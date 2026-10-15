@@ -165,8 +165,11 @@ describe('events and totals', () => {
 			totals: { visits: 2, pageViews: 5 },
 		});
 		expect(report.days).toHaveLength(30);
-		expect(report.funnel.steps[3]).toEqual({ step: 'purchase', count: 1 });
-		expect(report.funnel.revenue).toEqual([{ currency: 'USD', value: 2500, orders: 1 }]);
+		// G1: the shop funnel and the goals seeded (purchase, contact)
+		expect(report.funnels[0]).toMatchObject({ key: 'shop', name: 'Shop' });
+		expect(report.funnels[0].steps[3]).toEqual({ name: 'Purchased', kind: 'event', match: 'purchase', count: 1 });
+		expect(report.goals[0]).toEqual({ key: 'purchase', name: 'Purchase', kind: 'event', match: 'purchase', count: 1 });
+		expect(report.revenue).toEqual([{ currency: 'USD', value: 2500, orders: 1 }]);
 		expect(report.searches).toEqual([{ key: 'blue shoes', count: 1 }]);
 		expect(report.vitals[0]).toMatchObject({ name: 'LCP', average: 1800, good: 1 });
 		const ticket = await env.ticket(['analytics.read']);
@@ -184,6 +187,88 @@ describe('events and totals', () => {
 		expect(noPermission.status).toBe(403);
 	});
 
+	it('counts the merchant’s goals and funnels from their lists, and drops own events nothing names (G1, G2)', async () => {
+		const put = (/** @type {string} */ name, /** @type {unknown} */ value) =>
+			env.call('PUT', `/v1/lists/${name}`, { token: env.server, body: { value } });
+		expect(
+			(
+				await put('goals', [
+					{ key: 'demo', name: 'Booked a demo', kind: 'event', match: 'book_demo' },
+					{ key: 'thanks', name: 'Thank you', kind: 'page', match: '/thank-you' },
+				])
+			).status,
+		).toBe(200);
+		expect(
+			(
+				await put('funnels', [
+					{
+						key: 'lead',
+						name: 'Lead',
+						steps: [
+							{ name: 'Pricing', kind: 'page', match: '/pricing/**' },
+							{ name: 'Demo', kind: 'event', match: 'book_demo' },
+						],
+					},
+				])
+			).status,
+		).toBe(200);
+		// a step that is neither an event name nor a path is refused, naming the field
+		const bad = await put('funnels', [
+			{
+				key: 'x',
+				name: 'X',
+				steps: [
+					{ name: 'A', kind: 'page', match: 'pricing' },
+					{ name: 'B', match: 'b' },
+				],
+			},
+		]);
+		expect(bad.status).toBe(422);
+		expect((await bad.json()).errors[0].path).toBe('/value/0/steps/0/match');
+		env.advance(31_000);
+		const answer = await env.collect([
+			{ type: 'page_view', path: '/pricing/teams', visit: true },
+			{ type: 'custom', path: '/pricing/teams', name: 'book_demo', props: { plan: 'pro' } },
+			{ type: 'custom', path: '/pricing/teams', name: 'unnamed_event' },
+			{ type: 'page_view', path: '/thank-you' },
+			{ type: 'contact', path: '/about', method: 'whatsapp' },
+		]);
+		expect(await answer.json()).toEqual({ accepted: 4 });
+		const report = await (await env.call('GET', '/v1/analytics', { token: env.server })).json();
+		expect(report.goals).toEqual([
+			{ key: 'demo', name: 'Booked a demo', kind: 'event', match: 'book_demo', count: 1 },
+			{ key: 'thanks', name: 'Thank you', kind: 'page', match: '/thank-you', count: 1 },
+		]);
+		expect(report.funnels).toEqual([
+			{
+				key: 'lead',
+				name: 'Lead',
+				steps: [
+					{ name: 'Pricing', kind: 'page', match: '/pricing/**', count: 1 },
+					{ name: 'Demo', kind: 'event', match: 'book_demo', count: 1 },
+				],
+			},
+		]);
+		const events = await (await env.call('GET', '/v1/events?type=custom', { token: env.server })).json();
+		expect(events.items.map((/** @type {any} */ event) => event.data)).toEqual([{ name: 'book_demo', props: { plan: 'pro' } }]);
+		// back to the seeded goals and funnel for the tests after this one
+		await put('goals', [
+			{ key: 'purchase', name: 'Purchase', kind: 'event', match: 'purchase' },
+			{ key: 'contact', name: 'Contact', kind: 'event', match: 'contact' },
+		]);
+		await put('funnels', [
+			{
+				key: 'shop',
+				name: 'Shop',
+				steps: [
+					{ name: 'Viewed an item', kind: 'event', match: 'view_item' },
+					{ name: 'Added to cart', kind: 'event', match: 'add_to_cart' },
+					{ name: 'Began checkout', kind: 'event', match: 'begin_checkout' },
+					{ name: 'Purchased', kind: 'event', match: 'purchase' },
+				],
+			},
+		]);
+	});
 	it('lists raw events newest first, by type, paged', async () => {
 		const page = await (await env.call('GET', '/v1/events?limit=2', { token: env.server })).json();
 		expect(page.items).toHaveLength(2);

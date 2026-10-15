@@ -12,16 +12,9 @@
 		"adsId": {
 			"type": "string",
 			"title": "Google Ads id",
-			"description": "AW-XXXXXXXXX. Loads only after the visitor consents to marketing.",
+			"description": "AW-XXXXXXXXX. Loads only after the visitor consents to marketing. Which events are Google Ads conversions, with which label, is the list Conversion actions.",
 			"default": "",
 			"maxLength": 30
-		},
-		"adsPurchaseLabel": {
-			"type": "string",
-			"title": "Google Ads purchase conversion label",
-			"description": "The label of your purchase conversion action; each purchase is sent as that conversion.",
-			"default": "",
-			"maxLength": 40
 		},
 		"gtmId": {
 			"type": "string",

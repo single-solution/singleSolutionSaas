@@ -5433,14 +5433,7 @@
 					},
 					"name": {
 						"type": "string",
-						"enum": [
-							"LCP",
-							"INP",
-							"CLS",
-							"FCP",
-							"TTFB"
-						],
-						"description": "vital: which Web Vital."
+						"description": "custom: your event's name (lower-case letters, digits and _ from a letter, at most 40, not a standard event's name). Kept only when one of your goals or funnel steps names it; else dropped."
 					},
 					"session": {
 						"type": "string",
@@ -5484,6 +5477,14 @@
 						"minimum": 0,
 						"maximum": 1800000,
 						"description": "page_view with a session: milliseconds since the session's last page view (adds to its duration)."
+					},
+					"method": {
+						"type": "string",
+						"description": "contact: how the visitor got in touch (lower-case letters, digits, _ and -, at most 40; else none)."
+					},
+					"props": {
+						"type": "object",
+						"description": "custom: at most 10 properties named with lower-case letters, digits and _; each a text (at most 100 characters kept), a finite number, or true or false; anything else is left out."
 					}
 				}
 			},
@@ -5553,6 +5554,22 @@
 					}
 				}
 			},
+			"ContactData": {
+				"type": "object",
+				"description": "contact.",
+				"required": [
+					"method"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"method": {
+						"type": [
+							"string",
+							"null"
+						]
+					}
+				}
+			},
 			"Count": {
 				"type": "object",
 				"description": "How many records match the list's filters.",
@@ -5596,6 +5613,30 @@
 							"minimum": 1
 						},
 						"description": "Value → count, the 50 largest groups; a missing value is counted as none."
+					}
+				}
+			},
+			"CustomData": {
+				"type": "object",
+				"description": "custom: your own event (SSGrowth.track).",
+				"required": [
+					"name",
+					"props"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"props": {
+						"type": "object",
+						"additionalProperties": {
+							"type": [
+								"string",
+								"number",
+								"boolean"
+							]
+						}
 					}
 				}
 			},
@@ -5650,6 +5691,12 @@
 							},
 							{
 								"$ref": "#/components/schemas/VitalData"
+							},
+							{
+								"$ref": "#/components/schemas/ContactData"
+							},
+							{
+								"$ref": "#/components/schemas/CustomData"
 							}
 						],
 						"description": "What else is kept, by type."
@@ -5739,11 +5786,13 @@
 					"add_to_cart",
 					"begin_checkout",
 					"purchase",
+					"contact",
+					"custom",
 					"search",
 					"not_found",
 					"vital"
 				],
-				"description": "page_view: Visitor analytics; view_item, add_to_cart, begin_checkout, purchase: Conversion funnel; search, not_found: Searches and 404s; vital: Web Vitals."
+				"description": "page_view: Visitor analytics; view_item, add_to_cart, begin_checkout, purchase, contact and custom (your own events, SSGrowth.track): Goals and funnels; search, not_found: Searches and 404s; vital: Web Vitals."
 			},
 			"Format": {
 				"type": "object",
@@ -6823,13 +6872,15 @@
 					"cities",
 					"live",
 					"journeys",
-					"funnel",
 					"searches",
 					"emptySearches",
 					"notFound",
 					"notFoundFrom",
 					"vitalPages",
-					"vitals"
+					"vitals",
+					"goals",
+					"funnels",
+					"revenue"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -7051,72 +7102,128 @@
 							"$ref": "#/components/schemas/Journey"
 						}
 					},
-					"funnel": {
+					"goals": {
 						"type": [
-							"object",
+							"array",
 							"null"
 						],
-						"description": "Conversion funnel only.",
-						"required": [
-							"steps",
-							"revenue"
+						"description": "Goals and funnels only: each of your goals (the list Goals) with how many times it happened in the range — an event, or page views of a page pattern (counted from when the pattern was in a goal or funnel).",
+						"items": {
+							"type": "object",
+							"required": [
+								"key",
+								"name",
+								"kind",
+								"match",
+								"count"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								},
+								"kind": {
+									"type": "string",
+									"enum": [
+										"event",
+										"page"
+									]
+								},
+								"match": {
+									"type": "string"
+								},
+								"count": {
+									"type": "integer",
+									"minimum": 0
+								}
+							}
+						}
+					},
+					"funnels": {
+						"type": [
+							"array",
+							"null"
 						],
-						"additionalProperties": false,
-						"properties": {
-							"steps": {
-								"type": "array",
-								"description": "The four steps in order.",
-								"minItems": 4,
-								"maxItems": 4,
-								"items": {
-									"type": "object",
-									"required": [
-										"step",
-										"count"
-									],
-									"additionalProperties": false,
-									"properties": {
-										"step": {
-											"type": "string",
-											"enum": [
-												"view_item",
-												"add_to_cart",
-												"begin_checkout",
-												"purchase"
-											]
-										},
-										"count": {
-											"type": "integer",
-											"minimum": 0
+						"description": "Goals and funnels only: each of your funnels (the list Funnels; the shop funnel to start with), its steps in order, each with how many times it happened in the range.",
+						"items": {
+							"type": "object",
+							"required": [
+								"key",
+								"name",
+								"steps"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								},
+								"steps": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"name",
+											"kind",
+											"match",
+											"count"
+										],
+										"additionalProperties": false,
+										"properties": {
+											"name": {
+												"type": "string"
+											},
+											"kind": {
+												"type": "string",
+												"enum": [
+													"event",
+													"page"
+												]
+											},
+											"match": {
+												"type": "string"
+											},
+											"count": {
+												"type": "integer",
+												"minimum": 0
+											}
 										}
 									}
 								}
-							},
-							"revenue": {
-								"type": "array",
-								"description": "Purchases per currency.",
-								"items": {
-									"type": "object",
-									"required": [
-										"currency",
-										"value",
-										"orders"
-									],
-									"additionalProperties": false,
-									"properties": {
-										"currency": {
-											"type": "string",
-											"pattern": "^[A-Z]{3}$"
-										},
-										"value": {
-											"type": "number",
-											"description": "Minor units (a whole number unless an import brought fractions)."
-										},
-										"orders": {
-											"type": "integer",
-											"minimum": 0
-										}
-									}
+							}
+						}
+					},
+					"revenue": {
+						"type": [
+							"array",
+							"null"
+						],
+						"description": "Goals and funnels only: purchases per currency.",
+						"items": {
+							"type": "object",
+							"required": [
+								"currency",
+								"value",
+								"orders"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"currency": {
+									"type": "string",
+									"pattern": "^[A-Z]{3}$"
+								},
+								"value": {
+									"type": "number",
+									"description": "Minor units (a whole number unless an import brought fractions)."
+								},
+								"orders": {
+									"type": "integer",
+									"minimum": 0
 								}
 							}
 						}

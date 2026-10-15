@@ -14,7 +14,7 @@
  */
 import { TAG_SIGNALS, allows, anyChosen, consentMode, grantedOf } from '../core/consent.js';
 import { ratingOf } from '../core/events.js';
-import { contactCalls, pixelCalls, searchCalls, vitalCalls } from '../core/pixels.js';
+import { contactCalls, customCalls, pixelCalls, searchCalls, vitalCalls } from '../core/pixels.js';
 
 /** @typedef {import('../core/config.js').Tags} Tags */
 /** @typedef {import('../core/consent.js').Choice} Choice */
@@ -153,12 +153,15 @@ export const createTags = ({ window: win, tags, categories, gpc = false }) => {
 		meta: loaded.has('meta'),
 		google: loaded.has('ga4') || loaded.has('ads'),
 		gtm: loaded.has('gtm'),
-		ads:
-			loaded.has('ads') && tags.ads !== null && tags.adsPurchaseLabel !== null
-				? { id: tags.ads, label: tags.adsPurchaseLabel }
-				: null,
+		ads: loaded.has('ads') && tags.ads !== null ? { id: tags.ads } : null,
 		tiktok: loaded.has('tiktok'),
 	});
+
+	/**
+	 * The conversion action of an event (G5), or null: the event goes to no pixel.
+	 * @param {string} event
+	 */
+	const actionOf = (event) => tags.actions.find((action) => action.event === event) ?? null;
 
 	/**
 	 * Make pixel calls; a pixel the page removed since is skipped.
@@ -179,13 +182,19 @@ export const createTags = ({ window: win, tags, categories, gpc = false }) => {
 	 * @param {import('../core/pixels.js').Step} step
 	 * @param {import('../core/pixels.js').Detail} detail
 	 */
-	const forward = (step, detail) => send(pixelCalls(step, detail, loadedNow(), tags.contentIds));
+	const forward = (step, detail) => send(pixelCalls(step, detail, loadedNow(), tags.contentIds, actionOf(step)));
 
 	/** Pass a site search to the loaded pixels (G2). @param {string} term */
-	const search = (term) => send(searchCalls(term, loadedNow()));
+	const search = (term) => send(searchCalls(term, loadedNow(), actionOf('search')));
 
 	/** Pass a contact to the loaded pixels (G2). @param {string | null} method */
-	const contact = (method) => send(contactCalls(method, loadedNow()));
+	const contact = (method) => send(contactCalls(method, loadedNow(), actionOf('contact')));
+
+	/**
+	 * Pass the merchant's own event to the loaded pixels (G2), when a conversion action names it (G5).
+	 * @param {string} name @param {Record<string, string | number | boolean>} props
+	 */
+	const custom = (name, props) => send(customCalls(props, loadedNow(), actionOf(name)));
 
 	/**
 	 * Pass a Web Vital to Google Analytics 4 (G7), loaded by Growth or inside the Tag Manager container.
@@ -199,5 +208,5 @@ export const createTags = ({ window: win, tags, categories, gpc = false }) => {
 		if (google || now.gtm) send(vitalCalls(name, value, ratingOf(name, value), { ...now, google }, id));
 	};
 
-	return Object.freeze({ apply, forward, search, contact, vital, loaded: () => [...loaded] });
+	return Object.freeze({ apply, forward, search, contact, custom, vital, loaded: () => [...loaded] });
 };

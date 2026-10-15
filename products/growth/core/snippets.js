@@ -55,6 +55,10 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		"  currency: 'USD', value: 2500, items: [{ id: 'sku-1', price: 1250, quantity: 2 }] } }));",
 		"window.dispatchEvent(new CustomEvent('ss:purchase', { detail: {",
 		"  orderId: '1042', currency: 'USD', value: 2500, items: [{ id: 'sku-1', price: 1250, quantity: 2 }] } }));",
+		'',
+		'// your own events: counted when a goal or funnel step names them, sent to the pixels a conversion action names',
+		`${WIDGET_GLOBAL}.track('book_demo', { plan: 'pro' });`,
+		`${WIDGET_GLOBAL}.contact({ method: 'whatsapp' });`,
 	].join('\n');
 	const admin = [
 		widgetScriptTag({ src: `${base}/widget.js`, async: false }),

@@ -18,7 +18,6 @@ const TAG_IDS = Object.freeze({
 	meta: /^\d{6,20}$/,
 	ga4: /^G-[A-Z0-9]{4,20}$/,
 	ads: /^AW-\d{5,15}$/,
-	adsLabel: /^[A-Za-z0-9_-]{4,40}$/,
 	gtm: /^GTM-[A-Z0-9]{4,12}$/,
 	tiktok: /^[A-Z0-9]{10,30}$/,
 });
@@ -155,8 +154,10 @@ export const noticeAnswer = (notices, path) => {
  * @param {ReadonlyArray<string>} on
  * @param {FeatureValues} values
  * @param {ReadonlyArray<Record<string, unknown>>} [categories] the consent categories (their scripts, G3)
+ * @param {ReadonlyArray<import('./pixels.js').Action>} [actions] the conversion actions (G5): which event each pixel gets
+ *   under which name, and which are Google Ads conversions
  */
-export const tagsOf = (on, values, categories = []) => {
+export const tagsOf = (on, values, categories = [], actions = []) => {
 	const google = on.includes('google_tags');
 	const adsId = google ? idOf(text(values, 'google_tags', 'adsId'), TAG_IDS.ads) : null;
 	return {
@@ -167,9 +168,12 @@ export const tagsOf = (on, values, categories = []) => {
 		meta: on.includes('meta_pixel') ? idOf(text(values, 'meta_pixel', 'pixelId'), TAG_IDS.meta) : null,
 		ga4: google ? idOf(text(values, 'google_tags', 'ga4Id'), TAG_IDS.ga4) : null,
 		ads: adsId,
-		adsPurchaseLabel: adsId ? idOf(text(values, 'google_tags', 'adsPurchaseLabel'), TAG_IDS.adsLabel) : null,
 		gtm: google ? idOf(text(values, 'google_tags', 'gtmId'), TAG_IDS.gtm) : null,
 		tiktok: on.includes('tiktok_pixel') ? idOf(text(values, 'tiktok_pixel', 'pixelId'), TAG_IDS.tiktok) : null,
+		// G5: the events the pixels get, under the merchant's names
+		actions: on.some((key) => ['meta_pixel', 'google_tags', 'tiktok_pixel'].includes(key))
+			? actions.map(({ event, meta, google, tiktok, adsLabel }) => ({ event, meta, google, tiktok, adsLabel }))
+			: [],
 		// each consent category's own scripts (G3), while Custom scripts is on
 		scripts: on.includes('custom_scripts')
 			? Object.fromEntries(
@@ -265,7 +269,7 @@ export const widgetSettings = ({ on, values, now, admin = null, lists = {}, time
 			sessions: on.includes('visitor_analytics') && analytics.detail === 'sessions',
 			searchParams: searchParamsOf(text(values, 'searches_404s', 'searchParams')),
 		},
-		tags: tagsOf(on, values, categories),
+		tags: tagsOf(on, values, categories, lists.conversion_actions ?? readList('conversion_actions', undefined)),
 		// G4: the announcements showing now, in the merchant's order (the page script picks the page's)
 		notices: on.includes('notice_bar')
 			? noticesOf(values, lists.announcements ?? readList('announcements', undefined), now, timeZone)

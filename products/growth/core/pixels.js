@@ -1,6 +1,9 @@
 /**
- * The four shop events (PLAN 0.8.9) as each pixel names them: Meta (`fbq('track', …)`), Google tags (`gtag('event', …)`
- * for Google Analytics 4 and Google Ads loaded by Growth, with the Google Ads conversion of a purchase; and, while the
+ * The events each pixel gets, as the merchant's conversion actions name them (G5: the list Conversion actions, seeded
+ * with the four shop events, a search and a contact under each pixel's standard names; any event, the merchant's own
+ * included, may be sent under any name, and as a Google Ads conversion with its label): Meta (`fbq('track', …)` for its
+ * standard events, `fbq('trackCustom', …)` for others), Google tags (`gtag('event', …)`
+ * for Google Analytics 4 and Google Ads loaded by Growth, with the Google Ads conversion of an action's label; and, while the
  * Tag Manager container is loaded, the same GA4 event pushed to its `dataLayer` as `{ event, ecommerce }`, which its
  * tags take, for example Google Analytics 4 inside Tag Manager, PLAN 0.8.10 G1) and TikTok (`ttq.track(…)`). Money
  * arrives in minor units with a currency and goes to the pixels in major units.
@@ -14,15 +17,33 @@ import { isAmount, isCurrency } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
 import { toMajor } from './money.js';
 
-/** Each funnel step's name per pixel. */
-const PIXEL_EVENTS = Object.freeze({
-	view_item: Object.freeze({ meta: 'ViewContent', google: 'view_item', tiktok: 'ViewContent' }),
-	add_to_cart: Object.freeze({ meta: 'AddToCart', google: 'add_to_cart', tiktok: 'AddToCart' }),
-	begin_checkout: Object.freeze({ meta: 'InitiateCheckout', google: 'begin_checkout', tiktok: 'InitiateCheckout' }),
-	purchase: Object.freeze({ meta: 'Purchase', google: 'purchase', tiktok: 'CompletePayment' }),
-});
+/** Meta's standard events (`fbq('track', …)`); any other name is a custom event (`fbq('trackCustom', …)`). */
+const META_STANDARD = new Set([
+	'AddPaymentInfo',
+	'AddToCart',
+	'AddToWishlist',
+	'CompleteRegistration',
+	'Contact',
+	'CustomizeProduct',
+	'Donate',
+	'FindLocation',
+	'InitiateCheckout',
+	'Lead',
+	'Purchase',
+	'Schedule',
+	'Search',
+	'StartTrial',
+	'SubmitApplication',
+	'Subscribe',
+	'ViewContent',
+]);
 
-/** @typedef {keyof typeof PIXEL_EVENTS} Step */
+/** @typedef {'view_item' | 'add_to_cart' | 'begin_checkout' | 'purchase'} Step */
+/**
+ * A conversion action (G5): the event and its name for each pixel ('' : not sent there), and the Google Ads
+ * conversion label ('' : none).
+ * @typedef {{ event: string, meta: string, google: string, tiktok: string, adsLabel: string }} Action
+ */
 /** @typedef {'product' | 'variant'} ContentIds which id names an item */
 /** @typedef {{ id: string, variantId: string | null, name: string, price: number | null, quantity: number }} Item */
 /** @typedef {{ items: Item[], value: number | null, currency: string | null, orderId: string | null }} Detail */
@@ -30,7 +51,7 @@ const PIXEL_EVENTS = Object.freeze({
 /**
  * The pixels loaded in the page: `google`, Google Analytics 4 or Google Ads through gtag.js; `gtm`, the Tag Manager
  * container; `ads`, the Google Ads conversion of a purchase.
- * @typedef {{ meta: boolean, google: boolean, gtm: boolean, ads: { id: string, label: string } | null, tiktok: boolean }} Loaded
+ * @typedef {{ meta: boolean, google: boolean, gtm: boolean, ads: { id: string } | null, tiktok: boolean }} Loaded
  */
 
 /** @param {unknown} value @param {number} max */
@@ -95,15 +116,36 @@ const googleEvent = (name, params, loaded, ecommerce) => [
 const itemIdOf = (item, contentIds) => (contentIds === 'variant' ? (item.variantId ?? item.id) : item.id);
 
 /**
- * The pixel calls of one funnel event, for the tags that are loaded.
+ * The Meta call of an event name: `track` for a standard event, `trackCustom` for another.
+ * @param {string} name
+ */
+const metaMethod = (name) => (META_STANDARD.has(name) ? 'track' : 'trackCustom');
+
+/**
+ * The Google Ads conversion of an action with a label, while Google Ads is loaded.
+ * @param {Action | null | undefined} action
+ * @param {Loaded} loaded
+ * @param {Record<string, unknown>} params
+ * @returns {PixelCall[]}
+ */
+const adsConversion = (action, loaded, params) =>
+	action?.adsLabel && loaded.google && loaded.ads
+		? [{ vendor: 'google', args: ['event', 'conversion', { send_to: `${loaded.ads.id}/${action.adsLabel}`, ...params }] }]
+		: [];
+
+/**
+ * The pixel calls of one shop event, for the tags that are loaded, under the names of its conversion action (none
+ * without one).
  * @param {Step} step
  * @param {Detail} detail
  * @param {Loaded} loaded
  * @param {ContentIds} [contentIds]
+ * @param {Action | null} [action] the event's conversion action (G5)
  * @returns {PixelCall[]}
  */
-export const pixelCalls = (step, detail, loaded, contentIds = 'product') => {
-	const names = PIXEL_EVENTS[step];
+export const pixelCalls = (step, detail, loaded, contentIds = 'product', action = null) => {
+	if (!action) return [];
+	const names = action;
 	const currency = detail.currency;
 	const value = currency !== null && detail.value !== null ? toMajor(detail.value, currency) : undefined;
 	const money = value === undefined ? {} : { value, currency };
@@ -111,11 +153,11 @@ export const pixelCalls = (step, detail, loaded, contentIds = 'product') => {
 	const major = (price) => (price !== null && currency !== null ? { price: toMajor(price, currency) } : {});
 	/** @type {PixelCall[]} */
 	const calls = [];
-	if (loaded.meta)
+	if (loaded.meta && names.meta)
 		calls.push({
 			vendor: 'meta',
 			args: [
-				'track',
+				metaMethod(names.meta),
 				names.meta,
 				{
 					content_ids: detail.items.map((item) => itemIdOf(item, contentIds)),
@@ -126,38 +168,27 @@ export const pixelCalls = (step, detail, loaded, contentIds = 'product') => {
 				...(detail.orderId ? [{ eventID: `${step}-${detail.orderId}` }] : []),
 			],
 		});
-	calls.push(
-		...googleEvent(
-			names.google,
-			{
-				...money,
-				...(detail.orderId ? { transaction_id: detail.orderId } : {}),
-				items: detail.items.map((item) => ({
-					item_id: itemIdOf(item, contentIds),
-					...(item.name ? { item_name: item.name } : {}),
-					...(item.variantId ? { item_variant: item.variantId } : {}),
-					quantity: item.quantity,
-					...major(item.price),
-				})),
-			},
-			loaded,
-			true,
-		),
-	);
-	if (step === 'purchase' && loaded.google && loaded.ads)
-		calls.push({
-			vendor: 'google',
-			args: [
-				'event',
-				'conversion',
+	if (names.google)
+		calls.push(
+			...googleEvent(
+				names.google,
 				{
-					send_to: `${loaded.ads.id}/${loaded.ads.label}`,
 					...money,
 					...(detail.orderId ? { transaction_id: detail.orderId } : {}),
+					items: detail.items.map((item) => ({
+						item_id: itemIdOf(item, contentIds),
+						...(item.name ? { item_name: item.name } : {}),
+						...(item.variantId ? { item_variant: item.variantId } : {}),
+						quantity: item.quantity,
+						...major(item.price),
+					})),
 				},
-			],
-		});
-	if (loaded.tiktok)
+				loaded,
+				true,
+			),
+		);
+	calls.push(...adsConversion(action, loaded, { ...money, ...(detail.orderId ? { transaction_id: detail.orderId } : {}) }));
+	if (loaded.tiktok && names.tiktok)
 		calls.push({
 			vendor: 'tiktok',
 			args: [
@@ -203,32 +234,60 @@ export const contactOf = (raw) => {
 };
 
 /**
- * The pixel calls of a site search (G2): Meta `Search`, GA4 `search`, TikTok `Search`.
- * @param {string} term
+ * The pixel calls of an event with plain parameters, under the names of its conversion action (none without one).
+ * @param {Action | null | undefined} action
+ * @param {{ meta: Record<string, unknown>, google: Record<string, unknown>, tiktok: Record<string, unknown> }} params
  * @param {Loaded} loaded
  * @returns {PixelCall[]}
  */
-export const searchCalls = (term, loaded) => [
-	...(loaded.meta ? [{ vendor: /** @type {const} */ ('meta'), args: ['track', 'Search', { search_string: term }] }] : []),
-	...googleEvent('search', { search_term: term }, loaded, false),
-	...(loaded.tiktok ? [{ vendor: /** @type {const} */ ('tiktok'), args: ['Search', { query: term }] }] : []),
-];
+const plainCalls = (action, params, loaded) =>
+	action
+		? [
+				...(loaded.meta && action.meta
+					? [{ vendor: /** @type {const} */ ('meta'), args: [metaMethod(action.meta), action.meta, params.meta] }]
+					: []),
+				...(action.google ? googleEvent(action.google, params.google, loaded, false) : []),
+				...adsConversion(action, loaded, {}),
+				...(loaded.tiktok && action.tiktok
+					? [{ vendor: /** @type {const} */ ('tiktok'), args: [action.tiktok, params.tiktok] }]
+					: []),
+			]
+		: [];
 
 /**
- * The pixel calls of a contact (G2): Meta `Contact`, GA4 `generate_lead`, TikTok `Contact`, each with the method when
- * there is one.
- * @param {string | null} method
+ * The pixel calls of a site search (G2), under its conversion action's names (Meta `Search`, GA4 `search`, TikTok
+ * `Search` to start with).
+ * @param {string} term
  * @param {Loaded} loaded
+ * @param {Action | null} [action]
  * @returns {PixelCall[]}
  */
-export const contactCalls = (method, loaded) => {
+export const searchCalls = (term, loaded, action = null) =>
+	plainCalls(action, { meta: { search_string: term }, google: { search_term: term }, tiktok: { query: term } }, loaded);
+
+/**
+ * The pixel calls of a contact (G2), with the method when there is one, under its conversion action's names (Meta
+ * `Contact`, GA4 `generate_lead`, TikTok `Contact` to start with).
+ * @param {string | null} method
+ * @param {Loaded} loaded
+ * @param {Action | null} [action]
+ * @returns {PixelCall[]}
+ */
+export const contactCalls = (method, loaded, action = null) => {
 	const params = method === null ? {} : { method };
-	return [
-		...(loaded.meta ? [{ vendor: /** @type {const} */ ('meta'), args: ['track', 'Contact', params] }] : []),
-		...googleEvent('generate_lead', params, loaded, false),
-		...(loaded.tiktok ? [{ vendor: /** @type {const} */ ('tiktok'), args: ['Contact', params] }] : []),
-	];
+	return plainCalls(action, { meta: params, google: params, tiktok: params }, loaded);
 };
+
+/**
+ * The pixel calls of the merchant's own event (G2 `SSGrowth.track(name, props)`), with its properties, under its
+ * conversion action's names (none without one).
+ * @param {Record<string, string | number | boolean>} props
+ * @param {Loaded} loaded
+ * @param {Action | null} [action]
+ * @returns {PixelCall[]}
+ */
+export const customCalls = (props, loaded, action = null) =>
+	plainCalls(action, { meta: props, google: props, tiktok: props }, loaded);
 
 /**
  * A Web Vital as a Google Analytics 4 event (PLAN 0.8.10 G7), labeled as web.dev's `web-vitals` guide does, so the

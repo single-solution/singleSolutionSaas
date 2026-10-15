@@ -15,9 +15,9 @@
  */
 import { createTicketSource, viewerOf } from '@ss/app-kit/widget';
 import { ANALYTICS_SIGNALS, allows, grantedOf } from '../core/consent.js';
-import { VITALS } from '../core/events.js';
+import { VITALS, propsOf } from '../core/events.js';
 import { contactOf, detailOf, funnelEvent, searchOf } from '../core/pixels.js';
-import { BROWSER_EVENTS, SITE_EVENTS, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
+import { BROWSER_EVENTS, SITE_EVENTS, STANDARD_EVENTS, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountAnalyticsDashboard } from './analytics-dashboard.js';
 import {
 	cameFrom,
@@ -150,16 +150,39 @@ export const startWidget = ({ window: win, script }) => {
 			tags.search(found.term);
 		});
 	};
-	/** A contact, passed to the pixels (G2). @param {unknown} raw `{ method? }` */
-	const contact = (raw) => {
+	/**
+	 * A contact (G2): counted with Goals and funnels and passed to the pixels.
+	 * @param {unknown} raw `{ method? }`
+	 * @param {string} at the page's path
+	 */
+	const contact = (raw, at) => {
 		const { method } = contactOf(raw);
-		whenReady(({ tags }) => tags.contact(method));
+		whenReady(({ config, collector, tags }) => {
+			if (config.settings.record.funnel)
+				collector.record(() => ({ type: 'contact', path: at, ...(method === null ? {} : { method }) }));
+			tags.contact(method);
+		});
+	};
+	/**
+	 * The merchant's own event (G2): counted when a goal or funnel names it (the server drops the others), and passed to
+	 * the pixels a conversion action names (G5).
+	 * @param {unknown} name lower-case letters, digits and `_`, from a letter
+	 * @param {unknown} props at most 10 properties: texts, numbers or true or false
+	 * @param {string} at the page's path
+	 */
+	const track = (name, props, at) => {
+		if (typeof name !== 'string' || !/^[a-z][a-z0-9_]{0,39}$/.test(name) || STANDARD_EVENTS.includes(name)) return;
+		const kept = propsOf(props);
+		whenReady(({ config, collector, tags }) => {
+			if (config.settings.record.funnel) collector.record(() => ({ type: 'custom', name, props: kept, path: at }));
+			tags.custom(name, kept);
+		});
 	};
 	for (const [name, kind] of Object.entries(SITE_EVENTS))
 		win.addEventListener(name, (event) => {
 			const detail = /** @type {CustomEvent} */ (event).detail;
 			if (kind === 'search') siteSearch(detail, path());
-			else contact(detail);
+			else contact(detail, path());
 		});
 
 	const ready = (async () => {
@@ -361,7 +384,13 @@ export const startWidget = ({ window: win, script }) => {
 		 * The visitor got in touch (for example a WhatsApp link): passed to the pixels (as `ss:contact`).
 		 * @param {{ method?: string }} [detail]
 		 */
-		contact: (detail) => contact(detail),
+		contact: (detail) => contact(detail, path()),
+		/**
+		 * The page's own event (G2), for example `SSGrowth.track('book_demo', { plan: 'pro' })`: counted when one of the
+		 * merchant's goals or funnels names it, and sent to the pixels a conversion action names.
+		 * @param {string} name @param {Record<string, unknown>} [props]
+		 */
+		track: (name, props) => track(name, props, path()),
 		/** Record this page as one that does not exist (404). */
 		notFound: () => {
 			const at = path();

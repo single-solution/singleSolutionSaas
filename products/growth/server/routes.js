@@ -11,7 +11,18 @@
 import { actorOf, countHandlers, defineRoute, ok, paginate, problem } from '@ss/app-kit';
 import { JOURNEYS, LIVE_MS, buildReport, rangeOf, shiftDay, topOf } from '../core/analytics.js';
 import { noticeAnswer, noticesOf } from '../core/config.js';
-import { COLLECT_FEATURES, EVENT_FEATURES, checkBatch, cityOf, countryOf, dayOf, expiryOf, mergeTotals } from '../core/events.js';
+import {
+	COLLECT_FEATURES,
+	EVENT_FEATURES,
+	NOTHING_COUNTED,
+	checkBatch,
+	cityOf,
+	countedOf,
+	countryOf,
+	dayOf,
+	expiryOf,
+	mergeTotals,
+} from '../core/events.js';
 import { indexNowActivity, indexNowSubmission, robotsTxtOf, verificationOf } from '../core/seo.js';
 import { zonedDayStart } from '@ss/contracts/format';
 import { createStore } from '../adapters/store.js';
@@ -63,9 +74,11 @@ export const createRoutes = (product) => {
 		const timeZone = await timeZoneOf(ctx);
 		const range = rangeOf(ctx.query, now(), timeZone);
 		if (!range.ok) return invalid('from', range.message);
-		const [on, { detail }] = await Promise.all([
+		const [on, { detail }, goals, funnels] = await Promise.all([
 			product.featuresOn(ctx.websiteId),
 			product.settings.values(ctx.websiteId, 'visitor_analytics'),
+			product.lists.get(ctx.websiteId, 'goals'),
+			product.lists.get(ctx.websiteId, 'funnels'),
 		]);
 		const store = await storeOf(ctx);
 		const sessions = detail === 'sessions';
@@ -92,6 +105,8 @@ export const createRoutes = (product) => {
 			detail: sessions ? 'sessions' : 'anonymous',
 			live,
 			journeys,
+			goals,
+			funnels,
 		});
 	};
 
@@ -194,6 +209,14 @@ export const createRoutes = (product) => {
 					product.settings.values(ctx.websiteId, 'visitor_analytics'),
 					timeZoneOf(ctx),
 				]);
+				// what the merchant's goals and funnels count (G1): their custom events and page patterns, read at most every
+				// 30 s per instance
+				const counted = features.includes('conversion_funnel')
+					? countedOf(
+							await product.lists.recent(ctx.websiteId, 'goals'),
+							await product.lists.recent(ctx.websiteId, 'funnels'),
+						)
+					: NOTHING_COUNTED;
 				// events are kept only while Visitor analytics is on (Web Vitals may be on without it, for Google
 				// Analytics alone; SG-27)
 				const on = features.includes('visitor_analytics') ? features.filter((key) => COLLECT_FEATURES.includes(key)) : [];
@@ -204,7 +227,7 @@ export const createRoutes = (product) => {
 				const country = recordCountry === false ? null : countryOf(header);
 				const sessions = detail === 'sessions';
 				const city = sessions && recordCountry !== false ? cityOf(header) : null;
-				const kept = checkBatch(ctx.body, { on, domain: String(ctx.status.domain), country, sessions, city });
+				const kept = checkBatch(ctx.body, { on, domain: String(ctx.status.domain), country, sessions, city, counted });
 				const at = now();
 				await (
 					await storeOf(ctx)

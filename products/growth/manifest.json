@@ -70,10 +70,10 @@
 		},
 		{
 			"key": "conversion_funnel",
-			"name": "Conversion funnel",
-			"description": "Records the shop events (view, add to cart, checkout, purchase) and revenue from the page's browser events.",
+			"name": "Goals and funnels",
+			"description": "Counts the merchant's goals and funnels, each step an event (the shop events, contacts, or the merchant's own events sent with SSGrowth.track) or a page; the shop funnel to start with, and revenue per currency.",
 			"dependsOn": ["visitor_analytics"],
-			"recommendFor": ["marketing.analytics+sells.*"],
+			"recommendFor": ["marketing.analytics"],
 			"settings": {
 				"$ref": "schemas/conversion_funnel.settings.json"
 			}

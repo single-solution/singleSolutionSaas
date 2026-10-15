@@ -2,7 +2,7 @@
 
 Tracking, consent, own analytics and site-wide SEO for a merchant's site (PLAN.md 0.8.9): pixels and tags loaded only
 after consent, a consent banner with Google Consent Mode v2, anonymous first-party analytics in the merchant's own
-database, the shop funnel, searches, 404s, Web Vitals, robots.txt and verification tags, IndexNow, an SEO checklist,
+database, the merchant's goals and funnels (the shop funnel to start with), searches, 404s, Web Vitals, robots.txt and verification tags, IndexNow, an SEO checklist,
 redirects and a notice bar. Feature keys are in `manifest.json`, the public docs at `/docs`.
 
 More options (PLAN.md 0.8.10 G1–G7) are settings with safe defaults: tags without a consent step and
@@ -56,7 +56,7 @@ and no raw events are made.
 - `POST /v1/import/totals?dryRun=1` takes NDJSON (at most 1,000 records or 4 MB per call), one day per record:
   `{ "day": "YYYY-MM-DD", "part": 0, "totals": { "<metric>": { "<key>": { "c": <count>, "s": <sum> } } } }`, the day in
   the business time zone and the keys as readable text (Growth escapes them). Each metric must be one Growth counts
-  (`visits` and `page_views` with the key `""`, `page`, `source`, `device`, `country`, `funnel`, `revenue`, `search`,
+  (`visits` and `page_views` with the key `""`, `page`, `source`, `device`, `country`, `event` (an event name), `page_match` (a page pattern), `revenue`, `search`,
   `vital` and the rest), with keys of the form Growth writes, a whole count of 0 or more and a finite sum (only
   `revenue`, `duration`, `vital_value` and `vital_page` keep sums). Unknown fields are refused by name.
 - A day is one document of the daily totals, found by `day` and `part`: a re-imported day replaces it, so totals Growth

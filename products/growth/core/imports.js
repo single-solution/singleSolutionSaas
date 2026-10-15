@@ -10,7 +10,6 @@ import { isCurrency } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
 import { isDay } from './analytics.js';
 import { BROWSERS, DEVICES, DIRECT, SYSTEMS, VITALS, pathOf } from './events.js';
-import { FUNNEL_STEPS } from './widgets.js';
 
 /** @typedef {{ path: string, message: string }} ImportError */
 /** @typedef {Record<string, Record<string, { c: number, s?: number }>>} DayTotals metric → key → count and sum */
@@ -58,7 +57,16 @@ const METRICS = Object.freeze({
 	search: { keys: 'a search term', key: isText, sum: false },
 	search_empty: { keys: 'a search term', key: isText, sum: false },
 	device: { keys: DEVICES.join(', '), key: oneOf(DEVICES), sum: false },
-	funnel: { keys: FUNNEL_STEPS.join(', '), key: oneOf(FUNNEL_STEPS), sum: false },
+	event: {
+		keys: 'an event name (view_item, add_to_cart, begin_checkout, purchase, contact or your own: lower-case letters, digits and _)',
+		key: (/** @type {string} */ key) => /^[a-z][a-z0-9_]{0,39}$/.test(key),
+		sum: false,
+	},
+	page_match: {
+		keys: 'a page pattern from / (* and ** wildcards)',
+		key: (/** @type {string} */ key) => /^\/[^\s?#]*$/.test(key),
+		sum: false,
+	},
 	browser: { keys: BROWSERS.join(', '), key: oneOf(BROWSERS), sum: false },
 	os: { keys: SYSTEMS.join(', '), key: oneOf(SYSTEMS), sum: false },
 	revenue: { keys: 'a currency (ISO 4217)', key: isCurrency, sum: true },

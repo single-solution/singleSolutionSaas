@@ -7,7 +7,7 @@
  */
 
 /**
- * The browser global `widget.js` sets: `window.SSGrowth.admin({ getTicket })`, `.consent`, `.search()`, `.contact()`,
+ * The browser global `widget.js` sets: `window.SSGrowth.admin({ getTicket })`, `.consent`, `.search()`, `.contact()`, `.track()`,
  * `.notFound()`.
  */
 export const WIDGET_GLOBAL = 'SSGrowth';

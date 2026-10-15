@@ -8,10 +8,9 @@ import { PRESETS } from '../core/analytics.js';
 import { widgetSettings } from '../core/config.js';
 import { BROWSERS, DEVICES, EVENT_FEATURES, SYSTEMS, VITALS, ratingOf } from '../core/events.js';
 import { CHECKS } from '../core/seo-checks.js';
-import { DEFAULT_CATEGORIES, readList } from '../core/lists.js';
+import { DEFAULT_ACTIONS, DEFAULT_CATEGORIES, readList } from '../core/lists.js';
 import {
 	CONSENT_STORAGE_KEY,
-	FUNNEL_STEPS,
 	SESSION_STORAGE_KEY,
 	VISIT_STORAGE_KEY,
 	WIDGET_ATTRIBUTE,
@@ -161,7 +160,7 @@ describe('the page script', () => {
 		const fetch = serve({ [`GET ${CONFIG_PATH}`]: () => answer(403) });
 		await startWidget({ window, script: script(null) }).ready;
 		expect(fetch).not.toHaveBeenCalled();
-		expect(Object.keys(w[WIDGET_GLOBAL])).toEqual(['admin', 'consent', 'search', 'contact', 'notFound']);
+		expect(Object.keys(w[WIDGET_GLOBAL])).toEqual(['admin', 'consent', 'search', 'contact', 'track', 'notFound']);
 		await startWidget({ window, script: script('browser-token') }).ready;
 		expect(document.body.children).toHaveLength(0);
 		fetch.mockImplementation(async () => {
@@ -195,12 +194,15 @@ describe('the page script', () => {
 						{
 							consent_banner: { privacyUrl: '/privacy' },
 							meta_pixel: { pixelId: '1234567' },
-							google_tags: { ga4Id: 'G-ABCD12', adsId: 'AW-12345', adsPurchaseLabel: 'Label1', gtmId: 'GTM-ABCD1' },
+							google_tags: { ga4Id: 'G-ABCD12', adsId: 'AW-12345', gtmId: 'GTM-ABCD1' },
 							tiktok_pixel: { pixelId: 'CABCDEFGHIJ12' },
 						},
 						{
-							// the scripts of the analytics and marketing categories (G3)
+							// the scripts of the analytics and marketing categories (G3); a purchase is a Google Ads conversion (G5)
 							lists: {
+								conversion_actions: DEFAULT_ACTIONS.map((action) =>
+									action.event === 'purchase' ? { ...action, adsLabel: 'Label1' } : action,
+								),
 								consent_categories: DEFAULT_CATEGORIES.map((category) => ({
 									...category,
 									scripts:
@@ -387,6 +389,48 @@ describe('the page script', () => {
 		expect(document.head.querySelector('script[src*="gtag"]')).not.toBeNull();
 		window.dispatchEvent(new window.CustomEvent('ss:add_to_cart', { detail: null }));
 		expect([...w.dataLayer].map((args) => args[1])).toContain('add_to_cart');
+	});
+
+	it('G2: SSGrowth.track records the page’s own event and sends it to the pixels its conversion action names; contacts count', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout'] });
+		serve({
+			[`GET ${CONFIG_PATH}`]: () =>
+				answer(
+					200,
+					configOf(
+						['visitor_analytics', 'conversion_funnel', 'google_tags'],
+						{
+							visitor_analytics: { requireConsent: false },
+							google_tags: { ga4Id: 'G-ABCD12' },
+							tags: { consentRequired: false },
+						},
+						{
+							lists: {
+								conversion_actions: [
+									...DEFAULT_ACTIONS,
+									{ event: 'book_demo', meta: 'Schedule', google: 'book_demo', tiktok: '', adsLabel: '' },
+								],
+							},
+						},
+					),
+				),
+			'POST /v1/collect': () => answer(202),
+		});
+		const page = startWidget({ window, script: script('t') });
+		// before the config: waits for it
+		w[WIDGET_GLOBAL].track('book_demo', { plan: 'pro', nested: { no: 1 } });
+		await vi.advanceTimersByTimeAsync(0);
+		await page.ready;
+		w[WIDGET_GLOBAL].track('Bad Name');
+		w[WIDGET_GLOBAL].track('purchase', {});
+		window.dispatchEvent(new window.CustomEvent('ss:contact', { detail: { method: 'whatsapp' } }));
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(collected().filter((event) => event.type !== 'page_view')).toEqual([
+			{ type: 'custom', name: 'book_demo', props: { plan: 'pro' }, path: '/' },
+			{ type: 'contact', path: '/', method: 'whatsapp' },
+		]);
+		expect([...w.dataLayer].map((args) => [args[0], args[1]])).toContainEqual(['event', 'book_demo']);
+		expect([...w.dataLayer].map((args) => [args[0], args[1]])).toContainEqual(['event', 'generate_lead']);
 	});
 
 	it('shows the notice bar while it is on, and a closed one stays closed for the visit', async () => {
@@ -1231,15 +1275,20 @@ describe('admin widgets', () => {
 		sources: [{ key: '(direct)', count: 2 }],
 		devices: [{ key: 'mobile', count: 3 }],
 		countries: [{ key: '(unknown)', count: 1 }],
-		funnel: {
-			steps: [
-				{ step: 'view_item', count: 4 },
-				{ step: 'add_to_cart', count: 2 },
-				{ step: 'begin_checkout', count: 1 },
-				{ step: 'purchase', count: 1 },
-			],
-			revenue: [{ currency: 'USD', value: 2500, orders: 1 }],
-		},
+		goals: [{ key: 'contact', name: 'Contact', kind: 'event', match: 'contact', count: 3 }],
+		funnels: [
+			{
+				key: 'shop',
+				name: 'Shop',
+				steps: [
+					{ name: 'Viewed an item', kind: 'event', match: 'view_item', count: 4 },
+					{ name: 'Added to cart', kind: 'event', match: 'add_to_cart', count: 2 },
+					{ name: 'Began checkout', kind: 'event', match: 'begin_checkout', count: 1 },
+					{ name: 'Purchased', kind: 'event', match: 'purchase', count: 1 },
+				],
+			},
+		],
+		revenue: [{ currency: 'USD', value: 2500, orders: 1 }],
 		searches: [{ key: 'shade', count: 2 }],
 		emptySearches: [],
 		notFound: [{ key: '/old', count: 1 }],
@@ -1269,7 +1318,9 @@ describe('admin widgets', () => {
 	};
 	const SESSIONS_REPORT = {
 		...REPORT,
-		funnel: null,
+		goals: null,
+		funnels: null,
+		revenue: null,
 		detail: 'sessions',
 		sessions: { count: 2, bounces: 1, bounceRate: 50, averageDuration: 65, pagesPerSession: 1.5 },
 		browsers: [{ key: 'samsung', count: 2 }],
@@ -1566,7 +1617,9 @@ describe('admin widgets', () => {
 					totals: { visits: 0, pageViews: 0 },
 					days: [],
 					pages: [],
-					funnel: null,
+					goals: null,
+					funnels: null,
+					revenue: null,
 					searches: null,
 					vitals: null,
 					...SESSIONS_EMPTY,
@@ -1949,7 +2002,6 @@ describe('widget texts (OT-3)', () => {
 		]);
 		const keys = [
 			...PRESETS.map((preset) => `analytics.range.${preset}`),
-			...FUNNEL_STEPS.map((step) => `funnel.${step}`),
 			...Object.keys(VITALS).map((name) => `vital.${name}`),
 			...[0, 3000, 5000].map((value) => `rating.${ratingOf('LCP', value)}`),
 			...DEVICES.map((device) => `device.${device}`),

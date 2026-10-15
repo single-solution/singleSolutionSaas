@@ -39,8 +39,9 @@ describe('the website Setup sheet', () => {
 	it('tags features with business profile answers and says what the website builds for each one', () => {
 		expect(validateManifest(manifest).ok).toBe(true);
 		expect(Object.keys(build)).toEqual(manifest.features.map((feature) => feature.key));
+		// goals and funnels serve any site that measures (G1), not only a shop
 		expect(manifest.features.find((feature) => feature.key === 'conversion_funnel')?.recommendFor).toEqual([
-			'marketing.analytics+sells.*',
+			'marketing.analytics',
 		]);
 		expect(manifest.features.find((feature) => feature.key === 'custom_scripts')?.recommendFor).toBeUndefined();
 	});

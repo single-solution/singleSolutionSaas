@@ -68,7 +68,7 @@ const dayOf = (day, visits) => ({
 		source: { '(direct)': { c: visits - 1 }, 'www.google.com': { c: 1 } },
 		device: { mobile: { c: visits } },
 		country: { GB: { c: visits } },
-		funnel: { purchase: { c: 2 } },
+		event: { purchase: { c: 2 } },
 		revenue: { USD: { c: 2, s: 250_000 } },
 		vital: { 'LCP:good': { c: 1 } },
 		vital_value: { LCP: { c: 1, s: 1800 } },
@@ -168,7 +168,7 @@ describe('import of daily totals (K10, G8)', () => {
 			{ key: '/lamps', count: 24 },
 			{ key: '/lamps/a.b$c', count: 12 },
 		]);
-		expect(report.funnel.revenue).toEqual([{ currency: 'USD', value: 500_000, orders: 4 }]);
+		expect(report.revenue).toEqual([{ currency: 'USD', value: 500_000, orders: 4 }]);
 		expect(report.vitals.find((/** @type {any} */ v) => v.name === 'LCP')).toMatchObject({ count: 2, average: 1800, good: 2 });
 
 		// a re-run replaces the day

@@ -26,7 +26,6 @@ const TAG_FIELDS = {
 	google_tags: [
 		['ga4Id', 'ga4'],
 		['adsId', 'ads'],
-		['adsPurchaseLabel', 'adsPurchaseLabel'],
 		['gtmId', 'gtm'],
 	],
 	tiktok_pixel: [['pixelId', 'tiktok']],

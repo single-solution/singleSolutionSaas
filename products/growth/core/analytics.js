@@ -1,6 +1,7 @@
 /**
  * The analytics report (PLAN 0.8.9 Own analytics) from the daily totals: visits and page views per day, top pages,
- * sources, devices and countries, the funnel (view → cart → checkout → purchase) with revenue per currency, site
+ * sources, devices and countries, the merchant's goals and funnels (G1: each step an event or a page, counted per day;
+ * the shop funnel view → cart → checkout → purchase to start with) with revenue per currency, site
  * searches and 404s, and Web Vitals (average and the share of good, needs-improvement and poor). Each part is there
  * only while its feature is on. Days are the days of the website's business time zone (business.json `timeZone`, UTC
  * when missing; PLAN 0.8.10 K8), and the report says which zone.
@@ -12,7 +13,6 @@
  * @module
  */
 import { zonedDay, zonedDayStart } from '@ss/contracts/format';
-import { FUNNEL_STEPS } from './widgets.js';
 import { VITALS } from './events.js';
 
 /** Rows of each top list, unless the request asks for more (`top`, at most {@link MAX_TOP}). */
@@ -212,9 +212,11 @@ const sessionsOf = (totals) => {
  * @param {{ from: string, to: string, timeZone: string, on: ReadonlyArray<string>, totals: TotalRow[], days: DayRow[],
  *   top?: number, detail?: 'anonymous' | 'sessions',
  *   live?: { visitors: number, pages: Array<{ key: string, count: number }> } | null,
- *   journeys?: Journey[] | null }} input
+ *   journeys?: Journey[] | null, goals?: ReadonlyArray<{ key: string, name: string, kind: string, match: string }>,
+ *   funnels?: ReadonlyArray<{ key: string, name: string, steps: ReadonlyArray<{ name: string, kind: string, match: string }> }> }} input
  *   `timeZone`: the zone of the days (the business.json time zone, else UTC); `top`: rows of each top list; `detail`:
- *   the `visitor_analytics` setting; `live` and `journeys`: read from the raw events with `sessions`
+ *   the `visitor_analytics` setting; `live` and `journeys`: read from the raw events with `sessions`; `goals` and
+ *   `funnels`: the merchant's lists (G1)
  */
 export const buildReport = ({
 	from,
@@ -227,7 +229,12 @@ export const buildReport = ({
 	detail = 'anonymous',
 	live = null,
 	journeys = null,
+	goals = [],
+	funnels = [],
 }) => {
+	/** How many times an event happened, or a page pattern was viewed (G1). @param {{ kind: string, match: string }} entry */
+	const countOfMatch = (entry) => countOf(totals, entry.kind === 'page' ? 'page_match' : 'event', entry.match);
+	const counting = on.includes('conversion_funnel');
 	const sessions = detail === 'sessions';
 	const series = daysOf(from, to).map((day) => ({
 		day,
@@ -251,14 +258,32 @@ export const buildReport = ({
 		cities: sessions ? top(totals, 'city', size) : null,
 		live: sessions ? (live ?? { visitors: 0, pages: [] }) : null,
 		journeys: sessions ? (journeys ?? []) : null,
-		funnel: on.includes('conversion_funnel')
-			? {
-					steps: FUNNEL_STEPS.map((step) => ({ step, count: countOf(totals, 'funnel', step) })),
-					revenue: totals
-						.filter((row) => row.metric === 'revenue')
-						.sort((a, b) => a.key.localeCompare(b.key))
-						.map((row) => ({ currency: row.key, value: row.sum, orders: row.count })),
-				}
+		goals: counting
+			? goals.map((goal) => ({
+					key: goal.key,
+					name: goal.name,
+					kind: goal.kind,
+					match: goal.match,
+					count: countOfMatch(goal),
+				}))
+			: null,
+		funnels: counting
+			? funnels.map((funnel) => ({
+					key: funnel.key,
+					name: funnel.name,
+					steps: funnel.steps.map((step) => ({
+						name: step.name,
+						kind: step.kind,
+						match: step.match,
+						count: countOfMatch(step),
+					})),
+				}))
+			: null,
+		revenue: counting
+			? totals
+					.filter((row) => row.metric === 'revenue')
+					.sort((a, b) => a.key.localeCompare(b.key))
+					.map((row) => ({ currency: row.key, value: row.sum, orders: row.count }))
 			: null,
 		searches: on.includes('searches_404s') ? top(totals, 'search', size) : null,
 		emptySearches: on.includes('searches_404s') ? top(totals, 'search_empty', size) : null,

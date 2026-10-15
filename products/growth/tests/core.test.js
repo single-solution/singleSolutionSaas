@@ -1,4 +1,4 @@
-import { DEFAULT_CATEGORIES, SHOP_FUNNEL, checkList, readList, zonedTimeOf } from '../core/lists.js';
+import { DEFAULT_ACTIONS, DEFAULT_CATEGORIES, SHOP_FUNNEL, checkList, readList, zonedTimeOf } from '../core/lists.js';
 import { zonedParts } from '@ss/contracts/format';
 import { describe, expect, it } from 'vitest';
 import { PRESETS, buildReport, dayStart, daysOf, presetRange, rangeOf, topOf } from '../core/analytics.js';
@@ -27,6 +27,7 @@ import {
 import consentSchema from '../schemas/consent_banner.settings.json' with { type: 'json' };
 import {
 	checkBatch,
+	countedOf,
 	checkEvent,
 	cityOf,
 	countryOf,
@@ -39,7 +40,17 @@ import {
 	textOf,
 } from '../core/events.js';
 import { toMajor } from '../core/money.js';
-import { contactCalls, contactOf, detailOf, funnelEvent, pixelCalls, searchCalls, searchOf, vitalCalls } from '../core/pixels.js';
+import {
+	contactCalls,
+	contactOf,
+	customCalls,
+	detailOf,
+	funnelEvent,
+	pixelCalls,
+	searchCalls,
+	searchOf,
+	vitalCalls,
+} from '../core/pixels.js';
 import {
 	checksActivity,
 	indexNowActivity,
@@ -269,6 +280,74 @@ describe('analytics report', () => {
 		expect(dayStart('2026-13-01', 'UTC')).toBeNaN();
 	});
 
+	it('counts the merchant’s goals and funnels: events, their own events and pages (G1, G2)', () => {
+		const goals = [
+			{ key: 'demo', name: 'Booked a demo', kind: 'event', match: 'book_demo' },
+			{ key: 'thanks', name: 'Thank-you page', kind: 'page', match: '/thank-you' },
+			{ key: 'contact', name: 'Contact', kind: 'event', match: 'contact' },
+		];
+		const funnels = [
+			{
+				key: 'lead',
+				name: 'Lead',
+				steps: [
+					{ name: 'Pricing', kind: 'page', match: '/pricing/**' },
+					{ name: 'Demo', kind: 'event', match: 'book_demo' },
+				],
+			},
+		];
+		const counted = countedOf(goals, funnels);
+		expect([...counted.events]).toEqual(['book_demo', 'contact']);
+		expect(counted.pages).toEqual(['/thank-you', '/pricing/**']);
+		const kept = checkBatch(
+			{
+				events: [
+					{
+						type: 'custom',
+						path: '/pricing',
+						name: 'book_demo',
+						props: { plan: 'pro', seats: 5, ok: true, bad: {}, 'Bad Name': 1 },
+					},
+					{ type: 'custom', path: '/pricing', name: 'not_counted' },
+					{ type: 'custom', path: '/x', name: 'purchase' },
+					{ type: 'contact', path: '/about', method: 'whatsapp' },
+					{ type: 'page_view', path: '/pricing/teams', visit: true },
+					{ type: 'page_view', path: '/thank-you' },
+				],
+			},
+			{ on: ['visitor_analytics', 'conversion_funnel'], domain: DOMAIN, country: null, counted },
+		);
+		// a custom event no goal or step names is dropped, so raw events stay within what is counted; a standard name is
+		// not a custom event
+		expect(kept.map((event) => event.type)).toEqual(['custom', 'contact', 'page_view', 'page_view']);
+		expect(kept[0]?.data).toEqual({ name: 'book_demo', props: { plan: 'pro', seats: 5, ok: true } });
+		const merged = mergeTotals(kept);
+		expect(merged).toContainEqual({ metric: 'event', key: 'book_demo', count: 1, sum: 0 });
+		expect(merged).toContainEqual({ metric: 'event', key: 'contact', count: 1, sum: 0 });
+		expect(merged).toContainEqual({ metric: 'page_match', key: '/pricing/**', count: 1, sum: 0 });
+		expect(merged).toContainEqual({ metric: 'page_match', key: '/thank-you', count: 1, sum: 0 });
+		// without Goals and funnels, contacts and own events are not kept
+		expect(
+			checkBatch({ events: [{ type: 'contact', path: '/' }] }, { on: ['visitor_analytics'], domain: DOMAIN, country: null }),
+		).toEqual([]);
+		const report = buildReport({
+			from: '2026-10-01',
+			to: '2026-10-01',
+			timeZone: 'UTC',
+			on: ['visitor_analytics', 'conversion_funnel'],
+			totals: merged,
+			days: [],
+			goals,
+			funnels,
+		});
+		expect(report.goals?.map((goal) => [goal.key, goal.count])).toEqual([
+			['demo', 1],
+			['thanks', 1],
+			['contact', 1],
+		]);
+		expect(report.funnels?.[0]?.steps.map((step) => step.count)).toEqual([1, 1]);
+	});
+
 	it('leaves out the parts of features that are off', () => {
 		const report = buildReport({
 			from: '2026-10-01',
@@ -291,7 +370,9 @@ describe('analytics report', () => {
 			{ day: '2026-10-01', visits: 0, pageViews: 0 },
 			{ day: '2026-10-02', visits: 4, pageViews: 0 },
 		]);
-		expect(report.funnel).toBeNull();
+		expect(report.funnels).toBeNull();
+		expect(report.goals).toBeNull();
+		expect(report.revenue).toBeNull();
 		expect(report.searches).toBeNull();
 		expect(report.vitals?.find((v) => v.name === 'CLS')).toMatchObject({ average: 75, count: 2 });
 		expect(report.vitals?.find((v) => v.name === 'LCP')).toMatchObject({ average: null });
@@ -381,7 +462,7 @@ describe('page script settings', () => {
 	it('gives well-formed tag ids of switched-on features only', () => {
 		const values = {
 			meta_pixel: { pixelId: '123456789' },
-			google_tags: { ga4Id: 'G-ABCD12', adsId: 'AW-123456', adsPurchaseLabel: 'abcDEF12', gtmId: 'GTM-ABC123' },
+			google_tags: { ga4Id: 'G-ABCD12', adsId: 'AW-123456', gtmId: 'GTM-ABC123' },
 			tiktok_pixel: { pixelId: 'CABCDEFGHIJ12' },
 		};
 		const categories = [
@@ -397,17 +478,18 @@ describe('page script settings', () => {
 			meta: '123456789',
 			ga4: 'G-ABCD12',
 			ads: 'AW-123456',
-			adsPurchaseLabel: 'abcDEF12',
 			gtm: 'GTM-ABC123',
 			tiktok: 'CABCDEFGHIJ12',
 			// each consent category's own scripts (G3)
 			scripts: { analytics: '<script>a()</script>' },
+			// the conversion actions (G5): none given here
+			actions: [],
 		});
+		expect(tagsOf(all, values, categories, DEFAULT_ACTIONS).actions).toEqual(DEFAULT_ACTIONS);
+		expect(tagsOf(['custom_scripts'], values, categories, DEFAULT_ACTIONS).actions).toEqual([]);
 		expect(tagsOf(['meta_pixel'], values, categories).scripts).toEqual({});
 		expect(tagsOf([], values)).toMatchObject({ meta: null, ga4: null, ads: null, gtm: null, tiktok: null });
-		expect(
-			tagsOf(['google_tags'], { google_tags: { adsId: 'bad', adsPurchaseLabel: 'abcDEF12' } }).adsPurchaseLabel,
-		).toBeNull();
+		expect(tagsOf(['google_tags'], { google_tags: { adsId: 'bad' } }).ads).toBeNull();
 		expect(tagsReady(all, values, categories)).toEqual({ ready: 4, total: 4 });
 		expect(tagsReady(all, {}, [])).toEqual({ ready: 0, total: 4 });
 		expect(tagsReady([], {})).toEqual({ ready: 0, total: 0 });
@@ -694,7 +776,10 @@ describe('pixels and money', () => {
 		expect(toMajor(1250, 'KWD')).toBe(1.25);
 	});
 
-	it('names each shop event per pixel', () => {
+	it('names each event per pixel as the merchant’s conversion actions say (G5)', () => {
+		/** @param {string} event */
+		const action = (event) => DEFAULT_ACTIONS.find((entry) => entry.event === event) ?? null;
+		const purchaseAction = { ...action('purchase'), adsLabel: 'L' };
 		const detail = detailOf({
 			currency: 'USD',
 			value: 2500,
@@ -702,13 +787,13 @@ describe('pixels and money', () => {
 			items: [{ id: 'a', variantId: 'v', name: 'Case', price: 1250, quantity: 2 }, { id: 'b' }, null],
 		});
 		expect(detail.items).toHaveLength(2);
-		const calls = pixelCalls('purchase', detail, {
-			meta: true,
-			google: true,
-			gtm: false,
-			ads: { id: 'AW-1', label: 'L' },
-			tiktok: true,
-		});
+		const calls = pixelCalls(
+			'purchase',
+			detail,
+			{ meta: true, google: true, gtm: false, ads: { id: 'AW-1' }, tiktok: true },
+			'product',
+			/** @type {any} */ (purchaseAction),
+		);
 		expect(calls.map((call) => [call.vendor, call.args[0], call.args[1]])).toEqual([
 			['meta', 'track', 'Purchase'],
 			['google', 'event', 'purchase'],
@@ -725,17 +810,57 @@ describe('pixels and money', () => {
 			],
 		});
 		expect(calls[0]?.args[3]).toEqual({ eventID: 'purchase-o1' });
+		expect(calls[2]?.args[2]).toEqual({ send_to: 'AW-1/L', value: 25, currency: 'USD', transaction_id: 'o1' });
+		// no action: no pixel gets the event; a name left empty: not that pixel; another Meta name: trackCustom
+		expect(pixelCalls('purchase', detail, { meta: true, google: true, gtm: false, ads: null, tiktok: true })).toEqual([]);
+		const renamed = pixelCalls(
+			'add_to_cart',
+			detail,
+			{ meta: true, google: true, gtm: false, ads: null, tiktok: true },
+			'product',
+			{
+				event: 'add_to_cart',
+				meta: 'AddedToBag',
+				google: '',
+				tiktok: 'AddToCart',
+				adsLabel: '',
+			},
+		);
+		expect(renamed.map((call) => [call.vendor, call.args[0], call.args[1]])).toEqual([
+			['meta', 'trackCustom', 'AddedToBag'],
+			['tiktok', 'AddToCart', expect.any(Object)],
+		]);
 		const bare = detailOf('nothing');
 		expect(
-			pixelCalls('view_item', bare, { meta: true, google: true, gtm: false, ads: null, tiktok: false })[0]?.args[2],
+			pixelCalls(
+				'view_item',
+				bare,
+				{ meta: true, google: true, gtm: false, ads: null, tiktok: false },
+				'product',
+				action('view_item'),
+			)[0]?.args[2],
 		).toEqual({
 			content_ids: [],
 			content_type: 'product',
 			num_items: 0,
 		});
-		expect(pixelCalls('add_to_cart', bare, { meta: false, google: false, gtm: false, ads: null, tiktok: false })).toEqual([]);
+		expect(
+			pixelCalls(
+				'add_to_cart',
+				bare,
+				{ meta: false, google: false, gtm: false, ads: null, tiktok: false },
+				'product',
+				action('add_to_cart'),
+			),
+		).toEqual([]);
 		// the Tag Manager container takes GA4 ecommerce events from its dataLayer (G1); the Ads conversion needs gtag.js
-		const tagManager = pixelCalls('purchase', detail, { meta: false, google: false, gtm: true, ads: null, tiktok: false });
+		const tagManager = pixelCalls(
+			'purchase',
+			detail,
+			{ meta: false, google: false, gtm: true, ads: null, tiktok: false },
+			'product',
+			action('purchase'),
+		);
 		expect(tagManager).toEqual([
 			{ vendor: 'datalayer', args: [{ ecommerce: null }] },
 			{
@@ -746,7 +871,7 @@ describe('pixels and money', () => {
 		expect(funnelEvent('purchase', detail, '/c')).toMatchObject({ type: 'purchase', orderId: 'o1', value: 2500 });
 		// G2: variant ids, searches and contacts
 		const all = { meta: true, google: true, gtm: true, ads: null, tiktok: true };
-		const byVariant = pixelCalls('add_to_cart', detail, all, 'variant');
+		const byVariant = pixelCalls('add_to_cart', detail, all, 'variant', action('add_to_cart'));
 		expect(byVariant[0]?.args[2]).toMatchObject({ content_ids: ['v', 'b'] });
 		expect(byVariant.at(-1)?.args[1]).toMatchObject({ contents: [{ content_id: 'v' }, { content_id: 'b' }] });
 		expect(searchOf({ term: ' a  b ', results: 2 })).toEqual({ term: 'a b', results: 2 });
@@ -755,18 +880,40 @@ describe('pixels and money', () => {
 		expect(contactOf({ method: 'Phone' })).toEqual({ method: 'phone' });
 		expect(contactOf({ method: 'no spaces allowed' })).toEqual({ method: null });
 		expect(contactOf(undefined)).toEqual({ method: null });
-		expect(searchCalls('shoes', all).map((call) => [call.vendor, ...call.args])).toEqual([
+		expect(searchCalls('shoes', all, action('search')).map((call) => [call.vendor, ...call.args])).toEqual([
 			['meta', 'track', 'Search', { search_string: 'shoes' }],
 			['google', 'event', 'search', { search_term: 'shoes' }],
 			['datalayer', { event: 'search', search_term: 'shoes' }],
 			['tiktok', 'Search', { query: 'shoes' }],
 		]);
-		expect(contactCalls(null, { ...all, gtm: false })).toEqual([
+		expect(contactCalls(null, { ...all, gtm: false }, action('contact'))).toEqual([
 			{ vendor: 'meta', args: ['track', 'Contact', {}] },
 			{ vendor: 'google', args: ['event', 'generate_lead', {}] },
 			{ vendor: 'tiktok', args: ['Contact', {}] },
 		]);
-		expect(searchCalls('x', { meta: false, google: false, gtm: false, ads: null, tiktok: false })).toEqual([]);
+		expect(searchCalls('x', { meta: false, google: false, gtm: false, ads: null, tiktok: false }, action('search'))).toEqual(
+			[],
+		);
+		expect(searchCalls('x', all)).toEqual([]);
+		// G2: the merchant's own event, with its properties, to the pixels its action names
+		expect(
+			customCalls(
+				{ plan: 'pro' },
+				{ ...all, gtm: false, ads: { id: 'AW-1' } },
+				{
+					event: 'book_demo',
+					meta: 'Schedule',
+					google: 'book_demo',
+					tiktok: '',
+					adsLabel: 'Demo1',
+				},
+			),
+		).toEqual([
+			{ vendor: 'meta', args: ['track', 'Schedule', { plan: 'pro' }] },
+			{ vendor: 'google', args: ['event', 'book_demo', { plan: 'pro' }] },
+			{ vendor: 'google', args: ['event', 'conversion', { send_to: 'AW-1/Demo1' }] },
+		]);
+		expect(customCalls({}, all)).toEqual([]);
 		// G7: a Web Vital as a GA4 event, labeled as web.dev's guide does (SG-26)
 		expect(vitalCalls('CLS', 125.4, 'needs_improvement', { ...all, gtm: false }, 'v1-1-CLS')).toEqual([
 			{

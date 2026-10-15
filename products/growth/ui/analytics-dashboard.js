@@ -225,7 +225,7 @@ export const mountAnalyticsDashboard = ({ host, api, config, viewer, now }) => {
 						),
 						tile(t('analytics.pagesPerSession'), sessions.pagesPerSession ?? '—', '#'),
 					);
-				for (const entry of report.funnel?.revenue ?? [])
+				for (const entry of report.revenue ?? [])
 					tiles.append(
 						tile(t('analytics.revenue'), money(entry.value, entry.currency), '$', {
 							hint: t('analytics.orders', { count: entry.orders }),
@@ -248,15 +248,16 @@ export const mountAnalyticsDashboard = ({ host, api, config, viewer, now }) => {
 				return card;
 			};
 
-			/** @param {NonNullable<Report['funnel']>} funnel */
+			/** @param {NonNullable<Report['funnels']>[number]} funnel */
 			const funnelSteps = (funnel) => {
 				const list = h('div', { class: 'steps card' });
+				list.append(h('h3', {}, funnel.name));
 				const first = Math.max(1, funnel.steps[0]?.count ?? 0);
 				funnel.steps.forEach((step, index) => {
 					const before = index > 0 ? (funnel.steps[index - 1]?.count ?? 0) : 0;
 					const node = h('div', { class: 'step' });
 					const line = h('div', { class: 'line' });
-					line.append(h('span', {}, t(`funnel.${step.step}`)), h('span', { class: 'figure' }, String(step.count)));
+					line.append(h('span', {}, step.name), h('span', { class: 'figure' }, String(step.count)));
 					const bar = h('span', { class: 'bar', 'aria-hidden': 'true' });
 					bar.style.setProperty('--share', `${Math.max(2, Math.round((step.count / first) * 100))}%`);
 					node.append(line, bar);
@@ -534,8 +535,18 @@ export const mountAnalyticsDashboard = ({ host, api, config, viewer, now }) => {
 						]),
 					]),
 				);
-				if (report.funnel)
-					parts.push(section(t('analytics.funnel'), t('analytics.funnelHelp'), [funnelSteps(report.funnel)]));
+				// G1: the merchant's goals, then each of their funnels
+				if (report.goals && report.goals.length > 0)
+					parts.push(
+						section(t('analytics.goals'), t('analytics.goalsHelp'), [
+							rankCard(
+								t('analytics.goals'),
+								report.goals.map((goal) => ({ name: goal.name, count: goal.count })),
+							),
+						]),
+					);
+				if (report.funnels && report.funnels.length > 0)
+					parts.push(section(t('analytics.funnel'), t('analytics.funnelHelp'), report.funnels.map(funnelSteps)));
 				if (report.searches && report.emptySearches && report.notFound)
 					parts.push(
 						section(t('analytics.searches'), t('analytics.searchesHelp'), [

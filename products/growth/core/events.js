@@ -17,7 +17,8 @@
  */
 import { isAmount, isCurrency, zonedDay } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
-import { FUNNEL_STEPS, VISIT_IDLE_MS } from './widgets.js';
+import { pathMatches } from '@ss/contracts/text';
+import { FUNNEL_STEPS, STANDARD_EVENTS, VISIT_IDLE_MS } from './widgets.js';
 
 /** The feature each event type belongs to. */
 export const EVENT_FEATURES = Object.freeze({
@@ -26,6 +27,9 @@ export const EVENT_FEATURES = Object.freeze({
 	add_to_cart: 'conversion_funnel',
 	begin_checkout: 'conversion_funnel',
 	purchase: 'conversion_funnel',
+	// G2: a contact (ss:contact, SSGrowth.contact) and the merchant's own events (SSGrowth.track)
+	contact: 'conversion_funnel',
+	custom: 'conversion_funnel',
 	search: 'searches_404s',
 	not_found: 'searches_404s',
 	vital: 'web_vitals',
@@ -35,6 +39,57 @@ export const EVENT_FEATURES = Object.freeze({
 
 /** The features whose events `POST /v1/collect` takes. */
 export const COLLECT_FEATURES = Object.freeze(['visitor_analytics', 'conversion_funnel', 'searches_404s', 'web_vitals']);
+
+/** Most properties of a custom event (G2), each name at most 40 characters and each text at most 100. */
+const MAX_PROPS = 10;
+
+/**
+ * What the merchant counts (G1, G2: their goals and funnel steps): the custom events they name (any other custom event
+ * is dropped, so raw events stay within what is counted) and the page patterns whose page views are counted.
+ * @typedef {{ events: ReadonlySet<string>, pages: ReadonlyArray<string> }} Counted
+ */
+
+/** Nothing counted beyond the shop events and contacts. @type {Counted} */
+export const NOTHING_COUNTED = Object.freeze({ events: new Set(), pages: Object.freeze([]) });
+
+/**
+ * What the merchant's goals and funnels count (G1): the custom events (names that are not standard events) and the page
+ * patterns their entries and steps name.
+ * @param {ReadonlyArray<{ kind: string, match: string }>} goals
+ * @param {ReadonlyArray<{ steps: ReadonlyArray<{ kind: string, match: string }> }>} funnels
+ * @returns {Counted}
+ */
+export const countedOf = (goals, funnels) => {
+	const all = [...goals, ...funnels.flatMap((funnel) => funnel.steps)];
+	return {
+		events: new Set(all.filter((entry) => entry.kind === 'event').map((entry) => entry.match)),
+		pages: [...new Set(all.filter((entry) => entry.kind === 'page').map((entry) => entry.match))],
+	};
+};
+
+/**
+ * A custom event's properties (G2): at most {@link MAX_PROPS} names of lower-case letters, digits and `_`, each a text
+ * (at most 100 characters), a finite number or true or false; anything else is left out.
+ * @param {unknown} value
+ * @returns {Record<string, string | number | boolean>}
+ */
+export const propsOf = (value) =>
+	Object.fromEntries(
+		Object.entries(isObject(value) ? value : {})
+			.filter(([name]) => /^[a-z][a-z0-9_]{0,39}$/.test(name))
+			.map(([name, raw]) => [
+				name,
+				typeof raw === 'string'
+					? textOf(raw, 100)
+					: typeof raw === 'number' && Number.isFinite(raw)
+						? raw
+						: raw === true || raw === false
+							? raw
+							: null,
+			])
+			.filter(([, kept]) => kept !== null)
+			.slice(0, MAX_PROPS),
+	);
 
 /** Most events in one request (the page script sends smaller batches). */
 export const MAX_BATCH = 25;
@@ -250,13 +305,13 @@ const itemsOf = (value) =>
 /**
  * One event as the page script sent it, checked: what is kept, or null when it is invalid.
  * @param {unknown} raw
- * @param {{ domain: string, country: string | null, sessions?: boolean, city?: string | null }} context `domain`: the
- *   website's (a referrer on it is not a source); `sessions`: the `detail` setting is `sessions` (G3); `city`: from the
- *   host's header
+ * @param {{ domain: string, country: string | null, sessions?: boolean, city?: string | null, counted?: Counted }} context
+ *   `domain`: the website's (a referrer on it is not a source); `sessions`: the `detail` setting is `sessions` (G3);
+ *   `city`: from the host's header; `counted`: what the merchant's goals and funnels count (G1)
  * @returns {KeptEvent | null}
  */
 export const checkEvent = (raw, context) => {
-	const kept = checkBase(raw, context);
+	const kept = withCounted(checkBase(raw, context), context.counted ?? NOTHING_COUNTED);
 	if (kept === null || !context.sessions || !isObject(raw)) return kept;
 	const visitor = visitorOf(raw, context.city ?? null);
 	/** @type {KeptEvent['totals']} */
@@ -295,6 +350,26 @@ export const checkEvent = (raw, context) => {
 		kept.data = { ...kept.data, ...(page === null ? {} : { page }) };
 	}
 	return { ...kept, totals: [...kept.totals, ...more], ...(visitor === null ? {} : { visitor }) };
+};
+
+/**
+ * An event with what the merchant counts (G1): a custom event their goals and funnels do not name is dropped; a page
+ * view adds a count to each of their page patterns it matches.
+ * @param {KeptEvent | null} kept
+ * @param {Counted} counted
+ * @returns {KeptEvent | null}
+ */
+const withCounted = (kept, counted) => {
+	if (kept === null) return null;
+	if (kept.type === 'custom') return counted.events.has(String(kept.data.name)) ? kept : null;
+	if (kept.type !== 'page_view' || counted.pages.length === 0) return kept;
+	const matched = counted.pages.filter((pattern) => pathMatches(pattern, kept.path));
+	return matched.length === 0
+		? kept
+		: {
+				...kept,
+				totals: [...kept.totals, ...matched.map((pattern) => ({ metric: 'page_match', key: pattern, count: 1, sum: 0 }))],
+			};
 };
 
 /**
@@ -348,7 +423,7 @@ const checkBase = (raw, { domain, country }) => {
 			path,
 			data: { items: itemsOf(raw.items), value, currency, ...(type === 'purchase' ? { orderId } : {}) },
 			totals: [
-				{ metric: 'funnel', key: type, count: 1, sum: 0 },
+				{ metric: 'event', key: type, count: 1, sum: 0 },
 				...(type === 'purchase' && currency !== null ? [{ metric: 'revenue', key: currency, count: 1, sum: value }] : []),
 			],
 		};
@@ -368,6 +443,20 @@ const checkBase = (raw, { domain, country }) => {
 		};
 	}
 	if (type === 'not_found') return { type, path, data: {}, totals: [{ metric: 'not_found', key: path, count: 1, sum: 0 }] };
+	if (type === 'contact') {
+		const method = typeof raw.method === 'string' && /^[a-z0-9_-]{1,40}$/.test(raw.method) ? raw.method : null;
+		return { type, path, data: { method }, totals: [{ metric: 'event', key: 'contact', count: 1, sum: 0 }] };
+	}
+	if (type === 'custom') {
+		const name = typeof raw.name === 'string' ? raw.name : '';
+		if (!/^[a-z][a-z0-9_]{0,39}$/.test(name) || STANDARD_EVENTS.includes(name)) return null;
+		return {
+			type,
+			path,
+			data: { name, props: propsOf(raw.props) },
+			totals: [{ metric: 'event', key: name, count: 1, sum: 0 }],
+		};
+	}
 	// a Web Vital (CLS arrives × 1000, the others in milliseconds)
 	if (typeof raw.name !== 'string' || !Object.hasOwn(VITALS, raw.name)) return null;
 	const name = /** @type {VitalName} */ (raw.name);
@@ -389,7 +478,8 @@ const checkBase = (raw, { domain, country }) => {
  * A `POST /v1/collect` body, checked: the kept events of switched-on features (at most {@link MAX_BATCH}; the rest and
  * the invalid ones are dropped, as a beacon has nobody to tell).
  * @param {unknown} body
- * @param {{ on: ReadonlyArray<string>, domain: string, country: string | null, sessions?: boolean, city?: string | null }} context
+ * @param {{ on: ReadonlyArray<string>, domain: string, country: string | null, sessions?: boolean, city?: string | null,
+ *   counted?: Counted }} context
  * @returns {KeptEvent[]}
  */
 export const checkBatch = (body, { on, ...context }) => {
