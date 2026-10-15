@@ -122,7 +122,7 @@ describe('digital goods', () => {
 		const item = await shop.seedProduct({
 			kind: 'digital',
 			trackStock: false,
-			digital: { files: [], licenceKeys: true, downloadLimit: 0 },
+			digital: { files: [], retired: [], licenceKeys: true, downloadLimit: 0 },
 		});
 		const added = await shop.api('POST', `/v1/products/${item.id}/licences`, { keys: ['K-1', 'K-2', 'K-1'] });
 		expect(added.json).toEqual({ added: 2, available: 2 });
@@ -167,6 +167,7 @@ describe('digital goods', () => {
 			price: 900,
 			digital: {
 				files: [{ key: 'ecommerce/digital/x/book.pdf', type: 'application/pdf', size: 10, alt: 'The book' }],
+				retired: [],
 				licenceKeys: true,
 				downloadLimit: 2,
 			},
@@ -213,13 +214,115 @@ describe('digital goods', () => {
 	});
 });
 
+describe('removing digital files and license keys', () => {
+	it('takes them away from new buyers, while paid orders keep what they were given', async () => {
+		const book = { key: 'ecommerce/digital/prd_removals1/book.pdf', type: 'application/pdf', size: 10, alt: 'The book' };
+		const extra = { key: 'ecommerce/digital/prd_removals1/extra.pdf', type: 'application/pdf', size: 20, alt: 'Extras' };
+		const item = await shop.seedProduct({
+			id: 'prd_removals1',
+			kind: 'digital',
+			trackStock: false,
+			price: 900,
+			digital: { files: [book, extra], retired: [], licenceKeys: true, downloadLimit: 0 },
+		});
+		const ticket = await shop.ticket(['catalog.edit']);
+		await shop.api('POST', `/v1/products/${item.id}/licences`, { keys: ['K-1', 'K-2', 'K-3'] });
+		// keys not given yet go; unknown ones are not counted
+		const removed = await shop.admin(ticket, 'POST', `/v1/admin/products/${item.id}/licences/remove`, {
+			keys: ['K-3', 'NOPE'],
+		});
+		expect(removed.status).toBe(200);
+		expect(removed.json).toEqual({ removed: 1, given: 0, available: 2 });
+		expect((await shop.api('POST', `/v1/products/${item.id}/licences/remove`, { keys: [] })).status).toBe(422);
+		expect((await shop.api('POST', '/v1/products/prd_nothing/licences/remove', { keys: ['x'] })).status).toBe(404);
+
+		// a paid order gets a key and both files
+		const shopper = await newShopper();
+		const placed = await place(shopper, { lines: [{ productId: item.id }], payment: 'online' });
+		const id = placed.json.order.id;
+		const lineId = placed.json.order.lines[0].id;
+		shop.payPayment(await paymentOf(id));
+		shop.advance(31_000);
+		const paid = await visit('GET', `/v1/shop/orders/${id}`, { signIn: shopper });
+		const [given] = paid.json.lines[0].licenceKeys;
+		expect(['K-1', 'K-2']).toContain(given);
+
+		// a key given to an order stays with it
+		const kept = await shop.api('POST', `/v1/products/${item.id}/licences/remove`, { keys: [given] });
+		expect(kept.json).toEqual({ removed: 0, given: 1, available: 1 });
+		shop.advance(1000);
+
+		// a file removed while orders have the product is kept for the orders placed before
+		const gone = await shop.admin(ticket, 'DELETE', `/v1/admin/products/${item.id}/files/extra.pdf`);
+		expect(gone.status).toBe(200);
+		expect(gone.json).toEqual({ files: [{ name: 'book.pdf', type: 'application/pdf', size: 10 }], keptForOrders: true });
+		const stored = /** @type {any} */ (
+			await (await shop.db()).collection(COLLECTIONS.products).findOne({ websiteId: shop.websiteId, id: item.id })
+		);
+		expect(stored.digital.files).toEqual([book]);
+		expect(stored.digital.retired).toEqual([{ ...extra, removedAt: expect.any(Date) }]);
+		expect((await shop.api('DELETE', `/v1/products/${item.id}/files/extra.pdf`)).status).toBe(404);
+		const before = await visit('GET', `/v1/shop/orders/${id}`, { signIn: shopper });
+		expect(before.json.lines[0].licenceKeys).toEqual([given]);
+		expect(before.json.lines[0].downloads.map((/** @type {any} */ file) => file.file)).toEqual(['book.pdf', 'extra.pdf']);
+		expect((await visit('GET', `/v1/shop/orders/${id}/downloads/${lineId}/extra.pdf`, { signIn: shopper })).status).toBe(200);
+
+		// an order placed after the removal does not get it
+		shop.advance(1000);
+		const later = await newShopper();
+		const next = await place(later, { lines: [{ productId: item.id }], payment: 'online' });
+		shop.payPayment(await paymentOf(next.json.order.id));
+		shop.advance(31_000);
+		const after = await visit('GET', `/v1/shop/orders/${next.json.order.id}`, { signIn: later });
+		expect(after.json.lines[0].downloads.map((/** @type {any} */ file) => file.file)).toEqual(['book.pdf']);
+		const refused = await visit('GET', `/v1/shop/orders/${next.json.order.id}/downloads/${after.json.lines[0].id}/extra.pdf`, {
+			signIn: later,
+		});
+		expect(refused.status).toBe(404);
+
+		// uploaded again under its name, it is a file of the product again (the same storage key), for everyone
+		await shop.api('POST', `/v1/products/${item.id}/files`, { name: 'extra.pdf', type: 'application/pdf', size: 30 });
+		const again = /** @type {any} */ (
+			await (await shop.db()).collection(COLLECTIONS.products).findOne({ websiteId: shop.websiteId, id: item.id })
+		);
+		expect(again.digital.retired).toEqual([]);
+		expect(again.digital.files.map((/** @type {any} */ file) => file.key)).toEqual([book.key, extra.key]);
+	});
+
+	it('drops a file of a product no order has, and refuses what is not a file of a digital product', async () => {
+		const item = await shop.seedProduct({
+			kind: 'digital',
+			trackStock: false,
+			digital: {
+				files: [{ key: 'ecommerce/digital/y/a.pdf', type: 'application/pdf', size: 1, alt: 'a.pdf' }],
+				retired: [],
+				licenceKeys: false,
+				downloadLimit: 0,
+			},
+		});
+		const gone = await shop.api('DELETE', `/v1/products/${item.id}/files/a.pdf`);
+		expect(gone.json).toEqual({ files: [], keptForOrders: false });
+		const stored = /** @type {any} */ (
+			await (await shop.db()).collection(COLLECTIONS.products).findOne({ websiteId: shop.websiteId, id: item.id })
+		);
+		expect(stored.digital).toMatchObject({ files: [], retired: [] });
+		expect((await shop.api('DELETE', `/v1/products/prd_nothing/files/a.pdf`)).status).toBe(404);
+		const physical = await shop.seedProduct();
+		expect((await shop.api('DELETE', `/v1/products/${physical.id}/files/a.pdf`)).status).toBe(422);
+		expect((await shop.api('POST', `/v1/products/${physical.id}/licences/remove`, { keys: ['x'] })).status).toBe(422);
+		// a ticket without catalog.edit
+		const ticket = await shop.ticket(['orders.read']);
+		expect((await shop.admin(ticket, 'DELETE', `/v1/admin/products/${item.id}/files/a.pdf`)).status).toBe(403);
+	});
+});
+
 describe('free orders', () => {
 	it('are paid as they are placed and give their license keys at once', async () => {
 		const item = await shop.seedProduct({
 			kind: 'digital',
 			trackStock: false,
 			price: 0,
-			digital: { files: [], licenceKeys: true, downloadLimit: 0 },
+			digital: { files: [], retired: [], licenceKeys: true, downloadLimit: 0 },
 		});
 		await shop.api('POST', `/v1/products/${item.id}/licences`, { keys: ['FREE-1'] });
 		const placed = await place(await newShopper(), { lines: [{ productId: item.id }], payment: 'online' });

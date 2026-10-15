@@ -231,7 +231,7 @@ describe('lines', () => {
 			id: 'prd_dig',
 			kind: 'digital',
 			trackStock: false,
-			digital: { files: [], licenceKeys: true, downloadLimit: 0 },
+			digital: { files: [], retired: [], licenceKeys: true, downloadLimit: 0 },
 		});
 		const start = Date.parse('2026-10-06T10:00:00Z');
 		const lines = resolveLines(

@@ -259,6 +259,7 @@ describe('catalog admin: product files', () => {
 			trackStock: false,
 			digital: {
 				files: [{ key: 'ecommerce/digital/prd_1/manual.pdf', type: 'application/pdf', size: 2048, alt: '' }],
+				retired: [],
 				licenceKeys: true,
 				downloadLimit: 3,
 			},
@@ -304,6 +305,58 @@ describe('catalog admin: product files', () => {
 		server.routes['POST /v1/admin/products/prd_1/files'] = () => problem(503, 'storage_not_connected');
 		await choose(picker, [new window.File(['abc'], 'a.txt', { type: 'text/plain' })]);
 		expect(statuses(detail)).toContain(TEXTS['problem.storage_not_connected']);
+	});
+
+	it('removes files and license keys, saying what stays with the orders that have them', async () => {
+		const digital = product({
+			kind: 'digital',
+			options: [],
+			variants: [{ ...product().variants[0], options: {}, locations: {} }],
+			trackStock: false,
+			digital: {
+				files: [
+					{ key: 'ecommerce/digital/prd_1/manual.pdf', type: 'application/pdf', size: 2048, alt: '' },
+					{ key: 'ecommerce/digital/prd_1/extra.zip', type: 'application/zip', size: 4096, alt: '' },
+				],
+				retired: [],
+				licenceKeys: true,
+				downloadLimit: 0,
+			},
+			media: [],
+		});
+		let removeFile = () => problem(404, 'not_found');
+		let removeKeys = () => invalid('/keys');
+		const { root, server } = await start(['catalog', 'digital_goods'], {
+			'GET /v1/admin/products/prd_1': () => answer(200, digital),
+			'DELETE /v1/admin/products/prd_1/files/extra.zip': () => removeFile(),
+			'POST /v1/admin/products/prd_1/licences/remove': () => removeKeys(),
+		});
+		const detail = detailOf(panelOf(root, 'products'));
+		await click(/** @type {HTMLElement} */ (detail.querySelector('button[aria-label="Remove extra.zip"]')));
+		expect(textOf(dialogOf(root))).toContain('Orders placed from now on do not get extra.zip.');
+		await submitDialog(root);
+		expect(statuses(dialogOf(root))).toContain(TEXTS['problem.not_found']);
+		removeFile = () =>
+			answer(200, { files: [{ name: 'manual.pdf', type: 'application/pdf', size: 2048 }], keptForOrders: true });
+		await submitDialog(root);
+		expect(hasDialog(root)).toBe(false);
+		expect(statuses(detail)).toContain('extra.zip removed. Orders placed before keep downloading it.');
+		expect(textOf(detail)).not.toContain('extra.zip (4 KB)');
+		expect(textOf(detail)).toContain('manual.pdf (2 KB)');
+		// license keys: the ones no order was given
+		await click(buttonIn(detail, 'Remove license keys'));
+		type(fieldIn(dialogOf(root), 'License keys to remove (one per line)'), 'K1\nK9\n');
+		await submitDialog(root);
+		expect(statuses(dialogOf(root))).toContain(TEXTS['problem.field.keys']);
+		removeKeys = () => answer(200, { removed: 1, given: 1, available: 4 });
+		await submitDialog(root);
+		expect(server.last('POST /v1/admin/products/prd_1/licences/remove')?.body).toEqual({ keys: ['K1', 'K9'] });
+		expect(statuses(detail)).toContain('1 keys removed; 1 were given to orders and stay with them; 4 available.');
+		// nothing typed: refused before asking
+		await click(buttonIn(detail, 'Remove license keys'));
+		await submitDialog(root);
+		expect(statuses(dialogOf(root))).toContain(TEXTS['catalogAdmin.licencesNone']);
+		expect(server.all('POST /v1/admin/products/prd_1/licences/remove')).toHaveLength(2);
 	});
 
 	it('formats the rich description with the toolbar and previews it safely', async () => {

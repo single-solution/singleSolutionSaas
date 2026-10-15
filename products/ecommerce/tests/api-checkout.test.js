@@ -50,7 +50,7 @@ describe('digital files with the server token', () => {
 		const item = await shop.seedProduct({
 			kind: 'digital',
 			trackStock: false,
-			digital: { files: [], licenceKeys: false, downloadLimit: 0 },
+			digital: { files: [], retired: [], licenceKeys: false, downloadLimit: 0 },
 		});
 		const added = await shop.api('POST', `/v1/products/${item.id}/files`, {
 			name: 'Manual v2.pdf',

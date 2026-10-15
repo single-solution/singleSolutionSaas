@@ -1,9 +1,10 @@
 /**
- * Digital goods (PLAN 0.8.8: download/licence after payment): the merchant adds license keys and uploads files for a
- * digital product whose item type has them (`licenceKeys`, `downloads`; server routes and the matching admin-widget
- * routes, permission `catalog.edit`); when an order is
- * paid its digital lines get license keys (one per unit, each key given once); the shopper downloads the files of a
- * paid order through 5-minute signed links, counted per order line up to the download limit.
+ * Digital goods (PLAN 0.8.8: download/licence after payment): the merchant adds and removes license keys and files of
+ * a digital product whose item type has them (`licenceKeys`, `downloads`; server routes and the matching admin-widget
+ * routes, permission `catalog.edit`). A removal takes them from new buyers only: a key given to an order stays with
+ * it, and a file removed while orders have the product is kept (`retired`) for the orders placed before. When an
+ * order is paid its digital lines get license keys (one per unit, each key given once); the shopper downloads the
+ * files of a paid order through 5-minute signed links, counted per order line up to the download limit.
  * @module
  */
 import { problem } from '@ss/app-kit';
@@ -18,6 +19,7 @@ import {
 	downloadLimitOf,
 	fileKey,
 	fileNameOf,
+	filesOfOrder,
 	safeFileName,
 } from '../core/digital.js';
 import { elementsOf } from '../core/item-types.js';
@@ -88,20 +90,71 @@ export const createDigital = (product, service) => {
 		const storage = await product.connections.storage(s.websiteId);
 		if (!storage) throw problem('storage_not_connected', 'Connect storage in the product dashboard first.');
 		const key = fileKey(item.id, name);
-		const files = (item.digital?.files ?? []).filter((file) => file.key !== key);
+		const digital = /** @type {NonNullable<ProductRecord['digital']>} */ (item.digital);
+		const files = digital.files.filter((file) => file.key !== key);
 		if (files.length >= MAX_FILES) throw service.invalid('name', `A product has at most ${MAX_FILES} files.`);
 		const signed = storage.presignPut({ key, contentType: body.type, contentLength: body.size, expiresIn: UPLOAD_SECONDS });
 		const file = { key, type: body.type, size: body.size, alt: name };
+		// the same name is the same storage key: a removed file of that name is the product's file again, for everyone
 		await createOrdersStore(await s.data()).setDigital(item.id, {
+			...digital,
 			files: [...files, file],
-			licenceKeys: item.digital?.licenceKeys ?? false,
-			downloadLimit: item.digital?.downloadLimit ?? 0,
+			retired: digital.retired.filter((old) => old.key !== key),
 		});
 		await service.log(ctx, 'product.file_added', item.id, { label: item.name, detail: `File ${name}` });
 		return {
 			file: { name, type: file.type, size: file.size },
 			upload: { method: signed.method, url: signed.url, headers: signed.headers, expiresAt: signed.expiresAt },
 		};
+	};
+
+	/**
+	 * DELETE /v1/products/:id/files/:name: the file goes from the product. While orders have the product it is kept
+	 * (`retired`) for the orders placed before now, so what they bought stays downloadable; else it is dropped.
+	 * @param {any} ctx
+	 */
+	const removeFile = async (ctx) => {
+		const s = await service.site(ctx);
+		const item = await digitalProduct(s, String(ctx.params.id), 'downloads');
+		const digital = /** @type {NonNullable<ProductRecord['digital']>} */ (item.digital);
+		const name = String(ctx.params.name);
+		const file = digital.files.find((entry) => fileNameOf(entry.key) === name);
+		if (!file) throw problem('not_found', 'The product has no such file.');
+		const store = createOrdersStore(await s.data());
+		const keptForOrders = await store.productOrdered(item.id);
+		const files = digital.files.filter((entry) => entry !== file);
+		await store.setDigital(item.id, {
+			...digital,
+			files,
+			retired: keptForOrders ? [...digital.retired, { ...file, removedAt: new Date(product.now()) }] : digital.retired,
+		});
+		await service.log(ctx, 'product.file_removed', item.id, {
+			label: item.name,
+			detail: keptForOrders ? `File ${name} (kept for earlier orders)` : `File ${name}`,
+		});
+		return {
+			files: files.map((entry) => ({ name: fileNameOf(entry.key), type: entry.type, size: entry.size })),
+			keptForOrders,
+		};
+	};
+
+	/**
+	 * POST /v1/products/:id/licences/remove `{ keys }`: the keys no order was given go; a key given to an order stays
+	 * with it (counted as `given`).
+	 * @param {any} ctx
+	 */
+	const removeLicences = async (ctx) => {
+		const s = await service.site(ctx);
+		const checked = checkLicenceKeys(ctx.body?.keys);
+		if (!checked.ok) throw service.invalid('keys', checked.message);
+		const item = await digitalProduct(s, String(ctx.params.id), 'licenceKeys');
+		const store = createOrdersStore(await s.data());
+		const { removed, given } = await store.removeLicences(item.id, checked.value);
+		await service.log(ctx, 'product.licences_removed', item.id, {
+			label: item.name,
+			detail: `${removed} license key(s) removed`,
+		});
+		return { removed, given, available: await store.countLicences(item.id) };
 	};
 
 	/**
@@ -147,7 +200,7 @@ export const createDigital = (product, service) => {
 			const limit = item ? downloadLimitOf(item, downloadLimit) : 0;
 			const used = Number(/** @type {any} */ (line).downloads ?? 0);
 			out.set(line.id, {
-				files: (item?.digital?.files ?? []).map((file) => ({
+				files: (item?.digital ? filesOfOrder(item.digital, order.placedAt) : []).map((file) => ({
 					file: fileNameOf(file.key),
 					name: file.alt || fileNameOf(file.key),
 					type: file.type,
@@ -172,7 +225,9 @@ export const createDigital = (product, service) => {
 		if (!line) throw problem('not_found', 'There is no such download.');
 		const store = createOrdersStore(await s.data());
 		const item = await store.product(line.productId);
-		const file = item?.digital?.files.find((entry) => fileNameOf(entry.key) === name);
+		const file = item?.digital
+			? filesOfOrder(item.digital, order.placedAt).find((entry) => fileNameOf(entry.key) === name)
+			: undefined;
 		if (!item || !file) throw problem('not_found', 'There is no such download.');
 		const { downloadLimit } = await s.values('digital_goods');
 		const limit = downloadLimitOf(item, downloadLimit);
@@ -196,7 +251,7 @@ export const createDigital = (product, service) => {
 		return { url: signed.url, expiresAt: signed.expiresAt };
 	};
 
-	return Object.freeze({ addLicences, addFile, giveLicences, linesOf, download });
+	return Object.freeze({ addLicences, removeLicences, addFile, removeFile, giveLicences, linesOf, download });
 };
 
 /** @typedef {ReturnType<typeof createDigital>} Digital */

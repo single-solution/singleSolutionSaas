@@ -9203,6 +9203,60 @@
 				}
 			}
 		},
+		"/v1/admin/products/{id}/files/{name}": {
+			"delete": {
+				"summary": "Remove a file from a digital product (Catalog admin widget)",
+				"description": "The file goes from the product: orders placed from now on do not get it. While orders have the product it is kept (digital.retired) for the orders placed before, so what they bought stays downloadable; else it is dropped. The file in storage is not deleted. :name is a file name as the product lists it (the end of its key). Uploading a file of the same name again makes it the product's file again, for every order. 422 validation_failed at /id (not a digital product, or its item type has no downloads); 404 not_found for another product or file. The ticket needs catalog.edit.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "digital_goods",
+				"x-ss-permission": "catalog.edit",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "name",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DigitalFileRemoved"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/admin/products/{id}/licences": {
 			"post": {
 				"summary": "Add license keys to a digital product (Catalog admin widget)",
@@ -9257,6 +9311,77 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/LicenceKeysAdded"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/products/{id}/licences/remove": {
+			"post": {
+				"summary": "Remove license keys from a digital product (Catalog admin widget)",
+				"description": "Keys are trimmed. Keys no order was given are removed; a key already given to an order stays with that order (counted in given), and keys the product does not have are skipped. 422 validation_failed at /keys or /id (not a digital product, or its item type has no license keys); 404 not_found. The ticket needs catalog.edit.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "digital_goods",
+				"x-ss-permission": "catalog.edit",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"keys"
+								],
+								"properties": {
+									"keys": {
+										"type": "array",
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 500
+										},
+										"minItems": 1,
+										"maxItems": 1000
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LicenceKeysRemoved"
 								}
 							}
 						}
@@ -24964,6 +25089,71 @@
 				}
 			}
 		},
+		"/v1/products/{id}/files/{name}": {
+			"delete": {
+				"summary": "Remove a file from a digital product",
+				"description": "The file goes from the product: orders placed from now on do not get it. While orders have the product it is kept (digital.retired) for the orders placed before, so what they bought stays downloadable; else it is dropped. The file in storage is not deleted. :name is a file name as the product lists it (the end of its key). Uploading a file of the same name again makes it the product's file again, for every order. 422 validation_failed at /id (not a digital product, or its item type has no downloads); 404 not_found for another product or file.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "digital_goods",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "name",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DigitalFileRemoved"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/products/{id}/licences": {
 			"post": {
 				"summary": "Add license keys to a digital product",
@@ -25029,6 +25219,88 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/LicenceKeysAdded"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/products/{id}/licences/remove": {
+			"post": {
+				"summary": "Remove license keys from a digital product",
+				"description": "Keys are trimmed. Keys no order was given are removed; a key already given to an order stays with that order (counted in given), and keys the product does not have are skipped. 422 validation_failed at /keys or /id (not a digital product, or its item type has no license keys); 404 not_found.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "digital_goods",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"keys"
+								],
+								"properties": {
+									"keys": {
+										"type": "array",
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 500
+										},
+										"minItems": 1,
+										"maxItems": 1000
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LicenceKeysRemoved"
 								}
 							}
 						}
@@ -39904,6 +40176,46 @@
 					}
 				}
 			},
+			"DigitalFileRemoved": {
+				"type": "object",
+				"description": "The product’s files after a removal.",
+				"required": [
+					"files",
+					"keptForOrders"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"files": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": [
+								"name",
+								"type",
+								"size"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"name": {
+									"type": "string"
+								},
+								"type": {
+									"type": "string"
+								},
+								"size": {
+									"type": "integer",
+									"minimum": 0
+								}
+							}
+						},
+						"description": "The files new buyers get."
+					},
+					"keptForOrders": {
+						"type": "boolean",
+						"description": "Orders had the product: the file is kept (digital.retired) for the orders placed before now."
+					}
+				}
+			},
 			"DigitalFileUpload": {
 				"type": "object",
 				"description": "A signed upload of a digital product’s file.",
@@ -41298,6 +41610,30 @@
 					"added": {
 						"type": "integer",
 						"description": "Keys added (repeats and keys the product has are skipped)."
+					},
+					"available": {
+						"type": "integer",
+						"description": "Keys not given yet."
+					}
+				}
+			},
+			"LicenceKeysRemoved": {
+				"type": "object",
+				"description": "License keys removed.",
+				"required": [
+					"removed",
+					"given",
+					"available"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"removed": {
+						"type": "integer",
+						"description": "Keys removed (keys no order was given)."
+					},
+					"given": {
+						"type": "integer",
+						"description": "Keys of the list given to orders: they stay with those orders."
 					},
 					"available": {
 						"type": "integer",
@@ -44930,6 +45266,7 @@
 								"type": "object",
 								"required": [
 									"files",
+									"retired",
 									"licenceKeys",
 									"downloadLimit"
 								],
@@ -44989,6 +45326,68 @@
 												}
 											}
 										}
+									},
+									"retired": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"key",
+												"type",
+												"size",
+												"alt",
+												"removedAt"
+											],
+											"additionalProperties": false,
+											"properties": {
+												"key": {
+													"type": "string"
+												},
+												"type": {
+													"type": "string"
+												},
+												"size": {
+													"type": "integer",
+													"minimum": 0
+												},
+												"alt": {
+													"type": "string",
+													"description": "The file name."
+												},
+												"sizes": {
+													"type": "object",
+													"required": [],
+													"additionalProperties": false,
+													"properties": {
+														"thumb": {
+															"type": "string"
+														},
+														"card": {
+															"type": "string"
+														},
+														"detail": {
+															"type": "string"
+														}
+													},
+													"description": "Storage keys of the smaller copies the uploader made."
+												},
+												"width": {
+													"type": "integer"
+												},
+												"height": {
+													"type": "integer"
+												},
+												"blur": {
+													"type": "string"
+												},
+												"removedAt": {
+													"type": "string",
+													"format": "date-time",
+													"description": "When it was removed."
+												}
+											}
+										},
+										"description": "Files removed while orders had the product: still downloadable for the orders placed before removedAt, never for later ones."
 									},
 									"licenceKeys": {
 										"type": "boolean"

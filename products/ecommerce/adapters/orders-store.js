@@ -445,6 +445,24 @@ export const createOrdersStore = (data) => {
 				throw error;
 			}
 		},
+		/**
+		 * Remove license keys of a product that no order was given (keys given to an order stay with it).
+		 * @param {string} productId @param {string[]} keys
+		 * @returns {Promise<{ removed: number, given: number }>} given: how many of them an order has
+		 */
+		removeLicences: async (productId, keys) => {
+			const licences = data.collection(COLLECTIONS.licences);
+			const removed = (await licences.deleteMany({ websiteId, productId, key: { $in: keys }, status: 'available' }))
+				.deletedCount;
+			const given = await licences.countDocuments({ websiteId, productId, key: { $in: keys }, status: 'assigned' });
+			return { removed: Number(removed ?? 0), given };
+		},
+		/**
+		 * Whether any order has a line of the product (its files then stay for those orders when removed).
+		 * @param {string} productId
+		 */
+		productOrdered: async (productId) =>
+			(await orders.countDocuments({ websiteId, 'lines.productId': productId }, { limit: 1 })) > 0,
 		/** @param {string} productId */
 		countLicences: (productId) =>
 			data.collection(COLLECTIONS.licences).countDocuments({ websiteId, productId, status: 'available' }),

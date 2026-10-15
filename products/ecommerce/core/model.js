@@ -136,7 +136,9 @@ export const ID_PREFIX = Object.freeze({
  * @property {Array<{ name: string, values: string[] }>} options variant axes (variants)
  * @property {VariantRecord[]} variants at least one
  * @property {boolean} trackStock false = never runs out (services, made to order)
- * @property {{ files: MediaRecord[], licenceKeys: boolean, downloadLimit: number } | null} digital digital goods
+ * @property {{ files: MediaRecord[], retired: Array<MediaRecord & { removedAt: Date }>, licenceKeys: boolean,
+ *   downloadLimit: number } | null} digital digital goods: `retired` are files removed while orders had the product,
+ *   still downloadable for the orders placed before `removedAt`
  * @property {{ durationMinutes: number } | null} booking bookings
  * @property {import('./catalog-content.js').SeoRecord} seo '' = derived from name and summary (E16)
  * @property {boolean} featured (E2)

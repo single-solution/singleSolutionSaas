@@ -37,6 +37,19 @@ export const fileKey = (productId, name) => `ecommerce/digital/${productId}/${na
 export const fileNameOf = (key) => key.slice(key.lastIndexOf('/') + 1);
 
 /**
+ * The files an order's digital line gets: the product's files, and the ones removed after the order was placed (a
+ * removal takes a file away from new buyers only).
+ * @template {{ key: string }} F
+ * @param {{ files: F[], retired: Array<F & { removedAt: Date }> }} digital
+ * @param {Date} placedAt
+ * @returns {F[]}
+ */
+export const filesOfOrder = (digital, placedAt) => [
+	...digital.files,
+	...digital.retired.filter((file) => file.removedAt.getTime() > placedAt.getTime()),
+];
+
+/**
  * License keys to add: trimmed, without blanks and repeats.
  * @param {unknown} value
  * @returns {{ ok: true, value: string[] } | { ok: false, message: string }}

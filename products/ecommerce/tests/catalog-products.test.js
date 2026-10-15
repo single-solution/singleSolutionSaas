@@ -262,7 +262,7 @@ describe('products', () => {
 		expect(digital.json).toMatchObject({
 			trackStock: false,
 			inStock: true,
-			digital: { files: [], licenceKeys: true, downloadLimit: 3 },
+			digital: { files: [], retired: [], licenceKeys: true, downloadLimit: 3 },
 			booking: null,
 		});
 		const booking = await api('POST', '/v1/products', {

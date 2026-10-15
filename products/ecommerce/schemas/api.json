@@ -8680,7 +8680,7 @@
 						},
 						{
 							"type": "object",
-							"required": ["files", "licenceKeys", "downloadLimit"],
+							"required": ["files", "retired", "licenceKeys", "downloadLimit"],
 							"additionalProperties": false,
 							"properties": {
 								"files": {
@@ -8732,6 +8732,62 @@
 											}
 										}
 									}
+								},
+								"retired": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": ["key", "type", "size", "alt", "removedAt"],
+										"additionalProperties": false,
+										"properties": {
+											"key": {
+												"type": "string"
+											},
+											"type": {
+												"type": "string"
+											},
+											"size": {
+												"type": "integer",
+												"minimum": 0
+											},
+											"alt": {
+												"type": "string",
+												"description": "The file name."
+											},
+											"sizes": {
+												"type": "object",
+												"required": [],
+												"additionalProperties": false,
+												"properties": {
+													"thumb": {
+														"type": "string"
+													},
+													"card": {
+														"type": "string"
+													},
+													"detail": {
+														"type": "string"
+													}
+												},
+												"description": "Storage keys of the smaller copies the uploader made."
+											},
+											"width": {
+												"type": "integer"
+											},
+											"height": {
+												"type": "integer"
+											},
+											"blur": {
+												"type": "string"
+											},
+											"removedAt": {
+												"type": "string",
+												"format": "date-time",
+												"description": "When it was removed."
+											}
+										}
+									},
+									"description": "Files removed while orders had the product: still downloadable for the orders placed before removedAt, never for later ones."
 								},
 								"licenceKeys": {
 									"type": "boolean"
@@ -15223,6 +15279,59 @@
 				},
 				"active": {
 					"type": "boolean"
+				}
+			}
+		},
+		"LicenceKeysRemoved": {
+			"type": "object",
+			"description": "License keys removed.",
+			"required": ["removed", "given", "available"],
+			"additionalProperties": false,
+			"properties": {
+				"removed": {
+					"type": "integer",
+					"description": "Keys removed (keys no order was given)."
+				},
+				"given": {
+					"type": "integer",
+					"description": "Keys of the list given to orders: they stay with those orders."
+				},
+				"available": {
+					"type": "integer",
+					"description": "Keys not given yet."
+				}
+			}
+		},
+		"DigitalFileRemoved": {
+			"type": "object",
+			"description": "The product’s files after a removal.",
+			"required": ["files", "keptForOrders"],
+			"additionalProperties": false,
+			"properties": {
+				"files": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["name", "type", "size"],
+						"additionalProperties": false,
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"type": {
+								"type": "string"
+							},
+							"size": {
+								"type": "integer",
+								"minimum": 0
+							}
+						}
+					},
+					"description": "The files new buyers get."
+				},
+				"keptForOrders": {
+					"type": "boolean",
+					"description": "Orders had the product: the file is kept (digital.retired) for the orders placed before now."
 				}
 			}
 		}
@@ -21954,6 +22063,52 @@
 			"$ref": "#/components/schemas/LicenceKeysAdded"
 		}
 	},
+	"POST /v1/products/:id/licences/remove": {
+		"summary": "Remove license keys from a digital product",
+		"description": "Keys are trimmed. Keys no order was given are removed; a key already given to an order stays with that order (counted in given), and keys the product does not have are skipped. 422 validation_failed at /keys or /id (not a digital product, or its item type has no license keys); 404 not_found.",
+		"body": {
+			"type": "object",
+			"required": ["keys"],
+			"properties": {
+				"keys": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 500
+					},
+					"minItems": 1,
+					"maxItems": 1000
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/LicenceKeysRemoved"
+		}
+	},
+	"POST /v1/admin/products/:id/licences/remove": {
+		"summary": "Remove license keys from a digital product (Catalog admin widget)",
+		"description": "Keys are trimmed. Keys no order was given are removed; a key already given to an order stays with that order (counted in given), and keys the product does not have are skipped. 422 validation_failed at /keys or /id (not a digital product, or its item type has no license keys); 404 not_found. The ticket needs catalog.edit.",
+		"body": {
+			"type": "object",
+			"required": ["keys"],
+			"properties": {
+				"keys": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 500
+					},
+					"minItems": 1,
+					"maxItems": 1000
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/LicenceKeysRemoved"
+		}
+	},
 	"POST /v1/admin/products/:id/files": {
 		"summary": "Add a file to a digital product (Catalog admin widget)",
 		"description": "Answers a signed upload: PUT the file to upload.url with upload.headers within 15 minutes. The file is listed on the product at once (a file of the same name is replaced); a product has at most 20 files. The name is cleaned to letters, digits, dot, dash and underscore (at most 120 characters). Shoppers download the files of paid orders (GET /v1/shop/orders/{id}/downloads/{lineId}/{file}). 422 validation_failed at /name, /type, /size or /id (not a digital product, or its item type has no downloads); 404 not_found; 503 storage_not_connected. The ticket needs catalog.edit.",
@@ -21980,6 +22135,20 @@
 		},
 		"response": {
 			"$ref": "#/components/schemas/DigitalFileUpload"
+		}
+	},
+	"DELETE /v1/products/:id/files/:name": {
+		"summary": "Remove a file from a digital product",
+		"description": "The file goes from the product: orders placed from now on do not get it. While orders have the product it is kept (digital.retired) for the orders placed before, so what they bought stays downloadable; else it is dropped. The file in storage is not deleted. :name is a file name as the product lists it (the end of its key). Uploading a file of the same name again makes it the product's file again, for every order. 422 validation_failed at /id (not a digital product, or its item type has no downloads); 404 not_found for another product or file.",
+		"response": {
+			"$ref": "#/components/schemas/DigitalFileRemoved"
+		}
+	},
+	"DELETE /v1/admin/products/:id/files/:name": {
+		"summary": "Remove a file from a digital product (Catalog admin widget)",
+		"description": "The file goes from the product: orders placed from now on do not get it. While orders have the product it is kept (digital.retired) for the orders placed before, so what they bought stays downloadable; else it is dropped. The file in storage is not deleted. :name is a file name as the product lists it (the end of its key). Uploading a file of the same name again makes it the product's file again, for every order. 422 validation_failed at /id (not a digital product, or its item type has no downloads); 404 not_found for another product or file. The ticket needs catalog.edit.",
+		"response": {
+			"$ref": "#/components/schemas/DigitalFileRemoved"
 		}
 	},
 	"GET /v1/orders": {

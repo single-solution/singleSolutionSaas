@@ -1121,7 +1121,7 @@ export const checkProduct = (body, rules, existing) => {
 	/** @type {ProductRecord['digital']} */
 	let digital = null;
 	if (kind === 'digital') {
-		const before = existing?.digital ?? { files: [], licenceKeys: false, downloadLimit: 0 };
+		const before = existing?.digital ?? { files: [], retired: [], licenceKeys: false, downloadLimit: 0 };
 		const given = input.digital === undefined ? {} : input.digital;
 		if (!isObject(given)) fail('/digital', 'Give the download settings.');
 		const raw = isObject(given) ? given : {};
@@ -1131,6 +1131,7 @@ export const checkProduct = (body, rules, existing) => {
 			fail('/digital/downloadLimit', `Downloads are a whole number from 0 (no limit) to ${LIMITS.downloadLimit}.`);
 		digital = {
 			files: before.files,
+			retired: before.retired,
 			licenceKeys: typeof raw.licenceKeys === 'boolean' ? raw.licenceKeys : before.licenceKeys,
 			downloadLimit: isCount(raw.downloadLimit, LIMITS.downloadLimit) ? raw.downloadLimit : before.downloadLimit,
 		};

@@ -300,7 +300,8 @@ export const variantPhotosDialog = (kit, { productId, name, photos, picked, uplo
 };
 
 /**
- * License keys (one per line, in a dialog) and downloadable files of a saved digital product, as a card.
+ * License keys (added or removed one per line, in a dialog) and downloadable files of a saved digital product, as a
+ * card: each file with Remove (orders placed before keep it, the server says when), and Add a file.
  * @param {Kit} kit @param {any} product
  */
 export const digitalCard = (kit, product) => {
@@ -309,12 +310,36 @@ export const digitalCard = (kit, product) => {
 	const files = h('ul', { class: 'rows' });
 	/** @param {{ name: string, size: number }} file */
 	const listed = (file) =>
-		kit.text('li', {}, t('catalogAdmin.fileLine', { name: file.name, size: Math.ceil(file.size / 1024) }));
-	files.append(
-		...(product.digital?.files ?? []).map((/** @type {any} */ file) =>
-			listed({ name: file.alt || file.key.split('/').pop(), size: file.size }),
-		),
+		h('li', {}, [
+			t('catalogAdmin.fileLine', { name: file.name, size: Math.ceil(file.size / 1024) }),
+			' ',
+			kit.button(t('admin.remove'), () => removeFile(file.name), {
+				attributes: { 'aria-label': t('catalogAdmin.removeFile', { name: file.name }) },
+			}),
+		]);
+	/** @param {Array<{ name: string, size: number }>} list */
+	const draw = (list) => files.replaceChildren(...list.map(listed));
+	draw(
+		(product.digital?.files ?? []).map((/** @type {any} */ file) => ({
+			name: String(file.key).split('/').pop() ?? '',
+			size: file.size,
+		})),
 	);
+	/** @param {string} name */
+	const removeFile = (name) =>
+		kit.dialog({
+			title: t('catalogAdmin.removeFileTitle'),
+			body: [kit.text('p', {}, t('catalogAdmin.removeFileHint', { name }))],
+			submitLabel: t('admin.remove'),
+			danger: true,
+			onSubmit: async () => {
+				const answer = await kit.call('DELETE', `/v1/admin/products/${product.id}/files/${encodeURIComponent(name)}`);
+				if (!answer.ok) return kit.reason(answer);
+				draw(answer.data.files);
+				kit.say(note, t(answer.data.keptForOrders ? 'catalogAdmin.fileRemovedKept' : 'catalogAdmin.fileRemoved', { name }));
+				return null;
+			},
+		});
 	const addKeys = kit.button(t('catalogAdmin.addLicences'), () => {
 		const keys = kit.area('', { rows: '6' });
 		kit.dialog({
@@ -325,6 +350,30 @@ export const digitalCard = (kit, product) => {
 				const answer = await kit.call('POST', `/v1/admin/products/${product.id}/licences`, { keys: entriesOf(keys.value) });
 				if (!answer.ok) return kit.reason(answer);
 				kit.say(note, t('catalogAdmin.licencesAdded', { added: answer.data.added, available: answer.data.available }));
+				return null;
+			},
+		});
+	});
+	const removeKeys = kit.button(t('catalogAdmin.removeLicences'), () => {
+		const keys = kit.area('', { rows: '6' });
+		kit.dialog({
+			title: t('catalogAdmin.removeLicences'),
+			body: [kit.text('p', {}, t('catalogAdmin.removeLicencesHint')), kit.field(t('catalogAdmin.licencesToRemove'), keys)],
+			submitLabel: t('catalogAdmin.removeLicences'),
+			danger: true,
+			onSubmit: async () => {
+				const typed = entriesOf(keys.value);
+				if (typed.length === 0) return t('catalogAdmin.licencesNone');
+				const answer = await kit.call('POST', `/v1/admin/products/${product.id}/licences/remove`, { keys: typed });
+				if (!answer.ok) return kit.reason(answer);
+				kit.say(
+					note,
+					t('catalogAdmin.licencesRemoved', {
+						removed: answer.data.removed,
+						given: answer.data.given,
+						available: answer.data.available,
+					}),
+				);
 				return null;
 			},
 		});
@@ -341,6 +390,8 @@ export const digitalCard = (kit, product) => {
 		});
 		if (!asked.ok) return kit.fail(note, asked);
 		if (!(await kit.upload(asked.data.upload, file))) return kit.say(note, t('admin.uploadFailed'), true);
+		// a file of the same name is replaced
+		for (const row of [...files.children]) if (row.textContent?.startsWith(`${asked.data.file.name} (`)) row.remove();
 		files.append(listed(asked.data.file));
 		picker.value = '';
 		kit.say(note, t('catalogAdmin.fileAdded', { name: asked.data.file.name }));
@@ -357,6 +408,6 @@ export const digitalCard = (kit, product) => {
 			kit.field(t('catalogAdmin.addFile'), picker),
 			note,
 		],
-		[addKeys],
+		[addKeys, removeKeys],
 	);
 };
