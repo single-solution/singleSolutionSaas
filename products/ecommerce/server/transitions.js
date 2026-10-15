@@ -156,14 +156,15 @@ export const createTransitions = (product, service, { refunded } = {}) => {
 		);
 
 	/**
-	 * Run a plan in one transaction. Throws 409 `conflict` when the order changed meanwhile (or its loyalty account kept
-	 * changing) and 422 for a serial number the shop refuses; nothing is written then.
+	 * Run a plan in one transaction (with `more` the order must still match too, and with `remove` the order deleted in
+	 * it). Throws 409 `conflict` when the order changed meanwhile (or its loyalty account kept changing) and 422 for a
+	 * serial number the shop refuses; nothing is written then.
 	 * @param {Site} s @param {OrderRecord} order as read @param {TransitionPlan} plan
-	 * @returns {Promise<OrderRecord>} the order after it
+	 * @param {{ more?: Record<string, unknown>, remove?: boolean }} [how]
 	 */
-	const apply = async (s, order, plan) => {
+	const run = async (s, order, plan, { more = {}, remove = false } = {}) => {
 		const data = await s.data();
-		const guard = { ...plan.guard, ...moneyGuard(order, plan) };
+		const guard = { ...plan.guard, ...moneyGuard(order, plan), ...more };
 		/** @type {Record<string, unknown>} */
 		const update = { $set: plan.set };
 		if (Object.keys(plan.push).length > 0) update.$push = plan.push;
@@ -172,11 +173,11 @@ export const createTransitions = (product, service, { refunded } = {}) => {
 			try {
 				const done = await applyTransition(
 					data,
-					{ orderId: order.id, guard, update, effects: plan.ledger },
+					{ orderId: order.id, guard, update, effects: plan.ledger, remove },
 					{ now: product.now() },
 				);
 				if (!done) throw changed();
-				break;
+				return;
 			} catch (error) {
 				const refusal = unitRefusalOf(error);
 				if (refusal) throw service.invalid(refusal.field, refusal.message);
@@ -184,7 +185,43 @@ export const createTransitions = (product, service, { refunded } = {}) => {
 				if (attempt >= TRIES) throw changed();
 			}
 		}
+	};
+
+	/**
+	 * Run a plan in one transaction (`run`).
+	 * @param {Site} s @param {OrderRecord} order as read @param {TransitionPlan} plan
+	 * @returns {Promise<OrderRecord>} the order after it
+	 */
+	const apply = async (s, order, plan) => {
+		await run(s, order, plan);
 		return /** @type {OrderRecord} */ (await read(s, order.id));
+	};
+
+	/**
+	 * Delete an order with what it gives back (`planRelease`, or nothing) in one transaction, only while it is as read:
+	 * its status, `updatedAt` and facts, its money (paid and refunded) and no refund pending at Payments (E31).
+	 * @param {Site} s @param {OrderRecord} order as read @param {TransitionPlan | null} plan
+	 * @returns {Promise<boolean>} false when the order changed meanwhile (nothing given back, nothing deleted)
+	 */
+	const remove = async (s, order, plan) => {
+		const more = {
+			'payment.paid': order.payment.paid,
+			'payment.refunded': order.payment.refunded,
+			effects: { $not: { $elemMatch: { state: 'pending' } } },
+		};
+		if (!plan) {
+			const gone = await (
+				await ordersOf(s)
+			).deleteOne({ ...more, websiteId: s.websiteId, id: order.id, status: order.status, updatedAt: order.updatedAt });
+			return gone.deletedCount === 1;
+		}
+		try {
+			await run(s, order, plan, { more, remove: true });
+			return true;
+		} catch (error) {
+			if (/** @type {any} */ (error)?.code === 'conflict') return false;
+			throw error;
+		}
 	};
 
 	/**
@@ -594,7 +631,7 @@ export const createTransitions = (product, service, { refunded } = {}) => {
 		for (const order of due) await settle(s, order);
 	};
 
-	return Object.freeze({ apply, runEffects, settle, sweep, dropPending, lockedRefund, announce });
+	return Object.freeze({ apply, remove, runEffects, settle, sweep, dropPending, lockedRefund, announce });
 };
 
 /** @typedef {ReturnType<typeof createTransitions>} Transitions */

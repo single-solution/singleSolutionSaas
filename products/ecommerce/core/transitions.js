@@ -106,7 +106,8 @@ import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAf
  * @property {{ plan: UnitsPlan }} [units] the serial numbers a move into `packed`, `shipped` or `delivered` captures
  * @property {{ set: Record<string, unknown>, entry: Record<string, unknown> }} [paid] a payment the move records
  *   (paid when staff confirm, OR-7; Payments' confirmation)
- * @property {Record<string, unknown>} [payments] what canceling the open Payments payment writes (K-13)
+ * @property {Record<string, unknown>} [payments] what canceling the open Payments payment writes with the transition
+ *   (K-13: a cancel, or a waiting order staff move on, which lets it go)
  */
 
 /**
@@ -403,7 +404,7 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 	const before = factsOf(order);
 	const after = { ...before };
 	/** @type {Record<string, unknown>} */
-	const set = { status: to, role: stage, holdUntil: null };
+	const set = { status: to, role: stage, holdUntil: null, ...(input.payments ?? {}) };
 	/** @type {Record<string, number>} */
 	const inc = {};
 	/** @type {LedgerEffect[]} */
@@ -498,7 +499,6 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 
 	/** Everything the order holds goes back, each once (a cancel, a refund before delivery). */
 	const release = () => {
-		Object.assign(set, input.payments ?? {});
 		set.stockHeld = false;
 		set['promotions.released'] = true;
 		if (hasUnits(order) || before.units === 'captured') ledger.push({ kind: 'release_units' });

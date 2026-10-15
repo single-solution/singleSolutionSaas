@@ -57,7 +57,7 @@ import { ORDER_NUMBER } from '../core/order-numbers.js';
 import { checkTransition, planTransition } from '../core/transitions.js';
 import { createMedia } from './catalog-media.js';
 import { createGuests, phoneRulesOf } from './guests.js';
-import { RECHECK_MS, createOrderPayments, expectedOf } from './order-payments.js';
+import { DROPPED, RECHECK_MS, createOrderPayments, expectedOf } from './order-payments.js';
 import { createMoves } from './orders-moves.js';
 import { createTransitions, rulesOf } from './transitions.js';
 
@@ -776,7 +776,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			'payment.advance': method === 'cod' ? option.advance : 0,
 			// the offers stay as placed (their uses stay counted and go back on a cancel); the points' value may shrink
 			'promotions.pointsValue': q.points?.value ?? 0,
-			...(restartPayment ? { 'payment.paymentId': null, 'payment.checkoutUrl': '', 'payment.checkedAt': null } : {}),
+			...(restartPayment ? DROPPED : {}),
 			updatedAt: new Date(now),
 		};
 		// the payment started for the old total is canceled at Payments, so it can no longer be paid (K-13, CK-21)
@@ -814,9 +814,9 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			},
 		});
 		if (!swapped.ok) {
-			// its canceled payment is dropped: the shopper's next pay starts one for the total as it is
-			if (dropped)
-				await store.change(order, { 'payment.paymentId': null, 'payment.checkoutUrl': '', 'payment.checkedAt': null });
+			// its canceled payment is dropped while the order still names it (a newer one another change started stays): the
+			// shopper's next pay starts one for the total as it is
+			if (dropped) await store.change(order, { ...DROPPED }, { where: { 'payment.paymentId': order.payment.paymentId } });
 			if (swapped.code === 'changed') throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
 			throw problem('out_of_stock', 'Some items are not in stock in the quantity asked.', {
 				extensions: { lines: [{ productId: swapped.productId, variantId: swapped.variantId }] },

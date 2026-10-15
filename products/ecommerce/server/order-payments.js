@@ -38,6 +38,8 @@ const LATE_EVERY_MS = 15 * 60_000;
 const WATCH_MS = 3 * 86_400_000;
 /** Who confirms what Payments confirmed. */
 const PAYMENTS_ACTOR = Object.freeze({ kind: 'system', id: 'payments', name: 'Payments' });
+/** What an order writes when it lets its Payments payment go: the shopper's next pay starts one for it as it is. */
+export const DROPPED = Object.freeze({ 'payment.paymentId': null, 'payment.checkoutUrl': '', 'payment.checkedAt': null });
 
 /**
  * What Payments must confirm for an order: its advance (COD) or its total.
@@ -355,7 +357,7 @@ export const createOrderPayments = (product, service) => {
 			.collection(COLLECTIONS.orders)
 			.updateOne(
 				{ websiteId: s.websiteId, id: order.id, 'payment.paymentId': order.payment.paymentId, 'payment.voidedAt': null },
-				{ $set: { 'payment.paymentId': null, 'payment.checkoutUrl': '', 'payment.checkedAt': null } },
+				{ $set: { ...DROPPED } },
 			);
 	};
 

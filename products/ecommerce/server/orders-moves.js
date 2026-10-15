@@ -62,7 +62,7 @@ import {
 	planUnits,
 	refundEntry,
 } from '../core/transitions.js';
-import { createOrderPayments } from './order-payments.js';
+import { DROPPED, createOrderPayments, openAtPayments } from './order-payments.js';
 import { createTransitions, rulesOf } from './transitions.js';
 import {
 	CASH_METHODS,
@@ -108,6 +108,25 @@ export const createMoves = (product, service) => {
 				'move_not_allowed',
 				'The shopper paid this order meanwhile, so it is paid now: move it again to cancel and refund it.',
 			);
+		return step;
+	};
+
+	/**
+	 * A waiting order staff move on no longer waits for its Payments payment: an open one is canceled there first (K-13),
+	 * so the shopper can no longer pay it (money that still arrives Payments flags to give back); the move then lets it
+	 * go (`DROPPED`, as an edit does: waiting again, the shopper's next pay starts one for the order as it is), or keeps
+	 * it canceled with the payment staff record (`paidOnConfirm`). Paid meanwhile, the move is refused (the order is paid
+	 * now: Payments' payment is recorded), and so is a Payments that cannot be reached. Null when the order has no open
+	 * Payments payment.
+	 * @param {Site} s @param {OrderRecord} order @param {string} reason kept in the payment's history
+	 * @returns {Promise<import('./order-payments.js').CancelStep | null>}
+	 */
+	const leaveWaiting = async (s, order, reason) => {
+		if (!openAtPayments(order)) return null;
+		const step = await payments.beforeCancel(s, order, reason);
+		if (step.paid || step.late) throw problem('move_not_allowed', 'Payments says this order was paid meanwhile; reload it.');
+		if (!step.reached)
+			throw problem('payments_unavailable', 'Payments cannot be reached to cancel the order’s payment there. Try again.');
 		return step;
 	};
 
@@ -272,20 +291,16 @@ export const createMoves = (product, service) => {
 
 	/**
 	 * The payment a move out of waiting records when the order's method counts as paid then (`paidOnConfirm`, OR-7):
-	 * the balance due, as a payment of the order's method (cash for cash on delivery and pay at pickup), after its open
-	 * Payments payment is canceled (K-13); null when the move records none.
-	 * @param {Site} s @param {any} ctx @param {OrderRecord} order @param {import('../core/model.js').StatusRole} to
+	 * the balance due, as a payment of the order's method (cash for cash on delivery and pay at pickup), written with
+	 * what canceling its open Payments payment writes (K-13, `leaveWaiting`); null when the move records none.
+	 * @param {any} ctx @param {OrderRecord} order @param {import('../core/model.js').StatusRole} to
 	 * @param {ReadonlyArray<string>} methods the move's `paidOnConfirm`
 	 */
-	const paidOnConfirm = async (s, ctx, order, to, methods) => {
+	const paidOnConfirm = (ctx, order, to, methods) => {
 		const { due } = orderMoney(order);
 		if (!WAITING.includes(order.role) || !['open', 'packed', 'shipped'].includes(to) || !methods.includes(order.payment.method))
 			return null;
 		if (due <= 0) return null;
-		const step = await payments.beforeCancel(s, order, 'Paid by hand');
-		if (step.paid || step.late) throw problem('move_not_allowed', 'Payments says this order was paid meanwhile; reload it.');
-		if (!step.reached)
-			throw problem('payments_unavailable', 'Payments cannot be reached to cancel the order’s payment there. Try again.');
 		const paid = order.payment.paid + due;
 		const entry = {
 			id: createId(ID_PREFIX.orderPayment),
@@ -308,7 +323,7 @@ export const createMoves = (product, service) => {
 			refunded: order.payment.refunded,
 			state: order.payment.state,
 		});
-		return { entry, set: { ...step.set, 'payment.paid': paid, 'payment.state': state }, step };
+		return { entry, set: { 'payment.paid': paid, 'payment.state': state } };
 	};
 
 	/**
@@ -442,22 +457,24 @@ export const createMoves = (product, service) => {
 		}
 
 		async function moveOn() {
-			// a waiting order staff move on counts as paid when its method is listed (`paidOnConfirm`, OR-7), once its open
-			// Payments payment is canceled (K-13)
-			const paid = await paidOnConfirm(s, ctx, order, target.role, rules.options.paidOnConfirm ?? []);
-			if (paid) called.steps.push(paid.step);
+			const cancelling =
+				(target.role === 'cancelled' || target.role === 'refunded') && BEFORE_DELIVERY_ROLES.includes(order.role);
+			// a waiting order staff move on counts as paid when its method is listed (`paidOnConfirm`, OR-7)
+			const paid = paidOnConfirm(ctx, order, target.role, rules.options.paidOnConfirm ?? []);
+			// its open Payments payment is canceled there first (K-13): a cancel before dispatch, or a refund acting as one
+			// (the canceled order watches it for money that still comes), and a waiting order staff move on (it lets the
+			// payment go, or keeps it canceled with the payment staff record)
+			const step = cancelling
+				? await cancelAtPayments(s, order, input.note || (target.role === 'cancelled' ? 'Order canceled' : 'Order refunded'))
+				: WAITING.includes(order.role)
+					? await leaveWaiting(s, order, paid ? 'Paid by hand' : 'Moved on by staff')
+					: null;
+			if (step) called.steps.push(step);
 			const shipment = shipping
 				? 'book' in shipping
 					? (called.booked = await shipping.book())
 					: shipping.shipment
 				: undefined;
-			const cancelling =
-				(target.role === 'cancelled' || target.role === 'refunded') && BEFORE_DELIVERY_ROLES.includes(order.role);
-			// a cancel before dispatch, or a refund acting as one: its open payment is canceled at Payments first (K-13)
-			const step = cancelling
-				? await cancelAtPayments(s, order, input.note || (target.role === 'cancelled' ? 'Order canceled' : 'Order refunded'))
-				: null;
-			if (step) called.steps.push(step);
 			// stock an order gives back tells the alerts (E34): what its products were before
 			const held = ['cancelled', 'returned_to_origin', 'returned', 'refunded'].includes(target.role)
 				? await heldStockBefore(data, order)
@@ -471,8 +488,8 @@ export const createMoves = (product, service) => {
 					...(shipment ? { shipment } : {}),
 					...(video ? { video } : {}),
 					...(units ? { units } : {}),
-					...(paid ? { paid } : {}),
-					...(step ? { payments: step.set } : {}),
+					...(paid ? { paid: { ...paid, set: { ...step?.set, ...paid.set } } } : {}),
+					...(step && !paid ? { payments: cancelling ? step.set : { ...DROPPED } } : {}),
 				},
 				rules: settings,
 				now,
@@ -859,9 +876,10 @@ export const createMoves = (product, service) => {
 
 	/**
 	 * Record a payment staff took (E26): a bank transfer, cash or another way, at most the balance due. The order's open
-	 * Payments payment is canceled first, so the money cannot be taken twice (CK-21, as `paidOnConfirm` does); a payment
-	 * made there meanwhile, or a Payments that cannot be reached, refuses it. With `confirm`, a waiting order moves to its
-	 * confirmed status in the same call (a transition like any other).
+	 * Payments payment is canceled first, so the money cannot be taken twice (CK-21, as a waiting order staff move on
+	 * does); a payment made there meanwhile, or a Payments that cannot be reached, refuses it, and one that loses its race
+	 * to another change drops the payment it canceled. With `confirm`, a waiting order moves to its confirmed status in
+	 * the same call (a transition like any other).
 	 * @param {Site} s
 	 * @param {any} ctx
 	 * @param {OrderRecord} order
@@ -915,7 +933,11 @@ export const createMoves = (product, service) => {
 				},
 			},
 		);
-		if (result.modifiedCount !== 1) throw changed();
+		if (result.modifiedCount !== 1) {
+			// another change won: the payment Payments canceled for this one is dropped, so the order stays payable
+			await payments.dropVoided(s, order, step);
+			throw changed();
+		}
 		await service.log(ctx, 'order.payment_recorded', order.id, { label: order.number, detail: `${money} by ${input.method}` });
 		let after = /** @type {OrderRecord} */ (
 			await orders.findOne({ websiteId: s.websiteId, id: order.id }, { projection: { _id: 0 } })
@@ -941,24 +963,23 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
-	 * Give back what an order holds before it is deleted (E31), as a cancel does, through the order engine (a release
-	 * without a status): its stock and slots, offer uses and redeemed points, and its serial numbers, each once; with the
-	 * checkout setting `deleteGivesBack: all`, a delivered or closed order's items still with the customer, offer uses
-	 * and points too (stock back, earned points taken back, redeemed ones given back). With
-	 * `payments`, its open Payments payment is canceled first; a payment made meanwhile refuses the delete (K-13), and
-	 * so does a Payments that cannot be reached (a deleted order cannot try the cancel again later).
-	 * @param {Site} s @param {OrderRecord} order @param {{ payments?: boolean }} [options]
+	 * What giving back what an order holds plans (E31), as a cancel gives it, through the order engine (a release without
+	 * a status): its stock and slots, offer uses and redeemed points, and its serial numbers, each once; with the checkout
+	 * setting `deleteGivesBack: all`, a delivered or closed order's items still with the customer, offer uses and points
+	 * too (stock back, earned points taken back, redeemed ones given back). Null when it holds nothing any more.
+	 * @param {Site} s @param {OrderRecord} order
+	 */
+	const releaseOf = async (s, order) => planRelease({ order, all: (await s.values('checkout')).deleteGivesBack === 'all' });
+
+	/**
+	 * Give back what an order holds (`releaseOf`) before every order goes (`POST /v1/data/delete-all`, which cancels their
+	 * Payments payments first).
+	 * @param {Site} s @param {OrderRecord} order
 	 * @returns {Promise<boolean>} false when the order changed meanwhile (nothing was given back)
 	 */
-	const giveBack = async (s, order, { payments: cancelPayment = false } = {}) => {
-		// delivered, returned and settled orders keep what was sold, unless the website's deletes give everything back
-		const all = (await s.values('checkout')).deleteGivesBack === 'all';
-		const plan = planRelease({ order, all });
+	const giveBack = async (s, order) => {
+		const plan = await releaseOf(s, order);
 		if (!plan) return true;
-		const step = cancelPayment ? await payments.beforeCancel(s, order, 'Order deleted') : null;
-		if (step?.paid || step?.late) throw problem('conflict', 'This order was paid meanwhile; refund it before deleting it.');
-		if (step && !step.reached)
-			throw problem('payments_unavailable', 'Payments cannot be reached to cancel the order’s payment there. Try again.');
 		try {
 			await transitions.apply(s, order, plan);
 			return true;
@@ -968,11 +989,35 @@ export const createMoves = (product, service) => {
 		}
 	};
 
+	/**
+	 * Delete an order (E31). Its open Payments payment is canceled first (K-13; also when the order holds nothing any
+	 * more): a payment made meanwhile refuses the delete, and so does a Payments that cannot be reached (a deleted order
+	 * cannot try the cancel again later). Then what it holds goes back (`releaseOf`) and it is deleted in one
+	 * transaction, only while it is as read (its status, facts and money, no refund pending); one that changed meanwhile
+	 * is neither given back nor deleted, and the payment canceled for it is dropped, so it stays payable.
+	 * @param {Site} s @param {OrderRecord} order
+	 * @returns {Promise<boolean>} false when the order changed meanwhile
+	 */
+	const remove = async (s, order) => {
+		const step = await payments.beforeCancel(s, order, 'Order deleted');
+		if (step.paid || step.late) throw problem('conflict', 'This order was paid meanwhile; refund it before deleting it.');
+		if (!step.reached)
+			throw problem('payments_unavailable', 'Payments cannot be reached to cancel the order’s payment there. Try again.');
+		let removed = false;
+		try {
+			removed = await transitions.remove(s, order, await releaseOf(s, order));
+		} finally {
+			if (!removed) await payments.dropVoided(s, order, step);
+		}
+		return removed;
+	};
+
 	return Object.freeze({
 		move,
 		refund,
 		recordPayment,
 		giveBack,
+		remove,
 		typeSerials,
 		unitRulesFor,
 		recheck: payments.recheck,

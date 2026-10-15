@@ -1085,22 +1085,23 @@ const applyEffect = async (data, orderId, effect, { now, session }) => {
 
 /**
  * Apply a transition of an order in one transaction: the order's write, only while it still matches `guard` (its
- * status, `updatedAt` and facts as read: compare-and-set), then each ledger effect of the plan. Nothing is written
- * when the order changed meanwhile; a refused serial number or a loyalty account that changed meanwhile aborts it
- * all (`unitRefusalOf`, `isPointsChanged`).
+ * status, `updatedAt` and facts as read: compare-and-set), then each ledger effect of the plan, and with `remove` the
+ * order's delete (E31: what it gives back and the delete happen together). Nothing is written when the order changed
+ * meanwhile; a refused serial number or a loyalty account that changed meanwhile aborts it all (`unitRefusalOf`,
+ * `isPointsChanged`).
  * @param {WebsiteData} data
  * @param {{ orderId: string, guard: Record<string, unknown>, update: Record<string, unknown>,
- *   effects: ReadonlyArray<import('../core/transitions.js').LedgerEffect> }} transition
+ *   effects: ReadonlyArray<import('../core/transitions.js').LedgerEffect>, remove?: boolean }} transition
  * @param {{ now: number }} clock
  * @returns {Promise<boolean>} false when the order changed meanwhile
  */
-export const applyTransition = (data, { orderId, guard, update, effects }, { now }) =>
+export const applyTransition = (data, { orderId, guard, update, effects, remove = false }, { now }) =>
 	data.transaction(async (session) => {
-		const written = await data
-			.collection(COLLECTIONS.orders)
-			.updateOne({ ...guard, websiteId: data.websiteId, id: orderId }, update, { session });
+		const orders = data.collection(COLLECTIONS.orders);
+		const written = await orders.updateOne({ ...guard, websiteId: data.websiteId, id: orderId }, update, { session });
 		if (written.modifiedCount !== 1) return false;
 		for (const effect of effects) await applyEffect(data, orderId, effect, { now, session });
+		if (remove) await orders.deleteOne({ websiteId: data.websiteId, id: orderId }, { session });
 		return true;
 	});
 

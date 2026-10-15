@@ -246,16 +246,14 @@ export const createOrders = (product, service, { ordering }) => {
 	};
 
 	/**
-	 * DELETE /v1/orders/:id (E31): what the order holds is given back as a cancel does (stock, slots, offer uses, points,
-	 * serials; its open Payments payment is canceled, K-13), then it is deleted; the activity entry keeps its number and
-	 * total.
+	 * DELETE /v1/orders/:id (E31): its open Payments payment is canceled (K-13), then what the order holds is given back
+	 * as a cancel does (stock, slots, offer uses, points, serials) and it is deleted, in one transaction; the activity
+	 * entry keeps its number and total.
 	 * @param {any} ctx
 	 */
 	const deleteOrder = async (ctx) => {
 		const s = await service.site(ctx);
 		const order = await orderOf(s, ctx);
-		const data = await s.data();
-		const orders = data.collection(COLLECTIONS.orders);
 		const { money } = await s.format();
 		// the shopper's money is never deleted with it: a refund still running at Payments, or money a not delivered or
 		// closed order still holds, is refunded first
@@ -270,18 +268,9 @@ export const createOrders = (product, service, { ordering }) => {
 				'conflict',
 				`Refund the ${money(held, order.totals.currency)} it still holds to the shopper before deleting this order.`,
 			);
-		// what it holds goes back first, once; an order that changed meanwhile is not deleted (nor one paid or refunded
-		// meanwhile)
-		if (!(await moves.giveBack(s, order, { payments: true })))
-			throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
-		const deleted = await orders.deleteOne({
-			websiteId: s.websiteId,
-			id: order.id,
-			'payment.paid': order.payment.paid,
-			'payment.refunded': order.payment.refunded,
-			effects: { $not: { $elemMatch: { state: 'pending' } } },
-		});
-		if (deleted.deletedCount !== 1) throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
+		// what it holds goes back once, with the delete; an order that changed meanwhile (also paid or refunded meanwhile)
+		// is neither given back nor deleted
+		if (!(await moves.remove(s, order))) throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
 		await service.log(ctx, 'order.deleted', order.id, {
 			label: order.number,
 			detail: `Total ${money(order.totals.total, order.totals.currency)}`,
