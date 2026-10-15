@@ -411,6 +411,8 @@ export const settingsPlan = (values) => {
 				'landing_pages.attributeTitle': '{name}',
 				'landing_pages.attributeDescription': '',
 				'landing_pages.gradeUrl': '',
+				'landing_pages.gradeTitle': '{name}', // SaaS default (store mapping to review when the owner asks)
+				'landing_pages.gradeDescription': '', // SaaS default (store mapping to review when the owner asks)
 				'landing_pages.auto': 'category_brand',
 				'landing_pages.autoMinProducts': 2,
 				'landing_pages.autoMinInStockVariants': 3,
@@ -506,6 +508,10 @@ export const settingsPlan = (values) => {
 					'\n',
 				),
 				'robots_verification.blockAiCrawlers': false,
+				// Growth's robots presets at the SaaS defaults (mechanical; store mapping to review when the owner asks)
+				'robots_verification.blockSearchPages': true,
+				'robots_verification.blockParameters': 'sort, minPrice, maxPrice, inStock',
+				'robots_verification.blockPaths': ['/cart', '/checkout', '/account'],
 				...(site ? { 'robots_verification.sitemaps': [`${site}/sitemap.xml`] } : {}),
 				'robots_verification.googleVerification': seo.googleSiteVerification,
 				'robots_verification.bingVerification': '',
