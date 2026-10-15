@@ -1,92 +1,36 @@
 /**
- * The dashboard's texts (English, kept in this file; the dashboard is not translated, PLAN 0.6).
+ * The dashboard's words (US English, kept in this file; the dashboard is not translated, PLAN 0.6): Payments' title
+ * and its own words over the words every product dashboard shares (`@ss/ui`).
  * @module
  */
-export const TEXTS = Object.freeze({
+import { dashboardTexts } from '@ss/ui';
+
+export const TEXTS = dashboardTexts({
 	title: 'Payments',
-	loading: 'Loading…',
-	signedOut: 'Open this dashboard from the Portal.',
-	failed: 'This could not be loaded.',
-	backToPortal: 'Back to Portal',
-	pickWebsite: 'Pick a website',
-	website: 'Website',
-	adminView: 'Admin view: {merchant} / {domain}',
-	saved: 'Saved',
-	save: 'Save',
-	reset: 'Reset to default',
-	cancel: 'Cancel',
-	andMore: '{names} and {count} more',
-	tabs: Object.freeze({
-		overview: 'Overview',
-		features: 'Features',
-		settings: 'Settings',
-		connections: 'Connections',
-		developers: 'Developers',
-		defaults: 'Defaults',
-		prices: 'Prices',
-	}),
-	overview: Object.freeze({
+	overview: {
 		gateways: 'Gateways ready',
 		gatewaysHelp:
 			'Switched-on gateways with their keys connected (bank transfer: the account holder and the account number or IBAN set; with Require bank details off, instructions or an account number or IBAN).',
 		bankStep: 'Finish the bank transfer details',
-		noBank: Object.freeze({
+		noBank: {
 			title: 'Bank transfer is on, but payers do not see it yet',
 			action: 'Open Settings',
-		}),
+		},
 		bankHelpDetails:
 			'Set {missing} in Settings, or turn off Require bank details and write instructions that tell payers how to pay.',
 		bankHelpInstructions: 'Write instructions in Settings that tell payers how to pay, or set the account number or IBAN.',
-		bankMissing: Object.freeze({ accountHolder: 'the account holder name', accountNumber: 'the account number or IBAN' }),
+		bankMissing: { accountHolder: 'the account holder name', accountNumber: 'the account number or IBAN' },
 		and: '{first} and {second}',
-	}),
-	features: Object.freeze({
-		price: 'Price: {price}',
-		on: 'On',
-		needs: 'Needs: {features}',
-		contact: 'To change features, contact {contact}.',
-		confirmTitle: 'Save features?',
-		confirmCost: 'New hourly cost: {cost}',
-		alsoOff: 'Also turned off: {features}',
-		docs: 'Docs',
-		notWorking: 'Not working: connect {connection}',
-	}),
-	settings: Object.freeze({
-		featuresTitle: 'Feature settings',
-		featuresHelp: 'How each feature behaves on this website.',
-		looksTitle: 'Words and look',
+	},
+	settings: {
 		looksHelp:
 			'Every word of the pay button, the admin widgets and the hosted payment pages, their theme, and how money and dates look.',
-		texts: 'Widget texts',
 		textsHelp: 'Every word the widgets and hosted pages show. A text must keep the same {placeholders} as the English text.',
-		theme: 'Theme',
-		mode: 'Light or dark',
-		modes: Object.freeze({ auto: 'Follow device', light: 'Light', dark: 'Dark' }),
-		fontFamily: 'Font family (inherit, or a font your site loads)',
-		radius: 'Corner radius (0–24 px)',
-		accent: 'Accent color',
-		customCss: 'Custom CSS',
-		format: 'Format',
 		formatHelp: 'How money and dates look in the pay button, the admin widgets and the hosted payment pages.',
-		locale: 'Language and region',
 		localeHelp: "A tag such as en-US or fr-FR; empty uses each visitor's browser (en-US on the hosted pages).",
-		currencyDisplay: 'Currency shown as',
-		currencyDisplays: Object.freeze({
-			code: 'Code (USD 12,500.00)',
-			symbol: 'Symbol ($12,500.00)',
-			custom: 'Your own symbol',
-		}),
-		currencySymbol: 'Your own symbol (up to 8 characters)',
-		times: 'Dates and times in',
-		timesOptions: Object.freeze({
-			viewer: "Each visitor's time zone",
-			business: 'Your business time zone (business.json)',
-		}),
-		wholeUnits: 'Whole amounts only (no minor units)',
-		off: 'This feature is off.',
-	}),
-	connections: Object.freeze({
-		fields: Object.freeze({
+	},
+	connections: {
+		fields: {
 			endpoint: 'Endpoint (empty for AWS S3)',
 			region: 'Region',
 			bucket: 'Bucket',
@@ -116,22 +60,9 @@ export const TEXTS = Object.freeze({
 			url: 'Checkout address (https)',
 			refundUrl: 'Refund address (https, optional)',
 			currencies: 'Currencies (comma-separated, empty for any)',
-		}),
-		token: 'Server token of that product for this website',
-		neededByNone: 'Optional',
-		save: 'Save and test',
-		neededBy: 'Needed by: {features}',
-		connected: 'Connected',
-		not_connected: 'Not connected',
-		test_failed: 'Test failed',
-		value: 'New value',
-		test: 'Test',
-		remove: 'Remove',
-		more: 'More actions for {name}',
-		removeTitle: 'Remove {name}?',
-		removeHelp: 'The saved value is deleted here. The features that need it stop working until it is connected again.',
-	}),
-	developers: Object.freeze({
+		},
+	},
+	developers: {
 		api: 'Payment API',
 		apiHelp:
 			'Your server (or Ecommerce, with this website’s Payments token) creates payments and verifies them before marking an order paid.',
@@ -148,25 +79,5 @@ export const TEXTS = Object.freeze({
 			'The pay button on your website, and the admin widgets in your own admin: payments, payment links and subscriptions.',
 		ticket: 'Ticket snippet',
 		ticketHelp: 'Your server asks for a ticket for the admin widgets after checking its user.',
-		intro: 'The docs show every feature, widget and route. Features that are off are marked.',
-		openDocs: 'Open the docs',
-		websiteId: 'This website’s id: {id}',
-		manageTokens: 'Manage tokens in the Portal',
-		off: 'off',
-	}),
-	defaults: Object.freeze({
-		intro: 'Global defaults apply to every website that has not saved its own value.',
-	}),
-	prices: Object.freeze({
-		intro: 'One hourly price per feature, in credits, for every merchant and website.',
-		perHour: 'Credits per hour',
-	}),
-	reseal: Object.freeze({
-		title: 'Encryption key',
-		intro: 'After ENCRYPTION_KEY is changed, with the old key set as ENCRYPTION_KEY_PREVIOUS, seal every stored secret again with the new key. Pressing again is safe.',
-		button: 'Re-seal stored secrets',
-		result: '{resealed} re-sealed, {current} already on the current key, {unreadable} could not be opened with either key.',
-		finished: 'Every stored secret that opens now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.',
-		again: '{failed} websites could not be reached: press again later, and keep ENCRYPTION_KEY_PREVIOUS until none is left.',
-	}),
+	},
 });

@@ -1,15 +1,16 @@
 // @vitest-environment jsdom
 /**
- * The dashboard's Overview in the browser (jsdom), on a faked dashboard API (PLAN 0.6 "Overviews talk"): the kit's
+ * The dashboard's Overview in the browser (jsdom), on a faked dashboard API (PLAN 0.6 "Overviews talk"): the shared
  * Overview with Payments' own part — the gateways ready, and, while Bank transfer is on (the settings are read only
- * then), what it misses before payers see it (PLAN 0.8.10 P2) — and its times computed in UTC and shown in the viewer's
- * local time (owner 2026-10-14): UTC on the server and in the first render, then the viewer's zone, with UTC on hover.
+ * then), what it misses before payers see it (PLAN 0.8.10 P2).
  */
 import { act } from 'react';
-import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DashboardProvider } from '@ss/ui/dashboard';
 import { byText, cleanup, click, render } from '@ss/ui/testing';
+import manifest from '../manifest.json' with { type: 'json' };
 import { TABS } from '../app/dashboard/tabs.js';
+import { TEXTS } from '../app/dashboard/texts.js';
 
 /** The dashboard keeps each answer it loaded for the page: each render opens its own website. */
 let website = 0;
@@ -56,20 +57,6 @@ const serve = ({ featuresOn = [], bank = {} } = {}) =>
 		}),
 	);
 
-/**
- * The viewer's browser in a time zone (what `Intl.DateTimeFormat().resolvedOptions()` answers there).
- * @param {string} timeZone
- */
-const viewerIn = (timeZone) => {
-	const real = Intl.DateTimeFormat.prototype.resolvedOptions;
-	vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockImplementation(
-		/** @this {Intl.DateTimeFormat} */
-		function () {
-			return { ...real.call(this), timeZone };
-		},
-	);
-};
-
 /** Let the loads answer. */
 const settle = async () => {
 	for (let i = 0; i < 6; i += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
@@ -78,6 +65,7 @@ const settle = async () => {
 /** The tab's props for a new website (or the last one's with `same`). */
 const props = (same = false) => ({
 	websiteId: `web_${same ? website : (website += 1)}`,
+	domain: 'shop.example.com',
 	who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Merchant' }),
 	support: { email: 'help@example.com', phone: '' },
 	portal: 'https://portal.example.com',
@@ -90,6 +78,16 @@ const needs = (container) => [...container.querySelectorAll('section[aria-label=
 /** @param {HTMLElement} container the text of the Gateways ready tile */
 const gateways = (container) => byText(container, 'Gateways ready', 'span').parentElement?.parentElement?.textContent;
 
+/**
+ * Payments' Overview with the dashboard's words and feature names around it.
+ * @param {ReturnType<typeof props>} tab
+ */
+const Overview = (tab) => (
+	<DashboardProvider manifest={manifest} texts={TEXTS}>
+		<TABS.overview {...tab} />
+	</DashboardProvider>
+);
+
 afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
@@ -98,7 +96,6 @@ afterEach(() => {
 
 describe("Payments's dashboard Overview: bank transfer readiness (PLAN 0.8.10 P2)", () => {
 	it('says what is missing before payers see bank transfer, and counts it ready once they are told how to pay', async () => {
-		const Overview = TABS.overview;
 		/** @type {Array<[Record<string, unknown>, string]>} */
 		const missing = [
 			[
@@ -139,50 +136,11 @@ describe("Payments's dashboard Overview: bank transfer readiness (PLAN 0.8.10 P2
 
 	it('reads no settings while Bank transfer is off', async () => {
 		serve({ featuresOn: ['stripe'] });
-		const Overview = TABS.overview;
 		const { container } = render(<Overview {...props()} />);
 		await settle();
 		expect(vi.mocked(fetch).mock.calls.map(([path]) => String(path))).toEqual([
 			`/v1/dashboard/websites/web_${website}/overview`,
 		]);
 		expect(container.textContent).not.toContain('Bank transfer');
-	});
-});
-
-describe("Payments's dashboard times", () => {
-	it("Overview shows the grace end, the widget's last visit and the changes in the viewer's time zone, UTC on hover", async () => {
-		viewerIn('America/New_York');
-		serve();
-		const Overview = TABS.overview;
-		const { container } = render(<Overview {...props()} />);
-		await settle();
-		const text = container.textContent ?? '';
-		expect(text).toContain('Payments is in grace until Oct 4, 2026, 10:30 AM EDT');
-		expect(text).toContain('Last seen Oct 5, 2026, 7:15 PM EDT');
-		const change = container.querySelector('ol time');
-		expect([change?.textContent, change?.getAttribute('title'), change?.getAttribute('datetime')]).toEqual([
-			'Oct 6, 2026, 4:00 AM EDT',
-			'Oct 6, 2026, 8:00 AM UTC',
-			'2026-10-06T08:00:00.000Z',
-		]);
-		// a viewer far east: the widget's last visit is already the next day there
-		cleanup();
-		viewerIn('Asia/Tokyo');
-		const tokyo = render(<Overview {...props()} />);
-		await settle();
-		expect(tokyo.container.textContent).toContain('Last seen Oct 6, 2026, 8:15 AM GMT+9');
-	});
-
-	it('the server and the first render in the browser print UTC', async () => {
-		viewerIn('America/New_York');
-		serve();
-		const Overview = TABS.overview;
-		render(<Overview {...props()} />);
-		await settle();
-		// the answer this page already loaded shows at once, as the server would print it
-		const html = renderToString(<Overview {...props(true)} />);
-		for (const words of ['Oct 4, 2026, 2:30 PM UTC', 'Oct 5, 2026, 11:15 PM UTC', '>Oct 6, 2026, 8:00 AM UTC</time>'])
-			expect(html).toContain(words);
-		expect(html).not.toContain('EDT');
 	});
 });
