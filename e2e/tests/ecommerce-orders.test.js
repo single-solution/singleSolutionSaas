@@ -475,7 +475,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		const used = await server('POST', '/v1/orders/counter', { year: 2026, next: 1 });
 		expect([used.status, codeOf(used)]).toEqual([422, 'validation_failed']);
 		const set = await server('POST', '/v1/orders/counter', { year: 2026, next: 43 });
-		expect(set.json).toEqual({ prefix: 'SO-', year: 2026, next: 43 });
+		expect(set.json).toEqual({ prefix: 'SO-', year: 2026, month: null, next: 43 });
 		const next = await place({ lines: [caseLine(2)], payment: 'cod' }, sara);
 		expect(next.json.order).toMatchObject({ number: 'SO-2026-0043', status: 'awaiting_confirmation' });
 		ids.order43 = next.json.order;
