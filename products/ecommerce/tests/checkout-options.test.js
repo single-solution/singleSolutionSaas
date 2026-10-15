@@ -436,7 +436,7 @@ describe('guest checkout and order keys (E21)', () => {
 		await shop.setting('checkout', 'guests', 'off');
 	});
 
-	it('stops a burst of orders at checkout.placeLimit in 15 minutes, per customer', async () => {
+	it('stops a burst of orders at checkout.placeLimit in its window, per customer', async () => {
 		await shop.setting('checkout', 'guests', 'on');
 		await shop.setting('checkout', 'placeLimit', 2);
 		try {
@@ -452,7 +452,11 @@ describe('guest checkout and order keys (E21)', () => {
 			expect((await guest('+15550007102')).status).toBe(201);
 			shop.advance(15 * 60_000 + 1);
 			expect((await guest('+15550007101')).status).toBe(201);
+			// the window is the merchant's (E39): an hour still counts the orders of 15 minutes ago
+			await shop.setting('checkout', 'placeWindowMinutes', 60);
+			expect((await guest('+15550007101')).status).toBe(429);
 		} finally {
+			await shop.setting('checkout', 'placeWindowMinutes', 15);
 			await shop.setting('checkout', 'placeLimit', 0);
 			await shop.setting('checkout', 'guests', 'off');
 		}

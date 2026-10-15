@@ -743,6 +743,8 @@ describe('wishlist, alerts and compare', () => {
 			expect.objectContaining({ id: b.id, brand: null, grades: [] }),
 		]);
 		expect(compared.json.rows).toEqual([{ attributeId: 'att_ram', name: 'RAM', unit: 'GB', values: [8, 12] }]);
+		// up to 10 at once (E39)
+		await shop.setting('compare', 'maxProducts', 10);
 		await shop.setting('compare', 'maxProducts', 2);
 		expect((await shop.visitor('GET', `/v1/shop/compare?ids=${a.id},${b.id},prd_x`)).status).toBe(422);
 		expect((await shop.visitor('GET', `/v1/shop/compare?ids=${b.id}`)).json.rows).toHaveLength(1);

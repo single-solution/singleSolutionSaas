@@ -73,11 +73,19 @@
 		},
 		"placeLimit": {
 			"type": "integer",
-			"title": "Orders per customer in 15 minutes",
-			"description": "A customer (a signed-in shopper, or a guest by phone) may place at most this many orders in 15 minutes, against bursts of orders by mistake or abuse (0 = no limit; 5 suits most shops).",
+			"title": "Orders per customer in a while",
+			"description": "A customer (a signed-in shopper, or a guest by their contact) may place at most this many orders within Order burst window, against bursts of orders by mistake or abuse (0 = no limit; 5 suits most shops).",
 			"default": 0,
 			"minimum": 0,
 			"maximum": 100
+		},
+		"placeWindowMinutes": {
+			"type": "integer",
+			"title": "Order burst window (minutes)",
+			"description": "The minutes Orders per customer in a while counts orders in.",
+			"default": 15,
+			"minimum": 1,
+			"maximum": 1440
 		},
 		"addressRequired": {
 			"type": "array",
