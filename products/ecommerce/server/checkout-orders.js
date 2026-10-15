@@ -686,6 +686,14 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 						.toArray()
 				)
 			: [];
+		const bundles = order.promotions.bundleIds.length
+			? /** @type {import('../core/model.js').BundleRecord[]} */ (
+					await data
+						.collection(COLLECTIONS.bundles)
+						.find({ websiteId: data.websiteId, id: { $in: order.promotions.bundleIds } }, { projection: { _id: 0 } })
+						.toArray()
+				)
+			: [];
 		const coupon = order.promotions.couponId
 			? /** @type {import('../core/model.js').CouponRecord | null} */ (
 					await data
@@ -730,6 +738,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				edit: {
 					prices,
 					deals: kept,
+					bundles,
 					coupon: coupon ? { ...coupon, used: Math.max(0, coupon.used - 1) } : null,
 					role: order.promotions.role
 						? {

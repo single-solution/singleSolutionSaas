@@ -122,12 +122,13 @@ const BANK_FIELDS = Object.freeze(
  */
 
 /**
- * Re-pricing an order staff edit (E29): the order keeps the offers it was placed with (its deals and its coupon, even
- * ended, switched off or used up, by the website's deal rules; OR-9), its role price and the points it spent; staff
+ * Re-pricing an order staff edit (E29): the order keeps the offers it was placed with (its deals, bundles and coupon,
+ * even ended, switched off or used up, by the website's deal rules; OR-9), its role price and the points it spent; staff
  * may set unit prices. `keep` (`checkout.editPricing: keep_placed`): it keeps the amounts it was placed with instead of
  * pricing them again — its offer discount, its delivery fee while its delivery method stays, and its payment method's
  * fee while its payment method stays.
- * @typedef {{ prices: Map<string, number>, deals: DealRecord[], coupon: import('../core/model.js').CouponRecord | null,
+ * @typedef {{ prices: Map<string, number>, deals: DealRecord[], bundles: import('../core/model.js').BundleRecord[],
+ *   coupon: import('../core/model.js').CouponRecord | null,
  *   role: { role: string, percent: number, label: string } | null, points: { used: number, value: number },
  *   keep?: { promotions: number, delivery: number, deliveryMethod: string, fee: number, method: string } }} QuoteEdit
  */
@@ -352,7 +353,7 @@ export const createQuoting = (product, service) => {
 							};
 						}),
 						deals: edit ? edit.deals : [...offers.deals, ...kept],
-						bundles: edit ? [] : offers.bundles,
+						bundles: edit ? edit.bundles : offers.bundles,
 						coupon: edit ? edit.coupon : offers.coupon,
 						couponCode: edit ? (edit.coupon?.code ?? '') : couponCode,
 						customer: edit ? { orderCount: 0, couponUses: 0 } : { orderCount: customer?.orderCount ?? 0, couponUses },

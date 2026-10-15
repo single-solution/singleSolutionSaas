@@ -40,7 +40,15 @@ import { checkoutFieldsForm } from './shop-fields.js';
 const QUOTE_DELAY = 300;
 const ORDER_ID = /^ord_[A-Za-z0-9_-]{1,64}$/;
 /** Problems that mean the cart changed on the server: it is priced again at once. */
-const REQUOTE = ['out_of_stock', 'offer_unavailable', 'points_changed', 'slot_taken', 'cod_not_allowed', 'validation_failed'];
+const REQUOTE = [
+	'out_of_stock',
+	'offer_unavailable',
+	'points_changed',
+	'slot_taken',
+	'cod_not_allowed',
+	'validation_failed',
+	'price_changed',
+];
 /** The policies a checkout shows, in this order (`settings.checkout.policies`). */
 const POLICIES = Object.freeze(['shipping', 'returns', 'warranty', 'privacy', 'terms']);
 
@@ -614,6 +622,8 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						...(Object.keys(given.value).length > 0 ? { fields: given.value } : {}),
 						...(isDelivery ? { address: address.values() } : {}),
 						returnUrl: returnUrlOf(shop),
+						// the total the shopper sees: another total is not charged (409 price_changed: the cart is priced again)
+						expectedTotal: quote.totals.total,
 					},
 					idempotencyKey: attemptKey,
 				});

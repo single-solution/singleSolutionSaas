@@ -537,6 +537,29 @@ describe('bundles', () => {
 		expect(small.lines[1]).toMatchObject({ dealId: null, bundleDiscount: 100 });
 	});
 
+	it('keeps the bundles an order was placed with when staff edit it, even ended or used up (asPlaced, E29)', () => {
+		const gone = bundle({ ...pair, active: false, limit: 1, used: 1, endsAt: new Date(NOW - DAY) });
+		expect(run({ lines, bundles: [gone] }).bundleIds).toEqual([]);
+		const kept = run({ lines, bundles: [gone], asPlaced: true });
+		expect(kept.bundleIds).toEqual(['bnd_1']);
+		expect(kept.lines.map((item) => item.bundleDiscount)).toEqual([200, 100]);
+	});
+
+	it('counts what bundles take off a checkout deal’s cart total after the item deals (cartThresholdBase)', () => {
+		// 1,000 + 500 of goods form the pair for 1,200: 1,200 after the bundle, short of a deal "from 1,300"
+		const fromThirteen = deal({
+			id: 'deal_cart',
+			target: 'cart',
+			value: 5,
+			conditions: { ...NO_CONDITIONS, cartTotal: 1300 },
+		});
+		// the checkout deal after the bundle, on what is left of the goods
+		const onGoods = { ...DEAL_RULES, cartOffer: /** @type {const} */ ('one_after_items') };
+		const rules = { ...onGoods, cartThresholdBase: /** @type {const} */ ('after_item_deals') };
+		expect(run({ lines, bundles: [pair], deals: [fromThirteen], rules: onGoods }).dealIds).toEqual(['deal_cart']);
+		expect(run({ lines, bundles: [pair], deals: [fromThirteen], rules }).dealIds).toEqual([]);
+	});
+
 	it('skips bundles that are not live, empty or save nothing', () => {
 		const result = run({
 			lines,

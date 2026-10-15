@@ -33,7 +33,7 @@
 		"cartThresholdBase": {
 			"type": "string",
 			"title": "Checkout deals' minimum cart total is judged on",
-			"description": "Goods: the goods before any deal. After item deals: the goods after the item deals (a cart that item deals bring below a checkout deal's minimum does not get it).",
+			"description": "Goods: the goods before any deal. After item deals: the goods after the item deals and bundles (a cart that they bring below a checkout deal's minimum does not get it).",
 			"default": "goods",
 			"enum": ["goods", "after_item_deals"]
 		},

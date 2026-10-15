@@ -681,6 +681,23 @@ describe('checkout', () => {
 		expect(second.fake.went).toEqual(['https://pay.example.com/2']);
 	});
 
+	it('sends the total the shopper sees, and prices the cart again when it changed (E58)', async () => {
+		/** @type {any[]} */
+		const answers = [fail(409, 'price_changed'), ok({ order: ORDER, next: { kind: 'done' } }, 201)];
+		const { fake, host } = await setup({ signIn: 's1', routes: { 'POST /v1/shop/orders': () => answers.shift() } });
+		await fillAddress(host);
+		const quotes = fake.all('POST /v1/shop/cart/quote').length;
+		await click(buttonOf(host, text('checkout.place')));
+		expect(fake.last('POST /v1/shop/orders')?.body.expectedTotal).toBe(quoteOf().totals.total);
+		expect(textOf(host)).toContain(text('checkout.problem.price_changed'));
+		await flush();
+		expect(fake.all('POST /v1/shop/cart/quote').length).toBeGreaterThan(quotes);
+		// the shopper places it again at the total now shown
+		await click(buttonOf(host, text('checkout.place')));
+		expect(fake.all('POST /v1/shop/orders')).toHaveLength(2);
+		expect(fake.last('POST /v1/shop/orders')?.body.expectedTotal).toBe(quoteOf().totals.total);
+	});
+
 	it('keeps the attempt key after a lost answer and while the first press still runs, and shows refusals', async () => {
 		/** @type {any[]} */
 		const answers = [

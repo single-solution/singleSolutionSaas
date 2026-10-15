@@ -149,16 +149,20 @@ export const nextSet = (bundle, pools, unit = 1) => {
  * @param {Array<Omit<Pool, 'available'> & { quantity: number }>} lines
  * @param {number} now
  * @param {number} [unit] whole units (E25)
+ * @param {{ asPlaced?: boolean }} [options] `asPlaced`: the bundles an order was placed with (staff edit it, E29): they
+ *   apply whatever their switch, dates and uses
  * @returns {{ lines: Array<{ bundleDiscount: number, bundleUnits: number }>, savings: Map<string, number> }}
  *   per line: what bundles take off and how many of its units they discount; `savings`: bundle id → amount, in the order
  *   bundles first saved
  */
-export const formBundles = (bundles, lines, now, unit = 1) => {
+export const formBundles = (bundles, lines, now, unit = 1, { asPlaced = false } = {}) => {
 	const pools = lines.map(({ quantity, ...line }) => ({ ...line, available: quantity }));
 	const out = lines.map(() => ({ bundleDiscount: 0, bundleUnits: 0 }));
 	/** @type {Map<string, number>} */
 	const savings = new Map();
-	const live = bundles.filter((bundle) => isLive(bundle, now)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+	const live = (asPlaced ? bundles : bundles.filter((bundle) => isLive(bundle, now))).sort((a, b) =>
+		a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+	);
 	for (let formed = 0; formed < MAX_SETS; formed += 1) {
 		/** @type {{ bundle: BundleRecord, set: BundleSet } | null} */
 		let best = null;

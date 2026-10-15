@@ -89,8 +89,8 @@ import { allocateUnits, roundHalfUp } from './money.js';
  * @param {number} [input.unit] whole units (E25)
  * @param {boolean} [input.shopperChoice] lines may name one of their eligible deals (E18)
  * @param {import('./deals.js').DealRules} [input.rules] how deals choose, combine and round (the `deals` settings, D4)
- * @param {boolean} [input.asPlaced] `deals` and `coupon` are those an order was placed with (staff edit it, E29): they
- *   apply whatever their switch, dates, hours and uses; their scope, conditions and the rules still count
+ * @param {boolean} [input.asPlaced] `deals`, `bundles` and `coupon` are those an order was placed with (staff edit it,
+ *   E29): they apply whatever their switch, dates, hours and uses; their scope, conditions and the rules still count
  * @returns {PromotionsResult}
  */
 export const applyPromotions = ({
@@ -201,32 +201,49 @@ export const applyPromotions = ({
 		};
 	};
 
+	/**
+	 * The bundles the lines form, against what the given deal picks save per unit.
+	 * @param {Array<{ saving: number }>} picks
+	 */
+	const bundlesWith = (picks) =>
+		formBundles(
+			bundles,
+			lines.map((line, index) => ({
+				productId: line.productId,
+				categoryIds: line.categoryIds,
+				brandId: line.brandId,
+				unitPrice: Math.max(0, line.unitPrice),
+				quantity: Math.max(0, line.quantity),
+				dealUnit: line.quantity > 0 ? Math.floor((picks[index]?.saving ?? 0) / line.quantity) : 0,
+			})),
+			now,
+			unit,
+			{ asPlaced },
+		);
+
 	// the item deals alone: what each line takes while the checkout-level deal comes after them, and what is left of
-	// the goods for the checkout-level deals' cart total (`cartThresholdBase: after_item_deals`)
+	// the goods for the checkout-level deals' cart total (`cartThresholdBase: after_item_deals`: less what the item deals
+	// and the bundles take off, a bundled unit counting its bundle's discount instead of its deal's)
 	const afterItems = rules.cartThresholdBase === 'after_item_deals';
 	const items = stacked || afterItems ? lines.map((_, index) => choose(index, false)) : [];
-	cover(
-		live.filter(checkoutLevel),
-		afterItems ? { ...facts, goods: facts.goods - items.reduce((sum, pick) => sum + pick.saving, 0) } : facts,
-	);
+	/** @returns {number} */
+	const itemsTake = () => {
+		const kept = bundlesWith(items);
+		return lines.reduce((sum, line, index) => {
+			const { bundleUnits, bundleDiscount } = /** @type {{ bundleUnits: number, bundleDiscount: number }} */ (
+				kept.lines[index]
+			);
+			const perUnit = line.quantity > 0 ? Math.floor((items[index]?.saving ?? 0) / line.quantity) : 0;
+			return sum + bundleDiscount + perUnit * Math.max(0, line.quantity - bundleUnits);
+		}, 0);
+	};
+	cover(live.filter(checkoutLevel), afterItems ? { ...facts, goods: facts.goods - itemsTake() } : facts);
 
 	// 1. each line's deal (a cart deal never replaces an item deal while the checkout-level deal comes after them)
 	const chosen = stacked ? items : lines.map((_, index) => choose(index, true));
 
 	// 2. bundles, against what the chosen deals save per unit
-	const formed = formBundles(
-		bundles,
-		lines.map((line, index) => ({
-			productId: line.productId,
-			categoryIds: line.categoryIds,
-			brandId: line.brandId,
-			unitPrice: Math.max(0, line.unitPrice),
-			quantity: Math.max(0, line.quantity),
-			dealUnit: line.quantity > 0 ? Math.floor((chosen[index]?.saving ?? 0) / line.quantity) : 0,
-		})),
-		now,
-		unit,
-	);
+	const formed = bundlesWith(chosen);
 
 	// the deals on the units bundles left: per unit, a percent of the cart lines, or a fixed amount spread over them
 	const dealDiscounts = lines.map((line, index) => {
