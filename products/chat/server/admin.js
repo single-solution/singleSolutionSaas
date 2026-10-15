@@ -81,14 +81,19 @@ export const createAdmin = (product, service) => {
 			throw problem('feature_off', 'This feature is off.');
 	};
 
-	/** @param {any} ctx */
+	/**
+	 * Save a list whole: a Recent change and an activity-log entry by the session, as the kit's own settings saves.
+	 * @param {any} ctx
+	 */
 	const putList = async (ctx) => {
 		const name = listName(ctx);
 		const websiteId = String(ctx.params.websiteId);
 		await editable(ctx, [LISTS[name].feature]);
 		const saved = await product.lists.save(websiteId, name, bodyOf(ctx.body).items);
 		if (!saved.ok) throw invalid(saved.errors);
-		await product.recentChanges.record({ websiteId, who: who(ctx), what: 'settings', detail: `${LISTS[name].title}: changed` });
+		const { title } = LISTS[name];
+		await product.recentChanges.record({ websiteId, who: who(ctx), what: 'settings', detail: `${title}: changed` });
+		await product.settingsChanged(ctx, { what: 'list', key: name, who: who(ctx), label: title, detail: 'changed' });
 		return { items: saved.value };
 	};
 

@@ -204,6 +204,12 @@ describe('dashboard', () => {
 		expect(saved.json.items[0]).toMatchObject({ name: 'lookup', includeVisitor: false });
 		const overview = await sys.dashboard(merchant, 'GET', `${base}/overview`);
 		expect(overview.json.recentChanges.map((/** @type {any} */ c) => c.detail)).toContain('Webhook tools: changed');
+		// each save is an activity-log entry by who saved it, as the kit's own settings saves are
+		const log = (await sys.serverCall('GET', '/v1/activity?action=settings.changed')).json.items;
+		expect(log.map((/** @type {any} */ e) => [e.actor.kind, e.target, e.label, e.detail])).toEqual([
+			['merchant', 'list.tools', 'Webhook tools', 'changed'],
+			['admin', 'list.custom_fields', 'Custom fields', 'changed'],
+		]);
 	});
 
 	it('reveals and regenerates the tool signing secret (sealed with ENCRYPTION_KEY)', async () => {
