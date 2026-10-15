@@ -424,9 +424,10 @@ export const STATUS_ROLES = Object.freeze([
  *   taxIncluded: boolean, fee?: number, roleDiscount?: number }} totals `discount` = deals + bundles + coupon + points
  *   (+ the role discount, E19); `fee` the payment method's fee, included in `total`
  * @property {{ couponId: string | null, couponCode: string, dealIds: string[], bundleIds: string[], pointsRedeemed: number,
- *   pointsValue: number, pointsEarned: number, released: boolean, role?: { key: string, percent: number, label: string } | null,
+ *   pointsValue: number, pointsEarned: number, released: boolean, role?: { key: string, kind: 'percent' | 'prices',
+ *   percent: number, label: string, prices: import('./role-pricing.js').ListedPrice[] } | null,
  *   pointsFixed?: boolean, pointsCredited?: boolean, pointsBlocked?: boolean, pointsReversed?: number }} promotions `released`: offer uses and points were given back
- *   (cancel), exactly once; `role`: the role price applied (E19); `pointsCredited`: points fixed at placement were
+ *   (cancel), exactly once; `role`: the role price applied (E19; a price list keeps the prices of its products, E31); `pointsCredited`: points fixed at placement were
  *   credited (E20 `earnAt`); `pointsFixed`: `pointsEarned` was fixed at placement (`earnAt: placement`, or 0 for a
  *   signed-in shopper whose role the loyalty settings leave out); `pointsBlocked`: a deal without points applied (E18 `allowPoints`);
  *   `pointsReversed`: earned points already taken back (a claim's refund, a return or a refund, OR-10)

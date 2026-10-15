@@ -123,7 +123,7 @@ export const TEXTS = Object.freeze({
 			loyalty: Object.freeze({ title: 'Loyalty', help: 'Earning, redeeming and expiry of points.' }),
 			rolePrices: Object.freeze({
 				title: 'Role prices',
-				help: 'A percent off the goods for signed-in shoppers of an Accounts role, such as trade or member prices.',
+				help: 'A percent off, or fixed prices per product, for signed-in shoppers of an Accounts role, such as trade or member prices.',
 			}),
 			reviews: Object.freeze({ title: 'Reviews', help: 'Who may review and how reviews are moderated.' }),
 			wishlist: Object.freeze({
@@ -414,7 +414,7 @@ export const TEXTS = Object.freeze({
 		}),
 		rolePrices: Object.freeze({
 			title: 'Role prices',
-			help: 'A signed-in shopper whose Accounts role is listed gets its percent off the goods after offers, before points, delivery and tax. Guests never get it.',
+			help: 'A signed-in shopper whose Accounts role is listed gets its percent off, or its fixed prices, on the goods after offers, before points, delivery and tax. Guests never get it.',
 			item: 'Role',
 			role: 'Accounts role',
 			roleHelp: 'The role key as Accounts names it.',
@@ -422,6 +422,19 @@ export const TEXTS = Object.freeze({
 			label: 'Label',
 			labelHelp: 'Shown on the cart, orders and invoices (empty: Member discount).',
 			badPercent: '{role}: the percent is a number from 0 to 90.',
+			kind: 'Price',
+			kindPercent: 'A percent off',
+			kindPrices: 'Fixed prices',
+			pricesHelp:
+				'A fixed price per product, or per variant (a variant’s price beats its product’s). Items not listed keep their price; a fixed price never raises one.',
+			productId: 'Product id (prd_…)',
+			variantId: 'Variant id (var_…)',
+			variantIdHelp: 'Empty: every variant of the product.',
+			price: 'Price ({currency})',
+			addPrice: 'Add price',
+			removePrice: 'Remove price',
+			noPrices: '{role}: add at least one price.',
+			badPrice: '{role}: give each price a product id, an optional variant id and an amount in {currency}.',
 		}),
 		taxRules: Object.freeze({
 			title: 'Tax rules',

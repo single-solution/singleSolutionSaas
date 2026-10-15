@@ -205,6 +205,39 @@ describe('offers', () => {
 		expect(single.priceSpecification).toMatchObject({ price: '9.00', validForMemberTier: { '@id': vip.tierId } });
 	});
 
+	it('adds the member price of a price-list tier only to the variants it lists, never raising a price (G17, E31)', () => {
+		const item = product({ variants: [variant({ price: 1999 })] });
+		const [only] = item.variants;
+		const listed = (/** @type {number} */ price) => ({
+			tierId: 'https://shop.example.com/#member_tier_trade',
+			percent: 0,
+			unit: 1,
+			prices: new Map([[item.id, price]]),
+		});
+		const offers = nodeOf(productJsonLd(page(item, { memberPrices: [listed(1500)] })), 'Product').offers;
+		expect(offers.priceSpecification).toMatchObject({
+			price: '15.00',
+			validForMemberTier: { '@id': 'https://shop.example.com/#member_tier_trade' },
+		});
+		// the variant's own price beats its product's
+		const byVariant = {
+			...listed(1500),
+			prices: new Map([
+				[item.id, 1500],
+				[String(only?.id), 1200],
+			]),
+		};
+		expect(nodeOf(productJsonLd(page(item, { memberPrices: [byVariant] })), 'Product').offers.priceSpecification).toMatchObject(
+			{
+				price: '12.00',
+			},
+		);
+		// a listed price at or above the price is no member price
+		expect(
+			nodeOf(productJsonLd(page(item, { memberPrices: [listed(2500)] })), 'Product').offers.priceSpecification,
+		).toBeUndefined();
+	});
+
 	it('points physical goods to the store-wide shipping policy, once it is complete', () => {
 		const policy = 'https://shop.example.com/#shipping_policy';
 		const offers = (/** @type {ProductRecord} */ item, /** @type {Partial<ProductPage>} */ input) =>

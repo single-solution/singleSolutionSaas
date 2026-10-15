@@ -228,6 +228,42 @@ describe('role pricing (E19)', () => {
 		expect((await quote(body, other.token)).json.totals.roleDiscount).toBe(0);
 		await shop.list('role_prices', []);
 	});
+
+	it('gives a role its fixed prices per product or variant, and the order keeps them (E31)', async () => {
+		const listed = await shop.seedProduct({ price: 2000, stock: 10 });
+		const unlisted = await shop.seedProduct({ price: 1000, stock: 10 });
+		await shop.list('role_prices', [
+			{
+				role: 'trade',
+				kind: 'prices',
+				label: 'Trade price',
+				prices: [{ productId: listed.id, variantId: null, price: 1500 }],
+			},
+		]);
+		const trader = await newShopper({ role: 'trade' });
+		const body = {
+			lines: [
+				{ productId: listed.id, quantity: 2 },
+				{ productId: unlisted.id, quantity: 1 },
+			],
+			delivery: { city: 'Springfield' },
+		};
+		const priced = await quote(body, trader.token);
+		expect(priced.json.totals).toMatchObject({ subtotal: 5000, roleDiscount: 1000 });
+		expect(priced.json.role).toEqual({ key: 'trade', kind: 'prices', percent: 0, label: 'Trade price' });
+		expect((await quote(body, (await newShopper({ role: 'customer' })).token)).json.totals.roleDiscount).toBe(0);
+		// the order keeps the role's prices of its products
+		const placed = await place({ ...body, payment: 'cod', address: ADDRESS }, trader.token);
+		expect(placed.status).toBe(201);
+		expect((await orderRecord(placed.json.order.id)).promotions.role).toEqual({
+			key: 'trade',
+			kind: 'prices',
+			percent: 0,
+			label: 'Trade price',
+			prices: [{ productId: listed.id, variantId: null, price: 1500 }],
+		});
+		await shop.list('role_prices', []);
+	});
 });
 
 describe('guest checkout and order keys (E21)', () => {

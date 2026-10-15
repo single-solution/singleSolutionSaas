@@ -17,7 +17,8 @@ import { loyaltyAccount } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { loadOffers } from '../adapters/promotions-store.js';
 import { MAX_SLOT_DAYS, slotAt, slotsBetween } from '../core/bookings.js';
-import { MAX_QUANTITY, feeBaseOf, grossOf, merchandiseOf, priceLines, resolveLines, roleDiscountOf } from '../core/checkout.js';
+import { MAX_QUANTITY, afterOffers, feeBaseOf, grossOf, priceLines, resolveLines, roleDiscounts } from '../core/checkout.js';
+import { pricesFor, roleTermsOf } from '../core/role-pricing.js';
 import { placeOf } from '../core/address.js';
 import { matchZone, zoneFee } from '../core/delivery.js';
 import { dealRulesOf } from '../core/deals.js';
@@ -88,7 +89,9 @@ const DAY_MS = 86_400_000;
  * @property {PaymentMethod | null} paymentMethod the method priced: the one asked, else the first available (E22)
  * @property {{ balance: number, max: number, used: number, value: number } | null} points
  * @property {number} pointsToEarn what the order would earn (E20; 0 without loyalty)
- * @property {{ key: string, percent: number, label: string } | null} role the role price applied (E19)
+ * @property {{ key: string, kind: 'percent' | 'prices', percent: number, label: string,
+ *   prices: import('../core/role-pricing.js').ListedPrice[] } | null} role the role price applied (E19; E31 a price list,
+ *   with the prices of the cart's products)
  * @property {boolean} digital the cart has digital items
  * @property {import('../core/model.js').CustomerRecord | null} customer
  * @property {LocationRecord[]} locations stock locations in their order (multi_location)
@@ -110,7 +113,7 @@ const DAY_MS = 86_400_000;
  * fee while its payment method stays.
  * @typedef {{ prices: Map<string, number>, deals: DealRecord[], bundles: import('../core/model.js').BundleRecord[],
  *   coupon: import('../core/model.js').CouponRecord | null,
- *   role: { role: string, percent: number, label: string } | null, points: { used: number, value: number },
+ *   role: import('../core/role-pricing.js').RolePrice | null, points: { used: number, value: number },
  *   keep?: { promotions: number, delivery: number, deliveryMethod: string, fee: number, method: string } }} QuoteEdit
  */
 
@@ -327,11 +330,11 @@ export const createQuoting = (product, service) => {
 					})
 				: null;
 
-		// role pricing (E19)
-		/** @type {Array<{ role: string, percent: number, label: string }>} */
+		// role pricing (E19): a percent off, or a price list (E31)
+		/** @type {import('../core/role-pricing.js').RolePrice[]} */
 		const rolePrices = s.has('role_pricing') && shopper?.role ? await s.list('role_prices') : [];
 		const role = edit ? edit.role : (rolePrices.find((entry) => entry.role === shopper?.role) ?? null);
-		const rolePercent = role?.percent ?? 0;
+		const roleTerms = roleTermsOf(role);
 
 		const physical = priced.some((line) => line.kind === 'physical');
 		const digital = priced.some((line) => line.kind === 'digital');
@@ -380,8 +383,9 @@ export const createQuoting = (product, service) => {
 		const pass = (method) => {
 			const promotions = promote(method);
 			const keep = edit?.keep ?? null;
-			const merchandise = merchandiseOf(priced, promotions, keep ? keep.promotions : null, unit);
-			const goods = merchandise - roleDiscountOf(merchandise, rolePercent, unit);
+			const after = afterOffers(priced, promotions, keep ? keep.promotions : null, unit);
+			const merchandise = after.reduce((a, b) => a + b, 0);
+			const goods = merchandise - roleDiscounts(priced, after, roleTerms, unit).total;
 
 			// delivery
 			const free = promotions?.freeDelivery === true;
@@ -477,7 +481,7 @@ export const createQuoting = (product, service) => {
 				taxRules,
 				region,
 				taxIncluded,
-				rolePercent,
+				role: roleTerms,
 				unit,
 			};
 			const fixedPromotions = keep ? { promotions: keep.promotions } : null;
@@ -578,7 +582,17 @@ export const createQuoting = (product, service) => {
 			pointsToEarn: earns
 				? Math.max(0, Math.floor(pointsToEarn(earnTotals, /** @type {Record<string, any>} */ (loyaltySettings))))
 				: 0,
-			role: role && totals.roleDiscount > 0 ? { key: role.role, percent: role.percent, label: role.label } : null,
+			// the role price applied; a price list keeps the prices of the order's products (an edit prices it again)
+			role:
+				role && totals.roleDiscount > 0
+					? {
+							key: role.role,
+							kind: role.kind,
+							percent: role.percent,
+							label: role.label,
+							prices: pricesFor(role, new Set(priced.map((line) => line.productId))),
+						}
+					: null,
 			digital,
 			customer,
 			locations,
@@ -658,7 +672,7 @@ export const createQuoting = (product, service) => {
 			freeDelivery: q.promotions?.freeDelivery === true,
 			pointsBlocked: q.promotions?.pointsBlocked === true,
 		},
-		role: q.role,
+		role: q.role ? { key: q.role.key, kind: q.role.kind, percent: q.role.percent, label: q.role.label } : null,
 		delivery: q.delivery,
 		deliveryOptions: q.deliveryOptions,
 		deliveryProblem: q.deliveryProblem,

@@ -678,10 +678,13 @@ const rolePriceOf = (c, value) => {
 	if (missing(value)) return null;
 	const raw = c.fields(value, '/promotions/role', ['key', 'percent', 'label'], 'the role price');
 	if (!raw) return null;
+	// an order of another shop took a percent off; the discount it gave is its totals' roleDiscount
 	return {
 		key: c.text(raw.key, '/promotions/role/key', 40, { required: true }),
+		kind: /** @type {const} */ ('percent'),
 		percent: c.whole(raw.percent, '/promotions/role/percent', { max: 90 }),
 		label: c.text(raw.label, '/promotions/role/label', 60),
+		prices: [],
 	};
 };
 

@@ -787,7 +787,9 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 					role: order.promotions.role
 						? {
 								role: order.promotions.role.key,
+								kind: order.promotions.role.kind,
 								percent: order.promotions.role.percent,
+								prices: order.promotions.role.prices,
 								label: order.promotions.role.label,
 							}
 						: null,

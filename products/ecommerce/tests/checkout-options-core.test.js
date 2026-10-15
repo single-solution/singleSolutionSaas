@@ -18,7 +18,7 @@ import {
 } from '../core/guests.js';
 import { expiryFor, lotsByRule, pointsToEarn, pointsToRedeem, takesPart } from '../core/loyalty.js';
 import { allocateUnits, roundDown, roundHalfUp, unitOf } from '../core/money.js';
-import { checkRolePrices } from '../core/role-pricing.js';
+import { checkRolePrices, roleTermsOf } from '../core/role-pricing.js';
 
 /** Deal conditions that hold for every line (each test adds the one it checks). @type {import('../core/model.js').DealConditions} */
 const NO_CONDITIONS = Object.freeze({
@@ -190,7 +190,7 @@ describe('role pricing (E19)', () => {
 	it('checks the list', () => {
 		expect(checkRolePrices([{ role: 'member', percent: 10, label: '' }])).toEqual({
 			ok: true,
-			value: [{ role: 'member', percent: 10, label: 'Member discount' }],
+			value: [{ role: 'member', kind: 'percent', percent: 10, prices: [], label: 'Member discount' }],
 		});
 		expect(checkRolePrices('x').ok).toBe(false);
 		expect(checkRolePrices([{ role: 'member', percent: 95 }]).ok).toBe(false);
@@ -217,10 +217,67 @@ describe('role pricing (E19)', () => {
 			taxRules: [],
 			region: null,
 			taxIncluded: false,
-			rolePercent: 10,
+			role: roleTermsOf({ kind: 'percent', percent: 10, prices: [] }),
 		});
 		expect(priced.lines.map((line) => line.role)).toEqual([300, 100]);
 		expect(priced.totals).toMatchObject({ roleDiscount: 400, delivery: 500, total: 4100 });
+	});
+
+	it('checks fixed prices per product or variant (E31)', () => {
+		const prices = [
+			{ productId: 'prd_a', variantId: null, price: 2500 },
+			{ productId: 'prd_a', variantId: 'var_a2', price: 2000 },
+		];
+		expect(checkRolePrices([{ role: 'trade', kind: 'prices', prices, label: 'Trade price' }])).toEqual({
+			ok: true,
+			value: [{ role: 'trade', kind: 'prices', percent: 0, prices, label: 'Trade price' }],
+		});
+		// an entry without a kind is a percent off, as every role price was
+		expect(checkRolePrices([{ role: 'member', percent: 5 }])).toMatchObject({
+			ok: true,
+			value: [{ role: 'member', kind: 'percent', percent: 5, prices: [] }],
+		});
+		expect(checkRolePrices([{ role: 'trade', kind: 'prices', prices: [] }]).ok).toBe(false);
+		expect(
+			checkRolePrices([{ role: 'trade', kind: 'prices', prices: [{ productId: 'nope', variantId: null, price: 1 }] }]).ok,
+		).toBe(false);
+		expect(
+			checkRolePrices([{ role: 'trade', kind: 'prices', prices: [{ productId: 'prd_a', variantId: null, price: -1 }] }]).ok,
+		).toBe(false);
+		expect(checkRolePrices([{ role: 'trade', kind: 'prices', prices: [...prices, prices[0]] }]).ok).toBe(false);
+		expect(checkRolePrices([{ role: 'trade', kind: 'bulk', percent: 5 }]).ok).toBe(false);
+	});
+
+	it('takes a fixed price per product or variant off each line after offers, never raising a price (E31)', () => {
+		/** @type {any[]} */
+		const lines = [
+			{ key: 'a1', productId: 'prd_a', variantId: 'var_a1', unitPrice: 3000, quantity: 2, allCategoryIds: [] },
+			{ key: 'a2', productId: 'prd_a', variantId: 'var_a2', unitPrice: 3000, quantity: 1, allCategoryIds: [] },
+			{ key: 'b', productId: 'prd_b', variantId: 'var_b', unitPrice: 1000, quantity: 1, allCategoryIds: [] },
+			{ key: 'c', productId: 'prd_c', variantId: 'var_c', unitPrice: 500, quantity: 1, allCategoryIds: [] },
+		];
+		const role = roleTermsOf({
+			kind: 'prices',
+			percent: 0,
+			prices: [
+				{ productId: 'prd_a', variantId: null, price: 2500 },
+				{ productId: 'prd_a', variantId: 'var_a2', price: 2000 },
+				{ productId: 'prd_c', variantId: null, price: 900 },
+			],
+		});
+		const priced = priceLines({
+			lines,
+			promotions: null,
+			delivery: 0,
+			pointsValue: 0,
+			taxRules: [],
+			region: null,
+			taxIncluded: true,
+			role,
+		});
+		// a1: 2 × 500 off; a2: its variant's price, 1000 off; b: not listed; c: 900 would raise it
+		expect(priced.lines.map((line) => line.role)).toEqual([1000, 1000, 0, 0]);
+		expect(priced.totals).toMatchObject({ roleDiscount: 2000, total: 8500 });
 	});
 });
 
@@ -405,7 +462,7 @@ describe('payment fees (E23, D4)', () => {
 		const goods = priceLines({ ...base, feeBase: 'goods_after_discounts' });
 		expect(goods.totals).toMatchObject({ fee: 200, total: 9450 });
 		// the role discount comes off first: 2% of 9,000
-		expect(priceLines({ ...base, rolePercent: 10, feeBase: 'goods_after_discounts' }).totals.fee).toBe(180);
+		expect(priceLines({ ...base, role: { percent: 10, prices: null }, feeBase: 'goods_after_discounts' }).totals.fee).toBe(180);
 		const unpriced = priceLines({ ...base, feePercent: 0 });
 		expect(feeBaseOf(unpriced)).toBe(9250);
 		expect(feeBaseOf(unpriced, 'goods_after_discounts')).toBe(10_000);

@@ -544,6 +544,36 @@ export const roleDiscountOf = (merchandise, percent, unit = 1) =>
 	percent > 0 && merchandise > 0 ? Math.min(merchandise, roundHalfUp((merchandise * percent) / 100, unit)) : 0;
 
 /**
+ * The role discount of each line (E19, E31): a percent of the goods after offers spread in proportion, or each line's
+ * price list price (its variant's, else its product's) below its own price, at most what the line comes to after
+ * offers; a listed price never raises one.
+ * @param {ReadonlyArray<Pick<ResolvedLine, 'productId' | 'variantId' | 'unitPrice' | 'quantity' | 'measure'>>} lines
+ * @param {number[]} after what each line comes to after offers
+ * @param {import('./role-pricing.js').RoleTerms | null} terms
+ * @param {number} [unit]
+ * @returns {{ lines: number[], total: number }}
+ */
+export const roleDiscounts = (lines, after, terms, unit = 1) => {
+	if (!terms) return { lines: after.map(() => 0), total: 0 };
+	if (!terms.prices) {
+		const total = roleDiscountOf(
+			after.reduce((a, b) => a + b, 0),
+			terms.percent,
+			unit,
+		);
+		return { lines: allocateUnits(total, after, unit), total };
+	}
+	const prices = terms.prices;
+	const each = lines.map((line, index) => {
+		const listed = prices.get(line.variantId) ?? prices.get(line.productId);
+		if (listed === undefined || listed >= line.unitPrice) return 0;
+		const off = grossOf(line, unit) - grossOf({ ...line, unitPrice: listed }, unit);
+		return Math.max(0, Math.min(after[index] ?? 0, off));
+	});
+	return { lines: each, total: each.reduce((a, b) => a + b, 0) };
+};
+
+/**
  * Price the priced lines: promotions, the role discount (after offers, before delivery, E19), the points' value
  * (spread in proportion, at most what is left of the items), taxes, the totals with delivery, and the payment
  * method's fee on the whole, or on the goods after offers and the role discount (E23, `feeBase`). Percentages and tax
@@ -557,7 +587,7 @@ export const roleDiscountOf = (merchandise, percent, unit = 1) =>
  * @param {import('./address.js').Place | null} input.region where the order goes (a pickup order: the business.json
  *   country; null: no place, then only tax rules without regions apply)
  * @param {boolean} input.taxIncluded
- * @param {number} [input.rolePercent] the shopper's role discount (E19)
+ * @param {import('./role-pricing.js').RoleTerms | null} [input.role] the shopper's role prices (E19, E31)
  * @param {number} [input.feePercent] the payment method's fee (E23)
  * @param {import('./payment-methods.js').PaymentMethodRecord['feeBase']} [input.feeBase] what the fee is a percent of (the method's `feeBase`, D4)
  * @param {number} [input.unit] whole units (E25)
@@ -574,7 +604,7 @@ export const priceLines = ({
 	taxRules,
 	region,
 	taxIncluded,
-	rolePercent = 0,
+	role: roleTerms = null,
 	feePercent = 0,
 	feeBase = 'order_total',
 	unit = 1,
@@ -586,8 +616,7 @@ export const priceLines = ({
 			: promotionDiscounts(lines, promotions, unit);
 	const after = lines.map((line, index) => grossOf(line, unit) - (promo[index] ?? 0));
 	const merchandise = after.reduce((a, b) => a + b, 0);
-	const roleTotal = roleDiscountOf(merchandise, rolePercent, unit);
-	const role = allocateUnits(roleTotal, after, unit);
+	const { lines: role, total: roleTotal } = roleDiscounts(lines, after, roleTerms, unit);
 	const left = after.map((amount, index) => amount - (role[index] ?? 0));
 	const points = allocateUnits(Math.min(Math.max(0, pointsValue), merchandise - roleTotal), left, unit);
 	/** @type {PricedLine[]} */
@@ -647,7 +676,16 @@ export const feeBaseOf = ({ lines, totals }, feeBase = 'order_total') =>
  * @param {number | null} [kept] the offer discount an edited order keeps (`checkout.editPricing: keep_placed`)
  * @param {number} [unit]
  */
-export const merchandiseOf = (lines, promotions, kept = null, unit = 1) => {
+export const merchandiseOf = (lines, promotions, kept = null, unit = 1) =>
+	afterOffers(lines, promotions, kept, unit).reduce((a, b) => a + b, 0);
+
+/**
+ * What each line comes to after promotions (the role prices are taken off it, E31).
+ * @param {ResolvedLine[]} lines @param {PromotionsResult | null} promotions
+ * @param {number | null} [kept] the offer discount an edited order keeps (`checkout.editPricing: keep_placed`)
+ * @param {number} [unit]
+ */
+export const afterOffers = (lines, promotions, kept = null, unit = 1) => {
 	const promo = kept === null ? promotionDiscounts(lines, promotions, unit) : fixedDiscounts(lines, kept, unit);
-	return lines.reduce((n, line, index) => n + grossOf(line, unit) - (promo[index] ?? 0), 0);
+	return lines.map((line, index) => grossOf(line, unit) - (promo[index] ?? 0));
 };

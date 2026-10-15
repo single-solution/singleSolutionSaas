@@ -302,7 +302,7 @@ export function SettingsTab({ websiteId: id }) {
 								<SegmentsEditor websiteId={websiteId} off={off('checkout')} currency={currency} />
 							) : null,
 							rolePrices: seen('role_pricing') ? (
-								<RolePricesEditor websiteId={websiteId} off={off('role_pricing')} />
+								<RolePricesEditor websiteId={websiteId} off={off('role_pricing')} currency={currency} />
 							) : null,
 							texts: (
 								<Loaded answer={texts.answer}>

@@ -103,7 +103,7 @@ const orderOf = (patch = {}) => ({
 		pointsValue: 2000,
 		pointsEarned: 0,
 		released: false,
-		role: { key: 'member', percent: 3, label: 'Club price' },
+		role: { key: 'member', kind: 'percent', percent: 3, label: 'Club price', prices: [] },
 	},
 	payment: {
 		method: 'cod',

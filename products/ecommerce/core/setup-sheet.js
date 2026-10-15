@@ -154,10 +154,10 @@ export const LIST_WORDS = Object.freeze({
 	unit_states: named('unit state', 'unit states', (/** @type {{ label: string }} */ state) => nameOf(state.label)),
 	item_types: typeWords,
 	booking_hours: hoursWords,
-	role_prices: named(
-		'role price',
-		'role prices',
-		(/** @type {RolePrice} */ price) => `${nameOf(price.role)} ${price.percent}% off`,
+	role_prices: named('role price', 'role prices', (/** @type {RolePrice} */ price) =>
+		price.kind === 'prices'
+			? `${nameOf(price.role)} ${counted(price.prices.length, 'fixed price', 'fixed prices')}`
+			: `${nameOf(price.role)} ${price.percent}% off`,
 	),
 });
 

@@ -716,11 +716,24 @@ export function TaxRulesEditor({ websiteId, off }) {
 const R = L.rolePrices;
 
 /**
- * Role prices (PLAN 0.8.10 E19, `role_prices`, feature role_pricing): an Accounts role, the percent off the goods its
- * signed-in shoppers get (0–90) and the label quotes, orders and invoices show (empty: the server's default).
- * @param {EditorProps} props
+ * Role prices (PLAN 0.8.10 E19, E31, `role_prices`, feature role_pricing): an Accounts role, either the percent off the
+ * goods its signed-in shoppers get (0–90) or its price list (a fixed price per product, or per variant, in the shop
+ * currency), and the label quotes, orders and invoices show (empty: the server's default).
+ * @param {EditorProps & { currency: string }} props
  */
-export function RolePricesEditor({ websiteId, off }) {
+export function RolePricesEditor({ websiteId, off, currency }) {
+	const step = exponentOf(currency) === 0 ? '1' : String(10 ** -exponentOf(currency));
+	/** @param {Item} entry */
+	const badPercent = (entry) => {
+		const percent = Number(String(entry.percent).trim() || Number.NaN);
+		return !Number.isFinite(percent) || percent < 0 || percent > 90;
+	};
+	/** @param {Item} row */
+	const badPrice = (row) =>
+		!/^prd_[A-Za-z0-9_-]{1,64}$/.test(String(row.productId ?? '').trim()) ||
+		!/^(var_[A-Za-z0-9_-]{1,64})?$/.test(String(row.variantId ?? '').trim()) ||
+		amountOf(row.price, currency, null) === undefined ||
+		amountOf(row.price, currency, null) === null;
 	return (
 		<ListEditor
 			websiteId={websiteId}
@@ -730,53 +743,138 @@ export function RolePricesEditor({ websiteId, off }) {
 			itemLabel={R.item}
 			max={20}
 			off={off}
-			blank={() => ({ role: '', percent: '', label: '' })}
-			load={(entry) => ({ role: entry.role ?? '', percent: String(entry.percent ?? ''), label: entry.label ?? '' })}
+			blank={() => ({ role: '', kind: 'percent', percent: '', prices: [], label: '' })}
+			load={(entry) => ({
+				role: entry.role ?? '',
+				kind: entry.kind === 'prices' ? 'prices' : 'percent',
+				percent: entry.kind === 'prices' ? '' : String(entry.percent ?? ''),
+				prices: (Array.isArray(entry.prices) ? entry.prices : []).map((/** @type {Item} */ row) => ({
+					productId: row.productId ?? '',
+					variantId: row.variantId ?? '',
+					price: decimalOf(row.price, currency),
+				})),
+				label: entry.label ?? '',
+			})}
 			clean={(entry) => {
+				const role = String(entry.role ?? '').trim();
+				const label = String(entry.label ?? '').trim();
+				if (entry.kind === 'prices')
+					return {
+						role,
+						kind: 'prices',
+						prices: /** @type {Item[]} */ (entry.prices).map((row) => ({
+							productId: String(row.productId ?? '').trim(),
+							variantId: String(row.variantId ?? '').trim() || null,
+							price: amountOf(row.price, currency, null),
+						})),
+						label,
+					};
 				const percent = String(entry.percent).trim();
-				return {
-					role: String(entry.role ?? '').trim(),
-					percent: percent === '' ? Number.NaN : Number(percent),
-					label: String(entry.label ?? '').trim(),
-				};
+				return { role, kind: 'percent', percent: percent === '' ? Number.NaN : Number(percent), label };
 			}}
 			check={(entries) =>
-				entries
-					.filter((entry) => {
-						const percent = Number(String(entry.percent).trim() || Number.NaN);
-						return !Number.isFinite(percent) || percent < 0 || percent > 90;
-					})
-					.map((entry) => fill(R.badPercent, { role: String(entry.role ?? '').trim() || R.item }))
+				entries.flatMap((entry) => {
+					const name = String(entry.role ?? '').trim() || R.item;
+					if (entry.kind !== 'prices') return badPercent(entry) ? [fill(R.badPercent, { role: name })] : [];
+					/** @type {Item[]} */
+					const rows = entry.prices;
+					if (rows.length === 0) return [fill(R.noPrices, { role: name })];
+					return rows.some(badPrice) ? [fill(R.badPrice, { role: name, currency })] : [];
+				})
 			}
-			render={(entry, set) => (
-				<FieldGrid>
-					<Input
-						label={R.role}
-						help={R.roleHelp}
-						value={entry.role}
-						maxLength={40}
-						autoComplete="off"
-						onChange={(event) => set({ role: event.target.value })}
-					/>
-					<Input
-						label={R.percent}
-						type="number"
-						min={0}
-						max={90}
-						step="0.01"
-						inputMode="decimal"
-						value={entry.percent}
-						onChange={(event) => set({ percent: event.target.value })}
-					/>
-					<Input
-						label={R.label}
-						help={R.labelHelp}
-						value={entry.label}
-						maxLength={60}
-						onChange={(event) => set({ label: event.target.value })}
-					/>
-				</FieldGrid>
-			)}
+			render={(entry, set) => {
+				/** @type {Item[]} */
+				const rows = entry.prices;
+				/** @param {number} at @param {Item} patch */
+				const setRow = (at, patch) => set({ prices: rows.map((row, index) => (index === at ? { ...row, ...patch } : row)) });
+				return (
+					<div className="space-y-3">
+						<FieldGrid>
+							<Input
+								label={R.role}
+								help={R.roleHelp}
+								value={entry.role}
+								maxLength={40}
+								autoComplete="off"
+								onChange={(event) => set({ role: event.target.value })}
+							/>
+							<Select
+								label={R.kind}
+								value={entry.kind}
+								options={[
+									{ value: 'percent', label: R.kindPercent },
+									{ value: 'prices', label: R.kindPrices },
+								]}
+								onChange={(event) => set({ kind: event.target.value })}
+							/>
+							{entry.kind === 'prices' ? null : (
+								<Input
+									label={R.percent}
+									type="number"
+									min={0}
+									max={90}
+									step="0.01"
+									inputMode="decimal"
+									value={entry.percent}
+									onChange={(event) => set({ percent: event.target.value })}
+								/>
+							)}
+							<Input
+								label={R.label}
+								help={R.labelHelp}
+								value={entry.label}
+								maxLength={60}
+								onChange={(event) => set({ label: event.target.value })}
+							/>
+						</FieldGrid>
+						{entry.kind === 'prices' ? (
+							<div className="space-y-2">
+								<p className="text-sm text-muted">{R.pricesHelp}</p>
+								{rows.map((row, at) => (
+									<div key={at} data-price="" className="flex flex-wrap items-end gap-2">
+										<Input
+											label={R.productId}
+											value={row.productId}
+											maxLength={70}
+											autoComplete="off"
+											onChange={(event) => setRow(at, { productId: event.target.value })}
+										/>
+										<Input
+											label={R.variantId}
+											help={R.variantIdHelp}
+											value={row.variantId}
+											maxLength={70}
+											autoComplete="off"
+											onChange={(event) => setRow(at, { variantId: event.target.value })}
+										/>
+										<Input
+											label={fill(R.price, { currency })}
+											type="number"
+											min={0}
+											step={step}
+											inputMode="decimal"
+											value={row.price}
+											onChange={(event) => setRow(at, { price: event.target.value })}
+										/>
+										<IconButton
+											label={R.removePrice}
+											onClick={() => set({ prices: rows.filter((_, index) => index !== at) })}>
+											<Icon name="close" size={14} />
+										</IconButton>
+									</div>
+								))}
+								<Button
+									size="sm"
+									variant="ghost"
+									disabled={rows.length >= 500}
+									onClick={() => set({ prices: [...rows, { productId: '', variantId: '', price: '' }] })}>
+									{R.addPrice}
+								</Button>
+							</div>
+						) : null}
+					</div>
+				);
+			}}
 		/>
 	);
 }

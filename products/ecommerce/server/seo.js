@@ -22,6 +22,7 @@ import { elementsOf, typeOf, typeTree } from '../core/item-types.js';
 import { absolute } from '../core/links.js';
 import { buildLlmsFull, buildLlmsTxt, MAX_LLMS_CATEGORIES, treeOrder } from '../core/llms.js';
 import { SORTS, sortDocument, topField } from '../core/catalog-query.js';
+import { roleTermsOf } from '../core/role-pricing.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { daysOf } from '../core/durations.js';
 import { windowDefaults, windowTime } from '../core/returns.js';
@@ -260,15 +261,17 @@ export const createSeo = (product, service) => {
 
 	/**
 	 * The member program's tiers (SEO audit G17): the role prices while Role pricing is on, each a lower price for the
-	 * signed-in shoppers of an Accounts role (E19); none without any above 0 %.
+	 * signed-in shoppers of an Accounts role (E19): a percent above 0, or (E31) a price list, as its prices by variant
+	 * and product id.
 	 * @param {Site} s
-	 * @returns {Promise<Array<{ role: string, name: string, percent: number }>>}
+	 * @returns {Promise<Array<{ role: string, name: string, percent: number, prices: ReadonlyMap<string, number> | null }>>}
 	 */
 	const memberTiersOf = async (s) =>
 		s.has('role_pricing')
-			? /** @type {Array<{ role: string, label: string, percent: number }>} */ (await s.list('role_prices'))
-					.filter((entry) => entry.percent > 0)
-					.map((entry) => ({ role: entry.role, name: entry.label, percent: entry.percent }))
+			? /** @type {import('../core/role-pricing.js').RolePrice[]} */ (await s.list('role_prices')).flatMap((entry) => {
+					const terms = roleTermsOf(entry);
+					return terms ? [{ role: entry.role, name: entry.label, percent: terms.percent, prices: terms.prices }] : [];
+				})
 			: [];
 
 	/**
@@ -366,6 +369,7 @@ export const createSeo = (product, service) => {
 			tierId: siteIds(`https://${s.domain}/`).memberTier(tier.role),
 			percent: tier.percent,
 			unit,
+			prices: tier.prices,
 		}));
 		const trail = await trailOf(s, data, media, primary ?? null, true, business.name);
 		// the price shoppers are shown, after automatic deals (G4), as the card, the product page and the cart show it

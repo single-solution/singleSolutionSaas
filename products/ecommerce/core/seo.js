@@ -405,16 +405,32 @@ const daysValue = ({ min, max }) => ({ '@type': 'QuantitativeValue', minValue: m
 /**
  * A member price of the site's member program (SEO audit G17): a role price's tier (`tierId`, the `@id` the site answer
  * gives it) and its percent off the price shown, rounded half up to `unit` (whole units with the Format's `wholeUnits`),
- * as the cart takes it off.
- * @typedef {{ tierId: string, percent: number, unit: number }} MemberPrice
+ * as the cart takes it off; or (E31) its price list: a price by variant id and by product id (`prices`).
+ * @typedef {{ tierId: string, percent: number, unit: number, prices?: ReadonlyMap<string, number> | null }} MemberPrice
  */
 
 /**
- * A price for a member tier: the price shown less the tier's percent, as the cart computes a role discount (E19).
- * @param {number} price @param {MemberPrice} member
+ * A price for a member tier: the price shown less the tier's percent, as the cart computes a role discount (E19); a
+ * price-list tier's `off` (what its listed price takes off the variant's price, E31) comes off the price shown.
+ * @param {number} price @param {MemberPrice & { off?: number }} member
  */
-export const memberPriceOf = (price, { percent, unit }) =>
-	price - Math.min(price, Math.round((price * percent) / 100 / unit + 1e-9) * unit);
+export const memberPriceOf = (price, { percent, unit, off }) =>
+	off !== undefined
+		? Math.max(0, price - off)
+		: price - Math.min(price, Math.round((price * percent) / 100 / unit + 1e-9) * unit);
+
+/**
+ * The member prices of one variant (E31): a percent tier as it is; a price-list tier only where it lists the variant
+ * (else its product) below the variant's price, as what that takes off.
+ * @param {ReadonlyArray<MemberPrice>} members @param {ProductRecord} product @param {VariantRecord} variant
+ * @returns {Array<MemberPrice & { off?: number }>}
+ */
+const membersOf = (members, product, variant) =>
+	members.flatMap((member) => {
+		if (!member.prices) return [member];
+		const listed = member.prices.get(variant.id) ?? member.prices.get(product.id);
+		return listed !== undefined && listed < variant.price ? [{ ...member, off: variant.price - listed }] : [];
+	});
 
 /**
  * The price specifications of an offer: none, one, or a list.
@@ -431,7 +447,7 @@ const specifications = (list) => (list.length === 0 ? null : list.length === 1 ?
  * too; without a standard measure nothing is said of the unit.
  * @param {import('./promotions.js').ShownPrice} shown
  * @param {string} currency
- * @param {MemberPrice[]} members
+ * @param {Array<MemberPrice & { off?: number }>} members
  * @param {string} timeZone
  * @param {import('./measure.js').Measure | null} [measure]
  */
@@ -652,7 +668,13 @@ export const productJsonLd = (page) => {
 		compact({
 			'@type': 'Offer',
 			url: page.variantUrl?.(variant) ?? url,
-			...offerPrice(page.shown(variant), currency, page.memberPrices ?? [], page.timeZone ?? 'UTC', page.measure ?? null),
+			...offerPrice(
+				page.shown(variant),
+				currency,
+				membersOf(page.memberPrices ?? [], product, variant),
+				page.timeZone ?? 'UTC',
+				page.measure ?? null,
+			),
 			availability: `${SCHEMA}/${variantInStock(product, variant) ? 'InStock' : 'OutOfStock'}`,
 			itemCondition: (() => {
 				const condition = page.condition(variant);

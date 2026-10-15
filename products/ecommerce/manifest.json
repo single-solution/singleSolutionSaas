@@ -158,7 +158,7 @@
 		{
 			"key": "role_pricing",
 			"name": "Role pricing",
-			"description": "Signed-in shoppers with a listed Accounts role get a percent off the goods after offers, shown as its own line on quotes, orders and invoices.",
+			"description": "Signed-in shoppers with a listed Accounts role get a percent off the goods after offers, or fixed prices per product or variant, shown as its own line on quotes, orders and invoices.",
 			"dependsOn": ["checkout"],
 			"recommendFor": ["offers.member_prices"],
 			"settings": {

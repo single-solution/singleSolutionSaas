@@ -1617,14 +1617,20 @@
 						{
 							"type": "object",
 							"description": "The role price applied (role_pricing).",
-							"required": ["key", "percent", "label"],
+							"required": ["key", "kind", "percent", "label"],
 							"additionalProperties": false,
 							"properties": {
 								"key": {
 									"type": "string"
 								},
+								"kind": {
+									"type": "string",
+									"enum": ["percent", "prices"],
+									"description": "percent: a percent off the goods; prices: the role's price list (E31)."
+								},
 								"percent": {
-									"type": "number"
+									"type": "number",
+									"description": "The percent off (0 for a price list)."
 								},
 								"label": {
 									"type": "string"
@@ -8651,19 +8657,47 @@
 					"oneOf": [
 						{
 							"type": "object",
-							"required": ["key", "percent", "label"],
+							"required": ["key", "kind", "percent", "label", "prices"],
 							"additionalProperties": false,
 							"properties": {
 								"key": {
 									"type": "string"
 								},
+								"kind": {
+									"type": "string",
+									"enum": ["percent", "prices"],
+									"description": "percent: a percent off the goods; prices: the role's price list (E31)."
+								},
 								"percent": {
 									"type": "integer",
 									"minimum": 0,
-									"maximum": 100
+									"maximum": 100,
+									"description": "The percent off (0 for a price list)."
 								},
 								"label": {
 									"type": "string"
+								},
+								"prices": {
+									"type": "array",
+									"description": "A price list's prices of the order's products (an edit prices the order with them).",
+									"items": {
+										"type": "object",
+										"required": ["productId", "variantId", "price"],
+										"additionalProperties": false,
+										"properties": {
+											"productId": {
+												"type": "string"
+											},
+											"variantId": {
+												"type": ["string", "null"]
+											},
+											"price": {
+												"type": "integer",
+												"minimum": 0,
+												"description": "Minor units."
+											}
+										}
+									}
 								}
 							}
 						},

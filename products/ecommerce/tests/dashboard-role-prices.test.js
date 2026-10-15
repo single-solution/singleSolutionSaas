@@ -42,6 +42,10 @@ const serve = () => {
 	);
 };
 
+/** The list's own Add button (not Add price). @param {HTMLElement} root */
+const addButton = (root) =>
+	/** @type {HTMLElement} */ ([...root.querySelectorAll('button')].find((button) => button.textContent === 'Add'));
+
 /** Let the loads answer. */
 const settle = async () => {
 	for (let i = 0; i < 6; i += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
@@ -55,11 +59,11 @@ afterEach(() => {
 describe('the role prices editor', () => {
 	it('lists the roles, adds one and saves the list the server takes', async () => {
 		serve();
-		const { container } = render(<RolePricesEditor websiteId={WEBSITE} />);
+		const { container } = render(<RolePricesEditor websiteId={WEBSITE} currency="USD" />);
 		await settle();
 		expect(byLabel(container, 'Accounts role').getAttribute('value') ?? '').toBe('wholesale');
 		expect(/** @type {HTMLInputElement} */ (byLabel(container, 'Percent off (0–90)')).value).toBe('15');
-		await act(async () => click(byText(container, 'Add', 'button')));
+		await act(async () => click(addButton(container)));
 		const roles = /** @type {HTMLInputElement[]} */ ([...container.querySelectorAll('input')]).filter(
 			(input) => input.closest('[data-entry]') !== null,
 		);
@@ -78,20 +82,50 @@ describe('the role prices editor', () => {
 		await settle();
 		expect(saved).toEqual([
 			[
-				{ role: 'wholesale', percent: 15, label: 'Trade price' },
-				{ role: 'staff', percent: 10, label: '' },
+				{ role: 'wholesale', kind: 'percent', percent: 15, label: 'Trade price' },
+				{ role: 'staff', kind: 'percent', percent: 10, label: '' },
 			],
 		]);
 		expect(checkRolePrices(saved[0]).ok).toBe(true);
 		expect(container.textContent).toContain('Saved');
 		// the server's refusal is listed (a role twice)
-		await act(async () => click(byText(container, 'Add', 'button')));
+		await act(async () => click(addButton(container)));
 		const third = /** @type {HTMLElement} */ ([...container.querySelectorAll('[data-entry]')][2]);
 		type(byLabel(third, 'Accounts role'), 'staff');
 		type(byLabel(third, 'Percent off (0–90)'), '5');
 		await act(async () => click(byText(container, 'Save list', 'button')));
 		await settle();
 		expect(container.textContent).toContain("Role 'staff' is listed twice.");
+	});
+
+	it('gives a role fixed prices per product or variant (E31)', async () => {
+		serve();
+		const { container } = render(<RolePricesEditor websiteId={WEBSITE} currency="USD" />);
+		await settle();
+		const first = /** @type {HTMLElement} */ ([...container.querySelectorAll('[data-entry]')][0]);
+		type(byLabel(first, 'Price'), 'prices');
+		// no price yet: refused before anything is sent
+		await act(async () => click(byText(container, 'Save list', 'button')));
+		await settle();
+		expect(saved).toHaveLength(0);
+		expect(container.textContent).toContain('wholesale: add at least one price.');
+		await act(async () => click(byText(first, 'Add price', 'button')));
+		const row = /** @type {HTMLElement} */ (first.querySelector('[data-price]'));
+		type(byLabel(row, 'Product id (prd_…)'), 'prd_lamp');
+		type(byLabel(row, 'Price (USD)'), '12.50');
+		await act(async () => click(byText(container, 'Save list', 'button')));
+		await settle();
+		expect(saved).toEqual([
+			[
+				{
+					role: 'wholesale',
+					kind: 'prices',
+					prices: [{ productId: 'prd_lamp', variantId: null, price: 1250 }],
+					label: 'Trade price',
+				},
+			],
+		]);
+		expect(checkRolePrices(saved[0]).ok).toBe(true);
 	});
 });
 
