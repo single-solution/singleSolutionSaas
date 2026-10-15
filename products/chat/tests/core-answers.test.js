@@ -500,11 +500,15 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		expect(shopRequest('quote_product_savings', { productId: 'p1', quantity: 0, paymentMethod: 'bad method' })).toMatchObject({
 			path: '/v1/chat/products/p1/quote',
 		});
-		// only what Ecommerce takes: its payment methods, its variant ids and its product ids or slugs
+		// only what Ecommerce takes: a payment method key (the website's own list, C1), its variant ids and its product ids
+		// or slugs
 		expect(
 			shopRequest('quote_product_savings', { productId: 'p1', variantId: 'var.1', paymentMethod: ' Bank_Transfer ' }),
 		).toMatchObject({ path: '/v1/chat/products/p1/quote?paymentMethod=bank_transfer' });
-		expect(shopRequest('quote_product_savings', { productId: 'p1', paymentMethod: 'card' })).toMatchObject({
+		expect(shopRequest('quote_product_savings', { productId: 'p1', paymentMethod: 'card_on_delivery' })).toMatchObject({
+			path: '/v1/chat/products/p1/quote?paymentMethod=card_on_delivery',
+		});
+		expect(shopRequest('quote_product_savings', { productId: 'p1', paymentMethod: 'payments' })).toMatchObject({
 			path: '/v1/chat/products/p1/quote',
 		});
 		// where it goes, for the delivery zone and tax (Ecommerce's address lengths)
@@ -673,10 +677,44 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				problems: [],
 				paymentMethod: 'cod',
 				paymentMethods: [
-					{ method: 'online', available: true, reason: null, advance: 0, fee: 0, advanceText: '€0.00' },
-					{ method: 'cod', available: true, reason: null, advance: 2000, fee: 150, advanceText: '€20.00' },
-					{ method: 'bank_transfer', available: false, reason: 'not_ready', advance: 0, fee: 0, advanceText: '€0.00' },
-					{ method: 'pickup', available: false, reason: 'needs_pickup', advance: 0, fee: 0, advanceText: '€0.00' },
+					{
+						method: 'online',
+						name: 'Online payment',
+						available: true,
+						reason: null,
+						advance: 0,
+						fee: 0,
+						advanceText: '€0.00',
+					},
+					{
+						method: 'cod',
+						name: 'Cash on delivery',
+						available: true,
+						reason: null,
+						advance: 2000,
+						fee: 150,
+						advanceText: '€20.00',
+					},
+					{
+						method: 'bank_transfer',
+						name: 'Bank transfer',
+						available: false,
+						reason: 'not_ready',
+						advance: 0,
+						fee: 0,
+						advanceText: '€0.00',
+					},
+					{
+						method: 'pickup',
+						name: 'Pay at pickup',
+						available: false,
+						reason: 'needs_pickup',
+						advance: 0,
+						fee: 0,
+						advanceText: '€0.00',
+					},
+					// the merchant's own method, by its own name
+					{ method: 'cheque', name: 'Cheque', available: true, reason: null, advance: 0, fee: 0, advanceText: '€0.00' },
 				],
 				subtotal: 9000,
 				subtotalText: '€90.00',
@@ -713,10 +751,11 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 			delivery: 'Standard, €0.00',
 			// in the merchant's order, with why one cannot be used; the advance and the fee as the website shows money
 			paymentMethods: [
-				{ method: 'online', available: true },
-				{ method: 'cod', available: true, advance: '€20.00', fee: 'EUR 1.50' },
-				{ method: 'bank_transfer', available: false, reason: 'not_ready' },
-				{ method: 'pickup', available: false, reason: 'needs_pickup' },
+				{ method: 'online', name: 'Online payment', available: true },
+				{ method: 'cod', name: 'Cash on delivery', available: true, advance: '€20.00', fee: 'EUR 1.50' },
+				{ method: 'bank_transfer', name: 'Bank transfer', available: false, reason: 'not_ready' },
+				{ method: 'pickup', name: 'Pay at pickup', available: false, reason: 'needs_pickup' },
+				{ method: 'cheque', name: 'Cheque', available: true },
 			],
 		});
 	});

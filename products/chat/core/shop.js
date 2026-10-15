@@ -90,7 +90,7 @@ export const SHOP_ENDPOINTS = Object.freeze([
 		feature: 'shop_deals',
 		signIn: false,
 		request:
-			'GET /v1/chat/products/<productId>/quote?variantId=<id>&quantity=<1–5>&paymentMethod=cod|online|bank_transfer|pickup&country=<country>&region=<region>&city=<city>&postalCode=<postal code>',
+			'GET /v1/chat/products/<productId>/quote?variantId=<id>&quantity=<1–5>&paymentMethod=<payment method key>&country=<country>&region=<region>&city=<city>&postalCode=<postal code>',
 	},
 	{ tool: SHOP_TOOLS.deals, feature: 'shop_deals', signIn: false, request: 'GET /v1/chat/deals?limit=<1–20>' },
 	{ tool: SHOP_TOOLS.top, feature: 'shop_top', signIn: false, request: 'GET /v1/chat/products/top?kind=top|new&limit=<1–12>' },
@@ -125,7 +125,7 @@ export const SHOP_ANSWERS = Object.freeze({
 		'id, name, price (the shown price: after the best live deal on one unit), priceText, compareAtPrice and compareAtPriceText (the price struck through beside it, or null), deal ({ name, savings, savingsText } or null), priceMax, priceMaxText, currency, image (https or null), url (the product page), inStock, variantId (or null), grade (the label, or null), stockLeft (or null)',
 	details:
 		'a product plus summary, description, brand, options: [{ name, values: [text] }], specs: [{ name, value (text, number, true/false or a list), unit }], variants: [{ id, options: { name: value }, price, priceText, compareAtPrice, compareAtPriceText, deal, grade, gradeKey, inStock, soldOut, stockLeft, warrantyDays }]',
-	quote: 'productId, variantId, quantity, paymentMethod, price (one unit before deals), compareAtPrice (its own price struck through, or null), priceAfterDeals, savings, subtotal, discount, roleDiscount, fee, tax, freeDeliveryOver, total (each with its …Text), currency, delivery ({ method, name, fee, feeText, minDays, maxDays } or null), inStock, deals: [name], paymentMethods: [{ method (cod, online, bank_transfer or pickup), available, reason (or null), advance, advanceText, fee }]',
+	quote: 'productId, variantId, quantity, paymentMethod, price (one unit before deals), compareAtPrice (its own price struck through, or null), priceAfterDeals, savings, subtotal, discount, roleDiscount, fee, tax, freeDeliveryOver, total (each with its …Text), currency, delivery ({ method, name, fee, feeText, minDays, maxDays } or null), inStock, deals: [name], paymentMethods: [{ method (the website’s payment method key), name, available, reason (or null), advance, advanceText, fee }]',
 	deals: 'items: [{ name, description, valueText, badgeLabel, discountLabel, minQuantity, days (weekdays, 0 = Sunday), timeFrom, timeTo, endsAt, endsText }]',
 	orders:
 		'items: [{ number, status (the label), total, totalText, currency, placedAt, paymentMethod, balanceDue, balanceDueText, courier, trackingNumber, trackingUrl, trackingNote, expectedAt, dispatchVideo ({ kind, url } or null), lines: [{ name, variantName, gradeLabel, quantity, totalText, warrantyDays }] }] (the latest, as many as asked), loyaltyPoints, name',
@@ -136,8 +136,15 @@ export const SHOP_ANSWERS = Object.freeze({
 	customerOrders: 'items: [{ number, status, statusLabel, total, totalText, currency, createdAt }], loyaltyPoints',
 });
 
-/** The payment methods a quote takes (Ecommerce's `paymentMethod`). */
-const PAYMENT_METHODS = Object.freeze(['cod', 'online', 'bank_transfer', 'pickup']);
+/**
+ * A payment method key of the website's own list (Ecommerce's `payment_methods`, C1): lowercase letters, digits and `_`
+ * (`payments` and `other` name money entries, never a method).
+ */
+const METHOD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
+/** @param {unknown} value @returns {value is string} */
+const isMethodKey = (value) => typeof value === 'string' && METHOD_KEY.test(value) && value !== 'payments' && value !== 'other';
+/** A quote passes at most this many payment methods (the most a website's list has). */
+const MAX_METHODS = 20;
 
 /** A Sunday (2026-01-04 UTC): a deal's `days` (0 = Sunday) are named from it. */
 const SUNDAY = Date.UTC(2026, 0, 4);
@@ -370,9 +377,8 @@ const SCHEMAS = {
 			quantity: { type: 'integer', description: 'How many (1–5, default 1).' },
 			paymentMethod: {
 				type: 'string',
-				enum: [...PAYMENT_METHODS],
 				description:
-					'The payment method the visitor asks about (optional): cod (cash on delivery), online, bank_transfer or pickup (paid at the pickup counter).',
+					'The payment method the visitor asks about (optional): a payment method key of a quote’s paymentMethods (the website’s own methods, each with its name).',
 			},
 			country: { type: 'string', description: 'The visitor’s country, for the delivery charge and tax (optional).' },
 			region: {
@@ -506,7 +512,7 @@ export const shopRequest = (
 		const quantity = Number(args.quantity);
 		if (Number.isInteger(quantity) && quantity > 0) query.set('quantity', String(Math.min(QUOTE_MAX_QUANTITY, quantity)));
 		const method = typeof args.paymentMethod === 'string' ? args.paymentMethod.trim().toLowerCase() : '';
-		if (PAYMENT_METHODS.includes(method)) query.set('paymentMethod', method);
+		if (isMethodKey(method)) query.set('paymentMethod', method);
 		// where it goes (Ecommerce's address lengths), for the delivery zone and tax
 		for (const [field, max] of /** @type {const} */ ([
 			['country', 60],
@@ -808,18 +814,21 @@ export const shopAnswer = (name, body, look = {}) => {
 			content.delivery = [textOf(d.name, 80), fee, days].filter(Boolean).join(', ');
 		}
 		if (b.inStock === false) content.inStock = false;
-		// the payment methods in the merchant's order: whether each can pay for it (why not), its advance and its fee
+		// the website's payment methods in its list's order, by their own names (C1): whether each can pay for it (why
+		// not), its advance and its fee
 		const methods = itemsOf(b.paymentMethods)
-			.filter((m) => isObject(m) && /** @type {readonly unknown[]} */ (PAYMENT_METHODS).includes(m.method))
-			.slice(0, PAYMENT_METHODS.length)
+			.filter((m) => isObject(m) && isMethodKey(m.method))
+			.slice(0, MAX_METHODS)
 			.map((m) => {
 				const available = m.available === true;
 				const reason = available ? null : textOf(m.reason, 40);
 				const option = { ...m, currency: b.currency };
 				const advance = Number(m.advance) > 0 ? priceOf(option, 'advance', look) : null;
 				const fee = Number(m.fee) > 0 ? priceOf(option, 'fee', look) : null;
+				const name = textOf(m.name, 60);
 				return {
 					method: m.method,
+					...(name ? { name } : {}),
 					available,
 					...(reason ? { reason } : {}),
 					...(advance ? { advance } : {}),

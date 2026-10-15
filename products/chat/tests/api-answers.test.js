@@ -580,7 +580,9 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		});
 		// the AI sees the payment methods a quote takes
 		const quoteTool = sys.aiCalls()[0].tools.find((/** @type {any} */ t) => t.function.name === 'quote_product_savings');
-		expect(quoteTool.function.parameters.properties.paymentMethod.enum).toEqual(['cod', 'online', 'bank_transfer', 'pickup']);
+		// any method of the website's own list (C1): no fixed keys
+		expect(quoteTool.function.parameters.properties.paymentMethod.enum).toBeUndefined();
+		expect(quoteTool.function.parameters.properties.paymentMethod.description).toContain('payment method key');
 	});
 
 	it('adds the store context for the viewed product, cached 60 s per website and sign-in', async () => {

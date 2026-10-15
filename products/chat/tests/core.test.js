@@ -647,7 +647,7 @@ describe('shop', () => {
 			shopAnswer('quote_product_savings', {
 				...{ price: 1, priceAfterDeals: 1, currency: 'EUR' },
 				deals: [{ name: 'Sale' }],
-				paymentMethods: [{ key: 'cod', label: 'Cash on delivery' }, { method: 'card', available: true }, 'x'],
+				paymentMethods: [{ key: 'cod', label: 'Cash on delivery' }, { method: 'Card!', available: true }, 'x'],
 			}).content
 		);
 		expect([odd.deals, odd.paymentMethods]).toEqual([[], undefined]);
