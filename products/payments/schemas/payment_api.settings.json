@@ -1,5 +1,14 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"checkoutExpiryHours": {
+			"type": "integer",
+			"title": "Unpaid checkout expires after (hours)",
+			"description": "How long a payer has to finish paying on the gateway's page, for gateways that take a time limit (Stripe at most 24 hours, JazzCash and Easypaisa at most 168); each gateway's own longest caps it. A payer who comes back later starts a new checkout from the pay page.",
+			"default": 24,
+			"minimum": 1,
+			"maximum": 168
+		}
+	}
 }

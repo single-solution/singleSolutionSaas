@@ -59,6 +59,8 @@ const plain = (text, max) =>
 /** @type {GatewayAdapter} */
 export const jazzcash = {
 	id: 'jazzcash',
+	// JazzCash names no longest expiry: a week
+	maxExpiryHours: 168,
 	violation: (keys) => {
 		if (!isObject(keys)) return 'Enter the merchant id, the password and the integrity salt.';
 		for (const name of ['merchantId', 'password', 'integritySalt'])
@@ -71,7 +73,7 @@ export const jazzcash = {
 		const problem = jazzcash.violation(keys);
 		return problem ? { ok: false, message: problem } : { ok: true };
 	},
-	start: async ({ payment, keys, urls }, ctx) => {
+	start: async ({ payment, keys, urls, expiresAt }, ctx) => {
 		const ref = shortRef(payment.id, 'T');
 		/** @type {Record<string, string>} */
 		const fields = {
@@ -90,7 +92,7 @@ export const jazzcash = {
 			// without the merchant's own words, the transaction reference: never a word made in code (P11)
 			pp_BillReference: plain(payment.reference, 20).replace(/ /g, '') || ref,
 			pp_Description: plain(payment.description || payment.reference, 100) || ref,
-			pp_TxnExpiryDateTime: pakistanTime(ctx.now() + 24 * 3_600_000),
+			pp_TxnExpiryDateTime: pakistanTime(expiresAt),
 			pp_ReturnURL: urls.return,
 		};
 		fields.pp_SecureHash = secureHash(fields, String(keys.integritySalt));

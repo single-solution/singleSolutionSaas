@@ -39,6 +39,8 @@ const PAYMENT = {
 /** The same payment for the Pakistani gateways (PKR, a Pakistani mobile number). */
 const PK_PAYMENT = { ...PAYMENT, currency: 'PKR', customer: { ...PAYMENT.customer, phone: '+923001234567' } };
 const URLS = { return: 'https://pay.test/return', cancel: 'https://pay.test/cancel', notify: 'https://pay.test/notify' };
+/** When an unpaid checkout expires: the merchant's setting, 24 hours by default (P9). */
+const EXPIRES = NOW + 24 * 3_600_000;
 /** @param {Record<string, string>} [headers] @param {string} [rawBody] @param {Record<string, string>} [query] */
 const incoming = (headers = {}, rawBody = '', query = {}) => ({ rawBody, headers: new Headers(headers), query });
 
@@ -91,7 +93,7 @@ describe('Stripe', () => {
 			status: 200,
 			body: { id: 'cs_1', url: 'https://checkout.stripe.com/c/1' },
 		}));
-		expect(await stripe.start({ payment: PAYMENT, keys, urls: URLS }, ctx)).toEqual({
+		expect(await stripe.start({ payment: PAYMENT, keys, urls: URLS, expiresAt: EXPIRES }, ctx)).toEqual({
 			kind: 'redirect',
 			url: 'https://checkout.stripe.com/c/1',
 			ref: 'cs_1',
@@ -104,15 +106,25 @@ describe('Stripe', () => {
 		expect(form.get('line_items[0][price_data][currency]')).toBe('usd');
 		expect(form.get('client_reference_id')).toBe(PAYMENT.id);
 		expect(form.get('customer_email')).toBe('ana@example.com');
+		// Stripe's own longest is 24 hours, its default: sent only for a shorter time (P9)
+		expect(form.get('expires_at')).toBeNull();
+		expect(stripe.maxExpiryHours).toBe(24);
+		await stripe.start({ payment: PAYMENT, keys, urls: URLS, expiresAt: NOW + 2 * 3_600_000 }, ctx);
+		expect(new URLSearchParams(fake.calls.at(-1)?.body).get('expires_at')).toBe(String((NOW + 2 * 3_600_000) / 1000));
 		fake.respond('https://api.stripe.com', () => ({ status: 400, body: { error: { message: 'Bad currency' } } }));
 		expect(
-			await stripe.start({ payment: { ...PAYMENT, customer: {}, description: '', reference: '' }, keys, urls: URLS }, ctx),
+			await stripe.start(
+				{ payment: { ...PAYMENT, customer: {}, description: '', reference: '' }, keys, urls: URLS, expiresAt: EXPIRES },
+				ctx,
+			),
 		).toEqual({
 			kind: 'error',
 			message: 'Bad currency',
 		});
 		fake.respond('https://api.stripe.com', () => ({ status: 500 }));
-		expect(await stripe.start({ payment: PAYMENT, keys, urls: URLS }, ctx)).toMatchObject({ kind: 'error' });
+		expect(await stripe.start({ payment: PAYMENT, keys, urls: URLS, expiresAt: EXPIRES }, ctx)).toMatchObject({
+			kind: 'error',
+		});
 	});
 	it('reads signed webhooks: payments, subscriptions, other events', async () => {
 		const session = {
@@ -322,7 +334,7 @@ describe('PayPal', () => {
 			body: { id: 'ORDER1', links: [{ rel: 'payer-action', href: 'https://paypal.test/approve' }] },
 		}));
 		const payment = { ...PAYMENT, currency: 'USD', amount: 1050 };
-		expect(await paypal.start({ payment, keys, urls: URLS }, ctx)).toEqual({
+		expect(await paypal.start({ payment, keys, urls: URLS, expiresAt: EXPIRES }, ctx)).toEqual({
 			kind: 'redirect',
 			url: 'https://paypal.test/approve',
 			ref: 'ORDER1',
@@ -330,7 +342,9 @@ describe('PayPal', () => {
 		const order = JSON.parse(fake.calls.at(-1)?.body ?? '{}');
 		expect(order.purchase_units[0]).toMatchObject({ custom_id: PAYMENT.id, amount: { currency_code: 'USD', value: '10.50' } });
 		paypalAnswers(() => ({ status: 422, body: {} }));
-		expect(await paypal.start({ payment: { ...payment, description: '' }, keys, urls: URLS }, ctx)).toMatchObject({
+		expect(
+			await paypal.start({ payment: { ...payment, description: '' }, keys, urls: URLS, expiresAt: EXPIRES }, ctx),
+		).toMatchObject({
 			kind: 'error',
 		});
 
@@ -508,7 +522,10 @@ describe('PayFast', () => {
 		expect(await payfast.test({ ...keys, sandbox: false }, ctx)).toMatchObject({ ok: false });
 	});
 	it('signs the payment form in field order with the passphrase', async () => {
-		const started = await payfast.start({ payment: { ...PAYMENT, currency: 'ZAR' }, keys, urls: URLS }, ctx);
+		const started = await payfast.start(
+			{ payment: { ...PAYMENT, currency: 'ZAR' }, keys, urls: URLS, expiresAt: EXPIRES },
+			ctx,
+		);
 		if (started.kind !== 'form') throw new Error('form expected');
 		expect(started.action).toBe('https://sandbox.payfast.co.za/eng/process');
 		const fields = Object.fromEntries(started.fields);
@@ -529,7 +546,12 @@ describe('PayFast', () => {
 				.digest('hex'),
 		);
 		const bare = await payfast.start(
-			{ payment: { ...PAYMENT, customer: {}, description: '', reference: '' }, keys: { ...keys, sandbox: false }, urls: URLS },
+			{
+				payment: { ...PAYMENT, customer: {}, description: '', reference: '' },
+				keys: { ...keys, sandbox: false },
+				urls: URLS,
+				expiresAt: EXPIRES,
+			},
 			ctx,
 		);
 		expect(bare.kind === 'form' && bare.action).toBe('https://www.payfast.co.za/eng/process');
@@ -654,7 +676,7 @@ describe('PayFast (Pakistan)', () => {
 		expect(payfastAmount(250000, 'PKR')).toBe('2500');
 		expect(payfastAmount(250050, 'PKR')).toBe('2500.50');
 		tokens();
-		const started = await payfastPk.start({ payment: PK_PAYMENT, keys, urls: URLS }, ctx);
+		const started = await payfastPk.start({ payment: PK_PAYMENT, keys, urls: URLS, expiresAt: EXPIRES }, ctx);
 		if (started.kind !== 'form') throw new Error('form expected');
 		expect(started.action).toBe(`${UAT}/Ecommerce/api/Transaction/PostTransaction`);
 		expect(started.ref).toBe(PK_PAYMENT.id);
@@ -683,7 +705,7 @@ describe('PayFast (Pakistan)', () => {
 			TRAN_TYPE: 'ECOMM_PURCHASE',
 		});
 		const bare = await payfastPk.start(
-			{ payment: { ...PK_PAYMENT, customer: {}, description: '', reference: '' }, keys, urls: URLS },
+			{ payment: { ...PK_PAYMENT, customer: {}, description: '', reference: '' }, keys, urls: URLS, expiresAt: EXPIRES },
 			ctx,
 		);
 		const fields = bare.kind === 'form' ? Object.fromEntries(bare.fields) : {};
@@ -691,12 +713,15 @@ describe('PayFast (Pakistan)', () => {
 		expect(fields.CUSTOMER_EMAIL_ADDRESS).toBeUndefined();
 		expect(fields.CUSTOMER_MOBILE_NO).toBeUndefined();
 		fake.respond(UAT, () => ({ status: 401 }));
-		expect(await payfastPk.start({ payment: PK_PAYMENT, keys, urls: URLS }, ctx)).toEqual({
+		expect(await payfastPk.start({ payment: PK_PAYMENT, keys, urls: URLS, expiresAt: EXPIRES }, ctx)).toEqual({
 			kind: 'error',
 			message: 'PayFast (Pakistan) refused the keys.',
 		});
 		fake.respond('https://ipg1.apps.net.pk', () => ({ status: 200, body: { ACCESS_TOKEN: 'live' } }));
-		const live = await payfastPk.start({ payment: PK_PAYMENT, keys: { ...keys, sandbox: false }, urls: URLS }, ctx);
+		const live = await payfastPk.start(
+			{ payment: PK_PAYMENT, keys: { ...keys, sandbox: false }, urls: URLS, expiresAt: EXPIRES },
+			ctx,
+		);
 		expect(live.kind === 'form' && live.action).toBe('https://ipg1.apps.net.pk/Ecommerce/api/Transaction/PostTransaction');
 	});
 	it('trusts a return only with a valid hash for the payment’s basket', async () => {
@@ -811,9 +836,12 @@ describe('JazzCash', () => {
 	it('signs the request form and records refunds by hand', async () => {
 		expect(pakistanTime(NOW)).toBe('20261001150000');
 		expect(shortRef(PK_PAYMENT.id, 'T')).toBe('Tabcdefghijklmnopqrs');
-		const started = await jazzcash.start({ payment: PK_PAYMENT, keys, urls: URLS }, ctx);
+		const started = await jazzcash.start({ payment: PK_PAYMENT, keys, urls: URLS, expiresAt: EXPIRES }, ctx);
 		if (started.kind !== 'form') throw new Error('form expected');
 		const fields = Object.fromEntries(started.fields);
+		// the checkout expires when the merchant's setting says (P9)
+		expect(fields.pp_TxnExpiryDateTime).toBe('20261002150000');
+		expect(jazzcash.maxExpiryHours).toBe(168);
 		expect(fields).toMatchObject({
 			pp_Amount: '250000',
 			pp_TxnRefNo: 'Tabcdefghijklmnopqrs',
@@ -832,7 +860,12 @@ describe('JazzCash', () => {
 		);
 		expect(started.action).toContain('sandbox.jazzcash.com.pk');
 		const live = await jazzcash.start(
-			{ payment: { ...PK_PAYMENT, reference: '', description: '' }, keys: { ...keys, sandbox: false }, urls: URLS },
+			{
+				payment: { ...PK_PAYMENT, reference: '', description: '' },
+				keys: { ...keys, sandbox: false },
+				urls: URLS,
+				expiresAt: EXPIRES,
+			},
 			ctx,
 		);
 		expect(live.kind === 'form' && Object.fromEntries(live.fields)).toMatchObject({
@@ -908,9 +941,12 @@ describe('Easypaisa', () => {
 		expect(await easypaisa.test({}, ctx)).toMatchObject({ ok: false });
 	});
 	it('encrypts the sorted request and hands the token on to the confirm page', async () => {
-		const started = await easypaisa.start({ payment: PK_PAYMENT, keys, urls: URLS }, ctx);
+		const started = await easypaisa.start({ payment: PK_PAYMENT, keys, urls: URLS, expiresAt: NOW + 3 * 3_600_000 }, ctx);
 		if (started.kind !== 'form') throw new Error('form expected');
 		const fields = Object.fromEntries(started.fields);
+		// the checkout expires when the merchant's setting says (P9)
+		expect(fields.expiryDate).toBe('20261001 180000');
+		expect(easypaisa.maxExpiryHours).toBe(168);
 		expect(fields).toMatchObject({
 			amount: '2500.00',
 			orderRefNum: 'Eabcdefghijklmnopqrs',
@@ -925,7 +961,12 @@ describe('Easypaisa', () => {
 		expect(plain.startsWith('amount=2500.00&autoRedirect=1&emailAddr=ana@example.com&expiryDate=')).toBe(true);
 		expect(hashedRequest({ b: '1', a: '2' }, keys.hashKey)).toBe(hashedRequest({ a: '2', b: '1' }, keys.hashKey));
 		const bare = await easypaisa.start(
-			{ payment: { ...PK_PAYMENT, customer: { phone: '+15551234567' } }, keys: { ...keys, sandbox: false }, urls: URLS },
+			{
+				payment: { ...PK_PAYMENT, customer: { phone: '+15551234567' } },
+				keys: { ...keys, sandbox: false },
+				urls: URLS,
+				expiresAt: EXPIRES,
+			},
 			ctx,
 		);
 		expect(bare.kind === 'form' && bare.action).toBe('https://easypay.easypaisa.com.pk/easypay/Index.jsf');
@@ -1019,7 +1060,7 @@ describe('Rapid Gateway', () => {
 		expect(wholeUnits(250050, 'PKR')).toBeNull();
 		expect(wholeUnits(7, 'JPY')).toBe(7);
 		fake.respond(SANDBOX, () => ({ status: 201, body: { id: 'rp_1', checkout_url: 'https://checkout.rapidgateway.pk/rp_1' } }));
-		expect(await rapid.start({ payment: PK_PAYMENT, keys, urls: URLS }, ctx)).toEqual({
+		expect(await rapid.start({ payment: PK_PAYMENT, keys, urls: URLS, expiresAt: EXPIRES }, ctx)).toEqual({
 			kind: 'redirect',
 			url: 'https://checkout.rapidgateway.pk/rp_1',
 			ref: 'rp_1',
@@ -1037,24 +1078,28 @@ describe('Rapid Gateway', () => {
 			return_url: URLS.return,
 			webhook_url: URLS.notify,
 		});
-		await rapid.start({ payment: { ...PK_PAYMENT, customer: {} }, keys, urls: URLS }, ctx);
+		await rapid.start({ payment: { ...PK_PAYMENT, customer: {} }, keys, urls: URLS, expiresAt: EXPIRES }, ctx);
 		expect(JSON.parse(fake.calls.at(-1)?.body ?? '{}').customer).toEqual({});
-		expect(await rapid.start({ payment: { ...PK_PAYMENT, amount: 250050 }, keys, urls: URLS }, ctx)).toEqual({
+		expect(
+			await rapid.start({ payment: { ...PK_PAYMENT, amount: 250050 }, keys, urls: URLS, expiresAt: EXPIRES }, ctx),
+		).toEqual({
 			kind: 'error',
 			message: 'Rapid Gateway takes whole amounts only.',
 		});
 		fake.respond(SANDBOX, () => ({ status: 422, body: { message: 'Amount too low' } }));
-		expect(await rapid.start({ payment: PK_PAYMENT, keys, urls: URLS }, ctx)).toEqual({
+		expect(await rapid.start({ payment: PK_PAYMENT, keys, urls: URLS, expiresAt: EXPIRES }, ctx)).toEqual({
 			kind: 'error',
 			message: 'Amount too low',
 		});
 		fake.respond(SANDBOX, () => ({ status: 200, body: { id: 'rp_2', checkout_url: 'http://insecure.example/x' } }));
-		expect(await rapid.start({ payment: PK_PAYMENT, keys, urls: URLS }, ctx)).toEqual({
+		expect(await rapid.start({ payment: PK_PAYMENT, keys, urls: URLS, expiresAt: EXPIRES }, ctx)).toEqual({
 			kind: 'error',
 			message: 'Rapid Gateway answered HTTP 200.',
 		});
 		fake.respond('https://api.rapidgateway.pk', () => ({ status: 401 }));
-		expect(await rapid.start({ payment: PK_PAYMENT, keys: { ...keys, sandbox: false }, urls: URLS }, ctx)).toEqual({
+		expect(
+			await rapid.start({ payment: PK_PAYMENT, keys: { ...keys, sandbox: false }, urls: URLS, expiresAt: EXPIRES }, ctx),
+		).toEqual({
 			kind: 'error',
 			message: 'Rapid Gateway refused the keys.',
 		});
@@ -1130,7 +1175,7 @@ describe('generic adapter', () => {
 		expect(genericCurrencies(null)).toEqual([]);
 	});
 	it('signs the checkout fields and reads signed notices', async () => {
-		const started = await generic.start({ payment: PAYMENT, keys, urls: URLS }, ctx);
+		const started = await generic.start({ payment: PAYMENT, keys, urls: URLS, expiresAt: EXPIRES }, ctx);
 		if (started.kind !== 'form') throw new Error('form expected');
 		const fields = Object.fromEntries(started.fields);
 		expect(fields.signature).toBe(checkoutSignature(fields, keys.secret));

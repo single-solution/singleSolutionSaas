@@ -48,6 +48,8 @@ export const localMobile = (phone) => (phone && /^\+923\d{9}$/.test(phone) ? `0$
 /** @type {GatewayAdapter} */
 export const easypaisa = {
 	id: 'easypaisa',
+	// Easypay names no longest expiry: a week
+	maxExpiryHours: 168,
 	violation: (keys) => {
 		if (!isObject(keys)) return 'Enter the store id, the hash key and the API credentials.';
 		if (typeof keys.storeId !== 'string' || !/^\d{1,12}$/.test(keys.storeId)) return 'The store id is a number.';
@@ -62,9 +64,9 @@ export const easypaisa = {
 		const problem = easypaisa.violation(keys);
 		return problem ? { ok: false, message: problem } : { ok: true };
 	},
-	start: async ({ payment, keys, urls }, ctx) => {
+	start: async ({ payment, keys, urls, expiresAt }) => {
 		const ref = shortRef(payment.id, 'E');
-		const expiry = pakistanTime(ctx.now() + 24 * 3_600_000);
+		const expiry = pakistanTime(expiresAt);
 		/** @type {Record<string, string>} */
 		const fields = {
 			amount: toDecimal(payment.amount, payment.currency),

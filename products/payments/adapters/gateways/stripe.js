@@ -44,6 +44,8 @@ const sessionNews = (session) => ({
 /** @type {GatewayAdapter} */
 export const stripe = {
 	id: 'stripe',
+	// a Checkout Session lasts at most 24 hours (Stripe's own limit, also its default)
+	maxExpiryHours: 24,
 	violation: (keys) => {
 		if (!isObject(keys)) return 'Enter the secret key and the webhook signing secret.';
 		if (typeof keys.secretKey !== 'string' || !/^(sk|rk)_(live|test)_[A-Za-z0-9]{8,}$/.test(keys.secretKey))
@@ -56,7 +58,7 @@ export const stripe = {
 		const answer = await call(ctx, `${STRIPE_API}/v1/balance`, { method: 'GET', headers: headers(keys) });
 		return ok2xx(answer.status) ? { ok: true } : { ok: false, message: failure('Stripe', answer.status) };
 	},
-	start: async ({ payment, keys, urls }, ctx) => {
+	start: async ({ payment, keys, urls, expiresAt }, ctx) => {
 		const answer = await call(ctx, `${STRIPE_API}/v1/checkout/sessions`, {
 			method: 'POST',
 			headers: headers(keys, `ss-${payment.id}`),
@@ -73,6 +75,8 @@ export const stripe = {
 				'metadata[ss_website]': payment.websiteId,
 				'payment_intent_data[metadata][ss_payment]': payment.id,
 				...(payment.customer.email ? { customer_email: payment.customer.email } : {}),
+				// sent only when shorter than Stripe's own 24 hours, so a clock a little ahead never makes it refuse
+				...(expiresAt - ctx.now() < 24 * 3_600_000 ? { expires_at: Math.floor(expiresAt / 1000) } : {}),
 			}),
 		});
 		if (!ok2xx(answer.status) || typeof answer.json?.url !== 'string')

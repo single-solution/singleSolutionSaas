@@ -234,8 +234,16 @@ export const createService = (product) => {
 			return changed ? { ok: true, payment: changed } : { ok: false };
 		}
 		const keys = /** @type {Record<string, any>} */ (await keysOf(s, gateway));
+		// an unpaid checkout ends when the merchant says, within the gateway's own longest (P9)
+		const { checkoutExpiryHours } = await product.settings.values(s.websiteId, 'payment_api');
+		const hours = Math.min(Number(checkoutExpiryHours), gateways[gateway].maxExpiryHours ?? Number.POSITIVE_INFINITY);
 		const started = await gateways[gateway].start(
-			{ payment: { ...payment, websiteId: s.websiteId }, keys, urls: urlsOf(s, gateway, payment.id) },
+			{
+				payment: { ...payment, websiteId: s.websiteId },
+				keys,
+				urls: urlsOf(s, gateway, payment.id),
+				expiresAt: now() + hours * 3_600_000,
+			},
 			ctx,
 		);
 		if (started.kind === 'error') return { ok: false };

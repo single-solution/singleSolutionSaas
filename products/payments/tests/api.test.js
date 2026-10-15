@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { formSignature } from '../adapters/gateways/payfast.js';
-import { secureHash } from '../adapters/gateways/jazzcash.js';
+import { pakistanTime, secureHash } from '../adapters/gateways/jazzcash.js';
 import { validationHash } from '../adapters/gateways/payfast-pk.js';
 import { webhookSignature } from '../adapters/gateways/rapid.js';
 import { signTimestamped } from '../adapters/util.js';
@@ -411,8 +411,13 @@ describe('the payment API and Stripe', () => {
 
 describe('the other gateways', () => {
 	it('JazzCash: signed form, signed answer on the return address', async () => {
+		// unpaid checkouts expire when the merchant says, within the gateway's own longest (P9)
+		expect((await env.api('PUT', '/v1/settings/payment_api.checkoutExpiryHours', { value: 0 })).status).toBe(422);
+		await env.api('PUT', '/v1/settings/payment_api.checkoutExpiryHours', { value: 6 });
 		const payment = await createPayment({ gateway: 'jazzcash', currency: 'PKR', reference: 'inv 7' });
 		const form = await page(`/pay/${env.websiteId}/${payment.id}`);
+		expect(form.text).toContain(`name="pp_TxnExpiryDateTime" value="${pakistanTime(env.now() + 6 * 3_600_000)}"`);
+		await env.api('DELETE', '/v1/settings/payment_api.checkoutExpiryHours');
 		expect(form.text).toContain('payments.jazzcash.com.pk');
 		expect(form.text).toContain('/pay.js');
 		const ref = /name="pp_TxnRefNo" value="([^"]+)"/.exec(form.text)?.[1] ?? '';
