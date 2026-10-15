@@ -40,8 +40,8 @@ const CASES = [
 		product: accounts,
 		routes: accountsRoutes,
 		on: ['phone_code'],
-		setting: 'phone_code.codeLength',
-		value: 8,
+		setting: 'phone_code.countries',
+		value: ['GB'],
 		list: null,
 	},
 	{
