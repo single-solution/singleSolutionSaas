@@ -16,8 +16,9 @@ The exact API is in [API.md](./API.md).
   ended grace period into stopped, and keeps the last status (and revocation list) for 6 hours while the Portal
   cannot be reached (offline grace).
 - **Notices** — `POST /.well-known/ss-events`: `status.changed` (the status is fetched again right after the answer; a
-  `removed` status turns the website's switches off, so a re-add starts with every feature off), `token.revoked`,
-  `sessions.revoked`, `website.deleted`.
+  `removed` status turns the website's switches off, so a re-add starts with every feature off; a `featuresVersion`
+  above the switches' own, a re-add the product missed while it could not be reached, turns them off too),
+  `token.revoked`, `sessions.revoked`, `website.deleted`.
 - **Reports** — price reports (Prices screen, and once after a deploy that changed the feature list) and feature
   reports (Features screen); switches are saved only after the Portal accepts.
 - **Settings** — one value per website × setting with global defaults and schema defaults; widget texts with the same
@@ -60,8 +61,8 @@ The exact API is in [API.md](./API.md).
   the website's Setup sheet (`ss.blueprint/1`): features with their business profile tags (`recommendFor`) and their
   settings and lists while on, connections state only, widgets with readiness, staff permissions, events, the Overview
   checklist, docs, the product's `hooks.blueprint` summaries and what the website builds per feature on (the `build`
-  option). No secret can leave (connection values are never read into it, and any string holding one becomes
-  `[hidden]`). With the `openapi` option the kit also serves the product's `GET /openapi.json`. The advisor's Switch on
+  option). No secret can leave (connection values are never read into it; a setting holding one shows only
+  `set: true`, any other string holding one becomes `[hidden]`). With the `openapi` option the kit also serves the product's `GET /openapi.json`. The advisor's Switch on
   (`POST /v1/blueprint/features`, also a Portal call) switches features on, with what they need, for an Owner or
   Support admin through the usual feature report.
 - **Widgets** — the product serves one public `widget.js` (the same bytes for every website). With the page's

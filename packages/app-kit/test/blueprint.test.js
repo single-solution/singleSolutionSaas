@@ -173,8 +173,8 @@ describe('GET /v1/blueprint (Portal call)', () => {
 		expect(validateProductBlueprint(body).ok).toBe(true);
 		expect(body.features[0].settings).toEqual([
 			{ key: 'maxNotes', title: 'Notes per visitor per day', value: 5, default: true },
-			// a value holding a saved string is still hidden
-			{ key: 'greeting', title: 'Greeting', value: HIDDEN, default: false },
+			// a value holding a saved secret is never shown: only that it is set
+			{ key: 'greeting', title: 'Greeting', set: true, default: false },
 		]);
 		expect(JSON.stringify(body)).not.toContain('sk_live_0123456789abcdef');
 	});
@@ -526,6 +526,19 @@ describe('no secret can leave (property test)', () => {
 			expect(validateProductBlueprint(body).ok).toBe(true);
 			const text = JSON.stringify(body);
 			for (const secret of secrets) expect(text.includes(secret), `secret ${secret} leaked`).toBe(false);
+			// a saved setting that holds a secret shows only that it is set
+			for (const [full, value] of Object.entries(saved)) {
+				const [featureKey, key] = full.split('.');
+				const shown = body.features
+					.find((/** @type {any} */ f) => f.key === featureKey)
+					.settings.find((/** @type {any} */ one) => one.key === key);
+				const secret = secrets.some((one) => JSON.stringify(value).includes(one));
+				expect(shown, full).toEqual(
+					secret
+						? { key, title: shown.title, set: true, default: false }
+						: { key, title: shown.title, value, default: false },
+				);
+			}
 			expect(
 				body.connections.filter((/** @type {any} */ c) => c.key.startsWith('c')).every((/** @type {any} */ c) => c.set),
 			).toBe(true);

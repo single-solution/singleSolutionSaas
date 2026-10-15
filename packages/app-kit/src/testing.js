@@ -358,6 +358,16 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 		setStatus: (websiteId, patch) => {
 			Object.assign(site(websiteId), patch);
 		},
+		/**
+		 * Add a removed product to a website again, as the Portal does (PLAN 0.4.12 row 4): active, every feature off and
+		 * `featuresVersion` one higher.
+		 * @param {string} websiteId @param {string} productId
+		 */
+		addAgain: (websiteId, productId) => {
+			const added = site(websiteId);
+			added.status = 'active';
+			added.features[productId] = { version: (added.features[productId]?.version ?? 0) + 1, on: [] };
+		},
 		/** Delete a website (its status answers 404 afterwards). @param {string} websiteId */
 		deleteWebsite: (websiteId) => {
 			websites.delete(websiteId);

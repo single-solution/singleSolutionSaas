@@ -2,7 +2,9 @@
  * Feature switches and the price and feature reports (PLAN 0.4.2, 0.4.12 rows 2–3).
  *
  * - Switches per website `{ on, featuresVersion }` are saved only after the Portal accepted the feature report; a
- *   product added to a website starts with every feature off.
+ *   product added to a website starts with every feature off. While a report runs, a mark in the product database
+ *   (`reportingKey`) tells the status reads of other instances that a `featuresVersion` above the saved one is this
+ *   report's, not a re-add's (`status.js`).
  * - A price report is sent when an Owner saves the Prices screen (version = accepted + 1, saved only after a 2xx, no
  *   retry), and on the first request after a deploy that changed the manifest's feature list (kept prices, new features
  *   0, missing ones dropped). Only that second kind is retried, on a later request (at most once a minute per instance),
@@ -19,6 +21,14 @@ import { currentFeatures, featuresDiffer } from './connection.js';
 /** @typedef {import('./http/results.js').ProblemResult} ProblemResult */
 
 const RETRY_MS = 60_000;
+/** How long the mark of a running feature report holds (longer than the Portal call may take). */
+const REPORTING_MS = 30_000;
+
+/**
+ * The `state` id of the mark a running feature report of a website leaves.
+ * @param {string} websiteId
+ */
+export const reportingKey = (websiteId) => `reporting|${websiteId}`;
 
 /**
  * The problem to answer for a failed Portal call.
@@ -118,14 +128,17 @@ export const createReports = ({ store, manifest, connection, status, recent, now
 			};
 		const ordered = keys.filter((key) => on.includes(key));
 		const version = found.status.featuresVersion + 1;
+		await store.put('state', reportingKey(websiteId), { version, expiresAt: now() + REPORTING_MS });
 		try {
 			await connection
 				.active()
 				.client.putFeatures(websiteId, { version, on: ordered, adminId: actor.id, adminName: actor.name });
 		} catch (error) {
+			await store.delete('state', reportingKey(websiteId));
 			return { ok: false, problem: portalProblem(error) };
 		}
 		await store.put('switches', websiteId, { websiteId, on: ordered, featuresVersion: version, at: now() });
+		await store.delete('state', reportingKey(websiteId));
 		await status.drop(websiteId);
 		const names = manifest.features.filter((f) => ordered.includes(f.key)).map((f) => f.name);
 		await recent.record({

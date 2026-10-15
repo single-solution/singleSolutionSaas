@@ -204,9 +204,11 @@ widgets, staffPermissions, events, checklist, summaries, build }`.
   and logged, and a failing hook or list read never fails the answer.
 - `build`: `[{ feature, what, docs }]` for each feature that is on and has a `build` text (the option), `docs` its
   section of the guide (`<docsUrl>#feature-<key>`).
-- No secret can leave: besides never reading connection values into the answer, every string of the finished answer
-  that holds a value saved in the website's Connections (`SECRET_MIN_LENGTH`, 8 characters or more; every text member
-  of an object value) becomes `[hidden]` (`HIDDEN`), so a setting or hook text that repeats a key shows nothing of it.
+- No secret can leave: besides never reading connection values into the answer, a setting whose value holds a value
+  saved in the website's Connections (`SECRET_MIN_LENGTH`, 8 characters or more; anywhere in it) is `{ key, title, set:
+true, default }` without its value, and every other string of the answer that holds one (list and hook summaries,
+  events, the business name) becomes `[hidden]` (`HIDDEN`), so a setting or hook text that repeats a key shows nothing
+  of it.
 
 **Switch on** (`POST /v1/blueprint/features?websiteId=`, also a signed Portal call): the Setup sheet's advisor switches
 `features` on for the Owner or Support admin the Portal names (`admin: { id, name, role }`), each with every feature
@@ -250,7 +252,8 @@ below) refuses every frame (`X-Frame-Options: DENY`, `Content-Security-Policy: f
 
 Fake Portal members: `url`, `jwks`, `handle(request)`, `fetch`, `setReachable(bool)`, `connect({ handler, baseUrl,
 secret, priceListVersion? })`, `addProduct({ productId, baseUrl })`, `addWebsite({ domain, websiteId?, merchantId?,
-merchantName?, status?, graceEndsAt?, todayMillicredits? })`, `setStatus(websiteId, patch)`, `deleteWebsite(websiteId)`,
+merchantName?, status?, graceEndsAt?, todayMillicredits? })`, `setStatus(websiteId, patch)`, `addAgain(websiteId,
+productId)` (a re-add: active, every feature off, `featuresVersion` one higher), `deleteWebsite(websiteId)`,
 `features(websiteId, productId)`, `addAdmin({ id, name, role })`, `issueToken({ websiteId, productId, kind })`,
 `revoke(jti)`, `issueLaunch({ productId, kind, websiteId?, role?, adminId?, adminName?, sessionExpiresAt? })`,
 `signNotice(body)`, `sendNotice(productId, body)`, `signCall(productId, method, target, body?)` (signed Portal-call

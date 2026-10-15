@@ -110,7 +110,7 @@ describe('sso and sessions', () => {
 
 describe('features and prices', () => {
 	it('sends feature reports, saves switches only after acceptance and checks dependencies', async () => {
-		const { portal, session, dash, websiteId } = await setup();
+		const { portal, session, dash, websiteId, store } = await setup();
 		const cookie = await session({ role: 'support' });
 		const path = `/v1/dashboard/websites/${websiteId}/features`;
 		expect((await dash(cookie, 'PUT', path, { on: ['inbox'] })).status).toBe(422);
@@ -139,6 +139,8 @@ describe('features and prices', () => {
 		portal.addAdmin({ id: 'adm_0123456789abcdefghjkmnpq', name: 'Ada Admin', role: 'finance' });
 		const refused = await dash(finance, 'PUT', path, { on: [] });
 		expect(refused.status).toBe(422);
+		// the mark of a running report goes with its answer, accepted or refused
+		expect(await store.get('state', `reporting|${websiteId}`)).toBeNull();
 		expect((await dash(cookie, 'GET', path)).status).toBe(200);
 		expect((await (await dash(cookie, 'GET', path)).json()).featuresVersion).toBe(1);
 		const overview = await (await dash(cookie, 'GET', `/v1/dashboard/websites/${websiteId}/overview`)).json();

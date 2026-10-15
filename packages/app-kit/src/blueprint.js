@@ -20,10 +20,11 @@
  *   features on for an Owner or Support admin the Portal names, with the features they need, through the same feature
  *   report as the dashboard's Features page (the Portal checks the admin again when it accepts the report).
  *
- * No secret can leave: besides never reading connection values into the answer, every string the merchant or the hook
- * wrote (setting values, list summaries, the hook's summaries and events, the business name) that holds a value saved
- * in the website's Connections (8 characters or more) is replaced by `[hidden]` (an event is left out), so even a
- * setting or a hook text that repeats a key shows nothing of it. The names and addresses the product itself gives
+ * No secret can leave: besides never reading connection values into the answer, a setting whose value holds a value
+ * saved in the website's Connections (8 characters or more, anywhere in it) shows `set: true` instead of its value,
+ * and every other string the merchant or the hook wrote (list summaries, the hook's summaries and events, the business
+ * name) that holds one is replaced by `[hidden]` (an event is left out), so even a setting or a hook text that repeats
+ * a key shows nothing of it. The names and addresses the product itself gives
  * (keys, ids, links) are left as they are, so a connection part that is no secret, such as a bucket named like the
  * product, cannot break the answer.
  * @module
@@ -65,6 +66,19 @@ export const hideSecrets = (value, secrets) => {
 	if (Array.isArray(value)) return value.map((item) => hideSecrets(item, secrets));
 	if (isObject(value)) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, hideSecrets(item, secrets)]));
 	return value;
+};
+
+/**
+ * Whether any string of a value holds one of the secrets.
+ * @param {unknown} value
+ * @param {ReadonlyArray<string>} secrets
+ * @returns {boolean}
+ */
+const holdsSecret = (value, secrets) => {
+	if (typeof value === 'string') return secrets.some((secret) => value.includes(secret));
+	if (Array.isArray(value)) return value.some((item) => holdsSecret(item, secrets));
+	if (isObject(value)) return Object.values(value).some((item) => holdsSecret(item, secrets));
+	return false;
 };
 
 /**
@@ -184,18 +198,20 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 	const absolute = (value) => new URL(value, `${kit.connection.active().baseUrl.replace(/\/+$/, '')}/`).toString();
 
 	/**
-	 * Settings of a section with their values (a value holding a secret hidden).
+	 * Settings of a section with their values; a value holding a secret is never shown (`set: true` instead).
 	 * @param {import('@ss/contracts').ManifestFeature['settings']} schema
 	 * @param {Record<string, { value: unknown, source: string }>} values
 	 * @param {ReadonlyArray<string>} secrets
+	 * @returns {import('@ss/contracts').BlueprintSetting[]}
 	 */
 	const settingsOf = (schema, values, secrets) =>
-		Object.entries(schema.properties).map(([key, node]) => ({
-			key,
-			title: node.title,
-			value: hideSecrets(values[key]?.value, secrets),
-			default: values[key]?.source !== 'website',
-		}));
+		Object.entries(schema.properties).map(([key, node]) => {
+			const value = values[key]?.value;
+			const isDefault = values[key]?.source !== 'website';
+			return holdsSecret(value, secrets)
+				? { key, title: node.title, set: true, default: isDefault }
+				: { key, title: node.title, value, default: isDefault };
+		});
 
 	/**
 	 * The product's part of the website's Setup sheet.

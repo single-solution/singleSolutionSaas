@@ -17,11 +17,15 @@
  *   {@link WAITED_FETCH_MS}, and not again within {@link REFRESH_EVERY_MS} of a failure on the instance) and is refused
  *   while it cannot be fetched. A `token.revoked` notice fetches it at once.
  * - `graceEndsAt` in the past turns `grace` into `stopped` without asking the Portal.
- * - A fetched `removed` status turns the website's feature switches off: a re-add starts with every feature off.
+ * - A fetched `removed` status turns the website's feature switches off: a re-add starts with every feature off. A
+ *   fetched `featuresVersion` above the switches' own means the Portal reset them without this product: a re-add while
+ *   the product could not be reached (it never saw `removed`), which the Portal makes with every feature off and a
+ *   higher version (PLAN 0.4.12 row 4); the switches turn off at that version.
  * @module
  */
 import { isKitError } from './util.js';
 import { problem } from './http/results.js';
+import { reportingKey } from './reports.js';
 
 /** @typedef {import('@ss/contracts').StatusResponse} StatusResponse */
 /** @typedef {import('./stores/types.js').Store} Store */
@@ -131,15 +135,23 @@ export const createStatus = ({ store, client, now, logger }) => {
 	const syncLater = () => syncShared();
 
 	/**
-	 * A removed product is added again with every feature off (PLAN 0.5.9: the Portal resets its switches on the
-	 * re-add), so the product turns its own switches off as soon as it sees `removed`; the version is kept.
+	 * The website's switches as a fetched status says. A removed product is added again with every feature off (PLAN
+	 * 0.5.9: the Portal resets its switches on the re-add), so the product turns its own switches off as soon as it sees
+	 * `removed`, keeping their version. The re-add also raises `featuresVersion`: a version above the switches' own (the
+	 * product missed both the removal and the re-add) turns them off at the Portal's version, unless a feature report of
+	 * this product is running (another instance between the Portal's acceptance and its save: the version is its own).
 	 * @param {string} websiteId
+	 * @param {StatusResponse} status
 	 * @param {number} at
 	 */
-	const switchOff = async (websiteId, at) => {
+	const followSwitches = async (websiteId, status, at) => {
 		const switches = await store.get('switches', websiteId);
-		if (switches && switches.on.length > 0)
-			await store.put('switches', websiteId, { websiteId, on: [], featuresVersion: switches.featuresVersion, at });
+		const version = switches?.featuresVersion ?? 0;
+		if (status.featuresVersion > version) {
+			if ((await store.get('state', reportingKey(websiteId))) === null)
+				await store.put('switches', websiteId, { websiteId, on: [], featuresVersion: status.featuresVersion, at });
+		} else if (status.status === 'removed' && switches && switches.on.length > 0)
+			await store.put('switches', websiteId, { websiteId, on: [], featuresVersion: version, at });
 	};
 
 	/**
@@ -163,7 +175,7 @@ export const createStatus = ({ store, client, now, logger }) => {
 					validUntilMs: Math.min(Number.isFinite(validUntil) ? validUntil : t, t + STATUS_MAX_AGE_MS),
 				};
 				await store.put('status', websiteId, doc);
-				if (status.status === 'removed') await switchOff(websiteId, t);
+				await followSwitches(websiteId, status, t);
 				return doc;
 			})().finally(() => fetching.delete(websiteId));
 			fetching.set(websiteId, running);

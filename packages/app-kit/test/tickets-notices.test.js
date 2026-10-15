@@ -107,13 +107,50 @@ describe('notices', () => {
 		expect(await product.featuresOn(websiteId)).toEqual([]);
 		expect(await store.get('switches', websiteId)).toMatchObject({ on: [], featuresVersion: 1 });
 		// added again: every feature is off until an admin switches it on
-		portal.setStatus(websiteId, { status: 'active' });
+		portal.addAgain(websiteId, 'notes');
 		clock.advance(1000); // the same notice in the same second is a replay
 		expect((await portal.sendNotice('notes', { type: 'status.changed', websiteId })).status).toBe(204);
 		await settle();
+		expect(await store.get('switches', websiteId)).toMatchObject({ on: [], featuresVersion: 2 });
 		expect((await call('GET', '/v1/server/notes', { token: server.token })).status).toBe(403);
 		await switchOn(['notes']);
+		expect(await store.get('switches', websiteId)).toMatchObject({ on: ['notes'], featuresVersion: 3 });
 		expect((await call('GET', '/v1/server/notes', { token: server.token })).status).toBe(200);
+	});
+
+	it('a product that could not be reached across a removal and a re-add drops its old switches on its next status read', async () => {
+		const { call, server, portal, websiteId, switchOn, settle, product, store, clock } = await setup();
+		await switchOn(['notes']);
+		expect((await call('GET', '/v1/server/notes', { token: server.token })).status).toBe(200);
+		// removed and added again while no notice reached the product: it never saw `removed`
+		portal.setStatus(websiteId, { status: 'removed' });
+		portal.addAgain(websiteId, 'notes');
+		// its status copy runs out: the next use serves from it and fetches the status again right after
+		clock.advance(5 * 60_000 + 1000);
+		await call('GET', '/v1/server/open', { token: server.token });
+		await settle();
+		expect(await store.get('switches', websiteId)).toMatchObject({ on: [], featuresVersion: 2 });
+		expect(await product.featuresOn(websiteId)).toEqual([]);
+		expect((await call('GET', '/v1/server/notes', { token: server.token })).status).toBe(403);
+		await switchOn(['notes']);
+		expect(portal.features(websiteId, 'notes')).toEqual({ version: 3, on: ['notes'] });
+	});
+
+	it('a feature report still running on another instance is not undone by a status read that already sees it', async () => {
+		const { portal, websiteId, switchOn, settle, store, clock, call, server } = await setup();
+		await switchOn(['notes']);
+		clock.advance(5 * 60_000 + 1000); // the status copy runs out
+		// another instance's report was accepted (version 2) but has not saved its switches yet
+		await store.put('state', `reporting|${websiteId}`, { version: 2, expiresAt: clock.now() + 30_000 });
+		Object.assign(portal.features(websiteId, 'notes'), { version: 2, on: ['notes', 'inbox'] });
+		await call('GET', '/v1/server/open', { token: server.token });
+		await settle();
+		expect(await store.get('switches', websiteId)).toMatchObject({ on: ['notes'], featuresVersion: 1 });
+		// a mark left by a report that never finished holds 30 seconds at most: the next status read resets them
+		clock.advance(5 * 60_000 + 1000);
+		await call('GET', '/v1/server/open', { token: server.token });
+		await settle();
+		expect(await store.get('switches', websiteId)).toMatchObject({ on: [], featuresVersion: 2 });
 	});
 
 	it('token.revoked refetches the revocation list', async () => {
