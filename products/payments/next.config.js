@@ -6,6 +6,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { dashboardHeaders } from '@ss/app-kit/headers';
 
 const here = dirname(fileURLToPath(import.meta.url));
 // inside the Single Solution monorepo the workspace packages are linked from its root; split off, the project is the root
@@ -23,6 +24,8 @@ const config = {
 	serverExternalPackages: ['mongodb'],
 	// the UI library ships untranspiled JSX in .js files
 	transpilePackages: ['@ss/ui'],
+	// the dashboard page refuses every frame and gets the static security headers (PLAN 0.4.3)
+	headers: async () => dashboardHeaders(),
 	async rewrites() {
 		return [
 			'/.well-known/:path*',
