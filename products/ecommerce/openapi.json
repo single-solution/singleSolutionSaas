@@ -34116,6 +34116,95 @@
 					}
 				}
 			}
+		},
+		"/v1/widget/admin/config": {
+			"get": {
+				"summary": "Widget config (admin widgets)",
+				"description": "The same for the admin widgets, with a ticket from POST /v1/tickets, from the origin it names.",
+				"x-ss-auth": "ticket",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/WidgetConfig"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/widget/config": {
+			"get": {
+				"summary": "Widget config (visitor widgets)",
+				"description": "With the browser token from the website (an Origin is required; the server token is refused): what the visitor widgets need. No feature of its own: it answers while the product serves the website and its merchant database is connected.",
+				"x-ss-auth": "browser",
+				"security": [
+					{
+						"browserToken": []
+					},
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSVisitorIp"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/WidgetConfig"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	},
 	"components": {
@@ -53186,6 +53275,137 @@
 					}
 				},
 				"description": "Per product: the variants added, or why none."
+			},
+			"WidgetConfig": {
+				"type": "object",
+				"description": "What the product's widget.js needs for a website.",
+				"required": [
+					"texts",
+					"theme",
+					"customCss",
+					"format",
+					"timeZone",
+					"features",
+					"widgets",
+					"settings"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"texts": {
+						"type": "object",
+						"additionalProperties": {
+							"type": "string"
+						},
+						"description": "Widget texts by key, in the website's words (else the product's English defaults); fill their {placeholders} as text, never as HTML."
+					},
+					"theme": {
+						"type": "object",
+						"required": [
+							"colors",
+							"fontFamily",
+							"radius",
+							"mode"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"colors": {
+								"type": "object",
+								"maxProperties": 24,
+								"additionalProperties": {
+									"type": "string",
+									"pattern": "^#[0-9a-fA-F]{6}$"
+								},
+								"description": "Color name → #rrggbb (the product's CSS supplies the others)."
+							},
+							"fontFamily": {
+								"type": "string",
+								"description": "'inherit' or a font name."
+							},
+							"radius": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 24,
+								"description": "Corner radius in px."
+							},
+							"mode": {
+								"type": "string",
+								"enum": [
+									"light",
+									"dark",
+									"auto"
+								]
+							}
+						}
+					},
+					"customCss": {
+						"type": "string",
+						"description": "The merchant's own CSS for the widgets (at most 20 kB)."
+					},
+					"format": {
+						"type": "object",
+						"required": [
+							"locale",
+							"currencyDisplay",
+							"currencySymbol",
+							"wholeUnits",
+							"times"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"locale": {
+								"type": "string",
+								"description": "A language tag such as en-US or fr-FR, or '' for the viewer's."
+							},
+							"currencyDisplay": {
+								"type": "string",
+								"enum": [
+									"code",
+									"symbol",
+									"custom"
+								]
+							},
+							"currencySymbol": {
+								"type": "string",
+								"maxLength": 8,
+								"description": "With currencyDisplay custom."
+							},
+							"wholeUnits": {
+								"type": "boolean",
+								"description": "Amounts without the minor unit."
+							},
+							"times": {
+								"type": "string",
+								"enum": [
+									"viewer",
+									"business"
+								],
+								"description": "Whose time zone dates use."
+							}
+						}
+					},
+					"timeZone": {
+						"type": "string",
+						"description": "The business time zone (business.json), default UTC."
+					},
+					"features": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "The switched-on features."
+					},
+					"widgets": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "The keys of the widgets whose feature (one, or any of a list) is on: a widget not listed renders nothing."
+					},
+					"settings": {
+						"type": "object",
+						"description": "The product's own widget settings (never secrets)."
+					}
+				}
 			},
 			"Wishlist": {
 				"type": "object",
