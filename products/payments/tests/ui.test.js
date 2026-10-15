@@ -1,20 +1,21 @@
 // @vitest-environment jsdom
 /* global document, window */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import manifest from '../manifest.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountLinksAdmin } from '../ui/links-admin.js';
 import { mountPayButton } from '../ui/pay-button.js';
 import { mountPaymentsAdmin } from '../ui/payments-admin.js';
 import { mountSubscriptionsAdmin } from '../ui/subscriptions-admin.js';
-import { createTicketSource } from '../ui/tickets.js';
 import { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } from '../ui/widget.js';
 import { PAY_SCRIPT, renderBankPage } from '../server/pages.js';
 
 const BASE = 'https://payments.example.dev';
 
 /**
- * A widget config as the kit answers it (PLAN 0.8.10 K7: with the website's Format and business time zone).
+ * A widget config as the kit answers it (PLAN 0.8.10 K7: with the website's Format and business time zone; the widgets
+ * whose feature is on).
  * @param {string[]} features
  * @param {{ format?: Record<string, unknown>, timeZone?: string }} [look]
  */
@@ -25,6 +26,9 @@ const configOf = (features, { format = {}, timeZone = 'UTC' } = {}) => ({
 	format,
 	timeZone,
 	features,
+	widgets: manifest.widgets
+		.filter((widget) => [widget.feature].flat().some((key) => features.includes(key)))
+		.map((widget) => widget.key),
 });
 
 /** A custom Format: "US$ 12,500" and "1 Oct 2026, 19:00" in the business time zone (Tokyo, UTC+9). */
@@ -883,7 +887,7 @@ describe('admin widgets through widget.js', () => {
 		expect(subscriptions.shadowRoot).toBeNull();
 	});
 
-	it('mounts the subscriptions and links admins, and the ticket source renews', async () => {
+	it('mounts the subscriptions and links admins', async () => {
 		const host = place('subscriptions_admin');
 		const links = place('links_admin');
 		serve({
@@ -897,18 +901,6 @@ describe('admin widgets through widget.js', () => {
 		await flush();
 		expect(statusText(host)).toBe(strings['subs.empty']);
 		expect(statusText(links)).toBe(strings['links.empty']);
-		/** @type {Array<() => void>} */
-		const scheduled = [];
-		const source = createTicketSource({
-			first: { ticket: 'a', expiresAt: '2026-10-01T10:15:00.000Z' },
-			getTicket: async () => ({ ticket: 'b', expiresAt: '2026-10-01T10:30:00.000Z' }),
-			schedule: (task) => scheduled.push(task),
-			cancel: () => {},
-			now: () => Date.parse('2026-10-01T10:00:00.000Z'),
-		});
-		scheduled[0]?.();
-		await flush();
-		expect(source.current()).toBe('b');
 	});
 });
 

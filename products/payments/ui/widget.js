@@ -8,12 +8,12 @@
  * database is not connected.
  * @module
  */
-import { WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
+import { createTicketSource, requestJson } from '@ss/app-kit/widget';
+import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountLinksAdmin } from './links-admin.js';
 import { mountPayButton } from './pay-button.js';
 import { mountPaymentsAdmin } from './payments-admin.js';
 import { mountSubscriptionsAdmin } from './subscriptions-admin.js';
-import { createTicketSource } from './tickets.js';
 
 /** The kit's widget config routes (browser token; ticket). */
 export const CONFIG_PATH = '/v1/widget/config';
@@ -29,6 +29,7 @@ export const ADMIN_CONFIG_PATH = '/v1/widget/admin/config';
  *   Format, PLAN 0.8.10 K7)
  * @property {string} timeZone the business.json time zone (UTC when missing)
  * @property {string[]} features the switched-on features
+ * @property {string[]} widgets the keys of the widgets whose feature is on
  */
 
 /**
@@ -48,50 +49,33 @@ const loadConfig = async (request, url, credential) => {
 
 /**
  * @param {{ window: Window & typeof globalThis, script: HTMLScriptElement | null }} input
- * @returns {{ admin: (options: { getTicket: import('./tickets.js').GetTicket }) => Promise<void>, ready: Promise<void> }}
+ * @returns {{ admin: (options: { getTicket: import('@ss/app-kit/widget').GetTicket }) => Promise<void>, ready: Promise<void> }}
  *   `admin` is the page's API (`window.SSPayments.admin`); `ready` settles once the visitor widgets are mounted
  */
 export const startWidget = ({ window: win, script }) => {
 	const doc = win.document;
 	const base = new URL(script?.src ?? win.location.href).origin;
 	const token = script?.dataset.token;
-	/** @param {keyof typeof WIDGET_FEATURES} key */
+	/** @param {string} key */
 	const hosts = (key) => /** @type {HTMLElement[]} */ ([...doc.querySelectorAll(`[${WIDGET_ATTRIBUTE}="${key}"]`)]);
 	/** @type {typeof globalThis.fetch} */
 	const request = (input, init) => win.fetch(input, init);
-	/**
-	 * @param {WidgetConfig} config @param {keyof typeof WIDGET_FEATURES} key
-	 */
-	const on = (config, key) => WIDGET_FEATURES[key].some((feature) => config.features.includes(feature));
 
 	const ready = (async () => {
 		if (!token) return;
 		const config = await loadConfig(request, `${base}${CONFIG_PATH}`, token);
-		if (!config || !on(config, 'pay_button')) return;
+		if (!config || !config.widgets.includes('pay_button')) return;
 		/** @type {import('./pay-button.js').VisitorCall} */
-		const call = async (path, init = {}) => {
-			try {
-				const response = await request(`${base}${path}`, {
-					method: init.method ?? 'GET',
-					headers: {
-						authorization: `Bearer ${token}`,
-						...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
-					},
-					...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-				});
-				return { ok: response.ok, status: response.status, data: await response.json().catch(() => null) };
-			} catch {
-				return { ok: false, status: 0, data: null };
-			}
-		};
+		const call = (path, init = {}) =>
+			requestJson(request, `${base}${path}`, { ...init, headers: { authorization: `Bearer ${token}` } });
 		await Promise.all(
 			hosts('pay_button').map((host) => mountPayButton({ host, config, call, go: (url) => win.location.assign(url) })),
 		);
 	})();
 
-	/** @param {{ getTicket: import('./tickets.js').GetTicket }} options */
+	/** @param {{ getTicket: import('@ss/app-kit/widget').GetTicket }} options */
 	const admin = async ({ getTicket }) => {
-		/** @type {import('./tickets.js').Ticket} */
+		/** @type {import('@ss/app-kit/widget').Ticket} */
 		let first;
 		try {
 			first = await getTicket();
@@ -113,7 +97,7 @@ export const startWidget = ({ window: win, script }) => {
 		const open = (url) => void win.open(url, '_blank', 'noopener');
 		/** @param {string} text */
 		const copy = (text) => void win.navigator.clipboard?.writeText(text).catch(() => {});
-		if (on(config, 'payments_admin'))
+		if (config.widgets.includes('payments_admin'))
 			for (const host of hosts('payments_admin'))
 				mountPaymentsAdmin({
 					host,
@@ -129,8 +113,9 @@ export const startWidget = ({ window: win, script }) => {
 						win.URL.revokeObjectURL(link.href);
 					},
 				});
-		if (on(config, 'links_admin')) for (const host of hosts('links_admin')) mountLinksAdmin({ host, api, config, open, copy });
-		if (on(config, 'subscriptions_admin'))
+		if (config.widgets.includes('links_admin'))
+			for (const host of hosts('links_admin')) mountLinksAdmin({ host, api, config, open, copy });
+		if (config.widgets.includes('subscriptions_admin'))
 			for (const host of hosts('subscriptions_admin')) mountSubscriptionsAdmin({ host, api, config, copy });
 	};
 	Object.assign(win, { [WIDGET_GLOBAL]: Object.freeze({ admin }) });

@@ -10,20 +10,29 @@
  * amounts with their currency codes.
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import {
+	adminCall,
+	badge,
+	dot,
+	element,
+	fieldGrid,
+	formatText,
+	moreMenu,
+	mountWidget,
+	openDialog,
+	splitView,
+} from '@ss/app-kit/widget';
 import { fromDecimal, toDecimal } from '../core/money.js';
 import { PAYMENT_STATUSES, paymentsCsv } from '../core/payments.js';
-import { badge, dot, field, fieldGrid, listSection, moreMenu, openDialog, splitView } from './admin-kit.js';
-import { element } from './dom.js';
+import { field, listSection } from './admin-kit.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
-import { adminCall } from './tickets.js';
 
 /** Rows fetched per page, and pages an export reads at most. */
 const PAGE_SIZE = 25;
 const EXPORT_PAGES = 20;
 
-/** The tone of each payment status. @type {Record<string, import('./admin-kit.js').Tone>} */
+/** The tone of each payment status. @type {Record<string, import('@ss/app-kit/widget').Tone>} */
 const TONES = {
 	pending: 'warning',
 	paid: 'success',
@@ -34,7 +43,7 @@ const TONES = {
 };
 
 /**
- * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig,
+ * @param {{ host: HTMLElement, api: import('@ss/app-kit/widget').AdminApi, config: import('./widget.js').WidgetConfig,
  *   save: (name: string, text: string) => void, open: (url: string) => void, copy?: (text: string) => void }} input
  *   `save`: hand a file to the browser; `open`: open an address in a new tab; `copy`: put a text on the clipboard
  */
@@ -161,7 +170,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 								field(doc, t('admin.refundReason'), reason),
 							],
 							submitLabel: t('admin.refund'),
-							cancelLabel: t('admin.close'),
+							closeLabel: t('admin.close'),
 							onSubmit: async () => {
 								const minor = fromDecimal(amount.value, payment.currency);
 								const answer = await adminCall(api, 'POST', `/v1/admin/payments/${payment.id}/refunds`, {
@@ -204,7 +213,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 								field(doc, t('admin.confirmNote'), remark),
 							],
 							submitLabel: t('admin.confirm'),
-							cancelLabel: t('admin.close'),
+							closeLabel: t('admin.close'),
 							onSubmit: async () => {
 								const answer = await adminCall(api, 'POST', `/v1/admin/payments/${payment.id}/confirm`, {
 									reference: reference.value.trim(),
@@ -218,7 +227,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 					});
 					buttons.push(confirm);
 				}
-				/** @type {import('./admin-kit.js').MenuItem[]} */
+				/** @type {import('@ss/app-kit/widget').MenuItem[]} */
 				const menu = [];
 				if (can('bank_transfer') && payment.proof)
 					menu.push({

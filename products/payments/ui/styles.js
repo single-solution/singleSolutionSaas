@@ -49,8 +49,8 @@ li.item .meta { grid-column: 2 / -1; }
 .badge.success { color: #15803d; background: rgba(22, 163, 74, 0.14); }
 .badge.warning { color: #b45309; background: rgba(217, 119, 6, 0.14); }
 .badge.danger { color: #b91c1c; background: rgba(220, 38, 38, 0.14); }
-.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px 16px; margin: 12px 0; }
-.fields dt { font-size: 0.8em; opacity: 0.7; } .fields dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px 16px; margin: 12px 0; }
+.facts dt { font-size: 0.8em; opacity: 0.7; } .facts dd { margin: 2px 0 0; overflow-wrap: anywhere; }
 .sub h4 { font-size: 0.9em; margin: 12px 0 4px; } ul.plain li { padding: 4px 0; font-size: 0.9em; border-top: 0; }
 button.link { background: transparent; color: var(--ss-color-accent, #4f46e5); padding: 0; margin: 0 0 8px; }
 button.icon { padding: 6px 12px; line-height: 1; }

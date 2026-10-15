@@ -7,8 +7,7 @@
  * id).
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
-import { element } from './dom.js';
+import { element, formatText, mountWidget } from '@ss/app-kit/widget';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
 

@@ -5,19 +5,28 @@
  * it at the gateway after a confirmation (`subscriptions.cancel`). Times follow the website's Format and time zone.
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import {
+	adminCall,
+	badge,
+	dot,
+	element,
+	fieldGrid,
+	formatText,
+	moreMenu,
+	mountWidget,
+	openDialog,
+	splitView,
+} from '@ss/app-kit/widget';
 import { SUBSCRIPTION_STATUSES } from '../core/payments.js';
-import { badge, dot, fieldGrid, listSection, moreMenu, openDialog, splitView } from './admin-kit.js';
-import { element } from './dom.js';
+import { listSection } from './admin-kit.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
-import { adminCall } from './tickets.js';
 
-/** The tone of each subscription status. @type {Record<string, import('./admin-kit.js').Tone>} */
+/** The tone of each subscription status. @type {Record<string, import('@ss/app-kit/widget').Tone>} */
 const TONES = { pending: 'warning', active: 'success', past_due: 'danger', paused: 'warning' };
 
 /**
- * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig,
+ * @param {{ host: HTMLElement, api: import('@ss/app-kit/widget').AdminApi, config: import('./widget.js').WidgetConfig,
  *   copy?: (text: string) => void }} input `copy`: put a text on the clipboard
  */
 export const mountSubscriptionsAdmin = ({ host, api, config, copy = () => {} }) => {
@@ -58,7 +67,7 @@ export const mountSubscriptionsAdmin = ({ host, api, config, copy = () => {} }) 
 				for (const item of list.querySelectorAll('li.item'))
 					item.setAttribute('aria-current', String(item.getAttribute('data-id') === subscription.id));
 				const note = element(doc, 'p', { class: 'status', role: 'status' });
-				/** @type {import('./admin-kit.js').MenuItem[]} */
+				/** @type {import('@ss/app-kit/widget').MenuItem[]} */
 				const menu = [{ label: t('subs.copyId'), onSelect: () => copy(subscription.id) }];
 				if (subscription.status !== 'cancelled' && subscription.status !== 'expired')
 					menu.push({
@@ -69,7 +78,7 @@ export const mountSubscriptionsAdmin = ({ host, api, config, copy = () => {} }) 
 								title: t('subs.cancel'),
 								body: [element(doc, 'p', {}, formatText(t('subs.cancelIntro'), { plan: subscription.plan }))],
 								submitLabel: t('subs.cancel'),
-								cancelLabel: t('subs.keep'),
+								closeLabel: t('subs.keep'),
 								danger: true,
 								onSubmit: async () => {
 									const answer = await adminCall(api, 'POST', `/v1/admin/subscriptions/${subscription.id}/cancel`);

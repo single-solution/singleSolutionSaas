@@ -6,17 +6,26 @@
  * with Copy link as its button, and Open link page, Copy link id and, last, Turn off (or Turn on) in its More menu. Amounts and times follow the website's Format and time zone.
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import {
+	adminCall,
+	badge,
+	dot,
+	element,
+	fieldGrid,
+	formatText,
+	moreMenu,
+	mountWidget,
+	openDialog,
+	splitView,
+} from '@ss/app-kit/widget';
 import { GATEWAYS, GATEWAY_FEATURES } from '../core/gateways.js';
 import { fromDecimal } from '../core/money.js';
-import { badge, dot, field, fieldGrid, moreMenu, openDialog, splitView } from './admin-kit.js';
-import { element } from './dom.js';
+import { field } from './admin-kit.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
-import { adminCall } from './tickets.js';
 
 /**
- * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig,
+ * @param {{ host: HTMLElement, api: import('@ss/app-kit/widget').AdminApi, config: import('./widget.js').WidgetConfig,
  *   open: (url: string) => void, copy?: (text: string) => void }} input `open`: open an address in a new tab; `copy`:
  *   put a text on the clipboard
  */
@@ -72,7 +81,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 					view.detail.querySelector('[role="status"]')?.replaceChildren(t(active ? 'links.turnedOn' : 'links.turnedOff'));
 					return null;
 				};
-				/** @type {import('./admin-kit.js').MenuItem[]} */
+				/** @type {import('@ss/app-kit/widget').MenuItem[]} */
 				const menu = [
 					{ label: t('links.openPage'), onSelect: () => open(link.url) },
 					{ label: t('links.copyId'), onSelect: () => copy(link.id) },
@@ -85,7 +94,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 										title: t('links.turnOff'),
 										body: [element(doc, 'p', {}, formatText(t('links.turnOffIntro'), { title: link.title }))],
 										submitLabel: t('links.turnOff'),
-										cancelLabel: t('links.close'),
+										closeLabel: t('links.close'),
 										danger: true,
 										onSubmit: () => switchTo(false),
 									}),
@@ -221,7 +230,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 					title: t('links.new'),
 					body: [element(doc, 'p', { class: 'meta' }, t('links.newHelp')), grid],
 					submitLabel: t('links.create'),
-					cancelLabel: t('links.close'),
+					closeLabel: t('links.close'),
 					onSubmit: async () => {
 						const code = currency.value.trim().toUpperCase();
 						const fixed = amount.value.trim() ? fromDecimal(amount.value, code) : null;
