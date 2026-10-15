@@ -289,6 +289,34 @@ describe('Chat, feeds and structured data', () => {
 	});
 });
 
+describe('CSV', () => {
+	it('exports, imports and updates stock in units, not thousandths', async () => {
+		const linen = await api('GET', `/v1/products/${ids.linen.id}`);
+		const variantId = linen.variants[0].id;
+		const kept = linen.variants[0].stock;
+		const exported = (await shop.api('GET', '/v1/csv/products')).text;
+		const header = exported.split('\n')[0]?.split(',') ?? [];
+		const row =
+			exported
+				.split('\n')
+				.find((line) => line.includes(variantId))
+				?.split(',') ?? [];
+		expect(row[header.indexOf('stock')]).toBe(String(kept / 1000));
+		// an update in units: 12.5 bolts are 12,500 thousandths; a box takes whole pieces only
+		const box = await api('GET', `/v1/products/${ids.box.id}`);
+		const csv = [
+			'variant_id,updated_at,stock',
+			`${variantId},${linen.updatedAt},12.5`,
+			`${box.variants[0].id},${box.updatedAt},2.5`,
+		].join('\n');
+		const done = await shop.api('POST', '/v1/csv/products?mode=update', { csv, dryRun: false });
+		expect(done.json).toMatchObject({ updated: 1 });
+		expect(done.json.failed).toEqual([expect.objectContaining({ code: 'not_stock' })]);
+		expect(await linenStock()).toBe(12_500);
+		await api('PATCH', `/v1/products/${ids.linen.id}`, { variants: [{ id: variantId, stock: kept }] });
+	});
+});
+
 describe('the unit of measure', () => {
 	it('cannot change while the items have stock', async () => {
 		await expect(

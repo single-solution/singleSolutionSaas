@@ -9,6 +9,7 @@
  * @module
  */
 import { LIMITS, isObject, slugify } from './catalog.js';
+import { MILLI, quantityText } from './measure.js';
 import { fromDecimal, toDecimal } from './money.js';
 import { spentKey } from './orders.js';
 
@@ -109,7 +110,28 @@ export const CSV_PROBLEMS = Object.freeze(
  * @property {ReadonlyMap<string, string>} categorySlugs category id → slug
  * @property {ReadonlyMap<string, string>} brandSlugs brand id → slug
  * @property {string[]} locationIds
+ * @property {(product: ProductRecord) => boolean} [measured] whether a product is sold in a unit of its own (its stock
+ *   is in units in the file, thousandths in the shop)
  */
+
+/**
+ * A stock cell as thousandths of a unit: a whole number, or for an item sold in a unit of its own up to three decimals
+ * (`12.5`); null when it is not one. Which it is applies once the product is known ({@link storedStock}).
+ * @param {string} text
+ */
+const stockMilli = (text) => {
+	const match = /^(\d{1,10})(?:\.(\d{1,3}))?$/.exec(text);
+	if (!match) return null;
+	const value = Number(match[1]) * MILLI + Number((match[2] ?? '').padEnd(3, '0'));
+	return value <= LIMITS.stock * MILLI ? value : null;
+};
+
+/**
+ * Stock read from the file (thousandths) as the shop keeps it: thousandths of the unit of an item sold in a unit of
+ * its own, else whole pieces; null when pieces are not whole.
+ * @param {number} milli @param {boolean} measured
+ */
+export const storedStock = (milli, measured) => (measured ? milli : milli % MILLI === 0 ? milli / MILLI : null);
 
 /**
  * The products file's header (with a stock column per location when multi-location stock is on, then the sold-out
@@ -128,13 +150,15 @@ export const productHeader = (locationIds) => [
  * @param {CsvLookups} lookups
  * @returns {Cell[][]}
  */
-export const productRows = (products, { currency, categorySlugs, brandSlugs, locationIds }) => {
+export const productRows = (products, { currency, categorySlugs, brandSlugs, locationIds, measured = () => false }) => {
 	/** @type {Cell[][]} */
 	const rows = [];
 	/** @param {number | null} amount */
 	const money = (amount) => (amount === null ? '' : toDecimal(amount, currency));
 	for (const product of products)
 		for (const variant of product.variants) {
+			// stock in units: an item sold in a unit of its own keeps thousandths of it
+			const units = (/** @type {number} */ stock) => quantityText(stock, measured(product));
 			const options = Array.from({ length: OPTION_COLUMNS }, (_, i) => {
 				const axis = product.options[i];
 				return axis ? [axis.name, variant.options[axis.name] ?? ''] : ['', ''];
@@ -161,10 +185,10 @@ export const productRows = (products, { currency, categorySlugs, brandSlugs, loc
 				money(variant.price),
 				money(variant.compareAtPrice),
 				money(variant.cost),
-				variant.stock,
+				units(variant.stock),
 				variant.grade ?? '',
 				variant.active,
-				...locationIds.map((id) => variant.locations[id] ?? 0),
+				...locationIds.map((id) => units(variant.locations[id] ?? 0)),
 				variant.soldOut,
 				product.updatedAt ? new Date(product.updatedAt).toISOString() : '',
 			]);
@@ -454,8 +478,9 @@ export const importGroups = ({ header, records }, { currency, locationIds }) => 
 			else variant[name] = amount;
 		}
 		if (values.stock) {
-			if (!/^\d{1,10}$/.test(values.stock)) fail('stock', 'not_stock', 'Stock is a whole number from 0.');
-			else variant.stock = Number(values.stock);
+			const milli = stockMilli(values.stock);
+			if (milli === null) fail('stock', 'not_stock', 'Stock is a number from 0.');
+			else variant.stock = milli;
 		}
 		if (locationColumns.length > 0) {
 			/** @type {Record<string, number>} */
@@ -463,8 +488,9 @@ export const importGroups = ({ header, records }, { currency, locationIds }) => 
 			for (const column of locationColumns) {
 				const text = values[column] ?? '';
 				if (!text) continue;
-				if (!/^\d{1,10}$/.test(text)) fail(column, 'not_stock', 'Stock is a whole number from 0.');
-				else locations[column.slice(LOCATION_COLUMN.length)] = Number(text);
+				const milli = stockMilli(text);
+				if (milli === null) fail(column, 'not_stock', 'Stock is a number from 0.');
+				else locations[column.slice(LOCATION_COLUMN.length)] = milli;
 			}
 			if (Object.keys(locations).length > 0) variant.locations = locations;
 		}
@@ -539,12 +565,14 @@ const names = (row, variant) => {
  * The API input of a group (for the catalog's product check) and the stock to set on variants that already existed.
  * @param {ImportGroup} group
  * @param {ProductRecord | null} existing
- * @param {{ categoryIds: ReadonlyMap<string, string>, brandIds: ReadonlyMap<string, string> }} lookups slug, id or
- *   lowercase name → id
+ * @param {{ categoryIds: ReadonlyMap<string, string>, brandIds: ReadonlyMap<string, string>,
+ *   measured?: (input: Record<string, any>) => boolean }} lookups slug, id or lowercase name → id; `measured`: whether
+ *   the product as given is sold in a unit of its own (its stock cells are units, kept as thousandths)
  * @returns {{ ok: true, input: Record<string, any>, stock: Map<string, { stock?: number, locations?: Record<string, number> }> }
  *   | { ok: false, errors: RowProblem[] }}
  */
 export const importInput = (group, existing, lookups) => {
+	const measured = lookups.measured ?? (() => false);
 	/** @type {RowProblem[]} */
 	const errors = [];
 	/** @type {Record<string, any>} */
@@ -621,6 +649,26 @@ export const importInput = (group, existing, lookups) => {
 		input.options = axes;
 	}
 	input.variants = variants;
+	// stock read in units (thousandths) as the shop keeps it: pieces must be whole
+	const sold = measured(input);
+	/** @param {number | undefined} milli */
+	const kept = (milli) => (milli === undefined ? undefined : storedStock(milli, sold));
+	/** @param {Record<string, any>} entry */
+	const convert = (entry) => {
+		const stock = kept(entry.stock);
+		const locations = isObject(entry.locations)
+			? Object.fromEntries(Object.entries(entry.locations).map(([id, milli]) => [id, kept(Number(milli))]))
+			: undefined;
+		if (stock === null || (locations && Object.values(locations).some((value) => value === null)))
+			errors.push({ line: group.line, path: '/stock', message: 'Stock of this item is a whole number.', code: 'not_stock' });
+		return {
+			...entry,
+			...(entry.stock === undefined ? {} : { stock }),
+			...(locations ? { locations } : {}),
+		};
+	};
+	input.variants = variants.map(convert);
+	for (const [id, entry] of stock) stock.set(id, /** @type {any} */ (convert(entry)));
 	return errors.length > 0 ? { ok: false, errors } : { ok: true, input, stock };
 };
 
@@ -690,18 +738,16 @@ export const updateRows = ({ header, records }, { currency, locationIds }) => {
 		}
 		if (values.stock) {
 			if (locationIds.size > 0) fail('stock', 'stock_per_location', 'Give the stock per location (stock@ columns).');
-			else if (!/^\d{1,10}$/.test(values.stock) || Number(values.stock) > LIMITS.stock)
-				fail('stock', 'not_stock', 'Stock is a whole number from 0.');
-			else row.stock = Number(values.stock);
+			else if (stockMilli(values.stock) === null) fail('stock', 'not_stock', 'Stock is a number from 0.');
+			else row.stock = /** @type {number} */ (stockMilli(values.stock));
 		}
 		/** @type {Record<string, number>} */
 		const locations = {};
 		for (const column of locationColumns) {
 			const text = values[column] ?? '';
 			if (!text) continue;
-			if (!/^\d{1,10}$/.test(text) || Number(text) > LIMITS.stock)
-				fail(column, 'not_stock', 'Stock is a whole number from 0.');
-			else locations[column.slice(LOCATION_COLUMN.length)] = Number(text);
+			if (stockMilli(text) === null) fail(column, 'not_stock', 'Stock is a number from 0.');
+			else locations[column.slice(LOCATION_COLUMN.length)] = /** @type {number} */ (stockMilli(text));
 		}
 		if (Object.keys(locations).length > 0) row.locations = locations;
 		if (values.sold_out) {
@@ -716,12 +762,14 @@ export const updateRows = ({ header, records }, { currency, locationIds }) => {
 
 /**
  * A product after the update rows that name its variants (rows naming no variant of it fail). Only `price`, `stock`,
- * `locations` and `soldOut` of variants change.
+ * `locations` and `soldOut` of variants change; stock read in units (thousandths) is kept as the shop keeps it
+ * ({@link storedStock}: pieces must be whole).
  * @param {ProductRecord} product
  * @param {UpdateRow[]} rows
+ * @param {boolean} [measured] the product is sold in a unit of its own
  * @returns {{ variants: VariantRecord[], changed: number, failed: RowProblem[] }}
  */
-export const updatedVariants = (product, rows) => {
+export const updatedVariants = (product, rows, measured = false) => {
 	const variants = product.variants.map((variant) => ({ ...variant, locations: { ...variant.locations } }));
 	/** @type {RowProblem[]} */
 	const failed = [];
@@ -737,11 +785,19 @@ export const updatedVariants = (product, rows) => {
 			});
 			continue;
 		}
+		const stock = row.stock === undefined ? undefined : storedStock(row.stock, measured);
+		const locations = row.locations
+			? Object.fromEntries(Object.entries(row.locations).map(([id, milli]) => [id, storedStock(milli, measured)]))
+			: null;
+		if (stock === null || (locations && Object.values(locations).some((value) => value === null))) {
+			failed.push({ line: row.line, path: '/stock', message: 'Stock of this item is a whole number.', code: 'not_stock' });
+			continue;
+		}
 		const before = JSON.stringify([variant.price, variant.stock, variant.locations, variant.soldOut]);
 		if (row.price !== undefined) variant.price = row.price;
-		if (row.stock !== undefined) variant.stock = row.stock;
-		if (row.locations) {
-			Object.assign(variant.locations, row.locations);
+		if (stock !== undefined) variant.stock = stock;
+		if (locations) {
+			Object.assign(variant.locations, locations);
 			variant.stock = Object.values(variant.locations).reduce((a, b) => a + b, 0);
 		}
 		if (row.soldOut !== undefined) variant.soldOut = row.soldOut;

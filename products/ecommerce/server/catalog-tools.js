@@ -38,6 +38,7 @@ import {
 } from '../core/catalog-csv.js';
 import { parseCsv, recordsOf, toCsv } from '../core/csv.js';
 import { specsOf } from '../core/catalog-views.js';
+import { typeOf, typeTree } from '../core/item-types.js';
 import { nextPreviousSlugs } from '../core/links.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { orderFilters, orderQuery } from '../core/orders.js';
@@ -108,11 +109,13 @@ export const createCatalogTools = (product, service, common) => {
 		);
 		const [categories, brands, locations] = await Promise.all([categoriesOf(data), brandsOf(data), locationsOf(data)]);
 		const locationIds = s.has('multi_location') ? locations.map((location) => location.id) : [];
+		const measured = await measuredOf(s, categories);
 		const rows = productRows(products, {
 			currency: s.currency,
 			categorySlugs: new Map(categories.map((c) => [c.id, c.slug])),
 			brandSlugs: new Map(brands.map((b) => [b.id, b.slug])),
 			locationIds,
+			measured,
 		});
 		await service.log(ctx, 'csv.products_exported', 'products', {
 			label: 'products.csv',
@@ -173,12 +176,25 @@ export const createCatalogTools = (product, service, common) => {
 	// ------------------------------------------------------------------------------------------------- import
 
 	/**
+	 * Whether a product is sold in a unit of its own (its item type's measure, whatever the feature: its stock is counted
+	 * in it), so CSV files give its stock in units.
+	 * @param {Site} s @param {Array<{ id: string, path?: string[], typeKey?: string | null }>} categories
+	 * @returns {Promise<(product: { kind: string, typeKey?: string | null, categoryIds: ReadonlyArray<string> }) => boolean>}
+	 */
+	const measuredOf = async (s, categories) => {
+		const types = await s.list('item_types');
+		const tree = typeTree(categories);
+		return (product) => Boolean(typeOf(product, types, tree).elements.measure);
+	};
+
+	/**
 	 * Plan an import: every product of the file found or new, checked like an API change.
 	 * @param {Site} s @param {WebsiteData} data @param {ImportGroup[]} groups
 	 */
 	const plan = async (s, data, groups) => {
 		const rules = await common.rulesOf(s, data);
 		const [categories, brands] = await Promise.all([categoriesOf(data), brandsOf(data)]);
+		const measured = await measuredOf(s, categories);
 		/** @type {Map<string, string>} */
 		const categoryIds = new Map();
 		for (const c of categories) categoryIds.set(c.id, c.id).set(c.slug, c.id);
@@ -240,7 +256,17 @@ export const createCatalogTools = (product, service, common) => {
 				fileSkus.set(sku, group.key);
 			}
 			const before = id ? (existing.get(id) ?? null) : null;
-			const built = importInput(group, before, { categoryIds, brandIds });
+			const built = importInput(group, before, {
+				categoryIds,
+				brandIds,
+				// the product as the file gives it, over what it was: its item type says whether it is measured
+				measured: (input) =>
+					measured({
+						kind: input.kind ?? before?.kind ?? 'physical',
+						typeKey: input.typeKey === undefined ? (before?.typeKey ?? null) : input.typeKey,
+						categoryIds: input.categoryIds ?? before?.categoryIds ?? [],
+					}),
+			});
 			if (!built.ok) {
 				errors.push(...built.errors);
 				continue;
@@ -272,27 +298,40 @@ export const createCatalogTools = (product, service, common) => {
 		const locationIds = s.has('multi_location') ? (await locationsOf(data)).map((location) => location.id) : [];
 		const read = updateRows(recordsOf(table), { currency: s.currency, locationIds: new Set(locationIds) });
 		if (!read.ok) throw refuse([{ path: '/csv', message: read.message }]);
+		const measured = await measuredOf(s, await categoriesOf(data));
 		const failed = [...read.failed];
 		/** @param {UpdateRow} row @param {string} path @param {RowProblem['code']} code @param {string} message */
 		const fail = (row, path, code, message) => void failed.push({ line: row.line, path, message, code });
 		// the product of each row, by its variant id, else its SKU
-		const found = /** @type {Array<{ id: string, variants: Array<{ id: string, sku: string }> }>} */ (
-			read.rows.length === 0
-				? []
-				: await data
-						.collection(COLLECTIONS.products)
-						.find(
-							{
-								websiteId: data.websiteId,
-								$or: [
-									{ 'variants.id': { $in: read.rows.map((row) => row.variantId).filter(Boolean) } },
-									{ 'variants.sku': { $in: read.rows.map((row) => row.sku).filter(Boolean) } },
-								],
-							},
-							{ projection: { _id: 0, id: 1, 'variants.id': 1, 'variants.sku': 1 } },
-						)
-						.toArray()
-		);
+		const found =
+			/** @type {Array<{ id: string, kind: string, typeKey?: string | null, categoryIds: string[],
+			 *   variants: Array<{ id: string, sku: string }> }>} */ (
+				read.rows.length === 0
+					? []
+					: await data
+							.collection(COLLECTIONS.products)
+							.find(
+								{
+									websiteId: data.websiteId,
+									$or: [
+										{ 'variants.id': { $in: read.rows.map((row) => row.variantId).filter(Boolean) } },
+										{ 'variants.sku': { $in: read.rows.map((row) => row.sku).filter(Boolean) } },
+									],
+								},
+								{
+									projection: {
+										_id: 0,
+										id: 1,
+										kind: 1,
+										typeKey: 1,
+										categoryIds: 1,
+										'variants.id': 1,
+										'variants.sku': 1,
+									},
+								},
+							)
+							.toArray()
+			);
 		/** @type {Map<string, string>} */
 		const byVariant = new Map();
 		/** @type {Map<string, string[]>} */
@@ -335,6 +374,7 @@ export const createCatalogTools = (product, service, common) => {
 					const next = updatedVariants(
 						current,
 						rows.filter((row) => row.updatedAt >= at),
+						measured(current),
 					);
 					const outcome = { stale: rows.filter((row) => row.updatedAt < at), next };
 					return next.changed > 0 && !dryRun ? { set: { variants: next.variants }, result: outcome } : { refuse: outcome };

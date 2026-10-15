@@ -2734,7 +2734,7 @@
 			},
 			"post": {
 				"summary": "Import products from CSV, or update prices and stock (Customers admin widget)",
-				"description": "Rows are grouped into products (by product_id, sku, slug or name); each product is checked like POST/PATCH /v1/products (an empty gtin or mpn cell clears it). A dry run (the default) changes nothing and lists every row's problems; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<field>) and imports nothing. With mode=update only price, stock and sold out change per variant (by variant_id or sku): rows whose updated_at is older than the product are reported as failed, the rest are applied. At most 5,000 rows and 8 MB. Needs CSV; the admin twin needs the csv.run permission.",
+				"description": "Rows are grouped into products (by product_id, sku, slug or name); each product is checked like POST/PATCH /v1/products (an empty gtin or mpn cell clears it). A dry run (the default) changes nothing and lists every row's problems; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<field>) and imports nothing. With mode=update only price, stock and sold out change per variant (by variant_id or sku): rows whose updated_at is older than the product are reported as failed, the rest are applied. Stock cells are units: whole pieces, or for an item sold in a unit of its own an amount with up to three decimals (12.5), as the export writes them. At most 5,000 rows and 8 MB. Needs CSV; the admin twin needs the csv.run permission.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "csv",
 				"x-ss-permission": "csv.run",
@@ -16305,7 +16305,7 @@
 			},
 			"post": {
 				"summary": "Import products from CSV, or update prices and stock",
-				"description": "Rows are grouped into products (by product_id, sku, slug or name); each product is checked like POST/PATCH /v1/products (an empty gtin or mpn cell clears it). A dry run (the default) changes nothing and lists every row's problems; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<field>) and imports nothing. With mode=update only price, stock and sold out change per variant (by variant_id or sku): rows whose updated_at is older than the product are reported as failed, the rest are applied. At most 5,000 rows and 8 MB. Needs CSV; the admin twin needs the csv.run permission.",
+				"description": "Rows are grouped into products (by product_id, sku, slug or name); each product is checked like POST/PATCH /v1/products (an empty gtin or mpn cell clears it). A dry run (the default) changes nothing and lists every row's problems; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<field>) and imports nothing. With mode=update only price, stock and sold out change per variant (by variant_id or sku): rows whose updated_at is older than the product are reported as failed, the rest are applied. Stock cells are units: whole pieces, or for an item sold in a unit of its own an amount with up to three decimals (12.5), as the export writes them. At most 5,000 rows and 8 MB. Needs CSV; the admin twin needs the csv.run permission.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "csv",
 				"security": [
