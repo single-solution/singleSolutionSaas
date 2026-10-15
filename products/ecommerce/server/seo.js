@@ -29,6 +29,7 @@ import {
 	SITEMAP_HEAD,
 	asWritten,
 	categoryJsonLd,
+	daysRange,
 	fieldTargets,
 	fillTemplate,
 	metaDescription,
@@ -40,6 +41,7 @@ import {
 	productJsonLd,
 	robotsOf,
 	scriptJson,
+	siteIds,
 	siteJsonLd,
 	sitemapEntry,
 	sitemapFileUrl,
@@ -179,41 +181,80 @@ export const createSeo = (product, service) => {
 	};
 
 	/**
-	 * The delivery fee where no zone matches and the amount it is free from, to the business's country, for structured
-	 * data and feeds (E16, E17, SG-2); null without delivery zones. No delivery days are kept yet, so structured data
-	 * gives no shipping details (they need them; SEO audit G5.4).
+	 * The delivery fee where no zone matches and the amount it is free from, to the business's country, for feeds (E17,
+	 * SG-2); null without delivery zones.
 	 * @param {Site} s
 	 */
 	const shippingOf = async (s) => {
 		if (!s.has('delivery_zones')) return null;
 		const [{ defaultFee, defaultFreeOver }, business] = await Promise.all([s.values('delivery_zones'), s.business()]);
+		return { fee: Number(defaultFee ?? 0), freeOver: Number(defaultFreeOver ?? 0), country: String(business.country ?? '') };
+	};
+
+	/**
+	 * The store-wide policies of structured data (G2, G5), only with the business's country: the return policy — the
+	 * `returns` settings while Returns is on; while it is off none, or no returns when the `checkout` setting
+	 * `returnsAccepted` says so — and the shipping policy while Delivery zones is on and both its delivery days are set
+	 * (Google shows shipping only with them).
+	 * @param {Site} s
+	 */
+	const storePoliciesOf = async (s) => {
+		const [business, returns] = await Promise.all([s.business(), s.values('returns')]);
+		const country = String(business.country ?? '');
+		const noReturns = !s.has('returns') && s.has('checkout') && (await s.values('checkout')).returnsAccepted === 'no';
+		const zones = s.has('delivery_zones') ? await s.values('delivery_zones') : null;
+		const handling = daysRange(zones?.handlingDays);
+		const transit = daysRange(zones?.transitDays);
 		return {
-			fee: Number(defaultFee ?? 0),
-			freeOver: Number(defaultFreeOver ?? 0),
-			country: String(business.country ?? ''),
-			deliveryTime: null,
+			returns:
+				country && (s.has('returns') || noReturns)
+					? {
+							country,
+							days: noReturns ? 0 : Number(returns.returnDays ?? 0),
+							/** @type {import('../core/seo.js').ReturnTerms} */
+							terms: {
+								method: returns.returnMethod,
+								fee: returns.returnShippingFee,
+								feeAmount: Number(returns.returnShippingFeeAmount ?? 0),
+							},
+						}
+					: null,
+			shipping:
+				country && zones && handling && transit
+					? {
+							country,
+							fee: Number(zones.defaultFee ?? 0),
+							freeOver: Number(zones.defaultFreeOver ?? 0),
+							deliveryTime: { handling, transit },
+						}
+					: null,
 		};
 	};
 
 	/**
-	 * Each item's return window for structured data (G5.1), with the business's country (no country: no policy), or
-	 * null while Returns is off: physical goods as the cart decides it (the product's, else its grade's, else the
-	 * `returns` setting); digital goods and bookings only when the product names its own (they are not claimed through
-	 * returns).
+	 * Each item's return policy for structured data (G5.1, G5.5), with the store-wide one it points to when its window is
+	 * the store's; null when the shop gives none. With Returns on, physical goods as the cart decides it (the product's,
+	 * else its grade's, else the `returns` setting), digital goods and bookings only when the product names its own (they
+	 * are not claimed through returns); with Returns off and no returns taken, none of them.
 	 * @param {Site} s @param {ProductRecord} item
 	 * @param {{ gradeOf: (item: ProductRecord, variant: VariantRecord) => import('../core/grades.js').Grade | undefined }} conditions
-	 * @param {string} country
+	 * @param {Awaited<ReturnType<typeof storePoliciesOf>>['returns']} store
+	 * @returns {import('../core/seo.js').ProductPage['returns']}
 	 */
-	const returnsOf = async (s, item, conditions, country) => {
-		if (!s.has('returns')) return null;
-		const defaults = { returnDays: Number((await s.values('returns')).returnDays ?? 0), warrantyDays: 0 };
+	const returnsOf = (s, item, conditions, store) => {
+		if (!store) return null;
+		const defaults = { returnDays: store.days, warrantyDays: 0 };
 		return {
-			country,
+			country: store.country,
+			terms: store.terms,
+			store: { id: siteIds(`https://${s.domain}/`).returnPolicy, days: store.days },
 			/** @param {VariantRecord} variant */
 			days: (variant) =>
-				item.kind === 'physical'
-					? windowDays('return', item, conditions.gradeOf(item, variant) ?? null, defaults)
-					: item.returnDays,
+				!s.has('returns')
+					? 0
+					: item.kind === 'physical'
+						? windowDays('return', item, conditions.gradeOf(item, variant) ?? null, defaults)
+						: item.returnDays,
 		};
 	};
 
@@ -282,6 +323,7 @@ export const createSeo = (product, service) => {
 		);
 		const brand = item.brandId ? ((await brandNames(data, [item.brandId])).get(item.brandId) ?? null) : null;
 		const conditions = await conditionsOf(s);
+		const policies = await storePoliciesOf(s);
 		// the price shoppers are shown, after automatic deals (G4), as the card, the product page and the cart show it
 		const shown = (await shownPrices(s, data)).of(item, await categoryTrail(data, item.categoryIds));
 		// the merchant's patterns (SG-5, G6), with the product's facts as they are now: the page's part of the title, the
@@ -354,8 +396,8 @@ export const createSeo = (product, service) => {
 					.filter((field) => field.on === 'variant' && field.active && SCHEMA_PROPERTIES.includes(field.show.jsonLd))
 					.map((field) => [field.name, field.show.jsonLd]),
 			),
-			shipping: await shippingOf(s),
-			returns: await returnsOf(s, item, conditions, String(business.country ?? '')),
+			shippingPolicy: policies.shipping ? siteIds(`https://${s.domain}/`).shippingPolicy : null,
+			returns: returnsOf(s, item, conditions, policies.returns),
 			reviews: reviews.map((row) => ({
 				name: shownName(String(row.name ?? ''), nameFormat),
 				rating: Number(row.rating),
@@ -383,14 +425,6 @@ export const createSeo = (product, service) => {
 	};
 
 	/**
-	 * The store's return window for structured data (G2, G5.5), with the business's country (no country: none), or null
-	 * while Returns is off: the `returns` setting `returnDays` (0 = not returnable).
-	 * @param {Site} s @param {string} country
-	 */
-	const storeReturnsOf = async (s, country) =>
-		s.has('returns') && country ? { country, days: Number((await s.values('returns')).returnDays ?? 0) } : null;
-
-	/**
 	 * GET /v1/seo/site (E49): the home page's head — its title, description, canonical address, social image and site
 	 * name — and the structured data of the business and the website.
 	 * @param {any} ctx
@@ -401,6 +435,7 @@ export const createSeo = (product, service) => {
 		const home = `https://${s.domain}/`;
 		const name = storeNameOf(settings, business);
 		const country = String(business.country ?? '');
+		const policies = await storePoliciesOf(s);
 		// a local business at its pickup point, once the merchant picks it and the point has an address and hours
 		const zones = s.has('delivery_zones') ? await s.values('delivery_zones') : null;
 		const pickup = zones && String(zones.pickupAddress ?? '').trim() && String(zones.pickupHours ?? '').trim() ? zones : null;
@@ -418,7 +453,9 @@ export const createSeo = (product, service) => {
 				.map((address) => String(address).trim())
 				.filter((address) => /^https:\/\/\S+$/.test(address)),
 			openingHours: local ? openingHoursOf(pickup?.pickupHours) : [],
-			returns: await storeReturnsOf(s, country),
+			currency: s.currency,
+			returns: policies.returns,
+			shipping: policies.shipping,
 		});
 		return {
 			title: String(settings.homeTitle ?? '').trim() || name,

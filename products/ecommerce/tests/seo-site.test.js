@@ -28,8 +28,12 @@ describe('the site structured data', () => {
 		address: { street: '', country: '' },
 		sameAs: [],
 		openingHours: [],
+		currency: 'USD',
 		returns: null,
+		shipping: null,
 	};
+	/** The return terms by default: by mail, the shopper pays to send the item back. */
+	const TERMS = /** @type {const} */ ({ method: 'by_mail', fee: 'shopper_pays', feeAmount: 0 });
 
 	it('names the business and the website alike, with only the values the shop has', () => {
 		expect(siteJsonLd(page)['@graph']).toEqual([
@@ -53,7 +57,7 @@ describe('the site structured data', () => {
 			telephone: '+12025550143',
 			address: { street: '1 Main Street\nNew York, NY 10001\n', country: 'US' },
 			sameAs: ['https://social.example.com/northwind'],
-			returns: { country: 'US', days: 30 },
+			returns: { country: 'US', days: 30, terms: TERMS },
 		})['@graph'];
 		expect(business).toEqual({
 			'@type': 'OnlineStore',
@@ -72,15 +76,68 @@ describe('the site structured data', () => {
 				applicableCountry: 'US',
 				returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
 				merchantReturnDays: 30,
+				returnMethod: 'https://schema.org/ReturnByMail',
+				returnFees: 'https://schema.org/ReturnFeesCustomerResponsibility',
 			},
 		});
 		expect(website?.alternateName).toBe('NW');
 		// a country without a street is still the business's address; no returns: not returnable
 		const [onlyCountry] = /** @type {any[]} */ (
-			siteJsonLd({ ...page, address: { street: '', country: 'FR' }, returns: { country: 'FR', days: 0 } })['@graph']
+			siteJsonLd({ ...page, address: { street: '', country: 'FR' }, returns: { country: 'FR', days: 0, terms: TERMS } })[
+				'@graph'
+			]
 		);
 		expect(onlyCountry.address).toEqual({ '@type': 'PostalAddress', addressCountry: 'FR' });
 		expect(onlyCountry.hasMerchantReturnPolicy.returnPolicyCategory).toBe('https://schema.org/MerchantReturnNotPermitted');
+	});
+
+	it('gives the store-wide shipping policy: the fee until the free-delivery amount, then free, with the delivery days', () => {
+		const deliveryTime = { handling: { min: 0, max: 1 }, transit: { min: 2, max: 5 } };
+		const [business] = /** @type {any[]} */ (
+			siteJsonLd({ ...page, shipping: { country: 'US', fee: 500, freeOver: 5000, deliveryTime } })['@graph']
+		);
+		const destination = { '@type': 'DefinedRegion', addressCountry: 'US' };
+		const transitTime = {
+			'@type': 'ServicePeriod',
+			duration: { '@type': 'QuantitativeValue', minValue: 2, maxValue: 5, unitCode: 'DAY' },
+		};
+		expect(business.hasShippingService).toEqual({
+			'@type': 'ShippingService',
+			'@id': `${HOME}#shipping_policy`,
+			fulfillmentType: 'https://schema.org/FulfillmentTypeDelivery',
+			handlingTime: {
+				'@type': 'ServicePeriod',
+				duration: { '@type': 'QuantitativeValue', minValue: 0, maxValue: 1, unitCode: 'DAY' },
+			},
+			shippingConditions: [
+				{
+					'@type': 'ShippingConditions',
+					shippingDestination: destination,
+					orderValue: { '@type': 'MonetaryAmount', minValue: '0.00', maxValue: '49.99', currency: 'USD' },
+					shippingRate: { '@type': 'MonetaryAmount', value: '5.00', currency: 'USD' },
+					transitTime,
+				},
+				{
+					'@type': 'ShippingConditions',
+					shippingDestination: destination,
+					orderValue: { '@type': 'MonetaryAmount', minValue: '50.00', currency: 'USD' },
+					shippingRate: { '@type': 'MonetaryAmount', value: '0.00', currency: 'USD' },
+					transitTime,
+				},
+			],
+		});
+		// never free: one condition for every order
+		const [flat] = /** @type {any[]} */ (
+			siteJsonLd({ ...page, shipping: { country: 'US', fee: 500, freeOver: 0, deliveryTime } })['@graph']
+		);
+		expect(flat.hasShippingService.shippingConditions).toEqual([
+			{
+				'@type': 'ShippingConditions',
+				shippingDestination: destination,
+				shippingRate: { '@type': 'MonetaryAmount', value: '5.00', currency: 'USD' },
+				transitTime,
+			},
+		]);
 	});
 
 	it('takes opening hours only when every line is written as schema.org writes them', () => {

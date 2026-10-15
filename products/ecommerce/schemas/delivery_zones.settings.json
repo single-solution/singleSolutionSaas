@@ -18,6 +18,28 @@
 			"minimum": 0,
 			"maximum": 1000000000000
 		},
+		"handlingDays": {
+			"type": "array",
+			"title": "Handling days",
+			"description": "Working days from an order to its dispatch: one number (always that many) or two (the fewest and the most), one per line, for example 0 and 1. With Transit days and your business.json country, search engines show your shipping.",
+			"default": [],
+			"items": {
+				"type": "integer",
+				"minimum": 0,
+				"maximum": 60
+			}
+		},
+		"transitDays": {
+			"type": "array",
+			"title": "Transit days",
+			"description": "Days on the way where no zone matches: one number or two (the fewest and the most), one per line, for example 2 and 5.",
+			"default": [],
+			"items": {
+				"type": "integer",
+				"minimum": 0,
+				"maximum": 60
+			}
+		},
 		"defaultMethod": {
 			"type": "string",
 			"title": "Preselected delivery",

@@ -27586,7 +27586,7 @@
 		"/v1/seo/site": {
 			"get": {
 				"summary": "The home page's head and structured data",
-				"description": "Baseline SEO with the catalog (E49): the home page's title (the seo setting homeTitle as written, else the name in titles: brandName, else the business name), description (homeDescription, else defaultDescription, as written), canonical address, social image (defaultImage) and site name, and the JSON-LD of the business and the website: an OnlineStore — or, with the seo setting siteType local_business and Delivery zones' pickupAddress and pickupHours set, a LocalBusiness at the pickup point, its hours as openingHours when every line is written like Mo-Fr 09:00-17:00 — with name, alternateName, url, logo, email, telephone and address from business.json, sameAs (socialProfiles), and its store-wide return policy (with Returns on and the business.json country), whose @id product offers point to; and a WebSite with the same name. Only values the shop has are given. Put it on the home page only. While the SEO feature is off, the seo settings' defaults apply.",
+				"description": "Baseline SEO with the catalog (E49): the home page's title (the seo setting homeTitle as written, else the name in titles: brandName, else the business name), description (homeDescription, else defaultDescription, as written), canonical address, social image (defaultImage) and site name, and the JSON-LD of the business and the website: an OnlineStore — or, with the seo setting siteType local_business and Delivery zones' pickupAddress and pickupHours set, a LocalBusiness at the pickup point, its hours as openingHours when every line is written like Mo-Fr 09:00-17:00 — with name, alternateName, url, logo, email, telephone and address from business.json, sameAs (socialProfiles), and its store-wide policies, whose @id product offers point to, only with the business.json country: the return policy (with Returns on: returnDays, returnMethod and the return shipping fee; with Returns off only when the checkout setting returnsAccepted is no: no returns) and the shipping policy (with Delivery zones on and both handlingDays and transitDays set: delivery to the country at defaultFee, free from defaultFreeOver, with the handling and transit days); and a WebSite with the same name. Only values the shop has are given. Put it on the home page only. While the SEO feature is off, the seo settings' defaults apply.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -39539,11 +39539,14 @@
 							"variants_out_of_stock",
 							"variants_low_stock",
 							"business_name",
+							"business_country",
+							"business_logo",
 							"website_address",
+							"delivery_days",
 							"payment_methods",
 							"pixel_ids"
 						],
-						"description": "products_without_photos: active products with no photo; images_short_lived: storage is connected but the catalog setting mediaBaseUrl (the public address of your images) is empty, so the shop's widgets show images through links that last an hour (no browser caching; search engines, sitemaps and feeds get your website's media addresses instead) (1 or 0; skipped without storage); archived_featured: archived products still featured; variants_out_of_stock and variants_low_stock: offered variants of products that track stock and are not archived, with no units (or marked sold out) and with 1 to the catalog setting lowStock units; business_name: business.json is missing or gives no name (1 or 0); website_address: the website's address is not a public web address, such as localhost, an IP address or a .local or .test name (1 or 0); payment_methods: shoppers have no payment method they can use (1 or 0); pixel_ids: tag ids set in Growth (Meta and TikTok pixels, Google tags) that are not in the form their tag takes."
+						"description": "products_without_photos: active products with no photo; images_short_lived: storage is connected but the catalog setting mediaBaseUrl (the public address of your images) is empty, so the shop's widgets show images through links that last an hour (no browser caching; search engines, sitemaps and feeds get your website's media addresses instead) (1 or 0; skipped without storage); archived_featured: archived products still featured; variants_out_of_stock and variants_low_stock: offered variants of products that track stock and are not archived, with no units (or marked sold out) and with 1 to the catalog setting lowStock units; business_name: business.json is missing or gives no name (1 or 0); business_country and business_logo: business.json gives no country (search engines need it for your shipping and return policies) or no logo (shown with your business in search results; at least 112 × 112 pixels) (1 or 0); website_address: the website's address is not a public web address, such as localhost, an IP address or a .local or .test name (1 or 0); delivery_days: the delivery settings handlingDays and transitDays are not both set, so search engines show no shipping (1 or 0; skipped while Delivery zones is off); payment_methods: shoppers have no payment method they can use (1 or 0); pixel_ids: tag ids set in Growth (Meta and TikTok pixels, Google tags) that are not in the form their tag takes."
 					},
 					"status": {
 						"type": "string",
@@ -39552,7 +39555,7 @@
 							"attention",
 							"skipped"
 						],
-						"description": "attention when count is above 0; skipped for images_short_lived while no storage is connected, and for pixel_ids while Growth's token is not pasted in Connections or Growth does not answer."
+						"description": "attention when count is above 0; skipped for images_short_lived while no storage is connected, for delivery_days while Delivery zones is off, and for pixel_ids while Growth's token is not pasted in Connections or Growth does not answer."
 					},
 					"count": {
 						"type": "integer",
@@ -46792,7 +46795,7 @@
 					},
 					"jsonLd": {
 						"type": "string",
-						"description": "The JSON-LD as text safe to put in a script tag: a ProductGroup of the variants offered (active, priced above 0; one: a Product; none: no product node), each with its photo (else the product's), its SKU (else its feed item id), offer (the price shown after the best item deal on one unit, the higher price as a StrikethroughPrice, and for a deal that holds all day with an end validFrom and priceValidUntil), condition, return policy (the product's, its grade's or the returns setting's days, with the business.json country only) and shipping details (physical goods, with a country and delivery days only), reviews, a BreadcrumbList and, with the seo setting faqMarkup on, a FAQPage."
+						"description": "The JSON-LD as text safe to put in a script tag: a ProductGroup of the variants offered (active, priced above 0; one: a Product; none: no product node), each with its photo (else the product's), its SKU (else its feed item id), offer (the price shown after the best item deal on one unit, the higher price as a StrikethroughPrice, and for a deal that holds all day with an end validFrom and priceValidUntil), condition, return policy (the product's, its grade's or the returns setting's days, with the business.json country only: { @id } of the store-wide policy of GET /v1/seo/site when it is the store's, else its own with the return method and fees) and shipping details (physical goods: { @type: OfferShippingDetails, hasShippingService: { @id } } of the store-wide shipping policy, once it is complete), reviews, a BreadcrumbList and, with the seo setting faqMarkup on, a FAQPage."
 					}
 				}
 			},
@@ -46846,7 +46849,7 @@
 					},
 					"jsonLd": {
 						"type": "string",
-						"description": "The JSON-LD (OnlineStore or LocalBusiness with its return policy, and WebSite) as text safe to put in a script tag."
+						"description": "The JSON-LD (OnlineStore or LocalBusiness with its return and shipping policies, and WebSite) as text safe to put in a script tag."
 					}
 				}
 			},
@@ -47776,16 +47779,16 @@
 				"properties": {
 					"checks": {
 						"type": "array",
-						"maxItems": 9,
+						"maxItems": 12,
 						"items": {
 							"$ref": "#/components/schemas/HealthCheck"
 						},
-						"description": "Every check, in this order: products_without_photos, images_short_lived, archived_featured, variants_out_of_stock, variants_low_stock, business_name, website_address, payment_methods, pixel_ids."
+						"description": "Every check, in this order: products_without_photos, images_short_lived, archived_featured, variants_out_of_stock, variants_low_stock, business_name, business_country, business_logo, website_address, delivery_days, payment_methods, pixel_ids."
 					},
 					"attention": {
 						"type": "integer",
 						"minimum": 0,
-						"maximum": 9,
+						"maximum": 12,
 						"description": "How many checks need attention."
 					}
 				}

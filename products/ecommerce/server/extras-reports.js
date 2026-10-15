@@ -31,6 +31,7 @@ import {
 	totalsPipeline,
 } from '../core/reports.js';
 import { badTagIds, healthOf, healthPipeline, paymentMethodsOn } from '../core/health.js';
+import { daysRange } from '../core/seo.js';
 import { csvFile } from './catalog-tools.js';
 import { SERVER_LIMITS } from './service.js';
 
@@ -339,6 +340,7 @@ export const createReports = (product, service) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
 		const { lowStock, mediaBaseUrl } = await s.values('catalog');
+		const zones = s.has('delivery_zones') ? await s.values('delivery_zones') : null;
 		const [[facets], business, methods, tags, storage] = await Promise.all([
 			data
 				.collection(COLLECTIONS.products)
@@ -351,7 +353,16 @@ export const createReports = (product, service) => {
 		]);
 		// images go out on signed links that last an hour while the public address of the images is empty (G1)
 		const shortLived = storage ? !/^https:\/\//.test(String(mediaBaseUrl ?? '')) : null;
-		return healthOf({ facets, business, domain: s.domain, paymentMethods: methods, badTags: tags, shortLived });
+		return healthOf({
+			facets,
+			business,
+			domain: s.domain,
+			paymentMethods: methods,
+			badTags: tags,
+			shortLived,
+			// the delivery days structured data needs (G5.4), while Delivery zones is on
+			deliveryDays: zones ? daysRange(zones.handlingDays) !== null && daysRange(zones.transitDays) !== null : null,
+		});
 	};
 
 	const routes = [

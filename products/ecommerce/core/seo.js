@@ -286,6 +286,29 @@ export const feedGroupId = (product, many) => product.feedGroupId || (many ? pro
  */
 
 /**
+ * The days a list of whole days says (the delivery settings `handlingDays` and `transitDays`): the fewest and the most
+ * of them, or null for an empty list (not set).
+ * @param {unknown} list
+ * @returns {{ min: number, max: number } | null}
+ */
+export const daysRange = (list) => {
+	const days = (Array.isArray(list) ? list : []).filter((day) => Number.isSafeInteger(day) && day >= 0);
+	return days.length > 0 ? { min: Math.min(...days), max: Math.max(...days) } : null;
+};
+
+/**
+ * How returned items come back and who pays to send them (the `returns` settings `returnMethod`, `returnShippingFee`
+ * and `returnShippingFeeAmount`, G5.3).
+ * @typedef {{ method: 'by_mail' | 'in_store' | 'both', fee: 'shopper_pays' | 'free' | 'fixed', feeAmount: number }} ReturnTerms
+ */
+
+/**
+ * A shop's return policy for structured data: the business's country, the return terms and the store-wide window
+ * (the site answer's policy, with its `@id`); null where the shop gives none.
+ * @typedef {{ country: string, terms: ReturnTerms, store: { id: string, days: number } | null }} ReturnPolicy
+ */
+
+/**
  * @typedef {object} ProductPage
  * @property {ProductRecord} product
  * @property {string} url the canonical product page
@@ -302,11 +325,10 @@ export const feedGroupId = (product, many) => product.feedGroupId || (many ? pro
  * @property {(variant: VariantRecord) => string} [variantUrl] a variant's page (E13)
  * @property {(variant: VariantRecord) => string | null} [variantImage] a variant's first photo (E6); without one the
  *   variant shows the product's photos
- * @property {{ fee: number, freeOver?: number, country: string, deliveryTime: DeliveryTime | null } | null} [shipping]
- *   the default delivery fee, free from `freeOver` (0 = never; E16, SG-2), to the business's country, with the delivery
- *   days; shipping details need all of them (Google's merchant listings require the destination and delivery time)
- * @property {{ country: string, days: (variant: VariantRecord) => number | null } | null} [returns] the business's
- *   country and each item's return window in days (0 = not returnable, null = not known: no policy)
+ * @property {string | null} [shippingPolicy] the `@id` of the store-wide shipping policy (the site answer's, once it is
+ *   complete: the business's country and the delivery days), which physical goods point to (G5.5)
+ * @property {(ReturnPolicy & { days: (variant: VariantRecord) => number | null }) | null} [returns] the return policy
+ *   and each item's return window in days (0 = not returnable, null = not known: no policy)
  * @property {Array<{ name: string, rating: number, title: string, body: string, at: Date | string | null }>} [reviews]
  *   approved reviews shown as review nodes (E16)
  * @property {boolean} [faqMarkup] whether the product's questions are also given as `FAQPage` markup (the `seo` setting
@@ -393,49 +415,99 @@ const offerPrice = (shown, currency) => ({
 	priceValidUntil: shown.sale?.until ? new Date(new Date(shown.sale.until).getTime() - 1).toISOString().slice(0, 10) : null,
 });
 
+/** How items come back → schema.org `ReturnMethodEnumeration`. */
+const RETURN_METHODS = Object.freeze({
+	by_mail: [`${SCHEMA}/ReturnByMail`],
+	in_store: [`${SCHEMA}/ReturnInStore`],
+	both: [`${SCHEMA}/ReturnByMail`, `${SCHEMA}/ReturnInStore`],
+});
+
 /**
- * A return policy (G5): a window of `days` after delivery (0 = not returnable) in the country.
- * @param {string} country
- * @param {number} days
- * @param {Record<string, unknown>} [id] its `@id`, for the store-level policy other pages point to
+ * A money amount as schema.org takes it.
+ * @param {Record<string, number>} amounts `value`, `minValue` or `maxValue` in minor units
+ * @param {string} currency
  */
-const returnPolicyOf = (country, days, id = {}) =>
-	compact({
+const moneyValue = (amounts, currency) => ({
+	'@type': 'MonetaryAmount',
+	...Object.fromEntries(Object.entries(amounts).map(([key, amount]) => [key, toDecimal(amount, currency)])),
+	currency,
+});
+
+/**
+ * A return policy (G5): a window of `days` after delivery (0 = not returnable) in the country, with how items come back
+ * and who pays to send them (G5.3; a fixed fee of 0 is a free return, Google takes a return fee only above 0).
+ * @param {Pick<ReturnPolicy, 'country' | 'terms'>} policy
+ * @param {number} days
+ * @param {string} currency
+ * @param {Record<string, unknown>} [id] its `@id`, for the store-wide policy other pages point to
+ */
+const returnPolicyOf = ({ country, terms }, days, currency, id = {}) => {
+	const fixed = terms.fee === 'fixed' && terms.feeAmount > 0;
+	const fee = terms.fee === 'shopper_pays' ? 'ReturnFeesCustomerResponsibility' : fixed ? 'ReturnShippingFees' : 'FreeReturn';
+	const methods = RETURN_METHODS[terms.method] ?? RETURN_METHODS.by_mail;
+	return compact({
 		'@type': 'MerchantReturnPolicy',
 		...id,
 		applicableCountry: country,
 		returnPolicyCategory: `${SCHEMA}/${days > 0 ? 'MerchantReturnFiniteReturnWindow' : 'MerchantReturnNotPermitted'}`,
 		merchantReturnDays: days > 0 ? days : null,
+		returnMethod: days > 0 ? (methods.length === 1 ? methods[0] : methods) : null,
+		returnFees: days > 0 ? `${SCHEMA}/${fee}` : null,
+		returnShippingFeesAmount: days > 0 && fixed ? moneyValue({ value: terms.feeAmount }, currency) : null,
 	});
+};
 
 /**
- * The offer details of one variant (E16, SG-2, G5): shipping at the offer's price, only for physical goods and only when
- * complete (a destination country and the delivery days); the item's return policy, only with a country.
+ * The offer details of one variant (E16, G5.5): physical goods point to the store-wide shipping policy (once it is
+ * complete); the item's return policy points to the store-wide one when its window is the store's, else is its own.
  * @param {ProductPage} page
  * @param {VariantRecord} variant
- * @param {number} price the price shown
  */
-const offerExtras = ({ product, currency, shipping, returns }, variant, price) => {
-	const days = returns?.country ? returns.days(variant) : null;
+const offerExtras = ({ product, currency, shippingPolicy, returns }, variant) => {
+	const days = returns ? returns.days(variant) : null;
 	return {
 		shippingDetails:
-			product.kind === 'physical' && shipping?.country && shipping.deliveryTime
-				? {
-						'@type': 'OfferShippingDetails',
-						shippingRate: {
-							'@type': 'MonetaryAmount',
-							value: toDecimal(shippingFee(shipping, price), currency),
-							currency,
-						},
-						shippingDestination: { '@type': 'DefinedRegion', addressCountry: shipping.country },
-						deliveryTime: {
-							'@type': 'ShippingDeliveryTime',
-							handlingTime: daysValue(shipping.deliveryTime.handling),
-							transitTime: daysValue(shipping.deliveryTime.transit),
-						},
-					}
+			product.kind === 'physical' && shippingPolicy
+				? { '@type': 'OfferShippingDetails', hasShippingService: { '@id': shippingPolicy } }
 				: null,
-		hasMerchantReturnPolicy: returns && days !== null ? returnPolicyOf(returns.country, days) : null,
+		hasMerchantReturnPolicy:
+			returns && days !== null
+				? returns.store?.days === days
+					? { '@id': returns.store.id }
+					: returnPolicyOf(returns, days, currency)
+				: null,
+	};
+};
+
+/**
+ * The store-wide shipping policy (G5.5, Google's `ShippingService` of the business, launched 2025-11-12): delivery to
+ * the business's country at the delivery fee where no zone matches, free from the free-delivery amount (0 = never), with
+ * the handling and transit days.
+ * @param {{ country: string, fee: number, freeOver: number, deliveryTime: DeliveryTime }} shipping
+ * @param {string} currency
+ * @param {string} id its `@id`
+ */
+const shippingServiceOf = ({ country, fee, freeOver, deliveryTime }, currency, id) => {
+	const destination = { '@type': 'DefinedRegion', addressCountry: country };
+	const transitTime = { '@type': 'ServicePeriod', duration: daysValue(deliveryTime.transit) };
+	/** @param {number} rate @param {Record<string, number> | null} value the order values it is for */
+	const condition = (rate, value) =>
+		compact({
+			'@type': 'ShippingConditions',
+			shippingDestination: destination,
+			orderValue: value ? moneyValue(value, currency) : null,
+			shippingRate: moneyValue({ value: rate }, currency),
+			transitTime,
+		});
+	return {
+		'@type': 'ShippingService',
+		'@id': id,
+		fulfillmentType: `${SCHEMA}/FulfillmentTypeDelivery`,
+		handlingTime: { '@type': 'ServicePeriod', duration: daysValue(deliveryTime.handling) },
+		shippingConditions:
+			freeOver > 0 && fee > 0
+				? [condition(fee, { minValue: 0, maxValue: freeOver - 1 }), condition(0, { minValue: freeOver })]
+				: [condition(fee, null)],
 	};
 };
 
@@ -529,7 +601,7 @@ export const productJsonLd = (page) => {
 				return condition ? CONDITION_URL[condition] : '';
 			})(),
 			seller: seller ? { '@type': 'Organization', name: seller } : null,
-			...offerExtras(page, variant, page.shown(variant).price),
+			...offerExtras(page, variant),
 		});
 	const rating =
 		product.rating.count > 0
@@ -653,6 +725,7 @@ export const siteIds = (home) => ({
 	organization: `${home}#organization`,
 	website: `${home}#website`,
 	returnPolicy: `${home}#return_policy`,
+	shippingPolicy: `${home}#shipping_policy`,
 });
 
 /** A day as schema.org opening hours write it. */
@@ -689,14 +762,18 @@ export const openingHoursOf = (text) => {
  * @property {{ street: string, country: string }} address the address as written ('' = none) and the country code
  * @property {string[]} sameAs the business's profiles on other sites
  * @property {string[]} openingHours a local business's hours ({@link openingHoursOf})
- * @property {{ country: string, days: number } | null} returns the store's return window (0 = not returnable), null:
- *   none given
+ * @property {string} currency
+ * @property {(Pick<ReturnPolicy, 'country' | 'terms'> & { days: number }) | null} returns the store's return window
+ *   (0 = not returnable) and terms, null: none given
+ * @property {{ country: string, fee: number, freeOver: number, deliveryTime: DeliveryTime } | null} shipping the
+ *   store's delivery to the business's country, null: not complete
  */
 
 /**
  * The home page's structured data as a JSON-LD graph (E49, SEO audit G2): the business as an `OnlineStore` (or a
  * `LocalBusiness` at its pickup point) with its name, address, logo, contacts, profiles, hours and its store-wide return
- * policy, which product offers point to by `@id`; and the `WebSite` with its name. Only values the shop has.
+ * and shipping policies, which product offers point to by `@id`; and the `WebSite` with its name. Only values the shop
+ * has.
  * @param {SitePage} page
  */
 export const siteJsonLd = (page) => {
@@ -726,8 +803,9 @@ export const siteJsonLd = (page) => {
 				sameAs: page.sameAs,
 				openingHours: page.openingHours,
 				hasMerchantReturnPolicy: page.returns
-					? returnPolicyOf(page.returns.country, page.returns.days, { '@id': ids.returnPolicy })
+					? returnPolicyOf(page.returns, page.returns.days, page.currency, { '@id': ids.returnPolicy })
 					: null,
+				hasShippingService: page.shipping ? shippingServiceOf(page.shipping, page.currency, ids.shippingPolicy) : null,
 			}),
 			compact({
 				'@type': 'WebSite',

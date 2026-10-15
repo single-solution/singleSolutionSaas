@@ -1,9 +1,10 @@
 /**
- * Product structured data as Google's merchant listings take it (SEO audit G5, phase S1): every variant has an image and
- * a unique id (its own photo and SKU, else the product's photos and the feed item id), the group id is the feed's,
- * nothing is offered at a price of 0, a product with nothing to offer has no Product node, shipping details only for
- * physical goods and only when complete (country and delivery days), the return policy per item (product, then grade,
- * then the setting) and only with a country, and FAQ markup only while the merchant asks for it.
+ * Product structured data as Google's merchant listings take it (SEO audit G5, phases S1 and S6): every variant has an
+ * image and a unique id (its own photo and SKU, else the product's photos and the feed item id), the group id is the
+ * feed's, nothing is offered at a price of 0, a product with nothing to offer has no Product node, physical goods point
+ * to the store-wide shipping policy (only once it is complete: a country and delivery days), each item's return policy
+ * (product, then grade, then the setting) points to the store-wide one when it is the same and carries its own node,
+ * with the return method and fees, when it differs, and FAQ markup only while the merchant asks for it.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { listShown } from '../core/promotions.js';
@@ -78,7 +79,7 @@ const page = (item, input = {}) => ({
 	trail: [{ name: 'Shop', url: 'https://shop.example.com/' }],
 	variantName: (variant) => `${item.name} - ${Object.values(variant.options).join(' / ')}`,
 	shown: listShown,
-	shipping: null,
+	shippingPolicy: null,
 	returns: null,
 	reviews: [],
 	faqMarkup: false,
@@ -88,7 +89,8 @@ const page = (item, input = {}) => ({
 /** @param {ReturnType<typeof productJsonLd>} jsonLd @param {string} type */
 const nodeOf = (jsonLd, type) => /** @type {any} */ (jsonLd['@graph']).find((/** @type {any} */ node) => node['@type'] === type);
 
-const DELIVERY = { handling: { min: 0, max: 1 }, transit: { min: 2, max: 5 } };
+/** The return terms by default: by mail, the shopper pays to send the item back. */
+const TERMS = /** @type {const} */ ({ method: 'by_mail', fee: 'shopper_pays', feeAmount: 0 });
 
 describe('variants: images, ids and the group id', () => {
 	const two = product({
@@ -165,37 +167,36 @@ describe('offers', () => {
 		}
 	});
 
-	it('gives shipping details only to physical goods, and only with a country and delivery days', () => {
-		const complete = { fee: 500, freeOver: 0, country: 'US', deliveryTime: DELIVERY };
+	it('points physical goods to the store-wide shipping policy, once it is complete', () => {
+		const policy = 'https://shop.example.com/#shipping_policy';
 		const offers = (/** @type {ProductRecord} */ item, /** @type {Partial<ProductPage>} */ input) =>
 			nodeOf(productJsonLd(page(item, input)), 'Product').offers;
-		expect(offers(product(), { shipping: complete }).shippingDetails).toEqual({
+		expect(offers(product(), { shippingPolicy: policy }).shippingDetails).toEqual({
 			'@type': 'OfferShippingDetails',
-			shippingRate: { '@type': 'MonetaryAmount', value: '5.00', currency: 'USD' },
-			shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'US' },
-			deliveryTime: {
-				'@type': 'ShippingDeliveryTime',
-				handlingTime: { '@type': 'QuantitativeValue', minValue: 0, maxValue: 1, unitCode: 'DAY' },
-				transitTime: { '@type': 'QuantitativeValue', minValue: 2, maxValue: 5, unitCode: 'DAY' },
-			},
+			hasShippingService: { '@id': policy },
 		});
-		// free from the free-delivery amount, as the cart charges it (SG-2)
-		expect(offers(product(), { shipping: { ...complete, freeOver: 1000 } }).shippingDetails.shippingRate.value).toBe('0.00');
-		expect(offers(product({ kind: 'digital' }), { shipping: complete }).shippingDetails).toBeUndefined();
-		expect(offers(product({ kind: 'service' }), { shipping: complete }).shippingDetails).toBeUndefined();
-		expect(offers(product(), { shipping: { ...complete, country: '' } }).shippingDetails).toBeUndefined();
-		expect(offers(product(), { shipping: { ...complete, deliveryTime: null } }).shippingDetails).toBeUndefined();
+		expect(offers(product({ kind: 'digital' }), { shippingPolicy: policy }).shippingDetails).toBeUndefined();
+		expect(offers(product({ kind: 'service' }), { shippingPolicy: policy }).shippingDetails).toBeUndefined();
+		expect(offers(product(), { shippingPolicy: null }).shippingDetails).toBeUndefined();
 	});
 
-	it('gives each item its own return window, and no policy without a country', () => {
+	it('points an item to the store-wide return policy when its window is the store’s, else gives its own', () => {
 		const graded = product({
-			options: [{ name: 'Grade', values: ['A', 'B'] }],
+			options: [{ name: 'Grade', values: ['A', 'B', 'C'] }],
 			variants: [
 				variant({ id: 'var_a', options: { Grade: 'A' }, grade: 'a' }),
 				variant({ id: 'var_b', options: { Grade: 'B' }, grade: 'b' }),
+				variant({ id: 'var_c', options: { Grade: 'C' }, grade: 'c' }),
 			],
 		});
-		const returns = { country: 'US', days: (/** @type {VariantRecord} */ v) => (v.grade === 'a' ? 30 : 0) };
+		const store = { id: 'https://shop.example.com/#return_policy', days: 14 };
+		/** @type {NonNullable<ProductPage['returns']>} */
+		const returns = {
+			country: 'US',
+			terms: TERMS,
+			store,
+			days: (v) => (v.grade === 'a' ? 30 : v.grade === 'b' ? 0 : 14),
+		};
 		const group = nodeOf(productJsonLd(page(graded, { returns })), 'ProductGroup');
 		expect(group.hasVariant.map((/** @type {any} */ v) => v.offers.hasMerchantReturnPolicy)).toEqual([
 			{
@@ -203,21 +204,49 @@ describe('offers', () => {
 				applicableCountry: 'US',
 				returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
 				merchantReturnDays: 30,
+				returnMethod: 'https://schema.org/ReturnByMail',
+				returnFees: 'https://schema.org/ReturnFeesCustomerResponsibility',
 			},
 			{
 				'@type': 'MerchantReturnPolicy',
 				applicableCountry: 'US',
 				returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
 			},
+			{ '@id': 'https://shop.example.com/#return_policy' },
 		]);
-		const noCountry = nodeOf(productJsonLd(page(graded, { returns: { ...returns, country: '' } })), 'ProductGroup');
-		expect(noCountry.hasVariant[0].offers.hasMerchantReturnPolicy).toBeUndefined();
+		// no store-wide policy: every item gives its own
+		const own = nodeOf(productJsonLd(page(graded, { returns: { ...returns, store: null } })), 'ProductGroup');
+		expect(own.hasVariant[2].offers.hasMerchantReturnPolicy).toMatchObject({ merchantReturnDays: 14 });
 		// an item whose window is not known (null) has no policy node
 		const unknown = nodeOf(
-			productJsonLd(page(product({ kind: 'digital' }), { returns: { country: 'US', days: () => null } })),
+			productJsonLd(page(product({ kind: 'digital' }), { returns: { ...returns, days: () => null } })),
 			'Product',
 		);
 		expect(unknown.offers.hasMerchantReturnPolicy).toBeUndefined();
+	});
+
+	it('says how items come back and who pays to send them (G5.3)', () => {
+		/** @param {Partial<typeof TERMS> | Record<string, unknown>} terms */
+		const policyOf = (terms) =>
+			nodeOf(
+				productJsonLd(
+					page(product(), {
+						returns: { country: 'US', terms: /** @type {any} */ ({ ...TERMS, ...terms }), store: null, days: () => 30 },
+					}),
+				),
+				'Product',
+			).offers.hasMerchantReturnPolicy;
+		expect(policyOf({ method: 'in_store', fee: 'free' })).toMatchObject({
+			returnMethod: 'https://schema.org/ReturnInStore',
+			returnFees: 'https://schema.org/FreeReturn',
+		});
+		expect(policyOf({ method: 'both', fee: 'fixed', feeAmount: 499 })).toMatchObject({
+			returnMethod: ['https://schema.org/ReturnByMail', 'https://schema.org/ReturnInStore'],
+			returnFees: 'https://schema.org/ReturnShippingFees',
+			returnShippingFeesAmount: { '@type': 'MonetaryAmount', value: '4.99', currency: 'USD' },
+		});
+		// a fixed fee of nothing is a free return (Google takes ReturnShippingFees only with a fee above 0)
+		expect(policyOf({ fee: 'fixed', feeAmount: 0 }).returnFees).toBe('https://schema.org/FreeReturn');
 	});
 });
 
@@ -250,7 +279,9 @@ describe('the product answer', () => {
 	};
 	/** @param {any} offer */
 	const days = (offer) =>
-		offer.hasMerchantReturnPolicy?.merchantReturnDays ?? offer.hasMerchantReturnPolicy?.returnPolicyCategory;
+		offer.hasMerchantReturnPolicy?.merchantReturnDays ??
+		offer.hasMerchantReturnPolicy?.returnPolicyCategory ??
+		(offer.hasMerchantReturnPolicy?.['@id'] ? 'store' : undefined);
 
 	it('takes each item’s return window: the product’s, else its grade’s, else the setting', async () => {
 		const options = [{ name: 'Grade', values: ['Mint', 'Fair', 'New'] }];
@@ -274,12 +305,14 @@ describe('the product answer', () => {
 		const graded = nodeOf(await jsonLdOf('graded'), 'ProductGroup');
 		expect(graded.hasVariant.map((/** @type {any} */ v) => days(v.offers))).toEqual([
 			'https://schema.org/MerchantReturnNotPermitted',
-			14,
-			14,
+			'store',
+			'store',
 		]);
 		expect(graded.hasVariant[0].offers.hasMerchantReturnPolicy.applicableCountry).toBe('US');
 		// no delivery days yet: no shipping details (Google needs the delivery time)
 		expect(graded.hasVariant[0].offers.shippingDetails).toBeUndefined();
+		// the items whose window is the store's point to the store-wide policy on the home page
+		expect(graded.hasVariant[1].offers.hasMerchantReturnPolicy).toEqual({ '@id': 'https://shop.example.com/#return_policy' });
 		// a variant without its own photo shows the product's
 		expect(graded.hasVariant[0].image).toEqual([expect.stringMatching(/^https:\/\//)]);
 		expect(graded.hasVariant.map((/** @type {any} */ v) => v.sku)).toEqual(['var_mint', 'var_fair', 'var_new']);

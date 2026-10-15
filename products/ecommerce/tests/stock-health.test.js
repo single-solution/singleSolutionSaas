@@ -140,11 +140,12 @@ describe('shop health (E41)', () => {
 		]);
 		const health = healthOf({
 			facets: { noPhotos: [], archivedFeatured: [{ n: 1 }], variants: [{ _id: 'low', n: 4 }] },
-			business: { name: 'shop.example.com' },
+			business: { name: 'shop.example.com', country: null, logo: 'https://shop.example.com/logo.png' },
 			domain: 'shop.example.com',
 			paymentMethods: [],
 			badTags: null,
 			shortLived: true,
+			deliveryDays: false,
 		});
 		expect(health.checks.map((check) => check.key)).toEqual([...HEALTH_CHECKS]);
 		expect(Object.fromEntries(health.checks.map((check) => [check.key, `${check.status} ${check.count}`]))).toEqual({
@@ -154,18 +155,22 @@ describe('shop health (E41)', () => {
 			variants_out_of_stock: 'ok 0',
 			variants_low_stock: 'attention 4',
 			business_name: 'attention 1',
+			business_country: 'attention 1',
+			business_logo: 'ok 0',
 			website_address: 'ok 0',
+			delivery_days: 'attention 1',
 			payment_methods: 'attention 1',
 			pixel_ids: 'skipped 0',
 		});
-		expect(health.attention).toBe(5);
+		expect(health.attention).toBe(7);
 		// without storage the image check is skipped; with the public address it is ok
 		const skipped = {
 			facets: {},
-			business: { name: 'Shop' },
+			business: { name: 'Shop', country: 'US', logo: null },
 			domain: 'shop.example.com',
 			paymentMethods: ['cod'],
 			badTags: [],
+			deliveryDays: null,
 		};
 		expect(healthOf({ ...skipped, shortLived: null }).checks[1]).toEqual({
 			key: 'images_short_lived',
@@ -174,6 +179,13 @@ describe('shop health (E41)', () => {
 			link: null,
 		});
 		expect(healthOf({ ...skipped, shortLived: false }).checks[1]).toMatchObject({ status: 'ok', count: 0 });
+		// without delivery zones there are no delivery days to ask for
+		expect(healthOf({ ...skipped, shortLived: false }).checks.find((check) => check.key === 'delivery_days')).toEqual({
+			key: 'delivery_days',
+			status: 'skipped',
+			count: 0,
+			link: null,
+		});
 	});
 
 	it('answers the checks with counts and links for the server and the reports widget', async () => {
@@ -193,6 +205,10 @@ describe('shop health (E41)', () => {
 		expect(byKey.variants_out_of_stock).toMatchObject({ status: 'attention', count: 2 });
 		expect(byKey.variants_low_stock).toMatchObject({ status: 'attention', count: 2, link: '/v1/products?lowStock=1' });
 		expect(byKey.business_name).toMatchObject({ status: 'ok', link: 'https://shop.example.com/.well-known/business.json' });
+		// business.json gives no country and no logo, and the delivery days are not set
+		expect(byKey.business_country).toMatchObject({ status: 'attention', count: 1 });
+		expect(byKey.business_logo).toMatchObject({ status: 'attention', count: 1 });
+		expect(byKey.delivery_days).toEqual({ key: 'delivery_days', status: 'attention', count: 1, link: null });
 		expect(byKey.website_address.status).toBe('ok');
 		expect(byKey.payment_methods.status).toBe('ok');
 		// Growth's token is not pasted: its tag ids are not read
@@ -200,7 +216,7 @@ describe('shop health (E41)', () => {
 		expect(shop.callsTo(GROWTH)).toHaveLength(0);
 		// storage is connected without a public address of the images (G1)
 		expect(byKey.images_short_lived).toEqual({ key: 'images_short_lived', status: 'attention', count: 1, link: null });
-		expect(health.json.attention).toBe(5);
+		expect(health.json.attention).toBe(8);
 		const reader = await shop.ticket(['reports.read']);
 		expect((await shop.admin(reader, 'GET', '/v1/admin/reports/health')).json).toEqual(health.json);
 		expect((await shop.admin(await shop.ticket(['catalog.edit']), 'GET', '/v1/admin/reports/health')).status).toBe(403);

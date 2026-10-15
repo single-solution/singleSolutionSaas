@@ -1,8 +1,10 @@
 /**
  * Shop health (PLAN 0.8.10 E41): what needs fixing, as checks with a count and a link — active products without
- * photos, images on short-lived links (no public address of the images, SEO audit G1), archived products still featured, variants out of stock and low on stock (E44's level), the business name
- * (business.json) and the website's address, a payment method shoppers can use, and badly formed tag ids in Growth
- * (only while Growth's token is pasted; else the check is skipped). The products' checks are one `$facet` pipeline that
+ * photos, images on short-lived links (no public address of the images, SEO audit G1), archived products still
+ * featured, variants out of stock and low on stock (E44's level), the business name, country and logo (business.json;
+ * search engines need the country for shipping and return markup and show the logo, G2, G5), the website's address,
+ * the delivery days (Google shows shipping only with them, G5.4; while Delivery zones is on), a payment method shoppers
+ * can use, and badly formed tag ids in Growth (only while Growth's token is pasted; else the check is skipped). The products' checks are one `$facet` pipeline that
  * starts with a `$match` on the website. Judged on read; nothing is stored. No I/O.
  * @module
  */
@@ -17,7 +19,10 @@ export const HEALTH_CHECKS = Object.freeze(
 		'variants_out_of_stock',
 		'variants_low_stock',
 		'business_name',
+		'business_country',
+		'business_logo',
 		'website_address',
+		'delivery_days',
 		'payment_methods',
 		'pixel_ids',
 	]),
@@ -111,20 +116,24 @@ export const paymentMethodsOn = ({ cod, offered, paymentsConnected, bankManual, 
  * The checks from what was read.
  * @param {object} input
  * @param {any} input.facets the single document {@link healthPipeline} answers
- * @param {{ name: string }} input.business business.json with its defaults (name = the domain when missing)
+ * @param {{ name: string, country: string | null, logo: string | null }} input.business business.json with its defaults
+ *   (name = the domain when missing)
  * @param {string} input.domain the website's address
  * @param {string[]} input.paymentMethods {@link paymentMethodsOn}
  * @param {string[] | null} input.badTags {@link badTagIds}, or null when Growth's token is not pasted or Growth did not
  *   answer (the check is skipped)
  * @param {boolean | null} input.shortLived whether images go out on short-lived signed links (storage connected, no
  *   public address of the images); null without storage (the check is skipped)
+ * @param {boolean | null} input.deliveryDays whether both delivery day settings are set; null while Delivery zones is off
+ *   (the check is skipped)
  * @returns {{ checks: HealthCheck[], attention: number }}
  */
-export const healthOf = ({ facets, business, domain, paymentMethods, badTags, shortLived }) => {
+export const healthOf = ({ facets, business, domain, paymentMethods, badTags, shortLived, deliveryDays }) => {
 	/** @param {string} name */
 	const counted = (name) => Number(facets?.[name]?.[0]?.n ?? 0);
 	const variants = variantStockCounts(Array.isArray(facets?.variants) ? facets.variants : []);
 	const name = String(business.name ?? '').trim();
+	const file = `https://${domain}/.well-known/business.json`;
 	/** @type {Record<HealthKey, { count: number | null, link: string | null }>} */
 	const found = {
 		products_without_photos: { count: counted('noPhotos'), link: '/v1/products?status=active&hasMedia=0' },
@@ -132,11 +141,11 @@ export const healthOf = ({ facets, business, domain, paymentMethods, badTags, sh
 		archived_featured: { count: counted('archivedFeatured'), link: '/v1/products?status=archived&featured=1' },
 		variants_out_of_stock: { count: variants.out, link: '/v1/products?stockState=out,partial' },
 		variants_low_stock: { count: variants.low, link: '/v1/products?lowStock=1' },
-		business_name: {
-			count: name === '' || name.toLowerCase() === domain.toLowerCase() ? 1 : 0,
-			link: `https://${domain}/.well-known/business.json`,
-		},
+		business_name: { count: name === '' || name.toLowerCase() === domain.toLowerCase() ? 1 : 0, link: file },
+		business_country: { count: business.country ? 0 : 1, link: file },
+		business_logo: { count: business.logo ? 0 : 1, link: file },
 		website_address: { count: isPublicAddress(domain) ? 0 : 1, link: null },
+		delivery_days: { count: deliveryDays === null ? null : deliveryDays ? 0 : 1, link: null },
 		payment_methods: { count: paymentMethods.length === 0 ? 1 : 0, link: null },
 		pixel_ids: { count: badTags === null ? null : badTags.length, link: null },
 	};

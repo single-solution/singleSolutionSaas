@@ -91,12 +91,9 @@ describe('E10 grades and E16 structured data', () => {
 			'https://schema.org/RefurbishedCondition',
 			'https://schema.org/UsedCondition',
 		]);
+		// the store's return window: the store-wide policy of the home page, by its @id (G5.5)
 		expect(group.hasVariant[0].offers).toMatchObject({
-			hasMerchantReturnPolicy: {
-				applicableCountry: 'US',
-				returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
-				merchantReturnDays: 14,
-			},
+			hasMerchantReturnPolicy: { '@id': `${ORIGIN}/#return_policy` },
 		});
 		// shipping details need the delivery days (G5.4)
 		expect(group.hasVariant[0].offers.shippingDetails).toBeUndefined();
@@ -125,8 +122,10 @@ describe('E10 grades and E16 structured data', () => {
 		expect(shown.json.items[0].name).toBe('Sam L.');
 		await shop.setting('reviews', 'nameFormat', 'full');
 		await shop.setting('returns', 'returnDays', 0);
+		// no returns: the store-wide policy says so, and the items point to it
 		const none = node((await api('GET', `/v1/seo/products/${ids.phone.slug}`)).jsonLd, 'ProductGroup');
-		expect(none.hasVariant[0].offers.hasMerchantReturnPolicy.returnPolicyCategory).toBe(
+		expect(none.hasVariant[0].offers.hasMerchantReturnPolicy).toEqual({ '@id': `${ORIGIN}/#return_policy` });
+		expect(node((await api('GET', '/v1/seo/site')).jsonLd, 'OnlineStore').hasMerchantReturnPolicy.returnPolicyCategory).toBe(
 			'https://schema.org/MerchantReturnNotPermitted',
 		);
 		const page = (await shop.visitor('GET', `/v1/shop/products/${ids.phone.slug}`)).json;

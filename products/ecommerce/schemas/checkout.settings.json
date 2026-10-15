@@ -83,6 +83,13 @@
 			"default": "text",
 			"enum": ["text", "html"]
 		},
+		"returnsAccepted": {
+			"type": "string",
+			"title": "Returns without the Returns feature",
+			"description": "What search engines are told about returns while the Returns feature is off: nothing, or that you take no returns. With Returns on, its return window says it.",
+			"default": "unknown",
+			"enum": ["unknown", "no"]
+		},
 		"paymentMethods": {
 			"type": "array",
 			"title": "Payment methods offered",

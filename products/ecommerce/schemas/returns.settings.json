@@ -18,6 +18,28 @@
 			"minimum": 0,
 			"maximum": 3650
 		},
+		"returnMethod": {
+			"type": "string",
+			"title": "How items come back",
+			"description": "How shoppers return an item, as your return policy tells search engines: by mail, at your shop, or either.",
+			"default": "by_mail",
+			"enum": ["by_mail", "in_store", "both"]
+		},
+		"returnShippingFee": {
+			"type": "string",
+			"title": "Return shipping",
+			"description": "Who pays to send a returned item back, as your return policy tells search engines: the shopper, nobody (free returns), or a fixed fee you charge (Return shipping fee).",
+			"default": "shopper_pays",
+			"enum": ["shopper_pays", "free", "fixed"]
+		},
+		"returnShippingFeeAmount": {
+			"type": "integer",
+			"title": "Return shipping fee",
+			"description": "With Return shipping at a fixed fee: the fee, in minor units of your currency (0 = free returns).",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 1000000000000
+		},
 		"maxPhotos": {
 			"type": "integer",
 			"title": "Photos per claim",
