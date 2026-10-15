@@ -1,5 +1,6 @@
 /**
- * Small encoding and hashing helpers shared by the protocol primitives. Node runtime (`node:crypto`).
+ * Small encoding and hashing helpers shared by the protocol primitives, and exported for the Portal and every product
+ * (`sha256Hex`, `hmacSha256Hex`, `constantTimeEqual`, `randomToken`, `canonicalJson`). Node runtime (`node:crypto`).
  */
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { base64url } from 'jose';
@@ -46,6 +47,12 @@ export const fromB64url = (value) => {
 export const sha256Hex = (data) => createHash('sha256').update(data).digest('hex');
 
 /**
+ * @param {unknown} value
+ * @returns {value is Uint8Array | string}
+ */
+const isBytesOrText = (value) => typeof value === 'string' || value instanceof Uint8Array;
+
+/**
  * HMAC-SHA-256 hex digest.
  * @param {Uint8Array | string} key
  * @param {Uint8Array | string} data
@@ -55,12 +62,13 @@ export const hmacSha256Hex = (key, data) => createHmac('sha256', key).update(dat
 
 /**
  * Constant-time equality for secrets of any length: both sides are hashed first so neither the content nor the length
- * leaks through timing.
- * @param {Uint8Array | string} a
- * @param {Uint8Array | string} b
+ * leaks through timing. Anything that is not a string or bytes (a missing header, `null`, a number) is never equal.
+ * @param {unknown} a
+ * @param {unknown} b
  * @returns {boolean}
  */
 export const constantTimeEqual = (a, b) => {
+	if (!isBytesOrText(a) || !isBytesOrText(b)) return false;
 	const ha = createHash('sha256').update(a).digest();
 	const hb = createHash('sha256').update(b).digest();
 	return timingSafeEqual(ha, hb);
@@ -74,11 +82,22 @@ export const constantTimeEqual = (a, b) => {
 export const defaultRandomBytes = (length) => globalThis.crypto.getRandomValues(new Uint8Array(length));
 
 /**
+ * Random opaque token: base64url (no padding) of `bytes` random bytes (32 by default = 256 bits).
+ * @param {number} [bytes] a positive integer
+ * @param {(length: number) => Uint8Array} [randomBytes] defaults to the WebCrypto CSPRNG
+ * @returns {string}
+ */
+export const randomToken = (bytes = 32, randomBytes = defaultRandomBytes) => {
+	if (!Number.isSafeInteger(bytes) || bytes < 1) throw new TypeError('bytes must be a positive integer');
+	return b64url(randomBytes(bytes));
+};
+
+/**
  * Random identifier (base64url of 16 random bytes = 128 bits).
  * @param {(length: number) => Uint8Array} randomBytes
  * @returns {string}
  */
-export const randomId = (randomBytes) => b64url(randomBytes(16));
+export const randomId = (randomBytes) => randomToken(16, randomBytes);
 
 /**
  * Case-insensitive header lookup over a plain object or a WHATWG `Headers` — of any realm: it is known by its `get`,

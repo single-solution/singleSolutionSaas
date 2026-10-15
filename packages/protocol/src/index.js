@@ -20,7 +20,7 @@ export {
 	verifyConnectRequest,
 	verifyConnectResponse,
 } from './registration.js';
-export { canonicalJson } from './encoding.js';
+export { canonicalJson, constantTimeEqual, hmacSha256Hex, randomToken, sha256Hex } from './encoding.js';
 export { createSealer, legacyV1 } from './sealing.js';
 
 /** @typedef {import('./keys.js').PublicJwk} PublicJwk */
