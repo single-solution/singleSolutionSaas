@@ -381,7 +381,7 @@ describe('the Sisters Boutique mapping', () => {
 				pointsCredited: true,
 				released: false,
 			},
-			payments: [{ method: 'cash', amount: 1_231_600, note: 'Imported', at: '2026-08-25T10:00:00.000Z' }],
+			payments: [{ method: 'cod', amount: 1_231_600, note: 'Imported', at: '2026-08-25T10:00:00.000Z' }],
 			deliveredAt: '2026-08-25T10:00:00.000Z',
 			shipment: { trackingNote: 'Courier booked' },
 			media: [{ kind: 'dispatch_video', url: 'https://media.example.com/dispatch/0001.mp4', at: '2026-08-21T10:00:00.000Z' }],
@@ -392,7 +392,7 @@ describe('the Sisters Boutique mapping', () => {
 		// a paid order with no payment entry: the transfer counts as paid when staff confirmed it (IMP-13)
 		expect(orders.get('IM-2026-0002')).toMatchObject({
 			customer: { userId: '', customerId: id('cus', SB_IDS.guestB), phone: '+923000000002' },
-			payment: { method: 'bank_transfer', via: 'manual' },
+			payment: { method: 'bank_transfer', kind: 'pay_first', via: 'manual' },
 			payments: [{ method: 'bank_transfer', amount: 650_000, at: '2026-08-26T12:00:00.000Z' }],
 			idempotencyKey: `import:${SB_IDS.confirmed}`,
 		});
@@ -421,7 +421,7 @@ describe('the Sisters Boutique mapping', () => {
 			media: [{ url: 'https://media.example.com/dispatch/0006.mp4' }],
 		});
 		expect(orders.get('IM-2026-0007')).toMatchObject({
-			payments: [{ method: 'cash' }],
+			payments: [{ method: 'cod' }],
 			deliveredAt: '2026-09-08T10:00:00.000Z',
 			stockHeld: false,
 		});
@@ -464,10 +464,6 @@ describe('the Sisters Boutique mapping', () => {
 			'checkout.numberPrefix': 'IM-',
 			'checkout.numberDigits': 4,
 			'checkout.messageChannels': [],
-			'checkout.paymentMethods': ['bank_transfer'],
-			'checkout.noteCod': '+2% handling on cash orders',
-			'cod.feePercent': 2,
-			'cod.enabled': true,
 			'delivery_zones.defaultFreeOver': 2_000_000,
 			'delivery_zones.defaultFee': 150_000,
 			'delivery_zones.pickupAddress': '1 Sample Road, Sample City',
@@ -480,7 +476,6 @@ describe('the Sisters Boutique mapping', () => {
 			'deals.cartOffer': 'one_after_items',
 			'deals.cartThresholdBase': 'after_item_deals',
 			'deals.pointsBlockedBy': 'cart_offer',
-			'cod.feeBase': 'goods_after_discounts',
 			'staff_alerts.recipients': ['alerts@example.com', 'support@example.com', 'products@example.com'],
 			'staff_alerts.adminUrl': 'https://admin.example.com/orders?order={number}',
 			'seo.titleTemplate': '{name} — {business}',
@@ -489,7 +484,22 @@ describe('the Sisters Boutique mapping', () => {
 		// SB's order rules are its flow's: no messages, its starts, and the options of its moves
 		const flow = /** @type {any} */ (settings.ecommerce?.lists?.order_flow);
 		expect(flow.statuses.every((/** @type {any} */ status) => status.notify === false)).toBe(true);
-		expect(flow.starts).toEqual({ cod: 'confirmed', pickup: 'awaiting-confirmation', free: 'pending-payment' });
+		expect(flow.starts).toEqual({ on_delivery: 'confirmed', at_pickup: 'awaiting-confirmation', free: 'pending-payment' });
+		// SB's payment methods: bank transfer by hand with its account, cash on delivery with its fee and note (E2)
+		const paying = /** @type {any[]} */ (settings.ecommerce?.lists?.payment_methods);
+		expect(paying.map((method) => [method.key, method.kind, method.active])).toEqual([
+			['bank_transfer', 'pay_first', true],
+			['cod', 'on_delivery', true],
+			['online', 'gateway', false],
+			['pickup', 'at_pickup', false],
+		]);
+		expect(paying[0]).toMatchObject({ via: 'manual', proof: false, accounts: [{ rows: expect.any(Array) }] });
+		expect(paying[1]).toMatchObject({
+			note: '+2% handling on cash orders',
+			feePercent: 2,
+			feeBase: 'goods_after_discounts',
+			pickup: true,
+		});
 		expect(flow.triggers).toMatchObject({ refundsCover: '' });
 		/** @param {string} from @param {string} to */
 		const move = (from, to) => flow.moves.find((/** @type {any} */ entry) => entry.from === from && entry.to === to);
@@ -545,9 +555,13 @@ describe('the Sisters Boutique mapping', () => {
 			Object.keys(part.settings ?? {}).map((key) => `${product} ${key}`),
 		);
 		for (const key of Object.keys(BY_HAND).filter((name) => !name.includes('recipients'))) expect(keys).not.toContain(key);
+		expect(plan.ecommerce?.lists?.payment_methods).toMatchObject([
+			{ key: 'bank_transfer', instructions: 'Transfer online — send payment screenshot on WhatsApp' },
+			{ key: 'cod', note: 'Pay when you receive your order' },
+			{ key: 'online' },
+			{ key: 'pickup' },
+		]);
 		expect(plan.ecommerce?.settings).toMatchObject({
-			'checkout.noteBankTransfer': 'Transfer online — send payment screenshot on WhatsApp',
-			'checkout.noteCod': 'Pay when you receive your order',
 			'delivery_zones.defaultFreeOver': 5_000_000,
 			'catalog.lowStock': 2,
 			'seo.titleTemplate': '{name} | {business}',
@@ -711,7 +725,7 @@ describe('the Sisters Boutique mapping', () => {
 		for (const slug of ['too-many-prices', 'bad-price', 'mixed-checkout', 'no-action']) expect(deals.has(slug)).toBe(false);
 		const orders = new Map((await records('ecommerce.orders')).map((order) => [order.number, order]));
 		expect(orders.get('IM-2026-0008')).toMatchObject({
-			payment: { method: 'online' },
+			payment: { method: 'online', kind: 'gateway' },
 			payments: [],
 			history: [{ from: null, to: 'delivered', note: 'Imported: no timeline' }],
 			deliveredAt: '2026-08-27T10:00:00.000Z',

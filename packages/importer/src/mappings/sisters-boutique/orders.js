@@ -45,8 +45,7 @@ const ORDER_NUMBERS = 'order-numbers';
 /**
  * SB's statuses with their roles (`packages/db/src/models/Order.ts`:3; labels `packages/shared/src/notifications/
  * orderEventNotify.ts`:11-20); `awaiting-confirmation` is added because every flow has one (no SB order enters it:
- * cash on delivery starts confirmed, `cod.startStatus: open`, and free orders wait for payment,
- * `checkout.freeOrderStart: awaiting_payment`).
+ * cash on delivery starts confirmed, the flow's `starts.on_delivery`, and free orders wait for payment, `starts.free`).
  */
 export const STATUSES = Object.freeze([
 	{ key: 'pending-payment', label: 'Pending payment', role: 'awaiting_payment' },
@@ -62,12 +61,16 @@ export const STATUSES = Object.freeze([
 /** @param {string} status */
 const roleOf = (status) => STATUSES.find((each) => each.key === status)?.role ?? 'open';
 
-/** SB's payment methods → Ecommerce's (IMP-32), and the method of a payment or refund entry of each. */
+/** SB's payment methods → the keys of its Ecommerce payment methods list (IMP-32), with each one's kind. */
 const METHODS = Object.freeze(
 	/** @type {Record<string, string>} */ ({ 'bank-transfer': 'bank_transfer', cod: 'cod', card: 'online' }),
 );
+const KINDS = Object.freeze(
+	/** @type {Record<string, string>} */ ({ bank_transfer: 'pay_first', cod: 'on_delivery', online: 'gateway' }),
+);
+/** The way of a payment or refund entry of each (E16): its own method, an online one through Payments. */
 const ENTRY_METHODS = Object.freeze(
-	/** @type {Record<string, string>} */ ({ bank_transfer: 'bank_transfer', cod: 'cash', online: 'online' }),
+	/** @type {Record<string, string>} */ ({ bank_transfer: 'bank_transfer', cod: 'cod', online: 'payments' }),
 );
 /** Roles of orders that gave their stock back, and of orders never delivered (Ecommerce's import rules). */
 const RELEASED = Object.freeze(['cancelled', 'returned_to_origin', 'returned']);
@@ -342,7 +345,7 @@ export const orderStep = {
 			lines,
 			totals: { subtotal, discount, delivery, tax: 0, total, currency: CURRENCY, taxIncluded: true, fee, roleDiscount: 0 },
 			promotions: { dealIds: deals, ...pointsOf(doc, timeline) },
-			payment: { method, ...(method === 'bank_transfer' ? { via: 'manual' } : {}) },
+			payment: { method, kind: KINDS[method], ...(method === 'bank_transfer' ? { via: 'manual' } : {}) },
 			payments,
 			refunds,
 			status,

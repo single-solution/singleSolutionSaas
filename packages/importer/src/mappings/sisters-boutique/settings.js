@@ -78,7 +78,6 @@ export const FEATURES = Object.freeze({
 		'variants',
 		'size_charts',
 		'checkout',
-		'cod',
 		'delivery_zones',
 		'deals',
 		'loyalty',
@@ -279,18 +278,6 @@ export const settingsPlan = (values) => {
 				'checkout.statusTemplates': 'one',
 				'checkout.policyFormat': 'html',
 				'checkout.returnsAccepted': 'unknown', // SaaS default (store mapping to review when the owner asks)
-				// bank transfer by hand, cash on delivery; no card (D5)
-				'checkout.paymentMethods': store.paymentBankTransferEnabled ? ['bank_transfer'] : [],
-				'checkout.paymentOrder': ['bank_transfer', 'cod', 'online', 'pickup'], // `apps/web/src/app/checkout/_components/Checkout.tsx`:66
-				'checkout.bankTransferVia': 'manual',
-				'checkout.noteBankTransfer': store.paymentBankTransferNote || 'Transfer online — send payment screenshot on WhatsApp', // `packages/shared/src/constants.ts`:56
-				'checkout.noteCod':
-					store.paymentCodNote ||
-					(store.codSurchargePercent > 0
-						? `+${store.codSurchargePercent}% handling on cash orders`
-						: 'Pay when you receive your order'), // constants.ts:63-64
-				'checkout.noteOnline': '',
-				'checkout.notePickup': '',
 				// nothing expires and no open-order cap (no expiry code in SB; `apps/web/src/app/api/orders/route.ts`:107)
 				'checkout.paymentWindowMinutes': 0,
 				'checkout.confirmationHours': 0,
@@ -318,17 +305,6 @@ export const settingsPlan = (values) => {
 				'checkout.deleteGivesBack': 'all',
 				'checkout.orderUrl': '',
 				'checkout.reviewUrl': '',
-				'cod.enabled': store.paymentCodEnabled,
-				'cod.maxOrderValue': 0,
-				'cod.advanceAmount': 0,
-				'cod.advancePercent': 0,
-				'cod.rtoThreshold': 0,
-				'cod.rtoRequireAdvance': false,
-				'cod.atPickup': true, // Checkout.tsx:73
-				'cod.feePercent': store.codSurchargePercent,
-				'cod.feeBase': 'goods_after_discounts', // orders/route.ts:586-587 (D4)
-				'cod.paidOnDelivery': true,
-				'cod.advanceVia': 'payments',
 				'delivery_zones.defaultFee': store.courierFlatFeeRupees * 100,
 				'delivery_zones.defaultFreeOver': store.freeDeliveryThresholdRupees * 100,
 				// SaaS defaults: no delivery days said (store mapping to review when the owner asks)
@@ -477,8 +453,55 @@ export const settingsPlan = (values) => {
 					triggers: { paid: 'confirmed', windowEnd: 'cancelled', refundsCover: '' },
 					// cash on delivery starts confirmed (orders/route.ts:676), pay at pickup awaiting confirmation, free orders
 					// wait in pending-payment (CK-41)
-					starts: { cod: 'confirmed', pickup: 'awaiting-confirmation', free: 'pending-payment' },
+					starts: { on_delivery: 'confirmed', at_pickup: 'awaiting-confirmation', free: 'pending-payment' },
 				},
+				// bank transfer by hand, cash on delivery; no card (D5), in Checkout.tsx's order
+				// (`apps/web/src/app/checkout/_components/Checkout.tsx`:66; store mapping to review: the payment methods list)
+				payment_methods: [
+					{
+						key: 'bank_transfer',
+						name: 'Bank transfer',
+						kind: 'pay_first',
+						active: store.paymentBankTransferEnabled,
+						via: 'manual',
+						// `packages/shared/src/constants.ts`:56
+						instructions: store.paymentBankTransferNote || 'Transfer online — send payment screenshot on WhatsApp',
+						// the proof comes on WhatsApp, not as an upload; SB's one account, shown in the cart as SB's checkout does
+						// (store mapping to review: Payments' manual method bank_transfer holds the same rows; keep one)
+						proof: false,
+						accounts: [
+							{
+								label: '',
+								currency: '',
+								rows: [
+									{ label: 'Account holder', value: store.bankAccountTitle },
+									{ label: 'Bank', value: store.bankName },
+									{ label: 'Account number', value: store.bankAccountNumber },
+									{ label: 'IBAN', value: store.bankIban },
+								],
+							},
+						],
+					},
+					{
+						key: 'cod',
+						name: 'Cash on delivery',
+						kind: 'on_delivery',
+						active: store.paymentCodEnabled,
+						note:
+							store.paymentCodNote ||
+							(store.codSurchargePercent > 0
+								? `+${store.codSurchargePercent}% handling on cash orders`
+								: 'Pay when you receive your order'), // constants.ts:63-64
+						delivery: true,
+						pickup: true, // Checkout.tsx:73
+						rtoThreshold: 0,
+						rtoRequireAdvance: false,
+						feePercent: store.codSurchargePercent,
+						feeBase: 'goods_after_discounts', // orders/route.ts:586-587 (D4)
+					},
+					{ key: 'online', name: 'Online payment', kind: 'gateway', active: false },
+					{ key: 'pickup', name: 'Pay at pickup', kind: 'at_pickup', active: false },
+				],
 				couriers: [],
 				delivery_zones: [],
 				// the member discount (E19; `apps/web/src/app/checkout/_components/CheckoutPanels.tsx`:466)
