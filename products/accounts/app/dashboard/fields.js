@@ -22,7 +22,7 @@ import {
 	TextArea,
 	describeProblem,
 } from '@ss/ui';
-import { call, useLoad } from './api.js';
+import { Outcome, call, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
 /** @typedef {'text' | 'number' | 'date' | 'choice'} FieldType */
@@ -49,7 +49,7 @@ export function FieldsSection({ websiteId }) {
 	const base = `/v1/dashboard/websites/${websiteId}/fields`;
 	const { answer, reload } = useLoad(base);
 	const [draft, setDraft] = useState(/** @type {Draft | null} */ (null));
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
 	const [problem, setProblem] = useState(/** @type {any} */ (null));
 	/** @param {Partial<Draft>} patch */
 	const edit = (patch) => setDraft({ .../** @type {Draft} */ (draft), ...patch });
@@ -123,13 +123,7 @@ export function FieldsSection({ websiteId }) {
 					</ul>
 				</Card>
 			)}
-			{result ? (
-				result.ok ? (
-					<Callout tone="success">{TEXTS.saved}</Callout>
-				) : (
-					<Callout tone="danger">{describeProblem(result.problem)}</Callout>
-				)
-			) : null}
+			<Outcome result={result} />
 			<Dialog open={draft !== null} onClose={() => setDraft(null)} title={draft?.isNew === false ? T.editTitle : T.add}>
 				{draft ? (
 					<Form onSubmit={save} aria-label={draft.isNew ? T.add : T.editTitle}>

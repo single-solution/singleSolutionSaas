@@ -8,8 +8,11 @@
 import { act } from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DashboardProvider } from '@ss/ui/dashboard';
 import { byText, cleanup, click, render } from '@ss/ui/testing';
+import manifest from '../manifest.json' with { type: 'json' };
 import { TABS } from '../app/dashboard/tabs.js';
+import { TEXTS } from '../app/dashboard/texts.js';
 
 /** The dashboard keeps each answer it loaded for the page: each test opens its own website. */
 let website = 0;
@@ -76,6 +79,7 @@ const settle = async () => {
 /** The tab's props for a new website (or the same as the last call's with `same`). */
 const props = (same = false) => ({
 	websiteId: `web_${same ? website : (website += 1)}`,
+	domain: 'shop.example.com',
 	who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Merchant' }),
 	support: { email: 'help@example.com', phone: '' },
 	portal: 'https://portal.example.com',
@@ -92,6 +96,16 @@ const tile = (container, label) => byText(container, label, 'span').parentElemen
 /** @returns {string[]} the paths the tab read */
 const reads = () => vi.mocked(fetch).mock.calls.map(([path]) => String(path));
 
+/**
+ * Accounts' Overview inside the dashboard's words and feature names, as the dashboard page renders it.
+ * @param {ReturnType<typeof props>} tab
+ */
+const overviewOf = (tab) => (
+	<DashboardProvider manifest={manifest} texts={TEXTS}>
+		<TABS.overview {...tab} />
+	</DashboardProvider>
+);
+
 afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
@@ -101,9 +115,8 @@ afterEach(() => {
 describe("Accounts's dashboard Overview", () => {
 	it('with Custom fields on and no field yet, asks for one and opens Settings', async () => {
 		serve({ featuresOn: ['email_password', 'custom_fields'] });
-		const Overview = TABS.overview;
 		const tab = props();
-		const { container } = render(<Overview {...tab} />);
+		const { container } = render(overviewOf(tab));
 		await settle();
 		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Merchant');
 		expect(needs(container)).toContain('Custom fields is on, but no field is set up yet');
@@ -115,14 +128,13 @@ describe("Accounts's dashboard Overview", () => {
 
 	it('counts the fields once there are some; without the database it says to connect it first', async () => {
 		serve({ featuresOn: ['custom_fields'], fields: [{ key: 'company' }, { key: 'size' }] });
-		const Overview = TABS.overview;
-		const first = render(<Overview {...props()} />);
+		const first = render(overviewOf(props()));
 		await settle();
 		expect(needs(first.container)).not.toContain('Custom fields is on, but no field is set up yet');
 		expect(byText(first.container, 'Add a custom field', 'span').className).toContain('line-through');
 		cleanup();
 		serve({ featuresOn: ['custom_fields'], fields: null });
-		const second = render(<Overview {...props()} />);
+		const second = render(overviewOf(props()));
 		await settle();
 		expect(second.container.textContent).toContain('Connect the database first');
 		expect(second.container.textContent).not.toContain('Add a custom field');
@@ -130,8 +142,7 @@ describe("Accounts's dashboard Overview", () => {
 
 	it('reads no custom fields while the feature is off', async () => {
 		serve({ featuresOn: ['email_password'] });
-		const Overview = TABS.overview;
-		const { container } = render(<Overview {...props()} />);
+		const { container } = render(overviewOf(props()));
 		await settle();
 		expect(reads()).toEqual([`/v1/dashboard/websites/web_${website}/overview`]);
 		expect(container.textContent).not.toContain('Custom fields');
@@ -140,8 +151,7 @@ describe("Accounts's dashboard Overview", () => {
 	it("shows the grace end, the widget's last visit and the changes in the viewer's time zone, UTC on hover", async () => {
 		viewerIn('America/New_York');
 		serve();
-		const Overview = TABS.overview;
-		const { container } = render(<Overview {...props()} />);
+		const { container } = render(overviewOf(props()));
 		await settle();
 		const text = container.textContent ?? '';
 		expect(text).toContain('Accounts is in grace until Oct 4, 2026, 10:30 AM EDT');
@@ -155,7 +165,7 @@ describe("Accounts's dashboard Overview", () => {
 		// a viewer far east: the widget's last visit is already the next day there
 		cleanup();
 		viewerIn('Asia/Tokyo');
-		const tokyo = render(<Overview {...props()} />);
+		const tokyo = render(overviewOf(props()));
 		await settle();
 		expect(tokyo.container.textContent).toContain('Last seen Oct 6, 2026, 8:15 AM GMT+9');
 	});
@@ -163,11 +173,10 @@ describe("Accounts's dashboard Overview", () => {
 	it('the server and the first render in the browser print UTC', async () => {
 		viewerIn('America/New_York');
 		serve();
-		const Overview = TABS.overview;
-		render(<Overview {...props()} />);
+		render(overviewOf(props()));
 		await settle();
 		// the answer this page already loaded shows at once, as the server would print it
-		const html = renderToString(<Overview {...props(true)} />);
+		const html = renderToString(overviewOf(props(true)));
 		for (const words of [
 			'Oct 4, 2026, 2:30 PM UTC',
 			'Last seen ',

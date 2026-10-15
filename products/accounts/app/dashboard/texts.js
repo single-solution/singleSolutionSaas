@@ -1,61 +1,29 @@
 /**
- * The dashboard's texts (English, kept in this file; the dashboard is not translated, PLAN 0.6).
+ * The dashboard's own texts (US English, kept in this file; the dashboard is not translated, PLAN 0.6), laid over the
+ * words every product dashboard shares (`@ss/ui/dashboard` `DASHBOARD_TEXTS`).
  * @module
  */
-export const TEXTS = Object.freeze({
+import { dashboardTexts } from '@ss/ui';
+
+export const TEXTS = dashboardTexts({
 	title: 'Accounts',
-	loading: 'Loading…',
-	signedOut: 'Open this dashboard from the Portal.',
-	failed: 'This could not be loaded.',
-	backToPortal: 'Back to Portal',
-	pickWebsite: 'Pick a website',
-	website: 'Website',
-	adminView: 'Admin view: {merchant} / {domain}',
-	saved: 'Saved',
-	save: 'Save',
-	reset: 'Reset to default',
-	cancel: 'Cancel',
-	andMore: '{names} and {count} more',
-	tabs: Object.freeze({
-		overview: 'Overview',
-		features: 'Features',
-		settings: 'Settings',
-		connections: 'Connections',
-		developers: 'Developers',
-		defaults: 'Defaults',
-		prices: 'Prices',
-	}),
-	overview: Object.freeze({
+	overview: {
 		fields: 'Custom fields',
 		fieldsNone: 'Connect the database first',
 		fieldsStep: 'Add a custom field',
-		noFields: Object.freeze({
+		noFields: {
 			title: 'Custom fields is on, but no field is set up yet',
 			effect: 'It is charged, but sign-up and My account ask for nothing more until a field is added in Settings.',
 			action: 'Add a field',
-		}),
-	}),
-	features: Object.freeze({
-		price: 'Price: {price}',
-		on: 'On',
-		needs: 'Needs: {features}',
-		contact: 'To change features, contact {contact}.',
-		confirmTitle: 'Save features?',
-		confirmCost: 'New hourly cost: {cost}',
-		alsoOff: 'Also turned off: {features}',
-		docs: 'Docs',
-		notWorking: 'Not working: connect {connection}',
-	}),
-	settings: Object.freeze({
+		},
+	},
+	settings: {
 		fieldsTitle: 'Custom fields',
 		fieldsHelp:
 			'Your own profile fields. They are shown at sign-up (required ones must be filled) and in My account, and need the Custom fields feature.',
-		featuresTitle: 'Feature settings',
-		featuresHelp: 'How each feature behaves on this website.',
-		looksTitle: 'Words and look',
 		looksHelp:
 			'Every word of the sign-in, My account, role request and admin widgets, their theme, and how money and dates look.',
-		field: Object.freeze({
+		field: {
 			key: 'Key (lower-case letters, digits or _)',
 			label: 'Label',
 			type: 'Type',
@@ -68,43 +36,16 @@ export const TEXTS = Object.freeze({
 			none: 'No custom fields yet.',
 			required_badge: 'Required',
 			needsDatabase: 'Custom fields live in your database: connect it in Connections first.',
-		}),
-		fieldTypes: Object.freeze({
+		},
+		fieldTypes: {
 			text: 'Text',
 			number: 'Number',
 			date: 'Date',
 			choice: 'Choice',
-		}),
-		texts: 'Widget texts',
-		textsHelp: 'Every word the widgets show. A text must keep the same {placeholders} as the English text.',
-		theme: 'Theme',
-		mode: 'Light or dark',
-		modes: Object.freeze({ auto: 'Follow device', light: 'Light', dark: 'Dark' }),
-		fontFamily: 'Font family (inherit, or a font your site loads)',
-		radius: 'Corner radius (0–24 px)',
-		accent: 'Accent color',
-		customCss: 'Custom CSS',
-		format: 'Format',
-		formatHelp: 'How money and dates look in the widgets, messages, invoices and pages.',
-		locale: 'Language and region',
-		localeHelp: "A tag such as en-US or fr-FR; empty uses each visitor's browser (en-US in messages).",
-		currencyDisplay: 'Currency shown as',
-		currencyDisplays: Object.freeze({
-			code: 'Code (USD 12,500.00)',
-			symbol: 'Symbol ($12,500.00)',
-			custom: 'Your own symbol',
-		}),
-		currencySymbol: 'Your own symbol (up to 8 characters)',
-		times: 'Dates and times in',
-		timesOptions: Object.freeze({
-			viewer: "Each visitor's time zone",
-			business: 'Your business time zone (business.json)',
-		}),
-		wholeUnits: 'Whole amounts only (no minor units)',
-		off: 'This feature is off.',
-	}),
-	connections: Object.freeze({
-		fields: Object.freeze({
+		},
+	},
+	connections: {
+		fields: {
 			clientId: 'Client ID',
 			clientSecret: 'Client secret',
 			servicesId: 'Services ID',
@@ -113,33 +54,23 @@ export const TEXTS = Object.freeze({
 			privateKey: 'Private key (the contents of the .p8 file)',
 			appId: 'App ID',
 			appSecret: 'App secret',
-		}),
-		hints: Object.freeze({
+		},
+		hints: {
 			database: 'A MongoDB connection string (mongodb+srv://…). Users, roles and custom fields live here.',
 			token: "Paste the website's {product} server token from the Portal.",
 			imported_password_pepper:
 				'Only for passwords imported from another system as pbkdf2$… hashes: the secret (pepper) that system mixed into them. Each imported password is saved the Accounts way at its first sign-in.',
-		}),
-		products: Object.freeze({
+		},
+		products: {
 			notifications: 'Notifications',
 			ecommerce: 'Ecommerce',
 			chat: 'Chat',
 			payments: 'Payments',
 			growth: 'Growth',
-		}),
+		},
 		returnAddress: 'Return address to register with the provider',
-		save: 'Save and test',
-		neededBy: 'Needed by: {features}',
-		neededByNone: 'Optional',
-		connected: 'Connected',
-		not_connected: 'Not connected',
-		test_failed: 'Test failed',
-		value: 'New value',
-		test: 'Test',
-		remove: 'Remove',
-		none: 'No connections.',
-	}),
-	developers: Object.freeze({
+	},
+	developers: {
 		verification: 'Sign-in verification',
 		verificationHelp:
 			"Your server checks a sign-in offline with the public keys below: sign-ins last 15 minutes, are signed with EdDSA and their aud is this website's id. A sign-in never authorizes admin actions: admin widgets use tickets.",
@@ -154,24 +85,5 @@ export const TEXTS = Object.freeze({
 		templates: 'Message templates',
 		templatesHelp:
 			'Accounts sends codes, links and invites through Notifications, with its own default words until you write these templates in the Notifications dashboard; each can use the values shown. WhatsApp needs your template approved at Meta.',
-		intro: 'The docs show every feature, widget and route. Features that are off are marked.',
-		openDocs: 'Open the docs',
-		manageTokens: 'Manage tokens in the Portal',
-		off: 'off',
-	}),
-	defaults: Object.freeze({
-		intro: 'Global defaults apply to every website that has not saved its own value.',
-	}),
-	prices: Object.freeze({
-		intro: 'One hourly price per feature, in credits, for every merchant and website.',
-		perHour: 'Credits per hour',
-	}),
-	reseal: Object.freeze({
-		title: 'Encryption key',
-		intro: 'After ENCRYPTION_KEY is changed, with the old key set as ENCRYPTION_KEY_PREVIOUS, seal every stored secret again with the new key. Pressing again is safe.',
-		button: 'Re-seal stored secrets',
-		result: '{resealed} re-sealed, {current} already on the current key, {unreadable} could not be opened with either key.',
-		finished: 'Every stored secret that opens now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.',
-		again: '{failed} websites could not be reached: press again later, and keep ENCRYPTION_KEY_PREVIOUS until none is left.',
-	}),
+	},
 });
