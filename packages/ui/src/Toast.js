@@ -11,7 +11,7 @@ import { Icon } from './icons.js';
 import { usePresence } from './motion.js';
 
 /** @typedef {{ id: number, title: string, description?: string, tone: 'success' | 'danger' | 'info', leaving?: boolean }} ToastItem */
-/** @typedef {{ show: (toast: { title: string, description?: string, tone?: 'success' | 'danger' | 'info', durationMs?: number }) => void, dismiss: (id: number) => void }} ToastApi */
+/** @typedef {{ show: (toast: { title: string, description?: string, tone?: 'success' | 'danger' | 'info' }) => void, dismiss: (id: number) => void }} ToastApi */
 
 const NOOP = /** @type {ToastApi} */ ({ show: () => undefined, dismiss: () => undefined });
 const ToastContext = createContext(NOOP);
@@ -20,7 +20,8 @@ const ToastContext = createContext(NOOP);
 export const useToast = () => useContext(ToastContext);
 
 /**
- * @param {{ children: import('react').ReactNode, durationMs?: number }} props
+ * @param {{ children: import('react').ReactNode, durationMs?: number }} props `durationMs`: how long a toast stays
+ *   (5 s; tests set it longer so a toast stays while they look at it)
  */
 export function ToastProvider({ children, durationMs = 5000 }) {
 	const [items, setItems] = useState(/** @type {ToastItem[]} */ ([]));
@@ -49,7 +50,7 @@ export function ToastProvider({ children, durationMs = 5000 }) {
 			]);
 			timers.current.set(
 				id,
-				setTimeout(() => dismiss(id), toast.durationMs ?? durationMs),
+				setTimeout(() => dismiss(id), durationMs),
 			);
 		},
 		[dismiss, durationMs],

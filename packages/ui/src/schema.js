@@ -9,6 +9,7 @@
  * lists are wide anyway). A setting's `description` is its help text.
  * @module
  */
+import { humanize } from './format.js';
 
 /**
  * One item of a list setting.
@@ -55,45 +56,6 @@
 
 const DEFAULT_GROUP = 'General';
 
-/** Short words written in capitals (or with their own casing) when a choice's value is shown as a label. */
-const WORD_CASE = Object.freeze({
-	ai: 'AI',
-	api: 'API',
-	cod: 'COD',
-	csv: 'CSV',
-	html: 'HTML',
-	iban: 'IBAN',
-	id: 'ID',
-	ip: 'IP',
-	pdf: 'PDF',
-	seo: 'SEO',
-	sku: 'SKU',
-	sms: 'SMS',
-	url: 'URL',
-	utc: 'UTC',
-	whatsapp: 'WhatsApp',
-});
-
-/**
- * A readable label for a choice's value (`per_unit_down` → "Per unit down", `sms` → "SMS", `postalCode` → "Postal
- * code", `line1` → "Line 1"); the stored value stays as
- * it is. Values that are not plain words (numbers, mixed case) are shown as they are.
- * @param {unknown} value
- * @returns {string}
- */
-export const choiceLabel = (value) => {
-	const text = String(value);
-	if (!/^[a-z][a-zA-Z0-9]*(?:[_-][a-zA-Z0-9]+)*$/.test(text)) return text;
-	const words = text
-		.replace(/([a-z])([A-Z])/g, '$1 $2')
-		.replace(/([a-zA-Z])([0-9])/g, '$1 $2')
-		.split(/[_\s-]+/)
-		.map((word) => word.toLowerCase())
-		.map((word) => WORD_CASE[/** @type {keyof typeof WORD_CASE} */ (word)] ?? word);
-	const [first = '', ...rest] = words;
-	return [first === first.toLowerCase() ? first.charAt(0).toUpperCase() + first.slice(1) : first, ...rest].join(' ');
-};
-
 /** English country names from the runtime's own data (no list to keep up to date). */
 const REGION_NAMES = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['en'], { type: 'region' }) : null;
 
@@ -113,12 +75,12 @@ export const countryName = (code) => {
 
 /**
  * The readable label of a choice, by the field's `x-ui.labels` hint: `country` names ISO country codes, anything else
- * goes through {@link choiceLabel}.
+ * goes through {@link humanize}.
  * @param {unknown} value
  * @param {string | undefined} labels
  * @returns {string}
  */
-export const optionLabel = (value, labels) => (labels === 'country' ? countryName(String(value)) : choiceLabel(value));
+export const optionLabel = (value, labels) => (labels === 'country' ? countryName(String(value)) : humanize(value));
 
 /** A list of choices longer than this is a searchable picker, not a group of checkboxes. */
 const PICKER_FROM = 12;

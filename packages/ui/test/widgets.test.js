@@ -200,6 +200,7 @@ describe('display', () => {
 				<PageHeader title="Detail" level={2} />
 				<Stat label="Websites" value={3} icon="globe" kind="website" />
 				<IconBadge icon="users" kind="merchant" size="sm" />
+				<IconBadge icon="box" size="xs" className="plain-badge" />
 				<Badge kind="admin" dot>
 					Owner
 				</Badge>
@@ -230,6 +231,9 @@ describe('display', () => {
 		expect(tile.className).toContain('bg-surface');
 		expect(tile.querySelector('.bg-primary-soft.size-6')).not.toBeNull();
 		expect(container.querySelector('.bg-primary-soft.size-8')).not.toBeNull();
+		// without a kind an icon badge stays neutral (README: leaving `kind` out keeps the item neutral)
+		expect(container.querySelector('.plain-badge')?.className).toContain('bg-surface-2');
+		expect(container.querySelector('.plain-badge')?.className).not.toContain('bg-primary-soft');
 		expect(byText(container, 'Owner').className).toContain('bg-primary-soft');
 		expect(byText(container, 'No websites').closest('.rounded-card')?.querySelector('.bg-primary-soft')).not.toBeNull();
 		expect(container.querySelector('section[aria-labelledby="s1"] h2')?.textContent).toBe('Websites');
@@ -615,7 +619,7 @@ describe('toasts, code blocks and forms', () => {
 					<button type="button" onClick={() => toast.show({ title: 'Saved', description: 'All good' })}>
 						ok
 					</button>
-					<button type="button" onClick={() => toast.show({ title: 'Failed', tone: 'danger', durationMs: 100 })}>
+					<button type="button" onClick={() => toast.show({ title: 'Failed', tone: 'danger' })}>
 						bad
 					</button>
 				</>
@@ -626,12 +630,15 @@ describe('toasts, code blocks and forms', () => {
 				<Trigger />
 			</ToastProvider>,
 		);
-		click(byText(container, 'ok', 'button'));
 		click(byText(container, 'bad', 'button'));
+		act(() => {
+			vi.advanceTimersByTime(500);
+		});
+		click(byText(container, 'ok', 'button'));
 		expect(container.querySelector('[aria-live="polite"]')?.textContent).toContain('Saved');
 		expect(container.querySelector('[aria-live="assertive"]')?.textContent).toContain('Failed');
 		act(() => {
-			vi.advanceTimersByTime(150);
+			vi.advanceTimersByTime(600);
 		});
 		expect(container.textContent).not.toContain('Failed');
 		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="Dismiss notification"]')));
@@ -641,15 +648,14 @@ describe('toasts, code blocks and forms', () => {
 	it('copies code once, with the shown-once warning for secrets', async () => {
 		const writeText = vi.fn(async () => undefined);
 		Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-		const onCopy = vi.fn();
-		const { container } = render(<CodeBlock code="sk_live_x" label="Secret key" secret onCopy={onCopy} />);
+		const { container } = render(<CodeBlock code="sk_live_x" label="Secret key" secret />);
 		expect(container.textContent).toContain('shown only once');
 		await act(async () => {
 			byText(container, 'Copy', 'button').click();
 		});
 		expect(writeText).toHaveBeenCalledWith('sk_live_x');
-		expect(onCopy).toHaveBeenCalledWith(true);
 		expect(container.textContent).toContain('Copied');
+		expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('Copied to the clipboard.');
 		Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
 		/** @type {any} */ (document).execCommand = () => true;
 		expect(await copyText('x')).toBe(true);

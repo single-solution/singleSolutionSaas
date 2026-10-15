@@ -43,18 +43,20 @@ export function SoftBreaks({ text }) {
 
 /** The accent tint of icon tiles, chips and empty-state icons. */
 const ACCENT = 'bg-primary-soft text-primary';
+/** Icon tiles without a `kind`: neutral. */
+const NEUTRAL = 'bg-surface-2 text-muted';
 
 /**
- * Rounded icon badge in the accent tint.
+ * Rounded icon badge: in the accent tint with a `kind`, neutral without one.
  * @param {{ icon: import('./icons.js').IconName, kind?: Kind, size?: 'xs' | 'sm' | 'md', className?: string }} props
  */
-export function IconBadge({ icon, size = 'md', className }) {
+export function IconBadge({ icon, kind, size = 'md', className }) {
 	return (
 		<span
 			aria-hidden="true"
 			className={cx(
 				'inline-flex shrink-0 items-center justify-center',
-				ACCENT,
+				kind ? ACCENT : NEUTRAL,
 				size === 'xs' ? 'size-6 rounded-md' : size === 'sm' ? 'size-8 rounded-lg' : 'size-10 rounded-xl',
 				className,
 			)}>
@@ -246,7 +248,7 @@ export function EmptyState({ title, description, action, icon = 'box', kind, cla
 				compact ? 'gap-2 px-4 py-6' : 'gap-3 px-6 py-12',
 				className,
 			)}>
-			<span className={cx('flex size-10 items-center justify-center rounded-xl', kind ? ACCENT : 'bg-surface-2 text-muted')}>
+			<span className={cx('flex size-10 items-center justify-center rounded-xl', kind ? ACCENT : NEUTRAL)}>
 				<Icon name={icon} size={18} />
 			</span>
 			<div className="max-w-md space-y-1">

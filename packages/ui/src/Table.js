@@ -19,13 +19,15 @@ import { Icon } from './icons.js';
  * @property {string} key
  * @property {import('react').ReactNode} header
  * @property {(row: T) => import('react').ReactNode} [render] defaults to `row[key]`
- * @property {boolean} [sortable]
- * @property {(row: T) => string | number | null | undefined} [sortValue] defaults to `row[key]`
+ * @property {boolean} [sortable] sorts by `row[key]`
  * @property {'left' | 'right' | 'center'} [align]
  * @property {string} [className]
  * @property {boolean} [rowHeader] render this cell as the row's `<th scope="row">`
  * @property {boolean} [wrap] let the text wrap on whole words (at least 10rem wide); other cells keep one line
  */
+
+/** Cell padding: a little more room in a wide card (the table's own width, not the screen's). */
+const PAD = 'px-4 py-3 @4xl:px-5';
 
 /**
  * @template T
@@ -38,7 +40,7 @@ const cell = (row, key) => /** @type {Record<string, unknown>} */ (row)[key];
  * @template T
  * @param {{ columns: Column<T>[], rows: T[], rowKey: (row: T) => string, caption: string, captionHidden?: boolean,
  *   empty?: import('react').ReactNode, hasMore?: boolean, loadingMore?: boolean, onLoadMore?: () => void,
- *   defaultSort?: { key: string, direction: 'asc' | 'desc' }, className?: string, dense?: boolean }} props
+ *   defaultSort?: { key: string, direction: 'asc' | 'desc' }, className?: string }} props
  */
 export function Table({
 	columns,
@@ -52,18 +54,14 @@ export function Table({
 	onLoadMore,
 	defaultSort,
 	className,
-	dense = false,
 }) {
 	const [sort, setSort] = useState(defaultSort ?? null);
 	const sorted = useMemo(() => {
-		if (!sort) return rows;
-		const column = columns.find((c) => c.key === sort.key);
-		if (!column) return rows;
-		const valueOf = column.sortValue ?? ((/** @type {T} */ row) => /** @type {any} */ (cell(row, column.key)));
+		if (!sort || !columns.some((c) => c.key === sort.key)) return rows;
 		const factor = sort.direction === 'asc' ? 1 : -1;
 		return [...rows].sort((a, b) => {
-			const va = valueOf(a);
-			const vb = valueOf(b);
+			const va = cell(a, sort.key);
+			const vb = cell(b, sort.key);
 			if (va === vb) return 0;
 			if (va === null || va === undefined) return 1;
 			if (vb === null || vb === undefined) return -1;
@@ -73,8 +71,6 @@ export function Table({
 	/** @param {string} key */
 	const toggle = (key) =>
 		setSort((s) => (s?.key === key ? { key, direction: s.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' }));
-	// cells are a little tighter in a narrow card (the table's own width, not the screen's)
-	const pad = dense ? 'px-3 py-2' : 'px-4 py-3 @4xl:px-5';
 	/** @param {'left' | 'right' | 'center' | undefined} align */
 	const alignClass = (align) => (align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left');
 	return (
@@ -102,7 +98,7 @@ export function Table({
 										scope="col"
 										aria-sort={ariaSort}
 										className={cx(
-											pad,
+											PAD,
 											alignClass(column.align),
 											'whitespace-nowrap text-xs font-medium text-muted',
 											column.className,
@@ -149,7 +145,7 @@ export function Table({
 										// cells take no min-width: the block inside keeps a wrapping column readable
 										const content = column.wrap ? <span className="block min-w-40">{value}</span> : value;
 										const classes = cx(
-											pad,
+											PAD,
 											alignClass(column.align),
 											'align-middle text-fg',
 											column.wrap ? 'text-pretty' : 'whitespace-nowrap',

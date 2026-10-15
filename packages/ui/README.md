@@ -7,7 +7,7 @@ Tailwind scans `node_modules/@ss/ui/src` (`@source` in the app's CSS).
 
 | Entry              | What it is                                                                                                                 |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `@ss/ui`           | every component, `cx`, and the schema, format and problem helpers                                                          |
+| `@ss/ui`           | every component, `cx`, and the format and problem helpers                                                                  |
 | `@ss/ui/problems`  | RFC 9457 problem → user message and field-error helpers                                                                    |
 | `@ss/ui/theme.css` | the design tokens                                                                                                          |
 | `@ss/ui/testing`   | DOM test helpers on `react-dom/client` + jsdom (`render`, `cleanup`, `click`, `type`, `byLabel`, …) for other units' tests |
@@ -66,12 +66,12 @@ move. With `prefers-reduced-motion` nothing moves.
 - Buttons tint on hover and press in (`ss-motion ss-press`). A button whose `onClick` returns a promise, and the submit
   button of a `Form` whose `onSubmit` returns one, show the spinner and stay disabled until it settles (`loading` and
   `busy` still work). `FormBusyContext` gives the same to a submit button inside another form.
-- `Dialog`, `ActionMenu`, toasts and the phone menu animate in and out (`usePresence` keeps them mounted while they leave);
+- `Dialog`, `ActionMenu`, toasts and the phone menu animate in and out (they stay mounted while they leave);
   callouts and field errors fade in (an error with a short shake); new table rows and changed `Stat`
   figures fade in; skeletons shimmer (`Skeleton`, `SkeletonBlock`).
-- `AppShell`: the current item's tint slides to the clicked item at once, and the frame holds `NavigationProgress`, the
-  thin bar on top of the page while anything reports progress (`useNavigationProgress(active)`, `RouteProgress` in a
-  loading skeleton). `PendingHint` is the fixed-size spinner beside a clicked link.
+- `AppShell`: the current item's tint slides to the clicked item at once, and the frame holds the thin progress bar on
+  top of the page while anything reports progress (`useNavigationProgress(active)`, `RouteProgress` in a loading
+  skeleton). `PendingHint` is the fixed-size spinner beside a clicked link.
 - `PageTransition` and `SwapTransition` animate page and section changes with React's `ViewTransition` (navigations and
   other transitions only); browsers without view transitions get a CSS enter animation.
 
@@ -115,6 +115,8 @@ One style for the Portal and every dashboard, in US English: `formatDate` gives 
 gives `Oct 4, 2026, 2:30 PM UTC` (UTC, so the server and the browser render the same text). With
 `formatDateTime(value, { timeZone })` the same style shows another time zone with its short name
 (`Oct 4, 2026, 10:30 AM EDT`), for the viewer's local time once the page runs. `formatCredits` gives `12.5 credits`.
+`humanize` reads a code as words (`low_balance` → `Low balance`, `api_key` → `API key`): status badges and the choices
+of a settings form use it.
 
 ## Check
 

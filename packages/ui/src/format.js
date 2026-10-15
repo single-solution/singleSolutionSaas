@@ -3,7 +3,7 @@
  * 1000 millicredits), with at most 3 decimals and no rounding beyond that (millicredits are exact).
  * Dates are US English (`Oct 4, 2026`; `Oct 4, 2026, 2:30 PM UTC`) and render in UTC, so server and browser output
  * agree (no hydration drift); `formatDateTime(value, { timeZone })` shows the same style in another time zone, with
- * its short name (the viewer's local time once the page runs in a browser).
+ * its short name (the viewer's local time once the page runs in a browser). Codes read as words with `humanize`.
  * @module
  */
 
@@ -34,17 +34,14 @@ export const creditsNumber = (millicredits) => {
 };
 
 /**
- * `12.345 credits` (or `1 credit`). `signed` adds `+` to positive amounts.
+ * `12.345 credits` (or `1 credit`).
  * @param {number | null | undefined} millicredits
- * @param {{ signed?: boolean, unit?: boolean }} [options]
  * @returns {string}
  */
-export const formatCredits = (millicredits, { signed = false, unit = true } = {}) => {
+export const formatCredits = (millicredits) => {
 	const text = creditsNumber(millicredits);
 	if (text === '—') return text;
-	const sign = signed && /** @type {number} */ (millicredits) > 0 ? '+' : '';
-	if (!unit) return `${sign}${text}`;
-	return `${sign}${text} ${Math.abs(/** @type {number} */ (millicredits)) === 1000 ? 'credit' : 'credits'}`;
+	return `${text} ${Math.abs(/** @type {number} */ (millicredits)) === 1000 ? 'credit' : 'credits'}`;
 };
 
 /**
@@ -105,12 +102,42 @@ export const formatDate = (value) => {
 	return d ? DATE.format(d) : '—';
 };
 
+/** Short words written in capitals (or with their own casing) when a choice's value is shown as a label. */
+const WORD_CASE = Object.freeze({
+	ai: 'AI',
+	api: 'API',
+	cod: 'COD',
+	csv: 'CSV',
+	html: 'HTML',
+	iban: 'IBAN',
+	id: 'ID',
+	ip: 'IP',
+	pdf: 'PDF',
+	seo: 'SEO',
+	sku: 'SKU',
+	sms: 'SMS',
+	url: 'URL',
+	utc: 'UTC',
+	whatsapp: 'WhatsApp',
+});
+
 /**
- * Human label of a snake/kebab code (`low_balance` → `Low balance`).
- * @param {string | null | undefined} code
+ * A readable label for a code (a status, a choice's value): `low_balance` → "Low balance", `per_unit_down` → "Per unit
+ * down", `sms` → "SMS", `postalCode` → "Postal code", `line1` → "Line 1"; the stored value stays as it is. Values that
+ * are not plain words (numbers, mixed case) are shown as they are; nothing (`null`, `undefined`, `''`) is `''`.
+ * @param {unknown} value
+ * @returns {string}
  */
-export const humanize = (code) => {
-	if (!code) return '';
-	const text = String(code).replace(/[_-]+/g, ' ').trim();
-	return text.charAt(0).toUpperCase() + text.slice(1);
+export const humanize = (value) => {
+	if (value === null || value === undefined) return '';
+	const text = String(value);
+	if (!/^[a-z][a-zA-Z0-9]*(?:[_-][a-zA-Z0-9]+)*$/.test(text)) return text;
+	const words = text
+		.replace(/([a-z])([A-Z])/g, '$1 $2')
+		.replace(/([a-zA-Z])([0-9])/g, '$1 $2')
+		.split(/[_\s-]+/)
+		.map((word) => word.toLowerCase())
+		.map((word) => WORD_CASE[/** @type {keyof typeof WORD_CASE} */ (word)] ?? word);
+	const [first = '', ...rest] = words;
+	return [first === first.toLowerCase() ? first.charAt(0).toUpperCase() + first.slice(1) : first, ...rest].join(' ');
 };

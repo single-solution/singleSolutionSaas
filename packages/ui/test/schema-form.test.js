@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { SchemaForm } from '../src/SchemaForm.js';
-import { choiceLabel, fieldsOf, groupFields, isWide, widgetOf } from '../src/schema.js';
+import { fieldsOf, groupFields, isWide, widgetOf } from '../src/schema.js';
 import { allByRole, byLabel, byText, cleanup, click, render, type } from '../src/testing.js';
 
 afterEach(cleanup);
@@ -281,18 +281,3 @@ describe('SchemaForm', () => {
  * @param {string} text
  */
 const allByText = (root, text) => [...root.querySelectorAll('button')].filter((b) => b.textContent === text);
-
-describe('choiceLabel', () => {
-	it('shows a choice value as readable words, keeping known short words in capitals', () => {
-		expect(choiceLabel('per_unit_down')).toBe('Per unit down');
-		expect(choiceLabel('sms')).toBe('SMS');
-		expect(choiceLabel('whatsapp')).toBe('WhatsApp');
-		expect(choiceLabel('cod_fee')).toBe('COD fee');
-		expect(choiceLabel('one-exclusive')).toBe('One exclusive');
-		expect(choiceLabel('Mixed Case')).toBe('Mixed Case');
-		expect(choiceLabel('iban')).toBe('IBAN');
-		expect(choiceLabel('postalCode')).toBe('Postal code');
-		expect(choiceLabel('line1')).toBe('Line 1');
-		expect(choiceLabel(30)).toBe('30');
-	});
-});

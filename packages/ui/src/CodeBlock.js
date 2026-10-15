@@ -41,16 +41,11 @@ export const copyText = async (text) => {
 };
 
 /**
- * @param {{ code: string, label?: string, secret?: boolean, wrap?: boolean, className?: string,
- *   onCopy?: (ok: boolean) => void }} props
+ * @param {{ code: string, label?: string, secret?: boolean, wrap?: boolean, className?: string }} props
  */
-export function CodeBlock({ code, label, secret = false, wrap = true, className, onCopy }) {
+export function CodeBlock({ code, label, secret = false, wrap = true, className }) {
 	const [copied, setCopied] = useState(/** @type {null | boolean} */ (null));
-	const copy = async () => {
-		const ok = await copyText(code);
-		setCopied(ok);
-		onCopy?.(ok);
-	};
+	const copy = async () => setCopied(await copyText(code));
 	return (
 		<div className={cx('space-y-2', className)}>
 			{label ? <p className="text-[13px] font-medium text-fg">{label}</p> : null}

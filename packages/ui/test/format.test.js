@@ -20,9 +20,8 @@ describe('money formatting (credits from millicredits, ≤ 3 decimals)', () => {
 		expect(creditsNumber(Number.NaN)).toBe('—');
 		expect(formatCredits(1000)).toBe('1 credit');
 		expect(formatCredits(2500)).toBe('2.5 credits');
-		expect(formatCredits(2500, { signed: true })).toBe('+2.5 credits');
-		expect(formatCredits(-2500, { signed: true })).toBe('-2.5 credits');
-		expect(formatCredits(2500, { unit: false })).toBe('2.5');
+		expect(formatCredits(-1000)).toBe('-1 credit');
+		expect(formatCredits(-2500)).toBe('-2.5 credits');
 		expect(formatCredits(undefined)).toBe('—');
 		expect(formatCreditsPerHour(1250)).toBe('1.25 credits/h');
 		expect(formatCreditsPerHour(null)).toBe('—');
@@ -46,6 +45,21 @@ describe('money formatting (credits from millicredits, ≤ 3 decimals)', () => {
 		expect(formatDate(null)).toBe('—');
 		expect(humanize('low_balance')).toBe('Low balance');
 		expect(humanize(null)).toBe('');
+		expect(humanize('')).toBe('');
+	});
+	it('shows a code as readable words, keeping known short words in capitals', () => {
+		expect(humanize('per_unit_down')).toBe('Per unit down');
+		expect(humanize('sms')).toBe('SMS');
+		expect(humanize('api_key')).toBe('API key');
+		expect(humanize('whatsapp')).toBe('WhatsApp');
+		expect(humanize('cod_fee')).toBe('COD fee');
+		expect(humanize('one-exclusive')).toBe('One exclusive');
+		expect(humanize('Mixed Case')).toBe('Mixed Case');
+		expect(humanize('iban')).toBe('IBAN');
+		expect(humanize('postalCode')).toBe('Postal code');
+		expect(humanize('line1')).toBe('Line 1');
+		expect(humanize(30)).toBe('30');
+		expect(humanize(0)).toBe('0');
 	});
 });
 

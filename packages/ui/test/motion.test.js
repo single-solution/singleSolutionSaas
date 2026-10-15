@@ -6,16 +6,15 @@ import {
 	Button,
 	Dialog,
 	Form,
-	NavigationProgress,
 	PageTransition,
 	PendingHint,
 	RouteProgress,
 	SwapTransition,
 	ToastProvider,
 	useNavigationProgress,
-	usePresence,
 	useToast,
 } from '../src/index.js';
+import { NavigationProgress, usePresence } from '../src/motion.js';
 import { act, cleanup, click, render } from '../src/testing.js';
 
 afterEach(() => {
