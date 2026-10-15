@@ -202,7 +202,7 @@ describe('default templates of products (parity P1)', () => {
 		});
 		expect(env.providers.callsTo('https://graph.facebook.com')).toHaveLength(meta);
 		// with WhatsApp → SMS as the fallback, the SMS default goes
-		await env.setting('fallback', 'whatsapp', 'sms');
+		await env.fallback('whatsapp', 'sms');
 		const fellBack = await env.send('whatsapp', {
 			template: 'chat.staff_new_message',
 			to: { phone: '+15550002222' },
@@ -225,7 +225,7 @@ describe('default templates of products (parity P1)', () => {
 		});
 		expect(code.json).toMatchObject({ status: 'sent', channel: 'sms', text: '****** is your ****** code.' });
 		expect(lastSms()).toBe('123456 is your Shop code.');
-		await env.setting('fallback', 'whatsapp', 'none');
+		await env.fallback('whatsapp', 'none');
 		// once the merchant sets the WhatsApp template up, it goes by WhatsApp
 		await env.template({
 			key: 'chat.staff_new_message',
@@ -255,7 +255,7 @@ describe('default templates of products (parity P1)', () => {
 	});
 
 	it('keeps the defaults on a waiting message for its fallback, never in a delivery-log read, and drops them once done', async () => {
-		await env.setting('fallback', 'email', 'sms');
+		await env.fallback('email', 'sms');
 		env.providers.respond('https://api.resend.com', () => ({ status: 503 }));
 		const waiting = await env.send('email', {
 			template: 'chat.staff_new_message',
@@ -283,7 +283,7 @@ describe('default templates of products (parity P1)', () => {
 			defaults: null,
 		});
 		env.providers.reset('https://api.resend.com');
-		await env.setting('fallback', 'email', 'none');
+		await env.fallback('email', 'none');
 	});
 
 	it('a send with a fallbackTemplate uses the website’s template for that key before the defaults', async () => {
@@ -356,7 +356,7 @@ describe('default templates of products (parity P1)', () => {
 
 		// a message moved to its fallback channel keeps the chain: the website's general SMS template
 		await env.template({ key: 'ecommerce.order_status', channel: 'sms', text: 'Order {number}: {status}', required: true });
-		await env.setting('fallback', 'email', 'sms');
+		await env.fallback('email', 'sms');
 		env.providers.respond('https://api.resend.com', () => ({ status: 503 }));
 		const waiting = await send('email');
 		expect(waiting.json.status).toBe('retrying');
@@ -367,7 +367,7 @@ describe('default templates of products (parity P1)', () => {
 		const done = await (await env.merchantCollection('messages')).findOne({ websiteId: env.websiteId, id: waiting.json.id });
 		expect(done).toMatchObject({ status: 'sent', channel: 'sms', text: 'Order A-1001: Shipped' });
 		env.providers.reset('https://api.resend.com');
-		await env.setting('fallback', 'email', 'none');
+		await env.fallback('email', 'none');
 
 		// fallbackTemplate is another template key
 		for (const fallbackTemplate of ['ecommerce.order_status.shipped', 'Order status', 42]) {
@@ -744,7 +744,7 @@ describe('long values of a product’s message (a chat transcript)', () => {
 		expect((await own.dashboard(cookie, 'DELETE', texts)).status).toBe(204);
 
 		// an email that fails moves to SMS, where its long value is cut too
-		await own.setting('fallback', 'email', 'sms');
+		await own.fallback('email', 'sms');
 		own.providers.respond('https://api.resend.com', () => ({ status: 503 }));
 		const waiting = await send('email');
 		expect(waiting.json.status).toBe('retrying');

@@ -15,6 +15,13 @@
 			"default": 20,
 			"minimum": 1,
 			"maximum": 1000
+		},
+		"counts": {
+			"type": "string",
+			"title": "What the limits count",
+			"description": "Optional: only optional messages are counted and held back; required ones (sign-in codes, order updates) always go. All: every message is counted and held back over a limit. A template can say otherwise in its settings.",
+			"default": "optional",
+			"enum": ["optional", "all"]
 		}
 	}
 }

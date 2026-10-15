@@ -11,8 +11,8 @@ import { isId } from '@ss/contracts';
 export const WEBHOOK_EVENTS = Object.freeze(['message.sent', 'message.failed', 'recipient.unsubscribed']);
 /** Name of the signature header. */
 export const SIGNATURE_HEADER = 'ss-signature';
-/** URLs a website may send events to, at most. */
-const MAX_WEBHOOK_URLS = 5;
+/** URLs a website may send events to, at most, unless its setting `webhooks.maxUrls` says otherwise (fixed-choices N12). */
+export const DEFAULT_MAX_WEBHOOK_URLS = 5;
 /** Event types one URL may name, at most. */
 const MAX_URL_EVENTS = 50;
 /** Longest webhook URL. */
@@ -60,15 +60,15 @@ const isWebhookUrl = (url) => {
 const isEventType = (type) => typeof type === 'string' && (WEBHOOK_EVENTS.includes(type) || PRODUCT_EVENT.test(type));
 
 /**
- * Check the list `webhook_urls`: at most five https URLs, each once, each with the events it takes (at most 50 types;
- * empty takes every event).
+ * Check the list `webhook_urls`: at most `max` https URLs (the setting `webhooks.maxUrls`, five by default), each once,
+ * each with the events it takes (at most 50 types; empty takes every event).
  * @param {unknown} input
+ * @param {{ max?: number }} [limits]
  * @returns {{ ok: true, value: WebhookUrl[] } | { ok: false, errors: Array<{ path: string, message: string }> }}
  */
-export const checkWebhookUrls = (input) => {
+export const checkWebhookUrls = (input, { max = DEFAULT_MAX_WEBHOOK_URLS } = {}) => {
 	if (!Array.isArray(input)) return { ok: false, errors: [{ path: '/value', message: 'The list is [{ url, events }].' }] };
-	if (input.length > MAX_WEBHOOK_URLS)
-		return { ok: false, errors: [{ path: '/value', message: `Add at most ${MAX_WEBHOOK_URLS} URLs.` }] };
+	if (input.length > max) return { ok: false, errors: [{ path: '/value', message: `Add at most ${max} URLs.` }] };
 	/** @type {Array<{ path: string, message: string }>} */
 	const errors = [];
 	/** @type {WebhookUrl[]} */

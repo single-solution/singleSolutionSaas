@@ -250,7 +250,7 @@ describe('the send API', () => {
 	});
 
 	it('retries on later uses, then falls back to another channel; every attempt is logged', async () => {
-		await env.setting('fallback', 'whatsapp', 'sms');
+		await env.fallback('whatsapp', 'sms');
 		env.providers.respond('https://graph.facebook.com', () => ({ status: 503 }));
 		const first = await env.send('whatsapp', {
 			template: 'accounts.code',
@@ -401,13 +401,13 @@ describe('the send API', () => {
 		env.advance(Date.parse('2026-10-02T23:00:30Z') - env.now());
 		await env.call('GET', '/v1/messages?limit=1', { token: env.server });
 		expect((await (await env.call('GET', `/v1/messages/${held.json.id}`, { token: env.server })).json()).status).toBe('sent');
-		// equal hours: no quiet hours
-		await env.setting('quiet_hours', 'endHour', 21);
+		// no quiet windows: no quiet hours
+		await env.list('quiet_hours', []);
 	});
 
 	it('holds them by the business.json time zone when the recipient names none', async () => {
 		await env.businessJson({ name: 'Shop', timeZone: 'Asia/Singapore' });
-		await env.setting('quiet_hours', 'endHour', 8);
+		await env.list('quiet_hours', [{ days: [0, 1, 2, 3, 4, 5, 6], from: '21:00', until: '08:00', channels: [] }]);
 		// 17:30 UTC is 01:30 in Singapore: quiet there, not in UTC
 		env.advance(Date.parse('2026-10-03T17:30:00Z') - env.now());
 		const held = await env.send('sms', { template: 'welcome', to: { phone: '+15550008899' } });
@@ -418,7 +418,7 @@ describe('the send API', () => {
 		await env.businessJson({ name: 'shop.example.com', timeZone: 'UTC' });
 		const utc = await env.send('sms', { template: 'welcome', to: { phone: '+15550008897' } });
 		expect(utc.json.status).toBe('sent');
-		await env.setting('quiet_hours', 'endHour', 21);
+		await env.list('quiet_hours', []);
 	});
 
 	it('sends a delayed message on the first use after its time', async () => {
@@ -766,7 +766,7 @@ describe('the delivery log and the admin widgets (tickets)', () => {
 		expect(sent).toMatchObject({
 			actor: { kind: 'staff', id: 'u_1', name: 'Sam Staff' },
 			label: sent.target,
-			detail: 'channel=email status=sent',
+			detail: 'channel=email kind=transactional status=sent',
 		});
 		expect(sent.target).toMatch(/^msg_/);
 		// never an address or the words

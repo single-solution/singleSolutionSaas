@@ -30,13 +30,14 @@ import sendApi from '../schemas/send_api.settings.json' with { type: 'json' };
 import sendLimits from '../schemas/send_limits.settings.json' with { type: 'json' };
 import sms from '../schemas/sms.settings.json' with { type: 'json' };
 import staffPush from '../schemas/staff_push.settings.json' with { type: 'json' };
+import templateLimits from '../schemas/templates.shared.json' with { type: 'json' };
 import webhooks from '../schemas/webhooks.settings.json' with { type: 'json' };
 import whatsapp from '../schemas/whatsapp.settings.json' with { type: 'json' };
 import { normalisePhone } from '../core/channels.js';
 import { WEBHOOK_EVENTS, webhookUrlsSummary } from '../core/webhooks.js';
 import { createSealer, resealWebsite } from './crypto.js';
 import { createDefaults } from './defaults.js';
-import { LISTS, createLists } from './lists.js';
+import { createLists } from './lists.js';
 import { createProviders } from './providers.js';
 import { INDEXES, createStore } from './store.js';
 import { createWebPush, pushKeysOf } from './webpush.js';
@@ -59,7 +60,8 @@ const SETTINGS = {
 
 /**
  * Settings several features use (PLAN 0.8.10 D11): how long the delivery log of every channel and the outgoing webhook
- * events are kept (`delivery_log.retentionDays`; 0, the default, keeps them forever).
+ * events are kept (`delivery_log.retentionDays`; 0, the default, keeps them forever), and how many templates the website
+ * keeps (`templates.maxTemplates`).
  * @type {Record<string, { name: string, features: string[], settings: any }>}
  */
 const SHARED_SETTINGS = {
@@ -67,6 +69,12 @@ const SHARED_SETTINGS = {
 		name: 'Delivery log',
 		features: ['whatsapp', 'email', 'sms', 'browser_push', 'staff_push', 'webhooks'],
 		settings: deliveryLog,
+	},
+	// how many templates the website keeps (fixed-choices N12; the schema's maximum is the system cap)
+	templates: {
+		name: 'Templates',
+		features: ['whatsapp', 'email', 'sms', 'browser_push', 'staff_push', 'send_api'],
+		settings: templateLimits,
 	},
 };
 
@@ -99,7 +107,7 @@ const addressesOf = (user) =>
 	/** @type {string[]} */ ([normalizeEmail(user.email), normalisePhone(user.phone)].filter((address) => address !== null));
 
 /**
- * Data rights (PLAN 0.4.11): a person's messages, unsubscribes and unsubscribe codes are found by their email address
+ * Data rights (PLAN 0.4.11): a person's messages, unsubscribes (from everything or a topic) and unsubscribe codes are found by their email address
  * and phone number; delete removes them. Messages are exported as the delivery log keeps them: the values of sensitive
  * messages hidden (PLAN 0.8.10 D11).
  * @param {() => number} now
@@ -121,11 +129,20 @@ const dataRights = (now) => ({
 				status: message.status,
 				createdAt: new Date(message.createdAt).toISOString(),
 			})),
-			unsubscribes: (await store.optouts.byAddresses(addresses)).map((entry) => ({
-				address: entry.address,
-				via: entry.via,
-				at: new Date(entry.createdAt).toISOString(),
-			})),
+			unsubscribes: [
+				...(await store.optouts.byAddresses(addresses)).map((entry) => ({
+					address: entry.address,
+					topic: null,
+					via: entry.via,
+					at: new Date(entry.createdAt).toISOString(),
+				})),
+				...(await store.topicOptouts.byAddresses(addresses)).map((entry) => ({
+					address: entry.address,
+					topic: entry.topic,
+					via: entry.via,
+					at: new Date(entry.createdAt).toISOString(),
+				})),
+			],
 		};
 	},
 	deleteUser: async (ctx, user) => {
@@ -135,6 +152,7 @@ const dataRights = (now) => ({
 		const deleted =
 			(await store.messages.deleteByAddresses(addresses)) +
 			(await store.optouts.deleteByAddresses(addresses)) +
+			(await store.topicOptouts.deleteByAddresses(addresses)) +
 			(await store.recipients.deleteByAddresses(addresses));
 		return { deleted, anonymised: 0 };
 	},
@@ -152,10 +170,15 @@ const dataRights = (now) => ({
 export const createProductInstance = (options) => {
 	const { createTransport, ...kitOptions } = options;
 	const now = options.now ?? Date.now;
-	// Notifications keeps its list setting (webhook URLs) in the product database too, and sends to providers and push
-	// services on the policy the kit uses for addresses merchants enter: the kit's start-up pieces, shared with the kit
+	// Notifications keeps its list settings in the product database too, and sends to providers and push services on
+	// the policy the kit uses for addresses merchants enter: the kit's start-up pieces, shared with the kit
 	const { store, policy, send } = createProductBase(kitOptions);
-	const lists = createLists({ store, now });
+	const lists = createLists({
+		store,
+		now,
+		// the setting webhooks.maxUrls (fixed-choices N12), read when the list is saved
+		maxWebhookUrls: async (websiteId) => Number((await product.settings.values(websiteId, 'webhooks')).maxUrls),
+	});
 	const providers = createProviders({ send, policy, now, ...(createTransport ? { createTransport } : {}) });
 	const webpush = createWebPush({ send, now });
 	const keys = (options.problems ?? []).length === 0 ? options.config : undefined;
@@ -249,15 +272,9 @@ export const createProductInstance = (options) => {
 		// the website Setup sheet: the API document and what the merchant's website builds per feature
 		openapi,
 		build: guide.build,
-		// the settings API's `GET|PUT /v1/lists/webhook_urls` for the merchant's server (K1, N5), checked like the dashboard's
-		lists: {
-			webhook_urls: {
-				feature: LISTS.webhook_urls.feature,
-				title: LISTS.webhook_urls.title,
-				get: lists.webhookUrls,
-				save: lists.saveWebhookUrls,
-			},
-		},
+		// the lists (webhook URLs, topics, template settings, fallback channels, quiet hours): the settings API's
+		// `GET|PUT /v1/lists/<name>` for the merchant's server (K1) and the dashboard's twin
+		lists: lists.definitions(),
 	});
 	// the other products (the Portal's directory): whose template keys are theirs, and their messages with their
 	// defaults (the dashboard's list; a send carries its own defaults)

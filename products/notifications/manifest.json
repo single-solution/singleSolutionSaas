@@ -71,7 +71,7 @@
 		{
 			"key": "fallback",
 			"name": "Fallback channel",
-			"description": "When a message fails on its channel after its retries, it is sent once on the fallback channel (for example WhatsApp, then SMS).",
+			"description": "When a message fails on its channel after its retries, it moves to the next of its fallback channels, in order (for example WhatsApp, then SMS, then email; browser push too). A template can have its own order.",
 			"dependsOn": [],
 			"recommendFor": ["messages.whatsapp+messages.sms", "messages.whatsapp+messages.email", "messages.sms+messages.email"],
 			"settings": {
@@ -81,7 +81,7 @@
 		{
 			"key": "quiet_hours",
 			"name": "Quiet hours",
-			"description": "Messages that are not urgent wait for the end of the quiet hours in the recipient's time zone.",
+			"description": "Messages that are not urgent wait for the end of the quiet hours in the recipient's time zone: windows per weekday, with minutes, for the channels each one names.",
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/quiet_hours.settings.json"
@@ -90,7 +90,7 @@
 		{
 			"key": "send_limits",
 			"name": "Send limits",
-			"description": "Caps the messages one recipient gets per hour and per day.",
+			"description": "Caps the messages one recipient gets per hour and per day: optional messages only, or all of them.",
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/send_limits.settings.json"

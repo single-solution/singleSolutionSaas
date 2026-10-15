@@ -1,8 +1,9 @@
 /**
  * The hosted unsubscribe page (PLAN 0.8.5): served by Notifications at `/unsubscribe/<websiteId>/<code>`, with the
  * website's widget texts (every word editable in Settings → Texts), theme and custom CSS. Opening the link only asks;
- * the button (a form POST, also used by email clients' one-click unsubscribe) unsubscribes. Plain HTML; every value
- * is escaped and the page runs no script.
+ * the button (a form POST, also used by email clients' one-click unsubscribe) unsubscribes. When the website has
+ * unsubscribe topics (fixed-choices N2) the page lists them as choices: the recipient keeps the topics they want, or
+ * leaves every optional message. Plain HTML; every value is escaped and the page runs no script.
  * @module
  */
 import { escapeHtml } from '@ss/contracts/text';
@@ -29,25 +30,38 @@ body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding
 h1 { font-size: 1.3em; margin: 0 0 12px; }
 button { font: inherit; padding: 10px 18px; border: 0; border-radius: var(--ss-radius, 8px); cursor: pointer;
   background: var(--ss-color-accent, #4f46e5); color: var(--ss-color-onAccent, #ffffff); }
+fieldset { border: 0; padding: 0; margin: 0 0 16px; }
+label { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button.secondary { background: transparent; color: inherit; border: 1px solid var(--ss-color-border, GrayText); }
 `;
 
 /**
  * The page.
  * @param {{ texts: Record<string, string>, theme?: import('@ss/app-kit/widget').WidgetTheme & { customCss?: string },
- *   state: 'ask' | 'done' | 'invalid' | 'unavailable', business?: string, action?: string }} input
+ *   state: 'ask' | 'done' | 'saved' | 'invalid' | 'unavailable', business?: string, action?: string,
+ *   topics?: Array<{ id: string, name: string, subscribed: boolean }> }} input `topics`: the website's topics with the
+ *   recipient's choices (none: one button leaves every optional message)
  * @returns {string}
  */
-export const renderUnsubscribePage = ({ texts, theme, state, business = '', action = '' }) => {
+export const renderUnsubscribePage = ({ texts, theme, state, business = '', action = '', topics = [] }) => {
 	/** @param {string} key */
 	const t = (key) => texts[key] ?? key;
 	const mode = theme?.mode === 'dark' || theme?.mode === 'light' ? `:root { color-scheme: ${theme.mode}; }` : '';
 	const variables = theme ? themeCss(theme).replace(':host', ':root') : '';
 	// custom CSS stays inside its style element
 	const custom = (theme?.customCss ?? '').replace(/</g, '\\3c ');
-	const body =
-		state === 'ask'
+	const choices = topics
+		.map(
+			(topic) =>
+				`<label><input type="checkbox" name="topic" value="${escapeHtml(topic.id)}"${topic.subscribed ? ' checked' : ''}> ${escapeHtml(topic.name)}</label>`,
+		)
+		.join('');
+	const form =
+		topics.length === 0
 			? `<p>${escapeHtml(formatText(t('unsubscribe.question'), { business }))}</p><form method="post" action="${escapeHtml(action)}"><button type="submit">${escapeHtml(t('unsubscribe.button'))}</button></form>`
-			: `<p>${escapeHtml(t(`unsubscribe.${state}`))}</p>`;
+			: `<p>${escapeHtml(formatText(t('unsubscribe.choose'), { business }))}</p><form method="post" action="${escapeHtml(action)}"><fieldset>${choices}</fieldset><div class="actions"><button type="submit" name="action" value="save">${escapeHtml(t('unsubscribe.save'))}</button><button type="submit" name="action" value="all" class="secondary">${escapeHtml(t('unsubscribe.all'))}</button></div></form>`;
+	const body = state === 'ask' ? form : `<p>${escapeHtml(t(`unsubscribe.${state}`))}</p>`;
 	return `<!doctype html>
 <html>
 <head>

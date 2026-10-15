@@ -30,8 +30,13 @@ export const CHANNEL_CONNECTIONS = Object.freeze({
 	staff_push: 'push_keys',
 });
 
-/** Channels a fallback may lead to (and come from): messages with a text body to an email address or a phone. */
-export const FALLBACK_CHANNELS = Object.freeze(/** @type {Array<'email' | 'sms' | 'whatsapp'>} */ (['email', 'sms', 'whatsapp']));
+/**
+ * Channels a fallback may lead to (and come from), fixed-choices N7: the recipient's own channels — email, SMS, WhatsApp
+ * and browser push (staff push reaches the merchant's staff, never a customer's fallback).
+ */
+export const FALLBACK_CHANNELS = Object.freeze(
+	/** @type {Array<'email' | 'sms' | 'whatsapp' | 'push'>} */ (['email', 'sms', 'whatsapp', 'push']),
+);
 
 /** The member of `to` each channel needs. */
 const ADDRESS_FIELDS = Object.freeze({

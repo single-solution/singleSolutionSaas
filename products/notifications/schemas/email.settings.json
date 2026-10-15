@@ -12,9 +12,20 @@
 		"retryPlan": {
 			"type": "string",
 			"title": "Retries",
-			"description": "Short: now, then 1 and 5 minutes later. Long: now, then 5 and 15 minutes and 1, 3 and 6 hours later. Retries go out on the next uses of your website; a message keeps the plan it was sent with.",
+			"description": "Short: now, then 1 and 5 minutes later. Standard: now, then 1, 5 and 30 minutes and 2 hours later. Long: now, then 5 and 15 minutes and 1, 3 and 6 hours later. Custom: your own waits below. Retries go out on the next uses of your website; a message keeps the waits it was sent with.",
 			"default": "short",
-			"enum": ["short", "long"]
+			"enum": ["short", "standard", "long", "custom"]
+		},
+		"retryWaits": {
+			"type": "array",
+			"title": "Custom waits (minutes)",
+			"description": "With Custom retries: the minutes to wait before each retry, in order, for example 2, 10 and 60 (1 to 10080 minutes each; the first 10 count).",
+			"default": [1, 5],
+			"items": {
+				"type": "integer",
+				"minimum": 1,
+				"maximum": 10080
+			}
 		}
 	}
 }

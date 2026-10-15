@@ -266,6 +266,27 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		if (response.status !== 204) throw new Error(`setting: ${response.status} ${await response.text()}`);
 	};
 
+	/** Save a list whole in the dashboard. @param {string} name @param {unknown} value */
+	const list = async (name, value) => {
+		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/lists/${name}`, {
+			value,
+		});
+		if (response.status !== 200) throw new Error(`list ${name}: ${response.status} ${await response.text()}`);
+		return (await response.json()).value;
+	};
+
+	/**
+	 * Set the one fallback channel of a channel in the list `fallback_chains` (`none`: no fallback).
+	 * @param {string} channel @param {string} target
+	 */
+	const fallback = async (channel, target) => {
+		const read = await dashboard(await adminSession(), 'GET', `/v1/dashboard/websites/${websiteId}/lists/fallback_chains`);
+		const chains = /** @type {Array<{ channel: string }>} */ ((await read.json()).value).filter(
+			(entry) => entry.channel !== channel,
+		);
+		return list('fallback_chains', target === 'none' ? chains : [...chains, { channel, then: [target] }]);
+	};
+
 	/** Save a template in the dashboard. @param {Record<string, unknown>} template */
 	const template = async (template) => {
 		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/templates`, template);
@@ -305,6 +326,8 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		switchOn,
 		connect,
 		setting,
+		list,
+		fallback,
 		template,
 		send,
 		ticket,

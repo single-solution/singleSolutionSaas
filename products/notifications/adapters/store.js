@@ -8,7 +8,8 @@
  * - `templates`: one per key × channel × language
  * - `off_messages`: the product messages the merchant switched off, one per key × channel (parity P1)
  * - `messages`: the delivery log, one record per message with every attempt
- * - `optouts`: unsubscribed addresses
+ * - `optouts`: addresses unsubscribed from every optional message
+ * - `topic_optouts`: addresses unsubscribed from one topic (fixed-choices N2), one per address × topic
  * - `recipients`: the unsubscribe code of each address that got an optional message
  * - `subscriptions`: browser push subscriptions of visitors and of the merchant's staff
  * - `webhook_events`: outgoing webhook events and their attempts
@@ -67,9 +68,12 @@ import { LEASE_MS } from '../core/timing.js';
  *   `not_set_up`)
  * @property {Attempt[]} attempts every attempt, on every channel
  * @property {number} channelAttempts failed attempts on `channel`
- * @property {import('../core/timing.js').RetryPlan} retryPlan the retry plan on `channel`, kept from when the message
- *   was accepted (or moved to its fallback channel)
- * @property {boolean} fellBack
+ * @property {number[]} retryDelays the retry waits (ms) on `channel`, kept from when the message was accepted (or moved
+ *   to a fallback channel; fixed-choices N8)
+ * @property {boolean} fellBack it moved to a fallback channel
+ * @property {Channel[]} fallbackChain the fallback channels still left, in order (fixed-choices N7)
+ * @property {string | null} topic its unsubscribe topic (fixed-choices N2), null: none
+ * @property {boolean} capped send limits count it and may hold it back (fixed-choices N5)
  * @property {Date} dueAt
  * @property {Date | null} leaseUntil
  * @property {Date | null} sentAt
@@ -90,6 +94,7 @@ const TEMPLATES = 'templates';
 const OFF_MESSAGES = 'off_messages';
 const MESSAGES = 'messages';
 const OPTOUTS = 'optouts';
+const TOPIC_OPTOUTS = 'topic_optouts';
 const RECIPIENTS = 'recipients';
 const SUBSCRIPTIONS = 'subscriptions';
 const WEBHOOK_EVENTS = 'webhook_events';
@@ -103,6 +108,7 @@ export const INDEXES = [
 	{ collection: MESSAGES, keys: { websiteId: 1, status: 1, dueAt: 1 }, name: 'due' },
 	{ collection: MESSAGES, keys: { websiteId: 1, address: 1, sentAt: -1 }, name: 'by_address' },
 	{ collection: OPTOUTS, keys: { websiteId: 1, address: 1 }, name: 'by_address', unique: true },
+	{ collection: TOPIC_OPTOUTS, keys: { websiteId: 1, address: 1, topic: 1 }, name: 'by_address_topic', unique: true },
 	{ collection: RECIPIENTS, keys: { websiteId: 1, address: 1 }, name: 'by_address', unique: true },
 	{ collection: RECIPIENTS, keys: { websiteId: 1, code: 1 }, name: 'by_code', unique: true },
 	{ collection: SUBSCRIPTIONS, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
@@ -115,7 +121,8 @@ export const INDEXES = [
 /** What delivery-log reads return of a message: never the sealed real words, nor the product's defaults it keeps. */
 const LOG_PROJECTION = { _id: 0, sealed: 0, defaults: 0 };
 
-const MAX_TEMPLATES = 1000;
+/** Most templates a website keeps (the system cap of the setting `templates.maxTemplates`). */
+const MAX_TEMPLATES = 5000;
 const TEMPLATE_PROJECTION = {
 	_id: 0,
 	key: 1,
@@ -142,6 +149,7 @@ export const createStore = (data, { now }) => {
 	const offMessages = data.collection(OFF_MESSAGES);
 	const messages = data.collection(MESSAGES);
 	const optouts = data.collection(OPTOUTS);
+	const topicOptouts = data.collection(TOPIC_OPTOUTS);
 	const recipients = data.collection(RECIPIENTS);
 	const subscriptions = data.collection(SUBSCRIPTIONS);
 	const events = data.collection(WEBHOOK_EVENTS);
@@ -177,16 +185,17 @@ export const createStore = (data, { now }) => {
 			/**
 			 * Save a template (one with the same key, channel and language is replaced).
 			 * @param {Template} template
-			 * @returns {Promise<(Template & { updatedAt: Date }) | 'full'>} the template as saved, or `full` at 1000 templates
+			 * @param {{ max: number }} limits the setting `templates.maxTemplates`
+			 * @returns {Promise<(Template & { updatedAt: Date }) | 'full'>} the template as saved, or `full` at `max` templates
 			 */
-			save: async (template) => {
+			save: async (template, { max }) => {
 				const existing = await templates.countDocuments({
 					websiteId,
 					key: template.key,
 					channel: template.channel,
 					language: template.language,
 				});
-				if (existing === 0 && (await templates.countDocuments({ websiteId })) >= MAX_TEMPLATES) return 'full';
+				if (existing === 0 && (await templates.countDocuments({ websiteId })) >= Math.min(max, MAX_TEMPLATES)) return 'full';
 				await templates.updateOne(
 					{ websiteId, key: template.key, channel: template.channel, language: template.language },
 					{ $set: { ...template }, $setOnInsert: { createdAt: at() } },
@@ -275,10 +284,11 @@ export const createStore = (data, { now }) => {
 					),
 				),
 			/**
-			 * Messages sent to an address since a time.
+			 * Messages send limits count (`capped`) sent to an address since a time.
 			 * @param {string} address @param {number} since
 			 */
-			sentSince: (address, since) => messages.countDocuments({ websiteId, address, sentAt: { $gte: new Date(since) } }),
+			sentSince: (address, since) =>
+				messages.countDocuments({ websiteId, address, capped: true, sentAt: { $gte: new Date(since) } }),
 			/**
 			 * Newest first, keyset-paged by `[createdAt, id]`; optional filters.
 			 * @param {LogFilters & { after: unknown, limit: number }} page
@@ -332,6 +342,11 @@ export const createStore = (data, { now }) => {
 				);
 				return result.upsertedCount === 1;
 			},
+			/**
+			 * Lift "every optional message" (the recipient chose topics again on the hosted page).
+			 * @param {string} address
+			 */
+			remove: async (address) => (await optouts.deleteOne({ websiteId, address })).deletedCount === 1,
 			/** @param {string[]} addresses */
 			byAddresses: async (addresses) => {
 				/** @type {Array<{ address: string, via: string, createdAt: Date }>} */
@@ -350,6 +365,61 @@ export const createStore = (data, { now }) => {
 			deleteByAddresses: async (addresses) => {
 				let deleted = 0;
 				for (const address of addresses) deleted += (await optouts.deleteMany({ websiteId, address })).deletedCount;
+				return deleted;
+			},
+		}),
+
+		/** Addresses unsubscribed from one topic (fixed-choices N2). */
+		topicOptouts: Object.freeze({
+			/** @param {string} address @param {string} topic */
+			has: async (address, topic) => (await topicOptouts.countDocuments({ websiteId, address, topic }, { limit: 1 })) > 0,
+			/**
+			 * The topics an address unsubscribed from.
+			 * @param {string} address
+			 * @returns {Promise<string[]>}
+			 */
+			of: async (address) =>
+				(await topicOptouts.find({ websiteId, address }, { projection: { _id: 0, topic: 1 }, limit: 100 }).toArray()).map(
+					(doc) => String(doc.topic),
+				),
+			/**
+			 * Unsubscribe an address from topics; with `only`, every other topic is subscribed again.
+			 * @param {string} address @param {string[]} topics @param {'link' | 'keyword'} via
+			 * @param {{ only: boolean }} options
+			 * @returns {Promise<string[]>} the topics newly unsubscribed
+			 */
+			set: async (address, topics, via, { only }) => {
+				if (only) await topicOptouts.deleteMany({ websiteId, address, topic: { $nin: topics } });
+				/** @type {string[]} */
+				const added = [];
+				for (const topic of topics) {
+					const result = await topicOptouts.updateOne(
+						{ websiteId, address, topic },
+						{ $setOnInsert: { via, createdAt: at() } },
+						{ upsert: true },
+					);
+					if (result.upsertedCount === 1) added.push(topic);
+				}
+				return added;
+			},
+			/** @param {string[]} addresses */
+			byAddresses: async (addresses) => {
+				/** @type {Array<{ address: string, topic: string, via: string, createdAt: Date }>} */
+				const out = [];
+				for (const address of addresses)
+					out.push(
+						...as(
+							await topicOptouts
+								.find({ websiteId, address }, { projection: { _id: 0, address: 1, topic: 1, via: 1, createdAt: 1 } })
+								.toArray(),
+						),
+					);
+				return out;
+			},
+			/** @param {string[]} addresses */
+			deleteByAddresses: async (addresses) => {
+				let deleted = 0;
+				for (const address of addresses) deleted += (await topicOptouts.deleteMany({ websiteId, address })).deletedCount;
 				return deleted;
 			},
 		}),

@@ -19,16 +19,7 @@ import {
 	templateView,
 	valueNamesOf,
 } from '../core/templates.js';
-import {
-	RETRY_PLANS,
-	checkSendAt,
-	isQuietHour,
-	localTime,
-	nextAttemptAt,
-	quietUntil,
-	retryPlanOf,
-	withinLimits,
-} from '../core/timing.js';
+import { DEFAULT_QUIET_HOURS, checkSendAt, quietUntil, withinLimits } from '../core/timing.js';
 import {
 	WEBHOOK_EVENTS,
 	checkForwardedEvent,
@@ -407,46 +398,14 @@ describe('templates', () => {
 });
 
 describe('timing', () => {
-	it('retries a bounded number of times', () => {
-		expect(nextAttemptAt(1, 0)).toBe(60_000);
-		expect(nextAttemptAt(2, 0)).toBe(300_000);
-		expect(nextAttemptAt(3, 0)).toBeNull();
-		expect(nextAttemptAt(4, 0, { max: 5, delays: [1, 2] })).toBe(2);
-		// the long plan (PLAN 0.8.10 N3): now, then 5 and 15 minutes and 1, 3 and 6 hours later
-		const MIN = 60_000;
-		expect([1, 2, 3, 4, 5, 6].map((failed) => nextAttemptAt(failed, 0, RETRY_PLANS.long))).toEqual([
-			5 * MIN,
-			15 * MIN,
-			60 * MIN,
-			180 * MIN,
-			360 * MIN,
-			null,
-		]);
-		expect(retryPlanOf('long')).toBe('long');
-		expect(retryPlanOf(undefined)).toBe('short');
-		expect(retryPlanOf('weekly')).toBe('short');
-	});
-
-	it('holds non-urgent messages until the end of quiet hours in the recipient’s time zone', () => {
-		expect(isQuietHour(22, { startHour: 21, endHour: 8 })).toBe(true);
-		expect(isQuietHour(9, { startHour: 21, endHour: 8 })).toBe(false);
-		expect(isQuietHour(3, { startHour: 1, endHour: 6 })).toBe(true);
-		expect(isQuietHour(7, { startHour: 1, endHour: 6 })).toBe(false);
-		expect(isQuietHour(3, { startHour: 5, endHour: 5 })).toBe(false);
-		const at = Date.parse('2026-10-01T18:30:00Z');
-		expect(localTime(at, 'Asia/Tokyo')).toEqual({ hour: 3, minute: 30 });
-		expect(new Date(quietUntil(at, { startHour: 21, endHour: 8 }, 'Asia/Tokyo')).toISOString()).toBe(
-			'2026-10-01T23:00:00.000Z',
-		);
-		expect(quietUntil(at, { startHour: 21, endHour: 8 }, 'UTC')).toBe(at);
-	});
-
 	it('reads the wall clock in the business time zone, UTC when it is missing or unknown', () => {
 		const at = Date.parse('2026-10-01T18:30:00Z');
-		expect(localTime(at, 'America/New_York')).toEqual({ hour: 14, minute: 30 });
-		expect(localTime(at, null)).toEqual({ hour: 18, minute: 30 });
-		expect(localTime(at, 'Nowhere/Town')).toEqual({ hour: 18, minute: 30 });
-		expect(quietUntil(at, { startHour: 18, endHour: 7 }, undefined)).toBe(Date.parse('2026-10-02T07:00:00Z'));
+		const evening = [{ days: [0, 1, 2, 3, 4, 5, 6], from: '18:00', until: '07:00', channels: /** @type {any[]} */ ([]) }];
+		expect(quietUntil(at, evening, undefined, 'sms')).toBe(Date.parse('2026-10-02T07:00:00Z'));
+		expect(quietUntil(at, evening, 'Nowhere/Town', 'sms')).toBe(Date.parse('2026-10-02T07:00:00Z'));
+		// 14:30 in New York: not quiet there
+		expect(quietUntil(at, evening, 'America/New_York', 'sms')).toBe(at);
+		expect(quietUntil(at, DEFAULT_QUIET_HOURS, 'America/New_York', 'sms')).toBe(at);
 	});
 
 	it('checks send limits and send times', () => {

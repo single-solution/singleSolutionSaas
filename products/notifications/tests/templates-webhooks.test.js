@@ -251,8 +251,8 @@ describe('webhook URLs per event (N5)', () => {
 		expect(await read.json()).toEqual({ value: [] });
 		const settings = await (await env.call('GET', '/v1/settings', { token: env.server })).json();
 		const webhooks = settings.features.find((/** @type {any} */ f) => f.key === 'webhooks');
-		// one filter only, each URL's own events: the feature has no settings of its own
-		expect(Object.keys(webhooks.values)).toEqual([]);
+		// one filter only, each URL's own events: no Events setting; the limit of URLs and the retries (N8, N12)
+		expect(Object.keys(webhooks.values)).toEqual(['maxUrls', 'retryPlan', 'retryWaits']);
 		const value = [{ url: `${HOOKS}/first`, events: [] }];
 		expect((await env.call('PUT', '/v1/lists/webhook_urls', { token: env.server, body: { value } })).status).toBe(200);
 		// the dashboard reads the same list

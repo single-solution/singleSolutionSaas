@@ -74,8 +74,13 @@ describe('the website Setup sheet', () => {
 		]);
 		expect(on.build[3]).toEqual({ feature: 'webhooks', what: build.webhooks, docs: `${BASE}/docs#feature-webhooks` });
 
-		// one filter only: each URL's own events (the feature has no Events setting of its own)
-		expect(manifest.features.find((feature) => feature.key === 'webhooks')?.settings.properties).toEqual({});
+		// one filter only: each URL's own events (the feature has no Events setting of its own); its settings are the
+		// limit of URLs and the retries (fixed-choices N8, N12)
+		expect(Object.keys(manifest.features.find((feature) => feature.key === 'webhooks')?.settings.properties ?? {})).toEqual([
+			'maxUrls',
+			'retryPlan',
+			'retryWaits',
+		]);
 		// the OpenAPI document itself, public
 		const served = await env.call('GET', '/openapi.json');
 		expect(await served.json()).toEqual(openapi);

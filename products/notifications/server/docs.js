@@ -52,6 +52,8 @@ ${docsParagraph(guide.defaults)}
 ${docsParagraph(guide.retries)}
 <h2>Quiet hours, send limits and delayed send</h2>
 ${docsParagraph(guide.timing)}
+<h2>Unsubscribe topics</h2>
+${docsParagraph(guide.topics)}
 <h2>Languages</h2>
 ${docsParagraph(guide.languages)}
 <h2>Providers</h2>

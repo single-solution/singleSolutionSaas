@@ -117,7 +117,7 @@ describe('secrets never reach the delivery log (D11, SE-3)', () => {
 	});
 
 	it('keeps the real words sealed only while the message has attempts to make, also on the fallback channel', async () => {
-		await env.setting('fallback', 'whatsapp', 'sms');
+		await env.fallback('whatsapp', 'sms');
 		await env.template({
 			key: 'accounts.phone_code',
 			channel: 'whatsapp',

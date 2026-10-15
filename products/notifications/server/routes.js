@@ -10,7 +10,7 @@
  */
 import { isId } from '@ss/contracts';
 import { normalizeEmail } from '@ss/contracts/email';
-import { TEMPLATE_KEY } from '@ss/contracts/templates';
+import { TEMPLATE_KEY, TEXT_LIMITS } from '@ss/contracts/templates';
 import { actorOf, countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
 import { CHANNELS, CHANNEL_FEATURES, checkRecipient, normalisePhone } from '../core/channels.js';
 import { isOptOut, repliesOf } from '../core/inbound.js';
@@ -22,6 +22,7 @@ import {
 	checkValueNames,
 	checkValues,
 	isAccountKey,
+	isTitled,
 	languageOfSegment,
 	templateView,
 } from '../core/templates.js';
@@ -283,8 +284,11 @@ export const createRoutes = (product) => {
 				const checked = checkTemplate(ctx.body, await longValuesOf(key));
 				if (!checked.ok) return invalid(checked.field, checked.message);
 				if (!(await channelOn(ctx, checked.value.channel))) return channelOff(checked.value.channel);
-				const saved = await (await storeOf(ctx)).templates.save(checked.value);
-				if (saved === 'full') return problem('validation_failed', 'A website can have at most 1000 templates.');
+				// the setting templates.maxTemplates (fixed-choices N12)
+				const max = Number((await product.settings.values(ctx.websiteId, 'templates')).maxTemplates);
+				const saved = await (await storeOf(ctx)).templates.save(checked.value, { max });
+				if (saved === 'full')
+					return problem('validation_failed', `A website can have at most ${max} templates (Settings → Templates).`);
 				const t = checked.value;
 				await record(ctx, {
 					change: 'saved',
@@ -384,15 +388,38 @@ export const createRoutes = (product) => {
 			typeof code === 'string' && /^[A-Za-z0-9_-]{24}$/.test(code) ? await s.store.recipients.addressOf(code) : null;
 		if (!address)
 			return new Response(renderUnsubscribePage({ texts, theme, state: 'invalid' }), { status: 404, headers: PAGE_HEADERS });
+		// the topic the link names (a message with a topic): one-click unsubscribes from it only (fixed-choices N2)
+		const choices = await sending.choicesOf(s, address);
+		const named = typeof ctx.query.topic === 'string' ? ctx.query.topic : null;
+		const topic = choices.topics.some((entry) => entry.id === named) ? named : null;
 		if (step === 'ask') {
 			const business = (await product.business(websiteId)).name;
 			return new Response(
-				renderUnsubscribePage({ texts, theme, state: 'ask', business, action: `/unsubscribe/${websiteId}/${code}` }),
+				renderUnsubscribePage({
+					texts,
+					theme,
+					state: 'ask',
+					business,
+					action: `/unsubscribe/${websiteId}/${code}`,
+					// the link's topic is offered unticked; opening the page changes nothing
+					topics: choices.topics.map((entry) => ({ ...entry, subscribed: entry.subscribed && entry.id !== topic })),
+				}),
 				{ headers: PAGE_HEADERS },
 			);
 		}
-		await sending.unsubscribe(s, address, 'link');
-		return new Response(renderUnsubscribePage({ texts, theme, state: 'done' }), { headers: PAGE_HEADERS });
+		const form = new URLSearchParams(typeof ctx.rawBody === 'string' ? ctx.rawBody : '');
+		if (form.get('action') === 'save') {
+			const keep = form.getAll('topic').filter((id) => choices.topics.some((entry) => entry.id === id));
+			await sending.choose(s, address, keep);
+			return new Response(renderUnsubscribePage({ texts, theme, state: 'saved' }), { headers: PAGE_HEADERS });
+		}
+		// one-click (List-Unsubscribe=One-Click) from a topic's link leaves that topic only; the page's "all" button and a
+		// link without a topic leave every optional message
+		const oneClick = form.get('List-Unsubscribe') === 'One-Click';
+		await sending.unsubscribe(s, address, 'link', oneClick ? topic : null);
+		return new Response(renderUnsubscribePage({ texts, theme, state: oneClick && topic ? 'saved' : 'done' }), {
+			headers: PAGE_HEADERS,
+		});
 	};
 
 	return [
@@ -575,16 +602,37 @@ export const createRoutes = (product) => {
 			rateLimit: SEND_LIMITS,
 			handler: async (ctx) => {
 				const body = ctx.body ?? {};
-				if (!['email', 'sms', 'whatsapp'].includes(body.channel)) return invalid('channel', 'Pick email, SMS or WhatsApp.');
-				const channel = /** @type {'email' | 'sms' | 'whatsapp'} */ (body.channel);
-				const email = channel === 'email' ? normalizeEmail(body.to) : null;
-				const phone = channel === 'email' ? null : normalisePhone(body.to);
-				if (!email && !phone)
+				if (!CHANNELS.includes(body.channel)) return invalid('channel', `Pick one of ${CHANNELS.join(', ')}.`);
+				const channel = /** @type {Channel} */ (body.channel);
+				// transactional (required and urgent, the default) or marketing (optional: unsubscribes, quiet hours and send
+				// limits apply), fixed-choices N9
+				const kind = body.kind ?? 'transactional';
+				if (kind !== 'transactional' && kind !== 'marketing') return invalid('kind', 'kind is transactional or marketing.');
+				const s = await siteOf(ctx);
+				const topic = body.topic ?? null;
+				if (
+					topic !== null &&
+					(kind !== 'marketing' || !(await product.lists.topics(ctx.websiteId)).some((entry) => entry.id === topic))
+				)
+					return invalid('topic', 'A marketing message may name one of your unsubscribe topics.');
+				const id = typeof body.to === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.to) ? body.to : null;
+				const to = {
+					email: channel === 'email' ? normalizeEmail(body.to) : null,
+					phone: channel === 'sms' || channel === 'whatsapp' ? normalisePhone(body.to) : null,
+					subscriberId: channel === 'push' ? id : null,
+					staffId: channel === 'staff_push' ? id : null,
+					language: null,
+					timeZone: null,
+				};
+				if (!to.email && !to.phone && !to.subscriberId && !to.staffId)
 					return invalid(
 						'to',
-						channel === 'email' ? 'Enter an email address.' : 'Enter a phone number with its country code.',
+						channel === 'email'
+							? 'Enter an email address.'
+							: channel === 'push' || channel === 'staff_push'
+								? 'Enter the subscriber or staff id.'
+								: 'Enter a phone number with its country code.',
 					);
-				const to = { email, phone, subscriberId: null, staffId: null, language: null, timeZone: null };
 				// a saved template with sample values (the template editor's test send), else the words typed now
 				const template = body.template;
 				/** @type {Awaited<ReturnType<typeof sending.accept>>} */
@@ -598,7 +646,7 @@ export const createRoutes = (product) => {
 					const language = body.language === undefined ? null : languageOfSegment(body.language);
 					if (body.language !== undefined && language === null)
 						return invalid('language', 'Use a language code such as en, fr or pt-BR.');
-					result = await sending.accept(await siteOf(ctx), {
+					result = await sending.accept(s, {
 						channel,
 						template,
 						content: null,
@@ -618,16 +666,20 @@ export const createRoutes = (product) => {
 					const subject = typeof body.subject === 'string' ? body.subject.trim() : '';
 					if (text.length === 0 || text.length > 4096)
 						return invalid('text', 'Write the message (at most 4096 characters).');
-					if (channel === 'email' && (subject.length === 0 || subject.length > 200 || /[\r\n]/.test(subject)))
-						return invalid('subject', 'Write the subject (one line, at most 200 characters).');
-					result = await sending.accept(await siteOf(ctx), {
+					const titled = isTitled(channel);
+					if (titled && (subject.length === 0 || subject.length > 200 || /[\r\n]/.test(subject)))
+						return invalid('subject', 'Write the subject or title (one line, at most 200 characters).');
+					if (text.length > TEXT_LIMITS[channel])
+						return invalid('text', `Write the message (at most ${TEXT_LIMITS[channel]} characters).`);
+					result = await sending.accept(s, {
 						channel,
 						template: null,
-						content: { subject: channel === 'email' ? subject : '', text },
+						content: { subject: titled ? subject : '', text },
 						to,
 						values: {},
 						secretValues: [],
-						required: false,
+						required: kind === 'transactional',
+						topic,
 						language: null,
 						sendAt: null,
 						source: 'staff',
@@ -645,7 +697,7 @@ export const createRoutes = (product) => {
 						target: result.message.id,
 						// codes, never sentences (N10): the screens word them; a one-off message has no template key
 						label: template ?? result.message.id,
-						detail: `channel=${channel} status=${result.message.status}`,
+						detail: `channel=${channel}${template === undefined ? ` kind=${kind}` : ''} status=${result.message.status}`,
 					},
 				);
 				return created(messageView(result.message));

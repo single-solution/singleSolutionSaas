@@ -28,7 +28,8 @@ import { normalizeEmail } from '@ss/contracts/email';
 import { isNetError } from '@ss/net';
 import { problem } from '@ss/app-kit';
 import { signWebhook } from '@ss/protocol';
-import { CHANNEL_CONNECTIONS, CHANNEL_FEATURES, FALLBACK_CHANNELS, addressFor } from '../core/channels.js';
+import { CHANNEL_CONNECTIONS, CHANNEL_FEATURES, addressFor } from '../core/channels.js';
+import { fallbackChainOf } from '../core/choices.js';
 import {
 	DEFAULT_LANGUAGE,
 	hiddenNamesOf,
@@ -36,22 +37,13 @@ import {
 	isAccountKey,
 	isRequired,
 	isSensitive,
+	isTitled,
 	isUrgent,
 	metaLanguageOf,
 	pickVersion,
 	renderTemplate,
 } from '../core/templates.js';
-import {
-	DRAIN_BATCH,
-	LEASE_MS,
-	MAX_WEBHOOK_ATTEMPTS,
-	RETRY_PLANS,
-	WEBHOOK_DELAYS_MS,
-	nextAttemptAt,
-	quietUntil,
-	retryPlanOf,
-	withinLimits,
-} from '../core/timing.js';
+import { DRAIN_BATCH, LEASE_MS, RETRY_PRESETS, nextAttemptAt, quietUntil, retryDelaysOf, withinLimits } from '../core/timing.js';
 import { SIGNATURE_HEADER, urlsFor } from '../core/webhooks.js';
 import { messageAadOf } from '../adapters/crypto.js';
 import { createStore } from '../adapters/store.js';
@@ -74,7 +66,8 @@ import { failed } from '../core/gateway.js';
  * @property {Recipient} to
  * @property {Record<string, string>} values
  * @property {string[]} secretValues the values the sender names as secret: the delivery log hides them
- * @property {boolean} required the sender marks the message required (sent whatever the recipient unsubscribed from)
+ * @property {boolean} required the sender marks the message required (sent whatever the recipient unsubscribed from); a
+ *   one-off message is required and urgent (transactional) or neither (marketing, fixed-choices N9)
  * @property {string | null} language
  * @property {number | null} sendAt
  * @property {'api' | 'staff'} source
@@ -83,6 +76,7 @@ import { failed } from '../core/gateway.js';
  * @property {string | null} fallbackTemplate the template key whose website template is used when the website has none
  *   of its own for `template`, before the defaults (null: none)
  * @property {string[]} longValues the values of a product's message that hold long text (`[]`: none)
+ * @property {string | null} [topic] a one-off marketing message's unsubscribe topic (a template's comes from its settings)
  */
 /** @typedef {import('../core/templates.js').Template} Template */
 /** @typedef {import('../core/gateway.js').SendOutcome} SendOutcome */
@@ -131,6 +125,7 @@ export const messageView = (message) => ({
 	status: message.status,
 	reason: message.reason,
 	reasonValues: message.reasonValues ?? {},
+	topic: message.topic ?? null,
 	subject: message.subject,
 	text: message.text,
 	attempts: message.attempts.map((attempt) => ({
@@ -166,6 +161,36 @@ export const createSending = (product) => {
 	});
 
 	/**
+	 * The unsubscribe link of an address: on a message with a topic it names the topic (one-click unsubscribes from it
+	 * only; the page lets the recipient choose per topic).
+	 * @param {Site} s @param {string} address @param {string | null} topic
+	 */
+	const unsubscribeLinkOf = async (s, address, topic) =>
+		`${s.base}/unsubscribe/${s.websiteId}/${await s.store.recipients.codeOf(address)}${topic ? `?topic=${topic}` : ''}`;
+
+	/**
+	 * The merchant's settings of a template key (fixed-choices N2, N5, N7) and the website's topics: its topic counts only
+	 * while it is still one of the topics.
+	 * @param {Site} s @param {string | null} key
+	 */
+	const settingsOf = async (s, key) => {
+		const [templates, topics] = await Promise.all([
+			product.lists.templateSettings(s.websiteId),
+			product.lists.topics(s.websiteId),
+		]);
+		const own = key === null ? undefined : templates.find((entry) => entry.key === key);
+		const topic = own?.topic && topics.some((entry) => entry.id === own.topic) ? own.topic : null;
+		return { templates, topic, capped: own?.capped ?? null };
+	};
+
+	/**
+	 * Whether an address unsubscribed from a message: from every optional message, or from its topic.
+	 * @param {Site} s @param {string} address @param {string | null} topic
+	 */
+	const optedOut = async (s, address, topic) =>
+		(await s.store.optouts.has(address)) || (topic !== null && (await s.store.topicOptouts.has(address, topic)));
+
+	/**
 	 * The words of a template on a channel for a recipient, with the unsubscribe link of optional templates: as sent, and
 	 * as the delivery log keeps them, with every value of a sensitive template and the values named secret hidden.
 	 * The website's own template comes first (the recipient's language, else its default version), then its template
@@ -175,12 +200,12 @@ export const createSending = (product) => {
 	 * @param {Site} s
 	 * @param {{ key: string, fallbackKey: string | null, channel: Channel, address: string, values: Record<string, string>,
 	 *   language: string | null, secretValues: string[], defaults: Partial<Record<Channel, Template>>,
-	 *   longValues: string[] }} input
+	 *   longValues: string[], topic: string | null }} input
 	 * @returns {Promise<({ required: boolean, urgent: boolean } & Made) | null>} null when there is no template
 	 */
 	const fromTemplate = async (
 		s,
-		{ key, fallbackKey, channel, address, values, language, secretValues, defaults, longValues },
+		{ key, fallbackKey, channel, address, values, language, secretValues, defaults, longValues, topic },
 	) => {
 		/** @param {string} templateKey */
 		const ownOf = async (templateKey) =>
@@ -188,9 +213,7 @@ export const createSending = (product) => {
 		const version = (await ownOf(key)) ?? (fallbackKey ? await ownOf(fallbackKey) : null) ?? defaults[channel] ?? null;
 		if (!version) return null;
 		/** @type {Record<string, string>} */
-		const builtIn = version.required
-			? {}
-			: { unsubscribeUrl: `${s.base}/unsubscribe/${s.websiteId}/${await s.store.recipients.codeOf(address)}` };
+		const builtIn = version.required ? {} : { unsubscribeUrl: await unsubscribeLinkOf(s, address, topic) };
 		const fit = {
 			longValues,
 			note: longValues.length === 0 ? '' : String((await product.settings.texts(s.websiteId))['message.shortened']),
@@ -255,16 +278,16 @@ export const createSending = (product) => {
 	};
 
 	/**
-	 * The retry plan of a channel's setting `retryPlan` (email, SMS and WhatsApp; push channels retry on the short
-	 * plan). A message keeps the plan it was accepted with (PLAN 0.8.10 N3).
+	 * The retry waits of a channel's settings `retryPlan` and `retryWaits` (fixed-choices N8: a preset or the merchant's
+	 * own minutes). A message keeps the waits it was accepted with (PLAN 0.8.10 N3).
 	 * @param {Site} s
 	 * @param {Channel} channel
-	 * @returns {Promise<import('../core/timing.js').RetryPlan>}
+	 * @returns {Promise<number[]>}
 	 */
-	const planOf = async (s, channel) =>
-		channel === 'email' || channel === 'sms' || channel === 'whatsapp'
-			? retryPlanOf((await product.settings.values(s.websiteId, channel)).retryPlan)
-			: 'short';
+	const retryDelaysFor = async (s, channel) => {
+		const { retryPlan, retryWaits } = await product.settings.values(s.websiteId, CHANNEL_FEATURES[channel]);
+		return retryDelaysOf(retryPlan, retryWaits, 'short');
+	};
 
 	/**
 	 * When a finished message or webhook event (sent, failed or skipped) leaves the delivery log: the setting's days from
@@ -355,7 +378,7 @@ export const createSending = (product) => {
 				const replyTo = normalizeEmail((await product.settings.values(s.websiteId, 'email')).replyTo);
 				if (replyTo) extra.replyTo = replyTo;
 				if (!message.required) {
-					const link = `${s.base}/unsubscribe/${s.websiteId}/${await s.store.recipients.codeOf(message.address)}`;
+					const link = await unsubscribeLinkOf(s, message.address, message.topic ?? null);
 					extra.headers = { 'List-Unsubscribe': `<${link}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' };
 				}
 			}
@@ -413,54 +436,64 @@ export const createSending = (product) => {
 	};
 
 	/**
-	 * Where a failed message goes next: the fallback channel of its channel (settings), when that feature is on, the
-	 * recipient has an address there, a template exists for it and they did not unsubscribe there. The answer is what
-	 * the message keeps there (its values still hidden).
+	 * Where a failed message goes next (fixed-choices N7): the first of its fallback channels (kept from when it was
+	 * accepted: its template's own, else the website's for its channel) that is on, where the recipient has an address and
+	 * has not unsubscribed (a required message goes anyway), where the message is not switched off and a template exists
+	 * for it. The answer is what the message keeps there (its values still hidden) and the channels still left after it.
 	 * @param {Site} s
 	 * @param {MessageRecord} message with its real values and words
-	 * @returns {Promise<(ReturnType<typeof keep> & { channel: Channel, address: string }) | null>}
+	 * @returns {Promise<(ReturnType<typeof keep> & { channel: Channel, address: string, fallbackChain: Channel[] }) | null>}
 	 */
 	const fallbackOf = async (s, message) => {
-		if (message.fellBack || !s.on.includes('fallback') || !FALLBACK_CHANNELS.includes(/** @type {any} */ (message.channel)))
-			return null;
-		const target = /** @type {Channel | 'none'} */ ((await product.settings.values(s.websiteId, 'fallback'))[message.channel]);
-		if (target === 'none' || !s.on.includes(CHANNEL_FEATURES[target])) return null;
-		const address = addressFor(target, message.to);
-		if (!address) return null;
-		if (!message.required && (await s.store.optouts.has(address))) return null;
-		if (message.template !== null && (await switchedOff(s, message.template, message.fallbackTemplate ?? null, target)))
-			return null;
-		if (message.template === null) {
-			if (target === 'email' && message.subject === '') return null;
-			/** @type {Words} */
-			const words = {
-				subject: target === 'email' ? message.subject : '',
-				text: message.text,
-				parameters: [],
-				providerTemplate: '',
-				buttons: [],
-				language: DEFAULT_LANGUAGE,
-			};
-			return {
+		if (!s.on.includes('fallback')) return null;
+		const chain = message.fallbackChain ?? [];
+		for (const [at, target] of chain.entries()) {
+			const left = chain.slice(at + 1);
+			if (!s.on.includes(CHANNEL_FEATURES[target])) continue;
+			const address = addressFor(target, message.to);
+			if (!address) continue;
+			if (!message.required && (await optedOut(s, address, message.topic ?? null))) continue;
+			if (message.template !== null && (await switchedOff(s, message.template, message.fallbackTemplate ?? null, target)))
+				continue;
+			if (message.template === null) {
+				if (isTitled(target) && message.subject === '') continue;
+				/** @type {Words} */
+				const words = {
+					subject: isTitled(target) ? message.subject : '',
+					text: message.text,
+					parameters: [],
+					providerTemplate: '',
+					buttons: [],
+					language: DEFAULT_LANGUAGE,
+				};
+				return {
+					channel: target,
+					address,
+					fallbackChain: left,
+					...keep(s, { channel: target, address, values: message.values, words, shown: words, hidden: [] }),
+				};
+			}
+			const made = await fromTemplate(s, {
+				key: message.template,
+				fallbackKey: message.fallbackTemplate ?? null,
 				channel: target,
 				address,
-				...keep(s, { channel: target, address, values: message.values, words, shown: words, hidden: [] }),
-			};
+				values: message.values,
+				language: message.to.language,
+				secretValues: message.hidden,
+				defaults: message.defaults ?? {},
+				longValues: message.longValues ?? [],
+				topic: message.topic ?? null,
+			});
+			if (made)
+				return {
+					channel: target,
+					address,
+					fallbackChain: left,
+					...keep(s, { channel: target, address, values: message.values, ...made }),
+				};
 		}
-		const made = await fromTemplate(s, {
-			key: message.template,
-			fallbackKey: message.fallbackTemplate ?? null,
-			channel: target,
-			address,
-			values: message.values,
-			language: message.to.language,
-			secretValues: message.hidden,
-			defaults: message.defaults ?? {},
-			longValues: message.longValues ?? [],
-		});
-		return made
-			? { channel: target, address, ...keep(s, { channel: target, address, values: message.values, ...made }) }
-			: null;
+		return null;
 	};
 
 	/**
@@ -513,7 +546,7 @@ export const createSending = (product) => {
 			return sent;
 		}
 		const tries = message.channelAttempts + 1;
-		const next = result.retryable ? nextAttemptAt(tries, now(), RETRY_PLANS[message.retryPlan]) : null;
+		const next = result.retryable ? nextAttemptAt(tries, now(), message.retryDelays ?? RETRY_PRESETS.short) : null;
 		const why = { reason: result.reason, reasonValues: result.values ?? null };
 		if (next !== null)
 			return s.store.messages.update(message.id, {
@@ -530,7 +563,7 @@ export const createSending = (product) => {
 				...fallback,
 				attempts,
 				channelAttempts: 0,
-				retryPlan: await planOf(s, fallback.channel),
+				retryDelays: await retryDelaysFor(s, fallback.channel),
 				fellBack: true,
 				defaults: null,
 				status: 'queued',
@@ -580,6 +613,9 @@ export const createSending = (product) => {
 		/** Set when a product's message has no WhatsApp template of the merchant's: it fails at once (parity P1). */
 		let notSetUp = false;
 		const declared = Object.values(input.defaults);
+		const chosen = await settingsOf(s, input.template);
+		// a template's topic comes from its settings; a one-off marketing message names its own
+		const topic = input.template === null ? (input.topic ?? null) : chosen.topic;
 		if (input.template !== null) {
 			if (await switchedOff(s, input.template, input.fallbackTemplate, input.channel))
 				return {
@@ -603,8 +639,11 @@ export const createSending = (product) => {
 						reasonValues: null,
 						attempts: [],
 						channelAttempts: 0,
-						retryPlan: 'short',
+						retryDelays: [],
 						fellBack: false,
+						fallbackChain: [],
+						topic: null,
+						capped: false,
 						dueAt: new Date(now()),
 						leaseUntil: null,
 						sentAt: null,
@@ -621,6 +660,7 @@ export const createSending = (product) => {
 				secretValues: input.secretValues,
 				defaults: input.defaults,
 				longValues: input.longValues,
+				topic,
 			});
 			if (found) made = found;
 			else if (input.channel === 'whatsapp' && (await product.defaults.ownerOf(input.template)) !== null) {
@@ -644,7 +684,8 @@ export const createSending = (product) => {
 				};
 		} else {
 			const content = /** @type {{ subject: string, text: string }} */ (input.content);
-			// a one-off message from the merchant's staff is written for this person now: required and urgent
+			// a one-off message from the merchant's staff is written for this person now: transactional (required and
+			// urgent) or marketing (neither: unsubscribes, quiet hours and send limits apply)
 			/** @type {Words} */
 			const words = {
 				subject: content.subject,
@@ -654,9 +695,11 @@ export const createSending = (product) => {
 				buttons: [],
 				language: DEFAULT_LANGUAGE,
 			};
-			made = { required: true, urgent: true, words, shown: words, hidden: [] };
+			made = { required: input.required, urgent: input.required, words, shown: words, hidden: [] };
 		}
 		const t = now();
+		const required = made.required || input.required;
+		const limits = s.on.includes('send_limits') ? await product.settings.values(s.websiteId, 'send_limits') : null;
 		/** @type {Omit<MessageRecord, 'id' | 'createdAt'>} */
 		const base = {
 			template: input.template,
@@ -668,20 +711,28 @@ export const createSending = (product) => {
 			...keep(s, { channel: input.channel, address, values: input.values, ...made }),
 			defaults: declared.length > 0 ? input.defaults : null,
 			...(input.longValues.length > 0 ? { longValues: input.longValues } : {}),
-			required: made.required || input.required,
+			required,
 			urgent: made.urgent,
 			status: 'queued',
 			reason: null,
 			reasonValues: null,
 			attempts: [],
 			channelAttempts: 0,
-			retryPlan: await planOf(s, input.channel),
+			retryDelays: await retryDelaysFor(s, input.channel),
 			fellBack: false,
+			// its fallback channels, kept: its template's own, else the website's for its channel (fixed-choices N7)
+			fallbackChain: fallbackChainOf(
+				{ channel: input.channel, template: input.template },
+				{ templates: chosen.templates, chains: await product.lists.fallbackChains(s.websiteId) },
+			),
+			topic,
+			// send limits count it: as its template says, else every message ("all") or only optional ones (N5)
+			capped: chosen.capped ?? (limits?.counts === 'all' || !required),
 			dueAt: new Date(t),
 			leaseUntil: null,
 			sentAt: null,
 		};
-		if (!base.required && (await s.store.optouts.has(address)))
+		if (!base.required && (await optedOut(s, address, topic)))
 			return {
 				ok: true,
 				message: await s.store.messages.add({
@@ -694,8 +745,7 @@ export const createSending = (product) => {
 					expireAt: await expiryOf(s),
 				}),
 			};
-		if (s.on.includes('send_limits')) {
-			const limits = await product.settings.values(s.websiteId, 'send_limits');
+		if (limits && base.capped) {
 			const sent = {
 				lastHour: await s.store.messages.sentSince(address, t - 3_600_000),
 				lastDay: await s.store.messages.sentSince(address, t - 86_400_000),
@@ -724,9 +774,9 @@ export const createSending = (product) => {
 		// Accounts' messages (sign-in codes and links) go at once: a delayed send never holds them either
 		let dueAt = input.template !== null && isAccountKey(input.template) ? t : (input.sendAt ?? t);
 		if (!made.urgent && s.on.includes('quiet_hours')) {
-			const quiet = await product.settings.values(s.websiteId, 'quiet_hours');
+			const windows = await product.lists.quietHours(s.websiteId);
 			const timeZone = input.to.timeZone ?? (await product.business(s.websiteId)).timeZone ?? 'UTC';
-			dueAt = quietUntil(dueAt, { startHour: Number(quiet.startHour), endHour: Number(quiet.endHour) }, timeZone);
+			dueAt = quietUntil(dueAt, windows, timeZone, input.channel);
 		}
 		const now_ = dueAt <= t;
 		const message = await s.store.messages.add({
@@ -773,7 +823,9 @@ export const createSending = (product) => {
 				expireAt: await expiryOf(s),
 			});
 		const attempts = event.attempts + 1;
-		const next = nextAttemptAt(attempts, now(), { max: MAX_WEBHOOK_ATTEMPTS, delays: WEBHOOK_DELAYS_MS });
+		// the webhooks' retry setting when it is retried (fixed-choices N8; standard by default)
+		const { retryPlan, retryWaits } = await product.settings.values(s.websiteId, 'webhooks');
+		const next = nextAttemptAt(attempts, now(), retryDelaysOf(retryPlan, retryWaits, 'standard'));
 		return s.store.events.update(event.id, {
 			attempts,
 			lastError: error,
@@ -790,7 +842,7 @@ export const createSending = (product) => {
 		for (let i = 0; i < DRAIN_BATCH; i += 1) {
 			const message = await s.store.messages.claimDue();
 			if (!message) break;
-			if (!message.required && (await s.store.optouts.has(message.address)))
+			if (!message.required && (await optedOut(s, message.address, message.topic ?? null)))
 				await s.store.messages.update(message.id, {
 					status: 'skipped',
 					reason: 'unsubscribed',
@@ -810,16 +862,52 @@ export const createSending = (product) => {
 	};
 
 	/**
-	 * Unsubscribe an address from optional messages (link or keyword); tells the webhooks once.
+	 * Unsubscribe an address from every optional message, or from one topic (link or keyword); tells the webhooks once
+	 * (`topic` names the topic, null: every optional message).
 	 * @param {Site} s
 	 * @param {string} address
 	 * @param {'link' | 'keyword'} via
+	 * @param {string | null} [topic]
 	 */
-	const unsubscribe = async (s, address, via) => {
-		if (await s.store.optouts.add(address, via)) await emit(s, 'recipient.unsubscribed', { address, via });
+	const unsubscribe = async (s, address, via, topic = null) => {
+		const added =
+			topic === null
+				? await s.store.optouts.add(address, via)
+				: (await s.store.topicOptouts.set(address, [topic], via, { only: false })).length > 0;
+		if (added) await emit(s, 'recipient.unsubscribed', { address, via, topic });
 	};
 
-	return Object.freeze({ site, accept, drain, unsubscribe, relay });
+	/**
+	 * A recipient's choices on the hosted page (fixed-choices N2): the topics they keep; every other topic of the website
+	 * is unsubscribed, and "every optional message" is lifted. Tells the webhooks of each topic newly unsubscribed.
+	 * @param {Site} s
+	 * @param {string} address
+	 * @param {string[]} keep the topic ids the recipient keeps
+	 */
+	const choose = async (s, address, keep) => {
+		const topics = await product.lists.topics(s.websiteId);
+		const dropped = topics.map((topic) => topic.id).filter((id) => !keep.includes(id));
+		await s.store.optouts.remove(address);
+		for (const topic of await s.store.topicOptouts.set(address, dropped, 'link', { only: true }))
+			await emit(s, 'recipient.unsubscribed', { address, via: 'link', topic });
+	};
+
+	/**
+	 * A recipient's choices as the hosted page shows them: unsubscribed from every optional message, and the topics they
+	 * still get.
+	 * @param {Site} s
+	 * @param {string} address
+	 */
+	const choicesOf = async (s, address) => {
+		const [all, topics, out] = await Promise.all([
+			s.store.optouts.has(address),
+			product.lists.topics(s.websiteId),
+			s.store.topicOptouts.of(address),
+		]);
+		return { all, topics: topics.map((topic) => ({ ...topic, subscribed: !all && !out.includes(topic.id) })) };
+	};
+
+	return Object.freeze({ site, accept, drain, unsubscribe, choose, choicesOf, relay });
 };
 
 /** @typedef {ReturnType<typeof createSending>} Sending */

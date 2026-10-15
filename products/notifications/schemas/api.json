@@ -64,6 +64,7 @@
 				"status",
 				"reason",
 				"reasonValues",
+				"topic",
 				"subject",
 				"text",
 				"attempts",
@@ -99,10 +100,14 @@
 				},
 				"reason": {
 					"type": ["string", "null"],
-					"description": "A code, never a sentence. skipped: unsubscribed, limited (over a send limit) or switched_off (the product's message is switched off on this channel); retrying and failed: why the last attempt failed (see Attempt.reason; a product's message on WhatsApp without your WhatsApp template fails as not_set_up); else null."
+					"description": "A code, never a sentence. skipped: unsubscribed (from every optional message, or from its topic), limited (over a send limit) or switched_off (the product's message is switched off on this channel); retrying and failed: why the last attempt failed (see Attempt.reason; a product's message on WhatsApp without your WhatsApp template fails as not_set_up); else null."
 				},
 				"reasonValues": {
 					"$ref": "#/components/schemas/ReasonValues"
+				},
+				"topic": {
+					"type": ["string", "null"],
+					"description": "The unsubscribe topic it belongs to (its template's settings, or a marketing one-off message's topic); null: none. A recipient unsubscribed from the topic does not get it unless it is required."
 				},
 				"subject": {
 					"type": "string",
@@ -1116,26 +1121,34 @@
 	},
 	"POST /v1/admin/messages": {
 		"summary": "Send a message from your staff (send message and template editor widgets)",
-		"description": "Without template: a one-off message with the words typed now, required and urgent (it ignores unsubscribes and quiet hours, not send limits). With template: the saved template with sample values (the template editor's test send). Either is logged as a staff message and in the activity log. The answer is the message as the delivery log keeps it. 422 validation_failed for a field; 422 template_not_found. Send an Idempotency-Key so a retried request sends once.",
+		"description": "Without template: a one-off message with the words typed now, transactional by default (required and urgent: it ignores unsubscribes, quiet hours and send limits that count optional messages only) or marketing (optional: unsubscribes, its topic, quiet hours and send limits apply). It may go by email, SMS, WhatsApp, browser push (to a subscriber id) or staff push (to a staff user id). With template: the saved template with sample values (the template editor's test send). Either is logged as a staff message and in the activity log. The answer is the message as the delivery log keeps it. 422 validation_failed for a field; 422 template_not_found. Send an Idempotency-Key so a retried request sends once.",
 		"body": {
 			"type": "object",
 			"required": ["channel", "to"],
 			"properties": {
 				"channel": {
-					"type": "string",
-					"enum": ["email", "sms", "whatsapp"]
+					"$ref": "#/components/schemas/Channel"
 				},
 				"to": {
 					"type": "string",
-					"description": "An email address for email; a phone number with its calling code for sms and whatsapp."
+					"description": "An email address for email; a phone number with its calling code for sms and whatsapp; the browser's subscriber id for push; the staff user id for staff_push."
 				},
 				"subject": {
 					"type": "string",
-					"description": "A one-off email: required, one line of at most 200 characters (trimmed)."
+					"description": "A one-off email or push: required, one line of at most 200 characters (trimmed)."
 				},
 				"text": {
 					"type": "string",
-					"description": "A one-off message: required, at most 4096 characters (trimmed)."
+					"description": "A one-off message: required, at most 4096 characters (500 on push and staff push; trimmed)."
+				},
+				"kind": {
+					"type": "string",
+					"enum": ["transactional", "marketing"],
+					"description": "A one-off message: transactional (the default; required and urgent) or marketing (optional)."
+				},
+				"topic": {
+					"type": "string",
+					"description": "A marketing message: one of your unsubscribe topics (the list topics)."
 				},
 				"template": {
 					"type": "string",
