@@ -1344,7 +1344,9 @@ describe('admin widgets', () => {
 			sessionHours: 24,
 			rememberDays: 30,
 			rank: 900,
-			ready: true,
+			signUp: true,
+			membership: false,
+			system: true,
 		},
 		{
 			key: 'owner',
@@ -1355,7 +1357,9 @@ describe('admin widgets', () => {
 			sessionHours: 12,
 			rememberDays: 0,
 			rank: 100,
-			ready: true,
+			signUp: false,
+			membership: true,
+			system: true,
 		},
 		{
 			key: 'helper',
@@ -1366,7 +1370,9 @@ describe('admin widgets', () => {
 			sessionHours: 8,
 			rememberDays: 7,
 			rank: 600,
-			ready: false,
+			signUp: false,
+			membership: true,
+			system: false,
 		},
 	];
 
@@ -1942,7 +1948,7 @@ describe('admin widgets', () => {
 			'PUT /v1/admin/roles/helper': ({ body }) => {
 				saved.push(body);
 				roles = roles.map((role) => (role.key === 'helper' ? { ...role, ...body } : role));
-				return answer(200, { key: 'helper', ...body, ready: false });
+				return answer(200, { key: 'helper', ...body, system: false });
 			},
 			'PUT /v1/admin/roles/helper_copy': ({ body }) => {
 				saved.push(body);
@@ -1950,8 +1956,8 @@ describe('admin widgets', () => {
 					return problem(422, 'validation_failed', {
 						errors: [{ path: '/sessionHours', message: 'Session length is 1 to 720 hours.' }],
 					});
-				roles = [...roles, { key: 'helper_copy', ...body, ready: false }];
-				return answer(200, { key: 'helper_copy', ...body, ready: false });
+				roles = [...roles, { key: 'helper_copy', ...body, system: false }];
+				return answer(200, { key: 'helper_copy', ...body, system: false });
 			},
 			'DELETE /v1/admin/roles/helper': () => {
 				roles = roles.filter((role) => role.key !== 'helper');
@@ -1965,11 +1971,13 @@ describe('admin widgets', () => {
 		const root = shadow(host);
 		const rows = [...root.querySelectorAll('ul > li')];
 		expect(rows.map((li) => li.querySelector('.meta')?.textContent)).toEqual([
-			`customer · 0 permissions · Rank 900 · ${strings['roles.readyMade']}`,
-			`owner · ${strings['roles.allPermissions']} · Rank 100 · ${strings['roles.readyMade']}`,
+			`customer · 0 permissions · Rank 900 · ${strings['roles.signUpRole']} · ${strings['roles.system']}`,
+			`owner · ${strings['roles.allPermissions']} · Rank 100 · ${strings['roles.system']}`,
 			'helper · 2 permissions · Rank 600',
 		]);
 		expect(rows[0]?.textContent).not.toContain(strings['roles.delete']);
+		expect(rows[1]?.textContent).not.toContain(strings['roles.delete']);
+		expect(rows[2]?.textContent).toContain(strings['roles.delete']);
 		const form = /** @type {HTMLElement} */ (root.querySelector('form'));
 		expect(form.querySelector('h3')?.textContent).toBe(strings['roles.newRole']);
 
@@ -2008,6 +2016,8 @@ describe('admin widgets', () => {
 			remember: 'ask',
 			signIn: 'on',
 			logSignIns: false,
+			signUp: false,
+			membership: true,
 			methods: [],
 		});
 		expect(statusIn(form)).toBe(strings['roles.saved']);
@@ -2128,11 +2138,22 @@ describe('admin widgets', () => {
 		expect(root.querySelector('ul > li .meta')?.textContent).toContain(strings['roles.paused']);
 		await click(buttonIn(/** @type {HTMLElement} */ (root.querySelectorAll('ul > li')[0]), strings['roles.edit']));
 		const form = /** @type {HTMLElement} */ (root.querySelector('form'));
-		expect(fieldIn(form, strings['roles.rank']).disabled).toBe(true);
+		// the sign-up role: its rank is the merchant's; the sign-up choice moves only by choosing another role
+		expect(fieldIn(form, strings['roles.rank']).disabled).toBe(false);
 		expect(fieldIn(form, strings['roles.signIn']).value).toBe('paused');
+		expect(checkIn(form, strings['roles.signUp']).checked).toBe(true);
+		expect(checkIn(form, strings['roles.signUp']).disabled).toBe(true);
+		expect(checkIn(form, strings['roles.membership']).checked).toBe(false);
+		// Owner: rank 100, never the sign-up role
+		await click(buttonIn(/** @type {HTMLElement} */ (root.querySelectorAll('ul > li')[1]), strings['roles.edit']));
+		expect(fieldIn(form, strings['roles.rank']).disabled).toBe(true);
+		expect(checkIn(form, strings['roles.signUp']).disabled).toBe(true);
 		await click(buttonIn(/** @type {HTMLElement} */ (root.querySelectorAll('ul > li')[2]), strings['roles.edit']));
 		expect(fieldIn(form, strings['roles.rank']).disabled).toBe(false);
 		fieldIn(form, strings['roles.rank']).value = '450';
+		expect(checkIn(form, strings['roles.signUp']).disabled).toBe(false);
+		checkIn(form, strings['roles.signUp']).checked = true;
+		checkIn(form, strings['roles.membership']).checked = false;
 		const rememberChoices = [...fieldIn(form, strings['roles.remember']).querySelectorAll('option')].map((o) => o.value);
 		expect(rememberChoices).toEqual(['ask', 'ask_ticked', 'always', 'never']);
 		fieldIn(form, strings['roles.remember']).value = 'never';
@@ -2143,6 +2164,8 @@ describe('admin widgets', () => {
 		await submit(buttonIn(form, strings['roles.save']));
 		expect(saved[0]).toMatchObject({
 			rank: 450,
+			signUp: true,
+			membership: false,
 			remember: 'never',
 			methods: ['email_password'],
 			logSignIns: true,
@@ -2549,6 +2572,7 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 			hasPassword: false,
 			role: 'member',
 			roleName: 'Member',
+			membership: true,
 			roleSince: at(0),
 			addresses: [
 				{ id: 'adr_000001', label: 'Home', line1: '1 Main St', area: 'Camden', city: 'London', default: true },

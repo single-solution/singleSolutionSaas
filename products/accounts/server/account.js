@@ -25,13 +25,14 @@ export const createAccount = (product, service, flows) => {
 	const { now, sealer } = product;
 
 	/**
-	 * The user as they see themselves, with their role's name while Roles is on ("Member since", A5).
+	 * The user as they see themselves, with their role's name while Roles is on and whether the role shows as a
+	 * membership ("Member since", A4, A5).
 	 * @param {import('./service.js').Site} s @param {import('../core/profile.js').UserRecord} user
 	 */
-	const meView = async (s, user) => ({
-		...selfView(user),
-		roleName: s.on.includes('roles') ? (await service.roleOf(s, user)).name : null,
-	});
+	const meView = async (s, user) => {
+		const role = s.on.includes('roles') ? await service.roleOf(s, user) : null;
+		return { ...selfView(user), roleName: role?.name ?? null, membership: role?.membership === true };
+	};
 
 	/** @param {any} ctx */
 	const me = async (ctx) => {

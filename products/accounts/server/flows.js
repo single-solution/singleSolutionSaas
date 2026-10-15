@@ -10,7 +10,7 @@ import { phoneInCountries } from '@ss/contracts/phone';
 import { normalizeEmail } from '@ss/contracts/email';
 import { constantTimeEqual, randomToken, sha256Hex } from '@ss/protocol';
 import { checkCustomValues, checkName, identityOfMethod, resetsByEmail, selfView } from '../core/profile.js';
-import { DEFAULT_ROLE, sessionEnd } from '../core/roles.js';
+import { sessionEnd } from '../core/roles.js';
 import {
 	CODE_ATTEMPTS,
 	CODE_COOLDOWN_SECONDS,
@@ -78,8 +78,12 @@ const weak = (detail, extensions) => problem('weak_password', detail, { extensio
 export const invalid = (field, message) =>
 	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code: 'invalid' }] });
 
-/** A new user's empty profile (the store sets `roleSince`). @returns {Omit<UserRecord, 'id' | 'createdAt' | 'roleSince'>} */
-const blankUser = () => ({
+/**
+ * A new user's empty profile with their role (the store sets `roleSince`).
+ * @param {string} role
+ * @returns {Omit<UserRecord, 'id' | 'createdAt' | 'roleSince'>}
+ */
+const blankUser = (role) => ({
 	email: null,
 	emailVerified: false,
 	phone: null,
@@ -90,7 +94,7 @@ const blankUser = () => ({
 	notes: '',
 	blocked: null,
 	status: 'active',
-	role: DEFAULT_ROLE,
+	role,
 	providers: {},
 	passwordHash: null,
 	twoStep: null,
@@ -170,9 +174,9 @@ export const createFlows = (product, service) => {
 	};
 
 	/**
-	 * Create a user from a sign-up; `pending` when approval is required. Refused while the default role's sign-in is
-	 * paused or does not allow the method (A6). The account keeps the address it was made with (its identity), which
-	 * Forgot password by email goes by.
+	 * Create a user from a sign-up, with the role for new sign-ups (A4); `pending` when approval is required. Refused
+	 * while that role's sign-in is paused or does not allow the method (A6). The account keeps the address it was made
+	 * with (its identity), which Forgot password by email goes by.
 	 * @param {Site} s @param {Awaited<ReturnType<typeof signUpProfile>>} profile @param {Partial<UserRecord>} extra
 	 * @param {ReturnType<Service['howOf']>} how @param {string} method
 	 */
@@ -180,7 +184,7 @@ export const createFlows = (product, service) => {
 		await service.allowCode(s, null, method);
 		const risk = await riskCheck(s, profile.email, how);
 		const user = await s.store.users.create({
-			...blankUser(),
+			...blankUser((await service.signUpRole(s)).key),
 			email: profile.email,
 			phone: profile.phone,
 			name: profile.name ?? '',

@@ -130,8 +130,8 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 				const { section, note } = part(t('account.profile'));
 				if (user.email) section.append(para(formatText(t('account.email'), { email: user.email }), 'meta'));
 				if (user.phone) section.append(para(formatText(t('account.phone'), { phone: user.phone }), 'meta'));
-				// "Member since" (PLAN 0.8.10 A5): the role and when it was given
-				if (user.role && user.role !== 'customer' && user.roleSince)
+				// "Member since" (PLAN 0.8.10 A5): the role and when it was given, for a role shown as a membership (A4)
+				if (user.membership && user.roleSince)
 					section.append(
 						para(
 							formatText(t('account.memberSince'), {

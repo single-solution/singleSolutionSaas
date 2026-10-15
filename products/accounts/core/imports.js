@@ -15,7 +15,7 @@ import { normalizeEmail } from '@ss/contracts/email';
 import { normalisePhone } from '@ss/contracts/phone';
 import { isObject } from '@ss/contracts/util';
 import { MAX_ADDRESSES, checkAddresses, checkCustomValues, checkFieldDefinition, checkName } from './profile.js';
-import { DEFAULT_ROLE, READY_ROLES, checkRole } from './roles.js';
+import { checkRole } from './roles.js';
 import { PROVIDERS } from './widgets.js';
 
 /** @typedef {{ path: string, message: string }} ImportError */
@@ -53,6 +53,8 @@ const IMPORT_FIELDS = Object.freeze({
 		'methods',
 		'signIn',
 		'logSignIns',
+		'signUp',
+		'membership',
 	]),
 	fields: Object.freeze(['key', 'label', 'type', 'options', 'required', 'createdAt']),
 	users: Object.freeze([
@@ -229,7 +231,7 @@ const contactsOf = (record, phoneFormat, errors) => {
 };
 
 /**
- * A role the record names: it must exist (a ready-made role, or one imported before).
+ * A role the record names: it must exist (a ready-made template not deleted, or one imported before).
  * @param {Record<string, unknown>} record @param {ReadonlySet<string>} roles @param {ImportError[]} errors
  * @param {string} [fallback] the role when none is given
  */
@@ -248,8 +250,9 @@ const resultOf = (errors, value) => (errors.length > 0 ? { ok: false, errors } :
 // --------------------------------------------------------------------------------------------------------- roles
 
 /**
- * A role (`roles`, found by `key`): the merchant's own, such as a `member` copy of Customer, or a ready-made one with
- * the merchant's changes (it keeps its rank and stays ready-made).
+ * A role (`roles`, found by `key`): the merchant's own, such as a `member` copy of Customer, or a ready-made template
+ * with the merchant's changes. `signUp: true` makes it the role for new sign-ups (one role; with more than one, the
+ * lowest-ranked counts).
  * @param {Record<string, unknown>} record
  * @returns {ImportChecked<import('./roles.js').Role>}
  */
@@ -263,17 +266,16 @@ export const checkImportedRole = (record) => {
 			methods: 'array',
 			sessionRolling: 'boolean',
 			logSignIns: 'boolean',
+			signUp: 'boolean',
+			membership: 'boolean',
 		}),
 	];
 	if (record.twoStep !== undefined && record.twoStep !== 'optional' && record.twoStep !== 'required')
 		errors.push({ path: '/twoStep', message: 'twoStep is optional or required.' });
-	const readyMade = READY_ROLES.find((role) => role.key === record.key);
-	if (readyMade && record.rank !== undefined && record.rank !== readyMade.rank)
-		errors.push({ path: '/rank', message: `A ready-made role keeps its rank (${readyMade.rank}).` });
 	if (errors.length > 0) return { ok: false, errors };
 	const checked = checkRole(String(record.key), record);
 	if (!checked.ok) return { ok: false, errors: [{ path: `/${checked.field}`, message: checked.message }] };
-	return { ok: true, value: { ...checked.value, ready: Boolean(readyMade) } };
+	return { ok: true, value: checked.value };
 };
 
 // ------------------------------------------------------------------------------------------------ custom fields
@@ -303,6 +305,7 @@ export const checkImportedField = (record) => {
  * What a user check reads of the website.
  * @typedef {object} UserRules
  * @property {ReadonlySet<string>} roles the role keys that exist
+ * @property {string} signUpRole the role for new sign-ups (a user without a role gets it, A4)
  * @property {ReadonlyArray<CustomField>} fields the custom fields
  * @property {{ defaultCallingCode?: string, trunkPrefix?: string }} phoneFormat the website's phone format
  * @property {(hash: string) => boolean} isPasswordHash a hash Accounts' password check reads (A1)
@@ -432,7 +435,7 @@ export const checkImportedUser = (record, rules) => {
 	const phoneVerified = flagOf(record, 'phoneVerified', errors);
 	if (emailVerified && !email) errors.push({ path: '/emailVerified', message: 'Only an email address can be verified.' });
 	if (phoneVerified && !phone) errors.push({ path: '/phoneVerified', message: 'Only a phone number can be verified.' });
-	const role = roleOf(record, rules.roles, errors, DEFAULT_ROLE);
+	const role = roleOf(record, rules.roles, errors, rules.signUpRole);
 	const status = record.status ?? 'active';
 	if (!USER_STATUSES.includes(/** @type {string} */ (status)))
 		errors.push({ path: '/status', message: 'status is active, pending or invited.' });

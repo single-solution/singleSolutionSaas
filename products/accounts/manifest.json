@@ -82,7 +82,7 @@
 		{
 			"key": "roles",
 			"name": "Roles and permissions",
-			"description": "One user list with roles: the ready-made roles and the merchant's own, the permissions products supply plus the merchant's own names, session lengths per role, and the Users and Roles admin widgets.",
+			"description": "One user list with roles: ready-made templates the merchant changes or deletes and the merchant's own, the role for new sign-ups, the permissions products supply plus the merchant's own names, session lengths per role, and the Users and Roles admin widgets.",
 			"dependsOn": [],
 			"recommendFor": ["signIn.*", "offers.member_prices"],
 			"settings": {

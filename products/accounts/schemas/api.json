@@ -297,7 +297,8 @@
 				"deletion",
 				"roleSince",
 				"createdAt",
-				"roleName"
+				"roleName",
+				"membership"
 			],
 			"additionalProperties": false,
 			"properties": {
@@ -403,6 +404,10 @@
 				"roleName": {
 					"type": ["string", "null"],
 					"description": "The role’s name while Roles and permissions is on (null when it is off)."
+				},
+				"membership": {
+					"type": "boolean",
+					"description": "The role shows as a membership (“Member since” with roleSince); false while Roles and permissions is off."
 				}
 			}
 		},
@@ -971,7 +976,9 @@
 				"methods",
 				"signIn",
 				"logSignIns",
-				"ready"
+				"signUp",
+				"membership",
+				"system"
 			],
 			"additionalProperties": false,
 			"properties": {
@@ -1020,8 +1027,8 @@
 				"rank": {
 					"type": "integer",
 					"minimum": 1,
-					"maximum": 1000,
-					"description": "A smaller number ranks higher: Owner 100, Business manager 200, Product manager 300, Marketing manager 400, Support staff 500, Customer 900; your own roles 101–899."
+					"maximum": 999,
+					"description": "A smaller number ranks higher: Owner is always 100, every other role 101–999 (the templates: Business manager 200, Product manager 300, Marketing manager 400, Support staff 500, Customer 900)."
 				},
 				"remember": {
 					"type": "string",
@@ -1039,15 +1046,23 @@
 				"signIn": {
 					"type": "string",
 					"enum": ["on", "paused"],
-					"description": "paused: the role’s users (and new sign-ups while it is customer) are refused with sign_in_paused."
+					"description": "paused: the role’s users (and new sign-ups while it is the role for new sign-ups) are refused with sign_in_paused."
 				},
 				"logSignIns": {
 					"type": "boolean",
 					"description": "Sign-ins, failures, resets and recovery codes of the role’s users go to the activity log."
 				},
-				"ready": {
+				"signUp": {
 					"type": "boolean",
-					"description": "A ready-made role: its key and rank stay, and it cannot be deleted."
+					"description": "The role for new sign-ups: exactly one role, never Owner. Users of a deleted role get it too."
+				},
+				"membership": {
+					"type": "boolean",
+					"description": "Shown as a membership on the user’s own account (“Member since”)."
+				},
+				"system": {
+					"type": "boolean",
+					"description": "Owner or the role for new sign-ups: it cannot be deleted. Every other role, the ready-made templates too, can."
 				}
 			}
 		},
@@ -1073,7 +1088,7 @@
 						"type": "string",
 						"pattern": "^(?:[a-z][a-z0-9-]{1,30}:[a-z][a-z0-9_.]{0,63}|\\*)$"
 					},
-					"description": "<product>:<key> (from each product whose server token you pasted), site:<key> (your own names) or * (every permission). Default []."
+					"description": "<product>:<key> (from each product whose server token you pasted), site:<key> (your own names) or * (every permission). Default []. Owner keeps *."
 				},
 				"twoStep": {
 					"type": "string",
@@ -1100,9 +1115,9 @@
 				"rank": {
 					"type": "integer",
 					"minimum": 101,
-					"maximum": 899,
+					"maximum": 999,
 					"default": 600,
-					"description": "Your own roles only; a ready-made role keeps its rank (the value is ignored)."
+					"description": "Owner is always 100 (the value is ignored)."
 				},
 				"remember": {
 					"type": "string",
@@ -1129,6 +1144,15 @@
 					"type": "boolean",
 					"default": false,
 					"description": "Sign-ins, failures, resets and recovery codes of the role’s users go to the activity log."
+				},
+				"signUp": {
+					"type": "boolean",
+					"description": "true: the role for new sign-ups from now (the role that had it loses it); never Owner. false is refused for the role that has it (choose another role instead). Left out: unchanged."
+				},
+				"membership": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show the role as a membership on the user’s own account (“Member since”)."
 				}
 			}
 		},
@@ -1415,7 +1439,7 @@
 	},
 	"POST /v1/sign-up/password": {
 		"summary": "Sign up with an email address and a password",
-		"description": "Makes the account (role customer) and signs it in, or answers status pending while sign-ups wait for approval. The address is not proven by this. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
+		"description": "Makes the account (with the role for new sign-ups) and signs it in, or answers status pending while sign-ups wait for approval. The address is not proven by this. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
 		"body": {
 			"type": "object",
 			"required": ["email", "password"],
@@ -1533,7 +1557,7 @@
 	},
 	"POST /v1/sign-up/phone-password": {
 		"summary": "Sign up with a phone number and a password",
-		"description": "Only while the Phone + password signUp setting is on (else 403 sign_up_closed). The number is not proven by this. Makes the account (role customer) and signs it in, or answers status pending while sign-ups wait for approval. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
+		"description": "Only while the Phone + password signUp setting is on (else 403 sign_up_closed). The number is not proven by this. Makes the account (with the role for new sign-ups) and signs it in, or answers status pending while sign-ups wait for approval. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
 		"body": {
 			"type": "object",
 			"required": ["phone", "password"],
@@ -2986,10 +3010,10 @@
 	},
 	"GET /v1/roles": {
 		"summary": "The roles",
-		"description": "Highest rank first; the ready-made ones are made on first use.",
+		"description": "Highest rank first, with the role for new sign-ups. The ready-made templates are made on first use; then they are your roles to change or delete.",
 		"response": {
 			"type": "object",
-			"required": ["items"],
+			"required": ["items", "signUpRole"],
 			"additionalProperties": false,
 			"properties": {
 				"items": {
@@ -2998,6 +3022,11 @@
 					"items": {
 						"$ref": "#/components/schemas/Role"
 					}
+				},
+				"signUpRole": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_]{1,39}$",
+					"description": "The key of the role new sign-ups get."
 				}
 			}
 		}
@@ -3059,7 +3088,7 @@
 	},
 	"PUT /v1/roles/:key": {
 		"summary": "Save a role",
-		"description": "Creates the role or replaces it; the key is the path’s (2–40 lower-case letters, digits or _). 422 validation_failed for the field, or for the 101st role.",
+		"description": "Creates the role or replaces it; the key is the path’s (2–40 lower-case letters, digits or _). Owner keeps every permission and rank 100. 422 validation_failed for the field, or for the 101st role.",
 		"body": {
 			"$ref": "#/components/schemas/RoleInput"
 		},
@@ -3068,8 +3097,8 @@
 		}
 	},
 	"DELETE /v1/roles/:key": {
-		"summary": "Delete one of your own roles",
-		"description": "Its users get the customer role. 404 not_found for a ready-made role or an unknown key.",
+		"summary": "Delete a role",
+		"description": "Any role but Owner and the role for new sign-ups (409 conflict: choose another role for new sign-ups first); the ready-made templates too, for good. Its users get the role for new sign-ups. 404 not_found for an unknown key.",
 		"status": 204
 	},
 	"POST /v1/activity-copies": {
@@ -3994,10 +4023,10 @@
 	},
 	"GET /v1/admin/roles": {
 		"summary": "The roles (Users and Roles admin widgets)",
-		"description": "Highest rank first; the ready-made ones are made on first use.",
+		"description": "Highest rank first, with the role for new sign-ups. The ready-made templates are made on first use; then they are your roles to change or delete.",
 		"response": {
 			"type": "object",
-			"required": ["items"],
+			"required": ["items", "signUpRole"],
 			"additionalProperties": false,
 			"properties": {
 				"items": {
@@ -4006,6 +4035,11 @@
 					"items": {
 						"$ref": "#/components/schemas/Role"
 					}
+				},
+				"signUpRole": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_]{1,39}$",
+					"description": "The key of the role new sign-ups get."
 				}
 			}
 		}
@@ -4067,7 +4101,7 @@
 	},
 	"PUT /v1/admin/roles/:key": {
 		"summary": "Save a role (Roles admin widget)",
-		"description": "Creates the role or replaces it; the key is the path’s (2–40 lower-case letters, digits or _). 422 validation_failed for the field, or for the 101st role.",
+		"description": "Creates the role or replaces it; the key is the path’s (2–40 lower-case letters, digits or _). Owner keeps every permission and rank 100. 422 validation_failed for the field, or for the 101st role.",
 		"body": {
 			"$ref": "#/components/schemas/RoleInput"
 		},
@@ -4076,8 +4110,8 @@
 		}
 	},
 	"DELETE /v1/admin/roles/:key": {
-		"summary": "Delete one of your own roles (Roles admin widget)",
-		"description": "Its users get the customer role. 404 not_found for a ready-made role or an unknown key.",
+		"summary": "Delete a role",
+		"description": "Any role but Owner and the role for new sign-ups (409 conflict: choose another role for new sign-ups first); the ready-made templates too, for good. Its users get the role for new sign-ups. 404 not_found for an unknown key.",
 		"status": 204
 	},
 	"POST /v1/import/:collection": {

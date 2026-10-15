@@ -19,7 +19,7 @@ import {
 	checkImportedUser,
 } from '../core/imports.js';
 import { MAX_CUSTOM_FIELDS } from '../core/profile.js';
-import { MAX_ROLES, READY_ROLES } from '../core/roles.js';
+import { MAX_ROLES, OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core/roles.js';
 import { isPasswordHash } from './crypto.js';
 import { createStore, phoneDigitsOf } from './store.js';
 
@@ -42,26 +42,52 @@ import { createStore, phoneDigitsOf } from './store.js';
 const KEYS_READ = 200;
 
 /**
- * The keys of a website's roles (with the ready-made ones) or custom fields; read only, nothing is seeded here.
- * @param {'roles' | 'fields'} collection
- * @returns {(ctx: { data: WebsiteData, websiteId: string }) => Promise<Set<string>>}
+ * A website's roles as stored (key, rank, permissions and the sign-up choice); read only, nothing is seeded here.
+ * @param {{ data: WebsiteData, websiteId: string }} ctx
  */
-const keysIn =
-	(collection) =>
-	async ({ data, websiteId }) =>
-		new Set([
-			...(collection === 'roles' ? READY_ROLES.map((role) => role.key) : []),
-			...(
-				await data
-					.collection(collection)
-					.find({ websiteId }, { projection: { _id: 0, key: 1 } })
-					.limit(KEYS_READ)
-					.toArray()
-			).map((doc) => String(doc.key)),
-		]);
+const storedRoles = async ({ data, websiteId }) =>
+	await data
+		.collection('roles')
+		.find({ websiteId }, { projection: { _id: 0, key: 1, rank: 1, permissions: 1, signUp: 1 } })
+		.limit(KEYS_READ)
+		.toArray();
 
-/** The role keys that exist: the ready-made ones and the website's own. */
-const roleKeysOf = keysIn('roles');
+/**
+ * The roles a website has: its stored ones, plus the ready-made templates while they were never made (no Owner
+ * record yet: they are made on first use, A3).
+ * @param {{ data: WebsiteData, websiteId: string }} ctx
+ */
+const rolesOf = async (ctx) => {
+	const stored = await storedRoles(ctx);
+	const seeded = stored.some((role) => role.key === OWNER_ROLE);
+	return [...(seeded ? [] : ROLE_TEMPLATES.filter((role) => !stored.some((own) => own.key === role.key))), ...stored];
+};
+
+/** The role keys that exist (A3). @param {{ data: WebsiteData, websiteId: string }} ctx */
+const roleKeysOf = async (ctx) => new Set((await rolesOf(ctx)).map((role) => String(role.key)));
+
+/**
+ * The role for new sign-ups (A4): the one chosen (the lowest-ranked when an import chose more than one), else the
+ * Customer template.
+ * @param {{ data: WebsiteData, websiteId: string }} ctx
+ */
+const signUpRoleOf = async (ctx) =>
+	String(
+		(await rolesOf(ctx)).filter((role) => role.signUp === true).sort((a, b) => Number(b.rank) - Number(a.rank))[0]?.key ??
+			SIGN_UP_TEMPLATE,
+	);
+
+/** The custom-field keys that exist; read only. @param {{ data: WebsiteData, websiteId: string }} ctx */
+const fieldKeysOf = async ({ data, websiteId }) =>
+	new Set(
+		(
+			await data
+				.collection('fields')
+				.find({ websiteId }, { projection: { _id: 0, key: 1 } })
+				.limit(KEYS_READ)
+				.toArray()
+		).map((doc) => String(doc.key)),
+	);
 
 /**
  * The website's phone format (shared by Phone code and Phone + password): its calling code, else the business.json
@@ -155,7 +181,7 @@ export const createImportOptions = (deps) => ({
 	collections: {
 		roles: keyedCollection({ keysOf: roleKeysOf, max: MAX_ROLES, what: 'roles', check: checkImportedRole }),
 		fields: keyedCollection({
-			keysOf: keysIn('fields'),
+			keysOf: fieldKeysOf,
 			max: MAX_CUSTOM_FIELDS,
 			what: 'custom fields',
 			check: checkImportedField,
@@ -163,6 +189,7 @@ export const createImportOptions = (deps) => ({
 		users: {
 			prepare: async (ctx) => ({
 				roles: await roleKeysOf(ctx),
+				signUpRole: await signUpRoleOf(ctx),
 				fields: await createStore(ctx.data, { now: ctx.now }).fields.list(),
 				phoneFormat: await phoneFormatOf(deps, ctx.websiteId),
 				taken: new Map(),
@@ -209,7 +236,8 @@ export const createImportOptions = (deps) => ({
 
 	/**
 	 * Accounts derives nothing at the end (the phone's last digits, `createdAt`, `roleSince` and the identity are set per
-	 * record): it reports users whose role no longer exists (they act as Customer until it is imported again) and
+	 * record): it reports users whose role no longer exists (they act with the role for new sign-ups until it is imported
+	 * again) and
 	 * requests whose user is gone, for example after a prune.
 	 * @param {any} ctx
 	 */
@@ -240,12 +268,7 @@ export const createImportOptions = (deps) => ({
 		const data = /** @type {WebsiteData} */ (await ctx.data());
 		const websiteId = /** @type {string} */ (ctx.websiteId);
 		const users = data.collection('users');
-		const stored = await data
-			.collection('roles')
-			.find({ websiteId }, { projection: { _id: 0, key: 1, permissions: 1 } })
-			.limit(KEYS_READ)
-			.toArray();
-		const staffRoles = [...READY_ROLES.filter((role) => !stored.some((own) => own.key === role.key)), ...stored]
+		const staffRoles = (await rolesOf({ data, websiteId }))
 			.filter((role) => Array.isArray(role.permissions) && role.permissions.length > 0)
 			.map((role) => String(role.key));
 		const byRole = await users

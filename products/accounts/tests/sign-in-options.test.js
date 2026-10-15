@@ -226,14 +226,87 @@ describe('A6: per-role sign-in options', () => {
 		expect((await signIn('rem@example.com')).json.status).toBe('signed_in');
 	});
 
-	it('ranks: ready roles keep theirs; own roles sit between Owner and Customer', async () => {
+	it('ranks: Owner stays 100; every other role, ready-made templates too, sits at 101–999', async () => {
 		const own = await env.serverCall('PUT', '/v1/roles/member', { name: 'Member', rank: 50 });
 		expect(code(own)).toBe('validation_failed');
 		expect((await env.serverCall('PUT', '/v1/roles/member', { name: 'Member', rank: 700 })).json.rank).toBe(700);
 		expect((await env.serverCall('PUT', '/v1/roles/member', { name: 'Member' })).json.rank).toBe(600);
-		const owner = (await env.serverCall('GET', '/v1/roles')).json.items[0];
+		const items = (await env.serverCall('GET', '/v1/roles')).json.items;
+		const owner = items[0];
 		expect(owner.key).toBe('owner');
 		expect((await env.serverCall('PUT', '/v1/roles/owner', { ...owner, rank: 999 })).json.rank).toBe(100);
+		const manager = items.find((/** @type {any} */ r) => r.key === 'product_manager');
+		expect((await env.serverCall('PUT', '/v1/roles/product_manager', { ...manager, rank: 950 })).json.rank).toBe(950);
+		expect(code(await env.serverCall('PUT', '/v1/roles/product_manager', { ...manager, rank: 1000 }))).toBe(
+			'validation_failed',
+		);
+		await env.serverCall('PUT', '/v1/roles/product_manager', manager);
+		await env.serverCall('DELETE', '/v1/roles/member');
+	});
+});
+
+describe('A3, A4: ready-made roles are templates; the role for new sign-ups; membership', () => {
+	it('templates can be deleted for good; only Owner and the sign-up role are system roles', async () => {
+		const listed = await env.serverCall('GET', '/v1/roles');
+		expect(listed.json.signUpRole).toBe('customer');
+		const system = listed.json.items.filter((/** @type {any} */ r) => r.system).map((/** @type {any} */ r) => r.key);
+		expect(system.sort()).toEqual(['customer', 'owner']);
+		expect(listed.json.items.every((/** @type {any} */ r) => !('ready' in r))).toBe(true);
+		const marketing = listed.json.items.find((/** @type {any} */ r) => r.key === 'marketing_manager');
+		expect(code(await env.serverCall('DELETE', '/v1/roles/owner'))).toBe('conflict');
+		expect(code(await env.serverCall('DELETE', '/v1/roles/customer'))).toBe('conflict');
+		// Owner keeps every permission
+		expect(code(await env.serverCall('PUT', '/v1/roles/owner', { ...listed.json.items[0], permissions: [] }))).toBe(
+			'validation_failed',
+		);
+		expect((await env.serverCall('DELETE', '/v1/roles/marketing_manager')).status).toBe(204);
+		const after = (await env.serverCall('GET', '/v1/roles')).json.items.map((/** @type {any} */ r) => r.key);
+		expect(after).not.toContain('marketing_manager');
+		// a template deleted stays deleted (it is not made again)
+		expect((await env.serverCall('GET', '/v1/roles')).json.items.map((/** @type {any} */ r) => r.key)).toEqual(after);
+		await env.serverCall('PUT', '/v1/roles/marketing_manager', marketing);
+	});
+
+	it('the role for new sign-ups: one role at a time, never Owner; deleted roles’ users move to it', async () => {
+		const items = (await env.serverCall('GET', '/v1/roles')).json.items;
+		const owner = items.find((/** @type {any} */ r) => r.key === 'owner');
+		const customer = items.find((/** @type {any} */ r) => r.key === 'customer');
+		expect(customer).toMatchObject({ signUp: true, system: true, membership: false });
+		expect(code(await env.serverCall('PUT', '/v1/roles/owner', { ...owner, signUp: true }))).toBe('validation_failed');
+		// the sign-up role moves only by choosing another one
+		expect(code(await env.serverCall('PUT', '/v1/roles/customer', { ...customer, signUp: false }))).toBe('validation_failed');
+		const member = await env.serverCall('PUT', '/v1/roles/member', { name: 'Member', signUp: true });
+		expect(member.json).toMatchObject({ key: 'member', signUp: true, system: true, membership: true });
+		const listed = await env.serverCall('GET', '/v1/roles');
+		expect(listed.json.signUpRole).toBe('member');
+		expect(listed.json.items.find((/** @type {any} */ r) => r.key === 'customer')).toMatchObject({
+			signUp: false,
+			system: false,
+		});
+		const made = await signUp('newbie-member@example.com');
+		expect(made.status).toBe(200);
+		expect((await userOf(made.json.user.id)).role).toBe('member');
+		await env.serverCall('PUT', '/v1/roles/temp', { name: 'Temp' });
+		await env.serverCall('PATCH', `/v1/users/${made.json.user.id}`, { role: 'temp' });
+		expect((await env.serverCall('DELETE', '/v1/roles/temp')).status).toBe(204);
+		expect((await userOf(made.json.user.id)).role).toBe('member');
+		expect((await env.serverCall('PUT', '/v1/roles/customer', { ...customer, signUp: true })).json.signUp).toBe(true);
+		expect((await env.serverCall('DELETE', '/v1/roles/member')).status).toBe(204);
+		expect((await userOf(made.json.user.id)).role).toBe('customer');
+	});
+
+	it('membership: My account shows “Member since” only for a role shown as a membership', async () => {
+		const made = await signUp('member-since@example.com');
+		const me = await env.visitor('GET', '/v1/me', undefined, made.json.signIn);
+		expect(me.json).toMatchObject({ role: 'customer', membership: false });
+		await env.serverCall('PUT', '/v1/roles/vip', { name: 'VIP', membership: true });
+		await env.serverCall('PATCH', `/v1/users/${made.json.user.id}`, { role: 'vip' });
+		const vip = await env.visitor('GET', '/v1/me', undefined, made.json.signIn);
+		expect(vip.json).toMatchObject({ role: 'vip', roleName: 'VIP', membership: true });
+		await env.serverCall('PUT', '/v1/roles/vip', { name: 'VIP', membership: false });
+		const plain = await env.visitor('GET', '/v1/me', undefined, made.json.signIn);
+		expect(plain.json.membership).toBe(false);
+		await env.serverCall('DELETE', '/v1/roles/vip');
 	});
 });
 

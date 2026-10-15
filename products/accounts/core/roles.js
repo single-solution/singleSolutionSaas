@@ -1,9 +1,15 @@
 /**
  * Roles and permissions of the merchant's users (PLAN 0.8.6), pure.
  *
- * - Every user of a website has exactly one role. The ready-made roles are a usual business team (Owner, Business manager,
- *   Product manager, Marketing manager, Support staff) plus Customer, the role of every new sign-up.
- *   The merchant can change them (except their keys), copy them and add their own.
+ * - Every user of a website has exactly one role. On first use a website gets ready-made templates: a usual business
+ *   team (Owner, Business manager, Product manager, Marketing manager, Support staff) plus Customer, the role for new
+ *   sign-ups. They are the merchant's roles from then on: changed (except their keys), copied, deleted for good, and
+ *   the merchant adds their own (A3).
+ * - Only two roles are system roles (`system`), which cannot be deleted: Owner (every permission, rank 100) and the role
+ *   for new sign-ups (`signUp`; exactly one role, never Owner, the Customer template at first). The merchant moves the
+ *   sign-up choice by choosing another role; users of a deleted role get the sign-up role (A4).
+ * - `membership` (A4): the role shows as a membership on the user's own account ("Member since"); the templates show it
+ *   for every role but Customer, and a new role shows it unless the merchant turns it off.
  * - A permission is `<source>:<key>`: `<source>` is the product that supplies it (`accounts`, `chat`, `ecommerce`, …,
  *   from each pasted product's `GET /v1/permissions`) or `site` for the merchant's own names. Owner carries every
  *   permission, written `*`.
@@ -16,9 +22,9 @@
  *   at the latest after the role's longer length, its session length or its remember-me days), `methods` (the sign-in
  *   methods its users may use; [] = all), `signIn` (`on`, or `paused`: its users, and new sign-ups while it is the
  *   default role, are refused) and `logSignIns` (sign-ins and failures go to the activity log).
- * - A role has a `rank` (A4): a smaller number ranks higher. The ready-made roles rank Owner 100, Business manager 200,
- *   Product manager 300, Marketing manager 400, Support staff 500 and Customer 900; the merchant places their own roles
- *   between 101 and 899 (600 when not given). Staff never edit, block or delete a user whose role ranks above theirs.
+ * - A role has a `rank` (A4): a smaller number ranks higher. Owner is always 100; every other role sits between 101 and
+ *   999 (600 when not given). The templates rank Business manager 200, Product manager 300, Marketing manager 400,
+ *   Support staff 500 and Customer 900. Staff never edit, block or delete a user whose role ranks above theirs.
  * - Roles only say what a user may do on the merchant's own site: an Accounts sign-in never authorizes admin actions in
  *   any product (those need the server token or a ticket).
  * @module
@@ -36,16 +42,19 @@ const MAX_ROLE_PERMISSIONS = 500;
 const MAX_OWN_PERMISSIONS = 200;
 const MAX_SESSION_HOURS = 720;
 const MAX_REMEMBER_DAYS = 365;
-/** Where the merchant's own roles may rank (the ready-made Owner is 100 and Customer 900). */
-const OWN_RANK = Object.freeze({ min: 101, max: 899, default: 600 });
+/** Where every role but Owner may rank (Owner is always 100). */
+const RANK = Object.freeze({ owner: 100, min: 101, max: 999, default: 600 });
 /** The key of the Owner role (A4: the last unblocked Owner stays). */
 export const OWNER_ROLE = 'owner';
 /** "Remember me" per role (A6; `never`, A14). */
 const REMEMBER_OPTIONS = Object.freeze(/** @type {const} */ (['ask', 'ask_ticked', 'always', 'never']));
 /** The sign-in methods a role may be limited to (A6): the sign-in features. */
 export const ROLE_METHODS = SIGN_IN_METHODS;
-/** The role of every new sign-up and of users whose role was deleted. */
-export const DEFAULT_ROLE = 'customer';
+/**
+ * The template that is the role for new sign-ups on first use, and the last resort while no role is chosen (a website
+ * whose roles were all imported without one).
+ */
+export const SIGN_UP_TEMPLATE = 'customer';
 
 /**
  * @typedef {object} Role
@@ -62,14 +71,15 @@ export const DEFAULT_ROLE = 'customer';
  * @property {string[]} methods the sign-in methods its users may use; [] = all (A6)
  * @property {'on' | 'paused'} signIn (A6)
  * @property {boolean} logSignIns sign-ins, failures, resets and recovery codes in the activity log (A10)
- * @property {boolean} ready a ready-made role (cannot be deleted)
+ * @property {boolean} signUp the role for new sign-ups (exactly one role; A4)
+ * @property {boolean} membership shown as a membership on the user's own account, "Member since" (A4)
  */
 
 /**
  * @param {string} key @param {string} name @param {number} rank @param {string} description @param {string[]} permissions
  * @returns {Role}
  */
-const ready = (key, name, rank, description, permissions) => ({
+const template = (key, name, rank, description, permissions) => ({
 	key,
 	name,
 	description,
@@ -83,13 +93,21 @@ const ready = (key, name, rank, description, permissions) => ({
 	methods: [],
 	signIn: 'on',
 	logSignIns: false,
-	ready: true,
+	signUp: key === SIGN_UP_TEMPLATE,
+	membership: key !== SIGN_UP_TEMPLATE,
 });
 
 /**
- * A role as the API answers it: its own members only (never the website or the times the database stamps).
+ * Whether a role is a system role, which cannot be deleted: Owner, or the role for new sign-ups (A3).
+ * @param {Pick<Role, 'key' | 'signUp'>} role
+ */
+export const isSystemRole = (role) => role.key === OWNER_ROLE || role.signUp === true;
+
+/**
+ * A role as the API answers it: its own members only (never the website or the times the database stamps), and
+ * whether it is a system role.
  * @param {Role} role
- * @returns {Role}
+ * @returns {Role & { system: boolean }}
  */
 export const roleView = (role) => ({
 	key: role.key,
@@ -105,17 +123,19 @@ export const roleView = (role) => ({
 	methods: role.methods,
 	signIn: role.signIn,
 	logSignIns: role.logSignIns,
-	ready: role.ready === true,
+	signUp: role.signUp === true,
+	membership: role.membership === true,
+	system: isSystemRole(role),
 });
 
 /** Ecommerce's published permission keys (its manifest), as `ecommerce:<key>`. */
 const ecommerce = (/** @type {string[]} */ ...keys) => keys.map((key) => `ecommerce:${key}`);
 
-/** The ready-made roles, created for a website on first use. */
-export const READY_ROLES = Object.freeze([
-	ready('customer', 'Customer', 900, 'Customers and visitors with an account. No staff permissions.', []),
-	ready('owner', 'Owner', 100, 'Runs the business: every permission.', ['*']),
-	ready('business_manager', 'Business manager', 200, 'Day-to-day operations lead: users, sales, chats and messages.', [
+/** The ready-made templates, created for a website on first use (Owner first); then the merchant's to change or delete. */
+export const ROLE_TEMPLATES = Object.freeze([
+	template('owner', 'Owner', 100, 'Runs the business: every permission.', ['*']),
+	template('customer', 'Customer', 900, 'Customers and visitors with an account. No staff permissions.', []),
+	template('business_manager', 'Business manager', 200, 'Day-to-day operations lead: users, sales, chats and messages.', [
 		'accounts:users.read',
 		'accounts:users.manage',
 		'chat:inbox.read',
@@ -143,32 +163,38 @@ export const READY_ROLES = Object.freeze([
 			'bulk.run',
 		),
 	]),
-	ready(
+	template(
 		'product_manager',
 		'Product manager',
 		300,
 		'Catalog focus: products, CSV and bulk changes, and review moderation.',
 		ecommerce('catalog.edit', 'csv.run', 'bulk.run', 'reviews.moderate'),
 	),
-	ready('marketing_manager', 'Marketing manager', 400, 'Offers, content and messages.', [
+	template('marketing_manager', 'Marketing manager', 400, 'Offers, content and messages.', [
 		'notifications:templates.edit',
 		'chat:reports.read',
 		...ecommerce('coupons.edit', 'deals.edit', 'bundles.edit', 'loyalty.manage', 'reports.read'),
 	]),
-	ready('support_staff', 'Support staff', 500, 'Customer-facing: reads users, answers chats and handles orders and returns.', [
-		'accounts:users.read',
-		'chat:inbox.read',
-		'chat:inbox.reply',
-		'notifications:log.read',
-		...ecommerce('orders.read', 'orders.manage', 'returns.manage', 'customers.manage'),
-	]),
+	template(
+		'support_staff',
+		'Support staff',
+		500,
+		'Customer-facing: reads users, answers chats and handles orders and returns.',
+		[
+			'accounts:users.read',
+			'chat:inbox.read',
+			'chat:inbox.reply',
+			'notifications:log.read',
+			...ecommerce('orders.read', 'orders.manage', 'returns.manage', 'customers.manage'),
+		],
+	),
 ]);
 
 /**
  * Check a role as the merchant saves it (the key comes from the path).
  * @param {string} key
  * @param {unknown} input
- * @returns {{ ok: true, value: Omit<Role, 'ready'> } | { ok: false, field: string, message: string }}
+ * @returns {{ ok: true, value: Role } | { ok: false, field: string, message: string }}
  */
 export const checkRole = (key, input) => {
 	const body = typeof input === 'object' && input !== null ? /** @type {Record<string, unknown>} */ (input) : {};
@@ -181,6 +207,9 @@ export const checkRole = (key, input) => {
 	const permissions = Array.isArray(body.permissions) ? [...new Set(body.permissions)] : [];
 	if (permissions.length > MAX_ROLE_PERMISSIONS || permissions.some((p) => typeof p !== 'string' || !PERMISSION.test(p)))
 		return { ok: false, field: 'permissions', message: 'Permissions are <product>:<key>, site:<key> or * (at most 500).' };
+	const owner = key === OWNER_ROLE;
+	if (owner && !permissions.includes('*'))
+		return { ok: false, field: 'permissions', message: 'Owner keeps every permission (*).' };
 	const twoStep = body.twoStep === 'required' ? 'required' : 'optional';
 	const sessionHours = body.sessionHours ?? 24;
 	if (!Number.isInteger(sessionHours) || Number(sessionHours) < 1 || Number(sessionHours) > MAX_SESSION_HOURS)
@@ -188,14 +217,9 @@ export const checkRole = (key, input) => {
 	const rememberDays = body.rememberDays ?? 30;
 	if (!Number.isInteger(rememberDays) || Number(rememberDays) < 0 || Number(rememberDays) > MAX_REMEMBER_DAYS)
 		return { ok: false, field: 'rememberDays', message: `Remember me is 0 to ${MAX_REMEMBER_DAYS} days.` };
-	const readyMade = READY_ROLES.find((each) => each.key === key);
-	const rank = readyMade ? readyMade.rank : (body.rank ?? OWN_RANK.default);
-	if (
-		!Number.isInteger(rank) ||
-		Number(rank) < (readyMade ? 1 : OWN_RANK.min) ||
-		Number(rank) > (readyMade ? 1000 : OWN_RANK.max)
-	)
-		return { ok: false, field: 'rank', message: `Place your own roles at rank ${OWN_RANK.min} to ${OWN_RANK.max}.` };
+	const rank = owner ? RANK.owner : (body.rank ?? RANK.default);
+	if (!Number.isInteger(rank) || Number(rank) < (owner ? RANK.owner : RANK.min) || Number(rank) > RANK.max)
+		return { ok: false, field: 'rank', message: `Place roles at rank ${RANK.min} to ${RANK.max} (Owner is ${RANK.owner}).` };
 	const remember = body.remember ?? 'ask';
 	if (!REMEMBER_OPTIONS.includes(/** @type {any} */ (remember)))
 		return { ok: false, field: 'remember', message: 'Remember me is ask, ask_ticked, always or never.' };
@@ -204,6 +228,8 @@ export const checkRole = (key, input) => {
 		return { ok: false, field: 'methods', message: `Methods are a list of ${ROLE_METHODS.join(', ')} ([] = all).` };
 	const signIn = body.signIn ?? 'on';
 	if (signIn !== 'on' && signIn !== 'paused') return { ok: false, field: 'signIn', message: 'Sign-in is on or paused.' };
+	const signUp = body.signUp === true;
+	if (owner && signUp) return { ok: false, field: 'signUp', message: 'New sign-ups never get the Owner role.' };
 	return {
 		ok: true,
 		value: {
@@ -220,6 +246,8 @@ export const checkRole = (key, input) => {
 			methods: /** @type {string[]} */ (methods),
 			signIn,
 			logSignIns: body.logSignIns === true,
+			signUp,
+			membership: body.membership === undefined ? true : body.membership === true,
 		},
 	};
 };

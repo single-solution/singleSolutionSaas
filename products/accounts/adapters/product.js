@@ -42,7 +42,6 @@ import roles from '../schemas/roles.settings.json' with { type: 'json' };
 import terms from '../schemas/terms.settings.json' with { type: 'json' };
 import twoStep from '../schemas/two_step.settings.json' with { type: 'json' };
 import { selfView } from '../core/profile.js';
-import { DEFAULT_ROLE } from '../core/roles.js';
 import { OPEN_SIGN_UP } from '../core/rules.js';
 import { SIGN_IN_METHODS } from '../core/widgets.js';
 import { createSealer, importedTwoStep, resealWebsite, totpAadOf } from './crypto.js';
@@ -284,7 +283,7 @@ export const createProductInstance = (options) => {
 					: null;
 				const profile = await product.settings.values(websiteId, 'profile');
 				// the role every sign-up gets: its "remember me" and paused sign-in shape the sign-in widget (A6)
-				const signUpRole = on.includes('roles') ? await store.roles.get(DEFAULT_ROLE) : null;
+				const signUpRole = on.includes('roles') ? await store.roles.signUp() : null;
 				const requests = on.includes('role_requests') ? await product.settings.values(websiteId, 'role_requests') : null;
 				const roleNames = requests ? await store.roles.list() : [];
 				return {

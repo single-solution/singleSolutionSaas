@@ -1,8 +1,9 @@
 /**
  * The admin widget `roles_admin` (Roles; permission `roles.manage`): the merchant's staff edit the roles (name,
  * description, the permissions checked per product, two-step, session lengths, and PLAN 0.8.10 A4, A6, A10: rank,
- * remember me, the sign-in methods, paused sign-in and the sign-in log), copy one into a new role, add and delete their
- * own roles, and name their own permissions (the `site` group).
+ * remember me, the sign-in methods, paused sign-in and the sign-in log), choose the role for new sign-ups and whether a
+ * role shows as a membership (A4), copy one into a new role, add roles and delete any role but the two system roles
+ * (Owner and the sign-up role; the ready-made templates too, A3), and name their own permissions (the `site` group).
  * @module
  */
 import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
@@ -12,6 +13,8 @@ import { WIDGET_CSS } from './styles.js';
 
 /** Every permission (Owner). */
 const ALL = '*';
+/** The Owner role: always rank 100, every permission, never the sign-up role. */
+const OWNER = 'owner';
 /** The group of the merchant's own permission names. */
 const OWN_SOURCE = 'site';
 
@@ -30,7 +33,9 @@ const OWN_SOURCE = 'site';
  * @property {string[]} [methods]
  * @property {'on' | 'paused'} [signIn]
  * @property {boolean} [logSignIns]
- * @property {boolean} ready a ready-made role (cannot be deleted)
+ * @property {boolean} [signUp] the role for new sign-ups
+ * @property {boolean} [membership] shown as a membership ("Member since")
+ * @property {boolean} [system] Owner or the role for new sign-ups (cannot be deleted)
  */
 
 /** @typedef {{ source: string, permissions: Array<{ key: string, name: string }> }} PermissionGroup */
@@ -99,7 +104,7 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				required: '',
 			});
 			const sessionRolling = make.check(t('roles.sessionRolling'));
-			const rank = make.field('input', t('roles.rank'), { type: 'number', min: '101', max: '899', step: '1' });
+			const rank = make.field('input', t('roles.rank'), { type: 'number', min: '101', max: '999', step: '1' });
 			const remember = make.field('select', t('roles.remember'));
 			remember.input.append(
 				element(doc, 'option', { value: 'ask' }, t('roles.rememberAsk')),
@@ -113,6 +118,8 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				element(doc, 'option', { value: 'paused' }, t('roles.signInPaused')),
 			);
 			const logSignIns = make.check(t('roles.logSignIns'));
+			const signUp = make.check(t('roles.signUp'));
+			const membership = make.check(t('roles.membership'));
 			const methodSet = element(doc, 'fieldset');
 			methodSet.append(element(doc, 'legend', {}, t('roles.methods')));
 			/** @type {Map<string, HTMLInputElement>} */
@@ -142,6 +149,8 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				signInRow,
 				methodSet,
 				logSignIns.wrap,
+				signUp.wrap,
+				membership.wrap,
 				element(doc, 'h4', {}, t('roles.permissions')),
 				all.wrap,
 				permissionArea,
@@ -230,10 +239,16 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				sessionHours.input.value = String(role?.sessionHours ?? 24);
 				rememberDays.input.value = String(role?.rememberDays ?? 30);
 				sessionRolling.input.checked = role?.sessionRolling === true;
-				// a ready-made role keeps its rank; a copy or a new role is placed among the merchant's own
-				rank.input.value = String(role && !copy && role.ready ? role.rank : Math.min(899, Math.max(101, role?.rank ?? 600)));
-				if (role?.ready && !copy) rank.input.setAttribute('disabled', '');
+				// Owner keeps rank 100; every other role (a copy of Owner too) sits at 101–999
+				const owner = role?.key === OWNER && !copy;
+				rank.input.value = String(owner ? role.rank : Math.min(999, Math.max(101, role?.rank ?? 600)));
+				if (owner) rank.input.setAttribute('disabled', '');
 				else rank.input.removeAttribute('disabled');
+				// the role for new sign-ups moves only by choosing another role; Owner never is one
+				signUp.input.checked = role?.signUp === true && !copy;
+				if (owner || (role?.signUp === true && !copy)) signUp.input.setAttribute('disabled', '');
+				else signUp.input.removeAttribute('disabled');
+				membership.input.checked = role ? role.membership === true : true;
 				remember.input.value = role?.remember ?? 'ask';
 				signIn.input.value = role?.signIn ?? 'on';
 				logSignIns.input.checked = role?.logSignIns === true;
@@ -258,7 +273,8 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 										: formatText(t('roles.permissionCount'), { count: role.permissions.length }),
 									formatText(t('roles.rankShort'), { rank: role.rank ?? '' }),
 									role.signIn === 'paused' ? t('roles.paused') : '',
-									role.ready ? t('roles.readyMade') : '',
+									role.signUp ? t('roles.signUpRole') : '',
+									role.system ? t('roles.system') : '',
 								]
 									.filter((part) => part !== '')
 									.join(' · '),
@@ -270,7 +286,7 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 						change.addEventListener('click', () => fill(role));
 						copy.addEventListener('click', () => fill(role, true));
 						actions.append(change, copy);
-						if (!role.ready) {
+						if (!role.system) {
 							const remove = button(t('roles.delete'), { class: 'secondary small' });
 							remove.addEventListener('click', async () => {
 								const answer = await adminCall(api, 'DELETE', `/v1/admin/roles/${encodeURIComponent(role.key)}`);
@@ -350,6 +366,8 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 					remember: remember.input.value,
 					signIn: signIn.input.value,
 					logSignIns: logSignIns.input.checked,
+					...(signUp.input.hasAttribute('disabled') ? {} : { signUp: signUp.input.checked }),
+					membership: membership.input.checked,
 					methods: [...methodBoxes].filter(([, input]) => input.checked).map(([method]) => method),
 				});
 				save.removeAttribute('disabled');

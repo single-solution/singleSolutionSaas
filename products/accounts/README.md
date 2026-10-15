@@ -37,8 +37,9 @@ refused by name; text over a limit is refused, never cut); times are ISO-8601 wi
 | `requests` | `id`  | `ss_accounts_requests` | `{"id":"rrq_65f0000000000000000000b1","role":"member","name":"Nora New","phone":"+447700900456","status":"pending","createdAt":"2024-07-01T00:00:00Z"}`                                                                    |
 | `copies`   | `id`  | `ss_accounts_copies`   | `{"id":"act_65f0000000000000000000c1","productId":"ecommerce","actor":{"kind":"user","id":"usr_…","name":"Sara Staff"},"action":"order.status_changed","target":"ord_…","label":"Order 1042","at":"2024-05-02T10:00:00Z"}` |
 
-- Roles first: a user's or request's role must exist (ready-made, or imported before), so a dry run of users needs the
-  roles imported. A ready-made role key may be imported with the merchant's changes; it keeps its rank.
+- Roles first: a user's or request's role must exist (a ready-made template not deleted, or imported before), so a dry
+  run of users needs the roles imported. A template key may be imported with the merchant's changes; Owner keeps rank
+  100 and every permission, and `signUp: true` names the role for new sign-ups (a user without a role gets it).
 - Users: `email` and `phone` are normalized (national numbers with the website's phone format), `phoneDigits` and
   `identity` are derived; `passwordHash` is kept as given in a format sign-in checks (bcrypt, `pbkdf2$…` with the
   `imported_password_pepper` connection, or `scrypt$…`), any other is refused; `twoStep: { secret, recoveryHashes }` (plain base32

@@ -10,7 +10,8 @@
  *   its user, its end and whether it was used or canceled) kept 30 days past its end, so a setup page can say "used"
  *   or "expired" (A3)
  * - `oauth`: social sign-ins in progress (state, PKCE verifier, nonce), TTL
- * - `roles`, `fields` (custom fields), `permissions` (the merchant's own permission names)
+ * - `roles` (the ready-made templates are made once, on first use, with Owner; a template the merchant deletes stays
+ *   deleted), `fields` (custom fields), `permissions` (the merchant's own permission names)
  * - `keys`: the website's sign-in signing key (private part sealed with `ENCRYPTION_KEY`)
  * - `signups`: hashed device and network of each sign-up (risk checks), TTL 30 days
  * - `deletions`: users erased here whose erasure some connected products have not confirmed yet
@@ -23,7 +24,7 @@
  * @module
  */
 import { createId } from '@ss/contracts';
-import { DEFAULT_ROLE, READY_ROLES } from '../core/roles.js';
+import { OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core/roles.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/profile.js').UserRecord} UserRecord */
@@ -240,11 +241,27 @@ export const createStore = (data, { now }) => {
 	 */
 	const copiesFilter = (filter) => ({ ...filter, websiteId });
 
-	/** Create the ready-made roles once per website. */
+	/**
+	 * Make the ready-made templates once per website (A3): Owner always exists, so the templates come only with the
+	 * Owner record; a template deleted later stays deleted. A template never takes the sign-up choice from an imported
+	 * role that has it.
+	 */
+	let seeded = false;
 	const seedRoles = async () => {
-		if ((await roles.countDocuments({ websiteId, ready: true })) >= READY_ROLES.length) return;
-		for (const role of READY_ROLES)
-			await roles.updateOne({ websiteId, key: role.key }, { $setOnInsert: { ...role } }, { upsert: true });
+		if (seeded) return;
+		const owner = /** @type {Role} */ (ROLE_TEMPLATES.find((role) => role.key === OWNER_ROLE));
+		const others = ROLE_TEMPLATES.filter((role) => role !== owner);
+		const made = await roles.updateOne({ websiteId, key: owner.key }, { $setOnInsert: { ...owner } }, { upsert: true });
+		if (made.upsertedCount === 1) {
+			const chosen = (await roles.countDocuments({ websiteId, signUp: true })) > 0;
+			for (const role of others)
+				await roles.updateOne(
+					{ websiteId, key: role.key },
+					{ $setOnInsert: { ...role, signUp: role.signUp && !chosen } },
+					{ upsert: true },
+				);
+		}
+		seeded = true;
 	};
 
 	const requests = data.collection(REQUESTS);
@@ -385,8 +402,8 @@ export const createStore = (data, { now }) => {
 			unblockedOf: (role) => users.countDocuments({ websiteId, role, blocked: null }),
 			/** @param {string} id */
 			remove: async (id) => (await users.deleteOne({ websiteId, id })).deletedCount === 1,
-			/** Move users of a deleted role to the default role. @param {string} role */
-			resetRole: async (role) => (await users.updateMany({ websiteId, role }, { $set: { role: DEFAULT_ROLE } })).modifiedCount,
+			/** Move users of a deleted role to another (the role for new sign-ups). @param {string} role @param {string} to */
+			resetRole: async (role, to) => (await users.updateMany({ websiteId, role }, { $set: { role: to } })).modifiedCount,
 		}),
 
 		sessions: Object.freeze({
@@ -543,19 +560,36 @@ export const createStore = (data, { now }) => {
 				await seedRoles();
 				return as(await roles.findOne({ websiteId, key }, NO_ID));
 			},
+			/**
+			 * The role for new sign-ups (A4): the one chosen (the lowest-ranked when an import chose more than one), else the
+			 * Customer template while it exists, else null.
+			 * @returns {Promise<Role | null>}
+			 */
+			signUp: async () => {
+				await seedRoles();
+				return as(
+					(await roles.findOne({ websiteId, signUp: true }, { ...NO_ID, sort: { rank: -1, key: 1 } })) ??
+						(await roles.findOne({ websiteId, key: SIGN_UP_TEMPLATE }, NO_ID)),
+				);
+			},
 			count: () => roles.countDocuments({ websiteId }),
-			/** @param {Omit<Role, 'ready'>} role */
+			/**
+			 * Save a whole role; a role saved as the role for new sign-ups takes that choice from every other role.
+			 * @param {Role} role
+			 */
 			save: async (role) => {
 				await seedRoles();
-				await roles.updateOne(
-					{ websiteId, key: role.key },
-					{ $set: { ...role }, $setOnInsert: { ready: false } },
-					{ upsert: true },
-				);
+				await roles.updateOne({ websiteId, key: role.key }, { $set: { ...role } }, { upsert: true });
+				if (role.signUp)
+					await roles.updateMany({ websiteId, key: { $ne: role.key }, signUp: true }, { $set: { signUp: false } });
 				return as(await roles.findOne({ websiteId, key: role.key }, NO_ID));
 			},
-			/** Delete a role of the merchant's own (never a ready-made one). @param {string} key */
-			remove: async (key) => (await roles.deleteOne({ websiteId, key, ready: false })).deletedCount === 1,
+			/**
+			 * Delete a role, never a system role (Owner or the role for new sign-ups, A3).
+			 * @param {string} key
+			 */
+			remove: async (key) =>
+				key !== OWNER_ROLE && (await roles.deleteOne({ websiteId, key, signUp: { $ne: true } })).deletedCount === 1,
 		}),
 
 		fields: Object.freeze({

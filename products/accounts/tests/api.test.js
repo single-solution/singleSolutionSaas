@@ -738,7 +738,7 @@ describe('roles, two-step, terms, approval and risk checks', () => {
 			sessionHours: 8,
 			rememberDays: 0,
 		});
-		expect(saved.json).toMatchObject({ key: 'cashier', ready: false, sessionHours: 8 });
+		expect(saved.json).toMatchObject({ key: 'cashier', system: false, signUp: false, membership: true, sessionHours: 8 });
 		expect(code(await env.serverCall('PUT', '/v1/roles/Bad', { name: 'x' }))).toBe('validation_failed');
 		expect(code(await env.serverCall('PUT', '/v1/roles/x1', { name: 'x', permissions: ['nope'] }))).toBe('validation_failed');
 		expect(code(await env.serverCall('PUT', '/v1/roles/x1', { name: 'x', sessionHours: 0 }))).toBe('validation_failed');
@@ -752,7 +752,8 @@ describe('roles, two-step, terms, approval and risk checks', () => {
 		expect(claims).toMatchObject({ role: 'cashier', permissions: ['chat:inbox.reply', 'site:refunds.approve'] });
 		// remember me is off for this role: 8 hours
 		expect(Date.parse(s.json.sessionExpiresAt) - env.now()).toBe(8 * 3_600_000);
-		expect(code(await env.serverCall('DELETE', '/v1/roles/owner'))).toBe('not_found');
+		expect(code(await env.serverCall('DELETE', '/v1/roles/owner'))).toBe('conflict');
+		expect(code(await env.serverCall('DELETE', '/v1/roles/nope'))).toBe('not_found');
 		expect((await env.serverCall('DELETE', '/v1/roles/cashier')).status).toBe(204);
 		expect((await env.serverCall('GET', `/v1/users/${ana.id}`)).json.role).toBe('customer');
 	});

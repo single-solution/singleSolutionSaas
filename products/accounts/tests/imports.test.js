@@ -299,7 +299,7 @@ describe('import routes', () => {
 		]);
 		expect((await send('roles', [{ ...roles[0], name: 'Premium member' }])).json).toMatchObject({ updated: 1 });
 		const role = (await env.serverCall('GET', '/v1/roles')).json.items.find((/** @type {any} */ r) => r.key === 'member');
-		expect(role).toMatchObject({ name: 'Premium member', rank: 800, ready: false });
+		expect(role).toMatchObject({ name: 'Premium member', rank: 800, system: false, membership: true });
 	});
 
 	it('imported users sign in with their old passwords and two-step', async () => {
@@ -415,6 +415,7 @@ describe('import routes', () => {
 describe('import checks', () => {
 	const rules = {
 		roles: new Set(['customer', 'member']),
+		signUpRole: 'customer',
 		fields: [{ key: 'size', label: 'Size', type: /** @type {const} */ ('choice'), options: ['S'], required: true }],
 		phoneFormat: { defaultCallingCode: '+44', trunkPrefix: '0' },
 		isPasswordHash,
@@ -538,17 +539,30 @@ describe('import checks', () => {
 		});
 	});
 
-	it('roles and custom fields: strict types; ready-made roles keep their rank', () => {
-		expect(checkImportedRole({ key: 'customer', name: 'Shopper' })).toMatchObject({
+	it('roles and custom fields: strict types; Owner keeps rank 100 and every permission; the sign-up choice', () => {
+		expect(checkImportedRole({ key: 'customer', name: 'Shopper', rank: 900, signUp: true, membership: false })).toMatchObject({
 			ok: true,
-			value: { key: 'customer', rank: 900, ready: true },
+			value: { key: 'customer', rank: 900, signUp: true, membership: false },
 		});
-		expect(paths(checkImportedRole({ key: 'owner', name: 'Owner', rank: 5 }))).toEqual(['/rank']);
+		expect(checkImportedRole({ key: 'owner', name: 'Owner', rank: 5, permissions: ['*'] })).toMatchObject({
+			ok: true,
+			value: { rank: 100, signUp: false },
+		});
+		expect(paths(checkImportedRole({ key: 'owner', name: 'Owner', permissions: [] }))).toEqual(['/permissions']);
+		expect(paths(checkImportedRole({ key: 'owner', name: 'Owner', permissions: ['*'], signUp: true }))).toEqual(['/signUp']);
 		expect(
 			paths(
-				checkImportedRole({ key: 'vip', name: 3, twoStep: 'always', sessionRolling: 'yes', permissions: 'all', ready: true }),
+				checkImportedRole({
+					key: 'vip',
+					name: 3,
+					twoStep: 'always',
+					sessionRolling: 'yes',
+					permissions: 'all',
+					ready: true,
+					signUp: 'yes',
+				}),
 			),
-		).toEqual(['/ready', '/name', '/permissions', '/sessionRolling', '/twoStep']);
+		).toEqual(['/ready', '/name', '/permissions', '/sessionRolling', '/signUp', '/twoStep']);
 		expect(paths(checkImportedRole({ key: 'vip', name: 'VIP', description: 'd'.repeat(301) }))).toEqual(['/description']);
 		expect(checkImportedField({ key: 'note', label: 'Note', type: 'text' })).toMatchObject({
 			ok: true,

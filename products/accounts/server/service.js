@@ -17,7 +17,7 @@ import { createId } from '@ss/contracts';
 import { normalisePhone, websiteCallingCode } from '@ss/contracts/phone';
 import { constantTimeEqual, randomToken, sha256Hex } from '@ss/protocol';
 import { detailOf, labelOf } from '../core/activity.js';
-import { DEFAULT_ROLE, READY_ROLES, remembered, sessionEnd, signInRefusal } from '../core/roles.js';
+import { ROLE_TEMPLATES, SIGN_UP_TEMPLATE, remembered, sessionEnd, signInRefusal } from '../core/roles.js';
 import { checkAddresses, selfView } from '../core/profile.js';
 import { OPEN_SIGN_UP, deviceIdOf, deviceOf } from '../core/rules.js';
 import { OTHER_PRODUCTS, SIGN_IN_HEADER, SIGN_IN_METHODS, SIGN_IN_SECONDS } from '../core/widgets.js';
@@ -179,11 +179,18 @@ export const createService = (product) => {
 		return normalisePhone(value, { defaultCallingCode: code, trunkPrefix: String(trunkPrefix) });
 	};
 
-	/** The user's role (the default role when theirs is gone). @param {Site} s @param {UserRecord} user */
-	const roleOf = async (s, user) =>
-		(await s.store.roles.get(user.role)) ??
-		(await s.store.roles.get(DEFAULT_ROLE)) ??
-		/** @type {import('../core/roles.js').Role} */ (READY_ROLES[0]);
+	/**
+	 * The role for new sign-ups (A4): the one the merchant chose, else the Customer template (also while no role was
+	 * ever saved, for example a website whose roles were all imported without the choice).
+	 * @param {Site} s
+	 * @returns {Promise<import('../core/roles.js').Role>}
+	 */
+	const signUpRole = async (s) =>
+		(await s.store.roles.signUp()) ??
+		/** @type {import('../core/roles.js').Role} */ (ROLE_TEMPLATES.find((role) => role.key === SIGN_UP_TEMPLATE));
+
+	/** The user's role (the sign-up role when theirs is gone). @param {Site} s @param {UserRecord} user */
+	const roleOf = async (s, user) => (await s.store.roles.get(user.role)) ?? (await signUpRole(s));
 
 	// ------------------------------------------------------------------------------------------------- sign-ins
 
@@ -313,15 +320,12 @@ export const createService = (product) => {
 	const pausedText = async (s) => String((await product.settings.texts(s.websiteId))['signIn.paused']);
 
 	/**
-	 * The role of the address a code goes to, before it is sent (A6): its user's role, or the default role for a new
-	 * sign-up.
+	 * The role of the address a code goes to, before it is sent (A6): its user's role, or the role for new sign-ups.
 	 * @param {Site} s @param {UserRecord | null} user @param {string} method
 	 */
 	const allowCode = async (s, user, method) => {
 		if (!s.on.includes('roles')) return;
-		const role = user
-			? await roleOf(s, user)
-			: ((await s.store.roles.get(DEFAULT_ROLE)) ?? /** @type {any} */ (READY_ROLES[0]));
+		const role = user ? await roleOf(s, user) : await signUpRole(s);
 		await allowSignIn(s, role, method);
 	};
 
@@ -661,6 +665,7 @@ export const createService = (product) => {
 		settings,
 		signUpRules,
 		roleOf,
+		signUpRole,
 		signingKey,
 		signInFor,
 		issue,

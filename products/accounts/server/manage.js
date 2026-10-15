@@ -14,13 +14,13 @@ import { randomToken, sha256Hex } from '@ss/protocol';
 import { detailOf, labelOf } from '../core/activity.js';
 import { MAX_CUSTOM_FIELDS, checkCustomValues, checkFieldDefinition, checkName, staffView } from '../core/profile.js';
 import {
-	DEFAULT_ROLE,
 	MAX_ROLES,
 	OWNER_ROLE,
 	ROLE_KEY,
 	checkOwnPermissions,
 	checkRole,
 	grants,
+	isSystemRole,
 	permissionCatalog,
 	roleView,
 } from '../core/roles.js';
@@ -259,9 +259,10 @@ export const createManage = (product, service, flows) => {
 		if (!name) throw invalid('name', 'Write the name (at most 120 characters).');
 		const contacts = await contactsOf(s, body);
 		if (!contacts.email && !contacts.phone) throw invalid('email', 'Enter an email address or a phone number.');
-		const role = body.role === undefined ? DEFAULT_ROLE : body.role;
+		const signUpRole = (await service.signUpRole(s)).key;
+		const role = body.role === undefined ? signUpRole : body.role;
 		if (typeof role !== 'string' || !(await s.store.roles.get(role))) throw invalid('role', 'There is no such role.');
-		await guard(ctx, s, /** @type {any} */ ({ id: '', role: DEFAULT_ROLE, blocked: null }), { role });
+		await guard(ctx, s, /** @type {any} */ ({ id: '', role: signUpRole, blocked: null }), { role });
 		if (body.notes !== undefined && (typeof body.notes !== 'string' || body.notes.length > 5000))
 			throw invalid('notes', 'Notes are text of at most 5000 characters.');
 		const custom = checkCustomValues(await s.store.fields.list(), body.custom, { complete: false });
@@ -277,7 +278,7 @@ export const createManage = (product, service, flows) => {
 				? null
 				: await flows.newPassword(s, body.password, { method: method ?? 'email_password', who: draft });
 		const user = await s.store.users.create({
-			...flows.blankUser(),
+			...flows.blankUser(role),
 			...draft,
 			emailVerified: Boolean(draft.email),
 			phoneVerified: Boolean(draft.phone),
@@ -539,16 +540,16 @@ export const createManage = (product, service, flows) => {
 		if (!email && !phone) throw invalid('email', 'Enter an email address or a phone number.');
 		const name = checkName(body.name);
 		if (name === null) throw invalid('name', 'The name is too long.');
-		const role = typeof body.role === 'string' ? body.role : DEFAULT_ROLE;
+		const signUpRole = (await service.signUpRole(s)).key;
+		const role = typeof body.role === 'string' ? body.role : signUpRole;
 		if (!(await s.store.roles.get(role))) throw invalid('role', 'There is no such role.');
-		await guard(ctx, s, /** @type {any} */ ({ id: '', role: DEFAULT_ROLE, blocked: null }), { role });
+		await guard(ctx, s, /** @type {any} */ ({ id: '', role: signUpRole, blocked: null }), { role });
 		// the invite goes to the email address when there is one
 		const user = await s.store.users.create({
-			...flows.blankUser(),
+			...flows.blankUser(role),
 			email,
 			phone,
 			name,
-			role,
 			status: 'invited',
 			identity: email ? 'email' : 'phone',
 		});
@@ -823,19 +824,19 @@ export const createManage = (product, service, flows) => {
 			};
 			user = at === 'invite' ? ((await s.store.users.update(existing.id, { role: request.role })) ?? existing) : existing;
 		} else {
-			await guard(ctx, s, /** @type {any} */ ({ id: '', role: DEFAULT_ROLE, blocked: null }), { role: request.role });
+			const signUpRole = (await service.signUpRole(s)).key;
+			await guard(ctx, s, /** @type {any} */ ({ id: '', role: signUpRole, blocked: null }), { role: request.role });
 			// the setup link proves the phone number when there is one
 			const created = await s.store.users.create({
-				...flows.blankUser(),
+				...flows.blankUser(at === 'invite' ? request.role : signUpRole),
 				name: request.name,
 				phone: request.phone,
 				email: request.email,
-				role: at === 'invite' ? request.role : DEFAULT_ROLE,
 				identity: request.phone ? 'phone' : 'email',
 			});
 			if (!created) throw problem('conflict', 'Someone else has this phone number or email address.');
 			user = created;
-			grant = { at, createdUser: true, roleBefore: DEFAULT_ROLE };
+			grant = { at, createdUser: true, roleBefore: signUpRole };
 		}
 		const link = user.passwordHash ? null : await setupLinkFor(s, user);
 		let updated = await s.store.requests.update(request.id, {
@@ -963,10 +964,21 @@ export const createManage = (product, service, flows) => {
 
 	// ------------------------------------------------------------------------------------------------------ roles
 
-	/** @param {any} ctx */
-	const listRoles = async (ctx) => ({ items: (await (await service.site(ctx)).store.roles.list()).map(roleView) });
+	/**
+	 * The roles, highest rank first, with the role for new sign-ups (A4).
+	 * @param {any} ctx
+	 */
+	const listRoles = async (ctx) => {
+		const s = await service.site(ctx);
+		const items = (await s.store.roles.list()).map(roleView);
+		return { items, signUpRole: (await service.signUpRole(s)).key };
+	};
 
-	/** Save a role (a ready-made one keeps its key and cannot be deleted). @param {any} ctx */
+	/**
+	 * Save a whole role (A3, A4): Owner keeps every permission and rank 100; `signUp: true` makes the role the one for
+	 * new sign-ups (left out: unchanged), and the sign-up role moves only by choosing another one.
+	 * @param {any} ctx
+	 */
 	const saveRole = async (ctx) => {
 		const s = await service.site(ctx);
 		const checked = checkRole(ctx.params.key, ctx.body);
@@ -974,7 +986,11 @@ export const createManage = (product, service, flows) => {
 		const existing = await s.store.roles.get(checked.value.key);
 		if (!existing && (await s.store.roles.count()) >= MAX_ROLES)
 			throw problem('validation_failed', `A website can have at most ${MAX_ROLES} roles.`);
-		const role = await s.store.roles.save(checked.value);
+		const given = bodyOf(ctx.body).signUp;
+		const signUp = given === undefined ? existing?.signUp === true : checked.value.signUp;
+		if (existing?.signUp && !signUp)
+			throw invalid('signUp', 'New sign-ups need a role: choose another role for new sign-ups instead.');
+		const role = await s.store.roles.save({ ...checked.value, signUp });
 		await log(ctx, 'role.saved', role.key, {
 			label: labelOf(role.name) ?? role.key,
 			detail: detailOf([
@@ -983,21 +999,28 @@ export const createManage = (product, service, flows) => {
 				`two-step ${role.twoStep}`,
 				`rank ${role.rank}`,
 				role.signIn === 'paused' && 'sign-in paused',
+				role.signUp && !existing?.signUp && 'role for new sign-ups',
 			]),
 		});
 		return roleView(role);
 	};
 
-	/** Delete one of the merchant's own roles; its users get the Customer role. @param {any} ctx */
+	/**
+	 * Delete a role; its users get the role for new sign-ups. Owner and the sign-up role stay (A3).
+	 * @param {any} ctx
+	 */
 	const deleteRole = async (ctx) => {
 		const s = await service.site(ctx);
 		const role = await s.store.roles.get(ctx.params.key);
-		if (!(await s.store.roles.remove(ctx.params.key)))
-			throw problem('not_found', 'No such role of your own (ready-made roles stay).');
-		const moved = await s.store.users.resetRole(ctx.params.key);
-		await log(ctx, 'role.deleted', ctx.params.key, {
-			label: labelOf(role?.name) ?? ctx.params.key,
-			detail: `${plural(moved, 'user', 'users')} moved to the role ${DEFAULT_ROLE}`,
+		if (!role) throw problem('not_found', 'No such role.');
+		if (isSystemRole(role))
+			throw problem('conflict', 'Owner and the role for new sign-ups stay: choose another role for new sign-ups first.');
+		if (!(await s.store.roles.remove(role.key))) throw problem('not_found', 'No such role.');
+		const to = (await service.signUpRole(s)).key;
+		const moved = await s.store.users.resetRole(role.key, to);
+		await log(ctx, 'role.deleted', role.key, {
+			label: labelOf(role.name) ?? role.key,
+			detail: `${plural(moved, 'user', 'users')} moved to the role ${to}`,
 		});
 		return undefined;
 	};
