@@ -20,7 +20,7 @@ describe('decodeEntities', () => {
 	it('decodes decimal, hexadecimal and named references', () => {
 		expect(decodeEntities('A &amp; B &lt;i&gt; &quot;x&quot; &apos;y&#39;')).toBe(`A & B <i> "x" 'y'`);
 		expect(decodeEntities('&#36;5 &#x20B9;9 &#X20b9; &#0000065;')).toBe('$5 ₹9 ₹ A');
-		expect(decodeEntities('caf&eacute; &Eacute;t&eacute; &nbsp;&copy;&yuml;')).toBe('café Été  ©ÿ');
+		expect(decodeEntities('caf&eacute; &Eacute;t&eacute; &nbsp;&copy;&yuml;')).toBe('café Été \u00a0©ÿ');
 		expect(decodeEntities('It&rsquo;s&hellip; &ndash; &mdash; &euro;9 &trade; &AMP; &frac14;')).toBe('It’s… – — €9 ™ & ¼');
 	});
 
@@ -31,7 +31,9 @@ describe('decodeEntities', () => {
 	});
 
 	it('reads numbers as HTML does: invalid code points become U+FFFD, U+0080–U+009F windows-1252', () => {
-		expect(decodeEntities('&#0;|&#xD800;|&#xDFFF;|&#x110000;|&#99999999999999999999;')).toBe('�|�|�|�|�');
+		expect(decodeEntities('&#0;|&#xD800;|&#xDFFF;|&#x110000;|&#99999999999999999999;')).toBe(
+			'\uFFFD|\uFFFD|\uFFFD|\uFFFD|\uFFFD',
+		);
 		expect(decodeEntities('&#150;&#x80;&#x9F;&#x81;')).toBe('–€Ÿ\u0081');
 		expect(decodeEntities('&#x10FFFF;&#x1F600;')).toBe('\u{10FFFF}😀');
 	});

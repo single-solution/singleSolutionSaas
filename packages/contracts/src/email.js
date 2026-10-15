@@ -30,7 +30,7 @@ const LOCAL = /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*$
 /** One domain label (letters, digits and hyphens, no hyphen first or last). */
 const LABEL = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
 /** A domain typed in Unicode: letters, marks and digits of any script, hyphens and full stops (`.`, `。`, `．`, `｡`). */
-const UNICODE_DOMAIN = /^[\p{L}\p{M}\p{N}.。．｡-]+$/u;
+const UNICODE_DOMAIN = /^[\p{L}\p{M}\p{N}.\u3002\uff0e\uff61-]+$/u;
 /** Printable ASCII only. */
 const ASCII = /^[ -~]*$/;
 

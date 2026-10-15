@@ -67,7 +67,7 @@ const REFERENCE = /&(?:#(\d+)|#[xX]([0-9A-Fa-f]+)|([A-Za-z][A-Za-z0-9]*));/g;
  */
 const characterOf = (code) =>
 	code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)
-		? '�'
+		? '\uFFFD'
 		: String.fromCodePoint(WINDOWS_1252.get(code) ?? code);
 
 /**

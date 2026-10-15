@@ -185,6 +185,22 @@ Pure and browser-safe; every product normalizes phones with it, so one person ha
   business.json `country`; `callingCodeOf(country)`.
 - `PHONE_COUNTRIES` (ISO codes a setting may name) and `phoneInCountries(phone, countries)` (`[]` = any).
 
+## CSV (`@ss/contracts/csv`)
+
+Pure and browser-safe; every export and import (RFC 4180) uses it.
+
+- `toCsv(header, rows, { delimiter? })`: a UTF-8 byte order mark, then CRLF records; cells with the delimiter, `"`,
+  CR or LF quoted. Text starting with `=`, `+`, `-`, `@`, TAB or CR (after any leading `'`) gets one more `'` so
+  spreadsheets never run it as a formula; numbers are written as numbers (`-12.5`, never guarded; not finite → ''),
+  booleans as `true` / `false`, null and undefined as ''. `csvCell(value, delimiter?)` writes one cell the same way.
+- `parseCsv(input, { delimiter?, maxRows? })` → `{ ok: true, rows }` or `{ ok: false, code }` (`empty`,
+  `unterminated_quote`, `too_many_rows`; `maxRows` counts records after the header). Without `delimiter` it takes
+  the one the first line holds most of (comma, semicolon or tab). Quoted cells, doubled quotes, line breaks, CRLF, LF
+  or CR, a byte order mark and blank lines are handled, and the formula guard is undone: a round trip gives back every
+  text as written.
+- `csvRecords(rows)` → `{ header, records: [{ line, values }] }`: names trimmed and in lower case (first column of a
+  repeated name wins, empty names skipped), values trimmed, `line` counted from the header (line 1).
+
 ## Email addresses (`@ss/contracts/email`)
 
 Pure and browser-safe; every product and the Portal check addresses with it, so an address one accepts is never
