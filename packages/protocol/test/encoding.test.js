@@ -1,6 +1,6 @@
 import { createHash, createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { constantTimeEqual, hmacSha256Hex, randomToken, sha256Hex } from '../src/index.js';
+import { canonicalJson, constantTimeEqual, hmacSha256Hex, randomToken, sha256Hex } from '../src/index.js';
 import { randomId } from '../src/encoding.js';
 
 /** @param {number} length */
@@ -56,5 +56,15 @@ describe('randomToken', () => {
 	it('refuses a byte count that is not a positive integer', () => {
 		for (const bytes of [0, -1, 1.5, Number.NaN, /** @type {any} */ ('8')])
 			expect(() => randomToken(bytes, counting)).toThrow(TypeError);
+	});
+});
+
+describe('canonicalJson of values with toJSON', () => {
+	it('writes what toJSON gives, as JSON.stringify does (a date is its ISO text, never {})', () => {
+		expect(canonicalJson({ at: new Date(0), b: 1 })).toBe('{"at":"1970-01-01T00:00:00.000Z","b":1}');
+		expect(canonicalJson([new Date(1000)])).toBe('["1970-01-01T00:00:01.000Z"]');
+		expect(canonicalJson({ id: { toJSON: () => ({ z: 1, a: 'x' }) } })).toBe('{"id":{"a":"x","z":1}}');
+		expect(() => canonicalJson(new Date(Number.NaN))).not.toThrow();
+		expect(canonicalJson(new Date(Number.NaN))).toBe('null');
 	});
 });

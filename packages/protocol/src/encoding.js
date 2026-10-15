@@ -120,12 +120,23 @@ export const getHeader = (headers, name) => {
 
 /**
  * Canonical JSON (RFC 8785 style): object keys sorted by UTF-16 code units, no whitespace, ECMAScript number and string
- * serialization; `undefined` object members are omitted and `undefined` array items become `null` (as JSON.stringify).
- * Throws on values JSON cannot represent (non-finite numbers, functions, symbols, bigints).
+ * serialization; `undefined` object members are omitted, `undefined` array items become `null` and a value with
+ * `toJSON` is written as what it gives (a date is its ISO text), as JSON.stringify does. Throws on values JSON cannot
+ * represent (non-finite numbers, functions, symbols, bigints).
  * @param {unknown} value
  * @returns {string}
  */
 export const canonicalJson = (value) => {
+	const toJson = value !== null && typeof value === 'object' ? /** @type {{ toJSON?: unknown }} */ (value).toJSON : undefined;
+	return canonicalValue(typeof toJson === 'function' ? toJson.call(value) : value);
+};
+
+/**
+ * {@link canonicalJson} of a value whose own `toJSON` was already applied.
+ * @param {unknown} value
+ * @returns {string}
+ */
+const canonicalValue = (value) => {
 	if (value === null || typeof value === 'boolean' || typeof value === 'string') return JSON.stringify(value);
 	if (typeof value === 'number') {
 		if (!Number.isFinite(value)) throw new TypeError('non-finite number is not JSON');
