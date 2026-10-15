@@ -191,6 +191,8 @@ export const settingsPlan = (values) => {
 				'phone_password.breachedCheck': false,
 				'phone_password.maxAttempts': 20,
 				'phone_password.lockMinutes': 1,
+				// SaaS default (K-27; SB counts no failures per account): store mapping to review when the owner asks
+				'phone_password.forgetHours': 24,
 				// forgot password: a WhatsApp chat with the shop (`apps/web/src/app/account/_components/SignIn.tsx`:31)
 				'phone_password.selfReset': 'off',
 				'phone_password.forgotUrl': store.whatsappNumber
@@ -204,6 +206,7 @@ export const settingsPlan = (values) => {
 				'email_password.breachedCheck': false,
 				'email_password.maxAttempts': 20,
 				'email_password.lockMinutes': 1,
+				'email_password.forgetHours': 24,
 				'email_password.resetMinutes': 60,
 				'email_password.resetLimit': 3,
 				'email_password.resetHosts': [],
