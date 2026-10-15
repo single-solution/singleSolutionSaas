@@ -228,7 +228,7 @@ describe('conversation counts (K4)', () => {
 		});
 		const unknown = await server(sys, 'GET', '/v1/conversations/counts?by=color');
 		expect(unknown.status).toBe(422);
-		expect(unknown.json.detail).toBe('by is one of: status, waiting, guest, unread.');
+		expect(unknown.json.detail).toBe('by is one of: status, waiting, guest, unread, topic, priority.');
 
 		const ticket = await sys.ticket(['inbox.read']);
 		const listed = (await sys.admin(ticket, 'GET', '/v1/admin/conversations?waiting=1')).json.items;
