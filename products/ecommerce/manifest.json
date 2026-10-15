@@ -246,7 +246,7 @@
 		{
 			"key": "bulk_actions",
 			"name": "Bulk actions",
-			"description": "Change prices, stock, status or category for many products at once, and move many orders at once.",
+			"description": "Change prices, stock, status, category, brand, tags, item type, compare-at price or any field of many products at once, and move many orders at once.",
 			"dependsOn": ["catalog"],
 			"settings": {
 				"$ref": "schemas/bulk_actions.settings.json"

@@ -281,12 +281,46 @@ describe('catalog admin: the product list', () => {
 		reply = () => invalid('/categoryId');
 		await submitDialog(root);
 		expect(statuses(dialog)).toContain(TEXTS['problem.field.categoryId']);
+		await click(buttonIn(dialog, 'Cancel'));
+		// any field (E23): brand, tags, compare-at price and a field; a product the server refused is told
+		reply = () => answer(200, { matched: 1, changed: 1, missing: [], refused: [] });
+		/** @param {string} key @param {(dialog: HTMLElement) => Promise<void> | void} fill */
+		const bulkWith = async (key, fill) => {
+			await click(buttonIn(panel, 'Select all shown'));
+			await click(buttonIn(panel, 'Change'));
+			const open = dialogOf(root);
+			await change(fieldIn(open, 'Change'), key);
+			await fill(open);
+			await submitDialog(root);
+		};
+		await bulkWith('brand', (open) => change(fieldIn(open, 'Brand'), 'brd_1'));
+		await bulkWith('add_tags', (open) => type(fieldIn(open, 'Tags'), 'sale, new'));
+		await bulkWith('compare_at_price', async (open) => {
+			await change(fieldIn(open, 'Compare-at price'), 'set');
+			type(fieldIn(open, 'Percent or amount'), '12.50');
+		});
+		reply = () =>
+			answer(200, {
+				matched: 1,
+				changed: 0,
+				missing: [],
+				refused: [{ id: 'prd_1', path: '/specs/att_1', message: 'Too big.' }],
+			});
+		await bulkWith('field', async (open) => {
+			await change(fieldIn(open, 'Field'), 'att_1');
+			type(fieldIn(open, 'Value'), '42');
+		});
+		expect(statuses(panel)).toContain('Changed 0 of 1 products. 1 products kept as they were: Too big.');
 		expect(sent).toEqual([
 			{ ids: ['prd_1'], action: 'status', status: 'archived' },
 			{ ids: ['prd_1'], action: 'price', price: { mode: 'percent', value: -10 } },
 			{ ids: ['prd_1'], action: 'price', price: { mode: 'fixed', value: -250 } },
 			{ ids: ['prd_1'], action: 'stock', stock: 5, locationId: 'loc_2' },
 			{ ids: ['prd_1'], action: 'add_category', categoryId: 'cat_c' },
+			{ ids: ['prd_1'], action: 'brand', brandId: 'brd_1' },
+			{ ids: ['prd_1'], action: 'add_tags', tags: ['sale', 'new'] },
+			{ ids: ['prd_1'], action: 'compare_at_price', compareAt: { mode: 'set', value: 1250 } },
+			{ ids: ['prd_1'], action: 'field', field: 'att_1', value: 42 },
 		]);
 		await click(buttonIn(panel, 'Done'));
 		expect(panel.querySelector('input[aria-label="Select Phone"]')).toBeNull();

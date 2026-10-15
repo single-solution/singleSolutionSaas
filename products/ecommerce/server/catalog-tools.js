@@ -18,8 +18,13 @@ import {
 	locationsOf,
 	productsByIds,
 	rewriteProduct,
+	stockedUnits,
 } from '../adapters/catalog-store.js';
-import { LIMITS, changedPrice, changedStock, checkPriceChange, checkProduct, summarize } from '../core/catalog.js';
+import { LIMITS, changedPrice, changedStock, checkPriceChange, checkProduct, productType, summarize } from '../core/catalog.js';
+import { checkTags } from '../core/customer-segments.js';
+import { fieldApplies } from '../core/fields.js';
+import { typeByKey } from '../core/item-types.js';
+import { sameMeaning } from '../core/measure.js';
 import { aiPrompt, checkAiRequest, readSuggestions } from '../core/catalog-ai.js';
 import {
 	CUSTOMER_COLUMNS,
@@ -56,6 +61,7 @@ import { phoneRulesOf } from './guests.js';
 /** @typedef {import('./catalog-common.js').CatalogCommon} CatalogCommon */
 /** @typedef {import('../core/model.js').ProductRecord} ProductRecord */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
+/** @typedef {import('../core/model.js').VariantRecord} VariantRecord */
 /** @typedef {import('../core/catalog-csv.js').RowProblem} RowProblem */
 /** @typedef {import('../core/catalog-csv.js').ImportGroup} ImportGroup */
 /** @typedef {import('../core/catalog-csv.js').UpdateRow} UpdateRow */
@@ -71,7 +77,21 @@ const MAX_BULK = 500;
 /** Largest import body. */
 const IMPORT_BYTES = 8 * 1024 * 1024;
 
-const BULK_ACTIONS = Object.freeze(['status', 'price', 'stock', 'add_category', 'remove_category']);
+const BULK_ACTIONS = Object.freeze([
+	'status',
+	'price',
+	'stock',
+	'add_category',
+	'remove_category',
+	'brand',
+	'add_tags',
+	'remove_tags',
+	'item_type',
+	'compare_at_price',
+	'field',
+]);
+/** Bulk actions whose change is checked like an API change of the product (E23). */
+const CHECKED_ACTIONS = Object.freeze(['brand', 'add_tags', 'remove_tags', 'item_type', 'compare_at_price', 'field']);
 
 /** Where the product check names a field value: `/specs/<id>` or `/variants/<n>/attributes/<id>`. */
 const FIELD_PATH = /^\/(?:specs|variants\/(\d+)\/attributes)\/([^/]+)$/;
@@ -578,7 +598,111 @@ export const createCatalogTools = (product, service, common) => {
 
 	// ---------------------------------------------------------------------------------------------------- bulk
 
-	/** POST …/products/bulk `{ ids, action, status | price | stock (+ locationId) | categoryId }`. @param {any} ctx */
+	/**
+	 * The API change a checked bulk action (E23) makes to one product (null: nothing to change), and what the product's
+	 * own check then says: brand `{ brandId }` (null: none), tags added or removed `{ tags }`, item type `{ typeKey }`
+	 * (null: its category's), the compare-at price of every variant `{ compareAt: { mode: set, value } | { mode: clear }
+	 * | { mode: percent, value } }` (percent above its price) and any product or variant field `{ field, value }` (its
+	 * id, or its slug: the field defined for the product's category, else the one for every category; null clears it).
+	 * @param {string} action @param {Record<string, any>} body
+	 * @param {import('../core/catalog.js').CatalogRules} rules
+	 * @returns {(item: ProductRecord) => Record<string, unknown> | null}
+	 */
+	const checkedChange = (action, body, rules) => {
+		if (action === 'brand') {
+			const brandId = body.brandId === null || body.brandId === '' ? null : body.brandId;
+			if (brandId !== null && (typeof brandId !== 'string' || !rules.brandIds.has(brandId)))
+				throw refuse([{ path: '/brandId', message: 'Pick an existing brand, or null for none.' }]);
+			return (item) => (item.brandId === brandId ? null : { brandId });
+		}
+		if (action === 'add_tags' || action === 'remove_tags') {
+			const tags = checkTags(body.tags);
+			if (!tags.ok || tags.value.length === 0)
+				throw refuse([{ path: '/tags', message: tags.ok ? 'Give tags.' : tags.message }]);
+			return action === 'add_tags'
+				? (item) => {
+						const next = [...item.tags, ...tags.value.filter((tag) => !item.tags.includes(tag))];
+						return next.length === item.tags.length ? null : { tags: next };
+					}
+				: (item) =>
+						item.tags.some((tag) => tags.value.includes(tag))
+							? { tags: item.tags.filter((tag) => !tags.value.includes(tag)) }
+							: null;
+		}
+		if (action === 'item_type') {
+			const typeKey = body.typeKey === null || body.typeKey === '' ? null : body.typeKey;
+			if (typeKey !== null && (typeof typeKey !== 'string' || !typeByKey(typeKey, rules.types)))
+				throw refuse([{ path: '/typeKey', message: 'Pick one of your item types, or null for the category’s.' }]);
+			return (item) => ((item.typeKey ?? null) === typeKey ? null : { typeKey });
+		}
+		if (action === 'compare_at_price') {
+			const compareAt = typeof body.compareAt === 'object' && body.compareAt !== null ? body.compareAt : {};
+			const { mode, value } = compareAt;
+			const amount = Number.isSafeInteger(value) && value >= 0;
+			const percent = typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 1000;
+			if (!(mode === 'clear' || (mode === 'set' && amount) || (mode === 'percent' && percent)))
+				throw refuse([
+					{
+						path: '/compareAt',
+						message:
+							'Give { mode: set, value } in minor units, { mode: percent, value } (above 0, up to 1000) or { mode: clear }.',
+					},
+				]);
+			/** @param {VariantRecord} variant */
+			const next = (variant) =>
+				mode === 'clear' ? null : mode === 'set' ? value : Math.round((variant.price * (100 + value)) / 100);
+			return (item) =>
+				item.variants.every((variant) => (variant.compareAtPrice ?? null) === next(variant))
+					? null
+					: { variants: item.variants.map((variant) => ({ id: variant.id, compareAtPrice: next(variant) })) };
+		}
+		// any product or variant field
+		const ref = typeof body.field === 'string' ? body.field : '';
+		const byId = rules.attributes.get(ref);
+		const named = (byId ? [byId] : [...rules.attributes.values()].filter((field) => field.slug === ref)).filter(
+			(field) => field.on === 'product' || field.on === 'variant',
+		);
+		if (named.length === 0) throw refuse([{ path: '/field', message: 'Name a product or variant field by its id or slug.' }]);
+		if (body.value === undefined) throw refuse([{ path: '/value', message: 'Give the value, or null to clear it.' }]);
+		const value = body.value === '' ? null : body.value;
+		/** @param {ProductRecord} item the field for the product: by its category, nearest first, else for every category */
+		const fieldOf = (item) => {
+			const lineage = item.categoryIds.flatMap((id) => [id, ...(rules.categoryPaths.get(id) ?? [])]);
+			return (
+				lineage.map((id) => named.find((field) => field.categoryId === id)).find(Boolean) ??
+				named.find((field) => !field.categoryId && fieldApplies(field, lineage)) ??
+				named.find((field) => !field.categoryId) ??
+				null
+			);
+		};
+		/** @param {Record<string, unknown>} values @param {string} id */
+		const withValue = (values, id) => {
+			const out = { ...values };
+			if (value === null) delete out[id];
+			else out[id] = value;
+			return out;
+		};
+		return (item) => {
+			const field = fieldOf(item);
+			if (!field) return null;
+			if (field.on === 'product') {
+				const specs = withValue(item.specs ?? {}, field.id);
+				return JSON.stringify(specs) === JSON.stringify(item.specs ?? {}) ? null : { specs };
+			}
+			return {
+				variants: item.variants.map((variant) => ({
+					id: variant.id,
+					attributes: withValue(variant.attributes ?? {}, field.id),
+				})),
+			};
+		};
+	};
+
+	/**
+	 * POST …/products/bulk `{ ids, action, status | price | stock (+ locationId) | categoryId | brandId | tags | typeKey |
+	 * compareAt | field + value }`: `refused` lists the products the product's own check refused a change (E23), with why.
+	 * @param {any} ctx
+	 */
 	const bulk = async (ctx) => {
 		const body = bodyOf(ctx);
 		const ids = Array.isArray(body.ids) ? [...new Set(body.ids.filter((id) => typeof id === 'string'))] : [];
@@ -590,7 +714,38 @@ export const createCatalogTools = (product, service, common) => {
 		const { s, data } = await common.open(ctx);
 		/** @type {(product: ProductRecord) => Record<string, unknown> | null} null = nothing to change */
 		let change;
-		if (action === 'status') {
+		/** @type {Array<{ id: string, path: string, message: string }>} */
+		const refused = [];
+		if (CHECKED_ACTIONS.includes(action)) {
+			const rules = await common.rulesOf(s, data);
+			const input = checkedChange(action, body, rules);
+			const stocked = action === 'item_type' ? await stockedUnits(data, ids) : new Set();
+			change = (item) => {
+				const given = input(item);
+				if (!given) return null;
+				const checked = checkProduct(given, rules, item);
+				const fail = (/** @type {string} */ path, /** @type {string} */ message) => {
+					refused.push({ id: item.id, path, message });
+					return null;
+				};
+				if (!checked.ok) return fail(checked.errors[0]?.path ?? '', checked.errors[0]?.message ?? 'Refused.');
+				if (action === 'item_type') {
+					// units in stock were numbered by its item type, and its stock is counted in its type's unit of measure
+					const [before, after] = [productType(item, rules), productType(checked.value, rules)];
+					if (before.key !== after.key && stocked.has(item.id))
+						return fail(
+							'/typeKey',
+							'This product has units in stock: its item type cannot change until they are sold or removed.',
+						);
+					if (!sameMeaning(before.elements.measure, after.elements.measure) && item.variants.some((v) => v.stock > 0))
+						return fail(
+							'/typeKey',
+							'This product has stock counted in its unit of measure: its item type cannot change how it is measured until its stock is 0.',
+						);
+				}
+				return Object.fromEntries(Object.keys(given).map((key) => [key, /** @type {any} */ (checked.value)[key]]));
+			};
+		} else if (action === 'status') {
 			if (!['draft', 'active', 'archived'].includes(body.status))
 				throw refuse([{ path: '/status', message: 'Status is draft, active or archived.' }]);
 			// a draft without variants (an imported shell, CA-2) stays off sale until it has one
@@ -670,7 +825,9 @@ export const createCatalogTools = (product, service, common) => {
 			detail: `${action.replace('_', ' ')}: ${changed} of ${ids.length} changed`,
 		});
 		await common.changed(s, before);
-		return { matched: ids.length - missing.length, changed, missing };
+		// a product's change is tried again when its transaction is: each product is listed once
+		const once = [...new Map(refused.map((entry) => [entry.id, entry])).values()];
+		return { matched: ids.length - missing.length, changed, missing, refused: once };
 	};
 
 	// ------------------------------------------------------------------------------------------------- AI copy

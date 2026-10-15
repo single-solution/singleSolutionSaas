@@ -8452,7 +8452,7 @@
 		"/v1/admin/products/bulk": {
 			"post": {
 				"summary": "Change many products at once (Catalog admin widget)",
-				"description": "One action on up to 500 products: status (a draft without variants stays a draft), price (every variant's price by a percentage or a fixed amount, never below 0), stock (every variant's units, at locationId with multi-location stock), add_category or remove_category (a product keeps at most 20 categories). Ids not found are listed in missing. Needs Bulk actions; the admin twin needs the bulk.run permission. 422 validation_failed at /ids, /action or the action's member.",
+				"description": "One action on up to 500 products: status (a draft without variants stays a draft), price (every variant's price by a percentage or a fixed amount, never below 0), stock (every variant's units, at locationId with multi-location stock), add_category or remove_category (a product keeps at most 20 categories), and (E23) brand (brandId, null for none), add_tags or remove_tags (tags), item_type (typeKey, null for its category's; a product with units in stock, or with stock counted in its unit of measure, keeps how it is numbered and measured), compare_at_price (compareAt on every variant) and field (field: a product or variant field's id or slug, the one defined for the product's category first; value: checked like the product's own; null clears it). The last six are checked like PATCH /v1/products/:id: a product it refuses is listed in refused and left as it was. Ids not found are listed in missing. Needs Bulk actions; the admin twin needs the bulk.run permission. 422 validation_failed at /ids, /action or the action's member.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "bulk_actions",
 				"x-ss-permission": "bulk.run",
@@ -8489,7 +8489,13 @@
 											"price",
 											"stock",
 											"add_category",
-											"remove_category"
+											"remove_category",
+											"brand",
+											"add_tags",
+											"remove_tags",
+											"item_type",
+											"compare_at_price",
+											"field"
 										]
 									},
 									"status": {
@@ -8535,6 +8541,59 @@
 									"categoryId": {
 										"type": "string",
 										"description": "add_category, remove_category: an existing category."
+									},
+									"brandId": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "action brand: an existing brand, or null for none."
+									},
+									"tags": {
+										"type": "array",
+										"minItems": 1,
+										"maxItems": 30,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "add_tags, remove_tags."
+									},
+									"typeKey": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "action item_type: one of your item types (or a built-in one), or null for the category's."
+									},
+									"compareAt": {
+										"type": "object",
+										"required": [
+											"mode"
+										],
+										"properties": {
+											"mode": {
+												"type": "string",
+												"enum": [
+													"set",
+													"percent",
+													"clear"
+												]
+											},
+											"value": {
+												"type": "number",
+												"description": "set: whole minor units; percent: above the variant's price, over 0 and up to 1000."
+											}
+										},
+										"description": "action compare_at_price: the compare-at (\"was\") price of every variant."
+									},
+									"field": {
+										"type": "string",
+										"description": "action field: a product or variant field's id or slug."
+									},
+									"value": {
+										"description": "action field: the value as the product API takes it (a list for a field with several values); null clears it."
 									}
 								}
 							}
@@ -25195,7 +25254,7 @@
 		"/v1/products/bulk": {
 			"post": {
 				"summary": "Change many products at once",
-				"description": "One action on up to 500 products: status (a draft without variants stays a draft), price (every variant's price by a percentage or a fixed amount, never below 0), stock (every variant's units, at locationId with multi-location stock), add_category or remove_category (a product keeps at most 20 categories). Ids not found are listed in missing. Needs Bulk actions; the admin twin needs the bulk.run permission. 422 validation_failed at /ids, /action or the action's member.",
+				"description": "One action on up to 500 products: status (a draft without variants stays a draft), price (every variant's price by a percentage or a fixed amount, never below 0), stock (every variant's units, at locationId with multi-location stock), add_category or remove_category (a product keeps at most 20 categories), and (E23) brand (brandId, null for none), add_tags or remove_tags (tags), item_type (typeKey, null for its category's; a product with units in stock, or with stock counted in its unit of measure, keeps how it is numbered and measured), compare_at_price (compareAt on every variant) and field (field: a product or variant field's id or slug, the one defined for the product's category first; value: checked like the product's own; null clears it). The last six are checked like PATCH /v1/products/:id: a product it refuses is listed in refused and left as it was. Ids not found are listed in missing. Needs Bulk actions; the admin twin needs the bulk.run permission. 422 validation_failed at /ids, /action or the action's member.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "bulk_actions",
 				"security": [
@@ -25244,7 +25303,13 @@
 											"price",
 											"stock",
 											"add_category",
-											"remove_category"
+											"remove_category",
+											"brand",
+											"add_tags",
+											"remove_tags",
+											"item_type",
+											"compare_at_price",
+											"field"
 										]
 									},
 									"status": {
@@ -25290,6 +25355,59 @@
 									"categoryId": {
 										"type": "string",
 										"description": "add_category, remove_category: an existing category."
+									},
+									"brandId": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "action brand: an existing brand, or null for none."
+									},
+									"tags": {
+										"type": "array",
+										"minItems": 1,
+										"maxItems": 30,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "add_tags, remove_tags."
+									},
+									"typeKey": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "action item_type: one of your item types (or a built-in one), or null for the category's."
+									},
+									"compareAt": {
+										"type": "object",
+										"required": [
+											"mode"
+										],
+										"properties": {
+											"mode": {
+												"type": "string",
+												"enum": [
+													"set",
+													"percent",
+													"clear"
+												]
+											},
+											"value": {
+												"type": "number",
+												"description": "set: whole minor units; percent: above the variant's price, over 0 and up to 1000."
+											}
+										},
+										"description": "action compare_at_price: the compare-at (\"was\") price of every variant."
+									},
+									"field": {
+										"type": "string",
+										"description": "action field: a product or variant field's id or slug."
+									},
+									"value": {
+										"description": "action field: the value as the product API takes it (a list for a field with several values); null clears it."
 									}
 								}
 							}
@@ -48256,7 +48374,8 @@
 				"required": [
 					"matched",
 					"changed",
-					"missing"
+					"missing",
+					"refused"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -48276,6 +48395,31 @@
 							"type": "string"
 						},
 						"description": "Ids not found."
+					},
+					"refused": {
+						"type": "array",
+						"description": "Products the product's own check refused the change (brand, tags, item type, compare-at price or field), with the first reason: a value the field refuses, a required field cleared on a product on sale, an item type kept while units are in stock.",
+						"items": {
+							"type": "object",
+							"required": [
+								"id",
+								"path",
+								"message"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"path": {
+									"type": "string",
+									"description": "Where the product check refused it, as in PATCH /v1/products/:id."
+								},
+								"message": {
+									"type": "string"
+								}
+							}
+						}
 					}
 				},
 				"description": "What a bulk action changed."

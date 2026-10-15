@@ -3,7 +3,7 @@
  * search, status chips with their counts, a Filters dialog (category, several brands and grades, featured, stock state
  * with counts, photos, low stock, kind; with SEO on, the order by SEO score and a score below 50 or 80, E42), the
  * total, Load more, and a selection for bulk changes (status, price, stock,
- * add to or remove from a category; `bulk_actions`) and for generating the variants of many products (`variants`).
+ * add to or remove from a category, and (E23) brand, tags, item type, compare-at price and any field; `bulk_actions`) and for generating the variants of many products (`variants`).
  * The picked product's detail and editor are in `./admin-product.js` and `./admin-product-editor.js`.
  * @module
  */
@@ -14,6 +14,7 @@ import { STATUS_TONES, productDetail } from './admin-product.js';
 import { productEditor } from './admin-product-editor.js';
 import { createScreen, fieldsOf } from './admin-screen.js';
 import { categoryChoices } from './admin-taxonomy.js';
+import { typeChoices } from './admin-types.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-taxonomy.js').Lookups} Lookups */
@@ -26,7 +27,39 @@ import { categoryChoices } from './admin-taxonomy.js';
 /** Stock states (E2). */
 const STOCK_STATES = Object.freeze(['full', 'partial', 'out', 'none']);
 /** Bulk changes of products. */
-const BULK_ACTIONS = Object.freeze(['status', 'price', 'stock', 'add_category', 'remove_category']);
+const BULK_ACTIONS = Object.freeze([
+	'status',
+	'price',
+	'stock',
+	'add_category',
+	'remove_category',
+	'brand',
+	'add_tags',
+	'remove_tags',
+	'item_type',
+	'compare_at_price',
+	'field',
+]);
+
+/**
+ * A field value typed in the bulk dialog as the product API takes it (E23): a number, yes or no, several values
+ * separated by commas, else the text; '' clears it (null).
+ * @param {any} field @param {string} text
+ */
+const fieldValueOf = (field, text) => {
+	const value = text.trim();
+	if (value === '') return null;
+	/** @param {string} one */
+	const typed = (one) => (field?.type === 'number' ? Number(one) : one);
+	if (field?.type === 'yes_no') return ['true', 'yes', '1'].includes(value.toLowerCase());
+	if (field?.multiple)
+		return value
+			.split(',')
+			.map((one) => one.trim())
+			.filter(Boolean)
+			.map(typed);
+	return typed(value);
+};
 
 /**
  * A list row from a whole product (after a change in its detail).
@@ -355,6 +388,21 @@ export const productsTab = (kit, panel, lookups, links) => {
 		const stock = kit.input('', { type: 'number', min: '0', step: '1' });
 		const location = kit.select(lookups.state.locations.map((item) => ({ value: item.id, label: item.name })));
 		const category = kit.select(categoryChoices(lookups.state.categories));
+		// any field (E23): brand, tags, item type, compare-at price, product and variant fields
+		const brand = kit.select([
+			{ value: '', label: t('catalogAdmin.noBrand') },
+			...lookups.state.brands.map((item) => ({ value: item.id, label: item.name })),
+		]);
+		const tags = kit.input('', { maxlength: '1300', placeholder: t('admin.tagPlaceholder') });
+		const type = kit.select(typeChoices(kit, null, null, t('catalogAdmin.typeAsCategory')));
+		const compareMode = kit.select(
+			['percent', 'set', 'clear'].map((mode) => ({ value: mode, label: t(`catalogAdmin.compareAt.${mode}`) })),
+		);
+		const compareValue = kit.input('', { inputmode: 'decimal' });
+		/** @type {any[]} */
+		const fields = lookups.state.attributes.filter((item) => item.on === 'product' || item.on === 'variant');
+		const field = kit.select(fields.map((item) => ({ value: item.id, label: item.name })));
+		const fieldValue = kit.input('', { maxlength: '1000' });
 		const parts = {
 			status: kit.field(t('admin.status'), status),
 			price: fieldsOf(kit, [kit.field(t('catalogAdmin.priceChange'), priceMode), kit.field(t('catalogAdmin.priceBy'), price)]),
@@ -363,18 +411,48 @@ export const productsTab = (kit, panel, lookups, links) => {
 				has('multi_location') ? kit.field(t('catalogAdmin.location'), location) : null,
 			]),
 			category: kit.field(t('catalogAdmin.category'), category),
+			brand: kit.field(t('catalogAdmin.brand'), brand),
+			tags: fieldsOf(kit, [kit.text('p', { class: 'muted' }, t('admin.tagsHint')), kit.field(t('admin.tags'), tags)]),
+			type: kit.field(t('catalogAdmin.itemType'), type),
+			compareAt: fieldsOf(kit, [
+				kit.field(t('catalogAdmin.compareAtChange'), compareMode),
+				kit.field(t('catalogAdmin.compareAtBy'), compareValue),
+			]),
+			field: fieldsOf(kit, [
+				kit.field(t('catalogAdmin.fieldToSet'), field),
+				kit.field(t('catalogAdmin.fieldValue'), fieldValue),
+				kit.text('p', { class: 'muted' }, t('catalogAdmin.fieldValueHint')),
+			]),
 		};
 		const sync = () => {
 			parts.status.hidden = action.value !== 'status';
 			parts.price.hidden = action.value !== 'price';
 			parts.stock.hidden = action.value !== 'stock';
 			parts.category.hidden = !action.value.endsWith('_category');
+			parts.brand.hidden = action.value !== 'brand';
+			parts.tags.hidden = !action.value.endsWith('_tags');
+			parts.type.hidden = action.value !== 'item_type';
+			parts.compareAt.hidden = action.value !== 'compare_at_price';
+			compareValue.disabled = compareMode.value === 'clear';
+			parts.field.hidden = action.value !== 'field';
 		};
+		compareMode.addEventListener('change', sync);
 		action.addEventListener('change', sync);
 		sync();
 		kit.dialog({
 			title: t('catalogAdmin.bulkTitle', { count: selected.size }),
-			body: [kit.field(t('catalogAdmin.bulkAction'), action), parts.status, parts.price, parts.stock, parts.category],
+			body: [
+				kit.field(t('catalogAdmin.bulkAction'), action),
+				parts.status,
+				parts.price,
+				parts.stock,
+				parts.category,
+				parts.brand,
+				parts.tags,
+				parts.type,
+				parts.compareAt,
+				parts.field,
+			],
 			submitLabel: t('catalogAdmin.applyToSelected'),
 			onSubmit: async () => {
 				/** @type {Record<string, unknown>} */
@@ -389,7 +467,31 @@ export const productsTab = (kit, panel, lookups, links) => {
 					const units = wholeOf(stock.value);
 					if (units === null || Number.isNaN(units)) return t('admin.checkNumbers');
 					values = { stock: units, ...(has('multi_location') ? { locationId: location.value } : {}) };
-				} else values = { categoryId: category.value };
+				} else if (action.value === 'brand') values = { brandId: brand.value || null };
+				else if (action.value.endsWith('_tags'))
+					values = {
+						tags: tags.value
+							.split(',')
+							.map((tag) => tag.trim())
+							.filter(Boolean),
+					};
+				else if (action.value === 'item_type') values = { typeKey: type.value || null };
+				else if (action.value === 'compare_at_price') {
+					const mode = compareMode.value;
+					const value =
+						mode === 'clear' ? undefined : mode === 'percent' ? Number(compareValue.value) : kit.amount(compareValue.value);
+					if (mode !== 'clear' && (value === null || value === undefined || !Number.isFinite(value)))
+						return t('admin.checkNumbers');
+					values = { compareAt: { mode, ...(value === undefined ? {} : { value }) } };
+				} else if (action.value === 'field')
+					values = {
+						field: field.value,
+						value: fieldValueOf(
+							fields.find((item) => item.id === field.value),
+							fieldValue.value,
+						),
+					};
+				else values = { categoryId: category.value };
 				const answer = await kit.call('POST', '/v1/admin/products/bulk', {
 					ids: [...selected],
 					action: action.value,
@@ -397,7 +499,18 @@ export const productsTab = (kit, panel, lookups, links) => {
 				});
 				if (!answer.ok) return kit.reason(answer);
 				await reload(screen.current());
-				kit.say(screen.line, t('catalogAdmin.bulkDone', { changed: answer.data.changed, matched: answer.data.matched }));
+				/** @type {Array<{ id: string, message: string }>} the products whose own check refused the change */
+				const refused = answer.data.refused ?? [];
+				kit.say(
+					screen.line,
+					[
+						t('catalogAdmin.bulkDone', { changed: answer.data.changed, matched: answer.data.matched }),
+						...(refused.length > 0
+							? [t('catalogAdmin.bulkRefused', { count: refused.length, reason: refused[0]?.message ?? '' })]
+							: []),
+					].join(' '),
+					refused.length > 0,
+				);
 				return null;
 			},
 		});

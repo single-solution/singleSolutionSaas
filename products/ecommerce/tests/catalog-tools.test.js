@@ -275,7 +275,12 @@ describe('bulk actions', () => {
 		const both = [a.id, b.id];
 		/** @param {Record<string, unknown>} body */
 		const run = (body) => shop.admin(staff, 'POST', '/v1/admin/products/bulk', { ids: both, ...body });
-		expect((await run({ action: 'status', status: 'active' })).json).toEqual({ matched: 2, changed: 2, missing: [] });
+		expect((await run({ action: 'status', status: 'active' })).json).toEqual({
+			matched: 2,
+			changed: 2,
+			missing: [],
+			refused: [],
+		});
 		expect((await run({ action: 'status', status: 'active' })).json.changed).toBe(0);
 		expect((await ok('GET', `/v1/products/${a.id}`)).publishedAt).toBeTruthy();
 		await run({ action: 'price', price: { mode: 'percent', value: -10 } });
@@ -306,7 +311,74 @@ describe('bulk actions', () => {
 			action: 'status',
 			status: 'draft',
 		});
-		expect(missing.json).toEqual({ matched: 1, changed: 1, missing: ['prd_none'] });
+		expect(missing.json).toEqual({ matched: 1, changed: 1, missing: ['prd_none'], refused: [] });
+	});
+});
+
+describe('bulk edit any field (E23)', () => {
+	it('sets the brand, tags, item type, compare-at price and any field of many products', async () => {
+		const staff = await shop.ticket(['bulk.run']);
+		const material = await ok('POST', '/v1/attributes', { name: 'Material', slug: 'material' });
+		const finish = await ok('POST', '/v1/attributes', {
+			name: 'Finish',
+			slug: 'finish',
+			on: 'variant',
+			type: 'choice',
+			choices: ['matte', 'gloss'],
+			show: { page: false },
+		});
+		const a = await ok('POST', '/v1/products', { name: 'Edit A', price: 1000, locations: { [ids.store.id]: 0 } });
+		const b = await ok('POST', '/v1/products', {
+			name: 'Edit B',
+			options: [{ name: 'Size', values: ['S', 'M'] }],
+			variants: [
+				{ options: { Size: 'S' }, price: 500, locations: {} },
+				{ options: { Size: 'M' }, price: 800, locations: {} },
+			],
+		});
+		const both = [a.id, b.id];
+		/** @param {Record<string, unknown>} body */
+		const run = (body) => shop.admin(staff, 'POST', '/v1/admin/products/bulk', { ids: both, ...body });
+		/** @param {string} id */
+		const read = (id) => ok('GET', `/v1/products/${id}`);
+		// brand
+		expect((await run({ action: 'brand', brandId: ids.acme.id })).json).toMatchObject({ changed: 2, refused: [] });
+		expect((await read(b.id)).brandId).toBe(ids.acme.id);
+		expect((await run({ action: 'brand', brandId: 'brd_none' })).status).toBe(422);
+		await run({ action: 'brand', brandId: null });
+		expect((await read(a.id)).brandId).toBeNull();
+		// tags
+		await run({ action: 'add_tags', tags: ['sale', ' new '] });
+		expect((await read(a.id)).tags).toEqual(['sale', 'new']);
+		expect((await run({ action: 'add_tags', tags: ['sale'] })).json.changed).toBe(0);
+		await run({ action: 'remove_tags', tags: ['sale'] });
+		expect((await read(b.id)).tags).toEqual(['new']);
+		expect((await run({ action: 'add_tags', tags: [] })).status).toBe(422);
+		// item type
+		await run({ action: 'item_type', typeKey: 'typed' });
+		expect((await read(a.id)).typeKey).toBe('typed');
+		expect((await run({ action: 'item_type', typeKey: 'nope' })).status).toBe(422);
+		await run({ action: 'item_type', typeKey: null });
+		expect((await read(a.id)).typeKey).toBeNull();
+		// compare-at price: a percent above the price, a set amount, cleared
+		await run({ action: 'compare_at_price', compareAt: { mode: 'percent', value: 20 } });
+		expect((await read(b.id)).variants.map((/** @type {any} */ v) => v.compareAtPrice)).toEqual([600, 960]);
+		await run({ action: 'compare_at_price', compareAt: { mode: 'set', value: 1500 } });
+		expect((await read(a.id)).variants[0].compareAtPrice).toBe(1500);
+		await run({ action: 'compare_at_price', compareAt: { mode: 'clear' } });
+		expect((await read(a.id)).variants[0].compareAtPrice).toBeNull();
+		expect((await run({ action: 'compare_at_price', compareAt: { mode: 'percent', value: -5 } })).status).toBe(422);
+		// a product field by slug, a variant field by id on every variant, cleared with null
+		await run({ action: 'field', field: 'material', value: 'Steel' });
+		expect((await read(a.id)).specs).toEqual({ [material.id]: 'Steel' });
+		await run({ action: 'field', field: finish.id, value: 'matte' });
+		expect((await read(b.id)).variants.map((/** @type {any} */ v) => v.attributes[finish.id])).toEqual(['matte', 'matte']);
+		const refused = await run({ action: 'field', field: finish.id, value: 'shiny' });
+		expect(refused.json.changed).toBe(0);
+		expect(refused.json.refused.map((/** @type {any} */ r) => r.id).sort()).toEqual([...both].sort());
+		await run({ action: 'field', field: 'material', value: null });
+		expect((await read(a.id)).specs).toEqual({});
+		expect((await run({ action: 'field', field: 'nothing', value: 'x' })).status).toBe(422);
 	});
 });
 
