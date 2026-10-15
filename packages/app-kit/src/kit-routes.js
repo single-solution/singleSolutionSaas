@@ -20,9 +20,9 @@
  */
 import { validateDataRightsRequest } from '@ss/contracts';
 import { CONNECT_PATH, NOTICE_PATH, isProtocolError, ticketOriginAllowed, verifyNotice } from '@ss/protocol';
+import { isObject } from '@ss/contracts/util';
 import { defineRoute } from './http/routes.js';
 import { noContent, problem } from './http/results.js';
-import { isObject } from './util.js';
 
 /** @typedef {import('./http/handler.js').RequestContext} RequestContext */
 /** @typedef {{ id?: string, email?: string, phone?: string }} DataRightsUser */

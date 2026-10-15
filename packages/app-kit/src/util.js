@@ -2,34 +2,6 @@
  * Small pure helpers shared by the kit. No I/O.
  * @module
  */
-import { createHash } from 'node:crypto';
-
-/**
- * @param {unknown} value
- * @returns {value is Record<string, unknown>}
- */
-export const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
-
-/**
- * Text as HTML text or an attribute value: `& < > " '` escaped.
- * @param {unknown} value
- * @returns {string}
- */
-export const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (ch) => `&#${/** @type {string} */ (ch).charCodeAt(0)};`);
-
-/**
- * SHA-256 hex digest.
- * @param {string | Uint8Array} data
- * @returns {string}
- */
-export const sha256Hex = (data) => createHash('sha256').update(data).digest('hex');
-
-/**
- * Base64url without padding.
- * @param {Uint8Array | string} data
- * @returns {string}
- */
-const toBase64Url = (data) => Buffer.from(data).toString('base64url');
 
 /**
  * Default randomness (WebCrypto).
@@ -37,14 +9,6 @@ const toBase64Url = (data) => Buffer.from(data).toString('base64url');
  * @returns {Uint8Array}
  */
 export const defaultRandomBytes = (length) => globalThis.crypto.getRandomValues(new Uint8Array(length));
-
-/**
- * Random opaque token (base64url of `bytes` random bytes).
- * @param {(length: number) => Uint8Array} randomBytes
- * @param {number} [bytes]
- * @returns {string}
- */
-export const randomToken = (randomBytes, bytes = 16) => toBase64Url(randomBytes(bytes));
 
 /**
  * Merchant database collection prefix of a product: `ss_<product id with - → _>_`.
@@ -84,17 +48,3 @@ export const kitError = (code, message, details) => {
  */
 export const isKitError = (error, code) =>
 	error instanceof Error && error.name === 'AppKitError' && (code === undefined || /** @type {any} */ (error).code === code);
-
-/**
- * A value frozen all the way down.
- * @template T
- * @param {T} value
- * @returns {T} the value, recursively frozen
- */
-export const deepFreeze = (value) => {
-	if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) {
-		for (const child of Object.values(value)) deepFreeze(child);
-		Object.freeze(value);
-	}
-	return value;
-};

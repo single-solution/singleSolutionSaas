@@ -1,10 +1,8 @@
-import { createOutboundPolicy } from '@ss/net';
+import { DATABASE_DEADLINES, createOutboundPolicy } from '@ss/net';
 import { Collection, MongoClient } from 'mongodb';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
-	DATABASE_DEADLINES,
 	PRODUCT_DATABASE_OPTIONS,
-	connectBeforeUse,
 	createData,
 	guardFilter,
 	guardPipeline,
@@ -414,26 +412,6 @@ describe('merchant database (MongoDB)', () => {
 		expect(isDatabaseUnavailable(Object.assign(new Error('querySrv ENOTFOUND'), { code: 'ENOTFOUND' }))).toBe(true);
 		expect(isDatabaseUnavailable(Object.assign(new Error('querySrv'), { code: 'EAI_AGAIN' }))).toBe(true);
 		expect(isDatabaseUnavailable(null)).toBe(false);
-	});
-
-	it('connects a client before use, and again after a failed connect (K-16)', async () => {
-		let attempts = 0;
-		let down = true;
-		const client = {
-			connect: async () => {
-				attempts += 1;
-				if (down) throw Object.assign(new Error('no server'), { name: 'MongoServerSelectionError' });
-				return client;
-			},
-		};
-		const connect = connectBeforeUse(/** @type {any} */ (client));
-		// concurrent calls share one attempt; a failure is forgotten, so the next call tries again
-		await expect(Promise.all([connect(), connect()])).rejects.toMatchObject({ name: 'MongoServerSelectionError' });
-		expect(attempts).toBe(1);
-		down = false;
-		await Promise.all([connect(), connect()]);
-		await connect();
-		expect(attempts).toBe(2);
 	});
 
 	it('supports transactions', async () => {

@@ -18,10 +18,11 @@
  * @module
  */
 import { isNetError } from '@ss/net';
+import { isObject } from '@ss/contracts/util';
 import { problem } from './http/results.js';
 import { createS3Storage } from './adapters/storage.js';
 import { resealEach } from './reseal.js';
-import { isObject, omit } from './util.js';
+import { omit } from './util.js';
 
 /** @typedef {import('./stores/types.js').Store} Store */
 /** @typedef {import('./recent.js').Who} Who */

@@ -12,9 +12,10 @@
  * @module
  */
 import { createId } from '@ss/contracts';
+import { isObject } from '@ss/contracts/util';
 import { paginate, problem } from './http/results.js';
 import { countHandlers } from './counts.js';
-import { isKitError, isObject, kitError } from './util.js';
+import { isKitError, kitError } from './util.js';
 
 /** @typedef {'pending' | 'sent' | 'not_connected' | 'failed'} Delivery */
 /**

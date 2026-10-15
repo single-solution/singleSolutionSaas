@@ -7,9 +7,10 @@
  * @module
  */
 import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
+import { escapeHtml } from '@ss/contracts/text';
+import { isObject } from '@ss/contracts/util';
 import { apiAnchor, renderApiReference } from './api-reference.js';
 import { KIT_GUIDE } from './guide.js';
-import { escapeHtml, isObject } from './util.js';
 
 /**
  * An operation of `openapi.json` as the docs read it.

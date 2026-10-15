@@ -17,14 +17,16 @@
  *   or options (same name), is dropped, and a declared one missing is created — two collections at a time; concurrent
  *   requests wait for the same work. No record is changed (a query for `field: null` also matches a missing field, so
  *   a new field needs no backfill).
- * - Every database call has deadlines ({@link DATABASE_DEADLINES}): a database that cannot be reached or does not answer
- *   in time fails fast with an error {@link isDatabaseUnavailable} recognizes, which requests answer 503
+ * - Every database call has deadlines (`@ss/net` `DATABASE_DEADLINES`): a database that cannot be reached or does not
+ *   answer in time fails fast with an error `isDatabaseUnavailable` recognizes, which requests answer 503
  *   `database_unavailable` (K-16).
  * @module
  */
-import { guardedLookup, isSafeMongoUri } from '@ss/net';
+import { isObject } from '@ss/contracts/util';
+import { databaseClientOptions, guardedLookup, isDatabaseUnavailable as isUnreachable, isSafeMongoUri } from '@ss/net';
+import { sha256Hex } from '@ss/protocol';
 import { MongoClient } from 'mongodb';
-import { collectionPrefix, isKitError, isObject, kitError, sha256Hex } from './util.js';
+import { collectionPrefix, isKitError, kitError } from './util.js';
 
 /**
  * Connections per merchant database per instance, opened only when needed and closed after 60 s unused. One instance
@@ -60,76 +62,20 @@ export const sameIndex = (found, declared) => {
 };
 
 /**
- * Deadlines of every database call, for serverless functions (K-16): finding a server that answers (an unreachable
- * database) and opening a connection 5 s; waiting for a free pooled connection 10 s (pools of 5 only queue that long
- * when the operations ahead are slow); each send or receive on a connection 10 s (one operation that hangs). Code
- * constants, the same for merchant and product databases.
+ * Options of the product database client (`new MongoClient(uri, PRODUCT_DATABASE_OPTIONS)`): `@ss/net`'s serverless
+ * client rules (a pool of 5 kept per instance, PLAN 0.10, and `DATABASE_DEADLINES`). `createProductBase` uses them.
  */
-export const DATABASE_DEADLINES = Object.freeze({
-	serverSelectionTimeoutMS: 5_000,
-	connectTimeoutMS: 5_000,
-	waitQueueTimeoutMS: 10_000,
-	socketTimeoutMS: 10_000,
-});
+export const PRODUCT_DATABASE_OPTIONS = Object.freeze(databaseClientOptions());
 
 /**
- * Options of the product database client (`new MongoClient(uri, PRODUCT_DATABASE_OPTIONS)`): a small fixed pool kept
- * per instance (PLAN 0.10) and {@link DATABASE_DEADLINES}.
- */
-export const PRODUCT_DATABASE_OPTIONS = Object.freeze({
-	maxPoolSize: 5,
-	minPoolSize: 0,
-	maxIdleTimeMS: 60_000,
-	...DATABASE_DEADLINES,
-});
-
-/** Driver errors of a database that cannot be reached, or that did not answer within a deadline. */
-const UNAVAILABLE_ERRORS = new Set([
-	'MongoServerSelectionError',
-	'MongoNetworkError',
-	'MongoNetworkTimeoutError',
-	'MongoWaitQueueTimeoutError',
-	'MongoOperationTimeoutError',
-	'MongoPoolClearedError',
-	'MongoTopologyClosedError',
-]);
-
-/** Network errors of a name lookup (a `mongodb+srv` address whose DNS records cannot be read right now). */
-const LOOKUP_ERRORS = new Set(['ENOTFOUND', 'EAI_AGAIN', 'ETIMEOUT', 'ESERVFAIL']);
-
-/**
- * True when an error means a database cannot be reached or did not answer in time (a merchant database that cannot be
- * reached, a driver network error or deadline, a failed DNS lookup of its address, or an operation over its
- * `maxTimeMS`).
+ * True when an error means a database cannot be reached or did not answer in time: a merchant database that cannot be
+ * reached (`database_unreachable`), or what `@ss/net` `isDatabaseUnavailable` knows (a driver network error or
+ * deadline, a failed DNS lookup of its address, an operation over its `maxTimeMS`). Requests answer 503
+ * `database_unavailable`.
  * @param {unknown} error
  * @returns {boolean}
  */
-export const isDatabaseUnavailable = (error) =>
-	isKitError(error, 'database_unreachable') ||
-	(isObject(error) &&
-		(UNAVAILABLE_ERRORS.has(String(error.name)) || error.code === 50 || LOOKUP_ERRORS.has(String(error.code))));
-
-/**
- * Connect a database client before use: the returned function resolves once `client` is connected. A mongodb 6.x client
- * whose first connect fails (the database cannot be reached while a serverless instance starts) closes its topology,
- * and every later call fails with `MongoTopologyClosedError`, even once the database is back; `client.connect()` opens
- * a new one. So a failed connect (within the client's {@link DATABASE_DEADLINES}) is forgotten and tried again by the
- * next call, on the same warm instance, as merchant database pools are; concurrent calls share one attempt, and a
- * connected client is not asked again (it finds its database again by itself after an outage).
- * @param {Pick<MongoClient, 'connect'>} client
- * @returns {() => Promise<void>}
- */
-export const connectBeforeUse = (client) => {
-	/** @type {Promise<unknown> | null} */
-	let connecting = null;
-	return async () => {
-		connecting ??= client.connect().catch((error) => {
-			connecting = null;
-			throw error;
-		});
-		await connecting;
-	};
-};
+export const isDatabaseUnavailable = (error) => isKitError(error, 'database_unreachable') || isUnreachable(error);
 
 /** @typedef {import('./logger.js').Logger} Logger */
 /** @typedef {import('mongodb').Document} Document */
@@ -506,11 +452,7 @@ export const createData = ({
 		let entry = pools.get(key);
 		if (!entry) {
 			const options = {
-				maxPoolSize: CLIENT_DB_POOL_SIZE,
-				minPoolSize: 0,
-				maxIdleTimeMS: 60_000,
-				...DATABASE_DEADLINES,
-				appName: `ss-${productId}`,
+				...databaseClientOptions({ maxPoolSize: CLIENT_DB_POOL_SIZE, appName: `ss-${productId}` }),
 				lookup: /** @type {any} */ (lookup),
 			};
 			const connecting = Promise.resolve()

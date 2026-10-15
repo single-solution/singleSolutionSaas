@@ -5,7 +5,7 @@
  * global (prices, defaults) and are listed on the Defaults and Prices screens only.
  * @module
  */
-import { randomToken } from './util.js';
+import { randomToken } from '@ss/protocol';
 
 /** @typedef {import('./stores/types.js').Store} Store */
 /**
@@ -29,7 +29,7 @@ export const createRecentChanges = ({ store, now, randomBytes }) =>
 		record: async ({ websiteId, who, what, detail }) => {
 			const t = now();
 			const person = { kind: who.kind, id: who.id, name: who.name, ...(who.role ? { role: who.role } : {}) };
-			await store.put('changes', `${t}-${randomToken(randomBytes, 9)}`, { websiteId, who: person, what, detail, at: t });
+			await store.put('changes', `${t}-${randomToken(9, randomBytes)}`, { websiteId, who: person, what, detail, at: t });
 		},
 		/**
 		 * Newest first.

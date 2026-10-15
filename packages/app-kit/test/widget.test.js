@@ -2,17 +2,13 @@
 /* global document, window */
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_FORMAT, formatDate, formatMoney, formatText, mountWidget, themeCss, viewerOf } from '../src/widget.js';
-import { placeholdersOf, samePlaceholders } from '../src/text.js';
 
 describe('widget texts', () => {
-	it('fills placeholders as plain text and compares placeholder sets', () => {
+	it('fills placeholders as plain text', () => {
 		expect(formatText('Hi {name}, {count} new {missing}', { name: '<b>Sam</b>', count: 3 })).toBe(
 			'Hi <b>Sam</b>, 3 new {missing}',
 		);
 		expect(formatText('Plain')).toBe('Plain');
-		expect(placeholdersOf('{b} {a} {b} {1x}')).toEqual(['a', 'b']);
-		expect(samePlaceholders('{a} {b}', '{b} then {a}')).toBe(true);
-		expect(samePlaceholders('{a}', '{a} {b}')).toBe(false);
 	});
 });
 

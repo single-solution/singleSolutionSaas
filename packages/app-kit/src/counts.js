@@ -14,8 +14,8 @@
  *   defineRoute({ method: 'GET', path: '/v1/orders/count', auth: 'server', feature: 'checkout', handler: orderCounts.count })
  * @module
  */
+import { isObject } from '@ss/contracts/util';
 import { problem } from './http/results.js';
-import { isObject } from './util.js';
 
 /** Counts are exact up to this many records. */
 export const COUNT_CAP = 100_000;

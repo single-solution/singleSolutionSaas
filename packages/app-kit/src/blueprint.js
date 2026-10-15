@@ -29,11 +29,11 @@
  * product, cannot break the answer.
  * @module
  */
+import { isObject } from '@ss/contracts/util';
 import { WIDGET_SEEN_MS } from './dashboard.js';
 import { defineRoute } from './http/routes.js';
 import { problem } from './http/results.js';
 import { effectiveStatus } from './status.js';
-import { isObject } from './util.js';
 
 /** @typedef {import('./http/handler.js').RequestContext} RequestContext */
 /** @typedef {import('@ss/contracts').ProductBlueprint} ProductBlueprint */

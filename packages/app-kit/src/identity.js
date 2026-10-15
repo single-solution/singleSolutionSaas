@@ -9,7 +9,7 @@
  * @module
  */
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
-import { deepFreeze, isObject } from './util.js';
+import { deepFreeze, isObject } from '@ss/contracts/util';
 
 /** @typedef {{ issuer: string, jwks: Array<Record<string, any>>, audience: string }} IssuerSettings */
 

@@ -27,11 +27,19 @@
  * @module
  */
 import { isIP } from 'node:net';
-import { canonicalOrigin, isLocalOrigin, isProtocolError, originAllowed, verifyPortalCall, verifyToken } from '@ss/protocol';
+import {
+	canonicalOrigin,
+	isLocalOrigin,
+	isProtocolError,
+	originAllowed,
+	sha256Hex,
+	verifyPortalCall,
+	verifyToken,
+} from '@ss/protocol';
 import { createId } from '@ss/contracts';
 import { parseActor } from '../actor.js';
 import { isDatabaseUnavailable } from '../data.js';
-import { isKitError, sha256Hex } from '../util.js';
+import { isKitError } from '../util.js';
 import { isProblem, isResult, noContent, ok, problem } from './results.js';
 import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
 

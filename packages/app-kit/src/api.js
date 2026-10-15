@@ -13,9 +13,9 @@
  * referenced too.
  * @module
  */
+import { isObject } from '@ss/contracts/util';
 import KIT_API_JSON from './kit-api.json' with { type: 'json' };
 import { escapeToken, schemaProblems } from './api-schema.js';
-import { isObject } from './util.js';
 
 /** @typedef {import('./api-schema.js').Schema} Schema */
 /** @typedef {import('./api-schema.js').NamedSchemas} NamedSchemas */

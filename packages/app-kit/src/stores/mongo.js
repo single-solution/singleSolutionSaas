@@ -8,7 +8,7 @@
  * @module
  */
 
-import { connectBeforeUse } from '../data.js';
+import { connectBeforeUse } from '@ss/net';
 import { omit } from '../util.js';
 
 /** @typedef {import('mongodb').Db} Db */

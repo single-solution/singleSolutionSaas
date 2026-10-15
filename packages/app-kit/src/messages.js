@@ -20,7 +20,8 @@
  * @module
  */
 import { validateMessageDefaults } from '@ss/contracts';
-import { deepFreeze, isObject, kitError } from './util.js';
+import { deepFreeze, isObject } from '@ss/contracts/util';
+import { kitError } from './util.js';
 
 /** @typedef {import('@ss/contracts').DeclaredMessage} DeclaredMessage */
 /** @typedef {{ subject?: string, text: string, required: boolean, urgent: boolean, sensitive: boolean }} DefaultWords */

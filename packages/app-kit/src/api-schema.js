@@ -12,7 +12,7 @@
  * @module
  */
 import { isDeepStrictEqual } from 'node:util';
-import { isObject } from './util.js';
+import { isObject } from '@ss/contracts/util';
 
 /**
  * @typedef {{ [keyword: string]: unknown }} Schema

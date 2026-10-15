@@ -5,7 +5,8 @@
  * build-time JSON.
  * @module
  */
-import { escapeHtml as escape, isObject } from './util.js';
+import { isObject } from '@ss/contracts/util';
+import { escapeHtml as escape } from '@ss/contracts/text';
 
 /** @typedef {Record<string, any>} Node */
 

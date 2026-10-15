@@ -30,9 +30,10 @@
  * @module
  */
 import { IMPORT_LIMITS, isId } from '@ss/contracts';
+import { isObject } from '@ss/contracts/util';
 import { defineRoute } from './http/routes.js';
 import { problem } from './http/results.js';
-import { isObject, omit } from './util.js';
+import { omit } from './util.js';
 
 /** @typedef {{ path: string, message: string }} ImportError */
 /**

@@ -14,7 +14,8 @@ import {
 	validateWebsitesPage,
 } from '@ss/contracts';
 import { signAssertion } from '@ss/protocol';
-import { isObject, kitError } from './util.js';
+import { isObject } from '@ss/contracts/util';
+import { kitError } from './util.js';
 
 /** @typedef {import('@ss/protocol').Signer} Signer */
 /** @typedef {import('@ss/contracts').PriceList} PriceList */

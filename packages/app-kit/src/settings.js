@@ -14,8 +14,8 @@
 import { validateSettingValue } from '@ss/contracts';
 import { DEFAULT_FORMAT, FORMAT_FIELDS, formatViolation } from '@ss/contracts/format';
 import { placeholdersOf } from '@ss/contracts/templates';
+import { isObject } from '@ss/contracts/util';
 import { problem } from './http/results.js';
-import { isObject } from './util.js';
 
 /**
  * True when two texts carry exactly the same placeholders (in any order, each any number of times).

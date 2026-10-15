@@ -3,7 +3,7 @@
  * rendered as RFC 9457 documents with the product's type base URI and the request id.
  * @module
  */
-import { isObject } from '../util.js';
+import { isObject } from '@ss/contracts/util';
 
 const BRAND = Symbol.for('ss.app-kit.result');
 

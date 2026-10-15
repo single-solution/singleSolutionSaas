@@ -12,6 +12,7 @@ import { BUILD_TEXT_MAX, checkSettingsSchema, createProblemFactory, validateMani
 import { formatDate, formatMoney } from '@ss/contracts/format';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
 import { MongoClient } from 'mongodb';
+import { isObject } from '@ss/contracts/util';
 import { ACTIVITY_INDEXES, createActivity } from './activity.js';
 import { createBlueprint } from './blueprint.js';
 import { createBusiness } from './business.js';
@@ -38,7 +39,7 @@ import { createStatus } from './status.js';
 import { createMemoryStore } from './stores/memory.js';
 import { createMongoStore } from './stores/mongo.js';
 import { createTickets } from './tickets.js';
-import { defaultRandomBytes, isKitError, isObject, kitError } from './util.js';
+import { defaultRandomBytes, isKitError, kitError } from './util.js';
 import { verifyToken } from '@ss/protocol';
 
 /** @typedef {import('@ss/contracts').Manifest} Manifest */

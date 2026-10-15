@@ -25,12 +25,12 @@
  * on the merchant's server reads its settings on every page).
  * @module
  */
+import { isObject } from '@ss/contracts/util';
 import { currentFeatures } from './connection.js';
 import { activityFilter, activityPage, activityView } from './activity.js';
 import { countHandlers } from './counts.js';
 import { defineRoute } from './http/routes.js';
 import { noContent, ok, paginate, problem } from './http/results.js';
-import { isObject } from './util.js';
 
 /** @typedef {import('./http/handler.js').RequestContext} RequestContext */
 /** @typedef {import('./recent.js').Who} Who */

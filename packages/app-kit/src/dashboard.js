@@ -12,12 +12,12 @@
  * - Writes are refused unless their Origin is the product's own address; dashboard responses are never framed.
  * @module
  */
-import { canonicalOrigin, isProtocolError, verifyLaunch } from '@ss/protocol';
+import { canonicalOrigin, isProtocolError, randomToken, sha256Hex, verifyLaunch } from '@ss/protocol';
+import { isObject } from '@ss/contracts/util';
 import { currentFeatures } from './connection.js';
 import { defineRoute } from './http/routes.js';
 import { noContent, problem } from './http/results.js';
 import { effectiveStatus } from './status.js';
-import { isObject, randomToken, sha256Hex } from './util.js';
 
 /** @typedef {import('./http/handler.js').RequestContext} RequestContext */
 /** @typedef {import('./http/results.js').ProblemResult} ProblemResult */
@@ -139,7 +139,7 @@ export const createDashboard = (kit) => {
 			expiresAt,
 			at: now(),
 		};
-		const id = randomToken(randomBytes, 32);
+		const id = randomToken(32, randomBytes);
 		await store.put('sessions', sha256Hex(id), session);
 		const websiteId = merchant ? merchant.websiteId : (admin?.websiteId ?? null);
 		if (websiteId) {
