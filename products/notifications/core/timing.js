@@ -97,17 +97,17 @@ const quietEndAt = (at, windows, timeZone, channel) => {
 	const start = Math.floor(at / MINUTE) * MINUTE;
 	/** @type {number | null} */
 	let end = null;
-	for (const window of windows) {
-		if (window.channels.length > 0 && !window.channels.includes(channel)) continue;
-		const from = minutesOf(window.from);
-		const until = minutesOf(window.until);
+	for (const span of windows) {
+		if (span.channels.length > 0 && !span.channels.includes(channel)) continue;
+		const from = minutesOf(span.from);
+		const until = minutesOf(span.until);
 		if (from === until) continue;
-		/** @type {number | null} minutes left in this window */
+		/** @type {number | null} minutes left in this span */
 		let left = null;
 		if (from < until) {
-			if (window.days.includes(weekday) && nowMinutes >= from && nowMinutes < until) left = until - nowMinutes;
-		} else if (window.days.includes(weekday) && nowMinutes >= from) left = 1440 - nowMinutes + until;
-		else if (window.days.includes((weekday + 6) % 7) && nowMinutes < until) left = until - nowMinutes;
+			if (span.days.includes(weekday) && nowMinutes >= from && nowMinutes < until) left = until - nowMinutes;
+		} else if (span.days.includes(weekday) && nowMinutes >= from) left = 1440 - nowMinutes + until;
+		else if (span.days.includes((weekday + 6) % 7) && nowMinutes < until) left = until - nowMinutes;
 		if (left !== null) end = Math.max(end ?? 0, start + left * MINUTE);
 	}
 	return end;
