@@ -185,6 +185,25 @@ describe('templates for the merchant’s server (N4)', () => {
 				detail: 'Template ecommerce.order_cancelled (sms, default): deleted',
 			}),
 		);
+		// each change is in the activity log too, by who made it (the dashboard's save of the push template as well)
+		const activity = async (/** @type {string} */ action) =>
+			(await server('GET', `/v1/activity?action=${action}&limit=10`)).json.items;
+		expect(await activity('template.saved')).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					actor: { kind: 'user', id: 'usr_7', name: 'Alex Morgan', role: 'Manager' },
+					target: 'ecommerce.order_cancelled/sms/default',
+					label: 'ecommerce.order_cancelled (sms, default)',
+				}),
+				expect.objectContaining({ actor: expect.objectContaining({ kind: 'admin' }), target: 'alert/push/default' }),
+			]),
+		);
+		expect(await activity('template.deleted')).toContainEqual(
+			expect.objectContaining({
+				actor: { kind: 'server', id: 'server', name: 'Server' },
+				target: 'ecommerce.order_cancelled/sms/default',
+			}),
+		);
 		// every channel off: the routes answer feature_off
 		await env.switchOn(['webhooks', 'send_api']);
 		expect((await server('GET', '/v1/templates')).status).toBe(403);

@@ -147,6 +147,14 @@ describe('default templates of products (parity P1)', () => {
 		expect((await listed.json()).off).toEqual([{ key: 'chat.staff_new_message', channel: 'email' }]);
 		const recent = await env.dashboard(await env.adminSession(), 'GET', `/v1/dashboard/websites/${env.websiteId}/overview`);
 		expect(JSON.stringify(await recent.json())).toContain('Message chat.staff_new_message (email): switched off');
+		const logged = await env.call('GET', '/v1/activity?action=message.switched_off', { token: env.server });
+		expect((await logged.json()).items).toEqual([
+			expect.objectContaining({
+				actor: expect.objectContaining({ kind: 'admin' }),
+				target: 'chat.staff_new_message/email',
+				label: 'chat.staff_new_message (email)',
+			}),
+		]);
 
 		expect((await switchMessage('chat.staff_new_message', 'email', { off: false })).status).toBe(200);
 		const again = await env.send('email', {

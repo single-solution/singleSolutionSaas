@@ -48,6 +48,18 @@ const VISITOR_LIMITS = [
 
 /** Who acts when neither a ticket nor the `SS-Actor-*` headers name a member of the merchant's staff. */
 const SERVER = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
+/** @typedef {{ kind: 'merchant' | 'admin' | 'user' | 'server', id: string, name: string, role?: string }} Who */
+/**
+ * Who a dashboard session is, as Recent changes and the activity log name them.
+ * @param {{ kind: 'merchant' | 'admin', subject: string, name: string, role?: string }} session
+ * @returns {Who}
+ */
+const sessionWho = (session) => ({
+	kind: session.kind,
+	id: session.subject,
+	name: session.name,
+	...(session.role ? { role: session.role } : {}),
+});
 
 /**
  * Template writes of the merchant's server: they share the settings API's counter of 60 writes per minute per website
@@ -220,44 +232,42 @@ export const createRoutes = (product) => {
 		const channelOff = (channel) =>
 			problem('feature_off', `The ${CHANNEL_FEATURES[channel]} feature is off: its templates cannot be changed.`);
 		/**
-		 * A Recent change (dashboard: the session; server: the acting user, else the server) or an activity entry by who
-		 * acts (widget): the template's key, channel and language are its label; the detail names the change, never the
-		 * words.
+		 * Every change is an activity entry by who made it — the dashboard's session, a server call's acting user (else the
+		 * server), the widget's staff member — so the website's audit trail has them all; dashboard and server changes are
+		 * a Recent change too. The template's key, channel and language are its label; the detail names the change, never
+		 * the words.
 		 * @param {any} ctx
 		 * @param {{ change: 'saved' | 'deleted', key: string, channel: string, language: string, detail?: string }} input
 		 */
 		const record = async (ctx, { change, key, channel, language, detail }) => {
 			const label = `${key} (${channel}, ${language || 'default'})`;
-			if (via !== 'widget') {
-				const session = ctx.session;
-				const actor = ctx.actor;
+			const actor = ctx.actor;
+			/** @type {Who | null} who a dashboard or server change is (the widget's staff member is no Recent change) */
+			const who =
+				via === 'dashboard'
+					? sessionWho(ctx.session)
+					: via === 'server'
+						? actor
+							? { kind: 'user', id: actor.id, name: actor.name, ...(actor.role ? { role: actor.role } : {}) }
+							: SERVER
+						: null;
+			if (who)
 				await product.recentChanges.record({
 					websiteId: ctx.websiteId,
-					who:
-						via === 'dashboard'
-							? {
-									kind: session.kind,
-									id: session.subject,
-									name: session.name,
-									...(session.role ? { role: session.role } : {}),
-								}
-							: actor
-								? { kind: 'user', id: actor.id, name: actor.name, ...(actor.role ? { role: actor.role } : {}) }
-								: SERVER,
+					who,
 					what: 'templates',
 					detail: `Template ${label}: ${change}`,
 				});
-			} else
-				await product.activity.record(
-					{ websiteId: ctx.websiteId, merchantId: ctx.merchantId, after: ctx.after },
-					{
-						actor: actorOf(ctx, SERVER),
-						action: `template.${change}`,
-						target: `${key}/${channel}/${language || 'default'}`,
-						label,
-						...(detail ? { detail } : {}),
-					},
-				);
+			await product.activity.record(
+				{ websiteId: ctx.websiteId, merchantId: ctx.merchantId, after: ctx.after },
+				{
+					actor: who ?? actorOf(ctx, SERVER),
+					action: `template.${change}`,
+					target: `${key}/${channel}/${language || 'default'}`,
+					label,
+					...(detail ? { detail } : {}),
+				},
+			);
 		};
 		return {
 			/** @param {any} ctx */
@@ -304,7 +314,7 @@ export const createRoutes = (product) => {
 	};
 	/**
 	 * Switch a product's message off on a channel, or on again (dashboard; parity P1): a switched-off message is skipped,
-	 * never sent. Accounts' messages are always sent. A Recent change by the session when it changed.
+	 * never sent. Accounts' messages are always sent. A Recent change and an activity entry by the session when it changed.
 	 * @param {any} ctx
 	 */
 	const switchMessage = async (ctx) => {
@@ -318,13 +328,23 @@ export const createRoutes = (product) => {
 		if (typeof body.off !== 'boolean') return invalid('off', 'off is true or false.');
 		const store = createStore(await ctx.data(), { now });
 		if (await store.off.set(key, channel, body.off)) {
-			const { session } = ctx;
+			const who = sessionWho(ctx.session);
+			const change = body.off ? 'switched off' : 'switched on';
 			await product.recentChanges.record({
 				websiteId: ctx.websiteId,
-				who: { kind: session.kind, id: session.subject, name: session.name, ...(session.role ? { role: session.role } : {}) },
+				who,
 				what: 'templates',
-				detail: `Message ${key} (${channel}): ${body.off ? 'switched off' : 'switched on'}`,
+				detail: `Message ${key} (${channel}): ${change}`,
 			});
+			await product.activity.record(
+				{ websiteId: ctx.websiteId, merchantId: ctx.merchantId, after: ctx.after },
+				{
+					actor: who,
+					action: body.off ? 'message.switched_off' : 'message.switched_on',
+					target: `${key}/${channel}`,
+					label: `${key} (${channel})`,
+				},
+			);
 		}
 		return { key, channel, off: body.off };
 	};

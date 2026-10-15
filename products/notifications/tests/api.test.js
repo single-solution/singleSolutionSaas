@@ -772,14 +772,15 @@ describe('the delivery log and the admin widgets (tickets)', () => {
 			label: 'staff.note (sms, default)',
 			detail: 'Optional, not urgent',
 		});
-		expect(await activity('action=template.deleted')).toEqual([
+		// the widget's delete (the dashboard's and the server's are in the log too)
+		expect(await activity('action=template.deleted')).toContainEqual(
 			expect.objectContaining({
 				actor: expect.objectContaining({ name: 'Sam Staff' }),
 				target: 'staff.note/sms/default',
 				label: 'staff.note (sms, default)',
 				detail: null,
 			}),
-		]);
+		);
 		const [sent] = await activity('action=message.sent');
 		expect(sent).toMatchObject({
 			actor: { kind: 'staff', id: 'u_1', name: 'Sam Staff' },

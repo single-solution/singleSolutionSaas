@@ -963,7 +963,7 @@
 	},
 	"PUT /v1/templates": {
 		"summary": "Save a template",
-		"description": "The same checks as the dashboard: 422 validation_failed for a field, or when the website already has 1000 templates; 403 feature_off while the channel's feature is off. Writes count in the settings API's 60 writes per minute (429 rate_limited). The change shows in Recent changes with the acting user (SS-Actor-* headers), else Server.",
+		"description": "The same checks as the dashboard: 422 validation_failed for a field, or when the website already has 1000 templates; 403 feature_off while the channel's feature is off. Writes count in the settings API's 60 writes per minute (429 rate_limited). The change shows in Recent changes and the activity log (template.saved, template.deleted) with the acting user (SS-Actor-* headers), else Server.",
 		"body": {
 			"$ref": "#/components/schemas/TemplateInput"
 		},
