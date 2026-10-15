@@ -1,7 +1,8 @@
 /**
  * `openapi.json` generated from the routes (PLAN 0.4.13): every browser-token, server-token and ticket route of the
- * product, plus the API routes the kit serves for every product (tickets, data rights, the permission list, the
- * settings API and the activity log, PLAN 0.8.10 K1, K9). Each operation names its auth (`x-ss-auth`), its feature
+ * product, plus the API routes the kit serves for every product (widget config, tickets, data rights, the permission
+ * list, the settings API and the activity log, PLAN 0.8.10 K1, K9, each with its auth) and, for a manifest with the
+ * feature `import`, the kit's import routes (K10). Each operation names its auth (`x-ss-auth`), its feature
  * (`x-ss-feature`: one key, or a list when any of them is enough) and, for ticket routes, its permission
  * (`x-ss-permission`). Server-token operations take the optional `SS-Actor-*` headers (K2); visitor (browser-token)
  * operations also take the server token with `SS-Visitor-IP` (K3). Errors are RFC 9457 problems whose `type` ends with
@@ -12,8 +13,9 @@
  * JSON answer, and the shared schemas (`components.schemas`). A route without a description answers "2XX Success".
  * @module
  */
+import { PRODUCT_UNAVAILABLE_REASONS } from '@ss/contracts';
 import { isObject } from './fsutil.js';
-import { KIT_API, KIT_ROUTES } from './api.js';
+import { KIT_API, KIT_ROUTES, kitImportRoutesOf } from './api.js';
 
 /** @typedef {import('./routes.js').ScannedRoute} ScannedRoute */
 /** @typedef {import('@ss/app-kit/api').ApiDescription} ApiDescription */
@@ -36,7 +38,7 @@ const PROBLEM = Object.freeze({
 		detail: { type: 'string' },
 		instance: { type: 'string', description: 'The path of the request.' },
 		requestId: { type: 'string', description: 'Quote it when you contact support.' },
-		reason: { type: 'string', enum: ['stopped', 'suspended', 'removed'], description: 'product_unavailable only.' },
+		reason: { type: 'string', enum: [...PRODUCT_UNAVAILABLE_REASONS], description: 'product_unavailable only.' },
 		errors: {
 			type: 'array',
 			description: 'validation_failed: what is wrong, field by field.',
@@ -160,7 +162,10 @@ export const renderOpenapi = ({ manifest, routes, api = {} }) => {
 	const { name, version, base, featureOf } = manifestFacts(manifest);
 	/** @type {Map<string, Record<string, unknown>>} */
 	const paths = new Map();
-	const documented = [...routes.filter((route) => Object.hasOwn(SCHEMES, route.auth)), ...KIT_ROUTES];
+	const own = routes.filter((route) => Object.hasOwn(SCHEMES, route.auth));
+	const ownKeys = new Set(own.map((route) => `${route.method} ${route.path}`));
+	const kit = [...KIT_ROUTES, ...kitImportRoutesOf(manifest)].filter((route) => !ownKeys.has(`${route.method} ${route.path}`));
+	const documented = [...own, ...kit];
 	const descriptions = { ...entriesOf(KIT_API), ...entriesOf(api) };
 	for (const route of documented) {
 		const params = [...route.path.matchAll(/:([A-Za-z_][\w]*)/g)].map((match) => match[1] ?? '');
