@@ -677,6 +677,7 @@ export const SHOP_MAPPING = defineMapping({
 						line2: '',
 						city: doc.address.city,
 						area: '',
+						region: '',
 						postalCode: doc.address.zip,
 						country: 'US',
 						notes: '',
