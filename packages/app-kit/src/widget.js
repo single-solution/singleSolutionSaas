@@ -10,12 +10,29 @@
  * (`--ss-color-<name>`, `--ss-font-family`, `--ss-radius`), the product CSS and the merchant's custom CSS. The mode is
  * set as `data-ss-mode="light" | "dark"` on the host (`auto` follows the device and updates when it changes), so
  * product CSS styles both with `:host([data-ss-mode="dark"])`.
+ *
+ * Every widget builds its elements with `element` (text as text, never HTML), calls JSON routes with `requestJson`, and
+ * an admin widget calls its routes with `adminCall` and the ticket of `createTicketSource`. The admin widgets build
+ * their screens from `badge`, `dot`, `fieldGrid`, `splitView`, `moreMenu` and `openDialog` (PLAN 0.6).
  * @module
  */
 import { DEFAULT_FORMAT, formatDate, formatMoney, normaliseFormat } from '@ss/contracts/format';
 import { formatText } from './text.js';
 
 export { DEFAULT_FORMAT, formatDate, formatMoney, formatText, normaliseFormat };
+export { badge, dot, fieldGrid, moreMenu, openDialog, splitView } from './widget/admin.js';
+export { element } from './widget/dom.js';
+export { REFRESH_BEFORE_MS, adminCall, createTicketSource, requestJson } from './widget/tickets.js';
+
+/** @typedef {import('./widget/tickets.js').Answer} Answer */
+/** @typedef {import('./widget/tickets.js').Ticket} Ticket */
+/** @typedef {import('./widget/tickets.js').GetTicket} GetTicket */
+/** @typedef {import('./widget/tickets.js').TicketSource} TicketSource */
+/** @typedef {import('./widget/tickets.js').AdminApi} AdminApi */
+/** @typedef {import('./widget/admin.js').Tone} Tone */
+/** @typedef {import('./widget/admin.js').MenuItem} MenuItem */
+/** @typedef {import('./widget/admin.js').Child} Child */
+/** @typedef {import('./widget/admin.js').DialogInput} DialogInput */
 
 /**
  * The viewer of a widget: the browser's language and time zone (for a Format whose locale is '' and whose times are
