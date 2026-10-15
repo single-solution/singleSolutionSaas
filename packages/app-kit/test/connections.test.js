@@ -42,6 +42,7 @@ const routes = () => [
 				actor: { kind: 'merchant', id: 'srv' },
 				action: 'note.created',
 				target: 'note_1',
+				values: { kind: 'quick', words: 2, pinned: false },
 			});
 			return { done: true };
 		},
@@ -426,6 +427,10 @@ describe('activity log and data rights', () => {
 		await settle();
 		expect(await log.countDocuments({ copy: 'sent' })).toBe(2);
 		expect(accounts.copies.map((c) => c.copy.action)).toEqual(['note.created', 'note.created']);
+		// A8: what changed travels as values (codes, numbers, yes/no), never as a sentence
+		expect(accounts.copies[0]?.copy.values).toEqual({ kind: 'quick', words: 2, pinned: false });
+		const listed = await call('GET', '/v1/activity', { token: server.token });
+		expect((await listed.json()).items[0]).toMatchObject({ detail: null, values: { kind: 'quick', words: 2, pinned: false } });
 		expect(await log.findOne({ copy: 'sent' })).toMatchObject({
 			websiteId,
 			merchantId: 'mer_0123456789abcdefghjkmnpq',
@@ -436,6 +441,12 @@ describe('activity log and data rights', () => {
 			ctx.product.activity.record(
 				{ websiteId, merchantId: null, after: () => {} },
 				{ actor: /** @type {any} */ ({}), action: 'x', target: 'y' },
+			),
+		).rejects.toMatchObject({ code: 'invalid_argument' });
+		await expect(
+			ctx.product.activity.record(
+				{ websiteId, merchantId: null, after: () => {} },
+				{ actor: { kind: 'merchant', id: 'srv' }, action: 'x', target: 'y', values: { 'not a key': 1 } },
 			),
 		).rejects.toMatchObject({ code: 'invalid_argument' });
 	});

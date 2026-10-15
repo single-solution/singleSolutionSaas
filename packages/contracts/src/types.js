@@ -143,6 +143,8 @@
  * @property {string} target
  * @property {string} [label] what the target is called (for example an order number), at most 200 characters
  * @property {string} [detail] plain text, at most 2,000 characters; never message contents, secrets or addresses
+ * @property {Record<string, string | number | boolean>} [values] what changed as codes, numbers and yes/no (at most 20,
+ *   text at most 200 characters), which the product's texts put into words (A8): no sentence in one language is stored
  * @property {string} at ISO-8601 UTC
  */
 

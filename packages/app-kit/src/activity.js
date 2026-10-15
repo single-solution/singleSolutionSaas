@@ -2,8 +2,9 @@
  * The activity log and its copies to Accounts (PLAN 0.4.11, 0.8.10 K9). Each product keeps a log of actions done
  * through its widgets or API in the merchant database (`ss_<product id>_activity`): who (`actor`: kind, id, name and
  * the acting user's role), what (`action`), on what (`target`, and its `label`, for example an order number), when, and
- * an optional plain-text `detail` (never message contents, secrets or addresses). When the merchant pasted the
- * website's Accounts server token, every entry is also sent to Accounts right after the request
+ * what changed: `values` (codes, numbers and yes/no that the product's texts put into words, A8: no sentence in one
+ * language is stored) or an optional plain-text `detail` (never message contents, secrets or addresses). When the
+ * merchant pasted the website's Accounts server token, every entry is also sent to Accounts right after the request
  * (`POST <accounts>/v1/activity-copies`). Unsent entries stay marked `pending` and are retried right after this
  * product's next request for that website. When Accounts refuses them (its activity copies feature off, the token
  * refused …), an instance sends none of that website's copies for {@link REFUSED_PAUSE_MS}, each copy waiting is
@@ -23,7 +24,8 @@ import { kitError } from './util.js';
 /** @typedef {{ kind: string, id: string, name?: string, role?: string }} Actor */
 /** @typedef {{ websiteId: string, merchantId: string | null, after: (task: () => Promise<unknown>) => void }} ActivityContext */
 /**
- * @typedef {{ actor: Actor, action: string, target: string, label?: string, detail?: string }} ActivityEntry
+ * @typedef {{ actor: Actor, action: string, target: string, label?: string, detail?: string,
+ *   values?: Record<string, string | number | boolean> }} ActivityEntry
  */
 
 /** Path of the Accounts route that receives copies. */
@@ -146,6 +148,7 @@ export const activityView = (entry) => ({
 	target: entry.target,
 	label: entry.label ?? null,
 	detail: entry.detail ?? null,
+	values: entry.values ?? {},
 	at: new Date(entry.at).toISOString(),
 });
 
@@ -189,6 +192,7 @@ export const createActivity = ({ productId, data, connections, now, logger }) =>
 				target: entry.target,
 				...(entry.label ? { label: entry.label } : {}),
 				...(entry.detail ? { detail: entry.detail } : {}),
+				...(entry.values ? { values: entry.values } : {}),
 				at: entry.at.toISOString(),
 			};
 			const result = await connections.callProduct(websiteId, 'accounts', ACTIVITY_COPY_PATH, { method: 'POST', body: copy });
@@ -222,12 +226,12 @@ export const createActivity = ({ productId, data, connections, now, logger }) =>
 	return Object.freeze({
 		/**
 		 * Write one entry (merchant database) and, with the Accounts token, send its copy right after the request.
-		 * `label` and `detail` are cut to 200 and 2,000 characters.
+		 * `label` and `detail` are cut to 200 and 2,000 characters; `values` are at most 20 codes, numbers or yes/no.
 		 * @param {ActivityContext} ctx the request context
 		 * @param {ActivityEntry} entry
 		 * @param {{ copy?: boolean }} [options] `copy: false` keeps the entry in the merchant database only (imports)
 		 */
-		record: async (ctx, { actor, action, target, label, detail }, { copy: copied = true } = {}) => {
+		record: async (ctx, { actor, action, target, label, detail, values }, { copy: copied = true } = {}) => {
 			const at = new Date(now());
 			const who = {
 				kind: actor?.kind,
@@ -238,6 +242,7 @@ export const createActivity = ({ productId, data, connections, now, logger }) =>
 			const extra = {
 				...(typeof label === 'string' && label !== '' ? { label: label.slice(0, MAX_LABEL) } : {}),
 				...(typeof detail === 'string' && detail !== '' ? { detail: detail.slice(0, MAX_DETAIL) } : {}),
+				...(values && Object.keys(values).length > 0 ? { values } : {}),
 			};
 			const checked = validateActivityCopy({
 				websiteId: ctx.websiteId,
@@ -251,7 +256,7 @@ export const createActivity = ({ productId, data, connections, now, logger }) =>
 			if (!checked.ok)
 				throw kitError(
 					'invalid_argument',
-					'activity entries need actor { kind, id, name?, role? }, action and target (label and detail are text)',
+					'activity entries need actor { kind, id, name?, role? }, action and target (label and detail are text, values at most 20 codes, numbers or yes/no)',
 				);
 			const copy = copied && (await hasAccounts(ctx.websiteId)) ? 'pending' : 'none';
 			const db = await data.forWebsite(ctx.websiteId, ctx.merchantId ? { merchantId: ctx.merchantId } : {});

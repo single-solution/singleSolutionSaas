@@ -71,6 +71,12 @@ export const activityCopySchema = deepFreeze({
 		target: { type: 'string', minLength: 1, maxLength: 256 },
 		label: { type: 'string', maxLength: 200 },
 		detail: { type: 'string', maxLength: 2000 },
+		values: {
+			type: 'object',
+			maxProperties: 20,
+			propertyNames: { pattern: '^[a-z][a-zA-Z0-9_]{0,39}$' },
+			additionalProperties: { type: ['string', 'number', 'boolean'], maxLength: 200 },
+		},
 		at: ref('timestamp'),
 	},
 });

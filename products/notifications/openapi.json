@@ -4048,6 +4048,7 @@
 					"target",
 					"label",
 					"detail",
+					"values",
 					"at"
 				],
 				"additionalProperties": false,
@@ -4078,6 +4079,18 @@
 							"string",
 							"null"
 						]
+					},
+					"values": {
+						"type": "object",
+						"maxProperties": 20,
+						"additionalProperties": {
+							"type": [
+								"string",
+								"number",
+								"boolean"
+							]
+						},
+						"description": "What changed as codes, numbers and yes/no, which the product's texts put into words ({} when none)."
 					},
 					"at": {
 						"type": "string",

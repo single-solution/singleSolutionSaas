@@ -6,8 +6,16 @@
 			"required": ["count", "capped"],
 			"additionalProperties": false,
 			"properties": {
-				"count": { "type": "integer", "minimum": 0, "maximum": 100000, "description": "Exact up to 100,000." },
-				"capped": { "type": "boolean", "description": "True when there are more than 100,000 (count is then 100,000)." }
+				"count": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 100000,
+					"description": "Exact up to 100,000."
+				},
+				"capped": {
+					"type": "boolean",
+					"description": "True when there are more than 100,000 (count is then 100,000)."
+				}
 			}
 		},
 		"Counts": {
@@ -16,11 +24,18 @@
 			"required": ["total", "groups"],
 			"additionalProperties": false,
 			"properties": {
-				"total": { "type": "integer", "minimum": 0, "description": "All matching records." },
+				"total": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "All matching records."
+				},
 				"groups": {
 					"type": "object",
 					"maxProperties": 50,
-					"additionalProperties": { "type": "integer", "minimum": 1 },
+					"additionalProperties": {
+						"type": "integer",
+						"minimum": 1
+					},
 					"description": "Value → count, the 50 largest groups; a missing value is counted as none."
 				}
 			}
@@ -35,10 +50,20 @@
 			"required": ["key", "english", "value", "source"],
 			"additionalProperties": false,
 			"properties": {
-				"key": { "type": "string" },
-				"english": { "type": "string", "description": "The built-in English text." },
-				"value": { "type": "string", "description": "The text the widgets show." },
-				"source": { "$ref": "#/components/schemas/ValueSource" }
+				"key": {
+					"type": "string"
+				},
+				"english": {
+					"type": "string",
+					"description": "The built-in English text."
+				},
+				"value": {
+					"type": "string",
+					"description": "The text the widgets show."
+				},
+				"source": {
+					"$ref": "#/components/schemas/ValueSource"
+				}
 			}
 		},
 		"Theme": {
@@ -54,13 +79,30 @@
 						"colors": {
 							"type": "object",
 							"maxProperties": 24,
-							"additionalProperties": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+							"additionalProperties": {
+								"type": "string",
+								"pattern": "^#[0-9a-fA-F]{6}$"
+							},
 							"description": "Color name → #rrggbb (the product's CSS supplies the others)."
 						},
-						"fontFamily": { "type": "string", "description": "'inherit' or a font name." },
-						"radius": { "type": "integer", "minimum": 0, "maximum": 24, "description": "Corner radius in px." },
-						"mode": { "type": "string", "enum": ["light", "dark", "auto"] },
-						"customCss": { "type": "string", "description": "At most 20 kB." }
+						"fontFamily": {
+							"type": "string",
+							"description": "'inherit' or a font name."
+						},
+						"radius": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 24,
+							"description": "Corner radius in px."
+						},
+						"mode": {
+							"type": "string",
+							"enum": ["light", "dark", "auto"]
+						},
+						"customCss": {
+							"type": "string",
+							"description": "At most 20 kB."
+						}
 					}
 				},
 				"sources": {
@@ -68,11 +110,21 @@
 					"required": ["colors", "fontFamily", "radius", "mode", "customCss"],
 					"additionalProperties": false,
 					"properties": {
-						"colors": { "$ref": "#/components/schemas/ValueSource" },
-						"fontFamily": { "$ref": "#/components/schemas/ValueSource" },
-						"radius": { "$ref": "#/components/schemas/ValueSource" },
-						"mode": { "$ref": "#/components/schemas/ValueSource" },
-						"customCss": { "$ref": "#/components/schemas/ValueSource" }
+						"colors": {
+							"$ref": "#/components/schemas/ValueSource"
+						},
+						"fontFamily": {
+							"$ref": "#/components/schemas/ValueSource"
+						},
+						"radius": {
+							"$ref": "#/components/schemas/ValueSource"
+						},
+						"mode": {
+							"$ref": "#/components/schemas/ValueSource"
+						},
+						"customCss": {
+							"$ref": "#/components/schemas/ValueSource"
+						}
 					}
 				}
 			}
@@ -91,10 +143,24 @@
 							"type": "string",
 							"description": "A language tag such as en-US or fr-FR, or '' for the viewer's (en-US in text the server makes)."
 						},
-						"currencyDisplay": { "type": "string", "enum": ["code", "symbol", "custom"] },
-						"currencySymbol": { "type": "string", "maxLength": 8, "description": "With currencyDisplay custom." },
-						"wholeUnits": { "type": "boolean", "description": "Amounts without the minor unit." },
-						"times": { "type": "string", "enum": ["viewer", "business"], "description": "Whose time zone dates use." }
+						"currencyDisplay": {
+							"type": "string",
+							"enum": ["code", "symbol", "custom"]
+						},
+						"currencySymbol": {
+							"type": "string",
+							"maxLength": 8,
+							"description": "With currencyDisplay custom."
+						},
+						"wholeUnits": {
+							"type": "boolean",
+							"description": "Amounts without the minor unit."
+						},
+						"times": {
+							"type": "string",
+							"enum": ["viewer", "business"],
+							"description": "Whose time zone dates use."
+						}
 					}
 				},
 				"sources": {
@@ -102,11 +168,21 @@
 					"required": ["locale", "currencyDisplay", "currencySymbol", "wholeUnits", "times"],
 					"additionalProperties": false,
 					"properties": {
-						"locale": { "$ref": "#/components/schemas/ValueSource" },
-						"currencyDisplay": { "$ref": "#/components/schemas/ValueSource" },
-						"currencySymbol": { "$ref": "#/components/schemas/ValueSource" },
-						"wholeUnits": { "$ref": "#/components/schemas/ValueSource" },
-						"times": { "$ref": "#/components/schemas/ValueSource" }
+						"locale": {
+							"$ref": "#/components/schemas/ValueSource"
+						},
+						"currencyDisplay": {
+							"$ref": "#/components/schemas/ValueSource"
+						},
+						"currencySymbol": {
+							"$ref": "#/components/schemas/ValueSource"
+						},
+						"wholeUnits": {
+							"$ref": "#/components/schemas/ValueSource"
+						},
+						"times": {
+							"$ref": "#/components/schemas/ValueSource"
+						}
 					}
 				}
 			}
@@ -117,14 +193,40 @@
 			"required": ["name", "label", "kind", "neededBy", "state", "last4", "message", "testedAt"],
 			"additionalProperties": false,
 			"properties": {
-				"name": { "type": "string" },
-				"label": { "type": "string" },
-				"kind": { "type": "string", "enum": ["database", "storage", "secret", "token"] },
-				"neededBy": { "type": "array", "items": { "type": "string" }, "description": "The features that use it." },
-				"state": { "type": "string", "enum": ["connected", "not_connected", "test_failed"] },
-				"last4": { "type": "string", "maxLength": 4, "description": "The last 4 characters of the secret ('' when none)." },
-				"message": { "type": ["string", "null"], "description": "Why the last test failed." },
-				"testedAt": { "type": ["string", "null"], "format": "date-time" }
+				"name": {
+					"type": "string"
+				},
+				"label": {
+					"type": "string"
+				},
+				"kind": {
+					"type": "string",
+					"enum": ["database", "storage", "secret", "token"]
+				},
+				"neededBy": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "The features that use it."
+				},
+				"state": {
+					"type": "string",
+					"enum": ["connected", "not_connected", "test_failed"]
+				},
+				"last4": {
+					"type": "string",
+					"maxLength": 4,
+					"description": "The last 4 characters of the secret ('' when none)."
+				},
+				"message": {
+					"type": ["string", "null"],
+					"description": "Why the last test failed."
+				},
+				"testedAt": {
+					"type": ["string", "null"],
+					"format": "date-time"
+				}
 			}
 		},
 		"Actor": {
@@ -132,25 +234,61 @@
 			"description": "Who did it: user (the acting user of a server call), staff (a ticket's user) or server.",
 			"required": ["kind", "id"],
 			"properties": {
-				"kind": { "type": "string" },
-				"id": { "type": "string" },
-				"name": { "type": "string" },
-				"role": { "type": "string" },
-				"email": { "type": "string" }
+				"kind": {
+					"type": "string"
+				},
+				"id": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"role": {
+					"type": "string"
+				},
+				"email": {
+					"type": "string"
+				}
 			}
 		},
 		"ActivityEntry": {
 			"type": "object",
-			"required": ["id", "actor", "action", "target", "label", "detail", "at"],
+			"required": ["id", "actor", "action", "target", "label", "detail", "values", "at"],
 			"additionalProperties": false,
 			"properties": {
-				"id": { "type": "string" },
-				"actor": { "$ref": "#/components/schemas/Actor" },
-				"action": { "type": "string", "description": "What was done, for example payment.refunded." },
-				"target": { "type": "string", "description": "The id of what it was done to." },
-				"label": { "type": ["string", "null"], "description": "A name for the target, for example an order number." },
-				"detail": { "type": ["string", "null"] },
-				"at": { "type": "string", "format": "date-time" }
+				"id": {
+					"type": "string"
+				},
+				"actor": {
+					"$ref": "#/components/schemas/Actor"
+				},
+				"action": {
+					"type": "string",
+					"description": "What was done, for example payment.refunded."
+				},
+				"target": {
+					"type": "string",
+					"description": "The id of what it was done to."
+				},
+				"label": {
+					"type": ["string", "null"],
+					"description": "A name for the target, for example an order number."
+				},
+				"detail": {
+					"type": ["string", "null"]
+				},
+				"values": {
+					"type": "object",
+					"maxProperties": 20,
+					"additionalProperties": {
+						"type": ["string", "number", "boolean"]
+					},
+					"description": "What changed as codes, numbers and yes/no, which the product's texts put into words ({} when none)."
+				},
+				"at": {
+					"type": "string",
+					"format": "date-time"
+				}
 			}
 		},
 		"WidgetConfig": {
@@ -161,7 +299,9 @@
 			"properties": {
 				"texts": {
 					"type": "object",
-					"additionalProperties": { "type": "string" },
+					"additionalProperties": {
+						"type": "string"
+					},
 					"description": "Widget texts by key, in the website's words (else the product's English defaults); fill their {placeholders} as text, never as HTML."
 				},
 				"theme": {
@@ -172,47 +312,99 @@
 						"colors": {
 							"type": "object",
 							"maxProperties": 24,
-							"additionalProperties": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+							"additionalProperties": {
+								"type": "string",
+								"pattern": "^#[0-9a-fA-F]{6}$"
+							},
 							"description": "Color name → #rrggbb (the product's CSS supplies the others)."
 						},
-						"fontFamily": { "type": "string", "description": "'inherit' or a font name." },
-						"radius": { "type": "integer", "minimum": 0, "maximum": 24, "description": "Corner radius in px." },
-						"mode": { "type": "string", "enum": ["light", "dark", "auto"] }
+						"fontFamily": {
+							"type": "string",
+							"description": "'inherit' or a font name."
+						},
+						"radius": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 24,
+							"description": "Corner radius in px."
+						},
+						"mode": {
+							"type": "string",
+							"enum": ["light", "dark", "auto"]
+						}
 					}
 				},
-				"customCss": { "type": "string", "description": "The merchant's own CSS for the widgets (at most 20 kB)." },
+				"customCss": {
+					"type": "string",
+					"description": "The merchant's own CSS for the widgets (at most 20 kB)."
+				},
 				"format": {
 					"type": "object",
 					"required": ["locale", "currencyDisplay", "currencySymbol", "wholeUnits", "times"],
 					"additionalProperties": false,
 					"properties": {
-						"locale": { "type": "string", "description": "A language tag such as en-US or fr-FR, or '' for the viewer's." },
-						"currencyDisplay": { "type": "string", "enum": ["code", "symbol", "custom"] },
-						"currencySymbol": { "type": "string", "maxLength": 8, "description": "With currencyDisplay custom." },
-						"wholeUnits": { "type": "boolean", "description": "Amounts without the minor unit." },
-						"times": { "type": "string", "enum": ["viewer", "business"], "description": "Whose time zone dates use." }
+						"locale": {
+							"type": "string",
+							"description": "A language tag such as en-US or fr-FR, or '' for the viewer's."
+						},
+						"currencyDisplay": {
+							"type": "string",
+							"enum": ["code", "symbol", "custom"]
+						},
+						"currencySymbol": {
+							"type": "string",
+							"maxLength": 8,
+							"description": "With currencyDisplay custom."
+						},
+						"wholeUnits": {
+							"type": "boolean",
+							"description": "Amounts without the minor unit."
+						},
+						"times": {
+							"type": "string",
+							"enum": ["viewer", "business"],
+							"description": "Whose time zone dates use."
+						}
 					}
 				},
-				"timeZone": { "type": "string", "description": "The business time zone (business.json), default UTC." },
-				"features": { "type": "array", "items": { "type": "string" }, "description": "The switched-on features." },
+				"timeZone": {
+					"type": "string",
+					"description": "The business time zone (business.json), default UTC."
+				},
+				"features": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "The switched-on features."
+				},
 				"widgets": {
 					"type": "array",
-					"items": { "type": "string" },
+					"items": {
+						"type": "string"
+					},
 					"description": "The keys of the widgets whose feature (one, or any of a list) is on: a widget not listed renders nothing."
 				},
-				"settings": { "type": "object", "description": "The product's own widget settings (never secrets)." }
+				"settings": {
+					"type": "object",
+					"description": "The product's own widget settings (never secrets)."
+				}
 			}
 		}
 	},
 	"GET /v1/widget/config": {
 		"summary": "Widget config (visitor widgets)",
 		"description": "With the browser token from the website (an Origin is required; the server token is refused): what the visitor widgets need. No feature of its own: it answers while the product serves the website and its merchant database is connected.",
-		"response": { "$ref": "#/components/schemas/WidgetConfig" }
+		"response": {
+			"$ref": "#/components/schemas/WidgetConfig"
+		}
 	},
 	"GET /v1/widget/admin/config": {
 		"summary": "Widget config (admin widgets)",
 		"description": "The same for the admin widgets, with a ticket from POST /v1/tickets, from the origin it names.",
-		"response": { "$ref": "#/components/schemas/WidgetConfig" }
+		"response": {
+			"$ref": "#/components/schemas/WidgetConfig"
+		}
 	},
 	"POST /v1/tickets": {
 		"summary": "Ticket for an admin widget (15 minutes)",
@@ -225,14 +417,28 @@
 					"type": "object",
 					"required": ["id", "name", "email"],
 					"properties": {
-						"id": { "type": "string", "minLength": 1, "maxLength": 256 },
-						"name": { "type": "string", "minLength": 1, "maxLength": 200 },
-						"email": { "type": "string", "minLength": 1, "maxLength": 320 }
+						"id": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 256
+						},
+						"name": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 200
+						},
+						"email": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 320
+						}
 					}
 				},
 				"permissions": {
 					"type": "array",
-					"items": { "type": "string" },
+					"items": {
+						"type": "string"
+					},
 					"description": "Permissions of this product (GET /v1/permissions)."
 				},
 				"origin": {
@@ -246,8 +452,14 @@
 			"required": ["ticket", "expiresAt"],
 			"additionalProperties": false,
 			"properties": {
-				"ticket": { "type": "string", "description": "Give it to the admin widget (data-ticket)." },
-				"expiresAt": { "type": "string", "format": "date-time" }
+				"ticket": {
+					"type": "string",
+					"description": "Give it to the admin widget (data-ticket)."
+				},
+				"expiresAt": {
+					"type": "string",
+					"format": "date-time"
+				}
 			}
 		}
 	},
@@ -263,9 +475,20 @@
 					"additionalProperties": false,
 					"description": "At least one of id, email and phone.",
 					"properties": {
-						"id": { "type": "string", "minLength": 1, "maxLength": 256 },
-						"email": { "type": "string", "format": "email", "maxLength": 320 },
-						"phone": { "type": "string", "pattern": "^\\+?[0-9 ().-]{3,40}$" }
+						"id": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 256
+						},
+						"email": {
+							"type": "string",
+							"format": "email",
+							"maxLength": 320
+						},
+						"phone": {
+							"type": "string",
+							"pattern": "^\\+?[0-9 ().-]{3,40}$"
+						}
 					}
 				}
 			}
@@ -277,7 +500,9 @@
 			"properties": {
 				"records": {
 					"type": "object",
-					"additionalProperties": { "type": "array" },
+					"additionalProperties": {
+						"type": "array"
+					},
 					"description": "The person's records by kind (each product names its own; staff: the kit's staff records)."
 				}
 			}
@@ -295,9 +520,20 @@
 					"additionalProperties": false,
 					"description": "At least one of id, email and phone.",
 					"properties": {
-						"id": { "type": "string", "minLength": 1, "maxLength": 256 },
-						"email": { "type": "string", "format": "email", "maxLength": 320 },
-						"phone": { "type": "string", "pattern": "^\\+?[0-9 ().-]{3,40}$" }
+						"id": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 256
+						},
+						"email": {
+							"type": "string",
+							"format": "email",
+							"maxLength": 320
+						},
+						"phone": {
+							"type": "string",
+							"pattern": "^\\+?[0-9 ().-]{3,40}$"
+						}
 					}
 				}
 			}
@@ -307,8 +543,15 @@
 			"required": ["deleted", "anonymised"],
 			"additionalProperties": false,
 			"properties": {
-				"deleted": { "type": "integer", "minimum": 0 },
-				"anonymised": { "type": "integer", "minimum": 0, "description": "Records kept without the person's details." }
+				"deleted": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"anonymised": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Records kept without the person's details."
+				}
 			}
 		}
 	},
@@ -326,9 +569,15 @@
 						"required": ["key", "name", "feature"],
 						"additionalProperties": false,
 						"properties": {
-							"key": { "type": "string" },
-							"name": { "type": "string" },
-							"feature": { "type": "string" }
+							"key": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"feature": {
+								"type": "string"
+							}
 						}
 					}
 				}
@@ -349,11 +598,22 @@
 						"required": ["key", "name", "description", "on", "millicreditsPerHour"],
 						"additionalProperties": false,
 						"properties": {
-							"key": { "type": "string" },
-							"name": { "type": "string" },
-							"description": { "type": "string" },
-							"on": { "type": "boolean" },
-							"millicreditsPerHour": { "type": "integer", "minimum": 0 }
+							"key": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"description": {
+								"type": "string"
+							},
+							"on": {
+								"type": "boolean"
+							},
+							"millicreditsPerHour": {
+								"type": "integer",
+								"minimum": 0
+							}
 						}
 					}
 				}
@@ -375,10 +635,19 @@
 						"required": ["key", "name", "on", "schema", "values"],
 						"additionalProperties": false,
 						"properties": {
-							"key": { "type": "string" },
-							"name": { "type": "string" },
-							"on": { "type": "boolean" },
-							"schema": { "type": "object", "description": "The settings' JSON Schema (from the manifest)." },
+							"key": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"on": {
+								"type": "boolean"
+							},
+							"schema": {
+								"type": "object",
+								"description": "The settings' JSON Schema (from the manifest)."
+							},
 							"values": {
 								"type": ["object", "null"],
 								"description": "Setting → { value, source }; null while the feature is off.",
@@ -386,7 +655,12 @@
 									"type": "object",
 									"required": ["source"],
 									"additionalProperties": false,
-									"properties": { "value": {}, "source": { "$ref": "#/components/schemas/ValueSource" } }
+									"properties": {
+										"value": {},
+										"source": {
+											"$ref": "#/components/schemas/ValueSource"
+										}
+									}
 								}
 							}
 						}
@@ -401,13 +675,25 @@
 		"body": {
 			"type": "object",
 			"required": ["value"],
-			"properties": { "value": { "description": "A value the setting's schema allows (not null: DELETE resets)." } }
+			"properties": {
+				"value": {
+					"description": "A value the setting's schema allows (not null: DELETE resets)."
+				}
+			}
 		},
 		"response": {
 			"type": "object",
 			"required": ["key", "source"],
 			"additionalProperties": false,
-			"properties": { "key": { "type": "string" }, "value": {}, "source": { "$ref": "#/components/schemas/ValueSource" } }
+			"properties": {
+				"key": {
+					"type": "string"
+				},
+				"value": {},
+				"source": {
+					"$ref": "#/components/schemas/ValueSource"
+				}
+			}
 		}
 	},
 	"DELETE /v1/settings/:key": {
@@ -416,7 +702,15 @@
 			"type": "object",
 			"required": ["key", "source"],
 			"additionalProperties": false,
-			"properties": { "key": { "type": "string" }, "value": {}, "source": { "$ref": "#/components/schemas/ValueSource" } }
+			"properties": {
+				"key": {
+					"type": "string"
+				},
+				"value": {},
+				"source": {
+					"$ref": "#/components/schemas/ValueSource"
+				}
+			}
 		}
 	},
 	"GET /v1/texts": {
@@ -425,7 +719,14 @@
 			"type": "object",
 			"required": ["texts"],
 			"additionalProperties": false,
-			"properties": { "texts": { "type": "array", "items": { "$ref": "#/components/schemas/Text" } } }
+			"properties": {
+				"texts": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Text"
+					}
+				}
+			}
 		}
 	},
 	"PUT /v1/texts/:key": {
@@ -434,15 +735,30 @@
 		"body": {
 			"type": "object",
 			"required": ["value"],
-			"properties": { "value": { "type": "string", "minLength": 1, "maxLength": 2000 } }
+			"properties": {
+				"value": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 2000
+				}
+			}
 		},
-		"response": { "$ref": "#/components/schemas/Text" }
+		"response": {
+			"$ref": "#/components/schemas/Text"
+		}
 	},
 	"DELETE /v1/texts/:key": {
 		"summary": "Reset one widget text to English",
-		"response": { "$ref": "#/components/schemas/Text" }
+		"response": {
+			"$ref": "#/components/schemas/Text"
+		}
 	},
-	"GET /v1/theme": { "summary": "The widgets' theme", "response": { "$ref": "#/components/schemas/Theme" } },
+	"GET /v1/theme": {
+		"summary": "The widgets' theme",
+		"response": {
+			"$ref": "#/components/schemas/Theme"
+		}
+	},
 	"PUT /v1/theme": {
 		"summary": "Save theme fields (null resets one)",
 		"body": {
@@ -450,16 +766,36 @@
 			"additionalProperties": false,
 			"description": "The fields to change; null resets a field.",
 			"properties": {
-				"colors": { "type": ["object", "null"] },
-				"fontFamily": { "type": ["string", "null"] },
-				"radius": { "type": ["integer", "null"], "minimum": 0, "maximum": 24 },
-				"mode": { "type": ["string", "null"], "enum": ["light", "dark", "auto", null] },
-				"customCss": { "type": ["string", "null"] }
+				"colors": {
+					"type": ["object", "null"]
+				},
+				"fontFamily": {
+					"type": ["string", "null"]
+				},
+				"radius": {
+					"type": ["integer", "null"],
+					"minimum": 0,
+					"maximum": 24
+				},
+				"mode": {
+					"type": ["string", "null"],
+					"enum": ["light", "dark", "auto", null]
+				},
+				"customCss": {
+					"type": ["string", "null"]
+				}
 			}
 		},
-		"response": { "$ref": "#/components/schemas/Theme" }
+		"response": {
+			"$ref": "#/components/schemas/Theme"
+		}
 	},
-	"GET /v1/format": { "summary": "The Format of money and dates", "response": { "$ref": "#/components/schemas/Format" } },
+	"GET /v1/format": {
+		"summary": "The Format of money and dates",
+		"response": {
+			"$ref": "#/components/schemas/Format"
+		}
+	},
 	"PUT /v1/format": {
 		"summary": "Save Format fields (null resets one)",
 		"body": {
@@ -467,14 +803,29 @@
 			"additionalProperties": false,
 			"description": "The fields to change; null resets a field.",
 			"properties": {
-				"locale": { "type": ["string", "null"] },
-				"currencyDisplay": { "type": ["string", "null"], "enum": ["code", "symbol", "custom", null] },
-				"currencySymbol": { "type": ["string", "null"], "maxLength": 8 },
-				"wholeUnits": { "type": ["boolean", "null"] },
-				"times": { "type": ["string", "null"], "enum": ["viewer", "business", null] }
+				"locale": {
+					"type": ["string", "null"]
+				},
+				"currencyDisplay": {
+					"type": ["string", "null"],
+					"enum": ["code", "symbol", "custom", null]
+				},
+				"currencySymbol": {
+					"type": ["string", "null"],
+					"maxLength": 8
+				},
+				"wholeUnits": {
+					"type": ["boolean", "null"]
+				},
+				"times": {
+					"type": ["string", "null"],
+					"enum": ["viewer", "business", null]
+				}
 			}
 		},
-		"response": { "$ref": "#/components/schemas/Format" }
+		"response": {
+			"$ref": "#/components/schemas/Format"
+		}
 	},
 	"GET /v1/lists/:list": {
 		"summary": "A list setting ({ value })",
@@ -482,17 +833,31 @@
 			"type": "object",
 			"required": ["value"],
 			"additionalProperties": false,
-			"properties": { "value": { "description": "The saved list, else its default (each product describes its lists)." } }
+			"properties": {
+				"value": {
+					"description": "The saved list, else its default (each product describes its lists)."
+				}
+			}
 		}
 	},
 	"PUT /v1/lists/:list": {
 		"summary": "Save a whole list setting ({ value })",
-		"body": { "type": "object", "required": ["value"], "properties": { "value": {} } },
+		"body": {
+			"type": "object",
+			"required": ["value"],
+			"properties": {
+				"value": {}
+			}
+		},
 		"response": {
 			"type": "object",
 			"required": ["value"],
 			"additionalProperties": false,
-			"properties": { "value": { "description": "The list as saved." } }
+			"properties": {
+				"value": {
+					"description": "The list as saved."
+				}
+			}
 		}
 	},
 	"GET /v1/connections": {
@@ -501,7 +866,14 @@
 			"type": "object",
 			"required": ["connections"],
 			"additionalProperties": false,
-			"properties": { "connections": { "type": "array", "items": { "$ref": "#/components/schemas/Connection" } } }
+			"properties": {
+				"connections": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Connection"
+					}
+				}
+			}
 		}
 	},
 	"PUT /v1/connections/:name": {
@@ -509,31 +881,68 @@
 		"body": {
 			"type": "object",
 			"required": ["value"],
-			"properties": { "value": { "type": ["string", "object"], "description": "The secret, or its fields." } }
+			"properties": {
+				"value": {
+					"type": ["string", "object"],
+					"description": "The secret, or its fields."
+				}
+			}
 		},
-		"response": { "$ref": "#/components/schemas/Connection" }
+		"response": {
+			"$ref": "#/components/schemas/Connection"
+		}
 	},
-	"DELETE /v1/connections/:name": { "summary": "Remove a connection", "status": 204 },
+	"DELETE /v1/connections/:name": {
+		"summary": "Remove a connection",
+		"status": 204
+	},
 	"POST /v1/connections/:name/test": {
 		"summary": "Test a connection again",
-		"response": { "$ref": "#/components/schemas/Connection" }
+		"response": {
+			"$ref": "#/components/schemas/Connection"
+		}
 	},
 	"GET /v1/activity": {
 		"summary": "The activity log, newest first",
 		"query": {
 			"type": "object",
 			"properties": {
-				"actor": { "type": "string", "maxLength": 256, "description": "An actor id." },
-				"action": { "type": "string", "description": "One action, or several separated by commas." },
-				"target": { "type": "string", "maxLength": 256, "description": "A target id." },
-				"q": { "type": "string", "description": "Searches labels, details, actor names and targets." },
-				"from": { "type": "string", "description": "An ISO-8601 time, or a day (YYYY-MM-DD) in the business time zone." },
+				"actor": {
+					"type": "string",
+					"maxLength": 256,
+					"description": "An actor id."
+				},
+				"action": {
+					"type": "string",
+					"description": "One action, or several separated by commas."
+				},
+				"target": {
+					"type": "string",
+					"maxLength": 256,
+					"description": "A target id."
+				},
+				"q": {
+					"type": "string",
+					"description": "Searches labels, details, actor names and targets."
+				},
+				"from": {
+					"type": "string",
+					"description": "An ISO-8601 time, or a day (YYYY-MM-DD) in the business time zone."
+				},
 				"to": {
 					"type": "string",
 					"description": "An ISO-8601 time, or a day (YYYY-MM-DD; its end) in the business time zone."
 				},
-				"cursor": { "type": "string", "description": "nextCursor of the previous page." },
-				"limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 }
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 50
+				}
 			}
 		},
 		"response": {
@@ -541,9 +950,18 @@
 			"required": ["items", "nextCursor", "hasMore"],
 			"additionalProperties": false,
 			"properties": {
-				"items": { "type": "array", "items": { "$ref": "#/components/schemas/ActivityEntry" } },
-				"nextCursor": { "type": ["string", "null"] },
-				"hasMore": { "type": "boolean" }
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/ActivityEntry"
+					}
+				},
+				"nextCursor": {
+					"type": ["string", "null"]
+				},
+				"hasMore": {
+					"type": "boolean"
+				}
 			}
 		}
 	},
@@ -552,15 +970,31 @@
 		"query": {
 			"type": "object",
 			"properties": {
-				"actor": { "type": "string", "maxLength": 256 },
-				"action": { "type": "string" },
-				"target": { "type": "string", "maxLength": 256 },
-				"q": { "type": "string" },
-				"from": { "type": "string" },
-				"to": { "type": "string" }
+				"actor": {
+					"type": "string",
+					"maxLength": 256
+				},
+				"action": {
+					"type": "string"
+				},
+				"target": {
+					"type": "string",
+					"maxLength": 256
+				},
+				"q": {
+					"type": "string"
+				},
+				"from": {
+					"type": "string"
+				},
+				"to": {
+					"type": "string"
+				}
 			}
 		},
-		"response": { "$ref": "#/components/schemas/Count" }
+		"response": {
+			"$ref": "#/components/schemas/Count"
+		}
 	},
 	"GET /v1/activity/counts": {
 		"summary": "Count the activity log by action, actor or kind",
@@ -568,15 +1002,34 @@
 			"type": "object",
 			"required": ["by"],
 			"properties": {
-				"by": { "type": "string", "enum": ["action", "actor", "kind"] },
-				"actor": { "type": "string", "maxLength": 256 },
-				"action": { "type": "string" },
-				"target": { "type": "string", "maxLength": 256 },
-				"q": { "type": "string" },
-				"from": { "type": "string" },
-				"to": { "type": "string" }
+				"by": {
+					"type": "string",
+					"enum": ["action", "actor", "kind"]
+				},
+				"actor": {
+					"type": "string",
+					"maxLength": 256
+				},
+				"action": {
+					"type": "string"
+				},
+				"target": {
+					"type": "string",
+					"maxLength": 256
+				},
+				"q": {
+					"type": "string"
+				},
+				"from": {
+					"type": "string"
+				},
+				"to": {
+					"type": "string"
+				}
 			}
 		},
-		"response": { "$ref": "#/components/schemas/Counts" }
+		"response": {
+			"$ref": "#/components/schemas/Counts"
+		}
 	}
 }

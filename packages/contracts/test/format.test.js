@@ -224,6 +224,25 @@ describe('cross-product shapes of the store conversion', () => {
 		expect(validateActivityCopy({ ...copy, actor: { ...copy.actor, role: 'r'.repeat(41) } }).ok).toBe(false);
 	});
 
+	it('activity copies may carry values instead of words: codes, numbers and yes/no, shown through texts (A8)', () => {
+		const copy = {
+			websiteId: WEBSITE,
+			productId: 'accounts',
+			actor: { kind: 'user', id: 'usr_1' },
+			action: 'role.saved',
+			target: 'cashier',
+			values: { change: 'new', permissions: 3, twoStep: 'required', paused: false },
+			at: '2026-10-10T10:00:00Z',
+		};
+		expect(validateActivityCopy(copy).ok).toBe(true);
+		expect(validateActivityCopy({ ...copy, values: { 'Bad key': 1 } }).ok).toBe(false);
+		expect(validateActivityCopy({ ...copy, values: { list: ['a'] } }).ok).toBe(false);
+		expect(validateActivityCopy({ ...copy, values: { long: 'x'.repeat(201) } }).ok).toBe(false);
+		expect(
+			validateActivityCopy({ ...copy, values: Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`k${i}`, i])) }).ok,
+		).toBe(false);
+	});
+
 	it('import calls are bounded (K10)', () => {
 		expect(IMPORT_LIMITS).toEqual({ records: 1000, bytes: 4 * 1024 * 1024 });
 	});
