@@ -1578,6 +1578,84 @@ describe('admin widgets', () => {
 		expect(roles.shadowRoot).toBeNull();
 	});
 
+	it('Users admin: saved views open in one click, save the filters, and are renamed, moved and deleted; tags (A5)', async () => {
+		const host = place('users_admin');
+		/** @type {Array<{ key: string, name: string, query: Record<string, string> }>} */
+		let views = [
+			{ key: 'vip', name: 'VIP customers', query: { tags: 'VIP,Gold', role: 'customer', status: 'active' } },
+			{ key: 'waiting', name: 'Waiting', query: { status: 'pending' } },
+		];
+		/** @type {URL[]} */
+		const asked = [];
+		const { server } = await startAdmin(
+			{
+				'GET /v1/admin/roles': () => answer(200, { items: ROLES }),
+				'GET /v1/admin/users/counts': () => answer(200, { total: 0, groups: {} }),
+				'GET /v1/admin/users/count': () => answer(200, { count: 0, capped: false }),
+				'GET /v1/admin/users': ({ url }) => {
+					asked.push(url);
+					return answer(200, {
+						items: [{ ...USER, notes: '', tags: ['VIP'], status: 'active', blocked: null }],
+						nextCursor: null,
+						hasMore: false,
+					});
+				},
+				'GET /v1/admin/users/views': () => answer(200, { items: views }),
+				'GET /v1/admin/users/tags': () =>
+					answer(200, {
+						items: [
+							{ tag: 'Gold', users: 1 },
+							{ tag: 'VIP', users: 3 },
+						],
+					}),
+				'PUT /v1/admin/users/views/my_filters': ({ body }) => {
+					views = [...views, { key: 'my_filters', ...body }];
+					return answer(200, { key: 'my_filters', ...body });
+				},
+				'PUT /v1/admin/users/views': ({ body }) => {
+					views = body.order.map((/** @type {string} */ key) => views.find((v) => v.key === key));
+					return answer(200, { items: views });
+				},
+				'DELETE /v1/admin/users/views/waiting': () => {
+					views = views.filter((v) => v.key !== 'waiting');
+					return answer(204);
+				},
+			},
+			['roles'],
+		);
+		const root = shadow(host);
+		// the known tags are offered in the tag fields
+		expect([...root.querySelectorAll('datalist option')].map((o) => o.getAttribute('value'))).toEqual(['Gold', 'VIP']);
+		await click(buttonIn(root, 'VIP customers'));
+		const opened = /** @type {URL} */ (asked.at(-1));
+		expect(opened.searchParams.get('tags')).toBe('VIP,Gold');
+		expect(opened.searchParams.get('roles')).toBe('customer');
+		expect(opened.searchParams.get('status')).toBe('active');
+		expect(fieldIn(root, strings['users.tagsFilter']).value).toBe('VIP, Gold');
+		// save the filters now as a view
+		await click(buttonIn(root, strings['users.viewSave']));
+		const dialog = /** @type {HTMLElement} */ (root.querySelector('.dialog'));
+		fieldIn(dialog, strings['users.viewName']).value = 'My filters';
+		await click(buttonIn(dialog, strings['users.viewSaveButton']));
+		expect(server.last('PUT /v1/admin/users/views/my_filters')?.body).toEqual({
+			name: 'My filters',
+			query: { roles: 'customer', tags: 'VIP,Gold', status: 'active' },
+		});
+		expect(buttonIn(root, 'My filters')).toBeTruthy();
+		// manage: move and delete
+		await click(buttonIn(root, strings['users.viewsManage']));
+		const manage = /** @type {HTMLElement} */ ([...root.querySelectorAll('.dialog')].at(-1));
+		await click(
+			/** @type {HTMLButtonElement} */ (
+				manage.querySelector(`button[aria-label="${strings['users.viewDown']}: VIP customers"]`)
+			),
+		);
+		expect(server.last('PUT /v1/admin/users/views')?.body).toEqual({ order: ['waiting', 'vip', 'my_filters'] });
+		const rows = [...manage.querySelectorAll('li')];
+		await click(buttonIn(/** @type {HTMLElement} */ (rows[0]), strings['users.viewDelete']));
+		expect(views.map((v) => v.key)).toEqual(['vip', 'my_filters']);
+	});
+
 	it('Users admin: counts on the chips, filters, the first user’s detail and the More menu', async () => {
 		const host = place('users_admin');
 		const ana = {

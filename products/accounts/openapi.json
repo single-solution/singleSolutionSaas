@@ -2216,6 +2216,16 @@
 						}
 					},
 					{
+						"name": "tags",
+						"in": "query",
+						"required": false,
+						"description": "A comma list of tags: the users with any of them.",
+						"schema": {
+							"type": "string",
+							"description": "A comma list of tags: the users with any of them."
+						}
+					},
+					{
 						"name": "createdAfter",
 						"in": "query",
 						"required": false,
@@ -2315,6 +2325,16 @@
 									},
 									"custom": {
 										"$ref": "#/components/schemas/CustomValuesInput"
+									},
+									"tags": {
+										"type": "array",
+										"maxItems": 20,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "The whole list of the user's tags (your own labels; trimmed, each once whatever the case; at most 20 of 1 to 40 characters)."
 									}
 								}
 							}
@@ -2467,6 +2487,16 @@
 						"schema": {
 							"type": "string",
 							"description": "The key of a consent: the users who give it now (for example those who want offers; 422 when it is not a key)."
+						}
+					},
+					{
+						"name": "tags",
+						"in": "query",
+						"required": false,
+						"description": "A comma list of tags: the users with any of them.",
+						"schema": {
+							"type": "string",
+							"description": "A comma list of tags: the users with any of them."
 						}
 					},
 					{
@@ -2642,6 +2672,16 @@
 						}
 					},
 					{
+						"name": "tags",
+						"in": "query",
+						"required": false,
+						"description": "A comma list of tags: the users with any of them.",
+						"schema": {
+							"type": "string",
+							"description": "A comma list of tags: the users with any of them."
+						}
+					},
+					{
 						"name": "createdAfter",
 						"in": "query",
 						"required": false,
@@ -2743,6 +2783,304 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/InvitedUser"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/users/tags": {
+			"get": {
+				"summary": "The tags",
+				"description": "Your tags with how many users have each, by name.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "roles",
+				"x-ss-permission": "users.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"maxItems": 1000,
+											"items": {
+												"type": "object",
+												"required": [
+													"tag",
+													"users"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"tag": {
+														"type": "string"
+													},
+													"users": {
+														"type": "integer",
+														"minimum": 1
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/users/views": {
+			"get": {
+				"summary": "The saved views",
+				"description": "The users list's saved views, in your order.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "roles",
+				"x-ss-permission": "users.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"maxItems": 50,
+											"items": {
+												"$ref": "#/components/schemas/SavedView"
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"summary": "Order the saved views",
+				"description": "422 validation_failed for order unless it holds every view key once.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "roles",
+				"x-ss-permission": "users.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"order"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"order": {
+										"type": "array",
+										"maxItems": 50,
+										"items": {
+											"type": "string"
+										},
+										"description": "Every view key once, in the new order."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"maxItems": 50,
+											"items": {
+												"$ref": "#/components/schemas/SavedView"
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/users/views/{key}": {
+			"delete": {
+				"summary": "Delete a saved view",
+				"description": "404 not_found for an unknown key.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "roles",
+				"x-ss-permission": "users.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "No content"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"summary": "Save a view",
+				"description": "Creates the view or replaces it; the key is the path’s (1–40 lower-case letters, digits or _). 422 validation_failed for the field, or for the 51st view.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "roles",
+				"x-ss-permission": "users.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"name"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"name": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 80
+									},
+									"query": {
+										"type": "object",
+										"additionalProperties": {
+											"type": "string",
+											"maxLength": 200
+										},
+										"description": "The list's filters to keep (others answer 422 validation_failed for query/<name>)."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SavedView"
 								}
 							}
 						}
@@ -2958,6 +3296,16 @@
 									"twoStep": {
 										"const": false,
 										"description": "Turns the user’s two-step sign-in off (for example when its secret can no longer be read); they set it up again. Not for your own user (403 forbidden)."
+									},
+									"tags": {
+										"type": "array",
+										"maxItems": 20,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "The whole list of the user's tags (your own labels; trimmed, each once whatever the case; at most 20 of 1 to 40 characters)."
 									}
 								}
 							}
@@ -9726,6 +10074,16 @@
 						}
 					},
 					{
+						"name": "tags",
+						"in": "query",
+						"required": false,
+						"description": "A comma list of tags: the users with any of them.",
+						"schema": {
+							"type": "string",
+							"description": "A comma list of tags: the users with any of them."
+						}
+					},
+					{
 						"name": "createdAfter",
 						"in": "query",
 						"required": false,
@@ -9848,6 +10206,16 @@
 									},
 									"custom": {
 										"$ref": "#/components/schemas/CustomValuesInput"
+									},
+									"tags": {
+										"type": "array",
+										"maxItems": 20,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "The whole list of the user's tags (your own labels; trimmed, each once whatever the case; at most 20 of 1 to 40 characters)."
 									}
 								}
 							}
@@ -9999,6 +10367,16 @@
 						"schema": {
 							"type": "string",
 							"description": "The key of a consent: the users who give it now (for example those who want offers; 422 when it is not a key)."
+						}
+					},
+					{
+						"name": "tags",
+						"in": "query",
+						"required": false,
+						"description": "A comma list of tags: the users with any of them.",
+						"schema": {
+							"type": "string",
+							"description": "A comma list of tags: the users with any of them."
 						}
 					},
 					{
@@ -10185,6 +10563,16 @@
 						}
 					},
 					{
+						"name": "tags",
+						"in": "query",
+						"required": false,
+						"description": "A comma list of tags: the users with any of them.",
+						"schema": {
+							"type": "string",
+							"description": "A comma list of tags: the users with any of them."
+						}
+					},
+					{
 						"name": "createdAfter",
 						"in": "query",
 						"required": false,
@@ -10309,6 +10697,362 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/InvitedUser"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/users/tags": {
+			"get": {
+				"summary": "The tags",
+				"description": "Your tags with how many users have each, by name.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "roles",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"maxItems": 1000,
+											"items": {
+												"type": "object",
+												"required": [
+													"tag",
+													"users"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"tag": {
+														"type": "string"
+													},
+													"users": {
+														"type": "integer",
+														"minimum": 1
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/users/views": {
+			"get": {
+				"summary": "The saved views",
+				"description": "The users list's saved views, in your order.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "roles",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"maxItems": 50,
+											"items": {
+												"$ref": "#/components/schemas/SavedView"
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"summary": "Order the saved views",
+				"description": "422 validation_failed for order unless it holds every view key once.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "roles",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"order"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"order": {
+										"type": "array",
+										"maxItems": 50,
+										"items": {
+											"type": "string"
+										},
+										"description": "Every view key once, in the new order."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"maxItems": 50,
+											"items": {
+												"$ref": "#/components/schemas/SavedView"
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/users/views/{key}": {
+			"delete": {
+				"summary": "Delete a saved view",
+				"description": "404 not_found for an unknown key.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "roles",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "No content"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"summary": "Save a view",
+				"description": "Creates the view or replaces it; the key is the path’s (1–40 lower-case letters, digits or _). 422 validation_failed for the field, or for the 51st view.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "roles",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"name"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"name": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 80
+									},
+									"query": {
+										"type": "object",
+										"additionalProperties": {
+											"type": "string",
+											"maxLength": 200
+										},
+										"description": "The list's filters to keep (others answer 422 validation_failed for query/<name>)."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SavedView"
 								}
 							}
 						}
@@ -10557,6 +11301,16 @@
 									"twoStep": {
 										"const": false,
 										"description": "Turns the user’s two-step sign-in off (for example when its secret can no longer be read); they set it up again. Not for your own user (403 forbidden)."
+									},
+									"tags": {
+										"type": "array",
+										"maxItems": 20,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "The whole list of the user's tags (your own labels; trimmed, each once whatever the case; at most 20 of 1 to 40 characters)."
 									}
 								}
 							}
@@ -11960,6 +12714,7 @@
 					"roleSince",
 					"createdAt",
 					"notes",
+					"tags",
 					"blocked",
 					"status",
 					"lastSignInAt",
@@ -12106,6 +12861,16 @@
 						"type": "string",
 						"maxLength": 5000,
 						"description": "Your staff’s notes; never shown to the user."
+					},
+					"tags": {
+						"type": "array",
+						"maxItems": 20,
+						"items": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 40
+						},
+						"description": "Your own labels for the user (for example VIP), seen by staff only."
 					},
 					"blocked": {
 						"type": [
@@ -12895,6 +13660,36 @@
 					}
 				}
 			},
+			"SavedView": {
+				"type": "object",
+				"description": "A saved view of the users list: a name and the list's filters.",
+				"required": [
+					"key",
+					"name",
+					"query"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"key": {
+						"type": "string",
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"name": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 80
+					},
+					"query": {
+						"type": "object",
+						"maxProperties": 12,
+						"additionalProperties": {
+							"type": "string",
+							"maxLength": 200
+						},
+						"description": "The users list's filters by name: q, role, roles, permission, status, blocked, deletion, phone, phoneDigits, consent, tags, createdAfter."
+					}
+				}
+			},
 			"SignedIn": {
 				"type": "object",
 				"description": "Signed in: a session started.",
@@ -12989,6 +13784,7 @@
 					"roleSince",
 					"createdAt",
 					"notes",
+					"tags",
 					"blocked",
 					"status",
 					"lastSignInAt",
@@ -13135,6 +13931,16 @@
 						"type": "string",
 						"maxLength": 5000,
 						"description": "Your staff’s notes; never shown to the user."
+					},
+					"tags": {
+						"type": "array",
+						"maxItems": 20,
+						"items": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 40
+						},
+						"description": "Your own labels for the user (for example VIP), seen by staff only."
 					},
 					"blocked": {
 						"type": [

@@ -15,7 +15,8 @@ import { nationalNumberOf } from '@ss/contracts/phone';
 import { randomToken, sha256Hex } from '@ss/protocol';
 import { labelOf, valuesOf } from '../core/activity.js';
 import { MAX_CONSENTS, checkConsent } from '../core/consents.js';
-import { MAX_CUSTOM_FIELDS, checkCustomValues, checkFieldDefinition, checkName, staffView } from '../core/profile.js';
+import { MAX_CUSTOM_FIELDS, checkCustomValues, checkFieldDefinition, checkName, checkTags, staffView } from '../core/profile.js';
+import { MAX_VIEWS, checkView } from '../core/views.js';
 import {
 	MAX_ROLES,
 	OWNER_ROLE,
@@ -139,7 +140,8 @@ export const createManage = (product, service, flows) => {
 	 * `blocked` (true or false), `deletion=1`, `phone` (exact, as typed in the website's phone format), `phoneDigits`
 	 * (the end of a national number, A7: a whole number typed any usual way counts by its national number, so its trunk
 	 * prefix or calling code does not matter; else at least 4 digits the number ends with) and `createdAfter`
-	 * (ISO-8601), and `consent` (the key of a consent the user gives now, A2: for example the users who want offers). A
+	 * (ISO-8601), `tags` (a comma list: users with any of them, A5), and `consent` (the key of a consent the user gives
+	 * now, A2: for example the users who want offers). A
 	 * role or status that does not fit is ignored; a phone, permission, consent or time that does not fit answers 422.
 	 * @param {any} ctx @param {import('./service.js').Site} s
 	 * @returns {Promise<import('../adapters/store.js').UserQuery>}
@@ -150,7 +152,8 @@ export const createManage = (product, service, flows) => {
 			const whole = await service.phoneOf(site, typed);
 			return (whole && nationalNumberOf(whole)) ?? typed.replace(/\D/g, '');
 		};
-		const { q, role, roles, status, deletion, blocked, phone, phoneDigits, permission, consent, createdAfter } = ctx.query;
+		const { q, role, roles, status, deletion, blocked, phone, phoneDigits, permission, consent, tags, createdAfter } =
+			ctx.query;
 		const named = [role, ...(typeof roles === 'string' ? roles.split(',') : [])]
 			.filter((key) => typeof key === 'string')
 			.map((key) => key.trim())
@@ -170,6 +173,8 @@ export const createManage = (product, service, flows) => {
 			throw invalid('phoneDigits', `phoneDigits is a number, or at least ${MIN_PHONE_END} digits it ends with.`);
 		if (typeof consent === 'string' && consent !== '' && !/^[a-z][a-z0-9_]{0,39}$/.test(consent))
 			throw invalid('consent', 'consent is the key of a consent.');
+		const tagList = typeof tags === 'string' && tags.trim() !== '' ? checkTags(tags.split(',')) : null;
+		if (tagList && !tagList.ok) throw invalid('tags', 'tags is a comma list of tags.');
 		const after = typeof createdAfter === 'string' && createdAfter !== '' ? new Date(createdAfter) : null;
 		if (after && Number.isNaN(after.getTime())) throw invalid('createdAfter', 'createdAfter is an ISO-8601 time.');
 		return {
@@ -180,6 +185,7 @@ export const createManage = (product, service, flows) => {
 			...(exact ? { phone: exact } : {}),
 			...(end ? { phoneEnd: end } : {}),
 			...(typeof consent === 'string' && consent !== '' ? { consent } : {}),
+			...(tagList?.ok ? { tags: tagList.value } : {}),
 			...(after ? { createdAfter: after } : {}),
 			deletion: deletion === '1',
 		};
@@ -262,7 +268,7 @@ export const createManage = (product, service, flows) => {
 	};
 
 	/**
-	 * Create an active user (A4): `{ name, email?, phone?, role?, password?, addresses?, notes?, custom? }`; nothing is
+	 * Create an active user (A4): `{ name, email?, phone?, role?, password?, addresses?, notes?, custom?, tags? }`; nothing is
 	 * sent. A user needs a name and an email address or a phone number.
 	 * @param {any} ctx
 	 */
@@ -281,6 +287,8 @@ export const createManage = (product, service, flows) => {
 			throw invalid('notes', 'Notes are text of at most 5000 characters.');
 		const custom = checkCustomValues(await s.store.fields.list(), body.custom, { complete: false, by: 'staff' });
 		if (!custom.ok) throw invalid(custom.field, custom.message);
+		const tags = body.tags === undefined ? { ok: /** @type {const} */ (true), value: [] } : checkTags(body.tags);
+		if (!tags.ok) throw invalid('tags', tags.message);
 		const draft = {
 			email: /** @type {string | null} */ (contacts.email ?? null),
 			phone: /** @type {string | null} */ (contacts.phone ?? null),
@@ -301,6 +309,7 @@ export const createManage = (product, service, flows) => {
 			passwordHash,
 			notes: typeof body.notes === 'string' ? body.notes : '',
 			custom: custom.value,
+			tags: tags.value,
 			addresses: body.addresses === undefined ? [] : await service.addressesOf(s, body.addresses, null),
 		});
 		if (!user) throw problem('already_exists', 'Someone with this email address or phone number has an account.');
@@ -450,6 +459,18 @@ export const createManage = (product, service, flows) => {
 				throw invalid('role', 'There is no such role.');
 			set.role = body.role;
 			changes.push({ action: 'user.role_changed', values: { from: user.role, to: body.role } });
+		}
+		if (body.tags !== undefined) {
+			const tags = checkTags(body.tags);
+			if (!tags.ok) throw invalid('tags', tags.message);
+			set.tags = tags.value;
+			const added = tags.value.filter((tag) => !user.tags.includes(tag));
+			const removed = user.tags.filter((tag) => !tags.value.includes(tag));
+			if (added.length > 0 || removed.length > 0)
+				changes.push({
+					action: 'user.tags_changed',
+					values: valuesOf({ added: added.join(','), removed: removed.join(',') }),
+				});
 		}
 		if (body.notes !== undefined) {
 			if (typeof body.notes !== 'string' || body.notes.length > 5000)
@@ -1183,6 +1204,51 @@ export const createManage = (product, service, flows) => {
 			throw problem('feature_off', 'Custom fields are off.');
 	};
 
+	// ---------------------------------------------------------------------------------------- tags and views (A5)
+
+	/** The website's tags with how many users have each. @param {any} ctx */
+	const listTags = async (ctx) => ({ items: await (await service.site(ctx)).store.users.tags() });
+
+	/** The users list's saved views, in the merchant's order. @param {any} ctx */
+	const listViews = async (ctx) => ({ items: await (await service.site(ctx)).store.views.list() });
+
+	/** Save a view: `{ name, query }` (the list's filters). @param {any} ctx */
+	const saveView = async (ctx) => {
+		const s = await service.site(ctx);
+		const checked = checkView(ctx.params.key, ctx.body);
+		if (!checked.ok) throw invalid(checked.field, checked.message);
+		const existing = (await s.store.views.list()).some((view) => view.key === checked.value.key);
+		if (!existing && (await s.store.views.count()) >= MAX_VIEWS)
+			throw problem('validation_failed', `A website keeps at most ${MAX_VIEWS} saved views.`);
+		await s.store.views.save(checked.value);
+		await log(ctx, 'users_view.saved', checked.value.key, { label: checked.value.name });
+		return checked.value;
+	};
+
+	/** Delete a saved view. @param {any} ctx */
+	const deleteView = async (ctx) => {
+		const s = await service.site(ctx);
+		if (!(await s.store.views.remove(ctx.params.key))) throw problem('not_found', 'No such view.');
+		await log(ctx, 'users_view.deleted', ctx.params.key);
+		return undefined;
+	};
+
+	/** Place the saved views in this order: `{ order: [every key once] }`. @param {any} ctx */
+	const orderViews = async (ctx) => {
+		const s = await service.site(ctx);
+		const keys = (await s.store.views.list()).map((view) => view.key);
+		const order = bodyOf(ctx.body).order;
+		if (
+			!Array.isArray(order) ||
+			order.length !== keys.length ||
+			new Set(order).size !== keys.length ||
+			order.some((key) => !keys.includes(key))
+		)
+			throw invalid('order', 'Send every view key once, in the new order.');
+		await s.store.views.reorder(order);
+		return { items: await s.store.views.list() };
+	};
+
 	// ------------------------------------------------------------------------------------------------- consents (A2)
 
 	/** Merchants edit the consent list only while the feature is on (admins may prepare it). @param {any} ctx */
@@ -1290,6 +1356,11 @@ export const createManage = (product, service, flows) => {
 
 	return Object.freeze({
 		listUsers,
+		listTags,
+		listViews,
+		saveView,
+		deleteView,
+		orderViews,
 		listConsents,
 		consentList,
 		saveConsent,

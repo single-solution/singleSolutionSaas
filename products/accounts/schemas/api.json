@@ -493,6 +493,7 @@
 				"roleSince",
 				"createdAt",
 				"notes",
+				"tags",
 				"blocked",
 				"status",
 				"lastSignInAt",
@@ -616,6 +617,16 @@
 					"type": "string",
 					"maxLength": 5000,
 					"description": "Your staff’s notes; never shown to the user."
+				},
+				"tags": {
+					"type": "array",
+					"maxItems": 20,
+					"items": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 40
+					},
+					"description": "Your own labels for the user (for example VIP), seen by staff only."
 				},
 				"blocked": {
 					"type": ["object", "null"],
@@ -675,6 +686,7 @@
 				"roleSince",
 				"createdAt",
 				"notes",
+				"tags",
 				"blocked",
 				"status",
 				"lastSignInAt",
@@ -798,6 +810,16 @@
 					"type": "string",
 					"maxLength": 5000,
 					"description": "Your staff’s notes; never shown to the user."
+				},
+				"tags": {
+					"type": "array",
+					"maxItems": 20,
+					"items": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 40
+					},
+					"description": "Your own labels for the user (for example VIP), seen by staff only."
 				},
 				"blocked": {
 					"type": ["object", "null"],
@@ -1621,6 +1643,32 @@
 					"type": "string",
 					"enum": ["agreement", "marketing"],
 					"description": "agreement (terms, privacy policy …) or marketing (kept apart: never required, given or withdrawn by the user at any time)."
+				}
+			}
+		},
+		"SavedView": {
+			"type": "object",
+			"description": "A saved view of the users list: a name and the list's filters.",
+			"required": ["key", "name", "query"],
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_]{0,39}$"
+				},
+				"name": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 80
+				},
+				"query": {
+					"type": "object",
+					"maxProperties": 12,
+					"additionalProperties": {
+						"type": "string",
+						"maxLength": 200
+					},
+					"description": "The users list's filters by name: q, role, roles, permission, status, blocked, deletion, phone, phoneDigits, consent, tags, createdAfter."
 				}
 			}
 		}
@@ -2770,6 +2818,10 @@
 					"type": "string",
 					"description": "The key of a consent: the users who give it now (for example those who want offers; 422 when it is not a key)."
 				},
+				"tags": {
+					"type": "string",
+					"description": "A comma list of tags: the users with any of them."
+				},
 				"createdAfter": {
 					"type": "string",
 					"description": "An ISO-8601 time (422 otherwise)."
@@ -2827,6 +2879,10 @@
 				"consent": {
 					"type": "string",
 					"description": "The key of a consent: the users who give it now (for example those who want offers; 422 when it is not a key)."
+				},
+				"tags": {
+					"type": "string",
+					"description": "A comma list of tags: the users with any of them."
 				},
 				"createdAfter": {
 					"type": "string",
@@ -2892,6 +2948,10 @@
 					"type": "string",
 					"description": "The key of a consent: the users who give it now (for example those who want offers; 422 when it is not a key)."
 				},
+				"tags": {
+					"type": "string",
+					"description": "A comma list of tags: the users with any of them."
+				},
 				"createdAfter": {
 					"type": "string",
 					"description": "An ISO-8601 time (422 otherwise)."
@@ -2901,6 +2961,118 @@
 		"response": {
 			"$ref": "#/components/schemas/Counts"
 		}
+	},
+	"GET /v1/users/tags": {
+		"summary": "The tags",
+		"description": "Your tags with how many users have each, by name.",
+		"response": {
+			"type": "object",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"maxItems": 1000,
+					"items": {
+						"type": "object",
+						"required": ["tag", "users"],
+						"additionalProperties": false,
+						"properties": {
+							"tag": {
+								"type": "string"
+							},
+							"users": {
+								"type": "integer",
+								"minimum": 1
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"GET /v1/users/views": {
+		"summary": "The saved views",
+		"description": "The users list's saved views, in your order.",
+		"response": {
+			"type": "object",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"$ref": "#/components/schemas/SavedView"
+					}
+				}
+			}
+		}
+	},
+	"PUT /v1/users/views": {
+		"summary": "Order the saved views",
+		"description": "422 validation_failed for order unless it holds every view key once.",
+		"body": {
+			"type": "object",
+			"required": ["order"],
+			"additionalProperties": false,
+			"properties": {
+				"order": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string"
+					},
+					"description": "Every view key once, in the new order."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"$ref": "#/components/schemas/SavedView"
+					}
+				}
+			}
+		}
+	},
+	"PUT /v1/users/views/:key": {
+		"summary": "Save a view",
+		"description": "Creates the view or replaces it; the key is the path’s (1–40 lower-case letters, digits or _). 422 validation_failed for the field, or for the 51st view.",
+		"body": {
+			"type": "object",
+			"required": ["name"],
+			"additionalProperties": false,
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 80
+				},
+				"query": {
+					"type": "object",
+					"additionalProperties": {
+						"type": "string",
+						"maxLength": 200
+					},
+					"description": "The list's filters to keep (others answer 422 validation_failed for query/<name>)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/SavedView"
+		}
+	},
+	"DELETE /v1/users/views/:key": {
+		"summary": "Delete a saved view",
+		"description": "404 not_found for an unknown key.",
+		"status": 204
 	},
 	"POST /v1/users": {
 		"summary": "Add a user",
@@ -2942,6 +3114,16 @@
 				},
 				"custom": {
 					"$ref": "#/components/schemas/CustomValuesInput"
+				},
+				"tags": {
+					"type": "array",
+					"maxItems": 20,
+					"items": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 40
+					},
+					"description": "The whole list of the user's tags (your own labels; trimmed, each once whatever the case; at most 20 of 1 to 40 characters)."
 				}
 			}
 		},
@@ -3009,6 +3191,16 @@
 				"twoStep": {
 					"const": false,
 					"description": "Turns the user’s two-step sign-in off (for example when its secret can no longer be read); they set it up again. Not for your own user (403 forbidden)."
+				},
+				"tags": {
+					"type": "array",
+					"maxItems": 20,
+					"items": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 40
+					},
+					"description": "The whole list of the user's tags (your own labels; trimmed, each once whatever the case; at most 20 of 1 to 40 characters)."
 				}
 			}
 		},
@@ -3839,6 +4031,10 @@
 					"type": "string",
 					"description": "The key of a consent: the users who give it now (for example those who want offers; 422 when it is not a key)."
 				},
+				"tags": {
+					"type": "string",
+					"description": "A comma list of tags: the users with any of them."
+				},
 				"createdAfter": {
 					"type": "string",
 					"description": "An ISO-8601 time (422 otherwise)."
@@ -3896,6 +4092,10 @@
 				"consent": {
 					"type": "string",
 					"description": "The key of a consent: the users who give it now (for example those who want offers; 422 when it is not a key)."
+				},
+				"tags": {
+					"type": "string",
+					"description": "A comma list of tags: the users with any of them."
 				},
 				"createdAfter": {
 					"type": "string",
@@ -3961,6 +4161,10 @@
 					"type": "string",
 					"description": "The key of a consent: the users who give it now (for example those who want offers; 422 when it is not a key)."
 				},
+				"tags": {
+					"type": "string",
+					"description": "A comma list of tags: the users with any of them."
+				},
 				"createdAfter": {
 					"type": "string",
 					"description": "An ISO-8601 time (422 otherwise)."
@@ -3970,6 +4174,118 @@
 		"response": {
 			"$ref": "#/components/schemas/Counts"
 		}
+	},
+	"GET /v1/admin/users/tags": {
+		"summary": "The tags",
+		"description": "Your tags with how many users have each, by name.",
+		"response": {
+			"type": "object",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"maxItems": 1000,
+					"items": {
+						"type": "object",
+						"required": ["tag", "users"],
+						"additionalProperties": false,
+						"properties": {
+							"tag": {
+								"type": "string"
+							},
+							"users": {
+								"type": "integer",
+								"minimum": 1
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"GET /v1/admin/users/views": {
+		"summary": "The saved views",
+		"description": "The users list's saved views, in your order.",
+		"response": {
+			"type": "object",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"$ref": "#/components/schemas/SavedView"
+					}
+				}
+			}
+		}
+	},
+	"PUT /v1/admin/users/views": {
+		"summary": "Order the saved views",
+		"description": "422 validation_failed for order unless it holds every view key once.",
+		"body": {
+			"type": "object",
+			"required": ["order"],
+			"additionalProperties": false,
+			"properties": {
+				"order": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string"
+					},
+					"description": "Every view key once, in the new order."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"$ref": "#/components/schemas/SavedView"
+					}
+				}
+			}
+		}
+	},
+	"PUT /v1/admin/users/views/:key": {
+		"summary": "Save a view",
+		"description": "Creates the view or replaces it; the key is the path’s (1–40 lower-case letters, digits or _). 422 validation_failed for the field, or for the 51st view.",
+		"body": {
+			"type": "object",
+			"required": ["name"],
+			"additionalProperties": false,
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 80
+				},
+				"query": {
+					"type": "object",
+					"additionalProperties": {
+						"type": "string",
+						"maxLength": 200
+					},
+					"description": "The list's filters to keep (others answer 422 validation_failed for query/<name>)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/SavedView"
+		}
+	},
+	"DELETE /v1/admin/users/views/:key": {
+		"summary": "Delete a saved view",
+		"description": "404 not_found for an unknown key.",
+		"status": 204
 	},
 	"POST /v1/admin/users": {
 		"summary": "Add a user (Users admin widget)",
@@ -4011,6 +4327,16 @@
 				},
 				"custom": {
 					"$ref": "#/components/schemas/CustomValuesInput"
+				},
+				"tags": {
+					"type": "array",
+					"maxItems": 20,
+					"items": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 40
+					},
+					"description": "The whole list of the user's tags (your own labels; trimmed, each once whatever the case; at most 20 of 1 to 40 characters)."
 				}
 			}
 		},
@@ -4078,6 +4404,16 @@
 				"twoStep": {
 					"const": false,
 					"description": "Turns the user’s two-step sign-in off (for example when its secret can no longer be read); they set it up again. Not for your own user (403 forbidden)."
+				},
+				"tags": {
+					"type": "array",
+					"maxItems": 20,
+					"items": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 40
+					},
+					"description": "The whole list of the user's tags (your own labels; trimmed, each once whatever the case; at most 20 of 1 to 40 characters)."
 				}
 			}
 		},

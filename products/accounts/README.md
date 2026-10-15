@@ -40,8 +40,9 @@ refused by name; text over a limit is refused, never cut); times are ISO-8601 wi
 - Roles first: a user's or request's role must exist (a ready-made template not deleted, or imported before), so a dry
   run of users needs the roles imported. A template key may be imported with the merchant's changes; Owner keeps rank
   100 and every permission, and `signUp: true` names the role for new sign-ups (a user without a role gets it).
-- Users: `email` and `phone` are normalized (national numbers with the website's phone format), `phoneDigits` and
-  `identity` are derived; `passwordHash` is kept as given in a format sign-in checks (bcrypt, `pbkdf2$…` with the
+- Users: `email` and `phone` are normalized (national numbers with the website's phone format), the reversed national
+  number (the search by the end of a number) and `identity` are derived; `consents` keeps `{ key: { version, given,
+at } }` and `tags` the merchant's labels; `passwordHash` is kept as given in a format sign-in checks (bcrypt, `pbkdf2$…` with the
   `imported_password_pepper` connection, or `scrypt$…`), any other is refused; `twoStep: { secret, recoveryHashes }` (plain base32
   secret and SHA-256 hex of `recovery:<code>`) is sealed at once. An email address or phone number another user holds
   is refused (one user per phone number: a staff member and a customer cannot share one). `roleSince` defaults to

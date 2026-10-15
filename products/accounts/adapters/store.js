@@ -28,6 +28,7 @@ import { createId } from '@ss/contracts';
 import { nationalNumberOf } from '@ss/contracts/phone';
 import { CONSENT_TEMPLATES, MAX_CONSENTS } from '../core/consents.js';
 import { MAX_CUSTOM_FIELDS } from '../core/profile.js';
+import { MAX_VIEWS } from '../core/views.js';
 import { MAX_ROLES, OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core/roles.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -35,6 +36,7 @@ import { MAX_ROLES, OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core
 /** @typedef {import('../core/roles.js').Role} Role */
 /** @typedef {import('../core/profile.js').CustomField} CustomField */
 /** @typedef {import('../core/consents.js').Consent} Consent */
+/** @typedef {import('../core/views.js').SavedView} SavedView */
 
 /**
  * @typedef {object} SessionRecord
@@ -64,10 +66,10 @@ import { MAX_ROLES, OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core
 /**
  * The filters of the users list (and its counts): text in the name, email or phone; roles (one or several); a status
  * (`active`, `pending`, `invited`, or `blocked` for blocked users); blocked or not; users who asked to be deleted; an
- * exact phone, the end of a national number (digits, A7), users who gave a consent now (A2), and users made after a
- * time (PLAN 0.8.10 A4).
+ * exact phone, the end of a national number (digits, A7), users who gave a consent now (A2), users with any of some
+ * tags (A5), and users made after a time (PLAN 0.8.10 A4).
  * @typedef {{ q?: string, roles?: string[], status?: string, blocked?: boolean, deletion?: boolean, phone?: string,
- *   phoneEnd?: string, consent?: string, createdAfter?: Date }} UserQuery
+ *   phoneEnd?: string, consent?: string, tags?: string[], createdAfter?: Date }} UserQuery
  */
 
 /**
@@ -123,6 +125,7 @@ const OAUTH = 'oauth';
 const ROLES = 'roles';
 const FIELDS = 'fields';
 const CONSENTS = 'consents';
+const VIEWS = 'views';
 const PERMISSIONS = 'permissions';
 const KEYS = 'keys';
 const SIGNUPS = 'signups';
@@ -169,6 +172,8 @@ export const INDEXES = [
 	{ collection: ROLES, keys: { websiteId: 1, key: 1 }, name: 'by_key', unique: true },
 	{ collection: FIELDS, keys: { websiteId: 1, key: 1 }, name: 'by_key', unique: true },
 	{ collection: CONSENTS, keys: { websiteId: 1, key: 1 }, name: 'by_key', unique: true },
+	{ collection: VIEWS, keys: { websiteId: 1, key: 1 }, name: 'by_key', unique: true },
+	{ collection: USERS, keys: { websiteId: 1, tags: 1 }, name: 'by_tag' },
 	{ collection: PERMISSIONS, keys: { websiteId: 1, key: 1 }, name: 'by_key', unique: true },
 	{ collection: KEYS, keys: { websiteId: 1 }, name: 'by_website', unique: true },
 	{ collection: SIGNUPS, keys: { websiteId: 1, deviceHash: 1 }, name: 'by_device' },
@@ -221,6 +226,7 @@ export const createStore = (data, { now }) => {
 	const roles = data.collection(ROLES);
 	const fields = data.collection(FIELDS);
 	const consents = data.collection(CONSENTS);
+	const views = data.collection(VIEWS);
 	const permissions = data.collection(PERMISSIONS);
 	const keys = data.collection(KEYS);
 	const signups = data.collection(SIGNUPS);
@@ -233,7 +239,7 @@ export const createStore = (data, { now }) => {
 	 * The filter of the users list and of its counts (one builder, so a count always equals the list).
 	 * @param {UserQuery} query
 	 */
-	const usersFilter = ({ q, roles: anyRole, status, blocked, deletion, phone, phoneEnd, consent, createdAfter }) => {
+	const usersFilter = ({ q, roles: anyRole, status, blocked, deletion, phone, phoneEnd, consent, tags, createdAfter }) => {
 		/** @type {Record<string, unknown>} */
 		const filter = {};
 		/** @type {Record<string, unknown>[]} */
@@ -251,6 +257,7 @@ export const createStore = (data, { now }) => {
 		if (phone) filter.phone = phone;
 		if (phoneEnd) filter.phoneReversed = { $regex: `^${[...phoneEnd].reverse().join('')}` };
 		if (consent) filter[`consents.${consent}.given`] = true;
+		if (tags) filter.tags = { $in: tags };
 		if (createdAfter) filter.createdAt = { $gt: createdAfter };
 		return { ...filter, ...(and.length > 0 ? { $and: and } : {}), websiteId };
 	};
@@ -424,6 +431,22 @@ export const createStore = (data, { now }) => {
 			remove: async (id) => (await users.deleteOne({ websiteId, id })).deletedCount === 1,
 			/** Move users of a deleted role to another (the role for new sign-ups). @param {string} role @param {string} to */
 			resetRole: async (role, to) => (await users.updateMany({ websiteId, role }, { $set: { role: to } })).modifiedCount,
+			/**
+			 * The website's tags with how many users have each, by name (A5).
+			 * @returns {Promise<Array<{ tag: string, users: number }>>}
+			 */
+			tags: async () =>
+				(
+					await users
+						.aggregate([
+							{ $match: { websiteId, 'tags.0': { $exists: true } } },
+							{ $unwind: '$tags' },
+							{ $group: { _id: '$tags', users: { $sum: 1 } } },
+							{ $sort: { _id: 1 } },
+							{ $limit: 1000 },
+						])
+						.toArray()
+				).map((row) => ({ tag: String(row._id), users: Number(row.users) })),
 		}),
 
 		sessions: Object.freeze({
@@ -647,6 +670,34 @@ export const createStore = (data, { now }) => {
 			},
 			/** @param {string} key */
 			remove: async (key) => (await fields.deleteOne({ websiteId, key })).deletedCount === 1,
+		}),
+
+		views: Object.freeze({
+			/** The saved views of the users list, in the merchant's order (A5). @returns {Promise<SavedView[]>} */
+			list: async () =>
+				as(
+					await views
+						.find({ websiteId }, { projection: { _id: 0, key: 1, name: 1, query: 1 } })
+						.sort({ position: 1, key: 1 })
+						.limit(MAX_VIEWS)
+						.toArray(),
+				),
+			count: () => views.countDocuments({ websiteId }),
+			/** Save a view; a new one goes last. @param {SavedView} view */
+			save: async (view) => {
+				const position = await views.countDocuments({ websiteId });
+				await views.updateOne(
+					{ websiteId, key: view.key },
+					{ $set: { ...view }, $setOnInsert: { position } },
+					{ upsert: true },
+				);
+			},
+			/** Place the views in this order (every key once). @param {string[]} keys */
+			reorder: async (keys) => {
+				for (const [position, key] of keys.entries()) await views.updateOne({ websiteId, key }, { $set: { position } });
+			},
+			/** @param {string} key */
+			remove: async (key) => (await views.deleteOne({ websiteId, key })).deletedCount === 1,
 		}),
 
 		consents: Object.freeze({

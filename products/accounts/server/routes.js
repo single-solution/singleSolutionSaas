@@ -427,6 +427,18 @@ export const createRoutes = (product) => {
 		// counts with the list's filters (PLAN 0.8.10 K4)
 		defineRoute({ method: 'GET', path: '/v1/users/count', auth: 'server', feature: 'roles', handler: manage.countUsers }),
 		defineRoute({ method: 'GET', path: '/v1/users/counts', auth: 'server', feature: 'roles', handler: manage.countUsersBy }),
+		// tags and saved views of the users list (A5)
+		defineRoute({ method: 'GET', path: '/v1/users/tags', auth: 'server', feature: 'roles', handler: manage.listTags }),
+		defineRoute({ method: 'GET', path: '/v1/users/views', auth: 'server', feature: 'roles', handler: manage.listViews }),
+		defineRoute({ method: 'PUT', path: '/v1/users/views', auth: 'server', feature: 'roles', handler: manage.orderViews }),
+		defineRoute({ method: 'PUT', path: '/v1/users/views/:key', auth: 'server', feature: 'roles', handler: manage.saveView }),
+		defineRoute({
+			method: 'DELETE',
+			path: '/v1/users/views/:key',
+			auth: 'server',
+			feature: 'roles',
+			handler: manage.deleteView,
+		}),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/users',
@@ -641,6 +653,41 @@ export const createRoutes = (product) => {
 			auth: 'ticket',
 			permission: 'users.read',
 			handler: manage.countUsersBy,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/users/tags',
+			auth: 'ticket',
+			permission: 'users.read',
+			handler: manage.listTags,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/users/views',
+			auth: 'ticket',
+			permission: 'users.read',
+			handler: manage.listViews,
+		}),
+		defineRoute({
+			method: 'PUT',
+			path: '/v1/admin/users/views',
+			auth: 'ticket',
+			permission: 'users.manage',
+			handler: manage.orderViews,
+		}),
+		defineRoute({
+			method: 'PUT',
+			path: '/v1/admin/users/views/:key',
+			auth: 'ticket',
+			permission: 'users.manage',
+			handler: manage.saveView,
+		}),
+		defineRoute({
+			method: 'DELETE',
+			path: '/v1/admin/users/views/:key',
+			auth: 'ticket',
+			permission: 'users.manage',
+			handler: manage.deleteView,
 		}),
 		defineRoute({
 			method: 'GET',

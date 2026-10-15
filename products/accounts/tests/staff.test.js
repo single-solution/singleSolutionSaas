@@ -557,3 +557,61 @@ describe('the Users widget’s actions', () => {
 		expect(reopened.json).toMatchObject({ id: asked.json.id, status: 'pending', invitedAt: null });
 	});
 });
+
+describe('A5: user tags and saved views of the users list', () => {
+	it('tags a user, lists the tags with their counts, and finds users by any tag', async () => {
+		const tagged = await create({ name: 'Tia Tagged', email: 'tia@example.com', tags: [' VIP ', 'Wholesale', 'vip'] });
+		expect(tagged.tags).toEqual(['VIP', 'Wholesale']);
+		expect(code(await server('POST', '/v1/users', { name: 'Bad', email: 'bad@example.com', tags: ['x'.repeat(41)] }))).toBe(
+			'validation_failed',
+		);
+		expect(code(await server('PATCH', `/v1/users/${tagged.id}`, { tags: 'VIP' }))).toBe('validation_failed');
+		const patched = await server('PATCH', `/v1/users/${tagged.id}`, { tags: ['VIP', 'Newsletter'] });
+		expect(patched.json.tags).toEqual(['VIP', 'Newsletter']);
+		await server('PATCH', `/v1/users/${people.customer.id}`, { tags: ['VIP'] });
+		/** @param {string} query */
+		const ids = async (query) =>
+			(await server('GET', `/v1/users?${query}`)).json.items.map((/** @type {any} */ u) => u.id).sort();
+		expect(await ids('tags=VIP')).toEqual([tagged.id, people.customer.id].sort());
+		expect(await ids('tags=Newsletter,Nothing')).toEqual([tagged.id]);
+		expect((await server('GET', '/v1/users/count?tags=VIP')).json.count).toBe(2);
+		expect((await server('GET', '/v1/users/tags')).json.items).toEqual([
+			{ tag: 'Newsletter', users: 1 },
+			{ tag: 'VIP', users: 2 },
+		]);
+		const changed = (await server('GET', `/v1/activity?action=user.tags_changed&target=${tagged.id}`)).json.items[0];
+		expect(changed.values).toEqual({ added: 'Newsletter', removed: 'Wholesale' });
+	});
+
+	it('saves named views of the list’s filters, renames, orders and deletes them', async () => {
+		const saved = await server('PUT', '/v1/users/views/vip_customers', {
+			name: 'VIP customers',
+			query: { tags: 'VIP', role: 'customer', status: 'active' },
+		});
+		expect(saved.json).toEqual({
+			key: 'vip_customers',
+			name: 'VIP customers',
+			query: { tags: 'VIP', role: 'customer', status: 'active' },
+		});
+		await server('PUT', '/v1/users/views/waiting', { name: 'Waiting', query: { status: 'pending' } });
+		expect(code(await server('PUT', '/v1/users/views/bad', { name: 'Bad', query: { password: 'x' } }))).toBe(
+			'validation_failed',
+		);
+		expect(code(await server('PUT', '/v1/users/views/bad', { name: '', query: {} }))).toBe('validation_failed');
+		expect((await server('GET', '/v1/users/views')).json.items.map((/** @type {any} */ v) => v.key)).toEqual([
+			'vip_customers',
+			'waiting',
+		]);
+		await server('PUT', '/v1/users/views/waiting', { name: 'Waiting for approval', query: { status: 'pending' } });
+		const ordered = await server('PUT', '/v1/users/views', { order: ['waiting', 'vip_customers'] });
+		expect(ordered.json.items.map((/** @type {any} */ v) => v.name)).toEqual(['Waiting for approval', 'VIP customers']);
+		expect(code(await server('PUT', '/v1/users/views', { order: ['waiting'] }))).toBe('validation_failed');
+		// the admin widget reads them with a ticket and changes them with users.manage
+		const reader = await env.ticket(['users.read']);
+		expect((await env.admin(reader, 'GET', '/v1/admin/users/views')).json.items).toHaveLength(2);
+		expect(code(await env.admin(reader, 'DELETE', '/v1/admin/users/views/waiting'))).toBe('forbidden');
+		const manager = await env.ticket(['users.read', 'users.manage']);
+		expect((await env.admin(manager, 'DELETE', '/v1/admin/users/views/waiting')).status).toBe(204);
+		expect((await server('GET', '/v1/users/views')).json.items.map((/** @type {any} */ v) => v.key)).toEqual(['vip_customers']);
+	});
+});

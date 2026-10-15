@@ -14,7 +14,7 @@ import { isId, validateActivityCopy } from '@ss/contracts';
 import { normalizeEmail } from '@ss/contracts/email';
 import { normalisePhone } from '@ss/contracts/phone';
 import { isObject } from '@ss/contracts/util';
-import { MAX_ADDRESSES, checkAddresses, checkCustomValues, checkFieldDefinition, checkName } from './profile.js';
+import { MAX_ADDRESSES, checkAddresses, checkTags, checkCustomValues, checkFieldDefinition, checkName } from './profile.js';
 import { checkRole } from './roles.js';
 import { PROVIDERS } from './widgets.js';
 
@@ -77,6 +77,7 @@ const IMPORT_FIELDS = Object.freeze({
 		'passwordHash',
 		'twoStep',
 		'consents',
+		'tags',
 		'lastSignInAt',
 		'createdAt',
 	]),
@@ -490,6 +491,8 @@ export const checkImportedUser = (record, rules) => {
 			else consents[key] = { version: answer.version, given: answer.given, at };
 		}
 	else if (!absent(record.consents)) errors.push({ path: '/consents', message: 'consents is { key: { version, given, at } }.' });
+	const tags = absent(record.tags) ? { ok: /** @type {const} */ (true), value: [] } : checkTags(record.tags);
+	if (!tags.ok) errors.push({ path: '/tags', message: tags.message });
 	const lastSignInAt = optionalTime(record, 'lastSignInAt', errors);
 	const createdAt = optionalTime(record, 'createdAt', errors);
 	const roleSince = optionalTime(record, 'roleSince', errors) ?? createdAt;
@@ -514,6 +517,7 @@ export const checkImportedUser = (record, rules) => {
 		lockedUntil: null,
 		lockLevel: 0,
 		consents,
+		tags: tags.ok ? tags.value : [],
 		deletion: null,
 		deviceHash: null,
 		lastSignInAt,

@@ -73,6 +73,7 @@ export const FIELD_TEXT = new Set([
 	'custom',
 	'addresses',
 	'consents',
+	'tags',
 	'role',
 	'note',
 	'notes',

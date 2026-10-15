@@ -153,15 +153,34 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 			const roleFilter = make.field('select', t('users.roles'), { multiple: '', size: '3' });
 			const permission = make.field('select', t('users.permission'));
 			const joined = make.field('input', t('users.joinedAfter'), { type: 'date' });
+			const tagFilter = make.field('input', t('users.tagsFilter'), { maxlength: '200', list: 'ss-users-tags' });
+			const knownTags = element(doc, 'datalist', { id: 'ss-users-tags' });
 			const hideBlocked = make.check(t('users.hideBlocked'));
 			const search = element(doc, 'button', { type: 'submit' }, t('users.searchButton'));
-			filters.append(q.wrap, digits.wrap, roleFilter.wrap, permission.wrap, joined.wrap, hideBlocked.wrap, search);
+			filters.append(
+				q.wrap,
+				digits.wrap,
+				roleFilter.wrap,
+				permission.wrap,
+				tagFilter.wrap,
+				knownTags,
+				joined.wrap,
+				hideBlocked.wrap,
+				search,
+			);
+
+			// saved views of the list (A5): a click opens one; staff save the filters as a view and manage the views
+			/** @type {Array<{ key: string, name: string, query: Record<string, string> }>} */
+			let views = [];
+			const viewBar = element(doc, 'div', { class: 'actions views' });
+			const saveViewButton = button(t('users.viewSave'), { class: 'secondary small' });
+			const manageViewsButton = button(t('users.viewsManage'), { class: 'secondary small' });
 
 			const note = element(doc, 'p', { class: 'status', role: 'status' });
 			const list = element(doc, 'ul');
 			const more = button(t('users.more'), { class: 'secondary', hidden: '' });
 			const listPane = element(doc, 'div', { class: 'list-pane' });
-			listPane.append(filters, note, list, more);
+			listPane.append(viewBar, filters, note, list, more);
 			const detail = element(doc, 'div', { class: 'detail-pane' });
 			const layout = element(doc, 'div', { class: 'layout' });
 			layout.append(listPane, detail);
@@ -190,12 +209,149 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 				);
 				if (chosen.length > 0) out.set('roles', chosen.join(','));
 				if (permission.input.value) out.set('permission', permission.input.value);
+				const tagText = tagFilter.input.value
+					.split(',')
+					.map((tag) => tag.trim())
+					.filter((tag) => tag !== '')
+					.join(',');
+				if (tagText) out.set('tags', tagText);
 				if (joined.input.value) out.set('createdAfter', `${joined.input.value}T00:00:00Z`);
 				if (hideBlocked.input.checked) out.set('blocked', 'false');
 				if (chip === 'deletion') out.set('deletion', '1');
 				else if (chip) out.set('status', chip);
 				return out;
 			};
+
+			/**
+			 * Open a saved view: its filters go into the fields and the chip, and the list loads.
+			 * @param {Record<string, string>} saved
+			 */
+			const applyView = (saved) => {
+				q.input.value = saved.q ?? '';
+				digits.input.value = saved.phoneDigits ?? '';
+				const wanted = [saved.role, ...(saved.roles ?? '').split(',')].filter(Boolean);
+				for (const option of /** @type {HTMLSelectElement} */ (/** @type {unknown} */ (roleFilter.input)).options)
+					option.selected = wanted.includes(option.value);
+				permission.input.value = saved.permission ?? '';
+				tagFilter.input.value = (saved.tags ?? '').split(',').join(', ');
+				joined.input.value = (saved.createdAfter ?? '').slice(0, 10);
+				hideBlocked.input.checked = saved.blocked === 'false';
+				chip = saved.deletion === '1' ? 'deletion' : (saved.status ?? '');
+				statusChips.pick(chip);
+				void load(true);
+			};
+
+			const paintViews = () => {
+				viewBar.replaceChildren(
+					...views.map((view) => {
+						const open = button(view.name, { class: 'chip' });
+						open.addEventListener('click', () => applyView(view.query));
+						return open;
+					}),
+					saveViewButton,
+					...(views.length > 0 ? [manageViewsButton] : []),
+				);
+			};
+
+			const loadViews = async () => {
+				const [listed, tagged] = await Promise.all([
+					call('GET', '/v1/admin/users/views'),
+					call('GET', '/v1/admin/users/tags'),
+				]);
+				views = listed.ok && Array.isArray(listed.data?.items) ? listed.data.items : [];
+				if (tagged.ok && Array.isArray(tagged.data?.items))
+					knownTags.replaceChildren(
+						...tagged.data.items.map((/** @type {{ tag: string }} */ each) => element(doc, 'option', { value: each.tag })),
+					);
+				paintViews();
+			};
+
+			/** A view key from its name: lower-case letters, digits and _. @param {string} name */
+			const viewKeyOf = (name) => {
+				const slug = name
+					.toLowerCase()
+					.normalize('NFKD')
+					.replace(/[^a-z0-9]+/g, '_')
+					.replace(/^_+|_+$/g, '')
+					.slice(0, 34);
+				return /^[a-z]/.test(slug) ? slug : `view_${slug}`.replace(/_+$/, '').slice(0, 40);
+			};
+
+			saveViewButton.addEventListener('click', () => {
+				const name = make.field('input', t('users.viewName'), { maxlength: '80', required: '' });
+				formDialog(t('users.viewSave'), [name.wrap], t('users.viewSaveButton'), async (close) => {
+					const filtersNow = Object.fromEntries(query());
+					const answer = await call('PUT', `/v1/admin/users/views/${encodeURIComponent(viewKeyOf(name.input.value))}`, {
+						name: name.input.value.trim(),
+						query: filtersNow,
+					});
+					if (answer.ok) {
+						close();
+						await loadViews();
+					}
+					return answer;
+				});
+			});
+
+			manageViewsButton.addEventListener('click', () => {
+				const rows = element(doc, 'ul', { class: 'views-list' });
+				const status = element(doc, 'p', { class: 'status', role: 'status' });
+				const paintRows = () => {
+					rows.replaceChildren(
+						...views.map((view, index) => {
+							const row = element(doc, 'li');
+							const name = make.field('input', t('users.viewName'), { maxlength: '80' });
+							name.input.value = view.name;
+							const rename = button(t('users.viewRename'), { class: 'secondary small' });
+							rename.addEventListener('click', async () => {
+								const answer = await call('PUT', `/v1/admin/users/views/${encodeURIComponent(view.key)}`, {
+									name: name.input.value.trim(),
+									query: view.query,
+								});
+								status.textContent = answer.ok ? t('users.viewSaved') : failure(answer);
+								if (answer.ok) await loadViews();
+							});
+							/** @param {-1 | 1} by */
+							const move = async (by) => {
+								const keys = views.map((each) => each.key);
+								const [moved] = keys.splice(index, 1);
+								keys.splice(index + by, 0, /** @type {string} */ (moved));
+								const answer = await call('PUT', '/v1/admin/users/views', { order: keys });
+								status.textContent = answer.ok ? '' : failure(answer);
+								if (answer.ok) {
+									await loadViews();
+									paintRows();
+								}
+							};
+							const up = button(t('users.viewUp'), {
+								class: 'secondary small',
+								'aria-label': `${t('users.viewUp')}: ${view.name}`,
+							});
+							const down = button(t('users.viewDown'), {
+								class: 'secondary small',
+								'aria-label': `${t('users.viewDown')}: ${view.name}`,
+							});
+							if (index === 0) up.setAttribute('disabled', '');
+							if (index === views.length - 1) down.setAttribute('disabled', '');
+							up.addEventListener('click', () => void move(-1));
+							down.addEventListener('click', () => void move(1));
+							const remove = button(t('users.viewDelete'), { class: 'secondary small' });
+							remove.addEventListener('click', async () => {
+								const answer = await call('DELETE', `/v1/admin/users/views/${encodeURIComponent(view.key)}`);
+								status.textContent = answer.ok ? t('users.viewDeleted') : failure(answer);
+								if (answer.ok) {
+									await loadViews();
+									paintRows();
+								}
+							});
+							row.append(name.wrap, rename, up, down, remove);
+							return row;
+						}),
+					);
+				};
+				paintRows();
+				openDialog(root, { title: t('users.viewsManage'), body: [rows, status], closeLabel: t('users.close') });
+			});
 
 			/** The counts on the chips: by status, blocked and asked to be deleted, with the other filters. */
 			const loadCounts = async () => {
@@ -406,6 +562,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 						],
 						[t('users.lockedUntil'), user.lockedUntil ? date(user.lockedUntil) : ''],
 						[t('users.providers'), (user.providers ?? []).map((/** @type {string} */ p) => t(`method.${p}`)).join(', ')],
+						[t('users.tags'), (user.tags ?? []).join(', ')],
 					]),
 				);
 				// the consents the user answered (A2), named as the website's list names them
@@ -495,13 +652,15 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 				});
 				const notes = make.field('textarea', t('users.notes'), { rows: '3', maxlength: '5000' });
 				notes.wrap.classList.add('wide');
+				const tags = make.field('input', t('users.tags'), { maxlength: '900', list: 'ss-users-tags' });
+				tags.input.value = (user?.tags ?? []).join(', ');
 				name.input.value = user?.name ?? '';
 				email.input.value = user?.email ?? '';
 				phone.input.value = user?.phone ?? '';
 				notes.input.value = user?.notes ?? '';
 				const custom = customInputs(doc, make, t, fields, { values: user?.custom ?? {}, by: 'staff' });
 				return {
-					nodes: [name.wrap, email.wrap, phone.wrap, role.wrap, password.wrap, ...custom.nodes, notes.wrap],
+					nodes: [name.wrap, email.wrap, phone.wrap, role.wrap, password.wrap, ...custom.nodes, tags.wrap, notes.wrap],
 					/** The body: unchanged contacts are left out of an edit; an emptied one is removed. */
 					read: () => {
 						/** @type {Record<string, unknown>} */
@@ -514,6 +673,11 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 							if (user ? value !== (user[key] ?? '') : value !== '') out[key] = value === '' ? null : value;
 						}
 						if (password.input.value) out.password = password.input.value;
+						const tagList = tags.input.value
+							.split(',')
+							.map((tag) => tag.trim())
+							.filter((tag) => tag !== '');
+						if (user ? tagList.join(',') !== (user.tags ?? []).join(',') : tagList.length > 0) out.tags = tagList;
 						const values = custom.read(Boolean(user));
 						if (Object.keys(values).length > 0) out.custom = values;
 						return out;
@@ -866,6 +1030,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 					fields = listed.ok && Array.isArray(listed.data?.items) ? listed.data.items : [];
 				}
 				fillRoleFilters();
+				await loadViews();
 				await load(true);
 				if (on('role_requests')) await loadRequests(true);
 			})();

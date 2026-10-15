@@ -100,6 +100,7 @@ const blankUser = (role) => ({
 	lockedUntil: null,
 	lockLevel: 0,
 	consents: {},
+	tags: [],
 	deletion: null,
 	deviceHash: null,
 	lastSignInAt: null,

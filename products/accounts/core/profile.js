@@ -15,6 +15,10 @@ import { ADDRESS_LIMITS } from './widgets.js';
 export const MAX_ADDRESSES = 50;
 export const MAX_CUSTOM_FIELDS = 100;
 export const MAX_CHOICES = 200;
+/** Most tags one user has (A5). */
+export const MAX_TAGS = 20;
+/** Longest tag. */
+const TAG_LENGTH = 40;
 const FIELD_TYPES = Object.freeze(
 	/** @type {const} */ (['text', 'textarea', 'number', 'date', 'choice', 'multi_choice', 'boolean', 'email', 'url']),
 );
@@ -307,11 +311,32 @@ export const resetsByEmail = (user) => user.emailVerified || identityOf(user) ==
  * @property {Date} roleSince when the role was last set (A5: "Member since"; an import gives the source's, else
  *   `createdAt`)
  * @property {Record<string, import('./consents.js').ConsentAnswer>} consents what the user gave, by consent key (A2)
+ * @property {string[]} tags the merchant's labels, seen by staff only (A5)
  * @property {{ requestedAt: Date, dueAt: Date | null } | null} deletion
  * @property {string | null} deviceHash
  * @property {Date | null} lastSignInAt
  * @property {Date} createdAt
  */
+
+/**
+ * A user's tags as staff set them (A5): the merchant's own labels (for example VIP or Wholesale), trimmed, inner spaces
+ * kept single, each once (the first spelling wins, whatever the case), at most `MAX_TAGS` of 1 to 40 characters.
+ * @param {unknown} input
+ * @returns {{ ok: true, value: string[] } | { ok: false, message: string }}
+ */
+export const checkTags = (input) => {
+	if (!Array.isArray(input) || input.length > MAX_TAGS * 2)
+		return { ok: false, message: `Send the tags as a list (at most ${MAX_TAGS}).` };
+	/** @type {string[]} */
+	const out = [];
+	for (const raw of input) {
+		const tag = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ') : '';
+		if (tag === '' || tag.length > TAG_LENGTH || [...tag].some((ch) => ch.charCodeAt(0) < 32))
+			return { ok: false, message: `A tag is text of 1 to ${TAG_LENGTH} characters.` };
+		if (!out.some((kept) => kept.toLowerCase() === tag.toLowerCase())) out.push(tag);
+	}
+	return out.length > MAX_TAGS ? { ok: false, message: `At most ${MAX_TAGS} tags.` } : { ok: true, value: out };
+};
 
 /**
  * What the user sees of themselves (My account): never notes, password, secrets or staff-only custom fields (A6).
@@ -346,6 +371,7 @@ export const selfView = (user, fields) => ({
 export const staffView = (user) => ({
 	...selfView(user, null),
 	notes: user.notes,
+	tags: user.tags,
 	blocked: user.blocked ? { at: user.blocked.at.toISOString(), reason: user.blocked.reason } : null,
 	status: user.status,
 	lastSignInAt: user.lastSignInAt?.toISOString() ?? null,
