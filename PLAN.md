@@ -1981,6 +1981,27 @@ anything unused or left over (files, folders, exports, settings, texts, generate
 sitemaps and the new site answer (E49) — is served whenever the catalog is on; the priced `seo` feature is the SEO
 product (patterns, score, automatic copy, IndexNow, glossary and landing pages).
 
+- **SEO S10–S12 (Ecommerce part), E42 and the rest of the search and catalog work built (2026-10-15; e7fcaef9,
+  711b16e2, 657c17d2, 0bff5636, 70356d52, 0d041434, d8f4008e, 19153d4d, 5df51224, dc715742; importer 9aac9f69,
+  dc71da75 and the gradeTitle/gradeDescription lines in 6228074f — SaaS defaults to review when the owner asks):**
+  `attr.<slug>` matches every field with that slug and facets group by slug (P3-6 bug); the dashboard refuses frames
+  and its list saves are activity entries; a retired product leads to its `replacedBy` (one hop) and product answers
+  carry their own `url` (the guide warns that sending retired products to a category is a soft 404); feeds send up to
+  10 more photos, delivery days with shipping (switch `feeds.shipping`), gender, age group and size system in the
+  catalogs' own values, highlights and details from fields, a Google product category per category, `{grade}` and
+  `{attr.<slug>}` in item titles and a description pattern, and the Meta CSV adds more photos, identifier_exists, gender
+  and age group (P3-8); staff reads of products, categories, brands and deals carry `seo.score` and `seo.checks` while
+  `seo` is on (worked out on read, never stored), the product list sorts and filters by them (newest 5,000 that match)
+  and Shop health gains 20 data and setup checks (§3.2 A, P5-18); `catalog.topBasis` delivered | ordered with a
+  product `ordered` count kept by the order engine (P3-10); grade glossary patterns (SG-20); IndexNow sends every page a
+  save changed, earlier addresses and category listings (SG-32); og and twitter in every SEO answer (G13), descriptive
+  upload names and image text from the category or brand name (G14), `llms_txt.custom` (G16), member program markup
+  from role prices (G17); the grid's own search sends `ss:search`. Decided, no code: formula-written FAQs (P3-7) are
+  dropped (FAQ rich results are gone and pattern FAQs are thin content); G15 hreflang has nothing to send (no Format or
+  business.json data names a website's other-language sites); the listing's price filters keep comparing the variants'
+  own prices (documented limit). Fixed on the way: the guide said a slug in another letter case answers moved (it finds
+  the product), the health paragraph missed three checks and called /health a CSV report.
+
 - **SEO S5–S9 built (2026-10-15; a1454526, 00fb34ac, ed9f5693, 7a07e1f1, d0bfc2b9, aeb8d520; importer 55196021,
   24b34880 — SaaS defaults to review when the owner asks):** basic SEO comes with the catalog (product, category,
   listing and home heads and sitemaps follow the SEO settings' defaults while `seo` is off; `seo` is the SEO product,
