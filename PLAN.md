@@ -1981,6 +1981,13 @@ anything unused or left over (files, folders, exports, settings, texts, generate
 sitemaps and the new site answer (E49) — is served whenever the catalog is on; the priced `seo` feature is the SEO
 product (patterns, score, automatic copy, IndexNow, glossary and landing pages).
 
+- **Ecommerce review fixes, money (2026-10-15; 17f4df77, e6c0afa7, e33d7642, 122e1ac7;
+  `audit/review-ecommerce-2026-10-15.md`):** money moves only when the whole action is allowed (a claim refund under
+  `refundsCover` checks the trigger move's permission first; any move whose plan refunds needs `orders.refund`); a
+  staff move out of waiting cancels the open Payments payment so a later payment is never lost; a delete that loses a
+  race drops the voided payment (one transaction); a staff refund Payments finishes later moves the order and keeps the
+  claim true; checkout never stops on an order number already used (the counter catches up). Medium and low findings:
+  E-L2.
 - **SEO S10–S12 (Ecommerce part), E42 and the rest of the search and catalog work built (2026-10-15; e7fcaef9,
   711b16e2, 657c17d2, 0bff5636, 70356d52, 0d041434, d8f4008e, 19153d4d, 5df51224, dc715742; importer 9aac9f69,
   dc71da75 and the gradeTitle/gradeDescription lines in 6228074f — SaaS defaults to review when the owner asks):**
