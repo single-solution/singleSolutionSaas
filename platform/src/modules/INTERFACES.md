@@ -41,8 +41,8 @@ Connected products, launches, notices, websites' Setup sheets and their share li
 - `reconnect({ productId, url | null, secret, actor })`: same id required (409 otherwise); sends the last accepted
   version; an answered version lower than it → 409; higher → recorded as a price report; equal → nothing to record.
 - `setStatus({ productId, status })`, `getProduct(productId)` → `{ productId, name, status, baseUrl, version,
-widgetScriptUrl, docsUrl, connectedAt, reconnectedAt }` (addresses from the manifest made absolute against the base
-  URL), `listProducts({ status? })`, `productDetail(productId)` (+ `priceListVersion`, `features` of the last accepted
+widgetScriptUrl, widgetScriptLoading, docsUrl, connectedAt, reconnectedAt }` (addresses from the manifest made absolute
+  against the base URL; `widgetScriptLoading` `async` unless the manifest says `blocking`), `listProducts({ status? })`, `productDetail(productId)` (+ `priceListVersion`, `features` of the last accepted
   list, `numbers`), `isActive(productId)`, `directory(productId)` → `{ baseUrl }`.
 - `merchantLaunch({ merchantId, websiteId, productId, session, actor })` and `adminLaunch({ productId, websiteId |
 null, session, actor })` → `{ url: <baseUrl>/sso?launch=<token>, expiresAt }`: `@ss/protocol` `issueLaunch` with the

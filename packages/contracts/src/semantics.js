@@ -153,6 +153,8 @@ export const checkManifest = (manifest) => {
 		out.push(at(['widgetScriptUrl'], RULES.widgetScriptUrl, 'must be null exactly when there are no widgets'));
 	else if (manifest.widgetScriptUrl !== null && !isPathOrServiceUrl(manifest.widgetScriptUrl))
 		out.push(at(['widgetScriptUrl'], RULES.url, 'must be a path or an https URL'));
+	if (manifest.widgetScriptUrl === null && manifest.widgetScriptLoading !== undefined)
+		out.push(at(['widgetScriptLoading'], RULES.widgetScriptUrl, 'only with a widget script'));
 	return out;
 };
 

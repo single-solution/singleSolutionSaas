@@ -133,6 +133,7 @@ function GrowthDevelopers(props) {
 		base: origin,
 		widgets: manifest.widgets,
 		permissions: manifest.permissions.map((permission) => permission.key),
+		loading: /** @type {'async' | 'blocking'} */ (manifest.widgetScriptLoading),
 	});
 	return (
 		<DevelopersTab {...props}>

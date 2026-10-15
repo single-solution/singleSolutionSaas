@@ -110,10 +110,11 @@ const productProperties = {
 	},
 	install: {
 		type: 'object',
-		required: ['scriptUrl', 'installed', 'lastSeenAt'],
+		required: ['scriptUrl', 'scriptLoading', 'installed', 'lastSeenAt'],
 		additionalProperties: false,
 		properties: {
 			scriptUrl: nullable(ref('url')),
+			scriptLoading: { enum: ['async', 'blocking'] },
 			installed: nullable({ type: 'boolean' }),
 			lastSeenAt: nullable(ref('timestamp')),
 			browserToken: { type: 'string', minLength: 1, maxLength: 4096 },

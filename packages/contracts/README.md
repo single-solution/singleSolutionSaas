@@ -21,7 +21,8 @@ const prices = manifestPriceList(json); // { version: 1, features: [{ key, name,
 ```
 
 `manifest.json` has exactly `id`, `name`, `version` (semver), `endpoints: { base, dashboard }`, `widgetScriptUrl`
-(or `null`), `docsUrl`, `features: [{ key, name, description, dependsOn, settings, recommendFor? }]`,
+(or `null`), optionally `widgetScriptLoading` (`async`, the default, or `blocking` for a script that must run in page
+order; only with a widget script), `docsUrl`, `features: [{ key, name, description, dependsOn, settings, recommendFor? }]`,
 `permissions: [{ key, name, feature }]` and `widgets: [{ key, feature, kind: 'visitor' | 'admin' }]` (a widget's
 `feature` is one key or a list of keys, any of which turns it on). Rules:
 
@@ -238,8 +239,9 @@ Pure and browser-safe; servers, products' `core/` and widget bundles share it.
   punctuation such as `&rsquo;`, `&hellip;`, `&euro;`; case-sensitive; `&nbsp;` is U+00A0). A reference needs its `;`
   and an unknown name stays as written; 0, surrogates and code points past U+10FFFF become U+FFFD, and U+0080–U+009F
   are read as windows-1252, as HTML reads them.
-- `widgetScriptTag({ src, token?, async? })`: the install snippet `<script src="…" data-token="…" async></script>`,
-  attribute values escaped; no `data-token` when `token` is null or left out, no `async` when `async` is false.
+- `widgetScriptTag({ src, token?, loading? })`: the install snippet `<script src="…" data-token="…" async></script>`,
+  attribute values escaped; no `data-token` when `token` is null or left out, no `async` when `loading` is `blocking`
+  (the manifest's `widgetScriptLoading`; default `async`).
 - `pathMatches(pattern, path)`: the one path pattern rule ("hide on pages", page rules). A pattern is a path from `/`
   (else it matches nothing; `/` is the home page); `**` as a whole segment is any number of segments, none included;
   `*` elsewhere is any characters inside one segment (`/shop/*`, `/sale-*`); the rest matches itself,

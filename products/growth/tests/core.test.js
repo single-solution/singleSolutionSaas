@@ -67,6 +67,7 @@ import {
 } from '../core/seo.js';
 import { robotsAllows, robotsGroupsOf } from '../core/seo-scan.js';
 import { createSnippets } from '../core/snippets.js';
+import manifest from '../manifest.json' with { type: 'json' };
 import robotsSchema from '../schemas/robots_verification.settings.json' with { type: 'json' };
 import searchesSchema from '../schemas/searches_404s.settings.json' with { type: 'json' };
 
@@ -1261,6 +1262,19 @@ describe('snippets', () => {
 		expect(snippets.ticketNode).toContain('["analytics.read"]');
 		expect(snippets.notice).toContain('https://growth.example.dev/v1/notice?path=');
 		expect(snippets.analytics).toContain('/v1/events/counts?by=type');
+	});
+
+	it('load the page script blocking, as the manifest says (in page order, before the other products’ scripts)', () => {
+		expect(manifest.widgetScriptLoading).toBe('blocking');
+		const snippets = createSnippets({
+			base: 'https://growth.example.dev',
+			widgets: [],
+			permissions: [],
+			loading: /** @type {'blocking'} */ (manifest.widgetScriptLoading),
+		});
+		expect(snippets.pageScript).toContain(
+			'<script src="https://growth.example.dev/widget.js" data-token="YOUR_BROWSER_TOKEN"></script>',
+		);
 	});
 });
 

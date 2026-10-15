@@ -45,7 +45,7 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		`<div ${WIDGET_ATTRIBUTE}="pay_button" data-payment="pay_…"></div>`,
 	].join('\n');
 	const admin = [
-		widgetScriptTag({ src: `${base}/widget.js`, async: false }),
+		widgetScriptTag({ src: `${base}/widget.js`, loading: 'blocking' }),
 		...places('admin'),
 		'<script>',
 		`  window.${WIDGET_GLOBAL}.admin({`,

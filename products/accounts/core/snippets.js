@@ -29,7 +29,7 @@ export const createSnippets = ({ base, widgets, permissions, websiteId = '<websi
 	].join('\n');
 	const admin = [
 		// no async: the admin() call below needs window.SSAccounts
-		widgetScriptTag({ src: `${base}/widget.js`, async: false }),
+		widgetScriptTag({ src: `${base}/widget.js`, loading: 'blocking' }),
 		...places('admin'),
 		'<script>',
 		`  window.${WIDGET_GLOBAL}.admin({`,

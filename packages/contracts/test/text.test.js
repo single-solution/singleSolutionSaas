@@ -49,10 +49,13 @@ describe('widgetScriptTag', () => {
 		);
 	});
 
-	it('leaves out the token and async when asked', () => {
+	it('leaves out the token when there is none, and async for a script that loads blocking', () => {
 		expect(widgetScriptTag({ src: '/widget.js' })).toBe('<script src="/widget.js" async></script>');
-		expect(widgetScriptTag({ src: '/widget.js', token: null, async: false })).toBe('<script src="/widget.js"></script>');
-		expect(widgetScriptTag({ src: '/widget.js', token: 'YOUR_BROWSER_TOKEN', async: false })).toBe(
+		expect(widgetScriptTag({ src: '/widget.js', loading: 'async' })).toBe('<script src="/widget.js" async></script>');
+		expect(widgetScriptTag({ src: '/widget.js', token: null, loading: 'blocking' })).toBe(
+			'<script src="/widget.js"></script>',
+		);
+		expect(widgetScriptTag({ src: '/widget.js', token: 'YOUR_BROWSER_TOKEN', loading: 'blocking' })).toBe(
 			'<script src="/widget.js" data-token="YOUR_BROWSER_TOKEN"></script>',
 		);
 	});

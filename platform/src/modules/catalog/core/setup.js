@@ -49,7 +49,10 @@ export const productEntry = (entry, answer) => {
 		install: {
 			...install,
 			browserToken: entry.browserToken,
-			snippet: install.scriptUrl === null ? null : widgetScriptTag({ src: install.scriptUrl, token: entry.browserToken }),
+			snippet:
+				install.scriptUrl === null
+					? null
+					: widgetScriptTag({ src: install.scriptUrl, token: entry.browserToken, loading: install.scriptLoading }),
 		},
 		serverToken: { issued: true },
 	};
@@ -90,10 +93,10 @@ export const sharedCopy = (sheet, { values, install, expiresAt }) => ({
 		/** @param {import('@ss/contracts').BlueprintSetting[]} settings */
 		const strip = (settings) =>
 			values ? settings : settings.map(({ key, title, default: isDefault }) => ({ key, title, default: isDefault }));
-		const { scriptUrl, installed, lastSeenAt } = product.install;
+		const { scriptUrl, scriptLoading, installed, lastSeenAt } = product.install;
 		return {
 			...product,
-			install: install ? product.install : { scriptUrl, installed, lastSeenAt },
+			install: install ? product.install : { scriptUrl, scriptLoading, installed, lastSeenAt },
 			features: product.features.map((feature) => ({ ...feature, settings: strip(feature.settings) })),
 			shared: product.shared.map((group) => ({ ...group, settings: strip(group.settings) })),
 		};

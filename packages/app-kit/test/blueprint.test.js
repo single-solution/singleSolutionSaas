@@ -72,7 +72,7 @@ describe('GET /v1/blueprint (Portal call)', () => {
 			status: 'active',
 			docs: { guide: `${BASE}/docs`, openapi: null },
 			business: { found: false, fetchedAt: expect.any(String), name: null, country: null, timeZone: null },
-			install: { scriptUrl: `${BASE}/widget.js`, installed: false, lastSeenAt: null },
+			install: { scriptUrl: `${BASE}/widget.js`, scriptLoading: 'async', installed: false, lastSeenAt: null },
 			shared: [],
 			events: ['notes.settings.changed', 'notes.note.created'],
 			summaries: [{ title: 'Notes', text: 'Features on: notes' }],
@@ -193,7 +193,12 @@ describe('GET /v1/blueprint (Portal call)', () => {
 		await s.settle();
 		const { body } = await blueprintOf(s);
 		expect(body.widgets[0]).toEqual({ key: 'note_form', kind: 'visitor', features: ['notes'], on: true, ready: true });
-		expect(body.install).toEqual({ scriptUrl: `${BASE}/widget.js`, installed: true, lastSeenAt: expect.any(String) });
+		expect(body.install).toEqual({
+			scriptUrl: `${BASE}/widget.js`,
+			scriptLoading: 'async',
+			installed: true,
+			lastSeenAt: expect.any(String),
+		});
 		expect(body.business).toMatchObject({ found: true, name: 'Example Shop', country: 'US', timeZone: 'America/New_York' });
 		expect(body.checklist.filter((/** @type {any} */ item) => !item.done)).toEqual([]);
 		expect(body.events).toEqual([]);

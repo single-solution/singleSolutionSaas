@@ -31,6 +31,7 @@ const sheet = () => ({
 			serverToken: { issued: true },
 			install: {
 				scriptUrl: 'https://notes.example.dev/widget.js',
+				scriptLoading: 'async',
 				installed: false,
 				lastSeenAt: null,
 				browserToken: 'eyJ.browser.token',

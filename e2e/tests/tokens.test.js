@@ -38,6 +38,7 @@ describe('tokens of a product on a website', () => {
 				productId: 'notes',
 				name: 'Notes',
 				widgetScriptUrl: `${PRODUCT_URL}/widget.js`,
+				widgetScriptLoading: 'async',
 				docsUrl: `${PRODUCT_URL}/docs`,
 				browserToken: expect.any(String),
 				serverToken: { canShow: true },

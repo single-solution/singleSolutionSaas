@@ -9,17 +9,18 @@ import { widgetScriptTag } from '@ss/contracts/text';
 import { PAGE_MARKER, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js';
 
 /**
- * @param {{ base: string, widgets: ReadonlyArray<{ key: string, kind: string }>, permissions: string[] }} input `base`:
- *   the product's address
+ * @param {{ base: string, widgets: ReadonlyArray<{ key: string, kind: string }>, permissions: string[],
+ *   loading?: 'async' | 'blocking' }} input `base`: the product's address; `loading`: the manifest's
+ *   `widgetScriptLoading` (Growth's is `blocking`: the page script runs in page order, so it listens before the other
+ *   products send their events)
  */
-export const createSnippets = ({ base, widgets, permissions }) => {
+export const createSnippets = ({ base, widgets, permissions, loading = 'async' }) => {
 	/** @param {'visitor' | 'admin'} kind */
 	const places = (kind) =>
 		widgets.filter((widget) => widget.kind === kind).map((widget) => `<div ${WIDGET_ATTRIBUTE}="${widget.key}"></div>`);
 	const pageScript = [
 		'<!-- in the <head> of every page, before the other products’ scripts (so it hears their shop events) -->',
-		// never async: it runs in page order, so it listens before the other products send their events
-		widgetScriptTag({ src: `${base}/widget.js`, token: 'YOUR_BROWSER_TOKEN', async: false }),
+		widgetScriptTag({ src: `${base}/widget.js`, token: 'YOUR_BROWSER_TOKEN', loading }),
 		'<!-- optional: where the notice bar goes (else it is placed at the top of the page) -->',
 		`<div ${WIDGET_ATTRIBUTE}="notice_bar"></div>`,
 	].join('\n');
@@ -61,7 +62,7 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		`${WIDGET_GLOBAL}.contact({ method: 'whatsapp' });`,
 	].join('\n');
 	const admin = [
-		widgetScriptTag({ src: `${base}/widget.js`, async: false }),
+		widgetScriptTag({ src: `${base}/widget.js`, loading: 'blocking' }),
 		...places('admin'),
 		'<script>',
 		`  window.${WIDGET_GLOBAL}.admin({`,

@@ -75,6 +75,8 @@
  * @property {string} version semver
  * @property {{ base: string, dashboard: string }} endpoints
  * @property {string | null} widgetScriptUrl null exactly when there are no widgets
+ * @property {'async' | 'blocking'} [widgetScriptLoading] how websites load the widget script (default `async`;
+ *   `blocking` for a script that must run in page order)
  * @property {string} docsUrl
  * @property {ManifestFeature[]} features
  * @property {ManifestPermission[]} permissions
@@ -187,8 +189,9 @@
  * @property {{ guide: string, openapi: string | null }} docs
  * @property {{ found: boolean, fetchedAt: string | null, name: string | null, country: string | null,
  *   timeZone: string | null }} business the product's copy of business.json
- * @property {{ scriptUrl: string | null, installed: boolean | null, lastSeenAt: string | null, browserToken?: string,
- *   snippet?: string | null }} install `browserToken` and `snippet` are added by the Portal
+ * @property {{ scriptUrl: string | null, scriptLoading: 'async' | 'blocking', installed: boolean | null,
+ *   lastSeenAt: string | null, browserToken?: string, snippet?: string | null }} install `scriptLoading` from the
+ *   manifest's `widgetScriptLoading`; `browserToken` and `snippet` are added by the Portal
  * @property {Array<{ key: string, title: string, description: string, on: boolean, dependsOn: string[],
  *   recommendFor: string[], settings: BlueprintSetting[], lists: BlueprintList[] }>} features settings and lists only
  *   while on

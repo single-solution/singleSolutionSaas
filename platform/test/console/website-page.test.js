@@ -427,6 +427,7 @@ describe('website cards (jsdom)', () => {
 			productId: 'notes',
 			name: 'Notes',
 			widgetScriptUrl: null,
+			widgetScriptLoading: /** @type {const} */ ('async'),
 			docsUrl: null,
 			browserToken: 'browser-token',
 			serverToken: { canShow: true },

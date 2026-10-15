@@ -195,6 +195,7 @@ export const createIdentityService = (ctx, options = {}) => {
 					productId: entry.productId,
 					name: product?.name ?? entry.productId,
 					widgetScriptUrl: product?.widgetScriptUrl ?? null,
+					widgetScriptLoading: product?.widgetScriptLoading ?? 'async',
 					docsUrl: product?.docsUrl ?? null,
 					browserToken: entry.browserToken,
 					serverToken: { canShow: entry.serverTokenCanShow },

@@ -18,7 +18,7 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 	const src = `${base}/widget.js`;
 	const visitorSnippet = [widgetScriptTag({ src, token: 'YOUR_BROWSER_TOKEN' }), ...places('visitor')].join('\n');
 	const adminSnippet = [
-		widgetScriptTag({ src, async: false }),
+		widgetScriptTag({ src, loading: 'blocking' }),
 		...places('admin'),
 		'<script>',
 		`  window.${WIDGET_GLOBAL}.admin({`,

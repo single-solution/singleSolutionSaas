@@ -292,6 +292,7 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 			},
 			install: {
 				scriptUrl: manifest.widgetScriptUrl === null ? null : absolute(manifest.widgetScriptUrl),
+				scriptLoading: manifest.widgetScriptLoading ?? 'async',
 				installed,
 				lastSeenAt: seen ? new Date(seen.lastSeenAt).toISOString() : null,
 			},

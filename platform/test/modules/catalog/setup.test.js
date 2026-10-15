@@ -1,9 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { validateBlueprint } from '@ss/contracts';
-import { manifest as notesManifest } from '@ss/contracts/testing';
+import { manifest as notesManifest, productBlueprint } from '@ss/contracts/testing';
 import { closeMongoClients } from '../../../src/testing.js';
 import { SHARE_LINKS_MAX, SHEET_CACHE_MS } from '../../../src/modules/catalog/setup.js';
-import { parseShareLink, parseSwitchOn, sharedCopy } from '../../../src/modules/catalog/core/setup.js';
+import { parseShareLink, parseSwitchOn, productEntry, sharedCopy } from '../../../src/modules/catalog/core/setup.js';
 import { adviceOf, parseProfile } from '../../../src/modules/catalog/core/advisor.js';
 import { startMongo } from '../../helpers.js';
 import { PASSWORD, bootPortal, codeOf } from './boot.js';
@@ -93,6 +93,7 @@ describe('Setup sheet', () => {
 		const browserToken = tokens.json.items.find((/** @type {any} */ i) => i.productId === 'notes').browserToken;
 		expect(sheet.products[1].install).toEqual({
 			scriptUrl: 'https://notes.example.dev/widget.js',
+			scriptLoading: 'async',
 			installed: false,
 			lastSeenAt: null,
 			browserToken,
@@ -281,6 +282,44 @@ describe('business profile and advisor', () => {
 		expect(down.json.detail).toBe('The product did not answer. Refresh to see whether the feature is on, then try again.');
 	});
 
+	it('writes the install snippet as the product loads its widget script: async by default, blocking without async', async () => {
+		const entry = { productId: 'notes', name: 'Notes', browserToken: 'tok' };
+		const blueprint = productBlueprint();
+		const asyncPart = productEntry(/** @type {any} */ (entry), {
+			ok: true,
+			blueprint,
+			apiBase: 'https://notes.example.dev',
+		});
+		expect(asyncPart.reachable && asyncPart.install.snippet).toBe(
+			'<script src="https://notes.example.dev/widget.js" data-token="tok" async></script>',
+		);
+		const blocking = productEntry(/** @type {any} */ (entry), {
+			ok: true,
+			blueprint: { ...blueprint, install: { ...blueprint.install, scriptLoading: 'blocking' } },
+			apiBase: 'https://notes.example.dev',
+		});
+		expect(blocking.reachable && blocking.install.snippet).toBe(
+			'<script src="https://notes.example.dev/widget.js" data-token="tok"></script>',
+		);
+
+		// the Install and tokens page gets the manifest's loading with each product
+		const h = await bootPortal({ db: mongo.db('setup_loading') });
+		cleanups.push(h.close);
+		const owner = await h.owner();
+		await h.connect({ ...notesManifest(), widgetScriptLoading: 'blocking' });
+		await h.connect(chatManifest());
+		const m = await h.merchant('m@shop.test', ['shop.example.com']);
+		const site = `/v1/merchants/${m.merchantId}/websites/${m.websiteIds[0]}`;
+		for (const productId of ['notes', 'chat']) expect((await owner.post(`${site}/products`, { productId })).status).toBe(201);
+		const items = (await owner.get(`${site}/tokens`)).json.items;
+		expect(items.map((/** @type {any} */ i) => [i.productId, i.widgetScriptLoading])).toEqual(
+			expect.arrayContaining([
+				['notes', 'blocking'],
+				['chat', 'async'],
+			]),
+		);
+	});
+
 	it('parses a profile and words the advice', () => {
 		expect(parseProfile({ offers: [], moving: false })).toEqual({ ok: true, value: { moving: false } });
 		// own answers where the options cannot list everything: trimmed, kept in the order given; the tax question
@@ -393,6 +432,7 @@ describe('share links', () => {
 		});
 		expect(copy.products[1].install).toEqual({
 			scriptUrl: 'https://notes.example.dev/widget.js',
+			scriptLoading: 'async',
 			installed: false,
 			lastSeenAt: null,
 		});

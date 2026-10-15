@@ -28,7 +28,7 @@ export const renderDocs = ({ base }) => {
 		'\n',
 	);
 	const adminSnippet = [
-		widgetScriptTag({ src: `${base}/widget.js`, async: false }),
+		widgetScriptTag({ src: `${base}/widget.js`, loading: 'blocking' }),
 		...places('admin'),
 		'<script>',
 		`  window.${WIDGET_GLOBAL}.admin({`,

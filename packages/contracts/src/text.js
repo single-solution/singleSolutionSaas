@@ -88,13 +88,13 @@ export const decodeEntities = (text) =>
 /**
  * The tag that loads a product's widget script on a website (the install snippet of the Portal and of each product's
  * docs): `<script src="…" data-token="…" async></script>`, its attribute values escaped.
- * @param {{ src: string, token?: string | null, async?: boolean }} options `src`: the script's address; `token`: the
- *   website's browser token (null or left out: no `data-token`); `async` (default true): false for a script that must
- *   run in page order
+ * @param {{ src: string, token?: string | null, loading?: 'async' | 'blocking' }} options `src`: the script's
+ *   address; `token`: the website's browser token (null or left out: no `data-token`); `loading` (the manifest's
+ *   `widgetScriptLoading`, default `async`): `blocking` for a script that must run in page order (no `async`)
  * @returns {string}
  */
-export const widgetScriptTag = ({ src, token = null, async = true }) =>
-	`<script src="${escapeHtml(src)}"${token === null ? '' : ` data-token="${escapeHtml(token)}"`}${async ? ' async' : ''}></script>`;
+export const widgetScriptTag = ({ src, token = null, loading = 'async' }) =>
+	`<script src="${escapeHtml(src)}"${token === null ? '' : ` data-token="${escapeHtml(token)}"`}${loading === 'async' ? ' async' : ''}></script>`;
 
 // -------------------------------------------------------------------------------------------------------- path patterns
 

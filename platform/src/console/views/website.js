@@ -69,8 +69,9 @@ export function MerchantUsageDialog({ merchantId, title, onClose }) {
 
 /**
  * One product's install block.
- * @typedef {{ productId: string, name: string, widgetScriptUrl: string | null, docsUrl: string | null,
- *   browserToken: string, serverToken: { canShow: boolean } }} TokenEntry
+ * @typedef {{ productId: string, name: string, widgetScriptUrl: string | null,
+ *   widgetScriptLoading: 'async' | 'blocking', docsUrl: string | null, browserToken: string,
+ *   serverToken: { canShow: boolean } }} TokenEntry
  */
 /**
  * What the viewer may do on a website card.
@@ -616,7 +617,11 @@ export function InstallBlock({ entry, domain, merchantId, websiteId }) {
 				<div className="space-y-1">
 					<CodeBlock
 						label={WEBSITE.scriptTag}
-						code={widgetScriptTag({ src: entry.widgetScriptUrl, token: entry.browserToken })}
+						code={widgetScriptTag({
+							src: entry.widgetScriptUrl,
+							token: entry.browserToken,
+							loading: entry.widgetScriptLoading,
+						})}
 					/>
 					<p className="text-xs text-muted">{WEBSITE.scriptTagHelp}</p>
 				</div>

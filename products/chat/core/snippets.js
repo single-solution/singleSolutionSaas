@@ -27,7 +27,7 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		'</script>',
 	].join('\n');
 	const admin = [
-		widgetScriptTag({ src: `${base}/widget.js`, async: false }),
+		widgetScriptTag({ src: `${base}/widget.js`, loading: 'blocking' }),
 		...admins,
 		'<script>',
 		`  window.${WIDGET_GLOBAL}.admin({`,

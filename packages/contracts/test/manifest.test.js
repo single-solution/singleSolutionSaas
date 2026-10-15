@@ -20,6 +20,9 @@ describe('validateManifest', () => {
 		value.widgets = [{ key: 'w', feature: 'notes', kind: 'visitor' }];
 		value.widgetScriptUrl = '/widget.js';
 		expect(validateManifest(value).ok).toBe(true);
+		// a script that must run in page order loads blocking (the default is async)
+		value.widgetScriptLoading = 'blocking';
+		expect(validateManifest(value).ok).toBe(true);
 		// a widget that works while any of several features is on
 		value.widgets = [{ key: 'w', feature: ['notes', 'inbox'], kind: 'visitor' }];
 		expect(validateManifest(value).ok).toBe(true);
@@ -86,6 +89,17 @@ describe('validateManifest', () => {
 		['a script URL without widgets', (m) => (m.widgets = []), '/widgetScriptUrl', RULES.widgetScriptUrl],
 		['widgets without a script URL', (m) => (m.widgetScriptUrl = null), '/widgetScriptUrl', RULES.widgetScriptUrl],
 		['an http script URL', (m) => (m.widgetScriptUrl = 'http://notes.example.dev/widget.js'), '/widgetScriptUrl', RULES.url],
+		['an unknown script loading', (m) => (m.widgetScriptLoading = 'defer'), '/widgetScriptLoading', 'enum'],
+		[
+			'a script loading without a script',
+			(m) => {
+				m.widgets = [];
+				m.widgetScriptUrl = null;
+				m.widgetScriptLoading = 'blocking';
+			},
+			'/widgetScriptLoading',
+			RULES.widgetScriptUrl,
+		],
 		['an http base', (m) => (m.endpoints.base = 'http://notes.example.dev'), '/endpoints/base', RULES.url],
 		['a relative base', (m) => (m.endpoints.base = '/'), '/endpoints/base', RULES.url],
 		['a base with a query', (m) => (m.endpoints.base = 'https://notes.example.dev?x=1'), '/endpoints/base', RULES.url],

@@ -23,6 +23,7 @@ export const renderDocs = ({ base }) => {
 		base,
 		widgets: manifest.widgets,
 		permissions: manifest.permissions.map((permission) => permission.key),
+		loading: /** @type {'async' | 'blocking'} */ (manifest.widgetScriptLoading),
 	});
 	return renderDocsPage({
 		guide,

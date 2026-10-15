@@ -77,7 +77,7 @@ export const productBlueprint = () => ({
 		country: 'US',
 		timeZone: 'America/New_York',
 	},
-	install: { scriptUrl: 'https://notes.example.dev/widget.js', installed: false, lastSeenAt: null },
+	install: { scriptUrl: 'https://notes.example.dev/widget.js', scriptLoading: 'async', installed: false, lastSeenAt: null },
 	features: [
 		{
 			key: 'notes',
