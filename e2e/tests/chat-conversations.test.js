@@ -13,7 +13,9 @@
  * sends `chat.staff_reply` by WhatsApp to a visitor who left, once until they check again (C6); a store's own guest
  * cookie imported as a hash works as `SS-Guest`, a guest chat merges by time into the account's own conversation at
  * sign-in and guest chats with the verified phone move with `claimByPhone` (C7); older messages page back by sequence
- * for the visitor, the merchant's server and staff (C8). The AI provider (OpenAI), the email provider (Resend) and the
+ * for the visitor, the merchant's server and staff (C8); the staff list has every Accounts user who may answer chats
+ * and alerts reach the assignee's phone from Accounts (CH-6, CH-12); a transcript goes whole by email through the real
+ * Notifications, and merchants delete one lead or every lead. The AI provider (OpenAI), the email provider (Resend) and the
  * WhatsApp Cloud API (Meta) are fakes in this process; no real network call is made.
  */
 import { createHash } from 'node:crypto';
@@ -667,5 +669,66 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		expect(staffPage.json.earlier).toBe(false);
 		// the limit is 1–50
 		expect(seqsOf((await nadia('GET', `/v1/chat?before=${seqs[n - 1]}&limit=500`)).json)).toEqual(seqs.slice(0, n - 1));
+	});
+
+	it('CH-6, CH-12: the staff list has every Accounts user who may answer chats; alerts reach the assignee’s phone', async () => {
+		const features = (await server('chat', 'GET', '/v1/features')).json.features;
+		const on = features.filter((/** @type {any} */ feature) => feature.on).map((/** @type {any} */ feature) => feature.key);
+		expect((await setUp('chat', '/features', { on: [...on, 'assignment', 'leads_flows', 'transcripts'] })).status).toBe(200);
+		const phoned = await server('accounts', 'PATCH', `/v1/users/${users.aga}`, { phone: '+12025550147' });
+		expect(phoned.status, JSON.stringify(phoned.json)).toBe(200);
+		// Aga never opened the inbox: listed from Accounts, offline
+		const staff = (await server('chat', 'GET', '/v1/staff')).json.items;
+		expect(staff).toContainEqual(
+			expect.objectContaining({ id: users.aga, name: 'Aga Agent', email: 'agent@lamps.example.com', presence: 'offline' }),
+		);
+		expect(staff.some((/** @type {any} */ member) => member.id === users.rea)).toBe(false);
+		await configure('chat', {
+			'staff_alerts.recipients': ['team@lamps.example.com'],
+			'staff_alerts.staffPermission': '',
+			'staff_alerts.frequency': 'every_message',
+		});
+		const guest = device();
+		const id = (await guest('POST', '/v1/chat/messages', { text: 'lamp colors?' })).json.chat.conversation.id;
+		expect((await server('chat', 'PATCH', `/v1/conversations/${id}`, { assignedTo: users.aga })).status).toBe(200);
+		const mailsBefore = mails.length;
+		const whatsappBefore = whatsapp.length;
+		await guest('POST', '/v1/chat/messages', { text: 'any in white?' });
+		expect(
+			mails
+				.slice(mailsBefore)
+				.filter((mail) => mail.subject === 'New chat message')
+				.map((mail) => mail.to[0])
+				.sort(),
+		).toEqual(['agent@lamps.example.com', 'team@lamps.example.com']);
+		expect(whatsapp.slice(whatsappBefore).map((message) => [message.to, message.text?.body])).toEqual([
+			['12025550147', 'New chat: any in white?'],
+		]);
+	});
+
+	it('transcripts go whole through the real Notifications; merchants delete one lead or every lead', async () => {
+		await configure('chat', { 'guest_chat.messageLimit': 0, 'staff_alerts.recipients': [] });
+		const guest = device();
+		const texts = ['A', 'B', 'C', 'D'].map((letter) => `${letter}${'x'.repeat(3999)}`);
+		for (const text of texts) await guest('POST', '/v1/chat/messages', { text });
+		const before = mails.length;
+		expect((await guest('POST', '/v1/chat/transcript', { email: 'copy@example.com' })).status).toBe(202);
+		const [copy] = mails.slice(before);
+		// Chat's default words: the 16,000 characters of the chat in one email, never cut to 1,000
+		expect(copy).toMatchObject({ to: ['copy@example.com'], subject: expect.stringContaining('Your chat with') });
+		for (const text of texts) expect(copy.text).toContain(`You: ${text}`);
+		expect(copy.text).not.toContain('{transcript');
+
+		// leads: one by id, then every lead (the conversations stay)
+		const lead = await guest('POST', '/v1/chat/leads', { fields: { name: 'Lou', email: 'lou@example.com' } });
+		expect(lead.status, JSON.stringify(lead.json)).toBe(201);
+		await device()('POST', '/v1/chat/leads', { fields: { name: 'Max', email: 'max@example.com' } });
+		expect((await server('chat', 'DELETE', `/v1/leads/${lead.json.lead.id}`)).status).toBe(204);
+		expect((await server('chat', 'GET', `/v1/leads/${lead.json.lead.id}`)).status).toBe(404);
+		const all = await server('chat', 'POST', '/v1/data/delete-all', { scope: 'leads', confirm: DOMAIN });
+		expect(all.json).toMatchObject({ scope: 'leads', more: false });
+		expect(all.json.deleted.leads).toBeGreaterThanOrEqual(1);
+		expect((await server('chat', 'GET', '/v1/leads')).json.items).toEqual([]);
+		expect((await server('chat', 'GET', '/v1/conversations')).json.items.length).toBeGreaterThan(0);
 	});
 });
