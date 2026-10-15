@@ -300,6 +300,29 @@ describe('placing an order', () => {
 		]);
 	});
 
+	it('numbers an order after the highest number used when its counter fell behind, instead of failing every checkout', async () => {
+		const product = await shop.seedProduct({ stock: 5 });
+		const variantId = /** @type {string} */ (product.variants[0]?.id);
+		const place = () =>
+			placeOrder(
+				data,
+				{ order: orderOf([{ productId: product.id, variantId, quantity: 1 }]), numberPrefix: 'B-' },
+				{ now: shop.now() },
+			);
+		const first = await place();
+		expect(first.ok && first.order.number).toBe('B-000001');
+		// the counter falls behind a number already used (set back while an order was placed, or orders imported first)
+		await data
+			.collection(COLLECTIONS.counters)
+			.updateOne({ websiteId: data.websiteId, id: 'orders-B-:' }, { $set: { seq: 0 } });
+		const second = await place();
+		expect(second.ok && second.order.number).toBe('B-000002');
+		const third = await place();
+		expect(third.ok && third.order.number).toBe('B-000003');
+		// each order held its stock once
+		expect((await stockOf(product.id)).stock).toBe(2);
+	});
+
 	it('takes stock from the first location that has it, books slots once and skips untracked items', async () => {
 		const locations = await shop.seedProduct({
 			variants: [

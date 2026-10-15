@@ -594,6 +594,20 @@ export const setOrderCounter = async (data, { form, year, next }) => {
 	return { ok: true, next };
 };
 
+/**
+ * Move a counter past the highest number already used in its form, never back (it fell behind them: set back while an
+ * order was placed, or orders imported before it moved on).
+ * @param {WebsiteData} data
+ * @param {{ form: NumberForm, year: number }} numbering
+ */
+const counterPast = async (data, { form, year }) => {
+	const used = await highestNumber(data, { form, year });
+	const id = counterIdOf(form, year);
+	await data
+		.collection(COLLECTIONS.counters)
+		.updateOne({ websiteId: data.websiteId, id }, { $max: { seq: used }, $setOnInsert: { id } }, { upsert: true });
+};
+
 // ------------------------------------------------------------------------------------------------- placing orders
 
 /**
@@ -655,7 +669,8 @@ const refused = (result) => Object.assign(new Error(result.code), { refused: res
 
 /**
  * Place an order in one transaction: number it, hold its stock, count its offer uses, spend its points, hold its
- * booked slots, count its units as ordered and insert it. Nothing is written when any part fails.
+ * booked slots, count its units as ordered and insert it. Nothing is written when any part fails. A number used already
+ * (its counter fell behind the numbers of its form) moves the counter past the highest and places it again, once.
  * @param {WebsiteData} data
  * @param {Placement} placement
  * @param {{ now: number, timeZone?: string }} clock `timeZone`: the business.json time zone (UTC when missing), whose
@@ -681,79 +696,85 @@ export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => 
 		);
 	const before = await existing();
 	if (before) return { ok: true, order: before, duplicate: true, taken: [] };
-	try {
-		const placed = await data.transaction(async (session) => {
-			const number = await nextOrderNumber(data, {
-				form: numberFormOf(placement),
-				year: zonedParts(now, timeZone).year,
-				session,
-			});
-			const stock = await holdStock(
-				data,
-				order.lines
-					.filter((line) => line.kind === 'physical')
-					.map((line) => ({ productId: line.productId, variantId: line.variantId, quantity: line.quantity })),
-				{ locationOrder: placement.locationOrder ?? [], session },
-			);
-			if (!stock.ok)
-				throw refused({ ok: false, code: 'out_of_stock', productId: stock.productId, variantId: stock.variantId });
-			const where = new Map(stock.taken.map((line) => [`${line.productId}|${line.variantId}`, line.locationId]));
-			const { promotions } = order;
-			const offers = await useOffers(
-				data,
-				{
-					couponId: promotions.couponId,
-					dealIds: promotions.dealIds,
-					bundleIds: promotions.bundleIds,
-					userId: owner,
-					orderId: order.id,
-					perCustomer: placement.couponPerCustomer ?? null,
-					lockedDealIds: placement.lockedDealIds ?? [],
-				},
-				session,
-			);
-			if (!offers.ok) throw refused({ ok: false, code: 'offer_unavailable', offerId: offers.offerId });
-			if (promotions.pointsRedeemed > 0) {
-				const spent = await spendPoints(
+	const numbering = { form: numberFormOf(placement), year: zonedParts(now, timeZone).year };
+	for (let attempt = 1; ; attempt += 1) {
+		try {
+			const placed = await data.transaction(async (session) => {
+				const number = await nextOrderNumber(data, { ...numbering, session });
+				const stock = await holdStock(
 					data,
-					{ userId: order.customer.userId, points: promotions.pointsRedeemed, orderId: order.id, note: number },
-					{ now, session },
+					order.lines
+						.filter((line) => line.kind === 'physical')
+						.map((line) => ({ productId: line.productId, variantId: line.variantId, quantity: line.quantity })),
+					{ locationOrder: placement.locationOrder ?? [], session },
 				);
-				if (!spent) throw refused({ ok: false, code: 'points_changed' });
-			}
-			await holdSlots(
-				data,
-				(placement.slots ?? []).map((slot) => ({ ...slot, orderId: order.id })),
-				session,
-			);
-			await countOrdered(data, order.lines, session);
-			const record = {
-				...order,
-				number,
-				lines: order.lines.map((line) => ({
-					...line,
-					locationId: line.kind === 'physical' ? (where.get(`${line.productId}|${line.variantId}`) ?? null) : null,
-				})),
+				if (!stock.ok)
+					throw refused({ ok: false, code: 'out_of_stock', productId: stock.productId, variantId: stock.variantId });
+				const where = new Map(stock.taken.map((line) => [`${line.productId}|${line.variantId}`, line.locationId]));
+				const { promotions } = order;
+				const offers = await useOffers(
+					data,
+					{
+						couponId: promotions.couponId,
+						dealIds: promotions.dealIds,
+						bundleIds: promotions.bundleIds,
+						userId: owner,
+						orderId: order.id,
+						perCustomer: placement.couponPerCustomer ?? null,
+						lockedDealIds: placement.lockedDealIds ?? [],
+					},
+					session,
+				);
+				if (!offers.ok) throw refused({ ok: false, code: 'offer_unavailable', offerId: offers.offerId });
+				if (promotions.pointsRedeemed > 0) {
+					const spent = await spendPoints(
+						data,
+						{ userId: order.customer.userId, points: promotions.pointsRedeemed, orderId: order.id, note: number },
+						{ now, session },
+					);
+					if (!spent) throw refused({ ok: false, code: 'points_changed' });
+				}
+				await holdSlots(
+					data,
+					(placement.slots ?? []).map((slot) => ({ ...slot, orderId: order.id })),
+					session,
+				);
+				await countOrdered(data, order.lines, session);
+				const record = {
+					...order,
+					number,
+					lines: order.lines.map((line) => ({
+						...line,
+						locationId: line.kind === 'physical' ? (where.get(`${line.productId}|${line.variantId}`) ?? null) : null,
+					})),
+				};
+				await orders.insertOne({ ...record }, { session });
+				return { record, taken: tracked(stock.taken) };
+			});
+			return {
+				ok: true,
+				order: /** @type {OrderRecord} */ (/** @type {unknown} */ (placed.record)),
+				duplicate: false,
+				taken: placed.taken,
 			};
-			await orders.insertOne({ ...record }, { session });
-			return { record, taken: tracked(stock.taken) };
-		});
-		return {
-			ok: true,
-			order: /** @type {OrderRecord} */ (/** @type {unknown} */ (placed.record)),
-			duplicate: false,
-			taken: placed.taken,
-		};
-	} catch (error) {
-		if (error instanceof Error && 'refused' in error) return /** @type {any} */ (error).refused;
-		if (duplicateIn(error, COLLECTIONS.slots)) return { ok: false, code: 'slot_taken' };
-		if (duplicateIn(error, COLLECTIONS.couponUses))
-			return { ok: false, code: 'offer_unavailable', offerId: order.promotions.couponId ?? '' };
-		if (duplicateIn(error, COLLECTIONS.orders)) {
-			const won = await existing();
-			if (won) return { ok: true, order: won, duplicate: true, taken: [] };
+		} catch (error) {
+			if (error instanceof Error && 'refused' in error) return /** @type {any} */ (error).refused;
+			if (duplicateIn(error, COLLECTIONS.slots)) return { ok: false, code: 'slot_taken' };
+			if (duplicateIn(error, COLLECTIONS.couponUses))
+				return { ok: false, code: 'offer_unavailable', offerId: order.promotions.couponId ?? '' };
+			if (duplicateIn(error, COLLECTIONS.orders)) {
+				const won = await existing();
+				if (won) return { ok: true, order: won, duplicate: true, taken: [] };
+				// its number is used already: the counter fell behind the numbers of its form (set back while an order was
+				// placed, or orders imported before it moved on), so it moves past the highest and the order is numbered
+				// again, once
+				if (attempt === 1) {
+					await counterPast(data, numbering);
+					continue;
+				}
+			}
+			throw error;
 		}
-		throw error;
 	}
 };
 
