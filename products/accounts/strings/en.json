@@ -205,6 +205,9 @@
 	"account.recoveryRenewed": "Your old recovery codes no longer work.",
 	"account.devices": "Signed-in devices",
 	"account.unknownDevice": "Unknown device",
+	"account.deviceName": "{browser} on {system}",
+	"account.unknownBrowser": "Unknown browser",
+	"account.unknownSystem": "Unknown system",
 	"account.thisDevice": "This device",
 	"account.signedInWith": "Signed in with {method}",
 	"account.lastUsed": "Last used {time}",
@@ -410,5 +413,8 @@
 	"activity.empty": "Nothing here yet.",
 	"activity.more": "Show more",
 	"activity.signedOut": "Signed out",
-	"activity.by": "{name} · {time}"
+	"activity.by": "{name} · {time}",
+	"activity.value": "{name}: {value}",
+	"activity.yes": "yes",
+	"activity.no": "no"
 }

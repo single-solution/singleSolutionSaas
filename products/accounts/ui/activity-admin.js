@@ -2,7 +2,9 @@
  * The admin widget `activity_admin` (Activity log copy; permission `activity.read`): the activity-log copies every
  * connected product sends to Accounts, newest first, with a chip per product carrying its count, search (labels,
  * details, names, targets), the action, the person and a time range (days in the business time zone), and paging.
- * Each entry shows what was done, its label and detail, who did it (with their role) and when. PLAN 0.4.11, 0.8.10 K9.
+ * Each entry shows what was done, its label, what changed (its values through the texts `activity.value` and
+ * `activity.yes`/`activity.no`, A8, or a product's detail), who did it (with their role) and when. PLAN 0.4.11,
+ * 0.8.10 K9.
  * @module
  */
 import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
@@ -86,6 +88,20 @@ export const mountActivityAdmin = ({ host, api, config }) => {
 				if (answer.ok) productChips.counts({ '': answer.data.total, ...answer.data.groups });
 			};
 
+			/**
+			 * What changed, in words (A8): each value as `activity.value` with its name and value, yes/no as texts.
+			 * @param {Record<string, string | number | boolean>} values
+			 */
+			const valuesText = (values) =>
+				Object.entries(values)
+					.map(([name, value]) =>
+						formatText(t('activity.value'), {
+							name,
+							value: value === true ? t('activity.yes') : value === false ? t('activity.no') : String(value),
+						}),
+					)
+					.join(' · ');
+
 			/** @param {boolean} reset */
 			const load = async (reset) => {
 				const params = query();
@@ -109,6 +125,9 @@ export const mountActivityAdmin = ({ host, api, config }) => {
 					item.append(
 						element(doc, 'span', {}, [entry.label ?? entry.target, entry.action].join(' · ')),
 						...(entry.detail ? [element(doc, 'span', { class: 'meta' }, entry.detail)] : []),
+						...(Object.keys(entry.values ?? {}).length > 0
+							? [element(doc, 'span', { class: 'meta' }, valuesText(entry.values))]
+							: []),
 						element(
 							doc,
 							'span',

@@ -34,7 +34,8 @@ import { PROVIDERS } from './widgets.js';
 /**
  * An activity copy as stored (the store's `CopyRecord`).
  * @typedef {{ id: string, productId: string, actor: { kind: string, id: string, name?: string, role?: string },
- *   action: string, target: string, label?: string, detail?: string, at: Date }} ImportedCopy
+ *   action: string, target: string, label?: string, detail?: string, values?: Record<string, string | number | boolean>,
+ *   at: Date }} ImportedCopy
  */
 
 /** What each collection takes (top-level fields). */
@@ -94,7 +95,7 @@ const IMPORT_FIELDS = Object.freeze({
 		'completedAt',
 		'createdAt',
 	]),
-	copies: Object.freeze(['id', 'productId', 'actor', 'action', 'target', 'label', 'detail', 'at']),
+	copies: Object.freeze(['id', 'productId', 'actor', 'action', 'target', 'label', 'detail', 'values', 'at']),
 });
 
 const ADDRESS_KEYS = Object.freeze([
@@ -594,7 +595,7 @@ export const checkImportedCopy = (record, websiteId) => {
 	const { id, ...copy } = record;
 	const checked = validateActivityCopy({ ...copy, websiteId });
 	if (!checked.ok) return { ok: false, errors: checked.problems.map(({ path, message }) => ({ path, message })) };
-	const { productId, actor, action, target, label, detail, at } = checked.value;
+	const { productId, actor, action, target, label, detail, values, at } = checked.value;
 	return {
 		ok: true,
 		value: {
@@ -605,6 +606,7 @@ export const checkImportedCopy = (record, websiteId) => {
 			target,
 			...(label ? { label } : {}),
 			...(detail ? { detail } : {}),
+			...(values && Object.keys(values).length > 0 ? { values } : {}),
 			at: new Date(at),
 		},
 	};

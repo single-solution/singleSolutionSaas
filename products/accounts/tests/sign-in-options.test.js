@@ -377,14 +377,14 @@ describe('A10: sign-in events in the activity log', () => {
 		await signIn('sid@example.com');
 		const [failed] = await activity('action=user.sign_in_failed');
 		expect(failed).toMatchObject({ actor: { kind: 'user', name: 'Sid Staff', role: 'support_staff' }, label: 'Sid Staff' });
-		expect(failed.detail).toBe('IP: 203.0.113.77; Wrong password');
-		expect((await activity('action=user.signed_in'))[0].detail).toBe('IP: 203.0.113.77; Method: email_password');
+		expect(failed.values).toEqual({ ip: '203.0.113.77', reason: 'wrong_password' });
+		expect((await activity('action=user.signed_in'))[0].values).toEqual({ ip: '203.0.113.77', method: 'email_password' });
 		await env.visitor('POST', '/v1/password/forgot', { email: 'sid@example.com', returnTo: 'https://shop.example.com/reset' });
 		const link = String(env.messages().at(-1).values.link).split('=')[1];
 		expect((await env.visitor('POST', '/v1/password/reset', { token: link, password: 'brand new password 9' })).status).toBe(
 			204,
 		);
-		expect((await activity('action=user.password_reset'))[0].detail).toBe('IP: 203.0.113.77; With an email link');
+		expect((await activity('action=user.password_reset'))[0].values).toEqual({ ip: '203.0.113.77', by: 'email_link' });
 		env.setNetwork(null);
 	});
 });
@@ -432,7 +432,7 @@ describe('A8: imported two-step and old recovery codes', () => {
 			),
 		).toBe('code_invalid');
 		const logged = await activity('action=user.recovery_code_used');
-		expect(logged[0].detail).toMatch(/1 left$/);
+		expect(logged[0].values).toMatchObject({ left: 1 });
 	});
 
 	it('wrong two-step and recovery codes count toward the lock like wrong passwords; the step is refused while locked', async () => {
@@ -538,7 +538,10 @@ describe('A12: sign-in from the merchant’s server', () => {
 		expect(signedIn.json).toMatchObject({ status: 'signed_in' });
 		expect(signedIn.json.refreshToken).toMatch(/^ses_/);
 		const devices = await env.call('GET', '/v1/me/sessions', { token: env.server, signIn: signedIn.json.signIn });
-		expect(devices.json.items.find((/** @type {any} */ d) => d.current).device).toBe('Chrome on Android');
+		expect(devices.json.items.find((/** @type {any} */ d) => d.current).device).toEqual({
+			browser: 'Chrome',
+			system: 'Android',
+		});
 		const renewed = await fromServer('/v1/session/refresh', { refreshToken: signedIn.json.refreshToken });
 		expect(renewed.json.refreshToken).not.toBe(signedIn.json.refreshToken);
 		expect((await fromServer('/v1/session/sign-out', { refreshToken: renewed.json.refreshToken })).status).toBe(204);
@@ -640,7 +643,7 @@ describe('K-27: rolling sessions, new recovery codes and reset links to another 
 		expect(withNew.json.status).toBe('signed_in');
 		const logged = await activity('action=user.recovery_codes_replaced');
 		expect(logged[0]).toMatchObject({ actor: { name: 'Rae Renew', role: 'support_staff' }, label: 'Rae Renew' });
-		expect(logged[0].detail).toMatch(/^IP: [\d.]+; 10 new recovery codes$/);
+		expect(logged[0].values).toMatchObject({ ip: expect.stringMatching(/^[\d.]+$/), codes: 10 });
 		// wrong codes count toward the lock; the route is refused while it lasts
 		for (let i = 0; i < 5; i += 1) expect(code(await replace({ recoveryCode: 'ZZZZZ-ZZZZZ' }, me))).toBe('code_invalid');
 		env.advance(60_000);

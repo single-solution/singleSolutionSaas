@@ -4,7 +4,8 @@
  * admin widgets (tickets); the activity-log copies other products send (with their filters and counts); and the custom
  * fields set in the dashboard. Every change made through the server token or a ticket is written to the activity log
  * with the acting user (the ticket's staff member, else the `SS-Actor-*` user of a server-token call, else the
- * server; PLAN 0.8.10 K2), the target's label and a short detail (K9).
+ * server; PLAN 0.8.10 K2), the target's label and what changed as values (K9, A8: codes, numbers and yes/no, never a
+ * sentence in one language).
  * @module
  */
 import { activityFilter, actorOf, countHandlers, paginate, problem } from '@ss/app-kit';
@@ -12,7 +13,7 @@ import { createId, validateActivityCopy } from '@ss/contracts';
 import { normalizeEmail } from '@ss/contracts/email';
 import { nationalNumberOf } from '@ss/contracts/phone';
 import { randomToken, sha256Hex } from '@ss/protocol';
-import { detailOf, labelOf } from '../core/activity.js';
+import { labelOf, valuesOf } from '../core/activity.js';
 import { MAX_CUSTOM_FIELDS, checkCustomValues, checkFieldDefinition, checkName, staffView } from '../core/profile.js';
 import {
 	MAX_ROLES,
@@ -81,11 +82,8 @@ const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 'Server
 /** A code record id. */
 const createCodeId = () => createId('cod');
 
-/** @param {number} n @param {string} one @param {string} many */
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-
 /**
- * An activity-log copy as the API answers it: `label` and `detail` null when absent.
+ * An activity-log copy as the API answers it: `label` and `detail` null when absent, `values` {} when none.
  * @param {import('../adapters/store.js').CopyRecord} row
  */
 const copyView = (row) => ({
@@ -96,6 +94,7 @@ const copyView = (row) => ({
 	target: row.target,
 	label: row.label ?? null,
 	detail: row.detail ?? null,
+	values: row.values ?? {},
 	at: row.at.toISOString(),
 });
 
@@ -115,7 +114,8 @@ export const createManage = (product, service, flows) => {
 	/**
 	 * An activity-log entry by the acting user.
 	 * @param {any} ctx @param {string} action @param {string} target
-	 * @param {{ label?: string, detail?: string }} [about] the target's name and a short plain-text detail (never addresses)
+	 * @param {{ label?: string, values?: Record<string, string | number | boolean> }} [about] the target's name and what
+	 *   changed as values (A8; never addresses)
 	 */
 	const log = (ctx, action, target, about = {}) =>
 		product.activity.record(
@@ -302,7 +302,7 @@ export const createManage = (product, service, flows) => {
 		if (!user) throw problem('already_exists', 'Someone with this email address or phone number has an account.');
 		await log(ctx, 'user.created', user.id, {
 			label: labelOf(name),
-			detail: detailOf([`Role: ${role}`, passwordHash && 'with a password']),
+			values: valuesOf({ role, password: Boolean(passwordHash) }),
 		});
 		return new Response(JSON.stringify(staffView(user)), { status: 201, headers: { 'content-type': 'application/json' } });
 	};
@@ -325,11 +325,11 @@ export const createManage = (product, service, flows) => {
 			await service.removeHere(s, user);
 			await log(ctx, 'user.removed', user.id, {
 				label: labelOf(user.name),
-				detail: detailOf([reason && `Reason: ${reason}`, 'From Accounts only: other products keep their data']),
+				values: valuesOf({ scope: 'accounts', reason }),
 			});
 			return { deleted: true, pending: [] };
 		}
-		const { pending } = await service.erase(s, user, actor(ctx), ctx, reason ? `Reason: ${reason}` : 'Deleted by staff');
+		const { pending } = await service.erase(s, user, actor(ctx), ctx, { by: 'staff', reason });
 		return { deleted: true, pending };
 	};
 
@@ -360,7 +360,7 @@ export const createManage = (product, service, flows) => {
 		});
 		await log(ctx, 'user.sign_in_code_issued', user.id, {
 			label: labelOf(user.name),
-			detail: `Valid for ${plural(Number(codeMinutes), 'minute', 'minutes')}`,
+			values: { minutes: Number(codeMinutes) },
 		});
 		return { code, expiresAt: expireAt.toISOString() };
 	};
@@ -413,7 +413,7 @@ export const createManage = (product, service, flows) => {
 		if (request) await s.store.requests.update(request.id, { setupExpiresAt: new Date(link.expiresAt) });
 		await log(ctx, 'user.setup_link_issued', user.id, {
 			label: labelOf(user.name),
-			detail: `Valid until ${link.expiresAt.slice(0, 10)}`,
+			values: { expiresAt: link.expiresAt },
 		});
 		return link;
 	};
@@ -436,13 +436,16 @@ export const createManage = (product, service, flows) => {
 		});
 		/** @type {Record<string, unknown>} */
 		const set = {};
-		/** What changed, in the order of the log: the action and its detail. @type {Array<{ action: string, detail?: string }>} */
+		/**
+		 * What changed, in the order of the log: the action and its values (A8).
+		 * @type {Array<{ action: string, values?: Record<string, string | number | boolean> }>}
+		 */
 		const changes = [];
 		if (body.role !== undefined) {
 			if (typeof body.role !== 'string' || !(await s.store.roles.get(body.role)))
 				throw invalid('role', 'There is no such role.');
 			set.role = body.role;
-			changes.push({ action: 'user.role_changed', detail: `Role: ${user.role} → ${body.role}` });
+			changes.push({ action: 'user.role_changed', values: { from: user.role, to: body.role } });
 		}
 		if (body.notes !== undefined) {
 			if (typeof body.notes !== 'string' || body.notes.length > 5000)
@@ -462,7 +465,7 @@ export const createManage = (product, service, flows) => {
 			const name = checkName(body.name);
 			if (name === null) throw invalid('name', 'The name is too long.');
 			set.name = name;
-			changes.push({ action: 'user.name_changed', ...(user.name ? { detail: `Was: ${user.name}` } : {}) });
+			changes.push({ action: 'user.name_changed', values: valuesOf({ was: user.name }) });
 		}
 		if (body.custom !== undefined) {
 			const checked = checkCustomValues(await s.store.fields.list(), body.custom, {
@@ -472,19 +475,19 @@ export const createManage = (product, service, flows) => {
 			});
 			if (!checked.ok) throw invalid(checked.field, checked.message);
 			set.custom = checked.value;
-			changes.push({ action: 'user.custom_changed', detail: `Fields: ${Object.keys(bodyOf(body.custom)).join(', ')}` });
+			changes.push({ action: 'user.custom_changed', values: { fields: Object.keys(bodyOf(body.custom)).join(',') } });
 		}
 		const contacts = await contactsOf(s, body);
 		if ('email' in contacts)
-			changes.push({ action: 'user.email_changed', detail: contacts.email ? 'New email address' : 'Email address removed' });
+			changes.push({ action: 'user.email_changed', values: { change: contacts.email ? 'new' : 'removed' } });
 		if ('phone' in contacts)
-			changes.push({ action: 'user.phone_changed', detail: contacts.phone ? 'New phone number' : 'Phone number removed' });
+			changes.push({ action: 'user.phone_changed', values: { change: contacts.phone ? 'new' : 'removed' } });
 		Object.assign(set, contacts);
 		if (body.addresses !== undefined) {
 			set.addresses = await service.addressesOf(s, body.addresses, user);
 			changes.push({
 				action: 'user.addresses_changed',
-				detail: plural(/** @type {unknown[]} */ (set.addresses).length, 'address', 'addresses'),
+				values: { addresses: /** @type {unknown[]} */ (set.addresses).length },
 			});
 		}
 		if (body.twoStep !== undefined) {
@@ -494,10 +497,7 @@ export const createManage = (product, service, flows) => {
 			if (actorId === user.id) throw problem('forbidden', 'Turn your own two-step sign-in off from your account.');
 			if (user.twoStep?.enabledAt) {
 				set.twoStep = null;
-				changes.push({
-					action: 'user.two_step_off',
-					detail: 'Two-step sign-in turned off: set up again at the next sign-in',
-				});
+				changes.push({ action: 'user.two_step_off' });
 			}
 		}
 		if (body.password !== undefined) {
@@ -513,17 +513,14 @@ export const createManage = (product, service, flows) => {
 		// issued end within 15 minutes)
 		const signedOut = body.blocked === true || body.password !== undefined ? await s.store.sessions.revokeAll(user.id) : 0;
 		const label = labelOf(updated.name);
-		for (const { action, detail } of changes) {
-			const blockDetail =
+		for (const { action, values } of changes) {
+			const shown =
 				action === 'user.blocked'
-					? detailOf([
-							reason && `Reason: ${reason}`,
-							signedOut > 0 && `${plural(signedOut, 'device', 'devices')} signed out`,
-						])
+					? valuesOf({ reason, signedOut })
 					: action === 'user.password_changed'
-						? `${plural(signedOut, 'device', 'devices')} signed out`
-						: detail;
-			await log(ctx, action, user.id, { label, detail: blockDetail });
+						? { signedOut }
+						: values;
+			await log(ctx, action, user.id, { label, ...(shown ? { values: shown } : {}) });
 		}
 		return staffView(updated);
 	};
@@ -535,7 +532,7 @@ export const createManage = (product, service, flows) => {
 		const signedOut = await s.store.sessions.revokeAll(user.id);
 		await log(ctx, 'user.signed_out', user.id, {
 			label: labelOf(user.name),
-			detail: `${plural(signedOut, 'device', 'devices')} signed out`,
+			values: { signedOut },
 		});
 		return undefined;
 	};
@@ -581,7 +578,7 @@ export const createManage = (product, service, flows) => {
 			// the link comes back to staff, who send it themselves (A3)
 			await log(ctx, 'user.invited', user.id, {
 				label: labelOf(name),
-				detail: `Role: ${role}; link given to staff; valid for ${plural(inviteDays, 'day', 'days')}`,
+				values: { role, delivery: 'link', days: inviteDays },
 			});
 			const expiresAt = new Date(now() + inviteDays * 86_400_000).toISOString();
 			return new Response(JSON.stringify({ ...staffView(user), invite: { url: values.link, expiresAt } }), {
@@ -611,7 +608,7 @@ export const createManage = (product, service, flows) => {
 		}
 		await log(ctx, 'user.invited', user.id, {
 			label: labelOf(name),
-			detail: `Role: ${role}; sent by ${sentBy === 'email' ? 'email' : sentBy === 'sms' ? 'SMS' : 'WhatsApp'}; valid for ${plural(inviteDays, 'day', 'days')}`,
+			values: { role, delivery: sentBy, days: inviteDays },
 		});
 		return new Response(JSON.stringify(staffView(user)), { status: 201, headers: { 'content-type': 'application/json' } });
 	};
@@ -622,7 +619,7 @@ export const createManage = (product, service, flows) => {
 		const user = await userOr404(s, ctx.params.id);
 		if (user.status !== 'pending') throw problem('conflict', 'This user is not waiting for approval.');
 		const updated = await s.store.users.update(user.id, { status: 'active' });
-		await log(ctx, 'user.approved', user.id, { label: labelOf(user.name), detail: `Role: ${user.role}` });
+		await log(ctx, 'user.approved', user.id, { label: labelOf(user.name), values: { role: user.role } });
 		return staffView(updated ?? user);
 	};
 
@@ -633,7 +630,7 @@ export const createManage = (product, service, flows) => {
 		if (user.status !== 'pending') throw problem('conflict', 'This user is not waiting for approval.');
 		await guard(ctx, s, user, { remove: true });
 		await s.store.users.remove(user.id);
-		await log(ctx, 'user.declined', user.id, { label: labelOf(user.name), detail: 'The sign-up was removed' });
+		await log(ctx, 'user.declined', user.id, { label: labelOf(user.name) });
 		return undefined;
 	};
 
@@ -643,7 +640,7 @@ export const createManage = (product, service, flows) => {
 		const user = await userOr404(s, ctx.params.id);
 		if (!user.deletion) throw problem('conflict', 'This user did not ask to be deleted.');
 		await guard(ctx, s, user, { remove: true });
-		const { pending } = await service.erase(s, user, actor(ctx), ctx, 'Deletion request approved');
+		const { pending } = await service.erase(s, user, actor(ctx), ctx, { by: 'request' });
 		return { deleted: true, pending };
 	};
 
@@ -653,7 +650,7 @@ export const createManage = (product, service, flows) => {
 		const user = await userOr404(s, ctx.params.id);
 		if (!user.deletion) throw problem('conflict', 'This user did not ask to be deleted.');
 		const updated = await s.store.users.update(user.id, { deletion: null });
-		await log(ctx, 'user.deletion_rejected', user.id, { label: labelOf(user.name), detail: 'The account stays' });
+		await log(ctx, 'user.deletion_rejected', user.id, { label: labelOf(user.name) });
 		return staffView(updated ?? user);
 	};
 
@@ -865,12 +862,12 @@ export const createManage = (product, service, flows) => {
 		if (!link && updated) ({ user, request: updated } = await service.completeRequest(s, updated, user));
 		await log(ctx, 'role_request.invited', request.id, {
 			label: labelOf(request.name),
-			detail: detailOf([
-				`Role: ${request.role}`,
-				existing ? 'existing user' : 'user created',
-				at === 'invite' || !link ? 'role given' : 'role given when the setup link is used',
-				link && 'setup link given to staff',
-			]),
+			values: {
+				role: request.role,
+				user: existing ? 'existing' : 'created',
+				roleGiven: at === 'invite' || !link ? 'now' : 'at_setup',
+				setupLink: Boolean(link),
+			},
 		});
 		return { request: requestView(/** @type {any} */ (updated), now()), user: staffView(user), setupLink: link };
 	};
@@ -901,12 +898,11 @@ export const createManage = (product, service, flows) => {
 		if (!link && updated) ({ user, request: updated } = await service.completeRequest(s, updated, user));
 		await log(ctx, 'role_request.link_renewed', request.id, {
 			label: labelOf(request.name),
-			detail: detailOf([
-				`Role: ${request.role}`,
-				link
-					? `new setup link given to staff; valid until ${link.expiresAt.slice(0, 10)}`
-					: 'completed: the user has a password',
-			]),
+			values: valuesOf({
+				role: request.role,
+				result: link ? 'new_link' : 'completed',
+				expiresAt: link?.expiresAt,
+			}),
 		});
 		return { request: requestView(/** @type {any} */ (updated), now()), user: staffView(user), setupLink: link };
 	};
@@ -938,21 +934,24 @@ export const createManage = (product, service, flows) => {
 		if (user && (status === 'invited' || status === 'expired')) {
 			await s.store.codes.removeKind('setup', user.id);
 			await s.store.codes.cancelSetups(user.id);
-			done.push('setup link canceled');
+			done.push('setup_link_canceled');
 		}
 		if (user && remove) {
 			await service.removeHere(s, user);
-			done.push('the user the invite made was removed');
+			done.push('user_removed');
 		} else if (user && roleBack) {
 			await s.store.users.update(user.id, { role: roleBack });
-			done.push(`role back to ${roleBack}`);
+			done.push('role_back');
 		}
 		const updated = await s.store.requests.update(request.id, {
 			status: 'declined',
 			grant: null,
 			...(remove ? { userId: null } : {}),
 		});
-		await log(ctx, 'role_request.declined', request.id, { label: labelOf(request.name), detail: detailOf(done) });
+		await log(ctx, 'role_request.declined', request.id, {
+			label: labelOf(request.name),
+			values: valuesOf({ done: done.join(','), roleBack: done.includes('role_back') ? roleBack : undefined }),
+		});
 		return requestView(/** @type {any} */ (updated), now());
 	};
 
@@ -971,7 +970,7 @@ export const createManage = (product, service, flows) => {
 		});
 		await log(ctx, 'role_request.reopened', request.id, {
 			label: labelOf(request.name),
-			detail: `Role: ${request.role}`,
+			values: { role: request.role },
 		});
 		return requestView(/** @type {any} */ (updated), now());
 	};
@@ -1008,14 +1007,14 @@ export const createManage = (product, service, flows) => {
 		const role = await s.store.roles.save({ ...checked.value, signUp });
 		await log(ctx, 'role.saved', role.key, {
 			label: labelOf(role.name) ?? role.key,
-			detail: detailOf([
-				existing ? 'Changed' : 'New role',
-				plural(role.permissions.length, 'permission', 'permissions'),
-				`two-step ${role.twoStep}`,
-				`rank ${role.rank}`,
-				role.signIn === 'paused' && 'sign-in paused',
-				role.signUp && !existing?.signUp && 'role for new sign-ups',
-			]),
+			values: {
+				change: existing ? 'changed' : 'new',
+				permissions: role.permissions.length,
+				twoStep: role.twoStep,
+				rank: role.rank,
+				signIn: role.signIn,
+				signUp: role.signUp,
+			},
 		});
 		return roleView(role);
 	};
@@ -1035,7 +1034,7 @@ export const createManage = (product, service, flows) => {
 		const moved = await s.store.users.resetRole(role.key, to);
 		await log(ctx, 'role.deleted', role.key, {
 			label: labelOf(role.name) ?? role.key,
-			detail: `${plural(moved, 'user', 'users')} moved to the role ${to}`,
+			values: { users: moved, to },
 		});
 		return undefined;
 	};
@@ -1079,10 +1078,8 @@ export const createManage = (product, service, flows) => {
 		const checked = checkOwnPermissions(bodyOf(ctx.body).permissions);
 		if (!checked.ok) throw invalid('permissions', checked.message);
 		await s.store.permissions.replace(checked.value);
-		await log(ctx, 'permissions.saved', `${checked.value.length}`, {
-			label: 'Own permissions',
-			detail:
-				checked.value.length > 0 ? detailOf([checked.value.map((p) => `site:${p.key}`).join(', ')]) : 'No own permissions',
+		await log(ctx, 'permissions.saved', 'site', {
+			values: valuesOf({ count: checked.value.length, keys: checked.value.map((p) => p.key).join(',') }),
 		});
 		return { permissions: checked.value };
 	};
@@ -1091,7 +1088,7 @@ export const createManage = (product, service, flows) => {
 
 	/**
 	 * Another product sends one activity-log entry (PLAN 0.4.11), with this website's Accounts server token: who (with
-	 * the acting user's role), what, on what with its label, a short detail and when (K9).
+	 * the acting user's role), what, on what with its label, what changed (values, or a short detail) and when (K9).
 	 * @param {any} ctx
 	 */
 	const receiveCopy = async (ctx) => {
@@ -1099,10 +1096,10 @@ export const createManage = (product, service, flows) => {
 		if (!checked.ok || checked.value.websiteId !== ctx.websiteId)
 			return problem(
 				'validation_failed',
-				'Send { websiteId, productId, actor, action, target, label?, detail?, at } for this website.',
+				'Send { websiteId, productId, actor, action, target, label?, detail?, values?, at } for this website.',
 			);
 		const s = await service.site(ctx);
-		const { productId, actor: who, action, target, label, detail, at } = checked.value;
+		const { productId, actor: who, action, target, label, detail, values, at } = checked.value;
 		await s.store.copies.add({
 			productId,
 			actor: who,
@@ -1110,6 +1107,7 @@ export const createManage = (product, service, flows) => {
 			target,
 			...(label ? { label } : {}),
 			...(detail ? { detail } : {}),
+			...(values && Object.keys(values).length > 0 ? { values } : {}),
 			at: new Date(at),
 		});
 		return new Response(JSON.stringify({ received: true }), { status: 201, headers: { 'content-type': 'application/json' } });

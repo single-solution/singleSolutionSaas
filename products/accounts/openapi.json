@@ -400,6 +400,18 @@
 										"type": "string",
 										"maxLength": 2000
 									},
+									"values": {
+										"type": "object",
+										"maxProperties": 20,
+										"additionalProperties": {
+											"type": [
+												"string",
+												"number",
+												"boolean"
+											]
+										},
+										"description": "What changed as codes, numbers and yes/no (at most 20; text at most 200 characters), for your texts to put into words."
+									},
 									"at": {
 										"type": "string",
 										"format": "date-time"
@@ -10952,6 +10964,7 @@
 					"target",
 					"label",
 					"detail",
+					"values",
 					"at"
 				],
 				"additionalProperties": false,
@@ -11018,6 +11031,18 @@
 						],
 						"maxLength": 2000
 					},
+					"values": {
+						"type": "object",
+						"maxProperties": 20,
+						"additionalProperties": {
+							"type": [
+								"string",
+								"number",
+								"boolean"
+							]
+						},
+						"description": "What changed as codes, numbers and yes/no, which the product’s texts put into words ({} when none)."
+					},
 					"at": {
 						"type": "string",
 						"format": "date-time"
@@ -11061,6 +11086,7 @@
 					"target",
 					"label",
 					"detail",
+					"values",
 					"at"
 				],
 				"additionalProperties": false,
@@ -11091,6 +11117,18 @@
 							"string",
 							"null"
 						]
+					},
+					"values": {
+						"type": "object",
+						"maxProperties": 20,
+						"additionalProperties": {
+							"type": [
+								"string",
+								"number",
+								"boolean"
+							]
+						},
+						"description": "What changed as codes, numbers and yes/no, which the product's texts put into words ({} when none)."
 					},
 					"at": {
 						"type": "string",
@@ -11533,8 +11571,23 @@
 						"description": "The session id."
 					},
 					"device": {
-						"type": "string",
-						"description": "Browser and system, for example Safari on iOS."
+						"type": "object",
+						"required": [
+							"browser",
+							"system"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"browser": {
+								"type": "string",
+								"description": "The browser by its name, for example Safari ('' when unknown)."
+							},
+							"system": {
+								"type": "string",
+								"description": "The system by its name, for example iOS ('' when unknown)."
+							}
+						},
+						"description": "Browser and system by their own names; your screens put them into words (the widget: “Safari on iOS”)."
 					},
 					"method": {
 						"type": "string",

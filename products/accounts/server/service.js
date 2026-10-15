@@ -16,7 +16,7 @@ import { problem, verifyIdentityToken } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { normalisePhone, websiteCallingCode } from '@ss/contracts/phone';
 import { constantTimeEqual, randomToken, sha256Hex } from '@ss/protocol';
-import { detailOf, labelOf } from '../core/activity.js';
+import { labelOf, valuesOf } from '../core/activity.js';
 import { ROLE_TEMPLATES, SIGN_UP_TEMPLATE, remembered, sessionEnd, signInRefusal } from '../core/roles.js';
 import { checkAddresses, selfView } from '../core/profile.js';
 import { OPEN_SIGN_UP, deviceIdOf, deviceOf } from '../core/rules.js';
@@ -220,7 +220,7 @@ export const createService = (product) => {
 	/**
 	 * Start a session and answer the sign-in.
 	 * @param {Site} s @param {UserRecord} user
-	 * @param {{ method: string, remember: boolean, device: string }} how
+	 * @param {{ method: string, remember: boolean, device: { browser: string, system: string } }} how
 	 * @param {Record<string, unknown>} [extra] more members of the answer (recovery codes)
 	 */
 	const issue = async (s, user, { method, remember: asked, device }, extra = {}) => {
@@ -249,7 +249,7 @@ export const createService = (product) => {
 				lockedUntil: null,
 				lockLevel: 0,
 			})) ?? user;
-		await logSignIn(s, fresh, 'user.signed_in', `Method: ${method}`);
+		await logSignIn(s, fresh, 'user.signed_in', { method });
 		return {
 			status: /** @type {const} */ ('signed_in'),
 			...(await signInFor(s, fresh, session.id)),
@@ -264,7 +264,7 @@ export const createService = (product) => {
 	/**
 	 * After the first step of any method: blocked, waiting for approval, terms, then two-step; else the session.
 	 * @param {Site} s @param {UserRecord} user
-	 * @param {{ method: string, remember: boolean, device: string, acceptTerms?: unknown }} how
+	 * @param {{ method: string, remember: boolean, device: { browser: string, system: string }, acceptTerms?: unknown }} how
 	 */
 	const finish = async (s, user, how) => {
 		if (user.blocked) throw problem('blocked', 'This account is blocked.');
@@ -330,10 +330,12 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * A sign-in event in the activity log (A10), when the user's role logs them: who, what, and the visitor's address.
-	 * @param {Site} s @param {UserRecord} user @param {string} action @param {string} [more]
+	 * A sign-in event in the activity log (A10), when the user's role logs them: who, what, and the visitor's address
+	 * (`ip`) with the event's own values (A8).
+	 * @param {Site} s @param {UserRecord} user @param {string} action
+	 * @param {Record<string, string | number>} [more]
 	 */
-	const logSignIn = async (s, user, action, more = '') => {
+	const logSignIn = async (s, user, action, more = {}) => {
 		if (!s.on.includes('roles') || !s.after) return;
 		const role = await roleOf(s, user);
 		if (!role.logSignIns) return;
@@ -344,7 +346,7 @@ export const createService = (product) => {
 				action,
 				target: user.id,
 				label: labelOf(user.name || user.email || user.phone),
-				detail: detailOf([`IP: ${s.ip}`, more]),
+				values: valuesOf({ ip: s.ip, ...more }),
 			},
 		);
 	};
@@ -587,7 +589,7 @@ export const createService = (product) => {
 	 * right after later requests for this website.
 	 * @param {Site} s @param {UserRecord} user @param {import('@ss/app-kit').Actor} actor
 	 * @param {any} [ctx] the request (for the activity log)
-	 * @param {string} [why] the activity log's detail
+	 * @param {Record<string, string>} [why] the activity log's values: `by` (staff, request or due) and the staff's reason
 	 */
 	const erase = async (s, user, actor, ctx, why) => {
 		const pending = await fanOutDelete(s, user, await connectedProducts(s.websiteId));
@@ -601,7 +603,7 @@ export const createService = (product) => {
 					action: 'user.deleted',
 					target: user.id,
 					label: labelOf(user.name),
-					detail: detailOf([why, pending.length > 0 && `Not confirmed yet by: ${pending.join(', ')}`]),
+					values: valuesOf({ ...why, notConfirmedBy: pending.join(',') }),
 				},
 			);
 		return { pending };

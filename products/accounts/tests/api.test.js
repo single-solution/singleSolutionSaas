@@ -334,7 +334,7 @@ describe('sessions', () => {
 		const b = await signIn('ana@example.com', 'brand new password');
 		const list = await env.visitor('GET', '/v1/me/sessions', undefined, a.json.signIn);
 		expect(list.json.items.length).toBeGreaterThanOrEqual(2);
-		expect(list.json.items.find((/** @type {any} */ x) => x.current).device).toBe('Safari on macOS');
+		expect(list.json.items.find((/** @type {any} */ x) => x.current).device).toEqual({ browser: 'Safari', system: 'macOS' });
 		const other = list.json.items.find((/** @type {any} */ x) => !x.current);
 		expect((await env.visitor('DELETE', `/v1/me/sessions/${other.id}`, undefined, a.json.signIn)).status).toBe(204);
 		expect(code(await env.visitor('DELETE', `/v1/me/sessions/${other.id}`, undefined, a.json.signIn))).toBe('not_found');

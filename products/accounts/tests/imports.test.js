@@ -279,7 +279,7 @@ describe('import routes', () => {
 			[requests[1]?.id, 'expired'],
 		]);
 		const copies = (await env.serverCall('GET', '/v1/activity-copies')).json.items;
-		expect(copies).toEqual([{ ...copy, at: '2024-05-02T10:00:00.000Z' }]);
+		expect(copies).toEqual([{ ...copy, values: {}, at: '2024-05-02T10:00:00.000Z' }]);
 		// one activity entry per call, in the merchant database only
 		const logged = (await env.serverCall('GET', '/v1/activity?action=import.users')).json.items;
 		expect(logged[0]).toMatchObject({ action: 'import.users', detail: '4 inserted, 0 updated, 0 failed' });

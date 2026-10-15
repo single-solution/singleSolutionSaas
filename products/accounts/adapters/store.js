@@ -43,7 +43,7 @@ import { MAX_ROLES, OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core
  *   period of parallel renewals)
  * @property {string | null} [sealedRefresh] the current refresh secret, sealed (answered again within the grace period)
  * @property {string} method how the user signed in
- * @property {string} device
+ * @property {{ browser: string, system: string }} device the browser and the system by their own names ('' when unknown, A8)
  * @property {boolean} remember
  * @property {Date} expiresAt
  * @property {Date} lastUsedAt
@@ -108,6 +108,7 @@ import { MAX_ROLES, OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core
  * @property {string} target
  * @property {string} [label] what the target is called
  * @property {string} [detail] plain text
+ * @property {Record<string, string | number | boolean>} [values] what changed as codes, numbers and yes/no (A8)
  * @property {Date} at
  */
 
@@ -831,7 +832,18 @@ export const createStore = (data, { now }) => {
 				return as(
 					await copies
 						.find(page, {
-							projection: { _id: 0, id: 1, productId: 1, actor: 1, action: 1, target: 1, label: 1, detail: 1, at: 1 },
+							projection: {
+								_id: 0,
+								id: 1,
+								productId: 1,
+								actor: 1,
+								action: 1,
+								target: 1,
+								label: 1,
+								detail: 1,
+								values: 1,
+								at: 1,
+							},
 						})
 						.sort({ at: -1, id: -1 })
 						.limit(Math.min(limit, MAX_LIST + 1))

@@ -130,12 +130,13 @@ describe('the acting user and the labels of Accounts’ own activity log (K2, K9
 		expect((await fromServer('POST', `/v1/users/${quinn.id}/approve`)).json.status).toBe('active');
 		expect((await fromServer('POST', `/v1/users/${dee.id}/decline`, { headers: ZOE })).status).toBe(204);
 		const [approvedQuinn, approvedPia] = await activity('action=user.approved');
-		expect(approvedPia).toMatchObject({ actor: ZOE_ACTOR, target: pia.id, label: 'Pia Pending', detail: 'Role: customer' });
+		expect(approvedPia).toMatchObject({ actor: ZOE_ACTOR, target: pia.id, label: 'Pia Pending', values: { role: 'customer' } });
 		expect(approvedQuinn).toMatchObject({ actor: SERVER_ACTOR, label: 'Quinn' });
 		expect((await activity('action=user.declined'))[0]).toMatchObject({
 			actor: ZOE_ACTOR,
 			label: 'Dee Declined',
-			detail: 'The sign-up was removed',
+			detail: null,
+			values: {},
 		});
 
 		// user changes: role, name, notes (never their text), block (reason and devices signed out), unblock
@@ -149,17 +150,19 @@ describe('the acting user and the labels of Accounts’ own activity log (K2, K9
 		expect((await activity('action=user.role_changed'))[0]).toMatchObject({
 			actor: ZOE_ACTOR,
 			label: 'Pia Pending',
-			detail: 'Role: customer → support_staff',
+			detail: null,
+			values: { from: 'customer', to: 'support_staff' },
 		});
-		expect((await activity('action=user.name_changed'))[0]).toMatchObject({ label: 'Quinn Q', detail: 'Was: Quinn' });
+		expect((await activity('action=user.name_changed'))[0]).toMatchObject({ label: 'Quinn Q', values: { was: 'Quinn' } });
 		expect((await activity('action=user.notes_changed'))[0]).toMatchObject({
 			actor: SERVER_ACTOR,
 			label: 'Quinn Q',
 			detail: null,
+			values: {},
 		});
 		expect((await activity('action=user.blocked'))[0]).toMatchObject({
 			actor: SERVER_ACTOR,
-			detail: 'Reason: Chargebacks; 1 device signed out',
+			values: { reason: 'Chargebacks', signedOut: 1 },
 		});
 		expect((await activity('action=user.unblocked'))[0]).toMatchObject({ actor: ZOE_ACTOR, label: 'Quinn Q', detail: null });
 		expect(JSON.stringify(await activity(''))).not.toContain('secret note');
@@ -171,7 +174,7 @@ describe('the acting user and the labels of Accounts’ own activity log (K2, K9
 		expect((await activity('action=user.signed_out'))[0]).toMatchObject({
 			actor: { kind: 'staff', id: 'usr_staff', name: 'Sam Staff' },
 			label: 'Quinn Q',
-			detail: '1 device signed out',
+			values: { signedOut: 1 },
 		});
 
 		// roles and the merchant's own permissions
@@ -183,12 +186,12 @@ describe('the acting user and the labels of Accounts’ own activity log (K2, K9
 		expect(created).toMatchObject({
 			target: 'editor',
 			label: 'Editor',
-			detail: 'New role; 1 permission; two-step optional; rank 600',
+			values: { change: 'new', permissions: 1, twoStep: 'optional', rank: 600, signIn: 'on', signUp: false },
 		});
-		expect(changed).toMatchObject({ label: 'Editor', detail: 'Changed; 0 permissions; two-step required; rank 600' });
+		expect(changed).toMatchObject({ label: 'Editor', values: { change: 'changed', permissions: 0, twoStep: 'required' } });
 		expect((await activity('action=role.deleted'))[0]).toMatchObject({
 			label: 'Editor',
-			detail: '1 user moved to the role customer',
+			values: { users: 1, to: 'customer' },
 		});
 		await fromServer('PUT', '/v1/roles/permissions', {
 			body: { permissions: [{ key: 'vip.view', name: 'VIP' }] },
@@ -196,8 +199,8 @@ describe('the acting user and the labels of Accounts’ own activity log (K2, K9
 		});
 		await fromServer('PUT', '/v1/roles/permissions', { body: { permissions: [] } });
 		const [none, own] = await activity('action=permissions.saved');
-		expect(own).toMatchObject({ actor: ZOE_ACTOR, label: 'Own permissions', detail: 'site:vip.view' });
-		expect(none).toMatchObject({ actor: SERVER_ACTOR, detail: 'No own permissions' });
+		expect(own).toMatchObject({ actor: ZOE_ACTOR, target: 'site', values: { count: 1, keys: 'vip.view' } });
+		expect(none).toMatchObject({ actor: SERVER_ACTOR, target: 'site', values: { count: 0 } });
 
 		// invites by email and by phone (the address itself never goes into the log)
 		await env.setting('approval', 'invitePageUrl', `${ORIGIN}/join`);
@@ -207,9 +210,9 @@ describe('the acting user and the labels of Accounts’ own activity log (K2, K9
 		expect(byEmail).toMatchObject({
 			actor: ZOE_ACTOR,
 			label: 'Ivy',
-			detail: 'Role: customer; sent by email; valid for 7 days',
+			values: { role: 'customer', delivery: 'email', days: 7 },
 		});
-		expect(byPhone).toMatchObject({ label: 'Pat', detail: 'Role: customer; sent by SMS; valid for 7 days' });
+		expect(byPhone).toMatchObject({ label: 'Pat', values: { role: 'customer', delivery: 'sms', days: 7 } });
 		expect(JSON.stringify([byPhone, byEmail])).not.toMatch(/ivy@example|5550009999/);
 
 		// deletion requests: rejected, then approved and erased
@@ -218,7 +221,7 @@ describe('the acting user and the labels of Accounts’ own activity log (K2, K9
 		await fromServer('POST', `/v1/users/${pia.id}/deletion/reject`, { headers: ZOE });
 		expect((await activity('action=user.deletion_rejected'))[0]).toMatchObject({
 			label: 'Pia Pending',
-			detail: 'The account stays',
+			values: {},
 		});
 		await env.visitor('POST', '/v1/me/delete', {}, asked.json.signIn);
 		const erased = await fromServer('POST', `/v1/users/${pia.id}/deletion/approve`, { headers: ZOE });
@@ -227,7 +230,7 @@ describe('the acting user and the labels of Accounts’ own activity log (K2, K9
 			actor: ZOE_ACTOR,
 			target: pia.id,
 			label: 'Pia Pending',
-			detail: 'Deletion request approved',
+			values: { by: 'request' },
 		});
 		// the kit's activity filters work on the labels and the acting user
 		expect((await activity('actor=usr_staff1&q=pia')).every((/** @type {any} */ e) => e.actor.id === 'usr_staff1')).toBe(true);
@@ -317,7 +320,7 @@ describe('activity-log copies (K9)', () => {
 				action: 'order.moved',
 				target: 'ord_1',
 				label: 'SH-2026-0043',
-				detail: 'Status: paid → packed',
+				values: { from: 'paid', to: 'packed' },
 			}),
 			copy('2026-10-01T14:59:00Z', {
 				productId: 'ecommerce',
@@ -357,7 +360,8 @@ describe('activity-log copies (K9)', () => {
 			action: 'order.moved',
 			target: 'ord_1',
 			label: 'SH-2026-0043',
-			detail: 'Status: paid → packed',
+			detail: null,
+			values: { from: 'paid', to: 'packed' },
 			at: '2026-09-30T15:30:00.000Z',
 		});
 		expect(listed[1]).toMatchObject({ label: 'SH-2026-0043', detail: null });
@@ -374,7 +378,7 @@ describe('activity-log copies (K9)', () => {
 		expect((await targets('action=order.moved,order.refunded')).length).toBe(2);
 		expect((await targets('target=ord_1&productId=ecommerce')).length).toBe(2);
 		expect((await targets('q=sh-2026')).length).toBe(2);
-		expect((await targets('q=PAID')).length).toBe(1);
+		expect((await targets('q=REPLIES')).length).toBe(1);
 		expect((await targets('q=sam')).length).toBe(2);
 		expect((await targets('q=cnv_')).length).toBe(1);
 		expect(await targets('productId=growth')).toEqual([]);

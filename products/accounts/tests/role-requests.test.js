@@ -183,7 +183,7 @@ describe('staff: a new link or a decline for an invited request', () => {
 		expect((await lookup(deeLink)).json).toEqual({ status: 'invalid' });
 		expect(code(await server('POST', `/v1/role-requests/${dee.json.id}/decline`))).toBe('conflict');
 		const logged = await server('GET', '/v1/activity?action=role_request.declined');
-		expect(logged.json.items[0].detail).toContain('the user the invite made was removed');
+		expect(logged.json.items[0].values.done).toContain('user_removed');
 		// open again and invite: a new user, a new link
 		await server('POST', `/v1/role-requests/${dee.json.id}/reopen`);
 		const deeAgain = await server('POST', `/v1/role-requests/${dee.json.id}/invite`);

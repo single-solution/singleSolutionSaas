@@ -103,7 +103,7 @@ describe('A4: staff and customer management', () => {
 				.json.status,
 		).toBe('signed_in');
 		const log = (await server('GET', '/v1/activity?action=user.password_changed')).json.items[0];
-		expect(log).toMatchObject({ label: 'Olga Owner', detail: '1 device signed out' });
+		expect(log).toMatchObject({ label: 'Olga Owner', values: { signedOut: 1 } });
 		const removed = await server('PATCH', `/v1/users/${people.ada.id}`, { email: null, addresses: [] });
 		expect(removed.json).toMatchObject({ email: null, addresses: [] });
 	});
@@ -190,7 +190,7 @@ describe('A4: staff and customer management', () => {
 		expect(deleted.json).toEqual({ deleted: true, pending: [] });
 		expect(code(await server('GET', `/v1/users/${gone.id}`))).toBe('not_found');
 		const entry = (await server('GET', '/v1/activity?action=user.deleted')).json.items[0];
-		expect(entry).toMatchObject({ label: 'Gus Gone', detail: 'Reason: Asked by phone' });
+		expect(entry).toMatchObject({ label: 'Gus Gone', values: { by: 'staff', reason: 'Asked by phone' } });
 	});
 
 	it('removes someone from Accounts only: no other product erases anything, so their data stays', async () => {
@@ -215,7 +215,7 @@ describe('A4: staff and customer management', () => {
 		const entry = (await server('GET', '/v1/activity?action=user.removed')).json.items[0];
 		expect(entry).toMatchObject({
 			label: 'Lee Leaving',
-			detail: 'Reason: Left the team; From Accounts only: other products keep their data',
+			values: { scope: 'accounts', reason: 'Left the team' },
 		});
 		// the default still erases everywhere
 		const gone = await create({ name: 'Gil Gone', email: 'gil@example.com' });

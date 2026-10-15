@@ -1212,13 +1212,20 @@ describe('My account', () => {
 		let items = [
 			{
 				id: 'ses_1',
-				device: 'Firefox on Linux',
+				device: { browser: 'Firefox', system: 'Linux' },
 				method: 'email_password',
 				signedInAt: at(0),
 				lastUsedAt: at(60_000),
 				current: true,
 			},
-			{ id: 'ses_2', device: '', method: 'google', signedInAt: at(0), lastUsedAt: null, current: false },
+			{
+				id: 'ses_2',
+				device: { browser: '', system: '' },
+				method: 'google',
+				signedInAt: at(0),
+				lastUsedAt: null,
+				current: false,
+			},
 		];
 		const { host, server, widget } = await open({
 			'GET /v1/me/sessions': () => answer(200, { items }),
@@ -1306,7 +1313,7 @@ describe('My account', () => {
 					items: [
 						{
 							id: 'ses_1',
-							device: 'Firefox on Linux',
+							device: { browser: 'Firefox', system: 'Linux' },
 							method: 'email_password',
 							signedInAt: at(0),
 							lastUsedAt: at(60_000),
@@ -2284,7 +2291,15 @@ describe('admin widgets', () => {
 						return answer(200, { items: [], nextCursor: null, hasMore: false });
 					return url.searchParams.get('cursor')
 						? answer(200, {
-								items: [{ ...entry, id: 'act_2', label: null, detail: null }],
+								items: [
+									{
+										...entry,
+										id: 'act_2',
+										label: null,
+										detail: null,
+										values: { from: 'packed', to: 'shipped', notify: false },
+									},
+								],
 								nextCursor: null,
 								hasMore: false,
 							})
@@ -2307,6 +2322,10 @@ describe('admin widgets', () => {
 		await click(buttonIn(root, strings['activity.more']));
 		expect(asked.at(-1)?.searchParams.get('cursor')).toBe('c1');
 		expect(root.querySelectorAll('li')[1]?.textContent).toContain('ord_1 · order.status_changed');
+		// A8: values shown through the texts
+		expect(root.querySelectorAll('li')[1]?.textContent).toContain(
+			`from: packed · to: shipped · notify: ${strings['activity.no']}`,
+		);
 		await click(/** @type {HTMLButtonElement} */ (root.querySelectorAll('.chip')[2]));
 		expect(asked.at(-1)?.searchParams.get('productId')).toBe('chat');
 		expect(statusIn(root)).toBe(strings['activity.empty']);

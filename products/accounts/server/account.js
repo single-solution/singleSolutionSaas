@@ -229,7 +229,7 @@ export const createAccount = (product, service, flows) => {
 			'twoStep.recovery': hashes.map((hash) => ({ hash, format: 'v1' })),
 			'twoStep.lastStep': step,
 		});
-		await service.logSignIn(s, user, 'user.recovery_codes_replaced', `${codes.length} new recovery codes`);
+		await service.logSignIn(s, user, 'user.recovery_codes_replaced', { codes: codes.length });
 		return { recoveryCodes: codes };
 	};
 

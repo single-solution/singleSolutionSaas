@@ -323,14 +323,17 @@ const SYSTEMS = /** @type {const} */ ([
 ]);
 
 /**
- * A coarse device name for the device list (never the raw user agent).
+ * A coarse device for the device list (never the raw user agent): the browser and the system by their own names, ''
+ * when unknown; the widgets put them into words with their texts (A8).
  * @param {unknown} userAgent
+ * @returns {{ browser: string, system: string }}
  */
 export const deviceOf = (userAgent) => {
 	const ua = typeof userAgent === 'string' ? userAgent.slice(0, 512) : '';
-	const browser = BROWSERS.find(([, pattern]) => pattern.test(ua))?.[0] ?? 'Unknown browser';
-	const os = SYSTEMS.find(([, pattern]) => pattern.test(ua))?.[0] ?? 'Unknown system';
-	return `${browser} on ${os}`;
+	return {
+		browser: BROWSERS.find(([, pattern]) => pattern.test(ua))?.[0] ?? '',
+		system: SYSTEMS.find(([, pattern]) => pattern.test(ua))?.[0] ?? '',
+	};
 };
 
 /**

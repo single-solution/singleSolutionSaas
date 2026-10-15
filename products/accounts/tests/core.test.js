@@ -225,8 +225,9 @@ describe('roles and rules', () => {
 		expect(returnAddress('not a url', 'shop.example.com')).toBeNull();
 		expect(returnAddress(5, 'shop.example.com')).toBeNull();
 		expect(returnAddress('http://shop.localhost:5173/a#x', 'shop.example.com')).toBe('http://shop.localhost:5173/a');
-		expect(deviceOf('Mozilla/5.0 (Linux; Android 14) Chrome/120')).toBe('Chrome on Android');
-		expect(deviceOf(undefined)).toBe('Unknown browser on Unknown system');
+		// A8: the browser and the system by their own names ('' when unknown), never a sentence
+		expect(deviceOf('Mozilla/5.0 (Linux; Android 14) Chrome/120')).toEqual({ browser: 'Chrome', system: 'Android' });
+		expect(deviceOf(undefined)).toEqual({ browser: '', system: '' });
 		expect(deviceIdOf('short')).toBeNull();
 		expect(parseSecret('cod_abc.short')).toBeNull();
 		expect(parseSecret(5)).toBeNull();

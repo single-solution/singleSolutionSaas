@@ -403,7 +403,18 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 					const items = Array.isArray(answer.data?.items) ? answer.data.items : [];
 					list.replaceChildren(
 						...items.map((device) => {
-							const item = element(doc, 'li', {}, device.device || t('account.unknownDevice'));
+							const { browser = '', system = '' } = device.device ?? {};
+							const item = element(
+								doc,
+								'li',
+								{},
+								browser || system
+									? formatText(t('account.deviceName'), {
+											browser: browser || t('account.unknownBrowser'),
+											system: system || t('account.unknownSystem'),
+										})
+									: t('account.unknownDevice'),
+							);
 							item.append(
 								element(
 									doc,

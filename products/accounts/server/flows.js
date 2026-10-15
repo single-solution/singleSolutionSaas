@@ -207,7 +207,7 @@ export const createFlows = (product, service) => {
 
 	/**
 	 * The answer to a sign-up waiting for approval, else the sign-in.
-	 * @param {Site} s @param {UserRecord} user @param {{ method: string, remember: boolean, device: string, acceptTerms?: unknown }} how
+	 * @param {Site} s @param {UserRecord} user @param {{ method: string, remember: boolean, device: { browser: string, system: string }, acceptTerms?: unknown }} how
 	 */
 	const afterSignUp = async (s, user, how) => (user.status === 'pending' ? { status: 'pending' } : service.finish(s, user, how));
 
@@ -303,7 +303,7 @@ export const createFlows = (product, service) => {
 		if (!passwordOk && !staffCode) {
 			const failures = await s.store.users.failedLogin(user.id, rules.forgetMs);
 			await s.store.users.update(user.id, { ...lockAfter({ ...rules, failures, now: now() }) });
-			await service.logSignIn(s, user, 'user.sign_in_failed', 'Wrong password');
+			await service.logSignIn(s, user, 'user.sign_in_failed', { reason: 'wrong_password' });
 			throw failed();
 		}
 		if (tries) await s.store.counters.clear(tries, NETWORK_WINDOW_MS);
@@ -551,7 +551,7 @@ export const createFlows = (product, service) => {
 			phoneVerified: true,
 		});
 		await s.store.sessions.revokeAll(user.id);
-		await service.logSignIn(s, user, 'user.password_reset', 'With a code by phone');
+		await service.logSignIn(s, user, 'user.password_reset', { by: 'phone_code' });
 		return undefined;
 	};
 
@@ -617,7 +617,7 @@ export const createFlows = (product, service) => {
 			emailVerified: true,
 		});
 		await s.store.sessions.revokeAll(user.id);
-		await service.logSignIn(s, user, 'user.password_reset', 'With an email link');
+		await service.logSignIn(s, user, 'user.password_reset', { by: 'email_link' });
 		return undefined;
 	};
 
@@ -793,7 +793,7 @@ export const createFlows = (product, service) => {
 					{ emailVerified: Boolean(email), providers: { [provider]: identity.subject } },
 					{
 						remember: false,
-						device: '',
+						device: { browser: '', system: '' },
 						deviceId: pending.data.deviceId || null,
 						network: String(ctx.clientIp || 'unknown'),
 					},
@@ -857,13 +857,13 @@ export const createFlows = (product, service) => {
 		const how = {
 			method: String(record.data.method),
 			remember: record.data.remember === true,
-			device: String(record.data.device),
+			device: /** @type {{ browser: string, system: string }} */ (record.data.device),
 		};
 		/** @param {{ counted: boolean }} [options] `counted`: a guess at the user's secret (not while setting it up) */
 		const wrong = async ({ counted } = { counted: true }) => {
 			if ((await s.store.codes.attempt(record.id)) >= CODE_ATTEMPTS) await s.store.codes.consume(record.id);
 			if (counted) await countFailure(s, user, how.method);
-			await service.logSignIn(s, user, 'user.sign_in_failed', 'Wrong two-step code');
+			await service.logSignIn(s, user, 'user.sign_in_failed', { reason: 'wrong_two_step_code' });
 			return problem('code_invalid', 'The code is not valid.');
 		};
 		if (typeof record.data.setup === 'string') {
@@ -891,7 +891,7 @@ export const createFlows = (product, service) => {
 			if (index < 0) throw await wrong();
 			// each recovery code works once, an imported one too (A8)
 			await s.store.users.update(user.id, { 'twoStep.recovery': twoStepState.recovery.filter((_, i) => i !== index) });
-			await service.logSignIn(s, user, 'user.recovery_code_used', `${twoStepState.recovery.length - 1} left`);
+			await service.logSignIn(s, user, 'user.recovery_code_used', { left: twoStepState.recovery.length - 1 });
 		} else {
 			const secret = product.sealer.open(twoStepState.sealed, service.totpAad(s.websiteId, user.id));
 			const checked = secret ? verifyTotp(secret, body.code, { now: now(), lastStep: twoStepState.lastStep }) : { ok: false };

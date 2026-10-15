@@ -34,7 +34,7 @@ describe('a City on the member profile (custom fields)', () => {
 		const cookie = await env.adminSession();
 		const fields = `/v1/dashboard/websites/${env.websiteId}/fields`;
 		await env.dashboard(cookie, 'PUT', `${fields}/city`, { label: 'City', type: 'text' });
-		const city = { key: 'city', label: 'City', type: 'text', options: [], required: false };
+		const city = { key: 'city', label: 'City', type: 'text', options: [], required: false, visibility: 'edit', help: '' };
 		// the widgets get it: sign-up, My account and the Users widget
 		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.customFields).toEqual([city]);
 
@@ -61,7 +61,7 @@ describe('a City on the member profile (custom fields)', () => {
 		const edited = await env.admin(ticket, 'PATCH', `/v1/admin/users/${sam.json.id}`, { custom: { city: 'Paris' } });
 		expect(edited.json.custom).toEqual({ city: 'Paris' });
 		const logged = (await server('GET', '/v1/activity?action=user.custom_changed')).json.items[0];
-		expect(logged).toMatchObject({ target: sam.json.id, detail: 'Fields: city' });
+		expect(logged).toMatchObject({ target: sam.json.id, values: { fields: 'city' } });
 		expect(JSON.stringify(logged)).not.toContain('Paris');
 		// staff add a user with it
 		const kai = await server('POST', '/v1/users', { name: 'Kai Ito', phone: '07700 900601', custom: { city: 'Tokyo' } });
