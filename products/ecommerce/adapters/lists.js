@@ -3,7 +3,7 @@
  * records, which a settings schema cannot hold — the order flow (statuses and allowed moves), delivery zones, couriers,
  * tax rules, condition grades, item types (dynamic model §1), booking hours and role prices (E19). They are kept per website in the kit's settings collection (so a
  * removed website's lists go with its settings), each checked by its feature's rules, edited in the dashboard
- * (Settings, `/v1/dashboard/websites/:websiteId/lists/:list`) and recorded in Recent changes. Lists have no global
+ * (Settings, `/v1/dashboard/websites/:websiteId/lists/:list`) and recorded in Recent changes and the activity log. Lists have no global
  * defaults; an unsaved list reads as its code default. A list may also be checked against the merchant's data before
  * it is saved (`guards`: the order flow keeps the key and kind of every status that has orders; item types keep what
  * products, categories and units in stock rely on).

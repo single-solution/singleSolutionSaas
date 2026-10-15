@@ -172,6 +172,14 @@ export const createRoutes = (product) => {
 					what: 'settings',
 					detail: `${LISTS[name].title}: changed`,
 				});
+				// an activity-log entry by who saved it and the settings.changed event, as the kit's own saves (parity SB #12)
+				await product.settingsChanged(ctx, {
+					what: 'list',
+					key: name,
+					who: who(ctx),
+					label: LISTS[name].title,
+					detail: 'changed',
+				});
 				return { value: saved.value };
 			},
 		}),

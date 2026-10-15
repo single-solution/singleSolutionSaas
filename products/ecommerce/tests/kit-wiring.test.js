@@ -161,6 +161,18 @@ describe('K1: list settings for the merchant’s server', () => {
 			`/v1/dashboard/websites/${shop.websiteId}/lists/couriers`,
 		);
 		expect(dashboard.json.value).toEqual(couriers);
+		// a save on the dashboard is an activity entry too, by who saved it (parity SB #12)
+		const edited = [{ ...couriers[0], name: 'Swift Parcels' }];
+		const put = await shop.dashboard(
+			await shop.adminSession(),
+			'PUT',
+			`/v1/dashboard/websites/${shop.websiteId}/lists/couriers`,
+			{ value: edited },
+		);
+		expect(put.status).toBe(200);
+		const [entry] = await activityOf('list.couriers');
+		expect(entry).toMatchObject({ action: 'settings.changed', target: 'list.couriers', label: 'Couriers', detail: 'changed' });
+		expect(entry.actor.kind).not.toBe('user');
 		const changes = await shop.product.recentChanges.list(shop.websiteId);
 		expect(changes.find((change) => change.detail === 'Couriers: changed')).toMatchObject({
 			who: { kind: 'user', id: 'usr_ali0001', name: 'Ali Khān', role: 'Store manager' },
