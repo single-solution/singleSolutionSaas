@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /* global document, window */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import manifest from '../manifest.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import {
 	DEVICE_STORAGE_KEY,
@@ -66,13 +67,19 @@ let looks = /** @type {{ format: Record<string, unknown>, timeZone: string }} */
 /** Dates as the widgets show them with the default Format (this browser's language and time zone). */
 const when = datesOf(PLAIN_LOOKS, window);
 
-/** @param {string[]} features @param {Settings} [settings] */
+/**
+ * The widget config as the kit answers it: the features on and the keys of the widgets whose feature is on.
+ * @param {string[]} features @param {Settings} [settings]
+ */
 const configOf = (features, settings = {}) => ({
 	texts: { ...strings },
 	theme: { mode: /** @type {const} */ ('light') },
 	customCss: '',
 	...looks,
 	features,
+	widgets: manifest.widgets
+		.filter((widget) => [widget.feature].flat().some((feature) => features.includes(feature)))
+		.map((widget) => widget.key),
 	settings: {
 		signUp: { mode: 'open', requiredFields: [] },
 		customFields: [],
@@ -230,6 +237,11 @@ const statusIn = (scope) => /** @type {HTMLElement} */ (scope.querySelector('[ro
 const submit = async (node) => {
 	/** @type {HTMLFormElement} */ (node.closest('form')).dispatchEvent(new window.Event('submit', { cancelable: true }));
 	await flush();
+};
+/** Type into a field (its input event fires). @param {HTMLInputElement} input @param {string} value */
+const type = (input, value) => {
+	input.value = value;
+	input.dispatchEvent(new window.Event('input', { bubbles: true }));
 };
 /** @param {HTMLButtonElement} node */
 const click = async (node) => {
@@ -1553,13 +1565,13 @@ describe('admin widgets', () => {
 			strings['users.deletionApprove'],
 			strings['users.delete'],
 		]);
-		expect(menuOf().querySelector('.menu button:last-child')?.className).toContain('danger-text');
+		expect(menuOf().querySelector('.menu button:last-child')?.className).toBe('danger');
 		await pick(strings['users.signInCode']);
 		const dialog = () => /** @type {HTMLElement} */ (root.querySelector('.dialog'));
 		expect(dialog().querySelector('.code')?.textContent).toBe('123456');
 		expect(dialog().textContent).toContain('Read this code to Ana.');
 		await click(buttonIn(dialog(), strings['users.copy']));
-		await click(buttonIn(dialog(), '×'));
+		await click(buttonIn(dialog(), strings['users.close']));
 		expect(root.querySelector('.overlay')).toBeNull();
 		await pick(strings['users.setupLink']);
 		expect(statusIn(detail)).toBe(strings['error.forbidden']);
@@ -1636,10 +1648,11 @@ describe('admin widgets', () => {
 		expect(server.last('PATCH /v1/admin/users/usr_1')?.body).toEqual({ blocked: true, blockedReason: 'abuse' });
 		await pick(strings['users.delete']);
 		fieldIn(dialog(), strings['users.deleteReason']).value = 'Asked by phone';
-		fieldIn(dialog(), strings['users.typeToConfirm']).value = 'Anna';
+		type(fieldIn(dialog(), strings['users.typeToConfirm']), 'Anna');
+		expect(buttonIn(dialog(), strings['users.deleteSubmit']).disabled).toBe(true);
 		await submit(buttonIn(dialog(), strings['users.deleteSubmit']));
 		expect(server.last('DELETE /v1/admin/users/usr_1')).toBeUndefined();
-		fieldIn(dialog(), strings['users.typeToConfirm']).value = 'Ana';
+		type(fieldIn(dialog(), strings['users.typeToConfirm']), 'Ana');
 		// removed from Accounts only: the other products keep the person's data
 		checkIn(dialog(), strings['users.deleteKeep']).checked = true;
 		await submit(buttonIn(dialog(), strings['users.deleteSubmit']));
@@ -1755,7 +1768,7 @@ describe('admin widgets', () => {
 		const root = shadow(host);
 		const dialog = () => /** @type {HTMLElement} */ (root.querySelector('.dialog'));
 		// chips stay without counts when the counts cannot be read
-		expect([...root.querySelectorAll('.box > .chips .badge')].every((badge) => badge.textContent === '')).toBe(true);
+		expect([...root.querySelectorAll('.box > .chips .count')].every((count) => count.textContent === '')).toBe(true);
 
 		// Add user
 		await click(buttonIn(root, strings['users.add']));
@@ -1825,7 +1838,7 @@ describe('admin widgets', () => {
 		};
 		await rowMenu(0, strings['requests.invite']);
 		expect(dialog().querySelector('.code')?.textContent).toBe('https://shop.example.com/?ss_setup=nia');
-		await click(buttonIn(dialog(), '×'));
+		await click(buttonIn(dialog(), strings['users.close']));
 		await rowMenu(0, strings['requests.decline']);
 		expect(statusIn(part)).toBe(strings['error.conflict']);
 		await rowMenu(0, strings['requests.invite']);
@@ -1889,7 +1902,7 @@ describe('admin widgets', () => {
 		const dialog = /** @type {HTMLElement} */ (root.querySelector('.dialog'));
 		expect(dialog.textContent).toContain('New link for Ivo');
 		expect(dialog.querySelector('.code')?.textContent).toBe('https://shop.example.com/?ss_setup=fresh');
-		await click(buttonIn(dialog, '×'));
+		await click(buttonIn(dialog, strings['users.close']));
 		const expired = await menuOf(1);
 		expect(labels(expired)).toEqual([strings['requests.newLink'], strings['requests.reopen'], strings['requests.decline']]);
 		await click(buttonIn(expired, strings['requests.newLink']));

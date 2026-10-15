@@ -7,7 +7,7 @@
  * forms (PLAN 0.8.10 A2, A3, A6, A14).
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import { element, formatText, mountWidget } from '@ss/app-kit/widget';
 import { PROVIDERS } from '../core/widgets.js';
 import {
 	customInputs,
@@ -21,7 +21,6 @@ import {
 	textsOf,
 	webAddress,
 } from './common.js';
-import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 
 /** The methods with a form, in the order of their tabs. */

@@ -5,18 +5,16 @@
  * Each entry shows what was done, its label and detail, who did it (with their role) and when. PLAN 0.4.11, 0.8.10 K9.
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
 import { datesOf, errorText, fieldMaker, setHidden, textsOf } from './common.js';
-import { element } from './dom.js';
 import { chips } from './parts.js';
 import { WIDGET_CSS } from './styles.js';
-import { adminCall } from './tickets.js';
 
 /** The products that send copies (the chips; `''` is every product). */
 const PRODUCTS = /** @type {const} */ (['', 'accounts', 'chat', 'ecommerce', 'notifications', 'payments', 'growth']);
 
 /**
- * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig }} input
+ * @param {{ host: HTMLElement, api: import('@ss/app-kit/widget').AdminApi, config: import('./widget.js').WidgetConfig }} input
  */
 export const mountActivityAdmin = ({ host, api, config }) => {
 	const t = textsOf(config);

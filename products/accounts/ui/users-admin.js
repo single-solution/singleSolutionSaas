@@ -1,7 +1,7 @@
 /**
  * The admin widget `users_admin` (Roles; permissions `users.read` and `users.manage`), a list-and-detail screen (PLAN
  * 0.6): status chips with their counts, search and filters (phone number, roles, a permission, joined after, hide
- * blocked, asked to be deleted), the list with each user's status dot and last sign-in, and the picked user's detail
+ * blocked, asked to be deleted), the list with each user's status badge and last sign-in, and the picked user's detail
  * (the first one until another is picked) as cards: contact, account, profile, addresses, notes, blocked and deletion.
  * Edit and the main actions sit in the header; the rest in its More menu: a sign-in code and a setup link (Staff
  * sign-in codes and setup links), sign out everywhere, approve or decline a sign-up, keep or delete on a deletion
@@ -11,13 +11,11 @@
  * invited), open again. PLAN 0.8.6, 0.8.10 A3–A5.
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import { adminCall, badge, element, formatText, moreMenu, mountWidget, openDialog } from '@ss/app-kit/widget';
 import { customInputs, datesOf, errorText, fieldMaker, setHidden, textsOf } from './common.js';
 import { ADDRESS_LIMITS } from '../core/widgets.js';
-import { element } from './dom.js';
-import { card, chips, copyable, dot, moreMenu, openDialog } from './parts.js';
+import { card, chips, copyable } from './parts.js';
 import { WIDGET_CSS } from './styles.js';
-import { adminCall } from './tickets.js';
 
 /** The status chips of the users list: a status, or `deletion` for users who asked to be deleted. */
 const USER_CHIPS = /** @type {const} */ (['', 'active', 'pending', 'invited', 'blocked', 'deletion']);
@@ -28,7 +26,7 @@ const REQUEST_CHIPS = /** @type {const} */ (['', 'pending', 'invited', 'expired'
 /** @typedef {Record<string, any>} User */
 
 /**
- * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig }} input
+ * @param {{ host: HTMLElement, api: import('@ss/app-kit/widget').AdminApi, config: import('./widget.js').WidgetConfig }} input
  */
 export const mountUsersAdmin = ({ host, api, config }) => {
 	const t = textsOf(config);
@@ -63,10 +61,10 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 			const nameOf = (user) => user.name || user.email || user.phone || user.id;
 			/** @param {User} user */
 			const statusOf = (user) => (user.blocked ? 'blocked' : String(user.status ?? 'active'));
-			/** @param {User} user */
+			/** @param {User} user @returns {import('@ss/app-kit/widget').Tone} */
 			const toneOf = (user) => {
 				const status = statusOf(user);
-				return status === 'blocked' ? 'bad' : status === 'active' ? (user.deletion ? 'wait' : 'good') : 'wait';
+				return status === 'blocked' ? 'danger' : status === 'active' ? (user.deletion ? 'warning' : 'success') : 'warning';
 			};
 			/** @param {Answer} answer */
 			const failure = (answer) =>
@@ -81,23 +79,27 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 				return made;
 			};
 			/**
-			 * A dialog with a form: its fields, a submit button and a status line; `send` answers the call.
+			 * A dialog with a form: its fields, a submit button, Cancel and a status line; `send` answers the call (it closes
+			 * the dialog with `close` once done; a call that did not work shows its problem and the dialog stays open).
 			 * @param {string} title @param {Node[]} fields @param {string} submitText
-			 * @param {(done: () => void, note: HTMLElement) => Promise<Answer | null>} send
-			 * @param {string} [className] the submit button's class
+			 * @param {(close: () => void) => Promise<Answer>} send
+			 * @param {{ danger?: boolean, confirm?: { text: string, label: string } }} [options] a destructive submit, and the
+			 *   text to type before it works
 			 */
-			const formDialog = (title, fields, submitText, send, className = '') => {
-				const form = element(doc, 'form', { class: 'grid' });
-				const note = element(doc, 'p', { class: 'status wide', role: 'status' });
-				const go = element(doc, 'button', { type: 'submit', ...(className ? { class: className } : {}) }, submitText);
-				form.append(...fields, go, note);
-				const dialog = openDialog(root, { title, nodes: [form], closeLabel: t('users.close') });
-				form.addEventListener('submit', async (event) => {
-					event.preventDefault();
-					go.setAttribute('disabled', '');
-					const answer = await send(dialog.close, note);
-					go.removeAttribute('disabled');
-					if (answer && !answer.ok) note.textContent = failure(answer);
+			const formDialog = (title, fields, submitText, send, { danger = false, confirm } = {}) => {
+				const grid = element(doc, 'div', { class: 'grid' });
+				grid.append(...fields);
+				const dialog = openDialog(root, {
+					title,
+					body: [grid],
+					closeLabel: t('users.cancel'),
+					submitLabel: submitText,
+					danger,
+					...(confirm ? { confirm } : {}),
+					onSubmit: async () => {
+						const answer = await send(() => dialog.close());
+						return answer.ok ? null : failure(answer);
+					},
 				});
 				return dialog;
 			};
@@ -108,7 +110,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 			const handOver = (title, help, value) =>
 				openDialog(root, {
 					title,
-					nodes: [
+					body: [
 						element(doc, 'p', {}, help),
 						copyable(doc, value, { copy: t('users.copy'), copied: t('users.copied') }, win?.navigator),
 					],
@@ -263,7 +265,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 					),
 				);
 				item.append(
-					dot(doc, toneOf(user), t(`status.${statusOf(user)}`)),
+					badge(doc, t(`status.${statusOf(user)}`), toneOf(user)),
 					who,
 					element(doc, 'span', { class: 'figure' }, user.lastSignInAt ? when(user.lastSignInAt, 'date') : t('users.never')),
 				);
@@ -311,12 +313,12 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 
 				const edit = button(t('users.edit'));
 				edit.addEventListener('click', () => editDialog(user, done));
-				/** @type {import('./parts.js').MenuItem[]} */
+				/** @type {import('@ss/app-kit/widget').MenuItem[]} */
 				const items = [];
 				if (on('staff_links') && !user.blocked) {
 					items.push({
 						label: t('users.signInCode'),
-						run: async () => {
+						onSelect: async () => {
 							const answer = await call('POST', `/v1/admin/users/${encodeURIComponent(user.id)}/sign-in-code`);
 							if (!answer.ok) panelNote.textContent = failure(answer);
 							else
@@ -329,7 +331,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 					});
 					items.push({
 						label: t('users.setupLink'),
-						run: async () => {
+						onSelect: async () => {
 							const answer = await call('POST', `/v1/admin/users/${encodeURIComponent(user.id)}/setup-link`);
 							if (!answer.ok) panelNote.textContent = failure(answer);
 							else
@@ -341,16 +343,19 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 						},
 					});
 				}
-				items.push({ label: t('users.signOut'), run: () => act('/sign-out', t('users.signedOutUser')) });
+				items.push({ label: t('users.signOut'), onSelect: () => act('/sign-out', t('users.signedOutUser')) });
 				if (on('approval') && user.status === 'pending') {
-					items.push({ label: t('users.approve'), run: () => act('/approve', t('users.approved')) });
-					items.push({ label: t('users.decline'), run: () => act('/decline', t('users.declined')) });
+					items.push({ label: t('users.approve'), onSelect: () => act('/approve', t('users.approved')) });
+					items.push({ label: t('users.decline'), onSelect: () => act('/decline', t('users.declined')) });
 				}
 				if (on('data_rights') && user.deletion) {
-					items.push({ label: t('users.deletionReject'), run: () => act('/deletion/reject', t('users.deletionRejected')) });
+					items.push({
+						label: t('users.deletionReject'),
+						onSelect: () => act('/deletion/reject', t('users.deletionRejected')),
+					});
 					items.push({
 						label: t('users.deletionApprove'),
-						run: () => act('/deletion/approve', t('users.deletionApproved')),
+						onSelect: () => act('/deletion/approve', t('users.deletionApproved')),
 						danger: true,
 					});
 				}
@@ -358,7 +363,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 					user.blocked
 						? {
 								label: t('users.unblock'),
-								run: async () => {
+								onSelect: async () => {
 									const answer = await call('PATCH', `/v1/admin/users/${encodeURIComponent(user.id)}`, {
 										blocked: false,
 									});
@@ -366,13 +371,13 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 									else panelNote.textContent = failure(answer);
 								},
 							}
-						: { label: t('users.block'), run: () => blockDialog(user, done) },
+						: { label: t('users.block'), onSelect: () => blockDialog(user, done) },
 				);
-				items.push({ label: t('users.delete'), run: () => deleteDialog(user, done), danger: true });
+				items.push({ label: t('users.delete'), onSelect: () => deleteDialog(user, done), danger: true });
 
 				const header = element(doc, 'div', { class: 'head' });
 				const title = element(doc, 'div');
-				title.append(element(doc, 'h3', {}, nameOf(user)), dot(doc, toneOf(user), t(`status.${statusOf(user)}`)));
+				title.append(element(doc, 'h3', {}, nameOf(user)), badge(doc, t(`status.${statusOf(user)}`), toneOf(user)));
 				const actions = element(doc, 'div', { class: 'actions' });
 				actions.append(edit, moreMenu(doc, t('users.moreActions'), items));
 				header.append(title, actions);
@@ -581,7 +586,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 						}
 						return answer;
 					},
-					'danger',
+					{ danger: true },
 				);
 			};
 
@@ -593,23 +598,17 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 			const deleteDialog = (user, done) => {
 				const confirmWord = nameOf(user);
 				const reason = make.field('input', t('users.deleteReason'), { maxlength: '300' });
-				const typed = make.field('input', t('users.typeToConfirm'), { autocomplete: 'off', required: '' });
 				const keep = make.check(t('users.deleteKeep'));
-				for (const made of [reason, typed, keep]) made.wrap.classList.add('wide');
+				for (const made of [reason, keep]) made.wrap.classList.add('wide');
 				formDialog(
 					formatText(t('users.deleteTitle'), { name: confirmWord }),
 					[
 						element(doc, 'p', { class: 'wide' }, formatText(t('users.deleteHelp'), { confirm: confirmWord })),
 						keep.wrap,
 						reason.wrap,
-						typed.wrap,
 					],
 					t('users.deleteSubmit'),
-					async (close, dialogNote) => {
-						if (typed.input.value.trim() !== confirmWord) {
-							dialogNote.replaceChildren(formatText(t('users.deleteHelp'), { confirm: confirmWord }));
-							return null;
-						}
+					async (close) => {
 						const scope = keep.input.checked ? '?scope=accounts' : '';
 						const answer = await call('DELETE', `/v1/admin/users/${encodeURIComponent(user.id)}${scope}`, {
 							reason: reason.input.value.trim(),
@@ -621,7 +620,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 						}
 						return answer;
 					},
-					'danger',
+					{ danger: true, confirm: { text: confirmWord, label: t('users.typeToConfirm') } },
 				);
 			};
 
@@ -764,14 +763,13 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 					),
 					...(request.note ? [element(doc, 'span', { class: 'meta' }, request.note)] : []),
 				);
+				/** @type {import('@ss/app-kit/widget').Tone} */
 				const tone =
 					request.status === 'completed'
-						? 'good'
-						: request.status === 'declined'
-							? 'bad'
-							: request.status === 'expired'
-								? 'bad'
-								: 'wait';
+						? 'success'
+						: request.status === 'declined' || request.status === 'expired'
+							? 'danger'
+							: 'warning';
 				/** @param {string} path @param {string} message */
 				const move = async (path, message) => {
 					const answer = await call('POST', `/v1/admin/role-requests/${encodeURIComponent(request.id)}${path}`);
@@ -802,22 +800,25 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 						);
 					else requestNote.textContent = formatText(t('requests.given'), { name: request.name });
 				};
-				/** @type {import('./parts.js').MenuItem[]} */
+				/** @type {import('@ss/app-kit/widget').MenuItem[]} */
 				const items = [];
 				if (request.status === 'pending')
-					items.push({ label: t('requests.invite'), run: () => linkOf('/invite', 'requests.inviteTitle') });
+					items.push({ label: t('requests.invite'), onSelect: () => linkOf('/invite', 'requests.inviteTitle') });
 				// an invited request, its link working or expired, gets a new one (the old one stops working)
 				if (request.status === 'invited' || request.status === 'expired')
-					items.push({ label: t('requests.newLink'), run: () => linkOf('/setup-link', 'requests.newLinkTitle') });
+					items.push({ label: t('requests.newLink'), onSelect: () => linkOf('/setup-link', 'requests.newLinkTitle') });
 				if (request.status === 'pending' || request.status === 'invited' || request.status === 'expired')
 					items.push({
 						label: t('requests.decline'),
-						run: async () => void (await move('/decline', t('requests.declinedDone'))),
+						onSelect: async () => void (await move('/decline', t('requests.declinedDone'))),
 						danger: true,
 					});
 				if (request.status === 'declined' || request.status === 'expired')
-					items.push({ label: t('requests.reopen'), run: async () => void (await move('/reopen', t('requests.reopened'))) });
-				item.append(dot(doc, tone, t(`requests.${request.status}`)), who, moreMenu(doc, t('users.moreActions'), items));
+					items.push({
+						label: t('requests.reopen'),
+						onSelect: async () => void (await move('/reopen', t('requests.reopened'))),
+					});
+				item.append(badge(doc, t(`requests.${request.status}`), tone), who, moreMenu(doc, t('users.moreActions'), items));
 				return item;
 			};
 

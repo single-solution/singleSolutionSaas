@@ -243,6 +243,7 @@
 	"users.empty": "No users found.",
 	"users.more": "Show more",
 	"users.close": "Close",
+	"users.cancel": "Cancel",
 	"users.deletionAsked": "Asked to be deleted",
 	"users.deletionRequested": "Asked to be deleted on {time}.",
 	"users.notes": "Notes (only staff see these)",

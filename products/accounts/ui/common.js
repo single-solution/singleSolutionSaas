@@ -4,10 +4,9 @@
  * fields and the terms checkbox included). Text is always set as text, never as HTML.
  * @module
  */
-import { formatDate, formatMoney, formatText, viewerOf } from '@ss/app-kit/widget';
-import { element } from './dom.js';
+import { element, formatDate, formatMoney, formatText, viewerOf } from '@ss/app-kit/widget';
 
-/** @typedef {{ ok: boolean, status: number, data: any }} Answer status 0 when signed out or unreachable */
+/** @typedef {import('@ss/app-kit/widget').Answer} Answer status 0 when signed out or unreachable */
 /** @typedef {(key: string) => string} Texts */
 /** @typedef {Parameters<typeof formatDate>[1]} Format how money and dates look (the widget config's `format`) */
 /**

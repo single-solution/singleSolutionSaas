@@ -34,16 +34,6 @@ export const ADDRESS_LIMITS = Object.freeze({
 /** Social sign-in providers (each its own feature and connection). */
 export const PROVIDERS = Object.freeze(/** @type {const} */ (['google', 'apple', 'facebook']));
 
-/** The features each widget needs (any of them). */
-export const WIDGET_FEATURES = Object.freeze({
-	sign_in: SIGN_IN_METHODS,
-	my_account: SIGN_IN_METHODS,
-	role_request: Object.freeze(['role_requests']),
-	users_admin: Object.freeze(['roles']),
-	roles_admin: Object.freeze(['roles']),
-	activity_admin: Object.freeze(['activity_copies']),
-});
-
 /** The header that carries a visitor's sign-in next to the browser token. */
 export const SIGN_IN_HEADER = 'ss-sign-in';
 

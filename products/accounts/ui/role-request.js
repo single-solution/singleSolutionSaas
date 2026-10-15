@@ -19,9 +19,8 @@ export const REQUEST_OUTCOMES = Object.freeze({
 	invite_expired: 'request.inviteExpired',
 	already_member: 'request.alreadyMember',
 });
-import { mountWidget } from '@ss/app-kit/widget';
+import { element, mountWidget } from '@ss/app-kit/widget';
 import { datesOf, errorText, fieldMaker, say, textsOf } from './common.js';
-import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 
 /**

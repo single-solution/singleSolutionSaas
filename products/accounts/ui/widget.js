@@ -6,18 +6,20 @@
  * from the address bar at once, and a setup link's `?ss_setup=`) and mounts `sign_in` and `my_account`; `role_request`
  * mounts while Role requests is on. `window.SSAccounts` offers `getSignIn()`, `user()`, `signOut()`, `ready` and
  * `admin({ getTicket })`, which fetches the config with a ticket and mounts the admin widgets `users_admin` and
- * `roles_admin` while Roles is on, and `activity_admin` while Activity log copy is on. Widgets mount only into the elements the merchant placed
- * (`data-ss-accounts="<widget key>"`), and render nothing while the product is stopped or their features are off.
+ * `roles_admin` while Roles is on, and `activity_admin` while Activity log copy is on (each widget while the config
+ * lists it in `widgets`, the kit's keys of the widgets whose feature is on). Widgets mount only into the elements the
+ * merchant placed (`data-ss-accounts="<widget key>"`), and render nothing while the product is stopped or their
+ * features are off.
  * @module
  */
-import { LINK_PARAMS, SETUP_PARAM, SIGN_IN_METHODS, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
+import { createTicketSource, requestJson } from '@ss/app-kit/widget';
+import { LINK_PARAMS, SETUP_PARAM, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountActivityAdmin } from './activity-admin.js';
 import { mountMyAccount } from './my-account.js';
 import { mountRoleRequest } from './role-request.js';
 import { mountRolesAdmin } from './roles-admin.js';
 import { createSession } from './session.js';
 import { mountSignIn } from './sign-in.js';
-import { createTicketSource } from './tickets.js';
 import { mountUsersAdmin } from './users-admin.js';
 
 /** The kit's widget config routes (browser token; ticket). */
@@ -35,6 +37,7 @@ const ERROR_PARAM = LINK_PARAMS.error;
  * @property {import('./common.js').Format} format how money and dates look (Settings → Format, PLAN 0.8.10 K7)
  * @property {string} timeZone the business.json time zone (UTC when missing, K8)
  * @property {string[]} features the switched-on features
+ * @property {string[]} widgets the keys of the widgets whose feature is on
  * @property {WidgetSettings} settings
  */
 
@@ -60,12 +63,8 @@ const ERROR_PARAM = LINK_PARAMS.error;
  * @returns {Promise<WidgetConfig | null>} null when the product says no (stopped, database not connected …)
  */
 const loadConfig = async (request, url, credential) => {
-	try {
-		const response = await request(url, { headers: { authorization: `Bearer ${credential}` } });
-		return response.ok ? /** @type {WidgetConfig} */ (await response.json()) : null;
-	} catch {
-		return null;
-	}
+	const answer = await requestJson(request, url, { headers: { authorization: `Bearer ${credential}` } });
+	return answer.ok && answer.data ? /** @type {WidgetConfig} */ (answer.data) : null;
 };
 
 /**
@@ -115,7 +114,7 @@ export const startWidget = ({
 	const doc = win.document;
 	const base = new URL(script?.src ?? win.location.href).origin;
 	const token = script?.dataset.token;
-	/** @param {keyof typeof WIDGET_FEATURES} key */
+	/** @param {string} key */
 	const hosts = (key) => /** @type {HTMLElement[]} */ ([...doc.querySelectorAll(`[${WIDGET_ATTRIBUTE}="${key}"]`)]);
 	/** @type {typeof globalThis.fetch} */
 	const request = (input, init) => win.fetch(input, init);
@@ -128,9 +127,10 @@ export const startWidget = ({
 		const config = await loadConfig(request, `${base}${CONFIG_PATH}`, token);
 		if (!config) return;
 		const current = createSession({ win, base, token, schedule, cancel, now });
-		if (config.features.includes('role_requests'))
+		if (config.widgets.includes('role_request'))
 			for (const host of hosts('role_request')) mountRoleRequest({ host, win, config, call: current.call });
-		if (!SIGN_IN_METHODS.some((method) => config.features.includes(method))) return;
+		// the visitor's session runs for the sign-in and My account widgets (while any sign-in method is on)
+		if (!config.widgets.includes('sign_in') && !config.widgets.includes('my_account')) return;
 		session = current;
 		await current.restore();
 		const signIns = hosts('sign_in');
@@ -159,9 +159,9 @@ export const startWidget = ({
 		await session?.signOut();
 	};
 
-	/** @param {{ getTicket: import('./tickets.js').GetTicket }} options */
+	/** @param {{ getTicket: import('@ss/app-kit/widget').GetTicket }} options */
 	const admin = async ({ getTicket }) => {
-		/** @type {import('./tickets.js').Ticket} */
+		/** @type {import('@ss/app-kit/widget').Ticket} */
 		let first;
 		try {
 			first = await getTicket();
@@ -174,7 +174,7 @@ export const startWidget = ({
 		const tickets = createTicketSource({ first, getTicket, schedule, cancel, now });
 		const api = { base, tickets, fetch: request };
 		/** @param {'users_admin' | 'roles_admin' | 'activity_admin'} key */
-		const on = (key) => WIDGET_FEATURES[key].some((feature) => config.features.includes(feature));
+		const on = (key) => config.widgets.includes(key);
 		if (on('users_admin')) for (const host of hosts('users_admin')) mountUsersAdmin({ host, api, config });
 		if (on('roles_admin')) for (const host of hosts('roles_admin')) mountRolesAdmin({ host, api, config });
 		if (on('activity_admin')) for (const host of hosts('activity_admin')) mountActivityAdmin({ host, api, config });

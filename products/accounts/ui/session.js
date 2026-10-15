@@ -5,6 +5,7 @@
  * `ss-accounts:signed-out`) and to the widgets.
  * @module
  */
+import { requestJson } from '@ss/app-kit/widget';
 import { DEVICE_STORAGE_KEY, REFRESH_STORAGE_KEY, SIGNED_IN_EVENT, SIGNED_OUT_EVENT, SIGN_IN_HEADER } from '../core/widgets.js';
 
 /** A new sign-in is asked for this long before the current one expires. */
@@ -88,23 +89,12 @@ export const createSession = ({ win, base, token, schedule, cancel, now }) => {
 	 * @param {string} method @param {string} path @param {unknown} [body] @param {string | null} [current]
 	 * @returns {Promise<Answer>}
 	 */
-	const request = async (method, path, body, current = null) => {
-		try {
-			const response = await win.fetch(`${base}${path}`, {
-				method,
-				headers: {
-					authorization: `Bearer ${token}`,
-					...(current ? { [SIGN_IN_HEADER]: current } : {}),
-					...(body === undefined ? {} : { 'content-type': 'application/json' }),
-				},
-				...(body === undefined ? {} : { body: JSON.stringify(body) }),
-			});
-			const data = response.status === 204 ? null : await response.json().catch(() => null);
-			return { ok: response.ok, status: response.status, data };
-		} catch {
-			return { ok: false, status: 0, data: null };
-		}
-	};
+	const request = (method, path, body, current = null) =>
+		requestJson((input, init) => win.fetch(input, init), `${base}${path}`, {
+			method,
+			headers: { authorization: `Bearer ${token}`, ...(current ? { [SIGN_IN_HEADER]: current } : {}) },
+			body,
+		});
 
 	const stopTimer = () => {
 		if (timer !== null) cancel(timer);

@@ -5,12 +5,10 @@
  * own roles, and name their own permissions (the `site` group).
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
 import { datesOf, errorText, fieldMaker, setHidden, textsOf } from './common.js';
 import { SIGN_IN_METHODS } from '../core/widgets.js';
-import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
-import { adminCall } from './tickets.js';
 
 /** Every permission (Owner). */
 const ALL = '*';
@@ -38,7 +36,7 @@ const OWN_SOURCE = 'site';
 /** @typedef {{ source: string, permissions: Array<{ key: string, name: string }> }} PermissionGroup */
 
 /**
- * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig }} input
+ * @param {{ host: HTMLElement, api: import('@ss/app-kit/widget').AdminApi, config: import('./widget.js').WidgetConfig }} input
  */
 export const mountRolesAdmin = ({ host, api, config }) => {
 	const t = textsOf(config);

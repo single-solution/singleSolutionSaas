@@ -4,10 +4,9 @@
  * Delete my account (Data rights) and the orders (Orders tab). Each part shows only while its feature is on.
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import { element, formatText, mountWidget } from '@ss/app-kit/widget';
 import { customInputs, datesOf, errorText, fieldMaker, moneyText, setHidden, termsBox, textsOf, webAddress } from './common.js';
 import { ADDRESS_LIMITS } from '../core/widgets.js';
-import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 
 /**
