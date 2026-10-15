@@ -264,7 +264,7 @@ describe('cart', () => {
 								productId: 'prd_2',
 								name: 'Case',
 								url: 'javascript:alert(1)',
-								problems: [{ code: 'sold_out', message: '' }],
+								problems: [{ code: 'not_enough_stock', message: '' }],
 							}),
 						],
 						ready: false,
@@ -276,7 +276,7 @@ describe('cart', () => {
 		expect(items[0].querySelector('strong a').getAttribute('href')).toBe('https://shop.example.com/products/phone?color=blue');
 		expect(items[1].querySelector('strong a')).toBeNull();
 		expect(textOf(host)).toContain(text('cart.problem.out_of_stock'));
-		expect(textOf(host)).toContain(text('cart.problem.sold_out'));
+		expect(textOf(host)).toContain(text('cart.problem.not_enough_stock'));
 		expect(textOf(host)).toContain(text('cart.notReady'));
 	});
 

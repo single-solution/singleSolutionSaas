@@ -232,7 +232,7 @@ export const variantInStock = (product, variant) => !variant.soldOut && (!produc
 export const activeVariants = (product) => product.variants.filter((variant) => variant.active);
 
 /**
- * Option values of a variant as one label (`Red / 128 GB`).
+ * Option values of a variant as one label (`Blue / Large`).
  * @param {Pick<VariantRecord, 'options'>} variant
  */
 export const variantLabel = (variant) => Object.values(variant.options ?? {}).join(' / ');

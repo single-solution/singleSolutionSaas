@@ -25,8 +25,8 @@
  * types, `core/item-types.js`) and its options where the
  * stage contract leaves a choice ({@link moveOptionSpecs}). Each status has the name shoppers read, a line per payment
  * method and whether entering it sends the shopper a message. `triggers` name the statuses the shop moves orders to by
- * itself and `starts` where orders that need no payment first start. Anything missing reads as today's behavior
- * ({@link checkOrderFlow} fills it), so a flow saved before phase 2 works as it did.
+ * itself and `starts` where orders that need no payment first start. Anything missing takes its default
+ * ({@link checkOrderFlow} fills it).
  *
  * Pure functions, no I/O.
  * @module
@@ -122,8 +122,7 @@ Object.freeze(ALLOWED_FROM);
  */
 
 /**
- * The options a move takes (only where the stage contract leaves a choice, design §3.4) with their values and defaults,
- * which are today's behavior:
+ * The options a move takes (only where the stage contract leaves a choice, design §3.4) with their values and defaults:
  *
  * - out of waiting into an open, packed or shipped status: `paidOnConfirm`, the payment methods whose balance staff
  *   moving it record as paid (OR-7; default none);
@@ -183,8 +182,7 @@ const OPTION_NAMES = Object.freeze([
 ]);
 
 /**
- * Who may make a move by default: staff, and the shopper too out of a waiting status into a canceled one (today's
- * `shopperCancel` default).
+ * Who may make a move by default: staff, and the shopper too out of a waiting status into a canceled one.
  * @param {StatusRole} from @param {StatusRole} to
  * @returns {Mover[]}
  */
@@ -249,9 +247,9 @@ const DEFAULT_DEFINITION = {
 };
 
 /**
- * Check a flow the merchant saves, and fill what it leaves out with today's behavior: a status's shopper name ('' =
+ * Check a flow the merchant saves, and fill what it leaves out with the defaults: a status's shopper name ('' =
  * its name), shopper lines ('' each) and message (the statuses `confirmed`, `dispatched`, `delivered`, `cancelled` and
- * `refunded` send one, as the `notifyStatuses` default did); a move's `who`, permission, needs and options
+ * `refunded` send one); a move's `who`, permission, needs and options
  * ({@link moveRules}); the triggers (Payments' confirmation: the first open status listed from the awaiting-payment
  * status; an ended window: the first canceled status listed from it, else the first; refunds covering the payments:
  * none) and the starts (the awaiting-confirmation status, else the first open one).

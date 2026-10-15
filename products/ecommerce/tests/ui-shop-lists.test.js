@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { LINE_PROBLEMS } from '../core/checkout.js';
 import { mountCompare } from '../ui/compare.js';
 import { toggleCompare } from '../ui/shop-compare-store.js';
 import { mountWishlist } from '../ui/wishlist.js';
@@ -203,6 +204,7 @@ describe('texts', () => {
 			'shop-reviews',
 			'shop-returns',
 			'shop-slots',
+			'shop-payment',
 		];
 		const source = files.map((name) => readFileSync(join(import.meta.dirname, '..', 'ui', `${name}.js`), 'utf8')).join('\n');
 		const used = [
@@ -223,19 +225,17 @@ describe('texts', () => {
 			...['unpaid', 'pending', 'paid', 'partially_refunded', 'refunded'].map((key) => `orders.payment.${key}`),
 			...['return', 'warranty'].map((key) => `returns.kind.${key}`),
 			...['requested', 'approved', 'rejected', 'received', 'refunded', 'closed'].map((key) => `returns.status.${key}`),
-			...[
-				'unavailable',
-				'choose_variant',
-				'out_of_stock',
-				'not_enough_stock',
-				'slot_required',
-				'slot_unavailable',
-				'slot_taken',
-				'one_per_slot',
-				'sold_out',
-			].map((key) => `cart.problem.${key}`),
+			...LINE_PROBLEMS.map((key) => `cart.problem.${key}`),
+			...['accountHolder', 'bankName', 'accountNumber', 'routingNumber', 'sortCode', 'branchCode', 'iban', 'bic'].map(
+				(key) => `checkout.bank.${key}`,
+			),
 		];
 		const missing = [...used, ...dynamic].filter((key) => !Object.hasOwn(TEXTS, key));
 		expect(missing).toEqual([]);
+		// and no text for a cart line problem the server never sends
+		const stray = Object.keys(TEXTS).filter(
+			(key) => key.startsWith('cart.problem.') && !LINE_PROBLEMS.includes(key.slice('cart.problem.'.length)),
+		);
+		expect(stray).toEqual([]);
 	});
 });

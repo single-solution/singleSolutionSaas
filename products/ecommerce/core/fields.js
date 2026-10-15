@@ -548,7 +548,7 @@ export const unitKeys = (serial, values = {}) => [
 /**
  * Check one unit against the unit fields of its item type (`core/item-types.js`). Without unit fields, a unit is a plain
  * serial number. With them, its values: a field's one value, or up to two with a field that takes two (two numbers of
- * one unit, such as a dual-SIM phone's), each in the field's format (kept as the format keeps it), every required field
+ * one unit, such as two IMEIs of a phone with two SIM slots), each in the field's format (kept as the format keeps it), every required field
  * given; a text alone is the first field's value. A unit is named by the first value of its first field that has one.
  * @param {unknown} input a serial number (or the first field's value), or `{ values: { <fieldId>: value or [values] } }`
  * @param {ReadonlyArray<ValueRules & { id: string, required: boolean }>} fields

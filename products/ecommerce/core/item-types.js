@@ -9,7 +9,7 @@
  *
  * A product's type is its own (`typeKey`), else its first category's (a category without one takes its parent's), else
  * the **built-in type** of its kind. A type of another kind never applies: the product keeps its kind. Built-in types
- * have every element the switched-on features allow (today's behavior, so a shop without types sees no change), except
+ * have every element the switched-on features allow (so a shop needs no types of its own), except
  * numbered units: units are always a merchant's choice, made with a type that names their fields. An element works only
  * while its feature is on ({@link elementsOf}). No I/O.
  * @module

@@ -366,7 +366,7 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string} variantId
  * @property {ProductKind} kind
  * @property {string} name product name at placement
- * @property {string} variantName `Red / 128 GB` ('' without options)
+ * @property {string} variantName `Blue / Large` ('' without options)
  * @property {string} sku
  * @property {string | null} grade grade key
  * @property {string} gradeLabel

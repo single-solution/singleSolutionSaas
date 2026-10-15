@@ -21,7 +21,6 @@
  * @module
  */
 import { GROWTH_EVENTS, growthItem, itemsDetail } from '../core/growth-events.js';
-import { fromDecimal } from '../core/money.js';
 import { MAX_QUANTITY } from './cart-store.js';
 import {
 	announce,
@@ -440,7 +439,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 								const node = /** @type {HTMLButtonElement} */ (event.currentTarget);
 								const target =
 									kind === 'price_drop' && settings.alerts.targetPrice ? (typed.get('alert-target') ?? '').trim() : '';
-								const targetPrice = target === '' ? null : fromDecimal(target, currency);
+								const targetPrice = target === '' ? null : formats.amountOf(target, currency);
 								if (target !== '' && targetPrice === null) return void (said.textContent = t('alerts.targetInvalid'));
 								node.setAttribute('disabled', '');
 								const answer = await shop.call('/v1/shop/alerts', {

@@ -543,7 +543,7 @@
 		"orderUrl": {
 			"type": "string",
 			"title": "Order page address",
-			"description": "For messages, with {number}, for example https://shop.com/orders/{number}.",
+			"description": "For messages, with {number}, for example https://example.com/orders/{number}.",
 			"default": "",
 			"maxLength": 500
 		},

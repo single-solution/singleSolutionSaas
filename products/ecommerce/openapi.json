@@ -548,7 +548,7 @@
 										"type": "integer",
 										"minimum": 2,
 										"maximum": 20,
-										"description": "With multiple: 2 to 20 (a unit field 2, for two numbers of one unit such as a dual-SIM phone's); default the most."
+										"description": "With multiple: 2 to 20 (a unit field 2, for a unit that carries two numbers); default the most."
 									},
 									"format": {
 										"type": [
@@ -12757,7 +12757,7 @@
 										"type": "integer",
 										"minimum": 2,
 										"maximum": 20,
-										"description": "With multiple: 2 to 20 (a unit field 2, for two numbers of one unit such as a dual-SIM phone's); default the most."
+										"description": "With multiple: 2 to 20 (a unit field 2, for a unit that carries two numbers); default the most."
 									},
 									"format": {
 										"type": [
@@ -34425,7 +34425,7 @@
 					"unit": {
 						"type": "string",
 						"maxLength": 20,
-						"description": "Shown after its values, for example GB or mAh ('' for yes/no and date fields)."
+						"description": "Shown after its values, for example cm or kg ('' for yes/no and date fields)."
 					},
 					"min": {
 						"type": [
@@ -34694,7 +34694,7 @@
 						"type": "integer",
 						"minimum": 2,
 						"maximum": 20,
-						"description": "With multiple: 2 to 20 (a unit field 2, for two numbers of one unit such as a dual-SIM phone's); default the most."
+						"description": "With multiple: 2 to 20 (a unit field 2, for a unit that carries two numbers); default the most."
 					},
 					"format": {
 						"type": [
@@ -36201,7 +36201,7 @@
 					},
 					"variantName": {
 						"type": "string",
-						"description": "The option values, e.g. Red / 128 GB."
+						"description": "The option values, e.g. Blue / Large."
 					},
 					"gradeLabel": {
 						"type": "string"
@@ -43937,7 +43937,7 @@
 					},
 					"variantName": {
 						"type": "string",
-						"description": "For example 'Red / 128 GB' ('' without options)."
+						"description": "For example 'Blue / Large' ('' without options)."
 					},
 					"sku": {
 						"type": "string"
@@ -52116,7 +52116,7 @@
 					},
 					"name": {
 						"type": "string",
-						"description": "Its option values in the options' order (Red / 128 GB), '' without options."
+						"description": "Its option values in the options' order (Blue / Large), '' without options."
 					},
 					"sku": {
 						"type": "string"

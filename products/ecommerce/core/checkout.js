@@ -291,6 +291,9 @@ const PROBLEM_TEXT = {
 	one_per_slot: 'A time can be booked once per order.',
 };
 
+/** The problems a cart line can have (each has its widget text `cart.problem.<code>`). */
+export const LINE_PROBLEMS = Object.freeze(Object.keys(PROBLEM_TEXT));
+
 /** @param {string} code @returns {LineProblem} */
 const problemOf = (code) => ({ code, message: PROBLEM_TEXT[code] ?? code });
 

@@ -16,7 +16,6 @@
  * is wide (a container query), and behind a Filters button where it is narrow.
  * @module
  */
-import { fromDecimal } from '../core/money.js';
 import { GROWTH_EVENTS } from '../core/growth-events.js';
 import {
 	MAX_PAGE_SIZE,
@@ -209,8 +208,8 @@ export const mountProductGrid = async ({ host, config, shop, win }) => {
 				if (filters.brands.length > 0) query.set('brand', filters.brands.join(','));
 				if (filters.grades.length > 0) query.set('grade', filters.grades.join(','));
 				for (const [slug, values] of filters.attributes) if (values.length > 0) query.set(`attr.${slug}`, values.join(','));
-				const min = filters.minPrice ? fromDecimal(filters.minPrice, currency) : null;
-				const max = filters.maxPrice ? fromDecimal(filters.maxPrice, currency) : null;
+				const min = filters.minPrice ? formats.amountOf(filters.minPrice, currency) : null;
+				const max = filters.maxPrice ? formats.amountOf(filters.maxPrice, currency) : null;
 				if (min !== null) query.set('minPrice', String(min));
 				if (max !== null) query.set('maxPrice', String(max));
 				if (filters.inStock) query.set('inStock', 'true');
@@ -226,7 +225,9 @@ export const mountProductGrid = async ({ host, config, shop, win }) => {
 
 			/** Whether the typed prices are amounts. */
 			const pricesValid = () =>
-				[filters.minPrice, filters.maxPrice].every((value) => value === '' || fromDecimal(value, currency) !== null);
+				[filters.minPrice, filters.maxPrice].every((value) => value === '' || formats.amountOf(value, currency) !== null);
+			/** The hint for a price that is not a plain amount, with an example in the decimal sign money shows with. */
+			const priceHint = () => t('grid.priceInvalid', { example: `1500${formats.decimalSign}50` });
 
 			const renderFilters = () => {
 				const parts =
@@ -238,6 +239,7 @@ export const mountProductGrid = async ({ host, config, shop, win }) => {
 								facets,
 								known,
 								currency,
+								amountText: formats.amountText,
 								expanded,
 								onChange: (event, patch = {}) => {
 									Object.assign(filters, patch);
@@ -246,7 +248,7 @@ export const mountProductGrid = async ({ host, config, shop, win }) => {
 										forget();
 										void loadBrands();
 									}
-									if (event === 'price' && !pricesValid()) return say(t('grid.priceInvalid'));
+									if (event === 'price' && !pricesValid()) return say(priceHint());
 									void load('filters');
 								},
 							})
@@ -393,7 +395,7 @@ export const mountProductGrid = async ({ host, config, shop, win }) => {
 			 * @param {number} [pageNo]
 			 */
 			const load = async (mode, pageNo = 1) => {
-				if (!pricesValid()) return say(t('grid.priceInvalid'));
+				if (!pricesValid()) return say(priceHint());
 				seq += 1;
 				const mine = seq;
 				state = mode === 'more' ? 'more' : 'loading';
@@ -404,7 +406,7 @@ export const mountProductGrid = async ({ host, config, shop, win }) => {
 				if (!answer.ok) {
 					state = 'error';
 					if (mode !== 'more') items = [];
-					if (codeOf(answer) === 'validation_failed') say(t('grid.priceInvalid'));
+					if (codeOf(answer) === 'validation_failed') say(priceHint());
 					keepFocus(root, renderList);
 					return;
 				}

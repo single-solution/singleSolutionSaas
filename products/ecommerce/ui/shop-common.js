@@ -8,7 +8,7 @@
  * @module
  */
 import { DEFAULT_FORMAT, formatDate, formatMoney, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
-import { isCurrency } from '../core/money.js';
+import { fromDecimal, isCurrency, toDecimal } from '../core/money.js';
 import { element } from './dom.js';
 import { SHOP_CSS } from './shop-styles.js';
 import { WIDGET_CSS } from './styles.js';
@@ -33,21 +33,17 @@ export const textsOf =
 export const MAX_PAGE_SIZE = 60;
 
 /**
- * The grades the widget config names (`settings.catalog.grades` while grades_serials is on): a list of `{ key, label }`
- * or labels by key; anything else is left out.
+ * The grades the widget config names (`settings.catalog.grades` while grades_serials is on): a list of `{ key, label }`;
+ * anything else is left out.
  * @param {unknown} value
  * @returns {Array<{ key: string, label: string }>}
  */
-const gradesOf = (value) => {
-	const entries = Array.isArray(value)
-		? value.map((entry) => [entry?.key, entry?.label ?? entry?.key])
-		: value && typeof value === 'object'
-			? Object.entries(value)
-			: [];
-	return entries.flatMap(([key, label]) =>
-		typeof key === 'string' && key && typeof label === 'string' ? [{ key, label: label || key }] : [],
-	);
-};
+const gradesOf = (value) =>
+	(Array.isArray(value) ? value : []).flatMap((entry) => {
+		const key = entry?.key;
+		const label = entry?.label ?? key;
+		return typeof key === 'string' && key && typeof label === 'string' ? [{ key, label: label || key }] : [];
+	});
 
 /**
  * The settings the shopper widgets read (each part's `widgetSettings`), with defaults while a part is off.
@@ -132,7 +128,23 @@ export const announce = (win, name, detail) => void win.dispatchEvent(new win.Cu
  *   (and time, unless `time` is false); `zone` shows it in that time zone whatever the Format says (booking slots,
  *   which are the business's own hours)
  * @property {(iso: string | null | undefined, zone?: string) => string} timeText a time of day
+ * @property {string} decimalSign the decimal sign money shows with (`.` or `,` …, by the same language as `money`)
+ * @property {(text: unknown, currency: string) => number | null} amountOf an amount typed with that decimal sign (no
+ *   thousands separators) as minor units, or null
+ * @property {(minor: number, currency: string) => string} amountText minor units as a plain number to type, with that sign
  */
+
+/**
+ * The decimal sign of a language (`.` when the runtime does not know it).
+ * @param {string} locale
+ */
+const decimalSignOf = (locale) => {
+	try {
+		return new Intl.NumberFormat(locale).formatToParts(1.5).find((part) => part.type === 'decimal')?.value ?? '.';
+	} catch {
+		return '.';
+	}
+};
 
 /**
  * The formatters of a widget: the website's Format and business time zone (widget config) and the viewer's language
@@ -148,10 +160,19 @@ export const formatsOf = (config, win) => {
 	/** @param {string | null | undefined} iso @param {'date' | 'datetime' | 'time'} style @param {string} [zone] */
 	const at = (iso, style, zone) =>
 		formatDate(iso, zone ? { ...format, times: 'business' } : format, { timeZone: zone ?? timeZone, style, viewer });
+	const decimalSign = decimalSignOf(format.locale || viewer.locale || 'en-US');
 	return Object.freeze({
 		money: (amount, currency) => formatMoney(Math.round(Number(amount) || 0), currency, format, viewer),
 		dateText: (iso, { time = true, zone } = {}) => at(iso, time ? 'datetime' : 'date', zone),
 		timeText: (iso, zone) => at(iso, 'time', zone),
+		decimalSign,
+		// with a decimal comma a dot is the thousands separator: refused, never read as the decimal sign
+		amountOf: (text, currency) => {
+			const value = typeof text === 'string' ? text.trim() : '';
+			if (decimalSign === '.') return fromDecimal(value, currency);
+			return value.includes('.') ? null : fromDecimal(value.replace(decimalSign, '.'), currency);
+		},
+		amountText: (minor, currency) => toDecimal(minor, currency).replace('.', decimalSign),
 	});
 };
 

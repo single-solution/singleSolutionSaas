@@ -468,7 +468,7 @@ export const TEXTS = Object.freeze({
 			}),
 			units: 'Unit numbers',
 			unitsOn: 'Numbered units',
-			unitsHelp: 'Each unit gets its own numbers (serial numbers or your unit fields, such as an IMEI).',
+			unitsHelp: 'Each unit gets its own numbers (serial numbers or your unit fields, such as a frame number or an IMEI).',
 			capture: 'Numbers come',
 			captures: Object.freeze({
 				stock: 'From units added to stock, picked when packing',

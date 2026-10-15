@@ -39,7 +39,7 @@
 			"title": "Order page in your admin",
 			"default": "",
 			"maxLength": 500,
-			"description": "With {number} and {id}, for example https://admin.shop.com/orders/{id}. Alerts link to it."
+			"description": "With {number} and {id}, for example https://admin.example.com/orders/{id}. Alerts link to it."
 		},
 		"includePhone": {
 			"type": "boolean",
