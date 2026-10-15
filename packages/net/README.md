@@ -1,9 +1,11 @@
 # @ss/net
 
-Safe outbound networking shared by the Portal and products. It provides SSRF policy and IP address classification,
-DNS-pinned guarded lookups, a guarded HTTP(S) client, MongoDB connection-string safety and AWS SigV4 signing.
+The server-side networking and runtime shared by the Portal and products. It provides SSRF policy and IP address
+classification, DNS-pinned guarded lookups, a guarded HTTP(S) client, MongoDB connection strings and client rules, AWS
+SigV4 signing, the structured logger with redaction and the static security headers.
 
-- Node only (`node:http`, `node:https`, `node:dns`, `node:crypto`). No dependencies. JavaScript ESM, functional, JSDoc-typed.
+- Node only (`node:http`, `node:https`, `node:dns`, `node:crypto`). No dependencies (not even the MongoDB driver).
+  JavaScript ESM, functional, JSDoc-typed.
 - Every outbound call to a merchant- or developer-supplied destination (connect, event
   deliveries, connector checks, object stores, client databases) must go through this package.
 
@@ -36,6 +38,15 @@ import {
 	textOf,
 	jsonOf,
 	isSafeMongoUri,
+	mongoDatabaseName,
+	DATABASE_DEADLINES,
+	databaseClientOptions,
+	connectBeforeUse,
+	isDatabaseUnavailable,
+	createLogger,
+	noopLogger,
+	redact,
+	staticSecurityHeaders,
 	signV4,
 	presignV4,
 	objectUrl,
@@ -130,6 +141,37 @@ allowed. That refuses local file reads (`tlsCAFile`, …), TLS weakening, proxie
 credentials, and only SCRAM is accepted as an auth mechanism. TLS is required unless every host is allowlisted. Also
 connect with `{ lookup: guardedLookup(policy) }`, so that SRV answers and discovered replica-set members are vetted
 too. Credential rules (user/password required, database name) stay with the caller.
+
+`mongoDatabaseName(uri)` is the database the string names (its path, decoded, as the driver's `client.db()` takes
+it): `null` when it names none, `''` when its escapes are malformed.
+
+### Database clients (no driver inside: callers pass their client)
+
+- `DATABASE_DEADLINES`: finding a server and opening a connection 5 s, waiting for a pooled connection 10 s, each send
+  or receive 10 s, so a database that cannot be reached fails fast in a serverless function.
+- `databaseClientOptions({ maxPoolSize = 5, appName? })`: the options of `new MongoClient(uri, options)`, a small pool
+  (`minPoolSize: 0`, `maxIdleTimeMS: 60000`) with the deadlines. Add driver options (`lookup`) to the copy.
+- `connectBeforeUse(client) → () => Promise<void>`: connects once, shares one attempt between concurrent calls and
+  forgets a failed one, so the next request after an outage connects again on the same warm instance.
+- `isDatabaseUnavailable(error)`: true for a driver network error or deadline, a failed DNS lookup of the database or
+  an operation over its `maxTimeMS` (requests answer 503).
+
+### `createLogger({ level = 'info', write?, now?, fields? }) → Logger`
+
+JSON lines to standard output (or to `write`), with `debug`, `info`, `warn`, `error` and `child(fields)`; an unknown
+level is `info`. `noopLogger` writes nothing. Every record goes through `redact(value)`: members whose name (lower case,
+`_` and `-` removed) contains `secret`, `token`, `password`, `passwd`, `passphrase`, `authorization`, `cookie`,
+`apikey`, `accesskey`, `privatekey`, `privatejwk`, `signingkey`, `credential`, `connectionstring`, `descriptor`, `kek`,
+`pepper` or `sealed`, ends in `uri` or equals `d` become `[redacted]`; signed tokens (`eyJ….….…`) and the user part of
+addresses are redacted inside every text, error messages too; errors become `{ name, message, code? }`, dates ISO
+texts and big integers decimal texts (a log call never throws).
+
+### `staticSecurityHeaders() → Array<{ key, value }>`
+
+The static headers of every page, as `next.config.js` `headers()` takes them (a fresh copy each call):
+`Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`,
+`Permissions-Policy` (no powerful features), `Cross-Origin-Opener-Policy: same-origin`, `X-DNS-Prefetch-Control: off`
+and `X-Permitted-Cross-Domain-Policies: none`. Each side adds its own Content-Security-Policy.
 
 ### `signV4(params) → headers` / `presignV4(params) → url`
 

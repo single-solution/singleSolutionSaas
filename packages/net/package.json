@@ -1,7 +1,7 @@
 {
 	"name": "@ss/net",
 	"version": "0.1.0",
-	"description": "Safe outbound networking shared by the Portal and products: SSRF policy, DNS-pinned lookups, guarded fetch, AWS SigV4 signing.",
+	"description": "The server-side networking and runtime shared by the Portal and products: SSRF policy, DNS-pinned lookups, guarded fetch, MongoDB connection strings and client rules, AWS SigV4 signing, the structured logger with redaction and the static security headers.",
 	"type": "module",
 	"license": "UNLICENSED",
 	"exports": {

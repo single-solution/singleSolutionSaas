@@ -1,12 +1,16 @@
 /**
- * @ss/net — safe outbound networking shared by the Portal and products: SSRF policy and address classification,
- * DNS-pinned guarded lookups, a guarded fetch, MongoDB URI safety and AWS SigV4 signing. See README.md.
+ * @ss/net — the server-side networking and runtime shared by the Portal and products: SSRF policy and address
+ * classification, DNS-pinned guarded lookups, a guarded fetch, MongoDB connection strings and client rules, AWS SigV4
+ * signing, the structured logger with redaction and the static security headers. See README.md.
  */
 export { isNetError, netError } from './errors.js';
 export { checkHost, checkUrl, createOutboundPolicy } from './policy.js';
 export { guardedLookup, resolveVetted } from './lookup.js';
 export { jsonOf, safeFetch, textOf } from './fetch.js';
-export { isSafeMongoUri } from './mongo.js';
+export { isSafeMongoUri, mongoDatabaseName } from './mongo.js';
+export { DATABASE_DEADLINES, connectBeforeUse, databaseClientOptions, isDatabaseUnavailable } from './database.js';
+export { createLogger, noopLogger, redact } from './logger.js';
+export { staticSecurityHeaders } from './headers.js';
 export { objectUrl, presignV4, signV4 } from './sigv4.js';
 
 /** @typedef {import('./policy.js').OutboundPolicy} OutboundPolicy */
@@ -23,3 +27,5 @@ export { objectUrl, presignV4, signV4 } from './sigv4.js';
 /** @typedef {import('./mongo.js').MongoUriCheck} MongoUriCheck */
 /** @typedef {import('./sigv4.js').SignV4Params} SignV4Params */
 /** @typedef {import('./sigv4.js').PresignV4Params} PresignV4Params */
+/** @typedef {import('./logger.js').Logger} Logger */
+/** @typedef {import('./logger.js').LogLevel} LogLevel */

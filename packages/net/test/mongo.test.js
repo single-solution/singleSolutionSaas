@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createOutboundPolicy, isSafeMongoUri } from '../src/index.js';
+import { createOutboundPolicy, isSafeMongoUri, mongoDatabaseName } from '../src/index.js';
 import { parseMongoUri } from '../src/mongo.js';
 
 const policy = createOutboundPolicy();
@@ -119,5 +119,24 @@ describe('isSafeMongoUri', () => {
 	it('reports malformed strings as bad_url', () => {
 		expect(isSafeMongoUri('nope', policy)).toEqual({ ok: false, code: 'bad_url', reason: 'unsupported_scheme' });
 		expect(isSafeMongoUri('mongodb://u:p@bad..host/x', policy)).toMatchObject({ ok: false, code: 'bad_url' });
+	});
+});
+
+describe('mongoDatabaseName', () => {
+	it('is the decoded path of the string, as the driver takes it', () => {
+		expect(mongoDatabaseName('mongodb+srv://u:p@cluster.example.net/shop?retryWrites=true')).toBe('shop');
+		expect(mongoDatabaseName('mongodb://a.example.com:27017,b.example.com/my%2Ddb')).toBe('my-db');
+		expect(mongoDatabaseName('mongodb://h.example.com/db#x')).toBe('db');
+	});
+
+	it('is null when the string names none, and empty when its escapes are malformed', () => {
+		for (const uri of [
+			'mongodb://h.example.com',
+			'mongodb://h.example.com/',
+			'mongodb://h.example.com/?tls=true',
+			'postgres://h/db',
+		])
+			expect(mongoDatabaseName(uri)).toBeNull();
+		expect(mongoDatabaseName('mongodb://h.example.com/%zz')).toBe('');
 	});
 });

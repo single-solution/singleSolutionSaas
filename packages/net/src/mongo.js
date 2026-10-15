@@ -1,5 +1,5 @@
 /**
- * MongoDB connection-string safety (pure). Only `mongodb://` and `mongodb+srv://` are accepted; every host must pass
+ * MongoDB connection strings (pure): the database a string names, and its safety. Only `mongodb://` and `mongodb+srv://` are accepted; every host must pass
  * the outbound policy (`checkHost`); only a known-safe set of URI options is allowed — anything that makes the client
  * read local files (`tlsCAFile`, …), weaken TLS (`tlsInsecure`, `tlsAllowInvalidCertificates`, …), go through a proxy
  * (`proxyHost`, …) or use ambient cloud credentials (`MONGODB-AWS`, `MONGODB-OIDC`, `authMechanismProperties`) is
@@ -67,6 +67,30 @@ const SAFE_MECHANISMS = new Set(['SCRAM-SHA-1', 'SCRAM-SHA-256']);
 const OPTIONS = new Set(SAFE_MONGO_OPTIONS);
 
 /**
+ * Decode a database name from a URI path.
+ * @param {string} text
+ * @returns {string} '' when its escapes are malformed
+ */
+const decodeName = (text) => {
+	try {
+		return decodeURIComponent(text);
+	} catch {
+		return '';
+	}
+};
+
+/**
+ * The database a MongoDB connection string names (its path, decoded), as the driver's `client.db()` takes it. Null when
+ * it names none; '' when the name's escapes are malformed (no database has that name, so a name check refuses it).
+ * @param {string} uri
+ * @returns {string | null}
+ */
+export const mongoDatabaseName = (uri) => {
+	const match = /^mongodb(?:\+srv)?:\/\/[^/?#]*\/([^?#]*)/.exec(uri);
+	return match?.[1] ? decodeName(match[1]) : null;
+};
+
+/**
  * Parse a MongoDB connection string without contacting anything.
  * @param {unknown} uri
  * @returns {{ ok: true, value: ParsedMongoUri } | { ok: false, reason: string }}
@@ -113,11 +137,8 @@ export const parseMongoUri = (uri) => {
 	/** @type {string | null} */
 	let dbName = null;
 	if (path.length > 1) {
-		try {
-			dbName = decodeURIComponent(path.slice(1));
-		} catch {
-			return { ok: false, reason: 'invalid_db_name' };
-		}
+		dbName = decodeName(path.slice(1));
+		if (dbName === '') return { ok: false, reason: 'invalid_db_name' };
 	}
 	return {
 		ok: true,
