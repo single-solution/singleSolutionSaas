@@ -200,7 +200,9 @@ describe('Growth on the real Portal', () => {
 			(b) => b.textContent === strings['consent.acceptAll'],
 		);
 		accept.click();
-		expect(JSON.parse(win.localStorage.getItem('ss-growth-consent'))).toMatchObject({ analytics: true, marketing: true });
+		expect(JSON.parse(win.localStorage.getItem('ss-growth-consent'))).toMatchObject({
+			categories: { analytics: true, marketing: true },
+		});
 		win.dispatchEvent(
 			new win.CustomEvent('ss:add_to_cart', {
 				detail: { currency: 'USD', value: 2500, items: [{ id: 'prod_1', price: 1250, quantity: 2 }] },
@@ -225,7 +227,7 @@ describe('Growth on the real Portal', () => {
 		expect(total('visits', '')?.c).toBe(1);
 		expect(total('page', '/shop')?.c).toBe(1);
 		expect(total('search', 'lamps')?.c).toBe(1);
-		expect(total('funnel', 'purchase')?.c).toBe(1);
+		expect(total('event', 'purchase')?.c).toBe(1);
 		expect(total('revenue', 'USD')).toMatchObject({ c: 1, s: 2500 });
 
 		// the same visitor back later (a new visit): the kept choice holds, no banner, the totals go up
@@ -255,7 +257,8 @@ describe('Growth on the real Portal', () => {
 		});
 		expect(report.status).toBe(200);
 		expect(report.json.totals).toEqual({ visits: 2, pageViews: 2 });
-		expect(report.json.funnel.steps.map((/** @type {{ count: number }} */ s) => s.count)).toEqual([1, 1, 0, 1]);
+		// the shop funnel every website starts with (G1)
+		expect(report.json.funnels[0].steps.map((/** @type {{ count: number }} */ s) => s.count)).toEqual([1, 1, 0, 1]);
 		expect(report.json.searches).toEqual([{ key: 'lamps', count: 2 }]);
 		// the raw events list and its count agree (PLAN 0.8.10 K4)
 		const raw = await sys.call('GET', '/v1/events?limit=100', { token: tokens.server });
@@ -320,9 +323,9 @@ describe('Growth on the real Portal', () => {
 		expect(run.json.cached).toBe(false);
 		expect(run.json.pages).toEqual([
 			{ url: `https://${DOMAIN}/`, kind: 'home', sampled: false },
-			{ url: `https://${DOMAIN}/products/blue-lamp`, kind: 'product', sampled: true },
-			{ url: `https://${DOMAIN}/lamps`, kind: 'category', sampled: true },
-			{ url: `https://${DOMAIN}/glossary/linen`, kind: 'glossary', sampled: true },
+			{ url: `https://${DOMAIN}/products/blue-lamp`, kind: 'Product', sampled: true },
+			{ url: `https://${DOMAIN}/lamps`, kind: 'CollectionPage', sampled: true },
+			{ url: `https://${DOMAIN}/glossary/linen`, kind: 'DefinedTerm', sampled: true },
 		]);
 		/** @param {string} id @param {string | null} [at] */
 		const result = (id, at) => {

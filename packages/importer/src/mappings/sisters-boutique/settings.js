@@ -558,7 +558,6 @@ export const settingsPlan = (values) => {
 				'meta_pixel.pixelId': store.metaPixelId,
 				'google_tags.ga4Id': store.googleAnalyticsId,
 				'google_tags.adsId': '',
-				'google_tags.adsPurchaseLabel': '',
 				'google_tags.gtmId': store.googleTagManagerId,
 				'google_tags.ga4ViaGtm': false,
 				'tiktok_pixel.pixelId': store.tiktokPixelId,
@@ -569,7 +568,9 @@ export const settingsPlan = (values) => {
 				'robots_verification.robotsRules': ['User-agent: *', 'Allow: /', ...disallow.map((path) => `Disallow: ${path}`)].join(
 					'\n',
 				),
-				'robots_verification.blockAiCrawlers': false,
+				// no AI training crawler blocked (mechanical; store mapping to review when the owner asks)
+				'robots_verification.aiCrawlers': [],
+				'robots_verification.moreAiCrawlers': [],
 				// Growth's robots presets at the SaaS defaults (mechanical; store mapping to review when the owner asks)
 				'robots_verification.blockSearchPages': true,
 				'robots_verification.blockParameters': 'sort, minPrice, maxPrice, inStock',
@@ -581,14 +582,20 @@ export const settingsPlan = (values) => {
 				'robots_verification.yandexVerification': '',
 				// the notice banner, while SB has it on (`apps/web/src/app/_components/StoreNoticeBanner.tsx`:11)
 				'notice_bar.enabled': store.storeNoticeEnabled,
-				'notice_bar.text': store.storeNoticeText,
-				'notice_bar.linkText': '',
-				'notice_bar.linkUrl': '',
-				'notice_bar.startsAt': '',
-				'notice_bar.endsAt': '',
-				'notice_bar.dismissible': true,
-				'notice_bar.dismissFor': 'visit',
-				'notice_bar.hideOnPages': ['/', '/concepts/**'],
+			},
+			lists: {
+				// SB's one notice as Growth's one announcement (G4; mechanical, store mapping to review when the owner asks)
+				announcements: store.storeNoticeText
+					? [
+							{
+								key: 'store_notice',
+								text: store.storeNoticeText,
+								hideOnPages: ['/', '/concepts/**'],
+								dismissible: true,
+								dismiss: 'visit',
+							},
+						]
+					: [],
 			},
 		},
 	};

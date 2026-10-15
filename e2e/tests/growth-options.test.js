@@ -149,13 +149,16 @@ describe('Growth options with the real page script (PLAN 0.8.10 G1–G7)', () =>
 		await setting('visitor_analytics.detail', 'sessions');
 		await setting('visitor_analytics.requireConsent', false);
 		await setting('web_vitals.toGa4', true);
-		await setting('robots_verification.blockAiCrawlers', true);
+		await setting('robots_verification.aiCrawlers', ['GPTBot', 'Google-Extended', 'CCBot']);
 		await setting('robots_verification.yandexVerification', 'ya-123');
 		await setting('indexnow.key', 'key-0123456789');
 		await setting('indexnow.keyPath', '/indexnow-key.txt');
-		await setting('notice_bar.text', 'Free delivery this week');
-		await setting('notice_bar.dismissFor', 'page');
-		await setting('notice_bar.hideOnPages', ['/checkout/**']);
+		// G4: the notice bar's announcement, a merchant list
+		const announcements = await sys.call('PUT', '/v1/lists/announcements', {
+			token: tokens.server,
+			body: { value: [{ key: 'delivery', text: 'Free delivery this week', dismiss: 'page', hideOnPages: ['/checkout/**'] }] },
+		});
+		expect(announcements.status).toBe(200);
 		const settings = await sys.call('GET', '/v1/settings', { token: tokens.server });
 		const tags = settings.json.features.find((/** @type {any} */ f) => f.key === 'tags');
 		expect(tags).toMatchObject({ on: true, values: { consentRequired: { value: false, source: 'website' } } });
@@ -283,7 +286,13 @@ describe('Growth options with the real page script (PLAN 0.8.10 G1–G7)', () =>
 
 		// G6: custom UIs read the notice, also with a page it is hidden on
 		const notice = await sys.call('GET', '/v1/notice?path=/shop', { token: tokens.browser, origin: PAGE });
-		expect(notice.json).toEqual({ text: 'Free delivery this week', linkText: '', linkUrl: null, dismissible: true });
+		expect(notice.json).toEqual({
+			key: 'delivery',
+			text: 'Free delivery this week',
+			linkText: '',
+			linkUrl: null,
+			dismissible: true,
+		});
 		const hidden = await sys.call('GET', '/v1/notice?path=/checkout/pay', { token: tokens.server });
 		expect(hidden.json).toBeNull();
 		const checkout = openPage('/checkout/pay');

@@ -521,9 +521,17 @@ describe('the Sisters Boutique mapping', () => {
 			// SB says "already a member" to a repeat ask: Accounts' detailed answers (its default is private)
 			'role_requests.revealStatus': true,
 		});
+		expect(/** @type {any} */ (settings.growth?.lists)?.announcements).toEqual([
+			{
+				key: 'store_notice',
+				text: 'Free delivery this week',
+				hideOnPages: ['/', '/concepts/**'],
+				dismissible: true,
+				dismiss: 'visit',
+			},
+		]);
 		expect(settings.growth?.settings).toMatchObject({
 			'notice_bar.enabled': true,
-			'notice_bar.text': 'Free delivery this week',
 			'meta_pixel.pixelId': '100000000000000',
 			'robots_verification.robotsRules': 'User-agent: *\nAllow: /\nDisallow: /account\nDisallow: /checkout\nDisallow: /api/',
 			'robots_verification.sitemaps': ['https://shop.example.com/sitemap.xml'],
