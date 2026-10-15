@@ -560,7 +560,10 @@ Admin widgets on the merchant's own admin use **tickets**, never the browser tok
 - An Accounts sign-in only says who the visitor or user is. Whatever roles it carries, it never authorises admin actions
   in any product; those need the server token or a ticket.
 - Some products may also accept a merchant's own login for visitors (decided in their grilling; Chat never does). For
-  those, the issuer and its public-keys URL are set in that product's Connections, never in the Portal.
+  those, the issuer and its public-keys URL are set in that product's Connections, never in the Portal. No product
+  accepts one today, so the kit has no verifier for it (its unused `createIdentity` was removed in the 2026-10-15
+  cleanup); a product whose grilling decides to accept one adds it then. Every product logs JSON lines to its host's
+  logs through the kit's `createLogger()` (a failed route, a misconfiguration, the kit's warnings; secrets redacted).
 
 ### 0.4.7 Status of a product on a website: what every product must do
 
