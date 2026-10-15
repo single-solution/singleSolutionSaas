@@ -7,7 +7,9 @@
  * - `ss:add_to_cart`: a line is added to the browser cart (the product page's Add to cart, the wishlist's Add to cart,
  *   `SSEcommerce.addToCart(…)` and the `ss-ecommerce:add-to-cart` event of Chat's product cards);
  * - `ss:begin_checkout`: the shopper first presses Place order in the cart widget (once per cart widget);
- * - `ss:purchase`: `POST /v1/shop/orders` answered and the order exists (once per order placed).
+ * - `ss:purchase`: `POST /v1/shop/orders` answered and the order exists (once per order placed);
+ * - `ss:search`: the product grid's own search box ran a search (`{ term, results }`: the words and how many products it
+ *   found); a search in the page's address is Growth's to find, so the grid sends none for it.
  *
  * Money is integer minor units with an ISO 4217 currency, as everywhere in Ecommerce. `value` is the sum of price ×
  * quantity of the items, except on `ss:purchase`, where it is the order's total.
@@ -20,6 +22,7 @@ export const GROWTH_EVENTS = Object.freeze({
 	addToCart: 'ss:add_to_cart',
 	beginCheckout: 'ss:begin_checkout',
 	purchase: 'ss:purchase',
+	search: 'ss:search',
 });
 
 /**

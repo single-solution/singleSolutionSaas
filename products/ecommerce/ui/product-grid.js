@@ -15,8 +15,10 @@
  * @module
  */
 import { fromDecimal } from '../core/money.js';
+import { GROWTH_EVENTS } from '../core/growth-events.js';
 import {
 	MAX_PAGE_SIZE,
+	announce,
 	button,
 	codeOf,
 	currencyOf,
@@ -100,6 +102,8 @@ export const mountProductGrid = async ({ host, config, shop, win }) => {
 	let lastPage = 1;
 	let currency = settings.currency;
 	let state = /** @type {'loading' | 'ready' | 'error' | 'more'} */ ('loading');
+	/** the words of a search its own box ran, until its answer is told to Growth @type {string | null} */
+	let searching = null;
 	let panelOpen = activeCount(filters) > 0;
 	let seq = 0;
 	let brandSeq = 0;
@@ -164,6 +168,8 @@ export const mountProductGrid = async ({ host, config, shop, win }) => {
 				const q = search.value.trim();
 				if (q !== filters.q) forget();
 				filters.q = q;
+				// a search of its own box is told to Growth once it is answered (a search in the page's address is Growth's)
+				searching = q || null;
 				void load('filters');
 			});
 			sort.addEventListener('change', () => {
@@ -408,6 +414,10 @@ export const mountProductGrid = async ({ host, config, shop, win }) => {
 					remember(known, facets);
 				}
 				currency = currencyOf(settings, items[0]?.currency);
+				if (searching !== null && mode === 'filters') {
+					announce(win, GROWTH_EVENTS.search, { term: searching, results: found?.total ?? items.length });
+					searching = null;
+				}
 				state = 'ready';
 				keepFocus(root, () => {
 					renderFilters();

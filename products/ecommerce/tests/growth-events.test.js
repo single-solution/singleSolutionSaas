@@ -5,12 +5,13 @@ import { describe, expect, it } from 'vitest';
 import { GROWTH_EVENTS, growthItem, itemsDetail, purchaseDetail } from '../core/growth-events.js';
 
 describe('growth events', () => {
-	it('name the four events', () => {
+	it('name the five events, as Growth listens for them', () => {
 		expect(GROWTH_EVENTS).toEqual({
 			viewItem: 'ss:view_item',
 			addToCart: 'ss:add_to_cart',
 			beginCheckout: 'ss:begin_checkout',
 			purchase: 'ss:purchase',
+			search: 'ss:search',
 		});
 		expect(Object.isFrozen(GROWTH_EVENTS)).toBe(true);
 	});

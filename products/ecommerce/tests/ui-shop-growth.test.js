@@ -2,10 +2,12 @@
 /* global window */
 /**
  * Growth's browser events from the shopper widgets (PLAN 0.8.9): `ss:view_item` and `ss:add_to_cart` on the product
- * page, `ss:add_to_cart` from the wishlist, `ss:begin_checkout` and `ss:purchase` from the cart widget.
+ * page, `ss:add_to_cart` from the wishlist, `ss:begin_checkout` and `ss:purchase` from the cart widget, `ss:search`
+ * from the product grid's search box.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mountCart } from '../ui/cart.js';
+import { mountProductGrid } from '../ui/product-grid.js';
 import { mountProductPage } from '../ui/product-page.js';
 import { mountWishlist } from '../ui/wishlist.js';
 import {
@@ -231,5 +233,47 @@ describe('cart', () => {
 			{ orderId: 'ord_1', orderNumber: 'SO2026-1', currency: 'USD', value: 221000, items },
 		]);
 		expect(events.seen.map((entry) => entry.name)).toEqual(['ss:begin_checkout', 'ss:purchase']);
+	});
+});
+
+describe('product grid', () => {
+	it('tells Growth of each search its own search box runs, with how many products it found', async () => {
+		/** @type {string[]} */
+		const asked = [];
+		const fake = makeShop({
+			features: ['catalog'],
+			routes: {
+				'GET /v1/shop/products': (/** @type {any} */ call) => {
+					const q = call.query.q ?? '';
+					asked.push(q);
+					return ok({
+						items: q === 'none' ? [] : [{ ...PRODUCT, image: null, cardImages: [], grades: [], priceMax: PRODUCT.price }],
+						nextCursor: null,
+						hasMore: false,
+						...(q === 'lamp' ? { total: 7, capped: false } : {}),
+						facets: null,
+					});
+				},
+				'GET /v1/shop/categories': () => ok({ items: [] }),
+			},
+		});
+		const host = place('product_grid', { query: 'phone' });
+		await mountProductGrid({ host, config: configOf(['catalog']), shop: fake.shop, win: window });
+		await flush();
+		// a search in the page's own address or data is Growth's to find: nothing sent for it
+		expect(events.of('ss:search')).toEqual([]);
+		const box = /** @type {HTMLInputElement} */ ($(host, 'input[type="search"]'));
+		await setValue(box, ' lamp ');
+		await click(buttonOf(host, text('grid.searchButton')));
+		await setValue(box, 'none');
+		await click(buttonOf(host, text('grid.searchButton')));
+		// clearing the box lists everything: not a search
+		await setValue(box, '');
+		await click(buttonOf(host, text('grid.searchButton')));
+		expect(asked).toEqual(['phone', 'lamp', 'none', '']);
+		expect(events.of('ss:search')).toEqual([
+			{ term: 'lamp', results: 7 },
+			{ term: 'none', results: 0 },
+		]);
 	});
 });
