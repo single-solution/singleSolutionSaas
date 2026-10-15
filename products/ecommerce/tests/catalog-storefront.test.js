@@ -36,7 +36,14 @@ const bucket = ({ type = 'image/png', size = 2000, exists = true } = {}) =>
 beforeAll(async () => {
 	shop = await readyShop({ features: ALL.filter((feature) => feature !== 'multi_location') });
 	await shop.list('grades', [
-		{ key: 'a-plus', label: 'A+', description: 'Like new', color: '#16a34a', condition: 'refurbished', warrantyDays: 90 },
+		{
+			key: 'a-plus',
+			label: 'A+',
+			description: 'Like new',
+			color: '#16a34a',
+			condition: 'refurbished',
+			warrantyTime: { amount: 90, unit: /** @type {const} */ ('days') },
+		},
 		{ key: 'b', label: 'B', description: 'Light marks', categoryIds: [] },
 	]);
 	await shop.setting('catalog', 'mediaBaseUrl', 'https://cdn.shop.example.com');

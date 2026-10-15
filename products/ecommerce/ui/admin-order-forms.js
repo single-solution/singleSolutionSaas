@@ -9,6 +9,7 @@
  * @module
  */
 import { checkFormat } from '../core/fields.js';
+import { timeText } from './shop-common.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /**
@@ -43,11 +44,7 @@ export const unitsMissing = (line) => (line.serials ?? []).length !== line.quant
  * @param {Kit} kit @param {any} line
  */
 export const warrantyOf = (kit, line) =>
-	typeof line.warrantyDays !== 'number'
-		? ''
-		: line.warrantyDays > 0
-			? kit.t('ordersAdmin.warrantyDays', { days: line.warrantyDays })
-			: kit.t('ordersAdmin.noWarranty');
+	!line.warrantyTime ? '' : timeText(kit.t, line.warrantyTime) || kit.t('ordersAdmin.noWarranty');
 
 /**
  * Couriers of the website, when the widget settings carry them (`settings.orders.couriers: [{ key, name }]`).

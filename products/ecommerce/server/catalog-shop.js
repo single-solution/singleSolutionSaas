@@ -43,6 +43,7 @@ import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { attributeValues } from '../core/promotions.js';
 import { createShownPrices } from './shown-prices.js';
 import { chartView, resolveSizeChart } from '../core/size-charts.js';
+import { windowDefaults } from '../core/returns.js';
 import { SHOP_LIMITS, refuse } from './catalog-common.js';
 import { createCatalogSearch } from './catalog-search.js';
 import { conditional } from './http-cache.js';
@@ -498,7 +499,7 @@ export const createCatalogShop = (product, service, common) => {
 				),
 			),
 			stock: { showStock: String(settings.showStock ?? 'none'), lowStockShown: Number(settings.lowStockShown ?? 5) },
-			warrantyDays: Number((await s.values('returns')).warrantyDays ?? 0) || null,
+			warrantyTime: ((time) => (time.amount > 0 ? time : null))(windowDefaults(await s.values('returns')).warrantyTime),
 			sizeChart: elements.chart ? await sizeChartOf(s, data, item, brand, categories) : null,
 			video: await videoOf(s, item),
 		});

@@ -2,21 +2,35 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
-		"returnDays": {
+		"returnTime": {
 			"type": "integer",
-			"title": "Return window (days)",
-			"description": "Days after delivery during which a shopper may return an item, unless the item or its condition grade has its own window. 0 = no returns.",
+			"title": "Return window",
+			"description": "How long after delivery a shopper may return an item (in Return window unit), unless the item or its condition grade has its own window. 0 = no returns.",
 			"default": 7,
 			"minimum": 0,
-			"maximum": 365
+			"maximum": 3650
 		},
-		"warrantyDays": {
+		"returnTimeUnit": {
+			"type": "string",
+			"title": "Return window unit",
+			"description": "Days, months or years (at most 10 years); shown as typed: 1 year stays 1 year.",
+			"default": "days",
+			"enum": ["days", "months", "years"]
+		},
+		"warrantyTime": {
 			"type": "integer",
-			"title": "Warranty (days)",
-			"description": "Days after delivery during which a shopper may make a warranty claim, unless the item or its condition grade has its own. 0 = no warranty.",
+			"title": "Warranty",
+			"description": "How long after delivery a shopper may make a warranty claim (in Warranty unit), unless the item or its condition grade has its own. 0 = no warranty.",
 			"default": 0,
 			"minimum": 0,
 			"maximum": 3650
+		},
+		"warrantyTimeUnit": {
+			"type": "string",
+			"title": "Warranty unit",
+			"description": "Days, months or years (at most 10 years); shown as typed: 1 year stays 1 year.",
+			"default": "days",
+			"enum": ["days", "months", "years"]
 		},
 		"returnMethod": {
 			"type": "string",

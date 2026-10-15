@@ -2,12 +2,13 @@
  * The shop's policies (PLAN 0.8.8 Business details; PLAN 0.8.10 E3, SF-1, E27): the merchant's list `policies` — each
  * `{ key, title, text }`, in the order shown, seeded with delivery, returns, privacy, terms and warranty and open to any
  * other the merchant adds — in plain text or cleaned HTML (the `checkout` setting `policyFormat`), with the
- * placeholders `{returnDays}`, `{warrantyDays}`, `{warrantyMonths}`, `{business}`, `{email}`, `{phone}`, `{address}`,
+ * placeholders `{returnTime}`, `{warrantyTime}` (as typed: `30 days`, `1 year`, E14), `{business}`, `{email}`, `{phone}`, `{address}`,
  * `{deliveryFee}` and `{freeDeliveryOver}` filled (also written with double braces, `{{business}}`); other text in
  * braces stays as typed. Policies without text are left out. No I/O.
  * @module
  */
 import { cleanHtml } from './catalog-content.js';
+import { durationText } from './durations.js';
 
 /** A policy of the list. @typedef {{ key: string, title: string, text: string }} Policy */
 
@@ -65,7 +66,8 @@ export const checkPolicies = (value) => {
 /**
  * What the placeholders stand for: the return and warranty days, the business's name and contacts (business.json),
  * and the delivery fee where no zone matches and the amount delivery is free from, written as money ('' when none).
- * @typedef {{ returnDays: number, warrantyDays: number, business: string, email?: string, phone?: string,
+ * @typedef {{ returnTime: import('./durations.js').Duration, warrantyTime: import('./durations.js').Duration,
+ *   locale?: string, business: string, email?: string, phone?: string,
  *   address?: string, deliveryFee?: string, freeDeliveryOver?: string }} PolicyValues
  */
 
@@ -86,9 +88,8 @@ export const fillPolicies = (list, policyFormat, values) => {
 	const format = policyFormat === 'html' ? 'html' : 'text';
 	/** @type {Record<string, string>} */
 	const known = {
-		returnDays: String(values.returnDays),
-		warrantyDays: String(values.warrantyDays),
-		warrantyMonths: String(Math.round(values.warrantyDays / 30)),
+		returnTime: durationText(values.returnTime, values.locale),
+		warrantyTime: durationText(values.warrantyTime, values.locale),
 		business: values.business,
 		email: values.email ?? '',
 		phone: values.phone ?? '',

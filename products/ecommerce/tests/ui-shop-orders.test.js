@@ -193,10 +193,15 @@ describe('my orders', () => {
 							...order.lines[0],
 							serials: ['356938035643809', '490154203237518'],
 							unitValues: [{ name: 'Model code', values: ['A1', 'A2'] }],
-							warrantyDays: 365,
+							warrantyTime: { amount: 365, unit: /** @type {const} */ ('days') },
 						},
-						{ ...order.lines[1], serials: [], warrantyDays: 0 },
-						{ ...order.lines[1], id: 'oln_3', name: 'Case', warrantyDays: 90 },
+						{ ...order.lines[1], serials: [], warrantyTime: { amount: 0, unit: /** @type {const} */ ('days') } },
+						{
+							...order.lines[1],
+							id: 'oln_3',
+							name: 'Case',
+							warrantyTime: { amount: 3, unit: /** @type {const} */ ('months') },
+						},
 					];
 					return ok(order);
 				},
@@ -206,12 +211,12 @@ describe('my orders', () => {
 		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
 		const lines = $$(host, `ul[aria-label="${text('orders.lines')}"] > li`);
 		expect(lines[0].textContent).toContain(text('orders.serials', { serials: '356938035643809, 490154203237518' }));
-		expect(lines[0].textContent).toContain(text('shop.warrantyDays', { days: 365 }));
+		expect(lines[0].textContent).toContain(text('shop.warranty', { time: text('time.days', { count: 365 }) }));
 		expect(lines[0].textContent).toContain(text('orders.unitValues', { name: 'Model code', values: 'A1, A2' }));
 		expect(textOf(host)).toContain(text('orders.fieldValue', { name: 'Gift message', value: 'For Sam' }));
 		expect(lines[1].textContent).not.toContain(text('orders.serials', { serials: '' }));
-		expect(lines[1].textContent).not.toContain(text('shop.warrantyDays', { days: 0 }));
-		expect(lines[2].textContent).toContain(text('shop.warrantyMonths', { months: 3 }));
+		expect(lines[1].textContent).not.toContain('Warranty');
+		expect(lines[2].textContent).toContain(text('shop.warranty', { time: text('time.months', { count: 3 }) }));
 	});
 
 	it('shows the loyalty points above the orders: balance, points expiring soon and history', async () => {
@@ -690,8 +695,8 @@ describe('returns', () => {
 				image: null,
 				quantity: 2,
 				claimable: 2,
-				return: { days: 7, until: '2026-10-08T10:00:00.000Z', open: true },
-				warranty: { days: 365, until: '2027-10-01T10:00:00.000Z', open: true },
+				return: { time: { amount: 7, unit: 'days' }, until: '2026-10-08T10:00:00.000Z', open: true },
+				warranty: { time: { amount: 365, unit: 'days' }, until: '2027-10-01T10:00:00.000Z', open: true },
 			},
 			{
 				lineId: 'oln_3',
@@ -701,8 +706,8 @@ describe('returns', () => {
 				image: null,
 				quantity: 1,
 				claimable: 1,
-				return: { days: 0, until: null, open: false },
-				warranty: { days: 30, until: '2026-10-31T10:00:00.000Z', open: true },
+				return: { time: { amount: 0, unit: 'days' }, until: null, open: false },
+				warranty: { time: { amount: 30, unit: 'days' }, until: '2026-10-31T10:00:00.000Z', open: true },
 			},
 			{
 				lineId: 'oln_4',
@@ -712,8 +717,8 @@ describe('returns', () => {
 				image: null,
 				quantity: 1,
 				claimable: 0,
-				return: { days: 7, until: null, open: true },
-				warranty: { days: 0, until: null, open: false },
+				return: { time: { amount: 7, unit: 'days' }, until: null, open: true },
+				warranty: { time: { amount: 0, unit: 'days' }, until: null, open: false },
 			},
 		],
 	};

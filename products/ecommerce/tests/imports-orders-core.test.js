@@ -290,7 +290,7 @@ describe('orders', () => {
 							serials: [' 354000000000001 ', '354000000000002'],
 							licences: [idOf('lic', 1)],
 							booking: { start: '2027-01-01T10:00:00Z', end: '2027-01-01T11:00:00Z' },
-							warrantyDays: 365,
+							warrantyTime: { amount: 365, unit: /** @type {const} */ ('days') },
 							dealId: idOf('deal', 1),
 							returnedQuantity: 1,
 							cost: 500,
@@ -368,7 +368,14 @@ describe('orders', () => {
 		);
 		expect(value).toMatchObject({
 			role: 'refunded',
-			lines: [{ kind: 'digital', downloads: 0, serials: ['354000000000001', '354000000000002'], warrantyDays: 365 }],
+			lines: [
+				{
+					kind: 'digital',
+					downloads: 0,
+					serials: ['354000000000001', '354000000000002'],
+					warrantyTime: { amount: 365, unit: /** @type {const} */ ('days') },
+				},
+			],
 			payment: { state: 'refunded', via: 'payments', proof: { key: 'ecommerce/proofs/1.png' } },
 			refunds: [{ by: { email: 'sam@shop.example', role: 'owner' }, manual: false, refundId: 'rfd_1' }],
 			shipment: { courier: 'swift', trackingNumber: 'TRK-9', booked: true, trackingNote: '' },
@@ -571,7 +578,7 @@ describe('orders', () => {
 			serials: ['a', 'b', 'c'],
 			categoryIds: [idOf('cat', 1), idOf('cat', 1)],
 			downloads: -1,
-			warrantyDays: 99999,
+			warrantyTime: { amount: 99999, unit: /** @type {const} */ ('days') },
 			dealId: 'deal',
 			booking: 'today',
 			color: 'red',
@@ -584,7 +591,7 @@ describe('orders', () => {
 			'/lines/0/total',
 			'/lines/0/serials',
 			'/lines/0/downloads',
-			'/lines/0/warrantyDays',
+			'/lines/0/warrantyTime',
 			'/lines/0/id',
 			'/lines/0/name',
 			'/lines/0/categoryIds',

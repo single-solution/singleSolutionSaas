@@ -7,6 +7,7 @@
  * the loyalty points taken back. No I/O.
  * @module
  */
+import { endOf, isDuration, settingDuration } from './durations.js';
 import { gradesFor } from './grades.js';
 import { OTHER_WAY, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
 
@@ -124,51 +125,63 @@ export const claimedByLine = (claims) => {
 };
 
 /**
- * A condition grade of the `grades` list as this part reads it (days are optional).
- * @typedef {{ key: string, label?: string, returnDays?: number | null, warrantyDays?: number | null }} GradeDays
+ * A condition grade of the `grades` list as this part reads it (times are optional, E14).
+ * @typedef {{ key: string, label?: string, returnTime?: Duration | null, warrantyTime?: Duration | null }} GradeTimes
  */
 
 /**
- * @typedef {{ returnDays: number, warrantyDays: number }} WindowDefaults the `returns` settings
- * @typedef {{ days: number, until: Date | null, open: boolean }} ClaimWindow
+ * @typedef {import('./durations.js').Duration} Duration
+ * @typedef {{ returnTime: Duration, warrantyTime: Duration }} WindowDefaults the `returns` settings
+ * @typedef {{ time: Duration, until: Date | null, open: boolean }} ClaimWindow
  */
 
-/** @param {unknown} value @returns {value is number} */
-const isDays = (value) => Number.isSafeInteger(value) && Number(value) >= 0;
+/**
+ * The `returns` settings' times: each a number and its unit (`returnTime` + `returnTimeUnit`, E14).
+ * @param {Record<string, unknown>} settings
+ * @returns {WindowDefaults}
+ */
+export const windowDefaults = (settings) => ({
+	returnTime: settingDuration(settings.returnTime, settings.returnTimeUnit),
+	warrantyTime: settingDuration(settings.warrantyTime, settings.warrantyTimeUnit),
+});
+
+/** No time. @type {Duration} */
+const NONE = Object.freeze({ amount: 0, unit: 'days' });
 
 /**
- * Days of a line's window of one kind: the product's own, else its grade's, else the setting.
+ * The time of a line's window of one kind: the product's own, else its grade's, else the setting.
  * @param {ClaimKind} kind
- * @param {{ returnDays: number | null, warrantyDays: number | null } | null} product the product now (null: deleted)
- * @param {GradeDays | null} grade
+ * @param {{ returnTime: Duration | null, warrantyTime: Duration | null } | null} product the product now (null: deleted)
+ * @param {GradeTimes | null} grade
  * @param {WindowDefaults} defaults
+ * @returns {Duration}
  */
-export const windowDays = (kind, product, grade, defaults) => {
-	const field = kind === 'return' ? 'returnDays' : 'warrantyDays';
+export const windowTime = (kind, product, grade, defaults) => {
+	const field = kind === 'return' ? 'returnTime' : 'warrantyTime';
 	const own = product?.[field];
-	if (isDays(own)) return own;
+	if (isDuration(own)) return own;
 	const graded = grade?.[field];
-	if (isDays(graded)) return graded;
-	return isDays(defaults[field]) ? defaults[field] : 0;
+	if (isDuration(graded)) return graded;
+	return isDuration(defaults[field]) ? defaults[field] : NONE;
 };
 
 /**
- * A window counted from delivery.
- * @param {number} days
+ * A window counted from delivery (months and years on the calendar).
+ * @param {Duration} time
  * @param {Date | null} deliveredAt
  * @param {number} now
  * @returns {ClaimWindow}
  */
-export const windowOf = (days, deliveredAt, now) => {
-	if (!deliveredAt || days <= 0) return { days, until: null, open: false };
-	const until = new Date(deliveredAt.getTime() + days * DAY_MS);
-	return { days, until, open: now <= until.getTime() };
+export const windowOf = (time, deliveredAt, now) => {
+	if (!deliveredAt || time.amount <= 0) return { time, until: null, open: false };
+	const until = endOf(deliveredAt, time);
+	return { time, until, open: now <= until.getTime() };
 };
 
 /**
  * What can still be claimed on each line of a delivered order (only physical items are claimed).
  * @param {{ order: Pick<OrderRecord, 'lines' | 'deliveredAt'>, claims: Array<Pick<ReturnRecord, 'status' | 'kind' | 'refundAmount' | 'lines'>>,
- *   products: Map<string, { returnDays: number | null, warrantyDays: number | null }>, grades: GradeDays[],
+ *   products: Map<string, { returnTime: Duration | null, warrantyTime: Duration | null }>, grades: GradeTimes[],
  *   lineage: (categoryIds: string[]) => string[], defaults: WindowDefaults, now: number }} input `lineage`: a line's
  *   categories with those above them, nearest first (`core/catalog-taxonomy.js` `lineageOf`), for the grade a line's
  *   category or one above it defines
@@ -187,11 +200,11 @@ export const returnableLines = ({ order, claims, products, grades, lineage, defa
 				line,
 				claimable,
 				freeSerials: line.serials.filter((serial) => !taken?.serials.has(serial)),
-				return: windowOf(windowDays('return', product, grade, defaults), order.deliveredAt, now),
+				return: windowOf(windowTime('return', product, grade, defaults), order.deliveredAt, now),
 				// the warranty kept on the line at placement wins (E12); a line without one (none was set, or an imported
 				// line) uses the product, grade and setting
 				warranty: windowOf(
-					typeof line.warrantyDays === 'number' ? line.warrantyDays : windowDays('warranty', product, grade, defaults),
+					isDuration(line.warrantyTime) ? line.warrantyTime : windowTime('warranty', product, grade, defaults),
 					order.deliveredAt,
 					now,
 				),

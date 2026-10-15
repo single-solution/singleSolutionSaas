@@ -11,7 +11,7 @@
  */
 import { PRODUCT_STATUSES } from '../core/model.js';
 import { typeTakes } from '../core/item-types.js';
-import { entriesOf, query, wholeOf } from './admin-kit.js';
+import { entriesOf, query, timeInputs } from './admin-kit.js';
 import { choicesOf } from './admin-attributes.js';
 import { chartChoices, checkGroup, earlierSlugs, faqsEditor, paragraphsOf, richEditor, seoEditor } from './admin-fields.js';
 import { fieldsOf } from './admin-screen.js';
@@ -52,8 +52,8 @@ const blank = () => ({
 	faqs: [],
 	sizeChartId: null,
 	hideSizeGuide: false,
-	returnDays: null,
-	warrantyDays: null,
+	returnTime: null,
+	warrantyTime: null,
 	replacedBy: null,
 	media: [],
 	previousSlugs: [],
@@ -244,14 +244,18 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 		]);
 		const seo = seoEditor(kit, product.seo);
 		const faqs = faqsEditor(kit, product.faqs ?? []);
-		/** @param {number | null | undefined} days */
-		const daysInput = (days) =>
-			kit.input(days === null || days === undefined ? '' : String(days), { type: 'number', min: '0', step: '1' });
-		const returnDays = daysInput(product.returnDays);
-		const warrantyDays = daysInput(product.warrantyDays);
+		// its own return and warranty times: a number and its unit (E14)
+		const returnTime = timeInputs(kit, product.returnTime ?? null, t('catalogAdmin.returnTime'));
+		const warrantyTime = timeInputs(kit, product.warrantyTime ?? null, t('catalogAdmin.warrantyTime'));
+		/** @param {string} label @param {ReturnType<typeof timeInputs>} time the number labelled, its unit beside it */
+		const timeField = (label, time) => {
+			const node = kit.field(label, time.amount);
+			node.append(time.unit);
+			return node;
+		};
 		const daysGroup = fieldsOf(kit, [
-			kit.field(t('catalogAdmin.returnDays'), returnDays),
-			kit.field(t('catalogAdmin.warrantyDays'), warrantyDays),
+			timeField(t('catalogAdmin.returnTime'), returnTime),
+			timeField(t('catalogAdmin.warrantyTime'), warrantyTime),
 		]);
 		// an archived product's replacement: found by name or SKU, its address leads there (G9)
 		const findReplacement = kit.input('', { type: 'search' });
@@ -346,8 +350,8 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 				if (value !== null && !(typeof value === 'number' && Number.isNaN(value))) specValues[attribute.id] = value;
 			}
 			const variantList = variants.value();
-			const days = [returnDays, warrantyDays].map((input) => wholeOf(input.value));
-			if (!variantList || days.some((value) => Number.isNaN(value))) return null;
+			const days = [returnTime.read(), warrantyTime.read()];
+			if (!variantList || days.some((value) => value !== null && Number.isNaN(value.amount))) return null;
 			return {
 				name: name.value,
 				slug: slug.value.trim(),
@@ -378,7 +382,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 				...(parts.chart ? { sizeChartId: chart.value || null, hideSizeGuide: hideGuide.box.checked } : {}),
 				seo: seo.value(),
 				faqs: faqs.value(),
-				...(parts.days ? { returnDays: days[0], warrantyDays: days[1] } : {}),
+				...(parts.days ? { returnTime: days[0], warrantyTime: days[1] } : {}),
 				...(status.value === 'archived' ? { replacedBy: replacement.value || null } : {}),
 			};
 		};

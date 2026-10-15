@@ -70,7 +70,7 @@ beforeEach(async () => {
 		referencePrefix: 'R-',
 		refundDelivery: false,
 		pointsBack: 'proportional',
-		warrantyDays: 0,
+		warrantyTime: 0,
 	}))
 		await shop.setting('returns', name, value);
 });
@@ -253,7 +253,7 @@ describe('claim settings', () => {
 describe('claim outcomes and notes', () => {
 	it('replace an exchange, repair a warranty claim (both final) and keep staff notes from the shopper', async () => {
 		await shop.setting('returns', 'kinds', ['return', 'warranty', 'exchange']);
-		await shop.setting('returns', 'warrantyDays', 30);
+		await shop.setting('returns', 'warrantyTime', 30);
 		const item = await shop.seedProduct({ name: 'Watch', price: 2000 });
 		const swapped = await order({ lines: [{ product: item }] });
 		const exchange = await claim(swapped, { kind: 'exchange' });

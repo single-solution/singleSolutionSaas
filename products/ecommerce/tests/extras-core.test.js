@@ -21,7 +21,7 @@ import {
 	pointsToReverse,
 	refundCap,
 	returnableLines,
-	windowDays,
+	windowTime,
 	windowOf,
 } from '../core/returns.js';
 import { checkReply, checkReviewInput, ratingSummary, reviewSort } from '../core/reviews.js';
@@ -58,15 +58,26 @@ const lineOf = (line) =>
 	});
 
 describe('claim windows', () => {
-	const defaults = { returnDays: 7, warrantyDays: 0 };
+	const defaults = {
+		returnTime: { amount: 7, unit: /** @type {const} */ ('days') },
+		warrantyTime: { amount: 0, unit: /** @type {const} */ ('days') },
+	};
 	it('take the product, then the grade, then the setting', () => {
-		expect(windowDays('return', { returnDays: 3, warrantyDays: null }, { key: 'a', returnDays: 30 }, defaults)).toBe(3);
-		expect(windowDays('return', { returnDays: null, warrantyDays: null }, { key: 'a', returnDays: 30 }, defaults)).toBe(30);
-		expect(windowDays('warranty', null, { key: 'a' }, defaults)).toBe(0);
-		expect(windowDays('return', null, null, { returnDays: -1, warrantyDays: 0 })).toBe(0);
-		expect(windowOf(0, new Date(NOW), NOW)).toEqual({ days: 0, until: null, open: false });
-		expect(windowOf(5, null, NOW).open).toBe(false);
-		expect(windowOf(1, new Date(NOW - 2 * DAY_MS), NOW).open).toBe(false);
+		const days = (/** @type {number} */ amount) => ({ amount, unit: /** @type {const} */ ('days') });
+		expect(
+			windowTime('return', { returnTime: days(3), warrantyTime: null }, { key: 'a', returnTime: days(30) }, defaults),
+		).toEqual(days(3));
+		expect(
+			windowTime('return', { returnTime: null, warrantyTime: null }, { key: 'a', returnTime: days(30) }, defaults),
+		).toEqual(days(30));
+		expect(windowTime('warranty', null, { key: 'a' }, defaults)).toEqual(days(0));
+		expect(windowTime('return', null, null, /** @type {any} */ ({ returnTime: -1, warrantyTime: days(0) }))).toEqual(days(0));
+		expect(windowOf(days(0), new Date(NOW), NOW)).toEqual({ time: days(0), until: null, open: false });
+		expect(windowOf(days(5), null, NOW).open).toBe(false);
+		expect(windowOf(days(1), new Date(NOW - 2 * DAY_MS), NOW).open).toBe(false);
+		// months and years on the calendar, as typed (E14)
+		const year = windowOf({ amount: 1, unit: 'years' }, new Date('2026-01-31T00:00:00Z'), NOW);
+		expect(year.until?.toISOString()).toBe('2027-01-31T00:00:00.000Z');
 	});
 
 	it('count units held by claims and plan a claim', () => {
@@ -86,10 +97,13 @@ describe('claim windows', () => {
 		const lines = returnableLines({
 			order,
 			claims,
-			products: new Map([['prd_1', { returnDays: null, warrantyDays: null }]]),
-			grades: [{ key: 'a', warrantyDays: 90 }],
+			products: new Map([['prd_1', { returnTime: null, warrantyTime: null }]]),
+			grades: [{ key: 'a', warrantyTime: { amount: 90, unit: /** @type {const} */ ('days') } }],
 			lineage: (categoryIds) => categoryIds,
-			defaults: { returnDays: 7, warrantyDays: 0 },
+			defaults: {
+				returnTime: { amount: 7, unit: /** @type {const} */ ('days') },
+				warrantyTime: { amount: 0, unit: /** @type {const} */ ('days') },
+			},
 			now: NOW,
 		});
 		expect(lines).toHaveLength(2);

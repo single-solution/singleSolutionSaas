@@ -10,6 +10,7 @@
  */
 import { DEFAULT_FORMAT, formatDate, formatMoney, mountWidget, viewerOf } from '@ss/app-kit/widget';
 import { dayBounds } from '../core/calendar.js';
+import { DURATION_UNITS, isDuration } from '../core/durations.js';
 import { fromDecimal, toDecimal } from '../core/money.js';
 import { codeOf, problemKey } from './admin-problems.js';
 import { ADMIN_CSS } from './admin-styles.js';
@@ -92,6 +93,38 @@ export const entriesOf = (text, commas = false) =>
 		.split(commas ? /[\r\n,]+/ : /\r?\n/)
 		.map((entry) => entry.trim())
 		.filter(Boolean);
+
+/**
+ * A return or warranty time typed as a number and a unit (E14): the inputs, and what they read — null when the number
+ * is empty (the next one applies), NaN when it is not a whole number up to the unit's most.
+ * @param {Kit} kit @param {unknown} time the saved `{ amount, unit }` or null @param {string} label for screen readers
+ */
+export const timeInputs = (kit, time, label) => {
+	const saved = /** @type {{ amount?: number, unit?: string } | null} */ (time);
+	const amount = kit.input(saved?.amount === undefined ? '' : String(saved.amount), {
+		type: 'number',
+		min: '0',
+		step: '1',
+		'aria-label': label,
+	});
+	const unit = kit.select(
+		DURATION_UNITS.map((key) => ({ value: key, label: kit.t(`time.unit.${key}`) })),
+		saved?.unit ?? 'days',
+		{ 'aria-label': kit.t('time.unitOf', { field: label }) },
+	);
+	return {
+		amount,
+		unit,
+		nodes: [amount, unit],
+		/** @returns {{ amount: number, unit: string } | null} NaN amount when not a time */
+		read: () => {
+			const typed = wholeOf(amount.value);
+			if (typed === null) return null;
+			const given = { amount: typed, unit: unit.value };
+			return isDuration(given) ? given : { amount: Number.NaN, unit: unit.value };
+		},
+	};
+};
 
 /**
  * The decimal sign of a language (`.` in en-US, `,` in de-DE).

@@ -337,7 +337,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 				const renderFacts = () => {
 					const current = variant();
 					const stock = current ? stockText(t, current, settings.catalog.lowStockShown, measure) : null;
-					const warranty = current ? warrantyText(t, current.warrantyDays) : '';
+					const warranty = current ? warrantyText(t, current.warrantyTime) : '';
 					fill(
 						facts,
 						current?.grade ? gradeDetails(doc, t, current.grade) : null,

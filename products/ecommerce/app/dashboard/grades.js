@@ -31,6 +31,7 @@ import {
 	TextArea,
 	cx,
 } from '@ss/ui';
+import { DURATION_MAX, DURATION_UNITS } from '../../core/durations.js';
 import { fill } from './api.js';
 import { GRADE_CONDITIONS, GRADE_LIMITS, blankGrade, cleanGrade, gradeProblems, keyOf, loadGrade, videoOf } from './drafts.js';
 import { IdTags, ListOutcome, SaveRow, moved, useList } from './lists.js';
@@ -224,26 +225,38 @@ function GradeFields({ draft, set, problems, tried }) {
 					onChange={(event) => set({ condition: /** @type {GradeDraft['condition']} */ (event.target.value) })}
 				/>
 				<Input
-					label={G.returnDays}
+					label={G.returnTime}
 					help={G.daysHelp}
 					type="number"
 					min={0}
-					max={3650}
+					max={DURATION_MAX[draft.returnUnit]}
 					step={1}
 					inputMode="numeric"
-					value={draft.returnDays}
-					onChange={(event) => set({ returnDays: event.target.value })}
+					value={draft.returnTime}
+					onChange={(event) => set({ returnTime: event.target.value })}
+				/>
+				<Select
+					label={G.returnUnit}
+					value={draft.returnUnit}
+					options={DURATION_UNITS.map((unit) => ({ value: unit, label: G.units[unit] }))}
+					onChange={(event) => set({ returnUnit: /** @type {GradeDraft['returnUnit']} */ (event.target.value) })}
 				/>
 				<Input
-					label={G.warrantyDays}
+					label={G.warrantyTime}
 					help={G.daysHelp}
 					type="number"
 					min={0}
-					max={3650}
+					max={DURATION_MAX[draft.warrantyUnit]}
 					step={1}
 					inputMode="numeric"
-					value={draft.warrantyDays}
-					onChange={(event) => set({ warrantyDays: event.target.value })}
+					value={draft.warrantyTime}
+					onChange={(event) => set({ warrantyTime: event.target.value })}
+				/>
+				<Select
+					label={G.warrantyUnit}
+					value={draft.warrantyUnit}
+					options={DURATION_UNITS.map((unit) => ({ value: unit, label: G.units[unit] }))}
+					onChange={(event) => set({ warrantyUnit: /** @type {GradeDraft['warrantyUnit']} */ (event.target.value) })}
 				/>
 				<Input
 					label={G.color}
@@ -373,11 +386,16 @@ function GradeFields({ draft, set, problems, tried }) {
 function GradeRow({ grade, index, count, onEdit, onMove, onRemove }) {
 	const name = grade.label.trim() || G.unnamed;
 	/** @param {string} days */
-	const daysText = (days) => (days.trim() === '' ? G.daysSetting : fill(G.daysCount, { days: days.trim() }));
+	/** @param {string} amount @param {GradeDraft['returnUnit']} unit */
+	const daysText = (amount, unit) =>
+		amount.trim() === '' ? G.daysSetting : fill(G.daysCount, { amount: amount.trim(), unit: G.units[unit] });
 	const facts = [
 		...(grade.categoryId.trim() ? [fill(G.categoryIdFor, { id: grade.categoryId.trim() })] : []),
 		G.conditions[grade.condition],
-		fill(G.days, { returns: daysText(grade.returnDays), warranty: daysText(grade.warrantyDays) }),
+		fill(G.days, {
+			returns: daysText(grade.returnTime, grade.returnUnit),
+			warranty: daysText(grade.warrantyTime, grade.warrantyUnit),
+		}),
 		grade.categoryIds.length === 0 ? G.categoriesAll : fill(G.categoriesSome, { count: grade.categoryIds.length }),
 		grade.typeKeys.length === 0 ? G.typesAll : grade.typeKeys.join(', '),
 	];

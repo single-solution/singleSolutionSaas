@@ -222,8 +222,8 @@ describe('returns and warranty claims', () => {
 		expect(returnable.json.lines[0]).toMatchObject({
 			lineId,
 			claimable: 2,
-			return: { days: 7, open: true },
-			warranty: { days: 0, open: false, until: null },
+			return: { time: { amount: 7, unit: 'days' }, open: true },
+			warranty: { time: { amount: 0, unit: 'days' }, open: false, until: null },
 		});
 		expect(returnable.json.lines[0].image).toContain(STORAGE);
 
@@ -342,7 +342,11 @@ describe('returns and warranty claims', () => {
 	});
 
 	it('records refunds of orders not paid online, rejects with a note and frees rejected units', async () => {
-		const item = await shop.seedProduct({ name: 'Charger', price: 500, returnDays: 3 });
+		const item = await shop.seedProduct({
+			name: 'Charger',
+			price: 500,
+			returnTime: { amount: 3, unit: /** @type {const} */ ('days') },
+		});
 		const placed = await order({ userId: OMAR, lines: [{ product: item, quantity: 1 }] });
 		const lineId = /** @type {string} */ (placed.lines[0]?.id);
 		const body = { orderId: placed.id, kind: 'return', lines: [{ lineId, quantity: 1 }], reason: 'Wrong item' };
@@ -381,7 +385,14 @@ describe('returns and warranty claims', () => {
 	});
 
 	it('undoes the claim when Payments refuses, and uses grade windows', async () => {
-		await shop.list('grades', [{ key: 'used_a', label: 'Used A', returnDays: 0, warrantyDays: 90 }]);
+		await shop.list('grades', [
+			{
+				key: 'used_a',
+				label: 'Used A',
+				returnTime: { amount: 0, unit: /** @type {const} */ ('days') },
+				warrantyTime: { amount: 90, unit: /** @type {const} */ ('days') },
+			},
+		]);
 		const used = await shop.seedProduct({ name: 'Used phone', price: 3000 });
 		const placed = await order({
 			lines: [{ product: used, grade: 'used_a' }],
@@ -389,7 +400,10 @@ describe('returns and warranty claims', () => {
 		});
 		const lineId = /** @type {string} */ (placed.lines[0]?.id);
 		const view = await shop.visitor('GET', `/v1/shop/orders/${placed.id}/returnable`, { signIn: sara });
-		expect(view.json.lines[0]).toMatchObject({ return: { days: 0, open: false }, warranty: { days: 90, open: true } });
+		expect(view.json.lines[0]).toMatchObject({
+			return: { time: { amount: 0, unit: 'days' }, open: false },
+			warranty: { time: { amount: 90, unit: 'days' }, open: true },
+		});
 		const body = { orderId: placed.id, kind: 'warranty', lines: [{ lineId, quantity: 1 }], reason: 'Battery' };
 		const made = await shop.visitor('POST', '/v1/shop/returns', { signIn: sara, body });
 		expect(made.status).toBe(201);

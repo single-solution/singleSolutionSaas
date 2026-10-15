@@ -262,7 +262,7 @@ export const checkOrderExtras = (body) => {
  * @property {string} sku
  * @property {string | null} grade
  * @property {string} gradeLabel
- * @property {number | null} [warrantyDays] the variant's warranty, else the product's (E12; the grade's and the setting
+ * @property {import('./durations.js').Duration | null} [warrantyTime] the variant's warranty, else the product's (E12; the grade's and the setting
  *   are added at placement)
  * @property {string | null} image storage key of the main image
  * @property {number} unitPrice per piece, or per unit of a measured item
@@ -414,7 +414,7 @@ export const resolveLines = (
 			sku: variant.sku ?? '',
 			grade: variant.grade ?? null,
 			gradeLabel: variant.grade ? gradeLabel(variant.grade, product.categoryIds) : '',
-			warrantyDays: variant.warrantyDays ?? product.warrantyDays ?? null,
+			warrantyTime: variant.warrantyTime ?? product.warrantyTime ?? null,
 			unitPrice: variant.price,
 			measure,
 			limits: limitsOf(measure, measure ? null : quantityOf(product), pieceCap),

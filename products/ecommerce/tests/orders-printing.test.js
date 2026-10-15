@@ -55,7 +55,7 @@ const lineOf = (patch = {}) => ({
 	booking: null,
 	licences: [],
 	returnedQuantity: 0,
-	warrantyDays: 365,
+	warrantyTime: { amount: 365, unit: /** @type {const} */ ('days') },
 	...patch,
 });
 

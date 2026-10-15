@@ -59,13 +59,18 @@ beforeAll(async () => {
 		show: { filter: true },
 	});
 	await shop.list('grades', [
-		{ key: 'a', label: 'Grade A', description: 'Light marks.', warrantyDays: 30 },
+		{
+			key: 'a',
+			label: 'Grade A',
+			description: 'Light marks.',
+			warrantyTime: { amount: 30, unit: /** @type {const} */ ('days') },
+		},
 		{
 			key: 'a',
 			label: 'Like new',
 			description: 'As new.',
 			categoryId: ids.dresses.id,
-			warrantyDays: 90,
+			warrantyTime: { amount: 90, unit: /** @type {const} */ ('days') },
 			seo: { title: '', description: '', body: 'Worn once at most.', faqs: [] },
 		},
 	]);
@@ -148,8 +153,19 @@ describe('grades per category (E45)', () => {
 
 	it('takes a product category grade for compare labels, order lines and claim windows', () => {
 		const list = [
-			{ key: 'a', label: 'Grade A', returnDays: 3, warrantyDays: 30 },
-			{ key: 'a', label: 'Like new', categoryId: 'cat_d', returnDays: 10, warrantyDays: 90 },
+			{
+				key: 'a',
+				label: 'Grade A',
+				returnTime: { amount: 3, unit: /** @type {const} */ ('days') },
+				warrantyTime: { amount: 30, unit: /** @type {const} */ ('days') },
+			},
+			{
+				key: 'a',
+				label: 'Like new',
+				categoryId: 'cat_d',
+				returnTime: { amount: 10, unit: /** @type {const} */ ('days') },
+				warrantyTime: { amount: 90, unit: /** @type {const} */ ('days') },
+			},
 		];
 		const product = { categoryIds: ['cat_d'], variants: [{ active: true, grade: 'a' }] };
 		expect(gradeLabels(/** @type {any} */ (product), list, new Map())).toEqual(['Like new']);
@@ -202,33 +218,43 @@ describe('grades per category (E45)', () => {
 		const windows = returnableLines({
 			order: /** @type {any} */ ({ lines: [line, { ...line, id: 'oln_2', categoryIds: [] }], deliveredAt: delivered }),
 			claims: [],
-			products: new Map([['prd_1', { returnDays: null, warrantyDays: null }]]),
+			products: new Map([['prd_1', { returnTime: null, warrantyTime: null }]]),
 			grades: list,
 			lineage: (categoryIds) => lineageOf(categoryIds, new Map([['cat_e', { path: ['cat_d'] }]])),
-			defaults: { returnDays: 7, warrantyDays: 0 },
+			defaults: {
+				returnTime: { amount: 7, unit: /** @type {const} */ ('days') },
+				warrantyTime: { amount: 0, unit: /** @type {const} */ ('days') },
+			},
 			now: Date.parse('2026-10-05T00:00:00Z'),
 		});
-		expect(windows.map((entry) => [entry.return.days, entry.warranty.days])).toEqual([
+		expect(windows.map((entry) => [entry.return.time.amount, entry.warranty.time.amount])).toEqual([
 			[10, 90],
 			[3, 30],
 		]);
 		const evening = returnableLines({
 			order: /** @type {any} */ ({ lines: [{ ...line, categoryIds: ['cat_e'] }], deliveredAt: delivered }),
 			claims: [],
-			products: new Map([['prd_1', { returnDays: null, warrantyDays: null }]]),
+			products: new Map([['prd_1', { returnTime: null, warrantyTime: null }]]),
 			grades: list,
 			lineage: (categoryIds) => lineageOf(categoryIds, new Map([['cat_e', { path: ['cat_d'] }]])),
-			defaults: { returnDays: 7, warrantyDays: 0 },
+			defaults: {
+				returnTime: { amount: 7, unit: /** @type {const} */ ('days') },
+				warrantyTime: { amount: 0, unit: /** @type {const} */ ('days') },
+			},
 			now: Date.parse('2026-10-05T00:00:00Z'),
 		});
-		expect(evening.map((entry) => [entry.return.days, entry.warranty.days])).toEqual([[10, 90]]);
+		expect(evening.map((entry) => [entry.return.time.amount, entry.warranty.time.amount])).toEqual([[10, 90]]);
 	});
 
 	it('names a variant grade as its product category defines it', async () => {
 		const dress = await shop.seedProduct({ name: 'Silk dress', categoryIds: [ids.dresses.id], variants: [variant('a')] });
 		const shirt = await shop.seedProduct({ name: 'Oxford shirt', categoryIds: [ids.shirts.id], variants: [variant('a')] });
 		const page = (await shop.visitor('GET', `/v1/shop/products/${dress.slug}`)).json;
-		expect(page.variants[0].grade).toMatchObject({ key: 'a', label: 'Like new', warrantyDays: 90 });
+		expect(page.variants[0].grade).toMatchObject({
+			key: 'a',
+			label: 'Like new',
+			warrantyTime: { amount: 90, unit: /** @type {const} */ ('days') },
+		});
 		expect((await shop.visitor('GET', `/v1/shop/products/${shirt.slug}`)).json.variants[0].grade.label).toBe('Grade A');
 		const cards = (await shop.visitor('GET', '/v1/shop/products?q=Silk')).json.items;
 		expect(cards[0].grades).toEqual(['Like new']);
@@ -243,7 +269,7 @@ describe('grades per category (E45)', () => {
 		const gown = await shop.seedProduct({ name: 'Evening gown', categoryIds: [ids.evening.id], variants: [variant('a')] });
 		expect((await shop.visitor('GET', `/v1/shop/products/${gown.slug}`)).json.variants[0].grade).toMatchObject({
 			label: 'Like new',
-			warrantyDays: 90,
+			warrantyTime: { amount: 90, unit: /** @type {const} */ ('days') },
 		});
 		expect((await shop.visitor('GET', '/v1/shop/products?q=gown')).json.items[0].grades).toEqual(['Like new']);
 		const listing = (await shop.visitor('GET', `/v1/shop/products?category=${ids.evening.slug}`)).json;
@@ -511,7 +537,12 @@ describe('one slug, several fields (parity P3-6)', () => {
 describe('grade glossary patterns (SG-20)', () => {
 	it('titles and describes a grade page from the patterns when the grade has no copy of its own', async () => {
 		await shop.list('grades', [
-			{ key: 'a', label: 'Grade A', description: 'Light marks.', warrantyDays: 30 },
+			{
+				key: 'a',
+				label: 'Grade A',
+				description: 'Light marks.',
+				warrantyTime: { amount: 30, unit: /** @type {const} */ ('days') },
+			},
 			{ key: 'c', label: 'Collector', categoryId: ids.dresses.id },
 		]);
 		await shop.setting('landing_pages', 'gradeTitle', '{name} condition explained');

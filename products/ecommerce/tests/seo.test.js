@@ -46,7 +46,7 @@ const variant = (input = {}) => ({
 	attributes: {},
 	media: [],
 	soldOut: false,
-	warrantyDays: null,
+	warrantyTime: null,
 	...input,
 });
 
@@ -591,18 +591,20 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 	it('answers the policies to visitors and the server', async () => {
 		// the merchant's list: renamed, reordered, one added, one without text (E27)
 		await shop.list('policies', [
-			{ key: 'warranty', title: 'Repairs', text: '{business} repairs within {warrantyDays} days ({warrantyMonths} months).' },
+			{ key: 'warranty', title: 'Repairs', text: '{business} repairs within {warrantyTime}.' },
 			{ key: 'shipping', title: 'Shipping', text: 'Ships in 2 days.' },
 			{ key: 'returns', title: 'Returns', text: 'Returns within 14 days.' },
 			{ key: 'gift-cards', title: 'Gift cards', text: 'Gift cards never expire.' },
 			{ key: 'privacy', title: 'Privacy', text: '' },
 		]);
-		await shop.setting('returns', 'warrantyDays', 90);
+		// shown as typed (E14)
+		await shop.setting('returns', 'warrantyTime', 3);
+		await shop.setting('returns', 'warrantyTimeUnit', 'months');
 		const server = await shop.api('GET', '/v1/policies');
 		expect(server.json).toEqual({
 			format: 'text',
 			policies: [
-				{ key: 'warranty', title: 'Repairs', text: 'Shop repairs within 90 days (3 months).' },
+				{ key: 'warranty', title: 'Repairs', text: 'Shop repairs within 3 months.' },
 				{ key: 'shipping', title: 'Shipping', text: 'Ships in 2 days.' },
 				{ key: 'returns', title: 'Returns', text: 'Returns within 14 days.' },
 				{ key: 'gift-cards', title: 'Gift cards', text: 'Gift cards never expire.' },

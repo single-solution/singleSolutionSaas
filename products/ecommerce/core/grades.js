@@ -1,7 +1,8 @@
 /**
  * Condition grades (PLAN 0.8.8 Items: used or refurbished items carry a condition grade; PLAN 0.8.10 E10): the
  * `grades` list the merchant keeps in the dashboard — a stable key (letters, digits, `_` and `-`), a label shown to
- * shoppers, a description, the item's return and warranty days for that grade (null = the `returns` setting), and per
+ * shoppers, a description, the item's return and warranty times for that grade (a number and its unit, E14; null = the
+ * `returns` setting), and per
  * grade the categories and the item types it is for ([] = all: a grade set per item type, owner 2026-10-14 Q4), a color,
  * a condition video, content, whether it is offered, the standard condition structured data and feeds use, and its
  * glossary SEO. A grade entry may be the definition for one category
@@ -11,6 +12,7 @@
  * @module
  */
 import { EMPTY_CONTENT, checkContent, checkFaqs } from './catalog-content.js';
+import { DURATION_RULE, durationOf } from './durations.js';
 
 /** At most this many grades. */
 export const MAX_GRADES = 100;
@@ -36,8 +38,9 @@ const CONTROL = /[\u0000-\u001F\u007F]/;
  * @property {string} key
  * @property {string} label
  * @property {string} description
- * @property {number | null} returnDays
- * @property {number | null} warrantyDays
+ * @property {import('./durations.js').Duration | null} returnTime its return time, a number and its unit (E14; null = the
+ *   `returns` setting)
+ * @property {import('./durations.js').Duration | null} warrantyTime
  * @property {string | null} categoryId the category this entry is the definition for (E45); null = every category
  * @property {string[]} categoryIds [] = every category
  * @property {string[]} typeKeys the item types whose items take it (`core/item-types.js` keys, built-in ones too); [] =
@@ -54,7 +57,6 @@ const CONTROL = /[\u0000-\u001F\u007F]/;
  */
 
 /** @param {unknown} value */
-const isDays = (value) => value === null || (Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 3650);
 
 /** @param {unknown} value @param {number} max */
 const shortText = (value, max) =>
@@ -92,10 +94,10 @@ export const checkGrades = (value) => {
 		const description = entry.description === undefined ? '' : entry.description;
 		if (typeof description !== 'string' || description.length > MAX_DESCRIPTION)
 			errors.push(`Grade ${n}: the description has at most ${MAX_DESCRIPTION} characters.`);
-		const returnDays = entry.returnDays ?? null;
-		const warrantyDays = entry.warrantyDays ?? null;
-		if (!isDays(returnDays)) errors.push(`Grade ${n}: return days are whole days from 0 to 3650, or empty.`);
-		if (!isDays(warrantyDays)) errors.push(`Grade ${n}: warranty days are whole days from 0 to 3650, or empty.`);
+		const returnTime = durationOf(entry.returnTime ?? null);
+		const warrantyTime = durationOf(entry.warrantyTime ?? null);
+		if (returnTime === undefined) errors.push(`Grade ${n}: the return time: ${DURATION_RULE}`);
+		if (warrantyTime === undefined) errors.push(`Grade ${n}: the warranty time: ${DURATION_RULE}`);
 		const categoryIds = entry.categoryIds ?? [];
 		if (
 			!Array.isArray(categoryIds) ||
@@ -142,8 +144,8 @@ export const checkGrades = (value) => {
 			categoryId: typeof categoryId === 'string' ? categoryId : null,
 			label,
 			description: typeof description === 'string' ? description.trim() : '',
-			returnDays: /** @type {number | null} */ (returnDays),
-			warrantyDays: /** @type {number | null} */ (warrantyDays),
+			returnTime: returnTime ?? null,
+			warrantyTime: warrantyTime ?? null,
 			categoryIds: Array.isArray(categoryIds) ? [...new Set(/** @type {string[]} */ (categoryIds))] : [],
 			typeKeys: Array.isArray(typeKeys) ? [...new Set(/** @type {string[]} */ (typeKeys))] : [],
 			color: typeof color === 'string' ? color.trim() : '',
@@ -258,6 +260,6 @@ export const gradeView = (grade) => ({
 	videoUrl: grade.videoUrl ?? null,
 	content: grade.content,
 	condition: grade.condition,
-	warrantyDays: grade.warrantyDays,
-	returnDays: grade.returnDays,
+	warrantyTime: grade.warrantyTime,
+	returnTime: grade.returnTime,
 });

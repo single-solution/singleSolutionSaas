@@ -110,7 +110,8 @@ export const ID_PREFIX = Object.freeze({
  *   value or values (E7); `options` are derived from them
  * @property {MediaRecord[]} media this variant's photos (E6)
  * @property {boolean} soldOut shown as sold out without changing stock (E9)
- * @property {number | null} warrantyDays null = the product's, then the grade's, then the setting (E12)
+ * @property {import('./durations.js').Duration | null} warrantyTime its own warranty time, a number and its unit (E14);
+ *   null = the product's, then the grade's, then the setting (E12)
  * @property {Parcel | null} [parcel] its package (an item type with the `parcel` element): courier bookings and the
  *   feeds' shipping weight read it; none = not known
  * @property {string} [feedId] the item id the shop's earlier product feed listed it under, kept by an import so shopping
@@ -158,9 +159,10 @@ export const ID_PREFIX = Object.freeze({
  * @property {string[]} previousSlugs (E13)
  * @property {string | null} replacedBy the product that replaces it (SEO audit G9): once archived, its address answers
  *   `moved` to the replacement (followed to the first active one shoppers may see); null = none
- * @property {number | null} returnDays this item's return window in days after delivery (null = the grade's, else the
- *   `returns` setting)
- * @property {number | null} warrantyDays this item's warranty in days after delivery (null = the grade's, else the setting)
+ * @property {import('./durations.js').Duration | null} returnTime this item's return window after delivery, a number and
+ *   its unit (E14; null = the grade's, else the `returns` setting)
+ * @property {import('./durations.js').Duration | null} warrantyTime this item's warranty after delivery (null = the
+ *   grade's, else the setting)
  * @property {number} sold units sold (delivered orders), for top products
  * @property {number} ordered units of orders placed and not given back before delivery (open and delivered orders), for
  *   top products by the `catalog` setting `topBasis: ordered` (parity P3-10)
@@ -403,8 +405,8 @@ export const STATUS_ROLES = Object.freeze([
  * @property {number} [downloads] downloads made so far (digital)
  * @property {number} returnedQuantity units returned through approved return claims (thousandths of the unit of a
  *   measured line)
- * @property {number | null} [warrantyDays] the warranty at placement: the variant's, else the product's, the grade's or
- *   the setting (E12)
+ * @property {import('./durations.js').Duration | null} [warrantyTime] the warranty at placement: the variant's, else the
+ *   product's, the grade's or the setting (E12, E14)
  * @property {string | null} [dealId] the line's own deal at placement, else the checkout-level deal (E18)
  */
 

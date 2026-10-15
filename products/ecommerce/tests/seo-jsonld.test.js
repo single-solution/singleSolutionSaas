@@ -34,7 +34,7 @@ const variant = (input = {}) => ({
 	attributes: {},
 	media: [],
 	soldOut: false,
-	warrantyDays: null,
+	warrantyTime: null,
 	...input,
 });
 
@@ -53,7 +53,7 @@ const product = (input = {}) =>
 			options: [],
 			rating: { average: 0, count: 0 },
 			faqs: [{ question: 'Dishwasher safe?', answer: 'Yes.' }],
-			returnDays: null,
+			returnTime: null,
 			variants: [variant()],
 			...input,
 		})
@@ -301,10 +301,10 @@ describe('the product answer', () => {
 	beforeAll(async () => {
 		shop = await readyShop({ business: { country: 'US' } });
 		await shop.list('grades', [
-			{ key: 'mint', label: 'Mint', condition: 'refurbished', returnDays: 0 },
+			{ key: 'mint', label: 'Mint', condition: 'refurbished', returnTime: { amount: 0, unit: /** @type {const} */ ('days') } },
 			{ key: 'fair', label: 'Fair' },
 		]);
-		await shop.setting('returns', 'returnDays', 14);
+		await shop.setting('returns', 'returnTime', 14);
 		await shop.setting('delivery_zones', 'defaultFee', 500);
 	});
 	afterAll(async () => shop.product.close());
@@ -337,7 +337,7 @@ describe('the product answer', () => {
 		await shop.seedProduct({
 			slug: 'own-window',
 			options,
-			returnDays: 30,
+			returnTime: { amount: 30, unit: /** @type {const} */ ('days') },
 			variants: variants.map((v) => ({ ...v, id: `${v.id}_own` })),
 		});
 		const graded = nodeOf(await jsonLdOf('graded'), 'ProductGroup');
@@ -360,7 +360,12 @@ describe('the product answer', () => {
 
 	it('gives digital goods and bookings a return policy only when they name their own window', async () => {
 		await shop.seedProduct({ slug: 'ebook', kind: 'digital', trackStock: false });
-		await shop.seedProduct({ slug: 'ebook-returns', kind: 'digital', trackStock: false, returnDays: 7 });
+		await shop.seedProduct({
+			slug: 'ebook-returns',
+			kind: 'digital',
+			trackStock: false,
+			returnTime: { amount: 7, unit: /** @type {const} */ ('days') },
+		});
 		expect(nodeOf(await jsonLdOf('ebook'), 'Product').offers.hasMerchantReturnPolicy).toBeUndefined();
 		expect(days(nodeOf(await jsonLdOf('ebook-returns'), 'Product').offers)).toBe(7);
 	});

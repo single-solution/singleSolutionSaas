@@ -447,33 +447,37 @@ describe('landing pages, search, grades, policies and llms-full', () => {
 		expect(gradeCondition({ kind: 'physical' }, { grade: null }, grades)).toBe('new');
 		expect(gradeCondition({ kind: 'digital' }, { grade: 'a' }, grades)).toBe('');
 		// a grade as the list stores it (every field written by checkGrades)
-		const stored = checkGrades([{ key: 'b', label: 'B', warrantyDays: 5 }]);
+		const stored = checkGrades([{ key: 'b', label: 'B', warrantyTime: { amount: 5, unit: /** @type {const} */ ('days') } }]);
 		if (!stored.ok) throw new Error(stored.errors.join(' '));
 		expect(gradeView(/** @type {import('../core/grades.js').Grade} */ (stored.value[0]))).toMatchObject({
 			color: '',
 			video: '',
 			condition: 'used',
-			warrantyDays: 5,
+			warrantyTime: { amount: 5, unit: /** @type {const} */ ('days') },
 		});
 		expect(
 			fillPolicies(
 				[
-					{ key: 'returns', title: 'Returns', text: ' {returnDays} days ' },
+					{ key: 'returns', title: 'Returns', text: ' {returnTime} ' },
 					{ key: 'terms', title: 'Terms', text: '' },
 				],
 				'text',
-				{ returnDays: 7, warrantyDays: 60, business: 'S' },
+				{
+					returnTime: { amount: 7, unit: /** @type {const} */ ('days') },
+					warrantyTime: { amount: 60, unit: /** @type {const} */ ('days') },
+					business: 'S',
+				},
 			),
 		).toEqual({
 			format: 'text',
 			policies: [{ key: 'returns', title: 'Returns', text: '7 days' }],
 		});
 		expect(
-			fillPolicies(
-				[{ key: 'care', title: 'Care', text: '<p>{business}: {warrantyMonths} months</p><script>x</script>' }],
-				'html',
-				{ returnDays: 7, warrantyDays: 60, business: 'S' },
-			),
+			fillPolicies([{ key: 'care', title: 'Care', text: '<p>{business}: {warrantyTime}</p><script>x</script>' }], 'html', {
+				returnTime: { amount: 7, unit: /** @type {const} */ ('days') },
+				warrantyTime: { amount: 2, unit: /** @type {const} */ ('months') },
+				business: 'S',
+			}),
 		).toEqual({ format: 'html', policies: [{ key: 'care', title: 'Care', text: '<p>S: 2 months</p>' }] });
 		const text = buildLlmsFull({
 			name: 'Shop',

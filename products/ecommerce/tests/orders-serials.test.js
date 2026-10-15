@@ -63,8 +63,8 @@ const saveTypes = (capture) =>
 
 beforeAll(async () => {
 	shop = await readyShop({ features: ALL.filter((feature) => feature !== 'multi_location') });
-	await shop.list('grades', [{ key: 'used', label: 'Used', warrantyDays: 30 }]);
-	await shop.setting('returns', 'warrantyDays', 7);
+	await shop.list('grades', [{ key: 'used', label: 'Used', warrantyTime: { amount: 30, unit: /** @type {const} */ ('days') } }]);
+	await shop.setting('returns', 'warrantyTime', 7);
 	// the IMEI is one merchant's unit field: digits, 15 long, Luhn, two per dual-SIM phone; shown to shoppers and on invoices
 	ids.imei = await api('POST', '/v1/attributes', {
 		name: 'IMEI',
@@ -91,7 +91,12 @@ beforeAll(async () => {
 		categoryIds: [ids.android.id],
 		options: [{ name: 'Color', values: ['Black', 'Blue'] }],
 		variants: [
-			{ options: { Color: 'Black' }, price: 1000, stock: 9, warrantyDays: 365 },
+			{
+				options: { Color: 'Black' },
+				price: 1000,
+				stock: 9,
+				warrantyTime: { amount: 365, unit: /** @type {const} */ ('days') },
+			},
 			{ options: { Color: 'Blue' }, price: 1000, stock: 9, grade: 'used' },
 		],
 	});
@@ -101,7 +106,7 @@ beforeAll(async () => {
 		categoryIds: [ids.cases.id],
 		price: 100,
 		stock: 9,
-		warrantyDays: 14,
+		warrantyTime: { amount: 14, unit: /** @type {const} */ ('days') },
 	});
 	ids.charger = await api('POST', '/v1/products', {
 		name: 'Charger',
@@ -211,7 +216,7 @@ describe('E11 serial capture', () => {
 		expect(view.json.lines[0]).toMatchObject({
 			serials: [],
 			unitValues: [{ name: 'IMEI', values: ['490154203237518', '356938035643809'] }],
-			warrantyDays: 365,
+			warrantyTime: { amount: 365, unit: /** @type {const} */ ('days') },
 		});
 		expect(view.text).not.toContain('AB-123');
 		// the invoice prints the IMEI (show.invoice), the packing slip does not; the bin tag is never printed
@@ -362,15 +367,16 @@ describe('E12 warranty per variant', () => {
 			{ productId: ids.phone.id, variantId: ids.phone.variants[1].id },
 			{ productId: ids.case.id },
 		]);
-		expect(order.lines.map((/** @type {any} */ line) => line.warrantyDays)).toEqual([365, 30, 14]);
+		const days = (/** @type {number} */ amount) => ({ amount, unit: 'days' });
+		expect(order.lines.map((/** @type {any} */ line) => line.warrantyTime)).toEqual([days(365), days(30), days(14)]);
 		const record = await (await shop.db()).collection(COLLECTIONS.orders).findOne({ websiteId: shop.websiteId, id: order.id });
-		expect(record?.lines.map((/** @type {any} */ line) => line.warrantyDays)).toEqual([365, 30, 14]);
+		expect(record?.lines.map((/** @type {any} */ line) => line.warrantyTime)).toEqual([days(365), days(30), days(14)]);
 		// a later change of the product does not change the order
-		await api('PATCH', `/v1/products/${ids.case.id}`, { warrantyDays: null });
+		await api('PATCH', `/v1/products/${ids.case.id}`, { warrantyTime: null });
 		const invoice = await shop.api('GET', `/v1/orders/${order.id}/invoice`);
 		expect(invoice.text).toContain('Warranty: 365 days');
 		expect(invoice.text).toContain('Warranty: 14 days');
 		const next = await place([{ productId: ids.case.id }]);
-		expect(next.order.lines[0].warrantyDays).toBe(7);
+		expect(next.order.lines[0].warrantyTime).toEqual(days(7));
 	});
 });

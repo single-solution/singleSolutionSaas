@@ -361,15 +361,27 @@ export const ratingText = (t, rating) =>
 	rating && rating.count > 0 ? t('shop.rating', { average: Number(rating.average).toFixed(1), count: rating.count }) : '';
 
 /**
- * The warranty of an item as shoppers read it (E12): whole months when the days are a multiple of 30, else days; ''
- * without a warranty.
+ * A return or warranty time as the merchant typed it (E14: `1 year`, `6 months`, `30 days`), in the website's words;
+ * '' for none.
  * @param {Texts} t
- * @param {unknown} days
+ * @param {unknown} time `{ amount, unit }`
  */
-export const warrantyText = (t, days) => {
-	const n = Number(days);
-	if (days === null || !Number.isSafeInteger(n) || n <= 0) return '';
-	return n % 30 === 0 ? t('shop.warrantyMonths', { months: n / 30 }) : t('shop.warrantyDays', { days: n });
+export const timeText = (t, time) => {
+	const { amount, unit } = /** @type {{ amount?: unknown, unit?: unknown }} */ (time ?? {});
+	const n = Number(amount);
+	if (!Number.isSafeInteger(n) || n <= 0) return '';
+	const key = unit === 'years' ? 'year' : unit === 'months' ? 'month' : 'day';
+	return n === 1 ? t(`time.${key}`) : t(`time.${key}s`, { count: n });
+};
+
+/**
+ * The warranty of an item as shoppers read it (E12, E14): its time as typed; '' without a warranty.
+ * @param {Texts} t
+ * @param {unknown} time
+ */
+export const warrantyText = (t, time) => {
+	const text = timeText(t, time);
+	return text ? t('shop.warranty', { time: text }) : '';
 };
 
 // ------------------------------------------------------------------------------------------------ rich text (E3)

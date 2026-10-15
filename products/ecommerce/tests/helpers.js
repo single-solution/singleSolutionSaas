@@ -20,7 +20,7 @@ import { checkAttribute, checkBrand, checkCategory } from '../core/catalog-taxon
 import { COLLECTIONS } from '../core/model.js';
 
 /** @typedef {import('../core/model.js').VariantRecord} VariantRecord */
-/** What a test may leave out of a variant. @typedef {'attributes' | 'media' | 'soldOut' | 'warrantyDays'} VariantExtras */
+/** What a test may leave out of a variant. @typedef {'attributes' | 'media' | 'soldOut' | 'warrantyTime'} VariantExtras */
 
 export const BASE = 'https://ecommerce.example.dev';
 export const ACCOUNTS = 'https://accounts.example.dev';
@@ -500,7 +500,7 @@ export const setup = async ({
 					active: true,
 				},
 			]
-		).map((variant) => ({ attributes: {}, media: [], soldOut: false, warrantyDays: null, ...variant }));
+		).map((variant) => ({ attributes: {}, media: [], soldOut: false, warrantyTime: null, ...variant }));
 		const active = variants.filter((variant) => variant.active);
 		const { stockState, grades, priceMax } = summarize(variants, rest.trackStock ?? true);
 		/** @type {import('../core/model.js').ProductRecord} */
@@ -529,8 +529,8 @@ export const setup = async ({
 			contentUpdatedAt: new Date(t),
 			createdAt: new Date(t),
 			updatedAt: new Date(t),
-			returnDays: null,
-			warrantyDays: null,
+			returnTime: null,
+			warrantyTime: null,
 			featured: false,
 			stockState,
 			grades,

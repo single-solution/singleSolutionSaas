@@ -5,7 +5,7 @@ import {
 	blankGrade,
 	cleanGrade,
 	cleanLines,
-	daysOf,
+	timeOf,
 	flowToSave,
 	removeFlowStatus,
 	renameFlowStatus,
@@ -26,8 +26,8 @@ const FULL = {
 	key: 'grade-a',
 	label: 'Grade A',
 	description: 'Like new.',
-	returnDays: 14,
-	warrantyDays: 180,
+	returnTime: { amount: 14, unit: /** @type {const} */ ('days') },
+	warrantyTime: { amount: 180, unit: /** @type {const} */ ('days') },
 	categoryId: 'cat_phones',
 	categoryIds: ['cat_phones', 'cat_tablets'],
 	typeKeys: ['used_phone'],
@@ -52,12 +52,13 @@ describe('list helpers', () => {
 		expect(keyOf(null, null)).toBe('');
 	});
 
-	it('cleans lines and days', () => {
+	it('cleans lines and times', () => {
 		expect(cleanLines([' a ', '', 'b', 3])).toEqual(['a', 'b', '3']);
 		expect(cleanLines('a')).toEqual([]);
-		expect(daysOf('')).toBeNull();
-		expect(daysOf(' 30 ')).toBe(30);
-		expect(daysOf(undefined)).toBeNull();
+		expect(timeOf('', 'days')).toBeNull();
+		expect(timeOf(' 30 ', 'days')).toEqual({ amount: 30, unit: 'days' });
+		expect(timeOf('1', 'years')).toEqual({ amount: 1, unit: 'years' });
+		expect(timeOf(undefined, 'months')).toBeNull();
 	});
 
 	it('writes a tax rule’s region as one line, Country, Region, City, Postcode start, and reads it back', () => {
@@ -101,7 +102,7 @@ describe('list helpers', () => {
 describe('grade drafts (E10)', () => {
 	it('loads a saved grade and saves it back unchanged', () => {
 		const draft = loadGrade(FULL);
-		expect(draft.returnDays).toBe('14');
+		expect(draft.returnTime).toBe('14');
 		expect(draft.condition).toBe('refurbished');
 		expect(draft.active).toBe(false);
 		const saved = cleanGrade(draft);
@@ -109,16 +110,16 @@ describe('grade drafts (E10)', () => {
 		const checked = checkGrades([saved]);
 		expect(checked).toEqual({ ok: true, value: [FULL] });
 		// no category and no days of its own show as empty fields
-		const plain = loadGrade({ ...FULL, categoryId: null, returnDays: null, warrantyDays: null, condition: 'new' });
-		expect(plain).toMatchObject({ categoryId: '', returnDays: '', warrantyDays: '', condition: 'new' });
-		expect(cleanGrade(plain)).toEqual({ ...FULL, categoryId: null, returnDays: null, warrantyDays: null, condition: 'new' });
+		const plain = loadGrade({ ...FULL, categoryId: null, returnTime: null, warrantyTime: null, condition: 'new' });
+		expect(plain).toMatchObject({ categoryId: '', returnTime: '', warrantyTime: '', condition: 'new' });
+		expect(cleanGrade(plain)).toEqual({ ...FULL, categoryId: null, returnTime: null, warrantyTime: null, condition: 'new' });
 	});
 
 	it('saves a new grade the server takes: key from the name, empty rows dropped, used by default', () => {
 		const draft = {
 			...blankGrade(),
 			label: ' Grade B+ ',
-			returnDays: ' 7 ',
+			returnTime: ' 7 ',
 			categoryIds: [' cat_a ', ''],
 			video: 'https://youtu.be/dQw4w9WgXcQ',
 			content: {
@@ -142,8 +143,8 @@ describe('grade drafts (E10)', () => {
 		expect(saved).toMatchObject({
 			key: 'grade_b',
 			label: 'Grade B+',
-			returnDays: 7,
-			warrantyDays: null,
+			returnTime: { amount: 7, unit: /** @type {const} */ ('days') },
+			warrantyTime: null,
 			categoryIds: ['cat_a'],
 			video: 'dQw4w9WgXcQ',
 			content: { summary: 'ok', bullets: [{ text: 'Tested', icon: 'check' }] },

@@ -118,7 +118,7 @@ describe('catalog admin: a product', () => {
 		expect(checkIn(editor, 'X').checked).toBe(true);
 		expect(fieldIn(editor, 'Description (HTML)').value).toBe('<p>One</p>\n<p>Two &amp; &lt;three&gt;</p>');
 		expect(labelled(editor, 'Grade of Red').value).toBe('a');
-		expect(labelled(editor, 'Warranty days of Red').value).toBe('30');
+		expect(labelled(editor, 'Warranty of Red').value).toBe('30');
 		expect(labelled(editor, 'Blue is sold out').checked).toBe(true);
 		expect(labelled(editor, 'Bands of Blue').value).toBe('b1, b2');
 		expect(textOf(editor)).toContain('2 at Shop, 1 at Store room');
@@ -148,14 +148,14 @@ describe('catalog admin: a product', () => {
 		await click(buttonIn(editor, 'Save'));
 		expect(statuses(editor)).toContain('Check the amounts and numbers you typed.');
 		type(labelled(editor, 'Was price of Green'), '');
-		type(fieldIn(editor, 'Return days (empty = default)'), '1.5');
+		type(fieldIn(editor, 'Return time (empty = default)'), '1.5');
 		await click(buttonIn(editor, 'Save'));
 		expect(patches).toHaveLength(0);
-		type(fieldIn(editor, 'Return days (empty = default)'), '');
-		type(labelled(editor, 'Warranty days of Green'), '1.5');
+		type(fieldIn(editor, 'Return time (empty = default)'), '');
+		type(labelled(editor, 'Warranty of Green'), '1.5');
 		await click(buttonIn(editor, 'Save'));
 		expect(patches).toHaveLength(0);
-		type(labelled(editor, 'Warranty days of Green'), '');
+		type(labelled(editor, 'Warranty of Green'), '');
 		// a GTIN must end in its check digit (G5.6)
 		type(labelled(editor, 'GTIN (barcode number) of Green'), '4006381333932');
 		await click(buttonIn(editor, 'Save'));
@@ -182,7 +182,7 @@ describe('catalog admin: a product', () => {
 		expect(body.specs).toEqual({ att_1: 6.1, att_3: false, att_4: 'X1', att_7: ['x', 'y'] });
 		expect(body.kind).toBe('service');
 		expect(body.booking).toEqual({ durationMinutes: 30 });
-		expect(body.returnDays).toBeNull();
+		expect(body.returnTime).toBeNull();
 		expect(body.featured).toBe(false);
 		expect(body.typeKey).toBe('service');
 		expect(body.sizeChartId).toBeNull();
@@ -215,7 +215,7 @@ describe('catalog admin: a product', () => {
 			cost: null,
 			active: true,
 			soldOut: false,
-			warrantyDays: null,
+			warrantyTime: null,
 			grade: null,
 			media: [],
 			locations: { loc_1: 4, loc_2: 0 },
@@ -228,7 +228,7 @@ describe('catalog admin: a product', () => {
 			compareAtPrice: 130000,
 			cost: 100000,
 			grade: 'a',
-			warrantyDays: 30,
+			warrantyTime: { amount: 30, unit: /** @type {const} */ ('days') },
 			media: [{ key: 'ecommerce/products/prd_1/a.jpg', alt: 'front' }],
 		});
 		expect(body.variants[1]).toMatchObject({ id: 'var_2', attributes: { att_6: ['b1', 'b2'] }, soldOut: true, options: {} });
@@ -593,7 +593,7 @@ describe('catalog admin: a product by its item type', () => {
 		expect(fieldIn(editor, 'Item type').value).toBe('plain_box');
 		// the plain box: one variant with its package, the one field it names, no grade, size guide or own days
 		expect(() => labelled(editor, 'Grade of Red')).toThrow();
-		expect(() => labelled(editor, 'Warranty days of Red')).toThrow();
+		expect(() => labelled(editor, 'Warranty of Red')).toThrow();
 		expect(fieldIn(editor, 'Screen (in)').value).toBe('6.1');
 		expect(() => fieldIn(editor, 'Model')).toThrow();
 		expect(() => fieldIn(editor, 'Size chart')).toThrow();
@@ -603,7 +603,7 @@ describe('catalog admin: a product by its item type', () => {
 		expect(patches[0]).toMatchObject({ typeKey: 'plain_box', specs: { att_1: 6.1 } });
 		expect(patches[0]).not.toHaveProperty('options');
 		expect(patches[0]).not.toHaveProperty('sizeChartId');
-		expect(patches[0]).not.toHaveProperty('returnDays');
+		expect(patches[0]).not.toHaveProperty('returnTime');
 		expect(patches[0].variants[0]).toMatchObject({ parcel: { weightG: 250, lengthMm: 125, widthMm: null, heightMm: null } });
 		expect(patches[0].variants[0]).not.toHaveProperty('grade');
 		// as its category says (Phones: the used phone type, with grades and its own days)
@@ -642,8 +642,8 @@ describe('catalog admin: other product shapes', () => {
 			stockState: undefined,
 			updatedAt: undefined,
 			video: null,
-			returnDays: null,
-			warrantyDays: 30,
+			returnTime: null,
+			warrantyTime: { amount: 30, unit: /** @type {const} */ ('days') },
 			hideSizeGuide: true,
 			booking: { durationMinutes: 45 },
 			priceMax: 125000,
@@ -659,7 +659,7 @@ describe('catalog admin: other product shapes', () => {
 			'Service',
 			'Item typeService',
 			'Stock not tracked',
-			'Warranty days30',
+			'Warranty30 days',
 			'Size guide hidden',
 			'Duration in minutes45',
 			'No video.',

@@ -819,10 +819,16 @@ describe('shared helpers', () => {
 		expect(settingsOf(configOf([])).checkout.policyFormat).toBe('text');
 		const t = textsOf(configOf([]));
 		expect(warrantyText(t, null)).toBe('');
-		expect(warrantyText(t, 0)).toBe('');
-		expect(warrantyText(t, 1.5)).toBe('');
-		expect(warrantyText(t, 60)).toBe(text('shop.warrantyMonths', { months: 2 }));
-		expect(warrantyText(t, 7)).toBe(text('shop.warrantyDays', { days: 7 }));
+		expect(warrantyText(t, { amount: 0, unit: 'days' })).toBe('');
+		expect(warrantyText(t, { amount: 1.5, unit: 'days' })).toBe('');
+		// as the merchant typed it (E14): 1 year stays 1 year, 365 days stay 365 days
+		expect(warrantyText(t, { amount: 1, unit: 'years' })).toBe(text('shop.warranty', { time: text('time.year') }));
+		expect(warrantyText(t, { amount: 365, unit: 'days' })).toBe(
+			text('shop.warranty', { time: text('time.days', { count: 365 }) }),
+		);
+		expect(warrantyText(t, { amount: 2, unit: 'months' })).toBe(
+			text('shop.warranty', { time: text('time.months', { count: 2 }) }),
+		);
 	});
 
 	it('reads sparse categories and facets, and keeps a chosen attribute the facets no longer know', () => {

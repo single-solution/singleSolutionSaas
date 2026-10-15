@@ -25,8 +25,8 @@ describe('rich text, policies and size charts (core)', () => {
 
 	it('fills every placeholder, with one or two braces, and leaves other text in braces (SF-1)', () => {
 		const values = {
-			returnDays: 14,
-			warrantyDays: 180,
+			returnTime: { amount: 14, unit: /** @type {const} */ ('days') },
+			warrantyTime: { amount: 6, unit: /** @type {const} */ ('months') },
 			business: 'A & B',
 			email: 'help@shop.example.com',
 			phone: '+1 202 555 0143',
@@ -39,7 +39,7 @@ describe('rich text, policies and size charts (core)', () => {
 				{
 					key: 'returns',
 					title: 'Returns',
-					text: '{{returnDays}} days, {warrantyMonths} months at {business}. {email} {phone} {address} {deliveryFee} {freeDeliveryOver} {other} {{other}}',
+					text: '{{returnTime}}, {warrantyTime} at {business}. {email} {phone} {address} {deliveryFee} {freeDeliveryOver} {other} {{other}}',
 				},
 			],
 			'text',
@@ -52,8 +52,8 @@ describe('rich text, policies and size charts (core)', () => {
 		expect(html.policies[0]?.text).toBe('<h2>A &amp; B</h2><p>+1 202 555 0143</p>');
 		expect(
 			fillPolicies([{ key: 'privacy', title: 'P', text: '{email}' }], undefined, {
-				returnDays: 0,
-				warrantyDays: 0,
+				returnTime: { amount: 0, unit: /** @type {const} */ ('days') },
+				warrantyTime: { amount: 0, unit: /** @type {const} */ ('days') },
 				business: 'S',
 			}).policies,
 		).toEqual([]);
@@ -182,7 +182,7 @@ describe('storefront reads through the API', () => {
 	afterAll(async () => shop.product.close());
 
 	it('fills policies with business contacts and delivery amounts, as HTML with headings and contact links (SF-1)', async () => {
-		await shop.setting('returns', 'returnDays', 14);
+		await shop.setting('returns', 'returnTime', 14);
 		await shop.setting('delivery_zones', 'defaultFee', 25_000);
 		await shop.setting('delivery_zones', 'defaultFreeOver', 1_000_000);
 		await shop.setting('checkout', 'policyFormat', 'html');
@@ -190,7 +190,7 @@ describe('storefront reads through the API', () => {
 			{
 				key: 'returns',
 				title: 'Returns',
-				text: '<h2>Returns</h2><p>{{returnDays}} days. Delivery {deliveryFee}, free from {freeDeliveryOver}. <a href="mailto:{email}">Write</a></p>',
+				text: '<h2>Returns</h2><p>{{returnTime}}. Delivery {deliveryFee}, free from {freeDeliveryOver}. <a href="mailto:{email}">Write</a></p>',
 			},
 		]);
 		const answer = await api('GET', '/v1/policies');

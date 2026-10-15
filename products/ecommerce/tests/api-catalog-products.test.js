@@ -207,7 +207,7 @@ describe('the staff view of a product', () => {
 			stockState: 'full',
 			grades: [],
 		});
-		expect(read.json.variants[0]).toMatchObject({ attributes: {}, media: [], soldOut: false, warrantyDays: null, stock: 10 });
+		expect(read.json.variants[0]).toMatchObject({ attributes: {}, media: [], soldOut: false, warrantyTime: null, stock: 10 });
 
 		// a change keeps the defaults of the fields it does not name (never null)
 		const changed = await shop.api('PATCH', `/v1/products/${seeded.id}`, { name: 'Older phone' });

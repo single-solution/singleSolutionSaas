@@ -27,7 +27,7 @@ beforeAll(async () => {
 	data = await shop.db();
 	await data.ensureIndexes(INDEXES);
 	await shop.setting('returns', 'kinds', ['return', 'warranty', 'exchange']);
-	await shop.setting('returns', 'warrantyDays', 365);
+	await shop.setting('returns', 'warrantyTime', 365);
 });
 afterAll(async () => shop.product.close());
 beforeEach(async () => {
@@ -229,7 +229,10 @@ describe('claim outcomes', () => {
 		expect(repaired.json).toMatchObject({ status: 'repaired', actions: [] });
 		expect(repaired.json.history.at(-1)).toMatchObject({ status: 'repaired', by: 'Sam Staff', note: 'Fixed' });
 		const returnable = await shop.visitor('GET', `/v1/shop/orders/${second.id}/returnable`, { signIn: sara });
-		expect(returnable.json.lines[0]).toMatchObject({ claimable: 1, warranty: { days: 365, open: true } });
+		expect(returnable.json.lines[0]).toMatchObject({
+			claimable: 1,
+			warranty: { time: { amount: 365, unit: 'days' }, open: true },
+		});
 
 		// rejecting needs a note for the shopper; an exchange cannot be repaired
 		const third = await claim(second, 'exchange');

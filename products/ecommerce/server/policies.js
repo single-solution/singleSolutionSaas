@@ -6,6 +6,7 @@
  * @module
  */
 import { fillPolicies } from '../core/policies.js';
+import { windowDefaults } from '../core/returns.js';
 
 /** @typedef {import('./service.js').Site} Site */
 
@@ -14,7 +15,7 @@ import { fillPolicies } from '../core/policies.js';
  * @param {Site} s
  */
 export const policiesOf = async (s) => {
-	const [list, checkout, returns, business, { money }] = await Promise.all([
+	const [list, checkout, returns, business, { money, format }] = await Promise.all([
 		s.list('policies'),
 		s.values('checkout'),
 		s.values('returns'),
@@ -25,8 +26,8 @@ export const policiesOf = async (s) => {
 	const fee = Number(zones?.defaultFee ?? 0);
 	const freeOver = Number(zones?.defaultFreeOver ?? 0);
 	return fillPolicies(/** @type {import('../core/policies.js').Policy[]} */ (list), checkout.policyFormat, {
-		returnDays: Number(returns.returnDays ?? 0),
-		warrantyDays: Number(returns.warrantyDays ?? 0),
+		...windowDefaults(returns),
+		locale: format?.locale,
 		business: business.name,
 		email: business.email ?? '',
 		phone: business.phone ?? '',

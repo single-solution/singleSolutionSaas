@@ -168,10 +168,10 @@ describe('the type of a product', () => {
 					grade: 'a',
 					hideSizeGuide: true,
 					parcel: { weightG: 500 },
-					warrantyDays: 30,
+					warrantyTime: { amount: 30, unit: /** @type {const} */ ('days') },
 				}),
 			),
-		).toEqual(['/grade', '/hideSizeGuide', '/parcel', '/warrantyDays']);
+		).toEqual(['/grade', '/hideSizeGuide', '/parcel', '/warrantyTime']);
 		expect(
 			pathsOf(
 				await shop.api('POST', '/v1/products', {
@@ -230,11 +230,11 @@ describe('the type of a product', () => {
 			typeKey: 'used_phone',
 			price: 1,
 			grade: 'a',
-			warrantyDays: 90,
+			warrantyTime: { amount: 90, unit: /** @type {const} */ ('days') },
 			parcel: { weightG: 180, lengthMm: 160, widthMm: 80, heightMm: 10 },
 			specs: { [ids.battery.id]: 90 },
 		});
-		expect(phone.warrantyDays).toBe(90);
+		expect(phone.warrantyTime).toEqual({ amount: 90, unit: 'days' });
 		expect(phone.variants[0]).toMatchObject({
 			grade: 'a',
 			parcel: { weightG: 180, lengthMm: 160, widthMm: 80, heightMm: 10 },

@@ -61,6 +61,8 @@ export const CONTEXT_WORDS = Object.freeze(
 		'stockLeft',
 		'outOfStock',
 		'warranty',
+		'year',
+		'years',
 		'month',
 		'months',
 		'day',
@@ -102,7 +104,7 @@ const say = (text, values = {}) =>
  * @property {{ name: string, url: string, summary: string, priceRange: { minText: string, maxText: string },
  *   variants: Array<{ options: Record<string, string>, grade: string | null, priceText: string,
  *   compareAtPriceText: string | null, inStock: boolean, stockLeft: number | null, stockLeftText?: string | null,
- *   warrantyDays: number | null }>, measure?: { unit: string } | null } | null} product `measure`: sold by length, weight
+ *   warrantyTime: import('./durations.js').Duration | null }>, measure?: { unit: string } | null } | null} product `measure`: sold by length, weight
  *   or volume (prices per unit, stock in its unit)
  * @property {{ firstName: string, city: string, points: number | null } | null} visitor
  * @property {ShopBasics | null} [basics]
@@ -120,19 +122,20 @@ const say = (text, values = {}) =>
  * @property {Array<{ name: string, address: string, hours: string }>} pickup the pickup points
  * @property {number | null} earnPercent loyalty points earned, as a percent back
  * @property {string[]} categories the top categories shoppers see
- * @property {number | null} returnDays the return window (0 = no returns)
- * @property {number | null} warrantyDays the store's warranty (0 = none)
+ * @property {import('./durations.js').Duration | null} returnTime the return window (0 = no returns; null: unknown)
+ * @property {import('./durations.js').Duration | null} warrantyTime the store's warranty (0 = none)
  */
 
 /**
- * A warranty as the shopper widgets show it (`ui/shop-common.js` `warrantyText`): whole months when the days make
- * them, else days, in the website's words; '' for none.
- * @param {number | null | undefined} days @param {ContextWords} words
+ * A return or warranty time as the merchant typed it (E14: `1 year`, `6 months`, `30 days`), in the website's words;
+ * '' for none.
+ * @param {import('./durations.js').Duration | null | undefined} time @param {ContextWords} words
  */
-export const warrantyWords = (days, words) => {
-	const n = Number(days);
-	if (days === null || days === undefined || !Number.isSafeInteger(n) || n <= 0) return '';
-	if (n % 30 === 0) return n === 30 ? words.month : say(words.months, { count: n / 30 });
+export const timeWords = (time, words) => {
+	if (!time || !Number.isSafeInteger(time.amount) || time.amount <= 0) return '';
+	const n = time.amount;
+	if (time.unit === 'years') return n === 1 ? words.year : say(words.years, { count: n });
+	if (time.unit === 'months') return n === 1 ? words.month : say(words.months, { count: n });
 	return n === 1 ? words.day : say(words.days, { count: n });
 };
 
@@ -223,7 +226,9 @@ const productLines = (product, words) => {
 				variant.grade ? say(words.grade, { grade: variant.grade }) : '',
 				`${priceWords(variant, words)}${per}`,
 				stock,
-				variant.warrantyDays ? say(words.warranty, { warranty: warrantyWords(variant.warrantyDays, words) }) : '',
+				timeWords(variant.warrantyTime, words)
+					? say(words.warranty, { warranty: timeWords(variant.warrantyTime, words) })
+					: '',
 			].filter(Boolean);
 			return `- ${oneLine(parts.join(', '), 200)}`;
 		}),
@@ -255,7 +260,7 @@ const basicsLines = (basics, words) => {
 		const name = oneLine(entry.name, 60);
 		return extra.length > 0 ? `${name} (${extra.join('; ')})` : name;
 	});
-	const warranty = warrantyWords(basics.warrantyDays, words);
+	const warranty = timeWords(basics.warrantyTime, words);
 	const lines = [
 		payments.length > 0 ? say(words.payment, { methods: payments.join('; ') }) : '',
 		basics.delivery ? say(words.delivery, { fee: feeWords(basics.delivery, words) }) : '',
@@ -272,8 +277,12 @@ const basicsLines = (basics, words) => {
 		),
 		basics.earnPercent !== null && basics.earnPercent > 0 ? say(words.loyalty, { percent: basics.earnPercent }) : '',
 		basics.categories.length > 0 ? say(words.categories, { names: oneLine(basics.categories.join(', '), 400) }) : '',
-		basics.returnDays === null ? '' : basics.returnDays > 0 ? say(words.returns, { days: basics.returnDays }) : words.noReturns,
-		basics.warrantyDays === null ? '' : warranty ? say(words.warrantyLine, { warranty }) : words.noWarranty,
+		basics.returnTime === null
+			? ''
+			: timeWords(basics.returnTime, words)
+				? say(words.returns, { time: timeWords(basics.returnTime, words) })
+				: words.noReturns,
+		basics.warrantyTime === null ? '' : warranty ? say(words.warrantyLine, { warranty }) : words.noWarranty,
 	]
 		.filter(Boolean)
 		.map((line) => `- ${line}`);

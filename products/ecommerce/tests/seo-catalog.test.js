@@ -67,7 +67,7 @@ afterAll(async () => shop.product.close());
 describe('E10 grades and E16 structured data', () => {
 	it('writes each variant with its grade condition, return policy, reviews and FAQs', async () => {
 		await shop.setting('delivery_zones', 'defaultFee', 25000);
-		await shop.setting('returns', 'returnDays', 14);
+		await shop.setting('returns', 'returnTime', 14);
 		await shop.setting('seo', 'faqMarkup', true);
 		const data = await shop.db();
 		await data.collection('reviews').insertOne({
@@ -124,7 +124,7 @@ describe('E10 grades and E16 structured data', () => {
 		const shown = await shop.visitor('GET', `/v1/shop/products/${ids.phone.id}/reviews`);
 		expect(shown.json.items[0].name).toBe('Sam L.');
 		await shop.setting('reviews', 'nameFormat', 'full');
-		await shop.setting('returns', 'returnDays', 0);
+		await shop.setting('returns', 'returnTime', 0);
 		// no returns: the store-wide policy says so, and the items point to it
 		const none = node((await api('GET', `/v1/seo/products/${ids.phone.slug}`)).jsonLd, 'ProductGroup');
 		expect(none.hasVariant[0].offers.hasMerchantReturnPolicy).toEqual({ '@id': `${ORIGIN}/#return_policy` });
@@ -465,7 +465,7 @@ describe('E17 feed options', () => {
 					attributes: {},
 					media: [],
 					soldOut: false,
-					warrantyDays: null,
+					warrantyTime: null,
 				},
 			],
 			options: [],

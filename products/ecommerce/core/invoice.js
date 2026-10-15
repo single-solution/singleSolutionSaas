@@ -16,6 +16,7 @@
  * @module
  */
 import { formatDate, formatMoney } from '@ss/contracts/format';
+import { durationText } from './durations.js';
 import { fieldPlaceholders, fieldValuesShown, unitsShown } from './fields.js';
 import { isSlug } from './catalog.js';
 import { WAITING_ROLES } from './flow.js';
@@ -143,7 +144,7 @@ export const INVOICE_TEXTS = Object.freeze({
 	labelSku: 'SKU',
 	labelGrade: 'Grade',
 	labelSerials: 'Serial numbers',
-	labelWarranty: 'Warranty: {days} days',
+	labelWarranty: 'Warranty: {time}',
 	labelQuantity: 'Qty',
 	labelUnitPrice: 'Unit price',
 	labelAmount: 'Amount',
@@ -278,8 +279,8 @@ const lineDetail = (order, line, context, place) => {
 		line.sku && !(place === 'invoice' && context.columns.includes('sku')) ? `${t.labelSku} ${line.sku}` : '',
 		line.gradeLabel ? `${t.labelGrade}: ${line.gradeLabel}` : '',
 		// the warranty kept at placement (E12)
-		typeof line.warrantyDays === 'number' && line.warrantyDays > 0
-			? t.labelWarranty.replaceAll('{days}', String(line.warrantyDays))
+		line.warrantyTime && line.warrantyTime.amount > 0
+			? t.labelWarranty.replaceAll('{time}', durationText(line.warrantyTime, context.format.locale))
 			: '',
 	].filter(Boolean);
 	const detail = parts.length > 0 ? `<p class="small">${esc(parts.join(' · '))}</p>` : '';

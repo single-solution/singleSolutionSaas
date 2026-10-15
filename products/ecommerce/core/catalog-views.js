@@ -225,7 +225,7 @@ export const specsOf = (product, attributes) =>
  * @param {ReadonlyMap<string, MediaView[]>} [context.variantMedia] each variant's photos (E6)
  * @param {ReadonlyMap<string, string>} [context.variantUrls] each variant's page (E13)
  * @param {{ showStock: string, lowStockShown: number }} [context.stock] what shoppers are told of stock (E9)
- * @param {number | null} [context.warrantyDays] the `returns` setting (E12)
+ * @param {import('./durations.js').Duration | null} [context.warrantyTime] the `returns` setting (E12, E14)
  * @param {ReturnType<typeof import('./size-charts.js').chartView> | null} [context.sizeChart] (E5)
  * @param {Record<string, unknown> | null} [context.video] (E4)
  * @param {Shown} context.shown each variant's shown price (G4)
@@ -263,7 +263,7 @@ export const pageOf = (product, context) => {
 				soldOut: variant.soldOut,
 				stockLeft: stockLeftOf(variant, product.trackStock, stock, context.measure),
 				grade: grade ? gradeView(grade) : null,
-				warrantyDays: variant.warrantyDays ?? product.warrantyDays ?? grade?.warrantyDays ?? context.warrantyDays ?? null,
+				warrantyTime: variant.warrantyTime ?? product.warrantyTime ?? grade?.warrantyTime ?? context.warrantyTime ?? null,
 				media: context.variantMedia?.get(variant.id) ?? [],
 				url: context.variantUrls?.get(variant.id) ?? url,
 			};

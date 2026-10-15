@@ -17,6 +17,7 @@ import { normalisePhone } from '@ss/contracts/phone';
 import { ADDRESS_LIMITS } from './address.js';
 import { ALERT_TRIES, checkAlertInput } from './alerts.js';
 import { LIMITS } from './catalog.js';
+import { DURATION_RULE, durationOf } from './durations.js';
 import { derivedFacts } from './facts.js';
 import { statusOf } from './flow.js';
 import { guestKeyOf, guestRules, phoneDigitsOf, phoneRules } from './guests.js';
@@ -473,7 +474,7 @@ const DELIVERY_FIELDS = fieldList('method zone fee locationId');
 const LINE_FIELDS = fieldList(
 	'id productId variantId kind name variantName sku grade gradeLabel image unitPrice quantity discount tax ' +
 		'total cost categoryIds brandId locationId serials booking licences downloads returnedQuantity ' +
-		'warrantyDays dealId',
+		'warrantyTime dealId',
 );
 const TOTALS_FIELDS = fieldList('subtotal discount delivery tax total currency taxIncluded fee roleDiscount');
 const PROMOTIONS_FIELDS = fieldList(
@@ -603,9 +604,9 @@ const lineOf = (c, value, path, taxIncluded, now) => {
 	const serials = c.list(input.serials, `${path}/serials`, MAX_QUANTITY);
 	if (serials.length > quantity) c.fail(`${path}/serials`, 'At most one serial number per unit.');
 	const downloads = missing(input.downloads) ? undefined : c.whole(input.downloads, `${path}/downloads`, { max: 1_000_000 });
-	const warrantyDays = missing(input.warrantyDays)
-		? undefined
-		: c.whole(input.warrantyDays, `${path}/warrantyDays`, { max: LIMITS.days });
+	// the warranty the line kept, as typed (E14)
+	const warrantyTime = missing(input.warrantyTime) ? undefined : durationOf(input.warrantyTime);
+	if (warrantyTime === undefined && !missing(input.warrantyTime)) c.fail(`${path}/warrantyTime`, DURATION_RULE);
 	return {
 		id: c.id(input.id, ID_PREFIX.line, `${path}/id`) ?? '',
 		productId: c.id(input.productId, ID_PREFIX.product, `${path}/productId`) ?? '',
@@ -631,7 +632,7 @@ const lineOf = (c, value, path, taxIncluded, now) => {
 		licences: c.ids(input.licences, ID_PREFIX.licence, `${path}/licences`, MAX_QUANTITY),
 		returnedQuantity,
 		...(downloads === undefined ? (kind === 'digital' ? { downloads: 0 } : {}) : { downloads }),
-		...(warrantyDays === undefined ? {} : { warrantyDays }),
+		...(warrantyTime === undefined || warrantyTime === null ? {} : { warrantyTime }),
 		...(missing(input.dealId) ? {} : { dealId: c.id(input.dealId, ID_PREFIX.deal, `${path}/dealId`) }),
 	};
 };

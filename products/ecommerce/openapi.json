@@ -6903,7 +6903,7 @@
 			},
 			"post": {
 				"summary": "Create a product (Catalog admin widget)",
-				"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade, location or item type, several variants without Variants; values of a part its item type does not have, each at its path: /variants and /options (variants), /variants/<n>/grade (grades), /sizeChartId (chart), /variants/<n>/parcel (parcel), /returnDays, /warrantyDays and /variants/<n>/warrantyDays (warranty), /digital/downloadLimit (downloads), /digital/licenceKeys (licenceKeys), /booking (slots), /specs/<id> and /variants/<n>/attributes/<id> (a field the type does not name)); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
+				"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade, location or item type, several variants without Variants; values of a part its item type does not have, each at its path: /variants and /options (variants), /variants/<n>/grade (grades), /sizeChartId (chart), /variants/<n>/parcel (parcel), /returnTime, /warrantyTime and /variants/<n>/warrantyTime (warranty), /digital/downloadLimit (downloads), /digital/licenceKeys (licenceKeys), /booking (slots), /specs/<id> and /variants/<n>/attributes/<id> (a field the type does not name)); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -7145,13 +7145,15 @@
 													"type": "boolean",
 													"description": "Shown as sold out without changing stock."
 												},
-												"warrantyDays": {
-													"type": [
-														"integer",
-														"null"
+												"warrantyTime": {
+													"oneOf": [
+														{
+															"$ref": "#/components/schemas/Duration"
+														},
+														{
+															"type": "null"
+														}
 													],
-													"minimum": 0,
-													"maximum": 3650,
 													"description": "null: the product’s, then the grade’s, then the returns setting."
 												},
 												"parcel": {
@@ -7603,22 +7605,26 @@
 										},
 										"maxItems": 20
 									},
-									"returnDays": {
-										"type": [
-											"integer",
-											"null"
+									"returnTime": {
+										"oneOf": [
+											{
+												"$ref": "#/components/schemas/Duration"
+											},
+											{
+												"type": "null"
+											}
 										],
-										"minimum": 0,
-										"maximum": 3650,
 										"description": "Return window after delivery; null: the grade’s, else the returns setting."
 									},
-									"warrantyDays": {
-										"type": [
-											"integer",
-											"null"
+									"warrantyTime": {
+										"oneOf": [
+											{
+												"$ref": "#/components/schemas/Duration"
+											},
+											{
+												"type": "null"
+											}
 										],
-										"minimum": 0,
-										"maximum": 3650,
 										"description": "Warranty after delivery; null: the grade’s, else the returns setting."
 									},
 									"replacedBy": {
@@ -8550,13 +8556,15 @@
 													"type": "boolean",
 													"description": "Shown as sold out without changing stock."
 												},
-												"warrantyDays": {
-													"type": [
-														"integer",
-														"null"
+												"warrantyTime": {
+													"oneOf": [
+														{
+															"$ref": "#/components/schemas/Duration"
+														},
+														{
+															"type": "null"
+														}
 													],
-													"minimum": 0,
-													"maximum": 3650,
 													"description": "null: the product’s, then the grade’s, then the returns setting."
 												},
 												"parcel": {
@@ -9008,22 +9016,26 @@
 										},
 										"maxItems": 20
 									},
-									"returnDays": {
-										"type": [
-											"integer",
-											"null"
+									"returnTime": {
+										"oneOf": [
+											{
+												"$ref": "#/components/schemas/Duration"
+											},
+											{
+												"type": "null"
+											}
 										],
-										"minimum": 0,
-										"maximum": 3650,
 										"description": "Return window after delivery; null: the grade’s, else the returns setting."
 									},
-									"warrantyDays": {
-										"type": [
-											"integer",
-											"null"
+									"warrantyTime": {
+										"oneOf": [
+											{
+												"$ref": "#/components/schemas/Duration"
+											},
+											{
+												"type": "null"
+											}
 										],
-										"minimum": 0,
-										"maximum": 3650,
 										"description": "Warranty after delivery; null: the grade’s, else the returns setting."
 									},
 									"replacedBy": {
@@ -22453,7 +22465,7 @@
 		"/v1/policies": {
 			"get": {
 				"summary": "The shop's policies",
-				"description": "For your own policy pages (server token). The policies list (Settings → Policies; lists/policies), in its order, those without text left out, with {returnDays}, {warrantyDays}, {warrantyMonths}, {business}, {email}, {phone}, {address} (business.json), {deliveryFee} and {freeDeliveryOver} (Delivery zones, as money) filled in (also written with double braces); other text in braces stays.",
+				"description": "For your own policy pages (server token). The policies list (Settings → Policies; lists/policies), in its order, those without text left out, with {returnTime}, {warrantyTime} (as typed: 30 days, 1 year), {business}, {email}, {phone}, {address} (business.json), {deliveryFee} and {freeDeliveryOver} (Delivery zones, as money) filled in (also written with double braces); other text in braces stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -22729,7 +22741,7 @@
 			},
 			"post": {
 				"summary": "Create a product",
-				"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade, location or item type, several variants without Variants; values of a part its item type does not have, each at its path: /variants and /options (variants), /variants/<n>/grade (grades), /sizeChartId (chart), /variants/<n>/parcel (parcel), /returnDays, /warrantyDays and /variants/<n>/warrantyDays (warranty), /digital/downloadLimit (downloads), /digital/licenceKeys (licenceKeys), /booking (slots), /specs/<id> and /variants/<n>/attributes/<id> (a field the type does not name)); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
+				"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade, location or item type, several variants without Variants; values of a part its item type does not have, each at its path: /variants and /options (variants), /variants/<n>/grade (grades), /sizeChartId (chart), /variants/<n>/parcel (parcel), /returnTime, /warrantyTime and /variants/<n>/warrantyTime (warranty), /digital/downloadLimit (downloads), /digital/licenceKeys (licenceKeys), /booking (slots), /specs/<id> and /variants/<n>/attributes/<id> (a field the type does not name)); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -22982,13 +22994,15 @@
 													"type": "boolean",
 													"description": "Shown as sold out without changing stock."
 												},
-												"warrantyDays": {
-													"type": [
-														"integer",
-														"null"
+												"warrantyTime": {
+													"oneOf": [
+														{
+															"$ref": "#/components/schemas/Duration"
+														},
+														{
+															"type": "null"
+														}
 													],
-													"minimum": 0,
-													"maximum": 3650,
 													"description": "null: the product’s, then the grade’s, then the returns setting."
 												},
 												"parcel": {
@@ -23440,22 +23454,26 @@
 										},
 										"maxItems": 20
 									},
-									"returnDays": {
-										"type": [
-											"integer",
-											"null"
+									"returnTime": {
+										"oneOf": [
+											{
+												"$ref": "#/components/schemas/Duration"
+											},
+											{
+												"type": "null"
+											}
 										],
-										"minimum": 0,
-										"maximum": 3650,
 										"description": "Return window after delivery; null: the grade’s, else the returns setting."
 									},
-									"warrantyDays": {
-										"type": [
-											"integer",
-											"null"
+									"warrantyTime": {
+										"oneOf": [
+											{
+												"$ref": "#/components/schemas/Duration"
+											},
+											{
+												"type": "null"
+											}
 										],
-										"minimum": 0,
-										"maximum": 3650,
 										"description": "Warranty after delivery; null: the grade’s, else the returns setting."
 									},
 									"replacedBy": {
@@ -24466,13 +24484,15 @@
 													"type": "boolean",
 													"description": "Shown as sold out without changing stock."
 												},
-												"warrantyDays": {
-													"type": [
-														"integer",
-														"null"
+												"warrantyTime": {
+													"oneOf": [
+														{
+															"$ref": "#/components/schemas/Duration"
+														},
+														{
+															"type": "null"
+														}
 													],
-													"minimum": 0,
-													"maximum": 3650,
 													"description": "null: the product’s, then the grade’s, then the returns setting."
 												},
 												"parcel": {
@@ -24924,22 +24944,26 @@
 										},
 										"maxItems": 20
 									},
-									"returnDays": {
-										"type": [
-											"integer",
-											"null"
+									"returnTime": {
+										"oneOf": [
+											{
+												"$ref": "#/components/schemas/Duration"
+											},
+											{
+												"type": "null"
+											}
 										],
-										"minimum": 0,
-										"maximum": 3650,
 										"description": "Return window after delivery; null: the grade’s, else the returns setting."
 									},
-									"warrantyDays": {
-										"type": [
-											"integer",
-											"null"
+									"warrantyTime": {
+										"oneOf": [
+											{
+												"$ref": "#/components/schemas/Duration"
+											},
+											{
+												"type": "null"
+											}
 										],
-										"minimum": 0,
-										"maximum": 3650,
 										"description": "Warranty after delivery; null: the grade’s, else the returns setting."
 									},
 									"replacedBy": {
@@ -28748,7 +28772,7 @@
 		"/v1/seo/site": {
 			"get": {
 				"summary": "The home page's head and structured data",
-				"description": "Baseline SEO with the catalog (E49): the home page's title (the seo setting homeTitle as written, else the name in titles: brandName, else the business name), description (homeDescription, else defaultDescription, as written), canonical address, social image (defaultImage) and site name, and the JSON-LD of the business and the website: an OnlineStore — or, with the seo setting businessType set to any schema.org local business type (LocalBusiness, Store, ClothingStore, Bakery …) and Delivery zones' pickupAddress and pickupHours set, that type at the pickup point, its hours as openingHours when every line is written like Mo-Fr 09:00-17:00 — with name, alternateName, url, logo, email, telephone and address from business.json, sameAs (socialProfiles), and its store-wide policies, whose @id product offers point to, only with the business.json country: the return policy (with Returns on: returnDays, returnMethod and the return shipping fee; with Returns off only when the checkout setting returnsAccepted is no: no returns) and the shipping policy (with Delivery zones on and both handlingDays and transitDays set: delivery to the country at defaultFee, free from defaultFreeOver, with the handling and transit days); and a WebSite with the same name. Only values the shop has are given. Put it on the home page only. While the SEO feature is off, the seo settings' defaults apply. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
+				"description": "Baseline SEO with the catalog (E49): the home page's title (the seo setting homeTitle as written, else the name in titles: brandName, else the business name), description (homeDescription, else defaultDescription, as written), canonical address, social image (defaultImage) and site name, and the JSON-LD of the business and the website: an OnlineStore — or, with the seo setting businessType set to any schema.org local business type (LocalBusiness, Store, ClothingStore, Bakery …) and Delivery zones' pickupAddress and pickupHours set, that type at the pickup point, its hours as openingHours when every line is written like Mo-Fr 09:00-17:00 — with name, alternateName, url, logo, email, telephone and address from business.json, sameAs (socialProfiles), and its store-wide policies, whose @id product offers point to, only with the business.json country: the return policy (with Returns on: returnTime, returnMethod and the return shipping fee; with Returns off only when the checkout setting returnsAccepted is no: no returns) and the shipping policy (with Delivery zones on and both handlingDays and transitDays set: delivery to the country at defaultFee, free from defaultFreeOver, with the handling and transit days); and a WebSite with the same name. Only values the shop has are given. Put it on the home page only. While the SEO feature is off, the seo settings' defaults apply. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -31794,7 +31818,7 @@
 		"/v1/shop/orders/{id}/returnable": {
 			"get": {
 				"summary": "What the shopper can still claim on an order",
-				"description": "Send the shopper's Accounts sign-in in the SS-Sign-In header (403 sign_in_required without a valid one). Only the shopper's own order (404 not_found). Lists the physical lines of a delivered order (none before delivery) with the units not held by other claims and each line's return and warranty windows from delivery: the product's own days, else its condition grade's, else the returns settings returnDays and warrantyDays (the warranty kept on the line when it was ordered wins). A rejected claim, a repaired one and a warranty claim closed without a refund hold no units.",
+				"description": "Send the shopper's Accounts sign-in in the SS-Sign-In header (403 sign_in_required without a valid one). Only the shopper's own order (404 not_found). Lists the physical lines of a delivered order (none before delivery) with the units not held by other claims and each line's return and warranty windows from delivery: the product's own time, else its condition grade's, else the returns settings returnTime and warrantyTime with their units (months and years on the calendar) (the warranty kept on the line when it was ordered wins). A rejected claim, a repaired one and a warranty claim closed without a refund hold no units.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "returns",
 				"security": [
@@ -31867,7 +31891,7 @@
 		"/v1/shop/policies": {
 			"get": {
 				"summary": "The shop's policies",
-				"description": "For the visitor (browser token). The policies list (Settings → Policies; lists/policies), in its order, those without text left out, with {returnDays}, {warrantyDays}, {warrantyMonths}, {business}, {email}, {phone}, {address} (business.json), {deliveryFee} and {freeDeliveryOver} (Delivery zones, as money) filled in (also written with double braces); other text in braces stays.",
+				"description": "For the visitor (browser token). The policies list (Settings → Policies; lists/policies), in its order, those without text left out, with {returnTime}, {warrantyTime} (as typed: 30 days, 1 year), {business}, {email}, {phone}, {address} (business.json), {deliveryFee} and {freeDeliveryOver} (Delivery zones, as money) filled in (also written with double braces); other text in braces stays.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -36714,8 +36738,8 @@
 							"pickup",
 							"earnPercent",
 							"categories",
-							"returnDays",
-							"warrantyDays"
+							"returnTime",
+							"warrantyTime"
 						],
 						"additionalProperties": false,
 						"properties": {
@@ -36853,19 +36877,27 @@
 								},
 								"description": "The top categories shoppers see (at most 20)."
 							},
-							"returnDays": {
-								"type": [
-									"integer",
-									"null"
+							"returnTime": {
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/Duration"
+									},
+									{
+										"type": "null"
+									}
 								],
 								"description": "The return window (0 = no returns; null without returns)."
 							},
-							"warrantyDays": {
-								"type": [
-									"integer",
-									"null"
+							"warrantyTime": {
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/Duration"
+									},
+									{
+										"type": "null"
+									}
 								],
-								"description": "The store's warranty in days (0 = none; null without returns); the text says whole months when the days make them."
+								"description": "The store's warranty (0 = none; null without returns)."
 							}
 						}
 					},
@@ -37354,7 +37386,7 @@
 					"unitPriceText",
 					"total",
 					"totalText",
-					"warrantyDays"
+					"warrantyTime"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -37395,10 +37427,14 @@
 					"totalText": {
 						"type": "string"
 					},
-					"warrantyDays": {
-						"type": [
-							"integer",
-							"null"
+					"warrantyTime": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Duration"
+							},
+							{
+								"type": "null"
+							}
 						]
 					}
 				}
@@ -38273,7 +38309,7 @@
 					"inStock",
 					"soldOut",
 					"stockLeft",
-					"warrantyDays"
+					"warrantyTime"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -38371,10 +38407,14 @@
 							"null"
 						]
 					},
-					"warrantyDays": {
-						"type": [
-							"integer",
-							"null"
+					"warrantyTime": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Duration"
+							},
+							{
+								"type": "null"
+							}
 						],
 						"description": "Physical items with a warranty only."
 					}
@@ -40783,6 +40823,30 @@
 								"format": "date-time"
 							}
 						}
+					}
+				}
+			},
+			"Duration": {
+				"type": "object",
+				"description": "A return or warranty time as the merchant typed it (E14): a whole amount of days (up to 3650), months (120) or years (10); 0: none. Months and years count on the calendar from delivery.",
+				"required": [
+					"amount",
+					"unit"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"amount": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 3650
+					},
+					"unit": {
+						"type": "string",
+						"enum": [
+							"days",
+							"months",
+							"years"
+						]
 					}
 				}
 			},
@@ -44109,7 +44173,7 @@
 			},
 			"OrderLine": {
 				"type": "object",
-				"description": "One order line: what was bought, at the price paid. Imported lines may lack downloads, warrantyDays and dealId.",
+				"description": "One order line: what was bought, at the price paid. Imported lines may lack downloads, warrantyTime and dealId.",
 				"required": [
 					"id",
 					"productId",
@@ -44296,12 +44360,16 @@
 						"minimum": 0,
 						"description": "Units returned through approved return claims."
 					},
-					"warrantyDays": {
-						"type": [
-							"integer",
-							"null"
+					"warrantyTime": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Duration"
+							},
+							{
+								"type": "null"
+							}
 						],
-						"description": "The warranty at placement, in days (physical lines)."
+						"description": "The warranty at placement (physical lines)."
 					},
 					"dealId": {
 						"type": [
@@ -45778,8 +45846,8 @@
 					"digital",
 					"booking",
 					"seo",
-					"returnDays",
-					"warrantyDays",
+					"returnTime",
+					"warrantyTime",
 					"featured",
 					"video",
 					"sizeChartId",
@@ -46132,21 +46200,25 @@
 					"seo": {
 						"$ref": "#/components/schemas/ProductSeo"
 					},
-					"returnDays": {
-						"type": [
-							"integer",
-							"null"
-						],
-						"minimum": 0,
-						"maximum": 3650
+					"returnTime": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Duration"
+							},
+							{
+								"type": "null"
+							}
+						]
 					},
-					"warrantyDays": {
-						"type": [
-							"integer",
-							"null"
-						],
-						"minimum": 0,
-						"maximum": 3650
+					"warrantyTime": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Duration"
+							},
+							{
+								"type": "null"
+							}
+						]
 					},
 					"featured": {
 						"type": "boolean"
@@ -48092,16 +48164,15 @@
 				"type": "object",
 				"description": "A claim window counted from delivery.",
 				"required": [
-					"days",
+					"time",
 					"until",
 					"open"
 				],
 				"additionalProperties": false,
 				"properties": {
-					"days": {
-						"type": "integer",
-						"minimum": 0,
-						"description": "The window's days from delivery (0: none)."
+					"time": {
+						"$ref": "#/components/schemas/Duration",
+						"description": "The window from delivery, as the merchant typed it (amount 0: none)."
 					},
 					"until": {
 						"type": [
@@ -50151,8 +50222,8 @@
 					"videoUrl",
 					"content",
 					"condition",
-					"warrantyDays",
-					"returnDays"
+					"warrantyTime",
+					"returnTime"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -50224,21 +50295,25 @@
 							null
 						]
 					},
-					"warrantyDays": {
-						"type": [
-							"integer",
-							"null"
-						],
-						"minimum": 0,
-						"maximum": 3650
+					"warrantyTime": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Duration"
+							},
+							{
+								"type": "null"
+							}
+						]
 					},
-					"returnDays": {
-						"type": [
-							"integer",
-							"null"
-						],
-						"minimum": 0,
-						"maximum": 3650
+					"returnTime": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Duration"
+							},
+							{
+								"type": "null"
+							}
+						]
 					}
 				},
 				"description": "A condition grade as shoppers see it."
@@ -51048,7 +51123,7 @@
 					"gradeLabel",
 					"serials",
 					"unitValues",
-					"warrantyDays",
+					"warrantyTime",
 					"image",
 					"unitPrice",
 					"quantity",
@@ -51131,10 +51206,14 @@
 							}
 						}
 					},
-					"warrantyDays": {
-						"type": [
-							"integer",
-							"null"
+					"warrantyTime": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Duration"
+							},
+							{
+								"type": "null"
+							}
 						]
 					},
 					"image": {
@@ -52539,7 +52618,7 @@
 					"soldOut",
 					"stockLeft",
 					"grade",
-					"warrantyDays",
+					"warrantyTime",
 					"media",
 					"url"
 				],
@@ -52671,13 +52750,15 @@
 							}
 						]
 					},
-					"warrantyDays": {
-						"type": [
-							"integer",
-							"null"
+					"warrantyTime": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Duration"
+							},
+							{
+								"type": "null"
+							}
 						],
-						"minimum": 0,
-						"maximum": 3650,
 						"description": "The variant’s, else the product’s, the grade’s or the returns setting’s."
 					},
 					"media": {
@@ -53646,7 +53727,7 @@
 					"attributes",
 					"media",
 					"soldOut",
-					"warrantyDays"
+					"warrantyTime"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -53745,13 +53826,15 @@
 						"type": "boolean",
 						"description": "Shown as sold out whatever its stock."
 					},
-					"warrantyDays": {
-						"type": [
-							"integer",
-							"null"
+					"warrantyTime": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Duration"
+							},
+							{
+								"type": "null"
+							}
 						],
-						"minimum": 0,
-						"maximum": 3650,
 						"description": "null: the product’s, then the grade’s, then the returns setting."
 					},
 					"parcel": {

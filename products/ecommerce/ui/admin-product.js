@@ -14,6 +14,7 @@ import { card, deleteEntry, detailHead, masonryOf, yesNo } from './admin-screen.
 import { variantLabel } from './admin-taxonomy.js';
 import { partsOf, showsTypes, typeLabel, typeNamed } from './admin-types.js';
 import { generateDialog, stockAmount, stockText } from './admin-variants.js';
+import { timeText } from './shop-common.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-kit.js').Tone} Tone */
@@ -310,14 +311,8 @@ export const productDetail = (kit, product, context, message = '') => {
 			[t('catalogAdmin.tagsTitle'), product.tags.join(', ')],
 			[t('catalogAdmin.slug'), product.slug],
 			[t('catalogAdmin.earlierSlugsTitle'), (product.previousSlugs ?? []).join(', ')],
-			[
-				t('catalogAdmin.returnDaysTitle'),
-				product.returnDays === null || product.returnDays === undefined ? '' : String(product.returnDays),
-			],
-			[
-				t('catalogAdmin.warrantyDaysTitle'),
-				product.warrantyDays === null || product.warrantyDays === undefined ? '' : String(product.warrantyDays),
-			],
+			[t('catalogAdmin.returnTimeTitle'), timeText(t, product.returnTime)],
+			[t('catalogAdmin.warrantyTimeTitle'), timeText(t, product.warrantyTime)],
 			[
 				t('catalogAdmin.itemType'),
 				showsTypes(kit, product.typeKey) ? typeLabel(kit, product.type?.key ?? product.kind, '') : '',

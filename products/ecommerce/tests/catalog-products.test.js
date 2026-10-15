@@ -17,7 +17,7 @@ beforeAll(async () => {
 	staff = await shop.ticket(['catalog.edit']);
 	await shop.list('grades', [
 		{ key: 'new', label: 'New', description: 'Sealed' },
-		{ key: 'used_a', label: 'Used A', returnDays: 3 },
+		{ key: 'used_a', label: 'Used A', returnTime: { amount: 3, unit: /** @type {const} */ ('days') } },
 	]);
 });
 afterAll(async () => shop.product.close());
@@ -146,7 +146,7 @@ describe('products', () => {
 				{ sku: 'PX9-128', options: { Storage: '128 GB' }, price: 70000, compareAtPrice: 80000, stock: 2, grade: 'new' },
 				{ sku: 'PX9-256', options: { Storage: '256 GB' }, price: 80000, stock: 0 },
 			],
-			returnDays: 7,
+			returnTime: { amount: 7, unit: /** @type {const} */ ('days') },
 		});
 		expect(created.status).toBe(201);
 		const p = created.json;
@@ -232,7 +232,7 @@ describe('products', () => {
 			price: -1,
 			trackStock: 'yes',
 			seo: { title: 'x'.repeat(300) },
-			returnDays: 4000,
+			returnTime: { amount: 4000, unit: /** @type {const} */ ('days') },
 		});
 		expect(errors.status).toBe(422);
 		const paths = errors.json.errors.map((/** @type {any} */ e) => e.path);
@@ -248,7 +248,7 @@ describe('products', () => {
 			'/price',
 			'/trackStock',
 			'/seo/title',
-			'/returnDays',
+			'/returnTime',
 		])
 			expect(paths).toContain(path);
 		expect((await api('POST', '/v1/products', 'x')).status).toBe(400);

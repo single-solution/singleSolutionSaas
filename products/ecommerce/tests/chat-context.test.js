@@ -5,7 +5,7 @@
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MAX_CONTEXT, contextText, contextWordsOf, oneLine, warrantyWords } from '../core/chat-context.js';
+import { MAX_CONTEXT, contextText, contextWordsOf, oneLine, timeWords } from '../core/chat-context.js';
 import { chatFilters, filtersGiven, gradePrices, matchingVariant, variantFilter, warrantyOf } from '../core/lookup.js';
 import { shipmentLink } from '../core/couriers.js';
 import { COLLECTIONS } from '../core/model.js';
@@ -36,7 +36,7 @@ const variant = (input = {}) => ({
 	attributes: {},
 	media: [],
 	soldOut: false,
-	warrantyDays: null,
+	warrantyTime: null,
 	...input,
 });
 
@@ -76,11 +76,11 @@ describe('core: Chat filters, warranties and the context text', () => {
 		id: 'prd_1',
 		kind: 'physical',
 		trackStock: true,
-		warrantyDays: null,
+		warrantyTime: null,
 		variants: [
 			variant({ id: 'a1', grade: 'a', price: 900, stock: 0 }),
 			variant({ id: 'a2', grade: 'a', price: 1000 }),
-			variant({ id: 'b1', grade: 'b', price: 700, warrantyDays: 30 }),
+			variant({ id: 'b1', grade: 'b', price: 700, warrantyTime: { amount: 30, unit: /** @type {const} */ ('days') } }),
 			variant({ id: 'n1', price: 1200, soldOut: true }),
 			variant({ id: 'off', price: 1, active: false }),
 		],
@@ -137,14 +137,33 @@ describe('core: Chat filters, warranties and the context text', () => {
 			{ grade: 'b', price: 700, compareAtPrice: 900, inStock: true },
 			{ grade: null, price: 1200, compareAtPrice: null, inStock: false },
 		]);
-		const grades = new Map([['a', { warrantyDays: 90 }]]);
+		const grades = new Map([['a', { warrantyTime: { amount: 90, unit: /** @type {const} */ ('days') } }]]);
 		const [a1, , b1, n1] = product.variants;
-		expect(warrantyOf(product, a1, { grades, fallback: 7 })).toBe(90);
-		expect(warrantyOf(product, b1, { grades, fallback: 7 })).toBe(30);
-		expect(warrantyOf(product, n1, { grades, fallback: 7 })).toBe(7);
-		expect(warrantyOf(product, n1, { grades, fallback: 0 })).toBeNull();
-		expect(warrantyOf({ ...product, kind: 'digital' }, a1, { grades, fallback: 7 })).toBeNull();
-		expect(warrantyOf({ ...product, warrantyDays: 365 }, a1, { grades, fallback: 7 })).toBe(365);
+		expect(warrantyOf(product, a1, { grades, fallback: { amount: 7, unit: /** @type {const} */ ('days') } })).toEqual({
+			amount: 90,
+			unit: 'days',
+		});
+		expect(warrantyOf(product, b1, { grades, fallback: { amount: 7, unit: /** @type {const} */ ('days') } })).toEqual({
+			amount: 30,
+			unit: 'days',
+		});
+		expect(warrantyOf(product, n1, { grades, fallback: { amount: 7, unit: /** @type {const} */ ('days') } })).toEqual({
+			amount: 7,
+			unit: 'days',
+		});
+		expect(warrantyOf(product, n1, { grades, fallback: { amount: 0, unit: /** @type {const} */ ('days') } })).toBeNull();
+		expect(
+			warrantyOf({ ...product, kind: 'digital' }, a1, {
+				grades,
+				fallback: { amount: 7, unit: /** @type {const} */ ('days') },
+			}),
+		).toBeNull();
+		expect(
+			warrantyOf({ ...product, warrantyTime: { amount: 365, unit: /** @type {const} */ ('days') } }, a1, {
+				grades,
+				fallback: { amount: 7, unit: /** @type {const} */ ('days') },
+			}),
+		).toEqual({ amount: 365, unit: 'days' });
 	});
 
 	it('builds tracking pages from today’s couriers', () => {
@@ -198,7 +217,7 @@ describe('core: Chat filters, warranties and the context text', () => {
 						compareAtPriceText: '$1.50',
 						inStock: true,
 						stockLeft: 3,
-						warrantyDays: 30,
+						warrantyTime: { amount: 1, unit: /** @type {const} */ ('months') },
 					},
 					{
 						options: { Color: 'Red' },
@@ -207,7 +226,7 @@ describe('core: Chat filters, warranties and the context text', () => {
 						compareAtPriceText: null,
 						inStock: false,
 						stockLeft: 0,
-						warrantyDays: null,
+						warrantyTime: null,
 					},
 					{
 						options: {},
@@ -216,7 +235,7 @@ describe('core: Chat filters, warranties and the context text', () => {
 						compareAtPriceText: null,
 						inStock: true,
 						stockLeft: null,
-						warrantyDays: null,
+						warrantyTime: null,
 					},
 				],
 			},
@@ -234,8 +253,8 @@ describe('core: Chat filters, warranties and the context text', () => {
 				pickup: [{ name: 'Main shop', address: '1 Road', hours: 'Mon–Fri 9–5' }],
 				earnPercent: 1,
 				categories: ['Phones', 'Cases'],
-				returnDays: 7,
-				warrantyDays: 90,
+				returnTime: { amount: 7, unit: /** @type {const} */ ('days') },
+				warrantyTime: { amount: 3, unit: /** @type {const} */ ('months') },
 			},
 		});
 		expect(text.length).toBeLessThanOrEqual(MAX_CONTEXT);
@@ -255,7 +274,7 @@ describe('core: Chat filters, warranties and the context text', () => {
 			expect(text).toContain(part);
 		expect(text).toContain('first name Alex; city London; 120 loyalty points');
 		expect(text).toContain('Viewed phone ($1 – $2)');
-		// warranties read as the widgets show them: whole months when the days make them
+		// warranties read as the merchant typed them (E14)
 		expect(text).toContain('- Standard, $1 (was $1.50), 3 in stock, 1 month warranty');
 		expect(text).toContain('- Red, grade A, $2, out of stock');
 		expect(text).toContain('| Deal 0 (Hot) | 10% off | no end date |');
@@ -317,21 +336,25 @@ describe('core: Chat filters, warranties and the context text', () => {
 				pickup: [],
 				earnPercent: null,
 				categories: [],
-				returnDays: 0,
-				warrantyDays: 0,
+				returnTime: { amount: 0, unit: /** @type {const} */ ('days') },
+				warrantyTime: { amount: 0, unit: /** @type {const} */ ('days') },
 			},
 		});
 		expect(none).toContain('- Returns: not accepted');
 		expect(none).toContain('- Warranty: none');
-		expect([30, 60, 45, 1, 0, null, 1.5].map((days) => warrantyWords(days, WORDS))).toEqual([
-			'1 month',
-			'2 months',
-			'45 days',
-			'1 day',
-			'',
-			'',
-			'',
-		]);
+		// as the merchant typed them (E14): 1 year stays 1 year
+		expect(
+			/** @type {any[]} */ ([
+				{ amount: 1, unit: 'months' },
+				{ amount: 2, unit: 'months' },
+				{ amount: 45, unit: 'days' },
+				{ amount: 1, unit: 'days' },
+				{ amount: 1, unit: 'years' },
+				{ amount: 365, unit: 'days' },
+				{ amount: 0, unit: 'days' },
+				null,
+			]).map((time) => timeWords(time, WORDS)),
+		).toEqual(['1 month', '2 months', '45 days', '1 day', '1 year', '365 days', '', '']);
 	});
 });
 
@@ -383,10 +406,16 @@ describe('Chat lookups (E37)', () => {
 			}),
 		]);
 		await shop.list('grades', [
-			{ key: 'a', label: 'Grade A', description: '', returnDays: null, warrantyDays: 90 },
-			{ key: 'b', label: 'Grade B', description: '', returnDays: null, warrantyDays: null },
+			{
+				key: 'a',
+				label: 'Grade A',
+				description: '',
+				returnTime: null,
+				warrantyTime: { amount: 90, unit: /** @type {const} */ ('days') },
+			},
+			{ key: 'b', label: 'Grade B', description: '', returnTime: null, warrantyTime: null },
 		]);
-		await shop.setting('returns', 'warrantyDays', 7);
+		await shop.setting('returns', 'warrantyTime', 7);
 		await shop.setting('catalog', 'showStock', 'always');
 		phone = await shop.seedProduct({
 			slug: 'iphone-13',
@@ -396,7 +425,13 @@ describe('Chat lookups (E37)', () => {
 			variants: [
 				variant({ options: { Storage: '128 GB' }, grade: 'a', price: 120000, stock: 2 }),
 				variant({ options: { Storage: '128 GB' }, grade: 'b', price: 100000, stock: 0 }),
-				variant({ options: { Storage: '256 GB' }, grade: 'b', price: 110000, stock: 4, warrantyDays: 30 }),
+				variant({
+					options: { Storage: '256 GB' },
+					grade: 'b',
+					price: 110000,
+					stock: 4,
+					warrantyTime: { amount: 30, unit: /** @type {const} */ ('days') },
+				}),
 			],
 		});
 		cable = await shop.seedProduct({
@@ -436,7 +471,7 @@ describe('Chat lookups (E37)', () => {
 		await shop.setting('delivery_zones', 'defaultFreeOver', 0);
 		await shop.list('policies', [
 			{ key: 'shipping', title: 'Delivery', text: 'We deliver in {business} style.' },
-			{ key: 'returns', title: 'Returns', text: 'Returns within {returnDays} days.' },
+			{ key: 'returns', title: 'Returns', text: 'Returns within {returnTime}.' },
 			{ key: 'privacy', title: 'Privacy', text: '' },
 		]);
 		await shop.list('couriers', [{ key: 'fastship', name: 'FastShip', trackingUrl: 'https://track.example/{tracking}' }]);
@@ -475,7 +510,7 @@ describe('Chat lookups (E37)', () => {
 					tax: 0,
 					total: 120000,
 					serials: ['356938035643809'],
-					warrantyDays: 90,
+					warrantyTime: { amount: 90, unit: /** @type {const} */ ('days') },
 				},
 			],
 			totals: { subtotal: 120000, discount: 0, delivery: 0, tax: 0, total: 120000, currency: 'USD', taxIncluded: true },
@@ -543,9 +578,25 @@ describe('Chat lookups (E37)', () => {
 	it('gives each variant’s grade, stock left and warranty', async () => {
 		const answer = await shop.api('GET', '/v1/chat/products/iphone-13');
 		expect(answer.json.variants).toEqual([
-			expect.objectContaining({ grade: 'Grade A', gradeKey: 'a', stockLeft: 2, warrantyDays: 90, inStock: true }),
-			expect.objectContaining({ grade: 'Grade B', stockLeft: 0, warrantyDays: 7, inStock: false, soldOut: false }),
-			expect.objectContaining({ grade: 'Grade B', stockLeft: 4, warrantyDays: 30 }),
+			expect.objectContaining({
+				grade: 'Grade A',
+				gradeKey: 'a',
+				stockLeft: 2,
+				warrantyTime: { amount: 90, unit: /** @type {const} */ ('days') },
+				inStock: true,
+			}),
+			expect.objectContaining({
+				grade: 'Grade B',
+				stockLeft: 0,
+				warrantyTime: { amount: 7, unit: /** @type {const} */ ('days') },
+				inStock: false,
+				soldOut: false,
+			}),
+			expect.objectContaining({
+				grade: 'Grade B',
+				stockLeft: 4,
+				warrantyTime: { amount: 30, unit: /** @type {const} */ ('days') },
+			}),
 		]);
 	});
 
@@ -684,7 +735,7 @@ describe('Chat lookups (E37)', () => {
 						unitPriceText: 'USD 1,200.00',
 						total: 120000,
 						totalText: 'USD 1,200.00',
-						warrantyDays: 90,
+						warrantyTime: { amount: 90, unit: /** @type {const} */ ('days') },
 					},
 				],
 				courier: 'FastShip',
@@ -777,7 +828,7 @@ describe('Chat lookups (E37)', () => {
 		expect(guest.json.basics).toMatchObject({
 			delivery: { fee: 30000, feeText: 'USD 300.00', freeOver: 0 },
 			categories: ['Phones', 'Accessories'],
-			warrantyDays: 7,
+			warrantyTime: { amount: 7, unit: /** @type {const} */ ('days') },
 		});
 		expect(guest.json.basics.payments).toContainEqual({
 			method: 'cod',
@@ -799,7 +850,7 @@ describe('Chat lookups (E37)', () => {
 			policies: [],
 			deals: [],
 			visitor: { points: null },
-			basics: { payments: [], delivery: null, returnDays: null, warrantyDays: null, earnPercent: null },
+			basics: { payments: [], delivery: null, returnTime: null, warrantyTime: null, earnPercent: null },
 		});
 		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote')).status).toBe(403);
 	});

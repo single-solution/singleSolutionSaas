@@ -59,6 +59,7 @@ import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { byActor, orderMoney, serverNote } from '../core/orders.js';
 import { ORDER_NUMBER } from '../core/order-numbers.js';
 import { checkTransition, planTransition } from '../core/transitions.js';
+import { windowDefaults } from '../core/returns.js';
 import { createMedia } from './catalog-media.js';
 import { addressRulesOf, createGuests, phoneRulesOf } from './guests.js';
 import { DROPPED, RECHECK_MS, createOrderPayments, expectedOf } from './order-payments.js';
@@ -440,7 +441,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 						gradeLabel: line.gradeLabel,
 						serials: shown.serials,
 						unitValues: shown.values,
-						warrantyDays: line.warrantyDays ?? null,
+						warrantyTime: line.warrantyTime ?? null,
 						image: await media.mediaUrl(s, line.image),
 						unitPrice: line.unitPrice,
 						quantity: line.quantity,
@@ -615,7 +616,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	const linesOf = async (s, q) => {
 		// each physical line keeps its warranty from placement (E12): the variant's, the product's, the grade's, the setting
 		const grades = s.has('grades_serials') ? await s.list('grades') : [];
-		const warrantyDefault = Number((await s.values('returns')).warrantyDays ?? 0);
+		const warrantyDefault = windowDefaults(await s.values('returns')).warrantyTime;
 		const graded = q.priced.filter((line) => line.grade);
 		const paths =
 			grades.length > 0 && graded.length > 0
@@ -623,15 +624,19 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				: new Map();
 		const tree = new Map([...paths].map(([id, path]) => [id, { path }]));
 		/**
-		 * The grade's days are the entry of its product's category or the nearest one above it first (E45).
-		 * @param {{ kind: string, grade: string | null, warrantyDays?: number | null, categoryIds: string[] }} line
+		 * The grade's time is the entry of its product's category or the nearest one above it first (E45); none (0) is
+		 * kept as null.
+		 * @param {{ kind: string, grade: string | null, warrantyTime?: import('../core/durations.js').Duration | null,
+		 *   categoryIds: string[] }} line
 		 */
-		const warrantyOf = (line) =>
-			line.kind === 'physical'
-				? (line.warrantyDays ??
-					(line.grade ? gradesFor(grades, lineageOf(line.categoryIds, tree)).get(line.grade)?.warrantyDays : null) ??
-					warrantyDefault)
-				: null;
+		const warrantyOf = (line) => {
+			if (line.kind !== 'physical') return null;
+			const time =
+				line.warrantyTime ??
+				(line.grade ? gradesFor(grades, lineageOf(line.categoryIds, tree)).get(line.grade)?.warrantyTime : null) ??
+				warrantyDefault;
+			return time.amount > 0 ? time : null;
+		};
 		/** @type {Array<{ productId: string, start: Date, end: Date, lineId: string }>} */
 		const slots = [];
 		/** @type {OrderLineRecord[]} */
@@ -665,7 +670,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				brandId: line.brandId,
 				locationId: null,
 				serials: [],
-				warrantyDays: warrantyOf(line),
+				warrantyTime: warrantyOf(line),
 				booking,
 				licences: [],
 				returnedQuantity: 0,

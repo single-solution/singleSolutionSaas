@@ -95,8 +95,8 @@
 		"labelWarranty": {
 			"type": "string",
 			"title": "Label: Warranty",
-			"description": "With {days}, the warranty days the line kept when it was ordered.",
-			"default": "Warranty: {days} days",
+			"description": "With {time}, the warranty the line kept when it was ordered, as typed (30 days, 1 year).",
+			"default": "Warranty: {time}",
 			"maxLength": 80
 		},
 		"labelQuantity": {

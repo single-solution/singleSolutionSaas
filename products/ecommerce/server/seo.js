@@ -23,7 +23,8 @@ import { absolute } from '../core/links.js';
 import { buildLlmsFull, buildLlmsTxt, MAX_LLMS_CATEGORIES, treeOrder } from '../core/llms.js';
 import { SORTS, sortDocument, topField } from '../core/catalog-query.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
-import { windowDays } from '../core/returns.js';
+import { daysOf } from '../core/durations.js';
+import { windowDefaults, windowTime } from '../core/returns.js';
 import { shownName } from '../core/reviews.js';
 import { productHtml, say } from '../core/seo-html.js';
 import {
@@ -234,7 +235,9 @@ export const createSeo = (product, service) => {
 				country && (s.has('returns') || noReturns)
 					? {
 							country,
-							days: noReturns ? 0 : Number(returns.returnDays ?? 0),
+							// schema.org counts days: a month as 30, a year as 365 (E14)
+							days: noReturns ? 0 : daysOf(windowDefaults(returns).returnTime),
+							time: windowDefaults(returns).returnTime,
 							/** @type {import('../core/seo.js').ReturnTerms} */
 							terms: {
 								method: returns.returnMethod,
@@ -280,7 +283,7 @@ export const createSeo = (product, service) => {
 	 */
 	const returnsOf = (s, item, conditions, store) => {
 		if (!store) return null;
-		const defaults = { returnDays: store.days, warrantyDays: 0 };
+		const defaults = { returnTime: store.time, warrantyTime: { amount: 0, unit: /** @type {const} */ ('days') } };
 		return {
 			country: store.country,
 			terms: store.terms,
@@ -290,8 +293,10 @@ export const createSeo = (product, service) => {
 				!s.has('returns')
 					? 0
 					: item.kind === 'physical'
-						? windowDays('return', item, conditions.gradeOf(item, variant) ?? null, defaults)
-						: item.returnDays,
+						? daysOf(windowTime('return', item, conditions.gradeOf(item, variant) ?? null, defaults))
+						: item.returnTime
+							? daysOf(item.returnTime)
+							: null,
 		};
 	};
 

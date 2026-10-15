@@ -46,6 +46,7 @@ import {
 	referenceOf,
 	refundCap,
 	returnableLines,
+	windowDefaults,
 } from '../core/returns.js';
 import { measureView, piecesOf, quantityText } from '../core/measure.js';
 import { byActor, earnedLeft, pointsOwner, refundSplit, refundable, warningsOf } from '../core/orders.js';
@@ -74,6 +75,7 @@ export const RETURN_MESSAGE_VALUES = Object.freeze(
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/model.js').ReturnRecord} ReturnRecord */
+/** @typedef {import('../core/durations.js').Duration} Duration */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 /** @typedef {import('../core/model.js').OrderRefundEntry} OrderRefundEntry */
 /** @typedef {import('../core/returns.js').ClaimAction} ClaimAction */
@@ -166,12 +168,12 @@ export const createReturns = (product, service) => {
 			await claims(data).find({ websiteId: data.websiteId, orderId: order.id }, NO_ID).toArray()
 		);
 		const ids = [...new Set(order.lines.map((line) => line.productId))];
-		const products = /** @type {Array<{ id: string, returnDays: number | null, warrantyDays: number | null }>} */ (
+		const products = /** @type {Array<{ id: string, returnTime: Duration | null, warrantyTime: Duration | null }>} */ (
 			await data
 				.collection(COLLECTIONS.products)
 				.find(
 					{ websiteId: data.websiteId, id: { $in: ids } },
-					{ projection: { _id: 0, id: 1, returnDays: 1, warrantyDays: 1 } },
+					{ projection: { _id: 0, id: 1, returnTime: 1, warrantyTime: 1 } },
 				)
 				.toArray()
 		);
@@ -183,11 +185,11 @@ export const createReturns = (product, service) => {
 			order,
 			claims: existing,
 			products: new Map(
-				products.map((p) => [p.id, { returnDays: p.returnDays ?? null, warrantyDays: p.warrantyDays ?? null }]),
+				products.map((p) => [p.id, { returnTime: p.returnTime ?? null, warrantyTime: p.warrantyTime ?? null }]),
 			),
 			grades: Array.isArray(grades) ? grades : [],
 			lineage: (categoryIds) => lineageOf(categoryIds, byId),
-			defaults: { returnDays: Number(settings.returnDays ?? 0), warrantyDays: Number(settings.warrantyDays ?? 0) },
+			defaults: windowDefaults(settings),
 			now: service.now(),
 		});
 	};
@@ -302,8 +304,9 @@ export const createReturns = (product, service) => {
 								quantityText: quantityText(entry.claimable, true),
 							}
 						: null,
-					return: { days: entry.return.days, until: iso(entry.return.until), open: entry.return.open },
-					warranty: { days: entry.warranty.days, until: iso(entry.warranty.until), open: entry.warranty.open },
+					// each window's time as the merchant typed it (E14)
+					return: { time: entry.return.time, until: iso(entry.return.until), open: entry.return.open },
+					warranty: { time: entry.warranty.time, until: iso(entry.warranty.until), open: entry.warranty.open },
 				})),
 			),
 		};

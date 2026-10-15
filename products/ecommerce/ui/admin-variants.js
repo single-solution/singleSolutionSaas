@@ -12,7 +12,7 @@
 import { gtinOf } from '../core/fields.js';
 import { typeTakes } from '../core/item-types.js';
 import { quantityLabel, quantityText, toThousandths } from '../core/measure.js';
-import { entriesOf, wholeOf } from './admin-kit.js';
+import { entriesOf, timeInputs, wholeOf } from './admin-kit.js';
 import { choicesOf } from './admin-attributes.js';
 import { checkGroup } from './admin-fields.js';
 import { variantPhotosDialog } from './admin-media.js';
@@ -231,7 +231,7 @@ export const generateDialog = (kit, { productId, before, done, measure = null })
  * @property {HTMLInputElement | null} stock
  * @property {Map<string, HTMLInputElement>} locations
  * @property {HTMLInputElement | HTMLSelectElement} grade
- * @property {HTMLInputElement} warranty
+ * @property {ReturnType<typeof timeInputs>} warranty
  * @property {Record<'weightG' | 'lengthMm' | 'widthMm' | 'heightMm', HTMLInputElement>} parcel
  * @property {HTMLInputElement} active
  * @property {HTMLInputElement} soldOut
@@ -397,12 +397,8 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 							{ 'aria-label': aria('catalogAdmin.gradeOf') },
 						)
 					: kit.input(variant.grade ?? '', { 'aria-label': aria('catalogAdmin.gradeOf') }),
-			warranty: kit.input(variant.warrantyDays ?? '', {
-				type: 'number',
-				min: '0',
-				step: '1',
-				'aria-label': aria('catalogAdmin.warrantyOf'),
-			}),
+			// its own warranty time: a number and its unit (E14)
+			warranty: timeInputs(kit, variant.warrantyTime ?? null, aria('catalogAdmin.warrantyOf')),
 			parcel: /** @type {VariantRow['parcel']} */ (
 				Object.fromEntries(
 					PARCEL_PARTS.map((part) => [
@@ -504,7 +500,7 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 							? h('div', {}, [...entry.locations.values()])
 							: kit.text('span', {}, stockText(kit, entry.variant, locations, measureOf()))),
 					...(gradesOn() ? [entry.grade] : []),
-					...(warrantyOn() ? [entry.warranty] : []),
+					...(warrantyOn() ? [h('div', { class: 'row' }, entry.warranty.nodes)] : []),
 					...(parcelOn()
 						? [
 								h(
@@ -568,8 +564,8 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 						.map((attribute) => [attribute.id, entry.attributes.get(attribute.id)?.read() ?? null])
 						.filter(([, value]) => value !== null),
 				);
-				const warranty = wholeOf(entry.warranty.value);
-				if (Number.isNaN(warranty)) bad = true;
+				const warranty = entry.warranty.read();
+				if (warranty !== null && Number.isNaN(warranty.amount)) bad = true;
 				const parcel = Object.fromEntries(PARCEL_PARTS.map((part) => [part, parcelKept(part, entry.parcel[part].value)]));
 				if (Object.values(parcel).some((part) => Number.isNaN(part))) bad = true;
 				// a GTIN ends in its check digit: a mistyped barcode number is caught before saving
@@ -588,7 +584,7 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 					cost: priceOf(entry.cost, false),
 					active: entry.active.checked,
 					soldOut: entry.soldOut.checked,
-					...(warrantyOn() ? { warrantyDays: Number.isNaN(warranty) ? null : warranty } : {}),
+					...(warrantyOn() ? { warrantyTime: warranty } : {}),
 					...(gradesOn() ? { grade: entry.grade.value.trim() || null } : {}),
 					...(parcelOn() ? { parcel: Object.values(parcel).every((part) => part === null) ? null : parcel } : {}),
 					...(product.id
@@ -628,7 +624,7 @@ export const blankVariant = () => ({
 	grade: null,
 	active: true,
 	soldOut: false,
-	warrantyDays: null,
+	warrantyTime: null,
 	attributes: {},
 	media: [],
 });

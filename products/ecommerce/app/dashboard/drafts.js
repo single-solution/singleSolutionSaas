@@ -1,11 +1,12 @@
 /**
- * Plain helpers of the dashboard's list editors (no React, so tests import them): keys made from names, lines and days
+ * Plain helpers of the dashboard's list editors (no React, so tests import them): keys made from names, lines and times
  * as saved, a condition grade as edited (E10: every field of a `grades` item as text the editor shows) and as saved
  * (the shape `core/grades.js` `checkGrades` takes), and an item type as edited and as saved (`core/item-types.js`
  * `checkItemTypes`).
  * @module
  */
 import { CONTENT_LIMITS } from '../../core/catalog-content.js';
+import { DURATION_UNITS } from '../../core/durations.js';
 import { CONDITIONS, MAX_GRADES } from '../../core/grades.js';
 import { ELEMENTS, elementFor, isBuiltInKey } from '../../core/item-types.js';
 import { MAX_QUANTITY, MAX_UNIT_LABEL, quantityText, toThousandths } from '../../core/measure.js';
@@ -43,8 +44,10 @@ export const GRADE_CONDITIONS = CONDITIONS;
  * @property {string} key
  * @property {string} label
  * @property {string} description
- * @property {string} returnDays
- * @property {string} warrantyDays
+ * @property {string} returnTime the number of its return time as typed ('' = the Returns setting)
+ * @property {import('../../core/durations.js').DurationUnit} returnUnit
+ * @property {string} warrantyTime
+ * @property {import('../../core/durations.js').DurationUnit} warrantyUnit
  * @property {string} categoryId the category this entry is the definition for (E45); '' = every category
  * @property {string[]} categoryIds
  * @property {string[]} typeKeys the item types it is for ([] = every type)
@@ -108,12 +111,15 @@ export const taxRegionOf = (line) => {
 };
 
 /**
- * Whole days typed, or null when left empty (the feature's own default applies).
- * @param {unknown} text
+ * A time typed as a number and its unit (E14), or null when the number is left empty (the next one applies).
+ * @param {unknown} text @param {unknown} unit
+ * @returns {import('../../core/durations.js').Duration | null}
  */
-export const daysOf = (text) => {
+export const timeOf = (text, unit) => {
 	const value = String(text ?? '').trim();
-	return value === '' ? null : Number(value);
+	return value === ''
+		? null
+		: { amount: Number(value), unit: DURATION_UNITS.includes(/** @type {any} */ (unit)) ? /** @type {any} */ (unit) : 'days' };
 };
 
 /**
@@ -154,15 +160,18 @@ export const videoOf = (text) => {
 };
 
 /** @param {number | null} value */
-const daysText = (value) => (value === null ? '' : String(value));
+const amountText = (/** @type {import('../../core/durations.js').Duration | null} */ value) =>
+	value === null ? '' : String(value.amount);
 
 /** @returns {GradeDraft} a new grade (offered, used) */
 export const blankGrade = () => ({
 	key: '',
 	label: '',
 	description: '',
-	returnDays: '',
-	warrantyDays: '',
+	returnTime: '',
+	returnUnit: 'days',
+	warrantyTime: '',
+	warrantyUnit: 'days',
 	categoryId: '',
 	categoryIds: [],
 	typeKeys: [],
@@ -188,8 +197,10 @@ export const loadGrade = (grade) => ({
 	key: grade.key,
 	label: grade.label,
 	description: grade.description,
-	returnDays: daysText(grade.returnDays),
-	warrantyDays: daysText(grade.warrantyDays),
+	returnTime: amountText(grade.returnTime),
+	returnUnit: grade.returnTime?.unit ?? 'days',
+	warrantyTime: amountText(grade.warrantyTime),
+	warrantyUnit: grade.warrantyTime?.unit ?? 'days',
 	categoryId: grade.categoryId ?? '',
 	categoryIds: [...grade.categoryIds],
 	typeKeys: [...grade.typeKeys],
@@ -218,8 +229,8 @@ export const cleanGrade = (draft) => ({
 	key: keyOf(draft.key, draft.label),
 	label: draft.label.trim(),
 	description: draft.description.trim(),
-	returnDays: daysOf(draft.returnDays),
-	warrantyDays: daysOf(draft.warrantyDays),
+	returnTime: timeOf(draft.returnTime, draft.returnUnit),
+	warrantyTime: timeOf(draft.warrantyTime, draft.warrantyUnit),
 	categoryId: draft.categoryId.trim() || null,
 	categoryIds: cleanLines(draft.categoryIds),
 	typeKeys: cleanLines(draft.typeKeys),

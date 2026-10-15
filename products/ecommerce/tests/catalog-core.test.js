@@ -303,11 +303,21 @@ describe('product checks', () => {
 		expect(kept.ok && kept.value.variants).toEqual(existing.variants);
 		const single = record();
 		const changed = checkProduct(
-			{ price: 7, grade: null, brandId: 'brd_1', returnDays: null, warrantyDays: 30 },
+			{
+				price: 7,
+				grade: null,
+				brandId: 'brd_1',
+				returnTime: null,
+				warrantyTime: { amount: 30, unit: /** @type {const} */ ('days') },
+			},
 			rules(),
 			single,
 		);
-		expect(changed.ok && changed.value).toMatchObject({ brandId: 'brd_1', warrantyDays: 30, returnDays: null });
+		expect(changed.ok && changed.value).toMatchObject({
+			brandId: 'brd_1',
+			warrantyTime: { amount: 30, unit: /** @type {const} */ ('days') },
+			returnTime: null,
+		});
 		expect(changed.ok && changed.value.variants[0]?.price).toBe(7);
 		const cleared = checkProduct({ brandId: '' }, rules(), { ...single, brandId: 'brd_1' });
 		expect(cleared.ok && cleared.value.brandId).toBeNull();
@@ -325,10 +335,10 @@ describe('product checks', () => {
 		expect(longer.ok && longer.value.booking).toEqual({ durationMinutes: 60 });
 		expect(paths({ seo: { description: 'x'.repeat(600) } }, {}, single)).toEqual(['/seo/description']);
 		expect(paths({ seo: { title: 'T' } }, {}, single)).toEqual([]);
-		expect(paths({ typeKey: 'nope', slug: 'Bad Slug', warrantyDays: -1 }, {}, single)).toEqual([
+		expect(paths({ typeKey: 'nope', slug: 'Bad Slug', warrantyTime: -1 }, {}, single)).toEqual([
 			'/slug',
 			'/typeKey',
-			'/warrantyDays',
+			'/warrantyTime',
 		]);
 	});
 
@@ -837,7 +847,13 @@ describe('grades', () => {
 		const bad = checkGrades([
 			null,
 			{ key: 'A' },
-			{ key: 'a', label: 'A', description: 5, returnDays: -1, warrantyDays: 1.5 },
+			{
+				key: 'a',
+				label: 'A',
+				description: 5,
+				returnTime: -1,
+				warrantyTime: { amount: 1.5, unit: /** @type {const} */ ('days') },
+			},
 			{ key: 'a', label: 'x'.repeat(61) },
 			{ key: 'b', label: 'B', condition: null },
 			{ key: 'c', label: 'C', condition: 'worn' },
@@ -848,7 +864,16 @@ describe('grades', () => {
 			'Grade 5: the condition is new, refurbished or used.',
 			'Grade 6: the condition is new, refurbished or used.',
 		]);
-		expect(checkGrades([{ key: ' new ', label: ' New ', description: ' Box ', returnDays: 7 }])).toEqual({
+		expect(
+			checkGrades([
+				{
+					key: ' new ',
+					label: ' New ',
+					description: ' Box ',
+					returnTime: { amount: 7, unit: /** @type {const} */ ('days') },
+				},
+			]),
+		).toEqual({
 			ok: true,
 			value: [
 				{
@@ -856,8 +881,8 @@ describe('grades', () => {
 					categoryId: null,
 					label: 'New',
 					description: 'Box',
-					returnDays: 7,
-					warrantyDays: null,
+					returnTime: { amount: 7, unit: /** @type {const} */ ('days') },
+					warrantyTime: null,
 					categoryIds: [],
 					typeKeys: [],
 					color: '',

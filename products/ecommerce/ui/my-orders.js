@@ -312,7 +312,7 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 							{ class: 'secondary' },
 						),
 					);
-					const warranty = warrantyText(t, line.warrantyDays);
+					const warranty = warrantyText(t, line.warrantyTime);
 					const lineName = line.variantName ? `${line.name} (${line.variantName})` : line.name;
 					return h(
 						doc,

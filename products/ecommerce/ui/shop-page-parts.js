@@ -10,7 +10,7 @@
 import { youtubeId } from '../core/catalog-content.js';
 import { levelOf, quantityText } from '../core/measure.js';
 import { convertAmount, sameDimension, unitOf } from '../core/units.js';
-import { button, h, paragraphs, safeHref } from './shop-common.js';
+import { button, h, paragraphs, safeHref, timeText } from './shop-common.js';
 
 /** @typedef {import('./shop-common.js').Texts} Texts */
 /** @typedef {import('./widget.js').Shop} Shop */
@@ -24,15 +24,15 @@ import { button, h, paragraphs, safeHref } from './shop-common.js';
 /**
  * A grade as the shop answers it (E10).
  * @typedef {{ key: string, label: string, description?: string, color?: string, video?: string, videoUrl?: string | null,
- *   content?: { summary: string, bullets: Array<{ text: string, icon: string }> }, returnDays?: number | null,
- *   warrantyDays?: number | null }} PageGrade
+ *   content?: { summary: string, bullets: Array<{ text: string, icon: string }> }, returnTime?: number | null,
+ *   warrantyTime?: number | null }} PageGrade
  */
 
 /**
  * A variant as the product page reads it.
  * @typedef {{ id: string, name: string, options: Record<string, string>, price: number, compareAtPrice: number | null,
  *   deal?: { id: string, name: string, savings: number } | null, inStock: boolean, soldOut?: boolean,
- *   stockLeft?: number | null, grade: PageGrade | null, warrantyDays?: number | null,
+ *   stockLeft?: number | null, grade: PageGrade | null, warrantyTime?: number | null,
  *   attributes?: Array<{ id: string, slug: string, name: string, value: unknown, label: string }>, media?: PageMedia[],
  *   url?: string }} PageVariant
  *   `price`: the price shown (after automatic deals); `deal`: the deal in it and what it takes off one unit; `url`: its
@@ -255,8 +255,8 @@ export const gradeDetails = (doc, t, grade) => {
 					...bullets.map((bullet) => h(doc, 'li', bullet.icon ? { 'data-icon': bullet.icon } : {}, bullet.text)),
 				)
 			: null,
-		typeof grade.returnDays === 'number' && grade.returnDays > 0
-			? h(doc, 'p', { class: 'meta' }, t('page.returnDays', { days: grade.returnDays }))
+		timeText(t, grade.returnTime)
+			? h(doc, 'p', { class: 'meta' }, t('page.returnTime', { time: timeText(t, grade.returnTime) }))
 			: null,
 		video
 			? h(doc, 'a', { href: video, target: '_blank', rel: 'noopener' }, t('page.gradeVideo', { grade: grade.label }))

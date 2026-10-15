@@ -56,8 +56,8 @@ const grade = (over = {}) => ({
 		],
 	},
 	condition: 'refurbished',
-	warrantyDays: 180,
-	returnDays: 14,
+	warrantyTime: { amount: 180, unit: /** @type {const} */ ('days') },
+	returnTime: { amount: 14, unit: /** @type {const} */ ('days') },
 	...over,
 });
 
@@ -73,7 +73,7 @@ const variant = (over = {}) => ({
 	soldOut: false,
 	stockLeft: null,
 	grade: null,
-	warrantyDays: null,
+	warrantyTime: null,
 	media: [],
 	url: 'https://shop.example.com/products/phone',
 	...over,
@@ -341,7 +341,11 @@ describe('product page content', () => {
 						product({
 							options: [{ name: 'Color', values: ['Black'] }],
 							variants: [
-								variant({ grade: grade(), stockLeft: 3, warrantyDays: 180 }),
+								variant({
+									grade: grade(),
+									stockLeft: 3,
+									warrantyTime: { amount: 6, unit: /** @type {const} */ ('months') },
+								}),
 								variant({
 									id: 'var_2',
 									price: 80000,
@@ -352,10 +356,10 @@ describe('product page content', () => {
 										video: 'grades/b.mp4',
 										videoUrl: 'https://cdn.example.com/grades/b.mp4',
 										content: undefined,
-										returnDays: null,
+										returnTime: null,
 									}),
 									stockLeft: 40,
-									warrantyDays: 45,
+									warrantyTime: { amount: 45, unit: /** @type {const} */ ('days') },
 								}),
 								variant({ id: 'var_3', price: 70000, grade: null, soldOut: true, inStock: false }),
 								variant({
@@ -386,17 +390,17 @@ describe('product page content', () => {
 		expect(details.textContent).toContain('Hardly used');
 		expect(details.textContent).toContain('Checked in 40 points.');
 		expect([...details.querySelectorAll('.bullets li')].map((li) => li.getAttribute('data-icon'))).toEqual(['battery', null]);
-		expect(details.textContent).toContain(text('page.returnDays', { days: 14 }));
+		expect(details.textContent).toContain(text('page.returnTime', { time: text('time.days', { count: 14 }) }));
 		expect(details.querySelector('a').getAttribute('href')).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
 		expect($(host, '.stock').textContent).toBe(text('page.onlyLeft', { count: 3 }));
 		expect($(host, '.stock').classList.contains('warning')).toBe(true);
-		expect(textOf(host)).toContain(text('shop.warrantyMonths', { months: 6 }));
+		expect(textOf(host)).toContain(text('shop.warranty', { time: text('time.months', { count: 6 }) }));
 		// Good: plenty in stock, no swatch, its video file linked by the address the answer gives
 		await setValue(condition, 'b');
 		expect($(host, '.stock').textContent).toBe(text('page.inStockCount', { count: 40 }));
 		expect($(host, '.grade .swatch')).toBeNull();
 		expect($(host, '.grade a').getAttribute('href')).toBe('https://cdn.example.com/grades/b.mp4');
-		expect(textOf(host)).toContain(text('shop.warrantyDays', { days: 45 }));
+		expect(textOf(host)).toContain(text('shop.warranty', { time: text('time.days', { count: 45 }) }));
 		expect(textOf(host)).toContain('USD 800.00');
 		// no grade, sold out: shown, and not added to the cart
 		await setValue(condition, '');

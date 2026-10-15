@@ -41,7 +41,7 @@ const variant = (input = {}) => ({
 	attributes: {},
 	media: [],
 	soldOut: false,
-	warrantyDays: null,
+	warrantyTime: null,
 	...input,
 });
 

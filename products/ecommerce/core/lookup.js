@@ -12,6 +12,7 @@ import { measureView, quantityLabel } from './measure.js';
 import { orderMoney } from './orders.js';
 import { activeVariants, variantInStock } from './seo.js';
 
+/** @typedef {import('./durations.js').Duration} Duration */
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
@@ -311,9 +312,9 @@ const measureInfo = (measure) =>
  * (with the price struck through above it and the deal in it), stock left and warranty (E37).
  * @param {ProductRecord} product
  * @param {CardContext & { brand: string | null, attributes: Map<string, { name: string, unit: string }>,
- *   grades: Map<string, string>, warrantyDays?: (variant: VariantRecord) => number | null }} context
+ *   grades: Map<string, string>, warrantyTime?: (variant: VariantRecord) => Duration | null }} context
  *   `attributes`: attribute id → name and unit of the fields Chat may tell (others are left out); `grades`: grade key →
- *   label; `warrantyDays`: the variant's warranty in
+ *   label; `warrantyTime`: the variant's warranty in
  *   days (E12)
  */
 export const productDetails = (product, context) => {
@@ -350,7 +351,7 @@ export const productDetails = (product, context) => {
 					inStock: variantInStock(product, variant),
 					soldOut: variant.soldOut,
 					...stockParts(context.stockLeft?.(variant) ?? null, context.measure ?? null),
-					warrantyDays: context.warrantyDays?.(variant) ?? null,
+					warrantyTime: context.warrantyTime?.(variant) ?? null,
 				};
 			}),
 	};
@@ -361,17 +362,17 @@ export const productDetails = (product, context) => {
  * null for digital goods and bookings, and when it comes to 0.
  * @param {ProductRecord} product
  * @param {VariantRecord} variant
- * @param {{ grades: ReadonlyMap<string, { warrantyDays: number | null }>, fallback: number }} rules
- * @returns {number | null}
+ * @param {{ grades: ReadonlyMap<string, { warrantyTime: Duration | null }>, fallback: Duration }} rules
+ * @returns {Duration | null}
  */
 export const warrantyOf = (product, variant, { grades, fallback }) => {
 	if (product.kind !== 'physical') return null;
-	const days =
-		variant.warrantyDays ??
-		product.warrantyDays ??
-		(variant.grade ? (grades.get(variant.grade)?.warrantyDays ?? null) : null) ??
+	const time =
+		variant.warrantyTime ??
+		product.warrantyTime ??
+		(variant.grade ? (grades.get(variant.grade)?.warrantyTime ?? null) : null) ??
 		fallback;
-	return days > 0 ? days : null;
+	return time.amount > 0 ? time : null;
 };
 
 /**
@@ -464,7 +465,7 @@ export const orderSummary = (order, flow, money, extras = {}) => {
 			unitPriceText: text(line.unitPrice),
 			total: line.total,
 			totalText: text(line.total),
-			warrantyDays: line.warrantyDays ?? null,
+			warrantyTime: line.warrantyTime ?? null,
 		})),
 		courier: shipment?.courier ?? '',
 		trackingNumber: shipment?.trackingNumber ?? '',

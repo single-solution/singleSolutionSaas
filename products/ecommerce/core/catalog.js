@@ -15,6 +15,7 @@
 import { isId } from '@ss/contracts';
 import { isPrice } from './money.js';
 import { checkValue, fieldApplies, gtinOf, valueProblem } from './fields.js';
+import { DURATION_RULE, durationOf } from './durations.js';
 import { gradeForType } from './grades.js';
 import { PRODUCT_STATUSES } from './model.js';
 import { categoryTypeKey, typeByKey, typeOf, typeTakes } from './item-types.js';
@@ -55,7 +56,6 @@ export const LIMITS = Object.freeze({
 	specText: 200,
 	seoTitle: 200,
 	seoDescription: 500,
-	days: 3650,
 	stock: 1_000_000_000,
 	downloadLimit: 1000,
 	parcel: 10_000_000,
@@ -135,9 +135,6 @@ export const freeSlug = (base, taken) => {
 
 /** @param {unknown} value @param {number} max @returns {value is number} */
 const isCount = (value, max) => Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= max;
-
-/** @param {unknown} value @returns {value is number | null} */
-const isDays = (value) => value === null || isCount(value, LIMITS.days);
 
 /**
  * The variant's display name: its option values in the product's axis order (`Blue / Large`), '' without options.
@@ -286,8 +283,8 @@ export const heldKeys = (product) =>
  * The editable fields of a product (everything the adapter writes; `price`, `inStock`, `sold`, `rating`, `publishedAt`
  * and the timestamps are kept by the adapter and the ledger).
  * @typedef {Pick<ProductRecord, 'slug' | 'name' | 'kind' | 'status' | 'summary' | 'description' | 'categoryIds' | 'brandId'
- *   | 'typeKey' | 'tags' | 'specs' | 'options' | 'variants' | 'trackStock' | 'digital' | 'booking' | 'seo' | 'returnDays'
- *   | 'warrantyDays' | 'feedGroupId' | 'replacedBy'> & Required<Pick<ProductRecord, 'featured' | 'descriptionHtml' | 'video' | 'sizeChartId'
+ *   | 'typeKey' | 'tags' | 'specs' | 'options' | 'variants' | 'trackStock' | 'digital' | 'booking' | 'seo' | 'returnTime'
+ *   | 'warrantyTime' | 'feedGroupId' | 'replacedBy'> & Required<Pick<ProductRecord, 'featured' | 'descriptionHtml' | 'video' | 'sizeChartId'
  *   | 'hideSizeGuide' | 'attributeSetup' | 'faqs'>>} ProductFields `slug` '' = make one from the name
  */
 
@@ -582,8 +579,9 @@ const variantOf = (input, existing, rules, path, errors, place = NEW_PLACE, id =
 	}
 	if (input.active !== undefined && typeof input.active !== 'boolean') fail('active', 'Active is true or false.');
 	if (input.soldOut !== undefined && typeof input.soldOut !== 'boolean') fail('soldOut', 'Sold out is true or false.');
-	const warrantyDays = input.warrantyDays === undefined ? (existing?.warrantyDays ?? null) : input.warrantyDays;
-	if (!isDays(warrantyDays)) fail('warrantyDays', `Give whole days from 0 to ${LIMITS.days}, or null.`);
+	// its own warranty time (E14): a number and its unit, null: the product's
+	const warrantyTime = input.warrantyTime === undefined ? (existing?.warrantyTime ?? null) : durationOf(input.warrantyTime);
+	if (warrantyTime === undefined) fail('warrantyTime', DURATION_RULE);
 	const parcel = input.parcel === undefined ? (existing?.parcel ?? null) : parcelOf(input.parcel, `${path}/parcel`, errors);
 	if (input.parcel !== undefined && input.parcel !== null && !rules.parcels) fail('parcel', 'Switch on Delivery zones first.');
 	const attributes = variantAttributesOf(input, existing, rules, path, errors);
@@ -611,7 +609,7 @@ const variantOf = (input, existing, rules, path, errors, place = NEW_PLACE, id =
 		attributes,
 		media,
 		soldOut: typeof input.soldOut === 'boolean' ? input.soldOut : (existing?.soldOut ?? false),
-		warrantyDays: isDays(warrantyDays) ? warrantyDays : (existing?.warrantyDays ?? null),
+		warrantyTime: warrantyTime ?? null,
 		...(gtin ? { gtin } : {}),
 		...(mpn ? { mpn } : {}),
 		...(parcel ? { parcel } : {}),
@@ -930,10 +928,10 @@ const typeGuards = (input, type, errors) => {
 		for (const [index, variant] of variants) if (isGiven(variant.parcel)) refuse(`/variants/${index}/parcel`, 'package');
 	}
 	if (!on.warranty) {
-		for (const days of ['returnDays', 'warrantyDays'])
-			if (isGiven(input[days])) refuse(`/${days}`, 'own return and warranty days');
+		for (const time of ['returnTime', 'warrantyTime'])
+			if (isGiven(input[time])) refuse(`/${time}`, 'own return and warranty times');
 		for (const [index, variant] of variants)
-			if (isGiven(variant.warrantyDays)) refuse(`/variants/${index}/warrantyDays`, 'own return and warranty days');
+			if (isGiven(variant.warrantyTime)) refuse(`/variants/${index}/warrantyTime`, 'own return and warranty times');
 	}
 	if (type.kind === 'digital' && isObject(input.digital)) {
 		if (!on.downloads && isGiven(input.digital.downloadLimit) && input.digital.downloadLimit !== 0)
@@ -1199,18 +1197,19 @@ export const checkProduct = (body, rules, existing) => {
 						: checked;
 		}
 	}
-	/** @param {'returnDays' | 'warrantyDays'} name */
-	const daysOf = (name) => {
+	/** Its own return or warranty time (E14): a number and its unit; null: its grade's, else the setting's. @param {'returnTime' | 'warrantyTime'} name */
+	const timeOf = (name) => {
 		const before = existing?.[name] ?? null;
 		if (input[name] === undefined) return before;
-		if (!isDays(input[name])) {
-			fail(`/${name}`, `Give whole days from 0 to ${LIMITS.days}, or null.`);
+		const given = durationOf(input[name]);
+		if (given === undefined) {
+			fail(`/${name}`, DURATION_RULE);
 			return before;
 		}
-		return input[name];
+		return given;
 	};
-	const returnDays = daysOf('returnDays');
-	const warrantyDays = daysOf('warrantyDays');
+	const returnTime = timeOf('returnTime');
+	const warrantyTime = timeOf('warrantyTime');
 	// the product that replaces it once archived (G9); the route checks that it exists
 	let replacedBy = existing?.replacedBy ?? null;
 	if (input.replacedBy !== undefined) {
@@ -1243,8 +1242,8 @@ export const checkProduct = (body, rules, existing) => {
 			digital,
 			booking,
 			seo,
-			returnDays,
-			warrantyDays,
+			returnTime,
+			warrantyTime,
 			replacedBy,
 			featured,
 			descriptionHtml,

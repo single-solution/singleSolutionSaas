@@ -50,6 +50,7 @@ import { COLLECTIONS } from '../core/model.js';
 import { customerOwner, isCustomerId } from '../core/orders.js';
 import { isLoyaltyMember } from '../core/loyalty.js';
 import { listShown } from '../core/promotions.js';
+import { windowDefaults } from '../core/returns.js';
 import { createCatalogSearch } from './catalog-search.js';
 import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
 import { createQuoting } from './checkout-quote.js';
@@ -153,7 +154,7 @@ const CARD_FIELDS = Object.freeze({
 	categoryIds: 1,
 	brandId: 1,
 	specs: 1,
-	warrantyDays: 1,
+	warrantyTime: 1,
 	publishedAt: 1,
 });
 
@@ -237,7 +238,7 @@ export const createChatLookup = (product, service, media) => {
 					stockLeftOf(variant, item.trackStock, stock, measure),
 			/** @param {ProductRecord} item */
 			warranty: (item) => (/** @type {import('../core/model.js').VariantRecord} */ variant) =>
-				warrantyOf(item, variant, { grades: gradesOf(item), fallback: Number(returns.warrantyDays ?? 0) }),
+				warrantyOf(item, variant, { grades: gradesOf(item), fallback: windowDefaults(returns).warrantyTime }),
 		};
 	};
 
@@ -487,7 +488,7 @@ export const createChatLookup = (product, service, media) => {
 			grades: rules.labels(item),
 			stockLeft: rules.stockLeft(item, measure),
 			measure,
-			warrantyDays: rules.warranty(item),
+			warrantyTime: rules.warranty(item),
 		});
 	};
 
@@ -786,8 +787,9 @@ export const createChatLookup = (product, service, media) => {
 			pickup,
 			earnPercent: loyalty ? Number(loyalty.earnPercent) || 0 : null,
 			categories: categories.map((category) => String(category.name)),
-			returnDays: returns ? Number(returns.returnDays) || 0 : null,
-			warrantyDays: returns ? Number(returns.warrantyDays) || 0 : null,
+			// as the merchant typed them (E14)
+			returnTime: returns ? windowDefaults(returns).returnTime : null,
+			warrantyTime: returns ? windowDefaults(returns).warrantyTime : null,
 		};
 	};
 
