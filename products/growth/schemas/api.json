@@ -956,7 +956,7 @@
 						},
 						"path": {
 							"type": "string",
-							"description": "The first address concerned, as a path: blocked (robots_blocks), not answering 200 (sitemap_urls, sitemap's file_missing), a rule not applied (redirects_live), the most visited missing address (redirect_suggestions)."
+							"description": "The first address concerned, as a path: blocked (robots_blocks), not answering 200 (sitemap_urls, sitemap's file_missing), a rule not applied (redirects_live), the most visited missing address (redirect_suggestions), the missing address tried (soft_404)."
 						},
 						"url": {
 							"type": "string",
@@ -965,6 +965,10 @@
 						"rule": {
 							"type": "string",
 							"description": "robots_blocks: the rule that blocks it, as written (Disallow: /cart)."
+						},
+						"cacheControl": {
+							"type": "string",
+							"description": "caching: the page's Cache-Control header (no_store)."
 						},
 						"missing": {
 							"type": "string",
@@ -1090,7 +1094,7 @@
 				},
 				"checks": {
 					"type": "array",
-					"description": "The site's checks, then each page's (a check that cannot be judged is left out: robots.txt that does not answer, no Web Vitals measured).",
+					"description": "The site's checks, then each page's (a check that cannot be judged is left out: robots.txt that does not answer, no Web Vitals measured, the missing address not read before the run's 25 seconds were up).",
 					"items": {
 						"$ref": "#/components/schemas/SeoCheck"
 					}

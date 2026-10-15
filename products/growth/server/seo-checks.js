@@ -3,8 +3,9 @@
  * when staff ask (the `seo_checklist` admin widget with `seo.check`, or the merchant's server), never on a timer.
  *
  * A run reads robots.txt, the sitemap it names (else `/sitemap.xml`; for an index, its first files), the pages (the
- * home page, then the checklist's pages or the paths asked for), an address the site does not have (a soft 404 shows
- * there) and the old paths of up to three redirect rules; a full run (no paths asked for) also picks sample pages from
+ * home page, then the checklist's pages or the paths asked for), the old paths of up to three redirect rules and,
+ * once the pages are read, an address the site does not have (a soft 404 shows there: a removed product's address from
+ * the 404 log when one is known, else a made-up one); a full run (no paths asked for) also picks sample pages from
  * the sitemap: a product, a category, a landing or listing page and a glossary page when the site has them. It adds
  * the Web Vitals visitors measured (28 days) and the 404 log's addresses without a redirect rule (90 days), both from
  * the merchant database. Every read is limited (time, size, a few at a time, one deadline for the run; `adapters/
@@ -20,18 +21,20 @@ import { defineRoute, formatText, ok, problem } from '@ss/app-kit';
 import { shiftDay } from '../core/analytics.js';
 import { searchParamsOf } from '../core/config.js';
 import { dayOf } from '../core/events.js';
-import { locationOf, suggestionsOf } from '../core/redirects.js';
+import { createIndex, locationOf, normalizePath, suggestionsOf } from '../core/redirects.js';
 import {
 	SAMPLE_KINDS,
 	SITE_CHECKS,
 	candidatesOf,
 	comparableOf,
 	keptOutBy,
+	kindOf,
 	pageChecks,
 	pageVitalsOf,
 	pagesOf,
 	productOf,
 	redirectsLiveCheck,
+	removedProductOf,
 	richResultsTestOf,
 	robotsChecks,
 	siteVitalsCheck,
@@ -42,7 +45,7 @@ import {
 	summaryOf,
 	verificationCheck,
 } from '../core/seo-checks.js';
-import { sitemapOf, sitemapsIn } from '../core/seo-scan.js';
+import { scanHtml, sitemapOf, sitemapsIn } from '../core/seo-scan.js';
 import { checksActivity, pathOfUrl, robotsPresetsOf, siteUrlOf } from '../core/seo.js';
 import { createRedirectStore } from '../adapters/redirects.js';
 import { createReportStore } from '../adapters/seo-reports.js';
@@ -141,6 +144,37 @@ export const seoCheckRoutes = (product, { log }) => {
 	};
 
 	/**
+	 * The missing page a run tries (a missing product answers 404 or 410, SEO audit §3.2 B): a real removed product's
+	 * address from the 404 log when there is one ({@link removedProductOf}), else a made-up address; a removed product
+	 * that is a product page again (it came back) says nothing about missing pages, so the made-up address is read then.
+	 * @param {{ origin: string, until: number, pages: Array<{ read: Fetched, kind: string }>, listed: Set<string>,
+	 *   rules: import('../core/redirects.js').RuleInput[], notFound: Array<{ metric: string, key: string, count: number }> | null }} input
+	 * @returns {Promise<{ read: Fetched, pattern: string | null }>}
+	 */
+	const readMissing = async ({ origin, until, pages, listed, rules, notFound }) => {
+		const madeUp = `${origin}/this-page-does-not-exist-${crypto.randomUUID().slice(0, 8)}`;
+		const index = createIndex(rules);
+		const removed = notFound
+			? removedProductOf({
+					notFound,
+					products: pages.filter((page) => page.kind === 'product').map((page) => new URL(page.read.url).pathname),
+					listed,
+					answered: (path) => {
+						const found = normalizePath(path);
+						return found.ok && index.match(found.path) !== null;
+					},
+					origin,
+				})
+			: null;
+		if (removed) {
+			const read = await web.read(removed.url, { until });
+			if (read.status !== 200 || kindOf(read.url, scanHtml(read.body)) !== 'product')
+				return { read, pattern: removed.pattern };
+		}
+		return { read: await web.read(madeUp, { until }), pattern: null };
+	};
+
+	/**
 	 * One run: read the site, then check it.
 	 * @param {any} ctx
 	 * @param {string[]} typed the pages to check (the home page first)
@@ -166,16 +200,14 @@ export const seoCheckRoutes = (product, { log }) => {
 					(b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0),
 			)
 			.slice(0, MAX_RULE_PROBES);
-		const missingUrl = `${origin}/this-page-does-not-exist-${crypto.randomUUID().slice(0, 8)}`;
 		const [reads, totals, keptOut] = await Promise.all([
-			web.readAll([...typed, ...candidates, missingUrl, ...probes.map((rule) => `${origin}${rule.from}`)], { until }),
+			web.readAll([...typed, ...candidates, ...probes.map((rule) => `${origin}${rule.from}`)], { until }),
 			totalsOf(ctx, on),
 			keptOutOf(ctx, on),
 		]);
 		const typedReads = reads.slice(0, typed.length);
 		const candidateReads = reads.slice(typed.length, typed.length + candidates.length);
-		const missing = /** @type {Fetched} */ (reads[typed.length + candidates.length]);
-		const ruleReads = reads.slice(typed.length + candidates.length + 1);
+		const ruleReads = reads.slice(typed.length + candidates.length);
 
 		const listed = new Set(sitemap.entries.map((entry) => comparableOf(entry.loc)));
 		/** @param {Fetched} read @param {boolean} sampled */
@@ -195,6 +227,7 @@ export const seoCheckRoutes = (product, { log }) => {
 		);
 		const pages = [...own, ...samples];
 		const home = /** @type {(typeof own)[number]} */ (own[0]);
+		const missing = await readMissing({ origin, until, pages, listed, rules, notFound: totals.notFound });
 
 		// what robots.txt must let Google read: the home page, the sitemap, every page (but the merchant's own pages its
 		// robots presets keep out on purpose, such as /cart), and the products' images
@@ -223,7 +256,7 @@ export const seoCheckRoutes = (product, { log }) => {
 			...robotsChecks(robots, { paths: [...paths, ...[...new Set(images)].map((path) => ({ path, image: true }))] }),
 			sitemapCheck({ ...sitemap, entries: sitemap.entries.length }),
 			sitemapUrlsCheck({ reads: candidateReads, entries: sitemap.entries, domain }),
-			soft404Check(missing),
+			soft404Check(missing.read, missing.pattern),
 			redirectsLiveCheck(
 				probes.map((rule, index) => ({
 					read: /** @type {Fetched} */ (ruleReads[index]),

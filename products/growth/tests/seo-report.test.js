@@ -316,3 +316,68 @@ describe('SEO checklist: the live site', () => {
 		expect((await viaApi()).status).toBe(429);
 	});
 });
+
+describe('SEO checklist: a missing product (SEO audit §3.2 B)', () => {
+	/** @type {Awaited<ReturnType<typeof setup>>} */
+	let own;
+	beforeAll(async () => {
+		own = await setup();
+		await own.switchOn(ALL);
+		await own.connectDatabase();
+		Object.assign(own.web.pages, SITE);
+	});
+	afterAll(async () => {
+		await own.close();
+	});
+
+	/** A full run, past the kept report's 5 minutes. */
+	const fullRun = async () => {
+		own.advance(MIN_INTERVAL_MS);
+		const before = own.web.calls.length;
+		const report = await (await own.call('POST', '/v1/seo/checks', { token: own.server, body: {} })).json();
+		return { report, read: own.web.calls.slice(before).map((call) => call.url.replace(ORIGIN, '')) };
+	};
+
+	it('without a removed product in the 404 log, tries a made-up address', async () => {
+		const { report, read } = await fullRun();
+		expect(find(report, 'soft_404')).toMatchObject({ status: 'pass', finding: 'ok', detail: { status: 404 } });
+		expect(find(report, 'soft_404').page).toMatch(/\/this-page-does-not-exist-[0-9a-f]{8}$/);
+		expect(read.filter((path) => path.startsWith('/this-page-does-not-exist-'))).toHaveLength(1);
+	});
+
+	it('tries the 404 log’s most visited removed product instead: a soft 404, moved to its replacement, back again', async () => {
+		const visitor = { session: 'sessionbbbbbbbbbbbbbbbbbbbbbbbbb', browser: 'chrome', os: 'android' };
+		await own.collect([
+			{ type: 'not_found', path: '/products/old-lamp', ...visitor },
+			{ type: 'not_found', path: '/products/old-lamp', ...visitor },
+			{ type: 'not_found', path: '/products/older-lamp', ...visitor },
+			{ type: 'not_found', path: '/old-page', ...visitor },
+		]);
+		// the product route shows its not-found page with 200: the soft 404 a made-up address at the root does not show
+		own.web.pages['/products/old-lamp'] = pageOf('/products/old-lamp', { title: 'Sorry, this lamp is gone', data: {} });
+		const soft = await fullRun();
+		expect(find(soft.report, 'soft_404')).toMatchObject({
+			status: 'fail',
+			finding: 'soft',
+			page: `${ORIGIN}/products/old-lamp`,
+			detail: { status: 200, path: '/products/old-lamp' },
+			reason:
+				'/products/old-lamp, an address your site does not have, answered 200 (a soft 404), so search engines may index empty pages.',
+		});
+		expect(soft.read.filter((path) => path.startsWith('/this-page-does-not-exist-'))).toEqual([]);
+
+		own.web.pages['/products/old-lamp'] = { status: 308, headers: { location: '/products/blue-lamp' } };
+		expect(find((await fullRun()).report, 'soft_404')).toMatchObject({
+			status: 'pass',
+			finding: 'moved',
+			detail: { status: 308, location: '/products/blue-lamp', path: '/products/old-lamp' },
+		});
+
+		// a product page again (it came back): the made-up address is read instead
+		own.web.pages['/products/old-lamp'] = SITE['/products/blue-lamp'];
+		const back = await fullRun();
+		expect(back.read).toContain('/products/old-lamp');
+		expect(find(back.report, 'soft_404')).toMatchObject({ status: 'pass', finding: 'ok', detail: { status: 404 } });
+		expect(find(back.report, 'soft_404').page).toMatch(/\/this-page-does-not-exist-/);
+	});
+});

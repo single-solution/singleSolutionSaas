@@ -16,6 +16,7 @@ import {
 	patternOf,
 	productOf,
 	redirectsLiveCheck,
+	removedProductOf,
 	richResultsTestOf,
 	robotsChecks,
 	siteVitalsCheck,
@@ -403,6 +404,17 @@ describe('checks of a page', () => {
 		expect(speed(1800)).toEqual(['warn slow', 'warn none']);
 		expect(speed(1801)).toEqual(['fail very_slow', 'warn none']);
 		expect(speed(null)).toEqual([undefined, 'warn none']);
+		// Cache-Control: a validator kept by any cache that may store the page; no-store keeps nothing to ask again about
+		for (const value of ['private, no-cache', 'public, max-age=60, stale-while-revalidate=600', 'max-age=0, must-revalidate'])
+			expect(speed(100, { etag: '"a"', 'cache-control': value })).toEqual(['pass ok', 'pass ok']);
+		const stored = checksOf(html(), { headers: { etag: '"a"', 'cache-control': 'Private, No-Store' } }).checks;
+		expect(stored.find((item) => item.id === 'caching')).toMatchObject({
+			status: 'warn',
+			finding: 'no_store',
+			detail: { cacheControl: 'Private, No-Store' },
+		});
+		expect(speed(100, { 'cache-control': 'no-store' })).toEqual(['pass ok', 'warn no_store']);
+		expect(speed(100, { 'cache-control': 'public, max-age=3600' })).toEqual(['pass ok', 'warn none']);
 	});
 
 	it('a page that did not answer 200 has only its reachable check', () => {
@@ -748,6 +760,70 @@ describe('checks of the whole site', () => {
 		expect(soft404Check(read(at, { status: 307 }))).toMatchObject({ detail: { location: '' } });
 		expect(soft404Check(read(at, { status: 500 }))).toMatchObject({ status: 'fail', finding: 'error' });
 		expect(soft404Check(read(at, { status: null }))).toMatchObject({ finding: 'error', detail: { status: 0 } });
+		// the reason names the address tried; not read before the run's time was up: nothing to judge
+		expect(soft404Check(read(at, { status: 404 }))?.detail).toEqual({ status: 404, path: at });
+		expect(soft404Check(read(at, { status: null, error: 'time' }))).toBeNull();
+	});
+
+	it('a removed product answers 404 or 410, or sends visitors to another product (SEO audit §3.2 B)', () => {
+		const pattern = '/products/*';
+		const removed = '/products/old-lamp';
+		expect(soft404Check(read(removed, { status: 410 }), pattern)).toMatchObject({
+			status: 'pass',
+			finding: 'ok',
+			detail: { status: 410, path: removed },
+		});
+		// moved to its replacement: a product page, the same address level (Ecommerce's replacedBy)
+		for (const location of ['/products/new-lamp', `${ORIGIN}/products/new-lamp?ref=old`])
+			expect(soft404Check(read(removed, { status: 308, headers: { location } }), pattern)).toMatchObject({
+				status: 'pass',
+				finding: 'moved',
+				detail: { status: 308, location, path: removed },
+			});
+		// to its category or the home page, or not permanently: Google treats it as a soft 404
+		for (const [status, location] of [
+			[301, '/categories/lamps'],
+			[301, '/'],
+			[302, '/products/new-lamp'],
+			[301, 'https://other.example/products/x'],
+		])
+			expect(
+				soft404Check(read(removed, { status: Number(status), headers: { location: String(location) } }), pattern),
+			).toMatchObject({ status: 'warn', finding: 'redirect' });
+		expect(soft404Check(read(removed), pattern)).toMatchObject({ status: 'fail', finding: 'soft' });
+	});
+
+	it('finds a real removed product to try: the 404 log’s most visited address at a product page’s level', () => {
+		/** @param {Array<[string, number]>} rows */
+		const log = (rows) => [
+			{ metric: 'page', key: '/products/gone-a', count: 500 },
+			...rows.map(([key, count]) => ({ metric: 'not_found', key, count })),
+		];
+		const pick = (/** @type {Array<[string, number]>} */ rows, more = {}) =>
+			removedProductOf({
+				notFound: log(rows),
+				products: ['/products/blue-lamp'],
+				listed: new Set([`${ORIGIN}/products/red-lamp`]),
+				answered: (path) => path.startsWith('/products/ruled'),
+				origin: ORIGIN,
+				...more,
+			});
+		expect(
+			pick([
+				['/old-page', 90],
+				['/products/blue-lamp', 80],
+				['/products/red-lamp', 70],
+				['/products/ruled-1', 60],
+				['/products/a/b', 50],
+				['/products/gone-a', 3],
+				['/products/gone-b', 9],
+			]),
+		).toEqual({ url: `${ORIGIN}/products/gone-b`, pattern: '/products/*' });
+		expect(pick([['/products/gone-a', 3]], { products: [] })).toBeNull();
+		expect(pick([['/old-page', 3]])).toBeNull();
+		// products at the top level of the site
+		expect(pick([['/gone-c', 2]], { products: ['/blue-lamp'] })).toEqual({ url: `${ORIGIN}/gone-c`, pattern: '/*' });
+		expect(pick([['/', 2]], { products: ['/blue-lamp'] })).toBeNull();
 	});
 
 	it('the redirect rules answer on the live site', () => {

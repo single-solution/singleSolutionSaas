@@ -43,7 +43,7 @@ export const CHECKS = Object.freeze({
 	robots_blocks: ['ok', 'blocked'],
 	sitemap: ['ok', 'missing', 'invalid', 'empty', 'too_large', 'file_missing'],
 	sitemap_urls: ['ok', 'bad', 'other_host'],
-	soft_404: ['ok', 'soft', 'redirect', 'error'],
+	soft_404: ['ok', 'moved', 'soft', 'redirect', 'error'],
 	redirects_live: ['ok', 'not_applied'],
 	redirect_suggestions: ['none', 'some'],
 	verification: ['ok', 'none'],
@@ -66,7 +66,7 @@ export const CHECKS = Object.freeze({
 	server_html: ['ok', 'missing'],
 	breadcrumbs: ['ok', 'missing'],
 	response_time: ['ok', 'slow', 'very_slow'],
-	caching: ['ok', 'none'],
+	caching: ['ok', 'none', 'no_store'],
 	web_vitals: ['ok', 'needs_improvement', 'poor'],
 });
 
@@ -498,13 +498,16 @@ const productChecks = (at, scan) => {
 
 /**
  * How fast the page answered our read (Google's server response time thresholds, the TTFB of Web Vitals) and whether
- * it gives search engines a validator to read it again cheaply (an ETag or Last-Modified header).
+ * it gives search engines a validator to read it again cheaply (an ETag or Last-Modified header, Google's crawlers ask
+ * with If-None-Match or If-Modified-Since) that a cache may keep: `Cache-Control: no-store` keeps nothing, so every
+ * read downloads the whole page again.
  * @param {Fetched} page
  * @returns {Check[]}
  */
 const speedChecks = (page) => {
 	const [good = 0, poor = 0] = VITALS.TTFB;
 	const ms = page.ms === null ? null : Math.round(page.ms);
+	const cacheControl = (page.headers['cache-control'] ?? '').trim();
 	return [
 		...(ms === null
 			? []
@@ -517,9 +520,11 @@ const speedChecks = (page) => {
 						{ ms },
 					),
 				]),
-		page.headers.etag || page.headers['last-modified']
-			? check('caching', 'pass', 'ok', page.url)
-			: check('caching', 'warn', 'none', page.url),
+		/(?:^|,)\s*no-store\s*(?:,|$)/i.test(cacheControl)
+			? check('caching', 'warn', 'no_store', page.url, { cacheControl: cacheControl.slice(0, 200) })
+			: page.headers.etag || page.headers['last-modified']
+				? check('caching', 'pass', 'ok', page.url)
+				: check('caching', 'warn', 'none', page.url),
 	];
 };
 
@@ -585,6 +590,17 @@ export const pageChecks = (page, { domain, listed, vitals = null }) => {
 export const patternOf = (path) => (path === '/' ? '/' : `${path.slice(0, path.lastIndexOf('/'))}/*`);
 
 /**
+ * Whether a path is one of a pattern's pages: the home page itself, else a page at that level under its path.
+ * @param {string} pattern from {@link patternOf}
+ * @param {string} path
+ */
+const inPattern = (pattern, path) => {
+	if (pattern === '/') return path === '/';
+	const base = pattern.slice(0, -1);
+	return path.startsWith(base) && path.length > base.length && !path.slice(base.length).includes('/');
+};
+
+/**
  * The average Web Vitals of the pages of a pattern, from the per-page totals (`vital_page`, kept with the sessions
  * detail): null when fewer than {@link MIN_VITAL_SAMPLES} measurements of a core vital were made.
  * @param {ReadonlyArray<{ metric: string, key: string, count: number, sum: number }>} rows
@@ -593,7 +609,6 @@ export const patternOf = (path) => (path === '/' ? '/' : `${path.slice(0, path.l
  */
 export const pageVitalsOf = (rows, path) => {
 	const pattern = patternOf(path);
-	const base = pattern.slice(0, -1);
 	/** @type {Record<string, { count: number, sum: number }>} */
 	const sums = {};
 	for (const row of rows) {
@@ -601,9 +616,7 @@ export const pageVitalsOf = (rows, path) => {
 		const cut = row.key.lastIndexOf('\n');
 		const at = row.key.slice(0, cut);
 		const name = row.key.slice(cut + 1);
-		const inPattern =
-			pattern === '/' ? at === '/' : at.startsWith(base) && at.length > base.length && !at.slice(base.length).includes('/');
-		if (!inPattern || !CORE_VITALS.includes(/** @type {any} */ (name))) continue;
+		if (!inPattern(pattern, at) || !CORE_VITALS.includes(/** @type {any} */ (name))) continue;
 		const total = (sums[name] ??= { count: 0, sum: 0 });
 		total.count += row.count;
 		total.sum += row.sum;
@@ -785,18 +798,62 @@ export const sitemapUrlsCheck = ({ reads, entries, domain }) => {
 };
 
 /**
- * An address the website does not have answers 404 or 410: a 200 is a soft 404 (search engines index an empty page),
- * a redirect sends lost visitors and search engines elsewhere.
- * @param {Fetched} probe
- * @returns {Check}
+ * A real removed product's address to try as the missing page (SEO audit §3.2 B: a missing product answers 404 or
+ * 410): of the 404 log (visitors reached the site's not-found page there), the most visited address at the level of a
+ * product page the run read (`/products/*` for `/products/blue-lamp`) that is not a page read, the sitemap does not
+ * list and no redirect rule answers (those are tried as rules); null when there is none.
+ * @param {{ notFound: ReadonlyArray<{ metric: string, key: string, count: number }>, products: string[],
+ *   listed: Set<string>, answered: (path: string) => boolean, origin: string }} input `products`: the paths of the
+ *   product pages read; `listed`: the sitemap's addresses ({@link comparableOf}); `answered`: a rule answers the path
+ * @returns {{ url: string, pattern: string } | null}
  */
-export const soft404Check = (probe) => {
+export const removedProductOf = ({ notFound, products, listed, answered, origin }) => {
+	const patterns = [...new Set(products.map(patternOf))];
+	const found = notFound
+		.filter((row) => row.metric === 'not_found' && !products.includes(row.key))
+		.map((row) => ({ ...row, pattern: patterns.find((pattern) => inPattern(pattern, row.key)) }))
+		.filter((row) => row.pattern !== undefined && !listed.has(`${origin}${row.key}`) && !answered(row.key))
+		.sort((a, b) => b.count - a.count || (a.key < b.key ? -1 : 1))[0];
+	return found ? { url: `${origin}${found.key}`, pattern: /** @type {string} */ (found.pattern) } : null;
+};
+
+/**
+ * An address the website does not have answers 404 or 410: a 200 is a soft 404 (search engines index an empty page),
+ * a redirect sends lost visitors and search engines elsewhere (Google treats a removed page sent to an unrelated one,
+ * such as its category or the home page, as a soft 404). A removed product (`pattern`: the level of its product pages)
+ * may also be sent on permanently (301 or 308) to another product page of the website, its replacement.
+ * @param {Fetched} probe
+ * @param {string | null} [pattern] for a removed product, the pattern of the product pages ({@link patternOf})
+ * @returns {Check | null} null when the run's time was up before it was read (nothing to judge)
+ */
+export const soft404Check = (probe, pattern = null) => {
+	if (probe.error === 'time') return null;
 	const status = probe.status;
-	if (status === 404 || status === 410) return check('soft_404', 'pass', 'ok', probe.url, { status });
-	if (status === 200) return check('soft_404', 'fail', 'soft', probe.url, { status });
-	if (status !== null && status >= 300 && status < 400)
-		return check('soft_404', 'warn', 'redirect', probe.url, { status, location: probe.headers.location ?? '' });
-	return check('soft_404', 'fail', 'error', probe.url, { status: status ?? 0 });
+	const path = pathOfUrl(probe.url);
+	if (status === 404 || status === 410) return check('soft_404', 'pass', 'ok', probe.url, { status, path });
+	if (status === 200) return check('soft_404', 'fail', 'soft', probe.url, { status, path });
+	if (status !== null && status >= 300 && status < 400) {
+		const location = probe.headers.location ?? '';
+		/** @type {URL | null} */
+		let target = null;
+		try {
+			target = new URL(location, probe.url);
+		} catch {
+			// not an address: a redirect to nowhere
+		}
+		const replaced =
+			pattern !== null &&
+			(status === 301 || status === 308) &&
+			target !== null &&
+			target.host === new URL(probe.url).host &&
+			inPattern(pattern, target.pathname);
+		return check('soft_404', replaced ? 'pass' : 'warn', replaced ? 'moved' : 'redirect', probe.url, {
+			status,
+			location,
+			path,
+		});
+	}
+	return check('soft_404', 'fail', 'error', probe.url, { status: status ?? 0, path });
 };
 
 /**
