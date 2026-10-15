@@ -137,7 +137,7 @@
 		{
 			"key": "ecommerce.staff_status",
 			"name": "Order moved",
-			"description": "Tells the staff an order moved into another status, other than a cancel (staff alert event status).",
+			"description": "Tells the staff an order moved into a status whose Staff alert is on in the order flow, other than a cancel.",
 			"values": ["id", "number", "name", "total", "status", "paymentMethod", "business", "from", "link", "phone"],
 			"required": true,
 			"channels": {

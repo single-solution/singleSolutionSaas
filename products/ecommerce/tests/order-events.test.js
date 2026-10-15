@@ -60,6 +60,43 @@ describe('events and staff alerts (E32)', () => {
 		expect(shop.messages().map((m) => m.template)).toContain('ecommerce.staff_cancelled');
 	});
 
+	it('alerts the staff of a move only into a status whose staff alert is on (E36), by SMS on phones by default', async () => {
+		// one event for every move is gone: each status of the flow says whether entering it alerts the staff
+		await expect(shop.setting('staff_alerts', 'events', ['placed', 'status'])).rejects.toThrow(/422|400/);
+		await shop.flow((flow) => ({
+			...flow,
+			statuses: flow.statuses.map((/** @type {any} */ status) => ({ ...status, staffAlert: status.key === 'packed' })),
+		}));
+		await shop.setting('staff_alerts', 'recipients', ['team@shop.example.com', '+15550002222']);
+		try {
+			const order = await placeOrder();
+			const before = shop.messages().length;
+			await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'confirmed' });
+			await shop.flush();
+			expect(
+				shop
+					.messages()
+					.slice(before)
+					.map((m) => m.template),
+			).not.toContain('ecommerce.staff_status');
+			await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'packed' });
+			await shop.flush();
+			const alerts = shop
+				.messages()
+				.slice(before)
+				.filter((m) => m.template === 'ecommerce.staff_status');
+			expect(alerts.map((m) => [m.channel, m.to])).toEqual(
+				expect.arrayContaining([
+					['email', { email: 'team@shop.example.com' }],
+					['sms', { phone: '+15550002222' }],
+				]),
+			);
+			expect(alerts[0]?.values).toMatchObject({ number: order.number, from: 'Confirmed' });
+		} finally {
+			await shop.setting('staff_alerts', 'recipients', ['team@shop.example.com']);
+		}
+	});
+
 	it('raises the payment events for cash paid on delivery, as for payments staff record', async () => {
 		const order = await placeOrder();
 		for (const to of ['confirmed', 'delivered'])

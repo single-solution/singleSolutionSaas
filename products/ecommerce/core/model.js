@@ -324,9 +324,10 @@ export const STATUS_ROLES = Object.freeze([
 /**
  * A status of the order flow: its key, the name staff see (`label`), its kind of step (`role`), the name shoppers see
  * (`shopperLabel`, '' = `label`), a line per payment method shoppers read under it and whether entering it sends the
- * shopper a message (`notify`). Older saved flows read with the defaults (`core/flow.js` `checkOrderFlow`).
+ * shopper a message (`notify`) and alerts the staff (`staffAlert`, E36). Missing fields read with the defaults
+ * (`core/flow.js` `checkOrderFlow`).
  * @typedef {{ key: string, label: string, role: StatusRole, shopperLabel?: string, shopperText?: ShopperTexts,
- *   notify?: boolean }} OrderStatusDefinition
+ *   notify?: boolean, staffAlert?: boolean }} OrderStatusDefinition
  */
 /**
  * The choices a move makes where its stage contract leaves one (dynamic model §3.4; `core/flow.js` `moveOptionSpecs`

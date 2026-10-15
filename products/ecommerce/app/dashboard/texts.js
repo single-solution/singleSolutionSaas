@@ -201,6 +201,7 @@ export const TEXTS = Object.freeze({
 			role: 'Kind of step',
 			shopperLabel: 'Name shoppers see (empty: the same)',
 			notify: 'Send the shopper a message when an order gets here',
+			staffAlert: 'Alert the staff when an order gets here (Staff alerts)',
 			shopperTexts: 'Line shoppers read under this status, per payment method',
 			shopperText: Object.freeze({
 				cod: 'Cash on delivery',

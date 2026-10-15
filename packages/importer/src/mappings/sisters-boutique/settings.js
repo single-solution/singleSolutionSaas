@@ -268,6 +268,7 @@ export const settingsPlan = (values) => {
 				'size_charts.defaultChartId': DEFAULT_CHART_ID,
 				'checkout.numberPattern': ORDER_PATTERN,
 				'checkout.numberPrefix': ORDER_PREFIX,
+				'checkout.numberSuffix': '',
 				'checkout.numberDigits': ORDER_DIGITS,
 				// SB sends shoppers no message (owner decision D5, "Store facts corrected after the re-audit")
 				'checkout.messageChannels': [],
@@ -367,8 +368,9 @@ export const settingsPlan = (values) => {
 				'loyalty.expiryRule': 'at_earn',
 				// the SaaS default (E47; store mapping to review when the owner asks)
 				'loyalty.memberFlag': 'off',
-				// alerts on placement, status changes and cancels (`apps/admin/src/app/api/orders/[id]/route.ts`:336-342)
-				'staff_alerts.events': ['placed', 'status', 'cancelled'],
+				// alerts on placement, status changes and cancels (`apps/admin/src/app/api/orders/[id]/route.ts`:336-342); the
+				// status changes are each status's staffAlert in the order flow below (E36)
+				'staff_alerts.events': ['placed', 'cancelled'],
 				'staff_alerts.recipients': recipientsOf(values),
 				'staff_alerts.staffPermission': 'orders.read',
 				'staff_alerts.phoneChannel': 'whatsapp',
@@ -436,7 +438,7 @@ export const settingsPlan = (values) => {
 				// SB's moves (`apps/admin/src/app/api/orders/[id]/route.ts`:11-13, :77-123) that the role rules allow, with SB's
 				// rules as their options (`packages/db/src/orderTransitions.ts`); SB sends shoppers no message (D5)
 				order_flow: {
-					statuses: STATUSES.map((status) => ({ ...status, notify: false })),
+					statuses: STATUSES.map((status) => ({ ...status, notify: false, staffAlert: status.role !== 'cancelled' })),
 					moves: /** @type {Array<[string, string, Record<string, unknown>?]>} */ ([
 						// staff confirm a transfer by hand: it counts as paid (OR-7)
 						['pending-payment', 'confirmed', { options: { paidOnConfirm: ['bank_transfer'] } }],

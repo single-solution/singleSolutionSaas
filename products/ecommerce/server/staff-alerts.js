@@ -2,12 +2,18 @@
  * Staff alerts (PLAN 0.8.10 K6, E32) sent by Ecommerce as required messages through its outbox (K-17, owner decision
  * D7: an alert is saved before it is sent, right after the answer, and tried again on the website's next uses while
  * Notifications cannot be reached). Recipients and the link follow the kit's staff-alert rules: the feature's
- * `recipients` setting (email addresses, and international phone numbers that get WhatsApp, or SMS with
- * `phoneChannel: sms`; at most 20), plus every unblocked Accounts user whose role grants `staffPermission` (asked
+ * `recipients` setting (email addresses, and international phone numbers that get SMS, or WhatsApp with
+ * `phoneChannel: whatsapp`; at most 20), plus every unblocked Accounts user whose role grants `staffPermission` (asked
  * through the pasted Accounts token, kept 5 minutes on this instance) — `all_staff` stands for the permission of each
  * alert's own work ({@link ALL_STAFF_PERMISSIONS}: `orders.read` for orders, `returns.manage` for claims); the
  * template is `ecommerce.staff_<event>` (default words in `schemas/messages.json`, parity P1), and `adminUrl` filled
  * from the values is sent as `link`. With `includePhone` on, an alert also carries the shopper's phone as `phone`.
+ *
+ * Why not the kit's staff alerts (`@ss/app-kit` `staffAlerts.send`): the kit sends right after the answer and saves only
+ * what Notifications did not take, in its own queue, while every Ecommerce alert is saved in Ecommerce's outbox before
+ * the answer (D7: an instance stopped before its after-answer work loses nothing) and shares the outbox's one retry
+ * queue and data-rights removal (by address and order number) with the order messages. The kit lacks a way to hand
+ * its messages to a product's own outbox (or to save them first); with that, this file shrinks to its constants.
  * @module
  */
 import { formatText } from '@ss/app-kit';
@@ -148,7 +154,7 @@ export const createStaffAlerts = (product, service) => {
 		const link = adminUrl === '' ? '' : formatText(adminUrl, values);
 		/** @type {OutboxMessage[]} */
 		const messages = [...to.values()].map((recipient) => ({
-			channel: 'email' in recipient ? 'email' : own.phoneChannel === 'sms' ? 'sms' : 'whatsapp',
+			channel: 'email' in recipient ? 'email' : own.phoneChannel === 'whatsapp' ? 'whatsapp' : 'sms',
 			template: `ecommerce.staff_${event}`,
 			to: recipient,
 			values: { ...values, ...(link === '' ? {} : { [STAFF_ALERT_LINK]: link }) },

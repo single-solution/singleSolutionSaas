@@ -392,7 +392,10 @@ describe('the messages, staff alerts and events the code sends', () => {
 			expect(listed(staffPart, key), key).toBe(true);
 		}
 		expect(Object.keys(staffHelp).sort()).toEqual([...new Set(staffKeys)].sort());
-		expect(Object.keys(STAFF_ALERT_EVENTS)).toEqual(staffAlertSettings.properties.events.items.enum);
+		// a move into a status alerts by the status's own switch (E36), every other event by the setting
+		expect(Object.keys(STAFF_ALERT_EVENTS).filter((event) => event !== 'status')).toEqual(
+			staffAlertSettings.properties.events.items.enum,
+		);
 		expect(Object.keys(guide.staffEvents)).toEqual(Object.keys(STAFF_ALERT_EVENTS));
 		for (const [event, extra] of Object.entries(STAFF_ALERT_EVENTS))
 			for (const key of extra) expect(itemOf(staffPart, `ecommerce.staff_${event}`)).toContain(`<code>{${key}}</code>`);

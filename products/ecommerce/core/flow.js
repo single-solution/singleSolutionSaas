@@ -24,9 +24,9 @@
  * give with it (`needs`: a staff note, a reason the shopper reads; the serial numbers a stage needs follow the item
  * types, `core/item-types.js`) and its options where the
  * stage contract leaves a choice ({@link moveOptionSpecs}). Each status has the name shoppers read, a line per payment
- * method and whether entering it sends the shopper a message. `triggers` name the statuses the shop moves orders to by
- * itself and `starts` where orders that need no payment first start. Anything missing takes its default
- * ({@link checkOrderFlow} fills it).
+ * method, whether entering it sends the shopper a message and whether it alerts the staff (E36). `triggers` name the
+ * statuses the shop moves orders to by itself and `starts` where orders that need no payment first start. Anything
+ * missing takes its default ({@link checkOrderFlow} fills it).
  *
  * Pure functions, no I/O.
  * @module
@@ -297,6 +297,8 @@ export const checkOrderFlow = (value) => {
 				errors.push(`Status '${key}' has a shopper line for an unknown payment method '${method}'.`);
 		if (status.notify !== undefined && typeof status.notify !== 'boolean')
 			errors.push(`Whether status '${key}' sends a message is true or false.`);
+		if (status.staffAlert !== undefined && typeof status.staffAlert !== 'boolean')
+			errors.push(`Whether status '${key}' alerts the staff is true or false.`);
 		roles.set(key, role);
 		cleanStatuses.push({
 			key,
@@ -305,6 +307,7 @@ export const checkOrderFlow = (value) => {
 			shopperLabel: typeof shopperLabel === 'string' ? shopperLabel.trim() : '',
 			shopperText: /** @type {ShopperTexts} */ (shopperText),
 			notify: typeof status.notify === 'boolean' ? status.notify : NOTIFIED_KEYS.includes(key),
+			staffAlert: status.staffAlert === true,
 		});
 	}
 	const counted = (/** @type {StatusRole} */ role) => [...roles.values()].filter((r) => r === role).length;
@@ -704,6 +707,12 @@ export const notifiesOf = (flow, key) => {
 	const status = statusOf(flow, key);
 	return status ? (status.notify ?? NOTIFIED_KEYS.includes(key)) : false;
 };
+
+/**
+ * Whether entering a status alerts the staff (E36: the status's `staffAlert`, off unless the flow says so).
+ * @param {OrderFlow} flow @param {string} key
+ */
+export const staffAlertOf = (flow, key) => statusOf(flow, key)?.staffAlert === true;
 
 /** The default flow, every field filled. */
 export const DEFAULT_FLOW = /** @type {Required<OrderFlow>} */ (

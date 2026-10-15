@@ -177,6 +177,11 @@ function ShopperFields({ status, onChange }) {
 					checked={status.notify !== false}
 					onChange={(event) => onChange({ notify: event.target.checked })}
 				/>
+				<Checkbox
+					label={F.staffAlert}
+					checked={status.staffAlert === true}
+					onChange={(event) => onChange({ staffAlert: event.target.checked })}
+				/>
 			</div>
 		</details>
 	);
@@ -392,6 +397,7 @@ export function OrderFlowEditor({ websiteId, off }) {
 													shopperLabel: '',
 													shopperText: { cod: '', online: '', bank_transfer: '', pickup: '' },
 													notify: false,
+													staffAlert: false,
 												},
 											],
 										})

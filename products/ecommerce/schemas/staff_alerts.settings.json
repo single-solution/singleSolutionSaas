@@ -5,10 +5,11 @@
 		"events": {
 			"type": "array",
 			"title": "Alert staff of",
+			"description": "Moves into a status alert the staff when that status's Staff alert is on (Order statuses and moves).",
 			"default": ["placed", "cancelled", "proof_uploaded", "return_requested", "refund_due"],
 			"items": {
 				"type": "string",
-				"enum": ["placed", "status", "paid", "proof_uploaded", "cancelled", "expired", "return_requested", "refund_due"]
+				"enum": ["placed", "paid", "proof_uploaded", "cancelled", "expired", "return_requested", "refund_due"]
 			}
 		},
 		"recipients": {
@@ -19,7 +20,7 @@
 				"type": "string",
 				"maxLength": 254
 			},
-			"description": "Email addresses and international phone numbers (+ or 00 first; phones get WhatsApp or SMS), up to 20."
+			"description": "Email addresses and international phone numbers (+ or 00 first; phones get SMS, or WhatsApp with Phones get set to it), up to 20."
 		},
 		"staffPermission": {
 			"type": "string",
@@ -31,8 +32,9 @@
 		"phoneChannel": {
 			"type": "string",
 			"title": "Phones get",
-			"default": "whatsapp",
-			"enum": ["whatsapp", "sms"]
+			"description": "SMS goes out with Ecommerce's default words; WhatsApp needs your own approved templates in Notifications.",
+			"default": "sms",
+			"enum": ["sms", "whatsapp"]
 		},
 		"adminUrl": {
 			"type": "string",

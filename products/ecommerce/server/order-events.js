@@ -12,8 +12,9 @@
  *   the stock events follow E44's levels: a variant that counts for stock (`countsForStock`) whose units an order or a
  *   catalog write drops into 1 to the catalog setting `lowStock` (`stock.low`) or to 0 (`stock.out`);
  * - staff alerts (feature `staff_alerts`, the kit's K6 rules, `server/staff-alerts.js`): the events the setting `events`
- *   lists, as `ecommerce.staff_<event>` templates to its recipients, required and saved before they are sent (K-17);
- *   with the setting `includePhone`, each carries the shopper's phone (`phone`).
+ *   lists, and a move into a status of the flow whose `staffAlert` is on (`status`, E36), as `ecommerce.staff_<event>`
+ *   templates to its recipients, required and saved before they are sent (K-17); with the setting `includePhone`, each
+ *   carries the shopper's phone (`phone`).
  *
  * A failing message, event or alert never fails what triggered it (hooks never throw).
  * @module
@@ -22,7 +23,7 @@ import { defineRoute } from '@ss/app-kit';
 import { productTypes } from '../adapters/catalog-store.js';
 import { countsForStock, stockEventOf } from '../core/catalog-query.js';
 import { levelOf } from '../core/measure.js';
-import { notifiesOf, shopperLabelOf, statusOf } from '../core/flow.js';
+import { notifiesOf, shopperLabelOf, staffAlertOf, statusOf } from '../core/flow.js';
 import { statusLabel } from '../core/orders.js';
 import { createOrderMessages, messageWords } from './order-messages.js';
 import { SERVER_LIMITS } from './service.js';
@@ -72,7 +73,8 @@ export const createOrderEvents = (product, service) => {
 	};
 
 	/**
-	 * Alert the staff of an event the `staff_alerts` setting lists.
+	 * Alert the staff of an event the `staff_alerts` setting lists, or of a move into a status whose staff alert is on
+	 * (`status`, E36: the order flow says, not the setting).
 	 * @param {Site} s @param {string} event `placed`, `status`, `paid`, `proof_uploaded`, `cancelled`, `expired`,
 	 *   `return_requested` or `refund_due` @param {OrderRecord} order
 	 * @param {Record<string, string | number>} [extra]
@@ -80,7 +82,7 @@ export const createOrderEvents = (product, service) => {
 	const alert = async (s, event, order, extra = {}) => {
 		if (!s.has('staff_alerts')) return;
 		const { events, includePhone } = await s.values('staff_alerts');
-		if (!Array.isArray(events) || !events.includes(event)) return;
+		if (event !== 'status' && (!Array.isArray(events) || !events.includes(event))) return;
 		const { money } = await s.format();
 		await staffAlerts.send(s, {
 			feature: 'staff_alerts',
@@ -141,7 +143,7 @@ export const createOrderEvents = (product, service) => {
 			await alert(s, cancelReason === 'expired' ? 'expired' : 'cancelled', order, {
 				reason: words.cancel(cancelCode, (typeof note === 'string' ? note : '') || forShopper),
 			});
-		else await alert(s, 'status', order, { from: statusLabel(flow, from) });
+		else if (staffAlertOf(flow, to)) await alert(s, 'status', order, { from: statusLabel(flow, from) });
 	});
 
 	service.on('order.paid', async (s, { order }) => {
