@@ -5,7 +5,7 @@
  * @module
  */
 import { ruleProblem } from './profile.js';
-import { BUILT_IN_VALUES, valueNamesOf, wordsProblem } from './templates.js';
+import { BUILT_IN_VALUES, longValueProblem, valueNamesOf, wordsProblem } from './templates.js';
 import { isPathOrServiceUrl, isPlainObject, isServiceUrl, isUtcTimestamp, pointer } from './util.js';
 
 /** @typedef {import('./types.js').ValidationProblem} ValidationProblem */
@@ -237,7 +237,8 @@ export const checkActivityCopy = (copy) =>
  * A product's message defaults (parity P1): keys once each and, with `productId`, starting with `<productId>.`; the
  * default words of each channel pass the template rules of `@ss/contracts/templates` as written (no spaces at their
  * ends), and use only the message's declared values — plus `{unsubscribeUrl}` in a message that is not required
- * (Notifications fills it in optional messages only). A value is never named after a built-in one.
+ * (Notifications fills it in optional messages only). A value is never named after a built-in one. Each long value is
+ * one of the message's values, used in no subject or title.
  * @param {import('./types.js').MessageDefaults} declaration
  * @returns {ValidationProblem[]}
  */
@@ -255,6 +256,10 @@ export const checkMessageDefaults = (declaration) => {
 		for (const [valueIndex, name] of message.values.entries())
 			if (BUILT_IN_VALUES.includes(name))
 				out.push(at([...path, 'values', valueIndex], RULES.unknownValue, `'${name}' is filled by Notifications`));
+		const longValues = message.longValues ?? [];
+		for (const [valueIndex, name] of longValues.entries())
+			if (!message.values.includes(name))
+				out.push(at([...path, 'longValues', valueIndex], RULES.unknownValue, `'${name}' is not one of the message's values`));
 		const known = new Set([...message.values, ...(message.required === true ? [] : BUILT_IN_VALUES)]);
 		for (const [channel, words] of Object.entries(message.channels)) {
 			if (words === null) continue;
@@ -270,6 +275,8 @@ export const checkMessageDefaults = (declaration) => {
 				text: words.text,
 			});
 			if (wrong) out.push(at([...path, 'channels', channel, wrong.field], RULES.templateWords, wrong.message));
+			const long = longValueProblem(subject, longValues);
+			if (long) out.push(at([...path, 'channels', channel, 'subject'], RULES.templateWords, long));
 			for (const name of valueNamesOf(`${subject}\n${words.text}`))
 				if (!known.has(name))
 					out.push(

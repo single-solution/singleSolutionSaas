@@ -7,18 +7,19 @@
  *   action, target, label?, detail?, at }` (PLAN 0.8.10 K9: `label` names the target, for example an order number;
  *   `detail` is plain text). Never message contents, secrets or addresses.
  * - Message defaults (a product's `schemas/messages.json`, served by the kit at `GET /v1/message-defaults` with the
- *   product's id): `{ productId?, messages: [{ key, name, description?, values, required?, urgent?, sensitive?,
- *   channels }] }`. `channels` names every channel the product sends the message on, with its default words in US
- *   English: `email`, `push` and `staff_push` `{ subject, text }`, `sms` `{ text }`, and `whatsapp: null` (WhatsApp sends
- *   only templates the merchant had approved at Meta, so it never has a default). Notifications uses a default when
- *   the website has no template of its own. The words follow the template rules of `@ss/contracts/templates`
+ *   product's id): `{ productId?, messages: [{ key, name, description?, values, longValues?, required?, urgent?,
+ *   sensitive?, channels }] }`. `longValues` names the values that hold long text (up to 50,000 characters each, only
+ *   in a message's text). `channels` names every channel the product sends the message on, with its default words in
+ *   US English: `email`, `push` and `staff_push` `{ subject, text }`, `sms` `{ text }`, and `whatsapp: null` (WhatsApp
+ *   sends only templates the merchant had approved at Meta, so it never has a default). Notifications uses a default
+ *   when the website has no template of its own. The words follow the template rules of `@ss/contracts/templates`
  *   (`checkMessageDefaults`).
  * @module
  */
 import { deepFreeze } from '../util.js';
 import { SCHEMA_IDS } from './schema-ids.js';
 import { commonRef as ref } from './common.js';
-import { SUBJECT_LIMIT, TEMPLATE_KEY, VALUE_NAME } from '../templates.js';
+import { MAX_VALUES, SUBJECT_LIMIT, TEMPLATE_KEY, VALUE_NAME } from '../templates.js';
 
 const draft = 'https://json-schema.org/draft/2020-12/schema';
 
@@ -111,7 +112,13 @@ export const messageDefaultsSchema = deepFreeze({
 					description: { type: 'string', maxLength: 500 },
 					values: {
 						type: 'array',
-						maxItems: 50,
+						maxItems: MAX_VALUES,
+						uniqueItems: true,
+						items: { type: 'string', pattern: VALUE_NAME.source },
+					},
+					longValues: {
+						type: 'array',
+						maxItems: MAX_VALUES,
 						uniqueItems: true,
 						items: { type: 'string', pattern: VALUE_NAME.source },
 					},

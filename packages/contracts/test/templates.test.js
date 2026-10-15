@@ -3,12 +3,17 @@ import { RULES, validateMessageDefaults } from '../src/index.js';
 import { checkMessageDefaults } from '../src/semantics.js';
 import {
 	BUILT_IN_VALUES,
+	LONG_VALUE_LIMIT,
+	MAX_VALUES,
 	SUBJECT_LIMIT,
 	TEMPLATE_CHANNELS,
 	TEMPLATE_KEY,
 	TEXT_LIMITS,
+	VALUES_TOTAL_LIMIT,
+	VALUE_LIMIT,
 	VALUE_NAME,
 	isTitled,
+	longValueProblem,
 	placeholdersOf,
 	sectionProblem,
 	valueNamesOf,
@@ -48,6 +53,16 @@ const declaration = () => ({
 			sensitive: true,
 			channels: { sms: { text: 'Your code is {code}.' } },
 		},
+		{
+			key: 'notes.copy',
+			name: 'Copy of a note',
+			values: ['title', 'body'],
+			longValues: ['body'],
+			channels: {
+				email: { subject: 'Your note {title}', text: '{body}\n\nUnsubscribe: {unsubscribeUrl}' },
+				sms: { text: '{title}: {body}' },
+			},
+		},
 	],
 });
 
@@ -63,6 +78,16 @@ describe('template rules (@ss/contracts/templates)', () => {
 		expect(SUBJECT_LIMIT).toBe(200);
 		expect(BUILT_IN_VALUES).toEqual(['unsubscribeUrl']);
 		expect(TEMPLATE_CHANNELS.filter(isTitled)).toEqual(['email', 'push', 'staff_push']);
+		// a send's values: 50 of 1,000 characters, a declared long value 50,000, all together 100,000
+		expect([MAX_VALUES, VALUE_LIMIT, LONG_VALUE_LIMIT, VALUES_TOTAL_LIMIT]).toEqual([50, 1000, 50_000, 100_000]);
+	});
+
+	it('keeps long values out of the parts that stay short (subjects, titles, buttons)', () => {
+		expect(longValueProblem('Your chat with {business}', ['transcript'])).toBeNull();
+		expect(longValueProblem('Chat {?transcript}{transcript}{/transcript}', ['transcript'])).toBe(
+			'{transcript} is long text: use it in the message only.',
+		);
+		expect(longValueProblem('{transcript}', [])).toBeNull();
 	});
 
 	it('finds placeholders and value names in order of first use', () => {
@@ -128,12 +153,20 @@ describe('message defaults (validateMessageDefaults)', () => {
 		);
 		expectProblem(validateMessageDefaults({ messages: [{ ...wrong.messages[0], key: 'Notes.x' }] }), '/messages/0/key');
 		expectProblem(validateMessageDefaults({ messages: [{ ...wrong.messages[0], values: ['a', 'a'] }] }), '/messages/0/values');
+		expectProblem(
+			validateMessageDefaults({ messages: [{ ...wrong.messages[2], longValues: ['body', 'body'] }] }),
+			'/messages/0/longValues',
+		);
+		expectProblem(
+			validateMessageDefaults({ messages: [{ ...wrong.messages[2], longValues: ['1st'] }] }),
+			'/messages/0/longValues/0',
+		);
 	});
 
 	it('refuses repeated keys, keys of another product, words that break the rules and unknown values', () => {
 		const repeated = declaration();
 		repeated.messages.push({ ...repeated.messages[1] });
-		expectProblem(validateMessageDefaults(repeated), '/messages/2/key', RULES.duplicateKey);
+		expectProblem(validateMessageDefaults(repeated), '/messages/3/key', RULES.duplicateKey);
 
 		const elsewhere = declaration();
 		elsewhere.messages[1] = { ...elsewhere.messages[1], key: 'other.code' };
@@ -163,6 +196,23 @@ describe('message defaults (validateMessageDefaults)', () => {
 		const builtIn = declaration();
 		builtIn.messages[1] = { ...builtIn.messages[1], values: ['code', 'unsubscribeUrl'] };
 		expectProblem(validateMessageDefaults(builtIn), '/messages/1/values/1', RULES.unknownValue);
+
+		// a long value is one of the message's values, and goes in no subject or title
+		const undeclared = declaration();
+		undeclared.messages[2] = { ...undeclared.messages[2], longValues: ['body', 'summary'] };
+		expectProblem(validateMessageDefaults(undeclared), '/messages/2/longValues/1', RULES.unknownValue);
+		const titled = declaration();
+		titled.messages[2] = {
+			...titled.messages[2],
+			channels: { email: { subject: 'Note: {body}', text: '{body}' }, push: { subject: '{title}', text: '{body}' } },
+		};
+		expectProblem(validateMessageDefaults(titled), '/messages/2/channels/email/subject', RULES.templateWords);
+		expect(checkMessageDefaults(titled)).toEqual([
+			expect.objectContaining({
+				path: '/messages/2/channels/email/subject',
+				message: '{body} is long text: use it in the message only.',
+			}),
+		]);
 	});
 
 	it('checks a declaration that passed its schema (checkMessageDefaults)', () => {

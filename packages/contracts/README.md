@@ -88,12 +88,14 @@ knows (returned in canonical form). `BUSINESS_JSON_TEMPLATE` is the example ever
 - `IMPORT_LIMITS`: one call of a product's import route takes NDJSON of at most 1,000 records and 4 MB (K10).
 - `validateMessageDefaults`: a product's message defaults (its `schemas/messages.json`; the kit serves them at
   `GET /v1/message-defaults` with `productId`): `{ productId?, messages }`, at most 200 messages, each
-  `{ key, name, description?, values, required?, urgent?, sensitive?, channels }`. `channels` names every channel the
-  message is sent on with its US-English default words: `email`, `push` and `staff_push` `{ subject, text }`, `sms`
-  `{ text }`, and `whatsapp: null` (WhatsApp sends only templates the merchant had approved at Meta, so it has no
-  default). Keys are declared once and start with the product's id; the words follow the template rules below as
-  written (no spaces at their ends) and use only the message's `values`, plus `{unsubscribeUrl}` in a message that is
-  not required.
+  `{ key, name, description?, values, longValues?, required?, urgent?, sensitive?, channels }`. `longValues` names the
+  values that hold long text (for example a chat transcript; up to 50,000 characters each). `channels` names every
+  channel the message is sent on with its US-English default words: `email`, `push` and `staff_push`
+  `{ subject, text }`, `sms` `{ text }`, and `whatsapp: null` (WhatsApp sends only templates the merchant had approved
+  at Meta, so it has no default). Keys are declared once and start with the product's id; the words follow the
+  template rules below as written (no spaces at their ends) and use only the message's `values`, plus
+  `{unsubscribeUrl}` in a message that is not required; each long value is one of the `values` and used in no subject
+  or title.
 
 ## Website Setup sheet (`ss.blueprint/1`)
 
@@ -147,6 +149,10 @@ defaults with the same rules.
 - `TEMPLATE_CHANNELS` (`email`, `sms`, `whatsapp`, `push`, `staff_push`), `TEMPLATE_KEY`, `VALUE_NAME`, `TEXT_LIMITS`
   (email 100,000, SMS 1,600, WhatsApp 4,096, push 500 characters), `SUBJECT_LIMIT` (200), `BUILT_IN_VALUES`
   (`unsubscribeUrl`), `isTitled(channel)`.
+- The values of a send: at most `MAX_VALUES` (50), each at most `VALUE_LIMIT` (1,000) characters, `VALUES_TOTAL_LIMIT`
+  (100,000) in all; a value the product declares long (`longValues`) holds up to `LONG_VALUE_LIMIT` (50,000). Email
+  sends a long value whole; Notifications cuts it to fit a channel with a shorter limit.
+  `longValueProblem(part, longValues)`: a subject, title or WhatsApp button using a long value (null when fine).
 - `placeholdersOf(text)` and `valueNamesOf(text)` (placeholders and optional-section names, in order of first use),
   `sectionProblem(text)` (`{?name}…{/name}` closed, not crossing, not inside one of the same name) and
   `wordsProblem(channel, { subject, text })` (the text written and within the channel's limit, a subject on email and

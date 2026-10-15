@@ -12,6 +12,10 @@
  * - Email, browser push and staff push have a subject (a title): one line of at most 200 characters. The text has at
  *   most 100,000 (email), 1,600 (SMS), 4,096 (WhatsApp) or 500 (push) characters.
  * - Notifications fills `{unsubscribeUrl}` itself, in optional messages only.
+ * - A send carries at most 50 values of at most 1,000 characters each, 100,000 in all. A product may declare some
+ *   values of its message long (`longValues`, for example a chat transcript): each holds up to 50,000 characters, and
+ *   goes only in the message's text, never in a subject or title nor a WhatsApp button. Email sends a long value whole;
+ *   a channel with a shorter limit gets it cut to fit (Notifications).
  * @module
  */
 
@@ -36,6 +40,18 @@ export const SUBJECT_LIMIT = 200;
 
 /** Values Notifications fills itself (optional messages only). */
 export const BUILT_IN_VALUES = Object.freeze(['unsubscribeUrl']);
+
+/** Most values one send carries. */
+export const MAX_VALUES = 50;
+
+/** Longest value of a send (characters), unless its product declares it long. */
+export const VALUE_LIMIT = 1000;
+
+/** Longest value a product declares long (`longValues`; characters). */
+export const LONG_VALUE_LIMIT = 50_000;
+
+/** Most characters of all the values of one send together. */
+export const VALUES_TOTAL_LIMIT = 100_000;
 
 const PLACEHOLDER = /\{([A-Za-z][A-Za-z0-9_]{0,63})\}/g;
 /** An optional section's opening `{?name}` or closing `{/name}` tag. */
@@ -109,4 +125,16 @@ export const wordsProblem = (channel, { subject, text }) => {
 	const subjectSections = titled ? sectionProblem(subject) : null;
 	if (subjectSections) return { field: 'subject', message: subjectSections };
 	return null;
+};
+
+/**
+ * What is wrong with a part of a template that stays short (a subject or title, a WhatsApp button's value) when it uses
+ * a long value, or null: a long value goes only in the message's text.
+ * @param {string} part
+ * @param {ReadonlyArray<string>} longValues the message's long values
+ * @returns {string | null}
+ */
+export const longValueProblem = (part, longValues) => {
+	const name = valueNamesOf(part).find((each) => longValues.includes(each));
+	return name === undefined ? null : `{${name}} is long text: use it in the message only.`;
 };

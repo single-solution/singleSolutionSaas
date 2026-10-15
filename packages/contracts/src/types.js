@@ -154,6 +154,8 @@
  * @property {string} name what the message is, for the merchant (at most 80 characters)
  * @property {string} [description] when it is sent (at most 500 characters)
  * @property {string[]} values the values every send carries (the placeholders its words may use)
+ * @property {string[]} [longValues] the values that hold long text (up to 50,000 characters each), used only in a
+ *   message's text: email sends them whole, a channel with a shorter limit cut to fit
  * @property {boolean} [required] sent to people who unsubscribed too (default false)
  * @property {boolean} [urgent] not held by quiet hours (default false)
  * @property {boolean} [sensitive] its values are hidden in the delivery log (default false)
