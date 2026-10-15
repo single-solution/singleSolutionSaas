@@ -40,6 +40,7 @@ import {
 } from '../core/catalog-taxonomy.js';
 import { nextPreviousSlugs } from '../core/links.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { brandScore, categoryScore } from '../core/seo-score.js';
 import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -79,12 +80,14 @@ export const createCatalogTaxonomy = (product, service, common) => {
 		data.collection(COLLECTIONS.products).countDocuments({ websiteId: data.websiteId, ...filter }, { limit: 1 });
 
 	/**
-	 * A category or brand as answered: its image or logo with its address (no write stamps).
-	 * @param {Site} s @param {{ image?: any, logo?: any }} record @param {'image' | 'logo'} field
+	 * A category or brand as answered: its image or logo with its address (no write stamps), and its SEO score while
+	 * SEO is on (E42).
+	 * @param {Site} s @param {any} record @param {'image' | 'logo'} field
 	 */
 	const withImage = async (s, record, field) => ({
 		...withoutStamps(record),
 		[field]: record[field] ? { ...record[field], url: await common.media.mediaUrl(s, record[field].key) } : null,
+		...(s.has('seo') ? { seo: { ...record.seo, ...(field === 'image' ? categoryScore(record) : brandScore(record)) } } : {}),
 	});
 
 	/**

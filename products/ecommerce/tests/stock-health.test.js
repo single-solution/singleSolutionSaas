@@ -138,17 +138,32 @@ describe('shop health (E41)', () => {
 			'online',
 			'bank_transfer',
 		]);
+		const clean = { sameTitles: 0, sameDescriptions: 0, longTitles: 0, canonicalElsewhere: 0, emptyCategories: 0 };
+		const ready = {
+			storage: true,
+			bankReady: true,
+			staffAlerted: true,
+			adminUrl: true,
+			feeds: true,
+			missingIdentifiers: true,
+			glossaryWithoutText: 0,
+		};
 		const health = healthOf({
-			facets: { noPhotos: [], archivedFeatured: [{ n: 1 }], variants: [{ _id: 'low', n: 4 }] },
-			business: { name: 'shop.example.com', country: null, logo: 'https://shop.example.com/logo.png' },
+			facets: { active: [{ n: 3 }], noPhotos: [], archivedFeatured: [{ n: 1 }], variants: [{ _id: 'low', n: 4 }] },
+			taxonomy: clean,
+			business: { name: 'shop.example.com', country: null, logo: 'https://shop.example.com/logo.png', phone: '+12025550143' },
 			domain: 'shop.example.com',
 			paymentMethods: [],
 			badTags: null,
 			shortLived: true,
 			deliveryDays: false,
+			setup: ready,
 		});
 		expect(health.checks.map((check) => check.key)).toEqual([...HEALTH_CHECKS]);
-		expect(Object.fromEntries(health.checks.map((check) => [check.key, `${check.status} ${check.count}`]))).toEqual({
+		/** @type {Record<string, string>} */
+		const states = Object.fromEntries(health.checks.map((check) => [check.key, `${check.status} ${check.count}`]));
+		expect(states).toMatchObject({
+			no_products: 'ok 0',
 			products_without_photos: 'ok 0',
 			images_short_lived: 'attention 1',
 			archived_featured: 'attention 1',
@@ -157,6 +172,7 @@ describe('shop health (E41)', () => {
 			business_name: 'attention 1',
 			business_country: 'attention 1',
 			business_logo: 'ok 0',
+			business_phone: 'ok 0',
 			website_address: 'ok 0',
 			delivery_days: 'attention 1',
 			payment_methods: 'attention 1',
@@ -166,19 +182,18 @@ describe('shop health (E41)', () => {
 		// without storage the image check is skipped; with the public address it is ok
 		const skipped = {
 			facets: {},
-			business: { name: 'Shop', country: 'US', logo: null },
+			taxonomy: clean,
+			business: { name: 'Shop', country: 'US', logo: null, phone: null },
 			domain: 'shop.example.com',
 			paymentMethods: ['cod'],
 			badTags: [],
 			deliveryDays: null,
+			setup: ready,
 		};
-		expect(healthOf({ ...skipped, shortLived: null }).checks[1]).toEqual({
-			key: 'images_short_lived',
-			status: 'skipped',
-			count: 0,
-			link: null,
-		});
-		expect(healthOf({ ...skipped, shortLived: false }).checks[1]).toMatchObject({ status: 'ok', count: 0 });
+		const imagesOf = (/** @type {boolean | null} */ shortLived) =>
+			healthOf({ ...skipped, shortLived }).checks.find((check) => check.key === 'images_short_lived');
+		expect(imagesOf(null)).toEqual({ key: 'images_short_lived', status: 'skipped', count: 0, link: null });
+		expect(imagesOf(false)).toMatchObject({ status: 'ok', count: 0 });
 		// without delivery zones there are no delivery days to ask for
 		expect(healthOf({ ...skipped, shortLived: false }).checks.find((check) => check.key === 'delivery_days')).toEqual({
 			key: 'delivery_days',
@@ -216,7 +231,14 @@ describe('shop health (E41)', () => {
 		expect(shop.callsTo(GROWTH)).toHaveLength(0);
 		// storage is connected without a public address of the images (G1)
 		expect(byKey.images_short_lived).toEqual({ key: 'images_short_lived', status: 'attention', count: 1, link: null });
-		expect(health.json.attention).toBe(8);
+		// no description and no brand or GTIN on the four active products, no phone, and staff alerts to nobody and nowhere
+		expect(byKey.short_descriptions).toMatchObject({ status: 'attention', count: 4 });
+		expect(byKey.missing_identifiers).toMatchObject({ status: 'attention', count: 4 });
+		expect(byKey.business_phone).toMatchObject({ status: 'attention', count: 1 });
+		expect(byKey.staff_alerts).toMatchObject({ status: 'attention', count: 1 });
+		expect(byKey.admin_url).toMatchObject({ status: 'attention', count: 1 });
+		expect(health.json.checks.filter((/** @type {any} */ check) => check.status === 'attention')).toHaveLength(13);
+		expect(health.json.attention).toBe(13);
 		const reader = await shop.ticket(['reports.read']);
 		expect((await shop.admin(reader, 'GET', '/v1/admin/reports/health')).json).toEqual(health.json);
 		expect((await shop.admin(await shop.ticket(['catalog.edit']), 'GET', '/v1/admin/reports/health')).status).toBe(403);

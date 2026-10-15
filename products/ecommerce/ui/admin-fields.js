@@ -194,7 +194,7 @@ export const faqsEditor = (kit, faqs, legend = kit.t('catalogAdmin.faqs')) => {
 /**
  * @typedef {{ title?: string, description?: string, canonicalUrl?: string, ogImage?: string, noindex?: boolean,
  *   nofollow?: boolean, focusKeyword?: string, titleMode?: 'template' | 'as_written',
- *   source?: 'merchant' | 'import' | 'ai' | null }} Seo
+ *   source?: 'merchant' | 'import' | 'ai' | null, score?: number }} Seo
  */
 
 /**
@@ -238,7 +238,7 @@ export const seoEditor = (kit, seo) => {
 };
 
 /**
- * The SEO fields as facts of a detail.
+ * The SEO fields as facts of a detail, with the SEO score while SEO is on (E42).
  * @param {Kit} kit @param {Seo | null | undefined} seo
  * @returns {Array<[string, string]>}
  */
@@ -258,7 +258,27 @@ export const seoFacts = (kit, seo) => {
 		[t('catalogAdmin.canonicalUrl'), given.canonicalUrl ?? ''],
 		[t('catalogAdmin.ogImage'), given.ogImage ?? ''],
 		[t('catalogAdmin.robots'), [given.noindex ? 'noindex' : '', given.nofollow ? 'nofollow' : ''].filter(Boolean).join(', ')],
+		[t('catalogAdmin.seoScore'), typeof given.score === 'number' ? t('catalogAdmin.seoScoreOf', { score: given.score }) : ''],
 	];
+};
+
+/**
+ * A record's SEO checks (E42, while SEO is on): each passed or to fix; null without checks.
+ * @param {Kit} kit @param {{ checks?: Array<{ key: string, ok: boolean }> } | null | undefined} seo
+ */
+export const seoChecks = (kit, seo) => {
+	const { t, h } = kit;
+	if (!Array.isArray(seo?.checks) || seo.checks.length === 0) return null;
+	return h(
+		'ul',
+		{ class: 'checks', 'aria-label': t('catalogAdmin.seoChecks') },
+		seo.checks.map((check) =>
+			h('li', {}, [
+				kit.badge(t(check.ok ? 'catalogAdmin.seoCheckPassed' : 'catalogAdmin.seoCheckFix'), check.ok ? 'success' : 'warning'),
+				kit.text('span', {}, ` ${t(`catalogAdmin.seoCheck.${check.key}`)}`),
+			]),
+		),
+	);
 };
 
 /**

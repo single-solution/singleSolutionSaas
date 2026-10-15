@@ -1,7 +1,19 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mountCatalogAdmin } from '../ui/catalog-admin.js';
-import { ALL, ROW, detailOf, dialogOf, hasDialog, lists, pick, rowsOf, start, submitDialog } from './ui-admin-catalog-data.js';
+import {
+	ALL,
+	ROW,
+	detailOf,
+	dialogOf,
+	hasDialog,
+	lists,
+	pick,
+	product,
+	rowsOf,
+	start,
+	submitDialog,
+} from './ui-admin-catalog-data.js';
 import {
 	answer,
 	buttonIn,
@@ -106,6 +118,38 @@ describe('catalog admin: the product list', () => {
 		await click(buttonIn(panel, 'Clear filters'));
 		expect(lastQuery(server)).toEqual({});
 		expect(panel.querySelector('button.secondary')?.textContent).not.toBe('Clear filters');
+	});
+
+	it("orders and filters by the SEO score while SEO is on, and shows each row's score (E42)", async () => {
+		const { root, server } = await start([...ALL, 'seo'], {
+			'GET /v1/admin/products': () => answer(200, { items: [{ ...ROW, seoScore: 44 }], nextCursor: null, hasMore: false }),
+			// the open product's row follows its detail
+			'GET /v1/admin/products/prd_1': () => answer(200, product({ seo: { ...product().seo, score: 44, checks: [] } })),
+		});
+		const panel = panelOf(root, 'products');
+		expect(textOf(panel)).toContain('SEO 44/100');
+		await click(buttonIn(panel, 'Filters'));
+		const dialog = dialogOf(root);
+		await change(fieldIn(dialog, 'Order'), 'seo_score');
+		await change(fieldIn(dialog, 'SEO score'), '50');
+		expect([...fieldIn(dialog, 'SEO score').options].map((/** @type {any} */ o) => o.textContent)).toEqual([
+			'Any',
+			'Below 50',
+			'Below 80',
+		]);
+		await submitDialog(root);
+		expect(lastQuery(server)).toEqual({ sort: 'seo_score', seoBelow: '50' });
+		// counts take the filter, not the order
+		const count = Object.fromEntries(server.last('GET /v1/admin/products/count')?.url.searchParams ?? []);
+		expect(count).toEqual({ seoBelow: '50' });
+		expect(buttonIn(panel, 'Filters2').textContent).toBe('Filters2');
+		await click(buttonIn(panel, 'Clear filters'));
+		expect(lastQuery(server)).toEqual({});
+		// without SEO there is neither
+		resetPage();
+		const plain = await start();
+		await click(buttonIn(panelOf(plain.root, 'products'), 'Filters'));
+		expect(() => fieldIn(dialogOf(plain.root), 'Order')).toThrow();
 	});
 
 	it('shows not allowed, unreachable, empty and failed answers', async () => {

@@ -1,7 +1,8 @@
 /**
  * The products section of the catalog admin widget (PLAN 0.8.8; PLAN 0.8.10 E2, E7, K4) as a list-and-detail screen:
  * search, status chips with their counts, a Filters dialog (category, several brands and grades, featured, stock state
- * with counts, photos, low stock, kind), the total, Load more, and a selection for bulk changes (status, price, stock,
+ * with counts, photos, low stock, kind; with SEO on, the order by SEO score and a score below 50 or 80, E42), the
+ * total, Load more, and a selection for bulk changes (status, price, stock,
  * add to or remove from a category; `bulk_actions`) and for generating the variants of many products (`variants`).
  * The picked product's detail and editor are in `./admin-product.js` and `./admin-product-editor.js`.
  * @module
@@ -45,8 +46,12 @@ export const rowOf = (product) => {
 		featured: product.featured === true,
 		stockState: product.stockState,
 		mediaCount: product.media.length,
+		...(typeof product.seo?.score === 'number' ? { seoScore: product.seo.score } : {}),
 	};
 };
+
+/** The SEO score filters (E42): products scored below these. */
+const SEO_BELOW = Object.freeze(['50', '80']);
 
 /**
  * An amount typed with an optional minus sign, in minor units (null when empty, NaN when not an amount).
@@ -76,6 +81,8 @@ export const productsTab = (kit, panel, lookups, links) => {
 		hasMedia: '',
 		lowStock: false,
 		kind: '',
+		sort: '',
+		seoBelow: '',
 	};
 	/** @type {Set<string>} */
 	const selected = new Set();
@@ -97,6 +104,8 @@ export const productsTab = (kit, panel, lookups, links) => {
 			hasMedia: filters.hasMedia,
 			lowStock: filters.lowStock,
 			kind: filters.kind,
+			sort: filters.sort,
+			seoBelow: filters.seoBelow,
 			...over,
 		});
 
@@ -113,6 +122,8 @@ export const productsTab = (kit, panel, lookups, links) => {
 			hasMedia: '',
 			lowStock: false,
 			kind: '',
+			sort: '',
+			seoBelow: '',
 		});
 		return reload();
 	});
@@ -137,7 +148,8 @@ export const productsTab = (kit, panel, lookups, links) => {
 
 	/** How many filters of the dialog are on. */
 	const filterCount = () =>
-		[filters.category, filters.featured, filters.hasMedia, filters.kind].filter(Boolean).length +
+		[filters.category, filters.featured, filters.hasMedia, filters.kind, filters.sort, filters.seoBelow].filter(Boolean)
+			.length +
 		filters.brand.length +
 		filters.grade.length +
 		filters.stockState.length +
@@ -175,8 +187,8 @@ export const productsTab = (kit, panel, lookups, links) => {
 		drawBar();
 		const [answer, counted, statuses] = await Promise.all([
 			kit.call('GET', `/v1/admin/products${params()}`),
-			kit.call('GET', `/v1/admin/products/count${params()}`),
-			kit.call('GET', `/v1/admin/products/counts${params({ status: '', by: 'status' })}`),
+			kit.call('GET', `/v1/admin/products/count${params({ sort: '' })}`),
+			kit.call('GET', `/v1/admin/products/counts${params({ status: '', sort: '', by: 'status' })}`),
 		]);
 		drawChips(statuses.ok ? statuses.data.groups : {}, statuses.ok ? statuses.data.total : 0);
 		total.replaceChildren(
@@ -211,7 +223,7 @@ export const productsTab = (kit, panel, lookups, links) => {
 	const openFilters = async () => {
 		const by = ['stockState', 'brand', ...(lookups.grades().length > 0 ? ['grade'] : []), 'featured'];
 		const answers = await Promise.all(
-			by.map((name) => kit.call('GET', `/v1/admin/products/counts${params({ [name]: '', by: name })}`)),
+			by.map((name) => kit.call('GET', `/v1/admin/products/counts${params({ [name]: '', sort: '', by: name })}`)),
 		);
 		/** @type {Record<string, Record<string, number>>} */
 		const counts = Object.fromEntries(
@@ -256,6 +268,21 @@ export const productsTab = (kit, panel, lookups, links) => {
 			filters.hasMedia,
 		);
 		const lowStock = kit.check(t('catalogAdmin.lowStock'), filters.lowStock);
+		// with SEO on: the lowest score first, and a score below a mark (E42)
+		const order = kit.select(
+			[
+				{ value: '', label: t('catalogAdmin.newestFirst') },
+				{ value: 'seo_score', label: t('catalogAdmin.lowestSeoFirst') },
+			],
+			filters.sort,
+		);
+		const seoBelow = kit.select(
+			[
+				{ value: '', label: t('catalogAdmin.any') },
+				...SEO_BELOW.map((value) => ({ value, label: t('catalogAdmin.seoBelow', { score: value }) })),
+			],
+			filters.seoBelow,
+		);
 		const brands = checkGroup(
 			kit,
 			t('catalogAdmin.brands'),
@@ -286,6 +313,8 @@ export const productsTab = (kit, panel, lookups, links) => {
 					kinds.length > 1 ? kit.field(t('catalogAdmin.kind'), kind) : null,
 					kit.field(t('catalogAdmin.featured'), featured),
 					kit.field(t('catalogAdmin.photos'), photos),
+					has('seo') ? kit.field(t('catalogAdmin.order'), order) : null,
+					has('seo') ? kit.field(t('catalogAdmin.seoScore'), seoBelow) : null,
 					lowStock.node,
 				]),
 				states.node,
@@ -303,6 +332,8 @@ export const productsTab = (kit, panel, lookups, links) => {
 					brand: brands.value(),
 					grade: lookups.grades().length > 0 ? grades.value() : [],
 					stockState: states.value(),
+					sort: has('seo') ? order.value : '',
+					seoBelow: has('seo') ? seoBelow.value : '',
 				});
 				await reload();
 				return null;
@@ -506,6 +537,7 @@ export const productsTab = (kit, panel, lookups, links) => {
 				meta: [
 					item.trackStock ? t('catalogAdmin.inStockCount', { count: item.stock }) : t('catalogAdmin.notTracked'),
 					item.featured ? t('catalogAdmin.featured') : '',
+					typeof item.seoScore === 'number' ? t('catalogAdmin.seoScoreOf', { score: item.seoScore }) : '',
 					item.skus.join(', '),
 				]
 					.filter(Boolean)

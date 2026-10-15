@@ -296,6 +296,30 @@ describe('catalog admin: a product', () => {
 		expect(patches[1]).not.toHaveProperty('replacedBy');
 	});
 
+	it('shows the SEO score and its checks while SEO is on (E42)', async () => {
+		const { root } = await start([...ALL, 'seo'], {
+			'GET /v1/admin/products/prd_1': () =>
+				answer(
+					200,
+					product({
+						seo: {
+							...product().seo,
+							score: 50,
+							checks: [
+								{ key: 'focus_keyword', ok: true },
+								{ key: 'image_alt', ok: false },
+							],
+						},
+					}),
+				),
+		});
+		const detail = detailOf(panelOf(root, 'products'));
+		const text = textOf(detail);
+		expect(text).toContain('SEO scoreSEO 50/100');
+		expect(text).toContain('Done A focus keyword');
+		expect(text).toContain('To do Photos with their alternative text');
+	});
+
 	it('creates a product without variants, with the single price and stock', async () => {
 		/** @type {any[]} */
 		const posts = [];

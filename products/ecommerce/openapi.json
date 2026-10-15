@@ -6364,7 +6364,7 @@
 		"/v1/admin/products": {
 			"get": {
 				"summary": "The products, newest first (Catalog admin widget)",
-				"description": "Every status, with exact stock (the /v1/shop routes are for shoppers). Answers a Link header to the next page. 400 bad_request for an invalid cursor or limit.",
+				"description": "Every status, with exact stock (the /v1/shop routes are for shoppers), newest first; while the seo feature is on each row carries seoScore, and sort=seo_score and seoBelow order and filter by it (E42). Answers a Link header to the next page. 400 bad_request for an invalid cursor or limit; 422 validation_failed at /sort or /seoBelow.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -6527,6 +6527,31 @@
 						"schema": {
 							"type": "string",
 							"description": "Product ids, comma-separated (at most 20)."
+						}
+					},
+					{
+						"name": "sort",
+						"in": "query",
+						"required": false,
+						"description": "newest (default), or seo_score: the lowest SEO score first (E42; newest first among equal scores), among the newest 5,000 products that match, paged by position. 403 feature_off while the seo feature is off.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"newest",
+								"seo_score"
+							],
+							"description": "newest (default), or seo_score: the lowest SEO score first (E42; newest first among equal scores), among the newest 5,000 products that match, paged by position. 403 feature_off while the seo feature is off."
+						}
+					},
+					{
+						"name": "seoBelow",
+						"in": "query",
+						"required": false,
+						"description": "1 to 100: only products whose SEO score is below it (E42), among the newest 5,000 that match the other filters (scored on read); the count and counts routes take it too. 403 feature_off while the seo feature is off.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[0-9]{1,3}$",
+							"description": "1 to 100: only products whose SEO score is below it (E42), among the newest 5,000 that match the other filters (scored on read); the count and counts routes take it too. 403 feature_off while the seo feature is off."
 						}
 					}
 				],
@@ -7570,6 +7595,17 @@
 							"type": "string",
 							"description": "Product ids, comma-separated (at most 20)."
 						}
+					},
+					{
+						"name": "seoBelow",
+						"in": "query",
+						"required": false,
+						"description": "1 to 100: only products whose SEO score is below it (E42), among the newest 5,000 that match the other filters (scored on read); the count and counts routes take it too. 403 feature_off while the seo feature is off.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[0-9]{1,3}$",
+							"description": "1 to 100: only products whose SEO score is below it (E42), among the newest 5,000 that match the other filters (scored on read); the count and counts routes take it too. 403 feature_off while the seo feature is off."
+						}
 					}
 				],
 				"responses": {
@@ -7758,6 +7794,17 @@
 						"schema": {
 							"type": "string",
 							"description": "Product ids, comma-separated (at most 20)."
+						}
+					},
+					{
+						"name": "seoBelow",
+						"in": "query",
+						"required": false,
+						"description": "1 to 100: only products whose SEO score is below it (E42), among the newest 5,000 that match the other filters (scored on read); the count and counts routes take it too. 403 feature_off while the seo feature is off.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[0-9]{1,3}$",
+							"description": "1 to 100: only products whose SEO score is below it (E42), among the newest 5,000 that match the other filters (scored on read); the count and counts routes take it too. 403 feature_off while the seo feature is off."
 						}
 					}
 				],
@@ -9400,7 +9447,7 @@
 		"/v1/admin/reports/health": {
 			"get": {
 				"summary": "Shop health: what needs fixing (Customers admin widget)",
-				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the business.json copy, the payment methods shoppers can use now (cash on delivery while its feature is on; online payment and bank transfer when offered in the checkout setting paymentMethods and Payments is connected, bank transfer also with bankTransferVia manual; pay at pickup when offered with a pickup location), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
+				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the business.json copy, the connections, Payments' bank details while bank transfer is offered, the payment methods shoppers can use now (cash on delivery while its feature is on; online payment and bank transfer when offered in the checkout setting paymentMethods and Payments is connected, bank transfer also with bankTransferVia manual; pay at pickup when offered with a pickup location), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "reports",
 				"x-ss-permission": "reports.read",
@@ -21612,7 +21659,7 @@
 		"/v1/products": {
 			"get": {
 				"summary": "The products, newest first",
-				"description": "Every status, with exact stock (the /v1/shop routes are for shoppers). Answers a Link header to the next page. 400 bad_request for an invalid cursor or limit.",
+				"description": "Every status, with exact stock (the /v1/shop routes are for shoppers), newest first; while the seo feature is on each row carries seoScore, and sort=seo_score and seoBelow order and filter by it (E42). Answers a Link header to the next page. 400 bad_request for an invalid cursor or limit; 422 validation_failed at /sort or /seoBelow.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -21774,6 +21821,31 @@
 						"schema": {
 							"type": "string",
 							"description": "Product ids, comma-separated (at most 20)."
+						}
+					},
+					{
+						"name": "sort",
+						"in": "query",
+						"required": false,
+						"description": "newest (default), or seo_score: the lowest SEO score first (E42; newest first among equal scores), among the newest 5,000 products that match, paged by position. 403 feature_off while the seo feature is off.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"newest",
+								"seo_score"
+							],
+							"description": "newest (default), or seo_score: the lowest SEO score first (E42; newest first among equal scores), among the newest 5,000 products that match, paged by position. 403 feature_off while the seo feature is off."
+						}
+					},
+					{
+						"name": "seoBelow",
+						"in": "query",
+						"required": false,
+						"description": "1 to 100: only products whose SEO score is below it (E42), among the newest 5,000 that match the other filters (scored on read); the count and counts routes take it too. 403 feature_off while the seo feature is off.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[0-9]{1,3}$",
+							"description": "1 to 100: only products whose SEO score is below it (E42), among the newest 5,000 that match the other filters (scored on read); the count and counts routes take it too. 403 feature_off while the seo feature is off."
 						}
 					},
 					{
@@ -22853,6 +22925,17 @@
 						}
 					},
 					{
+						"name": "seoBelow",
+						"in": "query",
+						"required": false,
+						"description": "1 to 100: only products whose SEO score is below it (E42), among the newest 5,000 that match the other filters (scored on read); the count and counts routes take it too. 403 feature_off while the seo feature is off.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[0-9]{1,3}$",
+							"description": "1 to 100: only products whose SEO score is below it (E42), among the newest 5,000 that match the other filters (scored on read); the count and counts routes take it too. 403 feature_off while the seo feature is off."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -23050,6 +23133,17 @@
 						"schema": {
 							"type": "string",
 							"description": "Product ids, comma-separated (at most 20)."
+						}
+					},
+					{
+						"name": "seoBelow",
+						"in": "query",
+						"required": false,
+						"description": "1 to 100: only products whose SEO score is below it (E42), among the newest 5,000 that match the other filters (scored on read); the count and counts routes take it too. 403 feature_off while the seo feature is off.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[0-9]{1,3}$",
+							"description": "1 to 100: only products whose SEO score is below it (E42), among the newest 5,000 that match the other filters (scored on read); the count and counts routes take it too. 403 feature_off while the seo feature is off."
 						}
 					},
 					{
@@ -24837,7 +24931,7 @@
 		"/v1/reports/health": {
 			"get": {
 				"summary": "Shop health: what needs fixing",
-				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the business.json copy, the payment methods shoppers can use now (cash on delivery while its feature is on; online payment and bank transfer when offered in the checkout setting paymentMethods and Payments is connected, bank transfer also with bankTransferVia manual; pay at pickup when offered with a pickup location), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
+				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the business.json copy, the connections, Payments' bank details while bank transfer is offered, the payment methods shoppers can use now (cash on delivery while its feature is on; online payment and bank transfer when offered in the checkout setting paymentMethods and Payments is connected, bank transfer also with bankTransferVia manual; pay at pickup when offered with a pickup location), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "reports",
 				"security": [
@@ -33836,7 +33930,7 @@
 						"description": "The categories it belongs to (empty: every category)."
 					},
 					"seo": {
-						"$ref": "#/components/schemas/TaxonomySeo"
+						"$ref": "#/components/schemas/StaffTaxonomySeo"
 					},
 					"sizeChartId": {
 						"type": [
@@ -35146,7 +35240,7 @@
 						"description": "Lower first, then by name."
 					},
 					"seo": {
-						"$ref": "#/components/schemas/TaxonomySeo"
+						"$ref": "#/components/schemas/StaffTaxonomySeo"
 					},
 					"status": {
 						"type": "string",
@@ -38256,7 +38350,7 @@
 						"description": "The deal page’s text."
 					},
 					"seo": {
-						"$ref": "#/components/schemas/DealSeo"
+						"$ref": "#/components/schemas/StaffDealSeo"
 					},
 					"sort": {
 						"type": "integer",
@@ -39694,20 +39788,40 @@
 					"key": {
 						"type": "string",
 						"enum": [
+							"no_products",
 							"products_without_photos",
+							"products_not_buyable",
+							"variants_priced_zero",
+							"images_without_alt",
+							"images_too_small",
 							"images_short_lived",
+							"short_descriptions",
+							"duplicate_names",
+							"duplicate_titles",
+							"duplicate_descriptions",
+							"long_titles",
+							"canonical_elsewhere",
+							"branded_without_gtin",
+							"missing_identifiers",
+							"empty_categories",
+							"glossary_without_text",
 							"archived_featured",
 							"variants_out_of_stock",
 							"variants_low_stock",
 							"business_name",
 							"business_country",
 							"business_logo",
+							"business_phone",
 							"website_address",
+							"storage",
 							"delivery_days",
 							"payment_methods",
+							"bank_details",
+							"staff_alerts",
+							"admin_url",
 							"pixel_ids"
 						],
-						"description": "products_without_photos: active products with no photo; images_short_lived: storage is connected but the catalog setting mediaBaseUrl (the public address of your images) is empty, so the shop's widgets show images through links that last an hour (no browser caching; search engines, sitemaps and feeds get your website's media addresses instead) (1 or 0; skipped without storage); archived_featured: archived products still featured; variants_out_of_stock and variants_low_stock: offered variants of products that track stock and are not archived, with no units (or marked sold out) and with 1 to the catalog setting lowStock units; business_name: business.json is missing or gives no name (1 or 0); business_country and business_logo: business.json gives no country (search engines need it for your shipping and return policies) or no logo (shown with your business in search results; at least 112 × 112 pixels) (1 or 0); website_address: the website's address is not a public web address, such as localhost, an IP address or a .local or .test name (1 or 0); delivery_days: the delivery settings handlingDays and transitDays are not both set, so search engines show no shipping (1 or 0; skipped while Delivery zones is off); payment_methods: shoppers have no payment method they can use (1 or 0); pixel_ids: tag ids set in Growth (Meta and TikTok pixels, Google tags) that are not in the form their tag takes."
+						"description": "no_products: no active product at all (1 or 0); products_without_photos: active products with no photo; products_not_buyable: active products without an offered variant priced above 0; variants_priced_zero: offered variants of active products priced 0 (left out of structured data and feeds); images_without_alt: active products with a photo that has no alternative text; images_too_small: active products with a photo under 500 × 500 pixels (the shopping catalogs' minimum); images_short_lived: storage is connected but the catalog setting mediaBaseUrl (the public address of your images) is empty, so the shop's widgets show images through links that last an hour (no browser caching; search engines, sitemaps and feeds get your website's media addresses instead) (1 or 0; skipped without storage); short_descriptions: active products whose description has fewer than 20 words; duplicate_names: active products sharing a name with another (any letter case); duplicate_titles and duplicate_descriptions: active products, and categories and brands, whose own SEO title or description another record of the same kind also uses; long_titles: own SEO titles over 60 characters (search engines cut them); canonical_elsewhere: active products, categories and brands whose canonical address is on another site; branded_without_gtin: products the feeds send (active, with an offered variant priced above 0) of a brand without a GTIN on any offered variant (or a SKU, with the feeds setting skuAs gtin) (skipped while Feeds is off); missing_identifiers: products the feeds send with no brand and no GTIN or MPN (or a SKU sent as one) (skipped while Feeds is off or its identifierExists is no); empty_categories: categories shoppers see with no active product in them or below them; glossary_without_text: active product and variant fields without their glossary text, so their pages stay out of search results (skipped while Landing pages is off or attributeUrl is empty); archived_featured: archived products still featured; variants_out_of_stock and variants_low_stock: offered variants of products that track stock and are not archived, with no units (or marked sold out) and with 1 to the catalog setting lowStock units; business_name: business.json is missing or gives no name (1 or 0); business_country, business_logo and business_phone: business.json gives no country (search engines need it for your shipping and return policies), no logo (shown with your business in search results; at least 112 × 112 pixels) or no phone (shoppers and search engines reach you by it) (1 or 0); website_address: the website's address is not a public web address, such as localhost, an IP address or a .local or .test name (1 or 0); storage: no Storage connection, so no photo can be uploaded (1 or 0); delivery_days: the delivery settings handlingDays and transitDays are not both set, so search engines show no shipping (1 or 0; skipped while Delivery zones is off); payment_methods: shoppers have no payment method they can use (1 or 0); bank_details: bank transfer is offered but shoppers are not told where to pay: Payments' bank details are not saved, or, without Payments, the checkout setting noteBankTransfer is empty (1 or 0; skipped while bank transfer is not offered or Payments does not answer); staff_alerts: Staff alerts is on but nobody gets them (no recipients, no Accounts staff by permission with the Accounts token) or Notifications is not connected (1 or 0); admin_url: the staff_alerts setting adminUrl is empty, so alerts link to no order page (1 or 0); both skipped while Staff alerts is off; pixel_ids: tag ids set in Growth (Meta and TikTok pixels, Google tags) that are not in the form their tag takes."
 					},
 					"status": {
 						"type": "string",
@@ -39716,12 +39830,12 @@
 							"attention",
 							"skipped"
 						],
-						"description": "attention when count is above 0; skipped for images_short_lived while no storage is connected, for delivery_days while Delivery zones is off, and for pixel_ids while Growth's token is not pasted in Connections or Growth does not answer."
+						"description": "attention when count is above 0; skipped when a check does not apply (see each key: its feature off, nothing to read, or a product that does not answer)."
 					},
 					"count": {
 						"type": "integer",
 						"minimum": 0,
-						"description": "How many products, variants or ids need attention (0 when skipped)."
+						"description": "How many products, variants, records or ids need attention (0 when skipped)."
 					},
 					"link": {
 						"type": [
@@ -44779,6 +44893,12 @@
 					"updatedAt": {
 						"type": "string",
 						"format": "date-time"
+					},
+					"seoScore": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 100,
+						"description": "Its SEO score while the seo feature is on (E42; the checks are in GET /v1/products/:id)."
 					}
 				},
 				"description": "A row of the staff product list."
@@ -44843,6 +44963,43 @@
 							null
 						],
 						"description": "Who wrote the title and description: staff (merchant), an import (the earlier shop's copy) or an AI provider (ai: suggestions applied by staff, or written on save with the seo setting autoSeo); null while both are empty (the seo patterns fill the page on every read; formula copy is never stored)."
+					},
+					"score": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 100,
+						"description": "While the seo feature is on (E42): the share of its checks passed, worked out on read from its own SEO copy (never stored)."
+					},
+					"checks": {
+						"type": "array",
+						"description": "While the seo feature is on (E42): title_length (its SEO title, else its name, 10 to 60 characters), description (a written meta description of 50 to 160 characters), focus_keyword (one is set), keyword_in_title, keyword_in_description and keyword_in_text (the focus keyword, in any letter case, in the title, the meta description and the first paragraph of its text; not for deals), text_length (50 words of text of its own), image_alt (products: a photo at least, each with its text; others: their image or logo when they have one) and in_category (products: in a category).",
+						"items": {
+							"type": "object",
+							"required": [
+								"key",
+								"ok"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"key": {
+									"type": "string",
+									"enum": [
+										"title_length",
+										"description",
+										"focus_keyword",
+										"keyword_in_title",
+										"keyword_in_description",
+										"keyword_in_text",
+										"text_length",
+										"image_alt",
+										"in_category"
+									]
+								},
+								"ok": {
+									"type": "boolean"
+								}
+							}
+						}
 					}
 				},
 				"description": "SEO fields of a product."
@@ -48004,7 +48161,7 @@
 			},
 			"ShopHealth": {
 				"type": "object",
-				"description": "Shop health (E41): what needs fixing, judged on read.",
+				"description": "Shop health (E41, parity P5-18, SEO audit §3.2 A): what needs fixing, judged on read.",
 				"required": [
 					"checks",
 					"attention"
@@ -48013,16 +48170,16 @@
 				"properties": {
 					"checks": {
 						"type": "array",
-						"maxItems": 12,
+						"maxItems": 32,
 						"items": {
 							"$ref": "#/components/schemas/HealthCheck"
 						},
-						"description": "Every check, in this order: products_without_photos, images_short_lived, archived_featured, variants_out_of_stock, variants_low_stock, business_name, business_country, business_logo, website_address, delivery_days, payment_methods, pixel_ids."
+						"description": "Every check, in this order: no_products, products_without_photos, products_not_buyable, variants_priced_zero, images_without_alt, images_too_small, images_short_lived, short_descriptions, duplicate_names, duplicate_titles, duplicate_descriptions, long_titles, canonical_elsewhere, branded_without_gtin, missing_identifiers, empty_categories, glossary_without_text, archived_featured, variants_out_of_stock, variants_low_stock, business_name, business_country, business_logo, business_phone, website_address, storage, delivery_days, payment_methods, bank_details, staff_alerts, admin_url, pixel_ids."
 					},
 					"attention": {
 						"type": "integer",
 						"minimum": 0,
-						"maximum": 12,
+						"maximum": 32,
 						"description": "How many checks need attention."
 					}
 				}
@@ -50624,6 +50781,170 @@
 					"end": {
 						"type": "string",
 						"format": "date-time"
+					}
+				}
+			},
+			"StaffDealSeo": {
+				"type": "object",
+				"required": [
+					"title",
+					"description"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"title": {
+						"type": "string",
+						"maxLength": 120
+					},
+					"description": {
+						"type": "string",
+						"maxLength": 320
+					},
+					"score": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 100,
+						"description": "While the seo feature is on (E42): the share of its checks passed, worked out on read from its own SEO copy (never stored)."
+					},
+					"checks": {
+						"type": "array",
+						"description": "While the seo feature is on (E42): title_length (its SEO title, else its name, 10 to 60 characters), description (a written meta description of 50 to 160 characters), focus_keyword (one is set), keyword_in_title, keyword_in_description and keyword_in_text (the focus keyword, in any letter case, in the title, the meta description and the first paragraph of its text; not for deals), text_length (50 words of text of its own), image_alt (products: a photo at least, each with its text; others: their image or logo when they have one) and in_category (products: in a category).",
+						"items": {
+							"type": "object",
+							"required": [
+								"key",
+								"ok"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"key": {
+									"type": "string",
+									"enum": [
+										"title_length",
+										"description",
+										"focus_keyword",
+										"keyword_in_title",
+										"keyword_in_description",
+										"keyword_in_text",
+										"text_length",
+										"image_alt",
+										"in_category"
+									]
+								},
+								"ok": {
+									"type": "boolean"
+								}
+							}
+						}
+					}
+				},
+				"description": "A deal page's SEO fields, with its SEO score while the seo feature is on (E42)."
+			},
+			"StaffTaxonomySeo": {
+				"type": "object",
+				"description": "The SEO fields of a category or brand page (PLAN E16), with its SEO score while the seo feature is on (E42).",
+				"required": [
+					"title",
+					"description",
+					"canonicalUrl",
+					"ogImage",
+					"noindex",
+					"nofollow",
+					"focusKeyword",
+					"titleMode",
+					"source"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"title": {
+						"type": "string",
+						"maxLength": 200,
+						"description": "The page's title ('' = made from the name)."
+					},
+					"description": {
+						"type": "string",
+						"maxLength": 500,
+						"description": "The page's meta description ('' = made from the description)."
+					},
+					"canonicalUrl": {
+						"type": "string",
+						"maxLength": 500,
+						"description": "'' = the page's own address; else an https address or a path on the website (/…)."
+					},
+					"ogImage": {
+						"type": "string",
+						"maxLength": 500,
+						"description": "The social image: '' = the record's image; else an https address or a path on the website."
+					},
+					"noindex": {
+						"type": "boolean",
+						"description": "Ask search engines not to index the page."
+					},
+					"nofollow": {
+						"type": "boolean",
+						"description": "Ask search engines not to follow the page's links."
+					},
+					"focusKeyword": {
+						"type": "string",
+						"maxLength": 100
+					},
+					"titleMode": {
+						"type": "string",
+						"enum": [
+							"template",
+							"as_written"
+						],
+						"description": "as_written: the title is the page's whole title (the seo setting titleTemplate is not put around it); template: the title pattern is put around it (the name in titles is never added twice)."
+					},
+					"source": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"merchant",
+							"import",
+							"ai",
+							null
+						],
+						"description": "Who wrote the title and description: staff (merchant), an import (the earlier shop's copy) or an AI provider (ai: suggestions applied by staff, or written on save with the seo setting autoSeo); null while both are empty (the seo patterns fill the page on every read; formula copy is never stored)."
+					},
+					"score": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 100,
+						"description": "While the seo feature is on (E42): the share of its checks passed, worked out on read from its own SEO copy (never stored)."
+					},
+					"checks": {
+						"type": "array",
+						"description": "While the seo feature is on (E42): title_length (its SEO title, else its name, 10 to 60 characters), description (a written meta description of 50 to 160 characters), focus_keyword (one is set), keyword_in_title, keyword_in_description and keyword_in_text (the focus keyword, in any letter case, in the title, the meta description and the first paragraph of its text; not for deals), text_length (50 words of text of its own), image_alt (products: a photo at least, each with its text; others: their image or logo when they have one) and in_category (products: in a category).",
+						"items": {
+							"type": "object",
+							"required": [
+								"key",
+								"ok"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"key": {
+									"type": "string",
+									"enum": [
+										"title_length",
+										"description",
+										"focus_keyword",
+										"keyword_in_title",
+										"keyword_in_description",
+										"keyword_in_text",
+										"text_length",
+										"image_alt",
+										"in_category"
+									]
+								},
+								"ok": {
+									"type": "boolean"
+								}
+							}
+						}
 					}
 				}
 			},

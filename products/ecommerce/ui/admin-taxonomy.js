@@ -7,7 +7,16 @@
  * @module
  */
 import { query } from './admin-kit.js';
-import { chartChoices, checkGroup, contentEditor, earlierSlugs, faqsEditor, seoEditor, seoFacts } from './admin-fields.js';
+import {
+	chartChoices,
+	checkGroup,
+	contentEditor,
+	earlierSlugs,
+	faqsEditor,
+	seoChecks,
+	seoEditor,
+	seoFacts,
+} from './admin-fields.js';
 import { card, createScreen, deleteEntry, detailHead, fieldsOf, readFrom, saveDialog, yesNo } from './admin-screen.js';
 import { showsTypes, typeChoices, typeLabel } from './admin-types.js';
 
@@ -418,7 +427,7 @@ export const categoriesTab = (kit, panel, lookups) => {
 						: []),
 				]),
 				card(kit, t('catalogAdmin.faqs'), [faqList(kit, item.faqs)]),
-				card(kit, t('catalogAdmin.seo'), [kit.fieldGrid(seoFacts(kit, item.seo))]),
+				card(kit, t('catalogAdmin.seo'), [kit.fieldGrid(seoFacts(kit, item.seo)), seoChecks(kit, item.seo)]),
 			]),
 		];
 	};
@@ -561,7 +570,7 @@ export const brandsTab = (kit, panel, lookups) => {
 			kit.masonry([
 				imageCard(kit, { path, for: 'brand', field: 'logo', item, changed: (file) => keep(item.id, file) }),
 				card(kit, t('catalogAdmin.description'), [textBlock(kit, item.description)]),
-				card(kit, t('catalogAdmin.seo'), [kit.fieldGrid(seoFacts(kit, item.seo))]),
+				card(kit, t('catalogAdmin.seo'), [kit.fieldGrid(seoFacts(kit, item.seo)), seoChecks(kit, item.seo)]),
 			]),
 		];
 	};

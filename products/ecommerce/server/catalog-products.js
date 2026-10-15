@@ -44,6 +44,7 @@ import { nextPreviousSlugs } from '../core/links.js';
 import { withDescendants } from '../core/catalog-taxonomy.js';
 import { staffProductOf, staffRowOf } from '../core/catalog-views.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { productScore } from '../core/seo-score.js';
 import { IMAGE_TYPES, bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -56,6 +57,12 @@ import { IMAGE_TYPES, bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 
 /** The staff list's order. */
 const STAFF_SORT = /** @type {const} */ ({ field: 'createdAt', dir: -1 });
+/** The orders of the staff list: newest first, or the lowest SEO score first (E42). */
+const STAFF_ORDERS = Object.freeze(['newest', 'seo_score']);
+/** The products the SEO score order and filter look at: the newest this many that match (the score is never stored). */
+const SCORED_MAX = 5000;
+/** What the score sort and filter read of a product. */
+const SCORE_FIELDS = Object.freeze({ _id: 0, id: 1, name: 1, seo: 1, description: 1, media: 1, categoryIds: 1 });
 /** Most products of one bulk generation (E7). */
 const MAX_GENERATE = 100;
 
@@ -99,8 +106,8 @@ export const createCatalogProducts = (product, service, common) => {
 	const { now } = product;
 
 	/** @param {Site} s @param {ProductRecord} item */
-	const staffView = async (s, item) =>
-		staffProductOf(item, {
+	const staffView = async (s, item) => {
+		const view = staffProductOf(item, {
 			media: await common.mediaUrls(s, item),
 			variantMedia: await common.variantMediaUrls(s, item),
 			video: item.video?.kind === 'file' ? await common.media.mediaUrl(s, item.video.key) : null,
@@ -108,6 +115,40 @@ export const createCatalogProducts = (product, service, common) => {
 				(await productTypes(await s.data(), [item], await s.list('item_types'))).get(item.id)
 			),
 		});
+		// its SEO score and checks while SEO is on (E42)
+		return s.has('seo') ? { ...view, seo: { ...item.seo, ...productScore(item) } } : view;
+	};
+
+	/** @param {Site} s */
+	const scoreOn = (s) => {
+		if (!s.has('seo')) throw problem('feature_off', 'SEO is off: products have no SEO score.');
+	};
+
+	/**
+	 * The score filter asked for (E42): `seoBelow` 1–100, products scored below it; null = none.
+	 * @param {Site} s @param {Record<string, string>} query
+	 */
+	const seoBelowOf = (s, query) => {
+		if (query.seoBelow === undefined || query.seoBelow === '') return null;
+		const below = /^\d{1,3}$/.test(query.seoBelow) ? Number(query.seoBelow) : 0;
+		if (below < 1 || below > 100) throw refuse([{ path: '/seoBelow', message: 'seoBelow is a whole number from 1 to 100.' }]);
+		scoreOn(s);
+		return below;
+	};
+
+	/**
+	 * The scores of the newest {@link SCORED_MAX} products that match (E42; the score is never stored), newest first.
+	 * @param {WebsiteData} data @param {Record<string, unknown>} inner
+	 */
+	const scored = async (data, inner) =>
+		(
+			await data
+				.collection(COLLECTIONS.products)
+				.find({ websiteId: data.websiteId, $and: [inner] }, { projection: SCORE_FIELDS })
+				.sort({ createdAt: -1, id: -1 })
+				.limit(SCORED_MAX)
+				.toArray()
+		).map((row) => ({ id: String(row.id), score: productScore(/** @type {any} */ (row)).score }));
 
 	/**
 	 * Fill in the type and size of files the change names that the product did not have yet (its video, variant
@@ -199,7 +240,16 @@ export const createCatalogProducts = (product, service, common) => {
 		if (wanted.length > 0)
 			brandIds = (await brandsOf(data)).filter((b) => wanted.includes(b.id) || wanted.includes(b.slug)).map((b) => b.id);
 		const { lowStock } = await s.values('catalog');
-		return { s, data, inner: staffFilter(ctx.query, { categoryIds, brandIds, lowStock: Number(lowStock) }) };
+		const inner = staffFilter(ctx.query, { categoryIds, brandIds, lowStock: Number(lowStock) });
+		const below = seoBelowOf(s, ctx.query);
+		if (below === null) return { s, data, inner };
+		// scored below it (E42): the newest products that match, scored on read
+		const ranked = await scored(data, inner);
+		return {
+			s,
+			data,
+			inner: { $and: [inner, { id: { $in: ranked.filter((row) => row.score < below).map((row) => row.id) } }] },
+		};
 	};
 
 	const kitCounts = countHandlers({
@@ -266,23 +316,55 @@ export const createCatalogProducts = (product, service, common) => {
 		},
 	};
 
+	/**
+	 * A page of the products by their SEO score (E42), the lowest first (newest first among equal scores), paged by
+	 * position.
+	 * @param {WebsiteData} data @param {Record<string, unknown>} inner @param {ReturnType<typeof paginate>} page
+	 */
+	const scoredPage = async (data, inner, page) => {
+		const offset = page.after === null ? 0 : Array.isArray(page.after) && page.after[0] === 'seo' ? Number(page.after[1]) : -1;
+		if (!Number.isSafeInteger(offset) || offset < 0) throw problem('bad_request', 'cursor is invalid');
+		const products = data.collection(COLLECTIONS.products);
+		const ranked = (await scored(data, inner)).sort((a, b) => a.score - b.score);
+		const ids = ranked.slice(offset, offset + page.fetchLimit).map((row) => row.id);
+		const byId = new Map(
+			/** @type {ProductRecord[]} */ (
+				await products.find({ websiteId: data.websiteId, id: { $in: ids } }, NO_ID).toArray()
+			).map((item) => [item.id, item]),
+		);
+		const found = ids.flatMap((id) => byId.get(id) ?? []);
+		return page.page(found, (item) => ['seo', offset + found.indexOf(item) + 1]);
+	};
+
 	/** @param {any} ctx */
 	const list = async (ctx) => {
 		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
 		const { s, data, inner } = await staffSource(ctx);
-		const after = page.after === null ? null : afterFilter(STAFF_SORT, page.after);
-		if (page.after !== null && !after) throw problem('bad_request', 'cursor is invalid');
-		const found = /** @type {ProductRecord[]} */ (
-			await data
-				.collection(COLLECTIONS.products)
-				.find({ websiteId: data.websiteId, $and: [inner, ...(after ? [after] : [])] }, NO_ID)
-				.sort({ createdAt: -1, id: -1 })
-				.limit(page.fetchLimit)
-				.toArray()
-		);
-		const body = page.page(found, (item) => cursorKey(item, STAFF_SORT));
+		const sort = ctx.query.sort || 'newest';
+		if (!STAFF_ORDERS.includes(sort)) throw refuse([{ path: '/sort', message: `Sort is one of ${STAFF_ORDERS.join(', ')}.` }]);
+		/** @type {{ items: ProductRecord[], nextCursor: string | null, hasMore: boolean }} */
+		let body;
+		if (sort === 'seo_score') {
+			scoreOn(s);
+			body = await scoredPage(data, inner, page);
+		} else {
+			const after = page.after === null ? null : afterFilter(STAFF_SORT, page.after);
+			if (page.after !== null && !after) throw problem('bad_request', 'cursor is invalid');
+			const found = /** @type {ProductRecord[]} */ (
+				await data
+					.collection(COLLECTIONS.products)
+					.find({ websiteId: data.websiteId, $and: [inner, ...(after ? [after] : [])] }, NO_ID)
+					.sort({ createdAt: -1, id: -1 })
+					.limit(page.fetchLimit)
+					.toArray()
+			);
+			body = page.page(found, (item) => cursorKey(item, STAFF_SORT));
+		}
 		const items = await Promise.all(
-			body.items.map(async (item) => staffRowOf(item, { image: await common.media.mediaUrl(s, item.media?.[0]?.key) })),
+			body.items.map(async (item) => ({
+				...staffRowOf(item, { image: await common.media.mediaUrl(s, item.media?.[0]?.key) }),
+				...(s.has('seo') ? { seoScore: productScore(item).score } : {}),
+			})),
 		);
 		const link = page.link(body.nextCursor);
 		return ok({ items, nextCursor: body.nextCursor, hasMore: body.hasMore }, { headers: link ? { link } : {} });

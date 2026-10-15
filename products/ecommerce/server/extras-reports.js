@@ -30,13 +30,16 @@ import {
 	summaryPipeline,
 	totalsPipeline,
 } from '../core/reports.js';
-import { badTagIds, healthOf, healthPipeline, paymentMethodsOn } from '../core/health.js';
+import { badTagIds, healthOf, healthPipeline, paymentMethodsOn, taxonomyHealth } from '../core/health.js';
 import { daysRange } from '../core/seo.js';
+import { hiddenFor } from './catalog-visibility.js';
 import { csvFile } from './catalog-tools.js';
 import { SERVER_LIMITS } from './service.js';
 
 /** Rate limits (mutable copies of the shared constants, as route definitions take them). */
 const SERVER = [...SERVER_LIMITS];
+/** At most this many categories and brands are read for shop health. */
+const MAX_TAXONOMY = 5000;
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -335,26 +338,116 @@ export const createReports = (product, service) => {
 		return answer.ok ? badTagIds(answer.body) : null;
 	};
 
-	/** GET …/reports/health (E41): what needs fixing, with counts and links. @param {any} ctx */
+	/**
+	 * Whether shoppers are told where to pay by bank transfer (P5-18): Payments' bank details while Payments is connected
+	 * (null when it does not answer), else the bank transfer note when staff record transfers; null while bank transfer is
+	 * not offered.
+	 * @param {Site} s
+	 */
+	const bankReady = async (s) => {
+		const checkout = await s.values('checkout');
+		const offered = Array.isArray(checkout.paymentMethods) ? checkout.paymentMethods : [];
+		if (!s.has('checkout') || !offered.includes('bank_transfer')) return null;
+		if ((await product.connections.value(s.websiteId, 'payments')) !== null) {
+			// as the cart reads them: a Payments without saved details does not offer the transfer
+			const answer = await product
+				.callProduct(s.websiteId, 'payments', '/v1/bank-transfer', { method: 'GET' })
+				.catch(() => /** @type {const} */ ({ ok: false }));
+			if (!answer.ok) return null;
+			return answer.status === 200 && /** @type {any} */ (answer.body)?.ready === true;
+		}
+		return checkout.bankTransferVia === 'manual' && String(checkout.noteBankTransfer ?? '').trim() !== '';
+	};
+
+	/**
+	 * Whether staff alerts reach someone (P5-18): recipients, or Accounts staff by permission with the Accounts token,
+	 * through Notifications; and the admin page they link to. Null while Staff alerts is off.
+	 * @param {Site} s
+	 */
+	const staffAlertSetup = async (s) => {
+		if (!s.has('staff_alerts')) return { staffAlerted: null, adminUrl: null };
+		const own = await s.values('staff_alerts');
+		const connected = async (/** @type {string} */ name) => (await product.connections.value(s.websiteId, name)) !== null;
+		const listed = Array.isArray(own.recipients) && own.recipients.length > 0;
+		const staff = typeof own.staffPermission === 'string' && own.staffPermission !== '' && (await connected('accounts'));
+		return {
+			staffAlerted: (listed || staff) && (await connected('notifications')),
+			adminUrl: String(own.adminUrl ?? '').trim() !== '',
+		};
+	};
+
+	/**
+	 * Active product and variant fields without their glossary text, while their glossary pages have an address (G7.2);
+	 * null otherwise.
+	 * @param {Site} s @param {WebsiteData} data
+	 */
+	const glossaryGaps = async (s, data) => {
+		if (!s.has('landing_pages') || !String((await s.values('landing_pages')).attributeUrl ?? '')) return null;
+		return data.collection(COLLECTIONS.attributes).countDocuments({
+			websiteId: data.websiteId,
+			on: { $in: ['product', 'variant'] },
+			active: true,
+			'seo.body': { $in: ['', null] },
+		});
+	};
+
+	/**
+	 * The categories shoppers see and the brands, for their SEO checks and empty categories.
+	 * @param {Site} s @param {WebsiteData} data
+	 */
+	const taxonomyOf = async (s, data) => {
+		const hidden = await hiddenFor(s);
+		const [categories, brands] = await Promise.all([
+			data
+				.collection(COLLECTIONS.categories)
+				.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, path: 1, seo: 1 } })
+				.limit(MAX_TAXONOMY)
+				.toArray(),
+			data
+				.collection(COLLECTIONS.brands)
+				.find({ websiteId: data.websiteId }, { projection: { _id: 0, seo: 1 } })
+				.limit(MAX_TAXONOMY)
+				.toArray(),
+		]);
+		return {
+			categories: /** @type {any[]} */ (categories).filter((category) => !hidden.categoryIds.includes(category.id)),
+			brands: /** @type {any[]} */ (brands),
+		};
+	};
+
+	/** GET …/reports/health (E41, P5-18, SEO audit §3.2 A): what needs fixing, with counts and links. @param {any} ctx */
 	const health = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
 		const { lowStock, mediaBaseUrl } = await s.values('catalog');
 		const zones = s.has('delivery_zones') ? await s.values('delivery_zones') : null;
-		const [[facets], business, methods, tags, storage] = await Promise.all([
+		const feeds = s.has('feeds') ? await s.values('feeds') : null;
+		const skuAs = feeds?.skuAs === 'gtin' || feeds?.skuAs === 'mpn' ? feeds.skuAs : 'none';
+		const [[facets], business, methods, tags, storage, bank, alerts, glossary, taxonomy] = await Promise.all([
 			data
 				.collection(COLLECTIONS.products)
-				.aggregate(healthPipeline(data.websiteId, Number(lowStock)))
+				.aggregate(healthPipeline(data.websiteId, Number(lowStock), { domain: s.domain, skuAs }))
 				.toArray(),
 			s.business(),
 			paymentMethods(s, data),
 			badTags(s),
 			product.connections.storage(s.websiteId),
+			bankReady(s),
+			staffAlertSetup(s),
+			glossaryGaps(s, data),
+			taxonomyOf(s, data),
 		]);
 		// images go out on signed links that last an hour while the public address of the images is empty (G1)
 		const shortLived = storage ? !/^https:\/\//.test(String(mediaBaseUrl ?? '')) : null;
 		return healthOf({
 			facets,
+			taxonomy: taxonomyHealth({
+				...taxonomy,
+				stocked: (Array.isArray(facets?.categories) ? facets.categories : []).map((/** @type {any} */ row) =>
+					String(row._id),
+				),
+				domain: s.domain,
+			}),
 			business,
 			domain: s.domain,
 			paymentMethods: methods,
@@ -362,6 +455,14 @@ export const createReports = (product, service) => {
 			shortLived,
 			// the delivery days structured data needs (G5.4), while Delivery zones is on
 			deliveryDays: zones ? daysRange(zones.handlingDays) !== null && daysRange(zones.transitDays) !== null : null,
+			setup: {
+				storage: storage !== null,
+				bankReady: bank,
+				...alerts,
+				feeds: feeds === null ? null : true,
+				missingIdentifiers: feeds?.identifierExists !== 'no',
+				glossaryWithoutText: glossary,
+			},
 		});
 	};
 

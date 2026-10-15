@@ -9,7 +9,7 @@
  * @module
  */
 import { wholeOf } from './admin-kit.js';
-import { faqsEditor, paragraphsOf, richNodes, seoFacts } from './admin-fields.js';
+import { faqsEditor, paragraphsOf, richNodes, seoChecks, seoFacts } from './admin-fields.js';
 import { digitalCard, photosDialog, videoDialog, videoText } from './admin-media.js';
 import { card, deleteEntry, detailHead, masonryOf, yesNo } from './admin-screen.js';
 import { variantLabel } from './admin-taxonomy.js';
@@ -423,7 +423,7 @@ export const productDetail = (kit, product, context, message = '') => {
 						)
 					: kit.text('p', { class: 'muted' }, t('catalogAdmin.nothingYet')),
 			]),
-			card(kit, t('catalogAdmin.seo'), [kit.fieldGrid(seoFacts(kit, product.seo))]),
+			card(kit, t('catalogAdmin.seo'), [kit.fieldGrid(seoFacts(kit, product.seo)), seoChecks(kit, product.seo)]),
 			product.kind === 'digital' && has('digital_goods') ? digitalCard(kit, product) : null,
 		]),
 	];

@@ -15,6 +15,7 @@ import { createId } from '@ss/contracts';
 import { bundleView, checkBundleInput } from '../core/bundles.js';
 import { checkBatchInput, checkCouponInput, couponView, drawCode } from '../core/coupons.js';
 import { checkDealInput, dealView } from '../core/deals.js';
+import { dealScore } from '../core/seo-score.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
 	deleteOffer,
@@ -58,6 +59,20 @@ export const createOfferRoutes = (product, service) => {
 
 	/** @param {any} ctx */
 	const dataOf = async (ctx) => (await service.site(ctx)).data();
+
+	/**
+	 * How an offer is answered: a deal with its SEO score while SEO is on (E42).
+	 * @param {any} ctx @param {OfferCollection} kind
+	 * @returns {Promise<(record: any) => Record<string, unknown>>}
+	 */
+	const viewer = async (ctx, kind) => {
+		const view = KINDS[kind].view;
+		if (kind !== 'deals' || !(await service.site(ctx)).has('seo')) return view;
+		return (record) => {
+			const shown = view(record);
+			return { ...shown, seo: { ...record.seo, ...dealScore(record) } };
+		};
+	};
 
 	/**
 	 * Refuse a scope (or bundle items) naming products, categories or brands that do not exist.
@@ -121,13 +136,13 @@ export const createOfferRoutes = (product, service) => {
 			...(active === undefined ? {} : { active }),
 			...(q ? { q } : {}),
 		});
-		return page.respond(rows.map(KINDS[kind].view), (view) => [view.createdAt, view.id]);
+		return page.respond(rows.map(await viewer(ctx, kind)), (view) => [view.createdAt, view.id]);
 	};
 
 	/** @param {OfferCollection} kind */
 	const read = (kind) => async (/** @type {any} */ ctx) => {
 		const found = await getOffer(await dataOf(ctx), kind, String(ctx.params.id));
-		return found ? KINDS[kind].view(found) : problem('not_found', `No such ${KINDS[kind].name}.`);
+		return found ? (await viewer(ctx, kind))(found) : problem('not_found', `No such ${KINDS[kind].name}.`);
 	};
 
 	/** @param {OfferCollection} kind */
@@ -144,7 +159,7 @@ export const createOfferRoutes = (product, service) => {
 			return codeTaken(error);
 		}
 		await service.log(ctx, `${KINDS[kind].name}.created`, record.id, { label: KINDS[kind].label(record) });
-		return created(KINDS[kind].view(/** @type {any} */ (await getOffer(data, kind, record.id))));
+		return created((await viewer(ctx, kind))(/** @type {any} */ (await getOffer(data, kind, record.id))));
 	};
 
 	/** @param {OfferCollection} kind */
@@ -173,7 +188,7 @@ export const createOfferRoutes = (product, service) => {
 		}
 		if (!changed) return problem('not_found', `No such ${KINDS[kind].name}.`);
 		await service.log(ctx, `${KINDS[kind].name}.updated`, changed.id, { label: KINDS[kind].label(changed) });
-		return KINDS[kind].view(changed);
+		return (await viewer(ctx, kind))(changed);
 	};
 
 	/** @param {OfferCollection} kind */
