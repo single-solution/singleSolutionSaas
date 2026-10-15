@@ -328,14 +328,34 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 		const dry = await send({ dir: source.dir, products, dryRun: true, fetch });
 		expect(dry).toMatchObject({ dryRun: true, ok: false, finished: [] });
 		// read from the old shop, written explicitly even where it equals the built-in default (RT-15)
-		expect(dry.settings.changes.map((change) => [change.key, change.from, change.to, change.source])).toEqual([
-			['checkout.numberPattern', '{prefix}{number}', '{prefix}{year}-{number}', 'built-in'],
-			['checkout.numberPrefix', '', 'EX-', 'built-in'],
-			['catalog.currency', 'USD', 'USD', 'built-in'],
-			['catalog.mediaBaseUrl', '', 'https://cdn.example.com', 'built-in'],
+		expect(dry.settings.changes.map((change) => [change.key, change.source])).toEqual([
+			['checkout.numberPattern', 'built-in'],
+			['checkout.numberPrefix', 'built-in'],
+			['catalog.currency', 'built-in'],
+			['catalog.mediaBaseUrl', 'built-in'],
+			['order_flow', null],
+		]);
+		expect(dry.settings.changes.slice(0, 4).map((change) => [change.from, change.to])).toEqual([
+			['{prefix}{number}', '{prefix}{year}-{number}'],
+			['', 'EX-'],
+			['USD', 'USD'],
+			['', 'https://cdn.example.com'],
+		]);
+		// the old shop's own statuses replace the default flow (K9): orders keep them
+		const flow = /** @type {any} */ (dry.settings.changes[4]);
+		expect(flow.from.statuses.map((/** @type {{ key: string }} */ status) => status.key)).toContain('dispatched');
+		expect(flow.to.statuses.map((/** @type {{ key: string }} */ status) => status.key)).toEqual([
+			'awaiting_payment',
+			'pending',
+			'confirmed',
+			'packed',
+			'shipped',
+			'delivered',
+			'cancelled',
 		]);
 		// a first dry run into an empty website checks each record on its own: what names records of earlier files, or
-		// a setting the run would write first (the order number's form and prefix), is refused until the real run writes them
+		// a setting the run would write first (the order number's form and prefix, the shop's own order statuses), is
+		// refused until the real run writes them
 		const refused = dry.steps.flatMap((step) =>
 			step.failed.map((failed) => [step.file, failed.line, failed.errors.map((error) => error.path)]),
 		);
@@ -356,9 +376,9 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 			],
 			['07-ecommerce.products.ndjson', 2, ['/categoryIds', '/brandId']],
 			['08-ecommerce.deals.ndjson', 1, ['/scope/productIds']],
-			['10-ecommerce.orders.ndjson', 1, ['/number']],
-			['10-ecommerce.orders.ndjson', 2, ['/number']],
-			['10-ecommerce.orders.ndjson', 3, ['/number']],
+			['10-ecommerce.orders.ndjson', 1, ['/number', '/history/2/to', '/history/3/from']],
+			['10-ecommerce.orders.ndjson', 2, ['/number', '/history/0/to', '/history/1/from']],
+			['10-ecommerce.orders.ndjson', 3, ['/number', '/history/0/to', '/history/1/from']],
 			['18-chat.conversations.ndjson', 1, ['/assignedTo']],
 			['19-chat.messages.ndjson', 1, ['/conversationId']],
 			['19-chat.messages.ndjson', 2, ['/conversationId']],

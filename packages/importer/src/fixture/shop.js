@@ -64,6 +64,27 @@ export const shopSource = () => ({
 			orderPrefix: 'EX-',
 			currency: 'USD',
 			imageBase: 'https://cdn.example.com',
+			// the old shop's own order statuses (each with the stage it stands for) and the moves it allowed
+			orderStatuses: [
+				{ key: 'awaiting_payment', name: 'Awaiting payment', stage: 'unpaid' },
+				{ key: 'pending', name: 'Pending', stage: 'new' },
+				{ key: 'confirmed', name: 'Confirmed', stage: 'open' },
+				{ key: 'packed', name: 'Packed', stage: 'packed' },
+				{ key: 'shipped', name: 'Shipped', stage: 'shipped' },
+				{ key: 'delivered', name: 'Delivered', stage: 'delivered' },
+				{ key: 'cancelled', name: 'Cancelled', stage: 'cancelled' },
+			],
+			orderMoves: [
+				['awaiting_payment', 'confirmed'],
+				['awaiting_payment', 'cancelled'],
+				['pending', 'confirmed'],
+				['pending', 'cancelled'],
+				['confirmed', 'packed'],
+				['confirmed', 'cancelled'],
+				['packed', 'shipped'],
+				['packed', 'cancelled'],
+				['shipped', 'delivered'],
+			],
 			updatedAt: at('2026-01-01T00:00:00Z'),
 		},
 	],
@@ -395,22 +416,24 @@ const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 /** @param {unknown} sourceId */
 const hexKey = (sourceId) => String(sourceId);
 
-/** The old shop's order statuses → the keys of the products' default order flow. */
-const STATUS = Object.freeze({
-	pending: 'awaiting_confirmation',
-	awaiting_payment: 'pending_payment',
-	confirmed: 'confirmed',
+/**
+ * The stage each of the old shop's own statuses stands for → the role it has in Ecommerce's order flow (the engine's
+ * fixed status roles). The statuses themselves are the shop's: its keys and names become the website's order flow
+ * (fixed-choices audit K9), so orders keep their own statuses.
+ */
+const STAGE_ROLES = Object.freeze({
+	unpaid: 'awaiting_payment',
+	new: 'awaiting_confirmation',
+	open: 'open',
 	packed: 'packed',
-	shipped: 'dispatched',
+	shipped: 'shipped',
 	delivered: 'delivered',
 	cancelled: 'cancelled',
 });
-/** @param {string} status */
-const statusOf = (status) => /** @type {Record<string, string>} */ (STATUS)[status] ?? status;
 /** The old shop's payment methods → the keys of Ecommerce's payment methods list (IMP-32), with each one's kind. */
 const METHODS = Object.freeze({ cod: 'cod', 'bank-transfer': 'bank_transfer', card: 'online' });
 const KINDS = Object.freeze({ cod: 'on_delivery', bank_transfer: 'pay_first', online: 'gateway' });
-/** The old shop's staff roles → Accounts' ready-made roles. */
+/** The old shop's staff roles → Accounts' owner (the one role every website has) and a ready-made staff role. */
 const STAFF_ROLES = Object.freeze({ admin: 'owner', staff: 'support_staff' });
 
 /**
@@ -695,11 +718,11 @@ export const SHOP_MAPPING = defineMapping({
 						return { method, kind: /** @type {Record<string, string>} */ (KINDS)[method] };
 					})(),
 					payments: paymentsOf(doc, total, ctx),
-					status: statusOf(doc.status),
+					status: doc.status,
 					history: steps.map((step, index) => ({
 						at: iso(step.at),
-						from: index === 0 ? null : statusOf(/** @type {{ status: string }} */ (steps[index - 1]).status),
-						to: statusOf(step.status),
+						from: index === 0 ? null : /** @type {{ status: string }} */ (steps[index - 1]).status,
+						to: step.status,
 						by: step.by,
 						note: '',
 					})),
@@ -921,6 +944,21 @@ export const SHOP_MAPPING = defineMapping({
 					'catalog.currency': doc.currency,
 					'catalog.mediaBaseUrl': doc.imageBase,
 				},
+				// its own statuses and moves are the website's order flow (written before the orders)
+				...(Array.isArray(doc.orderStatuses)
+					? {
+							lists: {
+								order_flow: {
+									statuses: doc.orderStatuses.map((/** @type {Record<string, string>} */ status) => ({
+										key: status.key,
+										label: status.name,
+										role: /** @type {Record<string, string>} */ (STAGE_ROLES)[String(status.stage)] ?? 'open',
+									})),
+									moves: (doc.orderMoves ?? []).map((/** @type {[string, string]} */ [from, to]) => ({ from, to })),
+								},
+							},
+						}
+					: {}),
 			};
 		return plan;
 	},

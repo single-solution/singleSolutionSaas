@@ -125,8 +125,8 @@ describe('the example shop (fixture)', () => {
 			history: [
 				{ from: null, to: 'confirmed' },
 				{ to: 'packed' },
-				{ to: 'dispatched' },
-				{ from: 'dispatched', to: 'delivered' },
+				{ to: 'shipped' },
+				{ from: 'shipped', to: 'delivered' },
 			],
 			deliveredAt: '2026-07-04T12:00:00.000Z',
 			promotions: { pointsEarned: 25, pointsCredited: true, released: false },
@@ -136,7 +136,7 @@ describe('the example shop (fixture)', () => {
 			customer: { userId: '', customerId: `cus_${SHOP_IDS.guest}` },
 			payment: { method: 'bank_transfer' },
 			payments: [{ method: 'bank_transfer', amount: 3000, at: '2026-08-10T12:00:00.000Z' }],
-			history: [{ to: 'pending_payment' }, { from: 'pending_payment', to: 'confirmed' }],
+			history: [{ to: 'awaiting_payment' }, { from: 'awaiting_payment', to: 'confirmed' }],
 		});
 		expect(cancelled).toMatchObject({ payments: [], stockHeld: false, promotions: { released: true }, deliveredAt: null });
 		expect(await records('ecommerce.loyalty')).toEqual([
@@ -180,16 +180,24 @@ describe('the example shop (fixture)', () => {
 				source: { 'www.google.com': { c: 70 }, '(direct)': { c: 50 } },
 			},
 		});
-		expect(JSON.parse(await readFile(path.join(dir, SETTINGS_FILE), 'utf8'))).toEqual({
-			ecommerce: {
-				settings: {
-					'checkout.numberPattern': '{prefix}{year}-{number}',
-					'checkout.numberPrefix': 'EX-',
-					'catalog.currency': 'USD',
-					'catalog.mediaBaseUrl': 'https://cdn.example.com',
-				},
-			},
+		// the old shop's own statuses become the website's order flow, each with the role of its stage (K9)
+		const plan = JSON.parse(await readFile(path.join(dir, SETTINGS_FILE), 'utf8'));
+		expect(plan.ecommerce.settings).toEqual({
+			'checkout.numberPattern': '{prefix}{year}-{number}',
+			'checkout.numberPrefix': 'EX-',
+			'catalog.currency': 'USD',
+			'catalog.mediaBaseUrl': 'https://cdn.example.com',
 		});
+		expect(plan.ecommerce.lists.order_flow.statuses).toEqual([
+			{ key: 'awaiting_payment', label: 'Awaiting payment', role: 'awaiting_payment' },
+			{ key: 'pending', label: 'Pending', role: 'awaiting_confirmation' },
+			{ key: 'confirmed', label: 'Confirmed', role: 'open' },
+			{ key: 'packed', label: 'Packed', role: 'packed' },
+			{ key: 'shipped', label: 'Shipped', role: 'shipped' },
+			{ key: 'delivered', label: 'Delivered', role: 'delivered' },
+			{ key: 'cancelled', label: 'Cancelled', role: 'cancelled' },
+		]);
+		expect(plan.ecommerce.lists.order_flow.moves).toContainEqual({ from: 'packed', to: 'shipped' });
 		const idmap = JSON.parse(await readFile(path.join(dir, IDMAP_FILE), 'utf8'));
 		expect(idmap[`customers/${SHOP_IDS.guestAgain}`]).toBe(`cus_${SHOP_IDS.guest}`);
 		expect(idmap[`orders/${SHOP_IDS.confirmed}`]).toBe(`ord_${SHOP_IDS.confirmed}`);
