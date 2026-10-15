@@ -10373,14 +10373,14 @@
 							"staff",
 							"system"
 						],
-						"description": "system: a bot message (flows, handoff, office hours, the unavailable message), signed with the bot name."
+						"description": "system: a bot message (flows, handoff, office hours, the unavailable message), signed with the bot's name (the widget text chat.botName)."
 					},
 					"name": {
 						"type": [
 							"string",
 							"null"
 						],
-						"description": "The staff member's name, or the bot name; null for the visitor and for a reply of your server without SS-Actor headers (show your widget text chat.staff)."
+						"description": "The staff member's name, or the bot's name (the widget text chat.botName); null for the visitor and for a reply of your server without SS-Actor headers (show your widget text chat.staff)."
 					},
 					"text": {
 						"type": "string",
@@ -10958,14 +10958,14 @@
 							"staff",
 							"system"
 						],
-						"description": "system: a bot message (flows, handoff, office hours, the unavailable message), signed with the bot name."
+						"description": "system: a bot message (flows, handoff, office hours, the unavailable message), signed with the bot's name (the widget text chat.botName)."
 					},
 					"name": {
 						"type": [
 							"string",
 							"null"
 						],
-						"description": "The staff member's name, or the bot name; null for the visitor and for a reply of your server without SS-Actor headers (show your widget text chat.staff)."
+						"description": "The staff member's name, or the bot's name (the widget text chat.botName); null for the visitor and for a reply of your server without SS-Actor headers (show your widget text chat.staff)."
 					},
 					"text": {
 						"type": "string",

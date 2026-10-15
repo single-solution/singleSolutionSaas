@@ -73,7 +73,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 	const doc = win.document;
 	const memory = createMemory({ win, now: clock.now });
 	const make = fieldMaker(doc, 'ss-chat');
-	const botName = s.look.botName || t('chat.title');
+	const botName = t('chat.botName');
 	const fileTypes = s.attachments.types.filter((type) => ATTACHMENT_TYPES.includes(type));
 	const maxBytes = Math.min(s.attachments.maxBytes || MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_BYTES);
 	visitor.rememberFor(s.guests.rememberDays);

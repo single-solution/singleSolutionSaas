@@ -174,7 +174,6 @@ export const createAdmin = (product, service) => {
 		const flows = on.includes('leads_flows') ? await product.lists.get(websiteId, 'flows') : [];
 		return {
 			look: {
-				botName: look.botName,
 				avatarUrl: /^https:\/\//.test(String(look.avatarUrl)) ? look.avatarUrl : '',
 				launcherPosition: look.launcherPosition,
 				launcherStyle: look.launcherStyle,

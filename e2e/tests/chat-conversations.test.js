@@ -542,7 +542,7 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 	it('C4: the AI answers the message that asked for a person first, then stays quiet, then reassures after 3 minutes', async () => {
 		await configure('chat', {
 			'handoff.answerFirst': true,
-			'handoff.notice': '',
+			'handoff.showNotice': false,
 			'handoff.showButton': false,
 			'handoff.reassureAfterMinutes': 3,
 		});

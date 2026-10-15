@@ -20,7 +20,7 @@ import { CHECKS } from '../core/widgets.js';
 /**
  * The settings Chat adds to the widget config (`hooks.widgetConfig`); each part matters only while its feature is on.
  * @typedef {object} ChatSettings
- * @property {{ botName: string, avatarUrl: string, launcherPosition: string, launcherStyle: string, windowStyle: string,
+ * @property {{ avatarUrl: string, launcherPosition: string, launcherStyle: string, windowStyle: string,
  *   fullScreenOnMobile: boolean, hideOnPages: string[], showTimes: boolean }} look `showTimes`: each message's time and
  *   a divider for each day (C8)
  * @property {{ messageLimit: number, rememberDays: number, contactCapture: string }} guests
@@ -58,7 +58,6 @@ import { CHECKS } from '../core/widgets.js';
 /** @type {ChatSettings} */
 const DEFAULTS = {
 	look: {
-		botName: '',
 		avatarUrl: '',
 		launcherPosition: 'bottom-right',
 		launcherStyle: 'round',

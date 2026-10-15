@@ -18,6 +18,8 @@
 	"chat.welcomeSignedIn": "Hi! Ask about anything you need — we are here to help.",
 	"chat.aiLabel": "AI assistant",
 	"chat.staff": "Team",
+	"chat.botName": "Assistant",
+	"chat.handoffNotice": "A person from our team will reply here.",
 	"chat.typing": "Typing…",
 	"chat.seen": "Seen",
 	"chat.earlier": "Show earlier messages",

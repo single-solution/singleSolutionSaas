@@ -53,9 +53,14 @@ describe('AI replies', () => {
 		// the default style (C15)
 		expect(prompt).toContain('How to write: Be friendly, short and accurate. Keep answers to a few short sentences.');
 		await sys.setting('ai_replies', 'style', 'Formal and detailed.');
+		// the bot's name is a widget text (C16)
+		expect(prompt).toContain('Your name is Assistant.');
+		await sys.text('chat.botName', 'Lumi');
 		await v('POST', '/v1/chat/messages', { text: 'Are returns free?' });
 		expect(sys.aiCalls()[1].messages[0].content).toContain('Returns are free within thirty days.');
 		expect(sys.aiCalls()[1].messages[0].content).toContain('How to write: Formal and detailed.');
+		expect(sys.aiCalls()[1].messages[0].content).toContain('Your name is Lumi.');
+		expect((await v('GET', '/v1/chat')).json.messages.at(-1).name).toBe('Lumi');
 	});
 
 	it('calls the merchant’s webhook tool, signed with the tool signing secret', async () => {

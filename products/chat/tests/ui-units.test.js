@@ -233,8 +233,10 @@ describe('createVisitor', () => {
 
 describe('common', () => {
 	it('fills settings with defaults', () => {
-		const settings = settingsOf({ settings: /** @type {any} */ ({ look: { botName: 'Bo' }, signInUrl: '/in' }) });
-		expect(settings.look.botName).toBe('Bo');
+		const settings = settingsOf({
+			settings: /** @type {any} */ ({ look: { avatarUrl: 'https://cdn.test/a.png' }, signInUrl: '/in' }),
+		});
+		expect(settings.look.avatarUrl).toBe('https://cdn.test/a.png');
 		expect(settings.look.launcherPosition).toBe('bottom-right');
 		expect(settings.signInUrl).toBe('/in');
 		expect(settings.guests.rememberDays).toBe(90);

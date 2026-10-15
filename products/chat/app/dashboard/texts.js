@@ -32,9 +32,12 @@ export const TEXTS = dashboardTexts({
 			},
 			look: {
 				title: 'Widget look',
-				help: 'Bot name, avatar, launcher and window of the chat widget, its theme and custom CSS, and how money and dates look.',
+				help: 'Avatar, launcher and window of the chat widget, its theme and custom CSS, and how money and dates look.',
 			},
-			texts: { title: 'Texts', help: 'Every word the widgets show, welcome messages included.' },
+			texts: {
+				title: 'Texts',
+				help: 'Every word the widgets show: the bot’s name, the welcome messages and the handoff notice included.',
+			},
 			guests: { title: 'Guests', help: 'Chatting without signing in, and signing in to chat.' },
 			proactive: {
 				title: 'Proactive',

@@ -26,7 +26,7 @@ describe('handoff options (C4)', () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'inbox', 'handoff']);
 		await sys.connect('ai', AI_KEY);
 		await sys.setting('handoff', 'answerFirst', true);
-		await sys.setting('handoff', 'notice', '');
+		await sys.setting('handoff', 'showNotice', false);
 		await sys.setting('handoff', 'showButton', false);
 		await sys.setting('handoff', 'reassureAfterMinutes', 3);
 		sys.ai({ text: 'Our lamps come with a year of warranty.' });
@@ -62,10 +62,14 @@ describe('handoff options (C4)', () => {
 	it('without answerFirst the chat goes to a person at once with the notice', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'ai_replies', 'inbox', 'handoff']);
 		await sys.connect('ai', AI_KEY);
-		await sys.setting('handoff', 'notice', 'Hold on, a person is coming.');
+		// the notice is a widget text (C16), and the system message carries the bot's name of the widget texts
+		await sys.text('chat.handoffNotice', 'Hold on, a person is coming.');
+		await sys.text('chat.botName', 'Lumi');
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'talk to someone' });
-		expect(authors((await v('GET', '/v1/chat')).json).slice(1, 2)).toEqual([['system', 'Hold on, a person is coming.']]);
+		const messages = (await v('GET', '/v1/chat')).json.messages;
+		expect(authors({ messages }).slice(1, 2)).toEqual([['system', 'Hold on, a person is coming.']]);
+		expect(messages[1].name).toBe('Lumi');
 		expect(sys.aiCalls()).toHaveLength(0);
 	});
 });

@@ -68,7 +68,8 @@ const keepGuest = () =>
 
 /**
  * @param {{ features?: string[], settings?: Record<string, any>, routes?: Record<string, import('./ui-helpers.js').Route>,
- *   token?: string | null, path?: string, look?: { format?: Record<string, unknown>, timeZone?: string } }} [input]
+ *   token?: string | null, path?: string, look?: { format?: Record<string, unknown>, timeZone?: string },
+ *   texts?: Record<string, string> }} [input]
  */
 const start = async ({
 	features = ['visitor_chat', 'guest_chat'],
@@ -77,11 +78,16 @@ const start = async ({
 	token = 'bt',
 	path = '/products/lamp',
 	look = {},
+	texts = {},
 } = {}) => {
 	window.history.replaceState(null, '', path);
 	document.title = 'Lamp page';
 	const time = clock();
-	const server = serve({ 'GET /v1/widget/config': () => answer(200, configOf(features, settings, look)), ...routes });
+	const config = configOf(features, settings, look);
+	const server = serve({
+		'GET /v1/widget/config': () => answer(200, { ...config, texts: { ...config.texts, ...texts } }),
+		...routes,
+	});
 	const api = startWidget({ window, script: script(token), ...time });
 	await api.ready;
 	await flush();
@@ -125,11 +131,12 @@ describe('starting', () => {
 					launcherPosition: 'bottom-left',
 					windowStyle: 'side_panel',
 					fullScreenOnMobile: false,
-					botName: 'Bo',
 					avatarUrl: 'https://cdn.test/a.png',
 				},
 				guests: { messageLimit: 5 },
 			},
+			// the bot's name is a widget text (C16)
+			texts: { 'chat.botName': 'Bo' },
 		});
 		expect($('.chat').dataset.position).toBe('bottom-left');
 		expect($('.chat').dataset.style).toBe('side_panel');
@@ -153,7 +160,8 @@ describe('talking', () => {
 		let polls = 0;
 		const { $, root, server, time, api, type } = await start({
 			features: ['visitor_chat', 'guest_chat', 'ai_replies', 'typing_receipts'],
-			settings: { look: { botName: 'Bo' }, ai: { showLabel: true }, guests: { messageLimit: 0 } },
+			settings: { ai: { showLabel: true }, guests: { messageLimit: 0 } },
+			texts: { 'chat.botName': 'Bo' },
 			routes: {
 				'POST /v1/chat/messages': () =>
 					answer(201, {

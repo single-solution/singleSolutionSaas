@@ -117,8 +117,12 @@ describe('widgets and docs', () => {
 		const config = await sys.call('GET', '/v1/widget/config', { token: sys.browser, origin: ORIGIN });
 		expect(config.status).toBe(200);
 		expect(config.json.texts['chat.aiUnavailable']).toBe('Sorry, I cannot answer right now.');
+		// the bot's name and the handoff notice are widget texts (C16)
+		expect(config.json.texts['chat.botName']).toBe('Assistant');
+		expect(config.json.texts['chat.handoffNotice']).toBe('A person from our team will reply here.');
+		expect(config.json.settings.look.botName).toBeUndefined();
 		expect(config.json.settings).toMatchObject({
-			look: { botName: 'Assistant', avatarUrl: '', launcherPosition: 'bottom-right' },
+			look: { avatarUrl: '', launcherPosition: 'bottom-right' },
 			guests: { messageLimit: 5, rememberDays: 90, contactCapture: 'never' },
 			signInUrl: '',
 			proactive: {

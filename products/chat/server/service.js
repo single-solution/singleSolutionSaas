@@ -373,14 +373,15 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * A bot message (flows, handoff, office hours, the AI-unavailable message), signed with the bot name.
+	 * A bot message (flows, handoff, office hours, the AI-unavailable message), signed with the bot's name (the widget
+	 * text `chat.botName`, C16).
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 * @param {string} text
 	 * @param {{ buttons?: string[] }} [extra]
 	 */
 	const botMessage = async (s, c, text, extra = {}) => {
-		const { botName } = await s.values('visitor_chat');
+		const botName = (await s.texts())['chat.botName'];
 		return append(s, c, { author: 'system', text, name: String(botName), ...extra });
 	};
 
@@ -739,7 +740,7 @@ export const createService = (product) => {
 	 */
 	const sendTranscript = async (s, c, email) => {
 		const texts = await s.texts();
-		const { botName } = await s.values('visitor_chat');
+		const botName = texts['chat.botName'];
 		/** @param {MessageRecord} m */
 		const lineOf = (m) => {
 			const who =

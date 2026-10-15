@@ -10,7 +10,7 @@
 				"type": "string",
 				"maxLength": 100
 			},
-			"description": "Any language. The visitor can also use the Talk to a person button."
+			"description": "In each language your visitors write in. The visitor can also use the Talk to a person button."
 		},
 		"keywords": {
 			"type": "array",
@@ -46,12 +46,11 @@
 			"default": false,
 			"description": "Then the chat goes to a person. Off: it goes to a person at once."
 		},
-		"notice": {
-			"type": "string",
-			"title": "Handoff notice",
-			"default": "A person from our team will reply here.",
-			"maxLength": 500,
-			"description": "Shown to the visitor when the chat goes to a person. Empty = no notice."
+		"showNotice": {
+			"type": "boolean",
+			"title": "Tell the visitor when the chat goes to a person",
+			"default": true,
+			"description": "With the handoff notice of your widget texts (chat.handoffNotice). Outside office hours the visitor is told when staff are back."
 		},
 		"showButton": {
 			"type": "boolean",

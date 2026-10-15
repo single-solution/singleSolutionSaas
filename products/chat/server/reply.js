@@ -231,8 +231,14 @@ export const createReply = (product, service) => {
 		);
 		const texts = await s.texts();
 		const hours = await service.officeHours(s);
-		const { notice } = await s.values('handoff');
-		const said = hours && !hours.open ? await service.closedText(s, hours) : String(notice ?? '').trim();
+		const { showNotice } = await s.values('handoff');
+		// the handoff notice is a widget text (C16); outside office hours, when staff are back
+		const said =
+			hours && !hours.open
+				? await service.closedText(s, hours)
+				: showNotice === true
+					? String(texts['chat.handoffNotice'] ?? '').trim()
+					: '';
 		if (said) current = (await service.botMessage(s, current, said)).conversation;
 		if (current.visitor.kind === 'guest' && !current.email && !current.phone)
 			current = (await service.botMessage(s, current, String(texts['chat.contactAsk']))).conversation;
@@ -837,7 +843,7 @@ export const createReply = (product, service) => {
 		/** @type {import('../core/shop.js').ProductCard[]} */
 		let cards = [];
 		if (allowed && last) {
-			const { botName } = await s.values('visitor_chat');
+			const botName = (await s.texts())['chat.botName'];
 			const tools = reassure ? null : await toolsOf(s, c, visitor, verified);
 			const system = buildSystemPrompt({
 				botName: String(botName),
@@ -903,7 +909,7 @@ export const createReply = (product, service) => {
 			return settle();
 		}
 		const texts = await s.texts();
-		const { botName } = await s.values('visitor_chat');
+		const botName = (await s.texts())['chat.botName'];
 		/** Post an answer as the assistant: markdown, split into bubbles, the cards on the last one. @param {string[]} parts */
 		const post = async (parts) => {
 			let current = c;

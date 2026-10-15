@@ -2,21 +2,12 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
-		"botName": {
-			"type": "string",
-			"title": "Bot name",
-			"default": "Assistant",
-			"maxLength": 60,
-			"x-ui": {
-				"group": "Branding"
-			}
-		},
 		"avatarUrl": {
 			"type": "string",
 			"title": "Avatar (https image URL)",
 			"default": "",
 			"maxLength": 500,
-			"description": "Leave empty for the initial of the bot name.",
+			"description": "Leave empty for the first letter of the bot's name (the widget text chat.botName).",
 			"x-ui": {
 				"group": "Branding"
 			}
