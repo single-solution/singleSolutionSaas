@@ -1,5 +1,5 @@
 /**
- * Sample records shaped as Sisters Boutique keeps them (`@ss/importer/fixture`; SB's Mongoose models at 8f809d8:
+ * Sample records shaped as Sisters Boutique keeps them (SB's Mongoose models at 8f809d8:
  * `packages/db/src/models`), with neutral fake values (no real names, phones or email addresses), for the tests of
  * the `sisters-boutique` mapping and any run through the real products. It holds each kind SB has and the edge cases
  * the re-audit found: a guest saved twice and a guest who later became a member (merged), a staff phone a member has,

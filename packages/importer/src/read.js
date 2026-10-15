@@ -4,8 +4,8 @@
  * the id map (`idmap.json`: `<source>/<hex>` → the key of the record it became, merged documents pointing at the record
  * they joined), the website's settings when the mapping reads them (`settings.json`) and `manifest.json` (what was
  * read, in import order, with the verification sums; `send` and `verify` work from it). The files make dry runs and
- * diffs possible and re-runs idempotent; secrets that must never touch the disk are sent by a mapping straight to the
- * products.
+ * diffs possible and re-runs idempotent. A mapping reads no secret (keys and tokens are entered by hand in the products),
+ * but the files hold store data: they stay out of the repository.
  *
  * A target's records stay in memory from its first step to its last (merges can reach back), then go to its file.
  * @module

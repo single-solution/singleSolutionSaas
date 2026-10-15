@@ -29,7 +29,7 @@ import { readManifest } from './send.js';
  */
 export const verify = async ({ dir, products, fetch = globalThis.fetch }) => {
 	const manifest = await readManifest(dir);
-	/** @type {Map<string, { collections: Record<string, number>, imported: Record<string, number> | null, totals: Record<string, number> }>} */
+	/** @type {Map<string, { collections: Record<string, number>, imported: Record<string, number>, totals: Record<string, number> }>} */
 	const statuses = new Map();
 	/** @param {string} product */
 	const statusOf = async (product) => {
@@ -38,7 +38,7 @@ export const verify = async ({ dir, products, fetch = globalThis.fetch }) => {
 		const status = await callProduct(fetch, targetOf(products, product), 'GET', '/v1/import/status');
 		const read = {
 			collections: status?.collections ?? {},
-			imported: status?.imported ?? null,
+			imported: status?.imported ?? {},
 			totals: status?.totals ?? {},
 		};
 		statuses.set(product, read);
@@ -51,8 +51,7 @@ export const verify = async ({ dir, products, fetch = globalThis.fetch }) => {
 	for (const target of manifest.targets) {
 		const status = await statusOf(target.product);
 		const stored = countOf(status.collections[target.collection]);
-		// a product without import counts: every record of the collection
-		const imported = status.imported ? countOf(status.imported[target.collection]) : stored;
+		const imported = countOf(status.imported[target.collection]);
 		const counted = target.countPath
 			? Number((await callProduct(fetch, targetOf(products, target.product), 'GET', target.countPath))?.count)
 			: null;

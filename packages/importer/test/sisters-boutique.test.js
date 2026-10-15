@@ -2,7 +2,7 @@ import { ObjectId } from 'mongodb';
 import { afterEach, describe, expect, it } from 'vitest';
 import { send, verify } from '../src/index.js';
 import { MAPPINGS } from '../src/mappings/index.js';
-import { SB_IDS, sbHex } from '../src/fixture/index.js';
+import { SB_IDS, sbHex } from '../src/mappings/sisters-boutique/fixture.js';
 import {
 	BY_HAND,
 	DEAL_HOURS_SHIFT_MINUTES,
