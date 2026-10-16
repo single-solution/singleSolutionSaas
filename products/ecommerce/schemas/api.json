@@ -11983,6 +11983,10 @@
 				"jsonLd": {
 					"type": "string",
 					"description": "The JSON-LD (DefinedTerm, and a FAQPage with the seo setting faqMarkup on) as text safe to put in a script tag."
+				},
+				"products": {
+					"$ref": "#/components/schemas/ShopProductPage",
+					"description": "Only with products=1: one page of the products that carry the field, or with value that value of it, as the shop listing's cards (facets is null). It pages like the listing: nextCursor and hasMore, page, count=1 for total."
 				}
 			}
 		},
@@ -12181,6 +12185,10 @@
 				"jsonLd": {
 					"type": "string",
 					"description": "The JSON-LD (DefinedTerm, and a FAQPage with the seo setting faqMarkup on) as text safe to put in a script tag."
+				},
+				"products": {
+					"$ref": "#/components/schemas/ShopProductPage",
+					"description": "Only with products=1: one page of the products with a variant of the grade, as the shop listing's cards (facets is null). It pages like the listing: nextCursor and hasMore, page, count=1 for total."
 				}
 			}
 		},
@@ -29292,6 +29300,56 @@
 	"GET /v1/seo/attributes/:slug": {
 		"summary": "An attribute's glossary page",
 		"description": ":slug is the attribute's slug (any case) or id: the attribute for every category with it, else the first defined for a category (E45). Its own glossary SEO, else the landing_pages patterns attributeTitle and attributeDescription. canonical is the landing_pages setting attributeUrl with {slug} and {category} (the attribute's own category, if any); without it, or without text of its own (its SEO body), the page is noindex, follow. 404 not_found for an unknown or inactive attribute. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"products": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "1: add products, a page of the products that carry the field, as the shop listing's cards."
+				},
+				"value": {
+					"type": "string",
+					"description": "With products: one value of the field (several, comma-separated); without it, every product that has a value of the field. A field shoppers do not filter by lists no products."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 60,
+					"description": "With products: products per page (the catalog setting pageSize when left out)."
+				},
+				"cursor": {
+					"type": "string",
+					"description": "With products: the nextCursor of the previous page."
+				},
+				"page": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 500,
+					"description": "With products: a page number instead of the cursor."
+				},
+				"count": {
+					"type": "string",
+					"enum": ["true", "1", "false", "0"],
+					"description": "With products: true (or 1) adds total and capped to products."
+				},
+				"sort": {
+					"type": "string",
+					"enum": ["newest", "price_asc", "price_desc", "top", "sold_asc", "rating", "name", "updated"],
+					"default": "newest",
+					"description": "With products: the order, as the listing sorts."
+				},
+				"variants": {
+					"type": "string",
+					"enum": ["true", "1", "false", "0"],
+					"description": "With products: true (or 1) gives each card its active variants."
+				},
+				"brand": {
+					"type": "string",
+					"description": "With products: a brand id or slug (several, comma-separated). The listing's other filters (minPrice, maxPrice, inStock, featured, attr.<slug>) work too."
+				}
+			}
+		},
 		"response": {
 			"$ref": "#/components/schemas/SeoAttribute"
 		}
@@ -29299,6 +29357,52 @@
 	"GET /v1/seo/grades/:key": {
 		"summary": "A grade's glossary page",
 		"description": "The grade entry for every category with the key, else the first defined for a category (E45). canonical is the landing_pages setting gradeUrl with {key} and {category} (the entry's own category, if any); without it, or without text of its own (its SEO body), the page is noindex, follow. 404 not_found when Condition grades and unit numbers is off, or for an unknown grade or one not offered (active false). The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"products": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "1: add products, a page of the products with a variant of the grade, as the shop listing's cards."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 60,
+					"description": "With products: products per page (the catalog setting pageSize when left out)."
+				},
+				"cursor": {
+					"type": "string",
+					"description": "With products: the nextCursor of the previous page."
+				},
+				"page": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 500,
+					"description": "With products: a page number instead of the cursor."
+				},
+				"count": {
+					"type": "string",
+					"enum": ["true", "1", "false", "0"],
+					"description": "With products: true (or 1) adds total and capped to products."
+				},
+				"sort": {
+					"type": "string",
+					"enum": ["newest", "price_asc", "price_desc", "top", "sold_asc", "rating", "name", "updated"],
+					"default": "newest",
+					"description": "With products: the order, as the listing sorts."
+				},
+				"variants": {
+					"type": "string",
+					"enum": ["true", "1", "false", "0"],
+					"description": "With products: true (or 1) gives each card its active variants."
+				},
+				"brand": {
+					"type": "string",
+					"description": "With products: a brand id or slug (several, comma-separated). The listing's other filters (minPrice, maxPrice, inStock, featured, attr.<slug>) work too."
+				}
+			}
+		},
 		"response": {
 			"$ref": "#/components/schemas/SeoGrade"
 		}
@@ -29519,6 +29623,56 @@
 	"GET /v1/seo/attributes/:category/:slug": {
 		"summary": "An attribute's glossary page in a category",
 		"description": ":category is a category's id or slug (an earlier slug too), :slug the attribute's slug (any case) or id: the attribute defined for that category or the nearest category above it first, else the one for every category that applies to it (no categories named, or the category or one above it named) (E45). As GET /v1/seo/attributes/:slug otherwise, with {category} of attributeUrl this category's slug. 404 not_found for an unknown or hidden category, or no active attribute for it. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"products": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "1: add products, a page of the products that carry the field, as the shop listing's cards."
+				},
+				"value": {
+					"type": "string",
+					"description": "With products: one value of the field (several, comma-separated); without it, every product that has a value of the field. A field shoppers do not filter by lists no products."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 60,
+					"description": "With products: products per page (the catalog setting pageSize when left out)."
+				},
+				"cursor": {
+					"type": "string",
+					"description": "With products: the nextCursor of the previous page."
+				},
+				"page": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 500,
+					"description": "With products: a page number instead of the cursor."
+				},
+				"count": {
+					"type": "string",
+					"enum": ["true", "1", "false", "0"],
+					"description": "With products: true (or 1) adds total and capped to products."
+				},
+				"sort": {
+					"type": "string",
+					"enum": ["newest", "price_asc", "price_desc", "top", "sold_asc", "rating", "name", "updated"],
+					"default": "newest",
+					"description": "With products: the order, as the listing sorts."
+				},
+				"variants": {
+					"type": "string",
+					"enum": ["true", "1", "false", "0"],
+					"description": "With products: true (or 1) gives each card its active variants."
+				},
+				"brand": {
+					"type": "string",
+					"description": "With products: a brand id or slug (several, comma-separated). The listing's other filters (minPrice, maxPrice, inStock, featured, attr.<slug>) work too."
+				}
+			}
+		},
 		"response": {
 			"$ref": "#/components/schemas/SeoAttribute"
 		}
@@ -29526,6 +29680,52 @@
 	"GET /v1/seo/grades/:category/:key": {
 		"summary": "A grade's glossary page in a category",
 		"description": ":category is a category's id or slug (an earlier slug too): the grade as that category, or the nearest category above it, defines it first, else the entry for every category that applies to it (E45). As GET /v1/seo/grades/:key otherwise, with {category} of gradeUrl this category's slug. 404 not_found when Condition grades and unit numbers is off, for an unknown or hidden category, or no offered grade with the key for it. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"products": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "1: add products, a page of the products with a variant of the grade, as the shop listing's cards."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 60,
+					"description": "With products: products per page (the catalog setting pageSize when left out)."
+				},
+				"cursor": {
+					"type": "string",
+					"description": "With products: the nextCursor of the previous page."
+				},
+				"page": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 500,
+					"description": "With products: a page number instead of the cursor."
+				},
+				"count": {
+					"type": "string",
+					"enum": ["true", "1", "false", "0"],
+					"description": "With products: true (or 1) adds total and capped to products."
+				},
+				"sort": {
+					"type": "string",
+					"enum": ["newest", "price_asc", "price_desc", "top", "sold_asc", "rating", "name", "updated"],
+					"default": "newest",
+					"description": "With products: the order, as the listing sorts."
+				},
+				"variants": {
+					"type": "string",
+					"enum": ["true", "1", "false", "0"],
+					"description": "With products: true (or 1) gives each card its active variants."
+				},
+				"brand": {
+					"type": "string",
+					"description": "With products: a brand id or slug (several, comma-separated). The listing's other filters (minPrice, maxPrice, inStock, featured, attr.<slug>) work too."
+				}
+			}
+		},
 		"response": {
 			"$ref": "#/components/schemas/SeoGrade"
 		}

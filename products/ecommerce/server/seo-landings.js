@@ -71,7 +71,8 @@ import {
 import { gradesByKey, gradesFor } from '../core/grades.js';
 import { shownRange } from '../core/catalog-views.js';
 import { listingHtml, say } from '../core/seo-html.js';
-import { createListingFilter } from './catalog-shop.js';
+import { createCatalogCommon } from './catalog-common.js';
+import { createListingFilter, createProductsPage } from './catalog-shop.js';
 import { conditional } from './http-cache.js';
 import { createShownPrices } from './shown-prices.js';
 import { hiddenFor } from './catalog-visibility.js';
@@ -212,6 +213,7 @@ export const createLandings = (product, service, media) => {
 	};
 
 	const listingFilter = createListingFilter(service);
+	const productsPage = createProductsPage(product, service, createCatalogCommon(product, service));
 	const shownPrices = createShownPrices(service);
 
 	/**
@@ -970,6 +972,37 @@ export const createLandings = (product, service, media) => {
 		record.categoryIds.length === 0 || record.categoryIds.some((id) => id === category.id || category.path.includes(id));
 
 	/**
+	 * The products a glossary page lists, with `products=1` (none otherwise): one page of the shop listing's own cards
+	 * (paged, counted, sorted and with variants as it reads limit, cursor, page, count, sort and variants), of the
+	 * page's category and what the page names: the products that carry a field (one of its values with `value`), or have
+	 * a variant of a grade. A field only staff see lists none.
+	 * @param {any} ctx @param {Site} s @param {WebsiteData} data
+	 * @param {{ category: CategoryRecord | null, attribute?: { id: string }, grade?: { key: string } }} page
+	 */
+	const glossaryProducts = async (ctx, s, data, page) => {
+		const asked = ctx.query.products;
+		if (asked !== '1' && asked !== 'true') return {};
+		return {
+			products: await productsPage(s, data, ctx.query, {
+				facets: false,
+				query: (read) => ({
+					...read,
+					// a glossary page is not a search
+					q: '',
+					category: page.category?.id ?? null,
+					attributes: page.attribute
+						? [
+								...read.attributes.filter((a) => a.id !== page.attribute?.id),
+								{ id: page.attribute.id, values: listOf(ctx.query.value) },
+							]
+						: read.attributes,
+					grades: page.grade ? [page.grade.key] : read.grades,
+				}),
+			}),
+		};
+	};
+
+	/**
 	 * The head of a glossary page: its own SEO copy, else the merchant's patterns (`pattern`, attributes and grades;
 	 * SG-20).
 	 * @param {Site} s
@@ -1050,6 +1083,7 @@ export const createLandings = (product, service, media) => {
 			values,
 			categoryId: attribute.categoryId,
 			category: page ? { id: page.id, slug: page.slug, name: page.name } : null,
+			...(await glossaryProducts(ctx, s, data, { category: page, attribute })),
 			...(await glossaryHead(s, {
 				name: attribute.name,
 				url: await glossaryUrl(s, 'attributeUrl', { slug, category: page?.slug ?? '' }),
@@ -1106,6 +1140,7 @@ export const createLandings = (product, service, media) => {
 			categoryId: grade.categoryId,
 			categoryIds: grade.categoryIds,
 			category: page ? { id: page.id, slug: page.slug, name: page.name } : null,
+			...(await glossaryProducts(ctx, s, data, { category: page, grade })),
 			...(await glossaryHead(s, {
 				name: grade.label,
 				url: await glossaryUrl(s, 'gradeUrl', { key: grade.key, category: page?.slug ?? '' }),

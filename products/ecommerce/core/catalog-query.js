@@ -98,7 +98,8 @@ export const listOf = (value) =>
  * @property {number | null} minPrice minor units
  * @property {number | null} maxPrice minor units
  * @property {boolean} inStock
- * @property {Array<{ id: string, values: string[] }>} attributes by attribute id or slug (`attr.<slug>`)
+ * @property {Array<{ id: string, values: string[] }>} attributes by attribute id or slug (`attr.<slug>`); no values
+ *   (never read from a URL): the products that carry the field, whatever the value (a glossary page's products)
  * @property {string[]} grades grade keys (any of them)
  * @property {SortKey} sort
  * @property {boolean} featured only featured products (E2)
@@ -187,6 +188,9 @@ export const storedValues = (attribute, values) => {
  * @property {'words' | 'phrase'} [match] how the search's words match (the `catalog` setting `searchMatch`, SF-10)
  */
 
+/** A field has a value (a yes/no field's false and a number's 0 count). */
+const CARRIED = Object.freeze({ $exists: true, $nin: [null, ''] });
+
 /** Most filters by a field on the product and on variants at once that are matched exactly (2^n branches). */
 const MAX_MIXED = 3;
 
@@ -246,7 +250,9 @@ export const shopFilter = (query, resolved) => {
 		const conditions = (on, prefix) =>
 			fields
 				.filter((field) => field.on === on)
-				.map((field) => ({ [`${prefix}.${field.id}`]: { $in: storedValues(field, values) } }));
+				.map((field) => ({
+					[`${prefix}.${field.id}`]: values.length === 0 ? CARRIED : { $in: storedValues(field, values) },
+				}));
 		const product = conditions('product', 'specs');
 		const variants = conditions('variant', 'attributes');
 		if (fields.length === 0) and.push({ id: { $in: [] } });

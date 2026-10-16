@@ -30847,6 +30847,127 @@
 						}
 					},
 					{
+						"name": "products",
+						"in": "query",
+						"required": false,
+						"description": "1: add products, a page of the products that carry the field, as the shop listing's cards.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"1",
+								"true"
+							],
+							"description": "1: add products, a page of the products that carry the field, as the shop listing's cards."
+						}
+					},
+					{
+						"name": "value",
+						"in": "query",
+						"required": false,
+						"description": "With products: one value of the field (several, comma-separated); without it, every product that has a value of the field. A field shoppers do not filter by lists no products.",
+						"schema": {
+							"type": "string",
+							"description": "With products: one value of the field (several, comma-separated); without it, every product that has a value of the field. A field shoppers do not filter by lists no products."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "With products: products per page (the catalog setting pageSize when left out).",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 60,
+							"description": "With products: products per page (the catalog setting pageSize when left out)."
+						}
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "With products: the nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "With products: the nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "page",
+						"in": "query",
+						"required": false,
+						"description": "With products: a page number instead of the cursor.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500,
+							"description": "With products: a page number instead of the cursor."
+						}
+					},
+					{
+						"name": "count",
+						"in": "query",
+						"required": false,
+						"description": "With products: true (or 1) adds total and capped to products.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"1",
+								"false",
+								"0"
+							],
+							"description": "With products: true (or 1) adds total and capped to products."
+						}
+					},
+					{
+						"name": "sort",
+						"in": "query",
+						"required": false,
+						"description": "With products: the order, as the listing sorts.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"newest",
+								"price_asc",
+								"price_desc",
+								"top",
+								"sold_asc",
+								"rating",
+								"name",
+								"updated"
+							],
+							"default": "newest",
+							"description": "With products: the order, as the listing sorts."
+						}
+					},
+					{
+						"name": "variants",
+						"in": "query",
+						"required": false,
+						"description": "With products: true (or 1) gives each card its active variants.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"1",
+								"false",
+								"0"
+							],
+							"description": "With products: true (or 1) gives each card its active variants."
+						}
+					},
+					{
+						"name": "brand",
+						"in": "query",
+						"required": false,
+						"description": "With products: a brand id or slug (several, comma-separated). The listing's other filters (minPrice, maxPrice, inStock, featured, attr.<slug>) work too.",
+						"schema": {
+							"type": "string",
+							"description": "With products: a brand id or slug (several, comma-separated). The listing's other filters (minPrice, maxPrice, inStock, featured, attr.<slug>) work too."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -30901,6 +31022,127 @@
 						"required": true,
 						"schema": {
 							"type": "string"
+						}
+					},
+					{
+						"name": "products",
+						"in": "query",
+						"required": false,
+						"description": "1: add products, a page of the products that carry the field, as the shop listing's cards.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"1",
+								"true"
+							],
+							"description": "1: add products, a page of the products that carry the field, as the shop listing's cards."
+						}
+					},
+					{
+						"name": "value",
+						"in": "query",
+						"required": false,
+						"description": "With products: one value of the field (several, comma-separated); without it, every product that has a value of the field. A field shoppers do not filter by lists no products.",
+						"schema": {
+							"type": "string",
+							"description": "With products: one value of the field (several, comma-separated); without it, every product that has a value of the field. A field shoppers do not filter by lists no products."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "With products: products per page (the catalog setting pageSize when left out).",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 60,
+							"description": "With products: products per page (the catalog setting pageSize when left out)."
+						}
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "With products: the nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "With products: the nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "page",
+						"in": "query",
+						"required": false,
+						"description": "With products: a page number instead of the cursor.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500,
+							"description": "With products: a page number instead of the cursor."
+						}
+					},
+					{
+						"name": "count",
+						"in": "query",
+						"required": false,
+						"description": "With products: true (or 1) adds total and capped to products.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"1",
+								"false",
+								"0"
+							],
+							"description": "With products: true (or 1) adds total and capped to products."
+						}
+					},
+					{
+						"name": "sort",
+						"in": "query",
+						"required": false,
+						"description": "With products: the order, as the listing sorts.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"newest",
+								"price_asc",
+								"price_desc",
+								"top",
+								"sold_asc",
+								"rating",
+								"name",
+								"updated"
+							],
+							"default": "newest",
+							"description": "With products: the order, as the listing sorts."
+						}
+					},
+					{
+						"name": "variants",
+						"in": "query",
+						"required": false,
+						"description": "With products: true (or 1) gives each card its active variants.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"1",
+								"false",
+								"0"
+							],
+							"description": "With products: true (or 1) gives each card its active variants."
+						}
+					},
+					{
+						"name": "brand",
+						"in": "query",
+						"required": false,
+						"description": "With products: a brand id or slug (several, comma-separated). The listing's other filters (minPrice, maxPrice, inStock, featured, attr.<slug>) work too.",
+						"schema": {
+							"type": "string",
+							"description": "With products: a brand id or slug (several, comma-separated). The listing's other filters (minPrice, maxPrice, inStock, featured, attr.<slug>) work too."
 						}
 					},
 					{
@@ -31033,6 +31275,117 @@
 						}
 					},
 					{
+						"name": "products",
+						"in": "query",
+						"required": false,
+						"description": "1: add products, a page of the products with a variant of the grade, as the shop listing's cards.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"1",
+								"true"
+							],
+							"description": "1: add products, a page of the products with a variant of the grade, as the shop listing's cards."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "With products: products per page (the catalog setting pageSize when left out).",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 60,
+							"description": "With products: products per page (the catalog setting pageSize when left out)."
+						}
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "With products: the nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "With products: the nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "page",
+						"in": "query",
+						"required": false,
+						"description": "With products: a page number instead of the cursor.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500,
+							"description": "With products: a page number instead of the cursor."
+						}
+					},
+					{
+						"name": "count",
+						"in": "query",
+						"required": false,
+						"description": "With products: true (or 1) adds total and capped to products.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"1",
+								"false",
+								"0"
+							],
+							"description": "With products: true (or 1) adds total and capped to products."
+						}
+					},
+					{
+						"name": "sort",
+						"in": "query",
+						"required": false,
+						"description": "With products: the order, as the listing sorts.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"newest",
+								"price_asc",
+								"price_desc",
+								"top",
+								"sold_asc",
+								"rating",
+								"name",
+								"updated"
+							],
+							"default": "newest",
+							"description": "With products: the order, as the listing sorts."
+						}
+					},
+					{
+						"name": "variants",
+						"in": "query",
+						"required": false,
+						"description": "With products: true (or 1) gives each card its active variants.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"1",
+								"false",
+								"0"
+							],
+							"description": "With products: true (or 1) gives each card its active variants."
+						}
+					},
+					{
+						"name": "brand",
+						"in": "query",
+						"required": false,
+						"description": "With products: a brand id or slug (several, comma-separated). The listing's other filters (minPrice, maxPrice, inStock, featured, attr.<slug>) work too.",
+						"schema": {
+							"type": "string",
+							"description": "With products: a brand id or slug (several, comma-separated). The listing's other filters (minPrice, maxPrice, inStock, featured, attr.<slug>) work too."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -31087,6 +31440,117 @@
 						"required": true,
 						"schema": {
 							"type": "string"
+						}
+					},
+					{
+						"name": "products",
+						"in": "query",
+						"required": false,
+						"description": "1: add products, a page of the products with a variant of the grade, as the shop listing's cards.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"1",
+								"true"
+							],
+							"description": "1: add products, a page of the products with a variant of the grade, as the shop listing's cards."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "With products: products per page (the catalog setting pageSize when left out).",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 60,
+							"description": "With products: products per page (the catalog setting pageSize when left out)."
+						}
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "With products: the nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "With products: the nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "page",
+						"in": "query",
+						"required": false,
+						"description": "With products: a page number instead of the cursor.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500,
+							"description": "With products: a page number instead of the cursor."
+						}
+					},
+					{
+						"name": "count",
+						"in": "query",
+						"required": false,
+						"description": "With products: true (or 1) adds total and capped to products.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"1",
+								"false",
+								"0"
+							],
+							"description": "With products: true (or 1) adds total and capped to products."
+						}
+					},
+					{
+						"name": "sort",
+						"in": "query",
+						"required": false,
+						"description": "With products: the order, as the listing sorts.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"newest",
+								"price_asc",
+								"price_desc",
+								"top",
+								"sold_asc",
+								"rating",
+								"name",
+								"updated"
+							],
+							"default": "newest",
+							"description": "With products: the order, as the listing sorts."
+						}
+					},
+					{
+						"name": "variants",
+						"in": "query",
+						"required": false,
+						"description": "With products: true (or 1) gives each card its active variants.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"1",
+								"false",
+								"0"
+							],
+							"description": "With products: true (or 1) gives each card its active variants."
+						}
+					},
+					{
+						"name": "brand",
+						"in": "query",
+						"required": false,
+						"description": "With products: a brand id or slug (several, comma-separated). The listing's other filters (minPrice, maxPrice, inStock, featured, attr.<slug>) work too.",
+						"schema": {
+							"type": "string",
+							"description": "With products: a brand id or slug (several, comma-separated). The listing's other filters (minPrice, maxPrice, inStock, featured, attr.<slug>) work too."
 						}
 					},
 					{
@@ -52075,6 +52539,10 @@
 					"jsonLd": {
 						"type": "string",
 						"description": "The JSON-LD (DefinedTerm, and a FAQPage with the seo setting faqMarkup on) as text safe to put in a script tag."
+					},
+					"products": {
+						"$ref": "#/components/schemas/ShopProductPage",
+						"description": "Only with products=1: one page of the products that carry the field, or with value that value of it, as the shop listing's cards (facets is null). It pages like the listing: nextCursor and hasMore, page, count=1 for total."
 					}
 				}
 			},
@@ -52308,6 +52776,10 @@
 					"jsonLd": {
 						"type": "string",
 						"description": "The JSON-LD (DefinedTerm, and a FAQPage with the seo setting faqMarkup on) as text safe to put in a script tag."
+					},
+					"products": {
+						"$ref": "#/components/schemas/ShopProductPage",
+						"description": "Only with products=1: one page of the products with a variant of the grade, as the shop listing's cards (facets is null). It pages like the listing: nextCursor and hasMore, page, count=1 for total."
 					}
 				}
 			},

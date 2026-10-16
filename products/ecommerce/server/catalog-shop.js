@@ -247,30 +247,36 @@ export const createListingFilter = (service) => {
 };
 
 /**
+ * One page of the shop's products as cards, for a read query (`GET /v1/shop/products`, and a glossary page's products):
+ * the filters, search, sort, paging, facets and totals of the listing.
  * @param {Product} product
  * @param {Service} service
  * @param {CatalogCommon} common
  */
-export const createCatalogShop = (product, service, common) => {
+export const createProductsPage = (product, service, common) => {
 	const cards = createCards(common, service);
 	const listingFilter = createListingFilter(service);
-	const shownPrices = createShownPrices(service);
 	const search = createCatalogSearch(product);
 
-	/** GET /v1/shop/products. @param {any} ctx */
-	const listing = async (ctx) => {
-		const { s, data } = await common.open(ctx);
+	/**
+	 * @param {Site} s @param {WebsiteData} data
+	 * @param {Record<string, string>} params the query as the listing reads it
+	 * @param {{ query?: (read: import('../core/catalog-query.js').ShopQuery) => import('../core/catalog-query.js').ShopQuery,
+	 *   facets?: boolean }} [options] `query`: sets what the page fixes (a glossary page's category, field and grade) on
+	 *   the query read; `facets`: false leaves the facets out
+	 */
+	return async (s, data, params, { query: fixed = (read) => read, facets: withFacets = true } = {}) => {
 		const { pageSize, topBasis } = await s.values('catalog');
 		// pages by cursor like every other list (`nextCursor`, `hasMore`)
 		const page = paginate(
-			{ cursor: ctx.query.page ? null : ctx.query.cursor, limit: ctx.query.limit },
+			{ cursor: params.page ? null : params.cursor, limit: params.limit },
 			{ defaultLimit: Math.min(MAX_PAGE_SIZE, Number(pageSize)), maxLimit: MAX_PAGE_SIZE },
 		);
-		const read = readShopQuery(ctx.query);
+		const read = readShopQuery(params);
 		if (!read.ok) throw refuse(read.errors);
-		const query = read.value;
+		const query = fixed(read.value);
 		// variants=1: each card carries its active variants, for websites that draw their own cards (SF-6)
-		const withVariants = ctx.query.variants === '1' || ctx.query.variants === 'true';
+		const withVariants = params.variants === '1' || params.variants === 'true';
 		const { filter, resolved, brands, attributes, byCategory, lineage } = await listingFilter(s, data, query);
 		// top and sold_asc by the shop's count of top products (P3-10)
 		const sort = sortOf(query.sort, topBasis);
@@ -285,7 +291,7 @@ export const createCatalogShop = (product, service, common) => {
 			grades: gradesFor(await common.gradeListOf(s), lineage),
 			lineage,
 		};
-		const first = page.after === null && (query.page === null || query.page === 1);
+		const first = withFacets && page.after === null && (query.page === null || query.page === 1);
 
 		// Atlas Search first, when the website uses it; the basic search answers if it fails (E14)
 		if (await search.useAtlas(s, query.q)) {
@@ -295,7 +301,7 @@ export const createCatalogShop = (product, service, common) => {
 			const offset = atlasAfter ?? ((query.page ?? 1) - 1) * page.limit;
 			const found = await search.run(s, data, query.q, {
 				match: { websiteId: data.websiteId, ...shopFilter({ ...query, q: '' }, resolved) },
-				sort: ctx.query.sort ? sort : null,
+				sort: params.sort ? sort : null,
 				skip: offset,
 				limit: page.fetchLimit,
 				count: query.count,
@@ -347,6 +353,22 @@ export const createCatalogShop = (product, service, common) => {
 			...totals,
 			facets,
 		};
+	};
+};
+
+/**
+ * @param {Product} product
+ * @param {Service} service
+ * @param {CatalogCommon} common
+ */
+export const createCatalogShop = (product, service, common) => {
+	const productsPage = createProductsPage(product, service, common);
+	const shownPrices = createShownPrices(service);
+
+	/** GET /v1/shop/products. @param {any} ctx */
+	const listing = async (ctx) => {
+		const { s, data } = await common.open(ctx);
+		return productsPage(s, data, ctx.query);
 	};
 
 	/**
