@@ -76,14 +76,14 @@ const DATA_LAYERS = Object.freeze(['strings', 'schemas', 'docs', ROOT]);
  * Import direction per layer: the layers a file may import code from, whether it may import data files (`.json` in
  * strings/, schemas/, docs/ or the root) and the packages it may use (`null` = any listed package). An entry with a
  * subpath (`@ss/app-kit/widget`) admits exactly that subpath, a bare name the whole package. `core/` is pure logic;
- * `ui/` is bundled into the browser script.
+ * `ui/` is bundled into the browser script (the widget kit, and the SEO preview `@ss/ui` draws without React).
  * @type {Readonly<Record<string, { layers: readonly string[], data: boolean, packages: readonly string[] | null }>>}
  */
 const IMPORT_POLICY = Object.freeze({
 	core: { layers: ['core'], data: false, packages: ['@ss/contracts'] },
 	server: { layers: ['server', 'core', 'adapters'], data: true, packages: null },
 	adapters: { layers: ['adapters', 'core'], data: true, packages: null },
-	ui: { layers: ['ui', 'core'], data: false, packages: ['@ss/app-kit/widget'] },
+	ui: { layers: ['ui', 'core'], data: false, packages: ['@ss/app-kit/widget', '@ss/ui/seo-preview'] },
 	app: { layers: ['app', 'server', 'adapters', 'core'], data: true, packages: null },
 });
 

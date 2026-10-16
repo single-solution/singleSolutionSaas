@@ -5,13 +5,14 @@ React 19 components for the Portal and the product dashboards: design tokens (li
 from its settings schema). Untranspiled JSX in `.js` files: Next.js apps list the package in `transpilePackages`, and
 Tailwind scans `node_modules/@ss/ui/src` (`@source` in the app's CSS).
 
-| Entry              | What it is                                                                                                                 |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `@ss/ui`           | every component, `cx`, and the format and problem helpers                                                                  |
-| `@ss/ui/dashboard` | the product dashboard every product shares: the page, its standard tabs, their pieces, words and API helpers               |
-| `@ss/ui/problems`  | RFC 9457 problem → user message and field-error helpers                                                                    |
-| `@ss/ui/theme.css` | the design tokens                                                                                                          |
-| `@ss/ui/testing`   | DOM test helpers on `react-dom/client` + jsdom (`render`, `cleanup`, `click`, `type`, `byLabel`, …) for other units' tests |
+| Entry                | What it is                                                                                                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `@ss/ui`             | every component, `cx`, and the format and problem helpers                                                                  |
+| `@ss/ui/dashboard`   | the product dashboard every product shares: the page, its standard tabs, their pieces, words and API helpers               |
+| `@ss/ui/problems`    | RFC 9457 problem → user message and field-error helpers                                                                    |
+| `@ss/ui/seo-preview` | the search result and share card preview without React, for widgets (`seoPreview`, `SEO_PREVIEW_CSS`, the measure)         |
+| `@ss/ui/theme.css`   | the design tokens                                                                                                          |
+| `@ss/ui/testing`     | DOM test helpers on `react-dom/client` + jsdom (`render`, `cleanup`, `click`, `type`, `byLabel`, …) for other units' tests |
 
 ## Color rule
 
@@ -160,6 +161,17 @@ gives `1.234,5`); the words stay US English, and the global tabs stay en-US.
 https://wa.me/15550100 (WhatsApp)`), or `support` without channels.
 `humanize` reads a code as words (`low_balance` → `Low balance`, `api_key` → `API key`): status badges and the choices
 of a settings form use it.
+
+## Search result and share preview
+
+`<SeoPreview title description url siteName? image? texts? />` shows a page as Google lists it (site name, breadcrumb
+address, title, description) and as a share card (image at 1.91 : 1, domain, title, description). Widgets draw the
+same part without React from `@ss/ui/seo-preview`: `seoPreview(document, input, { texts })` gives `{ node, update }`
+and the widget adds `SEO_PREVIEW_CSS` to its CSS. Title and description are measured in pixels (a canvas in the
+browser, else an estimate that knows Latin, accented, wide and combining characters), never counted in characters, so
+it holds for any language and script; past Google's usual widths (`SERP_LIMITS`: title 600 px at 20 px Arial,
+description 920 px at 14 px Arial) the text is cut at a word with an ellipsis and a "may be cut" warning shows. The
+words are the caller's (`SEO_PREVIEW_TEXTS` holds the English defaults).
 
 ## Check
 

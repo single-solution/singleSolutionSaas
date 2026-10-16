@@ -182,6 +182,24 @@ describe('ss app validate', () => {
 		expect(rules(second)).not.toContain('vercel.crons');
 	});
 
+	it('lets ui/ draw the shared SEO preview without React (@ss/ui/seo-preview), not the rest of @ss/ui', async () => {
+		const dir = await project();
+		await edit(dir, 'package.json', (text) => {
+			const pkg = JSON.parse(text);
+			pkg.dependencies['@ss/ui'] = 'workspace:^';
+			return JSON.stringify(pkg);
+		});
+		await edit(
+			dir,
+			'ui/styles.js',
+			(text) => `import { seoPreview } from '@ss/ui/seo-preview';\nimport { Button } from '@ss/ui';\n${text}`,
+		);
+		const report = await validateProject(dir);
+		expect(report.problems.filter((p) => p.rule === 'imports.package').map((p) => `${p.file}:${p.line}`)).toEqual([
+			'ui/styles.js:2',
+		]);
+	});
+
 	it('reports import direction, packages, unresolved and outside imports, and DOM globals in core/', async () => {
 		const dir = await project();
 		await edit(
