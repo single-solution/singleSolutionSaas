@@ -10,7 +10,7 @@
  * (`localhost`, `*.localhost`, `127.0.0.1`, `[::1]`, any port, http or https). Tickets may name any https origin or a
  * local origin.
  */
-import { normaliseDomain } from '@ss/contracts';
+import { normalizeDomain as normalizeDomainRule } from '@ss/contracts';
 import { createProtocolError, isProtocolError } from './errors.js';
 import { defaultRandomBytes, randomId } from './encoding.js';
 import { nowSeconds, requireString, signCompact, verifyCompact } from './jws.js';
@@ -58,7 +58,7 @@ export const isProductId = (value) => typeof value === 'string' && PRODUCT_ID_PA
 
 /**
  * Normalize a website domain to lower-case ASCII (punycode) without a trailing dot, by the one domain rule of
- * `@ss/contracts` (`normaliseDomain`), and only from a bare host name: a token names exactly the domain the Portal
+ * `@ss/contracts` (`normalizeDomain`), and only from a bare host name: a token names exactly the domain the Portal
  * stored, so nothing is stripped here. Throws `invalid_argument` on anything that is not a plain public host name:
  * scheme, port, path, userinfo, wildcard, whitespace, IP literals, `localhost` / `*.localhost` and single-label names.
  * @param {unknown} domain
@@ -71,7 +71,7 @@ export const normalizeDomain = (domain) => {
 	if (/[/:@?#*%[\]]/.test(domain) || hasUnsafeChars(domain)) {
 		throw createProtocolError('invalid_argument', 'domain must be a bare host name');
 	}
-	const result = normaliseDomain(domain);
+	const result = normalizeDomainRule(domain);
 	if (!result.ok) throw createProtocolError('invalid_argument', result.message);
 	return result.value;
 };
