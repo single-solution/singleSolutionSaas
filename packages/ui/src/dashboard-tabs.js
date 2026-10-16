@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { Button } from './Button.js';
 import { CodeBlock } from './CodeBlock.js';
 import { Badge, Callout, Card, Masonry, Section } from './display.js';
+import { SectionLayout } from './blocks.js';
 import { FieldGrid, Input, Switch } from './fields.js';
 import { ActionMenu } from './Menu.js';
 import { ConfirmDialog } from './overlay.js';
@@ -216,8 +217,8 @@ export function FeaturesTab({ websiteId, who, support, warnings }) {
 }
 
 /**
- * Settings: the product's own `sections` first, then the features' settings forms (with the product's `notice` and
- * its `featureCards` beside them), then the widget texts, theme and Format.
+ * Settings: the product's own `sections` first, then an inner sidebar with the features' settings forms (with the
+ * product's `notice` and its `featureCards` beside them) and the widget texts, theme and Format.
  * @param {TabProps & { sections?: ReactNode, notice?: SettingsNotice,
  *   featureCards?: (features: FeatureSettings[]) => ReactNode }} props
  */
@@ -232,54 +233,99 @@ export function SettingsTab({ websiteId, sections, notice, featureCards }) {
 	return (
 		<div className="space-y-6">
 			{sections}
-			<Section title={S.featuresTitle} description={S.featuresHelp}>
-				<Masonry wideAlone>
-					<Loaded answer={settings.answer}>
-						{(data) => (
+			<SectionLayout
+				label={words.tabs.settings}
+				sections={[
+					{
+						id: 'features',
+						label: S.featuresTitle,
+						icon: 'sliders',
+						content: (
+							<Section title={S.featuresTitle} description={S.featuresHelp}>
+								<Masonry wideAlone>
+									<Loaded answer={settings.answer}>
+										{(data) => (
+											<>
+												<SettingsForms
+													features={data.features}
+													saveUrl={(key) => `${base}/settings/${encodeURIComponent(key)}`}
+													resetBody={false}
+													savedSource="website"
+													reload={settings.reload}
+													{...(notice ? { notice } : {})}
+												/>
+												{featureCards ? featureCards(data.features) : null}
+											</>
+										)}
+									</Loaded>
+								</Masonry>
+							</Section>
+						),
+					},
+					{
+						id: 'texts',
+						label: S.texts,
+						icon: 'code',
+						group: S.looksTitle,
+						content: (
 							<>
-								<SettingsForms
-									features={data.features}
-									saveUrl={(key) => `${base}/settings/${encodeURIComponent(key)}`}
-									resetBody={false}
-									savedSource="website"
-									reload={settings.reload}
-									{...(notice ? { notice } : {})}
-								/>
-								{featureCards ? featureCards(data.features) : null}
+								<p className="px-1 text-sm text-muted">{S.looksHelp}</p>
+								<Loaded answer={texts.answer}>
+									{(data) => (
+										<TextsForm
+											texts={data.texts}
+											saveUrl={(key) => `${base}/texts/${encodeURIComponent(key)}`}
+											resetBody={false}
+											savedSource="website"
+											reload={texts.reload}
+										/>
+									)}
+								</Loaded>
 							</>
-						)}
-					</Loaded>
-				</Masonry>
-			</Section>
-			<Section title={S.looksTitle} description={S.looksHelp}>
-				<Masonry wideAlone>
-					<Loaded answer={texts.answer}>
-						{(data) => (
-							<TextsForm
-								texts={data.texts}
-								saveUrl={(key) => `${base}/texts/${encodeURIComponent(key)}`}
-								resetBody={false}
-								savedSource="website"
-								reload={texts.reload}
-							/>
-						)}
-					</Loaded>
-					<Loaded answer={theme.answer}>
-						{(data) => (
-							<ThemeForm theme={data.theme} save={(next) => call('PUT', `${base}/theme`, next)} reload={theme.reload} />
-						)}
-					</Loaded>
-					<Loaded answer={format.answer}>
-						{(data) => (
-							<FormatForm
-								format={data.format}
-								save={(next) => call('PUT', `${base}/format`, next)}
-								reload={format.reload}
-							/>
-						)}
-					</Loaded>
-				</Masonry>
-			</Section>
+						),
+					},
+					{
+						id: 'theme',
+						label: S.theme,
+						icon: 'palette',
+						group: S.looksTitle,
+						content: (
+							<>
+								<p className="px-1 text-sm text-muted">{S.looksHelp}</p>
+								<Loaded answer={theme.answer}>
+									{(data) => (
+										<ThemeForm
+											theme={data.theme}
+											save={(next) => call('PUT', `${base}/theme`, next)}
+											reload={theme.reload}
+										/>
+									)}
+								</Loaded>
+							</>
+						),
+					},
+					{
+						id: 'format',
+						label: S.format,
+						icon: 'coins',
+						group: S.looksTitle,
+						content: (
+							<>
+								<p className="px-1 text-sm text-muted">{S.looksHelp}</p>
+								<Loaded answer={format.answer}>
+									{(data) => (
+										<FormatForm
+											format={data.format}
+											save={(next) => call('PUT', `${base}/format`, next)}
+											reload={format.reload}
+										/>
+									)}
+								</Loaded>
+							</>
+						),
+					},
+				]}
+			/>
 		</div>
 	);
 }

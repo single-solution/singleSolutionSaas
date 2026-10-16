@@ -652,6 +652,17 @@ describe('standard tabs', () => {
 		expect(container.textContent?.indexOf('own section')).toBe(0);
 		expect(container.textContent).toContain('notice for notes');
 		expect(container.textContent).toContain('cards for 1');
+		// an inner sidebar lists the sections: feature settings, then the words and look
+		expect([...container.querySelectorAll('nav[aria-label="Settings"] a')].map((link) => link.textContent)).toEqual([
+			'Feature settings',
+			'Widget texts',
+			'Theme',
+			'Format',
+		]);
+		expect(container.querySelector('nav[aria-label="Settings"] [aria-current="true"]')?.textContent).toBe('Feature settings');
+		click(/** @type {HTMLElement} */ (container.querySelector('nav[aria-label="Settings"] a[href="#theme"]')));
+		expect(/** @type {HTMLElement} */ (container.querySelector('#section-theme')).hidden).toBe(false);
+		expect(/** @type {HTMLElement} */ (container.querySelector('#section-features')).hidden).toBe(true);
 		expect(container.textContent).toContain('Our own words');
 		type(/** @type {HTMLInputElement} */ (container.querySelector('[data-field="greeting"] input')), 'Hey');
 		type(/** @type {HTMLInputElement} */ (container.querySelector('input[aria-describedby="text-hello-english"]')), 'Howdy');
