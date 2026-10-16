@@ -190,6 +190,25 @@ Pure and browser-safe, so products' `core/` and widgets (through `@ss/app-kit/wi
   the currency's digits, no grouping: `1050 USD` → `10.50`, `-5 USD` → `-0.05`) and `fromDecimal(text, currency)`
   (`10.5` → `1050`; null unless 1 to `MAX_AMOUNT` minor units with at most the currency's decimals).
 
+## Address formats (`@ss/contracts/address`)
+
+Pure and browser-safe; Accounts and Ecommerce build their address forms, checks and printed addresses from this one
+table, after Google's address data (as CLDR and Shopify). An address has a country (ISO 3166-1 alpha-2) and the place
+parts `line1`, `line2`, `area`, `city`, `region`, `postalCode` (`PLACE_PARTS`, longest values `PLACE_LIMITS`).
+
+- `addressFormat(country)`: the country's parts in its order, its written lines, the label kind of the area, city,
+  region and postal code (`LABEL_KINDS`: a region is a `state`, `province`, `prefecture`, `emirate` …; a postal code a
+  `zip`, `pin`, `eircode` …), the parts the country requires (region, postal code) and the postal code's shape. A
+  country not listed takes street lines, city and an optional postal code; countries without postal codes show none.
+- `addressFields(country, { required, ask })`: the parts a form shows, in order, with label kind and required flag: the
+  country's parts plus those the website requires or asks (after the part they usually follow).
+- `addressProblem(address, { country, required, ask })`: the first part refused (`required` or `postcode`), or null;
+  `tidyPostcode` (trimmed, upper case, single spaces).
+- `addressLines(address, homeCountry)`: the place lines in the country's order, empty parts left out (a part the
+  country does not use comes last, never lost).
+- `ADDRESS_COUNTRIES` (the phone list's ISO codes), `isAddressCountry`, `countryName(code)` (US English),
+  `countryCodeOf(codeOrName)` and `countryChoices()` (sorted by name) for pickers.
+
 ## Phone numbers (`@ss/contracts/phone`)
 
 Pure and browser-safe; every product normalizes phones with it, so one person has one number everywhere.
