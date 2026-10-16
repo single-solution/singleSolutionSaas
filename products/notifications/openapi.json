@@ -3994,7 +3994,7 @@
 			"serverToken": {
 				"type": "http",
 				"scheme": "bearer",
-				"description": "The website's server token: the merchant's server only, never with an Origin header. It also reaches every visitor route, acting for the visitor named by SS-Visitor-IP (and SS-Sign-In)."
+				"description": "The website's server token: the merchant's server only, never with an Origin header. It also reaches every visitor route, acting for the visitor named by SS-Visitor-IP and, for a signed-in shopper, SS-Sign-In (their Accounts sign-in, checked for this website; a wrong, expired or foreign one is 401 invalid_sign_in)."
 			},
 			"ticket": {
 				"type": "http",
