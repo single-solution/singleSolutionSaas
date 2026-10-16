@@ -44,7 +44,7 @@
  * @property {unknown[]} [enum]
  * @property {string} [format]
  * @property {SettingItem} [items]
- * @property {{ widget?: string, group?: string, placeholder?: string, labels?: 'country', wide?: boolean }} [x-ui]
+ * @property {{ widget?: string, group?: string, order?: number, placeholder?: string, labels?: 'country', wide?: boolean }} [x-ui]
  *   `labels: 'country'` shows ISO country codes by their names; `wide` sets whether it spans the whole row
  */
 

@@ -4,8 +4,9 @@
  * hints, and turn it into grouped field descriptors in the schema's order. The product checks every value when it is
  * saved; its field errors are passed to the form.
  *
- * `x-ui`: `widget` (switch|number|text|textarea|select|radio|url|email|checkboxes|tags; one that does not fit the type
- * is ignored), `group`, `placeholder`, `labels` (`country`, or each choice's own words: labels are data, fixed-choices
+ * `x-ui`: `widget` (switch|number|text|textarea|select|segmented|radio|url|email|checkboxes|tags; one that does not fit
+ * the type is ignored), `group` (the card the setting is shown in; settings without one share the feature's own card),
+ * `order` (a whole number: the settings with an `order` come first, ascending), `placeholder`, `labels` (`country`, or each choice's own words: labels are data, fixed-choices
  * audit K3), `suggestions` (values a text or a list of texts offers while the merchant may type their own), `wide`
  * (span the whole row of the field grid; a `textarea` widget and lists are wide anyway). A setting's `description` is
  * its help text.
@@ -37,7 +38,7 @@ import { humanize } from './format.js';
  * @property {unknown[]} [enum]
  * @property {string} [format]
  * @property {SettingItem} [items] every list setting has them
- * @property {{ widget?: string, group?: string, placeholder?: string, wide?: boolean,
+ * @property {{ widget?: string, group?: string, order?: number, placeholder?: string, wide?: boolean,
  *   labels?: 'country' | Record<string, string>, suggestions?: string[] }} [x-ui]
  */
 
@@ -55,6 +56,8 @@ import { humanize } from './format.js';
  * @property {string | null} help the setting's description
  * @property {string | null} placeholder
  * @property {boolean} wide spans the whole row of the field grid
+ * @property {number | null} order the setting's `x-ui.order`
+ * @property {boolean} grouped whether the setting names its own `x-ui.group`
  */
 
 const DEFAULT_GROUP = 'General';
@@ -106,7 +109,7 @@ export const widgetOf = (node) => {
 		boolean: ['switch'],
 		integer: ['number'],
 		number: ['number'],
-		string: ['text', 'textarea', 'select', 'radio', 'url', 'email'],
+		string: ['text', 'textarea', 'select', 'segmented', 'radio', 'url', 'email'],
 		array: ['checkboxes', 'tags'],
 	};
 	const type = node.type;
@@ -117,7 +120,7 @@ export const widgetOf = (node) => {
 		if (!node.items?.enum && node['x-ui']?.suggestions) return 'tags';
 		return node.items?.enum && node.items.enum.length <= PICKER_FROM ? 'checkboxes' : 'tags';
 	}
-	if (node.enum) return node.enum.length <= 4 ? 'radio' : 'select';
+	if (node.enum) return node.enum.length <= 4 ? 'segmented' : 'select';
 	if (node['x-ui']?.suggestions) return 'suggest';
 	if (node.format === 'email') return 'email';
 	if (node.format === 'uri') return 'url';
@@ -137,24 +140,36 @@ export const isWide = (node, widget) => {
 };
 
 /**
- * Field descriptors of a schema's top-level properties, in the schema's order.
+ * Field descriptors of a schema's top-level properties: the settings with an `x-ui.order` first (ascending, equal
+ * orders in the schema's order), then the others in the schema's order.
  * @param {SettingsSchema | null | undefined} schema
  * @returns {FieldDescriptor[]}
  */
 export const fieldsOf = (schema) =>
-	Object.entries(schema?.properties ?? {}).map(([name, node]) => {
-		const widget = widgetOf(node);
-		return {
-			name,
-			node,
-			title: node.title,
-			widget,
-			wide: isWide(node, widget),
-			group: node['x-ui']?.group ?? DEFAULT_GROUP,
-			help: node.description ?? null,
-			placeholder: node['x-ui']?.placeholder ?? null,
-		};
-	});
+	Object.entries(schema?.properties ?? {})
+		.map(([name, node], index) => {
+			const widget = widgetOf(node);
+			const order = node['x-ui']?.order;
+			return {
+				index,
+				field: {
+					name,
+					node,
+					title: node.title,
+					widget,
+					wide: isWide(node, widget),
+					group: node['x-ui']?.group ?? DEFAULT_GROUP,
+					grouped: node['x-ui']?.group !== undefined,
+					order: typeof order === 'number' ? order : null,
+					help: node.description ?? null,
+					placeholder: node['x-ui']?.placeholder ?? null,
+				},
+			};
+		})
+		.sort(
+			(a, b) => (a.field.order ?? Number.POSITIVE_INFINITY) - (b.field.order ?? Number.POSITIVE_INFINITY) || a.index - b.index,
+		)
+		.map(({ field }) => field);
 
 /**
  * Fields grouped by `x-ui.group`, the groups in the order they first appear.

@@ -5,8 +5,10 @@
  * A settings schema is `{ type: 'object', properties: { <setting>: <node> }, additionalProperties?: false }`. Every
  * setting node has `type`, `title` and `default`, and may add `description`, `minimum` / `maximum` (the hard maximums
  * of limits), `maxLength`, `pattern` (a text must match it, for example `^/` for a page path), `enum`, `format`
- * (`email`, `uri` or `hostname`), `items` (lists) and `x-ui` (form hints: `widget`, `group`, `placeholder`, `labels`,
- * `suggestions`, `wide`). Choice labels are data (fixed-choices audit K3): `labels` is `country` (ISO codes shown by
+ * (`email`, `uri` or `hostname`), `items` (lists) and `x-ui` (form hints: `widget`, `group`, `order`, `placeholder`,
+ * `labels`, `suggestions`, `wide`). A dashboard shows the settings of a feature as titled cards: `group` names the
+ * card a setting belongs to (settings without one share the feature's own card) and `order` (a whole number from 0)
+ * sorts the settings, those with an `order` first, ascending. Choice labels are data (fixed-choices audit K3): `labels` is `country` (ISO codes shown by
  * name) or a map of each choice to its words; `suggestions` are values a text (or a list of texts) offers while the
  * merchant may type their own. List items have `type` and may add `minimum`, `maximum`, `maxLength`, `pattern`, `enum`
  * and `format`.
@@ -74,7 +76,9 @@ export const settingsMetaSchema = deepFreeze({
 					additionalProperties: false,
 					properties: {
 						widget: { type: 'string', pattern: '^[a-z][a-z0-9-]{0,39}$' },
+						// the card the setting is shown in, and its place (ascending) among the settings
 						group: { type: 'string', minLength: 1, maxLength: 80 },
+						order: { type: 'integer', minimum: 0, maximum: 10000 },
 						placeholder: { type: 'string', maxLength: 200 },
 						// `country`: the choices are ISO 3166-1 alpha-2 codes, shown by their country names; or each choice's
 						// own words (`{ cod: 'Cash on delivery' }`), so no label is made from a code

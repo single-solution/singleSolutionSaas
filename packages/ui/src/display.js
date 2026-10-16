@@ -66,8 +66,36 @@ export function IconBadge({ icon, kind, size = 'md', className }) {
 }
 
 /**
- * Surface card: a flat rounded section with a hairline edge (no shadow, PLAN 0.6) with a heading and a lighter
- * one-line description.
+ * Initials of a name or email for an avatar: the first letters of the first two words (the part before the @ of an
+ * email), upper-cased.
+ * @param {string} name
+ */
+const initialsOfName = (name) => {
+	const words = (name.split('@')[0] ?? '').split(/[\s._-]+/).filter(Boolean);
+	return (words.length > 1 ? (words[0]?.[0] ?? '') + (words[1]?.[0] ?? '') : (words[0] ?? '').slice(0, 2)).toUpperCase() || '?';
+};
+
+/**
+ * A round avatar with the person's initials in the accent tint.
+ * @param {{ name: string, size?: 'sm' | 'md', className?: string }} props
+ */
+export function Avatar({ name, size = 'md', className }) {
+	return (
+		<span
+			aria-hidden="true"
+			className={cx(
+				'inline-flex shrink-0 items-center justify-center rounded-full bg-primary-soft font-semibold text-on-primary-soft',
+				size === 'sm' ? 'size-6 text-micro' : 'size-8 text-label',
+				className,
+			)}>
+			{initialsOfName(name)}
+		</span>
+	);
+}
+
+/**
+ * Surface card: a rounded section floating on the canvas (hairline edge, a very soft shadow) with a heading and a
+ * lighter one-line description.
  * @param {{ title?: ReactNode, subtitle?: ReactNode, actions?: ReactNode, children?: ReactNode, className?: string,
  *   bodyClassName?: string, as?: 'section' | 'div' | 'article', id?: string, padded?: boolean }} props
  */
@@ -77,12 +105,12 @@ export function Card({ title, subtitle, actions, children, className, bodyClassN
 	return (
 		<Tag
 			id={id}
-			className={cx('min-w-0 rounded-card border border-line-soft bg-surface', className)}
+			className={cx('min-w-0 rounded-card border border-line-soft bg-surface shadow-card', className)}
 			{...(title && typeof title === 'string' && as === 'section' ? { 'aria-label': title } : {})}>
 			{title || actions ? (
 				<header className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5 sm:px-6">
 					<div className="min-w-0">
-						{title ? <h2 className="text-lead font-semibold tracking-tight text-fg">{title}</h2> : null}
+						{title ? <h2 className="text-lead leading-6 font-semibold tracking-tight text-fg">{title}</h2> : null}
 						{subtitle ? <p className="mt-0.5 text-sm text-muted">{subtitle}</p> : null}
 					</div>
 					{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}

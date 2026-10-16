@@ -7,6 +7,7 @@
  */
 import { ViewTransition, createContext, useContext, useMemo, useState } from 'react';
 import { Button } from './Button.js';
+import { SaveBar } from './blocks.js';
 import { Callout, Card, ErrorState, Skeleton, SoftBreaks } from './display.js';
 import { Checkbox, FieldGrid, Input, Select, TextArea } from './fields.js';
 import { ListEditor } from './ListEditor.js';
@@ -148,9 +149,10 @@ export function Outcome({ result }) {
 }
 
 /**
- * Settings forms, one card per feature that has settings (none: nothing), each with its own Save and outcome: a
- * website's settings or the global defaults. `resetBody` resets with `PUT { value: null }` (defaults) instead of
- * `DELETE`; `notice` adds the product's callout to a feature's card.
+ * Settings forms of the features that have settings (none: nothing), a website's or the global defaults: each feature
+ * is a titled group of cards (`x-ui.group` makes the cards, a feature without groups is one card) and one sticky
+ * Save changes bar with Discard appears while anything is edited. `resetBody` resets with `PUT { value: null }`
+ * (defaults) instead of `DELETE`; `notice` adds the product's callout to a feature.
  * @param {{ features: FeatureSettings[], saveUrl: (key: string) => string, resetBody: boolean, savedSource: string,
  *   reload: () => void, notice?: SettingsNotice }} props
  */
@@ -158,12 +160,34 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 	const { texts } = useDashboard();
 	const [edits, setEdits] = useState(/** @type {Record<string, Record<string, unknown>>} */ ({}));
 	const [result, setResult] = useState(/** @type {{ feature: string, answer: Answer } | null} */ (null));
+	const [saving, setSaving] = useState(false);
 	const shown = features.filter(hasSettings);
 	if (shown.length === 0) return null;
+	const dirty = shown.some((feature) => Object.keys(edits[feature.key] ?? {}).length > 0);
 	/** @param {string} feature @param {string} name */
 	const reset = async (feature, name) => {
 		const key = saveUrl(`${feature}.${name}`);
 		setResult({ feature, answer: resetBody ? await call('PUT', key, { value: null }) : await call('DELETE', key) });
+		reload();
+	};
+	const save = async () => {
+		setSaving(true);
+		/** @type {{ feature: string, answer: Answer } | null} */
+		let outcome = null;
+		const left = { ...edits };
+		for (const feature of shown) {
+			const changed = edits[feature.key] ?? {};
+			for (const [name, value] of Object.entries(changed)) {
+				const answer = await call('PUT', saveUrl(`${feature.key}.${name}`), { value });
+				outcome = { feature: feature.key, answer };
+				if (!answer.ok) break;
+			}
+			if (outcome && !outcome.answer.ok) break;
+			if (Object.keys(changed).length > 0) delete left[feature.key];
+		}
+		setSaving(false);
+		setResult(outcome);
+		setEdits(left);
 		reload();
 	};
 	return (
@@ -177,39 +201,32 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 					Object.entries(feature.values).map(([name, entry]) => [name, entry.source === savedSource]),
 				);
 				return (
-					<Card key={feature.key} title={feature.name} subtitle={feature.on === false ? texts.settings.off : undefined}>
-						{notice ? notice(feature.key, values, features) : null}
-						<SchemaForm
-							schema={feature.schema}
-							values={values}
-							overridden={overridden}
-							onReset={(name) => void reset(feature.key, name)}
-							onChange={(name, value) => setEdits({ ...edits, [feature.key]: { ...changed, [name]: value } })}
-						/>
-						<Button
-							className="mt-4"
-							disabled={Object.keys(changed).length === 0}
-							onClick={async () => {
-								/** @type {Answer} */
-								let last = { ok: true, data: null };
-								for (const [name, value] of Object.entries(changed)) {
-									last = await call('PUT', saveUrl(`${feature.key}.${name}`), { value });
-									if (!last.ok) break;
-								}
-								setResult({ feature: feature.key, answer: last });
-								if (last.ok) setEdits({ ...edits, [feature.key]: {} });
-								reload();
-							}}>
-							{texts.save}
-						</Button>
-						{result?.feature === feature.key ? (
-							<div className="mt-4">
-								<Outcome result={result.answer} />
-							</div>
-						) : null}
-					</Card>
+					<SchemaForm
+						key={feature.key}
+						title={feature.name}
+						description={feature.on === false ? texts.settings.off : undefined}
+						schema={feature.schema}
+						values={values}
+						overridden={overridden}
+						onReset={(name) => void reset(feature.key, name)}
+						onChange={(name, value) => setEdits({ ...edits, [feature.key]: { ...changed, [name]: value } })}
+						before={notice ? notice(feature.key, values, features) : null}
+						after={result?.feature === feature.key ? <Outcome result={result.answer} /> : null}
+					/>
 				);
 			})}
+			<SaveBar
+				show={dirty}
+				saving={saving}
+				onSave={save}
+				onDiscard={() => {
+					setEdits({});
+					setResult(null);
+				}}
+				message={texts.settings.unsaved}
+				saveLabel={texts.settings.saveChanges}
+				discardLabel={texts.settings.discard}
+			/>
 		</>
 	);
 }

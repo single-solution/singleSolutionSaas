@@ -8,7 +8,7 @@
  * control with `wide`) span the whole row, and anything that is not a control (buttons, callouts, groups) does too.
  * @module
  */
-import { useId, useState } from 'react';
+import { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
 import { cx } from './cx.js';
 import { Icon } from './icons.js';
 
@@ -32,6 +32,22 @@ export const FIELD_GRID =
  * @param {boolean | undefined} wide
  */
 const cell = (wide) => (wide ? { 'data-cell': '', 'data-wide': '' } : { 'data-cell': '' });
+
+/**
+ * The layout of the fields inside: `stack` (a label above its control) or `row` (the label and help on the left, the
+ * control on the right). A {@link SettingsCard} sets `row`; a field's own `layout` prop wins.
+ */
+export const FieldLayoutContext = createContext(/** @type {'stack' | 'row'} */ ('stack'));
+
+/**
+ * Classes of a list of setting rows (the body of a {@link SettingsCard}, and a `Form` inside one): the fields are
+ * rows separated by hairlines; anything that is not a field (buttons, callouts) sits below with a gap.
+ */
+export const ROW_LIST =
+	'flex flex-col [&>[data-cell]]:py-4 [&>[data-cell]:first-child]:pt-0 [&>[data-cell]:last-child]:pb-0 ' +
+	'[&>[data-cell]+[data-cell]]:border-t [&>[data-cell]+[data-cell]]:border-line-soft [&>:not([data-cell])]:pt-4 ' +
+	'[&>[data-cell]+:not([data-cell])]:mt-4 [&>[data-cell]+:not([data-cell])]:border-t [&>[data-cell]+:not([data-cell])]:border-line-soft ' +
+	'[&>a]:self-start [&>button]:self-start';
 
 /**
  * A responsive grid of fields (its own size container): short controls side by side, long ones full width.
@@ -68,6 +84,20 @@ const controlClass = (invalid) =>
 	);
 
 /**
+ * The frame of a single-line input with adornments (a prefix and/or a suffix): the frame carries the border, the focus
+ * halo and the disabled / read-only look, the input inside is bare.
+ * @param {boolean} invalid
+ */
+const adornedClass = (invalid) =>
+	cx(
+		'flex h-9 w-full items-center rounded-control border bg-surface text-sm ss-motion',
+		'has-[input:focus-visible]:ring-[3px] has-[input:disabled]:cursor-not-allowed has-[input:disabled]:bg-surface-2 has-[input:disabled]:text-muted has-[input:read-only]:bg-surface-2',
+		invalid
+			? 'border-danger has-[input:focus-visible]:border-danger has-[input:focus-visible]:ring-danger/20'
+			: 'border-line hover:border-line-strong has-[input:focus-visible]:border-primary has-[input:focus-visible]:ring-primary/20',
+	);
+
+/**
  * Ids for a field's parts.
  * @param {string | undefined} id
  */
@@ -86,17 +116,18 @@ const describedBy = ({ help, error }, ids) =>
 
 /**
  * Help and error lines under a control; an error fades in with a short shake (again when its message changes).
- * @param {{ ids: { help: string, error: string }, help?: ReactNode, error?: ReactNode }} props
+ * `part` shows only one of them (a setting row keeps the help under its label and the error under its control).
+ * @param {{ ids: { help: string, error: string }, help?: ReactNode, error?: ReactNode, part?: 'help' | 'error' }} props
  */
-function FieldMessages({ ids, help, error }) {
+function FieldMessages({ ids, help, error, part }) {
 	return (
 		<>
-			{help ? (
+			{help && part !== 'error' ? (
 				<p id={ids.help} className="text-xs leading-relaxed text-muted">
 					{help}
 				</p>
 			) : null}
-			{error ? (
+			{error && part !== 'help' ? (
 				<p
 					key={typeof error === 'string' ? error : undefined}
 					id={ids.error}
@@ -111,27 +142,57 @@ function FieldMessages({ ids, help, error }) {
 }
 
 /**
- * Label + control + messages layout (for custom controls).
+ * Whether a field in the given layout is a row: its label and help on the left, the control on the right.
+ * @param {'stack' | 'row' | undefined} layout the field's own layout
+ * @param {'stack' | 'row'} inherited the layout of the card around it
+ * @param {boolean | undefined} wide
+ */
+const isRow = (layout, inherited, wide) => (layout ?? inherited) === 'row' && !wide;
+
+/**
+ * Label + control + messages layout (for custom controls). In a row layout (inside a {@link SettingsCard}, or with
+ * `layout="row"`) the label and its help sit on the left and the control and its error on the right, stacking again
+ * when the card is narrow (container query); `wide` fields and hidden labels always stack.
  * @param {{ id?: string, label: ReactNode, hideLabel?: boolean, required?: boolean, help?: ReactNode,
- *   error?: ReactNode, aside?: ReactNode, className?: string, wide?: boolean,
+ *   error?: ReactNode, aside?: ReactNode, className?: string, wide?: boolean, layout?: 'stack' | 'row',
  *   children: (ids: { id: string, help: string, error: string, describedBy: string | undefined }) => ReactNode }} props
  */
-function Field({ id, label, hideLabel = false, required = false, help, error, aside, className, wide, children }) {
+function Field({ id, label, hideLabel = false, required = false, help, error, aside, className, wide, layout, children }) {
 	const ids = useFieldIds(id);
+	const inherited = useContext(FieldLayoutContext);
+	const row = isRow(layout, inherited, wide) && !hideLabel;
+	const labelRow = (
+		<div className={cx('flex items-center justify-between gap-2', hideLabel && 'sr-only')}>
+			<label htmlFor={ids.id} className={cx(LABEL_CLASS, 'min-w-0 break-words')}>
+				{label}
+				{required ? (
+					<span className="text-danger" aria-hidden="true">
+						{' '}
+						*
+					</span>
+				) : null}
+			</label>
+			{aside ? <span className="text-xs text-muted">{aside}</span> : null}
+		</div>
+	);
+	if (row)
+		return (
+			<div
+				{...cell(wide)}
+				className={cx('grid min-w-0 items-start gap-x-8 gap-y-2 @md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]', className)}>
+				<div className="min-w-0 space-y-0.5 @md:pt-2">
+					{labelRow}
+					<FieldMessages ids={ids} help={help} part="help" />
+				</div>
+				<div className="min-w-0 space-y-1.5">
+					{children({ ...ids, describedBy: describedBy({ help, error }, ids) })}
+					<FieldMessages ids={ids} error={error} part="error" />
+				</div>
+			</div>
+		);
 	return (
 		<div {...cell(wide)} className={cx('min-w-0 space-y-2', className)}>
-			<div className={cx('flex items-center justify-between gap-2', hideLabel && 'sr-only')}>
-				<label htmlFor={ids.id} className={cx(LABEL_CLASS, 'min-w-0 break-words')}>
-					{label}
-					{required ? (
-						<span className="text-danger" aria-hidden="true">
-							{' '}
-							*
-						</span>
-					) : null}
-				</label>
-				{aside ? <span className="text-xs text-muted">{aside}</span> : null}
-			</div>
+			{labelRow}
 			{children({ ...ids, describedBy: describedBy({ help, error }, ids) })}
 			<FieldMessages ids={ids} help={help} error={error} />
 		</div>
@@ -139,20 +200,39 @@ function Field({ id, label, hideLabel = false, required = false, help, error, as
 }
 
 /**
- * `wide`: span the whole row of a field grid.
+ * `wide`: span the whole row of a field grid (and stack the label above the control in a setting row); `layout`
+ * overrides the layout of the card around the field.
  * @typedef {{ label: ReactNode, hideLabel?: boolean, help?: ReactNode, error?: ReactNode, aside?: ReactNode,
- *   suffix?: ReactNode, fieldClassName?: string, wide?: boolean }} FieldProps
+ *   suffix?: ReactNode, prefix?: ReactNode, fieldClassName?: string, wide?: boolean, layout?: 'stack' | 'row' }} FieldProps
  */
 
 /**
- * Text-like input (`type` text, email, password, number, url, date, color …).
- * @param {import('react').InputHTMLAttributes<HTMLInputElement> & FieldProps & { ref?: import('react').Ref<HTMLInputElement> }} props
+ * Text-like input (`type` text, email, password, number, url, date, color …). `prefix` and `suffix` are adornments
+ * inside the frame (a currency sign, a unit, `https://`, an icon).
+ * @param {Omit<import('react').InputHTMLAttributes<HTMLInputElement>, 'prefix'> & FieldProps & { ref?: import('react').Ref<HTMLInputElement> }} props
  */
-export function Input({ label, hideLabel, help, error, aside, suffix, fieldClassName, wide, id, required, className, ...rest }) {
+export function Input({
+	label,
+	hideLabel,
+	help,
+	error,
+	aside,
+	suffix,
+	prefix,
+	fieldClassName,
+	wide,
+	layout,
+	id,
+	required,
+	className,
+	...rest
+}) {
+	const adorned = Boolean(prefix || suffix);
 	return (
 		<Field
 			label={label}
 			wide={wide}
+			{...(layout ? { layout } : {})}
 			{...(id ? { id } : {})}
 			{...(hideLabel ? { hideLabel } : {})}
 			required={Boolean(required)}
@@ -160,27 +240,36 @@ export function Input({ label, hideLabel, help, error, aside, suffix, fieldClass
 			error={error}
 			aside={aside}
 			{...(fieldClassName ? { className: fieldClassName } : {})}>
-			{(ids) => (
-				<div className="relative flex items-center">
+			{(ids) =>
+				adorned ? (
+					<div className={adornedClass(Boolean(error))}>
+						{prefix ? <span className="shrink-0 pl-3 text-sm text-muted">{prefix}</span> : null}
+						<input
+							id={ids.id}
+							required={required}
+							aria-invalid={error ? true : undefined}
+							aria-describedby={ids.describedBy}
+							className={cx(
+								'h-full min-w-0 flex-1 bg-transparent px-3 text-sm text-fg placeholder:text-muted/70 focus:outline-none disabled:cursor-not-allowed',
+								prefix ? 'pl-2' : null,
+								suffix ? 'pr-2' : null,
+								className,
+							)}
+							{...rest}
+						/>
+						{suffix ? <span className="shrink-0 pr-3 text-xs font-medium text-muted">{suffix}</span> : null}
+					</div>
+				) : (
 					<input
 						id={ids.id}
 						required={required}
 						aria-invalid={error ? true : undefined}
 						aria-describedby={ids.describedBy}
-						className={cx(
-							controlClass(Boolean(error)),
-							LINE,
-							suffix ? 'pr-16' : null,
-							rest.type === 'color' && COLOR,
-							className,
-						)}
+						className={cx(controlClass(Boolean(error)), LINE, rest.type === 'color' && COLOR, className)}
 						{...rest}
 					/>
-					{suffix ? (
-						<span className="pointer-events-none absolute right-3 text-xs font-medium text-muted">{suffix}</span>
-					) : null}
-				</div>
-			)}
+				)
+			}
 		</Field>
 	);
 }
@@ -197,6 +286,7 @@ export function TextArea({
 	aside,
 	fieldClassName,
 	wide = true,
+	layout,
 	id,
 	required,
 	className,
@@ -207,6 +297,7 @@ export function TextArea({
 		<Field
 			label={label}
 			wide={wide}
+			{...(layout ? { layout } : {})}
 			{...(id ? { id } : {})}
 			{...(hideLabel ? { hideLabel } : {})}
 			required={Boolean(required)}
@@ -230,7 +321,8 @@ export function TextArea({
 }
 
 /**
- * @typedef {{ value: string, label: ReactNode, disabled?: boolean }} Option
+ * @typedef {{ value: string, label: ReactNode, disabled?: boolean, description?: ReactNode,
+ *   icon?: import('./icons.js').IconName }} Option `description` is the muted line under a radio card's title
  */
 
 /**
@@ -245,6 +337,7 @@ export function Select({
 	aside,
 	fieldClassName,
 	wide,
+	layout,
 	id,
 	required,
 	className,
@@ -256,6 +349,7 @@ export function Select({
 		<Field
 			label={label}
 			wide={wide}
+			{...(layout ? { layout } : {})}
 			{...(id ? { id } : {})}
 			{...(hideLabel ? { hideLabel } : {})}
 			required={Boolean(required)}
@@ -292,8 +386,9 @@ export function Select({
 	);
 }
 
-// Checkboxes and radios are drawn by the kit, so they look the same in every browser and theme: a hairline box at
-// rest, the accent fill (a check mark, or a ring for a radio) when chosen, the accent edge on hover.
+// Checkboxes and radios are drawn by the kit (native inputs with the browser's look reset), so they look the same in
+// every browser and theme: a hairline box at rest, the accent fill (a check mark, a dash when mixed, or a ring for a
+// radio) when chosen, the accent edge on hover.
 const BOX =
 	'size-[18px] shrink-0 cursor-pointer appearance-none border border-line-strong bg-surface ss-motion hover:border-primary ' +
 	'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50';
@@ -301,21 +396,40 @@ const RADIO = cx(BOX, 'rounded-full checked:border-[5px] checked:border-primary'
 
 /**
  * A bare kit-drawn checkbox (no label of its own: give it `aria-label`, or use {@link Checkbox}); the real input stays
- * for keyboards, forms and screen readers. For row selection in lists and tables.
- * @param {Omit<import('react').InputHTMLAttributes<HTMLInputElement>, 'type'>} props
+ * for keyboards, forms and screen readers. For row selection in lists and tables. `indeterminate` shows the mixed
+ * state (a dash, "some of them") until the next click.
+ * @param {Omit<import('react').InputHTMLAttributes<HTMLInputElement>, 'type'> & { indeterminate?: boolean,
+ *   ref?: import('react').Ref<HTMLInputElement> }} props
  */
-export function CheckboxInput({ className, ...rest }) {
+export function CheckboxInput({ className, indeterminate = false, ref, ...rest }) {
+	const inner = useRef(/** @type {HTMLInputElement | null} */ (null));
+	useEffect(() => {
+		if (inner.current) inner.current.indeterminate = indeterminate;
+	}, [indeterminate, rest.checked]);
 	return (
 		<span className={cx('relative inline-flex shrink-0', className)}>
 			<input
 				type="checkbox"
-				className={cx(BOX, 'peer rounded-[5px] checked:border-primary checked:bg-primary checked:hover:bg-primary-hover')}
+				ref={(el) => {
+					inner.current = el;
+					if (typeof ref === 'function') ref(el);
+					else if (ref) Object.assign(ref, { current: el });
+				}}
+				className={cx(
+					BOX,
+					'peer rounded-[5px] checked:border-primary checked:bg-primary checked:hover:bg-primary-hover indeterminate:border-primary indeterminate:bg-primary',
+				)}
 				{...rest}
 			/>
 			<span
 				aria-hidden="true"
-				className="pointer-events-none absolute inset-0 flex items-center justify-center text-on-primary opacity-0 ss-motion peer-checked:opacity-100">
+				className="pointer-events-none absolute inset-0 flex items-center justify-center text-on-primary opacity-0 ss-motion peer-checked:opacity-100 peer-indeterminate:hidden">
 				<Icon name="check" size={12} />
+			</span>
+			<span
+				aria-hidden="true"
+				className="pointer-events-none absolute inset-0 hidden items-center justify-center text-on-primary peer-indeterminate:flex">
+				<Icon name="minus" size={12} />
 			</span>
 		</span>
 	);
@@ -324,7 +438,7 @@ export function CheckboxInput({ className, ...rest }) {
 /**
  * Checkbox with a label on the right.
  * @param {Omit<import('react').InputHTMLAttributes<HTMLInputElement>, 'type'> & { label: ReactNode, help?: ReactNode,
- *   error?: ReactNode, wide?: boolean }} props
+ *   error?: ReactNode, wide?: boolean, indeterminate?: boolean }} props
  */
 export function Checkbox({ label, help, error, id, className, wide, ...rest }) {
 	const ids = useFieldIds(id);
@@ -350,8 +464,9 @@ export function Checkbox({ label, help, error, id, className, wide, ...rest }) {
 }
 
 /**
- * On/off switch (`role="switch"`). `onChange` receives the next boolean. `locked` renders it read-only with a
- * lock icon.
+ * On/off switch (`role="switch"`, a native button: Space and Enter toggle it). `onChange` receives the next boolean.
+ * Its label and description sit on the left and the switch on the right, the same as a setting row. `locked` renders
+ * it read-only with a lock icon.
  * @param {{ checked: boolean, onChange?: (next: boolean) => void, label: ReactNode, description?: ReactNode,
  *   error?: ReactNode, disabled?: boolean, locked?: boolean, lockedLabel?: string, id?: string, hideLabel?: boolean,
  *   size?: 'sm' | 'md', className?: string, aside?: ReactNode, wide?: boolean }} props
@@ -374,13 +489,13 @@ export function Switch({
 }) {
 	const ids = useFieldIds(id);
 	const inactive = disabled || locked;
-	const track = size === 'sm' ? 'h-4 w-7' : 'h-5 w-9';
-	const knob = size === 'sm' ? 'size-3' : 'size-4';
-	const shift = size === 'sm' ? 'translate-x-3' : 'translate-x-4';
+	const track = size === 'sm' ? 'h-5 w-9' : 'h-6 w-11';
+	const knob = size === 'sm' ? 'size-4' : 'size-5';
+	const shift = size === 'sm' ? 'translate-x-4' : 'translate-x-5';
 	return (
 		<div {...cell(wide)} className={cx('flex min-w-0 items-start justify-between gap-4', className)}>
 			<div className={cx('min-w-0 space-y-0.5', hideLabel && 'sr-only')}>
-				<label htmlFor={ids.id} className="flex items-center gap-1.5 text-sm leading-5 font-medium text-fg">
+				<label htmlFor={ids.id} className="flex items-center gap-1.5 text-sm leading-6 font-medium text-fg">
 					{label}
 					{locked ? <Icon name="lock" size={13} title={lockedLabel} /> : null}
 				</label>
@@ -418,10 +533,89 @@ export function Switch({
 }
 
 /**
- * Radio group in a fieldset.
+ * Arrow-key handler of a group of native radios: the arrows (and Home / End) move the choice and the focus to the
+ * next enabled option, wrapping round; the browsers' own arrow handling is replaced so it is the same everywhere.
+ * @param {Option[]} options
+ * @param {string | null | undefined} value
+ * @param {(value: string) => void} onChange
+ */
+const radioKeys =
+	(options, value, onChange) =>
+	/** @param {import('react').KeyboardEvent<HTMLElement>} event */
+	(event) => {
+		const target = /** @type {HTMLInputElement} */ (event.target);
+		if (target.type !== 'radio') return;
+		const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[
+			/** @type {'ArrowDown' | 'ArrowRight' | 'ArrowUp' | 'ArrowLeft'} */ (event.key)
+		];
+		const enabled = options.filter((o) => !o.disabled);
+		if (enabled.length === 0 || (step === undefined && event.key !== 'Home' && event.key !== 'End')) return;
+		const at = enabled.findIndex((o) => o.value === target.value);
+		const next =
+			event.key === 'Home'
+				? enabled[0]
+				: event.key === 'End'
+					? enabled[enabled.length - 1]
+					: enabled[(at + (step ?? 0) + enabled.length) % enabled.length];
+		if (!next) return;
+		event.preventDefault();
+		if (next.value !== value) onChange(next.value);
+		const radios = /** @type {HTMLInputElement[]} */ ([...event.currentTarget.querySelectorAll('input[type="radio"]')]);
+		radios.find((radio) => radio.value === next.value)?.focus();
+	};
+
+/**
+ * Group chrome of radios: a fieldset with a legend, or - as a setting row - a labelled group with the legend and
+ * help on the left and the options on the right.
+ * @param {{ legend: ReactNode, ids: { id: string, help: string, error: string }, help?: ReactNode, error?: ReactNode,
+ *   disabled: boolean, wide?: boolean | undefined, layout?: 'stack' | 'row' | undefined, className?: string | undefined,
+ *   onKeyDown: (event: import('react').KeyboardEvent<HTMLElement>) => void, children: ReactNode }} props
+ */
+function ChoiceGroup({ legend, ids, help, error, disabled, wide, layout, className, onKeyDown, children }) {
+	const inherited = useContext(FieldLayoutContext);
+	if (isRow(layout, inherited, wide))
+		return (
+			<div
+				{...cell(wide)}
+				role="radiogroup"
+				aria-labelledby={`${ids.id}-legend`}
+				aria-describedby={describedBy({ help, error }, ids)}
+				aria-disabled={disabled || undefined}
+				onKeyDown={onKeyDown}
+				className={cx('grid min-w-0 items-start gap-x-8 gap-y-2 @md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]', className)}>
+				<div className="min-w-0 space-y-0.5 @md:pt-2">
+					<div id={`${ids.id}-legend`} className={LABEL_CLASS}>
+						{legend}
+					</div>
+					<FieldMessages ids={ids} help={help} part="help" />
+				</div>
+				<div className="min-w-0 space-y-1.5">
+					{children}
+					<FieldMessages ids={ids} error={error} part="error" />
+				</div>
+			</div>
+		);
+	return (
+		<fieldset
+			{...cell(wide)}
+			onKeyDown={onKeyDown}
+			className={cx('min-w-0 space-y-2', className)}
+			aria-describedby={describedBy({ help, error }, ids)}
+			disabled={disabled}>
+			<legend className={cx(LABEL_CLASS, 'mb-2')}>{legend}</legend>
+			{children}
+			<FieldMessages ids={ids} help={help} error={error} />
+		</fieldset>
+	);
+}
+
+/**
+ * Radio group. The options are a list of radios, or - with `cards` - cards with a title and a muted description
+ * (`description` of each option); the arrow keys move between the options. In a {@link SettingsCard} it is a setting
+ * row.
  * @param {{ legend: ReactNode, name?: string, options: Option[], value: string | null | undefined,
  *   onChange: (value: string) => void, help?: ReactNode, error?: ReactNode, disabled?: boolean, inline?: boolean,
- *   className?: string, wide?: boolean }} props
+ *   cards?: boolean, className?: string, wide?: boolean, layout?: 'stack' | 'row' }} props
  */
 export function RadioGroup({
 	legend,
@@ -433,42 +627,171 @@ export function RadioGroup({
 	error,
 	disabled = false,
 	inline = false,
+	cards = false,
 	className,
 	wide,
+	layout,
 }) {
 	const ids = useFieldIds(undefined);
 	const groupName = name ?? ids.id;
 	return (
-		<fieldset
-			{...cell(wide)}
-			className={cx('min-w-0 space-y-2', className)}
-			aria-describedby={describedBy({ help, error }, ids)}
-			disabled={disabled}>
-			<legend className={cx(LABEL_CLASS, 'mb-2')}>{legend}</legend>
-			<div className={cx(inline ? 'flex flex-wrap gap-x-6 gap-y-2.5' : 'space-y-2.5')}>
+		<ChoiceGroup
+			legend={legend}
+			ids={ids}
+			help={help}
+			error={error}
+			disabled={disabled}
+			wide={wide}
+			layout={layout}
+			className={className}
+			onKeyDown={radioKeys(options, value, onChange)}>
+			<div
+				className={cx(
+					cards
+						? 'grid gap-2.5 @md:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]'
+						: inline
+							? 'flex flex-wrap gap-x-6 gap-y-2.5'
+							: 'space-y-2.5',
+				)}>
+				{options.map((o) => {
+					const optionId = `${ids.id}-${o.value}`;
+					const off = disabled || o.disabled;
+					const input = (
+						<input
+							id={optionId}
+							type="radio"
+							name={groupName}
+							value={o.value}
+							checked={value === o.value}
+							disabled={off}
+							aria-describedby={o.description ? `${optionId}-description` : undefined}
+							onChange={() => onChange(o.value)}
+							className={cx(RADIO, cards && 'mt-0.5')}
+						/>
+					);
+					if (cards)
+						return (
+							<div
+								key={o.value}
+								className={cx(
+									'ss-motion relative flex items-start gap-3 rounded-card border p-3.5',
+									'has-[:checked]:border-primary has-[:checked]:bg-primary-soft/60 has-[:checked]:shadow-card',
+									'has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-primary/20',
+									off ? 'border-line-soft opacity-60' : 'border-line hover:border-line-strong',
+								)}>
+								{input}
+								<div className="min-w-0 space-y-0.5">
+									<label
+										htmlFor={optionId}
+										className="cursor-pointer text-sm leading-5 font-medium text-fg after:absolute after:inset-0 after:rounded-card after:content-['']">
+										{o.label}
+									</label>
+									{o.description ? (
+										<p id={`${optionId}-description`} className="text-xs leading-relaxed text-muted">
+											{o.description}
+										</p>
+									) : null}
+								</div>
+							</div>
+						);
+					return (
+						<div key={o.value} className="flex items-start gap-2.5">
+							{input}
+							<div className="min-w-0">
+								<label htmlFor={optionId} className="cursor-pointer text-sm leading-[18px] text-fg">
+									{o.label}
+								</label>
+								{o.description ? (
+									<p id={`${optionId}-description`} className="mt-0.5 text-xs leading-relaxed text-muted">
+										{o.description}
+									</p>
+								) : null}
+							</div>
+						</div>
+					);
+				})}
+			</div>
+		</ChoiceGroup>
+	);
+}
+
+/**
+ * A few exclusive choices as one pill-shaped control (up to about four short ones; more belong in a {@link Select}).
+ * Native radios underneath, so the arrow keys, forms and screen readers work as for any radio group. In a
+ * {@link SettingsCard} it is a setting row.
+ * @param {{ legend: ReactNode, name?: string, options: Option[], value: string | null | undefined,
+ *   onChange: (value: string) => void, help?: ReactNode, error?: ReactNode, disabled?: boolean, block?: boolean,
+ *   className?: string, wide?: boolean, layout?: 'stack' | 'row', hideLegend?: boolean }} props `block`: the
+ *   segments share the whole width
+ */
+export function SegmentedControl({
+	legend,
+	name,
+	options,
+	value,
+	onChange,
+	help,
+	error,
+	disabled = false,
+	block = false,
+	className,
+	wide,
+	layout,
+	hideLegend = false,
+}) {
+	const ids = useFieldIds(undefined);
+	const groupName = name ?? ids.id;
+	return (
+		<ChoiceGroup
+			legend={hideLegend ? <span className="sr-only">{legend}</span> : legend}
+			ids={ids}
+			help={help}
+			error={error}
+			disabled={disabled}
+			wide={wide}
+			layout={layout}
+			className={className}
+			onKeyDown={radioKeys(options, value, onChange)}>
+			<div
+				className={cx(
+					'max-w-full flex-wrap gap-0.5 rounded-control border border-line-soft bg-surface-2 p-0.5',
+					block ? 'flex w-full' : 'inline-flex',
+				)}>
 				{options.map((o) => {
 					const optionId = `${ids.id}-${o.value}`;
 					return (
-						<div key={o.value} className="flex items-center gap-2.5">
+						<label
+							key={o.value}
+							htmlFor={optionId}
+							className={cx(
+								'relative min-w-0',
+								block && 'flex-1',
+								disabled || o.disabled ? 'opacity-50' : 'cursor-pointer',
+							)}>
 							<input
 								id={optionId}
 								type="radio"
 								name={groupName}
 								value={o.value}
 								checked={value === o.value}
-								disabled={o.disabled}
+								disabled={disabled || o.disabled}
 								onChange={() => onChange(o.value)}
-								className={RADIO}
+								className="peer sr-only"
 							/>
-							<label htmlFor={optionId} className="cursor-pointer text-sm leading-5 text-fg">
+							<span
+								className={cx(
+									'ss-motion flex h-7 items-center justify-center gap-1.5 rounded-md px-3 text-label font-medium whitespace-nowrap text-muted',
+									'hover:text-fg peer-checked:bg-surface peer-checked:text-fg peer-checked:shadow-card',
+									'peer-focus-visible:outline-2 peer-focus-visible:outline-focus',
+								)}>
+								{o.icon ? <Icon name={o.icon} size={14} /> : null}
 								{o.label}
-							</label>
-						</div>
+							</span>
+						</label>
 					);
 				})}
 			</div>
-			<FieldMessages ids={ids} help={help} error={error} />
-		</fieldset>
+		</ChoiceGroup>
 	);
 }
 

@@ -1,15 +1,16 @@
 'use client';
 /**
  * Form helpers: `Form` (no native submission, async `onSubmit` with a busy flag; its children are laid out in the
- * responsive field grid of fields.js, so short controls sit side by side and everything else spans the row) and
+ * responsive field grid of fields.js, so short controls sit side by side and everything else spans the row; inside a
+ * `SettingsCard` they are setting rows divided by hairlines instead) and
  * `FormError` (a problem document as a friendly callout).
  * @module
  */
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { FormBusyContext } from './Button.js';
 import { cx } from './cx.js';
 import { Callout } from './display.js';
-import { FIELD_GRID } from './fields.js';
+import { FIELD_GRID, FieldLayoutContext, ROW_LIST } from './fields.js';
 import { describeProblem, fieldErrors } from './problems.js';
 
 /** @typedef {import('./problems.js').Problem} Problem */
@@ -22,6 +23,7 @@ import { describeProblem, fieldErrors } from './problems.js';
  *   busy?: boolean }} props
  */
 export function Form({ onSubmit, busy: busyProp = false, className, children, ...rest }) {
+	const rows = useContext(FieldLayoutContext) === 'row';
 	const [running, setRunning] = useState(false);
 	const live = useRef(true);
 	useEffect(() => {
@@ -49,7 +51,7 @@ export function Form({ onSubmit, busy: busyProp = false, className, children, ..
 			}}
 			{...rest}>
 			<FormBusyContext.Provider value={busy}>
-				<div className={FIELD_GRID}>{children}</div>
+				<div className={rows ? ROW_LIST : FIELD_GRID}>{children}</div>
 			</FormBusyContext.Provider>
 		</form>
 	);

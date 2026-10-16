@@ -17,6 +17,9 @@ export {
 	CheckboxInput,
 	Switch,
 	RadioGroup,
+	SegmentedControl,
+	FieldLayoutContext,
+	ROW_LIST,
 	CheckboxGroup,
 	ChoicePicker,
 	FieldGrid,
@@ -26,6 +29,7 @@ export { Form, FormError } from './Form.js';
 export { ListEditor, LIST_EDITOR_TEXTS, moveItem } from './ListEditor.js';
 export {
 	Card,
+	Avatar,
 	PageHeader,
 	Badge,
 	StatusBadge,
@@ -46,11 +50,22 @@ export {
 } from './display.js';
 export { Table } from './Table.js';
 export { Dialog, ConfirmDialog } from './overlay.js';
-export { ActionMenu } from './Menu.js';
+export { ActionMenu, AccountMenu } from './Menu.js';
 export { TypedConfirmDialog } from './TypedConfirm.js';
 export { ToastProvider, useToast } from './Toast.js';
 export { CodeBlock, copyText } from './CodeBlock.js';
-export { AppShell } from './AppShell.js';
+export { AppShell, useShell } from './AppShell.js';
+export {
+	Grid,
+	Col,
+	SettingList,
+	SettingsCard,
+	SettingRow,
+	SaveBar,
+	SectionNav,
+	SectionLayout,
+	useHashSection,
+} from './blocks.js';
 export { ThemeScript } from './theme-script.js';
 export { DisplayLocale, LocalTime, useDisplayLocale, useViewerTimeZone } from './time.js';
 export { BarChart, isEmptySeries } from './charts.js';
@@ -74,6 +89,7 @@ export {
 export { describeProblem, fieldErrors, problemCode } from './problems.js';
 
 /** @typedef {import('./AppShell.js').NavSection} NavSection */
+/** @typedef {import('./blocks.js').SectionItem} SectionItem */
 /** @typedef {import('./icons.js').IconName} IconName */
 /** @typedef {import('./display.js').Kind} Kind */
 /** @typedef {import('./Menu.js').MenuItem} MenuItem */

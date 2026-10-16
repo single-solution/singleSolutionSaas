@@ -313,10 +313,12 @@ describe('shared pieces', () => {
 		const [notes, inbox] = /** @type {HTMLElement[]} */ ([...container.querySelectorAll('[data-field="greeting"]')]);
 		type(/** @type {HTMLInputElement} */ (notes?.querySelector('input')), 'Hello');
 		expect(container.textContent).toContain('notice Hello');
-		const saves = buttonsOf(container, 'Save');
-		expect(saves.map((el) => /** @type {HTMLButtonElement} */ (el).disabled)).toEqual([false, true]);
-		await act(async () => saves[0]?.click());
+		// one sticky bar saves every edited setting of every feature; it is there only while something is edited
+		expect(buttonsOf(container, 'Save changes')).toHaveLength(1);
+		expect(container.textContent).toContain('You have unsaved changes');
+		await act(async () => buttonsOf(container, 'Save changes')[0]?.click());
 		expect(requests).toEqual([{ method: 'PUT', path: '/s/notes.greeting', body: { value: 'Hello' } }]);
+		expect(buttonsOf(container, 'Save changes')).toHaveLength(0);
 		expect(container.textContent).toContain('Saved');
 		expect(reload).toHaveBeenCalledTimes(1);
 		await act(async () => byText(notes ?? container, 'Reset', 'button').click());
@@ -324,9 +326,13 @@ describe('shared pieces', () => {
 		// a failed save keeps the edit and shows the problem on that card
 		const inboxInput = /** @type {HTMLInputElement} */ (inbox?.querySelector('input'));
 		type(inboxInput, 'Hey');
-		await act(async () => saves[1]?.click());
+		await act(async () => buttonsOf(container, 'Save changes')[0]?.click());
 		expect(container.textContent).toContain('Too long');
 		expect(inboxInput.value).toBe('Hey');
+		// Discard drops the edits and the bar
+		await act(async () => buttonsOf(container, 'Discard')[0]?.click());
+		expect(buttonsOf(container, 'Save changes')).toHaveLength(0);
+		expect(inboxInput.value).toBe('Yo');
 		// defaults reset with PUT { value: null }
 		serve({ 'PUT /d/inbox.greeting': ok({}) });
 		rerender(
@@ -648,7 +654,8 @@ describe('standard tabs', () => {
 		expect(container.textContent).toContain('Our own words');
 		type(/** @type {HTMLInputElement} */ (container.querySelector('[data-field="greeting"] input')), 'Hey');
 		type(/** @type {HTMLInputElement} */ (container.querySelector('input[aria-describedby="text-hello-english"]')), 'Howdy');
-		for (const save of buttonsOf(container, 'Save')) await act(async () => save.click());
+		for (const save of [...buttonsOf(container, 'Save changes'), ...buttonsOf(container, 'Save')])
+			await act(async () => save.click());
 		await settle();
 		expect(requests.filter((request) => request.method === 'PUT').map((request) => request.path)).toEqual([
 			`${base}/settings/notes.greeting`,

@@ -1,21 +1,35 @@
 'use client';
 /**
- * SchemaForm renders a feature's settings form from its settings schema, in the schema's order, with the `x-ui` hints:
- * `widget`, `group` (fieldsets), `placeholder` (for a list of choices: the text shown while none is chosen), `wide`,
+ * SchemaForm renders a feature's settings form from its settings schema, with the `x-ui` hints: `widget`, `group`
+ * (one titled card per group; settings without a group share one card, titled with the feature's `title`), `order`
+ * (the settings with one come first, ascending), `placeholder` (for a list of choices: the text shown while none is chosen), `wide`,
  * `labels` (`country`: ISO country codes shown by name; or each choice's own words) and `suggestions` (a text offers
  * them and takes the merchant's own; a list of texts is a picker of them that adds what is typed); a setting's
  * `description` is its help text. A list of more than 12 choices (or `widget: 'tags'`) is a searchable picker; a
  * shorter one a group of checkboxes; a list without choices is typed one item per line (a list of on/off values as
- * JSON). Each group lays its fields out in the
- * responsive field grid (PLAN 0.6): short controls side by side, long text, lists and `wide` fields across the whole
- * row.
+ * JSON). Each card lists its settings as rows (PLAN 0.6, owner 2026-10-16): the label and the muted help on the left,
+ * the control on the right; an on/off setting is a toggle, a choice of up to four is a segmented control, a longer one
+ * a select; long text and lists take the whole row. Rows stack on a narrow card.
+ *
+ * With `onSave` it also shows the sticky Save changes bar (with Discard) while `dirty` is true.
  *
  * It is controlled: `values` holds the value of every setting, `onChange(name, value)` reports edits. Bounds show on
  * the inputs; the product checks every value when it is saved, and its field errors come in `errors`.
  * @module
  */
 import { useId, useState } from 'react';
-import { CheckboxGroup, ChoicePicker, FieldGrid, Input, RadioGroup, Select, SuggestInput, Switch, TextArea } from './fields.js';
+import { SaveBar, SettingList, SettingsCard } from './blocks.js';
+import {
+	CheckboxGroup,
+	ChoicePicker,
+	Input,
+	RadioGroup,
+	SegmentedControl,
+	Select,
+	SuggestInput,
+	Switch,
+	TextArea,
+} from './fields.js';
 import { cx } from './cx.js';
 import { fieldsOf, groupFields, optionLabel } from './schema.js';
 
@@ -72,9 +86,22 @@ function NodeControl({ id, label, node, widget, value, onChange, error, help, di
 
 	if (node.type === 'string') {
 		const text = typeof value === 'string' ? value : '';
-		if (node.enum && (widget === 'radio' || widget === 'select')) {
+		if (node.enum && (widget === 'segmented' || widget === 'radio' || widget === 'select')) {
 			const options = node.enum.map((v) => ({ value: String(v), label: optionLabel(v, node['x-ui']?.labels) }));
-			if (widget === 'radio')
+			// a few short choices are one segmented control; longer words need the room of a radio list
+			if (widget === 'segmented' && options.every((o) => o.label.length <= 16))
+				return (
+					<SegmentedControl
+						legend={label}
+						options={options}
+						value={text}
+						onChange={(v) => onChange(v)}
+						help={help}
+						error={error}
+						disabled={disabled}
+					/>
+				);
+			if (widget === 'segmented' || widget === 'radio')
 				return (
 					<RadioGroup
 						legend={label}
@@ -84,7 +111,6 @@ function NodeControl({ id, label, node, widget, value, onChange, error, help, di
 						help={help}
 						error={error}
 						disabled={disabled}
-						inline
 					/>
 				);
 			return (
@@ -215,10 +241,16 @@ function NodeControl({ id, label, node, widget, value, onChange, error, help, di
 
 /**
  * `overridden` marks settings the website saved itself; with `onReset` they get a Reset link (back to the default).
+ * `title` (and `description`) name the feature: with one group it is the card's title, with several it is a heading
+ * above the group cards; `before` and `after` are shown above and below the cards. `onSave` shows the Save changes
+ * bar while `dirty`.
  * @param {{ schema: SettingsSchema | null | undefined, values: Record<string, unknown>,
  *   onChange: (name: string, value: unknown) => void, errors?: Record<string, string>,
  *   overridden?: Record<string, boolean>, onReset?: (name: string) => void, disabled?: boolean, idPrefix?: string,
- *   emptyText?: string, className?: string }} props
+ *   emptyText?: string, className?: string, title?: import('react').ReactNode, description?: import('react').ReactNode,
+ *   before?: import('react').ReactNode, after?: import('react').ReactNode, dirty?: boolean, saving?: boolean,
+ *   onSave?: () => unknown, onDiscard?: () => void,
+ *   saveTexts?: { message?: string, save?: string, discard?: string } }} props
  */
 export function SchemaForm({
 	schema,
@@ -231,12 +263,22 @@ export function SchemaForm({
 	idPrefix,
 	emptyText = 'This feature has no settings.',
 	className,
+	title,
+	description,
+	before,
+	after,
+	dirty = false,
+	saving = false,
+	onSave,
+	onDiscard,
+	saveTexts = {},
 }) {
 	const auto = useId();
 	const prefix = idPrefix ?? `sf${auto.replace(/[^a-zA-Z0-9_-]/g, '')}`;
 	const fields = fieldsOf(schema);
 	if (fields.length === 0) return <p className="text-sm text-muted">{emptyText}</p>;
 	const groups = groupFields(fields);
+	const single = groups.length === 1;
 
 	/** @param {FieldDescriptor} field */
 	const renderField = (field) => {
@@ -269,17 +311,38 @@ export function SchemaForm({
 	};
 
 	return (
-		<div className={cx('space-y-6', className)}>
-			{groups.map((group) =>
-				groups.length === 1 ? (
-					<FieldGrid key={group.name}>{group.fields.map(renderField)}</FieldGrid>
-				) : (
-					<fieldset key={group.name} className="min-w-0">
-						<legend className="mb-3 text-sm font-bold text-fg">{group.name}</legend>
-						<FieldGrid>{group.fields.map(renderField)}</FieldGrid>
-					</fieldset>
-				),
-			)}
+		<div className={cx('min-w-0 space-y-4', className)}>
+			{before}
+			{!single && title ? (
+				<div className="min-w-0 px-1">
+					<h3 className="text-lead leading-6 font-semibold tracking-tight text-fg">{title}</h3>
+					{description ? <p className="mt-0.5 text-sm text-muted">{description}</p> : null}
+				</div>
+			) : null}
+			{groups.map((group, index) => {
+				const cardTitle = single ? (title ?? (group.fields[0]?.grouped ? group.name : undefined)) : group.name;
+				return (
+					<SettingsCard
+						key={group.name}
+						id={`${prefix}-group-${index}`}
+						title={cardTitle}
+						{...(single && description ? { description } : {})}>
+						<SettingList>{group.fields.map(renderField)}</SettingList>
+					</SettingsCard>
+				);
+			})}
+			{after}
+			{onSave ? (
+				<SaveBar
+					show={dirty}
+					saving={saving}
+					onSave={onSave}
+					onDiscard={onDiscard ?? (() => undefined)}
+					{...(saveTexts.message ? { message: saveTexts.message } : {})}
+					{...(saveTexts.save ? { saveLabel: saveTexts.save } : {})}
+					{...(saveTexts.discard ? { discardLabel: saveTexts.discard } : {})}
+				/>
+			) : null}
 		</div>
 	);
 }

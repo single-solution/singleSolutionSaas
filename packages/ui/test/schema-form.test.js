@@ -89,7 +89,9 @@ describe('schema helpers', () => {
 		expect(widgetOf(s.properties.allowStacking)).toBe('switch');
 		expect(widgetOf(s.properties.maxActive)).toBe('number');
 		expect(widgetOf(s.properties.channels)).toBe('checkboxes');
-		expect(widgetOf(node({ type: 'string', enum: ['a', 'b'] }))).toBe('radio');
+		expect(widgetOf(node({ type: 'string', enum: ['a', 'b'] }))).toBe('segmented');
+		expect(widgetOf(node({ type: 'string', enum: ['a', 'b', 'c', 'd', 'e'] }))).toBe('select');
+		expect(widgetOf(node({ type: 'string', enum: ['a', 'b'], 'x-ui': { widget: 'radio' } }))).toBe('radio');
 		expect(widgetOf(node({ type: 'string', format: 'email' }))).toBe('email');
 		expect(widgetOf(node({ type: 'string', format: 'uri' }))).toBe('url');
 		expect(widgetOf(node({ type: 'string', format: 'date' }))).toBe('text');
@@ -134,6 +136,12 @@ function Harness({ schema, initial, onChange, ...rest }) {
 	);
 }
 
+/**
+ * @param {ParentNode} root
+ * @param {string} label
+ */
+const byTextButton = (root, label) => [...root.querySelectorAll('button')].find((b) => b.textContent?.trim() === label);
+
 /** @param {any} schema */
 const defaults = (schema) =>
 	Object.fromEntries(Object.entries(schema.properties).map(([k, n]) => [k, /** @type {any} */ (n).default]));
@@ -142,9 +150,10 @@ describe('SchemaForm', () => {
 	it('renders every widget with labels and groups', () => {
 		const schema = hinted();
 		const { container } = render(<Harness schema={schema} initial={defaults(schema)} idPrefix="t" />);
-		expect([...container.querySelectorAll('legend')].map((l) => l.textContent)).toEqual(
-			expect.arrayContaining(['Content', 'Look', 'Tone']),
-		);
+		// one titled card per group, the settings as rows inside
+		expect([...container.querySelectorAll('section h2')].map((h) => h.textContent)).toEqual(['Content', 'Look', 'General']);
+		expect(container.querySelector('[role="radiogroup"]')?.getAttribute('aria-labelledby')).toBeTruthy();
+		expect(container.querySelector('[role="radiogroup"]')?.textContent).toContain('Tone');
 		expect(byLabel(container, 'Message').tagName).toBe('TEXTAREA');
 		expect(byLabel(container, 'Message').getAttribute('aria-describedby')).toContain('t-message-help');
 		expect(byLabel(container, 'Theme').tagName).toBe('SELECT');
@@ -162,7 +171,7 @@ describe('SchemaForm', () => {
 		expect(cellOf('tone')?.hasAttribute('data-wide')).toBe(false);
 		expect(cellOf('message')?.hasAttribute('data-wide')).toBe(true);
 		expect(cellOf('tags')?.hasAttribute('data-wide')).toBe(true);
-		expect(cellOf('tone')?.parentElement?.className).toContain('@md:grid-cols-2');
+		expect(cellOf('tone')?.parentElement?.className).toContain('flex-col');
 	});
 
 	it('reports typed values: numbers, switches, enums and lists, with the bounds on the inputs', () => {
@@ -313,6 +322,87 @@ describe('SchemaForm', () => {
 		);
 		expect(byLabel(container, 'Code prefix').disabled).toBe(true);
 		expect(allByText(container, 'Reset')).toHaveLength(0);
+	});
+
+	it('lays the settings out as grouped cards: x-ui.group makes the cards, x-ui.order sorts, the feature title heads them', () => {
+		const schema = /** @type {any} */ ({
+			type: 'object',
+			properties: {
+				late: { type: 'string', title: 'Late', default: '', 'x-ui': { group: 'Look', order: 2 } },
+				early: { type: 'string', title: 'Early', default: '', 'x-ui': { group: 'Look', order: 1 } },
+				plain: { type: 'boolean', title: 'Plain', default: false },
+				limit: { type: 'integer', title: 'Limit', default: 3, 'x-ui': { group: 'Limits' } },
+			},
+		});
+		const { container } = render(<Harness schema={schema} initial={defaults(schema)} title="Notes" description="Off" />);
+		expect(container.querySelector('h3')?.textContent).toBe('Notes');
+		expect([...container.querySelectorAll('section h2')].map((h) => h.textContent)).toEqual(['Look', 'General', 'Limits']);
+		const cards = [...container.querySelectorAll('section')];
+		expect([...(cards[0]?.querySelectorAll('[data-field]') ?? [])].map((f) => f.getAttribute('data-field'))).toEqual([
+			'early',
+			'late',
+		]);
+		// a feature without groups is one card, titled with the feature
+		const single = render(
+			<Harness
+				schema={{ type: 'object', properties: { a: { type: 'string', title: 'A', default: '' } } }}
+				initial={{ a: '' }}
+				title="Notes"
+			/>,
+		);
+		expect(single.container.querySelectorAll('section')).toHaveLength(1);
+		expect(single.container.querySelector('section h2')?.textContent).toBe('Notes');
+		expect(single.container.querySelector('h3')).toBeNull();
+	});
+
+	it('picks a segmented control for a few short choices and radios for longer words', () => {
+		const schema = /** @type {any} */ ({
+			type: 'object',
+			properties: {
+				tone: { type: 'string', title: 'Tone', default: 'a', enum: ['a', 'b', 'c'] },
+				mood: {
+					type: 'string',
+					title: 'Mood',
+					default: 'x',
+					enum: ['x', 'y'],
+					'x-ui': { labels: { x: 'Quite a long answer to read', y: 'Another long answer here' } },
+				},
+			},
+		});
+		const onChange = vi.fn();
+		const { container } = render(<Harness schema={schema} initial={defaults(schema)} onChange={onChange} />);
+		const groups = [...container.querySelectorAll('[role="radiogroup"]')];
+		expect(groups).toHaveLength(2);
+		expect(groups[0]?.querySelectorAll('input[type="radio"]')).toHaveLength(3);
+		expect(groups[0]?.querySelector('.rounded-control')).not.toBeNull();
+		expect(groups[1]?.querySelector('.rounded-control')).toBeNull();
+		click(/** @type {HTMLElement} */ (byLabel(container, 'C')));
+		expect(onChange).toHaveBeenLastCalledWith('tone', 'c');
+	});
+
+	it('shows the Save changes bar with Discard only while something changed', () => {
+		const schema = coupons();
+		const onSave = vi.fn();
+		const onDiscard = vi.fn();
+		const view = render(
+			<Harness schema={schema} initial={defaults(schema)} onSave={onSave} onDiscard={onDiscard} dirty={false} />,
+		);
+		expect(byTextButton(view.container, 'Save changes')).toBeUndefined();
+		view.rerender(
+			<Harness
+				schema={schema}
+				initial={defaults(schema)}
+				onSave={onSave}
+				onDiscard={onDiscard}
+				dirty
+				saveTexts={{ message: 'Unsaved', save: 'Save all', discard: 'Throw away' }}
+			/>,
+		);
+		expect(view.container.querySelector('[role="status"]')?.textContent).toBe('Unsaved');
+		click(/** @type {HTMLElement} */ (byTextButton(view.container, 'Save all')));
+		expect(onSave).toHaveBeenCalledTimes(1);
+		click(/** @type {HTMLElement} */ (byTextButton(view.container, 'Throw away')));
+		expect(onDiscard).toHaveBeenCalledTimes(1);
 	});
 
 	it('renders an empty schema message', () => {

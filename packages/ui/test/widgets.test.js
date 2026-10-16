@@ -784,17 +784,20 @@ describe('AppShell', () => {
 		expect(container.querySelector('a[href="#main"]')?.textContent).toBe('Skip to content');
 		expect(container.querySelector('main#main')?.textContent).toBe('Page body');
 		expect(container.querySelector('nav[aria-label="Main"] [aria-current="page"]')?.textContent).toBe('Websites');
-		// icon tiles: solid primary for the current page, the accent tint for an item with a kind, neutral without one
+		// icons: the accent for the current page, muted for the others; an item without an icon shows none
 		const badge = (/** @type {string} */ href) => container.querySelector(`nav a[href="${href}"] > span[aria-hidden="true"]`);
-		expect(badge('/websites')?.className).toContain('bg-primary');
-		expect(badge('/usage')?.className).toContain('bg-primary-soft');
-		expect(badge('/home')?.className).toContain('bg-surface-2');
+		expect(badge('/websites')?.className).toContain('text-primary');
+		expect(badge('/usage')?.className).toContain('text-muted');
+		expect(badge('/home')?.className).toContain('text-muted');
 		expect(badge('/team')).toBeNull();
+		// the group label and the footer are in the sidebar; the header holds the switchers and the actions
+		expect(container.querySelector('aside')?.textContent).toContain('Workspace');
+		expect(container.querySelector('aside')?.textContent).toContain('me@shop.test');
+		expect(container.querySelector('header')?.textContent).toContain('Shop');
 		const menu = /** @type {HTMLElement} */ (container.querySelector('button[aria-label="Open navigation"]'));
 		expect(menu.getAttribute('aria-expanded')).toBe('false');
-		// the menu button (below 1024 px) and the switchers share one line; the switchers keep at least 10rem
+		// the menu button shows below 1024 px, where the sidebar is a drawer
 		expect(menu.className).toContain('lg:hidden');
-		expect(menu.parentElement?.className).toContain('flex-[1_1_10rem]');
 		click(menu);
 		const panel = /** @type {HTMLElement} */ (container.querySelector('[role="dialog"][aria-label="Navigation"]'));
 		expect(panel).not.toBeNull();
@@ -803,6 +806,69 @@ describe('AppShell', () => {
 		click(menu);
 		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="Close navigation"]')));
 		expect(container.querySelector('[role="dialog"][aria-label="Navigation"]')).toBeNull();
+	});
+});
+
+describe('AppShell frame', () => {
+	afterEach(() => {
+		try {
+			window.localStorage.removeItem('ss-nav-rail');
+		} catch {
+			// no storage
+		}
+	});
+
+	it('folds the sidebar to an icon rail, remembers it, and hands the slots the state', () => {
+		const sections = [
+			{ items: [{ href: '/websites', label: 'Websites', icon: /** @type {const} */ ('globe'), current: true }] },
+		];
+		const slot = (/** @type {string} */ name) => (/** @type {{ rail: boolean }} */ state) => (
+			<p>{`${name}:${state.rail ? 'rail' : 'wide'}`}</p>
+		);
+		const { container, unmount } = render(
+			<AppShell
+				sections={sections}
+				switcher={slot('switcher')}
+				sidebarFooter={slot('footer')}
+				search={<input aria-label="Search" />}
+				topbar={<span>Shop</span>}>
+				<p>Body</p>
+			</AppShell>,
+		);
+		const aside = /** @type {HTMLElement} */ (container.querySelector('aside'));
+		expect(aside.hasAttribute('data-rail')).toBe(false);
+		expect(aside.textContent).toContain('switcher:wide');
+		expect(aside.textContent).toContain('footer:wide');
+		expect(container.querySelector('header input[aria-label="Search"]')).not.toBeNull();
+		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="Collapse sidebar"]')));
+		expect(aside.hasAttribute('data-rail')).toBe(true);
+		// the switcher is not drawn in the rail; the footer is told, links keep their name as tooltip and text
+		expect(aside.textContent).not.toContain('switcher');
+		expect(aside.textContent).toContain('footer:rail');
+		const link = /** @type {HTMLElement} */ (aside.querySelector('nav a[href="/websites"]'));
+		expect(link.getAttribute('title')).toBe('Websites');
+		expect(link.querySelector('.sr-only')?.textContent).toBe('Websites');
+		expect(window.localStorage.getItem('ss-nav-rail')).toBe('1');
+		// a new visit starts folded
+		unmount();
+		const again = render(
+			<AppShell sections={sections}>
+				<p>Body</p>
+			</AppShell>,
+		);
+		expect(again.container.querySelector('aside')?.hasAttribute('data-rail')).toBe(true);
+		click(/** @type {HTMLElement} */ (again.container.querySelector('button[aria-label="Expand sidebar"]')));
+		expect(again.container.querySelector('aside')?.hasAttribute('data-rail')).toBe(false);
+		expect(window.localStorage.getItem('ss-nav-rail')).toBe('0');
+	});
+
+	it('can be fixed wide (collapsible off)', () => {
+		const { container } = render(
+			<AppShell sections={[{ items: [{ href: '/a', label: 'A' }] }]} collapsible={false}>
+				<p>Body</p>
+			</AppShell>,
+		);
+		expect(container.querySelector('button[aria-label="Collapse sidebar"]')).toBeNull();
 	});
 });
 
@@ -843,7 +909,7 @@ describe('AppShell without the optional parts', () => {
 		expect(container.textContent).toContain('Console');
 		expect(container.querySelector('a[href="#content"]')).not.toBeNull();
 		expect(container.querySelector('a[data-router="yes"]')?.textContent).toBe('Home3');
-		expect(container.querySelector('header')?.children).toHaveLength(1);
+		expect(container.querySelector('header')?.children).toHaveLength(2);
 		const menu = /** @type {HTMLElement} */ (container.querySelector('button[aria-label="Open navigation"]'));
 		const panel = () => container.querySelector('[role="dialog"][aria-label="Navigation"]');
 		click(menu);

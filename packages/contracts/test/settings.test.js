@@ -61,6 +61,12 @@ describe('checkSettingsSchema', () => {
 			value.properties.pages['x-ui'] = { wide };
 			expect(checkSettingsSchema(value)).toEqual([]);
 		}
+		// the dashboard's cards: `group` names the card, `order` sorts the settings
+		for (const order of [0, 1, 10000]) {
+			const value = schema();
+			value.properties.ratio['x-ui'] = { group: 'Limits', order };
+			expect(checkSettingsSchema(value)).toEqual([]);
+		}
 		for (const [format, example] of [
 			['email', 'help@example.com'],
 			['uri', 'https://shop.example.com/help'],
@@ -98,7 +104,7 @@ describe('checkSettingsSchema', () => {
 			'/properties/ratio/x-ui/tooltip',
 			'additionalProperties',
 		],
-		...['order', 'help', 'advanced', 'hidden'].map(
+		...['help', 'advanced', 'hidden'].map(
 			(hint) =>
 				/** @type {[string, (s: any) => unknown, string, string]} */ ([
 					`the x-ui member ${hint}`,
@@ -119,6 +125,15 @@ describe('checkSettingsSchema', () => {
 			'/properties/greeting/x-ui/suggestions',
 			'uniqueItems',
 		],
+		[
+			'an order that is not a whole number',
+			(s) => (s.properties.ratio['x-ui'] = { order: 1.5 }),
+			'/properties/ratio/x-ui/order',
+			'type',
+		],
+		['a negative order', (s) => (s.properties.ratio['x-ui'] = { order: -1 }), '/properties/ratio/x-ui/order', 'minimum'],
+		['an order in words', (s) => (s.properties.ratio['x-ui'] = { order: 'first' }), '/properties/ratio/x-ui/order', 'type'],
+		['an empty group', (s) => (s.properties.ratio['x-ui'] = { group: '' }), '/properties/ratio/x-ui/group', 'minLength'],
 		[
 			'wide that is not true or false',
 			(s) => (s.properties.pages['x-ui'] = { wide: 'row' }),

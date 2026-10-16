@@ -4,9 +4,10 @@
  * `data-theme="dark"` on <html>, set before paint by `ThemeScript` from the `ThemeToggle` choice); utilities read them
  * through `@theme inline`, so components never need `dark:`. Text/background pairs keep a contrast ratio of at least
  * 4.5:1 (WCAG AA) in both themes; `line-strong` (form controls) keeps 3:1 against surfaces, `line` stays visible.
- * Visual style (PLAN 0.6, owner 2026-10-14): panels float on the canvas with space around them (never glued to the
- * window edges), flat at rest with a hairline `line-soft` edge; a glow appears only on hover (buttons), and a shadow
- * only on things that sit above the page (menus, dialogs, toasts). Two typefaces (owner's pick, look "A. Workbench"):
+ * Visual style (PLAN 0.6, owner 2026-10-14 and 2026-10-16): panels and cards float on a quiet canvas with space around
+ * them (never glued to the window edges), a hairline `line-soft` edge and a very soft shadow (`shadow-card`, panels
+ * `shadow-panel`); a glow appears only on hover (buttons), a deeper shadow only on things that sit above the page
+ * (menus, dialogs, toasts). Two typefaces (owner's pick, look "A. Workbench"):
  * Figtree for text and Bricolage Grotesque for page titles and key figures (`font-display`), loaded by each app's
  * layout; warm neutrals, kept light; a short type scale.
  *
@@ -48,21 +49,27 @@
 	--font-sans: var(--ss-font-text, ui-sans-serif), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 	--font-display: var(--ss-font-display, var(--ss-font-text, ui-sans-serif)), ui-sans-serif, system-ui, sans-serif;
 	--font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-	/* the type scale beside Tailwind's: label 13px (buttons, labels, compact rows), lead 15px (card titles, large buttons),
-	   heading 17px (dialog titles), page 26px (page titles), figure 28px (key figures), micro 11px (counters) */
-	--text-micro: 0.6875rem;
+	/* the type scale (12 / 13 / 14 / 16 / 20 / 24 / 30 with Tailwind's text-sm = 14): micro 12px (counters), label 13px
+	   (buttons, labels, compact rows), lead 16px (card titles, large buttons), heading 20px (dialog titles), page 24px
+	   (page titles), figure 30px (key figures) */
+	--text-micro: 0.75rem;
 	--text-label: 0.8125rem;
-	--text-lead: 0.9375rem;
-	--text-heading: 1.0625rem;
-	--text-page: 1.625rem;
-	--text-figure: 1.75rem;
+	--text-lead: 1rem;
+	--text-heading: 1.25rem;
+	--text-page: 1.5rem;
+	--text-figure: 1.875rem;
+	/* floating panels (sidebars, header) 16px, cards 14px, controls 8px */
+	--radius-panel: 1rem;
 	--radius-card: 0.875rem;
-	--radius-control: 0.625rem;
+	--radius-control: 0.5rem;
 	/* flat at rest (owner, 2026-10-14: elevation by default is not premium): buttons glow on hover; menus, dialogs and
 	   toasts sit above the page */
 	--shadow-glow-primary: 0 6px 18px -8px color-mix(in srgb, var(--ss-primary) 75%, transparent);
 	--shadow-glow-danger: 0 6px 18px -8px color-mix(in srgb, var(--ss-danger) 75%, transparent);
 	--shadow-knob: 0 1px 2px rgb(15 23 42 / 0.25);
+	/* floating panels and cards: a hairline-thin lift, never a heavy drop shadow */
+	--shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 1px rgb(15 23 42 / 0.02);
+	--shadow-panel: 0 1px 3px rgb(15 23 42 / 0.05), 0 8px 24px -12px rgb(15 23 42 / 0.1);
 	--shadow-overlay: 0 24px 48px -12px rgb(15 23 42 / 0.35);
 	--shadow-pop: 0 12px 32px -12px rgb(15 23 42 / 0.28), 0 0 0 1px var(--ss-line-soft);
 	/* motion (see "Motion" below): `ease-ss`, `ease-ss-move`, `duration-(--ss-motion)` and the `animate-ss-*` utilities */
@@ -348,9 +355,9 @@
 
 :root {
 	color-scheme: light;
-	--ss-canvas: #f7f6f4;
+	--ss-canvas: #f3f2ef;
 	--ss-surface: #ffffff;
-	--ss-surface-2: #f3f1ee;
+	--ss-surface-2: #f5f4f1;
 	--ss-line: #dbd6cf;
 	--ss-line-strong: #8a837a;
 	--ss-fg: #1d1b26;
@@ -375,15 +382,15 @@
 	--ss-on-info-soft: #3730a3;
 	--ss-focus: #4f46e5;
 	--ss-overlay: rgb(29 27 38 / 0.45);
-	--ss-line-soft: #ece9e4;
+	--ss-line-soft: #e8e5e0;
 	--ss-surface-3: #e9e6e1;
 }
 
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme='light']) {
 		color-scheme: dark;
-		--ss-canvas: #121114;
-		--ss-surface: #1b191f;
+		--ss-canvas: #0f0e12;
+		--ss-surface: #19171d;
 		--ss-surface-2: #23212a;
 		--ss-line: #3a3641;
 		--ss-line-strong: #6f6879;
@@ -416,8 +423,8 @@
 
 :root[data-theme='dark'] {
 	color-scheme: dark;
-	--ss-canvas: #121114;
-	--ss-surface: #1b191f;
+	--ss-canvas: #0f0e12;
+	--ss-surface: #19171d;
 	--ss-surface-2: #23212a;
 	--ss-line: #3a3641;
 	--ss-line-strong: #6f6879;
