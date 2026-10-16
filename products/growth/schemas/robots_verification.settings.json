@@ -9,21 +9,31 @@
 			"default": "User-agent: *\nAllow: /",
 			"maxLength": 10000,
 			"x-ui": {
-				"widget": "textarea"
+				"widget": "textarea",
+				"group": "robots.txt",
+				"order": 1
 			}
 		},
 		"blockSearchPages": {
 			"type": "boolean",
 			"title": "Keep search results out",
 			"description": "Adds Disallow lines for addresses with a search parameter of Searches and 404s (q, s, search and query unless you set yours there), so search engines do not crawl endless result pages.",
-			"default": true
+			"default": true,
+			"x-ui": {
+				"group": "robots.txt",
+				"order": 2
+			}
 		},
 		"blockParameters": {
 			"type": "string",
 			"title": "Sort and filter parameters to keep out",
 			"description": "Query parameters of your sorted and filtered lists, comma-separated, as your site names them; a name ending in * covers every parameter that starts with it (attr.* covers attr.color). Adds Disallow lines for addresses that carry one. Never list a parameter of pages you want in search results, such as page numbers or a landing page's own filters. At most 20. Empty by default; the dashboard's online store preset fills in a shop's.",
 			"default": "",
-			"maxLength": 300
+			"maxLength": 300,
+			"x-ui": {
+				"group": "robots.txt",
+				"order": 4
+			}
 		},
 		"blockPaths": {
 			"type": "array",
@@ -33,6 +43,10 @@
 			"items": {
 				"type": "string",
 				"maxLength": 200
+			},
+			"x-ui": {
+				"group": "robots.txt",
+				"order": 3
 			}
 		},
 		"aiCrawlers": {
@@ -53,6 +67,10 @@
 					"meta-externalagent",
 					"cohere-training-data-crawler"
 				]
+			},
+			"x-ui": {
+				"group": "AI crawlers",
+				"order": 11
 			}
 		},
 		"moreAiCrawlers": {
@@ -63,6 +81,10 @@
 			"items": {
 				"type": "string",
 				"maxLength": 100
+			},
+			"x-ui": {
+				"group": "AI crawlers",
+				"order": 12
 			}
 		},
 		"sitemaps": {
@@ -73,6 +95,10 @@
 			"items": {
 				"type": "string",
 				"maxLength": 2048
+			},
+			"x-ui": {
+				"group": "robots.txt",
+				"order": 5
 			}
 		},
 		"googleVerification": {
@@ -80,28 +106,44 @@
 			"title": "Google Search Console verification",
 			"description": "The content of the google-site-verification meta tag (or the whole tag).",
 			"default": "",
-			"maxLength": 300
+			"maxLength": 300,
+			"x-ui": {
+				"group": "Site verification",
+				"order": 21
+			}
 		},
 		"bingVerification": {
 			"type": "string",
 			"title": "Bing Webmaster Tools verification",
 			"description": "The content of the msvalidate.01 meta tag (or the whole tag).",
 			"default": "",
-			"maxLength": 300
+			"maxLength": 300,
+			"x-ui": {
+				"group": "Site verification",
+				"order": 22
+			}
 		},
 		"metaVerification": {
 			"type": "string",
 			"title": "Meta domain verification",
 			"description": "The content of the facebook-domain-verification meta tag (or the whole tag).",
 			"default": "",
-			"maxLength": 300
+			"maxLength": 300,
+			"x-ui": {
+				"group": "Site verification",
+				"order": 23
+			}
 		},
 		"yandexVerification": {
 			"type": "string",
 			"title": "Yandex Webmaster verification",
 			"description": "The content of the yandex-verification meta tag (or the whole tag).",
 			"default": "",
-			"maxLength": 300
+			"maxLength": 300,
+			"x-ui": {
+				"group": "Site verification",
+				"order": 24
+			}
 		}
 	}
 }

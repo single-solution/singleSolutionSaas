@@ -10,6 +10,10 @@
 			"items": {
 				"type": "string",
 				"maxLength": 300
+			},
+			"x-ui": {
+				"group": "Pages",
+				"order": 1
 			}
 		},
 		"titleMin": {
@@ -18,7 +22,11 @@
 			"description": "A page title shorter than this is flagged to improve.",
 			"default": 10,
 			"minimum": 1,
-			"maximum": 1000
+			"maximum": 1000,
+			"x-ui": {
+				"group": "Title length",
+				"order": 11
+			}
 		},
 		"titleMax": {
 			"type": "integer",
@@ -26,7 +34,11 @@
 			"description": "A page title longer than this is flagged: search results cut long titles (about 60 characters on Google).",
 			"default": 60,
 			"minimum": 1,
-			"maximum": 1000
+			"maximum": 1000,
+			"x-ui": {
+				"group": "Title length",
+				"order": 12
+			}
 		},
 		"descriptionMin": {
 			"type": "integer",
@@ -34,7 +46,11 @@
 			"description": "A meta description shorter than this is flagged to improve.",
 			"default": 50,
 			"minimum": 1,
-			"maximum": 1000
+			"maximum": 1000,
+			"x-ui": {
+				"group": "Description length",
+				"order": 21
+			}
 		},
 		"descriptionMax": {
 			"type": "integer",
@@ -42,7 +58,11 @@
 			"description": "A meta description longer than this is flagged: search results cut long ones (about 160 characters on Google).",
 			"default": 160,
 			"minimum": 1,
-			"maximum": 1000
+			"maximum": 1000,
+			"x-ui": {
+				"group": "Description length",
+				"order": 22
+			}
 		}
 	}
 }
