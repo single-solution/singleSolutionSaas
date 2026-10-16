@@ -352,7 +352,7 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 			'packed',
 			'shipped',
 			'delivered',
-			'cancelled',
+			'canceled',
 		]);
 		// a first dry run into an empty website checks each record on its own: what names records of earlier files, or
 		// a setting the run would write first (the order number's form and prefix, the shop's own order statuses), is
@@ -455,7 +455,7 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 			'ecommerce stock.units': 17,
 			'ecommerce customers': 2,
 			'ecommerce orders.delivered.total': 3000,
-			'ecommerce orders.cancelled.total': 5500,
+			'ecommerce orders.canceled.total': 5500,
 			'ecommerce loyalty.points': 35,
 			'chat messages': 2,
 			'growth visits': 200,

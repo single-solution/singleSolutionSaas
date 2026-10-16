@@ -81,22 +81,22 @@ const FLOW = {
 		{ key: 'packed', label: 'Packed', role: 'packed' },
 		{ key: 'dispatched', label: 'Dispatched', role: 'shipped' },
 		{ key: 'delivered', label: 'Delivered', role: 'delivered' },
-		{ key: 'cancelled', label: 'Canceled', role: 'cancelled' },
+		{ key: 'canceled', label: 'Canceled', role: 'canceled' },
 		{ key: 'returned', label: 'Returned to origin', role: 'returned_to_origin' },
 		{ key: 'refunded', label: 'Refunded', role: 'refunded' },
 		{ key: 'customer-returned', label: 'Returned by the customer', role: 'returned' },
 	],
 	moves: [
 		{ from: 'pending_payment', to: 'confirmed' },
-		{ from: 'pending_payment', to: 'cancelled' },
+		{ from: 'pending_payment', to: 'canceled' },
 		{ from: 'awaiting_confirmation', to: 'confirmed' },
-		{ from: 'awaiting_confirmation', to: 'cancelled' },
+		{ from: 'awaiting_confirmation', to: 'canceled' },
 		{ from: 'confirmed', to: 'packed' },
 		{ from: 'confirmed', to: 'delivered' },
-		{ from: 'confirmed', to: 'cancelled' },
+		{ from: 'confirmed', to: 'canceled' },
 		{ from: 'packed', to: 'dispatched' },
 		{ from: 'packed', to: 'delivered' },
-		{ from: 'packed', to: 'cancelled' },
+		{ from: 'packed', to: 'canceled' },
 		{ from: 'dispatched', to: 'delivered' },
 		{ from: 'dispatched', to: 'returned' },
 		{ from: 'delivered', to: 'refunded' },
@@ -375,11 +375,11 @@ beforeAll(async () => {
 	for (const [key, subject, text] of [
 		['ecommerce.order_placed', 'Order {number} placed', 'Hi {firstName}, order {number} for {total} is placed: {orderUrl}'],
 		['ecommerce.order_status.confirmed', 'Order {number}: {status}', 'Hi {firstName}, order {number} is {status}.'],
-		['ecommerce.order_status.cancelled', 'Order {number}: {status}', 'Order {number} is {status} ({cancelReason}).'],
+		['ecommerce.order_status.canceled', 'Order {number}: {status}', 'Order {number} is {status} ({cancelReason}).'],
 		['ecommerce.order_status.refunded', 'Order {number}: {status}', 'Order {number} is {status}.'],
 		['ecommerce.staff_placed', 'New order {number}', '{name} placed {number} for {total} ({paymentMethod}).'],
 		['ecommerce.staff_paid', 'Paid: {number}', 'Order {number} is paid.'],
-		['ecommerce.staff_cancelled', 'Canceled: {number}', 'Order {number} was canceled ({reason}).'],
+		['ecommerce.staff_canceled', 'Canceled: {number}', 'Order {number} was canceled ({reason}).'],
 		['ecommerce.staff_proof_uploaded', 'Transfer proof: {number}', 'Proof for {number}, reference {reference}.'],
 		['ecommerce.staff_return_requested', 'Claim {reference}', 'A claim {reference} on order {number}.'],
 		['ecommerce.back_in_stock', 'Back in stock: {name}', '{name} is back for {price}: {url} Stop these alerts: {stopUrl}'],
@@ -435,7 +435,7 @@ beforeAll(async () => {
 		'checkout.orderUrl': `${ORIGIN}/orders/{number}`,
 		'staff_alerts.recipients': [TEAM],
 		'staff_alerts.staffPermission': 'orders.read',
-		'staff_alerts.events': ['placed', 'paid', 'cancelled', 'proof_uploaded', 'return_requested'],
+		'staff_alerts.events': ['placed', 'paid', 'canceled', 'proof_uploaded', 'return_requested'],
 		'loyalty.earnPercent': 10,
 		'loyalty.pointValue': 100,
 		'loyalty.roles': ['member'],
@@ -527,14 +527,14 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 
 		// the shopper cancels SO-2026-0001: the cancel's reason reaches the message, the staff alert and the event
 		const sara = await signIn('07700900111');
-		const cancelled = await shopper('POST', `/v1/shop/orders/${ids.first.id}/cancel`, { signIn: sara });
-		expect(cancelled.json.order.status).toBe('cancelled');
+		const canceled = await shopper('POST', `/v1/shop/orders/${ids.first.id}/cancel`, { signIn: sara });
+		expect(canceled.json.order.status).toBe('canceled');
 		const told = mailsTo(before, 'sara@example.com').find((mail) => mail.subject === 'Order SO-2026-0001: Canceled');
 		// the reason in words from the website's texts, not the code (K-10)
 		expect(told?.text).toBe('Order SO-2026-0001 is Canceled (Canceled at your request).');
 		expect(mailsTo(before, TEAM).map((mail) => mail.subject)).toContain('Canceled: SO-2026-0001');
 
-		const events = await eventsOf('ecommerce.order.placed,ecommerce.order.status_changed,ecommerce.order.cancelled');
+		const events = await eventsOf('ecommerce.order.placed,ecommerce.order.status_changed,ecommerce.order.canceled');
 		const of43 = events.filter((/** @type {any} */ e) => e.data.number === 'SO-2026-0043');
 		expect(of43.map((/** @type {any} */ e) => e.type).sort()).toEqual([
 			'ecommerce.order.placed',
@@ -546,7 +546,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 			by: 'Alex Morgan',
 			paymentMethod: 'cod',
 		});
-		const cancel = events.find((/** @type {any} */ e) => e.type === 'ecommerce.order.cancelled');
+		const cancel = events.find((/** @type {any} */ e) => e.type === 'ecommerce.order.canceled');
 		expect(cancel.data).toMatchObject({ number: 'SO-2026-0001', reason: 'shopper' });
 		// events carry ids and small facts, never the address
 		expect(JSON.stringify(events)).not.toContain(ADDRESS.line1);
@@ -807,8 +807,8 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		const { paymentId } = (await orderOf(order.id)).payment;
 		const payments = (/** @type {string} */ method, /** @type {string} */ path, /** @type {unknown} */ body = undefined) =>
 			sys.call(method, path, { base: PAYMENTS, token: tokens.payments?.server, ...(body === undefined ? {} : { body }) });
-		const cancelled = await shopper('POST', `/v1/shop/orders/${order.id}/cancel`, { signIn: sara });
-		expect(cancelled.json.order.status).toBe('cancelled');
+		const canceled = await shopper('POST', `/v1/shop/orders/${order.id}/cancel`, { signIn: sara });
+		expect(canceled.json.order.status).toBe('canceled');
 		expect((await payments('GET', `/v1/payments/${paymentId}`)).json).toMatchObject({ status: 'voided', refundDue: false });
 		// the money arrives anyway and the store's staff confirm it in Payments: it is to be refunded
 		const late = await payments('POST', `/v1/payments/${paymentId}/confirm`, { reference: 'TRX-9', note: 'Late' });
@@ -816,7 +816,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		await dashboardOf(PAYMENTS, 'payments', '/features', { on: ['payment_api', 'manual_payments', 'refunds'] });
 		sys.clock.advance(31_000);
 		const read = await orderOf(order.id);
-		expect(read).toMatchObject({ status: 'cancelled', payment: { paid: total, refundDue: total } });
+		expect(read).toMatchObject({ status: 'canceled', payment: { paid: total, refundDue: total } });
 		// refunded the normal way: Payments records a bank transfer's refund, the shop returns the money by hand
 		const refunded = await server(
 			'POST',
@@ -1125,7 +1125,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 			statuses: null,
 		});
 		const orders = (await server('GET', '/v1/orders?limit=100')).json.items;
-		const counted = orders.filter((/** @type {any} */ o) => o.role !== 'cancelled');
+		const counted = orders.filter((/** @type {any} */ o) => o.role !== 'canceled');
 		const total = counted.reduce((/** @type {number} */ sum, /** @type {any} */ o) => sum + o.total, 0);
 		const units = counted.reduce((/** @type {number} */ sum, /** @type {any} */ o) => sum + o.itemCount, 0);
 		expect(summary.json).toMatchObject({ orders: counted.length, total, units });

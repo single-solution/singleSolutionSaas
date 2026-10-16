@@ -220,8 +220,8 @@ describe('Notifications on the real Portal', () => {
 			subject: 'Order SH-2026-0043: shipped',
 			text: 'Your order SH-2026-0043 is shipped. Track it with UPS: TRK9.',
 		});
-		const cancelled = await order({ order: 'SH-2026-0044', status: 'canceled', reason: 'Out of stock' });
-		expect(cancelled.json.text).toBe('Your order SH-2026-0044 is canceled. Reason: Out of stock.');
+		const canceled = await order({ order: 'SH-2026-0044', status: 'canceled', reason: 'Out of stock' });
+		expect(canceled.json.text).toBe('Your order SH-2026-0044 is canceled. Reason: Out of stock.');
 		const confirmed = await order({ order: 'SH-2026-0045', status: 'confirmed', tracking: '' });
 		expect(confirmed.json.text).toBe('Your order SH-2026-0045 is confirmed.');
 		// the email provider got exactly those words

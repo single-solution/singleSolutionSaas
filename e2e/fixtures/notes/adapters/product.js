@@ -39,7 +39,7 @@ const dataRights = {
 		user.email ? { notes: (await createNotesStore(await ctx.data()).byEmail(user.email.toLowerCase())).map(noteView) } : {},
 	deleteUser: async (ctx, user) => ({
 		deleted: user.email ? await createNotesStore(await ctx.data()).deleteByEmail(user.email.toLowerCase()) : 0,
-		anonymised: 0,
+		anonymized: 0,
 	}),
 };
 

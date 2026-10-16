@@ -86,7 +86,7 @@ describe('data rights', () => {
 			token: tokens.server,
 			body: { user: { email: 'ana@example.com' } },
 		});
-		expect(deleted.json).toEqual({ deleted: 2, anonymised: 0 });
+		expect(deleted.json).toEqual({ deleted: 2, anonymized: 0 });
 		const after = await sys.call('POST', '/v1/data-rights/export', {
 			token: tokens.server,
 			body: { user: { email: 'ana@example.com' } },

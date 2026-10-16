@@ -247,9 +247,9 @@ describe('default templates: no template written, messages still go (parity P1)'
 		const removed = await dash('notifications', 'DELETE', '/templates/ecommerce.order_status/email/default');
 		expect(removed.status).toBe(204);
 		const second = await place('defaults-2');
-		const cancelled = mails.length;
-		expect((await server('POST', `/v1/orders/${second.id}/move`, { to: 'cancelled' })).status).toBe(200);
-		const told2 = mails.slice(cancelled).find((each) => each.to[0] === 'sam@example.com');
+		const canceled = mails.length;
+		expect((await server('POST', `/v1/orders/${second.id}/move`, { to: 'canceled' })).status).toBe(200);
+		const told2 = mails.slice(canceled).find((each) => each.to[0] === 'sam@example.com');
 		expect(told2.subject).toMatch(new RegExp(`^Your order ${second.number} is now `));
 		expect((await dash('notifications', 'GET', '/templates')).json.items).toEqual([]);
 	});
