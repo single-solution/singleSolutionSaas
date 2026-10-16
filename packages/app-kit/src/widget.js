@@ -18,7 +18,9 @@
  *
  * Every widget builds its elements with `element` (text as text, never HTML), calls JSON routes with `requestJson`, and
  * an admin widget calls its routes with `adminCall` and the ticket of `createTicketSource`. The admin widgets build
- * their screens from `badge`, `dot`, `fieldGrid`, `splitView`, `moreMenu` and `openDialog` (PLAN 0.6).
+ * their screens from `badge`, `dot`, `fieldGrid`, `splitView`, `moreMenu` and `openDialog` (PLAN 0.6), and every widget builds
+ * its controls from `toggle`, `checkbox`, `radio`, `choiceGroup`, `field`, `affix`, `block` and `settingRow`, which
+ * `CONTROLS_CSS` draws (a switch, a checkbox, a radio, a segmented control, a card) from the website's theme.
  * @module
  */
 import { toCsv } from '@ss/contracts/csv';
@@ -47,6 +49,8 @@ export {
 	stateSlot,
 } from './widget/admin.js';
 export { ADMIN_KIT_CSS } from './widget/admin-css.js';
+export { CONTROLS_CSS } from './widget/controls-css.js';
+export { affix, block, checkbox, choiceGroup, field, fieldError, radio, settingRow, toggle } from './widget/controls.js';
 export { element } from './widget/dom.js';
 export { REFRESH_BEFORE_MS, adminCall, createTicketSource, requestJson } from './widget/tickets.js';
 
@@ -59,6 +63,8 @@ export { REFRESH_BEFORE_MS, adminCall, createTicketSource, requestJson } from '.
 /** @typedef {import('./widget/admin.js').MenuItem} MenuItem */
 /** @typedef {import('./widget/admin.js').Child} Child */
 /** @typedef {import('./widget/admin.js').DialogInput} DialogInput */
+/** @typedef {import('./widget/controls.js').ChoiceOptions} ChoiceOptions */
+/** @typedef {import('./widget/controls.js').GroupInput} GroupInput */
 
 /**
  * The viewer of a widget: the browser's language and time zone (for a Format whose locale is '' and whose times are
