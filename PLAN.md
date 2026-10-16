@@ -2227,7 +2227,7 @@ tables and landing facets, measured quantities.
   flag out of waiting, refuse out of open/packed), `unpaid` refuse | cancel (E40), `restock` yes | no | ask (refunds and
   cancels after delivery default **no**, owner), `points` take_back | keep (E39). Statuses have `shopperLabel`,
   `shopperText` per payment method and `notify`; the flow has `triggers` { paid, windowEnd, refundsCover } and `starts`
-  { cod, pickup, free }; at most one awaiting-confirmation status (none allowed). E40's extra moves are allowed when
+  { on_delivery, at_pickup, free }; at most one awaiting-confirmation status (none allowed). E40's extra moves are allowed when
   listed and settle by the facts. Removed (no aliases): checkout.returnRestock, shopperCancel, paidOnConfirm,
   rewaitWindow, trackingRequired, packingVideo, autoRefundedStatus, notifyStatuses, freeOrderStart, cod.startStatus.
   New checkout settings `editPricing` reprice | keep_placed and `deleteGivesBack` held | all. Staff refunds go through a
