@@ -6,7 +6,11 @@
 			"type": "boolean",
 			"title": "Refuse disposable email addresses",
 			"default": true,
-			"description": "The built-in list of common disposable email domains."
+			"description": "The built-in list of common disposable email domains.",
+			"x-ui": {
+				"group": "Email addresses",
+				"order": 1
+			}
 		},
 		"blockedDomains": {
 			"type": "array",
@@ -15,6 +19,10 @@
 			"items": {
 				"type": "string",
 				"maxLength": 253
+			},
+			"x-ui": {
+				"group": "Email addresses",
+				"order": 2
 			}
 		},
 		"allowedDomains": {
@@ -25,6 +33,10 @@
 			"items": {
 				"type": "string",
 				"maxLength": 253
+			},
+			"x-ui": {
+				"group": "Email addresses",
+				"order": 3
 			}
 		},
 		"maxAccountsPerDevice": {
@@ -33,7 +45,11 @@
 			"description": "New accounts one browser may create.",
 			"default": 3,
 			"minimum": 1,
-			"maximum": 50
+			"maximum": 50,
+			"x-ui": {
+				"group": "Limits",
+				"order": 11
+			}
 		},
 		"maxSignUpsPerNetworkPerDay": {
 			"type": "integer",
@@ -41,7 +57,11 @@
 			"description": "New accounts from one IP address in 24 hours.",
 			"default": 20,
 			"minimum": 1,
-			"maximum": 1000
+			"maximum": 1000,
+			"x-ui": {
+				"group": "Limits",
+				"order": 12
+			}
 		}
 	}
 }

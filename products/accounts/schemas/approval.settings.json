@@ -7,7 +7,11 @@
 			"title": "Who can sign up",
 			"description": "Open: anyone can sign up. Invite: only invited people. Approval: anyone, but a staff member approves each new user.",
 			"default": "approval",
-			"enum": ["open", "invite", "approval"]
+			"enum": ["open", "invite", "approval"],
+			"x-ui": {
+				"group": "Sign-up",
+				"order": 1
+			}
 		},
 		"requiredFields": {
 			"type": "array",
@@ -17,6 +21,10 @@
 			"items": {
 				"type": "string",
 				"enum": ["name", "email", "phone"]
+			},
+			"x-ui": {
+				"group": "Sign-up",
+				"order": 2
 			}
 		},
 		"invitePageUrl": {
@@ -24,14 +32,22 @@
 			"title": "Invite page",
 			"description": "A page of your website with the sign-in widget; invites link to it.",
 			"default": "",
-			"maxLength": 2048
+			"maxLength": 2048,
+			"x-ui": {
+				"group": "Invites",
+				"order": 12
+			}
 		},
 		"inviteDays": {
 			"type": "integer",
 			"title": "Invites valid for (days)",
 			"default": 7,
 			"minimum": 1,
-			"maximum": 30
+			"maximum": 30,
+			"x-ui": {
+				"group": "Invites",
+				"order": 11
+			}
 		}
 	}
 }
