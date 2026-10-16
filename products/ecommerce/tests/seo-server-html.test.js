@@ -90,7 +90,7 @@ describe('the product page core', () => {
 		const head = await read('/v1/seo/products/desk-lamp?html=1');
 		expect(head.html).not.toMatch(/<script|onclick|javascript:/i);
 		const odd = await read('/v1/seo/products/floor-lamp?html=1');
-		expect(odd.html).toContain('<h1>Floor &lt;Lamp&gt; &amp; &quot;co&quot;</h1>');
+		expect(odd.html).toContain('<h1>Floor &#60;Lamp&#62; &#38; &#34;co&#34;</h1>');
 		expect(served(odd.html, 'product_page').body.textContent).toContain('Out of stock');
 	});
 

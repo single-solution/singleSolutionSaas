@@ -2,11 +2,12 @@
  * Merchant fields (PLAN 0.8.10 dynamic model §2): the format a text field's values must have, checked by one pure
  * function, {@link checkFormat}, that walks each value once, character by character. No regular expression is ever
  * built from what a merchant types, so a format can never make a check slow (no ReDoS), whatever the value's length.
- * Also the check digits values use (E21): Luhn ({@link luhnValid}), the GS1 mod-10 check digit of a GTIN
+ * Also the check digits values use (E21): Luhn (`luhnValid` of `@ss/contracts/text`), the GS1 mod-10 check digit of a GTIN
  * ({@link gtinOf}), ISBN-10 and ISBN-13 ({@link isbnValid}) and the VIN's ({@link vinValid}); `none` checks the pattern
  * only. No I/O.
  * @module
  */
+import { luhnValid } from '@ss/contracts/text';
 
 /** Which characters a format allows. */
 export const FORMAT_CHARS = Object.freeze(
@@ -75,27 +76,6 @@ const fitsMask = (char, place) => {
 	if (place === '9') return isDigit(char);
 	if (place === '*') return isLetter(char) || isDigit(char);
 	return char === place;
-};
-
-/**
- * Whether a string of digits passes the Luhn check (its last digit is the check digit): payment cards, IMEIs and many
- * other numbers use it.
- * @param {string} digits
- */
-const luhnValid = (digits) => {
-	if (digits.length < 2) return false;
-	let sum = 0;
-	for (let index = 0; index < digits.length; index += 1) {
-		const char = digits[digits.length - 1 - index] ?? '';
-		if (!isDigit(char)) return false;
-		let digit = char.charCodeAt(0) - 48;
-		if (index % 2 === 1) {
-			digit *= 2;
-			if (digit > 9) digit -= 9;
-		}
-		sum += digit;
-	}
-	return sum % 10 === 0;
 };
 
 /**

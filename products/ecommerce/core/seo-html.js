@@ -5,18 +5,8 @@
  * image sizes Ecommerce writes, and description HTML cleaned again: no script, no style, no event attribute. No I/O.
  * @module
  */
+import { escapeHtml } from '@ss/contracts/text';
 import { cleanHtml } from './catalog-content.js';
-
-/**
- * Text safe in an element or a quoted attribute.
- * @param {unknown} value
- */
-const escapeHtml = (value) =>
-	String(value ?? '')
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;');
 
 /**
  * An https address for an attribute, or '' (links and images take nothing else).

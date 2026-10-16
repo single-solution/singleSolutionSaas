@@ -7,6 +7,7 @@
  * `existing`, so a change can name only what it changes. No I/O.
  * @module
  */
+import { decodeEntities, escapeHtml } from '@ss/contracts/text';
 
 /** @typedef {{ path: string, message: string }} FieldError */
 
@@ -293,28 +294,6 @@ const DROPPED = new Set([
 const BLOCKS = new Set(['p', 'br', 'li', 'h2', 'h3', 'h4', 'blockquote', 'ul', 'ol', 'div']);
 /** Equivalent tags folded into the allowed ones. */
 const SYNONYMS = Object.freeze(/** @type {Record<string, string>} */ ({ b: 'strong', i: 'em' }));
-
-/** Named entities decoded in text. */
-const ENTITIES = Object.freeze(
-	/** @type {Record<string, string>} */ ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0' }),
-);
-
-/**
- * Text with HTML entities decoded (named ones of {@link ENTITIES} and numeric ones).
- * @param {string} value
- */
-export const decodeEntities = (value) =>
-	value.replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|[a-z]{2,6});/gi, (match, name) => {
-		const lower = String(name).toLowerCase();
-		if (lower.startsWith('#')) {
-			const code = lower.startsWith('#x') ? Number.parseInt(lower.slice(2), 16) : Number.parseInt(lower.slice(1), 10);
-			return code > 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff) ? String.fromCodePoint(code) : '';
-		}
-		return Object.hasOwn(ENTITIES, lower) ? /** @type {string} */ (ENTITIES[lower]) : match;
-	});
-
-/** @param {string} value */
-const escapeHtml = (value) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /** A contact link (SF-1): an email address or a phone number, nothing a browser could run. */
 const CONTACT_LINK = /^(?:mailto:[^\s"'<>\\]{3,254}|tel:\+?[0-9][0-9 ().-]{2,30})$/i;

@@ -214,7 +214,7 @@ describe('E3 rich descriptions', () => {
 				'<h3 class="x">Fit</h3><p onclick="bad()">Soft <b>silk</b> &amp; <a href="javascript:alert(1)">more</a> <a href="/care">care</a></p><script>bad()</script><ul><li>One</li></ul>',
 		});
 		expect(item.descriptionHtml).toBe(
-			'<h3>Fit</h3><p>Soft <strong>silk</strong> &amp; <a>more</a> <a href="/care">care</a></p><ul><li>One</li></ul>',
+			'<h3>Fit</h3><p>Soft <strong>silk</strong> &#38; <a>more</a> <a href="/care">care</a></p><ul><li>One</li></ul>',
 		);
 		expect(item.description).toBe('Fit\n\nSoft silk & more care\n\nOne');
 		const page = (await get(`/v1/shop/products/${ids.shown.slug}`)).json;

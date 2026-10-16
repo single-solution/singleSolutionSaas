@@ -49,7 +49,7 @@ describe('rich text, policies and size charts (core)', () => {
 			'14 days, 6 months at A & B. help@shop.example.com +1 202 555 0143 1 Main St $250 $5,000 {other} {{other}}',
 		);
 		const html = fillPolicies([{ key: 'terms', title: 'T', text: '<h2>{{business}}</h2><p>{phone}</p>' }], 'html', values);
-		expect(html.policies[0]?.text).toBe('<h2>A &amp; B</h2><p>+1 202 555 0143</p>');
+		expect(html.policies[0]?.text).toBe('<h2>A &#38; B</h2><p>+1 202 555 0143</p>');
 		expect(
 			fillPolicies([{ key: 'privacy', title: 'P', text: '{email}' }], undefined, {
 				returnTime: { amount: 0, unit: /** @type {const} */ ('days') },

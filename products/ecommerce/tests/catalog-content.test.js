@@ -13,7 +13,6 @@ import {
 	checkSeo,
 	checkVideo,
 	cleanHtml,
-	decodeEntities,
 	htmlToText,
 	mediaExtras,
 	siteAddress,
@@ -40,13 +39,12 @@ describe('content fields', () => {
 		expect(cleanHtml('<ul><li>one<li>two</ul>')).toBe('<ul><li>one<li>two</li></li></ul>');
 		expect(cleanHtml('<p>open <strong>bold')).toBe('<p>open <strong>bold</strong></p>');
 		expect(cleanHtml('</p>stray')).toBe('stray');
-		expect(cleanHtml('a < b & c > d')).toBe('a &lt; b &amp; c &gt; d');
-		expect(cleanHtml('<a href="https://x.example/?a=1&amp;b=2">x</a>')).toBe('<a href="https://x.example/?a=1&amp;b=2">x</a>');
+		expect(cleanHtml('a < b & c > d')).toBe('a &#60; b &#38; c &#62; d');
+		expect(cleanHtml('<a href="https://x.example/?a=1&amp;b=2">x</a>')).toBe('<a href="https://x.example/?a=1&#38;b=2">x</a>');
 		expect(cleanHtml('<a href=\'/care\' onclick=x>c</a><a href=//evil.example>e</a><a href="http://x">h</a>')).toBe(
 			'<a href="/care">c</a><a>e</a><a>h</a>',
 		);
 		expect(cleanHtml('<p></p><p> </p><h3>T</h3>')).toBe('<h3>T</h3>');
-		expect(decodeEntities('&lt;&#65;&#x42;&nbsp;&bogus;&#0;')).toBe('<AB &bogus;');
 		expect(htmlToText('<h3>A</h3><p>B&amp;C</p><ul><li>D</li></ul><script>x</script>')).toBe('A\n\nB&C\n\nD');
 		expect(checkHtml(5)).toBeNull();
 		expect(checkHtml('x'.repeat(20_001))).toBeNull();

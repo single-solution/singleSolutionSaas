@@ -17,6 +17,7 @@
  */
 import { addressLines as placeLines, countryName } from '@ss/contracts/address';
 import { formatDate, formatMoney } from '@ss/contracts/format';
+import { escapeHtml } from '@ss/contracts/text';
 import { durationText } from './durations.js';
 import { fieldPlaceholders, fieldValuesShown, unitsShown } from './fields.js';
 import { isSlug } from './catalog.js';
@@ -57,7 +58,7 @@ const fieldLines = (order, context, place) =>
 			place,
 		),
 	]
-		.map((entry) => `<p class="small">${esc(`${entry.name}: ${entry.label}`)}</p>`)
+		.map((entry) => `<p class="small">${escapeHtml(`${entry.name}: ${entry.label}`)}</p>`)
 		.join('');
 /**
  * What a document is printed with: the business, the texts, the payment words of the website's texts
@@ -175,14 +176,6 @@ export const INVOICE_TEXTS = Object.freeze({
 
 /** @typedef {Record<keyof typeof INVOICE_TEXTS, string>} InvoiceTexts */
 
-const ESCAPES = /** @type {Record<string, string>} */ ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' });
-
-/**
- * HTML-escape a value.
- * @param {unknown} value
- */
-export const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ESCAPES[char] ?? char);
-
 /**
  * The texts to print: the settings, with the defaults for anything missing.
  * @param {Record<string, unknown>} settings
@@ -241,13 +234,13 @@ td { border-bottom: 1px solid; }
  * @param {string} body
  */
 const page = (title, body) =>
-	`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${esc(title)}</title><style>${CSS}</style></head><body>${body}</body></html>`;
+	`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${escapeHtml(title)}</title><style>${CSS}</style></head><body>${body}</body></html>`;
 
 /** @param {BusinessLike} business @param {string} [seller] the seller details, filled and escaped (E26) */
 const businessBlock = (business, seller = '') =>
-	`<div class="end"><p><strong>${esc(business.name)}</strong></p>${[business.address, business.email, business.phone]
+	`<div class="end"><p><strong>${escapeHtml(business.name)}</strong></p>${[business.address, business.email, business.phone]
 		.filter(Boolean)
-		.map((line) => `<p>${esc(line)}</p>`)
+		.map((line) => `<p>${escapeHtml(line)}</p>`)
 		.join('')}${seller}</div>`;
 
 /**
@@ -257,7 +250,7 @@ const businessBlock = (business, seller = '') =>
 const addressBlock = (address) =>
 	[address.name, address.phone, ...placeLines(address), countryName(address.country)]
 		.filter(Boolean)
-		.map((line) => `<p>${esc(line)}</p>`)
+		.map((line) => `<p>${escapeHtml(line)}</p>`)
 		.join('');
 
 /**
@@ -279,7 +272,7 @@ const lineDetail = (order, line, context, place) => {
 			? t.labelWarranty.replaceAll('{time}', durationText(line.warrantyTime, context.format.locale))
 			: '',
 	].filter(Boolean);
-	const detail = parts.length > 0 ? `<p class="small">${esc(parts.join(' · '))}</p>` : '';
+	const detail = parts.length > 0 ? `<p class="small">${escapeHtml(parts.join(' · '))}</p>` : '';
 	const units = unitsShown(
 		line.serials,
 		context.fields.units.get(order.id) ?? new Map(),
@@ -287,9 +280,9 @@ const lineDetail = (order, line, context, place) => {
 		place,
 	);
 	const serials =
-		units.serials.length > 0 ? `<p class="small mono">${esc(`${t.labelSerials}: ${units.serials.join(', ')}`)}</p>` : '';
+		units.serials.length > 0 ? `<p class="small mono">${escapeHtml(`${t.labelSerials}: ${units.serials.join(', ')}`)}</p>` : '';
 	const values = units.values
-		.map((entry) => `<p class="small mono">${esc(`${entry.name}: ${entry.values.join(', ')}`)}</p>`)
+		.map((entry) => `<p class="small mono">${escapeHtml(`${entry.name}: ${entry.values.join(', ')}`)}</p>`)
 		.join('');
 	return `${detail}${serials}${values}`;
 };
@@ -377,8 +370,8 @@ const sellerAndFooter = (order, context) => {
 	const seller = context.texts.sellerDetails.trim();
 	const footer = context.texts.footer.trim();
 	return {
-		seller: seller ? `<p class="small seller">${esc(filled(seller, values))}</p>` : '',
-		footer: footer ? `<div class="footer small">${esc(filled(footer, values))}</div>` : '',
+		seller: seller ? `<p class="small seller">${escapeHtml(filled(seller, values))}</p>` : '',
+		footer: footer ? `<div class="footer small">${escapeHtml(filled(footer, values))}</div>` : '',
 	};
 };
 
@@ -405,17 +398,21 @@ const columnOf = (column, context) => {
 	const slug = fieldSlugOf(column);
 	if (slug !== null) {
 		const field = context.fields.list.find((entry) => entry.slug === slug);
-		return { head: () => field?.name ?? slug, cell: (line) => esc(lineFieldValue(line, slug, context)), num: false };
+		return { head: () => field?.name ?? slug, cell: (line) => escapeHtml(lineFieldValue(line, slug, context)), num: false };
 	}
 	switch (column) {
 		case 'sku':
-			return { head: (t) => t.labelSku, cell: (line) => `<span class="mono">${esc(line.sku)}</span>`, num: false };
+			return { head: (t) => t.labelSku, cell: (line) => `<span class="mono">${escapeHtml(line.sku)}</span>`, num: false };
 		case 'quantity':
-			return { head: (t) => t.labelQuantity, cell: (line) => esc(quantityLabel(line.quantity, line.measure)), num: true };
+			return {
+				head: (t) => t.labelQuantity,
+				cell: (line) => escapeHtml(quantityLabel(line.quantity, line.measure)),
+				num: true,
+			};
 		case 'unitPrice':
 			return {
 				head: (t) => t.labelUnitPrice,
-				cell: (line, money) => `${money(line.unitPrice)}${line.measure ? ` / ${esc(line.measure.unit)}` : ''}`,
+				cell: (line, money) => `${money(line.unitPrice)}${line.measure ? ` / ${escapeHtml(line.measure.unit)}` : ''}`,
 				num: true,
 			};
 		case 'discount':
@@ -435,7 +432,8 @@ const columnOf = (column, context) => {
 		default:
 			return {
 				head: (t) => t.labelItem,
-				cell: (line, _money, order) => `<strong>${esc(line.name)}</strong>${lineDetail(order, line, context, 'invoice')}`,
+				cell: (line, _money, order) =>
+					`<strong>${escapeHtml(line.name)}</strong>${lineDetail(order, line, context, 'invoice')}`,
 				num: false,
 			};
 	}
@@ -484,10 +482,10 @@ const entriesBlock = (title, entries, order, context, money, shopper) => {
 			]
 				.filter(Boolean)
 				.join(' · ');
-			return `<tr><td>${esc(formatDate(entry.at, format, { timeZone, style: 'date' }))}</td><td>${esc(detail)}</td><td class="num">${money(entry.amount)}</td></tr>`;
+			return `<tr><td>${escapeHtml(formatDate(entry.at, format, { timeZone, style: 'date' }))}</td><td>${escapeHtml(detail)}</td><td class="num">${money(entry.amount)}</td></tr>`;
 		})
 		.join('');
-	return `<h2>${esc(title)}</h2><table class="entries small"><tbody>${rows}</tbody></table>`;
+	return `<h2>${escapeHtml(title)}</h2><table class="entries small"><tbody>${rows}</tbody></table>`;
 };
 
 /**
@@ -499,10 +497,10 @@ const entriesBlock = (title, entries, order, context, money, shopper) => {
 export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 	const { business, texts: t, format } = context;
 	const { currency } = order.totals;
-	const money = (/** @type {number} */ amount) => esc(formatMoney(amount, currency, format));
+	const money = (/** @type {number} */ amount) => escapeHtml(formatMoney(amount, currency, format));
 	// the merchant's columns, in their order (E26)
 	const columns = context.columns.map((column) => columnOf(column, context));
-	const head = columns.map((column) => `<th${column.num ? ' class="num"' : ''}>${esc(column.head(t))}</th>`).join('');
+	const head = columns.map((column) => `<th${column.num ? ' class="num"' : ''}>${escapeHtml(column.head(t))}</th>`).join('');
 	const rows = order.lines
 		.map(
 			(line) =>
@@ -536,7 +534,7 @@ export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 	const totalsRows = totals
 		.map(
 			([label, value, grand]) =>
-				`<tr${grand ? ' class="grand"' : ''}><td>${esc(label)}</td><td class="num">${value}</td></tr>`,
+				`<tr${grand ? ' class="grand"' : ''}><td>${escapeHtml(label)}</td><td class="num">${value}</td></tr>`,
 		)
 		.join('');
 	// the website's own words for the method and the state (decision 10)
@@ -550,15 +548,15 @@ export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 	const customer = order.customer;
 	const billed = [customer.name, customer.email, customer.phone]
 		.filter(Boolean)
-		.map((line) => `<p>${esc(line)}</p>`)
+		.map((line) => `<p>${escapeHtml(line)}</p>`)
 		.join('');
-	const rate = order.delivery.rateName ? `<p class="small">${esc(order.delivery.rateName)}</p>` : '';
+	const rate = order.delivery.rateName ? `<p class="small">${escapeHtml(order.delivery.rateName)}</p>` : '';
 	const shipTo = order.address
-		? `<div><h2>${esc(t.labelShipTo)}</h2>${addressBlock(order.address)}${rate}</div>`
+		? `<div><h2>${escapeHtml(t.labelShipTo)}</h2>${addressBlock(order.address)}${rate}</div>`
 		: order.delivery.method === 'pickup'
-			? `<div><h2>${esc(t.labelShipTo)}</h2><p>${esc(t.labelPickup)}</p>${rate}</div>`
+			? `<div><h2>${escapeHtml(t.labelShipTo)}</h2><p>${escapeHtml(t.labelPickup)}</p>${rate}</div>`
 			: '<div></div>';
-	const body = `<header><div><h1>${esc(t.title)}</h1><p>${esc(t.labelNumber)} <strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business, seller)}</header><div class="grid"><div><h2>${esc(t.labelBilledTo)}</h2>${billed}${fieldLines(order, context, 'invoice')}</div>${shipTo}</div><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table><table class="totals"><tbody>${totalsRows}</tbody></table>${paymentWords ? `<p>${esc(t.labelPayment)}: ${esc(paymentWords)}</p>` : ''}${entries}${footer}`;
+	const body = `<header><div><h1>${escapeHtml(t.title)}</h1><p>${escapeHtml(t.labelNumber)} <strong class="mono">${escapeHtml(order.number)}</strong></p><p>${escapeHtml(t.labelDate)} ${escapeHtml(placedOn(order, context))}</p></div>${businessBlock(business, seller)}</header><div class="grid"><div><h2>${escapeHtml(t.labelBilledTo)}</h2>${billed}${fieldLines(order, context, 'invoice')}</div>${shipTo}</div><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table><table class="totals"><tbody>${totalsRows}</tbody></table>${paymentWords ? `<p>${escapeHtml(t.labelPayment)}: ${escapeHtml(paymentWords)}</p>` : ''}${entries}${footer}`;
 	return page(`${t.title} ${order.number}`, body);
 };
 
@@ -573,27 +571,31 @@ const slipBody = (order, context, batch) => {
 	const { business, texts: t, format } = context;
 	const slots = (/** @type {OrderRecord['lines'][number]} */ line) => {
 		const missing = batch && batch.numbered.has(line.productId) ? Math.max(0, line.quantity - line.serials.length) : 0;
-		return missing > 0 ? `<p class="small">${esc(t.labelSerials)}: ${'<span class="slot"></span>'.repeat(missing)}</p>` : '';
+		return missing > 0
+			? `<p class="small">${escapeHtml(t.labelSerials)}: ${'<span class="slot"></span>'.repeat(missing)}</p>`
+			: '';
 	};
 	const rows = order.lines
 		.filter((line) => line.kind === 'physical')
 		.map(
 			(line) =>
-				`<tr><td><strong>${esc(line.name)}</strong>${lineDetail(order, line, context, 'packingSlip')}${slots(line)}</td><td class="num">${esc(quantityLabel(line.quantity, line.measure))}</td></tr>`,
+				`<tr><td><strong>${escapeHtml(line.name)}</strong>${lineDetail(order, line, context, 'packingSlip')}${slots(line)}</td><td class="num">${escapeHtml(quantityLabel(line.quantity, line.measure))}</td></tr>`,
 		)
 		.join('');
 	const shipTo = order.address
 		? addressBlock(order.address)
-		: `<p>${esc(order.delivery.method === 'pickup' ? t.labelPickup : order.customer.name)}</p>`;
+		: `<p>${escapeHtml(order.delivery.method === 'pickup' ? t.labelPickup : order.customer.name)}</p>`;
 	const shipment = order.shipment
-		? `<p>${esc(t.labelCourier)}: ${esc(order.shipment.courier)}</p><p>${esc(t.labelTracking)}: <span class="mono">${esc(order.shipment.trackingNumber)}</span></p>`
+		? `<p>${escapeHtml(t.labelCourier)}: ${escapeHtml(order.shipment.courier)}</p><p>${escapeHtml(t.labelTracking)}: <span class="mono">${escapeHtml(order.shipment.trackingNumber)}</span></p>`
 		: '';
 	const cash = batch ? cashToCollect(order) : 0;
 	const collect =
-		cash > 0 ? `<p class="due">${esc(t.labelCashDue)}: ${esc(formatMoney(cash, order.totals.currency, format))}</p>` : '';
-	const note = order.note ? `<p class="small">${esc(t.labelNote)}: ${esc(order.note)}</p>` : '';
+		cash > 0
+			? `<p class="due">${escapeHtml(t.labelCashDue)}: ${escapeHtml(formatMoney(cash, order.totals.currency, format))}</p>`
+			: '';
+	const note = order.note ? `<p class="small">${escapeHtml(t.labelNote)}: ${escapeHtml(order.note)}</p>` : '';
 	const { seller, footer } = sellerAndFooter(order, context);
-	return `<header><div><h1>${esc(t.packingSlipTitle)}</h1><p><strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business, seller)}</header><div class="grid"><div><h2>${esc(t.labelShipTo)}</h2>${shipTo}${fieldLines(order, context, 'packingSlip')}</div><div class="end">${shipment}</div></div>${collect}<table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th></tr></thead><tbody>${rows}</tbody></table>${note}${footer}`;
+	return `<header><div><h1>${escapeHtml(t.packingSlipTitle)}</h1><p><strong class="mono">${escapeHtml(order.number)}</strong></p><p>${escapeHtml(t.labelDate)} ${escapeHtml(placedOn(order, context))}</p></div>${businessBlock(business, seller)}</header><div class="grid"><div><h2>${escapeHtml(t.labelShipTo)}</h2>${shipTo}${fieldLines(order, context, 'packingSlip')}</div><div class="end">${shipment}</div></div>${collect}<table><thead><tr><th>${escapeHtml(t.labelItem)}</th><th class="num">${escapeHtml(t.labelQuantity)}</th></tr></thead><tbody>${rows}</tbody></table>${note}${footer}`;
 };
 
 /**
@@ -643,10 +645,10 @@ export const pickListHtml = (orders, context) => {
 			]
 				.filter(Boolean)
 				.join(' · ');
-			return `<tr><td><strong>${esc(line.name)}</strong>${detail ? `<p class="small">${esc(detail)}</p>` : ''}</td><td class="num">${esc(quantityLabel(quantity, line.measure))}</td></tr>`;
+			return `<tr><td><strong>${escapeHtml(line.name)}</strong>${detail ? `<p class="small">${escapeHtml(detail)}</p>` : ''}</td><td class="num">${escapeHtml(quantityLabel(quantity, line.measure))}</td></tr>`;
 		})
 		.join('');
 	const numbers = orders.map((order) => order.number).join(', ');
-	const body = `<header><div><h1>${esc(t.pickListTitle)}</h1><p class="small mono">${esc(numbers)}</p></div>${businessBlock(business)}</header><table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th></tr></thead><tbody>${rows}</tbody></table>`;
+	const body = `<header><div><h1>${escapeHtml(t.pickListTitle)}</h1><p class="small mono">${escapeHtml(numbers)}</p></div>${businessBlock(business)}</header><table><thead><tr><th>${escapeHtml(t.labelItem)}</th><th class="num">${escapeHtml(t.labelQuantity)}</th></tr></thead><tbody>${rows}</tbody></table>`;
 	return page(t.pickListTitle, body);
 };

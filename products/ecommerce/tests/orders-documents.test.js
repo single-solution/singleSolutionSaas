@@ -8,7 +8,6 @@ import {
 	DEFAULT_COLUMNS,
 	INVOICE_TEXTS,
 	documentWordsOf,
-	esc,
 	invoiceColumnsOf,
 	invoiceHtml,
 	invoiceTexts,
@@ -158,8 +157,8 @@ describe('printable documents', () => {
 		const html = answer.text;
 		expect(html).toContain('<style>');
 		expect(html).not.toContain('<script>');
-		expect(html).toContain('Phone &lt;script&gt;alert(1)&lt;/script&gt;');
-		expect(html).toContain('Sara &lt;b&gt;Shopper&lt;/b&gt;');
+		expect(html).toContain('Phone &#60;script&#62;alert(1)&#60;/script&#62;');
+		expect(html).toContain('Sara &#60;b&#62;Shopper&#60;/b&#62;');
 		expect(html).toContain(order.number);
 		expect(html).toContain('Invoice no.');
 		expect(html).toContain('Oct 4, 2026');
@@ -272,7 +271,7 @@ describe('document parts', () => {
 		expect(texts.title).toBe('Invoice');
 		expect(texts.labelTotal).toBe('Sum');
 		const html = invoiceHtml(order, { business, texts, ...context });
-		expect(html).toContain('B &amp; Co');
+		expect(html).toContain('B &#38; Co');
 		expect(html).toContain('1 Road');
 		expect(html).toContain('Store pickup');
 		expect(html).toContain('Tax included');
@@ -289,7 +288,7 @@ describe('document parts', () => {
 		});
 		// a method the list no longer has and a state the texts have no words for print none: no code or English shows
 		expect(invoiceHtml(none, { business, texts, ...context })).not.toContain('Payment:');
-		expect(packingSlipHtml(none, { business, texts, ...context })).toContain('Sara &lt;b&gt;Shopper&lt;/b&gt;');
+		expect(packingSlipHtml(none, { business, texts, ...context })).toContain('Sara &#60;b&#62;Shopper&#60;/b&#62;');
 		const local = {
 			...context,
 			format: {
@@ -304,7 +303,6 @@ describe('document parts', () => {
 		expect(formatted).toContain('4 oct. 2026');
 		expect(formatted).toContain('10 $ US');
 		expect(formatted).toContain('−3 $ US');
-		expect(esc(null)).toBe('');
 		expect(Object.keys(INVOICE_TEXTS)).toContain('labelSerials');
 	});
 

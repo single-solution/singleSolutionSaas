@@ -7,6 +7,7 @@
  * braces stays as typed. Policies without text are left out. No I/O.
  * @module
  */
+import { escapeHtml } from '@ss/contracts/text';
 import { cleanHtml } from './catalog-content.js';
 import { durationText } from './durations.js';
 
@@ -73,9 +74,6 @@ export const checkPolicies = (value) => {
 
 /** A placeholder, with one or two braces. */
 const PLACEHOLDER = /\{\{([A-Za-z]+)\}\}|\{([A-Za-z]+)\}/g;
-
-/** @param {string} value */
-const escapeHtml = (value) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /**
  * The filled policies, in the list's order, those without text left out.
