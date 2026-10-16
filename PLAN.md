@@ -5781,3 +5781,250 @@ Done: <date>, verified by <who>
   confirmation, data-export download, and the 60-second launch while it stays `GET /sso?launch=` (open question, 0.8.4).
 - **Part 0 changes only with the owner**: if building shows that Part 0 is wrong or incomplete, stop and ask; change
   Part 0 only after the owner decides.
+
+## 0.14 The finish (built 2026-10-15/16): cleanup, merchant-owned choices, the stores' options
+
+Owner directions recorded here (binding):
+
+- 2026-10-15 15:55: "this is just a unit can be any … why still not universal and global?" A business choice a
+  merchant would name (units, reasons, methods, labels, channels, segments) is the merchant's own list, seeded with
+  sensible defaults; fixed only: world standards (ISO countries, currencies, languages, IANA zones, E.164, UN/CEFACT
+  codes used only toward Google) and engine primitives (item kinds, stage contracts, field data types).
+- 2026-10-15 16:30: grade stays a switchable feature with merchant-created grades; payment methods are a merchant list
+  on fixed kinds (gateway | pay_first | on_delivery | at_pickup); shopper texts per language, Portal staff logins, a
+  CSV/Shopify importer and chat-app channels are not built now.
+- 2026-10-15 ~23:20: the SaaS is the union of every option the three stores have, in its most advanced form, built
+  universally; the owner sets each store up later; pre-launch, code is removed freely and no compatibility code is kept.
+- 2026-10-16 12:08: stay within usage limits (one helper at a time, lean checks).
+
+Result: every one of the 118 options the three stores have is in the SaaS (111 as the stores have them, 5 the
+professional way, 2 added: SEO previews and product performance); old-format secret readers and old-record code are
+removed; Ecommerce runs on the shared code like the other products. Every renamed or removed setting is listed in the
+owner's deploy notes (outside the repo, `audit/deploy-notes-2026-10-16.md`).
+
+### P6 (merged 16:13 as 8b2034d0…b9dfe2f4)
+
+Dynamic model phase 6 and the Ecommerce Overview built (P6, 2026-10-15). Measurement tables: size charts take any unit
+(mm, cm, m, in, ft, yd, g, kg, lb, oz, ml, l; `core/units.js` with the exact factors), an own label or none (no
+default), a unit per column, and `convertTo` (a shopper switch only within one dimension; 422 otherwise); `fitAdvice` →
+`advice`; the Size guide converts from the table. Landing pages by any field: `facet { field: grade | slug, value }`
+replaces `grade`; `landing_pages.auto` off | category_brand | category_brand_facet with `autoFacet` and `autoMaxPages`
+(2,000; one stock aggregation per facet field); `landingUrl` default `{categoryUrl}?brand={brand}&{facet}={value}` (the
+empty pair dropped without a facet); `GET /v1/seo/listing` reads `attr.<slug>=` as the facet; imports check facets; the
+grid takes `data-attributes` (parity P3-9). The Ecommerce Overview is on @ss/ui `ProductOverview` (Payments,
+Notifications, currency until set — USD default, decision 9 —, Atlas index, image address, staff alerts reaching nobody
+or without an admin page, bank note empty, Connections ready tile); the old copies removed. P5-18 shop-health checks
+were already complete (E42).
+
+### Decision 8 (N2)
+
+PLAN 0.2: turning two-step sign-in on replaces the Portal session (new cookie; the old token stops at once); a session
+lasts the Session length from sign-in and is never written on use.
+
+### EW1 (merged 16:22 as 97719e5b…da111ca4)
+
+Built (EW1, 2026-10-15): the Ecommerce admin widgets use every staff route the API has. Orders: record a payment
+(E26; can confirm a waiting order), edit a waiting order's items, payment and delivery (priced again, E29), delete an
+order behind its typed number (refusals in the website's words), an opened-by-me marker with a "not opened" filter on
+orders and customers, a "refunds to make" filter, move all orders of a status to another of the same kind, packing
+slips and pick list for selected orders, and a CSV export of what the list shows. Claims: staff notes. Customers and
+reports: sales summary, sell-through, oldest stock, customers CSV, review back to waiting. Catalog: a brand's
+hidden-in categories; removing digital files and license keys without taking away what orders already received
+(`digital.retired`; DELETE /v1/products/:id/files/:name, POST /v1/products/:id/licences/remove and admin twins).
+Settings → Role prices has its editor. Unused admin code removed (kit pager/row, the no-flow orders list, the
+uncoded-warnings fallback).
+
+### P5 (merged 2026-10-16 00:05 as e129b049…eea95c0a)
+
+Phase 5 built: every address carries `region` with one address table (`core/address.js`) for checkout, widgets, staff
+edits and imports; postcodes upper-cased without spaces; optional `address_regions` picker. Zones match { countries,
+regions, cities, areas, postcodes } — most specific wins (longest postcode start, area, city, region, country,
+catch-all). Tax by country/region/city/postcode start, percents add up, pickup/undelivered orders taxed in the
+business country. Guests: `checkout.guestIdentity` (phone | email | either), `checkout.phoneRequired`; `guestKey`
+(`p:+E164` | `e:email`) with a unique partial index (`one_guest_per_key`); linking by verified phone or email. Phones
+searched by the whole number. Chat delivery quotes take the full place. Dashboard zone/tax/region editors.
+
+### EW2 (merged 2026-10-16 ~00:20 as …a75cb6f9)
+
+The shopper widgets catch up with the API: per-item reviews from My orders (`canReview`), Reviews per page read; bank
+transfer details, proof upload (signed upload then POST …/proof) and the staff "Open proof" link; guest checkout in the
+cart (`guestIdentity`, `phoneRequired`, order keys kept in the browser, newest 20, sent as `SS-Order-Key`; My orders
+lists this browser's guest orders); delivery, packing and pickup-ready texts and the pickup point's address and hours;
+Chat context shop basics (P5-17) with warranties in months; real section names, neutral examples; prices typed with
+the shown decimal sign; `cart.problem.sold_out` and the object form of grades removed.
+
+### P7 (merged 2026-10-16 ~00:25 as d80e0133, b0b36390)
+
+Dynamic model phase 7 built: feature `measured_sales` ("Sell in any unit"). An item type's `measure` names the
+merchant's own unit label in any language (no fixed unit list, no dimension), decimals 0–3, step/least/most; an
+optional standard measure (amount + UN/CEFACT code) only for feeds `unit_pricing_measure` and JSON-LD
+`UnitPriceSpecification` (none sent without it). Quantities are integer thousandths of the unit. `core/measure.js`
+`lineGross` (BigInt, half up, whole units, refuses above MAX_AMOUNT), `piecesOf`, step/min/max checks used by checkout,
+promotions, deals, coupons, points, tax, invoices, claims, reports, Growth and order counts. Measured lines: one piece
+for deals (percent off the line, fixed off each unit), never in bundles or buy X get Y (422 `measured`). Cart and Chat
+take decimal amounts exactly; answers carry `measure`; low stock in units; the unit is kept while items have stock.
+Widgets and the item-type editor updated.
+
+### FX-B (merged 2026-10-16 ~01:00, …73b335e1)
+
+Payments fixed choices: manual payment methods are the merchant's list (`manual_methods`) on the shared kinds
+`pay_first` / `on_delivery` / `at_pickup`, each with accounts of label/value rows per currency and a dashboard editor;
+proof upload per method, off by default (Storage warning only when a method needs it). Gateways and methods follow the
+merchant's order and preferred way. Links ask the phone (off/optional/required) and up to 3 own questions, end on a
+date or after N payments. Up to 5 custom gateways `generic:<key>` in connections `generic_1…5`. Amounts accept both
+decimal signs; ISO currency picker; CSV in the website's words with plain decimals and a currency column; checkout
+expiry a setting capped per gateway; brand-only payer labels; no English sent to gateways; gateway addresses from
+adapter metadata. Growth `consent_banner.askAgainMonths` (G6).
+
+### N7 (2026-10-16, 7fc6f65e…6b08f2b0) — PLAN line committed by N7 itself.
+
+### EW-a (merged 2026-10-16 ~01:10, …7d1d30ed)
+
+E27 policies are the merchant's list {key, title, text} (seeded five, editor; cart, Chat, llms.txt and /v1/policies
+read it); E29 order numbers follow a free token pattern {prefix}{year}{month}{number}{suffix} with per-month, per-year
+or running counters, `numberSuffix`, `numberDigits` 1–10; E35 `seo.businessType` (OnlineStore or any schema.org
+LocalBusiness type); E34 `variesBy` only from mapped variant fields; E36 a per-status `staffAlert` switch, SMS default;
+E15 `checkout.guestIdentity` also for alerts, loyalty and staff-added customers; E33 Chat context words from Texts
+`chat.context.*`; E26 invoice columns with `field.<slug>`, `sellerDetails` and footer placeholders; decision 10 invoice
+payment words from Texts; E28 `field_<slug>` values in order messages.
+
+### FX-C (merged 2026-10-16 ~01:20, …7e1fcdf2)
+
+Chat fixed choices: AI style and summary instructions are settings with fixed safety rules (C15); bot name and handoff
+notice are widget texts (C16); "this is a bot" phrases are a list in any language (C17); budget words are a setting and
+numbers in product names are not budgets (C18); the fixed intent list is gone (C20); shop list sizes and store
+information length are settings (C22); reply alerts use the channels on in Notifications (C23); the team author name
+comes from `chat.staff` (C24); ratings are CSAT with the merchant's labels or NPS, reports show NPS (C13); merchant
+redaction patterns run by a safe linear engine, IPv6 hidden (C14); knowledge collections and a language per entry
+(C21); teams route chats by round robin or least busy, by language or page (C12).
+
+### FX-A (merged 2026-10-16 ~01:10, …55e6e642)
+
+Accounts fixed choices: ready-made roles are editable/deletable templates; only Owner and the merchant-chosen sign-up
+role are protected; each role decides whether it shows as a membership. Phone search by each number's national part.
+Email codes have the same limit settings as phone codes, both with wrong-try settings. The personal-password check
+knows many keyboard layouts, digits in every script and alphabet runs. Disposable-email checks have an "always allow"
+list; all caps are settings below system limits. Custom fields gain 5 types, help text, visibility and order.
+Activity details and device names are stored as codes and values put into words by texts. One consent list (marketing
+kept apart, each answer recorded per user) replaces the single terms box. User tags and saved views.
+
+### FX-N (merged 2026-10-16 01:25, …140d575c)
+
+Notifications has no fixed business choices left: any SMS/WhatsApp gateway is a request the merchant builds (method,
+URL template, headers, body type, body) judged by the merchant's own success rule (statuses, JSON path = value), with a
+configurable id path and no English-word detection; replies from any gateway are read by the merchant's mapping and a
+token; unsubscribe keywords per language. Merchant-named unsubscribe topics per template; per-template fallback order
+and send-limit rule (required messages never capped); quiet hours as windows per weekday with minutes, per channel;
+retry presets or custom waits per channel and for webhooks; staff one-off messages transactional or marketing, push
+included; failure reasons stored as codes; default templates in other languages with US English fallback; webhook URL
+and template limits as settings with system caps.
+
+### FX-C2 (merged 2026-10-16 ~01:35, …83506a4a)
+
+Chat C6, C7, C9, C10, C11: office hours are lists office_hours {day 1–7, start, end} and office_exceptions {date,
+name, hours}; page types are the list page_types {key, name, path, nudge} (seeded product/category/deals/cart), typed
+by setPage or path pattern; visitor uploads are the list upload_types {type, maxMb} from a wider safe set (images incl.
+HEIC/AVIF, PDF, video, audio), up to 100 MB per type; book-a-slot asks booking_questions (seeded name/email/phone) and
+an optional booking_services choice (`needsContact`); conversations carry merchant tags, topic and priority (lists
+tags/topics/priorities), inbox filters, counts and reports by them, optional AI tagging (`inbox.aiTagging`) picks only
+the merchant's keys.
+
+### EP (merged 2026-10-16 01:58, …e43a6824)
+
+Payment methods are the merchant's own list (`payment_methods`), the one place to choose them: key, name, kind
+(`gateway | pay_first | on_delivery | at_pickup`, the same as Payments), on/off, note, fee % with its base, largest
+order, offered for delivered and/or picked-up orders; on-delivery and at-pickup methods add an advance and the
+returned-packages rule. Pay-first methods are paid through Payments (its manual method of the same key) or by hand
+(own label/value accounts per currency and a proof switch), so each account lives in one place. Orders store their
+method's kind; the order engine, flow starts and couriers follow the kind. Staff record money by a listed method or
+`other`. "Paid on delivery" is an option on the move into delivered (decision 11). Flow texts, deals, invoices,
+reports, messages, Chat and widgets show the merchant's names. The `cod` feature and the fixed checkout payment
+settings are removed.
+
+### EU (merged 2026-10-16 02:14, …d5cd2ecd)
+
+Quantity rules per item type (step, least, most; system ceilings 100,000 pieces / 500 lines) that the cart, product
+page and Chat read from the server; store units for package weight and size (g/kg/oz/lb, mm/cm/in; stored in g/mm);
+return and warranty times as a number plus days/months/years, on the setting, products, variants and grades, shown as
+typed and counted on the calendar; unit fields up to 10 × 10 values with check digits pattern/Luhn/GTIN/ISBN/VIN; the
+merchant's own unit states (in stock and sold fixed); order burst window a setting; compare up to 10; feature texts
+match today's shapes; widgets import core enums; staff money boxes accept the shown decimal sign; CSV measured stock in
+units. Grade stays a merchant feature (create, name, order, remove; condition and own return/warranty times) with the
+phone-shop leftovers removed.
+
+### FX-G (merged 2026-10-16 02:15, …66c4653e)
+
+Growth fixed choices (G1–G14 without G6): merchant lists on the kit — goals, funnels, consent categories,
+announcements, conversion actions, more verification tags and ignored SEO findings — checked field by field, seeded
+with today's behavior, edited in one shared Settings editor. Goals and funnels count events or page patterns per day;
+`SSGrowth.track(name, props)`; custom events no goal names are dropped (raw-event storage stays within M0). Consent
+follows the merchant's categories (CCPA sale/sharing opt-out and Global Privacy Control included); pixels follow the
+conversion actions; banner bottom/top/centered/corner. The notice bar shows the first announcement on now for the page
+(schedule on the business clock). SEO checklist uses all schema.org Organization types, ignore per page and editable
+lengths; page kind from the main schema.org type. Redirects add 302/307 and wildcards ($1–$9). Robots defaults empty
+for any site, with an "Online store preset"; AI crawlers blocked one by one plus own user agents.
+
+### EL (merged 2026-10-16 05:16, …c7302d92)
+
+E11: customers and orders carry the merchant's tags (filter, tags in use, rename, remove, bulk apply up to 500), and
+saved customer segments (`customer_segments`, today's three as defaults, loyalty follows the member flag) use rules over
+tags, orders, spend, last order, place, flags and customer fields (all/any). E22: CSV files have a `field:<slug>`
+column per merchant field; imports merge rows of one product given by different keys. E23: bulk edit sets brand, tags,
+item type, compare-at price or any field, each checked like a product change (`refused` listed). E12: sales group by any
+built-in grouping or `field:<id>`, read from `…/reports/groupings`, payment methods by name, summary per day/week/month.
+E24: the staff product list filters and counts by any filterable field. E31: role prices are a percent off or a price
+list per product or variant (never raising a price), also giving member prices in the product markup.
+
+### FX-K (merged 2026-10-16 05:21, …271eca1f)
+
+The setup advisor recommends only what the business profile asks for (finer answers, "other" own answers, a tax
+question, an EEA region rule); Re-seal wording keyed on "could not be opened" = 0 with the parts to enter again (Portal
+and products); manifest `widgetScriptLoading` (async | blocking; Growth blocking) read by the Portal snippet and
+`widgetScriptTag`; the support contact is a channel list; @ss/ui `ListEditor` (the merchant-list pattern), label maps
+and suggestions in settings; dashboards in the website's Format locale; business.json `currency`, `currencies`,
+`language`, Format symbols per currency; staff alerts with a channel per recipient, staff push and `maxRecipients`;
+the example shop imports its own order flow; kit import log entries as codes and values; local development: one port
+per deployable (Portal 3000, products 3001–3006), a dev-only localhost rule (`@ss/net` `allowHostsFor`; never in
+production) and a kept local database (`db:local`).
+
+### R7 (2026-10-16 05:20) — `audit/store-options-superset-2026-10-15.md`: 118 store options, 111 built, 5 SaaS better, 2
+
+missing → SX.
+
+### ED (merged 2026-10-16 05:36, …4cc70521)
+
+E5 delivery zones hold named rates like Shopify shipping profiles: { key, name, kind: delivery|pickup, price,
+freeOver, minDays, maxDays, condition: { by: none|weight|value, min, max }, locations }; the shopper picks one
+(`delivery.rate`); the quote and order keep the rate and its name; nothing fits → `no_delivery`; the seeded list is one
+zone with Standard and Pickup; SEO, feeds and policies read the home country's first plain rate. E25 each courier books
+through its own connection (`courier_1…5`). E30 booking schedules per place, person or service in Chat's office-hours
+shape with dated exceptions; services name their schedule.
+
+### ADDR (merged 2026-10-16 05:49, …a8cf9abc)
+
+Address formats per country (A1, E6): one table in `@ss/contracts/address`, based on Google's address data (~70
+countries with their own entry), gives each country its parts, order, labels, the region and postal code it requires
+and its postal code shape; other countries take a plain default. Accounts and Ecommerce use it for forms (which change
+with the country), checks, imports and printed addresses. The country is a picker saved as its 2-letter code. Labels are
+per-website widget texts. The merchant's required fields and P5's region lists still apply.
+
+### SX (merged 2026-10-16 ~06:00) — R7 #105, #113
+
+One search result and share card preview (`@ss/ui/seo-preview` + `<SeoPreview>`): pixel widths by canvas (or an
+estimate for any script), cut at a word, warnings past 600 / 920 px; Ecommerce product, category, brand, landing page
+and grade editors show it live with the server's patterns and fallbacks (widget config `settings.seo`); Growth's SEO
+checklist shows each page as read (`pages[].head`). Growth product performance: shop-event items totaled per product per
+day inside the one-document-per-day totals (`item_view`, `item_cart`, `item_checkout`, `item_purchase`, `item_revenue`
+per currency, `item_name`); `GET /v1/analytics/products` (+ CSV and ticket twins) feeds a sortable Products table.
+
+### ER (merged 2026-10-16 12:15)
+
+Merchants name claim kinds and statuses (statuses on fixed roles) with outcomes refund, replace, repair or store credit (a one-use coupon); cancel and failed-delivery reasons that can count against the customer; order attachments (photo/video/file kinds, optionally required at a status) replace the dispatch video; review questions (1–5 rating or a choice). Chat gets generic attachments and extra fields, and its cards add the item's least quantity.
+
+### CL (merged 2026-10-16 12:25)
+
+Pre-launch, every unit reads secrets only in the ss2 format and records only in the shape today's writes store (old secret readers, old-queue, old-flow, old-order and history-repair code removed); Re-seal and ENCRYPTION_KEY_PREVIOUS stay for key rotation. Chat imports carry tags, topic and priority.
+
+### E-S1 (merged 2026-10-16 13:02, …f2840a2f)
+
+Ecommerce runs on the shared code: widgets mount from `config.widgets`, docs via `renderDocsPage`, the kit's list twin, `createProductBase` start-up and the kit's import routes, the shared CSV/money/text/email/isObject/crypto/Format helpers, `createLogger()`. Staff alerts take recipients, channels and staff push from the kit (`staffAlerts.prepare`) and are still saved first in Ecommerce's outbox. The kit lost what it kept only for Ecommerce. Bug fixed: the Meta feed CSV had no spreadsheet formula guard.
