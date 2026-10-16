@@ -1212,7 +1212,7 @@
 	"catalogAdmin.featuredProduct": "Featured product",
 	"catalogAdmin.severalValues": "{name} (comma separated)",
 	"catalogAdmin.requiredLabel": "{name} (required)",
-	"catalogAdmin.hideSizeGuide": "Hide the size guide",
+	"catalogAdmin.noSizeGuide": "No size guide",
 	"catalogAdmin.sizeGuide": "Size guide",
 	"catalogAdmin.googleCategory": "Google product category (empty = as above it)",
 	"catalogAdmin.googleCategoryTitle": "Google product category",

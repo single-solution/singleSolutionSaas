@@ -305,6 +305,8 @@ export const pageOf = (product, context) => {
 		rating: product.rating,
 		booking: context.slots && product.booking ? { durationMinutes: product.booking.durationMinutes } : null,
 		sizeChart: context.sizeChart,
+		// the merchant chose no size guide for this product (then sizeChart is null)
+		hideSizeGuide: product.hideSizeGuide === true,
 		faqs: product.faqs,
 		seo: {
 			title: product.seo.title || product.name,

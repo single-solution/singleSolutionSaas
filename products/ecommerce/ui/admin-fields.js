@@ -435,6 +435,21 @@ export const chartChoices = (kit, charts) => [
 	...charts.map((chart) => ({ value: chart.id, label: chart.name })),
 ];
 
+/** The value of a product's size guide choice for "no size guide" (`hideSizeGuide`). */
+export const NO_GUIDE = 'none';
+
+/**
+ * Choices of a product's size guide (E5): from its brand or category (the product has none of its own), no size guide
+ * at all, then the charts by name. The value 'none' stands for `hideSizeGuide`.
+ * @param {Kit} kit @param {Array<{ id: string, name: string }>} charts
+ * @returns {Choice[]}
+ */
+export const guideChoices = (kit, charts) => [
+	{ value: '', label: kit.t('catalogAdmin.chartFromBrand') },
+	{ value: NO_GUIDE, label: kit.t('catalogAdmin.noSizeGuide') },
+	...charts.map((chart) => ({ value: chart.id, label: chart.name })),
+];
+
 /**
  * The earlier addresses of a product or category (E13), read only.
  * @param {Kit} kit @param {string[] | undefined} previous

@@ -380,8 +380,16 @@ describe('E5 size charts', () => {
 		});
 		await api('PATCH', `/v1/products/${ids.featured.id}`, { sizeChartId: chart.id });
 		expect((await get(`/v1/shop/products/${ids.featured.slug}`)).json.sizeChart.id).toBe(chart.id);
+		expect((await get(`/v1/shop/products/${ids.featured.slug}`)).json.hideSizeGuide).toBe(false);
+		// the product's own choice of none: no chart, and the answer says the merchant chose it
 		await api('PATCH', `/v1/products/${ids.featured.id}`, { hideSizeGuide: true });
-		expect((await get(`/v1/shop/products/${ids.featured.slug}`)).json.sizeChart).toBeNull();
+		const hidden = (await get(`/v1/shop/products/${ids.featured.slug}`)).json;
+		expect(hidden.sizeChart).toBeNull();
+		expect(hidden.hideSizeGuide).toBe(true);
+		// a product with no chart anywhere has none, but did not choose it
+		const plain = await api('POST', '/v1/products', { name: 'Plain mug', status: 'active', price: 100, stock: 1 });
+		expect((await get(`/v1/shop/products/${plain.slug}`)).json).toMatchObject({ sizeChart: null, hideSizeGuide: false });
+		await api('DELETE', `/v1/products/${plain.id}`);
 		expect((await shop.api('PATCH', `/v1/products/${ids.featured.id}`, { sizeChartId: 'szc_none' })).status).toBe(422);
 		const used = await api('GET', `/v1/size-charts/${chart.id}`);
 		expect(used.uses).toEqual({ products: 1, brands: 0, categories: 1 });

@@ -54854,6 +54854,7 @@
 					"rating",
 					"booking",
 					"sizeChart",
+					"hideSizeGuide",
 					"faqs",
 					"seo"
 				],
@@ -55228,6 +55229,10 @@
 								"$ref": "#/components/schemas/ShopSizeChart"
 							}
 						]
+					},
+					"hideSizeGuide": {
+						"type": "boolean",
+						"description": "The merchant chose no size guide for this product (then sizeChart is null), as against a product that has no chart to show."
 					},
 					"faqs": {
 						"type": "array",

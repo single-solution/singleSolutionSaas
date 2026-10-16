@@ -174,8 +174,15 @@ describe('catalog admin: a product', () => {
 		await change(fieldIn(editor, 'Item type'), 'service');
 		// booked on the Branch schedule (E30)
 		type(fieldIn(editor, 'Booking schedule key (empty: the first schedule)'), ' Branch ');
-		await change(fieldIn(editor, 'Size chart'), '');
-		await tick(checkIn(editor, 'Hide the size guide'), true);
+		// one choice: from its brand or category, no size guide at all, or a chart of its own
+		expect([...fieldIn(editor, 'Size chart').options].map((option) => option.textContent)).toEqual([
+			'From its brand or category',
+			'No size guide',
+			'Shirts',
+			'Shoes',
+		]);
+		expect(fieldIn(editor, 'Size chart').value).toBe('szc_1');
+		await change(fieldIn(editor, 'Size chart'), 'none');
 		await tick(checkIn(editor, 'Featured product'), false);
 		await tick(checkIn(editor, 'Use the page title as written (the title pattern is not added)'), false);
 		await click(buttonIn(editor, 'Save'));
@@ -252,6 +259,30 @@ describe('catalog admin: a product', () => {
 		await click(buttonIn(detailOf(panel), 'Edit'));
 		await click(buttonIn(detailOf(panel), 'Cancel'));
 		expect(shows(detailOf(panel), 'Stock')).toBe(true);
+	});
+
+	it('picks the size guide in one choice: from its brand or category, none, or a chart of its own', async () => {
+		/** @type {any[]} */
+		const patches = [];
+		const { root } = await start(ALL, {
+			'GET /v1/admin/products/prd_1': () => answer(200, product({ hideSizeGuide: true, sizeChartId: null })),
+			'PATCH /v1/admin/products/prd_1': (/** @type {any} */ call) => {
+				patches.push(call.body);
+				return answer(200, product({ hideSizeGuide: call.body.hideSizeGuide, sizeChartId: call.body.sizeChartId }));
+			},
+		});
+		const panel = panelOf(root, 'products');
+		await click(buttonIn(detailOf(panel), 'Edit'));
+		// a product that hides its size guide shows that choice
+		expect(fieldIn(detailOf(panel), 'Size chart').value).toBe('none');
+		expect(() => checkIn(detailOf(panel), 'Hide the size guide')).toThrow();
+		await change(fieldIn(detailOf(panel), 'Size chart'), 'szc_1');
+		await click(buttonIn(detailOf(panel), 'Save'));
+		expect(patches[0]).toMatchObject({ sizeChartId: 'szc_1', hideSizeGuide: false });
+		await click(buttonIn(detailOf(panel), 'Edit'));
+		await change(fieldIn(detailOf(panel), 'Size chart'), '');
+		await click(buttonIn(detailOf(panel), 'Save'));
+		expect(patches[1]).toMatchObject({ sizeChartId: null, hideSizeGuide: false });
 	});
 
 	it('names the product that replaces an archived one (SEO audit G9)', async () => {

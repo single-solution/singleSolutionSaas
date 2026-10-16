@@ -14,10 +14,11 @@ import { typeTakes } from '../core/item-types.js';
 import { entriesOf, query, timeInputs } from './admin-kit.js';
 import { choicesOf } from './admin-attributes.js';
 import {
-	chartChoices,
+	NO_GUIDE,
 	checkGroup,
 	earlierSlugs,
 	faqsEditor,
+	guideChoices,
 	pageLinks,
 	paragraphsOf,
 	plainOf,
@@ -252,11 +253,12 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			kit.field(t('catalogAdmin.duration'), duration),
 			kit.field(t('catalogAdmin.schedule'), schedule),
 		]);
-		const chart = kit.select(chartChoices(kit, charts), product.sizeChartId ?? '');
-		const hideGuide = kit.toggle(t('catalogAdmin.hideSizeGuide'), product.hideSizeGuide === true);
-		const guideGroup = kit.group(t('catalogAdmin.sizeGuide'), [
-			fieldsOf(kit, [kit.field(t('catalogAdmin.sizeChart'), chart), hideGuide.node]),
-		]);
+		// one choice: from its brand or category, no size guide, or a chart of its own
+		const chart = kit.select(
+			guideChoices(kit, charts),
+			product.hideSizeGuide === true ? NO_GUIDE : (product.sizeChartId ?? ''),
+		);
+		const guideGroup = kit.group(t('catalogAdmin.sizeGuide'), [fieldsOf(kit, [kit.field(t('catalogAdmin.sizeChart'), chart)])]);
 		// the page as search engines will get it, from the values typed so far (R7 #105)
 		const links = pageLinks(kit, categories, brands);
 		const seo = seoEditor(kit, product.seo, {
@@ -418,7 +420,12 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 				...(parts.slots
 					? { booking: { durationMinutes: Number(duration.value), schedule: schedule.value.trim().toLowerCase() } }
 					: {}),
-				...(parts.chart ? { sizeChartId: chart.value || null, hideSizeGuide: hideGuide.box.checked } : {}),
+				...(parts.chart
+					? {
+							sizeChartId: chart.value && chart.value !== NO_GUIDE ? chart.value : null,
+							hideSizeGuide: chart.value === NO_GUIDE,
+						}
+					: {}),
 				seo: seo.value(),
 				faqs: faqs.value(),
 				...(parts.days ? { returnTime: days[0], warrantyTime: days[1] } : {}),
