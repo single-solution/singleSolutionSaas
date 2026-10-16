@@ -15,7 +15,7 @@ export const ADMIN_KIT_CSS = `
 :host([data-ss-mode='dark']) { --ss-kit-focus: var(--ss-color-accent, #a5b4fc); --ss-kit-ok: var(--ss-color-success, #4ade80);
   --ss-kit-warn: var(--ss-color-warning, #fbbf24); --ss-kit-bad: var(--ss-color-danger, #f87171); }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible,
-[tabindex]:not([tabindex='-1']):focus-visible { outline: 2px solid var(--ss-kit-focus); outline-offset: 2px; }
+:where([tabindex]:not([tabindex='-1'])):focus-visible { outline: 2px solid var(--ss-kit-focus); outline-offset: 2px; }
 button.icon { padding: 6px 12px; line-height: 1; }
 button.danger { background: var(--ss-color-danger, #b91c1c); color: var(--ss-color-onDanger, #ffffff); }
 .status.error { color: var(--ss-kit-bad); }

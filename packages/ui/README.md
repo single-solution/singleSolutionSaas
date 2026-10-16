@@ -36,7 +36,10 @@ it is the menu button.
 - `KeyValueList`, `Masonry` and the field grid also follow their own width.
 - `PageHeader` keeps its actions beside the title while both fit on one line, else moves them together under it.
 - `Table` cells keep one line (a column with `wrap` wraps on whole words within 10rem); a table wider than its card
-  scrolls inside it. With no rows it shows only its empty message.
+  scrolls inside it (a labeled region the keyboard can focus and scroll). With no rows it shows only its empty message.
+- Type sizes beside Tailwind's scale are named in `theme.css`: `text-micro` (11px), `text-label` (13px), `text-lead` (15px),
+  `text-heading` (17px), `text-page` (26px) and `text-figure` (28px); use them instead of `text-[13px]`. A failed
+  dashboard section (`Loaded` with an answer from `useLoad`) offers Try again; `ConfirmDialog` starts on Cancel when `danger`.
 - `<SoftBreaks text>` lets a domain, email or path wrap between its parts (`<wbr>` after dots, `@` and slashes).
 
 ## Masonry and the More menu
