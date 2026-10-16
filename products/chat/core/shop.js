@@ -177,7 +177,10 @@ export const SHOP_TOOL_NAMES = Object.freeze(Object.values(SHOP_TOOLS));
  * @property {string | null} [priceMaxText] the highest variant price, when it is higher (E37)
  * @property {string | null} grade
  * @property {number | null} stockLeft
+ * @property {QuantityLimits | null} limits the quantities a shopper may buy (pieces, or thousandths of `unit`)
+ * @property {string | null} unit the item's own unit when it is sold in one
  */
+/** @typedef {{ step: number, min: number, max: number }} QuantityLimits */
 /**
  * A product card saved on an AI message.
  * @typedef {object} ProductCard
@@ -190,6 +193,8 @@ export const SHOP_TOOL_NAMES = Object.freeze(Object.values(SHOP_TOOLS));
  * @property {string | null} image https
  * @property {string | null} url the product page
  * @property {boolean} inStock
+ * @property {QuantityLimits | null} [limits] what Add to cart adds: the least, in the item's steps (Ecommerce's limits)
+ * @property {string | null} [unit] the item's own unit when it is sold in one (quantities in thousandths of it)
  */
 /**
  * The website's Format and business time zone (from the server's `product.format(websiteId)`).
@@ -325,7 +330,21 @@ const productOf = (raw) => {
 		priceMaxText: isAmount(raw.priceMax) && Number(raw.priceMax) > Number(raw.price) ? textOf(raw.priceMaxText, 60) : null,
 		grade: textOf(raw.grade, 60),
 		stockLeft: countOf(raw.stockLeft),
+		limits: cardLimitsOf(raw.limits),
+		unit: textOf(raw.unit, 20),
 	};
+};
+
+/**
+ * The quantities a product may be bought in (Ecommerce's `limits`: whole step, least and most), else null.
+ * @param {unknown} raw
+ * @returns {QuantityLimits | null}
+ */
+const cardLimitsOf = (raw) => {
+	if (!isObject(raw)) return null;
+	const whole = (/** @type {unknown} */ value) => Number.isSafeInteger(value) && Number(value) >= 1;
+	if (!whole(raw.step) || !whole(raw.min) || !whole(raw.max) || Number(raw.min) > Number(raw.max)) return null;
+	return { step: Number(raw.step), min: Number(raw.min), max: Number(raw.max) };
 };
 
 /**
@@ -343,6 +362,8 @@ export const cardOf = (product) => ({
 	image: product.image,
 	url: product.url,
 	inStock: product.inStock,
+	limits: product.limits,
+	unit: product.unit,
 });
 
 /**

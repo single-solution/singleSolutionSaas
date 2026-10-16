@@ -1004,6 +1004,9 @@ describe('product cards', () => {
 			image: null,
 			url: null,
 			inStock: true,
+			// sold by the meter from 1.5 m in steps of 0.5 m (thousandths of its unit)
+			limits: { step: 500, min: 1500, max: 20000 },
+			unit: 'm',
 		},
 		{
 			...{ productId: 'prd_3', variantId: null, name: 'Old', price: 100, compareAtPrice: null, currency: 'EUR' },
@@ -1056,7 +1059,8 @@ describe('product cards', () => {
 		expect(cards[0]?.querySelector('.status')?.textContent).toBe(TEXTS['chat.addedToCart']);
 		// a card without a product page has a plain button
 		buttonIn(/** @type {HTMLElement} */ (cards[1]), TEXTS['chat.addToCart']).click();
-		expect(asked.at(-1)).toEqual({ productId: 'prd_2', variantId: null, quantity: 1 });
+		// an item with limits adds its least, in its own unit (EU)
+		expect(asked.at(-1)).toEqual({ productId: 'prd_2', variantId: null, quantity: 1500, measured: true });
 		window.removeEventListener('ss-ecommerce:add-to-cart', cart);
 		document.documentElement.lang = '';
 	});

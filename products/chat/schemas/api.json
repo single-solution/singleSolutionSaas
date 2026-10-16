@@ -1186,7 +1186,19 @@
 		"ProductCard": {
 			"type": "object",
 			"description": "A product the shop tools found, shown under the AI answer (Product cards).",
-			"required": ["productId", "variantId", "name", "price", "compareAtPrice", "currency", "image", "url", "inStock"],
+			"required": [
+				"productId",
+				"variantId",
+				"name",
+				"price",
+				"compareAtPrice",
+				"currency",
+				"image",
+				"url",
+				"inStock",
+				"limits",
+				"unit"
+			],
 			"additionalProperties": false,
 			"properties": {
 				"productId": {
@@ -1224,6 +1236,37 @@
 				},
 				"inStock": {
 					"type": "boolean"
+				},
+				"limits": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["step", "min", "max"],
+							"additionalProperties": false,
+							"properties": {
+								"step": {
+									"type": "integer",
+									"minimum": 1
+								},
+								"min": {
+									"type": "integer",
+									"minimum": 1
+								},
+								"max": {
+									"type": "integer",
+									"minimum": 1
+								}
+							}
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "The quantities a shopper may buy (Ecommerce's limits: pieces, or thousandths of unit); Add to cart adds min (EU)."
+				},
+				"unit": {
+					"type": ["string", "null"],
+					"description": "The item's own unit when it is sold in one."
 				}
 			}
 		},

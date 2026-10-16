@@ -202,8 +202,9 @@ const pricePart = (doc, t, money, { price, compareAtPrice }) => {
 /**
  * The product cards under an AI answer (product cards): image, name linking to the product page, price with the "was"
  * price struck through beside it (as the product page shows them) and Add to cart. Add to cart dispatches the
- * cancelable `ss-ecommerce:add-to-cart` window event; when no widget on the page (Ecommerce's) calls `preventDefault()`,
- * the button follows its link to the product page.
+ * cancelable `ss-ecommerce:add-to-cart` window event with the item's least quantity in its steps (the card's `limits`;
+ * an item sold in a unit of its own counts thousandths of it, `measured`); when no widget on the page (Ecommerce's)
+ * calls `preventDefault()`, the button follows its link to the product page.
  * @param {{ doc: Document, win: Window, t: import('./common.js').Texts,
  *   config: { format?: import('./common.js').WidgetConfig['format'] },
  *   cards: import('../core/shop.js').ProductCard[] }} input
@@ -234,7 +235,12 @@ export const cardsPart = ({ doc, win, t, config, cards }) => {
 		add.addEventListener('click', (event) => {
 			const Custom = /** @type {typeof CustomEvent} */ (/** @type {any} */ (win).CustomEvent);
 			const asked = new Custom(ADD_TO_CART_EVENT, {
-				detail: { productId: card.productId, variantId: card.variantId, quantity: 1 },
+				detail: {
+					productId: card.productId,
+					variantId: card.variantId,
+					quantity: card.limits?.min ?? 1,
+					...(card.unit ? { measured: true } : {}),
+				},
 				cancelable: true,
 			});
 			// handled by a cart on the page: stay in the chat; otherwise the link opens the product page

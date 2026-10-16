@@ -581,9 +581,14 @@ describe('shop', () => {
 			image: null,
 			url: null,
 			inStock: false,
+			limits: null,
+			unit: null,
 		};
 		expect(
 			cardsOf([
+				// the quantities Add to cart adds (EU): kept when whole and in order
+				{ productId: 'p', name: 'N', price: 1, currency: 'EUR', limits: { step: 500, min: 1000, max: 20000 }, unit: 'm' },
+				{ productId: 'p', name: 'N', price: 1, currency: 'EUR', limits: { step: 1, min: 5, max: 2 } },
 				null,
 				{ productId: 'p', name: 'N', price: -1, currency: 'EUR' },
 				{ productId: 'p', name: 'N', price: 1, currency: 'EUR', url: 'javascript:x' },
@@ -593,6 +598,8 @@ describe('shop', () => {
 				{ productId: 'p', name: 'N', price: 1, currency: 'EUR', compareAtPrice: '3' },
 			]),
 		).toEqual([
+			{ ...card, compareAtPrice: null, limits: { step: 500, min: 1000, max: 20000 }, unit: 'm' },
+			{ ...card, compareAtPrice: null },
 			{ ...card, compareAtPrice: null },
 			{ ...card, compareAtPrice: 3 },
 			{ ...card, price: 2, compareAtPrice: null },

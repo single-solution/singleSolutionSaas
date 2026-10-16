@@ -34,6 +34,9 @@ const LAMP = {
 	variantId: 'var_1',
 	grade: null,
 	stockLeft: null,
+	// the quantities Add to cart adds (EU)
+	limits: { step: 2, min: 2, max: 20 },
+	unit: null,
 };
 // an image that is not https is dropped (cards are shown to visitors)
 const TOTE = {
@@ -508,6 +511,8 @@ describe('product cards', () => {
 				image: LAMP.image,
 				url: LAMP.url,
 				inStock: true,
+				limits: { step: 2, min: 2, max: 20 },
+				unit: null,
 			},
 			{
 				productId: 'prd_tote',
@@ -519,6 +524,8 @@ describe('product cards', () => {
 				image: null,
 				url: TOTE.url,
 				inStock: false,
+				limits: { step: 2, min: 2, max: 20 },
+				unit: null,
 			},
 		]);
 		await sys.switchOn(on.filter((key) => key !== 'product_cards'));
