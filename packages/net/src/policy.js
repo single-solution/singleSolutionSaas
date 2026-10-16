@@ -92,7 +92,7 @@ const defaultResolve = (hostname, { family } = {}) =>
  * @param {string} host
  * @returns {string}
  */
-export const normaliseHost = (host) => {
+export const normalizeHost = (host) => {
 	const h = host.trim().toLowerCase().replace(/\.$/, '');
 	return h.startsWith('[') && h.endsWith(']') ? h.slice(1, -1) : h;
 };
@@ -107,7 +107,7 @@ export const createOutboundPolicy = ({ allowHosts = [], resolve = defaultResolve
 		throw new TypeError('allowHosts must be an array of strings');
 	if (typeof resolve !== 'function') throw new TypeError('resolve must be a function');
 	return Object.freeze({
-		allowHosts: new Set(allowHosts.map(normaliseHost).filter((h) => h !== '')),
+		allowHosts: new Set(allowHosts.map(normalizeHost).filter((h) => h !== '')),
 		resolve,
 		userAgent: String(userAgent),
 	});
@@ -120,7 +120,7 @@ export const createOutboundPolicy = ({ allowHosts = [], resolve = defaultResolve
  * @returns {boolean}
  */
 export const isAllowlisted = (policy, host) => {
-	const h = normaliseHost(host);
+	const h = normalizeHost(host);
 	if (policy.allowHosts.has(h)) return true;
 	const ip = classifyAddress(h);
 	return ip.address !== null && policy.allowHosts.has(ip.address);
@@ -145,7 +145,7 @@ const bad = (reason) => ({ ok: false, code: 'bad_url', reason });
  */
 export const checkHost = (rawHost, policy) => {
 	if (typeof rawHost !== 'string' || rawHost.trim() === '' || rawHost.length > 253) return bad('invalid_host');
-	const host = normaliseHost(rawHost);
+	const host = normalizeHost(rawHost);
 	const ip = classifyAddress(host);
 	const allowlisted = isAllowlisted(policy, host);
 	if (allowlisted) return { ok: true, host: ip.address ?? host, ip: ip.family !== null, allowlisted };

@@ -100,7 +100,7 @@ const canonicalQuery = (pairs) =>
  * @param {Record<string, string>} headers
  * @returns {{ names: string[], lower: Record<string, string> }}
  */
-const normaliseHeaders = (headers) => {
+const normalizeHeaders = (headers) => {
 	/** @type {Record<string, string>} */
 	const lower = {};
 	for (const [k, v] of Object.entries(headers)) lower[k.toLowerCase()] = String(v).trim().replace(/\s+/g, ' ');
@@ -112,7 +112,7 @@ const normaliseHeaders = (headers) => {
  * @returns {{ signedHeaders: string, text: string }}
  */
 const canonicalRequest = ({ method, path, query, headers, payloadHash }) => {
-	const { names, lower } = normaliseHeaders(headers);
+	const { names, lower } = normalizeHeaders(headers);
 	const signedHeaders = names.join(';');
 	const canonicalHeaders = names.map((name) => `${name}:${lower[name]}\n`).join('');
 	return {
@@ -224,7 +224,7 @@ export const presignV4 = (params) => {
 		['X-Amz-Credential', `${accessKeyId}/${scope}`],
 		['X-Amz-Date', amzDate],
 		['X-Amz-Expires', String(expiresIn)],
-		['X-Amz-SignedHeaders', normaliseHeaders(allHeaders).names.join(';')],
+		['X-Amz-SignedHeaders', normalizeHeaders(allHeaders).names.join(';')],
 	];
 	if (sessionToken) pairs.push(['X-Amz-Security-Token', sessionToken]);
 	const { text } = canonicalRequest({

@@ -11,7 +11,7 @@
  */
 import { classifyAddress } from './address.js';
 import { netError } from './errors.js';
-import { checkHost, isAllowlisted, normaliseHost } from './policy.js';
+import { checkHost, isAllowlisted, normalizeHost } from './policy.js';
 
 /** @typedef {import('./policy.js').OutboundPolicy} OutboundPolicy */
 /** @typedef {import('./policy.js').ResolvedAddress} ResolvedAddress */
@@ -74,7 +74,7 @@ export const guardedLookup = (policy) => (hostname, options, callback) => {
 				? { family: options }
 				: options;
 	const family = opts.family === 4 || opts.family === 6 ? opts.family : undefined;
-	resolveVetted(policy, normaliseHost(String(hostname)), family ? { family } : {}).then(
+	resolveVetted(policy, normalizeHost(String(hostname)), family ? { family } : {}).then(
 		(vetted) => {
 			const first = /** @type {ResolvedAddress} */ (vetted[0]);
 			if (opts.all) cb(null, vetted);

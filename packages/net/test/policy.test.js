@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LOCAL_HOSTS, allowHostsFor, checkHost, checkUrl, createOutboundPolicy } from '../src/index.js';
-import { isAllowlisted, normaliseHost, sameOrigin } from '../src/policy.js';
+import { isAllowlisted, normalizeHost, sameOrigin } from '../src/policy.js';
 
 const policy = createOutboundPolicy();
 const dev = createOutboundPolicy({ allowHosts: ['LocalHost', '[::1]', '10.0.0.5', 'minio.internal.'] });
@@ -130,7 +130,7 @@ describe('checkUrl', () => {
 		expect(sameOrigin(new URL('https://a.example.com/x'), new URL('https://a.example.com:443/y'))).toBe(true);
 		expect(sameOrigin(new URL('https://a.example.com/'), new URL('http://a.example.com/'))).toBe(false);
 		expect(sameOrigin(new URL('https://a.example.com/'), new URL('https://a.example.com:8443/'))).toBe(false);
-		expect(normaliseHost(' [FE80::1] ')).toBe('fe80::1');
+		expect(normalizeHost(' [FE80::1] ')).toBe('fe80::1');
 	});
 });
 
