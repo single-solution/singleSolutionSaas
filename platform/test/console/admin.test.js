@@ -113,7 +113,7 @@ describe('admin console smoke', () => {
 			);
 			for (const item of ['Overview', 'Merchants', 'Products', 'Credits and billing', 'Admins', 'Settings', 'Activity'])
 				expect(shell).toContain(item);
-			expect(shell).toContain('My account');
+			for (const group of ['Operate', 'Money', 'Portal']) expect(shell).toContain(group);
 			expect(shell).toContain('child');
 			const pending = text(
 				ssr(

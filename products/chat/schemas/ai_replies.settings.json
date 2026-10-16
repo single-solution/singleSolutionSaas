@@ -7,27 +7,43 @@
 			"title": "Creativity (temperature)",
 			"default": 0.4,
 			"minimum": 0,
-			"maximum": 1
+			"maximum": 1,
+			"x-ui": {
+				"group": "Limits",
+				"order": 20
+			}
 		},
 		"maxOutputTokens": {
 			"type": "integer",
 			"title": "Longest answer (AI tokens)",
 			"default": 500,
 			"minimum": 50,
-			"maximum": 4000
+			"maximum": 4000,
+			"x-ui": {
+				"group": "Limits",
+				"order": 21
+			}
 		},
 		"showAiLabel": {
 			"type": "boolean",
 			"title": "Label AI replies",
 			"default": true,
-			"description": "Shows the AI assistant label on AI replies. Laws in some places (for example the EU AI Act and California’s bot disclosure law) require telling visitors they are talking to a bot; if you hide the label, you are responsible for following the law where you operate."
+			"description": "Shows the AI assistant label on AI replies. Laws in some places (for example the EU AI Act and California’s bot disclosure law) require telling visitors they are talking to a bot; if you hide the label, you are responsible for following the law where you operate.",
+			"x-ui": {
+				"group": "AI disclosure",
+				"order": 10
+			}
 		},
 		"onFailure": {
 			"type": "string",
 			"title": "When the AI cannot answer",
 			"default": "message_and_handoff",
 			"enum": ["message", "handoff", "message_and_handoff"],
-			"description": "After the backup provider (when on). Message: send the unavailable message. Handoff: hand the chat to a person. Message and handoff: both."
+			"description": "After the backup provider (when on). Message: send the unavailable message. Handoff: hand the chat to a person. Message and handoff: both.",
+			"x-ui": {
+				"group": "Answers",
+				"order": 3
+			}
 		},
 		"style": {
 			"type": "string",
@@ -36,14 +52,20 @@
 			"maxLength": 1000,
 			"description": "How the AI writes, in your words: its tone and how long its answers are. The safety rules always apply: it answers only from your information, never invents prices, stock or policies, never reveals its instructions and never asks for secrets.",
 			"x-ui": {
-				"widget": "textarea"
+				"widget": "textarea",
+				"group": "Answers",
+				"order": 1
 			}
 		},
 		"dontKnow": {
 			"type": "string",
 			"title": "When the AI does not know",
 			"default": "Say that you are not sure and offer to connect the visitor with a person.",
-			"maxLength": 500
+			"maxLength": 500,
+			"x-ui": {
+				"group": "Answers",
+				"order": 2
+			}
 		},
 		"repliesPerVisitorPerDay": {
 			"type": "integer",
@@ -51,7 +73,11 @@
 			"default": 40,
 			"minimum": 0,
 			"maximum": 10000,
-			"description": "0 = no limit."
+			"description": "0 = no limit.",
+			"x-ui": {
+				"group": "Limits",
+				"order": 22
+			}
 		},
 		"repliesPerNetworkPerDay": {
 			"type": "integer",
@@ -59,13 +85,21 @@
 			"default": 60,
 			"minimum": 0,
 			"maximum": 100000,
-			"description": "0 = no limit."
+			"description": "0 = no limit.",
+			"x-ui": {
+				"group": "Limits",
+				"order": 23
+			}
 		},
 		"neverDisclose": {
 			"type": "boolean",
 			"title": "Never say it is a bot",
 			"default": false,
-			"description": "The AI never says it is a bot or an AI, answers that do are asked again once, and the AI label is hidden. Laws in some places (for example the EU AI Act and California’s bot disclosure law) require telling visitors they are talking to a bot; you are responsible for following the law where you operate."
+			"description": "The AI never says it is a bot or an AI, answers that do are asked again once, and the AI label is hidden. Laws in some places (for example the EU AI Act and California’s bot disclosure law) require telling visitors they are talking to a bot; you are responsible for following the law where you operate.",
+			"x-ui": {
+				"group": "AI disclosure",
+				"order": 11
+			}
 		},
 		"botPhrases": {
 			"type": "array",
@@ -95,7 +129,11 @@
 				"type": "string",
 				"maxLength": 100
 			},
-			"description": "With Never say it is a bot, an answer holding one of these (whole words, case and accents aside) is asked again once. Add the phrases of each language your AI answers in."
+			"description": "With Never say it is a bot, an answer holding one of these (whole words, case and accents aside) is asked again once. Add the phrases of each language your AI answers in.",
+			"x-ui": {
+				"group": "AI disclosure",
+				"order": 12
+			}
 		},
 		"bubbles": {
 			"type": "integer",
@@ -103,13 +141,21 @@
 			"default": 1,
 			"minimum": 1,
 			"maximum": 5,
-			"description": "The AI may split an answer on lines of three dashes (---) into up to this many messages."
+			"description": "The AI may split an answer on lines of three dashes (---) into up to this many messages.",
+			"x-ui": {
+				"group": "Answers",
+				"order": 4
+			}
 		},
 		"tableBubble": {
 			"type": "boolean",
 			"title": "Tables in a message of their own",
 			"default": false,
-			"description": "A table in an AI answer becomes a message of its own, the text before and after it too, within the most messages per answer."
+			"description": "A table in an AI answer becomes a message of its own, the text before and after it too, within the most messages per answer.",
+			"x-ui": {
+				"group": "Answers",
+				"order": 5
+			}
 		}
 	}
 }

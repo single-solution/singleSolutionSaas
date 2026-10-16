@@ -376,9 +376,12 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		expect(siteSelect?.value).toBe(site.websiteId);
 		type(/** @type {HTMLSelectElement} */ (siteSelect), '');
 		type(/** @type {HTMLSelectElement} */ (siteSelect), site.websiteId);
+		// the account menu (header): My account and Sign out
+		await clickEl(/** @type {HTMLButtonElement} */ (document.querySelector('button[aria-label="Account menu"]')));
+		expect([...document.querySelectorAll('[role="menuitem"]')].map((x) => x.textContent)).toEqual(['Account', 'Sign out']);
 		await clickEl(
 			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('button')].find((x) => x.textContent?.includes('Sign out'))
+				[...document.querySelectorAll('[role="menuitem"]')].find((x) => x.textContent?.includes('Sign out'))
 			),
 		);
 		await e.waitCall('POST', '/v1/auth/sign-out');

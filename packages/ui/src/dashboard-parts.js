@@ -7,9 +7,9 @@
  */
 import { ViewTransition, createContext, useContext, useMemo, useState } from 'react';
 import { Button } from './Button.js';
-import { SaveBar } from './blocks.js';
+import { SaveBar, SettingList, SettingRow, SettingsCard } from './blocks.js';
 import { Callout, Card, ErrorState, Skeleton, SoftBreaks } from './display.js';
-import { Checkbox, FieldGrid, Input, Select, TextArea } from './fields.js';
+import { Input, RadioGroup, SegmentedControl, Switch, TextArea } from './fields.js';
 import { ListEditor } from './ListEditor.js';
 import { SchemaForm } from './SchemaForm.js';
 import { describeProblem } from './problems.js';
@@ -247,27 +247,31 @@ export function TextsForm({ texts, saveUrl, resetBody, savedSource, reload }) {
 		? texts.filter((text) => `${text.key} ${text.english} ${text.value}`.toLowerCase().includes(needle))
 		: texts;
 	return (
-		<Card title={words.settings.texts} subtitle={words.settings.textsHelp}>
+		<SettingsCard title={words.settings.texts} description={words.settings.textsHelp}>
 			<Input
 				fieldClassName="mb-4"
 				label={words.settings.textsFilter}
 				type="search"
 				value={filter}
 				onChange={(event) => setFilter(event.target.value)}
+				layout="stack"
 			/>
-			<div className="space-y-4">
+			<SettingList>
 				{shown.map((text) => {
 					const englishId = `text-${text.key.replace(/[^\w-]/g, '-')}-english`;
 					return (
-						<div key={text.key} className="space-y-1.5">
-							<div className="flex flex-wrap items-end gap-2">
-								<Input
-									fieldClassName="min-w-0 flex-1 basis-64"
-									label={<SoftBreaks text={text.key} />}
-									aria-describedby={englishId}
-									value={edits[text.key] ?? text.value}
-									onChange={(event) => setEdits({ ...edits, [text.key]: event.target.value })}
-								/>
+						<SettingRow
+							key={text.key}
+							label={<SoftBreaks text={text.key} />}
+							description={<span id={englishId}>{text.english}</span>}>
+							<Input
+								hideLabel
+								label={<SoftBreaks text={text.key} />}
+								aria-describedby={englishId}
+								value={edits[text.key] ?? text.value}
+								onChange={(event) => setEdits({ ...edits, [text.key]: event.target.value })}
+							/>
+							<div className="flex flex-wrap items-center gap-2">
 								<Button
 									size="sm"
 									disabled={edits[text.key] === undefined}
@@ -297,15 +301,12 @@ export function TextsForm({ texts, saveUrl, resetBody, savedSource, reload }) {
 									</Button>
 								) : null}
 							</div>
-							<p id={englishId} className="text-xs text-muted">
-								{text.english}
-							</p>
 							{result?.key === text.key ? <Outcome result={result.answer} /> : null}
-						</div>
+						</SettingRow>
 					);
 				})}
-			</div>
-		</Card>
+			</SettingList>
+		</SettingsCard>
 	);
 }
 
@@ -319,13 +320,23 @@ export function ThemeForm({ theme, save, reload }) {
 	const [draft, setDraft] = useState(theme);
 	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
 	return (
-		<Card title={texts.settings.theme}>
-			<FieldGrid>
-				<Select
-					label={texts.settings.mode}
+		<SettingsCard
+			title={texts.settings.theme}
+			footer={
+				<Button
+					onClick={async () => {
+						setResult(await save(draft));
+						reload();
+					}}>
+					{texts.save}
+				</Button>
+			}>
+			<SettingList>
+				<SegmentedControl
+					legend={texts.settings.mode}
 					value={draft.mode}
 					options={Object.entries(texts.settings.modes).map(([value, label]) => ({ value, label }))}
-					onChange={(event) => setDraft({ ...draft, mode: event.target.value })}
+					onChange={(value) => setDraft({ ...draft, mode: value })}
 				/>
 				<Input
 					label={texts.settings.fontFamily}
@@ -337,32 +348,27 @@ export function ThemeForm({ theme, save, reload }) {
 					type="number"
 					min={0}
 					max={24}
+					suffix="px"
 					value={String(draft.radius)}
 					onChange={(event) => setDraft({ ...draft, radius: Number(event.target.value) })}
 				/>
 				<Input
 					label={texts.settings.accent}
 					type="color"
+					className="w-20!"
 					value={draft.colors.accent ?? '#4f46e5'}
 					onChange={(event) => setDraft({ ...draft, colors: { ...draft.colors, accent: event.target.value } })}
 				/>
-			</FieldGrid>
-			<TextArea
-				label={texts.settings.customCss}
-				rows={6}
-				value={draft.customCss}
-				onChange={(event) => setDraft({ ...draft, customCss: event.target.value })}
-			/>
-			<Button
-				className="mt-4"
-				onClick={async () => {
-					setResult(await save(draft));
-					reload();
-				}}>
-				{texts.save}
-			</Button>
+				<TextArea
+					label={texts.settings.customCss}
+					rows={6}
+					className="font-mono text-xs"
+					value={draft.customCss}
+					onChange={(event) => setDraft({ ...draft, customCss: event.target.value })}
+				/>
+			</SettingList>
 			<Outcome result={result} />
-		</Card>
+		</SettingsCard>
 	);
 }
 
@@ -379,8 +385,19 @@ export function FormatForm({ format, save, reload }) {
 	const [rows, setRows] = useState(() => symbolRowsOf(format.currencySymbols ?? {}));
 	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
 	return (
-		<Card title={texts.settings.format} subtitle={texts.settings.formatHelp}>
-			<FieldGrid>
+		<SettingsCard
+			title={texts.settings.format}
+			description={texts.settings.formatHelp}
+			footer={
+				<Button
+					onClick={async () => {
+						setResult(await save({ ...draft, currencySymbols: symbolsOf(rows) }));
+						reload();
+					}}>
+					{texts.save}
+				</Button>
+			}>
+			<SettingList>
 				<Input
 					label={texts.settings.locale}
 					help={texts.settings.localeHelp}
@@ -388,22 +405,24 @@ export function FormatForm({ format, save, reload }) {
 					value={draft.locale}
 					onChange={(event) => setDraft({ ...draft, locale: event.target.value.trim() })}
 				/>
-				<Select
-					label={texts.settings.currencyDisplay}
+				<RadioGroup
+					legend={texts.settings.currencyDisplay}
+					cards
 					value={draft.currencyDisplay}
 					options={Object.entries(texts.settings.currencyDisplays).map(([value, label]) => ({ value, label }))}
-					onChange={(event) => setDraft({ ...draft, currencyDisplay: event.target.value })}
+					onChange={(value) => setDraft({ ...draft, currencyDisplay: value })}
 				/>
-				<Select
-					label={texts.settings.times}
+				<RadioGroup
+					legend={texts.settings.times}
+					cards
 					value={draft.times}
 					options={Object.entries(texts.settings.timesOptions).map(([value, label]) => ({ value, label }))}
-					onChange={(event) => setDraft({ ...draft, times: event.target.value })}
+					onChange={(value) => setDraft({ ...draft, times: value })}
 				/>
-				<Checkbox
+				<Switch
 					label={texts.settings.wholeUnits}
 					checked={draft.wholeUnits}
-					onChange={(event) => setDraft({ ...draft, wholeUnits: event.target.checked })}
+					onChange={(next) => setDraft({ ...draft, wholeUnits: next })}
 				/>
 				<ListEditor
 					legend={texts.settings.currencySymbols}
@@ -433,17 +452,9 @@ export function FormatForm({ format, save, reload }) {
 						</>
 					)}
 				/>
-			</FieldGrid>
-			<Button
-				className="mt-4"
-				onClick={async () => {
-					setResult(await save({ ...draft, currencySymbols: symbolsOf(rows) }));
-					reload();
-				}}>
-				{texts.save}
-			</Button>
+			</SettingList>
 			<Outcome result={result} />
-		</Card>
+		</SettingsCard>
 	);
 }
 

@@ -1,14 +1,16 @@
 'use client';
 /**
- * The signed-in merchant console frame (PLAN 0.6): the menu Overview · Websites · Usage and credits · Account, the
- * website switcher, the balance, sign out and the billing banner, with the Branding. The frame is the console's
+ * The signed-in merchant console frame (PLAN 0.6, premium layout 2026-10-16): the menu Overview · Websites · Usage and
+ * credits · Account, the website switcher (in the sidebar, in the header on phones), the balance chip and the account
+ * menu (My account, Sign out) in the header, help and account at the bottom of the sidebar, and the billing banner,
+ * with the Branding. The frame is the console's
  * layout, so it stays across navigations: pages hand it their fresh billing summary (frame-billing.js). The public
  * account pages render without it.
  * @module
  */
 import { usePathname, useRouter } from 'next/navigation.js';
 import { useEffect, useState, useTransition } from 'react';
-import { AppShell, Button, Icon, Select, ToastProvider, formatCredits, useNavigationProgress } from '@ss/ui';
+import { AccountMenu, AppShell, Icon, Select, ToastProvider, formatCredits, useNavigationProgress } from '@ss/ui';
 import { MERCHANT } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link, NavLink } from '../link.js';
@@ -16,6 +18,7 @@ import { PUBLIC_PATHS, api, routes } from '../paths.js';
 import { BillingBanner } from './billing.js';
 import { accentStyle } from './brand.js';
 import { BillingContext } from './frame-billing.js';
+import { FrameFooter } from './frame-footer.js';
 import { contactLine } from './sign-in.js';
 
 /**
@@ -58,6 +61,25 @@ export const merchantSections = (pathname) => {
 };
 
 /**
+ * The website switcher: a select of the merchant's websites, "All websites" first.
+ * @param {{ websites: any[], current: string, disabled: boolean, onPick: (next: string) => void, className?: string }} props
+ */
+function WebsiteSwitcher({ websites, current, disabled, onPick, className }) {
+	return (
+		<Select
+			label={MERCHANT.website}
+			hideLabel
+			fieldClassName={className ?? 'w-full'}
+			className="truncate font-medium"
+			value={current}
+			disabled={disabled}
+			options={[{ value: '', label: MERCHANT.allWebsites }, ...websites.map((w) => ({ value: w.websiteId, label: w.domain }))]}
+			onChange={(e) => onPick(e.currentTarget.value)}
+		/>
+	);
+}
+
+/**
  * @param {{ me: any, merchantId: string | null, websites: any[], billing: any, children: import('react').ReactNode,
  *   branding: { name: string, accent: string, support?: any } }} props
  */
@@ -75,6 +97,15 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 		await apiFetch(api.signOut(), { method: 'POST', redirectOn401: false });
 		window.location.assign(routes.login());
 	};
+	/** @param {string} next */
+	const pickWebsite = (next) => startSwitch(() => router.push(next ? routes.website(next) : routes.websites()));
+	const helpChannel = branding.support?.channels?.[0];
+	const accountName = merchant?.ownerName || merchant?.name || merchant?.email || '';
+	/** @type {import('@ss/ui').MenuItem[]} */
+	const accountItems = [
+		{ label: MERCHANT.menu.account, onSelect: () => router.push(routes.account()) },
+		{ label: MERCHANT.signOut, onSelect: () => void signOut(), danger: true },
+	];
 
 	return (
 		<BillingContext.Provider value={setBilling}>
@@ -85,30 +116,33 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 						linkAs={NavLink}
 						sections={merchantSections(pathname)}
 						banner={<BillingBanner summary={billing} contact={contactLine(branding.support)} />}
+						switcher={
+							websites.length > 0 ? (
+								<WebsiteSwitcher
+									websites={websites}
+									current={currentWebsiteId}
+									disabled={switching}
+									onPick={pickWebsite}
+								/>
+							) : null
+						}
 						topbar={
 							<>
 								<span
 									title={merchant?.name ?? merchantId}
-									className="hidden min-w-0 truncate px-1 text-sm font-semibold text-fg sm:block">
+									className="min-w-0 truncate px-1 text-sm font-semibold text-fg">
 									{merchant?.name ?? merchantId}
 								</span>
 								{websites.length > 0 ? (
-									<Select
-										label={MERCHANT.website}
-										hideLabel
-										fieldClassName="w-full min-w-32 max-w-[11rem] sm:max-w-[14rem]"
-										className="truncate font-medium"
-										value={currentWebsiteId}
-										disabled={switching}
-										options={[
-											{ value: '', label: MERCHANT.allWebsites },
-											...websites.map((w) => ({ value: w.websiteId, label: w.domain })),
-										]}
-										onChange={(e) => {
-											const next = e.currentTarget.value ? routes.website(e.currentTarget.value) : routes.websites();
-											startSwitch(() => router.push(next));
-										}}
-									/>
+									<span className="min-w-0 flex-1 lg:hidden">
+										<WebsiteSwitcher
+											websites={websites}
+											current={currentWebsiteId}
+											disabled={switching}
+											onPick={pickWebsite}
+											className="w-full min-w-28 max-w-[14rem]"
+										/>
+									</span>
 								) : null}
 							</>
 						}
@@ -123,17 +157,22 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 										<span className="tabular-nums">{formatCredits(billing.balance)}</span>
 									</Link>
 								) : null}
-								<Button variant="ghost" size="sm" onClick={signOut} icon={<Icon name="logout" size={14} />}>
-									<span className="hidden sm:inline">{MERCHANT.signOut}</span>
-									<span className="sr-only sm:hidden">{MERCHANT.signOut}</span>
-								</Button>
+								<AccountMenu
+									name={accountName}
+									{...(merchant?.email ? { email: merchant.email } : {})}
+									items={accountItems}
+									label={MERCHANT.accountMenu}
+									compact
+								/>
 							</>
 						}
-						sidebarFooter={
-							<div className="rounded-xl bg-surface-2 p-3 text-xs">
-								<p className="truncate font-semibold text-fg">{merchant?.email}</p>
-							</div>
-						}>
+						sidebarFooter={({ rail }) => (
+							<FrameFooter
+								rail={rail}
+								help={helpChannel ? { label: MERCHANT.help, url: helpChannel.url } : null}
+								account={{ name: accountName, email: merchant?.email, label: MERCHANT.accountMenu, items: accountItems }}
+							/>
+						)}>
 						{children}
 					</AppShell>
 				</div>

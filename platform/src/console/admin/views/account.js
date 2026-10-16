@@ -5,8 +5,8 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Card, Form, FormError, Input, Masonry, PageHeader, fieldErrors, useToast } from '@ss/ui';
-import { ADMIN, LOGIN } from '../../../texts/console.js';
+import { Badge, Button, Form, FormError, Input, PageHeader, SectionLayout, SettingsCard, fieldErrors, useToast } from '@ss/ui';
+import { ADMIN, LOGIN, TWO_STEP } from '../../../texts/console.js';
 import { apiFetch, useResource } from '../../client.js';
 import { EmailPanel, OwnActivity, PasswordPanel, TwoStepPanel } from '../../views/login-settings.js';
 import { adminApi } from '../paths.js';
@@ -33,7 +33,7 @@ function NameCard({ admin, onSaved }) {
 		onSaved();
 	};
 	return (
-		<Card title={ADMIN.nameTitle} actions={<RoleBadge role={admin.role} />}>
+		<SettingsCard title={ADMIN.nameTitle} actions={<RoleBadge role={admin.role} />}>
 			<Form onSubmit={submit} busy={busy} aria-label={ADMIN.nameTitle}>
 				<Input
 					label={ADMIN.nameTitle}
@@ -48,7 +48,7 @@ function NameCard({ admin, onSaved }) {
 					{LOGIN.save}
 				</Button>
 			</Form>
-		</Card>
+		</SettingsCard>
 	);
 }
 
@@ -59,16 +59,53 @@ export function MyAccountView(props) {
 	const { data, reload } = useResource(props.ok ? adminApi.me() : null, props.me ?? null);
 	if (!props.ok || !data) return <AdminProblem problem={props.problem} />;
 	const admin = data.admin;
+	const A = ADMIN.accountSections;
 	return (
 		<div className="space-y-6">
 			<PageHeader title={ADMIN.myAccountTitle} subtitle={ADMIN.myAccountIntro} />
-			<Masonry columns={2}>
-				<NameCard admin={admin} onSaved={() => void reload()} />
-				<EmailPanel email={admin.email} twoStepOn={admin.twoStep.enabled} />
-				<PasswordPanel twoStepOn={admin.twoStep.enabled} />
-				<TwoStepPanel twoStep={admin.twoStep} onChange={() => void reload()} />
-			</Masonry>
-			<OwnActivity path={adminApi.myActivity()} initial={props.activity} />
+			<SectionLayout
+				label={ADMIN.myAccountTitle}
+				sections={[
+					{
+						id: 'profile',
+						label: A.profile,
+						icon: 'user',
+						group: A.account,
+						content: <NameCard admin={admin} onSaved={() => void reload()} />,
+					},
+					{
+						id: 'sign-in',
+						label: A.signIn,
+						icon: 'key',
+						group: A.security,
+						content: (
+							<>
+								<EmailPanel email={admin.email} twoStepOn={admin.twoStep.enabled} />
+								<PasswordPanel twoStepOn={admin.twoStep.enabled} />
+							</>
+						),
+					},
+					{
+						id: 'two-step',
+						label: TWO_STEP.title,
+						icon: 'shield',
+						group: A.security,
+						badge: (
+							<Badge tone={admin.twoStep.enabled ? 'success' : 'neutral'}>
+								{admin.twoStep.enabled ? TWO_STEP.on : TWO_STEP.off}
+							</Badge>
+						),
+						content: <TwoStepPanel twoStep={admin.twoStep} onChange={() => void reload()} />,
+					},
+					{
+						id: 'activity',
+						label: LOGIN.activityTitle,
+						icon: 'activity',
+						group: A.history,
+						content: <OwnActivity path={adminApi.myActivity()} initial={props.activity} />,
+					},
+				]}
+			/>
 		</div>
 	);
 }

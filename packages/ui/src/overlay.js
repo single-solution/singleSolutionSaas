@@ -9,6 +9,7 @@ import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './Button.js';
 import { cx } from './cx.js';
+import { FieldLayoutContext } from './fields.js';
 import { Icon } from './icons.js';
 import { usePresence } from './motion.js';
 
@@ -155,7 +156,9 @@ export function Dialog({
 						</button>
 					) : null}
 				</div>
-				<div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">{children}</div>
+				<div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+					<FieldLayoutContext.Provider value="stack">{children}</FieldLayoutContext.Provider>
+				</div>
 				{footer ? <div className="flex flex-wrap items-center justify-end gap-2 px-6 pb-6 pt-2">{footer}</div> : null}
 			</div>
 		</div>

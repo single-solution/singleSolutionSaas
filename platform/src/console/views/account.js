@@ -6,9 +6,21 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Card, Form, FormError, Input, Masonry, PageHeader, Select, fieldErrors, useToast } from '@ss/ui';
+import {
+	Badge,
+	Button,
+	Form,
+	FormError,
+	Input,
+	PageHeader,
+	SectionLayout,
+	Select,
+	SettingsCard,
+	fieldErrors,
+	useToast,
+} from '@ss/ui';
 import { COUNTRY_CHOICES } from '../../modules/identity/core/countries.js';
-import { LOGIN, MERCHANT, MERCHANT_FIELDS } from '../../texts/console.js';
+import { LOGIN, MERCHANT, MERCHANT_FIELDS, TWO_STEP } from '../../texts/console.js';
 import { apiFetch, useResource } from '../client.js';
 import { api } from '../paths.js';
 import { PageProblem } from './common.js';
@@ -149,19 +161,58 @@ export function AccountView(props) {
 	const { data, reload } = useResource(props.ok ? '/v1/me' : null, props.me ?? null);
 	if (!props.ok || !data) return <PageProblem problem={props.problem} />;
 	const merchant = data.merchant;
+	const G = MERCHANT.accountGroups;
 	return (
 		<div className="space-y-6">
 			<FrameBilling billing={props.billing} />
 			<PageHeader title={MERCHANT.accountTitle} subtitle={MERCHANT.accountIntro} />
-			<Masonry columns={2}>
-				<Card title={MERCHANT.detailsTitle} subtitle={MERCHANT.detailsIntro}>
-					<MerchantFieldsForm merchant={merchant} path="/v1/me" onSaved={() => void reload()} />
-				</Card>
-				<EmailPanel email={merchant.email} twoStepOn={merchant.twoStep.enabled} />
-				<PasswordPanel twoStepOn={merchant.twoStep.enabled} />
-				<TwoStepPanel twoStep={merchant.twoStep} onChange={() => void reload()} />
-			</Masonry>
-			<OwnActivity path={api.activity(props.merchantId)} initial={props.activity} />
+			<SectionLayout
+				label={MERCHANT.accountTitle}
+				sections={[
+					{
+						id: 'details',
+						label: MERCHANT.detailsTitle,
+						icon: 'user',
+						group: G.business,
+						content: (
+							<SettingsCard title={MERCHANT.detailsTitle} description={MERCHANT.detailsIntro}>
+								<MerchantFieldsForm merchant={merchant} path="/v1/me" onSaved={() => void reload()} />
+							</SettingsCard>
+						),
+					},
+					{
+						id: 'sign-in',
+						label: MERCHANT.signInTitle,
+						icon: 'key',
+						group: G.security,
+						content: (
+							<>
+								<EmailPanel email={merchant.email} twoStepOn={merchant.twoStep.enabled} />
+								<PasswordPanel twoStepOn={merchant.twoStep.enabled} />
+							</>
+						),
+					},
+					{
+						id: 'two-step',
+						label: TWO_STEP.title,
+						icon: 'shield',
+						group: G.security,
+						badge: (
+							<Badge tone={merchant.twoStep.enabled ? 'success' : 'neutral'}>
+								{merchant.twoStep.enabled ? TWO_STEP.on : TWO_STEP.off}
+							</Badge>
+						),
+						content: <TwoStepPanel twoStep={merchant.twoStep} onChange={() => void reload()} />,
+					},
+					{
+						id: 'activity',
+						label: LOGIN.activityTitle,
+						icon: 'activity',
+						group: G.history,
+						content: <OwnActivity path={api.activity(props.merchantId)} initial={props.activity} />,
+					},
+				]}
+			/>
 		</div>
 	);
 }

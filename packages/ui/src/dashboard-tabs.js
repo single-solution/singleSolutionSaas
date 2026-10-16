@@ -11,7 +11,7 @@ import { useState } from 'react';
 import { Button } from './Button.js';
 import { CodeBlock } from './CodeBlock.js';
 import { Badge, Callout, Card, Masonry, Section } from './display.js';
-import { Checkbox, FieldGrid, Input } from './fields.js';
+import { FieldGrid, Input, Switch } from './fields.js';
 import { ActionMenu } from './Menu.js';
 import { ConfirmDialog } from './overlay.js';
 import { OverviewSkeleton, ProductOverview, RecentChanges } from './overview.js';
@@ -150,9 +150,18 @@ export function FeaturesTab({ websiteId, who, support, warnings }) {
 										title={feature.name}
 										subtitle={fill(F.price, { price: formatCreditsPerHour(feature.millicreditsPerHour, { locale }) })}
 										actions={
-											<a className="text-sm font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
-												{F.docs}
-											</a>
+											<>
+												<a className="text-sm font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
+													{F.docs}
+												</a>
+												<Switch
+													size="sm"
+													label={F.on}
+													checked={on.includes(feature.key)}
+													disabled={!admin || (missing.length > 0 && !on.includes(feature.key))}
+													onChange={(next) => toggle(feature, next)}
+												/>
+											</>
 										}>
 										<p className="text-sm">{feature.description}</p>
 										{feature.dependsOn.length > 0 ? (
@@ -165,12 +174,6 @@ export function FeaturesTab({ websiteId, who, support, warnings }) {
 													</p>
 												))
 											: null}
-										<Checkbox
-											label={F.on}
-											checked={on.includes(feature.key)}
-											disabled={!admin || (missing.length > 0 && !on.includes(feature.key))}
-											onChange={(event) => toggle(feature, event.target.checked)}
-										/>
 									</Card>
 								);
 							})}

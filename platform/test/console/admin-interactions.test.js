@@ -584,8 +584,12 @@ describe('admin console interactions (jsdom)', () => {
 			</AdminShell>,
 		);
 		await act(async () => {
+			/** @type {HTMLButtonElement} */ (document.querySelector('button[aria-label="Account menu"]')).click();
+		});
+		expect([...document.querySelectorAll('[role="menuitem"]')].map((x) => x.textContent)).toEqual(['My account', 'Sign out']);
+		await act(async () => {
 			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Sign out'))
+				[...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent?.includes('Sign out'))
 			).click();
 		});
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.signOut() && c.status === 204));

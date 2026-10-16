@@ -15,10 +15,12 @@ import {
 	Checkbox,
 	CodeBlock,
 	EmptyState,
+	FieldLayoutContext,
 	Form,
 	FormError,
 	Input,
 	LocalTime,
+	SettingsCard,
 	Stepper,
 	Table,
 	Timeline,
@@ -231,71 +233,73 @@ export function TwoStepPanel({ twoStep, onChange }) {
 	const [fresh, setFresh] = useState(/** @type {string[] | null} */ (null));
 	const [saved, setSaved] = useState(false);
 	return (
-		<Card
+		<SettingsCard
 			title={TWO_STEP.title}
 			actions={<Badge tone={twoStep.enabled ? 'success' : 'neutral'}>{twoStep.enabled ? TWO_STEP.on : TWO_STEP.off}</Badge>}>
-			{fresh ? (
-				<RecoveryCodes
-					codes={fresh}
-					saved={saved}
-					setSaved={setSaved}
-					onDone={() => {
-						setFresh(null);
-						setSaved(false);
-						onChange();
-					}}
-				/>
-			) : mode === 'setup' ? (
-				<TwoStepSetup
-					onDone={() => {
-						setMode('idle');
-						onChange();
-					}}
-				/>
-			) : mode === 'off' ? (
-				<ProveForm
-					title={TWO_STEP.turnOff}
-					help={TWO_STEP.turnOffHelp}
-					label={TWO_STEP.turnOff}
-					path="/v1/me/two-step/off"
-					onDone={() => {
-						setMode('idle');
-						toast.show({ tone: 'success', title: LOGIN.saved });
-						onChange();
-					}}
-					onCancel={() => setMode('idle')}
-				/>
-			) : mode === 'codes' ? (
-				<ProveForm
-					title={TWO_STEP.newCodes}
-					help={TWO_STEP.newCodesHelp}
-					label={TWO_STEP.newCodes}
-					path="/v1/me/two-step/recovery-codes"
-					onDone={(data) => {
-						setMode('idle');
-						setFresh(data?.recoveryCodes ?? []);
-					}}
-					onCancel={() => setMode('idle')}
-				/>
-			) : twoStep.enabled ? (
-				<div className="space-y-3">
-					<p className="text-sm text-muted">{TWO_STEP.codesLeft(twoStep.recoveryCodesLeft)}</p>
-					<div className="flex flex-wrap gap-2">
-						<Button variant="secondary" onClick={() => setMode('codes')}>
-							{TWO_STEP.newCodes}
-						</Button>
-						<Button variant="danger" onClick={() => setMode('off')}>
-							{TWO_STEP.turnOff}
-						</Button>
+			<FieldLayoutContext.Provider value="stack">
+				{fresh ? (
+					<RecoveryCodes
+						codes={fresh}
+						saved={saved}
+						setSaved={setSaved}
+						onDone={() => {
+							setFresh(null);
+							setSaved(false);
+							onChange();
+						}}
+					/>
+				) : mode === 'setup' ? (
+					<TwoStepSetup
+						onDone={() => {
+							setMode('idle');
+							onChange();
+						}}
+					/>
+				) : mode === 'off' ? (
+					<ProveForm
+						title={TWO_STEP.turnOff}
+						help={TWO_STEP.turnOffHelp}
+						label={TWO_STEP.turnOff}
+						path="/v1/me/two-step/off"
+						onDone={() => {
+							setMode('idle');
+							toast.show({ tone: 'success', title: LOGIN.saved });
+							onChange();
+						}}
+						onCancel={() => setMode('idle')}
+					/>
+				) : mode === 'codes' ? (
+					<ProveForm
+						title={TWO_STEP.newCodes}
+						help={TWO_STEP.newCodesHelp}
+						label={TWO_STEP.newCodes}
+						path="/v1/me/two-step/recovery-codes"
+						onDone={(data) => {
+							setMode('idle');
+							setFresh(data?.recoveryCodes ?? []);
+						}}
+						onCancel={() => setMode('idle')}
+					/>
+				) : twoStep.enabled ? (
+					<div className="space-y-3">
+						<p className="text-sm text-muted">{TWO_STEP.codesLeft(twoStep.recoveryCodesLeft)}</p>
+						<div className="flex flex-wrap gap-2">
+							<Button variant="secondary" onClick={() => setMode('codes')}>
+								{TWO_STEP.newCodes}
+							</Button>
+							<Button variant="danger" onClick={() => setMode('off')}>
+								{TWO_STEP.turnOff}
+							</Button>
+						</div>
 					</div>
-				</div>
-			) : (
-				<div className="space-y-3">
-					<p className="text-sm text-muted">{TWO_STEP.intro}</p>
-					<Button onClick={() => setMode('setup')}>{TWO_STEP.start}</Button>
-				</div>
-			)}
-		</Card>
+				) : (
+					<div className="space-y-3">
+						<p className="text-sm text-muted">{TWO_STEP.intro}</p>
+						<Button onClick={() => setMode('setup')}>{TWO_STEP.start}</Button>
+					</div>
+				)}
+			</FieldLayoutContext.Provider>
+		</SettingsCard>
 	);
 }
 
@@ -325,7 +329,7 @@ export function EmailPanel({ email, twoStepOn }) {
 		} else setProblem(result.problem);
 	};
 	return (
-		<Card title={LOGIN.loginTitle} subtitle={email}>
+		<SettingsCard title={LOGIN.loginTitle} description={email}>
 			<Form onSubmit={submit} busy={busy} aria-label={LOGIN.changeEmail}>
 				<p className="text-sm text-muted">{LOGIN.loginHelp}</p>
 				{sentTo ? <Callout tone="success">{LOGIN.emailSent(sentTo)}</Callout> : null}
@@ -363,7 +367,7 @@ export function EmailPanel({ email, twoStepOn }) {
 					{LOGIN.changeEmail}
 				</Button>
 			</Form>
-		</Card>
+		</SettingsCard>
 	);
 }
 
@@ -400,7 +404,7 @@ export function PasswordPanel({ twoStepOn }) {
 		} else setProblem(result.problem);
 	};
 	return (
-		<Card title={LOGIN.passwordTitle}>
+		<SettingsCard title={LOGIN.passwordTitle}>
 			<Form onSubmit={submit} busy={busy} aria-label={LOGIN.changePassword}>
 				<p className="text-sm text-muted">{LOGIN.passwordHelp}</p>
 				<Input
@@ -437,7 +441,7 @@ export function PasswordPanel({ twoStepOn }) {
 					{LOGIN.changePassword}
 				</Button>
 			</Form>
-		</Card>
+		</SettingsCard>
 	);
 }
 

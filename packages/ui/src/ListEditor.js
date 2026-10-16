@@ -8,6 +8,7 @@
  */
 import { Button, IconButton } from './Button.js';
 import { cx } from './cx.js';
+import { FieldLayoutContext } from './fields.js';
 import { Icon } from './icons.js';
 
 /**
@@ -68,7 +69,7 @@ export function ListEditor({
 	const T = { ...LIST_EDITOR_TEXTS, ...texts };
 	const full = max !== undefined && items.length >= max;
 	return (
-		<fieldset className={cx('col-span-full min-w-0 space-y-3', className)} disabled={disabled}>
+		<fieldset data-cell="" data-wide="" className={cx('col-span-full min-w-0 space-y-3', className)} disabled={disabled}>
 			<legend className="mb-2 block text-label font-medium leading-5 text-fg">
 				{legend}
 				{items.length > 0 ? <span className="ml-1.5 font-normal text-muted">{items.length}</span> : null}
@@ -83,7 +84,9 @@ export function ListEditor({
 							key={index}
 							className="flex flex-wrap items-start gap-3 rounded-xl border border-line bg-surface-2/40 px-3 py-3">
 							<div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-3">
-								{renderItem(item, index, (next) => onChange(items.map((old, i) => (i === index ? next : old))))}
+								<FieldLayoutContext.Provider value="stack">
+									{renderItem(item, index, (next) => onChange(items.map((old, i) => (i === index ? next : old))))}
+								</FieldLayoutContext.Provider>
 							</div>
 							<div className="flex shrink-0 items-center gap-1 pt-6">
 								<IconButton

@@ -404,7 +404,7 @@ describe('shared pieces', () => {
 		const saveTheme = vi.fn(async () => /** @type {const} */ ({ ok: true, data: null }));
 		const theme = { colors: {}, fontFamily: 'inherit', radius: 8, mode: 'auto', customCss: '' };
 		const { container } = render(inDashboard(<ThemeForm theme={theme} save={saveTheme} reload={reload} />));
-		type(byLabel(container, TEXTS.settings.mode), 'dark');
+		click(byLabel(container, TEXTS.settings.modes.dark));
 		type(byLabel(container, TEXTS.settings.fontFamily), 'Inter');
 		type(byLabel(container, TEXTS.settings.radius), '12');
 		type(byLabel(container, TEXTS.settings.accent), '#112233');
@@ -432,7 +432,7 @@ describe('shared pieces', () => {
 		};
 		const second = render(inDashboard(<FormatForm format={format} save={saveFormat} reload={reload} />));
 		type(byLabel(second.container, TEXTS.settings.locale), ' fr-FR ');
-		type(byLabel(second.container, TEXTS.settings.currencyDisplay), 'symbol');
+		click(byLabel(second.container, TEXTS.settings.currencyDisplays.symbol));
 		// one symbol per currency (K5): add PKR, keep CHF, a row without a symbol is left out
 		await act(async () => button(TEXTS.settings.addSymbol).click());
 		await act(async () => button(TEXTS.settings.addSymbol).click());
@@ -440,7 +440,7 @@ describe('shared pieces', () => {
 		type(byLabel(/** @type {HTMLElement} */ (rows[1]), TEXTS.settings.currency), 'pkr');
 		type(byLabel(/** @type {HTMLElement} */ (rows[1]), TEXTS.settings.symbol), 'Rs');
 		type(byLabel(/** @type {HTMLElement} */ (rows[2]), TEXTS.settings.currency), 'EUR');
-		type(byLabel(second.container, TEXTS.settings.times), 'business');
+		click(byLabel(second.container, TEXTS.settings.timesOptions.business));
 		click(byLabel(second.container, TEXTS.settings.wholeUnits));
 		await act(async () => button('Save').click());
 		expect(saveFormat).toHaveBeenCalledWith({
@@ -554,14 +554,15 @@ describe('standard tabs', () => {
 		expect(container.textContent).toContain('Price: 1 credits/h');
 		expect(container.textContent).toContain('Needs: Notes');
 		expect(container.textContent).toContain('Not working: connect Database');
-		const boxes = /** @type {HTMLInputElement[]} */ ([...container.querySelectorAll('input[type="checkbox"]')]);
-		expect(boxes.map((box) => box.checked)).toEqual([true, true, false]);
+		const boxes = /** @type {HTMLButtonElement[]} */ ([...container.querySelectorAll('[role="switch"]')]);
+		const checks = () => boxes.map((box) => box.getAttribute('aria-checked') === 'true');
+		expect(checks()).toEqual([true, true, false]);
 		// Alerts needs Inbox (on): it can be switched on; Save is enabled only once something changed
 		expect(boxes[2]?.disabled).toBe(false);
 		expect(/** @type {HTMLButtonElement} */ (button('Save')).disabled).toBe(true);
-		click(/** @type {HTMLInputElement} */ (boxes[2]));
-		click(/** @type {HTMLInputElement} */ (boxes[0]));
-		expect(boxes.map((box) => box.checked)).toEqual([false, false, false]);
+		click(/** @type {HTMLElement} */ (boxes[2]));
+		click(/** @type {HTMLElement} */ (boxes[0]));
+		expect(checks()).toEqual([false, false, false]);
 		expect(container.textContent).toContain('Nothing starts a note.');
 		click(button('Save'));
 		const dialog = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
@@ -584,8 +585,8 @@ describe('standard tabs', () => {
 		await settle();
 		expect(merchant.container.textContent).toContain('To change features, contact help@example.com (Email).');
 		expect(
-			[...merchant.container.querySelectorAll('input[type="checkbox"]')].every(
-				(box) => /** @type {HTMLInputElement} */ (box).disabled,
+			[...merchant.container.querySelectorAll('[role="switch"]')].every(
+				(box) => /** @type {HTMLButtonElement} */ (box).disabled,
 			),
 		).toBe(true);
 		expect(merchant.container.textContent).not.toContain('Save');
@@ -601,10 +602,10 @@ describe('standard tabs', () => {
 		});
 		const { container } = render(inDashboard(<FeaturesTab {...tabProps(id)} />));
 		await settle();
-		const boxes = /** @type {HTMLInputElement[]} */ ([...container.querySelectorAll('input[type="checkbox"]')]);
+		const boxes = /** @type {HTMLButtonElement[]} */ ([...container.querySelectorAll('[role="switch"]')]);
 		// Inbox needs Notes, which is off
 		expect(boxes[1]?.disabled).toBe(true);
-		click(/** @type {HTMLInputElement} */ (boxes[0]));
+		click(/** @type {HTMLElement} */ (boxes[0]));
 		click(button('Save'));
 		click(byText(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Cancel', 'button'));
 		await settle();
@@ -615,7 +616,7 @@ describe('standard tabs', () => {
 		);
 		await settle();
 		expect(container.textContent).toContain('No credits');
-		expect(boxes[0]?.checked).toBe(true);
+		expect(boxes[0]?.getAttribute('aria-checked')).toBe('true');
 	});
 
 	it('Settings: the product sections, the feature forms with its notice and cards, then texts, theme and Format', async () => {

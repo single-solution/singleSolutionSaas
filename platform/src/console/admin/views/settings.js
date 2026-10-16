@@ -1,6 +1,7 @@
 'use client';
 /**
- * Settings (PLAN 0.8.2; Owner only): one page, no tabs — a masonry of cards, each saved on its own: Email sending
+ * Settings (PLAN 0.8.2; Owner only): one page with an inner sidebar (premium layout 2026-10-16) — a section per card,
+ * all of them in the page and each saved on its own: Email sending
  * (SMTP host, port, user, password, sender name and address; Send test email to the signed-in admin), Branding (name,
  * accent, logo), Support contact (email, phone, optional WhatsApp), Security (Session length, Require two-step for
  * admins), Billing rules (grace days, low-balance threshold) and Encryption key (Re-seal after a key change). Every
@@ -11,15 +12,15 @@ import { useState } from 'react';
 import {
 	Button,
 	Callout,
-	Card,
-	Checkbox,
 	Form,
 	FormError,
 	Input,
 	ListEditor,
-	Masonry,
 	PageHeader,
+	SectionLayout,
 	Select,
+	SettingRow,
+	SettingsCard,
 	Switch,
 	describeProblem,
 	fieldErrors,
@@ -103,7 +104,7 @@ function MailCard({ settings, onSaved }) {
 	};
 	const errors = fieldErrors(problem);
 	return (
-		<Card title={ADMIN.settingsSections.mail.title} subtitle={ADMIN.settingsSections.mail.help}>
+		<SettingsCard title={ADMIN.settingsSections.mail.title} description={ADMIN.settingsSections.mail.help}>
 			<Form onSubmit={submit} busy={busy} aria-label={ADMIN.settingsSections.mail.title}>
 				<Input
 					label={ADMIN.mail.host}
@@ -155,7 +156,7 @@ function MailCard({ settings, onSaved }) {
 					error={errors.senderAddress}
 					required
 				/>
-				<Checkbox label={ADMIN.mail.secure} checked={form.secure} onChange={(e) => set('secure', e.currentTarget.checked)} />
+				<Switch label={ADMIN.mail.secure} checked={form.secure} onChange={(next) => set('secure', next)} />
 				<FormError problem={problem} fields={['host', 'port', 'user', 'password', 'senderName', 'senderAddress']} />
 				<div className="flex flex-wrap gap-2">
 					<Button type="submit" loading={busy}>
@@ -174,7 +175,7 @@ function MailCard({ settings, onSaved }) {
 				</div>
 				{testProblem ? <Callout tone="danger">{describeProblem(testProblem)}</Callout> : null}
 			</Form>
-		</Card>
+		</SettingsCard>
 	);
 }
 
@@ -197,7 +198,7 @@ function BrandingCard({ settings, onSaved }) {
 	};
 	const errors = fieldErrors(problem);
 	return (
-		<Card title={ADMIN.settingsSections.branding.title} subtitle={ADMIN.settingsSections.branding.help}>
+		<SettingsCard title={ADMIN.settingsSections.branding.title} description={ADMIN.settingsSections.branding.help}>
 			<Form
 				onSubmit={() => save(adminApi.settingsBranding(), 'PUT', { name: name.trim(), accent })}
 				busy={busy}
@@ -213,13 +214,12 @@ function BrandingCard({ settings, onSaved }) {
 				<Input
 					label={ADMIN.branding.accent}
 					type="color"
+					className="w-20!"
 					value={accent}
 					onChange={(e) => setAccent(e.currentTarget.value)}
 					error={errors.accent}
 				/>
-				<div className="space-y-2">
-					<p className="text-sm font-semibold text-fg">{ADMIN.branding.logo}</p>
-					<p className="text-sm text-muted">{ADMIN.branding.logoHelp}</p>
+				<SettingRow label={ADMIN.branding.logo} description={ADMIN.branding.logoHelp}>
 					{settings.branding.hasLogo ? (
 						<img
 							src={`/branding/logo?v=${settings.branding.logoVersion}`}
@@ -243,13 +243,13 @@ function BrandingCard({ settings, onSaved }) {
 							{ADMIN.branding.logoRemove}
 						</Button>
 					) : null}
-				</div>
+				</SettingRow>
 				<FormError problem={problem} fields={['name', 'accent', 'type', 'data']} />
 				<Button type="submit" loading={busy}>
 					{LOGIN.save}
 				</Button>
 			</Form>
-		</Card>
+		</SettingsCard>
 	);
 }
 
@@ -275,7 +275,7 @@ function SupportCard({ settings, onSaved }) {
 	const { busy, problem, save } = useSave(onSaved);
 	const errors = fieldErrors(problem);
 	return (
-		<Card title={ADMIN.settingsSections.support.title} subtitle={ADMIN.settingsSections.support.help}>
+		<SettingsCard title={ADMIN.settingsSections.support.title} description={ADMIN.settingsSections.support.help}>
 			<Form
 				onSubmit={() =>
 					save(adminApi.settingsSupport(), 'PUT', {
@@ -323,7 +323,7 @@ function SupportCard({ settings, onSaved }) {
 					{LOGIN.save}
 				</Button>
 			</Form>
-		</Card>
+		</SettingsCard>
 	);
 }
 
@@ -334,7 +334,7 @@ function SecurityCard({ settings, onSaved }) {
 	const [required, setRequired] = useState(settings.security.requireTwoStepForAdmins);
 	const { busy, problem, save } = useSave(onSaved);
 	return (
-		<Card title={ADMIN.settingsSections.security.title} subtitle={ADMIN.settingsSections.security.help}>
+		<SettingsCard title={ADMIN.settingsSections.security.title} description={ADMIN.settingsSections.security.help}>
 			<Form
 				onSubmit={() =>
 					save(adminApi.settingsSecurity(), 'PUT', { sessionHours: Number(hours), requireTwoStepForAdmins: required })
@@ -361,7 +361,7 @@ function SecurityCard({ settings, onSaved }) {
 					{LOGIN.save}
 				</Button>
 			</Form>
-		</Card>
+		</SettingsCard>
 	);
 }
 
@@ -374,7 +374,7 @@ function BillingRulesCard({ settings, onSaved }) {
 	const { busy, problem, save } = useSave(onSaved);
 	const errors = fieldErrors(problem);
 	return (
-		<Card title={ADMIN.settingsSections.billing.title} subtitle={ADMIN.settingsSections.billing.help}>
+		<SettingsCard title={ADMIN.settingsSections.billing.title} description={ADMIN.settingsSections.billing.help}>
 			<Form
 				onSubmit={() =>
 					save(adminApi.settingsBilling(), 'PUT', { graceDays: Number(graceDays), lowBalanceDays: Number(lowBalanceDays) })
@@ -408,7 +408,7 @@ function BillingRulesCard({ settings, onSaved }) {
 					{LOGIN.save}
 				</Button>
 			</Form>
-		</Card>
+		</SettingsCard>
 	);
 }
 
@@ -422,7 +422,7 @@ function EncryptionCard() {
 		),
 	);
 	return (
-		<Card title={ADMIN.settingsSections.encryption.title} subtitle={ADMIN.settingsSections.encryption.help}>
+		<SettingsCard title={ADMIN.settingsSections.encryption.title} description={ADMIN.settingsSections.encryption.help}>
 			<div className="space-y-4">
 				<Button
 					loading={busy}
@@ -441,7 +441,7 @@ function EncryptionCard() {
 				) : null}
 				<FormError problem={problem} fields={[]} />
 			</div>
-		</Card>
+		</SettingsCard>
 	);
 }
 
@@ -451,17 +451,57 @@ function EncryptionCard() {
 export function SettingsView(props) {
 	const [settings, setSettings] = useState(props.ok ? props.settings : null);
 	if (!props.ok || !settings) return <AdminProblem problem={props.problem} />;
+	const S = ADMIN.settingsSections;
 	return (
 		<div className="space-y-6">
 			<PageHeader title={ADMIN.settingsTitle} subtitle={ADMIN.settingsIntro} />
-			<Masonry columns={2}>
-				<MailCard settings={settings} onSaved={setSettings} />
-				<BrandingCard settings={settings} onSaved={setSettings} />
-				<SupportCard settings={settings} onSaved={setSettings} />
-				<SecurityCard settings={settings} onSaved={setSettings} />
-				<BillingRulesCard settings={settings} onSaved={setSettings} />
-				<EncryptionCard />
-			</Masonry>
+			<SectionLayout
+				label={ADMIN.settingsTitle}
+				sections={[
+					{
+						id: 'branding',
+						label: S.branding.title,
+						icon: 'palette',
+						group: ADMIN.settingsGroups.portal,
+						content: <BrandingCard settings={settings} onSaved={setSettings} />,
+					},
+					{
+						id: 'support',
+						label: S.support.title,
+						icon: 'help',
+						group: ADMIN.settingsGroups.portal,
+						content: <SupportCard settings={settings} onSaved={setSettings} />,
+					},
+					{
+						id: 'mail',
+						label: S.mail.title,
+						icon: 'mail',
+						group: ADMIN.settingsGroups.portal,
+						content: <MailCard settings={settings} onSaved={setSettings} />,
+					},
+					{
+						id: 'security',
+						label: S.security.title,
+						icon: 'shield',
+						group: ADMIN.settingsGroups.safety,
+						content: <SecurityCard settings={settings} onSaved={setSettings} />,
+					},
+					{
+						id: 'billing',
+						label: S.billing.title,
+						icon: 'wallet',
+						group: ADMIN.settingsGroups.safety,
+						content: <BillingRulesCard settings={settings} onSaved={setSettings} />,
+					},
+					{
+						id: 'encryption',
+						label: S.encryption.title,
+						icon: 'key',
+						group: ADMIN.settingsGroups.safety,
+						content: <EncryptionCard />,
+					},
+				]}
+			/>
 		</div>
 	);
 }
