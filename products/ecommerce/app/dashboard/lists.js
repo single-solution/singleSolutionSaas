@@ -20,6 +20,7 @@ import {
 	TextArea,
 	describeProblem,
 } from '@ss/ui';
+import { COURIER_CONNECTIONS } from '../../core/couriers.js';
 import { exponentOf, fromDecimal, toDecimal } from '../../core/money.js';
 import { UNIT_STATE_LIMITS } from '../../core/unit-states.js';
 import { call, fill, useLoad } from './api.js';
@@ -320,7 +321,11 @@ export function ListEditor({
 
 const C = L.couriers;
 
-/** Couriers: a name and a tracking link template with `{tracking}` (`couriers`, feature checkout). @param {EditorProps} props */
+/**
+ * Couriers: a name, a tracking link template with `{tracking}` and the courier API connection its shipments are booked
+ * through (`courier_1` … `courier_5`, or none; E25) (`couriers`, feature checkout).
+ * @param {EditorProps} props
+ */
 export function CouriersEditor({ websiteId, off }) {
 	return (
 		<ListEditor
@@ -331,11 +336,12 @@ export function CouriersEditor({ websiteId, off }) {
 			itemLabel={C.item}
 			max={30}
 			off={off}
-			blank={() => ({ key: '', name: '', trackingUrl: 'https://' })}
+			blank={() => ({ key: '', name: '', trackingUrl: 'https://', connection: '' })}
 			clean={(courier) => ({
 				key: keyOf(courier.key, courier.name),
 				name: String(courier.name ?? '').trim(),
 				trackingUrl: String(courier.trackingUrl ?? '').trim(),
+				connection: String(courier.connection ?? ''),
 			})}
 			render={(courier, set) => (
 				<FieldGrid>
@@ -352,6 +358,15 @@ export function CouriersEditor({ websiteId, off }) {
 						type="url"
 						value={courier.trackingUrl ?? ''}
 						onChange={(event) => set({ trackingUrl: event.target.value })}
+					/>
+					<Select
+						label={C.connection}
+						value={courier.connection ?? ''}
+						options={[
+							{ value: '', label: C.byHand },
+							...COURIER_CONNECTIONS.map((name, index) => ({ value: name, label: fill(C.keys, { n: index + 1 }) })),
+						]}
+						onChange={(event) => set({ connection: event.target.value })}
 					/>
 				</FieldGrid>
 			)}

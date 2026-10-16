@@ -549,8 +549,10 @@ describe('a move that loses its race after calling out', () => {
 	});
 
 	it('keeps a courier booking on the order and uses it when the move is made again (review 8)', async () => {
-		await shop.list('couriers', [{ key: 'swift', name: 'Swift Post', trackingUrl: 'https://track.example.org/{tracking}' }]);
-		await shop.connect('courier', {
+		await shop.list('couriers', [
+			{ key: 'swift', name: 'Swift Post', trackingUrl: 'https://track.example.org/{tracking}', connection: 'courier_1' },
+		]);
+		await shop.connect('courier_1', {
 			bookUrl: `${COURIER}/book`,
 			trackUrl: `${COURIER}/track/{tracking}`,
 			apiKey: 'courier-key-123',

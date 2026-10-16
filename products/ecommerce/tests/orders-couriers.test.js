@@ -37,8 +37,13 @@ beforeAll(async () => {
 	data = await shop.db();
 	await data.ensureIndexes((await import('../adapters/product.js')).INDEXES);
 	ticket = await shop.ticket();
-	await shop.list('couriers', [{ key: 'swift', name: 'Swift Post', trackingUrl: 'https://track.example.org/{tracking}' }]);
+	await shop.list('couriers', COURIERS);
 });
+
+/** The couriers of these tests: Swift Post books through the first courier connection (E25). */
+const COURIERS = [
+	{ key: 'swift', name: 'Swift Post', trackingUrl: 'https://track.example.org/{tracking}', connection: 'courier_1' },
+];
 afterAll(async () => shop.product.close());
 
 /**
@@ -164,16 +169,16 @@ describe('the couriers list', () => {
 	it('checks keys, names and tracking-link templates', () => {
 		expect(checkCouriers('x')).toEqual({ ok: false, errors: ['A list of couriers is expected.'] });
 		const ok = checkCouriers([
-			{ key: ' swift ', name: ' Swift ', trackingUrl: 'https://t.example.org/{tracking}' },
+			{ key: ' swift ', name: ' Swift ', trackingUrl: 'https://t.example.org/{tracking}', connection: 'courier_5' },
 			{ key: 'hand', name: 'Hand', trackingUrl: '' },
 			{ key: 'none', name: 'None' },
 		]);
 		expect(ok).toEqual({
 			ok: true,
 			value: [
-				{ key: 'swift', name: 'Swift', trackingUrl: 'https://t.example.org/{tracking}' },
-				{ key: 'hand', name: 'Hand', trackingUrl: '' },
-				{ key: 'none', name: 'None', trackingUrl: '' },
+				{ key: 'swift', name: 'Swift', trackingUrl: 'https://t.example.org/{tracking}', connection: 'courier_5' },
+				{ key: 'hand', name: 'Hand', trackingUrl: '', connection: '' },
+				{ key: 'none', name: 'None', trackingUrl: '', connection: '' },
 			],
 		});
 		const bad = checkCouriers([
@@ -184,9 +189,10 @@ describe('the couriers list', () => {
 			{ key: 'b', name: 'B', trackingUrl: 'https://t.example.org/no-token' },
 			{ key: 'c', name: 'C', trackingUrl: 'https://user:pw@t.example.org/{tracking}' },
 			{ key: 'd', name: 'D', trackingUrl: 'not a url {tracking}' },
+			{ key: 'e', name: 'E', connection: 'courier_6' },
 		]);
 		expect(bad.ok).toBe(false);
-		expect(!bad.ok && bad.errors.length).toBe(8);
+		expect(!bad.ok && bad.errors.length).toBe(9);
 		const many = checkCouriers(Array.from({ length: 31 }, (_, i) => ({ key: `c${i}`, name: `C${i}` })));
 		expect(!many.ok && many.errors).toEqual(['At most 30 couriers.']);
 	});
@@ -373,7 +379,7 @@ describe('booking and tracking shipments', () => {
 	});
 
 	it('books through the courier API, links the tracking page and reads the status on view', async () => {
-		await shop.connect('courier', KEYS);
+		await shop.connect('courier_1', KEYS);
 		await shop.setting('courier_apis', 'courier', 'swift');
 		/** @type {string[]} */
 		const bodies = [];
@@ -439,12 +445,17 @@ describe('booking and tracking shipments', () => {
 		expect(delivered.status).toBe(200);
 	});
 
-	it('books without a courier of the list, and moves nothing when the courier refuses', async () => {
+	it('books with the first courier that has a connection, and moves nothing when the courier refuses', async () => {
 		await shop.setting('courier_apis', 'courier', '');
 		shop.responders.set(`${COURIER}/book`, () => ({ status: 200, body: { data: { cn: 'CN9' } } }));
 		const order = await packedOrder({ method: 'online' });
 		const shipped = await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'dispatched', shipment: { book: true } });
-		expect(shipped.json.shipment).toMatchObject({ courier: '', trackingNumber: 'CN9', trackingUrl: '', booked: true });
+		expect(shipped.json.shipment).toMatchObject({
+			courier: 'Swift Post',
+			trackingNumber: 'CN9',
+			trackingUrl: 'https://track.example.org/CN9',
+			booked: true,
+		});
 		expect(JSON.parse(shop.callsTo(`${COURIER}/book`).at(-1)?.body ?? '{}').collect).toBe('0.00');
 		shop.responders.set(`${COURIER}/book`, () => ({ status: 400, body: { error: 'bad address' } }));
 		const other = await packedOrder();
@@ -463,8 +474,57 @@ describe('booking and tracking shipments', () => {
 		expect(shop.callsTo(`${COURIER}/track`).length).toBe(tracks);
 	});
 
+	it('books and tracks each courier through its own connection; a courier without one ships by hand (E25)', async () => {
+		const FAST = `${COURIER}/fast`;
+		await shop.list('couriers', [
+			...COURIERS,
+			{ key: 'fast', name: 'Fast Freight', trackingUrl: '', connection: 'courier_2' },
+			{ key: 'van', name: 'Own van', trackingUrl: '' },
+		]);
+		try {
+			await shop.connect('courier_1', KEYS);
+			await shop.connect('courier_2', { bookUrl: `${FAST}/book`, trackUrl: `${FAST}/track/{tracking}`, apiKey: 'fast-key' });
+			shop.responders.set(`${COURIER}/book`, () => ({ status: 200, body: { data: { cn: 'S1' } } }));
+			shop.responders.set(`${FAST}/book`, () => ({ status: 200, body: { trackingNumber: 'F1' } }));
+			shop.responders.set(`${FAST}/track/F1`, () => ({ status: 200, body: { status: 'In the van' } }));
+			const fast = await packedOrder();
+			const byFast = await shop.api('POST', `/v1/orders/${fast.id}/move`, {
+				to: 'dispatched',
+				shipment: { book: true, courier: 'fast' },
+			});
+			expect(byFast.status).toBe(200);
+			expect(byFast.json.shipment).toMatchObject({ courier: 'Fast Freight', trackingNumber: 'F1', booked: true });
+			expect(shop.callsTo(`${FAST}/book`).at(-1)?.headers.authorization).toBe('Bearer fast-key');
+			// its status is read through the connection it was booked with
+			shop.advance(31 * 60_000);
+			expect((await shop.api('GET', `/v1/orders/${fast.id}`)).json.shipment.status).toBe('In the van');
+			// the other courier books through its own keys meanwhile
+			const swift = await packedOrder();
+			const bySwift = await shop.api('POST', `/v1/orders/${swift.id}/move`, {
+				to: 'dispatched',
+				shipment: { book: true, courier: 'swift' },
+			});
+			expect(bySwift.json.shipment).toMatchObject({ courier: 'Swift Post', trackingNumber: 'S1' });
+			// a courier without a booking connection cannot be booked
+			const van = await packedOrder();
+			const refused = await shop.api('POST', `/v1/orders/${van.id}/move`, {
+				to: 'dispatched',
+				shipment: { book: true, courier: 'van' },
+			});
+			expect(refused.status).toBe(502);
+			expect(refused.json.detail).toBe('Own van has no booking connection.');
+			// a connection that is not one of the five is refused in the list
+			const bad = await shop.api('PUT', '/v1/lists/couriers', {
+				value: [{ key: 'x', name: 'X', trackingUrl: '', connection: 'courier' }],
+			});
+			expect(bad.status).toBe(422);
+		} finally {
+			await shop.list('couriers', COURIERS);
+		}
+	});
+
 	it('sends the package weight of items whose item type has packages, none when one is not known', async () => {
-		await shop.connect('courier', { bookUrl: KEYS.bookUrl, trackUrl: KEYS.trackUrl, apiKey: 'k1' });
+		await shop.connect('courier_1', { bookUrl: KEYS.bookUrl, trackUrl: KEYS.trackUrl, apiKey: 'k1' });
 		shop.responders.set(`${COURIER}/book`, () => ({ status: 200, body: { trackingNumber: 'W1' } }));
 		/** @param {number} weightG */
 		const bookedWeight = async (weightG) => {

@@ -61,6 +61,7 @@ import { LIST_WORDS, setupSummaries } from '../core/setup-sheet.js';
 import { createAi } from './ai.js';
 import { INDEXES as CATALOG_INDEXES, typeUses } from './catalog-store.js';
 import { createCouriers } from './couriers.js';
+import { COURIER_CONNECTIONS } from '../core/couriers.js';
 import { INDEXES as EXTRAS_INDEXES } from './extras-store.js';
 import { INDEXES as FULFILMENT_INDEXES } from './fulfilment-store.js';
 import { createImportOptions } from './imports.js';
@@ -320,13 +321,20 @@ export const createProductInstance = (options) => {
 				productId: 'growth',
 				neededBy: [],
 			},
-			courier: {
-				label: 'Courier API keys',
-				kind: 'secret',
-				neededBy: ['courier_apis'],
-				secretField: 'apiKey',
-				test: (value) => couriers.test(value),
-			},
+			// one courier API per courier the merchant books with, named by its entry of the couriers list (E25): the
+			// feature needs the first; the others are there for more
+			...Object.fromEntries(
+				COURIER_CONNECTIONS.map((name, index) => [
+					name,
+					{
+						label: `Courier API keys ${index + 1}`,
+						kind: /** @type {const} */ ('secret'),
+						neededBy: index === 0 ? ['courier_apis'] : [],
+						secretField: 'apiKey',
+						test: (/** @type {unknown} */ value) => couriers.test(value),
+					},
+				]),
+			),
 			ai: {
 				label: 'AI provider key (AI copy)',
 				kind: 'secret',

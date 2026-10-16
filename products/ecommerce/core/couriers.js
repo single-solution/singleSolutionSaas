@@ -1,7 +1,9 @@
 /**
  * Couriers and tracking links (PLAN 0.8.8: couriers with tracking-link templates; no courier is named in code). The
- * merchant's `couriers` list holds `{ key, name, trackingUrl }`: `trackingUrl` is an https template with `{tracking}`
- * where the (URL-encoded) tracking number goes, or '' when the courier has no tracking page. Also the pure parts of the
+ * merchant's `couriers` list holds `{ key, name, trackingUrl, connection }`: `trackingUrl` is an https template with
+ * `{tracking}` where the (URL-encoded) tracking number goes, or '' when the courier has no tracking page; `connection`
+ * is the courier API connection its shipments are booked and tracked through (`courier_1` … `courier_5`, each holding one
+ * courier's own keys, fixed-choices E25), or '' when it is shipped by hand only. Several couriers may book at once. Also the pure parts of the
  * generic courier API (`adapters/couriers.js`): filling the booking body template and reading a value at a dotted path
  * of the courier's answer. No I/O.
  * @module
@@ -18,7 +20,10 @@ const MAX_TEMPLATE = 300;
 /** A courier key. */
 const KEY = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 
-/** @typedef {{ key: string, name: string, trackingUrl: string }} Courier */
+/** The courier API connections: one per courier the merchant books with (E25). */
+export const COURIER_CONNECTIONS = Object.freeze(['courier_1', 'courier_2', 'courier_3', 'courier_4', 'courier_5']);
+
+/** @typedef {{ key: string, name: string, trackingUrl: string, connection: string }} Courier */
 
 /**
  * Whether a text holds control characters.
@@ -58,6 +63,7 @@ export const checkCouriers = (value) => {
 		const key = typeof row.key === 'string' ? row.key.trim() : '';
 		const name = typeof row.name === 'string' ? row.name.trim() : '';
 		const trackingUrl = typeof row.trackingUrl === 'string' ? row.trackingUrl.trim() : '';
+		const connection = row.connection ?? '';
 		if (!KEY.test(key)) {
 			errors.push(`Courier key '${key}' must be 1–40 lowercase letters, digits, - or _.`);
 			continue;
@@ -67,7 +73,9 @@ export const checkCouriers = (value) => {
 		if (!name || name.length > 60) errors.push(`Courier '${key}' needs a name of at most 60 characters.`);
 		if (trackingUrl !== '' && !isTrackingTemplate(trackingUrl))
 			errors.push(`Courier '${key}': the tracking link must be an https address containing ${TRACKING_TOKEN}.`);
-		couriers.push({ key, name, trackingUrl });
+		if (connection !== '' && !COURIER_CONNECTIONS.includes(/** @type {string} */ (connection)))
+			errors.push(`Courier '${key}': the booking connection is one of ${COURIER_CONNECTIONS.join(', ')}, or none.`);
+		couriers.push({ key, name, trackingUrl, connection: String(connection) });
 	}
 	return errors.length > 0 ? { ok: false, errors } : { ok: true, value: couriers };
 };
@@ -80,6 +88,20 @@ export const checkCouriers = (value) => {
  */
 export const courierOf = (list, key) =>
 	(Array.isArray(list) ? /** @type {Courier[]} */ (list) : []).find((courier) => courier?.key === key) ?? null;
+
+/**
+ * The courier a booking goes to (E25): the one staff picked (by key), else the preselected one (the `courier_apis`
+ * setting `courier`) while it has a booking connection, else the first of the list that has one; null when none.
+ * @param {unknown} list the `couriers` list
+ * @param {{ picked: string, preselected: string }} keys
+ * @returns {Courier | null}
+ */
+export const bookingCourier = (list, { picked, preselected }) => {
+	if (picked) return courierOf(list, picked);
+	const first = courierOf(list, preselected);
+	if (first?.connection) return first;
+	return (Array.isArray(list) ? /** @type {Courier[]} */ (list) : []).find((courier) => courier?.connection) ?? null;
+};
 
 /**
  * A courier of the list by its key or its name (staff may give either; an order keeps the name, E28).

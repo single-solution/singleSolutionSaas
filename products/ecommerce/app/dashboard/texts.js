@@ -336,8 +336,11 @@ export const TEXTS = Object.freeze({
 		}),
 		couriers: Object.freeze({
 			title: 'Couriers',
-			help: 'Staff pick the courier when an order ships. In the tracking link, {tracking} is replaced by the tracking number.',
+			help: 'Staff pick the courier when an order ships. In the tracking link, {tracking} is replaced by the tracking number. With Courier APIs, each courier books through its own connection (Connections → Courier API keys 1 to 5).',
 			item: 'Courier',
+			connection: 'Booking connection (Courier APIs)',
+			byHand: 'None: shipped by hand',
+			keys: 'Courier API keys {n}',
 			key: 'Key (lower-case letters, digits, _ or -)',
 			name: 'Name',
 			trackingUrl: 'Tracking link (https://…{tracking}…)',

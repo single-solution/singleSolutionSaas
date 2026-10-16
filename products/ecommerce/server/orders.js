@@ -153,7 +153,8 @@ export const createOrders = (product, service, { ordering }) => {
 	};
 
 	/**
-	 * Ask the courier API for the latest status of a booked package, at most every 30 minutes (on read). The order's
+	 * Ask the courier API of the courier it was booked with for the latest status of a booked package, at most every 30
+	 * minutes (on read). The order's
 	 * `updatedAt` stays as it was, so a move staff are making meanwhile is not refused.
 	 * @param {Site} s @param {OrderRecord} order
 	 * @returns {Promise<OrderRecord>}
@@ -163,7 +164,9 @@ export const createOrders = (product, service, { ordering }) => {
 		if (!s.has('courier_apis') || order.role !== 'shipped' || !shipment?.booked) return order;
 		const now = product.now();
 		if (shipment.checkedAt && now - new Date(shipment.checkedAt).getTime() < TRACK_EVERY_MS) return order;
-		const value = await product.connections.value(s.websiteId, 'courier');
+		// the connection of the courier it was booked with (E25), found by its name or key in today's list
+		const courier = courierNamed(await s.list('couriers'), shipment.courier);
+		const value = courier?.connection ? await product.connections.value(s.websiteId, courier.connection) : null;
 		if (!value) return order;
 		const tracked = await product.couriers.track({ trackingNumber: shipment.trackingNumber, value });
 		const next = { ...shipment, status: tracked.ok ? tracked.status : shipment.status, checkedAt: new Date(now) };

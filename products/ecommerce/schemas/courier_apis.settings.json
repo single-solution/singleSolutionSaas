@@ -4,8 +4,8 @@
 	"properties": {
 		"courier": {
 			"type": "string",
-			"title": "Courier of booked shipments",
-			"description": "The key of the courier (from your couriers list) whose name and tracking link booked shipments get. Staff may pick another when booking.",
+			"title": "Courier booked first",
+			"description": "The key of the courier (from your couriers list, with a booking connection) a booking goes to unless staff pick another; empty: the first courier of the list with a booking connection.",
 			"default": "",
 			"maxLength": 40
 		}

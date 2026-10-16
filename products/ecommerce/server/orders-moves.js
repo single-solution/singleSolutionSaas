@@ -39,7 +39,7 @@ import { problem } from '@ss/app-kit';
 import { fieldsOn, productTypes, unitRulesOf } from '../adapters/catalog-store.js';
 import { heldStockBefore } from '../adapters/ledger.js';
 import { checkUnit, missingOrderFields, sharedKeys, unitKeys } from '../core/fields.js';
-import { courierNamed, courierOf, trackingLink } from '../core/couriers.js';
+import { bookingCourier, courierNamed, trackingLink } from '../core/couriers.js';
 import {
 	BEFORE_DELIVERY_ROLES,
 	WAITING_ROLES as WAITING,
@@ -234,24 +234,32 @@ export const createMoves = (product, service) => {
 		const couriers = await s.list('couriers');
 		if ('book' in input) {
 			if (!s.has('courier_apis')) throw service.invalid('shipment/book', 'Booking needs Courier APIs.');
-			const key = input.courier ?? String((await s.values('courier_apis')).courier);
-			const courier = key ? courierOf(couriers, key) : null;
+			// the courier picked, else the preselected one, else the first with a booking connection (E25)
+			const courier = bookingCourier(couriers, {
+				picked: input.courier ?? '',
+				preselected: String((await s.values('courier_apis')).courier ?? ''),
+			});
 			if (input.courier && !courier) throw service.invalid('shipment/courier', 'There is no such courier.');
 			// a package booked for it already (a move that failed after the booking) ships with that booking, never booked
 			// twice
 			const booked = order.shipment;
 			if (booked?.booked && booked.trackingNumber && (!input.courier || courier?.name === booked.courier))
 				return { shipment: booked };
-			const value = await product.connections.value(s.websiteId, 'courier');
-			if (!value) throw problem('courier_failed', 'Connect the courier API keys first.');
+			if (!courier?.connection)
+				throw problem(
+					'courier_failed',
+					courier ? `${courier.name} has no booking connection.` : 'No courier has a booking connection.',
+				);
+			const value = await product.connections.value(s.websiteId, courier.connection);
+			if (!value) throw problem('courier_failed', `Connect the courier API keys of ${courier.name} first.`);
 			return {
 				book: async () => {
 					const booked = await product.couriers.book({ order, value, weightG: await parcelWeight(s, order) });
 					if (!booked.ok) throw problem('courier_failed', booked.message);
 					return {
-						courier: courier?.name ?? '',
+						courier: courier.name,
 						trackingNumber: booked.trackingNumber,
-						trackingUrl: courier ? trackingLink(courier.trackingUrl, booked.trackingNumber) : '',
+						trackingUrl: trackingLink(courier.trackingUrl, booked.trackingNumber),
 						booked: true,
 						status: '',
 						checkedAt: null,
