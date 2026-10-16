@@ -42,7 +42,7 @@ import { zoneOr } from '../core/time.js';
 import { plainOf } from '../core/markdown.js';
 import { compileRedactionPatterns } from '../core/moderation.js';
 import { ROUTED, inTeam, pickAssignee, teamFor } from '../core/routing.js';
-import { GUEST_HEADER, GUEST_KEY, SIGN_IN_HEADER, attachmentKind } from '../core/widgets.js';
+import { GUEST_HEADER, GUEST_KEY, attachmentKind } from '../core/widgets.js';
 import { createStore } from '../adapters/store.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -254,10 +254,9 @@ export const createService = (product) => {
 			list: (name) => once(`l:${name}`, () => product.lists.get(websiteId, name)),
 			signIn: () =>
 				once('signIn', async () => {
-					const token = ctx.headers.get(SIGN_IN_HEADER);
-					if (!token || !on.includes('signed_in_chat')) return null;
-					const verified = await product.accounts.verify({ websiteId, token });
-					return verified.ok ? { token, user: verified.user } : null;
+					if (!on.includes('signed_in_chat')) return null;
+					const verified = await ctx.signIn();
+					return verified?.ok ? { token: verified.token, user: verified.user } : null;
 				}),
 		};
 	};

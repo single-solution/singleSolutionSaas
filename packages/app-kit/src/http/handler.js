@@ -39,6 +39,7 @@ import {
 import { createId } from '@ss/contracts';
 import { parseActor } from '../actor.js';
 import { isDatabaseUnavailable } from '../data.js';
+import { requestSignIn } from '../identity.js';
 import { isKitError } from '../util.js';
 import { isProblem, isResult, noContent, ok, problem } from './results.js';
 import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
@@ -74,6 +75,12 @@ import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
  * @property {import('@ss/protocol').TicketClaims | null} ticket
  * @property {import('../actor.js').ActingUser | null} actor the member of the merchant's staff a server-token request
  *   names with `SS-Actor-*` headers (PLAN 0.8.10 K2), else null
+ * @property {() => Promise<import('../identity.js').RequestSignIn | null>} signIn the visitor's Accounts sign-in from
+ *   `SS-Sign-In`, verified once per request for the website of the request's own token (`{ ok: true, token, user, claims }`,
+ *   `{ ok: false, code }`, or null without the header). On a browser route the merchant's server called for a visitor
+ *   (`visitor.server`), a sign-in that is not valid never reaches the route: 401 `invalid_sign_in` (`cause`: the failure,
+ *   for example `audience`, `expired`, `signature`), or 503 `accounts_unavailable`. A browser call keeps a wrong or
+ *   expired sign-in as none.
  * @property {{ server: boolean, ip: string | null }} visitor on browser routes: `server` when the merchant's server
  *   called with the server token for one visitor (K3), `ip` that visitor's `SS-Visitor-IP` (null when not sent)
  * @property {string} clientIp the visitor's address for per-visitor limits and risk checks: `SS-Visitor-IP` on a
@@ -115,6 +122,20 @@ const CORS_HEADERS = 'authorization, content-type, idempotency-key, ss-guest, ss
 /** Visitor calls from the merchant's server: their own window per route per website (PLAN 0.8.10 K3, code constant). */
 export const SERVER_VISITOR_LIMIT = Object.freeze({ limit: 3000, windowSeconds: 60 });
 const VISITOR_IP_HEADER = 'ss-visitor-ip';
+/** What a refused sign-in tells the merchant's server (the failure code of `verifyIdentityToken`). @type {Record<string, string>} */
+const SIGN_IN_DETAIL = Object.freeze({
+	accounts_not_connected: "Paste the website's Accounts token in this product's Connections to take sign-ins.",
+	audience: 'The sign-in was made for another website.',
+	expired: 'The sign-in has expired. Renew it at Accounts and send the new one.',
+	too_old: 'The sign-in is too old. Renew it at Accounts and send the new one.',
+	not_yet_valid: 'The sign-in is not valid yet.',
+	signature: 'The sign-in is not signed by the keys of this website’s Accounts.',
+	unknown_key: 'The sign-in is signed by a key this website’s Accounts does not have.',
+	issuer: 'The sign-in was not issued by this website’s Accounts.',
+	algorithm: 'The sign-in uses a signature algorithm that is not accepted.',
+	subject: 'The sign-in does not name a user.',
+	malformed: 'SS-Sign-In must be the Accounts sign-in of the shopper.',
+});
 const LAST_SEEN_EVERY_MS = 60 * 60_000;
 const STAFF_EVERY_MS = 10 * 60_000;
 const NO_FRAMES = Object.freeze({ 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" });
@@ -436,6 +457,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				ticket: null,
 				actor: null,
 				visitor: { server: false, ip: null },
+				signIn: async () => null,
 				clientIp: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
 				session: null,
 				after: (task) => {
@@ -519,6 +541,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				});
 			}
 			websiteId = ctx.websiteId;
+			ctx.signIn = requestSignIn({ accounts: kit.accounts, websiteId: ctx.websiteId, headers: request.headers });
 
 			if (r.auth === 'browser' || r.auth === 'server' || r.auth === 'ticket') {
 				const id = /** @type {string} */ (ctx.websiteId);
@@ -581,6 +604,23 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				}
 			}
 
+			// the merchant's server called for a signed-in visitor: the sign-in is the visitor, so a wrong, expired or foreign one
+			// is refused here and never becomes "no sign-in" (a browser call keeps that); a user id alone is never taken
+			if (ctx.visitor.server) {
+				const found = await ctx.signIn();
+				if (found !== null && !found.ok) {
+					if (found.code === 'accounts_unavailable') {
+						extra['retry-after'] = '5';
+						return fail(problem('accounts_unavailable', 'The sign-in cannot be checked right now. Try again shortly.'));
+					}
+					return fail(
+						problem('invalid_sign_in', SIGN_IN_DETAIL[found.code] ?? SIGN_IN_DETAIL.malformed, {
+							extensions: { cause: found.code },
+						}),
+					);
+				}
+			}
+
 			// a repeated Idempotency-Key (same website, route, address, body and visitor, signed-in shopper or staff member) gets the first
 			// answer again; another request under the key 409 duplicate_request; one still running 409 in_progress (K-14)
 			/** @type {string | null} */
@@ -590,6 +630,8 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 			if (r.idempotent === true && ctx.idempotencyKey) {
 				const principal = ctx.websiteId ?? ctx.session?.subject ?? 'anonymous';
 				duplicateKey = `idem:${sha256Hex(`${principal}\n${r.id}\n${ctx.idempotencyKey}`)}`;
+				// a server call for a verified shopper counts by who they are, so a retry with a renewed sign-in is the same request
+				const verified = ctx.visitor.server ? await ctx.signIn() : null;
 				fingerprint = sha256Hex(
 					[
 						method,
@@ -598,7 +640,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 						ctx.actor?.id ?? '',
 						request.headers.get('ss-guest') ?? '',
 						request.headers.get('ss-order-key') ?? '',
-						request.headers.get('ss-sign-in') ?? '',
+						verified?.ok ? `user:${verified.user.id}` : (request.headers.get('ss-sign-in') ?? ''),
 						ctx.rawBody,
 					].join('\n'),
 				);

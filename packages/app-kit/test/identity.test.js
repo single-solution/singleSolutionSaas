@@ -114,9 +114,10 @@ describe('accounts.verify (Accounts sign-ins through the pasted Accounts token)'
 		const server = (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token;
 		const cookie = await session();
 		await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, { value: server });
-		expect(await product.accounts.verify({ websiteId, token })).toEqual({
+		expect(await product.accounts.verify({ websiteId, token })).toMatchObject({
 			ok: true,
 			user: { id: 'usr_1', email: 'a@example.com', role: 'customer' },
+			claims: { sub: 'usr_1', aud: websiteId },
 		});
 		// another website's sign-in is refused (audience), and so is an expired one
 		const other = await accounts.signIn({ websiteId: 'web_other', sub: 'usr_1' });

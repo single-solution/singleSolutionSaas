@@ -138,7 +138,8 @@ const ACCOUNTS_REFETCH_MS = 60_000;
 
 /**
  * @typedef {{ id: string, email?: string, phone?: string, name?: string, role?: string, permissions?: string[] }} AccountsUser
- * @typedef {{ ok: true, user: AccountsUser } | { ok: false, code: IdentityFailure | 'accounts_not_connected' | 'accounts_unavailable' }} AccountsSignInResult
+ * @typedef {{ ok: true, user: AccountsUser, claims: Readonly<Record<string, unknown>> }
+ *   | { ok: false, code: IdentityFailure | 'accounts_not_connected' | 'accounts_unavailable' }} AccountsSignInResult
  */
 
 /**
@@ -193,6 +194,7 @@ export const createAccountsSignIns = ({ connections, now }) => {
 			const { claims } = result.identity;
 			return {
 				ok: true,
+				claims,
 				user: {
 					id: result.identity.subject,
 					...(result.identity.email === undefined ? {} : { email: result.identity.email }),
@@ -206,4 +208,35 @@ export const createAccountsSignIns = ({ connections, now }) => {
 			};
 		},
 	});
+};
+
+/** The header a visitor's Accounts sign-in travels in: from the browser next to the browser token, and from the merchant's server next to the server token. */
+export const SIGN_IN_HEADER = 'ss-sign-in';
+
+/**
+ * @typedef {{ ok: true, token: string, user: AccountsUser, claims: Readonly<Record<string, unknown>> }
+ *   | { ok: false, code: IdentityFailure | 'accounts_not_connected' | 'accounts_unavailable' }} RequestSignIn
+ */
+
+/**
+ * The Accounts sign-in of one request (`ctx.signIn()`): read from `SS-Sign-In`, checked for the website of the request's
+ * own token, never for one the header names (signature by the website's Accounts keys, `aud`, `exp`, `iat`, see
+ * `verifyIdentityToken`), and checked once however often a route asks. Null when the request carries no sign-in.
+ * A sign-in only says who the person is: it never grants more than a visitor's rights, and only a verified sign-in names
+ * the shopper (a user id alone is never taken).
+ * @param {{ accounts: ReturnType<typeof createAccountsSignIns>, websiteId: string | null, headers: Headers }} input
+ * @returns {() => Promise<RequestSignIn | null>}
+ */
+export const requestSignIn = ({ accounts, websiteId, headers }) => {
+	/** @type {Promise<RequestSignIn | null> | null} */
+	let once = null;
+	return () => {
+		once ??= (async () => {
+			const token = (headers.get(SIGN_IN_HEADER) ?? '').trim();
+			if (token.length === 0 || websiteId === null) return null;
+			const verified = await accounts.verify({ websiteId, token });
+			return verified.ok ? { ok: true, token, user: verified.user, claims: verified.claims } : verified;
+		})();
+		return once;
+	};
 };

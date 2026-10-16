@@ -28,7 +28,10 @@ The exact API is in [API.md](./API.md).
 - **The merchant's server** (PLAN 0.8.10 K1–K4, K9) — the settings API (`/v1/features`, `/v1/settings`, `/v1/texts`,
   `/v1/theme`, `/v1/format`, `/v1/lists`, `/v1/connections`; 3,000 reads per minute per route and 60 writes per
   minute per website) with a merchant's rights; the acting user named by
-  `SS-Actor-*` headers; visitor calls with the server token (`SS-Visitor-IP`, their own rate window); counts of lists
+  `SS-Actor-*` headers; visitor calls with the server token (`SS-Visitor-IP`, their own rate window), acting for a
+  signed-in shopper with `SS-Sign-In` (the Accounts sign-in, verified by the kit for the token's own website through
+  `ctx.signIn()`; a sign-in that is wrong, expired, for another website or signed by another key is refused with 401
+  `invalid_sign_in`, never read as a guest, and a user id alone is never taken); counts of lists
   (`countHandlers`); the activity log (`GET /v1/activity`; `activityFilter` for a product's own copies of entries).
   The product dashboard edits the same lists (`GET|PUT /v1/dashboard/websites/:websiteId/lists/:list`) with the same
   rules.

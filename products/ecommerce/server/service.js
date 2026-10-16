@@ -100,20 +100,6 @@ export const actorHeaders = (who) => {
  */
 
 /**
- * The claims of a sign-in already verified (its middle part), or {}.
- * @param {string} token
- * @returns {Record<string, unknown>}
- */
-const claimsOf = (token) => {
-	try {
-		const body = JSON.parse(Buffer.from(String(token.split('.')[1] ?? ''), 'base64url').toString('utf8'));
-		return typeof body === 'object' && body !== null ? body : {};
-	} catch {
-		return {};
-	}
-};
-
-/**
  * A website while serving one request. `values(feature)` and `data()` are read once per request.
  * @typedef {object} Site
  * @property {string} websiteId
@@ -308,16 +294,16 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * The shopper of a visitor request: the verified Accounts sign-in in `SS-Sign-In`, or null (none, invalid, expired
-	 * or no Accounts token pasted).
+	 * The shopper of a visitor request: the verified Accounts sign-in in `SS-Sign-In` (the kit's `ctx.signIn()`, for the
+	 * website of the request's own token), or null (none, invalid, expired or no Accounts token pasted). From the
+	 * merchant's server the kit has already refused an invalid sign-in (401 `invalid_sign_in`); a user id alone never
+	 * names a shopper.
 	 * @param {Site} s
 	 * @returns {Promise<Shopper | null>}
 	 */
 	const shopper = async (s) => {
-		const token = s.ctx.headers?.get?.(SIGN_IN_HEADER);
-		if (!token) return null;
-		const verified = await product.accounts.verify({ websiteId: s.websiteId, token });
-		if (!verified.ok) return null;
+		const verified = await s.ctx.signIn?.();
+		if (!verified?.ok) return null;
 		const user = verified.user;
 		/** @type {Shopper} */
 		const found = {
@@ -326,8 +312,8 @@ export const createService = (product) => {
 			email: user.email ?? '',
 			phone: user.phone ?? '',
 			role: user.role ?? '',
-			phoneVerified: Boolean(user.phone) && claimsOf(token).phone_verified === true,
-			emailVerified: Boolean(user.email) && claimsOf(token).email_verified === true,
+			phoneVerified: Boolean(user.phone) && verified.claims.phone_verified === true,
+			emailVerified: Boolean(user.email) && verified.claims.email_verified === true,
 		};
 		recordShopper(s, found);
 		return found;
@@ -411,10 +397,10 @@ export const createService = (product) => {
 	 * @returns {Promise<{ name: string, city: string, area: string, region: string, country: string } | null>}
 	 */
 	const accountProfile = async (s) => {
-		const token = s.ctx.headers?.get?.(SIGN_IN_HEADER);
-		if (!token) return null;
+		const verified = await s.ctx.signIn?.();
+		if (!verified?.ok) return null;
 		const answer = await product
-			.callProduct(s.websiteId, 'accounts', '/v1/me', { headers: { [SIGN_IN_HEADER]: token } })
+			.callProduct(s.websiteId, 'accounts', '/v1/me', { headers: { [SIGN_IN_HEADER]: verified.token } })
 			.catch(() => /** @type {const} */ ({ ok: false }));
 		if (!answer.ok || answer.status !== 200 || typeof answer.body !== 'object' || answer.body === null) return null;
 		const body = /** @type {Record<string, any>} */ (answer.body);

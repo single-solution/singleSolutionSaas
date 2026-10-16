@@ -118,6 +118,7 @@ import { verifyToken } from '@ss/protocol';
  *   change: SettingsChange) => Promise<void>} settingsChanged a website's settings change: activity-log entry and event
  * @property {import('./staff-alerts.js').StaffAlerts} staffAlerts
  * @property {import('./messages.js').Messages} messages
+ * @property {ReturnType<typeof createAccountsSignIns>} accounts
  * @property {ReturnType<typeof createTickets>} tickets
  * @property {() => Promise<import('./reseal.js').ResealResult>} reseal the Owner's Re-seal of stored secrets (RT-14)
  * @property {ReturnType<typeof createDashboard>} dashboard
@@ -128,6 +129,8 @@ const KIT_PROBLEM_CODES = Object.freeze({
 	duplicate_request: Object.freeze({ status: 409, title: 'Duplicate request' }),
 	in_progress: Object.freeze({ status: 409, title: 'Request in progress' }),
 	invalid_actor: Object.freeze({ status: 400, title: 'Invalid acting user' }),
+	invalid_sign_in: Object.freeze({ status: 401, title: 'The sign-in is not valid' }),
+	accounts_unavailable: Object.freeze({ status: 503, title: 'Accounts cannot be reached' }),
 	visitor_ip_required: Object.freeze({ status: 400, title: "The visitor's IP address is required" }),
 	count_timeout: Object.freeze({ status: 503, title: 'Counting took too long' }),
 	database_unavailable: Object.freeze({ status: 503, title: 'Database unavailable' }),
@@ -376,6 +379,7 @@ export const createProduct = (options) => {
 		settingsChanged,
 		staffAlerts,
 		messages,
+		accounts,
 		tickets,
 		reseal,
 	};
