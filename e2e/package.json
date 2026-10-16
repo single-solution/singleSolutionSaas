@@ -12,7 +12,6 @@
 	"scripts": {
 		"check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm validate && pnpm test",
 		"test": "vitest run",
-		"test:watch": "vitest",
 		"lint": "eslint .",
 		"typecheck": "tsc -p tsconfig.json",
 		"validate": "ss app validate fixtures/notes",
