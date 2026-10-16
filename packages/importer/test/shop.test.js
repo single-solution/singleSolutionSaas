@@ -122,12 +122,7 @@ describe('the example shop (fixture)', () => {
 			customer: { userId: `usr_${SHOP_IDS.member}`, customerId: `cus_${SHOP_IDS.member}` },
 			totals: { subtotal: 2500, delivery: 500, total: 3000 },
 			payments: [{ method: 'cod', amount: 3000, at: '2026-07-04T12:00:00.000Z' }],
-			history: [
-				{ from: null, to: 'confirmed' },
-				{ to: 'packed' },
-				{ to: 'shipped' },
-				{ from: 'shipped', to: 'delivered' },
-			],
+			history: [{ from: null, to: 'confirmed' }, { to: 'packed' }, { to: 'shipped' }, { from: 'shipped', to: 'delivered' }],
 			deliveredAt: '2026-07-04T12:00:00.000Z',
 			promotions: { pointsEarned: 25, pointsCredited: true, released: false },
 		});

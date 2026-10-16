@@ -169,7 +169,13 @@ export const settingsPlan = (values) => {
 	const media = origin(integration.awsS3PublicUrlBase);
 	const disallow = [...new Set([...(seo.robotsDisallow ?? ROBOTS_FALLBACK), ROBOTS_ALWAYS])];
 	// prices are whole rupees ("Rs 12,500", `packages/shared/src/formatters.ts`) and times are the shop's (SF-14, K8)
-	const format = { wholeUnits: true, currencyDisplay: 'symbol', currencySymbols: { PKR: 'Rs' }, locale: 'en', times: 'business' };
+	const format = {
+		wholeUnits: true,
+		currencyDisplay: 'symbol',
+		currencySymbols: { PKR: 'Rs' },
+		locale: 'en',
+		times: 'business',
+	};
 	return {
 		accounts: {
 			format,
