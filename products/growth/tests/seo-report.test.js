@@ -156,7 +156,7 @@ describe('SEO checklist: the live site', () => {
 		expect(read).toContain('/old-lamps');
 		expect(read.find((path) => path.startsWith('/this-page-does-not-exist-'))).toBeDefined();
 		expect(report.cached).toBe(false);
-		expect(report.pages).toEqual([
+		expect(report.pages.map((/** @type {any} */ { url, kind, sampled }) => ({ url, kind, sampled }))).toEqual([
 			{ url: `${ORIGIN}/`, kind: 'home', sampled: false },
 			{ url: `${ORIGIN}/cart`, kind: 'WebPage', sampled: false },
 			{ url: `${ORIGIN}/products/blue-lamp`, kind: 'Product', sampled: true },
@@ -164,6 +164,14 @@ describe('SEO checklist: the live site', () => {
 			{ url: `${ORIGIN}/categories/lamps`, kind: 'CollectionPage', sampled: true },
 			{ url: `${ORIGIN}/glossary/linen`, kind: 'DefinedTerm', sampled: true },
 		]);
+		// each page read carries its head, for the checklist's search result and share preview (R7 #105)
+		expect(report.pages[2].head).toEqual({
+			title: 'Blue Lamp | Shop Example',
+			description: 'Blue Lamp | Shop Example: everything about it, with the details shoppers ask for before they buy it.',
+			url: `${ORIGIN}/products/blue-lamp`,
+			image: `${ORIGIN}/media/og.jpg`,
+			siteName: '',
+		});
 		/** @param {string} id @param {string | null} [page] */
 		const result = (id, page) => {
 			const item = find(report, id, page);
@@ -253,7 +261,7 @@ describe('SEO checklist: the live site', () => {
 			await env.call('POST', '/v1/seo/checks', { token: env.server, body: { paths: ['/products/blue-lamp'] } })
 		).json();
 		expect(page.cached).toBe(false);
-		expect(page.pages).toEqual([
+		expect(page.pages.map((/** @type {any} */ { url, kind, sampled }) => ({ url, kind, sampled }))).toEqual([
 			{ url: `${ORIGIN}/`, kind: 'home', sampled: false },
 			{ url: `${ORIGIN}/products/blue-lamp`, kind: 'Product', sampled: false },
 		]);
@@ -276,7 +284,9 @@ describe('SEO checklist: the live site', () => {
 		const db = await env.merchantDb();
 		expect(await db.collection('ss_growth_activity').countDocuments({ action: 'seo.checked' })).toBe(0);
 		const ran = await env.call('POST', '/v1/admin/seo/checks', { token: ticket, origin: ADMIN_ORIGIN, body: { paths: ['/'] } });
-		expect((await ran.json()).pages).toEqual([{ url: `${ORIGIN}/`, kind: 'home', sampled: false }]);
+		expect((await ran.json()).pages).toEqual([
+			{ url: `${ORIGIN}/`, kind: 'home', sampled: false, head: expect.objectContaining({ url: `${ORIGIN}/` }) },
+		]);
 		expect(await db.collection('ss_growth_activity').findOne({ action: 'seo.checked' })).toMatchObject({
 			actor: { kind: 'staff', id: 'u_1', name: 'Sam Staff' },
 			target: 'seo_checklist',
@@ -353,7 +363,8 @@ describe('SEO checklist: the live site', () => {
 			reason: 'The page could not be reached: its address does not answer or is not a public https address.',
 		});
 		expect(find(down, 'verification')).toBeUndefined();
-		expect(down.pages).toEqual([{ url: `${ORIGIN}/`, kind: 'home', sampled: false }]);
+		// a page that could not be read has no head
+		expect(down.pages).toEqual([{ url: `${ORIGIN}/`, kind: 'home', sampled: false, head: null }]);
 	});
 
 	it('runs at most 10 times an hour per website, through the API and the widget together', async () => {

@@ -1657,8 +1657,13 @@ describe('admin widgets', () => {
 			cached,
 			summary: { pass: 2, warn: 1, fail: 1 },
 			pages: [
-				{ url: page, kind: 'home', sampled: false },
-				{ url: shop, kind: 'ProductGroup', sampled: true },
+				{ url: page, kind: 'home', sampled: false, head: null },
+				{
+					url: shop,
+					kind: 'ProductGroup',
+					sampled: true,
+					head: { title: 'Blue Lamp | Shop', description: 'A lamp.', url: shop, image: '', siteName: 'Shop' },
+				},
 			],
 			checks: [
 				{ id: 'title', status: 'pass', page, title: 'Page title', reason: 'The title has 30 characters.', fix: '' },
@@ -1712,6 +1717,13 @@ describe('admin widgets', () => {
 		expect([...(host.shadowRoot?.querySelectorAll('.tile .value') ?? [])].map((v) => v.textContent)).toEqual(['1', '1', '2']);
 		const cards = () => [...(host.shadowRoot?.querySelectorAll('.masonry .card h4') ?? [])].map((h) => h.textContent);
 		expect(cards()).toEqual(['Whole site', '/', '/products/blue-lamp']);
+		// a page read shows its search result and share preview (R7 #105); one not read has none
+		const [, home, lamp] = /** @type {HTMLElement[]} */ ([...(host.shadowRoot?.querySelectorAll('.masonry .card') ?? [])]);
+		expect(home?.querySelector('.ss-seo')).toBeNull();
+		expect(lamp?.querySelector('details > summary')?.textContent).toBe(strings['seo.preview.show']);
+		expect(lamp?.querySelector('.ss-seo-title')?.textContent).toBe('Blue Lamp | Shop');
+		expect(lamp?.querySelector('.ss-seo-trail')?.textContent).toBe('https://shop.example.com › products › blue-lamp');
+		expect(lamp?.querySelector('.ss-seo-head')?.textContent).toBe(strings['seo.preview.result']);
 		expect([...(host.shadowRoot?.querySelectorAll('.masonry .card .kind') ?? [])].map((k) => k.textContent)).toEqual([
 			strings['seo.kind.home'],
 			`Product group · ${strings['seo.sampled']}`,

@@ -298,6 +298,7 @@ export const scanHtml = (html) => {
 		viewport: meta('name', 'viewport'),
 		ogTitle: meta('property', 'og:title'),
 		ogImage: meta('property', 'og:image'),
+		siteName: meta('property', 'og:site_name'),
 		canonicals,
 		lang: tags('html')[0]?.lang || null,
 		h1: tags('h1').length,

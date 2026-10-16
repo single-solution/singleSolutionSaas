@@ -596,6 +596,39 @@ const reachableCheck = (page, listed) => {
 };
 
 /**
+ * @typedef {{ title: string, description: string, url: string, image: string, siteName: string }} PageHead
+ */
+
+/**
+ * What a page read gives search engines and share cards, for the checklist's search result and share preview (R7
+ * #105): its title, meta description, canonical address (else its own), share image (`og:image`) and site name
+ * (`og:site_name`), addresses made absolute; null for a page that could not be read.
+ * @param {ReturnType<typeof scanHtml> | null} scan
+ * @param {string} url the page's address
+ * @returns {PageHead | null}
+ */
+export const headOf = (scan, url) => {
+	if (!scan) return null;
+	/** @param {string | null | undefined} address */
+	const absolute = (address) => {
+		if (!address) return '';
+		try {
+			const resolved = new URL(address, url);
+			return resolved.protocol === 'https:' || resolved.protocol === 'http:' ? resolved.toString() : '';
+		} catch {
+			return '';
+		}
+	};
+	return {
+		title: scan.title ?? '',
+		description: scan.description ?? '',
+		url: absolute(scan.canonicals[0]) || url,
+		image: absolute(scan.ogImage),
+		siteName: scan.siteName ?? '',
+	};
+};
+
+/**
  * The checks of one page: whether it answered, then (when it did) its content, its structured data by kind, its speed,
  * and its Web Vitals (pages like it, when measured).
  * @param {Fetched} page

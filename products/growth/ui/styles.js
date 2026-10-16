@@ -112,6 +112,8 @@ ul { list-style: none; margin: 0; padding: 0; }
 .card { border-radius: calc(var(--ss-radius, 8px) * 2); padding: 14px 16px;
   background: color-mix(in srgb, var(--ss-color-accent, #4f46e5) 6%, transparent); }
 .card-head { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.card details.preview { margin-top: 10px; }
+.card details.preview > summary { cursor: pointer; font-weight: 600; }
 .card-head h3, .card-head h4 { margin: 0; overflow-wrap: anywhere; }
 .card .actions { margin-top: 8px; }
 ul.rank li { padding: 6px 0; }

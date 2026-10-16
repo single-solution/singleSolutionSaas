@@ -27,6 +27,7 @@ import {
 	SITE_CHECKS,
 	candidatesOf,
 	comparableOf,
+	headOf,
 	keptOutBy,
 	isCollectionKind,
 	isProductKind,
@@ -316,7 +317,12 @@ export const seoCheckRoutes = (product, { log }) => {
 		];
 		return {
 			checkedAt: new Date(now()),
-			pages: pages.map((page) => ({ url: page.read.url, kind: page.kind, sampled: page.sampled })),
+			pages: pages.map((page) => ({
+				url: page.read.url,
+				kind: page.kind,
+				sampled: page.sampled,
+				head: headOf(page.scan, page.read.url),
+			})),
 			checks: [...site.filter((item) => item !== null), ...pages.flatMap((page) => page.checks)],
 		};
 	};

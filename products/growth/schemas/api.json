@@ -1125,7 +1125,7 @@
 		"SeoPage": {
 			"type": "object",
 			"description": "A page the run read.",
-			"required": ["url", "kind", "sampled"],
+			"required": ["url", "kind", "sampled", "head"],
 			"additionalProperties": false,
 			"properties": {
 				"url": {
@@ -1139,6 +1139,19 @@
 				"sampled": {
 					"type": "boolean",
 					"description": "true: picked from your sitemap; false: the home page, a page of the checklist's settings or a path you sent."
+				},
+				"head": {
+					"type": ["object", "null"],
+					"description": "What the page gives search engines and share cards, for the search result and share preview (R7 #105); null when it could not be read.",
+					"required": ["title", "description", "url", "image", "siteName"],
+					"additionalProperties": false,
+					"properties": {
+						"title": { "type": "string", "description": "Its title element ('' without one)." },
+						"description": { "type": "string", "description": "Its meta description ('' without one)." },
+						"url": { "type": "string", "description": "Its canonical address, else its own." },
+						"image": { "type": "string", "description": "Its share image (og:image) as an absolute address, or ''." },
+						"siteName": { "type": "string", "description": "Its site name (og:site_name), or ''." }
+					}
 				}
 			}
 		},

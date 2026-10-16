@@ -10,8 +10,10 @@
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/seo-checks.js').Check} Check */
 /** @typedef {import('../core/seo-checks.js').PageKind} PageKind */
+/** @typedef {import('../core/seo-checks.js').PageHead} PageHead */
 /**
- * @typedef {{ checkedAt: Date, pages: Array<{ url: string, kind: PageKind, sampled: boolean }>, checks: Check[] }} KeptReport
+ * @typedef {{ checkedAt: Date, pages: Array<{ url: string, kind: PageKind, sampled: boolean, head: PageHead | null }>,
+ *   checks: Check[] }} KeptReport
  */
 
 const REPORTS = 'seo_reports';

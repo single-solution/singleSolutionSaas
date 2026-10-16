@@ -5,13 +5,16 @@
  * pages from the sitemap (a run within 5 minutes of the last one answers that one), and the More menu checks other
  * pages (a dialog). A run shows the passed, to-improve and to-fix counts as tiles, filter chips with counts, and a
  * masonry of cards (the whole site, then each page with its kind) whose checks carry the reason and their fix steps;
- * each page's More menu opens it, tests it in Google's Rich Results Test, checks it again or submits it to IndexNow,
+ * each page read shows its search result and share preview (R7 #105, `@ss/ui/seo-preview`: its title and description
+ * measured against Google's usual widths), and each page's More menu opens it, tests it in Google's Rich Results Test,
+ * checks it again or submits it to IndexNow,
  * and the 404 log's check opens the redirects widget when it is on the page. With IndexNow on (ticket
  * `indexnow.submit`) a card names the key file address (G5) and submits pages in a dialog. Every word is a widget
  * text; the time of a run follows the website's Format and time zone (PLAN 0.8.10 K7).
  * @module
  */
 import { adminCall, element, formatDate, formatText, moreMenu, mountWidget, openDialog } from '@ss/app-kit/widget';
+import { SEO_PREVIEW_CSS, SEO_PREVIEW_TEXTS, seoPreview } from '@ss/ui/seo-preview';
 import { SITE_CHECKS, richResultsTestOf } from '../core/seo-checks.js';
 import { WIDGET_ATTRIBUTE } from '../core/widgets.js';
 import { PROBLEM_TEXTS, chipGroup, problemKey } from './admin-kit.js';
@@ -60,7 +63,10 @@ const indexNowProblems = (answer) => {
  * @typedef {{ id: string, status: 'pass' | 'warn' | 'fail', page: string | null, title: string, reason: string,
  *   fix: string, ignored?: boolean }} Check
  */
-/** @typedef {{ url: string, kind: string, sampled: boolean }} Page */
+/**
+ * @typedef {{ url: string, kind: string, sampled: boolean,
+ *   head?: import('../core/seo-checks.js').PageHead | null }} Page `head`: what it gives search engines (R7 #105)
+ */
 /**
  * @typedef {{ checkedAt: string, cached: boolean, summary: { pass: number, warn: number, fail: number, ignored: number },
  *   checks: Check[], pages: Page[] }} Report
@@ -100,7 +106,7 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {}, 
 		host,
 		theme: config.theme,
 		customCss: config.customCss,
-		css: WIDGET_CSS,
+		css: WIDGET_CSS + SEO_PREVIEW_CSS,
 		render: (root) => {
 			const doc = root.ownerDocument;
 			/** @param {string} tag @param {Record<string, string>} [attributes] @param {string} [text] */
@@ -112,6 +118,18 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {}, 
 			 */
 			const failure = (answer, keys, fallback) =>
 				answer.status === 0 && !api.tickets.current() ? t('seo.signedOut') : t(problemKey(answer, keys, fallback));
+			/** The preview's words: the widget texts `seo.preview.<key>`. */
+			const previewTexts = Object.fromEntries(Object.keys(SEO_PREVIEW_TEXTS).map((key) => [key, t(`seo.preview.${key}`)]));
+			/**
+			 * A page's search result and share preview, folded (R7 #105); null for a page that could not be read.
+			 * @param {Page | undefined} page
+			 */
+			const previewOf = (page) => {
+				if (!page?.head) return null;
+				const fold = h('details', { class: 'preview' });
+				fold.append(h('summary', {}, t('seo.preview.show')), seoPreview(doc, page.head, { texts: previewTexts }).node);
+				return fold;
+			};
 			/** @param {string} label @param {HTMLElement} control */
 			const field = (label, control) => {
 				const node = h('label', {}, label);
@@ -342,6 +360,8 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {}, 
 								list.append(row);
 							}
 							card.append(top, list);
+							const preview = previewOf(page);
+							if (preview) card.append(preview);
 							cards.append(card);
 						}
 					};
