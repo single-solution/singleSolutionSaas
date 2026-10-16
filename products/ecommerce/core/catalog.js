@@ -21,6 +21,7 @@ import { gradeForType } from './grades.js';
 import { PRODUCT_STATUSES } from './model.js';
 import { categoryTypeKey, typeByKey, typeOf, typeTakes } from './item-types.js';
 import {
+	CONTENT_LIMITS,
 	VIDEO_TYPES,
 	checkFaqs,
 	checkHtml,
@@ -65,7 +66,6 @@ export const LIMITS = Object.freeze({
 	variantMedia: 24,
 	mpn: 70,
 	allVariantMedia: 200,
-	faqs: 20,
 	setup: 20,
 	setupValues: 100,
 	attributeValues: 20,
@@ -1149,7 +1149,7 @@ export const checkProduct = (body, rules, existing) => {
 
 	const seo = checkSeo(input.seo, existing?.seo, '/seo', errors);
 	let faqs = existing?.faqs ?? [];
-	if (input.faqs !== undefined) faqs = checkFaqs(input.faqs, LIMITS.faqs, '/faqs', errors) ?? faqs;
+	if (input.faqs !== undefined) faqs = checkFaqs(input.faqs, CONTENT_LIMITS.faqs, '/faqs', errors) ?? faqs;
 	const featured = field('featured', (v) => (typeof v === 'boolean' ? v : null), false, 'Featured is true or false.');
 	const hideSizeGuide = field(
 		'hideSizeGuide',

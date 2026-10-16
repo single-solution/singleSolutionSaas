@@ -37,7 +37,7 @@ const MAX_REFERENCE = 120;
 /** Photo uploads and photo links last this long. */
 export const PHOTO_SECONDS = 300;
 /** Photo types a shopper may upload, with their file extension. */
-const PHOTO_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' });
+export const PHOTO_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' });
 
 /**
  * How a claim's money goes back: `payments` (through Payments), a payment method key of the website's list, or `other`.

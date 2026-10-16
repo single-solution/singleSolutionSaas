@@ -17,7 +17,7 @@
  * @module
  */
 import { GROWTH_EVENTS } from '../core/growth-events.js';
-import { MAX_PAGE_NUMBER, MAX_PAGE_SIZE } from '../core/model.js';
+import { MAX_PAGE_NUMBER, MAX_PAGE_SIZE, SORTS } from '../core/model.js';
 import {
 	announce,
 	button,
@@ -38,7 +38,7 @@ import { activeCount, emptyKnown, filterControls, flattenCategories, listOf, rem
 import { savedOf } from './shop-saved.js';
 
 /** The sorts of the listing (`GET /v1/shop/products?sort=`). */
-export const GRID_SORTS = Object.freeze(['newest', 'price_asc', 'price_desc', 'top', 'rating', 'name', 'updated', 'sold_asc']);
+export const GRID_SORTS = Object.freeze(Object.keys(SORTS));
 /** Deals read for the filter. */
 const DEALS_READ = 50;
 

@@ -39,6 +39,7 @@ import {
 	checkPayment,
 	checkRefund,
 	customerOwnView,
+	ORDER_ID,
 	orderDetail,
 	orderFilters,
 	orderMoney,
@@ -100,7 +101,6 @@ export const DOCUMENT_HEADERS = Object.freeze({
 		"default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; base-uri 'none'; form-action 'none'",
 });
 
-const ORDER_ID = /^ord_[A-Za-z0-9_-]{1,64}$/;
 /** How long the staff link to a transfer proof works (seconds). */
 const PROOF_LINK_SECONDS = 300;
 

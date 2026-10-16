@@ -25,11 +25,31 @@ export const isDuplicate = (error) => {
 
 /** Products in a wishlist, at most. */
 export const MAX_WISHLIST = 200;
+/** Products compared at once, at most (the `compare` setting `maxProducts` picks 2 to this many, E39). */
+export const MAX_COMPARE = 10;
 
 /** Most products on one page of a listing (E8): the `limit` of a read and the `pageSize` setting stop here. */
 export const MAX_PAGE_SIZE = 60;
 /** Highest page number of a listing. */
 export const MAX_PAGE_NUMBER = 500;
+/**
+ * The sort orders of a listing, in the order shoppers pick them: the field and its direction, then any further fields
+ * (price ties break by newest, E8); ties are broken by id in the direction of the last field.
+ */
+export const SORTS = Object.freeze({
+	newest: { field: 'publishedAt', dir: -1 },
+	price_asc: { field: 'price', dir: 1, then: [{ field: 'publishedAt', dir: -1 }] },
+	price_desc: { field: 'price', dir: -1, then: [{ field: 'publishedAt', dir: -1 }] },
+	top: { field: 'sold', dir: -1 },
+	rating: { field: 'rating.average', dir: -1 },
+	name: { field: 'name', dir: 1 },
+	updated: { field: 'updatedAt', dir: -1 },
+	sold_asc: { field: 'sold', dir: 1 },
+});
+/** Stock states of a product (E2), in the order the staff filter lists them. */
+export const STOCK_STATES = Object.freeze(['full', 'partial', 'out', 'none']);
+/** When an attribute is shown (E7). */
+export const VISIBILITY = Object.freeze(/** @type {const} */ (['always', 'brands', 'grades', 'attribute']));
 /** A listing's total is exact up to this many products (E8). */
 export const TOTAL_CAP = 10_000;
 

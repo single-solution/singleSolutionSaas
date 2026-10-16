@@ -8,6 +8,7 @@
  * @module
  */
 import { DEFAULT_FORMAT, element, formatDate, formatMoney, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
+import { CONTACT_LINK, RICH_DROPPED, RICH_SYNONYMS, RICH_TAGS } from '../core/catalog-content.js';
 import { GUEST_IDENTITIES } from '../core/guests.js';
 import { MAX_PAGE_SIZE } from '../core/model.js';
 import { fromDecimal, isCurrency, toDecimal } from '@ss/app-kit/widget';
@@ -372,35 +373,6 @@ export const warrantyText = (t, time) => {
 };
 
 // ------------------------------------------------------------------------------------------------ rich text (E3)
-
-/** The tags rich text may hold (the server cleans to these; the widget rebuilds only these). */
-const RICH_TAGS = new Set(['p', 'br', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'blockquote', 'a']);
-/** A contact link rich text may keep (SF-1): an email address or a phone number. */
-const CONTACT_LINK = /^(?:mailto:[^\s"'<>\\]{3,254}|tel:\+?[0-9][0-9 ().-]{2,30})$/i;
-/** Equivalent tags folded into the allowed ones. @type {Record<string, string>} */
-const RICH_SYNONYMS = { b: 'strong', i: 'em' };
-/** Elements left out with everything inside them (any other unknown element keeps only its text). */
-const RICH_DROPPED = new Set([
-	'script',
-	'style',
-	'iframe',
-	'object',
-	'embed',
-	'template',
-	'noscript',
-	'svg',
-	'math',
-	'textarea',
-	'select',
-	'button',
-	'form',
-	'img',
-	'video',
-	'audio',
-	'picture',
-	'head',
-	'title',
-]);
 
 /**
  * A link address rich text may keep: an https address (without a user name) or a path on the website (`/…`, never

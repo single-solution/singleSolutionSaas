@@ -25,6 +25,18 @@ import { escapeRegex } from './search.js';
 /** @typedef {import('./model.js').CustomerRecord} CustomerRecord */
 /** An amount as text, by the website's Format (`product.format(websiteId).money`). @typedef {(amount: number, currency: string) => string} Money */
 
+/** An order's id as the shop makes them. */
+export const ORDER_ID = /^ord_[A-Za-z0-9_-]{1,64}$/;
+
+/** Transfer proofs (E24): what may be uploaded, and how big. */
+export const PROOF_TYPES = Object.freeze({
+	'image/jpeg': 'jpg',
+	'image/png': 'png',
+	'image/webp': 'webp',
+	'application/pdf': 'pdf',
+});
+export const PROOF_MAX_BYTES = 10 * 1_048_576;
+
 /** Payment states. */
 export const PAYMENT_STATES = Object.freeze(
 	/** @type {const} */ (['unpaid', 'pending', 'paid', 'partially_refunded', 'refunded']),
@@ -899,8 +911,7 @@ export const checkBulkMove = (body) => {
 	const ids = rawItems ? rawItems.map((item) => objectOf(item).id) : Array.isArray(input.ids) ? input.ids : null;
 	const field = rawItems ? 'items' : 'ids';
 	if (!ids || ids.length === 0 || ids.length > MAX_BULK) return refuse(field, `List 1–${MAX_BULK} order ids.`);
-	if (!ids.every((id) => typeof id === 'string' && /^ord_[A-Za-z0-9_-]{1,64}$/.test(id)))
-		return refuse(field, 'Unknown order id.');
+	if (!ids.every((id) => typeof id === 'string' && ORDER_ID.test(id))) return refuse(field, 'Unknown order id.');
 	const move = checkMove({ to: input.to, note: input.note, shopperNote: input.shopperNote, restock: input.restock });
 	if (!move.ok) return move;
 	/** @type {Map<string, BulkItem>} */

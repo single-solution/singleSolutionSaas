@@ -24,7 +24,6 @@ import { NO_KEYS, attributesOf, brandsOf, categoriesOf, findBySlugHistory } from
 import { checkLandingAiRequest, landingPrompt, readSuggestions } from '../core/catalog-ai.js';
 import { siteAddress } from '../core/catalog-content.js';
 import {
-	SORTS,
 	attributeOf,
 	fieldsNamed,
 	listOf,
@@ -53,7 +52,7 @@ import {
 	stockStages,
 } from '../core/landings.js';
 import { absolute, withQuery } from '../core/links.js';
-import { COLLECTIONS, ID_PREFIX, MAX_PAGE_SIZE, TOTAL_CAP, isDuplicate } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX, MAX_PAGE_SIZE, SORTS, TOTAL_CAP, isDuplicate } from '../core/model.js';
 import {
 	asWritten,
 	categoryJsonLd,

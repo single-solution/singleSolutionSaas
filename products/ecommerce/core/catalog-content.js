@@ -54,6 +54,7 @@ export const CONTENT_LIMITS = Object.freeze({
 	answer: 4000,
 	summary: 2000,
 	bullets: 12,
+	faqs: 20,
 	bullet: 300,
 	icon: 40,
 	html: 20_000,
@@ -61,6 +62,9 @@ export const CONTENT_LIMITS = Object.freeze({
 	pixels: 100_000,
 	sizeKey: 500,
 });
+
+/** The image types the catalog stores. */
+export const IMAGE_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/avif': 'avif' });
 
 /** The video types a product may have. */
 export const VIDEO_TYPES = Object.freeze({ 'video/mp4': 'mp4', 'video/webm': 'webm' });
@@ -272,10 +276,10 @@ export const iconOf = (value) => text(value, CONTENT_LIMITS.icon);
 
 // ---------------------------------------------------------------------------------------------- rich text (E3)
 
-/** The tags a rich description may hold; `a` keeps only an https, site-relative, `mailto:` or `tel:` `href`. */
-const HTML_TAGS = new Set(['p', 'br', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'blockquote', 'a']);
+/** The tags a rich description may hold; `a` keeps only an https, site-relative, `mailto:` or `tel:` `href` (the widgets rebuild only these). */
+export const RICH_TAGS = new Set(['p', 'br', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'blockquote', 'a']);
 /** Elements dropped with everything inside them. */
-const DROPPED = new Set([
+export const RICH_DROPPED = new Set([
 	'script',
 	'style',
 	'iframe',
@@ -291,10 +295,10 @@ const DROPPED = new Set([
 /** Tags that start a new line in plain text. */
 const BLOCKS = new Set(['p', 'br', 'li', 'h2', 'h3', 'h4', 'blockquote', 'ul', 'ol', 'div']);
 /** Equivalent tags folded into the allowed ones. */
-const SYNONYMS = Object.freeze(/** @type {Record<string, string>} */ ({ b: 'strong', i: 'em' }));
+export const RICH_SYNONYMS = Object.freeze(/** @type {Record<string, string>} */ ({ b: 'strong', i: 'em' }));
 
 /** A contact link (SF-1): an email address or a phone number, nothing a browser could run. */
-const CONTACT_LINK = /^(?:mailto:[^\s"'<>\\]{3,254}|tel:\+?[0-9][0-9 ().-]{2,30})$/i;
+export const CONTACT_LINK = /^(?:mailto:[^\s"'<>\\]{3,254}|tel:\+?[0-9][0-9 ().-]{2,30})$/i;
 
 /**
  * The `href` of an `a` tag, kept only when it is an https address, a path on the website, or a `mailto:` or `tel:`
@@ -334,13 +338,13 @@ export const cleanHtml = (html) => {
 		}
 		if (!rawName) continue; // comments, doctypes, processing instructions
 		const lower = rawName.toLowerCase();
-		const name = SYNONYMS[lower] ?? lower;
+		const name = RICH_SYNONYMS[lower] ?? lower;
 		const closing = whole.startsWith('</');
-		if (DROPPED.has(lower)) {
+		if (RICH_DROPPED.has(lower)) {
 			if (!closing && !/\/\s*$/.test(attributes)) skipping = lower;
 			continue;
 		}
-		if (!HTML_TAGS.has(name)) continue;
+		if (!RICH_TAGS.has(name)) continue;
 		if (name === 'br') {
 			if (!closing) out += '<br>';
 			continue;

@@ -26,6 +26,7 @@ import {
 	checkFormat,
 	checkFormatRule,
 } from '../core/fields.js';
+import { VISIBILITY } from '../core/model.js';
 import { checkGroup, faqsEditor } from './admin-fields.js';
 import { card, createScreen, deleteEntry, detailHead, fieldsOf, masonryOf, saveDialog, yesNo } from './admin-screen.js';
 import { categoryChoices, faqList } from './admin-taxonomy.js';
@@ -34,8 +35,6 @@ import { categoryChoices, faqList } from './admin-taxonomy.js';
 /** @typedef {import('./admin-taxonomy.js').Lookups} Lookups */
 /** @typedef {import('./admin-taxonomy.js').Named} Named */
 
-/** Visibility rules. */
-const VISIBILITY = Object.freeze(['always', 'brands', 'grades', 'attribute']);
 /** The places a field shows that are a yes or no (the others pick one of their values). */
 const SHOW_CHECKS = Object.freeze(['page', 'filter', 'compare', 'invoice', 'packingSlip', 'shopper', 'chat']);
 /** At most this many choices. */

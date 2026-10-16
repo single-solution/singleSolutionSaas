@@ -6,12 +6,11 @@
  * list for the page's life only.
  * @module
  */
+import { MAX_COMPARE } from '../core/model.js';
 import { STORAGE_KEYS } from '../core/widgets.js';
 
 /** The window event of a change to the compare list (`detail`: the ids). */
 export const COMPARE_EVENT = 'ss-ecommerce:compare';
-/** More ids than this are never kept, whatever the setting says. */
-const MAX_KEPT = 10;
 const PRODUCT_ID = /^prd_[A-Za-z0-9]{1,64}$/;
 
 /** The list per window when the browser keeps no storage. @type {WeakMap<object, string[]>} */
@@ -29,7 +28,7 @@ const storageOf = (win) => {
 /** @param {unknown} value @returns {string[]} */
 const clean = (value) =>
 	Array.isArray(value)
-		? [...new Set(value.filter((id) => typeof id === 'string' && PRODUCT_ID.test(id)))].slice(0, MAX_KEPT)
+		? [...new Set(value.filter((id) => typeof id === 'string' && PRODUCT_ID.test(id)))].slice(0, MAX_COMPARE)
 		: [];
 
 /**
@@ -74,7 +73,7 @@ export const toggleCompare = (win, productId, max) => {
 		write(win, next);
 		return { ok: true, ids: next };
 	}
-	if (ids.length >= Math.min(max, MAX_KEPT) || !PRODUCT_ID.test(productId)) return { ok: false, ids };
+	if (ids.length >= Math.min(max, MAX_COMPARE) || !PRODUCT_ID.test(productId)) return { ok: false, ids };
 	const next = [...ids, productId];
 	write(win, next);
 	return { ok: true, ids: next };

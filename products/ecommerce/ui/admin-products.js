@@ -7,7 +7,7 @@
  * The picked product's detail and editor are in `./admin-product.js` and `./admin-product-editor.js`.
  * @module
  */
-import { PRODUCT_STATUSES } from '../core/model.js';
+import { PRODUCT_STATUSES, STOCK_STATES } from '../core/model.js';
 import { query, wholeOf } from './admin-kit.js';
 import { checkGroup } from './admin-fields.js';
 import { STATUS_TONES, productDetail } from './admin-product.js';
@@ -24,8 +24,6 @@ import { typeChoices } from './admin-types.js';
  *   removed: () => Promise<unknown>, serials: (product: any) => void }} ProductContext
  */
 
-/** Stock states (E2). */
-const STOCK_STATES = Object.freeze(['full', 'partial', 'out', 'none']);
 /** Bulk changes of products. */
 const BULK_ACTIONS = Object.freeze([
 	'status',

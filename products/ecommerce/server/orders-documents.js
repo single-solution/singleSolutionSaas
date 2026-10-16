@@ -10,6 +10,7 @@ import { defineRoute, problem } from '@ss/app-kit';
 import { unitRulesOf } from '../adapters/catalog-store.js';
 import { packingSlipsHtml, pickListHtml } from '../core/invoice.js';
 import { COLLECTIONS } from '../core/model.js';
+import { ORDER_ID } from '../core/orders.js';
 import { DOCUMENT_HEADERS, documentContextOf } from './orders.js';
 import { SERVER_LIMITS } from './service.js';
 
@@ -22,8 +23,6 @@ import { SERVER_LIMITS } from './service.js';
 const MAX_SLIPS = 50;
 /** Orders on one pick list, at most. */
 const MAX_PICK = 100;
-
-const ORDER_ID = /^ord_[A-Za-z0-9_-]{1,64}$/;
 
 /**
  * @param {Product} _product

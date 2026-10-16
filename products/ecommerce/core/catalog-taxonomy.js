@@ -6,7 +6,8 @@
  */
 import { isObject } from './json.js';
 import { LIMITS, cleanText, isSlug } from './catalog.js';
-import { EMPTY_CONTENT, checkContent, checkFaqs, checkSeo, iconOf } from './catalog-content.js';
+import { CONTENT_LIMITS, EMPTY_CONTENT, checkContent, checkFaqs, checkSeo, iconOf } from './catalog-content.js';
+import { VISIBILITY } from './model.js';
 import {
 	FIELD_DATES,
 	FIELD_LIMITS,
@@ -32,10 +33,6 @@ import {
 export const CATEGORY_STATUSES = Object.freeze(/** @type {const} */ (['active', 'coming_soon', 'hidden']));
 /** Brand statuses (E1). */
 export const BRAND_STATUSES = Object.freeze(/** @type {const} */ (['active', 'hidden']));
-/** When an attribute is shown (E7). */
-const VISIBILITY = Object.freeze(/** @type {const} */ (['always', 'brands', 'grades', 'attribute']));
-/** At most this many FAQs on a category, a brand, a product, a glossary page or a landing page. */
-export const MAX_FAQS = 20;
 /** Most categories a brand or an attribute is limited to. */
 const MAX_SCOPE = 200;
 /** Longest glossary text. */
@@ -117,7 +114,7 @@ const contentAndFaqs = (body, existing, errors) => {
 	let content = existing?.content ?? { ...EMPTY_CONTENT };
 	if (body.content !== undefined) content = checkContent(body.content, '/content', errors) ?? content;
 	let faqs = existing?.faqs ?? [];
-	if (body.faqs !== undefined) faqs = checkFaqs(body.faqs, MAX_FAQS, '/faqs', errors) ?? faqs;
+	if (body.faqs !== undefined) faqs = checkFaqs(body.faqs, CONTENT_LIMITS.faqs, '/faqs', errors) ?? faqs;
 	return { content, faqs };
 };
 
@@ -404,7 +401,7 @@ const glossaryOf = (v) => {
 	const title = v.title === undefined ? '' : cleanText(v.title, LIMITS.seoTitle);
 	const description = v.description === undefined ? '' : cleanText(v.description, LIMITS.seoDescription);
 	const body = v.body === undefined ? '' : cleanText(v.body, GLOSSARY_BODY, { multiline: true });
-	const faqs = v.faqs === undefined ? [] : checkFaqs(v.faqs, MAX_FAQS, '/seo/faqs', errors);
+	const faqs = v.faqs === undefined ? [] : checkFaqs(v.faqs, CONTENT_LIMITS.faqs, '/seo/faqs', errors);
 	return title === null || description === null || body === null || faqs === null ? null : { title, description, body, faqs };
 };
 
@@ -583,7 +580,7 @@ export const checkAttribute = (body, existing) => {
 		'seo',
 		glossaryOf,
 		{ title: '', description: '', body: '', faqs: /** @type {import('./catalog-content.js').Faq[]} */ ([]) },
-		`The glossary has a title, a description, a text of at most ${GLOSSARY_BODY} characters and at most ${MAX_FAQS} questions.`,
+		`The glossary has a title, a description, a text of at most ${GLOSSARY_BODY} characters and at most ${CONTENT_LIMITS.faqs} questions.`,
 	);
 	if (!catalog && (seo.title || seo.description || seo.body || seo.faqs.length > 0))
 		errors.push({ path: '/seo', message: 'Only product and variant fields have a glossary page.' });

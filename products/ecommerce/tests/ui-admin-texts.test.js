@@ -6,7 +6,7 @@
 import { LABEL_KINDS } from '@ss/contracts/address';
 import { describe, expect, it } from 'vitest';
 import strings from '../strings/en.json' with { type: 'json' };
-import { SORTS } from '../core/catalog-query.js';
+import { SORTS } from '../core/model.js';
 import { CSV_PROBLEMS } from '../core/catalog-csv.js';
 import { BRAND_STATUSES, CATEGORY_STATUSES } from '../core/catalog-taxonomy.js';
 import { ITEM_KINDS } from '../core/item-types.js';

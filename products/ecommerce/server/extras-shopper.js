@@ -8,8 +8,8 @@
 import { defineRoute, problem } from '@ss/app-kit';
 import { categoriesOf } from '../adapters/catalog-store.js';
 import { userIdsOf } from '../adapters/extras-store.js';
-import { MAX_COMPARE, compareRows, gradeLabels, parseCompareIds } from '../core/compare.js';
-import { COLLECTIONS, MAX_WISHLIST, NO_ID } from '../core/model.js';
+import { compareRows, gradeLabels, parseCompareIds } from '../core/compare.js';
+import { COLLECTIONS, MAX_COMPARE, MAX_WISHLIST, NO_ID } from '../core/model.js';
 import { VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */

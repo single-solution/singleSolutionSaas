@@ -21,9 +21,6 @@ import { hiddenFor } from './catalog-visibility.js';
 /** Most addresses one IndexNow submission takes. */
 const INDEXNOW_MAX = 10_000;
 
-/** Image types the catalog stores. */
-export const IMAGE_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/avif': 'avif' });
-
 /**
  * A 422 `validation_failed` listing every field problem.
  * @param {FieldError[]} errors

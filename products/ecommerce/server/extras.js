@@ -6,8 +6,8 @@
  * widgets need.
  * @module
  */
-import { MAX_COMPARE } from '../core/compare.js';
 import { guestRules } from '../core/guests.js';
+import { MAX_COMPARE } from '../core/model.js';
 import { createAlerts } from './extras-alerts.js';
 import { createCards } from './extras-cards.js';
 import { createReports } from './extras-reports.js';

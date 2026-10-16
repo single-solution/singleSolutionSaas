@@ -39,7 +39,7 @@ import {
 	productType,
 	summarize,
 } from '../core/catalog.js';
-import { VIDEO_TYPES } from '../core/catalog-content.js';
+import { IMAGE_TYPES, VIDEO_TYPES } from '../core/catalog-content.js';
 import {
 	afterFilter,
 	cursorKey,
@@ -56,7 +56,7 @@ import { staffProductOf, staffRowOf } from '../core/catalog-views.js';
 import { sameMeaning } from '../core/measure.js';
 import { COLLECTIONS, ID_PREFIX, isDuplicate } from '../core/model.js';
 import { productScore } from '../core/seo-score.js';
-import { IMAGE_TYPES, refuse } from './catalog-common.js';
+import { refuse } from './catalog-common.js';
 import { pageTitlesOf } from './seo-reads.js';
 import { SERVER_LIMITS, bodyOf } from './service.js';
 

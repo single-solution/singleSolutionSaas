@@ -5,11 +5,11 @@
  * browser without storage keeps them for the page's life only.
  * @module
  */
+import { ORDER_ID } from '../core/orders.js';
 import { STORAGE_KEYS } from '../core/widgets.js';
 
 /** The most order keys kept, the newest first. */
 const MAX_ORDER_KEYS = 20;
-const ORDER_ID = /^ord_[A-Za-z0-9_-]{1,64}$/;
 /** An order key as the server makes them (letters and digits). */
 const ORDER_KEY = /^[A-Za-z0-9]{16,128}$/;
 

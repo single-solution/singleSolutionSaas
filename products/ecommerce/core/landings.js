@@ -12,8 +12,7 @@
  */
 import { isObject } from './json.js';
 import { cleanText } from './catalog.js';
-import { checkFaqs } from './catalog-content.js';
-import { MAX_FAQS } from './catalog-taxonomy.js';
+import { CONTENT_LIMITS, checkFaqs } from './catalog-content.js';
 
 /** @typedef {import('./model.js').LandingRecord} LandingRecord */
 /** @typedef {import('./model.js').LandingFacet} LandingFacet */
@@ -92,7 +91,7 @@ export const checkLanding = (body, existing) => {
 	const description = copy('description');
 	const intro = copy('intro');
 	let faqs = existing?.faqs ?? [];
-	if (body.faqs !== undefined) faqs = checkFaqs(body.faqs, MAX_FAQS, '/faqs', errors) ?? faqs;
+	if (body.faqs !== undefined) faqs = checkFaqs(body.faqs, CONTENT_LIMITS.faqs, '/faqs', errors) ?? faqs;
 	const indexable = body.indexable === undefined ? (existing?.indexable ?? 'auto') : body.indexable;
 	if (!['auto', 'yes', 'no'].includes(indexable)) errors.push({ path: '/indexable', message: 'Indexable is auto, yes or no.' });
 	if (errors.length > 0) return { ok: false, errors };

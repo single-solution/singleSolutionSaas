@@ -8,7 +8,7 @@
  */
 import { valueLabel } from './catalog.js';
 import { levelOf } from './measure.js';
-import { MAX_PAGE_NUMBER } from './model.js';
+import { MAX_PAGE_NUMBER, SORTS, STOCK_STATES } from './model.js';
 import { MAX_AMOUNT } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
 import { escapeRegex } from './search.js';
@@ -17,21 +17,6 @@ import { escapeRegex } from './search.js';
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
 /** @typedef {import('./catalog.js').FieldError} FieldError */
-
-/**
- * The sort orders of a listing: the field and its direction, then any further fields (price ties break by newest,
- * E8); ties are broken by id in the direction of the last field.
- */
-export const SORTS = Object.freeze({
-	newest: { field: 'publishedAt', dir: -1 },
-	price_asc: { field: 'price', dir: 1, then: [{ field: 'publishedAt', dir: -1 }] },
-	price_desc: { field: 'price', dir: -1, then: [{ field: 'publishedAt', dir: -1 }] },
-	top: { field: 'sold', dir: -1 },
-	sold_asc: { field: 'sold', dir: 1 },
-	rating: { field: 'rating.average', dir: -1 },
-	name: { field: 'name', dir: 1 },
-	updated: { field: 'updatedAt', dir: -1 },
-});
 
 /** @typedef {keyof typeof SORTS} SortKey */
 
@@ -538,9 +523,6 @@ export const facetsOf = (raw, names) => {
 		}),
 	};
 };
-
-/** Stock states of the staff filter (E2). */
-const STOCK_STATES = Object.freeze(['none', 'out', 'partial', 'full']);
 
 /**
  * The products sold in a unit of their own (their stock counts thousandths of their unit, `core/measure.js`):

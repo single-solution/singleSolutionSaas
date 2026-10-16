@@ -6,6 +6,7 @@
  * downloadable files of a digital product. Uploads go to presigned addresses of the merchant's storage.
  * @module
  */
+import { VIDEO_TYPES } from '../core/catalog-content.js';
 import { safeFileName } from '../core/digital.js';
 import { entriesOf } from './admin-kit.js';
 import { card } from './admin-screen.js';
@@ -15,7 +16,7 @@ import { IMAGE_ACCEPT } from './admin-taxonomy.js';
 /** @typedef {{ key: string, alt: string, url?: string | null, width?: number, height?: number }} Photo */
 
 /** Video types a product may have (E4). */
-const VIDEO_ACCEPT = 'video/mp4,video/webm';
+const VIDEO_ACCEPT = Object.keys(VIDEO_TYPES).join(',');
 
 /**
  * The width and height of an image file, when the browser can read it.

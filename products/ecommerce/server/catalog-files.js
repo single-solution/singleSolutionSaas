@@ -13,9 +13,9 @@ import { defineRoute, problem } from '@ss/app-kit';
 import { isObject } from '@ss/contracts/util';
 import { NO_KEYS } from '../adapters/catalog-store.js';
 import { LIMITS, cleanText, heldKeys } from '../core/catalog.js';
-import { VIDEO_TYPES, mediaExtras } from '../core/catalog-content.js';
+import { IMAGE_TYPES, VIDEO_TYPES, mediaExtras } from '../core/catalog-content.js';
 import { COLLECTIONS } from '../core/model.js';
-import { IMAGE_TYPES, refuse } from './catalog-common.js';
+import { refuse } from './catalog-common.js';
 import { SERVER_LIMITS, UPLOAD_SECONDS, bodyOf } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */

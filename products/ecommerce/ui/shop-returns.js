@@ -7,6 +7,7 @@
  * @module
  */
 import { quantityText } from '../core/measure.js';
+import { PHOTO_TYPES } from '../core/returns.js';
 import { button, field, formatsOf, h, problemText, select } from './shop-common.js';
 import { codeOf } from './problem-code.js';
 
@@ -18,8 +19,6 @@ const MEASURED_CHOICES = 200;
 /** @typedef {import('./widget.js').Shop} Shop */
 /** @typedef {import('./widget.js').WidgetConfig} WidgetConfig */
 
-/** Photo types the claims take. */
-const PHOTO_TYPES = Object.freeze(['image/jpeg', 'image/png', 'image/webp']);
 const CLAIMS_PAGE = 10;
 
 /**
@@ -158,7 +157,7 @@ export const renderClaimForm = async (input) => {
 	const reasonText = () => (picked && picked.value !== OTHER ? picked.value : reason.value.trim());
 	const { maxPhotos, photoMaxMb } = settings.returns;
 	const photos = /** @type {HTMLInputElement} */ (
-		h(doc, 'input', { type: 'file', accept: PHOTO_TYPES.join(','), multiple: '' })
+		h(doc, 'input', { type: 'file', accept: Object.keys(PHOTO_TYPES).join(','), multiple: '' })
 	);
 	const status = h(doc, 'p', { class: 'status', role: 'status' });
 	const submit = h(doc, 'button', { type: 'submit' }, t('returns.submit'));
@@ -186,7 +185,7 @@ export const renderClaimForm = async (input) => {
 		if (!reasonText()) return void (status.textContent = t('returns.reasonNeeded'));
 		const files = [...(photos.files ?? [])];
 		if (files.length > maxPhotos) return void (status.textContent = t('returns.tooManyPhotos', { max: maxPhotos }));
-		if (files.some((file) => !PHOTO_TYPES.includes(file.type) || file.size > photoMaxMb * 1_048_576))
+		if (files.some((file) => !Object.hasOwn(PHOTO_TYPES, file.type) || file.size > photoMaxMb * 1_048_576))
 			return void (status.textContent = t('returns.photoInvalid', { mb: photoMaxMb }));
 		submit.setAttribute('disabled', '');
 		status.textContent = t('returns.sending');

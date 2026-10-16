@@ -9,7 +9,7 @@
  */
 
 import { SEO_PREVIEW_TEXTS, seoPreview } from '@ss/ui/seo-preview';
-import { htmlToText } from '../core/catalog-content.js';
+import { CONTACT_LINK, CONTENT_LIMITS, RICH_DROPPED, RICH_SYNONYMS, RICH_TAGS, htmlToText } from '../core/catalog-content.js';
 import { categoryLink, productLink } from '../core/links.js';
 import { previewHead } from '../core/seo-preview.js';
 
@@ -18,18 +18,6 @@ import { previewHead } from '../core/seo-preview.js';
 /** @typedef {import('../core/seo-preview.js').PreviewPage} PreviewPage */
 /** @typedef {'product' | 'category' | 'brand' | 'landing'} PreviewKind */
 /** @typedef {{ question: string, answer: string }} Faq */
-
-/** At most this many FAQs (E16), content bullets (E1). */
-const MAX_FAQS = 20;
-const MAX_BULLETS = 12;
-
-/** The elements a rich description may hold (E3); `b` and `i` are read as `strong` and `em`. */
-const RICH_TAGS = new Set(['p', 'br', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'blockquote', 'a']);
-/** A contact link rich text may keep (SF-1): an email address or a phone number. */
-const CONTACT_LINK = /^(?:mailto:[^\s"'<>\\]{3,254}|tel:\+?[0-9][0-9 ().-]{2,30})$/i;
-const RICH_SYNONYMS = Object.freeze(/** @type {Record<string, string>} */ ({ b: 'strong', i: 'em' }));
-/** Elements dropped with everything inside them. */
-const RICH_DROPPED = new Set(['script', 'style', 'iframe', 'object', 'embed', 'template', 'noscript', 'svg', 'math']);
 
 /**
  * A link address kept in rich text: an https address or a path on the website, else ''.
@@ -181,7 +169,7 @@ export const faqsEditor = (kit, faqs, legend = kit.t('catalogAdmin.faqs')) => {
 				]),
 			),
 		);
-		add.hidden = entries.length >= MAX_FAQS;
+		add.hidden = entries.length >= CONTENT_LIMITS.faqs;
 	};
 	const add = kit.button(t('catalogAdmin.addQuestion'), () => {
 		entries.push(make({ question: '', answer: '' }));
@@ -394,7 +382,7 @@ export const contentEditor = (kit, content) => {
 				]),
 			),
 		);
-		add.hidden = entries.length >= MAX_BULLETS;
+		add.hidden = entries.length >= CONTENT_LIMITS.bullets;
 	};
 	const add = kit.button(t('catalogAdmin.addBullet'), () => {
 		entries.push(make({ text: '', icon: '' }));

@@ -8,16 +8,13 @@
  * the proof sent and the proof form.
  * @module
  */
+import { PROOF_MAX_BYTES, PROOF_TYPES } from '../core/orders.js';
 import { field, formatsOf, h, problemText } from './shop-common.js';
 import { codeOf } from './problem-code.js';
 
 /** @typedef {import('./shop-common.js').Texts} Texts */
 /** @typedef {import('./widget.js').Shop} Shop */
 /** @typedef {import('./widget.js').WidgetConfig} WidgetConfig */
-
-/** The files a transfer proof may be, and its largest size (as the server takes them). */
-export const PROOF_TYPES = Object.freeze(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
-export const PROOF_MAX_BYTES = 10 * 1_048_576;
 
 /** @param {unknown} value */
 const textOf = (value) => (typeof value === 'string' ? value.trim() : '');
@@ -96,7 +93,7 @@ export const transferParts = ({ doc, t, shop, config, win, order, onOrder }) => 
  */
 const proofForm = ({ doc, t, shop, config, win, order, onOrder }) => {
 	const id = encodeURIComponent(order.id);
-	const file = /** @type {HTMLInputElement} */ (h(doc, 'input', { type: 'file', accept: PROOF_TYPES.join(',') }));
+	const file = /** @type {HTMLInputElement} */ (h(doc, 'input', { type: 'file', accept: Object.keys(PROOF_TYPES).join(',') }));
 	const reference = /** @type {HTMLInputElement} */ (h(doc, 'input', { maxlength: '120', autocomplete: 'off' }));
 	const status = h(doc, 'p', { class: 'status', role: 'status' });
 	const submit = h(doc, 'button', { type: 'submit' }, t('checkout.pay.proofSend'));
@@ -121,7 +118,7 @@ const proofForm = ({ doc, t, shop, config, win, order, onOrder }) => {
 		event.preventDefault();
 		const chosen = file.files?.[0];
 		if (!chosen) return say(t('checkout.pay.proofNeeded'));
-		if (!PROOF_TYPES.includes(chosen.type) || chosen.size < 1 || chosen.size > PROOF_MAX_BYTES)
+		if (!Object.hasOwn(PROOF_TYPES, chosen.type) || chosen.size < 1 || chosen.size > PROOF_MAX_BYTES)
 			return say(t('checkout.pay.proofInvalid'));
 		submit.setAttribute('disabled', '');
 		status.textContent = t('checkout.pay.proofSending');

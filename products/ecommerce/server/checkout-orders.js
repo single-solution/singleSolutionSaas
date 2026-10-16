@@ -48,7 +48,7 @@ import { lineageOf } from '../core/catalog-taxonomy.js';
 import { gradesFor } from '../core/grades.js';
 import { lineMeasureOf, measureView, piecesOf } from '../core/measure.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
-import { byActor, orderMoney, serverNote } from '../core/orders.js';
+import { PROOF_MAX_BYTES, PROOF_TYPES, byActor, orderMoney, serverNote } from '../core/orders.js';
 import { ORDER_NUMBER } from '../core/order-numbers.js';
 import { checkTransition, planTransition } from '../core/transitions.js';
 import { windowDefaults } from '../core/returns.js';
@@ -74,9 +74,6 @@ import { createTransitions, rulesOf } from './transitions.js';
 const ORDER_KEY_HEADER = 'ss-order-key';
 /** Who ends a waiting order whose window passed (the activity log). */
 const SYSTEM_ACTOR = Object.freeze({ kind: 'system', id: 'checkout', name: 'System' });
-/** Transfer proofs: what may be uploaded, and how big (E24). */
-const PROOF_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' });
-const PROOF_MAX_BYTES = 10 * 1_048_576;
 const PROOF_SECONDS = 900;
 
 /** @param {string} url @param {string} name @param {string} value */

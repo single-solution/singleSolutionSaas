@@ -21,6 +21,7 @@
  */
 import { GROWTH_EVENTS, growthItem, itemsDetail, purchaseDetail } from '../core/growth-events.js';
 import { toThousandths } from '../core/measure.js';
+import { ORDER_ID } from '../core/orders.js';
 import { MAX_QUANTITY } from './cart-store.js';
 import {
 	announce,
@@ -46,7 +47,6 @@ import { payDetailsBox } from './shop-payment.js';
 
 /** The pause after a change before the cart is priced again (ms). */
 const QUOTE_DELAY = 300;
-const ORDER_ID = /^ord_[A-Za-z0-9_-]{1,64}$/;
 /** Problems that mean the cart changed on the server: it is priced again at once. */
 const REQUOTE = [
 	'out_of_stock',

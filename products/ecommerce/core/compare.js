@@ -9,9 +9,6 @@ import { gradesFor } from './grades.js';
 /** @typedef {import('./model.js').AttributeRecord} AttributeRecord */
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 
-/** Products compared at once, at most (the `compare` setting `maxProducts` picks 2 to this many, E39). */
-export const MAX_COMPARE = 10;
-
 /**
  * The product ids of `?ids=a,b,c`, in order and without repeats.
  * @param {unknown} value

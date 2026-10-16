@@ -6,6 +6,7 @@
  * grades) and the searches of products, categories and brands for pickers.
  * @module
  */
+import { IMAGE_TYPES } from '../core/catalog-content.js';
 import { query } from './admin-kit.js';
 import {
 	chartChoices,
@@ -27,7 +28,7 @@ import { showsTypes, typeChoices, typeLabel } from './admin-types.js';
 /** @typedef {{ id: string, name: string, slug?: string, parentId?: string | null, path?: string[], [key: string]: any }} Named */
 
 /** Image types the catalog stores. */
-export const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/avif';
+export const IMAGE_ACCEPT = Object.keys(IMAGE_TYPES).join(',');
 
 /** Category statuses (E1) and their status colors. */
 const CATEGORY_TONES = Object.freeze(
