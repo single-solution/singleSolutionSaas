@@ -36,7 +36,7 @@ const closedIn = (store) => {
  * @param {Notice} notice
  * @param {{ visits: import('./consent.js').KeyValue, kept: import('./consent.js').KeyValue, now: number }} stores
  */
-export const isClosed = (notice, { visits, kept, now }) => {
+const isClosed = (notice, { visits, kept, now }) => {
 	if (notice.dismiss === 'page') return false;
 	const found = closedIn(notice.dismiss === 'days' ? kept : visits)[notice.key];
 	return found?.text === notice.text && (notice.dismiss !== 'days' || Number(found.until) > now);

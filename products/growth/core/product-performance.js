@@ -49,7 +49,7 @@ export const PRODUCT_SORTS = Object.freeze([
 ]);
 
 /** Rows a report gives unless asked for fewer or more (`limit`, at most {@link MAX_LIMIT}). */
-export const DEFAULT_LIMIT = 100;
+const DEFAULT_LIMIT = 100;
 export const MAX_LIMIT = 1000;
 
 /** @typedef {{ id: string, variantId: string | null, quantity: number, name: string, price: number | null }} EventItem */

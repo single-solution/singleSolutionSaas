@@ -69,13 +69,13 @@ const PATH_PATTERN = /^\/[^\s?#]*$/;
 const LOCAL_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 
 /** What a goal or funnel step matches: an event, or a page (a path pattern). */
-export const MATCH_KINDS = Object.freeze(/** @type {const} */ (['event', 'page']));
+const MATCH_KINDS = Object.freeze(/** @type {const} */ (['event', 'page']));
 
 /** How a consent category asks: always on, off until agreed, or on until refused. */
-export const CONSENT_MODES = Object.freeze(/** @type {const} */ (['required', 'opt_in', 'opt_out']));
+const CONSENT_MODES = Object.freeze(/** @type {const} */ (['required', 'opt_in', 'opt_out']));
 
 /** How long a closed announcement stays closed: until another page, the rest of the visit, or some days. */
-export const DISMISS_KINDS = Object.freeze(/** @type {const} */ (['page', 'visit', 'days']));
+const DISMISS_KINDS = Object.freeze(/** @type {const} */ (['page', 'visit', 'days']));
 
 /**
  * Meta tags a verification tag may never be: they change how the page is indexed or shown.

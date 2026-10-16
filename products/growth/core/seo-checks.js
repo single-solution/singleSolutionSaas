@@ -25,7 +25,7 @@ export const MAX_SAMPLES = 4;
  * Title and description lengths search results show without cutting: the defaults of the merchant's own (the SEO
  * checklist settings, G9).
  */
-export const DEFAULT_LIMITS = Object.freeze({ titleMin: 10, titleMax: 60, descriptionMin: 50, descriptionMax: 160 });
+const DEFAULT_LIMITS = Object.freeze({ titleMin: 10, titleMax: 60, descriptionMin: 50, descriptionMax: 160 });
 
 /** @typedef {{ titleMin: number, titleMax: number, descriptionMin: number, descriptionMax: number }} Limits */
 

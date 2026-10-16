@@ -51,7 +51,7 @@ export const moved = (items, index, step) => {
  * @param {Entry[]} [others]
  * @returns {Entry}
  */
-export const blankEntry = (fields, others = []) =>
+const blankEntry = (fields, others = []) =>
 	Object.fromEntries(
 		Object.entries(fields).map(([name, field]) => {
 			if (field.type === 'rows') return [name, Array.from({ length: field.min }, () => blankEntry(field.fields))];
@@ -313,7 +313,7 @@ export function ListCard({ websiteId, name }) {
  * private pages with a shop's, then reloads the page so the robots card shows them.
  * @param {{ websiteId: string }} props
  */
-export function StorePresetCard({ websiteId }) {
+function StorePresetCard({ websiteId }) {
 	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
 	return (
 		<Card title={L.preset.title} subtitle={L.preset.help}>

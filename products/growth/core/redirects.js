@@ -36,8 +36,6 @@ export const MAX_RULES = 5000;
 export const MATCHES = Object.freeze(/** @type {const} */ (['exact', 'prefix', 'wildcard']));
 /** The answers a rule gives: permanent (301, 308), temporary (302, 307, G14) or gone (410). */
 export const CODES = Object.freeze(/** @type {const} */ ([301, 302, 307, 308, 410]));
-/** The permanent redirects (search engines move the old address's standing to the new one). */
-export const PERMANENT = Object.freeze(/** @type {const} */ ([301, 308]));
 /** Most wildcard rules of one website: a request is tried against each of them (G14). */
 export const MAX_WILDCARDS = 100;
 /** Most parts (`*` and `**`) of one wildcard rule: `$1` to `$9`. */
@@ -361,7 +359,7 @@ const fixedOf = (from) => segmentsOf(from).filter((segment) => segment !== '*' &
  * @param {string} path
  * @returns {string[] | null}
  */
-export const wildcardParts = (from, path) => {
+const wildcardParts = (from, path) => {
 	const pattern = segmentsOf(from);
 	const segments = segmentsOf(path);
 	/** @type {string[]} */

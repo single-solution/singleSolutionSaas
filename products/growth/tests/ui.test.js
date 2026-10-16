@@ -1577,7 +1577,7 @@ describe('admin widgets', () => {
 		await startAdmin(
 			['visitor_analytics', 'seo_checklist'],
 			{
-				'GET /v1/admin/analytics': (init, url) => {
+				'GET /v1/admin/analytics': (_init, url) => {
 					asked.push(url);
 					return answer(200, { ...REPORT, timeZone: 'Asia/Tokyo' });
 				},
@@ -1625,7 +1625,7 @@ describe('admin widgets', () => {
 		});
 		await startAdmin(['visitor_analytics', 'conversion_funnel'], {
 			'GET /v1/admin/analytics': () => answer(200, REPORT),
-			'GET /v1/admin/analytics/products': (init, url) => {
+			'GET /v1/admin/analytics/products': (_init, url) => {
 				asked.push(url);
 				return answer(200, {
 					from: '2026-09-09',
