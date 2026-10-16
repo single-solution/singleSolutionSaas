@@ -13,7 +13,6 @@ import {
 	payFirstDetails,
 	payLaterDecision,
 	paymentOptions,
-	wayName,
 } from '../core/payment-methods.js';
 
 /**
@@ -125,8 +124,6 @@ describe('the payment methods list (E2, E8)', () => {
 			accounts: [],
 		});
 		expect(payFirstDetails({ ...wire, accounts: [], instructions: 'Ask us.' }, 'USD').ready).toBe(true);
-		expect(wayName([wire], 'wire')).toBe('Wire');
-		expect(wayName([wire], 'other')).toBe('');
 	});
 });
 

@@ -69,10 +69,10 @@ export const categoryChoices = (categories) =>
 	treeOrder(categories).map((category) => ({ value: category.id, label: `${'— '.repeat(category.depth)}${category.name}` }));
 
 /**
- * Grades of the website, when the widget settings carry them (`settings.catalog.grades: [{ key, label, typeKeys }]`;
- * `typeKeys`: the item types it is for, none = every type).
+ * Grades of the website, when the widget settings carry them (`settings.catalog.grades: [{ key, label, active,
+ * typeKeys }]`; `active` false: not offered for new variants; `typeKeys`: the item types it is for, none = every type).
  * @param {Kit} kit
- * @returns {Array<{ key: string, label: string, typeKeys?: string[] }>}
+ * @returns {Array<{ key: string, label: string, active?: boolean, typeKeys?: string[] }>}
  */
 export const gradesOf = (kit) => {
 	const list = kit.settings.catalog?.grades;

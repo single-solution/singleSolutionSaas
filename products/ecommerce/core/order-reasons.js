@@ -21,7 +21,7 @@ import { boolField, checkNamedList } from './named-lists.js';
 /** At most this many reasons in each list. */
 export const REASON_LIMIT = 30;
 /** Keys checkout's own cancels write (who or what canceled). */
-export const CHECKOUT_CANCEL_REASONS = Object.freeze(/** @type {const} */ (['staff', 'shopper', 'expired']));
+const CHECKOUT_CANCEL_REASONS = Object.freeze(/** @type {const} */ (['staff', 'shopper', 'expired']));
 
 /** @type {ReadonlyArray<OrderReason>} */
 export const DEFAULT_CANCEL_REASONS = Object.freeze([

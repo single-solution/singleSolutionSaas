@@ -84,8 +84,6 @@ const watched = (order) =>
  */
 export const createOrderPayments = (product, service) => {
 	const transitions = createTransitions(product, service);
-	/** @param {Site} s @returns {Promise<OrderFlow>} */
-	const flowOf = async (s) => /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
 
 	/**
 	 * Mark an order paid (Payments confirmed it: an `online` entry of its payments log, E26) and move it to the status the
@@ -96,7 +94,7 @@ export const createOrderPayments = (product, service) => {
 	 */
 	const confirmPaid = async (s, order) => {
 		const store = createOrdersStore(await s.data());
-		const flow = await flowOf(s);
+		const flow = await s.flow();
 		const now = service.now();
 		const trigger = flow.triggers.paid;
 		const to = trigger && canMove(flow, order.status, trigger) ? trigger : null;

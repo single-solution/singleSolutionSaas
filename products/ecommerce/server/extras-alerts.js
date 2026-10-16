@@ -33,13 +33,9 @@ import {
 	stopLink,
 } from '../core/alerts.js';
 import { ORDER_KEY_LENGTH, checkGuestContact, guestRules, phoneAllowed } from '../core/guests.js';
-import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX, NO_ID } from '../core/model.js';
 import { phoneRulesOf } from './guests.js';
 import { VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
-
-/** Rate limits (mutable copies of the shared constants, as route definitions take them). */
-const VISITOR = [...VISITOR_LIMITS];
-const VISITOR_WRITE = [...VISITOR_WRITE_LIMITS];
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -52,7 +48,6 @@ const VISITOR_WRITE = [...VISITOR_WRITE_LIMITS];
  * @typedef {import('../core/model.js').AlertRecord & { dueAt: Date | null, createdAt: Date }} StoredAlert
  */
 
-const NO_ID = { projection: { _id: 0 } };
 /** Alerts listed to a shopper, at most (newest first). */
 const LISTED = 100;
 
@@ -398,7 +393,7 @@ export const createAlerts = (_product, service, cards) => {
 			auth: 'browser',
 			feature: 'alerts',
 			idempotent: true,
-			rateLimit: VISITOR_WRITE,
+			rateLimit: VISITOR_WRITE_LIMITS,
 			handler: subscribe,
 		}),
 		defineRoute({
@@ -406,7 +401,7 @@ export const createAlerts = (_product, service, cards) => {
 			path: '/v1/shop/alerts',
 			auth: 'browser',
 			feature: 'alerts',
-			rateLimit: VISITOR,
+			rateLimit: VISITOR_LIMITS,
 			handler: mine,
 		}),
 		defineRoute({
@@ -414,7 +409,7 @@ export const createAlerts = (_product, service, cards) => {
 			path: '/v1/shop/alerts/unsubscribe/:token',
 			auth: 'browser',
 			feature: 'alerts',
-			rateLimit: VISITOR_WRITE,
+			rateLimit: VISITOR_WRITE_LIMITS,
 			handler: unsubscribe,
 		}),
 		defineRoute({
@@ -422,7 +417,7 @@ export const createAlerts = (_product, service, cards) => {
 			path: '/v1/shop/alerts/:id',
 			auth: 'browser',
 			feature: 'alerts',
-			rateLimit: VISITOR_WRITE,
+			rateLimit: VISITOR_WRITE_LIMITS,
 			handler: remove,
 		}),
 	];

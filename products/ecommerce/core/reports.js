@@ -426,7 +426,7 @@ const SUMMARY_FIELDS = Object.freeze(
  * The ISO week (`2026-W41`) of a day (`YYYY-MM-DD`), as MongoDB's `%G-W%V` writes it.
  * @param {string} day
  */
-export const isoWeekOf = (day) => {
+const isoWeekOf = (day) => {
 	const date = new Date(`${day}T00:00:00Z`);
 	// the Thursday of its week decides the year
 	const thursday = new Date(date.getTime() + (3 - ((date.getUTCDay() + 6) % 7)) * DAY_MS);

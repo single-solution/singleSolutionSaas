@@ -360,7 +360,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 			};
 
 			const renderCoupon = () => {
-				if (!settings.checkout.coupons || !quote) {
+				if (!shop.has('coupons') || !quote) {
 					couponBox.replaceChildren();
 					return;
 				}
@@ -407,7 +407,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 
 			const renderPoints = () => {
 				const found = quote?.points;
-				if (!settings.checkout.loyalty || !shop.signIn() || !found) {
+				if (!shop.has('loyalty') || !shop.signIn() || !found) {
 					pointsBox.replaceChildren();
 					return;
 				}

@@ -134,9 +134,6 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	const transitions = createTransitions(product, service);
 	const moves = createMoves(product, service);
 
-	/** @param {Site} s @returns {Promise<OrderFlow>} */
-	const flowOf = async (s) => /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
-
 	/** @param {OrderFlow} flow @param {string} status */
 	const labelOf = (flow, status) => statusOf(flow, status)?.label ?? status;
 	/** The name the shopper reads. @param {OrderFlow} flow @param {string} status */
@@ -252,7 +249,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	 * @returns {Promise<OrderRecord | null>} null when it moved meanwhile, or the flow changed under it
 	 */
 	const cancel = async (s, order, { by, note, code, reason, to: target }) => {
-		const flow = await flowOf(s);
+		const flow = await s.flow();
 		const who = by === 'system' ? 'system' : 'shopper';
 		const listed = who === 'shopper';
 		const to = target ?? flow.triggers.windowEnd;
@@ -988,7 +985,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			});
 
 		// the order record
-		const flow = await flowOf(s);
+		const flow = await s.flow();
 		const now = service.now();
 		const total = q.totals.total;
 		const chosen = /** @type {import('../core/payment-methods.js').PaymentMethodRecord} */ (
@@ -1195,7 +1192,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const s = await service.site(ctx);
 		const shopper = await service.requireShopper(s);
 		await guests.claim(s, shopper);
-		const flow = await flowOf(s);
+		const flow = await s.flow();
 		const rows = await createOrdersStore(await s.data()).customerOrders(shopper.id, {
 			after: page.after,
 			limit: page.fetchLimit,
@@ -1220,7 +1217,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	/** @param {any} ctx */
 	const read = async (ctx) => {
 		const { s, order } = await shopperOrder(ctx);
-		return shopperView(s, await refresh(s, order), await flowOf(s));
+		return shopperView(s, await refresh(s, order), await s.flow());
 	};
 
 	/** GET /v1/shop/orders/by-number/:number: order pages by number (E21). @param {any} ctx */
@@ -1228,14 +1225,14 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const number = String(ctx.params.number);
 		if (!ORDER_NUMBER.test(number)) throw problem('not_found', 'There is no such order.');
 		const { s, order } = await ownOrder(ctx, (store) => store.byNumber(number));
-		return shopperView(s, await refresh(s, order), await flowOf(s));
+		return shopperView(s, await refresh(s, order), await s.flow());
 	};
 
 	/** @param {any} ctx */
 	const cancelByShopper = async (ctx) => {
 		const { s, shopper, order } = await shopperOrder(ctx);
 		const current = await refresh(s, order);
-		const flow = await flowOf(s);
+		const flow = await s.flow();
 		const move = shopperCancelOf(flow, current.status);
 		if (!move) throw problem('move_not_allowed', 'This order can no longer be canceled here.');
 		// a paid order as the move says (E27): refused (staff cancel and refund it), canceled with the refund due, or
@@ -1271,7 +1268,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			if (!started) throw problem('payments_unavailable', 'Payments cannot be reached right now. Try again in a moment.');
 			current = started;
 		}
-		return { order: await shopperView(s, current, await flowOf(s)), next: await nextOf(s, current) };
+		return { order: await shopperView(s, current, await s.flow()), next: await nextOf(s, current) };
 	};
 
 	/** POST /v1/shop/orders/:id/proof/upload `{ type, size }`: a signed upload of a transfer proof (E24). @param {any} ctx */
@@ -1334,7 +1331,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		);
 		if (!changed) throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
 		await service.emit('order.proof_uploaded', s, { order: changed, reference });
-		return { order: await shopperView(s, changed, await flowOf(s)) };
+		return { order: await shopperView(s, changed, await s.flow()) };
 	};
 
 	/** @param {any} ctx */

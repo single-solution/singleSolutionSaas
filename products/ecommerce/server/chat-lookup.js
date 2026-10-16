@@ -55,7 +55,7 @@ import { createCatalogSearch } from './catalog-search.js';
 import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
 import { createQuoting } from './checkout-quote.js';
 import { policiesOf } from './policies.js';
-import { SERVER_LIMITS } from './service.js';
+import { SERVER_LIMITS, invalid } from './service.js';
 import { activeProduct, brandNames } from './seo-reads.js';
 import { createShownPrices } from './shown-prices.js';
 
@@ -67,9 +67,6 @@ import { createShownPrices } from './shown-prices.js';
 /** @typedef {import('../core/model.js').ProductRecord} ProductRecord */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 /** @typedef {import('../core/model.js').DealRecord} DealRecord */
-
-/** The rate limits of these routes. @type {Array<{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }>} */
-const SERVER_RATE = [...SERVER_LIMITS];
 
 /**
  * A first name: the first word of a name.
@@ -94,28 +91,27 @@ const firstNameOf = (name) =>
 const quoteQuery = (query, measure, least = 1) => {
 	const variantId = query.variantId === undefined || query.variantId === '' ? null : query.variantId;
 	if (variantId !== null && (typeof variantId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(variantId)))
-		throw invalidQuery('variantId', 'variantId is a variant id.');
+		throw invalid('variantId', 'variantId is a variant id.');
 	const given = query.quantity === undefined || query.quantity === '' ? null : query.quantity;
 	/** @type {number} */
 	let quantity;
 	if (measure) {
 		const read = given === null ? measure.min : toThousandths(given);
 		if (read === null)
-			throw invalidQuery('quantity', `quantity is a number of ${measure.unit} with at most three decimals, such as 2.5.`);
+			throw invalid('quantity', `quantity is a number of ${measure.unit} with at most three decimals, such as 2.5.`);
 		quantity = read;
 	} else {
 		quantity = given === null ? least : Number(given);
 		if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUANTITY || !/^\d+$/.test(String(given ?? least)))
-			throw invalidQuery('quantity', `quantity is a whole number from 1 to ${MAX_QUANTITY}.`);
+			throw invalid('quantity', `quantity is a whole number from 1 to ${MAX_QUANTITY}.`);
 	}
 	const method = query.paymentMethod === undefined || query.paymentMethod === '' ? null : query.paymentMethod;
-	if (method !== null && !isMethodKey(method)) throw invalidQuery('paymentMethod', 'paymentMethod is a payment method key.');
+	if (method !== null && !isMethodKey(method)) throw invalid('paymentMethod', 'paymentMethod is a payment method key.');
 	/** @type {Record<'country' | 'region' | 'city' | 'area' | 'postalCode', string>} */
 	const place = { country: '', region: '', city: '', area: '', postalCode: '' };
 	for (const field of /** @type {Array<keyof typeof place>} */ (Object.keys(place))) {
 		const value = typeof query[field] === 'string' ? String(query[field]).trim() : '';
-		if (value.length > ADDRESS_LIMITS[field])
-			throw invalidQuery(field, `${field} is at most ${ADDRESS_LIMITS[field]} characters.`);
+		if (value.length > ADDRESS_LIMITS[field]) throw invalid(field, `${field} is at most ${ADDRESS_LIMITS[field]} characters.`);
 		place[field] = value;
 	}
 	return {
@@ -125,20 +121,6 @@ const quoteQuery = (query, measure, least = 1) => {
 		place,
 	};
 };
-
-/**
- * A 422 naming a query field.
- * @param {string} field @param {string} message
- */
-const invalidQuery = (field, message) =>
-	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code: 'invalid' }] });
-
-/**
- * The website's order flow.
- * @param {Site} s
- * @returns {Promise<import('../core/model.js').OrderFlow>}
- */
-const flowOf = async (s) => /** @type {any} */ (await s.list('order_flow'));
 
 /** What a product card reads of a product (its specs for the deal conditions of its shown price). */
 const CARD_FIELDS = Object.freeze({
@@ -691,7 +673,7 @@ export const createChatLookup = (product, service, media) => {
 		const data = await s.data();
 		const [orders, flow, loyaltyPoints, { money }, extras] = await Promise.all([
 			ordersOf(data, shopper.id, limitOf(ctx.query.limit, 5, 10)),
-			flowOf(s),
+			s.flow(),
 			shopperPointsOf(s, data, shopper.id),
 			s.format(),
 			orderExtras(s),
@@ -748,7 +730,7 @@ export const createChatLookup = (product, service, media) => {
 		const data = await s.data();
 		const [orders, flow, extras] = await Promise.all([
 			ordersOf(data, shopper.id, limitOf(ctx.query.limit, 5, 10), true),
-			flowOf(s),
+			s.flow(),
 			orderExtras(s),
 		]);
 		const found = await Promise.all(orders.map(async (order) => shipmentSummary(order, flow, await extras(order))));
@@ -941,7 +923,7 @@ export const createChatLookup = (product, service, media) => {
 		const owner = record ? customerOwner(record) : { userId: ref };
 		const [orders, flow, loyaltyPoints, { money }] = await Promise.all([
 			ordersOf(data, owner, limitOf(ctx.query.limit, 10, 50)),
-			flowOf(s),
+			s.flow(),
 			pointsOf(s, data, owner),
 			s.format(),
 		]);
@@ -967,7 +949,7 @@ export const createChatLookup = (product, service, media) => {
 				path: '/v1/chat/products',
 				auth: 'server',
 				feature: 'catalog',
-				rateLimit: SERVER_RATE,
+				rateLimit: SERVER_LIMITS,
 				handler: search,
 			}),
 			// before /v1/chat/products/:id, so `top` is never taken for a product
@@ -976,7 +958,7 @@ export const createChatLookup = (product, service, media) => {
 				path: '/v1/chat/products/top',
 				auth: 'server',
 				feature: 'catalog',
-				rateLimit: SERVER_RATE,
+				rateLimit: SERVER_LIMITS,
 				handler: top,
 			}),
 			defineRoute({
@@ -984,7 +966,7 @@ export const createChatLookup = (product, service, media) => {
 				path: '/v1/chat/products/:id',
 				auth: 'server',
 				feature: 'catalog',
-				rateLimit: SERVER_RATE,
+				rateLimit: SERVER_LIMITS,
 				handler: details,
 			}),
 			defineRoute({
@@ -992,7 +974,7 @@ export const createChatLookup = (product, service, media) => {
 				path: '/v1/chat/products/:id/quote',
 				auth: 'server',
 				feature: 'deals',
-				rateLimit: SERVER_RATE,
+				rateLimit: SERVER_LIMITS,
 				handler: quote,
 			}),
 			defineRoute({
@@ -1000,7 +982,7 @@ export const createChatLookup = (product, service, media) => {
 				path: '/v1/chat/deals',
 				auth: 'server',
 				feature: 'deals',
-				rateLimit: SERVER_RATE,
+				rateLimit: SERVER_LIMITS,
 				handler: deals,
 			}),
 			defineRoute({
@@ -1008,7 +990,7 @@ export const createChatLookup = (product, service, media) => {
 				path: '/v1/chat/me/orders',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: SERVER_RATE,
+				rateLimit: SERVER_LIMITS,
 				handler: myOrders,
 			}),
 			defineRoute({
@@ -1016,7 +998,7 @@ export const createChatLookup = (product, service, media) => {
 				path: '/v1/chat/me/account',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: SERVER_RATE,
+				rateLimit: SERVER_LIMITS,
 				handler: myAccount,
 			}),
 			defineRoute({
@@ -1024,7 +1006,7 @@ export const createChatLookup = (product, service, media) => {
 				path: '/v1/chat/me/shipments',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: SERVER_RATE,
+				rateLimit: SERVER_LIMITS,
 				handler: myShipments,
 			}),
 			defineRoute({
@@ -1032,7 +1014,7 @@ export const createChatLookup = (product, service, media) => {
 				path: '/v1/chat/context',
 				auth: 'server',
 				feature: 'catalog',
-				rateLimit: SERVER_RATE,
+				rateLimit: SERVER_LIMITS,
 				handler: context,
 			}),
 			defineRoute({
@@ -1040,7 +1022,7 @@ export const createChatLookup = (product, service, media) => {
 				path: '/v1/customers/:userId/orders',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: SERVER_RATE,
+				rateLimit: SERVER_LIMITS,
 				handler: customerOrders,
 			}),
 		],

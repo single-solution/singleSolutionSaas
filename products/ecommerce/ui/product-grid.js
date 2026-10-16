@@ -17,8 +17,8 @@
  * @module
  */
 import { GROWTH_EVENTS } from '../core/growth-events.js';
+import { MAX_PAGE_NUMBER, MAX_PAGE_SIZE } from '../core/model.js';
 import {
-	MAX_PAGE_SIZE,
 	announce,
 	button,
 	codeOf,
@@ -39,8 +39,6 @@ import { savedOf } from './shop-saved.js';
 
 /** The sorts of the listing (`GET /v1/shop/products?sort=`). */
 export const GRID_SORTS = Object.freeze(['newest', 'price_asc', 'price_desc', 'top', 'rating', 'name', 'updated', 'sold_asc']);
-/** The highest page number the listing takes. */
-const MAX_PAGE_NUMBER = 500;
 /** Deals read for the filter. */
 const DEALS_READ = 50;
 

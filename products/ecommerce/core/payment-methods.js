@@ -34,7 +34,7 @@ export const VIA_PAYMENTS = 'payments';
 export const OTHER_WAY = 'other';
 
 /** Engine caps of the list (code constants). */
-export const METHOD_LIMITS = Object.freeze({
+const METHOD_LIMITS = Object.freeze({
 	methods: 20,
 	accounts: 10,
 	rows: 12,
@@ -271,19 +271,6 @@ export const checkPaymentMethods = (value) => {
 	});
 	return errors.length > 0 ? { ok: false, errors } : { ok: true, value: /** @type {PaymentMethodRecord[]} */ (methods) };
 };
-
-/**
- * The method of a key in the list, if there is one.
- * @param {ReadonlyArray<PaymentMethodRecord>} methods @param {string} key
- */
-export const methodOf = (methods, key) => methods.find((method) => method.key === key);
-
-/**
- * What a money entry's way reads as: the method's name, '' for `other`, Payments and a key the list no longer has
- * (`payments`: the caller words it).
- * @param {ReadonlyArray<PaymentMethodRecord>} methods @param {string} way
- */
-export const wayName = (methods, way) => methodOf(methods, way)?.name ?? '';
 
 /**
  * The accounts shoppers see for a currency: those in that currency, else those for any currency; only the rows with a

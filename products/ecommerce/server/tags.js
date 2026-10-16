@@ -7,6 +7,7 @@
  * @module
  */
 import { TAG_LIMITS, checkTags } from '../core/customer-segments.js';
+import { bodyOf } from './service.js';
 
 /** @typedef {import('./service.js').Service} Service */
 
@@ -33,9 +34,6 @@ export const createTagTools = (service, { collection, what, idFilter, stamp, now
 		if (!checked.ok) throw service.invalid(field, `A tag has 1 to ${TAG_LIMITS.tag} characters.`);
 		return /** @type {string} */ (checked.value[0]);
 	};
-
-	/** @param {any} ctx */
-	const bodyOf = (ctx) => (typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {});
 
 	const stamped = () => (stamp ? { updatedAt: new Date(now()) } : {});
 

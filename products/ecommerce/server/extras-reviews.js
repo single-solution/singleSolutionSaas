@@ -12,7 +12,7 @@ import { countHandlers, created, defineRoute, noContent, ok, paginate, problem }
 import { keyOpens } from '../adapters/crypto.js';
 import { answerCounts, isDuplicate, refreshRating, reviewSummary, userIdsOf } from '../adapters/extras-store.js';
 import { afterFilter, keyOf, sortOf } from '../core/extras-pages.js';
-import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX, NO_ID } from '../core/model.js';
 import {
 	REVIEW_SORTS,
 	REVIEW_STATUSES,
@@ -25,12 +25,8 @@ import {
 	reviewSort,
 	shownName,
 } from '../core/reviews.js';
-import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
-
-/** Rate limits (mutable copies of the shared constants, as route definitions take them). */
-const SERVER = [...SERVER_LIMITS];
-const VISITOR = [...VISITOR_LIMITS];
-const VISITOR_WRITE = [...VISITOR_WRITE_LIMITS];
+import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS, bodyOf } from './service.js';
+import { activeProduct } from './seo-reads.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -40,15 +36,11 @@ const VISITOR_WRITE = [...VISITOR_WRITE_LIMITS];
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 /** @typedef {import('../core/model.js').ReviewRecord} ReviewRecord */
 
-const NO_ID = { projection: { _id: 0 } };
 const NEWEST = REVIEW_SORTS.newest;
 /** The header a guest's order key comes in (E21). */
 const ORDER_KEY_HEADER = 'ss-order-key';
 /** What a review needs of its order. */
 const ORDER_FIELDS = { projection: { _id: 0, id: 1, customer: 1, accessKeyHash: 1, deliveredAt: 1, lines: 1 } };
-
-/** @param {any} ctx */
-const bodyOf = (ctx) => (typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {});
 
 /**
  * A review as visitors see it: the name as `nameFormat` shows it, `verified` when written from an order, and the
@@ -131,17 +123,6 @@ export const createReviews = (product, service) => {
 		if (review.status === 'approved') await refreshRating(data, review.productId);
 		await service.emit('review.submitted', s, { review });
 		return created(staffView(await reviewOf(data, review.id), await s.list('review_questions')));
-	};
-
-	/**
-	 * @param {WebsiteData} data
-	 * @param {string} productId
-	 */
-	const activeProduct = async (data, productId) => {
-		const item = await data
-			.collection(COLLECTIONS.products)
-			.findOne({ websiteId: data.websiteId, id: productId, status: 'active' }, { projection: { _id: 0, id: 1 } });
-		if (!item) throw problem('not_found', 'No such product.');
 	};
 
 	/**
@@ -433,7 +414,7 @@ export const createReviews = (product, service) => {
 			auth: 'browser',
 			feature: 'reviews',
 			idempotent: true,
-			rateLimit: VISITOR_WRITE,
+			rateLimit: VISITOR_WRITE_LIMITS,
 			handler: write,
 		}),
 		defineRoute({
@@ -441,17 +422,24 @@ export const createReviews = (product, service) => {
 			path: '/v1/shop/products/:id/reviews',
 			auth: 'browser',
 			feature: 'reviews',
-			rateLimit: VISITOR,
+			rateLimit: VISITOR_LIMITS,
 			handler: productReviews,
 		}),
 
-		defineRoute({ method: 'GET', path: '/v1/reviews', auth: 'server', feature: 'reviews', rateLimit: SERVER, handler: list }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/reviews',
+			auth: 'server',
+			feature: 'reviews',
+			rateLimit: SERVER_LIMITS,
+			handler: list,
+		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/reviews/count',
 			auth: 'server',
 			feature: 'reviews',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: reviewCounts.count,
 		}),
 		defineRoute({
@@ -459,7 +447,7 @@ export const createReviews = (product, service) => {
 			path: '/v1/reviews/counts',
 			auth: 'server',
 			feature: 'reviews',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: reviewCounts.counts,
 		}),
 		defineRoute({
@@ -467,7 +455,7 @@ export const createReviews = (product, service) => {
 			path: '/v1/reviews/:id/approve',
 			auth: 'server',
 			feature: 'reviews',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: moderate('approved'),
 		}),
 		defineRoute({
@@ -475,7 +463,7 @@ export const createReviews = (product, service) => {
 			path: '/v1/reviews/:id/reject',
 			auth: 'server',
 			feature: 'reviews',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: moderate('rejected'),
 		}),
 		defineRoute({
@@ -483,7 +471,7 @@ export const createReviews = (product, service) => {
 			path: '/v1/reviews/:id/pending',
 			auth: 'server',
 			feature: 'reviews',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: moderate('pending'),
 		}),
 		defineRoute({
@@ -491,7 +479,7 @@ export const createReviews = (product, service) => {
 			path: '/v1/reviews/:id/reply',
 			auth: 'server',
 			feature: 'reviews',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: reply,
 		}),
 		defineRoute({
@@ -499,7 +487,7 @@ export const createReviews = (product, service) => {
 			path: '/v1/reviews/:id',
 			auth: 'server',
 			feature: 'reviews',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: remove,
 		}),
 
@@ -509,7 +497,7 @@ export const createReviews = (product, service) => {
 			auth: 'ticket',
 			feature: 'reviews',
 			permission: 'reviews.moderate',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: list,
 		}),
 		defineRoute({
@@ -518,7 +506,7 @@ export const createReviews = (product, service) => {
 			auth: 'ticket',
 			feature: 'reviews',
 			permission: 'reviews.moderate',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: reviewCounts.count,
 		}),
 		defineRoute({
@@ -527,7 +515,7 @@ export const createReviews = (product, service) => {
 			auth: 'ticket',
 			feature: 'reviews',
 			permission: 'reviews.moderate',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: reviewCounts.counts,
 		}),
 		defineRoute({
@@ -536,7 +524,7 @@ export const createReviews = (product, service) => {
 			auth: 'ticket',
 			feature: 'reviews',
 			permission: 'reviews.moderate',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: moderate('approved'),
 		}),
 		defineRoute({
@@ -545,7 +533,7 @@ export const createReviews = (product, service) => {
 			auth: 'ticket',
 			feature: 'reviews',
 			permission: 'reviews.moderate',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: moderate('rejected'),
 		}),
 		defineRoute({
@@ -554,7 +542,7 @@ export const createReviews = (product, service) => {
 			auth: 'ticket',
 			feature: 'reviews',
 			permission: 'reviews.moderate',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: moderate('pending'),
 		}),
 		defineRoute({
@@ -563,7 +551,7 @@ export const createReviews = (product, service) => {
 			auth: 'ticket',
 			feature: 'reviews',
 			permission: 'reviews.moderate',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: reply,
 		}),
 		defineRoute({
@@ -572,7 +560,7 @@ export const createReviews = (product, service) => {
 			auth: 'ticket',
 			feature: 'reviews',
 			permission: 'reviews.moderate',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: remove,
 		}),
 	];

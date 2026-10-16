@@ -180,6 +180,18 @@ describe('the product grid', () => {
 			categoryUrl: '/categories/{slug}',
 			pageSize: 2,
 		});
+		// only what the widgets read
+		expect(Object.keys(config.json.settings.catalog).sort()).toEqual([
+			'categoryUrl',
+			'grades',
+			'lowStockShown',
+			'pageSize',
+			'productUrl',
+			'sizeUnit',
+			'types',
+			'unitStates',
+			'weightUnit',
+		]);
 	});
 });
 

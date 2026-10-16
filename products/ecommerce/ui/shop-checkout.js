@@ -45,7 +45,7 @@ const AUTOFILL = Object.freeze({
  * (`address.<part>.<kind>`, for example `address.region.state`, which a website renames), else the field's own text.
  * @param {Texts} t @param {string} name @param {string} [kind] the country's (`addressFormat(country).labels`)
  */
-export const addressLabel = (t, name, kind) =>
+const addressLabel = (t, name, kind) =>
 	name in LABEL_KINDS
 		? t(`address.${name}.${kind ?? LABEL_KINDS[/** @type {keyof typeof LABEL_KINDS} */ (name)][0]}`)
 		: t(`checkout.field.${name}`);

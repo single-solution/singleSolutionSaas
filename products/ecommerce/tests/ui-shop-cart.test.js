@@ -128,9 +128,7 @@ const SETTINGS = {
 			{ key: 'cod', name: 'Cash on delivery', kind: 'on_delivery' },
 			{ key: 'online', name: 'Online payment', kind: 'gateway' },
 		],
-		coupons: true,
-		loyalty: true,
-		delivery: { zones: true, cities: ['Paris', 'Lyon'] },
+		delivery: { cities: ['Paris', 'Lyon'] },
 		policies: [
 			{ key: 'shipping', title: 'How we ship', text: 'Ships fast.\n\nReally fast.' },
 			{ key: 'privacy', title: 'Our privacy', text: '  ' },
@@ -142,7 +140,7 @@ const SETTINGS = {
 
 /**
  * @param {{ quote?: (call: any) => any, routes?: Record<string, any>, signIn?: string | null, url?: string,
- *   settings?: Record<string, any>, lines?: any[], guestOrders?: string[] }} [options]
+ *   settings?: Record<string, any>, lines?: any[], guestOrders?: string[], features?: string[] }} [options]
  */
 const setup = async ({
 	quote = () => ok(quoteOf()),
@@ -152,9 +150,10 @@ const setup = async ({
 	settings = SETTINGS,
 	lines,
 	guestOrders = [],
+	features = ['checkout', 'coupons', 'loyalty'],
 } = {}) => {
 	const fake = makeShop({
-		features: ['checkout'],
+		features,
 		signIn,
 		routes: { 'POST /v1/shop/cart/quote': quote, ...routes },
 		guestOrders,
@@ -163,7 +162,7 @@ const setup = async ({
 	for (const entry of lines ?? [{ productId: 'prd_1', variantId: 'var_1', quantity: 2 }]) fake.cart.add(entry);
 	const timers = handTimers();
 	const host = place('cart');
-	await mountCart({ host, config: configOf(['checkout'], settings), shop: fake.shop, win: /** @type {any} */ (timers) });
+	await mountCart({ host, config: configOf(features, settings), shop: fake.shop, win: /** @type {any} */ (timers) });
 	await flush();
 	return { fake, timers, host };
 };
@@ -470,7 +469,7 @@ describe('cart', () => {
 		expect(textOf(host)).toContain(text('cart.coupon.coupon_not_applicable'));
 
 		resetPage();
-		const off = await setup({ settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, coupons: false } } });
+		const off = await setup({ features: ['checkout', 'loyalty'] });
 		expect($(off.host, '#ss-cart-coupon')).toBeNull();
 	});
 

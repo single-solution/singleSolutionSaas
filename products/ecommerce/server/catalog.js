@@ -40,16 +40,13 @@ export const createCatalog = (product, service) => {
 		 * @param {Site} s
 		 */
 		widgetSettings: async (s) => {
-			const { productUrl, categoryUrl, variantQuery, pageSize, showStock, lowStockShown, weightUnit, sizeUnit } =
-				await s.values('catalog');
+			const { productUrl, categoryUrl, pageSize, lowStockShown, weightUnit, sizeUnit } = await s.values('catalog');
 			const types = await s.list('item_types');
 			return {
 				catalog: {
 					productUrl,
 					categoryUrl,
-					variantQuery,
 					pageSize,
-					showStock,
 					lowStockShown,
 					types,
 					// the units staff type and read package weights and sizes in (E13)

@@ -14,7 +14,7 @@ import { durationText } from './durations.js';
 /** A policy of the list. @typedef {{ key: string, title: string, text: string }} Policy */
 
 /** At most this many policies. */
-export const MAX_POLICIES = 20;
+const MAX_POLICIES = 20;
 /** The longest title and text of a policy. */
 const MAX_TITLE = 80;
 const MAX_TEXT = 20_000;

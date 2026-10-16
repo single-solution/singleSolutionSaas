@@ -11,7 +11,7 @@
  */
 import { defineRoute, paginate, problem } from '@ss/app-kit';
 import {
-	NO_ID,
+	NO_KEYS,
 	attributesOf,
 	brandsOf,
 	categoriesOf,
@@ -39,15 +39,16 @@ import { dealProductsFilter, productDeals } from '../core/deals.js';
 import { gradesFor } from '../core/grades.js';
 import { elementsOf, typeOf, typeTree } from '../core/item-types.js';
 import { MAX_QUANTITY, limitsOf } from '../core/measure.js';
-import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX, MAX_PAGE_SIZE, TOTAL_CAP } from '../core/model.js';
 import { attributeValues } from '../core/promotions.js';
 import { createShownPrices } from './shown-prices.js';
 import { chartView, resolveSizeChart } from '../core/size-charts.js';
 import { windowDefaults } from '../core/returns.js';
-import { SHOP_LIMITS, refuse } from './catalog-common.js';
+import { refuse } from './catalog-common.js';
 import { createCatalogSearch } from './catalog-search.js';
 import { conditional } from './http-cache.js';
 import { hiddenFor, retiredMove, visible } from './catalog-visibility.js';
+import { VISITOR_LIMITS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -58,11 +59,6 @@ import { hiddenFor, retiredMove, visible } from './catalog-visibility.js';
 /** @typedef {import('../core/model.js').CategoryRecord} CategoryRecord */
 /** @typedef {import('../core/model.js').SizeChartRecord} SizeChartRecord */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
-
-/** Most products on one page of a listing (E8). */
-const MAX_PAGE = 60;
-/** A listing's total is exact up to this many products (E8). */
-const TOTAL_CAP = 10_000;
 
 /**
  * Product cards for the grid and search results, at their shown prices (G4: the price after automatic deals, as the
@@ -276,7 +272,7 @@ export const createCatalogShop = (product, service, common) => {
 		// pages by cursor like every other list (`nextCursor`, `hasMore`)
 		const page = paginate(
 			{ cursor: ctx.query.page ? null : ctx.query.cursor, limit: ctx.query.limit },
-			{ defaultLimit: Math.min(MAX_PAGE, Number(pageSize)), maxLimit: MAX_PAGE },
+			{ defaultLimit: Math.min(MAX_PAGE_SIZE, Number(pageSize)), maxLimit: MAX_PAGE_SIZE },
 		);
 		const read = readShopQuery(ctx.query);
 		if (!read.ok) throw refuse(read.errors);
@@ -333,7 +329,7 @@ export const createCatalogShop = (product, service, common) => {
 		const products = data.collection(COLLECTIONS.products);
 		const found = /** @type {ProductRecord[]} */ (
 			await products
-				.find(after ? { $and: [filter, after], websiteId: data.websiteId } : filter, NO_ID)
+				.find(after ? { $and: [filter, after], websiteId: data.websiteId } : filter, NO_KEYS)
 				.sort(sortDocument(sort))
 				.skip(query.page === null ? 0 : (query.page - 1) * page.limit)
 				.limit(page.fetchLimit)
@@ -384,7 +380,7 @@ export const createCatalogShop = (product, service, common) => {
 		const charts = /** @type {SizeChartRecord[]} */ (
 			await data
 				.collection(COLLECTIONS.sizeCharts)
-				.find({ websiteId: data.websiteId, active: true }, NO_ID)
+				.find({ websiteId: data.websiteId, active: true }, NO_KEYS)
 				.limit(1000)
 				.toArray()
 		);
@@ -447,7 +443,7 @@ export const createCatalogShop = (product, service, common) => {
 		/** @type {BrandRecord | null} */
 		const brand = item.brandId
 			? /** @type {BrandRecord | null} */ (
-					await data.collection(COLLECTIONS.brands).findOne({ websiteId: data.websiteId, id: item.brandId }, NO_ID)
+					await data.collection(COLLECTIONS.brands).findOne({ websiteId: data.websiteId, id: item.brandId }, NO_KEYS)
 				)
 			: null;
 		const main = item.categoryIds.map((id) => byId.get(id)).find((category) => category !== undefined);
@@ -605,7 +601,7 @@ export const createCatalogShop = (product, service, common) => {
 			path: '/v1/shop/products',
 			auth: 'browser',
 			feature: 'catalog',
-			rateLimit: SHOP_LIMITS,
+			rateLimit: VISITOR_LIMITS,
 			handler: conditional(listing, service.now),
 		}),
 		defineRoute({
@@ -613,7 +609,7 @@ export const createCatalogShop = (product, service, common) => {
 			path: '/v1/shop/products/:ref',
 			auth: 'browser',
 			feature: 'catalog',
-			rateLimit: SHOP_LIMITS,
+			rateLimit: VISITOR_LIMITS,
 			handler: conditional(page, service.now),
 		}),
 		defineRoute({
@@ -621,7 +617,7 @@ export const createCatalogShop = (product, service, common) => {
 			path: '/v1/shop/categories',
 			auth: 'browser',
 			feature: 'catalog',
-			rateLimit: SHOP_LIMITS,
+			rateLimit: VISITOR_LIMITS,
 			handler: conditional(categoryList, service.now),
 		}),
 		defineRoute({
@@ -629,7 +625,7 @@ export const createCatalogShop = (product, service, common) => {
 			path: '/v1/shop/brands',
 			auth: 'browser',
 			feature: 'catalog',
-			rateLimit: SHOP_LIMITS,
+			rateLimit: VISITOR_LIMITS,
 			handler: conditional(brandList, service.now),
 		}),
 	];

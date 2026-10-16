@@ -9,12 +9,8 @@ import { defineRoute, problem } from '@ss/app-kit';
 import { categoriesOf } from '../adapters/catalog-store.js';
 import { userIdsOf } from '../adapters/extras-store.js';
 import { MAX_COMPARE, compareRows, gradeLabels, parseCompareIds } from '../core/compare.js';
-import { COLLECTIONS } from '../core/model.js';
+import { COLLECTIONS, NO_ID } from '../core/model.js';
 import { VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
-
-/** Rate limits (mutable copies of the shared constants, as route definitions take them). */
-const VISITOR = [...VISITOR_LIMITS];
-const VISITOR_WRITE = [...VISITOR_WRITE_LIMITS];
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -26,7 +22,6 @@ const VISITOR_WRITE = [...VISITOR_WRITE_LIMITS];
 
 /** Products in a wishlist, at most. */
 export const MAX_WISHLIST = 200;
-const NO_ID = { projection: { _id: 0 } };
 
 /**
  * @param {Product} _product
@@ -205,7 +200,7 @@ export const createShopperLists = (_product, service, cards) => {
 			path: '/v1/shop/wishlist',
 			auth: 'browser',
 			feature: 'wishlist',
-			rateLimit: VISITOR,
+			rateLimit: VISITOR_LIMITS,
 			handler: readWishlist,
 		}),
 		defineRoute({
@@ -213,7 +208,7 @@ export const createShopperLists = (_product, service, cards) => {
 			path: '/v1/shop/wishlist/items/:productId',
 			auth: 'browser',
 			feature: 'wishlist',
-			rateLimit: VISITOR_WRITE,
+			rateLimit: VISITOR_WRITE_LIMITS,
 			handler: add,
 		}),
 		defineRoute({
@@ -221,7 +216,7 @@ export const createShopperLists = (_product, service, cards) => {
 			path: '/v1/shop/wishlist/merge',
 			auth: 'browser',
 			feature: 'wishlist',
-			rateLimit: VISITOR_WRITE,
+			rateLimit: VISITOR_WRITE_LIMITS,
 			handler: merge,
 		}),
 		defineRoute({
@@ -229,7 +224,7 @@ export const createShopperLists = (_product, service, cards) => {
 			path: '/v1/shop/wishlist/items/:productId',
 			auth: 'browser',
 			feature: 'wishlist',
-			rateLimit: VISITOR_WRITE,
+			rateLimit: VISITOR_WRITE_LIMITS,
 			handler: remove,
 		}),
 		defineRoute({
@@ -237,7 +232,7 @@ export const createShopperLists = (_product, service, cards) => {
 			path: '/v1/shop/compare',
 			auth: 'browser',
 			feature: 'compare',
-			rateLimit: VISITOR,
+			rateLimit: VISITOR_LIMITS,
 			handler: compare,
 		}),
 	];

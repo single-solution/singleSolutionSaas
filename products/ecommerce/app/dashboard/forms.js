@@ -17,7 +17,7 @@ const N = TEXTS.connections.fields;
  */
 
 /** Connections with their own form, and their fields. @type {Readonly<Record<string, ReadonlyArray<FieldSpec>>>} */
-export const FORMS = Object.freeze({
+const FORMS = Object.freeze({
 	storage: [
 		{ name: 'endpoint', optional: true, type: 'url' },
 		{ name: 'region' },

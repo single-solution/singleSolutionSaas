@@ -8,6 +8,7 @@
  */
 import { valueLabel } from './catalog.js';
 import { levelOf } from './measure.js';
+import { MAX_PAGE_NUMBER } from './model.js';
 import { MAX_AMOUNT } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
 
@@ -55,8 +56,6 @@ export const sortOf = (key, basis) => {
 
 /** Most values of one filter (brands, grades, attribute values). */
 const MAX_VALUES = 20;
-/** Highest page number. */
-export const MAX_PAGE_NUMBER = 500;
 
 /** Most words of a search, and their length. */
 const MAX_WORDS = 8;
@@ -555,7 +554,7 @@ const STOCK_STATES = Object.freeze(['none', 'out', 'partial', 'full']);
  * A match of the products of a {@link MeasuredScope}.
  * @param {MeasuredScope} scope
  */
-export const measuredMatch = (scope) => ({
+const measuredMatch = (scope) => ({
 	kind: 'physical',
 	$or: [{ typeKey: { $in: scope.keys } }, { typeKey: { $in: [null, ''] }, 'categoryIds.0': { $in: scope.categoryIds } }],
 });
@@ -704,7 +703,7 @@ export const fieldPath = (field) => (field.on === 'product' ? `specs.${field.id}
  * @param {ReadonlyMap<string, AttributeRecord>} attributes every field by id
  * @returns {Record<string, unknown>[]}
  */
-export const staffFieldFilters = (query, attributes) => {
+const staffFieldFilters = (query, attributes) => {
 	/** @type {Record<string, unknown>[]} */
 	const and = [];
 	for (const [name, value] of Object.entries(query)) {

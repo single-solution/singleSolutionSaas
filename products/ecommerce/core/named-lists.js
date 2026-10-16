@@ -8,7 +8,7 @@
 /** A list entry's key. */
 export const LIST_KEY = /^[a-z][a-z0-9_-]{0,39}$/;
 /** The longest name of an entry. */
-export const MAX_ENTRY_LABEL = 60;
+const MAX_ENTRY_LABEL = 60;
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001F\u007F]/;
 

@@ -98,7 +98,7 @@ export const documentWordsOf = (texts, methods = []) => {
 };
 
 /** The line columns an invoice may have besides fields (`field.<slug>`), and those of a new website. */
-export const INVOICE_COLUMNS = Object.freeze(['item', 'sku', 'quantity', 'unitPrice', 'discount', 'tax', 'amount']);
+const INVOICE_COLUMNS = Object.freeze(['item', 'sku', 'quantity', 'unitPrice', 'discount', 'tax', 'amount']);
 export const DEFAULT_COLUMNS = Object.freeze(['item', 'quantity', 'unitPrice', 'amount']);
 /**
  * The field slug a column names (`field.<slug>`), or null.

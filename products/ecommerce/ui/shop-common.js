@@ -9,6 +9,7 @@
  */
 import { DEFAULT_FORMAT, element, formatDate, formatMoney, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
 import { GUEST_IDENTITIES } from '../core/guests.js';
+import { MAX_PAGE_SIZE } from '../core/model.js';
 import { fromDecimal, isCurrency, toDecimal } from '@ss/app-kit/widget';
 import { SHOP_CSS } from './shop-styles.js';
 import { WIDGET_CSS } from './styles.js';
@@ -28,9 +29,6 @@ export const textsOf =
 	(config) =>
 	(key, values = {}) =>
 		formatText(config.texts[key] ?? key, values);
-
-/** Most products a listing gives at once (E8). */
-export const MAX_PAGE_SIZE = 60;
 
 /**
  * The grades the widget config names (`settings.catalog.grades` while grades_serials is on): a list of `{ key, label }`;
@@ -92,8 +90,6 @@ export const settingsOf = (config) => {
 			),
 			/** policies are HTML (cleaned by the server) or plain text (E3) */
 			policyFormat: checkout.policyFormat === 'html' ? 'html' : 'text',
-			coupons: checkout.coupons === true,
-			loyalty: checkout.loyalty === true,
 			/** how a shopper orders without signing in (E21): the contact guests check out by; null while guests sign in */
 			guests: guestsOf(checkout.guests),
 			address: {

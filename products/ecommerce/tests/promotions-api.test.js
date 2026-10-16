@@ -392,9 +392,10 @@ describe('loyalty', () => {
 		expect(mine.json.expiringSoon).toEqual([{ points: 300, expiresAt: new Date(shop.now() + 10 * 86_400_000).toISOString() }]);
 	});
 
-	it('gives the widgets the loyalty settings', async () => {
+	it('leaves the loyalty rules out of the widget config (the cart is priced by the server)', async () => {
 		const config = await shop.visitor('GET', '/v1/widget/config');
-		expect(config.json.settings.loyalty).toEqual({ pointValue: 100, minRedeem: 100, maxPercent: 20 });
+		expect(config.json.features).toContain('loyalty');
+		expect(config.json.settings).not.toHaveProperty('loyalty');
 	});
 
 	it('exports and deletes a person’s loyalty account and coupon uses', async () => {

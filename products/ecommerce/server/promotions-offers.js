@@ -28,12 +28,7 @@ import {
 	updateOffer,
 } from '../adapters/promotions-store.js';
 import { IMAGE_TYPES } from './catalog-common.js';
-import { SERVER_LIMITS } from './service.js';
-
-/** Rate limits of the merchant's server and admin routes. */
-const SERVER_RATE = [...SERVER_LIMITS];
-/** An upload link lasts this long (seconds), as the catalog's. */
-const UPLOAD_SECONDS = 900;
+import { SERVER_LIMITS, UPLOAD_SECONDS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -270,8 +265,7 @@ export const createOfferRoutes = (product, service) => {
 			return invalid('size', `A banner has at most ${limit} bytes.`);
 		const found = await getOffer(await s.data(), 'deals', String(ctx.params.id));
 		if (!found) return problem('not_found', 'No such deal.');
-		const storage = await product.connections.storage(s.websiteId);
-		if (!storage) return problem('storage_not_connected', 'Connect your storage first (Connections).');
+		const storage = await service.storage(s);
 		const key = `ecommerce/deals/${found.id}/${createId('img').slice(4).toLowerCase()}.${extension}`;
 		const signed = storage.presignPut({ key, contentType: type, contentLength: body.size, expiresIn: UPLOAD_SECONDS });
 		return { key, upload: { method: signed.method, url: signed.url, headers: signed.headers, expiresAt: signed.expiresAt } };
@@ -315,7 +309,7 @@ export const createOfferRoutes = (product, service) => {
 			path: '/v1/coupons',
 			auth: 'server',
 			feature: 'coupons',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: list('coupons'),
 		}),
 		defineRoute({
@@ -324,7 +318,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'ticket',
 			feature: 'coupons',
 			permission: 'coupons.edit',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: list('coupons'),
 		}),
 		defineRoute({
@@ -333,7 +327,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'server',
 			feature: 'coupons',
 			idempotent: true,
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: create('coupons'),
 		}),
 		defineRoute({
@@ -343,7 +337,7 @@ export const createOfferRoutes = (product, service) => {
 			feature: 'coupons',
 			permission: 'coupons.edit',
 			idempotent: true,
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: create('coupons'),
 		}),
 		defineRoute({
@@ -352,7 +346,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'server',
 			feature: 'coupons',
 			idempotent: true,
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: batch,
 		}),
 		defineRoute({
@@ -362,7 +356,7 @@ export const createOfferRoutes = (product, service) => {
 			feature: 'coupons',
 			permission: 'coupons.edit',
 			idempotent: true,
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: batch,
 		}),
 		defineRoute({
@@ -370,7 +364,7 @@ export const createOfferRoutes = (product, service) => {
 			path: '/v1/coupons/:id',
 			auth: 'server',
 			feature: 'coupons',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: read('coupons'),
 		}),
 		defineRoute({
@@ -379,7 +373,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'ticket',
 			feature: 'coupons',
 			permission: 'coupons.edit',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: read('coupons'),
 		}),
 		defineRoute({
@@ -387,7 +381,7 @@ export const createOfferRoutes = (product, service) => {
 			path: '/v1/coupons/:id',
 			auth: 'server',
 			feature: 'coupons',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: update('coupons'),
 		}),
 		defineRoute({
@@ -396,7 +390,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'ticket',
 			feature: 'coupons',
 			permission: 'coupons.edit',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: update('coupons'),
 		}),
 		defineRoute({
@@ -404,7 +398,7 @@ export const createOfferRoutes = (product, service) => {
 			path: '/v1/coupons/:id',
 			auth: 'server',
 			feature: 'coupons',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: remove('coupons'),
 		}),
 		defineRoute({
@@ -413,7 +407,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'ticket',
 			feature: 'coupons',
 			permission: 'coupons.edit',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: remove('coupons'),
 		}),
 
@@ -423,7 +417,7 @@ export const createOfferRoutes = (product, service) => {
 			path: '/v1/deals',
 			auth: 'server',
 			feature: 'deals',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: list('deals'),
 		}),
 		defineRoute({
@@ -432,7 +426,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'ticket',
 			feature: 'deals',
 			permission: 'deals.edit',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: list('deals'),
 		}),
 		defineRoute({
@@ -441,7 +435,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'server',
 			feature: 'deals',
 			idempotent: true,
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: create('deals'),
 		}),
 		defineRoute({
@@ -451,7 +445,7 @@ export const createOfferRoutes = (product, service) => {
 			feature: 'deals',
 			permission: 'deals.edit',
 			idempotent: true,
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: create('deals'),
 		}),
 		defineRoute({
@@ -459,7 +453,7 @@ export const createOfferRoutes = (product, service) => {
 			path: '/v1/deals/:id',
 			auth: 'server',
 			feature: 'deals',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: read('deals'),
 		}),
 		defineRoute({
@@ -468,7 +462,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'ticket',
 			feature: 'deals',
 			permission: 'deals.edit',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: read('deals'),
 		}),
 		defineRoute({
@@ -476,7 +470,7 @@ export const createOfferRoutes = (product, service) => {
 			path: '/v1/deals/:id',
 			auth: 'server',
 			feature: 'deals',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: update('deals'),
 		}),
 		defineRoute({
@@ -485,7 +479,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'ticket',
 			feature: 'deals',
 			permission: 'deals.edit',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: update('deals'),
 		}),
 		defineRoute({
@@ -493,7 +487,7 @@ export const createOfferRoutes = (product, service) => {
 			path: '/v1/deals/:id',
 			auth: 'server',
 			feature: 'deals',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: remove('deals'),
 		}),
 		defineRoute({
@@ -502,7 +496,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'ticket',
 			feature: 'deals',
 			permission: 'deals.edit',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: remove('deals'),
 		}),
 		defineRoute({
@@ -510,7 +504,7 @@ export const createOfferRoutes = (product, service) => {
 			path: '/v1/deals/:id/banner/upload',
 			auth: 'server',
 			feature: 'deals',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: bannerUpload,
 		}),
 		defineRoute({
@@ -519,7 +513,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'ticket',
 			feature: 'deals',
 			permission: 'deals.edit',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: bannerUpload,
 		}),
 
@@ -529,7 +523,7 @@ export const createOfferRoutes = (product, service) => {
 			path: '/v1/bundles',
 			auth: 'server',
 			feature: 'bundles',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: list('bundles'),
 		}),
 		defineRoute({
@@ -538,7 +532,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'ticket',
 			feature: 'bundles',
 			permission: 'bundles.edit',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: list('bundles'),
 		}),
 		defineRoute({
@@ -547,7 +541,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'server',
 			feature: 'bundles',
 			idempotent: true,
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: create('bundles'),
 		}),
 		defineRoute({
@@ -557,7 +551,7 @@ export const createOfferRoutes = (product, service) => {
 			feature: 'bundles',
 			permission: 'bundles.edit',
 			idempotent: true,
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: create('bundles'),
 		}),
 		defineRoute({
@@ -565,7 +559,7 @@ export const createOfferRoutes = (product, service) => {
 			path: '/v1/bundles/:id',
 			auth: 'server',
 			feature: 'bundles',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: read('bundles'),
 		}),
 		defineRoute({
@@ -574,7 +568,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'ticket',
 			feature: 'bundles',
 			permission: 'bundles.edit',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: read('bundles'),
 		}),
 		defineRoute({
@@ -582,7 +576,7 @@ export const createOfferRoutes = (product, service) => {
 			path: '/v1/bundles/:id',
 			auth: 'server',
 			feature: 'bundles',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: update('bundles'),
 		}),
 		defineRoute({
@@ -591,7 +585,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'ticket',
 			feature: 'bundles',
 			permission: 'bundles.edit',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: update('bundles'),
 		}),
 		defineRoute({
@@ -599,7 +593,7 @@ export const createOfferRoutes = (product, service) => {
 			path: '/v1/bundles/:id',
 			auth: 'server',
 			feature: 'bundles',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: remove('bundles'),
 		}),
 		defineRoute({
@@ -608,7 +602,7 @@ export const createOfferRoutes = (product, service) => {
 			auth: 'ticket',
 			feature: 'bundles',
 			permission: 'bundles.edit',
-			rateLimit: SERVER_RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: remove('bundles'),
 		}),
 	];

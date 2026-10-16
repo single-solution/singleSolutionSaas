@@ -27,7 +27,7 @@ const SHARE = Object.freeze({ visitor: 300, product: 1600, basics: 700, deals: 9
 /**
  * The words of the context: the website's text `chat.context.<word>` of each (E33), with `{placeholders}`.
  */
-export const CONTEXT_WORDS = Object.freeze(
+const CONTEXT_WORDS = Object.freeze(
 	/** @type {const} */ ([
 		'title',
 		'basics',

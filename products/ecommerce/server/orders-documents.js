@@ -24,7 +24,6 @@ const MAX_SLIPS = 50;
 const MAX_PICK = 100;
 
 const ORDER_ID = /^ord_[A-Za-z0-9_-]{1,64}$/;
-const serverLimits = [...SERVER_LIMITS];
 
 /**
  * @param {Product} _product
@@ -108,7 +107,7 @@ export const createOrderDocuments = (_product, service) => {
 				path: '/v1/orders/packing-slips',
 				auth: 'server',
 				feature: 'invoices',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: packingSlips,
 			}),
 			defineRoute({
@@ -117,7 +116,7 @@ export const createOrderDocuments = (_product, service) => {
 				auth: 'ticket',
 				feature: 'invoices',
 				permission: 'orders.read',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: packingSlips,
 			}),
 			defineRoute({
@@ -125,7 +124,7 @@ export const createOrderDocuments = (_product, service) => {
 				path: '/v1/orders/pick-list',
 				auth: 'server',
 				feature: 'invoices',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: pickList,
 			}),
 			defineRoute({
@@ -134,7 +133,7 @@ export const createOrderDocuments = (_product, service) => {
 				auth: 'ticket',
 				feature: 'invoices',
 				permission: 'orders.read',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: pickList,
 			}),
 		],

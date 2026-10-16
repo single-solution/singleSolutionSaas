@@ -578,8 +578,9 @@ describe('catalog admin: a product by its item type', () => {
 			{
 				catalog: {
 					grades: [
-						{ key: 'a', label: 'Grade A' },
-						{ key: 'mint', label: 'Mint', typeKeys: ['used_phone'] },
+						{ key: 'a', label: 'Grade A', active: true },
+						{ key: 'mint', label: 'Mint', active: true, typeKeys: ['used_phone'] },
+						{ key: 'worn', label: 'Worn', active: false },
 					],
 					types: [plain, USED_PHONE],
 					// packages typed in the shop's units, kept in grams and millimeters (E13)
@@ -616,6 +617,9 @@ describe('catalog admin: a product by its item type', () => {
 		// only the grades of the type are offered
 		const mint = /** @type {HTMLOptionElement} */ (labelled(again, 'Grade of Red').querySelector('option[value="mint"]'));
 		expect(mint.disabled).toBe(false);
+		// a grade turned off is not offered for a variant that does not have it
+		const worn = /** @type {HTMLOptionElement} */ (labelled(again, 'Grade of Red').querySelector('option[value="worn"]'));
+		expect(worn.disabled).toBe(true);
 		await change(fieldIn(again, 'Item type'), 'physical');
 		expect(mint.disabled).toBe(true);
 		expect(fieldIn(again, 'Model').value).toBe('');

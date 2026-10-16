@@ -6,7 +6,7 @@
  * @module
  */
 import { phoneSearchOf } from '../core/guests.js';
-import { COLLECTIONS } from '../core/model.js';
+import { COLLECTIONS, NO_ID } from '../core/model.js';
 import { isCustomerId, spentKey } from '../core/orders.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -41,8 +41,6 @@ export const INDEXES = [
 	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, email: 1 }, name: 'fulfil_by_email' },
 	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, phone: 1 }, name: 'fulfil_by_phone' },
 ];
-
-const NO_ID = Object.freeze({ projection: { _id: 0 } });
 
 /** @param {string} text */
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

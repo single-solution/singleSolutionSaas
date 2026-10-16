@@ -640,9 +640,6 @@ export const createMoves = (product, service) => {
 		return after;
 	};
 
-	/** @param {Site} s @returns {Promise<OrderFlow>} */
-	const flowOf = async (s) => /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
-
 	/** @param {Site} s @param {string} id @returns {Promise<OrderRecord | null>} */
 	const orderNow = async (s, id) =>
 		/** @type {OrderRecord | null} */ (
@@ -713,7 +710,7 @@ export const createMoves = (product, service) => {
 			ticket: null,
 			...(by ? { actor: by } : {}),
 		};
-		return (await cover(s, ctx, order, await flowOf(s))).order;
+		return (await cover(s, ctx, order, await s.flow())).order;
 	};
 
 	/**
@@ -732,7 +729,7 @@ export const createMoves = (product, service) => {
 	 * @param {import('../core/orders.js').RefundInput} input
 	 */
 	const refund = async (s, ctx, order, input) => {
-		const flow = await flowOf(s);
+		const flow = await s.flow();
 		// a refund that will move the order needs that move's permission too, before anything is called (no money moves
 		// for a refund that would then be refused)
 		const to = coverStatus(flow, order, order.payment.refunded + input.amount);

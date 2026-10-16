@@ -17,7 +17,7 @@ import { postcodeKey } from './address.js';
 /** An order key's length. */
 export const ORDER_KEY_LENGTH = 32;
 /** A phone of a country the website does not serve (SE-5). */
-export const COUNTRY_REFUSED = Object.freeze({
+const COUNTRY_REFUSED = Object.freeze({
 	message: 'Give a phone number of a country this shop serves.',
 	code: 'country_not_allowed',
 });

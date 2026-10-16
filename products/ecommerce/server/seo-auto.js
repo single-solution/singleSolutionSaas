@@ -12,7 +12,7 @@
 import { aiPrompt, glossaryPrompt, readSuggestions } from '../core/catalog-ai.js';
 import { specsOf } from '../core/catalog-views.js';
 import { COLLECTIONS } from '../core/model.js';
-import { NO_ID, attributesOf } from '../adapters/catalog-store.js';
+import { NO_KEYS, attributesOf } from '../adapters/catalog-store.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -63,10 +63,10 @@ export const createAutoSeo = (product, service, landings) => {
 		const data = await s.data();
 		const [primary, brand, ai, attributes] = await Promise.all([
 			item.categoryIds[0]
-				? data.collection(COLLECTIONS.categories).findOne({ websiteId: data.websiteId, id: item.categoryIds[0] }, NO_ID)
+				? data.collection(COLLECTIONS.categories).findOne({ websiteId: data.websiteId, id: item.categoryIds[0] }, NO_KEYS)
 				: null,
 			item.brandId
-				? data.collection(COLLECTIONS.brands).findOne({ websiteId: data.websiteId, id: item.brandId }, NO_ID)
+				? data.collection(COLLECTIONS.brands).findOne({ websiteId: data.websiteId, id: item.brandId }, NO_KEYS)
 				: null,
 			s.values('ai_copy'),
 			attributesOf(data),
@@ -151,7 +151,7 @@ export const createAutoSeo = (product, service, landings) => {
 		const data = await s.data();
 		const [category, ai] = await Promise.all([
 			attribute.categoryId
-				? data.collection(COLLECTIONS.categories).findOne({ websiteId: data.websiteId, id: attribute.categoryId }, NO_ID)
+				? data.collection(COLLECTIONS.categories).findOne({ websiteId: data.websiteId, id: attribute.categoryId }, NO_KEYS)
 				: null,
 			s.values('ai_copy'),
 		]);

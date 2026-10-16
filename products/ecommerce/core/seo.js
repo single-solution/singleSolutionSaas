@@ -263,7 +263,7 @@ const daysValue = ({ min, max }) => ({ '@type': 'QuantitativeValue', minValue: m
  * price-list tier's `off` (what its listed price takes off the variant's price, E31) comes off the price shown.
  * @param {number} price @param {MemberPrice & { off?: number }} member
  */
-export const memberPriceOf = (price, { percent, unit, off }) =>
+const memberPriceOf = (price, { percent, unit, off }) =>
 	off !== undefined
 		? Math.max(0, price - off)
 		: price - Math.min(price, Math.round((price * percent) / 100 / unit + 1e-9) * unit);

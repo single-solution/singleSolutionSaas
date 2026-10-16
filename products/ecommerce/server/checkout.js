@@ -23,10 +23,6 @@ import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.j
 /** @typedef {import('./service.js').Site} Site */
 
 const DAY_MS = 86_400_000;
-/** The shared rate limits as the route definitions take them. */
-const SERVER = [...SERVER_LIMITS];
-const VISITOR = [...VISITOR_LIMITS];
-const VISITOR_WRITE = [...VISITOR_WRITE_LIMITS];
 
 /**
  * @param {Product} product
@@ -103,24 +99,15 @@ export const createCheckout = (product, service) => {
 		const phoneNeeded = checkout.phoneRequired !== false;
 		return {
 			checkout: {
-				// the most lines of a cart and pieces of one item (E4); each line's own limits come with its quote
+				// the most lines of a cart; each line's own limits come with its quote
 				maxLines: checkout.maxLines,
-				maxQuantity: checkout.maxQuantity,
 				paymentMethods: methods.map((method) => ({ key: method.key, name: method.name, kind: method.kind })),
 				pickupLocations,
-				delivery: {
-					zones: zonesOn,
-					cities: zoneCities(zones),
-				},
-				pricesIncludeTax: s.has('taxes') ? (await s.values('taxes')).pricesIncludeTax === true : true,
+				delivery: { cities: zoneCities(zones) },
 				...(await (async () => {
 					const filled = await policiesOf(s);
 					return { policies: filled.policies, policyFormat: filled.format };
 				})()),
-				bookings: s.has('bookings'),
-				digital: s.has('digital_goods'),
-				coupons: s.has('coupons'),
-				loyalty: s.has('loyalty'),
 				// how a shopper orders without signing in (E21): the contact guests check out by and whether a phone is
 				// needed (phase 5); null while guests sign in
 				guests: checkout.guests === 'off' ? null : guestRules(checkout),
@@ -135,7 +122,6 @@ export const createCheckout = (product, service) => {
 					regions: await s.list('address_regions'),
 					country: (await s.business()).country ?? '',
 				},
-				paymentWindowMinutes: checkout.paymentWindowMinutes,
 			},
 		};
 	};
@@ -147,7 +133,7 @@ export const createCheckout = (product, service) => {
 				path: '/v1/shop/cart/quote',
 				auth: 'browser',
 				feature: 'checkout',
-				rateLimit: VISITOR,
+				rateLimit: VISITOR_LIMITS,
 				handler: ordering.quoteCart,
 			}),
 			defineRoute({
@@ -156,7 +142,7 @@ export const createCheckout = (product, service) => {
 				auth: 'browser',
 				feature: 'checkout',
 				idempotent: true,
-				rateLimit: VISITOR_WRITE,
+				rateLimit: VISITOR_WRITE_LIMITS,
 				handler: ordering.place,
 			}),
 			defineRoute({
@@ -164,7 +150,7 @@ export const createCheckout = (product, service) => {
 				path: '/v1/shop/orders',
 				auth: 'browser',
 				feature: 'checkout',
-				rateLimit: VISITOR,
+				rateLimit: VISITOR_LIMITS,
 				handler: ordering.list,
 			}),
 			defineRoute({
@@ -172,7 +158,7 @@ export const createCheckout = (product, service) => {
 				path: '/v1/shop/orders/:id',
 				auth: 'browser',
 				feature: 'checkout',
-				rateLimit: VISITOR,
+				rateLimit: VISITOR_LIMITS,
 				handler: ordering.read,
 			}),
 			defineRoute({
@@ -180,7 +166,7 @@ export const createCheckout = (product, service) => {
 				path: '/v1/shop/orders/by-number/:number',
 				auth: 'browser',
 				feature: 'checkout',
-				rateLimit: VISITOR,
+				rateLimit: VISITOR_LIMITS,
 				handler: ordering.readByNumber,
 			}),
 			defineRoute({
@@ -188,7 +174,7 @@ export const createCheckout = (product, service) => {
 				path: '/v1/shop/orders/:id/proof/upload',
 				auth: 'browser',
 				feature: 'checkout',
-				rateLimit: VISITOR_WRITE,
+				rateLimit: VISITOR_WRITE_LIMITS,
 				handler: ordering.proofUpload,
 			}),
 			defineRoute({
@@ -196,7 +182,7 @@ export const createCheckout = (product, service) => {
 				path: '/v1/shop/orders/:id/proof',
 				auth: 'browser',
 				feature: 'checkout',
-				rateLimit: VISITOR_WRITE,
+				rateLimit: VISITOR_WRITE_LIMITS,
 				handler: ordering.sendProof,
 			}),
 			defineRoute({
@@ -204,7 +190,7 @@ export const createCheckout = (product, service) => {
 				path: '/v1/shop/orders/:id/cancel',
 				auth: 'browser',
 				feature: 'checkout',
-				rateLimit: VISITOR_WRITE,
+				rateLimit: VISITOR_WRITE_LIMITS,
 				handler: ordering.cancelByShopper,
 			}),
 			defineRoute({
@@ -213,7 +199,7 @@ export const createCheckout = (product, service) => {
 				auth: 'browser',
 				feature: 'checkout',
 				idempotent: true,
-				rateLimit: VISITOR_WRITE,
+				rateLimit: VISITOR_WRITE_LIMITS,
 				handler: ordering.pay,
 			}),
 			defineRoute({
@@ -221,7 +207,7 @@ export const createCheckout = (product, service) => {
 				path: '/v1/shop/orders/:id/downloads/:lineId/:file',
 				auth: 'browser',
 				feature: 'digital_goods',
-				rateLimit: VISITOR,
+				rateLimit: VISITOR_LIMITS,
 				handler: ordering.downloadFile,
 			}),
 			defineRoute({
@@ -229,7 +215,7 @@ export const createCheckout = (product, service) => {
 				path: '/v1/shop/slots',
 				auth: 'browser',
 				feature: 'bookings',
-				rateLimit: VISITOR,
+				rateLimit: VISITOR_LIMITS,
 				handler: slots,
 			}),
 			defineRoute({
@@ -237,7 +223,7 @@ export const createCheckout = (product, service) => {
 				path: '/v1/products/:id/licences',
 				auth: 'server',
 				feature: 'digital_goods',
-				rateLimit: SERVER,
+				rateLimit: SERVER_LIMITS,
 				handler: digital.addLicences,
 			}),
 			defineRoute({
@@ -246,7 +232,7 @@ export const createCheckout = (product, service) => {
 				auth: 'ticket',
 				feature: 'digital_goods',
 				permission: 'catalog.edit',
-				rateLimit: SERVER,
+				rateLimit: SERVER_LIMITS,
 				handler: digital.addLicences,
 			}),
 			defineRoute({
@@ -254,7 +240,7 @@ export const createCheckout = (product, service) => {
 				path: '/v1/products/:id/licences/remove',
 				auth: 'server',
 				feature: 'digital_goods',
-				rateLimit: SERVER,
+				rateLimit: SERVER_LIMITS,
 				handler: digital.removeLicences,
 			}),
 			defineRoute({
@@ -263,7 +249,7 @@ export const createCheckout = (product, service) => {
 				auth: 'ticket',
 				feature: 'digital_goods',
 				permission: 'catalog.edit',
-				rateLimit: SERVER,
+				rateLimit: SERVER_LIMITS,
 				handler: digital.removeLicences,
 			}),
 			defineRoute({
@@ -271,7 +257,7 @@ export const createCheckout = (product, service) => {
 				path: '/v1/products/:id/files/:name',
 				auth: 'server',
 				feature: 'digital_goods',
-				rateLimit: SERVER,
+				rateLimit: SERVER_LIMITS,
 				handler: digital.removeFile,
 			}),
 			defineRoute({
@@ -280,7 +266,7 @@ export const createCheckout = (product, service) => {
 				auth: 'ticket',
 				feature: 'digital_goods',
 				permission: 'catalog.edit',
-				rateLimit: SERVER,
+				rateLimit: SERVER_LIMITS,
 				handler: digital.removeFile,
 			}),
 			defineRoute({
@@ -288,7 +274,7 @@ export const createCheckout = (product, service) => {
 				path: '/v1/products/:id/files',
 				auth: 'server',
 				feature: 'digital_goods',
-				rateLimit: SERVER,
+				rateLimit: SERVER_LIMITS,
 				handler: digital.addFile,
 			}),
 			defineRoute({
@@ -297,7 +283,7 @@ export const createCheckout = (product, service) => {
 				auth: 'ticket',
 				feature: 'digital_goods',
 				permission: 'catalog.edit',
-				rateLimit: SERVER,
+				rateLimit: SERVER_LIMITS,
 				handler: digital.addFile,
 			}),
 		],

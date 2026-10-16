@@ -9,6 +9,7 @@
  */
 import { actorOf, problem } from '@ss/app-kit';
 import { zonedParts } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { KEEP_MS, createOutbox } from '../adapters/outbox.js';
 import { unitOf } from '../core/money.js';
@@ -17,28 +18,51 @@ import { createPaymentMethods } from './payment-methods.js';
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
+/** @typedef {import('../core/model.js').OrderFlow} OrderFlow */
 
 /** The header a signed-in shopper's Accounts sign-in comes in (the kit's CORS allows it). */
 const SIGN_IN_HEADER = 'ss-sign-in';
 
+/** One rate limit: `limit` calls in `windowSeconds`, for the whole website or for each visitor. @typedef {{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }} RateLimit */
+
+/** @param {RateLimit[]} rows @returns {RateLimit[]} */
+const limits = (rows) => /** @type {RateLimit[]} */ (/** @type {unknown} */ (Object.freeze(rows)));
+
 /** Rate limits of the merchant's server and admin routes (code constants protecting our hosting). */
-export const SERVER_LIMITS = Object.freeze([{ limit: 600, windowSeconds: 60, per: /** @type {const} */ ('website') }]);
+export const SERVER_LIMITS = limits([{ limit: 600, windowSeconds: 60, per: 'website' }]);
 /**
  * Rate limits of the SEO reads the merchant's server makes while rendering pages (titles, structured data, sitemaps,
  * landing and glossary pages, policies, feeds): the window of visitor calls from the merchant's server (K3), so a
  * crawl does not run out of it (SG-31).
  */
-export const SEO_LIMITS = Object.freeze([{ limit: 3000, windowSeconds: 60, per: /** @type {const} */ ('website') }]);
+export const SEO_LIMITS = limits([{ limit: 3000, windowSeconds: 60, per: 'website' }]);
 /** Rate limits of visitor routes. */
-export const VISITOR_LIMITS = Object.freeze([
-	{ limit: 600, windowSeconds: 60, per: /** @type {const} */ ('website') },
-	{ limit: 60, windowSeconds: 60, per: /** @type {const} */ ('visitor') },
+export const VISITOR_LIMITS = limits([
+	{ limit: 600, windowSeconds: 60, per: 'website' },
+	{ limit: 60, windowSeconds: 60, per: 'visitor' },
 ]);
 /** Rate limits of visitor routes that write (checkout, reviews, claims, alerts). */
-export const VISITOR_WRITE_LIMITS = Object.freeze([
-	{ limit: 120, windowSeconds: 60, per: /** @type {const} */ ('website') },
-	{ limit: 10, windowSeconds: 60, per: /** @type {const} */ ('visitor') },
+export const VISITOR_WRITE_LIMITS = limits([
+	{ limit: 120, windowSeconds: 60, per: 'website' },
+	{ limit: 10, windowSeconds: 60, per: 'visitor' },
 ]);
+
+/**
+ * A 422 `validation_failed` naming the field.
+ * @param {string} field @param {string} message @param {string} [code]
+ */
+export const invalid = (field, message, code = 'invalid') =>
+	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code }] });
+
+/**
+ * The request body as an object ({} when missing).
+ * @param {any} ctx
+ * @returns {Record<string, any>}
+ */
+export const bodyOf = (ctx) => (isObject(ctx.body) ? ctx.body : {});
+
+/** How long a signed upload link lasts (seconds). */
+export const UPLOAD_SECONDS = 900;
 
 /** The server token as an actor, when a call names no member of the staff (PLAN 0.8.10 K2). */
 const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
@@ -103,6 +127,7 @@ const claimsOf = (token) => {
  * @property {() => ReturnType<Product['business']>} business business.json (defaults: name = the domain, time zone UTC)
  * @property {() => Promise<Record<string, string>>} texts the website's widget texts
  * @property {(name: string) => Promise<any[]>} list a list setting of the product database (`adapters/lists.js`)
+ * @property {() => Promise<OrderFlow>} flow the website's order flow (the `order_flow` list)
  * @property {() => ReturnType<Product['format']>} format the Format and business time zone, with `money` and `date` for
  *   text the server makes (PLAN 0.8.10 K7, K8)
  * @property {string} currency the shop's currency (`catalog` setting)
@@ -271,11 +296,12 @@ export const createService = (product) => {
 				}
 				return found;
 			},
+			flow: async () => /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow'))),
 			format: () => {
 				formatted ??= product.format(websiteId);
 				return formatted;
 			},
-			currency: typeof catalog.currency === 'string' && catalog.currency ? catalog.currency : 'USD',
+			currency: catalog.currency,
 		};
 		scheduleUse(s);
 		return s;
@@ -426,11 +452,14 @@ export const createService = (product) => {
 		);
 
 	/**
-	 * A 422 `validation_failed` naming the field.
-	 * @param {string} field @param {string} message @param {string} [code]
+	 * The merchant's storage, or 503 `storage_not_connected`.
+	 * @param {Site} s
 	 */
-	const invalid = (field, message, code = 'invalid') =>
-		problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code }] });
+	const storage = async (s) => {
+		const connected = await product.connections.storage(s.websiteId);
+		if (!connected) throw problem('storage_not_connected', 'Connect your storage first (Connections).');
+		return connected;
+	};
 
 	// ---------------------------------------------------------------------------------------------- notifications
 
@@ -734,6 +763,7 @@ export const createService = (product) => {
 		actor,
 		log,
 		invalid,
+		storage,
 		notify,
 		sendRequired,
 		payments,

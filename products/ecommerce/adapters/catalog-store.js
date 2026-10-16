@@ -94,8 +94,8 @@ export const INDEXES = [
 	{ collection: COLLECTIONS.serials, keys: { websiteId: 1, productId: 1, variantId: 1, status: 1 }, name: 'by_variant' },
 ];
 
-/** Without the database's own fields. */
-export const NO_ID = Object.freeze({ projection: { _id: 0, websiteId: 0, merchantId: 0 } });
+/** Without the ids that tie a record to its website and merchant (and the database's own). */
+export const NO_KEYS = Object.freeze({ projection: { _id: 0, websiteId: 0, merchantId: 0 } });
 
 /** @param {unknown} error */
 export const isDuplicate = (error) => typeof error === 'object' && error !== null && /** @type {any} */ (error).code === 11000;
@@ -111,7 +111,7 @@ const allOf = async (data, collection) =>
 	/** @type {T[]} */ (
 		await data
 			.collection(collection)
-			.find({ websiteId: data.websiteId }, NO_ID)
+			.find({ websiteId: data.websiteId }, NO_KEYS)
 			.sort({ sort: 1, name: 1, id: 1 })
 			.limit(5000)
 			.toArray()
@@ -224,7 +224,7 @@ export const unitRulesOf = async (data, productIds, { types, has }) => {
 			.toArray(),
 		/** @type {Promise<AttributeRecord[]>} */ (
 			/** @type {unknown} */ (
-				data.collection(COLLECTIONS.attributes).find({ websiteId, on: 'unit', active: true }, NO_ID).toArray()
+				data.collection(COLLECTIONS.attributes).find({ websiteId, on: 'unit', active: true }, NO_KEYS).toArray()
 			)
 		),
 	]);
@@ -282,7 +282,7 @@ export const fieldsOn = async (data, on) =>
 		/** @type {unknown} */ (
 			await data
 				.collection(COLLECTIONS.attributes)
-				.find({ websiteId: data.websiteId, on }, NO_ID)
+				.find({ websiteId: data.websiteId, on }, NO_KEYS)
 				.sort({ sort: 1, name: 1, id: 1 })
 				.toArray()
 		)
@@ -304,7 +304,7 @@ export const documentFieldsOf = async (data, orders) => {
 	const [list, units, customers, products] = await Promise.all([
 		data
 			.collection(COLLECTIONS.attributes)
-			.find({ websiteId: data.websiteId, on: { $in: ['unit', 'order', 'customer', 'product', 'variant'] } }, NO_ID)
+			.find({ websiteId: data.websiteId, on: { $in: ['unit', 'order', 'customer', 'product', 'variant'] } }, NO_KEYS)
 			.sort({ sort: 1, name: 1, id: 1 })
 			.toArray(),
 		unitsOfOrders(data, withUnits),
@@ -469,7 +469,7 @@ const findByRef = async (data, collection, ref, prefix, session) =>
 			.collection(collection)
 			.findOne(
 				{ websiteId: data.websiteId, ...(ref.startsWith(`${prefix}_`) ? { id: ref } : { slug: ref }) },
-				{ ...NO_ID, session },
+				{ ...NO_KEYS, session },
 			)
 	);
 
@@ -494,7 +494,7 @@ export const findBySlugHistory = async (data, collection, ref, prefix) => {
 	const found = await findByRef(data, collection, key, prefix);
 	if (found) return { record: /** @type {T} */ (found), moved: false };
 	if (key.startsWith(`${prefix}_`)) return null;
-	const old = await data.collection(collection).findOne({ websiteId: data.websiteId, previousSlugs: key }, NO_ID);
+	const old = await data.collection(collection).findOne({ websiteId: data.websiteId, previousSlugs: key }, NO_KEYS);
 	return old ? { record: /** @type {T} */ (old), moved: true } : null;
 };
 
@@ -574,7 +574,7 @@ export const rewriteProduct = (data, id, change, { now }) =>
 	data.transaction(async (session) => {
 		const products = data.collection(COLLECTIONS.products);
 		const before = /** @type {ProductRecord | null} */ (
-			await products.findOne({ websiteId: data.websiteId, id }, { ...NO_ID, session })
+			await products.findOne({ websiteId: data.websiteId, id }, { ...NO_KEYS, session })
 		);
 		if (!before) return { found: false };
 		const outcome = await change(before, session);
@@ -587,7 +587,7 @@ export const rewriteProduct = (data, id, change, { now }) =>
 		await products.updateOne({ websiteId: data.websiteId, id }, { $set: set }, { session });
 		await refreshProducts(data, [id], session);
 		const product = /** @type {ProductRecord} */ (
-			await products.findOne({ websiteId: data.websiteId, id }, { ...NO_ID, session })
+			await products.findOne({ websiteId: data.websiteId, id }, { ...NO_KEYS, session })
 		);
 		return { found: true, before, product, result: outcome.result, changed: true };
 	});
@@ -601,7 +601,7 @@ export const productsByIds = async (data, ids) => {
 	const found = /** @type {ProductRecord[]} */ (
 		await data
 			.collection(COLLECTIONS.products)
-			.find({ websiteId: data.websiteId, id: { $in: ids } }, NO_ID)
+			.find({ websiteId: data.websiteId, id: { $in: ids } }, NO_KEYS)
 			.toArray()
 	);
 	const byId = new Map(found.map((product) => [product.id, product]));

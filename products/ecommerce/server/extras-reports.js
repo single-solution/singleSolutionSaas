@@ -47,8 +47,6 @@ import { hiddenFor } from './catalog-visibility.js';
 import { csvFile } from './catalog-tools.js';
 import { SERVER_LIMITS } from './service.js';
 
-/** Rate limits (mutable copies of the shared constants, as route definitions take them). */
-const SERVER = [...SERVER_LIMITS];
 /** At most this many categories and brands are read for shop health. */
 const MAX_TAXONOMY = 5000;
 /** At most this many products (or variants) a sales report regroups by their tags, item types or fields (E12). */
@@ -234,9 +232,7 @@ export const createReports = (product, service) => {
 				const names = new Map((await service.methods.methodsOf(s)).map((method) => [method.key, method.name]));
 				nameOf = (key) => names.get(key) ?? key;
 			} else if (by === 'status') {
-				const flow = /** @type {import('../core/model.js').OrderFlow} */ (
-					/** @type {unknown} */ (await s.list('order_flow'))
-				);
+				const flow = await s.flow();
 				nameOf = (key) => statusLabel(flow, key);
 			} else if (field) nameOf = (key, row) => (key === '' ? '' : valueLabel(field, row._id));
 			list = rows.map((row) => {
@@ -364,7 +360,7 @@ export const createReports = (product, service) => {
 		const series = ctx.query.series === undefined || ctx.query.series === '' ? 'day' : ctx.query.series;
 		if (!isSeries(series)) throw service.invalid('series', 'The series is day, week or month.');
 		const { s, data, range, timeZone } = await begin(ctx);
-		const flow = /** @type {import('../core/model.js').OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
+		const flow = await s.flow();
 		const parsed = parseStatuses(ctx.query.statuses, new Set(flow.statuses.map((status) => status.key)));
 		if (!parsed.ok) throw service.invalid(parsed.field, parsed.message);
 		const rows = await data
@@ -610,7 +606,7 @@ export const createReports = (product, service) => {
 			path: '/v1/reports/health',
 			auth: 'server',
 			feature: 'reports',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: health,
 		}),
 		defineRoute({
@@ -619,7 +615,7 @@ export const createReports = (product, service) => {
 			auth: 'ticket',
 			feature: 'reports',
 			permission: 'reports.read',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: health,
 		}),
 		defineRoute({
@@ -627,7 +623,7 @@ export const createReports = (product, service) => {
 			path: '/v1/reports/groupings',
 			auth: 'server',
 			feature: 'reports',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: groupings,
 		}),
 		defineRoute({
@@ -636,7 +632,7 @@ export const createReports = (product, service) => {
 			auth: 'ticket',
 			feature: 'reports',
 			permission: 'reports.read',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: groupings,
 		}),
 		defineRoute({
@@ -644,7 +640,7 @@ export const createReports = (product, service) => {
 			path: '/v1/reports/sales',
 			auth: 'server',
 			feature: 'reports',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: report('sales', sales),
 		}),
 		defineRoute({
@@ -652,7 +648,7 @@ export const createReports = (product, service) => {
 			path: '/v1/reports/stock-age',
 			auth: 'server',
 			feature: 'reports',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: report('stock-age', stockAge),
 		}),
 		defineRoute({
@@ -660,7 +656,7 @@ export const createReports = (product, service) => {
 			path: '/v1/reports/returns',
 			auth: 'server',
 			feature: 'reports',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: report('returns', returnRate),
 		}),
 		defineRoute({
@@ -668,7 +664,7 @@ export const createReports = (product, service) => {
 			path: '/v1/reports/margin',
 			auth: 'server',
 			feature: 'reports',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: report('margin', margin),
 		}),
 		defineRoute({
@@ -676,7 +672,7 @@ export const createReports = (product, service) => {
 			path: '/v1/reports/summary',
 			auth: 'server',
 			feature: 'reports',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: report('summary', summary),
 		}),
 		defineRoute({
@@ -684,7 +680,7 @@ export const createReports = (product, service) => {
 			path: '/v1/reports/sell-through',
 			auth: 'server',
 			feature: 'reports',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: report('sell-through', sellThrough),
 		}),
 		defineRoute({
@@ -692,7 +688,7 @@ export const createReports = (product, service) => {
 			path: '/v1/reports/oldest-stock',
 			auth: 'server',
 			feature: 'reports',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: report('oldest-stock', oldestStock),
 		}),
 		defineRoute({
@@ -701,7 +697,7 @@ export const createReports = (product, service) => {
 			auth: 'ticket',
 			feature: 'reports',
 			permission: 'reports.read',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: report('sales', sales),
 		}),
 		defineRoute({
@@ -710,7 +706,7 @@ export const createReports = (product, service) => {
 			auth: 'ticket',
 			feature: 'reports',
 			permission: 'reports.read',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: report('stock-age', stockAge),
 		}),
 		defineRoute({
@@ -719,7 +715,7 @@ export const createReports = (product, service) => {
 			auth: 'ticket',
 			feature: 'reports',
 			permission: 'reports.read',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: report('returns', returnRate),
 		}),
 		defineRoute({
@@ -728,7 +724,7 @@ export const createReports = (product, service) => {
 			auth: 'ticket',
 			feature: 'reports',
 			permission: 'reports.read',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: report('margin', margin),
 		}),
 		defineRoute({
@@ -737,7 +733,7 @@ export const createReports = (product, service) => {
 			auth: 'ticket',
 			feature: 'reports',
 			permission: 'reports.read',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: report('summary', summary),
 		}),
 		defineRoute({
@@ -746,7 +742,7 @@ export const createReports = (product, service) => {
 			auth: 'ticket',
 			feature: 'reports',
 			permission: 'reports.read',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: report('sell-through', sellThrough),
 		}),
 		defineRoute({
@@ -755,7 +751,7 @@ export const createReports = (product, service) => {
 			auth: 'ticket',
 			feature: 'reports',
 			permission: 'reports.read',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: report('oldest-stock', oldestStock),
 		}),
 	];

@@ -13,7 +13,7 @@ import { createCards } from './extras-cards.js';
 import { createReports } from './extras-reports.js';
 import { createReturns } from './extras-returns.js';
 import { createReviews } from './extras-reviews.js';
-import { MAX_WISHLIST, createShopperLists } from './extras-shopper.js';
+import { createShopperLists } from './extras-shopper.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -59,11 +59,10 @@ export const createExtras = (product, service) => {
 				settings.returns = { maxPhotos: Number(maxPhotos), photoMaxMb: Number(photoMaxMb) };
 			}
 			if (s.has('reviews')) {
-				const { moderation, per, pageSize } = await s.values('reviews');
+				const { per, pageSize } = await s.values('reviews');
 				/** @type {import('../core/reviews.js').ReviewQuestion[]} */
 				const questions = await s.list('review_questions');
 				settings.reviews = {
-					moderation: moderation === 'auto' ? 'auto' : 'manual',
 					// reviews of order lines are written from the order page (E34)
 					per: per === 'order_line' ? 'order_line' : 'product',
 					pageSize: Math.min(20, Math.max(5, Number(pageSize) || 10)),
@@ -71,7 +70,6 @@ export const createExtras = (product, service) => {
 					questions: questions.map(({ key, label, type, choices, required }) => ({ key, label, type, choices, required })),
 				};
 			}
-			if (s.has('wishlist')) settings.wishlist = { max: MAX_WISHLIST };
 			if (s.has('alerts')) {
 				// a guest gives a phone; a price-drop alert may name its price (EN-1)
 				const { guests, targetPrice } = await s.values('alerts');

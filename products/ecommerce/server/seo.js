@@ -87,14 +87,6 @@ import {
 /** @typedef {import('../core/model.js').VariantRecord} VariantRecord */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 
-/**
- * The rate limits of these routes: the merchant's server reads them while rendering pages, so its own higher window
- * (SG-31). @type {Array<{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }>}
- */
-const SERVER_RATE = [...SEO_LIMITS];
-/** @type {Array<{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }>} */
-const VISITOR_RATE = [...VISITOR_LIMITS];
-
 /** At most this many images per product in structured data and sitemaps. */
 const MAX_IMAGES = 10;
 /**
@@ -1258,8 +1250,7 @@ export const createSeo = (product, service) => {
 		const key = typeof ctx.query.key === 'string' ? ctx.query.key : '';
 		if (!key || key.length > MAX_KEY || !mediaSignatureOk(await product.secrets.get(s.websiteId), key, ctx.query.signature))
 			throw problem('not_found', 'There is no such file.');
-		const storage = await product.connections.storage(s.websiteId);
-		if (!storage) throw problem('storage_not_connected', 'Connect your storage first (Connections).');
+		const storage = await service.storage(s);
 		const signed = storage.presignGet({ key, expiresIn: MEDIA_LINK_SECONDS });
 		return { url: signed.url, expiresAt: signed.expiresAt };
 	};
@@ -1302,7 +1293,7 @@ export const createSeo = (product, service) => {
 				path: '/v1/seo/site',
 				auth: 'server',
 				feature: 'catalog',
-				rateLimit: SERVER_RATE,
+				rateLimit: SEO_LIMITS,
 				handler: conditional(siteSeo, service.now),
 			}),
 			defineRoute({
@@ -1310,7 +1301,7 @@ export const createSeo = (product, service) => {
 				path: '/v1/seo/products/:ref',
 				auth: 'server',
 				feature: 'catalog',
-				rateLimit: SERVER_RATE,
+				rateLimit: SEO_LIMITS,
 				handler: conditional(productSeo, service.now),
 			}),
 			defineRoute({
@@ -1318,7 +1309,7 @@ export const createSeo = (product, service) => {
 				path: '/v1/seo/categories/:ref',
 				auth: 'server',
 				feature: 'catalog',
-				rateLimit: SERVER_RATE,
+				rateLimit: SEO_LIMITS,
 				handler: conditional(categorySeo, service.now),
 			}),
 			defineRoute({
@@ -1326,7 +1317,7 @@ export const createSeo = (product, service) => {
 				path: '/v1/seo/sitemap.xml',
 				auth: 'server',
 				feature: 'catalog',
-				rateLimit: SERVER_RATE,
+				rateLimit: SEO_LIMITS,
 				handler: sitemap,
 			}),
 			defineRoute({
@@ -1334,7 +1325,7 @@ export const createSeo = (product, service) => {
 				path: '/v1/seo/sitemaps/:file',
 				auth: 'server',
 				feature: 'catalog',
-				rateLimit: SERVER_RATE,
+				rateLimit: SEO_LIMITS,
 				handler: sitemapFile,
 			}),
 			defineRoute({
@@ -1342,7 +1333,7 @@ export const createSeo = (product, service) => {
 				path: '/v1/media',
 				auth: 'server',
 				feature: 'catalog',
-				rateLimit: SERVER_RATE,
+				rateLimit: SEO_LIMITS,
 				handler: mediaFile,
 			}),
 			defineRoute({
@@ -1350,7 +1341,7 @@ export const createSeo = (product, service) => {
 				path: '/v1/feeds/products.xml',
 				auth: 'server',
 				feature: 'feeds',
-				rateLimit: SERVER_RATE,
+				rateLimit: SEO_LIMITS,
 				handler: googleFeed,
 			}),
 			defineRoute({
@@ -1358,7 +1349,7 @@ export const createSeo = (product, service) => {
 				path: '/v1/feeds/products.csv',
 				auth: 'server',
 				feature: 'feeds',
-				rateLimit: SERVER_RATE,
+				rateLimit: SEO_LIMITS,
 				handler: metaFeed,
 			}),
 			defineRoute({
@@ -1366,7 +1357,7 @@ export const createSeo = (product, service) => {
 				path: '/v1/llms.txt',
 				auth: 'server',
 				feature: 'llms_txt',
-				rateLimit: SERVER_RATE,
+				rateLimit: SEO_LIMITS,
 				handler: llmsTxt,
 			}),
 			defineRoute({
@@ -1374,7 +1365,7 @@ export const createSeo = (product, service) => {
 				path: '/v1/llms-full.txt',
 				auth: 'server',
 				feature: 'llms_txt',
-				rateLimit: SERVER_RATE,
+				rateLimit: SEO_LIMITS,
 				handler: llmsFull,
 			}),
 			defineRoute({
@@ -1382,7 +1373,7 @@ export const createSeo = (product, service) => {
 				path: '/v1/shop/policies',
 				auth: 'browser',
 				feature: 'checkout',
-				rateLimit: VISITOR_RATE,
+				rateLimit: VISITOR_LIMITS,
 				handler: policies,
 			}),
 			defineRoute({
@@ -1390,7 +1381,7 @@ export const createSeo = (product, service) => {
 				path: '/v1/policies',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: SERVER_RATE,
+				rateLimit: SEO_LIMITS,
 				handler: policies,
 			}),
 			...landings.routes,

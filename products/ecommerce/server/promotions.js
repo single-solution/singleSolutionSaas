@@ -36,11 +36,6 @@ import { createMedia } from './catalog-media.js';
 import { createOfferRoutes } from './promotions-offers.js';
 import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
 
-/** Rate limits of the merchant's server and admin routes. */
-const SERVER_RATE = [...SERVER_LIMITS];
-/** Rate limits of visitor routes. @type {Array<{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }>} */
-const VISITOR_RATE = [...VISITOR_LIMITS];
-
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('./service.js').Site} Site */
@@ -181,7 +176,7 @@ export const createPromotions = (product, service) => {
 				path: '/v1/loyalty/accounts/:userId',
 				auth: 'server',
 				feature: 'loyalty',
-				rateLimit: SERVER_RATE,
+				rateLimit: SERVER_LIMITS,
 				handler: readAccount,
 			}),
 			defineRoute({
@@ -190,7 +185,7 @@ export const createPromotions = (product, service) => {
 				auth: 'ticket',
 				feature: 'loyalty',
 				permission: 'loyalty.manage',
-				rateLimit: SERVER_RATE,
+				rateLimit: SERVER_LIMITS,
 				handler: readAccount,
 			}),
 			defineRoute({
@@ -199,7 +194,7 @@ export const createPromotions = (product, service) => {
 				auth: 'server',
 				feature: 'loyalty',
 				idempotent: true,
-				rateLimit: SERVER_RATE,
+				rateLimit: SERVER_LIMITS,
 				handler: adjustAccount,
 			}),
 			defineRoute({
@@ -209,7 +204,7 @@ export const createPromotions = (product, service) => {
 				feature: 'loyalty',
 				permission: 'loyalty.manage',
 				idempotent: true,
-				rateLimit: SERVER_RATE,
+				rateLimit: SERVER_LIMITS,
 				handler: adjustAccount,
 			}),
 
@@ -219,7 +214,7 @@ export const createPromotions = (product, service) => {
 				path: '/v1/shop/deals',
 				auth: 'browser',
 				feature: 'deals',
-				rateLimit: VISITOR_RATE,
+				rateLimit: VISITOR_LIMITS,
 				handler: async (ctx) => {
 					const limit = checkWhole(
 						ctx.query.limit === undefined || ctx.query.limit === '' ? undefined : Number(ctx.query.limit),
@@ -238,7 +233,7 @@ export const createPromotions = (product, service) => {
 				path: '/v1/shop/deals/:ref',
 				auth: 'browser',
 				feature: 'deals',
-				rateLimit: VISITOR_RATE,
+				rateLimit: VISITOR_LIMITS,
 				handler: async (ctx) => {
 					const ref = String(ctx.params.ref);
 					const s = await service.site(ctx);
@@ -252,7 +247,7 @@ export const createPromotions = (product, service) => {
 				path: '/v1/shop/products/:id/quote',
 				auth: 'browser',
 				feature: 'deals',
-				rateLimit: VISITOR_RATE,
+				rateLimit: VISITOR_LIMITS,
 				handler: async (ctx) => {
 					const s = await service.site(ctx);
 					const data = await s.data();
@@ -286,7 +281,7 @@ export const createPromotions = (product, service) => {
 				path: '/v1/shop/loyalty',
 				auth: 'browser',
 				feature: 'loyalty',
-				rateLimit: VISITOR_RATE,
+				rateLimit: VISITOR_LIMITS,
 				handler: async (ctx) => {
 					const limit = checkWhole(
 						ctx.query.limit === undefined || ctx.query.limit === '' ? undefined : Number(ctx.query.limit),
@@ -369,12 +364,6 @@ export const createPromotions = (product, service) => {
 		deleteUser: async (s, user) => {
 			if (!user.id) return { deleted: 0, anonymised: 0 };
 			return { deleted: await deletePerson(await s.data(), user.id), anonymised: 0 };
-		},
-
-		widgetSettings: async (s) => {
-			if (!s.has('loyalty')) return {};
-			const { pointValue, minRedeem, maxPercent } = loyaltyRules(await s.values('loyalty'));
-			return { loyalty: { pointValue, minRedeem, maxPercent } };
 		},
 	};
 };

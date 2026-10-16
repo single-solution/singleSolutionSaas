@@ -23,7 +23,7 @@ import { escapeRegex } from './lookup.js';
 /** The form of a new website: one running counter. */
 export const DEFAULT_NUMBER_PATTERN = '{prefix}{number}';
 /** The tokens a pattern may hold. */
-export const NUMBER_TOKENS = Object.freeze(['prefix', 'year', 'month', 'number', 'suffix']);
+const NUMBER_TOKENS = Object.freeze(['prefix', 'year', 'month', 'number', 'suffix']);
 /** Digits of the sequence by default, and their range. */
 const NUMBER_DIGITS = Object.freeze({ default: 6, min: 1, max: 10 });
 /** The longest sequence a number may carry. */

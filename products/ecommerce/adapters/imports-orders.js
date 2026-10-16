@@ -389,7 +389,7 @@ export const orderImports = (deps) => {
 		importRules({
 			flow: await deps.list(ctx.websiteId, 'order_flow'),
 			checkout: await deps.settings(ctx.websiteId, 'checkout'),
-			catalog: await deps.settings(ctx.websiteId, 'catalog'),
+			catalog: /** @type {any} */ (await deps.settings(ctx.websiteId, 'catalog')),
 			country: (await ctx.business()).country,
 			now: ctx.now(),
 			fields: { order: await fieldsOn(ctx.data, 'order'), customer: await fieldsOn(ctx.data, 'customer') },

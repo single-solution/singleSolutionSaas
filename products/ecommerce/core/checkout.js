@@ -707,15 +707,6 @@ export const feeBaseOf = ({ lines, totals }, feeBase = 'order_total') =>
 		: totals.total - totals.fee;
 
 /**
- * What the items cost after promotions (delivery's free-over and points are measured on it).
- * @param {ResolvedLine[]} lines @param {PromotionsResult | null} promotions
- * @param {number | null} [kept] the offer discount an edited order keeps (`checkout.editPricing: keep_placed`)
- * @param {number} [unit]
- */
-export const merchandiseOf = (lines, promotions, kept = null, unit = 1) =>
-	afterOffers(lines, promotions, kept, unit).reduce((a, b) => a + b, 0);
-
-/**
  * What each line comes to after promotions (the role prices are taken off it, E31).
  * @param {ResolvedLine[]} lines @param {PromotionsResult | null} promotions
  * @param {number | null} [kept] the offer discount an edited order keeps (`checkout.editPricing: keep_placed`)

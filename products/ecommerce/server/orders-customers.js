@@ -331,7 +331,7 @@ export const createCustomers = (service) => {
 		const { store, record, recent, details, userId } = await find(s, ref);
 		const shown = record ?? { userId, ...details };
 		const spent = (await store.orders.spent([shown])).get(spentKey(shown)) ?? { total: 0, count: 0 };
-		const flow = /** @type {import('../core/model.js').OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
+		const flow = await s.flow();
 		const { money } = await s.format();
 		const values = record?.fields ?? {};
 		return {

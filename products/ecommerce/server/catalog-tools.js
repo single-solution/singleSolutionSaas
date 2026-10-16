@@ -11,7 +11,7 @@ import { createId } from '@ss/contracts';
 import { csvRecords, parseCsv, toCsv } from '@ss/contracts/csv';
 import { defineRoute, problem } from '@ss/app-kit';
 import {
-	NO_ID,
+	NO_KEYS,
 	attributesOf,
 	brandsOf,
 	categoriesOf,
@@ -52,8 +52,9 @@ import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { orderFilters, orderQuery } from '../core/orders.js';
 import { phoneSearchOf } from '../core/guests.js';
 import { createFulfilmentStore } from '../adapters/fulfilment-store.js';
-import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
+import { refuse } from './catalog-common.js';
 import { phoneRulesOf } from './guests.js';
+import { SERVER_LIMITS, bodyOf } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -134,7 +135,7 @@ export const createCatalogTools = (product, service, common) => {
 		const products = /** @type {ProductRecord[]} */ (
 			await data
 				.collection(COLLECTIONS.products)
-				.find({ websiteId: data.websiteId }, NO_ID)
+				.find({ websiteId: data.websiteId }, NO_KEYS)
 				.sort({ createdAt: 1, id: 1 })
 				.limit(MAX_EXPORT_PRODUCTS)
 				.toArray()
@@ -179,7 +180,7 @@ export const createCatalogTools = (product, service, common) => {
 		const orders = data.collection(COLLECTIONS.orders);
 		if ((await orders.countDocuments(filter, { limit: MAX_EXPORT_ORDERS + 1 })) > MAX_EXPORT_ORDERS)
 			throw refuse([{ path: '/from', message: `More than ${MAX_EXPORT_ORDERS} orders: choose shorter dates.` }]);
-		const found = /** @type {OrderRecord[]} */ (await orders.find(filter, NO_ID).sort({ placedAt: 1, id: 1 }).toArray());
+		const found = /** @type {OrderRecord[]} */ (await orders.find(filter, NO_KEYS).sort({ placedAt: 1, id: 1 }).toArray());
 		const fields = await columnsOn(data, ['order']);
 		await service.log(ctx, 'csv.orders_exported', 'orders', { label: 'orders.csv', detail: `${found.length} orders` });
 		const delimiter = await delimiterOf(s);
@@ -197,7 +198,7 @@ export const createCatalogTools = (product, service, common) => {
 		const customers = /** @type {import('../core/model.js').CustomerRecord[]} */ (
 			await data
 				.collection(COLLECTIONS.customers)
-				.find({ websiteId: data.websiteId }, NO_ID)
+				.find({ websiteId: data.websiteId }, NO_KEYS)
 				.sort({ name: 1, userId: 1 })
 				.limit(MAX_EXPORT_CUSTOMERS)
 				.toArray()
@@ -838,7 +839,7 @@ export const createCatalogTools = (product, service, common) => {
 		if (!request.ok) throw refuse([{ path: request.path, message: request.message }]);
 		const { s, data } = await common.open(ctx);
 		const item = /** @type {ProductRecord | null} */ (
-			await data.collection(COLLECTIONS.products).findOne({ websiteId: data.websiteId, id: String(ctx.params.id) }, NO_ID)
+			await data.collection(COLLECTIONS.products).findOne({ websiteId: data.websiteId, id: String(ctx.params.id) }, NO_KEYS)
 		);
 		if (!item) throw problem('not_found', 'There is no such product.');
 		const connection = await product.connections.value(s.websiteId, 'ai');
@@ -887,7 +888,7 @@ export const createCatalogTools = (product, service, common) => {
 			path: '/v1/csv/products',
 			auth: 'server',
 			feature: 'csv',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: exportProducts,
 		}),
 		defineRoute({
@@ -896,7 +897,7 @@ export const createCatalogTools = (product, service, common) => {
 			auth: 'server',
 			feature: 'csv',
 			maxBodyBytes: IMPORT_BYTES,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: importProducts,
 		}),
 		defineRoute({
@@ -904,7 +905,7 @@ export const createCatalogTools = (product, service, common) => {
 			path: '/v1/csv/orders',
 			auth: 'server',
 			feature: 'csv',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: exportOrders,
 		}),
 		defineRoute({
@@ -912,7 +913,7 @@ export const createCatalogTools = (product, service, common) => {
 			path: '/v1/csv/customers',
 			auth: 'server',
 			feature: 'csv',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: exportCustomers,
 		}),
 		defineRoute({
@@ -920,7 +921,7 @@ export const createCatalogTools = (product, service, common) => {
 			path: '/v1/admin/csv/products',
 			auth: 'ticket',
 			permission: 'csv.run',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: exportProducts,
 		}),
 		defineRoute({
@@ -929,7 +930,7 @@ export const createCatalogTools = (product, service, common) => {
 			auth: 'ticket',
 			permission: 'csv.run',
 			maxBodyBytes: IMPORT_BYTES,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: importProducts,
 		}),
 		defineRoute({
@@ -937,7 +938,7 @@ export const createCatalogTools = (product, service, common) => {
 			path: '/v1/admin/csv/orders',
 			auth: 'ticket',
 			permission: 'csv.run',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: exportOrders,
 		}),
 		defineRoute({
@@ -945,7 +946,7 @@ export const createCatalogTools = (product, service, common) => {
 			path: '/v1/admin/csv/customers',
 			auth: 'ticket',
 			permission: 'csv.run',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: exportCustomers,
 		}),
 
@@ -955,7 +956,7 @@ export const createCatalogTools = (product, service, common) => {
 			path: '/v1/products/bulk',
 			auth: 'server',
 			feature: 'bulk_actions',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: bulk,
 		}),
 		defineRoute({
@@ -963,7 +964,7 @@ export const createCatalogTools = (product, service, common) => {
 			path: '/v1/admin/products/bulk',
 			auth: 'ticket',
 			permission: 'bulk.run',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: bulk,
 		}),
 
@@ -973,7 +974,7 @@ export const createCatalogTools = (product, service, common) => {
 			path: '/v1/products/:id/ai-copy',
 			auth: 'server',
 			feature: 'ai_copy',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: aiCopy,
 		}),
 		defineRoute({
@@ -982,7 +983,7 @@ export const createCatalogTools = (product, service, common) => {
 			auth: 'ticket',
 			feature: 'ai_copy',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: aiCopy,
 		}),
 	];

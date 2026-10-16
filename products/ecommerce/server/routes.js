@@ -81,9 +81,7 @@ export const createRoutes = (product) => {
 			// for the admin
 			// widgets' pickers
 			if (s.has('checkout')) {
-				const flow = /** @type {import('../core/model.js').OrderFlow} */ (
-					/** @type {unknown} */ (await s.list('order_flow'))
-				);
+				const flow = await s.flow();
 				const couriers = await s.list('couriers');
 				const methods = /** @type {import('../core/payment-methods.js').PaymentMethodRecord[]} */ (
 					await s.list('payment_methods')
@@ -104,9 +102,7 @@ export const createRoutes = (product) => {
 				const grades = [...gradesByKey(await s.list('grades')).values()].map((/** @type {any} */ grade) => ({
 					key: grade.key,
 					label: grade.label,
-					color: grade.color,
 					active: grade.active,
-					categoryIds: grade.categoryIds,
 					typeKeys: grade.typeKeys,
 				}));
 				settings.catalog = { .../** @type {object} */ (settings.catalog ?? {}), grades };

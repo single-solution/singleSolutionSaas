@@ -319,6 +319,7 @@ describe('reviews per order line', () => {
 		expect(adminCounts.json.groups).toMatchObject({ pending: 1 });
 
 		const config = await visit('GET', '/v1/widget/config');
+		expect(Object.keys(config.json.settings.reviews).sort()).toEqual(['pageSize', 'per', 'questions']);
 		expect(config.json.settings.reviews).toMatchObject({ per: 'product', pageSize: 10 });
 	});
 });

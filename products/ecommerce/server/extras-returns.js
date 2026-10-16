@@ -30,7 +30,7 @@ import { checkCouponInput, drawCode } from '../core/coupons.js';
 import { labelIn } from '../core/named-lists.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { afterFilter, keyOf, sortOf } from '../core/extras-pages.js';
-import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX, NO_ID } from '../core/model.js';
 import {
 	CLAIM_ACTIONS,
 	CLAIM_ROLES,
@@ -62,12 +62,7 @@ import { measureView, piecesOf, quantityText } from '../core/measure.js';
 import { byActor, earnedLeft, pointsOwner, refundSplit, refundable, warningsOf } from '../core/orders.js';
 import { createMedia } from './catalog-media.js';
 import { createMoves } from './orders-moves.js';
-import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
-
-/** Rate limits (mutable copies of the shared constants, as route definitions take them). */
-const SERVER = [...SERVER_LIMITS];
-const VISITOR = [...VISITOR_LIMITS];
-const VISITOR_WRITE = [...VISITOR_WRITE_LIMITS];
+import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS, bodyOf } from './service.js';
 
 /** Tries of taking a claim's points back while the order or its loyalty account changes meanwhile. */
 const POINTS_TRIES = 5;
@@ -100,7 +95,6 @@ const NEWEST = [
 	{ field: 'createdAt', direction: -1, date: true },
 	{ field: 'id', direction: -1 },
 ];
-const NO_ID = { projection: { _id: 0 } };
 
 /** Why a line cannot be claimed, for the shopper. */
 const NOT_RETURNABLE = Object.freeze({
@@ -109,9 +103,6 @@ const NOT_RETURNABLE = Object.freeze({
 	quantity: 'More units than can still be claimed.',
 	step: 'This item is sold in a unit of its own: claim it in the steps it was sold in.',
 });
-
-/** @param {any} ctx */
-const bodyOf = (ctx) => (typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {});
 
 /** @param {Date | null | undefined} at */
 const iso = (at) => (at ? new Date(at).toISOString() : null);
@@ -163,16 +154,6 @@ export const createReturns = (product, service) => {
 	const listsOf = async (s) => {
 		const [kinds, statuses] = await Promise.all([s.list('claim_kinds'), s.list('claim_statuses')]);
 		return { kinds: Array.isArray(kinds) ? kinds : [], statuses: Array.isArray(statuses) ? statuses : [] };
-	};
-
-	/**
-	 * @param {Site} s
-	 * @returns {Promise<NonNullable<Awaited<ReturnType<Product['connections']['storage']>>>>}
-	 */
-	const storageOf = async (s) => {
-		const storage = await product.connections.storage(s.websiteId);
-		if (!storage) throw problem('storage_not_connected', 'Storage not connected: connect it in the product dashboard.');
-		return storage;
 	};
 
 	/**
@@ -393,7 +374,7 @@ export const createReturns = (product, service) => {
 		if (Number(settings.maxPhotos) < 1) throw service.invalid('type', 'Photos are not taken with claims.');
 		const checked = checkPhotoInput(bodyOf(ctx), { photoMaxMb: Number(settings.photoMaxMb) });
 		if (!checked.ok) throw service.invalid(checked.field, checked.message);
-		const storage = await storageOf(s);
+		const storage = await service.storage(s);
 		const signed = storage.presignPut({
 			key: `${photoFolder(shopper.id)}${createId('pho')}.${checked.extension}`,
 			contentType: checked.type,
@@ -435,7 +416,7 @@ export const createReturns = (product, service) => {
 		/** @type {ReturnRecord['photos']} */
 		const photos = [];
 		if (input.photos.length > 0) {
-			const storage = await storageOf(s);
+			const storage = await service.storage(s);
 			for (const key of input.photos) {
 				const head = isPhotoKey(key, shopper.id) ? await storage.headObject({ key }) : null;
 				if (!head?.exists) throw service.invalid('photos', 'A photo was not uploaded.');
@@ -1137,7 +1118,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/shop/orders/:id/returnable',
 			auth: 'browser',
 			feature: 'returns',
-			rateLimit: VISITOR,
+			rateLimit: VISITOR_LIMITS,
 			handler: returnable,
 		}),
 		defineRoute({
@@ -1145,7 +1126,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/shop/returns/photos',
 			auth: 'browser',
 			feature: 'returns',
-			rateLimit: VISITOR_WRITE,
+			rateLimit: VISITOR_WRITE_LIMITS,
 			handler: uploadPhoto,
 		}),
 		defineRoute({
@@ -1154,7 +1135,7 @@ export const createReturns = (product, service) => {
 			auth: 'browser',
 			feature: 'returns',
 			idempotent: true,
-			rateLimit: VISITOR_WRITE,
+			rateLimit: VISITOR_WRITE_LIMITS,
 			handler: createClaim,
 		}),
 		defineRoute({
@@ -1162,7 +1143,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/shop/returns',
 			auth: 'browser',
 			feature: 'returns',
-			rateLimit: VISITOR,
+			rateLimit: VISITOR_LIMITS,
 			handler: myClaims,
 		}),
 
@@ -1172,7 +1153,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/returns',
 			auth: 'server',
 			feature: 'returns',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: listClaims,
 		}),
 		defineRoute({
@@ -1180,7 +1161,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/returns/count',
 			auth: 'server',
 			feature: 'returns',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: claimCounts.count,
 		}),
 		defineRoute({
@@ -1188,7 +1169,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/returns/counts',
 			auth: 'server',
 			feature: 'returns',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: claimCounts.counts,
 		}),
 		defineRoute({
@@ -1196,7 +1177,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/returns/lists',
 			auth: 'server',
 			feature: 'returns',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: claimLists,
 		}),
 		defineRoute({
@@ -1204,7 +1185,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/returns/:id',
 			auth: 'server',
 			feature: 'returns',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: readClaim,
 		}),
 		defineRoute({
@@ -1212,7 +1193,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/returns/:id/approve',
 			auth: 'server',
 			feature: 'returns',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: move('approve'),
 		}),
 		defineRoute({
@@ -1220,7 +1201,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/returns/:id/reject',
 			auth: 'server',
 			feature: 'returns',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: move('reject'),
 		}),
 		defineRoute({
@@ -1228,7 +1209,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/returns/:id/receive',
 			auth: 'server',
 			feature: 'returns',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: move('receive'),
 		}),
 		defineRoute({
@@ -1237,7 +1218,7 @@ export const createReturns = (product, service) => {
 			auth: 'server',
 			feature: 'returns',
 			idempotent: true,
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: refund,
 		}),
 		defineRoute({
@@ -1245,7 +1226,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/returns/:id/restock',
 			auth: 'server',
 			feature: 'returns',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: restock,
 		}),
 		defineRoute({
@@ -1253,7 +1234,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/returns/:id/close',
 			auth: 'server',
 			feature: 'returns',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: move('close'),
 		}),
 		defineRoute({
@@ -1261,7 +1242,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/returns/:id/replace',
 			auth: 'server',
 			feature: 'returns',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: move('replace'),
 		}),
 		defineRoute({
@@ -1269,7 +1250,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/returns/:id/repair',
 			auth: 'server',
 			feature: 'returns',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: move('repair'),
 		}),
 		defineRoute({
@@ -1278,7 +1259,7 @@ export const createReturns = (product, service) => {
 			auth: 'server',
 			feature: 'returns',
 			idempotent: true,
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: credit,
 		}),
 		defineRoute({
@@ -1286,7 +1267,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/returns/:id/status',
 			auth: 'server',
 			feature: 'returns',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: restatus,
 		}),
 		defineRoute({
@@ -1294,7 +1275,7 @@ export const createReturns = (product, service) => {
 			path: '/v1/returns/:id/notes',
 			auth: 'server',
 			feature: 'returns',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: addNote,
 		}),
 
@@ -1305,7 +1286,7 @@ export const createReturns = (product, service) => {
 			auth: 'ticket',
 			feature: 'returns',
 			permission: 'returns.manage',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: listClaims,
 		}),
 		defineRoute({
@@ -1314,7 +1295,7 @@ export const createReturns = (product, service) => {
 			auth: 'ticket',
 			feature: 'returns',
 			permission: 'returns.manage',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: claimCounts.count,
 		}),
 		defineRoute({
@@ -1323,7 +1304,7 @@ export const createReturns = (product, service) => {
 			auth: 'ticket',
 			feature: 'returns',
 			permission: 'returns.manage',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: claimCounts.counts,
 		}),
 		defineRoute({
@@ -1332,7 +1313,7 @@ export const createReturns = (product, service) => {
 			auth: 'ticket',
 			feature: 'returns',
 			permission: 'returns.manage',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: claimLists,
 		}),
 		defineRoute({
@@ -1341,7 +1322,7 @@ export const createReturns = (product, service) => {
 			auth: 'ticket',
 			feature: 'returns',
 			permission: 'returns.manage',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: readClaim,
 		}),
 		defineRoute({
@@ -1350,7 +1331,7 @@ export const createReturns = (product, service) => {
 			auth: 'ticket',
 			feature: 'returns',
 			permission: 'returns.manage',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: move('approve'),
 		}),
 		defineRoute({
@@ -1359,7 +1340,7 @@ export const createReturns = (product, service) => {
 			auth: 'ticket',
 			feature: 'returns',
 			permission: 'returns.manage',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: move('reject'),
 		}),
 		defineRoute({
@@ -1368,7 +1349,7 @@ export const createReturns = (product, service) => {
 			auth: 'ticket',
 			feature: 'returns',
 			permission: 'returns.manage',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: move('receive'),
 		}),
 		defineRoute({
@@ -1378,7 +1359,7 @@ export const createReturns = (product, service) => {
 			feature: 'returns',
 			permission: 'returns.manage',
 			idempotent: true,
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: refund,
 		}),
 		defineRoute({
@@ -1387,7 +1368,7 @@ export const createReturns = (product, service) => {
 			auth: 'ticket',
 			feature: 'returns',
 			permission: 'returns.manage',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: restock,
 		}),
 		defineRoute({
@@ -1396,7 +1377,7 @@ export const createReturns = (product, service) => {
 			auth: 'ticket',
 			feature: 'returns',
 			permission: 'returns.manage',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: move('close'),
 		}),
 		defineRoute({
@@ -1405,7 +1386,7 @@ export const createReturns = (product, service) => {
 			auth: 'ticket',
 			feature: 'returns',
 			permission: 'returns.manage',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: move('replace'),
 		}),
 		defineRoute({
@@ -1414,7 +1395,7 @@ export const createReturns = (product, service) => {
 			auth: 'ticket',
 			feature: 'returns',
 			permission: 'returns.manage',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: move('repair'),
 		}),
 		defineRoute({
@@ -1424,7 +1405,7 @@ export const createReturns = (product, service) => {
 			feature: 'returns',
 			permission: 'returns.manage',
 			idempotent: true,
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: credit,
 		}),
 		defineRoute({
@@ -1433,7 +1414,7 @@ export const createReturns = (product, service) => {
 			auth: 'ticket',
 			feature: 'returns',
 			permission: 'returns.manage',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: restatus,
 		}),
 		defineRoute({
@@ -1442,7 +1423,7 @@ export const createReturns = (product, service) => {
 			auth: 'ticket',
 			feature: 'returns',
 			permission: 'returns.manage',
-			rateLimit: SERVER,
+			rateLimit: SERVER_LIMITS,
 			handler: addNote,
 		}),
 	];

@@ -15,7 +15,7 @@ import { createId } from '@ss/contracts';
 import { created, defineRoute, ok, paginate, problem } from '@ss/app-kit';
 import { isObject } from '@ss/contracts/util';
 import {
-	NO_ID,
+	NO_KEYS,
 	attributesOf,
 	brandsOf,
 	categoriesOf,
@@ -44,8 +44,9 @@ import { sameMeaning } from '../core/measure.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { brandScore, categoryScore } from '../core/seo-score.js';
 import { unitStatusOf } from '../core/unit-states.js';
-import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
+import { refuse } from './catalog-common.js';
 import { pageTitlesOf } from './seo-reads.js';
+import { SERVER_LIMITS, bodyOf } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -74,7 +75,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 	 * @returns {Promise<T>}
 	 */
 	const one = async (data, collection, id, what) => {
-		const found = await data.collection(collection).findOne({ websiteId: data.websiteId, id }, NO_ID);
+		const found = await data.collection(collection).findOne({ websiteId: data.websiteId, id }, NO_KEYS);
 		if (!found) throw problem('not_found', `There is no such ${what}.`);
 		return /** @type {T} */ (found);
 	};
@@ -665,7 +666,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			}
 			const rows = await data
 				.collection(COLLECTIONS.serials)
-				.find(filter, NO_ID)
+				.find(filter, NO_KEYS)
 				.sort({ serial: 1 })
 				.limit(page.fetchLimit)
 				.toArray();
@@ -786,7 +787,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/categories',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: categories.list,
 		}),
 		defineRoute({
@@ -795,7 +796,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			auth: 'server',
 			feature: 'catalog',
 			idempotent: true,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: categories.create,
 		}),
 		defineRoute({
@@ -803,7 +804,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/categories/:id',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: categories.read,
 		}),
 		defineRoute({
@@ -811,7 +812,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/categories/:id',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: categories.update,
 		}),
 		defineRoute({
@@ -819,7 +820,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/categories/:id',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: categories.remove,
 		}),
 		defineRoute({
@@ -827,7 +828,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/admin/categories',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: categories.list,
 		}),
 		defineRoute({
@@ -836,7 +837,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			idempotent: true,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: categories.create,
 		}),
 		defineRoute({
@@ -844,7 +845,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/admin/categories/:id',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: categories.read,
 		}),
 		defineRoute({
@@ -852,7 +853,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/admin/categories/:id',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: categories.update,
 		}),
 		defineRoute({
@@ -860,7 +861,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/admin/categories/:id',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: categories.remove,
 		}),
 
@@ -870,7 +871,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/brands',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: brands.list,
 		}),
 		defineRoute({
@@ -879,7 +880,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			auth: 'server',
 			feature: 'catalog',
 			idempotent: true,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: brands.create,
 		}),
 		defineRoute({
@@ -887,7 +888,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/brands/:id',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: brands.read,
 		}),
 		defineRoute({
@@ -895,7 +896,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/brands/:id',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: brands.update,
 		}),
 		defineRoute({
@@ -903,7 +904,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/brands/:id',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: brands.remove,
 		}),
 		defineRoute({
@@ -911,7 +912,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/admin/brands',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: brands.list,
 		}),
 		defineRoute({
@@ -920,7 +921,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			idempotent: true,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: brands.create,
 		}),
 		defineRoute({
@@ -928,7 +929,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/admin/brands/:id',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: brands.read,
 		}),
 		defineRoute({
@@ -936,7 +937,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/admin/brands/:id',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: brands.update,
 		}),
 		defineRoute({
@@ -944,7 +945,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/admin/brands/:id',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: brands.remove,
 		}),
 
@@ -954,7 +955,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/attributes',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: attributes.list,
 		}),
 		defineRoute({
@@ -963,7 +964,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			auth: 'server',
 			feature: 'catalog',
 			idempotent: true,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: attributes.create,
 		}),
 		defineRoute({
@@ -971,7 +972,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/attributes/:id',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: attributes.update,
 		}),
 		defineRoute({
@@ -979,7 +980,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/attributes/:id',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: attributes.remove,
 		}),
 		defineRoute({
@@ -987,7 +988,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/admin/attributes',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: attributes.list,
 		}),
 		defineRoute({
@@ -996,7 +997,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			idempotent: true,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: attributes.create,
 		}),
 		defineRoute({
@@ -1004,7 +1005,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/admin/attributes/:id',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: attributes.update,
 		}),
 		defineRoute({
@@ -1012,7 +1013,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/admin/attributes/:id',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: attributes.remove,
 		}),
 
@@ -1022,7 +1023,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/locations',
 			auth: 'server',
 			feature: 'multi_location',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: locations.list,
 		}),
 		defineRoute({
@@ -1031,7 +1032,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			auth: 'server',
 			feature: 'multi_location',
 			idempotent: true,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: locations.create,
 		}),
 		defineRoute({
@@ -1039,7 +1040,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/locations/:id',
 			auth: 'server',
 			feature: 'multi_location',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: locations.update,
 		}),
 		defineRoute({
@@ -1047,7 +1048,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/locations/:id',
 			auth: 'server',
 			feature: 'multi_location',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: locations.remove,
 		}),
 		defineRoute({
@@ -1056,7 +1057,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			auth: 'ticket',
 			feature: 'multi_location',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: locations.list,
 		}),
 		defineRoute({
@@ -1066,7 +1067,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			feature: 'multi_location',
 			permission: 'catalog.edit',
 			idempotent: true,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: locations.create,
 		}),
 		defineRoute({
@@ -1075,7 +1076,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			auth: 'ticket',
 			feature: 'multi_location',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: locations.update,
 		}),
 		defineRoute({
@@ -1084,7 +1085,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			auth: 'ticket',
 			feature: 'multi_location',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: locations.remove,
 		}),
 
@@ -1094,7 +1095,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/serials',
 			auth: 'server',
 			feature: 'grades_serials',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: serials.list,
 		}),
 		defineRoute({
@@ -1103,7 +1104,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			auth: 'server',
 			feature: 'grades_serials',
 			idempotent: true,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: serials.add,
 		}),
 		defineRoute({
@@ -1111,7 +1112,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/serials/:id',
 			auth: 'server',
 			feature: 'grades_serials',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: serials.update,
 		}),
 		defineRoute({
@@ -1119,7 +1120,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			path: '/v1/serials/:id',
 			auth: 'server',
 			feature: 'grades_serials',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: serials.remove,
 		}),
 		defineRoute({
@@ -1128,7 +1129,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			auth: 'ticket',
 			feature: 'grades_serials',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: serials.list,
 		}),
 		defineRoute({
@@ -1138,7 +1139,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			feature: 'grades_serials',
 			permission: 'catalog.edit',
 			idempotent: true,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: serials.add,
 		}),
 		defineRoute({
@@ -1147,7 +1148,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			auth: 'ticket',
 			feature: 'grades_serials',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: serials.update,
 		}),
 		defineRoute({
@@ -1156,7 +1157,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			auth: 'ticket',
 			feature: 'grades_serials',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: serials.remove,
 		}),
 	];

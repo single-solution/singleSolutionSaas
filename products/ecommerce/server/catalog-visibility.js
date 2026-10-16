@@ -5,7 +5,7 @@
  * where a retired product's address leads (E13, SEO audit G9).
  * @module
  */
-import { NO_ID } from '../adapters/catalog-store.js';
+import { NO_KEYS } from '../adapters/catalog-store.js';
 import { COLLECTIONS } from '../core/model.js';
 
 /** @typedef {import('./service.js').Site} Site */
@@ -108,14 +108,16 @@ export const retiredMove = async (s, data, item, links) => {
 	const seen = new Set([item.id]);
 	for (let next = item.replacedBy; next && !seen.has(next) && seen.size <= MAX_HOPS;) {
 		seen.add(next);
-		const found = /** @type {ProductRecord | null} */ (await products.findOne({ websiteId: data.websiteId, id: next }, NO_ID));
+		const found = /** @type {ProductRecord | null} */ (
+			await products.findOne({ websiteId: data.websiteId, id: next }, NO_KEYS)
+		);
 		if (found?.status === 'active' && visible(found, hidden))
 			return { moved: { kind: 'product', slug: found.slug, url: await links.productUrl(s, found) } };
 		next = found?.status === 'archived' ? found.replacedBy : null;
 	}
 	if (retiredUrl !== 'category') return null;
 	const category = /** @type {CategoryRecord | null} */ (
-		await data.collection(COLLECTIONS.categories).findOne({ websiteId: data.websiteId, id: item.categoryIds[0] ?? '' }, NO_ID)
+		await data.collection(COLLECTIONS.categories).findOne({ websiteId: data.websiteId, id: item.categoryIds[0] ?? '' }, NO_KEYS)
 	);
 	return category && !hidden.unlisted.has(category.id)
 		? { moved: { kind: 'category', slug: category.slug, url: await links.categoryUrl(s, category) } }

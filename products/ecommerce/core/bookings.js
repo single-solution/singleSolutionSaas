@@ -21,7 +21,7 @@ import { isObject } from '@ss/contracts/util';
 /** @typedef {Hours & { key: string, name: string }} BookingSchedule */
 
 /** At most this many schedules, weekly windows per schedule, dated exceptions per schedule and windows on one date. */
-export const SCHEDULE_LIMITS = Object.freeze({ schedules: 20, windows: 70, exceptions: 200, perDay: 6, name: 80 });
+const SCHEDULE_LIMITS = Object.freeze({ schedules: 20, windows: 70, exceptions: 200, perDay: 6, name: 80 });
 /** A slot list covers at most this many days. */
 export const MAX_SLOT_DAYS = 14;
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;

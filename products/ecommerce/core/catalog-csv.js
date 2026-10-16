@@ -189,7 +189,7 @@ const stockMilli = (text) => {
  * its own, else whole pieces; null when pieces are not whole.
  * @param {number} milli @param {boolean} measured
  */
-export const storedStock = (milli, measured) => (measured ? milli : milli % MILLI === 0 ? milli / MILLI : null);
+const storedStock = (milli, measured) => (measured ? milli : milli % MILLI === 0 ? milli / MILLI : null);
 
 /**
  * The products file's header (with a stock column per location when multi-location stock is on, a column per product

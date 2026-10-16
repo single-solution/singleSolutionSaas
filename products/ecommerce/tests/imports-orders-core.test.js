@@ -84,7 +84,13 @@ describe('import rules', () => {
 			phoneRules: { defaultCallingCode: '+1' },
 		});
 		expect(
-			importRules({ flow: DEFAULT_FLOW, checkout: { numberDigits: 12 }, catalog: {}, country: null, now: NOW }),
+			importRules({
+				flow: DEFAULT_FLOW,
+				checkout: { numberDigits: 12 },
+				catalog: { currency: 'USD' },
+				country: null,
+				now: NOW,
+			}),
 		).toMatchObject({
 			numbers: { pattern: '{prefix}{number}', prefix: '', suffix: '', digits: 10 },
 			currency: 'USD',
@@ -149,7 +155,7 @@ describe('customers', () => {
 	it('key guests as checkout.guestIdentity says: an email guest needs no phone (dynamic model §5)', () => {
 		/** @param {string} guestIdentity */
 		const rulesFor = (guestIdentity) =>
-			importRules({ flow: DEFAULT_FLOW, checkout: { guestIdentity }, catalog: {}, country: 'US', now: NOW });
+			importRules({ flow: DEFAULT_FLOW, checkout: { guestIdentity }, catalog: { currency: 'USD' }, country: 'US', now: NOW });
 		const byEmail = { id: idOf('cus', 5), guest: true, name: 'Ella', email: 'Ella@Example.com' };
 		expect(valueOf(checkImportedCustomer(byEmail, rulesFor('email')))).toMatchObject({
 			guestKey: 'e:ella@example.com',

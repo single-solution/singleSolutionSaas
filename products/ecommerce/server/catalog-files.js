@@ -11,11 +11,12 @@
 import { createId } from '@ss/contracts';
 import { defineRoute, problem } from '@ss/app-kit';
 import { isObject } from '@ss/contracts/util';
-import { NO_ID } from '../adapters/catalog-store.js';
+import { NO_KEYS } from '../adapters/catalog-store.js';
 import { LIMITS, cleanText, heldKeys } from '../core/catalog.js';
 import { VIDEO_TYPES, mediaExtras } from '../core/catalog-content.js';
 import { COLLECTIONS } from '../core/model.js';
-import { IMAGE_TYPES, bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
+import { IMAGE_TYPES, refuse } from './catalog-common.js';
+import { SERVER_LIMITS, UPLOAD_SECONDS, bodyOf } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -23,9 +24,6 @@ import { IMAGE_TYPES, bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 /** @typedef {import('./catalog-common.js').CatalogCommon} CatalogCommon */
 /** @typedef {import('../core/model.js').MediaRecord} MediaRecord */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
-
-/** An upload link lasts this long (seconds). */
-const UPLOAD_SECONDS = 900;
 
 /** What an image can belong to: the collection, the storage folder and the activity name. */
 const OWNERS = Object.freeze({
@@ -50,7 +48,7 @@ export const createCatalogFiles = (product, service, common) => {
 	 * @param {WebsiteData} data @param {Owner} owner @param {string} id
 	 */
 	const recordOf = async (data, owner, id) => {
-		const found = await data.collection(OWNERS[owner].collection).findOne({ websiteId: data.websiteId, id }, NO_ID);
+		const found = await data.collection(OWNERS[owner].collection).findOne({ websiteId: data.websiteId, id }, NO_KEYS);
 		if (!found) throw problem('not_found', `There is no such ${owner}.`);
 		return /** @type {Record<string, any>} */ (found);
 	};
@@ -61,7 +59,7 @@ export const createCatalogFiles = (product, service, common) => {
 	 * @returns {Promise<MediaRecord>}
 	 */
 	const uploaded = async (s, owner, id, body) => {
-		const storage = await common.storageOf(s);
+		const storage = await service.storage(s);
 		const key = typeof body.key === 'string' ? body.key : '';
 		if (!key.startsWith(`ecommerce/${OWNERS[owner].folder}/${id}/`) || key.includes('..'))
 			throw refuse([{ path: '/key', message: 'Give the key of the upload made for this record.' }]);
@@ -125,7 +123,7 @@ export const createCatalogFiles = (product, service, common) => {
 		if (!Number.isSafeInteger(body.size) || body.size < 1 || body.size > limit)
 			throw refuse([{ path: '/size', message: `${video ? 'A video' : 'An image'} has at most ${limit} bytes.` }]);
 		const record = await recordOf(data, owner, String(body.id));
-		const storage = await common.storageOf(s);
+		const storage = await service.storage(s);
 		// a descriptive name (SEO audit G14): the record's slug, a product photo's number, and a short id that keeps names
 		// apart; keys already stored are never renamed
 		const number = owner === 'product' && !video ? `-${(record.media?.length ?? 0) + 1}` : '';
@@ -254,7 +252,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/catalog/uploads',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: upload,
 		}),
 		defineRoute({
@@ -262,7 +260,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/products/:id/media',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: attach,
 		}),
 		defineRoute({
@@ -270,7 +268,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/products/:id/media',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: arrange,
 		}),
 		defineRoute({
@@ -278,7 +276,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/products/:id/media',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: detach,
 		}),
 		defineRoute({
@@ -286,7 +284,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/categories/:id/image',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: categoryImage.set,
 		}),
 		defineRoute({
@@ -294,7 +292,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/categories/:id/image',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: categoryImage.remove,
 		}),
 		defineRoute({
@@ -302,7 +300,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/brands/:id/logo',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: brandLogo.set,
 		}),
 		defineRoute({
@@ -310,7 +308,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/brands/:id/logo',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: brandLogo.remove,
 		}),
 
@@ -319,7 +317,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/admin/catalog/uploads',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: upload,
 		}),
 		defineRoute({
@@ -327,7 +325,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/admin/products/:id/media',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: attach,
 		}),
 		defineRoute({
@@ -335,7 +333,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/admin/products/:id/media',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: arrange,
 		}),
 		defineRoute({
@@ -343,7 +341,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/admin/products/:id/media',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: detach,
 		}),
 		defineRoute({
@@ -351,7 +349,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/admin/categories/:id/image',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: categoryImage.set,
 		}),
 		defineRoute({
@@ -359,7 +357,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/admin/categories/:id/image',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: categoryImage.remove,
 		}),
 		defineRoute({
@@ -367,7 +365,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/admin/brands/:id/logo',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: brandLogo.set,
 		}),
 		defineRoute({
@@ -375,7 +373,7 @@ export const createCatalogFiles = (product, service, common) => {
 			path: '/v1/admin/brands/:id/logo',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: brandLogo.remove,
 		}),
 	];

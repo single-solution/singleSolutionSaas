@@ -6,7 +6,7 @@
  */
 import { createId } from '@ss/contracts';
 import { phoneDigitsOf } from '../core/guests.js';
-import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX, NO_ID } from '../core/model.js';
 import { VIA_PAYMENTS } from '../core/payment-methods.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -66,8 +66,6 @@ export const INDEXES = [
 	{ collection: COLLECTIONS.licences, keys: { websiteId: 1, productId: 1, status: 1 }, name: 'by_status' },
 	{ collection: COLLECTIONS.licences, keys: { websiteId: 1, orderId: 1 }, name: 'by_order' },
 ];
-
-const NO_ID = Object.freeze({ projection: { _id: 0 } });
 
 /** Waiting orders handled per sweep, and waiting payments rechecked per use. */
 const SWEEP_BATCH = 20;
@@ -256,9 +254,6 @@ export const createOrdersStore = (data) => {
 		// -------------------------------------------------------------------------------------------------- orders
 		/** @param {string} id @returns {Promise<OrderRecord | null>} */
 		order: async (id) => /** @type {OrderRecord | null} */ (await orders.findOne({ websiteId, id }, NO_ID)),
-		/** @param {string} userId @param {string} id @returns {Promise<OrderRecord | null>} */
-		customerOrder: async (userId, id) =>
-			/** @type {OrderRecord | null} */ (await orders.findOne({ websiteId, id, 'customer.userId': userId }, NO_ID)),
 		/**
 		 * A customer's orders, newest first (keyset after `[placedAt ISO, id]`).
 		 * @param {string} userId @param {{ after: unknown, limit: number }} page

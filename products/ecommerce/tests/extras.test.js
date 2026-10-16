@@ -873,9 +873,10 @@ describe('data rights and widget settings', () => {
 		const config = await shop.visitor('GET', '/v1/widget/config');
 		expect(config.json.settings).toMatchObject({
 			returns: { maxPhotos: 5, photoMaxMb: 5 },
-			reviews: { moderation: 'auto' },
-			wishlist: { max: 200 },
 			compare: { max: 2 },
 		});
+		// nothing the widgets do not read: no review moderation, no wishlist size
+		expect(config.json.settings.reviews).not.toHaveProperty('moderation');
+		expect(config.json.settings).not.toHaveProperty('wishlist');
 	});
 });

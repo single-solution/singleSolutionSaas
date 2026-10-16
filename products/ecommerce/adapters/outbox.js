@@ -7,7 +7,7 @@
  * @module
  */
 import { createId } from '@ss/contracts';
-import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX, NO_ID } from '../core/model.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 
@@ -35,8 +35,6 @@ export const INDEXES = [
 	// a row of a website that was never used again goes a day after it was given up
 	{ collection: COLLECTIONS.outbox, keys: { expireAt: 1 }, name: 'expiry', expireAfterSeconds: 0 },
 ];
-
-const NO_ID = Object.freeze({ projection: { _id: 0 } });
 
 /**
  * @param {WebsiteData} data the website's guarded merchant database

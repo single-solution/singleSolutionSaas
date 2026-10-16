@@ -16,7 +16,7 @@
 import { createId } from '@ss/contracts';
 import { countHandlers, created, defineRoute, ok, paginate, problem } from '@ss/app-kit';
 import {
-	NO_ID,
+	NO_KEYS,
 	attributesOf,
 	brandsOf,
 	categoriesOf,
@@ -57,8 +57,9 @@ import { staffProductOf, staffRowOf } from '../core/catalog-views.js';
 import { sameMeaning } from '../core/measure.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { productScore } from '../core/seo-score.js';
-import { IMAGE_TYPES, bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
+import { IMAGE_TYPES, refuse } from './catalog-common.js';
 import { pageTitlesOf } from './seo-reads.js';
+import { SERVER_LIMITS, bodyOf } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -408,7 +409,7 @@ export const createCatalogProducts = (product, service, common) => {
 		const ids = ranked.slice(offset, offset + page.fetchLimit).map((row) => row.id);
 		const byId = new Map(
 			/** @type {ProductRecord[]} */ (
-				await products.find({ websiteId: data.websiteId, id: { $in: ids } }, NO_ID).toArray()
+				await products.find({ websiteId: data.websiteId, id: { $in: ids } }, NO_KEYS).toArray()
 			).map((item) => [item.id, item]),
 		);
 		const found = ids.flatMap((id) => byId.get(id) ?? []);
@@ -432,7 +433,7 @@ export const createCatalogProducts = (product, service, common) => {
 			const found = /** @type {ProductRecord[]} */ (
 				await data
 					.collection(COLLECTIONS.products)
-					.find({ websiteId: data.websiteId, $and: [inner, ...(after ? [after] : [])] }, NO_ID)
+					.find({ websiteId: data.websiteId, $and: [inner, ...(after ? [after] : [])] }, NO_KEYS)
 					.sort({ createdAt: -1, id: -1 })
 					.limit(page.fetchLimit)
 					.toArray()
@@ -757,7 +758,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/products/variants/generate',
 			auth: 'server',
 			feature: 'variants',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: generateMany,
 		}),
 		defineRoute({
@@ -765,7 +766,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/products/:id/variants/generate',
 			auth: 'server',
 			feature: 'variants',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: generate,
 		}),
 		defineRoute({
@@ -774,7 +775,7 @@ export const createCatalogProducts = (product, service, common) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			feature: 'variants',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: generateMany,
 		}),
 		defineRoute({
@@ -783,7 +784,7 @@ export const createCatalogProducts = (product, service, common) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			feature: 'variants',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: generate,
 		}),
 		defineRoute({
@@ -791,7 +792,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/products',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: list,
 		}),
 		defineRoute({
@@ -799,7 +800,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/products/count',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: counts.count,
 		}),
 		defineRoute({
@@ -807,7 +808,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/products/counts',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: counts.counts,
 		}),
 		defineRoute({
@@ -816,7 +817,7 @@ export const createCatalogProducts = (product, service, common) => {
 			auth: 'server',
 			feature: 'catalog',
 			idempotent: true,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: create,
 		}),
 		defineRoute({
@@ -824,7 +825,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/products/:id',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: read,
 		}),
 		defineRoute({
@@ -832,7 +833,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/products/:id',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: update,
 		}),
 		defineRoute({
@@ -840,7 +841,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/products/:id',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: remove,
 		}),
 		defineRoute({
@@ -848,7 +849,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/products/:id/stock',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: stock,
 		}),
 
@@ -857,7 +858,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/admin/products',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: list,
 		}),
 		defineRoute({
@@ -865,7 +866,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/admin/products/count',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: counts.count,
 		}),
 		defineRoute({
@@ -873,7 +874,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/admin/products/counts',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: counts.counts,
 		}),
 		defineRoute({
@@ -882,7 +883,7 @@ export const createCatalogProducts = (product, service, common) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			idempotent: true,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: create,
 		}),
 		defineRoute({
@@ -890,7 +891,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/admin/products/:id',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: read,
 		}),
 		defineRoute({
@@ -898,7 +899,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/admin/products/:id',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: update,
 		}),
 		defineRoute({
@@ -906,7 +907,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/admin/products/:id',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: remove,
 		}),
 		defineRoute({
@@ -914,7 +915,7 @@ export const createCatalogProducts = (product, service, common) => {
 			path: '/v1/admin/products/:id/stock',
 			auth: 'ticket',
 			permission: 'catalog.edit',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: stock,
 		}),
 	];

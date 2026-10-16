@@ -374,7 +374,7 @@ const answer = (c, value) => (c.errors.length > 0 ? { ok: false, errors: c.error
 
 /**
  * The rules of one import call from what the website has (`prepare`).
- * @param {{ flow: unknown, checkout: Record<string, unknown>, catalog: Record<string, unknown>, country: unknown,
+ * @param {{ flow: unknown, checkout: Record<string, unknown>, catalog: { currency: string }, country: unknown,
  *   now: number, fields?: ImportRules['fields'], claims?: ImportRules['claims'],
  *   attachmentKinds?: ImportRules['attachmentKinds'] }} input `country`: business.json's;
  *   `fields`: the shop's order and customer fields (none: no field value is taken); `claims`: the claim kinds and
@@ -396,7 +396,7 @@ export const importRules = ({
 		now,
 		flow: /** @type {OrderFlow} */ (flow),
 		numbers: numberFormOf(checkout),
-		currency: typeof catalog.currency === 'string' && catalog.currency ? catalog.currency : 'USD',
+		currency: catalog.currency,
 		phoneRules: { defaultCallingCode, trunkPrefix },
 		guestIdentity: guestRules(checkout).identity,
 		fields,

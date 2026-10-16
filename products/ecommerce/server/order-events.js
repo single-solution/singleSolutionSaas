@@ -34,8 +34,6 @@ import { ALL_STAFF_PERMISSIONS, STAFF_ALERT_PHONE } from './staff-alerts.js';
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 
-const serverLimits = [...SERVER_LIMITS];
-
 /**
  * The small facts of an order an event carries (never addresses or contact details).
  * @param {OrderRecord} order
@@ -57,10 +55,6 @@ const orderFacts = (order) => ({
  */
 export const createOrderEvents = (product, service) => {
 	const messages = createOrderMessages(service);
-
-	/** @param {Site} s */
-	const flowOf = async (s) =>
-		/** @type {import('../core/model.js').OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
 
 	/**
 	 * Record an event while Events is on.
@@ -89,7 +83,7 @@ export const createOrderEvents = (product, service) => {
 			number: order.number,
 			name: order.customer.name.slice(0, 200),
 			total: money(order.totals.total, order.totals.currency),
-			status: statusLabel(await flowOf(s), order.status),
+			status: statusLabel(await s.flow(), order.status),
 			paymentMethod: (await messageWords(s)).payment(order.payment.method),
 			business: String((await s.business()).name ?? ''),
 			...(includePhone === true ? { [STAFF_ALERT_PHONE]: order.customer.phone } : {}),
@@ -110,13 +104,13 @@ export const createOrderEvents = (product, service) => {
 	};
 
 	service.on('order.placed', async (s, { order, statusLabel: label }) => {
-		await messages.placed(s, order, label ?? shopperLabelOf(await flowOf(s), order.status));
+		await messages.placed(s, order, label ?? shopperLabelOf(await s.flow(), order.status));
 		await publish(s, 'order.placed', orderFacts(order));
 		await alert(s, 'placed', order);
 	});
 
 	service.on('order.moved', async (s, { order, from, to, by, reason, note, shopperNote }) => {
-		const flow = await flowOf(s);
+		const flow = await s.flow();
 		const role = statusOf(flow, to)?.role;
 		// a cancel says why: staff, the shopper, or the end of its window (events keep the code; messages and alerts get
 		// words, K-10): the shopper reads the note for the shopper, else the website's text for it — the note staff typed
@@ -320,7 +314,7 @@ export const createOrderEvents = (product, service) => {
 				path: '/v1/events',
 				auth: 'server',
 				feature: 'events',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: (ctx) => product.events.list(ctx),
 			}),
 			defineRoute({
@@ -328,7 +322,7 @@ export const createOrderEvents = (product, service) => {
 				path: '/v1/events/count',
 				auth: 'server',
 				feature: 'events',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: (ctx) => product.events.count(ctx),
 			}),
 			defineRoute({
@@ -336,7 +330,7 @@ export const createOrderEvents = (product, service) => {
 				path: '/v1/events/counts',
 				auth: 'server',
 				feature: 'events',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: (ctx) => product.events.counts(ctx),
 			}),
 		],

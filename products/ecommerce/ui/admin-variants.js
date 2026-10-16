@@ -456,7 +456,9 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 		for (const entry of rows)
 			for (const option of 'options' in entry.grade ? entry.grade.options : []) {
 				const grade = grades.find((candidate) => candidate.key === option.value);
-				option.disabled = Boolean(grade?.typeKeys?.length) && !grade?.typeKeys?.includes(typeKey) && !option.selected;
+				// a grade of other types, or turned off, is not offered to a variant that does not have it
+				const offered = grade?.active !== false && (!grade?.typeKeys?.length || grade.typeKeys.includes(typeKey));
+				option.disabled = !offered && !option.selected;
 			}
 		const attributes = attributesOf();
 		const removable = many() && rows.length > 1;
@@ -665,4 +667,4 @@ export const stockAmount = (text, measure = null) => {
  * A stock amount as an input shows it: pieces, or units of a measured item.
  * @param {number} value @param {{ unit: string } | null} [measure]
  */
-export const stockInput = (value, measure = null) => (measure ? quantityText(value, measure) : String(value));
+const stockInput = (value, measure = null) => (measure ? quantityText(value, measure) : String(value));

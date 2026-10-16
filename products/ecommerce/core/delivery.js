@@ -43,9 +43,9 @@ import { isObject } from '@ss/contracts/util';
 /** @typedef {{ key: string, name: string, match: ZoneMatch, rates: Rate[] }} Zone */
 
 /** The kinds of rate. */
-export const RATE_KINDS = Object.freeze(/** @type {const} */ (['delivery', 'pickup']));
+const RATE_KINDS = Object.freeze(/** @type {const} */ (['delivery', 'pickup']));
 /** What a rate's condition measures. */
-export const RATE_CONDITIONS = Object.freeze(/** @type {const} */ (['none', 'weight', 'value']));
+const RATE_CONDITIONS = Object.freeze(/** @type {const} */ (['none', 'weight', 'value']));
 /** At most this many rates in a zone, and this many pickup locations named by one rate. */
 const MAX_RATES = 20;
 const MAX_LOCATIONS = 50;

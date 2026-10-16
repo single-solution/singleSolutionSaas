@@ -56,9 +56,6 @@ export const settingDuration = (amount, unit) => {
 	return isDuration(given) ? given : { amount: 0, unit: 'days' };
 };
 
-/** Whether a time is none (null or 0). @param {Duration | null | undefined} duration */
-export const isNone = (duration) => !duration || duration.amount <= 0;
-
 /**
  * When a time from `start` ends: days as whole days, months and years on the calendar (UTC), the day kept or the
  * month's last day when it has fewer.

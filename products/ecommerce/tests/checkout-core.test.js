@@ -4,15 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { checkBookingSchedules, defaultSchedules, scheduleOf, instantOf, slotAt, slotsBetween } from '../core/bookings.js';
-import {
-	checkAddress,
-	checkCart,
-	checkOrderExtras,
-	merchandiseOf,
-	priceLines,
-	promotionDiscounts,
-	resolveLines,
-} from '../core/checkout.js';
+import { checkAddress, checkCart, checkOrderExtras, priceLines, promotionDiscounts, resolveLines } from '../core/checkout.js';
 import { ADDRESS_LIMITS, checkAddressRegions, countryKey, placeKey, postcodeKey, regionsFor } from '../core/address.js';
 import { checkZones, defaultZones, homeRate, matchZone, rateFee, rateFits, zoneCities } from '../core/delivery.js';
 import { canDownload, checkLicenceKeys, downloadLimitOf, fileKey, fileNameOf, safeFileName } from '../core/digital.js';
@@ -420,7 +412,6 @@ describe('pricing', () => {
 	it('takes promotions off (never more than the line)', () => {
 		expect(promotionDiscounts(lines, promotions)).toEqual([2000, 0]);
 		expect(promotionDiscounts(lines, null)).toEqual([0, 0]);
-		expect(merchandiseOf(lines, promotions)).toBe(500);
 	});
 
 	it('spreads points, adds taxes on top and totals', () => {

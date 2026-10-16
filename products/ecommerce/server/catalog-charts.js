@@ -7,11 +7,12 @@
  */
 import { createId } from '@ss/contracts';
 import { created, defineRoute, problem } from '@ss/app-kit';
-import { NO_ID } from '../adapters/catalog-store.js';
+import { NO_KEYS } from '../adapters/catalog-store.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { withoutStamps } from '../core/catalog-taxonomy.js';
 import { checkSizeChart } from '../core/size-charts.js';
-import { refuse, STAFF_LIMITS } from './catalog-common.js';
+import { refuse } from './catalog-common.js';
+import { SERVER_LIMITS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -34,7 +35,7 @@ export const createCatalogCharts = (product, service, common) => {
 	 * @returns {Promise<SizeChartRecord>}
 	 */
 	const chartOf = async (data, id) => {
-		const found = await data.collection(COLLECTIONS.sizeCharts).findOne({ websiteId: data.websiteId, id }, NO_ID);
+		const found = await data.collection(COLLECTIONS.sizeCharts).findOne({ websiteId: data.websiteId, id }, NO_KEYS);
 		if (!found) throw problem('not_found', 'There is no such size chart.');
 		return /** @type {SizeChartRecord} */ (/** @type {unknown} */ (found));
 	};
@@ -59,7 +60,7 @@ export const createCatalogCharts = (product, service, common) => {
 		const charts = /** @type {SizeChartRecord[]} */ (
 			await data
 				.collection(COLLECTIONS.sizeCharts)
-				.find({ websiteId: data.websiteId }, NO_ID)
+				.find({ websiteId: data.websiteId }, NO_KEYS)
 				.sort({ name: 1, id: 1 })
 				.limit(MAX_CHARTS)
 				.toArray()
@@ -123,7 +124,7 @@ export const createCatalogCharts = (product, service, common) => {
 			path: '/v1/size-charts',
 			auth: 'server',
 			feature: 'size_charts',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: list,
 		}),
 		defineRoute({
@@ -132,7 +133,7 @@ export const createCatalogCharts = (product, service, common) => {
 			auth: 'server',
 			feature: 'size_charts',
 			idempotent: true,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: create,
 		}),
 		defineRoute({
@@ -140,7 +141,7 @@ export const createCatalogCharts = (product, service, common) => {
 			path: '/v1/size-charts/:id',
 			auth: 'server',
 			feature: 'size_charts',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: read,
 		}),
 		defineRoute({
@@ -148,7 +149,7 @@ export const createCatalogCharts = (product, service, common) => {
 			path: '/v1/size-charts/:id',
 			auth: 'server',
 			feature: 'size_charts',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: update,
 		}),
 		defineRoute({
@@ -156,7 +157,7 @@ export const createCatalogCharts = (product, service, common) => {
 			path: '/v1/size-charts/:id',
 			auth: 'server',
 			feature: 'size_charts',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: remove,
 		}),
 		defineRoute({
@@ -165,7 +166,7 @@ export const createCatalogCharts = (product, service, common) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			feature: 'size_charts',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: list,
 		}),
 		defineRoute({
@@ -175,7 +176,7 @@ export const createCatalogCharts = (product, service, common) => {
 			permission: 'catalog.edit',
 			feature: 'size_charts',
 			idempotent: true,
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: create,
 		}),
 		defineRoute({
@@ -184,7 +185,7 @@ export const createCatalogCharts = (product, service, common) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			feature: 'size_charts',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: read,
 		}),
 		defineRoute({
@@ -193,7 +194,7 @@ export const createCatalogCharts = (product, service, common) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			feature: 'size_charts',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: update,
 		}),
 		defineRoute({
@@ -202,7 +203,7 @@ export const createCatalogCharts = (product, service, common) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			feature: 'size_charts',
-			rateLimit: STAFF_LIMITS,
+			rateLimit: SERVER_LIMITS,
 			handler: remove,
 		}),
 	];

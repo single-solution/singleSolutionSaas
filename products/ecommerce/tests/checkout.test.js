@@ -752,14 +752,22 @@ describe('store pickup and the widget settings', () => {
 				{ key: 'pickup', name: 'Pay at pickup', kind: 'at_pickup' },
 			],
 			pickupLocations: [{ id: 'loc_shop', name: 'Main shop' }],
-			delivery: { zones: true, cities: ['Springfield'] },
-			pricesIncludeTax: true,
+			delivery: { cities: ['Springfield'] },
 			policies: [],
 			policyFormat: 'text',
-			bookings: true,
-			digital: true,
 			address: { required: ['name', 'phone', 'line1', 'city'] },
-			paymentWindowMinutes: 60,
 		});
+		// only what the widgets read (the features come with the config itself)
+		expect(Object.keys(config.json.settings.checkout).sort()).toEqual([
+			'address',
+			'delivery',
+			'guests',
+			'maxLines',
+			'paymentMethods',
+			'pickupLocations',
+			'policies',
+			'policyFormat',
+		]);
+		expect(Object.keys(config.json.settings.checkout.delivery)).toEqual(['cities']);
 	});
 });

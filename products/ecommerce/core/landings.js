@@ -35,7 +35,7 @@ export const GRADE_FACET = 'grade';
 const FACET_FIELD = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 /** The default address of a landing page. */
-export const DEFAULT_LANDING_URL = '{categoryUrl}?brand={brand}&{facet}={value}';
+const DEFAULT_LANDING_URL = '{categoryUrl}?brand={brand}&{facet}={value}';
 
 /** @typedef {Omit<LandingRecord, 'id'>} LandingFields */
 
@@ -44,7 +44,7 @@ export const DEFAULT_LANDING_URL = '{categoryUrl}?brand={brand}&{facet}={value}'
  * @param {unknown} input
  * @returns {LandingFacet | null | undefined} undefined when it is not one
  */
-export const readFacet = (input) => {
+const readFacet = (input) => {
 	if (input === null) return null;
 	if (!isObject(input) || typeof input.field !== 'string' || !FACET_FIELD.test(input.field)) return undefined;
 	const value =
@@ -329,7 +329,7 @@ export const stockOf = (rows) => {
  * The listing parameter of a facet: `grade`, or `attr.<slug>` for a field.
  * @param {LandingFacet | null} facet
  */
-export const facetParameter = (facet) => (facet ? (facet.field === GRADE_FACET ? GRADE_FACET : `attr.${facet.field}`) : '');
+const facetParameter = (facet) => (facet ? (facet.field === GRADE_FACET ? GRADE_FACET : `attr.${facet.field}`) : '');
 
 /**
  * A landing page's address on the merchant's website: the template's placeholders filled (`{facet}` the listing
@@ -360,7 +360,7 @@ export const landingLink = (template, { categoryUrl, category, brand, facet }, d
  * @param {LandingFacet | null} a
  * @param {LandingFacet | null} b
  */
-export const sameFacet = (a, b) => (a === null || b === null ? a === b : a.field === b.field && a.value === b.value);
+const sameFacet = (a, b) => (a === null || b === null ? a === b : a.field === b.field && a.value === b.value);
 
 /**
  * The landing page that matches a listing's filters exactly (a category, one brand and one facet value, each or none).

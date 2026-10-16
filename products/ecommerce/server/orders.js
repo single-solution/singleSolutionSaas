@@ -103,15 +103,6 @@ export const DOCUMENT_HEADERS = Object.freeze({
 const ORDER_ID = /^ord_[A-Za-z0-9_-]{1,64}$/;
 /** How long the staff link to a transfer proof works (seconds). */
 const PROOF_LINK_SECONDS = 300;
-const serverLimits = [...SERVER_LIMITS];
-const visitorLimits = [...VISITOR_LIMITS];
-
-/**
- * The website's order flow.
- * @param {Site} s
- * @returns {Promise<import('../core/model.js').OrderFlow>}
- */
-const flowOf = async (s) => /** @type {any} */ (await s.list('order_flow'));
 
 /**
  * @param {Product} product
@@ -189,7 +180,7 @@ export const createOrders = (product, service, { ordering }) => {
 	 */
 	const detailOf = async (s, order) => {
 		const [flow, customer, { money }] = await Promise.all([
-			flowOf(s),
+			s.flow(),
 			// the order's customer record (K-6)
 			order.customer.customerId ? (await storeOf(s)).customers.find(order.customer.customerId) : null,
 			s.format(),
@@ -253,7 +244,7 @@ export const createOrders = (product, service, { ordering }) => {
 	const orderCounts = countHandlers({
 		source: async (ctx) => {
 			const { s, filter } = await orderSource(ctx);
-			countedFlows.set(ctx, await flowOf(s));
+			countedFlows.set(ctx, await s.flow());
 			return { collection: (await s.data()).collection(COLLECTIONS.orders), filter: { websiteId: s.websiteId, ...filter } };
 		},
 		by: {
@@ -277,7 +268,7 @@ export const createOrders = (product, service, { ordering }) => {
 		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
 		const { s, filter } = await orderSource(ctx);
 		const [flow, rows, { money }] = await Promise.all([
-			flowOf(s),
+			s.flow(),
 			(await storeOf(s)).orders.list({ filter, after: page.after, limit: page.fetchLimit }),
 			s.format(),
 		]);
@@ -306,7 +297,7 @@ export const createOrders = (product, service, { ordering }) => {
 		if (!input.ok) throw service.invalid(input.field, input.message);
 		const s = await service.site(ctx);
 		const order = await orderOf(s, ctx);
-		const moved = await moves.move(s, ctx, order, input.value, await flowOf(s));
+		const moved = await moves.move(s, ctx, order, input.value, await s.flow());
 		return { ...(await detailOf(s, moved.order)), ...warningsOf(moved.warnings) };
 	};
 
@@ -505,7 +496,7 @@ export const createOrders = (product, service, { ordering }) => {
 		const from = typeof body.from === 'string' ? body.from : '';
 		const to = typeof body.to === 'string' ? body.to : '';
 		const s = await service.site(ctx);
-		const flow = await flowOf(s);
+		const flow = await s.flow();
 		const checked = checkRestatus(flow, from, to);
 		if (!checked.ok) throw service.invalid(checked.field, checked.message);
 		const actor = service.actor(ctx);
@@ -536,7 +527,7 @@ export const createOrders = (product, service, { ordering }) => {
 		const order = await orderOf(s, ctx);
 		const input = checkPayment(ctx.body, order, await methodKeys(s));
 		if (!input.ok) throw service.invalid(input.field, input.message);
-		const done = await moves.recordPayment(s, ctx, order, input.value, await flowOf(s));
+		const done = await moves.recordPayment(s, ctx, order, input.value, await s.flow());
 		return created({ order: await detailOf(s, done.order), ...warningsOf(done.warnings) });
 	};
 
@@ -689,7 +680,7 @@ export const createOrders = (product, service, { ordering }) => {
 		const input = checkBulkMove(ctx.body);
 		if (!input.ok) throw service.invalid(input.field, input.message);
 		const s = await service.site(ctx);
-		const flow = await flowOf(s);
+		const flow = await s.flow();
 		const found = new Map((await (await storeOf(s)).orders.many(input.value.ids)).map((order) => [order.id, order]));
 		/** @type {Array<{ id: string, ok: true, number: string, status: string } & ReturnType<typeof warningsOf> | { id: string, ok: false, code: string, detail: string }>} */
 		const results = [];
@@ -743,7 +734,7 @@ export const createOrders = (product, service, { ordering }) => {
 	const exportUser = async (s, user) => {
 		const store = await storeOf(s);
 		const [orders, records] = await Promise.all([store.orders.ofPerson(user), store.customers.ofPerson(user)]);
-		const flow = await flowOf(s);
+		const flow = await s.flow();
 		// what the shopper sees of their orders (GET /v1/shop/orders/:id) and of their record: never unit costs, staff
 		// notes or names, who opened them, or a block and its reason (SE-1)
 		return {
@@ -784,7 +775,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/orders',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: listOrders,
 			}),
 			defineRoute({
@@ -793,7 +784,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'orders.read',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: listOrders,
 			}),
 			defineRoute({
@@ -801,7 +792,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/orders/count',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: orderCounts.count,
 			}),
 			defineRoute({
@@ -809,7 +800,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/orders/counts',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: orderCounts.counts,
 			}),
 			defineRoute({
@@ -818,7 +809,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'orders.read',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: orderCounts.count,
 			}),
 			defineRoute({
@@ -827,7 +818,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'orders.read',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: orderCounts.counts,
 			}),
 			defineRoute({
@@ -835,7 +826,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/orders/:id',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: readOrder,
 			}),
 			defineRoute({
@@ -844,7 +835,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'orders.read',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: readOrder,
 			}),
 			defineRoute({
@@ -852,7 +843,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/orders/:id',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: editOrder,
 			}),
 			defineRoute({
@@ -861,7 +852,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'orders.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: editOrder,
 			}),
 			defineRoute({
@@ -870,7 +861,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'server',
 				feature: 'checkout',
 				idempotent: true,
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: moveOrder,
 			}),
 			defineRoute({
@@ -880,7 +871,7 @@ export const createOrders = (product, service, { ordering }) => {
 				feature: 'checkout',
 				permission: 'orders.manage',
 				idempotent: true,
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: moveOrder,
 			}),
 			defineRoute({
@@ -888,7 +879,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/orders/:id/seen',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: markSeen,
 			}),
 			defineRoute({
@@ -897,7 +888,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'orders.read',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: markSeen,
 			}),
 			defineRoute({
@@ -905,7 +896,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/orders/:id',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: deleteOrder,
 			}),
 			defineRoute({
@@ -914,7 +905,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'orders.delete',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: deleteOrder,
 			}),
 			defineRoute({
@@ -922,7 +913,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/data/delete-all',
 				auth: 'server',
 				feature: 'bulk_actions',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: deleteAll,
 			}),
 			defineRoute({
@@ -930,7 +921,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/orders/counter',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: setCounter,
 			}),
 			defineRoute({
@@ -939,7 +930,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'server',
 				feature: 'checkout',
 				idempotent: true,
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: restatus,
 			}),
 			defineRoute({
@@ -949,7 +940,7 @@ export const createOrders = (product, service, { ordering }) => {
 				feature: 'checkout',
 				permission: 'orders.manage',
 				idempotent: true,
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: restatus,
 			}),
 			defineRoute({
@@ -958,7 +949,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'server',
 				feature: 'checkout',
 				idempotent: true,
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: recordPayment,
 			}),
 			defineRoute({
@@ -968,7 +959,7 @@ export const createOrders = (product, service, { ordering }) => {
 				feature: 'checkout',
 				permission: 'orders.manage',
 				idempotent: true,
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: recordPayment,
 			}),
 			defineRoute({
@@ -977,7 +968,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'server',
 				feature: 'checkout',
 				idempotent: true,
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: refundOrder,
 			}),
 			defineRoute({
@@ -987,7 +978,7 @@ export const createOrders = (product, service, { ordering }) => {
 				feature: 'checkout',
 				permission: 'orders.refund',
 				idempotent: true,
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: refundOrder,
 			}),
 
@@ -997,7 +988,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/orders/:id/invoice',
 				auth: 'server',
 				feature: 'invoices',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: invoice,
 			}),
 			defineRoute({
@@ -1006,7 +997,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'invoices',
 				permission: 'orders.read',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: invoice,
 			}),
 			defineRoute({
@@ -1014,7 +1005,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/orders/:id/packing-slip',
 				auth: 'server',
 				feature: 'invoices',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: packingSlip,
 			}),
 			defineRoute({
@@ -1023,7 +1014,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'invoices',
 				permission: 'orders.read',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: packingSlip,
 			}),
 			defineRoute({
@@ -1031,7 +1022,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/shop/orders/:id/invoice',
 				auth: 'browser',
 				feature: 'invoices',
-				rateLimit: visitorLimits,
+				rateLimit: VISITOR_LIMITS,
 				handler: shopInvoice,
 			}),
 
@@ -1042,7 +1033,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'server',
 				feature: 'bulk_actions',
 				idempotent: true,
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: bulkMove,
 			}),
 			defineRoute({
@@ -1052,7 +1043,7 @@ export const createOrders = (product, service, { ordering }) => {
 				feature: 'bulk_actions',
 				permission: 'bulk.run',
 				idempotent: true,
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: bulkMove,
 			}),
 
@@ -1062,7 +1053,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/customers',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.list,
 			}),
 			defineRoute({
@@ -1071,7 +1062,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'customers.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.list,
 			}),
 			defineRoute({
@@ -1079,7 +1070,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/customers/count',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.count,
 			}),
 			defineRoute({
@@ -1087,7 +1078,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/customers/counts',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.counts,
 			}),
 			defineRoute({
@@ -1096,7 +1087,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'customers.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.count,
 			}),
 			defineRoute({
@@ -1105,7 +1096,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'customers.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.counts,
 			}),
 			defineRoute({
@@ -1113,7 +1104,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/customers/:userId',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.read,
 			}),
 			defineRoute({
@@ -1122,7 +1113,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'customers.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.read,
 			}),
 			defineRoute({
@@ -1130,7 +1121,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/customers/:userId',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.edit,
 			}),
 			defineRoute({
@@ -1139,7 +1130,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'customers.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.edit,
 			}),
 			defineRoute({
@@ -1147,7 +1138,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/customers',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.create,
 			}),
 			defineRoute({
@@ -1156,7 +1147,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'customers.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.create,
 			}),
 			defineRoute({
@@ -1164,7 +1155,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/customers/:userId/addresses',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.setAddresses,
 			}),
 			defineRoute({
@@ -1173,7 +1164,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'customers.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.setAddresses,
 			}),
 			defineRoute({
@@ -1181,7 +1172,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/customers/:userId',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.remove,
 			}),
 			defineRoute({
@@ -1190,7 +1181,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'customers.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.remove,
 			}),
 			defineRoute({
@@ -1198,7 +1189,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/customers/:userId/seen',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.seen,
 			}),
 			defineRoute({
@@ -1207,7 +1198,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'customers.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.seen,
 			}),
 			// saved segments and tags of customers and orders (E11)
@@ -1216,7 +1207,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/customers/segments',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.segments,
 			}),
 			defineRoute({
@@ -1225,7 +1216,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'customers.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customers.segments,
 			}),
 			defineRoute({
@@ -1233,7 +1224,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/customers/tags',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customerTags.list,
 			}),
 			defineRoute({
@@ -1242,7 +1233,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'customers.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customerTags.list,
 			}),
 			defineRoute({
@@ -1250,7 +1241,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/customers/tags/rename',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customerTags.rename,
 			}),
 			defineRoute({
@@ -1259,7 +1250,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'customers.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customerTags.rename,
 			}),
 			defineRoute({
@@ -1267,7 +1258,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/customers/tags/remove',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customerTags.remove,
 			}),
 			defineRoute({
@@ -1276,7 +1267,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'customers.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customerTags.remove,
 			}),
 			defineRoute({
@@ -1284,7 +1275,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/customers/tags/apply',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customerTags.apply,
 			}),
 			defineRoute({
@@ -1293,7 +1284,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'customers.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: customerTags.apply,
 			}),
 			defineRoute({
@@ -1301,7 +1292,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/orders/tags',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: orderTags.list,
 			}),
 			defineRoute({
@@ -1310,7 +1301,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'orders.read',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: orderTags.list,
 			}),
 			defineRoute({
@@ -1318,7 +1309,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/orders/tags/rename',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: orderTags.rename,
 			}),
 			defineRoute({
@@ -1327,7 +1318,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'orders.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: orderTags.rename,
 			}),
 			defineRoute({
@@ -1335,7 +1326,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/orders/tags/remove',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: orderTags.remove,
 			}),
 			defineRoute({
@@ -1344,7 +1335,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'orders.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: orderTags.remove,
 			}),
 			defineRoute({
@@ -1352,7 +1343,7 @@ export const createOrders = (product, service, { ordering }) => {
 				path: '/v1/orders/tags/apply',
 				auth: 'server',
 				feature: 'checkout',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: orderTags.apply,
 			}),
 			defineRoute({
@@ -1361,7 +1352,7 @@ export const createOrders = (product, service, { ordering }) => {
 				auth: 'ticket',
 				feature: 'checkout',
 				permission: 'orders.manage',
-				rateLimit: serverLimits,
+				rateLimit: SERVER_LIMITS,
 				handler: orderTags.apply,
 			}),
 		],

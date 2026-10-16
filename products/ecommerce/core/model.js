@@ -9,6 +9,16 @@
  * @module
  */
 
+/** A read without the database's own id: the projection of a document read. */
+export const NO_ID = Object.freeze({ projection: { _id: 0 } });
+
+/** Most products on one page of a listing (E8): the `limit` of a read and the `pageSize` setting stop here. */
+export const MAX_PAGE_SIZE = 60;
+/** Highest page number of a listing. */
+export const MAX_PAGE_NUMBER = 500;
+/** A listing's total is exact up to this many products (E8). */
+export const TOTAL_CAP = 10_000;
+
 /** Collection names (unprefixed). */
 export const COLLECTIONS = Object.freeze({
 	products: 'products',
@@ -31,7 +41,6 @@ export const COLLECTIONS = Object.freeze({
 	reviews: 'reviews',
 	wishlists: 'wishlists',
 	alerts: 'alerts',
-	staff: 'staff',
 	sizeCharts: 'size_charts',
 	landings: 'landings',
 	landingIndex: 'landing_index',
@@ -419,7 +428,7 @@ export const STATUS_ROLES = Object.freeze([
  * The single order record (PLAN 0.8.8). Placed in one transaction with its stock, offer uses and points.
  * @typedef {object} OrderRecord
  * @property {string} id `ord_…`
- * @property {string} number human number, unique per website (`<prefix><year>-<sequence>`)
+ * @property {string} number human number, unique per website (in the form the `checkout` setting `numberPattern` gives)
  * @property {{ userId: string, name: string, email: string, phone: string, customerId?: string }} customer from the
  *   Accounts sign-in, or the guest's details (`userId` '' for guests, E21); `customerId` the shop's customer record
  * @property {import('./checkout.js').Address | null} address null for pickup, digital and booking-only orders
@@ -642,4 +651,3 @@ export const STATUS_ROLES = Object.freeze([
  *   email: string, phone: string, price: number | null, status: 'waiting' | 'sent' | 'failed', customerId?: string | null,
  *   targetPrice?: number | null, tokenHash?: string, tries?: number }} AlertRecord `tries`: sends that reached no one
  */
-/** A member of the merchant's staff seen in a ticket (PLAN 0.4.5). @typedef {{ id: string, name: string, email: string, lastSeenAt: Date }} StaffRecord */

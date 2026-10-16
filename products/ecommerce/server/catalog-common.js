@@ -4,14 +4,12 @@
  * @module
  */
 import { problem } from '@ss/app-kit';
-import { isObject } from '@ss/contracts/util';
 import { categoriesOf, loadRules } from '../adapters/catalog-store.js';
 import { COLLECTIONS } from '../core/model.js';
 import { contentChanged } from '../core/catalog.js';
 import { gradeTypes, gradesByKey } from '../core/grades.js';
 import { createMedia } from './catalog-media.js';
 import { hiddenFor } from './catalog-visibility.js';
-import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -19,13 +17,6 @@ import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
 /** @typedef {import('../core/model.js').ProductRecord} ProductRecord */
 /** @typedef {import('../core/catalog.js').FieldError} FieldError */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
-
-/** @typedef {{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }} RateLimit */
-
-/** Rate limits of the staff routes (server token and tickets). */
-export const STAFF_LIMITS = /** @type {RateLimit[]} */ ([...SERVER_LIMITS]);
-/** Rate limits of the shopper routes. */
-export const SHOP_LIMITS = /** @type {RateLimit[]} */ ([...VISITOR_LIMITS]);
 
 /** Most addresses one IndexNow submission takes. */
 const INDEXNOW_MAX = 10_000;
@@ -41,13 +32,6 @@ export const refuse = (errors) =>
 	problem('validation_failed', errors[0]?.message ?? 'The request is not valid.', {
 		errors: errors.map((error) => ({ path: error.path, message: error.message, code: 'invalid' })),
 	});
-
-/**
- * The request body as an object ({} when missing).
- * @param {any} ctx
- * @returns {Record<string, any>}
- */
-export const bodyOf = (ctx) => (isObject(ctx.body) ? ctx.body : {});
 
 /**
  * @param {Product} product
@@ -186,16 +170,6 @@ export const createCatalogCommon = (product, service) => {
 	};
 
 	/**
-	 * The merchant's storage, or 503 `storage_not_connected`.
-	 * @param {Site} s
-	 */
-	const storageOf = async (s) => {
-		const storage = await product.connections.storage(s.websiteId);
-		if (!storage) throw problem('storage_not_connected', 'Connect your storage first (Connections).');
-		return storage;
-	};
-
-	/**
 	 * The addresses of a product's images.
 	 * @param {Site} s @param {ProductRecord} item
 	 */
@@ -231,7 +205,7 @@ export const createCatalogCommon = (product, service) => {
 		/** @type {Map<string, { type: string, size: number }>} */
 		const out = new Map();
 		if (keys.length === 0) return out;
-		const storage = await storageOf(s);
+		const storage = await service.storage(s);
 		for (const key of keys) {
 			const head = await storage.headObject({ key }).catch(() => {
 				throw problem('upstream_error', 'Your storage cannot be reached right now.');
@@ -279,7 +253,6 @@ export const createCatalogCommon = (product, service) => {
 		gradeListOf,
 		rulesOf,
 		changed,
-		storageOf,
 		mediaUrls,
 		mediaView,
 		variantMediaUrls,

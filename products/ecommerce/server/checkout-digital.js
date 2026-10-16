@@ -24,6 +24,7 @@ import {
 } from '../core/digital.js';
 import { elementsOf } from '../core/item-types.js';
 import { ID_PREFIX } from '../core/model.js';
+import { UPLOAD_SECONDS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -33,8 +34,6 @@ import { ID_PREFIX } from '../core/model.js';
 
 /** At most this many files per product. */
 const MAX_FILES = 20;
-/** A signed upload lasts this long. */
-const UPLOAD_SECONDS = 900;
 const MEDIA_TYPE = /^[a-z]+\/[a-z0-9.+-]{1,100}$/;
 
 /**
@@ -87,8 +86,7 @@ export const createDigital = (product, service) => {
 		if (!Number.isSafeInteger(body.size) || body.size < 1 || body.size > MAX_FILE_BYTES)
 			throw service.invalid('size', 'size is the file size in bytes (at most 5 GB).');
 		const item = await digitalProduct(s, String(ctx.params.id), 'downloads');
-		const storage = await product.connections.storage(s.websiteId);
-		if (!storage) throw problem('storage_not_connected', 'Connect storage in the product dashboard first.');
+		const storage = await service.storage(s);
 		const key = fileKey(item.id, name);
 		const digital = /** @type {NonNullable<ProductRecord['digital']>} */ (item.digital);
 		const files = digital.files.filter((file) => file.key !== key);

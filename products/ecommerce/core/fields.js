@@ -90,7 +90,7 @@ const fitsMask = (char, place) => {
  * starting 978 or 979); hyphens and spaces are passed over.
  * @param {string} value
  */
-export const isbnValid = (value) => {
+const isbnValid = (value) => {
 	const plain = value.replace(/[-\s]/g, '').toUpperCase();
 	if (plain.length === 13) return /^97[89]/.test(plain) && gtinOf(plain) !== null;
 	if (!/^\d{9}[\dX]$/.test(plain)) return false;
@@ -112,7 +112,7 @@ const VIN_WEIGHTS = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2];
  * for 10), as North America and some other markets use it.
  * @param {string} value
  */
-export const vinValid = (value) => {
+const vinValid = (value) => {
 	const plain = value.toUpperCase();
 	if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(plain)) return false;
 	let sum = 0;

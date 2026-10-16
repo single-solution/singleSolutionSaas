@@ -417,10 +417,7 @@ describe('a shop with only the catalog and checkout', () => {
 					{ key: 'cod', name: 'Cash on delivery', kind: 'on_delivery' },
 				],
 				pickupLocations: [],
-				delivery: { zones: false, cities: [] },
-				pricesIncludeTax: true,
-				bookings: false,
-				digital: false,
+				delivery: { cities: [] },
 			});
 			await other.list('order_flow', {
 				statuses: DEFAULT_FLOW.statuses,

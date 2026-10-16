@@ -20,7 +20,7 @@
  */
 import { createId } from '@ss/contracts';
 import { created, defineRoute, problem } from '@ss/app-kit';
-import { NO_ID, attributesOf, brandsOf, categoriesOf, findBySlugHistory, isDuplicate } from '../adapters/catalog-store.js';
+import { NO_KEYS, attributesOf, brandsOf, categoriesOf, findBySlugHistory, isDuplicate } from '../adapters/catalog-store.js';
 import { checkLandingAiRequest, landingPrompt, readSuggestions } from '../core/catalog-ai.js';
 import { siteAddress } from '../core/catalog-content.js';
 import {
@@ -53,7 +53,7 @@ import {
 	stockStages,
 } from '../core/landings.js';
 import { absolute, withQuery } from '../core/links.js';
-import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX, MAX_PAGE_SIZE, TOTAL_CAP } from '../core/model.js';
 import {
 	asWritten,
 	categoryJsonLd,
@@ -94,25 +94,14 @@ import { defaultImageOf, newestOf, seoSettingsOf, storeNameOf, trailOf } from '.
 /** @typedef {import('../core/model.js').ProductRecord} ProductRecord */
 /** @typedef {import('../core/grades.js').Grade} Grade */
 
-/** @type {Array<{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }>} */
-const RATE = [...SERVER_LIMITS];
-/**
- * The reads the merchant's server makes while rendering pages: their own higher window (SG-31).
- * @type {Array<{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }>}
- */
-const READ_RATE = [...SEO_LIMITS];
 /** Values of an attribute a glossary pattern's `{values}` names. */
 const PATTERN_VALUES = 5;
 /** At most this many landing pages per website. */
 const MAX_LANDINGS = 2000;
-/** Most products on one page of a listing (the grid's `limit`, E8). */
-const MAX_PAGE = 60;
 /** Most combinations of a saved product looked at for an AI-written automatic landing page (E43). */
 const MAX_AUTO_TRIES = 5;
 /** Most rows of the stock of every combination (E43): products in stock, by facet value. */
 const MAX_STOCK_ROWS = 50_000;
-/** A listing's total is exact up to this many products (as the grid counts, E8). */
-const TOTAL_CAP = 10_000;
 /** At most this many landing pages are remembered as indexed (G7.7). */
 const MAX_REMEMBERED = 10_000;
 /** Most facet fields whose stock one read adds up (stored pages' fields and `autoFacet`). */
@@ -503,7 +492,7 @@ export const createLandings = (product, service, media) => {
 	 * @returns {Promise<LandingRecord>}
 	 */
 	const landingOf = async (data, id) => {
-		const found = await data.collection(COLLECTIONS.landings).findOne({ websiteId: data.websiteId, id }, NO_ID);
+		const found = await data.collection(COLLECTIONS.landings).findOne({ websiteId: data.websiteId, id }, NO_KEYS);
 		if (!found) throw problem('not_found', 'There is no such landing page.');
 		return /** @type {LandingRecord} */ (/** @type {unknown} */ (found));
 	};
@@ -524,7 +513,7 @@ export const createLandings = (product, service, media) => {
 			if (ctx.query.facet) filter['facet.field'] = String(ctx.query.facet);
 			if (ctx.query.value) filter['facet.value'] = String(ctx.query.value);
 			const rows = /** @type {LandingRecord[]} */ (
-				await data.collection(COLLECTIONS.landings).find(filter, NO_ID).sort({ id: 1 }).limit(MAX_LANDINGS).toArray()
+				await data.collection(COLLECTIONS.landings).find(filter, NO_KEYS).sort({ id: 1 }).limit(MAX_LANDINGS).toArray()
 			);
 			const q = String(ctx.query.q ?? '')
 				.trim()
@@ -755,7 +744,7 @@ export const createLandings = (product, service, media) => {
 						/** @type {LandingRecord[]} */ (
 							await data
 								.collection(COLLECTIONS.landings)
-								.find({ websiteId: data.websiteId, ...comboQuery(combination) }, NO_ID)
+								.find({ websiteId: data.websiteId, ...comboQuery(combination) }, NO_KEYS)
 								.limit(1)
 								.toArray()
 						),
@@ -795,7 +784,7 @@ export const createLandings = (product, service, media) => {
 			? await data.collection(COLLECTIONS.products).countDocuments(counted.filter, { limit: TOTAL_CAP + 1 })
 			: 0;
 		const limit = /^\d{1,2}$/.test(String(ctx.query.limit ?? ''))
-			? Math.min(MAX_PAGE, Math.max(1, Number(ctx.query.limit)))
+			? Math.min(MAX_PAGE_SIZE, Math.max(1, Number(ctx.query.limit)))
 			: Number((await s.values('catalog')).pageSize);
 		const narrowed = Object.keys(ctx.query).some((key) => !NOT_NARROWING.has(key) && ctx.query[key] !== '');
 		const searched = String(ctx.query.q ?? '').trim() !== '';
@@ -869,7 +858,7 @@ export const createLandings = (product, service, media) => {
 			counted && total > 0 && (itemsKnown || html)
 				? await data
 						.collection(COLLECTIONS.products)
-						.find(counted.filter, NO_ID)
+						.find(counted.filter, NO_KEYS)
 						.sort(sortDocument(sorted ?? /** @type {import('../core/catalog-query.js').Sort} */ (SORTS.newest)))
 						.skip((page - 1) * limit)
 						.limit(limit)
@@ -1049,7 +1038,7 @@ export const createLandings = (product, service, media) => {
 				? /** @type {CategoryRecord | null} */ (
 						(await data
 							.collection(COLLECTIONS.categories)
-							.findOne({ websiteId: data.websiteId, id: attribute.categoryId }, NO_ID)) ?? null
+							.findOne({ websiteId: data.websiteId, id: attribute.categoryId }, NO_KEYS)) ?? null
 					)
 				: null);
 		const slug = attribute.slug;
@@ -1104,7 +1093,7 @@ export const createLandings = (product, service, media) => {
 				? /** @type {CategoryRecord | null} */ (
 						(await data
 							.collection(COLLECTIONS.categories)
-							.findOne({ websiteId: data.websiteId, id: grade.categoryId }, NO_ID)) ?? null
+							.findOne({ websiteId: data.websiteId, id: grade.categoryId }, NO_KEYS)) ?? null
 					)
 				: null);
 		const patterns = await s.values('landing_pages');
@@ -1186,7 +1175,7 @@ export const createLandings = (product, service, media) => {
 		const rows = /** @type {Array<LandingRecord & { updatedAt?: Date }>} */ (
 			await data
 				.collection(COLLECTIONS.landings)
-				.find({ websiteId: data.websiteId }, NO_ID)
+				.find({ websiteId: data.websiteId }, NO_KEYS)
 				.sort({ id: 1 })
 				.limit(MAX_LANDINGS)
 				.toArray()
@@ -1355,7 +1344,7 @@ export const createLandings = (product, service, media) => {
 			path: '/v1/landings',
 			auth: 'server',
 			feature: 'landing_pages',
-			rateLimit: READ_RATE,
+			rateLimit: SEO_LIMITS,
 			handler: landings.list,
 		}),
 		defineRoute({
@@ -1364,7 +1353,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'server',
 			feature: 'landing_pages',
 			idempotent: true,
-			rateLimit: RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: landings.create,
 		}),
 		defineRoute({
@@ -1372,7 +1361,7 @@ export const createLandings = (product, service, media) => {
 			path: '/v1/landings/:id',
 			auth: 'server',
 			feature: 'landing_pages',
-			rateLimit: READ_RATE,
+			rateLimit: SEO_LIMITS,
 			handler: landings.read,
 		}),
 		defineRoute({
@@ -1380,7 +1369,7 @@ export const createLandings = (product, service, media) => {
 			path: '/v1/landings/:id',
 			auth: 'server',
 			feature: 'landing_pages',
-			rateLimit: RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: landings.update,
 		}),
 		defineRoute({
@@ -1388,7 +1377,7 @@ export const createLandings = (product, service, media) => {
 			path: '/v1/landings/:id',
 			auth: 'server',
 			feature: 'landing_pages',
-			rateLimit: RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: landings.remove,
 		}),
 		defineRoute({
@@ -1396,7 +1385,7 @@ export const createLandings = (product, service, media) => {
 			path: '/v1/landings/:id/ai-copy',
 			auth: 'server',
 			feature: 'ai_copy',
-			rateLimit: RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: landings.aiCopy,
 		}),
 		defineRoute({
@@ -1405,7 +1394,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			feature: 'landing_pages',
-			rateLimit: RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: landings.list,
 		}),
 		defineRoute({
@@ -1415,7 +1404,7 @@ export const createLandings = (product, service, media) => {
 			permission: 'catalog.edit',
 			feature: 'landing_pages',
 			idempotent: true,
-			rateLimit: RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: landings.create,
 		}),
 		defineRoute({
@@ -1424,7 +1413,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			feature: 'landing_pages',
-			rateLimit: RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: landings.read,
 		}),
 		defineRoute({
@@ -1433,7 +1422,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			feature: 'landing_pages',
-			rateLimit: RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: landings.update,
 		}),
 		defineRoute({
@@ -1442,7 +1431,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			feature: 'landing_pages',
-			rateLimit: RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: landings.remove,
 		}),
 		defineRoute({
@@ -1451,7 +1440,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'ticket',
 			permission: 'catalog.edit',
 			feature: 'ai_copy',
-			rateLimit: RATE,
+			rateLimit: SERVER_LIMITS,
 			handler: landings.aiCopy,
 		}),
 		defineRoute({
@@ -1459,7 +1448,7 @@ export const createLandings = (product, service, media) => {
 			path: '/v1/seo/listing',
 			auth: 'server',
 			feature: 'catalog',
-			rateLimit: READ_RATE,
+			rateLimit: SEO_LIMITS,
 			handler: conditional(listing, service.now),
 		}),
 		defineRoute({
@@ -1467,7 +1456,7 @@ export const createLandings = (product, service, media) => {
 			path: '/v1/seo/attributes/:slug',
 			auth: 'server',
 			feature: 'landing_pages',
-			rateLimit: READ_RATE,
+			rateLimit: SEO_LIMITS,
 			handler: conditional(attributeGlossary, service.now),
 		}),
 		defineRoute({
@@ -1475,7 +1464,7 @@ export const createLandings = (product, service, media) => {
 			path: '/v1/seo/attributes/:category/:slug',
 			auth: 'server',
 			feature: 'landing_pages',
-			rateLimit: READ_RATE,
+			rateLimit: SEO_LIMITS,
 			handler: conditional(attributeGlossary, service.now),
 		}),
 		defineRoute({
@@ -1483,7 +1472,7 @@ export const createLandings = (product, service, media) => {
 			path: '/v1/seo/grades/:key',
 			auth: 'server',
 			feature: 'landing_pages',
-			rateLimit: READ_RATE,
+			rateLimit: SEO_LIMITS,
 			handler: conditional(gradeGlossary, service.now),
 		}),
 		defineRoute({
@@ -1491,7 +1480,7 @@ export const createLandings = (product, service, media) => {
 			path: '/v1/seo/grades/:category/:key',
 			auth: 'server',
 			feature: 'landing_pages',
-			rateLimit: READ_RATE,
+			rateLimit: SEO_LIMITS,
 			handler: conditional(gradeGlossary, service.now),
 		}),
 	];

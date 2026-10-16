@@ -527,7 +527,7 @@ export const shipmentFields = (raw) => {
  * reference); `payments` is Payments' own.
  * @param {unknown} way @param {ReadonlyArray<string>} keys the `payment_methods` list's keys
  */
-export const isRecordedWay = (way, keys) => way === OTHER_WAY || (isMethodKey(way) && keys.includes(way));
+const isRecordedWay = (way, keys) => way === OTHER_WAY || (isMethodKey(way) && keys.includes(way));
 /** Longest payment or refund reference. */
 export const MAX_REFERENCE = 120;
 

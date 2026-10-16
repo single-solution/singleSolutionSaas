@@ -253,7 +253,7 @@ export const settingsNotice = (key, values) =>
  * @param {FeatureSettings[]} features
  * @returns {import('./grades.js').GradePreview}
  */
-export const gradePreview = (features) => {
+const gradePreview = (features) => {
 	/** @param {string} key @param {string} name */
 	const value = (key, name) => String(features.find((feature) => feature.key === key)?.values[name]?.value ?? '');
 	return {
