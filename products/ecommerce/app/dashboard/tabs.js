@@ -364,7 +364,9 @@ function FeaturesTab({ websiteId, who, support }) {
 				};
 				return (
 					<div className="space-y-4">
-						{admin ? null : <Callout tone="info">{fill(TEXTS.features.contact, { contact: supportContact(support) })}</Callout>}
+						{admin ? null : (
+							<Callout tone="info">{fill(TEXTS.features.contact, { contact: supportContact(support) })}</Callout>
+						)}
 						<Masonry wideAlone>
 							{features.map((feature) => {
 								const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
