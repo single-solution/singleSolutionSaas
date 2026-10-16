@@ -17,6 +17,7 @@ import { LIST_KEY } from './named-lists.js';
 import { MAX_TRACKING, cleanTracking, hasControl } from './couriers.js';
 import { OTHER_WAY, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
 import { TAG_LIMITS, checkTags } from './customer-segments.js';
+import { escapeRegex } from './search.js';
 
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {import('./model.js').OrderFlow} OrderFlow */
@@ -140,9 +141,6 @@ const refuse = (field, message) => ({ ok: false, field, message });
 /** @param {unknown} value @returns {Record<string, unknown>} */
 const objectOf = (value) =>
 	typeof value === 'object' && value !== null && !Array.isArray(value) ? /** @type {Record<string, unknown>} */ (value) : {};
-
-/** @param {string} text */
-const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * A record as it goes on the wire: dates as ISO strings, without the database fields.

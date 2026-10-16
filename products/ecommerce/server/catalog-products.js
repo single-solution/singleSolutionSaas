@@ -22,7 +22,6 @@ import {
 	categoriesOf,
 	findProduct,
 	freeSlugIn,
-	isDuplicate,
 	measuredScope,
 	productTypes,
 	rewriteProduct,
@@ -55,7 +54,7 @@ import { nextPreviousSlugs } from '../core/links.js';
 import { withDescendants } from '../core/catalog-taxonomy.js';
 import { staffProductOf, staffRowOf } from '../core/catalog-views.js';
 import { sameMeaning } from '../core/measure.js';
-import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX, isDuplicate } from '../core/model.js';
 import { productScore } from '../core/seo-score.js';
 import { IMAGE_TYPES, refuse } from './catalog-common.js';
 import { pageTitlesOf } from './seo-reads.js';

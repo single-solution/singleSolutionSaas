@@ -7005,11 +7005,6 @@
 					"type": "boolean",
 					"description": "Its return put its units back in stock."
 				},
-				"claimRestockedAt": {
-					"type": "string",
-					"format": "date-time",
-					"description": "When a return claim last put its units back in stock."
-				},
 				"holdUntil": {
 					"type": ["string", "null"],
 					"format": "date-time",
@@ -8401,11 +8396,6 @@
 				"returnRestocked": {
 					"type": "boolean",
 					"description": "Its return put its units back in stock."
-				},
-				"claimRestockedAt": {
-					"type": "string",
-					"format": "date-time",
-					"description": "When a return claim last put its units back in stock."
 				},
 				"holdUntil": {
 					"type": ["string", "null"],
@@ -13328,7 +13318,6 @@
 				"lifetimeEarned",
 				"pending",
 				"history",
-				"hasMore",
 				"expiringSoon"
 			],
 			"additionalProperties": false,
@@ -13384,11 +13373,7 @@
 					"items": {
 						"$ref": "#/components/schemas/LoyaltyHistoryEntry"
 					},
-					"description": "Newest first, from offset."
-				},
-				"hasMore": {
-					"type": "boolean",
-					"description": "More history after this part."
+					"description": "Newest first, at most limit entries."
 				},
 				"expiringSoon": {
 					"type": "array",
@@ -27183,7 +27168,7 @@
 	},
 	"GET /v1/shop/loyalty": {
 		"summary": "The signed-in shopper’s points",
-		"description": "403 sign_in_required without a valid SS-Sign-In. With the loyalty setting expiryRule current, earned points expire by today’s expiry setting. 422 validation_failed at /limit or /offset; 403 feature_off while the loyalty feature is off.",
+		"description": "403 sign_in_required without a valid SS-Sign-In. With the loyalty setting expiryRule current, earned points expire by today’s expiry setting. 422 validation_failed at /limit; 403 feature_off while the loyalty feature is off.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -27193,13 +27178,6 @@
 					"maximum": 50,
 					"default": 50,
 					"description": "History entries."
-				},
-				"offset": {
-					"type": "integer",
-					"minimum": 0,
-					"maximum": 10000,
-					"default": 0,
-					"description": "History entries to skip."
 				}
 			}
 		},

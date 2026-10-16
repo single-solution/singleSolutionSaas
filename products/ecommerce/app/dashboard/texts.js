@@ -49,12 +49,12 @@ export const TEXTS = dashboardTexts({
 		alerts: {
 			title: 'No one gets staff alerts',
 			effect:
-				'New orders, cancellations, payment proofs and return requests alert nobody until you add recipients, or pick a staff permission with Accounts connected, in Settings → Staff alerts.',
+				'New orders, cancellations, payment proofs and return requests alert nobody until you add recipients, or pick a staff permission with Accounts connected, in Settings → Other settings (Staff alerts).',
 			action: 'Add recipients',
 		},
 		adminUrl: {
 			title: 'Staff alerts have no admin page to link to',
-			effect: 'Alerts cannot open the order until you set the admin page address in Settings → Staff alerts.',
+			effect: 'Alerts cannot open the order until you set the admin page address in Settings → Other settings (Staff alerts).',
 			action: 'Set it',
 		},
 		bank: {

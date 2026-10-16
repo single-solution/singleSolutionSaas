@@ -7,7 +7,6 @@ import { DEFAULT_FORMAT, formatMoney } from '@ss/contracts/format';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	cardVariant,
-	escapeRegex,
 	gradeLabels,
 	limitOf,
 	orderSummary,
@@ -18,6 +17,7 @@ import {
 	shipmentSummary,
 	statusLabel,
 } from '../core/lookup.js';
+import { escapeRegex } from '../core/search.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import { listShown } from '../core/promotions.js';

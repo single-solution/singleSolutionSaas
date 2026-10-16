@@ -9,6 +9,8 @@
  * ({@link segmentNeeds}). No I/O.
  * @module
  */
+import { escapeRegex } from './search.js';
+import { DAY_MS } from './durations.js';
 
 /** At most this many tags on one customer or order, each at most this long. */
 export const TAG_LIMITS = Object.freeze({ tags: 30, tag: 40 });
@@ -22,8 +24,6 @@ const MAX_TEXT = 80;
 const KEY = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 /** A customer field's id in a rule (`field:<id>`). */
 const FIELD_RULE = /^field:[A-Za-z0-9_-]{1,64}$/;
-/** One day, in milliseconds. */
-const DAY_MS = 86_400_000;
 
 /**
  * The fields a rule reads, by kind: `number` (orders placed, spend in minor units of the shop's currency), `days` (the
@@ -183,9 +183,6 @@ export const segmentNeeds = (segment) => ({
 		rule.field === 'spent' ? [{ index, op: rule.op, value: Number(rule.value) }] : [],
 	),
 });
-
-/** @param {string} text */
-const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * @typedef {{ userIds: string[], customerIds: string[] }} Owners customers by Accounts user id or customer id

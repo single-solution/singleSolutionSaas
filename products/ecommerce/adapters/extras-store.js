@@ -49,9 +49,6 @@ export const INDEXES = [
 	},
 ];
 
-/** @param {unknown} error */
-export const isDuplicate = (error) => typeof error === 'object' && error !== null && /** @type {any} */ (error).code === 11000;
-
 /**
  * The approved reviews' summary of a product (count per star, average).
  * @param {WebsiteData} data

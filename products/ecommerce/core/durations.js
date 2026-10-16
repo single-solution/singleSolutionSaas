@@ -20,7 +20,8 @@ export const DURATION_MAX = Object.freeze({ days: 3650, months: 120, years: 10 }
 /** @typedef {(typeof DURATION_UNITS)[number]} DurationUnit */
 /** A time: `amount` of `unit` (0: none). @typedef {{ amount: number, unit: DurationUnit }} Duration */
 
-const DAY_MS = 86_400_000;
+/** One day, in milliseconds. */
+export const DAY_MS = 86_400_000;
 
 /**
  * Whether a value is a time: `{ amount, unit }`, a whole amount from 0 to the unit's most.

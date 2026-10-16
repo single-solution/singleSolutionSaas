@@ -7,9 +7,7 @@
  * @module
  */
 import { defineRoute } from '@ss/app-kit';
-
-/** The index Atlas Search uses when the `searchIndex` setting is empty (as `server/catalog-search.js`). */
-const DEFAULT_INDEX = 'ss_ecommerce_products_search';
+import { SEARCH_INDEX } from '../adapters/product.js';
 
 /**
  * What the check answers.
@@ -35,7 +33,7 @@ export const createDashboardSearch = (product) => [
 			]);
 			return {
 				search: catalog.search === 'atlas' || catalog.chatSearch === 'atlas' ? 'atlas' : 'basic',
-				index: String(catalog.searchIndex || DEFAULT_INDEX),
+				index: String(catalog.searchIndex || SEARCH_INDEX),
 				state: state
 					? { missing: state.missing === true, at: new Date(state.at).toISOString(), message: String(state.message ?? '') }
 					: null,

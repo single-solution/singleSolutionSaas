@@ -176,7 +176,8 @@ export const createCatalogTools = (product, service, common) => {
 		if (!filters.ok) throw refuse([{ path: `/${filters.field}`, message: filters.message }]);
 		const { s, data } = await common.open(ctx);
 		if (filters.value.q) filters.value.phoneDigits = phoneSearchOf(filters.value.q, await phoneRulesOf(s));
-		const filter = { websiteId: data.websiteId, ...orderQuery(filters.value) };
+		// the list's polling filters (new since a time, not seen by me) are not the file's
+		const filter = { websiteId: data.websiteId, ...orderQuery({ ...filters.value, createdAfter: undefined, unseen: false }) };
 		const orders = data.collection(COLLECTIONS.orders);
 		if ((await orders.countDocuments(filter, { limit: MAX_EXPORT_ORDERS + 1 })) > MAX_EXPORT_ORDERS)
 			throw refuse([{ path: '/from', message: `More than ${MAX_EXPORT_ORDERS} orders: choose shorter dates.` }]);

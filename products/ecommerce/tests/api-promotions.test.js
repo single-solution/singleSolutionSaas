@@ -311,12 +311,13 @@ describe('loyalty', () => {
 			value: 25_000,
 			lifetimeEarned: 0,
 			pending: 40,
-			hasMore: true,
 			expiringSoon: [],
 		});
 		expect(first.json.history.map((/** @type {any} */ entry) => entry.points)).toEqual([50, 200]);
-		const rest = await shop.visitor('GET', '/v1/shop/loyalty?limit=2&offset=2', { signIn: token });
-		expect(rest.json).toMatchObject({ hasMore: false, history: [{ kind: 'adjust', points: 100 }] });
-		expect((await shop.visitor('GET', '/v1/shop/loyalty?offset=-1', { signIn: token })).status).toBe(422);
+		// the history is the newest `limit` entries (the most a shopper's page shows), not a paged list
+		expect(first.json).not.toHaveProperty('hasMore');
+		const all = await shop.visitor('GET', '/v1/shop/loyalty', { signIn: token });
+		expect(all.json.history.map((/** @type {any} */ entry) => entry.points)).toEqual([50, 200, 100]);
+		expect((await shop.visitor('GET', '/v1/shop/loyalty?limit=0', { signIn: token })).status).toBe(422);
 	});
 });

@@ -5,10 +5,10 @@
 import { describe, expect, it } from 'vitest';
 import { checkAlertInput, dueConditions, isDue, priceOf } from '../core/alerts.js';
 import { compareRows, gradeLabels, parseCompareIds } from '../core/compare.js';
+import { DAY_MS } from '../core/durations.js';
 import { afterFilter, keyOf, sortOf } from '../core/extras-pages.js';
 import { parseRange, returnRateRows, stockAgeRows } from '../core/reports.js';
 import {
-	DAY_MS,
 	actionsOf,
 	checkClaimInput,
 	checkNote,

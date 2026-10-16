@@ -20,7 +20,7 @@
  */
 import { createId } from '@ss/contracts';
 import { created, defineRoute, problem } from '@ss/app-kit';
-import { NO_KEYS, attributesOf, brandsOf, categoriesOf, findBySlugHistory, isDuplicate } from '../adapters/catalog-store.js';
+import { NO_KEYS, attributesOf, brandsOf, categoriesOf, findBySlugHistory } from '../adapters/catalog-store.js';
 import { checkLandingAiRequest, landingPrompt, readSuggestions } from '../core/catalog-ai.js';
 import { siteAddress } from '../core/catalog-content.js';
 import {
@@ -53,7 +53,7 @@ import {
 	stockStages,
 } from '../core/landings.js';
 import { absolute, withQuery } from '../core/links.js';
-import { COLLECTIONS, ID_PREFIX, MAX_PAGE_SIZE, TOTAL_CAP } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX, MAX_PAGE_SIZE, TOTAL_CAP, isDuplicate } from '../core/model.js';
 import {
 	asWritten,
 	categoryJsonLd,

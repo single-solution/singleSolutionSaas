@@ -97,9 +97,6 @@ export const INDEXES = [
 /** Without the ids that tie a record to its website and merchant (and the database's own). */
 export const NO_KEYS = Object.freeze({ projection: { _id: 0, websiteId: 0, merchantId: 0 } });
 
-/** @param {unknown} error */
-export const isDuplicate = (error) => typeof error === 'object' && error !== null && /** @type {any} */ (error).code === 11000;
-
 /**
  * Every record of a small catalog collection (categories, brands, attributes, locations), in order.
  * @template T

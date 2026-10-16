@@ -273,7 +273,7 @@
 		{
 			"key": "staff_alerts",
 			"name": "Staff alerts",
-			"description": "Email or WhatsApp your staff about new orders, status changes, payments, transfer proofs, cancels, expiries and return claims, through Notifications.",
+			"description": "Email, text (SMS) or WhatsApp your staff about new orders, status changes, payments, transfer proofs, cancels, expiries and return claims, through Notifications.",
 			"dependsOn": ["checkout"],
 			"recommendFor": ["sells.physical+messages.*", "sells.digital+messages.*", "sells.services+messages.*"],
 			"settings": {

@@ -14,7 +14,7 @@
  * the prefix and suffix are left out.
  * @module
  */
-import { escapeRegex } from './lookup.js';
+import { escapeRegex } from './search.js';
 
 /** A website's order number form. @typedef {{ pattern: string, prefix: string, suffix: string, digits: number }} NumberForm */
 /** When a number is made: its year and month (1–12) in the business time zone. @typedef {{ year: number, month: number }} NumberAt */

@@ -817,9 +817,9 @@ export const createSeo = (product, service) => {
 				// the product's photos, then its variants' (E6), each once
 				const keys = [
 					...new Set([
-						...(record.media ?? []).map((/** @type {any} */ file) => file.key),
-						...(record.variants ?? []).flatMap((/** @type {any} */ variant) =>
-							(variant.media ?? []).map((/** @type {any} */ file) => file.key),
+						...record.media.map((/** @type {any} */ file) => file.key),
+						...record.variants.flatMap((/** @type {any} */ variant) =>
+							variant.media.map((/** @type {any} */ file) => file.key),
 						),
 					]),
 				].slice(0, MAX_IMAGES);

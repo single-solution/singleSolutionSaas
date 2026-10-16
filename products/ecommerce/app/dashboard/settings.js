@@ -243,7 +243,7 @@ export const settingsNotice = (key, values) =>
 					{TEXTS.settings.atlasDocs}
 				</a>
 			}>
-			{fill(TEXTS.settings.atlasNotice, { index: String(values.searchIndex || 'ss_ecommerce_products_search') })}
+			{fill(TEXTS.settings.atlasNotice, { index: String(values.searchIndex ?? '') })}
 		</Callout>
 	) : null;
 

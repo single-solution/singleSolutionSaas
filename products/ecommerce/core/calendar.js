@@ -5,11 +5,10 @@
  * @module
  */
 import { zonedDayStart } from '@ss/contracts/format';
+import { DAY_MS } from './durations.js';
 
 /** A calendar day as `YYYY-MM-DD`. */
 export const DAY = /^\d{4}-\d{2}-\d{2}$/;
-
-const DAY_MS = 86_400_000;
 
 /**
  * Where a day starts and ends (the next day's start, exclusive) in a time zone, in epoch ms; null when the value is

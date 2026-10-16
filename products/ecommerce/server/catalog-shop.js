@@ -196,14 +196,7 @@ export const createListingFilter = (service) => {
 		if (!deal) return { id: { $in: [] } };
 		/** @param {string} id */
 		const below = (id) => withDescendants(id, categories);
-		const scope = scopeFilter(
-			{
-				productIds: deal.scope?.productIds ?? [],
-				categoryIds: deal.scope?.categoryIds ?? [],
-				brandIds: deal.scope?.brandIds ?? [],
-			},
-			below,
-		);
+		const scope = scopeFilter(deal.scope, below);
 		const covered = dealProductsFilter(deal.conditions, below);
 		return scope ? { $and: [scope, covered] } : covered;
 	};

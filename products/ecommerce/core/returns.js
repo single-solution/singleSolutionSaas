@@ -26,7 +26,6 @@ import { OTHER_WAY, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {import('./model.js').OrderLineRecord} OrderLineRecord */
 
-export const DAY_MS = 86_400_000;
 /** Lines in one claim, at most. */
 const MAX_CLAIM_LINES = 50;
 /** Longest reason. */

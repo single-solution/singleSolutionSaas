@@ -43,6 +43,7 @@ import { applyPromotions, attributeValues } from '../core/promotions.js';
 import { COLLECTIONS } from '../core/model.js';
 import { paymentOptions } from '../core/payment-methods.js';
 import { createMedia } from './catalog-media.js';
+import { DAY_MS } from '../core/durations.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -56,8 +57,6 @@ import { createMedia } from './catalog-media.js';
 /** @typedef {import('../core/model.js').LocationRecord} LocationRecord */
 /** @typedef {import('../core/model.js').DealRecord} DealRecord */
 /** @typedef {import('../core/model.js').PaymentMethod} PaymentMethod */
-
-const DAY_MS = 86_400_000;
 
 /** No delivery: the order has nothing to deliver (or no rate fits; then `method` says what was asked). */
 const NO_DELIVERY = Object.freeze({

@@ -9,16 +9,8 @@
  * @module
  */
 import { csvCell } from '@ss/contracts/csv';
-import {
-	escapeXml,
-	feedGroupId,
-	feedItemId,
-	fillTemplate,
-	offeredVariants,
-	shippingFee,
-	variantInStock,
-	variantLabel,
-} from './seo.js';
+import { escapeXml, feedGroupId, feedItemId, fillTemplate, offeredVariants, shippingFee, variantLabel } from './seo.js';
+import { variantInStock } from './catalog.js';
 import { feedMeasureOf } from './measure.js';
 import { toDecimal } from '@ss/contracts/format';
 
@@ -176,7 +168,7 @@ export const feedRows = (product, context) => {
 	const shipping = physical ? context.shipping : null;
 	return variants
 		.filter((variant) => context.shown(variant).price > 0)
-		.filter((variant) => context.includeOutOfStock || variantInStock(product, variant))
+		.filter((variant) => context.includeOutOfStock || variantInStock(variant, product.trackStock))
 		.map((variant) => {
 			const label = variantLabel(variant);
 			const shown = context.shown(variant);
@@ -221,7 +213,7 @@ export const feedRows = (product, context) => {
 				price: money(shown.was ?? shown.price),
 				salePrice: shown.was === null ? '' : money(shown.price),
 				saleDates: until ? `${from.toISOString()}/${until.toISOString()}` : '',
-				inStock: variantInStock(product, variant),
+				inStock: variantInStock(variant, product.trackStock),
 				condition: context.condition(variant),
 				brand: context.brand,
 				gtin,

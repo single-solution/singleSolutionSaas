@@ -9,6 +9,7 @@
  * private embed address). Staff add attachments with a move or on the order, and remove them. Pure, no I/O.
  * @module
  */
+import { youtubeId } from './catalog-content.js';
 import { boolField, checkNamedList, oneOf } from './named-lists.js';
 
 /** What an attachment is. */
@@ -30,7 +31,6 @@ export const DEFAULT_ATTACHMENT_KINDS = Object.freeze([
 ]);
 
 const STATUS_KEY = /^[a-z][a-z0-9_-]{1,39}$/;
-const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 /** An upload key in the merchant's bucket. */
 const UPLOAD_KEY = /^[A-Za-z0-9][A-Za-z0-9/_.-]{0,299}$/;
 
@@ -70,9 +70,8 @@ export const attachmentSource = (value) => {
 		try {
 			const url = new URL(raw);
 			if (url.protocol !== 'https:' || raw.length > 2000) return null;
-			const host = url.hostname.replace(/^www\.|^m\./, '');
-			const id = host === 'youtu.be' ? url.pathname.slice(1) : host === 'youtube.com' ? (url.searchParams.get('v') ?? '') : '';
-			if (YOUTUBE_ID.test(id)) return { url: `https://www.youtube-nocookie.com/embed/${id}` };
+			const id = youtubeId(raw);
+			if (id) return { url: `https://www.youtube-nocookie.com/embed/${id}` };
 			return { url: url.toString() };
 		} catch {
 			return null;

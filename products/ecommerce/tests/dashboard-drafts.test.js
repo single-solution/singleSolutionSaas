@@ -19,7 +19,7 @@ import {
 } from '../app/dashboard/drafts.js';
 import { checkTaxRules } from '../core/taxes.js';
 import { DEFAULT_FLOW, canMove, checkOrderFlow } from '../core/flow.js';
-import { MAX_GRADES, checkGrades } from '../core/grades.js';
+import { checkGrades } from '../core/grades.js';
 
 /** A grade with every field, as the server saves it. @type {import('../app/dashboard/drafts.js').SavedGrade} */
 const FULL = {
@@ -166,7 +166,7 @@ describe('grade drafts (E10)', () => {
 	});
 
 	it('names the limits the server checks', () => {
-		expect(GRADE_LIMITS.grades).toBe(MAX_GRADES);
+		expect(GRADE_LIMITS.grades).toBe(100);
 		expect(GRADE_LIMITS.description).toBe(1200);
 		expect(GRADE_CONDITIONS).toEqual(['new', 'refurbished', 'used']);
 	});

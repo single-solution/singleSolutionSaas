@@ -11,6 +11,7 @@ import { levelOf } from './measure.js';
 import { MAX_PAGE_NUMBER } from './model.js';
 import { MAX_AMOUNT } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
+import { escapeRegex } from './search.js';
 
 /** @typedef {import('./model.js').AttributeRecord} AttributeRecord */
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -60,9 +61,6 @@ const MAX_VALUES = 20;
 /** Most words of a search, and their length. */
 const MAX_WORDS = 8;
 const MAX_WORD = 50;
-
-/** @param {string} text */
-const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Words of a search as a filter: every word must appear in the name, summary, a tag or a SKU; with `phrase`, the words

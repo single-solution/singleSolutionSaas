@@ -12,6 +12,17 @@
 /** A read without the database's own id: the projection of a document read. */
 export const NO_ID = Object.freeze({ projection: { _id: 0 } });
 
+/**
+ * A duplicate-key error of the driver (a single write, or a bulk write whose every failure is one).
+ * @param {unknown} error
+ */
+export const isDuplicate = (error) => {
+	if (typeof error !== 'object' || error === null) return false;
+	const failures = /** @type {any} */ (error).writeErrors;
+	if (Array.isArray(failures) && failures.length > 0) return failures.every((item) => item?.code === 11000);
+	return /** @type {any} */ (error).code === 11000;
+};
+
 /** Most products on one page of a listing (E8): the `limit` of a read and the `pageSize` setting stop here. */
 export const MAX_PAGE_SIZE = 60;
 /** Highest page number of a listing. */
@@ -483,7 +494,8 @@ export const STATUS_ROLES = Object.freeze([
  *   refund through Payments): pending until done, tried again on use
  * @property {boolean} [returnRestocked] its return (RTO or a customer's return) put its units back in stock: a claim
  *   restocked later puts none back (OR-10)
- * @property {Date} [claimRestockedAt] when a return claim of it last put units back in stock (OR-10)
+ * @property {Date} [claimRestockedAt] set when a return claim of it puts units back in stock (OR-10): the write locks the
+ *   order against a second claim; nothing reads it, and imports and the API leave it out
  * @property {Date | null} holdUntil an unconfirmed order is canceled after this time (on use)
  * @property {string} idempotencyKey the checkout's Idempotency-Key, unique per customer
  * @property {string} note the shopper's note

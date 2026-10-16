@@ -13,6 +13,7 @@
  */
 import { zonedDay, zonedDayStart, zonedParts } from '@ss/contracts/format';
 import { roundDown } from './money.js';
+import { DAY_MS } from './durations.js';
 
 /** @typedef {import('./model.js').LoyaltyRecord} LoyaltyRecord */
 
@@ -20,8 +21,6 @@ import { roundDown } from './money.js';
 const EXPIRING_SOON_DAYS = 30;
 /** Most history entries shown to the shopper (newest first). */
 export const SHOPPER_HISTORY = 50;
-
-const DAY_MS = 86_400_000;
 
 /**
  * @typedef {object} LoyaltyRules
@@ -86,15 +85,17 @@ export const loyaltyRules = (settings) => {
 		minRedeem: Math.floor(numberIn(s.minRedeem, LOYALTY_DEFAULTS.minRedeem, 1, 1_000_000_000)),
 		maxPercent: numberIn(s.maxPercent, LOYALTY_DEFAULTS.maxPercent, 0, 100),
 		expiryDays: Math.floor(numberIn(s.expiryDays, LOYALTY_DEFAULTS.expiryDays, 0, 36_500)),
-		roles: Array.isArray(s.roles) ? s.roles.filter((role) => typeof role === 'string' && role !== '') : [],
-		guests: oneOf(s.guests, /** @type {const} */ (['none', 'earn']), 'none'),
-		earnBase: oneOf(s.earnBase, /** @type {const} */ (['goods', 'total']), 'goods'),
-		earnAt: oneOf(s.earnAt, /** @type {const} */ (['delivery', 'placement']), 'delivery'),
-		capBase: oneOf(s.capBase, /** @type {const} */ (['order', 'goods']), 'order'),
-		redeemMode: oneOf(s.redeemMode, /** @type {const} */ (['amount', 'maximum']), 'amount'),
-		expiryUnit: oneOf(s.expiryUnit, /** @type {const} */ (['days', 'months']), 'days'),
-		expiryRule: oneOf(s.expiryRule, /** @type {const} */ (['at_earn', 'current']), 'at_earn'),
-		memberFlag: oneOf(s.memberFlag, /** @type {const} */ (['off', 'manual', 'first_order']), 'off'),
+		roles: Array.isArray(s.roles)
+			? s.roles.filter((role) => typeof role === 'string' && role !== '')
+			: [...LOYALTY_DEFAULTS.roles],
+		guests: oneOf(s.guests, /** @type {const} */ (['none', 'earn']), LOYALTY_DEFAULTS.guests),
+		earnBase: oneOf(s.earnBase, /** @type {const} */ (['goods', 'total']), LOYALTY_DEFAULTS.earnBase),
+		earnAt: oneOf(s.earnAt, /** @type {const} */ (['delivery', 'placement']), LOYALTY_DEFAULTS.earnAt),
+		capBase: oneOf(s.capBase, /** @type {const} */ (['order', 'goods']), LOYALTY_DEFAULTS.capBase),
+		redeemMode: oneOf(s.redeemMode, /** @type {const} */ (['amount', 'maximum']), LOYALTY_DEFAULTS.redeemMode),
+		expiryUnit: oneOf(s.expiryUnit, /** @type {const} */ (['days', 'months']), LOYALTY_DEFAULTS.expiryUnit),
+		expiryRule: oneOf(s.expiryRule, /** @type {const} */ (['at_earn', 'current']), LOYALTY_DEFAULTS.expiryRule),
+		memberFlag: oneOf(s.memberFlag, /** @type {const} */ (['off', 'manual', 'first_order']), LOYALTY_DEFAULTS.memberFlag),
 	};
 };
 

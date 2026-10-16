@@ -130,6 +130,9 @@ export const SEO_DEFAULTS = Object.freeze(
 	Object.fromEntries(Object.entries(seoSettings.properties).map(([key, node]) => [key, node.default])),
 );
 
+/** The Atlas Search index a shop reads while its `catalog` setting `searchIndex` is empty: the schema's default. */
+export const SEARCH_INDEX = String(catalogSettings.properties.searchIndex.default);
+
 /** Ecommerce's own problem codes. */
 const PROBLEM_CODES = Object.freeze({
 	sign_in_required: Object.freeze({ status: 403, title: 'Sign in required' }),

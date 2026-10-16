@@ -6,7 +6,7 @@
  * `<script>` element. Pure functions, no I/O.
  * @module
  */
-import { valueLabel } from './catalog.js';
+import { valueLabel, variantInStock } from './catalog.js';
 import { toDecimal, zonedDay } from '@ss/contracts/format';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -66,13 +66,6 @@ export {
 	metaDescription,
 	writtenSummary,
 } from './seo-text.js';
-
-/**
- * Whether a variant can be bought now (a variant marked sold out cannot, E9).
- * @param {Pick<ProductRecord, 'trackStock'>} product
- * @param {Pick<VariantRecord, 'stock' | 'soldOut'>} variant
- */
-export const variantInStock = (product, variant) => !variant.soldOut && (!product.trackStock || variant.stock > 0);
 
 /**
  * The variants shown and sold.
@@ -488,7 +481,7 @@ export const productFacts = (product, { money, grades, specs, priceOf = (variant
 		maxPrice: high === null ? '' : money(high),
 		price: low === null || high === null ? '' : low === high ? money(low) : `${money(low)} – ${money(high)}`,
 		options: valuesOf(offered),
-		inStockOptions: valuesOf(offered.filter((variant) => variantInStock(product, variant))),
+		inStockOptions: valuesOf(offered.filter((variant) => variantInStock(variant, product.trackStock))),
 		conditions: [...grades.entries()]
 			.filter(([key]) => offered.some((variant) => variant.grade === key))
 			.map(([, grade]) => grade.label)
@@ -524,7 +517,7 @@ export const productJsonLd = (page) => {
 				page.timeZone ?? 'UTC',
 				page.measure ?? null,
 			),
-			availability: `${SCHEMA}/${variantInStock(product, variant) ? 'InStock' : 'OutOfStock'}`,
+			availability: `${SCHEMA}/${variantInStock(variant, product.trackStock) ? 'InStock' : 'OutOfStock'}`,
 			itemCondition: (() => {
 				const condition = page.condition(variant);
 				return condition ? CONDITION_URL[condition] : '';

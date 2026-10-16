@@ -20,7 +20,6 @@ import {
 	brandsOf,
 	categoriesOf,
 	freeSlugIn,
-	isDuplicate,
 	locationsOf,
 	slugTaken,
 	stockedUnits,
@@ -41,7 +40,7 @@ import {
 } from '../core/catalog-taxonomy.js';
 import { nextPreviousSlugs } from '../core/links.js';
 import { sameMeaning } from '../core/measure.js';
-import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX, isDuplicate } from '../core/model.js';
 import { brandScore, categoryScore } from '../core/seo-score.js';
 import { unitStatusOf } from '../core/unit-states.js';
 import { refuse } from './catalog-common.js';

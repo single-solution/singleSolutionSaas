@@ -17,16 +17,8 @@ import { bundleView, checkBundleInput } from '../core/bundles.js';
 import { checkBatchInput, checkCouponInput, couponView, drawCode } from '../core/coupons.js';
 import { checkDealInput, dealView } from '../core/deals.js';
 import { dealScore } from '../core/seo-score.js';
-import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
-import {
-	deleteOffer,
-	getOffer,
-	insertOffers,
-	isDuplicate,
-	listOffers,
-	missingRefs,
-	updateOffer,
-} from '../adapters/promotions-store.js';
+import { COLLECTIONS, ID_PREFIX, isDuplicate } from '../core/model.js';
+import { deleteOffer, getOffer, insertOffers, listOffers, missingRefs, updateOffer } from '../adapters/promotions-store.js';
 import { IMAGE_TYPES } from './catalog-common.js';
 import { SERVER_LIMITS, UPLOAD_SECONDS } from './service.js';
 

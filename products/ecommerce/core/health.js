@@ -16,6 +16,7 @@
  * @module
  */
 import { variantStockCounts, variantStockStages } from './catalog-query.js';
+import { escapeRegex } from './search.js';
 
 /** The checks, in the order they are answered. */
 export const HEALTH_CHECKS = Object.freeze(
@@ -79,9 +80,6 @@ const TAG_FORMS = Object.freeze([
 
 /** Names that are not a public web address (reserved and local top-level names). */
 const LOCAL_NAMES = Object.freeze(['localhost', 'local', 'test', 'example', 'invalid', 'internal', 'lan', 'home']);
-
-/** @param {string} text */
-const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** A text field that holds something. */
 const FILLED = Object.freeze({ $nin: ['', null] });

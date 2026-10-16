@@ -10,7 +10,7 @@
 import { zonedDay } from '@ss/contracts/format';
 import { dayBounds } from './calendar.js';
 import { toDecimal } from '@ss/contracts/format';
-import { DAY_MS } from './returns.js';
+import { DAY_MS } from './durations.js';
 
 /** The longest range, in days. */
 const MAX_RANGE_DAYS = 366;

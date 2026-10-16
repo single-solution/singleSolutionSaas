@@ -14,7 +14,7 @@ import { createId } from '@ss/contracts';
 import { zonedParts } from '@ss/contracts/format';
 import { summarize } from '../core/catalog.js';
 import { unitKeys } from '../core/fields.js';
-import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX, isDuplicate } from '../core/model.js';
 import { lotsByRule } from '../core/loyalty.js';
 import { piecesOf } from '../core/measure.js';
 import { counterIdOf, counterNumbers, numberFormOf, orderNumberOf } from '../core/order-numbers.js';
@@ -88,9 +88,6 @@ export const LEDGER_INDEXES = [
  * Units an order took from a variant that tracks stock, and what the variant holds after (for the stock events, E44).
  * @typedef {{ productId: string, variantId: string, quantity: number, left: number }} TakenStock
  */
-
-/** @param {unknown} error */
-const isDuplicate = (error) => typeof error === 'object' && error !== null && /** @type {any} */ (error).code === 11000;
 
 /** @param {unknown} error @param {string} collection the unprefixed name */
 const duplicateIn = (error, collection) =>

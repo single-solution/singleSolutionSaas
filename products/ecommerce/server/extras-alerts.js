@@ -19,7 +19,7 @@
 import { createId } from '@ss/contracts';
 import { created, defineRoute, noContent, problem } from '@ss/app-kit';
 import { newOrderKey, orderKeyHash } from '../adapters/crypto.js';
-import { isDuplicate, userIdsOf } from '../adapters/extras-store.js';
+import { userIdsOf } from '../adapters/extras-store.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import {
 	MAX_ALERTS,
@@ -33,7 +33,7 @@ import {
 	stopLink,
 } from '../core/alerts.js';
 import { ORDER_KEY_LENGTH, checkGuestContact, guestRules, phoneAllowed } from '../core/guests.js';
-import { COLLECTIONS, ID_PREFIX, NO_ID } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX, NO_ID, isDuplicate } from '../core/model.js';
 import { phoneRulesOf } from './guests.js';
 import { VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
 

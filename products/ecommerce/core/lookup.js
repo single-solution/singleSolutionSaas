@@ -10,7 +10,9 @@
 import { shopperLabelOf } from './flow.js';
 import { MAX_QUANTITY, limitsOf, measureView, quantityLabel } from './measure.js';
 import { orderMoney } from './orders.js';
-import { activeVariants, variantInStock } from './seo.js';
+import { variantInStock } from './catalog.js';
+import { activeVariants } from './seo.js';
+import { escapeRegex } from './search.js';
 
 /** @typedef {import('./durations.js').Duration} Duration */
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -156,7 +158,7 @@ const cheapestShown = (product, variants, shown) => {
 					!best || next.price < best.price ? next : best,
 				null,
 			)?.variant ?? null;
-	return cheapest(variants.filter((variant) => variantInStock(product, variant))) ?? cheapest(variants);
+	return cheapest(variants.filter((variant) => variantInStock(variant, product.trackStock))) ?? cheapest(variants);
 };
 
 /**
@@ -175,16 +177,10 @@ export const matchingVariant = (product, filters, shown) =>
 				(filters.minPrice === null || variant.price >= filters.minPrice) &&
 				(filters.maxPrice === null || variant.price <= filters.maxPrice) &&
 				(filters.grades.length === 0 || (variant.grade !== null && filters.grades.includes(variant.grade))) &&
-				(!filters.inStock || variantInStock(product, variant)),
+				(!filters.inStock || variantInStock(variant, product.trackStock)),
 		),
 		shown,
 	);
-
-/**
- * Escape a text for a regular expression.
- * @param {string} text
- */
-export const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * The words of a search text, as escaped regular expression sources (at most a few; empty when there is nothing to
@@ -351,7 +347,7 @@ export const productDetails = (product, context) => {
 					...shownParts(shown, text),
 					grade: variant.grade ? (context.grades.get(variant.grade) ?? variant.grade) : null,
 					gradeKey: variant.grade ?? null,
-					inStock: variantInStock(product, variant),
+					inStock: variantInStock(variant, product.trackStock),
 					soldOut: variant.soldOut,
 					...stockParts(context.stockLeft?.(variant) ?? null, context.measure ?? null),
 					warrantyTime: context.warrantyTime?.(variant) ?? null,
@@ -391,7 +387,7 @@ export const gradePrices = (product, shown) => {
 	const out = new Map();
 	for (const variant of activeVariants(product)) {
 		const key = variant.grade ?? '';
-		const inStock = variantInStock(product, variant);
+		const inStock = variantInStock(variant, product.trackStock);
 		const { price, was } = shown(variant);
 		const found = out.get(key);
 		if (!found || (inStock && !found.inStock) || (inStock === found.inStock && price < found.price))

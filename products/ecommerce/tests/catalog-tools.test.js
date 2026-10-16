@@ -245,6 +245,9 @@ describe('CSV', () => {
 			"2026-000002,2026-10-01T10:00:00.000Z,delivered,Sara,Berlin,Berlin,DE,'@Case,,,1,5.00,0.00,5.00,USD,cod,paid,",
 		]);
 		expect((await shop.api('GET', '/v1/csv/orders?from=yesterday')).status).toBe(422);
+		// the file takes the filters it documents: the list's polling filters are not among them
+		const polled = await shop.api('GET', '/v1/csv/orders?createdAfter=2099-01-01T00:00:00Z&unseen=1');
+		expect(polled.text.trim().split('\r\n')).toHaveLength(5);
 		const staff = await shop.ticket(['csv.run']);
 		expect((await shop.admin(staff, 'GET', '/v1/admin/csv/orders')).text.trim().split('\r\n')).toHaveLength(5);
 		await data.collection(COLLECTIONS.orders).insertMany(

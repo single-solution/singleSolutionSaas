@@ -13,6 +13,7 @@
  */
 import { zonedParts } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
+import { DAY_MS } from './durations.js';
 
 /** @typedef {{ start: string, end: string }} TimeRange `HH:MM`, the end after the start (`24:00` = the end of the day) */
 /** @typedef {TimeRange & { day: number }} HoursWindow one weekly window: `day` 1 = Monday … 7 = Sunday (ISO 8601) */
@@ -27,7 +28,6 @@ export const MAX_SLOT_DAYS = 14;
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const KEY = /^[a-z][a-z0-9_]{1,39}$/;
-const DAY_MS = 86_400_000;
 
 /** @param {string} time 'HH:MM' @returns {number} minutes after midnight ('24:00' = 1440) */
 const minutesOf = (time) => (time === '24:00' ? 1440 : Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5)));

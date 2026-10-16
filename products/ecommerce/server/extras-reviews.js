@@ -10,9 +10,9 @@
 import { createId } from '@ss/contracts';
 import { countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
 import { keyOpens } from '../adapters/crypto.js';
-import { answerCounts, isDuplicate, refreshRating, reviewSummary, userIdsOf } from '../adapters/extras-store.js';
+import { answerCounts, refreshRating, reviewSummary, userIdsOf } from '../adapters/extras-store.js';
 import { afterFilter, keyOf, sortOf } from '../core/extras-pages.js';
-import { COLLECTIONS, ID_PREFIX, NO_ID } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX, NO_ID, isDuplicate } from '../core/model.js';
 import {
 	REVIEW_SORTS,
 	REVIEW_STATUSES,

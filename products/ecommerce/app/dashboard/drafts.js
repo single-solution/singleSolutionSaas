@@ -5,22 +5,16 @@
  * `checkItemTypes`).
  * @module
  */
-import { CONTENT_LIMITS } from '../../core/catalog-content.js';
+import { CONTENT_LIMITS, youtubeId } from '../../core/catalog-content.js';
 import { DURATION_UNITS } from '../../core/durations.js';
-import { CONDITIONS, MAX_GRADES } from '../../core/grades.js';
+import { CONDITIONS, GRADE_LIMITS as GRADE_RULES, KEY as LIST_KEY } from '../../core/grades.js';
 import { ELEMENTS, elementFor, isBuiltInKey } from '../../core/item-types.js';
 import { MAX_QUANTITY, MAX_UNIT_LABEL, quantityText, toThousandths } from '../../core/measure.js';
 
 /** What a grade may hold, for the editor's counters and Add buttons. */
 export const GRADE_LIMITS = Object.freeze({
-	grades: MAX_GRADES,
-	label: 60,
-	key: 40,
-	description: 1200,
-	color: 40,
+	...GRADE_RULES,
 	video: 500,
-	categories: 200,
-	types: 50,
 	summary: CONTENT_LIMITS.summary,
 	bullets: CONTENT_LIMITS.bullets,
 	bullet: CONTENT_LIMITS.bullet,
@@ -32,9 +26,6 @@ export const GRADE_LIMITS = Object.freeze({
 	question: CONTENT_LIMITS.question,
 	answer: CONTENT_LIMITS.answer,
 });
-
-/** Grade and item type keys as the server takes them. */
-const LIST_KEY = /^[a-z][a-z0-9_-]{0,39}$/;
 
 /** The standard conditions a grade maps to (structured data and feeds). */
 export const GRADE_CONDITIONS = CONDITIONS;
@@ -141,23 +132,7 @@ export const splitIds = (text) => [
  * storage key or an id).
  * @param {string} text
  */
-export const videoOf = (text) => {
-	const value = text.trim();
-	let url;
-	try {
-		url = new URL(value);
-	} catch {
-		return value;
-	}
-	const host = url.hostname.replace(/^(www\.|m\.)/, '');
-	const id =
-		host === 'youtu.be'
-			? url.pathname.split('/')[1]
-			: host === 'youtube.com' || host === 'youtube-nocookie.com'
-				? (url.searchParams.get('v') ?? /^\/(?:shorts|embed|live)\/([^/?#]+)/.exec(url.pathname)?.[1])
-				: undefined;
-	return id && /^[\w-]{6,20}$/.test(id) ? id : value;
-};
+export const videoOf = (text) => youtubeId(text) ?? text.trim();
 
 /** @param {number | null} value */
 const amountText = (/** @type {import('../../core/durations.js').Duration | null} */ value) =>

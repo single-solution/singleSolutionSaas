@@ -33027,7 +33027,7 @@
 		"/v1/shop/loyalty": {
 			"get": {
 				"summary": "The signed-in shopper’s points",
-				"description": "403 sign_in_required without a valid SS-Sign-In. With the loyalty setting expiryRule current, earned points expire by today’s expiry setting. 422 validation_failed at /limit or /offset; 403 feature_off while the loyalty feature is off.",
+				"description": "403 sign_in_required without a valid SS-Sign-In. With the loyalty setting expiryRule current, earned points expire by today’s expiry setting. 422 validation_failed at /limit; 403 feature_off while the loyalty feature is off.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "loyalty",
 				"security": [
@@ -33050,19 +33050,6 @@
 							"maximum": 50,
 							"default": 50,
 							"description": "History entries."
-						}
-					},
-					{
-						"name": "offset",
-						"in": "query",
-						"required": false,
-						"description": "History entries to skip.",
-						"schema": {
-							"type": "integer",
-							"minimum": 0,
-							"maximum": 10000,
-							"default": 0,
-							"description": "History entries to skip."
 						}
 					},
 					{
@@ -45740,11 +45727,6 @@
 						"type": "boolean",
 						"description": "Its return put its units back in stock."
 					},
-					"claimRestockedAt": {
-						"type": "string",
-						"format": "date-time",
-						"description": "When a return claim last put its units back in stock."
-					},
 					"holdUntil": {
 						"type": [
 							"string",
@@ -47537,11 +47519,6 @@
 					"returnRestocked": {
 						"type": "boolean",
 						"description": "Its return put its units back in stock."
-					},
-					"claimRestockedAt": {
-						"type": "string",
-						"format": "date-time",
-						"description": "When a return claim last put its units back in stock."
 					},
 					"holdUntil": {
 						"type": [
@@ -53830,7 +53807,6 @@
 					"lifetimeEarned",
 					"pending",
 					"history",
-					"hasMore",
 					"expiringSoon"
 				],
 				"additionalProperties": false,
@@ -53886,11 +53862,7 @@
 						"items": {
 							"$ref": "#/components/schemas/LoyaltyHistoryEntry"
 						},
-						"description": "Newest first, from offset."
-					},
-					"hasMore": {
-						"type": "boolean",
-						"description": "More history after this part."
+						"description": "Newest first, at most limit entries."
 					},
 					"expiringSoon": {
 						"type": "array",

@@ -289,12 +289,6 @@ export const createPromotions = (product, service) => {
 						{ min: 1, max: SHOPPER_HISTORY, fallback: SHOPPER_HISTORY },
 					);
 					if (!limit.ok) return invalid(limit.field, limit.message);
-					const offset = checkWhole(
-						ctx.query.offset === undefined || ctx.query.offset === '' ? undefined : Number(ctx.query.offset),
-						'offset',
-						{ min: 0, max: 10_000, fallback: 0 },
-					);
-					if (!offset.ok) return invalid(offset.field, offset.message);
 					const s = await service.site(ctx);
 					const shopper = await service.requireShopper(s);
 					const at = now();
@@ -318,7 +312,6 @@ export const createPromotions = (product, service) => {
 							lifetimeEarned: 0,
 							pending: 0,
 							history: [],
-							hasMore: false,
 							expiringSoon: [],
 						};
 					const account = await loyaltyAccount(data, shopper.id, { now: at, rules: { settings, timeZone } });
@@ -333,8 +326,7 @@ export const createPromotions = (product, service) => {
 						maxPercent: rules.maxPercent,
 						lifetimeEarned: account.lifetimeEarned ?? 0,
 						pending: await pendingPoints(data, shopper.id),
-						history: history.slice(offset.value, offset.value + limit.value),
-						hasMore: history.length > offset.value + limit.value,
+						history: history.slice(0, limit.value),
 						expiringSoon: expiringSoon(account.lots, at),
 					};
 				},

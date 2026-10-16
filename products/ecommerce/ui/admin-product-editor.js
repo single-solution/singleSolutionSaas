@@ -244,7 +244,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			max: '1440',
 			step: '5',
 		});
-		// the booking schedule it is booked on, by key ('' = the first of Settings → Booking schedules; E30)
+		// the booking schedule it is booked on, by key ('' = the first of Settings → Catalog → Booking schedules; E30)
 		const schedule = kit.input(product.booking?.schedule ?? '', { maxlength: '40', autocomplete: 'off' });
 		const downloadField = kit.field(t('catalogAdmin.downloadLimit'), downloadLimit);
 		const digitalGroup = kit.group(t('catalogAdmin.digital'), [licenceKeys.node, downloadField]);

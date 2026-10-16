@@ -5,8 +5,8 @@
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { givePoints } from '../adapters/ledger.js';
-import { insertOffers, isDuplicate, loadOffers } from '../adapters/promotions-store.js';
-import { COLLECTIONS } from '../core/model.js';
+import { insertOffers, loadOffers } from '../adapters/promotions-store.js';
+import { COLLECTIONS, isDuplicate } from '../core/model.js';
 import { readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */

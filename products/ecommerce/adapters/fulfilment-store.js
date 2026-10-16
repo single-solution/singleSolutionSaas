@@ -8,6 +8,7 @@
 import { phoneSearchOf } from '../core/guests.js';
 import { COLLECTIONS, NO_ID } from '../core/model.js';
 import { isCustomerId, spentKey } from '../core/orders.js';
+import { escapeRegex } from '../core/search.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
@@ -41,9 +42,6 @@ export const INDEXES = [
 	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, email: 1 }, name: 'fulfil_by_email' },
 	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, phone: 1 }, name: 'fulfil_by_phone' },
 ];
-
-/** @param {string} text */
-const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * The page filter of a `[time, id]` cursor (newest first).

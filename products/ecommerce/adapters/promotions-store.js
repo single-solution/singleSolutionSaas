@@ -4,7 +4,7 @@
  * accounts and coupon uses. Offer use counters and loyalty points are changed only by the ledger (`adapters/ledger.js`).
  * @module
  */
-import { COLLECTIONS } from '../core/model.js';
+import { COLLECTIONS, isDuplicate } from '../core/model.js';
 import { normaliseCode } from '../core/coupons.js';
 import { dealLive } from '../core/deals.js';
 
@@ -29,17 +29,6 @@ export const INDEXES = [
 	{ collection: COLLECTIONS.bundles, keys: { websiteId: 1, active: 1, startsAt: 1, endsAt: 1 }, name: 'live' },
 	{ collection: COLLECTIONS.bundles, keys: { websiteId: 1, createdAt: -1, id: -1 }, name: 'newest' },
 ];
-
-/**
- * A duplicate-key error of the driver (a single write, or a bulk write whose every failure is one).
- * @param {unknown} error
- */
-export const isDuplicate = (error) => {
-	if (typeof error !== 'object' || error === null) return false;
-	const failures = /** @type {any} */ (error).writeErrors;
-	if (Array.isArray(failures) && failures.length > 0) return failures.every((item) => item?.code === 11000);
-	return /** @type {any} */ (error).code === 11000;
-};
 
 /**
  * Live offers of a collection: switched on, started, not ended, under their use limit.

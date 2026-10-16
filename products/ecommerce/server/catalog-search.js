@@ -8,6 +8,7 @@
  * @module
  */
 import { brandsOf, categoriesOf } from '../adapters/catalog-store.js';
+import { SEARCH_INDEX } from '../adapters/product.js';
 import { sortDocument } from '../core/catalog-query.js';
 import { COLLECTIONS } from '../core/model.js';
 import { namesMatching, searchStage } from '../core/search.js';
@@ -66,7 +67,7 @@ export const createCatalogSearch = (product) => {
 		const { searchIndex } = await s.values('catalog');
 		const [brands, categories] = await Promise.all([brandsOf(data), categoriesOf(data)]);
 		const stage = searchStage(q, {
-			index: String(searchIndex || 'ss_ecommerce_products_search'),
+			index: String(searchIndex || SEARCH_INDEX),
 			websiteId: data.websiteId,
 			brandIds: namesMatching(q, brands),
 			categoryIds: namesMatching(q, categories),

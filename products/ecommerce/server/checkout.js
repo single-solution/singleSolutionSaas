@@ -17,12 +17,11 @@ import { createOrdering } from './checkout-orders.js';
 import { createQuoting } from './checkout-quote.js';
 import { policiesOf } from './policies.js';
 import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
+import { DAY_MS } from '../core/durations.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('./service.js').Site} Site */
-
-const DAY_MS = 86_400_000;
 
 /**
  * @param {Product} product

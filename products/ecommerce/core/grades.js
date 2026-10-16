@@ -14,17 +14,21 @@
 import { EMPTY_CONTENT, checkContent, checkFaqs } from './catalog-content.js';
 import { DURATION_RULE, durationOf } from './durations.js';
 
-/** At most this many grades. */
-export const MAX_GRADES = 100;
-/** Longest grade description. */
-const MAX_DESCRIPTION = 1200;
+/** What a grade may hold (the dashboard's editor counts with the same). */
+export const GRADE_LIMITS = Object.freeze({
+	grades: 100,
+	label: 60,
+	key: 40,
+	description: 1200,
+	color: 40,
+	categories: 200,
+	types: 50,
+});
 
 /** Grade and item type keys. */
-const KEY = /^[a-z][a-z0-9_-]{0,39}$/;
-/** At most this many item types a grade names. */
-const MAX_TYPES = 50;
+export const KEY = new RegExp(`^[a-z][a-z0-9_-]{0,${GRADE_LIMITS.key - 1}}$`);
 /** A CSS color as the website writes it (a name, `#rgb`, `#rrggbb`, `rgb(…)` …). */
-const COLOUR = /^[#A-Za-z0-9(),.%\s-]{0,40}$/;
+const COLOUR = new RegExp(`^[#A-Za-z0-9(),.%\\s-]{0,${GRADE_LIMITS.color}}$`);
 /** Grade conditions (schema.org item conditions), the standard condition every grade maps to (owner, 2026-10-14). */
 export const CONDITIONS = Object.freeze(/** @type {const} */ (['new', 'refurbished', 'used']));
 
@@ -69,7 +73,7 @@ const shortText = (value, max) =>
  */
 export const checkGrades = (value) => {
 	if (!Array.isArray(value)) return { ok: false, errors: ['A list is expected.'] };
-	if (value.length > MAX_GRADES) return { ok: false, errors: [`At most ${MAX_GRADES} grades.`] };
+	if (value.length > GRADE_LIMITS.grades) return { ok: false, errors: [`At most ${GRADE_LIMITS.grades} grades.`] };
 	/** @type {string[]} */
 	const errors = [];
 	/** @type {Grade[]} */
@@ -90,10 +94,11 @@ export const checkGrades = (value) => {
 					: `Grade ${n}: the key ${key} is used twice for the same category.`,
 			);
 		const label = typeof entry.label === 'string' ? entry.label.trim() : '';
-		if (!label || label.length > 60 || CONTROL.test(label)) errors.push(`Grade ${n}: give a label of 1 to 60 characters.`);
+		if (!label || label.length > GRADE_LIMITS.label || CONTROL.test(label))
+			errors.push(`Grade ${n}: give a label of 1 to ${GRADE_LIMITS.label} characters.`);
 		const description = entry.description === undefined ? '' : entry.description;
-		if (typeof description !== 'string' || description.length > MAX_DESCRIPTION)
-			errors.push(`Grade ${n}: the description has at most ${MAX_DESCRIPTION} characters.`);
+		if (typeof description !== 'string' || description.length > GRADE_LIMITS.description)
+			errors.push(`Grade ${n}: the description has at most ${GRADE_LIMITS.description} characters.`);
 		const returnTime = durationOf(entry.returnTime ?? null);
 		const warrantyTime = durationOf(entry.warrantyTime ?? null);
 		if (returnTime === undefined) errors.push(`Grade ${n}: the return time: ${DURATION_RULE}`);
@@ -101,17 +106,17 @@ export const checkGrades = (value) => {
 		const categoryIds = entry.categoryIds ?? [];
 		if (
 			!Array.isArray(categoryIds) ||
-			categoryIds.length > 200 ||
+			categoryIds.length > GRADE_LIMITS.categories ||
 			!categoryIds.every((id) => typeof id === 'string' && id.length > 0 && id.length <= 64)
 		)
 			errors.push(`Grade ${n}: categories are a list of category ids.`);
 		const typeKeys = entry.typeKeys ?? [];
 		if (
 			!Array.isArray(typeKeys) ||
-			typeKeys.length > MAX_TYPES ||
+			typeKeys.length > GRADE_LIMITS.types ||
 			!typeKeys.every((key) => typeof key === 'string' && KEY.test(key))
 		)
-			errors.push(`Grade ${n}: item types are a list of at most ${MAX_TYPES} item type keys.`);
+			errors.push(`Grade ${n}: item types are a list of at most ${GRADE_LIMITS.types} item type keys.`);
 		const color = entry.color === undefined ? '' : entry.color;
 		if (typeof color !== 'string' || !COLOUR.test(color))
 			errors.push(`Grade ${n}: the color is a CSS color of up to 40 characters.`);

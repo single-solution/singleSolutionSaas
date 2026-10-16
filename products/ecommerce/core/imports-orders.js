@@ -482,7 +482,7 @@ export const checkImportedCustomer = (record, rules) => {
 /** Fields of an order and its parts (`OrderRecord`); `role` must be the flow's, `phoneDigits` is derived. */
 const ORDER_FIELDS = fieldList(
 	'id number customer address delivery lines totals promotions payment payments refunds status role history ' +
-		'shipment attachments seenBy phoneDigits accessKeyHash stockHeld returnRestocked claimRestockedAt holdUntil ' +
+		'shipment attachments seenBy phoneDigits accessKeyHash stockHeld returnRestocked holdUntil ' +
 		'idempotencyKey note fields staffNote placedAt deliveredAt createdAt updatedAt',
 );
 const ORDER_CUSTOMER_FIELDS = fieldList('userId customerId name email phone');
@@ -1054,7 +1054,6 @@ export const checkImportedOrder = (record, rules) => {
 		c.fail('/accessKeyHash', 'The SHA-256 hash of a guest order’s key (base64url) is expected.');
 	const idempotencyKey = c.text(record.idempotencyKey, '/idempotencyKey', 200) || `import:${id}`;
 	const createdAt = c.time(record.createdAt, '/createdAt', now, { nullable: true }) ?? placedAt;
-	const claimRestockedAt = c.time(record.claimRestockedAt, '/claimRestockedAt', now, { nullable: true });
 
 	const order = {
 		id,
@@ -1078,7 +1077,6 @@ export const checkImportedOrder = (record, rules) => {
 		accessKeyHash,
 		stockHeld,
 		...(missing(record.returnRestocked) ? {} : { returnRestocked: c.flag(record.returnRestocked, '/returnRestocked') }),
-		...(claimRestockedAt ? { claimRestockedAt } : {}),
 		holdUntil,
 		idempotencyKey,
 		note: c.text(record.note, '/note', MAX_NOTE),

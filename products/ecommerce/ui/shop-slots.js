@@ -6,6 +6,7 @@
  * @module
  */
 import { button, h } from './shop-common.js';
+import { DAY_MS } from '../core/durations.js';
 
 /** @typedef {import('./shop-common.js').Texts} Texts */
 /** @typedef {import('./shop-common.js').Formats} Formats */
@@ -13,7 +14,6 @@ import { button, h } from './shop-common.js';
 
 /** Days read at once. */
 const SLOT_DAYS = 7;
-const DAY_MS = 86_400_000;
 
 /**
  * Fill `box` with the slot picker.
