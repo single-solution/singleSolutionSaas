@@ -475,7 +475,10 @@ describe('A11: profile options', () => {
 	it('area and a default address; at most N; required fields; the last address stays', async () => {
 		await env.switchOn(ALL.filter((key) => !['consents', 'approval', 'two_step', 'risk_checks'].includes(key)));
 		const me = (await signIn('rem@example.com')).json.signIn;
-		const save = (/** @type {unknown[]} */ addresses) => env.visitor('PATCH', '/v1/me', { addresses }, me);
+		// each address in the UK, whose format asks for a postcode (A1)
+		const uk = { country: 'GB', postalCode: 'NW1 7AA' };
+		const save = (/** @type {Array<Record<string, unknown>>} */ addresses) =>
+			env.visitor('PATCH', '/v1/me', { addresses: addresses.map((address) => ({ ...uk, ...address })) }, me);
 		const two = await save([
 			{ line1: '1 High Street', area: 'Camden', city: 'London' },
 			{ line1: '2 Park Road', city: 'London' },
@@ -512,7 +515,15 @@ describe('A11: profile options', () => {
 		await env.setting('profile', 'keepOneAddress', true);
 		expect(code(await save([]))).toBe('validation_failed');
 		const config = (await env.visitor('GET', '/v1/widget/config')).json.settings.profile;
-		expect(config).toEqual({ maxAddresses: 1, keepOneAddress: true, addressRequired: ['line1', 'area'] });
+		expect(config).toEqual({
+			maxAddresses: 1,
+			keepOneAddress: true,
+			addressRequired: ['line1', 'area'],
+			country: expect.any(String),
+		});
+		// the postcode the UK asks for, in its shape
+		expect(code(await save([{ line1: 'a', area: 'b', postalCode: '' }]))).toBe('validation_failed');
+		expect(code(await save([{ line1: 'a', area: 'b', postalCode: '12345' }]))).toBe('validation_failed');
 	});
 });
 

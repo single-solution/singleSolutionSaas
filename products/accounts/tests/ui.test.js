@@ -1387,7 +1387,13 @@ describe('My account', () => {
 
 	it('shows dates and order totals in the Format and business time zone of the widget config', async () => {
 		looks = {
-			format: { locale: 'en-GB', currencyDisplay: 'symbol', currencySymbols: { USD: 'US$' }, wholeUnits: true, times: 'business' },
+			format: {
+				locale: 'en-GB',
+				currencyDisplay: 'symbol',
+				currencySymbols: { USD: 'US$' },
+				wholeUnits: true,
+				times: 'business',
+			},
 			timeZone: 'Asia/Tokyo',
 		};
 		const { host } = await open({
@@ -2965,7 +2971,13 @@ describe('helpers', () => {
 	it('show dates and money in the Format and business time zone of the widget config', () => {
 		/** @type {import('../ui/common.js').Looks} */
 		const tokyo = {
-			format: { locale: 'en-GB', currencyDisplay: 'symbol', currencySymbols: { USD: 'US$' }, wholeUnits: true, times: 'business' },
+			format: {
+				locale: 'en-GB',
+				currencyDisplay: 'symbol',
+				currencySymbols: { USD: 'US$' },
+				wholeUnits: true,
+				times: 'business',
+			},
 			timeZone: 'Asia/Tokyo',
 		};
 		const dates = datesOf(tokyo, window);
