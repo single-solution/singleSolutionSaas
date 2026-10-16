@@ -5,7 +5,7 @@
  * resolved, average rating, Net Promoter Score, leads and AI tokens (numbers in the website's Format too).
  * @module
  */
-import { adminCall, element, formatDate, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
+import { adminCall, block, element, formatDate, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
 import { dayKey } from '../core/time.js';
 import { fieldMaker, isInvalid, numbersOf, textsOf } from './common.js';
 import { WIDGET_CSS } from './styles.js';
@@ -56,8 +56,12 @@ export const mountReports = ({ host, win, api, config, now }) => {
 			const numbers = element(doc, 'dl', { class: 'numbers' });
 			const days = element(doc, 'ul', { class: 'bars' });
 			const labeled = element(doc, 'div', { class: 'labeled' });
-			const box = element(doc, 'section', { class: 'box' });
-			box.append(element(doc, 'h2', {}, t('reports.title')), form, note, numbers, labeled, days);
+			const box = element(doc, 'section', { class: 'box admin' });
+			box.append(
+				element(doc, 'h2', {}, t('reports.title')),
+				block(doc, { body: [form, note] }),
+				block(doc, { body: [numbers, labeled, days] }),
+			);
 			root.append(box);
 
 			const load = async () => {

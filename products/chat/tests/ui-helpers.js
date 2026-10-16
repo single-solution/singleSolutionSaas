@@ -142,17 +142,33 @@ export const buttonIn = (scope, text) => {
 /** A visible button? @param {ParentNode} scope @param {string} text */
 export const shows = (scope, text) =>
 	[...scope.querySelectorAll('button')].some((b) => b.textContent === text && !b.closest('[hidden]'));
+/** A choice group (segmented control) read and set like the select it replaced. @param {Element} group */
+const groupAsSelect = (group) => ({
+	get value() {
+		return /** @type {HTMLInputElement | null} */ (group.querySelector('input:checked'))?.value ?? '';
+	},
+	set value(next) {
+		/** @type {HTMLInputElement} */ ([...group.querySelectorAll('input')].find((input) => input.value === next)).click();
+	},
+	querySelectorAll: () => [...group.querySelectorAll('input')].map((input) => ({ value: input.value })),
+	// picking a radio already fires its change
+	dispatchEvent: () => true,
+});
 /** @param {ParentNode} scope @param {string} label @returns {any} */
 export const fieldIn = (scope, label) => {
 	const found = /** @type {HTMLLabelElement | undefined} */ (
-		[...scope.querySelectorAll('label')].find((l) => l.textContent === label && !l.classList.contains('check'))
+		[...scope.querySelectorAll('label')].find((l) => l.textContent === label && !l.classList.contains('check') && l.htmlFor)
 	);
-	if (!found) throw new Error(`no field ${label}`);
+	if (!found) {
+		const caption = [...scope.querySelectorAll('.field > .cap')].find((c) => c.textContent === label);
+		if (!caption) throw new Error(`no field ${label}`);
+		return groupAsSelect(/** @type {Element} */ (caption.parentElement?.querySelector('[role="radiogroup"]')));
+	}
 	return /** @type {ShadowRoot} */ (found.getRootNode()).getElementById(found.htmlFor);
 };
-/** @param {ParentNode} scope @param {string} text @returns {HTMLInputElement} */
+/** A checkbox or a switch by its text. @param {ParentNode} scope @param {string} text @returns {HTMLInputElement} */
 export const checkIn = (scope, text) => {
-	const found = [...scope.querySelectorAll('label.check')].find((l) => (l.textContent ?? '').startsWith(text));
+	const found = [...scope.querySelectorAll('label.check, label.switch')].find((l) => (l.textContent ?? '').startsWith(text));
 	if (!found) throw new Error(`no check ${text}`);
 	return /** @type {HTMLInputElement} */ (found.querySelector('input'));
 };

@@ -94,7 +94,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 			const shown = new Map();
 
 			// the list
-			const box = element(doc, 'section', { class: 'box inbox' });
+			const box = element(doc, 'section', { class: 'box inbox admin' });
 			const total = element(doc, 'p', { class: 'meta total' });
 			const filters = element(doc, 'form', { class: 'row' });
 			const status = make.field('select', t('inbox.status'));
@@ -102,18 +102,16 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				element(doc, 'option', { value: '' }, t('inbox.any')),
 				...Object.entries(statuses).map(([value, label]) => element(doc, 'option', { value }, label)),
 			);
-			const assigned = make.field('select', t('inbox.assigned'));
-			assigned.input.append(
-				element(doc, 'option', { value: 'any' }, t('inbox.any')),
-				element(doc, 'option', { value: 'me' }, t('inbox.assignedMe')),
-				element(doc, 'option', { value: 'unassigned' }, t('inbox.unassigned')),
-			);
-			const kind = make.field('select', t('inbox.visitor'));
-			kind.input.append(
-				element(doc, 'option', { value: '' }, t('inbox.any')),
-				element(doc, 'option', { value: 'guest' }, t('inbox.guest')),
-				element(doc, 'option', { value: 'user' }, t('inbox.signedIn')),
-			);
+			const assigned = make.choose(t('inbox.assigned'), [
+				{ value: 'any', label: t('inbox.any') },
+				{ value: 'me', label: t('inbox.assignedMe') },
+				{ value: 'unassigned', label: t('inbox.unassigned') },
+			]);
+			const kind = make.choose(t('inbox.visitor'), [
+				{ value: '', label: t('inbox.any') },
+				{ value: 'guest', label: t('inbox.guest') },
+				{ value: 'user', label: t('inbox.signedIn') },
+			]);
 			// the merchant's tags, topics and priorities (C7)
 			const labels = s.labels;
 			/** @param {readonly { key: string, name: string }[]} list @param {string} key */
@@ -136,7 +134,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 					}),
 			);
 			const hasLabels = labels.tags.length + labels.topics.length + labels.priorities.length > 0;
-			const waiting = make.check(t('inbox.waitingOnly'));
+			const waiting = make.flip(t('inbox.waitingOnly'));
 			const q = make.field('input', t('inbox.search'), { type: 'search', maxlength: '200' });
 			filters.append(
 				status.wrap,

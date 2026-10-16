@@ -4,7 +4,16 @@
  * always set as text, never as HTML.
  * @module
  */
-import { element, formatDate, normalizeFormat, viewerOf } from '@ss/app-kit/widget';
+import {
+	checkbox,
+	element,
+	field as kitField,
+	formatDate,
+	normalizeFormat,
+	segmented,
+	toggle,
+	viewerOf,
+} from '@ss/app-kit/widget';
 import { CHECKS, attachmentKind } from '../core/widgets.js';
 
 /** @typedef {(key: string) => string} Texts */
@@ -219,12 +228,24 @@ export const fieldMaker = (doc, prefix) => {
 	};
 	/** A checkbox with its text. @param {string} label */
 	const check = (label) => {
-		const input = /** @type {HTMLInputElement} */ (element(doc, 'input', { type: 'checkbox' }));
-		const wrap = element(doc, 'label', { class: 'check' });
-		wrap.append(input, doc.createTextNode(label));
-		return { wrap, input };
+		const { box, node } = checkbox(doc, label);
+		return { wrap: node, input: box };
 	};
-	return { field, check };
+	/** A switch with its text, for a filter. @param {string} label */
+	const flip = (label) => {
+		const { box, node } = toggle(doc, label, { inline: true });
+		return { wrap: node, input: box };
+	};
+	/**
+	 * One choice from a few as a segmented control under its label; `input.value` reads and sets the choice.
+	 * @param {string} label @param {Array<{ value: string, label: string }>} items
+	 */
+	const choose = (label, items) => {
+		n += 1;
+		const input = segmented(doc, { label, name: `${prefix}-choice-${n}`, items, value: items[0]?.value });
+		return { wrap: kitField(doc, label, input.node), input };
+	};
+	return { field, check, flip, choose };
 };
 
 /** @typedef {ReturnType<typeof fieldMaker>} FieldMaker */

@@ -29,7 +29,7 @@ export const savedReplies = ({ doc, t, make, api, failure }) => {
 	let editing = null;
 	/** @type {Set<() => void>} */
 	const pickers = new Set();
-	const part = element(doc, 'section', { class: 'part', hidden: '' });
+	const part = element(doc, 'section', { class: 'part block', hidden: '' });
 	const list = element(doc, 'ul');
 	const title = make.field('input', t('inbox.savedTitle'), { maxlength: '120', required: '' });
 	const text = make.field('textarea', t('inbox.savedText'), { rows: '3', maxlength: '4000', required: '' });
@@ -128,7 +128,7 @@ export const savedReplies = ({ doc, t, make, api, failure }) => {
 export const staffPart = ({ doc, t, make, api, failure, queue, onStaff }) => {
 	/** @type {Record<string, string>} */
 	const presence = { online: t('inbox.online'), away: t('inbox.away'), offline: t('inbox.offline') };
-	const part = element(doc, 'section', { class: 'part', hidden: '' });
+	const part = element(doc, 'section', { class: 'part block', hidden: '' });
 	const mine = make.field('select', t('inbox.myPresence'));
 	mine.input.append(
 		element(doc, 'option', { value: '' }, t('inbox.presenceUnknown')),
@@ -288,7 +288,7 @@ export const deviceText = (t, device) => {
  * @param {PartKit & { summary: boolean }} input
  */
 export const contextPart = ({ doc, t, api, failure, summary }) => {
-	const part = element(doc, 'section', { class: 'part' });
+	const part = element(doc, 'section', { class: 'part block' });
 	const facts = element(doc, 'ul', { class: 'facts' });
 	const shopTitle = element(doc, 'h3', {}, t('inbox.orders'));
 	const shop = element(doc, 'ul', { class: 'facts shop' });

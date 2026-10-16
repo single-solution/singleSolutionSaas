@@ -4,7 +4,7 @@
  * Pages are fetched when added and by Fetch again, never on a schedule. A part whose route answers 403 hides itself.
  * @module
  */
-import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
+import { adminCall, block, element, formatText, mountWidget } from '@ss/app-kit/widget';
 import { buttonOf, fieldMaker, formPart, isInvalid, setHidden, textsOf, webAddress, whenOf } from './common.js';
 import { WIDGET_CSS } from './styles.js';
 
@@ -49,7 +49,7 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 			/** @type {any} */
 			let editing = null;
 
-			const box = element(doc, 'section', { class: 'box' });
+			const box = element(doc, 'section', { class: 'box admin' });
 			const search = element(doc, 'form', { class: 'row' });
 			const q = make.field('input', t('knowledge.search'), { type: 'search', maxlength: '200' });
 			// the merchant's own collections (C21): a filter, and the names offered while typing one
@@ -98,7 +98,11 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 				},
 			});
 			cancel.addEventListener('click', reset);
-			box.append(element(doc, 'h2', {}, t('knowledge.title')), search, note, list, more, form);
+			box.append(
+				element(doc, 'h2', {}, t('knowledge.title')),
+				block(doc, { body: [search, note, list, more] }),
+				block(doc, { body: [form] }),
+			);
 			root.append(box);
 
 			/** @param {any} entry */
