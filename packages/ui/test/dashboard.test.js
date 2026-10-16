@@ -13,6 +13,7 @@ import {
 	FeaturesTab,
 	FormatForm,
 	Loaded,
+	LookTab,
 	OverviewTab,
 	Outcome,
 	PricesTab,
@@ -21,6 +22,7 @@ import {
 	SettingsForms,
 	SettingsTab,
 	TextsForm,
+	TextsTab,
 	ThemeForm,
 	call,
 	fill,
@@ -46,9 +48,10 @@ afterEach(() => {
 
 const MANIFEST = {
 	features: [
-		{ key: 'notes', name: 'Notes' },
-		{ key: 'inbox', name: 'Inbox' },
-		{ key: 'alerts', name: 'Alerts' },
+		{ key: 'notes', name: 'Notes', description: 'Keep notes.', dependsOn: [] },
+		{ key: 'inbox', name: 'Inbox', description: 'Read them.', dependsOn: ['notes'] },
+		{ key: 'alerts', name: 'Alerts', description: 'Be told.', dependsOn: ['inbox'] },
+		{ key: 'digest', name: 'Digest', description: 'A daily mail.', dependsOn: ['alerts'] },
 	],
 };
 const TEXTS = dashboardTexts({ title: 'Notes', settings: { looksHelp: 'Our own words' } });
@@ -89,12 +92,25 @@ const settle = async () => {
 let sites = 0;
 const freshSite = () => `w${(sites += 1)}`;
 
-/** @param {import('react').ReactNode} node */
-const inDashboard = (node) => (
-	<DashboardProvider manifest={MANIFEST} texts={TEXTS}>
+/** @param {import('react').ReactNode} node @param {import('../src/dashboard.js').DashboardCategories} [categories] */
+const inDashboard = (node, categories) => (
+	<DashboardProvider manifest={MANIFEST} texts={TEXTS} {...(categories ? { categories } : {})}>
 		{node}
 	</DashboardProvider>
 );
+
+/**
+ * Opens a section of the inner sidebar by its address (a sub-item, when it is one, is the last link to it).
+ * @param {ParentNode} root
+ * @param {string} id
+ */
+const openSection = (root, id) => {
+	const links = [...root.querySelectorAll(`nav a[href="#${id}"]`)];
+	click(/** @type {HTMLElement} */ (links.at(-1)));
+};
+
+/** The links of the inner sidebar. @param {ParentNode} root */
+const navLinks = (root) => [...root.querySelectorAll('nav[aria-label] a[href^="#"]')].map((link) => link.textContent);
 
 /**
  * The props a tab gets for a website.
@@ -558,9 +574,9 @@ describe('standard tabs', () => {
 		const boxes = /** @type {HTMLButtonElement[]} */ ([...container.querySelectorAll('[role="switch"]')]);
 		const checks = () => boxes.map((box) => box.getAttribute('aria-checked') === 'true');
 		expect(checks()).toEqual([true, true, false]);
-		// Alerts needs Inbox (on): it can be switched on; Save is enabled only once something changed
+		// Alerts needs Inbox (on): it can be switched on; the Save bar shows only once something changed
 		expect(boxes[2]?.disabled).toBe(false);
-		expect(/** @type {HTMLButtonElement} */ (button('Save')).disabled).toBe(true);
+		expect(container.textContent).not.toContain('You changed the features');
 		click(/** @type {HTMLElement} */ (boxes[2]));
 		click(/** @type {HTMLElement} */ (boxes[0]));
 		expect(checks()).toEqual([false, false, false]);
@@ -593,6 +609,32 @@ describe('standard tabs', () => {
 		expect(merchant.container.textContent).not.toContain('Save');
 	});
 
+	it('Features: a sidebar of categories with how many are on, one category at a time', async () => {
+		const id = freshSite();
+		const base = `/v1/dashboard/websites/${id}`;
+		serve({ [`GET ${base}/features`]: ok({ features: FEATURES }), [`GET ${base}/connections`]: ok({ connections: [] }) });
+		const { container } = render(
+			inDashboard(<FeaturesTab {...tabProps(id)} />, [
+				{ title: 'Writing', features: ['notes'] },
+				{ title: 'Reading', features: ['inbox', 'alerts'] },
+			]),
+		);
+		await settle();
+		expect(navLinks(container)).toEqual(['Writing1/1', 'Reading1/2']);
+		expect(container.textContent).toContain('1 of 1 on');
+		expect(container.textContent).not.toContain('Read them.');
+		openSection(container, 'category-reading');
+		expect(container.textContent).toContain('Read them.');
+		expect(container.textContent).toContain('1 of 2 on');
+		// the rows are short: name, price and docs on one line, the description under it, then the switch
+		expect(container.querySelectorAll('#section-category-reading [role="switch"]')).toHaveLength(2);
+		// features in no category are listed under More
+		cleanup();
+		const rest = render(inDashboard(<FeaturesTab {...tabProps(id)} />, [{ title: 'Writing', features: ['notes'] }]));
+		await settle();
+		expect(navLinks(rest.container)).toEqual(['Writing1/1', 'More1/2']);
+	});
+
 	it('Features: a failed save keeps the picks and shows the problem; Cancel closes', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}`;
@@ -620,73 +662,208 @@ describe('standard tabs', () => {
 		expect(boxes[0]?.getAttribute('aria-checked')).toBe('true');
 	});
 
-	it('Settings: the product sections, the feature forms with its notice and cards, then texts, theme and Format', async () => {
+	it('Settings: the features that are on, by category, one view at a time with the notice, the extras and the groups as sub-items', async () => {
+		const id = freshSite();
+		const base = `/v1/dashboard/websites/${id}`;
+		const GROUPED = {
+			type: 'object',
+			properties: {
+				subject: { type: 'string', title: 'Subject', 'x-ui': { group: 'Basics' } },
+				sender: { type: 'string', title: 'Sender', 'x-ui': { group: 'Messages' } },
+				limit: { type: 'integer', title: 'Daily limit', 'x-ui': { group: 'Limits' } },
+				salt: { type: 'string', title: 'Hash salt', 'x-ui': { advanced: true } },
+			},
+		};
+		serve({
+			[`GET ${base}/settings`]: ok({
+				features: [
+					{
+						key: 'notes',
+						name: 'Notes',
+						on: true,
+						schema: SCHEMA,
+						values: { greeting: { value: 'Hi', source: 'default' } },
+					},
+					{
+						key: 'inbox',
+						name: 'Inbox',
+						on: true,
+						schema: GROUPED,
+						values: Object.fromEntries(
+							Object.keys(GROUPED.properties).map((name) => [name, { value: '', source: 'default' }]),
+						),
+					},
+					// off: not listed; its needs are off: not listed either
+					{
+						key: 'alerts',
+						name: 'Alerts',
+						on: false,
+						schema: SCHEMA,
+						values: { greeting: { value: '', source: 'default' } },
+					},
+					{
+						key: 'digest',
+						name: 'Digest',
+						on: true,
+						schema: SCHEMA,
+						values: { greeting: { value: '', source: 'default' } },
+					},
+				],
+			}),
+			[`PUT ${base}/settings/notes.greeting`]: ok({}),
+		});
+		const { container } = render(
+			inDashboard(
+				<SettingsTab
+					{...tabProps(id)}
+					notice={(key) => <p>{`notice for ${key}`}</p>}
+					extras={{
+						notes: <p>notes extra</p>,
+						inbox: { items: [{ id: 'rules', label: 'Rules', content: <p>rules list</p> }] },
+					}}
+					sections={[{ id: 'own', label: 'Own section', group: 'Lists', content: <p>own section</p> }]}
+				/>,
+				[
+					{ title: 'Writing', features: ['notes'] },
+					{ title: 'Reading', features: ['inbox', 'alerts', 'digest'] },
+				],
+			),
+		);
+		await settle();
+		// the sidebar lists the features that are on whose needs are on, under their category (Alerts is off, Digest needs it)
+		const nav = /** @type {HTMLElement} */ (container.querySelector('nav[aria-label="Settings"]'));
+		expect(navLinks(container)).toEqual(['Notes', 'Inbox', 'Own section']);
+		expect(nav.textContent).toContain('Writing');
+		expect(nav.textContent).toContain('Reading');
+		expect(nav.textContent).not.toContain('Alerts');
+		expect(nav.textContent).not.toContain('Digest');
+		// one view: Notes, with the notice and its extra; Inbox is not on the page yet
+		expect(container.textContent).toContain('notice for notes');
+		expect(container.textContent).toContain('notes extra');
+		expect(container.textContent).toContain('Keep notes.');
+		expect(container.textContent).not.toContain('Daily limit');
+		type(/** @type {HTMLInputElement} */ (container.querySelector('[data-field="greeting"] input')), 'Hey');
+		await act(async () => byText(container, 'Save changes', 'button').click());
+		await settle();
+		expect(requests.filter((request) => request.method === 'PUT')).toEqual([
+			{ method: 'PUT', path: `${base}/settings/notes.greeting`, body: { value: 'Hey' } },
+		]);
+		// Inbox has three groups and Advanced settings: they are sub-items, each one view; its list editor is one too
+		openSection(container, 'inbox.basics');
+		expect(navLinks(container)).toEqual(['Notes', 'Inbox', 'Basics', 'Messages', 'Limits', 'Advanced', 'Rules', 'Own section']);
+		expect(container.querySelector('[data-field="subject"]')).not.toBeNull();
+		expect(container.querySelector('[data-field="sender"]')).toBeNull();
+		openSection(container, 'inbox.limits');
+		expect(/** @type {HTMLElement} */ (container.querySelector('[data-field="limit"]')).closest('[hidden]')).toBeNull();
+		openSection(container, 'inbox.advanced');
+		expect(container.querySelector('[data-field="salt"]')).not.toBeNull();
+		openSection(container, 'inbox.rules');
+		expect(container.textContent).toContain('rules list');
+		openSection(container, 'own');
+		expect(container.textContent).toContain('own section');
+		expect(window.location.hash).toBe('#own');
+		// without the product parts: the kit's forms only
+		cleanup();
+		const plain = render(inDashboard(<SettingsTab {...tabProps(id)} />));
+		await settle();
+		expect(plain.container.textContent).not.toContain('notice for');
+		expect(plain.container.textContent).toContain('Keep notes.');
+	});
+
+	it('Settings: says so when no feature with settings is on', async () => {
+		const id = freshSite();
+		serve({
+			[`GET /v1/dashboard/websites/${id}/settings`]: ok({
+				features: [{ key: 'notes', name: 'Notes', on: false, schema: SCHEMA, values: {} }],
+			}),
+		});
+		const { container } = render(inDashboard(<SettingsTab {...tabProps(id)} />));
+		await settle();
+		expect(container.textContent).toContain(TEXTS.settings.nothingOn);
+		expect(container.querySelector('nav')).toBeNull();
+	});
+
+	it('Texts: a sidebar of screens and widgets, a search across all of them, each text saved on its own', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}`;
 		serve({
-			[`GET ${base}/settings`]: ok({
-				features: [{ key: 'notes', name: 'Notes', schema: SCHEMA, values: { greeting: { value: 'Hi', source: 'default' } } }],
+			[`GET ${base}/texts`]: ok({
+				texts: [
+					{ key: 'cart.title', english: 'Your cart', value: 'Your cart', source: 'built-in' },
+					{ key: 'cart.empty', english: 'Nothing here', value: 'Nothing here', source: 'built-in' },
+					{ key: 'signIn.title', english: 'Sign in', value: 'Welcome back', source: 'website' },
+				],
 			}),
-			[`GET ${base}/texts`]: ok({ texts: [{ key: 'hello', english: 'Hello', value: 'Hello', source: 'default' }] }),
+			[`PUT ${base}/texts/cart.title`]: ok({}),
+		});
+		const { container } = render(inDashboard(<TextsTab {...tabProps(id)} />));
+		await settle();
+		expect(navLinks(container)).toEqual(['Cart', 'Sign in1']);
+		// the screen with a changed text says how many
+		expect(container.querySelector('nav a[href="#text-signIn"]')?.textContent).toBe('Sign in1');
+		expect(container.querySelector('#section-text-cart')?.textContent).toContain('Your cart');
+		expect(container.querySelector('#section-text-signIn')).toBeNull();
+		type(
+			/** @type {HTMLInputElement} */ (container.querySelector('input[aria-describedby="text-cart-title-english"]')),
+			'My cart',
+		);
+		await act(async () => buttonsOf(container, 'Save')[0]?.click());
+		await settle();
+		expect(requests.filter((request) => request.method === 'PUT')).toEqual([
+			{ method: 'PUT', path: `${base}/texts/cart.title`, body: { value: 'My cart' } },
+		]);
+		// a search finds a text by its words in every screen
+		type(/** @type {HTMLInputElement} */ (container.querySelector('input[type="search"]')), 'welcome');
+		expect(container.querySelector('nav')).toBeNull();
+		expect(container.textContent).toContain(TEXTS.texts.results);
+		expect(container.textContent).toContain('signIn.title');
+		expect(container.textContent).not.toContain('cart.title');
+		type(/** @type {HTMLInputElement} */ (container.querySelector('input[type="search"]')), 'zzz');
+		expect(container.textContent).toContain(TEXTS.texts.none);
+	});
+
+	it('Theme & format: Colors, Type, Shapes and Formats, one Save changes bar for whatever changed', async () => {
+		const id = freshSite();
+		const base = `/v1/dashboard/websites/${id}`;
+		serve({
 			[`GET ${base}/theme`]: ok({
 				theme: { colors: { accent: '#000000' }, fontFamily: 'inherit', radius: 4, mode: 'auto', customCss: '' },
 			}),
 			[`GET ${base}/format`]: ok({
 				format: { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' },
 			}),
-			[`PUT ${base}/settings/notes.greeting`]: ok({}),
-			[`PUT ${base}/texts/hello`]: ok({}),
 			[`PUT ${base}/theme`]: ok({}),
 			[`PUT ${base}/format`]: ok({}),
 		});
-		const { container } = render(
-			inDashboard(
-				<SettingsTab
-					{...tabProps(id)}
-					sections={<section>own section</section>}
-					notice={(key) => <p>{`notice for ${key}`}</p>}
-					featureCards={(features) => <p>{`cards for ${features.length}`}</p>}
-				/>,
-			),
-		);
+		const { container } = render(inDashboard(<LookTab {...tabProps(id)} />));
 		await settle();
-		expect(container.textContent?.indexOf('own section')).toBe(0);
-		expect(container.textContent).toContain('notice for notes');
-		expect(container.textContent).toContain('cards for 1');
-		// an inner sidebar lists the sections: feature settings, then the words and look
-		expect([...container.querySelectorAll('nav[aria-label="Settings"] a')].map((link) => link.textContent)).toEqual([
-			'Feature settings',
-			'Widget texts',
-			'Theme',
-			'Format',
+		expect(navLinks(container)).toEqual(['Colors', 'Type', 'Shapes', 'Formats']);
+		expect(container.textContent).not.toContain('You have unsaved changes');
+		type(byLabel(container, TEXTS.settings.accent), '#ff0000');
+		expect(container.textContent).toContain('You have unsaved changes');
+		openSection(container, 'type');
+		type(byLabel(container, TEXTS.settings.fontFamily), 'Georgia');
+		openSection(container, 'shapes');
+		// the custom CSS is under Advanced
+		expect(container.querySelector('textarea')).toBeNull();
+		click(/** @type {HTMLElement} */ (container.querySelector('#section-shapes button[aria-expanded]')));
+		expect(container.querySelector('textarea')).not.toBeNull();
+		openSection(container, 'formats');
+		type(byLabel(container, TEXTS.settings.locale), 'fr-FR');
+		await act(async () => button('Save changes').click());
+		await settle();
+		expect(requests.filter((request) => request.method === 'PUT')).toEqual([
+			{
+				method: 'PUT',
+				path: `${base}/theme`,
+				body: { colors: { accent: '#ff0000' }, fontFamily: 'Georgia', radius: 4, mode: 'auto', customCss: '' },
+			},
+			{
+				method: 'PUT',
+				path: `${base}/format`,
+				body: { locale: 'fr-FR', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' },
+			},
 		]);
-		expect(container.querySelector('nav[aria-label="Settings"] [aria-current="true"]')?.textContent).toBe('Feature settings');
-		click(/** @type {HTMLElement} */ (container.querySelector('nav[aria-label="Settings"] a[href="#theme"]')));
-		expect(/** @type {HTMLElement} */ (container.querySelector('#section-theme')).hidden).toBe(false);
-		expect(/** @type {HTMLElement} */ (container.querySelector('#section-features')).hidden).toBe(true);
-		expect(container.textContent).toContain('Our own words');
-		// a section is mounted when first opened, then kept
-		for (const section of ['format', 'texts']) {
-			click(/** @type {HTMLElement} */ (container.querySelector(`nav[aria-label="Settings"] a[href="#${section}"]`)));
-			await settle();
-		}
-		type(/** @type {HTMLInputElement} */ (container.querySelector('[data-field="greeting"] input')), 'Hey');
-		type(/** @type {HTMLInputElement} */ (container.querySelector('input[aria-describedby="text-hello-english"]')), 'Howdy');
-		for (const save of [...buttonsOf(container, 'Save changes'), ...buttonsOf(container, 'Save')])
-			await act(async () => save.click());
-		await settle();
-		expect(requests.filter((request) => request.method === 'PUT').map((request) => request.path)).toEqual([
-			`${base}/settings/notes.greeting`,
-			`${base}/texts/hello`,
-			`${base}/theme`,
-			`${base}/format`,
-		]);
-		// without the product parts: the kit's forms only
-		cleanup();
-		const plain = render(inDashboard(<SettingsTab {...tabProps(id)} />));
-		await settle();
-		expect(plain.container.textContent).not.toContain('notice for');
-		expect(plain.container.textContent).toContain('Notes');
 	});
 
 	it('Connections: saves and tests a value, removes after a confirmation, with the product forms and hints', async () => {
@@ -728,17 +905,25 @@ describe('standard tabs', () => {
 			),
 		);
 		await settle();
+		// one connection per sidebar link, with its state
+		expect(navLinks(container)).toEqual(['Database', 'Mail', 'Storage']);
 		expect(container.textContent).toContain('Needed by: Notes, Inbox');
-		expect(container.textContent).toContain('Optional');
 		expect(container.textContent).toContain('••••abcd');
 		expect(container.textContent).toContain('Fine');
 		expect(container.textContent).toContain('Your MongoDB address.');
-		expect(container.textContent).toContain('Test failed');
+		expect(container.textContent).not.toContain('Optional');
+		await act(async () => buttonsOf(container, TEXTS.connections.test)[0]?.click());
+		await settle();
+		expect(container.textContent).toContain('Cannot reach it');
+		// Mail: a token field, Save and test sends it trimmed, and the field empties; nothing saved yet, so no Remove menu
+		openSection(container, 'connection-mail');
+		expect(container.textContent).toContain('Optional');
+		expect(container.querySelector('#section-connection-mail button[aria-haspopup="menu"]')).toBeNull();
 		const token = byLabel(container, TEXTS.connections.token);
-		expect(byLabel(container, TEXTS.connections.value)).toBeTruthy();
 		type(token, '  secret  ');
-		const mailCard = /** @type {HTMLElement} */ (token.closest('section, article, div[class*="rounded-card"]') ?? container);
-		await act(async () => byText(mailCard, TEXTS.connections.save, 'button').click());
+		await act(async () =>
+			byText(container.querySelector('#section-connection-mail') ?? container, TEXTS.connections.save, 'button').click(),
+		);
 		await settle();
 		expect(requests.find((request) => request.method === 'PUT')).toEqual({
 			method: 'PUT',
@@ -746,6 +931,9 @@ describe('standard tabs', () => {
 			body: { value: 'secret' },
 		});
 		expect(token.value).toBe('');
+		// Storage: the product's own form, and its state
+		openSection(container, 'connection-storage');
+		expect(container.querySelector('#section-connection-storage')?.textContent).toContain('Test failed');
 		await act(async () => button('Save storage').click());
 		await settle();
 		expect(requests.filter((request) => request.method === 'PUT').at(-1)).toEqual({
@@ -753,23 +941,20 @@ describe('standard tabs', () => {
 			path: `${base}/storage`,
 			body: { value: { bucket: 'b' } },
 		});
-		await act(async () => buttonsOf(container, TEXTS.connections.test)[0]?.click());
-		await settle();
-		expect(container.textContent).toContain('Cannot reach it');
-		// Remove sits in the menu of what is saved (not of Mail, which has nothing saved), after a confirmation
-		const menus = /** @type {HTMLElement[]} */ ([...container.querySelectorAll('button[aria-haspopup="menu"]')]);
-		expect(menus.map((menu) => menu.getAttribute('aria-label'))).toEqual([
-			'More actions for Database',
-			'More actions for Storage',
-		]);
-		click(/** @type {HTMLElement} */ (menus[0]));
+		// Remove sits in the menu of what is saved, after a confirmation
+		openSection(container, 'connection-database');
+		const menu = /** @type {HTMLElement} */ (
+			container.querySelector('#section-connection-database button[aria-haspopup="menu"]')
+		);
+		expect(menu.getAttribute('aria-label')).toBe('More actions for Database');
+		click(menu);
 		click(/** @type {HTMLElement} */ (allByRole(container, 'menuitem')[0]));
 		const dialog = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
 		expect(dialog.textContent).toContain('Remove Database?');
 		click(byText(dialog, 'Cancel', 'button'));
 		await settle();
 		expect(requests.some((request) => request.method === 'DELETE')).toBe(false);
-		click(/** @type {HTMLElement} */ (menus[0]));
+		click(menu);
 		click(/** @type {HTMLElement} */ (allByRole(container, 'menuitem')[0]));
 		await act(async () =>
 			byText(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Remove', 'button').click(),
@@ -788,41 +973,48 @@ describe('standard tabs', () => {
 		expect(container.textContent).toContain(TEXTS.connections.none);
 	});
 
-	it('Developers: the docs, website id and tokens, then the product sections or the widget script', async () => {
+	it('Developers: start here, the product sections or the widget script, and the searchable docs', async () => {
 		const id = freshSite();
 		serve({ [`GET /v1/dashboard/websites/${id}/features`]: ok({ features: FEATURES }) });
 		const { container } = render(inDashboard(<DevelopersTab {...tabProps(id)} />));
 		await settle();
+		expect(navLinks(container)).toEqual(['Start here', 'Widget script', 'Feature docs']);
 		expect(container.textContent).toContain(`This website’s id: ${id}`);
+		expect(container.querySelector('a[href="https://portal.example.com"]')?.textContent).toBe(TEXTS.developers.manageTokens);
+		openSection(container, 'script');
+		expect(container.textContent).toContain(`${window.location.origin}/widget.js`);
+		openSection(container, 'docs');
 		expect(container.textContent).toContain('Alerts (off)');
 		expect(container.querySelector('a[href="/docs#feature-notes"]')).not.toBeNull();
-		expect(container.querySelector('a[href="https://portal.example.com"]')?.textContent).toBe(TEXTS.developers.manageTokens);
-		expect(container.textContent).toContain(`${window.location.origin}/widget.js`);
 		cleanup();
 		const own = render(
 			inDashboard(
-				<DevelopersTab {...tabProps(id)} links={<a href="/docs#seo">SEO</a>}>
-					<section>own sections</section>
-				</DevelopersTab>,
+				<DevelopersTab
+					{...tabProps(id)}
+					links={<a href="/docs#seo">SEO</a>}
+					sections={[{ id: 'snippets', label: 'Snippets', content: <section>own sections</section> }]}
+				/>,
 			),
 		);
 		await settle();
+		expect(navLinks(own.container)).toEqual(['Start here', 'Snippets', 'Feature docs']);
+		expect(own.container.querySelector('a[href="/docs#seo"]')).not.toBeNull();
+		openSection(own.container, 'snippets');
 		expect(own.container.textContent).toContain('own sections');
 		expect(own.container.textContent).not.toContain('widget.js');
-		expect(own.container.querySelector('a[href="/docs#seo"]')).not.toBeNull();
 	});
 
 	it('Defaults: the global settings (reset with PUT null), texts, theme and Format, with the product notice', async () => {
 		serve({
 			'GET /v1/dashboard/defaults': ok({
 				features: [{ key: 'notes', name: 'Notes', schema: SCHEMA, values: { greeting: { value: 'Hi', source: 'default' } } }],
-				texts: [{ key: 'hello', english: 'Hello', value: 'Hey', source: 'default' }],
+				texts: [{ key: 'hello.title', english: 'Hello', value: 'Hey', source: 'default' }],
 				theme: { theme: { colors: {}, fontFamily: 'inherit', radius: 4, mode: 'auto', customCss: '' } },
 				format: { format: { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' } },
 				recentChanges: [],
 			}),
 			'PUT /v1/dashboard/defaults/notes.greeting': ok({}),
-			'PUT /v1/dashboard/defaults/text.hello': ok({}),
+			'PUT /v1/dashboard/defaults/text.hello.title': ok({}),
 			'PUT /v1/dashboard/defaults/theme': ok({}),
 			'PUT /v1/dashboard/defaults/format': ok({}),
 		});
@@ -830,23 +1022,31 @@ describe('standard tabs', () => {
 		await settle();
 		expect(container.textContent).toContain(TEXTS.defaults.intro);
 		expect(container.textContent).toContain('default notice notes');
+		// the sidebar: every feature, then the texts by screen, the theme and Format, and Recent changes
+		expect(navLinks(container)).toEqual(['Notes', 'Hello1', 'Colors', 'Type', 'Shapes', 'Formats', 'Recent changes']);
 		await act(async () => byText(container, 'Reset', 'button').click());
+		openSection(container, 'text-hello');
 		await act(async () => button(TEXTS.reset).click());
-		const saves = buttonsOf(container, 'Save');
-		for (const save of saves.slice(-2)) await act(async () => save.click());
+		openSection(container, 'colors');
+		type(byLabel(container, TEXTS.settings.accent), '#112233');
+		openSection(container, 'formats');
+		type(byLabel(container, TEXTS.settings.locale), 'fr-FR');
+		await act(async () => button('Save changes').click());
 		await settle();
 		expect(requests.filter((request) => request.method === 'PUT')).toEqual([
 			{ method: 'PUT', path: '/v1/dashboard/defaults/notes.greeting', body: { value: null } },
-			{ method: 'PUT', path: '/v1/dashboard/defaults/text.hello', body: { value: null } },
+			{ method: 'PUT', path: '/v1/dashboard/defaults/text.hello.title', body: { value: null } },
 			{
 				method: 'PUT',
 				path: '/v1/dashboard/defaults/theme',
-				body: { value: { colors: {}, fontFamily: 'inherit', radius: 4, mode: 'auto', customCss: '' } },
+				body: { value: { colors: { accent: '#112233' }, fontFamily: 'inherit', radius: 4, mode: 'auto', customCss: '' } },
 			},
 			{
 				method: 'PUT',
 				path: '/v1/dashboard/defaults/format',
-				body: { value: { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' } },
+				body: {
+					value: { locale: 'fr-FR', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' },
+				},
 			},
 		]);
 		cleanup();
@@ -855,23 +1055,36 @@ describe('standard tabs', () => {
 		expect(document.body.textContent).not.toContain('default notice');
 	});
 
-	it('Prices: reads each price as credits, refuses a bad one, saves them all', async () => {
+	it('Prices: by category, reads each price as credits, refuses a bad one, saves them all', async () => {
 		/** @type {any} */
 		let saved = ok({});
 		serve({
 			'GET /v1/dashboard/prices': ok({ features: FEATURES, recentChanges: [] }),
 			'PUT /v1/dashboard/prices': () => saved,
 		});
-		const { container } = render(inDashboard(<PricesTab />));
+		const { container } = render(
+			inDashboard(<PricesTab />, [
+				{ title: 'Writing', features: ['notes'] },
+				{ title: 'Reading', features: ['inbox', 'alerts'] },
+			]),
+		);
 		await settle();
+		expect(navLinks(container)).toEqual(['Writing', 'Reading', TEXTS.reseal.title, 'Recent changes']);
 		expect(byLabel(container, 'Notes').value).toBe('1');
+		expect(container.textContent).not.toContain('You have unsaved prices');
+		type(byLabel(container, 'Notes'), '1.5');
+		expect(container.textContent).toContain('You have unsaved prices');
+		openSection(container, 'prices-reading');
 		type(byLabel(container, 'Inbox'), 'lots');
-		expect(/** @type {HTMLButtonElement} */ (button('Save')).disabled).toBe(true);
+		await act(async () => button('Save').click());
+		await settle();
+		// a price that is not credits is refused, nothing is sent
+		expect(requests.some((request) => request.method === 'PUT')).toBe(false);
 		type(byLabel(container, 'Inbox'), '2.5');
 		await act(async () => button('Save').click());
 		await settle();
 		expect(requests.find((request) => request.method === 'PUT')?.body).toEqual({
-			prices: { notes: 1000, inbox: 2500, alerts: 250 },
+			prices: { notes: 1500, inbox: 2500, alerts: 250 },
 		});
 		expect(byLabel(container, 'Inbox').value).toBe('0.5');
 		saved = { status: 403, body: { status: 403, code: 'product_rule', title: 'Owners only' } };
@@ -880,6 +1093,7 @@ describe('standard tabs', () => {
 		await settle();
 		expect(container.textContent).toContain('Owners only');
 		expect(byLabel(container, 'Inbox').value).toBe('3');
+		openSection(container, 'security');
 		expect(container.textContent).toContain(TEXTS.reseal.title);
 	});
 });
@@ -924,7 +1138,7 @@ describe('ProductDashboard', () => {
 		expect(second.container.textContent).toContain('Down');
 	});
 
-	it('a merchant gets the five website tabs, picks a website, and switches sections inside the page', async () => {
+	it('a merchant gets the seven website tabs, picks a website, and switches sections inside the page', async () => {
 		/** @type {Array<{ props: TabProps, tab: string }>} */
 		const seen = [];
 		/** @param {string} tab */
@@ -944,7 +1158,7 @@ describe('ProductDashboard', () => {
 		const tabs = { overview: probe('overview'), settings: probe('settings') };
 		render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} tabs={tabs} />);
 		await settle();
-		expect(sidebar()).toEqual(['Overview', 'Features', 'Settings', 'Connections', 'Developers']);
+		expect(sidebar()).toEqual(['Overview', 'Features', 'Settings', 'Texts', 'Theme & format', 'Connections', 'Developers']);
 		expect(document.body.textContent).toContain(TEXTS.pickWebsite);
 		expect(document.body.textContent).toContain('Notes');
 		expect(document.querySelector('a[href="https://portal.example.com"]')?.textContent).toBe(TEXTS.backToPortal);
@@ -1032,6 +1246,8 @@ describe('ProductDashboard', () => {
 			'Overview',
 			'Features',
 			'Settings',
+			'Texts',
+			'Theme & format',
 			'Connections',
 			'Developers',
 			'Lists',
@@ -1053,7 +1269,7 @@ describe('ProductDashboard', () => {
 		expect(document.body.textContent).toContain('Admin view: Other / other.example.com');
 		expect(document.body.textContent).toContain('tab for p2');
 		// from a website tab, the same tab of the other website
-		click(/** @type {HTMLElement} */ ([...document.querySelectorAll('nav[aria-label="Main"] a')][5]));
+		click(/** @type {HTMLElement} */ ([...document.querySelectorAll('nav[aria-label="Main"] a')][7]));
 		await settle();
 		type(picker, 'p1');
 		await settle();

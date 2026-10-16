@@ -332,9 +332,9 @@ export function SchemaForm({
 		);
 	};
 
-	/** @param {{ name: string, fields: FieldDescriptor[] }} entry @param {string} id @param {import('react').ReactNode} cardTitle @param {import('react').ReactNode} [text] */
-	const card = (entry, id, cardTitle, text) => (
-		<SettingsCard key={id} id={id} title={cardTitle} {...(text ? { description: text } : {})}>
+	/** @param {{ name: string, fields: FieldDescriptor[] }} entry @param {string} id @param {import('react').ReactNode} cardTitle @param {import('react').ReactNode} [text] @param {boolean} [wide] a lone card takes the whole row */
+	const card = (entry, id, cardTitle, text, wide = false) => (
+		<SettingsCard key={id} id={id} title={cardTitle} wide={wide} {...(text ? { description: text } : {})}>
 			<SettingList>{entry.fields.map(renderField)}</SettingList>
 		</SettingsCard>
 	);
@@ -345,6 +345,8 @@ export function SchemaForm({
 				entry,
 				`${prefix}-advanced-${index}`,
 				entry.fields[0]?.grouped && entry.name.trim().toLowerCase() !== ADVANCED_GROUP.toLowerCase() ? entry.name : undefined,
+				undefined,
+				advanced.length === 1,
 			),
 		);
 
@@ -355,7 +357,7 @@ export function SchemaForm({
 			only === ADVANCED_GROUP
 				? advancedCards()
 				: index >= 0 && groups[index]
-					? [card(groups[index], `${prefix}-group-${index}`, undefined)]
+					? [card(groups[index], `${prefix}-group-${index}`, undefined, undefined, true)]
 					: [];
 	} else if (tabbed) {
 		const ids = [...groups.map((entry) => entry.name), ...(advanced.length > 0 ? [ADVANCED_GROUP] : [])];
@@ -392,7 +394,9 @@ export function SchemaForm({
 				className={CARD_FLOW}>
 				{shown === ADVANCED_GROUP
 					? advancedCards()
-					: groups.map((entry, index) => (entry.name === shown ? card(entry, `${prefix}-group-${index}`, undefined) : null))}
+					: groups.map((entry, index) =>
+							entry.name === shown ? card(entry, `${prefix}-group-${index}`, undefined, undefined, true) : null,
+						)}
 			</div>,
 		];
 	} else {
@@ -403,6 +407,7 @@ export function SchemaForm({
 					`${prefix}-group-${index}`,
 					single ? (title ?? (entry.fields[0]?.grouped ? entry.name : undefined)) : entry.name,
 					single && description ? description : undefined,
+					single,
 				),
 			),
 			...(advanced.length > 0

@@ -29,9 +29,11 @@ import {
 	DefaultsTab,
 	DevelopersTab,
 	FeaturesTab,
+	LookTab,
 	OverviewTab,
 	PricesTab,
 	SettingsTab,
+	TextsTab,
 } from './dashboard-tabs.js';
 
 export { call, fill, useLoad } from './dashboard-api.js';
@@ -49,12 +51,28 @@ export {
 	useDashboard,
 	withDependents,
 } from './dashboard-parts.js';
-export { ConnectionsTab, DefaultsTab, DevelopersTab, FeaturesTab, OverviewTab, PricesTab, SettingsTab };
+export {
+	LookBar,
+	NothingToShow,
+	SettingsBar,
+	TextsCard,
+	featureSections,
+	lookSections,
+	textGroups,
+	textSections,
+	useLookEditor,
+	useSettingsEditor,
+	useTextsEditor,
+} from './dashboard-settings.js';
+export { ConnectionsTab, DefaultsTab, DevelopersTab, FeaturesTab, LookTab, OverviewTab, PricesTab, SettingsTab, TextsTab };
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
 /** @typedef {import('./dashboard-parts.js').DashboardManifest} DashboardManifest */
 /** @typedef {import('./dashboard-parts.js').FeatureSettings} FeatureSettings */
 /** @typedef {import('./dashboard-parts.js').SettingsNotice} SettingsNotice */
+/** @typedef {import('./dashboard-parts.js').DashboardCategories} DashboardCategories */
+/** @typedef {import('./dashboard-settings.js').FeatureExtra} FeatureExtra */
+/** @typedef {import('./blocks.js').SectionSpec} SectionSpec */
 /** @typedef {import('./dashboard-tabs.js').TabProps} TabProps */
 /** @typedef {import('./dashboard-tabs.js').Who} Who */
 /** @typedef {import('./dashboard-tabs.js').Feature} Feature */
@@ -77,6 +95,8 @@ const STANDARD_TABS = [
 	['overview', { component: OverviewTab, icon: 'home', kind: 'overview' }],
 	['features', { component: FeaturesTab, icon: 'zap', kind: 'feature' }],
 	['settings', { component: SettingsTab, icon: 'sliders', kind: 'settings' }],
+	['texts', { component: TextsTab, icon: 'type', kind: 'settings' }],
+	['look', { component: LookTab, icon: 'palette', kind: 'settings' }],
 	['connections', { component: ConnectionsTab, icon: 'plug', kind: 'connection' }],
 	['developers', { component: DevelopersTab, icon: 'code', kind: 'developer' }],
 	['defaults', { component: DefaultsTab, icon: 'layers', kind: 'default', global: true }],
@@ -154,12 +174,13 @@ function WebsiteLocale({ websiteId, children }) {
  * words over the shared ones) and its tabs — a standard tab's key with a component puts the product's section in its
  * place (often the standard tab with the product's props); a new key with `{ component, icon, kind, global? }` adds a
  * tab (its label in `texts.tabs`).
- * @param {{ manifest: DashboardManifest, texts: { title: string } & Record<string, any>,
+ * `categories` groups the features for the Features and Settings sidebars (most used first).
+ * @param {{ manifest: DashboardManifest, texts: { title: string } & Record<string, any>, categories?: DashboardCategories,
  *   tabs?: Record<string, TabComponent | TabSpec> }} props
  */
-export function ProductDashboard({ manifest, texts, tabs = {} }) {
+export function ProductDashboard({ manifest, texts, categories, tabs = {} }) {
 	return (
-		<DashboardProvider manifest={manifest} texts={texts}>
+		<DashboardProvider manifest={manifest} texts={texts} {...(categories ? { categories } : {})}>
 			<DashboardPage tabs={tabs} />
 		</DashboardProvider>
 	);

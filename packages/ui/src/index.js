@@ -65,6 +65,7 @@ export {
 	SectionNav,
 	SectionLayout,
 	PillTabs,
+	ViewTitle,
 	Disclosure,
 	NO_STRETCH,
 	CARD_FLOW,

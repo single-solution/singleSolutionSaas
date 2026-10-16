@@ -3,38 +3,46 @@
  * The standard tabs of every product dashboard (PLAN 0.4.3), each on the kit's dashboard API. Rights are the kit's:
  * merchants see features read-only and only the settings of switched-on features; Owners and Support switch features;
  * Owners alone edit Defaults and Prices. A product fills in its own parts through each tab's props (its Overview items,
- * settings sections and notices, connection forms and hints, developer sections) or replaces a tab with its own,
- * built from the shared pieces.
+ * settings lists and notices, connection forms and hints, developer sections) or replaces a tab with its own, built
+ * from the shared pieces.
+ *
+ * Every tab with more than a couple of cards has an inner sidebar and shows ONE view at a time (owner 2026-10-16: no
+ * long scrolls): Features by category, Settings by feature (grouped by category), Texts by screen or widget, Theme &
+ * format by Colors / Type / Shapes / Formats, Connections one per connection, Developers and Prices by section.
  * @module
  */
 import { useState } from 'react';
 import { Button } from './Button.js';
 import { CodeBlock } from './CodeBlock.js';
-import { Badge, Callout, Card, Masonry, Section } from './display.js';
-import { SectionLayout } from './blocks.js';
-import { FieldGrid, Input, Switch } from './fields.js';
+import { Badge, Callout, Card } from './display.js';
+import { SaveBar, SectionLayout, SettingList, SettingsCard, ViewTitle } from './blocks.js';
+import { Input, Switch } from './fields.js';
 import { ActionMenu } from './Menu.js';
 import { ConfirmDialog } from './overlay.js';
 import { OverviewSkeleton, ProductOverview, RecentChanges } from './overview.js';
+import { Paged } from './paged.js';
 import { formatCreditsPerHour, parseCredits, supportContact } from './format.js';
 import { useDisplayLocale } from './time.js';
 import { call, fill, useLoad } from './dashboard-api.js';
+import { Loaded, Outcome, ResealCard, toneOf, useDashboard, withDependents } from './dashboard-parts.js';
 import {
-	FormatForm,
-	Loaded,
-	Outcome,
-	ResealCard,
-	SettingsForms,
-	TextsForm,
-	ThemeForm,
-	toneOf,
-	useDashboard,
-	withDependents,
-} from './dashboard-parts.js';
+	LookBar,
+	NothingToShow,
+	SettingsBar,
+	TextsCard,
+	featureSections,
+	lookSections,
+	textSections,
+	useLookEditor,
+	useSettingsEditor,
+	useTextsEditor,
+} from './dashboard-settings.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
 /** @typedef {import('./dashboard-parts.js').FeatureSettings} FeatureSettings */
 /** @typedef {import('./dashboard-parts.js').SettingsNotice} SettingsNotice */
+/** @typedef {import('./dashboard-settings.js').FeatureExtra} FeatureExtra */
+/** @typedef {import('./blocks.js').SectionSpec} SectionSpec */
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
 /**
@@ -62,6 +70,14 @@ import {
 
 /** @type {UseOverviewMore} */
 const useNothingMore = () => ({});
+
+/** A name as part of an address. @param {string} name */
+const slug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+/** A small count shown at the right of a sidebar link. @param {{ children: ReactNode }} props */
+function Count({ children }) {
+	return <span className="rounded-full bg-surface-2 px-1.5 text-xs font-semibold text-muted tabular-nums">{children}</span>;
+}
 
 /**
  * Overview (PLAN 0.6 "Overviews talk", 0.4.3): the kit's whole Overview (`ProductOverview`) — the greeting, what needs
@@ -98,13 +114,14 @@ export function OverviewTab(props) {
 }
 
 /**
- * Features: one card per feature with its price, what it needs and its connections that do not work; admins switch
- * them (switching one off switches off the features that need it) and confirm the new hourly cost. `warnings` gives
- * the product's warnings for the features picked (shown above the cards and in the confirmation).
+ * Features: the inner sidebar lists the categories (most used first, with how many are on), the view is one category's
+ * features as rows with their price, what each needs and its switch; admins switch them (switching one off switches
+ * off the features that need it) and confirm the new hourly cost. `warnings` gives the product's warnings for the
+ * features picked (shown above the list and in the confirmation).
  * @param {TabProps & { warnings?: (on: string[]) => string[] }} props
  */
 export function FeaturesTab({ websiteId, who, support, warnings }) {
-	const { texts, namesOf } = useDashboard();
+	const { texts, namesOf, byCategory } = useDashboard();
 	const locale = useDisplayLocale();
 	const F = texts.features;
 	const base = `/v1/dashboard/websites/${websiteId}`;
@@ -123,15 +140,81 @@ export function FeaturesTab({ websiteId, who, support, warnings }) {
 				const saved = features.filter((feature) => feature.on).map((feature) => feature.key);
 				const on = picked ?? saved;
 				const turnedOff = saved.filter((key) => !on.includes(key));
+				const changed = on.length !== saved.length || on.some((key) => !saved.includes(key));
 				const cost = features.reduce((sum, feature) => sum + (on.includes(feature.key) ? feature.millicreditsPerHour : 0), 0);
 				/** @type {Connection[]} */
 				const links = connections.answer?.ok ? connections.answer.data.connections : [];
 				const warned = warnings ? warnings(on) : [];
+				const byKey = new Map(features.map((feature) => [feature.key, feature]));
 				/** @param {Feature} feature @param {boolean} checked */
 				const toggle = (feature, checked) => {
 					const off = withDependents(features, on, feature.key);
 					setPicked(checked ? [...on, feature.key] : on.filter((key) => !off.has(key)));
 				};
+				const sections = byCategory(features.map((feature) => feature.key)).map((category) => {
+					const list = category.keys.map((key) => /** @type {Feature} */ (byKey.get(key)));
+					const count = list.filter((feature) => on.includes(feature.key)).length;
+					return {
+						id: `category-${slug(category.title)}`,
+						label: category.title,
+						badge: <Count>{`${count}/${list.length}`}</Count>,
+						content: (
+							<>
+								<ViewTitle title={category.title} description={fill(F.countOn, { on: count, total: list.length })} />
+								<Card>
+									<ul className="divide-y divide-line-soft">
+										{list.map((feature) => {
+											const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
+											const broken = links.filter(
+												(link) => link.neededBy.includes(feature.key) && link.status !== 'connected',
+											);
+											return (
+												<li key={feature.key} className="flex items-start gap-4 py-3 first:pt-0 last:pb-0">
+													<div className="min-w-0 flex-1 space-y-0.5">
+														<p className="flex flex-wrap items-baseline gap-x-2">
+															<span className="text-sm font-medium text-fg">{feature.name}</span>
+															<span className="text-xs text-muted">
+																{fill(F.price, {
+																	price: formatCreditsPerHour(feature.millicreditsPerHour, { locale }),
+																})}
+															</span>
+															<a
+																className="text-xs font-semibold text-primary"
+																href={`/docs#feature-${feature.key}`}>
+																{F.docs}
+															</a>
+														</p>
+														<p className="text-[13px] leading-snug text-muted">{feature.description}</p>
+														{feature.dependsOn.length > 0 ? (
+															<p className="text-xs text-muted">
+																{fill(F.needs, { features: namesOf(feature.dependsOn) })}
+															</p>
+														) : null}
+														{feature.on
+															? broken.map((link) => (
+																	<p key={link.name} className="text-xs text-danger">
+																		{fill(F.notWorking, { connection: link.label })}
+																	</p>
+																))
+															: null}
+													</div>
+													<Switch
+														size="sm"
+														hideLabel
+														label={feature.name}
+														checked={on.includes(feature.key)}
+														disabled={!admin || (missing.length > 0 && !on.includes(feature.key))}
+														onChange={(next) => toggle(feature, next)}
+													/>
+												</li>
+											);
+										})}
+									</ul>
+								</Card>
+							</>
+						),
+					};
+				});
 				return (
 					<div className="space-y-4">
 						{admin ? null : <Callout tone="info">{fill(F.contact, { contact: supportContact(support) })}</Callout>}
@@ -140,51 +223,17 @@ export function FeaturesTab({ websiteId, who, support, warnings }) {
 								{warning}
 							</Callout>
 						))}
-						<Masonry wideAlone>
-							{features.map((feature) => {
-								const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
-								const broken = links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected');
-								return (
-									<Card
-										key={feature.key}
-										bodyClassName="space-y-3"
-										title={feature.name}
-										subtitle={fill(F.price, { price: formatCreditsPerHour(feature.millicreditsPerHour, { locale }) })}
-										actions={
-											<>
-												<a className="text-sm font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
-													{F.docs}
-												</a>
-												<Switch
-													size="sm"
-													label={F.on}
-													checked={on.includes(feature.key)}
-													disabled={!admin || (missing.length > 0 && !on.includes(feature.key))}
-													onChange={(next) => toggle(feature, next)}
-												/>
-											</>
-										}>
-										<p className="text-sm">{feature.description}</p>
-										{feature.dependsOn.length > 0 ? (
-											<p className="text-sm text-muted">{fill(F.needs, { features: namesOf(feature.dependsOn) })}</p>
-										) : null}
-										{feature.on
-											? broken.map((link) => (
-													<p key={link.name} className="text-sm text-danger">
-														{fill(F.notWorking, { connection: link.label })}
-													</p>
-												))
-											: null}
-									</Card>
-								);
-							})}
-						</Masonry>
-						{admin ? (
-							<Button disabled={picked === null} onClick={() => setConfirming(true)}>
-								{texts.save}
-							</Button>
-						) : null}
 						<Outcome result={result} />
+						<SectionLayout label={texts.tabs.features} sections={sections} />
+						{admin ? (
+							<SaveBar
+								show={changed}
+								onSave={() => setConfirming(true)}
+								onDiscard={() => setPicked(null)}
+								message={F.unsaved}
+								saveLabel={texts.save}
+							/>
+						) : null}
 						<ConfirmDialog
 							open={confirming}
 							busy={busy}
@@ -217,123 +266,186 @@ export function FeaturesTab({ websiteId, who, support, warnings }) {
 }
 
 /**
- * Settings: the product's own `sections` first, then an inner sidebar with the features' settings forms (with the
- * product's `notice` and its `featureCards` beside them) and the widget texts, theme and Format.
- * @param {TabProps & { sections?: ReactNode, notice?: SettingsNotice,
- *   featureCards?: (features: FeatureSettings[]) => ReactNode }} props
+ * Settings: the inner sidebar lists the switched-on features that have settings, grouped by category (a feature that
+ * is off, or whose needs are off, is not listed); the view is that feature's settings as cards by group (a feature with
+ * many groups lists them as sub-items, its Advanced settings last). The product adds under a feature (`extras`: a node
+ * under its settings, or `{ items }`, views of their own such as list editors) and its own `sections` after the features
+ * (not tied to a feature), and a `notice` above a feature's cards.
+ * @param {TabProps & { sections?: SectionSpec[], notice?: SettingsNotice, extras?: Record<string, FeatureExtra> }} props
  */
-export function SettingsTab({ websiteId, sections, notice, featureCards }) {
-	const { texts: words } = useDashboard();
-	const S = words.settings;
+export function SettingsTab({ websiteId, sections, notice, extras }) {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const settings = useLoad(`${base}/settings`);
-	const texts = useLoad(`${base}/texts`);
-	const theme = useLoad(`${base}/theme`);
-	const format = useLoad(`${base}/format`);
 	return (
-		<div className="space-y-6">
-			{sections}
+		<Loaded answer={settings.answer}>
+			{(data) => (
+				<SettingsPanel
+					features={data.features}
+					base={base}
+					reload={settings.reload}
+					{...(sections ? { sections } : {})}
+					{...(notice ? { notice } : {})}
+					{...(extras ? { extras } : {})}
+				/>
+			)}
+		</Loaded>
+	);
+}
+
+/**
+ * @param {{ features: FeatureSettings[], base: string, reload: () => void, sections?: SectionSpec[],
+ *   notice?: SettingsNotice, extras?: Record<string, FeatureExtra> }} props
+ */
+function SettingsPanel({ features, base, reload, sections = [], notice, extras }) {
+	const dash = useDashboard();
+	const editor = useSettingsEditor({
+		saveUrl: (key) => `${base}/settings/${encodeURIComponent(key)}`,
+		resetBody: false,
+		reload,
+	});
+	const list = [
+		...featureSections({
+			features,
+			editor,
+			savedSource: 'website',
+			dash,
+			hideOff: true,
+			...(notice ? { notice } : {}),
+			...(extras ? { extras } : {}),
+		}),
+		...sections,
+	];
+	return (
+		<>
 			<SectionLayout
-				label={words.tabs.settings}
-				sections={[
-					{
-						id: 'features',
-						label: S.featuresTitle,
-						icon: 'sliders',
-						content: (
-							<Section title={S.featuresTitle} description={S.featuresHelp}>
-								<Masonry wideAlone>
-									<Loaded answer={settings.answer}>
-										{(data) => (
-											<>
-												<SettingsForms
-													features={data.features}
-													saveUrl={(key) => `${base}/settings/${encodeURIComponent(key)}`}
-													resetBody={false}
-													savedSource="website"
-													reload={settings.reload}
-													{...(notice ? { notice } : {})}
-												/>
-												{featureCards ? featureCards(data.features) : null}
-											</>
-										)}
-									</Loaded>
-								</Masonry>
-							</Section>
-						),
-					},
-					{
-						id: 'texts',
-						label: S.texts,
-						icon: 'code',
-						group: S.looksTitle,
-						content: (
-							<>
-								<p className="px-1 text-sm text-muted">{S.looksHelp}</p>
-								<Loaded answer={texts.answer}>
-									{(data) => (
-										<TextsForm
-											texts={data.texts}
-											saveUrl={(key) => `${base}/texts/${encodeURIComponent(key)}`}
-											resetBody={false}
-											savedSource="website"
-											reload={texts.reload}
-										/>
-									)}
-								</Loaded>
-							</>
-						),
-					},
-					{
-						id: 'theme',
-						label: S.theme,
-						icon: 'palette',
-						group: S.looksTitle,
-						content: (
-							<>
-								<p className="px-1 text-sm text-muted">{S.looksHelp}</p>
-								<Loaded answer={theme.answer}>
-									{(data) => (
-										<ThemeForm
-											theme={data.theme}
-											save={(next) => call('PUT', `${base}/theme`, next)}
-											reload={theme.reload}
-										/>
-									)}
-								</Loaded>
-							</>
-						),
-					},
-					{
-						id: 'format',
-						label: S.format,
-						icon: 'coins',
-						group: S.looksTitle,
-						content: (
-							<>
-								<p className="px-1 text-sm text-muted">{S.looksHelp}</p>
-								<Loaded answer={format.answer}>
-									{(data) => (
-										<FormatForm
-											format={data.format}
-											save={(next) => call('PUT', `${base}/format`, next)}
-											reload={format.reload}
-										/>
-									)}
-								</Loaded>
-							</>
-						),
-					},
-				]}
+				label={dash.texts.tabs.settings}
+				sections={list}
+				searchLabel={dash.texts.settings.navSearch}
+				empty={<NothingToShow>{dash.texts.settings.nothingOn}</NothingToShow>}
 			/>
+			<SettingsBar editor={editor} texts={dash.texts} />
+		</>
+	);
+}
+
+/**
+ * Texts: every word the widgets show. The inner sidebar lists the screens and widgets (a text's key starts with its
+ * screen), a search box above finds a text by its words in all of them. Each text saves on its own.
+ * @param {TabProps} props
+ */
+export function TextsTab({ websiteId }) {
+	const base = `/v1/dashboard/websites/${websiteId}`;
+	const texts = useLoad(`${base}/texts`);
+	return (
+		<Loaded answer={texts.answer}>
+			{(data) => (
+				<TextsPanel
+					items={data.texts}
+					saveUrl={(key) => `${base}/texts/${encodeURIComponent(key)}`}
+					resetBody={false}
+					savedSource="website"
+					reload={texts.reload}
+				/>
+			)}
+		</Loaded>
+	);
+}
+
+/**
+ * The texts' search and sidebar (a website's or the global defaults).
+ * @param {{ items: Array<{ key: string, english: string, value: string, source: string }>, saveUrl: (key: string) => string,
+ *   resetBody: boolean, savedSource: string, reload: () => void }} props
+ */
+function TextsPanel({ items, saveUrl, resetBody, savedSource, reload }) {
+	const dash = useDashboard();
+	const T = dash.texts.texts;
+	const editor = useTextsEditor({ saveUrl, resetBody, reload });
+	const [query, setQuery] = useState('');
+	const needle = query.trim().toLowerCase();
+	const found = needle
+		? items.filter((text) => `${text.key} ${text.english} ${text.value}`.toLowerCase().includes(needle))
+		: items;
+	return (
+		<div className="space-y-4">
+			<Input
+				fieldClassName="max-w-sm"
+				label={T.search}
+				hideLabel
+				placeholder={T.search}
+				type="search"
+				value={query}
+				onChange={(event) => setQuery(event.target.value)}
+				layout="stack"
+			/>
+			{needle ? (
+				<TextsCard
+					items={found}
+					editor={editor}
+					savedSource={savedSource}
+					texts={dash.texts}
+					title={T.results}
+					searchable={false}
+				/>
+			) : (
+				<SectionLayout
+					label={dash.texts.tabs.texts}
+					searchFrom={6}
+					searchLabel={T.navSearch}
+					sections={textSections({ items, editor, savedSource, dash })}
+				/>
+			)}
 		</div>
 	);
 }
 
 /**
- * Connections: one card per connection with its status, a value to save (and test), Test, and Remove in its ⋯ menu
- * once something is saved (after a confirmation). `form` gives the product's own form for a connection (null: the
- * one value field); `hint` its help line under the status.
+ * Theme & format: the inner sidebar has Colors, Type, Shapes and Formats; one Save changes bar saves whichever changed.
+ * @param {TabProps} props
+ */
+export function LookTab({ websiteId }) {
+	const base = `/v1/dashboard/websites/${websiteId}`;
+	const theme = useLoad(`${base}/theme`);
+	const format = useLoad(`${base}/format`);
+	return (
+		<Loaded answer={theme.answer}>
+			{(themeData) => (
+				<Loaded answer={format.answer}>
+					{(formatData) => (
+						<LookPanel
+							theme={themeData.theme}
+							format={formatData.format}
+							saveTheme={(next) => call('PUT', `${base}/theme`, next)}
+							saveFormat={(next) => call('PUT', `${base}/format`, next)}
+							reload={() => {
+								theme.reload();
+								format.reload();
+							}}
+						/>
+					)}
+				</Loaded>
+			)}
+		</Loaded>
+	);
+}
+
+/**
+ * @param {Parameters<typeof useLookEditor>[0]} props
+ */
+function LookPanel(props) {
+	const dash = useDashboard();
+	const editor = useLookEditor(props);
+	return (
+		<>
+			<SectionLayout label={dash.texts.tabs.look} sections={lookSections({ editor, dash })} />
+			<LookBar editor={editor} texts={dash.texts} />
+		</>
+	);
+}
+
+/**
+ * Connections: the inner sidebar lists the connections with their state; the view is one connection with its status, a
+ * value to save (and test), Test, and Remove in its ⋯ menu once something is saved (after a confirmation). `form`
+ * gives the product's own form for a connection (null: the one value field); `hint` its help line under the status.
  * @param {TabProps & { form?: (item: Connection, save: (value: unknown) => Promise<void>) => ReactNode,
  *   hint?: (name: string) => ReactNode }} props
  */
@@ -352,32 +464,45 @@ export function ConnectionsTab({ websiteId, form, hint }) {
 	};
 	return (
 		<Loaded answer={answer}>
-			{(data) => (
-				<div className="space-y-4">
-					{data.connections.length === 0 ? <p className="text-sm text-muted">{C.none}</p> : null}
-					<Masonry wideAlone>
-						{data.connections.map((/** @type {Connection} */ item) => {
-							/** @param {unknown} value */
-							const save = (value) => act(call('PUT', `${base}/${item.name}`, { value }));
-							const own = form ? form(item, save) : null;
-							const help = hint ? hint(item.name) : null;
-							return (
-								<Card
-									key={item.name}
+			{(data) => {
+				/** @type {Connection[]} */
+				const connections = data.connections;
+				const sections = connections.map((item) => {
+					/** @param {unknown} value */
+					const save = (value) => act(call('PUT', `${base}/${item.name}`, { value }));
+					const own = form ? form(item, save) : null;
+					const help = hint ? hint(item.name) : null;
+					const tone = toneOf(item.status);
+					return {
+						id: `connection-${item.name}`,
+						label: item.label,
+						icon: /** @type {const} */ ('plug'),
+						badge: (
+							<span
+								role="img"
+								aria-label={String(C[/** @type {'connected'} */ (item.status)])}
+								className={`size-2 rounded-full ${tone === 'success' ? 'bg-success' : tone === 'danger' ? 'bg-danger' : 'bg-warning'}`}
+							/>
+						),
+						content: (
+							<>
+								<ViewTitle
 									title={item.label}
-									subtitle={
+									description={
 										item.neededBy.length > 0
 											? fill(C.neededBy, { features: namesOf(item.neededBy, 4) })
 											: C.neededByNone
-									}>
+									}
+								/>
+								<Card>
 									<p className="flex flex-wrap items-center gap-2 text-sm">
-										<Badge tone={toneOf(item.status)} dot>
+										<Badge tone={tone} dot>
 											{C[/** @type {'connected'} */ (item.status)]}
 										</Badge>
 										{item.last4 ? <code>••••{item.last4}</code> : null}
 										{item.message ? <span className="text-muted">{item.message}</span> : null}
 									</p>
-									{help ? <p className="mt-2 text-sm text-muted">{help}</p> : null}
+									{help ? <p className="mt-2 text-[13px] leading-snug text-muted">{help}</p> : null}
 									{own ?? (
 										<div className="mt-3 flex flex-wrap items-end gap-2">
 											<Input
@@ -421,73 +546,152 @@ export function ConnectionsTab({ websiteId, form, hint }) {
 										)}
 									</div>
 								</Card>
-							);
-						})}
-					</Masonry>
-					<Outcome result={result} />
-					<ConfirmDialog
-						open={removing !== null}
-						title={fill(C.removeTitle, { name: removing?.label ?? '' })}
-						confirmLabel={C.remove}
-						cancelLabel={texts.cancel}
-						danger
-						onClose={() => setRemoving(null)}
-						onConfirm={async () => {
-							const name = removing?.name ?? '';
-							setRemoving(null);
-							await act(call('DELETE', `${base}/${name}`));
-						}}>
-						<p>{C.removeHelp}</p>
-					</ConfirmDialog>
-				</div>
-			)}
+							</>
+						),
+					};
+				});
+				return (
+					<div className="space-y-4">
+						<Outcome result={result} />
+						<SectionLayout
+							label={texts.tabs.connections}
+							sections={sections}
+							empty={<p className="text-sm text-muted">{C.none}</p>}
+						/>
+						<ConfirmDialog
+							open={removing !== null}
+							title={fill(C.removeTitle, { name: removing?.label ?? '' })}
+							confirmLabel={C.remove}
+							cancelLabel={texts.cancel}
+							danger
+							onClose={() => setRemoving(null)}
+							onConfirm={async () => {
+								const name = removing?.name ?? '';
+								setRemoving(null);
+								await act(call('DELETE', `${base}/${name}`));
+							}}>
+							<p>{C.removeHelp}</p>
+						</ConfirmDialog>
+					</div>
+				);
+			}}
 		</Loaded>
 	);
 }
 
 /**
- * Developers: the docs of every feature (off ones marked), this website's id, the server token, the Portal's tokens and
- * the product's `links` beside them; then the product's own sections (`children`), by default the widget script.
- * @param {TabProps & { links?: ReactNode, children?: ReactNode }} props
+ * Developers: the inner sidebar has Start here (this website's id, the server token, the Portal's tokens and the
+ * product's `links`), the product's own `sections` (by default the widget script), and the docs of every feature (off
+ * ones marked, searchable).
+ * @param {TabProps & { links?: ReactNode, sections?: SectionSpec[], children?: ReactNode }} props
  */
-export function DevelopersTab({ websiteId, portal, links, children }) {
+export function DevelopersTab({ websiteId, portal, links, sections, children }) {
 	const { texts } = useDashboard();
 	const D = texts.developers;
 	const { answer } = useLoad(`/v1/dashboard/websites/${websiteId}/features`);
 	const origin = typeof window === 'undefined' ? '' : window.location.origin;
 	return (
 		<Loaded answer={answer}>
+			{(data) => {
+				/** @type {Feature[]} */
+				const features = data.features;
+				/** @type {SectionSpec[]} */
+				const own = sections ?? [
+					{
+						id: 'script',
+						label: D.script,
+						icon: 'code',
+						content: (
+							<>
+								<ViewTitle title={D.script} description={D.scriptHelp} />
+								<CodeBlock code={`<script src="${origin}/widget.js" data-token="YOUR_BROWSER_TOKEN" async></script>`} />
+							</>
+						),
+					},
+				];
+				return (
+					<SectionLayout
+						label={texts.tabs.developers}
+						sections={[
+							{
+								id: 'start',
+								label: D.start,
+								icon: 'home',
+								content: (
+									<>
+										<ViewTitle title={D.start} description={D.intro} />
+										<Card>
+											<p className="text-sm">{fill(D.websiteId, { id: String(websiteId) })}</p>
+											<p className="mt-2 text-sm">{D.server}</p>
+											<p className="mt-3 flex flex-wrap gap-4">
+												<a className="text-sm font-semibold text-primary" href="/docs">
+													{D.openDocs}
+												</a>
+												{links}
+												<a className="text-sm font-semibold text-primary" href={portal}>
+													{D.manageTokens}
+												</a>
+											</p>
+										</Card>
+									</>
+								),
+							},
+							...own,
+							...(children
+								? [{ id: 'more', label: D.more, icon: /** @type {const} */ ('layers'), content: children }]
+								: []),
+							{
+								id: 'docs',
+								label: D.docs,
+								icon: 'external',
+								content: (
+									<>
+										<ViewTitle title={D.docs} description={D.docsHelp} />
+										<Card>
+											<Paged
+												items={features}
+												pageSize={10}
+												label={D.search}
+												text={(feature) => `${feature.name} ${feature.key}`}>
+												{(page) => (
+													<ul className="divide-y divide-line-soft">
+														{page.map((feature) => (
+															<li key={feature.key} className="py-2 text-sm first:pt-0 last:pb-0">
+																<a className="font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
+																	{feature.name}
+																</a>
+																{feature.on ? '' : ` (${D.off})`}
+															</li>
+														))}
+													</ul>
+												)}
+											</Paged>
+										</Card>
+									</>
+								),
+							},
+						]}
+					/>
+				);
+			}}
+		</Loaded>
+	);
+}
+
+/**
+ * Defaults (Owner): the inner sidebar has the global defaults of every feature's settings (by category, with the
+ * product's `notice`), the widget texts by screen, the theme and Format, and Recent changes.
+ * @param {Partial<TabProps> & { notice?: SettingsNotice }} props
+ */
+export function DefaultsTab({ notice }) {
+	const { texts } = useDashboard();
+	const { answer, reload } = useLoad('/v1/dashboard/defaults');
+	return (
+		<Loaded answer={answer}>
 			{(data) => (
-				<div className="space-y-6">
-					<Card title={texts.tabs.developers}>
-						<p className="text-sm">{D.intro}</p>
-						<p className="mt-2 text-sm">{fill(D.websiteId, { id: String(websiteId) })}</p>
-						<p className="mt-2 text-sm">{D.server}</p>
-						<ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm">
-							{data.features.map((/** @type {Feature} */ feature) => (
-								<li key={feature.key}>
-									<a className="font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
-										{feature.name}
-									</a>
-									{feature.on ? '' : ` (${D.off})`}
-								</li>
-							))}
-						</ul>
-						<p className="mt-3 flex flex-wrap gap-4">
-							<a className="text-sm font-semibold text-primary" href="/docs">
-								{D.openDocs}
-							</a>
-							{links}
-							<a className="text-sm font-semibold text-primary" href={portal}>
-								{D.manageTokens}
-							</a>
-						</p>
-					</Card>
-					{children ?? (
-						<Section title={D.script} description={D.scriptHelp}>
-							<CodeBlock code={`<script src="${origin}/widget.js" data-token="YOUR_BROWSER_TOKEN" async></script>`} />
-						</Section>
-					)}
+				<div className="space-y-4">
+					<Callout tone="info">{texts.defaults.intro}</Callout>
+					<DefaultsPanel data={data} reload={reload} {...(notice ? { notice } : {})} />
 				</div>
 			)}
 		</Loaded>
@@ -495,57 +699,55 @@ export function DevelopersTab({ websiteId, portal, links, children }) {
 }
 
 /**
- * Defaults (Owner): the global defaults of every feature's settings (with the product's `notice`), the widget texts,
- * theme and Format, and their Recent changes.
- * @param {Partial<TabProps> & { notice?: SettingsNotice }} props
+ * @param {{ data: any, reload: () => void, notice?: SettingsNotice }} props
  */
-export function DefaultsTab({ notice }) {
-	const { texts } = useDashboard();
-	const { answer, reload } = useLoad('/v1/dashboard/defaults');
+function DefaultsPanel({ data, reload, notice }) {
+	const dash = useDashboard();
+	const D = dash.texts.defaults;
 	/** @param {string} key */
 	const saveUrl = (key) => `/v1/dashboard/defaults/${encodeURIComponent(key)}`;
+	const settings = useSettingsEditor({ saveUrl, resetBody: true, reload });
+	const words = useTextsEditor({ saveUrl: (key) => saveUrl(`text.${key}`), resetBody: true, reload });
+	const look = useLookEditor({
+		theme: data.theme.theme,
+		format: data.format.format,
+		saveTheme: (next) => call('PUT', saveUrl('theme'), { value: next }),
+		saveFormat: (next) => call('PUT', saveUrl('format'), { value: next }),
+		reload,
+	});
+	const sections = [
+		...featureSections({
+			features: data.features,
+			editor: settings,
+			savedSource: 'default',
+			dash,
+			...(notice ? { notice } : {}),
+		}),
+		...textSections({ items: data.texts, editor: words, savedSource: 'default', dash, group: D.texts }),
+		...lookSections({ editor: look, dash, group: D.look }),
+		{
+			id: 'changes',
+			label: D.changes,
+			icon: /** @type {const} */ ('clock'),
+			group: D.changes,
+			content: <RecentChanges items={data.recentChanges} />,
+		},
+	];
 	return (
-		<Loaded answer={answer}>
-			{(data) => (
-				<div className="space-y-4">
-					<Callout tone="info">{texts.defaults.intro}</Callout>
-					<Masonry wideAlone>
-						<SettingsForms
-							features={data.features}
-							saveUrl={saveUrl}
-							resetBody
-							savedSource="default"
-							reload={reload}
-							{...(notice ? { notice } : {})}
-						/>
-						<TextsForm
-							texts={data.texts}
-							saveUrl={(key) => saveUrl(`text.${key}`)}
-							resetBody
-							savedSource="default"
-							reload={reload}
-						/>
-						<ThemeForm
-							theme={data.theme.theme}
-							save={(next) => call('PUT', saveUrl('theme'), { value: next })}
-							reload={reload}
-						/>
-						<FormatForm
-							format={data.format.format}
-							save={(next) => call('PUT', saveUrl('format'), { value: next })}
-							reload={reload}
-						/>
-					</Masonry>
-					<RecentChanges items={data.recentChanges} />
-				</div>
-			)}
-		</Loaded>
+		<>
+			<SectionLayout label={dash.texts.tabs.defaults} sections={sections} searchFrom={12} searchLabel={D.navSearch} />
+			<SettingsBar editor={settings} texts={dash.texts} />
+			<LookBar editor={look} texts={dash.texts} />
+		</>
 	);
 }
 
-/** Prices (Owner): one hourly price per feature, in credits, for every merchant and website; Re-seal; Recent changes. */
+/**
+ * Prices (Owner): the inner sidebar has the hourly prices by category (one price per feature, in credits, for every
+ * merchant and website), the encryption key's Re-seal, and Recent changes.
+ */
 export function PricesTab() {
-	const { texts } = useDashboard();
+	const { texts, byCategory } = useDashboard();
 	const { answer, reload } = useLoad('/v1/dashboard/prices');
 	const [draft, setDraft] = useState(/** @type {Record<string, string>} */ ({}));
 	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
@@ -558,41 +760,77 @@ export function PricesTab() {
 					const text = draft[feature.key] ?? String(feature.millicreditsPerHour / 1000);
 					return { feature, text, credits: parseCredits(text) };
 				});
+				const byKey = new Map(parsed.map((entry) => [entry.feature.key, entry]));
+				const dirty = Object.keys(draft).length > 0;
+				const sections = [
+					...byCategory(features.map((feature) => feature.key)).map((category) => ({
+						id: `prices-${slug(category.title)}`,
+						label: category.title,
+						group: texts.prices.hourly,
+						content: (
+							<>
+								<ViewTitle title={category.title} description={texts.prices.perHour} />
+								<SettingsCard wide>
+									<SettingList>
+										{category.keys.map((key) => {
+											const entry = /** @type {NonNullable<ReturnType<typeof byKey.get>>} */ (byKey.get(key));
+											return (
+												<Input
+													key={key}
+													label={entry.feature.name}
+													help={texts.prices.perHour}
+													inputMode="decimal"
+													value={entry.text}
+													error={entry.credits.ok ? undefined : entry.credits.message}
+													onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
+												/>
+											);
+										})}
+									</SettingList>
+								</SettingsCard>
+								<Outcome result={result} />
+							</>
+						),
+					})),
+					{
+						id: 'security',
+						label: texts.reseal.title,
+						icon: /** @type {const} */ ('key'),
+						group: texts.prices.security,
+						content: <ResealCard />,
+					},
+					{
+						id: 'changes',
+						label: texts.prices.changes,
+						icon: /** @type {const} */ ('clock'),
+						group: texts.prices.changes,
+						content: <RecentChanges items={data.recentChanges} />,
+					},
+				];
 				return (
 					<div className="space-y-4">
 						<Callout tone="info">{texts.prices.intro}</Callout>
-						<Card>
-							<FieldGrid>
-								{parsed.map(({ feature, text, credits }) => (
-									<Input
-										key={feature.key}
-										label={feature.name}
-										help={texts.prices.perHour}
-										inputMode="decimal"
-										value={text}
-										error={credits.ok ? undefined : credits.message}
-										onChange={(event) => setDraft({ ...draft, [feature.key]: event.target.value })}
-									/>
-								))}
-							</FieldGrid>
-							<Button
-								className="mt-4"
-								disabled={parsed.some((entry) => !entry.credits.ok)}
-								onClick={async () => {
-									const prices = Object.fromEntries(
-										parsed.map(({ feature, credits }) => [feature.key, credits.ok ? credits.value : 0]),
-									);
-									const next = await call('PUT', '/v1/dashboard/prices', { prices });
-									setResult(next);
-									if (next.ok) setDraft({});
-									reload();
-								}}>
-								{texts.save}
-							</Button>
-						</Card>
-						<Outcome result={result} />
-						<ResealCard />
-						<RecentChanges items={data.recentChanges} />
+						<SectionLayout label={texts.tabs.prices} sections={sections} />
+						<SaveBar
+							show={dirty}
+							message={texts.prices.unsaved}
+							saveLabel={texts.save}
+							discardLabel={texts.settings.discard}
+							onDiscard={() => {
+								setDraft({});
+								setResult(null);
+							}}
+							onSave={async () => {
+								if (parsed.some((entry) => !entry.credits.ok)) return;
+								const prices = Object.fromEntries(
+									parsed.map(({ feature, credits }) => [feature.key, credits.ok ? credits.value : 0]),
+								);
+								const next = await call('PUT', '/v1/dashboard/prices', { prices });
+								setResult(next);
+								if (next.ok) setDraft({});
+								reload();
+							}}
+						/>
 					</div>
 				);
 			}}

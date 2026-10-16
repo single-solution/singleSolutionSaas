@@ -35,7 +35,7 @@ const fillRange = (text, values) =>
  * items (8) and the pager when the matches need more than one page of `pageSize` (10).
  * @template T
  * @param {{ items: T[], text: (item: T) => string, children: (page: T[]) => ReactNode, pageSize?: number,
- *   searchFrom?: number, texts?: Partial<typeof PAGED_TEXTS>, label?: string, className?: string }} props
+ *   searchFrom?: number, texts?: Partial<Record<keyof typeof PAGED_TEXTS, string>>, label?: string, className?: string }} props
  */
 export function Paged({ items, text, children, pageSize = 10, searchFrom = 8, texts = {}, label, className }) {
 	const words = { ...PAGED_TEXTS, ...texts };

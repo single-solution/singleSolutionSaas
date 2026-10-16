@@ -13,7 +13,7 @@
  *   timeline card the dashboards also show under Defaults and Prices.
  * @module
  */
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { Button, ButtonLink } from './Button.js';
 import { cx } from './cx.js';
 import { Card, EmptyState, PageHeader, STAT_GRID, SkeletonBlock, Stat, StatGrid, StatusBadge } from './display.js';
@@ -216,16 +216,26 @@ export function Timeline({ items, empty }) {
 }
 
 /**
- * A dashboard's Recent changes (newest first) as a timeline card.
- * @param {{ items: ReadonlyArray<{ who: { name: string }, detail: string, at: string }>, intro?: ReactNode }} props
+ * A dashboard's Recent changes (newest first) as a timeline card. With `limit` it shows that many and a button for the
+ * rest, so a long history does not make the page long.
+ * @param {{ items: ReadonlyArray<{ who: { name: string }, detail: string, at: string }>, intro?: ReactNode,
+ *   limit?: number }} props
  */
-export function RecentChanges({ items, intro }) {
+export function RecentChanges({ items, intro, limit }) {
+	const [all, setAll] = useState(false);
+	const cut = limit !== undefined && items.length > limit && !all;
+	const shown = cut ? items.slice(0, limit) : items;
 	return (
 		<Card title={OVERVIEW_TEXTS.changes} {...(intro ? { subtitle: intro } : {})}>
 			<Timeline
-				items={items.map((item, i) => ({ key: `${item.at}-${i}`, who: item.who.name, what: item.detail, at: item.at }))}
+				items={shown.map((item, i) => ({ key: `${item.at}-${i}`, who: item.who.name, what: item.detail, at: item.at }))}
 				empty={OVERVIEW_TEXTS.noChanges}
 			/>
+			{limit !== undefined && items.length > limit ? (
+				<Button className="mt-3" size="sm" variant="ghost" onClick={() => setAll(!all)}>
+					{all ? OVERVIEW_TEXTS.showFewer : OVERVIEW_TEXTS.showAll.replace('{count}', String(items.length))}
+				</Button>
+			) : null}
 		</Card>
 	);
 }
@@ -414,44 +424,48 @@ export function ProductOverview({
 	const done = checklist.filter((step) => step.done).length;
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-5">
 			<PageHeader
 				title={fillText(T.welcome, { name: who.name })}
 				subtitle={sentence}
 				actions={<StatusBadge status={status} label={T.status[/** @type {'active'} */ (status)] ?? status} />}
 			/>
 			<div className="@container">
-				<div className="grid gap-6 @4xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-					<Card title={N.title} {...(items.length > 0 ? { subtitle: N.intro } : {})}>
-						<NeedsList items={items} none={N.none} />
-					</Card>
-					<SetupChecklist
-						title={T.setup.title}
-						progress={fillText(T.setup.progress, { done, total: checklist.length })}
-						steps={checklist}
-						labels={{ done: T.setup.done, todo: T.setup.todo }}
-					/>
+				<div className="grid items-start gap-5 @4xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+					<div className="min-w-0 space-y-5">
+						<Card title={N.title} {...(items.length > 0 ? { subtitle: N.intro } : {})}>
+							<NeedsList items={items} none={N.none} />
+						</Card>
+						<StatGrid label={T.numbers}>
+							<Stat
+								label={T.today}
+								value={formatCredits(data.todayMillicredits, { locale })}
+								hint={T.todayHint}
+								icon="coins"
+								kind="credit"
+							/>
+							<Stat
+								label={T.features}
+								value={on.length}
+								hint={on.length > 0 ? namesOf(on, 3) : T.noFeatures}
+								icon="zap"
+								kind="feature"
+							/>
+							{numbers}
+						</StatGrid>
+					</div>
+					<div className="min-w-0 space-y-5">
+						<SetupChecklist
+							title={T.setup.title}
+							progress={fillText(T.setup.progress, { done, total: checklist.length })}
+							steps={checklist}
+							labels={{ done: T.setup.done, todo: T.setup.todo }}
+						/>
+						<RecentChanges items={data.recentChanges} limit={4} />
+					</div>
 				</div>
 			</div>
-			<StatGrid label={T.numbers}>
-				<Stat
-					label={T.today}
-					value={formatCredits(data.todayMillicredits, { locale })}
-					hint={T.todayHint}
-					icon="coins"
-					kind="credit"
-				/>
-				<Stat
-					label={T.features}
-					value={on.length}
-					hint={on.length > 0 ? namesOf(on, 3) : T.noFeatures}
-					icon="zap"
-					kind="feature"
-				/>
-				{numbers}
-			</StatGrid>
 			{children}
-			<RecentChanges items={data.recentChanges} intro={T.changesIntro} />
 		</div>
 	);
 }
@@ -462,25 +476,27 @@ export function ProductOverview({
  */
 export function OverviewSkeleton() {
 	return (
-		<div role="status" aria-label={OVERVIEW_TEXTS.loading} aria-busy="true" className="animate-ss-fade space-y-6">
+		<div role="status" aria-label={OVERVIEW_TEXTS.loading} aria-busy="true" className="animate-ss-fade space-y-5">
 			<div className="space-y-2">
 				<SkeletonBlock className="h-8 w-72 max-w-full" />
 				<SkeletonBlock className="h-4 w-96 max-w-full" />
 			</div>
 			<div className="@container">
-				<div className="grid gap-6 @4xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-					<SkeletonBlock className="h-44 rounded-card" />
-					<SkeletonBlock className="h-44 rounded-card" />
+				<div className="grid items-start gap-5 @4xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+					<div className="space-y-5">
+						<SkeletonBlock className="h-44 rounded-card" />
+						<div className={STAT_GRID}>
+							<SkeletonBlock className="h-28 rounded-card" />
+							<SkeletonBlock className="h-28 rounded-card" />
+							<SkeletonBlock className="h-28 rounded-card" />
+						</div>
+					</div>
+					<div className="space-y-5">
+						<SkeletonBlock className="h-44 rounded-card" />
+						<SkeletonBlock className="h-40 rounded-card" />
+					</div>
 				</div>
 			</div>
-			<div className="@container">
-				<div className={STAT_GRID}>
-					<SkeletonBlock className="h-28 rounded-card" />
-					<SkeletonBlock className="h-28 rounded-card" />
-					<SkeletonBlock className="h-28 rounded-card" />
-				</div>
-			</div>
-			<SkeletonBlock className="h-40 rounded-card" />
 		</div>
 	);
 }

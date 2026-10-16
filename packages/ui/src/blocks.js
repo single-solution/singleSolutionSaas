@@ -456,6 +456,19 @@ export function SectionLayout({ sections, label = 'Sections', initial, className
 		return sections.map(strip);
 	}, [sections]);
 	if (leaves.length === 0) return <>{empty ?? null}</>;
+	const panels = (
+		<div className="min-w-0">
+			{leaves
+				.filter((section) => section.id === active || seen.has(section.id))
+				.map((section) => (
+					<div key={section.id} id={`section-${section.id}`} hidden={section.id !== active} className={CARD_FLOW}>
+						{section.content}
+					</div>
+				))}
+		</div>
+	);
+	// one view needs no sidebar
+	if (leaves.length === 1) return <div className={cx('grid min-w-0', NO_STRETCH, className)}>{panels}</div>;
 	return (
 		<div className={cx('grid min-w-0 gap-4 lg:grid-cols-[13.5rem_minmax(0,1fr)] lg:gap-5', NO_STRETCH, className)}>
 			<SectionNav
@@ -467,16 +480,25 @@ export function SectionLayout({ sections, label = 'Sections', initial, className
 				{...(searchLabel ? { searchLabel } : {})}
 				className="lg:sticky lg:top-24"
 			/>
-			<div className="min-w-0">
-				{leaves
-					.filter((section) => section.id === active || seen.has(section.id))
-					.map((section) => (
-						<div key={section.id} id={`section-${section.id}`} hidden={section.id !== active} className={CARD_FLOW}>
-							{section.content}
-						</div>
-					))}
-			</div>
+			{panels}
 		</div>
+	);
+}
+
+/**
+ * The heading of one view of a page with an inner sidebar: its title, a one-line description and optional actions. In a
+ * {@link CardFlow} it takes the whole row.
+ * @param {{ title: ReactNode, description?: ReactNode, actions?: ReactNode, className?: string }} props
+ */
+export function ViewTitle({ title, description, actions, className }) {
+	return (
+		<header className={cx('flex min-w-0 flex-wrap items-end justify-between gap-3 px-1', className)}>
+			<div className="min-w-0">
+				<h2 className="text-lead leading-6 font-semibold tracking-tight text-fg">{title}</h2>
+				{description ? <p className="mt-0.5 text-[13px] leading-snug text-muted">{description}</p> : null}
+			</div>
+			{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+		</header>
 	);
 }
 

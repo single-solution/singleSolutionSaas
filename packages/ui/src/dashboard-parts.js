@@ -20,12 +20,26 @@ import { dashboardTexts, resealAdvice } from './dashboard-texts.js';
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {typeof import('./dashboard-texts.js').DASHBOARD_TEXTS & { title: string } & Record<string, any>} DashboardTexts */
-/** What a dashboard needs of the product's manifest.json. @typedef {{ features: Array<{ key: string, name: string }> }} DashboardManifest */
+/**
+ * What a dashboard needs of the product's manifest.json: the features (their `description` and `dependsOn` are used
+ * when there).
+ * @typedef {{ features: Array<{ key: string, name: string, description?: string, dependsOn?: string[] }> }} DashboardManifest
+ */
+/**
+ * The feature categories of a product, in the order they are listed (the most used first); a feature in none is listed
+ * under More. They head the groups of the Features and Settings sidebars.
+ * @typedef {Array<{ title: string, features: string[] }>} DashboardCategories
+ */
 /**
  * @typedef {object} Dashboard
  * @property {DashboardTexts} texts the shared words with the product's own laid over them
  * @property {(keys: string[], max?: number) => string} namesOf feature names by key, at most `max` of them and how
  *   many more (a long list would make its tile or card tall)
+ * @property {(key: string) => string} nameOf the name of a feature
+ * @property {(key: string) => string} describe the one-line description of a feature ('' when the manifest has none)
+ * @property {(key: string) => string[]} needsOf the keys a feature depends on
+ * @property {(keys: string[]) => Array<{ title: string, keys: string[] }>} byCategory the keys grouped by category, the
+ *   categories and the features in each in the product's order, the rest under More
  */
 /** @typedef {{ key: string, name: string, on?: boolean, schema: any, values: Record<string, { value: unknown, source: string }> }} FeatureSettings */
 /**
@@ -34,19 +48,42 @@ import { dashboardTexts, resealAdvice } from './dashboard-texts.js';
  * @typedef {(key: string, values: Record<string, unknown>, features: FeatureSettings[]) => ReactNode} SettingsNotice
  */
 
+/** @type {DashboardCategories} */
+const NO_CATEGORIES = [];
+
 const DashboardContext = createContext(/** @type {Dashboard | null} */ (null));
 
 /**
  * The product's words and feature names for every dashboard piece inside (`ProductDashboard` gives it; a product's
  * own tests wrap a single piece in it).
- * @param {{ manifest: DashboardManifest, texts: { title: string } & Record<string, any>, children?: ReactNode }} props
+ * @param {{ manifest: DashboardManifest, texts: { title: string } & Record<string, any>, categories?: DashboardCategories,
+ *   children?: ReactNode }} props
  */
-export function DashboardProvider({ manifest, texts, children }) {
+export function DashboardProvider({ manifest, texts, categories = NO_CATEGORIES, children }) {
 	const value = useMemo(() => {
 		const words = /** @type {DashboardTexts} */ (dashboardTexts(texts));
 		const names = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
+		const entries = new Map(manifest.features.map((feature) => [feature.key, feature]));
 		return {
 			texts: words,
+			/** @param {string} key */
+			nameOf: (key) => names.get(key) ?? key,
+			/** @param {string} key */
+			describe: (key) => entries.get(key)?.description ?? '',
+			/** @param {string} key */
+			needsOf: (key) => entries.get(key)?.dependsOn ?? [],
+			/** @param {string[]} keys */
+			byCategory: (keys) => {
+				const listed = categories
+					.map((category) => ({
+						title: category.title,
+						keys: category.features.filter((key) => keys.includes(key)),
+					}))
+					.filter((category) => category.keys.length > 0);
+				const placed = new Set(listed.flatMap((category) => category.keys));
+				const rest = keys.filter((key) => !placed.has(key));
+				return rest.length > 0 ? [...listed, { title: words.categories.more, keys: rest }] : listed;
+			},
 			/** @param {string[]} keys @param {number} [max] */
 			namesOf: (keys, max = Infinity) => {
 				const found = keys.map((key) => names.get(key) ?? key);
@@ -55,7 +92,7 @@ export function DashboardProvider({ manifest, texts, children }) {
 					: found.join(', ');
 			},
 		};
-	}, [manifest, texts]);
+	}, [manifest, texts, categories]);
 	return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;
 }
 

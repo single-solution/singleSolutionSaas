@@ -87,5 +87,7 @@ export const OVERVIEW_TEXTS = Object.freeze({
 	changes: 'Recent changes',
 	changesIntro: 'Every change made in this dashboard.',
 	noChanges: 'No changes yet.',
+	showAll: 'Show all {count}',
+	showFewer: 'Show fewer',
 	loading: 'Loading…',
 });
