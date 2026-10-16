@@ -9,6 +9,7 @@
  * @module
  */
 import { DEFAULT_FORMAT, formatDate, formatMoney, mountWidget, viewerOf } from '@ss/app-kit/widget';
+import { SEO_PREVIEW_CSS } from '@ss/ui/seo-preview';
 import { dayBounds } from '../core/calendar.js';
 import { DURATION_UNITS, isDuration } from '../core/durations.js';
 import { fromDecimal, toDecimal } from '../core/money.js';
@@ -834,7 +835,7 @@ export const mountAdmin = ({ host, config, api, win, save, open }, name, titleKe
 		host,
 		theme: config.theme,
 		customCss: config.customCss,
-		css: WIDGET_CSS + ADMIN_CSS,
+		css: WIDGET_CSS + ADMIN_CSS + SEO_PREVIEW_CSS,
 		render: (root) => {
 			const kit = createKit({ root, config, api, win, save, open });
 			const banner = kit.status();

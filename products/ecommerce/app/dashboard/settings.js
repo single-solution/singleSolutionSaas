@@ -241,6 +241,25 @@ export const settingsNotice = (key, values) =>
 		</Callout>
 	) : null;
 
+/**
+ * The settings a grade's glossary page preview takes (R7 #105): the title pattern, brand name, default description and
+ * share image of `seo`, and the grade patterns of `landing_pages`.
+ * @param {FeatureSettings[]} features
+ * @returns {import('./grades.js').GradePreview}
+ */
+export const gradePreview = (features) => {
+	/** @param {string} key @param {string} name */
+	const value = (key, name) => String(features.find((feature) => feature.key === key)?.values[name]?.value ?? '');
+	return {
+		titleTemplate: value('seo', 'titleTemplate'),
+		siteName: value('seo', 'brandName'),
+		defaultDescription: value('seo', 'defaultDescription'),
+		defaultImage: value('seo', 'defaultImage'),
+		gradeTitle: value('landing_pages', 'gradeTitle'),
+		gradeDescription: value('landing_pages', 'gradeDescription'),
+	};
+};
+
 /** @param {import('./tabs.js').TabProps} props */
 export function SettingsTab({ websiteId: id }) {
 	const websiteId = /** @type {string} */ (id);
@@ -281,7 +300,7 @@ export function SettingsTab({ websiteId: id }) {
 							),
 							grades: seen('grades_serials') ? (
 								<>
-									<GradesEditor websiteId={websiteId} off={off('grades_serials')} />
+									<GradesEditor websiteId={websiteId} off={off('grades_serials')} preview={gradePreview(features)} />
 									<UnitStatesEditor websiteId={websiteId} off={off('grades_serials')} />
 								</>
 							) : null,

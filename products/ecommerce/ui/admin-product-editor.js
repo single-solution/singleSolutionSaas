@@ -13,7 +13,17 @@ import { PRODUCT_STATUSES } from '../core/model.js';
 import { typeTakes } from '../core/item-types.js';
 import { entriesOf, query, timeInputs } from './admin-kit.js';
 import { choicesOf } from './admin-attributes.js';
-import { chartChoices, checkGroup, earlierSlugs, faqsEditor, paragraphsOf, richEditor, seoEditor } from './admin-fields.js';
+import {
+	chartChoices,
+	checkGroup,
+	earlierSlugs,
+	faqsEditor,
+	pageLinks,
+	paragraphsOf,
+	plainOf,
+	richEditor,
+	seoEditor,
+} from './admin-fields.js';
 import { fieldsOf } from './admin-screen.js';
 import { categoryChoices } from './admin-taxonomy.js';
 import { productTypeOf, showsTypes, typeChoices } from './admin-types.js';
@@ -247,7 +257,29 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 		const guideGroup = kit.group(t('catalogAdmin.sizeGuide'), [
 			fieldsOf(kit, [kit.field(t('catalogAdmin.sizeChart'), chart), hideGuide.node]),
 		]);
-		const seo = seoEditor(kit, product.seo);
+		// the page as search engines will get it, from the values typed so far (R7 #105)
+		const links = pageLinks(kit, categories, brands);
+		const seo = seoEditor(kit, product.seo, {
+			kind: 'product',
+			read: () => {
+				const categoryIds = categoryBoxes.value();
+				return {
+					name: name.value.trim(),
+					brand: brands.find((item) => item.id === brand.value)?.name ?? '',
+					category: categories.find((item) => item.id === categoryIds[0])?.name ?? '',
+					summary: summary.value,
+					text: plainOf(description.value()),
+					url: links.product({
+						id: product.id ?? '',
+						slug: slug.value.trim() || product.slug,
+						categoryIds,
+						brandId: brand.value || null,
+					}),
+					image: photos.find((photo) => photo.url)?.url ?? '',
+				};
+			},
+		});
+		seo.watch(name, slug, summary, description.node, brand, categoryBoxes.node);
 		const faqs = faqsEditor(kit, product.faqs ?? []);
 		// its own return and warranty times: a number and its unit (E14)
 		const returnTime = timeInputs(kit, product.returnTime ?? null, t('catalogAdmin.returnTime'));

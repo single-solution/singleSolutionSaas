@@ -13,6 +13,7 @@ import {
 	contentEditor,
 	earlierSlugs,
 	faqsEditor,
+	pageLinks,
 	seoChecks,
 	seoEditor,
 	seoFacts,
@@ -337,7 +338,20 @@ export const categoriesTab = (kit, panel, lookups) => {
 		const description = kit.area(item?.description ?? '', { rows: '4', maxlength: '5000' });
 		const content = contentEditor(kit, item?.content);
 		const faqs = faqsEditor(kit, item?.faqs ?? []);
-		const seo = seoEditor(kit, item?.seo);
+		// the page as search engines will get it, from the values typed so far (R7 #105)
+		const links = pageLinks(kit, all, []);
+		const seo = seoEditor(kit, item?.seo, {
+			kind: 'category',
+			read: () => ({
+				name: name.value.trim(),
+				category: all.find((other) => other.id === parent.value)?.name ?? '',
+				summary: content.value().summary,
+				text: description.value,
+				url: links.category({ ...(item ? { id: item.id } : {}), slug: slug.value.trim() || (item?.slug ?? '') }),
+				image: item?.image?.url ?? '',
+			}),
+		});
+		seo.watch(name, slug, parent, description, content.node);
 		saveDialog(kit, {
 			title: item ? t('admin.editing', { name: item.name }) : t('catalogAdmin.newCategory'),
 			wide: true,
@@ -521,7 +535,12 @@ export const brandsTab = (kit, panel, lookups) => {
 			categoryChoices(lookups.state.categories),
 			item?.hiddenIn ?? [],
 		);
-		const seo = seoEditor(kit, item?.seo);
+		// the brand's page as search engines will get it (R7 #105)
+		const seo = seoEditor(kit, item?.seo, {
+			kind: 'brand',
+			read: () => ({ name: name.value.trim(), text: description.value }),
+		});
+		seo.watch(name, description);
 		saveDialog(kit, {
 			title: item ? t('admin.editing', { name: item.name }) : t('catalogAdmin.newBrand'),
 			wide: true,

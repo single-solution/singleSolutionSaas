@@ -27,11 +27,13 @@ import {
 	Icon,
 	IconButton,
 	Input,
+	SeoPreview,
 	Select,
 	TextArea,
 	cx,
 } from '@ss/ui';
 import { DURATION_MAX, DURATION_UNITS } from '../../core/durations.js';
+import { asWritten, fillTitle, metaDescription, patternText } from '../../core/seo-text.js';
 import { fill } from './api.js';
 import { GRADE_CONDITIONS, GRADE_LIMITS, blankGrade, cleanGrade, gradeProblems, keyOf, loadGrade, videoOf } from './drafts.js';
 import { IdTags, ListOutcome, SaveRow, moved, useList } from './lists.js';
@@ -190,11 +192,44 @@ function FaqsField({ faqs, onChange }) {
 }
 
 /**
+ * What the glossary page preview needs from the settings (R7 #105): the title pattern, the name in titles (the SEO
+ * brand name: the dashboard shows no business data), the default description and share image (`seo`), and the grade
+ * patterns (`landing_pages`).
+ * @typedef {{ titleTemplate: string, siteName: string, defaultDescription: string, defaultImage: string,
+ *   gradeTitle: string, gradeDescription: string }} GradePreview
+ */
+
+/**
+ * The grade's glossary page as search engines get it (`glossaryHead` on the server): its own title, else the grade
+ * title pattern, else its name, in the title pattern; its own description, else its page text, its description, the
+ * grade description pattern or the default description.
+ * @param {GradeDraft} draft
+ * @param {GradePreview} preview
+ */
+const gradeHead = (draft, preview) => {
+	const values = { name: draft.label.trim(), storeName: preview.siteName, category: '' };
+	return {
+		title: fillTitle(preview.titleTemplate, {
+			name: draft.seo.title.trim() || patternText(preview.gradeTitle, values) || values.name,
+			business: preview.siteName,
+		}),
+		description: metaDescription(
+			asWritten(draft.seo.description),
+			draft.seo.body,
+			draft.description,
+			patternText(preview.gradeDescription, values),
+			asWritten(preview.defaultDescription),
+		),
+	};
+};
+
+/**
  * Every field of one grade (the dialog's body).
  * @param {{ draft: GradeDraft, set: (patch: Partial<GradeDraft>) => void, problems: ReturnType<typeof gradeProblems>,
- *   tried: boolean }} props `tried`: Done was pressed (the missing name is shown from then on)
+ *   tried: boolean, preview?: GradePreview }} props `tried`: Done was pressed (the missing name is shown from then on);
+ *   `preview`: the settings of the glossary page's search result and share preview
  */
-function GradeFields({ draft, set, problems, tried }) {
+function GradeFields({ draft, set, problems, tried, preview }) {
 	const keyError = problems.key === 'invalid' ? G.keyInvalid : problems.key === 'taken' ? G.keyTaken : undefined;
 	return (
 		<div className="space-y-6">
@@ -372,6 +407,14 @@ function GradeFields({ draft, set, problems, tried }) {
 						onChange={(event) => set({ seo: { ...draft.seo, body: event.target.value } })}
 					/>
 				</FieldGrid>
+				{preview ? (
+					<SeoPreview
+						{...gradeHead(draft, preview)}
+						siteName={preview.siteName}
+						image={preview.defaultImage}
+						texts={G.preview}
+					/>
+				) : null}
 				<FaqsField faqs={draft.seo.faqs} onChange={(faqs) => set({ seo: { ...draft.seo, faqs } })} />
 			</fieldset>
 		</div>
@@ -432,9 +475,10 @@ function GradeRow({ grade, index, count, onEdit, onMove, onRemove }) {
 
 /**
  * Condition grades (`grades`, feature grades_serials): the list, and each grade's fields in a dialog.
- * @param {{ websiteId: string, off?: boolean }} props
+ * @param {{ websiteId: string, off?: boolean, preview?: GradePreview }} props `preview`: the settings of the glossary
+ *   page preview
  */
-export function GradesEditor({ websiteId, off }) {
+export function GradesEditor({ websiteId, off, preview }) {
 	const state = useList(websiteId, 'grades');
 	const [editing, setEditing] = useState(
 		/** @type {Editing} */ ({ open: false, index: null, draft: blankGrade(), tried: false }),
@@ -524,6 +568,7 @@ export function GradesEditor({ websiteId, off }) {
 									draft={editing.draft}
 									tried={editing.tried}
 									problems={problems}
+									preview={preview}
 									set={(patch) => setEditing((now) => ({ ...now, draft: { ...now.draft, ...patch } }))}
 								/>
 							</Dialog>

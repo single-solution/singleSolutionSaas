@@ -7,7 +7,7 @@
  * @module
  */
 import { query } from './admin-kit.js';
-import { faqsEditor } from './admin-fields.js';
+import { faqsEditor, seoPreviewOf } from './admin-fields.js';
 import { card, createScreen, deleteEntry, detailHead, fieldsOf, masonryOf, readFrom, saveDialog } from './admin-screen.js';
 import { categoryChoices, faqList } from './admin-taxonomy.js';
 
@@ -139,6 +139,17 @@ export const landingsTab = (kit, panel, lookups) => {
 			landing?.indexable ?? 'auto',
 		);
 		const faqs = faqsEditor(kit, landing?.faqs ?? []);
+		// the page as search engines will get it: its heading (else what it lists) in the title pattern (R7 #105)
+		const preview = seoPreviewOf(kit, 'landing', () => ({
+			name:
+				h1.value.trim() ||
+				[lookups.nameOf('categories', categoryPick.value), lookups.nameOf('brands', brandPick.value), facetValue.value.trim()]
+					.filter(Boolean)
+					.join(' '),
+			seo: { title: title.value, description: description.value },
+			url: landing?.url ?? '',
+		}));
+		preview?.watch(categoryPick, brandPick, facetValue, h1, title, description);
 		saveDialog(kit, {
 			title: landing ? t('admin.editing', { name: nameOf(landing) }) : t('catalogAdmin.newLanding'),
 			wide: true,
@@ -154,6 +165,7 @@ export const landingsTab = (kit, panel, lookups) => {
 				]),
 				fieldsOf(kit, [kit.field(t('catalogAdmin.landingH1'), h1), kit.field(t('catalogAdmin.seoTitle'), title)]),
 				kit.field(t('catalogAdmin.seoDescription'), description),
+				preview?.node,
 				kit.field(t('catalogAdmin.landingIntro'), intro),
 				valueList,
 				faqs.node,

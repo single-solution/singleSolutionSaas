@@ -1273,6 +1273,29 @@ export const createSeo = (product, service) => {
 	const lookup = createChatLookup(product, service, media);
 
 	return {
+		/**
+		 * What the SEO editors' search result and share preview needs (R7 #105): the domain, the name in titles and the
+		 * `seo` settings a page's head takes (all of it shows on the website's pages anyway).
+		 * @param {Site} s
+		 */
+		widgetSettings: async (s) => {
+			const settings = await seoSettingsOf(s);
+			/** @param {string} key */
+			const text = (key) => String(settings[key] ?? '');
+			return {
+				seo: {
+					domain: s.domain,
+					siteName: storeNameOf(settings, await s.business()),
+					titleTemplate: text('titleTemplate'),
+					productTitle: text('productTitle'),
+					categoryTitle: text('categoryTitle'),
+					productDescription: text('productDescription'),
+					categoryDescription: text('categoryDescription'),
+					defaultDescription: text('defaultDescription'),
+					defaultImage: text('defaultImage'),
+				},
+			};
+		},
 		routes: [
 			defineRoute({
 				method: 'GET',

@@ -1,14 +1,22 @@
 /**
  * Form pieces the catalog admin widget's editors share (PLAN 0.8.10 E1, E3, E16): FAQs, SEO fields (title,
- * description, canonical address, social image, noindex, nofollow, focus keyword), content blocks (a summary and
+ * description, canonical address, social image, noindex, nofollow, focus keyword) with the page's search result and
+ * share preview (R7 #105, `@ss/ui/seo-preview`, redrawn as the merchant types), content blocks (a summary and
  * bullets with icons), groups of checkboxes, yes / no / inherited selects, and the rich description editor (a toolbar
  * that writes the allowed tags into the HTML and a live safe preview). Rich text is never inserted as HTML: it is
  * parsed in an inert document and only the allowed elements (and the `href` of links) are copied.
  * @module
  */
 
+import { SEO_PREVIEW_TEXTS, seoPreview } from '@ss/ui/seo-preview';
+import { htmlToText } from '../core/catalog-content.js';
+import { categoryLink, productLink } from '../core/links.js';
+import { previewHead } from '../core/seo-preview.js';
+
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-kit.js').Choice} Choice */
+/** @typedef {import('../core/seo-preview.js').PreviewPage} PreviewPage */
+/** @typedef {'product' | 'category' | 'brand' | 'landing'} PreviewKind */
 /** @typedef {{ question: string, answer: string }} Faq */
 
 /** At most this many FAQs (E16), content bullets (E1). */
@@ -198,10 +206,66 @@ export const faqsEditor = (kit, faqs, legend = kit.t('catalogAdmin.faqs')) => {
  */
 
 /**
- * The SEO fields of a product, category or brand (E16).
- * @param {Kit} kit @param {Seo | null | undefined} seo
+ * The addresses of product and category pages from the editor's values (the `catalog` settings `productUrl` and
+ * `categoryUrl` on the website's domain), or '' without a domain or slug.
+ * @param {Kit} kit
+ * @param {Array<{ id: string, slug?: string, path?: string[] }>} categories
+ * @param {Array<{ id: string, slug?: string }>} brands
  */
-export const seoEditor = (kit, seo) => {
+export const pageLinks = (kit, categories, brands) => {
+	const domain = String(kit.settings.seo?.domain ?? '');
+	const context = {
+		domain,
+		categories: new Map(categories.map((item) => [item.id, { slug: item.slug ?? '', path: item.path ?? [] }])),
+		brands: new Map(brands.map((item) => [item.id, { slug: item.slug ?? '' }])),
+	};
+	return {
+		/** @param {{ id: string, slug: string, categoryIds: string[], brandId: string | null }} product */
+		product: (product) =>
+			domain && product.slug ? productLink(String(kit.settings.catalog?.productUrl ?? ''), product, context) : '',
+		/** @param {{ id?: string, slug: string }} category */
+		category: (category) =>
+			domain && category.slug ? categoryLink(String(kit.settings.catalog?.categoryUrl ?? ''), category, context) : '',
+	};
+};
+
+/** Plain text of rich text, for a description that falls back on it. @param {string} html */
+export const plainOf = (html) => htmlToText(html);
+
+/**
+ * The search result and share preview of a page (R7 #105): the head {@link previewHead} works out from what `read`
+ * gives now, redrawn by `refresh` (and on every input and change inside the nodes given to `watch`); null when the
+ * widget config has no SEO settings.
+ * @param {Kit} kit
+ * @param {PreviewKind} kind
+ * @param {() => PreviewPage} read
+ */
+export const seoPreviewOf = (kit, kind, read) => {
+	const settings = kit.settings.seo;
+	if (!settings) return null;
+	const texts = Object.fromEntries(Object.keys(SEO_PREVIEW_TEXTS).map((key) => [key, kit.t(`catalogAdmin.seoPreview.${key}`)]));
+	const view = seoPreview(kit.doc, previewHead(kind, read(), settings), { texts });
+	const refresh = () => view.update(previewHead(kind, read(), settings));
+	return {
+		node: view.node,
+		refresh,
+		/** @param {...(Node | null | undefined)} nodes */
+		watch: (...nodes) => {
+			for (const node of nodes) {
+				node?.addEventListener('input', refresh);
+				node?.addEventListener('change', refresh);
+			}
+		},
+	};
+};
+
+/**
+ * The SEO fields of a product, category or brand (E16), with the page's preview when `page` says which page they
+ * describe (`read`: the editor's other values now; `watch` the nodes holding them).
+ * @param {Kit} kit @param {Seo | null | undefined} seo
+ * @param {{ kind: PreviewKind, read: () => Omit<PreviewPage, 'seo'> }} [page]
+ */
+export const seoEditor = (kit, seo, page) => {
 	const { t, h } = kit;
 	const given = seo ?? {};
 	const title = kit.input(given.title ?? '', { maxlength: '200' });
@@ -212,18 +276,35 @@ export const seoEditor = (kit, seo) => {
 	const noindex = kit.check(t('catalogAdmin.noindex'), given.noindex === true);
 	const nofollow = kit.check(t('catalogAdmin.nofollow'), given.nofollow === true);
 	const asWritten = kit.check(t('catalogAdmin.titleAsWritten'), given.titleMode === 'as_written');
-	return {
-		node: kit.group(t('catalogAdmin.seo'), [
-			h('div', { class: 'fields' }, [
-				kit.field(t('catalogAdmin.seoTitle'), title),
-				kit.field(t('catalogAdmin.focusKeyword'), keyword),
-				kit.field(t('catalogAdmin.canonicalUrl'), canonical),
-				kit.field(t('catalogAdmin.ogImage'), image),
-			]),
-			asWritten.node,
-			kit.field(t('catalogAdmin.seoDescription'), description),
-			h('div', { class: 'fields' }, [noindex.node, nofollow.node]),
+	const preview = page
+		? seoPreviewOf(kit, page.kind, () => ({
+				...page.read(),
+				seo: {
+					title: title.value,
+					titleMode: asWritten.box.checked ? 'as_written' : 'template',
+					description: description.value,
+					canonicalUrl: canonical.value,
+					ogImage: image.value,
+				},
+			}))
+		: null;
+	const node = kit.group(t('catalogAdmin.seo'), [
+		h('div', { class: 'fields' }, [
+			kit.field(t('catalogAdmin.seoTitle'), title),
+			kit.field(t('catalogAdmin.focusKeyword'), keyword),
+			kit.field(t('catalogAdmin.canonicalUrl'), canonical),
+			kit.field(t('catalogAdmin.ogImage'), image),
 		]),
+		asWritten.node,
+		kit.field(t('catalogAdmin.seoDescription'), description),
+		h('div', { class: 'fields' }, [noindex.node, nofollow.node]),
+		preview?.node,
+	]);
+	preview?.watch(node);
+	return {
+		node,
+		/** Redraw the preview when any of these nodes' fields change. @param {...(Node | null | undefined)} nodes */
+		watch: (...nodes) => preview?.watch(...nodes),
 		value: () => ({
 			title: title.value.trim(),
 			description: description.value.trim(),
