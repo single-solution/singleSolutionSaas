@@ -55,7 +55,7 @@ function AccountEditor({ account, index, count, onChange, onMove, onRemove }) {
 	const setRow = (at, change) =>
 		onChange({ ...account, rows: account.rows.map((row, i) => (i === at ? { ...row, ...change } : row)) });
 	return (
-		<fieldset className="space-y-3 rounded-md border border-border p-3">
+		<fieldset className="space-y-3 rounded-md border border-line p-3">
 			<legend className="px-1 text-sm font-medium">{fill(M.account, { n: index + 1 })}</legend>
 			<FieldGrid>
 				<Input
@@ -178,7 +178,7 @@ function MethodEditor({ method, index, count, noStorage, onChange, onMove, onRem
 					onChange={(event) => onChange({ ...method, instructions: event.target.value })}
 				/>
 				<div className="space-y-3">
-					<p className="text-sm text-fg-muted">{M.accountsHelp}</p>
+					<p className="text-sm text-muted">{M.accountsHelp}</p>
 					{method.accounts.map((account, at) => (
 						<AccountEditor
 							key={at}
@@ -253,7 +253,7 @@ export function MethodsEditor({ websiteId, off }) {
 				<h3 id="manual-methods-title" className="text-base font-semibold">
 					{M.title}
 				</h3>
-				<p className="text-sm text-fg-muted">{off ? `${M.help} ${M.off}` : M.help}</p>
+				<p className="text-sm text-muted">{off ? `${M.help} ${M.off}` : M.help}</p>
 			</div>
 			{methods.map((method, index) => (
 				<MethodEditor

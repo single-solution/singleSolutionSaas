@@ -649,7 +649,7 @@ function RatesPart({ rates, currency, step, onChange }) {
 			<p className="text-sm font-bold">{Z.rates}</p>
 			<p className="text-sm text-muted">{Z.ratesHelp}</p>
 			{rates.map((rate, index) => (
-				<div key={index} data-rate="" className="space-y-3 rounded-lg border border-border p-3">
+				<div key={index} data-rate="" className="space-y-3 rounded-lg border border-line p-3">
 					<EntryHead
 						label={Z.rate}
 						index={index}
