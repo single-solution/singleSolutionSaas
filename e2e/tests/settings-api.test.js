@@ -62,7 +62,7 @@ const CASES = [
 		value: 36,
 		list: {
 			name: 'couriers',
-			value: [{ key: 'swift', name: 'Swift Couriers', trackingUrl: 'https://swift.example.com/t/{tracking}' }],
+			value: [{ key: 'swift', name: 'Swift Couriers', trackingUrl: 'https://swift.example.com/t/{tracking}', connection: '' }],
 		},
 	},
 	{

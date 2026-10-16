@@ -358,6 +358,9 @@ export const settingsPlan = (values) => {
 				'staff_alerts.phoneChannel': 'whatsapp',
 				// SB's staff alerts never showed the shopper's phone
 				'staff_alerts.includePhone': false,
+				// SaaS defaults (SB has no staff push and no recipient cap)
+				'staff_alerts.staffPush': false,
+				'staff_alerts.maxRecipients': 100,
 				...(admin ? { 'staff_alerts.adminUrl': `${admin}/orders?order={number}` } : {}),
 				// SEO (`apps/web/src/lib/seo/seoSettings.ts`:51-62, `packages/shared/src/seo/composeSeoMeta.ts`:224)
 				'seo.titleTemplate': (seo.titleTemplate || '{title} | {storeName}')
