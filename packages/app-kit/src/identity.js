@@ -168,7 +168,15 @@ export const createAccountsSignIns = ({ connections, now }) => {
 		return entry;
 	};
 
+	// a product trusts Accounts sign-ins only when it declares the Accounts token connection (Accounts itself, which issues
+	// them and checks its own, does not)
+	const trusted = Object.values(connections.definitions).some(
+		(definition) => definition.kind === 'token' && definition.productId === 'accounts',
+	);
+
 	return Object.freeze({
+		/** Whether this product takes Accounts sign-ins (it declares the `accounts` token connection). */
+		trusted,
 		/**
 		 * Verify a visitor's Accounts sign-in for a website.
 		 * @param {{ websiteId: string, token: unknown }} input
@@ -221,7 +229,8 @@ export const SIGN_IN_HEADER = 'ss-sign-in';
 /**
  * The Accounts sign-in of one request (`ctx.signIn()`): read from `SS-Sign-In`, checked for the website of the request's
  * own token, never for one the header names (signature by the website's Accounts keys, `aud`, `exp`, `iat`, see
- * `verifyIdentityToken`), and checked once however often a route asks. Null when the request carries no sign-in.
+ * `verifyIdentityToken`), and checked once however often a route asks. Null when the request carries no sign-in, or
+ * when the product takes no Accounts sign-ins (it declares no `accounts` token connection: Accounts itself reads its own).
  * A sign-in only says who the person is: it never grants more than a visitor's rights, and only a verified sign-in names
  * the shopper (a user id alone is never taken).
  * @param {{ accounts: ReturnType<typeof createAccountsSignIns>, websiteId: string | null, headers: Headers }} input
@@ -233,7 +242,7 @@ export const requestSignIn = ({ accounts, websiteId, headers }) => {
 	return () => {
 		once ??= (async () => {
 			const token = (headers.get(SIGN_IN_HEADER) ?? '').trim();
-			if (token.length === 0 || websiteId === null) return null;
+			if (!accounts.trusted || token.length === 0 || websiteId === null) return null;
 			const verified = await accounts.verify({ websiteId, token });
 			return verified.ok ? { ok: true, token, user: verified.user, claims: verified.claims } : verified;
 		})();

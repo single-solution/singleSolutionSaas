@@ -108,7 +108,7 @@ roles?, handler })`
   `?websiteId=`, `ctx.websiteId` null when missing or malformed; any failure 401 `unauthorized`; no CORS), `none`.
 - `ctx.signIn()` (every route with a website): the visitor's Accounts sign-in from `SS-Sign-In`, verified once per request
   with the website's Accounts keys and only for the website of the request's own token (`aud`): `{ ok: true, token,
-user, claims }`, `{ ok: false, code }` or null without the header. On a browser route the merchant's server called for
+user, claims }`, `{ ok: false, code }` or null without the header or when the product declares no `accounts` token connection (Accounts itself reads its own sign-ins). On a browser route the merchant's server called for
   a visitor (`ctx.visitor.server`), the kit refuses a sign-in that is not valid before the route runs (401
   `invalid_sign_in` with `cause`, 503 `accounts_unavailable`); a browser call keeps a wrong or expired sign-in as none.
   A repeated `Idempotency-Key` of such a call counts by the verified user, so a retry with a renewed sign-in is the

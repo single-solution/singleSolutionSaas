@@ -252,4 +252,14 @@ describe('acting as a signed-in shopper from the website’s server (SS-Sign-In 
 		expect([retry.status, retry.headers.get('idempotent-replayed')]).toEqual([200, 'true']);
 		expect((await post('usr_b')).status).toBe(409);
 	});
+
+	it('leaves SS-Sign-In to a product that declares no Accounts token connection (Accounts reads its own sign-ins)', async () => {
+		const { call, server, switchOn } = await setup({ routes: routes() });
+		await switchOn(['notes']);
+		const sign = { ...IP, 'ss-sign-in': 'a-sign-in-of-the-product-itself' };
+		const found = await call('GET', '/v1/visitor/me', { token: server.token, headers: sign });
+		expect(found.status).toBe(200);
+		expect((await found.json()).signIn).toBeNull();
+		expect((await call('POST', '/v1/visitor/orders', { token: server.token, body: {}, headers: sign })).status).toBe(200);
+	});
 });
