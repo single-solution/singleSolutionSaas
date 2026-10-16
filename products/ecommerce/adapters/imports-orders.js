@@ -21,6 +21,7 @@ import {
 	holdsSerials,
 	importRules,
 	rtoKeysOf,
+	cancelKeysOf,
 	serialsSoldTo,
 } from '../core/imports-orders.js';
 import { ObjectId } from 'mongodb';
@@ -58,20 +59,35 @@ const pageOf = (batch) => ({ read: batch.length, last: batch.length === 0 ? null
 const timeOf = (at) => (at instanceof Date ? at.getTime() : null);
 
 /**
- * Customers' order count, RTO count (packages moved to a `returned_to_origin` status for another reason than a
- * customer's return, as the ledger counts them) and last order time, from their orders (by customer id). A page of
- * customers.
- * @param {WebsiteData} data @param {string[]} rtoKeys @param {Page} page
+ * Customers' order count, returned-packages count (orders whose package moved to a `returned_to_origin` status for a
+ * reason that counts against the customer — none given counts, customer_return never — or that were canceled for a
+ * reason that counts, as the ledger counts them; E19) and last order time, from their orders (by customer id). A page
+ * of customers.
+ * @param {WebsiteData} data
+ * @param {{ rtoKeys: string[], cancelKeys: string[], notCounting: string[], countingCancels: string[] }} rules
+ *   `notCounting`: failed-delivery reasons that do not count; `countingCancels`: cancel reasons that do
+ * @param {Page} page
  */
-const finishCustomers = async (data, rtoKeys, { after, limit }) => {
+const finishCustomers = async (data, { rtoKeys, cancelKeys, notCounting, countingCancels }, { after, limit }) => {
 	const { websiteId } = data;
 	const orders = data.collection(COLLECTIONS.orders);
 	const customers = data.collection(COLLECTIONS.customers);
 	const isRto = {
 		$and: [
-			{ $in: ['$$this.to', rtoKeys] },
 			{ $ne: ['$$this.from', '$$this.to'] },
-			{ $ne: ['$$this.reason', 'customer_return'] },
+			{
+				$or: [
+					{
+						$and: [
+							{ $in: ['$$this.to', rtoKeys] },
+							{ $not: [{ $in: [{ $ifNull: ['$$this.reason', ''] }, [...notCounting, 'customer_return']] }] },
+						],
+					},
+					{
+						$and: [{ $in: ['$$this.to', cancelKeys] }, { $in: [{ $ifNull: ['$$this.reason', ''] }, countingCancels] }],
+					},
+				],
+			},
 		],
 	};
 	const rto = { $cond: [{ $gt: [{ $size: { $filter: { input: { $ifNull: ['$history', []] }, cond: isRto } } }, 0] }, 1, 0] };
@@ -413,7 +429,20 @@ export const orderImports = (deps) => {
 				zero: { customersUpdated: 0 },
 				run: async (ctx, page) => {
 					const flow = /** @type {import('../core/model.js').OrderFlow} */ (await deps.list(ctx.websiteId, 'order_flow'));
-					return finishCustomers(await ctx.data(), rtoKeysOf(flow), page);
+					/** @type {Array<{ key: string, countsAgainst: boolean }>} */
+					const failures = /** @type {any} */ (await deps.list(ctx.websiteId, 'delivery_failure_reasons'));
+					/** @type {Array<{ key: string, countsAgainst: boolean }>} */
+					const cancels = /** @type {any} */ (await deps.list(ctx.websiteId, 'cancel_reasons'));
+					return finishCustomers(
+						await ctx.data(),
+						{
+							rtoKeys: rtoKeysOf(flow),
+							cancelKeys: cancelKeysOf(flow),
+							notCounting: failures.filter((reason) => !reason.countsAgainst).map((reason) => reason.key),
+							countingCancels: cancels.filter((reason) => reason.countsAgainst).map((reason) => reason.key),
+						},
+						page,
+					);
 				},
 			},
 			{

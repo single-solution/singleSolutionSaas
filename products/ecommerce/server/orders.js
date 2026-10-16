@@ -197,10 +197,12 @@ export const createOrders = (product, service, { ordering }) => {
 		for (const line of order.lines) images.set(line.id, await media.mediaUrl(s, line.image));
 		// how the lines' units are numbered (their item types), and the units' values (staff see every value)
 		const data = await s.data();
-		const [rules, unitValues, orderFields] = await Promise.all([
+		const [rules, unitValues, orderFields, cancel, failure] = await Promise.all([
 			moves.unitRulesFor(s, order),
 			unitsOfOrders(data, [order.id]),
 			fieldsOn(data, 'order'),
+			s.list('cancel_reasons'),
+			s.list('delivery_failure_reasons'),
 		]);
 		const detail = orderDetail(order, flow, {
 			customer,
@@ -208,6 +210,7 @@ export const createOrders = (product, service, { ordering }) => {
 			money,
 			units: { rules, values: unitValues.get(order.id) ?? new Map() },
 			orderFields,
+			reasons: { cancel, failure },
 		});
 		// the shopper's transfer proof opens with a signed link of 5 minutes (E24)
 		const proof = order.payment.proof;
@@ -253,6 +256,8 @@ export const createOrders = (product, service, { ordering }) => {
 			},
 			paymentMethod: 'payment.method',
 			paymentState: 'payment.state',
+			// why orders were canceled or came back (E19)
+			reason: 'closeReason',
 		},
 	});
 

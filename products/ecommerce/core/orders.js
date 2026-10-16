@@ -12,6 +12,7 @@ import { CLOSED_ROLES, moveOf, nextStatuses, statusOf } from './flow.js';
 import { ID_PREFIX, STATUS_ROLES } from './model.js';
 import { MAX_MEASURED, piecesOf } from './measure.js';
 import { isAmount } from './money.js';
+import { LIST_KEY } from './named-lists.js';
 import { MAX_TRACKING, cleanTracking, hasControl } from './couriers.js';
 import { OTHER_WAY, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
 import { TAG_LIMITS, checkTags } from './customer-segments.js';
@@ -253,6 +254,7 @@ export const stateAfterRefund = (paid, refunded) => (refunded >= paid ? 'refunde
  * @property {import('./model.js').PaymentState} [paymentState]
  * @property {import('./model.js').PaymentMethod[]} [paymentMethods] (`paymentMethod`, one or several, E31)
  * @property {Array<'delivery' | 'pickup' | 'none'>} [deliveryMethods] (`deliveryMethod`, E31)
+ * @property {string[]} [reasons] (`reason`): why orders were canceled or came back (E19)
  * @property {string} [city] the delivery city (E31)
  * @property {string} [customer] a customer's user id or customer id (E31)
  * @property {string[]} [tags] orders with any of these tags (`tag`, E11)
@@ -331,6 +333,12 @@ export const orderFilters = (query) => {
 		if (!methods) return refuse('deliveryMethod', 'deliveryMethod is delivery, pickup or none.');
 		value.deliveryMethods = /** @type {Array<'delivery' | 'pickup' | 'none'>} */ (methods);
 	}
+	const reason = text('reason');
+	if (reason !== null) {
+		const reasons = several(reason, (key) => LIST_KEY.test(key));
+		if (!reasons) return refuse('reason', 'reason is a key of the cancel or failed-delivery reasons.');
+		value.reasons = reasons;
+	}
 	const city = text('city');
 	if (city !== null) {
 		if (String(city).length > 100) return refuse('city', 'At most 100 characters.');
@@ -376,6 +384,7 @@ export const orderQuery = (filters, { seenBy = '' } = {}) => {
 	if (filters.paymentState) query['payment.state'] = filters.paymentState;
 	if (filters.paymentMethods) query['payment.method'] = { $in: filters.paymentMethods };
 	if (filters.deliveryMethods) query['delivery.method'] = { $in: filters.deliveryMethods };
+	if (filters.reasons) query.closeReason = { $in: filters.reasons };
 	if (filters.city) query['address.city'] = { $regex: `^${escapeRegex(filters.city)}$`, $options: 'i' };
 	// a customer id (`cus_…`, guests too) or an Accounts user id
 	if (filters.customer)
@@ -415,9 +424,9 @@ export const orderQuery = (filters, { seenBy = '' } = {}) => {
  *   { book: true, courier?: string }} ShipmentInput `trackingNumber` may be '' when the website does not require it (E28)
  * @typedef {{ kind: 'dispatch_video', key: string } | { kind: 'dispatch_video', url: string }} OrderMedia
  * @typedef {{ to: string, note: string, serials: Record<string, UnitInput[]>, shipment: ShipmentInput | null,
- *   updatedAt: string | null, reason?: 'rto' | 'customer_return', video?: OrderMedia, code?: HistoryNote,
+ *   updatedAt: string | null, reason?: string, video?: OrderMedia, code?: HistoryNote,
  *   shopperNote?: string, restock?: boolean }} MoveInput
- *   `reason`: why a package came back (E27); `video`: the dispatch video taken when packing (E28); `code`: the code of a
+ *   `reason`: why staff cancel or a package came back, a key of the merchant's reason list (E19); `video`: the dispatch video taken when packing (E28); `code`: the code of a
  *   note the server writes itself (a move that follows a refund or a recorded payment; never from what staff send);
  *   `shopperNote`: a note the shopper reads in the order's timeline and message (the staff note stays internal);
  *   `restock`: whether the items go back in stock, for a move that asks (`restock: ask`)
@@ -462,9 +471,9 @@ export const checkMove = (body) => {
 		video = checked;
 	}
 	const updatedAt = typeof input.updatedAt === 'string' && input.updatedAt !== '' ? input.updatedAt : null;
-	if (input.reason !== undefined && input.reason !== null && input.reason !== 'rto' && input.reason !== 'customer_return')
-		return refuse('reason', 'reason is rto or customer_return.');
-	const reason = /** @type {'rto' | 'customer_return' | undefined} */ (input.reason ?? undefined);
+	if (input.reason !== undefined && input.reason !== null && (typeof input.reason !== 'string' || !LIST_KEY.test(input.reason)))
+		return refuse('reason', 'reason is a key of the cancel_reasons or delivery_failure_reasons list.');
+	const reason = typeof input.reason === 'string' ? input.reason : undefined;
 	return {
 		ok: true,
 		value: {
@@ -1079,11 +1088,18 @@ const LEFT_OUT = Object.freeze(['accessKeyHash', 'idempotencyKey', 'phoneDigits'
  * @param {OrderFlow} flow
  * @param {{ customer: Partial<CustomerRecord> | null, images: Map<string, string | null>, money: Money,
  *   units?: { rules: ReadonlyMap<string, import('./item-types.js').UnitRules>,
- *   values: ReadonlyMap<string, Record<string, string[]>> }, orderFields?: ReadonlyArray<import('./model.js').AttributeRecord> }} extras
+ *   values: ReadonlyMap<string, Record<string, string[]>> }, orderFields?: ReadonlyArray<import('./model.js').AttributeRecord>,
+ *   reasons?: { cancel: ReadonlyArray<import('./order-reasons.js').OrderReason>,
+ *   failure: ReadonlyArray<import('./order-reasons.js').OrderReason> } }} extras
  *   `images`: line id → address; `units`: how the units of the order's products are numbered (their item types), and
- *   the values of the order's units by serial; `orderFields`: the shop's order fields
+ *   the values of the order's units by serial; `orderFields`: the shop's order fields; `reasons`: the cancel and
+ *   failed-delivery reasons (E19)
  */
-export const orderDetail = (order, flow, { customer, images, money, units, orderFields = [] }) => {
+export const orderDetail = (
+	order,
+	flow,
+	{ customer, images, money, units, orderFields = [], reasons = { cancel: [], failure: [] } },
+) => {
 	const plain = Object.fromEntries(Object.entries(wire(order)).filter(([key]) => !LEFT_OUT.includes(key)));
 	// what is due, can be refunded and must be refunded, counted the one way
 	const sums = orderMoney(order);
@@ -1100,6 +1116,12 @@ export const orderDetail = (order, flow, { customer, images, money, units, order
 			.filter((field) => field.active || order.fields?.[field.id] !== undefined)
 			.map((field) => fieldDefinition(field)),
 		statusLabel: statusLabel(flow, order.status),
+		// why it was canceled or came back, by the merchant's name (E19)
+		closeReason: order.closeReason ?? null,
+		closeReasonLabel: order.closeReason
+			? ([...reasons.cancel, ...reasons.failure].find((reason) => reason.key === order.closeReason)?.label ??
+				order.closeReason)
+			: null,
 		totalText: money(order.totals.total, order.totals.currency),
 		lines: plain.lines.map((/** @type {any} */ line) => {
 			// how the line's units are numbered (its item type, dynamic model §1): when, before which stage, the unit fields
@@ -1137,7 +1159,17 @@ export const orderDetail = (order, flow, { customer, images, money, units, order
 		// the statuses staff may move it to, with what each move needs and its options (the widgets ask for them)
 		nextStatuses: nextStatuses(flow, order.status, 'staff').map(({ key, label, role }) => {
 			const move = /** @type {NonNullable<ReturnType<typeof moveOf>>} */ (moveOf(flow, order.status, key, 'staff'));
-			return { key, label, role, permission: move.permission, needs: move.needs, options: move.options };
+			// a cancel or a package that came back offers the merchant's reasons (E19)
+			const offered = role === 'cancelled' ? reasons.cancel : role === 'returned_to_origin' ? reasons.failure : null;
+			return {
+				key,
+				label,
+				role,
+				permission: move.permission,
+				needs: move.needs,
+				options: move.options,
+				...(offered ? { reasons: offered.map((reason) => ({ key: reason.key, label: reason.label })) } : {}),
+			};
 		}),
 	};
 };

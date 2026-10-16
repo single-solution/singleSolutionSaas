@@ -139,7 +139,15 @@ const detail = (over = {}) => ({
 	nextStatuses: [
 		{ key: 'packed', label: 'Packed', role: 'packed' },
 		{ key: 'dispatched', label: 'Dispatched', role: 'shipped' },
-		{ key: 'cancelled', label: 'Canceled', role: 'cancelled' },
+		{
+			key: 'cancelled',
+			label: 'Canceled',
+			role: 'cancelled',
+			reasons: [
+				{ key: 'customer_request', label: 'The customer asked' },
+				{ key: 'fake', label: 'Fake order' },
+			],
+		},
 	],
 	...over,
 });
@@ -580,7 +588,12 @@ describe('orders admin: one order', () => {
 		reply = () => problem(409, 'conflict');
 		await submitDialog(root);
 		expect(moves[6]).toMatchObject({ to: 'cancelled', serials: {}, shipment: null });
+		expect(moves[6].reason).toBeUndefined();
 		expect(dialogStatus(root)).toBe(TEXTS['problem.conflict']);
+		// the merchant's cancel reasons (E19): none by default, else the one picked
+		await change(fieldIn(dialogOf(root), 'Reason'), 'fake');
+		await submitDialog(root);
+		expect(moves[7]).toMatchObject({ to: 'cancelled', reason: 'fake' });
 	});
 
 	it('asks what the move needs: notes for staff and the shopper, the dispatch video and whether items go back', async () => {

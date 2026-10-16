@@ -327,6 +327,21 @@ export const TEXTS = Object.freeze({
 			removeAccount: 'Remove this account',
 			badAmount: '{method}: {value} is not an amount in {currency}.',
 		}),
+		reasons: Object.freeze({
+			item: 'Reason',
+			key: 'Key (lower-case letters, digits, _ or -)',
+			label: 'Name',
+			countsAgainst:
+				'Counts against the customer (adds one to their returned packages; pay-on-delivery methods can ask flagged customers for an advance)',
+			cancel_reasons: Object.freeze({
+				title: 'Cancel reasons',
+				help: 'What staff pick when they cancel an order (optional). Orders keep the reason, so lists, counts and reports group by it.',
+			}),
+			delivery_failure_reasons: Object.freeze({
+				title: 'Failed delivery reasons',
+				help: 'What staff pick when a shipped package comes back to you (the first one when none is picked). Orders keep the reason, so lists, counts and reports group by it.',
+			}),
+		}),
 		claimKinds: Object.freeze({
 			title: 'Claim kinds',
 			help: 'What shoppers and staff can claim: each kind is counted in the return or the warranty window and ends in the outcomes you allow. Kinds offered to shoppers show on their claim form.',

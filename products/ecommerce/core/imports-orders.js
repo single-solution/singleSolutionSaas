@@ -37,6 +37,7 @@ import {
 } from './orders.js';
 import { FIELD_LIMITS, PLAIN_SERIAL_RULE, checkFieldValues, isPlainSerial } from './fields.js';
 import { balanceOf, expireLots } from './points.js';
+import { LIST_KEY } from './named-lists.js';
 import { DEFAULT_CLAIM_KINDS, DEFAULT_CLAIM_STATUSES, checkClaimInput, checkNote, plainText } from './returns.js';
 import { OTHER_WAY, PAYMENT_KINDS, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
 import { REVIEW_STATUSES, checkReply, checkReviewInput } from './reviews.js';
@@ -503,8 +504,6 @@ const HISTORY_FIELDS = fieldList('at from to by note shopperNote reason kind');
 const SHIPMENT_FIELDS = fieldList('courier trackingNumber trackingUrl booked status checkedAt trackingNote estimatedDeliveryAt');
 const MEDIA_FIELDS = fieldList('kind key url at by');
 
-/** Why an order moved (E27: a return's, or a cancel's). */
-const MOVE_REASONS = Object.freeze(/** @type {const} */ (['rto', 'customer_return', 'staff', 'shopper', 'expired']));
 /** History entries that are not moves. */
 const ENTRY_KINDS = Object.freeze(/** @type {const} */ (['edited', 'payment', 'refund']));
 /** Roles of orders never delivered: they have no delivery time (IMP-9). */
@@ -895,7 +894,12 @@ const historyOf = (c, value, { flow, now }, status) => {
 		return {
 			...entry,
 			...(shopperNote ? { shopperNote } : {}),
-			...(missing(input.reason) ? {} : { reason: c.oneOf(input.reason, MOVE_REASONS, `${path}/reason`) }),
+			// why it moved (E19): a key of the cancel or failed-delivery reasons, customer_return, or who canceled at checkout
+			...(missing(input.reason)
+				? {}
+				: typeof input.reason === 'string' && LIST_KEY.test(input.reason)
+					? { reason: input.reason }
+					: (c.fail(`${path}/reason`, 'A reason key is expected.'), {})),
 			...(missing(input.kind) ? {} : { kind: c.oneOf(input.kind, ENTRY_KINDS, `${path}/kind`) }),
 		};
 	});
@@ -1395,6 +1399,12 @@ export const checkImportedWishlist = (record, rules) => {
  */
 export const rtoKeysOf = (flow) =>
 	flow.statuses.filter((status) => status.role === 'returned_to_origin').map((status) => status.key);
+
+/**
+ * The statuses of the flow that cancel (`finish` counts a cancel whose reason counts against the customer, E19).
+ * @param {OrderFlow} flow
+ */
+export const cancelKeysOf = (flow) => flow.statuses.filter((status) => status.role === 'cancelled').map((status) => status.key);
 
 /**
  * A customer's counts from the sums of their orders (`finish`): orders placed, packages returned to origin, the last

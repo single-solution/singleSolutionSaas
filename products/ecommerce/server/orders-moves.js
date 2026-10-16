@@ -43,6 +43,7 @@ import { bookingCourier, courierNamed, trackingLink } from '../core/couriers.js'
 import { BEFORE_DELIVERY_ROLES, WAITING_ROLES as WAITING, canMove, confirmedStatus, moveOf, statusOf } from '../core/flow.js';
 import { createId } from '@ss/contracts';
 import { elementsOf } from '../core/item-types.js';
+import { reasonOf } from '../core/order-reasons.js';
 import { OTHER_WAY, VIA_PAYMENTS } from '../core/payment-methods.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
@@ -396,6 +397,23 @@ export const createMoves = (product, service) => {
 			input: { who: 'staff', trigger, ...(input.restock === undefined ? {} : { restock: input.restock }) },
 		});
 		if (!chosen.ok) throw service.invalid(chosen.field ?? 'restock', chosen.message);
+		// why staff cancel or a package came back: a reason of the merchant's list for that move (E19), with whether it
+		// counts against the customer
+		const reasons =
+			target.role === 'cancelled'
+				? await s.list('cancel_reasons')
+				: target.role === 'returned_to_origin'
+					? await s.list('delivery_failure_reasons')
+					: null;
+		if (!reasons && input.reason) throw service.invalid('reason', 'Only a cancel or a package that came back takes a reason.');
+		const why = reasons
+			? reasonOf(input.reason, reasons, { fallbackFirst: target.role === 'returned_to_origin' })
+			: { ok: true, reason: null };
+		if (!why.ok)
+			throw service.invalid(
+				'reason',
+				`reason is a key of the ${target.role === 'cancelled' ? 'cancel_reasons' : 'delivery_failure_reasons'} list.`,
+			);
 		const data = await s.data();
 		const now = product.now();
 		const actor = service.actor(ctx);
@@ -410,7 +428,7 @@ export const createMoves = (product, service) => {
 			...(input.shopperNote ? { shopperNote: input.shopperNote } : {}),
 			...(input.restock === undefined ? {} : { restock: input.restock }),
 			...(input.code ? { code: input.code } : {}),
-			...(input.reason ? { reason: input.reason } : {}),
+			...(why.reason ? { reason: why.reason.key, countsAgainst: why.reason.countsAgainst } : {}),
 		};
 		// a move that gives money back needs the refund permission, whatever permission it names (a cancel that refunds
 		// what was paid, before delivery or after it, E40): planned with the order as read, before anything is called

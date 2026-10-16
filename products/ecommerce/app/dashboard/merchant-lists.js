@@ -1,11 +1,13 @@
 'use client';
 /**
- * The merchant's claim lists (fixed-choices E18, feature `returns`): claim kinds (a name, the window each is counted in,
- * its outcomes and whether shoppers may make it) and claim statuses (a name on a fixed role). Saved whole with the
- * shared list editor (`./lists.js`).
+ * The merchant's own lists of business choices (fixed-choices E18–E20, E40): claim kinds (a name, the window each is
+ * counted in, its outcomes and whether shoppers may make it) and claim statuses (a name on a fixed role), feature
+ * `returns`; cancel and failed-delivery reasons (each counting against the customer or not), feature `checkout`. Saved
+ * whole with the shared list editor (`./lists.js`).
  * @module
  */
 import { Checkbox, CheckboxGroup, FieldGrid, Input, Select } from '@ss/ui';
+import { REASON_LIMIT } from '../../core/order-reasons.js';
 import { CLAIM_LIST_LIMITS, CLAIM_OUTCOMES, CLAIM_ROLES, CLAIM_WINDOWS } from '../../core/returns.js';
 import { keyOf } from './drafts.js';
 import { ListEditor } from './lists.js';
@@ -114,6 +116,58 @@ export function ClaimStatusesEditor({ websiteId, off }) {
 						onChange={(event) => set({ role: event.target.value })}
 					/>
 				</FieldGrid>
+			)}
+		/>
+	);
+}
+
+const R = TEXTS.lists.reasons;
+
+/**
+ * A reason list (`cancel_reasons` or `delivery_failure_reasons`): a name, a key and whether it counts against the
+ * customer.
+ * @param {EditorProps & { list: 'cancel_reasons' | 'delivery_failure_reasons' }} props
+ */
+export function ReasonsEditor({ websiteId, off, list }) {
+	const words = R[list];
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list={list}
+			title={words.title}
+			help={words.help}
+			itemLabel={R.item}
+			max={REASON_LIMIT}
+			off={off}
+			blank={() => ({ key: '', label: '', countsAgainst: false })}
+			clean={(reason) => ({
+				key: keyOf(reason.key, reason.label),
+				label: String(reason.label ?? '').trim(),
+				countsAgainst: reason.countsAgainst === true,
+			})}
+			render={(reason, set) => (
+				<div className="space-y-3">
+					<FieldGrid>
+						<Input
+							label={R.label}
+							value={reason.label ?? ''}
+							maxLength={120}
+							onChange={(event) => set({ label: event.target.value })}
+						/>
+						<Input
+							label={R.key}
+							value={reason.key ?? ''}
+							maxLength={40}
+							autoComplete="off"
+							onChange={(event) => set({ key: event.target.value })}
+						/>
+					</FieldGrid>
+					<Checkbox
+						label={R.countsAgainst}
+						checked={reason.countsAgainst === true}
+						onChange={(event) => set({ countsAgainst: event.target.checked })}
+					/>
+				</div>
 			)}
 		/>
 	);

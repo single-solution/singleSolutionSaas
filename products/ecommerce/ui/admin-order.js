@@ -300,6 +300,8 @@ const renderOrder = (kit, order, detail, message) => {
 		[t('ordersAdmin.total'), money(order.totals.total)],
 		[t('ordersAdmin.paymentState'), t(`ordersAdmin.payment.${order.payment.state}`)],
 		[t('ordersAdmin.paymentMethod'), methodName(kit, order.payment.method)],
+		// why it was canceled or came back (E19)
+		[t('ordersAdmin.closeReason'), order.closeReasonLabel ?? ''],
 		// the shopper's transfer proof: when it came, its reference and a link to open it (E24)
 		[t('ordersAdmin.proof'), proofOf(kit, order.payment.proof)],
 		[t('ordersAdmin.paid'), money(order.payment.paid)],
@@ -464,7 +466,8 @@ const claimsCard = async (kit, order, cards, detail) => {
 /**
  * A status staff may move the order to, with what the move needs and its options (the order's `nextStatuses`).
  * @typedef {{ key: string, label: string, role: string, needs?: string[],
- *   options?: { video?: string, restock?: string } }} NextStatus
+ *   options?: { video?: string, restock?: string }, reasons?: Array<{ key: string, label: string }> }} NextStatus
+ *   `reasons`: the merchant's cancel or failed-delivery reasons the move offers (E19)
  */
 
 /** Roles of an order whose dispatch video staff may replace. */
@@ -498,6 +501,15 @@ const moveDialog = (kit, order, status, done) => {
 			: null;
 	const restock = options.restock === 'ask' ? kit.check(t('ordersAdmin.restockAsk')) : null;
 	const cancelling = status.role === 'cancelled';
+	// why: a cancel may give one of the merchant's reasons, a package that came back takes one (the first by default)
+	const reasons = status.reasons ?? [];
+	const why =
+		reasons.length > 0
+			? kit.select([
+					...(cancelling ? [{ value: '', label: t('ordersAdmin.noReason') }] : []),
+					...reasons.map((entry) => ({ value: entry.key, label: entry.label })),
+				])
+			: null;
 	kit.dialog({
 		title: t('ordersAdmin.moveToStatus', { status: status.label }),
 		body: [
@@ -507,6 +519,7 @@ const moveDialog = (kit, order, status, done) => {
 				? kit.field(t(options.video === 'required' ? 'ordersAdmin.videoRequired' : 'ordersAdmin.videoOptional'), video)
 				: null,
 			shipping?.node,
+			why ? kit.field(t('ordersAdmin.moveReason'), why) : null,
 			restock?.node,
 			kit.field(t(needs.includes('note') ? 'ordersAdmin.moveNoteRequired' : 'ordersAdmin.moveNote'), reason),
 			kit.field(t(needs.includes('reason') ? 'ordersAdmin.shopperNoteRequired' : 'ordersAdmin.shopperNoteField'), forShopper),
@@ -525,6 +538,7 @@ const moveDialog = (kit, order, status, done) => {
 				note: reason.value,
 				...(forShopper.value.trim() ? { shopperNote: forShopper.value.trim() } : {}),
 				...(restock ? { restock: restock.box.checked } : {}),
+				...(why && why.value ? { reason: why.value } : {}),
 				...(video && video.value.trim() ? { video: video.value.trim() } : {}),
 				serials: serials.value,
 				shipment: shipping ? shipping.value() : null,

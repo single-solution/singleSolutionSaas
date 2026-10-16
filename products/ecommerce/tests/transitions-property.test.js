@@ -14,6 +14,7 @@ import { givePoints, loyaltyAccount, placeOrder } from '../adapters/ledger.js';
 import { PLACED_FACTS, factsOf } from '../core/facts.js';
 import { moveOf, nextStatuses } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
+import { DEFAULT_CANCEL_REASONS } from '../core/order-reasons.js';
 import { checkPayment, checkRefund, refundable } from '../core/orders.js';
 import { balanceOf } from '../core/points.js';
 import { createMoves } from '../server/orders-moves.js';
@@ -33,6 +34,11 @@ let moves;
 
 beforeAll(async () => {
 	shop = await readyShop();
+	// a cancel reason that counts against the customer, as a package that could not be delivered does (E19)
+	await shop.list('cancel_reasons', [
+		...DEFAULT_CANCEL_REASONS,
+		{ key: 'fraud', label: 'Suspected fraud', countsAgainst: true },
+	]);
 	service = createService(shop.product);
 	moves = createMoves(shop.product, service);
 });
@@ -364,6 +370,13 @@ describe('property: random flows × every way an order moves, retries, two at on
 						 * @returns {Promise<boolean>} whether it changed the order
 						 */
 						const run = async (action, current = read) => {
+							/** @param {string} to @param {string} reason */
+							const reasonFor = (to, reason) => {
+								const role = flow.statuses.find((status) => status.key === to)?.role;
+								if (role === 'returned_to_origin') return { reason };
+								if (role === 'cancelled') return { reason: reason === 'rto' ? 'fraud' : 'customer_request' };
+								return {};
+							};
 							counts.attempts += 1;
 							const s = await service.site(ctx());
 							if (action.kind === 'move') {
@@ -380,7 +393,8 @@ describe('property: random flows × every way an order moves, retries, two at on
 											// a dispatch video for a move into packed that asks for one
 											video: { kind: 'dispatch_video', url: 'https://video.example/packing' },
 											updatedAt: null,
-											reason: /** @type {'rto' | 'customer_return'} */ (action.reason),
+											// a reason only with a cancel (one that counts, or not) or a package that came back (E19)
+											...reasonFor(/** @type {string} */ (action.to), /** @type {string} */ (action.reason)),
 											// staff answer a move that asks whether the items go back in stock
 											...(moveOf(flow, current.status, /** @type {string} */ (action.to), 'staff')?.options.restock ===
 											'ask'
@@ -601,7 +615,9 @@ describe('property: random flows × every way an order moves, retries, two at on
 			.filter((record) => factsOf(record).earned === 'credited')
 			.reduce((total, record) => total + record.promotions.pointsEarned, 0);
 		expect(account.balance, `points (seed ${SEED})`).toBe(100_000 - spent + earned);
-		const rto = all.flatMap((record) => record.history).filter((entry) => entry.reason === 'rto').length;
+		const rto = all
+			.flatMap((record) => record.history)
+			.filter((entry) => entry.reason === 'rto' || entry.reason === 'fraud').length;
 		const customer = /** @type {any} */ (
 			await data.collection(COLLECTIONS.customers).findOne({ websiteId: shop.websiteId, id: customerId })
 		);

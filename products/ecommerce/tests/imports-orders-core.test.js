@@ -481,7 +481,7 @@ describe('orders', () => {
 						number: '2026-0007',
 						status: 'lost',
 						websiteId: 'web_000000000001',
-						history: [{ at: 'later', from: 'nowhere', to: 'confirmed', reason: 'lost', kind: 'other', extra: 1 }],
+						history: [{ at: 'later', from: 'nowhere', to: 'confirmed', reason: 'Lost!', kind: 'other', extra: 1 }],
 						placedAt: undefined,
 						deliveredAt: '2026-03-04T00:00:00Z',
 					}),

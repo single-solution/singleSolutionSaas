@@ -96,7 +96,10 @@ import { OTHER_WAY, PAY_LATER_KINDS, VIA_PAYMENTS, isMethodKey } from './payment
  * @property {boolean} [restock] staff's answer when the move asks whether the items go back in stock (`restock: ask`)
  * @property {HistoryNote} [code] a note the server writes itself
  * @property {NoteValues} [values]
- * @property {'rto' | 'customer_return'} [reason] why a package came back (staff)
+ * @property {string} [reason] why staff cancel or a package came back: a key of the `cancel_reasons` or
+ *   `delivery_failure_reasons` list (E19; `core/order-reasons.js`)
+ * @property {boolean} [countsAgainst] the reason adds one to the customer's returned-packages counter (none given: a
+ *   package that came back counts, unless the customer sent it back)
  * @property {'staff' | 'shopper' | 'expired'} [cancelReason] why a checkout cancel happened (kept as the reason)
  * @property {boolean} [listed] false: no listed move is needed (an ended window), only the role rules
  * @property {boolean} [trigger] the shop moves it by itself for staff (refunds that cover the payments): any listed
@@ -445,16 +448,22 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 		triedAt: null,
 	});
 
-	// why: a package that came back is a return to origin (counted) or a customer's return (not counted, E27); a checkout
-	// cancel keeps who or what canceled it
+	// why (E19): a package that came back or a staff cancel keeps the merchant's reason (a package without one: rto); a
+	// customer's return is customer_return; a checkout cancel keeps who or what canceled it
 	const reason =
 		stage === 'returned_to_origin'
 			? (input.reason ?? 'rto')
 			: stage === 'returned'
 				? 'customer_return'
 				: input.who === 'staff'
-					? undefined
+					? stage === 'cancelled'
+						? input.reason
+						: undefined
 					: input.cancelReason;
+	/** Whether the move adds one to the customer's returned-packages counter. */
+	const countsAgainst = input.countsAgainst ?? (stage === 'returned_to_origin' && reason !== 'customer_return');
+	// the reason a closing move gives is kept on the order, for its lists, counts and reports
+	if ((stage === 'cancelled' || stage === 'returned_to_origin') && reason) set.closeReason = reason;
 
 	// a payment the move records (paid when staff confirm, OR-7; Payments' confirmation)
 	if (input.paid) {
@@ -676,6 +685,8 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 		case 'cancelled': {
 			if (BEFORE_DELIVERY.includes(fromStage)) release();
 			else settleAfter({ cancel: true });
+			if (countsAgainst && order.customer.customerId)
+				ledger.push({ kind: 'count_rto', customerId: order.customer.customerId });
 			// what Payments took is refunded after the transaction, once (its id is the Idempotency-Key), when the move says so
 			const { online } = moneyLeft();
 			if (choices.refund && online > 0)
@@ -690,7 +701,7 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 			break;
 		}
 		case 'returned_to_origin':
-			comeBack(reason !== 'customer_return');
+			comeBack(countsAgainst);
 			break;
 		case 'returned':
 			comeBack(false);

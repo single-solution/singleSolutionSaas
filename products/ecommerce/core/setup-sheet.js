@@ -174,6 +174,13 @@ export const LIST_WORDS = Object.freeze({
 			? `${nameOf(price.role)} ${counted(price.prices.length, 'fixed price', 'fixed prices')}`
 			: `${nameOf(price.role)} ${price.percent}% off`,
 	),
+	cancel_reasons: named('cancel reason', 'cancel reasons', (/** @type {{ label: string }} */ reason) => nameOf(reason.label)),
+	delivery_failure_reasons: named(
+		'failed delivery reason',
+		'failed delivery reasons',
+		(/** @type {{ label: string, countsAgainst: boolean }} */ reason) =>
+			`${nameOf(reason.label)}${reason.countsAgainst ? ' (counts)' : ''}`,
+	),
 	claim_kinds: named('claim kind', 'claim kinds', (/** @type {{ label: string }} */ kind) => nameOf(kind.label)),
 	claim_statuses: named(
 		'claim status',

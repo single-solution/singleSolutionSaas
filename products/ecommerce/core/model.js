@@ -484,6 +484,8 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string[]} [tags] the merchant's tags (E11); none when it has none
  * @property {Date} placedAt
  * @property {Date | null} deliveredAt
+ * @property {string} [closeReason] why it was canceled or its package came back: a key of the merchant's
+ *   `cancel_reasons` or `delivery_failure_reasons` list, or who canceled at checkout (`staff`, `shopper`, `expired`; E19)
  * @property {Date} createdAt
  * @property {Date} updatedAt
  */

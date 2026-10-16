@@ -475,6 +475,64 @@ describe('moving orders', () => {
 		expect(refunded.json.payment).toMatchObject({ state: 'unpaid', refunded: 0 });
 	});
 
+	it('keeps the merchant reason of a cancel or a package that came back, and counts the ones that count (E19)', async () => {
+		await shop.list('cancel_reasons', [
+			{ key: 'customer_request', label: 'The customer asked', countsAgainst: false },
+			{ key: 'fake', label: 'Fake order', countsAgainst: true },
+		]);
+		await shop.list('delivery_failure_reasons', [
+			{ key: 'refused', label: 'Refused at the door', countsAgainst: true },
+			{ key: 'customer_return', label: 'Sent back by the customer', countsAgainst: false },
+		]);
+		try {
+			// a cancel offers the reasons; a reason of another list, or on another move, is refused
+			const { order } = await place({ userId: 'usr_reason00000001' });
+			const read = await shop.admin(ticket, 'GET', `/v1/admin/orders/${order.id}`);
+			expect(read.json.nextStatuses.find((/** @type {any} */ next) => next.key === 'cancelled').reasons).toEqual([
+				{ key: 'customer_request', label: 'The customer asked' },
+				{ key: 'fake', label: 'Fake order' },
+			]);
+			expect(read.json.nextStatuses.find((/** @type {any} */ next) => next.key === 'confirmed').reasons).toBeUndefined();
+			expect((await move(order.id, 'cancelled', { reason: 'refused' })).json.errors[0].path).toBe('/reason');
+			expect((await move(order.id, 'confirmed', { reason: 'fake' })).json.errors[0].path).toBe('/reason');
+			const canceled = await move(order.id, 'cancelled', { reason: 'fake' });
+			expect(canceled.status).toBe(200);
+			expect(canceled.json).toMatchObject({ closeReason: 'fake', closeReasonLabel: 'Fake order' });
+			expect(canceled.json.customerFlags.rtoCount).toBe(1);
+			expect(canceled.json.history.at(-1)).toMatchObject({ to: 'cancelled', reason: 'fake' });
+
+			// a cancel without a reason, and one that does not count
+			const second = await place({ userId: 'usr_reason00000001' });
+			expect((await move(second.order.id, 'cancelled', { reason: 'customer_request' })).json.customerFlags.rtoCount).toBe(1);
+
+			// a package that came back: the first reason by default (it counts), customer_return does not
+			let tracking = 0;
+			const shipped = async () => {
+				const placed = await place({ userId: 'usr_reason00000001' });
+				tracking += 1;
+				await move(placed.order.id, 'confirmed');
+				await move(placed.order.id, 'packed');
+				await move(placed.order.id, 'dispatched', { shipment: { courier: 'swift', trackingNumber: `RS${tracking}` } });
+				return placed.order.id;
+			};
+			const back = await move(await shipped(), 'returned');
+			expect(back.json).toMatchObject({ closeReason: 'refused', closeReasonLabel: 'Refused at the door' });
+			expect(back.json.customerFlags.rtoCount).toBe(2);
+			const sentBack = await move(await shipped(), 'returned', { reason: 'customer_return' });
+			expect(sentBack.json.customerFlags.rtoCount).toBe(2);
+
+			// lists and counts group by reason
+			const fakes = await shop.api('GET', '/v1/orders?reason=fake&customer=usr_reason00000001');
+			expect(fakes.json.items.map((/** @type {any} */ item) => item.id)).toEqual([order.id]);
+			const byReason = await shop.api('GET', '/v1/orders/counts?by=reason&customer=usr_reason00000001');
+			expect(byReason.json.groups).toEqual({ fake: 1, customer_request: 1, refused: 1, customer_return: 1 });
+		} finally {
+			const { DEFAULT_CANCEL_REASONS, DEFAULT_DELIVERY_FAILURE_REASONS } = await import('../core/order-reasons.js');
+			await shop.list('cancel_reasons', DEFAULT_CANCEL_REASONS);
+			await shop.list('delivery_failure_reasons', DEFAULT_DELIVERY_FAILURE_REASONS);
+		}
+	});
+
 	it('keeps the shipment when moving between shipped statuses', async () => {
 		const flow = (await import('../core/flow.js')).DEFAULT_FLOW;
 		await shop.list('order_flow', {

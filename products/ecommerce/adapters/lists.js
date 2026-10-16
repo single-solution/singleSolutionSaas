@@ -3,8 +3,8 @@
  * records, which a settings schema cannot hold — the order flow (statuses and allowed moves), the payment methods
  * (fixed-choices E2), delivery zones, couriers, the shop's policies (E27), saved customer segments (E11; today's three
  * until saved),
- * the region names checkout offers per country (dynamic model §5), tax rules, condition grades, unit states (E38), item types (dynamic model §1), booking schedules with their dated exceptions (E30), role prices (E19) and the
- * claim kinds and statuses (E18). They are kept per website in the kit's settings collection (so a
+ * the region names checkout offers per country (dynamic model §5), tax rules, condition grades, unit states (E38), item types (dynamic model §1), booking schedules with their dated exceptions (E30), role prices (E19), the
+ * cancel and failed-delivery reasons (fixed-choices E19) and the claim kinds and statuses (E18). They are kept per website in the kit's settings collection (so a
  * removed website's lists go with its settings), each checked by its feature's rules, edited in the dashboard
  * (Settings, `/v1/dashboard/websites/:websiteId/lists/:list`) and recorded in Recent changes and the activity log. Lists have no global
  * defaults; an unsaved list reads as its code default. A list may also be checked against the merchant's data before
@@ -23,6 +23,7 @@ import { DEFAULT_POLICIES, checkPolicies } from '../core/policies.js';
 import { checkItemTypes } from '../core/item-types.js';
 import { checkPaymentMethods, defaultPaymentMethods } from '../core/payment-methods.js';
 import { checkRolePrices } from '../core/role-pricing.js';
+import { DEFAULT_CANCEL_REASONS, DEFAULT_DELIVERY_FAILURE_REASONS, checkReasons } from '../core/order-reasons.js';
 import { DEFAULT_CLAIM_KINDS, DEFAULT_CLAIM_STATUSES, checkClaimKinds, checkClaimStatuses } from '../core/returns.js';
 import { checkTaxRules } from '../core/taxes.js';
 import { DEFAULT_UNIT_STATES, checkUnitStates } from '../core/unit-states.js';
@@ -80,6 +81,18 @@ export const LISTS = Object.freeze({
 		fallback: defaultSchedules,
 	},
 	role_prices: { feature: 'role_pricing', title: 'Role prices', check: checkRolePrices, fallback: () => [] },
+	cancel_reasons: {
+		feature: 'checkout',
+		title: 'Cancel reasons',
+		check: checkReasons,
+		fallback: () => DEFAULT_CANCEL_REASONS.map((reason) => ({ ...reason })),
+	},
+	delivery_failure_reasons: {
+		feature: 'checkout',
+		title: 'Failed delivery reasons',
+		check: checkReasons,
+		fallback: () => DEFAULT_DELIVERY_FAILURE_REASONS.map((reason) => ({ ...reason })),
+	},
 	claim_kinds: {
 		feature: 'returns',
 		title: 'Claim kinds',

@@ -13,7 +13,7 @@
 import { startTransition, useState } from 'react';
 import { Callout, Masonry, Section, Select, SwapTransition, cx } from '@ss/ui';
 import { call, fill, useLoad } from './api.js';
-import { ClaimKindsEditor, ClaimStatusesEditor } from './claim-lists.js';
+import { ClaimKindsEditor, ClaimStatusesEditor, ReasonsEditor } from './merchant-lists.js';
 import { GradesEditor } from './grades.js';
 import { ItemTypesEditor } from './item-types.js';
 import { OrderFlowEditor } from './flow-editor.js';
@@ -315,7 +315,13 @@ export function SettingsTab({ websiteId: id }) {
 								<ZonesEditor websiteId={websiteId} off={off('delivery_zones')} currency={currency} />
 							) : null,
 							taxes: seen('taxes') ? <TaxRulesEditor websiteId={websiteId} off={off('taxes')} /> : null,
-							orders: seen('checkout') ? <OrderFlowEditor websiteId={websiteId} off={off('checkout')} /> : null,
+							orders: seen('checkout') ? (
+								<>
+									<OrderFlowEditor websiteId={websiteId} off={off('checkout')} />
+									<ReasonsEditor websiteId={websiteId} off={off('checkout')} list="cancel_reasons" />
+									<ReasonsEditor websiteId={websiteId} off={off('checkout')} list="delivery_failure_reasons" />
+								</>
+							) : null,
 							couriers: seen('checkout') ? <CouriersEditor websiteId={websiteId} off={off('checkout')} /> : null,
 							policies: seen('checkout') ? <PoliciesEditor websiteId={websiteId} off={off('checkout')} /> : null,
 							customers: seen('checkout') ? (

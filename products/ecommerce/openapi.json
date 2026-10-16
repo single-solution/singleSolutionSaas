@@ -5333,6 +5333,16 @@
 							],
 							"description": "Only canceled orders that still hold the shopper’s money (paid before or after the cancel and not all refunded yet): the refunds to make."
 						}
+					},
+					{
+						"name": "reason",
+						"in": "query",
+						"required": false,
+						"description": "Only orders canceled or come back for these reasons (keys of cancel_reasons or delivery_failure_reasons, or staff, shopper, expired; comma-separated, up to 30).",
+						"schema": {
+							"type": "string",
+							"description": "Only orders canceled or come back for these reasons (keys of cancel_reasons or delivery_failure_reasons, or staff, shopper, expired; comma-separated, up to 30)."
+						}
 					}
 				],
 				"responses": {
@@ -5769,6 +5779,16 @@
 							],
 							"description": "Only canceled orders that still hold the shopper’s money (paid before or after the cancel and not all refunded yet): the refunds to make."
 						}
+					},
+					{
+						"name": "reason",
+						"in": "query",
+						"required": false,
+						"description": "Only orders canceled or come back for these reasons (keys of cancel_reasons or delivery_failure_reasons, or staff, shopper, expired; comma-separated, up to 30).",
+						"schema": {
+							"type": "string",
+							"description": "Only orders canceled or come back for these reasons (keys of cancel_reasons or delivery_failure_reasons, or staff, shopper, expired; comma-separated, up to 30)."
+						}
 					}
 				],
 				"responses": {
@@ -5798,7 +5818,7 @@
 		"/v1/admin/orders/counts": {
 			"get": {
 				"summary": "Count the orders by status, role, payment method or payment state (Orders admin widget)",
-				"description": "by=status counts by status key; by=role by the role of each status in today's order flow (none: a status the flow no longer has); by=paymentMethod and by=paymentState by the payment's. 422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, more than 30 tags, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit. 503 count_timeout after 3 seconds.",
+				"description": "by=status counts by status key; by=role by the role of each status in today's order flow (none: a status the flow no longer has); by=paymentMethod and by=paymentState by the payment's. 422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, more than 30 tags, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit. 503 count_timeout after 3 seconds. by=reason counts canceled and come-back orders by their reason (closeReason; orders without one are not counted).",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "orders.read",
@@ -5818,7 +5838,8 @@
 								"status",
 								"role",
 								"paymentMethod",
-								"paymentState"
+								"paymentState",
+								"reason"
 							]
 						}
 					},
@@ -5991,6 +6012,16 @@
 								"true"
 							],
 							"description": "Only canceled orders that still hold the shopper’s money (paid before or after the cancel and not all refunded yet): the refunds to make."
+						}
+					},
+					{
+						"name": "reason",
+						"in": "query",
+						"required": false,
+						"description": "Only orders canceled or come back for these reasons (keys of cancel_reasons or delivery_failure_reasons, or staff, shopper, expired; comma-separated, up to 30).",
+						"schema": {
+							"type": "string",
+							"description": "Only orders canceled or come back for these reasons (keys of cancel_reasons or delivery_failure_reasons, or staff, shopper, expired; comma-separated, up to 30)."
 						}
 					}
 				],
@@ -7137,12 +7168,7 @@
 											"string",
 											"null"
 										],
-										"enum": [
-											"rto",
-											"customer_return",
-											null
-										],
-										"description": "Why a package came back to a returned-to-origin status: rto (counted on the customer, the default) or customer_return."
+										"description": "Why staff cancel or a package came back (E19): a key of your cancel_reasons list (a move into a canceled status; optional) or delivery_failure_reasons list (a move into a returned-to-origin status; none: the first). A reason whose countsAgainst is on adds one to the customer's returned-packages counter (rtoCount, which payment methods paid on delivery read). 422 validation_failed at /reason for another key, or a reason on any other move."
 									},
 									"shopperNote": {
 										"type": [
@@ -21984,6 +22010,16 @@
 						}
 					},
 					{
+						"name": "reason",
+						"in": "query",
+						"required": false,
+						"description": "Only orders canceled or come back for these reasons (keys of cancel_reasons or delivery_failure_reasons, or staff, shopper, expired; comma-separated, up to 30).",
+						"schema": {
+							"type": "string",
+							"description": "Only orders canceled or come back for these reasons (keys of cancel_reasons or delivery_failure_reasons, or staff, shopper, expired; comma-separated, up to 30)."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -22442,6 +22478,16 @@
 						}
 					},
 					{
+						"name": "reason",
+						"in": "query",
+						"required": false,
+						"description": "Only orders canceled or come back for these reasons (keys of cancel_reasons or delivery_failure_reasons, or staff, shopper, expired; comma-separated, up to 30).",
+						"schema": {
+							"type": "string",
+							"description": "Only orders canceled or come back for these reasons (keys of cancel_reasons or delivery_failure_reasons, or staff, shopper, expired; comma-separated, up to 30)."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -22594,7 +22640,7 @@
 		"/v1/orders/counts": {
 			"get": {
 				"summary": "Count the orders by status, role, payment method or payment state",
-				"description": "by=status counts by status key; by=role by the role of each status in today's order flow (none: a status the flow no longer has); by=paymentMethod and by=paymentState by the payment's. 422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, more than 30 tags, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit. 503 count_timeout after 3 seconds.",
+				"description": "by=status counts by status key; by=role by the role of each status in today's order flow (none: a status the flow no longer has); by=paymentMethod and by=paymentState by the payment's. 422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, more than 30 tags, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit. 503 count_timeout after 3 seconds. by=reason counts canceled and come-back orders by their reason (closeReason; orders without one are not counted).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -22613,7 +22659,8 @@
 								"status",
 								"role",
 								"paymentMethod",
-								"paymentState"
+								"paymentState",
+								"reason"
 							]
 						}
 					},
@@ -22786,6 +22833,16 @@
 								"true"
 							],
 							"description": "Only canceled orders that still hold the shopper’s money (paid before or after the cancel and not all refunded yet): the refunds to make."
+						}
+					},
+					{
+						"name": "reason",
+						"in": "query",
+						"required": false,
+						"description": "Only orders canceled or come back for these reasons (keys of cancel_reasons or delivery_failure_reasons, or staff, shopper, expired; comma-separated, up to 30).",
+						"schema": {
+							"type": "string",
+							"description": "Only orders canceled or come back for these reasons (keys of cancel_reasons or delivery_failure_reasons, or staff, shopper, expired; comma-separated, up to 30)."
 						}
 					},
 					{
@@ -24080,12 +24137,7 @@
 											"string",
 											"null"
 										],
-										"enum": [
-											"rto",
-											"customer_return",
-											null
-										],
-										"description": "Why a package came back to a returned-to-origin status: rto (counted on the customer, the default) or customer_return."
+										"description": "Why staff cancel or a package came back (E19): a key of your cancel_reasons list (a move into a canceled status; optional) or delivery_failure_reasons list (a move into a returned-to-origin status; none: the first). A reason whose countsAgainst is on adds one to the customer's returned-packages counter (rtoCount, which payment methods paid on delivery read). 422 validation_failed at /reason for another key, or a reason on any other move."
 									},
 									"shopperNote": {
 										"type": [
@@ -45616,6 +45668,20 @@
 							"$ref": "#/components/schemas/FieldDefinition"
 						},
 						"description": "The shop's order fields staff fill (active ones, and those this order has a value of)."
+					},
+					"closeReason": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Why it was canceled or its package came back: a key of your cancel_reasons or delivery_failure_reasons list, or who canceled at checkout (staff, shopper, expired); null when none (E19)."
+					},
+					"closeReasonLabel": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Your name of closeReason (its key when the reason was removed since, or for staff, shopper and expired)."
 					}
 				}
 			},
@@ -46586,15 +46652,7 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"rto",
-							"customer_return",
-							"staff",
-							"shopper",
-							"expired",
-							null
-						],
-						"description": "Why: a package came back (rto, customer_return), or the shopper (shopper) or the end of its window (expired) canceled it; null otherwise, also for a staff cancel (order.cancelled says staff)."
+						"description": "Why: the key of your cancel or failed-delivery reason (E19; customer_return for a customer's return), or the shopper (shopper) or the end of its window (expired) canceled it; null otherwise."
 					},
 					"by": {
 						"type": "string",
@@ -46765,14 +46823,7 @@
 					},
 					"reason": {
 						"type": "string",
-						"enum": [
-							"rto",
-							"customer_return",
-							"staff",
-							"shopper",
-							"expired"
-						],
-						"description": "Why a package came back (rto, customer_return) or who canceled (staff, shopper, expired: its window ended)."
+						"description": "Why the order moved: a key of your cancel_reasons or delivery_failure_reasons list (E19), customer_return for a customer's return, or who canceled at checkout (staff, shopper, expired)."
 					},
 					"kind": {
 						"type": "string",
@@ -47373,6 +47424,20 @@
 							"$ref": "#/components/schemas/FieldDefinition"
 						},
 						"description": "The shop's order fields staff fill (active ones, and those this order has a value of)."
+					},
+					"closeReason": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Why it was canceled or its package came back: a key of your cancel_reasons or delivery_failure_reasons list, or who canceled at checkout (staff, shopper, expired); null when none (E19)."
+					},
+					"closeReasonLabel": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Your name of closeReason (its key when the reason was removed since, or for staff, shopper and expired)."
 					}
 				}
 			},
@@ -47513,6 +47578,26 @@
 					},
 					"options": {
 						"$ref": "#/components/schemas/OrderMoveOptions"
+					},
+					"reasons": {
+						"type": "array",
+						"description": "A cancel or a package that came back: your reasons to pick from (cancel_reasons or delivery_failure_reasons, E19).",
+						"items": {
+							"type": "object",
+							"required": [
+								"key",
+								"label"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								}
+							}
+						}
 					}
 				}
 			},
