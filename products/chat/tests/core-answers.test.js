@@ -817,17 +817,24 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 						trackingUrl: 'https://t.example.com/T1',
 						trackingNote: 'With the courier',
 						expectedAt: '2026-10-09T08:00:00.000Z',
-						dispatchVideo: { kind: 'file', url: 'https://cdn.example.com/v.mp4' },
+						attachments: [
+							{ label: 'Packing video', type: 'video', url: 'https://cdn.example.com/v.mp4' },
+							{ label: 'Bad', type: 'file', url: 'javascript:x' },
+						],
 					},
 				],
-				loyaltyPoints: 0,
+				extraFields: [
+					{ label: 'Loyalty points', value: '0' },
+					{ label: '', value: 'x' },
+				],
 				name: 'Sam Lee',
 			},
 			look,
 		);
 		expect(orders.content).toMatchObject({
 			name: 'Sam Lee',
-			loyaltyPoints: 0,
+			// the shop's extra fields and attachments, generic (C19)
+			more: ['Loyalty points: 0'],
 			orders: [
 				{
 					number: 'SH-1042',
@@ -842,7 +849,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 					trackingLink: 'https://t.example.com/T1',
 					expected: '9 Oct 2026',
 					trackingNote: 'With the courier',
-					dispatchVideo: 'https://cdn.example.com/v.mp4',
+					attachments: ['Packing video: https://cdn.example.com/v.mp4'],
 				},
 			],
 		});
@@ -858,7 +865,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 						trackingUrl: '',
 						trackingNote: '',
 						expectedAt: null,
-						dispatchVideo: null,
+						attachments: [],
 						balanceDue: 0,
 						lines: [],
 					},
@@ -870,20 +877,21 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 			shopAnswer('get_my_account', {
 				name: 'Alex Morgan',
 				firstName: 'Alex',
-				loyaltyPoints: 3,
 				city: 'Manchester',
-				area: 'Didsbury',
 				region: 'England',
 				country: 'GB',
+				extraFields: [
+					{ label: 'Loyalty points', value: '3' },
+					{ label: 'Area', value: 'Didsbury' },
+				],
 			}).content,
 		).toEqual({
 			name: 'Alex Morgan',
 			firstName: 'Alex',
-			loyaltyPoints: 3,
 			city: 'Manchester',
-			area: 'Didsbury',
 			region: 'England',
 			country: 'GB',
+			more: ['Loyalty points: 3', 'Area: Didsbury'],
 		});
 		const deal = {
 			id: 'deal_1',

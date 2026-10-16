@@ -128,8 +128,9 @@ export const SHOP_ANSWERS = Object.freeze({
 	quote: 'productId, variantId, quantity, paymentMethod, price (one unit before deals), compareAtPrice (its own price struck through, or null), priceAfterDeals, savings, subtotal, discount, roleDiscount, fee, tax, freeDeliveryOver, total (each with its …Text), currency, delivery ({ method, name, rateName, fee, feeText, minDays, maxDays } or null), limits ({ step, min, max } of pieces, or thousandths of its unit with measure { unit, quantityText }), inStock, deals: [name], paymentMethods: [{ method (the website’s payment method key), name, available, reason (or null), advance, advanceText, fee }]',
 	deals: 'items: [{ name, description, valueText, badgeLabel, discountLabel, minQuantity, days (weekdays, 0 = Sunday), timeFrom, timeTo, endsAt, endsText }]',
 	orders:
-		'items: [{ number, status (the label), total, totalText, currency, placedAt, paymentMethod, balanceDue, balanceDueText, courier, trackingNumber, trackingUrl, trackingNote, expectedAt, dispatchVideo ({ kind, url } or null), lines: [{ name, variantName, gradeLabel, quantity, totalText, warrantyTime }] }] (the latest, as many as asked), loyaltyPoints, name',
-	account: 'name, firstName, loyaltyPoints, city, area, region, country',
+		'items: [{ number, status (the label), total, totalText, currency, placedAt, paymentMethod, balanceDue, balanceDueText, courier, trackingNumber, trackingUrl, trackingNote, expectedAt, attachments: [{ label, type (photo, video or file), url }], lines: [{ name, variantName, gradeLabel, quantity, totalText, warrantyTime }] }] (the latest, as many as asked), extraFields: [{ label, value }] (such as the loyalty points, in the website’s words), name',
+	account:
+		'name, firstName, city, region, country, extraFields: [{ label, value }] (such as the loyalty points and the area, in the website’s words)',
 	shipments: 'items: [{ orderNumber, courier, trackingNumber, trackingUrl, status, trackingNote, expectedAt }]',
 	context:
 		'text (at most 6,000 characters: the policies, the 10 newest products with their shown price per grade and its "was" price, the deals table, the named product and, signed in, first name, city and points), currency',
@@ -198,6 +199,33 @@ export const SHOP_TOOL_NAMES = Object.freeze(Object.values(SHOP_TOOLS));
  * The context panel's shop info.
  * @typedef {{ orders: Array<{ number: string, status: string, total: string, createdAt: string | null }>, loyaltyPoints: number | null }} ShopInfo
  */
+
+/**
+ * What a list of objects gives, each through `read` (null skipped), at most 10.
+ * @param {unknown} value @param {(item: Record<string, unknown>) => string | null} read
+ * @returns {string[]}
+ */
+const fieldsOf = (value, read) =>
+	(Array.isArray(value) ? value : [])
+		.filter(isObject)
+		.slice(0, 10)
+		.map(read)
+		.filter((text) => text !== null);
+
+/**
+ * The extra fields a lookup gives (C19: `[{ label, value }]` in the website's words, such as the loyalty points or the
+ * area) as `{ more: ['Label: value'] }`, or nothing.
+ * @param {unknown} value
+ * @returns {{ more?: string[] }}
+ */
+const extraOf = (value) => {
+	const more = fieldsOf(value, (item) => {
+		const label = textOf(item.label, 60);
+		const text = textOf(item.value, 200);
+		return label && text ? `${label}: ${text}` : null;
+	});
+	return more.length > 0 ? { more } : {};
+};
 
 /** @param {unknown} value @param {number} max */
 const textOf = (value, max) => {
@@ -405,11 +433,11 @@ const SCHEMAS = {
 	),
 	[SHOP_TOOLS.orders]: schema(
 		SHOP_TOOLS.orders,
-		'Look up the signed-in visitor’s own last orders (number, status, total, date, items, expected date, tracking note), loyalty points and name. Only for questions about their own orders.',
+		'Look up the signed-in visitor’s own last orders (number, status, total, date, items, expected date, tracking note, the shop’s attachments such as a packing video), their name and more about them (such as loyalty points). Only for questions about their own orders.',
 	),
 	[SHOP_TOOLS.account]: schema(
 		SHOP_TOOLS.account,
-		'Get the signed-in visitor’s own name, loyalty points balance, city, area, region and country.',
+		'Get the signed-in visitor’s own name, city, region and country, and more about them the shop gives (such as loyalty points or their area).',
 	),
 	[SHOP_TOOLS.track]: schema(
 		SHOP_TOOLS.track,
@@ -934,7 +962,11 @@ export const shopAnswer = (name, body, look = {}) => {
 					);
 				const expected = dateText(o.expectedAt, look, 'date');
 				const note = textOf(o.trackingNote, 300);
-				const video = isObject(o.dispatchVideo) ? pageUrl(o.dispatchVideo.url) : null;
+				const attachments = fieldsOf(o.attachments, (item) => {
+					const url = pageUrl(item.url);
+					const label = textOf(item.label, 60);
+					return url && label ? `${label}: ${url}` : null;
+				});
 				const due = Number(o.balanceDue) > 0 ? priceOf(o, 'balanceDue', look) : null;
 				const tracking = pageUrl(o.trackingUrl);
 				const courier = textOf(o.courier, 80);
@@ -953,13 +985,13 @@ export const shopAnswer = (name, body, look = {}) => {
 					...(tracking ? { trackingLink: tracking } : {}),
 					...(expected ? { expected } : {}),
 					...(note ? { trackingNote: note } : {}),
-					...(video ? { dispatchVideo: video } : {}),
+					...(attachments.length > 0 ? { attachments } : {}),
 				};
 			});
 		return {
 			content: {
 				name: textOf(b.name, 120),
-				loyaltyPoints: countOf(b.loyaltyPoints),
+				...extraOf(b.extraFields),
 				orders: orders.length > 0 ? orders : 'No orders on this account yet.',
 			},
 			products: [],
@@ -968,18 +1000,16 @@ export const shopAnswer = (name, body, look = {}) => {
 	if (name === SHOP_TOOLS.account) {
 		const firstName = textOf(b.firstName, 60);
 		const city = textOf(b.city, 100);
-		const area = textOf(b.area, 100);
 		const region = textOf(b.region, 100);
 		const country = textOf(b.country, 60);
 		return {
 			content: {
 				name: textOf(b.name, 120),
 				...(firstName ? { firstName } : {}),
-				loyaltyPoints: countOf(b.loyaltyPoints),
 				...(city ? { city } : {}),
-				...(area ? { area } : {}),
 				...(region ? { region } : {}),
 				...(country ? { country } : {}),
+				...extraOf(b.extraFields),
 			},
 			products: [],
 		};

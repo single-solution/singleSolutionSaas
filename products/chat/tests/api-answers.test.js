@@ -87,7 +87,7 @@ const ORDER = {
 	trackingUrl: '',
 	trackingNote: '',
 	expectedAt: null,
-	dispatchVideo: null,
+	attachments: [],
 };
 
 describe('instructions, never disclose and rich answers (C1, C2)', () => {

@@ -73,7 +73,7 @@ const ORDER = {
 	trackingUrl: '',
 	trackingNote: '',
 	expectedAt: null,
-	dispatchVideo: null,
+	attachments: [],
 	address: '1 Main Street',
 };
 
@@ -149,14 +149,13 @@ const ANSWERS = {
 			},
 		],
 	},
-	'/v1/chat/me/orders': { name: 'Rea Der', loyaltyPoints: 120, items: [ORDER] },
+	'/v1/chat/me/orders': { name: 'Rea Der', extraFields: [{ label: 'Loyalty points', value: '120' }], items: [ORDER] },
 	// a phone it never sends, never passed on
 	'/v1/chat/me/account': {
 		name: 'Rea Der',
 		firstName: 'Rea',
-		loyaltyPoints: 120,
 		city: '',
-		area: '',
+		extraFields: [{ label: 'Loyalty points', value: '120' }],
 		phone: '+447700900123',
 	},
 	'/v1/chat/me/shipments': {
@@ -390,10 +389,10 @@ describe('shop tools', () => {
 		const answers = toolAnswers(sys.aiCalls()[1]);
 		expect(JSON.parse(String(answers[0]))).toEqual({
 			name: 'Rea Der',
-			loyaltyPoints: 120,
+			more: ['Loyalty points: 120'],
 			orders: [{ number: 'SH-1001', status: 'Dispatched', total: '$45.00', placedAt: 'Oct 1, 2026', paymentMethod: 'online' }],
 		});
-		expect(JSON.parse(String(answers[1]))).toEqual({ name: 'Rea Der', firstName: 'Rea', loyaltyPoints: 120 });
+		expect(JSON.parse(String(answers[1]))).toEqual({ name: 'Rea Der', firstName: 'Rea', more: ['Loyalty points: 120'] });
 		expect(JSON.parse(String(answers[2])).shipments).toEqual([
 			{
 				orderNumber: 'SH-1001',
@@ -474,7 +473,7 @@ describe('shop tools', () => {
 			'No quote for this product. Do not invent prices.',
 			'No deals are running right now.',
 			'Nothing in the catalog matched. Do not invent products; suggest another search.',
-			JSON.stringify({ name: null, loyaltyPoints: null, orders: 'No orders on this account yet.' }),
+			JSON.stringify({ name: null, orders: 'No orders on this account yet.' }),
 			'No shipments on this account yet.',
 		]);
 	});
