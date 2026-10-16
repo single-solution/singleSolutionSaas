@@ -8,7 +8,7 @@
  * server's English (OT-4); times follow the website's Format and time zone (PLAN 0.8.10 K7).
  * @module
  */
-import { adminCall, element, formatDate, formatText, moreMenu, mountWidget, openDialog } from '@ss/app-kit/widget';
+import { adminCall, element, formatDate, formatText, moreMenu, mountWidget, openDialog, stateSlot } from '@ss/app-kit/widget';
 import { PROBLEM_TEXTS, chipGroup, problemKey } from './admin-kit.js';
 import { WIDGET_CSS } from './styles.js';
 
@@ -90,6 +90,7 @@ export const mountRedirects = ({ host, api, config, viewer, download }) => {
 			);
 			const chips = h('div');
 			const list = h('ul', { class: 'rows' });
+			const state = stateSlot(doc);
 			const more = h('button', { type: 'button', class: 'secondary', hidden: '' }, t('redirects.loadMore'));
 			/** @type {{ q: string, code: string, cursor: string | null }} */
 			const view = { q: '', code: '', cursor: null };
@@ -100,6 +101,7 @@ export const mountRedirects = ({ host, api, config, viewer, download }) => {
 			 */
 			const load = async (next = false) => {
 				const params = new URLSearchParams({ limit: String(PAGE) });
+				if (!next && list.children.length === 0) state.loading(t('redirects.loading'));
 				if (view.q) params.set('q', view.q);
 				if (view.code) params.set('code', view.code);
 				if (next && view.cursor) params.set('cursor', view.cursor);
@@ -109,9 +111,15 @@ export const mountRedirects = ({ host, api, config, viewer, download }) => {
 					next ? null : adminCall(api, 'GET', `/v1/admin/redirects/counts?${counted.toString()}`),
 				]);
 				if (!answer.ok) {
-					status.textContent = failure(answer);
+					// Try again helps when the server or the network failed, not when the answer says what to set up first
+					const transient = answer.status === 0 || answer.status === 429 || answer.status >= 500;
+					state.failed(
+						failure(answer),
+						transient && api.tickets.current() ? { label: t('redirects.tryAgain'), onRetry: () => load(next) } : undefined,
+					);
 					return;
 				}
+				state.clear();
 				view.cursor = answer.data.nextCursor ?? null;
 				more.toggleAttribute('hidden', !answer.data.hasMore);
 				if (!next) {
@@ -406,7 +414,7 @@ export const mountRedirects = ({ host, api, config, viewer, download }) => {
 			const box = h('section', { class: 'box' });
 			const filters = h('div', { class: 'section' });
 			filters.append(search, chips);
-			box.append(head, sub, filters, h('div', { class: 'section' }), list, more, status);
+			box.append(head, sub, filters, h('div', { class: 'section' }), state.root, list, more, status);
 
 			// ------------------------------------------------------------------------- suggestions from the 404 log
 			const ideas = h('ul', { class: 'rows' });

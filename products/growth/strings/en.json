@@ -400,6 +400,8 @@
 	"redirects.noneFound": "No rule matches.",
 	"redirects.loadMore": "Load more",
 	"redirects.failed": "Something went wrong. Try again.",
+	"redirects.loading": "Loading rules…",
+	"redirects.tryAgain": "Try again",
 	"redirects.signedOut": "Signed out",
 	"redirects.edit": "Change the rule",
 	"redirects.help": "Visitors and search engines that ask for the old path go to the new page; a 410 rule tells them the page is gone for good. The rest of a path and its query string go along.",

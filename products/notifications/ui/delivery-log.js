@@ -6,7 +6,7 @@
  * is a code shown in the website's words (`reason.<code>`); the provider's own answer shows apart, as it came.
  * @module
  */
-import { adminCall, element, formatDate, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
+import { adminCall, element, formatDate, formatText, mountWidget, stateSlot, viewerOf } from '@ss/app-kit/widget';
 import { CHANNELS } from '../core/channels.js';
 import { STATUSES } from '../core/log.js';
 import { logReason } from './problems.js';
@@ -43,13 +43,13 @@ export const mountDeliveryLog = ({ host, api, config }) => {
 				element(doc, 'input', { type: 'search', 'aria-label': t('log.to'), placeholder: t('log.to'), maxlength: '254' })
 			);
 			const total = element(doc, 'p', { class: 'count' });
-			const note = element(doc, 'p', { class: 'status', role: 'status' });
+			const state = stateSlot(doc);
 			const list = element(doc, 'ul');
 			const more = element(doc, 'button', { type: 'button', class: 'secondary', hidden: '' }, t('log.more'));
 			const filters = element(doc, 'div', { class: 'row' });
 			filters.append(status, channel, to);
 			const box = element(doc, 'section', { class: 'box' });
-			box.append(element(doc, 'h2', {}, t('log.title')), filters, total, note, list, more);
+			box.append(element(doc, 'h2', {}, t('log.title')), filters, total, state.root, list, more);
 			/** The status options' own names, before their counts. */
 			const statusNames = new Map(STATUSES.map((value) => [String(value), t(`status.${value}`)]));
 
@@ -134,17 +134,23 @@ export const mountDeliveryLog = ({ host, api, config }) => {
 				if (to.value.trim()) query.set('to', to.value.trim());
 				if (reset) void count(query);
 				if (!reset && cursor) query.set('cursor', cursor);
+				if (list.childElementCount === 0) state.loading(t('log.loading'));
 				const answer = await adminCall(api, 'GET', `/v1/admin/messages?${query.toString()}`);
 				if (reset) list.replaceChildren();
 				if (!answer.ok) {
-					note.textContent = answer.status === 0 && !api.tickets.current() ? t('log.signedOut') : t('log.failed');
+					const signedOut = answer.status === 0 && !api.tickets.current();
+					state.failed(
+						signedOut ? t('log.signedOut') : t('log.failed'),
+						signedOut ? undefined : { label: t('log.tryAgain'), onRetry: () => load(reset) },
+					);
 					more.setAttribute('hidden', '');
 					return;
 				}
 				/** @type {Array<Parameters<typeof detailOf>[0] & { template: string | null, channel: string, to: string, status: string, createdAt: string }>} */
 				const items = answer.data.items;
 				cursor = answer.data.nextCursor;
-				note.textContent = reset && items.length === 0 ? t('log.empty') : '';
+				if (reset && items.length === 0) state.empty(t('log.empty'));
+				else state.clear();
 				for (const message of items) {
 					const item = element(doc, 'li');
 					const opened = element(doc, 'details');
@@ -181,7 +187,7 @@ export const mountDeliveryLog = ({ host, api, config }) => {
 			const off = api.tickets.onChange((signedIn) => {
 				if (!signedIn) {
 					list.replaceChildren();
-					note.textContent = t('log.signedOut');
+					state.failed(t('log.signedOut'));
 				}
 			});
 			void load(true);

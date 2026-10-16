@@ -478,11 +478,27 @@ describe('the redirects widget', () => {
 		});
 		expect(inside(host, 'section.box:last-child li.empty').textContent).toBe(T['redirects.suggestions.none']);
 		expect(inside(host, 'section.box:last-child .status').textContent).toBe(T['redirects.suggestions.off']);
-		expect(status(host)).toBe(T['problem.database_not_connected']);
+		expect(inside(host, '.state.error p').textContent).toBe(T['problem.database_not_connected']);
+		expect(inside(host, '.state.error button')).toBeNull();
 		document.body.replaceChildren();
 		const other = await start({ 'GET /v1/admin/redirects/suggestions': () => refusal('rate_limited', 429) });
 		expect(inside(other, 'section.box:last-child .status').textContent).toBe(T['problem.rate_limited']);
 		expect(all(other, 'section.box:first-child ul.rows li')).toHaveLength(2);
+	});
+
+	it('shows a rules list that cannot load as a problem with Try again, which loads it again', async () => {
+		let failing = true;
+		const host = await start({
+			'GET /v1/admin/redirects': () =>
+				failing ? refusal('internal_error', 500) : answer(200, { items: [], nextCursor: null, hasMore: false }),
+		});
+		expect(inside(host, '.state.error p').textContent).toBe(T['redirects.failed']);
+		expect(inside(host, '.state.error').getAttribute('role')).toBe('alert');
+		failing = false;
+		button(host, T['redirects.tryAgain']).click();
+		await flush();
+		expect(inside(host, '.state.error')).toBeNull();
+		expect(inside(host, 'ul.rows li.empty').textContent).toBe(T['redirects.none']);
 	});
 
 	it('shows Signed out once the ticket cannot be renewed', async () => {

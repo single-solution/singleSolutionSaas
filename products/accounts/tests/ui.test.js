@@ -234,6 +234,8 @@ const checkIn = (scope, text) => {
 };
 /** @param {ParentNode} scope */
 const statusIn = (scope) => /** @type {HTMLElement} */ (scope.querySelector('[role="status"]')).textContent;
+/** The text of a list's state (loading, empty or failed). @param {Element} scope */
+const stateIn = (scope) => /** @type {HTMLElement} */ (scope.querySelector('.state p')).textContent;
 /** @param {Element} node */
 const submit = async (node) => {
 	/** @type {HTMLFormElement} */ (node.closest('form')).dispatchEvent(new window.Event('submit', { cancelable: true }));
@@ -1801,11 +1803,13 @@ describe('admin widgets', () => {
 			status: 'pending',
 			limit: '25',
 		});
-		expect(statusIn(root)).toBe(strings['users.empty']);
+		expect(stateIn(root)).toBe(strings['users.empty']);
 		expect(detail.textContent).toBe(strings['users.emptyDetail']);
 		fieldIn(root, strings['users.search']).value = 'boom';
 		await submit(buttonIn(root, strings['users.searchButton']));
-		expect(statusIn(root)).toBe(strings['error.generic']);
+		expect(stateIn(root)).toBe(strings['error.generic']);
+		// a server failure offers Try again
+		expect(buttonIn(root, strings['users.tryAgain'])).toBeTruthy();
 		for (const label of [
 			strings['users.search'],
 			strings['users.phoneDigits'],
@@ -2348,14 +2352,14 @@ describe('admin widgets', () => {
 				return { ticket: 't', expiresAt: at(2 * 60_000) };
 			},
 		);
-		expect(statusIn(shadow(users))).toBe(strings['users.empty']);
+		expect(stateIn(shadow(users))).toBe(strings['users.empty']);
 		expect(shadow(users).querySelector('form.part')).toBeNull();
 		expect(() => fieldIn(shadow(roles), strings['roles.twoStep'])).toThrow();
 		await time.fire();
-		expect(statusIn(shadow(users))).toBe(strings['users.signedOut']);
+		expect(stateIn(shadow(users))).toBe(strings['users.signedOut']);
 		expect(statusIn(shadow(roles))).toBe(strings['roles.signedOut']);
 		await submit(buttonIn(shadow(users), strings['users.searchButton']));
-		expect(statusIn(shadow(users))).toBe(strings['users.signedOut']);
+		expect(stateIn(shadow(users))).toBe(strings['users.signedOut']);
 		const form = /** @type {HTMLElement} */ (shadow(roles).querySelector('form'));
 		await submit(buttonIn(form, strings['roles.save']));
 		expect(statusIn(form)).toBe(strings['roles.signedOut']);

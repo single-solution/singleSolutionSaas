@@ -11,7 +11,7 @@
  * invited), open again. PLAN 0.8.6, 0.8.10 A3–A5.
  * @module
  */
-import { adminCall, badge, element, formatText, moreMenu, mountWidget, openDialog } from '@ss/app-kit/widget';
+import { adminCall, badge, element, formatText, moreMenu, mountWidget, openDialog, stateSlot } from '@ss/app-kit/widget';
 import { customInputs, datesOf, errorText, fieldMaker, setHidden, textsOf } from './common.js';
 import { addressInputs, addressText } from './address.js';
 import { card, chips, copyable } from './parts.js';
@@ -177,10 +177,11 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 			const manageViewsButton = button(t('users.viewsManage'), { class: 'secondary small' });
 
 			const note = element(doc, 'p', { class: 'status', role: 'status' });
+			const state = stateSlot(doc);
 			const list = element(doc, 'ul');
 			const more = button(t('users.more'), { class: 'secondary', hidden: '' });
 			const listPane = element(doc, 'div', { class: 'list-pane' });
-			listPane.append(viewBar, filters, note, list, more);
+			listPane.append(viewBar, filters, note, state.root, list, more);
 			const detail = element(doc, 'div', { class: 'detail-pane' });
 			const layout = element(doc, 'div', { class: 'layout' });
 			layout.append(listPane, detail);
@@ -380,6 +381,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 				const params = query();
 				params.set('limit', '25');
 				if (!reset && cursor) params.set('cursor', cursor);
+				if (list.childElementCount === 0) state.loading(t('users.loading'));
 				const answer = await call('GET', `/v1/admin/users?${params.toString()}`);
 				if (reset) {
 					list.replaceChildren();
@@ -387,7 +389,12 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 					void loadCounts();
 				}
 				if (!answer.ok) {
-					note.textContent = failure(answer);
+					// Try again helps when the server or the network failed, not when the answer says what to change
+					const transient = answer.status === 0 || answer.status === 429 || answer.status >= 500;
+					state.failed(
+						failure(answer),
+						transient && api.tickets.current() ? { label: t('users.tryAgain'), onRetry: () => load(reset) } : undefined,
+					);
 					more.setAttribute('hidden', '');
 					return;
 				}
@@ -395,7 +402,8 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 				const items = answer.data.items;
 				cursor = answer.data.nextCursor;
 				shown = [...shown, ...items];
-				note.textContent = reset && items.length === 0 ? t('users.empty') : '';
+				if (reset && items.length === 0) state.empty(t('users.empty'));
+				else state.clear();
 				for (const user of items) list.append(row(user));
 				setHidden(more, !answer.data.hasMore);
 				// wide widgets open the first user of the list, so the detail side is never empty
@@ -1003,7 +1011,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 					list.replaceChildren();
 					detail.replaceChildren();
 					more.setAttribute('hidden', '');
-					note.textContent = t('users.signedOut');
+					state.failed(t('users.signedOut'));
 				}
 			});
 			void (async () => {

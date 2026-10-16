@@ -86,7 +86,7 @@ export const errorState = (doc, text, retry) => {
  * @param {Document} doc
  */
 export const stateSlot = (doc) => {
-	const root = element(doc, 'div', { class: 'state-slot' });
+	const root = element(doc, 'div', { class: 'state-slot', 'aria-live': 'polite' });
 	return {
 		root,
 		/** @param {string} text */

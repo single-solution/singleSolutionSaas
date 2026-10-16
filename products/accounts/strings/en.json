@@ -276,6 +276,8 @@
 	"users.searchButton": "Search",
 	"users.role": "Role",
 	"users.empty": "No users found.",
+	"users.loading": "Loading users…",
+	"users.tryAgain": "Try again",
 	"users.more": "Show more",
 	"users.close": "Close",
 	"users.cancel": "Cancel",

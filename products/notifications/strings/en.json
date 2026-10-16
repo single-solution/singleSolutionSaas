@@ -51,6 +51,8 @@
 	"log.empty": "No messages yet.",
 	"log.more": "Show more",
 	"log.failed": "The delivery log could not be loaded.",
+	"log.loading": "Loading messages…",
+	"log.tryAgain": "Try again",
 	"log.signedOut": "Signed out",
 	"templates.title": "Templates",
 	"templates.new": "New template",

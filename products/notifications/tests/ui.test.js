@@ -77,6 +77,8 @@ const serve = (routes) =>
 const inside = (host, selector) => /** @type {any} */ (host.shadowRoot?.querySelector(selector));
 /** @param {HTMLElement} host */
 const statusOf = (host) => inside(host, '[role="status"]').textContent;
+/** The text of a list's state (loading, empty or failed). @param {HTMLElement} host */
+const stateOf = (host) => inside(host, '.state p').textContent;
 /** @param {HTMLElement} host @param {string} text */
 const button = (host, text) =>
 	/** @type {HTMLButtonElement} */ (
@@ -287,11 +289,12 @@ describe('admin widgets', () => {
 		/** @type {HTMLSelectElement} */ (channel).value = 'email';
 		channel?.dispatchEvent(new window.Event('change'));
 		await flush();
-		expect(statusOf(host)).toBe(strings['log.empty']);
+		expect(stateOf(host)).toBe(strings['log.empty']);
 		/** @type {HTMLSelectElement} */ (status).value = 'sent';
 		status?.dispatchEvent(new window.Event('change'));
 		await flush();
-		expect(statusOf(host)).toBe(strings['log.failed']);
+		expect(stateOf(host)).toBe(strings['log.failed']);
+		expect(button(host, strings['log.tryAgain'])).toBeTruthy();
 	});
 
 	it('the delivery log counts by status, finds a recipient and opens a message to every attempt', async () => {
@@ -735,9 +738,9 @@ describe('tickets', () => {
 			},
 		});
 		await vi.advanceTimersByTimeAsync(0);
-		expect(statusOf(host)).toBe(strings['log.empty']);
+		expect(stateOf(host)).toBe(strings['log.empty']);
 		await vi.advanceTimersByTimeAsync(2 * 60_000);
-		expect(statusOf(host)).toBe(strings['log.signedOut']);
+		expect(stateOf(host)).toBe(strings['log.signedOut']);
 		/** @type {HTMLFormElement} */ (inside(editor, 'form')).dispatchEvent(new window.Event('submit', { cancelable: true }));
 		await vi.advanceTimersByTimeAsync(0);
 		expect(statusOf(editor)).toBe(strings['templates.signedOut']);
