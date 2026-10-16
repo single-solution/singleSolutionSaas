@@ -908,7 +908,7 @@ describe('Payment links admin widget', () => {
 		set('returnUrl', '');
 		set('amount', '');
 		// what the link asks and when it ends (P3)
-		/** @type {HTMLSelectElement} */ (form.querySelector('select[name="phone"]')).value = 'required';
+		/** @type {HTMLInputElement} */ (form.querySelector('input[name="phone"][value="required"]')).click();
 		set('field_1', ' Company ');
 		/** @type {HTMLInputElement} */ (form.querySelector('input[name="field_1_required"]')).checked = true;
 		set('maxPayments', '0');
@@ -999,7 +999,7 @@ describe('Payment links admin widget', () => {
 		button(host, strings['links.new']).click();
 		await flush();
 		const labels = [
-			.../** @type {HTMLFormElement} */ (dialog(host)).querySelectorAll('fieldset:first-of-type label.check'),
+			.../** @type {HTMLFormElement} */ (dialog(host)).querySelectorAll('fieldset:first-of-type label.choice'),
 		].map((label) => label.textContent);
 		expect(labels).toEqual(['Card (Stripe)', 'PayFast (ZAR)', 'PayFast (PKR)']);
 	});

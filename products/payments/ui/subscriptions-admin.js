@@ -8,6 +8,7 @@
 import {
 	adminCall,
 	badge,
+	block,
 	dot,
 	element,
 	fieldGrid,
@@ -54,8 +55,10 @@ export const mountSubscriptionsAdmin = ({ host, api, config, copy = () => {} }) 
 			const more = element(doc, 'button', { type: 'button', class: 'secondary', hidden: '' }, t('subs.more'));
 			const view = splitView(doc, t('subs.back'));
 			view.list.append(list, more);
-			const box = element(doc, 'section', { class: 'box' });
-			box.append(head, status, state.root, view.root);
+			const box = element(doc, 'section', { class: 'box admin' });
+			const tools = block(doc, { body: [head, status, state.root] });
+			tools.classList.add('tools');
+			box.append(tools, view.root);
 			root.append(box);
 			/** @type {string | null} */
 			let cursor = null;

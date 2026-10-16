@@ -7,7 +7,7 @@
  * id).
  * @module
  */
-import { element, formatText, mountWidget } from '@ss/app-kit/widget';
+import { element, field, formatText, mountWidget, radioGroup } from '@ss/app-kit/widget';
 import { toDecimal } from '../core/payments.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
@@ -114,12 +114,13 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 						})
 					),
 			);
-			const method = /** @type {HTMLSelectElement} */ (element(doc, 'select', { id: 'ss-pay-method' }));
-			method.append(
-				...data.gateways.map((/** @type {{ id: string, name: string }} */ g) =>
-					element(doc, 'option', { value: g.id }, g.name),
-				),
-			);
+			const method = radioGroup(doc, {
+				label: t('link.method'),
+				name: 'ss-pay-method',
+				items: data.gateways.map((/** @type {{ id: string, name: string }} */ g) => ({ value: g.id, label: g.name })),
+				value: data.gateways[0]?.id ?? '',
+				look: 'card',
+			});
 			const button = element(doc, 'button', { type: 'submit' }, t('link.pay'));
 			box.append(
 				element(doc, 'label', { for: 'ss-pay-name' }, t('link.name')),
@@ -141,8 +142,7 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 					element(doc, 'label', { for: `ss-pay-field-${index}` }, question.label),
 					/** @type {HTMLInputElement} */ (answers[index]),
 				]),
-				element(doc, 'label', { for: 'ss-pay-method' }, t('link.method')),
-				method,
+				field(doc, t('link.method'), method.node),
 				button,
 				status,
 			);

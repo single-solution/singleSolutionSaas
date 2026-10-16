@@ -9,6 +9,7 @@
 import {
 	adminCall,
 	badge,
+	block,
 	dot,
 	element,
 	fieldGrid,
@@ -16,8 +17,11 @@ import {
 	moreMenu,
 	mountWidget,
 	openDialog,
+	checkGroup,
+	segmented,
 	splitView,
 	stateSlot,
+	toggle,
 } from '@ss/app-kit/widget';
 import { GATEWAYS, GATEWAY_CURRENCIES, GATEWAY_FEATURES } from '../core/gateways.js';
 import { field } from './admin-kit.js';
@@ -70,8 +74,10 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 			const more = element(doc, 'button', { type: 'button', class: 'secondary', hidden: '' }, t('links.more'));
 			const view = splitView(doc, t('links.back'));
 			view.list.append(list, more);
-			const box = element(doc, 'section', { class: 'box' });
-			box.append(head, status, state.root, view.root);
+			const box = element(doc, 'section', { class: 'box admin' });
+			const tools = block(doc, { body: [head, status, state.root] });
+			tools.classList.add('tools');
+			box.append(tools, view.root);
 			root.append(box);
 			/** @type {string | null} */
 			let cursor = null;
@@ -263,29 +269,35 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 					}),
 					...methods.map((method) => /** @type {[string, string]} */ ([method.key, method.name])),
 				];
-				for (const [id, name] of offered) {
-					const box = /** @type {HTMLInputElement} */ (
-						element(doc, 'input', { type: 'checkbox', name: 'gateway', value: id })
-					);
-					const label = element(doc, 'label', { class: 'check' });
-					label.append(box, name);
-					gateways.append(label);
-				}
-				// what the link asks beyond the amount, and when it ends by itself (P3)
-				const phone = /** @type {HTMLSelectElement} */ (element(doc, 'select', { name: 'phone' }));
-				phone.append(
-					...['off', 'optional', 'required'].map((value) => element(doc, 'option', { value }, t(`links.phone.${value}`))),
+				gateways.append(
+					checkGroup(doc, {
+						label: t('links.field.gateways'),
+						name: 'gateway',
+						items: offered.map(([value, label]) => ({ value, label })),
+						look: 'card',
+					}).node,
 				);
+				// what the link asks beyond the amount, and when it ends by itself (P3)
+				const phone = segmented(doc, {
+					label: t('links.field.phone'),
+					name: 'phone',
+					items: ['off', 'optional', 'required'].map((value) => ({ value, label: t(`links.phone.${value}`) })),
+					value: 'off',
+				});
 				const questions = [0, 1, 2].map((index) => ({
 					label: input(`field_${index}`, { maxlength: '60' }),
-					required: input(`field_${index}_required`, { type: 'checkbox' }),
+					required: toggle(doc, formatText(t('links.field.questionRequired'), { n: index + 1 }), {
+						inline: true,
+						name: `field_${index}_required`,
+					}),
 				}));
 				const asked = element(doc, 'fieldset', { class: 'wide' });
 				asked.append(element(doc, 'legend', {}, t('links.field.questions')));
 				questions.forEach((question, index) => {
-					const check = element(doc, 'label', { class: 'check' });
-					check.append(question.required, formatText(t('links.field.questionRequired'), { n: index + 1 }));
-					asked.append(field(doc, formatText(t('links.field.question'), { n: index + 1 }), question.label), check);
+					asked.append(
+						field(doc, formatText(t('links.field.question'), { n: index + 1 }), question.label),
+						question.required.node,
+					);
 				});
 				const expiresAt = input('expiresAt', { type: 'datetime-local' });
 				const maxPayments = input('maxPayments', { type: 'number', min: '1', step: '1', inputmode: 'numeric' });
@@ -303,7 +315,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 					wide(field(doc, t('links.field.returnUrl'), returnUrl)),
 					wide(field(doc, t('links.field.description'), description)),
 					gateways,
-					field(doc, t('links.field.phone'), phone),
+					field(doc, t('links.field.phone'), phone.node),
 					asked,
 					field(doc, t('links.field.expiresAt'), expiresAt),
 					field(doc, t('links.field.maxPayments'), maxPayments),
@@ -343,7 +355,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 							phone: phone.value,
 							fields: questions
 								.filter((question) => question.label.value.trim() !== '')
-								.map((question) => ({ label: question.label.value.trim(), required: question.required.checked })),
+								.map((question) => ({ label: question.label.value.trim(), required: question.required.box.checked })),
 							expiresAt: ends ? ends.toISOString() : null,
 							maxPayments: most,
 						});

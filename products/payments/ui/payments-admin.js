@@ -13,6 +13,7 @@
 import {
 	adminCall,
 	badge,
+	block,
 	dot,
 	element,
 	fieldGrid,
@@ -102,8 +103,10 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 			const more = element(doc, 'button', { type: 'button', class: 'secondary', hidden: '' }, t('admin.more'));
 			const view = splitView(doc, t('admin.back'));
 			view.list.append(list, more);
-			const box = element(doc, 'section', { class: 'box' });
-			box.append(head, filters, byGateway, status, state.root, view.root);
+			const box = element(doc, 'section', { class: 'box admin' });
+			const tools = block(doc, { body: [head, filters, byGateway, status, state.root] });
+			tools.classList.add('tools');
+			box.append(tools, view.root);
 			root.append(box);
 
 			/** @type {string | null} */

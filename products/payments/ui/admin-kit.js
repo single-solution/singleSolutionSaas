@@ -4,17 +4,13 @@
  * set as text, never as HTML.
  * @module
  */
-import { element } from '@ss/app-kit/widget';
+import { element, field as kitField } from '@ss/app-kit/widget';
 
 /**
- * A labeled form control.
+ * A labeled form control (the kit's field: the label linked to the control).
  * @param {Document} doc @param {string} label @param {HTMLElement} control
  */
-export const field = (doc, label, control) => {
-	const node = element(doc, 'label', {}, label);
-	node.append(control);
-	return node;
-};
+export const field = (doc, label, control) => kitField(doc, label, control);
 
 /**
  * A section of the detail: a small heading and its items (nothing when there are none).
