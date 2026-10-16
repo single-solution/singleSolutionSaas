@@ -37,7 +37,7 @@ const ACTION = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
  * @param {unknown} actor
  * @returns {{ type: string, id: string, name?: string }}
  */
-const normaliseActor = (actor) => {
+const normalizeActor = (actor) => {
 	if (!isObject(actor) || typeof actor.id !== 'string' || actor.id.length === 0)
 		throw platformError('invalid_argument', 'audit actor needs an id');
 	// only admins, merchants, products and the system act
@@ -74,7 +74,7 @@ export const createAudit = ({ repo, now = Date.now, randomBytes = defaultRandomB
 		await repo.insertOne({
 			_id: id,
 			at: new Date(now()),
-			actor: normaliseActor(actor),
+			actor: normalizeActor(actor),
 			action,
 			target: { type: target.type, id: target.id, websiteId: target.websiteId ?? null },
 			merchantId: target.merchantId ?? null,

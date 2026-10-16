@@ -3,7 +3,7 @@
  * of field errors (`{ path, message }`, JSON-pointer paths). Objects are closed: unknown members are errors.
  * @module
  */
-import { ADMIN_ROLES, isId, normaliseDomain } from '@ss/contracts';
+import { ADMIN_ROLES, isId, normalizeDomain } from '@ss/contracts';
 import { normalizeEmail } from '@ss/contracts/email';
 import { hasControlCharacters } from '../../../infra/util.js';
 import { isCountryCode } from './countries.js';
@@ -130,14 +130,14 @@ export const optionalText = (max) => (value) =>
 export const nullable = (field) => (value) => (value === null ? okv(null) : field(value));
 
 /**
- * A website domain, normalized with `@ss/contracts` `normaliseDomain` (public hosts only).
+ * A website domain, normalized with `@ss/contracts` `normalizeDomain` (public hosts only).
  * @param {{ isPublicSuffix?: (domain: string) => boolean }} [options]
  * @returns {Field<string>}
  */
 export const domain =
 	(options = {}) =>
 	(value) => {
-		const result = normaliseDomain(value, options.isPublicSuffix ? { isPublicSuffix: options.isPublicSuffix } : {});
+		const result = normalizeDomain(value, options.isPublicSuffix ? { isPublicSuffix: options.isPublicSuffix } : {});
 		return result.ok ? okv(result.value) : bad(result.message);
 	};
 

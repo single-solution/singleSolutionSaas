@@ -361,7 +361,7 @@ describe('transactions', () => {
 
 	it('retries transient transaction errors and unknown commit results, within bounds', async () => {
 		/** @param {string} label */
-		const labelled = (label) => Object.assign(new Error(label), { hasErrorLabel: (/** @type {string} */ l) => l === label });
+		const labeled = (label) => Object.assign(new Error(label), { hasErrorLabel: (/** @type {string} */ l) => l === label });
 		/** @param {{ fnErrors?: Error[], commitErrors?: Error[] }} plan */
 		const fakeClient = (plan) => {
 			const log = /** @type {string[]} */ ([]);
@@ -399,20 +399,20 @@ describe('transactions', () => {
 			return { log, result };
 		};
 
-		const transient = run({ fnErrors: [labelled('TransientTransactionError')] });
+		const transient = run({ fnErrors: [labeled('TransientTransactionError')] });
 		expect(await transient.result).toBe(2);
 		expect(transient.log).toEqual(['start', 'abort', 'start', 'commit', 'end']);
 
-		const unknown = run({ commitErrors: [labelled('UnknownTransactionCommitResult')] });
+		const unknown = run({ commitErrors: [labeled('UnknownTransactionCommitResult')] });
 		expect(await unknown.result).toBe(1);
 		expect(unknown.log).toEqual(['start', 'commit:UnknownTransactionCommitResult', 'commit', 'end']);
 
-		const transientCommit = run({ commitErrors: [labelled('TransientTransactionError')] });
+		const transientCommit = run({ commitErrors: [labeled('TransientTransactionError')] });
 		expect(await transientCommit.result).toBe(2);
 		expect(transientCommit.log).toEqual(['start', 'commit:TransientTransactionError', 'start', 'commit', 'end']);
 
 		const exhausted = run(
-			{ fnErrors: [labelled('TransientTransactionError'), labelled('TransientTransactionError')] },
+			{ fnErrors: [labeled('TransientTransactionError'), labeled('TransientTransactionError')] },
 			{ maxAttempts: 2 },
 		);
 		await expect(exhausted.result).rejects.toThrow('TransientTransactionError');
@@ -422,7 +422,7 @@ describe('transactions', () => {
 		await expect(fatalCommit.result).rejects.toThrow('boom');
 
 		let t = 0;
-		const late = run({ fnErrors: [labelled('TransientTransactionError')] }, { timeoutMs: 10, clock: () => (t += 20) });
+		const late = run({ fnErrors: [labeled('TransientTransactionError')] }, { timeoutMs: 10, clock: () => (t += 20) });
 		await expect(late.result).rejects.toThrow('TransientTransactionError');
 	});
 });
