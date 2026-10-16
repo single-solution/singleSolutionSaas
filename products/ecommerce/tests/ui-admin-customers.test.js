@@ -90,7 +90,18 @@ const start = (routes = {}, features = ['checkout', 'reviews', 'reports', 'csv',
 			'GET /v1/admin/customers/u2': () => problem(404, 'not_found'),
 			'GET /v1/admin/returns': () =>
 				answer(200, {
-					items: [{ id: 'ret_1', reference: 'R-1', orderNumber: 'SO-1', kind: 'warranty', status: 'requested' }],
+					items: [
+						{
+							id: 'ret_1',
+							reference: 'R-1',
+							orderNumber: 'SO-1',
+							kind: 'warranty',
+							kindLabel: 'Warranty',
+							status: 'requested',
+							statusLabel: 'Requested',
+							role: 'requested',
+						},
+					],
 					nextCursor: null,
 					hasMore: false,
 				}),

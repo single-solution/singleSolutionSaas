@@ -129,9 +129,11 @@ export const createTransitions = (product, service, { refunded } = {}) => {
 		const claim = effect.record?.claim;
 		if (!claim) return;
 		const { before } = claim;
-		const status = before.refundAmount > 0 ? 'refunded' : before.status;
+		// refunded before: it stays in the refunded status the refund put it in; else back where it was (E18)
+		const back = before.refundAmount > 0 ? null : { status: before.status, role: before.role };
+		const status = back?.status ?? claim.status;
 		/** @type {Record<string, unknown>} */
-		const set = { status, refundAmount: before.refundAmount, refundId: before.refundId };
+		const set = { ...(back ?? {}), refundAmount: before.refundAmount, refundId: before.refundId };
 		/** @type {Record<string, ''>} */
 		const unset = {};
 		if (before.refundMethod === null) unset.refundMethod = '';
@@ -139,11 +141,13 @@ export const createTransitions = (product, service, { refunded } = {}) => {
 		if (before.refundReference === null) unset.refundReference = '';
 		else set.refundReference = before.refundReference;
 		await (await s.data()).collection(COLLECTIONS.returns).updateOne(
-			{ websiteId: s.websiteId, id: claim.id, status: 'refunded', refundAmount: claim.refundAmount },
+			{ websiteId: s.websiteId, id: claim.id, role: 'refunded', refundAmount: claim.refundAmount },
 			{
 				$set: set,
 				...(Object.keys(unset).length > 0 ? { $unset: unset } : {}),
-				$push: { history: { at: new Date(product.now()), status, by: 'system', note: '' } },
+				$push: {
+					history: { at: new Date(product.now()), status, role: back?.role ?? 'refunded', by: 'system', note: '' },
+				},
 			},
 		);
 	};

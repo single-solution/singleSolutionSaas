@@ -155,10 +155,11 @@ import { OTHER_WAY, PAY_LATER_KINDS, VIA_PAYMENTS, isMethodKey } from './payment
  */
 
 /**
- * A claim's refund as the claim reserved it: `refundAmount` what the claim says it refunded with it, and `before` the
- * claim's refund and status before it (`refundMethod` and `refundReference` null when it had none).
- * @typedef {{ id: string, refundAmount: number, before: { status: string, refundAmount: number, refundId: string | null,
- *   refundMethod: string | null, refundReference: string | null } }} ClaimRefundUndo
+ * A claim's refund as the claim reserved it: `refundAmount` what the claim says it refunded with it, `status` the
+ * refunded status it put the claim in, and `before` the claim's refund, status and role before it (`refundMethod` and
+ * `refundReference` null when it had none).
+ * @typedef {{ id: string, refundAmount: number, status: string, before: { status: string, role: string, refundAmount: number,
+ *   refundId: string | null, refundMethod: string | null, refundReference: string | null } }} ClaimRefundUndo
  */
 
 /**

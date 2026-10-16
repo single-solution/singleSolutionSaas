@@ -69,24 +69,21 @@
 			"minimum": 1,
 			"maximum": 20
 		},
-		"kinds": {
-			"type": "array",
-			"title": "Claims shoppers may make",
-			"default": ["return", "warranty"],
-			"items": {
-				"type": "string",
-				"enum": ["return", "warranty", "exchange"]
-			}
-		},
 		"reasons": {
 			"type": "array",
 			"title": "Reasons",
-			"description": "The reasons shoppers pick from. Empty = free text.",
+			"description": "The reasons shoppers pick from when they make a claim. Empty = they say why in their own words. Which claims they may make, and their statuses, are the Claim kinds and Claim statuses lists.",
 			"default": [],
 			"items": {
 				"type": "string",
 				"maxLength": 120
 			}
+		},
+		"otherReason": {
+			"type": "boolean",
+			"title": "Offer \"Other\" with the reasons",
+			"description": "With reasons listed: shoppers may also pick Other and say why in their own words.",
+			"default": true
 		},
 		"referencePrefix": {
 			"type": "string",

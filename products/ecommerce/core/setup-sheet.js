@@ -174,6 +174,12 @@ export const LIST_WORDS = Object.freeze({
 			? `${nameOf(price.role)} ${counted(price.prices.length, 'fixed price', 'fixed prices')}`
 			: `${nameOf(price.role)} ${price.percent}% off`,
 	),
+	claim_kinds: named('claim kind', 'claim kinds', (/** @type {{ label: string }} */ kind) => nameOf(kind.label)),
+	claim_statuses: named(
+		'claim status',
+		'claim statuses',
+		(/** @type {{ label: string, role: string }} */ status) => `${nameOf(status.label)} (${status.role})`,
+	),
 });
 
 /**

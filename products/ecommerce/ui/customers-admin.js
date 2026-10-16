@@ -425,8 +425,8 @@ const claimsCard = async (kit, customer, cards, detail) => {
 					{},
 					claims.map((claim) =>
 						kit.h('li', {}, [
-							`${claim.reference} · ${t('ordersAdmin.orderHead', { number: claim.orderNumber })} · ${t(`ordersAdmin.claimKind.${claim.kind}`)} `,
-							kit.badge(t(`ordersAdmin.claim.${claim.status}`), CLAIM_TONES[claim.status]),
+							`${claim.reference} · ${t('ordersAdmin.orderHead', { number: claim.orderNumber })} · ${claim.kindLabel} `,
+							kit.badge(claim.statusLabel, CLAIM_TONES[claim.role]),
 						]),
 					),
 				),

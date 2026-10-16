@@ -444,7 +444,18 @@ describe('orders admin: one order', () => {
 		const { root, server } = await start({
 			'GET /v1/admin/returns': () =>
 				answer(200, {
-					items: [{ id: 'ret_1', reference: 'R-ABC', kind: 'return', status: 'approved', orderNumber: 'SO2026-1' }],
+					items: [
+						{
+							id: 'ret_1',
+							reference: 'R-ABC',
+							kind: 'return',
+							kindLabel: 'Return',
+							status: 'approved',
+							statusLabel: 'Approved',
+							role: 'approved',
+							orderNumber: 'SO2026-1',
+						},
+					],
 					nextCursor: null,
 					hasMore: false,
 				}),
@@ -1140,8 +1151,38 @@ describe('orders admin: one order', () => {
 	});
 });
 
+/** The merchant's claim kinds and statuses (E18) as the lists route answers them. */
+const CLAIM_LISTS = {
+	kinds: [
+		{ key: 'return', label: 'Return', window: 'return', outcomes: ['refund'], shoppers: true },
+		{ key: 'warranty', label: 'Warranty', window: 'warranty', outcomes: ['refund', 'replace', 'repair'], shoppers: true },
+		{ key: 'exchange', label: 'Exchange', window: 'return', outcomes: ['refund', 'replace'], shoppers: false },
+	],
+	statuses: ['requested', 'approved', 'received', 'refunded', 'credited', 'replaced', 'repaired', 'closed', 'rejected'].map(
+		(key) => ({ key, label: key === 'credited' ? 'Store credit given' : key[0]?.toUpperCase() + key.slice(1), role: key }),
+	),
+};
+/** @param {unknown} key */
+const statusLabel = (key) => CLAIM_LISTS.statuses.find((status) => status.key === key)?.label ?? String(key);
+
+/** @param {Record<string, any>} [over] */
+const claim = (over = {}) => {
+	const made = baseClaim(over);
+	return {
+		kindLabel: CLAIM_LISTS.kinds.find((kind) => kind.key === made.kind)?.label ?? made.kind,
+		statusLabel: statusLabel(made.status),
+		role: made.status,
+		statuses: [],
+		creditAmount: 0,
+		creditCodes: [],
+		creditable: 0,
+		...made,
+		history: (made.history ?? []).map((/** @type {any} */ entry) => ({ statusLabel: statusLabel(entry.status), ...entry })),
+	};
+};
+
 /** @param {Record<string, unknown>} [over] */
-const claim = (over = {}) => ({
+const baseClaim = (over = {}) => ({
 	id: 'ret_1',
 	reference: 'R-ABC123',
 	orderId: 'ord_1',
@@ -1188,6 +1229,7 @@ describe('orders admin: returns', () => {
 				}),
 			'GET /v1/admin/returns/count': () => answer(200, { count: 100000, capped: true }),
 			'GET /v1/admin/returns/counts': () => answer(200, { total: 2, groups: { requested: 2 } }),
+			'GET /v1/admin/returns/lists': () => answer(200, CLAIM_LISTS),
 			'GET /v1/admin/returns/ret_1': () => answer(200, claim()),
 			'GET /v1/admin/returns/ret_2': () => problem(404, 'not_found'),
 			...routes,

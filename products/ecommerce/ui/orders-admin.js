@@ -34,7 +34,7 @@ export const mountOrdersAdmin = async (input) => {
 							{
 								key: 'returns',
 								label: t('ordersAdmin.returns'),
-								render: (/** @type {HTMLElement} */ panel) => returnsTab(kit, panel),
+								render: (/** @type {HTMLElement} */ panel) => void returnsTab(kit, panel),
 							},
 						]
 					: []),

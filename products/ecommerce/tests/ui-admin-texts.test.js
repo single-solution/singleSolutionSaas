@@ -16,7 +16,7 @@ import { HEALTH_CHECKS } from '../core/health.js';
 import { STATUS_ROLES } from '../core/model.js';
 import { ADDRESS_FIELDS } from '../core/address.js';
 import { HISTORY_NOTES, MOVE_WARNINGS, PAYMENT_STATES } from '../core/orders.js';
-import { CLAIM_ACTIONS, CLAIM_KINDS, CLAIM_NOTES, CLAIM_STATUSES } from '../core/returns.js';
+import { CLAIM_ACTIONS, CLAIM_NOTES, CLAIM_ROLES } from '../core/returns.js';
 import { REVIEW_STATUSES } from '../core/reviews.js';
 import { CLAIM_TONES, HISTORY_ACTORS, ROLE_TONES, SERVER_KIND } from '../ui/admin-order.js';
 import { codeOf, problemKey } from '../ui/admin-problems.js';
@@ -50,12 +50,13 @@ describe('widget texts named after a code (PLAN 0.4.10)', () => {
 			'ordersAdmin.paidWith.other',
 			...keysOf('ordersAdmin.deliveryMethod.', ['delivery', 'pickup']),
 			...keysOf('orders.payment.', PAYMENT_STATES),
-			...keysOf('ordersAdmin.claimKind.', CLAIM_KINDS),
-			...keysOf('returns.kind.', CLAIM_KINDS),
-			...keysOf('ordersAdmin.claim.', CLAIM_STATUSES),
-			...keysOf('returns.status.', CLAIM_STATUSES),
+			// claim kinds and statuses are the merchant's own names (E18)
 			...keysOf('ordersAdmin.claimAction.', claimMoves),
-			...keysOf('ordersAdmin.claimDone.', claimMoves),
+			// store credit says how much was given (ordersAdmin.creditDone)
+			...keysOf(
+				'ordersAdmin.claimDone.',
+				claimMoves.filter((action) => action !== 'credit'),
+			),
 			// the area, city, region and postal code are named by their country's label kind
 			...keysOf(
 				'ordersAdmin.address.',
@@ -124,7 +125,7 @@ describe('widget texts named after a code (PLAN 0.4.10)', () => {
 		expect(strayValues('customersAdmin.csvProblem.', ['currency', 'category', 'brand', 'sku', 'field'])).toEqual([]);
 		// every status has its tone
 		expect(STATUS_ROLES.filter((role) => !Object.hasOwn(ROLE_TONES, role))).toEqual([]);
-		expect(CLAIM_STATUSES.filter((status) => !Object.hasOwn(CLAIM_TONES, status))).toEqual([]);
+		expect(CLAIM_ROLES.filter((role) => !Object.hasOwn(CLAIM_TONES, role))).toEqual([]);
 	});
 
 	it('a refusal names the text for its field (the deepest part with one first), else for its code, else none', () => {

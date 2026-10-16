@@ -58,12 +58,13 @@ export const ROLE_TONES = Object.freeze({
 	returned: 'neutral',
 });
 
-/** The tone of a claim's status. @type {Record<string, Tone>} */
+/** The tone of a claim's status, by its role (E18). @type {Record<string, Tone>} */
 export const CLAIM_TONES = Object.freeze({
 	requested: 'warning',
 	approved: 'neutral',
 	received: 'neutral',
 	refunded: 'success',
+	credited: 'success',
 	replaced: 'success',
 	repaired: 'success',
 	closed: 'success',
@@ -450,8 +451,8 @@ const claimsCard = async (kit, order, cards, detail) => {
 					{},
 					claims.map((claim) =>
 						kit.h('li', {}, [
-							`${claim.reference} · ${t(`ordersAdmin.claimKind.${claim.kind}`)} `,
-							kit.badge(t(`ordersAdmin.claim.${claim.status}`), CLAIM_TONES[claim.status] ?? 'neutral'),
+							`${claim.reference} · ${claim.kindLabel} `,
+							kit.badge(claim.statusLabel, CLAIM_TONES[claim.role] ?? 'neutral'),
 						]),
 					),
 				),

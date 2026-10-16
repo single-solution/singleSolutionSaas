@@ -71,16 +71,16 @@
 		{
 			"key": "ecommerce.return_status",
 			"name": "Claim status",
-			"description": "Tells the shopper where their return, exchange or warranty claim is: when it is made and at each staff step.",
-			"values": ["number", "claim", "kind", "status", "reason", "amount", "name", "business"],
+			"description": "Tells the shopper where their claim is (return, exchange, warranty or any claim kind of the shop): when it is made and at each staff step, with the refund or the store credit code given.",
+			"values": ["number", "claim", "kind", "status", "reason", "amount", "credit", "creditCode", "name", "business"],
 			"required": true,
 			"channels": {
 				"email": {
 					"subject": "Your claim {claim} is now {status}",
-					"text": "Hello {name},\n\nYour claim {claim} ({kind}) for order {number} is now {status}.{?amount}\n\nRefunded: {amount}{/amount}\n\n{business}"
+					"text": "Hello {name},\n\nYour claim {claim} ({kind}) for order {number} is now {status}.{?amount}\n\nRefunded: {amount}{/amount}{?credit}\n\nStore credit: {credit}. Use the code {creditCode} at checkout.{/credit}\n\n{business}"
 				},
 				"sms": {
-					"text": "{business}: your claim {claim} for order {number} is now {status}.{?amount} Refunded: {amount}.{/amount}"
+					"text": "{business}: your claim {claim} for order {number} is now {status}.{?amount} Refunded: {amount}.{/amount}{?credit} Store credit: {credit}, code {creditCode}.{/credit}"
 				},
 				"whatsapp": null
 			}

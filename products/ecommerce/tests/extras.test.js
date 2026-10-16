@@ -262,7 +262,7 @@ describe('returns and warranty claims', () => {
 		expect(shop.messages().at(-1)).toMatchObject({
 			template: 'ecommerce.return_status',
 			to: { email: 'sara@example.com' },
-			values: { number: placed.number, status: 'requested', amount: '' },
+			values: { number: placed.number, status: 'Requested', amount: '' },
 		});
 		const again = await shop.visitor('GET', `/v1/shop/orders/${placed.id}/returnable`, { signIn: sara });
 		expect(again.json.lines[0].claimable).toBe(1);
@@ -320,7 +320,7 @@ describe('returns and warranty claims', () => {
 		expect(stored.payment).toMatchObject({ refunded: 1000, state: 'partially_refunded' });
 		expect(stored.lines[0].returnedQuantity).toBe(1);
 		expect((await loyaltyAccount(data, SARA, { now: shop.now() })).balance).toBe(10);
-		expect(shop.messages().at(-1)).toMatchObject({ values: { status: 'refunded', amount: 'USD 10.00' } });
+		expect(shop.messages().at(-1)).toMatchObject({ values: { status: 'Refunded', amount: 'USD 10.00' } });
 		expect((await shop.api('POST', `/v1/returns/${claimId}/refund`, { amount: 1 })).status).toBe(422);
 
 		// restock exactly once: stock and the serial come back
@@ -358,7 +358,7 @@ describe('returns and warranty claims', () => {
 		expect((await shop.api('POST', `/v1/returns/${first.json.id}/reject`, {})).status).toBe(422);
 		const rejected = await shop.api('POST', `/v1/returns/${first.json.id}/reject`, { note: 'Used item' });
 		expect(rejected.json.status).toBe('rejected');
-		expect(shop.messages().at(-1)).toMatchObject({ to: { email: 'omar@example.com' }, values: { status: 'rejected' } });
+		expect(shop.messages().at(-1)).toMatchObject({ to: { email: 'omar@example.com' }, values: { status: 'Rejected' } });
 
 		const second = await shop.visitor('POST', '/v1/shop/returns', { signIn: omar, body });
 		expect(second.status).toBe(201);

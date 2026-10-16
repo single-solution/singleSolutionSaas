@@ -7,25 +7,33 @@
  * step. Each step's history entry names who did it (a ticket's user, the staff member a server-token call names in its
  * `SS-Actor-*` headers, else `Server`), and its activity entry the claim (order number and reference) and the move.
  *
- * E33: exchange claims and fixed reasons as the `returns` settings say; `replaced` and `repaired` outcomes; staff choose
- * per line when receiving whether it goes back in stock (those lines are restocked at once, each exactly once); a
- * refund names its method and reference and is also written on the order's `refunds` (with the claim's id), the
- * delivery fee inside the cap when `refundDelivery` is on, and points taken back as `pointsBack` says; staff notes; a
- * new claim raises the `return.requested` hook.
+ * E33: staff choose per line when receiving whether it goes back in stock (those lines are restocked at once, each
+ * exactly once); a refund names its method and reference and is also written on the order's `refunds` (with the
+ * claim's id), the delivery fee inside the cap when `refundDelivery` is on, and points taken back as `pointsBack` says;
+ * staff notes; a new claim raises the `return.requested` hook.
+ *
+ * E17/E18: the merchant's claim kinds (`claim_kinds`: window, outcomes, offered to shoppers or not) and claim statuses
+ * (`claim_statuses`, each on a fixed role, `core/returns.js`); the shopper's form reads the kinds and reasons from
+ * `returnable`; staff move a claim between the statuses of one role (`POST …/status`); the `store_credit` outcome gives
+ * the shopper a one-use code of the credited amount (a fixed coupon, so it needs the Coupons feature), told in the
+ * claim message.
  * @module
  */
+import { randomBytes } from 'node:crypto';
 import { createId } from '@ss/contracts';
 import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
 import { categoriesOf } from '../adapters/catalog-store.js';
 import { applyTransition, isPointsChanged, restockClaimLines } from '../adapters/ledger.js';
 import { userIdsOf } from '../adapters/extras-store.js';
+import { insertOffers } from '../adapters/promotions-store.js';
+import { checkCouponInput, drawCode } from '../core/coupons.js';
+import { labelIn } from '../core/named-lists.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { afterFilter, keyOf, sortOf } from '../core/extras-pages.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
 	CLAIM_ACTIONS,
-	CLAIM_KINDS,
-	CLAIM_STATUSES,
+	CLAIM_ROLES,
 	PHOTO_SECONDS,
 	actionsOf,
 	allows,
@@ -37,6 +45,7 @@ import {
 	checkRestockChoices,
 	claimReference,
 	claimedByLine,
+	creditCap,
 	deliveryLeft,
 	isPhotoKey,
 	linesToRestock,
@@ -46,6 +55,7 @@ import {
 	referenceOf,
 	refundCap,
 	returnableLines,
+	statusIn,
 	windowDefaults,
 } from '../core/returns.js';
 import { measureView, piecesOf, quantityText } from '../core/measure.js';
@@ -67,7 +77,7 @@ const POINTS_TRIES = 5;
  * fills exactly these, and `schemas/messages.json` declares them.
  */
 export const RETURN_MESSAGE_VALUES = Object.freeze(
-	/** @type {const} */ (['number', 'claim', 'kind', 'status', 'reason', 'amount', 'name']),
+	/** @type {const} */ (['number', 'claim', 'kind', 'status', 'reason', 'amount', 'credit', 'creditCode', 'name']),
 );
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -79,6 +89,10 @@ export const RETURN_MESSAGE_VALUES = Object.freeze(
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 /** @typedef {import('../core/model.js').OrderRefundEntry} OrderRefundEntry */
 /** @typedef {import('../core/returns.js').ClaimAction} ClaimAction */
+/** @typedef {import('../core/returns.js').ClaimKind} ClaimKind */
+/** @typedef {import('../core/returns.js').ClaimStatus} ClaimStatus */
+/** @typedef {import('../core/returns.js').ClaimRole} ClaimRole */
+/** @typedef {{ kinds: ClaimKind[], statuses: ClaimStatus[] }} ClaimLists */
 /** @typedef {ReturnRecord & { createdAt: Date, updatedAt: Date }} StoredClaim */
 
 /** Newest claims first. @type {import('../core/extras-pages.js').SortField[]} */
@@ -105,6 +119,24 @@ const iso = (at) => (at ? new Date(at).toISOString() : null);
 /** A claim as the activity log names it: its order number and reference. @param {ReturnRecord} claim */
 const claimLabel = (claim) => `${claim.orderNumber} ${referenceOf(claim)}`;
 
+/** Store credit codes start with this, then 8 random characters. */
+const CREDIT_PREFIX = 'CREDIT-';
+
+/** A random byte source for codes. */
+const byteSource = () => {
+	let buffer = randomBytes(64);
+	let offset = 0;
+	return () => {
+		if (offset >= buffer.length) {
+			buffer = randomBytes(64);
+			offset = 0;
+		}
+		const byte = /** @type {number} */ (buffer[offset]);
+		offset += 1;
+		return byte;
+	};
+};
+
 /**
  * @param {Product} product
  * @param {Service} service
@@ -122,6 +154,16 @@ export const createReturns = (product, service) => {
 
 	/** @param {WebsiteData} data */
 	const claims = (data) => data.collection(COLLECTIONS.returns);
+
+	/**
+	 * The merchant's claim kinds and statuses (E18).
+	 * @param {Site} s
+	 * @returns {Promise<ClaimLists>}
+	 */
+	const listsOf = async (s) => {
+		const [kinds, statuses] = await Promise.all([s.list('claim_kinds'), s.list('claim_statuses')]);
+		return { kinds: Array.isArray(kinds) ? kinds : [], statuses: Array.isArray(statuses) ? statuses : [] };
+	};
 
 	/**
 	 * @param {Site} s
@@ -195,9 +237,9 @@ export const createReturns = (product, service) => {
 	};
 
 	/**
-	 * Tell the shopper where their claim is (on the `checkout` setting `messageChannels`): the kind and status in words
-	 * (the website's texts `returns.kind.<kind>` and `returns.status.<status>`, as the shopper's claims list shows them;
-	 * K-10) and the reason they gave.
+	 * Tell the shopper where their claim is (on the `checkout` setting `messageChannels`): the kind and status by the
+	 * merchant's names (the `claim_kinds` and `claim_statuses` lists, as the shopper's claims list shows them), the
+	 * reason they gave, the refund and the store credit with its code.
 	 * @param {Site} s
 	 * @param {OrderRecord | null} order
 	 * @param {ReturnRecord} claim
@@ -205,15 +247,19 @@ export const createReturns = (product, service) => {
 	const tell = async (s, order, claim) => {
 		if (!order) return;
 		const { messageChannels } = await s.values('checkout');
-		const texts = await s.texts();
+		const { kinds, statuses } = await listsOf(s);
+		const { money } = await s.format();
+		const credit = claim.creditAmount ?? 0;
 		/** Exactly {@link RETURN_MESSAGE_VALUES}. @type {Record<typeof RETURN_MESSAGE_VALUES[number], string>} */
 		const values = {
 			number: order.number,
 			claim: referenceOf(claim),
-			kind: texts[`returns.kind.${claim.kind}`] ?? claim.kind,
-			status: texts[`returns.status.${claim.status}`] ?? claim.status,
+			kind: labelIn(kinds, claim.kind),
+			status: labelIn(statuses, claim.status),
 			reason: claim.reason.slice(0, 1000),
-			amount: claim.refundAmount > 0 ? (await s.format()).money(claim.refundAmount, order.totals.currency) : '',
+			amount: claim.refundAmount > 0 ? money(claim.refundAmount, order.totals.currency) : '',
+			credit: credit > 0 ? money(credit, order.totals.currency) : '',
+			creditCode: (claim.creditCodes ?? []).at(-1) ?? '',
 			name: order.customer.name,
 		};
 		await service.notify(
@@ -230,43 +276,64 @@ export const createReturns = (product, service) => {
 	/**
 	 * A claim as its shopper sees it: the staff's notes to them, never the shop's own notes (`restocked`).
 	 * @param {StoredClaim} claim
+	 * @param {ClaimLists} lists
 	 */
-	const shopperView = (claim) => ({
+	const shopperView = (claim, { kinds, statuses }) => ({
 		id: claim.id,
 		reference: referenceOf(claim),
 		orderId: claim.orderId,
 		orderNumber: claim.orderNumber,
 		kind: claim.kind,
+		kindLabel: labelIn(kinds, claim.kind),
 		lines: claim.lines.map((line) => ({ lineId: line.lineId, quantity: line.quantity })),
 		reason: claim.reason,
 		status: claim.status,
+		statusLabel: labelIn(statuses, claim.status),
+		role: claim.role,
 		refundAmount: claim.refundAmount,
+		creditAmount: claim.creditAmount ?? 0,
+		creditCodes: claim.creditCodes ?? [],
 		history: claim.history.map((entry) => ({
 			at: iso(entry.at),
 			status: entry.status,
+			statusLabel: labelIn(statuses, entry.status),
 			note: /** @type {readonly string[]} */ (CLAIM_NOTES).includes(entry.note) ? '' : entry.note,
 		})),
 		createdAt: iso(claim.createdAt),
 	});
 
-	/** @param {StoredClaim} claim */
-	const staffView = (claim) => ({
+	/**
+	 * @param {StoredClaim} claim
+	 * @param {ClaimLists} lists
+	 */
+	const staffView = (claim, { kinds, statuses }) => ({
 		id: claim.id,
 		reference: referenceOf(claim),
 		orderId: claim.orderId,
 		orderNumber: claim.orderNumber,
 		userId: claim.userId,
 		kind: claim.kind,
+		kindLabel: labelIn(kinds, claim.kind),
+		window: claim.window,
+		outcomes: claim.outcomes,
 		lines: claim.lines.map((line) => ({ ...line, restockedAt: iso(line.restockedAt) })),
 		reason: claim.reason,
 		photos: claim.photos.map((photo) => ({ key: photo.key, type: photo.type, size: photo.size })),
 		status: claim.status,
+		statusLabel: labelIn(statuses, claim.status),
+		role: claim.role,
+		// the other statuses of the claim's role staff may move it to (`POST …/status`)
+		statuses: statuses
+			.filter((status) => status.role === claim.role && status.key !== claim.status)
+			.map((status) => ({ key: status.key, label: status.label })),
 		refundAmount: claim.refundAmount,
+		creditAmount: claim.creditAmount ?? 0,
+		creditCodes: claim.creditCodes ?? [],
 		refundId: claim.refundId,
 		refundMethod: claim.refundMethod ?? null,
 		refundReference: claim.refundReference ?? '',
 		restockedAt: iso(claim.restockedAt),
-		history: claim.history.map((entry) => ({ ...entry, at: iso(entry.at) })),
+		history: claim.history.map((entry) => ({ ...entry, at: iso(entry.at), statusLabel: labelIn(statuses, entry.status) })),
 		notes: (claim.notes ?? []).map((entry) => ({ ...entry, at: iso(entry.at) })),
 		actions: actionsOf(claim),
 		createdAt: iso(claim.createdAt),
@@ -283,10 +350,16 @@ export const createReturns = (product, service) => {
 		const order = await findOrder(data, { id: String(ctx.params.id), 'customer.userId': shopper.id });
 		if (!order) throw problem('not_found', 'No such order.');
 		const lines = order.deliveredAt ? await returnableOf(s, data, order) : [];
+		const [{ kinds }, settings] = await Promise.all([listsOf(s), s.values('returns')]);
 		return {
 			orderId: order.id,
 			number: order.number,
 			deliveredAt: iso(order.deliveredAt),
+			// what the shopper may ask for: the merchant's kinds offered to shoppers, each with the window it is counted in
+			kinds: kinds.filter((kind) => kind.shoppers).map((kind) => ({ key: kind.key, label: kind.label, window: kind.window })),
+			// the merchant's reasons (none: the shopper says why in their own words) and whether "Other" is offered (E17)
+			reasons: Array.isArray(settings.reasons) ? settings.reasons : [],
+			otherReason: settings.otherReason !== false,
 			lines: await Promise.all(
 				lines.map(async (entry) => ({
 					lineId: entry.line.id,
@@ -339,18 +412,22 @@ export const createReturns = (product, service) => {
 		const s = await service.site(ctx);
 		const shopper = await service.requireShopper(s);
 		const settings = await s.values('returns');
+		const lists = await listsOf(s);
 		const checked = checkClaimInput(bodyOf(ctx), {
 			maxPhotos: Number(settings.maxPhotos),
-			kinds: Array.isArray(settings.kinds) ? settings.kinds : undefined,
+			kinds: lists.kinds,
 			reasons: Array.isArray(settings.reasons) ? settings.reasons : [],
+			otherReason: settings.otherReason !== false,
 		});
 		if (!checked.ok) throw service.invalid(checked.field, checked.message);
 		const input = checked.value;
+		const kind = /** @type {ClaimKind} */ (lists.kinds.find((entry) => entry.key === input.kind));
+		const requested = /** @type {ClaimStatus} */ (statusIn(lists.statuses, 'requested'));
 		const data = await s.data();
 		const order = await findOrder(data, { id: input.orderId, 'customer.userId': shopper.id });
 		if (!order) throw problem('not_found', 'No such order.');
 		if (!order.deliveredAt) throw problem('not_returnable', 'Items can be claimed once the order is delivered.');
-		const planned = planClaim(input.kind, input.lines, await returnableOf(s, data, order));
+		const planned = planClaim(kind.window, input.lines, await returnableOf(s, data, order));
 		if (!planned.ok)
 			throw problem('not_returnable', NOT_RETURNABLE[planned.reason], {
 				errors: [{ path: '/lines', message: NOT_RETURNABLE[planned.reason], code: planned.reason }],
@@ -374,15 +451,18 @@ export const createReturns = (product, service) => {
 			orderId: order.id,
 			orderNumber: order.number,
 			userId: shopper.id,
-			kind: input.kind,
+			kind: kind.key,
+			window: kind.window,
+			outcomes: [...kind.outcomes],
 			lines: planned.lines,
 			reason: input.reason,
 			photos,
-			status: 'requested',
+			status: requested.key,
+			role: 'requested',
 			refundAmount: 0,
 			refundId: null,
 			restockedAt: null,
-			history: [{ at, status: 'requested', by: 'shopper', note: '' }],
+			history: [{ at, status: requested.key, role: 'requested', by: 'shopper', note: '' }],
 			notes: [],
 		};
 		await claims(data).insertOne({ ...claim });
@@ -402,7 +482,7 @@ export const createReturns = (product, service) => {
 		}
 		await tell(s, order, claim);
 		await service.emit('return.requested', s, { claim: mine, order });
-		return created(shopperView(mine));
+		return created(shopperView(mine, lists));
 	};
 
 	/** @param {any} ctx */
@@ -419,31 +499,38 @@ export const createReturns = (product, service) => {
 				)
 				.toArray()
 		);
-		return page.respond(rows.map(shopperView), (view) => [/** @type {string} */ (view.createdAt), view.id]);
+		const lists = await listsOf(s);
+		return page.respond(
+			rows.map((row) => shopperView(row, lists)),
+			(view) => [/** @type {string} */ (view.createdAt), view.id],
+		);
 	};
 
 	// --------------------------------------------------------------------------------------------------- staff
 
 	/**
-	 * The staff claim list's collection and filter (`status`, `kind`, `orderId`, `userId`), shared by the list and its
-	 * counts (PLAN 0.8.10 K4).
+	 * The staff claim list's collection and filter (`status`, `role`, `kind`, `orderId`, `userId`), shared by the list
+	 * and its counts (PLAN 0.8.10 K4).
 	 * @param {any} ctx
 	 */
 	const claimSource = async (ctx) => {
 		const data = await (await service.site(ctx)).data();
-		const { status, kind, orderId, userId } = ctx.query;
+		const { status, role, kind, orderId, userId } = ctx.query;
+		/** @param {unknown} value */
+		const key = (value) => typeof value === 'string' && /^[a-z][a-z0-9_-]{0,39}$/.test(value);
 		return {
 			collection: claims(data),
 			filter: {
 				websiteId: data.websiteId,
-				...(CLAIM_STATUSES.includes(status) ? { status } : {}),
-				...(CLAIM_KINDS.includes(kind) ? { kind } : {}),
+				...(key(status) ? { status } : {}),
+				.../** @type {readonly string[]} */ (CLAIM_ROLES.includes(role) ? { role } : {}),
+				...(key(kind) ? { kind } : {}),
 				...(typeof orderId === 'string' && orderId ? { orderId } : {}),
 				...(typeof userId === 'string' && userId ? { userId } : {}),
 			},
 		};
 	};
-	const claimCounts = countHandlers({ source: claimSource, by: { status: 'status' } });
+	const claimCounts = countHandlers({ source: claimSource, by: { status: 'status', role: 'role', kind: 'kind' } });
 
 	/** @param {any} ctx */
 	const listClaims = async (ctx) => {
@@ -454,7 +541,11 @@ export const createReturns = (product, service) => {
 				.find({ ...filter, ...afterFilter(NEWEST, page.after) }, { ...NO_ID, sort: sortOf(NEWEST), limit: page.fetchLimit })
 				.toArray()
 		);
-		return page.respond(rows.map(staffView), (view) => keyOf(NEWEST, view));
+		const lists = await listsOf(await service.site(ctx));
+		return page.respond(
+			rows.map((row) => staffView(row, lists)),
+			(view) => keyOf(NEWEST, view),
+		);
 	};
 
 	/**
@@ -484,7 +575,7 @@ export const createReturns = (product, service) => {
 		const order = await findOrder(data, { id: claim.orderId });
 		const storage = claim.photos.length > 0 ? await product.connections.storage(s.websiteId) : null;
 		return {
-			...staffView(claim),
+			...staffView(claim, await listsOf(s)),
 			photos: claim.photos.map((photo) => ({
 				key: photo.key,
 				type: photo.type,
@@ -524,9 +615,16 @@ export const createReturns = (product, service) => {
 					}
 				: null,
 			refundable: order ? await capOf(s, data, order, claim) : 0,
+			creditable: order ? creditCap(order, claim) : 0,
 			refundsOnline: order ? paidOnline(order) : false,
 		};
 	};
+
+	/**
+	 * The merchant's claim kinds and statuses, for the staff screens' filters and moves (E18).
+	 * @param {any} ctx
+	 */
+	const claimLists = async (ctx) => listsOf(await service.site(ctx));
 
 	/** @param {any} ctx */
 	const readClaim = async (ctx) => {
@@ -578,6 +676,7 @@ export const createReturns = (product, service) => {
 					history: {
 						at: new Date(service.now()),
 						status: claim.status,
+						role: claim.role,
 						...byActor(service.actor(ctx)),
 						note: 'restocked',
 						code: 'restocked',
@@ -599,8 +698,22 @@ export const createReturns = (product, service) => {
 	};
 
 	/**
-	 * Approve, reject, mark received (with the staff's restock choice per line, E33), replace, repair or close: a status
-	 * move with a history entry and a message to the shopper.
+	 * The status of a role a move leads to: the one staff name (`status`, of that role), else the claim's own when it
+	 * already has that role (a refund or credit given again), else the role's first.
+	 * @param {Site} s @param {StoredClaim} claim @param {ClaimRole} role @param {unknown} named
+	 * @returns {Promise<ClaimStatus>}
+	 */
+	const targetOf = async (s, claim, role, named) => {
+		const { statuses } = await listsOf(s);
+		const given = named === undefined || named === null || named === '' ? null : named;
+		const target = statusIn(statuses, role, given ?? (claim.role === role ? claim.status : null));
+		if (!target) throw service.invalid('status', `status is a key of the claim_statuses list with the role ${role}.`);
+		return target;
+	};
+
+	/**
+	 * Approve, reject, mark received (with the staff's restock choice per line, E33), replace, repair or close: a move
+	 * into the action's role (its first status, or the one staff name) with a history entry and a message to the shopper.
 	 * @param {'approve' | 'reject' | 'receive' | 'replace' | 'repair' | 'close'} action
 	 */
 	const move = (action) => async (/** @type {any} */ ctx) => {
@@ -610,19 +723,21 @@ export const createReturns = (product, service) => {
 		const body = bodyOf(ctx);
 		const note = checkNote(body.note, action === 'reject');
 		if (!note.ok) throw service.invalid('note', note.message);
-		const status = /** @type {ReturnRecord['status']} */ (CLAIM_ACTIONS[action].to);
+		const role = /** @type {ClaimRole} */ (CLAIM_ACTIONS[action].to);
 		if (!allows(action, claim))
-			throw problem('move_not_allowed', `A ${claim.status} ${claim.kind} claim cannot be moved to ${status}.`);
+			throw problem('move_not_allowed', `A ${claim.role} ${claim.kind} claim cannot be moved to ${role}.`);
+		const status = (await targetOf(s, claim, role, body.status)).key;
 		const restock = action === 'receive' ? checkRestockChoices(body.lines, claim) : null;
 		if (restock && !restock.ok) throw service.invalid(restock.field, restock.message);
 		const choices = restock?.ok ? restock.choices : new Map();
-		const entry = { at: new Date(service.now()), status, ...byActor(service.actor(ctx)), note: note.note };
+		const entry = { at: new Date(service.now()), status, role, ...byActor(service.actor(ctx)), note: note.note };
 		const moved = /** @type {StoredClaim | null} */ (
 			await claims(data).findOneAndUpdate(
 				{ websiteId: data.websiteId, id: claim.id, status: claim.status },
 				{
 					$set: {
 						status,
+						role,
 						...(choices.size > 0
 							? {
 									lines: claim.lines.map((line) =>
@@ -637,7 +752,7 @@ export const createReturns = (product, service) => {
 			)
 		);
 		if (!moved) throw problem('move_not_allowed', 'The claim changed meanwhile; reload it.');
-		await service.log(ctx, `return.${status}`, claim.id, {
+		await service.log(ctx, `return.${role}`, claim.id, {
 			label: claimLabel(claim),
 			detail: `${claim.status} → ${status}`,
 		});
@@ -666,7 +781,8 @@ export const createReturns = (product, service) => {
 		const body = bodyOf(ctx);
 		const note = checkNote(body.note);
 		if (!note.ok) throw service.invalid('note', note.message);
-		if (!allows('refund', claim)) throw problem('move_not_allowed', `A ${claim.status} claim cannot be refunded.`);
+		if (!allows('refund', claim)) throw problem('move_not_allowed', `A ${claim.role} claim cannot be refunded.`);
+		const status = (await targetOf(s, claim, 'refunded', body.status)).key;
 		const order = await findOrder(data, { id: claim.orderId });
 		if (!order) throw problem('not_found', 'The order of this claim is gone.');
 		const how = checkRefundMethod(
@@ -681,17 +797,23 @@ export const createReturns = (product, service) => {
 		const amount = body.amount;
 		if (!Number.isSafeInteger(amount) || amount < 1 || amount > cap)
 			throw service.invalid('amount', `The refund is a whole amount in minor units from 1 to ${cap}.`);
-		// the claim's first refund (one Payments refused after all gave the claim its refund back, its units counted)
-		const first = claim.refundAmount === 0 && !claim.history.some((entry) => entry.status === 'refunded');
+		// the claim's first money back (one Payments refused after all gave the claim its refund back, its units counted)
+		const first = firstMoney(claim);
 		const total = claim.refundAmount + amount;
 		const money = (await s.format()).money(amount, order.totals.currency);
 		const at = new Date(service.now());
-		const entry = { at, status: 'refunded', ...byActor(service.actor(ctx)), note: note.note || money };
+		const entry = { at, status, role: 'refunded', ...byActor(service.actor(ctx)), note: note.note || money };
 		// reserve the refund on the claim first, so two refunds at once cannot both pass the cap
 		const reserved = await claims(data).updateOne(
 			{ websiteId: data.websiteId, id: claim.id, status: claim.status, refundAmount: claim.refundAmount },
 			{
-				$set: { status: 'refunded', refundAmount: total, refundMethod: how.method, refundReference: how.reference },
+				$set: {
+					status,
+					role: 'refunded',
+					refundAmount: total,
+					refundMethod: how.method,
+					refundReference: how.reference,
+				},
 				$push: { history: entry },
 			},
 		);
@@ -711,8 +833,10 @@ export const createReturns = (product, service) => {
 				claim: {
 					id: claim.id,
 					refundAmount: total,
+					status,
 					before: {
 						status: claim.status,
+						role: claim.role,
 						refundAmount: claim.refundAmount,
 						refundId: claim.refundId ?? null,
 						refundMethod: claim.refundMethod ?? null,
@@ -726,6 +850,7 @@ export const createReturns = (product, service) => {
 				{
 					$set: {
 						status: claim.status,
+						role: claim.role,
 						refundAmount: claim.refundAmount,
 						...(claim.refundMethod === undefined ? {} : { refundMethod: claim.refundMethod }),
 						...(claim.refundReference === undefined ? {} : { refundReference: claim.refundReference }),
@@ -746,7 +871,36 @@ export const createReturns = (product, service) => {
 				},
 			},
 		);
-		// the order: on the first refund, the units returned
+		await moneyBack(s, data, order, claim, first, true);
+		await service.log(ctx, 'return.refunded', claim.id, { label: claimLabel(claim), detail: `Refunded ${money}` });
+		const refunded = await claimOf(data, claim.id);
+		if (refunded.status !== claim.status)
+			await service.emit('return.status_changed', s, { claim: refunded, from: claim.status, to: refunded.status });
+		await tell(s, order, refunded);
+		return { ...(await detailOf(s, refunded)), ...warningsOf(done.warnings) };
+	};
+
+	/**
+	 * Whether a claim has given no money back yet (a refund Payments refused after all gave the claim its refund back,
+	 * its units counted: its history keeps that refund).
+	 * @param {ReturnRecord} claim
+	 */
+	const firstMoney = (claim) =>
+		claim.refundAmount === 0 &&
+		!((claim.creditAmount ?? 0) > 0) &&
+		!claim.history.some(
+			(entry) =>
+				/** @type {{ role?: string }} */ (entry).role === 'refunded' ||
+				/** @type {{ role?: string }} */ (entry).role === 'credited',
+		);
+
+	/**
+	 * After a claim's refund or store credit: on its first money back the order's lines count the units as returned;
+	 * loyalty points go back as the `pointsBack` setting says (a store credit never completes the order's refund).
+	 * @param {Site} s @param {WebsiteData} data @param {OrderRecord} order the order before the money went back
+	 * @param {ReturnRecord} claim the claim before it @param {boolean} first @param {boolean} refunded
+	 */
+	const moneyBack = async (s, data, order, claim, first, refunded) => {
 		if (first) {
 			const returned = claim.lines.map((line, index) => [`lines.$[l${index}].returnedQuantity`, line.quantity]);
 			const filters = claim.lines.map((line, index) => ({ [`l${index}.id`]: line.lineId }));
@@ -769,7 +923,7 @@ export const createReturns = (product, service) => {
 				// them already)
 				const wanted =
 					pointsBack === 'full_refund_only'
-						? after.payment.refunded >= after.payment.paid && order.payment.refunded < order.payment.paid
+						? refunded && after.payment.refunded >= after.payment.paid && order.payment.refunded < order.payment.paid
 							? order.promotions.pointsEarned
 							: 0
 						: first
@@ -796,12 +950,109 @@ export const createReturns = (product, service) => {
 				}
 			}
 		}
-		await service.log(ctx, 'return.refunded', claim.id, { label: claimLabel(claim), detail: `Refunded ${money}` });
-		const refunded = await claimOf(data, claim.id);
-		if (refunded.status !== claim.status)
-			await service.emit('return.status_changed', s, { claim: refunded, from: claim.status, to: refunded.status });
-		await tell(s, order, refunded);
-		return { ...(await detailOf(s, refunded)), ...warningsOf(done.warnings) };
+	};
+
+	/**
+	 * Give store credit on a claim whose kind allows it (E18 outcome `store_credit`; more may be given later): a one-use
+	 * code of the amount (a fixed coupon the shopper uses at checkout, so the Coupons feature must be on), never more
+	 * than what the claim's lines were paid less what it refunded or credited, nor more than the order was paid less its
+	 * refunds. The claim moves to its credited status (or the one staff name), the units count as returned and the points
+	 * go back as on a first refund; the shopper's message carries the code.
+	 * @param {any} ctx
+	 */
+	const credit = async (ctx) => {
+		const s = await service.site(ctx);
+		const data = await s.data();
+		const claim = await claimOf(data, ctx.params.id);
+		const body = bodyOf(ctx);
+		const note = checkNote(body.note);
+		if (!note.ok) throw service.invalid('note', note.message);
+		if (!allows('credit', claim)) throw problem('move_not_allowed', `A ${claim.role} ${claim.kind} claim cannot be credited.`);
+		if (!s.has('coupons'))
+			throw problem('feature_off', 'Store credit is given as a one-use code: turn on the Coupons feature first.');
+		const status = (await targetOf(s, claim, 'credited', body.status)).key;
+		const order = await findOrder(data, { id: claim.orderId });
+		if (!order) throw problem('not_found', 'The order of this claim is gone.');
+		const cap = creditCap(order, claim);
+		const amount = body.amount;
+		if (!Number.isSafeInteger(amount) || amount < 1 || amount > cap)
+			throw service.invalid('amount', `The store credit is a whole amount in minor units from 1 to ${cap}.`);
+		const first = firstMoney(claim);
+		const given = (claim.creditAmount ?? 0) + amount;
+		const money = (await s.format()).money(amount, order.totals.currency);
+		const code = drawCode(CREDIT_PREFIX, byteSource());
+		const entry = {
+			at: new Date(service.now()),
+			status,
+			role: 'credited',
+			...byActor(service.actor(ctx)),
+			note: note.note || money,
+		};
+		// reserve the credit on the claim first, so two credits at once cannot both pass the cap
+		const reserved = await claims(data).updateOne(
+			{
+				websiteId: data.websiteId,
+				id: claim.id,
+				status: claim.status,
+				creditAmount: claim.creditAmount ?? { $in: [null, 0] },
+			},
+			{
+				$set: { status, role: 'credited', creditAmount: given },
+				$push: { history: entry, creditCodes: code },
+			},
+		);
+		if (reserved.modifiedCount !== 1) throw problem('move_not_allowed', 'The claim changed meanwhile; reload it.');
+		const coupon = checkCouponInput({ code, type: 'fixed', value: amount, limit: 1, perCustomer: 1 });
+		if (!coupon.ok) throw new Error(`store credit code: ${coupon.message}`);
+		await insertOffers(data, 'coupons', [{ id: createId(ID_PREFIX.coupon), ...coupon.value, used: 0 }]);
+		await moneyBack(s, data, order, claim, first, false);
+		await service.log(ctx, 'return.credited', claim.id, { label: claimLabel(claim), detail: `Store credit ${money}` });
+		const credited = await claimOf(data, claim.id);
+		if (credited.status !== claim.status)
+			await service.emit('return.status_changed', s, { claim: credited, from: claim.status, to: credited.status });
+		await tell(s, order, credited);
+		return detailOf(s, credited);
+	};
+
+	/**
+	 * Move a claim to another status of its role (E18: approved → "label sent", received → "inspecting" …), with a
+	 * history entry and a message to the shopper.
+	 * @param {any} ctx
+	 */
+	const restatus = async (ctx) => {
+		const s = await service.site(ctx);
+		const data = await s.data();
+		const claim = await claimOf(data, ctx.params.id);
+		const body = bodyOf(ctx);
+		const note = checkNote(body.note);
+		if (!note.ok) throw service.invalid('note', note.message);
+		const { statuses } = await listsOf(s);
+		const target = statusIn(statuses, claim.role, typeof body.status === 'string' && body.status ? body.status : null);
+		if (!target || target.key === claim.status || typeof body.status !== 'string')
+			throw service.invalid('status', `status is another key of the claim_statuses list with the role ${claim.role}.`);
+		const moved = /** @type {StoredClaim | null} */ (
+			await claims(data).findOneAndUpdate(
+				{ websiteId: data.websiteId, id: claim.id, status: claim.status },
+				{
+					$set: { status: target.key },
+					$push: {
+						history: {
+							at: new Date(service.now()),
+							status: target.key,
+							role: claim.role,
+							...byActor(service.actor(ctx)),
+							note: note.note,
+						},
+					},
+				},
+				{ returnDocument: 'after', ...NO_ID },
+			)
+		);
+		if (!moved) throw problem('move_not_allowed', 'The claim changed meanwhile; reload it.');
+		await service.log(ctx, 'return.status', claim.id, { label: claimLabel(claim), detail: `${claim.status} → ${target.key}` });
+		await service.emit('return.status_changed', s, { claim: moved, from: claim.status, to: target.key });
+		await tell(s, await findOrder(data, { id: claim.orderId }), moved);
+		return detailOf(s, moved);
 	};
 
 	/**
@@ -812,7 +1063,7 @@ export const createReturns = (product, service) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
 		const claim = await claimOf(data, ctx.params.id);
-		if (!allows('restock', claim)) throw problem('move_not_allowed', `A ${claim.status} claim cannot be restocked.`);
+		if (!allows('restock', claim)) throw problem('move_not_allowed', `A ${claim.role} claim cannot be restocked.`);
 		const left = linesToRestock(claim).map((line) => line.lineId);
 		if (left.length === 0 || (await restockLines(s, ctx, data, claim, left)) === 0)
 			throw problem('conflict', 'This claim was already restocked.');
@@ -851,7 +1102,8 @@ export const createReturns = (product, service) => {
 				.find({ websiteId: data.websiteId, userId: { $in: users } }, NO_ID)
 				.toArray()
 		);
-		return { returnClaims: rows.map(shopperView) };
+		const lists = await listsOf(s);
+		return { returnClaims: rows.map((row) => shopperView(row, lists)) };
 	};
 
 	/**
@@ -941,6 +1193,14 @@ export const createReturns = (product, service) => {
 		}),
 		defineRoute({
 			method: 'GET',
+			path: '/v1/returns/lists',
+			auth: 'server',
+			feature: 'returns',
+			rateLimit: SERVER,
+			handler: claimLists,
+		}),
+		defineRoute({
+			method: 'GET',
 			path: '/v1/returns/:id',
 			auth: 'server',
 			feature: 'returns',
@@ -1014,6 +1274,23 @@ export const createReturns = (product, service) => {
 		}),
 		defineRoute({
 			method: 'POST',
+			path: '/v1/returns/:id/credit',
+			auth: 'server',
+			feature: 'returns',
+			idempotent: true,
+			rateLimit: SERVER,
+			handler: credit,
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/returns/:id/status',
+			auth: 'server',
+			feature: 'returns',
+			rateLimit: SERVER,
+			handler: restatus,
+		}),
+		defineRoute({
+			method: 'POST',
 			path: '/v1/returns/:id/notes',
 			auth: 'server',
 			feature: 'returns',
@@ -1048,6 +1325,15 @@ export const createReturns = (product, service) => {
 			permission: 'returns.manage',
 			rateLimit: SERVER,
 			handler: claimCounts.counts,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/returns/lists',
+			auth: 'ticket',
+			feature: 'returns',
+			permission: 'returns.manage',
+			rateLimit: SERVER,
+			handler: claimLists,
 		}),
 		defineRoute({
 			method: 'GET',
@@ -1130,6 +1416,25 @@ export const createReturns = (product, service) => {
 			permission: 'returns.manage',
 			rateLimit: SERVER,
 			handler: move('repair'),
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/admin/returns/:id/credit',
+			auth: 'ticket',
+			feature: 'returns',
+			permission: 'returns.manage',
+			idempotent: true,
+			rateLimit: SERVER,
+			handler: credit,
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/admin/returns/:id/status',
+			auth: 'ticket',
+			feature: 'returns',
+			permission: 'returns.manage',
+			rateLimit: SERVER,
+			handler: restatus,
 		}),
 		defineRoute({
 			method: 'POST',

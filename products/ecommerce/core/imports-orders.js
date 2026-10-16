@@ -37,7 +37,7 @@ import {
 } from './orders.js';
 import { FIELD_LIMITS, PLAIN_SERIAL_RULE, checkFieldValues, isPlainSerial } from './fields.js';
 import { balanceOf, expireLots } from './points.js';
-import { CLAIM_KINDS, CLAIM_STATUSES, checkClaimInput, checkNote, plainText } from './returns.js';
+import { DEFAULT_CLAIM_KINDS, DEFAULT_CLAIM_STATUSES, checkClaimInput, checkNote, plainText } from './returns.js';
 import { OTHER_WAY, PAYMENT_KINDS, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
 import { REVIEW_STATUSES, checkReply, checkReviewInput } from './reviews.js';
 
@@ -54,10 +54,11 @@ import { REVIEW_STATUSES, checkReply, checkReviewInput } from './reviews.js';
  * currency (`catalog.currency`), its phone rules (as checkout reads phones, K12: `checkout.defaultCallingCode`, else
  * the business.json country's calling code, and `trunkPrefix`; so national numbers read as the shop's), what guests
  * are known by (`checkout.guestIdentity`, a guest record's key), its order and customer fields (imported values are
- * checked as staff's are) and the time of the call.
+ * checked as staff's are), its claim kinds and statuses (E18) and the time of the call.
  * @typedef {{ now: number, flow: OrderFlow, numbers: import('./order-numbers.js').NumberForm, currency: string,
  *   phoneRules: { defaultCallingCode: string, trunkPrefix: string }, guestIdentity: import('./guests.js').GuestIdentity,
- *   fields: { order: ImportField[], customer: ImportField[] } }} ImportRules
+ *   fields: { order: ImportField[], customer: ImportField[] },
+ *   claims: { kinds: ReadonlyArray<import('./returns.js').ClaimKind>, statuses: ReadonlyArray<import('./returns.js').ClaimStatus> } }} ImportRules
  */
 
 /** The longest name of a person (checkout's guest and address name, IMP-31) and email address. */
@@ -373,11 +374,20 @@ const answer = (c, value) => (c.errors.length > 0 ? { ok: false, errors: c.error
 /**
  * The rules of one import call from what the website has (`prepare`).
  * @param {{ flow: unknown, checkout: Record<string, unknown>, catalog: Record<string, unknown>, country: unknown,
- *   now: number, fields?: ImportRules['fields'] }} input `country`: business.json's; `fields`: the shop's order and
- *   customer fields (none: no field value is taken)
+ *   now: number, fields?: ImportRules['fields'], claims?: ImportRules['claims'] }} input `country`: business.json's;
+ *   `fields`: the shop's order and customer fields (none: no field value is taken); `claims`: the claim kinds and
+ *   statuses (none: the seeded ones)
  * @returns {ImportRules}
  */
-export const importRules = ({ flow, checkout, catalog, country, now, fields = { order: [], customer: [] } }) => {
+export const importRules = ({
+	flow,
+	checkout,
+	catalog,
+	country,
+	now,
+	fields = { order: [], customer: [] },
+	claims = { kinds: DEFAULT_CLAIM_KINDS, statuses: DEFAULT_CLAIM_STATUSES },
+}) => {
 	const { defaultCallingCode, trunkPrefix } = phoneRules(checkout, country);
 	return {
 		now,
@@ -387,6 +397,7 @@ export const importRules = ({ flow, checkout, catalog, country, now, fields = { 
 		phoneRules: { defaultCallingCode, trunkPrefix },
 		guestIdentity: guestRules(checkout).identity,
 		fields,
+		claims,
 	};
 };
 
@@ -1233,8 +1244,11 @@ export const checkImportedReturn = (record, rules) => {
 			lines: lines.map(({ lineId, quantity }) => ({ lineId, quantity })),
 			reason: record.reason,
 		},
-		{ maxPhotos: 0, kinds: CLAIM_KINDS },
+		// any kind of the list, staff-only ones too
+		{ maxPhotos: 0, kinds: rules.claims.kinds.map((kind) => ({ key: kind.key, shoppers: true })) },
 	);
+	const kind = rules.claims.kinds.find((entry) => entry.key === (claim.ok ? claim.value.kind : ''));
+	const statusKeys = rules.claims.statuses.map((status) => status.key);
 	if (!claim.ok) c.refused(claim);
 	const photos = c.list(record.photos, '/photos', MAX_PHOTOS).map((raw, index) => {
 		const path = `/photos/${index}`;
@@ -1253,7 +1267,7 @@ export const checkImportedReturn = (record, rules) => {
 		if (!note.ok) c.fail(`${path}/note`, note.message);
 		return {
 			at: c.time(input.at, `${path}/at`, now),
-			status: c.oneOf(input.status, CLAIM_STATUSES, `${path}/status`),
+			status: c.oneOf(input.status, statusKeys, `${path}/status`),
 			by: c.text(input.by, `${path}/by`, MAX_PERSON),
 			note: note.ok ? note.note : '',
 		};
@@ -1280,11 +1294,14 @@ export const checkImportedReturn = (record, rules) => {
 		orderId: claim.ok ? claim.value.orderId : '',
 		orderNumber: c.text(record.orderNumber, '/orderNumber', 40, { required: true }),
 		userId: c.user(record.userId, '/userId'),
-		kind: claim.ok ? claim.value.kind : 'return',
+		kind: kind?.key ?? '',
+		window: kind?.window ?? 'return',
+		outcomes: kind ? [...kind.outcomes] : [],
 		lines,
 		reason: claim.ok ? claim.value.reason : '',
 		photos,
-		status: c.oneOf(record.status, CLAIM_STATUSES, '/status'),
+		status: c.oneOf(record.status, statusKeys, '/status'),
+		role: rules.claims.statuses.find((status) => status.key === record.status)?.role ?? 'requested',
 		refundAmount: c.whole(record.refundAmount, '/refundAmount', { fallback: 0 }),
 		refundId: missing(record.refundId) || record.refundId === '' ? null : c.text(record.refundId, '/refundId', 80),
 		restockedAt: c.time(record.restockedAt, '/restockedAt', now, { nullable: true }),

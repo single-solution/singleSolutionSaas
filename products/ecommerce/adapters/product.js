@@ -56,6 +56,8 @@ import importSettings from '../schemas/import.settings.json' with { type: 'json'
 import messages from '../schemas/messages.json' with { type: 'json' };
 import { flowChangeProblems } from '../core/flow.js';
 import { typeChangeProblems } from '../core/item-types.js';
+import { COLLECTIONS } from '../core/model.js';
+import { claimStatusProblems } from '../core/returns.js';
 import { EVENT_TYPES } from '../core/events.js';
 import { LIST_WORDS, setupSummaries } from '../core/setup-sheet.js';
 import { createAi } from './ai.js';
@@ -228,6 +230,19 @@ export const createProductInstance = (options) => {
 				if (!kitProduct || (await kitProduct.connections.value(websiteId, 'database')) === null) return [];
 				const counts = await createOrdersStore(await kitProduct.data.forWebsite(websiteId)).statusCounts();
 				return flowChangeProblems(saved, next, counts);
+			},
+			// a claim status that has claims keeps its key and role (E18)
+			claim_statuses: async (websiteId, _saved, next) => {
+				if (!kitProduct || (await kitProduct.connections.value(websiteId, 'database')) === null) return [];
+				const data = await kitProduct.data.forWebsite(websiteId);
+				const used = await data
+					.collection(COLLECTIONS.returns)
+					.aggregate([{ $match: { websiteId } }, { $group: { _id: { status: '$status', role: '$role' } } }])
+					.toArray();
+				return claimStatusProblems(
+					next,
+					used.map((row) => ({ status: String(row._id?.status ?? ''), role: String(row._id?.role ?? '') })),
+				);
 			},
 			// item types name existing fields of the right kind, and keep what products, categories and units in stock
 			// rely on (a used type stays with its kind; a type with units in stock keeps its units' fields; a type whose items

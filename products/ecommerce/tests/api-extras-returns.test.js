@@ -10,6 +10,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { placeOrder } from '../adapters/ledger.js';
 import { INDEXES } from '../adapters/product.js';
 import { COLLECTIONS } from '../core/model.js';
+import { DEFAULT_CLAIM_KINDS } from '../core/returns.js';
 import { readyShop, storedOrder } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
@@ -26,7 +27,10 @@ beforeAll(async () => {
 	shop = await readyShop();
 	data = await shop.db();
 	await data.ensureIndexes(INDEXES);
-	await shop.setting('returns', 'kinds', ['return', 'warranty', 'exchange']);
+	await shop.list(
+		'claim_kinds',
+		DEFAULT_CLAIM_KINDS.map((kind) => ({ ...kind, shoppers: true })),
+	);
 	await shop.setting('returns', 'warrantyTime', 365);
 });
 afterAll(async () => shop.product.close());
@@ -169,14 +173,16 @@ describe('claim counts', () => {
 			expect((await get(`${base}/count?kind=warranty&orderId=${other.id}`)).json).toEqual({ count: 1, capped: false });
 			expect((await get(`${base}/count?status=approved&orderId=${other.id}`)).json).toEqual({ count: 0, capped: false });
 			expect((await get(`${base}/count?userId=usr_nobody000000`)).json).toEqual({ count: 0, capped: false });
-			// another status filters nothing
-			expect((await get(`${base}/count?status=lost&orderId=${placed.id}`)).json).toEqual({ count: 1, capped: false });
+			// statuses are the merchant's keys: one no claim has finds none; a role filters by role (E18)
+			expect((await get(`${base}/count?status=lost&orderId=${placed.id}`)).json).toEqual({ count: 0, capped: false });
+			expect((await get(`${base}/count?role=approved&orderId=${placed.id}`)).json).toEqual({ count: 1, capped: false });
 
 			const counts = await get(`${base}/counts?by=status&userId=${SARA}`);
 			expect(counts.status).toBe(200);
 			expect(counts.json.groups).toMatchObject({ approved: 1, requested: 1 });
 			expect(counts.json.total).toBe(Object.values(counts.json.groups).reduce((sum, n) => Number(sum) + Number(n), 0));
-			const wrong = await get(`${base}/counts?by=kind`);
+			expect((await get(`${base}/counts?by=kind&userId=${SARA}`)).json.groups).toMatchObject({ return: 1, warranty: 1 });
+			const wrong = await get(`${base}/counts?by=reason`);
 			expect([wrong.status, codeOf(wrong)]).toEqual([422, 'validation_failed']);
 		}
 	});
@@ -252,6 +258,7 @@ describe('claim outcomes', () => {
 		expect(mine.json.items[0].history.at(-1)).toEqual({
 			at: new Date(shop.now()).toISOString(),
 			status: 'rejected',
+			statusLabel: 'Rejected',
 			note: 'Out of the window',
 		});
 		expect(Object.keys(mine.json.items[0])).not.toContain('notes');

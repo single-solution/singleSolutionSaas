@@ -90,9 +90,9 @@ describe('claim windows', () => {
 			deliveredAt: new Date(NOW - DAY_MS),
 		};
 		const claims = /** @type {any[]} */ ([
-			{ status: 'requested', kind: 'return', refundAmount: 0, lines: [{ lineId: 'oln_1', quantity: 1, serials: ['S1'] }] },
-			{ status: 'rejected', kind: 'return', refundAmount: 0, lines: [{ lineId: 'oln_1', quantity: 1, serials: ['S2'] }] },
-			{ status: 'closed', kind: 'warranty', refundAmount: 0, lines: [{ lineId: 'oln_1', quantity: 1, serials: ['S2'] }] },
+			{ role: 'requested', window: 'return', refundAmount: 0, lines: [{ lineId: 'oln_1', quantity: 1, serials: ['S1'] }] },
+			{ role: 'rejected', window: 'return', refundAmount: 0, lines: [{ lineId: 'oln_1', quantity: 1, serials: ['S2'] }] },
+			{ role: 'closed', window: 'warranty', refundAmount: 0, lines: [{ lineId: 'oln_1', quantity: 1, serials: ['S2'] }] },
 		]);
 		const lines = returnableLines({
 			order,
@@ -117,7 +117,7 @@ describe('claim windows', () => {
 			ok: true,
 			lines: [{ lineId: 'oln_1', quantity: 1, serials: ['S2'] }],
 		});
-		expect(holdsUnits({ status: 'closed', kind: 'warranty', refundAmount: 5 })).toBe(true);
+		expect(holdsUnits({ role: 'closed', window: 'warranty', refundAmount: 5 })).toBe(true);
 	});
 
 	it('check claims, photos and notes', () => {
@@ -182,8 +182,8 @@ describe('claim windows', () => {
 		// never more than was paid and not refunded yet (OR-3): nothing on an order whose payment was not recorded
 		expect(refundCap({ ...order, payment: { ...order.payment, paid: 0 } }, claim)).toBe(0);
 		expect(refundCap({ ...order, payment: { ...order.payment, paid: 1500, refunded: 1000 } }, claim)).toBe(500);
-		expect(actionsOf({ status: 'refunded', restockedAt: new Date() })).toEqual(['refund', 'close']);
-		expect(actionsOf({ status: 'requested', restockedAt: null })).toEqual(['approve', 'reject']);
+		expect(actionsOf({ role: 'refunded', outcomes: ['refund'], restockedAt: new Date() })).toEqual(['refund', 'close']);
+		expect(actionsOf({ role: 'requested', restockedAt: null })).toEqual(['approve', 'reject']);
 	});
 });
 

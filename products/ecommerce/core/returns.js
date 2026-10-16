@@ -1,21 +1,30 @@
 /**
  * Return, warranty and exchange claims (PLAN 0.8.8: claims with time windows per item/grade, photos, approval, refund
- * through Payments when paid online, restock exactly once; E33: exchange claims, fixed reasons, replaced and repaired
- * outcomes, restock per line, refund method and reference, delivery inside the refund cap, the reference prefix).
- * Pure rules: the windows of an order line (the product's own days, else its condition grade's, else the `returns`
- * settings), what is still claimable, checking a shopper's claim, the staff moves between statuses, the refund cap and
- * the loyalty points taken back. No I/O.
+ * through Payments when paid online, restock exactly once; E33: refund method and reference, restock per line,
+ * delivery inside the refund cap, the reference prefix; fixed-choices E17/E18: the merchant's claim kinds and statuses).
+ *
+ * Like the order flow, the merchant names what a claim can be and where it stands, and code relies only on fixed parts:
+ * - the `claim_kinds` list: each kind ({ key, label }) is counted in the `return` or the `warranty` window, ends in some
+ *   of the fixed outcomes (`refund`, `replace`, `repair`, `store_credit`) and may be offered to shoppers or made by staff
+ *   only (seeded with today's return, warranty and exchange);
+ * - the `claim_statuses` list: each status ({ key, label }) has one of the fixed roles ({@link CLAIM_ROLES}); every role
+ *   has at least one status, and a role may have more (approved: "label sent", received: "inspecting" …). Staff actions
+ *   lead into a role (its first status, or the one they name), and staff move a claim between the statuses of one role.
+ *
+ * A claim keeps its kind's window and outcomes and its status's role when made, so editing the lists never changes
+ * what an existing claim may do. Pure rules: the windows of an order line (the product's own time, else its condition
+ * grade's, else the `returns` settings), what is still claimable, checking a shopper's claim, the staff moves, the
+ * refund and store credit caps and the loyalty points taken back. No I/O.
  * @module
  */
 import { endOf, isDuration, settingDuration } from './durations.js';
 import { gradesFor } from './grades.js';
+import { boolField, checkNamedList, oneOf } from './named-lists.js';
 import { OTHER_WAY, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
 
 /** @typedef {import('./model.js').ReturnRecord} ReturnRecord */
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {import('./model.js').OrderLineRecord} OrderLineRecord */
-/** @typedef {ReturnRecord['status']} ClaimStatus */
-/** @typedef {ReturnRecord['kind']} ClaimKind */
 
 export const DAY_MS = 86_400_000;
 /** Lines in one claim, at most. */
@@ -30,15 +39,164 @@ const MAX_REFERENCE = 120;
 export const PHOTO_SECONDS = 300;
 /** Photo types a shopper may upload, with their file extension. */
 const PHOTO_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' });
-export const CLAIM_KINDS = Object.freeze(/** @type {ClaimKind[]} */ (['return', 'warranty', 'exchange']));
-export const CLAIM_STATUSES = Object.freeze(
-	/** @type {ClaimStatus[]} */ (['requested', 'approved', 'rejected', 'received', 'refunded', 'replaced', 'repaired', 'closed']),
-);
-/** How a refund was given back: `online` through Payments, the rest recorded by staff (E33, as E26). */
+
 /**
  * How a claim's money goes back: `payments` (through Payments), a payment method key of the website's list, or `other`.
  * @typedef {string} RefundMethod
  */
+
+/** The fixed roles of claim statuses (code relies on them; the merchant names the statuses). */
+export const CLAIM_ROLES = Object.freeze(
+	/** @type {const} */ ([
+		'requested',
+		'approved',
+		'rejected',
+		'received',
+		'refunded',
+		'credited',
+		'replaced',
+		'repaired',
+		'closed',
+	]),
+);
+/** @typedef {typeof CLAIM_ROLES[number]} ClaimRole */
+/** What a claim kind may end in. */
+export const CLAIM_OUTCOMES = Object.freeze(/** @type {const} */ (['refund', 'store_credit', 'replace', 'repair']));
+/** @typedef {typeof CLAIM_OUTCOMES[number]} ClaimOutcome */
+/** The windows a kind is counted in. */
+export const CLAIM_WINDOWS = Object.freeze(/** @type {const} */ (['return', 'warranty']));
+/** @typedef {typeof CLAIM_WINDOWS[number]} WindowName */
+/** Engine caps of the lists. */
+export const CLAIM_LIST_LIMITS = Object.freeze({ kinds: 10, statuses: 20 });
+
+/**
+ * @typedef {{ key: string, label: string, window: WindowName, outcomes: ClaimOutcome[], shoppers: boolean }} ClaimKind
+ * @typedef {{ key: string, label: string, role: ClaimRole }} ClaimStatus
+ */
+
+/** The claim kinds before the merchant saves the list (today's three). @type {ReadonlyArray<ClaimKind>} */
+export const DEFAULT_CLAIM_KINDS = Object.freeze([
+	{ key: 'return', label: 'Return', window: 'return', outcomes: ['refund'], shoppers: true },
+	{
+		key: 'warranty',
+		label: 'Warranty repair or replacement',
+		window: 'warranty',
+		outcomes: ['refund', 'replace', 'repair'],
+		shoppers: true,
+	},
+	{ key: 'exchange', label: 'Exchange', window: 'return', outcomes: ['refund', 'replace'], shoppers: false },
+]);
+
+/** The claim statuses before the merchant saves the list: one per role. @type {ReadonlyArray<ClaimStatus>} */
+export const DEFAULT_CLAIM_STATUSES = Object.freeze([
+	{ key: 'requested', label: 'Requested', role: 'requested' },
+	{ key: 'approved', label: 'Approved', role: 'approved' },
+	{ key: 'received', label: 'Received by the shop', role: 'received' },
+	{ key: 'refunded', label: 'Refunded', role: 'refunded' },
+	{ key: 'credited', label: 'Store credit given', role: 'credited' },
+	{ key: 'replaced', label: 'Replaced', role: 'replaced' },
+	{ key: 'repaired', label: 'Repaired', role: 'repaired' },
+	{ key: 'closed', label: 'Closed', role: 'closed' },
+	{ key: 'rejected', label: 'Rejected', role: 'rejected' },
+]);
+
+/**
+ * Check the `claim_kinds` list: each kind a key and name, its window (`return` | `warranty`), its outcomes (at least
+ * one, each once) and whether shoppers may make it.
+ * @param {unknown} value
+ * @returns {{ ok: true, value: ClaimKind[] } | { ok: false, errors: Array<{ path: string, message: string }> }}
+ */
+export const checkClaimKinds = (value) =>
+	/** @type {{ ok: true, value: ClaimKind[] } | { ok: false, errors: Array<{ path: string, message: string }> }} */ (
+		checkNamedList(value, {
+			max: CLAIM_LIST_LIMITS.kinds,
+			what: 'claim kinds',
+			fields: (entry, fail) => {
+				const outcomes = Array.isArray(entry.outcomes) ? entry.outcomes : [];
+				if (
+					outcomes.length === 0 ||
+					new Set(outcomes).size !== outcomes.length ||
+					!outcomes.every((outcome) => /** @type {readonly unknown[]} */ (CLAIM_OUTCOMES).includes(outcome))
+				)
+					fail('outcomes', `outcomes are one or more of ${CLAIM_OUTCOMES.join(', ')}, each once.`);
+				return {
+					window: oneOf(entry, 'window', CLAIM_WINDOWS, 'return', fail),
+					outcomes: /** @type {ClaimOutcome[]} */ (CLAIM_OUTCOMES.filter((outcome) => outcomes.includes(outcome))),
+					shoppers: boolField(entry, 'shoppers', true, fail),
+				};
+			},
+		})
+	);
+
+/**
+ * Check the `claim_statuses` list: each status a key, a name and a role; every role has at least one status.
+ * @param {unknown} value
+ * @returns {{ ok: true, value: ClaimStatus[] } | { ok: false, errors: Array<{ path: string, message: string }> }}
+ */
+export const checkClaimStatuses = (value) => {
+	const checked = checkNamedList(value, {
+		max: CLAIM_LIST_LIMITS.statuses,
+		what: 'claim statuses',
+		fields: (entry, fail) => {
+			if (!(/** @type {readonly unknown[]} */ (CLAIM_ROLES).includes(entry.role)))
+				fail('role', `role is one of ${CLAIM_ROLES.join(', ')}.`);
+			return { role: /** @type {ClaimRole} */ (entry.role) };
+		},
+	});
+	if (!checked.ok) return checked;
+	const list = /** @type {ClaimStatus[]} */ (checked.value);
+	const missing = CLAIM_ROLES.filter((role) => !list.some((status) => status.role === role));
+	if (missing.length > 0)
+		return { ok: false, errors: [{ path: '/value', message: `Give every role a status: ${missing.join(', ')} has none.` }] };
+	return { ok: true, value: list };
+};
+
+/**
+ * The status a claim takes in a role: the one named (when it has that role), else the role's first.
+ * @param {ReadonlyArray<ClaimStatus>} statuses
+ * @param {ClaimRole} role
+ * @param {unknown} [named]
+ * @returns {ClaimStatus | null} null: `named` is not a status of this role
+ */
+export const statusIn = (statuses, role, named) => {
+	if (named !== undefined && named !== null && named !== '')
+		return statuses.find((status) => status.key === named && status.role === role) ?? null;
+	return statuses.find((status) => status.role === role) ?? { key: role, label: role, role };
+};
+
+/**
+ * What saving the claim statuses would break: a status that has claims must stay, with the same role.
+ * @param {ReadonlyArray<ClaimStatus>} next
+ * @param {ReadonlyArray<{ status: string, role: string }>} used the status and role pairs claims have
+ * @returns {Array<{ path: string, message: string }>}
+ */
+export const claimStatusProblems = (next, used) =>
+	used
+		.filter(({ status, role }) => !next.some((entry) => entry.key === status && entry.role === role))
+		.map(({ status, role }) => ({
+			path: '/value',
+			message: `Claims are in the status ${status} (${role}): keep it with that role, or move them first.`,
+		}));
+
+/**
+ * What the merchant's staff do to a claim, from which roles, the role it leads to (refund and credit keep giving more
+ * possible; restock does not change the status) and the outcome the claim's kind must allow. `replaced` and
+ * `repaired` are final.
+ * @type {Readonly<Record<'approve' | 'reject' | 'receive' | 'refund' | 'credit' | 'replace' | 'repair' | 'close' | 'restock',
+ *   { from: ClaimRole[], to: ClaimRole | null, outcome?: ClaimOutcome }>>}
+ */
+export const CLAIM_ACTIONS = Object.freeze({
+	approve: { from: ['requested'], to: 'approved' },
+	reject: { from: ['requested', 'approved', 'received'], to: 'rejected' },
+	receive: { from: ['approved'], to: 'received' },
+	refund: { from: ['approved', 'received', 'refunded'], to: 'refunded', outcome: 'refund' },
+	credit: { from: ['approved', 'received', 'credited'], to: 'credited', outcome: 'store_credit' },
+	replace: { from: ['approved', 'received'], to: 'replaced', outcome: 'replace' },
+	repair: { from: ['approved', 'received'], to: 'repaired', outcome: 'repair' },
+	close: { from: ['approved', 'received', 'refunded', 'credited'], to: 'closed' },
+	restock: { from: ['approved', 'received', 'refunded', 'credited', 'replaced', 'closed'], to: null },
+});
+
 /**
  * History entries of a claim the server writes itself (PLAN 0.4.10): the code is kept as `code` and as the `note`
  * (the widgets' words `ordersAdmin.historyNote.<code>`). `restocked`: items went back in stock.
@@ -46,34 +204,16 @@ export const CLAIM_STATUSES = Object.freeze(
 export const CLAIM_NOTES = Object.freeze(/** @type {const} */ (['restocked']));
 /** @typedef {typeof CLAIM_NOTES[number]} ClaimNote */
 
-/**
- * What the merchant's staff do to a claim, from which statuses, and the status it leads to (refund keeps refunding
- * possible for a top-up; restock does not change the status). `replaced` and `repaired` are final (E33): a replacement
- * is for exchange and warranty claims, a repair for warranty claims only (`kinds`).
- * @type {Readonly<Record<'approve' | 'reject' | 'receive' | 'refund' | 'replace' | 'repair' | 'close' | 'restock',
- *   { from: ClaimStatus[], to: ClaimStatus | null, kinds?: ClaimKind[] }>>}
- */
-export const CLAIM_ACTIONS = Object.freeze({
-	approve: { from: ['requested'], to: 'approved' },
-	reject: { from: ['requested', 'approved', 'received'], to: 'rejected' },
-	receive: { from: ['approved'], to: 'received' },
-	refund: { from: ['approved', 'received', 'refunded'], to: 'refunded' },
-	replace: { from: ['approved', 'received'], to: 'replaced', kinds: ['exchange', 'warranty'] },
-	repair: { from: ['approved', 'received'], to: 'repaired', kinds: ['warranty'] },
-	close: { from: ['approved', 'received', 'refunded'], to: 'closed' },
-	restock: { from: ['approved', 'received', 'refunded', 'replaced', 'closed'], to: null },
-});
-
 /** @typedef {keyof typeof CLAIM_ACTIONS} ClaimAction */
 
 /**
- * Whether an action may be taken on a claim of this kind in this status.
+ * Whether an action may be taken on a claim in its role, with the outcomes its kind allows.
  * @param {ClaimAction} action
- * @param {Pick<ReturnRecord, 'status'> & Partial<Pick<ReturnRecord, 'kind'>>} claim
+ * @param {Pick<ReturnRecord, 'role'> & Partial<Pick<ReturnRecord, 'outcomes'>>} claim
  */
 export const allows = (action, claim) => {
-	const { from, kinds } = CLAIM_ACTIONS[action];
-	return from.includes(claim.status) && (!kinds || (claim.kind !== undefined && kinds.includes(claim.kind)));
+	const { from, outcome } = CLAIM_ACTIONS[action];
+	return from.includes(claim.role) && (!outcome || (claim.outcomes ?? []).includes(outcome));
 };
 
 /**
@@ -86,7 +226,7 @@ export const linesToRestock = (claim) =>
 
 /**
  * The actions possible on a claim now.
- * @param {Pick<ReturnRecord, 'status' | 'restockedAt'> & Partial<Pick<ReturnRecord, 'kind' | 'lines'>>} claim
+ * @param {Pick<ReturnRecord, 'role' | 'restockedAt'> & Partial<Pick<ReturnRecord, 'outcomes' | 'lines'>>} claim
  * @returns {ClaimAction[]}
  */
 export const actionsOf = (claim) =>
@@ -96,17 +236,17 @@ export const actionsOf = (claim) =>
 
 /**
  * Whether a claim holds its units (they cannot be claimed again): every claim except a rejected one, a repaired one and
- * a warranty claim closed without a refund (a repair: the item went back to the shopper).
- * @param {Pick<ReturnRecord, 'status' | 'kind' | 'refundAmount'>} claim
+ * a claim of the warranty window closed with no money given (a repair: the item went back to the shopper).
+ * @param {Pick<ReturnRecord, 'role' | 'window' | 'refundAmount'> & Partial<Pick<ReturnRecord, 'creditAmount'>>} claim
  */
 export const holdsUnits = (claim) =>
-	claim.status !== 'rejected' &&
-	claim.status !== 'repaired' &&
-	!(claim.kind === 'warranty' && claim.status === 'closed' && claim.refundAmount === 0);
+	claim.role !== 'rejected' &&
+	claim.role !== 'repaired' &&
+	!(claim.window === 'warranty' && claim.role === 'closed' && claim.refundAmount === 0 && !(Number(claim.creditAmount) > 0));
 
 /**
  * Units of each order line held by claims.
- * @param {Array<Pick<ReturnRecord, 'status' | 'kind' | 'refundAmount' | 'lines'>>} claims
+ * @param {Array<Pick<ReturnRecord, 'role' | 'window' | 'refundAmount' | 'lines'> & Partial<Pick<ReturnRecord, 'creditAmount'>>>} claims
  * @returns {Map<string, { quantity: number, serials: Set<string> }>}
  */
 export const claimedByLine = (claims) => {
@@ -149,8 +289,8 @@ export const windowDefaults = (settings) => ({
 const NONE = Object.freeze({ amount: 0, unit: 'days' });
 
 /**
- * The time of a line's window of one kind: the product's own, else its grade's, else the setting.
- * @param {ClaimKind} kind
+ * The time of a line's window: the product's own, else its grade's, else the setting.
+ * @param {WindowName} kind
  * @param {{ returnTime: Duration | null, warrantyTime: Duration | null } | null} product the product now (null: deleted)
  * @param {GradeTimes | null} grade
  * @param {WindowDefaults} defaults
@@ -180,7 +320,7 @@ export const windowOf = (time, deliveredAt, now) => {
 
 /**
  * What can still be claimed on each line of a delivered order (only physical items are claimed).
- * @param {{ order: Pick<OrderRecord, 'lines' | 'deliveredAt'>, claims: Array<Pick<ReturnRecord, 'status' | 'kind' | 'refundAmount' | 'lines'>>,
+ * @param {{ order: Pick<OrderRecord, 'lines' | 'deliveredAt'>, claims: Array<Pick<ReturnRecord, 'role' | 'window' | 'refundAmount' | 'lines'>>,
  *   products: Map<string, { returnTime: Duration | null, warrantyTime: Duration | null }>, grades: GradeTimes[],
  *   lineage: (categoryIds: string[]) => string[], defaults: WindowDefaults, now: number }} input `lineage`: a line's
  *   categories with those above them, nearest first (`core/catalog-taxonomy.js` `lineageOf`), for the grade a line's
@@ -215,7 +355,7 @@ export const returnableLines = ({ order, claims, products, grades, lineage, defa
 /** @typedef {ReturnType<typeof returnableLines>[number]} ReturnableLine */
 
 /**
- * @typedef {{ orderId: string, kind: ClaimKind, lines: Array<{ lineId: string, quantity: number }>, reason: string,
+ * @typedef {{ orderId: string, kind: string, lines: Array<{ lineId: string, quantity: number }>, reason: string,
  *   photos: string[] }} ClaimInput
  */
 
@@ -235,18 +375,19 @@ const plain = (value) =>
 export const plainText = plain;
 
 /**
- * Check a shopper's claim: its kind one the shop takes (the `kinds` setting) and, when the shop lists reasons, one of
- * them (E33; no list = free text).
+ * Check a shopper's claim: its kind one of the `claim_kinds` list offered to shoppers and, when the shop lists reasons,
+ * one of them or (with `otherReason`) the shopper's own words (E17; no list = free text).
  * @param {unknown} body
- * @param {{ maxPhotos: number, kinds?: readonly string[], reasons?: readonly string[] }} limits
+ * @param {{ maxPhotos: number, kinds?: ReadonlyArray<Pick<ClaimKind, 'key' | 'shoppers'>>, reasons?: readonly string[],
+ *   otherReason?: boolean }} limits
  * @returns {{ ok: true, value: ClaimInput } | { ok: false, field: string, message: string }}
  */
-export const checkClaimInput = (body, { maxPhotos, kinds = ['return', 'warranty'], reasons = [] }) => {
+export const checkClaimInput = (body, { maxPhotos, kinds = DEFAULT_CLAIM_KINDS, reasons = [], otherReason = true }) => {
 	const input = typeof body === 'object' && body !== null ? /** @type {Record<string, unknown>} */ (body) : {};
 	if (typeof input.orderId !== 'string' || !/^ord_[A-Za-z0-9]{1,64}$/.test(input.orderId))
 		return { ok: false, field: 'orderId', message: 'Name the order.' };
-	const taken = CLAIM_KINDS.filter((kind) => kinds.includes(kind));
-	if (!taken.includes(/** @type {ClaimKind} */ (input.kind)))
+	const taken = kinds.filter((kind) => kind.shoppers).map((kind) => kind.key);
+	if (typeof input.kind !== 'string' || !taken.includes(input.kind))
 		return { ok: false, field: 'kind', message: `kind is ${taken.join(' or ') || 'not open'}.` };
 	if (!Array.isArray(input.lines) || input.lines.length === 0 || input.lines.length > MAX_CLAIM_LINES)
 		return { ok: false, field: 'lines', message: `Choose 1 to ${MAX_CLAIM_LINES} items.` };
@@ -263,33 +404,31 @@ export const checkClaimInput = (body, { maxPhotos, kinds = ['return', 'warranty'
 	const reason = plain(input.reason);
 	if (reason === '' || reason.length > MAX_REASON)
 		return { ok: false, field: 'reason', message: `Say why, in at most ${MAX_REASON} characters.` };
-	if (reasons.length > 0 && !reasons.includes(reason))
+	if (reasons.length > 0 && !otherReason && !reasons.includes(reason))
 		return { ok: false, field: 'reason', message: 'Pick one of the reasons.' };
 	const photos = input.photos ?? [];
 	if (!Array.isArray(photos) || photos.length > maxPhotos || !photos.every((key) => typeof key === 'string'))
 		return { ok: false, field: 'photos', message: `Add at most ${maxPhotos} photos.` };
 	if (new Set(photos).size !== photos.length) return { ok: false, field: 'photos', message: 'Add each photo once.' };
-	return { ok: true, value: { orderId: input.orderId, kind: /** @type {ClaimKind} */ (input.kind), lines, reason, photos } };
+	return { ok: true, value: { orderId: input.orderId, kind: input.kind, lines, reason, photos } };
 };
 
 /**
- * The claim's lines if every one is claimable now (its window of this kind open, enough units left; an exchange uses
- * the return window; a measured line — its quantity in thousandths of its unit — in its steps), with the serial
+ * The claim's lines if every one is claimable now (the window of the claim's kind open, enough units left; a measured line — its quantity in thousandths of its unit — in its steps), with the serial
  * numbers of the units claimed (the line's serials not held by other claims, in order).
- * @param {ClaimKind} kind
+ * @param {WindowName} span the claim kind's window
  * @param {ClaimInput['lines']} wanted
  * @param {ReturnableLine[]} returnable
  * @returns {{ ok: true, lines: ReturnRecord['lines'] } | { ok: false, lineId: string,
  *   reason: 'unknown' | 'window_closed' | 'quantity' | 'step' }}
  */
-export const planClaim = (kind, wanted, returnable) => {
+export const planClaim = (span, wanted, returnable) => {
 	/** @type {ReturnRecord['lines']} */
 	const lines = [];
 	for (const want of wanted) {
 		const found = returnable.find((entry) => entry.line.id === want.lineId);
 		if (!found) return { ok: false, lineId: want.lineId, reason: 'unknown' };
-		if (!found[kind === 'warranty' ? 'warranty' : 'return'].open)
-			return { ok: false, lineId: want.lineId, reason: 'window_closed' };
+		if (!found[span].open) return { ok: false, lineId: want.lineId, reason: 'window_closed' };
 		if (want.quantity > found.claimable) return { ok: false, lineId: want.lineId, reason: 'quantity' };
 		const step = found.line.measure?.step ?? 1;
 		if (want.quantity % step !== 0 && want.quantity !== found.claimable)
@@ -315,14 +454,35 @@ export const claimValue = (order, claim) =>
 
 /**
  * The most that can still be refunded on a claim: what its lines were paid (plus the delivery still left to refund,
- * when the `refundDelivery` setting is on) minus what this claim refunded, never more than what the order was paid
- * minus everything refunded on it (OR-3: money never received is never refunded).
+ * when the `refundDelivery` setting is on) minus what this claim refunded or gave as store credit, never more than what
+ * the order was paid minus everything refunded on it (OR-3: money never received is never refunded).
  * @param {Pick<OrderRecord, 'lines' | 'totals' | 'payment'>} order
- * @param {Pick<ReturnRecord, 'lines' | 'refundAmount'>} claim
+ * @param {Pick<ReturnRecord, 'lines' | 'refundAmount'> & Partial<Pick<ReturnRecord, 'creditAmount'>>} claim
  * @param {number} [delivery] the delivery this claim may also refund ({@link deliveryLeft})
  */
 export const refundCap = (order, claim, delivery = 0) =>
-	Math.max(0, Math.min(claimValue(order, claim) + delivery - claim.refundAmount, order.payment.paid - order.payment.refunded));
+	Math.max(
+		0,
+		Math.min(
+			claimValue(order, claim) + delivery - claim.refundAmount - (claim.creditAmount ?? 0),
+			order.payment.paid - order.payment.refunded,
+		),
+	);
+
+/**
+ * The most store credit a claim can still give (E18 outcome `store_credit`): what its lines were paid minus what it
+ * refunded or credited, never more than what the order was paid minus everything refunded on it.
+ * @param {Pick<OrderRecord, 'lines' | 'payment'>} order
+ * @param {Pick<ReturnRecord, 'lines' | 'refundAmount'> & Partial<Pick<ReturnRecord, 'creditAmount'>>} claim
+ */
+export const creditCap = (order, claim) =>
+	Math.max(
+		0,
+		Math.min(
+			claimValue(order, claim) - claim.refundAmount - (claim.creditAmount ?? 0),
+			order.payment.paid - order.payment.refunded,
+		),
+	);
 
 /**
  * The order's delivery fee not yet refunded by its other claims (a claim refunded beyond what its lines were paid gave

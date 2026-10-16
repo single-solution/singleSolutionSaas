@@ -310,10 +310,13 @@ describe('K2 and K9: the acting staff member and labeled activity', () => {
 			orderNumber: order.number,
 			userId: order.customer.userId,
 			kind: 'return',
+			window: 'return',
+			outcomes: ['refund'],
 			lines: [{ lineId: /** @type {any} */ (order.lines[0]).id, quantity: 1, serials: [] }],
 			reason: 'Too big',
 			photos: [],
 			status: 'requested',
+			role: 'requested',
 			refundAmount: 0,
 			refundId: null,
 			restockedAt: null,
@@ -587,10 +590,13 @@ describe('K4: counts equal to their lists', () => {
 			orderNumber: 'CNT-R',
 			userId: 'usr_cnt0001',
 			kind: 'return',
+			window: 'return',
+			outcomes: ['refund'],
 			lines: [],
 			reason: 'x',
 			photos: [],
 			status,
+			role: status,
 			refundAmount: 0,
 			refundId: null,
 			restockedAt: null,
@@ -607,6 +613,11 @@ describe('K4: counts equal to their lists', () => {
 		});
 		expect((await shop.admin(ticket, 'GET', '/v1/admin/returns/count?orderId=ord_cntreturn')).json.count).toBe(4);
 		expect((await shop.admin(ticket, 'GET', '/v1/admin/returns/counts?orderId=ord_cntreturn&by=status')).json.total).toBe(4);
+		expect((await shop.api('GET', '/v1/returns/counts?orderId=ord_cntreturn&by=role')).json.groups).toEqual({
+			approved: 2,
+			closed: 1,
+			requested: 1,
+		});
 	});
 });
 

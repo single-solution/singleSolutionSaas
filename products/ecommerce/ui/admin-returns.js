@@ -3,14 +3,15 @@
  * Returns and warranty, 0.6): a list-and-detail screen — the count of matching claims as a badge, status chips with
  * their counts, the kind, and the claims of one order or one customer (set from a claim's More menu, removable) —
  * beside one claim: its figures, lines, the shopper's photos (short presigned links) and history, with the actions its
- * status and kind allow as dialogs: approve, mark received, mark replaced (exchange and warranty) or repaired (warranty;
- * E33), refund (through Payments when paid online, else recorded), restock (exactly once) and close as buttons or in
- * the More menu, Add a staff note (never shown to the shopper; the notes as a card), and reject last, in danger text
- * behind its typed confirmation (it needs a note for the shopper).
+ * role and kind allow as dialogs: approve, mark received, mark replaced or repaired, refund (through Payments when paid
+ * online, else recorded), give store credit (a one-use code), restock (exactly once) and close as buttons or in the
+ * More menu, move to another status of the same role, Add a staff note (never shown to the shopper; the notes as a
+ * card), and reject last, in danger text behind its typed confirmation (it needs a note for the shopper). Statuses and
+ * kinds are the merchant's (`GET /v1/admin/returns/lists`, E18); tones follow the status's role.
  * @module
  */
 import { quantityLabel } from '../core/measure.js';
-import { CLAIM_KINDS, CLAIM_NOTES, CLAIM_STATUSES } from '../core/returns.js';
+import { CLAIM_NOTES } from '../core/returns.js';
 import { query } from './admin-kit.js';
 import { card, chipFilter, detailHead, listScreen, scopeChip } from './admin-lists.js';
 import { CLAIM_TONES, historyBy, warningsText } from './admin-order.js';
@@ -19,7 +20,7 @@ import { CLAIM_TONES, historyBy, warningsText } from './admin-order.js';
 /** @typedef {import('./admin-lists.js').Detail} Detail */
 
 /** The actions that move a claim forward, in the order they are offered (the claim's `actions` say which apply). */
-const FORWARD = Object.freeze(['approve', 'receive', 'replace', 'repair', 'refund', 'restock', 'close']);
+const FORWARD = Object.freeze(['approve', 'receive', 'replace', 'repair', 'refund', 'credit', 'restock', 'close']);
 
 /**
  * The note of a claim's history entry: the website's words for a note the server writes itself (its `code`, or on
@@ -35,20 +36,23 @@ const claimNote = (kit, entry) => {
  * The returns section.
  * @param {Kit} kit @param {HTMLElement} panel
  */
-export const returnsTab = (kit, panel) => {
+export const returnsTab = async (kit, panel) => {
 	const { t, h } = kit;
 	const reload = () => void screen.reload();
+	const found = await kit.call('GET', '/v1/admin/returns/lists');
+	/** @type {{ kinds: Array<{ key: string, label: string }>, statuses: Array<{ key: string, label: string, role: string }> }} */
+	const lists = found.ok ? found.data : { kinds: [], statuses: [] };
 	const chips = chipFilter(kit, {
 		label: t('admin.status'),
 		choices: [
 			{ value: '', label: t('admin.all') },
-			...CLAIM_STATUSES.map((key) => ({ value: key, label: t(`ordersAdmin.claim.${key}`) })),
+			...lists.statuses.map((status) => ({ value: status.key, label: status.label })),
 		],
 		onChange: reload,
 	});
 	const kind = kit.select([
 		{ value: '', label: t('admin.all') },
-		...CLAIM_KINDS.map((key) => ({ value: key, label: t(`ordersAdmin.claimKind.${key}`) })),
+		...lists.kinds.map((entry) => ({ value: entry.key, label: entry.label })),
 	]);
 	kind.addEventListener('change', reload);
 	/** @type {{ name: 'orderId' | 'userId', value: string }} */
@@ -81,12 +85,12 @@ export const returnsTab = (kit, panel) => {
 			figure: claim.refundAmount > 0 ? kit.money(claim.refundAmount) : '',
 			meta: [
 				t('ordersAdmin.orderHead', { number: claim.orderNumber }),
-				t(`ordersAdmin.claimKind.${claim.kind}`),
-				t(`ordersAdmin.claim.${claim.status}`),
+				claim.kindLabel,
+				claim.statusLabel,
 				kit.when(claim.createdAt),
 			].join(' · '),
-			tone: CLAIM_TONES[claim.status] ?? 'neutral',
-			toneLabel: t(`ordersAdmin.claim.${claim.status}`),
+			tone: CLAIM_TONES[claim.role] ?? 'neutral',
+			toneLabel: claim.statusLabel,
 		}),
 		open: (claim, detail) =>
 			claimDetail(kit, claim.id, detail, {
@@ -136,14 +140,19 @@ const renderClaim = (kit, claim, detail, list, message) => {
 		detail.changed(next);
 	};
 	const actions = new Set(claim.actions ?? []);
-	const forward = FORWARD.filter((action) => actions.has(action) && (action !== 'refund' || claim.refundable > 0));
+	const forward = FORWARD.filter(
+		(action) =>
+			actions.has(action) && (action !== 'refund' || claim.refundable > 0) && (action !== 'credit' || claim.creditable > 0),
+	);
 	/** @param {string} action */
 	const run = (action) => () =>
 		action === 'refund'
 			? refundDialog(kit, claim, money, done)
-			: action === 'restock'
-				? restockDialog(kit, claim, done)
-				: moveDialog(kit, claim, action, done);
+			: action === 'credit'
+				? creditDialog(kit, claim, money, done)
+				: action === 'restock'
+					? restockDialog(kit, claim, done)
+					: moveDialog(kit, claim, action, done);
 	/** @param {string} action */
 	const labelOf = (action) =>
 		action === 'restock'
@@ -151,17 +160,20 @@ const renderClaim = (kit, claim, detail, list, message) => {
 			: action === 'refund'
 				? t('ordersAdmin.refund')
 				: t(`ordersAdmin.claimAction.${action}`);
+	/** @type {Array<{ key: string, label: string }>} */
+	const others = claim.statuses ?? [];
 	const customer = [claim.order?.customer?.name, claim.order?.customer?.email].filter(Boolean).join(' · ');
 	const head = detailHead(
 		kit,
-		[
-			t('ordersAdmin.claimHead', { reference: claim.reference }),
-			kit.badge(t(`ordersAdmin.claim.${claim.status}`), CLAIM_TONES[claim.status]),
-		],
+		[t('ordersAdmin.claimHead', { reference: claim.reference }), kit.badge(claim.statusLabel, CLAIM_TONES[claim.role])],
 		[
 			...forward.slice(0, 2).map((action, index) => kit.button(labelOf(action), run(action), { primary: index === 0 })),
 			kit.moreMenu([
 				...forward.slice(2).map((action) => ({ label: labelOf(action), onSelect: run(action) })),
+				...others.map((status) => ({
+					label: t('ordersAdmin.claimMoveTo', { status: status.label }),
+					onSelect: () => statusDialog(kit, claim, status, done),
+				})),
 				{
 					label: t('ordersAdmin.showOrderClaims'),
 					onSelect: () => list.narrow('orderId', claim.orderId, t('ordersAdmin.orderHead', { number: claim.orderNumber })),
@@ -184,7 +196,7 @@ const renderClaim = (kit, claim, detail, list, message) => {
 		head,
 		note,
 		kit.fieldGrid([
-			[t('ordersAdmin.claimKindLabel'), t(`ordersAdmin.claimKind.${claim.kind}`)],
+			[t('ordersAdmin.claimKindLabel'), claim.kindLabel],
 			[t('ordersAdmin.claimOrder'), claim.orderNumber],
 			[t('ordersAdmin.customer'), customer],
 			[t('ordersAdmin.claimedAt'), kit.when(claim.createdAt)],
@@ -192,6 +204,8 @@ const renderClaim = (kit, claim, detail, list, message) => {
 			[t('ordersAdmin.claimReason'), claim.reason],
 			[t('ordersAdmin.refundedAmount'), claim.refundAmount > 0 ? money(claim.refundAmount) : ''],
 			[t('ordersAdmin.refundableAmount'), claim.refundable > 0 ? money(claim.refundable) : ''],
+			[t('ordersAdmin.creditAmount'), claim.creditAmount > 0 ? money(claim.creditAmount) : ''],
+			[t('ordersAdmin.creditCodes'), (claim.creditCodes ?? []).join(', ')],
 			[t('ordersAdmin.refundsHow'), t(claim.refundsOnline ? 'ordersAdmin.refundsOnline' : 'ordersAdmin.refundsRecorded')],
 			[t('ordersAdmin.restockedAt'), kit.when(claim.restockedAt)],
 		]),
@@ -247,12 +261,7 @@ const renderClaim = (kit, claim, detail, list, message) => {
 								kit.text(
 									'li',
 									{},
-									[
-										kit.when(entry.at),
-										t(`ordersAdmin.claim.${entry.status}`),
-										historyBy(kit, entry),
-										claimNote(kit, entry),
-									]
+									[kit.when(entry.at), entry.statusLabel, historyBy(kit, entry), claimNote(kit, entry)]
 										.filter(Boolean)
 										.join(' · '),
 								),
@@ -321,6 +330,61 @@ const refundDialog = (kit, claim, money, done) => {
 				answer.data,
 				[t('ordersAdmin.refundDone', { amount: money(minor) }), ...warningsText(kit, answer.data, money)].join(' '),
 			);
+			return null;
+		},
+	});
+};
+
+/**
+ * Give store credit on the claim (up to what can still be given): a one-use code the shopper is sent.
+ * @param {Kit} kit @param {any} claim @param {(minor: number) => string} money
+ * @param {(claim: any, text: string) => void} done
+ */
+const creditDialog = (kit, claim, money, done) => {
+	const { t } = kit;
+	const currency = claim.order?.currency ?? kit.currency;
+	const amount = kit.input(kit.decimal(claim.creditable), { inputmode: 'decimal' });
+	const note = kit.input('', { maxlength: '1000' });
+	kit.dialog({
+		title: t('ordersAdmin.claimAction.credit'),
+		body: [
+			kit.text('p', { class: 'muted' }, t('ordersAdmin.creditHint')),
+			kit.h('div', { class: 'fields' }, [
+				kit.field(t('ordersAdmin.refundAmount', { currency }), amount),
+				kit.field(t('ordersAdmin.noteForShopper'), note),
+			]),
+		],
+		submitLabel: t('ordersAdmin.claimAction.credit'),
+		onSubmit: async () => {
+			const minor = kit.amount(amount.value);
+			if (minor === null || Number.isNaN(minor) || minor <= 0) return t('admin.checkNumbers');
+			const answer = await kit.call('POST', `/v1/admin/returns/${claim.id}/credit`, { amount: minor, note: note.value });
+			if (!answer.ok) return kit.reason(answer);
+			done(answer.data, t('ordersAdmin.creditDone', { amount: money(minor) }));
+			return null;
+		},
+	});
+};
+
+/**
+ * Move the claim to another status of its role (with a note for the shopper).
+ * @param {Kit} kit @param {any} claim @param {{ key: string, label: string }} status
+ * @param {(claim: any, text: string) => void} done
+ */
+const statusDialog = (kit, claim, status, done) => {
+	const { t } = kit;
+	const note = kit.area('', { maxlength: '1000' });
+	kit.dialog({
+		title: t('ordersAdmin.claimMoveTo', { status: status.label }),
+		body: [kit.field(t('ordersAdmin.noteForShopper'), note)],
+		submitLabel: t('ordersAdmin.claimMoveTo', { status: status.label }),
+		onSubmit: async () => {
+			const answer = await kit.call('POST', `/v1/admin/returns/${claim.id}/status`, {
+				status: status.key,
+				note: note.value,
+			});
+			if (!answer.ok) return kit.reason(answer);
+			done(answer.data, t('ordersAdmin.claimMoved', { status: status.label }));
 			return null;
 		},
 	});

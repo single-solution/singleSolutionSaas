@@ -115,8 +115,15 @@
 			"required": ["amount", "unit"],
 			"additionalProperties": false,
 			"properties": {
-				"amount": { "type": "integer", "minimum": 0, "maximum": 3650 },
-				"unit": { "type": "string", "enum": ["days", "months", "years"] }
+				"amount": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 3650
+				},
+				"unit": {
+					"type": "string",
+					"enum": ["days", "months", "years"]
+				}
 			}
 		},
 		"QuantityLimits": {
@@ -125,9 +132,18 @@
 			"required": ["step", "min", "max"],
 			"additionalProperties": false,
 			"properties": {
-				"step": { "type": "integer", "minimum": 1 },
-				"min": { "type": "integer", "minimum": 1 },
-				"max": { "type": "integer", "minimum": 1 }
+				"step": {
+					"type": "integer",
+					"minimum": 1
+				},
+				"min": {
+					"type": "integer",
+					"minimum": 1
+				},
+				"max": {
+					"type": "integer",
+					"minimum": 1
+				}
 			}
 		},
 		"QuantityRule": {
@@ -136,9 +152,21 @@
 			"required": ["step", "min", "max"],
 			"additionalProperties": false,
 			"properties": {
-				"step": { "type": "integer", "minimum": 1, "maximum": 100000 },
-				"min": { "type": "integer", "minimum": 1, "maximum": 100000 },
-				"max": { "type": ["integer", "null"], "minimum": 1, "maximum": 100000 }
+				"step": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100000
+				},
+				"min": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100000
+				},
+				"max": {
+					"type": ["integer", "null"],
+					"minimum": 1,
+					"maximum": 100000
+				}
 			}
 		},
 		"Measure": {
@@ -1791,7 +1819,14 @@
 					"description": "An item sold in a unit of its own: its unit and the quantity in units (quantity counts thousandths); null for pieces."
 				},
 				"limits": {
-					"oneOf": [{ "$ref": "#/components/schemas/QuantityLimits" }, { "type": "null" }],
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/QuantityLimits"
+						},
+						{
+							"type": "null"
+						}
+					],
 					"description": "The quantities the shopper may choose; null when the item could not be read."
 				},
 				"key": {
@@ -2364,11 +2399,25 @@
 							"description": "The top categories shoppers see (at most 20)."
 						},
 						"returnTime": {
-							"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+							"oneOf": [
+								{
+									"$ref": "#/components/schemas/Duration"
+								},
+								{
+									"type": "null"
+								}
+							],
 							"description": "The return window (0 = no returns; null without returns)."
 						},
 						"warrantyTime": {
-							"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+							"oneOf": [
+								{
+									"$ref": "#/components/schemas/Duration"
+								},
+								{
+									"type": "null"
+								}
+							],
 							"description": "The store's warranty (0 = none; null without returns)."
 						}
 					}
@@ -2742,7 +2791,14 @@
 					"type": "string"
 				},
 				"warrantyTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }]
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					]
 				}
 			}
 		},
@@ -3173,7 +3229,14 @@
 			"additionalProperties": false,
 			"properties": {
 				"limits": {
-					"oneOf": [{ "$ref": "#/components/schemas/QuantityLimits" }, { "type": "null" }],
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/QuantityLimits"
+						},
+						{
+							"type": "null"
+						}
+					],
 					"description": "The quantities the shopper may buy (C3): pieces, or thousandths of the unit."
 				},
 				"measure": {
@@ -3542,7 +3605,14 @@
 					"type": ["integer", "null"]
 				},
 				"warrantyTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					],
 					"description": "Physical items with a warranty only."
 				}
 			}
@@ -7565,7 +7635,7 @@
 				},
 				"kind": {
 					"type": "string",
-					"enum": ["return", "warranty", "exchange"]
+					"description": "A key of the claim_kinds list."
 				},
 				"orderId": {
 					"type": "string",
@@ -8002,7 +8072,14 @@
 					"description": "Units returned through approved return claims."
 				},
 				"warrantyTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					],
 					"description": "The warranty at placement (physical lines)."
 				},
 				"dealId": {
@@ -9444,10 +9521,24 @@
 					"$ref": "#/components/schemas/ProductSeo"
 				},
 				"returnTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }]
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					]
 				},
 				"warrantyTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }]
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					]
 				},
 				"featured": {
 					"type": "boolean"
@@ -10307,7 +10398,15 @@
 				"notes",
 				"actions",
 				"createdAt",
-				"updatedAt"
+				"updatedAt",
+				"kindLabel",
+				"statusLabel",
+				"role",
+				"creditAmount",
+				"creditCodes",
+				"window",
+				"outcomes",
+				"statuses"
 			],
 			"additionalProperties": false,
 			"properties": {
@@ -10404,6 +10503,58 @@
 				"updatedAt": {
 					"type": "string",
 					"format": "date-time"
+				},
+				"kindLabel": {
+					"type": "string",
+					"description": "The kind's name in the claim_kinds list (its key when removed since)."
+				},
+				"statusLabel": {
+					"type": "string",
+					"description": "The status's name in the claim_statuses list (its key when removed since)."
+				},
+				"role": {
+					"$ref": "#/components/schemas/ReturnRole"
+				},
+				"creditAmount": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Store credit given on this claim so far, minor units (0: none)."
+				},
+				"creditCodes": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "The one-use codes the store credit was given as (each a fixed coupon of its amount)."
+				},
+				"window": {
+					"type": "string",
+					"enum": ["return", "warranty"],
+					"description": "The window of the claim's kind when it was made."
+				},
+				"outcomes": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/ReturnOutcome"
+					},
+					"description": "The outcomes of the claim's kind when it was made."
+				},
+				"statuses": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["key", "label"],
+						"additionalProperties": false,
+						"properties": {
+							"key": {
+								"type": "string"
+							},
+							"label": {
+								"type": "string"
+							}
+						}
+					},
+					"description": "The other statuses of the claim's role it may move to (POST /v1/returns/:id/status)."
 				}
 			}
 		},
@@ -10476,7 +10627,7 @@
 		"ReturnableOrder": {
 			"type": "object",
 			"description": "What the shopper can still claim on their order.",
-			"required": ["orderId", "number", "deliveredAt", "lines"],
+			"required": ["orderId", "number", "deliveredAt", "lines", "kinds", "reasons", "otherReason"],
 			"additionalProperties": false,
 			"properties": {
 				"orderId": {
@@ -10495,13 +10646,45 @@
 					"items": {
 						"$ref": "#/components/schemas/ReturnableLine"
 					}
+				},
+				"kinds": {
+					"type": "array",
+					"description": "The claim kinds offered to shoppers, each with the window it is counted in: offer a kind whose window is open on some line.",
+					"items": {
+						"type": "object",
+						"required": ["key", "label", "window"],
+						"additionalProperties": false,
+						"properties": {
+							"key": {
+								"type": "string"
+							},
+							"label": {
+								"type": "string"
+							},
+							"window": {
+								"type": "string",
+								"enum": ["return", "warranty"]
+							}
+						}
+					}
+				},
+				"reasons": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "The shop's reasons (the returns setting reasons); empty: the shopper says why in their own words."
+				},
+				"otherReason": {
+					"type": "boolean",
+					"description": "With reasons listed: whether the shopper may also pick Other and give their own words (the returns setting otherReason)."
 				}
 			}
 		},
 		"ReturnAction": {
 			"type": "string",
-			"enum": ["approve", "reject", "receive", "refund", "replace", "repair", "close", "restock"],
-			"description": "A staff action (POST /v1/returns/:id/<action>)."
+			"enum": ["approve", "reject", "receive", "refund", "credit", "replace", "repair", "close", "restock"],
+			"description": "A staff action (POST /v1/returns/:id/<action>); refund, credit, replace and repair only when the claim's kind has that outcome."
 		},
 		"ReturnDetail": {
 			"type": "object",
@@ -10529,7 +10712,16 @@
 				"updatedAt",
 				"order",
 				"refundable",
-				"refundsOnline"
+				"refundsOnline",
+				"kindLabel",
+				"statusLabel",
+				"role",
+				"creditAmount",
+				"creditCodes",
+				"window",
+				"outcomes",
+				"statuses",
+				"creditable"
 			],
 			"additionalProperties": false,
 			"properties": {
@@ -10641,7 +10833,7 @@
 				"refundable": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "The most that can still be refunded on this claim, minor units: what its lines were paid (with the delivery fee not refunded by other claims when the returns setting refundDelivery is on) minus what it refunded, never more than the order was paid and not refunded yet."
+					"description": "The most that can still be refunded on this claim, minor units: what its lines were paid (with the delivery fee not refunded by other claims when the returns setting refundDelivery is on) minus what it refunded or gave as store credit, never more than the order was paid and not refunded yet."
 				},
 				"refundsOnline": {
 					"type": "boolean",
@@ -10660,6 +10852,63 @@
 						"$ref": "#/components/schemas/OrderWarning"
 					},
 					"description": "Only in the answer of a refund: the warnings' codes and values, in the same order as warnings."
+				},
+				"kindLabel": {
+					"type": "string",
+					"description": "The kind's name in the claim_kinds list (its key when removed since)."
+				},
+				"statusLabel": {
+					"type": "string",
+					"description": "The status's name in the claim_statuses list (its key when removed since)."
+				},
+				"role": {
+					"$ref": "#/components/schemas/ReturnRole"
+				},
+				"creditAmount": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Store credit given on this claim so far, minor units (0: none)."
+				},
+				"creditCodes": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "The one-use codes the store credit was given as (each a fixed coupon of its amount)."
+				},
+				"window": {
+					"type": "string",
+					"enum": ["return", "warranty"],
+					"description": "The window of the claim's kind when it was made."
+				},
+				"outcomes": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/ReturnOutcome"
+					},
+					"description": "The outcomes of the claim's kind when it was made."
+				},
+				"statuses": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["key", "label"],
+						"additionalProperties": false,
+						"properties": {
+							"key": {
+								"type": "string"
+							},
+							"label": {
+								"type": "string"
+							}
+						}
+					},
+					"description": "The other statuses of the claim's role it may move to (POST /v1/returns/:id/status)."
+				},
+				"creditable": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "The most store credit that can still be given on this claim, minor units: what its lines were paid minus what it refunded or credited, never more than the order was paid and not refunded yet."
 				}
 			}
 		},
@@ -10775,7 +11024,7 @@
 		},
 		"ReturnHistoryEntry": {
 			"type": "object",
-			"required": ["at", "status", "by", "note"],
+			"required": ["at", "status", "by", "note", "statusLabel"],
 			"additionalProperties": false,
 			"properties": {
 				"at": {
@@ -10802,13 +11051,21 @@
 					"type": "string",
 					"enum": ["restocked"],
 					"description": "An entry the server wrote itself, for your own words: restocked (items went back in stock; note says restocked too)."
+				},
+				"statusLabel": {
+					"type": "string",
+					"description": "The status's name in the claim_statuses list."
+				},
+				"role": {
+					"type": "string",
+					"description": "The status's role then (entries before E18 have none)."
 				}
 			}
 		},
 		"ReturnKind": {
 			"type": "string",
-			"enum": ["return", "warranty", "exchange"],
-			"description": "return: money back; exchange: another item instead (uses the return window); warranty: repair or replacement within the warranty window."
+			"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+			"description": "A key of the merchant's claim_kinds list (seeded: return, warranty, exchange). Each kind is counted in the return or the warranty window and ends in its outcomes (refund, store_credit, replace, repair)."
 		},
 		"ReturnLine": {
 			"type": "object",
@@ -11049,8 +11306,8 @@
 		},
 		"ReturnStatus": {
 			"type": "string",
-			"enum": ["requested", "approved", "rejected", "received", "refunded", "replaced", "repaired", "closed"],
-			"description": "requested → approved → (received →) refunded, replaced, repaired or closed; rejected from requested, approved or received. A refunded claim can be refunded again (a top-up) or closed; rejected, replaced, repaired and closed are final (restock aside)."
+			"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+			"description": "A key of the merchant's claim_statuses list (seeded one per role: requested, approved, received, refunded, credited, replaced, repaired, closed, rejected). What a claim may do follows its role (see ReturnRole)."
 		},
 		"ReturnWindow": {
 			"type": "object",
@@ -12808,10 +13065,24 @@
 					"enum": ["new", "refurbished", "used", null]
 				},
 				"warrantyTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }]
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					]
 				},
 				"returnTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }]
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					]
 				}
 			},
 			"description": "A condition grade as shoppers see it."
@@ -13592,7 +13863,14 @@
 					}
 				},
 				"warrantyTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }]
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					]
 				},
 				"image": {
 					"type": ["string", "null"]
@@ -14516,7 +14794,12 @@
 				"status",
 				"refundAmount",
 				"history",
-				"createdAt"
+				"createdAt",
+				"kindLabel",
+				"statusLabel",
+				"role",
+				"creditAmount",
+				"creditCodes"
 			],
 			"additionalProperties": false,
 			"properties": {
@@ -14576,12 +14859,35 @@
 				"createdAt": {
 					"type": "string",
 					"format": "date-time"
+				},
+				"kindLabel": {
+					"type": "string",
+					"description": "The kind's name in the claim_kinds list (its key when removed since)."
+				},
+				"statusLabel": {
+					"type": "string",
+					"description": "The status's name in the claim_statuses list (its key when removed since)."
+				},
+				"role": {
+					"$ref": "#/components/schemas/ReturnRole"
+				},
+				"creditAmount": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Store credit given on this claim so far, minor units (0: none)."
+				},
+				"creditCodes": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "The one-use codes the store credit was given as (each a fixed coupon of its amount)."
 				}
 			}
 		},
 		"ShopReturnHistoryEntry": {
 			"type": "object",
-			"required": ["at", "status", "note"],
+			"required": ["at", "status", "note", "statusLabel"],
 			"additionalProperties": false,
 			"properties": {
 				"at": {
@@ -14594,6 +14900,10 @@
 				"note": {
 					"type": "string",
 					"description": "The staff's note for the shopper ('' for none; restocked when items went back in stock)."
+				},
+				"statusLabel": {
+					"type": "string",
+					"description": "The status's name in the claim_statuses list."
 				}
 			}
 		},
@@ -14883,7 +15193,14 @@
 					]
 				},
 				"warrantyTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					],
 					"description": "The variant’s, else the product’s, the grade’s or the returns setting’s."
 				},
 				"media": {
@@ -15645,7 +15962,14 @@
 					"description": "Shown as sold out whatever its stock."
 				},
 				"warrantyTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					],
 					"description": "null: the product’s, then the grade’s, then the returns setting."
 				},
 				"parcel": {
@@ -16138,6 +16462,81 @@
 								}
 							}
 						}
+					}
+				}
+			}
+		},
+		"ReturnRole": {
+			"type": "string",
+			"enum": ["requested", "approved", "rejected", "received", "refunded", "credited", "replaced", "repaired", "closed"],
+			"description": "The fixed role of a claim status: requested → approved → (received →) refunded, credited, replaced, repaired or closed; rejected from requested, approved or received. A refunded (credited) claim can be refunded (credited) again or closed; rejected, replaced, repaired and closed are final (restock aside)."
+		},
+		"ReturnOutcome": {
+			"type": "string",
+			"enum": ["refund", "store_credit", "replace", "repair"]
+		},
+		"ReturnKindEntry": {
+			"type": "object",
+			"description": "A claim kind of the claim_kinds list.",
+			"required": ["key", "label", "window", "outcomes", "shoppers"],
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"type": "string"
+				},
+				"label": {
+					"type": "string"
+				},
+				"window": {
+					"type": "string",
+					"enum": ["return", "warranty"],
+					"description": "The window the kind is counted in."
+				},
+				"outcomes": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/ReturnOutcome"
+					}
+				},
+				"shoppers": {
+					"type": "boolean",
+					"description": "Offered to shoppers (else made by staff only, for example an import)."
+				}
+			}
+		},
+		"ReturnStatusEntry": {
+			"type": "object",
+			"description": "A claim status of the claim_statuses list.",
+			"required": ["key", "label", "role"],
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"type": "string"
+				},
+				"label": {
+					"type": "string"
+				},
+				"role": {
+					"$ref": "#/components/schemas/ReturnRole"
+				}
+			}
+		},
+		"ReturnLists": {
+			"type": "object",
+			"description": "The merchant's claim kinds and statuses (Settings → Returns, or the claim_kinds and claim_statuses lists).",
+			"required": ["kinds", "statuses"],
+			"additionalProperties": false,
+			"properties": {
+				"kinds": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/ReturnKindEntry"
+					}
+				},
+				"statuses": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/ReturnStatusEntry"
 					}
 				}
 			}
@@ -16860,7 +17259,14 @@
 								"description": "Shown as sold out without changing stock."
 							},
 							"warrantyTime": {
-								"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/Duration"
+									},
+									{
+										"type": "null"
+									}
+								],
 								"description": "null: the product’s, then the grade’s, then the returns setting."
 							},
 							"parcel": {
@@ -17224,11 +17630,25 @@
 					"maxItems": 20
 				},
 				"returnTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					],
 					"description": "Return window after delivery; null: the grade’s, else the returns setting."
 				},
 				"warrantyTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					],
 					"description": "Warranty after delivery; null: the grade’s, else the returns setting."
 				},
 				"replacedBy": {
@@ -17421,7 +17841,14 @@
 								"description": "Shown as sold out without changing stock."
 							},
 							"warrantyTime": {
-								"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/Duration"
+									},
+									{
+										"type": "null"
+									}
+								],
 								"description": "null: the product’s, then the grade’s, then the returns setting."
 							},
 							"parcel": {
@@ -17785,11 +18212,25 @@
 					"maxItems": 20
 				},
 				"returnTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					],
 					"description": "Return window after delivery; null: the grade’s, else the returns setting."
 				},
 				"warrantyTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					],
 					"description": "Warranty after delivery; null: the grade’s, else the returns setting."
 				},
 				"replacedBy": {
@@ -17995,7 +18436,14 @@
 								"description": "Shown as sold out without changing stock."
 							},
 							"warrantyTime": {
-								"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/Duration"
+									},
+									{
+										"type": "null"
+									}
+								],
 								"description": "null: the product’s, then the grade’s, then the returns setting."
 							},
 							"parcel": {
@@ -18359,11 +18807,25 @@
 					"maxItems": 20
 				},
 				"returnTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					],
 					"description": "Return window after delivery; null: the grade’s, else the returns setting."
 				},
 				"warrantyTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					],
 					"description": "Warranty after delivery; null: the grade’s, else the returns setting."
 				},
 				"replacedBy": {
@@ -18554,7 +19016,14 @@
 								"description": "Shown as sold out without changing stock."
 							},
 							"warrantyTime": {
-								"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/Duration"
+									},
+									{
+										"type": "null"
+									}
+								],
 								"description": "null: the product’s, then the grade’s, then the returns setting."
 							},
 							"parcel": {
@@ -18918,11 +19387,25 @@
 					"maxItems": 20
 				},
 				"returnTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					],
 					"description": "Return window after delivery; null: the grade’s, else the returns setting."
 				},
 				"warrantyTime": {
-					"oneOf": [{ "$ref": "#/components/schemas/Duration" }, { "type": "null" }],
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Duration"
+						},
+						{
+							"type": "null"
+						}
+					],
 					"description": "Warranty after delivery; null: the grade’s, else the returns setting."
 				},
 				"replacedBy": {
@@ -26520,13 +27003,11 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["requested", "approved", "rejected", "received", "refunded", "replaced", "repaired", "closed"],
-					"description": "Only claims with this status (another value filters nothing)."
+					"description": "Only claims with this status, a key of the claim_statuses list (another value filters nothing)."
 				},
 				"kind": {
 					"type": "string",
-					"enum": ["return", "warranty", "exchange"],
-					"description": "Only claims of this kind (another value filters nothing)."
+					"description": "Only claims of this kind, a key of the claim_kinds list (another value filters nothing)."
 				},
 				"orderId": {
 					"type": "string",
@@ -26535,6 +27016,21 @@
 				"userId": {
 					"type": "string",
 					"description": "Only one shopper's claims (their Accounts user id)."
+				},
+				"role": {
+					"type": "string",
+					"enum": [
+						"requested",
+						"approved",
+						"rejected",
+						"received",
+						"refunded",
+						"credited",
+						"replaced",
+						"repaired",
+						"closed"
+					],
+					"description": "Only claims whose status has this role (another value filters nothing)."
 				}
 			}
 		},
@@ -26549,13 +27045,11 @@
 			"properties": {
 				"status": {
 					"type": "string",
-					"enum": ["requested", "approved", "rejected", "received", "refunded", "replaced", "repaired", "closed"],
-					"description": "Only claims with this status (another value filters nothing)."
+					"description": "Only claims with this status, a key of the claim_statuses list (another value filters nothing)."
 				},
 				"kind": {
 					"type": "string",
-					"enum": ["return", "warranty", "exchange"],
-					"description": "Only claims of this kind (another value filters nothing)."
+					"description": "Only claims of this kind, a key of the claim_kinds list (another value filters nothing)."
 				},
 				"orderId": {
 					"type": "string",
@@ -26564,6 +27058,21 @@
 				"userId": {
 					"type": "string",
 					"description": "Only one shopper's claims (their Accounts user id)."
+				},
+				"role": {
+					"type": "string",
+					"enum": [
+						"requested",
+						"approved",
+						"rejected",
+						"received",
+						"refunded",
+						"credited",
+						"replaced",
+						"repaired",
+						"closed"
+					],
+					"description": "Only claims whose status has this role (another value filters nothing)."
 				}
 			}
 		},
@@ -26572,25 +27081,23 @@
 		}
 	},
 	"GET /v1/returns/counts": {
-		"summary": "Count the claims by status",
-		"description": "by=status counts by status (422 validation_failed for another by).",
+		"summary": "Count the claims by status, role or kind",
+		"description": "by=status, role or kind counts by that field (422 validation_failed for another by).",
 		"query": {
 			"type": "object",
 			"required": ["by"],
 			"properties": {
 				"by": {
 					"type": "string",
-					"enum": ["status"]
+					"enum": ["status", "role", "kind"]
 				},
 				"status": {
 					"type": "string",
-					"enum": ["requested", "approved", "rejected", "received", "refunded", "replaced", "repaired", "closed"],
-					"description": "Only claims with this status (another value filters nothing)."
+					"description": "Only claims with this status, a key of the claim_statuses list (another value filters nothing)."
 				},
 				"kind": {
 					"type": "string",
-					"enum": ["return", "warranty", "exchange"],
-					"description": "Only claims of this kind (another value filters nothing)."
+					"description": "Only claims of this kind, a key of the claim_kinds list (another value filters nothing)."
 				},
 				"orderId": {
 					"type": "string",
@@ -26599,11 +27106,33 @@
 				"userId": {
 					"type": "string",
 					"description": "Only one shopper's claims (their Accounts user id)."
+				},
+				"role": {
+					"type": "string",
+					"enum": [
+						"requested",
+						"approved",
+						"rejected",
+						"received",
+						"refunded",
+						"credited",
+						"replaced",
+						"repaired",
+						"closed"
+					],
+					"description": "Only claims whose status has this role (another value filters nothing)."
 				}
 			}
 		},
 		"response": {
 			"$ref": "#/components/schemas/Counts"
+		}
+	},
+	"GET /v1/returns/lists": {
+		"summary": "The claim kinds and statuses",
+		"description": "The merchant's claim_kinds and claim_statuses lists (seeded until saved), for filters and moves.",
+		"response": {
+			"$ref": "#/components/schemas/ReturnLists"
 		}
 	},
 	"GET /v1/returns/:id": {
@@ -26615,7 +27144,7 @@
 	},
 	"POST /v1/returns/:id/approve": {
 		"summary": "Approve a claim",
-		"description": "Only while the claim is requested (409 move_not_allowed otherwise, also when the claim changed meanwhile). 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
+		"description": "Only while the claim's status has the role requested (409 move_not_allowed otherwise, also when the claim changed meanwhile). 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
 		"body": {
 			"type": "object",
 			"required": [],
@@ -26624,6 +27153,10 @@
 					"type": "string",
 					"maxLength": 1000,
 					"description": "Kept in the history and told to the shopper."
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role approved (default: the claim's own when it already has that role, else the role's first; 422 validation_failed at /status for another)."
 				}
 			}
 		},
@@ -26633,7 +27166,7 @@
 	},
 	"POST /v1/returns/:id/reject": {
 		"summary": "Reject a claim",
-		"description": "Only while the claim is requested, approved or received (409 move_not_allowed otherwise, also when the claim changed meanwhile). The note is required: it tells the shopper why (422 validation_failed at /note). Its units can be claimed again. 404 not_found. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
+		"description": "Only while the claim's status has the role requested, approved or received (409 move_not_allowed otherwise, also when the claim changed meanwhile). The note is required: it tells the shopper why (422 validation_failed at /note). Its units can be claimed again. 404 not_found. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
 		"body": {
 			"type": "object",
 			"required": ["note"],
@@ -26642,6 +27175,10 @@
 					"type": "string",
 					"maxLength": 1000,
 					"description": "Told to the shopper (required)."
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role rejected (default: the claim's own when it already has that role, else the role's first; 422 validation_failed at /status for another)."
 				}
 			}
 		},
@@ -26651,7 +27188,7 @@
 	},
 	"POST /v1/returns/:id/receive": {
 		"summary": "Mark the package received",
-		"description": "Only while the claim is approved (409 move_not_allowed otherwise, also when the claim changed meanwhile). lines says per claimed line whether it goes back in stock: those with restock true are put back at once (each exactly once, with the products.changed hook for back-in-stock alerts), false keeps a line out of later restocks, lines not named wait for POST …/restock. 422 validation_failed at /lines (not a list), /lines/<i>/lineId (not a claimed line, or named twice), /lines/<i>/restock or /note; 404 not_found. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
+		"description": "Only while the claim's status has the role approved (409 move_not_allowed otherwise, also when the claim changed meanwhile). lines says per claimed line whether it goes back in stock: those with restock true are put back at once (each exactly once, with the products.changed hook for back-in-stock alerts), false keeps a line out of later restocks, lines not named wait for POST …/restock. 422 validation_failed at /lines (not a list), /lines/<i>/lineId (not a claimed line, or named twice), /lines/<i>/restock or /note; 404 not_found. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
 		"body": {
 			"type": "object",
 			"required": [],
@@ -26677,6 +27214,10 @@
 							}
 						}
 					}
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role received (default: the claim's own when it already has that role, else the role's first; 422 validation_failed at /status for another)."
 				}
 			}
 		},
@@ -26686,7 +27227,7 @@
 	},
 	"POST /v1/returns/:id/refund": {
 		"summary": "Refund a claim (again for a top-up)",
-		"description": "Only while the claim is approved, received or refunded (409 move_not_allowed otherwise, also when the claim changed meanwhile); the claim becomes refunded. The refund is an order refund, written on the order's refunds with the claim's id: method online (or no method on an order paid through Payments) refunds through Payments for what Payments took, the rest recorded as other; bank_transfer, cash and other are only recorded (give the money back yourself). At most refundable (see the claim). On the first refund the units count as returned on the order and, with loyalty on, points are taken back as the returns setting pointsBack says. With the flow's trigger refundsCover, an order whose refunds reach what was paid moves to that refunded status when the flow lists the move: a ticket needs that move's permission for such a refund (403 forbidden before any money moves), and once the money is recorded the move never undoes it (an order the move cannot take is left to staff, logged). A refund through Payments that finishes later moves the order the same way; one Payments then refuses, or that is not sent (staff refunded the order by hand meanwhile), gives the claim back what it reserved (refund, method, reference, status), so a claim never says it refunded money that did not go back. The order's refund lock applies (see POST /v1/orders/:id/refunds): when Payments does not answer, the refund is kept pending and sent again on use. 422 validation_failed at /amount (1 to refundable; nothing paid left on the order; with method online, more than Payments took), /method (not one of the methods, or online on an order not paid through Payments), /reference or /note; 404 not_found (the claim or its order); 409 conflict when the order changed meanwhile; 502 payments_refused and 503 payments_unavailable (nothing is refunded). Send an Idempotency-Key so a retried request refunds once. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
+		"description": "Only when the claim's kind has the refund outcome. Only while the claim's status has the role approved, received or refunded (409 move_not_allowed otherwise, also when the claim changed meanwhile); the claim becomes refunded. The refund is an order refund, written on the order's refunds with the claim's id: method online (or no method on an order paid through Payments) refunds through Payments for what Payments took, the rest recorded as other; bank_transfer, cash and other are only recorded (give the money back yourself). At most refundable (see the claim). On the first refund the units count as returned on the order and, with loyalty on, points are taken back as the returns setting pointsBack says. With the flow's trigger refundsCover, an order whose refunds reach what was paid moves to that refunded status when the flow lists the move: a ticket needs that move's permission for such a refund (403 forbidden before any money moves), and once the money is recorded the move never undoes it (an order the move cannot take is left to staff, logged). A refund through Payments that finishes later moves the order the same way; one Payments then refuses, or that is not sent (staff refunded the order by hand meanwhile), gives the claim back what it reserved (refund, method, reference, status), so a claim never says it refunded money that did not go back. The order's refund lock applies (see POST /v1/orders/:id/refunds): when Payments does not answer, the refund is kept pending and sent again on use. 422 validation_failed at /amount (1 to refundable; nothing paid left on the order; with method online, more than Payments took), /method (not one of the methods, or online on an order not paid through Payments), /reference or /note; 404 not_found (the claim or its order); 409 conflict when the order changed meanwhile; 502 payments_refused and 503 payments_unavailable (nothing is refunded). Send an Idempotency-Key so a retried request refunds once. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
 		"body": {
 			"type": "object",
 			"required": ["amount"],
@@ -26710,6 +27251,37 @@
 					"type": "string",
 					"maxLength": 1000,
 					"description": "Kept in the history, on the order’s refund and told to the shopper (default: the amount)."
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role refunded (default: the claim's own when it already has that role, else the role's first; 422 validation_failed at /status for another)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ReturnDetail"
+		}
+	},
+	"POST /v1/returns/:id/credit": {
+		"summary": "Give store credit on a claim (again for more)",
+		"description": "Only when the claim's kind has the store_credit outcome and its status has the role approved, received or credited (409 move_not_allowed otherwise, also when the claim changed meanwhile); the claim moves to its credited status (or the one named). Store credit is given as a one-use code of the amount (a fixed coupon, limit 1, any product, no end date: the shopper uses it at checkout; what an order does not use of it is not kept), so the Coupons feature must be on (409 feature_off). At most creditable (see the claim): what its lines were paid minus what it refunded or credited, never more than the order was paid and not refunded yet. On the claim's first money back the units count as returned on the order and, with loyalty on, points are taken back in proportion (the returns setting pointsBack proportional; full_refund_only waits for refunds). 422 validation_failed at /amount, /status or /note; 404 not_found. Send an Idempotency-Key so a retried request gives credit once. The shopper gets the ecommerce.return_status message with the code (values credit and creditCode) and the return.status_changed hook runs.",
+		"body": {
+			"type": "object",
+			"required": ["amount"],
+			"properties": {
+				"amount": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Minor units, at most the claim's creditable."
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role credited."
+				},
+				"note": {
+					"type": "string",
+					"maxLength": 1000,
+					"description": "Kept in the history and told to the shopper."
 				}
 			}
 		},
@@ -26726,7 +27298,7 @@
 	},
 	"POST /v1/returns/:id/close": {
 		"summary": "Close a claim",
-		"description": "Only while the claim is approved, received or refunded (409 move_not_allowed otherwise, also when the claim changed meanwhile). A warranty claim closed without a refund gives its units back (they can be claimed again). 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
+		"description": "Only while the claim's status has the role approved, received or refunded (409 move_not_allowed otherwise, also when the claim changed meanwhile). A warranty claim closed without a refund gives its units back (they can be claimed again). 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
 		"body": {
 			"type": "object",
 			"required": [],
@@ -26735,6 +27307,10 @@
 					"type": "string",
 					"maxLength": 1000,
 					"description": "Kept in the history and told to the shopper."
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role closed (default: the claim's own when it already has that role, else the role's first; 422 validation_failed at /status for another)."
 				}
 			}
 		},
@@ -26744,7 +27320,7 @@
 	},
 	"POST /v1/returns/:id/replace": {
 		"summary": "Mark a claim replaced (final)",
-		"description": "Only while the claim is approved or received, and only for exchange or warranty claims (409 move_not_allowed otherwise, also when the claim changed meanwhile). 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
+		"description": "Only when the claim's kind has the replace outcome. Only while the claim's status has the role approved or received, and only for exchange or warranty claims (409 move_not_allowed otherwise, also when the claim changed meanwhile). 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
 		"body": {
 			"type": "object",
 			"required": [],
@@ -26753,6 +27329,10 @@
 					"type": "string",
 					"maxLength": 1000,
 					"description": "Kept in the history and told to the shopper."
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role replaced (default: the claim's own when it already has that role, else the role's first; 422 validation_failed at /status for another)."
 				}
 			}
 		},
@@ -26762,11 +27342,37 @@
 	},
 	"POST /v1/returns/:id/repair": {
 		"summary": "Mark a warranty claim repaired (final)",
-		"description": "Only while the claim is approved or received, and only for warranty claims (409 move_not_allowed otherwise, also when the claim changed meanwhile). The item went back to the shopper: its units can be claimed again. 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
+		"description": "Only when the claim's kind has the repair outcome. Only while the claim's status has the role approved or received, and only for warranty claims (409 move_not_allowed otherwise, also when the claim changed meanwhile). The item went back to the shopper: its units can be claimed again. 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
 		"body": {
 			"type": "object",
 			"required": [],
 			"properties": {
+				"note": {
+					"type": "string",
+					"maxLength": 1000,
+					"description": "Kept in the history and told to the shopper."
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role repaired (default: the claim's own when it already has that role, else the role's first; 422 validation_failed at /status for another)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ReturnDetail"
+		}
+	},
+	"POST /v1/returns/:id/status": {
+		"summary": "Move a claim to another status of its role",
+		"description": "Statuses of one role are the merchant's steps inside it (approved → label sent, received → inspecting …). 422 validation_failed at /status (not another status of the claim's role) or /note; 404 not_found; 409 move_not_allowed when the claim changed meanwhile. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
+		"body": {
+			"type": "object",
+			"required": ["status"],
+			"properties": {
+				"status": {
+					"type": "string",
+					"description": "Another key of the claim_statuses list with the claim's role."
+				},
 				"note": {
 					"type": "string",
 					"maxLength": 1000,
@@ -26817,13 +27423,11 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["requested", "approved", "rejected", "received", "refunded", "replaced", "repaired", "closed"],
-					"description": "Only claims with this status (another value filters nothing)."
+					"description": "Only claims with this status, a key of the claim_statuses list (another value filters nothing)."
 				},
 				"kind": {
 					"type": "string",
-					"enum": ["return", "warranty", "exchange"],
-					"description": "Only claims of this kind (another value filters nothing)."
+					"description": "Only claims of this kind, a key of the claim_kinds list (another value filters nothing)."
 				},
 				"orderId": {
 					"type": "string",
@@ -26832,6 +27436,21 @@
 				"userId": {
 					"type": "string",
 					"description": "Only one shopper's claims (their Accounts user id)."
+				},
+				"role": {
+					"type": "string",
+					"enum": [
+						"requested",
+						"approved",
+						"rejected",
+						"received",
+						"refunded",
+						"credited",
+						"replaced",
+						"repaired",
+						"closed"
+					],
+					"description": "Only claims whose status has this role (another value filters nothing)."
 				}
 			}
 		},
@@ -26846,13 +27465,11 @@
 			"properties": {
 				"status": {
 					"type": "string",
-					"enum": ["requested", "approved", "rejected", "received", "refunded", "replaced", "repaired", "closed"],
-					"description": "Only claims with this status (another value filters nothing)."
+					"description": "Only claims with this status, a key of the claim_statuses list (another value filters nothing)."
 				},
 				"kind": {
 					"type": "string",
-					"enum": ["return", "warranty", "exchange"],
-					"description": "Only claims of this kind (another value filters nothing)."
+					"description": "Only claims of this kind, a key of the claim_kinds list (another value filters nothing)."
 				},
 				"orderId": {
 					"type": "string",
@@ -26861,6 +27478,21 @@
 				"userId": {
 					"type": "string",
 					"description": "Only one shopper's claims (their Accounts user id)."
+				},
+				"role": {
+					"type": "string",
+					"enum": [
+						"requested",
+						"approved",
+						"rejected",
+						"received",
+						"refunded",
+						"credited",
+						"replaced",
+						"repaired",
+						"closed"
+					],
+					"description": "Only claims whose status has this role (another value filters nothing)."
 				}
 			}
 		},
@@ -26869,25 +27501,23 @@
 		}
 	},
 	"GET /v1/admin/returns/counts": {
-		"summary": "Count the claims by status (Orders admin widget)",
-		"description": "by=status counts by status (422 validation_failed for another by).",
+		"summary": "Count the claims by status, role or kind",
+		"description": "by=status, role or kind counts by that field (422 validation_failed for another by).",
 		"query": {
 			"type": "object",
 			"required": ["by"],
 			"properties": {
 				"by": {
 					"type": "string",
-					"enum": ["status"]
+					"enum": ["status", "role", "kind"]
 				},
 				"status": {
 					"type": "string",
-					"enum": ["requested", "approved", "rejected", "received", "refunded", "replaced", "repaired", "closed"],
-					"description": "Only claims with this status (another value filters nothing)."
+					"description": "Only claims with this status, a key of the claim_statuses list (another value filters nothing)."
 				},
 				"kind": {
 					"type": "string",
-					"enum": ["return", "warranty", "exchange"],
-					"description": "Only claims of this kind (another value filters nothing)."
+					"description": "Only claims of this kind, a key of the claim_kinds list (another value filters nothing)."
 				},
 				"orderId": {
 					"type": "string",
@@ -26896,11 +27526,33 @@
 				"userId": {
 					"type": "string",
 					"description": "Only one shopper's claims (their Accounts user id)."
+				},
+				"role": {
+					"type": "string",
+					"enum": [
+						"requested",
+						"approved",
+						"rejected",
+						"received",
+						"refunded",
+						"credited",
+						"replaced",
+						"repaired",
+						"closed"
+					],
+					"description": "Only claims whose status has this role (another value filters nothing)."
 				}
 			}
 		},
 		"response": {
 			"$ref": "#/components/schemas/Counts"
+		}
+	},
+	"GET /v1/admin/returns/lists": {
+		"summary": "The claim kinds and statuses (Orders admin widget)",
+		"description": "The merchant's claim_kinds and claim_statuses lists (seeded until saved), for filters and moves.",
+		"response": {
+			"$ref": "#/components/schemas/ReturnLists"
 		}
 	},
 	"GET /v1/admin/returns/:id": {
@@ -26912,7 +27564,7 @@
 	},
 	"POST /v1/admin/returns/:id/approve": {
 		"summary": "Approve a claim (Orders admin widget)",
-		"description": "Only while the claim is requested (409 move_not_allowed otherwise, also when the claim changed meanwhile). 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
+		"description": "Only while the claim's status has the role requested (409 move_not_allowed otherwise, also when the claim changed meanwhile). 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
 		"body": {
 			"type": "object",
 			"required": [],
@@ -26921,6 +27573,10 @@
 					"type": "string",
 					"maxLength": 1000,
 					"description": "Kept in the history and told to the shopper."
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role approved (default: the claim's own when it already has that role, else the role's first; 422 validation_failed at /status for another)."
 				}
 			}
 		},
@@ -26930,7 +27586,7 @@
 	},
 	"POST /v1/admin/returns/:id/reject": {
 		"summary": "Reject a claim (Orders admin widget)",
-		"description": "Only while the claim is requested, approved or received (409 move_not_allowed otherwise, also when the claim changed meanwhile). The note is required: it tells the shopper why (422 validation_failed at /note). Its units can be claimed again. 404 not_found. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
+		"description": "Only while the claim's status has the role requested, approved or received (409 move_not_allowed otherwise, also when the claim changed meanwhile). The note is required: it tells the shopper why (422 validation_failed at /note). Its units can be claimed again. 404 not_found. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
 		"body": {
 			"type": "object",
 			"required": ["note"],
@@ -26939,6 +27595,10 @@
 					"type": "string",
 					"maxLength": 1000,
 					"description": "Told to the shopper (required)."
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role rejected (default: the claim's own when it already has that role, else the role's first; 422 validation_failed at /status for another)."
 				}
 			}
 		},
@@ -26948,7 +27608,7 @@
 	},
 	"POST /v1/admin/returns/:id/receive": {
 		"summary": "Mark the package received (Orders admin widget)",
-		"description": "Only while the claim is approved (409 move_not_allowed otherwise, also when the claim changed meanwhile). lines says per claimed line whether it goes back in stock: those with restock true are put back at once (each exactly once, with the products.changed hook for back-in-stock alerts), false keeps a line out of later restocks, lines not named wait for POST …/restock. 422 validation_failed at /lines (not a list), /lines/<i>/lineId (not a claimed line, or named twice), /lines/<i>/restock or /note; 404 not_found. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
+		"description": "Only while the claim's status has the role approved (409 move_not_allowed otherwise, also when the claim changed meanwhile). lines says per claimed line whether it goes back in stock: those with restock true are put back at once (each exactly once, with the products.changed hook for back-in-stock alerts), false keeps a line out of later restocks, lines not named wait for POST …/restock. 422 validation_failed at /lines (not a list), /lines/<i>/lineId (not a claimed line, or named twice), /lines/<i>/restock or /note; 404 not_found. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
 		"body": {
 			"type": "object",
 			"required": [],
@@ -26974,6 +27634,10 @@
 							}
 						}
 					}
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role received (default: the claim's own when it already has that role, else the role's first; 422 validation_failed at /status for another)."
 				}
 			}
 		},
@@ -26983,7 +27647,7 @@
 	},
 	"POST /v1/admin/returns/:id/refund": {
 		"summary": "Refund a claim (again for a top-up) (Orders admin widget)",
-		"description": "Only while the claim is approved, received or refunded (409 move_not_allowed otherwise, also when the claim changed meanwhile); the claim becomes refunded. The refund is an order refund, written on the order's refunds with the claim's id: method online (or no method on an order paid through Payments) refunds through Payments for what Payments took, the rest recorded as other; bank_transfer, cash and other are only recorded (give the money back yourself). At most refundable (see the claim). On the first refund the units count as returned on the order and, with loyalty on, points are taken back as the returns setting pointsBack says. With the flow's trigger refundsCover, an order whose refunds reach what was paid moves to that refunded status when the flow lists the move: a ticket needs that move's permission for such a refund (403 forbidden before any money moves), and once the money is recorded the move never undoes it (an order the move cannot take is left to staff, logged). A refund through Payments that finishes later moves the order the same way; one Payments then refuses, or that is not sent (staff refunded the order by hand meanwhile), gives the claim back what it reserved (refund, method, reference, status), so a claim never says it refunded money that did not go back. The order's refund lock applies (see POST /v1/orders/:id/refunds): when Payments does not answer, the refund is kept pending and sent again on use. 422 validation_failed at /amount (1 to refundable; nothing paid left on the order; with method online, more than Payments took), /method (not one of the methods, or online on an order not paid through Payments), /reference or /note; 404 not_found (the claim or its order); 409 conflict when the order changed meanwhile; 502 payments_refused and 503 payments_unavailable (nothing is refunded). Send an Idempotency-Key so a retried request refunds once. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
+		"description": "Only when the claim's kind has the refund outcome. Only while the claim's status has the role approved, received or refunded (409 move_not_allowed otherwise, also when the claim changed meanwhile); the claim becomes refunded. The refund is an order refund, written on the order's refunds with the claim's id: method online (or no method on an order paid through Payments) refunds through Payments for what Payments took, the rest recorded as other; bank_transfer, cash and other are only recorded (give the money back yourself). At most refundable (see the claim). On the first refund the units count as returned on the order and, with loyalty on, points are taken back as the returns setting pointsBack says. With the flow's trigger refundsCover, an order whose refunds reach what was paid moves to that refunded status when the flow lists the move: a ticket needs that move's permission for such a refund (403 forbidden before any money moves), and once the money is recorded the move never undoes it (an order the move cannot take is left to staff, logged). A refund through Payments that finishes later moves the order the same way; one Payments then refuses, or that is not sent (staff refunded the order by hand meanwhile), gives the claim back what it reserved (refund, method, reference, status), so a claim never says it refunded money that did not go back. The order's refund lock applies (see POST /v1/orders/:id/refunds): when Payments does not answer, the refund is kept pending and sent again on use. 422 validation_failed at /amount (1 to refundable; nothing paid left on the order; with method online, more than Payments took), /method (not one of the methods, or online on an order not paid through Payments), /reference or /note; 404 not_found (the claim or its order); 409 conflict when the order changed meanwhile; 502 payments_refused and 503 payments_unavailable (nothing is refunded). Send an Idempotency-Key so a retried request refunds once. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
 		"body": {
 			"type": "object",
 			"required": ["amount"],
@@ -27007,6 +27671,37 @@
 					"type": "string",
 					"maxLength": 1000,
 					"description": "Kept in the history, on the order’s refund and told to the shopper (default: the amount)."
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role refunded (default: the claim's own when it already has that role, else the role's first; 422 validation_failed at /status for another)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ReturnDetail"
+		}
+	},
+	"POST /v1/admin/returns/:id/credit": {
+		"summary": "Give store credit on a claim (again for more) (Orders admin widget)",
+		"description": "Only when the claim's kind has the store_credit outcome and its status has the role approved, received or credited (409 move_not_allowed otherwise, also when the claim changed meanwhile); the claim moves to its credited status (or the one named). Store credit is given as a one-use code of the amount (a fixed coupon, limit 1, any product, no end date: the shopper uses it at checkout; what an order does not use of it is not kept), so the Coupons feature must be on (409 feature_off). At most creditable (see the claim): what its lines were paid minus what it refunded or credited, never more than the order was paid and not refunded yet. On the claim's first money back the units count as returned on the order and, with loyalty on, points are taken back in proportion (the returns setting pointsBack proportional; full_refund_only waits for refunds). 422 validation_failed at /amount, /status or /note; 404 not_found. Send an Idempotency-Key so a retried request gives credit once. The shopper gets the ecommerce.return_status message with the code (values credit and creditCode) and the return.status_changed hook runs.",
+		"body": {
+			"type": "object",
+			"required": ["amount"],
+			"properties": {
+				"amount": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Minor units, at most the claim's creditable."
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role credited."
+				},
+				"note": {
+					"type": "string",
+					"maxLength": 1000,
+					"description": "Kept in the history and told to the shopper."
 				}
 			}
 		},
@@ -27023,7 +27718,7 @@
 	},
 	"POST /v1/admin/returns/:id/close": {
 		"summary": "Close a claim (Orders admin widget)",
-		"description": "Only while the claim is approved, received or refunded (409 move_not_allowed otherwise, also when the claim changed meanwhile). A warranty claim closed without a refund gives its units back (they can be claimed again). 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
+		"description": "Only while the claim's status has the role approved, received or refunded (409 move_not_allowed otherwise, also when the claim changed meanwhile). A warranty claim closed without a refund gives its units back (they can be claimed again). 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
 		"body": {
 			"type": "object",
 			"required": [],
@@ -27032,6 +27727,10 @@
 					"type": "string",
 					"maxLength": 1000,
 					"description": "Kept in the history and told to the shopper."
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role closed (default: the claim's own when it already has that role, else the role's first; 422 validation_failed at /status for another)."
 				}
 			}
 		},
@@ -27041,7 +27740,7 @@
 	},
 	"POST /v1/admin/returns/:id/replace": {
 		"summary": "Mark a claim replaced (final) (Orders admin widget)",
-		"description": "Only while the claim is approved or received, and only for exchange or warranty claims (409 move_not_allowed otherwise, also when the claim changed meanwhile). 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
+		"description": "Only when the claim's kind has the replace outcome. Only while the claim's status has the role approved or received, and only for exchange or warranty claims (409 move_not_allowed otherwise, also when the claim changed meanwhile). 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
 		"body": {
 			"type": "object",
 			"required": [],
@@ -27050,6 +27749,10 @@
 					"type": "string",
 					"maxLength": 1000,
 					"description": "Kept in the history and told to the shopper."
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role replaced (default: the claim's own when it already has that role, else the role's first; 422 validation_failed at /status for another)."
 				}
 			}
 		},
@@ -27059,11 +27762,37 @@
 	},
 	"POST /v1/admin/returns/:id/repair": {
 		"summary": "Mark a warranty claim repaired (final) (Orders admin widget)",
-		"description": "Only while the claim is approved or received, and only for warranty claims (409 move_not_allowed otherwise, also when the claim changed meanwhile). The item went back to the shopper: its units can be claimed again. 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
+		"description": "Only when the claim's kind has the repair outcome. Only while the claim's status has the role approved or received, and only for warranty claims (409 move_not_allowed otherwise, also when the claim changed meanwhile). The item went back to the shopper: its units can be claimed again. 404 not_found; 422 validation_failed at /note. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
 		"body": {
 			"type": "object",
 			"required": [],
 			"properties": {
+				"note": {
+					"type": "string",
+					"maxLength": 1000,
+					"description": "Kept in the history and told to the shopper."
+				},
+				"status": {
+					"type": "string",
+					"description": "A status of the claim_statuses list with the role repaired (default: the claim's own when it already has that role, else the role's first; 422 validation_failed at /status for another)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ReturnDetail"
+		}
+	},
+	"POST /v1/admin/returns/:id/status": {
+		"summary": "Move a claim to another status of its role (Orders admin widget)",
+		"description": "Statuses of one role are the merchant's steps inside it (approved → label sent, received → inspecting …). 422 validation_failed at /status (not another status of the claim's role) or /note; 404 not_found; 409 move_not_allowed when the claim changed meanwhile. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
+		"body": {
+			"type": "object",
+			"required": ["status"],
+			"properties": {
+				"status": {
+					"type": "string",
+					"description": "Another key of the claim_statuses list with the claim's role."
+				},
 				"note": {
 					"type": "string",
 					"maxLength": 1000,

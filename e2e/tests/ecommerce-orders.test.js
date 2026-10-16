@@ -997,8 +997,14 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 
 	it('handles claims: exchange and fixed reasons, prefixed references, notes, restock per line, refunds by method (E33)', async () => {
 		await configure({
-			'returns.kinds': ['return', 'warranty', 'exchange'],
+			// the seeded claim kinds, exchange offered to shoppers too (E18)
+			'list.claim_kinds': [
+				{ key: 'return', label: 'Return', window: 'return', outcomes: ['refund'], shoppers: true },
+				{ key: 'warranty', label: 'Warranty', window: 'warranty', outcomes: ['refund', 'replace', 'repair'], shoppers: true },
+				{ key: 'exchange', label: 'Exchange', window: 'return', outcomes: ['refund', 'replace'], shoppers: true },
+			],
 			'returns.reasons': ['Faulty', 'Wrong item'],
+			'returns.otherReason': false,
 			'returns.referencePrefix': 'RR-',
 		});
 		const delivered = async () => {

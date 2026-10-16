@@ -1,7 +1,9 @@
 /**
  * Returns and warranty claims in the shopper's orders (feature `returns`, PLAN 0.8.8 "Returns and warranty"): the
- * claim form of a delivered order (the lines still claimable and their windows, the kind, the quantities, the reason
- * and photos uploaded straight to the merchant's storage with a signed address) and the shopper's own claims.
+ * claim form of a delivered order (the lines still claimable and their windows, the kinds the shop offers shoppers, the
+ * quantities, the reason — the shop's own list plus "Other" with the shopper's words, or free text when it lists none
+ * (E17) — and photos uploaded straight to the merchant's storage with a signed address) and the shopper's own claims,
+ * by the shop's names of their kinds and statuses (E18).
  * @module
  */
 import { quantityText } from '../core/measure.js';
@@ -68,25 +70,26 @@ export const renderClaimForm = async (input) => {
 	}
 	/** @type {any[]} */
 	const lines = answer.data.lines.filter((/** @type {any} */ line) => line.claimable > 0);
-	/** @type {Array<'return' | 'warranty'>} */
-	const kinds = /** @type {Array<'return' | 'warranty'>} */ (['return', 'warranty']).filter((kind) =>
-		lines.some((line) => line[kind].open),
-	);
+	// the kinds the shop offers shoppers whose window is open on some line (the server sends them, E17)
+	/** @type {Array<{ key: string, label: string, window: 'return' | 'warranty' }>} */
+	const kinds = (answer.data.kinds ?? []).filter((/** @type {any} */ kind) => lines.some((line) => line[kind.window]?.open));
 	if (kinds.length === 0) {
 		box.replaceChildren(h(doc, 'p', { class: 'hint' }, t('returns.none')));
 		return;
 	}
 	const kind = select(
 		doc,
-		kinds.map((key) => /** @type {[string, string]} */ ([key, t(`returns.kind.${key}`)])),
-		kinds[0] ?? 'return',
+		kinds.map((entry) => /** @type {[string, string]} */ ([entry.key, entry.label])),
+		kinds[0]?.key ?? '',
 	);
+	/** The window of the kind chosen. */
+	const windowOf = () => kinds.find((entry) => entry.key === kind.value)?.window ?? 'return';
 	const linesBox = h(doc, 'div', { class: 'stack' });
 	/** @type {Map<string, HTMLSelectElement>} */
 	const quantities = new Map();
 	const renderLines = () => {
 		quantities.clear();
-		const chosen = /** @type {'return' | 'warranty'} */ (kind.value);
+		const chosen = windowOf();
 		linesBox.replaceChildren(
 			...lines
 				.filter((line) => line[chosen].open)
@@ -124,7 +127,34 @@ export const renderClaimForm = async (input) => {
 	};
 	kind.addEventListener('change', renderLines);
 	renderLines();
-	const reason = /** @type {HTMLTextAreaElement} */ (h(doc, 'textarea', { maxlength: '1000', rows: '3', required: '' }));
+	// the shop's reasons, plus Other with the shopper's words (when the shop offers it); none listed: free text
+	/** @type {string[]} */
+	const reasons = (Array.isArray(answer.data.reasons) ? answer.data.reasons : []).filter(
+		(/** @type {unknown} */ text) => typeof text === 'string' && text.trim() !== '',
+	);
+	const offersOther = answer.data.otherReason !== false;
+	/** Other's value: no listed reason is empty. */
+	const OTHER = '';
+	const picked =
+		reasons.length > 0
+			? select(
+					doc,
+					[
+						...reasons.map((text) => /** @type {[string, string]} */ ([text, text])),
+						...(offersOther ? [/** @type {[string, string]} */ ([OTHER, t('returns.reasonOther')])] : []),
+					],
+					reasons[0] ?? '',
+				)
+			: null;
+	const reason = /** @type {HTMLTextAreaElement} */ (h(doc, 'textarea', { maxlength: '1000', rows: '3' }));
+	const reasonField = field(doc, 'ss-claim-reason', t(picked ? 'returns.reasonOtherText' : 'returns.reason'), reason);
+	const showOther = () => {
+		reasonField.hidden = picked !== null && picked.value !== OTHER;
+	};
+	picked?.addEventListener('change', showOther);
+	showOther();
+	/** The reason sent: the reason picked, else what the shopper typed. */
+	const reasonText = () => (picked && picked.value !== OTHER ? picked.value : reason.value.trim());
 	const { maxPhotos, photoMaxMb } = settings.returns;
 	const photos = /** @type {HTMLInputElement} */ (
 		h(doc, 'input', { type: 'file', accept: PHOTO_TYPES.join(','), multiple: '' })
@@ -138,7 +168,8 @@ export const renderClaimForm = async (input) => {
 		h(doc, 'h2', {}, t('returns.formTitle')),
 		field(doc, 'ss-claim-kind', t('returns.kind'), kind),
 		linesBox,
-		field(doc, 'ss-claim-reason', t('returns.reason'), reason),
+		picked ? field(doc, 'ss-claim-reason-pick', t('returns.reason'), picked) : null,
+		reasonField,
 		maxPhotos > 0 ? field(doc, 'ss-claim-photos', t('returns.photos', { max: maxPhotos, mb: photoMaxMb }), photos) : null,
 		submit,
 		status,
@@ -151,7 +182,7 @@ export const renderClaimForm = async (input) => {
 			.map(([lineId, control]) => ({ lineId, quantity: Number(control.value) }))
 			.filter((line) => line.quantity > 0);
 		if (chosen.length === 0) return void (status.textContent = t('returns.chooseItems'));
-		if (!reason.value.trim()) return void (status.textContent = t('returns.reasonNeeded'));
+		if (!reasonText()) return void (status.textContent = t('returns.reasonNeeded'));
 		const files = [...(photos.files ?? [])];
 		if (files.length > maxPhotos) return void (status.textContent = t('returns.tooManyPhotos', { max: maxPhotos }));
 		if (files.some((file) => !PHOTO_TYPES.includes(file.type) || file.size > photoMaxMb * 1_048_576))
@@ -167,7 +198,7 @@ export const renderClaimForm = async (input) => {
 		attemptKey ??= shop.newKey();
 		const sent = await shop.call('/v1/shop/returns', {
 			method: 'POST',
-			body: { orderId, kind: kind.value, lines: chosen, reason: reason.value.trim(), photos: uploaded.keys },
+			body: { orderId, kind: kind.value, lines: chosen, reason: reasonText(), photos: uploaded.keys },
 			idempotencyKey: attemptKey,
 		});
 		submit.removeAttribute('disabled');
@@ -210,13 +241,24 @@ export const renderClaims = async ({ box, t, shop, config, settings, win }) => {
 				'span',
 				{ class: 'meta' },
 				t('returns.claimLine', {
-					kind: t(`returns.kind.${claim.kind}`),
-					status: t(`returns.status.${claim.status}`),
+					kind: claim.kindLabel,
+					status: claim.statusLabel,
 					date: dateText(claim.createdAt, { time: false }),
 				}),
 			),
 			claim.refundAmount > 0
 				? h(doc, 'span', { class: 'save' }, t('returns.refunded', { amount: money(claim.refundAmount, settings.currency) }))
+				: null,
+			claim.creditAmount > 0
+				? h(
+						doc,
+						'span',
+						{ class: 'save' },
+						t('returns.credited', {
+							amount: money(claim.creditAmount, settings.currency),
+							codes: (claim.creditCodes ?? []).join(', '),
+						}),
+					)
 				: null,
 			last?.note ? h(doc, 'p', { class: 'reply' }, last.note) : null,
 		);

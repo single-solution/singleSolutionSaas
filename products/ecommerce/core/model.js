@@ -606,22 +606,27 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string} orderId
  * @property {string} orderNumber
  * @property {string} userId
- * @property {'return' | 'warranty' | 'exchange'} kind `exchange` (E33)
+ * @property {string} kind a key of the `claim_kinds` list (E18)
+ * @property {'return' | 'warranty'} window the kind's window when the claim was made
+ * @property {Array<'refund' | 'store_credit' | 'replace' | 'repair'>} outcomes the kind's outcomes when it was made
  * @property {Array<{ lineId: string, quantity: number, serials: string[], restock?: boolean,
  *   restockedAt?: Date | null }>} lines `restock`: staff's choice when received (E33)
  * @property {string} reason
  * @property {MediaRecord[]} photos
- * @property {'requested' | 'approved' | 'rejected' | 'received' | 'refunded' | 'replaced' | 'repaired' | 'closed'} status
+ * @property {string} status a key of the `claim_statuses` list (E18)
+ * @property {import('./returns.js').ClaimRole} role the status's role (what code relies on)
  * @property {number} refundAmount minor units (0 = none)
  * @property {string | null} refundId the Payments refund id, or null when recorded only
  * @property {Date | null} restockedAt
- * @property {Array<{ at: Date, status: string, by: string, note: string, byKind?: string,
- *   code?: import('./returns.js').ClaimNote }>} history `byKind` and `code` as on an order's history (`code`:
- *   `core/returns.js` `CLAIM_NOTES`)
+ * @property {Array<{ at: Date, status: string, role?: string, by: string, note: string, byKind?: string,
+ *   code?: import('./returns.js').ClaimNote }>} history `role`: the status's role then; `byKind` and `code` as on an
+ *   order's history (`code`: `core/returns.js` `CLAIM_NOTES`)
  * @property {string} [reference] the claim's reference (`R-…`, E33)
  * @property {Array<{ at: Date, by: string, text: string }>} [notes] staff notes (E33)
  * @property {string} [refundMethod] how the refund was given (E33)
  * @property {string} [refundReference]
+ * @property {number} [creditAmount] store credit given, minor units (E18)
+ * @property {string[]} [creditCodes] the one-use codes the store credit was given as
  */
 /**
  * @typedef {{ id: string, productId: string, userId: string, orderId: string, name: string, rating: number, title: string,

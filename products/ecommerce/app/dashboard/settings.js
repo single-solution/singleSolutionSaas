@@ -13,6 +13,7 @@
 import { startTransition, useState } from 'react';
 import { Callout, Masonry, Section, Select, SwapTransition, cx } from '@ss/ui';
 import { call, fill, useLoad } from './api.js';
+import { ClaimKindsEditor, ClaimStatusesEditor } from './claim-lists.js';
 import { GradesEditor } from './grades.js';
 import { ItemTypesEditor } from './item-types.js';
 import { OrderFlowEditor } from './flow-editor.js';
@@ -319,6 +320,12 @@ export function SettingsTab({ websiteId: id }) {
 							policies: seen('checkout') ? <PoliciesEditor websiteId={websiteId} off={off('checkout')} /> : null,
 							customers: seen('checkout') ? (
 								<SegmentsEditor websiteId={websiteId} off={off('checkout')} currency={currency} />
+							) : null,
+							returns: seen('returns') ? (
+								<>
+									<ClaimKindsEditor websiteId={websiteId} off={off('returns')} />
+									<ClaimStatusesEditor websiteId={websiteId} off={off('returns')} />
+								</>
 							) : null,
 							rolePrices: seen('role_pricing') ? (
 								<RolePricesEditor websiteId={websiteId} off={off('role_pricing')} currency={currency} />

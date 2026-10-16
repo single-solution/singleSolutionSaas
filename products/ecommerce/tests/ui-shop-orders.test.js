@@ -694,6 +694,12 @@ describe('returns', () => {
 		orderId: 'ord_1',
 		number: 'SO-1',
 		deliveredAt: '2026-10-01T10:00:00.000Z',
+		kinds: [
+			{ key: 'return', label: 'Return', window: 'return' },
+			{ key: 'warranty', label: 'Warranty repair or replacement', window: 'warranty' },
+		],
+		reasons: [],
+		otherReason: true,
 		lines: [
 			{
 				lineId: 'oln_1',
@@ -736,10 +742,15 @@ describe('returns', () => {
 		orderId: 'ord_1',
 		orderNumber: 'SO-1',
 		kind: 'return',
+		kindLabel: 'Return',
 		lines: [],
 		reason: 'Broken',
 		status: 'requested',
+		statusLabel: 'Requested',
+		role: 'requested',
 		refundAmount: 0,
+		creditAmount: 0,
+		creditCodes: [],
 		history: [{ at: '2026-10-02T10:00:00.000Z', status: 'requested', note: '' }],
 		createdAt: '2026-10-02T10:00:00.000Z',
 		...over,
@@ -765,8 +776,13 @@ describe('returns', () => {
 							items: [
 								claim('2', {
 									kind: 'warranty',
-									status: 'refunded',
+									kindLabel: 'Warranty',
+									status: 'money_back',
+									statusLabel: 'Money sent back',
+									role: 'refunded',
 									refundAmount: 5000,
+									creditAmount: 1000,
+									creditCodes: ['CREDIT-ABCDEFGH'],
 									history: [{ at: '2026-10-03T10:00:00.000Z', status: 'refunded', note: 'Refunded in full' }],
 								}),
 							],
@@ -779,7 +795,9 @@ describe('returns', () => {
 		await click(buttonOf(host, text('returns.more')));
 		expect(textOf(host)).toContain(text('returns.refunded', { amount: 'GBP 50.00' }));
 		expect(textOf(host)).toContain('Refunded in full');
-		expect(textOf(host)).toContain(text('returns.status.refunded'));
+		// the shop's own names of the kind and status (E18), and the store credit with its code
+		expect(textOf(host)).toContain('Warranty · Money sent back');
+		expect(textOf(host)).toContain(text('returns.credited', { amount: 'GBP 10.00', codes: 'CREDIT-ABCDEFGH' }));
 		resetPage();
 		const none = await mountOrders(delivered({ 'GET /v1/shop/returns': () => ok({ items: [], nextCursor: null }) }));
 		expect(textOf(none)).toContain(text('returns.noClaims'));
@@ -867,6 +885,50 @@ describe('returns', () => {
 		await submit(form());
 		expect(fake.all('POST /v1/shop/returns').at(-1)?.body.kind).toBe('warranty');
 		expect(textOf(host)).toContain(text('returns.sent', { reference: 'R-9' }));
+	});
+
+	it('offers the kinds the server sends (exchange too) and the shop reasons with Other (E17)', async () => {
+		const fake = delivered({
+			'GET /v1/shop/returns': () => ok({ items: [], nextCursor: null }),
+			'GET /v1/shop/orders/ord_1/returnable': () =>
+				ok({
+					...RETURNABLE,
+					kinds: [
+						{ key: 'swap', label: 'Swap for another size', window: 'return' },
+						{ key: 'fix', label: 'Repair', window: 'warranty' },
+					],
+					reasons: ['Too small', 'Damaged'],
+					otherReason: true,
+				}),
+			'POST /v1/shop/returns': () => ok(claim('9'), 201),
+		});
+		const host = await mountOrders(fake);
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		await click(buttonOf(host, text('orders.claim')));
+		const kinds = /** @type {HTMLSelectElement} */ ($(host, '#ss-claim-kind'));
+		expect([...kinds.options].map((option) => option.textContent)).toEqual(['Swap for another size', 'Repair']);
+		const pick = /** @type {HTMLSelectElement} */ ($(host, '#ss-claim-reason-pick'));
+		expect([...pick.options].map((option) => option.textContent)).toEqual([
+			'Too small',
+			'Damaged',
+			text('returns.reasonOther'),
+		]);
+		// a listed reason hides the text box; Other shows it
+		const box = /** @type {HTMLElement} */ ($(host, '#ss-claim-reason').closest('.field'));
+		expect(box.hidden).toBe(true);
+		await setValue($(host, '#ss-claim-oln_1'), '1');
+		await setValue(pick, 'Damaged');
+		await submit($(host, 'form.box'));
+		expect(fake.all('POST /v1/shop/returns').at(-1)?.body).toMatchObject({ kind: 'swap', reason: 'Damaged' });
+		await click(buttonOf(host, text('orders.claim')));
+		await setValue($(host, '#ss-claim-oln_1'), '1');
+		await setValue($(host, '#ss-claim-reason-pick'), '');
+		expect(/** @type {HTMLElement} */ ($(host, '#ss-claim-reason').closest('.field')).hidden).toBe(false);
+		await submit($(host, 'form.box'));
+		expect(textOf(host)).toContain(text('returns.reasonNeeded'));
+		$(host, '#ss-claim-reason').value = 'Wrong color';
+		await submit($(host, 'form.box'));
+		expect(fake.all('POST /v1/shop/returns').at(-1)?.body).toMatchObject({ kind: 'swap', reason: 'Wrong color' });
 	});
 
 	it('says when nothing can be claimed or the lines cannot be read', async () => {
