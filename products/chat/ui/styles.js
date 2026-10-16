@@ -51,7 +51,7 @@ p { overflow-wrap: anywhere; }
   border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); }
 .window { display: flex; flex-direction: column; width: 360px; max-width: 100%; height: min(600px, calc(100vh - 104px));
   background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); overflow: hidden; }
-.chat[data-style='side_panel'] .window { position: fixed; top: 0; bottom: 0; right: 0; height: auto; width: 400px; border-radius: 0; }
+.chat[data-style='side_panel'] .window { position: fixed; top: 0; bottom: 0; right: 0; height: auto; width: min(400px, 100vw); max-width: 100vw; border-radius: 0; }
 .chat[data-style='side_panel'][data-position='bottom-left'] .window { right: auto; left: 0; }
 .head { display: flex; align-items: center; gap: 8px; padding: 12px; background: var(--accent); color: var(--on-accent); }
 .head .name { flex: 1; } .head .close { color: inherit; }
