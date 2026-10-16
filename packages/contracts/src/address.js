@@ -310,16 +310,25 @@ export const addressProblem = (address, { country = '', required = [], ask = [] 
 };
 
 /**
- * An address as its country writes it: the place lines in the country's order, empty parts and lines left out.
+ * An address as its country writes it: the place lines in the country's order, empty parts and lines left out; a part
+ * the country does not use is kept on a line of its own after the part it usually follows (never lost).
  * @param {Partial<Record<PlacePart | 'country', unknown>>} address
  * @param {string} [homeCountry] the country of an address without one
  * @returns {string[]}
  */
 export const addressLines = (address, homeCountry = '') => {
 	const format = addressFormat(textOf(address.country) || homeCountry);
-	const used = new Set(format.parts);
-	/** @type {FormatLine[]} the country's lines, then any part it does not use (kept, never lost) */
-	const lines = [...format.lines, ...PLACE_PARTS.filter((part) => !used.has(part)).map((part) => [{ part, before: '' }])];
+	/** @type {FormatLine[]} */
+	const lines = [...format.lines];
+	for (const part of PLACE_PARTS) {
+		if (format.parts.includes(part)) continue;
+		const usual = PLACE_PARTS.indexOf(part);
+		const after = lines.reduce(
+			(last, line, index) => (line.some((each) => PLACE_PARTS.indexOf(each.part) < usual) ? index : last),
+			-1,
+		);
+		lines.splice(after + 1, 0, [{ part, before: '' }]);
+	}
 	return lines
 		.map((line) => {
 			let out = '';

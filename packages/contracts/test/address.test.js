@@ -97,13 +97,15 @@ describe('address formats per country (one table for every product)', () => {
 		expect(
 			addressLines({ country: 'JP', line1: '1-1 Chiyoda', city: 'Chiyoda-ku', region: 'Tokyo', postalCode: '1000001' }),
 		).toEqual(['1000001', 'Tokyo', 'Chiyoda-ku', '1-1 Chiyoda']);
-		// a part the country does not use is still shown, never lost
+		// a part the country does not use is still shown after the part it usually follows, never lost
 		expect(addressLines({ country: 'GB', line1: '1 High St', area: 'Soho', city: 'London', postalCode: 'w1d 1aa' })).toEqual([
 			'1 High St',
+			'Soho',
 			'London',
 			'W1D 1AA',
-			'Soho',
 		]);
+		expect(addressLines({ line1: '1 Main St', area: 'Camden', city: 'London' })).toEqual(['1 Main St', 'Camden', 'London']);
+		expect(addressLines({ country: 'JP', region: 'Tokyo', area: 'Chiyoda' })).toEqual(['Tokyo', 'Chiyoda']);
 	});
 
 	it('lists countries by code and name, and reads a code or an English name', () => {
