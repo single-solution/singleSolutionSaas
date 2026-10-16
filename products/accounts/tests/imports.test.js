@@ -72,6 +72,7 @@ const users = () => [
 		emailVerified: true,
 		role: 'support_staff',
 		passwordHash: bcrypt.hashSync('staff secret 1', 4),
+		passwordChangedAt: '2024-04-15T12:00:00Z',
 		notes: 'Joined in spring',
 		lastSignInAt: '2024-05-01T08:00:00Z',
 		createdAt: '2023-03-01T09:00:00Z',
@@ -265,8 +266,11 @@ describe('import routes', () => {
 		expect(staff).toMatchObject({
 			identity: 'email',
 			notes: 'Joined in spring',
+			passwordChangedAt: new Date('2024-04-15T12:00:00Z'),
 			lastSignInAt: new Date('2024-05-01T08:00:00Z'),
 		});
+		// a password moved in without its time has none
+		expect((await store.users.get(ids.member))?.passwordChangedAt ?? null).toBeNull();
 		// the plain two-step secret is never stored: only its sealed form and the old recovery hashes
 		const owner = await store.users.get(ids.owner);
 		expect(owner?.twoStep?.sealed).toMatch(/^ss2\./);
@@ -476,6 +480,7 @@ describe('import checks', () => {
 						passwordHash: 42,
 						twoStep: { secret: SECRET, recoveryHashes: ['abc'], issuer: 'x' },
 						consents: { terms: { version: '', given: true, at: 'x' } },
+						passwordChangedAt: 'x',
 						lastSignInAt: 'x',
 						createdAt: '2024-01-01',
 						roleSince: 5,
@@ -502,6 +507,7 @@ describe('import checks', () => {
 			'/twoStep/issuer',
 			'/twoStep/recoveryHashes',
 			'/consents/terms/version',
+			'/passwordChangedAt',
 			'/lastSignInAt',
 			'/createdAt',
 			'/roleSince',

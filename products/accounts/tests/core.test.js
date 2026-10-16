@@ -29,6 +29,7 @@ import {
 	deviceIdOf,
 	deviceOf,
 	emailRefused,
+	endedByPassword,
 	generateCode,
 	normalizeCode,
 	passwordProblem,
@@ -299,6 +300,21 @@ describe('roles and rules', () => {
 		expect(setupLinkState({ live: null, trace: trace('canceled'), now: 0 })).toEqual({ status: 'canceled' });
 		// gone while it still worked, without a trace saying why
 		expect(setupLinkState({ live: null, trace: trace('issued'), now: 0 })).toEqual({ status: 'canceled' });
+	});
+
+	it('a password change ends the sessions made before it, and only those', () => {
+		const at = (/** @type {number} */ n) => new Date(n);
+		// no change yet: nothing ends
+		expect(endedByPassword({ createdAt: at(1) }, {})).toBe(false);
+		expect(endedByPassword({ createdAt: at(1), passwordChangedAt: null }, { passwordChangedAt: null })).toBe(false);
+		// made under the password that stands, or kept across the change
+		expect(endedByPassword({ createdAt: at(1), passwordChangedAt: at(5) }, { passwordChangedAt: at(5) })).toBe(false);
+		// made before the last change (or with no password change known yet)
+		expect(endedByPassword({ createdAt: at(1), passwordChangedAt: at(5) }, { passwordChangedAt: at(9) })).toBe(true);
+		expect(endedByPassword({ createdAt: at(1), passwordChangedAt: null }, { passwordChangedAt: at(9) })).toBe(true);
+		// a session of an earlier release stands at its start
+		expect(endedByPassword({ createdAt: at(1) }, { passwordChangedAt: at(9) })).toBe(true);
+		expect(endedByPassword({ createdAt: at(9) }, { passwordChangedAt: at(9) })).toBe(false);
 	});
 
 	it('snippets name the website when it is known', () => {

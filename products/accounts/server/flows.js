@@ -14,6 +14,7 @@ import { sessionEnd } from '../core/roles.js';
 import {
 	CODE_ATTEMPTS,
 	emailRefused,
+	endedByPassword,
 	generateCode,
 	lockAfter,
 	newUserNameOf,
@@ -95,6 +96,7 @@ const blankUser = (role) => ({
 	role,
 	providers: {},
 	passwordHash: null,
+	passwordChangedAt: null,
 	twoStep: null,
 	failedLogins: 0,
 	lockedUntil: null,
@@ -193,6 +195,8 @@ export const createFlows = (product, service) => {
 			deviceHash: risk.deviceHash,
 			identity: identityOfMethod(method),
 			...extra,
+			// a password given at sign-up is its first
+			passwordChangedAt: extra.passwordHash ? new Date(now()) : null,
 		});
 		if (!user) throw problem('already_exists', 'An account with this email address or phone number exists. Sign in instead.');
 		await s.store.signups.add(risk);
@@ -539,6 +543,7 @@ export const createFlows = (product, service) => {
 		if (!(await s.store.codes.consume(recordId))) throw problem('code_invalid', 'The code is not valid or has expired.');
 		await s.store.users.update(user.id, {
 			passwordHash,
+			passwordChangedAt: new Date(now()),
 			failedLogins: 0,
 			lockedUntil: null,
 			lockLevel: 0,
@@ -605,6 +610,7 @@ export const createFlows = (product, service) => {
 		if (!user) throw problem('code_invalid', 'This reset link is not valid or has expired.');
 		await s.store.users.update(user.id, {
 			passwordHash,
+			passwordChangedAt: new Date(now()),
 			failedLogins: 0,
 			lockedUntil: null,
 			lockLevel: 0,
@@ -956,7 +962,8 @@ export const createFlows = (product, service) => {
 			throw out();
 		}
 		const user = await s.store.users.get(found.userId);
-		if (!user || user.blocked || user.status !== 'active') {
+		// a session made before the user's last password change ends for good
+		if (!user || user.blocked || user.status !== 'active' || endedByPassword(found, user)) {
 			await s.store.sessions.revoke(found.userId, found.id);
 			throw out();
 		}
@@ -1008,6 +1015,7 @@ export const createFlows = (product, service) => {
 		let active =
 			(await s.store.users.update(user.id, {
 				passwordHash,
+				passwordChangedAt: new Date(now()),
 				failedLogins: 0,
 				lockedUntil: null,
 				lockLevel: 0,
@@ -1071,6 +1079,7 @@ export const createFlows = (product, service) => {
 			set.passwordHash = await newPassword(s, body.password, { who: { name: name || user.name, email: user.email } });
 		else if (body.password !== undefined && s.on.includes('phone_password') && user.phone)
 			set.passwordHash = await newPassword(s, body.password, { method: 'phone_password', who: { name: name || user.name } });
+		if (set.passwordHash) set.passwordChangedAt = new Date(now());
 		if (!(await s.store.codes.consume(record.id))) throw problem('code_invalid', 'This invite is not valid or has expired.');
 		const active = (await s.store.users.update(user.id, set)) ?? user;
 		return service.finish(s, active, { method: 'invite', ...service.howOf(ctx), consents: body.consents });

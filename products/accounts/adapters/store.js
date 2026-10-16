@@ -53,6 +53,8 @@ import { MAX_ROLES, OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core
  * @property {Date} expiresAt
  * @property {Date} lastUsedAt
  * @property {Date | null} revokedAt
+ * @property {Date | null} [passwordChangedAt] the user's `passwordChangedAt` this session was made or kept under (a
+ *   session of an earlier release has none: its `createdAt` stands in); it ends when the user's is later
  * @property {Date} createdAt
  */
 
@@ -494,6 +496,13 @@ export const createStore = (data, { now }) => {
 						{ $set: { revokedAt: at(), sealedRefresh: null } },
 					)
 				).modifiedCount === 1,
+			/**
+			 * Keep a session across a password change: it now stands under the user's new `passwordChangedAt` (the device
+			 * that changed the password stays signed in; every other session of the user ends).
+			 * @param {string} id @param {Date} passwordChangedAt
+			 */
+			keep: async (id, passwordChangedAt) =>
+				(await sessions.updateOne({ websiteId, id, revokedAt: null }, { $set: { passwordChangedAt } })).modifiedCount === 1,
 			/** @param {string} userId */
 			revokeAll: async (userId) =>
 				(

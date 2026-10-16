@@ -75,6 +75,7 @@ const IMPORT_FIELDS = Object.freeze({
 		'providers',
 		'identity',
 		'passwordHash',
+		'passwordChangedAt',
 		'twoStep',
 		'consents',
 		'tags',
@@ -494,6 +495,7 @@ export const checkImportedUser = (record, rules) => {
 	else if (!absent(record.consents)) errors.push({ path: '/consents', message: 'consents is { key: { version, given, at } }.' });
 	const tags = absent(record.tags) ? { ok: /** @type {const} */ (true), value: [] } : checkTags(record.tags);
 	if (!tags.ok) errors.push({ path: '/tags', message: tags.message });
+	const passwordChangedAt = optionalTime(record, 'passwordChangedAt', errors);
 	const lastSignInAt = optionalTime(record, 'lastSignInAt', errors);
 	const createdAt = optionalTime(record, 'createdAt', errors);
 	const roleSince = optionalTime(record, 'roleSince', errors) ?? createdAt;
@@ -513,6 +515,7 @@ export const checkImportedUser = (record, rules) => {
 		providers,
 		...(identity ? { identity } : {}),
 		passwordHash: /** @type {string | null} */ (passwordHash),
+		passwordChangedAt,
 		twoStep,
 		failedLogins: 0,
 		lockedUntil: null,

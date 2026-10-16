@@ -355,6 +355,7 @@
 	"users.lastSignInLabel": "Last sign-in",
 	"users.never": "Never",
 	"users.password": "Password",
+	"users.passwordChanged": "Password changed",
 	"users.yes": "Yes",
 	"users.no": "No",
 	"users.twoStepLabel": "Two-step sign-in",

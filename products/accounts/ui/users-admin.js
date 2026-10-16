@@ -566,6 +566,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 						[t('users.joined'), date(user.createdAt)],
 						[t('users.lastSignInLabel'), user.lastSignInAt ? date(user.lastSignInAt) : t('users.never')],
 						[t('users.password'), user.hasPassword ? t('users.yes') : t('users.no')],
+						[t('users.passwordChanged'), user.passwordChangedAt ? date(user.passwordChangedAt) : ''],
 						[
 							t('users.twoStepLabel'),
 							user.twoStep ? formatText(t('users.twoStepOn'), { count: user.recoveryCodesLeft ?? 0 }) : t('users.no'),

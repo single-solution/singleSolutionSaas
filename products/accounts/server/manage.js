@@ -307,6 +307,7 @@ export const createManage = (product, service, flows) => {
 			identity: draft.email ? 'email' : 'phone',
 			role,
 			passwordHash,
+			passwordChangedAt: passwordHash ? new Date(now()) : null,
 			notes: typeof body.notes === 'string' ? body.notes : '',
 			custom: custom.value,
 			tags: tags.value,
@@ -529,6 +530,7 @@ export const createManage = (product, service, flows) => {
 			const next = { ...user, ...set };
 			const method = service.passwordMethodOf(s, /** @type {any} */ (next)) ?? 'email_password';
 			set.passwordHash = await flows.newPassword(s, body.password, { method, who: /** @type {any} */ (next) });
+			set.passwordChangedAt = new Date(now());
 			Object.assign(set, { failedLogins: 0, lockedUntil: null, lockLevel: 0 });
 			changes.push({ action: 'user.password_changed' });
 		}

@@ -20,7 +20,7 @@ import { labelOf, valuesOf } from '../core/activity.js';
 import { ROLE_TEMPLATES, SIGN_UP_TEMPLATE, remembered, sessionEnd, signInRefusal } from '../core/roles.js';
 import { answerConsents, consentsToAsk } from '../core/consents.js';
 import { checkAddresses, selfView } from '../core/profile.js';
-import { OPEN_SIGN_UP, deviceIdOf, deviceOf } from '../core/rules.js';
+import { OPEN_SIGN_UP, deviceIdOf, deviceOf, endedByPassword } from '../core/rules.js';
 import { OTHER_PRODUCTS, SIGN_IN_HEADER, SIGN_IN_METHODS, SIGN_IN_SECONDS } from '../core/widgets.js';
 import {
 	keyAadOf,
@@ -242,6 +242,8 @@ export const createService = (product) => {
 			expiresAt,
 			lastUsedAt: new Date(now()),
 			revokedAt: null,
+			// made under the user's password as it is now: a later change ends it
+			passwordChangedAt: user.passwordChangedAt ?? null,
 		});
 		const fresh =
 			(await s.store.users.update(user.id, {
@@ -435,6 +437,11 @@ export const createService = (product) => {
 		const user = await s.store.users.get(checked.identity.subject);
 		if (!session || session.revokedAt || session.expiresAt.getTime() <= now() || !user || user.blocked)
 			throw problem('signed_out', 'Sign in again.');
+		// a session made before the user's last password change is over, whatever else did or did not sign it out
+		if (endedByPassword(session, user)) {
+			await s.store.sessions.revoke(user.id, session.id);
+			throw problem('signed_out', 'Sign in again.');
+		}
 		return { s, user, session };
 	};
 

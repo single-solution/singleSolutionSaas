@@ -111,8 +111,10 @@ export const createAccount = (product, service, flows) => {
 		if (user.passwordHash && (typeof body.current !== 'string' || !(await service.checkPassword(s, user, body.current))))
 			throw problem('sign_in_failed', 'The current password is wrong.');
 		const passwordHash = await flows.newPassword(s, body.password, { method, who: user });
-		await s.store.users.update(user.id, { passwordHash });
-		// the other devices sign in again
+		const changedAt = new Date(now());
+		await s.store.users.update(user.id, { passwordHash, passwordChangedAt: changedAt });
+		// this device stays signed in; the other devices sign in again
+		await s.store.sessions.keep(session.id, changedAt);
 		for (const other of await s.store.sessions.ofUser(user.id))
 			if (other.id !== session.id) await s.store.sessions.revoke(user.id, other.id);
 		return undefined;

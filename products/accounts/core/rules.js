@@ -342,6 +342,19 @@ export const deviceOf = (userAgent) => {
  */
 export const deviceIdOf = (value) => (typeof value === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(value) ? value : null);
 
+/**
+ * Whether a password change ended a session: the user's password changed after the session was made (or last kept
+ * across a change). A session of an earlier release, with no time of its own, stands at its start.
+ * @param {{ createdAt: Date, passwordChangedAt?: Date | null }} session
+ * @param {{ passwordChangedAt?: Date | null }} user
+ */
+export const endedByPassword = (session, user) => {
+	const changed = user.passwordChangedAt;
+	if (!changed) return false;
+	const standsAt = session.passwordChangedAt === undefined ? session.createdAt : session.passwordChangedAt;
+	return standsAt === null || standsAt.getTime() < changed.getTime();
+};
+
 // ---------------------------------------------------------------------------------------------- sign-up rules
 
 /**

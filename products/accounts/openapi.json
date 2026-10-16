@@ -12827,6 +12827,7 @@
 					"role",
 					"providers",
 					"hasPassword",
+					"passwordChangedAt",
 					"twoStep",
 					"consents",
 					"deletion",
@@ -12904,6 +12905,14 @@
 					},
 					"hasPassword": {
 						"type": "boolean"
+					},
+					"passwordChangedAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "When the password was last set or changed (null: none yet, or moved in without it). A session made before it has ended: compare it with the sign-in's iat if you keep sign-ins of your own."
 					},
 					"twoStep": {
 						"type": "boolean",
@@ -13100,6 +13109,7 @@
 					"role",
 					"providers",
 					"hasPassword",
+					"passwordChangedAt",
 					"twoStep",
 					"consents",
 					"deletion",
@@ -13172,6 +13182,14 @@
 					},
 					"hasPassword": {
 						"type": "boolean"
+					},
+					"passwordChangedAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "When the password was last set or changed (null: none yet, or moved in without it). A session made before it has ended: compare it with the sign-in's iat if you keep sign-ins of your own."
 					},
 					"twoStep": {
 						"type": "boolean",
@@ -13897,6 +13915,7 @@
 					"role",
 					"providers",
 					"hasPassword",
+					"passwordChangedAt",
 					"twoStep",
 					"consents",
 					"deletion",
@@ -13974,6 +13993,14 @@
 					},
 					"hasPassword": {
 						"type": "boolean"
+					},
+					"passwordChangedAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "When the password was last set or changed (null: none yet, or moved in without it). A session made before it has ended: compare it with the sign-in's iat if you keep sign-ins of your own."
 					},
 					"twoStep": {
 						"type": "boolean",
@@ -14301,6 +14328,7 @@
 					"role",
 					"providers",
 					"hasPassword",
+					"passwordChangedAt",
 					"twoStep",
 					"consents",
 					"deletion",
@@ -14371,6 +14399,14 @@
 					},
 					"hasPassword": {
 						"type": "boolean"
+					},
+					"passwordChangedAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "When the password was last set or changed (null: none yet, or moved in without it). A session made before it has ended: compare it with the sign-in's iat if you keep sign-ins of your own."
 					},
 					"twoStep": {
 						"type": "boolean",

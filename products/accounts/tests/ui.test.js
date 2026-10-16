@@ -1715,6 +1715,7 @@ describe('admin widgets', () => {
 			status: 'pending',
 			lastSignInAt: at(0),
 			roleSince: at(0),
+			passwordChangedAt: at(3_600_000),
 			recoveryCodesLeft: 3,
 			twoStep: true,
 			lockedUntil: at(60_000),
@@ -1792,6 +1793,8 @@ describe('admin widgets', () => {
 		expect(detail.textContent).toContain('termsGiven (version 2, ');
 		expect(detail.textContent).toContain('ana@example.com (verified)');
 		expect(detail.textContent).toContain('On, 3 recovery codes left');
+		// staff see when the password last changed
+		expect(detail.textContent).toContain(`${strings['users.passwordChanged']}${when(at(3_600_000))}`);
 		expect(detail.textContent).toContain('1 Main St, Camden, London');
 		expect(detail.textContent).toContain(formatDeletion(at(0)));
 		await click(buttonIn(root, strings['users.more']));

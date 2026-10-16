@@ -323,6 +323,8 @@ export const resetsByEmail = (user) => user.emailVerified || identityOf(user) ==
  * @property {Identity} [identity] the address the account was made with and signs in by (absent on an imported
  *   account whose source did not say: see `identityOf`)
  * @property {string | null} passwordHash
+ * @property {Date | null} [passwordChangedAt] when the password was last set or changed (null: none yet, or an import
+ *   that did not say); a session made before it ends (`endedByPassword`)
  * @property {{ sealed: string, lastStep: number | null, recovery: Array<{ hash: string, format: 'v1' | 'sha256_prefixed' }>,
  *   enabledAt: Date | null } | null} twoStep recovery codes as hashes with their format (A8)
  * @property {number} failedLogins wrong passwords and two-step codes that still count toward the lock (A9, ST-1)
@@ -379,6 +381,7 @@ export const selfView = (user, fields) => ({
 	role: user.role,
 	providers: Object.keys(user.providers).sort(),
 	hasPassword: Boolean(user.passwordHash),
+	passwordChangedAt: user.passwordChangedAt?.toISOString() ?? null,
 	twoStep: Boolean(user.twoStep?.enabledAt),
 	consents: ownConsents(user.consents),
 	deletion: user.deletion
