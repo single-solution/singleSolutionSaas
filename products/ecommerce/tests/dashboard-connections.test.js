@@ -6,7 +6,7 @@
  */
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render } from '@ss/ui/testing';
+import { cleanup, click, render } from '@ss/ui/testing';
 import { TABS } from '../app/dashboard/tabs.js';
 import { TEXTS } from '../app/dashboard/texts.js';
 import { inDashboard } from './dashboard-provider.js';
@@ -41,11 +41,16 @@ describe('Ecommerce’s connection forms', () => {
 		);
 		const Connections = TABS.connections;
 		const { container } = render(inDashboard(<Connections {...props} />));
-		for (let i = 0; i < 4; i += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
-		const cards = [...container.querySelectorAll('section, article, [class*="card"]')].filter((node) =>
-			node.textContent?.startsWith('courier_2'),
-		);
-		const courier = cards.at(-1)?.textContent ?? '';
+		const settle = async () => {
+			for (let i = 0; i < 4; i += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+		};
+		await settle();
+		// one connection per view of the sidebar: open each
+		for (const name of ['courier_2', 'storage', 'accounts']) {
+			click(/** @type {HTMLElement} */ (container.querySelector(`nav a[href="#connection-${name}"]`)));
+			await settle();
+		}
+		const courier = container.querySelector('[id="section-connection-courier_2"]')?.textContent ?? '';
 		expect(courier).toContain(TEXTS.connections.fields.bookUrl);
 		expect(courier).toContain(TEXTS.connections.fields.trackingPath);
 		expect(courier).toContain(TEXTS.connections.hints.courier);

@@ -32,7 +32,8 @@
 			"maxLength": 20,
 			"x-ui": {
 				"group": "Orders",
-				"order": 14
+				"order": 14,
+				"advanced": true
 			}
 		},
 		"messageChannels": {
@@ -57,7 +58,8 @@
 			"enum": ["text", "html"],
 			"x-ui": {
 				"group": "Messages and pages",
-				"order": 37
+				"order": 37,
+				"advanced": true
 			}
 		},
 		"returnsAccepted": {
@@ -68,7 +70,8 @@
 			"enum": ["unknown", "no"],
 			"x-ui": {
 				"group": "Messages and pages",
-				"order": 38
+				"order": 38,
+				"advanced": true
 			}
 		},
 		"paymentWindowMinutes": {
@@ -104,7 +107,8 @@
 			"maximum": 100,
 			"x-ui": {
 				"group": "Limits",
-				"order": 23
+				"order": 23,
+				"advanced": true
 			}
 		},
 		"placeLimit": {
@@ -116,7 +120,8 @@
 			"maximum": 100,
 			"x-ui": {
 				"group": "Limits",
-				"order": 24
+				"order": 24,
+				"advanced": true
 			}
 		},
 		"placeWindowMinutes": {
@@ -128,7 +133,8 @@
 			"maximum": 1440,
 			"x-ui": {
 				"group": "Limits",
-				"order": 25
+				"order": 25,
+				"advanced": true
 			}
 		},
 		"addressRequired": {
@@ -196,7 +202,8 @@
 			"maxLength": 2,
 			"x-ui": {
 				"group": "Guests and contacts",
-				"order": 7
+				"order": 7,
+				"advanced": true
 			}
 		},
 		"countries": {
@@ -480,7 +487,8 @@
 			"maximum": 500,
 			"x-ui": {
 				"group": "Limits",
-				"order": 26
+				"order": 26,
+				"advanced": true
 			}
 		},
 		"maxQuantity": {
@@ -492,7 +500,8 @@
 			"maximum": 100000,
 			"x-ui": {
 				"group": "Limits",
-				"order": 27
+				"order": 27,
+				"advanced": true
 			}
 		},
 		"successUrl": {
@@ -548,7 +557,8 @@
 			"maximum": 10,
 			"x-ui": {
 				"group": "Orders",
-				"order": 13
+				"order": 13,
+				"advanced": true
 			}
 		},
 		"statusTemplates": {

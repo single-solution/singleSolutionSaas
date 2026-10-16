@@ -67,7 +67,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Page and item labels",
-				"order": 101
+				"order": 101,
+				"advanced": true
 			}
 		},
 		"labelDate": {
@@ -77,7 +78,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Page and item labels",
-				"order": 102
+				"order": 102,
+				"advanced": true
 			}
 		},
 		"labelBilledTo": {
@@ -87,7 +89,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Page and item labels",
-				"order": 103
+				"order": 103,
+				"advanced": true
 			}
 		},
 		"labelShipTo": {
@@ -97,7 +100,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Page and item labels",
-				"order": 104
+				"order": 104,
+				"advanced": true
 			}
 		},
 		"labelItem": {
@@ -107,7 +111,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Page and item labels",
-				"order": 106
+				"order": 106,
+				"advanced": true
 			}
 		},
 		"labelSku": {
@@ -117,7 +122,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Page and item labels",
-				"order": 107
+				"order": 107,
+				"advanced": true
 			}
 		},
 		"labelGrade": {
@@ -127,7 +133,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Page and item labels",
-				"order": 108
+				"order": 108,
+				"advanced": true
 			}
 		},
 		"labelSerials": {
@@ -137,7 +144,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Page and item labels",
-				"order": 109
+				"order": 109,
+				"advanced": true
 			}
 		},
 		"labelWarranty": {
@@ -148,7 +156,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Page and item labels",
-				"order": 110
+				"order": 110,
+				"advanced": true
 			}
 		},
 		"labelQuantity": {
@@ -158,7 +167,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Page and item labels",
-				"order": 111
+				"order": 111,
+				"advanced": true
 			}
 		},
 		"labelUnitPrice": {
@@ -168,7 +178,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Page and item labels",
-				"order": 112
+				"order": 112,
+				"advanced": true
 			}
 		},
 		"labelAmount": {
@@ -178,7 +189,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Page and item labels",
-				"order": 113
+				"order": 113,
+				"advanced": true
 			}
 		},
 		"labelSubtotal": {
@@ -188,7 +200,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Totals labels",
-				"order": 201
+				"order": 201,
+				"advanced": true
 			}
 		},
 		"labelDiscount": {
@@ -198,7 +211,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Totals labels",
-				"order": 202
+				"order": 202,
+				"advanced": true
 			}
 		},
 		"labelDelivery": {
@@ -208,7 +222,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Totals labels",
-				"order": 205
+				"order": 205,
+				"advanced": true
 			}
 		},
 		"labelTax": {
@@ -218,7 +233,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Totals labels",
-				"order": 207
+				"order": 207,
+				"advanced": true
 			}
 		},
 		"labelTaxIncluded": {
@@ -228,7 +244,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Totals labels",
-				"order": 208
+				"order": 208,
+				"advanced": true
 			}
 		},
 		"labelTotal": {
@@ -238,7 +255,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Totals labels",
-				"order": 209
+				"order": 209,
+				"advanced": true
 			}
 		},
 		"labelPayment": {
@@ -248,7 +266,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Payment and delivery labels",
-				"order": 301
+				"order": 301,
+				"advanced": true
 			}
 		},
 		"labelPaid": {
@@ -258,7 +277,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Payment and delivery labels",
-				"order": 303
+				"order": 303,
+				"advanced": true
 			}
 		},
 		"labelRefunded": {
@@ -268,7 +288,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Payment and delivery labels",
-				"order": 304
+				"order": 304,
+				"advanced": true
 			}
 		},
 		"labelBalance": {
@@ -278,7 +299,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Payment and delivery labels",
-				"order": 306
+				"order": 306,
+				"advanced": true
 			}
 		},
 		"labelPickup": {
@@ -288,7 +310,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Payment and delivery labels",
-				"order": 308
+				"order": 308,
+				"advanced": true
 			}
 		},
 		"labelCourier": {
@@ -298,7 +321,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Payment and delivery labels",
-				"order": 309
+				"order": 309,
+				"advanced": true
 			}
 		},
 		"labelTracking": {
@@ -308,7 +332,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Payment and delivery labels",
-				"order": 310
+				"order": 310,
+				"advanced": true
 			}
 		},
 		"labelNote": {
@@ -318,7 +343,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Page and item labels",
-				"order": 105
+				"order": 105,
+				"advanced": true
 			}
 		},
 		"shopperFrom": {
@@ -339,7 +365,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Totals labels",
-				"order": 206
+				"order": 206,
+				"advanced": true
 			}
 		},
 		"labelRoleDiscount": {
@@ -349,7 +376,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Totals labels",
-				"order": 203
+				"order": 203,
+				"advanced": true
 			}
 		},
 		"labelPoints": {
@@ -359,7 +387,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Totals labels",
-				"order": 204
+				"order": 204,
+				"advanced": true
 			}
 		},
 		"labelCashDue": {
@@ -369,7 +398,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Payment and delivery labels",
-				"order": 307
+				"order": 307,
+				"advanced": true
 			}
 		},
 		"labelPayments": {
@@ -379,7 +409,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Payment and delivery labels",
-				"order": 302
+				"order": 302,
+				"advanced": true
 			}
 		},
 		"labelRefunds": {
@@ -389,7 +420,8 @@
 			"maxLength": 80,
 			"x-ui": {
 				"group": "Payment and delivery labels",
-				"order": 305
+				"order": 305,
+				"advanced": true
 			}
 		},
 		"pickListTitle": {

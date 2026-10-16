@@ -8,7 +8,7 @@ import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { RolePricesEditor } from '../app/dashboard/lists.js';
-import { SettingsSections } from '../app/dashboard/settings.js';
+import { TABS } from '../app/dashboard/tabs.js';
 import { checkRolePrices } from '../core/role-pricing.js';
 import { inDashboard } from './dashboard-provider.js';
 
@@ -64,13 +64,10 @@ describe('the role prices editor', () => {
 		await settle();
 		expect(byLabel(container, 'Accounts role').getAttribute('value') ?? '').toBe('wholesale');
 		expect(/** @type {HTMLInputElement} */ (byLabel(container, 'Percent off (0–90)')).value).toBe('15');
+		// one role at a time: the new one is picked after Add
 		await act(async () => click(addButton(container)));
-		const roles = /** @type {HTMLInputElement[]} */ ([...container.querySelectorAll('input')]).filter(
-			(input) => input.closest('[data-entry]') !== null,
-		);
-		expect(roles.length).toBeGreaterThan(3);
-		const entries = [...container.querySelectorAll('[data-entry]')];
-		const second = /** @type {HTMLElement} */ (entries[1]);
+		expect(container.querySelectorAll('[data-entry]')).toHaveLength(1);
+		const second = /** @type {HTMLElement} */ (container.querySelector('[data-entry]'));
 		type(byLabel(second, 'Accounts role'), 'staff');
 		type(byLabel(second, 'Percent off (0–90)'), '95');
 		await act(async () => click(byText(container, 'Save list', 'button')));
@@ -91,7 +88,7 @@ describe('the role prices editor', () => {
 		expect(container.textContent).toContain('Saved');
 		// the server's refusal is listed (a role twice)
 		await act(async () => click(addButton(container)));
-		const third = /** @type {HTMLElement} */ ([...container.querySelectorAll('[data-entry]')][2]);
+		const third = /** @type {HTMLElement} */ (container.querySelector('[data-entry]'));
 		type(byLabel(third, 'Accounts role'), 'staff');
 		type(byLabel(third, 'Percent off (0–90)'), '5');
 		await act(async () => click(byText(container, 'Save list', 'button')));
@@ -130,12 +127,54 @@ describe('the role prices editor', () => {
 	});
 });
 
-describe('Settings → Role prices', () => {
-	it('is a section of its own while Role pricing is seen', () => {
-		const { container } = render(
-			inDashboard(<SettingsSections features={[]} forms={() => null} extras={{ rolePrices: <p>Role prices editor</p> }} />),
-		);
-		expect(container.textContent).toContain('Role prices');
-		expect(container.textContent).toContain('Role prices editor');
+describe('Settings → Role pricing', () => {
+	it('lists the editor under Role pricing while the feature is on, and nothing while it is off', async () => {
+		/** @param {boolean} on */
+		const answer = (on) => ({
+			features: ['catalog', 'checkout', 'role_pricing'].map((key) => ({
+				key,
+				name: key,
+				on: key !== 'role_pricing' || on,
+				schema: {
+					type: 'object',
+					properties: key === 'role_pricing' ? {} : { x: { type: 'string', title: 'X', default: '' } },
+				},
+				values: {},
+			})),
+		});
+		serve();
+		const Settings = TABS.settings;
+		const props = {
+			websiteId: WEBSITE,
+			domain: 'shop.example.com',
+			who: /** @type {const} */ ({ kind: 'admin', id: 'a_1', name: 'Admin', role: 'owner' }),
+			support: { channels: [] },
+			portal: 'https://portal.example.com',
+			open: () => undefined,
+		};
+		const original = fetch;
+		/** @param {boolean} on */
+		const stub = (on) =>
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async (/** @type {string} */ path, /** @type {RequestInit} */ init) =>
+					path === `/v1/dashboard/websites/${WEBSITE}/settings`
+						? new Response(JSON.stringify(answer(on)), { status: 200 })
+						: original(path, init),
+				),
+			);
+		stub(true);
+		const on = render(inDashboard(<Settings {...props} />));
+		await settle();
+		click(/** @type {HTMLElement} */ (on.container.querySelector('nav a[href="#role_pricing"]')));
+		await settle();
+		expect(on.container.textContent).toContain('Role prices');
+		expect(on.container.querySelector('[data-entry]')).not.toBeNull();
+		cleanup();
+		stub(false);
+		const off = render(inDashboard(<Settings {...props} />));
+		await settle();
+		expect(off.container.querySelector('nav a[href="#role_pricing"]')).toBeNull();
+		expect(off.container.querySelector('[data-entry]')).toBeNull();
 	});
 });

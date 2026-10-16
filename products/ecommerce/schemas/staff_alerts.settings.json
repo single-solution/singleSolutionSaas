@@ -71,7 +71,8 @@
 			"description": "At most this many people get one alert (the list first, then the Accounts staff).",
 			"x-ui": {
 				"group": "Recipients",
-				"order": 13
+				"order": 13,
+				"advanced": true
 			}
 		},
 		"adminUrl": {

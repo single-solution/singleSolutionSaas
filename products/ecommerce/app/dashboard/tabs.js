@@ -6,27 +6,14 @@
  * @module
  */
 import { Fragment } from 'react';
-import { Button, ButtonLink, Callout, CodeBlock, LocalTime, Masonry, RecentChanges, Section, Stat } from '@ss/ui';
-import {
-	ConnectionsTab,
-	DevelopersTab,
-	FormatForm,
-	Loaded,
-	OverviewTab,
-	SettingsForms,
-	TextsForm,
-	ThemeForm,
-	call,
-	fill,
-	useDashboard,
-	useLoad,
-} from '@ss/ui/dashboard';
+import { Button, ButtonLink, CodeBlock, LocalTime, Section, Stat } from '@ss/ui';
+import { ConnectionsTab, DefaultsTab, DevelopersTab, OverviewTab, fill, useLoad } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { paidByHand } from '../../core/payment-methods.js';
 import { SEARCH_INDEX_DEFINITION } from '../../core/search.js';
 import { SITE_ROUTES, createSnippets } from '../../core/snippets.js';
 import { ConnectionForm, formOf } from './forms.js';
-import { SettingsSections, SettingsTab, settingsNotice } from './settings.js';
+import { SettingsTab, settingsNotice } from './settings.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('@ss/ui/dashboard').TabProps} TabProps */
@@ -296,6 +283,17 @@ function Developers(props) {
 		permissions: manifest.permissions.map((permission) => permission.key),
 	});
 	const D = TEXTS.developers;
+	/** @param {string} id @param {string} title @param {string} help @param {import('react').ReactNode} body @param {import('@ss/ui').IconName} icon @param {import('react').ReactNode} [actions] */
+	const part = (id, title, help, body, icon, actions) => ({
+		id,
+		label: title,
+		icon,
+		content: (
+			<Section title={title} description={help} {...(actions ? { actions } : {})}>
+				{body}
+			</Section>
+		),
+	});
 	return (
 		<DevelopersTab
 			{...props}
@@ -303,107 +301,54 @@ function Developers(props) {
 				<a className="text-sm font-semibold text-primary" href="/docs#catalog-seo">
 					{D.catalogSeo}
 				</a>
-			}>
-			<Section title={D.visitor} description={D.visitorHelp}>
-				<CodeBlock code={snippets.visitor} />
-			</Section>
-			<Section title={D.api} description={D.apiHelp}>
-				<CodeBlock code={snippets.api} />
-			</Section>
-			<Section title={D.event} description={D.eventHelp}>
-				<CodeBlock code={snippets.addToCartEvent} />
-			</Section>
-			<Section title={D.admin} description={D.adminHelp}>
-				<CodeBlock code={snippets.admin} />
-			</Section>
-			<Section title={D.ticket} description={D.ticketHelp}>
-				<div className="space-y-4">
-					<CodeBlock code={snippets.ticketNode} />
-					<CodeBlock code={snippets.ticketCurl} />
-				</div>
-			</Section>
-			<Section title={D.site} description={D.siteHelp}>
-				<div className="space-y-4">
-					{SITE_ROUTES.map((entry) => (
-						<CodeBlock key={entry.name} code={snippets.site[entry.name] ?? ''} />
-					))}
-					<CodeBlock code={snippets.productMeta} />
-					<CodeBlock code={snippets.listingPage} />
-					<CodeBlock code={snippets.policies} />
-				</div>
-			</Section>
-			<Section
-				title={D.searchIndex}
-				description={fill(D.searchIndexHelp, { collection: 'ss_ecommerce_products' })}
-				actions={
+			}
+			sections={[
+				part('visitor', D.visitor, D.visitorHelp, <CodeBlock code={snippets.visitor} />, 'users'),
+				part('api', D.api, D.apiHelp, <CodeBlock code={snippets.api} />, 'code'),
+				part('event', D.event, D.eventHelp, <CodeBlock code={snippets.addToCartEvent} />, 'activity'),
+				part('admin', D.admin, D.adminHelp, <CodeBlock code={snippets.admin} />, 'box'),
+				part(
+					'ticket',
+					D.ticket,
+					D.ticketHelp,
+					<div className="space-y-4">
+						<CodeBlock code={snippets.ticketNode} />
+						<CodeBlock code={snippets.ticketCurl} />
+					</div>,
+					'key',
+				),
+				part(
+					'site',
+					D.site,
+					D.siteHelp,
+					<div className="space-y-4">
+						{SITE_ROUTES.map((entry) => (
+							<CodeBlock key={entry.name} code={snippets.site[entry.name] ?? ''} />
+						))}
+						<CodeBlock code={snippets.productMeta} />
+						<CodeBlock code={snippets.listingPage} />
+						<CodeBlock code={snippets.policies} />
+					</div>,
+					'globe',
+				),
+				part(
+					'search-index',
+					D.searchIndex,
+					fill(D.searchIndexHelp, { collection: 'ss_ecommerce_products' }),
+					<CodeBlock code={JSON.stringify(SEARCH_INDEX_DEFINITION, null, 2)} />,
+					'database',
 					<a className="text-sm font-semibold text-primary hover:underline" href="/docs#atlas-search">
 						{D.searchIndexDocs}
-					</a>
-				}>
-				<CodeBlock code={JSON.stringify(SEARCH_INDEX_DEFINITION, null, 2)} />
-			</Section>
-			<Section title={D.cors} description={D.corsHelp}>
-				<CodeBlock code={snippets.cors} />
-			</Section>
-		</DevelopersTab>
+					</a>,
+				),
+				part('cors', D.cors, D.corsHelp, <CodeBlock code={snippets.cors} />, 'shield'),
+			]}
+		/>
 	);
 }
 
-/** Defaults (Owner): the global defaults in Ecommerce's settings sections, the widget texts, theme and Format. */
-function Defaults() {
-	const { texts } = useDashboard();
-	const { answer, reload } = useLoad('/v1/dashboard/defaults');
-	/** @param {string} key */
-	const saveUrl = (key) => `/v1/dashboard/defaults/${encodeURIComponent(key)}`;
-	return (
-		<Loaded answer={answer}>
-			{(data) => (
-				<div className="space-y-4">
-					<Callout tone="info">{texts.defaults.intro}</Callout>
-					<SettingsSections
-						features={data.features}
-						forms={(shown) => (
-							<SettingsForms
-								features={shown}
-								saveUrl={saveUrl}
-								resetBody
-								savedSource="default"
-								reload={reload}
-								notice={settingsNotice}
-							/>
-						)}
-						extras={{
-							texts: (
-								<TextsForm
-									texts={data.texts}
-									saveUrl={(key) => saveUrl(`text.${key}`)}
-									resetBody
-									savedSource="default"
-									reload={reload}
-								/>
-							),
-							theme: (
-								<Masonry columns={2} wideAlone>
-									<ThemeForm
-										theme={data.theme.theme}
-										save={(next) => call('PUT', saveUrl('theme'), { value: next })}
-										reload={reload}
-									/>
-									<FormatForm
-										format={data.format.format}
-										save={(next) => call('PUT', saveUrl('format'), { value: next })}
-										reload={reload}
-									/>
-								</Masonry>
-							),
-						}}
-					/>
-					<RecentChanges items={data.recentChanges} />
-				</div>
-			)}
-		</Loaded>
-	);
-}
+/** Defaults (Owner): the global defaults of the same features, the widget texts, the theme and Format. @param {TabProps} props */
+const Defaults = (props) => <DefaultsTab {...props} notice={settingsNotice} />;
 
 /** Ecommerce's tabs in place of the standard ones (Features and Prices are the standard tabs). */
 export const TABS = Object.freeze({

@@ -342,7 +342,8 @@
 			"maximum": 15000,
 			"x-ui": {
 				"group": "Indexing and sitemap",
-				"order": 34
+				"order": 34,
+				"advanced": true
 			}
 		},
 		"defaultDescription": {

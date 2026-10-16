@@ -64,7 +64,8 @@
 			"enum": ["none", "mpn", "gtin"],
 			"x-ui": {
 				"group": "Identifiers",
-				"order": 21
+				"order": 21,
+				"advanced": true
 			}
 		},
 		"identifierExists": {
@@ -75,7 +76,8 @@
 			"enum": ["auto", "no"],
 			"x-ui": {
 				"group": "Identifiers",
-				"order": 22
+				"order": 22,
+				"advanced": true
 			}
 		},
 		"googleCategory": {

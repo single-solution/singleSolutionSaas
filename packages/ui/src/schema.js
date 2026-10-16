@@ -104,6 +104,9 @@ export const optionLabel = (value, labels) => {
 /** A list of choices longer than this is a searchable picker, not a group of checkboxes. */
 const PICKER_FROM = 12;
 
+/** A text setting with room for at least this many characters takes the whole row. */
+const LONG_TEXT = 200;
+
 /** Widgets that take the whole row of the field grid. */
 const WIDE_WIDGETS = Object.freeze(['textarea', 'tags', 'checkboxes']);
 
@@ -137,7 +140,8 @@ export const widgetOf = (node) => {
 };
 
 /**
- * Whether a field spans the whole row of the field grid: `x-ui.wide` when given, else long text and lists.
+ * Whether a field spans the whole row of the field grid: `x-ui.wide` when given, else long text (a text that takes 200
+ * characters or more) and lists.
  * @param {SettingNode} node
  * @param {string} widget
  * @returns {boolean}
@@ -145,6 +149,8 @@ export const widgetOf = (node) => {
 export const isWide = (node, widget) => {
 	const asked = node['x-ui']?.wide;
 	if (typeof asked === 'boolean') return asked;
+	// text with room for a long value (an address, a template with placeholders) takes the whole row
+	if (node.type === 'string' && !node.enum && Number(node.maxLength) >= LONG_TEXT) return true;
 	return WIDE_WIDGETS.includes(widget);
 };
 

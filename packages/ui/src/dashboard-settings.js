@@ -27,8 +27,9 @@ import { Outcome, hasSettings } from './dashboard-parts.js';
 /** @typedef {import('react').ReactNode} ReactNode */
 /**
  * What a product adds to a feature's view: a node shown under the feature's settings, or `{ items }`, views of their
- * own listed under the feature (a list editor each). A node or an item brings its own heading (a `Section`).
- * @typedef {ReactNode | { items: Array<{ id: string, label: ReactNode, content: ReactNode }> }} FeatureExtra
+ * own listed under the feature (a list editor each; with `top` the view is listed beside the feature instead of under
+ * it). A node or an item brings its own heading (a `Section`).
+ * @typedef {ReactNode | { items: Array<{ id: string, label: ReactNode, content: ReactNode, top?: boolean }> }} FeatureExtra
  */
 
 /** A name as part of an address. @param {string} name */
@@ -152,7 +153,7 @@ function FeatureForm({ feature, features, editor, savedSource, notice, group, te
 /**
  * Whether a value is the `{ items }` form of a {@link FeatureExtra}.
  * @param {unknown} extra
- * @returns {extra is { items: Array<{ id: string, label: ReactNode, content: ReactNode }> }}
+ * @returns {extra is { items: Array<{ id: string, label: ReactNode, content: ReactNode, top?: boolean }> }}
  */
 const hasItems = (extra) =>
 	typeof extra === 'object' && extra !== null && !('$$typeof' in extra) && 'items' in extra && Array.isArray(extra.items);
@@ -175,7 +176,7 @@ export function featureSections({ features, editor, savedSource, dash, hideOff =
 	});
 	const byKey = new Map(shown.map((feature) => [feature.key, feature]));
 	return dash.byCategory(shown.map((feature) => feature.key)).flatMap((category) =>
-		category.keys.map((key) => {
+		category.keys.flatMap((key) => {
 			const feature = /** @type {FeatureSettings} */ (byKey.get(key));
 			const extra = extras[key];
 			const shape = shapeOf(feature.schema);
@@ -226,17 +227,27 @@ export function featureSections({ features, editor, savedSource, dash, hideOff =
 					});
 			} else if (extra !== undefined && !hasItems(extra))
 				views.push({ id: `${key}.${slug(S.settingsView)}`, label: S.settingsView, content: extra });
+			/** @type {SectionSpec[]} */
+			const beside = [];
 			if (hasItems(extra))
 				for (const item of extra.items)
-					views.push({
+					(item.top ? beside : views).push({
 						id: `${key}.${item.id}`,
 						label: item.label,
+						...(item.top ? { group: category.title } : {}),
 						content: item.content,
 					});
 			const only = views.length === 1 ? views[0] : undefined;
-			return only
-				? { ...only, id: key, label: feature.name, group: category.title }
-				: { id: key, label: feature.name, group: category.title, children: views };
+			return [
+				...(views.length === 0
+					? []
+					: [
+							only
+								? { ...only, id: key, label: feature.name, group: category.title }
+								: { id: key, label: feature.name, group: category.title, children: views },
+						]),
+				...beside,
+			];
 		}),
 	);
 }

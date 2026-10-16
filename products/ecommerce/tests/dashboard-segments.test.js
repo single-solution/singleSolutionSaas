@@ -8,7 +8,6 @@ import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { SegmentsEditor } from '../app/dashboard/lists.js';
-import { SettingsSections } from '../app/dashboard/settings.js';
 import { DEFAULT_SEGMENTS, checkSegments } from '../core/customer-segments.js';
 import { inDashboard } from './dashboard-provider.js';
 
@@ -56,12 +55,14 @@ describe('the customer segments editor', () => {
 		serve();
 		const { container } = render(inDashboard(<SegmentsEditor websiteId={WEBSITE} currency="USD" />));
 		await settle();
-		const entries = () => /** @type {HTMLElement[]} */ ([...container.querySelectorAll('[data-entry]')]);
-		expect(entries()).toHaveLength(3);
-		expect(byLabel(/** @type {HTMLElement} */ (entries()[0]), 'Name').getAttribute('value')).toBe('Loyalty members');
+		// one segment at a time, from a strip of tabs
+		const tabs = () => [...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
+		expect(tabs()).toHaveLength(3);
+		expect(byLabel(container, 'Name').getAttribute('value')).toBe('Loyalty members');
 		const add = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Add');
 		await act(async () => click(/** @type {HTMLElement} */ (add)));
-		const fourth = /** @type {HTMLElement} */ (entries()[3]);
+		const fourth = /** @type {HTMLElement} */ (container.querySelector('[data-entry]'));
+		expect(tabs()).toHaveLength(4);
 		type(byLabel(fourth, 'Name'), 'Big spenders');
 		await act(async () => click(byText(fourth, 'Add rule', 'button')));
 		const rules = [...fourth.querySelectorAll('[data-rule]')];
@@ -89,15 +90,5 @@ describe('the customer segments editor', () => {
 		});
 		expect(checkSegments(saved[0]).ok).toBe(true);
 		expect(container.textContent).toContain('Saved');
-	});
-});
-
-describe('Settings → Customers', () => {
-	it('is a section of its own with the segments editor', () => {
-		const { container } = render(
-			inDashboard(<SettingsSections features={[]} forms={() => null} extras={{ customers: <p>Segments editor</p> }} />),
-		);
-		expect(container.textContent).toContain('Customers');
-		expect(container.textContent).toContain('Segments editor');
 	});
 });

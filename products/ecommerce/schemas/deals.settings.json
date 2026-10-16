@@ -11,7 +11,8 @@
 			"maximum": 10080,
 			"x-ui": {
 				"group": "Choosing a deal",
-				"order": 3
+				"order": 3,
+				"advanced": true
 			}
 		},
 		"shopperChoice": {
@@ -54,7 +55,8 @@
 			"enum": ["goods", "after_item_deals"],
 			"x-ui": {
 				"group": "Checkout deals",
-				"order": 12
+				"order": 12,
+				"advanced": true
 			}
 		},
 		"pointsBlockedBy": {
@@ -65,7 +67,8 @@
 			"enum": ["any_deal", "cart_offer"],
 			"x-ui": {
 				"group": "Checkout deals",
-				"order": 13
+				"order": 13,
+				"advanced": true
 			}
 		},
 		"rounding": {
@@ -76,7 +79,8 @@
 			"enum": ["per_unit_down", "total_half_up"],
 			"x-ui": {
 				"group": "Choosing a deal",
-				"order": 4
+				"order": 4,
+				"advanced": true
 			}
 		}
 	}

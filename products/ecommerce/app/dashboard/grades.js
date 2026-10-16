@@ -31,6 +31,7 @@ import {
 	Select,
 	TextArea,
 	cx,
+	Paged,
 } from '@ss/ui';
 import { DURATION_MAX, DURATION_UNITS } from '../../core/durations.js';
 import { asWritten, fillTitle, metaDescription, patternText } from '../../core/seo-text.js';
@@ -512,19 +513,26 @@ export function GradesEditor({ websiteId, off, preview }) {
 							{items.length === 0 ? (
 								<p className="text-sm text-muted">{L.none}</p>
 							) : (
-								<ul className="divide-y divide-line-soft">
-									{items.map((grade, index) => (
-										<GradeRow
-											key={index}
-											grade={grade}
-											index={index}
-											count={items.length}
-											onEdit={() => open(index, grade)}
-											onMove={(step) => setItems(moved(items, index, step))}
-											onRemove={() => setItems(items.filter((_, at) => at !== index))}
-										/>
-									))}
-								</ul>
+								<Paged
+									items={items.map((grade, index) => ({ grade, index }))}
+									pageSize={8}
+									text={(entry) => entry.grade.label}>
+									{(page) => (
+										<ul className="divide-y divide-line-soft">
+											{page.map(({ grade, index }) => (
+												<GradeRow
+													key={index}
+													grade={grade}
+													index={index}
+													count={items.length}
+													onEdit={() => open(index, grade)}
+													onMove={(step) => setItems(moved(items, index, step))}
+													onRemove={() => setItems(items.filter((_, at) => at !== index))}
+												/>
+											))}
+										</ul>
+									)}
+								</Paged>
 							)}
 							<SaveRow
 								dirty={state.draft !== null}

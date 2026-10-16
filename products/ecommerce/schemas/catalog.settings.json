@@ -43,7 +43,8 @@
 			"maxLength": 200,
 			"x-ui": {
 				"group": "Page addresses",
-				"order": 14
+				"order": 14,
+				"advanced": true
 			}
 		},
 		"retiredUrl": {
@@ -54,7 +55,8 @@
 			"enum": ["none", "category"],
 			"x-ui": {
 				"group": "Page addresses",
-				"order": 13
+				"order": 13,
+				"advanced": true
 			}
 		},
 		"mediaBaseUrl": {
@@ -76,7 +78,8 @@
 			"maxLength": 100,
 			"x-ui": {
 				"group": "Page addresses",
-				"order": 16
+				"order": 16,
+				"advanced": true
 			}
 		},
 		"weightUnit": {
@@ -133,7 +136,8 @@
 			"enum": ["delivered", "ordered"],
 			"x-ui": {
 				"group": "Basics",
-				"order": 6
+				"order": 6,
+				"advanced": true
 			}
 		},
 		"imageMaxBytes": {
@@ -145,7 +149,8 @@
 			"maximum": 20971520,
 			"x-ui": {
 				"group": "Units and uploads",
-				"order": 33
+				"order": 33,
+				"advanced": true
 			}
 		},
 		"showStock": {
@@ -168,7 +173,8 @@
 			"maximum": 1000,
 			"x-ui": {
 				"group": "Basics",
-				"order": 4
+				"order": 4,
+				"advanced": true
 			}
 		},
 		"videoMaxBytes": {
@@ -180,7 +186,8 @@
 			"maximum": 209715200,
 			"x-ui": {
 				"group": "Units and uploads",
-				"order": 34
+				"order": 34,
+				"advanced": true
 			}
 		},
 		"search": {
@@ -213,7 +220,8 @@
 			"enum": ["words", "phrase"],
 			"x-ui": {
 				"group": "Search",
-				"order": 22
+				"order": 22,
+				"advanced": true
 			}
 		},
 		"searchIndex": {
@@ -224,7 +232,8 @@
 			"maxLength": 100,
 			"x-ui": {
 				"group": "Search",
-				"order": 24
+				"order": 24,
+				"advanced": true
 			}
 		}
 	}

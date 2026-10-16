@@ -106,7 +106,8 @@
 			"enum": ["delivery", "placement"],
 			"x-ui": {
 				"group": "Earning",
-				"order": 3
+				"order": 3,
+				"advanced": true
 			}
 		},
 		"capBase": {
@@ -117,7 +118,8 @@
 			"enum": ["order", "goods"],
 			"x-ui": {
 				"group": "Redeeming",
-				"order": 15
+				"order": 15,
+				"advanced": true
 			}
 		},
 		"redeemMode": {
@@ -150,7 +152,8 @@
 			"enum": ["at_earn", "current"],
 			"x-ui": {
 				"group": "Expiry",
-				"order": 23
+				"order": 23,
+				"advanced": true
 			}
 		},
 		"memberFlag": {

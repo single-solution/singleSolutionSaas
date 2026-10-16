@@ -7,7 +7,19 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, FieldGrid, Icon, IconButton, Input, Select, TextArea, describeProblem } from '@ss/ui';
+import {
+	Button,
+	Callout,
+	Card,
+	FieldGrid,
+	Icon,
+	IconButton,
+	Input,
+	ItemSwitcher,
+	Select,
+	TextArea,
+	describeProblem,
+} from '@ss/ui';
 import { COURIER_CONNECTIONS } from '../../core/couriers.js';
 import { currencyDigits, fromDecimal, toDecimal } from '@ss/contracts/format';
 import { UNIT_STATE_LIMITS } from '../../core/unit-states.js';
@@ -268,19 +280,29 @@ export function ListEditor({
 					const set = (index, patch) => setItems(items.map((item, at) => (at === index ? { ...item, ...patch } : item)));
 					return (
 						<div className="space-y-4">
-							{items.length === 0 ? <p className="text-sm text-muted">{L.none}</p> : null}
-							{items.map((item, index) => (
-								<div key={index} data-entry="" className="space-y-3 rounded-xl bg-surface-2 p-4">
-									<EntryHead
-										label={itemLabel}
-										index={index}
-										count={items.length}
-										onMove={(step) => setItems(moved(items, index, step))}
-										onRemove={() => setItems(items.filter((_, at) => at !== index))}
-									/>
-									{render(item, (patch) => set(index, patch))}
-								</div>
-							))}
+							<ItemSwitcher
+								items={items}
+								legend={title}
+								nameOf={(item, index) =>
+									String(item.name ?? item.label ?? item.title ?? '') || `${itemLabel} ${index + 1}`
+								}
+								addLabel={L.add}
+								addDisabled={items.length >= max}
+								onAdd={() => setItems([...items, blank()])}
+								emptyText={L.none}
+								renderItem={(item, index) => (
+									<div key={index} data-entry="" className="space-y-3 rounded-xl bg-surface-2 p-4">
+										<EntryHead
+											label={itemLabel}
+											index={index}
+											count={items.length}
+											onMove={(step) => setItems(moved(items, index, step))}
+											onRemove={() => setItems(items.filter((_, at) => at !== index))}
+										/>
+										{render(item, (patch) => set(index, patch))}
+									</div>
+								)}
+							/>
 							<SaveRow
 								dirty={state.draft !== null}
 								onCancel={() => state.setDraft(null)}
@@ -288,15 +310,8 @@ export function ListEditor({
 									const problems = check ? check(items) : [];
 									if (problems.length > 0) return state.refuse(problems);
 									await state.save(items.map(clean));
-								}}>
-								<Button
-									size="sm"
-									variant="secondary"
-									disabled={items.length >= max}
-									onClick={() => setItems([...items, blank()])}>
-									{L.add}
-								</Button>
-							</SaveRow>
+								}}
+							/>
 							<ListOutcome result={state.result} local={state.local} />
 						</div>
 					);

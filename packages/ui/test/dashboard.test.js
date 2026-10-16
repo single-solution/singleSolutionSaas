@@ -719,7 +719,12 @@ describe('standard tabs', () => {
 					notice={(key) => <p>{`notice for ${key}`}</p>}
 					extras={{
 						notes: <p>notes extra</p>,
-						inbox: { items: [{ id: 'rules', label: 'Rules', content: <p>rules list</p> }] },
+						inbox: {
+							items: [
+								{ id: 'rules', label: 'Rules', content: <p>rules list</p> },
+								{ id: 'beside', label: 'Beside', top: true, content: <p>beside inbox</p> },
+							],
+						},
 					}}
 					sections={[{ id: 'own', label: 'Own section', group: 'Lists', content: <p>own section</p> }]}
 				/>,
@@ -732,7 +737,7 @@ describe('standard tabs', () => {
 		await settle();
 		// the sidebar lists the features that are on whose needs are on, under their category (Alerts is off, Digest needs it)
 		const nav = /** @type {HTMLElement} */ (container.querySelector('nav[aria-label="Settings"]'));
-		expect(navLinks(container)).toEqual(['Notes', 'Inbox', 'Own section']);
+		expect(navLinks(container)).toEqual(['Notes', 'Inbox', 'Beside', 'Own section']);
 		expect(nav.textContent).toContain('Writing');
 		expect(nav.textContent).toContain('Reading');
 		expect(nav.textContent).not.toContain('Alerts');
@@ -750,7 +755,18 @@ describe('standard tabs', () => {
 		]);
 		// Inbox has three groups and Advanced settings: they are sub-items, each one view; its list editor is one too
 		openSection(container, 'inbox.basics');
-		expect(navLinks(container)).toEqual(['Notes', 'Inbox', 'Basics', 'Messages', 'Limits', 'Advanced', 'Rules', 'Own section']);
+		// a view marked `top` is listed beside the feature, not under it
+		expect(navLinks(container)).toEqual([
+			'Notes',
+			'Inbox',
+			'Basics',
+			'Messages',
+			'Limits',
+			'Advanced',
+			'Rules',
+			'Beside',
+			'Own section',
+		]);
 		expect(container.querySelector('[data-field="subject"]')).not.toBeNull();
 		expect(container.querySelector('[data-field="sender"]')).toBeNull();
 		openSection(container, 'inbox.limits');
@@ -759,6 +775,8 @@ describe('standard tabs', () => {
 		expect(container.querySelector('[data-field="salt"]')).not.toBeNull();
 		openSection(container, 'inbox.rules');
 		expect(container.textContent).toContain('rules list');
+		openSection(container, 'inbox.beside');
+		expect(container.textContent).toContain('beside inbox');
 		openSection(container, 'own');
 		expect(container.textContent).toContain('own section');
 		expect(window.location.hash).toBe('#own');

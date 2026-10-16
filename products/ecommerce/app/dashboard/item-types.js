@@ -15,7 +15,7 @@
  * @module
  */
 import { useState } from 'react';
-import { ActionMenu, Badge, Button, Card, Checkbox, Dialog, FieldGrid, Input, Select } from '@ss/ui';
+import { ActionMenu, Badge, Button, Card, Checkbox, Dialog, FieldGrid, Input, Paged, Select } from '@ss/ui';
 import { FIELD_LIMITS } from '../../core/fields.js';
 import { ELEMENTS, ITEM_KINDS, TYPE_LIMITS, UNIT_CAPTURES, elementFor } from '../../core/item-types.js';
 import { MAX_DECIMALS, MAX_UNIT_LABEL, STANDARD_UNITS } from '../../core/measure.js';
@@ -376,19 +376,26 @@ export function ItemTypesEditor({ websiteId, off }) {
 							{items.length === 0 ? (
 								<p className="text-sm text-muted">{T.none}</p>
 							) : (
-								<ul className="divide-y divide-line-soft">
-									{items.map((type, index) => (
-										<TypeRow
-											key={index}
-											type={type}
-											index={index}
-											count={items.length}
-											onEdit={() => open(index, type)}
-											onMove={(step) => setItems(moved(items, index, step))}
-											onRemove={() => setItems(items.filter((_, at) => at !== index))}
-										/>
-									))}
-								</ul>
+								<Paged
+									items={items.map((type, index) => ({ type, index }))}
+									pageSize={8}
+									text={(entry) => entry.type.name}>
+									{(page) => (
+										<ul className="divide-y divide-line-soft">
+											{page.map(({ type, index }) => (
+												<TypeRow
+													key={index}
+													type={type}
+													index={index}
+													count={items.length}
+													onEdit={() => open(index, type)}
+													onMove={(step) => setItems(moved(items, index, step))}
+													onRemove={() => setItems(items.filter((_, at) => at !== index))}
+												/>
+											))}
+										</ul>
+									)}
+								</Paged>
 							)}
 							<SaveRow
 								dirty={state.draft !== null}
