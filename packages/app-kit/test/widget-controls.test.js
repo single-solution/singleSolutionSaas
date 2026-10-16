@@ -7,10 +7,12 @@ import {
 	affix,
 	block,
 	checkbox,
-	choiceGroup,
+	checkGroup,
 	field,
 	fieldError,
 	radio,
+	radioGroup,
+	segmented,
 	settingRow,
 	toggle,
 } from '../src/widget.js';
@@ -101,7 +103,7 @@ describe('checkbox and radio', () => {
 	});
 });
 
-describe('choiceGroup', () => {
+describe('segmented, radioGroup and checkGroup', () => {
 	const items = [
 		{ value: 'a', label: 'Alpha', help: 'First' },
 		{ value: 'b', label: 'Beta' },
@@ -110,7 +112,7 @@ describe('choiceGroup', () => {
 
 	it('a segmented control is a labeled radio group of native radios', () => {
 		const onChange = vi.fn();
-		const group = choiceGroup(document, { label: 'Size', name: 'size', items, value: 'a', look: 'segmented', onChange });
+		const group = segmented(document, { label: 'Size', name: 'size', items, value: 'a', onChange });
 		mount(group.node);
 		expect(group.node.getAttribute('role')).toBe('radiogroup');
 		expect(group.node.getAttribute('aria-label')).toBe('Size');
@@ -125,7 +127,7 @@ describe('choiceGroup', () => {
 	});
 
 	it('cards carry a title and a line, and the value can be set', () => {
-		const group = choiceGroup(document, { label: 'Plan', name: 'plan', items, look: 'card' });
+		const group = radioGroup(document, { label: 'Plan', name: 'plan', items, look: 'card' });
 		mount(group.node);
 		expect(group.node.className).toBe('choices');
 		expect(group.value).toBe('');
@@ -137,14 +139,7 @@ describe('choiceGroup', () => {
 
 	it('a multiple group is checkboxes and reads and sets an array', () => {
 		const onChange = vi.fn();
-		const group = choiceGroup(document, {
-			label: 'Days',
-			name: 'days',
-			items,
-			multiple: true,
-			value: ['a'],
-			onChange,
-		});
+		const group = checkGroup(document, { label: 'Days', name: 'days', items, value: ['a'], onChange });
 		mount(group.node);
 		expect(group.node.getAttribute('role')).toBe('group');
 		expect(group.inputs[0]?.type).toBe('checkbox');
@@ -153,12 +148,13 @@ describe('choiceGroup', () => {
 		expect(onChange).toHaveBeenCalledWith(['a', 'b']);
 		group.value = ['b'];
 		expect(group.value).toEqual(['b']);
-		group.value = 'a';
-		expect(group.value).toEqual(['a']);
+		const single = radioGroup(document, { label: 'One', name: 'one', items });
+		single.value = 'a';
+		expect(single.value).toBe('a');
 	});
 
 	it('the plain look is a list of checks with their help', () => {
-		const group = choiceGroup(document, { label: 'Way', name: 'way', items: items.slice(0, 2), value: 'b' });
+		const group = radioGroup(document, { label: 'Way', name: 'way', items: items.slice(0, 2), value: 'b' });
 		mount(group.node);
 		expect(group.node.className).toBe('opts');
 		expect(group.node.querySelectorAll('.check')).toHaveLength(2);
@@ -204,6 +200,14 @@ describe('field and affix', () => {
 		expect(node.querySelector('.hint.error')).toBeNull();
 		expect(input.hasAttribute('aria-invalid')).toBe(false);
 		fieldError(node, '');
+	});
+
+	it('a choice group gets a caption that is not a label, since the group is already named', () => {
+		const group = segmented(document, { label: 'Kind', name: 'kind', items: [{ value: 'a', label: 'A' }] });
+		const node = field(document, 'Kind', group.node, { error: 'Pick one' });
+		expect(node.querySelector(':scope > label')).toBeNull();
+		expect(node.querySelector('.cap')?.getAttribute('aria-hidden')).toBe('true');
+		expect(group.node.getAttribute('aria-invalid')).toBe('true');
 	});
 
 	it('can start with an error and works without a hint', () => {

@@ -11,7 +11,7 @@
  * a right to left page. Motion is short and stops with `prefers-reduced-motion`.
  *
  * The classes the builders in controls.js set: `check` (checkbox or radio with its text), `switch`, `setting`
- * (`wide` when its control is a field), `choices` with `choice` (cards), `segmented`, `field` with `hint` (`error`),
+ * (`wide` when its control is a field), `choices` with `choice` (cards), `segmented`, `field` with `hint` (`error`), `fields` (a grid of fields),
  * `affix` (field with `pre` / `suf`), `block` with `block-head`, `help`, and the existing `box`.
  * @module
  */
@@ -48,7 +48,9 @@ select[multiple] { background-image: none; padding-inline-end: 12px; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible,
 :where([tabindex]:not([tabindex='-1'])):focus-visible { outline: 2px solid var(--ss-kit-focus); outline-offset: 2px; }
 .field { display: grid; align-content: start; gap: 6px; min-width: 0; margin: 12px 0 0; }
-.field > label { margin: 0; }
+.field > label, .field > .cap { margin: 0; font-size: 0.875em; font-weight: 500; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 0 16px; }
+.fields > .field { margin-top: 12px; }
 .hint, .help { display: block; margin: 0; font-size: 0.85em; font-weight: 400; opacity: 0.7; }
 .hint.error { color: var(--ss-kit-bad); opacity: 1; }
 .affix { display: flex; align-items: stretch; border: 1px solid var(--ss-kit-line); border-radius: var(--ss-kit-r); overflow: hidden;

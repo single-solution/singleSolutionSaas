@@ -5,8 +5,8 @@
  * - `toggle`: a switch (`<input type="checkbox" role="switch">`) for a yes or no setting, as a setting row (label and
  *   help on the left, the switch on the right) or, with `inline`, a switch with its text.
  * - `checkbox` and `radio`: a box or a round button with its text; `checkbox` can be indeterminate.
- * - `choiceGroup`: several radios (or checkboxes) as a plain list, as cards (`look: 'card'`) or, for a few short
- *   choices, a segmented control (`look: 'segmented'`).
+ * - `radioGroup`, `segmented` and `checkGroup`: one choice (or several) from a few, as a list, as cards or, for a few
+ *   short choices, a segmented control.
  * - `field`: a label, a control, an optional hint and error; `affix` puts a prefix or suffix (`$`, `%`, `kg`) in the
  *   same frame as a text input; `fieldError` shows or clears a problem on a field.
  * - `block` and `settingRow`: a titled card (title, one line, actions) and a row of label and help beside a control,
@@ -135,21 +135,19 @@ export const settingRow = (doc, { label, help, control, wide = false }) => {
 /**
  * @typedef {object} GroupInput
  * @property {string} label the group's accessible name
- * @property {string} name the radios' shared name (radio groups)
+ * @property {string} name the inputs' shared name
  * @property {Array<{ value: string, label: string, help?: string, disabled?: boolean }>} items
- * @property {string | string[]} [value] the chosen value, or the chosen values of a `multiple` group
- * @property {boolean} [multiple] checkboxes instead of radios
  * @property {'plain' | 'card' | 'segmented'} [look] a list, cards with a title and a line, or a segmented control for a
  *   few short choices (radios only)
- * @property {(value: string | string[]) => unknown} [onChange]
  */
 
 /**
- * A group of radios (or checkboxes) in one of three looks. `value` reads and sets the choice (a string; an array in a
- * `multiple` group). The group is a native radio group, so Tab enters it once and the arrow keys move inside it.
- * @param {Document} doc @param {GroupInput} input
+ * A group of radios (or checkboxes) in one of three looks, as a native group: Tab enters a radio group once and the
+ * arrow keys move inside it.
+ * @param {Document} doc @param {GroupInput & { value?: string | string[], onChange?: (value: any) => unknown }} input
+ * @param {boolean} multiple
  */
-export const choiceGroup = (doc, { label, name, items, value = '', multiple = false, look = 'plain', onChange }) => {
+const group = (doc, { label, name, items, value = '', look = 'plain', onChange }, multiple) => {
 	const type = multiple ? 'checkbox' : 'radio';
 	const chosen = Array.isArray(value) ? value : [value];
 	const node = element(doc, 'div', {
@@ -196,6 +194,30 @@ export const choiceGroup = (doc, { label, name, items, value = '', multiple = fa
 };
 
 /**
+ * One choice from a few: native radios as a list, as cards (a title and a line each) or as a segmented control (short
+ * choices side by side). `value` reads and sets the chosen value.
+ * @param {Document} doc
+ * @param {GroupInput & { value?: string, onChange?: (value: string) => unknown }} input
+ * @returns {{ node: HTMLElement, inputs: HTMLInputElement[], value: string }}
+ */
+export const radioGroup = (doc, input) => /** @type {any} */ (group(doc, input, false));
+
+/**
+ * One choice from a few, side by side in a segmented control: `radioGroup` with that look.
+ * @param {Document} doc
+ * @param {Omit<GroupInput, 'look'> & { value?: string, onChange?: (value: string) => unknown }} input
+ */
+export const segmented = (doc, input) => radioGroup(doc, { ...input, look: 'segmented' });
+
+/**
+ * Several choices from a few: native checkboxes as a list or as cards. `value` reads and sets the chosen values.
+ * @param {Document} doc
+ * @param {Omit<GroupInput, 'look'> & { look?: 'plain' | 'card', value?: string[], onChange?: (value: string[]) => unknown }} input
+ * @returns {{ node: HTMLElement, inputs: HTMLInputElement[], value: string[] }}
+ */
+export const checkGroup = (doc, input) => /** @type {any} */ (group(doc, input, true));
+
+/**
  * A text input (or select) with a prefix and a suffix in one frame (`$ [ 12.50 ] USD`).
  * @param {Document} doc @param {HTMLElement} control @param {{ prefix?: string, suffix?: string }} [around]
  */
@@ -214,9 +236,13 @@ export const affix = (doc, control, { prefix = '', suffix = '' } = {}) => {
  * @param {{ hint?: string, error?: string, prefix?: string, suffix?: string }} [options]
  */
 export const field = (doc, label, control, { hint = '', error = '', prefix = '', suffix = '' } = {}) => {
-	if (!control.id) control.setAttribute('id', nextId('field'));
 	const node = element(doc, 'div', { class: 'field' });
-	const name = element(doc, 'label', { for: control.id });
+	// a radio or checkbox group has its name already (`aria-label`): its visible caption is not a label
+	const grouped = ['radiogroup', 'group'].includes(control.getAttribute('role') ?? '');
+	if (!control.id) control.setAttribute('id', nextId('field'));
+	const name = grouped
+		? element(doc, 'span', { class: 'cap', 'aria-hidden': 'true' })
+		: element(doc, 'label', { for: control.id });
 	name.append(label || '');
 	node.append(name, prefix || suffix ? affix(doc, control, { prefix, suffix }) : control);
 	if (hint) {
@@ -236,7 +262,7 @@ export const field = (doc, label, control, { hint = '', error = '', prefix = '',
 export const fieldError = (node, text) => {
 	const doc = /** @type {Document} */ (node.ownerDocument);
 	const control = /** @type {HTMLElement | null} */ (
-		node.querySelector(`[id="${node.querySelector('label')?.getAttribute('for')}"]`)
+		node.querySelector('input, select, textarea, [role="radiogroup"], [role="group"]')
 	);
 	let line = /** @type {HTMLElement | null} */ (node.querySelector('.hint.error'));
 	if (!text) {
