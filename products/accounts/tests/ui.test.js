@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 /* global document, window */
+import { LABEL_KINDS } from '@ss/contracts/address';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import manifest from '../manifest.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
@@ -1177,17 +1178,37 @@ describe('My account', () => {
 		expect(statusIn(profile)).toBe(strings['error.field.name']);
 
 		const addresses = part(host, strings['account.addresses']);
-		expect(addresses.querySelector('li')?.firstChild?.textContent).toBe('Home, Ana, 1 Main St, Springfield, North 12345, US');
+		expect(addresses.querySelector('li')?.firstChild?.textContent).toBe(
+			'Home, Ana, 1 Main St, Springfield, North 12345, United States',
+		);
 		await click(buttonIn(addresses, strings['account.addressAdd']));
 		fieldIn(addresses, strings['address.line1']).value = '2 Side St';
-		fieldIn(addresses, strings['address.city']).value = 'Shelbyville';
+		fieldIn(addresses, strings['address.city.city']).value = 'Shelbyville';
 		await submit(buttonIn(addresses, strings['account.addressSave']));
 		expect(patches.at(-1).addresses).toHaveLength(2);
 		expect(patches.at(-1).addresses[1]).toMatchObject({ line1: '2 Side St', city: 'Shelbyville', label: '' });
 		expect(addresses.querySelectorAll('li')).toHaveLength(2);
 		await click(/** @type {HTMLButtonElement} */ (addresses.querySelectorAll('li')[0]?.querySelector('button')));
 		expect(fieldIn(addresses, strings['address.line1']).value).toBe('1 Main St');
-		fieldIn(addresses, strings['address.city']).value = 'Capital City';
+		// the form follows the address's country: the US asks for a State and a ZIP code, in its order (A1)
+		const labels = () => [...addresses.querySelectorAll('form .field label')].map((label) => label.textContent);
+		expect(labels().slice(2)).toEqual([
+			strings['address.country'],
+			strings['address.line1'],
+			strings['address.line2'],
+			strings['address.city.city'],
+			strings['address.region.state'],
+			strings['address.postalCode.zip'],
+			strings['address.phone'],
+		]);
+		const country = /** @type {HTMLSelectElement} */ (fieldIn(addresses, strings['address.country']));
+		country.value = 'JP';
+		country.dispatchEvent(new Event('change'));
+		expect(labels().slice(3, 5)).toEqual([strings['address.postalCode.postal'], strings['address.region.prefecture']]);
+		expect(fieldIn(addresses, strings['address.postalCode.postal']).value).toBe('12345');
+		country.value = 'US';
+		country.dispatchEvent(new Event('change'));
+		fieldIn(addresses, strings['address.city.city']).value = 'Capital City';
 		await submit(buttonIn(addresses, strings['account.addressSave']));
 		expect(patches.at(-1).addresses[0]).toMatchObject({ id: 'adr_000001', city: 'Capital City' });
 		await click(buttonIn(addresses, strings['account.addressAdd']));
@@ -1841,11 +1862,12 @@ describe('admin widgets', () => {
 		await click(buttonIn(dialog(), strings['account.addressAdd']));
 		const fieldsets = dialog().querySelectorAll('fieldset');
 		// each part takes at most what the API takes (it used to allow 200 everywhere, so a long postal code was refused)
-		expect(fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.postalCode']).maxLength).toBe(20);
-		expect(fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.country']).maxLength).toBe(2);
+		expect(fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.postalCode.postal']).maxLength).toBe(20);
+		// the country is a picker of every country, kept as its code (A1)
+		expect(fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.country']).tagName).toBe('SELECT');
 		expect(fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.label']).maxLength).toBe(40);
 		fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.line1']).value = '2 Park Rd';
-		fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.city']).value = 'London';
+		fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.city.city']).value = 'London';
 		await submit(buttonIn(dialog(), strings['users.save']));
 		expect(server.last('PATCH /v1/admin/users/usr_1')?.body).toEqual({
 			name: 'Ana',
@@ -2866,8 +2888,8 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		await click(buttonIn(/** @type {HTMLElement} */ (addresses.querySelectorAll('li')[1]), strings['account.makeDefault']));
 		expect(patches.at(-1).addresses.map((/** @type {any} */ a) => a.default)).toEqual([false, true]);
 		await click(buttonIn(/** @type {HTMLElement} */ (addresses.querySelectorAll('li')[0]), strings['account.edit']));
-		expect(fieldIn(addresses, strings['address.area']).required).toBe(true);
-		expect(fieldIn(addresses, strings['address.city']).required).toBe(false);
+		expect(fieldIn(addresses, strings['address.area.area']).required).toBe(true);
+		expect(fieldIn(addresses, strings['address.city.city']).required).toBe(false);
 		checkIn(addresses, strings['address.default']).checked = true;
 		await submit(buttonIn(addresses, strings['account.addressSave']));
 		expect(patches.at(-1).addresses.map((/** @type {any} */ a) => a.default)).toEqual([true, false]);
@@ -2893,7 +2915,11 @@ describe('helpers', () => {
 			...['pending', 'invited', 'completed', 'declined', 'expired'].map((status) => `requests.${status}`),
 			...['expired', 'used', 'canceled', 'invalid'].map((status) => `setup.${status}`),
 			...Object.values(REQUEST_OUTCOMES),
-			...Object.keys(ADDRESS_LIMITS).map((field) => `address.${field}`),
+			// the area, city, region and postal code are named by their country's label kind (A1)
+			...Object.keys(ADDRESS_LIMITS)
+				.filter((field) => !(field in LABEL_KINDS))
+				.map((field) => `address.${field}`),
+			...Object.entries(LABEL_KINDS).flatMap(([part, kinds]) => kinds.map((kind) => `address.${part}.${kind}`)),
 			...[...OWN_TEXT, 'generic', 'locked', 'validation_failed', 'weak_password'].map((code) => `error.${code}`),
 			...[...FIELD_TEXT].map((field) => `error.field.${field}`),
 			...[...PASSWORD_RULES].map((rule) => `error.weak_password.${rule}`),

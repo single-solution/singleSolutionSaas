@@ -309,6 +309,8 @@ export const createProductInstance = (options) => {
 						maxAddresses: profile.maxAddresses,
 						keepOneAddress: profile.keepOneAddress,
 						addressRequired: profile.addressRequired,
+						// the country of an address without one, whose format the address form follows (A1)
+						country: (await product.business(websiteId)).country ?? '',
 					},
 					roleRequests: requests
 						? {

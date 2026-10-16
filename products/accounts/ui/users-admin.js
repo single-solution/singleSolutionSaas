@@ -13,7 +13,7 @@
  */
 import { adminCall, badge, element, formatText, moreMenu, mountWidget, openDialog } from '@ss/app-kit/widget';
 import { customInputs, datesOf, errorText, fieldMaker, setHidden, textsOf } from './common.js';
-import { ADDRESS_LIMITS } from '../core/widgets.js';
+import { addressInputs, addressText } from './address.js';
 import { card, chips, copyable } from './parts.js';
 import { WIDGET_CSS } from './styles.js';
 
@@ -599,17 +599,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 							t('users.addresses'),
 							user.addresses.map((/** @type {Record<string, any>} */ address) => [
 								address.label || (address.default ? t('account.defaultAddress') : t('users.addresses')),
-								[
-									address.line1,
-									address.line2,
-									address.area,
-									address.city,
-									address.region,
-									address.postalCode,
-									address.country,
-								]
-									.filter(Boolean)
-									.join(', '),
+								addressText(address),
 							]),
 						),
 					);
@@ -688,20 +678,14 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 			/** The addresses of a user, to change in the edit dialog. @param {Array<Record<string, any>>} addresses */
 			const addressEditor = (addresses) => {
 				const area = element(doc, 'div', { class: 'wide' });
-				/** @type {Array<{ id?: string, inputs: Record<string, HTMLInputElement>, isDefault: HTMLInputElement, node: HTMLElement }>} */
+				/** @type {Array<{ id?: string, inputs: { values: () => Record<string, string> }, isDefault: HTMLInputElement, node: HTMLElement }>} */
 				const rows = [];
 				/** @param {Record<string, any>} [address] */
 				const addRow = (address = {}) => {
 					const fieldset = element(doc, 'fieldset', { class: 'grid' });
 					fieldset.append(element(doc, 'legend', {}, t('users.addresses')));
-					/** @type {Record<string, HTMLInputElement>} */
-					const inputs = {};
-					for (const [key, max] of Object.entries(ADDRESS_LIMITS)) {
-						const made = make.field('input', t(`address.${key}`), { maxlength: String(max) });
-						made.input.value = address[key] ?? '';
-						inputs[key] = made.input;
-						fieldset.append(made.wrap);
-					}
+					// the parts of the address's country, in its order with its labels (A1)
+					const inputs = addressInputs({ doc, make, t, box: fieldset, address });
 					const isDefault = make.check(t('address.default'));
 					isDefault.input.checked = address.default === true;
 					const remove = button(t('account.remove'), { class: 'secondary small' });
@@ -723,7 +707,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 					read: () =>
 						rows.map((entry) => ({
 							...(entry.id ? { id: entry.id } : {}),
-							...Object.fromEntries(Object.entries(entry.inputs).map(([key, input]) => [key, input.value.trim()])),
+							...entry.inputs.values(),
 							default: entry.isDefault.checked,
 						})),
 				};

@@ -51,7 +51,8 @@ const ERROR_PARAM = LINK_PARAMS.error;
  *   Phone + password's options; null while it is off
  * @property {'ask' | 'ask_ticked' | 'always' | 'never'} [remember] "Remember me" of the role sign-ups get (A6, A14)
  * @property {boolean} [signInPaused] the role sign-ups get has its sign-in paused (A6)
- * @property {{ maxAddresses: number, keepOneAddress: boolean, addressRequired: string[] }} profile (A11)
+ * @property {{ maxAddresses: number, keepOneAddress: boolean, addressRequired: string[], country: string }} profile (A11;
+ *   `country`: the business.json country, of an address without one)
  * @property {{ roles: Array<{ key: string, name: string }>, requireNote: boolean, revealStatus?: boolean } | null} [roleRequests]
  *   (A5; revealStatus: a repeat ask's answer says what is there, else one private text for every ask)
  */

@@ -107,6 +107,29 @@ describe('profile', () => {
 		expect(ownCustom({ size: 'S', risk: 'x', gone: 1 }, fields)).toEqual({ size: 'S', gone: 1 });
 	});
 
+	it('checks addresses by their country: its region and postal code, the country as its code (A1)', () => {
+		const at = (/** @type {Record<string, unknown>} */ address, /** @type {any} */ rules = {}) =>
+			checkAddresses([{ line1: '1 Main St', city: 'Austin', ...address }], () => 'adr_new', rules);
+		expect(at({ country: 'us', region: 'TX', postalCode: '78701' })).toMatchObject({
+			ok: true,
+			value: [{ country: 'US', region: 'TX', postalCode: '78701' }],
+		});
+		expect(at({ country: 'United Kingdom', postalCode: 'sw1a 1aa' })).toMatchObject({
+			ok: true,
+			value: [{ country: 'GB', postalCode: 'SW1A 1AA' }],
+		});
+		expect(at({ country: 'US', postalCode: '78701' })).toMatchObject({ ok: false, field: 'addresses/0/region' });
+		expect(at({ country: 'US', region: 'TX', postalCode: '787' })).toMatchObject({
+			ok: false,
+			field: 'addresses/0/postalCode',
+			message: 'Use a postal code of the United States.',
+		});
+		expect(at({ country: 'ZZ' })).toMatchObject({ ok: false, field: 'addresses/0/country' });
+		// an address without a country is in the business.json country; no postal code where a country has none
+		expect(at({}, { country: 'JP' })).toMatchObject({ ok: false, field: 'addresses/0/postalCode' });
+		expect(at({ country: 'AE', region: 'Dubai' }, { required: ['postalCode'] })).toMatchObject({ ok: true });
+	});
+
 	it('checks addresses and shows users', () => {
 		expect(checkAddresses('x', () => 'adr_x').ok).toBe(false);
 		expect(checkAddresses([null], () => 'adr_x').ok).toBe(false);

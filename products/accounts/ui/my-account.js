@@ -16,7 +16,7 @@ import {
 	textsOf,
 	webAddress,
 } from './common.js';
-import { ADDRESS_LIMITS } from '../core/widgets.js';
+import { addressInputs, addressText } from './address.js';
 import { WIDGET_CSS } from './styles.js';
 
 /**
@@ -27,20 +27,12 @@ import { WIDGET_CSS } from './styles.js';
  * @property {import('./session.js').Session} session
  */
 
-/** @param {Record<string, unknown>} address */
-const addressLine = (address) =>
-	[
-		address.label,
-		address.name,
-		address.line1,
-		address.line2,
-		address.area,
-		address.city,
-		[address.region, address.postalCode].filter(Boolean).join(' '),
-		address.country,
-	]
-		.filter((part) => typeof part === 'string' && part !== '')
-		.join(', ');
+/**
+ * An address as one line: its label and name, then the place in its country's order and the country's name.
+ * @param {Record<string, any>} address @param {string} homeCountry
+ */
+const addressLine = (address, homeCountry) =>
+	[address.label, address.name, addressText(address, homeCountry)].filter(Boolean).join(', ');
 
 /**
  * @param {MyAccountInput} input
@@ -226,25 +218,27 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 				/** @param {Record<string, any> | null} address null: a new one */
 				const edit = (address) => {
 					const form = element(doc, 'form');
-					const fields = Object.entries(ADDRESS_LIMITS).map(([key, max]) => {
-						const made = make.field('input', t(`address.${key}`), {
-							maxlength: String(max),
-							...(rules.addressRequired.includes(key) ? { required: '' } : {}),
-						});
-						made.input.value = address?.[key] ?? '';
-						return /** @type {const} */ ([key, made]);
+					// the parts of the address's country, in its order with its labels (A1)
+					const inputs = addressInputs({
+						doc,
+						make,
+						t,
+						box: form,
+						address: address ?? {},
+						required: rules.addressRequired,
+						country: rules.country,
 					});
 					const isDefault = make.check(t('address.default'));
 					isDefault.input.checked = address?.default === true;
 					const submit = element(doc, 'button', { type: 'submit' }, t('account.addressSave'));
 					const cancel = button(t('account.cancel'), { class: 'secondary' });
 					cancel.addEventListener('click', () => area.replaceChildren());
-					form.append(...fields.map(([, made]) => made.wrap), isDefault.wrap, submit, cancel);
+					form.append(isDefault.wrap, submit, cancel);
 					form.addEventListener('submit', (event) => {
 						event.preventDefault();
 						/** @type {Record<string, string | boolean>} */
 						const values = {
-							...Object.fromEntries(fields.map(([key, made]) => [key, made.input.value.trim()])),
+							...inputs.values(),
 							default: isDefault.input.checked,
 						};
 						// one default address: choosing this one unsets the others
@@ -265,7 +259,7 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 						...(addresses.length === 0
 							? [element(doc, 'li', {}, t('account.noAddresses'))]
 							: addresses.map((address) => {
-									const item = element(doc, 'li', {}, addressLine(address));
+									const item = element(doc, 'li', {}, addressLine(address, rules.country));
 									if (address.default) item.append(element(doc, 'span', { class: 'tag' }, t('account.defaultAddress')));
 									const change = button(t('account.edit'), { class: 'secondary small' });
 									const remove = button(t('account.remove'), { class: 'secondary small' });

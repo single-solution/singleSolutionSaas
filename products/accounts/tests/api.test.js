@@ -352,11 +352,24 @@ describe('sessions', () => {
 		const patched = await env.visitor(
 			'PATCH',
 			'/v1/me',
-			{ name: 'Ana B', addresses: [{ label: 'Home', line1: '1 Main St', city: 'Springfield', country: 'us' }] },
+			{
+				name: 'Ana B',
+				addresses: [
+					{ label: 'Home', line1: '1 Main St', city: 'Springfield', region: 'IL', postalCode: '62701', country: 'us' },
+				],
+			},
 			t,
 		);
 		expect(patched.json).toMatchObject({ name: 'Ana B', addresses: [{ label: 'Home', country: 'US' }] });
 		expect(patched.json.addresses[0].id).toMatch(/^adr_/);
+		// the country's format: the US asks for a state and a ZIP code of its shape (A1)
+		const noZip = await env.visitor(
+			'PATCH',
+			'/v1/me',
+			{ addresses: [{ line1: 'x', city: 'y', region: 'IL', country: 'US' }] },
+			t,
+		);
+		expect(noZip.json.errors?.[0]?.path).toBe('/addresses/0/postalCode');
 		expect(code(await env.visitor('PATCH', '/v1/me', { addresses: [{ line1: '' }] }, t))).toBe('validation_failed');
 		expect(code(await env.visitor('PATCH', '/v1/me', { addresses: [{ line1: 'x', city: 'y', country: 'USA' }] }, t))).toBe(
 			'validation_failed',

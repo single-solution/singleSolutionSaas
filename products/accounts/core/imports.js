@@ -348,6 +348,7 @@ const addressesOf = (input, userId, errors) => {
 	const checked = checkAddresses(input, (index) => `adr_${own}${String(index).padStart(2, '0')}`, {
 		max: MAX_ADDRESSES,
 		required: ['line1'],
+		byCountry: false,
 	});
 	if (!checked.ok) {
 		errors.push({ path: `/${checked.field}`, message: checked.message });

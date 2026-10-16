@@ -6,6 +6,7 @@
  * @module
  */
 import { ownConsents } from './consents.js';
+import { PLACE_PARTS, addressProblem, countryCodeOf, countryName, tidyPostcode } from '@ss/contracts/address';
 import { ADDRESS_LIMITS } from './widgets.js';
 
 /**
@@ -35,7 +36,8 @@ const SHORT_TEXT = 1000;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const FIELD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const COUNTRY = /^[A-Z]{2}$/;
+/** The longest country the API reads: a code or an English name (kept as the code). */
+const COUNTRY_INPUT = 60;
 
 /**
  * @typedef {object} CustomField
@@ -204,17 +206,22 @@ export const checkCustomValues = (fields, input, { complete, current = {}, by })
 /**
  * Check the user's addresses (the whole list is saved at once) with the website's Profile settings (A11): at most
  * `max` addresses, the `required` fields filled, the last one kept with `keepOne`, and one default address (the first
- * when none is chosen).
+ * when none is chosen). Each address follows its country's format (`@ss/contracts/address`, A1): the country kept as
+ * its ISO code (given as a code or an English name), the region and postal code filled where the country requires them
+ * (never a postal code where it has none) and the postal code in the country's shape, kept upper case. An address
+ * without a country is in `country` (the business.json country). Imports pass `byCountry: false`: an imported
+ * address keeps its parts as they were (only the country as its code and the postal code upper case).
  * @param {unknown} input
  * @param {(index: number) => string} idOf a new id for an address without one
- * @param {{ max?: number, required?: ReadonlyArray<string>, keepOne?: boolean, before?: number }} [rules] `before`: how
- *   many addresses the user has now
+ * @param {{ max?: number, required?: ReadonlyArray<string>, keepOne?: boolean, before?: number, country?: string,
+ *   byCountry?: boolean }}
+ *   [rules] `before`: how many addresses the user has now
  * @returns {{ ok: true, value: Address[] } | { ok: false, field: string, message: string }}
  */
 export const checkAddresses = (
 	input,
 	idOf,
-	{ max = MAX_ADDRESSES, required = ['line1', 'city'], keepOne = false, before = 0 } = {},
+	{ max = MAX_ADDRESSES, required = ['line1', 'city'], keepOne = false, before = 0, country: home = '', byCountry = true } = {},
 ) => {
 	const most = Math.min(max, MAX_ADDRESSES);
 	if (!Array.isArray(input) || input.length > most)
@@ -227,17 +234,34 @@ export const checkAddresses = (
 	const out = [];
 	for (const [index, raw] of input.entries()) {
 		const a = typeof raw === 'object' && raw !== null ? /** @type {Record<string, unknown>} */ (raw) : {};
-		const fields = Object.fromEntries(Object.entries(ADDRESS_LIMITS).map(([key, most]) => [key, text(a[key], most)]));
+		const limits = { ...ADDRESS_LIMITS, country: COUNTRY_INPUT };
+		const fields = Object.fromEntries(Object.entries(limits).map(([key, most]) => [key, text(a[key], most)]));
 		const bad = Object.entries(fields).find(([, v]) => v === null);
 		if (bad) return { ok: false, field: `addresses/${index}/${bad[0]}`, message: 'This value is too long.' };
 		const f = /** @type {Record<keyof typeof ADDRESS_LIMITS, string>} */ (fields);
-		const missing = required.find((name) => name in f && f[/** @type {keyof typeof f} */ (name)] === '');
+		// the website's required fields outside the place (the place parts follow the country's format below)
+		const missing = required.find(
+			(name) =>
+				name in f &&
+				!(byCountry && PLACE_PARTS.includes(/** @type {any} */ (name))) &&
+				f[/** @type {keyof typeof f} */ (name)] === '',
+		);
 		if (missing) return { ok: false, field: `addresses/${index}/${missing}`, message: 'Fill out this part of the address.' };
-		const country = f.country.toUpperCase();
-		if (country !== '' && !COUNTRY.test(country))
-			return { ok: false, field: `addresses/${index}/country`, message: 'Use a two-letter country code.' };
+		const country = f.country === '' ? '' : countryCodeOf(f.country);
+		if (country === null) return { ok: false, field: `addresses/${index}/country`, message: 'Choose a country.' };
+		const place = { ...f, country, postalCode: tidyPostcode(f.postalCode) };
+		const refused = byCountry ? addressProblem(place, { country: home, required }) : null;
+		if (refused)
+			return {
+				ok: false,
+				field: `addresses/${index}/${refused.part}`,
+				message:
+					refused.problem === 'required'
+						? 'Fill out this part of the address.'
+						: `Use a postal code of ${countryName(country || home).replace(/^United /, 'the United ')}.`,
+			};
 		const id = typeof a.id === 'string' && /^adr_[0-9a-z]{6,40}$/.test(a.id) ? a.id : idOf(index);
-		out.push({ id, ...f, country, default: a.default === true });
+		out.push({ id, ...place, default: a.default === true });
 	}
 	if (out.length > 0 && !out.some((address) => address.default)) /** @type {Address} */ (out[0]).default = true;
 	return { ok: true, value: out };

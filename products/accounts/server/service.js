@@ -478,6 +478,8 @@ export const createService = (product) => {
 			required: /** @type {string[]} */ (addressRequired),
 			keepOne: keepOneAddress === true,
 			before: user?.addresses.length ?? 0,
+			// an address without a country is in the business.json country, whose format it follows (A1)
+			country: (await product.business(s.websiteId)).country ?? '',
 		});
 		if (!checked.ok)
 			throw problem('validation_failed', checked.message, {
