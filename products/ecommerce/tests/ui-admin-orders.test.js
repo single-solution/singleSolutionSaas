@@ -415,7 +415,7 @@ describe('orders admin: the list', () => {
 
 describe('orders admin: one order', () => {
 	it('takes amounts typed with the decimal sign the Format shows', async () => {
-		const format = { locale: 'de-DE', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer' };
+		const format = { locale: 'de-DE', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' };
 		const { root, server } = await start(
 			{
 				'POST /v1/admin/orders/ord_1/refunds': () =>
