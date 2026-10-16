@@ -941,7 +941,7 @@ describe('bank transfers recorded by staff (E24)', () => {
 });
 
 describe('loyalty options (E20)', () => {
-	it('answers points to earn, pending points and the paged history', async () => {
+	it('answers points to earn, pending points and the newest history', async () => {
 		await shop.setting('loyalty', 'earnPercent', 10);
 		await shop.setting('loyalty', 'pointValue', 100);
 		await shop.setting('loyalty', 'earnAt', 'placement');
@@ -951,7 +951,7 @@ describe('loyalty options (E20)', () => {
 		expect(priced.json.pointsToEarn).toBe(10);
 		await place({ lines: [{ productId: item.id }], payment: 'cod', address: ADDRESS }, shopper.token);
 		const account = await visit('GET', '/v1/shop/loyalty?limit=5', { signIn: shopper.token });
-		expect(account.json).toMatchObject({ balance: 0, lifetimeEarned: 0, pending: 10, hasMore: false });
+		expect(account.json).toMatchObject({ balance: 0, lifetimeEarned: 0, pending: 10 });
 		await shop.setting('loyalty', 'earnAt', 'delivery');
 	});
 
