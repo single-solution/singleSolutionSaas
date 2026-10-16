@@ -80,22 +80,30 @@ export const createMedia = (product) => {
 	};
 
 	/**
-	 * An order's dispatch video as shoppers get it (E28): an upload's address, or the YouTube or https address kept;
-	 * null when the order has none.
+	 * An order's attachments shoppers see (E20): those of the attachment kinds marked for shoppers, each with the kind's
+	 * name and type and its address (an upload's address, or the https address kept; a YouTube one is its private embed
+	 * address), oldest first.
 	 * @param {Site} s
-	 * @param {{ media?: Array<{ kind: string, key?: string | null, url?: string | null }> }} order
-	 * @returns {Promise<{ kind: 'file' | 'youtube' | 'url', url: string } | null>}
+	 * @param {{ attachments?: ReadonlyArray<{ kind: string, key: string | null, url: string | null }> }} order
+	 * @returns {Promise<Array<{ kind: string, label: string, type: string, url: string }>>}
 	 */
-	const dispatchVideo = async (s, order) => {
-		const entry = (order.media ?? []).findLast((item) => item.kind === 'dispatch_video');
-		if (!entry) return null;
-		if (entry.key) {
-			const url = await mediaUrl(s, entry.key);
-			return url ? { kind: 'file', url } : null;
+	const shopperAttachments = async (s, order) => {
+		const held = order.attachments ?? [];
+		if (held.length === 0) return [];
+		/** @type {Array<{ key: string, label: string, type: string, shoppers: boolean }>} */
+		const kinds = await s.list('attachment_kinds');
+		const out = [];
+		for (const attachment of held) {
+			const kind = kinds.find((entry) => entry.key === attachment.kind && entry.shoppers);
+			if (!kind) continue;
+			const url = attachment.key
+				? await mediaUrl(s, attachment.key)
+				: typeof attachment.url === 'string' && /^https:\/\//.test(attachment.url)
+					? attachment.url
+					: null;
+			if (url) out.push({ kind: kind.key, label: kind.label, type: kind.type, url });
 		}
-		const url = typeof entry.url === 'string' && /^https:\/\//.test(entry.url) ? entry.url : '';
-		if (!url) return null;
-		return { kind: /^https:\/\/www\.youtube-nocookie\.com\/embed\//.test(url) ? 'youtube' : 'url', url };
+		return out;
 	};
 
 	/** The categories and brands links are made of, read once per request. @type {WeakMap<Site, Promise<LinkContext>>} */
@@ -166,7 +174,7 @@ export const createMedia = (product) => {
 		return categoryLink(String(template), category, await linkContext(s));
 	};
 
-	return Object.freeze({ mediaUrl, stableUrl, dispatchVideo, productUrl, variantUrl, categoryUrl, linkContext });
+	return Object.freeze({ mediaUrl, stableUrl, shopperAttachments, productUrl, variantUrl, categoryUrl, linkContext });
 };
 
 /** @typedef {ReturnType<typeof createMedia>} Media */

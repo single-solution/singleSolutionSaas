@@ -60,8 +60,8 @@ describe('the order flow editor', () => {
 		for (const status of DEFAULT_FLOW.statuses) expect(container.textContent).toContain(status.label);
 		// a cancel says it also needs the refund permission when it gives money back (review H2)
 		expect(container.textContent).toContain('A cancel that gives back money paid also needs Refund orders.');
-		// the move into packed asks for the dispatch video; into dispatched the tracking number is optional
-		type(byLabel(container, 'Dispatch video'), 'required');
+		// into dispatched the tracking number is optional (attachments are the attachment_kinds list's, E20)
+		expect(container.textContent).not.toContain('Dispatch video');
 		type(byLabel(container, 'Tracking number'), 'optional');
 		// the shopper's name of the packed status and its line for cash on delivery
 		const packed = DEFAULT_FLOW.statuses.findIndex((status) => status.key === 'packed');
@@ -82,7 +82,7 @@ describe('the order flow editor', () => {
 		const value = saved[0];
 		/** @param {string} from @param {string} to */
 		const move = (from, to) => value.moves.find((/** @type {any} */ entry) => entry.from === from && entry.to === to);
-		expect(move('confirmed', 'packed').options).toMatchObject({ video: 'required' });
+		expect(move('confirmed', 'packed').options?.video).toBeUndefined();
 		expect(move('packed', 'dispatched').options).toMatchObject({ tracking: 'optional' });
 		expect(value.statuses[packed]).toMatchObject({ key: 'packed', shopperLabel: 'Getting ready' });
 		expect(value.triggers).toMatchObject({ refundsCover: 'refunded' });

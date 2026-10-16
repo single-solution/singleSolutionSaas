@@ -418,12 +418,13 @@ export const statusLabel = (flow, key) => shopperLabelOf(flow, key);
 /**
  * What an order lookup adds from outside the record: the tracking page (built from today's couriers, E28) and the
  * dispatch video's address.
- * @typedef {{ trackingUrl?: string, video?: { kind: 'file' | 'youtube' | 'url', url: string } | null }} OrderExtras
+ * @typedef {{ trackingUrl?: string, attachments?: Array<{ kind: string, label: string, type: string, url: string }> }} OrderExtras
  */
 
 /**
  * An order as Chat's `get_my_orders` sees it (E37): its status, totals, what is paid and due, its lines, and its
- * shipment with the tracking note, the expected date and the dispatch video. Never the address or phone.
+ * shipment with the tracking note, the expected date and the attachments shoppers see (C19: `{ label, type, url }`).
+ * Never the address or phone.
  * @param {OrderRecord} order
  * @param {OrderFlow} flow
  * @param {Money} money
@@ -470,7 +471,7 @@ export const orderSummary = (order, flow, money, extras = {}) => {
 		trackingUrl: safeLink(extras.trackingUrl ?? shipment?.trackingUrl ?? ''),
 		trackingNote: shipment?.trackingNote ?? '',
 		expectedAt: expected && !Number.isNaN(expected.getTime()) ? expected.toISOString() : null,
-		dispatchVideo: extras.video ?? null,
+		attachments: (extras.attachments ?? []).map(({ label, type, url }) => ({ label, type, url })),
 	};
 };
 

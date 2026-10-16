@@ -245,7 +245,7 @@ describe('core/lookup', () => {
 			trackingUrl: '',
 			trackingNote: '',
 			expectedAt: null,
-			dispatchVideo: null,
+			attachments: [],
 		});
 		expect(statusLabel(DEFAULT_FLOW, 'gone')).toBe('gone');
 		expect(shipmentSummary(record, DEFAULT_FLOW)).toBeNull();
@@ -447,7 +447,8 @@ describe('Chat lookups', () => {
 					placedAt: '2026-09-01T00:00:00.000Z',
 				},
 			],
-			loyaltyPoints: 120,
+			// the points as a field in the website's words (C19)
+			extraFields: [{ label: 'Loyalty points', value: '120' }],
 			name: 'Sara Shopper',
 		});
 		expect(orders.json.items).toHaveLength(3);
@@ -458,11 +459,10 @@ describe('Chat lookups', () => {
 		expect(account.json).toEqual({
 			name: 'Sara Shopper',
 			firstName: 'Sara',
-			loyaltyPoints: 120,
 			city: 'Town',
-			area: '',
 			region: '',
 			country: '',
+			extraFields: [{ label: 'Loyalty points', value: '120' }],
 		});
 		const shipments = await shop.api('GET', '/v1/chat/me/shipments', undefined, headers);
 		expect(shipments.json).toEqual({
@@ -511,7 +511,8 @@ describe('Chat lookups', () => {
 		expect(browser.status).toBeGreaterThanOrEqual(400);
 		await shop.switchOn(['catalog', 'checkout']);
 		const token = await shop.signIn({ id: sara });
-		expect((await shop.api('GET', '/v1/chat/me/account', undefined, { 'ss-sign-in': token })).json.loyaltyPoints).toBe(0);
+		// Loyalty off: no points field
+		expect((await shop.api('GET', '/v1/chat/me/account', undefined, { 'ss-sign-in': token })).json.extraFields).toEqual([]);
 		expect((await shop.api('GET', '/v1/chat/deals')).json.type).toMatch(/feature_off$/);
 		expect((await shop.api('GET', '/v1/chat/products/galaxy-s24')).json.variants[0].grade).toBe('a');
 		expect((await shop.api('GET', '/v1/feeds/products.xml')).status).toBe(403);

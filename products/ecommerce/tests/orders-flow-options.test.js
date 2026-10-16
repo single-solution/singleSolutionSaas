@@ -3,7 +3,7 @@
  * who may make a move and the permission and input it needs, a paid order the shopper cancels, what shoppers read of a
  * status and the note staff write them, whether a status sends a message, staff asked whether items go back in stock,
  * a refund of an unpaid order as a cancel, the extra moves after delivery (E40), edits that keep the placed amounts, a
- * delete that gives everything back, a flow without a confirmation step, a dispatch video replaced after packing, and
+ * delete that gives everything back, a flow without a confirmation step, and
  * the settings the flow replaced.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -424,24 +424,6 @@ describe('checkout options of the flow', () => {
 				expect(placed.status).toBe(201);
 				expect(await records.recordOf(placed.json.order.id)).toMatchObject({ status: 'confirmed', role: 'open' });
 			},
-		);
-	});
-
-	it('replaces the dispatch video after packing', async () => {
-		const { order } = await records.seedOrder({
-			status: 'packed',
-			role: 'packed',
-			patch: { media: [{ kind: 'dispatch_video', url: 'https://www.youtube-nocookie.com/embed/aaaaaaaaaaa' }] },
-		});
-		const replaced = await shop.api('PATCH', `/v1/orders/${order.id}`, { video: 'https://youtu.be/dQw4w9WgXcQ' });
-		expect(replaced.status).toBe(200);
-		const record = await records.recordOf(order.id);
-		expect(record.media).toEqual([{ kind: 'dispatch_video', url: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ' }]);
-		expect(record.history.at(-1)).toMatchObject({ code: 'video_replaced', kind: 'video' });
-		// not before packing: it comes with the move into packed
-		const open = await records.seedOrder();
-		expect(codeOf(await shop.api('PATCH', `/v1/orders/${open.order.id}`, { video: 'https://youtu.be/dQw4w9WgXcQ' }))).toBe(
-			'validation_failed',
 		);
 	});
 

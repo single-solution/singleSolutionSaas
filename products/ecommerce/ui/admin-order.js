@@ -248,9 +248,9 @@ const renderOrder = (kit, order, detail, message) => {
 			order.address && EDITABLE_ROLES.includes(order.role)
 				? { label: t('ordersAdmin.editAddress'), onSelect: () => addressDialog(kit, order, done) }
 				: null,
-			// the dispatch video is replaced once the order is packed
-			VIDEO_ROLES.includes(order.role)
-				? { label: t('ordersAdmin.replaceVideo'), onSelect: () => videoDialog(kit, order, done) }
+			// attachments of the merchant's kinds, at any time (E20)
+			(order.attachmentKinds ?? []).length > 0
+				? { label: t('ordersAdmin.addAttachment'), onSelect: () => attachDialog(kit, order, done) }
 				: null,
 			{ label: t('ordersAdmin.editNote'), onSelect: () => noteDialog(kit, order, done) },
 			{
@@ -414,7 +414,27 @@ const renderOrder = (kit, order, detail, message) => {
 		),
 	]);
 	const fields = fieldsCard(kit, order.orderFields ?? [], order.fields ?? {});
-	const cards = kit.masonry([customer, address, shipment, notes, fields, history].filter(Boolean));
+	/** @type {any[]} */
+	const held = order.attachments ?? [];
+	const attachments =
+		held.length > 0
+			? card(kit, t('ordersAdmin.attachments'), [
+					h(
+						'ul',
+						{},
+						held.map((attachment) =>
+							h('li', {}, [
+								attachment.href
+									? h('a', { href: attachment.href, target: '_blank', rel: 'noopener noreferrer' }, [attachment.label])
+									: kit.text('span', {}, attachment.label),
+								kit.text('span', { class: 'muted' }, ` · ${kit.when(attachment.at)} · ${attachment.by} `),
+								kit.button(t('ordersAdmin.removeAttachment'), () => removeAttachment(kit, order, attachment, done)),
+							]),
+						),
+					),
+				])
+			: null;
+	const cards = kit.masonry([customer, address, shipment, notes, fields, attachments, history].filter(Boolean));
 
 	kit.put(detail.pane, [
 		detail.back,
@@ -465,17 +485,21 @@ const claimsCard = async (kit, order, cards, detail) => {
 
 /**
  * A status staff may move the order to, with what the move needs and its options (the order's `nextStatuses`).
- * @typedef {{ key: string, label: string, role: string, needs?: string[],
- *   options?: { video?: string, restock?: string }, reasons?: Array<{ key: string, label: string }> }} NextStatus
- *   `reasons`: the merchant's cancel or failed-delivery reasons the move offers (E19)
+ * @typedef {{ key: string, label: string, role: string, needs?: string[], options?: { restock?: string },
+ *   reasons?: Array<{ key: string, label: string }>, attachments?: Array<{ kind: string, label: string }> }} NextStatus
+ *   `reasons`: the merchant's cancel or failed-delivery reasons the move offers (E19); `attachments`: the attachments
+ *   the move needs (E20)
  */
 
-/** Roles of an order whose dispatch video staff may replace. */
-const VIDEO_ROLES = Object.freeze(['packed', 'shipped']);
+/**
+ * An attachment as staff type it: an https address, else an upload key in the storage.
+ * @param {string} kind @param {string} typed
+ */
+const attachmentOf = (kind, typed) => (/^https:\/\//i.test(typed) ? { kind, url: typed } : { kind, key: typed });
 
 /**
  * Move the order to a status, with what its role and the move need: the units' numbers (packing: every line whose item
- * type numbers its units; shipping or delivering: those still missing some) and the dispatch video when packing, the
+ * type numbers its units; shipping or delivering: those still missing some) and the attachments it needs (E20), the
  * shipment, a staff note and a note for the shopper (required when the move needs them), and whether the items go back
  * in stock when the move asks; a canceling status asks for the order number first.
  * @param {Kit} kit @param {any} order @param {NextStatus} status
@@ -495,10 +519,12 @@ const moveDialog = (kit, order, status, done) => {
 				? serialForm(kit, numbered.filter(unitsMissing), false)
 				: null;
 	const shipping = status.role === 'shipped' ? shipForm(kit) : null;
-	const video =
-		status.role === 'packed' && options.video && options.video !== 'off'
-			? kit.input('', { maxlength: '2000', inputmode: 'url' })
-			: null;
+	// the attachments the move needs, each an https address or an upload key (E20)
+	const needed = (status.attachments ?? []).map((entry) => ({
+		kind: entry.kind,
+		label: entry.label,
+		input: kit.input('', { maxlength: '2000', inputmode: 'url' }),
+	}));
 	const restock = options.restock === 'ask' ? kit.check(t('ordersAdmin.restockAsk')) : null;
 	const cancelling = status.role === 'cancelled';
 	// why: a cancel may give one of the merchant's reasons, a package that came back takes one (the first by default)
@@ -515,9 +541,7 @@ const moveDialog = (kit, order, status, done) => {
 		body: [
 			cancelling ? kit.text('p', {}, t('ordersAdmin.cancelHint', { number: order.number })) : null,
 			packing?.node,
-			video
-				? kit.field(t(options.video === 'required' ? 'ordersAdmin.videoRequired' : 'ordersAdmin.videoOptional'), video)
-				: null,
+			...needed.map((entry) => kit.field(t('ordersAdmin.attachmentNeeded', { kind: entry.label }), entry.input)),
 			shipping?.node,
 			why ? kit.field(t('ordersAdmin.moveReason'), why) : null,
 			restock?.node,
@@ -533,13 +557,17 @@ const moveDialog = (kit, order, status, done) => {
 			if (!serials.ok) return serials.error;
 			if (needs.includes('note') && !reason.value.trim()) return t('ordersAdmin.needsNote');
 			if (needs.includes('reason') && !forShopper.value.trim()) return t('ordersAdmin.needsShopperNote');
+			const missing = needed.find((entry) => !entry.input.value.trim());
+			if (missing) return t('ordersAdmin.attachmentNeeded', { kind: missing.label });
 			const answer = await kit.call('POST', `/v1/admin/orders/${order.id}/move`, {
 				to: status.key,
 				note: reason.value,
 				...(forShopper.value.trim() ? { shopperNote: forShopper.value.trim() } : {}),
 				...(restock ? { restock: restock.box.checked } : {}),
 				...(why && why.value ? { reason: why.value } : {}),
-				...(video && video.value.trim() ? { video: video.value.trim() } : {}),
+				...(needed.length > 0
+					? { attachments: needed.map((entry) => attachmentOf(entry.kind, entry.input.value.trim())) }
+					: {}),
 				serials: serials.value,
 				shipment: shipping ? shipping.value() : null,
 				updatedAt: order.updatedAt,
@@ -557,21 +585,47 @@ const moveDialog = (kit, order, status, done) => {
 };
 
 /**
- * Replace the dispatch video once the order is packed (a YouTube or https address).
+ * Add an attachment of one of the merchant's kinds (E20): an https address or an upload key.
  * @param {Kit} kit @param {any} order @param {(order: any, text: string) => void} done
  */
-const videoDialog = (kit, order, done) => {
+const attachDialog = (kit, order, done) => {
 	const { t } = kit;
-	const video = kit.input('', { maxlength: '2000', inputmode: 'url' });
+	const kind = kit.select(
+		(order.attachmentKinds ?? []).map((/** @type {any} */ entry) => ({ value: entry.key, label: entry.label })),
+	);
+	const address = kit.input('', { maxlength: '2000', inputmode: 'url' });
 	kit.dialog({
-		title: t('ordersAdmin.replaceVideo'),
-		body: [kit.field(t('ordersAdmin.videoAddress'), video)],
+		title: t('ordersAdmin.addAttachment'),
+		body: [kit.field(t('ordersAdmin.attachmentKind'), kind), kit.field(t('ordersAdmin.attachmentAddress'), address)],
 		submitLabel: t('admin.save'),
 		onSubmit: async () => {
-			if (!video.value.trim()) return t('ordersAdmin.videoAddress');
-			const answer = await kit.call('PATCH', `/v1/admin/orders/${order.id}`, { video: video.value.trim() });
+			if (!address.value.trim()) return t('ordersAdmin.attachmentAddress');
+			const answer = await kit.call('PATCH', `/v1/admin/orders/${order.id}`, {
+				attachments: [attachmentOf(kind.value, address.value.trim())],
+			});
 			if (!answer.ok) return kit.reason(answer);
-			done(answer.data, t('ordersAdmin.videoReplaced'));
+			done(answer.data, t('ordersAdmin.attachmentAdded'));
+			return null;
+		},
+	});
+};
+
+/**
+ * Remove an attachment of the order.
+ * @param {Kit} kit @param {any} order @param {{ id: string, label: string }} attachment
+ * @param {(order: any, text: string) => void} done
+ */
+const removeAttachment = (kit, order, attachment, done) => {
+	const { t } = kit;
+	kit.dialog({
+		title: t('ordersAdmin.removeAttachment'),
+		body: [kit.text('p', {}, attachment.label)],
+		submitLabel: t('ordersAdmin.removeAttachment'),
+		danger: true,
+		onSubmit: async () => {
+			const answer = await kit.call('PATCH', `/v1/admin/orders/${order.id}`, { removeAttachments: [attachment.id] });
+			if (!answer.ok) return kit.reason(answer);
+			done(answer.data, t('ordersAdmin.attachmentRemoved'));
 			return null;
 		},
 	});

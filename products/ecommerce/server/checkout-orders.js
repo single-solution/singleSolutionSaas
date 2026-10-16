@@ -546,7 +546,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 						estimatedDeliveryAt: iso(order.shipment.estimatedDeliveryAt),
 					}
 				: null,
-			dispatchVideo: await media.dispatchVideo(s, order),
+			// the attachments shoppers see (E20)
+			attachments: await media.shopperAttachments(s, order),
 			note: order.note,
 			canCancel: shopperCancelMove(flow, order) !== null,
 			// the same sign-in or order key opens the invoice (GET /v1/shop/orders/:id/invoice)
@@ -1083,7 +1084,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			role,
 			history: [{ at: new Date(now), from: null, to: status, by: shopper ? 'shopper' : 'guest', note: '' }],
 			shipment: null,
-			media: [],
+			attachments: [],
 			stockHeld: true,
 			// what the order holds (the order engine's facts): its stock, offer uses and spent points
 			facts: { ...PLACED_FACTS },

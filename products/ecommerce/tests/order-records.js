@@ -126,7 +126,7 @@ export const orderRecords = (shop) => {
 			role,
 			history: [{ at: new Date(shop.now()), from: null, to: status, by: 'shopper', note: '' }],
 			shipment: null,
-			media: [],
+			attachments: [],
 			// the stock it holds was taken from the product
 			stockHeld: true,
 			holdUntil: null,

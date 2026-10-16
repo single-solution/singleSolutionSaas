@@ -345,7 +345,7 @@ export const STATUS_ROLES = Object.freeze([
 /**
  * The choices a move makes where its stage contract leaves one (dynamic model §3.4; `core/flow.js` `moveOptionSpecs`
  * says which a move takes and their defaults).
- * @typedef {{ paidOnConfirm?: PaymentMethod[], window?: 'restart' | 'none', video?: 'off' | 'optional' | 'required',
+ * @typedef {{ paidOnConfirm?: PaymentMethod[], window?: 'restart' | 'none',
  *   tracking?: 'required' | 'optional', refund?: 'auto' | 'staff', shopperPaid?: 'refuse' | 'flag' | 'refund',
  *   unpaid?: 'refuse' | 'cancel', restock?: 'yes' | 'no' | 'ask', points?: 'take_back' | 'keep',
  *   paidOnDelivery?: 'yes' | 'no' }} MoveOptions
@@ -453,7 +453,7 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string} status a status key of the website's order flow
  * @property {StatusRole} role the role of `status`
  * @property {Array<{ at: Date, from: string | null, to: string, by: string, note: string, reason?: string,
- *   kind?: 'edited' | 'payment' | 'refund' | 'video', byKind?: string, code?: import('./orders.js').HistoryNote,
+ *   kind?: 'edited' | 'payment' | 'refund' | 'attachments', byKind?: string, code?: import('./orders.js').HistoryNote,
  *   values?: import('./orders.js').NoteValues, shopperNote?: string }>} history `shopperNote`: what staff wrote for
  *   the shopper with a move (the shopper's timeline shows it; `note` stays internal); `reason` of a move (E27: `rto` | `customer_return`, or a
  *   cancel's `staff` | `shopper` | `expired`); `byKind`: the kind of the actor `by` names (`staff`, `user` or `server`;
@@ -462,8 +462,8 @@ export const STATUS_ROLES = Object.freeze([
  * @property {{ courier: string, trackingNumber: string, trackingUrl: string, booked: boolean, status: string,
  *   checkedAt: Date | null, trackingNote?: string, estimatedDeliveryAt?: Date | null } | null} shipment the courier by
  *   name or key, its link built on read from the `couriers` list (E28)
- * @property {Array<{ kind: 'dispatch_video', key?: string | null, url?: string | null, at?: Date, by?: string }>} [media]
- *   the dispatch video: an upload key, or a YouTube or https address (E28)
+ * @property {import('./attachments.js').AttachmentRecord[]} [attachments] photos, videos and files of the merchant's
+ *   attachment kinds (E20): an upload key, or an https address (YouTube kept as its private embed address)
  * @property {string[]} seenBy staff ids who opened it (E31, at most 50)
  * @property {string} [phoneDigits] the digits of the customer's phone, its whole number (E31)
  * @property {string | null} [accessKeyHash] the hash of a guest order's key (E21)

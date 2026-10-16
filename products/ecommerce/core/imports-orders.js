@@ -33,10 +33,10 @@ import {
 	checkCustomerEdit,
 	paymentStateOf,
 	shipmentFields,
-	videoOf,
 } from './orders.js';
 import { FIELD_LIMITS, PLAIN_SERIAL_RULE, checkFieldValues, isPlainSerial } from './fields.js';
 import { balanceOf, expireLots } from './points.js';
+import { ATTACHMENT_LIMITS, DEFAULT_ATTACHMENT_KINDS, attachmentSource } from './attachments.js';
 import { LIST_KEY } from './named-lists.js';
 import { DEFAULT_CLAIM_KINDS, DEFAULT_CLAIM_STATUSES, checkClaimInput, checkNote, plainText } from './returns.js';
 import { OTHER_WAY, PAYMENT_KINDS, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
@@ -59,7 +59,8 @@ import { REVIEW_STATUSES, checkReply, checkReviewInput } from './reviews.js';
  * @typedef {{ now: number, flow: OrderFlow, numbers: import('./order-numbers.js').NumberForm, currency: string,
  *   phoneRules: { defaultCallingCode: string, trunkPrefix: string }, guestIdentity: import('./guests.js').GuestIdentity,
  *   fields: { order: ImportField[], customer: ImportField[] },
- *   claims: { kinds: ReadonlyArray<import('./returns.js').ClaimKind>, statuses: ReadonlyArray<import('./returns.js').ClaimStatus> } }} ImportRules
+ *   claims: { kinds: ReadonlyArray<import('./returns.js').ClaimKind>, statuses: ReadonlyArray<import('./returns.js').ClaimStatus> },
+ *   attachmentKinds: ReadonlyArray<import('./attachments.js').AttachmentKind> }} ImportRules
  */
 
 /** The longest name of a person (checkout's guest and address name, IMP-31) and email address. */
@@ -375,7 +376,8 @@ const answer = (c, value) => (c.errors.length > 0 ? { ok: false, errors: c.error
 /**
  * The rules of one import call from what the website has (`prepare`).
  * @param {{ flow: unknown, checkout: Record<string, unknown>, catalog: Record<string, unknown>, country: unknown,
- *   now: number, fields?: ImportRules['fields'], claims?: ImportRules['claims'] }} input `country`: business.json's;
+ *   now: number, fields?: ImportRules['fields'], claims?: ImportRules['claims'],
+ *   attachmentKinds?: ImportRules['attachmentKinds'] }} input `country`: business.json's;
  *   `fields`: the shop's order and customer fields (none: no field value is taken); `claims`: the claim kinds and
  *   statuses (none: the seeded ones)
  * @returns {ImportRules}
@@ -388,6 +390,7 @@ export const importRules = ({
 	now,
 	fields = { order: [], customer: [] },
 	claims = { kinds: DEFAULT_CLAIM_KINDS, statuses: DEFAULT_CLAIM_STATUSES },
+	attachmentKinds = DEFAULT_ATTACHMENT_KINDS,
 }) => {
 	const { defaultCallingCode, trunkPrefix } = phoneRules(checkout, country);
 	return {
@@ -399,6 +402,7 @@ export const importRules = ({
 		guestIdentity: guestRules(checkout).identity,
 		fields,
 		claims,
+		attachmentKinds,
 	};
 };
 
@@ -479,7 +483,7 @@ export const checkImportedCustomer = (record, rules) => {
 /** Fields of an order and its parts (`OrderRecord`); `role` must be the flow's, `phoneDigits` is derived. */
 const ORDER_FIELDS = fieldList(
 	'id number customer address delivery lines totals promotions payment payments refunds status role history ' +
-		'shipment media seenBy phoneDigits accessKeyHash stockHeld returnRestocked claimRestockedAt holdUntil ' +
+		'shipment attachments seenBy phoneDigits accessKeyHash stockHeld returnRestocked claimRestockedAt holdUntil ' +
 		'idempotencyKey note fields staffNote placedAt deliveredAt createdAt updatedAt',
 );
 const ORDER_CUSTOMER_FIELDS = fieldList('userId customerId name email phone');
@@ -502,7 +506,7 @@ const REFUND_ENTRY_FIELDS = fieldList('id method amount reference claimId note b
 const BY_FIELDS = fieldList('kind id name role email');
 const HISTORY_FIELDS = fieldList('at from to by note shopperNote reason kind');
 const SHIPMENT_FIELDS = fieldList('courier trackingNumber trackingUrl booked status checkedAt trackingNote estimatedDeliveryAt');
-const MEDIA_FIELDS = fieldList('kind key url at by');
+const ATTACHMENT_FIELDS = fieldList('id kind key url at by');
 
 /** History entries that are not moves. */
 const ENTRY_KINDS = Object.freeze(/** @type {const} */ (['edited', 'payment', 'refund']));
@@ -934,22 +938,31 @@ const shipmentOf = (c, value, now) => {
 };
 
 /**
- * Dispatch videos (E28): an upload key, or a YouTube or https address (`videoOf`).
- * @param {Checker} c @param {unknown} value @param {number} now
+ * Attachments (E20): each of a kind of the `attachment_kinds` list, an upload key or an https address
+ * (`attachmentSource`), its time (else the call's) and who added it.
+ * @param {Checker} c @param {unknown} value @param {ImportRules} rules
  */
-const mediaOf = (c, value, now) =>
-	c.list(value, '/media', 10).map((raw, index) => {
-		const path = `/media/${index}`;
-		const input = c.fields(raw, path, MEDIA_FIELDS, 'a dispatch video') ?? {};
-		c.oneOf(input.kind, /** @type {const} */ (['dispatch_video']), `${path}/kind`);
+const attachmentsIn = (c, value, { now, attachmentKinds }) =>
+	c.list(value, '/attachments', ATTACHMENT_LIMITS.perOrder).map((raw, index) => {
+		const path = `/attachments/${index}`;
+		const input = c.fields(raw, path, ATTACHMENT_FIELDS, 'an attachment') ?? {};
+		const kind = attachmentKinds.find((entry) => entry.key === input.kind);
+		if (!kind) c.fail(`${path}/kind`, 'kind is a key of the attachment_kinds list.');
 		const byKey = !missing(input.key);
-		const video = videoOf(byKey ? input.key : input.url);
+		const source = attachmentSource(byKey ? input.key : input.url);
 		// an upload key must read as a key, an address as an address
-		if (!video || byKey !== 'key' in video)
-			c.fail(path, 'A dispatch video is an upload key (key), or a YouTube or https address (url).');
-		const by = c.text(input.by, `${path}/by`, MAX_PERSON);
-		const at = c.time(input.at, `${path}/at`, now, { nullable: true });
-		return { ...(video ?? { kind: 'dispatch_video' }), ...(at ? { at } : {}), ...(by ? { by } : {}) };
+		if (!source || byKey !== 'key' in source) c.fail(path, 'An attachment is an upload key (key) or an https address (url).');
+		const at = c.time(input.at, `${path}/at`, now, { nullable: true }) ?? new Date(now);
+		return {
+			// an attachment without an id gets one from its place, so a second run changes nothing
+			id: missing(input.id) ? `att_${String(index).padStart(10, '0')}` : (c.id(input.id, 'att', `${path}/id`) ?? ''),
+			kind: kind?.key ?? '',
+			type: kind?.type ?? 'file',
+			key: source && 'key' in source ? source.key : null,
+			url: source && 'url' in source ? source.url : null,
+			at,
+			by: c.text(input.by, `${path}/by`, MAX_PERSON),
+		};
 	});
 
 /**
@@ -1060,7 +1073,7 @@ export const checkImportedOrder = (record, rules) => {
 		role,
 		history,
 		shipment: shipmentOf(c, record.shipment, now),
-		media: mediaOf(c, record.media, now),
+		attachments: attachmentsIn(c, record.attachments, rules),
 		seenBy: c.seen(record.seenBy, '/seenBy'),
 		phoneDigits: phoneDigitsOf(customer.phone),
 		accessKeyHash,

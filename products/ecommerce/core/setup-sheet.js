@@ -181,6 +181,12 @@ export const LIST_WORDS = Object.freeze({
 		(/** @type {{ label: string, countsAgainst: boolean }} */ reason) =>
 			`${nameOf(reason.label)}${reason.countsAgainst ? ' (counts)' : ''}`,
 	),
+	attachment_kinds: named(
+		'attachment kind',
+		'attachment kinds',
+		(/** @type {{ label: string, type: string, requiredAt: string }} */ kind) =>
+			`${nameOf(kind.label)} (${kind.type}${kind.requiredAt ? `, needed at ${kind.requiredAt}` : ''})`,
+	),
 	claim_kinds: named('claim kind', 'claim kinds', (/** @type {{ label: string }} */ kind) => nameOf(kind.label)),
 	claim_statuses: named(
 		'claim status',

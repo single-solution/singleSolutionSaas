@@ -13,7 +13,7 @@
 import { startTransition, useState } from 'react';
 import { Callout, Masonry, Section, Select, SwapTransition, cx } from '@ss/ui';
 import { call, fill, useLoad } from './api.js';
-import { ClaimKindsEditor, ClaimStatusesEditor, ReasonsEditor } from './merchant-lists.js';
+import { AttachmentKindsEditor, ClaimKindsEditor, ClaimStatusesEditor, ReasonsEditor } from './merchant-lists.js';
 import { GradesEditor } from './grades.js';
 import { ItemTypesEditor } from './item-types.js';
 import { OrderFlowEditor } from './flow-editor.js';
@@ -320,6 +320,7 @@ export function SettingsTab({ websiteId: id }) {
 									<OrderFlowEditor websiteId={websiteId} off={off('checkout')} />
 									<ReasonsEditor websiteId={websiteId} off={off('checkout')} list="cancel_reasons" />
 									<ReasonsEditor websiteId={websiteId} off={off('checkout')} list="delivery_failure_reasons" />
+									<AttachmentKindsEditor websiteId={websiteId} off={off('checkout')} />
 								</>
 							) : null,
 							couriers: seen('checkout') ? <CouriersEditor websiteId={websiteId} off={off('checkout')} /> : null,

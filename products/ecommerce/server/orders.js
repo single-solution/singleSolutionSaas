@@ -10,12 +10,14 @@
  * each status key in the website's order flow), `paymentMethod` and `paymentState`; customers by `blocked`.
  * @module
  */
+import { createId } from '@ss/contracts';
 import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
 import { documentFieldsOf, fieldsOn, unitsOfOrders } from '../adapters/catalog-store.js';
 import { createFulfilmentStore, markSeenBy } from '../adapters/fulfilment-store.js';
 import { setOrderCounter } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { createOutbox } from '../adapters/outbox.js';
+import { attachmentsOf } from '../core/attachments.js';
 import { checkAddress } from '../core/checkout.js';
 import { phoneSearchOf } from '../core/guests.js';
 import { courierNamed, trackingLink } from '../core/couriers.js';
@@ -197,12 +199,13 @@ export const createOrders = (product, service, { ordering }) => {
 		for (const line of order.lines) images.set(line.id, await media.mediaUrl(s, line.image));
 		// how the lines' units are numbered (their item types), and the units' values (staff see every value)
 		const data = await s.data();
-		const [rules, unitValues, orderFields, cancel, failure] = await Promise.all([
+		const [rules, unitValues, orderFields, cancel, failure, attachmentKinds] = await Promise.all([
 			moves.unitRulesFor(s, order),
 			unitsOfOrders(data, [order.id]),
 			fieldsOn(data, 'order'),
 			s.list('cancel_reasons'),
 			s.list('delivery_failure_reasons'),
+			s.list('attachment_kinds'),
 		]);
 		const detail = orderDetail(order, flow, {
 			customer,
@@ -211,7 +214,15 @@ export const createOrders = (product, service, { ordering }) => {
 			units: { rules, values: unitValues.get(order.id) ?? new Map() },
 			orderFields,
 			reasons: { cancel, failure },
+			attachmentKinds,
 		});
+		// each attachment opens at its address: an upload's, or the https address kept (E20)
+		detail.attachments = await Promise.all(
+			detail.attachments.map(async (attachment) => ({
+				...attachment,
+				href: attachment.key ? await media.mediaUrl(s, attachment.key) : attachment.url,
+			})),
+		);
 		// the shopper's transfer proof opens with a signed link of 5 minutes (E24)
 		const proof = order.payment.proof;
 		if (!proof) return detail;
@@ -536,7 +547,8 @@ export const createOrders = (product, service, { ordering }) => {
 		const input = checkEdit(ctx.body, order);
 		if (!input.ok) throw service.invalid(input.field, input.message);
 		// serial numbers typed at packing or later (E11)
-		const { serials, shipment, waiting, video, fields, ...rest } = input.value;
+		const { serials, shipment, waiting, attachments, removeAttachments, fields, ...rest } = input.value;
+		const attaching = Boolean(attachments || removeAttachments);
 		// a changed address holds what the website requires, as checkout checks it (a waiting order's is checked when it
 		// is priced again)
 		if (rest.address && !waiting) {
@@ -548,11 +560,11 @@ export const createOrders = (product, service, { ordering }) => {
 		if (waiting) {
 			order = await ordering.editWaiting(s, ctx, order, { ...waiting, ...(rest.address ? { address: rest.address } : {}) });
 			delete rest.address;
-			if (Object.keys(rest).length === 0 && !shipment && !serials && !video && !fields) return detailOf(s, order);
+			if (Object.keys(rest).length === 0 && !shipment && !serials && !attaching && !fields) return detailOf(s, order);
 		}
 		if (serials) {
 			order = await moves.typeSerials(s, ctx, order, serials);
-			if (Object.keys(rest).length === 0 && !shipment && !video && !fields) return detailOf(s, order);
+			if (Object.keys(rest).length === 0 && !shipment && !attaching && !fields) return detailOf(s, order);
 		}
 		/** @type {Record<string, unknown>} */
 		const set = { ...rest };
@@ -584,17 +596,27 @@ export const createOrders = (product, service, { ordering }) => {
 		}
 		/** @type {Record<string, unknown>} */
 		const update = { $set: set };
-		// a new dispatch video replaces the one taken when packing (E28), with a history entry
-		if (video) {
-			set.media = [...(order.media ?? []).filter((item) => item.kind !== 'dispatch_video'), video];
+		// attachments added (of the merchant's kinds) and removed at any time (E20), with a history entry
+		if (attaching) {
+			const kept = (order.attachments ?? []).filter((held) => !(removeAttachments ?? []).includes(held.id));
+			const added = attachmentsOf(attachments ?? [], await s.list('attachment_kinds'), {
+				held: kept.length,
+				at: new Date(product.now()),
+				by: service.actor(ctx).name,
+				id: () => createId('att'),
+			});
+			if (!added.ok) throw service.invalid(added.field, added.message);
+			set.attachments = [...kept, ...added.value];
 			update.$push = {
 				history: {
 					at: new Date(product.now()),
 					from: order.status,
 					to: order.status,
 					...byActor(service.actor(ctx)),
-					...serverNote('video_replaced', 'Dispatch video replaced'),
-					kind: 'video',
+					...(added.value.length > 0
+						? serverNote('attachment_added', 'Attachment added')
+						: serverNote('attachment_removed', 'Attachment removed')),
+					kind: 'attachments',
 				},
 			};
 		}
@@ -607,8 +629,8 @@ export const createOrders = (product, service, { ordering }) => {
 				? 'order.address_changed'
 				: shipment
 					? 'order.shipment_changed'
-					: video
-						? 'order.video_replaced'
+					: attaching
+						? 'order.attachments_changed'
 						: 'order.noted',
 			order.id,
 			{
@@ -616,7 +638,8 @@ export const createOrders = (product, service, { ordering }) => {
 				detail: [
 					...(rest.address ? ['Delivery address changed'] : []),
 					...(shipment ? ['Shipment changed'] : []),
-					...(video ? ['Dispatch video replaced'] : []),
+					...(attachments ? ['Attachment added'] : []),
+					...(removeAttachments ? ['Attachment removed'] : []),
 					...(rest.staffNote === undefined ? [] : ['Staff note changed']),
 					...(rest.tags === undefined ? [] : ['Tags changed']),
 					...(fields ? ['Fields changed'] : []),
@@ -690,7 +713,7 @@ export const createOrders = (product, service, { ordering }) => {
 						serials: item?.serials ?? {},
 						shipment: item?.shipment ?? null,
 						updatedAt: null,
-						...(item?.video ? { video: item.video } : {}),
+						...(item?.attachments ? { attachments: item.attachments } : {}),
 					},
 					flow,
 				);

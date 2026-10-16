@@ -265,7 +265,7 @@ describe('orders', () => {
 			lines: [{ kind: 'physical', serials: [], booking: null, licences: [], returnedQuantity: 0, grade: null, image: null }],
 			phoneDigits: '15550001111',
 			shipment: null,
-			media: [],
+			attachments: [],
 			holdUntil: null,
 			accessKeyHash: null,
 		});
@@ -359,9 +359,9 @@ describe('orders', () => {
 						checkedAt: '2026-03-03T00:00:00Z',
 						estimatedDeliveryAt: '2026-03-03T00:00:00Z',
 					},
-					media: [
-						{ kind: 'dispatch_video', key: 'ecommerce/videos/o1.mp4', at: '2026-03-02T00:00:00Z', by: 'Sam' },
-						{ kind: 'dispatch_video', url: 'https://youtu.be/dQw4w9WgXcQ' },
+					attachments: [
+						{ kind: 'packing_video', key: 'ecommerce/videos/o1.mp4', at: '2026-03-02T00:00:00Z', by: 'Sam' },
+						{ kind: 'packing_video', url: 'https://youtu.be/dQw4w9WgXcQ' },
 					],
 					seenBy: ['usr_staff'],
 					accessKeyHash: 'A'.repeat(43),
@@ -390,7 +390,17 @@ describe('orders', () => {
 			payment: { state: 'refunded', via: 'payments', proof: { key: 'ecommerce/proofs/1.png' } },
 			refunds: [{ by: { email: 'sam@shop.example', role: 'owner' }, manual: false, refundId: 'rfd_1' }],
 			shipment: { courier: 'swift', trackingNumber: 'TRK-9', booked: true, trackingNote: '' },
-			media: [{ key: 'ecommerce/videos/o1.mp4', by: 'Sam' }, { url: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ' }],
+			attachments: [
+				{ id: 'att_0000000000', kind: 'packing_video', type: 'video', key: 'ecommerce/videos/o1.mp4', url: null, by: 'Sam' },
+				{
+					id: 'att_0000000001',
+					kind: 'packing_video',
+					type: 'video',
+					key: null,
+					url: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ',
+					by: '',
+				},
+			],
 			promotions: { pointsReversed: 20, role: { key: 'member' } },
 			idempotencyKey: 'checkout-1',
 			phoneDigits: '15550001111',
@@ -794,13 +804,13 @@ describe('orders', () => {
 		]);
 	});
 
-	it('refuse a shipment or dispatch video that does not fit', () => {
+	it('refuse a shipment or attachments that do not fit', () => {
 		expect(
 			pathsOf(
 				checkImportedOrder(
 					order({
 						shipment: { trackingNumber: 'TRK-1', trackingUrl: 'ftp://x', booked: 1, checkedAt: 'x' },
-						media: [{ kind: 'photo', key: 'dQw4w9WgXcQ' }, { url: 'ftp://x' }, {}],
+						attachments: [{ kind: 'photo', key: 'dQw4w9WgXcQ' }, { url: 'ftp://x' }, {}],
 					}),
 					RULES,
 				),
@@ -810,12 +820,11 @@ describe('orders', () => {
 			'/shipment/trackingUrl',
 			'/shipment/booked',
 			'/shipment/checkedAt',
-			'/media/0/kind',
-			'/media/0',
-			'/media/1/kind',
-			'/media/1',
-			'/media/2/kind',
-			'/media/2',
+			'/attachments/0/kind',
+			'/attachments/1/kind',
+			'/attachments/1',
+			'/attachments/2/kind',
+			'/attachments/2',
 		]);
 	});
 });

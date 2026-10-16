@@ -312,7 +312,7 @@ describe('property: random flows × every way an order moves, retries, two at on
 									role: start.role,
 									history: [{ at: new Date(shop.now()), from: null, to: start.key, by: 'shopper', note: '' }],
 									shipment: null,
-									media: [],
+									attachments: [],
 									stockHeld: true,
 									facts: { ...PLACED_FACTS },
 									holdUntil,
@@ -390,8 +390,6 @@ describe('property: random flows × every way an order moves, retries, two at on
 											note: '',
 											serials: {},
 											shipment: { courier: '', trackingNumber: `T-${step}` },
-											// a dispatch video for a move into packed that asks for one
-											video: { kind: 'dispatch_video', url: 'https://video.example/packing' },
 											updatedAt: null,
 											// a reason only with a cancel (one that counts, or not) or a package that came back (E19)
 											...reasonFor(/** @type {string} */ (action.to), /** @type {string} */ (action.reason)),

@@ -435,6 +435,16 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 							h(doc, 'a', { href: order.shipment.trackingUrl, target: '_blank', rel: 'noopener' }, t('orders.track')),
 						);
 				}
+				// the shop's attachments shoppers see: a packing video, a photo of the parcel … (E20)
+				for (const attachment of order.attachments ?? [])
+					deliveryParts.push(
+						h(
+							doc,
+							'p',
+							{ class: 'meta' },
+							h(doc, 'a', { href: attachment.url, target: '_blank', rel: 'noopener' }, attachment.label),
+						),
+					);
 				// the shop's texts: delivery times, packing, and when a pickup is ready (E22)
 				const method = order.delivery.method;
 				if (method !== 'none')

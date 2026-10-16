@@ -44,6 +44,7 @@ import { BEFORE_DELIVERY_ROLES, WAITING_ROLES as WAITING, canMove, confirmedStat
 import { createId } from '@ss/contracts';
 import { elementsOf } from '../core/item-types.js';
 import { reasonOf } from '../core/order-reasons.js';
+import { attachmentsOf, missingAttachments } from '../core/attachments.js';
 import { OTHER_WAY, VIA_PAYMENTS } from '../core/payment-methods.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
@@ -441,14 +442,20 @@ export const createMoves = (product, service) => {
 		// what the move needs, checked before anything is called
 		/** @type {{ plan: Awaited<ReturnType<typeof capturePlan>> } | undefined} */
 		let units;
-		/** @type {import('../core/orders.js').OrderMedia | undefined} */
-		let video;
-		if (target.role === 'packed') {
-			// the dispatch video taken when packing, as the move asks (E28)
-			const videoRule = String(rules.options.video ?? 'off');
-			if (videoRule === 'required' && !input.video && !(order.media ?? []).some((m) => m.kind === 'dispatch_video'))
-				throw service.invalid('video', 'Add the dispatch video before packing.');
-			if (videoRule !== 'off' && input.video) video = input.video;
+		// the attachments the move adds (each of a kind of the merchant's list), and the kinds this status needs (E20)
+		const kinds = await s.list('attachment_kinds');
+		const attached = attachmentsOf(input.attachments ?? [], kinds, {
+			held: (order.attachments ?? []).length,
+			at: new Date(now),
+			by: actor.name,
+			id: () => createId('att'),
+		});
+		if (!attached.ok) throw service.invalid(attached.field, attached.message);
+		const attachments = attached.value;
+		if (!trigger) {
+			const missing = missingAttachments(kinds, target.key, [...(order.attachments ?? []), ...attachments]);
+			if (missing.length > 0)
+				throw service.invalid('attachments', `Add ${missing.map((kind) => kind.label).join(', ')} before this move.`);
 		}
 		// the units of the lines whose item type numbers them: those sent, and every one the stage needs by now
 		if (['packed', 'shipped', 'delivered'].includes(target.role))
@@ -500,7 +507,7 @@ export const createMoves = (product, service) => {
 				input: {
 					...asked,
 					...(shipment ? { shipment } : {}),
-					...(video ? { video } : {}),
+					...(attachments.length > 0 ? { attachments } : {}),
 					...(units ? { units } : {}),
 					...(paid ? { paid: { ...paid, set: { ...step?.set, ...paid.set } } } : {}),
 					...(step && !paid ? { payments: cancelling ? step.set : { ...DROPPED } } : {}),

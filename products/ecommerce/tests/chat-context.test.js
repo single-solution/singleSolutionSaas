@@ -592,7 +592,17 @@ describe('Chat lookups (E37)', () => {
 				trackingNote: 'Leaves Chicago today',
 				estimatedDeliveryAt: new Date('2026-10-05T00:00:00Z'),
 			},
-			media: [{ kind: 'dispatch_video', url: 'https://www.youtube-nocookie.com/embed/abcdefghijk' }],
+			attachments: [
+				{
+					id: 'att_video0000001',
+					kind: 'packing_video',
+					type: 'video',
+					key: null,
+					url: 'https://www.youtube-nocookie.com/embed/abcdefghijk',
+					at: placedAt,
+					by: 'Sam',
+				},
+			],
 			placedAt,
 			createdAt: placedAt,
 		});
@@ -808,7 +818,8 @@ describe('Chat lookups (E37)', () => {
 				trackingUrl: 'https://track.example/TRK%209',
 				trackingNote: 'Leaves Chicago today',
 				expectedAt: '2026-10-05T00:00:00.000Z',
-				dispatchVideo: { kind: 'youtube', url: 'https://www.youtube-nocookie.com/embed/abcdefghijk' },
+				// the attachments shoppers see, generic (C19)
+				attachments: [{ label: 'Packing video', type: 'video', url: 'https://www.youtube-nocookie.com/embed/abcdefghijk' }],
 			}),
 		]);
 		expect(orders.text).not.toContain('Hidden street');
@@ -819,7 +830,10 @@ describe('Chat lookups (E37)', () => {
 			expectedAt: '2026-10-05T00:00:00.000Z',
 		});
 		// the city of the last order, until Accounts answers with a default address
-		expect((await shop.api('GET', '/v1/chat/me/account', undefined, headers)).json).toMatchObject({ city: 'Boston', area: '' });
+		expect((await shop.api('GET', '/v1/chat/me/account', undefined, headers)).json).toMatchObject({
+			city: 'Boston',
+			extraFields: [{ label: 'Loyalty points', value: '0' }],
+		});
 		shop.responders.set(`${ACCOUNTS}/v1/me`, (call) =>
 			call.headers['ss-sign-in'] === token
 				? {
@@ -837,11 +851,14 @@ describe('Chat lookups (E37)', () => {
 		expect((await shop.api('GET', '/v1/chat/me/account', undefined, headers)).json).toEqual({
 			name: 'Sara Shopper',
 			firstName: 'Sara',
-			loyaltyPoints: 0,
 			city: 'Seattle',
-			area: 'Downtown',
 			region: 'Washington',
 			country: 'US',
+			// the points and the area as fields in the website's words (C19)
+			extraFields: [
+				{ label: 'Loyalty points', value: '0' },
+				{ label: 'Area', value: 'Downtown' },
+			],
 		});
 		shop.responders.delete(`${ACCOUNTS}/v1/me`);
 	});

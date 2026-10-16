@@ -5372,7 +5372,7 @@
 		"/v1/admin/orders/bulk-move": {
 			"post": {
 				"summary": "Move several orders to one status (Orders admin widget)",
-				"description": "Each order moves on its own, as POST /v1/orders/:id/move moves it (without the updatedAt check); an order that cannot move is listed with its problem and the others still move. Send ids, or items with each order's shipment, serial numbers and dispatch video. Needs bulk_actions (the widget the bulk.run permission). 422 validation_failed for no or more than 200 ids, a malformed id, a missing to or a bad item. Send an Idempotency-Key so a retried request is done once.",
+				"description": "Each order moves on its own, as POST /v1/orders/:id/move moves it (without the updatedAt check); an order that cannot move is listed with its problem and the others still move. Send ids, or items with each order's shipment, serial numbers and attachments. Needs bulk_actions (the widget the bulk.run permission). 422 validation_failed for no or more than 200 ids, a malformed id, a missing to or a bad item. Send an Idempotency-Key so a retried request is done once.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "bulk_actions",
 				"x-ss-permission": "bulk.run",
@@ -5539,12 +5539,13 @@
 													},
 													"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (a line whose item type picks them from stock, unitCapture stock) are picked by their serial numbers; typed units (unitCapture packing) are checked against the unit fields of the line's item type (each value in its field's format, every required field given; without unit fields a plain serial number)."
 												},
-												"video": {
-													"type": [
-														"string",
-														"null"
-													],
-													"description": "The dispatch video: an upload key in the merchant's storage, a YouTube id or address, or an https address."
+												"attachments": {
+													"type": "array",
+													"maxItems": 10,
+													"items": {
+														"$ref": "#/components/schemas/AttachmentInput"
+													},
+													"description": "This order's attachments added with the move."
 												}
 											}
 										},
@@ -6893,14 +6894,6 @@
 											}
 										}
 									},
-									"video": {
-										"type": [
-											"string",
-											"null"
-										],
-										"maxLength": 2000,
-										"description": "A new dispatch video replacing the one taken when packing (an upload key, a YouTube id or address, or an https address); only while the order is packed or shipped (422 validation_failed otherwise)."
-									},
 									"fields": {
 										"type": "object",
 										"additionalProperties": {
@@ -6925,6 +6918,22 @@
 											]
 										},
 										"description": "The order fields' values staff give (active fields on orders); null clears one. 422 at /fields/<id> for a value its field refuses."
+									},
+									"attachments": {
+										"type": "array",
+										"maxItems": 10,
+										"items": {
+											"$ref": "#/components/schemas/AttachmentInput"
+										},
+										"description": "Attachments to add, at any time (an order keeps at most 30)."
+									},
+									"removeAttachments": {
+										"type": "array",
+										"maxItems": 30,
+										"items": {
+											"type": "string"
+										},
+										"description": "Ids of the order's attachments to remove (422 validation_failed for another id)."
 									}
 								}
 							}
@@ -6997,7 +7006,7 @@
 		"/v1/admin/orders/{id}/move": {
 			"post": {
 				"summary": "Move an order to another status of the flow (Orders admin widget)",
-				"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed, shipped and delivered take serial numbers (serials, grades_serials) for the lines whose item type numbers their units: picked from units in stock (unitCapture stock) when packing, or typed (unitCapture packing) with this move or later, and every unit of a line is needed by the step its type names (unitsRequiredBefore: packed, or shipped, which also covers delivered); packed takes the dispatch video as the move's video option says; shipped needs a shipment (its tracking number unless the move's tracking is optional); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order staff move on (into an open, packed or delivered status) lets go of its open Payments payment: it is canceled at Payments first, so the shopper can no longer pay it (money that still arrives Payments flags to give back), and the order waits for a new one if it waits again; paid just before, the move is refused (409 move_not_allowed) and the payment recorded; 503 payments_unavailable when Payments cannot be reached. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund), and any move that gives money back (a cancel that refunds what was paid, before or after delivery) needs orders.refund too, whatever permission the move names; refused with 403 forbidden before anything is called. The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once. A move into a packed, shipped or delivered status needs the order fields required by that stage (requiredAt) first: 422 validation_failed at /fields/<id>.",
+				"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed, shipped and delivered take serial numbers (serials, grades_serials) for the lines whose item type numbers their units: picked from units in stock (unitCapture stock) when packing, or typed (unitCapture packing) with this move or later, and every unit of a line is needed by the step its type names (unitsRequiredBefore: packed, or shipped, which also covers delivered); any move takes attachments, and one into a status that a kind of your attachment_kinds list names in requiredAt needs that kind (E20); shipped needs a shipment (its tracking number unless the move's tracking is optional); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order staff move on (into an open, packed or delivered status) lets go of its open Payments payment: it is canceled at Payments first, so the shopper can no longer pay it (money that still arrives Payments flags to give back), and the order waits for a new one if it waits again; paid just before, the move is refused (409 move_not_allowed) and the payment recorded; 503 payments_unavailable when Payments cannot be reached. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund), and any move that gives money back (a cancel that refunds what was paid, before or after delivery) needs orders.refund too, whatever permission the move names; refused with 403 forbidden before anything is called. The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once. A move into a packed, shipped or delivered status needs the order fields required by that stage (requiredAt) first: 422 validation_failed at /fields/<id>.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "orders.manage",
@@ -7156,13 +7165,6 @@
 										],
 										"description": "Needed to enter a shipped status (unless the order is already shipped)."
 									},
-									"video": {
-										"type": [
-											"string",
-											"null"
-										],
-										"description": "The dispatch video: an upload key in the merchant's storage, a YouTube id or address, or an https address."
-									},
 									"reason": {
 										"type": [
 											"string",
@@ -7184,6 +7186,14 @@
 											"null"
 										],
 										"description": "Whether the items go back in stock: required when the move asks (its restock option ask), refused otherwise."
+									},
+									"attachments": {
+										"type": "array",
+										"maxItems": 10,
+										"items": {
+											"$ref": "#/components/schemas/AttachmentInput"
+										},
+										"description": "Attachments added with the move. A kind whose requiredAt is the status moved into must be on the order or given here (422 validation_failed at /attachments otherwise)."
 									}
 								}
 							}
@@ -16064,8 +16074,8 @@
 									"type": "object",
 									"required": [
 										"items",
-										"loyaltyPoints",
-										"name"
+										"name",
+										"extraFields"
 									],
 									"additionalProperties": false,
 									"properties": {
@@ -16075,13 +16085,16 @@
 												"$ref": "#/components/schemas/ChatOrder"
 											}
 										},
-										"loyaltyPoints": {
-											"type": "integer",
-											"description": "0 while loyalty is off."
-										},
 										"name": {
 											"type": "string",
 											"description": "The shopper’s name."
+										},
+										"extraFields": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/ExtraField"
+											},
+											"description": "More about the shopper in the website's words (C19): the loyalty points balance while Loyalty is on and they are a member."
 										}
 									}
 								}
@@ -22059,7 +22072,7 @@
 		"/v1/orders/bulk-move": {
 			"post": {
 				"summary": "Move several orders to one status",
-				"description": "Each order moves on its own, as POST /v1/orders/:id/move moves it (without the updatedAt check); an order that cannot move is listed with its problem and the others still move. Send ids, or items with each order's shipment, serial numbers and dispatch video. Needs bulk_actions (the widget the bulk.run permission). 422 validation_failed for no or more than 200 ids, a malformed id, a missing to or a bad item. Send an Idempotency-Key so a retried request is done once.",
+				"description": "Each order moves on its own, as POST /v1/orders/:id/move moves it (without the updatedAt check); an order that cannot move is listed with its problem and the others still move. Send ids, or items with each order's shipment, serial numbers and attachments. Needs bulk_actions (the widget the bulk.run permission). 422 validation_failed for no or more than 200 ids, a malformed id, a missing to or a bad item. Send an Idempotency-Key so a retried request is done once.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "bulk_actions",
 				"security": [
@@ -22237,12 +22250,13 @@
 													},
 													"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (a line whose item type picks them from stock, unitCapture stock) are picked by their serial numbers; typed units (unitCapture packing) are checked against the unit fields of the line's item type (each value in its field's format, every required field given; without unit fields a plain serial number)."
 												},
-												"video": {
-													"type": [
-														"string",
-														"null"
-													],
-													"description": "The dispatch video: an upload key in the merchant's storage, a YouTube id or address, or an https address."
+												"attachments": {
+													"type": "array",
+													"maxItems": 10,
+													"items": {
+														"$ref": "#/components/schemas/AttachmentInput"
+													},
+													"description": "This order's attachments added with the move."
 												}
 											}
 										},
@@ -23840,14 +23854,6 @@
 											}
 										}
 									},
-									"video": {
-										"type": [
-											"string",
-											"null"
-										],
-										"maxLength": 2000,
-										"description": "A new dispatch video replacing the one taken when packing (an upload key, a YouTube id or address, or an https address); only while the order is packed or shipped (422 validation_failed otherwise)."
-									},
 									"fields": {
 										"type": "object",
 										"additionalProperties": {
@@ -23872,6 +23878,22 @@
 											]
 										},
 										"description": "The order fields' values staff give (active fields on orders); null clears one. 422 at /fields/<id> for a value its field refuses."
+									},
+									"attachments": {
+										"type": "array",
+										"maxItems": 10,
+										"items": {
+											"$ref": "#/components/schemas/AttachmentInput"
+										},
+										"description": "Attachments to add, at any time (an order keeps at most 30)."
+									},
+									"removeAttachments": {
+										"type": "array",
+										"maxItems": 30,
+										"items": {
+											"type": "string"
+										},
+										"description": "Ids of the order's attachments to remove (422 validation_failed for another id)."
 									}
 								}
 							}
@@ -23955,7 +23977,7 @@
 		"/v1/orders/{id}/move": {
 			"post": {
 				"summary": "Move an order to another status of the flow",
-				"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed, shipped and delivered take serial numbers (serials, grades_serials) for the lines whose item type numbers their units: picked from units in stock (unitCapture stock) when packing, or typed (unitCapture packing) with this move or later, and every unit of a line is needed by the step its type names (unitsRequiredBefore: packed, or shipped, which also covers delivered); packed takes the dispatch video as the move's video option says; shipped needs a shipment (its tracking number unless the move's tracking is optional); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order staff move on (into an open, packed or delivered status) lets go of its open Payments payment: it is canceled at Payments first, so the shopper can no longer pay it (money that still arrives Payments flags to give back), and the order waits for a new one if it waits again; paid just before, the move is refused (409 move_not_allowed) and the payment recorded; 503 payments_unavailable when Payments cannot be reached. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund), and any move that gives money back (a cancel that refunds what was paid, before or after delivery) needs orders.refund too, whatever permission the move names; refused with 403 forbidden before anything is called. The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once. A move into a packed, shipped or delivered status needs the order fields required by that stage (requiredAt) first: 422 validation_failed at /fields/<id>.",
+				"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed, shipped and delivered take serial numbers (serials, grades_serials) for the lines whose item type numbers their units: picked from units in stock (unitCapture stock) when packing, or typed (unitCapture packing) with this move or later, and every unit of a line is needed by the step its type names (unitsRequiredBefore: packed, or shipped, which also covers delivered); any move takes attachments, and one into a status that a kind of your attachment_kinds list names in requiredAt needs that kind (E20); shipped needs a shipment (its tracking number unless the move's tracking is optional); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order staff move on (into an open, packed or delivered status) lets go of its open Payments payment: it is canceled at Payments first, so the shopper can no longer pay it (money that still arrives Payments flags to give back), and the order waits for a new one if it waits again; paid just before, the move is refused (409 move_not_allowed) and the payment recorded; 503 payments_unavailable when Payments cannot be reached. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund), and any move that gives money back (a cancel that refunds what was paid, before or after delivery) needs orders.refund too, whatever permission the move names; refused with 403 forbidden before anything is called. The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once. A move into a packed, shipped or delivered status needs the order fields required by that stage (requiredAt) first: 422 validation_failed at /fields/<id>.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -24125,13 +24147,6 @@
 										],
 										"description": "Needed to enter a shipped status (unless the order is already shipped)."
 									},
-									"video": {
-										"type": [
-											"string",
-											"null"
-										],
-										"description": "The dispatch video: an upload key in the merchant's storage, a YouTube id or address, or an https address."
-									},
 									"reason": {
 										"type": [
 											"string",
@@ -24153,6 +24168,14 @@
 											"null"
 										],
 										"description": "Whether the items go back in stock: required when the move asks (its restock option ask), refused otherwise."
+									},
+									"attachments": {
+										"type": "array",
+										"maxItems": 10,
+										"items": {
+											"$ref": "#/components/schemas/AttachmentInput"
+										},
+										"description": "Attachments added with the move. A kind whose requiredAt is the status moved into must be on the order or given here (422 validation_failed at /attachments otherwise)."
 									}
 								}
 							}
@@ -36913,6 +36936,25 @@
 					}
 				}
 			},
+			"AttachmentInput": {
+				"type": "object",
+				"description": "An attachment staff add: its kind and an upload key (key) or an https address (url; a YouTube address is kept as its private embed address).",
+				"required": [
+					"kind"
+				],
+				"properties": {
+					"kind": {
+						"type": "string",
+						"description": "A key of the attachment_kinds list (422 validation_failed at /attachments/<n>/kind for another)."
+					},
+					"key": {
+						"type": "string"
+					},
+					"url": {
+						"type": "string"
+					}
+				}
+			},
 			"Attribute": {
 				"type": "object",
 				"description": "A field (an attribute): a value products, variants, units (numbered items), orders or customers keep, with its type, checks and where it shows.",
@@ -39258,11 +39300,10 @@
 				"required": [
 					"name",
 					"firstName",
-					"loyaltyPoints",
 					"city",
-					"area",
 					"region",
-					"country"
+					"country",
+					"extraFields"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -39272,16 +39313,9 @@
 					"firstName": {
 						"type": "string"
 					},
-					"loyaltyPoints": {
-						"type": "integer",
-						"description": "0 while loyalty is off or the shopper is not a loyalty member."
-					},
 					"city": {
 						"type": "string",
 						"description": "The default address’s city in Accounts, else the last delivered-to city."
-					},
-					"area": {
-						"type": "string"
 					},
 					"region": {
 						"type": "string",
@@ -39290,6 +39324,13 @@
 					"country": {
 						"type": "string",
 						"description": "The default address’s country in Accounts."
+					},
+					"extraFields": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ExtraField"
+						},
+						"description": "More about the shopper in the website's words (C19): the loyalty points balance while Loyalty is on and they are a member, and the area of their default address."
 					}
 				}
 			},
@@ -39881,7 +39922,7 @@
 					"trackingUrl",
 					"trackingNote",
 					"expectedAt",
-					"dispatchVideo"
+					"attachments"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -39959,15 +40000,34 @@
 						],
 						"format": "date-time"
 					},
-					"dispatchVideo": {
-						"oneOf": [
-							{
-								"$ref": "#/components/schemas/ShopDispatchVideo"
-							},
-							{
-								"type": "null"
+					"attachments": {
+						"type": "array",
+						"description": "The attachments shoppers see (C19).",
+						"items": {
+							"type": "object",
+							"required": [
+								"label",
+								"type",
+								"url"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"label": {
+									"type": "string"
+								},
+								"type": {
+									"type": "string",
+									"enum": [
+										"photo",
+										"video",
+										"file"
+									]
+								},
+								"url": {
+									"type": "string"
+								}
 							}
-						]
+						}
 					}
 				}
 			},
@@ -43493,6 +43553,23 @@
 					}
 				}
 			},
+			"ExtraField": {
+				"type": "object",
+				"description": "A field in the website's words (C19).",
+				"required": [
+					"label",
+					"value"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"label": {
+						"type": "string"
+					},
+					"value": {
+						"type": "string"
+					}
+				}
+			},
 			"ExtrasProductCard": {
 				"type": "object",
 				"description": "A product card of the wishlist, compare and alerts.",
@@ -45561,13 +45638,6 @@
 							}
 						]
 					},
-					"media": {
-						"type": "array",
-						"items": {
-							"$ref": "#/components/schemas/OrderMedia"
-						},
-						"description": "Dispatch videos."
-					},
 					"seenBy": {
 						"type": "array",
 						"items": {
@@ -45682,6 +45752,42 @@
 							"null"
 						],
 						"description": "Your name of closeReason (its key when the reason was removed since, or for staff, shopper and expired)."
+					},
+					"attachments": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/OrderAttachment"
+						},
+						"description": "Photos, videos and files of your attachment kinds, oldest first (E20)."
+					},
+					"attachmentKinds": {
+						"type": "array",
+						"description": "Your attachment kinds staff may add (in the order's detail).",
+						"items": {
+							"type": "object",
+							"required": [
+								"key",
+								"label",
+								"type"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								},
+								"type": {
+									"type": "string",
+									"enum": [
+										"photo",
+										"video",
+										"file"
+									]
+								}
+							}
+						}
 					}
 				}
 			},
@@ -45744,6 +45850,69 @@
 					"notes": {
 						"type": "string",
 						"maxLength": 500
+					}
+				}
+			},
+			"OrderAttachment": {
+				"type": "object",
+				"description": "An attachment of one of your attachment kinds (E20): an upload key in your storage, or an https address (a YouTube one is kept as its private embed address).",
+				"required": [
+					"id",
+					"kind",
+					"type",
+					"key",
+					"url",
+					"at",
+					"by"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"kind": {
+						"type": "string",
+						"description": "A key of the attachment_kinds list."
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"photo",
+							"video",
+							"file"
+						]
+					},
+					"key": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "An upload key in your storage."
+					},
+					"url": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "An https address."
+					},
+					"at": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"by": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string",
+						"description": "The kind's name (in the order's detail)."
+					},
+					"href": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Where it opens (in the order's detail): the upload's address, or url."
 					}
 				}
 			},
@@ -46814,7 +46983,8 @@
 							"payment_recorded_reference",
 							"confirmed_on_payment",
 							"restatus",
-							"video_replaced"
+							"attachment_added",
+							"attachment_removed"
 						],
 						"description": "An entry the server wrote itself, for your own words: shopper (the shopper canceled), not_paid_in_time and not_confirmed_in_time (a waiting order ended), payment_confirmed (Payments confirmed the payment), payments_took and paid_after_cancel (amount: Payments took money outside that, after the cancel for the second), proof_sent, edited, serials_typed, refunded and refunded_recorded (amount, reason), claim_refunded and claim_refunded_recorded (amount, reference: a claim refunded without a note; _recorded: partly recorded), refunds_cover_payments (the move to the refunded status that follows), payment_recorded (amount) and payment_recorded_reference (amount, reference) for a payment staff recorded, confirmed_on_payment (the move to the confirmed status that follows), restatus (staff moved the orders of a status to another status of the same kind, POST /v1/orders/restatus). Missing on entries staff wrote and on older entries."
 					},
@@ -46831,7 +47001,7 @@
 							"edited",
 							"payment",
 							"refund",
-							"video"
+							"attachments"
 						],
 						"description": "An entry that is not a move (from and to are the same status)."
 					},
@@ -47130,43 +47300,6 @@
 					}
 				}
 			},
-			"OrderMedia": {
-				"type": "object",
-				"description": "A dispatch video taken when packing: key or url.",
-				"required": [
-					"kind"
-				],
-				"additionalProperties": false,
-				"properties": {
-					"kind": {
-						"type": "string",
-						"enum": [
-							"dispatch_video"
-						]
-					},
-					"key": {
-						"type": [
-							"string",
-							"null"
-						],
-						"description": "An upload key in the merchant's storage."
-					},
-					"url": {
-						"type": [
-							"string",
-							"null"
-						],
-						"description": "A YouTube embed or https address."
-					},
-					"at": {
-						"type": "string",
-						"format": "date-time"
-					},
-					"by": {
-						"type": "string"
-					}
-				}
-			},
 			"OrderMoved": {
 				"type": "object",
 				"description": "The order after the move, with warnings.",
@@ -47303,13 +47436,6 @@
 							}
 						]
 					},
-					"media": {
-						"type": "array",
-						"items": {
-							"$ref": "#/components/schemas/OrderMedia"
-						},
-						"description": "Dispatch videos."
-					},
 					"seenBy": {
 						"type": "array",
 						"items": {
@@ -47438,12 +47564,48 @@
 							"null"
 						],
 						"description": "Your name of closeReason (its key when the reason was removed since, or for staff, shopper and expired)."
+					},
+					"attachments": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/OrderAttachment"
+						},
+						"description": "Photos, videos and files of your attachment kinds, oldest first (E20)."
+					},
+					"attachmentKinds": {
+						"type": "array",
+						"description": "Your attachment kinds staff may add (in the order's detail).",
+						"items": {
+							"type": "object",
+							"required": [
+								"key",
+								"label",
+								"type"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								},
+								"type": {
+									"type": "string",
+									"enum": [
+										"photo",
+										"video",
+										"file"
+									]
+								}
+							}
+						}
 					}
 				}
 			},
 			"OrderMoveOptions": {
 				"type": "object",
-				"description": "The options of a move of the order flow, those its stage takes (lists/order_flow): paidOnConfirm (out of waiting into open, packed or shipped: the payment methods whose balance a staff move records as paid), window (into awaiting payment: restart the time to pay, or none), video (into packed: the dispatch video off, optional or required), tracking (into shipped: required or optional), refund (into cancelled: auto refunds what Payments took when staff cancel, staff leaves it due), shopperPaid (into cancelled when the shopper may cancel: refuse a paid order, flag it as due to refund, or refund it through Payments), unpaid (into refunded before dispatch: an order with nothing paid is canceled with no money, the default, or refused), restock (into returned_to_origin and returned: yes, no or ask; into cancelled or refunded after delivery: no, yes or ask) and points (into returned, and into cancelled or refunded after delivery: take_back or keep the earned points; redeemed points always come back).",
+				"description": "The options of a move of the order flow, those its stage takes (lists/order_flow): paidOnConfirm (out of waiting into open, packed or shipped: the payment methods whose balance a staff move records as paid), window (into awaiting payment: restart the time to pay, or none), tracking (into shipped: required or optional), refund (into cancelled: auto refunds what Payments took when staff cancel, staff leaves it due), shopperPaid (into cancelled when the shopper may cancel: refuse a paid order, flag it as due to refund, or refund it through Payments), unpaid (into refunded before dispatch: an order with nothing paid is canceled with no money, the default, or refused), restock (into returned_to_origin and returned: yes, no or ask; into cancelled or refunded after delivery: no, yes or ask) and points (into returned, and into cancelled or refunded after delivery: take_back or keep the earned points; redeemed points always come back).",
 				"additionalProperties": false,
 				"properties": {
 					"paidOnConfirm": {
@@ -47458,14 +47620,6 @@
 						"enum": [
 							"restart",
 							"none"
-						]
-					},
-					"video": {
-						"type": "string",
-						"enum": [
-							"off",
-							"optional",
-							"required"
 						]
 					},
 					"tracking": {
@@ -47595,6 +47749,35 @@
 								},
 								"label": {
 									"type": "string"
+								}
+							}
+						}
+					},
+					"attachments": {
+						"type": "array",
+						"description": "The attachments the move needs: kinds whose requiredAt is this status and that the order does not have yet (E20); send them in attachments.",
+						"items": {
+							"type": "object",
+							"required": [
+								"kind",
+								"label",
+								"type"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"kind": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								},
+								"type": {
+									"type": "string",
+									"enum": [
+										"photo",
+										"video",
+										"file"
+									]
 								}
 							}
 						}
@@ -52703,6 +52886,37 @@
 					}
 				}
 			},
+			"ShopAttachment": {
+				"type": "object",
+				"description": "An attachment shoppers see (its kind is marked for shoppers).",
+				"required": [
+					"kind",
+					"label",
+					"type",
+					"url"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"kind": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"photo",
+							"video",
+							"file"
+						]
+					},
+					"url": {
+						"type": "string",
+						"description": "The upload's address, a YouTube embed address or another https address."
+					}
+				}
+			},
 			"ShopBrand": {
 				"type": "object",
 				"required": [
@@ -53082,28 +53296,6 @@
 								}
 							}
 						}
-					}
-				}
-			},
-			"ShopDispatchVideo": {
-				"type": "object",
-				"description": "The dispatch video staff added (an upload’s address, a YouTube embed or an https address).",
-				"required": [
-					"kind",
-					"url"
-				],
-				"additionalProperties": false,
-				"properties": {
-					"kind": {
-						"type": "string",
-						"enum": [
-							"file",
-							"youtube",
-							"url"
-						]
-					},
-					"url": {
-						"type": "string"
 					}
 				}
 			},
@@ -53616,7 +53808,7 @@
 					"pickupPoint",
 					"history",
 					"shipment",
-					"dispatchVideo",
+					"attachments",
 					"note",
 					"canCancel",
 					"invoice",
@@ -54098,16 +54290,6 @@
 							}
 						]
 					},
-					"dispatchVideo": {
-						"oneOf": [
-							{
-								"$ref": "#/components/schemas/ShopDispatchVideo"
-							},
-							{
-								"type": "null"
-							}
-						]
-					},
 					"note": {
 						"type": "string",
 						"description": "The shopper’s note."
@@ -54139,6 +54321,13 @@
 								}
 							}
 						}
+					},
+					"attachments": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ShopAttachment"
+						},
+						"description": "The attachments shoppers see (their kinds marked for shoppers, E20)."
 					}
 				}
 			},

@@ -2,11 +2,13 @@
 /**
  * The merchant's own lists of business choices (fixed-choices E18–E20, E40): claim kinds (a name, the window each is
  * counted in, its outcomes and whether shoppers may make it) and claim statuses (a name on a fixed role), feature
- * `returns`; cancel and failed-delivery reasons (each counting against the customer or not), feature `checkout`. Saved
+ * `returns`; cancel and failed-delivery reasons (each counting against the customer or not) and order attachment kinds
+ * (photo, video or file, optionally needed at a status, shown to shoppers or not), feature `checkout`. Saved
  * whole with the shared list editor (`./lists.js`).
  * @module
  */
 import { Checkbox, CheckboxGroup, FieldGrid, Input, Select } from '@ss/ui';
+import { ATTACHMENT_LIMITS, ATTACHMENT_TYPES } from '../../core/attachments.js';
 import { REASON_LIMIT } from '../../core/order-reasons.js';
 import { CLAIM_LIST_LIMITS, CLAIM_OUTCOMES, CLAIM_ROLES, CLAIM_WINDOWS } from '../../core/returns.js';
 import { keyOf } from './drafts.js';
@@ -166,6 +168,69 @@ export function ReasonsEditor({ websiteId, off, list }) {
 						label={R.countsAgainst}
 						checked={reason.countsAgainst === true}
 						onChange={(event) => set({ countsAgainst: event.target.checked })}
+					/>
+				</div>
+			)}
+		/>
+	);
+}
+
+const A = TEXTS.lists.attachmentKinds;
+
+/** Order attachment kinds (`attachment_kinds`, E20). @param {EditorProps} props */
+export function AttachmentKindsEditor({ websiteId, off }) {
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="attachment_kinds"
+			title={A.title}
+			help={A.help}
+			itemLabel={A.item}
+			max={ATTACHMENT_LIMITS.kinds}
+			off={off}
+			blank={() => ({ key: '', label: '', type: 'photo', requiredAt: '', shoppers: false })}
+			clean={(kind) => ({
+				key: keyOf(kind.key, kind.label),
+				label: String(kind.label ?? '').trim(),
+				type: kind.type,
+				requiredAt: String(kind.requiredAt ?? '').trim(),
+				shoppers: kind.shoppers === true,
+			})}
+			render={(kind, set) => (
+				<div className="space-y-3">
+					<FieldGrid>
+						<Input
+							label={A.label}
+							value={kind.label ?? ''}
+							maxLength={60}
+							onChange={(event) => set({ label: event.target.value })}
+						/>
+						<Input
+							label={A.key}
+							value={kind.key ?? ''}
+							maxLength={40}
+							autoComplete="off"
+							onChange={(event) => set({ key: event.target.value })}
+						/>
+						<Select
+							label={A.type}
+							value={kind.type ?? 'photo'}
+							options={ATTACHMENT_TYPES.map((type) => ({ value: type, label: A.types[type] }))}
+							onChange={(event) => set({ type: event.target.value })}
+						/>
+						<Input
+							label={A.requiredAt}
+							help={A.requiredAtHelp}
+							value={kind.requiredAt ?? ''}
+							maxLength={40}
+							autoComplete="off"
+							onChange={(event) => set({ requiredAt: event.target.value })}
+						/>
+					</FieldGrid>
+					<Checkbox
+						label={A.shoppers}
+						checked={kind.shoppers === true}
+						onChange={(event) => set({ shoppers: event.target.checked })}
 					/>
 				</div>
 			)}

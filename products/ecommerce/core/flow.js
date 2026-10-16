@@ -127,7 +127,6 @@ Object.freeze(ALLOWED_FROM);
  * - out of waiting into an open, packed or shipped status: `paidOnConfirm`, the payment methods whose balance staff
  *   moving it record as paid (OR-7; default none);
  * - into awaiting payment again: `window`, the time to pay `restart`s (default) or there is `none` (OR-5);
- * - into packed: `video`, the dispatch video `off` (default), `optional` or `required` (E28);
  * - into delivered: `paidOnDelivery`, an order paid on delivery or at pickup counts as paid with it (`yes`, the
  *   default: the money was taken at the door or the counter) or staff record that money (`no`; decision 11);
  * - into shipped: `tracking`, the tracking number `required` (default) or `optional`;
@@ -155,7 +154,6 @@ export const moveOptionSpecs = (from, to, who = ['staff']) => {
 	if (WAITING_ROLES.includes(from) && ['open', 'packed', 'shipped'].includes(to))
 		specs.paidOnConfirm = { kind: 'methods', default: [] };
 	if (to === 'awaiting_payment') specs.window = one(['restart', 'none'], 'restart');
-	if (to === 'packed') specs.video = one(['off', 'optional', 'required'], 'off');
 	if (to === 'delivered') specs.paidOnDelivery = one(['yes', 'no'], 'yes');
 	if (to === 'shipped') specs.tracking = one(['required', 'optional'], 'required');
 	if (to === 'cancelled') {
@@ -175,7 +173,6 @@ export const moveOptionSpecs = (from, to, who = ['staff']) => {
 const OPTION_NAMES = Object.freeze([
 	'paidOnConfirm',
 	'window',
-	'video',
 	'tracking',
 	'refund',
 	'shopperPaid',

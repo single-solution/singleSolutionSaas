@@ -170,7 +170,7 @@ const ORDER_FIELDS = Object.freeze({
 	lines: 1,
 	payment: 1,
 	shipment: 1,
-	media: 1,
+	attachments: 1,
 	placedAt: 1,
 	createdAt: 1,
 });
@@ -646,14 +646,28 @@ export const createChatLookup = (product, service, media) => {
 	};
 
 	/**
-	 * What order lookups add: each order's tracking page from today's couriers and its dispatch video (E28).
+	 * The extra fields a shopper lookup gives Chat (C19: `[{ label, value }]` in the website's words): the loyalty
+	 * points balance while Loyalty is on, and the area of the shopper's default address when it has one.
+	 * @param {Site} s @param {number | null} points @param {{ area?: string } | null} [profile]
+	 * @returns {Promise<Array<{ label: string, value: string }>>}
+	 */
+	const extraFieldsOf = async (s, points, profile = null) => {
+		const texts = await s.texts();
+		return [
+			...(points === null ? [] : [{ label: texts['orders.points.title'] ?? 'Loyalty points', value: String(points) }]),
+			...(profile?.area ? [{ label: texts['checkout.field.area'] ?? 'Area', value: profile.area }] : []),
+		];
+	};
+
+	/**
+	 * What order lookups add: each order's tracking page from today's couriers and the attachments shoppers see (E20).
 	 * @param {Site} s
 	 */
 	const orderExtras = async (s) => {
 		const couriers = s.has('checkout') ? await s.list('couriers') : [];
 		return async (/** @type {OrderRecord} */ order) => ({
 			trackingUrl: shipmentLink(couriers, order.shipment),
-			video: await media.dispatchVideo(s, order),
+			attachments: await media.shopperAttachments(s, order),
 		});
 	};
 
@@ -671,7 +685,7 @@ export const createChatLookup = (product, service, media) => {
 		]);
 		return {
 			items: await Promise.all(orders.map(async (order) => orderSummary(order, flow, money, await extras(order)))),
-			loyaltyPoints: loyaltyPoints ?? 0,
+			extraFields: await extraFieldsOf(s, loyaltyPoints),
 			name: shopper.name,
 		};
 	};
@@ -707,11 +721,10 @@ export const createChatLookup = (product, service, media) => {
 		return {
 			name: shopper.name,
 			firstName: firstNameOf(shopper.name),
-			loyaltyPoints: points ?? 0,
 			city: await cityOf(data, shopper.id, profile),
-			area: profile?.area ?? '',
 			region: profile?.region ?? '',
 			country: profile?.country ?? '',
+			extraFields: await extraFieldsOf(s, points, profile),
 		};
 	};
 

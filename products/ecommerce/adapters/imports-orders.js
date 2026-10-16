@@ -393,6 +393,7 @@ export const orderImports = (deps) => {
 			country: (await ctx.business()).country,
 			now: ctx.now(),
 			fields: { order: await fieldsOn(ctx.data, 'order'), customer: await fieldsOn(ctx.data, 'customer') },
+			attachmentKinds: /** @type {any[]} */ (await deps.list(ctx.websiteId, 'attachment_kinds')),
 			claims: {
 				kinds: /** @type {any[]} */ (await deps.list(ctx.websiteId, 'claim_kinds')),
 				statuses: /** @type {any[]} */ (await deps.list(ctx.websiteId, 'claim_statuses')),

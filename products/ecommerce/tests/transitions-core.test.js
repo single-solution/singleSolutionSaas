@@ -57,7 +57,7 @@ const flagged = (patch = {}) => ({
 	status: 'confirmed',
 	role: 'open',
 	history: [],
-	media: [],
+	attachments: [],
 	stockHeld: true,
 	holdUntil: null,
 	deliveredAt: null,
@@ -211,10 +211,19 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 				},
 			],
 		};
-		const packed = planOf(plan(order(), 'packed', { units, video: { kind: 'dispatch_video', url: 'https://v.example/1' } }));
+		const attachment = {
+			id: 'att_1',
+			kind: 'packing_video',
+			type: /** @type {const} */ ('video'),
+			key: null,
+			url: 'https://v.example/1',
+			at: new Date(0),
+			by: 'Sam',
+		};
+		const packed = planOf(plan(order(), 'packed', { units, attachments: [attachment] }));
 		expect(kinds(packed)).toEqual(['capture_units']);
 		expect(packed.facts.after.units).toBe('captured');
-		expect(packed.push.media).toEqual({ kind: 'dispatch_video', url: 'https://v.example/1' });
+		expect(packed.push.attachments).toEqual({ $each: [attachment] });
 		expect(/** @type {any[]} */ (packed.set.lines)[0].serials).toEqual(['S1', 'S2']);
 
 		const shipment = { courier: 'Post', trackingNumber: 'T1', trackingUrl: '', booked: false, status: '', checkedAt: null };

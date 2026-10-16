@@ -218,6 +218,7 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 				'3 cancel reasons: The customer asked to cancel, Items not available, The customer did not confirm.',
 			],
 			['delivery_failure_reasons', '2 failed delivery reasons: Could not be delivered (counts), Sent back by the customer.'],
+			['attachment_kinds', '1 attachment kind: Packing video (video).'],
 		]);
 		expect(listsOf(on, 'delivery_zones')).toEqual([
 			['delivery_zones', '2 zones: Springfield (Standard), Rest of the state (Standard, Pickup).'],
@@ -302,6 +303,7 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 				'3 cancel reasons: The customer asked to cancel, Items not available, The customer did not confirm.',
 			],
 			['delivery_failure_reasons', '2 failed delivery reasons: Could not be delivered (counts), Sent back by the customer.'],
+			['attachment_kinds', '1 attachment kind: Packing video (video).'],
 		]);
 	});
 });

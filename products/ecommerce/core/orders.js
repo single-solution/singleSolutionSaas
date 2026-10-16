@@ -11,6 +11,7 @@ import { phoneSearchOf } from './guests.js';
 import { CLOSED_ROLES, moveOf, nextStatuses, statusOf } from './flow.js';
 import { ID_PREFIX, STATUS_ROLES } from './model.js';
 import { MAX_MEASURED, piecesOf } from './measure.js';
+import { checkAttachmentInputs } from './attachments.js';
 import { isAmount } from './money.js';
 import { LIST_KEY } from './named-lists.js';
 import { MAX_TRACKING, cleanTracking, hasControl } from './couriers.js';
@@ -52,8 +53,8 @@ export const TRACK_EVERY_MS = 30 * 60_000;
  * recorded for the `_recorded` ones; `refunds_cover_payments`: the move to the refunded status that follows;
  * `payment_recorded` (`amount`) and `payment_recorded_reference` (`amount`, `reference`): staff recorded a payment;
  * `confirmed_on_payment`: the move to the confirmed status that follows; `restatus`: staff moved every order of a
- * status to another status of the same kind (`POST /v1/orders/restatus`); `video_replaced`: staff replaced the
- * dispatch video after packing.
+ * status to another status of the same kind (`POST /v1/orders/restatus`); `attachment_added` and
+ * `attachment_removed`: staff added or removed attachments on the order (E20).
  */
 export const HISTORY_NOTES = Object.freeze(
 	/** @type {const} */ ([
@@ -75,7 +76,8 @@ export const HISTORY_NOTES = Object.freeze(
 		'payment_recorded_reference',
 		'confirmed_on_payment',
 		'restatus',
-		'video_replaced',
+		'attachment_added',
+		'attachment_removed',
 	]),
 );
 /** @typedef {typeof HISTORY_NOTES[number]} HistoryNote */
@@ -422,11 +424,10 @@ export const orderQuery = (filters, { seenBy = '' } = {}) => {
 /**
  * @typedef {{ courier: string, trackingNumber: string, trackingNote?: string, estimatedDeliveryAt?: Date | null } |
  *   { book: true, courier?: string }} ShipmentInput `trackingNumber` may be '' when the website does not require it (E28)
- * @typedef {{ kind: 'dispatch_video', key: string } | { kind: 'dispatch_video', url: string }} OrderMedia
  * @typedef {{ to: string, note: string, serials: Record<string, UnitInput[]>, shipment: ShipmentInput | null,
- *   updatedAt: string | null, reason?: string, video?: OrderMedia, code?: HistoryNote,
+ *   updatedAt: string | null, reason?: string, attachments?: import('./attachments.js').AttachmentInput[], code?: HistoryNote,
  *   shopperNote?: string, restock?: boolean }} MoveInput
- *   `reason`: why staff cancel or a package came back, a key of the merchant's reason list (E19); `video`: the dispatch video taken when packing (E28); `code`: the code of a
+ *   `reason`: why staff cancel or a package came back, a key of the merchant's reason list (E19); `attachments`: attachments added with the move (E20); `code`: the code of a
  *   note the server writes itself (a move that follows a refund or a recorded payment; never from what staff send);
  *   `shopperNote`: a note the shopper reads in the order's timeline and message (the staff note stays internal);
  *   `restock`: whether the items go back in stock, for a move that asks (`restock: ask`)
@@ -463,12 +464,12 @@ export const checkMove = (body) => {
 			shipment = checked.value;
 		}
 	}
-	/** @type {OrderMedia | undefined} */
-	let video;
-	if (input.video !== undefined && input.video !== null && input.video !== '') {
-		const checked = videoOf(input.video);
-		if (!checked) return refuse('video', 'video is an upload key, a YouTube id or address, or an https address.');
-		video = checked;
+	/** @type {import('./attachments.js').AttachmentInput[]} */
+	let attachments = [];
+	if (input.attachments !== undefined && input.attachments !== null) {
+		const checked = checkAttachmentInputs(input.attachments);
+		if (!checked.ok) return checked;
+		attachments = checked.value;
 	}
 	const updatedAt = typeof input.updatedAt === 'string' && input.updatedAt !== '' ? input.updatedAt : null;
 	if (input.reason !== undefined && input.reason !== null && (typeof input.reason !== 'string' || !LIST_KEY.test(input.reason)))
@@ -483,7 +484,7 @@ export const checkMove = (body) => {
 			shipment,
 			updatedAt,
 			...(reason ? { reason } : {}),
-			...(video ? { video } : {}),
+			...(attachments.length > 0 ? { attachments } : {}),
 			...(shopperNote.trim() ? { shopperNote: shopperNote.trim() } : {}),
 			...(typeof input.restock === 'boolean' ? { restock: input.restock } : {}),
 		},
@@ -492,9 +493,6 @@ export const checkMove = (body) => {
 
 /** Longest tracking note. */
 const MAX_TRACKING_NOTE = 500;
-const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
-/** An upload key in the merchant's bucket. */
-const UPLOAD_KEY = /^[A-Za-z0-9][A-Za-z0-9/_.-]{0,299}$/;
 
 /**
  * A shipment's fields as staff send them (E28): the courier (by key or name), the tracking number ('' allowed here:
@@ -522,31 +520,6 @@ export const shipmentFields = (raw) => {
 		ok: true,
 		value: { courier, trackingNumber: trackingNumber ?? '', trackingNote: note.trim(), estimatedDeliveryAt },
 	};
-};
-
-/**
- * A dispatch video (E28): an upload key in the merchant's bucket, a YouTube id or address (kept as its private embed
- * address), or an https address; null when it is none of these.
- * @param {unknown} value
- * @returns {OrderMedia | null}
- */
-export const videoOf = (value) => {
-	if (typeof value !== 'string') return null;
-	const raw = value.trim();
-	if (YOUTUBE_ID.test(raw)) return { kind: 'dispatch_video', url: `https://www.youtube-nocookie.com/embed/${raw}` };
-	if (/^https:\/\//i.test(raw)) {
-		try {
-			const url = new URL(raw);
-			if (url.protocol !== 'https:' || raw.length > 2000) return null;
-			const host = url.hostname.replace(/^www\.|^m\./, '');
-			const id = host === 'youtu.be' ? url.pathname.slice(1) : host === 'youtube.com' ? (url.searchParams.get('v') ?? '') : '';
-			if (YOUTUBE_ID.test(id)) return { kind: 'dispatch_video', url: `https://www.youtube-nocookie.com/embed/${id}` };
-			return { kind: 'dispatch_video', url: url.toString() };
-		} catch {
-			return null;
-		}
-	}
-	return UPLOAD_KEY.test(raw) && !raw.includes('..') ? { kind: 'dispatch_video', key: raw } : null;
 };
 
 /**
@@ -753,32 +726,37 @@ export const checkEdit = (body, order) => {
 		// the fields the website requires are checked by the server as checkout checks them (`checkAddress`)
 		value.address = /** @type {NonNullable<OrderRecord['address']>} */ (/** @type {unknown} */ (address));
 	}
-	if (input.video !== undefined && input.video !== null) {
-		// the dispatch video is replaced while the order is packed or shipped (E28; before that it comes with the move into
-		// packed)
-		if (!VIDEO_ROLES.includes(order.role))
-			return refuse('video', 'The dispatch video can be replaced while the order is packed or shipped.');
-		const video = videoOf(input.video);
-		if (!video) return refuse('video', 'video is an upload key, a YouTube id or address, or an https address.');
-		value.video = video;
+	// attachments added or removed at any time (E20)
+	if (input.attachments !== undefined && input.attachments !== null) {
+		const checked = checkAttachmentInputs(input.attachments);
+		if (!checked.ok) return checked;
+		if (checked.value.length > 0) value.attachments = checked.value;
+	}
+	if (input.removeAttachments !== undefined && input.removeAttachments !== null) {
+		const ids = input.removeAttachments;
+		if (
+			!Array.isArray(ids) ||
+			ids.length > 30 ||
+			!ids.every((id) => typeof id === 'string' && (order.attachments ?? []).some((held) => held.id === id))
+		)
+			return refuse('removeAttachments', "removeAttachments lists ids of the order's attachments.");
+		if (ids.length > 0) value.removeAttachments = [...new Set(/** @type {string[]} */ (ids))];
 	}
 	if (Object.keys(value).length === 0)
-		return refuse('staffNote', 'Send a staff note, tags, an address, a shipment, serial numbers or a video.');
+		return refuse('staffNote', 'Send a staff note, tags, an address, a shipment, serial numbers or attachments.');
 	return { ok: true, value };
 };
 
-/** Roles of an order whose dispatch video staff may replace: packed, and shipped. */
-const VIDEO_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['packed', 'shipped']));
-
 /**
  * What staff change on an order (`PATCH /v1/orders/:id`): the staff note, the address, the shipment's details at any
- * time (E28), serial numbers and the dispatch video once packed.
+ * time (E28), serial numbers and attachments (E20).
  * @typedef {{ staffNote?: string, tags?: string[], address?: NonNullable<OrderRecord['address']>,
  *   serials?: Record<string, UnitInput[]>,
  *   shipment?: { courier: string, trackingNumber: string, trackingNote: string, estimatedDeliveryAt: Date | null },
- *   waiting?: WaitingEdit, video?: OrderMedia, fields?: Record<string, unknown> }} OrderEdit `waiting`: lines, payment
- *   and delivery changed while the order waits (E29); `video`: the dispatch video that replaces the one taken when
- *   packing; `fields`: order field values by field id (null clears one), checked against the fields by the caller
+ *   waiting?: WaitingEdit, attachments?: import('./attachments.js').AttachmentInput[], removeAttachments?: string[],
+ *   fields?: Record<string, unknown> }} OrderEdit `waiting`: lines, payment and delivery changed while the order waits
+ *   (E29); `attachments`: attachments added (their kinds checked by the caller), `removeAttachments` the ids of those
+ *   removed; `fields`: order field values by field id (null clears one), checked against the fields by the caller
  */
 
 /**
@@ -902,12 +880,13 @@ export const checkCustomerEdit = (body) => {
 };
 
 /**
- * One order of a bulk move with what it takes (E28): its shipment, serial numbers and dispatch video.
- * @typedef {{ id: string, shipment: ShipmentInput | null, serials: Record<string, UnitInput[]>, video?: OrderMedia }} BulkItem
+ * One order of a bulk move with what it takes (E28): its shipment, serial numbers and attachments (E20).
+ * @typedef {{ id: string, shipment: ShipmentInput | null, serials: Record<string, UnitInput[]>,
+ *   attachments?: import('./attachments.js').AttachmentInput[] }} BulkItem
  */
 
 /**
- * Check a bulk move: `ids`, or `items` with each order's shipment, serial numbers and video (E28).
+ * Check a bulk move: `ids`, or `items` with each order's shipment, serial numbers and attachments.
  * @param {unknown} body
  * @returns {{ ok: true, value: { ids: string[], to: string, note: string, items: Map<string, BulkItem>,
  *   shopperNote?: string, restock?: boolean } } | Refusal}
@@ -926,14 +905,19 @@ export const checkBulkMove = (body) => {
 	const items = new Map();
 	for (const [index, raw] of (rawItems ?? []).entries()) {
 		const item = objectOf(raw);
-		const checked = checkMove({ to: input.to, shipment: item.shipment, serials: item.serials, video: item.video });
+		const checked = checkMove({
+			to: input.to,
+			shipment: item.shipment,
+			serials: item.serials,
+			attachments: item.attachments,
+		});
 		if (!checked.ok) return refuse(`items/${index}/${checked.field}`, checked.message);
 		const id = /** @type {string} */ (item.id);
 		items.set(id, {
 			id,
 			shipment: checked.value.shipment,
 			serials: checked.value.serials,
-			...(checked.value.video ? { video: checked.value.video } : {}),
+			...(checked.value.attachments ? { attachments: checked.value.attachments } : {}),
 		});
 	}
 	return {
@@ -1090,15 +1074,16 @@ const LEFT_OUT = Object.freeze(['accessKeyHash', 'idempotencyKey', 'phoneDigits'
  *   units?: { rules: ReadonlyMap<string, import('./item-types.js').UnitRules>,
  *   values: ReadonlyMap<string, Record<string, string[]>> }, orderFields?: ReadonlyArray<import('./model.js').AttributeRecord>,
  *   reasons?: { cancel: ReadonlyArray<import('./order-reasons.js').OrderReason>,
- *   failure: ReadonlyArray<import('./order-reasons.js').OrderReason> } }} extras
+ *   failure: ReadonlyArray<import('./order-reasons.js').OrderReason> },
+ *   attachmentKinds?: ReadonlyArray<import('./attachments.js').AttachmentKind> }} extras
  *   `images`: line id → address; `units`: how the units of the order's products are numbered (their item types), and
  *   the values of the order's units by serial; `orderFields`: the shop's order fields; `reasons`: the cancel and
- *   failed-delivery reasons (E19)
+ *   failed-delivery reasons (E19); `attachmentKinds`: the attachment kinds (E20)
  */
 export const orderDetail = (
 	order,
 	flow,
-	{ customer, images, money, units, orderFields = [], reasons = { cancel: [], failure: [] } },
+	{ customer, images, money, units, orderFields = [], reasons = { cancel: [], failure: [] }, attachmentKinds = [] },
 ) => {
 	const plain = Object.fromEntries(Object.entries(wire(order)).filter(([key]) => !LEFT_OUT.includes(key)));
 	// what is due, can be refunded and must be refunded, counted the one way
@@ -1118,6 +1103,14 @@ export const orderDetail = (
 		statusLabel: statusLabel(flow, order.status),
 		// why it was canceled or came back, by the merchant's name (E19)
 		closeReason: order.closeReason ?? null,
+		// the kinds staff may add (E20)
+		attachmentKinds: attachmentKinds.map((kind) => ({ key: kind.key, label: kind.label, type: kind.type })),
+		// the attachments with their kind's name (E20)
+		attachments: (order.attachments ?? []).map((attachment) => ({
+			...attachment,
+			at: new Date(attachment.at).toISOString(),
+			label: attachmentKinds.find((kind) => kind.key === attachment.kind)?.label ?? attachment.kind,
+		})),
 		closeReasonLabel: order.closeReason
 			? ([...reasons.cancel, ...reasons.failure].find((reason) => reason.key === order.closeReason)?.label ??
 				order.closeReason)
@@ -1169,6 +1162,10 @@ export const orderDetail = (
 				needs: move.needs,
 				options: move.options,
 				...(offered ? { reasons: offered.map((reason) => ({ key: reason.key, label: reason.label })) } : {}),
+				// the attachments the move needs (their kinds required at that status, E20)
+				attachments: attachmentKinds
+					.filter((kind) => kind.requiredAt === key)
+					.map((kind) => ({ kind: kind.key, label: kind.label, type: kind.type })),
 			};
 		}),
 	};

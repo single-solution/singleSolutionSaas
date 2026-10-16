@@ -16,7 +16,7 @@
  * - into `awaiting_payment` or `open` from `packed`: serial numbers captured go back (units → none); back to waiting,
  *   the time to pay starts again (the move's `window`: `restart`, or `none`);
  * - into `packed`, `shipped` or `delivered`: the serial numbers of the move's plan are captured (units → captured;
- *   the item types say which lines need them by which stage); into `packed` the dispatch video is kept;
+ *   the item types say which lines need them by which stage); any move keeps the attachments staff add with it;
  * - into `shipped`: the shipment;
  * - into `delivered`: stock held → sold, units counted sold, an order paid on delivery or at pickup paid (the move's
  *   `paidOnDelivery`), earned
@@ -40,7 +40,7 @@
  * move, and nothing else does: only a waiting order becomes canceled without one), `flow_changed` (the order's role is not the flow's role of its status any
  * more), `nothing_paid` (a refund before delivery when nothing was paid) and `input_needed` (a move that asks staff
  * whether the items go back in stock, without the answer). What the caller sends (the shipment, the serial numbers,
- * the dispatch video) it checks before. Pure functions, no I/O (ids are random).
+ * the attachments) it checks before. Pure functions, no I/O (ids are random).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -107,7 +107,7 @@ import { OTHER_WAY, PAY_LATER_KINDS, VIA_PAYMENTS, isMethodKey } from './payment
  * @property {boolean} [checkUpdatedAt] false: the order's `updatedAt` is not part of the compare-and-set
  * @property {Record<string, unknown>} [where] more the order must match (Payments' confirmation: still pending)
  * @property {NonNullable<OrderRecord['shipment']>} [shipment] the shipment of a move into `shipped`
- * @property {NonNullable<OrderRecord['media']>[number]} [video] the dispatch video of a move into `packed`
+ * @property {NonNullable<OrderRecord['attachments']>} [attachments] attachments staff add with the move (E20)
  * @property {{ plan: UnitsPlan }} [units] the serial numbers a move into `packed`, `shipped` or `delivered` captures
  * @property {{ set: Record<string, unknown>, entry: Record<string, unknown> }} [paid] a payment the move records
  *   (paid when staff confirm, OR-7; Payments' confirmation)
@@ -426,8 +426,6 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 	const payments = [];
 	/** @type {Record<string, unknown>[]} */
 	const refunds = [];
-	/** @type {Record<string, unknown>} */
-	const media = {};
 	/**
 	 * A refund through Payments after the transaction (kept on the order until done).
 	 * @param {string} id its Idempotency-Key @param {number} amount
@@ -614,7 +612,6 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 			unpack();
 			break;
 		case 'packed': {
-			if (input.video) media.media = input.video;
 			captureUnits();
 			break;
 		}
@@ -753,7 +750,7 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 	const push = { history };
 	if (payments.length > 0) push.payments = payments[0];
 	if (refunds.length > 0) push.refunds = { $each: refunds };
-	if (media.media) push.media = media.media;
+	if (input.attachments && input.attachments.length > 0) push.attachments = { $each: input.attachments };
 	if (external.length > 0) push.effects = { $each: external };
 	return {
 		ok: true,

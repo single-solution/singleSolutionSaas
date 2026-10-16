@@ -1,7 +1,7 @@
 /**
  * Shipping and packing options through the API (PLAN 0.8.10 E28): dispatch without a tracking number when the website
  * allows it, the shipment's note and expected date changed at any time, the courier kept by name with its link from
- * today's list, the dispatch video when packing, and bulk moves with each order's shipment.
+ * today's list, the attachments a status needs (E20), and bulk moves with each order's shipment.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COLLECTIONS } from '../core/model.js';
@@ -97,20 +97,66 @@ describe('shipping and packing options (E28)', () => {
 		await shop.list('couriers', [{ key: 'post', name: 'Post', trackingUrl: 'https://track.example/{tracking}' }]);
 	});
 
-	it('takes the dispatch video when packing, as the move asks', async () => {
-		await shop.moveOptions('confirmed', 'packed', { video: 'required' });
-		const { id, token } = await confirmedOrder();
-		expect(codeOf(await moveTo(id, 'packed'))).toBe('validation_failed');
-		expect(codeOf(await moveTo(id, 'packed', { video: 'javascript:alert(1)' }))).toBe('validation_failed');
-		const packed = await moveTo(id, 'packed', { video: 'https://youtu.be/dQw4w9WgXcQ' });
-		expect(packed.status).toBe(200);
-		const mine = await shop.call('GET', `/v1/shop/orders/${id}`, {
-			token: shop.browser,
-			origin: ORIGIN,
-			headers: { 'ss-sign-in': token, 'x-forwarded-for': '10.8.1.2' },
-		});
-		expect(mine.json.dispatchVideo).toEqual({ kind: 'youtube', url: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ' });
-		await shop.moveOptions('confirmed', 'packed', {});
+	it('takes the attachments a status needs with the move, and shows shoppers the kinds marked for them (E20)', async () => {
+		await shop.list('attachment_kinds', [
+			{ key: 'packing_video', label: 'Packing video', type: 'video', requiredAt: 'packed', shoppers: true },
+			{ key: 'parcel_photo', label: 'Parcel photo', type: 'photo', requiredAt: '', shoppers: false },
+		]);
+		try {
+			const { id, token } = await confirmedOrder();
+			const refused = await moveTo(id, 'packed');
+			expect(refused.json.errors[0]).toMatchObject({ path: '/attachments', message: 'Add Packing video before this move.' });
+			expect(
+				codeOf(await moveTo(id, 'packed', { attachments: [{ kind: 'packing_video', url: 'javascript:alert(1)' }] })),
+			).toBe('validation_failed');
+			expect(
+				(await moveTo(id, 'packed', { attachments: [{ kind: 'receipt', url: 'https://x.example/1' }] })).json.errors[0].path,
+			).toBe('/attachments/0/kind');
+			const packed = await moveTo(id, 'packed', {
+				attachments: [
+					{ kind: 'packing_video', url: 'https://youtu.be/dQw4w9WgXcQ' },
+					{ kind: 'parcel_photo', key: 'ecommerce/orders/parcel.jpg' },
+				],
+			});
+			expect(packed.status).toBe(200);
+			expect(packed.json.attachments).toMatchObject([
+				{
+					kind: 'packing_video',
+					label: 'Packing video',
+					type: 'video',
+					url: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ',
+				},
+				{ kind: 'parcel_photo', label: 'Parcel photo', type: 'photo', key: 'ecommerce/orders/parcel.jpg' },
+			]);
+			const mine = await shop.call('GET', `/v1/shop/orders/${id}`, {
+				token: shop.browser,
+				origin: ORIGIN,
+				headers: { 'ss-sign-in': token, 'x-forwarded-for': '10.8.1.2' },
+			});
+			// shoppers see only the kinds marked for them
+			expect(mine.json.attachments).toEqual([
+				{
+					kind: 'packing_video',
+					label: 'Packing video',
+					type: 'video',
+					url: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ',
+				},
+			]);
+			// staff add and remove attachments at any time, with a history entry
+			const photo = packed.json.attachments[1].id;
+			const removed = await shop.api('PATCH', `/v1/orders/${id}`, { removeAttachments: [photo] });
+			expect(removed.json.attachments.map((/** @type {any} */ a) => a.kind)).toEqual(['packing_video']);
+			expect(removed.json.history.at(-1)).toMatchObject({ code: 'attachment_removed', kind: 'attachments' });
+			expect((await shop.api('PATCH', `/v1/orders/${id}`, { removeAttachments: [photo] })).status).toBe(422);
+			const added = await shop.api('PATCH', `/v1/orders/${id}`, {
+				attachments: [{ kind: 'parcel_photo', url: 'https://cdn.example/p.jpg' }],
+			});
+			expect(added.json.attachments).toHaveLength(2);
+			expect(added.json.history.at(-1)).toMatchObject({ code: 'attachment_added' });
+		} finally {
+			const { DEFAULT_ATTACHMENT_KINDS } = await import('../core/attachments.js');
+			await shop.list('attachment_kinds', DEFAULT_ATTACHMENT_KINDS);
+		}
 	});
 
 	it('dispatches several orders with their own shipments', async () => {

@@ -596,7 +596,7 @@ describe('orders admin: one order', () => {
 		expect(moves[7]).toMatchObject({ to: 'cancelled', reason: 'fake' });
 	});
 
-	it('asks what the move needs: notes for staff and the shopper, the dispatch video and whether items go back', async () => {
+	it('asks what the move needs: notes for staff and the shopper, attachments and whether items go back', async () => {
 		/** @type {any[]} */
 		const moves = [];
 		/** @type {any[]} */
@@ -609,6 +609,23 @@ describe('orders admin: one order', () => {
 					status: 'dispatched',
 					statusLabel: 'Dispatched',
 					role: 'shipped',
+					attachmentKinds: [
+						{ key: 'packing_video', label: 'Packing video', type: 'video' },
+						{ key: 'parcel_photo', label: 'Parcel photo', type: 'photo' },
+					],
+					attachments: [
+						{
+							id: 'att_1',
+							kind: 'parcel_photo',
+							type: 'photo',
+							key: 'orders/p.jpg',
+							url: null,
+							at: AT,
+							by: 'Sam',
+							label: 'Parcel photo',
+							href: 'https://cdn.example/orders/p.jpg',
+						},
+					],
 					nextStatuses: [
 						{ key: 'delivered', label: 'Delivered', role: 'delivered', needs: ['note', 'reason'], options: {} },
 						{ key: 'returned', label: 'Returned', role: 'returned_to_origin', needs: [], options: { restock: 'ask' } },
@@ -652,17 +669,23 @@ describe('orders admin: one order', () => {
 		await submitDialog(root);
 		expect(moves[1]).toMatchObject({ to: 'returned', restock: true });
 		expect(moves[1].shopperNote).toBeUndefined();
-		// the dispatch video of a shipped order is replaced
-		await pickMenu(pane, TEXTS['ordersAdmin.replaceVideo'] ?? '');
+		// the attachments card links each one; an attachment of the merchant's kinds is added at any time (E20)
+		expect(textOf(pane)).toContain('Parcel photo');
+		expect(pane.querySelector('a[href="https://cdn.example/orders/p.jpg"]')).not.toBeNull();
+		await pickMenu(pane, TEXTS['ordersAdmin.addAttachment'] ?? '');
 		dialog = dialogOf(root);
 		await submitDialog(root);
-		expect(dialogStatus(root)).toBe(TEXTS['ordersAdmin.videoAddress']);
-		type(fieldIn(dialog, TEXTS['ordersAdmin.videoAddress'] ?? ''), ' https://youtu.be/dQw4w9WgXcQ ');
+		expect(dialogStatus(root)).toBe(TEXTS['ordersAdmin.attachmentAddress']);
+		type(fieldIn(dialog, TEXTS['ordersAdmin.attachmentAddress'] ?? ''), ' https://youtu.be/dQw4w9WgXcQ ');
 		await submitDialog(root);
-		expect(edits).toEqual([{ video: 'https://youtu.be/dQw4w9WgXcQ' }]);
+		expect(edits).toEqual([{ attachments: [{ kind: 'packing_video', url: 'https://youtu.be/dQw4w9WgXcQ' }] }]);
+		// and removed
+		await click(buttonIn(pane, TEXTS['ordersAdmin.removeAttachment'] ?? ''));
+		await submitDialog(root);
+		expect(edits[1]).toEqual({ removeAttachments: ['att_1'] });
 	});
 
-	it('asks for the dispatch video when packing as the move says', async () => {
+	it('asks for the attachments a status needs when moving there (E20)', async () => {
 		/** @type {any[]} */
 		const moves = [];
 		const { root } = await start(
@@ -672,7 +695,14 @@ describe('orders admin: one order', () => {
 						200,
 						detail({
 							nextStatuses: [
-								{ key: 'packed', label: 'Packed', role: 'packed', needs: [], options: { video: 'required' } },
+								{
+									key: 'packed',
+									label: 'Packed',
+									role: 'packed',
+									needs: [],
+									options: {},
+									attachments: [{ kind: 'packing_video', label: 'Packing video', type: 'video' }],
+								},
 							],
 						}),
 					),
@@ -685,9 +715,15 @@ describe('orders admin: one order', () => {
 		);
 		const pane = detailOf(panelOf(root, 'orders'));
 		await click(buttonIn(pane, 'Move to Packed'));
-		type(fieldIn(dialogOf(root), TEXTS['ordersAdmin.videoRequired'] ?? ''), 'https://youtu.be/dQw4w9WgXcQ');
+		const label = (TEXTS['ordersAdmin.attachmentNeeded'] ?? '').replace('{kind}', 'Packing video');
 		await submitDialog(root);
-		expect(moves[0]).toMatchObject({ to: 'packed', video: 'https://youtu.be/dQw4w9WgXcQ' });
+		expect(dialogStatus(root)).toBe(label);
+		type(fieldIn(dialogOf(root), label), 'orders/ord_1/packing.mp4');
+		await submitDialog(root);
+		expect(moves[0]).toMatchObject({
+			to: 'packed',
+			attachments: [{ kind: 'packing_video', key: 'orders/ord_1/packing.mp4' }],
+		});
 	});
 
 	it('checks typed units against their unit fields as they are typed, and saves them later', async () => {

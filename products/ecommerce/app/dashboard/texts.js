@@ -237,7 +237,6 @@ export const TEXTS = Object.freeze({
 			options: Object.freeze({
 				paidOnConfirm: 'Record the balance as paid for',
 				window: 'Time to pay',
-				video: 'Dispatch video',
 				tracking: 'Tracking number',
 				refund: 'Money paid through Payments',
 				shopperPaid: 'When the shopper cancels a paid order',
@@ -248,7 +247,6 @@ export const TEXTS = Object.freeze({
 			}),
 			values: Object.freeze({
 				window: Object.freeze({ restart: 'Starts again', none: 'None: waits until staff move it' }),
-				video: Object.freeze({ off: 'Off', optional: 'Optional', required: 'Required' }),
 				tracking: Object.freeze({ required: 'Required', optional: 'Optional' }),
 				refund: Object.freeze({ auto: 'Refunded automatically', staff: 'Staff refund it from the order' }),
 				shopperPaid: Object.freeze({
@@ -341,6 +339,18 @@ export const TEXTS = Object.freeze({
 				title: 'Failed delivery reasons',
 				help: 'What staff pick when a shipped package comes back to you (the first one when none is picked). Orders keep the reason, so lists, counts and reports group by it.',
 			}),
+		}),
+		attachmentKinds: Object.freeze({
+			title: 'Order attachments',
+			help: 'Photos, videos and files staff keep on an order, such as a packing video or a photo of the parcel. A kind may be needed before a status, and shown to shoppers in their order.',
+			item: 'Kind',
+			key: 'Key (lower-case letters, digits, _ or -)',
+			label: 'Name',
+			type: 'Type',
+			types: Object.freeze({ photo: 'Photo', video: 'Video', file: 'File' }),
+			requiredAt: 'Needed before the status',
+			requiredAtHelp: 'The key of a status of your order flow (such as packed); empty: never needed.',
+			shoppers: 'Shown to shoppers in their order',
 		}),
 		claimKinds: Object.freeze({
 			title: 'Claim kinds',
