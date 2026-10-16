@@ -279,9 +279,6 @@ describe('one price everywhere', () => {
 		expect(google).toContain('/2026-10-12T00:00:00.000Z</g:sale_price_effective_date>');
 		const meta = (await shop.api('GET', '/v1/feeds/products.csv')).text;
 		expect(meta).toContain(',60.00 USD,40.00 USD,');
-		// the quote of one unit says the same
-		const quote = (await shop.visitor('GET', `/v1/shop/products/${page.id}/quote`)).json;
-		expect(quote).toMatchObject({ price: 5000, priceAfterDeals: 4000, savings: 1000 });
 	});
 
 	it('gives Chat the price shoppers see, with the price struck through and the deal in it', async () => {

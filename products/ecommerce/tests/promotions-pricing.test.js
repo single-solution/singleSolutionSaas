@@ -13,7 +13,16 @@ import {
 	drawCode,
 	normalizeCode,
 } from '../core/coupons.js';
-import { bestDeal, byShowOrder, checkDealInput, DEAL_RULES, dealUnitDiscount, dealView, publicDeal } from '../core/deals.js';
+import {
+	bestDeal,
+	byShowOrder,
+	checkDealInput,
+	DEAL_RULES,
+	dealUnitDiscount,
+	dealView,
+	publicDeal,
+	utcClock,
+} from '../core/deals.js';
 import {
 	earnsAsMember,
 	expiringSoon,
@@ -26,7 +35,7 @@ import {
 	pointsToEarn,
 	pointsValue,
 } from '../core/loyalty.js';
-import { applyPromotions, quoteProduct } from '../core/promotions.js';
+import { applyPromotions, shownPrice } from '../core/promotions.js';
 import { checkDate, checkScope, checkText, checkWhole, gather, inScope, isLive, phaseOf } from '../core/promotions-rules.js';
 
 /** Deal conditions that hold for every line (each test adds the one it checks). @type {import('../core/model.js').DealConditions} */
@@ -41,6 +50,32 @@ const NO_CONDITIONS = Object.freeze({
 });
 
 const NOW = Date.parse('2026-10-05T10:00:00Z');
+
+/**
+ * The shown price of one unit of a product's lowest-priced active variant (or the one named), at the UTC time unless a
+ * clock is given.
+ * @param {{ product: any, variantId?: string, deals: any[], categoryIds?: string[], clock?: { weekday: number, minutes: number },
+ *   unit?: number, rules?: any }} input
+ */
+const shownOf = ({ product, variantId, deals, categoryIds, clock, unit, rules }) => {
+	const active = product.variants.filter((/** @type {any} */ item) => item.active);
+	const variant = variantId
+		? active.find((/** @type {any} */ item) => item.id === variantId)
+		: active.reduce(
+				(/** @type {any} */ low, /** @type {any} */ item) => (!low || item.price < low.price ? item : low),
+				undefined,
+			);
+	return shownPrice({
+		product,
+		variant,
+		deals,
+		now: NOW,
+		categoryIds: categoryIds ?? product.categoryIds,
+		clock: clock ?? utcClock(NOW),
+		unit,
+		rules,
+	});
+};
 const DAY = 86_400_000;
 const empty = () => ({
 	productIds: /** @type {string[]} */ ([]),
@@ -244,7 +279,7 @@ describe('deals', () => {
 		// the shopper's pick still wins
 		const picked = [line({ unitPrice: 1_000_000, dealId: 'deal_b' })];
 		expect(run({ lines: picked, deals, rules: first, shopperChoice: true }).lines[0]?.dealId).toBe('deal_b');
-		// the product quote follows the same choice
+		// the shown price follows the same choice
 		const product = /** @type {any} */ ({
 			id: 'p1',
 			categoryIds: [],
@@ -252,11 +287,8 @@ describe('deals', () => {
 			specs: {},
 			variants: [{ id: 'v1', price: 1_000_000, active: true, attributes: {} }],
 		});
-		expect(quoteProduct({ product, deals, now: NOW })?.deals).toEqual([{ id: 'deal_b', name: 'Deal' }]);
-		expect(quoteProduct({ product, deals, now: NOW, rules: first })).toMatchObject({
-			savings: 50_000,
-			deals: [{ id: 'deal_a', name: 'Deal' }],
-		});
+		expect(shownOf({ product, deals }).deal).toEqual({ id: 'deal_b', name: 'Deal' });
+		expect(shownOf({ product, deals, rules: first })).toMatchObject({ savings: 50_000, deal: { id: 'deal_a', name: 'Deal' } });
 	});
 
 	it('rounds the deals once per order, half up, with rounding total_half_up (D4)', () => {
@@ -693,7 +725,7 @@ describe('coupons', () => {
 	});
 });
 
-describe('quoteProduct', () => {
+describe('the shown price of one unit', () => {
 	/** @type {import('../core/model.js').ProductRecord} */
 	const product = /** @type {any} */ ({
 		id: 'prd_1',
@@ -707,43 +739,28 @@ describe('quoteProduct', () => {
 		],
 	});
 
-	it('quotes the lowest active variant, or the one asked for', () => {
+	it('takes the lowest active variant, or the one asked for, less the best deal', () => {
 		const deals = [deal({ name: 'Brand week', scope: { ...empty(), brandIds: ['b1'] } })];
-		expect(quoteProduct({ product, deals, now: NOW, currency: 'EUR' })).toEqual({
-			productId: 'prd_1',
-			variantId: 'v2',
-			price: 1500,
-			priceAfterDeals: 1350,
+		expect(shownOf({ product, deals })).toMatchObject({
+			price: 1350,
+			was: 1500,
 			savings: 150,
-			currency: 'EUR',
-			deals: [{ id: 'deal_1', name: 'Brand week' }],
+			deal: { id: 'deal_1', name: 'Brand week' },
 		});
-		expect(quoteProduct({ product, variantId: 'v1', deals: [], now: NOW })).toMatchObject({
-			price: 2000,
-			savings: 0,
-			deals: [],
-			currency: '',
-		});
-		expect(quoteProduct({ product, variantId: 'v3', deals: [], now: NOW })).toBeNull();
+		expect(shownOf({ product, variantId: 'v1', deals: [] })).toMatchObject({ price: 2000, savings: 0, deal: null });
 		const parent = [deal({ scope: { ...empty(), categoryIds: ['c0'] } })];
-		expect(quoteProduct({ product, deals: parent, now: NOW })?.savings).toBe(0);
-		expect(quoteProduct({ product, deals: parent, now: NOW, categoryIds: ['c1', 'c0'] })?.savings).toBe(150);
-		expect(quoteProduct({ product: { ...product, variants: [] }, deals: [], now: NOW })).toBeNull();
+		expect(shownOf({ product, deals: parent }).savings).toBe(0);
+		expect(shownOf({ product, deals: parent, categoryIds: ['c1', 'c0'] }).savings).toBe(150);
 	});
 
 	it('rounds one unit as the cart does (D4)', () => {
 		const phone = /** @type {any} */ ({ ...product, variants: [{ id: 'v1', price: 499_900, active: true, attributes: {} }] });
 		const deals = [deal({ value: 7 })];
-		expect(quoteProduct({ product: phone, deals, now: NOW, unit: 100 })?.savings).toBe(34_900);
+		expect(shownOf({ product: phone, deals, unit: 100 }).savings).toBe(34_900);
 		const exact = { ...DEAL_RULES, rounding: /** @type {const} */ ('total_half_up') };
-		expect(quoteProduct({ product: phone, deals, now: NOW, unit: 100, rules: exact })).toMatchObject({
-			savings: 35_000,
-			priceAfterDeals: 464_900,
-		});
+		expect(shownOf({ product: phone, deals, unit: 100, rules: exact })).toMatchObject({ savings: 35_000, price: 464_900 });
 		const cheap = /** @type {any} */ ({ ...product, variants: [{ id: 'v1', price: 200, active: true, attributes: {} }] });
-		expect(
-			quoteProduct({ product: cheap, deals: [deal({ type: 'fixed', value: 300 })], now: NOW, rules: exact })?.savings,
-		).toBe(200);
+		expect(shownOf({ product: cheap, deals: [deal({ type: 'fixed', value: 300 })], rules: exact }).savings).toBe(200);
 	});
 
 	it('judges a deal’s weekdays and hours as the cart does, at the UTC time when no clock is given (K-15)', () => {
@@ -751,12 +768,12 @@ describe('quoteProduct', () => {
 		const today = at.getUTCDay();
 		const minutes = at.getUTCHours() * 60 + at.getUTCMinutes();
 		const elsewhere = [deal({ days: [(today + 1) % 7] }), deal({ id: 'deal_2', timeFrom: '00:00', timeTo: '00:01' })];
-		expect(quoteProduct({ product, deals: elsewhere, now: NOW })?.savings).toBe(0);
-		expect(quoteProduct({ product, deals: elsewhere, now: NOW, clock: { weekday: (today + 1) % 7, minutes } })).toMatchObject({
+		expect(shownOf({ product, deals: elsewhere }).savings).toBe(0);
+		expect(shownOf({ product, deals: elsewhere, clock: { weekday: (today + 1) % 7, minutes } })).toMatchObject({
 			savings: 150,
-			deals: [{ id: 'deal_1' }],
+			deal: { id: 'deal_1' },
 		});
-		expect(quoteProduct({ product, deals: elsewhere, now: NOW, clock: { weekday: today, minutes: 0 } })?.savings).toBe(150);
+		expect(shownOf({ product, deals: elsewhere, clock: { weekday: today, minutes: 0 } }).savings).toBe(150);
 	});
 });
 

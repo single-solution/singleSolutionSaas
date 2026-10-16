@@ -10032,60 +10032,6 @@
 			},
 			"description": "One page of products, newest first."
 		},
-		"ProductQuote": {
-			"type": "object",
-			"description": "What one unit of a product costs after deals.",
-			"required": ["productId", "variantId", "price", "priceAfterDeals", "savings", "currency", "deals"],
-			"additionalProperties": false,
-			"properties": {
-				"productId": {
-					"type": "string"
-				},
-				"variantId": {
-					"type": "string",
-					"description": "The variant priced."
-				},
-				"price": {
-					"type": "integer",
-					"minimum": 0,
-					"description": "Its price, minor units."
-				},
-				"priceAfterDeals": {
-					"type": "integer",
-					"minimum": 0,
-					"description": "One unit after the best item deal, minor units."
-				},
-				"savings": {
-					"type": "integer",
-					"minimum": 0,
-					"description": "price − priceAfterDeals."
-				},
-				"currency": {
-					"type": "string",
-					"minLength": 1,
-					"maxLength": 3,
-					"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
-				},
-				"deals": {
-					"type": "array",
-					"maxItems": 1,
-					"items": {
-						"type": "object",
-						"required": ["id", "name"],
-						"additionalProperties": false,
-						"properties": {
-							"id": {
-								"type": "string"
-							},
-							"name": {
-								"type": "string"
-							}
-						}
-					},
-					"description": "The deal applied ([]: none)."
-				}
-			}
-		},
 		"ProductRow": {
 			"type": "object",
 			"required": [
@@ -27148,22 +27094,6 @@
 		"description": "404 not_found when no deal on now (switched on, within its dates, under its limit, inside its weekdays and hours) has this id or slug; 403 feature_off while the deals feature is off.",
 		"response": {
 			"$ref": "#/components/schemas/ShopDeal"
-		}
-	},
-	"GET /v1/shop/products/:id/quote": {
-		"summary": "What one unit of a product costs after deals",
-		"description": "The variant asked for, or the lowest-priced active one, with the best live item deal on one unit as the cart prices it (the same shown price as the product page, cards, structured data and feeds): the largest saving, or the first in the shoppers’ order with the deals setting lineChoice first; within its days and hours (business time zone); rounded to whole units by Format and the deals setting rounding. Not included: deals off the cart total (target cart), free delivery, deals whose conditions need more than one unit, a cart total above the price or a payment method, bundles, coupons, points and role prices (the cart quote has them all). 404 not_found for a product that is not active or a variant that is not an active one of it; 403 feature_off while the deals feature is off.",
-		"query": {
-			"type": "object",
-			"properties": {
-				"variantId": {
-					"type": "string",
-					"description": "A variant of the product (default: its lowest-priced active one)."
-				}
-			}
-		},
-		"response": {
-			"$ref": "#/components/schemas/ProductQuote"
 		}
 	},
 	"GET /v1/shop/loyalty": {

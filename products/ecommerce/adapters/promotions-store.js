@@ -222,34 +222,6 @@ export const missingRefs = async (data, refs) => {
 
 // ---------------------------------------------------------------------------------------------- shopper reads
 
-/**
- * An active product.
- * @param {WebsiteData} data
- * @param {string} id
- * @returns {Promise<import('../core/model.js').ProductRecord | null>}
- */
-export const activeProduct = async (data, id) =>
-	/** @type {Promise<any>} */ (
-		data
-			.collection(COLLECTIONS.products)
-			.findOne({ websiteId: data.websiteId, id, status: 'active' }, { projection: { _id: 0, websiteId: 0, merchantId: 0 } })
-	);
-
-/**
- * Categories with all their ancestors (from each category's `path`).
- * @param {WebsiteData} data
- * @param {string[]} categoryIds
- * @returns {Promise<string[]>}
- */
-export const categoryTrail = async (data, categoryIds) => {
-	if (categoryIds.length === 0) return [];
-	const found = await data
-		.collection(COLLECTIONS.categories)
-		.find({ websiteId: data.websiteId, id: { $in: categoryIds } }, { projection: { _id: 0, id: 1, path: 1 } })
-		.toArray();
-	return [...new Set([...categoryIds, ...found.flatMap((doc) => (Array.isArray(doc.path) ? doc.path : []))])];
-};
-
 /** At most this many categories are read for their places in the tree. */
 const MAX_CATEGORIES = 5000;
 

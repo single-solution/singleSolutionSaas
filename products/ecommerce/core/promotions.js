@@ -2,7 +2,7 @@
  * Promotions pricing (PLAN 0.8.8; PLAN 0.8.10 E18): which deals, bundles and coupon apply to a cart and how much each
  * takes off each line. Checkout calls `applyPromotions` when it prices a cart and again when it places the order (the
  * ledger then counts the uses in the order transaction); cards, the product page, Chat's product answers, structured
- * data, feeds and the product quote (`/v1/shop/products/:id/quote`) all take one unit's shown price from `shownPrice`
+ * data and feeds all take one unit's shown price from `shownPrice`
  * (SEO audit G4). The order:
  * 1. deals: each line takes one deal — the best saving among the live deals covering it (scope, conditions, weekdays
  *    and hours in the business time zone) or, with `lineChoice: first`, the first of them in the shoppers' order that
@@ -485,7 +485,7 @@ export const listShown = (variant) => ({
 
 /**
  * The price shoppers are shown for one unit of a variant (SEO audit G4): the one function cards, the product page,
- * Chat's product answers, structured data, feeds and the product quote take, so they all name the same price. The variant's price less the best live
+ * Chat's product answers, structured data and feeds take, so they all name the same price. The variant's price less the best live
  * item deal on one unit as the cart prices it (`bestDeal` with the unit alone, at the business time: a deal that needs
  * more than one unit, a cart total above the price or a payment method is an offer of the cart, not the price; cart
  * deals and free delivery neither); the struck-through price; the deal and its dates.
@@ -523,64 +523,6 @@ export const shownPrice = ({ product, variant, deals, now, categoryIds, clock, u
 		savings: found.perUnit,
 		deal: { id: found.deal.id, name: found.deal.name },
 		sale: holdsAllDay(found.deal) ? { from: found.deal.startsAt ?? null, until: found.deal.endsAt ?? null } : null,
-	};
-};
-
-/**
- * What one product costs after deals: its lowest active variant (or the variant asked for), at its shown price
- * ({@link shownPrice}). Used by the product quote (`/v1/shop/products/:id/quote`).
- * @param {object} input
- * @param {import('./model.js').ProductRecord} input.product
- * @param {string | null} [input.variantId] a variant of the product ('' or null: the lowest-priced active one)
- * @param {import('./model.js').DealRecord[]} input.deals live deals (switched off: [])
- * @param {number} input.now epoch ms
- * @param {string[]} [input.categoryIds] the product's categories with their ancestors (default: the product's own)
- * @param {string} [input.currency] the shop's currency
- * @param {{ weekday: number, minutes: number }} [input.clock] the business time (deal hours; default: the UTC time of
- *   `now`)
- * @param {number} [input.unit] whole units (E25)
- * @param {import('./deals.js').DealRules} [input.rules] how deals choose and round (the `deals` settings, D4)
- * @returns {{ productId: string, variantId: string, price: number, priceAfterDeals: number, savings: number, currency: string,
- *   deals: Array<{ id: string, name: string }> } | null} null when the product has no such active variant
- */
-export const quoteProduct = ({
-	product,
-	variantId = null,
-	deals,
-	now,
-	categoryIds,
-	currency = '',
-	clock,
-	unit = 1,
-	rules = DEAL_RULES,
-}) => {
-	const active = product.variants.filter((variant) => variant.active);
-	const variant = variantId
-		? active.find((item) => item.id === variantId)
-		: active.reduce(
-				(/** @type {import('./model.js').VariantRecord | undefined} */ low, item) =>
-					!low || item.price < low.price ? item : low,
-				undefined,
-			);
-	if (!variant) return null;
-	const shown = shownPrice({
-		product,
-		variant,
-		deals,
-		now,
-		categoryIds: categoryIds ?? product.categoryIds,
-		clock: clock ?? utcClock(now),
-		unit,
-		rules,
-	});
-	return {
-		productId: product.id,
-		variantId: variant.id,
-		price: variant.price,
-		priceAfterDeals: shown.price,
-		savings: shown.savings,
-		currency,
-		deals: shown.deal ? [shown.deal] : [],
 	};
 };
 

@@ -23,8 +23,8 @@ beforeAll(async () => {
 	data = await shop.db();
 	await data.ensureIndexes((await import('../adapters/product.js')).INDEXES);
 	await data.collection(COLLECTIONS.categories).insertMany([
-		{ id: 'cat_parent', slug: 'phones', name: 'Phones', parentId: null, path: [] },
-		{ id: 'cat_child', slug: 'android', name: 'Android', parentId: 'cat_parent', path: ['cat_parent'] },
+		{ id: 'cat_parent', slug: 'phones', name: 'Phones', parentId: null, path: [], status: 'active' },
+		{ id: 'cat_child', slug: 'android', name: 'Android', parentId: 'cat_parent', path: ['cat_parent'], status: 'active' },
 	]);
 	await data.collection(COLLECTIONS.brands).insertOne({ id: 'brd_one', slug: 'one', name: 'One' });
 	phone = await shop.seedProduct({
@@ -255,7 +255,7 @@ describe('deals and bundles', () => {
 });
 
 describe('shopper routes', () => {
-	it('lists live deals and quotes a product after deals', async () => {
+	it('lists live deals and shows a product at its price after deals', async () => {
 		await shop.api('POST', '/v1/deals', { name: 'Later', type: 'fixed', value: 1, startsAt: '2027-01-01T00:00:00Z' });
 		await shop.api('POST', '/v1/deals', { name: 'Brand', type: 'fixed', value: 50, scope: { brandIds: ['brd_one'] } });
 		const deals = await shop.visitor('GET', '/v1/shop/deals?limit=5');
@@ -266,21 +266,19 @@ describe('shopper routes', () => {
 		expect((await shop.visitor('GET', '/v1/shop/deals')).json.items).toHaveLength(2);
 		expect((await shop.visitor('GET', '/v1/shop/deals?limit=500')).status).toBe(422);
 
-		const quote = await shop.visitor('GET', `/v1/shop/products/${phone.id}/quote`);
-		expect(quote.json).toMatchObject({
-			productId: phone.id,
-			variantId: 'var_small',
-			price: 10000,
-			priceAfterDeals: 9000,
-			savings: 1000,
-			currency: 'USD',
+		const page = await shop.visitor('GET', `/v1/shop/products/${phone.id}`);
+		const variant = (/** @type {string} */ id) => page.json.variants.find((/** @type {any} */ item) => item.id === id);
+		expect(variant('var_small')).toMatchObject({
+			price: 9000,
+			compareAtPrice: 10000,
+			deal: { name: 'Phone week', savings: 1000 },
 		});
-		expect(quote.json.deals[0].name).toBe('Phone week');
-		const big = await shop.visitor('GET', `/v1/shop/products/${phone.id}/quote?variantId=var_big`);
-		expect(big.json.savings).toBe(2000);
-		expect((await shop.visitor('GET', `/v1/shop/products/${phone.id}/quote?variantId=var_nope`)).status).toBe(404);
-		expect((await shop.visitor('GET', '/v1/shop/products/prd_none/quote')).status).toBe(404);
-		expect((await shop.visitor('GET', `/v1/shop/products/${cover.id}/quote`)).json).toMatchObject({ savings: 0, deals: [] });
+		expect(variant('var_big').deal.savings).toBe(2000);
+		expect((await shop.visitor('GET', '/v1/shop/products/prd_none')).status).toBe(404);
+		expect((await shop.visitor('GET', `/v1/shop/products/${cover.id}`)).json.variants[0]).toMatchObject({
+			price: 1000,
+			deal: null,
+		});
 	});
 
 	it('loads offers for pricing', async () => {

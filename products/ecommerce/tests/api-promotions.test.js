@@ -29,7 +29,9 @@ const codeOf = (response) =>
 beforeAll(async () => {
 	shop = await readyShop();
 	data = await shop.db();
-	await data.collection(COLLECTIONS.categories).insertOne({ id: 'cat_phones', slug: 'phones', name: 'Phones', path: [] });
+	await data
+		.collection(COLLECTIONS.categories)
+		.insertOne({ id: 'cat_phones', slug: 'phones', name: 'Phones', path: [], status: 'active' });
 	await data.collection(COLLECTIONS.brands).insertOne({ id: 'brd_acme', slug: 'acme', name: 'Acme' });
 	phone = await shop.seedProduct({ name: 'Phone', price: 20_000, categoryIds: ['cat_phones'], brandId: 'brd_acme' });
 	cover = await shop.seedProduct({ name: 'Cover', price: 1_000 });
@@ -216,7 +218,7 @@ describe('deals', () => {
 		await shop.api('DELETE', `/v1/deals/${deal.id}`);
 	});
 
-	it('quotes one unit with the best item deal only', async () => {
+	it('shows one unit at the best item deal only', async () => {
 		const scope = { productIds: [phone.id] };
 		const night = await shop.api('POST', '/v1/deals', { name: 'Night', type: 'percent', value: 50, scope, days: [0] });
 		const two = await shop.api('POST', '/v1/deals', {
@@ -228,15 +230,12 @@ describe('deals', () => {
 		});
 		const cart = await shop.api('POST', '/v1/deals', { name: 'Cart', type: 'percent', value: 40, target: 'cart', scope });
 		const plain = await shop.api('POST', '/v1/deals', { name: 'Plain', type: 'fixed', value: 1_500, scope });
-		const quote = await shop.visitor('GET', `/v1/shop/products/${phone.id}/quote?variantId=${phone.variants[0]?.id}`);
-		expect(quote.json).toEqual({
-			productId: phone.id,
-			variantId: phone.variants[0]?.id,
-			price: 20_000,
-			priceAfterDeals: 18_500,
-			savings: 1_500,
-			currency: 'USD',
-			deals: [{ id: plain.json.id, name: 'Plain' }],
+		const shown = (await shop.visitor('GET', `/v1/shop/products/${phone.id}`)).json.variants[0];
+		expect(shown).toMatchObject({
+			id: phone.variants[0]?.id,
+			price: 18_500,
+			compareAtPrice: 20_000,
+			deal: { id: plain.json.id, name: 'Plain', savings: 1_500 },
 		});
 		for (const made of [night, two, cart, plain]) await shop.api('DELETE', `/v1/deals/${made.json.id}`);
 	});

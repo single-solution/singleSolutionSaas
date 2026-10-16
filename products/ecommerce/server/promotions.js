@@ -9,16 +9,8 @@
  */
 import { defineRoute, problem } from '@ss/app-kit';
 import { givePoints, loyaltyAccount, takePoints } from '../adapters/ledger.js';
-import {
-	activeProduct,
-	categoryTrail,
-	dealsLiveNow,
-	deletePerson,
-	loadOffers,
-	pendingPoints,
-	personRecords,
-} from '../adapters/promotions-store.js';
-import { byShowOrder, dealRulesOf, publicDeal } from '../core/deals.js';
+import { dealsLiveNow, deletePerson, pendingPoints, personRecords } from '../adapters/promotions-store.js';
+import { byShowOrder, publicDeal } from '../core/deals.js';
 import { COLLECTIONS } from '../core/model.js';
 import { isCustomerId } from '../core/orders.js';
 import {
@@ -30,7 +22,6 @@ import {
 	pointsValue,
 	SHOPPER_HISTORY,
 } from '../core/loyalty.js';
-import { quoteProduct } from '../core/promotions.js';
 import { checkText, checkWhole } from '../core/promotions-rules.js';
 import { createMedia } from './catalog-media.js';
 import { createOfferRoutes } from './promotions-offers.js';
@@ -240,40 +231,6 @@ export const createPromotions = (product, service) => {
 					const deals = await dealsLiveNow(await s.data(), { now: now(), clock: await service.pricing(s) });
 					const found = deals.find((deal) => deal.id === ref || (deal.slug && deal.slug === ref));
 					return found ? shopDeal(s, found) : problem('not_found', 'There is no such deal on now.');
-				},
-			}),
-			defineRoute({
-				method: 'GET',
-				path: '/v1/shop/products/:id/quote',
-				auth: 'browser',
-				feature: 'deals',
-				rateLimit: VISITOR_LIMITS,
-				handler: async (ctx) => {
-					const s = await service.site(ctx);
-					const data = await s.data();
-					const found = await activeProduct(data, String(ctx.params.id));
-					if (!found) return problem('not_found', 'No such product.');
-					const at = now();
-					const [categoryIds, { deals }, { unit, weekday, minutes }, settings] = await Promise.all([
-						categoryTrail(data, found.categoryIds),
-						loadOffers(data, { now: at, deals: true }),
-						service.pricing(s),
-						s.values('deals'),
-					]);
-					const variantId = typeof ctx.query.variantId === 'string' ? ctx.query.variantId : null;
-					// priced as the cart prices one unit: whole units, deal hours and the deal rules (E25, E18, D4)
-					const quote = quoteProduct({
-						product: found,
-						variantId,
-						deals,
-						now: at,
-						categoryIds,
-						currency: s.currency,
-						clock: { weekday, minutes },
-						unit,
-						rules: dealRulesOf(settings),
-					});
-					return quote ?? problem('not_found', 'No such variant.');
 				},
 			}),
 			defineRoute({
