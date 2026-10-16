@@ -54,7 +54,12 @@
 			"name": "Consent banner",
 			"description": "A consent banner with the merchant's categories (necessary, preferences, analytics, marketing and the sale or sharing of personal data to start with), at the bottom, the top, in the middle or in a corner; the choice stays in the visitor's browser and feeds Google Consent Mode v2.",
 			"dependsOn": [],
-			"recommendFor": ["marketing.google+countries.eea", "marketing.meta+countries.eea", "marketing.tiktok+countries.eea", "marketing.analytics+countries.eea"],
+			"recommendFor": [
+				"marketing.google+countries.eea",
+				"marketing.meta+countries.eea",
+				"marketing.tiktok+countries.eea",
+				"marketing.analytics+countries.eea"
+			],
 			"settings": {
 				"$ref": "schemas/consent_banner.settings.json"
 			}

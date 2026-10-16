@@ -1561,7 +1561,13 @@ describe('admin widgets', () => {
 		// 20:00 UTC on 8 October is 9 October in Tokyo (UTC+9)
 		vi.setSystemTime(Date.parse('2026-10-08T20:00:00Z'));
 		const look = {
-			format: { locale: 'en-GB', currencyDisplay: 'symbol', currencySymbols: { USD: 'US$' }, wholeUnits: true, times: 'business' },
+			format: {
+				locale: 'en-GB',
+				currencyDisplay: 'symbol',
+				currencySymbols: { USD: 'US$' },
+				wholeUnits: true,
+				times: 'business',
+			},
 			timeZone: 'Asia/Tokyo',
 		};
 		const dashboard = place('analytics_dashboard');

@@ -61,9 +61,7 @@ describe('the website Setup sheet', () => {
 			'countries.eea',
 		]);
 		// a coupon shop gets the notice bar for its codes
-		expect(adviseFeatures(features, { offers: ['coupons'] }).recommended.map((entry) => entry.feature)).toEqual([
-			'notice_bar',
-		]);
+		expect(adviseFeatures(features, { offers: ['coupons'] }).recommended.map((entry) => entry.feature)).toEqual(['notice_bar']);
 	});
 
 	it('answers its part: the OpenAPI document, the tags after consent, and what to build for each feature on', async () => {

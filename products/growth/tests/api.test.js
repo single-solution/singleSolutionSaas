@@ -701,7 +701,13 @@ describe('store conversion kit (PLAN 0.8.10 K2–K9)', () => {
 		expect(await codeOf(bad)).toBe('invalid_actor');
 		const format = await kit.call('PUT', '/v1/format', {
 			token: kit.server,
-			body: { locale: 'en-GB', currencyDisplay: 'symbol', currencySymbols: { USD: 'US$' }, wholeUnits: true, times: 'business' },
+			body: {
+				locale: 'en-GB',
+				currencyDisplay: 'symbol',
+				currencySymbols: { USD: 'US$' },
+				wholeUnits: true,
+				times: 'business',
+			},
 			headers: { 'ss-actor-id': 'u_7', 'ss-actor-name': encodeURIComponent('Alex Morgan'), 'ss-actor-role': 'Manager' },
 		});
 		expect(format.status).toBe(200);
