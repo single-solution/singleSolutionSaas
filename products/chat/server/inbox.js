@@ -486,7 +486,7 @@ export const createInbox = (product, service, reply) => {
 	/** @param {any} ctx */
 	const summary = async (ctx) => {
 		const { s, c } = await found(ctx);
-		return { summary: await reply.summarise(s, c.id) };
+		return { summary: await reply.summarize(s, c.id) };
 	};
 
 	/** @param {any} ctx */

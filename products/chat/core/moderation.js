@@ -18,7 +18,7 @@
 import { luhnValid } from '@ss/contracts/text';
 import { MARKDOWN_LINK } from './markdown.js';
 import { compilePattern, replacePattern } from './patterns.js';
-import { normalise } from './text.js';
+import { normalize } from './text.js';
 
 /** @typedef {'card' | 'iban' | 'email' | 'phone' | 'ip'} PiiKind */
 
@@ -229,8 +229,8 @@ const SECRET_PATTERNS = Object.freeze([
 export const leakCheck = (text, { phrases = [] } = {}) => {
 	const value = String(text ?? '');
 	if (SECRET_PATTERNS.some((pattern) => pattern.test(value))) return { ok: false, reason: 'secret' };
-	const plain = normalise(value);
-	if (phrases.some((phrase) => phrase.trim() && plain.includes(normalise(phrase)))) return { ok: false, reason: 'internals' };
+	const plain = normalize(value);
+	if (phrases.some((phrase) => phrase.trim() && plain.includes(normalize(phrase)))) return { ok: false, reason: 'internals' };
 	return { ok: true, reason: null };
 };
 

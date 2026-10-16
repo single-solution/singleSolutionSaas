@@ -12,7 +12,7 @@
  * @module
  */
 import { createId } from '@ss/contracts';
-import { normalisePhone } from '@ss/contracts/phone';
+import { normalizePhone } from '@ss/contracts/phone';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/conversation.js').ConversationRecord} ConversationRecord */
@@ -344,7 +344,7 @@ export const createStore = (data, { now }) => {
 			 * @returns {Promise<ConversationRecord[]>}
 			 */
 			guestsByPhone: async (phone) => {
-				const e164 = normalisePhone(phone);
+				const e164 = normalizePhone(phone);
 				if (!e164) return [];
 				return /** @type {any} */ (
 					await conversations
@@ -365,7 +365,7 @@ export const createStore = (data, { now }) => {
 				const or = [];
 				if (user.id) or.push({ 'visitor.kind': 'user', 'visitor.id': user.id });
 				if (user.email) or.push({ email: user.email.toLowerCase() });
-				if (user.phone) or.push({ phone: normalisePhone(user.phone) ?? user.phone });
+				if (user.phone) or.push({ phone: normalizePhone(user.phone) ?? user.phone });
 				if (or.length === 0) return [];
 				return /** @type {any} */ (await conversations.find({ websiteId: w, $or: or }, HIDDEN).toArray());
 			},
@@ -532,7 +532,7 @@ export const createStore = (data, { now }) => {
 			ofPerson: async (contact, conversationIds) => {
 				const or = [
 					...(contact.email ? [{ email: contact.email.toLowerCase() }] : []),
-					...(contact.phone ? [{ phone: normalisePhone(contact.phone) ?? contact.phone }] : []),
+					...(contact.phone ? [{ phone: normalizePhone(contact.phone) ?? contact.phone }] : []),
 					...(conversationIds.length > 0 ? [{ conversationId: { $in: conversationIds } }] : []),
 				];
 				return or.length === 0 ? [] : /** @type {any} */ (await leads.find({ websiteId: w, $or: or }, HIDDEN).toArray());

@@ -16,7 +16,7 @@
  * warranty, quotes per variant and payment method, order lines and the store context (C1).
  * @module
  */
-import { formatDate, formatMoney, isAmount, isCurrency, normaliseFormat } from '@ss/contracts/format';
+import { formatDate, formatMoney, isAmount, isCurrency, normalizeFormat } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
 import { isHttpsUrl } from './text.js';
 
@@ -739,7 +739,7 @@ const variantOptions = (value) =>
  * The language of text Chat makes for the website: its Format's, else `en-US`.
  * @param {Look} look
  */
-const localeOf = (look) => normaliseFormat(look.format).locale || 'en-US';
+const localeOf = (look) => normalizeFormat(look.format).locale || 'en-US';
 
 /**
  * A deal's weekdays (`days`, 0 = Sunday) as names in the website's language, listed as that language lists them

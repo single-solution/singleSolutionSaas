@@ -13,7 +13,7 @@
  * @module
  */
 import { isId } from '@ss/contracts';
-import { normalisePhone } from '@ss/contracts/phone';
+import { normalizePhone } from '@ss/contracts/phone';
 import { isObject } from '@ss/contracts/util';
 import { PRESENCES, STATUSES, USER_ID, messageText, previewOf } from './conversation.js';
 import { LABEL_LIMITS } from './labels.js';
@@ -306,7 +306,7 @@ export const checkConversation = (record, { callingCode, staffIds, customFields,
 	const phone =
 		record.phone === undefined || record.phone === null || record.phone === ''
 			? null
-			: (normalisePhone(record.phone, callingCode) ?? read.fail('/phone', 'Not a phone number.'));
+			: (normalizePhone(record.phone, callingCode) ?? read.fail('/phone', 'Not a phone number.'));
 	const status = read.oneOf(record.status, '/status', STATUSES, null);
 	if (record.status === undefined) read.fail('/status', `One of ${STATUSES.join(', ')}.`);
 	const assignedTo = record.assignedTo === undefined || record.assignedTo === null ? null : String(record.assignedTo);

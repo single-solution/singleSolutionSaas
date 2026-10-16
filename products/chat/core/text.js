@@ -24,7 +24,7 @@ export const isHttpsUrl = (value) =>
  * @param {unknown} text
  * @returns {string}
  */
-export const normalise = (text) =>
+export const normalize = (text) =>
 	typeof text === 'string'
 		? text
 				.normalize('NFKD')
@@ -44,7 +44,7 @@ export const normalise = (text) =>
 export const tokenize = (text, { minLength = 2, max = 20_000 } = {}) => {
 	/** @type {string[]} */
 	const out = [];
-	for (const match of normalise(text).matchAll(/[\p{L}\p{N}]+/gu)) {
+	for (const match of normalize(text).matchAll(/[\p{L}\p{N}]+/gu)) {
 		const word = match[0];
 		if (UNSPACED.test(word)) {
 			const chars = [...word];
@@ -104,7 +104,7 @@ export const aroundPhrase = (text, phrase) => {
 			.split(/\s+/)
 			.map(trimEdges)
 			.filter((word) => word !== '');
-	const needle = wordsOf(phrase).map(normalise);
+	const needle = wordsOf(phrase).map(normalize);
 	if (needle.length === 0) return null;
 	for (const line of text.normalize('NFKC').split('\n')) {
 		if (UNSPACED.test(phrase)) {
@@ -122,7 +122,7 @@ export const aroundPhrase = (text, phrase) => {
 		}
 		const raw = line.split(/\s+/).filter((word) => trimEdges(word) !== '');
 		const words = raw.map(trimEdges);
-		const keys = words.map(normalise);
+		const keys = words.map(normalize);
 		const ends = raw.map((word) => SENTENCE_END.test(word));
 		for (let i = 1; i + needle.length < words.length; i += 1) {
 			if (!needle.every((word, j) => keys[i + j] === word)) continue;

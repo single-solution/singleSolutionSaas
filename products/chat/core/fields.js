@@ -6,7 +6,7 @@
  * @module
  */
 import { normalizeEmail } from '@ss/contracts/email';
-import { normalisePhone } from '@ss/contracts/phone';
+import { normalizePhone } from '@ss/contracts/phone';
 import { isObject } from '@ss/contracts/util';
 
 /** Most custom fields a website has. */
@@ -91,7 +91,7 @@ export const checkFieldValue = (field, raw, callingCode = '') => {
 			return email ? { ok: true, value: email } : { ok: false };
 		}
 		case 'phone': {
-			const phone = normalisePhone(value, callingCode);
+			const phone = normalizePhone(value, callingCode);
 			return phone ? { ok: true, value: phone } : { ok: false };
 		}
 		default:

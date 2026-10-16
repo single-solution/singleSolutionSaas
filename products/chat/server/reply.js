@@ -260,7 +260,7 @@ export const createReply = (product, service) => {
 			current = (await service.botMessage(s, current, String(texts['chat.contactAsk']))).conversation;
 		current = await service.route(s, current, await conversationLanguage(s, current));
 		await service.staffAlert(s, current, 'needs_you');
-		if (s.on.includes('ai_summary')) s.ctx.after(() => summarise(s, current.id).catch(() => null));
+		if (s.on.includes('ai_summary')) s.ctx.after(() => summarize(s, current.id).catch(() => null));
 		s.ctx.after(() => tagWithAi(s, current.id).catch(() => null));
 		return current;
 	};
@@ -1054,7 +1054,7 @@ export const createReply = (product, service) => {
 	 * @param {string} conversationId
 	 * @returns {Promise<string>}
 	 */
-	const summarise = async (s, conversationId) => {
+	const summarize = async (s, conversationId) => {
 		const connections = await connectionsOf(s, { backup: true });
 		if (connections.length === 0 || (await service.capped(s)))
 			throw problem('ai_unavailable', 'The AI cannot write a summary now (no AI key, or an AI token cap is reached).');
@@ -1125,7 +1125,7 @@ export const createReply = (product, service) => {
 		handOff,
 		startFlow,
 		runFlow,
-		summarise,
+		summarize,
 		tagWithAi,
 		answer,
 		resume,

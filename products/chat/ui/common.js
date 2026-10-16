@@ -4,7 +4,7 @@
  * always set as text, never as HTML.
  * @module
  */
-import { element, formatDate, normaliseFormat, viewerOf } from '@ss/app-kit/widget';
+import { element, formatDate, normalizeFormat, viewerOf } from '@ss/app-kit/widget';
 import { CHECKS, attachmentKind } from '../core/widgets.js';
 
 /** @typedef {(key: string) => string} Texts */
@@ -178,7 +178,7 @@ const NO_BREAK_SPACES = new RegExp('[\u00a0\u202f]', 'g');
  * @returns {(value: number, digits?: number) => string} `digits`: exactly that many decimals
  */
 export const numbersOf = (config, win) => {
-	const wanted = normaliseFormat(config.format).locale || viewerOf(win).locale || 'en-US';
+	const wanted = normalizeFormat(config.format).locale || viewerOf(win).locale || 'en-US';
 	let locale = 'en-US';
 	try {
 		locale = Intl.NumberFormat.supportedLocalesOf(wanted)[0] ?? locale;

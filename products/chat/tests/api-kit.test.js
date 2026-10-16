@@ -305,7 +305,7 @@ describe('data rights', () => {
 			token: sys.server,
 			user: { id: 'usr_ann', email: 'ann@example.com' },
 		});
-		expect(deleted.body).toEqual({ deleted: 5, anonymised: 0 });
+		expect(deleted.body).toEqual({ deleted: 5, anonymized: 0 });
 		expect((await sys.serverCall('GET', '/v1/conversations')).json.items.map((/** @type {any} */ c) => c.preview)).toEqual([
 			'someone else',
 		]);
@@ -348,7 +348,7 @@ describe('data rights', () => {
 			user: { phone: '+447700900123' },
 		});
 		// the conversation with what belongs to it, and the alert about it
-		expect(deleted.body).toEqual({ deleted: 4, anonymised: 0 });
+		expect(deleted.body).toEqual({ deleted: 4, anonymized: 0 });
 		expect(await saved()).toEqual([['', 'someone else']]);
 	});
 });

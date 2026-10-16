@@ -307,8 +307,8 @@ export const markerSetsOf = (lines) =>
 		];
 		const phrases = quoted.filter((q) => tokenize(q, { minLength: 1 }).length > 1);
 		const tag = String(match[1]);
-		const romanised = scriptOf(tag) !== 'Latin' && latinOnly([...words, ...phrases].join(' '));
-		return [{ language: romanised ? `${primary(tag)}-Latn` : tag, words, phrases }];
+		const romanized = scriptOf(tag) !== 'Latin' && latinOnly([...words, ...phrases].join(' '));
+		return [{ language: romanized ? `${primary(tag)}-Latn` : tag, words, phrases }];
 	});
 
 /** @param {string} tag */

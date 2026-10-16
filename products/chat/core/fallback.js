@@ -10,7 +10,7 @@
  */
 import { isObject } from '@ss/contracts/util';
 import { primary } from './language.js';
-import { aroundPhrase, containsPhrase, normalise, tokenize } from './text.js';
+import { aroundPhrase, containsPhrase, normalize, tokenize } from './text.js';
 
 /** The placeholders and the shop feature each one needs. */
 export const PLACEHOLDERS = Object.freeze({
@@ -150,7 +150,7 @@ export const multipliersOf = (lines) =>
 	(Array.isArray(lines) ? lines : [])
 		.map((line) => MULTIPLIER.exec(typeof line === 'string' ? line.trim() : ''))
 		.filter((match) => match !== null)
-		.map((match) => ({ word: normalise(match[1]), factor: Number(String(match[2]).replace(/[,._ ]/g, '')) }))
+		.map((match) => ({ word: normalize(match[1]), factor: Number(String(match[2]).replace(/[,._ ]/g, '')) }))
 		.filter(({ word, factor }) => word !== '' && Number.isSafeInteger(factor) && factor >= 2)
 		.sort((a, b) => b.word.length - a.word.length);
 
@@ -162,7 +162,7 @@ export const multipliersOf = (lines) =>
  */
 const keywordEnd = (message, keywords) => {
 	const words = [...message.matchAll(/[\p{L}\p{N}]+/gu)].map((m) => ({
-		key: normalise(m[0]),
+		key: normalize(m[0]),
 		start: m.index ?? 0,
 		end: (m.index ?? 0) + m[0].length,
 	}));
@@ -204,7 +204,7 @@ const amountsOf = (text, multipliers) => {
 		let amount = grouped ? Number(raw.replace(/[,. ]/g, '')) : Number(raw.replace(',', '.'));
 		const rest = text.slice(end);
 		const spaces = /^\s*/u.exec(rest)?.[0].length ?? 0;
-		const after = normalise(rest.slice(spaces, spaces + 41));
+		const after = normalize(rest.slice(spaces, spaces + 41));
 		const multiplier = multipliers.find(
 			({ word }) =>
 				after.startsWith(word) && (UNSPACED.test([...word].at(-1) ?? '') || !LETTER.test(after.charAt(word.length))),
@@ -326,8 +326,8 @@ export const comparedProduct = (products, searched, taken) => {
 		const name = new Set(tokenize(product.name));
 		return product.id !== taken && words.some((word) => name.has(word));
 	});
-	const wanted = normalise(searched);
-	return named.find((product) => normalise(product.name) === wanted) ?? named[0] ?? null;
+	const wanted = normalize(searched);
+	return named.find((product) => normalize(product.name) === wanted) ?? named[0] ?? null;
 };
 
 /**
@@ -352,12 +352,12 @@ export const comparisonTable = (products, words) => {
 	const names = [];
 	for (const p of products)
 		for (const detail of p.details)
-			if (!names.some((name) => normalise(name) === normalise(detail.name))) names.push(detail.name);
+			if (!names.some((name) => normalize(name) === normalize(detail.name))) names.push(detail.name);
 	for (const name of names.slice(0, COMPARE_ROWS))
 		rows.push([
 			name,
 			...products.map((p) => {
-				const value = p.details.find((detail) => normalise(detail.name) === normalise(name))?.value;
+				const value = p.details.find((detail) => normalize(detail.name) === normalize(name))?.value;
 				return value === undefined ? MISSING : value === true ? words.yes : value === false ? words.no : value;
 			}),
 		]);

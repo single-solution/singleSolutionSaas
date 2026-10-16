@@ -172,7 +172,7 @@
 	"inbox.deviceComputer": "Computer",
 	"inbox.deviceBrowser": "Browser",
 	"inbox.summaryUnavailable": "The AI cannot write a summary now.",
-	"inbox.summarise": "Summarize",
+	"inbox.summarize": "Summarize",
 	"inbox.transcriptEmail": "Send a copy to",
 	"inbox.transcriptSend": "Send copy",
 	"inbox.transcriptSent": "The copy is on its way.",

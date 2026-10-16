@@ -8,7 +8,7 @@
 import { problem } from '@ss/app-kit';
 import { ratingScale } from '../core/conversation.js';
 import { labelCounts } from '../core/labels.js';
-import { reportRange, summarise } from '../core/reports.js';
+import { reportRange, summarize } from '../core/reports.js';
 import { dayStart } from '../core/time.js';
 import { aiLabelShown } from '../core/widgets.js';
 import { uploadRules } from './visitor.js';
@@ -35,7 +35,7 @@ export const createAdmin = (product, service) => {
 		);
 		const rows = await s.store.conversations.startedBetween(from, to);
 		const dayKeys = range.dates.map((date) => `day:${date}`);
-		const numbers = summarise({
+		const numbers = summarize({
 			rows: rows.map((row) => ({ ...row, aiReplies: Number(row.aiReplies ?? 0), firstVisitorAt: row.firstVisitorAt ?? null })),
 			dates: range.dates,
 			timeZone,
@@ -157,7 +157,7 @@ export const createAdmin = (product, service) => {
 			removed.messages +
 			removed.guests +
 			(await store.leads.remove(leads.map((l) => l.id)));
-		return { deleted, anonymised: 0 };
+		return { deleted, anonymized: 0 };
 	};
 
 	// --------------------------------------------------------------------------------------------- widget config

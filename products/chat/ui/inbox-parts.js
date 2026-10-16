@@ -293,17 +293,17 @@ export const contextPart = ({ doc, t, api, failure, summary }) => {
 	const shopTitle = element(doc, 'h3', {}, t('inbox.orders'));
 	const shop = element(doc, 'ul', { class: 'facts shop' });
 	const text = element(doc, 'p', { class: 'summary' });
-	const summarise = buttonOf(doc, t('inbox.summarise'), { class: 'secondary small' });
+	const summarize = buttonOf(doc, t('inbox.summarize'), { class: 'secondary small' });
 	const note = element(doc, 'p', { class: 'status', role: 'status' });
-	part.append(element(doc, 'h3', {}, t('inbox.context')), facts, shopTitle, shop, text, ...(summary ? [summarise] : []), note);
+	part.append(element(doc, 'h3', {}, t('inbox.context')), facts, shopTitle, shop, text, ...(summary ? [summarize] : []), note);
 	/** @type {string} */
 	let id = '';
-	summarise.addEventListener('click', async () => {
-		summarise.setAttribute('disabled', '');
+	summarize.addEventListener('click', async () => {
+		summarize.setAttribute('disabled', '');
 		const answer = await adminCall(api, 'POST', `/v1/admin/conversations/${encodeURIComponent(id)}/summary`);
-		summarise.removeAttribute('disabled');
+		summarize.removeAttribute('disabled');
 		if (answer.ok) text.textContent = String(answer.data?.summary ?? '');
-		else if (answer.status === 403) setHidden(summarise, true);
+		else if (answer.status === 403) setHidden(summarize, true);
 		else note.textContent = failure(answer);
 	});
 

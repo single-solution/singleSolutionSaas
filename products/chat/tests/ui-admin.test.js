@@ -371,7 +371,7 @@ describe('inbox', () => {
 		expect(server.all('DELETE /v1/admin/saved-replies/r1')).toHaveLength(1);
 
 		// context, transcript, rating
-		await click(buttonIn(root, TEXTS['inbox.summarise']));
+		await click(buttonIn(root, TEXTS['inbox.summarize']));
 		expect(root.querySelector('.summary')?.textContent).toBe('Wants a phone.');
 		await submit(fieldIn(root, TEXTS['inbox.transcriptEmail']));
 		expect(server.last('POST /v1/admin/conversations/c1/transcript')?.body).toEqual({ email: 'ana@x.co' });
@@ -831,10 +831,10 @@ describe('inbox', () => {
 		await click(buttonIn(root, '55'));
 		expect(textsIn(root, '.facts li')).toEqual(['Rating: 2']);
 		expect(textsIn(root, '.log .who')).toEqual(['']);
-		await click(buttonIn(root, TEXTS['inbox.summarise']));
+		await click(buttonIn(root, TEXTS['inbox.summarize']));
 		expect(root.textContent).toContain(TEXTS['common.error']);
 		summaryAnswer = () => problem(503, 'ai_unavailable');
-		await click(buttonIn(root, TEXTS['inbox.summarise']));
+		await click(buttonIn(root, TEXTS['inbox.summarize']));
 		expect(root.textContent).toContain(TEXTS['inbox.summaryUnavailable']);
 		await submit(fieldIn(root, TEXTS['inbox.transcriptEmail']));
 		expect(root.textContent).toContain(TEXTS['inbox.transcriptUnavailable']);
@@ -1078,7 +1078,7 @@ describe('reports', () => {
 		expect(numbers[TEXTS['reports.aiTokens']]).toBe('12,000');
 		expect(/** @type {HTMLElement} */ (root.querySelector('.bar')).style.width).toBe('50%');
 		expect(root.textContent).toContain('Days in Europe/Berlin');
-		expect(textsIn(root, '.labelled h3')).toEqual([TEXTS['reports.byTopic']]);
+		expect(textsIn(root, '.labeled h3')).toEqual([TEXTS['reports.byTopic']]);
 		expect(numbers.Billing).toBe('3');
 		report = () => answer(200, { days: null, medianFirstReplySeconds: 40, rating: null });
 		fieldIn(root, TEXTS['reports.from']).value = '2026-01-01';

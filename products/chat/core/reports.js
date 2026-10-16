@@ -64,7 +64,7 @@ const median = (values) => {
 /**
  * @param {{ rows: ReportRow[], dates: string[], timeZone: string, leads: number, aiTokens: number }} input
  */
-export const summarise = ({ rows, dates, timeZone, leads, aiTokens }) => {
+export const summarize = ({ rows, dates, timeZone, leads, aiTokens }) => {
 	/** @type {Map<string, number>} */
 	const perDay = new Map(dates.map((date) => [date, 0]));
 	for (const row of rows) {

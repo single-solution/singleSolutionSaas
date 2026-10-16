@@ -24,7 +24,7 @@ import {
 } from '../core/moderation.js';
 import { buildSystemPrompt } from '../core/prompt.js';
 import { WIRE, estimateTokens, parseArguments } from '../core/providers.js';
-import { reportRange, summarise } from '../core/reports.js';
+import { reportRange, summarize } from '../core/reports.js';
 import { cardsOf, shopAnswer, shopInfoOf, shopRequest } from '../core/shop.js';
 import { truncate } from '../core/text.js';
 import { dayKey, dayStart, monthKey, zoneOr } from '../core/time.js';
@@ -367,7 +367,7 @@ describe('handoff, time, caps and reports', () => {
 		expect(dayKey(at, 'Not/AZone')).toBe('2026-10-31');
 		expect(new Date(dayStart('2026-11-01', 'Asia/Tokyo')).toISOString()).toBe('2026-10-31T15:00:00.000Z');
 		expect(reportRange({}, at, 'Asia/Tokyo')?.to).toBe('2026-11-01');
-		const late = summarise({
+		const late = summarize({
 			rows: [
 				{
 					createdAt: new Date(at),
@@ -398,7 +398,7 @@ describe('handoff, time, caps and reports', () => {
 		expect(alertCrossed({ before: 0, after: 100, monthlyTokens: 0, percent: 50 })).toBe(false);
 		expect(reportRange({ from: 'x' }, 0, 'UTC')).toBeNull();
 		expect(reportRange({ from: '2020-01-01', to: '2026-01-01' }, 0, 'UTC')).toBeNull();
-		const report = summarise({
+		const report = summarize({
 			rows: [
 				{
 					createdAt: new Date('2026-10-01T00:00:00Z'),

@@ -55,9 +55,9 @@ export const mountReports = ({ host, win, api, config, now }) => {
 			const note = element(doc, 'p', { class: 'status', role: 'status' });
 			const numbers = element(doc, 'dl', { class: 'numbers' });
 			const days = element(doc, 'ul', { class: 'bars' });
-			const labelled = element(doc, 'div', { class: 'labelled' });
+			const labeled = element(doc, 'div', { class: 'labeled' });
 			const box = element(doc, 'section', { class: 'box' });
-			box.append(element(doc, 'h2', {}, t('reports.title')), form, note, numbers, labelled, days);
+			box.append(element(doc, 'h2', {}, t('reports.title')), form, note, numbers, labeled, days);
 			root.append(box);
 
 			const load = async () => {
@@ -65,7 +65,7 @@ export const mountReports = ({ host, win, api, config, now }) => {
 				const answer = await adminCall(api, 'GET', `/v1/admin/reports?${query.toString()}`);
 				if (!answer.ok) {
 					numbers.replaceChildren();
-					labelled.replaceChildren();
+					labeled.replaceChildren();
 					days.replaceChildren();
 					note.textContent =
 						answer.status === 0 && !api.tickets.current()
@@ -119,7 +119,7 @@ export const mountReports = ({ host, win, api, config, now }) => {
 					[t('reports.byTag'), Array.isArray(data.tags) ? data.tags : []],
 					[t('reports.byPriority'), Array.isArray(data.priorities) ? data.priorities : []],
 				];
-				labelled.replaceChildren(
+				labeled.replaceChildren(
 					...grouped
 						.filter(([, rows]) => rows.some((row) => row.conversations > 0))
 						.flatMap(([title, rows]) => {

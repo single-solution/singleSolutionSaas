@@ -714,7 +714,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 						advanceText: '€0.00',
 					},
 					// the merchant's own method, by its own name
-					{ method: 'cheque', name: 'Cheque', available: true, reason: null, advance: 0, fee: 0, advanceText: '€0.00' },
+					{ method: 'check', name: 'Check', available: true, reason: null, advance: 0, fee: 0, advanceText: '€0.00' },
 				],
 				subtotal: 9000,
 				subtotalText: '€90.00',
@@ -764,7 +764,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				{ method: 'cod', name: 'Cash on delivery', available: true, advance: '€20.00', fee: 'EUR 1.50' },
 				{ method: 'bank_transfer', name: 'Bank transfer', available: false, reason: 'not_ready' },
 				{ method: 'pickup', name: 'Pay at pickup', available: false, reason: 'needs_pickup' },
-				{ method: 'cheque', name: 'Cheque', available: true },
+				{ method: 'check', name: 'Check', available: true },
 			],
 		});
 	});
