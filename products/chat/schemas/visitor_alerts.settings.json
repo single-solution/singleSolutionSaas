@@ -8,7 +8,10 @@
 			"default": 60,
 			"minimum": 0,
 			"maximum": 3600,
-			"description": "A staff reply alerts the visitor when they have not checked the chat for this long (0: also while they are in the chat)."
+			"description": "A staff reply alerts the visitor when they have not checked the chat for this long (0: also while they are in the chat).",
+			"x-ui": {
+				"advanced": true
+			}
 		},
 		"frequency": {
 			"type": "string",

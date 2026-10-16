@@ -99,22 +99,36 @@ function Developers(props) {
 		permissions: manifest.permissions.map((permission) => permission.key),
 	});
 	const D = TEXTS.developers;
+	/** @param {string} id @param {string} title @param {string} help @param {import('react').ReactNode} body @param {import('@ss/ui').IconName} icon */
+	const part = (id, title, help, body, icon) => ({
+		id,
+		label: title,
+		icon,
+		content: (
+			<Section title={title} description={help}>
+				{body}
+			</Section>
+		),
+	});
 	return (
-		<DevelopersTab {...props}>
-			<Section title={D.visitor} description={D.visitorHelp}>
-				<CodeBlock code={snippets.visitor} />
-			</Section>
-			<Section title={D.admin} description={D.adminHelp}>
-				<CodeBlock code={snippets.admin} />
-			</Section>
-			<Section title={D.ticket} description={D.ticketHelp}>
-				<CodeBlock code={snippets.ticketNode} />
-				<CodeBlock code={snippets.ticketCurl} />
-			</Section>
-			<Section title={D.tools} description={D.toolsHelp}>
-				<CodeBlock code={snippets.toolCheck} />
-			</Section>
-		</DevelopersTab>
+		<DevelopersTab
+			{...props}
+			sections={[
+				part('visitor', D.visitor, D.visitorHelp, <CodeBlock code={snippets.visitor} />, 'users'),
+				part('admin', D.admin, D.adminHelp, <CodeBlock code={snippets.admin} />, 'box'),
+				part(
+					'ticket',
+					D.ticket,
+					D.ticketHelp,
+					<>
+						<CodeBlock code={snippets.ticketNode} />
+						<CodeBlock code={snippets.ticketCurl} />
+					</>,
+					'key',
+				),
+				part('tools', D.tools, D.toolsHelp, <CodeBlock code={snippets.toolCheck} />, 'shield'),
+			]}
+		/>
 	);
 }
 

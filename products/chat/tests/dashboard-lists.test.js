@@ -109,16 +109,16 @@ describe('the fallback answers editor (C3)', () => {
 		expect(container.textContent).toContain('Answer 2');
 		expect(container.textContent).toContain('Write the answer (up to 2000 characters).');
 		expect(/** @type {HTMLButtonElement} */ (button(container, 'Save list')).disabled).toBe(true);
-		type(field(container, 'Answer', 1), '  Popular this week:\n{top_products}  ');
+		type(field(container, 'Answer', 0), '  Popular this week:\n{top_products}  ');
 		expect(container.textContent).not.toContain('Write the answer');
 		// its placeholder needs a shop tool that is off: the answer would be skipped
 		expect(container.textContent).toContain('Skipped while these are off: Shop tools: top and new products.');
-		type(field(container, 'Language', 1), 'fr');
+		type(field(container, 'Language', 0), 'fr');
 		// 31 keywords are more than the server takes
-		type(field(container, 'Keywords (one per line)', 1), Array.from({ length: 31 }, (_, i) => `word ${i}`).join('\n'));
+		type(field(container, 'Keywords (one per line)', 0), Array.from({ length: 31 }, (_, i) => `word ${i}`).join('\n'));
 		expect(container.textContent).toContain('Up to 30 keywords of up to 100 characters each.');
 		expect(/** @type {HTMLButtonElement} */ (button(container, 'Save list')).disabled).toBe(true);
-		type(field(container, 'Keywords (one per line)', 1), ' best \n\nbestseller');
+		type(field(container, 'Keywords (one per line)', 0), ' best \n\nbestseller');
 		expect(container.textContent).not.toContain('Up to 30 keywords');
 		expect(saved).toEqual([]);
 
@@ -136,10 +136,10 @@ describe('the fallback answers editor (C3)', () => {
 		const { container } = render(inDashboard(<FallbackAnswersEditor websiteId={WEBSITE} languages={[]} on={() => true} />));
 		await settle();
 		click(button(container, 'Add'));
-		type(field(container, 'Answer', 1), 'Side by side:\n{comparison}');
+		type(field(container, 'Answer', 0), 'Side by side:\n{comparison}');
 		expect(container.textContent).toContain('Add the words between the two products, such as vs, for {comparison}.');
 		expect(/** @type {HTMLButtonElement} */ (button(container, 'Save list')).disabled).toBe(true);
-		type(field(container, 'Keywords (one per line)', 1), 'vs\nversus');
+		type(field(container, 'Keywords (one per line)', 0), 'vs\nversus');
 		expect(container.textContent).not.toContain('Add the words between');
 		click(button(container, 'Save list'));
 		await settle();
@@ -151,8 +151,10 @@ describe('the fallback answers editor (C3)', () => {
 		const { container } = render(inDashboard(<FallbackAnswersEditor websiteId={WEBSITE} languages={[]} on={() => true} />));
 		await settle();
 		click(button(container, 'Add'));
-		type(field(container, 'Answer', 1), 'Hello!');
-		click(container.querySelectorAll('button[aria-label="Move up"]')[1] ?? container);
+		type(field(container, 'Answer', 0), 'Hello!');
+		// one answer at a time: move the new one up, then look at the first
+		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="Move up"]')));
+		click(/** @type {HTMLElement} */ (container.querySelectorAll('[role="tab"]')[0]));
 		expect(field(container, 'Answer', 0).value).toBe('Hello!');
 		// no fixed "For" list (C20): an answer is its language, keywords and text
 		expect(container.textContent).not.toContain('Anything else');

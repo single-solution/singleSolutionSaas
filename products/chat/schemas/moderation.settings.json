@@ -74,7 +74,8 @@
 			},
 			"x-ui": {
 				"group": "AI answers",
-				"order": 13
+				"order": 13,
+				"advanced": true
 			}
 		}
 	}

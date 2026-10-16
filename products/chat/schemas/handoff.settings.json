@@ -80,7 +80,8 @@
 			"description": "From this many minutes after the handoff, the AI answers the visitor’s next messages with reassurance only, until staff reply. 0 = off.",
 			"x-ui": {
 				"group": "After the handoff",
-				"order": 13
+				"order": 13,
+				"advanced": true
 			}
 		}
 	}

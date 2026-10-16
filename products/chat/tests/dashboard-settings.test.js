@@ -52,24 +52,24 @@ describe('Chat settings in the dashboard', () => {
 				/>,
 			),
 		);
-		// the feature is the heading, its groups the cards, in `x-ui.order` (the schema lists Creativity first)
+		// the feature is the heading; its groups are one view each under a tab strip, in `x-ui.order`, Advanced last
 		expect(container.querySelector('h3')?.textContent).toBe('AI replies');
-		expect([...container.querySelectorAll('section h2')].map((h) => h.textContent)).toEqual([
-			'Answers',
-			'AI disclosure',
-			'Limits',
-		]);
-		const fieldsOf = (/** @type {number} */ card) =>
-			[...(container.querySelectorAll('section')[card]?.querySelectorAll('[data-field]') ?? [])].map((f) =>
-				f.getAttribute('data-field'),
-			);
-		expect(fieldsOf(0)).toEqual(['style', 'dontKnow', 'onFailure', 'bubbles', 'tableBubble']);
-		expect(fieldsOf(2)).toEqual(['temperature', 'maxOutputTokens', 'repliesPerVisitorPerDay', 'repliesPerNetworkPerDay']);
+		const tabs = () => [...container.querySelectorAll('[role="tab"]')];
+		expect(tabs().map((tab) => tab.textContent)).toEqual(['Answers', 'AI disclosure', 'Limits', 'Advanced']);
+		const fields = () => [...container.querySelectorAll('[data-field]')].map((f) => f.getAttribute('data-field'));
+		expect(fields()).toEqual(['style', 'dontKnow', 'onFailure', 'bubbles', 'tableBubble']);
 		// on/off settings are toggles, not checkboxes
-		expect(container.querySelectorAll('[role="switch"]')).toHaveLength(3);
+		expect(container.querySelectorAll('[role="switch"]')).toHaveLength(1);
 		expect(container.querySelector('input[type="checkbox"]')).toBeNull();
 		// three choices with long words are a radio list
 		expect(container.querySelectorAll('[role="radiogroup"] input[type="radio"]')).toHaveLength(3);
+		click(/** @type {HTMLElement} */ (tabs()[1]));
+		expect(fields()).toEqual(['showAiLabel', 'neverDisclose']);
+		click(/** @type {HTMLElement} */ (tabs()[2]));
+		expect(fields()).toEqual(['repliesPerVisitorPerDay', 'repliesPerNetworkPerDay']);
+		// the settings most people never change are the last tab
+		click(/** @type {HTMLElement} */ (tabs()[3]));
+		expect(fields().sort()).toEqual(['botPhrases', 'maxOutputTokens', 'temperature']);
 		// nothing is edited: no bar
 		expect(container.textContent).not.toContain('Save changes');
 	});

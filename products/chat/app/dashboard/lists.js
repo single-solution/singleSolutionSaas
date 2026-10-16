@@ -18,6 +18,7 @@ import {
 	Icon,
 	IconButton,
 	Input,
+	ItemSwitcher,
 	Select,
 	TextArea,
 	describeProblem,
@@ -123,27 +124,30 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 					const problems = result && !result.ok ? errorLines(result.problem) : [];
 					return (
 						<div className="space-y-4">
-							{items.length === 0 ? <p className="text-sm text-muted">{L.none}</p> : null}
-							{items.map((item, index) => (
-								<div key={index} className="space-y-3 rounded-xl bg-surface-2 p-4">
-									<EntryHead
-										label={itemLabel}
-										index={index}
-										count={items.length}
-										onMove={(step) => setDraft(moved(items, index, step))}
-										onRemove={() => setDraft(items.filter((_, at) => at !== index))}
-									/>
-									{render(item, (patch) => set(index, patch))}
-								</div>
-							))}
+							<ItemSwitcher
+								items={items}
+								legend={title}
+								nameOf={(item, index) =>
+									String(item.name ?? item.label ?? item.title ?? '') || `${itemLabel} ${index + 1}`
+								}
+								addLabel={L.add}
+								addDisabled={items.length >= max}
+								onAdd={() => setDraft([...items, blank()])}
+								emptyText={L.none}
+								renderItem={(item, index) => (
+									<div key={index} className="space-y-3 rounded-xl bg-surface-2 p-4">
+										<EntryHead
+											label={itemLabel}
+											index={index}
+											count={items.length}
+											onMove={(step) => setDraft(moved(items, index, step))}
+											onRemove={() => setDraft(items.filter((_, at) => at !== index))}
+										/>
+										{render(item, (patch) => set(index, patch))}
+									</div>
+								)}
+							/>
 							<div className="flex flex-wrap gap-2">
-								<Button
-									size="sm"
-									variant="secondary"
-									disabled={items.length >= max}
-									onClick={() => setDraft([...items, blank()])}>
-									{L.add}
-								</Button>
 								<Button
 									size="sm"
 									disabled={draft === null || (invalid !== undefined && items.some((item) => invalid(clean(item))))}

@@ -38,7 +38,8 @@
 			"description": "One line per language, for example `tl: po salamat ako \"wala po\"` (quoted words count only together). Words in Latin letters under a language written in another script mark that language in Latin letters (<code>-Latn).",
 			"x-ui": {
 				"group": "Detection",
-				"order": 11
+				"order": 11,
+				"advanced": true
 			}
 		},
 		"minMarkers": {
@@ -49,7 +50,8 @@
 			"maximum": 10,
 			"x-ui": {
 				"group": "Detection",
-				"order": 12
+				"order": 12,
+				"advanced": true
 			}
 		},
 		"markerShare": {
@@ -61,7 +63,8 @@
 			"description": "For example 0.15, counted from the number of words below. 0 = off: then one marker word is enough in a message of up to 3 words.",
 			"x-ui": {
 				"group": "Detection",
-				"order": 13
+				"order": 13,
+				"advanced": true
 			}
 		},
 		"minWordsForShare": {
@@ -72,7 +75,8 @@
 			"maximum": 50,
 			"x-ui": {
 				"group": "Detection",
-				"order": 14
+				"order": 14,
+				"advanced": true
 			}
 		},
 		"strict": {
@@ -82,7 +86,8 @@
 			"description": "With the Whole check: a reply must also match the visitor’s language by its share of marker words.",
 			"x-ui": {
 				"group": "Reply check",
-				"order": 22
+				"order": 22,
+				"advanced": true
 			}
 		},
 		"checkMode": {
@@ -93,7 +98,8 @@
 			"description": "Whole: the whole answer must be in the visitor's language. Presence: each part of the answer needs one marker word of the language (or a letter of its script); a language without marker words fails with as many marker words of another language as pick it, or with letters of another script.",
 			"x-ui": {
 				"group": "Reply check",
-				"order": 21
+				"order": 21,
+				"advanced": true
 			}
 		},
 		"acceptLatinFor": {
@@ -107,7 +113,8 @@
 			"description": "Languages written in another script whose replies may also be in Latin letters, and the reverse, for example hi. Latin replies are checked with the marker words of <code>-Latn.",
 			"x-ui": {
 				"group": "Reply check",
-				"order": 23
+				"order": 23,
+				"advanced": true
 			}
 		},
 		"unavailableTexts": {

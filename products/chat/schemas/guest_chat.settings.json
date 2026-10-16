@@ -21,7 +21,8 @@
 			"description": "On: guests have no message limit while the Customer role's sign-in is paused in Accounts (Roles and permissions), as on a website that does not use sign-in. Needs the Accounts token in Connections; a change in Accounts applies within a minute.",
 			"x-ui": {
 				"group": "Limits",
-				"order": 2
+				"order": 2,
+				"advanced": true
 			}
 		},
 		"rememberDays": {
@@ -55,7 +56,8 @@
 			"description": "A device that sends no guest key starts a new guest; more new guests than this from one network address in 15 minutes are refused for a while (too many requests). 0 = no limit (many shoppers can share one mobile network address).",
 			"x-ui": {
 				"group": "Limits",
-				"order": 3
+				"order": 3,
+				"advanced": true
 			}
 		}
 	}

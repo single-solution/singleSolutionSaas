@@ -69,7 +69,8 @@
 			"description": "Off: PDFs are downloads. On: they open in a new tab. HEIC photos, Word, Excel and text files are always downloads.",
 			"x-ui": {
 				"group": "Files",
-				"order": 12
+				"order": 12,
+				"advanced": true
 			}
 		}
 	}

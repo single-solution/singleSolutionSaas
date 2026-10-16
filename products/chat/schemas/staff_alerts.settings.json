@@ -79,7 +79,8 @@
 			"description": "At most this many people get one alert (the list first, then staff and the assigned person).",
 			"x-ui": {
 				"group": "Recipients",
-				"order": 3
+				"order": 3,
+				"advanced": true
 			}
 		},
 		"includePhone": {

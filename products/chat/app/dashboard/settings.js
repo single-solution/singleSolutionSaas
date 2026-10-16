@@ -1,13 +1,14 @@
 'use client';
 /**
- * Settings tab (PLAN 0.8.3 Chat dashboard): the kit's settings forms of the features the viewer may see, grouped in
- * Chat's sections, with the list editors (fallback answers with the Assistant), the tool signing secret, the theme,
- * the Format (with the theme, in Widget look) and the widget texts. A section shows only when one of its features is
- * visible (merchants: switched-on features; admins: all, off ones marked); Widget look always shows, for the Format.
+ * Settings tab (PLAN 0.8.3 Chat dashboard): the kit's settings of the switched-on features, listed by category in the
+ * inner sidebar, with Chat's list editors under the feature they belong to (fallback answers under the Assistant,
+ * tools and the signing secret, booking questions and services, page types and page rules, flows, custom fields,
+ * office hours, tags, topics and priorities, teams, upload types and redaction patterns). The widget texts, theme and
+ * Format are the Texts and Theme & format tabs.
  * @module
  */
-import { Callout, Masonry, Section } from '@ss/ui';
-import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, call, hasSettings, useLoad } from '@ss/ui/dashboard';
+import { Callout } from '@ss/ui';
+import { SettingsTab as SharedSettingsTab, useLoad } from '@ss/ui/dashboard';
 import { LABEL_LISTS } from '../../core/labels.js';
 import { aiLabelShown } from '../../core/widgets.js';
 import {
@@ -29,33 +30,6 @@ import {
 } from './lists.js';
 import { TEXTS } from './texts.js';
 
-/** @typedef {import('@ss/ui/dashboard').FeatureSettings} FeatureSettings */
-/** @typedef {keyof typeof TEXTS.settings.sections} SectionId */
-
-/**
- * Sections in order and the features whose settings forms each shows.
- * @type {Array<{ id: SectionId, features: string[] }>}
- */
-const SECTIONS = [
-	{ id: 'assistant', features: ['ai_replies', 'ai_instructions', 'ai_caps', 'ai_cost_alerts', 'language_lock'] },
-	{ id: 'tools', features: ['webhook_tools', 'book_slot'] },
-	{ id: 'look', features: ['visitor_chat'] },
-	{ id: 'texts', features: [] },
-	{ id: 'guests', features: ['guest_chat', 'signed_in_chat'] },
-	{ id: 'proactive', features: ['proactive_idle', 'proactive_pages', 'proactive_exit'] },
-	{ id: 'flows', features: [] },
-	{ id: 'leads', features: ['leads_flows'] },
-	{ id: 'customFields', features: [] },
-	{ id: 'handoff', features: ['handoff', 'presence_queue'] },
-	{ id: 'inbox', features: ['staff_alerts', 'inbox', 'assignment'] },
-	{ id: 'attachments', features: ['attachments'] },
-	{ id: 'ratings', features: ['ratings'] },
-	{ id: 'transcripts', features: ['transcripts'] },
-	{ id: 'moderation', features: ['moderation'] },
-];
-
-const PLACED = new Set(SECTIONS.flatMap((section) => section.features));
-
 /**
  * The AI label warning (PLAN 0.8.3 AI) on the AI replies card while the label is hidden: Show the AI label off, or
  * Never disclose on (C1).
@@ -69,160 +43,100 @@ export const aiLabelNotice = (key, values) =>
 		</Callout>
 	) : null;
 
-/** @param {import('@ss/ui/dashboard').TabProps} props */
-export function SettingsTab({ websiteId: id }) {
-	const websiteId = /** @type {string} */ (id);
-	const base = `/v1/dashboard/websites/${websiteId}`;
-	const settings = useLoad(`${base}/settings`);
-	const texts = useLoad(`${base}/texts`);
-	const theme = useLoad(`${base}/theme`);
-	const format = useLoad(`${base}/format`);
+/**
+ * The features that are on (and their settings values), from the settings answer the tab has already read.
+ * @param {string} websiteId
+ */
+const useFeatures = (websiteId) => {
+	const settings = useLoad(`/v1/dashboard/websites/${websiteId}/settings`);
+	/** @type {Array<{ key: string, on?: boolean, values: Record<string, { value: unknown }> }>} */
+	const features = settings.answer?.ok ? settings.answer.data.features : [];
+	return {
+		/** @param {string} key */
+		on: (key) => features.some((feature) => feature.key === key && feature.on !== false),
+		/** @param {string} key @param {string} name */
+		value: (key, name) => features.find((feature) => feature.key === key)?.values[name]?.value,
+	};
+};
+
+/** The fallback answers, with the languages of Language lock offered. @param {{ websiteId: string }} props */
+function FallbackAnswers({ websiteId }) {
+	const { on, value } = useFeatures(websiteId);
+	const languages = on('language_lock') ? value('language_lock', 'allowedLanguages') : [];
 	return (
-		<Loaded answer={settings.answer}>
-			{(data) => {
-				/** @type {FeatureSettings[]} */
-				const features = data.features;
-				/** @param {string} key */
-				const seen = (key) => features.find((feature) => feature.key === key) ?? null;
-				/** @param {string} key */
-				const off = (key) => seen(key)?.on === false;
-				/** @param {string[]} keys */
-				const forms = (keys) => (
-					<SettingsForms
-						features={features.filter((feature) => keys.includes(feature.key))}
-						saveUrl={(key) => `${base}/settings/${encodeURIComponent(key)}`}
-						resetBody={false}
-						savedSource="website"
-						reload={settings.reload}
-						notice={aiLabelNotice}
-					/>
-				);
-				/** @param {string} key */
-				const on = (key) => seen(key) !== null && !off(key);
-				/** Language lock's languages, offered for fallback answers. */
-				const languages = on('language_lock') ? seen('language_lock')?.values.allowedLanguages?.value : [];
-				/** @type {Record<SectionId, import('react').ReactNode>} */
-				const extras = {
-					assistant: seen('fallback_answers') ? (
-						<FallbackAnswersEditor
-							websiteId={websiteId}
-							off={off('fallback_answers')}
-							languages={Array.isArray(languages) ? languages.map(String) : []}
-							on={on}
-						/>
-					) : null,
-					tools:
-						seen('webhook_tools') || seen('book_slot') ? (
-							<>
-								{seen('webhook_tools') ? <ToolsEditor websiteId={websiteId} off={off('webhook_tools')} /> : null}
-								{seen('book_slot') ? (
-									<>
-										<BookingQuestionsEditor websiteId={websiteId} off={off('book_slot')} />
-										<BookingServicesEditor websiteId={websiteId} off={off('book_slot')} />
-									</>
-								) : null}
-								<ToolSecret websiteId={websiteId} />
-							</>
-						) : null,
-					look: (
-						<>
-							{seen('visitor_chat') ? (
-								<Loaded answer={theme.answer}>
-									{(found) => (
-										<ThemeForm
-											theme={found.theme}
-											save={(next) => call('PUT', `${base}/theme`, next)}
-											reload={theme.reload}
-										/>
-									)}
-								</Loaded>
-							) : null}
-							<Loaded answer={format.answer}>
-								{(found) => (
-									<FormatForm
-										format={found.format}
-										save={(next) => call('PUT', `${base}/format`, next)}
-										reload={format.reload}
-									/>
-								)}
-							</Loaded>
-						</>
-					),
-					texts: (
-						<Loaded answer={texts.answer}>
-							{(found) => (
-								<TextsForm
-									texts={found.texts}
-									saveUrl={(key) => `${base}/texts/${encodeURIComponent(key)}`}
-									resetBody={false}
-									savedSource="website"
-									reload={texts.reload}
-								/>
-							)}
-						</Loaded>
-					),
-					guests: null,
-					proactive:
-						seen('visitor_chat') || seen('proactive_pages') ? (
-							<>
-								{seen('visitor_chat') ? <PageTypesEditor websiteId={websiteId} off={off('visitor_chat')} /> : null}
-								{seen('proactive_pages') ? <PageRulesEditor websiteId={websiteId} off={off('proactive_pages')} /> : null}
-							</>
-						) : null,
-					flows: seen('leads_flows') ? (
-						<FlowsEditor websiteId={websiteId} off={off('leads_flows')} customFields={seen('custom_fields') !== null} />
-					) : null,
-					leads: null,
-					customFields: seen('custom_fields') ? (
-						<CustomFieldsEditor websiteId={websiteId} off={off('custom_fields')} />
-					) : null,
-					handoff: seen('handoff') ? (
-						<>
-							<OfficeHoursEditor websiteId={websiteId} off={off('handoff')} />
-							<OfficeExceptionsEditor websiteId={websiteId} off={off('handoff')} />
-						</>
-					) : null,
-					inbox:
-						seen('inbox') || seen('assignment') ? (
-							<>
-								{seen('inbox')
-									? LABEL_LISTS.map((list) => (
-											<LabelsEditor key={list} websiteId={websiteId} list={list} off={off('inbox')} />
-										))
-									: null}
-								{seen('assignment') ? <TeamsEditor websiteId={websiteId} off={off('assignment')} /> : null}
-							</>
-						) : null,
-					attachments: seen('attachments') ? <UploadTypesEditor websiteId={websiteId} off={off('attachments')} /> : null,
-					ratings: null,
-					transcripts: seen('transcripts') ? <Callout tone="info">{TEXTS.settings.transcriptsNote}</Callout> : null,
-					moderation: seen('moderation') ? <RedactionPatternsEditor websiteId={websiteId} off={off('moderation')} /> : null,
-					other: null,
-				};
-				const others = features.filter((feature) => !PLACED.has(feature.key) && hasSettings(feature));
-				const shown = [
-					...SECTIONS.filter(
-						(section) =>
-							extras[section.id] !== null || features.some((f) => section.features.includes(f.key) && hasSettings(f)),
-					),
-					...(others.length > 0 ? [{ id: /** @type {SectionId} */ ('other'), features: others.map((f) => f.key) }] : []),
-				];
-				return (
-					<div className="space-y-6">
-						{shown.map((section) => (
-							<Section
-								key={section.id}
-								title={TEXTS.settings.sections[section.id].title}
-								description={TEXTS.settings.sections[section.id].help}>
-								<Masonry wideAlone>
-									{forms(section.features)}
-									{extras[section.id]}
-								</Masonry>
-							</Section>
-						))}
-					</div>
-				);
-			}}
-		</Loaded>
+		<FallbackAnswersEditor
+			websiteId={websiteId}
+			off={false}
+			languages={Array.isArray(languages) ? languages.map(String) : []}
+			on={on}
+		/>
 	);
+}
+
+/** The flows, with Custom fields offered as steps while it is on. @param {{ websiteId: string }} props */
+function Flows({ websiteId }) {
+	const { on } = useFeatures(websiteId);
+	return <FlowsEditor websiteId={websiteId} off={false} customFields={on('custom_fields')} />;
+}
+
+/**
+ * Chat's list editors, each under its feature (a feature that is off is not listed).
+ * @param {string} websiteId
+ * @returns {Record<string, import('@ss/ui/dashboard').FeatureExtra>}
+ */
+const extrasOf = (websiteId) => ({
+	fallback_answers: <FallbackAnswers websiteId={websiteId} />,
+	webhook_tools: {
+		items: [
+			{ id: 'tools', label: TEXTS.lists.tools.title, content: <ToolsEditor websiteId={websiteId} off={false} /> },
+			{ id: 'secret', label: TEXTS.secret.title, content: <ToolSecret websiteId={websiteId} /> },
+		],
+	},
+	book_slot: {
+		items: [
+			{
+				id: 'questions',
+				label: TEXTS.lists.bookingQuestions.title,
+				content: <BookingQuestionsEditor websiteId={websiteId} off={false} />,
+			},
+			{
+				id: 'services',
+				label: TEXTS.lists.bookingServices.title,
+				content: <BookingServicesEditor websiteId={websiteId} off={false} />,
+			},
+		],
+	},
+	visitor_chat: {
+		items: [
+			{ id: 'page-types', label: TEXTS.lists.pageTypes.title, content: <PageTypesEditor websiteId={websiteId} off={false} /> },
+		],
+	},
+	proactive_pages: <PageRulesEditor websiteId={websiteId} off={false} />,
+	leads_flows: <Flows websiteId={websiteId} />,
+	custom_fields: <CustomFieldsEditor websiteId={websiteId} off={false} />,
+	handoff: {
+		items: [
+			{ id: 'hours', label: TEXTS.lists.officeHours.title, content: <OfficeHoursEditor websiteId={websiteId} off={false} /> },
+			{
+				id: 'exceptions',
+				label: TEXTS.lists.officeExceptions.title,
+				content: <OfficeExceptionsEditor websiteId={websiteId} off={false} />,
+			},
+		],
+	},
+	inbox: {
+		items: LABEL_LISTS.map((list) => ({
+			id: list,
+			label: TEXTS.lists.labels[list].title,
+			content: <LabelsEditor websiteId={websiteId} list={list} off={false} />,
+		})),
+	},
+	assignment: <TeamsEditor websiteId={websiteId} off={false} />,
+	attachments: <UploadTypesEditor websiteId={websiteId} off={false} />,
+	moderation: <RedactionPatternsEditor websiteId={websiteId} off={false} />,
+});
+
+/** @param {import('@ss/ui/dashboard').TabProps} props */
+export function SettingsTab(props) {
+	return <SharedSettingsTab {...props} notice={aiLabelNotice} extras={extrasOf(String(props.websiteId))} />;
 }

@@ -10,7 +10,8 @@
 			"maximum": 1,
 			"x-ui": {
 				"group": "Limits",
-				"order": 20
+				"order": 20,
+				"advanced": true
 			}
 		},
 		"maxOutputTokens": {
@@ -21,7 +22,8 @@
 			"maximum": 4000,
 			"x-ui": {
 				"group": "Limits",
-				"order": 21
+				"order": 21,
+				"advanced": true
 			}
 		},
 		"showAiLabel": {
@@ -132,7 +134,8 @@
 			"description": "With Never say it is a bot, an answer holding one of these (whole words, case and accents aside) is asked again once. Add the phrases of each language your AI answers in.",
 			"x-ui": {
 				"group": "AI disclosure",
-				"order": 12
+				"order": 12,
+				"advanced": true
 			}
 		},
 		"bubbles": {

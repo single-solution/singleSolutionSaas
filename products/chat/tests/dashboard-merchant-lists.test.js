@@ -98,6 +98,12 @@ const button = (root, text) => {
 /** The options of a select, as shown. @param {HTMLInputElement} select */
 const optionsOf = (select) => [.../** @type {HTMLSelectElement} */ (/** @type {unknown} */ (select)).options].map((o) => o.text);
 
+/** The entry tabs. @param {ParentNode} root */
+const tabs = (root) => /** @type {HTMLElement[]} */ ([...root.querySelectorAll('[role="tab"]')]);
+
+/** Shows the `index`-th entry (one entry is shown at a time). @param {ParentNode} root @param {number} index */
+const pick = (root, index) => click(/** @type {HTMLElement} */ (tabs(root)[index]));
+
 /** Save the list and let it answer. @param {ParentNode} root */
 const save = async (root) => {
 	click(button(root, 'Save list'));
@@ -125,9 +131,9 @@ describe('office hours and their exceptions (C9)', () => {
 		]);
 		expect(field(container, 'Opens').value).toBe('09:30');
 		click(button(container, 'Add'));
-		type(field(container, 'Day', 1), '7');
-		type(field(container, 'Opens', 1), '22:00');
-		type(field(container, 'Closes', 1), '02:15');
+		type(field(container, 'Day'), '7');
+		type(field(container, 'Opens'), '22:00');
+		type(field(container, 'Closes'), '02:15');
 		await save(container);
 		expect(saved.office_hours).toEqual([
 			[
@@ -137,7 +143,8 @@ describe('office hours and their exceptions (C9)', () => {
 		]);
 		expect(container.textContent).toContain('Saved');
 		// a bad time is refused with the server's words
-		type(field(container, 'Closes', 0), '25:00');
+		pick(container, 0);
+		type(field(container, 'Closes'), '25:00');
 		await save(container);
 		expect(container.textContent).toContain('Window 1: a day from 1 (Monday) to 7 (Sunday)');
 	});
@@ -152,13 +159,9 @@ describe('office hours and their exceptions (C9)', () => {
 		type(field(container, 'Name'), ' Holiday ');
 		expect(container.textContent).toContain('Closed all day.');
 		click(button(container, 'Add'));
-		type(field(container, 'Date', 1), '2026-12-24');
+		type(field(container, 'Date'), '2026-12-24');
 		// the second date's own window
-		click(
-			/** @type {HTMLButtonElement} */ (
-				[...container.querySelectorAll('button')].filter((b) => b.textContent === 'Add window')[1]
-			),
-		);
+		click(button(container, 'Add window'));
 		type(field(container, 'Closes'), '12:30');
 		await save(container);
 		expect(saved.office_exceptions).toEqual([
@@ -175,25 +178,20 @@ describe('page types (C6)', () => {
 		serve();
 		const { container } = render(inDashboard(<PageTypesEditor websiteId={WEBSITE} />));
 		await settle();
-		expect([0, 1, 2, 3].map((index) => field(container, 'Name', index).value)).toEqual([
-			'Product page',
-			'Category page',
-			'Deals page',
-			'Cart',
-		]);
-		type(field(container, 'Name', 3), 'Basket');
-		type(field(container, 'Idle nudge', 0), 'Still deciding on {product}?');
+		expect(tabs(container).map((tab) => tab.textContent)).toEqual(['Product page', 'Category page', 'Deals page', 'Cart']);
+		pick(container, 3);
+		type(field(container, 'Name'), 'Basket');
+		pick(container, 0);
+		type(field(container, 'Idle nudge'), 'Still deciding on {product}?');
 		click(button(container, 'Add'));
-		type(field(container, 'Key', 4), 'menu');
-		type(field(container, 'Name', 4), 'Menu');
-		type(field(container, 'Path pattern', 4), '/menu/**');
+		type(field(container, 'Key'), 'menu');
+		type(field(container, 'Name'), 'Menu');
+		type(field(container, 'Path pattern'), '/menu/**');
 		// the deals page goes, the menu moves up one
-		click(
-			/** @type {HTMLButtonElement} */ (
-				[...container.querySelectorAll('button')].filter((b) => b.textContent === 'Remove')[2]
-			),
-		);
-		click(/** @type {HTMLButtonElement} */ ([...container.querySelectorAll('button[aria-label="Move up"]')][3]));
+		pick(container, 2);
+		click(button(container, 'Remove'));
+		pick(container, 3);
+		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="Move up"]')));
 		await save(container);
 		expect(saved.page_types).toEqual([
 			[
@@ -204,7 +202,8 @@ describe('page types (C6)', () => {
 			],
 		]);
 		// other is the type of pages that match none
-		type(field(container, 'Key', 0), 'other');
+		pick(container, 0);
+		type(field(container, 'Key'), 'other');
 		await save(container);
 		expect(container.textContent).toContain('Page type 1: a unique key');
 	});
@@ -215,24 +214,23 @@ describe('upload types (C11)', () => {
 		serve();
 		const { container } = render(inDashboard(<UploadTypesEditor websiteId={WEBSITE} />));
 		await settle();
-		expect([0, 1, 2, 3, 4].map((index) => field(container, 'Type', index).value)).toEqual([
-			'image/jpeg',
-			'image/png',
-			'image/webp',
-			'image/gif',
-			'application/pdf',
-		]);
+		expect(
+			[0, 1, 2, 3, 4].map((index) => {
+				pick(container, index);
+				return field(container, 'Type').value;
+			}),
+		).toEqual(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']);
 		expect(optionsOf(field(container, 'Type'))).toContain('HEIC photo (image/heic)');
 		expect(optionsOf(field(container, 'Type'))).toContain('Ogg audio (voice notes) (audio/ogg)');
 		click(button(container, 'Add'));
-		type(field(container, 'Type', 5), 'video/quicktime');
-		type(field(container, 'Largest file (MB)', 5), '60');
+		type(field(container, 'Type'), 'video/quicktime');
+		type(field(container, 'Largest file (MB)'), '60');
 		await save(container);
 		expect(saved.upload_types?.[0]?.slice(4)).toEqual([
 			{ type: 'application/pdf', maxMb: 5 },
 			{ type: 'video/quicktime', maxMb: 60 },
 		]);
-		type(field(container, 'Largest file (MB)', 5), '500');
+		type(field(container, 'Largest file (MB)'), '500');
 		await save(container);
 		expect(container.textContent).toContain('File type 6: the largest file as whole MB, 1–100.');
 	});
@@ -243,13 +241,13 @@ describe('booking questions and services (C10)', () => {
 		serve();
 		const questions = render(inDashboard(<BookingQuestionsEditor websiteId={WEBSITE} />)).container;
 		await settle();
-		expect([0, 1, 2].map((index) => field(questions, 'Question', index).value)).toEqual(['Name', 'Email', 'Phone']);
-		expect(field(questions, 'Required', 0).checked).toBe(true);
+		expect(tabs(questions).map((tab) => tab.textContent)).toEqual(['Name', 'Email', 'Phone']);
+		expect(field(questions, 'Required').checked).toBe(true);
 		click(button(questions, 'Add'));
-		type(field(questions, 'Key', 3), 'seating');
-		type(field(questions, 'Question', 3), 'Seating');
-		type(field(questions, 'Answer', 3), 'choice');
-		type(field(questions, 'Options', 0), 'Inside\n\nTerrace ');
+		type(field(questions, 'Key'), 'seating');
+		type(field(questions, 'Question'), 'Seating');
+		type(field(questions, 'Answer'), 'choice');
+		type(field(questions, 'Options'), 'Inside\n\nTerrace ');
 		await save(questions);
 		expect(saved.booking_questions?.[0]?.[3]).toEqual({
 			key: 'seating',
@@ -275,7 +273,7 @@ describe('tags, topics and priorities (C7)', () => {
 		serve();
 		const priorities = render(inDashboard(<LabelsEditor websiteId={WEBSITE} list="priorities" />)).container;
 		await settle();
-		expect([0, 1, 2, 3].map((index) => field(priorities, 'Name', index).value)).toEqual(['Urgent', 'High', 'Normal', 'Low']);
+		expect(tabs(priorities).map((tab) => tab.textContent)).toEqual(['Urgent', 'High', 'Normal', 'Low']);
 		cleanup();
 		const tags = render(inDashboard(<LabelsEditor websiteId={WEBSITE} list="tags" />)).container;
 		await settle();
