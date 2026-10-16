@@ -147,6 +147,25 @@ describe('dashboard API', () => {
 		expect(await call('GET', '/a')).toEqual({ ok: false, problem: { status: 502 } });
 	});
 
+	it('a resource that failed to load shows Try again, which loads it again and shows the content', async () => {
+		let calls = 0;
+		serve({ 'GET /flaky': () => (calls++ === 0 ? { status: 503, body: null } : ok({ n: 7 })) });
+		function Probe() {
+			const loaded = useLoad('/flaky');
+			return <Loaded answer={loaded.answer}>{(data) => `n=${data.n}`}</Loaded>;
+		}
+		const view = render(inDashboard(<Probe />));
+		await settle();
+		expect(view.container.textContent).toContain(TEXTS.failed);
+		expect(view.container.querySelector('[role="alert"]')).not.toBeNull();
+		await act(async () => byText(view.container, TEXTS.tryAgain, 'button').click());
+		await settle();
+		expect(view.container.textContent).toBe('n=7');
+		// a failed answer without a way to fetch again (a save, say) shows no button
+		view.rerender(inDashboard(<Loaded answer={{ ok: false, problem: { status: 503 } }}>{() => 'content'}</Loaded>));
+		expect(view.container.querySelector('button')).toBeNull();
+	});
+
 	it('loads a resource, shows its last answer at once when opened again, reloads, and loads nothing for null', async () => {
 		let round = 0;
 		serve({ 'GET /cached': () => ok({ round: (round += 1) }), 'GET /other': ok({ other: true }) });

@@ -7,7 +7,10 @@
 import { startTransition, useCallback, useEffect, useState } from 'react';
 import { useNavigationProgress } from './motion.js';
 
-/** @typedef {{ ok: true, data: any } | { ok: false, problem: any }} Answer */
+/**
+ * @typedef {{ ok: true, data: any } | { ok: false, problem: any, retry?: () => void }} Answer a failed answer from
+ *   `useLoad` carries `retry`, which fetches the resource again (`Loaded` offers it as Try again)
+ */
 
 /**
  * One call to the dashboard API. A product that does not answer gives a 503 problem, which `describeProblem` words
@@ -70,7 +73,8 @@ export const useLoad = (path) => {
 		};
 	}, [path, round]);
 	const reload = useCallback(() => setRound((n) => n + 1), []);
-	return { answer: current.answer, reload };
+	const answer = current.answer && !current.answer.ok ? { ...current.answer, retry: reload } : current.answer;
+	return { answer, reload };
 };
 
 /**

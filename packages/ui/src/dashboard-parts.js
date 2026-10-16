@@ -102,13 +102,29 @@ export const withDependents = (features, on, key) => {
 };
 
 /**
- * Its skeleton while loading (`skeleton`, else a few lines), the problem when it failed, else the content (it fades in).
+ * Its skeleton while loading (`skeleton`, else a few lines), the problem when it failed (with Try again when the answer
+ * can be fetched again), else the content (it fades in).
  * @param {{ answer: Answer | null, skeleton?: ReactNode, children: (data: any) => ReactNode }} props
  */
 export function Loaded({ answer, skeleton, children }) {
 	const { texts } = useDashboard();
 	if (!answer) return skeleton ?? <Skeleton lines={3} label={texts.loading} />;
-	if (!answer.ok) return <ErrorState title={texts.failed} message={describeProblem(answer.problem)} />;
+	if (!answer.ok)
+		return (
+			<ErrorState
+				title={texts.failed}
+				message={describeProblem(answer.problem)}
+				{...(answer.retry
+					? {
+							action: (
+								<Button variant="secondary" onClick={answer.retry}>
+									{texts.tryAgain}
+								</Button>
+							),
+						}
+					: {})}
+			/>
+		);
 	// fades and slides in when it replaces the skeleton; a refresh of shown content changes it in place
 	return (
 		<ViewTransition enter="ss-vt-enter" default="none">

@@ -8,6 +8,7 @@ export const DASHBOARD_TEXTS = Object.freeze({
 	loading: 'Loading…',
 	signedOut: 'Open this dashboard from the Portal.',
 	failed: 'This could not be loaded.',
+	tryAgain: 'Try again',
 	backToPortal: 'Back to Portal',
 	pickWebsite: 'Pick a website',
 	website: 'Website',
