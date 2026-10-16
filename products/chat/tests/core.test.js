@@ -542,7 +542,12 @@ describe('shop', () => {
 			'KWD 1.250',
 		]);
 		const look = {
-			format: { locale: 'en-GB', currencyDisplay: /** @type {const} */ ('symbol'), currencySymbols: { SEK: 'kr' }, wholeUnits: true },
+			format: {
+				locale: 'en-GB',
+				currencyDisplay: /** @type {const} */ ('symbol'),
+				currencySymbols: { SEK: 'kr' },
+				wholeUnits: true,
+			},
 			timeZone: 'Europe/Stockholm',
 		};
 		expect(quoted(125000, 'SEK', look)).toBe('kr 1,250');

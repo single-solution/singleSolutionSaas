@@ -41,9 +41,9 @@ describe('the website Setup sheet', () => {
 		expect(adviseFeatures(features, { messages: ['sms'], languages: ['en'] }).recommended.map((e) => e.feature)).toEqual([
 			'sms',
 		]);
-		expect(
-			adviseFeatures(features, { messages: ['none'], languages: ['en', 'fr'] }).recommended.map((e) => e.feature),
-		).toEqual([]);
+		expect(adviseFeatures(features, { messages: ['none'], languages: ['en', 'fr'] }).recommended.map((e) => e.feature)).toEqual(
+			[],
+		);
 	});
 
 	it('answers its part: the OpenAPI document, the channels on, the webhook events and URLs by host, what to build', async () => {
