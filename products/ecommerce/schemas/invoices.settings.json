@@ -6,13 +6,21 @@
 			"type": "string",
 			"title": "Invoice title",
 			"default": "Invoice",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Basics",
+				"order": 1
+			}
 		},
 		"packingSlipTitle": {
 			"type": "string",
 			"title": "Packing slip title",
 			"default": "Packing slip",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Basics",
+				"order": 6
+			}
 		},
 		"columns": {
 			"type": "array",
@@ -22,6 +30,10 @@
 			"items": {
 				"type": "string",
 				"maxLength": 130
+			},
+			"x-ui": {
+				"group": "Basics",
+				"order": 3
 			}
 		},
 		"sellerDetails": {
@@ -31,7 +43,9 @@
 			"default": "",
 			"maxLength": 1000,
 			"x-ui": {
-				"widget": "textarea"
+				"widget": "textarea",
+				"group": "Basics",
+				"order": 4
 			}
 		},
 		"footer": {
@@ -41,214 +55,352 @@
 			"default": "",
 			"maxLength": 2000,
 			"x-ui": {
-				"widget": "textarea"
+				"widget": "textarea",
+				"group": "Basics",
+				"order": 5
 			}
 		},
 		"labelNumber": {
 			"type": "string",
 			"title": "Label: Invoice no.",
 			"default": "Invoice no.",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Page and item labels",
+				"order": 101
+			}
 		},
 		"labelDate": {
 			"type": "string",
 			"title": "Label: Date",
 			"default": "Date",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Page and item labels",
+				"order": 102
+			}
 		},
 		"labelBilledTo": {
 			"type": "string",
 			"title": "Label: Billed to",
 			"default": "Billed to",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Page and item labels",
+				"order": 103
+			}
 		},
 		"labelShipTo": {
 			"type": "string",
 			"title": "Label: Ship to",
 			"default": "Ship to",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Page and item labels",
+				"order": 104
+			}
 		},
 		"labelItem": {
 			"type": "string",
 			"title": "Label: Item",
 			"default": "Item",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Page and item labels",
+				"order": 106
+			}
 		},
 		"labelSku": {
 			"type": "string",
 			"title": "Label: SKU",
 			"default": "SKU",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Page and item labels",
+				"order": 107
+			}
 		},
 		"labelGrade": {
 			"type": "string",
 			"title": "Label: Grade",
 			"default": "Grade",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Page and item labels",
+				"order": 108
+			}
 		},
 		"labelSerials": {
 			"type": "string",
 			"title": "Label: Serial numbers",
 			"default": "Serial numbers",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Page and item labels",
+				"order": 109
+			}
 		},
 		"labelWarranty": {
 			"type": "string",
 			"title": "Label: Warranty",
 			"description": "With {time}, the warranty the line kept when it was ordered, as typed (30 days, 1 year).",
 			"default": "Warranty: {time}",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Page and item labels",
+				"order": 110
+			}
 		},
 		"labelQuantity": {
 			"type": "string",
 			"title": "Label: Qty",
 			"default": "Qty",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Page and item labels",
+				"order": 111
+			}
 		},
 		"labelUnitPrice": {
 			"type": "string",
 			"title": "Label: Unit price",
 			"default": "Unit price",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Page and item labels",
+				"order": 112
+			}
 		},
 		"labelAmount": {
 			"type": "string",
 			"title": "Label: Amount",
 			"default": "Amount",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Page and item labels",
+				"order": 113
+			}
 		},
 		"labelSubtotal": {
 			"type": "string",
 			"title": "Label: Subtotal",
 			"default": "Subtotal",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Totals labels",
+				"order": 201
+			}
 		},
 		"labelDiscount": {
 			"type": "string",
 			"title": "Label: Discount",
 			"default": "Discount",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Totals labels",
+				"order": 202
+			}
 		},
 		"labelDelivery": {
 			"type": "string",
 			"title": "Label: Delivery",
 			"default": "Delivery",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Totals labels",
+				"order": 205
+			}
 		},
 		"labelTax": {
 			"type": "string",
 			"title": "Label: Tax",
 			"default": "Tax",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Totals labels",
+				"order": 207
+			}
 		},
 		"labelTaxIncluded": {
 			"type": "string",
 			"title": "Label: Tax included",
 			"default": "Tax included",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Totals labels",
+				"order": 208
+			}
 		},
 		"labelTotal": {
 			"type": "string",
 			"title": "Label: Total",
 			"default": "Total",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Totals labels",
+				"order": 209
+			}
 		},
 		"labelPayment": {
 			"type": "string",
 			"title": "Label: Payment",
 			"default": "Payment",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Payment and delivery labels",
+				"order": 301
+			}
 		},
 		"labelPaid": {
 			"type": "string",
 			"title": "Label: Paid",
 			"default": "Paid",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Payment and delivery labels",
+				"order": 303
+			}
 		},
 		"labelRefunded": {
 			"type": "string",
 			"title": "Label: Refunded",
 			"default": "Refunded",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Payment and delivery labels",
+				"order": 304
+			}
 		},
 		"labelBalance": {
 			"type": "string",
 			"title": "Label: Balance due",
 			"default": "Balance due",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Payment and delivery labels",
+				"order": 306
+			}
 		},
 		"labelPickup": {
 			"type": "string",
 			"title": "Label: Store pickup",
 			"default": "Store pickup",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Payment and delivery labels",
+				"order": 308
+			}
 		},
 		"labelCourier": {
 			"type": "string",
 			"title": "Label: Courier",
 			"default": "Courier",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Payment and delivery labels",
+				"order": 309
+			}
 		},
 		"labelTracking": {
 			"type": "string",
 			"title": "Label: Tracking number",
 			"default": "Tracking number",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Payment and delivery labels",
+				"order": 310
+			}
 		},
 		"labelNote": {
 			"type": "string",
 			"title": "Label: Note",
 			"default": "Note",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Page and item labels",
+				"order": 105
+			}
 		},
 		"shopperFrom": {
 			"type": "string",
 			"title": "Shoppers get their invoice",
 			"description": "Placed: as soon as the order is placed. Confirmed: once it is confirmed.",
 			"default": "placed",
-			"enum": ["placed", "confirmed"]
+			"enum": ["placed", "confirmed"],
+			"x-ui": {
+				"group": "Basics",
+				"order": 2
+			}
 		},
 		"labelFee": {
 			"type": "string",
 			"title": "Label: Cash handling",
 			"default": "Cash handling",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Totals labels",
+				"order": 206
+			}
 		},
 		"labelRoleDiscount": {
 			"type": "string",
 			"title": "Label: Member discount",
 			"default": "Member discount",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Totals labels",
+				"order": 203
+			}
 		},
 		"labelPoints": {
 			"type": "string",
 			"title": "Label: Points",
 			"default": "Points ({points})",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Totals labels",
+				"order": 204
+			}
 		},
 		"labelCashDue": {
 			"type": "string",
 			"title": "Label: Cash due on delivery",
 			"default": "Cash due on delivery",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Payment and delivery labels",
+				"order": 307
+			}
 		},
 		"labelPayments": {
 			"type": "string",
 			"title": "Label: Payments",
 			"default": "Payments",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Payment and delivery labels",
+				"order": 302
+			}
 		},
 		"labelRefunds": {
 			"type": "string",
 			"title": "Label: Refunds",
 			"default": "Refunds",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Payment and delivery labels",
+				"order": 305
+			}
 		},
 		"pickListTitle": {
 			"type": "string",
 			"title": "Pick list title",
 			"default": "Pick list",
-			"maxLength": 80
+			"maxLength": 80,
+			"x-ui": {
+				"group": "Basics",
+				"order": 7
+			}
 		}
 	}
 }

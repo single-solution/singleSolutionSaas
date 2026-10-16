@@ -7,63 +7,99 @@
 			"title": "Currency",
 			"description": "The shop's currency: an ISO 4217 code (USD, EUR, JPY …). Every price is in it.",
 			"default": "USD",
-			"maxLength": 3
+			"maxLength": 3,
+			"x-ui": {
+				"group": "Basics",
+				"order": 1
+			}
 		},
 		"productUrl": {
 			"type": "string",
 			"title": "Product page address",
 			"description": "Where a product's page is on your website: a path with {slug} (or {id}), and optionally {category} (its first category's slug), {categoryPath} (that category's slugs from the top) and {brand}; for example /{category}/{slug}.",
 			"default": "/products/{slug}",
-			"maxLength": 200
+			"maxLength": 200,
+			"x-ui": {
+				"group": "Page addresses",
+				"order": 11
+			}
 		},
 		"categoryUrl": {
 			"type": "string",
 			"title": "Category page address",
 			"description": "Where a category's page is on your website: a path with {slug}, or {path} (its slugs from the top category), for example /categories/{slug}.",
 			"default": "/categories/{slug}",
-			"maxLength": 200
+			"maxLength": 200,
+			"x-ui": {
+				"group": "Page addresses",
+				"order": 12
+			}
 		},
 		"variantQuery": {
 			"type": "string",
 			"title": "Variant address",
 			"description": "What is added to a product's address to open one variant: {grade} and {attributes} (the variant's slug=value pairs of the fields shown on the product page), for example grade={grade}&{attributes}. Empty: variants have no address of their own.",
 			"default": "",
-			"maxLength": 200
+			"maxLength": 200,
+			"x-ui": {
+				"group": "Page addresses",
+				"order": 14
+			}
 		},
 		"retiredUrl": {
 			"type": "string",
 			"title": "Archived products",
 			"description": "Where an archived product's address leads when it names no replacement: nowhere (not found), or its category's page. Search engines treat many old addresses sent to one broad page as soft 404s: prefer a replacement for products with a near match.",
 			"default": "none",
-			"enum": ["none", "category"]
+			"enum": ["none", "category"],
+			"x-ui": {
+				"group": "Page addresses",
+				"order": 13
+			}
 		},
 		"mediaBaseUrl": {
 			"type": "string",
 			"title": "Public address of your images",
 			"description": "The public https address your storage or CDN serves your files from (for example https://cdn.shop.example.com): images then have lasting addresses everywhere, browsers keep them, and pages load faster. Set it right after connecting storage (a public bucket or a CDN in front of it). Empty: the shop's widgets show images through short-lived signed links, and search engines, sitemaps and feeds get your website's media addresses (Media path).",
 			"default": "",
-			"maxLength": 300
+			"maxLength": 300,
+			"x-ui": {
+				"group": "Page addresses",
+				"order": 15
+			}
 		},
 		"mediaPath": {
 			"type": "string",
 			"title": "Media path",
 			"description": "While the public address is empty, the path on your website that serves your images to search engines and shopping catalogs: their addresses are https://<your domain><path>/<signature>/<file>, and they never change. Serve the path with the media route in the docs (it fetches each file through GET /v1/media).",
 			"default": "/media",
-			"maxLength": 100
+			"maxLength": 100,
+			"x-ui": {
+				"group": "Page addresses",
+				"order": 16
+			}
 		},
 		"weightUnit": {
 			"type": "string",
 			"title": "Package weight unit",
 			"description": "The unit staff type and read package weights in (kept in grams for couriers and feeds).",
 			"default": "g",
-			"enum": ["g", "kg", "oz", "lb"]
+			"enum": ["g", "kg", "oz", "lb"],
+			"x-ui": {
+				"group": "Units and uploads",
+				"order": 31
+			}
 		},
 		"sizeUnit": {
 			"type": "string",
 			"title": "Package size unit",
 			"description": "The unit staff type and read package lengths, widths and heights in (kept in millimeters).",
 			"default": "mm",
-			"enum": ["mm", "cm", "in"]
+			"enum": ["mm", "cm", "in"],
+			"x-ui": {
+				"group": "Units and uploads",
+				"order": 32
+			}
 		},
 		"pageSize": {
 			"type": "integer",
@@ -71,7 +107,11 @@
 			"description": "How many products the product grid shows at a time (1 to 60).",
 			"default": 24,
 			"minimum": 1,
-			"maximum": 60
+			"maximum": 60,
+			"x-ui": {
+				"group": "Basics",
+				"order": 2
+			}
 		},
 		"lowStock": {
 			"type": "integer",
@@ -79,14 +119,22 @@
 			"description": "A variant still for sale with 1 to this many units counts as low on stock (archived products and variants marked sold out are left out): the products list's low-stock filter and counts, and Shop health. 0: no variant is low.",
 			"default": 3,
 			"minimum": 0,
-			"maximum": 1000000
+			"maximum": 1000000,
+			"x-ui": {
+				"group": "Basics",
+				"order": 5
+			}
 		},
 		"topBasis": {
 			"type": "string",
 			"title": "Top products count",
 			"description": "What ranks products as top (the top sort, Chat's top products and llms.txt): delivered units, or the units of orders placed and not canceled, open ones included.",
 			"default": "delivered",
-			"enum": ["delivered", "ordered"]
+			"enum": ["delivered", "ordered"],
+			"x-ui": {
+				"group": "Basics",
+				"order": 6
+			}
 		},
 		"imageMaxBytes": {
 			"type": "integer",
@@ -94,14 +142,22 @@
 			"description": "The largest product, category or brand image that can be uploaded, in bytes.",
 			"default": 5242880,
 			"minimum": 100000,
-			"maximum": 20971520
+			"maximum": 20971520,
+			"x-ui": {
+				"group": "Units and uploads",
+				"order": 33
+			}
 		},
 		"showStock": {
 			"type": "string",
 			"title": "Show stock to shoppers",
 			"description": "Whether shoppers see how many units are left: never, only when few are left, or always.",
 			"default": "none",
-			"enum": ["none", "low", "always"]
+			"enum": ["none", "low", "always"],
+			"x-ui": {
+				"group": "Basics",
+				"order": 3
+			}
 		},
 		"lowStockShown": {
 			"type": "integer",
@@ -109,7 +165,11 @@
 			"description": "With Show stock set to only when few are left, the number of units left is shown at this many or fewer.",
 			"default": 5,
 			"minimum": 1,
-			"maximum": 1000
+			"maximum": 1000,
+			"x-ui": {
+				"group": "Basics",
+				"order": 4
+			}
 		},
 		"videoMaxBytes": {
 			"type": "integer",
@@ -117,35 +177,55 @@
 			"description": "The largest product video (MP4 or WebM) that can be uploaded, in bytes.",
 			"default": 67108864,
 			"minimum": 1000000,
-			"maximum": 209715200
+			"maximum": 209715200,
+			"x-ui": {
+				"group": "Units and uploads",
+				"order": 34
+			}
 		},
 		"search": {
 			"type": "string",
 			"title": "Search",
 			"description": "Basic search matches every word; Atlas Search is fuzzy and ranked, and needs the search index described in the docs on your database (MongoDB Atlas). If the index is missing, basic search answers and Overview says so.",
 			"default": "basic",
-			"enum": ["basic", "atlas"]
+			"enum": ["basic", "atlas"],
+			"x-ui": {
+				"group": "Search",
+				"order": 21
+			}
 		},
 		"chatSearch": {
 			"type": "string",
 			"title": "Search for Chat",
 			"description": "How Chat's product lookups search: as the shop (Search above), basic, or Atlas Search (the same index).",
 			"default": "same",
-			"enum": ["same", "basic", "atlas"]
+			"enum": ["same", "basic", "atlas"],
+			"x-ui": {
+				"group": "Search",
+				"order": 23
+			}
 		},
 		"searchMatch": {
 			"type": "string",
 			"title": "Basic search matches",
 			"description": "Every word anywhere in the name, summary, tags or SKUs; or the whole phrase, words in order, in the name or a SKU. For the shop's basic search.",
 			"default": "words",
-			"enum": ["words", "phrase"]
+			"enum": ["words", "phrase"],
+			"x-ui": {
+				"group": "Search",
+				"order": 22
+			}
 		},
 		"searchIndex": {
 			"type": "string",
 			"title": "Atlas Search index name",
 			"description": "The name of the Atlas Search index on the products collection.",
 			"default": "ss_ecommerce_products_search",
-			"maxLength": 100
+			"maxLength": 100,
+			"x-ui": {
+				"group": "Search",
+				"order": 24
+			}
 		}
 	}
 }

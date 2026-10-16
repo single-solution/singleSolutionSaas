@@ -7,28 +7,44 @@
 			"title": "New reviews",
 			"description": "Show new reviews at once, or only after your staff approve them.",
 			"default": "manual",
-			"enum": ["auto", "manual"]
+			"enum": ["auto", "manual"],
+			"x-ui": {
+				"group": "Reviews",
+				"order": 1
+			}
 		},
 		"per": {
 			"type": "string",
 			"title": "Reviews per",
 			"description": "Product: one per product. Order line: one per item bought.",
 			"default": "product",
-			"enum": ["product", "order_line"]
+			"enum": ["product", "order_line"],
+			"x-ui": {
+				"group": "Reviews",
+				"order": 2
+			}
 		},
 		"nameFormat": {
 			"type": "string",
 			"title": "Names shown",
 			"description": "Full, or First initial (\"Alex K.\").",
 			"default": "full",
-			"enum": ["full", "first_initial"]
+			"enum": ["full", "first_initial"],
+			"x-ui": {
+				"group": "Display",
+				"order": 11
+			}
 		},
 		"pageSize": {
 			"type": "integer",
 			"title": "Reviews per page",
 			"default": 10,
 			"minimum": 5,
-			"maximum": 20
+			"maximum": 20,
+			"x-ui": {
+				"group": "Display",
+				"order": 12
+			}
 		}
 	}
 }

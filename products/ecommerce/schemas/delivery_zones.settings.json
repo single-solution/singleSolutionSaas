@@ -11,19 +11,31 @@
 				"type": "integer",
 				"minimum": 0,
 				"maximum": 60
+			},
+			"x-ui": {
+				"group": "Delivery times",
+				"order": 1
 			}
 		},
 		"pickupEnabled": {
 			"type": "boolean",
 			"title": "Pickup point",
 			"description": "Without Multi-location stock: the one place where a zone's pickup rates are picked up (with it, the stock locations that take pickups are used).",
-			"default": false
+			"default": false,
+			"x-ui": {
+				"group": "Pickup point",
+				"order": 11
+			}
 		},
 		"pickupName": {
 			"type": "string",
 			"title": "Pickup point name",
 			"default": "",
-			"maxLength": 120
+			"maxLength": 120,
+			"x-ui": {
+				"group": "Pickup point",
+				"order": 12
+			}
 		},
 		"pickupAddress": {
 			"type": "string",
@@ -31,7 +43,9 @@
 			"default": "",
 			"maxLength": 500,
 			"x-ui": {
-				"widget": "textarea"
+				"widget": "textarea",
+				"group": "Pickup point",
+				"order": 13
 			}
 		},
 		"pickupHours": {
@@ -40,7 +54,9 @@
 			"default": "",
 			"maxLength": 500,
 			"x-ui": {
-				"widget": "textarea"
+				"widget": "textarea",
+				"group": "Pickup point",
+				"order": 14
 			}
 		},
 		"deliveryNote": {
@@ -48,21 +64,33 @@
 			"title": "Delivery time text",
 			"description": "Shown with delivery in the cart and on orders, for example \"Orders ship on weekdays\". Each rate shows its own days.",
 			"default": "",
-			"maxLength": 500
+			"maxLength": 500,
+			"x-ui": {
+				"group": "Delivery times",
+				"order": 2
+			}
 		},
 		"prepNote": {
 			"type": "string",
 			"title": "Preparation text",
 			"description": "Shown in the cart and on orders, for example \"Orders are packed within 24 hours\".",
 			"default": "",
-			"maxLength": 500
+			"maxLength": 500,
+			"x-ui": {
+				"group": "Delivery times",
+				"order": 3
+			}
 		},
 		"pickupReadyNote": {
 			"type": "string",
 			"title": "Pickup ready text",
 			"description": "Shown on orders for pickup, for example \"We message you when it is ready\".",
 			"default": "",
-			"maxLength": 500
+			"maxLength": 500,
+			"x-ui": {
+				"group": "Pickup point",
+				"order": 15
+			}
 		}
 	}
 }

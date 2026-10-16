@@ -10,26 +10,42 @@
 			"items": {
 				"type": "string",
 				"enum": ["email", "sms", "whatsapp"]
+			},
+			"x-ui": {
+				"group": "Basics",
+				"order": 1
 			}
 		},
 		"guests": {
 			"type": "boolean",
 			"title": "Guests may ask for alerts",
 			"description": "Without signing in, with the contact guests are known by (Checkout: Guests check out by: a phone, an email address or either): the product page asks for it.",
-			"default": false
+			"default": false,
+			"x-ui": {
+				"group": "Basics",
+				"order": 2
+			}
 		},
 		"targetPrice": {
 			"type": "boolean",
 			"title": "Shoppers may name a price",
 			"description": "The product page asks for an optional price with a price-drop alert: the alert is sent only once the price is at or under it.",
-			"default": false
+			"default": false,
+			"x-ui": {
+				"group": "Price and stop link",
+				"order": 11
+			}
 		},
 		"stopUrl": {
 			"type": "string",
 			"title": "Alert stop page",
 			"description": "The page each alert message links to for stopping alerts ({stopUrl}): a path or https address with {token}, for example /alerts/stop/{token}. Empty or without {token}: /alerts/unsubscribe/{token} on your domain. Place the alerts_stop widget on that page.",
 			"default": "",
-			"maxLength": 500
+			"maxLength": 500,
+			"x-ui": {
+				"group": "Price and stop link",
+				"order": 12
+			}
 		}
 	}
 }

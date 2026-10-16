@@ -7,67 +7,107 @@
 			"title": "Items in the feeds",
 			"description": "All active items, or only those with an image (shopping catalogs refuse items without one).",
 			"default": "with_images",
-			"enum": ["with_images", "all"]
+			"enum": ["with_images", "all"],
+			"x-ui": {
+				"group": "Items",
+				"order": 1
+			}
 		},
 		"includeOutOfStock": {
 			"type": "boolean",
 			"title": "Include items out of stock",
 			"description": "Listed as out of stock; off leaves them out of the feeds.",
-			"default": true
+			"default": true,
+			"x-ui": {
+				"group": "Items",
+				"order": 2
+			}
 		},
 		"itemTitle": {
 			"type": "string",
 			"title": "Item titles",
 			"description": "{name} is the product, {brand} its brand, {variant} the variant's options on products with several variants, {options} the variant's options always, {grade} its grade, and {attr.<slug>} a field's value (the variant's, else the product's; fields shoppers see only). Empty brackets and separators left over are dropped; [ … ] around words with a placeholder drops them when it is empty.",
 			"default": "{name} - {variant}",
-			"maxLength": 160
+			"maxLength": 160,
+			"x-ui": {
+				"group": "Titles and text",
+				"order": 11
+			}
 		},
 		"itemDescription": {
 			"type": "string",
 			"title": "Item descriptions",
 			"description": "The product's description (else its summary), its SEO description first, or the pattern below.",
 			"default": "body",
-			"enum": ["body", "seo", "pattern"]
+			"enum": ["body", "seo", "pattern"],
+			"x-ui": {
+				"group": "Titles and text",
+				"order": 12
+			}
 		},
 		"descriptionPattern": {
 			"type": "string",
 			"title": "Item description pattern",
 			"description": "With item descriptions at pattern: the item title's placeholders, {description} (the product's description, else its summary) and {summary}. Empty, or a pattern that gives no text: the description.",
 			"default": "{description}",
-			"maxLength": 1000
+			"maxLength": 1000,
+			"x-ui": {
+				"group": "Titles and text",
+				"order": 13
+			}
 		},
 		"skuAs": {
 			"type": "string",
 			"title": "Send the SKU as",
 			"description": "Shopping catalogs match items by GTIN (barcode) or MPN (manufacturer part number). A variant's own GTIN and MPN are always sent; for variants without them, choose what your SKUs are.",
 			"default": "none",
-			"enum": ["none", "mpn", "gtin"]
+			"enum": ["none", "mpn", "gtin"],
+			"x-ui": {
+				"group": "Identifiers",
+				"order": 21
+			}
 		},
 		"identifierExists": {
 			"type": "string",
 			"title": "Items without GTIN or MPN",
 			"description": "Auto: nothing is sent and the catalog decides. No: identifier_exists no is sent on items with neither (custom or handmade goods).",
 			"default": "auto",
-			"enum": ["auto", "no"]
+			"enum": ["auto", "no"],
+			"x-ui": {
+				"group": "Identifiers",
+				"order": 22
+			}
 		},
 		"googleCategory": {
 			"type": "string",
 			"title": "Google product category",
 			"description": "The Google product category of your items (an id or a path), sent with every item whose category (or one above it) names none of its own.",
 			"default": "",
-			"maxLength": 250
+			"maxLength": 250,
+			"x-ui": {
+				"group": "Identifiers",
+				"order": 23
+			}
 		},
 		"gradeLabel": {
 			"type": "boolean",
 			"title": "Grade as custom label 0",
 			"description": "Send each item's grade label as custom_label_0.",
-			"default": false
+			"default": false,
+			"x-ui": {
+				"group": "Items",
+				"order": 4
+			}
 		},
 		"shipping": {
 			"type": "boolean",
 			"title": "Send shipping",
 			"description": "Each physical item carries the delivery fee to your business.json country (free from the free-delivery amount) and, once both are set, the handling and transit days of Delivery zones (digital items and services carry no shipping, as checkout charges them none). Off when you set shipping in the catalog's own account.",
-			"default": true
+			"default": true,
+			"x-ui": {
+				"group": "Items",
+				"order": 3
+			}
 		}
 	}
 }

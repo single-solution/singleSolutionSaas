@@ -9,7 +9,9 @@
 			"default": "",
 			"maxLength": 2000,
 			"x-ui": {
-				"widget": "textarea"
+				"widget": "textarea",
+				"group": "Shop summary",
+				"order": 1
 			}
 		},
 		"products": {
@@ -18,19 +20,31 @@
 			"description": "How many of your best-selling products are listed, with links and prices.",
 			"default": 50,
 			"minimum": 0,
-			"maximum": 200
+			"maximum": 200,
+			"x-ui": {
+				"group": "Shop summary",
+				"order": 2
+			}
 		},
 		"policies": {
 			"type": "boolean",
 			"title": "Include policy summaries",
 			"description": "A short summary of your delivery, returns, privacy and terms texts (Cart and checkout settings).",
-			"default": true
+			"default": true,
+			"x-ui": {
+				"group": "Shop summary",
+				"order": 3
+			}
 		},
 		"full": {
 			"type": "boolean",
 			"title": "Full product list",
 			"description": "Also serve llms-full.txt: every product in stock with its price range, and the grades of each category.",
-			"default": false
+			"default": false,
+			"x-ui": {
+				"group": "Files",
+				"order": 11
+			}
 		},
 		"custom": {
 			"type": "string",
@@ -39,7 +53,9 @@
 			"default": "",
 			"maxLength": 100000,
 			"x-ui": {
-				"widget": "textarea"
+				"widget": "textarea",
+				"group": "Files",
+				"order": 12
 			}
 		}
 	}

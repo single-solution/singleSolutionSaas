@@ -8,48 +8,76 @@
 			"description": "Each cart line keeps the deal price it was quoted for this long, even if the deal ends or changes meanwhile (not when it is deleted or used up). 0 = off.",
 			"default": 0,
 			"minimum": 0,
-			"maximum": 10080
+			"maximum": 10080,
+			"x-ui": {
+				"group": "Choosing a deal",
+				"order": 3
+			}
 		},
 		"shopperChoice": {
 			"type": "boolean",
 			"title": "Shoppers pick the deal",
 			"description": "When several deals fit a cart line, the shopper picks one; otherwise the best saving applies.",
-			"default": false
+			"default": false,
+			"x-ui": {
+				"group": "Choosing a deal",
+				"order": 1
+			}
 		},
 		"lineChoice": {
 			"type": "string",
 			"title": "Deal a cart line takes",
 			"description": "Best: the largest saving (then the higher priority). First: the first deal in your deals' show order that saves something. A deal the shopper picked wins either way.",
 			"default": "best",
-			"enum": ["best", "first"]
+			"enum": ["best", "first"],
+			"x-ui": {
+				"group": "Choosing a deal",
+				"order": 2
+			}
 		},
 		"cartOffer": {
 			"type": "string",
 			"title": "Checkout deals with item deals",
 			"description": "How checkout deals (off the cart total, or free delivery) combine with item deals. Per line best: each line takes the best of its item and checkout deals, and the best free delivery is added. One after items: at most one checkout deal, the first live one in your deals' show order that applies, taken off what is left after the item deals (free delivery counts as that deal). One exclusive: the same, but none once an item deal applies.",
 			"default": "per_line_best",
-			"enum": ["per_line_best", "one_after_items", "one_exclusive"]
+			"enum": ["per_line_best", "one_after_items", "one_exclusive"],
+			"x-ui": {
+				"group": "Checkout deals",
+				"order": 11
+			}
 		},
 		"cartThresholdBase": {
 			"type": "string",
 			"title": "Checkout deals' minimum cart total is judged on",
 			"description": "Goods: the goods before any deal. After item deals: the goods after the item deals and bundles (a cart that they bring below a checkout deal's minimum does not get it).",
 			"default": "goods",
-			"enum": ["goods", "after_item_deals"]
+			"enum": ["goods", "after_item_deals"],
+			"x-ui": {
+				"group": "Checkout deals",
+				"order": 12
+			}
 		},
 		"pointsBlockedBy": {
 			"type": "string",
 			"title": "Deals without points block redeeming",
 			"description": "Any deal: any deal on the order that allows no points blocks redeeming points. Cart offer: only a checkout deal (off the cart total, or free delivery) that allows no points does; item deals never block.",
 			"default": "any_deal",
-			"enum": ["any_deal", "cart_offer"]
+			"enum": ["any_deal", "cart_offer"],
+			"x-ui": {
+				"group": "Checkout deals",
+				"order": 13
+			}
 		},
 		"rounding": {
 			"type": "string",
 			"title": "Rounding of deal discounts",
 			"description": "Per unit down: each deal is rounded down on each unit (on each line for checkout deals). Total half up: each deal is worked out on the line or cart amount and the order's deal discounts are rounded once, half up (with whole units, 7% off 4,999 is 350, not 349).",
 			"default": "per_unit_down",
-			"enum": ["per_unit_down", "total_half_up"]
+			"enum": ["per_unit_down", "total_half_up"],
+			"x-ui": {
+				"group": "Choosing a deal",
+				"order": 4
+			}
 		}
 	}
 }

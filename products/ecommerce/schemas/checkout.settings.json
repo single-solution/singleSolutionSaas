@@ -7,21 +7,33 @@
 			"title": "Order number pattern",
 			"description": "Your order numbers from {prefix}, {year}, {month}, {number} and {suffix}, with letters, digits, - and _ between them: {number} once, {month} only with {year}. The number starts again each month with {month}, each year with {year}, by your business time zone (SH-001043 from {prefix}{number}; SH-2026-0043 from {prefix}{year}-{number}; 202603-0043 from {year}{month}-{number}). A pattern that breaks these rules reads as {prefix}{number}.",
 			"default": "{prefix}{number}",
-			"maxLength": 60
+			"maxLength": 60,
+			"x-ui": {
+				"group": "Orders",
+				"order": 11
+			}
 		},
 		"numberPrefix": {
 			"type": "string",
 			"title": "Order number prefix",
 			"description": "What {prefix} stands for in the order number pattern (for example SH-): letters, digits, - and _ (other characters are left out, as order numbers go in addresses).",
 			"default": "",
-			"maxLength": 12
+			"maxLength": 12,
+			"x-ui": {
+				"group": "Orders",
+				"order": 12
+			}
 		},
 		"numberSuffix": {
 			"type": "string",
 			"title": "Order number suffix",
 			"description": "What {suffix} stands for in the order number pattern: letters, digits, - and _ (other characters are left out).",
 			"default": "",
-			"maxLength": 20
+			"maxLength": 20,
+			"x-ui": {
+				"group": "Orders",
+				"order": 14
+			}
 		},
 		"messageChannels": {
 			"type": "array",
@@ -31,6 +43,10 @@
 			"items": {
 				"type": "string",
 				"enum": ["email", "sms", "whatsapp"]
+			},
+			"x-ui": {
+				"group": "Messages and pages",
+				"order": 31
 			}
 		},
 		"policyFormat": {
@@ -38,14 +54,22 @@
 			"title": "Policy format",
 			"description": "Your policies (Settings → Policies) in plain text, or HTML (paragraphs, lists, headings, bold, italic, underline, quotes, and links to https addresses, your own pages, mailto: and tel:).",
 			"default": "text",
-			"enum": ["text", "html"]
+			"enum": ["text", "html"],
+			"x-ui": {
+				"group": "Messages and pages",
+				"order": 37
+			}
 		},
 		"returnsAccepted": {
 			"type": "string",
 			"title": "Returns without the Returns feature",
 			"description": "What search engines are told about returns while the Returns feature is off: nothing, or that you take no returns. With Returns on, its return window says it.",
 			"default": "unknown",
-			"enum": ["unknown", "no"]
+			"enum": ["unknown", "no"],
+			"x-ui": {
+				"group": "Messages and pages",
+				"order": 38
+			}
 		},
 		"paymentWindowMinutes": {
 			"type": "integer",
@@ -53,7 +77,11 @@
 			"description": "An order paid online or by bank transfer (or a cash-on-delivery advance) that is not paid within this time is canceled and its stock given back. 0 = never canceled.",
 			"default": 60,
 			"minimum": 0,
-			"maximum": 10080
+			"maximum": 10080,
+			"x-ui": {
+				"group": "Limits",
+				"order": 21
+			}
 		},
 		"confirmationHours": {
 			"type": "integer",
@@ -61,7 +89,11 @@
 			"description": "A cash-on-delivery or pay-at-pickup order your staff do not confirm within this time is canceled and its stock given back. 0 = never canceled.",
 			"default": 24,
 			"minimum": 0,
-			"maximum": 336
+			"maximum": 336,
+			"x-ui": {
+				"group": "Limits",
+				"order": 22
+			}
 		},
 		"openOrderCap": {
 			"type": "integer",
@@ -69,7 +101,11 @@
 			"description": "A customer may have at most this many orders waiting for payment or confirmation (0 = no limit).",
 			"default": 3,
 			"minimum": 0,
-			"maximum": 100
+			"maximum": 100,
+			"x-ui": {
+				"group": "Limits",
+				"order": 23
+			}
 		},
 		"placeLimit": {
 			"type": "integer",
@@ -77,7 +113,11 @@
 			"description": "A customer (a signed-in shopper, or a guest by their contact) may place at most this many orders within Order burst window, against bursts of orders by mistake or abuse (0 = no limit; 5 suits most shops).",
 			"default": 0,
 			"minimum": 0,
-			"maximum": 100
+			"maximum": 100,
+			"x-ui": {
+				"group": "Limits",
+				"order": 24
+			}
 		},
 		"placeWindowMinutes": {
 			"type": "integer",
@@ -85,7 +125,11 @@
 			"description": "The minutes Orders per customer in a while counts orders in.",
 			"default": 15,
 			"minimum": 1,
-			"maximum": 1440
+			"maximum": 1440,
+			"x-ui": {
+				"group": "Limits",
+				"order": 25
+			}
 		},
 		"addressRequired": {
 			"type": "array",
@@ -95,41 +139,65 @@
 			"items": {
 				"type": "string",
 				"enum": ["line1", "line2", "area", "city", "region", "postalCode", "country"]
+			},
+			"x-ui": {
+				"group": "Guests and contacts",
+				"order": 4
 			}
 		},
 		"phoneRequired": {
 			"type": "boolean",
 			"title": "Phone number needed",
 			"description": "On: every delivery address and every guest gives a phone number. Off: they may leave it out (guests who check out by phone still give theirs).",
-			"default": true
+			"default": true,
+			"x-ui": {
+				"group": "Guests and contacts",
+				"order": 3
+			}
 		},
 		"guests": {
 			"type": "string",
 			"title": "Guest checkout",
 			"description": "Off: shoppers sign in to order. On: anyone orders with a name and the contact Guests check out by asks for. Unless password: a phone or email address that belongs to a member with a password must sign in (checked with Accounts).",
 			"default": "off",
-			"enum": ["off", "on", "unless_password"]
+			"enum": ["off", "on", "unless_password"],
+			"x-ui": {
+				"group": "Guests and contacts",
+				"order": 1
+			}
 		},
 		"guestIdentity": {
 			"type": "string",
 			"title": "Guests check out by",
 			"description": "What a guest gives and is known by: one customer record per phone number, per email address, or either (the phone when given, else the email address). A guest's orders move into their account when they sign in with that phone or email address verified.",
 			"default": "phone",
-			"enum": ["phone", "email", "either"]
+			"enum": ["phone", "email", "either"],
+			"x-ui": {
+				"group": "Guests and contacts",
+				"order": 2
+			}
 		},
 		"defaultCallingCode": {
 			"type": "string",
 			"title": "Default calling code",
 			"description": "For phones typed without a country code (guests, alerts, delivery addresses), for example +44 or +1. Empty: the calling code of the country in business.json; without one, numbers must start with + or 00.",
 			"default": "",
-			"maxLength": 4
+			"maxLength": 4,
+			"x-ui": {
+				"group": "Guests and contacts",
+				"order": 6
+			}
 		},
 		"trunkPrefix": {
 			"type": "string",
 			"title": "National trunk prefix",
 			"description": "Dropped from national numbers before the calling code is added, for example 0. Empty: the country's usual prefix (0; 8 for +7; none where national numbers keep their 0, as in Italy).",
 			"default": "",
-			"maxLength": 2
+			"maxLength": 2,
+			"x-ui": {
+				"group": "Guests and contacts",
+				"order": 7
+			}
 		},
 		"countries": {
 			"type": "array",
@@ -387,7 +455,9 @@
 			"x-ui": {
 				"widget": "tags",
 				"labels": "country",
-				"placeholder": "Any country"
+				"placeholder": "Any country",
+				"group": "Guests and contacts",
+				"order": 8
 			}
 		},
 		"customerRecords": {
@@ -395,7 +465,11 @@
 			"title": "Customers appear",
 			"description": "First order: a customer record is made with their first order (or when staff open an Accounts user). Sign in: also as soon as a signed-in shopper uses the shop, before any order.",
 			"default": "first_order",
-			"enum": ["first_order", "sign_in"]
+			"enum": ["first_order", "sign_in"],
+			"x-ui": {
+				"group": "Guests and contacts",
+				"order": 5
+			}
 		},
 		"maxLines": {
 			"type": "integer",
@@ -403,7 +477,11 @@
 			"description": "Up to 500.",
 			"default": 50,
 			"minimum": 1,
-			"maximum": 500
+			"maximum": 500,
+			"x-ui": {
+				"group": "Limits",
+				"order": 26
+			}
 		},
 		"maxQuantity": {
 			"type": "integer",
@@ -411,35 +489,55 @@
 			"description": "Pieces of one item in a cart, up to 100,000. An item type can set its own least, most and step quantity.",
 			"default": 99,
 			"minimum": 1,
-			"maximum": 100000
+			"maximum": 100000,
+			"x-ui": {
+				"group": "Limits",
+				"order": 27
+			}
 		},
 		"successUrl": {
 			"type": "string",
 			"title": "Success page",
 			"description": "Where shoppers return after placing or paying, with {number} and {id}. Empty = the page they ordered from with ss_order.",
 			"default": "",
-			"maxLength": 500
+			"maxLength": 500,
+			"x-ui": {
+				"group": "Messages and pages",
+				"order": 33
+			}
 		},
 		"cancelUrl": {
 			"type": "string",
 			"title": "Payment canceled page",
 			"description": "Where shoppers return when they leave a payment, with {number} and {id}. Empty = as the success page.",
 			"default": "",
-			"maxLength": 500
+			"maxLength": 500,
+			"x-ui": {
+				"group": "Messages and pages",
+				"order": 34
+			}
 		},
 		"editPricing": {
 			"type": "string",
 			"title": "Staff edits of waiting orders",
 			"description": "Reprice: an edited order is priced again (its offers as placed, its delivery fee and cash handling fee worked out anew). Keep placed amounts: it keeps the offer discount, delivery fee and payment fee it was placed with (the discount at most what the items come to).",
 			"default": "reprice",
-			"enum": ["reprice", "keep_placed"]
+			"enum": ["reprice", "keep_placed"],
+			"x-ui": {
+				"group": "Orders",
+				"order": 15
+			}
 		},
 		"deleteGivesBack": {
 			"type": "string",
 			"title": "Deleting an order gives back",
 			"description": "Held: what an order not delivered yet holds (stock, offer uses, redeemed points). All: also the items, offer uses and points of a delivered or closed order (its stock back, earned points taken back, redeemed points given back).",
 			"default": "held",
-			"enum": ["held", "all"]
+			"enum": ["held", "all"],
+			"x-ui": {
+				"group": "Orders",
+				"order": 16
+			}
 		},
 		"numberDigits": {
 			"type": "integer",
@@ -447,28 +545,44 @@
 			"description": "The fewest digits of {number} (zeros in front; it grows past them when it must): SH-001043 has 6, SH-2026-0043 has 4.",
 			"default": 6,
 			"minimum": 1,
-			"maximum": 10
+			"maximum": 10,
+			"x-ui": {
+				"group": "Orders",
+				"order": 13
+			}
 		},
 		"statusTemplates": {
 			"type": "string",
 			"title": "Status messages",
 			"description": "One: one template for every status. Per status: ecommerce.order_status.<status key> per status.",
 			"default": "one",
-			"enum": ["one", "per_status"]
+			"enum": ["one", "per_status"],
+			"x-ui": {
+				"group": "Messages and pages",
+				"order": 32
+			}
 		},
 		"orderUrl": {
 			"type": "string",
 			"title": "Order page address",
 			"description": "For messages, with {number}, for example https://example.com/orders/{number}.",
 			"default": "",
-			"maxLength": 500
+			"maxLength": 500,
+			"x-ui": {
+				"group": "Messages and pages",
+				"order": 35
+			}
 		},
 		"reviewUrl": {
 			"type": "string",
 			"title": "Review page address",
 			"description": "For messages, with {number}.",
 			"default": "",
-			"maxLength": 500
+			"maxLength": 500,
+			"x-ui": {
+				"group": "Messages and pages",
+				"order": 36
+			}
 		}
 	}
 }

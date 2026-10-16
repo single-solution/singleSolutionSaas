@@ -10,6 +10,10 @@
 			"items": {
 				"type": "string",
 				"enum": ["placed", "paid", "proof_uploaded", "canceled", "expired", "return_requested", "refund_due"]
+			},
+			"x-ui": {
+				"group": "Alerts",
+				"order": 1
 			}
 		},
 		"recipients": {
@@ -20,27 +24,43 @@
 				"type": "string",
 				"maxLength": 254
 			},
-			"description": "Email addresses and international phone numbers (+ or 00 first; phones get the channel below). Name a channel first to choose it for one person: sms:+15550100, whatsapp:+15550100, email:ops@example.com, or push:<Accounts user id> for staff push."
+			"description": "Email addresses and international phone numbers (+ or 00 first; phones get the channel below). Name a channel first to choose it for one person: sms:+15550100, whatsapp:+15550100, email:ops@example.com, or push:<Accounts user id> for staff push.",
+			"x-ui": {
+				"group": "Recipients",
+				"order": 11
+			}
 		},
 		"staffPermission": {
 			"type": "string",
 			"title": "Also alert Accounts staff who can",
 			"default": "",
 			"enum": ["", "orders.read", "orders.manage", "orders.refund", "returns.manage", "all_staff"],
-			"description": "Every unblocked Accounts user whose role has this Ecommerce permission; all_staff: every one who works with the alert's subject (orders.read for orders, returns.manage for claims). Both need the Accounts token. Empty = only the list above."
+			"description": "Every unblocked Accounts user whose role has this Ecommerce permission; all_staff: every one who works with the alert's subject (orders.read for orders, returns.manage for claims). Both need the Accounts token. Empty = only the list above.",
+			"x-ui": {
+				"group": "Recipients",
+				"order": 12
+			}
 		},
 		"phoneChannel": {
 			"type": "string",
 			"title": "Phones get",
 			"description": "SMS goes out with Ecommerce's default words; WhatsApp needs your own approved templates in Notifications.",
 			"default": "sms",
-			"enum": ["sms", "whatsapp"]
+			"enum": ["sms", "whatsapp"],
+			"x-ui": {
+				"group": "Alerts",
+				"order": 3
+			}
 		},
 		"staffPush": {
 			"type": "boolean",
 			"title": "Staff push too",
 			"default": false,
-			"description": "Accounts staff also get a push in their browser (Notifications: Staff push, with your push keys)."
+			"description": "Accounts staff also get a push in their browser (Notifications: Staff push, with your push keys).",
+			"x-ui": {
+				"group": "Alerts",
+				"order": 2
+			}
 		},
 		"maxRecipients": {
 			"type": "integer",
@@ -48,20 +68,32 @@
 			"default": 100,
 			"minimum": 1,
 			"maximum": 200,
-			"description": "At most this many people get one alert (the list first, then the Accounts staff)."
+			"description": "At most this many people get one alert (the list first, then the Accounts staff).",
+			"x-ui": {
+				"group": "Recipients",
+				"order": 13
+			}
 		},
 		"adminUrl": {
 			"type": "string",
 			"title": "Order page in your admin",
 			"default": "",
 			"maxLength": 500,
-			"description": "With {number} and {id}, for example https://admin.example.com/orders/{id}. Alerts link to it."
+			"description": "With {number} and {id}, for example https://admin.example.com/orders/{id}. Alerts link to it.",
+			"x-ui": {
+				"group": "Contents",
+				"order": 21
+			}
 		},
 		"includePhone": {
 			"type": "boolean",
 			"title": "Alerts carry the shopper's phone",
 			"default": false,
-			"description": "Adds the value {phone} (the phone on the order) to every staff alert."
+			"description": "Adds the value {phone} (the phone on the order) to every staff alert.",
+			"x-ui": {
+				"group": "Contents",
+				"order": 22
+			}
 		}
 	}
 }

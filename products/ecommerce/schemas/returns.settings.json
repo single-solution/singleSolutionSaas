@@ -8,14 +8,22 @@
 			"description": "How long after delivery a shopper may return an item (in Return window unit), unless the item or its condition grade has its own window. 0 = no returns.",
 			"default": 7,
 			"minimum": 0,
-			"maximum": 3650
+			"maximum": 3650,
+			"x-ui": {
+				"group": "Time limits",
+				"order": 1
+			}
 		},
 		"returnTimeUnit": {
 			"type": "string",
 			"title": "Return window unit",
 			"description": "Days, months or years (at most 10 years); shown as typed: 1 year stays 1 year.",
 			"default": "days",
-			"enum": ["days", "months", "years"]
+			"enum": ["days", "months", "years"],
+			"x-ui": {
+				"group": "Time limits",
+				"order": 2
+			}
 		},
 		"warrantyTime": {
 			"type": "integer",
@@ -23,28 +31,44 @@
 			"description": "How long after delivery a shopper may make a warranty claim (in Warranty unit), unless the item or its condition grade has its own. 0 = no warranty.",
 			"default": 0,
 			"minimum": 0,
-			"maximum": 3650
+			"maximum": 3650,
+			"x-ui": {
+				"group": "Time limits",
+				"order": 3
+			}
 		},
 		"warrantyTimeUnit": {
 			"type": "string",
 			"title": "Warranty unit",
 			"description": "Days, months or years (at most 10 years); shown as typed: 1 year stays 1 year.",
 			"default": "days",
-			"enum": ["days", "months", "years"]
+			"enum": ["days", "months", "years"],
+			"x-ui": {
+				"group": "Time limits",
+				"order": 4
+			}
 		},
 		"returnMethod": {
 			"type": "string",
 			"title": "How items come back",
 			"description": "How shoppers return an item, as your return policy tells search engines: by mail, at your shop, or either.",
 			"default": "by_mail",
-			"enum": ["by_mail", "in_store", "both"]
+			"enum": ["by_mail", "in_store", "both"],
+			"x-ui": {
+				"group": "Shipping and refunds",
+				"order": 11
+			}
 		},
 		"returnShippingFee": {
 			"type": "string",
 			"title": "Return shipping",
 			"description": "Who pays to send a returned item back, as your return policy tells search engines: the shopper, nobody (free returns), or a fixed fee you charge (Return shipping fee).",
 			"default": "shopper_pays",
-			"enum": ["shopper_pays", "free", "fixed"]
+			"enum": ["shopper_pays", "free", "fixed"],
+			"x-ui": {
+				"group": "Shipping and refunds",
+				"order": 12
+			}
 		},
 		"returnShippingFeeAmount": {
 			"type": "integer",
@@ -52,7 +76,11 @@
 			"description": "With Return shipping at a fixed fee: the fee, in minor units of your currency (0 = free returns).",
 			"default": 0,
 			"minimum": 0,
-			"maximum": 1000000000000
+			"maximum": 1000000000000,
+			"x-ui": {
+				"group": "Shipping and refunds",
+				"order": 13
+			}
 		},
 		"maxPhotos": {
 			"type": "integer",
@@ -60,14 +88,22 @@
 			"description": "How many photos a shopper may add to a claim (0 = none).",
 			"default": 5,
 			"minimum": 0,
-			"maximum": 10
+			"maximum": 10,
+			"x-ui": {
+				"group": "Claims",
+				"order": 23
+			}
 		},
 		"photoMaxMb": {
 			"type": "integer",
 			"title": "Largest photo (MB)",
 			"default": 5,
 			"minimum": 1,
-			"maximum": 20
+			"maximum": 20,
+			"x-ui": {
+				"group": "Claims",
+				"order": 24
+			}
 		},
 		"reasons": {
 			"type": "array",
@@ -77,31 +113,51 @@
 			"items": {
 				"type": "string",
 				"maxLength": 120
+			},
+			"x-ui": {
+				"group": "Claims",
+				"order": 21
 			}
 		},
 		"otherReason": {
 			"type": "boolean",
 			"title": "Offer \"Other\" with the reasons",
 			"description": "With reasons listed: shoppers may also pick Other and say why in their own words.",
-			"default": true
+			"default": true,
+			"x-ui": {
+				"group": "Claims",
+				"order": 22
+			}
 		},
 		"referencePrefix": {
 			"type": "string",
 			"title": "Claim reference prefix",
 			"default": "R-",
-			"maxLength": 8
+			"maxLength": 8,
+			"x-ui": {
+				"group": "Claims",
+				"order": 25
+			}
 		},
 		"refundDelivery": {
 			"type": "boolean",
 			"title": "Refunds may include delivery",
-			"default": false
+			"default": false,
+			"x-ui": {
+				"group": "Shipping and refunds",
+				"order": 14
+			}
 		},
 		"pointsBack": {
 			"type": "string",
 			"title": "Points taken back",
 			"description": "Proportional: in proportion to what is refunded. Full refund only: only when the whole order is refunded.",
 			"default": "proportional",
-			"enum": ["proportional", "full_refund_only"]
+			"enum": ["proportional", "full_refund_only"],
+			"x-ui": {
+				"group": "Shipping and refunds",
+				"order": 15
+			}
 		}
 	}
 }

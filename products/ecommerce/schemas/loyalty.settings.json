@@ -8,7 +8,11 @@
 			"description": "The share of what a shopper paid for the goods (without delivery and tax) given back as points when the order is delivered. 1 = 1% back.",
 			"default": 1,
 			"minimum": 0,
-			"maximum": 100
+			"maximum": 100,
+			"x-ui": {
+				"group": "Earning",
+				"order": 1
+			}
 		},
 		"pointValue": {
 			"type": "integer",
@@ -16,7 +20,11 @@
 			"description": "What one point is worth at checkout, in the smallest unit of your currency (100 = 1.00 in a currency with cents).",
 			"default": 100,
 			"minimum": 1,
-			"maximum": 1000000000
+			"maximum": 1000000000,
+			"x-ui": {
+				"group": "Redeeming",
+				"order": 11
+			}
 		},
 		"minRedeem": {
 			"type": "integer",
@@ -24,7 +32,11 @@
 			"description": "A shopper redeems at least this many points on an order.",
 			"default": 100,
 			"minimum": 1,
-			"maximum": 1000000000
+			"maximum": 1000000000,
+			"x-ui": {
+				"group": "Redeeming",
+				"order": 13
+			}
 		},
 		"maxPercent": {
 			"type": "number",
@@ -32,7 +44,11 @@
 			"description": "Points pay at most this share of an order's total.",
 			"default": 20,
 			"minimum": 0,
-			"maximum": 100
+			"maximum": 100,
+			"x-ui": {
+				"group": "Redeeming",
+				"order": 12
+			}
 		},
 		"expiryDays": {
 			"type": "integer",
@@ -40,7 +56,11 @@
 			"description": "Days, or calendar months when \"Expiry counted in\" is Months. 0 = never.",
 			"default": 0,
 			"minimum": 0,
-			"maximum": 36500
+			"maximum": 36500,
+			"x-ui": {
+				"group": "Expiry",
+				"order": 21
+			}
 		},
 		"roles": {
 			"type": "array",
@@ -50,6 +70,10 @@
 			"items": {
 				"type": "string",
 				"maxLength": 40
+			},
+			"x-ui": {
+				"group": "Members",
+				"order": 32
 			}
 		},
 		"guests": {
@@ -57,56 +81,88 @@
 			"title": "Guests",
 			"description": "None: guests do not earn. Earn: guests earn on the contact they are known by (Checkout: Guests check out by) and redeem once they sign in.",
 			"default": "none",
-			"enum": ["none", "earn"]
+			"enum": ["none", "earn"],
+			"x-ui": {
+				"group": "Members",
+				"order": 33
+			}
 		},
 		"earnBase": {
 			"type": "string",
 			"title": "Points earned on",
 			"description": "Goods: what was paid for the items. Total: the order total with delivery and fees.",
 			"default": "goods",
-			"enum": ["goods", "total"]
+			"enum": ["goods", "total"],
+			"x-ui": {
+				"group": "Earning",
+				"order": 2
+			}
 		},
 		"earnAt": {
 			"type": "string",
 			"title": "Points worked out",
 			"description": "Delivery: when the order is delivered. Placement: fixed when the order is placed, credited when it is delivered.",
 			"default": "delivery",
-			"enum": ["delivery", "placement"]
+			"enum": ["delivery", "placement"],
+			"x-ui": {
+				"group": "Earning",
+				"order": 3
+			}
 		},
 		"capBase": {
 			"type": "string",
 			"title": "The most paid with points is measured on",
 			"description": "Order: the items after offers. Goods: the items' full price.",
 			"default": "order",
-			"enum": ["order", "goods"]
+			"enum": ["order", "goods"],
+			"x-ui": {
+				"group": "Redeeming",
+				"order": 15
+			}
 		},
 		"redeemMode": {
 			"type": "string",
 			"title": "Redeeming",
 			"description": "Amount: shoppers choose how many points. Maximum: one switch redeems the most allowed.",
 			"default": "amount",
-			"enum": ["amount", "maximum"]
+			"enum": ["amount", "maximum"],
+			"x-ui": {
+				"group": "Redeeming",
+				"order": 14
+			}
 		},
 		"expiryUnit": {
 			"type": "string",
 			"title": "Expiry counted in",
 			"description": "Days, or Months (calendar months in your business time zone).",
 			"default": "days",
-			"enum": ["days", "months"]
+			"enum": ["days", "months"],
+			"x-ui": {
+				"group": "Expiry",
+				"order": 22
+			}
 		},
 		"expiryRule": {
 			"type": "string",
 			"title": "Expiry follows",
 			"description": "At earn: the setting when the points were earned. Current: today's setting, so a change applies to past points too.",
 			"default": "at_earn",
-			"enum": ["at_earn", "current"]
+			"enum": ["at_earn", "current"],
+			"x-ui": {
+				"group": "Expiry",
+				"order": 23
+			}
 		},
 		"memberFlag": {
 			"type": "string",
 			"title": "Loyalty members",
 			"description": "Off: every customer the settings above let in is a member. Manual: only customers your staff mark as members earn, see and redeem points. First order: a customer becomes a member with their first order (staff can mark or unmark anyone too). The customers list's loyalty segment is the members.",
 			"default": "off",
-			"enum": ["off", "manual", "first_order"]
+			"enum": ["off", "manual", "first_order"],
+			"x-ui": {
+				"group": "Members",
+				"order": 31
+			}
 		}
 	}
 }

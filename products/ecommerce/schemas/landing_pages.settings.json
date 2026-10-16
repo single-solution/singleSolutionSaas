@@ -8,28 +8,44 @@
 			"description": "A landing page set to Automatic is indexed by search engines while at least this many of its products are in stock (and, while Automatic landing pages is on, at least In-stock variants to index of their variants).",
 			"default": 3,
 			"minimum": 1,
-			"maximum": 1000
+			"maximum": 1000,
+			"x-ui": {
+				"group": "Landing pages",
+				"order": 2
+			}
 		},
 		"landingUrl": {
 			"type": "string",
 			"title": "Landing page address",
 			"description": "Where a landing page is on your website: {categoryUrl} (its category's page), {category}, {brand}, {facet} (the listing parameter of its facet: grade or attr.<slug>) and {value} (the facet's value), for example {categoryUrl}?brand={brand}&{facet}={value} or /shop/{category}/{brand}/{value}. Query pairs with an empty name or value are left out.",
 			"default": "{categoryUrl}?brand={brand}&{facet}={value}",
-			"maxLength": 300
+			"maxLength": 300,
+			"x-ui": {
+				"group": "Landing pages",
+				"order": 1
+			}
 		},
 		"auto": {
 			"type": "string",
 			"title": "Automatic landing pages",
 			"description": "Off: only the landing pages you create. Category brand: every category and brand with enough products and variants in stock is a landing page without creating it (indexed and in the sitemap; one you create wins). Category brand facet: also every category and brand with each value of the field Automatic facet.",
 			"default": "off",
-			"enum": ["off", "category_brand", "category_brand_facet"]
+			"enum": ["off", "category_brand", "category_brand_facet"],
+			"x-ui": {
+				"group": "Automatic pages",
+				"order": 11
+			}
 		},
 		"autoFacet": {
 			"type": "string",
 			"title": "Automatic facet",
 			"description": "With Category brand facet: the field whose values make automatic pages: the slug of a field shoppers filter by (for example color), or grade for condition grades. Empty, or a field shoppers do not filter by: no facet pages.",
 			"default": "",
-			"maxLength": 64
+			"maxLength": 64,
+			"x-ui": {
+				"group": "Automatic pages",
+				"order": 12
+			}
 		},
 		"autoMaxPages": {
 			"type": "integer",
@@ -37,7 +53,11 @@
 			"description": "At most this many automatic landing pages are listed in the sitemaps, those with the most products in stock first, so each read stays light on a small database.",
 			"default": 2000,
 			"minimum": 1,
-			"maximum": 2000
+			"maximum": 2000,
+			"x-ui": {
+				"group": "Automatic pages",
+				"order": 15
+			}
 		},
 		"autoMinProducts": {
 			"type": "integer",
@@ -45,7 +65,11 @@
 			"description": "An automatic landing page exists while at least this many of its products are in stock. A landing page you create for such a category and brand (and facet value), set to Automatic, is indexed from the lower of this and Products in stock to index.",
 			"default": 2,
 			"minimum": 1,
-			"maximum": 1000
+			"maximum": 1000,
+			"x-ui": {
+				"group": "Automatic pages",
+				"order": 13
+			}
 		},
 		"autoMinInStockVariants": {
 			"type": "integer",
@@ -53,21 +77,33 @@
 			"description": "An automatic landing page is indexed only while at least this many variants of its products are in stock; while Automatic landing pages is on, so is a landing page you create set to Automatic.",
 			"default": 3,
 			"minimum": 1,
-			"maximum": 100000
+			"maximum": 100000,
+			"x-ui": {
+				"group": "Automatic pages",
+				"order": 14
+			}
 		},
 		"autoCopy": {
 			"type": "string",
 			"title": "Copy of automatic pages",
 			"description": "Formula: the automatic page title and description patterns below, from the category, brand and facet names and what is in stock. AI: when staff save a product, Ecommerce writes one of its automatic pages with your AI provider (AI copy on and its key in Connections) and keeps it as a landing page you can edit; until then, and when the provider does not answer, the formula.",
 			"default": "formula",
-			"enum": ["formula", "ai"]
+			"enum": ["formula", "ai"],
+			"x-ui": {
+				"group": "Automatic pages",
+				"order": 16
+			}
 		},
 		"autoTitle": {
 			"type": "string",
 			"title": "Automatic page title",
 			"description": "An automatic landing page's heading and part of the page title: {category} and {brand} (their names), {facet} (the facet field's name) and {value} (its value), {products} and {variants} (in stock), {price} (the lowest price in stock) and {storeName}, for example {brand} {category}.",
 			"default": "{category} {brand} {value}",
-			"maxLength": 160
+			"maxLength": 160,
+			"x-ui": {
+				"group": "Automatic pages",
+				"order": 17
+			}
 		},
 		"autoDescription": {
 			"type": "string",
@@ -76,7 +112,9 @@
 			"default": "",
 			"maxLength": 500,
 			"x-ui": {
-				"widget": "textarea"
+				"widget": "textarea",
+				"group": "Automatic pages",
+				"order": 18
 			}
 		},
 		"attributeUrl": {
@@ -84,14 +122,22 @@
 			"title": "Attribute glossary address",
 			"description": "Where an attribute's glossary page is on your website, with {slug} and {category} (the category's slug), for example /glossary/{slug} or /attributes/{category}/{slug}. With {category}, an attribute defined for one category has its page there, one for every category a page in each category it names. Set, every active attribute's page is listed in the sitemap. Empty: there are no attribute glossary pages.",
 			"default": "",
-			"maxLength": 200
+			"maxLength": 200,
+			"x-ui": {
+				"group": "Attribute glossary",
+				"order": 21
+			}
 		},
 		"attributeTitle": {
 			"type": "string",
 			"title": "Attribute glossary title",
 			"description": "An attribute glossary page's part of the page title when it has no SEO title: {name} is the attribute, {unit} its unit, {values} its first values, {category} the page's category, {storeName} the name in titles, for example What is {name}?",
 			"default": "{name}",
-			"maxLength": 160
+			"maxLength": 160,
+			"x-ui": {
+				"group": "Attribute glossary",
+				"order": 22
+			}
 		},
 		"attributeDescription": {
 			"type": "string",
@@ -100,7 +146,9 @@
 			"default": "",
 			"maxLength": 500,
 			"x-ui": {
-				"widget": "textarea"
+				"widget": "textarea",
+				"group": "Attribute glossary",
+				"order": 23
 			}
 		},
 		"gradeUrl": {
@@ -108,14 +156,22 @@
 			"title": "Grade glossary address",
 			"description": "Where a grade's glossary page is on your website, with {key} and {category} (the category's slug), for example /grades/{key} or /grades/{category}/{key}. With {category}, a grade defined for one category has its page there, one for every category a page in each category it names. Empty: there are no grade glossary pages (they are left out of the sitemap).",
 			"default": "",
-			"maxLength": 200
+			"maxLength": 200,
+			"x-ui": {
+				"group": "Grade glossary",
+				"order": 31
+			}
 		},
 		"gradeTitle": {
 			"type": "string",
 			"title": "Grade glossary title",
 			"description": "A grade glossary page's part of the page title when it has no SEO title: {name} is the grade, {category} the page's category, {storeName} the name in titles, for example {name} condition explained.",
 			"default": "{name}",
-			"maxLength": 160
+			"maxLength": 160,
+			"x-ui": {
+				"group": "Grade glossary",
+				"order": 32
+			}
 		},
 		"gradeDescription": {
 			"type": "string",
@@ -124,7 +180,9 @@
 			"default": "",
 			"maxLength": 500,
 			"x-ui": {
-				"widget": "textarea"
+				"widget": "textarea",
+				"group": "Grade glossary",
+				"order": 33
 			}
 		}
 	}
