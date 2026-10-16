@@ -14,7 +14,8 @@
  *   media route gets a file from storage only for keys Ecommerce named; it never changes for the same file.
  * @module
  */
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { constantTimeEqual } from '@ss/protocol';
 import { ORDER_KEY_LENGTH } from '../core/guests.js';
 
 /** An order key's characters. */
@@ -39,9 +40,7 @@ export const orderKeyHash = (key) => createHash('sha256').update(key).digest('ba
  */
 export const keyOpens = (key, hash) => {
 	if (typeof key !== 'string' || key.length !== ORDER_KEY_LENGTH || !hash) return false;
-	const given = Buffer.from(orderKeyHash(key));
-	const kept = Buffer.from(hash);
-	return given.length === kept.length && timingSafeEqual(given, kept);
+	return constantTimeEqual(orderKeyHash(key), hash);
 };
 
 /** A lock as signed. @typedef {{ dealId: string, variantId: string, price: number, perUnit: number, exp: number }} Lock */
@@ -78,9 +77,7 @@ export const readLock = (text, { secret, websiteId, now }) => {
 	if (typeof text !== 'string' || text.length === 0 || text.length > MAX_LOCK) return null;
 	const [body, signature, ...rest] = text.split('.');
 	if (!body || !signature || rest.length > 0) return null;
-	const expected = Buffer.from(signatureOf(secret, websiteId, body));
-	const given = Buffer.from(signature);
-	if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
+	if (!constantTimeEqual(signatureOf(secret, websiteId, body), signature)) return null;
 	try {
 		const raw = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
 		const lock = { dealId: raw.d, variantId: raw.v, price: raw.p, perUnit: raw.u, exp: raw.e };
@@ -116,8 +113,5 @@ export const mediaSignature = (secret, key) =>
  * @param {string} secret @param {string} key @param {unknown} signature
  */
 export const mediaSignatureOk = (secret, key, signature) => {
-	if (typeof signature !== 'string') return false;
-	const expected = Buffer.from(mediaSignature(secret, key));
-	const given = Buffer.from(signature);
-	return expected.length === given.length && timingSafeEqual(expected, given);
+	return constantTimeEqual(mediaSignature(secret, key), signature);
 };

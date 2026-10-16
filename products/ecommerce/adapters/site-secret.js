@@ -12,7 +12,7 @@
  * @module
  */
 import { createSealer as createKitSealer, resealEach } from '@ss/app-kit';
-import { randomBytes } from 'node:crypto';
+import { randomToken } from '@ss/protocol';
 
 /**
  * The sealer of Ecommerce's own secrets.
@@ -65,7 +65,7 @@ export const createSiteSecrets = ({ store, sealer, now }) => {
 			const doc = await store.get('settings', idOf(websiteId));
 			let secret = secretOf(websiteId, doc);
 			if (secret === null) {
-				const fresh = randomBytes(32).toString('base64url');
+				const fresh = randomToken(32);
 				// none yet: the first written wins; one that no longer opens (ENCRYPTION_KEY lost) is replaced
 				if (doc) await store.put('settings', idOf(websiteId), recordOf(websiteId, fresh));
 				else await store.insert('settings', idOf(websiteId), recordOf(websiteId, fresh));
