@@ -144,9 +144,9 @@ describe('notes routes', () => {
 		const none = await env.call('POST', '/v1/data-rights/export', { token: env.server, body: { user: { id: 'u_9' } } });
 		expect((await none.json()).records).toEqual({});
 		const deleted = await env.call('POST', '/v1/data-rights/delete', { token: env.server, body: { user } });
-		expect(await deleted.json()).toEqual({ deleted: 1, anonymised: 0 });
+		expect(await deleted.json()).toEqual({ deleted: 1, anonymized: 0 });
 		const nothing = await env.call('POST', '/v1/data-rights/delete', { token: env.server, body: { user: { id: 'u_9' } } });
-		expect(await nothing.json()).toEqual({ deleted: 0, anonymised: 0 });
+		expect(await nothing.json()).toEqual({ deleted: 0, anonymized: 0 });
 	});
 });
 

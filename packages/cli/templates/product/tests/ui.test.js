@@ -188,7 +188,7 @@ describe('admin widget', () => {
 		expect(without.shadowRoot?.querySelector('[role="status"]')?.textContent).toBe(strings['inbox.signedOut']);
 		signedOut.unmount();
 		expect(cancel).not.toHaveBeenCalled();
-		// unmounted before the renewal: the renewal is cancelled
+		// unmounted before the renewal: the renewal is canceled
 		mountInbox({ host: place('inbox'), ...options }).unmount();
 		expect(cancel).toHaveBeenCalledWith(1);
 		// the renewal gets no ticket: Signed out
