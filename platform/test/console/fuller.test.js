@@ -163,8 +163,9 @@ describe('fuller Portal screens (jsdom)', () => {
 			withToasts(<OverviewView {...overview} admin={owner} />);
 			// an inner sidebar, one view at a time: what needs the admin (with what happens if it waits) and the setup
 			// checklist first; the month's numbers, the first merchants, the products and the timeline are links
-			for (const text of ['Welcome back', 'Needs you', 'Credits are running low', 'Getting the platform ready'])
+			for (const text of ['Welcome back', 'Needs you', 'Credits are running low', 'Email sending is not set up'])
 				expect(shows(text)).toBe(true);
+			expect(shows('Getting the platform ready')).toBe(false); // a product, a merchant and a website exist: nothing left to set up
 			await openSection('Credits');
 			expect(shows('Credits added this month (UTC)')).toBe(true);
 			await openSection('Merchants');
