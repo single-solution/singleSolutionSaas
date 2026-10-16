@@ -120,12 +120,6 @@ export const LISTS = Object.freeze({
 /** @typedef {keyof typeof LISTS} ListName */
 
 /**
- * @param {unknown} name
- * @returns {name is ListName}
- */
-export const isListName = (name) => typeof name === 'string' && Object.hasOwn(LISTS, name);
-
-/**
  * @param {{ store: import('@ss/app-kit').Store, now: () => number, guards?: Partial<Record<ListName, ListGuard>> }} options
  *   `guards`: checks of a list against the merchant's data before it is saved (both the dashboard and the settings API
  *   save through here)

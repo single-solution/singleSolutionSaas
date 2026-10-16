@@ -4,12 +4,11 @@
  * promotions, extras (returns, reviews, wishlist, alerts, compare, reports) and SEO (with feeds, llms.txt and the Chat
  * lookups). Every browser-token, server-token and ticket route belongs to one feature; `openapi.json` is generated from
  * the definitions (`ss app assets`), so `method`, `path`, `auth`, `feature` and `permission` stay string literals.
- * This file adds the public widget script and docs, the dashboard's list settings, and joins the parts' data-rights
- * answers and widget settings. Public entry `./routes` of this package: `product.handler(createRoutes(product))`.
+ * This file adds the public widget script and docs, and joins the parts' data-rights answers and widget settings (the
+ * dashboard's list settings are the kit's). Public entry `./routes` of this package: `product.handler(createRoutes(product))`.
  * @module
  */
-import { defineRoute, problem } from '@ss/app-kit';
-import { LISTS, isListName } from '../adapters/lists.js';
+import { defineRoute } from '@ss/app-kit';
 import { gradesByKey } from '../core/grades.js';
 import { createCatalog } from './catalog.js';
 import { createCheckout } from './checkout.js';
@@ -118,21 +117,6 @@ export const createRoutes = (product) => {
 		},
 	});
 
-	/** @param {any} ctx */
-	const listName = (ctx) => {
-		const name = ctx.params.list;
-		if (!isListName(name)) throw problem('not_found', 'There is no such list.');
-		return name;
-	};
-
-	/** @param {any} ctx */
-	const who = (ctx) => ({
-		kind: ctx.session.kind,
-		id: ctx.session.subject,
-		name: ctx.session.name,
-		...(ctx.session.role ? { role: ctx.session.role } : {}),
-	});
-
 	return [
 		...areas.flatMap((area) => area.routes),
 
@@ -149,51 +133,6 @@ export const createRoutes = (product) => {
 
 		// the Atlas Search index state on Overview (E14)
 		...createDashboardSearch(product),
-
-		// the dashboard's list settings (order flow, couriers, delivery zones, tax rules, grades, booking hours)
-		defineRoute({
-			method: 'GET',
-			path: '/v1/dashboard/websites/:websiteId/lists/:list',
-			auth: 'dashboard',
-			handler: async (ctx) => ({ value: await product.lists.get(String(ctx.params.websiteId), listName(ctx)) }),
-		}),
-		defineRoute({
-			method: 'PUT',
-			path: '/v1/dashboard/websites/:websiteId/lists/:list',
-			auth: 'dashboard',
-			handler: async (ctx) => {
-				const name = listName(ctx);
-				const websiteId = String(ctx.params.websiteId);
-				// merchants edit the settings of switched-on features only (admins may prepare them)
-				if (ctx.session.kind === 'merchant' && !(await product.featuresOn(websiteId)).includes(LISTS[name].feature))
-					throw problem('feature_off', 'This feature is off.');
-				const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
-				const saved = await product.lists.save(websiteId, name, /** @type {any} */ (body).value);
-				if (!saved.ok) {
-					const errors = saved.errors.map((error) =>
-						typeof error === 'string'
-							? { path: '/value', message: error, code: 'invalid' }
-							: { path: error.path, message: error.message, code: error.code ?? 'invalid' },
-					);
-					throw problem('validation_failed', errors.map((error) => error.message).join(' '), { errors });
-				}
-				await product.recentChanges.record({
-					websiteId,
-					who: who(ctx),
-					what: 'settings',
-					detail: `${LISTS[name].title}: changed`,
-				});
-				// an activity-log entry by who saved it and the settings.changed event, as the kit's own saves (parity SB #12)
-				await product.settingsChanged(ctx, {
-					what: 'list',
-					key: name,
-					who: who(ctx),
-					label: LISTS[name].title,
-					detail: 'changed',
-				});
-				return { value: saved.value };
-			},
-		}),
 
 		// public docs: no sign-in, no tokens
 		defineRoute({
