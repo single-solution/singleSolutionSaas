@@ -79,7 +79,7 @@ input[role='switch']::before, input[role='switch']:checked::before { width: 18px
 input[role='switch']:checked::before { margin-inline-start: 19px; }
 input:is([type='checkbox'], [type='radio']):disabled { opacity: 0.5; cursor: not-allowed; }
 .check, .switch { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0; font-size: 1em; font-weight: 400; cursor: pointer; }
-.check > input { margin-top: 2px; } .switch > input { margin-top: 0; }
+.check > input, .choice > input { margin-top: 2px; } .switch > input { margin-top: 0; }
 .opt > .help { margin-inline-start: 28px; }
 .setting { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 14px 0; border-top: 1px solid var(--ss-kit-hair); }
 .setting:first-child { border-top: 0; padding-top: 4px; }
@@ -103,7 +103,7 @@ input:is([type='checkbox'], [type='radio']):disabled { opacity: 0.5; cursor: not
 fieldset, .block { box-sizing: border-box; min-width: 0; margin: 0; padding: 16px 20px 18px; border: 1px solid var(--ss-kit-hair);
   border-radius: var(--ss-kit-rc); background: var(--ss-kit-card); box-shadow: var(--ss-kit-shadow); }
 fieldset + fieldset, .block + .block, :is(fieldset, .block) + :is(fieldset, .block) { margin-top: 16px; }
-:is(fieldset, .block, .pane) :is(fieldset, .block) { background: transparent; box-shadow: none; border-color: var(--ss-kit-hair); }
+:is(fieldset, .block, .pane, .box:not(.admin)) :is(fieldset, .block, .box) { background: transparent; box-shadow: none; border-color: var(--ss-kit-hair); }
 legend { float: left; width: 100%; margin: 0 0 12px; padding: 0; font-size: 1.0625em; font-weight: 600; } legend + * { clear: both; }
 .block-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 16px; margin-bottom: 12px; }
 .block-head > div:first-child { flex: 1 1 14rem; min-width: 0; }
