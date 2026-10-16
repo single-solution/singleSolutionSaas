@@ -231,10 +231,7 @@ describe('launch rules', () => {
 		['support without channels', { support: { email: 'a@b.c' } }],
 		['a support channel of an unknown type', { support: { channels: [{ type: 'fax', label: 'Fax', url: 'tel:+15550100' }] } }],
 		['a support link that is not https', { support: { channels: [{ type: 'link', label: 'Help', url: 'http://help.test' }] } }],
-		[
-			'too many support channels',
-			{ support: { channels: Array.from({ length: 11 }, () => support.channels[0]) } },
-		],
+		['too many support channels', { support: { channels: Array.from({ length: 11 }, () => support.channels[0]) } }],
 	];
 	it.each(refused)('refuses to issue %s', async (_name, extra) => {
 		const clock = createClock();

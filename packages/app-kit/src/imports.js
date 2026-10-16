@@ -105,14 +105,14 @@ const MAX_ENTRY_VALUES = 20;
 export const summaryValues = (summary) =>
 	/** @type {Record<string, string | number | boolean>} */ (
 		Object.fromEntries(
-		Object.entries(summary)
-			.filter(
-				([, value]) =>
-					(typeof value === 'number' && Number.isFinite(value)) ||
-					typeof value === 'boolean' ||
-					(typeof value === 'string' && value.length <= 200),
-			)
-			.slice(0, MAX_ENTRY_VALUES),
+			Object.entries(summary)
+				.filter(
+					([, value]) =>
+						(typeof value === 'number' && Number.isFinite(value)) ||
+						typeof value === 'boolean' ||
+						(typeof value === 'string' && value.length <= 200),
+				)
+				.slice(0, MAX_ENTRY_VALUES),
 		)
 	);
 
