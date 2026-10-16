@@ -321,12 +321,20 @@ describe('Growth on the real Portal', () => {
 		const run = await sys.call('POST', '/v1/seo/checks', { token: tokens.server, body: {} });
 		expect(run.status).toBe(200);
 		expect(run.json.cached).toBe(false);
-		expect(run.json.pages).toEqual([
+		expect(run.json.pages.map((/** @type {any} */ { url, kind, sampled }) => ({ url, kind, sampled }))).toEqual([
 			{ url: `https://${DOMAIN}/`, kind: 'home', sampled: false },
 			{ url: `https://${DOMAIN}/products/blue-lamp`, kind: 'Product', sampled: true },
 			{ url: `https://${DOMAIN}/lamps`, kind: 'CollectionPage', sampled: true },
 			{ url: `https://${DOMAIN}/glossary/linen`, kind: 'DefinedTerm', sampled: true },
 		]);
+		// each page read keeps its head for the checklist's search result and share preview (R7 #105)
+		expect(run.json.pages[1].head).toEqual({
+			title: 'Blue Lamp | Grow Example',
+			description: 'Blue Lamp | Grow Example, with the details shoppers ask for before they buy, and delivery in two days.',
+			url: `https://${DOMAIN}/products/blue-lamp`,
+			image: '',
+			siteName: '',
+		});
 		/** @param {string} id @param {string | null} [at] */
 		const result = (id, at) => {
 			const item = run.json.checks.find(
