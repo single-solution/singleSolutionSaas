@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { IMPORT_LIMITS, defineRoute } from '../src/index.js';
+import { IMPORT_LIMITS } from '@ss/contracts';
+import { defineRoute } from '../src/index.js';
 import { summaryValues } from '../src/imports.js';
 import { DOMAIN, manifest, openDb, productRoutes, setup } from './helpers.js';
 
@@ -201,8 +202,8 @@ describe('import routes (K10)', () => {
 		);
 	});
 
-	it('report unique values already taken, and a product without imports answers nothing', async () => {
-		const { send, dbName, product } = await start();
+	it('report unique values already taken', async () => {
+		const { send, dbName } = await start();
 		const { client, db } = await openDb(dbName);
 		await db.collection('ss_notes_notes').createIndex({ websiteId: 1, text: 1 }, { unique: true });
 		const result = await send(
@@ -217,18 +218,6 @@ describe('import routes (K10)', () => {
 			failed: [{ line: 2, errors: [{ message: 'A unique value is already taken.' }] }],
 		});
 		await client.close();
-		expect(Object.keys(product.imports).sort()).toEqual(['finish', 'prune', 'status', 'upsert']);
-		// prune has one name: the old upsert.prune alias is gone (every product's route calls imports.prune)
-		expect(/** @type {Record<string, unknown>} */ (/** @type {unknown} */ (product.imports.upsert)).prune).toBeUndefined();
-		const plain = await setup();
-		const status = await plain.product.imports.status({
-			data: async () => ({ collection: () => null, ensureIndexes: async () => ({ created: [] }) }),
-			websiteId: plain.websiteId,
-		});
-		expect(status).toEqual({ collections: {}, imported: {}, totals: {} });
-		await expect(plain.product.imports.upsert({ params: { collection: 'notes' } })).rejects.toMatchObject({
-			code: 'not_found',
-		});
 	});
 
 	it('replace the stored record, so fields the source no longer has go, and keep createdAt', async () => {
@@ -412,21 +401,15 @@ describe('import routes (K10)', () => {
 		expect((await plain.call('GET', '/v1/import/status', { token: plain.server.token })).status).toBe(404);
 	});
 
-	it("give way to a product's own route of the same method and path (until every product has dropped its copy)", async () => {
+	it("refuse a product's own route of the same method and path as an import route", async () => {
 		const own = defineRoute({
 			method: 'GET',
 			path: '/v1/import/status',
 			auth: 'server',
 			feature: 'notes',
-			handler: () => ({ own: true }),
+			handler: () => ({}),
 		});
-		const ctx = await setupImports({ routes: [...productRoutes(), own], imports: IMPORTS });
-		await ctx.switchOn(['notes']);
-		await ctx.connectDatabase();
-		expect(await (await ctx.call('GET', '/v1/import/status', { token: ctx.server.token })).json()).toEqual({ own: true });
-		// a kit route that is not replaceable stays a duplicate
-		const twin = defineRoute({ method: 'GET', path: '/v1/features', auth: 'server', handler: () => ({}) });
-		await expect(setupImports({ routes: [twin], imports: IMPORTS })).rejects.toThrow(/duplicate route/);
+		await expect(setupImports({ routes: [...productRoutes(), own], imports: IMPORTS })).rejects.toThrow(/duplicate route/);
 	});
 
 	it('refuse definitions that cannot work', async () => {

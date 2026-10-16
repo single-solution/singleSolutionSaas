@@ -29,10 +29,6 @@ export {
 	renderDocsPage,
 } from './docs.js';
 export { PRODUCT_DATABASE_OPTIONS } from './data.js';
-// kept only until Ecommerce switches (E-S): server code takes Format helpers from `@ss/contracts/format`, and the kit
-// serves the import routes (no product needs IMPORT_LIMITS)
-export { IMPORT_LIMITS } from '@ss/contracts';
-export { zonedParts } from '@ss/contracts/format';
 
 /** @typedef {import('./product.js').ProductOptions} ProductOptions */
 /** @typedef {import('./http/routes.js').RouteDefinition} RouteDefinition */

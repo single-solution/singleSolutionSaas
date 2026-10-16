@@ -170,28 +170,6 @@ export const createProductBase = (options) => {
 };
 
 /**
- * Kit routes a product's own route of the same method and path still replaces: the dashboard list twin and the import
- * routes, which products wrote themselves before the kit served them. Only until the last product has dropped its copy
- * (Ecommerce); then this goes.
- */
-const REPLACEABLE_ROUTES = new Set([
-	'GET /v1/dashboard/websites/:/lists/:',
-	'PUT /v1/dashboard/websites/:/lists/:',
-	'POST /v1/import/:',
-	'POST /v1/import/:/prune',
-	'POST /v1/import/finish',
-	'GET /v1/import/status',
-]);
-
-/** A route with every parameter alike (`GET /v1/import/:`). @param {{ method: string, path: string }} route */
-const routeShape = ({ method, path }) =>
-	`${method} /${path
-		.split('/')
-		.filter(Boolean)
-		.map((segment) => (segment.startsWith(':') ? ':' : segment))
-		.join('/')}`;
-
-/**
  * @param {ProductOptions} options
  */
 export const createProduct = (options) => {
@@ -479,9 +457,7 @@ export const createProduct = (options) => {
 		 * @param {{ after?: (task: () => Promise<unknown>) => void }} [handlerOptions]
 		 */
 		handler: (routes, handlerOptions) => {
-			const own = new Set(routes.map(routeShape));
-			const served = kitRoutes.filter((route) => !(REPLACEABLE_ROUTES.has(routeShape(route)) && own.has(routeShape(route))));
-			return createRequestHandler(kit, [...served, ...routes], handlerOptions);
+			return createRequestHandler(kit, [...kitRoutes, ...routes], handlerOptions);
 		},
 		/** Whether the product serves a website now (status checks). */
 		serving: status.serving,
@@ -520,7 +496,6 @@ export const createProduct = (options) => {
 			drain: events.drain,
 		}),
 		staffAlerts: Object.freeze({ send: staffAlerts.send, prepare: staffAlerts.prepare, forget: staffAlerts.forget }),
-		imports: Object.freeze({ upsert: imports.upsert, prune: imports.prune, finish: imports.finish, status: imports.status }),
 		recentChanges: Object.freeze({ record: recent.record, list: recent.list }),
 		/** Accounts sign-ins of a website, verified offline with its pasted Accounts token (PLAN 0.4.6). */
 		accounts,
