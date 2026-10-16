@@ -638,6 +638,12 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 	// events
 	launcher.addEventListener('click', () => (isOpen ? close() : void open()));
 	closer.addEventListener('click', close);
+	// Escape closes the window and gives focus back to the launcher
+	panel.addEventListener('keydown', (event) => {
+		if (event.key !== 'Escape' || !isOpen) return;
+		close();
+		launcher.focus();
+	});
 	nudgeText.addEventListener('click', () => void open());
 	nudgeClose.addEventListener('click', () => {
 		memory.dismiss(s.proactive.dismissDays);

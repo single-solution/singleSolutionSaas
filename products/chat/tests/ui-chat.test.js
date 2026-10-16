@@ -152,6 +152,13 @@ describe('starting', () => {
 		expect(server.all('GET /v1/chat')).toHaveLength(0);
 		await click(buttonIn(root, TEXTS['chat.close']));
 		expect($('.window').hidden).toBe(true);
+		// Escape closes the open window too, and focus goes back to the launcher
+		await click($('.launcher'));
+		expect($('.window').hidden).toBe(false);
+		$('.window').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		expect($('.window').hidden).toBe(true);
+		expect($('.launcher').getAttribute('aria-expanded')).toBe('false');
+		expect(root.activeElement).toBe($('.launcher'));
 	});
 });
 
