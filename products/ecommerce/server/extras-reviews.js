@@ -10,12 +10,15 @@
 import { createId } from '@ss/contracts';
 import { countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
 import { keyOpens } from '../adapters/crypto.js';
-import { isDuplicate, refreshRating, reviewSummary, userIdsOf } from '../adapters/extras-store.js';
+import { answerCounts, isDuplicate, refreshRating, reviewSummary, userIdsOf } from '../adapters/extras-store.js';
 import { afterFilter, keyOf, sortOf } from '../core/extras-pages.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
 	REVIEW_SORTS,
 	REVIEW_STATUSES,
+	answerSummary,
+	answersView,
+	checkAnswers,
 	checkLineReviewInput,
 	checkReply,
 	checkReviewInput,
@@ -49,11 +52,12 @@ const bodyOf = (ctx) => (typeof ctx.body === 'object' && ctx.body !== null ? ctx
 
 /**
  * A review as visitors see it: the name as `nameFormat` shows it, `verified` when written from an order, and the
- * variant bought (E34).
+ * variant bought (E34), and the answers to the merchant's questions still asked (E40).
  * @param {StoredReview} review
  * @param {unknown} [nameFormat]
+ * @param {ReadonlyArray<import('../core/reviews.js').ReviewQuestion>} [questions]
  */
-const publicView = (review, nameFormat = 'full') => ({
+const publicView = (review, nameFormat = 'full', questions = []) => ({
 	id: review.id,
 	name: shownName(review.name, nameFormat),
 	verified: Boolean(review.orderId),
@@ -62,12 +66,16 @@ const publicView = (review, nameFormat = 'full') => ({
 	title: review.title,
 	body: review.body,
 	reply: review.reply,
+	answers: answersView(review.answers, questions),
 	createdAt: new Date(review.createdAt).toISOString(),
 });
 
-/** @param {StoredReview} review */
-const staffView = (review) => ({
-	...publicView(review),
+/**
+ * @param {StoredReview} review
+ * @param {ReadonlyArray<import('../core/reviews.js').ReviewQuestion>} [questions]
+ */
+const staffView = (review, questions = []) => ({
+	...publicView(review, 'full', questions),
 	productId: review.productId,
 	userId: review.userId,
 	orderId: review.orderId,
@@ -122,7 +130,7 @@ export const createReviews = (product, service) => {
 		}
 		if (review.status === 'approved') await refreshRating(data, review.productId);
 		await service.emit('review.submitted', s, { review });
-		return created(staffView(await reviewOf(data, review.id)));
+		return created(staffView(await reviewOf(data, review.id), await s.list('review_questions')));
 	};
 
 	/**
@@ -145,6 +153,7 @@ export const createReviews = (product, service) => {
 		const checked = checkReviewInput(bodyOf(ctx));
 		if (!checked.ok) throw service.invalid(checked.field, checked.message);
 		const input = checked.value;
+		const answers = await answersOf(s, ctx);
 		const data = await s.data();
 		await activeProduct(data, input.productId);
 		const order = /** @type {Pick<OrderRecord, 'id' | 'lines'> | null} */ (
@@ -172,6 +181,7 @@ export const createReviews = (product, service) => {
 				rating: input.rating,
 				title: input.title,
 				body: input.body,
+				answers,
 			},
 			'You have already reviewed this product.',
 		);
@@ -189,6 +199,7 @@ export const createReviews = (product, service) => {
 		const checked = checkLineReviewInput(bodyOf(ctx));
 		if (!checked.ok) throw service.invalid(checked.field, checked.message);
 		const input = checked.value;
+		const answers = await answersOf(s, ctx);
 		const data = await s.data();
 		const order = /** @type {OrderRecord | null} */ (
 			await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id: input.orderId }, ORDER_FIELDS)
@@ -218,9 +229,20 @@ export const createReviews = (product, service) => {
 				rating: input.rating,
 				title: input.title,
 				body: input.body,
+				answers,
 			},
 			'You have already reviewed this item.',
 		);
+	};
+
+	/**
+	 * The answers to the merchant's review questions a review gives (E40).
+	 * @param {Site} s @param {any} ctx
+	 */
+	const answersOf = async (s, ctx) => {
+		const checked = checkAnswers(bodyOf(ctx).answers, await s.list('review_questions'));
+		if (!checked.ok) throw service.invalid(checked.field, checked.message);
+		return checked.value;
 	};
 
 	/** POST /v1/shop/reviews: of a product, or of an order line with `per: order_line` (E34). @param {any} ctx */
@@ -249,12 +271,19 @@ export const createReviews = (product, service) => {
 				)
 				.toArray()
 		);
+		/** @type {import('../core/reviews.js').ReviewQuestion[]} */
+		const questions = await s.list('review_questions');
 		const body = page.page(
-			rows.map((row) => publicView(row, nameFormat)),
+			rows.map((row) => publicView(row, nameFormat, questions)),
 			(view) => keyOf(fields, view),
 		);
 		const link = page.link(body.nextCursor);
-		return ok({ ...body, summary: await reviewSummary(data, productId) }, { headers: link ? { link } : {} });
+		const [summary, counted] = await Promise.all([reviewSummary(data, productId), answerCounts(data, productId)]);
+		// the answers to the merchant's questions: a rating's average, a choice's count per answer (E40)
+		return ok(
+			{ ...body, summary: { ...summary, questions: answerSummary(questions, counted) } },
+			{ headers: link ? { link } : {} },
+		);
 	};
 
 	/**
@@ -286,7 +315,10 @@ export const createReviews = (product, service) => {
 				.toArray()
 		);
 		// each review names its product, for the moderation list (names read once per page)
-		const data = await (await service.site(ctx)).data();
+		const s = await service.site(ctx);
+		const data = await s.data();
+		/** @type {import('../core/reviews.js').ReviewQuestion[]} */
+		const questions = await s.list('review_questions');
 		const names = new Map(
 			(
 				await data
@@ -299,7 +331,7 @@ export const createReviews = (product, service) => {
 			).map((row) => [String(row.id), String(row.name)]),
 		);
 		return page.respond(
-			rows.map((row) => ({ ...staffView(row), productName: names.get(row.productId) ?? '' })),
+			rows.map((row) => ({ ...staffView(row, questions), productName: names.get(row.productId) ?? '' })),
 			(view) => keyOf(NEWEST, view),
 		);
 	};
@@ -331,7 +363,7 @@ export const createReviews = (product, service) => {
 				detail: `${review.status} → ${status}`,
 			});
 		}
-		return staffView(await reviewOf(data, review.id));
+		return staffView(await reviewOf(data, review.id), await s.list('review_questions'));
 	};
 
 	/** @param {any} ctx */
@@ -346,7 +378,7 @@ export const createReviews = (product, service) => {
 			...(await reviewLabel(data, review)),
 			detail: checked.reply ? 'Reply saved' : 'Reply removed',
 		});
-		return staffView(await reviewOf(data, review.id));
+		return staffView(await reviewOf(data, review.id), await s.list('review_questions'));
 	};
 
 	/** @param {any} ctx */
@@ -374,7 +406,8 @@ export const createReviews = (product, service) => {
 						.find({ websiteId: data.websiteId, userId: { $in: users } }, NO_ID)
 						.toArray()
 		);
-		return { reviews: rows.map(staffView) };
+		const questions = await s.list('review_questions');
+		return { reviews: rows.map((row) => staffView(row, questions)) };
 	};
 
 	/**

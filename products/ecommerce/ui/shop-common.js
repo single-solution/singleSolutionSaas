@@ -117,6 +117,11 @@ export const settingsOf = (config) => {
 		reviews: {
 			per: raw.reviews?.per === 'order_line' ? 'order_line' : 'product',
 			pageSize: Number(raw.reviews?.pageSize) || 10,
+			/** the merchant's review questions (E40) */
+			questions:
+				/** @type {Array<{ key: string, label: string, type: 'rating' | 'choice', choices: string[], required: boolean }>} */ (
+					Array.isArray(raw.reviews?.questions) ? raw.reviews.questions : []
+				),
 		},
 		/** guests set alerts with a phone; a price-drop alert names a price (EN-1) */
 		alerts: {

@@ -69,6 +69,25 @@ export const reviewSummary = async (data, productId) => {
 };
 
 /**
+ * The answers to the review questions of a product's approved reviews, counted per question and answer (E40).
+ * @param {WebsiteData} data
+ * @param {string} productId
+ * @returns {Promise<Array<{ key: string, value: unknown, count: number }>>}
+ */
+export const answerCounts = async (data, productId) =>
+	(
+		await data
+			.collection(COLLECTIONS.reviews)
+			.aggregate([
+				{ $match: { websiteId: data.websiteId, productId, status: 'approved', answers: { $type: 'object' } } },
+				{ $project: { _id: 0, answer: { $objectToArray: '$answers' } } },
+				{ $unwind: '$answer' },
+				{ $group: { _id: { key: '$answer.k', value: '$answer.v' }, count: { $sum: 1 } } },
+			])
+			.toArray()
+	).map((row) => ({ key: String(row._id?.key ?? ''), value: row._id?.value, count: Number(row.count) }));
+
+/**
  * Keep a product's `rating` right after its approved reviews changed.
  * @param {WebsiteData} data
  * @param {string} productId

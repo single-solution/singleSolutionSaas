@@ -352,6 +352,17 @@ export const TEXTS = Object.freeze({
 			requiredAtHelp: 'The key of a status of your order flow (such as packed); empty: never needed.',
 			shoppers: 'Shown to shoppers in their order',
 		}),
+		reviewQuestions: Object.freeze({
+			title: 'Review questions',
+			help: 'What the review form asks besides the stars, such as fit, quality or value: a 1–5 rating, or one of your choices. Answers show on the reviews and in the product’s summary.',
+			item: 'Question',
+			key: 'Key (lower-case letters, digits, _ or -)',
+			label: 'Question',
+			type: 'Answer',
+			types: Object.freeze({ rating: 'A rating from 1 to 5', choice: 'One of your choices' }),
+			choices: 'Choices (one per line)',
+			required: 'Shoppers must answer it',
+		}),
 		claimKinds: Object.freeze({
 			title: 'Claim kinds',
 			help: 'What shoppers and staff can claim: each kind is counted in the return or the warranty window and ends in the outcomes you allow. Kinds offered to shoppers show on their claim form.',

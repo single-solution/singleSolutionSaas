@@ -187,6 +187,11 @@ export const LIST_WORDS = Object.freeze({
 		(/** @type {{ label: string, type: string, requiredAt: string }} */ kind) =>
 			`${nameOf(kind.label)} (${kind.type}${kind.requiredAt ? `, needed at ${kind.requiredAt}` : ''})`,
 	),
+	review_questions: named(
+		'review question',
+		'review questions',
+		(/** @type {{ label: string, type: string }} */ question) => `${nameOf(question.label)} (${question.type})`,
+	),
 	claim_kinds: named('claim kind', 'claim kinds', (/** @type {{ label: string }} */ kind) => nameOf(kind.label)),
 	claim_statuses: named(
 		'claim status',

@@ -5,7 +5,7 @@
  * until saved),
  * the region names checkout offers per country (dynamic model §5), tax rules, condition grades, unit states (E38), item types (dynamic model §1), booking schedules with their dated exceptions (E30), role prices (E19), the
  * cancel and failed-delivery reasons (fixed-choices E19), the order attachment kinds (E20) and the claim kinds and
- * statuses (E18). They are kept per website in the kit's settings collection (so a
+ * statuses (E18) and the review questions (E40). They are kept per website in the kit's settings collection (so a
  * removed website's lists go with its settings), each checked by its feature's rules, edited in the dashboard
  * (Settings, `/v1/dashboard/websites/:websiteId/lists/:list`) and recorded in Recent changes and the activity log. Lists have no global
  * defaults; an unsaved list reads as its code default. A list may also be checked against the merchant's data before
@@ -24,6 +24,7 @@ import { DEFAULT_POLICIES, checkPolicies } from '../core/policies.js';
 import { checkItemTypes } from '../core/item-types.js';
 import { checkPaymentMethods, defaultPaymentMethods } from '../core/payment-methods.js';
 import { checkRolePrices } from '../core/role-pricing.js';
+import { checkReviewQuestions } from '../core/reviews.js';
 import { DEFAULT_ATTACHMENT_KINDS, checkAttachmentKinds } from '../core/attachments.js';
 import { DEFAULT_CANCEL_REASONS, DEFAULT_DELIVERY_FAILURE_REASONS, checkReasons } from '../core/order-reasons.js';
 import { DEFAULT_CLAIM_KINDS, DEFAULT_CLAIM_STATUSES, checkClaimKinds, checkClaimStatuses } from '../core/returns.js';
@@ -101,6 +102,7 @@ export const LISTS = Object.freeze({
 		check: checkAttachmentKinds,
 		fallback: () => DEFAULT_ATTACHMENT_KINDS.map((kind) => ({ ...kind })),
 	},
+	review_questions: { feature: 'reviews', title: 'Review questions', check: checkReviewQuestions, fallback: () => [] },
 	claim_kinds: {
 		feature: 'returns',
 		title: 'Claim kinds',

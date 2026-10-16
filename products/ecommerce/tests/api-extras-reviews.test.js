@@ -161,10 +161,11 @@ describe('reviews', () => {
 				title: 'Good',
 				body: 'Works well.\nFast.',
 				reply: 'Thank you!',
+				answers: [],
 				createdAt: expect.any(String),
 			},
 		]);
-		expect(shown.json.summary).toEqual({ average: 4, count: 1, stars: { 1: 0, 2: 0, 3: 0, 4: 1, 5: 0 } });
+		expect(shown.json.summary).toEqual({ average: 4, count: 1, stars: { 1: 0, 2: 0, 3: 0, 4: 1, 5: 0 }, questions: [] });
 		expect(shown.json).toMatchObject({ nextCursor: null, hasMore: false });
 		// a server reply with nothing removes it
 		expect((await shop.api('POST', `/v1/reviews/${id}/reply`, {})).json.reply).toBe('');
@@ -179,8 +180,57 @@ describe('reviews', () => {
 			items: [],
 			nextCursor: null,
 			hasMore: false,
-			summary: { average: 0, count: 0, stars: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+			summary: { average: 0, count: 0, stars: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, questions: [] },
 		});
+	});
+
+	it('ask the merchant questions, show the answers on each review and sum them up (E40)', async () => {
+		await shop.list('review_questions', [
+			{ key: 'fit', label: 'Fit', type: 'choice', choices: ['Runs small', 'True to size', 'Runs large'], required: true },
+			{ key: 'quality', label: 'Quality', type: 'rating' },
+		]);
+		try {
+			const shoe = await shop.seedProduct({ name: 'Question shoe', variants: [variant({ options: { Color: 'Red' } })] });
+			await seedOrder({ product: shoe, placedAt: new Date('2025-01-11T10:00:00Z'), userId: SARA, variantName: 'Red' });
+			/** @param {Record<string, unknown>} answers */
+			const write = (answers) =>
+				shop.visitor('POST', '/v1/shop/reviews', {
+					signIn: sara,
+					key: createId('key'),
+					body: { productId: shoe.id, rating: 5, answers },
+				});
+			expect((await write({ quality: 4 })).json.errors[0]).toMatchObject({ path: '/answers/fit', message: 'Answer Fit.' });
+			expect((await write({ fit: 'Huge' })).json.errors[0].path).toBe('/answers/fit');
+			expect((await write({ fit: 'True to size', quality: 6 })).json.errors[0].path).toBe('/answers/quality');
+			expect((await write({ fit: 'True to size', color: 'Red' })).json.errors[0].path).toBe('/answers/color');
+			const written = await write({ fit: 'True to size', quality: 4 });
+			expect(written.status).toBe(201);
+			expect(written.json.answers).toEqual([
+				{ key: 'fit', label: 'Fit', type: 'choice', value: 'True to size' },
+				{ key: 'quality', label: 'Quality', type: 'rating', value: 4 },
+			]);
+			await shop.api('POST', `/v1/reviews/${written.json.id}/approve`);
+			const shown = await shop.visitor('GET', `/v1/shop/products/${shoe.id}/reviews`);
+			expect(shown.json.items[0].answers).toHaveLength(2);
+			expect(shown.json.summary.questions).toEqual([
+				{
+					key: 'fit',
+					label: 'Fit',
+					type: 'choice',
+					count: 1,
+					choices: { 'Runs small': 0, 'True to size': 1, 'Runs large': 0 },
+				},
+				{ key: 'quality', label: 'Quality', type: 'rating', count: 1, average: 4 },
+			]);
+			// the shop's widgets know the questions
+			const config = await shop.visitor('GET', '/v1/widget/config');
+			expect(config.json.settings.reviews.questions).toEqual([
+				{ key: 'fit', label: 'Fit', type: 'choice', choices: ['Runs small', 'True to size', 'Runs large'], required: true },
+				{ key: 'quality', label: 'Quality', type: 'rating', choices: [], required: false },
+			]);
+		} finally {
+			await shop.list('review_questions', []);
+		}
 	});
 });
 

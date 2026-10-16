@@ -60,11 +60,15 @@ export const createExtras = (product, service) => {
 			}
 			if (s.has('reviews')) {
 				const { moderation, per, pageSize } = await s.values('reviews');
+				/** @type {import('../core/reviews.js').ReviewQuestion[]} */
+				const questions = await s.list('review_questions');
 				settings.reviews = {
 					moderation: moderation === 'auto' ? 'auto' : 'manual',
 					// reviews of order lines are written from the order page (E34)
 					per: per === 'order_line' ? 'order_line' : 'product',
 					pageSize: Math.min(20, Math.max(5, Number(pageSize) || 10)),
+					// the merchant's questions the review form asks (E40)
+					questions: questions.map(({ key, label, type, choices, required }) => ({ key, label, type, choices, required })),
 				};
 			}
 			if (s.has('wishlist')) settings.wishlist = { max: MAX_WISHLIST };

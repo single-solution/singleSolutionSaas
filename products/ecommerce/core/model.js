@@ -633,7 +633,8 @@ export const STATUS_ROLES = Object.freeze([
 /**
  * @typedef {{ id: string, productId: string, userId: string, orderId: string, name: string, rating: number, title: string,
  *   body: string, status: 'pending' | 'approved' | 'rejected', reply: string, lineId?: string | null,
- *   variantName?: string }} ReviewRecord
+ *   variantName?: string, answers?: Record<string, number | string> }} ReviewRecord `answers`: to the merchant's review
+ *   questions by question key (E40)
  */
 /** @typedef {{ userId: string, productIds: string[] }} WishlistRecord */
 /**

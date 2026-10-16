@@ -3,15 +3,17 @@
  * The merchant's own lists of business choices (fixed-choices E18–E20, E40): claim kinds (a name, the window each is
  * counted in, its outcomes and whether shoppers may make it) and claim statuses (a name on a fixed role), feature
  * `returns`; cancel and failed-delivery reasons (each counting against the customer or not) and order attachment kinds
- * (photo, video or file, optionally needed at a status, shown to shoppers or not), feature `checkout`. Saved
+ * (photo, video or file, optionally needed at a status, shown to shoppers or not), feature `checkout`; review
+ * questions (a rating or one of its choices), feature `reviews`. Saved
  * whole with the shared list editor (`./lists.js`).
  * @module
  */
-import { Checkbox, CheckboxGroup, FieldGrid, Input, Select } from '@ss/ui';
+import { Checkbox, CheckboxGroup, FieldGrid, Input, Select, TextArea } from '@ss/ui';
 import { ATTACHMENT_LIMITS, ATTACHMENT_TYPES } from '../../core/attachments.js';
 import { REASON_LIMIT } from '../../core/order-reasons.js';
+import { QUESTION_LIMITS, QUESTION_TYPES } from '../../core/reviews.js';
 import { CLAIM_LIST_LIMITS, CLAIM_OUTCOMES, CLAIM_ROLES, CLAIM_WINDOWS } from '../../core/returns.js';
-import { keyOf } from './drafts.js';
+import { cleanLines, keyOf } from './drafts.js';
 import { ListEditor } from './lists.js';
 import { TEXTS } from './texts.js';
 
@@ -231,6 +233,70 @@ export function AttachmentKindsEditor({ websiteId, off }) {
 						label={A.shoppers}
 						checked={kind.shoppers === true}
 						onChange={(event) => set({ shoppers: event.target.checked })}
+					/>
+				</div>
+			)}
+		/>
+	);
+}
+
+const Q = TEXTS.lists.reviewQuestions;
+
+/** Review questions (`review_questions`, E40): a rating, or one of the merchant's choices (one per line). @param {EditorProps} props */
+export function ReviewQuestionsEditor({ websiteId, off }) {
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="review_questions"
+			title={Q.title}
+			help={Q.help}
+			itemLabel={Q.item}
+			max={QUESTION_LIMITS.questions}
+			off={off}
+			blank={() => ({ key: '', label: '', type: 'rating', choices: '', required: false })}
+			load={(question) => ({ ...question, choices: (question.choices ?? []).join('\n') })}
+			clean={(question) => ({
+				key: keyOf(question.key, question.label),
+				label: String(question.label ?? '').trim(),
+				type: question.type,
+				choices: question.type === 'choice' ? cleanLines(question.choices) : [],
+				required: question.required === true,
+			})}
+			render={(question, set) => (
+				<div className="space-y-3">
+					<FieldGrid>
+						<Input
+							label={Q.label}
+							value={question.label ?? ''}
+							maxLength={120}
+							onChange={(event) => set({ label: event.target.value })}
+						/>
+						<Input
+							label={Q.key}
+							value={question.key ?? ''}
+							maxLength={40}
+							autoComplete="off"
+							onChange={(event) => set({ key: event.target.value })}
+						/>
+						<Select
+							label={Q.type}
+							value={question.type ?? 'rating'}
+							options={QUESTION_TYPES.map((type) => ({ value: type, label: Q.types[type] }))}
+							onChange={(event) => set({ type: event.target.value })}
+						/>
+					</FieldGrid>
+					{question.type === 'choice' ? (
+						<TextArea
+							label={Q.choices}
+							value={question.choices ?? ''}
+							rows={4}
+							onChange={(event) => set({ choices: event.target.value })}
+						/>
+					) : null}
+					<Checkbox
+						label={Q.required}
+						checked={question.required === true}
+						onChange={(event) => set({ required: event.target.checked })}
 					/>
 				</div>
 			)}

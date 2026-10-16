@@ -685,6 +685,68 @@ describe('reviews block', () => {
 		expect($(other, 'form.box')).not.toBeNull();
 	});
 
+	it('asks the merchant questions on the form, and shows the answers and their summary (E40)', async () => {
+		const fake = makeShop({
+			features: ['catalog', 'reviews'],
+			signIn: 's1',
+			routes: {
+				'GET /v1/shop/products/phone': () => ok(product()),
+				'GET /v1/shop/products/prd_1/reviews': () =>
+					ok({
+						items: [
+							review('rev_1', {
+								answers: [
+									{ key: 'fit', label: 'Fit', type: 'choice', value: 'True to size' },
+									{ key: 'quality', label: 'Quality', type: 'rating', value: 4 },
+								],
+							}),
+						],
+						nextCursor: null,
+						hasMore: false,
+						summary: {
+							average: 5,
+							count: 1,
+							stars: { 5: 1 },
+							questions: [
+								{ key: 'fit', label: 'Fit', type: 'choice', count: 1, choices: { 'Runs small': 0, 'True to size': 1 } },
+								{ key: 'quality', label: 'Quality', type: 'rating', count: 1, average: 4 },
+							],
+						},
+					}),
+				'POST /v1/shop/reviews': () => ok({ id: 'rev_9', status: 'pending' }, 201),
+			},
+		});
+		const host = await mountPage(fake, 'phone', {
+			reviews: {
+				per: 'product',
+				pageSize: 10,
+				questions: [
+					{ key: 'fit', label: 'Fit', type: 'choice', choices: ['Runs small', 'True to size'], required: true },
+					{ key: 'quality', label: 'Quality', type: 'rating', choices: [], required: false },
+				],
+			},
+		});
+		expect(textOf(host)).toContain(text('reviews.answer', { question: 'Fit', answer: 'True to size' }));
+		expect(textOf(host)).toContain(
+			text('reviews.answer', { question: 'Quality', answer: text('reviews.stars', { rating: 4 }) }),
+		);
+		expect(textOf(host)).toContain(text('reviews.answer', { question: 'Fit', answer: 'True to size (1)' }));
+		expect(textOf(host)).toContain(text('reviews.questionAverage', { question: 'Quality', average: '4.0', count: 1 }));
+		const form = () => $(host, 'form.box');
+		await submit(form());
+		expect(textOf(host)).toContain(text('reviews.answerNeeded', { question: 'Fit' }));
+		expect(fake.all('POST /v1/shop/reviews')).toHaveLength(0);
+		$(host, '#ss-review-q-fit').value = 'Runs small';
+		await submit(form());
+		expect(fake.last('POST /v1/shop/reviews')?.body).toEqual({
+			productId: 'prd_1',
+			rating: 5,
+			title: '',
+			body: '',
+			answers: { fit: 'Runs small' },
+		});
+	});
+
 	it('shows no reviews and errors', async () => {
 		const fake = makeShop({
 			features: ['catalog', 'reviews'],

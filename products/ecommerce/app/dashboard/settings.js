@@ -13,7 +13,13 @@
 import { startTransition, useState } from 'react';
 import { Callout, Masonry, Section, Select, SwapTransition, cx } from '@ss/ui';
 import { call, fill, useLoad } from './api.js';
-import { AttachmentKindsEditor, ClaimKindsEditor, ClaimStatusesEditor, ReasonsEditor } from './merchant-lists.js';
+import {
+	AttachmentKindsEditor,
+	ClaimKindsEditor,
+	ClaimStatusesEditor,
+	ReasonsEditor,
+	ReviewQuestionsEditor,
+} from './merchant-lists.js';
 import { GradesEditor } from './grades.js';
 import { ItemTypesEditor } from './item-types.js';
 import { OrderFlowEditor } from './flow-editor.js';
@@ -328,6 +334,7 @@ export function SettingsTab({ websiteId: id }) {
 							customers: seen('checkout') ? (
 								<SegmentsEditor websiteId={websiteId} off={off('checkout')} currency={currency} />
 							) : null,
+							reviews: seen('reviews') ? <ReviewQuestionsEditor websiteId={websiteId} off={off('reviews')} /> : null,
 							returns: seen('returns') ? (
 								<>
 									<ClaimKindsEditor websiteId={websiteId} off={off('returns')} />

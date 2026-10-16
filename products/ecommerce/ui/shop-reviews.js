@@ -14,8 +14,9 @@ import { button, codeOf, field, formatsOf, h, problemText, select, settingsOf } 
 /** @typedef {import('./widget.js').WidgetConfig} WidgetConfig */
 
 /**
- * The form to write a review: the rating, a title and the text, sent to `POST /v1/shop/reviews` with `target` (the
- * product, or the order and its line). A lost answer or a server failure is sent again with the same key.
+ * The form to write a review: the rating, the merchant's questions (E40: a 1–5 rating or one of its choices, each
+ * required or not), a title and the text, sent to `POST /v1/shop/reviews` with `target` (the product, or the order and
+ * its line). A lost answer or a server failure is sent again with the same key.
  * @param {{ doc: Document, t: Texts, shop: Shop, config: WidgetConfig, target: Record<string, string>, idPrefix: string,
  *   heading: string, onDone: (status: string) => void, onRefused: (code: string) => void }} input `onDone` gets the
  *   saved review's status; `onRefused` a code that ends the form (`review_not_allowed`, `already_reviewed`)
@@ -27,6 +28,22 @@ export const reviewForm = ({ doc, t, shop, config, target, idPrefix, heading, on
 		['5', '4', '3', '2', '1'].map((star) => /** @type {[string, string]} */ ([star, t('reviews.stars', { rating: star })])),
 		'5',
 	);
+	// the merchant's questions, each unanswered at first (E40)
+	const questions = settingsOf(config).reviews.questions.map((question) => ({
+		question,
+		control: select(
+			doc,
+			[
+				/** @type {[string, string]} */ (['', t('reviews.noAnswer')]),
+				...(question.type === 'rating'
+					? ['5', '4', '3', '2', '1'].map(
+							(star) => /** @type {[string, string]} */ ([star, t('reviews.stars', { rating: star })]),
+						)
+					: question.choices.map((choice) => /** @type {[string, string]} */ ([choice, choice]))),
+			],
+			'',
+		),
+	}));
 	const title = /** @type {HTMLInputElement} */ (h(doc, 'input', { maxlength: '120' }));
 	const body = /** @type {HTMLTextAreaElement} */ (h(doc, 'textarea', { maxlength: '2000', rows: '4' }));
 	const sent = h(doc, 'p', { class: 'status', role: 'status' });
@@ -38,6 +55,14 @@ export const reviewForm = ({ doc, t, shop, config, target, idPrefix, heading, on
 			{ class: 'box review-form' },
 			h(doc, 'h2', {}, heading),
 			field(doc, `${idPrefix}-rating`, t('reviews.rating'), rating),
+			...questions.map(({ question, control }) =>
+				field(
+					doc,
+					`${idPrefix}-q-${question.key}`,
+					question.required ? question.label : t('reviews.optional', { question: question.label }),
+					control,
+				),
+			),
 			field(doc, `${idPrefix}-title`, t('reviews.titleField'), title),
 			field(doc, `${idPrefix}-body`, t('reviews.body'), body),
 			submit,
@@ -48,11 +73,25 @@ export const reviewForm = ({ doc, t, shop, config, target, idPrefix, heading, on
 	let attemptKey = null;
 	form.addEventListener('submit', async (event) => {
 		event.preventDefault();
+		const unanswered = questions.find(({ question, control }) => question.required && !control.value);
+		if (unanswered) return void (sent.textContent = t('reviews.answerNeeded', { question: unanswered.question.label }));
+		/** @type {Record<string, number | string>} */
+		const answers = Object.fromEntries(
+			questions
+				.filter(({ control }) => control.value)
+				.map(({ question, control }) => [question.key, question.type === 'rating' ? Number(control.value) : control.value]),
+		);
 		submit.setAttribute('disabled', '');
 		attemptKey ??= shop.newKey();
 		const answer = await shop.call('/v1/shop/reviews', {
 			method: 'POST',
-			body: { ...target, rating: Number(rating.value), title: title.value.trim(), body: body.value.trim() },
+			body: {
+				...target,
+				rating: Number(rating.value),
+				title: title.value.trim(),
+				body: body.value.trim(),
+				...(Object.keys(answers).length > 0 ? { answers } : {}),
+			},
 			idempotencyKey: attemptKey,
 		});
 		submit.removeAttribute('disabled');
@@ -94,6 +133,18 @@ export const renderReviews = ({ box, t, shop, config, productId }) => {
 			h(doc, 'strong', {}, t('reviews.stars', { rating: review.rating })),
 			review.title ? h(doc, 'span', {}, review.title) : null,
 			review.body ? h(doc, 'p', {}, review.body) : null,
+			// the answers to the merchant's questions (E40)
+			...(review.answers ?? []).map((/** @type {any} */ given) =>
+				h(
+					doc,
+					'span',
+					{ class: 'meta answer' },
+					t('reviews.answer', {
+						question: given.label,
+						answer: given.type === 'rating' ? t('reviews.stars', { rating: given.value }) : given.value,
+					}),
+				),
+			),
 			h(
 				doc,
 				'span',
@@ -103,12 +154,38 @@ export const renderReviews = ({ box, t, shop, config, productId }) => {
 			review.reply ? h(doc, 'p', { class: 'reply' }, h(doc, 'strong', {}, t('reviews.reply')), ' ', review.reply) : null,
 		);
 
-	/** @param {{ average: number, count: number, stars: Record<string, number> }} found */
+	/**
+	 * @param {{ average: number, count: number, stars: Record<string, number>, questions?: Array<{ label: string,
+	 *   type: string, count: number, average?: number, choices?: Record<string, number> }> }} found
+	 */
 	const showSummary = (found) => {
 		if (found.count === 0) {
 			summary.replaceChildren(h(doc, 'p', { class: 'muted' }, t('reviews.none')));
 			return;
 		}
+		// the answers to the merchant's questions: a rating's average, a choice's count per answer (E40)
+		const answered = (found.questions ?? [])
+			.filter((question) => question.count > 0)
+			.map((question) =>
+				h(
+					doc,
+					'li',
+					{ class: 'meta' },
+					question.type === 'rating'
+						? t('reviews.questionAverage', {
+								question: question.label,
+								average: Number(question.average).toFixed(1),
+								count: question.count,
+							})
+						: t('reviews.answer', {
+								question: question.label,
+								answer: Object.entries(question.choices ?? {})
+									.filter(([, count]) => count > 0)
+									.map(([choice, count]) => `${choice} (${count})`)
+									.join(', '),
+							}),
+				),
+			);
 		summary.replaceChildren(
 			h(
 				doc,
@@ -124,6 +201,7 @@ export const renderReviews = ({ box, t, shop, config, productId }) => {
 					h(doc, 'li', { class: 'meta' }, t('reviews.starCount', { rating: star, count: found.stars[star] ?? 0 })),
 				),
 			),
+			...(answered.length > 0 ? [h(doc, 'ul', { 'aria-label': t('reviews.questions') }, ...answered)] : []),
 		);
 	};
 

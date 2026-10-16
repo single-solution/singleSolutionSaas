@@ -153,6 +153,11 @@ const renderReview = (kit, review, detail, message, ofProduct) => {
 			[t('customersAdmin.orderNumber'), review.orderId],
 			[t('customersAdmin.userId'), review.userId],
 			[t('customersAdmin.written'), kit.when(review.createdAt)],
+			// the answers to the merchant's review questions (E40)
+			...(review.answers ?? []).map((/** @type {any} */ given) => [
+				given.label,
+				given.type === 'rating' ? `${stars(given.value)} ${given.value}/5` : String(given.value),
+			]),
 		]),
 		kit.masonry([
 			card(kit, t('customersAdmin.reviewText'), [kit.text('p', {}, review.body)]),

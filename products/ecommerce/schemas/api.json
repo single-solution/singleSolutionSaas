@@ -11427,7 +11427,8 @@
 				"orderId",
 				"lineId",
 				"status",
-				"updatedAt"
+				"updatedAt",
+				"answers"
 			],
 			"additionalProperties": false,
 			"properties": {
@@ -11495,6 +11496,31 @@
 				"updatedAt": {
 					"type": "string",
 					"format": "date-time"
+				},
+				"answers": {
+					"type": "array",
+					"description": "The answers to your review questions still asked, in the list's order (E40).",
+					"items": {
+						"type": "object",
+						"required": ["key", "label", "type", "value"],
+						"additionalProperties": false,
+						"properties": {
+							"key": {
+								"type": "string"
+							},
+							"label": {
+								"type": "string"
+							},
+							"type": {
+								"type": "string",
+								"enum": ["rating", "choice"]
+							},
+							"value": {
+								"type": ["integer", "string"],
+								"description": "A rating 1–5, or one of the question's choices."
+							}
+						}
+					}
 				}
 			}
 		},
@@ -11517,7 +11543,8 @@
 				"lineId",
 				"status",
 				"updatedAt",
-				"productName"
+				"productName",
+				"answers"
 			],
 			"additionalProperties": false,
 			"properties": {
@@ -11589,6 +11616,31 @@
 				"productName": {
 					"type": "string",
 					"description": "The product's name ('' when it was deleted)."
+				},
+				"answers": {
+					"type": "array",
+					"description": "The answers to your review questions still asked, in the list's order (E40).",
+					"items": {
+						"type": "object",
+						"required": ["key", "label", "type", "value"],
+						"additionalProperties": false,
+						"properties": {
+							"key": {
+								"type": "string"
+							},
+							"label": {
+								"type": "string"
+							},
+							"type": {
+								"type": "string",
+								"enum": ["rating", "choice"]
+							},
+							"value": {
+								"type": ["integer", "string"],
+								"description": "A rating 1–5, or one of the question's choices."
+							}
+						}
+					}
 				}
 			}
 		},
@@ -11655,6 +11707,43 @@
 						"5": {
 							"type": "integer",
 							"minimum": 0
+						}
+					}
+				},
+				"questions": {
+					"type": "array",
+					"description": "Your review questions with what approved reviews answered (E40): a rating question's average and count, a choice question's count per choice.",
+					"items": {
+						"type": "object",
+						"required": ["key", "label", "type", "count"],
+						"additionalProperties": false,
+						"properties": {
+							"key": {
+								"type": "string"
+							},
+							"label": {
+								"type": "string"
+							},
+							"type": {
+								"type": "string",
+								"enum": ["rating", "choice"]
+							},
+							"count": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"average": {
+								"type": "number",
+								"description": "A rating question's average (0 without answers)."
+							},
+							"choices": {
+								"type": "object",
+								"additionalProperties": {
+									"type": "integer",
+									"minimum": 0
+								},
+								"description": "A choice question's count per choice."
+							}
 						}
 					}
 				}
@@ -14992,7 +15081,7 @@
 		"ShopReview": {
 			"type": "object",
 			"description": "An approved review as visitors see it.",
-			"required": ["id", "name", "verified", "variantName", "rating", "title", "body", "reply", "createdAt"],
+			"required": ["id", "name", "verified", "variantName", "rating", "title", "body", "reply", "createdAt", "answers"],
 			"additionalProperties": false,
 			"properties": {
 				"id": {
@@ -15035,6 +15124,31 @@
 				"createdAt": {
 					"type": "string",
 					"format": "date-time"
+				},
+				"answers": {
+					"type": "array",
+					"description": "The answers to your review questions still asked, in the list's order (E40).",
+					"items": {
+						"type": "object",
+						"required": ["key", "label", "type", "value"],
+						"additionalProperties": false,
+						"properties": {
+							"key": {
+								"type": "string"
+							},
+							"label": {
+								"type": "string"
+							},
+							"type": {
+								"type": "string",
+								"enum": ["rating", "choice"]
+							},
+							"value": {
+								"type": ["integer", "string"],
+								"description": "A rating 1–5, or one of the question's choices."
+							}
+						}
+					}
 				}
 			}
 		},
@@ -28139,7 +28253,7 @@
 	},
 	"POST /v1/shop/reviews": {
 		"summary": "Write a review",
-		"description": "Send an Idempotency-Key so a retried request does not write twice. The reviews setting per decides what is reviewed. per: product (the default): the shopper signed in (SS-Sign-In) reviews productId once an order of theirs holding it was delivered; one review per product and shopper. per: order_line: the order's owner (their sign-in, or a guest's order key in SS-Order-Key) reviews one line (orderId, lineId) of a delivered order; one review per line. The review is pending, or approved at once with the reviews setting moderation: auto (it then counts in the product's rating). Errors: 403 sign_in_required (no valid sign-in; with per: order_line, neither a sign-in nor an order key); 422 validation_failed at /productId, /orderId, /lineId (also when the order has no such line), /rating, /title or /body; 404 not_found when the product is not active, or (per: order_line) the order is not theirs; 403 review_not_allowed before delivery; 409 already_reviewed.",
+		"description": "Send an Idempotency-Key so a retried request does not write twice. The reviews setting per decides what is reviewed. per: product (the default): the shopper signed in (SS-Sign-In) reviews productId once an order of theirs holding it was delivered; one review per product and shopper. per: order_line: the order's owner (their sign-in, or a guest's order key in SS-Order-Key) reviews one line (orderId, lineId) of a delivered order; one review per line. The review is pending, or approved at once with the reviews setting moderation: auto (it then counts in the product's rating). Errors: 403 sign_in_required (no valid sign-in; with per: order_line, neither a sign-in nor an order key); 422 validation_failed at /productId, /orderId, /lineId (also when the order has no such line), /rating, /title or /body; 404 not_found when the product is not active, or (per: order_line) the order is not theirs; 403 review_not_allowed before delivery; 409 already_reviewed. With review questions (the review_questions list, E40), answers gives each answer by question key; the widget settings list the questions (reviews.questions).",
 		"body": {
 			"type": "object",
 			"required": ["rating"],
@@ -28175,6 +28289,13 @@
 					"type": "string",
 					"maxLength": 2000,
 					"description": "Plain text, trimmed, new lines kept (none: no text)."
+				},
+				"answers": {
+					"type": "object",
+					"description": "Answers to your review questions (the review_questions list, E40) by question key: a whole number 1–5 for a rating question, one of its choices for a choice question; every required question answered (422 validation_failed at /answers/<key>).",
+					"additionalProperties": {
+						"type": ["integer", "string"]
+					}
 				}
 			}
 		},
