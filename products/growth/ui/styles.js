@@ -8,51 +8,40 @@
  * every layout follows the widget's own width (container queries), not the screen's.
  * @module
  */
-import { ADMIN_KIT_CSS } from '@ss/app-kit/widget';
+import { ADMIN_KIT_CSS, CONTROLS_CSS } from '@ss/app-kit/widget';
 
-export const WIDGET_CSS = `${ADMIN_KIT_CSS}
+export const WIDGET_CSS = `${CONTROLS_CSS}${ADMIN_KIT_CSS}
 :host { display: block; font-family: var(--ss-font-family, inherit); color: var(--ss-color-text, #1f2937); }
 :host([data-ss-mode='dark']) { color: var(--ss-color-text, #f3f4f6); }
-.box { border-radius: calc(var(--ss-radius, 8px) * 2); padding: 16px; background: var(--ss-color-background, #ffffff); }
-:host([data-ss-mode='dark']) .box { background: var(--ss-color-background, #111827); }
-h2 { font-size: 1.1em; margin: 0 0 4px; }
+h2 { font-size: 1.15em; font-weight: 650; margin: 0 0 4px; }
 h3 { font-size: 1em; margin: 0; }
 p { margin: 4px 0; }
 .lead { opacity: 0.7; font-size: 0.9em; margin: 0 0 12px; }
-label { display: block; font-size: 0.9em; margin: 8px 0 4px; }
-textarea, input, select { width: 100%; box-sizing: border-box; font: inherit; color: inherit; background: rgba(127, 127, 127, 0.08);
-  padding: 8px; border: 0; border-radius: var(--ss-radius, 8px); }
-label.check { display: flex; gap: 8px; align-items: flex-start; } label.check input { width: auto; margin-top: 3px; }
-button { font: inherit; padding: 8px 16px; border: 0; border-radius: var(--ss-radius, 8px); cursor: pointer;
-  background: var(--ss-color-accent, #4f46e5); color: var(--ss-color-onAccent, #ffffff); }
-button.secondary { background: rgba(127, 127, 127, 0.14); color: inherit; }
 button.link { background: transparent; color: inherit; padding: 4px 8px; text-decoration: underline; }
-button[disabled] { opacity: 0.6; cursor: default; }
-a { color: var(--ss-color-accent, #4f46e5); }
-:host([data-ss-mode='dark']) a { color: var(--ss-color-accent, #a5b4fc); }
+a { color: var(--ss-kit-focus); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.box.admin > .body, .box.admin > .section { margin-top: 16px; } .body > * + * { margin-top: 16px; }
 .status { margin: 8px 0 0; font-size: 0.9em; }
 ul { list-style: none; margin: 0; padding: 0; }
 .meta { display: block; font-size: 0.8em; opacity: 0.7; overflow-wrap: anywhere; }
 
 /* consent banner */
-.banner { position: fixed; left: 16px; right: 16px; z-index: 2147483000; max-width: 720px; margin: 0 auto;
-  border-radius: calc(var(--ss-radius, 8px) * 2); padding: 16px; background: var(--ss-color-background, #ffffff);
-  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.18); }
-:host([data-ss-mode='dark']) .banner { background: var(--ss-color-background, #111827); }
+.banner { position: fixed; left: 16px; right: 16px; z-index: 2147483000; max-width: 720px; margin: 0 auto; box-sizing: border-box;
+  border: 1px solid var(--ss-kit-hair); border-radius: var(--ss-kit-rc); padding: 20px; background: var(--ss-kit-card);
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.22); }
+.banner h2 { margin: 0 0 8px; }
 .banner.bottom { bottom: 16px; } .banner.top { top: 16px; }
 .banner.center { top: 50%; transform: translateY(-50%); max-width: 560px; max-height: calc(100vh - 32px); overflow: auto; }
 .banner.bottom_left, .banner.bottom_right { bottom: 16px; max-width: 380px; margin: 0; }
 .banner.bottom_left { right: auto; } .banner.bottom_right { left: auto; }
 .banner-backdrop { position: fixed; inset: 0; z-index: 2147482999; background: rgb(0 0 0 / 0.45); }
-.choices { display: grid; gap: 8px; margin-top: 8px; }
-.choices .help { display: block; font-size: 0.85em; opacity: 0.7; }
+.choices { margin: 12px 0 4px; }
 
 /* notice bar */
-.notice { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: center; padding: 8px 16px;
-  background: var(--ss-color-accent, #4f46e5); color: var(--ss-color-onAccent, #ffffff); text-align: center; }
+.notice { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: center; padding: 10px 16px; margin: 8px;
+  border-radius: var(--ss-kit-rc); background: var(--ss-color-accent, #4f46e5); color: var(--ss-color-onAccent, #ffffff); text-align: center; }
 .notice a { color: inherit; font-weight: 600; }
-.notice button { background: transparent; color: inherit; padding: 2px 8px; font-size: 1.1em; line-height: 1; }
+.notice button { margin: 0; background: transparent; color: inherit; padding: 2px 8px; font-size: 1.1em; line-height: 1; }
 
 /* admin widgets */
 .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; justify-content: space-between; margin-bottom: 16px; }

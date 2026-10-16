@@ -8,7 +8,18 @@
  * server's English (OT-4); times follow the website's Format and time zone (PLAN 0.8.10 K7).
  * @module
  */
-import { adminCall, element, formatDate, formatText, moreMenu, mountWidget, openDialog, stateSlot } from '@ss/app-kit/widget';
+import {
+	adminCall,
+	element,
+	field as kitField,
+	formatDate,
+	formatText,
+	moreMenu,
+	mountWidget,
+	openDialog,
+	segmented,
+	stateSlot,
+} from '@ss/app-kit/widget';
 import { PROBLEM_TEXTS, chipGroup, problemKey } from './admin-kit.js';
 import { WIDGET_CSS } from './styles.js';
 
@@ -60,11 +71,7 @@ export const mountRedirects = ({ host, api, config, viewer, download }) => {
 			/** @param {string} tag @param {Record<string, string>} [attributes] @param {string} [text] */
 			const h = (tag, attributes, text) => element(doc, tag, attributes, text);
 			/** @param {string} label @param {HTMLElement} control */
-			const field = (label, control) => {
-				const node = h('label', {}, label);
-				node.append(control);
-				return node;
-			};
+			const field = (label, control) => kitField(doc, label, control);
 			/**
 			 * The text of a refused call.
 			 * @param {{ ok: boolean, status: number, data: any }} answer
@@ -186,10 +193,12 @@ export const mountRedirects = ({ host, api, config, viewer, download }) => {
 					h('input', { type: 'text', placeholder: t('redirects.field.fromHint') })
 				);
 				from.value = rule?.from ?? preset?.from ?? '';
-				const match = /** @type {HTMLSelectElement} */ (h('select'));
-				for (const value of ['exact', 'prefix', 'wildcard'])
-					match.append(h('option', { value }, t(`redirects.match.${value}`)));
-				match.value = rule?.match ?? 'exact';
+				const match = segmented(doc, {
+					label: t('redirects.field.match'),
+					name: 'redirect-match',
+					items: ['exact', 'prefix', 'wildcard'].map((value) => ({ value, label: t(`redirects.match.${value}`) })),
+					value: rule?.match ?? 'exact',
+				});
 				const code = /** @type {HTMLSelectElement} */ (h('select'));
 				for (const value of CODE_CHOICES) code.append(h('option', { value }, t(`redirects.code.${value}`)));
 				code.value = String(rule?.code ?? 301);
@@ -207,7 +216,13 @@ export const mountRedirects = ({ host, api, config, viewer, download }) => {
 				target.classList.add('wide');
 				const noted = field(t('redirects.field.note'), note);
 				noted.classList.add('wide');
-				grid.append(wide, field(t('redirects.field.match'), match), field(t('redirects.field.code'), code), target, noted);
+				grid.append(
+					wide,
+					field(t('redirects.field.match'), match.node),
+					field(t('redirects.field.code'), code),
+					target,
+					noted,
+				);
 				const remove = rule ? h('button', { type: 'button', class: 'link remove' }, t('redirects.deleteRule')) : null;
 				const dialog = openDialog(root, {
 					title: rule ? t('redirects.edit') : t('redirects.add'),

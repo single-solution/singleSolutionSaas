@@ -14,6 +14,7 @@
  */
 import {
 	adminCall,
+	block,
 	element,
 	fieldGrid,
 	formatDate,
@@ -116,10 +117,10 @@ export const mountAnalyticsDashboard = ({ host, api, config, viewer, now, downlo
 			);
 			const span = h('p', { class: 'sub' });
 			const status = h('p', { class: 'status', role: 'status' });
-			const body = h('div');
+			const body = h('div', { class: 'body' });
 			const log = h('div', { class: 'section' });
-			const box = h('section', { class: 'box' });
-			box.append(head, chips, span, status, body, log);
+			const box = h('section', { class: 'box admin' });
+			box.append(block(doc, { body: [head, chips, span, status] }), body, log);
 			root.append(box);
 
 			/** @param {{ ok: boolean, status: number, data: any }} answer */
@@ -139,11 +140,7 @@ export const mountAnalyticsDashboard = ({ host, api, config, viewer, now, downlo
 			 * A section: its heading, a lighter line under it, and its content.
 			 * @param {string} title @param {string} help @param {Node[]} nodes
 			 */
-			const section = (title, help, nodes) => {
-				const node = h('div', { class: 'section' });
-				node.append(h('h3', {}, title), h('p', { class: 'sub' }, help), ...nodes);
-				return node;
-			};
+			const section = (title, help, nodes) => block(doc, { title, sub: help, body: nodes });
 			/** @param {Node[]} cards */
 			const masonry = (cards) => {
 				const node = h('div', { class: 'masonry' });

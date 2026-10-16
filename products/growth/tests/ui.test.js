@@ -230,7 +230,7 @@ describe('the page script', () => {
 
 		// Choose: the merchant's categories, each with its name and description (G3); analytics only
 		button(banner, strings['consent.customize']).click();
-		const boxes = [...(banner.shadowRoot?.querySelectorAll('label.check') ?? [])];
+		const boxes = [...(banner.shadowRoot?.querySelectorAll('.setting') ?? [])];
 		expect(boxes.map((label) => label.textContent)).toEqual(
 			DEFAULT_CATEGORIES.map((category) => `${category.name}${category.description}`),
 		);
@@ -1539,7 +1539,7 @@ describe('admin widgets', () => {
 		])
 			expect(text).toContain(words);
 		expect(inside(host, '.pulse').classList.contains('idle')).toBe(false);
-		const journey = /** @type {HTMLElement} */ (host.shadowRoot?.querySelector('.section ul.rows.card li'));
+		const journey = /** @type {HTMLElement} */ (host.shadowRoot?.querySelector('.block ul.rows.card li'));
 		journey.click();
 		expect(dialog(host).textContent).toContain('sess_1234567890');
 		expect([...dialog(host).querySelectorAll('ol.timeline li')].map((li) => li.textContent)).toEqual([

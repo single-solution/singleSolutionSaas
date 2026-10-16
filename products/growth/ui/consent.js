@@ -6,7 +6,7 @@
  * (G7). The banner's other words are widget texts.
  * @module
  */
-import { element, mountWidget } from '@ss/app-kit/widget';
+import { element, mountWidget, toggle } from '@ss/app-kit/widget';
 import { BANNER_POSITIONS, CONSENT_STORAGE_KEY } from '../core/widgets.js';
 import { grantedOf, makeChoice, readChoice } from '../core/consent.js';
 import { WIDGET_CSS } from './styles.js';
@@ -162,16 +162,14 @@ export const mountConsentBanner = ({ host, config, consent, gpc = false }) => {
 			choose = element(doc, 'div', { hidden: '' });
 			const list = element(doc, 'div', { class: 'choices' });
 			for (const category of categories) {
-				const input = /** @type {HTMLInputElement} */ (element(doc, 'input', { type: 'checkbox' }));
-				if (category.mode === 'required') {
-					input.checked = true;
-					input.disabled = true;
-				} else boxes.set(category.key, input);
-				const label = element(doc, 'label', { class: 'check' });
-				const words = element(doc, 'span', {}, category.name);
-				if (category.description) words.append(element(doc, 'span', { class: 'help' }, category.description));
-				label.append(input, words);
-				list.append(label);
+				const required = category.mode === 'required';
+				const { box, node } = toggle(doc, category.name, {
+					help: category.description || undefined,
+					checked: required,
+					disabled: required,
+				});
+				if (!required) boxes.set(category.key, box);
+				list.append(node);
 			}
 			const save = element(doc, 'div', { class: 'actions' });
 			save.append(

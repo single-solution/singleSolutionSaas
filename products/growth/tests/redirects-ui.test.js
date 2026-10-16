@@ -230,7 +230,7 @@ describe('the redirects widget', () => {
 		await flush();
 		const form = dialog(host);
 		expect(form.querySelector('h3')?.textContent).toBe(T['redirects.add']);
-		const [from, to] = /** @type {HTMLInputElement[]} */ ([...form.querySelectorAll('input')]);
+		const [from, to] = /** @type {HTMLInputElement[]} */ ([...form.querySelectorAll('input[type="text"]')]);
 		expect([from?.value, to?.value]).toEqual(['/old/blue-lamp', '/lamps/blue-lamp']);
 		await submit(host);
 		expect(requests.find((r) => r.method === 'POST')?.body).toEqual({
@@ -261,11 +261,11 @@ describe('the redirects widget', () => {
 		const host = await start();
 		button(host, T['redirects.add'] ?? '').click();
 		await flush();
-		expect([...dialog(host).querySelectorAll('input')].map((input) => input.value)).toEqual(['', '', '']);
+		expect([...dialog(host).querySelectorAll('input[type="text"]')].map((input) => input.value)).toEqual(['', '', '']);
 		button(host, T['redirects.cancel'] ?? '').click();
 		all(host, 'section.box:last-child ul.rows li')[1].click();
 		await flush();
-		expect([...dialog(host).querySelectorAll('input')].map((input) => input.value)).toEqual(['/missing', '', '']);
+		expect([...dialog(host).querySelectorAll('input[type="text"]')].map((input) => input.value)).toEqual(['/missing', '', '']);
 	});
 
 	it('changes a rule, hiding the new page for 410, and deletes one after a confirmation', async () => {
@@ -287,11 +287,13 @@ describe('the redirects widget', () => {
 		expect(form.querySelector('.meta')?.textContent).toBe(
 			T['redirects.times']?.replace('{created}', 'Oct 1, 2026, 9:00 AM').replace('{updated}', 'Oct 1, 2026, 9:00 AM'),
 		);
-		const code = /** @type {HTMLSelectElement} */ (form.querySelectorAll('select')[1]);
+		const code = /** @type {HTMLSelectElement} */ (form.querySelectorAll('select')[0]);
 		code.value = '410';
 		code.dispatchEvent(new window.Event('change'));
 		const target = /** @type {HTMLElement} */ (
-			[...form.querySelectorAll('label')].find((l) => l.textContent?.startsWith(T['redirects.field.to'] ?? ''))
+			[...form.querySelectorAll('label')]
+				.find((l) => l.textContent?.startsWith(T['redirects.field.to'] ?? ''))
+				?.closest('.field')
 		);
 		expect(target.hidden).toBe(true);
 		await submit(host);
