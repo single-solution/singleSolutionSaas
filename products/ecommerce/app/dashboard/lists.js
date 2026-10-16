@@ -7,19 +7,7 @@
  * @module
  */
 import { useState } from 'react';
-import {
-	Button,
-	Callout,
-	Card,
-	CheckboxGroup,
-	FieldGrid,
-	Icon,
-	IconButton,
-	Input,
-	Select,
-	TextArea,
-	describeProblem,
-} from '@ss/ui';
+import { Button, Callout, Card, FieldGrid, Icon, IconButton, Input, Select, TextArea, describeProblem } from '@ss/ui';
 import { COURIER_CONNECTIONS } from '../../core/couriers.js';
 import { currencyDigits, fromDecimal, toDecimal } from '@ss/contracts/format';
 import { UNIT_STATE_LIMITS } from '../../core/unit-states.js';

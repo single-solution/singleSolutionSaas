@@ -14,7 +14,6 @@ import { checkSizeChart } from '../core/size-charts.js';
 import { refuse } from './catalog-common.js';
 import { SERVER_LIMITS } from './service.js';
 
-/** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('./catalog-common.js').CatalogCommon} CatalogCommon */
 /** @typedef {import('../core/model.js').SizeChartRecord} SizeChartRecord */
@@ -24,11 +23,10 @@ import { SERVER_LIMITS } from './service.js';
 const MAX_CHARTS = 1000;
 
 /**
- * @param {Product} product
  * @param {Service} service
  * @param {CatalogCommon} common
  */
-export const createCatalogCharts = (product, service, common) => {
+export const createCatalogCharts = (service, common) => {
 	/**
 	 * A chart by id, or 404.
 	 * @param {WebsiteData} data @param {string} id

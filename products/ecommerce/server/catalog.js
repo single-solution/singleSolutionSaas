@@ -30,7 +30,7 @@ export const createCatalog = (product, service) => {
 			...createCatalogProducts(product, service, common),
 			...createCatalogFiles(product, service, common),
 			...createCatalogTaxonomy(product, service, common),
-			...createCatalogCharts(product, service, common),
+			...createCatalogCharts(service, common),
 			...createCatalogTools(product, service, common),
 		],
 		/**

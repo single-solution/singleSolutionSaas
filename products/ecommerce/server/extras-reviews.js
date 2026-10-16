@@ -28,7 +28,6 @@ import {
 import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS, bodyOf } from './service.js';
 import { activeProduct } from './seo-reads.js';
 
-/** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -77,10 +76,9 @@ const staffView = (review, questions = []) => ({
 });
 
 /**
- * @param {Product} product
  * @param {Service} service
  */
-export const createReviews = (product, service) => {
+export const createReviews = (service) => {
 	/** @param {WebsiteData} data */
 	const reviews = (data) => data.collection(COLLECTIONS.reviews);
 

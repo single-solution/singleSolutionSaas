@@ -28,7 +28,7 @@ import { createShopperLists } from './extras-shopper.js';
 export const createExtras = (product, service) => {
 	const cards = createCards(product, service);
 	const returns = createReturns(product, service);
-	const reviews = createReviews(product, service);
+	const reviews = createReviews(service);
 	const alerts = createAlerts(product, service, cards);
 	const lists = createShopperLists(product, service, cards);
 	const reports = createReports(product, service);

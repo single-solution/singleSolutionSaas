@@ -22,7 +22,6 @@ import { COLLECTIONS, ID_PREFIX, isDuplicate } from '../core/model.js';
 import { deleteOffer, getOffer, insertOffers, listOffers, missingRefs, updateOffer } from '../adapters/promotions-store.js';
 import { SERVER_LIMITS, UPLOAD_SECONDS } from './service.js';
 
-/** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('../adapters/promotions-store.js').OfferCollection} OfferCollection */
 
@@ -39,10 +38,9 @@ const KINDS = {
 };
 
 /**
- * @param {Product} product
  * @param {Service} service
  */
-export const createOfferRoutes = (product, service) => {
+export const createOfferRoutes = (service) => {
 	const { invalid } = service;
 
 	/** @param {any} ctx */

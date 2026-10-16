@@ -546,7 +546,7 @@ export const createTransitions = (product, service, { refunded } = {}) => {
 			},
 			{
 				$set: Object.fromEntries(
-					pending.flatMap((effect, index) => [
+					pending.flatMap((_effect, index) => [
 						[`effects.$[e${index}].state`, 'skipped'],
 						[`effects.$[e${index}].runningAt`, null],
 						[`effects.$[e${index}].triedAt`, new Date(now)],

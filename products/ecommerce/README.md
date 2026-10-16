@@ -54,8 +54,10 @@ does: only public https addresses and TLS databases.
 ## API
 
 Every route is in `openapi.json` and in `/docs`. Besides the shop's own routes, the merchant's server reaches the kit's
-settings API (features, settings, texts, theme, Format, connections, and the lists `order_flow`, `couriers`,
-`address_regions`, `delivery_zones`, `tax_rules`, `grades`, `item_types`, `booking_schedules` and `role_prices` at `/v1/lists/:list`), the activity log
+settings API (features, settings, texts, theme, Format, connections, and the lists `order_flow`, `payment_methods`,
+`couriers`, `policies`, `address_regions`, `customer_segments`, `delivery_zones`, `tax_rules`, `grades`, `unit_states`,
+`item_types`, `booking_schedules`, `role_prices`, `cancel_reasons`, `delivery_failure_reasons`, `attachment_kinds`,
+`review_questions`, `claim_kinds` and `claim_statuses` at `/v1/lists/:list`), the activity log
 (`/v1/activity`) and counts of the main lists (`/v1/orders`, `/v1/products`, `/v1/customers`, `/v1/reviews` and
 `/v1/returns`, each with `/count` and `/counts?by=`, and ticket twins under `/v1/admin/`). Server-token calls may name
 the acting staff member with the `SS-Actor-*` headers, and the shopper routes (`/v1/shop/…`) also take the server token
@@ -97,7 +99,7 @@ times in the future, and slugs, SKUs, variant ids, serial numbers, deal slugs an
 holds (in the database or earlier in the same call). With Multi-location stock a variant gives `locations` (its
 `stock` is their sum). Units (`serials`) belong to products whose item type numbers them: save the `item_types` list
 first (`PUT /v1/lists/item_types`; a category or a product names its type by `typeKey`, as `numbered` below). A unit
-`in_stock` or `faulty` belongs to no order; a `sold` one names its `orderId`.
+`in_stock`, or held in one of the merchant's `unit_states` (for example `faulty`), belongs to no order; a `sold` one names its `orderId`.
 
 A product may carry `feedGroupId` and a variant `feedId`: the item group and item ids the earlier shop's product feed
 used (1 to 50 letters, digits, `.`, `_` or `-`), which the feeds then send, so shopping catalogs keep listing the same
@@ -124,7 +126,7 @@ send` does, and adds the numbers of every call up). Each call answers `categorie
 `productsChecked` and `productsChanged`, and the calls that reach the categories add `categoryProblems: { orphans,
 cycles, tooDeep }` (at most 20 ids per list; `{ tooMany: true }` above 5,000 categories: no path derived). `GET
 /v1/import/status` adds the sums `products`, `products.active`, `products.draft`, `variants`, `variants.active`,
-`stock.units`, `serials.in_stock`, `serials.sold`, `serials.faulty`, `deals.used` and `bundles.used`. Imports and finish
+`stock.units`, `serials.in_stock`, `serials.sold`, `serials.held`, `deals.used` and `bundles.used`. Imports and finish
 send no message, event, alert or IndexNow call.
 
 Storage keys after the import: a product, a variant or a deal keeps the keys it holds whatever their folder when staff

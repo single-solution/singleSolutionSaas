@@ -159,7 +159,7 @@ export const createPromotions = (product, service) => {
 
 	return {
 		routes: [
-			...createOfferRoutes(product, service),
+			...createOfferRoutes(service),
 
 			// ---------------------------------------------------------------------------------- loyalty (merchant)
 			defineRoute({
