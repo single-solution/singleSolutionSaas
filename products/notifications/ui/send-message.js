@@ -6,7 +6,7 @@
  * call or a message that was not sent shows the website's words for why, never the server's English.
  * @module
  */
-import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
+import { adminCall, block, element, field, formatText, mountWidget, segmented } from '@ss/app-kit/widget';
 import { notSentText, problemText } from './problems.js';
 import { WIDGET_CSS } from './styles.js';
 
@@ -45,49 +45,46 @@ export const mountSendMessage = ({ host, api, config }) => {
 			const channels = /** @type {Array<keyof typeof CHANNEL_FEATURES>} */ (Object.keys(CHANNEL_FEATURES)).filter((channel) =>
 				config.features.includes(CHANNEL_FEATURES[channel]),
 			);
-			const channel = /** @type {HTMLSelectElement} */ (element(doc, 'select', { id: 'send-channel' }));
-			channel.append(...channels.map((value) => element(doc, 'option', { value }, t(`channel.${value}`))));
-			const kind = /** @type {HTMLSelectElement} */ (element(doc, 'select', { id: 'send-kind' }));
-			kind.append(
-				...['transactional', 'marketing'].map((value) => element(doc, 'option', { value }, t(`send.kind.${value}`))),
-			);
+			const channel = segmented(doc, {
+				label: t('send.channel'),
+				name: 'send-channel',
+				items: channels.map((value) => ({ value, label: t(`channel.${value}`) })),
+				value: channels[0] ?? '',
+				onChange: () => showSubject(),
+			});
+			const kind = segmented(doc, {
+				label: t('send.kind'),
+				name: 'send-kind',
+				items: ['transactional', 'marketing'].map((value) => ({ value, label: t(`send.kind.${value}`) })),
+				value: 'transactional',
+			});
 			const to = /** @type {HTMLInputElement} */ (
 				element(doc, 'input', { id: 'send-to', autocomplete: 'off', maxlength: '254' })
 			);
-			const toLabel = element(doc, 'label', { for: 'send-to' }, t('send.to'));
+			const toField = field(doc, t('send.to'), to);
 			const subject = /** @type {HTMLInputElement} */ (element(doc, 'input', { id: 'send-subject', maxlength: '200' }));
-			const subjectLabel = element(doc, 'label', { for: 'send-subject' }, t('send.subject'));
+			const subjectField = field(doc, t('send.subject'), subject);
 			const text = /** @type {HTMLTextAreaElement} */ (
 				element(doc, 'textarea', { id: 'send-text', rows: '5', maxlength: '4096' })
 			);
 			const button = element(doc, 'button', { type: 'submit' }, t('send.submit'));
 			const note = element(doc, 'p', { class: 'status', role: 'status' });
-			const form = element(doc, 'form', { class: 'box' });
+			const form = element(doc, 'form', { class: 'box admin' });
+			const fieldsRow = element(doc, 'div', { class: 'fields' });
+			fieldsRow.append(field(doc, t('send.channel'), channel.node), field(doc, t('send.kind'), kind.node));
 			form.append(
-				element(doc, 'h2', {}, t('send.title')),
-				element(doc, 'label', { for: 'send-channel' }, t('send.channel')),
-				channel,
-				element(doc, 'label', { for: 'send-kind' }, t('send.kind')),
-				kind,
-				toLabel,
-				to,
-				subjectLabel,
-				subject,
-				element(doc, 'label', { for: 'send-text' }, t('send.text')),
-				text,
-				button,
-				note,
+				block(doc, {
+					title: t('send.title'),
+					body: [fieldsRow, toField, subjectField, field(doc, t('send.text'), text), button, note],
+				}),
 			);
 			root.append(form);
 			const showSubject = () => {
 				const titled = TITLED.includes(channel.value);
-				for (const node of [subject, subjectLabel]) {
-					if (titled) node.removeAttribute('hidden');
-					else node.setAttribute('hidden', '');
-				}
+				subjectField.toggleAttribute('hidden', !titled);
+				const toLabel = /** @type {HTMLElement} */ (toField.querySelector('label'));
 				toLabel.textContent = t(TO_TEXT[/** @type {keyof typeof TO_TEXT} */ (channel.value)] ?? 'send.to');
 			};
-			channel.addEventListener('change', showSubject);
 			showSubject();
 
 			form.addEventListener('submit', async (event) => {

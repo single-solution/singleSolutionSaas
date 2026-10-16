@@ -606,7 +606,7 @@ describe('admin widgets', () => {
 		const channel = /** @type {HTMLSelectElement} */ (host.shadowRoot?.querySelectorAll('select')[0]);
 		channel.value = 'push';
 		channel.dispatchEvent(new window.Event('change'));
-		expect(to.parentElement?.hidden).toBe(true);
+		expect(to.closest('[hidden]')).not.toBeNull();
 		channel.value = 'whatsapp';
 		channel.dispatchEvent(new window.Event('change'));
 		const name = /** @type {HTMLInputElement} */ (
@@ -651,12 +651,17 @@ describe('admin widgets', () => {
 				return /** @type {Response} */ (next);
 			},
 		});
-		const channel = /** @type {HTMLSelectElement} */ (inside(host, 'select'));
-		expect([...channel.options].map((option) => option.value)).toEqual(['email', 'sms', 'staff_push']);
-		const kind = /** @type {HTMLSelectElement} */ (inside(host, '#send-kind'));
-		expect([...kind.options].map((option) => option.value)).toEqual(['transactional', 'marketing']);
+		/** The radios of a segmented control, and picking one. */
+		const radios = (/** @type {string} */ name) =>
+			/** @type {HTMLInputElement[]} */ ([...(host.shadowRoot?.querySelectorAll(`input[name="${name}"]`) ?? [])]);
+		const pick = (/** @type {string} */ name, /** @type {string} */ value) =>
+			/** @type {HTMLInputElement} */ (radios(name).find((radio) => radio.value === value)).click();
+		expect(radios('send-channel').map((radio) => radio.value)).toEqual(['email', 'sms', 'staff_push']);
+		expect(inside(host, '[role="radiogroup"]').getAttribute('aria-label')).toBe(strings['send.channel']);
+		expect(radios('send-kind').map((radio) => radio.value)).toEqual(['transactional', 'marketing']);
 		const subject = /** @type {HTMLInputElement} */ (inside(host, '#send-subject'));
-		expect(subject.hidden).toBe(false);
+		const subjectHidden = () => Boolean(subject.closest('[hidden]'));
+		expect(subjectHidden()).toBe(false);
 		/** @type {HTMLInputElement} */ (inside(host, '#send-to')).value = ' ana@example.com ';
 		subject.value = 'Hi';
 		/** @type {HTMLTextAreaElement} */ (inside(host, '#send-text')).value = 'Hello';
@@ -668,20 +673,17 @@ describe('admin widgets', () => {
 		};
 		expect(await submit()).toBe(strings['send.done']);
 		expect(bodies[0]).toEqual({ channel: 'email', to: 'ana@example.com', kind: 'transactional', subject: 'Hi', text: 'Hello' });
-		channel.value = 'sms';
-		channel.dispatchEvent(new window.Event('change'));
-		expect(subject.hidden).toBe(true);
-		kind.value = 'marketing';
+		pick('send-channel', 'sms');
+		expect(subjectHidden()).toBe(true);
+		pick('send-kind', 'marketing');
 		expect(await submit()).toBe(strings['send.later']);
 		expect(bodies[1]).not.toHaveProperty('subject');
 		expect(bodies[1]).toMatchObject({ kind: 'marketing' });
 		// staff push: a title, to a staff user id
-		channel.value = 'staff_push';
-		channel.dispatchEvent(new window.Event('change'));
-		expect(subject.hidden).toBe(false);
+		pick('send-channel', 'staff_push');
+		expect(subjectHidden()).toBe(false);
 		expect(inside(host, 'label[for="send-to"]').textContent).toBe(strings['send.toStaff']);
-		channel.value = 'sms';
-		channel.dispatchEvent(new window.Event('change'));
+		pick('send-channel', 'sms');
 		// why it was not sent, in the website's words: never the server's English
 		expect(await submit()).toBe(`The message was not sent: ${strings['reason.limited']}`);
 		expect(await submit()).toBe(`The message was not sent: ${strings['reason.failed']}`);

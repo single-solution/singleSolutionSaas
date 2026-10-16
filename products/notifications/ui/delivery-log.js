@@ -6,7 +6,7 @@
  * is a code shown in the website's words (`reason.<code>`); the provider's own answer shows apart, as it came.
  * @module
  */
-import { adminCall, element, formatDate, formatText, mountWidget, stateSlot, viewerOf } from '@ss/app-kit/widget';
+import { adminCall, block, element, formatDate, formatText, mountWidget, stateSlot, viewerOf } from '@ss/app-kit/widget';
 import { CHANNELS } from '../core/channels.js';
 import { STATUSES } from '../core/log.js';
 import { logReason } from './problems.js';
@@ -48,8 +48,8 @@ export const mountDeliveryLog = ({ host, api, config }) => {
 			const more = element(doc, 'button', { type: 'button', class: 'secondary', hidden: '' }, t('log.more'));
 			const filters = element(doc, 'div', { class: 'row' });
 			filters.append(status, channel, to);
-			const box = element(doc, 'section', { class: 'box' });
-			box.append(element(doc, 'h2', {}, t('log.title')), filters, total, state.root, list, more);
+			const box = element(doc, 'section', { class: 'box admin' });
+			box.append(block(doc, { title: t('log.title'), body: [filters, total, state.root, list, more] }));
 			/** The status options' own names, before their counts. */
 			const statusNames = new Map(STATUSES.map((value) => [String(value), t(`status.${value}`)]));
 

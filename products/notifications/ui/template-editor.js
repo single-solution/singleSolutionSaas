@@ -7,7 +7,7 @@
  * a test with those samples. A refused call shows the website's text for its problem, never the server's English.
  * @module
  */
-import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
+import { adminCall, block, element, formatText, mountWidget, toggle } from '@ss/app-kit/widget';
 import { CHANNELS } from '../core/channels.js';
 import { MAX_BUTTONS, fillText, isTitled, valueNamesOf } from '../core/templates.js';
 import { problemText } from './problems.js';
@@ -50,12 +50,16 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 				const input = element(doc, tag, { id, ...attributes });
 				return { label: element(doc, 'label', { for: id }, label), input: /** @type {HTMLInputElement} */ (input) };
 			};
-			/** @param {string} label */
+			/** A switch row for a yes or no setting. @param {string} label */
 			const check = (label) => {
-				const input = /** @type {HTMLInputElement} */ (element(doc, 'input', { type: 'checkbox' }));
-				const wrap = element(doc, 'label', { class: 'check' });
-				wrap.append(input, doc.createTextNode(label));
-				return { wrap, input };
+				const { box, node } = toggle(doc, label);
+				return { wrap: node, input: box };
+			};
+			/** A field's label and input in one cell. @param {{ label: HTMLElement, input: HTMLElement }} part */
+			const cell = (part) => {
+				const wrap = element(doc, 'div', { class: 'field' });
+				wrap.append(part.label, part.input);
+				return wrap;
 			};
 			const key = field('input', t('templates.key'), { maxlength: '64' });
 			const channel = field('select', t('templates.channel'));
@@ -69,13 +73,12 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 			const providerTemplate = field('input', t('templates.providerTemplate'), { maxlength: '512' });
 			const rows = element(doc, 'div');
 			const addButton = element(doc, 'button', { type: 'button', class: 'secondary' }, t('templates.addButton'));
-			const buttonsBox = element(doc, 'div', { class: 'buttons' });
-			buttonsBox.append(
-				element(doc, 'label', {}, t('templates.buttons')),
-				element(doc, 'p', { class: 'meta' }, t('templates.buttonsHelp')),
-				rows,
-				addButton,
-			);
+			const buttonsBox = block(doc, {
+				title: t('templates.buttons'),
+				sub: t('templates.buttonsHelp'),
+				body: [rows, addButton],
+			});
+			buttonsBox.classList.add('buttons');
 			/** @type {Array<{ index: HTMLInputElement, type: HTMLInputElement, value: HTMLInputElement }>} */
 			let buttonFields = [];
 			/** @param {ButtonView} button */
@@ -98,11 +101,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 					addButton.toggleAttribute('disabled', false);
 					renderPreview();
 				});
-				for (const part of [index, type, value]) {
-					const cell = element(doc, 'div');
-					cell.append(part.label, part.input);
-					row.append(cell);
-				}
+				for (const part of [index, type, value]) row.append(cell(part));
 				row.append(remove);
 				rows.append(row);
 				buttonFields.push(fields);
@@ -123,8 +122,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 			const samples = new Map();
 			const sampleFields = element(doc, 'div', { class: 'row' });
 			const previewOut = element(doc, 'div', { class: 'preview', 'aria-live': 'polite' });
-			const previewBox = element(doc, 'div');
-			previewBox.append(element(doc, 'label', {}, t('templates.preview')), sampleFields, previewOut);
+			const previewBox = block(doc, { title: t('templates.preview'), body: [sampleFields, previewOut] });
 			/** The buttons as typed (a WhatsApp template at Meta only). */
 			const typedButtons = () =>
 				atMeta()
@@ -154,9 +152,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 								samples.set(name, sample.input.value);
 								renderPreview();
 							});
-							const cell = element(doc, 'div');
-							cell.append(sample.label, sample.input);
-							return cell;
+							return cell(sample);
 						}),
 					);
 				const values = { ...sampleValues(), unsubscribeUrl: t('templates.sampleUnsubscribe') };
@@ -181,7 +177,8 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 			const testTo = field('input', t('templates.testTo'), { maxlength: '254', autocomplete: 'off' });
 			const testSend = element(doc, 'button', { type: 'button', class: 'secondary' }, t('templates.testSend'));
 			const testBox = element(doc, 'div');
-			testBox.append(element(doc, 'p', { class: 'meta' }, t('templates.testHelp')), testTo.label, testTo.input, testSend);
+			testBox.append(element(doc, 'p', { class: 'meta' }, t('templates.testHelp')), cell(testTo), testSend);
+			previewBox.append(testBox);
 			const showTest = () => testBox.toggleAttribute('hidden', !['email', 'sms', 'whatsapp'].includes(channel.input.value));
 			for (const input of [subject.input, text.input, providerTemplate.input]) input.addEventListener('input', renderPreview);
 			channel.input.addEventListener('change', () => {
@@ -194,33 +191,29 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 			const fresh = element(doc, 'button', { type: 'button', class: 'secondary' }, t('templates.new'));
 			const note = element(doc, 'p', { class: 'status', role: 'status' });
 			const list = element(doc, 'ul');
-			const form = element(doc, 'form', { class: 'box' });
+			const form = element(doc, 'form', { class: 'box admin' });
+			const identity = element(doc, 'div', { class: 'fields' });
+			identity.append(cell(key), cell(channel), cell(language));
+			const actions = element(doc, 'div', { class: 'actions' });
+			actions.append(save, remove, fresh);
 			form.append(
 				element(doc, 'h2', {}, t('templates.title')),
-				list,
-				key.label,
-				key.input,
-				channel.label,
-				channel.input,
-				language.label,
-				language.input,
-				subject.label,
-				subject.input,
-				text.label,
-				text.input,
-				element(doc, 'p', { class: 'meta' }, formatText(t('templates.help'), { section: '{?name}…{/name}' })),
-				required.wrap,
-				urgent.wrap,
-				sensitive.wrap,
-				providerTemplate.label,
-				providerTemplate.input,
+				block(doc, { body: [list] }),
+				block(doc, {
+					body: [
+						identity,
+						cell(subject),
+						cell(text),
+						element(doc, 'p', { class: 'meta' }, formatText(t('templates.help'), { section: '{?name}…{/name}' })),
+						required.wrap,
+						urgent.wrap,
+						sensitive.wrap,
+						cell(providerTemplate),
+					],
+				}),
 				buttonsBox,
 				previewBox,
-				save,
-				remove,
-				fresh,
-				testBox,
-				note,
+				block(doc, { body: [actions, note] }),
 			);
 			root.append(form);
 
