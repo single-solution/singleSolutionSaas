@@ -45,7 +45,7 @@ export const randomBytes = (n) => new Uint8Array(nodeRandomBytes(n));
  * @param {string | null} [previousKey] `ENCRYPTION_KEY_PREVIOUS`, set only while the key changes
  */
 export const createSealer = (encryptionKey, previousKey = null) =>
-	createKitSealer({ encryptionKey, previousKey, label: 'accounts', legacyInfo: 'ss-accounts.seal.v1' });
+	createKitSealer({ encryptionKey, previousKey, label: 'accounts' });
 
 /** @typedef {import('@ss/app-kit').Sealer} Sealer */
 

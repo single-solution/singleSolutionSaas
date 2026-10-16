@@ -54,7 +54,7 @@ The exact API is in [API.md](./API.md).
   and values open with either; the Owner's Re-seal (`POST /v1/dashboard/reseal`) seals Connections, the product key,
   the ticket key and the product's own secrets (`hooks.resealProduct`, `hooks.resealWebsite`) again with the new key.
   `createSealer` gives a product the same sealer for its own secrets. The product key and the ticket key are kept
-  sealed (K-21; their public keys readable); keys kept in clear before are sealed on their next use.
+  sealed (K-21; their public keys readable).
 - **Merchant database** — guarded access (`websiteId` on every query, no cross-collection stages, inserts stamped
   with `websiteId` and `merchantId`; Atlas Search only as a first `$search` whose compound filter pins the website) to
   collections `ss_<product id>_<name>`; the product's declared indexes are the truth (a changed or retired index of a

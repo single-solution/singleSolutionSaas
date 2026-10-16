@@ -1,28 +1,11 @@
-import { createCipheriv, hkdfSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { createSealer, legacyV1 } from '../src/index.js';
+import { createSealer } from '../src/index.js';
 import { SEAL_FORMAT, sealKeyId } from '../src/sealing.js';
 import { expectThrowCode } from './helpers.js';
 
 const A = 'key-a-0123456789-0123456789-abcdef';
 const B = 'key-b-0123456789-0123456789-abcdef';
 const C = 'key-c-0123456789-0123456789-abcdef';
-
-/**
- * A value in the first products' format (`v1.<iv>.<tag>.<data>`), as they sealed it.
- * @param {string} encryptionKey
- * @param {string} info
- * @param {string} plaintext
- * @param {string} aad
- */
-const sealV1 = (encryptionKey, info, plaintext, aad) => {
-	const key = Buffer.from(hkdfSync('sha256', Buffer.from(encryptionKey, 'utf8'), Buffer.alloc(0), info, 32));
-	const iv = Buffer.alloc(12, 7);
-	const cipher = createCipheriv('aes-256-gcm', key, iv);
-	cipher.setAAD(Buffer.from(aad, 'utf8'));
-	const data = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
-	return `v1.${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${data.toString('base64url')}`;
-};
 
 describe('sealing', () => {
 	it('seals with a key id derived from the key (never the key) and opens with the same aad only', () => {
@@ -72,21 +55,6 @@ describe('sealing', () => {
 		expect(after.open(sealedA, 'website-1')).toBeNull();
 		// a third key that sealed nothing here opens nothing
 		expect(createSealer({ key: C, previousKey: B, label: 'test' }).open(sealedA, 'website-1')).toBeNull();
-	});
-
-	it('reads values sealed before this format with either key, and re-seals them', () => {
-		const legacy = legacyV1('ss-test.seal.v1');
-		const oldA = sealV1(A, 'ss-test.seal.v1', 'token', 'aad');
-		expect(createSealer({ key: A, label: 'test', legacy }).open(oldA, 'aad')).toBe('token');
-		expect(createSealer({ key: A, label: 'test', legacy }).open(oldA, 'other')).toBeNull();
-		expect(createSealer({ key: A, label: 'test' }).open(oldA, 'aad')).toBeNull(); // no legacy reader
-		const changing = createSealer({ key: B, previousKey: A, label: 'test', legacy });
-		expect(changing.open(oldA, 'aad')).toBe('token');
-		const moved = /** @type {string} */ (changing.reseal(oldA, 'aad'));
-		expect(changing.isCurrent(moved)).toBe(true);
-		expect(createSealer({ key: B, label: 'test' }).open(moved, 'aad')).toBe('token');
-		expect(changing.open('v1.only.three', 'aad')).toBeNull();
-		expect(changing.open(`${oldA}.extra`, 'aad')).toBeNull();
 	});
 
 	it('the same key twice counts once; bad keys and labels are refused', () => {

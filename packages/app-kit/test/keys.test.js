@@ -1,8 +1,7 @@
 /**
  * The product's own key and its ticket key are kept sealed with `ENCRYPTION_KEY`, their public keys readable (PLAN
- * 0.4.8, K-21): keys kept in clear before are sealed on their first use; a product key that no longer opens leaves
- * the product not connected until the owner connects it again (a new key); a ticket key that no longer opens is
- * replaced. The Owner's Re-seal covers both (RT-14).
+ * 0.4.8, K-21): a product key that no longer opens leaves the product not connected until the owner connects it again
+ * (a new key); a ticket key that no longer opens is replaced. The Owner's Re-seal covers both (RT-14).
  */
 import { describe, expect, it } from 'vitest';
 import { createProduct } from '../src/index.js';
@@ -56,26 +55,6 @@ describe('signing keys sealed (K-21)', () => {
 		}
 	});
 
-	it('seals keys kept in clear before on their first use, and keeps using the same keys', async () => {
-		const ctx = await setup();
-		expect((await ticketOf(ctx)).status).toBe(200);
-		const sealer = createSealer({ encryptionKey: ENCRYPTION_KEY });
-		/** @type {Record<string, any>} */
-		const kids = {};
-		for (const id of IDS) {
-			const privateJwk = openKey(sealer, await ctx.store.get('state', id), `state|${id}`);
-			kids[id] = privateJwk?.kid;
-			await ctx.store.put('state', id, { privateJwk });
-		}
-		const again = instance(ctx, ENCRYPTION_KEY);
-		expect((await again.ticket()).status).toBe(200);
-		for (const id of IDS) {
-			const doc = await ctx.store.get('state', id);
-			expect(doc.privateJwk).toBeUndefined();
-			expect(openKey(sealer, doc, `state|${id}`)?.kid).toBe(kids[id]);
-		}
-	});
-
 	it('a product key that no longer opens: not connected until connected again (a new key); the ticket key is replaced', async () => {
 		const ctx = await setup();
 		expect((await ticketOf(ctx)).status).toBe(200);
@@ -110,10 +89,5 @@ describe('signing keys sealed (K-21)', () => {
 		const after = instance(ctx, KEY_B);
 		expect((await after.ticket()).status).toBe(200);
 		expect((await ctx.store.get('state', 'productKey')).publicJwk.kid).toBe(kid);
-		// a key kept in clear is sealed by the Re-seal too
-		const plain = openKey(createSealer({ encryptionKey: KEY_B }), await ctx.store.get('state', 'ticketKey'), 'state|ticketKey');
-		await ctx.store.put('state', 'ticketKey', { privateJwk: plain });
-		expect(await (await reseal()).json()).toMatchObject({ resealed: 1, current: 1 });
-		expect((await ctx.store.get('state', 'ticketKey')).privateJwk).toBeUndefined();
 	});
 });

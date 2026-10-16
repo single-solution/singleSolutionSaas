@@ -13,7 +13,7 @@ import { createSealer as createKitSealer, resealEach } from '@ss/app-kit';
  * @param {string | null} [previousKey] `ENCRYPTION_KEY_PREVIOUS`, set only while the key changes
  */
 export const createSealer = (encryptionKey, previousKey = null) =>
-	createKitSealer({ encryptionKey, previousKey, label: 'notifications', legacyInfo: 'ss-notifications.seal.v1' });
+	createKitSealer({ encryptionKey, previousKey, label: 'notifications' });
 
 /** @typedef {import('@ss/app-kit').Sealer} Sealer */
 

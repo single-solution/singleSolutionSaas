@@ -22,8 +22,7 @@ import { createHmac, hkdfSync } from 'node:crypto';
  * @param {string} encryptionKey `ENCRYPTION_KEY` (at least 32 characters)
  * @param {string | null} [previousKey] `ENCRYPTION_KEY_PREVIOUS`, set only while the key changes
  */
-export const createSealer = (encryptionKey, previousKey = null) =>
-	createKitSealer({ encryptionKey, previousKey, label: 'chat', legacyInfo: 'ss-chat.seal.v1' });
+export const createSealer = (encryptionKey, previousKey = null) => createKitSealer({ encryptionKey, previousKey, label: 'chat' });
 
 /** @typedef {import('@ss/app-kit').Sealer} Sealer */
 

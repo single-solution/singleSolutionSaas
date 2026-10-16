@@ -2,9 +2,9 @@
  * The product's connection to the Portal (PLAN 0.4.12 row 1, 0.10), kept in the product database:
  *
  * - `state/productKey`: the product's Ed25519 key, generated on the first connect and kept (insert-if-absent, so
- *   concurrent instances agree), its private part sealed with `ENCRYPTION_KEY` (PLAN 0.4.8, K-21; a key kept in clear
- *   before is sealed on its next use). A key that no longer opens (`ENCRYPTION_KEY` lost) leaves the product not
- *   connected until the owner connects it again from the Portal, which makes a new key;
+ *   concurrent instances agree), its private part sealed with `ENCRYPTION_KEY` (PLAN 0.4.8, K-21). A key that no
+ *   longer opens (`ENCRYPTION_KEY` lost) leaves the product not connected until the owner connects it again from the
+ *   Portal, which makes a new key;
  * - `state/connection`: `{ portalUrl, jwks, baseUrl, connectedAt }`, written when a Portal proves it holds the
  *   deployer's `CONNECT_SECRET`. The Portal URL and its keys are pinned; `baseUrl` is this product's own address.
  *   Connecting again replaces it: whoever holds the secret is the authority;
@@ -133,15 +133,12 @@ export const createConnection = ({ store, manifest, connectSecret, sealer, fetch
 	};
 
 	/**
-	 * The stored private key, sealed on its first use when it was kept in clear (K-21); null when there is none or it
-	 * does not open.
+	 * The stored private key (K-21); null when there is none or it does not open.
 	 * @returns {Promise<Record<string, any> | null>}
 	 */
 	const storedKey = async () => {
 		const stored = await store.get('state', 'productKey');
-		if (!stored) return null;
-		if (stored.privateJwk) await store.put('state', 'productKey', sealKey(sealer, stored.privateJwk, KEY_AAD));
-		return openKey(sealer, stored, KEY_AAD);
+		return stored ? openKey(sealer, stored, KEY_AAD) : null;
 	};
 
 	/**

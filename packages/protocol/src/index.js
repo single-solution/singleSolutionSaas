@@ -21,7 +21,7 @@ export {
 	verifyConnectResponse,
 } from './registration.js';
 export { canonicalJson, constantTimeEqual, hmacSha256Hex, randomToken, sha256Hex } from './encoding.js';
-export { createSealer, legacyV1 } from './sealing.js';
+export { createSealer } from './sealing.js';
 export { WEBHOOK_TOLERANCE_SECONDS, signWebhook, verifyWebhook } from './webhooks.js';
 
 /** @typedef {import('./keys.js').PublicJwk} PublicJwk */
@@ -43,4 +43,3 @@ export { WEBHOOK_TOLERANCE_SECONDS, signWebhook, verifyWebhook } from './webhook
 /** @typedef {import('./notices.js').NoticeHeaders} NoticeHeaders */
 /** @typedef {import('./calls.js').CallHeaders} CallHeaders */
 /** @typedef {import('./sealing.js').Sealer} Sealer */
-/** @typedef {import('./sealing.js').LegacyReader} LegacyReader */

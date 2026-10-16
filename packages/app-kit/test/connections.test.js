@@ -62,7 +62,7 @@ const dashOn = (handler, cookie, method, path) =>
 	handler(new Request(`${BASE}${path}`, { method, headers: { cookie, ...(method === 'GET' ? {} : { origin: BASE }) } }));
 
 describe('sealing', () => {
-	it('opens only with the same key and place; values of the first format still open', () => {
+	it('opens only with the same key and place', () => {
 		const sealer = createSealer({ encryptionKey: 'k'.repeat(32), randomBytes: (n) => new Uint8Array(n).fill(1) });
 		const sealed = sealer.seal('secret', 'a');
 		expect(sealed.startsWith(`ss2.${sealer.keyId}.`)).toBe(true);
@@ -72,10 +72,6 @@ describe('sealing', () => {
 		expect(sealer.open('v2.x.y.z', 'a')).toBeNull();
 		expect(sealer.open(42, 'a')).toBeNull();
 		expect(() => createSealer({ encryptionKey: 'short' })).toThrow(/ENCRYPTION_KEY/);
-		// `v1.<iv>.<tag>.<data>` sealed by the kit before key ids (fixed IV 01…, key 'k' × 32, aad 'a')
-		const first = 'v1.AQEBAQEBAQEBAQEB.jEJhvO4DGbEeCwZHXDjDqw.aKQZLWWj';
-		expect(sealer.open(first, 'a')).toBe('secret');
-		expect(createSealer({ encryptionKey: KEY_B, previousKey: 'k'.repeat(32) }).open(first, 'a')).toBe('secret');
 	});
 });
 

@@ -7,9 +7,8 @@
  * `ENCRYPTION_KEY` under another HKDF label, never the key itself.
  *
  * Changing the key (owner's job): the deployable gets the new `ENCRYPTION_KEY` and the old one as
- * `ENCRYPTION_KEY_PREVIOUS`. A value opens with the key its id names; values sealed before this format (no key id)
- * are read by the caller's `legacy` reader with either key. `reseal` moves a value to the current key; once every
- * value is re-sealed the previous key is removed.
+ * `ENCRYPTION_KEY_PREVIOUS`. A value opens with the key its id names; `reseal` moves a value to the current key; once
+ * every value is re-sealed the previous key is removed.
  * @module
  */
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes as nodeRandomBytes } from 'node:crypto';
@@ -35,26 +34,6 @@ const derive = (encryptionKey, info, length) =>
  * @param {string} encryptionKey
  */
 export const sealKeyId = (encryptionKey) => derive(encryptionKey, 'ss.seal.key-id.v2', 6).toString('base64url');
-
-/**
- * A reader of values sealed before this format, for one key: the plaintext, or null.
- * @typedef {(sealed: string, aad: string) => string | null} LegacyReader
- */
-
-/**
- * The reader of the first products' format `v1.<iv>.<tag>.<data>` (AES-256-GCM under HKDF-SHA256 of the key with
- * `info`, the caller's `aad`).
- * @param {string} info the HKDF label the unit used (for example `ss-app-kit.seal.v1`)
- * @returns {(encryptionKey: string) => LegacyReader}
- */
-export const legacyV1 = (info) => (encryptionKey) => {
-	const key = derive(encryptionKey, info, 32);
-	return (sealed, aad) => {
-		const [version, iv, tag, data, extra] = sealed.split('.');
-		if (version !== 'v1' || !iv || !tag || data === undefined || extra !== undefined) return null;
-		return gcmOpen(key, iv, tag, data, aad);
-	};
-};
 
 /**
  * @param {Buffer} key
@@ -86,20 +65,17 @@ const checkKey = (key, name) => {
 };
 
 /**
- * @param {{ key: string, previousKey?: string | null, label: string,
- *   legacy?: (encryptionKey: string) => LegacyReader, randomBytes?: (length: number) => Uint8Array }} options
+ * @param {{ key: string, previousKey?: string | null, label: string, randomBytes?: (length: number) => Uint8Array }} options
  *   `key`: `ENCRYPTION_KEY`; `previousKey`: `ENCRYPTION_KEY_PREVIOUS` (null or '' when not set); `label`: the unit
- *   (`app-kit`, `accounts`, `portal` …), so one unit's values never open in another's; `legacy`: reads values sealed
- *   before this format
+ *   (`app-kit`, `accounts`, `portal` …), so one unit's values never open in another's
  */
-export const createSealer = ({ key, previousKey = null, label, legacy, randomBytes = (n) => nodeRandomBytes(n) }) => {
+export const createSealer = ({ key, previousKey = null, label, randomBytes = (n) => nodeRandomBytes(n) }) => {
 	checkKey(key, 'ENCRYPTION_KEY');
 	if (previousKey) checkKey(previousKey, 'ENCRYPTION_KEY_PREVIOUS');
 	if (typeof label !== 'string' || !LABEL.test(label)) throw createProtocolError('invalid_argument', 'invalid sealer label');
 	const keyring = [key, ...(previousKey && previousKey !== key ? [previousKey] : [])].map((secret) => ({
 		id: sealKeyId(secret),
 		aes: derive(secret, `ss.seal.v2|${label}`, 32),
-		legacy: legacy ? legacy(secret) : null,
 	}));
 	const current = /** @type {(typeof keyring)[number]} */ (keyring[0]);
 	const prefix = `${SEAL_FORMAT}.${current.id}.`;
@@ -123,18 +99,11 @@ export const createSealer = ({ key, previousKey = null, label, legacy, randomByt
 	 * @returns {string | null} null when it cannot be opened (another key, tampered, malformed)
 	 */
 	const open = (sealed, aad) => {
-		if (typeof sealed !== 'string') return null;
-		if (sealed.startsWith(`${SEAL_FORMAT}.`)) {
-			const [, id, iv, tag, data, extra] = sealed.split('.');
-			const entry = keyring.find((k) => k.id === id);
-			if (!entry || !iv || !tag || data === undefined || extra !== undefined) return null;
-			return gcmOpen(entry.aes, iv, tag, data, aad);
-		}
-		for (const entry of keyring) {
-			const opened = entry.legacy ? entry.legacy(sealed, aad) : null;
-			if (opened !== null) return opened;
-		}
-		return null;
+		if (typeof sealed !== 'string' || !sealed.startsWith(`${SEAL_FORMAT}.`)) return null;
+		const [, id, iv, tag, data, extra] = sealed.split('.');
+		const entry = keyring.find((k) => k.id === id);
+		if (!entry || !iv || !tag || data === undefined || extra !== undefined) return null;
+		return gcmOpen(entry.aes, iv, tag, data, aad);
 	};
 
 	/** @param {unknown} sealed @returns {boolean} sealed in this format with the current key */

@@ -1,7 +1,7 @@
 /**
- * The deal-lock secret sealed with `ENCRYPTION_KEY` (PLAN 0.4.8, RT-14): made sealed, a clear one sealed on first use,
- * opened with `ENCRYPTION_KEY_PREVIOUS` while the key changes, moved by the Owner's Re-seal, replaced when no key opens
- * it; and the dashboard's Re-seal reaches it.
+ * The deal-lock secret sealed with `ENCRYPTION_KEY` (PLAN 0.4.8, RT-14): made sealed, opened with
+ * `ENCRYPTION_KEY_PREVIOUS` while the key changes, moved by the Owner's Re-seal, replaced when no key opens it; and the
+ * dashboard's Re-seal reaches it.
  */
 import { createMemoryStore } from '@ss/app-kit';
 import { describe, expect, it } from 'vitest';
@@ -33,22 +33,12 @@ describe('deal-lock secret (RT-14)', () => {
 		});
 	});
 
-	it('seals a secret kept in clear on first use and on Re-seal, and replaces one no key opens', async () => {
+	it('replaces a secret no key opens (ENCRYPTION_KEY lost), and keeps the new one', async () => {
 		const store = createMemoryStore({ now: () => 0 });
-		const clear = 'x'.repeat(43);
-		const doc = { websiteId: 'web_1', kind: 'ecommerce', key: 'secret.locks', value: clear, at: 0 };
-		await store.put('settings', ID, doc);
-		await store.put('settings', 'web_2|ecommerce|secret.locks', { ...doc, websiteId: 'web_2' });
-		const secrets = createSiteSecrets({ store, sealer: createSealer(A), now: () => 0 });
-		expect(await secrets.get('web_1')).toBe(clear);
-		expect(String((await store.get('settings', ID))?.value).startsWith('ss2.')).toBe(true);
-		// web_1 is sealed now; web_2 still in clear
-		expect(await secrets.reseal()).toEqual({ resealed: 1, current: 1, unreadable: 0 });
-		expect(await createSiteSecrets({ store, sealer: createSealer(A), now: () => 0 }).get('web_2')).toBe(clear);
-
+		const first = await createSiteSecrets({ store, sealer: createSealer(A), now: () => 0 }).get('web_1');
 		const lost = createSiteSecrets({ store, sealer: createSealer(B), now: () => 0 });
 		const fresh = await lost.get('web_1');
-		expect(fresh).not.toBe(clear);
+		expect(fresh).not.toBe(first);
 		expect(await lost.get('web_1')).toBe(fresh);
 		expect(await createSiteSecrets({ store, sealer: createSealer(B), now: () => 0 }).get('web_1')).toBe(fresh);
 	});

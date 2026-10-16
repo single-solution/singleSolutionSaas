@@ -1,9 +1,8 @@
 /**
  * Tickets for admin widgets (PLAN 0.4.5). The product signs them with its own ticket key, generated on first use and
- * kept in the product database (`state/ticketKey`), its private part sealed with `ENCRYPTION_KEY` (PLAN 0.4.8, K-21; a
- * key kept in clear before is sealed on its next use). The key is published nowhere, because only this product
- * verifies its tickets. A key that no longer opens (`ENCRYPTION_KEY` lost) is replaced: tickets last 15 minutes and
- * the admin widgets ask for new ones.
+ * kept in the product database (`state/ticketKey`), its private part sealed with `ENCRYPTION_KEY` (PLAN 0.4.8, K-21).
+ * The key is published nowhere, because only this product verifies its tickets. A key that no longer opens
+ * (`ENCRYPTION_KEY` lost) is replaced: tickets last 15 minutes and the admin widgets ask for new ones.
  * @module
  */
 import { createKeyResolver, createSigner, generateSigningKey, issueTicket, toPublicJwk, verifyTicket } from '@ss/protocol';
@@ -26,7 +25,6 @@ export const createTickets = ({ store, productId, sealer, now, randomBytes }) =>
 	const load = () => {
 		loaded ??= (async () => {
 			const doc = await store.get('state', 'ticketKey');
-			if (doc?.privateJwk) await store.put('state', 'ticketKey', sealKey(sealer, doc.privateJwk, KEY_AAD));
 			let privateJwk = doc ? openKey(sealer, doc, KEY_AAD) : null;
 			if (!privateJwk) {
 				// none yet, or it does not open: one new key (the first writer wins, so instances agree)
