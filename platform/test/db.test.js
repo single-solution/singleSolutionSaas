@@ -316,7 +316,7 @@ describe('getMongoClient', () => {
 		const seen = [];
 		getMongoClient({
 			uri: 'mongodb://a/x',
-			createClient: (uri, options) => {
+			createClient: (_uri, options) => {
 				seen.push(options);
 				return /** @type {any} */ ({ close: async () => {} });
 			},

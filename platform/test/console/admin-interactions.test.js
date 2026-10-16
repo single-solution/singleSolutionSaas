@@ -28,7 +28,7 @@ import { AddCreditsDialog, FinanceView } from '../../src/console/admin/views/fin
 import { SettingsView } from '../../src/console/admin/views/settings.js';
 import { ToastProvider } from '@ss/ui';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
-import { ENCRYPTION_KEY, PORTAL_URL, createTestLogger, startMongo, testConfig } from '../helpers.js';
+import { ENCRYPTION_KEY, createTestLogger, startMongo, testConfig } from '../helpers.js';
 
 vi.mock('next/navigation.js', async (importOriginal) => {
 	const { testRouter } = await import('./router.js');

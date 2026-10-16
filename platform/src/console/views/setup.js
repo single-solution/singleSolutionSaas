@@ -91,7 +91,7 @@ const takesOther = (question) => /** @type {readonly string[]} */ (PROFILE_OTHER
  * @param {string} line
  * @returns {string[]}
  */
-export const ownAnswersOf = (line) => {
+const ownAnswersOf = (line) => {
 	/** @type {string[]} */
 	const out = [];
 	for (const part of line.split(',')) {
