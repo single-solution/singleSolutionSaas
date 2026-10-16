@@ -7,10 +7,9 @@
  * texts (E12), the mount with the shop's CSS and the dispatch of Growth's browser events (`../core/growth-events.js`).
  * @module
  */
-import { DEFAULT_FORMAT, formatDate, formatMoney, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
+import { DEFAULT_FORMAT, element, formatDate, formatMoney, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
 import { GUEST_IDENTITIES } from '../core/guests.js';
 import { fromDecimal, isCurrency, toDecimal } from '../core/money.js';
-import { element } from './dom.js';
 import { SHOP_CSS } from './shop-styles.js';
 import { WIDGET_CSS } from './styles.js';
 

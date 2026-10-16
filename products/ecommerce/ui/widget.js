@@ -37,7 +37,7 @@ import { mountProductPage } from './product-page.js';
 import { mountPromotionsAdmin } from './promotions-admin.js';
 import { announce } from './shop-common.js';
 import { createOrderKeys } from './order-keys.js';
-import { createTicketSource } from './tickets.js';
+import { createTicketSource } from '@ss/app-kit/widget';
 import { mountWishlist } from './wishlist.js';
 
 /** The kit's widget config routes (browser token; ticket). */
@@ -97,8 +97,8 @@ const retryAfterSeconds = (header) => {
  */
 
 /**
- * What an admin widget's mount function receives (`adminCall(api, method, path, body)` from `./tickets.js`).
- * @typedef {{ host: HTMLElement, config: WidgetConfig, api: import('./tickets.js').AdminApi,
+ * What an admin widget's mount function receives (`adminCall(api, method, path, body)` from `@ss/app-kit/widget`).
+ * @typedef {{ host: HTMLElement, config: WidgetConfig, api: import('@ss/app-kit/widget').AdminApi,
  *   win: Window & typeof globalThis, save: (name: string, text: string, type?: string) => void,
  *   open: (url: string) => void }} AdminMount
  */
@@ -312,9 +312,9 @@ export const startWidget = ({ window: win, script }) => {
 		);
 	})();
 
-	/** @param {{ getTicket: import('./tickets.js').GetTicket }} options */
+	/** @param {{ getTicket: import('@ss/app-kit/widget').GetTicket }} options */
 	const admin = async ({ getTicket }) => {
-		/** @type {import('./tickets.js').Ticket} */
+		/** @type {import('@ss/app-kit/widget').Ticket} */
 		let first;
 		try {
 			first = await getTicket();

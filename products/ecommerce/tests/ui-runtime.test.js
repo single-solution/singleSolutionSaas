@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ADD_TO_CART_EVENT, STORAGE_KEYS, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { MAX_LINES, MAX_QUANTITY, createCartStore } from '../ui/cart-store.js';
-import { adminCall, createTicketSource } from '../ui/tickets.js';
+import { adminCall, createTicketSource } from '@ss/app-kit/widget';
 import { flush, growthEvents } from './ui-shop-helpers.js';
 
 const mounts = vi.hoisted(() => ({ visitor: /** @type {any[]} */ ([]), admin: /** @type {any[]} */ ([]) }));
