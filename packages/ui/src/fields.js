@@ -45,9 +45,8 @@ export const FieldLayoutContext = createContext(/** @type {'stack' | 'row'} */ (
  */
 export const ROW_LIST =
 	'flex flex-col [&>[data-cell]]:py-4 [&>[data-cell]:first-child]:pt-0 [&>[data-cell]:last-child]:pb-0 ' +
-	'[&>[data-cell]+[data-cell]]:border-t [&>[data-cell]+[data-cell]]:border-line-soft [&>:not([data-cell])]:pt-4 [&>:first-child:not([data-cell])]:pt-0 ' +
-	'[&>[data-cell]+:not([data-cell])]:mt-4 [&>[data-cell]+:not([data-cell])]:border-t [&>[data-cell]+:not([data-cell])]:border-line-soft ' +
-	'[&>a]:self-start [&>button]:self-start';
+	'[&>[data-cell]:has(+:not([data-cell]))]:pb-0 [&>[data-cell]+[data-cell]]:border-t [&>[data-cell]+[data-cell]]:border-line-soft ' +
+	'[&>:not([data-cell])]:mt-4 [&>:first-child:not([data-cell])]:mt-0 [&>a]:self-start [&>button]:self-start';
 
 /**
  * A responsive grid of fields (its own size container): short controls side by side, long ones full width.
