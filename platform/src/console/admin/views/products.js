@@ -10,6 +10,7 @@
  * connection (id, version, price list, widget script, docs). The list counts the products and sorts by name,
  * credits this month or websites; the More menu also opens the docs and copies the address. Owners manage products; Support sees them
  * read-only. The Portal checks every right again.
+ * Layout: the product's parts are tabs (Websites, Features and prices, Connection), one at a time.
  * @module
  */
 import { useState } from 'react';
@@ -27,7 +28,6 @@ import {
 	KeyValueList,
 	LocalTime,
 	PageHeader,
-	Section,
 	Select,
 	SoftBreaks,
 	Stat,
@@ -45,7 +45,7 @@ import { ADMIN, MORE, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
 import { ProductStatusBadge, creditDayBars, formatChartCredits } from '../../views/billing.js';
-import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch, openDashboard } from '../../views/common.js';
+import { DetailTabs, HeaderActions, ListDetail, ListPane, ListRow, ListSearch, openDashboard } from '../../views/common.js';
 import { apiFetch } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
@@ -322,14 +322,6 @@ function ProductDetail({ detail, owner }) {
 						<HeaderActions
 							label={ADMIN.moreActions(product.name)}
 							more={[
-								...(product.docsUrl
-									? [
-											{
-												label: MORE.openDocs,
-												onSelect: () => void window.open(product.docsUrl, '_blank', 'noopener,noreferrer'),
-											},
-										]
-									: []),
 								{ label: MORE.copyAddress, onSelect: () => void copyAddress() },
 								{ label: PRODUCTS.reconnect, onSelect: () => setReconnecting(true) },
 							]}>
@@ -361,165 +353,180 @@ function ProductDetail({ detail, owner }) {
 					{...(isEmptySeries(earned) ? { hint: PRODUCTS.noEarnings } : {})}
 				/>
 				<Stat label={PRODUCTS.websitesUsing} value={numbers.websites ?? 0} icon="globe" kind="website" />
-				<Stat
-					label={MORE.featuresCount}
-					value={features.length}
-					hint={MORE.pricedCount(features.filter((f) => (f.millicreditsPerHour ?? 0) > 0).length)}
-					icon="sliders"
-					kind="product"
-				/>
 			</StatGrid>
 			{isEmptySeries(earned) ? null : (
 				<Card title={PRODUCTS.earnedChart}>
 					<BarChart label={PRODUCTS.earnedChart} data={earned} format={formatChartCredits} />
 				</Card>
 			)}
-			<Section id="product-websites" title={PRODUCTS.websitesTitle} description={PRODUCTS.websitesIntro}>
-				{problem ? <p className="text-sm text-danger">{describeProblem(problem)}</p> : null}
-				<Table
-					caption={PRODUCTS.websitesTitle}
-					rows={rows}
-					rowKey={(w) => w.websiteId}
-					empty={<EmptyState compact icon="globe" kind="website" title={PRODUCTS.noWebsites} />}
-					hasMore={cursor !== null}
-					loadingMore={loadingMore}
-					onLoadMore={() => void more()}
-					columns={[
-						{
-							key: 'domain',
-							header: PRODUCTS.websiteColumns.website,
-							rowHeader: true,
-							// a long domain wraps between its parts and a long merchant name on words, so the table fits
-							// a narrow detail pane before it has to scroll
-							wrap: true,
-							render: (w) => (
-								<span className="block min-w-0">
-									<Link
-										href={adminRoutes.website(w.merchantId, w.websiteId)}
-										title={w.domain}
-										className="line-clamp-2 break-words font-semibold text-primary hover:underline">
-										<SoftBreaks text={w.domain} />
-									</Link>
-									<Link
-										href={adminRoutes.merchant(w.merchantId)}
-										title={w.merchantName}
-										className="line-clamp-2 text-xs font-normal text-muted hover:text-fg hover:underline">
-										{w.merchantName}
-									</Link>
-								</span>
-							),
-						},
-						{
-							key: 'status',
-							header: PRODUCTS.websiteColumns.status,
-							render: (w) => <ProductStatusBadge status={w.status} featuresOn={w.featuresOn} />,
-						},
-						{
-							key: 'featuresOn',
-							header: PRODUCTS.websiteColumns.featuresOn,
-							render: (w) => {
-								const names = featureNames(product.features, w.featuresOn);
-								return (
-									<span className="block max-w-56 truncate" title={names}>
-										{names}
-									</span>
-								);
-							},
-						},
-						{
-							key: 'dailyCost',
-							header: PRODUCTS.websiteColumns.dailyCost,
-							align: 'right',
-							className: 'whitespace-nowrap',
-							render: (w) => formatCredits(w.dailyCost ?? 0),
-						},
-					]}
-				/>
-			</Section>
-			<Section id="product-features" title={MORE.featuresTitle} description={MORE.featuresIntro}>
-				<Table
-					caption={MORE.featuresTitle}
-					rows={features}
-					rowKey={(f) => f.key}
-					empty={<EmptyState compact icon="sliders" kind="product" title={MORE.noFeatures} />}
-					columns={[
-						{
-							key: 'name',
-							header: MORE.featureColumns.feature,
-							rowHeader: true,
-							wrap: true,
-							render: (f) => (
-								<span className="block min-w-48 space-y-0.5">
-									<span className="block font-semibold text-fg">{f.name}</span>
-									{f.description ? <span className="block text-xs text-muted">{f.description}</span> : null}
-								</span>
-							),
-						},
-						{
-							key: 'needs',
-							header: MORE.featureColumns.needs,
-							wrap: true,
-							render: (f) =>
-								(f.dependsOn ?? []).length > 0 ? (
-									featureNames(features, f.dependsOn)
-								) : (
-									<span className="text-muted">—</span>
-								),
-						},
-						{
-							key: 'perHour',
-							header: MORE.featureColumns.perHour,
-							align: 'right',
-							className: 'whitespace-nowrap',
-							render: (f) => formatCredits(f.millicreditsPerHour ?? 0),
-						},
-						{
-							key: 'perDay',
-							header: MORE.featureColumns.perDay,
-							align: 'right',
-							className: 'whitespace-nowrap',
-							render: (f) => formatCredits(24 * (f.millicreditsPerHour ?? 0)),
-						},
-					]}
-				/>
-			</Section>
-			<Card title={MORE.connectionTitle}>
-				<KeyValueList
-					columns={2}
-					items={[
-						{ label: MORE.connection.productId, value: <span className="font-mono text-xs">{product.productId}</span> },
-						{ label: MORE.connection.version, value: product.version ?? '—' },
-						{ label: MORE.connection.priceList, value: MORE.priceListVersion(product.priceListVersion ?? 0) },
-						{
-							label: MORE.connection.widget,
-							value: product.widgetScriptUrl ? (
-								<span className="break-all font-mono text-xs">{product.widgetScriptUrl}</span>
-							) : (
-								MORE.noWidget
-							),
-						},
-						{
-							label: MORE.connection.docs,
-							value: product.docsUrl ? (
-								<a
-									href={product.docsUrl}
-									target="_blank"
-									rel="noopener noreferrer"
-									className="break-all font-semibold text-primary hover:underline">
-									{product.docsUrl}
-								</a>
-							) : (
-								'—'
-							),
-						},
-						{ label: MORE.connection.connected, value: <LocalTime value={product.connectedAt} /> },
-						{
-							label: MORE.connection.reconnected,
-							value: product.reconnectedAt ? <LocalTime value={product.reconnectedAt} /> : MORE.never,
-						},
-					]}
-				/>
-			</Card>
+			<DetailTabs
+				label={PRODUCTS.parts}
+				idPrefix="product"
+				tabs={[
+					{
+						id: 'product-websites',
+						label: `${PRODUCTS.websitesTitle} · ${rows.length}${cursor !== null ? '+' : ''}`,
+						content: (
+							<>
+								{problem ? <p className="text-sm text-danger">{describeProblem(problem)}</p> : null}
+								<Table
+									caption={PRODUCTS.websitesTitle}
+									rows={rows}
+									rowKey={(w) => w.websiteId}
+									empty={<EmptyState compact icon="globe" kind="website" title={PRODUCTS.noWebsites} />}
+									hasMore={cursor !== null}
+									loadingMore={loadingMore}
+									onLoadMore={() => void more()}
+									columns={[
+										{
+											key: 'domain',
+											header: PRODUCTS.websiteColumns.website,
+											rowHeader: true,
+											// a long domain wraps between its parts and a long merchant name on words, so the table fits
+											// a narrow detail pane before it has to scroll
+											wrap: true,
+											render: (w) => (
+												<span className="block min-w-0">
+													<Link
+														href={adminRoutes.website(w.merchantId, w.websiteId)}
+														title={w.domain}
+														className="line-clamp-2 break-words font-semibold text-primary hover:underline">
+														<SoftBreaks text={w.domain} />
+													</Link>
+													<Link
+														href={adminRoutes.merchant(w.merchantId)}
+														title={w.merchantName}
+														className="line-clamp-2 text-xs font-normal text-muted hover:text-fg hover:underline">
+														{w.merchantName}
+													</Link>
+												</span>
+											),
+										},
+										{
+											key: 'status',
+											header: PRODUCTS.websiteColumns.status,
+											render: (w) => <ProductStatusBadge status={w.status} featuresOn={w.featuresOn} />,
+										},
+										{
+											key: 'featuresOn',
+											header: PRODUCTS.websiteColumns.featuresOn,
+											render: (w) => {
+												const names = featureNames(product.features, w.featuresOn);
+												return (
+													<span className="block max-w-56 truncate" title={names}>
+														{names}
+													</span>
+												);
+											},
+										},
+										{
+											key: 'dailyCost',
+											header: PRODUCTS.websiteColumns.dailyCost,
+											align: 'right',
+											className: 'whitespace-nowrap',
+											render: (w) => formatCredits(w.dailyCost ?? 0),
+										},
+									]}
+								/>
+							</>
+						),
+					},
+					{
+						id: 'product-features',
+						label: `${MORE.featuresTitle} · ${features.length}`,
+						content: (
+							<>
+								<Table
+									caption={MORE.featuresTitle}
+									rows={features}
+									rowKey={(f) => f.key}
+									empty={<EmptyState compact icon="sliders" kind="product" title={MORE.noFeatures} />}
+									columns={[
+										{
+											key: 'name',
+											header: MORE.featureColumns.feature,
+											rowHeader: true,
+											wrap: true,
+											render: (f) => (
+												<span className="block min-w-48 space-y-0.5">
+													<span className="block font-semibold text-fg">{f.name}</span>
+													{f.description ? <span className="block text-xs text-muted">{f.description}</span> : null}
+												</span>
+											),
+										},
+										{
+											key: 'needs',
+											header: MORE.featureColumns.needs,
+											wrap: true,
+											render: (f) =>
+												(f.dependsOn ?? []).length > 0 ? (
+													featureNames(features, f.dependsOn)
+												) : (
+													<span className="text-muted">—</span>
+												),
+										},
+										{
+											key: 'perHour',
+											header: MORE.featureColumns.perHour,
+											align: 'right',
+											className: 'whitespace-nowrap',
+											render: (f) => formatCredits(f.millicreditsPerHour ?? 0),
+										},
+										{
+											key: 'perDay',
+											header: MORE.featureColumns.perDay,
+											align: 'right',
+											className: 'whitespace-nowrap',
+											render: (f) => formatCredits(24 * (f.millicreditsPerHour ?? 0)),
+										},
+									]}
+								/>
+							</>
+						),
+					},
+					{
+						id: 'product-connection',
+						label: MORE.connectionTitle,
+						content: (
+							<Card title={MORE.connectionTitle}>
+								<KeyValueList
+									columns={2}
+									items={[
+										{
+											label: MORE.connection.productId,
+											value: <span className="font-mono text-xs">{product.productId}</span>,
+										},
+										{ label: MORE.connection.version, value: product.version ?? '—' },
+										{ label: MORE.connection.priceList, value: MORE.priceListVersion(product.priceListVersion ?? 0) },
+										{
+											label: MORE.connection.widget,
+											value: product.widgetScriptUrl ? (
+												<span className="break-all font-mono text-xs">{product.widgetScriptUrl}</span>
+											) : (
+												MORE.noWidget
+											),
+										},
+										{
+											label: MORE.connection.docs,
+											value: product.docsUrl ? (
+												<a
+													href={product.docsUrl}
+													target="_blank"
+													rel="noopener noreferrer"
+													className="break-all font-semibold text-primary hover:underline">
+													{product.docsUrl}
+												</a>
+											) : (
+												'—'
+											),
+										},
+									]}
+								/>
+							</Card>
+						),
+					},
+				]}
+			/>
 			{owner ? (
 				<ConnectDialog
 					open={reconnecting}

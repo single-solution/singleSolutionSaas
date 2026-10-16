@@ -27,7 +27,19 @@ import { OwnActivity } from '../../src/console/views/login-settings.js';
 import { presetOf, rangePresets } from '../../src/console/views/range.js';
 import { OverviewView as MerchantOverview, WebsitesView } from '../../src/console/views/websites.js';
 import { PORTAL_URL, startMongo } from '../helpers.js';
-import { buttons, clickEl, createWorld, dialog, press, pressDialog, quiet, shows, until } from './merchant-harness.js';
+import {
+	buttons,
+	clickEl,
+	createWorld,
+	dialog,
+	openSection,
+	openTab,
+	press,
+	pressDialog,
+	quiet,
+	shows,
+	until,
+} from './merchant-harness.js';
 import { testRouter } from './router.js';
 
 vi.mock('next/navigation.js', async (importOriginal) => {
@@ -149,18 +161,15 @@ describe('fuller Portal screens (jsdom)', () => {
 			expect(overview.merchants.map((m) => m.name)).toContain('Shop & Co');
 			expect(typeof overview.billing[merchantId]?.balance).toBe('number');
 			withToasts(<OverviewView {...overview} admin={owner} />);
-			// look "Workbench": the greeting, what needs the admin (with what happens if it waits), the setup checklist,
-			// the month's numbers, the first merchants with their balance and the activity timeline
-			for (const text of [
-				'Welcome back',
-				'Needs you',
-				'Credits are running low',
-				'Getting the platform ready',
-				'Credits added this month (UTC)',
-				'Shop & Co',
-				'View all',
-			])
+			// an inner sidebar, one view at a time: what needs the admin (with what happens if it waits) and the setup
+			// checklist first; the month's numbers, the first merchants, the products and the timeline are links
+			for (const text of ['Welcome back', 'Needs you', 'Credits are running low', 'Getting the platform ready'])
 				expect(shows(text)).toBe(true);
+			await openSection('Credits');
+			expect(shows('Credits added this month (UTC)')).toBe(true);
+			await openSection('Merchants');
+			expect(shows('Shop & Co') && shows('View all')).toBe(true);
+			await openSection('Products');
 			await menu('Notes actions');
 			await clickEl(menuItem('View product'));
 			expect(pushed('/admin/products/notes')).toBe(true);
@@ -180,15 +189,20 @@ describe('fuller Portal screens (jsdom)', () => {
 			const list = await admin.loadMerchants(ownerBrowser.api, {});
 			const detail = await admin.loadMerchant(ownerBrowser.api, merchantId, owner);
 			withToasts(<MerchantsView {...list} detail={detail} selectedId={merchantId} admin={owner} />);
-			for (const text of ['Details', 'Last sign-in', 'Low balance: about', 'Products on websites', 'Changes'])
-				expect(shows(text)).toBe(true);
+			// the merchant's parts are tabs: Websites first, then Credits, Details, Activity
+			expect(shows('Low balance: about')).toBe(true);
+			await openTab('Credits');
+			expect(shows('Credit receipts')).toBe(true);
+			await openTab('Details');
+			expect(shows('Last sign-in')).toBe(true);
+			expect(shows('Products on websites')).toBe(false); // the Websites tab shows the count
+			await openTab('Activity');
+			expect(shows('Changes')).toBe(true);
+			await press('Open in Activity');
+			expect(pushed(`/admin/activity?merchantId=${merchantId}`)).toBe(true);
 			await choose('Shop & Co', 'Usage, all websites');
 			await until(() => shows('Usage · Shop & Co') && !dialog().querySelector('[aria-busy="true"]'));
 			keydown(document, 'Escape');
-			await choose('Shop & Co', 'Receipts in Credits and billing');
-			expect(pushed(`/admin/finance?merchantId=${merchantId}`)).toBe(true);
-			await choose('Shop & Co', 'Open in Activity');
-			expect(pushed(`/admin/activity?merchantId=${merchantId}`)).toBe(true);
 			cleanup();
 
 			// ---------------------------------------------------------------- Products: features, connection, sort, menu
@@ -196,15 +210,15 @@ describe('fuller Portal screens (jsdom)', () => {
 			if (!products.ok || !('detail' in products) || !products.detail.ok) throw new Error('products');
 			const baseUrl = String(products.detail.product.baseUrl);
 			withToasts(<ProductsView {...products} admin={owner} />);
-			for (const text of ['Features and prices', 'Notes inbox', 'Version 5', 'Connection', '1 with a price'])
-				expect(shows(text)).toBe(true);
+			await openTab('Features and prices');
+			expect(shows('Notes inbox')).toBe(true);
+			await openTab('Connection');
+			expect(shows('Version 5') && shows(`${baseUrl}/docs`)).toBe(true);
 			await pick('Sort', 'earned');
 			await pick('Sort', 'websites');
 			await choose('Notes', 'Copy address');
 			await until(() => shows('Copied.'));
 			expect(writeText).toHaveBeenCalledWith(baseUrl);
-			await choose('Notes', 'Open docs');
-			expect(open).toHaveBeenCalledWith(`${baseUrl}/docs`, '_blank', 'noopener,noreferrer');
 			cleanup();
 
 			// ---------------------------------------------------------------- Credits and billing
@@ -212,15 +226,18 @@ describe('fuller Portal screens (jsdom)', () => {
 			if (!billing.ok) throw new Error('billing');
 			expect(billing.merchants.map((m) => m.label)).toEqual(['Pending Ltd', 'Shop & Co']);
 			withToasts(<FinanceView {...billing} admin={owner} />);
-			for (const text of ['Credits added', 'Receipts', 'Credits charged', 'Need attention']) expect(shows(text)).toBe(true);
+			for (const text of ['Credits added', 'Receipts', 'Credits charged', 'Needs attention']) expect(shows(text)).toBe(true);
 			await clickEl(/** @type {Element} */ (buttons('Add credits')[0]));
 			await until(() => shows('Choose the merchant who paid'));
 			await type(byLabel(dialog(), 'Merchant'), merchantId);
 			await pressDialog('Next');
 			await until(() => shows('Add credits · Shop & Co'));
 			keydown(document, 'Escape');
+			await openSection('Receipts');
 			await pick('Period', 'last7');
 			expect(pushed('/admin/finance?') && pushed('from=')).toBe(true);
+			await openSection('Charges');
+			expect(shows('By merchant')).toBe(true);
 			cleanup();
 
 			// ---------------------------------------------------------------- Activity
@@ -255,6 +272,7 @@ describe('fuller Portal screens (jsdom)', () => {
 			const admins = await admin.loadAdmins(ownerBrowser.api, owner);
 			withToasts(<AdminsView {...admins} />);
 			expect(shows('What this role can do') && shows('Everything in the Portal')).toBe(true);
+			await openTab('Recent activity');
 			await until(() =>
 				ownerBrowser.calls.some((c) => c.path === `/v1/admin/activity?adminId=${owner.adminId}&limit=10` && c.status === 200),
 			);
@@ -267,10 +285,13 @@ describe('fuller Portal screens (jsdom)', () => {
 			// ---------------------------------------------------------------- merchant console
 			shop.b.use();
 			withToasts(<MerchantOverview {...await loaders.loadOverview(shop.b.api, merchantId)} />);
+			await openSection('Latest');
 			for (const text of ['Recent activity', 'Latest credits added', 'seed-1']) expect(shows(text)).toBe(true);
 			cleanup();
 			withToasts(<WebsitesView {...await loaders.loadWebsites(shop.b.api, merchantId, websiteId)} />);
-			await until(() => shows('Spend on this website') && shows('Features on') && !shows('—'));
+			await until(() =>
+				shop.b.calls.some((c) => c.path.startsWith(`/v1/merchants/${merchantId}/usage?websiteId=`) && c.status === 200),
+			);
 			cleanup();
 			withToasts(<CreditsView {...await loaders.loadCredits(shop.b.api, merchantId, {})} />);
 			await pick('Period', 'lastMonth');

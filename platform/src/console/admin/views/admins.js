@@ -25,7 +25,6 @@ import {
 	Input,
 	KeyValueList,
 	LocalTime,
-	Masonry,
 	RadioGroup,
 	PageHeader,
 	Select,
@@ -36,7 +35,7 @@ import {
 import { ADMIN, MORE, TWO_STEP } from '../../../texts/console.js';
 import { useNavigation } from '../../navigation.js';
 import { apiFetch, useResource } from '../../client.js';
-import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
+import { DetailTabs, HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, RoleBadge } from './common.js';
@@ -71,14 +70,13 @@ function AdminActivity({ adminId }) {
 		};
 	}, [adminId]);
 	return (
-		<Card
-			title={ADMIN.recentActivity}
-			subtitle={MORE.adminActivityIntro}
-			actions={
+		<>
+			<div className="flex flex-wrap items-center justify-between gap-3">
+				<p className="min-w-0 text-sm text-muted">{MORE.adminActivityIntro}</p>
 				<Button variant="secondary" size="sm" onClick={() => nav.go(adminRoutes.activity({ adminId }))}>
 					{MORE.openInActivity}
 				</Button>
-			}>
+			</div>
 			{result && !result.ok ? <Callout tone="danger">{describeProblem(result.problem)}</Callout> : null}
 			<ActivityTable
 				items={result?.ok ? (result.data?.items ?? []) : []}
@@ -86,7 +84,7 @@ function AdminActivity({ adminId }) {
 				showMerchant
 				filterHref={(q) => adminRoutes.activity(q)}
 			/>
-		</Card>
+		</>
 	);
 }
 
@@ -238,6 +236,11 @@ export function AdminsView(props) {
 								/>
 							</ListSearch>
 						}>
+						{shown.length === 0 ? (
+							<li>
+								<EmptyState compact icon="shield" kind="admin" title={ADMIN.noAdmins} />
+							</li>
+						) : null}
 						{shown.map((a) => (
 							<ListRow
 								key={a.adminId}
@@ -269,38 +272,53 @@ export function AdminsView(props) {
 								subtitle={current.adminId === me?.adminId ? `${current.email} · ${ADMIN.you}` : current.email}
 								actions={actions}
 							/>
-							<Masonry columns={2}>
-								<Card title={MORE.detailsTitle}>
-									<KeyValueList
-										items={[
-											{
-												label: MORE.statusLabel,
-												value: current.status === 'invited' ? ADMIN.invited : ADMIN.status.active,
-											},
-											{ label: ADMIN.role, value: ADMIN.roles[/** @type {'owner'} */ (current.role)] ?? current.role },
-											{
-												label: ADMIN.twoStepColumn,
-												value: current.twoStep?.enabled
-													? MORE.twoStepOn(current.twoStep.recoveryCodesLeft ?? 0)
-													: TWO_STEP.off,
-											},
-											{
-												label: ADMIN.columns.lastSignIn,
-												value: current.lastSignInAt ? <LocalTime value={current.lastSignInAt} /> : MORE.never,
-											},
-											{ label: MORE.added, value: <LocalTime value={current.createdAt} /> },
-										]}
-									/>
-								</Card>
-								<Card title={MORE.rightsTitle} subtitle={ADMIN.roles[/** @type {'owner'} */ (current.role)]}>
-									<ul className="list-disc space-y-1.5 pl-5 text-sm text-fg marker:text-primary">
-										{(MORE.rights[/** @type {'owner'} */ (current.role)] ?? []).map((line) => (
-											<li key={line}>{line}</li>
-										))}
-									</ul>
-								</Card>
-							</Masonry>
-							<AdminActivity key={current.adminId} adminId={current.adminId} />
+							<DetailTabs
+								label={ADMIN.adminParts}
+								idPrefix="admin"
+								tabs={[
+									{
+										id: 'admin-details',
+										label: MORE.detailsTitle,
+										content: (
+											<>
+												<Card title={MORE.detailsTitle}>
+													<KeyValueList
+														items={[
+															{
+																label: ADMIN.twoStepColumn,
+																value: current.twoStep?.enabled
+																	? MORE.twoStepOn(current.twoStep.recoveryCodesLeft ?? 0)
+																	: TWO_STEP.off,
+															},
+															{
+																label: ADMIN.columns.lastSignIn,
+																value: current.lastSignInAt ? (
+																	<LocalTime value={current.lastSignInAt} />
+																) : (
+																	MORE.never
+																),
+															},
+															{ label: MORE.added, value: <LocalTime value={current.createdAt} /> },
+														]}
+													/>
+												</Card>
+												<Card title={MORE.rightsTitle} subtitle={ADMIN.roles[/** @type {'owner'} */ (current.role)]}>
+													<ul className="list-disc space-y-1.5 pl-5 text-sm text-fg marker:text-primary">
+														{(MORE.rights[/** @type {'owner'} */ (current.role)] ?? []).map((line) => (
+															<li key={line}>{line}</li>
+														))}
+													</ul>
+												</Card>
+											</>
+										),
+									},
+									{
+										id: 'admin-activity',
+										label: ADMIN.recentActivity,
+										content: <AdminActivity key={current.adminId} adminId={current.adminId} />,
+									},
+								]}
+							/>
 						</>
 					) : auto ? null : (
 						<EmptyState icon="shield" kind="admin" title={ADMIN.adminGone} />

@@ -10,7 +10,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { Blob as NodeBlob } from 'node:buffer';
 import { totpCode } from '../../src/infra/auth.js';
 import { closeMongoClients } from '../../src/testing.js';
-import { browserOf, settle, until } from './merchant-harness.js';
+import { browserOf, openSection, openTab, settle, until } from './merchant-harness.js';
 import { createSystemStore } from '../../src/infra/system.js';
 import { createPortal } from '../../src/portal.js';
 import { modules as defaultModules } from '../../src/modules/index.js';
@@ -81,6 +81,20 @@ const pressInDialog = async (label) => {
 	await until(() => found()?.disabled === false);
 	await act(async () => {
 		found()?.click();
+	});
+};
+
+/**
+ * Open the Advanced block of a section of the inner sidebar.
+ * @param {string} sectionId
+ */
+const openAdvanced = async (sectionId) => {
+	const bar = [...document.querySelectorAll(`#section-${sectionId} button[aria-expanded]`)].find((b) =>
+		b.textContent?.startsWith('Advanced'),
+	);
+	if (!bar) throw new Error(`no Advanced block in ${sectionId}`);
+	await act(async () => {
+		/** @type {HTMLButtonElement} */ (bar).click();
 	});
 };
 
@@ -206,7 +220,7 @@ describe('admin console interactions (jsdom)', () => {
 		expect(shows('child')).toBe(true);
 		cleanup();
 		render(<OverviewView {...await admin.loadOverview(ownerBrowser.api)} admin={me} />);
-		expect(shows('Email sending is not set up') && shows('Set up email sending')).toBe(true);
+		expect(shows('Email sending is not set up') && shows('Setup links and low-balance emails are skipped')).toBe(true);
 		cleanup();
 
 		// ---------------------------------------------------------------- merchants: search, bulk, Add merchant
@@ -319,8 +333,11 @@ describe('admin console interactions (jsdom)', () => {
 			ownerBrowser.calls.some((c) => c.method === 'PATCH' && c.path === adminApi.merchant(madeId) && c.status === 200),
 		);
 		await until(() => !document.querySelector('[role="dialog"]') && shows('olga@made.test'));
-		// credits and activity are sections of the same page
-		expect(shows('Credit receipts') && shows('Merchant created')).toBe(true);
+		// credits and activity are tabs of the same page
+		await openTab('Credits');
+		expect(shows('Credit receipts')).toBe(true);
+		await openTab('Activity');
+		await until(() => shows('Merchant created'));
 		// a merchant with a website cannot be deleted: Delete is last in the More menu, disabled, with the reason
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (document.querySelector('button[aria-label^="More actions for"]')).click();
@@ -410,9 +427,9 @@ describe('admin console interactions (jsdom)', () => {
 		cleanup();
 
 		// ---------------------------------------------------------------- Activity: filters
-		render(<ActivityView {...await admin.loadActivity(ownerBrowser.api, { merchantId })} />);
+		render(<ActivityView {...await admin.loadActivity(ownerBrowser.api, { merchantId }, me)} />);
 		await until(() => shows('Merchant created'));
-		fill('Admin id', me.adminId);
+		fill('Admin', me.adminId);
 		fill('From (UTC day)', '2026-01-01');
 		await press('Filter');
 		cleanup();
@@ -423,17 +440,19 @@ describe('admin console interactions (jsdom)', () => {
 				<SettingsView {...await admin.loadSettings(ownerBrowser.api)} />
 			</ToastProvider>,
 		);
+		await openSection('Email sending');
 		fill('SMTP host', 'smtp.example.com');
 		fill('Port', '587');
 		fill('User', 'mailer');
 		fill('Password', 'smtp secret');
 		fill('Sender name', 'Portal');
 		fill('Sender address', 'no-reply@example.com');
+		// the secure-connection switch is under Advanced
+		expect(document.querySelector('[role="switch"]')).toBeNull();
+		await openAdvanced('mail');
 		await act(async () => {
-			/** @type {HTMLInputElement} */ (byLabel(document, 'Implicit TLS (port 465)')).click();
+			/** @type {HTMLInputElement} */ (byLabel(document, 'Secure connection from the start (SSL/TLS)')).click();
 		});
-		// one page: every section is a card with its own Save
-		expect(document.querySelector('[role="tablist"]')).toBeNull();
 		await saveIn('Email sending');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsMail() && c.status === 200));
 		await until(() => shows('Send test email'));
@@ -441,6 +460,7 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsMailTest()));
 		await press('Turn email sending off');
 		await until(() => ownerBrowser.calls.filter((c) => c.path === adminApi.settingsMail() && c.status === 200).length >= 2);
+		await openSection('Branding');
 		fill('Name', 'Acme Portal');
 		await saveIn('Branding');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsBranding() && c.status === 200));
@@ -464,6 +484,7 @@ describe('admin console interactions (jsdom)', () => {
 		await press('Remove logo');
 		await until(() => ownerBrowser.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.settingsLogo()));
 		// the support contact: a list of channels, each with its kind, label and address
+		await openSection('Support contact');
 		await press('Add channel');
 		const supportCard = /** @type {HTMLElement} */ (document.querySelector('section[aria-label="Support contact"]'));
 		type(byLabel(supportCard, 'Label'), 'Email');
@@ -485,16 +506,18 @@ describe('admin console interactions (jsdom)', () => {
 				{ type: 'email', label: 'Email', url: 'mailto:help@acme.test' },
 			],
 		});
+		await openSection('Security');
 		fill('Session length (hours)', '0');
 		await saveIn('Security');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 422));
 		fill('Session length (hours)', '24');
 		await act(async () => {
-			/** @type {HTMLElement} */ (document.querySelector('[role="switch"]')).click();
+			/** @type {HTMLElement} */ (document.querySelector('#section-security [role="switch"]')).click();
 		});
 		await saveIn('Security');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 200));
-		// Encryption key: Re-seal after a key change (RT-14)
+		// Encryption key: Re-seal after a key change (RT-14), under Advanced on Security
+		await openAdvanced('security');
 		await press('Re-seal stored secrets');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsReseal() && c.status === 200));
 		await until(() => shows('ENCRYPTION_KEY_PREVIOUS can be removed'));

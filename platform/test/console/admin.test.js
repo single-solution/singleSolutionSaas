@@ -128,16 +128,16 @@ describe('admin console smoke', () => {
 			// ------------------------------------------------------------------ Overview: per-product numbers
 			const overview = await admin.loadOverview(ownerBrowser.api);
 			const overviewHtml = text(ssr(<OverviewView {...overview} admin={owner} />));
+			// an inner sidebar with one view at a time: the first (Needs you) is on the page, the others are links
 			expect(overviewHtml).toContain('Email sending is not set up');
-			expect(overviewHtml).toContain('Notes');
-			expect(overviewHtml).toContain('1 website');
-			expect(overviewHtml).toContain('earned this month (UTC)');
-			expect(overviewHtml).toContain('Chatty');
-			expect(overviewHtml).toContain('0 websites');
-			expect(overviewHtml).toContain('Inactive');
-			expect(overviewHtml).toContain('No data for this period.'); // no charges yet: one line, not an empty chart
-			expect(overviewHtml).toContain('Recent activity');
-			expect(text(ssr(<OverviewView ok overview={{ products: [] }} admin={owner} />))).toContain('No products connected yet.');
+			expect(overviewHtml).toContain('1 merchant and 1 website');
+			for (const section of ['Needs you', 'Credits', 'Merchants', 'Products', 'Recent activity'])
+				expect(overviewHtml).toContain(section);
+			expect(overviewHtml).not.toContain('earned this month (UTC)');
+			// nothing repeated: the setup checklist asks for the first product, and no second "No product" need says it again
+			const bare = text(ssr(<OverviewView ok overview={{ products: [] }} admin={owner} />));
+			expect(bare).toContain('Connect a product');
+			expect(bare).not.toContain('No product is connected yet');
 
 			// ------------------------------------------------------------------ Merchants: the list, then a merchant selected
 			const list = await admin.loadMerchants(ownerBrowser.api, {});
@@ -169,8 +169,8 @@ describe('admin console smoke', () => {
 			expect(detail.addable).toEqual([{ productId: 'notes', name: 'Notes' }]);
 			const raw = ssr(<MerchantsView {...list} detail={detail} selectedId={merchantId} admin={owner} />);
 			const detailHtml = text(raw);
-			// one page: header with the actions, website cards, credits and activity — no tabs
-			expect(raw).not.toContain('role="tab"');
+			// the header with the actions, then one part at a time as tabs: Websites first (the others are tabs)
+			expect(raw).toContain('role="tab"');
 			for (const word of [
 				'shop.example.com',
 				'Notes',
@@ -179,12 +179,15 @@ describe('admin console smoke', () => {
 				'Add website',
 				'Add credits',
 				'Edit merchant',
-				'Credit receipts',
+				'Websites · 1',
+				'Credits',
+				'Details',
 				'Activity',
 				'Install and tokens',
 				'Usage',
 			])
 				expect(detailHtml).toContain(word);
+			expect(detailHtml).not.toContain('Credit receipts');
 			// the other actions (Suspend, setup link, two-step off, Delete) sit in the header's More menu
 			expect(raw).toContain('aria-label="More actions for Shop &amp; Co"');
 			expect(raw).not.toMatch(/>Suspend<\/button>/);
@@ -230,20 +233,17 @@ describe('admin console smoke', () => {
 			const productHtml = text(productRaw);
 			for (const word of ['Open as admin', 'Set inactive', 'Connected', 'Websites using it', 'Shop & Co'])
 				expect(productHtml).toContain(word);
+			// the product's parts are tabs; the first (websites) is on the page
+			expect(productRaw).toContain('role="tab"');
 			// two actions as buttons; Reconnect in the header's More menu (PLAN 0.6 header actions)
 			expect(productRaw).toContain('aria-label="More actions for Notes"');
-			// the address once (the subtitle; the Connection card shows the widget script and docs URLs under it), and one
-			// line instead of an empty 30-day chart
-			const under = [product.product.widgetScriptUrl, product.product.docsUrl].filter((u) =>
-				String(u ?? '').startsWith(String(product.product.baseUrl)),
-			).length;
-			expect(productHtml.split(String(product.product.baseUrl)).length - 1).toBe(1 + under);
-			for (const word of ['Features and prices', 'Connection', 'Product version', 'Price list'])
-				expect(productHtml).toContain(word);
+			// the address once (the subtitle; the Connection tab is not open), and one line instead of an empty 30-day chart
+			expect(productHtml.split(String(product.product.baseUrl)).length - 1).toBe(1);
+			for (const word of ['Features and prices', 'Connection']) expect(productHtml).toContain(word);
+			expect(productHtml).not.toContain('Product version');
 			expect(productHtml).toContain('No credits earned in the last 30 UTC days.');
 			expect(productHtml).not.toContain('Credits earned per UTC day (last 30 days)');
 			expect(productRaw).toContain('title="shop.example.com"');
-			expect(productRaw).not.toContain('role="tab"');
 			expect(productRaw).toContain(`href="/admin/merchants/${merchantId}#website-${websiteId}"`);
 			const chatty = await admin.loadProduct(ownerBrowser.api, 'chatty');
 			const chattyHtml = text(ssr(<ProductsView {...products} detail={chatty} selectedId="chatty" admin={owner} />));
@@ -277,28 +277,21 @@ describe('admin console smoke', () => {
 			expect(text(ssr(<AdminsView {...admins} selectedId="adm_00000000000000000000z" />))).toContain(
 				'This admin does not exist or was removed.',
 			);
-			// Settings: one page, every section a card with its own Save (no tabs)
+			// Settings: an inner sidebar with one section at a time (Branding first), each card with its own Save
 			const settingsRaw = ssr(<SettingsView {...await admin.loadSettings(ownerBrowser.api)} />);
+			expect(settingsRaw).toContain('aria-label="Branding"');
 			for (const title of ['Email sending', 'Branding', 'Support contact', 'Security', 'Billing rules'])
-				expect(settingsRaw).toContain(`aria-label="${title}"`);
-			expect(text(settingsRaw)).toContain('SMTP host');
-			expect(text(settingsRaw)).toContain('Grace period (days)');
-			expect(settingsRaw).not.toContain('role="tab"');
-			expect(text(settingsRaw).match(/ Save /g)).toHaveLength(5);
-			expect(text(ssr(<MyAccountView {...await admin.loadMyAccount(ownerBrowser.api)} />))).toContain(
-				'10 recovery codes left',
-			);
+				expect(text(settingsRaw)).toContain(title);
+			expect(text(settingsRaw)).not.toContain('Encryption key'); // under Advanced on Security
+			expect(text(settingsRaw).match(/ Save /g)).toHaveLength(1);
+			// My account: an inner sidebar (Your name first); the two-step section is a link
+			expect(text(ssr(<MyAccountView {...await admin.loadMyAccount(ownerBrowser.api)} />))).toContain('Two-step sign-in');
 			const finance = await admin.loadBilling(ownerBrowser.api, { merchantId, by: 'merchant', method: 'Bank transfer' });
 			expect(finance).toMatchObject({ ok: true, filter: { merchantId, by: 'merchant' } });
 			const financeRaw = ssr(<FinanceView {...finance} admin={owner} />);
-			// one page: needs attention, receipts and charges (no tabs); the charges switch keeps the receipt filter
-			for (const word of ['Credits and billing', 'Needs attention', 'Receipts', 'Charges', 'By merchant'])
+			// an inner sidebar: needs attention first, then receipts and charges (opened from the sidebar)
+			for (const word of ['Credits and billing', 'Needs attention', 'Receipts', 'Charges'])
 				expect(text(financeRaw)).toContain(word);
-			expect(financeRaw).not.toContain('role="tab"');
-			expect(financeRaw).toContain('name="by" value="merchant"');
-			expect(financeRaw).toContain(
-				`/admin/finance?merchantId=${merchantId}&amp;method=Bank+transfer&amp;by=day#billing-charges`,
-			);
 			const creditsHtml = text(
 				ssr(
 					<MerchantCredits
@@ -418,6 +411,14 @@ describe('admin console smoke', () => {
 			expect(financeHtml).toContain('Add credits');
 			for (const word of ['Install and tokens', 'Add product', 'Open Notes', 'Add website', 'Edit merchant'])
 				expect(financeHtml).not.toContain(word);
+			// Activity filters: Support has no list of admins, so no Admin field to type an id into; the Owner picks a name
+			const supportActivity = await admin.loadActivity(supportBrowser.api, {}, support);
+			const supportActivityHtml = text(ssr(<ActivityView {...supportActivity} />));
+			expect(supportActivityHtml).toContain('Merchant');
+			expect(supportActivityHtml).not.toContain('Admin id');
+			expect(ssr(<ActivityView {...supportActivity} />)).not.toContain('name="adminId"');
+			const ownerActivity = await admin.loadActivity(world.ownerBrowser.api, {}, world.owner);
+			expect(text(ssr(<ActivityView {...ownerActivity} />))).toContain('All admins');
 			// the API refuses what the screens hide
 			expect((await financeBrowser.api.get(`/v1/merchants/${merchantId}/websites/${websiteId}/tokens`)).status).toBe(403);
 			expect((await financeBrowser.api.post('/v1/admin/products/notes/launch', { websiteId })).status).toBe(403);

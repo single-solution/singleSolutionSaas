@@ -3,10 +3,12 @@
  * Credits and billing (PLAN 0.5.8, 0.8.2): the receipt form with its confirm step (Owner and Finance), all receipts,
  * charges by day, merchant or product, the merchants that need attention, and a merchant's Credits section. Credits are
  * whole numbers on screen and integer millicredits on the wire; receipts are never edited or reversed.
+ * Layout: an inner sidebar shows one view at a time — Needs attention, Receipts, Charges.
  * @module
  */
 import { useMemo, useState } from 'react';
 import {
+	Badge,
 	BarChart,
 	Button,
 	ButtonLink,
@@ -18,7 +20,7 @@ import {
 	Icon,
 	Input,
 	PageHeader,
-	Section,
+	SectionLayout,
 	Select,
 	Stat,
 	StatGrid,
@@ -331,7 +333,6 @@ export function FinanceView(props) {
 					icon="wallet"
 					kind="credit"
 				/>
-				<Stat label={MORE.receiptsCount} value={receipts.length} hint={range} icon="receipt" kind="credit" />
 				<Stat
 					label={MORE.chargedRange}
 					value={formatCredits(sumOf(chargeRows, (r) => r.credits))}
@@ -339,137 +340,156 @@ export function FinanceView(props) {
 					icon="trendingUp"
 					kind="credit"
 				/>
-				<Stat
-					label={MORE.attentionCount}
-					value={attention.length}
-					tone={attention.length > 0 ? 'warning' : 'neutral'}
-					icon="users"
-					kind="merchant"
-				/>
 			</StatGrid>
-			<Section id="billing-attention" title={S.attention.title} description={S.attention.help}>
-				<AttentionTable rows={attention} onAdd={canAdd ? setAdding : null} />
-			</Section>
-			<Section id="billing-receipts" title={S.receipts.title} description={S.receipts.help}>
-				<Card>
-					<FilterForm label={BILLING.filters.apply} className="flex flex-wrap items-end gap-3">
-						<input type="hidden" name="by" value={filter.by} />
-						<Select
-							label={BILLING.receiptColumns.merchant}
-							name="merchantId"
-							defaultValue={filter.merchantId ?? ''}
-							fieldClassName="min-w-48 flex-1"
-							options={[{ value: '', label: MORE.allMerchants }, ...merchants]}
-						/>
-						<RangeSelect
-							from={filter.from}
-							to={filter.to}
-							emptyLabel={MORE.range.last30}
-							omit="last30"
-							hrefFor={(r) => adminRoutes.finance({ ...filter, ...r })}
-						/>
-						<Input
-							label={BILLING.filters.from}
-							name="from"
-							type="date"
-							defaultValue={filter.from ?? ''}
-							fieldClassName="min-w-40"
-						/>
-						<Input
-							label={BILLING.filters.to}
-							name="to"
-							type="date"
-							defaultValue={filter.to ?? ''}
-							fieldClassName="min-w-40"
-						/>
-						<Input
-							label={BILLING.receiptColumns.method}
-							name="method"
-							list="billing-methods"
-							placeholder={MORE.allMethods}
-							defaultValue={filter.method ?? ''}
-							fieldClassName="min-w-40 flex-1"
-						/>
-						<datalist id="billing-methods">
-							{methods.map((m) => (
-								<option key={m} value={m} />
-							))}
-						</datalist>
-						<Button type="submit" variant="secondary">
-							{BILLING.filters.apply}
-						</Button>
-						{filter.merchantId || filter.from || filter.to || filter.method ? (
-							<ButtonLink as={Link} href={adminRoutes.finance({ by: filter.by })} variant="ghost">
-								{MORE.clearFilters}
-							</ButtonLink>
-						) : null}
-					</FilterForm>
-				</Card>
-				<ReceiptsTable receipts={receipts} showMerchant />
-			</Section>
-			<Section
-				id="billing-charges"
-				title={S.charges.title}
-				description={S.charges.help}
-				actions={
-					<nav className="flex flex-wrap gap-1 rounded-xl bg-surface p-1" aria-label={S.charges.title}>
-						{
-							/** @type {const} */ (['day', 'merchant', 'product']).map((by) => (
-								<Link
-									key={by}
-									href={`${adminRoutes.finance({ ...filter, by })}#billing-charges`}
-									aria-current={filter.by === by ? 'page' : undefined}
-									className={cx(
-										'rounded-xl px-3 py-1.5 text-sm font-semibold',
-										filter.by === by ? 'bg-primary-soft text-on-primary-soft' : 'text-muted hover:text-fg',
-									)}>
-									{BILLING.chargesBy[by]}
-								</Link>
-							))
-						}
-					</nav>
-				}>
-				{isEmptySeries(dayBars) ? null : (
-					<Card title={MORE.chargesChart} subtitle={range}>
-						<BarChart label={MORE.chargesChart} data={dayBars} format={formatChartCredits} height={120} />
-					</Card>
-				)}
-				<Table
-					caption={S.charges.title}
-					rows={chargeRows}
-					rowKey={(r) => r.key}
-					empty={<EmptyState compact icon="coins" kind="credit" title={BILLING.noUsage} />}
-					columns={[
-						{
-							key: 'label',
-							header: BILLING.chargesBy[/** @type {'day'} */ (filter.by)],
-							rowHeader: true,
-							sortable: true,
-							render: (r) =>
-								filter.by === 'merchant' ? (
-									<Link
-										href={`${adminRoutes.merchant(r.key)}#merchant-credits`}
-										className="hover:text-primary hover:underline">
-										{r.label}
-									</Link>
-								) : filter.by === 'product' && productsLinked ? (
-									<Link href={adminRoutes.product(r.key)} className="hover:text-primary hover:underline">
-										{r.label}
-									</Link>
-								) : (
-									r.label
-								),
-						},
-						{
-							key: 'credits',
-							header: BILLING.usageColumns.credits,
-							align: 'right',
-							sortable: true,
-							render: (r) => formatCredits(r.credits),
-						},
-					]}
-				/>
-			</Section>
+			<SectionLayout
+				label={BILLING.billingTitle}
+				sections={[
+					{
+						id: 'billing-attention',
+						label: S.attention.title,
+						icon: 'alert',
+						...(attention.length > 0 ? { badge: <Badge tone="warning">{attention.length}</Badge> } : {}),
+						content: (
+							<>
+								<p className="text-sm text-muted">{S.attention.help}</p>
+								<AttentionTable rows={attention} onAdd={canAdd ? setAdding : null} />
+							</>
+						),
+					},
+					{
+						id: 'billing-receipts',
+						label: S.receipts.title,
+						icon: 'receipt',
+						content: (
+							<>
+								<Card>
+									<FilterForm label={BILLING.filters.apply} className="flex flex-wrap items-end gap-3">
+										<input type="hidden" name="by" value={filter.by} />
+										<Select
+											label={BILLING.receiptColumns.merchant}
+											name="merchantId"
+											defaultValue={filter.merchantId ?? ''}
+											fieldClassName="min-w-48 flex-1"
+											options={[{ value: '', label: MORE.allMerchants }, ...merchants]}
+										/>
+										<RangeSelect
+											from={filter.from}
+											to={filter.to}
+											emptyLabel={MORE.range.last30}
+											omit="last30"
+											hrefFor={(r) => adminRoutes.finance({ ...filter, ...r })}
+										/>
+										<Input
+											label={BILLING.filters.from}
+											name="from"
+											type="date"
+											defaultValue={filter.from ?? ''}
+											fieldClassName="min-w-40"
+										/>
+										<Input
+											label={BILLING.filters.to}
+											name="to"
+											type="date"
+											defaultValue={filter.to ?? ''}
+											fieldClassName="min-w-40"
+										/>
+										<Input
+											label={BILLING.receiptColumns.method}
+											name="method"
+											list="billing-methods"
+											placeholder={MORE.allMethods}
+											defaultValue={filter.method ?? ''}
+											fieldClassName="min-w-40 flex-1"
+										/>
+										<datalist id="billing-methods">
+											{methods.map((m) => (
+												<option key={m} value={m} />
+											))}
+										</datalist>
+										<Button type="submit" variant="secondary">
+											{BILLING.filters.apply}
+										</Button>
+										{filter.merchantId || filter.from || filter.to || filter.method ? (
+											<ButtonLink as={Link} href={adminRoutes.finance({ by: filter.by })} variant="ghost">
+												{MORE.clearFilters}
+											</ButtonLink>
+										) : null}
+									</FilterForm>
+								</Card>
+								<ReceiptsTable receipts={receipts} showMerchant />
+							</>
+						),
+					},
+					{
+						id: 'billing-charges',
+						label: S.charges.title,
+						icon: 'trendingUp',
+						content: (
+							<>
+								<div className="flex flex-wrap items-center justify-between gap-3">
+									<p className="min-w-0 text-sm text-muted">{S.charges.help}</p>
+									<nav className="flex flex-wrap gap-1 rounded-xl bg-surface p-1" aria-label={S.charges.title}>
+										{
+											/** @type {const} */ (['day', 'merchant', 'product']).map((by) => (
+												<Link
+													key={by}
+													href={`${adminRoutes.finance({ ...filter, by })}#billing-charges`}
+													aria-current={filter.by === by ? 'page' : undefined}
+													className={cx(
+														'rounded-xl px-3 py-1.5 text-sm font-semibold',
+														filter.by === by ? 'bg-primary-soft text-on-primary-soft' : 'text-muted hover:text-fg',
+													)}>
+													{BILLING.chargesBy[by]}
+												</Link>
+											))
+										}
+									</nav>
+								</div>
+								{isEmptySeries(dayBars) ? null : (
+									<Card title={MORE.chargesChart} subtitle={range}>
+										<BarChart label={MORE.chargesChart} data={dayBars} format={formatChartCredits} height={120} />
+									</Card>
+								)}
+								<Table
+									caption={S.charges.title}
+									rows={chargeRows}
+									rowKey={(r) => r.key}
+									empty={<EmptyState compact icon="coins" kind="credit" title={BILLING.noUsage} />}
+									columns={[
+										{
+											key: 'label',
+											header: BILLING.chargesBy[/** @type {'day'} */ (filter.by)],
+											rowHeader: true,
+											sortable: true,
+											render: (r) =>
+												filter.by === 'merchant' ? (
+													<Link
+														href={`${adminRoutes.merchant(r.key)}#merchant-credits`}
+														className="hover:text-primary hover:underline">
+														{r.label}
+													</Link>
+												) : filter.by === 'product' && productsLinked ? (
+													<Link href={adminRoutes.product(r.key)} className="hover:text-primary hover:underline">
+														{r.label}
+													</Link>
+												) : (
+													r.label
+												),
+										},
+										{
+											key: 'credits',
+											header: BILLING.usageColumns.credits,
+											align: 'right',
+											sortable: true,
+											render: (r) => formatCredits(r.credits),
+										},
+									]}
+								/>
+							</>
+						),
+					},
+				]}
+			/>
 			{picking ? (
 				<PickMerchantDialog
 					merchants={merchants}

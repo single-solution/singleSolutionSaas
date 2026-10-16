@@ -85,6 +85,41 @@ export const press = async (label, root) => {
 /** Press a button of the open dialog. @param {string} label */
 export const pressDialog = (label) => press(label, dialog());
 
+/** Forget the chosen section or tab (the address hash), as a fresh page load does. */
+export const resetHash = () => {
+	if (typeof window !== 'undefined') window.history.replaceState(null, '', window.location.pathname + window.location.search);
+};
+
+/**
+ * Open a section of the inner sidebar (only the opened section is on the page) or a sub-item.
+ * @param {string} label the link's text (a badge after it is fine)
+ */
+export const openSection = async (label) => {
+	const links = /** @type {HTMLAnchorElement[]} */ ([...document.querySelectorAll('nav a[href^="#"]')]);
+	const text = (/** @type {Element} */ el) => el.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+	const link = links.find((a) => text(a) === label) ?? links.find((a) => text(a).startsWith(label));
+	if (!link) throw new Error(`no section “${label}” (have: ${links.map(text).join(', ')})`);
+	await act(async () => {
+		link.click();
+	});
+	await settle(1);
+};
+
+/**
+ * Open a tab of a detail (the parts of a merchant, a product, an admin).
+ * @param {string} label the tab's text (a count after it is fine)
+ */
+export const openTab = async (label) => {
+	const tabs = /** @type {HTMLElement[]} */ ([...document.querySelectorAll('[role="tab"]')]);
+	const text = (/** @type {Element} */ el) => el.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+	const tab = tabs.find((t) => text(t) === label) ?? tabs.find((t) => text(t).startsWith(label));
+	if (!tab) throw new Error(`no tab “${label}” (have: ${tabs.map(text).join(', ')})`);
+	await act(async () => {
+		tab.click();
+	});
+	await settle(1);
+};
+
 /** @param {Element} el */
 export const clickEl = async (el) => {
 	await act(async () => {

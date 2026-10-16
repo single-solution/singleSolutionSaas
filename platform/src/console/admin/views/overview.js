@@ -6,12 +6,12 @@
  * the platform is new; the month's numbers; credits spent per UTC day; the first merchants with their balance; the
  * per-product numbers (websites using it, credits earned this month, 30-day chart, a More menu to view it or open it
  * as admin); and the latest activity as a timeline. Add merchant sits in the header.
+ * Layout (owner 2026-10-16): an inner sidebar shows one view at a time — Needs you (with the setup checklist), Credits (the
+ * month's numbers and the chart), Merchants, Products, Recent activity.
  * @module
  */
 import { useState } from 'react';
 import {
-	Col,
-	Grid,
 	ActionMenu,
 	Badge,
 	BarChart,
@@ -23,7 +23,7 @@ import {
 	IconBadge,
 	NeedsList,
 	PageHeader,
-	Section,
+	SectionLayout,
 	SetupChecklist,
 	Stat,
 	StatGrid,
@@ -97,19 +97,7 @@ export function OverviewView(props) {
 				</ButtonLink>
 			) : null,
 		});
-	if (products.length === 0)
-		needs.push({
-			key: 'no-product',
-			tone: 'warning',
-			title: ADMIN.needs.noProduct.title,
-			effect: ADMIN.needs.noProduct.effect,
-			action: linked ? (
-				<ButtonLink as={Link} href={adminRoutes.products()} variant="secondary" size="sm">
-					{ADMIN.needs.noProduct.action}
-				</ButtonLink>
-			) : null,
-		});
-	else if (inactive > 0)
+	if (products.length > 0 && inactive > 0)
 		needs.push({
 			key: 'inactive',
 			tone: 'warning',
@@ -148,10 +136,228 @@ export function OverviewView(props) {
 		{ key: 'active', done: products.some((p) => p.status === 'active'), href: linked ? adminRoutes.products() : null },
 		{ key: 'merchant', done: (o.merchants ?? 0) > 0, onClick: canAddMerchant ? () => setAdding(true) : null },
 		{ key: 'website', done: (o.websites ?? 0) > 0, href: adminRoutes.merchants() },
-		{ key: 'mail', done: o.mailConfigured !== false, href: canSettings ? adminRoutes.settings() : null },
 	];
 	const stepsDone = steps.filter((s) => s.done).length;
 	const settingUp = stepsDone < steps.length;
+
+	const sections = [
+		{
+			id: 'needs',
+			label: ADMIN.needs.title,
+			icon: /** @type {const} */ ('bell'),
+			...(needCount > 0 ? { badge: <Badge tone="warning">{needCount}</Badge> } : {}),
+			content: (
+				<>
+					<Card
+						flow
+						id="overview-needs"
+						title={ADMIN.needs.title}
+						subtitle={needs.length > 0 ? ADMIN.needs.intro : undefined}>
+						<div className="space-y-3">
+							<NeedsList items={needs} none={ADMIN.needs.none} />
+							{attention.length > NEEDS_MERCHANTS ? (
+								<ButtonLink as={Link} href={`${adminRoutes.finance()}#billing-attention`} variant="ghost" size="sm">
+									{BILLING.billingTitle}
+								</ButtonLink>
+							) : null}
+						</div>
+					</Card>
+					{settingUp ? (
+						<div data-flow="card">
+							<SetupChecklist
+								id="overview-ready"
+								title={ADMIN.ready.title}
+								progress={ADMIN.ready.progress(stepsDone, steps.length)}
+								labels={{ done: ADMIN.ready.done, todo: ADMIN.ready.todo }}
+								linkAs={Link}
+								steps={steps.map((step) => ({
+									key: step.key,
+									label: ADMIN.ready.steps[/** @type {'product'} */ (step.key)],
+									done: step.done,
+									...(step.href ? { href: step.href } : {}),
+									...(step.onClick ? { onSelect: step.onClick } : {}),
+								}))}
+							/>
+						</div>
+					) : null}
+				</>
+			),
+		},
+		{
+			id: 'credits',
+			label: ADMIN.creditsSection,
+			icon: /** @type {const} */ ('coins'),
+			content: (
+				<>
+					<StatGrid>
+						<Stat label={ADMIN.creditsThisMonth} value={formatCredits(earned)} icon="coins" kind="credit" />
+						<Stat
+							label={MORE.creditsAdded}
+							value={typeof props.creditsAdded === 'number' ? formatCredits(props.creditsAdded) : '—'}
+							icon="wallet"
+							kind="credit"
+						/>
+					</StatGrid>
+					<Card title={ADMIN.creditsChart}>
+						<BarChart
+							label={ADMIN.creditsChart}
+							data={creditDayBars(totalDays(products))}
+							format={formatChartCredits}
+							height={132}
+						/>
+					</Card>
+				</>
+			),
+		},
+		{
+			id: 'merchants',
+			label: ADMIN.merchantsTitle,
+			icon: /** @type {const} */ ('users'),
+			content: (
+				<Card
+					title={ADMIN.merchantsTitle}
+					subtitle={merchants.length > 0 ? ADMIN.merchantsIntro : undefined}
+					actions={
+						merchants.length > 0 ? (
+							<ButtonLink as={Link} href={adminRoutes.merchants()} variant="secondary" size="sm">
+								{ADMIN.viewMerchants}
+							</ButtonLink>
+						) : null
+					}>
+					{merchants.length === 0 ? (
+						<EmptyState
+							compact
+							icon="users"
+							kind="merchant"
+							title={ADMIN.noMerchants}
+							description={ADMIN.noMerchantsYetHelp}
+							action={
+								canAddMerchant ? (
+									<Button size="sm" onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
+										{ADMIN.addMerchant}
+									</Button>
+								) : null
+							}
+						/>
+					) : (
+						<ul className="-my-2 divide-y divide-line-soft">
+							{merchants.map((m) => {
+								const b = billing[m.merchantId] ?? null;
+								return (
+									<li key={m.merchantId}>
+										<Link
+											href={adminRoutes.merchant(m.merchantId)}
+											className="ss-motion -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-surface-2">
+											<span
+												aria-hidden="true"
+												className="flex size-9 shrink-0 items-center justify-center rounded-control bg-primary-soft text-xs font-bold text-on-primary-soft">
+												{initialsOf(m.name)}
+											</span>
+											<span className="min-w-0 flex-1">
+												<span className="block truncate text-sm font-semibold text-fg">{m.name}</span>
+												<span className="block truncate text-xs text-muted">{m.email}</span>
+											</span>
+											<span className="shrink-0 text-right">
+												<span className="block text-sm font-medium text-fg tabular-nums">
+													{b ? formatCredits(b.balance) : '—'}
+												</span>
+												{b ? <MerchantStatusBadge status={b.status ?? m.status} /> : null}
+											</span>
+										</Link>
+									</li>
+								);
+							})}
+						</ul>
+					)}
+				</Card>
+			),
+		},
+		{
+			id: 'products',
+			label: ADMIN.productsTitle,
+			icon: /** @type {const} */ ('box'),
+			content:
+				products.length === 0 ? (
+					<EmptyState
+						compact
+						icon="box"
+						kind="product"
+						title={ADMIN.noProducts}
+						action={
+							linked ? (
+								<ButtonLink as={Link} href={adminRoutes.products()} variant="secondary" size="sm">
+									{ADMIN.connectProduct}
+								</ButtonLink>
+							) : null
+						}
+					/>
+				) : (
+					products.map((p) => (
+						<Card
+							flow
+							key={p.productId}
+							title={
+								<span className="flex items-center gap-3">
+									<IconBadge icon="box" kind="product" size="sm" />
+									{linked ? (
+										<Link
+											href={adminRoutes.product(p.productId)}
+											className="text-fg hover:text-primary hover:underline">
+											{p.name}
+										</Link>
+									) : (
+										p.name
+									)}
+								</span>
+							}
+							subtitle={`${ADMIN.productWebsites(p.websites ?? 0)} · ${ADMIN.productEarned(formatCredits(p.earnedThisMonth ?? 0))}`}
+							actions={
+								<span className="flex items-center gap-1">
+									<Badge tone={p.status === 'active' ? 'success' : 'neutral'} dot>
+										{PRODUCTS.status[/** @type {'active'} */ (p.status)] ?? p.status}
+									</Badge>
+									{linked ? (
+										<ActionMenu
+											label={MORE.productMenu(p.name)}
+											items={[
+												{
+													label: MORE.viewProduct,
+													onSelect: () => nav.go(adminRoutes.product(p.productId)),
+												},
+												{ label: PRODUCTS.openAsAdmin, onSelect: () => void openAsAdmin(p) },
+											]}
+										/>
+									) : null}
+								</span>
+							}>
+							<BarChart
+								label={PRODUCTS.earnedChart}
+								data={creditDayBars(p.days)}
+								format={formatChartCredits}
+								height={96}
+							/>
+						</Card>
+					))
+				),
+		},
+		{
+			id: 'activity',
+			label: ADMIN.recentActivity,
+			icon: /** @type {const} */ ('activity'),
+			content: (
+				<Card
+					title={ADMIN.recentActivity}
+					subtitle={ADMIN.recentActivityIntro}
+					actions={
+						<ButtonLink as={Link} href={adminRoutes.activity()} variant="secondary" size="sm">
+							{MORE.viewAll}
+						</ButtonLink>
+					}>
+					<ActivityTimeline items={o.recentActivity ?? []} empty={MORE.noActivity} />
+				</Card>
+			),
+		},
+	];
 
 	return (
 		<div className="space-y-6">
@@ -166,185 +372,7 @@ export function OverviewView(props) {
 					) : null
 				}
 			/>
-			<Grid>
-				<Col span={12} xl={settingUp ? 7 : 12}>
-					<Card id="overview-needs" title={ADMIN.needs.title} subtitle={needs.length > 0 ? ADMIN.needs.intro : undefined}>
-						<div className="space-y-3">
-							<NeedsList items={needs} none={ADMIN.needs.none} />
-							{attention.length > NEEDS_MERCHANTS ? (
-								<ButtonLink as={Link} href={`${adminRoutes.finance()}#billing-attention`} variant="ghost" size="sm">
-									{BILLING.billingTitle}
-								</ButtonLink>
-							) : null}
-						</div>
-					</Card>
-				</Col>
-				{settingUp ? (
-					<Col span={12} xl={5}>
-						<SetupChecklist
-							id="overview-ready"
-							title={ADMIN.ready.title}
-							progress={ADMIN.ready.progress(stepsDone, steps.length)}
-							labels={{ done: ADMIN.ready.done, todo: ADMIN.ready.todo }}
-							linkAs={Link}
-							steps={steps.map((step) => ({
-								key: step.key,
-								label: ADMIN.ready.steps[/** @type {'product'} */ (step.key)],
-								done: step.done,
-								...(step.href ? { href: step.href } : {}),
-								...(step.onClick ? { onSelect: step.onClick } : {}),
-							}))}
-						/>
-					</Col>
-				) : null}
-			</Grid>
-			<StatGrid>
-				<Stat label={ADMIN.creditsThisMonth} value={formatCredits(earned)} icon="coins" kind="credit" />
-				<Stat
-					label={MORE.creditsAdded}
-					value={typeof props.creditsAdded === 'number' ? formatCredits(props.creditsAdded) : '—'}
-					icon="wallet"
-					kind="credit"
-				/>
-				<Stat label={ADMIN.totals.merchants} value={o.merchants ?? 0} icon="users" kind="merchant" />
-				<Stat label={ADMIN.totals.websites} value={o.websites ?? 0} icon="globe" kind="website" />
-			</StatGrid>
-			<Grid>
-				<Col span={12} xl={5}>
-					<Card title={ADMIN.creditsChart}>
-						<BarChart
-							label={ADMIN.creditsChart}
-							data={creditDayBars(totalDays(products))}
-							format={formatChartCredits}
-							height={132}
-						/>
-					</Card>
-				</Col>
-				<Col span={12} xl={7}>
-					<Card
-						title={ADMIN.merchantsTitle}
-						subtitle={merchants.length > 0 ? ADMIN.merchantsIntro : undefined}
-						actions={
-							merchants.length > 0 ? (
-								<ButtonLink as={Link} href={adminRoutes.merchants()} variant="secondary" size="sm">
-									{ADMIN.viewMerchants}
-								</ButtonLink>
-							) : null
-						}>
-						{merchants.length === 0 ? (
-							<EmptyState
-								compact
-								icon="users"
-								kind="merchant"
-								title={ADMIN.noMerchants}
-								action={
-									canAddMerchant ? (
-										<Button size="sm" onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
-											{ADMIN.addMerchant}
-										</Button>
-									) : null
-								}
-							/>
-						) : (
-							<ul className="-my-2 divide-y divide-line-soft">
-								{merchants.map((m) => {
-									const b = billing[m.merchantId] ?? null;
-									return (
-										<li key={m.merchantId}>
-											<Link
-												href={adminRoutes.merchant(m.merchantId)}
-												className="ss-motion -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-surface-2">
-												<span
-													aria-hidden="true"
-													className="flex size-9 shrink-0 items-center justify-center rounded-control bg-primary-soft text-xs font-bold text-on-primary-soft">
-													{initialsOf(m.name)}
-												</span>
-												<span className="min-w-0 flex-1">
-													<span className="block truncate text-sm font-semibold text-fg">{m.name}</span>
-													<span className="block truncate text-xs text-muted">{m.email}</span>
-												</span>
-												<span className="shrink-0 text-right">
-													<span className="block text-sm font-medium text-fg tabular-nums">
-														{b ? formatCredits(b.balance) : '—'}
-													</span>
-													{b ? <MerchantStatusBadge status={b.status ?? m.status} /> : null}
-												</span>
-											</Link>
-										</li>
-									);
-								})}
-							</ul>
-						)}
-					</Card>
-				</Col>
-			</Grid>
-			<Section id="overview-products" title={ADMIN.productsTitle} description={ADMIN.productsIntro}>
-				{products.length === 0 ? (
-					<EmptyState compact icon="box" kind="product" title={ADMIN.noProducts} />
-				) : (
-					<div className="@container">
-						<ul className="grid gap-5 @2xl:grid-cols-2 @6xl:grid-cols-3">
-							{products.map((p) => (
-								<li key={p.productId}>
-									<Card
-										className="h-full"
-										title={
-											<span className="flex items-center gap-3">
-												<IconBadge icon="box" kind="product" size="sm" />
-												{linked ? (
-													<Link
-														href={adminRoutes.product(p.productId)}
-														className="text-fg hover:text-primary hover:underline">
-														{p.name}
-													</Link>
-												) : (
-													p.name
-												)}
-											</span>
-										}
-										subtitle={`${ADMIN.productWebsites(p.websites ?? 0)} · ${ADMIN.productEarned(formatCredits(p.earnedThisMonth ?? 0))}`}
-										actions={
-											<span className="flex items-center gap-1">
-												<Badge tone={p.status === 'active' ? 'success' : 'neutral'} dot>
-													{PRODUCTS.status[/** @type {'active'} */ (p.status)] ?? p.status}
-												</Badge>
-												{linked ? (
-													<ActionMenu
-														label={MORE.productMenu(p.name)}
-														items={[
-															{
-																label: MORE.viewProduct,
-																onSelect: () => nav.go(adminRoutes.product(p.productId)),
-															},
-															{ label: PRODUCTS.openAsAdmin, onSelect: () => void openAsAdmin(p) },
-														]}
-													/>
-												) : null}
-											</span>
-										}>
-										<BarChart
-											label={PRODUCTS.earnedChart}
-											data={creditDayBars(p.days)}
-											format={formatChartCredits}
-											height={96}
-										/>
-									</Card>
-								</li>
-							))}
-						</ul>
-					</div>
-				)}
-			</Section>
-			<Card
-				title={ADMIN.recentActivity}
-				subtitle={ADMIN.recentActivityIntro}
-				actions={
-					<ButtonLink as={Link} href={adminRoutes.activity()} variant="secondary" size="sm">
-						{MORE.viewAll}
-					</ButtonLink>
-				}>
-				<ActivityTimeline items={o.recentActivity ?? []} empty={MORE.noActivity} />
-			</Card>
+			<SectionLayout label={ADMIN.menu.overview} sections={sections} />
 			<AddMerchantDialog
 				open={adding}
 				onClose={() => setAdding(false)}

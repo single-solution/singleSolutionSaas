@@ -17,14 +17,17 @@ import {
 	ActionMenu,
 	Button,
 	ButtonLink,
+	CARD_FLOW,
 	ErrorState,
 	Icon,
 	Input,
 	PageTransition,
+	PillTabs,
 	SoftBreaks,
 	cx,
 	describeProblem,
 	problemCode,
+	useHashSection,
 } from '@ss/ui';
 import { CONSOLE } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
@@ -86,6 +89,45 @@ export function HeaderActions({ label, children, more = [] }) {
 		<div className="flex flex-wrap items-center gap-2">
 			{children}
 			{more.length > 0 ? <ActionMenu label={label} items={more} size="md" /> : null}
+		</div>
+	);
+}
+
+/**
+ * The parts of a detail that sits beside a list (a merchant, a product, an admin) as a tab strip: ONE part is shown at a
+ * time (the list is already the screen's sidebar, so the parts get tabs, not a second sidebar), the chosen part is kept
+ * in the address hash (`#merchant-credits`), and a part is mounted when first opened and then kept. Small cards in a
+ * part sit side by side; a table or an editor takes the whole row.
+ * @param {{ tabs: Array<{ id: string, label: import('react').ReactNode, content: import('react').ReactNode }>,
+ *   label: string, idPrefix?: string }} props
+ */
+export function DetailTabs({ tabs, label, idPrefix = 'dt' }) {
+	const ids = tabs.map((tab) => tab.id);
+	const [active, choose] = useHashSection(ids);
+	const [seen, setSeen] = useState(() => new Set([active]));
+	if (active && !seen.has(active)) setSeen(new Set([...seen, active]));
+	return (
+		<div className="min-w-0 space-y-4">
+			<PillTabs
+				tabs={tabs.map(({ id, label: text }) => ({ id, label: text }))}
+				active={active}
+				onSelect={choose}
+				label={label}
+				idPrefix={idPrefix}
+			/>
+			{tabs
+				.filter((tab) => tab.id === active || seen.has(tab.id))
+				.map((tab) => (
+					<div
+						key={tab.id}
+						id={`${idPrefix}-panel-${tab.id}`}
+						role="tabpanel"
+						aria-labelledby={`${idPrefix}-tab-${tab.id}`}
+						hidden={tab.id !== active}
+						className={CARD_FLOW}>
+						{tab.content}
+					</div>
+				))}
 		</div>
 	);
 }

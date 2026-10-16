@@ -48,10 +48,11 @@ export function ActivityView(props) {
 			<PageHeader title={ADMIN.activityTitle} subtitle={ADMIN.activityIntro} />
 			<Card>
 				<Form onSubmit={apply} busy={nav.pending} aria-label={ADMIN.filters.apply}>
-					<div className="grid gap-3 @md:grid-cols-2 @4xl:grid-cols-3 @6xl:grid-cols-[1fr_1fr_1fr_10rem_10rem_auto] @6xl:items-end">
+					<div className="flex flex-wrap items-end gap-3">
 						<Select
 							label={MORE.pickMerchant}
 							value={form.merchantId}
+							fieldClassName="min-w-48 flex-1"
 							onChange={(e) => set('merchantId', e.currentTarget.value)}
 							options={[{ value: '', label: MORE.allMerchants }, ...(props.merchants ?? [])]}
 						/>
@@ -59,32 +60,29 @@ export function ActivityView(props) {
 							<Select
 								label={MORE.adminFilter}
 								value={form.adminId}
+								fieldClassName="min-w-48 flex-1"
 								onChange={(e) => set('adminId', e.currentTarget.value)}
 								options={[{ value: '', label: MORE.allAdmins }, ...props.admins]}
 							/>
-						) : (
-							<Input
-								label={ADMIN.filters.admin}
-								value={form.adminId}
-								onChange={(e) => set('adminId', e.currentTarget.value)}
-							/>
-						)}
+						) : null}
 						<RangeSelect
 							from={f.from}
 							to={f.to}
 							emptyLabel={MORE.range.allTime}
 							hrefFor={(range) => adminRoutes.activity({ ...f, ...range })}
-							fieldClassName="min-w-0"
+							fieldClassName="min-w-44"
 						/>
 						<Input
 							label={ADMIN.filters.from}
 							type="date"
+							fieldClassName="min-w-40"
 							value={form.from}
 							onChange={(e) => set('from', e.currentTarget.value)}
 						/>
 						<Input
 							label={ADMIN.filters.to}
 							type="date"
+							fieldClassName="min-w-40"
 							value={form.to}
 							onChange={(e) => set('to', e.currentTarget.value)}
 						/>

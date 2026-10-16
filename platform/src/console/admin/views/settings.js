@@ -12,6 +12,7 @@ import { useState } from 'react';
 import {
 	Button,
 	Callout,
+	Disclosure,
 	Form,
 	FormError,
 	Input,
@@ -156,7 +157,14 @@ function MailCard({ settings, onSaved }) {
 					error={errors.senderAddress}
 					required
 				/>
-				<Switch label={ADMIN.mail.secure} checked={form.secure} onChange={(next) => set('secure', next)} />
+				<Disclosure title={ADMIN.advanced}>
+					<Switch
+						label={ADMIN.mail.secure}
+						description={ADMIN.mail.secureHelp}
+						checked={form.secure}
+						onChange={(next) => set('secure', next)}
+					/>
+				</Disclosure>
 				<FormError problem={problem} fields={['host', 'port', 'user', 'password', 'senderName', 'senderAddress']} />
 				<div className="flex flex-wrap gap-2">
 					<Button type="submit" loading={busy}>
@@ -412,8 +420,11 @@ function BillingRulesCard({ settings, onSaved }) {
 	);
 }
 
-/** Encryption key (PLAN 0.4.8): Re-seal every stored secret with the current `ENCRYPTION_KEY` after a key change. */
-function EncryptionCard() {
+/**
+ * Encryption key (PLAN 0.4.8): Re-seal every stored secret with the current `ENCRYPTION_KEY` after a key change. It is
+ * needed once in a long while, so it sits under Advanced on the Security page.
+ */
+function EncryptionBlock() {
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [counts, setCounts] = useState(
@@ -422,7 +433,8 @@ function EncryptionCard() {
 		),
 	);
 	return (
-		<SettingsCard title={ADMIN.settingsSections.encryption.title} description={ADMIN.settingsSections.encryption.help}>
+		<Disclosure title={ADMIN.advanced} description={ADMIN.settingsSections.encryption.title}>
+			<p className="text-sm text-muted">{ADMIN.settingsSections.encryption.help}</p>
 			<div className="space-y-4">
 				<Button
 					loading={busy}
@@ -441,7 +453,7 @@ function EncryptionCard() {
 				) : null}
 				<FormError problem={problem} fields={[]} />
 			</div>
-		</SettingsCard>
+		</Disclosure>
 	);
 }
 
@@ -484,7 +496,12 @@ export function SettingsView(props) {
 						label: S.security.title,
 						icon: 'shield',
 						group: ADMIN.settingsGroups.safety,
-						content: <SecurityCard settings={settings} onSaved={setSettings} />,
+						content: (
+							<>
+								<SecurityCard settings={settings} onSaved={setSettings} />
+								<EncryptionBlock />
+							</>
+						),
 					},
 					{
 						id: 'billing',
@@ -492,13 +509,6 @@ export function SettingsView(props) {
 						icon: 'wallet',
 						group: ADMIN.settingsGroups.safety,
 						content: <BillingRulesCard settings={settings} onSaved={setSettings} />,
-					},
-					{
-						id: 'encryption',
-						label: S.encryption.title,
-						icon: 'key',
-						group: ADMIN.settingsGroups.safety,
-						content: <EncryptionCard />,
 					},
 				]}
 			/>

@@ -8,6 +8,7 @@
  * the usage of all its websites, its receipts in Credits and billing and its Activity), a low-balance / grace / stopped
  * warning with Add credits, its details (contact, sign-in, two-step, websites), a masonry of website cards (products
  * with Add product, tokens and usage in dialogs; Add website) and the Credits and Activity (paged) sections. Rights follow the role (PLAN 0.2); the API checks them again.
+ * Layout: the merchant's parts are tabs (Websites, Credits, Details, Activity), one at a time, kept in the address hash.
  * @module
  */
 import { useState } from 'react';
@@ -27,9 +28,7 @@ import {
 	Input,
 	KeyValueList,
 	LocalTime,
-	Masonry,
 	PageHeader,
-	Section,
 	Select,
 	TextArea,
 	TypedConfirmDialog,
@@ -43,7 +42,7 @@ import { api, withCursor } from '../../paths.js';
 import { DaysLeft, MerchantStatusBadge } from '../../views/billing.js';
 import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
 import { COUNTRY_NAMES } from '../../../modules/identity/core/countries.js';
-import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
+import { DetailTabs, HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { AddWebsiteDialog, MerchantUsageDialog, WebsiteCard } from '../../views/website.js';
 import { useNavigation } from '../../navigation.js';
@@ -388,13 +387,10 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 const countryName = (code) => (code ? (COUNTRY_NAMES[code] ?? code) : '—');
 
 /**
- * The merchant's details (the fields the header does not show), its sign-in and its websites.
+ * The merchant's details: what the header (owner, email, balance) and the tab labels (websites) do not already show.
  * @param {any} merchant
- * @param {Array<{ website: any, cards: any[] }>} rows
  */
-const detailItems = (merchant, rows) => [
-	{ label: MORE.fields.owner, value: merchant.ownerName ?? '—' },
-	{ label: MORE.fields.email, value: <span className="break-all">{merchant.email ?? '—'}</span> },
+const detailItems = (merchant) => [
 	{ label: MORE.fields.phone, value: merchant.phone ?? '—' },
 	{ label: MORE.fields.country, value: <span suppressHydrationWarning>{countryName(merchant.country)}</span> },
 	{ label: MORE.fields.address, value: merchant.address ?? '—' },
@@ -408,8 +404,6 @@ const detailItems = (merchant, rows) => [
 		value: merchant.twoStep?.enabled ? MORE.twoStepOn(merchant.twoStep.recoveryCodesLeft ?? 0) : TWO_STEP.off,
 	},
 	{ label: MORE.fields.password, value: merchant.setupPending ? MORE.fields.setupPending : MORE.fields.passwordSet },
-	{ label: MORE.fields.websites, value: rows.length },
-	{ label: MORE.fields.products, value: rows.reduce((n, r) => n + r.cards.length, 0) },
 ];
 
 /**
@@ -493,8 +487,6 @@ function MerchantDetail({ detail, admin, back }) {
 	/** @type {import('@ss/ui').MenuItem[]} */
 	const more = [
 		{ label: MORE.usageAll, onSelect: () => openDialog('usage') },
-		{ label: MORE.receiptsInBilling, onSelect: () => nav.go(adminRoutes.finance({ merchantId })) },
-		{ label: MORE.openInActivity, onSelect: () => nav.go(adminRoutes.activity({ merchantId })) },
 		...(can('merchants.suspend')
 			? [
 					merchant.status === 'suspended'
@@ -582,70 +574,109 @@ function MerchantDetail({ detail, admin, back }) {
 					)}
 				</Callout>
 			) : null}
-			<Card title={MORE.detailsTitle}>
-				<KeyValueList columns={3} items={detailItems(merchant, rows)} />
-			</Card>
-			<Section
-				id="merchant-websites"
-				title={ADMIN.websitesTitle}
-				description={ADMIN.websitesIntro}
-				actions={
-					can('websites.write') ? (
-						<Button variant="secondary" onClick={() => openDialog('addWebsite')} icon={<Icon name="plus" size={14} />}>
-							{WEBSITE.addWebsite}
-						</Button>
-					) : null
-				}>
-				{rows.length === 0 ? (
-					<EmptyState compact icon="globe" kind="website" title={WEBSITE.none} />
-				) : (
-					<Masonry as="ul" columns={2} label={ADMIN.websitesTitle}>
-						{rows.map((row) => (
-							<li key={row.website.websiteId} className="min-w-0">
-								<WebsiteCard
-									website={row.website}
-									cards={row.cards}
-									can={websiteRights}
-									setupHref={adminRoutes.websiteSetup(merchantId, String(row.website.websiteId))}
-									addable={detail.addable}
-									launch={(productId) => ({
-										path: api.adminLaunch(productId),
-										body: { websiteId: String(row.website.websiteId) },
-									})}
-									onCardsChange={(cards) =>
-										setRows((list) =>
-											list.map((r) => (r.website.websiteId === row.website.websiteId ? { ...r, cards } : r)),
-										)
-									}
-									onRemoved={() => setRows((list) => list.filter((r) => r.website.websiteId !== row.website.websiteId))}
+			<DetailTabs
+				label={ADMIN.merchantParts}
+				idPrefix="merchant"
+				tabs={[
+					{
+						id: 'merchant-websites',
+						label: `${ADMIN.websitesTitle} · ${rows.length}`,
+						content: (
+							<>
+								<div className="flex flex-wrap items-center justify-between gap-3">
+									<p className="min-w-0 text-sm text-muted">{ADMIN.websitesIntro}</p>
+									{can('websites.write') && rows.length > 0 ? (
+										<Button
+											variant="secondary"
+											onClick={() => openDialog('addWebsite')}
+											icon={<Icon name="plus" size={14} />}>
+											{WEBSITE.addWebsite}
+										</Button>
+									) : null}
+								</div>
+								{rows.length === 0 ? (
+									<EmptyState
+										compact
+										icon="globe"
+										kind="website"
+										title={WEBSITE.none}
+										description={can('websites.write') ? ADMIN.noWebsitesHelp : undefined}
+										action={
+											can('websites.write') ? (
+												<Button onClick={() => openDialog('addWebsite')} icon={<Icon name="plus" size={14} />}>
+													{WEBSITE.addWebsite}
+												</Button>
+											) : null
+										}
+									/>
+								) : (
+									rows.map((row) => (
+										<WebsiteCard
+											key={row.website.websiteId}
+											website={row.website}
+											cards={row.cards}
+											can={websiteRights}
+											setupHref={adminRoutes.websiteSetup(merchantId, String(row.website.websiteId))}
+											addable={detail.addable}
+											launch={(productId) => ({
+												path: api.adminLaunch(productId),
+												body: { websiteId: String(row.website.websiteId) },
+											})}
+											onCardsChange={(cards) =>
+												setRows((list) =>
+													list.map((r) => (r.website.websiteId === row.website.websiteId ? { ...r, cards } : r)),
+												)
+											}
+											onRemoved={() =>
+												setRows((list) => list.filter((r) => r.website.websiteId !== row.website.websiteId))
+											}
+										/>
+									))
+								)}
+							</>
+						),
+					},
+					{
+						id: 'merchant-credits',
+						label: ADMIN.creditsTitle,
+						content: (
+							<MerchantCredits billing={billing} receipts={detail.receipts ?? []} dayCharges={detail.dayCharges ?? []} />
+						),
+					},
+					{
+						id: 'merchant-details',
+						label: MORE.detailsTitle,
+						content: (
+							<Card title={MORE.detailsTitle}>
+								<KeyValueList columns={3} items={detailItems(merchant)} />
+							</Card>
+						),
+					},
+					{
+						id: 'merchant-activity',
+						label: ADMIN.activityTitle,
+						content: (
+							<>
+								<div className="flex flex-wrap items-center justify-end gap-3">
+									<Button variant="secondary" size="sm" onClick={() => nav.go(adminRoutes.activity({ merchantId }))}>
+										{MORE.openInActivity}
+									</Button>
+								</div>
+								{activity.problem ? <Callout tone="danger">{describeProblem(activity.problem)}</Callout> : null}
+								<ActivityTable
+									items={activity.items}
+									empty={MORE.noActivity}
+									details
+									filterHref={(q) => adminRoutes.activity(q)}
+									hasMore={activity.cursor !== null}
+									loadingMore={activity.loading}
+									onLoadMore={() => void activity.more()}
 								/>
-							</li>
-						))}
-					</Masonry>
-				)}
-			</Section>
-			<Section id="merchant-credits" title={ADMIN.creditsTitle} description={ADMIN.creditsIntro}>
-				<MerchantCredits billing={billing} receipts={detail.receipts ?? []} dayCharges={detail.dayCharges ?? []} />
-			</Section>
-			<Section
-				id="merchant-activity"
-				title={ADMIN.activityTitle}
-				actions={
-					<Button variant="secondary" onClick={() => nav.go(adminRoutes.activity({ merchantId }))}>
-						{MORE.openInActivity}
-					</Button>
-				}>
-				{activity.problem ? <Callout tone="danger">{describeProblem(activity.problem)}</Callout> : null}
-				<ActivityTable
-					items={activity.items}
-					empty={MORE.noActivity}
-					details
-					filterHref={(q) => adminRoutes.activity(q)}
-					hasMore={activity.cursor !== null}
-					loadingMore={activity.loading}
-					onLoadMore={() => void activity.more()}
-				/>
-			</Section>
+							</>
+						),
+					},
+				]}
+			/>
 			<Dialog open={dialog === 'edit'} onClose={() => setDialog(null)} title={ADMIN.editMerchant} size="lg">
 				<MerchantFieldsForm
 					merchant={merchant}
