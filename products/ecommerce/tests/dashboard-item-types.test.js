@@ -11,6 +11,7 @@ import { byLabel, byText, cleanup, click, keydown, render, type } from '@ss/ui/t
 import { ItemTypesEditor } from '../app/dashboard/item-types.js';
 import { blankType, cleanType, loadType, typeProblems } from '../app/dashboard/drafts.js';
 import { checkItemTypes } from '../core/item-types.js';
+import { inDashboard } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 const PATH = `/v1/dashboard/websites/${WEBSITE}/lists/item_types`;
@@ -182,7 +183,7 @@ describe('item type drafts', () => {
 describe('the item types editor', () => {
 	it('lists the types, adds one in its dialog and saves the list the server takes', async () => {
 		serve();
-		const { container } = render(<ItemTypesEditor websiteId={WEBSITE} />);
+		const { container } = render(inDashboard(<ItemTypesEditor websiteId={WEBSITE} />));
 		await settle();
 		expect(container.textContent).toContain('E-book');
 		expect(container.textContent).toContain('Not offered');

@@ -10,6 +10,7 @@ import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@ss/ui/testing';
 import { TABS } from '../app/dashboard/tabs.js';
+import { inDashboard } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 const BASE = `/v1/dashboard/websites/${WEBSITE}`;
@@ -85,6 +86,7 @@ const props = {
 	websiteId: WEBSITE,
 	who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Merchant' }),
 	support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] },
+	domain: 'shop.example.com',
 	portal: 'https://portal.example.com',
 	open: () => undefined,
 };
@@ -100,7 +102,7 @@ describe('Ecommerce’s dashboard times', () => {
 		viewerIn('America/New_York');
 		serve();
 		const Overview = TABS.overview;
-		const { container } = render(<Overview {...props} />);
+		const { container } = render(inDashboard(<Overview {...props} />));
 		await settle();
 		const text = container.textContent ?? '';
 		expect(text).toContain('Ecommerce is in grace until Oct 4, 2026, 10:30 AM EDT');
@@ -115,7 +117,7 @@ describe('Ecommerce’s dashboard times', () => {
 		// a viewer far east: the widget's last visit is already the next day there
 		cleanup();
 		viewerIn('Asia/Tokyo');
-		const tokyo = render(<Overview {...props} />);
+		const tokyo = render(inDashboard(<Overview {...props} />));
 		await settle();
 		expect(tokyo.container.textContent).toContain('Last seen Oct 6, 2026, 8:15 AM GMT+9');
 	});
@@ -124,10 +126,10 @@ describe('Ecommerce’s dashboard times', () => {
 		viewerIn('America/New_York');
 		serve();
 		const Overview = TABS.overview;
-		render(<Overview {...props} />);
+		render(inDashboard(<Overview {...props} />));
 		await settle();
 		// the answers this page already loaded show at once, as the server would print them
-		const html = renderToString(<Overview {...props} />);
+		const html = renderToString(inDashboard(<Overview {...props} />));
 		for (const words of [
 			'in grace until <time',
 			'>Oct 4, 2026, 2:30 PM UTC</time>',

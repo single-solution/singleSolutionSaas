@@ -34,10 +34,9 @@ import {
 } from '@ss/ui';
 import { DURATION_MAX, DURATION_UNITS } from '../../core/durations.js';
 import { asWritten, fillTitle, metaDescription, patternText } from '../../core/seo-text.js';
-import { fill } from './api.js';
+import { Loaded, fill } from '@ss/ui/dashboard';
 import { GRADE_CONDITIONS, GRADE_LIMITS, blankGrade, cleanGrade, gradeProblems, keyOf, loadGrade, videoOf } from './drafts.js';
 import { IdTags, ListOutcome, SaveRow, moved, useList } from './lists.js';
-import { Loaded } from './parts.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('./drafts.js').GradeDraft} GradeDraft */

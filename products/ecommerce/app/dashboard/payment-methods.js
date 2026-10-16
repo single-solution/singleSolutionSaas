@@ -12,7 +12,7 @@
 import { Button, Checkbox, FieldGrid, Input, Select, TextArea } from '@ss/ui';
 import { exponentOf } from '../../core/money.js';
 import { PAYMENT_KINDS, PAY_LATER_KINDS, newAccount, paidByHand } from '../../core/payment-methods.js';
-import { fill } from './api.js';
+import { fill } from '@ss/ui/dashboard';
 import { keyOf } from './drafts.js';
 import { ListEditor, amountOf, decimalOf } from './lists.js';
 import { TEXTS } from './texts.js';

@@ -1,51 +1,34 @@
 /**
- * The dashboard's texts (English, kept in this file; the dashboard is not translated, PLAN 0.6).
+ * The dashboard's words (US English, kept in this file; the dashboard is not translated, PLAN 0.6): Ecommerce's title
+ * and its own words laid over the words every product dashboard shares (`dashboardTexts`). The server's page title
+ * reads it too, so it comes from the `@ss/ui` root.
  * @module
  */
-export const TEXTS = Object.freeze({
+import { dashboardTexts } from '@ss/ui';
+
+export const TEXTS = dashboardTexts({
 	title: 'Ecommerce',
-	loading: 'Loading…',
-	signedOut: 'Open this dashboard from the Portal.',
-	failed: 'This could not be loaded.',
-	backToPortal: 'Back to Portal',
-	pickWebsite: 'Pick a website',
-	website: 'Website',
-	adminView: 'Admin view: {merchant} / {domain}',
-	saved: 'Saved',
-	save: 'Save',
-	reset: 'Reset to default',
-	cancel: 'Cancel',
-	andMore: '{names} and {count} more',
-	tabs: Object.freeze({
-		overview: 'Overview',
-		features: 'Features',
-		settings: 'Settings',
-		connections: 'Connections',
-		developers: 'Developers',
-		defaults: 'Defaults',
-		prices: 'Prices',
-	}),
-	overview: Object.freeze({
+	overview: {
 		connectionsReady: 'Connections ready',
 		ofTotal: '{count} of {total}',
 		connectionsHint: 'Of those the switched-on features need',
-		payments: Object.freeze({
+		payments: {
 			title: 'Payments is not connected',
 			effect:
 				'Online payments, bank transfers through Payments, cash on delivery advances and refunds do not work until it is connected.',
 			step: 'Connect Payments (recommended)',
 			action: 'Connect',
-		}),
+		},
 		notificationsStep: 'Connect Notifications for order messages to shoppers (optional)',
-		currency: Object.freeze({
+		currency: {
 			title: 'Set your currency',
 			effect:
 				'Every price is in {currency}, the default, until you set your shop’s currency (an ISO 4217 code such as EUR or JPY) in Settings → Catalog. Set it before you add prices.',
 			step: 'Set your currency',
 			now: 'Now {currency}',
 			action: 'Set it',
-		}),
-		search: Object.freeze({
+		},
+		search: {
 			title: 'The Atlas Search index {index} is missing',
 			effect:
 				'Shop and Chat searches use basic search until the index is created on ss_ecommerce_products and Atlas shows it ready. Last try {time}.',
@@ -55,140 +38,96 @@ export const TEXTS = Object.freeze({
 			missing: 'Missing, last try {time}',
 			unchecked: 'Checked by the first shop search: create it first.',
 			docs: 'How to create it',
-		}),
-		media: Object.freeze({
+		},
+		media: {
 			title: 'The public address of your images is not set',
 			effect:
 				'Until it is set, shoppers get image links that last an hour and search engines your website’s media route. Set it in Settings → Catalog: a public bucket, or a CDN in front of it.',
 			step: 'Set the public address of your images',
 			action: 'Set it',
-		}),
-		alerts: Object.freeze({
+		},
+		alerts: {
 			title: 'No one gets staff alerts',
 			effect:
 				'New orders, cancellations, payment proofs and return requests alert nobody until you add recipients, or pick a staff permission with Accounts connected, in Settings → Staff alerts.',
 			action: 'Add recipients',
-		}),
-		adminUrl: Object.freeze({
+		},
+		adminUrl: {
 			title: 'Staff alerts have no admin page to link to',
 			effect: 'Alerts cannot open the order until you set the admin page address in Settings → Staff alerts.',
 			action: 'Set it',
-		}),
-		bank: Object.freeze({
+		},
+		bank: {
 			title: 'Shoppers are not told where to pay: {methods}',
 			effect:
 				'These payment methods are paid by hand, but have no instructions and no account details: add them in Settings → Checkout and payment.',
 			action: 'Add them',
-		}),
-	}),
-	features: Object.freeze({
-		price: 'Price: {price}',
-		on: 'On',
-		needs: 'Needs: {features}',
-		contact: 'To change features, contact {contact}.',
-		confirmTitle: 'Save features?',
-		confirmCost: 'New hourly cost: {cost}',
-		alsoOff: 'Also turned off: {features}',
-		docs: 'Docs',
-		notWorking: 'Not working: connect {connection}',
-	}),
-	settings: Object.freeze({
-		off: 'This feature is off.',
+		},
+	},
+	settings: {
 		sectionsLabel: 'Settings sections',
 		section: 'Section',
-		sections: Object.freeze({
-			catalog: Object.freeze({
+		sections: {
+			catalog: {
 				title: 'Catalog',
 				help: 'Currency, item types, product, category and variant addresses, archived products, media and video, stock shown to shoppers, search, digital goods, services and bookings, CSV and bulk actions.',
-			}),
-			variants: Object.freeze({ title: 'Variants and stock', help: 'Options, variants and stock per location.' }),
-			grades: Object.freeze({
+			},
+			variants: { title: 'Variants and stock', help: 'Options, variants and stock per location.' },
+			grades: {
 				title: 'Condition grades and unit numbers',
 				help: 'Condition grades with their categories, item types, standard condition, return and warranty times and content. Which items have numbered units, and how their numbers come, is set on their item types (Catalog).',
-			}),
-			checkout: Object.freeze({ title: 'Checkout and payment', help: 'The cart, checkout and your payment methods.' }),
-			delivery: Object.freeze({
+			},
+			checkout: { title: 'Checkout and payment', help: 'The cart, checkout and your payment methods.' },
+			delivery: {
 				title: 'Delivery',
 				help: 'Delivery zones with their named rates (by weight or order value), free delivery and pickup.',
-			}),
-			taxes: Object.freeze({ title: 'Taxes', help: 'Tax rules per category or region, prices with or without tax.' }),
-			orders: Object.freeze({
+			},
+			taxes: { title: 'Taxes', help: 'Tax rules per category or region, prices with or without tax.' },
+			orders: {
 				title: 'Orders and messages',
 				help: 'Order statuses and moves, order numbers and the messages shoppers get.',
-			}),
-			customers: Object.freeze({
+			},
+			customers: {
 				title: 'Customers',
 				help: 'Saved customer segments by tags, orders, spend, last order, place and customer fields.',
-			}),
-			invoices: Object.freeze({ title: 'Invoices', help: 'Invoices and packing slips.' }),
-			couriers: Object.freeze({ title: 'Couriers', help: 'Couriers with tracking links, and booking with courier APIs.' }),
-			promotions: Object.freeze({ title: 'Promotions', help: 'Coupons, deals, bundles and buy X get Y.' }),
-			loyalty: Object.freeze({ title: 'Loyalty', help: 'Earning, redeeming and expiry of points.' }),
-			rolePrices: Object.freeze({
+			},
+			invoices: { title: 'Invoices', help: 'Invoices and packing slips.' },
+			couriers: { title: 'Couriers', help: 'Couriers with tracking links, and booking with courier APIs.' },
+			promotions: { title: 'Promotions', help: 'Coupons, deals, bundles and buy X get Y.' },
+			loyalty: { title: 'Loyalty', help: 'Earning, redeeming and expiry of points.' },
+			rolePrices: {
 				title: 'Role prices',
 				help: 'A percent off, or fixed prices per product, for signed-in shoppers of an Accounts role, such as trade or member prices.',
-			}),
-			reviews: Object.freeze({ title: 'Reviews', help: 'Who may review and how reviews are moderated.' }),
-			wishlist: Object.freeze({
+			},
+			reviews: { title: 'Reviews', help: 'Who may review and how reviews are moderated.' },
+			wishlist: {
 				title: 'Wishlist and alerts',
 				help: 'Wishlist, back-in-stock and price-drop alerts, compare.',
-			}),
-			returns: Object.freeze({ title: 'Returns', help: 'Return and warranty windows, photos, approval and refunds.' }),
-			reports: Object.freeze({ title: 'Reports', help: 'Sales, stock age, return rate and margin.' }),
-			seo: Object.freeze({
+			},
+			returns: { title: 'Returns', help: 'Return and warranty windows, photos, approval and refunds.' },
+			reports: { title: 'Reports', help: 'Sales, stock age, return rate and margin.' },
+			seo: {
 				title: 'SEO and feeds',
 				help: 'Meta and structured data, sitemaps, IndexNow, landing and glossary pages, product feeds and llms.txt.',
-			}),
-			ai: Object.freeze({ title: 'AI copy', help: 'Product descriptions and meta text written with your AI key.' }),
-			policies: Object.freeze({
+			},
+			ai: { title: 'AI copy', help: 'Product descriptions and meta text written with your AI key.' },
+			policies: {
 				title: 'Policies',
 				help: 'Your policies: delivery, returns, warranty, privacy and terms to start with, and any you add, as plain text or HTML.',
-			}),
-			texts: Object.freeze({ title: 'Texts', help: 'Every word the widgets show.' }),
-			theme: Object.freeze({
+			},
+			texts: { title: 'Texts', help: 'Every word the widgets show.' },
+			theme: {
 				title: 'Theme and format',
 				help: 'Colors, font, corners, light or dark and custom CSS of all widgets, and how money and dates look.',
-			}),
-			other: Object.freeze({ title: 'Other settings', help: 'Settings of the other features.' }),
-		}),
-		texts: 'Widget texts',
-		textsHelp: 'Every word the widgets show. A text must keep the same {placeholders} as the English text.',
-		textsFilter: 'Find a text',
-		theme: 'Theme',
-		mode: 'Light or dark',
-		modes: Object.freeze({ auto: 'Follow device', light: 'Light', dark: 'Dark' }),
-		fontFamily: 'Font family (inherit, or a font your site loads)',
-		radius: 'Corner radius (0–24 px)',
-		accent: 'Accent color',
-		customCss: 'Custom CSS',
-		format: 'Format',
-		formatHelp: 'How money and dates look in the widgets, messages, invoices and pages.',
-		locale: 'Language and region',
-		localeHelp: "A tag such as en-US or fr-FR; empty uses each visitor's browser (en-US in messages).",
-		currencyDisplay: 'Currency shown as',
-		currencyDisplays: Object.freeze({
-			code: 'Code (USD 12,500.00)',
-			symbol: 'Symbol ($12,500.00)',
-		}),
-		currencySymbols: 'Your own symbols',
-		currencySymbolsHelp:
-			'Shown instead of the usual symbol for that currency (Symbol display). A currency without one keeps the usual symbol.',
-		currency: 'Currency (ISO code)',
-		symbol: 'Symbol (up to 8 characters)',
-		addSymbol: 'Add symbol',
-		symbolRow: '{currency} symbol',
-		times: 'Dates and times in',
-		timesOptions: Object.freeze({
-			viewer: "Each visitor's time zone",
-			business: 'Your business time zone (business.json)',
-		}),
-		wholeUnits: 'Whole amounts only (no minor units)',
+			},
+			other: { title: 'Other settings', help: 'Settings of the other features.' },
+		},
 		nothing: 'No settings here for the features that are on.',
 		atlasNotice:
 			'Atlas Search needs the index {index} on the ss_ecommerce_products collection of your database, built and ready; until then basic search answers.',
 		atlasDocs: 'How to create it',
-	}),
-	lists: Object.freeze({
+	},
+	lists: {
 		add: 'Add',
 		remove: 'Remove',
 		up: 'Move up',
@@ -199,7 +138,7 @@ export const TEXTS = Object.freeze({
 		errors: 'Not saved: fix these first.',
 		count: '{count}/{max}',
 		removeId: 'Remove {id}',
-		orderFlow: Object.freeze({
+		orderFlow: {
 			title: 'Order statuses and moves',
 			help: 'Name your statuses, add your own and choose where an order may move next, who may move it and what each move does where its kind of step leaves a choice. The kinds of step keep stock, offers, points and money right.',
 			statuses: 'Statuses',
@@ -217,24 +156,24 @@ export const TEXTS = Object.freeze({
 			moveSettings: 'Settings of the move to {status}',
 			afterDelivery: 'after delivery',
 			who: 'Who may make this move',
-			whoChoices: Object.freeze({
+			whoChoices: {
 				staff: 'Staff',
 				staff_shopper: 'Staff and the shopper',
 				shopper: 'Only the shopper',
 				system: 'Only the shop itself (triggers)',
-			}),
+			},
 			permission: 'Permission staff need',
 			refundPermission: 'A cancel that gives back money paid also needs Refund orders.',
-			permissions: Object.freeze({
+			permissions: {
 				'orders.manage': 'Manage orders',
 				'orders.refund': 'Refund orders',
-			}),
+			},
 			needs: 'Staff give with this move',
-			needChoices: Object.freeze({
+			needChoices: {
 				note: 'A note for the staff',
 				reason: 'A note for the shopper',
-			}),
-			options: Object.freeze({
+			},
+			options: {
 				paidOnConfirm: 'Record the balance as paid for',
 				window: 'Time to pay',
 				tracking: 'Tracking number',
@@ -244,37 +183,37 @@ export const TEXTS = Object.freeze({
 				restock: 'Items back in stock',
 				points: 'Earned loyalty points',
 				paidOnDelivery: 'Orders paid on delivery or at pickup',
-			}),
-			values: Object.freeze({
-				window: Object.freeze({ restart: 'Starts again', none: 'None: waits until staff move it' }),
-				tracking: Object.freeze({ required: 'Required', optional: 'Optional' }),
-				refund: Object.freeze({ auto: 'Refunded automatically', staff: 'Staff refund it from the order' }),
-				shopperPaid: Object.freeze({
+			},
+			values: {
+				window: { restart: 'Starts again', none: 'None: waits until staff move it' },
+				tracking: { required: 'Required', optional: 'Optional' },
+				refund: { auto: 'Refunded automatically', staff: 'Staff refund it from the order' },
+				shopperPaid: {
 					refuse: 'Refuse: staff cancel and refund it',
 					flag: 'Cancel, the refund shown as due',
 					refund: 'Cancel and refund through Payments',
-				}),
-				unpaid: Object.freeze({ refuse: 'Refuse the refund', cancel: 'Cancel it with no money' }),
-				restock: Object.freeze({ yes: 'Yes', no: 'No', ask: 'Staff choose with each move' }),
-				points: Object.freeze({ take_back: 'Taken back', keep: 'Kept' }),
-				paidOnDelivery: Object.freeze({ yes: 'Count as paid with this move', no: 'Staff record the money' }),
-			}),
+				},
+				unpaid: { refuse: 'Refuse the refund', cancel: 'Cancel it with no money' },
+				restock: { yes: 'Yes', no: 'No', ask: 'Staff choose with each move' },
+				points: { take_back: 'Taken back', keep: 'Kept' },
+				paidOnDelivery: { yes: 'Count as paid with this move', no: 'Staff record the money' },
+			},
 			triggers: 'Moves the shop makes by itself',
-			triggerFields: Object.freeze({
+			triggerFields: {
 				paid: 'When Payments confirms the payment, move to',
 				windowEnd: 'When the time to pay or confirm ends, move to',
 				refundsCover: 'When refunds reach what was paid, move to',
-			}),
+			},
 			stay: 'Stay where it is',
 			starts: 'Where orders start that need no payment first',
-			startFields: Object.freeze({
+			startFields: {
 				on_delivery: 'Orders paid on delivery',
 				at_pickup: 'Orders paid at pickup',
 				free: 'Free orders paid online or first',
-			}),
+			},
 			resetFlow: 'Reset to the default flow',
 			resetNote: 'The default flow is loaded below. Save to apply it.',
-			roles: Object.freeze({
+			roles: {
 				awaiting_payment: 'Awaiting payment (start: paid online or first, an advance)',
 				awaiting_confirmation: 'Awaiting confirmation (start: paid on delivery or at pickup)',
 				open: 'Open (confirmed)',
@@ -285,28 +224,28 @@ export const TEXTS = Object.freeze({
 				returned_to_origin: 'Returned to origin',
 				refunded: 'Refunded',
 				returned: 'Returned by the customer',
-			}),
-		}),
-		paymentMethods: Object.freeze({
+			},
+		},
+		paymentMethods: {
 			title: 'Payment methods',
 			help: 'The ways shoppers pay, in the order the cart lists them. Only the kind is fixed: paid online through Payments, paid first (a bank transfer, a wallet …), paid on delivery or paid at pickup.',
 			item: 'Payment method',
 			name: 'Name shoppers see',
 			key: 'Key (lower-case letters, digits or _)',
 			kind: 'Kind',
-			kinds: Object.freeze({
+			kinds: {
 				gateway: 'Paid online through Payments',
 				pay_first: 'Paid first (transfer, wallet …)',
 				on_delivery: 'Paid on delivery',
 				at_pickup: 'Paid at pickup',
-			}),
+			},
 			note: 'Note shown when it is chosen',
 			maxOrderValue: 'Largest order ({currency}; empty: no limit)',
 			feePercent: 'Fee (%)',
 			feeBase: 'The fee is a percent of',
-			feeBases: Object.freeze({ order_total: 'The order total', goods_after_discounts: 'The goods after discounts' }),
+			feeBases: { order_total: 'The order total', goods_after_discounts: 'The goods after discounts' },
 			via: 'Paid',
-			vias: Object.freeze({ payments: 'Through Payments', manual: 'By hand: staff record it' }),
+			vias: { payments: 'Through Payments', manual: 'By hand: staff record it' },
 			viaPayments: 'Its accounts and instructions are those of the manual payment method with the same key in Payments.',
 			advanceAmount: 'Advance ({currency}; wins over the percent)',
 			advancePercent: 'Advance (% of the total)',
@@ -324,70 +263,70 @@ export const TEXTS = Object.freeze({
 			addAccount: 'Add an account',
 			removeAccount: 'Remove this account',
 			badAmount: '{method}: {value} is not an amount in {currency}.',
-		}),
-		reasons: Object.freeze({
+		},
+		reasons: {
 			item: 'Reason',
 			key: 'Key (lower-case letters, digits, _ or -)',
 			label: 'Name',
 			countsAgainst:
 				'Counts against the customer (adds one to their returned packages; pay-on-delivery methods can ask flagged customers for an advance)',
-			cancel_reasons: Object.freeze({
+			cancel_reasons: {
 				title: 'Cancel reasons',
 				help: 'What staff pick when they cancel an order (optional). Orders keep the reason, so lists, counts and reports group by it.',
-			}),
-			delivery_failure_reasons: Object.freeze({
+			},
+			delivery_failure_reasons: {
 				title: 'Failed delivery reasons',
 				help: 'What staff pick when a shipped package comes back to you (the first one when none is picked). Orders keep the reason, so lists, counts and reports group by it.',
-			}),
-		}),
-		attachmentKinds: Object.freeze({
+			},
+		},
+		attachmentKinds: {
 			title: 'Order attachments',
 			help: 'Photos, videos and files staff keep on an order, such as a packing video or a photo of the parcel. A kind may be needed before a status, and shown to shoppers in their order.',
 			item: 'Kind',
 			key: 'Key (lower-case letters, digits, _ or -)',
 			label: 'Name',
 			type: 'Type',
-			types: Object.freeze({ photo: 'Photo', video: 'Video', file: 'File' }),
+			types: { photo: 'Photo', video: 'Video', file: 'File' },
 			requiredAt: 'Needed before the status',
 			requiredAtHelp: 'The key of a status of your order flow (such as packed); empty: never needed.',
 			shoppers: 'Shown to shoppers in their order',
-		}),
-		reviewQuestions: Object.freeze({
+		},
+		reviewQuestions: {
 			title: 'Review questions',
 			help: 'What the review form asks besides the stars, such as fit, quality or value: a 1–5 rating, or one of your choices. Answers show on the reviews and in the product’s summary.',
 			item: 'Question',
 			key: 'Key (lower-case letters, digits, _ or -)',
 			label: 'Question',
 			type: 'Answer',
-			types: Object.freeze({ rating: 'A rating from 1 to 5', choice: 'One of your choices' }),
+			types: { rating: 'A rating from 1 to 5', choice: 'One of your choices' },
 			choices: 'Choices (one per line)',
 			required: 'Shoppers must answer it',
-		}),
-		claimKinds: Object.freeze({
+		},
+		claimKinds: {
 			title: 'Claim kinds',
 			help: 'What shoppers and staff can claim: each kind is counted in the return or the warranty window and ends in the outcomes you allow. Kinds offered to shoppers show on their claim form.',
 			item: 'Kind',
 			key: 'Key (lower-case letters, digits, _ or -)',
 			label: 'Name',
 			window: 'Counted in',
-			windows: Object.freeze({ return: 'The return window', warranty: 'The warranty window' }),
+			windows: { return: 'The return window', warranty: 'The warranty window' },
 			outcomes: 'Outcomes',
-			outcomeChoices: Object.freeze({
+			outcomeChoices: {
 				refund: 'Refund',
 				store_credit: 'Store credit (a one-use code; needs Coupons)',
 				replace: 'Replacement',
 				repair: 'Repair',
-			}),
+			},
 			shoppers: 'Offered to shoppers',
-		}),
-		claimStatuses: Object.freeze({
+		},
+		claimStatuses: {
 			title: 'Claim statuses',
 			help: 'Where a claim stands, in your words. Each status has a role the shop relies on; every role needs a status, and a role may have more (such as Return label sent beside Approved). A status that has claims keeps its key and role.',
 			item: 'Status',
 			key: 'Key (lower-case letters, digits, _ or -)',
 			label: 'Name',
 			role: 'Role',
-			roles: Object.freeze({
+			roles: {
 				requested: 'Requested',
 				approved: 'Approved',
 				rejected: 'Rejected',
@@ -397,16 +336,16 @@ export const TEXTS = Object.freeze({
 				replaced: 'Replaced',
 				repaired: 'Repaired',
 				closed: 'Closed',
-			}),
-		}),
-		unitStates: Object.freeze({
+			},
+		},
+		unitStates: {
 			title: 'Unit states',
 			help: 'What a numbered unit can be besides in stock and sold, such as faulty, reserved, demo or in repair. A unit in one of them is not for sale; staff put it back in stock.',
 			item: 'State',
 			key: 'Key (lower-case letters, digits, _ or -)',
 			label: 'Name',
-		}),
-		couriers: Object.freeze({
+		},
+		couriers: {
 			title: 'Couriers',
 			help: 'Staff pick the courier when an order ships. In the tracking link, {tracking} is replaced by the tracking number. With Courier APIs, each courier books through its own connection (Connections → Courier API keys 1 to 5).',
 			item: 'Courier',
@@ -416,23 +355,23 @@ export const TEXTS = Object.freeze({
 			key: 'Key (lower-case letters, digits, _ or -)',
 			name: 'Name',
 			trackingUrl: 'Tracking link (https://…{tracking}…)',
-		}),
-		policies: Object.freeze({
+		},
+		policies: {
 			title: 'Policies',
 			help: 'Shown at checkout, to Chat and in llms.txt, each on its own page of your site (/policies/<key>). The texts take {returnTime}, {warrantyTime} (as typed: 30 days, 1 year), {business}, {email}, {phone}, {address}, {deliveryFee} and {freeDeliveryOver}; a policy without text is not shown.',
 			item: 'Policy',
 			name: 'Title',
 			key: 'Key (lower-case letters, digits, _ or -; names its page)',
 			text: 'Text',
-		}),
-		addressRegions: Object.freeze({
+		},
+		addressRegions: {
 			title: 'Address regions',
 			help: 'Countries whose shoppers pick their state, province or region from a list (exact names, so zones and tax rules match them). An address without a country is in your business.json country.',
 			item: 'Country',
 			country: 'Country (code or name)',
 			names: 'Regions (one per line)',
-		}),
-		zones: Object.freeze({
+		},
+		zones: {
 			title: 'Delivery zones',
 			help: "A shopper's address goes to the most specific zone it is in: the longest postcode start, then a zone listing areas, cities, regions, countries; a zone listing nothing covers every address. Empty lists match any place; an address without a country is in your business.json country.",
 			item: 'Zone',
@@ -450,17 +389,17 @@ export const TEXTS = Object.freeze({
 			standard: 'Standard',
 			rateName: 'Name shoppers see (for example Standard, Express)',
 			kind: 'Kind',
-			kinds: Object.freeze({ delivery: 'Delivery to the address', pickup: 'Pickup' }),
+			kinds: { delivery: 'Delivery to the address', pickup: 'Pickup' },
 			price: 'Price ({currency})',
 			freeOver: 'Free over ({currency}, empty: never free)',
 			minDays: 'Days from (empty: not said)',
 			maxDays: 'Days to',
 			by: 'Offered',
-			conditions: Object.freeze({
+			conditions: {
 				none: 'Always',
 				weight: 'By package weight (grams)',
 				value: 'By order value ({currency})',
-			}),
+			},
 			minGrams: 'From (grams)',
 			maxGrams: 'To (grams, empty: no limit)',
 			minValue: 'From ({currency})',
@@ -469,8 +408,8 @@ export const TEXTS = Object.freeze({
 			addRate: 'Add a delivery rate',
 			addPickup: 'Add a pickup rate',
 			badAmount: '{zone}: "{value}" is not an amount in {currency}.',
-		}),
-		segments: Object.freeze({
+		},
+		segments: {
 			title: 'Customer segments',
 			help: 'Saved groups of customers by rules. The Customers widget lists each one; GET /v1/customers?segment=<key> too.',
 			item: 'Segment',
@@ -492,7 +431,7 @@ export const TEXTS = Object.freeze({
 			addRule: 'Add rule',
 			removeRule: 'Remove rule',
 			badRule: '{segment}: give every rule its value.',
-			fields: Object.freeze({
+			fields: {
 				tag: 'Tag',
 				orders: 'Orders placed',
 				spent: 'Amount spent',
@@ -504,8 +443,8 @@ export const TEXTS = Object.freeze({
 				blocked: 'Blocked',
 				loyalty: 'Loyalty member',
 				field: 'Customer field',
-			}),
-			ops: Object.freeze({
+			},
+			ops: {
 				is: 'is',
 				is_not: 'is not',
 				gte: 'at least',
@@ -514,9 +453,9 @@ export const TEXTS = Object.freeze({
 				not_within: 'not within the last (days)',
 				set: 'has a value',
 				not_set: 'has no value',
-			}),
-		}),
-		rolePrices: Object.freeze({
+			},
+		},
+		rolePrices: {
 			title: 'Role prices',
 			help: 'A signed-in shopper whose Accounts role is listed gets its percent off, or its fixed prices, on the goods after offers, before points, delivery and tax. Guests never get it.',
 			item: 'Role',
@@ -539,8 +478,8 @@ export const TEXTS = Object.freeze({
 			removePrice: 'Remove price',
 			noPrices: '{role}: add at least one price.',
 			badPrice: '{role}: give each price a product id, an optional variant id and an amount in {currency}.',
-		}),
-		taxRules: Object.freeze({
+		},
+		taxRules: {
 			title: 'Tax rules',
 			help: 'Every rule that applies to a line adds its percent. Empty categories or regions apply everywhere. A delivery is taxed where it goes, a pickup or download where your business is (its business.json country).',
 			item: 'Rule',
@@ -550,8 +489,8 @@ export const TEXTS = Object.freeze({
 			regions:
 				'Regions: Country, Region, City, Postcode start (one per line; only the country is needed, for example "US, CA" or "GB, , , SW1"; empty: all)',
 			badPercent: '{rule}: the percent is a number from 0 to 100.',
-		}),
-		grades: Object.freeze({
+		},
+		grades: {
 			title: 'Condition grades',
 			help: 'Grades for new, used or refurbished items: each with its categories and item types, return and warranty times, color, condition video, content and glossary page.',
 			item: 'Grade',
@@ -572,16 +511,16 @@ export const TEXTS = Object.freeze({
 			keyInvalid: 'Use lower-case letters, digits, _ or -, starting with a letter (at most 40).',
 			keyTaken: 'Another grade has this key.',
 			condition: 'Condition for search engines and feeds',
-			conditions: Object.freeze({
+			conditions: {
 				new: 'New',
 				refurbished: 'Refurbished',
 				used: 'Used',
-			}),
+			},
 			returnTime: 'Return time',
 			returnUnit: 'Return time unit',
 			warrantyTime: 'Warranty time',
 			warrantyUnit: 'Warranty time unit',
-			units: Object.freeze({ days: 'days', months: 'months', years: 'years' }),
+			units: { days: 'days', months: 'months', years: 'years' },
 			daysHelp: 'Empty: the Returns setting.',
 			days: 'Returns {returns} · warranty {warranty}',
 			daysCount: '{amount} {unit}',
@@ -621,7 +560,7 @@ export const TEXTS = Object.freeze({
 			seoTitle: 'Title',
 			seoDescription: 'Description',
 			seoBody: 'Text of the page',
-			preview: Object.freeze({
+			preview: {
 				result: 'Search result preview',
 				card: 'Share preview',
 				noTitle: 'No title: search engines write one from the page.',
@@ -631,7 +570,7 @@ export const TEXTS = Object.freeze({
 				descriptionWidth: 'Description: {width} of {limit} px',
 				titleCut: 'The title may be cut in search results.',
 				descriptionCut: 'The description may be cut in search results.',
-			}),
+			},
 			faqs: 'Questions and answers',
 			faq: 'Question {number}',
 			question: 'Question',
@@ -639,8 +578,8 @@ export const TEXTS = Object.freeze({
 			addFaq: 'Add question',
 			removeFaq: 'Remove question {number}',
 			count: '{count}/{max}',
-		}),
-		itemTypes: Object.freeze({
+		},
+		itemTypes: {
 			title: 'Item types',
 			help: 'What your items are and the parts they have: a kind (physical goods, digital goods or a service), options, condition grades, numbered units, a size chart, selling in a unit of its own, a package, own return and warranty days, downloads, license keys or booked times. A category gives its products a type; a product may name its own. Without types every item has the built-in type of its kind, with every part your features allow.',
 			none: 'No item types yet: every item has the built-in type of its kind.',
@@ -663,12 +602,12 @@ export const TEXTS = Object.freeze({
 			keyBuiltIn: 'physical, digital and service are the built-in types: pick another key.',
 			kind: 'Kind',
 			kindHelp: 'Products and categories that use the type keep its kind.',
-			kinds: Object.freeze({ physical: 'Physical goods', digital: 'Digital goods', service: 'Service' }),
+			kinds: { physical: 'Physical goods', digital: 'Digital goods', service: 'Service' },
 			active: 'Offered for new products',
 			activeHelp: 'Off: products and categories that have it keep it, new ones cannot pick it.',
 			parts: 'Parts',
 			partsHelp: 'Only the parts of its kind; each works while its feature is on.',
-			elements: Object.freeze({
+			elements: {
 				variants: 'Options and variants',
 				grades: 'Condition grades',
 				chart: 'Size chart',
@@ -677,8 +616,8 @@ export const TEXTS = Object.freeze({
 				downloads: 'Downloads',
 				licenceKeys: 'License keys',
 				slots: 'Booked time slots',
-			}),
-			elementHelp: Object.freeze({
+			},
+			elementHelp: {
 				variants: 'Options such as size or color, variant fields and Generate (Variants).',
 				grades: 'A condition grade per variant (Condition grades and unit numbers).',
 				chart: 'A size chart from the product, its brand or its category (Size charts).',
@@ -687,7 +626,7 @@ export const TEXTS = Object.freeze({
 				downloads: 'Files the shopper downloads once paid (Digital goods).',
 				licenceKeys: 'A license key per unit, given once paid (Digital goods).',
 				slots: 'A duration and a time the shopper books in your booking hours (Services and bookings).',
-			}),
+			},
 			measure: 'Selling in your own unit',
 			measureOn: 'Sold in decimal quantities of a unit',
 			measureHelp:
@@ -712,7 +651,7 @@ export const TEXTS = Object.freeze({
 			standardNone: 'None',
 			standardAmount: 'One unit is',
 			standardAmountInvalid: 'Give a number above 0 (at most six decimals).',
-			standardCodes: Object.freeze({
+			standardCodes: {
 				MMT: 'millimeters (MMT)',
 				CMT: 'centimeters (CMT)',
 				MTR: 'meters (MTR)',
@@ -733,7 +672,7 @@ export const TEXTS = Object.freeze({
 				OZA: 'US fluid ounces (OZA)',
 				GLL: 'US gallons (GLL)',
 				C62: 'pieces (C62)',
-			}),
+			},
 			soldBy: 'Sold per {unit}',
 			quantity: 'Quantities',
 			quantityHelp:
@@ -751,14 +690,14 @@ export const TEXTS = Object.freeze({
 			unitsHelp:
 				'Each unit gets its own numbers (serial numbers or your unit fields, such as a frame number, a VIN or a device identity number).',
 			capture: 'Numbers come',
-			captures: Object.freeze({
+			captures: {
 				stock: 'From units added to stock, picked when packing',
 				packing: 'Typed at packing or later',
-			}),
+			},
 			requiredBefore: 'Needed before',
 			requiredBeforeHelp: 'Moves into this step (and later ones) need every number first.',
 			requiredBeforeStock: 'Units in stock are picked when the order is packed.',
-			stages: Object.freeze({ packed: 'Packed', shipped: 'Shipped (and delivered)', never: 'Never: they may be left out' }),
+			stages: { packed: 'Packed', shipped: 'Shipped (and delivered)', never: 'Never: they may be left out' },
 			unitFields: 'Unit fields',
 			unitFieldsHelp:
 				'Ids of unit fields (att_…, Catalog admin → Fields, on units), in order: at most {max}; each takes the number of values you give it. None: a plain serial number.',
@@ -770,8 +709,8 @@ export const TEXTS = Object.freeze({
 			fieldIdsHelp: 'Field ids (att_…) from Catalog admin → Fields: press Enter after each, or paste several. At most 40.',
 			noFields: 'No fields',
 			noParts: 'No parts',
-		}),
-		bookingSchedules: Object.freeze({
+		},
+		bookingSchedules: {
 			title: 'Booking schedules',
 			help: "When services can be booked, in your business time zone. A schedule can stand for a place, a person or a service; each service names its schedule (the first when it names none). Dated exceptions replace that date's weekly hours: holidays, special hours.",
 			item: 'Schedule',
@@ -782,14 +721,14 @@ export const TEXTS = Object.freeze({
 			from: 'From',
 			to: 'To',
 			addWindow: 'Add hours',
-			days: Object.freeze(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']),
+			days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
 			exceptions: 'Dated exceptions (one per line)',
 			exceptionsHelp:
 				'A date, a name and, after |, its own hours: 2026-12-25 Christmas (closed all day), or 2026-12-24 Christmas Eve | 09:00-12:00.',
-		}),
-	}),
-	connections: Object.freeze({
-		fields: Object.freeze({
+		},
+	},
+	connections: {
+		fields: {
 			apiKey: 'API key',
 			model: 'Model',
 			baseUrl: 'Base URL (https, OpenAI-compatible)',
@@ -805,9 +744,9 @@ export const TEXTS = Object.freeze({
 			bodyTemplate: 'Booking body template (optional JSON with {number}, {name}, {city} …)',
 			trackingPath: 'Tracking number in the answer (dotted path, default trackingNumber)',
 			statusPath: 'Status in the answer (dotted path, default status)',
-		}),
+		},
 		badHeaders: 'Extra headers must be a JSON object of text values.',
-		hints: Object.freeze({
+		hints: {
 			database: 'A MongoDB connection string (mongodb+srv://…). Products, orders and customers live here.',
 			storage:
 				'An S3-compatible bucket (AWS S3, Cloudflare R2 and others) for product images, downloads and return photos. Allow PUT from your website and admin origins in its CORS (see Developers).',
@@ -822,23 +761,9 @@ export const TEXTS = Object.freeze({
 			ai: 'Your own OpenAI-compatible AI service: base URL, key and model. AI copy suggests product texts with it.',
 			growth:
 				"Paste the website's Growth server token from the Portal. With Send changes to IndexNow on (Settings → SEO and feeds), saved product and category addresses go to search engines through it.",
-		}),
-		save: 'Save and test',
-		neededBy: 'Needed by: {features}',
-		neededByNone: 'Optional',
-		connected: 'Connected',
-		not_connected: 'Not connected',
-		test_failed: 'Test failed',
-		value: 'New value',
-		test: 'Test',
-		remove: 'Remove',
-		none: 'No connections.',
-	}),
-	developers: Object.freeze({
-		intro: 'The docs show every feature, widget and route. Features that are off are marked.',
-		openDocs: 'Open the docs',
-		manageTokens: 'Manage tokens in the Portal',
-		off: 'off',
+		},
+	},
+	developers: {
 		visitor: 'Visitor widgets',
 		visitorHelp:
 			"The script and the shop widgets on your website. Replace YOUR_BROWSER_TOKEN with the website's browser token from the Portal.",
@@ -861,27 +786,8 @@ export const TEXTS = Object.freeze({
 		searchIndexDocs: 'Docs',
 		cors: 'Storage CORS',
 		corsHelp: "Uploads go straight to your bucket: allow PUT from your website's and your admin's origins.",
-	}),
-	defaults: Object.freeze({
+	},
+	defaults: {
 		intro: 'Global defaults apply to every website that has not saved its own value. Lists (order flow, couriers, zones…) have no global defaults.',
-	}),
-	prices: Object.freeze({
-		intro: 'One hourly price per feature, in credits, for every merchant and website.',
-		perHour: 'Credits per hour',
-	}),
-	reseal: Object.freeze({
-		title: 'Encryption key',
-		intro: 'After ENCRYPTION_KEY is changed, with the old key set as ENCRYPTION_KEY_PREVIOUS, seal every stored secret again with the new key. Pressing again is safe.',
-		button: 'Re-seal stored secrets',
-		result: '{resealed} re-sealed, {current} already on the current key, {unreadable} could not be opened with either key.',
-		finished: 'Every stored secret now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.',
-		again: '{failed} websites could not be reached: press again later, and keep ENCRYPTION_KEY_PREVIOUS until none is left.',
-		unreadable:
-			'Keep ENCRYPTION_KEY_PREVIOUS and check that it is the old key. Then enter these again and press Re-seal again: {parts}. Remove ENCRYPTION_KEY_PREVIOUS only when "could not be opened" is 0.',
-		parts: Object.freeze({
-			connections: '{count} secrets in Connections (type them again on each website)',
-			keys: '{count} signing keys (press Reconnect for this product in the Portal)',
-			product: '{count} of the shop’s own stored secrets (set them up again where Ecommerce asks for them)',
-		}),
-	}),
+	},
 });

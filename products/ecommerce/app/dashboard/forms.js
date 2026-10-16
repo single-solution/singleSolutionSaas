@@ -1,7 +1,7 @@
 'use client';
 /**
  * Connections → structured values (PLAN 0.8.8): the S3-compatible `storage`, the OpenAI-compatible `ai` key (base URL,
- * key, model) and the generic `courier` API adapter (booking and tracking addresses, key, extra headers as JSON object
+ * key, model) and each courier API connection's generic adapter (booking and tracking addresses, key, extra headers as JSON object
  * text, booking body template, where the answers hold the tracking number and status). A value is saved as one
  * connection (tested live, encrypted, write-only), so each form starts empty and saving replaces the whole value.
  * @module
@@ -39,6 +39,14 @@ export const FORMS = Object.freeze({
 });
 
 /**
+ * The form a connection takes: every courier API connection (`courier_1` … `courier_5`, E25) takes the courier form;
+ * null for a connection of one value.
+ * @param {string} name
+ * @returns {keyof typeof FORMS | null}
+ */
+export const formOf = (name) => (/^courier_\d+$/.test(name) ? 'courier' : Object.hasOwn(FORMS, name) ? name : null);
+
+/**
  * Why extra headers are not a JSON object of text values, or null (empty is fine).
  * @param {string} text
  * @returns {string | null}
@@ -63,11 +71,12 @@ const headersProblem = (text) => {
  * @param {{ name: string, onSave: (value: object) => void }} props
  */
 export function ConnectionForm({ name, onSave }) {
-	const fields = FORMS[name] ?? [];
+	const form = formOf(name);
+	const fields = (form && FORMS[form]) || [];
 	const [values, setValues] = useState(/** @type {Record<string, string>} */ ({}));
 	/** @param {string} field */
 	const valueOf = (field) => (values[field] ?? '').trim();
-	const problem = name === 'courier' ? headersProblem(values.headers ?? '') : null;
+	const problem = form === 'courier' ? headersProblem(values.headers ?? '') : null;
 	const ready = problem === null && fields.every((field) => field.optional === true || valueOf(field.name) !== '');
 	/** @param {FieldSpec} field */
 	const input = (field) => {

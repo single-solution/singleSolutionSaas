@@ -22,10 +22,9 @@ import {
 	statusOf,
 } from '../../core/flow.js';
 import { STATUS_ROLES } from '../../core/model.js';
-import { fill, useLoad } from './api.js';
+import { Loaded, fill, useLoad } from '@ss/ui/dashboard';
 import { flowToSave, removeFlowStatus, renameFlowStatus } from './drafts.js';
 import { EntryHead, ListOutcome, SaveRow, moved, useList } from './lists.js';
-import { Loaded } from './parts.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('../../core/model.js').OrderFlow} OrderFlow */

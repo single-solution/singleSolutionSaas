@@ -12,7 +12,7 @@
  */
 import { startTransition, useState } from 'react';
 import { Callout, Masonry, Section, Select, SwapTransition, cx } from '@ss/ui';
-import { call, fill, useLoad } from './api.js';
+import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, call, fill, hasSettings, useLoad } from '@ss/ui/dashboard';
 import {
 	AttachmentKindsEditor,
 	ClaimKindsEditor,
@@ -34,11 +34,10 @@ import {
 	UnitStatesEditor,
 	ZonesEditor,
 } from './lists.js';
-import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
 import { PaymentMethodsEditor } from './payment-methods.js';
 import { TEXTS } from './texts.js';
 
-/** @typedef {import('./parts.js').FeatureSettings} FeatureSettings */
+/** @typedef {import('@ss/ui/dashboard').FeatureSettings} FeatureSettings */
 /** @typedef {keyof typeof TEXTS.settings.sections} SectionId */
 
 /** Sections in order. */
@@ -267,7 +266,7 @@ export const gradePreview = (features) => {
 	};
 };
 
-/** @param {import('./tabs.js').TabProps} props */
+/** @param {import('@ss/ui/dashboard').TabProps} props */
 export function SettingsTab({ websiteId: id }) {
 	const websiteId = /** @type {string} */ (id);
 	const base = `/v1/dashboard/websites/${websiteId}`;

@@ -23,9 +23,8 @@ import {
 import { COURIER_CONNECTIONS } from '../../core/couriers.js';
 import { exponentOf, fromDecimal, toDecimal } from '../../core/money.js';
 import { UNIT_STATE_LIMITS } from '../../core/unit-states.js';
-import { call, fill, useLoad } from './api.js';
+import { Loaded, call, fill, useLoad } from '@ss/ui/dashboard';
 import { cleanLines, keyOf, splitIds, taxRegionLine, taxRegionOf } from './drafts.js';
-import { Loaded } from './parts.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {Record<string, any>} Item */
@@ -171,7 +170,7 @@ export function IdTags({ label, help, values, max, none, onChange }) {
 
 /**
  * The outcome of a save: local errors, the server's check errors, another problem, or saved.
- * @param {{ result: import('./api.js').Answer | null, local: string[] }} props
+ * @param {{ result: import('@ss/ui/dashboard').Answer | null, local: string[] }} props
  */
 export function ListOutcome({ result, local }) {
 	const problems = local.length > 0 ? local : result && !result.ok ? errorLines(result.problem) : [];
@@ -227,7 +226,7 @@ export const useList = (websiteId, list) => {
 	const path = `/v1/dashboard/websites/${websiteId}/lists/${list}`;
 	const { answer, reload } = useLoad(path);
 	const [draft, setDraft] = useState(/** @type {any} */ (null));
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
 	const [local, setLocal] = useState(/** @type {string[]} */ ([]));
 	/** @param {unknown} value */
 	const save = async (value) => {

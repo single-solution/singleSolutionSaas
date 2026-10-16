@@ -10,6 +10,7 @@ import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { SegmentsEditor } from '../app/dashboard/lists.js';
 import { SettingsSections } from '../app/dashboard/settings.js';
 import { DEFAULT_SEGMENTS, checkSegments } from '../core/customer-segments.js';
+import { inDashboard } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 const PATH = `/v1/dashboard/websites/${WEBSITE}/lists/customer_segments`;
@@ -53,7 +54,7 @@ afterEach(() => {
 describe('the customer segments editor', () => {
 	it('lists the segments, adds one with rules and saves the list the server takes', async () => {
 		serve();
-		const { container } = render(<SegmentsEditor websiteId={WEBSITE} currency="USD" />);
+		const { container } = render(inDashboard(<SegmentsEditor websiteId={WEBSITE} currency="USD" />));
 		await settle();
 		const entries = () => /** @type {HTMLElement[]} */ ([...container.querySelectorAll('[data-entry]')]);
 		expect(entries()).toHaveLength(3);
@@ -94,7 +95,7 @@ describe('the customer segments editor', () => {
 describe('Settings → Customers', () => {
 	it('is a section of its own with the segments editor', () => {
 		const { container } = render(
-			<SettingsSections features={[]} forms={() => null} extras={{ customers: <p>Segments editor</p> }} />,
+			inDashboard(<SettingsSections features={[]} forms={() => null} extras={{ customers: <p>Segments editor</p> }} />),
 		);
 		expect(container.textContent).toContain('Customers');
 		expect(container.textContent).toContain('Segments editor');

@@ -7,6 +7,7 @@ import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { GradesEditor } from '../app/dashboard/grades.js';
+import { inDashboard } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 
@@ -24,17 +25,19 @@ describe('a grade’s search result and share preview', () => {
 			vi.fn(async () => new Response(JSON.stringify({ value: [] }), { status: 200 })),
 		);
 		const { container } = render(
-			<GradesEditor
-				websiteId={WEBSITE}
-				preview={{
-					titleTemplate: '{name} | {business}',
-					siteName: 'Northwind',
-					defaultDescription: 'Phones and more.',
-					defaultImage: 'https://cdn.example/share.png',
-					gradeTitle: '{name} condition',
-					gradeDescription: '',
-				}}
-			/>,
+			inDashboard(
+				<GradesEditor
+					websiteId={WEBSITE}
+					preview={{
+						titleTemplate: '{name} | {business}',
+						siteName: 'Northwind',
+						defaultDescription: 'Phones and more.',
+						defaultImage: 'https://cdn.example/share.png',
+						gradeTitle: '{name} condition',
+						gradeDescription: '',
+					}}
+				/>,
+			),
 		);
 		await settle();
 		await act(async () => click(byText(container, 'Add grade', 'button')));

@@ -9,6 +9,7 @@ import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@ss/ui/testing';
 import { TABS } from '../app/dashboard/tabs.js';
+import { inDashboard } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 const BASE = `/v1/dashboard/websites/${WEBSITE}`;
@@ -55,6 +56,7 @@ const props = {
 	websiteId: WEBSITE,
 	who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Merchant' }),
 	support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] },
+	domain: 'shop.example.com',
 	portal: 'https://portal.example.com',
 	open: (/** @type {string} */ tab) => void opened.push(tab),
 };
@@ -68,7 +70,7 @@ describe('Overview: the public address of the images', () => {
 	it('asks for it once storage is connected, with a button to the settings', async () => {
 		serve({ storage: 'connected', mediaBaseUrl: '' });
 		const Overview = TABS.overview;
-		const { container } = render(<Overview {...props} />);
+		const { container } = render(inDashboard(<Overview {...props} />));
 		await settle();
 		const text = container.textContent ?? '';
 		expect(text).toContain('The public address of your images is not set');
@@ -81,13 +83,13 @@ describe('Overview: the public address of the images', () => {
 	it('shows the address once set, and nothing before storage is connected', async () => {
 		serve({ storage: 'connected', mediaBaseUrl: 'https://cdn.shop.example.com' });
 		const Overview = TABS.overview;
-		const set = render(<Overview {...props} />);
+		const set = render(inDashboard(<Overview {...props} />));
 		await settle();
 		expect(set.container.textContent).toContain('Set the public address of your imageshttps://cdn.shop.example.com');
 		expect(set.container.textContent).not.toContain('is not set');
 		cleanup();
 		serve({ storage: 'not_connected', mediaBaseUrl: '' });
-		const before = render(<Overview {...props} />);
+		const before = render(inDashboard(<Overview {...props} />));
 		await settle();
 		expect(before.container.textContent).not.toContain('public address of your images');
 	});

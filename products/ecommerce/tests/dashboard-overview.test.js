@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@ss/ui/testing';
 import { TABS } from '../app/dashboard/tabs.js';
 import { defaultPaymentMethods, newAccount } from '../core/payment-methods.js';
+import { inDashboard } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 const BASE = `/v1/dashboard/websites/${WEBSITE}`;
@@ -65,6 +66,7 @@ const props = {
 	websiteId: WEBSITE,
 	who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Sam' }),
 	support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] },
+	domain: 'shop.example.com',
 	portal: 'https://portal.example.com',
 	open: (/** @type {string} */ tab) => void opened.push(tab),
 };
@@ -89,7 +91,7 @@ describe('Ecommerce’s Overview', () => {
 	it('greets, asks for the currency until it is set, and reads only what the features need', async () => {
 		const loads = serve({ on: ['catalog'], settings: { catalog: { currency: value('USD'), mediaBaseUrl: value('') } } });
 		const Overview = TABS.overview;
-		const { container } = render(<Overview {...props} />);
+		const { container } = render(inDashboard(<Overview {...props} />));
 		await settle();
 		const text = container.textContent ?? '';
 		expect(text).toContain('Welcome back, Sam');
@@ -102,7 +104,7 @@ describe('Ecommerce’s Overview', () => {
 		expect(loads()).not.toContain('/connections');
 		cleanup();
 		serve({ on: ['catalog'], settings: { catalog: { currency: value('EUR', 'website'), mediaBaseUrl: value('') } } });
-		const set = render(<Overview {...props} />);
+		const set = render(inDashboard(<Overview {...props} />));
 		await settle();
 		expect(set.container.textContent).not.toContain('Every price is in');
 		expect(set.container.textContent).toContain('Everything on shop.example.com is ready');
@@ -120,7 +122,7 @@ describe('Ecommerce’s Overview', () => {
 			settings: { catalog: { currency: value('USD', 'website') } },
 		});
 		const Overview = TABS.overview;
-		const { container } = render(<Overview {...props} />);
+		const { container } = render(inDashboard(<Overview {...props} />));
 		await settle();
 		const text = container.textContent ?? '';
 		expect(text).toContain('Payments is not connected');
@@ -152,7 +154,7 @@ describe('Ecommerce’s Overview', () => {
 			},
 		});
 		const Overview = TABS.overview;
-		const { container } = render(<Overview {...props} />);
+		const { container } = render(inDashboard(<Overview {...props} />));
 		await settle();
 		const text = container.textContent ?? '';
 		for (const words of [
@@ -183,7 +185,7 @@ describe('Ecommerce’s Overview', () => {
 				},
 			},
 		});
-		const fine = render(<Overview {...props} />);
+		const fine = render(inDashboard(<Overview {...props} />));
 		await settle();
 		expect(fine.container.textContent).toContain('Nothing needs you right now.');
 	});

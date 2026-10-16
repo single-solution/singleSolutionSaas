@@ -10,6 +10,7 @@ import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { OrderFlowEditor } from '../app/dashboard/flow-editor.js';
 import { DEFAULT_FLOW, checkOrderFlow } from '../core/flow.js';
 import { defaultPaymentMethods } from '../core/payment-methods.js';
+import { inDashboard } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 const PATH = `/v1/dashboard/websites/${WEBSITE}/lists/order_flow`;
@@ -54,7 +55,7 @@ afterEach(() => {
 describe('the order flow editor', () => {
 	it('changes a move’s options, who makes it and what it needs, a status’s shopper names, triggers and starts', async () => {
 		serve();
-		const { container } = render(<OrderFlowEditor websiteId={WEBSITE} />);
+		const { container } = render(inDashboard(<OrderFlowEditor websiteId={WEBSITE} />));
 		await settle();
 		// the saved flow: every status with its staff name
 		for (const status of DEFAULT_FLOW.statuses) expect(container.textContent).toContain(status.label);
@@ -97,7 +98,7 @@ describe('the order flow editor', () => {
 
 	it('adds a status keyed from its name and a move to it', async () => {
 		serve();
-		const { container } = render(<OrderFlowEditor websiteId={WEBSITE} />);
+		const { container } = render(inDashboard(<OrderFlowEditor websiteId={WEBSITE} />));
 		await settle();
 		await act(async () => click(byText(container, 'Add', 'button')));
 		const added = DEFAULT_FLOW.statuses.length;

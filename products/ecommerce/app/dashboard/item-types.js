@@ -19,10 +19,9 @@ import { ActionMenu, Badge, Button, Card, Checkbox, Dialog, FieldGrid, Input, Se
 import { FIELD_LIMITS } from '../../core/fields.js';
 import { ELEMENTS, ITEM_KINDS, TYPE_LIMITS, UNIT_CAPTURES, elementFor } from '../../core/item-types.js';
 import { MAX_DECIMALS, MAX_UNIT_LABEL, STANDARD_UNITS } from '../../core/measure.js';
-import { fill } from './api.js';
+import { Loaded, fill } from '@ss/ui/dashboard';
 import { blankType, cleanType, keyOf, loadType, typeProblems } from './drafts.js';
 import { IdTags, ListOutcome, SaveRow, moved, useList } from './lists.js';
-import { Loaded } from './parts.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('./drafts.js').TypeDraft} TypeDraft */

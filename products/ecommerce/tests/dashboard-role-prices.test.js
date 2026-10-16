@@ -10,6 +10,7 @@ import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { RolePricesEditor } from '../app/dashboard/lists.js';
 import { SettingsSections } from '../app/dashboard/settings.js';
 import { checkRolePrices } from '../core/role-pricing.js';
+import { inDashboard } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 const PATH = `/v1/dashboard/websites/${WEBSITE}/lists/role_prices`;
@@ -59,7 +60,7 @@ afterEach(() => {
 describe('the role prices editor', () => {
 	it('lists the roles, adds one and saves the list the server takes', async () => {
 		serve();
-		const { container } = render(<RolePricesEditor websiteId={WEBSITE} currency="USD" />);
+		const { container } = render(inDashboard(<RolePricesEditor websiteId={WEBSITE} currency="USD" />));
 		await settle();
 		expect(byLabel(container, 'Accounts role').getAttribute('value') ?? '').toBe('wholesale');
 		expect(/** @type {HTMLInputElement} */ (byLabel(container, 'Percent off (0–90)')).value).toBe('15');
@@ -100,7 +101,7 @@ describe('the role prices editor', () => {
 
 	it('gives a role fixed prices per product or variant (E31)', async () => {
 		serve();
-		const { container } = render(<RolePricesEditor websiteId={WEBSITE} currency="USD" />);
+		const { container } = render(inDashboard(<RolePricesEditor websiteId={WEBSITE} currency="USD" />));
 		await settle();
 		const first = /** @type {HTMLElement} */ ([...container.querySelectorAll('[data-entry]')][0]);
 		type(byLabel(first, 'Price'), 'prices');
@@ -132,7 +133,7 @@ describe('the role prices editor', () => {
 describe('Settings → Role prices', () => {
 	it('is a section of its own while Role pricing is seen', () => {
 		const { container } = render(
-			<SettingsSections features={[]} forms={() => null} extras={{ rolePrices: <p>Role prices editor</p> }} />,
+			inDashboard(<SettingsSections features={[]} forms={() => null} extras={{ rolePrices: <p>Role prices editor</p> }} />),
 		);
 		expect(container.textContent).toContain('Role prices');
 		expect(container.textContent).toContain('Role prices editor');
