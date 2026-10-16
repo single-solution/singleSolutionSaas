@@ -243,7 +243,7 @@ export function AppShell({
 					) : null}
 				</div>
 				{switcher && !narrow ? <div className="shrink-0 px-3 pb-2">{slotOf(switcher, narrow)}</div> : null}
-				<div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+				<div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-2">
 					<Nav
 						sections={sections}
 						{...(linkAs ? { linkAs } : {})}
@@ -286,7 +286,7 @@ export function AppShell({
 					<aside
 						data-rail={rail || undefined}
 						className={cx(
-							'sticky top-4 hidden h-[calc(100dvh-2rem)] shrink-0 overflow-hidden rounded-panel border border-line-soft bg-surface shadow-panel [view-transition-name:ss-sidebar] lg:block',
+							'sticky top-4 hidden h-[calc(100dvh-2rem)] shrink-0 rounded-panel border border-line-soft bg-surface shadow-panel [view-transition-name:ss-sidebar] lg:block',
 							'transition-[width] duration-(--ss-motion) ease-ss',
 							rail ? 'w-[4.5rem]' : 'w-[15.5rem]',
 						)}>

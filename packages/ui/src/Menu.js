@@ -122,8 +122,10 @@ export function ActionMenu({ label, items, icon = 'more', size = 'sm', className
 					aria-label={label}
 					data-state={presence.closing ? 'closed' : 'open'}
 					className={cx(
-						'absolute z-40 w-64 max-w-[calc(100vw-2rem)] space-y-0.5 rounded-xl bg-surface p-1.5 shadow-pop',
-						placement === 'up' ? 'bottom-full left-0 mb-1.5 origin-bottom-left' : 'right-0 mt-1.5 origin-top-right',
+						'absolute z-40 max-w-[calc(100vw-2rem)] space-y-0.5 rounded-xl bg-surface p-1.5 shadow-pop',
+						placement === 'up'
+							? 'bottom-full left-0 mb-1.5 w-56 origin-bottom-left'
+							: 'right-0 mt-1.5 w-64 origin-top-right',
 						'animate-ss-pop data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-pop-out',
 					)}>
 					{header ? <div className="border-b border-line-soft px-3 pt-1.5 pb-2.5">{header}</div> : null}
