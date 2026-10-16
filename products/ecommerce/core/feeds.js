@@ -20,7 +20,7 @@ import {
 	variantLabel,
 } from './seo.js';
 import { feedMeasureOf } from './measure.js';
-import { toDecimal } from './money.js';
+import { toDecimal } from '@ss/contracts/format';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./seo.js').Condition} Condition */

@@ -19,7 +19,8 @@ import { normalisePhone } from '@ss/contracts/phone';
 import { addressProblem, countryCodeOf, countryName, tidyPostcode } from '@ss/contracts/address';
 import { ADDRESS_LIMITS, placeKey, regionsFor } from './address.js';
 import { MAX_LINES, MAX_MEASURED, MAX_QUANTITY, grossFits, limitsOf, lineGross, piecesOf, quantityProblem } from './measure.js';
-import { allocateUnits, isPrice, roundHalfUp } from './money.js';
+import { allocateUnits, roundHalfUp } from './money.js';
+import { isAmount } from '@ss/contracts/format';
 import { isMethodKey, methodFee } from './payment-methods.js';
 import { taxOf, taxPercent } from './taxes.js';
 
@@ -269,7 +270,7 @@ export const checkOrderExtras = (body) => {
 	if (returnUrl !== null && (typeof returnUrl !== 'string' || returnUrl.length > 2000))
 		return { ok: false, field: 'returnUrl', message: 'returnUrl is an address of at most 2000 characters.' };
 	const expectedTotal = input.expectedTotal ?? null;
-	if (expectedTotal !== null && !isPrice(expectedTotal))
+	if (expectedTotal !== null && !isAmount(expectedTotal))
 		return { ok: false, field: 'expectedTotal', message: 'expectedTotal is the total shown, in minor units.' };
 	return {
 		ok: true,

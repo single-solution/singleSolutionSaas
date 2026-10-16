@@ -9,7 +9,7 @@
  */
 import { zonedDay } from '@ss/contracts/format';
 import { dayBounds } from './calendar.js';
-import { toDecimal } from './money.js';
+import { toDecimal } from '@ss/contracts/format';
 import { DAY_MS } from './returns.js';
 
 /** The longest range, in days. */

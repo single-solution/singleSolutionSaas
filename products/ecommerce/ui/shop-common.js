@@ -9,7 +9,7 @@
  */
 import { DEFAULT_FORMAT, element, formatDate, formatMoney, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
 import { GUEST_IDENTITIES } from '../core/guests.js';
-import { fromDecimal, isCurrency, toDecimal } from '../core/money.js';
+import { fromDecimal, isCurrency, toDecimal } from '@ss/app-kit/widget';
 import { SHOP_CSS } from './shop-styles.js';
 import { WIDGET_CSS } from './styles.js';
 

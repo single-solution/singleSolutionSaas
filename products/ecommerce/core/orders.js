@@ -12,7 +12,7 @@ import { CLOSED_ROLES, moveOf, nextStatuses, statusOf } from './flow.js';
 import { ID_PREFIX, STATUS_ROLES } from './model.js';
 import { MAX_MEASURED, piecesOf } from './measure.js';
 import { checkAttachmentInputs } from './attachments.js';
-import { isAmount } from './money.js';
+import { isPositiveAmount } from '@ss/contracts/format';
 import { LIST_KEY } from './named-lists.js';
 import { MAX_TRACKING, cleanTracking, hasControl } from './couriers.js';
 import { OTHER_WAY, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
@@ -558,7 +558,7 @@ export const checkRefund = (body, order, keys) => {
 	const input = objectOf(body);
 	const left = refundable(order);
 	if (left <= 0) return refuse('amount', 'Nothing paid is left to refund.');
-	if (!isAmount(input.amount) || /** @type {number} */ (input.amount) > left)
+	if (!isPositiveAmount(input.amount) || /** @type {number} */ (input.amount) > left)
 		return refuse('amount', `Refund a whole amount in minor units from 1 to ${left}.`);
 	const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
 	if (!reason || reason.length > 500) return refuse('reason', 'Give a reason of at most 500 characters.');
@@ -603,7 +603,7 @@ export const checkPayment = (body, order, keys) => {
 	if (CLOSED_ROLES.includes(order.role)) return refuse('amount', 'This order is closed: no payment can be recorded on it.');
 	const { due } = orderMoney(order);
 	if (due <= 0) return refuse('amount', 'Nothing is left to pay on this order.');
-	if (!isAmount(input.amount) || /** @type {number} */ (input.amount) > due)
+	if (!isPositiveAmount(input.amount) || /** @type {number} */ (input.amount) > due)
 		return refuse('amount', `Record a whole amount in minor units from 1 to ${due}.`);
 	const reference = referenceOf(input.reference);
 	if (!reference.ok) return reference;
@@ -796,7 +796,11 @@ const waitingEditOf = (input) => {
 					`lines/${index}/quantity`,
 					'A quantity is a whole number from 1: pieces, or thousandths of the unit of a measured item.',
 				);
-			if (line.unitPrice !== undefined && line.unitPrice !== null && !(line.unitPrice === 0 || isAmount(line.unitPrice)))
+			if (
+				line.unitPrice !== undefined &&
+				line.unitPrice !== null &&
+				!(line.unitPrice === 0 || isPositiveAmount(line.unitPrice))
+			)
 				return refuse(`lines/${index}/unitPrice`, 'A unit price is a whole amount in minor units.');
 			lines.push({
 				variantId,

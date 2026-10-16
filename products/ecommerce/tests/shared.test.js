@@ -13,7 +13,8 @@ import {
 	statusOf,
 	statusWithRole,
 } from '../core/flow.js';
-import { allocate, fromDecimal, isPrice, percentOf, toDecimal } from '../core/money.js';
+import { allocate, percentOf } from '../core/money.js';
+import { fromDecimal, isAmount, toDecimal } from '@ss/contracts/format';
 import { readyShop } from './helpers.js';
 
 describe('the order flow', () => {
@@ -69,8 +70,8 @@ describe('money', () => {
 		expect(fromDecimal('1.005', 'USD')).toBeNull();
 		expect(fromDecimal('1.000', 'USD')).toBe(100);
 		expect(fromDecimal(null, 'USD')).toBeNull();
-		expect(isPrice(0)).toBe(true);
-		expect(isPrice(-1)).toBe(false);
+		expect(isAmount(0)).toBe(true);
+		expect(isAmount(-1)).toBe(false);
 		expect(percentOf(1000, 12.5)).toBe(125);
 		expect(percentOf(1000, 150)).toBe(1000);
 		expect(allocate(10, [1, 1, 1])).toEqual([4, 3, 3]);

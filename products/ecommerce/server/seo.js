@@ -12,7 +12,7 @@ import { defineRoute, problem } from '@ss/app-kit';
 import { attributesOf, findBySlugHistory, productTypes } from '../adapters/catalog-store.js';
 import { mediaSignatureOk } from '../adapters/crypto.js';
 import { valueLabel } from '../core/catalog.js';
-import { toDecimal } from '../core/money.js';
+import { toDecimal } from '@ss/contracts/format';
 import { htmlToText, siteAddress } from '../core/catalog-content.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { homeRate } from '../core/delivery.js';

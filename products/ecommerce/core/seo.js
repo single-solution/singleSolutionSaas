@@ -8,7 +8,7 @@
  */
 import { zonedDay } from '@ss/contracts';
 import { valueLabel } from './catalog.js';
-import { toDecimal } from './money.js';
+import { toDecimal } from '@ss/contracts/format';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */

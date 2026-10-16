@@ -24,7 +24,7 @@
  * @module
  */
 import { ADDRESS_LIMITS, countryKey, placeKey, postcodeKey } from './address.js';
-import { isPrice } from './money.js';
+import { isAmount } from '@ss/contracts/format';
 
 /**
  * Where a zone delivers ([] = any).
@@ -156,8 +156,8 @@ const checkRates = (value, label, errors) => {
 		if (!RATE_KINDS.includes(/** @type {any} */ (kind))) errors.push(`${at}: the kind is ${RATE_KINDS.join(' or ')}.`);
 		const price = rate.price ?? 0;
 		const freeOver = rate.freeOver ?? 0;
-		if (!isPrice(price)) errors.push(`${at}: the price is a whole amount in minor units.`);
-		if (!isPrice(freeOver)) errors.push(`${at}: free over is a whole amount in minor units (0 = never free).`);
+		if (!isAmount(price)) errors.push(`${at}: the price is a whole amount in minor units.`);
+		if (!isAmount(freeOver)) errors.push(`${at}: free over is a whole amount in minor units (0 = never free).`);
 		const minDays = rate.minDays ?? null;
 		const maxDays = rate.maxDays ?? minDays;
 		const said = minDays !== null || maxDays !== null;
@@ -172,8 +172,8 @@ const checkRates = (value, label, errors) => {
 		if (!RATE_CONDITIONS.includes(/** @type {any} */ (by)))
 			errors.push(`${at}: the condition is by ${RATE_CONDITIONS.join(', ')}.`);
 		else if (
-			!isPrice(min) ||
-			!isPrice(max) ||
+			!isAmount(min) ||
+			!isAmount(max) ||
 			Number(min) > most ||
 			Number(max) > most ||
 			(Number(max) > 0 && Number(max) < Number(min))

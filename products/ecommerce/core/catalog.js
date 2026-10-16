@@ -13,7 +13,7 @@
  * @module
  */
 import { isId } from '@ss/contracts';
-import { isPrice } from './money.js';
+import { isAmount } from '@ss/contracts/format';
 import { checkValue, fieldApplies, gtinOf, valueProblem } from './fields.js';
 import { DURATION_RULE, durationOf } from './durations.js';
 import { gradeForType } from './grades.js';
@@ -559,12 +559,12 @@ const variantOf = (input, existing, rules, path, errors, place = NEW_PLACE, id =
 	const mpn = input.mpn === undefined ? (existing?.mpn ?? '') : input.mpn === null ? '' : cleanText(input.mpn, LIMITS.mpn);
 	if (mpn === null) fail('mpn', `An MPN has at most ${LIMITS.mpn} characters.`);
 	const price = input.price === undefined ? existing?.price : input.price;
-	if (!isPrice(price)) fail('price', 'The price is a whole number of minor units from 0.');
+	if (!isAmount(price)) fail('price', 'The price is a whole number of minor units from 0.');
 	/** @param {string} field */
 	const optionalPrice = (field) => {
 		const value = input[field] === undefined ? (existing ? /** @type {any} */ (existing)[field] : null) : input[field];
-		if (value !== null && !isPrice(value)) fail(field, 'Give a whole number of minor units from 0, or null.');
-		return value === null || isPrice(value) ? value : null;
+		if (value !== null && !isAmount(value)) fail(field, 'Give a whole number of minor units from 0, or null.');
+		return value === null || isAmount(value) ? value : null;
 	};
 	const compareAtPrice = optionalPrice('compareAtPrice');
 	const cost = optionalPrice('cost');
@@ -599,7 +599,7 @@ const variantOf = (input, existing, rules, path, errors, place = NEW_PLACE, id =
 		id: existing?.id ?? id ?? rules.newId('var'),
 		sku: sku ?? '',
 		options,
-		price: isPrice(price) ? price : 0,
+		price: isAmount(price) ? price : 0,
 		compareAtPrice,
 		cost,
 		stock: stock.stock,

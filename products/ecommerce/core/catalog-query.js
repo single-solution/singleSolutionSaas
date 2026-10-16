@@ -8,7 +8,7 @@
  */
 import { isObject, valueLabel } from './catalog.js';
 import { levelOf } from './measure.js';
-import { MAX_AMOUNT } from './money.js';
+import { MAX_AMOUNT } from '@ss/contracts/format';
 
 /** @typedef {import('./model.js').AttributeRecord} AttributeRecord */
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */

@@ -6,7 +6,8 @@
  * @module
  */
 import { COUPON_TYPES } from './model.js';
-import { MAX_AMOUNT, allocateUnits, isPrice, percentOf, roundDown } from './money.js';
+import { allocateUnits, percentOf, roundDown } from './money.js';
+import { MAX_AMOUNT, isAmount } from '@ss/contracts/format';
 import {
 	checkAmount,
 	checkBoolean,
@@ -133,7 +134,7 @@ export const checkCouponInput = (input) => {
 		[
 			'minSubtotal',
 			() =>
-				input.minSubtotal === undefined || isPrice(input.minSubtotal)
+				input.minSubtotal === undefined || isAmount(input.minSubtotal)
 					? { ok: true, value: input.minSubtotal ?? 0 }
 					: fail('minSubtotal', 'minSubtotal is an amount in minor units from 0.'),
 		],

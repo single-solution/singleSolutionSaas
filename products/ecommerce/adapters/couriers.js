@@ -30,7 +30,7 @@ import {
 	readPath,
 } from '../core/couriers.js';
 import { orderMoney } from '../core/orders.js';
-import { toDecimal } from '../core/money.js';
+import { toDecimal } from '@ss/contracts/format';
 
 /** @typedef {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} OutboundSend */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */

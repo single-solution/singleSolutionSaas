@@ -10,7 +10,7 @@
  * @module
  */
 import { Button, Checkbox, FieldGrid, Input, Select, TextArea } from '@ss/ui';
-import { exponentOf } from '../../core/money.js';
+import { currencyDigits } from '@ss/contracts/format';
 import { PAYMENT_KINDS, PAY_LATER_KINDS, newAccount, paidByHand } from '../../core/payment-methods.js';
 import { fill } from '@ss/ui/dashboard';
 import { keyOf } from './drafts.js';
@@ -45,7 +45,7 @@ const rowsOf = (text) =>
  * @param {{ websiteId: string, off?: boolean, currency: string }} props
  */
 export function PaymentMethodsEditor({ websiteId, off, currency }) {
-	const step = exponentOf(currency) === 0 ? '1' : String(10 ** -exponentOf(currency));
+	const step = currencyDigits(currency) === 0 ? '1' : String(10 ** -currencyDigits(currency));
 	/** @param {string} label @param {unknown} value @param {(text: string) => void} set */
 	const money = (label, value, set) => (
 		<Input

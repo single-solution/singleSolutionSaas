@@ -16,7 +16,7 @@ import { LIMITS, isObject, slugify } from './catalog.js';
 import { MILLI, quantityText } from './measure.js';
 import { attributeOf } from './catalog-query.js';
 import { lineageOf } from './catalog-taxonomy.js';
-import { fromDecimal, toDecimal } from './money.js';
+import { fromDecimal, toDecimal } from '@ss/contracts/format';
 import { spentKey } from './orders.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */

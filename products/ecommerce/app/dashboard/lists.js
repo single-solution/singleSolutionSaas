@@ -21,7 +21,7 @@ import {
 	describeProblem,
 } from '@ss/ui';
 import { COURIER_CONNECTIONS } from '../../core/couriers.js';
-import { exponentOf, fromDecimal, toDecimal } from '../../core/money.js';
+import { currencyDigits, fromDecimal, toDecimal } from '@ss/contracts/format';
 import { UNIT_STATE_LIMITS } from '../../core/unit-states.js';
 import { Loaded, call, fill, useLoad } from '@ss/ui/dashboard';
 import { cleanLines, keyOf, splitIds, taxRegionLine, taxRegionOf } from './drafts.js';
@@ -533,7 +533,7 @@ const blankRate = (kind) => ({
  * @param {EditorProps & { currency: string }} props
  */
 export function ZonesEditor({ websiteId, off, currency }) {
-	const step = exponentOf(currency) === 0 ? '1' : String(10 ** -exponentOf(currency));
+	const step = currencyDigits(currency) === 0 ? '1' : String(10 ** -currencyDigits(currency));
 	/** The days as typed: '' = not said. @param {unknown} text */
 	const daysOf = (text) => (String(text ?? '').trim() === '' ? null : Number(String(text).trim()));
 	/** @param {Item} rate */
@@ -1001,7 +1001,7 @@ const R = L.rolePrices;
  * @param {EditorProps & { currency: string }} props
  */
 export function RolePricesEditor({ websiteId, off, currency }) {
-	const step = exponentOf(currency) === 0 ? '1' : String(10 ** -exponentOf(currency));
+	const step = currencyDigits(currency) === 0 ? '1' : String(10 ** -currencyDigits(currency));
 	/** @param {Item} entry */
 	const badPercent = (entry) => {
 		const percent = Number(String(entry.percent).trim() || Number.NaN);
@@ -1226,7 +1226,7 @@ const ruleOf = (draft, currency) => {
  * @param {EditorProps & { currency: string }} props
  */
 export function SegmentsEditor({ websiteId, off, currency }) {
-	const step = exponentOf(currency) === 0 ? '1' : String(10 ** -exponentOf(currency));
+	const step = currencyDigits(currency) === 0 ? '1' : String(10 ** -currencyDigits(currency));
 	return (
 		<ListEditor
 			websiteId={websiteId}

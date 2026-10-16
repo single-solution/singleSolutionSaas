@@ -14,7 +14,7 @@
  * left out; it is never guessed, and the standard list never limits what a merchant sells in. No I/O.
  * @module
  */
-import { MAX_AMOUNT } from './money.js';
+import { MAX_AMOUNT } from '@ss/contracts/format';
 
 /** Thousandths of the unit in one unit (the integer base of measured quantities). */
 export const MILLI = 1000;

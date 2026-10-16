@@ -22,7 +22,7 @@
  * @module
  */
 import { GROWTH_EVENTS, growthItem, itemsDetail } from '../core/growth-events.js';
-import { isCurrency } from '../core/money.js';
+import { isCurrency } from '@ss/app-kit/widget';
 import { ADD_TO_CART_EVENT, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountAlertsStop } from './alerts-stop.js';
 import { mountCart } from './cart.js';

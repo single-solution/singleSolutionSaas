@@ -23,7 +23,7 @@ import { derivedFacts } from './facts.js';
 import { statusOf } from './flow.js';
 import { guestKeyOf, guestRules, phoneDigitsOf, phoneRules } from './guests.js';
 import { ID_PREFIX } from './model.js';
-import { MAX_AMOUNT } from './money.js';
+import { MAX_AMOUNT } from '@ss/contracts/format';
 import { describeNumberForm, numberFormOf, numberMatcher } from './order-numbers.js';
 import {
 	MAX_NOTE,

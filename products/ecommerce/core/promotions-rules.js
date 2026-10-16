@@ -4,7 +4,7 @@
  * limit) when the merchant's staff or server write one. No I/O.
  * @module
  */
-import { MAX_AMOUNT } from './money.js';
+import { MAX_AMOUNT } from '@ss/contracts/format';
 
 /** @typedef {import('./model.js').OfferScope} OfferScope */
 
