@@ -165,6 +165,61 @@ export const markSeenBy = (data, collection, match, staffId) =>
 	]);
 
 /**
+ * What an order row of the staff list reads (`orderSummary`): not the history, payments, refunds, facts, attachments or
+ * effects of the record, which are the heavy parts. A page of orders stays small however long the orders are kept.
+ */
+const ORDER_ROW_FIELDS = Object.freeze({
+	_id: 0,
+	id: 1,
+	number: 1,
+	status: 1,
+	role: 1,
+	customer: 1,
+	'address.city': 1,
+	delivery: 1,
+	'lines.name': 1,
+	'lines.variantName': 1,
+	'lines.quantity': 1,
+	'lines.measure': 1,
+	'lines.total': 1,
+	'totals.total': 1,
+	'totals.currency': 1,
+	'payment.method': 1,
+	'payment.state': 1,
+	'shipment.courier': 1,
+	'shipment.trackingNumber': 1,
+	tags: 1,
+	placedAt: 1,
+	createdAt: 1,
+	updatedAt: 1,
+});
+
+/**
+ * What a customer row of the staff list reads (`customerView`, and the keys their spend is counted by): not the
+ * addresses or field values staff keep.
+ */
+const CUSTOMER_ROW_FIELDS = Object.freeze({
+	_id: 0,
+	id: 1,
+	userId: 1,
+	guestKey: 1,
+	name: 1,
+	email: 1,
+	phone: 1,
+	city: 1,
+	blocked: 1,
+	blockedReason: 1,
+	rtoCount: 1,
+	orderCount: 1,
+	note: 1,
+	loyaltyMember: 1,
+	tags: 1,
+	lastOrderAt: 1,
+	createdAt: 1,
+	updatedAt: 1,
+});
+
+/**
  * @param {WebsiteData} data the website's guarded merchant database
  */
 export const createFulfillmentStore = (data) => {
@@ -199,7 +254,7 @@ export const createFulfillmentStore = (data) => {
 					await orders
 						.find(
 							{ websiteId, ...filter, $and: [newerPage(after, 'createdAt', 'id')] },
-							{ ...NO_ID, sort: { createdAt: -1, id: -1 }, limit },
+							{ projection: ORDER_ROW_FIELDS, sort: { createdAt: -1, id: -1 }, limit },
 						)
 						.toArray(),
 				),
@@ -310,7 +365,11 @@ export const createFulfillmentStore = (data) => {
 					await customers
 						.find(
 							{ ...filter, $and: [.../** @type {any[]} */ (filter.$and ?? []), page] },
-							{ ...NO_ID, sort: sort === 'newest' ? { createdAt: -1, id: -1 } : { name: 1, id: 1 }, limit },
+							{
+								projection: CUSTOMER_ROW_FIELDS,
+								sort: sort === 'newest' ? { createdAt: -1, id: -1 } : { name: 1, id: 1 },
+								limit,
+							},
 						)
 						.toArray(),
 				);

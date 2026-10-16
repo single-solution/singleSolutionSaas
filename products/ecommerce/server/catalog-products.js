@@ -72,6 +72,40 @@ import { SERVER_LIMITS, bodyOf } from './service.js';
 const STAFF_SORT = /** @type {const} */ ({ field: 'createdAt', dir: -1 });
 /** The orders of the staff list: newest first, or the lowest SEO score first (E42). */
 const STAFF_ORDERS = Object.freeze(['newest', 'seo_score']);
+/**
+ * What a row of the staff list reads of a product (`staffRowOf`): not the description, specs, options or the photos
+ * and prices of each variant; the SEO score (when the feature is on) adds the copy it judges.
+ * @param {boolean} seo
+ */
+const listProjection = (seo) =>
+	Object.freeze({
+		projection: {
+			_id: 0,
+			id: 1,
+			slug: 1,
+			name: 1,
+			kind: 1,
+			typeKey: 1,
+			status: 1,
+			price: 1,
+			priceMax: 1,
+			inStock: 1,
+			trackStock: 1,
+			'variants.active': 1,
+			'variants.stock': 1,
+			'variants.sku': 1,
+			categoryIds: 1,
+			brandId: 1,
+			featured: 1,
+			stockState: 1,
+			grades: 1,
+			media: 1,
+			createdAt: 1,
+			updatedAt: 1,
+			...(seo ? { seo: 1, description: 1 } : {}),
+		},
+	});
+
 /** The products the SEO score order and filter look at: the newest this many that match (the score is never stored). */
 const SCORED_MAX = 5000;
 /** What the score sort and filter read of a product. */
@@ -432,16 +466,17 @@ export const createCatalogProducts = (product, service, common) => {
 			const found = /** @type {ProductRecord[]} */ (
 				await data
 					.collection(COLLECTIONS.products)
-					.find({ websiteId: data.websiteId, $and: [inner, ...(after ? [after] : [])] }, NO_KEYS)
+					.find({ websiteId: data.websiteId, $and: [inner, ...(after ? [after] : [])] }, listProjection(s.has('seo')))
 					.sort({ createdAt: -1, id: -1 })
 					.limit(page.fetchLimit)
 					.toArray()
 			);
 			body = page.page(found, (item) => cursorKey(item, STAFF_SORT));
 		}
+		const { money } = await s.format();
 		const items = await Promise.all(
 			body.items.map(async (item) => ({
-				...staffRowOf(item, { image: await common.media.mediaUrl(s, item.media?.[0]?.key) }),
+				...staffRowOf(item, { image: await common.media.mediaUrl(s, item.media?.[0]?.key), money, currency: s.currency }),
 				...(s.has('seo') ? { seoScore: productScore(item, (await pageTitlesOf(s)).product(item)).score } : {}),
 			})),
 		);

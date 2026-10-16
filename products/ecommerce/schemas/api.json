@@ -4401,6 +4401,8 @@
 				"totalSpent",
 				"totalSpentText",
 				"ordersPlaced",
+				"lastOrderAt",
+				"loyaltyPoints",
 				"createdAt",
 				"updatedAt"
 			],
@@ -4486,6 +4488,16 @@
 					"minimum": 0,
 					"description": "Their orders."
 				},
+				"lastOrderAt": {
+					"type": ["string", "null"],
+					"format": "date-time",
+					"description": "When they last ordered (null: never)."
+				},
+				"loyaltyPoints": {
+					"type": ["integer", "null"],
+					"minimum": 0,
+					"description": "Their loyalty points (0 without an account; null while Loyalty is off)."
+				},
 				"createdAt": {
 					"type": ["string", "null"],
 					"format": "date-time"
@@ -4518,6 +4530,8 @@
 				"totalSpent",
 				"totalSpentText",
 				"ordersPlaced",
+				"lastOrderAt",
+				"loyaltyPoints",
 				"createdAt",
 				"updatedAt",
 				"addresses",
@@ -4606,6 +4620,16 @@
 					"type": "integer",
 					"minimum": 0,
 					"description": "Their orders."
+				},
+				"lastOrderAt": {
+					"type": ["string", "null"],
+					"format": "date-time",
+					"description": "When they last ordered (null: never)."
+				},
+				"loyaltyPoints": {
+					"type": ["integer", "null"],
+					"minimum": 0,
+					"description": "Their loyalty points (0 without an account; null while Loyalty is off)."
 				},
 				"createdAt": {
 					"type": ["string", "null"],
@@ -9116,6 +9140,9 @@
 				"role",
 				"customer",
 				"city",
+				"delivery",
+				"lineCount",
+				"lines",
 				"itemCount",
 				"total",
 				"totalText",
@@ -9164,6 +9191,82 @@
 				"city": {
 					"type": "string",
 					"description": "The delivery city ('' without an address)."
+				},
+				"delivery": {
+					"type": "object",
+					"description": "How it is delivered: the method, the name of the delivery rate the shopper picked ('' without delivery zones or rates) and the delivery city ('' without an address).",
+					"required": ["method", "rateName", "city"],
+					"additionalProperties": false,
+					"properties": {
+						"method": {
+							"type": "string",
+							"enum": ["delivery", "pickup", "none"]
+						},
+						"rateName": {
+							"type": "string"
+						},
+						"city": {
+							"type": "string"
+						}
+					}
+				},
+				"lineCount": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "All lines of the order; lines shows the first five."
+				},
+				"lines": {
+					"type": "array",
+					"maxItems": 5,
+					"description": "The first five lines, in order.",
+					"items": {
+						"type": "object",
+						"required": ["name", "variantName", "quantity", "measure", "total", "totalText"],
+						"additionalProperties": false,
+						"properties": {
+							"name": {
+								"type": "string",
+								"description": "The product name when it was ordered."
+							},
+							"variantName": {
+								"type": "string",
+								"description": "For example 'Blue / Large' ('' without options)."
+							},
+							"quantity": {
+								"type": "integer",
+								"minimum": 0,
+								"description": "Pieces, or thousandths of the unit of a measured item (see measure)."
+							},
+							"measure": {
+								"oneOf": [
+									{
+										"type": "object",
+										"required": ["unit", "quantityText"],
+										"additionalProperties": false,
+										"properties": {
+											"unit": {
+												"type": "string"
+											},
+											"quantityText": {
+												"type": "string"
+											}
+										}
+									},
+									{
+										"type": "null"
+									}
+								],
+								"description": "An item sold in a unit of its own: the unit and the quantity in units as text; null for pieces."
+							},
+							"total": {
+								"type": "integer",
+								"description": "What the line comes to, minor units."
+							},
+							"totalText": {
+								"type": "string"
+							}
+						}
+					}
 				},
 				"itemCount": {
 					"type": "integer",
@@ -10042,6 +10145,10 @@
 				"typeKey",
 				"status",
 				"price",
+				"priceMax",
+				"priceText",
+				"priceMaxText",
+				"currency",
 				"inStock",
 				"stock",
 				"trackStock",
@@ -10084,6 +10191,23 @@
 					"type": "integer",
 					"minimum": 0,
 					"description": "The lowest active variant price, minor units."
+				},
+				"priceMax": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "The highest active variant price, minor units (equal to price with one price)."
+				},
+				"priceText": {
+					"type": "string",
+					"description": "price as text, by the Format."
+				},
+				"priceMaxText": {
+					"type": "string",
+					"description": "priceMax as text, by the Format."
+				},
+				"currency": {
+					"type": "string",
+					"description": "The shop currency."
 				},
 				"inStock": {
 					"type": "boolean"

@@ -316,12 +316,14 @@ export const pageOf = (product, context) => {
 };
 
 /**
- * A row of the staff's product list.
+ * A row of the staff's product list: the variants counted, the price range of the active ones (lowest `price`, highest
+ * `priceMax`, with their texts), the stock of all of them added up and the first photo.
  * @param {ProductRecord} product
- * @param {{ image: string | null }} context
+ * @param {{ image: string | null, money: (amount: number, currency: string) => string, currency: string }} context
  */
-export const staffRowOf = (product, { image }) => {
+export const staffRowOf = (product, { image, money, currency }) => {
 	const active = product.variants.filter((variant) => variant.active);
+	const highest = Math.max(product.price, product.priceMax ?? product.price);
 	return {
 		id: product.id,
 		slug: product.slug,
@@ -330,6 +332,10 @@ export const staffRowOf = (product, { image }) => {
 		typeKey: product.typeKey ?? null,
 		status: product.status,
 		price: product.price,
+		priceMax: highest,
+		priceText: money(product.price, currency),
+		priceMaxText: money(highest, currency),
+		currency,
 		inStock: product.inStock,
 		stock: active.reduce((sum, variant) => sum + variant.stock, 0),
 		trackStock: product.trackStock,

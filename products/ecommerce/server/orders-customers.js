@@ -277,6 +277,42 @@ export const createCustomers = (service) => {
 		})),
 	});
 
+	/**
+	 * The loyalty points of a page of customers, read in one query for all of them (a member's account is keyed by their
+	 * user id, a guest's by their customer id; no account: 0). Null while the loyalty feature is off. The balance is the
+	 * one the account holds; lots that expired are written off the next time the account is read.
+	 * @param {Site} s @param {Array<{ id?: string, userId?: string | null }>} rows
+	 * @returns {Promise<(row: { id?: string, userId?: string | null }) => number | null>}
+	 */
+	const pointsOf = async (s, rows) => {
+		if (!s.has('loyalty')) return () => null;
+		const userIds = rows.map((row) => row.userId).filter((id) => typeof id === 'string' && id !== '');
+		const customerIds = rows
+			.filter((row) => !row.userId)
+			.map((row) => row.id)
+			.filter((id) => typeof id === 'string' && id !== '');
+		const owners = [
+			...(userIds.length > 0 ? [{ userId: { $in: userIds } }] : []),
+			...(customerIds.length > 0 ? [{ customerId: { $in: customerIds } }] : []),
+		];
+		/** @type {Map<string, number>} */
+		const balances = new Map();
+		if (owners.length > 0) {
+			const accounts = await (
+				await s.data()
+			)
+				.collection(COLLECTIONS.loyalty)
+				.find(
+					{ websiteId: s.websiteId, $or: owners },
+					{ projection: { _id: 0, userId: 1, customerId: 1, balance: 1 }, maxTimeMS: 3000 },
+				)
+				.toArray();
+			for (const account of accounts)
+				balances.set(account.userId ? `u:${account.userId}` : `c:${account.customerId}`, Number(account.balance) || 0);
+		}
+		return (row) => balances.get(row.userId ? `u:${row.userId}` : `c:${row.id}`) ?? 0;
+	};
+
 	/** @param {any} ctx */
 	const list = async (ctx) => {
 		const sort = sortOf(ctx);
@@ -285,10 +321,9 @@ export const createCustomers = (service) => {
 		const s = await service.site(ctx);
 		const store = await storeOf(s);
 		const rows = await store.customers.list({ ...query, sort, after: page.after, limit: page.fetchLimit });
-		const spent = await store.orders.spent(rows);
-		const { money } = await s.format();
+		const [spent, points, { money }] = await Promise.all([store.orders.spent(rows), pointsOf(s, rows), s.format()]);
 		return page.respond(
-			rows.map((row) => customerView(row, spent.get(spentKey(row)) ?? { total: 0, count: 0 }, s.currency, money)),
+			rows.map((row) => customerView(row, spent.get(spentKey(row)) ?? { total: 0, count: 0 }, s.currency, money, points(row))),
 			(view) => (sort === 'newest' ? [view.createdAt ?? '', view.id] : [view.name, view.id]),
 		);
 	};
@@ -335,7 +370,7 @@ export const createCustomers = (service) => {
 		const { money } = await s.format();
 		const values = record?.fields ?? {};
 		return {
-			...customerView(shown, spent, s.currency, money),
+			...customerView(shown, spent, s.currency, money, (await pointsOf(s, [shown]))(shown)),
 			// the addresses staff keep and a guest's orders delivered to (E46)
 			addresses: record?.addresses ?? [],
 			recentOrders: recent.map((order) => orderSummary(order, flow, money)),

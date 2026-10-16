@@ -10,7 +10,7 @@ import { factsOf } from './facts.js';
 import { phoneSearchOf } from './guests.js';
 import { CLOSED_ROLES, moveOf, nextStatuses, statusOf } from './flow.js';
 import { ID_PREFIX, STATUS_ROLES } from './model.js';
-import { MAX_MEASURED, piecesOf } from './measure.js';
+import { MAX_MEASURED, measureView, piecesOf } from './measure.js';
 import { checkAttachmentInputs } from './attachments.js';
 import { isPositiveAmount } from '@ss/contracts/format';
 import { LIST_KEY } from './named-lists.js';
@@ -1026,8 +1026,13 @@ export const missingSerials = (order, rules, stage) =>
  */
 export const statusLabel = (flow, key) => statusOf(flow, key)?.label ?? key;
 
+/** Lines an order row in the staff list shows; `lineCount` counts them all. */
+export const ORDER_ROW_LINES = 5;
+
 /**
- * An order in the staff list.
+ * An order in the staff list: who, where it goes and how (`delivery`: the method, the rate name the shopper picked and
+ * the city), the first {@link ORDER_ROW_LINES} lines (name, variant, quantity, total) with all of them counted in
+ * `lineCount`, the money, the payment and the shipment.
  * @param {OrderRecord} order
  * @param {OrderFlow} flow
  * @param {Money} money
@@ -1040,6 +1045,21 @@ export const orderSummary = (order, flow, money) => ({
 	role: order.role,
 	customer: { ...order.customer },
 	city: order.address?.city ?? '',
+	delivery: {
+		method: order.delivery?.method ?? 'none',
+		rateName: order.delivery?.rateName ?? '',
+		city: order.address?.city ?? '',
+	},
+	lineCount: order.lines.length,
+	lines: order.lines.slice(0, ORDER_ROW_LINES).map((line) => ({
+		name: line.name,
+		variantName: line.variantName,
+		quantity: line.quantity,
+		// an item sold in a unit of its own: its unit and the quantity in units (`quantity` is thousandths)
+		measure: measureView(line.quantity, line.measure),
+		total: line.total,
+		totalText: money(line.total, order.totals.currency),
+	})),
 	itemCount: order.lines.reduce((sum, line) => sum + piecesOf(line), 0),
 	total: order.totals.total,
 	totalText: money(order.totals.total, order.totals.currency),
@@ -1237,8 +1257,9 @@ export const spentKey = (customer) => (customer.userId ? `u:${customer.userId}` 
  * @param {{ total: number, count: number }} spent what they paid (paid − refunded) over all their orders, and how many
  * @param {string} currency
  * @param {Money} money
+ * @param {number | null} [points] their loyalty points (null: the loyalty feature is off)
  */
-export const customerView = (customer, spent, currency, money) => ({
+export const customerView = (customer, spent, currency, money, points = null) => ({
 	id: customer.id ?? '',
 	userId: customer.userId ?? '',
 	guest: !customer.userId,
@@ -1252,6 +1273,8 @@ export const customerView = (customer, spent, currency, money) => ({
 	totalSpent: spent.total,
 	totalSpentText: money(spent.total, currency),
 	ordersPlaced: spent.count,
+	lastOrderAt: customer.lastOrderAt ? wire(customer.lastOrderAt) : null,
+	loyaltyPoints: points,
 	createdAt: customer.createdAt ? wire(customer.createdAt) : null,
 	updatedAt: customer.updatedAt ? wire(customer.updatedAt) : null,
 });
