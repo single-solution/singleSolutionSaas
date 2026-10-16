@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IMPORT_LIMITS, defineRoute } from '../src/index.js';
+import { summaryValues } from '../src/imports.js';
 import { DOMAIN, manifest, openDb, productRoutes, setup } from './helpers.js';
 
 /** Notes import: the product's own check in import mode (given ids and past times allowed). */
@@ -160,9 +161,10 @@ describe('import routes (K10)', () => {
 		expect(await notes.countDocuments({})).toBe(2);
 		// one activity entry per call, never copied
 		const entries = await db.collection('ss_notes_activity').find({}).sort({ at: 1 }).toArray();
-		expect(entries.map((entry) => [entry.action, entry.detail, entry.copy])).toEqual([
-			['import.notes', '2 inserted, 0 updated, 0 failed', 'none'],
-			['import.notes', '0 inserted, 2 updated, 0 failed', 'none'],
+		// what changed as values (codes and numbers), never an English sentence (A8)
+		expect(entries.map((entry) => [entry.action, entry.values, entry.detail, entry.copy])).toEqual([
+			['import.notes', { inserted: 2, updated: 0, failed: 0 }, undefined, 'none'],
+			['import.notes', { inserted: 0, updated: 2, failed: 0 }, undefined, 'none'],
 		]);
 		expect(entries[0]?.actor).toEqual({ kind: 'user', id: 'usr_1', name: 'Importer' });
 		expect(entries[1]?.actor).toEqual({ kind: 'server', id: 'server', name: 'Server' });
@@ -177,7 +179,9 @@ describe('import routes (K10)', () => {
 		});
 		const finished = await call('POST', '/v1/import/finish', { token: server.token });
 		expect(await finished.json()).toEqual({ finished: true, notes: 2 });
-		expect(await db.collection('ss_notes_activity').countDocuments({ action: 'import.finish' })).toBe(1);
+		const finishedEntry = await db.collection('ss_notes_activity').findOne({ action: 'import.finish' });
+		expect(finishedEntry?.values).toEqual({ notes: 2 });
+		expect(finishedEntry?.detail).toBeUndefined();
 		await client.close();
 	});
 
@@ -331,8 +335,22 @@ describe('import routes (K10)', () => {
 		const status = await call('GET', '/v1/import/status', { token: server.token });
 		expect((await status.json()).imported).toMatchObject({ notes: 0 });
 		const entries = await db.collection('ss_notes_activity').find({ action: 'import.notes.prune' }).toArray();
-		expect(entries.map((entry) => entry.detail)).toEqual(['1 removed', '1 removed', '0 removed', '3 removed']);
+		expect(entries.map((entry) => entry.values)).toEqual([
+			{ removed: 1, more: false },
+			{ removed: 1, more: false },
+			{ removed: 0, more: false },
+			{ removed: 3, more: false },
+		]);
 		await client.close();
+	});
+
+	it('keep only numbers, yes/no and short texts of a finish summary, at most 20', () => {
+		expect(summaryValues({ notes: 2, done: true, next: 'not_1', list: [1], nested: { a: 1 }, long: 'x'.repeat(201) })).toEqual({
+			notes: 2,
+			done: true,
+			next: 'not_1',
+		});
+		expect(Object.keys(summaryValues(Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`n${i}`, i]))))).toHaveLength(20);
 	});
 
 	it('prune keys of several fields, at most 1,000 a call', async () => {

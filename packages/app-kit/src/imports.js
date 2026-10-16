@@ -8,8 +8,8 @@
  *   (fields the source no longer has go, IMP-22; `createdAt` is kept when the record has none), so a re-run gives
  *   exactly the source again. The tenant is stamped. It answers `{ inserted, updated, failed: [{ line, id, errors }],
  *   dryRun }` (`id`: the record's key). It sends no message, event, alert or activity copy and holds no stock; each
- *   call (not a dry run) writes one activity entry (`import.<collection>` with the counts), kept in the merchant
- *   database only.
+ *   call (not a dry run) writes one activity entry (`import.<collection>`, values `{ inserted, updated, failed }`:
+ *   codes and numbers for texts to put into words, A8), kept in the merchant database only.
  * - `POST /v1/import/:collection/prune?dryRun=1` takes `{ keep: [<key>, …], after?: <key>, through?: <key> }` (JSON, at
  *   most 1,000 keys): the records an import wrote whose key lies after `after` and up to `through` (open ends when left
  *   out) and is not kept are removed, at most 1,000 per call (`more: true`: call again). The importer sends the
@@ -17,7 +17,8 @@
  *   one open, so records deleted in the source go too (the final pass, IMP-22). Only records written by an import are
  *   ever removed (the kit notes each key it writes in `ss_<product>_imports`): records the merchant made in the product
  *   itself, ready-made ones and live totals stay, and a wrong keep list can only take away what a re-import restores.
- *   A dry run answers what would go. Each real call writes one activity entry (`import.<collection>.prune`).
+ *   A dry run answers what would go. Each real call writes one activity entry (`import.<collection>.prune`, values
+ *   `{ removed, more }`).
  * - `POST /v1/import/finish` runs the product's `finish` (derived values) and answers `{ finished: true, …summary }`.
  *   A finish that works in bounded batches reads `ctx.query.after` and answers `more: true` with `next` while work is
  *   left; the importer calls again with `?after=<next>` until `more` is false.
@@ -91,6 +92,29 @@ const KEY_TEXT = /^[^\u0000-\u001f]{1,200}$/;
 
 /** @param {string} message @param {string} [path] @returns {ImportError[]} */
 const errorOf = (message, path = '') => [{ path, message }];
+
+/** Most values one activity entry keeps (the kit's activity log). */
+const MAX_ENTRY_VALUES = 20;
+
+/**
+ * What a product's `finish` answered, as an activity entry's values (A8: codes, numbers and yes/no, never a sentence):
+ * its numbers, yes/no and short texts, at most {@link MAX_ENTRY_VALUES}.
+ * @param {Record<string, unknown>} summary
+ * @returns {Record<string, string | number | boolean>}
+ */
+export const summaryValues = (summary) =>
+	/** @type {Record<string, string | number | boolean>} */ (
+		Object.fromEntries(
+		Object.entries(summary)
+			.filter(
+				([, value]) =>
+					(typeof value === 'number' && Number.isFinite(value)) ||
+					typeof value === 'boolean' ||
+					(typeof value === 'string' && value.length <= 200),
+			)
+			.slice(0, MAX_ENTRY_VALUES),
+		)
+	);
 
 /**
  * The text of a key's values (the ledger's `key`): the value of a one-field key, else the values joined by U+001F.
@@ -342,7 +366,7 @@ export const createImports = ({ options, now, record, business }) => {
 					action: `import.${name}`,
 					target: name,
 					label: name,
-					detail: `${inserted} inserted, ${updated} updated, ${failed.length} failed`,
+					values: { inserted, updated, failed: failed.length },
 				},
 				{ copy: false },
 			);
@@ -426,7 +450,7 @@ export const createImports = ({ options, now, record, business }) => {
 				action: `import.${name}.prune`,
 				target: name,
 				label: name,
-				detail: `${removed} removed${more ? ', more to remove' : ''}`,
+				values: { removed, more },
 			},
 			{ copy: false },
 		);
@@ -441,7 +465,7 @@ export const createImports = ({ options, now, record, business }) => {
 		const summary = options?.finish ? await options.finish(ctx) : {};
 		await record(
 			ctx,
-			{ actor: actorOf(ctx), action: 'import.finish', target: 'import', label: 'import', detail: JSON.stringify(summary) },
+			{ actor: actorOf(ctx), action: 'import.finish', target: 'import', label: 'import', values: summaryValues(summary) },
 			{ copy: false },
 		);
 		return { finished: true, ...summary };

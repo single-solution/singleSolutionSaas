@@ -151,9 +151,10 @@ describe('importing a store into a product (K10, ss-import)', () => {
 		});
 		// each call wrote one activity entry, never copied to Accounts; the dry run wrote none
 		const activity = await sys.call('GET', '/v1/activity?action=import.notes', { token: tokens.server });
-		expect(activity.json.items.map((/** @type {{ detail: string }} */ entry) => entry.detail)).toEqual([
-			'0 inserted, 3 updated, 0 failed',
-			'3 inserted, 0 updated, 0 failed',
+		// what changed as values for texts to put into words (A8), never an English sentence
+		expect(activity.json.items.map((/** @type {{ values: unknown }} */ entry) => entry.values)).toEqual([
+			{ inserted: 0, updated: 3, failed: 0 },
+			{ inserted: 3, updated: 0, failed: 0 },
 		]);
 		expect(await merchantDb.collection('ss_notes_activity').countDocuments({ copy: { $ne: 'none' } })).toBe(0);
 	});

@@ -282,7 +282,7 @@ describe('import routes', () => {
 		expect(copies).toEqual([{ ...copy, values: {}, at: '2024-05-02T10:00:00.000Z' }]);
 		// one activity entry per call, in the merchant database only
 		const logged = (await env.serverCall('GET', '/v1/activity?action=import.users')).json.items;
-		expect(logged[0]).toMatchObject({ action: 'import.users', detail: '4 inserted, 0 updated, 0 failed' });
+		expect(logged[0]).toMatchObject({ action: 'import.users', values: { inserted: 4, updated: 0, failed: 0 } });
 		expect(copies).toHaveLength(1);
 	});
 

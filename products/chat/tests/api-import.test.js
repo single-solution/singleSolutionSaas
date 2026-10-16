@@ -434,9 +434,9 @@ describe('import (K10): a run, a re-run and finish', () => {
 		});
 		// the activity log keeps one entry per call, never a message
 		const activity = (await sys.serverCall('GET', '/v1/activity?action=import.messages')).json.items;
-		expect(activity.map((/** @type {any} */ e) => e.detail)).toEqual([
-			'0 inserted, 5 updated, 0 failed',
-			'5 inserted, 0 updated, 0 failed',
+		expect(activity.map((/** @type {any} */ e) => e.values)).toEqual([
+			{ inserted: 0, updated: 5, failed: 0 },
+			{ inserted: 5, updated: 0, failed: 0 },
 		]);
 	});
 
