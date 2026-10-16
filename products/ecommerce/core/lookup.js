@@ -401,7 +401,7 @@ export const gradePrices = (product, shown) => {
  * @param {unknown} list
  * @returns {Map<string, string>}
  */
-export const gradeLabels = (list) =>
+export const gradeNames = (list) =>
 	new Map(
 		(Array.isArray(list) ? list : [])
 			.filter((grade) => grade && typeof grade.key === 'string')

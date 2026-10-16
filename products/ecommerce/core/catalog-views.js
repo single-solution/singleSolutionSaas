@@ -6,6 +6,7 @@
  * @module
  */
 import { summarize, valueLabel, variantInStock, variantName } from './catalog.js';
+import { gradeLabels } from './compare.js';
 import { gradeView } from './grades.js';
 import { levelOf } from './measure.js';
 
@@ -35,16 +36,6 @@ export const shownRange = (product, shown) => {
 		compareAtPrice: low ? low.was : null,
 		priceMax: prices.length > 0 ? Math.max(...prices.map((found) => found.price)) : product.priceMax,
 	};
-};
-
-/**
- * The grade labels of a product's active variants, in the order of the grades list.
- * @param {ProductRecord} product
- * @param {ReadonlyMap<string, Grade>} grades
- */
-const gradeLabels = (product, grades) => {
-	const keys = new Set(product.variants.filter((v) => v.active && v.grade).map((v) => v.grade));
-	return [...grades.values()].filter((grade) => keys.has(grade.key)).map((grade) => grade.label);
 };
 
 /**
@@ -160,11 +151,11 @@ export const sizeOf = (file) =>
  * A product card (grid and search results), at its shown prices (G4).
  * @param {ProductRecord} product
  * @param {{ currency: string, image: string | null, url: string, brand: { id: string, name: string, slug?: string } | null,
- *   grades: ReadonlyMap<string, Grade>, cardImages?: Card['cardImages'], shown: Shown,
+ *   grades: Parameters<typeof gradeLabels>[1], categories: ReadonlyMap<string, { path: string[] }>, cardImages?: Card['cardImages'], shown: Shown,
  *   measure?: import('./measure.js').Measure | null }} context `measure`: its type's, while Sell in any unit is on
  * @returns {Card}
  */
-export const cardOf = (product, { currency, image, url, brand, grades, cardImages = [], shown, measure = null }) => ({
+export const cardOf = (product, { currency, image, url, brand, grades, categories, cardImages = [], shown, measure = null }) => ({
 	id: product.id,
 	slug: product.slug,
 	name: product.name,
@@ -178,7 +169,7 @@ export const cardOf = (product, { currency, image, url, brand, grades, cardImage
 	inStock: product.inStock,
 	rating: product.rating,
 	brand,
-	grades: gradeLabels(product, grades),
+	grades: gradeLabels(product, grades, categories),
 	variantCount: product.variants.filter((variant) => variant.active).length,
 	featured: product.featured,
 	cardImages,

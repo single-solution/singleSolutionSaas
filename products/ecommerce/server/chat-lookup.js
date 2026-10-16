@@ -32,7 +32,7 @@ import {
 	chatDeal,
 	chatFilters,
 	filtersGiven,
-	gradeLabels,
+	gradeNames,
 	gradePrices,
 	limitOf,
 	matchingVariant,
@@ -214,7 +214,7 @@ export const createChatLookup = (product, service, media) => {
 			money,
 			date,
 			/** @param {ProductRecord} item */
-			labels: (item) => gradeLabels([...gradesOf(item).values()]),
+			labels: (item) => gradeNames([...gradesOf(item).values()]),
 			/** @param {ProductRecord} item @param {import('../core/measure.js').Measure | null} [measure] */
 			stockLeft:
 				(item, measure = null) =>

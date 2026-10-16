@@ -689,14 +689,16 @@ describe('listings', () => {
 describe('views', () => {
 	it('builds cards and pages without stock counts', () => {
 		const product = { ...record({ seo: { title: 'T', description: 'D' }, specs: { att_n: 3 } }), specs: { att_n: 3, gone: 1 } };
-		const grades = gradesByKey([{ key: 'a', label: 'A', description: '' }, { nothing: true }]);
+		const gradeList = [{ key: 'a', label: 'A', description: '' }];
+		const grades = gradesByKey([...gradeList, { nothing: true }]);
 		expect(shownRange({ ...product, variants: [] }, listShown)).toMatchObject({ compareAtPrice: null });
 		const card = cardOf(product, {
 			currency: 'EUR',
 			image: null,
 			url: 'u',
 			brand: null,
-			grades,
+			grades: gradeList,
+			categories: new Map(),
 			shown: listShown,
 		});
 		expect(card.rating).toEqual(product.rating);

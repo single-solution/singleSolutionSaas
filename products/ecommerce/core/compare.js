@@ -54,7 +54,8 @@ export const compareRows = (products, attributes) =>
 		.filter((row) => row.values.some((value) => value !== null));
 
 /**
- * The grade labels of a product's active variants (in the grades list's order, once each).
+ * The grade labels of a product's active variants (in the grades list's order, once each), by the grades as the
+ * product's category defines them. The one place cards and Compare get them.
  * @param {Pick<ProductRecord, 'variants' | 'categoryIds'>} product
  * @param {Array<{ key: string, label?: string, categoryId?: string | null }>} grades
  * @param {ReadonlyMap<string, { path: string[] }>} categories every category by id

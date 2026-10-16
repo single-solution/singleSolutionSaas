@@ -7,7 +7,7 @@ import { DEFAULT_FORMAT, formatMoney } from '@ss/contracts/format';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	cardVariant,
-	gradeLabels,
+	gradeNames,
 	limitOf,
 	orderSummary,
 	priceRange,
@@ -118,11 +118,11 @@ describe('core/lookup', () => {
 		expect(searchTerms(42)).toEqual([]);
 		expect(searchTerms('1 2 3 4 5 6 7 8')).toHaveLength(6);
 		expect(escapeRegex('(x)')).toBe('\\(x\\)');
-		expect([...gradeLabels([{ key: 'a', label: 'Like new' }, { key: 'b', label: '' }, { label: 'x' }, null])]).toEqual([
+		expect([...gradeNames([{ key: 'a', label: 'Like new' }, { key: 'b', label: '' }, { label: 'x' }, null])]).toEqual([
 			['a', 'Like new'],
 			['b', 'b'],
 		]);
-		expect(gradeLabels({ not: 'a list' }).size).toBe(0);
+		expect(gradeNames({ not: 'a list' }).size).toBe(0);
 	});
 
 	it('picks the card variant and the price range at the shown prices', () => {

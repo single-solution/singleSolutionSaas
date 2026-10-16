@@ -143,8 +143,8 @@ const createCards = (common, service) => {
 						image: await common.media.mediaUrl(s, main?.sizes?.card ?? main?.key),
 						url,
 						brand: brand ? { id: brand.id, name: brand.name, slug: brand.slug } : null,
-						// each product's grades: its category's (or the nearest one above it) entries first (E45)
-						grades: gradesFor(gradeList, lineageOf(item.categoryIds, categories)),
+						grades: gradeList,
+						categories,
 						cardImages: await Promise.all(
 							cardPhotos(item).map(async (file) => ({
 								url: await common.media.mediaUrl(s, file.sizes?.card ?? file.key),
