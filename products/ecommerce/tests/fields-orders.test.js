@@ -33,7 +33,15 @@ const place = async (fields) => {
 		body: {
 			lines: [{ productId: ids.mug.id, quantity: 1 }],
 			payment: 'cod',
-			address: { name: 'Sam Lee', phone: '+12025550143', line1: '1 Main Street', city: 'Springfield', country: 'US' },
+			address: {
+				name: 'Sam Lee',
+				phone: '+12025550143',
+				line1: '1 Main Street',
+				city: 'Springfield',
+				region: 'IL',
+				postalCode: '62701',
+				country: 'US',
+			},
 			...(fields ? { fields } : {}),
 		},
 		headers: { 'x-forwarded-for': `10.8.0.${ip}`, 'ss-sign-in': token, 'idempotency-key': `fields-${ip}` },

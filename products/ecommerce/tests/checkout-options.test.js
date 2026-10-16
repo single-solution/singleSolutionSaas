@@ -12,7 +12,15 @@ let shop;
 let ip = 0;
 let users = 0;
 
-const ADDRESS = { name: 'Sara Shopper', phone: '+15550001111', line1: '1 Main Street', city: 'Springfield', country: 'US' };
+const ADDRESS = {
+	name: 'Sara Shopper',
+	phone: '+15550001111',
+	line1: '1 Main Street',
+	city: 'Springfield',
+	region: 'IL',
+	postalCode: '62701',
+	country: 'US',
+};
 
 /**
  * A visitor request from a fresh address.
@@ -522,7 +530,14 @@ describe('guest checkout and order keys (E21)', () => {
 			phoneRequired: false,
 		});
 		const item = await shop.seedProduct({ price: 1000, stock: 10 });
-		const noPhone = { name: 'Ella Guest', line1: '1 Main Street', city: 'Springfield', country: 'US' };
+		const noPhone = {
+			name: 'Ella Guest',
+			line1: '1 Main Street',
+			city: 'Springfield',
+			region: 'IL',
+			postalCode: '62701',
+			country: 'US',
+		};
 		/** @param {Record<string, unknown>} customer */
 		const asGuest = (customer) =>
 			place({
@@ -546,7 +561,7 @@ describe('guest checkout and order keys (E21)', () => {
 			.toArray();
 		expect(records).toHaveLength(1);
 		expect(records[0]).toMatchObject({ guest: true, email: 'ella@example.com', orderCount: 2, phone: '+15550003333' });
-		expect((await orderRecord(first.json.order.id)).address).toMatchObject({ phone: '', region: '' });
+		expect((await orderRecord(first.json.order.id)).address).toMatchObject({ phone: '', region: 'IL' });
 		// another email guest without a phone is another record (no clash on the empty phone, as the phone-only index had)
 		const other = await asGuest({ email: 'otto@example.com' });
 		expect(other.status).toBe(201);

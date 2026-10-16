@@ -417,7 +417,15 @@ describe('every way an order moves goes through the engine', () => {
 				body: {
 					lines: [{ productId: item.id }],
 					payment,
-					address: { name: 'Eve', phone: '+15550001111', line1: '1 Main', city: 'Springfield', country: 'US' },
+					address: {
+						name: 'Eve',
+						phone: '+15550001111',
+						line1: '1 Main',
+						city: 'Springfield',
+						region: 'IL',
+						postalCode: '62701',
+						country: 'US',
+					},
 				},
 				headers: { 'ss-sign-in': token, 'idempotency-key': key, 'x-forwarded-for': `10.77.0.${key.length}` },
 			});

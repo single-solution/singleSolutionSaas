@@ -400,7 +400,15 @@ describe('K3: visitor calls from the merchant’s server', () => {
 			'/v1/shop/orders',
 			{
 				...body,
-				address: { name: 'Sana', phone: '+15550002222', line1: '2 High Street', city: 'Springfield', country: 'US' },
+				address: {
+					name: 'Sana',
+					phone: '+15550002222',
+					line1: '2 High Street',
+					city: 'Springfield',
+					region: 'IL',
+					postalCode: '62701',
+					country: 'US',
+				},
 			},
 			{ 'ss-sign-in': signIn, 'ss-visitor-ip': '203.0.113.7', 'idempotency-key': 'srv-2' },
 		);
@@ -690,7 +698,15 @@ describe('K7 and K8: Format and business time zone', () => {
 			{
 				lines: [{ productId: item.id, quantity: 1 }],
 				payment: 'cod',
-				address: { name: 'N', phone: '+15550003333', line1: '3 Main Street', city: 'Springfield', country: 'US' },
+				address: {
+					name: 'N',
+					phone: '+15550003333',
+					line1: '3 Main Street',
+					city: 'Springfield',
+					region: 'IL',
+					postalCode: '62701',
+					country: 'US',
+				},
 			},
 			{ 'ss-sign-in': signIn, 'ss-visitor-ip': '203.0.113.9', 'idempotency-key': 'new-year' },
 		);

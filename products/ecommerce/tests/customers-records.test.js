@@ -13,7 +13,15 @@ let shop;
 let users = 0;
 let keys = 0;
 
-const ADDRESS = { name: 'Gina Guest', phone: '+15550004001', line1: '1 Main Street', city: 'Springfield', country: 'US' };
+const ADDRESS = {
+	name: 'Gina Guest',
+	phone: '+15550004001',
+	line1: '1 Main Street',
+	city: 'Springfield',
+	region: 'IL',
+	postalCode: '62701',
+	country: 'US',
+};
 
 /** @param {string} method @param {string} path @param {unknown} [body] */
 const api = async (method, path, body) => {

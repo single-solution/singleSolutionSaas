@@ -11,7 +11,15 @@ import { ORIGIN, readyShop } from './helpers.js';
 let shop;
 let users = 0;
 
-const ADDRESS = { name: 'Sara Shopper', phone: '+15550001111', line1: '1 Main Street', city: 'Springfield', country: 'US' };
+const ADDRESS = {
+	name: 'Sara Shopper',
+	phone: '+15550001111',
+	line1: '1 Main Street',
+	city: 'Springfield',
+	region: 'IL',
+	postalCode: '62701',
+	country: 'US',
+};
 
 /** @param {{ json: any }} response */
 const codeOf = (response) =>

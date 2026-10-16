@@ -33,7 +33,8 @@ const ADDRESS = {
 	line2: '',
 	city: 'Springfield',
 	area: '',
-	postalCode: '',
+	region: 'IL',
+	postalCode: '62701',
 	country: 'US',
 	notes: '',
 };

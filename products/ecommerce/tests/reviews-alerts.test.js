@@ -27,7 +27,15 @@ let omar;
 let ip = 0;
 const SARA = 'usr_shopper0000001';
 const OMAR = 'usr_shopper0000002';
-const ADDRESS = { name: 'Sara Shopper', phone: '+15550001111', line1: '1 Main Street', city: 'Springfield', country: 'US' };
+const ADDRESS = {
+	name: 'Sara Shopper',
+	phone: '+15550001111',
+	line1: '1 Main Street',
+	city: 'Springfield',
+	region: 'IL',
+	postalCode: '62701',
+	country: 'US',
+};
 
 beforeAll(async () => {
 	shop = await readyShop();

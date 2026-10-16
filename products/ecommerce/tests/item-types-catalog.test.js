@@ -41,7 +41,15 @@ const place = async (lines) => {
 		body: {
 			lines: lines.map((line) => ({ quantity: 1, ...line })),
 			payment: 'cod',
-			address: { name: 'Alex Morgan', phone: '+12025550143', line1: '1 Main Street', city: 'New York', country: 'US' },
+			address: {
+				name: 'Alex Morgan',
+				phone: '+12025550143',
+				line1: '1 Main Street',
+				city: 'New York',
+				region: 'NY',
+				postalCode: '10001',
+				country: 'US',
+			},
 		},
 		headers: { 'x-forwarded-for': `10.7.0.${ip}`, 'ss-sign-in': token, 'idempotency-key': `types-${ip}` },
 	});

@@ -20,7 +20,15 @@ let ip = 0;
 const FABRIC = Object.freeze({ unit: 'bolt', decimals: 1, step: 500, min: 1000, max: 20_000, standard: null });
 /** Every feature but stock per location (stock is given as one number). */
 const FEATURES = ALL.filter((feature) => feature !== 'multi_location');
-const ADDRESS = { name: 'Alex Morgan', phone: '+12025550143', line1: '1 Main Street', city: 'New York', country: 'US' };
+const ADDRESS = {
+	name: 'Alex Morgan',
+	phone: '+12025550143',
+	line1: '1 Main Street',
+	city: 'New York',
+	region: 'NY',
+	postalCode: '10001',
+	country: 'US',
+};
 
 /** @param {string} method @param {string} path @param {unknown} [body] */
 const api = async (method, path, body) => {

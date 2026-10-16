@@ -418,7 +418,15 @@ describe('the messages, staff alerts and events the code sends', () => {
 		/** @type {Awaited<ReturnType<typeof readyShop>>} */
 		let shop;
 		let visits = 0;
-		const ADDRESS = { name: 'Sara Shopper', phone: '+15550001111', line1: '1 Main Street', city: 'Springfield', country: 'US' };
+		const ADDRESS = {
+			name: 'Sara Shopper',
+			phone: '+15550001111',
+			line1: '1 Main Street',
+			city: 'Springfield',
+			region: 'IL',
+			postalCode: '62701',
+			country: 'US',
+		};
 
 		/**
 		 * A visitor call from its own address (the visitor rate limits stay out of the way).

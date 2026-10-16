@@ -14,7 +14,15 @@ let shop;
 let ip = 0;
 let users = 0;
 
-const ADDRESS = { name: 'Sara Shopper', phone: '+15550001111', line1: '1 Main Street', city: 'Springfield', country: 'US' };
+const ADDRESS = {
+	name: 'Sara Shopper',
+	phone: '+15550001111',
+	line1: '1 Main Street',
+	city: 'Springfield',
+	region: 'IL',
+	postalCode: '62701',
+	country: 'US',
+};
 
 /**
  * A visitor request from a fresh address (the visitor rate limits count per address).
@@ -98,7 +106,10 @@ describe('quote', () => {
 		await shop.list('tax_rules', [{ name: 'Sales tax', percent: 10, categoryIds: [], regions: [{ country: 'US', city: '' }] }]);
 		await shop.setting('taxes', 'pricesIncludeTax', false);
 		const response = await visit('POST', '/v1/shop/cart/quote', {
-			body: { lines: [{ productId: item.id, quantity: 2 }], delivery: { city: 'Springfield', country: 'US' } },
+			body: {
+				lines: [{ productId: item.id, quantity: 2 }],
+				delivery: { city: 'Springfield', region: 'IL', postalCode: '62701', country: 'US' },
+			},
 		});
 		await shop.setting('taxes', 'pricesIncludeTax', true);
 		await shop.list('tax_rules', []);

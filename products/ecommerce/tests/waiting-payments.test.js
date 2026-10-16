@@ -63,7 +63,15 @@ const withFlow = async (change, run) => {
 	}
 };
 
-const ADDRESS = { name: 'Sara Shopper', phone: '+15550001111', line1: '1 Main Street', city: 'Springfield', country: 'US' };
+const ADDRESS = {
+	name: 'Sara Shopper',
+	phone: '+15550001111',
+	line1: '1 Main Street',
+	city: 'Springfield',
+	region: 'IL',
+	postalCode: '62701',
+	country: 'US',
+};
 let ip = 0;
 let users = 0;
 
@@ -167,7 +175,7 @@ describe('a delete, a recorded payment or an edit that loses its race (L1)', () 
 			status: 'pending_payment',
 			role: 'awaiting_payment',
 			patch: {
-				address: { ...ADDRESS, line2: '', area: '', postalCode: '', notes: '' },
+				address: { ...ADDRESS, line2: '', area: '', notes: '' },
 				delivery: { method: 'delivery', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 				payment: {
 					method: 'online',

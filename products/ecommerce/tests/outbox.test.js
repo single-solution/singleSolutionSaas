@@ -15,7 +15,15 @@ let users = 0;
 /** How the fake Notifications answers a send. @type {'ok' | 'down' | 'duplicate' | 'running' | 'missing'} */
 let mode = 'ok';
 
-const ADDRESS = { name: 'Sara Shopper', phone: '+15550001111', line1: '1 Main Street', city: 'Springfield', country: 'US' };
+const ADDRESS = {
+	name: 'Sara Shopper',
+	phone: '+15550001111',
+	line1: '1 Main Street',
+	city: 'Springfield',
+	region: 'IL',
+	postalCode: '62701',
+	country: 'US',
+};
 
 /** A COD order of a new shopper (an order message and a staff alert). */
 const placeOrder = async () => {

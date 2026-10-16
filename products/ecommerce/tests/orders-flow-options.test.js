@@ -328,7 +328,15 @@ describe('checkout options of the flow', () => {
 				body: {
 					lines: [{ productId: item.id }],
 					payment: 'cod',
-					address: { name: 'Eve', phone: '+15550001111', line1: '1 Main St', city: 'Springfield', country: 'US' },
+					address: {
+						name: 'Eve',
+						phone: '+15550001111',
+						line1: '1 Main St',
+						city: 'Springfield',
+						region: 'IL',
+						postalCode: '62701',
+						country: 'US',
+					},
 				},
 				headers: { 'ss-sign-in': token, 'idempotency-key': key, 'x-forwarded-for': `10.10.0.${visits % 200}` },
 			});
@@ -397,7 +405,15 @@ describe('checkout options of the flow', () => {
 					body: {
 						lines: [{ productId: item.id }],
 						payment: 'cod',
-						address: { name: 'Eve', phone: '+15550001111', line1: '1 Main St', city: 'Springfield', country: 'US' },
+						address: {
+							name: 'Eve',
+							phone: '+15550001111',
+							line1: '1 Main St',
+							city: 'Springfield',
+							region: 'IL',
+							postalCode: '62701',
+							country: 'US',
+						},
 					},
 					headers: {
 						'ss-sign-in': await shop.signIn({ id: SHOPPER }),

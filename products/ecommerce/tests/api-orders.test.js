@@ -11,7 +11,15 @@ import { ALL, ORIGIN, readyShop } from './helpers.js';
 let shop;
 let visits = 0;
 
-const ADDRESS = { name: 'Sara Shopper', phone: '+15550001111', line1: '1 Main Street', city: 'Springfield', country: 'US' };
+const ADDRESS = {
+	name: 'Sara Shopper',
+	phone: '+15550001111',
+	line1: '1 Main Street',
+	city: 'Springfield',
+	region: 'IL',
+	postalCode: '62701',
+	country: 'US',
+};
 
 /**
  * Place a cash-on-delivery order through checkout: a member's (signed in) or a guest's, of a new product (10 in

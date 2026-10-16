@@ -84,7 +84,15 @@ describe('Ecommerce’s messages and their defaults (parity P1)', () => {
 		/** @type {Awaited<ReturnType<typeof readyShop>>} */
 		let shop;
 		let shoppers = 0;
-		const ADDRESS = { name: 'Sam Lee', phone: '+15550001111', line1: '1 Main Street', city: 'Springfield', country: 'US' };
+		const ADDRESS = {
+			name: 'Sam Lee',
+			phone: '+15550001111',
+			line1: '1 Main Street',
+			city: 'Springfield',
+			region: 'IL',
+			postalCode: '62701',
+			country: 'US',
+		};
 
 		/** A COD order of a new shopper. */
 		const placeOrder = async () => {

@@ -26,7 +26,7 @@ const placeOrder = async ({ phone, city = 'Springfield', price = 1000 }) => {
 		body: {
 			lines: [{ productId: item.id }],
 			payment: 'cod',
-			address: { name: 'Sara', phone, line1: '1 Main Street', city, country: 'US' },
+			address: { name: 'Sara', phone, line1: '1 Main Street', city, region: 'IL', postalCode: '62701', country: 'US' },
 		},
 		headers: { 'x-forwarded-for': `10.11.0.${users}`, 'ss-sign-in': token, 'idempotency-key': `e11-${users}` },
 	});
