@@ -26,7 +26,7 @@ label.check { display: flex; gap: 8px; align-items: center; } label.check input 
 button { margin: 8px 8px 0 0; font: inherit; padding: 8px 14px; min-height: 40px; border: 0; border-radius: var(--r);
   background: var(--accent); color: var(--on-accent); cursor: pointer; }
 button.secondary { background: transparent; color: inherit; border: 1px solid var(--line); }
-button.link { background: transparent; color: var(--accent); padding: 4px 0; min-height: 0; margin: 0; text-align: left; }
+button.link { background: transparent; color: var(--accent); padding: 4px 0; min-height: 0; margin: 0; text-align: start; }
 button.small { padding: 4px 10px; min-height: 32px; font-size: 0.9em; }
 button[disabled] { opacity: 0.6; cursor: default; }
 button[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); }
@@ -67,14 +67,14 @@ p { overflow-wrap: anywhere; }
 .msg > time { margin-top: 2px; }
 .msg.note > p, .msg.note > .rich { border: 1px dashed var(--line); background: transparent; }
 .rich { min-width: 0; overflow-wrap: anywhere; } .rich > * { margin: 0; } .rich > * + * { margin-top: 8px; }
-.rich ul { list-style: disc; padding-left: 20px; } .rich ol { list-style: decimal; padding-left: 24px; }
+.rich ul { list-style: disc; padding-inline-start: 20px; } .rich ol { list-style: decimal; padding-inline-start: 24px; }
 .rich li { padding: 0; border: 0; }
 .rich code { font-family: ui-monospace, monospace; font-size: 0.9em; padding: 0 4px; border-radius: 4px; background: var(--bg); }
 .rich pre { overflow-x: auto; padding: 8px; border-radius: var(--r); background: var(--bg); }
 .rich pre code { padding: 0; }
 .rich .table { overflow-x: auto; }
 .rich table { border-collapse: collapse; overflow-wrap: normal; font-size: 0.9em; }
-.rich th, .rich td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; min-width: 4em; }
+.rich th, .rich td { border: 1px solid var(--line); padding: 4px 8px; text-align: start; vertical-align: top; min-width: 4em; }
 .msg img { max-width: 220px; border-radius: var(--r); margin-top: 4px; }
 .msg video.file { display: block; width: 100%; max-width: 260px; border-radius: var(--r); margin-top: 4px; }
 .msg audio.file { display: block; width: 100%; max-width: 260px; margin-top: 4px; }
@@ -106,7 +106,7 @@ ul.staff { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(10
   .split.open > .list-part { display: block; }
 }
 .conversations li.unread > button { font-weight: 700; }
-.conversations .badge { margin-left: 6px; background: var(--accent); color: var(--on-accent); }
+.conversations .badge { margin-inline-start: 6px; background: var(--accent); color: var(--on-accent); }
 .facts li { padding: 4px 0; border: 0; }
 .numbers { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; } .numbers dd { margin: 0; font-weight: 600; }
 .bars li { display: grid; grid-template-columns: 96px 1fr 48px; gap: 8px; align-items: center; padding: 2px 0; border: 0; }

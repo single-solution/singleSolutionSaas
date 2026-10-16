@@ -4,13 +4,13 @@
  * @module
  */
 export const WIDGET_CSS = `
-.price { font-weight: 600; } .was { text-decoration: line-through; opacity: 0.6; margin-left: 6px; font-weight: 400; }
+.price { font-weight: 600; } .was { text-decoration: line-through; opacity: 0.6; margin-inline-start: 6px; font-weight: 400; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
 .card { border: 1px solid var(--ss-color-border, #e5e7eb); border-radius: var(--ss-radius, 8px); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
 .card img, .gallery img { width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; border-radius: var(--ss-radius, 8px); }
 .muted { opacity: 0.7; font-size: 0.9em; }
 .error { color: var(--ss-color-danger, #b91c1c); }
-table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 6px; border-top: 1px solid var(--ss-color-border, #e5e7eb); }
+table { width: 100%; border-collapse: collapse; } th, td { text-align: start; padding: 6px; border-top: 1px solid var(--ss-color-border, #e5e7eb); }
 :host { display: block; font-family: var(--ss-font-family, inherit); color: var(--ss-color-text, #1f2937); }
 :host([data-ss-mode='dark']) { color: var(--ss-color-text, #f3f4f6); }
 .box { border: 1px solid var(--ss-color-border, #d1d5db); border-radius: var(--ss-radius, 8px); padding: 16px;
