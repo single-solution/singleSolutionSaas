@@ -10,8 +10,8 @@
  * @module
  */
 import { defineRoute } from '@ss/app-kit';
+import { toCsv } from '@ss/contracts/csv';
 import { measuredScope } from '../adapters/catalog-store.js';
-import { toCsv } from '../core/csv.js';
 import { attributesOf, productTypes } from '../adapters/catalog-store.js';
 import { valueLabel } from '../core/catalog.js';
 import { COLLECTIONS } from '../core/model.js';

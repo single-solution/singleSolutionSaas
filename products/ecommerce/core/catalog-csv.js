@@ -24,7 +24,7 @@ import { spentKey } from './orders.js';
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {import('./model.js').CustomerRecord} CustomerRecord */
 /** @typedef {import('./model.js').AttributeRecord} AttributeRecord */
-/** @typedef {import('./csv.js').Cell} Cell */
+/** @typedef {import('@ss/contracts/csv').CsvCell} Cell */
 
 /** Most data rows of an import. */
 export const MAX_IMPORT_ROWS = 5000;

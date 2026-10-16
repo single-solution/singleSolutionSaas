@@ -2,6 +2,7 @@
  * The catalog's pure rules (PLAN 0.8.8 Catalog): product checks, categories and the tree, listings and facets, views,
  * CSV files, grades, AI copy, plus the AI provider adapter and the change notice with doubles.
  */
+import { csvRecords, parseCsv } from '@ss/contracts/csv';
 import { describe, expect, it } from 'vitest';
 import { checkAiConnection, createAi } from '../adapters/ai.js';
 import { createCatalogCommon } from '../server/catalog-common.js';
@@ -44,7 +45,6 @@ import {
 import { EMPTY_CONTENT, EMPTY_SEO } from '../core/catalog-content.js';
 import { cardOf, pageOf, shownRange, specsOf } from '../core/catalog-views.js';
 import { listShown } from '../core/promotions.js';
-import { formatCell, parseCsv, recordsOf, toCsv, unescapeFormula } from '../core/csv.js';
 import { showDefaults } from '../core/fields.js';
 import { checkGrades, gradesByKey } from '../core/grades.js';
 import { BUILT_IN_TYPES } from '../core/item-types.js';
@@ -721,36 +721,8 @@ describe('views', () => {
 });
 
 describe('CSV', () => {
-	it('writes and reads cells safely', () => {
-		expect(formatCell(null)).toBe('');
-		expect(formatCell(Number.NaN)).toBe('');
-		expect(formatCell(false)).toBe('false');
-		expect(formatCell('-1')).toBe("'-1");
-		expect(formatCell('a;b', ';')).toBe('"a;b"');
-		expect(toCsv(['a'], [['x']])).toBe('\uFEFFa\r\nx\r\n');
-		expect(unescapeFormula("'x")).toBe("'x");
-		expect(parseCsv('a,b\r\n\r\n"x ""y""",z\rq,"line\nbreak"')).toEqual({
-			ok: true,
-			rows: [
-				['a', 'b'],
-				['x "y"', 'z'],
-				['q', 'line\nbreak'],
-			],
-		});
-		expect(parseCsv('a\n1\n2\n3', { maxRows: 1 })).toEqual({ ok: false, code: 'too_many_rows' });
-		expect(parseCsv('a\n1\n2', { maxRows: 1 })).toEqual({ ok: false, code: 'too_many_rows' });
-		expect(parseCsv('a,')).toEqual({ ok: true, rows: [['a', '']] });
-		expect(
-			recordsOf([
-				[' Name ', '', 'name'],
-				['x', 'y', 'z'],
-			]).records[0]?.values,
-		).toEqual({ name: 'x' });
-		expect(recordsOf([]).header).toEqual([]);
-	});
-
 	it('reads import rows into products', () => {
-		const file = recordsOf(
+		const file = csvRecords(
 			/** @type {any} */ (
 				parseCsv(
 					'name,option1_name,option1_value,option2_name,option2_value,cost,compare_at_price,track_stock,stock,grade\n' +

@@ -623,7 +623,7 @@ const decimal = (amount, currency) => (amount < 0 ? -Number(toDecimal(-amount, c
  * @param {ReadonlyArray<readonly [string, string, ('money' | undefined)?]>} columns
  * @param {Array<Record<string, unknown>>} rows
  * @param {string} currency
- * @returns {{ header: string[], rows: import('./csv.js').Cell[][] }}
+ * @returns {{ header: string[], rows: import('@ss/contracts/csv').CsvCell[][] }}
  */
 export const reportCsv = (columns, rows, currency) => ({
 	header: columns.map(([column]) => column),

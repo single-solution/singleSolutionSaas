@@ -8,6 +8,7 @@
  * @module
  */
 import { createId } from '@ss/contracts';
+import { csvRecords, parseCsv, toCsv } from '@ss/contracts/csv';
 import { defineRoute, problem } from '@ss/app-kit';
 import {
 	NO_ID,
@@ -44,7 +45,6 @@ import {
 	updateRows,
 	updatedVariants,
 } from '../core/catalog-csv.js';
-import { parseCsv, recordsOf, toCsv } from '../core/csv.js';
 import { specsOf } from '../core/catalog-views.js';
 import { typeOf, typeTree } from '../core/item-types.js';
 import { nextPreviousSlugs } from '../core/links.js';
@@ -377,7 +377,7 @@ export const createCatalogTools = (product, service, common) => {
 	 */
 	const updateProducts = async (ctx, s, data, table, dryRun) => {
 		const locationIds = s.has('multi_location') ? (await locationsOf(data)).map((location) => location.id) : [];
-		const read = updateRows(recordsOf(table), { currency: s.currency, locationIds: new Set(locationIds) });
+		const read = updateRows(csvRecords(table), { currency: s.currency, locationIds: new Set(locationIds) });
 		if (!read.ok) throw refuse([{ path: '/csv', message: read.message }]);
 		const measured = await measuredOf(s, await categoriesOf(data));
 		const failed = [...read.failed];
@@ -509,7 +509,7 @@ export const createCatalogTools = (product, service, common) => {
 		if (mode === 'update') return updateProducts(ctx, s, data, parsed.rows, dryRun);
 		const locationIds = s.has('multi_location') ? (await locationsOf(data)).map((location) => location.id) : [];
 		const fields = await columnsOn(data, ['product', 'variant']);
-		const read = importGroups(recordsOf(parsed.rows), {
+		const read = importGroups(csvRecords(parsed.rows), {
 			currency: s.currency,
 			locationIds: new Set(locationIds),
 			fieldSlugs: new Set(fields.map((column) => column.slug)),

@@ -8,7 +8,7 @@
  * uploaded under the deal's folder (`POST …/deals/:id/banner/upload`) and set with its alternative text, or removed.
  * @module
  */
-import { toCsv } from '../core/csv.js';
+import { toCsv } from '@ss/app-kit/widget';
 import { query } from './admin-kit.js';
 import { card, chipFilter, detailHead, listScreen } from './admin-lists.js';
 import { bundleFields, couponFields, dealFields } from './admin-offer-fields.js';

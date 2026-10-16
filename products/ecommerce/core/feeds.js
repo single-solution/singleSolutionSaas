@@ -8,6 +8,7 @@
  * functions, no I/O.
  * @module
  */
+import { csvCell } from '@ss/contracts/csv';
 import {
 	escapeXml,
 	feedGroupId,
@@ -415,12 +416,6 @@ const META_COLUMNS = Object.freeze([
 	'custom_label_4',
 ]);
 
-/**
- * One CSV cell (RFC 4180): quoted when it holds a comma, a quote or a line break.
- * @param {string} value
- */
-export const csvCell = (value) => (/[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
-
 /** The header line of a Meta catalog CSV. */
 export const META_HEADER = `${META_COLUMNS.join(',')}\r\n`;
 
@@ -457,5 +452,5 @@ export const metaLine = (row) =>
 		row.shippingWeight,
 		...row.customLabels,
 	]
-		.map(csvCell)
+		.map((cell) => csvCell(cell))
 		.join(',')}\r\n`;

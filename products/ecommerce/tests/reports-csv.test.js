@@ -4,8 +4,8 @@
  * filters, customers, and price and stock updates by CSV with the stale-row check; each with its ticket twin.
  */
 import { createId } from '@ss/contracts';
+import { parseCsv, toCsv } from '@ss/contracts/csv';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { parseCsv, toCsv } from '../core/csv.js';
 import { COLLECTIONS } from '../core/model.js';
 import { ORIGIN, readyShop } from './helpers.js';
 

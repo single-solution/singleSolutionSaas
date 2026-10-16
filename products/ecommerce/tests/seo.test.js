@@ -4,7 +4,7 @@
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { csvCell, feedMoney, feedRows, googleItem, metaLine } from '../core/feeds.js';
+import { feedMoney, feedRows, googleItem, metaLine } from '../core/feeds.js';
 import { gradeCondition } from '../core/grades.js';
 import { listShown } from '../core/promotions.js';
 import { buildLlmsTxt, markdownText, MAX_LLMS_CHARS, treeOrder } from '../core/llms.js';
@@ -283,7 +283,19 @@ describe('core/feeds and core/llms', () => {
 		expect(metaLine(/** @type {any} */ ({ ...row, inStock: false, condition: '', salePrice: '' }))).toContain(
 			'out of stock,new,12.00 USD,,',
 		);
-		expect(csvCell('a,"b"\nc')).toBe('"a,""b""\nc"');
+		// a cell with a comma, a quote or a line break is quoted
+		expect(metaLine(/** @type {any} */ ({ ...row, description: 'a,"b"\nc' }))).toContain(',"a,""b""\nc",');
+	});
+
+	it('guards the Meta CSV against spreadsheet formulas: a title or description starting with = + - or @ gets a leading quote', () => {
+		const [row] = feedRows(product, context);
+		const line = metaLine(
+			/** @type {any} */ ({ ...row, title: '=HYPERLINK("https://evil.example","Open")', description: '@SUM(A1)' }),
+		);
+		expect(line).toMatch(/^var_a,"'=HYPERLINK\(""https:\/\/evil\.example"",""Open""\)",'@SUM\(A1\),in stock,/);
+		expect(metaLine(/** @type {any} */ ({ ...row, title: '+1 offer', description: '-5% today' }))).toMatch(
+			/^var_a,'\+1 offer,'-5% today,/,
+		);
 	});
 
 	it('writes llms.txt within its bounds', () => {
