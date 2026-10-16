@@ -18,7 +18,8 @@ Exit codes: `0` ok, `1` failed validation or command error, `2` usage error. `--
 ## The generated product
 
 `templates/product` (plus `templates/standalone` outside a pnpm workspace: `pnpm-workspace.yaml`, `.nvmrc`), with the
-placeholders `{{id}}`, `{{name}}`, `{{global}}` (`SS<Product>`), `{{baseUrl}}` and `{{sdkVersion}}`:
+placeholders `{{id}}`, `{{name}}`, `{{global}}` (`SS<Product>`), `{{baseUrl}}`, `{{port}}` (the local development port) and
+`{{sdkVersion}}`:
 
 - `manifest.json` (0.4.13: id, name, version, endpoints, widgetScriptUrl, docsUrl, features with a settings `$ref` into
   `schemas/` and an example `recommendFor` for the Setup sheet's advisor, permissions, widgets), `openapi.json`
