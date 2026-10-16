@@ -261,11 +261,19 @@ describe('the redirects widget', () => {
 		const host = await start();
 		button(host, T['redirects.add'] ?? '').click();
 		await flush();
-		expect([...dialog(host).querySelectorAll('input[type="text"]')].map((input) => input.value)).toEqual(['', '', '']);
+		expect(
+			[.../** @type {NodeListOf<HTMLInputElement>} */ (dialog(host).querySelectorAll('input[type="text"]'))].map(
+				(input) => input.value,
+			),
+		).toEqual(['', '', '']);
 		button(host, T['redirects.cancel'] ?? '').click();
 		all(host, 'section.box:last-child ul.rows li')[1].click();
 		await flush();
-		expect([...dialog(host).querySelectorAll('input[type="text"]')].map((input) => input.value)).toEqual(['/missing', '', '']);
+		expect(
+			[.../** @type {NodeListOf<HTMLInputElement>} */ (dialog(host).querySelectorAll('input[type="text"]'))].map(
+				(input) => input.value,
+			),
+		).toEqual(['/missing', '', '']);
 	});
 
 	it('changes a rule, hiding the new page for 410, and deletes one after a confirmation', async () => {
