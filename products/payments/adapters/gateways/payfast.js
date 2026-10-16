@@ -146,7 +146,7 @@ export const payfast = {
 						status === 'COMPLETE'
 							? 'paid'
 							: status === 'CANCELLED'
-								? 'cancelled'
+								? 'canceled'
 								: status === 'FAILED'
 									? 'failed'
 									: 'pending',

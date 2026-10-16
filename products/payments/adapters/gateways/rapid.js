@@ -125,7 +125,7 @@ export const rapid = {
 						: status === 'failed'
 							? 'failed'
 							: status === 'cancelled' || status === 'canceled'
-								? 'cancelled'
+								? 'canceled'
 								: 'pending',
 					...(amount === null ? {} : { amount }),
 					currency,

@@ -382,15 +382,15 @@ export const createRoutes = (product) => {
 		if (!found) throw problem('not_found', 'No such subscription.');
 		const texts = await product.settings.texts(s.websiteId);
 		const reason = given || cleanText(texts['subs.defaultReason'], 128) || found.plan;
-		const cancelled = await service.cancelSubscription(s, found, who(ctx), reason);
+		const canceled = await service.cancelSubscription(s, found, who(ctx), reason);
 		await log(
 			ctx,
-			'subscription.cancelled',
-			cancelled.id,
-			cancelled.reference || cancelled.id,
-			details(gatewayName(texts, cancelled.gateway), cancelled.plan, reason),
+			'subscription.canceled',
+			canceled.id,
+			canceled.reference || canceled.id,
+			details(gatewayName(texts, canceled.gateway), canceled.plan, reason),
 		);
-		return subscriptionView(cancelled);
+		return subscriptionView(canceled);
 	};
 
 	/**
@@ -528,7 +528,7 @@ export const createRoutes = (product) => {
 		if (payment.status === 'refunded') return html(renderResultPage({ ...result, state: 'refunded', backUrl: back }));
 		// the merchant canceled it: nobody pays it any more (K-13)
 		if (payment.status === 'voided') return html(renderResultPage({ ...result, state: 'voided', backUrl: back }));
-		if (payment.status === 'failed' || payment.status === 'cancelled')
+		if (payment.status === 'failed' || payment.status === 'canceled')
 			return html(
 				renderResultPage({ ...result, state: payment.status, retry: `/pay/${websiteId}/${payment.id}`, backUrl: back }),
 			);
@@ -596,10 +596,10 @@ export const createRoutes = (product) => {
 		const payment = isId(paymentId, 'pay') ? await s.store.payments.get(paymentId) : null;
 		if (!payment) return html(renderResultPage({ ...(await lookOf(websiteId)), state: 'notFound' }), 404);
 		const form = Object.fromEntries(formFields(ctx.rawBody));
-		if (form.retry === '1' && (payment.status === 'failed' || payment.status === 'cancelled'))
+		if (form.retry === '1' && (payment.status === 'failed' || payment.status === 'canceled'))
 			await s.store.payments.change(
 				payment.id,
-				['failed', 'cancelled'],
+				['failed', 'canceled'],
 				{ status: 'pending', gateway: null, checkout: null },
 				{ event: 'retried' },
 			);
@@ -642,8 +642,8 @@ export const createRoutes = (product) => {
 			await s.store.payments.change(
 				payment.id,
 				['pending'],
-				{ status: 'cancelled' },
-				{ event: 'cancelled', detail: 'by the payer' },
+				{ status: 'canceled' },
+				{ event: 'canceled', detail: 'by the payer' },
 			);
 			return seeOther(
 				payment.cancelUrl ? withParam(payment.cancelUrl, 'ss_payment', payment.id) : `/pay/${websiteId}/${payment.id}`,

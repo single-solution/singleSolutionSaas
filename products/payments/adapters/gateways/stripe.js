@@ -148,7 +148,7 @@ export const stripe = {
 		});
 		if (!ok2xx(answer.status) || !isObject(answer.json)) return null;
 		const news = sessionNews(answer.json);
-		if (answer.json.status === 'expired') news.outcome = 'cancelled';
+		if (answer.json.status === 'expired') news.outcome = 'canceled';
 		return news;
 	},
 	returned: async (_incoming, payment, keys, ctx) => ({ news: (await stripe.status?.(payment, keys, ctx)) ?? null }),

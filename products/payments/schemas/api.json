@@ -246,7 +246,7 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["pending", "active", "past_due", "paused", "cancelled", "expired"],
+					"enum": ["pending", "active", "past_due", "paused", "canceled", "expired"],
 					"description": "Mirrored from the gateway."
 				},
 				"gateway": {
@@ -280,7 +280,7 @@
 							},
 							"event": {
 								"type": "string",
-								"enum": ["created", "failed", "pending", "active", "past_due", "paused", "cancelled", "expired"]
+								"enum": ["created", "failed", "pending", "active", "past_due", "paused", "canceled", "expired"]
 							},
 							"detail": {
 								"type": "string"
@@ -345,8 +345,8 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"],
-					"description": "pending: waiting for the payer or the gateway; cancelled: the payer canceled at the gateway (they may try again); voided: you canceled it, nobody can pay it."
+					"enum": ["pending", "paid", "failed", "canceled", "voided", "partially_refunded", "refunded"],
+					"description": "pending: waiting for the payer or the gateway; canceled: the payer canceled at the gateway (they may try again); voided: you canceled it, nobody can pay it."
 				},
 				"refundDue": {
 					"type": "boolean",
@@ -534,7 +534,7 @@
 									"created",
 									"started",
 									"retried",
-									"cancelled",
+									"canceled",
 									"paid",
 									"mismatch",
 									"failed",
@@ -738,7 +738,7 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["pending", "active", "past_due", "paused", "cancelled", "expired"],
+					"enum": ["pending", "active", "past_due", "paused", "canceled", "expired"],
 					"description": "Mirrored from the gateway."
 				},
 				"gateway": {
@@ -772,7 +772,7 @@
 							},
 							"event": {
 								"type": "string",
-								"enum": ["created", "failed", "pending", "active", "past_due", "paused", "cancelled", "expired"]
+								"enum": ["created", "failed", "pending", "active", "past_due", "paused", "canceled", "expired"]
 							},
 							"detail": {
 								"type": "string"
@@ -1003,7 +1003,7 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"],
+					"enum": ["pending", "paid", "failed", "canceled", "voided", "partially_refunded", "refunded"],
 					"description": "Only payments with this status (another value filters nothing)."
 				},
 				"q": {
@@ -1023,7 +1023,7 @@
 			"properties": {
 				"status": {
 					"type": "string",
-					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"],
+					"enum": ["pending", "paid", "failed", "canceled", "voided", "partially_refunded", "refunded"],
 					"description": "Only payments with this status (another value filters nothing)."
 				},
 				"q": {
@@ -1049,7 +1049,7 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"],
+					"enum": ["pending", "paid", "failed", "canceled", "voided", "partially_refunded", "refunded"],
 					"description": "Only payments with this status (another value filters nothing)."
 				},
 				"q": {
@@ -1464,7 +1464,7 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["pending", "active", "past_due", "paused", "cancelled", "expired"],
+					"enum": ["pending", "active", "past_due", "paused", "canceled", "expired"],
 					"description": "Only subscriptions with this status (another value filters nothing)."
 				}
 			}
@@ -1646,7 +1646,7 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"]
+					"enum": ["pending", "paid", "failed", "canceled", "voided", "partially_refunded", "refunded"]
 				},
 				"amount": {
 					"type": "integer",
@@ -1686,7 +1686,7 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"],
+					"enum": ["pending", "paid", "failed", "canceled", "voided", "partially_refunded", "refunded"],
 					"description": "Only payments with this status (another value filters nothing)."
 				},
 				"q": {
@@ -1706,7 +1706,7 @@
 			"properties": {
 				"status": {
 					"type": "string",
-					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"],
+					"enum": ["pending", "paid", "failed", "canceled", "voided", "partially_refunded", "refunded"],
 					"description": "Only payments with this status (another value filters nothing)."
 				},
 				"q": {
@@ -1732,7 +1732,7 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"],
+					"enum": ["pending", "paid", "failed", "canceled", "voided", "partially_refunded", "refunded"],
 					"description": "Only payments with this status (another value filters nothing)."
 				},
 				"q": {
@@ -1983,7 +1983,7 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["pending", "active", "past_due", "paused", "cancelled", "expired"],
+					"enum": ["pending", "active", "past_due", "paused", "canceled", "expired"],
 					"description": "Only subscriptions with this status (another value filters nothing)."
 				}
 			}

@@ -69,7 +69,7 @@ export const mountSubscriptionsAdmin = ({ host, api, config, copy = () => {} }) 
 				const note = element(doc, 'p', { class: 'status', role: 'status' });
 				/** @type {import('@ss/app-kit/widget').MenuItem[]} */
 				const menu = [{ label: t('subs.copyId'), onSelect: () => copy(subscription.id) }];
-				if (subscription.status !== 'cancelled' && subscription.status !== 'expired')
+				if (subscription.status !== 'canceled' && subscription.status !== 'expired')
 					menu.push({
 						label: t('subs.cancel'),
 						danger: true,
@@ -96,7 +96,7 @@ export const mountSubscriptionsAdmin = ({ host, api, config, copy = () => {} }) 
 									const item = list.querySelector(`li[data-id="${answer.data.id}"]`);
 									if (item) row(answer.data, /** @type {HTMLElement} */ (item));
 									details(answer.data);
-									view.detail.querySelector('[role="status"]')?.replaceChildren(t('subs.cancelled'));
+									view.detail.querySelector('[role="status"]')?.replaceChildren(t('subs.canceled'));
 									return null;
 								},
 							});

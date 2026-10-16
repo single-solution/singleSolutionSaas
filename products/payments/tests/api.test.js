@@ -1218,13 +1218,13 @@ describe('subscriptions', () => {
 		// the Subscriptions admin widget cancels it (its ticket twin), with the merchant's own reason (P11)
 		const long = await env.api('POST', `/v1/subscriptions/${made.json.id}/cancel`, { reason: 'x'.repeat(129) });
 		expect(long.status).toBe(422);
-		const cancelled = await env.call('POST', `/v1/admin/subscriptions/${made.json.id}/cancel`, {
+		const canceled = await env.call('POST', `/v1/admin/subscriptions/${made.json.id}/cancel`, {
 			token: await env.ticket(),
 			origin: ADMIN_ORIGIN,
 			body: { reason: 'Moved to yearly' },
 		});
-		expect(cancelled.json.status).toBe('cancelled');
-		expect(cancelled.json.history.at(-1)).toMatchObject({ event: 'cancelled', detail: 'Moved to yearly' });
+		expect(canceled.json.status).toBe('canceled');
+		expect(canceled.json.history.at(-1)).toMatchObject({ event: 'canceled', detail: 'Moved to yearly' });
 		expect(env.gateways.callsTo('https://api.stripe.com').at(-1)).toMatchObject({
 			method: 'DELETE',
 			path: '/v1/subscriptions/sub_stripe1',
@@ -1425,14 +1425,14 @@ describe('kit features (PLAN 0.8.10)', () => {
 				object: { mode: 'subscription', client_reference_id: sub.json.id, subscription: 'sub_stripe9', status: 'complete' },
 			},
 		});
-		const cancelled = await env.api('POST', `/v1/subscriptions/${sub.json.id}/cancel`, {}, ACTOR);
-		expect(cancelled.json.history.at(-1)).toMatchObject({ event: 'cancelled', by: 'Zoë Martin' });
+		const canceled = await env.api('POST', `/v1/subscriptions/${sub.json.id}/cancel`, {}, ACTOR);
+		expect(canceled.json.history.at(-1)).toMatchObject({ event: 'canceled', by: 'Zoë Martin' });
 
 		const log = (await env.api('GET', '/v1/activity?actor=staff_7')).json.items;
 		expect(log.map((/** @type {any} */ e) => e.action).sort()).toEqual([
 			'payment.manual_confirmed',
 			'payment.refunded',
-			'subscription.cancelled',
+			'subscription.canceled',
 		]);
 		for (const entry of log) expect(entry.actor).toEqual({ kind: 'user', id: 'staff_7', name: 'Zoë Martin', role: 'Manager' });
 		const byAction = Object.fromEntries(log.map((/** @type {any} */ e) => [e.action, e]));
@@ -1446,7 +1446,7 @@ describe('kit features (PLAN 0.8.10)', () => {
 			label: 'INV-77',
 			detail: 'USD 500.00 · recorded; returned outside the gateway',
 		});
-		expect(byAction['subscription.cancelled']).toMatchObject({
+		expect(byAction['subscription.canceled']).toMatchObject({
 			target: sub.json.id,
 			label: 'club-9',
 			detail: 'Card (Stripe) · price_2 · Canceled by the merchant',
@@ -1500,7 +1500,11 @@ describe('kit features (PLAN 0.8.10)', () => {
 	});
 
 	it('formats money with the website’s Format on hosted pages, in activity details and in the widget config (K7)', async () => {
-		const saved = await env.api('PUT', '/v1/format', { currencyDisplay: 'symbol', currencySymbols: { USD: 'US$' }, wholeUnits: true });
+		const saved = await env.api('PUT', '/v1/format', {
+			currencyDisplay: 'symbol',
+			currencySymbols: { USD: 'US$' },
+			wholeUnits: true,
+		});
 		expect(saved.status).toBe(200);
 		const config = await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN });
 		expect(config.json).toMatchObject({ format: { currencySymbols: { USD: 'US$' }, wholeUnits: true }, timeZone: 'UTC' });
@@ -1564,7 +1568,7 @@ describe('data rights, statuses and public files', () => {
 		expect(ana.json.records.payments.length).toBeGreaterThan(0);
 		expect(ana.json.records.payments[0]).not.toHaveProperty('metadata');
 		const removed = await env.api('POST', '/v1/data-rights/delete', { user: { email: 'ana@example.com' } });
-		expect(removed.json.anonymised).toBeGreaterThan(0);
+		expect(removed.json.anonymized).toBeGreaterThan(0);
 		expect(
 			(await env.api('POST', '/v1/data-rights/export', { user: { email: 'ana@example.com' } })).json.records.payments,
 		).toEqual([]);

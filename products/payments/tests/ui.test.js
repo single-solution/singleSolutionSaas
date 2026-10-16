@@ -676,7 +676,7 @@ describe('Subscriptions admin widget', () => {
 				queries.push(url.search);
 				return url.searchParams.get('cursor')
 					? answer(200, {
-							items: [{ ...sub, id: 'sub_2', status: 'cancelled', customer: {}, history: [] }],
+							items: [{ ...sub, id: 'sub_2', status: 'canceled', customer: {}, history: [] }],
 							nextCursor: null,
 							hasMore: false,
 						})
@@ -699,10 +699,10 @@ describe('Subscriptions admin widget', () => {
 		await submitDialog(host);
 		expect(cancelBodies[0]).toEqual({ reason: 'Moved to yearly' });
 		expect(dialog(host)?.querySelector('[role="status"]')?.textContent).toBe('Not canceled: Stripe refused the keys.');
-		cancel = answer(200, { ...sub, status: 'cancelled' });
+		cancel = answer(200, { ...sub, status: 'canceled' });
 		await submitDialog(host);
 		expect(dialog(host)).toBeNull();
-		expect(detailStatus(host)).toBe(strings['subs.cancelled']);
+		expect(detailStatus(host)).toBe(strings['subs.canceled']);
 		expect(menuItem(host, strings['subs.cancel'])).toBeUndefined();
 		menuItem(host, strings['subs.copyId'])?.click();
 		expect(copy).toHaveBeenCalledWith('sub_1');

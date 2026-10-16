@@ -86,7 +86,7 @@ const orderNews = (order, paymentId) => {
 			: capture?.status === 'DECLINED' || capture?.status === 'FAILED'
 				? 'failed'
 				: order?.status === 'VOIDED'
-					? 'cancelled'
+					? 'canceled'
 					: 'pending';
 	return {
 		kind: 'payment',

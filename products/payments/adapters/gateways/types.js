@@ -27,7 +27,7 @@ import { GATEWAY_TIMEOUT_MS, jsonOf } from '../util.js';
  */
 /**
  * What a gateway confirmed about a payment.
- * @typedef {{ kind: 'payment', paymentId: string | null, ref?: string | null, outcome: 'paid' | 'failed' | 'cancelled' | 'pending',
+ * @typedef {{ kind: 'payment', paymentId: string | null, ref?: string | null, outcome: 'paid' | 'failed' | 'canceled' | 'pending',
  *   amount?: number, currency?: string, capture?: string | null }} PaymentNews
  */
 /** @typedef {{ kind: 'subscription', subscriptionId: string | null, ref: string, status: string | null }} SubscriptionNews */

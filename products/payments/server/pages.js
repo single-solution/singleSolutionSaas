@@ -288,7 +288,7 @@ ${upload}`,
 
 /**
  * The result page (or a page that says the payment cannot be shown).
- * @param {Omit<PageLook, 'money'> & Partial<Pick<PageLook, 'money'>> & { state: 'paid' | 'failed' | 'cancelled' |
+ * @param {Omit<PageLook, 'money'> & Partial<Pick<PageLook, 'money'>> & { state: 'paid' | 'failed' | 'canceled' |
  *   'voided' | 'refundDue' | 'refunded' | 'unavailable' | 'notFound' | 'error', business?: string, amount?: number,
  *   currency?: string, backUrl?: string | null, retry?: string | null }} input `money` with `amount` (a page for a
  *   website that cannot be served has neither)

@@ -237,8 +237,8 @@ describe('Stripe', () => {
 					}
 				: { status: 404 },
 		);
-		expect(await stripe.status?.(withRef, keys, ctx)).toMatchObject({ outcome: 'cancelled' });
-		expect(await stripe.returned?.(incoming(), withRef, keys, ctx)).toMatchObject({ news: { outcome: 'cancelled' } });
+		expect(await stripe.status?.(withRef, keys, ctx)).toMatchObject({ outcome: 'canceled' });
+		expect(await stripe.returned?.(incoming(), withRef, keys, ctx)).toMatchObject({ news: { outcome: 'canceled' } });
 		expect(await stripe.status?.({ ...withRef, gatewayRef: 'cs_2' }, keys, ctx)).toBeNull();
 		expect(await stripe.returned?.(incoming(), { ...withRef, gatewayRef: 'cs_2' }, keys, ctx)).toEqual({ news: null });
 
@@ -379,7 +379,7 @@ describe('PayPal', () => {
 			status: 200,
 			body: { id: 'ORDER1', status: 'VOIDED', purchase_units: [{ amount: { currency_code: 'USD', value: '10.50' } }] },
 		}));
-		expect(await paypal.status?.(withRef, keys, ctx)).toMatchObject({ outcome: 'cancelled', capture: null });
+		expect(await paypal.status?.(withRef, keys, ctx)).toMatchObject({ outcome: 'canceled', capture: null });
 		paypalAnswers(() => ({
 			status: 200,
 			body: { status: 'COMPLETED', purchase_units: [{ payments: { captures: [{ status: 'DECLINED' }] } }] },
@@ -581,7 +581,7 @@ describe('PayFast', () => {
 		});
 		expect(fake.calls.at(-1)?.path).toBe('/eng/query/validate');
 		for (const [status, outcome] of [
-			['CANCELLED', 'cancelled'],
+			['CANCELLED', 'canceled'],
 			['FAILED', 'failed'],
 			['PENDING', 'pending'],
 		]) {
@@ -1121,8 +1121,8 @@ describe('Rapid Gateway', () => {
 			['PAID', 'paid'],
 			['success', 'paid'],
 			['failed', 'failed'],
-			['cancelled', 'cancelled'],
-			['canceled', 'cancelled'],
+			['cancelled', 'canceled'],
+			['canceled', 'canceled'],
 			['processing', 'pending'],
 		])
 			expect(await rapid.notice?.(hook({ ...body, status }), keys, ctx)).toMatchObject({ news: [{ outcome }] });
@@ -1212,7 +1212,7 @@ describe('generic adapter', () => {
 		expect(await generic.notice?.(post({ paymentId: PAYMENT.id, status: 'maybe' }), keys, ctx)).toEqual({ ok: false });
 		// every status the docs name for this notice is taken (the docs once said canceled, which was refused)
 		const named = /status: ([a-z_ |]+),/.exec(guide.generic)?.[1]?.split(' | ') ?? [];
-		expect(named).toEqual(['paid', 'failed', 'cancelled']);
+		expect(named).toEqual(['paid', 'failed', 'canceled']);
 		for (const status of named)
 			expect(await generic.notice?.(post({ paymentId: PAYMENT.id, status }), keys, ctx)).toMatchObject({
 				ok: true,

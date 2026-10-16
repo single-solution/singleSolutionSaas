@@ -14,16 +14,16 @@ import { isMethodKey } from './methods.js';
 export { fromDecimal, toDecimal } from '@ss/contracts/format';
 
 /**
- * Payment statuses. `pending`: waiting for the payer or the gateway; `cancelled`: the payer canceled at the gateway
+ * Payment statuses. `pending`: waiting for the payer or the gateway; `canceled`: the payer canceled at the gateway
  * (they may try again); `voided`: the merchant canceled it (`POST /v1/payments/:id/cancel`, for example its order was
  * canceled or expired), so nobody can pay it any more; `refunded` and `partially_refunded` were paid.
  */
 export const PAYMENT_STATUSES = Object.freeze(
-	/** @type {const} */ (['pending', 'paid', 'failed', 'cancelled', 'voided', 'partially_refunded', 'refunded']),
+	/** @type {const} */ (['pending', 'paid', 'failed', 'canceled', 'voided', 'partially_refunded', 'refunded']),
 );
 /** Subscription statuses mirrored from the gateway. */
 export const SUBSCRIPTION_STATUSES = Object.freeze(
-	/** @type {const} */ (['pending', 'active', 'past_due', 'paused', 'cancelled', 'expired']),
+	/** @type {const} */ (['pending', 'active', 'past_due', 'paused', 'canceled', 'expired']),
 );
 /**
  * Payment events (the kit's events, PLAN 0.8.10 K5: listed by `GET /v1/events` and sent to the merchant through
@@ -510,7 +510,7 @@ const STRIPE_SUBSCRIPTION = Object.freeze({
 	past_due: 'past_due',
 	unpaid: 'past_due',
 	paused: 'paused',
-	canceled: 'cancelled',
+	canceled: 'canceled',
 	incomplete_expired: 'expired',
 });
 /** PayPal subscription statuses → mirrored statuses. */
@@ -519,7 +519,7 @@ const PAYPAL_SUBSCRIPTION = Object.freeze({
 	APPROVED: 'pending',
 	ACTIVE: 'active',
 	SUSPENDED: 'paused',
-	CANCELLED: 'cancelled',
+	CANCELLED: 'canceled',
 	EXPIRED: 'expired',
 });
 

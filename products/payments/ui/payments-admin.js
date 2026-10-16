@@ -36,7 +36,7 @@ const TONES = {
 	pending: 'warning',
 	paid: 'success',
 	failed: 'danger',
-	cancelled: 'neutral',
+	canceled: 'neutral',
 	voided: 'neutral',
 	partially_refunded: 'warning',
 };
@@ -246,7 +246,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 							else note.textContent = failed(answer);
 						},
 					});
-				if (payment.checkoutUrl && ['pending', 'failed', 'cancelled'].includes(payment.status))
+				if (payment.checkoutUrl && ['pending', 'failed', 'canceled'].includes(payment.status))
 					menu.push(
 						{ label: t('admin.copyPayLink'), onSelect: () => copy(payment.checkoutUrl) },
 						{ label: t('admin.openPayPage'), onSelect: () => open(payment.checkoutUrl) },

@@ -7,7 +7,7 @@
  * - Checkout fields: `payment_id`, `website_id`, `amount` (minor units), `currency`, `description`, `return_url`,
  *   `cancel_url`, `notify_url`, `timestamp` (unix seconds) and `signature`: hex HMAC-SHA256 with the secret over every
  *   other field sorted by name as `name=value` joined by `&`.
- * - Notice: `POST <notify_url>` with JSON `{ paymentId, status: paid | failed | cancelled, amount, currency, reference? }`
+ * - Notice: `POST <notify_url>` with JSON `{ paymentId, status: paid | failed | canceled, amount, currency, reference? }`
  *   and `SS-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">` (5 minutes).
  * - Refund: `POST <refundUrl>` with JSON `{ refundId, paymentId, reference, amount, currency, reason }`, signed the same
  *   way; any 2xx answer is a refund (its JSON `reference`, if any, is kept).
@@ -119,7 +119,7 @@ export const createGeneric = (policy = createOutboundPolicy()) => {
 			}
 			if (!isObject(body) || typeof body.paymentId !== 'string') return { ok: false };
 			const outcome = body.status;
-			if (outcome !== 'paid' && outcome !== 'failed' && outcome !== 'cancelled') return { ok: false };
+			if (outcome !== 'paid' && outcome !== 'failed' && outcome !== 'canceled') return { ok: false };
 			return {
 				ok: true,
 				news: [

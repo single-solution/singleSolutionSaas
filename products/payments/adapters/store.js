@@ -233,7 +233,7 @@ export const createStore = (data, { now }) => {
 			 * Remove a person's details from their payments (the amounts stay: they are the merchant's money records).
 			 * @param {{ id?: string, email?: string, phone?: string }} user
 			 */
-			anonymise: async (user) => {
+			anonymize: async (user) => {
 				const filter = personFilter(user);
 				return filter ? (await payments.updateMany(filter, { $set: { customer: {} } })).modifiedCount : 0;
 			},
@@ -310,7 +310,7 @@ export const createStore = (data, { now }) => {
 				return filter ? as(await subscriptions.find(filter, NO_ID).toArray()) : [];
 			},
 			/** @param {{ id?: string, email?: string, phone?: string }} user */
-			anonymise: async (user) => {
+			anonymize: async (user) => {
 				const filter = personFilter(user);
 				return filter ? (await subscriptions.updateMany(filter, { $set: { customer: {} } })).modifiedCount : 0;
 			},

@@ -114,8 +114,8 @@ const dataRights = (now) => ({
 	},
 	deleteUser: async (ctx, user) => {
 		const store = createStore(await ctx.data(), { now });
-		const anonymised = (await store.payments.anonymise(user)) + (await store.subscriptions.anonymise(user));
-		return { deleted: 0, anonymised };
+		const anonymized = (await store.payments.anonymize(user)) + (await store.subscriptions.anonymize(user));
+		return { deleted: 0, anonymized };
 	},
 });
 

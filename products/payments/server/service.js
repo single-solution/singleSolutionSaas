@@ -269,7 +269,7 @@ export const createService = (product) => {
 			if (!method) return { ok: false };
 			const changed = await s.store.payments.change(
 				payment.id,
-				['pending', 'failed', 'cancelled'],
+				['pending', 'failed', 'canceled'],
 				{
 					gateway,
 					manual: { name: method.name, kind: method.kind },
@@ -302,7 +302,7 @@ export const createService = (product) => {
 				: { kind: started.kind, action: started.action, fields: started.fields };
 		const changed = await s.store.payments.change(
 			payment.id,
-			['pending', 'failed', 'cancelled'],
+			['pending', 'failed', 'canceled'],
 			{
 				gateway,
 				manual: null,
@@ -364,7 +364,7 @@ export const createService = (product) => {
 			}
 			const paid = await s.store.payments.change(
 				payment.id,
-				['pending', 'failed', 'cancelled', 'voided'],
+				['pending', 'failed', 'canceled', 'voided'],
 				{
 					status: 'paid',
 					paidAt: new Date(now()),
@@ -375,7 +375,7 @@ export const createService = (product) => {
 			);
 			return paid ? settle(s, paid) : payment;
 		}
-		if (news.outcome === 'failed' || news.outcome === 'cancelled') {
+		if (news.outcome === 'failed' || news.outcome === 'canceled') {
 			const changed = await s.store.payments.change(
 				payment.id,
 				['pending'],
@@ -435,13 +435,13 @@ export const createService = (product) => {
 	 */
 	const voidPayment = async (s, payment, reason, by) => {
 		if (payment.status === 'voided') return payment;
-		if (!['pending', 'failed', 'cancelled'].includes(payment.status))
+		if (!['pending', 'failed', 'canceled'].includes(payment.status))
 			throw problem('already_paid', 'This payment was paid: refund it instead.', {
 				extensions: { payment: view(s, payment) },
 			});
 		const voided = await s.store.payments.change(
 			payment.id,
-			['pending', 'failed', 'cancelled'],
+			['pending', 'failed', 'canceled'],
 			{ status: 'voided', voidedAt: new Date(now()), checkout: null },
 			{ event: 'voided', detail: reason || 'canceled by the merchant', by: nameOf(by) },
 		);
@@ -622,7 +622,7 @@ export const createService = (product) => {
 	 * @param {Site} s @param {SubscriptionRecord} subscription @param {Actor} by @param {string} reason
 	 */
 	const cancelSubscription = async (s, subscription, by, reason) => {
-		if (subscription.status === 'cancelled' || subscription.status === 'expired')
+		if (subscription.status === 'canceled' || subscription.status === 'expired')
 			throw problem('conflict', 'The subscription has already ended.');
 		const keys = await keysOf(s, subscription.gateway);
 		if (!keys) throw problem('gateway_not_ready', `${subscription.gateway} is not connected for this website.`);
@@ -631,8 +631,8 @@ export const createService = (product) => {
 		const updated = /** @type {SubscriptionRecord} */ (
 			await s.store.subscriptions.update(
 				subscription.id,
-				{ status: 'cancelled' },
-				{ event: 'cancelled', detail: reason, by: nameOf(by) },
+				{ status: 'canceled' },
+				{ event: 'canceled', detail: reason, by: nameOf(by) },
 			)
 		);
 		await emit(s, 'subscription.updated', { subscription: subscriptionView(updated) });

@@ -4,7 +4,7 @@
  * type take the decimal sign money is shown with (P6).
  * @module
  */
-import { formatDate, formatMoney, normaliseFormat, viewerOf } from '@ss/app-kit/widget';
+import { formatDate, formatMoney, normalizeFormat, viewerOf } from '@ss/app-kit/widget';
 import { amountOf, amountText, decimalSignOf } from '../core/money.js';
 
 /**
@@ -15,7 +15,7 @@ import { amountOf, amountText, decimalSignOf } from '../core/money.js';
 export const formattersOf = (config, host) => {
 	const viewer = viewerOf(host.ownerDocument.defaultView);
 	// the language money is shown in: the Format's, else the viewer's
-	const decimalSign = decimalSignOf(normaliseFormat(config.format).locale || viewer.locale || '');
+	const decimalSign = decimalSignOf(normalizeFormat(config.format).locale || viewer.locale || '');
 	return Object.freeze({
 		/** @param {number} amount minor units @param {string} currency */
 		money: (amount, currency) => formatMoney(amount, currency, config.format, viewer),
