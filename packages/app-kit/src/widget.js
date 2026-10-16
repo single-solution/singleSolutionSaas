@@ -4,6 +4,8 @@
  *
  * `formatMoney` and `formatDate` are the kit's one formatter (PLAN 0.8.10 K7): widgets pass the website's Format and
  * business time zone from their widget config, and `viewerOf(window)` (the browser's language and time zone).
+ * `toDecimal` and `fromDecimal` turn minor units into the plain decimal text of a money input and back, `isCurrency`
+ * checks a currency code, and `toCsv` writes a CSV file (the formula guard included), the same as the server's.
  *
  * `mountWidget({ host, theme, css, customCss, render })` attaches an open Shadow DOM to `host`, so the site's CSS
  * cannot break the widget, and injects into that shadow root only: the theme as CSS variables
@@ -16,10 +18,19 @@
  * their screens from `badge`, `dot`, `fieldGrid`, `splitView`, `moreMenu` and `openDialog` (PLAN 0.6).
  * @module
  */
-import { DEFAULT_FORMAT, formatDate, formatMoney, normaliseFormat } from '@ss/contracts/format';
+import { toCsv } from '@ss/contracts/csv';
+import {
+	DEFAULT_FORMAT,
+	formatDate,
+	formatMoney,
+	fromDecimal,
+	isCurrency,
+	normaliseFormat,
+	toDecimal,
+} from '@ss/contracts/format';
 import { formatText } from './text.js';
 
-export { DEFAULT_FORMAT, formatDate, formatMoney, formatText, normaliseFormat };
+export { DEFAULT_FORMAT, formatDate, formatMoney, formatText, fromDecimal, isCurrency, normaliseFormat, toCsv, toDecimal };
 export { badge, dot, fieldGrid, moreMenu, openDialog, splitView } from './widget/admin.js';
 export { element } from './widget/dom.js';
 export { REFRESH_BEFORE_MS, adminCall, createTicketSource, requestJson } from './widget/tickets.js';

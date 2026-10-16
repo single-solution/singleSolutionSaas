@@ -1,7 +1,19 @@
 // @vitest-environment jsdom
 /* global document, window */
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_FORMAT, formatDate, formatMoney, formatText, mountWidget, themeCss, viewerOf } from '../src/widget.js';
+import {
+	DEFAULT_FORMAT,
+	formatDate,
+	formatMoney,
+	formatText,
+	fromDecimal,
+	isCurrency,
+	mountWidget,
+	themeCss,
+	toCsv,
+	toDecimal,
+	viewerOf,
+} from '../src/widget.js';
 
 describe('widget texts', () => {
 	it('fills placeholders as plain text', () => {
@@ -9,6 +21,21 @@ describe('widget texts', () => {
 			'Hi <b>Sam</b>, 3 new {missing}',
 		);
 		expect(formatText('Plain')).toBe('Plain');
+	});
+});
+
+describe('money and CSV for inputs and downloads', () => {
+	it('turns minor units into the decimal text of an input and back, in the currency’s own digits', () => {
+		expect(toDecimal(1050, 'USD')).toBe('10.50');
+		expect(toDecimal(1050, 'JPY')).toBe('1050');
+		expect(fromDecimal('10.5', 'USD')).toBe(1050);
+		expect(fromDecimal('10.555', 'USD')).toBeNull();
+		expect(isCurrency('USD')).toBe(true);
+		expect(isCurrency('usd')).toBe(false);
+	});
+
+	it('writes a CSV file whose text never runs as a formula in a spreadsheet', () => {
+		expect(toCsv(['name', 'note'], [['=SUM(A1)', 'a, "b"']])).toBe('﻿name,note\r\n\'=SUM(A1),"a, ""b"""\r\n');
 	});
 });
 
