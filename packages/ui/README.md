@@ -38,7 +38,18 @@ the page is as wide as the window leaves it. Nothing is centered in a narrow col
   become rows by themselves (`FieldLayoutContext`); `SettingRow` is a row for any other control; `Dialog` and `ListEditor`
   items stack again. `layout="stack" | "row"` on a field overrides.
 - `SectionLayout` / `SectionNav` / `useHashSection`: the inner sidebar for pages with sections (grouped links, badges,
-  sticky, a button that opens the list on phones). All sections stay mounted, the chosen one is in the hash.
+  sticky, a search box from 10 links, a button that opens the list on phones). ONE section is shown at a time; a section
+  mounts when first opened and then stays; the choice is in the hash with a history entry per choice (Back works). A
+  section with `children` lists them as sub-items, each its own view. A page with one section has no sidebar. Use it
+  (not a long column) for every page with more than about two cards.
+- `CardFlow` / `CARD_FLOW` (also what `SectionLayout` panels and `SchemaForm` use): cards in auto-fill columns of at least
+  24 rem, always at their natural height (`NO_STRETCH` = `items-start`; never equal heights). A `SettingsCard` or
+  `<Card flow>` takes one column; anything else in the flow (table, editor, callout) takes the whole row. A lone card
+  takes the whole row (`SettingsCard wide`).
+- `Disclosure` (collapsed by default; `forceOpen`), `PillTabs`, `ItemSwitcher` (a list editor's entries one at a time),
+  `Paged` (search from 8 items and Previous / Next pages), `ViewTitle`.
+- `SchemaForm`: settings with `x-ui.advanced` (or in a group named Advanced) are in a collapsed Advanced block; from three
+  groups on only one group shows, under a tab strip (`tabs={false}` lists the cards; `group="Name"` shows one group).
 - Controls on native inputs: `Switch` (`role="switch"`), `Checkbox` / `CheckboxInput` (`indeterminate`), `RadioGroup`
   (`cards`: title plus `description`; arrow keys), `SegmentedControl` (up to about four short choices), `Input` with
   `prefix` / `suffix` adornments, `Select`, `TextArea`; 36 px high, the accent focus ring, error and disabled states.
