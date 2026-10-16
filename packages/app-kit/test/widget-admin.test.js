@@ -1,7 +1,18 @@
 // @vitest-environment jsdom
 /* global document, KeyboardEvent */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { badge, dot, element, fieldGrid, moreMenu, openDialog, splitView } from '../src/widget.js';
+import {
+	badge,
+	dot,
+	element,
+	emptyState,
+	errorState,
+	fieldGrid,
+	loadingState,
+	moreMenu,
+	openDialog,
+	splitView,
+} from '../src/widget.js';
 
 afterEach(() => document.body.replaceChildren());
 
@@ -115,7 +126,7 @@ describe('moreMenu', () => {
 		toggle.click();
 		expect(list.hasAttribute('hidden')).toBe(true);
 		toggle.click();
-		press(list, 'Tab');
+		press(list, 'Enter');
 		expect(list.hasAttribute('hidden')).toBe(false);
 		press(list, 'Escape');
 		expect(list.hasAttribute('hidden')).toBe(true);
@@ -185,8 +196,8 @@ describe('openDialog', () => {
 		expect(
 			[...opened.dialog.querySelectorAll('.actions button')].map((button) => [button.textContent, button.className]),
 		).toEqual([
-			['Add', ''],
 			['Cancel', 'secondary'],
+			['Add', ''],
 		]);
 		submitForm(opened.dialog);
 		expect(submit.disabled).toBe(true);
@@ -280,5 +291,131 @@ describe('openDialog', () => {
 		opener.remove();
 		opened.close();
 		expect(document.activeElement).toBe(document.body);
+	});
+});
+
+describe('moreMenu keyboard', () => {
+	it('moves with the arrow keys, Home and End; Tab closes; choosing returns focus to the button first', () => {
+		const { root, shadow } = widgetRoot();
+		const picked = vi.fn(() => shadow.activeElement);
+		const menu = moreMenu(document, 'More', [
+			{ label: 'Edit', onSelect: () => {} },
+			{ label: 'Copy', onSelect: picked },
+			{ label: 'Delete', onSelect: () => {}, danger: true },
+		]);
+		root.append(menu);
+		const [toggle, list] = /** @type {[HTMLElement, HTMLElement]} */ ([...menu.children]);
+		const [edit, copy, remove] = /** @type {[HTMLElement, HTMLElement, HTMLElement]} */ ([...list.children]);
+		toggle.focus();
+		press(toggle, 'ArrowDown');
+		expect(list.hasAttribute('hidden')).toBe(false);
+		expect(shadow.activeElement).toBe(edit);
+		press(edit, 'ArrowDown');
+		expect(shadow.activeElement).toBe(copy);
+		press(copy, 'ArrowDown');
+		expect(shadow.activeElement).toBe(remove);
+		press(remove, 'ArrowDown');
+		expect(shadow.activeElement).toBe(edit);
+		press(edit, 'ArrowUp');
+		expect(shadow.activeElement).toBe(remove);
+		press(remove, 'Home');
+		expect(shadow.activeElement).toBe(edit);
+		press(edit, 'End');
+		expect(shadow.activeElement).toBe(remove);
+		press(remove, 'Tab');
+		expect(list.hasAttribute('hidden')).toBe(true);
+		toggle.click();
+		copy.click();
+		// the action ran with focus already back on the button, so a dialog it opens returns focus there
+		expect(picked).toHaveReturnedWith(toggle);
+	});
+
+	it('does nothing for the arrow keys while closed, except ArrowDown on the button', () => {
+		const { root, shadow } = widgetRoot();
+		const menu = moreMenu(document, 'More', [{ label: 'Edit', onSelect: () => {} }]);
+		root.append(menu);
+		const [toggle, list] = /** @type {[HTMLElement, HTMLElement]} */ ([...menu.children]);
+		press(toggle, 'ArrowUp');
+		expect(list.hasAttribute('hidden')).toBe(true);
+		press(toggle, 'ArrowDown');
+		expect(shadow.activeElement).toBe(list.children[0]);
+	});
+});
+
+describe('openDialog focus', () => {
+	it('keeps Tab and Shift+Tab inside the dialog', () => {
+		const { root, shadow } = widgetRoot();
+		const name = element(document, 'input', { name: 'name' });
+		const opened = openDialog(root, {
+			title: 'Add item',
+			body: [name],
+			submitLabel: 'Add',
+			closeLabel: 'Cancel',
+			onSubmit: () => undefined,
+		});
+		const [cancel, add] = /** @type {[HTMLElement, HTMLElement]} */ ([...opened.dialog.querySelectorAll('.actions button')]);
+		const tab = (/** @type {boolean} */ shift) => {
+			const event = new KeyboardEvent('keydown', {
+				key: 'Tab',
+				shiftKey: shift,
+				bubbles: true,
+				cancelable: true,
+				composed: true,
+			});
+			(shadow.activeElement ?? document.body).dispatchEvent(event);
+			return event.defaultPrevented;
+		};
+		expect(shadow.activeElement).toBe(name);
+		expect(tab(true)).toBe(true);
+		expect(shadow.activeElement).toBe(add);
+		expect(tab(false)).toBe(true);
+		expect(shadow.activeElement).toBe(name);
+		// in between the browser moves focus itself
+		cancel.focus();
+		expect(tab(false)).toBe(false);
+		expect(tab(true)).toBe(false);
+	});
+
+	it('starts on Cancel when the dialog has no field, so a destructive confirm is never one key away', () => {
+		const { root, shadow } = widgetRoot();
+		const opened = openDialog(root, {
+			title: 'Delete rule',
+			body: ['This cannot be undone.'],
+			submitLabel: 'Delete',
+			closeLabel: 'Cancel',
+			danger: true,
+			onSubmit: () => undefined,
+		});
+		expect(shadow.activeElement?.textContent).toBe('Cancel');
+		opened.close();
+	});
+});
+
+describe('list states', () => {
+	it('shows loading as a status line', () => {
+		const loading = loadingState(document, 'Loading payments');
+		expect(loading.outerHTML).toBe('<p class="state loading" role="status">Loading payments</p>');
+	});
+
+	it('shows an empty list with its next step', () => {
+		const add = element(document, 'button', { type: 'button' }, 'Add a link');
+		const empty = emptyState(document, 'No links yet.', add);
+		expect(empty.className).toBe('state empty');
+		expect(empty.firstElementChild?.textContent).toBe('No links yet.');
+		expect(empty.lastElementChild).toBe(add);
+		expect(emptyState(document, 'Nothing here.').children).toHaveLength(1);
+	});
+
+	it('shows a problem as an alert with a Try again button that calls back', () => {
+		const onRetry = vi.fn();
+		const failed = errorState(document, 'The list did not load.', { label: 'Try again', onRetry });
+		expect(failed.getAttribute('role')).toBe('alert');
+		expect(failed.querySelector('p')?.textContent).toBe('The list did not load.');
+		const again = /** @type {HTMLButtonElement} */ (failed.querySelector('button'));
+		expect(again.type).toBe('button');
+		expect(again.className).toBe('secondary');
+		again.click();
+		expect(onRetry).toHaveBeenCalledOnce();
+		expect(errorState(document, 'No retry.').querySelector('button')).toBeNull();
 	});
 });

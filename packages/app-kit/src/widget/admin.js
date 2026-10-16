@@ -1,11 +1,13 @@
 /**
  * Building blocks of the admin widgets (PLAN 0.6): status badges and dots, a grid of labeled values, the
  * list-and-detail layout, the More menu (⋯) with a destructive action last in danger text, and dialogs for secondary
- * forms with an optional typed confirmation. They set these classes for the product CSS: `badge <tone>`,
- * `dot <tone>`, `facts`, `split` (`data-view="list" | "detail"`) with `pane list-pane` / `pane detail-pane` and
- * `link back`, `more` with `secondary icon` and `menu` (`danger` on a destructive item), and `overlay` with
- * `dialog` (`wide`), `field`, `status` (`error` while it shows a problem), `actions`, `danger` and `secondary`.
- * Text is always set as text, never as HTML.
+ * forms with an optional typed confirmation, and the three states of a list: loading, empty (with a next step) and
+ * failed (with Try again). They set these classes, which `ADMIN_KIT_CSS` (admin-css.js) styles for every product:
+ * `badge <tone>`, `dot <tone>`, `facts`, `split` (`data-view="list" | "detail"`) with `pane list-pane` /
+ * `pane detail-pane` and `link back`, `more` with `secondary icon` and `menu` (`danger` on a destructive item),
+ * `overlay` with `dialog` (`wide`), `field`, `status` (`error` while it shows a problem), `actions`, `danger` and
+ * `secondary`, and `state` (`loading`, `empty`, `error`). A dialog and the More menu are keyboard complete: the dialog
+ * traps Tab and closes on Escape, the menu moves with the arrow keys. Text is always set as text, never as HTML.
  * @module
  */
 import { element } from './dom.js';
@@ -45,6 +47,40 @@ export const fieldGrid = (doc, rows) => {
 };
 
 /**
+ * The loading state of a list or panel: one line of text (`role="status"`), with a small spinner from the product CSS.
+ * @param {Document} doc @param {string} text
+ */
+export const loadingState = (doc, text) => element(doc, 'p', { class: 'state loading', role: 'status' }, text);
+
+/**
+ * The empty state of a list: what is missing and, when there is one, the next step (a button or link that adds the
+ * first item, clears the filter, and so on).
+ * @param {Document} doc @param {string} text @param {HTMLElement | null} [action]
+ */
+export const emptyState = (doc, text, action = null) => {
+	const box = element(doc, 'div', { class: 'state empty' });
+	box.append(element(doc, 'p', {}, text));
+	if (action) box.append(action);
+	return box;
+};
+
+/**
+ * The error state of a list or panel: the problem text (`role="alert"`) and, with `retry`, a Try again button that
+ * calls `onRetry`.
+ * @param {Document} doc @param {string} text @param {{ label: string, onRetry: () => unknown }} [retry]
+ */
+export const errorState = (doc, text, retry) => {
+	const box = element(doc, 'div', { class: 'state error', role: 'alert' });
+	box.append(element(doc, 'p', {}, text));
+	if (retry) {
+		const again = element(doc, 'button', { type: 'button', class: 'secondary' }, retry.label);
+		again.addEventListener('click', () => void retry.onRetry());
+		box.append(again);
+	}
+	return box;
+};
+
+/**
  * The list-and-detail layout: the product CSS shows the list beside the picked item on a wide widget, and on a narrow
  * one the list, then the item alone (`show('detail')`) with Back. The detail can take focus.
  * @param {Document} doc @param {string} backLabel
@@ -67,8 +103,11 @@ export const splitView = (doc, backLabel) => {
 };
 
 /**
- * The More menu (⋯): a button that opens a short list of actions, destructive ones last in danger text. Escape or a
- * press outside closes it; it is hidden when it has no actions.
+ * The More menu (⋯): a button that opens a short list of actions, destructive ones last in danger text. Opening focuses
+ * the first action; Arrow keys, Home and End move between the actions (ArrowDown on the closed button opens it);
+ * Escape returns focus to the button, Tab and a press outside close the menu. Choosing an action closes the menu and
+ * puts focus back on the button first, so a dialog the action opens returns focus there. It is hidden when it has no
+ * actions.
  * @param {Document} doc
  * @param {string} label the button's accessible name
  * @param {Array<MenuItem | null | undefined | false>} entries left out when null, undefined or false
@@ -92,6 +131,14 @@ export const moreMenu = (doc, label, entries) => {
 		button.setAttribute('aria-expanded', 'false');
 		doc.removeEventListener('pointerdown', outside, true);
 	};
+	/** @type {() => HTMLElement[]} */
+	const entriesNow = () => /** @type {HTMLElement[]} */ ([...menu.querySelectorAll('[role="menuitem"]')]);
+	const open = () => {
+		menu.removeAttribute('hidden');
+		button.setAttribute('aria-expanded', 'true');
+		doc.addEventListener('pointerdown', outside, true);
+		entriesNow()[0]?.focus();
+	};
 	for (const item of [...items.filter((each) => !each.danger), ...items.filter((each) => each.danger)]) {
 		const entry = element(
 			doc,
@@ -101,21 +148,42 @@ export const moreMenu = (doc, label, entries) => {
 		);
 		entry.addEventListener('click', () => {
 			close();
+			button.focus();
 			void item.onSelect();
 		});
 		menu.append(entry);
 	}
 	button.addEventListener('click', () => {
 		if (!menu.hasAttribute('hidden')) return close();
-		menu.removeAttribute('hidden');
-		button.setAttribute('aria-expanded', 'true');
-		doc.addEventListener('pointerdown', outside, true);
-		/** @type {HTMLElement | null} */ (menu.querySelector('button'))?.focus();
+		open();
 	});
 	wrap.addEventListener('keydown', (event) => {
-		if (event.key !== 'Escape') return;
-		close();
-		button.focus();
+		const opened = !menu.hasAttribute('hidden');
+		if (event.key === 'Escape') {
+			if (!opened) return;
+			close();
+			button.focus();
+			return;
+		}
+		if (!opened) {
+			if (event.key === 'ArrowDown' && event.target === button) {
+				event.preventDefault();
+				open();
+			}
+			return;
+		}
+		if (event.key === 'Tab') return close();
+		const list = entriesNow();
+		const index = list.indexOf(/** @type {HTMLElement} */ (event.target));
+		/** @type {number | null} */
+		let next = null;
+		if (event.key === 'ArrowDown') next = (index + 1) % list.length;
+		else if (event.key === 'ArrowUp') next = (index - 1 + list.length) % list.length;
+		else if (event.key === 'Home') next = 0;
+		else if (event.key === 'End') next = list.length - 1;
+		if (next === null) return;
+		event.preventDefault();
+		list[next]?.focus();
 	});
 	wrap.append(button, menu);
 	if (items.length === 0) wrap.setAttribute('hidden', '');
@@ -124,6 +192,36 @@ export const moreMenu = (doc, label, entries) => {
 
 /** Ids of the typed-confirmation inputs, unique on the page. */
 let confirmIds = 0;
+
+/** What Tab can reach inside a dialog. */
+const FOCUSABLE =
+	'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), ' +
+	'textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Keep Tab inside a dialog: from the last control it goes to the first and Shift+Tab from the first to the last.
+ * @param {HTMLElement} dialog
+ * @param {KeyboardEvent} event
+ */
+const trapTab = (dialog, event) => {
+	const controls = /** @type {HTMLElement[]} */ ([...dialog.querySelectorAll(FOCUSABLE)]).filter(
+		(control) => !control.closest('[hidden]'),
+	);
+	const first = controls[0];
+	const last = controls[controls.length - 1];
+	if (!first || !last) {
+		event.preventDefault();
+		return;
+	}
+	const active = /** @type {Document | ShadowRoot} */ (dialog.getRootNode()).activeElement;
+	if (event.shiftKey && (active === first || !dialog.contains(active))) {
+		event.preventDefault();
+		last.focus();
+	} else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+		event.preventDefault();
+		first.focus();
+	}
+};
 
 /**
  * @typedef {object} DialogInput
@@ -141,8 +239,9 @@ let confirmIds = 0;
 
 /**
  * A dialog over the widget (the product CSS makes it a full-screen sheet on phones). With `onSubmit` it is a form with
- * a submit and a Cancel button; without, it shows `body` with a Close button and a press beside it closes it too.
- * Escape closes either, and focus goes back to where it was.
+ * a Cancel and a submit button (Cancel first, the main action last, as in the Portal); without, it shows `body` with a
+ * Close button and a press beside it closes it too. Focus starts on the first field (the first button when there is
+ * none, which is Cancel), Tab stays inside the dialog, Escape closes either, and focus goes back to where it was.
  * @param {HTMLElement | ShadowRoot} root the widget's root
  * @param {DialogInput} input
  * @returns {{ close: () => void, dialog: HTMLElement, submit: HTMLButtonElement | null, status: HTMLElement }}
@@ -181,7 +280,6 @@ export const openDialog = (
 			element(doc, 'button', { type: 'submit', ...(danger ? { class: 'danger' } : {}) }, submitLabel)
 		);
 		submit = button;
-		actions.append(button);
 		/** Whether the typed confirmation, if any, is done. @type {() => boolean} */
 		let confirmed = () => true;
 		if (confirm) {
@@ -213,6 +311,7 @@ export const openDialog = (
 			if (event.target === overlay) close();
 		});
 	actions.append(dismiss);
+	if (submit) actions.append(submit);
 	dialog.append(
 		element(doc, 'h3', {}, title),
 		.../** @type {Array<Node | string>} */ (body.filter((child) => child !== null && child !== undefined && child !== false)),
@@ -222,7 +321,10 @@ export const openDialog = (
 	);
 	overlay.append(dialog);
 	overlay.addEventListener('keydown', (event) => {
-		if (event.key === 'Escape') close();
+		if (event.key === 'Escape') {
+			event.stopPropagation();
+			close();
+		} else if (event.key === 'Tab') trapTab(dialog, event);
 	});
 	root.append(overlay);
 	/** @type {HTMLElement | null} */ (dialog.querySelector('input, textarea, select, button'))?.focus();

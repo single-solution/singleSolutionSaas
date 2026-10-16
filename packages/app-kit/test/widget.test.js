@@ -104,6 +104,24 @@ describe('mountWidget', () => {
 		window.matchMedia = original;
 	});
 
+	it('sets lang and dir on the root only when given, else the page decides', () => {
+		const plain = document.createElement('div');
+		document.body.append(plain);
+		const first = mountWidget({ host: plain, render: () => undefined });
+		expect(first.root.hasAttribute('lang')).toBe(false);
+		expect(first.root.hasAttribute('dir')).toBe(false);
+		const arabic = document.createElement('div');
+		document.body.append(arabic);
+		const second = mountWidget({ host: arabic, lang: 'ar', dir: 'rtl', render: () => undefined });
+		expect(second.root.getAttribute('lang')).toBe('ar');
+		expect(second.root.getAttribute('dir')).toBe('rtl');
+		const odd = document.createElement('div');
+		document.body.append(odd);
+		// @ts-expect-error a direction that is not ltr or rtl is left out
+		const third = mountWidget({ host: odd, dir: 'auto', render: () => undefined });
+		expect(third.root.hasAttribute('dir')).toBe(false);
+	});
+
 	it('leaves out theme values that do not fit', () => {
 		expect(themeCss({ fontFamily: 'x;} body{', radius: 99 })).toBe(':host {  }');
 		expect(themeCss()).toBe(':host { --ss-font-family: inherit; }');
