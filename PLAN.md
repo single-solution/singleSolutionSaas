@@ -64,7 +64,7 @@ One meaning per word. New code, screens, APIs and docs use only these words, wit
   admins and settings. Merchants use it to see their websites, tokens, install code, usage and credits, and to open
   product dashboards.
 - **Deployable**: one separately hosted app with its own database and environment variables: the Portal, or one product.
-- **Website**: one exact, normalised domain owned by one merchant (0.2). `shop.com` and `www.shop.com` are two websites.
+- **Website**: one exact, normalized domain owned by one merchant (0.2). `shop.com` and `www.shop.com` are two websites.
   A domain belongs to at most one website platform-wide.
 - **Product**: one of the six separately hosted apps, with ids `accounts`, `ecommerce`, `chat`, `notifications`,
   `payments` and `growth`. Each offers an API plus widgets and has its own setup dashboard.
@@ -112,7 +112,7 @@ One meaning per word. New code, screens, APIs and docs use only these words, wit
 - **Receipt**: a ledger entry that adds whole credits, recorded by an Owner or Finance admin with amount paid, payment
   method and reference. It is never edited or reversed.
 - **Amount paid**: free text on a receipt (for example `PKR 5,000`), shown exactly as typed, to admins only, and never
-  totalled.
+  totaled.
 - **Charge**: credits the Portal takes for one switched-on feature, for one UTC clock hour, on one product on a website.
 - **Day charge**: the stored ledger entry for one product on a website for one UTC day, with per-feature lines (hours,
   credits). Today's charges are computed live and not stored.
@@ -168,7 +168,7 @@ One meaning per word. New code, screens, APIs and docs use only these words, wit
 - **Permission**: a named right inside a product that a ticket can carry (for Chat: `inbox.read`, `inbox.reply`,
   `inbox.manage`, `knowledge.edit`, `reports.read`).
 - **Accounts sign-in**: a 15-minute token from Accounts that identifies one of a merchant's users on one website. A
-  product trusts it only when the Accounts token is pasted, and it never authorises admin actions.
+  product trusts it only when the Accounts token is pasted, and it never authorizes admin actions.
 - **Origin**: scheme + host + port of a web page, as browsers send it in the Origin header (for example
   `https://admin.shop.com`).
 
@@ -215,7 +215,7 @@ One meaning per word. New code, screens, APIs and docs use only these words, wit
 
 ## 0.1 The idea and the scope
 
-We centralise the code that ibrahimMobiles has, so any merchant can use it. Each **product** is a standalone, separately
+We centralize the code that ibrahimMobiles has, so any merchant can use it. Each **product** is a standalone, separately
 hosted app that offers its functionality as an **API** plus **ready-made widgets**. A merchant builds their own website
 and their own admin; they drop in our widgets or design their own screens on our API. Our **Portal** is where we
 (admins) manage merchants, their websites, which products each website has, and credits; merchants use it to see their
@@ -342,7 +342,7 @@ Each product checks the dashboard rights on its own server for every request.
 | **Payments**      | Card and online payments with the merchant's own keys: Stripe, PayFast and local Pakistani gateways, PayPal, plus a generic adapter. Usable by non-shop sites too; Ecommerce uses it through a pasted token.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Growth**        | Tracking pixels, cookie consent, conversion events, first-party analytics, notice bar, site-wide SEO (robots, verification, IndexNow, SEO checklist).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
-- These six products are the whole catalogue. A product's exact feature list comes only from its grilling, right before
+- These six products are the whole catalog. A product's exact feature list comes only from its grilling, right before
   it is built (0.12); Chat's list is already decided (0.8.3). Until a product is grilled, 0.3 is its only scope.
 - Nothing outside 0.3 is built: no Automation, Ops Monitor, Files & Drive, Reports builder, Content product, Messaging
   campaigns, Configurator product, booking system, or any other idea. (Chat's book-a-slot tool calls the
@@ -557,7 +557,7 @@ Admin widgets on the merchant's own admin use **tickets**, never the browser tok
   from Accounts (through `@ss/net`, cached) and verifies each sign-in offline: it must be signed by Accounts, issued for
   the same website and not expired. Accounts sign-ins last 15 minutes and are renewed by Accounts' widget, so a blocked
   or deleted user stops being trusted within 15 minutes.
-- An Accounts sign-in only says who the visitor or user is. Whatever roles it carries, it never authorises admin actions
+- An Accounts sign-in only says who the visitor or user is. Whatever roles it carries, it never authorizes admin actions
   in any product; those need the server token or a ticket.
 - Some products may also accept a merchant's own login for visitors (decided in their grilling; Chat never does). For
   those, the issuer and its public-keys URL are set in that product's Connections, never in the Portal. No product
@@ -665,7 +665,7 @@ status response and notices (0.4.12) and checks it on use (0.8.1).
   Chat, `window.SSChat.admin({ getTicket })`), and admin widgets then mount into their `data-ss-<product>` elements.
 - The merchant decides where widgets appear; targeting exists only as a product's own settings (for example Chat's hide
   on pages).
-- **Styling**: each product has one theme per website, used by all its widgets, visitor and admin: colours, font family
+- **Styling**: each product has one theme per website, used by all its widgets, visitor and admin: colors, font family
   (inherit, or a font the site already loads; we host no fonts), corner radius, and Light, Dark or Follow device. There
   is also a custom CSS box. Widgets render inside a Shadow DOM so the site's CSS cannot break them, and the custom CSS
   is injected into that shadow root only.
@@ -691,7 +691,7 @@ status response and notices (0.4.12) and checks it on use (0.8.1).
 - Data rights and log copies use pasted tokens only; nothing is automatic.
 - Every product, Chat included, ships two kit routes from its first release, for one end user of a website, called with
   that product's own server token: **export**, which returns that user's records, and **delete**, which deletes or
-  anonymises them as the product's grilling decides (Chat: 0.8.3 Retention). The user is identified by Accounts user id,
+  anonymizes them as the product's grilling decides (Chat: 0.8.3 Retention). The user is identified by Accounts user id,
   e-mail and phone.
 - The merchant pastes each other product's server token into Accounts' Connections. When a signed-in user asks, Accounts
   calls each connected product's export or delete route and combines the results. The export is given only to that user,
@@ -880,7 +880,7 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
 
 - Owner and Finance add credits as a **receipt** with these fields: **credits** (whole number of 1 or more, required);
   **amount paid** (free text, required, up to 60 characters, for example `PKR 5,000`; shown exactly as typed, never
-  totalled or converted); **payment method** (free text, required, up to 60 characters); **reference** (free text,
+  totaled or converted); **payment method** (free text, required, up to 60 characters); **reference** (free text,
   optional, up to 120 characters).
 - A confirm step repeats the merchant, the credits, the amount paid and the new balance before saving. The form carries
   a one-time key that also names the receipt, so a double submit or a repeat after an error saves once. Once the receipt
@@ -940,7 +940,7 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
 - One row per product × website × UTC day × feature, showing hours charged and credits; zero-price features show 0.
   Today's row is live. Feature names come from the current price list; a feature no longer in the price list shows the
   name from the last price list that had it. Removed products and websites keep their past rows.
-- All Portal days, months, 30-day charts and this-month totals are UTC and labelled UTC; single timestamps show in the
+- All Portal days, months, 30-day charts and this-month totals are UTC and labeled UTC; single timestamps show in the
   viewer's local time.
 - Spent this month = the merchant's charges in the current UTC month, today included. Earned this month (Products page)
   = that product's charges in the current UTC month, today included.
@@ -994,7 +994,7 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
   other list has bulk actions, and there is no CSV export. The Merchants search also matches owner e-mail and website
   domains; this is how an admin finds a website. Merchants is paged at 50. Long names and domains wrap to two lines on
   whole words (a domain or e-mail between its parts) before they are cut with an ellipsis (the full text on hover).
-- **Forms**: centred dialogs; a full page only when a form would still scroll a lot after a smarter layout. **Fields sit
+- **Forms**: centered dialogs; a full page only when a form would still scroll a lot after a smarter layout. **Fields sit
   in a grid**, not full width: short inputs (names, e-mails, numbers, selects, switches, dates, short text) pack into 1
   column on phones, 2 on tablets and 3 on wide screens (by the width of the form, so dialogs get fewer); long text, code,
   JSON and lists span the whole row, and so does a lone short field. The shared form components do this for every
@@ -1004,7 +1004,7 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
 - **Visual style (owner decisions 2026-10-14, look "A. Workbench"; replaces the 2026-10-08 "A + B" style)**:
    - **Floating, never glued to the window edges**: the sidebar and the top bar are panels with space around them (the
      top bar stays on desktop too: theme switch and account actions on its right; owner: "I loved that header"). The
-     top bar and the page share one width (at most 1200 px, centred beside the sidebar).
+     top bar and the page share one width (at most 1200 px, centered beside the sidebar).
    - **One rhythm**: the same 24 px between all blocks of a page and around the panels; cards side by side in a row have
      the **same height** (no holes between cards and sections; owner: "spaces between cards and sections, I hate
      that"). Masonry (below) stays for cards of very different heights.
@@ -1013,11 +1013,11 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
      (menus, dialogs, toasts) carry a shadow.
    - **Type**: Figtree for text, Bricolage Grotesque for page titles, the brand name and key figures; one short scale
      (titles 26 px, card titles 15 px, text 14 px, help 12–13 px); labels in sentence case, never all caps.
-   - **Colour**: warm neutrals kept light (canvas `#f7f6f4`; dark: warm plum-black), white surfaces; indigo stays the
-     only accent (colour rule below).
+   - **Color**: warm neutrals kept light (canvas `#f7f6f4`; dark: warm plum-black), white surfaces; indigo stays the
+     only accent (color rule below).
    - **Controls**: one height for inputs, selects and medium buttons (36 px), 10 px corners for controls and 14 px for
      cards; kit-drawn checkboxes, radios and switches (the same in every browser); a disabled button turns neutral
-     grey, a busy one keeps its colour with a spinner; long lists of choices (more than 12, e.g. countries) are a
+     gray, a busy one keeps its color with a spinner; long lists of choices (more than 12, e.g. countries) are a
      searchable picker with chips, countries shown by name.
    - **Overviews talk**: the admin Overview opens with a greeting and one sentence of what matters now, a **Needs you**
      list (each item says what happens if it waits and carries its button), a setup checklist while the platform is
@@ -1032,19 +1032,19 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
      product's own numbers, and Recent changes as a timeline in the viewer's local time. Accounts, Notifications, Chat,
      Payments, Growth and `ss app init` use it, each product reading its extra data only while its feature is on;
      Ecommerce to follow.)
-- **Colour rule (owner decision 2026-10-09: one accent, final)**: **indigo is the only accent** — primary buttons,
+- **Color rule (owner decision 2026-10-09: one accent, final)**: **indigo is the only accent** — primary buttons,
   links, the active item, icon tiles and badges; surfaces are neutral; **green, amber and red only for status**. No
-  screen names a colour for meaning, and the product dashboards follow the same rule.
+  screen names a color for meaning, and the product dashboards follow the same rule.
 - **Product dashboards** look the same as the Portal.
 - **Light and dark**, following the device, with a switch. The Portal and product dashboards are English, with texts
   kept in files. Widget texts are editable by merchants (0.4.10).
 
-### Status labels and colours
+### Status labels and colors
 
-- Merchant (0.5.5): Active green, Low balance amber, In grace amber, Stopped red, Suspended red; Setup pending is a grey
+- Merchant (0.5.5): Active green, Low balance amber, In grace amber, Stopped red, Suspended red; Setup pending is a gray
   badge.
 - Product on a website: Active green, In grace amber, Stopped red, Suspended red; an active product with no features on
-  shows grey `No features on`. Removed products show no card or chip.
+  shows gray `No features on`. Removed products show no card or chip.
 - Opening a Portal page runs the check (0.5.7) for the merchants it shows: the merchant console checks its own merchant,
   and admin pages check the merchants on screen (lists are paged at 50).
 
@@ -1263,7 +1263,7 @@ in, before any other page opens. A merchant with no websites sees a short welcom
    - Connected products are never deleted, only set inactive.
 - **Credits and billing** (Owner and Finance; Support read-only), one page without tabs: needs attention, all receipts
   (filter by merchant, date, method), charges by day / merchant / product. Add credits opens the receipt form (0.5.8).
-- **Admins** (Owner only; list-and-detail, 0.6): the list (search; per row name, e-mail, status dot — invited grey —
+- **Admins** (Owner only; list-and-detail, 0.6): the list (search; per row name, e-mail, status dot — invited gray —
   and role) with **Invite** (e-mail + role; sends a setup link; the invitee sets their name and password); the selected
   admin (on wide screens the first of the list until another is picked) shows e-mail, role, two-step on/off and last
   sign-in, with the actions **Resend invite** or **Copy invite link** and **Correct invite e-mail** (only until the
@@ -1429,7 +1429,7 @@ intervals, retry counts) are constants in code, not settings (the widget's poll 
 - Answers use Chat's built-in neutral instructions (no store-, country- or language-specific text) plus the name and
   contact from business.json; the merchant's own text when AI instructions is on (up to 12,000 characters, as in
   ibrahimMobiles); and knowledge, website pages and shop data only from features that are on.
-- Behaviour on AI failure is a setting: backup provider (when on), a message, and/or handoff.
+- Behavior on AI failure is a setting: backup provider (when on), a message, and/or handoff.
 - **AI label**: the merchant's choice. By default AI replies carry a label (text `AI assistant`, editable in Texts); the
   merchant may hide it. While it is hidden, Settings show a warning: laws in some places (for example the EU AI Act and
   California's bot disclosure law) require telling visitors they are talking to a bot, and the merchant is responsible
@@ -1592,7 +1592,7 @@ intervals, retry counts) are constants in code, not settings (the widget's poll 
   visitor's Accounts e-mail is prefilled), and staff can send one from the inbox.
 - **Moderation** (`products/chat/core/moderation.js`): PII redaction (cards, IBAN,
   e-mail, phone, IP), a leak filter on AI answers, a link policy, and the merchant's blocked-terms list.
-- **AI conversation summary**: made when a conversation is handed to a person, and on demand (Summarise in the context
+- **AI conversation summary**: made when a conversation is handed to a person, and on demand (Summarize in the context
   panel). It is saved on the conversation and counted in the AI token caps.
 - **Reports widget**: for a date range in the business.json time zone (default the last 30 days), it shows conversations
   per day, visitor messages, conversations answered only by AI vs handed to a person, median first staff reply time,
@@ -1654,7 +1654,7 @@ intervals, retry counts) are constants in code, not settings (the widget's poll 
   installed, and business.json found (warning only).
 - **Features**: read-only for merchants (0.4.3).
 - **Settings**: Assistant (bot name, avatar, AI instructions, AI label on/off with the law warning, on-failure
-  behaviour, token caps, cost alert share, the don't-know answer, language lock options); Tools (webhook tools, tool
+  behavior, token caps, cost alert share, the don't-know answer, language lock options); Tools (webhook tools, tool
   signing secret, booking URL); Widget look, theme and custom CSS; Texts (every widget word, welcome messages included);
   Guests; Proactive rules; Flows; Lead capture fields and consent text; Custom fields; Handoff and office hours (queue
   position); Inbox (Inbox address, staff alert recipients, default max concurrent chats); Attachments; Ratings;
@@ -1667,7 +1667,7 @@ intervals, retry counts) are constants in code, not settings (the widget's poll 
 ### 0.8.5 Notifications — owner interview (2026-10-08)
 
 Notifications sends messages for any product **and** for the merchant's own server (send API), through the merchant's
-own provider keys. All behaviour below is managed inside the Notifications product (per website; our admin sets
+own provider keys. All behavior below is managed inside the Notifications product (per website; our admin sets
 defaults and prices). Features start at price 0.
 
 - **Feature switches**: WhatsApp · Email · SMS · Browser push · Staff push · Outgoing webhooks · Fallback channel ·
@@ -1681,7 +1681,7 @@ defaults and prices). Features start at price 0.
 - **Failures**: retry on the same channel a bounded number of times (on the next uses, no background jobs), then an
   optional **fallback channel** (e.g. WhatsApp → SMS); every attempt is recorded in the delivery log.
 - **Opt-out**: required messages (sign-in codes, order and account updates) always send; non-essential messages
-  (promotions, alerts) honour a per-recipient unsubscribe (link or keyword).
+  (promotions, alerts) honor a per-recipient unsubscribe (link or keyword).
 - **Timing**: quiet hours (non-urgent messages wait for the recipient's morning), send limits per recipient per
   hour/day, delayed send (sent on the first use after its due time; no scheduled jobs, so it can be late on a quiet
   site).
@@ -1701,7 +1701,7 @@ defaults and prices). Features start at price 0.
 ### 0.8.6 Accounts — owner interview (2026-10-08)
 
 Accounts is the merchant's sign-in and user system for **their own website and admin** (never our Portal). All
-behaviour below is managed inside Accounts (per website; our admin sets defaults and prices). Features start at 0.
+behavior below is managed inside Accounts (per website; our admin sets defaults and prices). Features start at 0.
 
 - **Feature switches**: Phone code · Email + password · Email code / magic link · Google · Apple · Facebook · Roles and
   permissions · Custom fields · Two-step sign-in · Approval / invite sign-up · Risk checks · Terms acceptance · Data
@@ -1736,13 +1736,13 @@ behaviour below is managed inside Accounts (per website; our admin sets defaults
 
 ### 0.8.7 Payments — owner interview (2026-10-08)
 
-Payments takes online payments for the merchant's customers with the **merchant's own gateway keys**. All behaviour is
+Payments takes online payments for the merchant's customers with the **merchant's own gateway keys**. All behavior is
 managed inside Payments (per website; our admin sets defaults and prices). Features start at 0.
 
 - **Feature switches** (same pattern as Notifications/Accounts: per gateway + extras): Stripe · PayPal · PayFast
   (South Africa) · PayFast (Pakistan) · JazzCash · Easypaisa · Rapid Gateway · Bank transfer (manual) · Generic gateway
   adapter · Payment links · Merchant payment API · Subscriptions · Refunds. Owner decision 2026-10-10: the existing
-  `payfast` is PayFast South Africa (`payfast.co.za`, ZAR), relabelled and keeping its key; PayFast Pakistan (gopayfast,
+  `payfast` is PayFast South Africa (`payfast.co.za`, ZAR), relabeled and keeping its key; PayFast Pakistan (gopayfast,
   `apps.net.pk`, PKR) is `payfast_pk` and Rapid Gateway (`rapidgateway.pk`, PKR) is `rapid`.
 - **Uses**: shop checkout (Ecommerce sends the total via a pasted Payments token), payment links for any amount
   (invoices, bookings, donations), the merchant's own server via API, and subscriptions.
@@ -1763,7 +1763,7 @@ managed inside Payments (per website; our admin sets defaults and prices). Featu
 ### 0.8.8 Ecommerce — owner interview (2026-10-08)
 
 Ecommerce is the whole shop (following ibrahimMobiles, generic for any shop).
-Stock, offer use and points change in **one database step** at order placement. All behaviour is managed inside
+Stock, offer use and points change in **one database step** at order placement. All behavior is managed inside
 Ecommerce (per website; our admin sets defaults and prices). Features start at 0.
 
 - **Feature switches (per area + extras)**: Catalog · Variants · Multi-location stock · Grades and serials · Digital
@@ -1771,7 +1771,7 @@ Ecommerce (per website; our admin sets defaults and prices). Features start at 0
   Loyalty · Bundles · Reviews · Wishlist · Alerts · Compare · Returns · Invoices · CSV · Bulk actions · Reports · SEO ·
   Feeds · AI copy · llms.txt.
 - **Items**: physical goods (including used/graded items with condition grades and serial numbers such as IMEI —
-  part of physical goods, not a separate type), digital goods (download/licence after payment), services/bookings
+  part of physical goods, not a separate type), digital goods (download/license after payment), services/bookings
   (**simple slots**: duration, weekly hours, no double booking).
 - **Catalog**: nested categories (with SEO text), brands, variants + attributes (own price, stock, SKU), multiple stock
   locations, media in the merchant's own storage.
@@ -1807,7 +1807,7 @@ Ecommerce (per website; our admin sets defaults and prices). Features start at 0
 ### 0.8.9 Growth — owner interview (2026-10-08, round 1; round 2 left to builder defaults)
 
 Growth handles a merchant site's tracking, consent, own analytics and site-wide SEO. Catalog SEO stays in Ecommerce. All
-behaviour is managed inside Growth (per website; our admin sets defaults and prices). Features start at 0.
+behavior is managed inside Growth (per website; our admin sets defaults and prices). Features start at 0.
 
 - **Feature switches (per tool)**: Meta pixel · Google tags (GA4, Ads, Tag Manager) · TikTok pixel · Custom scripts ·
   Consent banner · Visitor analytics · Conversion funnel · Searches and 404s · Web Vitals · robots and verification ·
@@ -1864,7 +1864,7 @@ that says otherwise.
   section came from that branch and do not hold for live IM, which has no serials or IMEI capture, no claims, no stock
   or price alerts, no wishlists, no staff two-step sign-in, no order reservation window, no message outbox and no daily
   health digest, and still ships PayFast and Rapid Gateway card code. Every IM fact below is re-checked against live IM
-  before IM's turn; until then an IM tag means "a product feature IM may use", not "an IM behaviour to keep".
+  before IM's turn; until then an IM tag means "a product feature IM may use", not "an IM behavior to keep".
 - **D4.** **Totals: one option per rule** (rounding, COD fee base, first or best deal, stacking a checkout offer with
   item deals and its threshold base, which deals block points). Defaults keep the products' current math for new
   merchants; the importer writes every store value explicitly, so a later change of a global default never changes a
@@ -1883,7 +1883,7 @@ that says otherwise.
   saved before sending and retried on the next activity, and one small retry timer per product for these alone is
   allowed if that is not enough. This corrects 0.10's "no background work" only there.
 - **D8.** **Rewiring in two steps per store** (Store-side rewiring): first, inside the store, every database call moves
-  behind a named function with no behaviour change; then those functions switch to product calls one product at a time,
+  behind a named function with no behavior change; then those functions switch to product calls one product at a time,
   and the old logic is deleted. Store repositories change only after the owner's go.
 - **D9.** **No going back.** Once a store runs on the products it stays there; problems are fixed forward. There is no
   reverse export and no rollback step. The write freeze during the final copy stays, so no order is lost at that moment.
@@ -2186,7 +2186,7 @@ advisor).
 **Ecommerce dynamic model — approved by the owner 2026-10-14 (all 10 decisions as recommended).** The design is
 `audit/design/ecommerce-dynamic-model.md` (binding; this paragraph is its summary). Merchants make **item types** (kind
 physical / digital / service, plus the parts it uses: variants, grades, unit numbers, measurement table, measured
-selling, parcel, downloads, licence keys, slots, warranty); a category gives a default type; built-in types reproduce
+selling, parcel, downloads, license keys, slots, warranty); a category gives a default type; built-in types reproduce
 today. **Fields** widen attributes (product, variant, unit, order, customer; text, number, choice, yes/no, date; format
 checks without any merchant-built regular expression: characters, length, starts with, mask, check digit none/Luhn);
 up to 3 unit-number fields per type, one may hold 2 values; IMEI is one shop's field. **Order steps:** one flow per
@@ -2197,7 +2197,7 @@ transaction per move, pending external effects retried on use, a flow-save guard
 while orders are in it). **Guests:** phone, e-mail or either (phone wins under either), "phone needed" yes/no.
 **Measured selling:** new feature `measured_sales` (off, price 0), quantities in thousandths of the selling unit, unit
 fixed once there is stock, not in bundles. Region and postcode in addresses, zones and tax; measurement tables with any
-unit; landing pages by any attribute. Build order: phase 1 the order engine with no behaviour change (golden replay and
+unit; landing pages by any attribute. Build order: phase 1 the order engine with no behavior change (golden replay and
 property tests first), then flow options, fields and unit numbers (IMEI code removed), item types, addresses/guests,
 tables and landing facets, measured quantities.
 
@@ -2235,7 +2235,7 @@ tables and landing facets, measured quantities.
   a move needs and replaces the dispatch video; My orders shows the status line and the notes for the shopper. Defaults
   reproduce phase 1 exactly (golden replay and both property tests green, the pure one with random options and E40
   moves). The 8 fixes of `audit/review-order-engine-2026-10-14.md` are in with failing-first tests
-  (`tests/transitions-money.test.js`); also: a move or shopper cancel that loses its race after Payments cancelled the
+  (`tests/transitions-money.test.js`); also: a move or shopper cancel that loses its race after Payments canceled the
   payment drops it (`dropVoided`), a courier booking left by a failed move is kept and reused, a refund asked before
   is first looked up in Payments' refunds (`unrecordedRefund`), deletes are refused while a refund is pending or money
   is held, warning `refund_skipped`. SB mapping: its rules as flow options, `editPricing: keep_placed`,
@@ -2263,7 +2263,7 @@ tables and landing facets, measured quantities.
 - **Phase 4 built (2026-10-15; cf5e00ea, a839d90b, cc55a02c; importer 42b74a1d test only; e2e 590164af):** item types
   (`item_types` list of `catalog`, at most 50, kept with the settings): kind physical | digital | service, offered or
   not, elements variants, grades, units { fieldIds ≤ 3, capture stock | packing, requiredBefore packed | shipped | null },
-  chart, parcel, warranty, downloads, licenceKeys, slots, and the fields a type names (≤ 40, none = every field; the
+  chart, parcel, warranty, downloads, licenseKeys, slots, and the fields a type names (≤ 40, none = every field; the
   link lives on the type, not on fields). A product's type is its own, else its first category's (or the nearest above),
   else the built-in type of its kind; built-in types have every element the features allow except numbered units (a
   merchant turns those on through a type), so shops without types are otherwise unchanged. Saving refuses values of
@@ -2276,7 +2276,7 @@ tables and landing facets, measured quantities.
   `g:shipping_weight`, the Meta CSV and courier `{weightG}`. Dashboard Item types editor, type pickers, the product
   editor follows the type; features shown as "Condition grades and unit numbers" and "Services and bookings". Bugs
   fixed: orders that skip packing could not take unit numbers; units could be stocked for products that never number
-  them. For US-2: `licenceKeys`.
+  them. For US-2: `licenseKeys`.
 
 #### Principles
 
@@ -2285,15 +2285,15 @@ tables and landing facets, measured quantities.
   visible change" means the same features, wording, URLs and outcomes for merchants, staff and shoppers, never copying
   a store's internals or bugs.
 - **The stores are references, not targets** (owner, 2026-10-12). Nothing is built for these three stores alone and
-  nothing about them is hardcoded; more stores will come. Each behaviour they show is a general option any merchant
+  nothing about them is hardcoded; more stores will come. Each behavior they show is a general option any merchant
   sets, and the importer only writes the three stores' values (A14–A16, E38–E50, C16–C20 came from their audit).
   Restated by the owner on 2026-10-13: "the saas should be product specific but global, so I don't want anything just
   specific to a specific [store]". Each feature belongs to one product and works the same for every merchant; a store
   differs from another only by the values in its settings, and those values appear only in the importer's per-store
   table (Migration), never in product code or product defaults. Product sections describe only global options; their
   "Why" lines merely say which store showed the need.
-- **Options with safe defaults.** Every behaviour a store has that the products lack becomes a general option of the
-  product it belongs to, per website, open to every merchant. Its default keeps today's behaviour. A change that is
+- **Options with safe defaults.** Every behavior a store has that the products lack becomes a general option of the
+  product it belongs to, per website, open to every merchant. Its default keeps today's behavior. A change that is
   plainly better for every website has no switch and is marked **always**; no merchant is live yet, so these break
   nothing.
 - **Billing.** Each change is either a **new feature** (new key, off, price 0, switched by our admins, 0.4.2) or a
@@ -2338,7 +2338,7 @@ rendering (data from the APIs), CSP and legacy redirects, the store's own consen
 - CT: the success page and the payment start act on any order number without a session; a guest order needs its order
   key (E21).
 - CT: the admin chat panel calls a missing `/read` route, so unread never clears; the inbox clears it on open.
-- CT: guest phones are stored as typed, so one person has several customer records; phones are normalised (E21) and the
+- CT: guest phones are stored as typed, so one person has several customer records; phones are normalized (E21) and the
   importer merges duplicates.
 - CT: a debug route (`/api/test-product`) ships; nothing like it is ported.
 - SB: after a guest orders, the success page sends them to a member sign-in they cannot use; a guest sees the order with
@@ -2470,14 +2470,14 @@ ids and no side effects.
 Needed by E14.
 
 **K12. Phone numbers (always; owner, 2026-10-13; commits 169941a3, 168b3b81, 9c54cd55, 404d77cd, 9e916c2e, bc2863e5).**
-One normaliser, `normalisePhone` of `@ss/contracts/phone`, reads every phone a product takes as E.164, for any country.
+One normalizer, `normalizePhone` of `@ss/contracts/phone`, reads every phone a product takes as E.164, for any country.
 With `+` or `00` the number names its calling code (any assigned code, +800 and +882 too). A trunk `0` or `(0)` right
 after the code is dropped, except where national numbers keep their 0. Without them, the number takes the website's
 default calling code (the product's setting, else the business.json `country`'s; none: refused) and is read as already
 international (`923001234567`), national after its trunk prefix, or national as typed. The country's usual lengths only
 pick the reading; when they cannot, the digits are kept as typed with no second code. Any reading of 8–15 digits is
 accepted (a wrong number fails at delivery rather than refusing a real foreign one). Lookups compare E.164 exactly.
-Accounts, Chat, Notifications and the kit's staff alerts use it; Ecommerce switches next; the importer normalises and
+Accounts, Chat, Notifications and the kit's staff alerts use it; Ecommerce switches next; the importer normalizes and
 merges customers with it. Why: `923001234567` became `+92923001234567` and `+92 0320…` became `+920320…` (K-7, CK-3,
 SA-3).
 
@@ -2501,7 +2501,7 @@ Format or list save.
 
 **A1. Legacy password hashes.** Password checks also accept bcrypt (`$2a$`, `$2b$`, `$2y$`, any cost) and
 `pbkdf2$<iterations>$<salt>$<hash>` (PBKDF2-HMAC-SHA256 of the password joined with a pepper, without Unicode
-normalisation on this path). After a successful check the password is re-hashed with scrypt and saved; failed checks
+normalization on this path). After a successful check the password is re-hashed with scrypt and saved; failed checks
 keep the timing of the dummy check.
 
 - Why: SB (staff and members, bcrypt cost 12), CT (staff, bcrypt), IM (staff, PBKDF2 peppered with `AUTH_SECRET`).
@@ -2545,9 +2545,9 @@ keep the timing of the dummy check.
   roles.
 - Key: existing `roles` (its routes).
 - API: `POST /v1/users` creates an active user `{ name, email?, phone?, role, password?, addresses?, notes?, custom? }`
-  and sends nothing; `PATCH /v1/users/:id` also takes `email`, `phone` (normalised, unique, marked verified), `password`
+  and sends nothing; `PATCH /v1/users/:id` also takes `email`, `phone` (normalized, unique, marked verified), `password`
   (ends the user's sessions) and `addresses`; `DELETE /v1/users/:id` `{ reason }` erases at once, as an approved
-  deletion request does (every connected product deletes or anonymises, 0.4.11). `GET /v1/users` takes `phone` (exact),
+  deletion request does (every connected product deletes or anonymizes, 0.4.11). `GET /v1/users` takes `phone` (exact),
   `phoneDigits` (the last 10 digits), `permission` (`<product>:<key>` granted by the role, K6), several `roles` and
   `createdAfter`, has counts (K4), and its answers carry `hasPassword`. Users widget: create, edit contacts and
   password, delete.
@@ -2792,7 +2792,7 @@ sends as button components.
 - Data: none new.
 
 **N5. Webhook URLs per event.** The `webhooks` setting `urls` becomes the list `webhook_urls` of `{ url, events }`
-(empty `events` = every event, today's behaviour).
+(empty `events` = every event, today's behavior).
 
 - Why: the stores' servers take only the events they handle (K5).
 - Key: list of `webhooks`.
@@ -2835,7 +2835,7 @@ gateway switch and bank-proof upload; Stripe's checkout is expired and an approv
 (other gateways cannot be stopped). A paid payment answers 409 `already_paid` with the payment; a second cancel returns
 it. Money that arrives after a cancel (a gateway notice, or staff confirming a transfer) is recorded `paid` with
 `refundDue: true` until fully refunded, `verify` answers `verified: false`, and `payment.paid` carries the flag; the
-admin widget shows "Refund due". Ecommerce calls cancel whenever an unpaid order with a payment is cancelled (E-side
+admin widget shows "Refund due". Ecommerce calls cancel whenever an unpaid order with a payment is canceled (E-side
 work pending).
 
 #### Ecommerce
@@ -2887,7 +2887,7 @@ Catalog:
 
 **E5. Size charts.**
 
-- Why: SB (a chart from the product, else the brand, else the category; inches or centimetres; fit advice).
+- Why: SB (a chart from the product, else the brand, else the category; inches or centimeters; fit advice).
 - Key: new feature `size_charts` (needs `catalog`).
 - API: `/v1/size-charts` create, read, update and delete (server token; ticket with `catalog.edit`; delete refused while
   linked); products, brands and categories take `sizeChartId`, products `hideSizeGuide`; `GET /v1/shop/products/:ref`
@@ -2908,7 +2908,7 @@ Catalog:
 
 **E7. Attributes per category, on variants, with several values.**
 
-- Why: SB (five variant attributes, several colours on one variant, labels per category), CT (generate all variants), IM
+- Why: SB (five variant attributes, several colors on one variant, labels per category), CT (generate all variants), IM
   (attributes shown only for some grades).
 - Key: `catalog` (attributes), `variants` (variant values and the generator).
 - API: attributes gain `slug`, `categoryIds` ([] = all), `on` (`product` | `variant`), `multiple`, choices as
@@ -2942,7 +2942,7 @@ Catalog:
 
 **E10. Grades per category.**
 
-- Why: IM (grades per category with a colour, an inspection video, content, SEO and an item condition; keys with
+- Why: IM (grades per category with a color, an inspection video, content, SEO and an item condition; keys with
   hyphens).
 - Key: the `grades` list of `grades_serials`.
 - API: grade items gain `categoryIds` ([] = all), `color`, `video` (a media key or a YouTube id), `content`, `active`,
@@ -3038,7 +3038,7 @@ Promotions:
 **E18. Deal rules, display and cart locks.**
 
 - Why: SB and CT (attribute, price-range, minimum-quantity, cart-total and payment-method conditions; exclusions;
-  all/any groups; weekday and hour windows; automatic free delivery; badges and colours; deal pages; "no points with
+  all/any groups; weekday and hour windows; automatic free delivery; badges and colors; deal pages; "no points with
   this offer"; the offer kept on the cart line), CT (the shopper picks the deal), IM (a grade condition).
 - Key: `deals`. Settings: `lockMinutes` (0 = off; up to 10,080), `shopperChoice` (false).
 - API: deals gain `slug`; display fields `badgeLabel`, `discountLabel`, `color`, `banner` (media), `content`, `seo` and
@@ -3048,7 +3048,7 @@ Promotions:
   `days` (0–6) and `timeFrom`/`timeTo` (HH:MM in the business time zone; judged on read); `allowPoints` (true). Quotes
   take `paymentMethod` and re-price; quote lines carry the deal's display fields and `minQuantity`. With `lockMinutes`,
   each quote line carries a signed `lock` (deal, variant, unit price and expiry, HMAC with a website secret kept in the
-  product database), which placement honours after the deal ends or changes, unless the deal was deleted or its limit is
+  product database), which placement honors after the deal ends or changes, unless the deal was deleted or its limit is
   used up. With `shopperChoice`, a cart line may name one of its eligible deals (`dealId`). `GET /v1/shop/deals/:ref`
   takes an id or a slug; cards carry `dealCount` and the first deal's badge. The promotions widget edits it all.
 - Data: those `DealRecord` fields.
@@ -3083,14 +3083,14 @@ Checkout:
   default).
 - Key: settings of `checkout`: `guests` (`off` default | `on` | `unless_password`: a phone that belongs to an Accounts
   user with a password must sign in, checked with the pasted Accounts token), `defaultCallingCode` and `trunkPrefix`
-  (phone normalising, as in Accounts).
+  (phone normalizing, as in Accounts).
 - API: `POST /v1/shop/orders` without a sign-in takes `customer { name, phone, email? }`; its answer carries `orderKey`
   (32 random characters, shown once, kept as a hash), and guest reads, pay, cancel and proof upload send it as
   `SS-Order-Key`. `GET /v1/shop/orders/by-number/:number` (the owner's sign-in or the key) serves order pages by number
   (always). When a signed-in shopper's verified phone matches a guest, the guest's orders, loyalty and alerts move to
   the user on that request. The open-order cap and the blocklist apply per guest phone.
 - Data: `CustomerRecord` gains `id` (`cus_…`), `userId` (null for guests), `guest`, `city` and `phoneDigits`; a guest is
-  unique by normalised phone; orders gain `customer.customerId` and `accessKeyHash`.
+  unique by normalized phone; orders gain `customer.customerId` and `accessKeyHash`.
 
 **E22. Payment, delivery and address options.**
 
@@ -3161,7 +3161,7 @@ Orders:
   `returnRestock` (`yes` default | `no`), `shopperCancel` (["awaiting_payment", "awaiting_confirmation"]; may add
   `open`).
 - API: status keys may contain `-`. The role rules also allow: `open` or `packed` → `awaiting_payment` (the order waits
-  again and its window restarts); `packed` → `open` (captured serials are freed); `shipped` → `cancelled` (the parcel is
+  again and its window restarts); `packed` → `open` (captured serials are freed); `shipped` → `canceled` (the parcel is
   recalled; everything is given back); waiting, `open` or `packed` → `refunded`, only when something was paid and
   refunds cover it, else 409 `nothing_paid` (it acts as a cancel); a new role `returned` (a customer return after
   delivery) from `delivered`, then → `refunded`. Entering `returned_to_origin` takes `reason`: `rto` (counted) or
@@ -3220,12 +3220,12 @@ Orders:
   changes, payments and cancels), IM (one editable text per status with first name, order and review links, tracking and
   cancel reason; staff e-mail on proof upload, new claims and expiry).
 - Key: new feature `events` (needs `catalog`; K5). New feature `staff_alerts` (needs `checkout`; Notifications token;
-  K6) with settings `events` (from `placed`, `status`, `paid`, `proof_uploaded`, `cancelled`, `expired`,
+  K6) with settings `events` (from `placed`, `status`, `paid`, `proof_uploaded`, `canceled`, `expired`,
   `return_requested`), `recipients`, `staffPermission` ('' or an Ecommerce permission), `phoneChannel` and `adminUrl`.
   Settings of `checkout`: `statusTemplates` (`one` default | `per_status`: sends `ecommerce.order_status.<status key>`),
   `orderUrl` and `reviewUrl` (templates with `{number}`).
 - API: events `order.placed`, `order.status_changed { from, to, reason, by }`, `order.paid`, `order.payment_recorded`,
-  `order.proof_uploaded`, `order.cancelled { reason: 'staff' | 'shopper' | 'expired' }`, `order.refunded`,
+  `order.proof_uploaded`, `order.canceled { reason: 'staff' | 'shopper' | 'expired' }`, `order.refunded`,
   `return.requested`, `return.status_changed`, `review.submitted`, `catalog.changed { kind, id, slug }` and
   `stock.low { productId, variantId, stock }`. Message values add `firstName`, `paymentMethod`, `deliveryMethod`,
   `orderUrl`, `trackingDetails`, `cancelReason`, `reviewUrl` and `business` (always); an order its window cancels is
@@ -3309,7 +3309,7 @@ Orders:
 
 **E40. Order moves as switches.** (owner, 2026-10-12)
 
-- Why: merchants differ on delivered → cancelled, refunds from any status (also unpaid) and moves between closed
+- Why: merchants differ on delivered → canceled, refunds from any status (also unpaid) and moves between closed
   statuses.
 - Key: the `order_flow` list gains `extraMoves` switches: `cancel_after_delivery`, `refund_unpaid`, `between_closed`
   (all off). On, the role rules (E27) allow those moves where the flow lists them; a refund of an unpaid order records
@@ -3492,7 +3492,7 @@ built.
 Built after the re-audit, third batch (2026-10-13; commits 7e649523, c972e42e, aed9a696, 4715b132, 38abdcf8, 31cec4de):
 
 **E64. Cancel the Payments payment (always; K-13, P4).** Before an order whose Payments payment is still open is
-cancelled (staff, shopper or window), refunded before delivery, deleted or edited, Ecommerce calls `POST
+canceled (staff, shopper or window), refunded before delivery, deleted or edited, Ecommerce calls `POST
 /v1/payments/:id/cancel` (`payment.voidedAt`). If it was paid just before (409 `already_paid`, not `refundDue`, the
 order's amount), the order is confirmed as paid and the cancel, edit or delete is refused. If Payments cannot be
 reached, the cancel goes on (`payment.voidPendingAt`) and is retried on use for 3 days; an edit is refused. Money paid
@@ -3511,7 +3511,7 @@ gives its redeemed points back; earned points are reversed once.
 
 **E67. Paid when staff confirm (OR-7).** Key: `checkout.paidOnConfirm` (`[]` default | any of `cod`, `online`,
 `bank_transfer`, `pickup`): when staff move a waiting order of a listed method to open, packed or shipped, its balance
-is recorded as a payment of that method, after its open Payments payment is cancelled.
+is recorded as a payment of that method, after its open Payments payment is canceled.
 
 **E68. Guest claim points (always).** Points of a refunded claim are taken back from the guest's record by customer id.
 
@@ -3530,8 +3530,8 @@ redeemed points spent, restock on refund after delivery, dispatched→refunded);
 Built after the re-audit, fourth batch (2026-10-13; commits f80a9f07, 1a0f5ad5, 982cd878, bbf90e6d, 6faf925d, 5df2ca02,
 e46a6ce4, e0fc91dc, e1a3c23e, 41c341b4):
 
-**E71. One phone normaliser (always; K12).** Guest checkout, guest alerts, the Payments customer phone and staff alert
-recipients use `normalisePhone`; the default calling code is `checkout.defaultCallingCode`, else the business.json
+**E71. One phone normalizer (always; K12).** Guest checkout, guest alerts, the Payments customer phone and staff alert
+recipients use `normalizePhone`; the default calling code is `checkout.defaultCallingCode`, else the business.json
 country's, and an empty `trunkPrefix` is the country's usual one. The delivery-address phone is kept as E.164 when it
 can be read, else as typed (the courier calls it).
 
@@ -3557,7 +3557,7 @@ and no time to pay).
 **E78. The rest of CK-21 (always).** A payment staff record by hand cancels the open Payments payment first (paid
 meanwhile: 409; Payments unreachable: 503). Deleting one order, or all orders, is refused while Payments cannot be
 reached; delete-all cancels every open payment first. A payment start writes the order only while it has no other
-payment; the losing payment is cancelled.
+payment; the losing payment is canceled.
 
 **E79. Phone countries (SE-5).** Key: `checkout.countries` ([] default = any | ISO codes). Guest order and alert phones
 of other countries are refused (`country_not_allowed`); a member's phone of another country is left out of alerts.
@@ -3576,7 +3576,7 @@ of `titleTemplate`); `seo.productDescription` and `seo.categoryDescription` ('' 
 description), with `{name}`, `{brand}`, `{category}`, `{storeName}`; empty brackets and leftover separators are dropped;
 `seo.pagedListings` (`index` default | `noindex`: pages 2+ are noindex, follow, with page 1 as canonical).
 
-**E83. Variant links (always; SG-7).** A multi-value attribute names its first value (`?colour=red&size=S`).
+**E83. Variant links (always; SG-7).** A multi-value attribute names its first value (`?color=red&size=S`).
 
 **E84. Glossary patterns (SG-20).** Keys: `landing_pages.attributeTitle` ('{name}') and `attributeDescription` (''),
 with `{name}`, `{unit}`, `{values}`, `{storeName}`; when `attributeDescription` is set, every active attribute's page is
@@ -3628,7 +3628,7 @@ fixed when the order is placed.
 `invoice` field follows the same check.
 
 **E96. A transfer proof stops the payment window (always).** Once the shopper uploads a proof, the order is no longer
-cancelled for not paying in time; staff confirm or cancel it.
+canceled for not paying in time; staff confirm or cancel it.
 
 **E97. Payment events (always).** Cash recorded on delivery raises `order.payment_recorded` and `order.paid`; a cancel's
 online refund and a move to a refunded status raise `order.refunded`.
@@ -4079,7 +4079,7 @@ first-party recording are unchanged).
 form), so references and old links map without a lookup: `usr_`, `prd_`, `var_`, `cat_`, `brd_`, `att_`, `szc_`, `lnd_`,
 `deal_`, `bnd_`, `cus_`, `ord_`, `oln_`, `ret_`, `rev_`, `alr_`, `conv_`, `msg_`. Attributes, grades and brands are
 **not** merged by slug (re-audit CA-23, CA-11): they keep one record per category (E45, built before the first store
-that has the same slug in several categories). People: one Ecommerce customer per normalised phone, duplicates merged
+that has the same slug in several categories). People: one Ecommerce customer per normalized phone, duplicates merged
 with their order, loyalty, alert and wishlist histories (CU-6); staff and shopper Accounts users stay separate even on
 one phone (ST-16, ST-17, A16). Merged ids are recorded in the id map. Codes that must be exactly 26 characters use
 `createId`. The importer framework gains several source steps per target, merge reducers, one-to-many steps, slug
@@ -4143,7 +4143,7 @@ turn, against live `main`), and is checked by the dry run's diff.
    - SB: staff and members become Accounts users with their bcrypt hashes (A1); members get the role `member` with
      `roleSince`; other customers stay Ecommerce guests (`cus_`, no Accounts user); open membership requests and their
      unexpired setup links (SHA-256 hashes) are imported (A5, A3).
-   - CT: phones are normalised and duplicate customers merged first (orders, loyalty and conversations re-pointed);
+   - CT: phones are normalized and duplicate customers merged first (orders, loyalty and conversations re-pointed);
      every customer becomes a phone-only Accounts user, linked to their Ecommerce customer; staff keep their bcrypt
      hashes.
    - IM: every customer becomes a phone-only Accounts user; staff are imported without phones (A6 `methods` keeps them
@@ -4160,7 +4160,7 @@ turn, against live `main`), and is checked by the dry run's diff.
 - **Orders.** Numbers are kept. Statuses keep their keys (hyphens allowed, E27) and get roles: `pending-payment`
   awaiting_payment; `awaiting-confirmation` awaiting_confirmation (SB and CT get one for free non-COD orders, which do
   enter it, CK-41; their COD starts confirmed, E23); `confirmed` open; `packed`; `dispatched` shipped; `delivered`;
-  `cancelled`; `refunded`; `returned`: in SB and CT the role `returned`; in IM two statuses labelled Returned,
+  `canceled`; `refunded`; `returned`: in SB and CT the role `returned`; in IM two statuses labeled Returned,
   `returned` (returned_to_origin, with its reason) and `returned-delivered` (role `returned`), chosen by the order's
   history. Payment state: in IM from its payments log (E26); in SB and CT from the status (bank transfer and card paid
   from `confirmed`, COD paid at `delivered`). `holdUntil`: IM's reservation end; null in SB and CT (window 0, E24).
@@ -4248,7 +4248,7 @@ than the landing copy (SG-30).
 **How** (owner decision 8, 2026-10-13): two steps per store, SB first. A drop-in data package with the stores' old
 names cannot work: the stores use 26 raw database models directly at about 250–490 places (RW-4).
 
-1. Inside the store, every database call moves behind a named function, with no change in behaviour, tested against
+1. Inside the store, every database call moves behind a named function, with no change in behavior, tested against
    the store as it is. The same step adds the freeze switch (PL-5).
 2. Those functions switch to product calls one product at a time (Accounts first, then Ecommerce, Chat, Growth), each
    checked side by side with the live store; then the old logic and the store's data package are deleted.
@@ -4336,15 +4336,15 @@ are built in parallel; a phase starts when the one before it is done.
    paging pass e2e against the real Accounts, Notifications and Ecommerce.
    4b. **Merchant options from the store audit** (A14–A16, E38–E50, C16–C20; owner, 2026-10-12): general options any
    merchant sets, found by checking the three stores against Part 0. Done when: each option's default keeps today's
-   behaviour and its unit tests pass, and the importer sets the three stores' values through the settings API. Built
+   behavior and its unit tests pass, and the importer sets the three stores' values through the settings API. Built
    only as the store being moved needs them, each after the owner's go (owner decision 1): SB needs E39, E41 and
    E43–E47; CT needs E39 and the changed E46 and E47; IM's needs are settled at its turn.
    4c. **Parity and blockers** (owner decisions 1 and 4, 2026-10-13; before Phase 5). Parity tests built from the
    stores' own code: each store's totals functions run beside the product's on the same carts, and real SB and CT carts
    and orders are replayed from read-only copies of their databases (copying needs the owner's go; IM's at its turn).
    The E23 and E25 tests are rewritten to cover both values of every totals option. Then the re-audit's 17 blockers
-   are fixed with general options whose defaults keep the products' behaviour (the totals options, the settings table,
-   the alert stop value, one shared phone normaliser, guest-customer routes, phone verification at invite, message
+   are fixed with general options whose defaults keep the products' behavior (the totals options, the settings table,
+   the alert stop value, one shared phone normalizer, guest-customer routes, phone verification at invite, message
    labels), then the money-related highs and SE-3 and SA-2. Done when: the parity tests pass for SB's and CT's real
    carts and orders, every blocker has a test, and CI is green locally (PL-15, PL-17, K-20).
 5. **Importers and rehearsal** (the `import` features; the `@ss/importer` source mapping and `verify`), one store at a
@@ -4384,7 +4384,7 @@ The owner confirms or changes each one.
   `{ kind: 'user', id, name, role }`. Its staff record (name, e-mail, role, last seen) is upserted only while the
   merchant database is connected, at most every 10 minutes per instance. Activity entries never carry the e-mail.
 - **K3**: `SS-Visitor-IP` must be an IPv4 or IPv6 address. On reads it is optional: without it only the server window
-  applies, since the per-visitor limits need the address. A browser-token request never honours it. Products read the
+  applies, since the per-visitor limits need the address. A browser-token request never honors it. Products read the
   visitor's address as `ctx.clientIp`. On a server call, edge headers (Growth's country) are the merchant server's.
   `SS-Order-Key` is already among the CORS headers (E21 uses it).
 - **K4**: Phase 1 mounts counts on each product's main lists — Accounts users and its activity copies, Chat
@@ -4606,7 +4606,7 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
   `countries` takes ISO codes from a built-in calling-code table (NANP countries share +1; Russia and Kazakhstan +7),
   checked when a sign-in code is asked for. `newUserName` names phone-code sign-ups without a name only.
 - **A8**: recovery codes are stored as `{ hash, format }`; the old format is SHA-256 hex of `recovery:` and the code
-  without spaces or dashes in capitals (the store's normalisation), checked after Accounts' own. Phase 2 has no import
+  without spaces or dashes in capitals (the store's normalization), checked after Accounts' own. Phase 2 has no import
   route: `product.twoStepFromImport(websiteId, userId, { secret, recoveryHashes })` builds the record for Phase 5.
 - **A9**: `lockMode`, `networkLimit` and `personalCheck` stay Email + password settings that Phone + password reads too
   (merchants see them while Email + password is on). Growing: each failure beyond `maxAttempts` locks for 2^(n−1)
@@ -4760,7 +4760,7 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
   where stock is shown. Quotes answer `out_of_stock` for a sold-out variant and placement refuses it. `soldOut` may be
   sent alone on the stock route; the activity detail says "sold out" or "for sale".
 - **E10**: a grade's `categoryIds` are not enforced on variants (they decide what llms-full.txt and widgets list per
-  category); `condition` null uses the `gradedCondition` setting; `color` is a CSS colour text (at most 40); `video` is a
+  category); `condition` null uses the `gradedCondition` setting; `color` is a CSS color text (at most 40); `video` is a
   file key or YouTube id (not checked in the bucket); inactive grades stay on old variants and leave the glossary and
   llms-full.txt. The widget config's grades add `color`, `active` and `categoryIds`.
 - **E11**: a product with `serialized: null` follows its categories (a category's `requiresSerial`, else the nearest
@@ -4794,7 +4794,7 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
   active and has a glossary text or description. Landing AI copy is a route of `ai_copy` that needs `landing_pages` on.
   One landing page per category, brand and grade; at most 2,000.
 - **E16**: a product is a ProductGroup only with two or more active variants (one variant stays a Product); `variesBy`
-  maps Size, Colour, Color, Material and Pattern to schema.org properties and names other options as they are.
+  maps Size, Color, Color, Material and Pattern to schema.org properties and names other options as they are.
   `shippingDetails` come from the Delivery zones setting `defaultFee` and the business.json country while that feature
   is on; the return policy while Returns is on (0 days = not permitted); the five newest approved reviews are review
   nodes. SEO answers add `robots` (`index|noindex, follow|nofollow`) and products `focusKeyword`. Files of a sitemap
@@ -4834,7 +4834,7 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
   product's only variant when reading its lock; product cards carry `dealCount` and the first live deal's badge,
   judged without the cart-only conditions (minimum quantity, cart total, payment methods). `allowPoints: false` blocks
   redeeming points, not earning them.
-- **E20**: `pending` points are those of a member's orders not yet delivered, cancelled or given back whose points are
+- **E20**: `pending` points are those of a member's orders not yet delivered, canceled or given back whose points are
   not credited; guests' points (`guests: earn`) are credited to their customer record and move to the member at
   sign-in; points are taken back on a refund only when they were credited.
 - **E21**: guest checkout returns the order key once; a wrong or missing key reads like a missing order.
@@ -4842,7 +4842,7 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
   due; a payment recorded on a waiting order moves it only with `confirm`. A refund with no `method` goes through
   Payments first and records the rest as `other`. Cash paid on delivery is written as a `cash` entry.
 - **E27**: a shopper may cancel an open order (`shopperCancel` with `open`) only while nothing was paid; paid orders
-  are cancelled and refunded by staff. A return to origin without `reason` counts as an RTO.
+  are canceled and refunded by staff. A return to origin without `reason` counts as an RTO.
 - **E28**: a dispatch video is an upload key in the merchant's bucket, a YouTube id or address (kept as its private
   embed address) or an https address; with `packingVideo: off` a video sent is ignored. A courier is given by key or
   name and kept by name.
@@ -4891,7 +4891,7 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
   by the owner.
 - **Open owner questions** (from the Part 0 review of 2026-10-07). Each is answered by the owner and written into the
   section named before the step that needs it is built:
-   - **Start** (0.12): is building authorised now, and must step 1 be finished before step 2?
+   - **Start** (0.12): is building authorized now, and must step 1 be finished before step 2?
    - **Step 5 test product** (0.12 step 5): may step 5 be verified in e2e against a minimal test product generated by
      `ss app init` under `e2e/fixtures/` (test-only, never deployed)?
    - **Session length** (0.2, 0.8.2): is it an absolute lifetime from sign-in with no idle timeout, and what range is
@@ -4994,9 +4994,9 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
      product's `widget.js` (esbuild stays inside the CLI). `/widget.js` is public and the same for every website; with
      `data-token` it fetches the website's texts, theme and switched-on features from the kit route
      `GET /v1/widget/config` (browser token); admin widgets use `GET /v1/widget/admin/config` with a ticket.
-   - **Cross-product shapes** are fixed provisionally in `@ss/contracts` (step 4) and finalised in Accounts' grilling:
+   - **Cross-product shapes** are fixed provisionally in `@ss/contracts` (step 4) and finalized in Accounts' grilling:
      data rights `POST /v1/data-rights/export|delete` with `{ user: { id?, email?, phone? } }` (each product decides
-     how it matches), answers `{ records }` and `{ deleted, anonymised }`; activity copies `{ websiteId, productId,
+     how it matches), answers `{ records }` and `{ deleted, anonymized }`; activity copies `{ websiteId, productId,
 actor, action, target, at }` sent to Accounts at `POST /v1/activity-copies`.
    - **Developers tab browser token**: products never receive tokens, so the dashboard's Developers tab shows a
      placeholder with `Manage tokens in the Portal`; 0.4.3 says the website's browser token is filled in. How the
@@ -5030,13 +5030,13 @@ actor, action, target, at }` sent to Accounts at `POST /v1/activity-copies`.
      and staff records at most every 10 minutes per instance; a merchant writing a setting of a feature that is off
      gets 403 `feature_off`; a failed connection test is saved as `Test failed`; pasted tokens that do not verify are
      refused; Recent changes keep the newest 50 on screen; a misconfigured product answers 503 naming the variables.
-     Theme defaults: no colours, inherited font, radius 8, follow device. Settings schemas allow `type`, `title`,
+     Theme defaults: no colors, inherited font, radius 8, follow device. Settings schemas allow `type`, `title`,
      `default`, `description`, `minimum`/`maximum`, `maxLength`, `enum`, `format`, `items` and `x-ui`.
    - **Protocol details**: launches are refused once `sessionExpiresAt` has passed; a token issued more than 5 minutes
      in the future is refused; ticket users need id, name and e-mail; business.json without a valid `name` counts as
      not found (defaults apply), other invalid fields are dropped.
    - **Shared kit widgets**: widgets use `@ss/app-kit/widget` (Shadow DOM mount, theme, widget texts); `@ss/ui`'s status
-     badge colours follow 0.5.5.
+     badge colors follow 0.5.5.
    - **Step 6, Notifications** (0.8.5; each item open for owner review):
       - **Feature keys**: `whatsapp`, `email`, `sms`, `browser_push`, `staff_push`, `webhooks`, `fallback`,
         `quiet_hours`, `send_limits`, `delayed_send`, `multi_language`, `send_api`; none depends on another.
@@ -5077,7 +5077,7 @@ actor, action, target, at }` sent to Accounts at `POST /v1/activity-copies`.
         product does not generate one. Header `SS-Signature: t=<unix>,v1=<hex HMAC-SHA256 of "<t>.<body>">`.
       - **Data rights**: matched by e-mail and phone; delete removes the person's messages, unsubscribes and
         unsubscribe codes (push subscriptions name no person).
-      - **Overview**: today's cost is a colour tile, not a hero card (a product has no 30-day numbers to chart).
+      - **Overview**: today's cost is a color tile, not a hero card (a product has no 30-day numbers to chart).
       - **Owner items, step 6**: create the Vercel project with root `products/notifications`, set `MONGODB_URI`
         (its own database, for example `ss_notifications`), `CONNECT_SECRET` and `ENCRYPTION_KEY` for Production,
         deploy, then Portal → Products → Add product (its address and `CONNECT_SECRET`) and set it Active. Step 6's
@@ -5239,8 +5239,8 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
         again when it is read (API, verify, pay page), at most every 30 seconds (Stripe, PayPal, Easypaisa; PayFast
         Pakistan and Rapid Gateway have no status call, so they wait for their signed return or notice).
         `POST /v1/payments/:id/verify` with `{ amount, currency }` answers `verified` for Ecommerce and the merchant's
-        server. A payer who cancels on the gateway marks the payment cancelled; a later confirmation still pays it, and
-        the payer can try again (failed or cancelled → pick a gateway again).
+        server. A payer who cancels on the gateway marks the payment canceled; a later confirmation still pays it, and
+        the payer can try again (failed or canceled → pick a gateway again).
       - **Events and Notifications**: `payment.paid`, `payment.failed`, `payment.refunded` and `subscription.updated` are
         kept in the merchant database, listed by `GET /v1/events` and sent as `payments.<event>` through a new
         Notifications route, `POST /v1/events` (Notifications server token, feature `webhooks`, `{ type, data }` with a
@@ -5257,9 +5257,9 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
         minutes.
       - **Data rights**: matched on the Accounts user id, e-mail or phone; export lists payments (without metadata and
         history) and subscriptions; delete removes the person's details and keeps the amounts (the merchant's money
-        records): `{ deleted: 0, anonymised }`.
+        records): `{ deleted: 0, anonymized }`.
       - **Payments admin export**: a CSV built in the browser from the filtered list (at most 2,000 rows).
-      - **Overview**: today's cost, features on, connections ready and gateways ready as colour tiles (no hero card).
+      - **Overview**: today's cost, features on, connections ready and gateways ready as color tiles (no hero card).
       - **Owner items, step 9**: create the Vercel project with root `products/payments`, set `MONGODB_URI` (its own
         database, for example `ss_payments`), `CONNECT_SECRET` and `ENCRYPTION_KEY` for Production, deploy, then
         Portal → Products → Add product and set it Active; redeploy Notifications (its new `POST /v1/events`). Merchants
@@ -5296,18 +5296,18 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
         point): an order is marked paid only after `POST /v1/payments/:id/verify` answers verified for its exact amount
         (or advance) and currency; a waiting payment is asked again when the order is read (at most every 30 s) and by
         the work on use (at most 10 per request) before a waiting order whose window ended (payment window, default 60
-        minutes; confirmation window, default 24 hours) is cancelled; if Payments cannot be reached the order waits for
+        minutes; confirmation window, default 24 hours) is canceled; if Payments cannot be reached the order waits for
         a later request. Refunds of online-paid money go through Payments; cash refunds are recorded.
       - **Work on use**: expired waiting orders, payment rechecks and unsent alerts run right after requests for that
         website, at most once a minute per website and instance (`service.whenUsed`). Loyalty lots expire when the
         account is read or changed. Courier tracking is refreshed when a shipped order is read (at most every 30 min).
       - **Order flow**: the merchant's statuses and moves are a list setting (`order_flow`) with roles
-        (`awaiting_payment`, `awaiting_confirmation`, `open`, `packed`, `shipped`, `delivered`, `cancelled`,
+        (`awaiting_payment`, `awaiting_confirmation`, `open`, `packed`, `shipped`, `delivered`, `canceled`,
         `returned_to_origin`, `refunded`) whose rules hold whatever the flow (exactly one waiting status of each kind,
         cancel only before shipping, RTO only from shipped, refunded only after delivered or RTO). The default is the
         ibrahimMobiles flow. Packing captures serials of serialized lines; shipping takes a courier of the `couriers`
         list and a tracking number, or books through the courier API; delivered marks COD and pickup orders paid,
-        counts sales and earns points; cancelled gives everything back and refunds online money.
+        counts sales and earns points; canceled gives everything back and refunds online money.
       - **List settings** (product database, like Chat's): `order_flow`, `couriers` (name, tracking link with
         `{tracking}`), `delivery_zones`, `tax_rules`, `grades` (with return and warranty days) and `booking_hours`,
         edited in the dashboard with Recent changes, no global defaults.
@@ -5318,7 +5318,7 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
         images are shown from the `catalog` setting `mediaBaseUrl` (the bucket's or CDN's public address) or, when it
         is empty, through signed links of one hour.
       - **Bookings**: weekly hours in the business.json time zone, slots of the product's duration, no double booking
-        (unique index per product and start). **Digital goods**: licence keys and files are given once the order is
+        (unique index per product and start). **Digital goods**: license keys and files are given once the order is
         paid; downloads are 5-minute signed links, limited per line.
       - **Promotions**: each line takes its best deal; bundles and buy-X-get-Y compete with deals per unit; a coupon
         applies last on what is left. Loyalty earns a percentage of the goods paid as points (ibrahimMobiles), redeemed
@@ -5345,7 +5345,7 @@ currency, createdAt }], loyaltyPoints }`. `context_panel` is not marked Not work
         `checkout` setting `notifyStatuses`), `ecommerce.return_status`, `ecommerce.back_in_stock`,
         `ecommerce.price_drop` (values in the docs); alerts are non-essential (unsubscribes apply).
       - **Data rights** match the Accounts user id, e-mail or phone: the export lists orders (without staff notes),
-        the customer record, loyalty, claims, reviews, wishlist and alerts; delete anonymises orders and claims (amounts
+        the customer record, loyalty, claims, reviews, wishlist and alerts; delete anonymizes orders and claims (amounts
         kept: the merchant's money records), deletes the customer record, loyalty, wishlist, alerts and reviews.
       - **Limits** (code constants): 50 cart lines and 99 of one item, 250 variants and 20 images per product, 500 ids
         per bulk product action and 200 per bulk order move, 5,000 rows per CSV import, 4 products compared.
@@ -5425,7 +5425,7 @@ orderId? }` with money in minor units (as everywhere); pixels get major units. N
         date-time); an invalid date hides the bar. A closed bar stays closed for the visit (sessionStorage).
       - **Tag ids** are checked on use (settings schemas allow no pattern): a malformed id is not loaded, and Overview's
         Tags ready tile counts the tag features with a well-formed id or a script. Overview: today's cost, features on,
-        connections ready and tags ready as colour tiles (no hero card).
+        connections ready and tags ready as color tiles (no hero card).
       - **Connections**: the database and the Accounts token (activity-log copies of the staff actions IndexNow
         submitted and SEO checked). **Data rights**: nothing names a person, so export answers no records and delete
         removes nothing.
@@ -5510,7 +5510,7 @@ These bind wherever the rest of Part 0 does not change them.
   Portal's revocation list.
 - **Money units**: integer millicredits (1 credit = 1000) and UTC hours (0.5.1).
 - **Formats**: ids are `<prefix>_` plus 128 random bits as 26 lowercase Crockford base32 characters. Domains are
-  normalised (lowercased, punycode, scheme, path, port and trailing dot removed; IP addresses, `localhost`, single labels
+  normalized (lowercased, punycode, scheme, path, port and trailing dot removed; IP addresses, `localhost`, single labels
   and wildcards refused). Errors are RFC 9457 problems with stable codes.
 - **Tenant guard**: every merchant-data query names one `websiteId` (equality, no `$in`); `$where` and cross-collection
   stages (`$lookup`, `$unionWith`, `$out`, `$merge`, also inside `$facet`) are refused; inserts are stamped with
@@ -5755,7 +5755,7 @@ Done: <date>, verified by <who>
 
 - **Read Part 0 first**, all of it, before writing code. Use the words in 0.0.
 - **Ask, don't guess.** When Part 0 is silent or unclear on a point, ask the owner. Do not fill the gap from code docs or
-  from your own ideas. ibrahimMobiles is a source of behaviour only where Part 0 says "as in ibrahimMobiles".
+  from your own ideas. ibrahimMobiles is a source of behavior only where Part 0 says "as in ibrahimMobiles".
 - **No extras.** Build only what Part 0 names (0.1 scope rule): no health, ready or status endpoints, status pages,
   uptime checks, monitoring, telemetry or diagnostic screens; no crons, timers, timed queue drains or background loops;
   no extra admin tools, exports, presets or nice-to-haves.
@@ -5830,7 +5830,7 @@ orders and customers, a "refunds to make" filter, move all orders of a status to
 slips and pick list for selected orders, and a CSV export of what the list shows. Claims: staff notes. Customers and
 reports: sales summary, sell-through, oldest stock, customers CSV, review back to waiting. Catalog: a brand's
 hidden-in categories; removing digital files and license keys without taking away what orders already received
-(`digital.retired`; DELETE /v1/products/:id/files/:name, POST /v1/products/:id/licences/remove and admin twins).
+(`digital.retired`; DELETE /v1/products/:id/files/:name, POST /v1/products/:id/licenses/remove and admin twins).
 Settings → Role prices has its editor. Unused admin code removed (kit pager/row, the no-flow orders list, the
 uncoded-warnings fallback).
 
