@@ -19,7 +19,8 @@ import { HISTORY_NOTES, MOVE_WARNINGS, PAYMENT_STATES } from '../core/orders.js'
 import { CLAIM_ACTIONS, CLAIM_NOTES, CLAIM_ROLES } from '../core/returns.js';
 import { REVIEW_STATUSES } from '../core/reviews.js';
 import { CLAIM_TONES, HISTORY_ACTORS, ROLE_TONES, SERVER_KIND } from '../ui/admin-order.js';
-import { codeOf, problemKey } from '../ui/admin-problems.js';
+import { problemKey } from '../ui/admin-problems.js';
+import { codeOf } from '../ui/problem-code.js';
 import { GRID_SORTS } from '../ui/product-grid.js';
 
 const TEXTS = /** @type {Record<string, string>} */ (strings);

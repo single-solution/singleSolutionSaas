@@ -26,7 +26,6 @@ import { MAX_QUANTITY } from './cart-store.js';
 import {
 	announce,
 	button,
-	codeOf,
 	currencyOf,
 	field,
 	fill,
@@ -44,6 +43,7 @@ import {
 	textsOf,
 	warrantyText,
 } from './shop-common.js';
+import { codeOf } from './problem-code.js';
 import { compareIds, onCompareChange, toggleCompare } from './shop-compare-store.js';
 import {
 	alertsOf,

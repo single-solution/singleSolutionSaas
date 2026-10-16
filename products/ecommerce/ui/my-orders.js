@@ -13,7 +13,6 @@
 import { addressLines, countryName } from '../core/address.js';
 import {
 	button,
-	codeOf,
 	currencyOf,
 	fill,
 	formatsOf,
@@ -26,6 +25,7 @@ import {
 	textsOf,
 	warrantyText,
 } from './shop-common.js';
+import { codeOf } from './problem-code.js';
 import { returnUrlOf } from './shop-checkout.js';
 import { renderClaimForm, renderClaims } from './shop-returns.js';
 import { transferParts } from './shop-payment.js';

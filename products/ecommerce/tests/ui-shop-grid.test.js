@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { STORAGE_KEYS } from '../core/widgets.js';
 import { mountProductGrid, pageNumbers } from '../ui/product-grid.js';
 import {
-	codeOf,
 	currencyOf,
 	fill,
 	formatsOf,
@@ -19,6 +18,7 @@ import {
 	textsOf,
 	warrantyText,
 } from '../ui/shop-common.js';
+import { codeOf } from '../ui/problem-code.js';
 import {
 	COMPARE_EVENT,
 	clearCompare,
@@ -728,9 +728,9 @@ describe('shared helpers', () => {
 		expect(full.checkout.cities).toEqual(['A']);
 		expect(currencyOf(settings, 'nope', 'USD')).toBe('USD');
 		expect(currencyOf(full)).toBe('USD');
-		expect(codeOf({ ok: false, status: 0, data: null })).toBe('offline');
-		expect(codeOf({ ok: false, status: 500, data: null })).toBe('');
-		expect(codeOf({ ok: false, status: 409, data: { type: 'https://x/problems/slot_taken' } })).toBe('slot_taken');
+		expect(codeOf({ status: 0, data: null })).toBe('offline');
+		expect(codeOf({ status: 500, data: null })).toBe('');
+		expect(codeOf({ status: 409, data: { type: 'https://x/problems/slot_taken' } })).toBe('slot_taken');
 		// money and dates by the website's Format and business time zone (widget config) and the viewer (PLAN 0.8.10 K7)
 		const viewer = { navigator: { language: 'en-US' } };
 		const plain = formatsOf(config, viewer);

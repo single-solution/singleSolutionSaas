@@ -16,7 +16,6 @@ import { WIDGET_CSS } from './styles.js';
 
 /** @typedef {import('./widget.js').WidgetConfig} WidgetConfig */
 /** @typedef {import('./widget.js').Shop} Shop */
-/** @typedef {import('./widget.js').Answer} Answer */
 /** @typedef {(key: string, values?: Record<string, string | number>) => string} Texts */
 /** @typedef {string | Node | null | undefined | false} Child */
 
@@ -272,16 +271,6 @@ export const select = (doc, options, value, attributes = {}) => {
 	for (const [key, text] of options) node.append(element(doc, 'option', { value: key }, text));
 	node.value = value;
 	return node;
-};
-
-/**
- * The problem code of a refused answer (`type` ends with it), `offline` when unreachable, else ''.
- * @param {Answer} answer
- */
-export const codeOf = (answer) => {
-	if (answer.status === 0) return 'offline';
-	const type = answer.data?.type;
-	return typeof type === 'string' ? (type.split('/').pop() ?? '') : '';
 };
 
 /**

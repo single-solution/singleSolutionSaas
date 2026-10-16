@@ -7,7 +7,8 @@
  * @module
  */
 import { quantityText } from '../core/measure.js';
-import { button, codeOf, field, formatsOf, h, problemText, select } from './shop-common.js';
+import { button, field, formatsOf, h, problemText, select } from './shop-common.js';
+import { codeOf } from './problem-code.js';
 
 /** A measured line offers at most this many amounts (its steps) to claim. */
 const MEASURED_CHOICES = 200;

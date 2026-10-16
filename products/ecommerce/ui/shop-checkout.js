@@ -16,7 +16,8 @@ import {
 	countryCodeOf,
 	regionsFor,
 } from '../core/address.js';
-import { button, codeOf, currencyOf, field, formatsOf, h, problemText, quantityShown, select } from './shop-common.js';
+import { button, currencyOf, field, formatsOf, h, problemText, quantityShown, select } from './shop-common.js';
+import { codeOf } from './problem-code.js';
 import { transferParts } from './shop-payment.js';
 
 /** @typedef {import('../core/address.js').AddressField} AddressField */

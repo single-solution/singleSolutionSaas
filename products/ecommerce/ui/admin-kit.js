@@ -28,7 +28,8 @@ import { SEO_PREVIEW_CSS } from '@ss/ui/seo-preview';
 import { dayBounds } from '../core/calendar.js';
 import { DURATION_UNITS, isDuration } from '../core/durations.js';
 import { fromDecimal, toDecimal } from '@ss/app-kit/widget';
-import { codeOf, problemKey } from './admin-problems.js';
+import { problemKey } from './admin-problems.js';
+import { codeOf } from './problem-code.js';
 import { ADMIN_CSS } from './admin-styles.js';
 import { WIDGET_CSS } from './styles.js';
 

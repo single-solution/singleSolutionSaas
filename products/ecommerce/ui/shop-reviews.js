@@ -7,7 +7,8 @@
  * says so instead of showing a form the server would refuse.
  * @module
  */
-import { button, codeOf, field, formatsOf, h, problemText, select, settingsOf } from './shop-common.js';
+import { button, field, formatsOf, h, problemText, select, settingsOf } from './shop-common.js';
+import { codeOf } from './problem-code.js';
 
 /** @typedef {import('./shop-common.js').Texts} Texts */
 /** @typedef {import('./widget.js').Shop} Shop */

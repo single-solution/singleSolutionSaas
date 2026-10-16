@@ -8,7 +8,8 @@
  * the proof sent and the proof form.
  * @module
  */
-import { codeOf, field, formatsOf, h, problemText } from './shop-common.js';
+import { field, formatsOf, h, problemText } from './shop-common.js';
+import { codeOf } from './problem-code.js';
 
 /** @typedef {import('./shop-common.js').Texts} Texts */
 /** @typedef {import('./widget.js').Shop} Shop */

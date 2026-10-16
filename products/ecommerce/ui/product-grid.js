@@ -21,7 +21,6 @@ import { MAX_PAGE_NUMBER, MAX_PAGE_SIZE } from '../core/model.js';
 import {
 	announce,
 	button,
-	codeOf,
 	currencyOf,
 	field,
 	formatsOf,
@@ -33,6 +32,7 @@ import {
 	settingsOf,
 	textsOf,
 } from './shop-common.js';
+import { codeOf } from './problem-code.js';
 import { compareIds, onCompareChange, toggleCompare } from './shop-compare-store.js';
 import { activeCount, emptyKnown, filterControls, flattenCategories, listOf, remember } from './shop-filters.js';
 import { savedOf } from './shop-saved.js';

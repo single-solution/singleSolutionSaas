@@ -7,16 +7,6 @@
  */
 
 /**
- * The problem code of an answer: the last segment of its problem type, else ''.
- * @param {{ data: any }} answer
- * @returns {string}
- */
-export const codeOf = (answer) => {
-	const type = answer.data?.type;
-	return typeof type === 'string' ? type.slice(type.lastIndexOf('/') + 1) : '';
-};
-
-/**
  * The key of the website's text for a refusal, or null when it has none.
  * @param {Readonly<Record<string, string>>} texts the widget texts
  * @param {string} code the problem code ('' for none)

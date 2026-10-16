@@ -25,7 +25,6 @@ import { MAX_QUANTITY } from './cart-store.js';
 import {
 	announce,
 	button,
-	codeOf,
 	currencyOf,
 	field,
 	fill,
@@ -40,6 +39,7 @@ import {
 	settingsOf,
 	textsOf,
 } from './shop-common.js';
+import { codeOf } from './problem-code.js';
 import { addressForm, guestForm, renderSuccess, returnUrlOf } from './shop-checkout.js';
 import { checkoutFieldsForm } from './shop-fields.js';
 import { payDetailsBox } from './shop-payment.js';
