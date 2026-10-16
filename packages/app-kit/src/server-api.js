@@ -40,8 +40,8 @@ import { noContent, ok, paginate, problem } from './http/results.js';
  * @property {string | string[]} feature the feature it belongs to (any of them, for a list)
  * @property {string} title its name on screens and in Recent changes
  * @property {(websiteId: string) => Promise<unknown>} get the saved list, else its default
- * @property {(websiteId: string, value: unknown) => Promise<{ ok: true, value: unknown } | { ok: false, errors: Array<string | { path?: string, message: string }> }>} save
- *   checks and saves the whole list
+ * @property {(websiteId: string, value: unknown) => Promise<{ ok: true, value: unknown } | { ok: false, errors: Array<string | { path?: string, message: string, code?: string }> }>} save
+ *   checks and saves the whole list; an error may carry a `code` the dashboard acts on (it is answered as given)
  */
 
 /** Settings writes of the merchant's server per website (code constant). */
@@ -191,7 +191,7 @@ export const createServerApi = (kit, lists) => {
 			const errors = list.errors.map((error) =>
 				typeof error === 'string'
 					? { path: '/value', message: error }
-					: { path: error.path ?? '/value', message: error.message },
+					: { path: error.path ?? '/value', message: error.message, ...(error.code ? { code: error.code } : {}) },
 			);
 			throw problem('validation_failed', errors[0]?.message ?? 'The list is not valid.', { errors });
 		}

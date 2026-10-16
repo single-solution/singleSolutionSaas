@@ -20,6 +20,11 @@ const memoryLists = () => {
 				if (!Array.isArray(value)) return { ok: /** @type {const} */ (false), errors: ['The list is an array.'] };
 				if (value.some((item) => typeof item !== 'string'))
 					return { ok: /** @type {const} */ (false), errors: [{ path: '/value/0', message: 'Each label is text.' }] };
+				if (new Set(value).size !== value.length)
+					return {
+						ok: /** @type {const} */ (false),
+						errors: [{ path: '/value', message: 'A label is twice in the list.', code: 'duplicate' }],
+					};
 				saved.set(websiteId, value);
 				return { ok: /** @type {const} */ (true), value };
 			},
@@ -173,6 +178,9 @@ describe('settings API for the merchant’s server (K1)', () => {
 		expect(
 			(await body(await call('PUT', '/v1/lists/labels', { token: server.token, body: { value: 'x' } }))).json.errors,
 		).toEqual([{ path: '/value', message: 'The list is an array.' }]);
+		// an error's code the product gave is answered as given
+		const twice = await body(await call('PUT', '/v1/lists/labels', { token: server.token, body: { value: ['a', 'a'] } }));
+		expect(twice.json.errors).toEqual([{ path: '/value', message: 'A label is twice in the list.', code: 'duplicate' }]);
 		expect((await call('GET', '/v1/lists/nope', { token: server.token })).status).toBe(404);
 		const cookie = await session({ kind: 'merchant' });
 		const overview = await (await dash(cookie, 'GET', `/v1/dashboard/websites/${websiteId}/overview`)).json();
@@ -206,6 +214,8 @@ describe('settings API for the merchant’s server (K1)', () => {
 		});
 		const invalid = await body(await dash(merchant, 'PUT', path, { value: [1] }));
 		expect(invalid).toMatchObject({ status: 422, json: { errors: [{ path: '/value/0', message: 'Each label is text.' }] } });
+		const twice = await body(await dash(merchant, 'PUT', path, { value: ['a', 'a'] }));
+		expect(twice).toMatchObject({ status: 422, json: { errors: [{ path: '/value', code: 'duplicate' }] } });
 		expect((await dash(merchant, 'PUT', path, { items: [] })).status).toBe(422);
 		expect((await dash(merchant, 'GET', `/v1/dashboard/websites/${websiteId}/lists/nope`)).status).toBe(404);
 		// a session is needed, and writes come from the product's own address
