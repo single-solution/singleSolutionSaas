@@ -96,6 +96,7 @@ describe('the product grid', () => {
 			url: 'https://shop.example.com/products/pixel-9',
 			inStock: true,
 			brand: { id: ids.acme.id, name: 'Acme' },
+			category: { id: ids.android.id, slug: 'android', name: 'Android' },
 			grades: ['New', 'Used'],
 			variantCount: 2,
 		});
@@ -113,6 +114,33 @@ describe('the product grid', () => {
 			{ key: 'new', label: 'New', count: 1 },
 			{ key: 'used', label: 'Used', count: 1 },
 		]);
+	});
+
+	it('carries each card its main category, so a website builds its own product address', async () => {
+		const card = (/** @type {any} */ answer, /** @type {string} */ name) =>
+			answer.json.items.find((/** @type {any} */ item) => item.name === name);
+		const android = { id: ids.android.id, slug: 'android', name: 'Android' };
+		// in the grid, a search, a category listing and a listing that draws its variants
+		expect(card(await get('/v1/shop/products'), 'Pixel 9').category).toEqual(android);
+		expect(card(await get('/v1/shop/products?q=pixel'), 'Pixel 9').category).toEqual(android);
+		expect(card(await get(`/v1/shop/products?category=${ids.phones.id}`), 'Pixel 9').category).toEqual(android);
+		expect(card(await get('/v1/shop/products?variants=1&brand=acme'), 'Pixel 9').category).toEqual(android);
+		expect(card(await get('/v1/shop/products'), 'Clear case').category).toEqual({
+			id: ids.cases.id,
+			slug: 'cases',
+			name: 'Cases',
+		});
+		// the first category it is in that still exists; null when it is in none
+		expect(card(await get('/v1/shop/products'), 'Bestseller').category).toBeNull();
+		const both = await api('POST', '/v1/products', {
+			name: 'Phone case set',
+			status: 'active',
+			categoryIds: [ids.cases.id, ids.android.id],
+			price: 900,
+			stock: 1,
+		});
+		expect(card(await get('/v1/shop/products?q=case%20set'), 'Phone case set').category).toMatchObject({ id: ids.cases.id });
+		await api('DELETE', `/v1/products/${both.id}`);
 	});
 
 	it('searches, filters and sorts', async () => {

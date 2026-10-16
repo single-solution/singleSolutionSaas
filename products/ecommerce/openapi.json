@@ -53120,6 +53120,27 @@
 				},
 				"description": "A category of the tree, with the categories below it."
 			},
+			"ShopCategoryRef": {
+				"type": "object",
+				"required": [
+					"id",
+					"slug",
+					"name"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"slug": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					}
+				},
+				"description": "A category named by its id, address part and name."
+			},
 			"ShopDeal": {
 				"type": "object",
 				"description": "A live deal as shoppers see it (no use counts, priority or rule details).",
@@ -55250,6 +55271,7 @@
 					"inStock",
 					"rating",
 					"brand",
+					"category",
 					"grades",
 					"variantCount",
 					"priceMax",
@@ -55378,6 +55400,17 @@
 								}
 							}
 						]
+					},
+					"category": {
+						"oneOf": [
+							{
+								"type": "null"
+							},
+							{
+								"$ref": "#/components/schemas/ShopCategoryRef"
+							}
+						],
+						"description": "Its main category, the first of its categories that exists (null: in none), so a website can build its own product address."
 					},
 					"grades": {
 						"type": "array",

@@ -43,7 +43,7 @@ import {
 	placeCategory,
 } from '../core/catalog-taxonomy.js';
 import { EMPTY_CONTENT, EMPTY_SEO } from '../core/catalog-content.js';
-import { cardOf, pageOf, shownRange, specsOf } from '../core/catalog-views.js';
+import { cardOf, mainCategoryOf, pageOf, shownRange, specsOf } from '../core/catalog-views.js';
 import { listShown } from '../core/promotions.js';
 import { showDefaults } from '../core/fields.js';
 import { checkGrades, gradesByKey } from '../core/grades.js';
@@ -702,6 +702,11 @@ describe('views', () => {
 			shown: listShown,
 		});
 		expect(card.rating).toEqual(product.rating);
+		expect(card.category).toBeNull();
+		// the main category is the first of its categories that exists
+		const trail = new Map([['c2', { path: ['c1'], slug: 'dresses', name: 'Dresses' }]]);
+		expect(mainCategoryOf({ categoryIds: ['gone', 'c2'] }, trail)).toEqual({ id: 'c2', slug: 'dresses', name: 'Dresses' });
+		expect(mainCategoryOf({ categoryIds: [] }, trail)).toBeNull();
 		const page = pageOf(product, {
 			currency: 'EUR',
 			url: 'u',

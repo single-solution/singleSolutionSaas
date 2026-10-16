@@ -54,6 +54,8 @@ export const shownRange = (product, shown) => {
  * @property {boolean} inStock
  * @property {{ average: number, count: number }} rating
  * @property {{ id: string, name: string, slug?: string } | null} brand
+ * @property {{ id: string, slug: string, name: string } | null} category its main category (the first of its
+ *   categories that exists; null: in none), so a website can build its own product address
  * @property {string[]} grades
  * @property {number} variantCount
  * @property {number} priceMax the highest price shown of its active variants (E8)
@@ -148,10 +150,25 @@ export const sizeOf = (file) =>
 		: null;
 
 /**
+ * A product's main category as cards and the product page's trail name it: the first of its categories that exists.
+ * @param {Pick<ProductRecord, 'categoryIds'>} product
+ * @param {ReadonlyMap<string, { slug: string, name: string }>} categories by id
+ * @returns {{ id: string, slug: string, name: string } | null}
+ */
+export const mainCategoryOf = (product, categories) => {
+	for (const id of product.categoryIds) {
+		const found = categories.get(id);
+		if (found) return { id, slug: found.slug, name: found.name };
+	}
+	return null;
+};
+
+/**
  * A product card (grid and search results), at its shown prices (G4).
  * @param {ProductRecord} product
  * @param {{ currency: string, image: string | null, url: string, brand: { id: string, name: string, slug?: string } | null,
- *   grades: Parameters<typeof gradeLabels>[1], categories: ReadonlyMap<string, { path: string[] }>, cardImages?: Card['cardImages'], shown: Shown,
+ *   grades: Parameters<typeof gradeLabels>[1], categories: ReadonlyMap<string, { path: string[], slug: string, name: string }>,
+ *   cardImages?: Card['cardImages'], shown: Shown,
  *   measure?: import('./measure.js').Measure | null }} context `measure`: its type's, while Sell in any unit is on
  * @returns {Card}
  */
@@ -169,6 +186,7 @@ export const cardOf = (product, { currency, image, url, brand, grades, categorie
 	inStock: product.inStock,
 	rating: product.rating,
 	brand,
+	category: mainCategoryOf(product, categories),
 	grades: gradeLabels(product, grades, categories),
 	variantCount: product.variants.filter((variant) => variant.active).length,
 	featured: product.featured,

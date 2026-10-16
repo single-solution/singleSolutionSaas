@@ -14591,6 +14591,23 @@
 			},
 			"description": "The product page’s data."
 		},
+		"ShopCategoryRef": {
+			"type": "object",
+			"required": ["id", "slug", "name"],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"slug": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				}
+			},
+			"description": "A category named by its id, address part and name."
+		},
 		"ShopProductCard": {
 			"type": "object",
 			"required": [
@@ -14607,6 +14624,7 @@
 				"inStock",
 				"rating",
 				"brand",
+				"category",
 				"grades",
 				"variantCount",
 				"priceMax",
@@ -14716,6 +14734,17 @@
 							}
 						}
 					]
+				},
+				"category": {
+					"oneOf": [
+						{
+							"type": "null"
+						},
+						{
+							"$ref": "#/components/schemas/ShopCategoryRef"
+						}
+					],
+					"description": "Its main category, the first of its categories that exists (null: in none), so a website can build its own product address."
 				},
 				"grades": {
 					"type": "array",

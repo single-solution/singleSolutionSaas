@@ -120,8 +120,7 @@ const createCards = (common, service) => {
 		if (products.length === 0) return [];
 		const brands = new Map((await brandsOf(data)).map((brand) => [brand.id, brand]));
 		const gradeList = await common.gradeListOf(s);
-		const categories =
-			gradeList.length > 0 ? new Map((await categoriesOf(data)).map((category) => [category.id, category])) : new Map();
+		const categories = new Map((await categoriesOf(data)).map((category) => [category.id, category]));
 		const offers = await offersOf(s, data, products);
 		const attributes = variants ? new Map((await attributesOf(data)).map((attribute) => [attribute.id, attribute])) : null;
 		// items sold in a unit of their own show their unit (their type's measure, while Sell in any unit is on)
