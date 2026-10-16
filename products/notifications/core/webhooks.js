@@ -12,7 +12,7 @@ export const WEBHOOK_EVENTS = Object.freeze(['message.sent', 'message.failed', '
 /** Name of the signature header. */
 export const SIGNATURE_HEADER = 'ss-signature';
 /** URLs a website may send events to, at most, unless its setting `webhooks.maxUrls` says otherwise (fixed-choices N12). */
-export const DEFAULT_MAX_WEBHOOK_URLS = 5;
+const DEFAULT_MAX_WEBHOOK_URLS = 5;
 /** Event types one URL may name, at most. */
 const MAX_URL_EVENTS = 50;
 /** Longest webhook URL. */

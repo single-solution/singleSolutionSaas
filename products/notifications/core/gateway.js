@@ -38,7 +38,7 @@ export const FAILURE_REASONS = Object.freeze([
 export const SKIP_REASONS = Object.freeze(['unsubscribed', 'limited', 'switched_off']);
 
 /** Longest provider detail kept (characters). */
-export const DETAIL_LIMIT = 200;
+const DETAIL_LIMIT = 200;
 
 /**
  * What success is for a provider's answer (fixed-choices N1): the HTTP statuses that count (`[from, to]` ranges), and,

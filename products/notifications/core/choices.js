@@ -14,15 +14,15 @@ import { CHANNELS, FALLBACK_CHANNELS } from './channels.js';
 /** @template T @typedef {{ ok: true, value: T } | { ok: false, errors: Errors }} Checked */
 
 /** Most unsubscribe topics a website has (a system cap). */
-export const MAX_TOPICS = 20;
+const MAX_TOPICS = 20;
 /** Most template settings a website has (one per template key; a system cap). */
-export const MAX_TEMPLATE_SETTINGS = 1000;
+const MAX_TEMPLATE_SETTINGS = 1000;
 /** Most quiet windows (a system cap). */
-export const MAX_QUIET_WINDOWS = 50;
+const MAX_QUIET_WINDOWS = 50;
 /** Longest topic name. */
 const TOPIC_NAME_LIMIT = 60;
 /** A topic id: kept when the topic is renamed; links and recipients' choices name it. */
-export const TOPIC_ID = /^[a-z][a-z0-9_]{0,31}$/;
+const TOPIC_ID = /^[a-z][a-z0-9_]{0,31}$/;
 /** Most languages with unsubscribe keywords, and keywords per language (system caps). */
 const MAX_KEYWORD_LANGUAGES = 30;
 const MAX_KEYWORDS = 20;

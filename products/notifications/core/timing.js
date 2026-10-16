@@ -24,12 +24,10 @@ export const RETRY_PRESETS = Object.freeze({
 	standard: Object.freeze([MINUTE, 5 * MINUTE, 30 * MINUTE, 2 * HOUR]),
 	long: Object.freeze([5 * MINUTE, 15 * MINUTE, HOUR, 3 * HOUR, 6 * HOUR]),
 });
-/** Every retry plan a setting may name. */
-export const RETRY_PLANS = Object.freeze(/** @type {RetryPlan[]} */ (['short', 'standard', 'long', 'custom']));
 /** Most custom waits (a system cap: retries are judged on the next uses of the website). */
-export const MAX_RETRY_WAITS = 10;
+const MAX_RETRY_WAITS = 10;
 /** Longest custom wait, in minutes (7 days). */
-export const MAX_RETRY_WAIT_MINUTES = 10_080;
+const MAX_RETRY_WAIT_MINUTES = 10_080;
 
 /**
  * The waits (ms) a retry setting names: a preset's, or with `custom` the merchant's own minutes (whole numbers from 1 to

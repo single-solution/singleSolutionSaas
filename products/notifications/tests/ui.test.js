@@ -265,7 +265,7 @@ describe('admin widgets', () => {
 			createdAt: '2026-10-01T10:00:00.000Z',
 		});
 		await startAdmin({
-			'GET /v1/admin/messages': (init, url) => {
+			'GET /v1/admin/messages': (_init, url) => {
 				asked.push(url);
 				if (url.searchParams.get('status') === 'sent') return answer(500);
 				if (url.searchParams.get('channel') === 'email') return answer(200, { items: [], nextCursor: null, hasMore: false });
@@ -327,13 +327,13 @@ describe('admin widgets', () => {
 			createdAt: '2026-10-01T10:00:00.000Z',
 		};
 		await startAdmin({
-			'GET /v1/admin/messages/counts': (init, url) => {
+			'GET /v1/admin/messages/counts': (_init, url) => {
 				counted.push(url);
 				return url.searchParams.get('to') === 'nobody'
 					? answer(500)
 					: answer(200, { total: 3, groups: { sent: 2, failed: 1 } });
 			},
-			'GET /v1/admin/messages': (init, url) => {
+			'GET /v1/admin/messages': (_init, url) => {
 				listed.push(url);
 				return answer(200, { items: [message], nextCursor: null, hasMore: false });
 			},
