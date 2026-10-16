@@ -7,6 +7,7 @@
  * says so instead of showing a form the server would refuse.
  * @module
  */
+import { field as kitField, segmented } from '@ss/app-kit/widget';
 import { button, field, formatsOf, h, problemText, select, settingsOf } from './shop-common.js';
 import { codeOf } from './problem-code.js';
 
@@ -24,11 +25,13 @@ import { codeOf } from './problem-code.js';
  * @returns {HTMLFormElement}
  */
 export const reviewForm = ({ doc, t, shop, config, target, idPrefix, heading, onDone, onRefused }) => {
-	const rating = select(
-		doc,
-		['5', '4', '3', '2', '1'].map((star) => /** @type {[string, string]} */ ([star, t('reviews.stars', { rating: star })])),
-		'5',
-	);
+	const rating = segmented(doc, {
+		label: t('reviews.rating'),
+		name: `${idPrefix}-rating`,
+		items: ['5', '4', '3', '2', '1'].map((star) => ({ value: star, label: t('reviews.stars', { rating: star }) })),
+		value: '5',
+	});
+	rating.node.setAttribute('id', `${idPrefix}-rating`);
 	// the merchant's questions, each unanswered at first (E40)
 	const questions = settingsOf(config).reviews.questions.map((question) => ({
 		question,
@@ -55,7 +58,7 @@ export const reviewForm = ({ doc, t, shop, config, target, idPrefix, heading, on
 			'form',
 			{ class: 'box review-form' },
 			h(doc, 'h2', {}, heading),
-			field(doc, `${idPrefix}-rating`, t('reviews.rating'), rating),
+			kitField(doc, t('reviews.rating'), rating.node),
 			...questions.map(({ question, control }) =>
 				field(
 					doc,
