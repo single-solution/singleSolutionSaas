@@ -666,7 +666,7 @@ export const locationsTab = (kit, panel, lookups) => {
 	const edit = (item) => {
 		const name = kit.input(item?.name ?? '', { maxlength: '120', required: '' });
 		const sort = kit.input(String(item?.sort ?? 0), { type: 'number', step: '1' });
-		const pickup = kit.check(t('catalogAdmin.pickup'), item?.pickup === true);
+		const pickup = kit.toggle(t('catalogAdmin.pickup'), item?.pickup === true);
 		saveDialog(kit, {
 			title: item ? t('admin.editing', { name: item.name }) : t('catalogAdmin.newLocation'),
 			path,

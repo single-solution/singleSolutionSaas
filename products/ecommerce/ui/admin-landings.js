@@ -134,7 +134,7 @@ export const landingsTab = (kit, panel, lookups) => {
 		const title = kit.input(landing?.title ?? '', { maxlength: '200' });
 		const description = kit.area(landing?.description ?? '', { rows: '2', maxlength: '500' });
 		const intro = kit.area(landing?.intro ?? '', { rows: '5', maxlength: '5000' });
-		const indexable = kit.select(
+		const indexable = kit.pick(
 			['auto', 'yes', 'no'].map((key) => ({ value: key, label: t(`catalogAdmin.indexable.${key}`) })),
 			landing?.indexable ?? 'auto',
 		);

@@ -211,7 +211,7 @@ export const shipForm = (kit) => {
 				])
 			: kit.input('', { maxlength: '40' });
 	const tracking = kit.input('', { maxlength: '80' });
-	const book = kit.check(t('ordersAdmin.bookCourier'));
+	const book = kit.toggle(t('ordersAdmin.bookCourier'));
 	const trackingField = kit.field(t('ordersAdmin.trackingNumber'), tracking);
 	book.box.addEventListener('change', () => {
 		trackingField.hidden = book.box.checked;

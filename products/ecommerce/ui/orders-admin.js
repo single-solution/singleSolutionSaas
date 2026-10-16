@@ -84,9 +84,9 @@ const ordersTab = (kit, panel) => {
 	const to = kit.input('', { type: 'date' });
 	// orders with a tag (E11)
 	const tag = kit.input('', { maxlength: '40', placeholder: t('admin.tagPlaceholder') });
-	const unseen = kit.check(t('ordersAdmin.unseenOnly'));
+	const unseen = kit.toggle(t('ordersAdmin.unseenOnly'), false, { inline: true });
 	// canceled orders that still hold the shopper's money: the refunds to make (late money, K-13)
-	const refundDue = kit.check(t('ordersAdmin.refundDueOnly'));
+	const refundDue = kit.toggle(t('ordersAdmin.refundDueOnly'), false, { inline: true });
 
 	/**
 	 * The list's filters; a count by a field leaves out that field's own filter.

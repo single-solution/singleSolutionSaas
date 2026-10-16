@@ -12,8 +12,10 @@ import {
 	DEFAULT_FORMAT,
 	adminCall,
 	badge,
+	checkbox,
 	dot,
 	element,
+	field as kitField,
 	fieldGrid,
 	formatDate,
 	formatMoney,
@@ -21,7 +23,9 @@ import {
 	moreMenu,
 	mountWidget,
 	openDialog,
+	segmented,
 	splitView,
+	toggle as kitToggle,
 	viewerOf,
 } from '@ss/app-kit/widget';
 import { SEO_PREVIEW_CSS } from '@ss/ui/seo-preview';
@@ -177,7 +181,6 @@ const createKit = ({ root, config, api, win, save, open }) => {
 	const viewer = viewerOf(win);
 	/** @type {string[]} */
 	const blobs = [];
-	let ids = 0;
 
 	/** @param {string} key @param {Record<string, string | number>} [values] */
 	const t = (key, values = {}) => formatText(config.texts[key] ?? key, values);
@@ -399,15 +402,10 @@ const createKit = ({ root, config, api, win, save, open }) => {
 	};
 
 	/**
-	 * A labeled field.
-	 * @param {string} label @param {HTMLElement} control
+	 * A labeled field (the kit's: the label linked to the control, a hint and an error line on request).
+	 * @param {string} label @param {HTMLElement} control @param {{ hint?: string, prefix?: string, suffix?: string }} [options]
 	 */
-	const field = (label, control) => {
-		ids += 1;
-		const id = `ss-field-${ids}`;
-		control.setAttribute('id', id);
-		return h('div', { class: 'field' }, [text('label', { for: id }, label), control]);
-	};
+	const field = (label, control, options = {}) => kitField(doc, label, control, options);
 	/** @param {string | number | null | undefined} [value] @param {Record<string, string>} [attributes] */
 	const input = (value = '', attributes = {}) => {
 		const node = /** @type {HTMLInputElement} */ (element(doc, 'input', attributes));
@@ -429,9 +427,34 @@ const createKit = ({ root, config, api, win, save, open }) => {
 	};
 	/** A checkbox with its label. @param {string} label @param {boolean} [checked] */
 	const check = (label, checked = false) => {
-		const box = input('', { type: 'checkbox' });
-		box.checked = checked;
-		return { box, node: h('label', { class: 'check' }, [box, label]) };
+		const { box, node } = checkbox(doc, label, { checked });
+		return { box, node };
+	};
+	/**
+	 * A switch for a yes or no setting: a setting row (label and help on the left, the switch on the right), or with
+	 * `inline` the switch with its text (a filter).
+	 * @param {string} label @param {boolean} [checked] @param {{ help?: string, inline?: boolean }} [options]
+	 */
+	const toggle = (label, checked = false, options = {}) => {
+		const { box, node } = kitToggle(doc, label, { checked, ...options });
+		return { box, node };
+	};
+	let groups = 0;
+	/**
+	 * One choice from a few short ones as a segmented control that stands where a select would: `value`, `disabled` and
+	 * `change` work on it.
+	 * @param {Choice[]} choices @param {string} [value] @param {{ 'aria-label'?: string }} [attributes]
+	 * @returns {HTMLElement & { value: string, disabled: boolean }}
+	 */
+	const pick = (choices, value = '', attributes = {}) => {
+		groups += 1;
+		const choice = segmented(doc, {
+			label: attributes['aria-label'] ?? '',
+			name: `ss-pick-${groups}`,
+			items: choices,
+			value: choices.some((each) => each.value === value) ? value : (choices[0]?.value ?? ''),
+		});
+		return /** @type {any} */ (choice.node);
 	};
 	/** A group of fields with a legend. @param {string} legend @param {Child[]} children */
 	const group = (legend, children) => h('fieldset', {}, [text('legend', {}, legend), ...children]);
@@ -662,6 +685,8 @@ const createKit = ({ root, config, api, win, save, open }) => {
 		area,
 		select,
 		check,
+		toggle,
+		pick,
 		group,
 		table,
 		sections,

@@ -261,9 +261,9 @@ export const seoEditor = (kit, seo, page) => {
 	const canonical = kit.input(given.canonicalUrl ?? '', { maxlength: '500', inputmode: 'url' });
 	const image = kit.input(given.ogImage ?? '', { maxlength: '500', inputmode: 'url' });
 	const keyword = kit.input(given.focusKeyword ?? '', { maxlength: '100' });
-	const noindex = kit.check(t('catalogAdmin.noindex'), given.noindex === true);
-	const nofollow = kit.check(t('catalogAdmin.nofollow'), given.nofollow === true);
-	const asWritten = kit.check(t('catalogAdmin.titleAsWritten'), given.titleMode === 'as_written');
+	const noindex = kit.toggle(t('catalogAdmin.noindex'), given.noindex === true);
+	const nofollow = kit.toggle(t('catalogAdmin.nofollow'), given.nofollow === true);
+	const asWritten = kit.toggle(t('catalogAdmin.titleAsWritten'), given.titleMode === 'as_written');
 	const preview = page
 		? seoPreviewOf(kit, page.kind, () => ({
 				...page.read(),

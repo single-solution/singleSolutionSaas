@@ -73,7 +73,7 @@ const customersTab = (kit, panel) => {
 		],
 		onChange: reload,
 	});
-	const unseen = kit.check(t('customersAdmin.unseenOnly'));
+	const unseen = kit.toggle(t('customersAdmin.unseenOnly'), false, { inline: true });
 	unseen.box.addEventListener('change', reload);
 	// the merchant's saved segments (E11), read from the server
 	const segment = kit.select([{ value: '', label: t('customersAdmin.allCustomers') }], '');
@@ -141,7 +141,7 @@ const customersTab = (kit, panel) => {
 		const email = kit.input('', { type: 'email', maxlength: '254' });
 		const city = kit.input('', { maxlength: '80' });
 		const points = kit.input('0', { type: 'number', min: '0', step: '1' });
-		const member = kit.check(t('customersAdmin.loyaltyMember'));
+		const member = kit.toggle(t('customersAdmin.loyaltyMember'));
 		kit.dialog({
 			title: t('customersAdmin.add'),
 			body: [

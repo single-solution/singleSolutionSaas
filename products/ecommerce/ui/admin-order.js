@@ -523,7 +523,7 @@ const moveDialog = (kit, order, status, done) => {
 		label: entry.label,
 		input: kit.input('', { maxlength: '2000', inputmode: 'url' }),
 	}));
-	const restock = options.restock === 'ask' ? kit.check(t('ordersAdmin.restockAsk')) : null;
+	const restock = options.restock === 'ask' ? kit.toggle(t('ordersAdmin.restockAsk')) : null;
 	const canceling = status.role === 'canceled';
 	// why: a cancel may give one of the merchant's reasons, a package that came back takes one (the first by default)
 	const reasons = status.reasons ?? [];
@@ -770,7 +770,7 @@ const paymentDialog = (kit, order, done) => {
 	const amount = kit.input(kit.decimal(due), { inputmode: 'decimal' });
 	const reference = kit.input('', { maxlength: '120' });
 	const note = kit.input('', { maxlength: '1000' });
-	const confirm = WAITING_ROLES.includes(order.role) ? kit.check(t('ordersAdmin.paymentConfirm'), true) : null;
+	const confirm = WAITING_ROLES.includes(order.role) ? kit.toggle(t('ordersAdmin.paymentConfirm'), true) : null;
 	kit.dialog({
 		title: t('ordersAdmin.recordPayment'),
 		body: [

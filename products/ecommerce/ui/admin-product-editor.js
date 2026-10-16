@@ -81,7 +81,7 @@ export const specControl = (kit, attribute, current, own) => {
 	const named = attribute.unit ? `${attribute.name} (${attribute.unit})` : attribute.name;
 	const label = attribute.required ? t('catalogAdmin.requiredLabel', { name: named }) : named;
 	if (attribute.type === 'yes_no') {
-		const select = kit.select(
+		const select = kit.pick(
 			[
 				{ value: '', label: t('catalogAdmin.notSet') },
 				{ value: 'true', label: t('admin.yes') },
@@ -175,7 +175,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			PRODUCT_STATUSES.map((key) => ({ value: key, label: t(`catalogAdmin.status.${key}`) })),
 			product.status,
 		);
-		const featured = kit.check(t('catalogAdmin.featuredProduct'), product.featured === true);
+		const featured = kit.toggle(t('catalogAdmin.featuredProduct'), product.featured === true);
 		const summary = kit.area(product.summary, { maxlength: '500' });
 		const description = richEditor(kit, product.descriptionHtml || paragraphsOf(product.description));
 		const brand = kit.select(
@@ -235,8 +235,8 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 		});
 
 		// ------------------------------------------------------------------------------------- stock and kinds
-		const trackStock = kit.check(t('catalogAdmin.trackStock'), product.trackStock);
-		const licenseKeys = kit.check(t('catalogAdmin.licenseKeys'), product.digital?.licenseKeys === true);
+		const trackStock = kit.toggle(t('catalogAdmin.trackStock'), product.trackStock);
+		const licenseKeys = kit.toggle(t('catalogAdmin.licenseKeys'), product.digital?.licenseKeys === true);
 		const downloadLimit = kit.input(String(product.digital?.downloadLimit ?? 0), { type: 'number', min: '0', step: '1' });
 		const duration = kit.input(String(product.booking?.durationMinutes ?? 60), {
 			type: 'number',
@@ -253,7 +253,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			kit.field(t('catalogAdmin.schedule'), schedule),
 		]);
 		const chart = kit.select(chartChoices(kit, charts), product.sizeChartId ?? '');
-		const hideGuide = kit.check(t('catalogAdmin.hideSizeGuide'), product.hideSizeGuide === true);
+		const hideGuide = kit.toggle(t('catalogAdmin.hideSizeGuide'), product.hideSizeGuide === true);
 		const guideGroup = kit.group(t('catalogAdmin.sizeGuide'), [
 			fieldsOf(kit, [kit.field(t('catalogAdmin.sizeChart'), chart), hideGuide.node]),
 		]);

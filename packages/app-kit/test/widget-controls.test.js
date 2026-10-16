@@ -126,10 +126,28 @@ describe('segmented, radioGroup and checkGroup', () => {
 		expect(group.node.querySelector('label')?.textContent).toBe('Alpha');
 	});
 
+	it('the group element reads, sets and disables like the select it replaces, and fires change', () => {
+		const group = segmented(document, { label: 'Size', name: 'sz', items, value: 'a' });
+		mount(group.node);
+		const seen = vi.fn();
+		group.node.addEventListener('change', seen);
+		const node = /** @type {HTMLElement & { value: string, disabled: boolean }} */ (group.node);
+		expect(node.value).toBe('a');
+		node.value = 'b';
+		expect(group.inputs[1]?.checked).toBe(true);
+		group.inputs[0]?.click();
+		expect(seen).toHaveBeenCalledTimes(1);
+		expect(node.disabled).toBe(false);
+		node.disabled = true;
+		expect(group.inputs.every((each) => each.disabled)).toBe(true);
+		node.disabled = false;
+		expect(group.inputs.some((each) => each.disabled)).toBe(false);
+	});
+
 	it('cards carry a title and a line, and the value can be set', () => {
 		const group = radioGroup(document, { label: 'Plan', name: 'plan', items, look: 'card' });
 		mount(group.node);
-		expect(group.node.className).toBe('choices');
+		expect(group.node.className).toBe('choice-grid');
 		expect(group.value).toBe('');
 		group.value = 'b';
 		expect(group.inputs[1]?.checked).toBe(true);

@@ -52,8 +52,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .field > label, .field > .cap { margin: 0; font-size: 0.875em; font-weight: 500; }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 0 16px; }
 .fields > .field { margin-top: 12px; }
-.hint, .help { display: block; margin: 0; font-size: 0.85em; font-weight: 400; opacity: 0.7; }
-.hint.error { color: var(--ss-kit-bad); opacity: 1; }
+.field > .hint, .help { display: block; margin: 0; font-size: 0.85em; font-weight: 400; opacity: 0.7; }
+.field > .hint.error { color: var(--ss-kit-bad); opacity: 1; }
 .affix { display: flex; align-items: stretch; border: 1px solid var(--ss-kit-line); border-radius: var(--ss-kit-r); overflow: hidden;
   transition: border-color 120ms, box-shadow 120ms; }
 .affix:focus-within { border-color: var(--ss-kit-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ss-kit-focus) 24%, transparent); }

@@ -160,23 +160,40 @@ export const shows = (scope, text) =>
 	[...scope.querySelectorAll('button')].some((b) => b.textContent === text && !b.closest('[hidden]'));
 
 /**
- * The control of a labeled field.
+ * A choice group (segmented control or cards) with the `value` of the select it replaced.
+ * @param {Element} group
+ */
+const groupAsSelect = (group) => group;
+/**
+ * The control of a labeled field (a segmented control is found by its caption).
  * @param {ParentNode} scope @param {string} label @param {number} [index]
  * @returns {any}
  */
 export const fieldIn = (scope, label, index = 0) => {
 	const found = [...scope.querySelectorAll('label')].filter(
-		(l) => l.textContent === label && !l.classList.contains('check') && !l.closest('[hidden]'),
+		(l) => l.textContent === label && !l.classList.contains('check') && l.htmlFor && !l.closest('[hidden]'),
 	);
 	const node = /** @type {HTMLLabelElement | undefined} */ (found[index]);
-	if (!node) throw new Error(`no field ${label}`);
+	if (!node) {
+		const caption = [...scope.querySelectorAll('.field > .cap')].filter(
+			(c) => c.textContent === label && !c.closest('[hidden]'),
+		)[index];
+		if (!caption) throw new Error(`no field ${label}`);
+		return groupAsSelect(/** @type {Element} */ (caption.parentElement?.querySelector('[role="radiogroup"]')));
+	}
 	return /** @type {ShadowRoot} */ (node.getRootNode()).getElementById(node.htmlFor);
 };
-/** A checkbox by its label. @param {ParentNode} scope @param {string} text @returns {HTMLInputElement} */
+/** A checkbox or a switch by its label. @param {ParentNode} scope @param {string} text @returns {HTMLInputElement} */
 export const checkIn = (scope, text) => {
-	const found = [...scope.querySelectorAll('label.check')].find((l) => (l.textContent ?? '') === text && !l.closest('[hidden]'));
-	if (!found) throw new Error(`no check ${text}`);
-	return /** @type {HTMLInputElement} */ (found.querySelector('input'));
+	const found = [...scope.querySelectorAll('label.check, label.switch')].find(
+		(l) => (l.textContent ?? '') === text && !l.closest('[hidden]'),
+	);
+	if (found) return /** @type {HTMLInputElement} */ (found.querySelector('input'));
+	const row = /** @type {HTMLLabelElement | undefined} */ (
+		[...scope.querySelectorAll('.setting .text > label')].find((l) => (l.textContent ?? '') === text && !l.closest('[hidden]'))
+	);
+	if (!row) throw new Error(`no check ${text}`);
+	return /** @type {HTMLInputElement} */ (/** @type {ShadowRoot} */ (row.getRootNode()).getElementById(row.htmlFor));
 };
 /** @param {HTMLElement} node */
 export const click = async (node) => {

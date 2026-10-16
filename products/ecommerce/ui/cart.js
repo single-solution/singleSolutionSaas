@@ -481,18 +481,28 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					return h(
 						doc,
 						'label',
-						{ class: 'check' },
+						{ class: 'choice' },
 						radio,
-						// the merchant's name for the rate (E5), else the plain words
-						pickup
-							? t('checkout.pickupAt', { rate: option.rateName || t('checkout.pickup'), name: option.name, fee })
-							: t('checkout.deliver', { rate: option.rateName || t('checkout.delivery'), fee }),
-						days ? h(doc, 'span', { class: 'meta' }, days) : null,
-						// the pickup point of the settings: its address and hours (E22)
-						pickup && option.address ? h(doc, 'span', { class: 'meta' }, option.address) : null,
-						pickup && option.hours
-							? h(doc, 'span', { class: 'meta' }, t('checkout.pickupHours', { hours: option.hours }))
-							: null,
+						h(
+							doc,
+							'span',
+							{},
+							// the merchant's name for the rate (E5), else the plain words
+							h(
+								doc,
+								'b',
+								{},
+								pickup
+									? t('checkout.pickupAt', { rate: option.rateName || t('checkout.pickup'), name: option.name, fee })
+									: t('checkout.deliver', { rate: option.rateName || t('checkout.delivery'), fee }),
+							),
+							days ? h(doc, 'span', { class: 'meta' }, days) : null,
+							// the pickup point of the settings: its address and hours (E22)
+							pickup && option.address ? h(doc, 'span', { class: 'meta' }, option.address) : null,
+							pickup && option.hours
+								? h(doc, 'span', { class: 'meta' }, t('checkout.pickupHours', { hours: option.hours }))
+								: null,
+						),
 					);
 				});
 				// the shop's texts: delivery times with delivery, how long packing takes (E22)
@@ -504,7 +514,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						'fieldset',
 						{ class: 'box' },
 						h(doc, 'legend', {}, t('checkout.delivery')),
-						h(doc, 'div', { class: 'choices' }, ...choices),
+						h(doc, 'div', { class: 'choice-grid' }, ...choices),
 						quote.deliveryProblem
 							? h(
 									doc,
@@ -548,12 +558,17 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					return h(
 						doc,
 						'label',
-						{ class: 'check' },
+						{ class: 'choice' },
 						radio,
-						option.name,
-						option.advance > 0
-							? h(doc, 'span', { class: 'meta' }, t('checkout.advance', { amount: money(option.advance, currency()) }))
-							: null,
+						h(
+							doc,
+							'span',
+							{},
+							h(doc, 'b', {}, option.name),
+							option.advance > 0
+								? h(doc, 'span', { class: 'meta' }, t('checkout.advance', { amount: money(option.advance, currency()) }))
+								: null,
+						),
 					);
 				});
 				paymentBox.replaceChildren(
@@ -563,7 +578,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						{ class: 'box' },
 						h(doc, 'legend', {}, t('checkout.payment')),
 						choices.length > 0
-							? h(doc, 'div', { class: 'choices' }, ...choices)
+							? h(doc, 'div', { class: 'choice-grid' }, ...choices)
 							: h(doc, 'p', { class: 'error' }, t('checkout.noPayment')),
 						// the shop's note for the chosen method, and how to pay a method paid first (E22, E24, E8)
 						chosenNote ? h(doc, 'p', { class: 'meta' }, chosenNote) : null,

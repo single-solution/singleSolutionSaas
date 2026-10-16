@@ -54,7 +54,7 @@ const commonOf = (kit, offer) => {
 	const startsAt = kit.input(localInput(offer.startsAt), { type: 'datetime-local' });
 	const endsAt = kit.input(localInput(offer.endsAt), { type: 'datetime-local' });
 	const limit = kit.input(offer.limit ?? '', { type: 'number', min: '1', step: '1' });
-	const active = kit.check(t('promotionsAdmin.active'), offer.active !== false);
+	const active = kit.toggle(t('promotionsAdmin.active'), offer.active !== false);
 	return {
 		nodes: [
 			kit.h('div', { class: 'fields' }, [
@@ -80,7 +80,7 @@ const commonOf = (kit, offer) => {
 export const couponFields = (kit, searches, names, coupon, withCode) => {
 	const { t, h } = kit;
 	const code = kit.input(coupon.code ?? '', { maxlength: '40', autocapitalize: 'characters' });
-	const type = kit.select(
+	const type = kit.pick(
 		COUPON_TYPES.map((key) => ({ value: key, label: t(`promotionsAdmin.couponType.${key}`) })),
 		coupon.type ?? 'percent',
 	);
@@ -94,7 +94,7 @@ export const couponFields = (kit, searches, names, coupon, withCode) => {
 	const maxDiscount = kit.input(kit.decimal(coupon.maxDiscount), { inputmode: 'decimal' });
 	const minSubtotal = kit.input(coupon.minSubtotal ? kit.decimal(coupon.minSubtotal) : '', { inputmode: 'decimal' });
 	const perCustomer = kit.input(coupon.perCustomer ?? '', { type: 'number', min: '1', step: '1' });
-	const firstOrder = kit.check(t('promotionsAdmin.firstOrderOnly'), coupon.firstOrderOnly === true);
+	const firstOrder = kit.toggle(t('promotionsAdmin.firstOrderOnly'), coupon.firstOrderOnly === true);
 	const percentField = kit.field(t('promotionsAdmin.percentOff'), percent);
 	const fixedField = kit.field(t('promotionsAdmin.amountOff', { currency: kit.currency }), fixed);
 	const maxField = kit.field(t('promotionsAdmin.maxDiscount', { currency: kit.currency }), maxDiscount);
@@ -153,7 +153,7 @@ export const dealFields = (kit, searches, names, deal) => {
 	const { t, h } = kit;
 	const name = kit.input(deal.name ?? '', { maxlength: '120' });
 	const description = kit.area(deal.description ?? '', { maxlength: '500' });
-	const type = kit.select(
+	const type = kit.pick(
 		DEAL_TYPES.map((key) => ({ value: key, label: t(`promotionsAdmin.dealType.${key}`) })),
 		deal.type ?? 'percent',
 	);
@@ -278,7 +278,7 @@ const itemsOf = (kit, searches, items, names) => {
 export const bundleFields = (kit, searches, names, bundle) => {
 	const { t, h } = kit;
 	const name = kit.input(bundle.name ?? '', { maxlength: '120' });
-	const type = kit.select(
+	const type = kit.pick(
 		BUNDLE_TYPES.map((key) => ({ value: key, label: t(`promotionsAdmin.bundleType.${key}`) })),
 		bundle.type ?? 'bundle',
 	);

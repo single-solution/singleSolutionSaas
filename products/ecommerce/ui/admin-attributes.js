@@ -168,7 +168,7 @@ const showText = (kit, item) => {
  */
 const formatEditor = (kit, start) => {
 	const { t, h } = kit;
-	const on = kit.check(t('catalogAdmin.formatOn'), start !== null && start !== undefined);
+	const on = kit.toggle(t('catalogAdmin.formatOn'), start !== null && start !== undefined);
 	const format = start ?? {};
 	const chars = kit.select(
 		FORMAT_CHARS.map((key) => ({ value: key, label: t(`catalogAdmin.chars.${key}`) })),
@@ -182,8 +182,8 @@ const formatEditor = (kit, start) => {
 		CHECK_DIGITS.map((key) => ({ value: key, label: t(`catalogAdmin.checkDigit.${key}`) })),
 		format.checkDigit ?? 'none',
 	);
-	const ignoreSpaces = kit.check(t('catalogAdmin.ignoreSpaces'), format.ignoreSpaces === true);
-	const upperCase = kit.check(t('catalogAdmin.upperCase'), format.upperCase === true);
+	const ignoreSpaces = kit.toggle(t('catalogAdmin.ignoreSpaces'), format.ignoreSpaces === true);
+	const upperCase = kit.toggle(t('catalogAdmin.upperCase'), format.upperCase === true);
 	const tryValue = kit.input('', { maxlength: '200', spellcheck: 'false' });
 	const result = kit.status();
 	/** The format as sent: null when off. */
@@ -303,32 +303,32 @@ export const attributesTab = (kit, panel, lookups) => {
 		const sort = kit.input(String(item?.sort ?? 0), { type: 'number', step: '1' });
 		const min = kit.input(item?.min ?? '', { type: 'number', step: 'any' });
 		const max = kit.input(item?.max ?? '', { type: 'number', step: 'any' });
-		const decimals = kit.select(
+		const decimals = kit.pick(
 			[0, 1, 2, 3].map((count) => ({ value: String(count), label: String(count) })),
 			String(item?.decimals ?? 2),
 		);
-		const dates = kit.select(
+		const dates = kit.pick(
 			FIELD_DATES.map((key) => ({ value: key, label: t(`catalogAdmin.dates.${key}`) })),
 			item?.dates ?? 'any',
 		);
-		const multiple = kit.check(t('catalogAdmin.multiple'), item?.multiple === true);
+		const multiple = kit.toggle(t('catalogAdmin.multiple'), item?.multiple === true);
 		const maxValues = kit.input(String(item?.multiple ? item.maxValues : FIELD_LIMITS.values), {
 			type: 'number',
 			min: '2',
 			max: String(FIELD_LIMITS.values),
 			step: '1',
 		});
-		const required = kit.check(t('catalogAdmin.required'), item?.required === true);
+		const required = kit.toggle(t('catalogAdmin.required'), item?.required === true);
 		const requiredAt = kit.select(
 			REQUIRED_AT.map((key) => ({ value: key, label: t(`catalogAdmin.requiredAt.${key}`) })),
 			item?.requiredAt ?? 'checkout',
 		);
-		const active = kit.check(t('catalogAdmin.attributeActive'), item?.active !== false);
+		const active = kit.toggle(t('catalogAdmin.attributeActive'), item?.active !== false);
 		const choices = choicesEditor(kit, choicesOf(item));
 		const format = formatEditor(kit, item?.format ?? null);
 		const given = item?.show ?? {};
-		const checks = new Map(SHOW_CHECKS.map((key) => [key, kit.check(t(`catalogAdmin.show.${key}`), given[key] === true)]));
-		const cardMode = kit.select(
+		const checks = new Map(SHOW_CHECKS.map((key) => [key, kit.toggle(t(`catalogAdmin.show.${key}`), given[key] === true)]));
+		const cardMode = kit.pick(
 			CARD_MODES.map((key) => ({ value: key, label: t(`catalogAdmin.card.${key}`) })),
 			given.card ?? 'none',
 		);

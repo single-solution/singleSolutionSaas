@@ -143,7 +143,7 @@ export const settingRow = (doc, { label, help, control, wide = false }) => {
 
 /**
  * A group of radios (or checkboxes) in one of three looks, as a native group: Tab enters a radio group once and the
- * arrow keys move inside it.
+ * arrow keys move inside it. The group's element also has `value` and `disabled`, so it can stand where a select was.
  * @param {Document} doc @param {GroupInput & { value?: string | string[], onChange?: (value: any) => unknown }} input
  * @param {boolean} multiple
  */
@@ -180,6 +180,23 @@ const group = (doc, { label, name, items, value = '', look = 'plain', onChange }
 		return multiple ? picked : (picked[0] ?? '');
 	};
 	if (onChange) for (const each of inputs) each.addEventListener('change', () => void onChange(read()));
+	/** @param {string | string[]} next */
+	const write = (next) => {
+		const set = Array.isArray(next) ? next : [next];
+		for (const each of inputs) each.checked = set.includes(each.value);
+	};
+	// the group reads and sets its value like the select it can replace: `node.value`, `node.disabled`, and its
+	// `change` event (the radios' change bubbles to the group)
+	Object.defineProperties(node, {
+		value: { configurable: true, get: read, set: write },
+		disabled: {
+			configurable: true,
+			get: () => inputs.every((each) => each.disabled),
+			set: (off) => {
+				for (const each of inputs) each.disabled = off === true;
+			},
+		},
+	});
 	return {
 		node,
 		inputs,
@@ -187,8 +204,7 @@ const group = (doc, { label, name, items, value = '', look = 'plain', onChange }
 			return read();
 		},
 		set value(next) {
-			const set = Array.isArray(next) ? next : [next];
-			for (const each of inputs) each.checked = set.includes(each.value);
+			write(next);
 		},
 	};
 };

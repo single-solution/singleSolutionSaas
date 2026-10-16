@@ -49,7 +49,7 @@ const stockDialog = (kit, product, context) => {
 	const measure = product.type?.measure ?? null;
 	const rows = variants.map((variant) => {
 		const label = variantLabel(kit, variant);
-		const mode = kit.select(
+		const mode = kit.pick(
 			[
 				{ value: 'adjust', label: t('catalogAdmin.adjustBy') },
 				{ value: 'set', label: t('catalogAdmin.setTo') },

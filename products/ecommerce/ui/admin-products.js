@@ -328,7 +328,7 @@ export const productsTab = (kit, panel, lookups, links) => {
 			],
 			filters.hasMedia,
 		);
-		const lowStock = kit.check(t('catalogAdmin.lowStock'), filters.lowStock);
+		const lowStock = kit.toggle(t('catalogAdmin.lowStock'), filters.lowStock === true, { inline: true });
 		// with SEO on: the lowest score first, and a score below a mark (E42)
 		const order = kit.select(
 			[

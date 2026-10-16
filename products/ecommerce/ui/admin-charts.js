@@ -262,7 +262,7 @@ export const chartsTab = (kit, panel, lookups) => {
 			],
 			chart?.convertTo ?? '',
 		);
-		const active = kit.check(t('catalogAdmin.chartActive'), chart?.active !== false);
+		const active = kit.toggle(t('catalogAdmin.chartActive'), chart?.active !== false);
 		const grid = gridEditor(kit, chart);
 		const advice = kit.area(chart?.advice ?? '', { rows: '3', maxlength: '2000' });
 		const notes = kit.area(chart?.notes ?? '', { rows: '3', maxlength: '2000' });
