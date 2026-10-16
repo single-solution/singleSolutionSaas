@@ -166,10 +166,10 @@ export const checkPaymentInput = (body) => {
 };
 
 /** Whether a payment link asks the payer's phone (P3). */
-export const LINK_PHONE = Object.freeze(/** @type {const} */ (['off', 'optional', 'required']));
+const LINK_PHONE = Object.freeze(/** @type {const} */ (['off', 'optional', 'required']));
 
 /** Engine caps of a link's own questions (P3, code constants). */
-export const LINK_FIELDS = Object.freeze({ max: 3, label: 60, answer: 200 });
+const LINK_FIELDS = Object.freeze({ max: 3, label: 60, answer: 200 });
 
 /** The longest a link may say it ends after (payments). */
 const MAX_LINK_PAYMENTS = 1_000_000;

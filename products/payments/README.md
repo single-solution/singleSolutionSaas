@@ -1,8 +1,8 @@
 # Payments
 
 Online payments with the merchant's own gateway keys (PLAN.md 0.8.7): Stripe, PayPal, PayFast (South Africa), PayFast
-(Pakistan), JazzCash (Pakistan), Easypaisa (Pakistan), Rapid Gateway (Pakistan), bank transfer and a generic adapter;
-payment links, the payment API, subscriptions and refunds. Payers always pay on the gateway's own page, so card details
+(Pakistan), JazzCash (Pakistan), Easypaisa (Pakistan), Rapid Gateway (Pakistan), up to five custom gateways of the merchant's own and the merchant's manual payment
+methods (bank transfer, cash and the like, with proof of payment); payment links, the payment API, subscriptions and refunds. Payers always pay on the gateway's own page, so card details
 never reach Payments. Feature keys are in `manifest.json`, the public docs at `/docs`.
 
 ## Environment
@@ -55,13 +55,13 @@ does: only public https addresses and TLS databases.
 | JazzCash      | return URL `<base>/return/jazzcash/<websiteId>/<paymentId>` (sent per payment; whitelist `<base>`)                |
 | Easypaisa     | postBack URL `<base>/return/easypaisa/<websiteId>/<paymentId>` (sent per payment; whitelist `<base>`)             |
 | Rapid Gateway | webhook `<base>/v1/gateways/rapid/<websiteId>` (also sent per payment; its secret goes into the Rapid connection) |
-| Generic       | notice `<base>/v1/gateways/generic/<websiteId>` (sent per payment as `notify_url`)                                |
-| Bank transfer | none; storage CORS allows `PUT` from `<base>` for proof uploads                                                   |
+| Custom        | notice `<base>/v1/gateways/generic/<key>/<websiteId>` (sent per payment as `notify_url`)                          |
+| Manual method | none; storage CORS allows `PUT` from `<base>` for proof uploads                                                   |
 
 ## API
 
 Routes are listed in `/docs` and `openapi.json` (generated from `server/routes.js`). Besides the payment, link,
-subscription and pay-button routes, Payments serves `GET /v1/payments/count` and `/v1/payments/counts?by=state|gateway`
+subscription and pay-button routes, Payments serves `GET /v1/manual-methods` (the manual methods as payers see them), `GET /v1/payments/count` and `/v1/payments/counts?by=state|gateway`
 (and their ticket twins under `/v1/admin/payments/`), and the payment events on the kit's mechanism: `GET /v1/events`,
 `/v1/events/count` and `/v1/events/counts` (PLAN.md 0.8.10 K4, K5). The kit adds its own routes for the merchant's
 server (settings, texts, theme, Format, connections, activity log; `SS-Actor-*` headers name the acting staff member).
