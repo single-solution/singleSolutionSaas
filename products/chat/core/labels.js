@@ -176,7 +176,7 @@ export const parseTagging = (text, labels) => {
 
 /**
  * Conversations by each tag, topic and priority of the lists, in the lists' order (reports, C7).
- * @param {ReadonlyArray<{ tags?: string[], topic?: string | null, priority?: string | null }>} rows
+ * @param {ReadonlyArray<{ tags: string[], topic: string | null, priority: string | null }>} rows
  * @param {Labels} labels
  */
 export const labelCounts = (rows, labels) => {
@@ -184,7 +184,7 @@ export const labelCounts = (rows, labels) => {
 	const count = (list, has) =>
 		list.map((each) => ({ key: each.key, name: each.name, conversations: rows.filter((row) => has(row, each.key)).length }));
 	return {
-		tags: count(labels.tags, (row, key) => (row.tags ?? []).includes(key)),
+		tags: count(labels.tags, (row, key) => row.tags.includes(key)),
 		topics: count(labels.topics, (row, key) => row.topic === key),
 		priorities: count(labels.priorities, (row, key) => row.priority === key),
 	};

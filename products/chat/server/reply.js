@@ -1086,7 +1086,7 @@ export const createReply = (product, service) => {
 		const labels = await labelListsOf(s);
 		if (labels.tags.length + labels.topics.length + labels.priorities.length === 0) return;
 		const c = await s.store.conversations.get(conversationId);
-		if (!c || ((c.tags ?? []).length > 0 && c.topic && c.priority)) return;
+		if (!c || (c.tags.length > 0 && c.topic && c.priority)) return;
 		const connections = await connectionsOf(s, { backup: true });
 		if (connections.length === 0 || (await service.capped(s))) return;
 		const messages = await s.store.messages.list(conversationId, { limit: 100, internal: false });
@@ -1109,7 +1109,7 @@ export const createReply = (product, service) => {
 		if (!picked) return;
 		/** @type {Record<string, unknown>} */
 		const set = {};
-		if ((c.tags ?? []).length === 0 && picked.tags.length > 0) set.tags = picked.tags;
+		if (c.tags.length === 0 && picked.tags.length > 0) set.tags = picked.tags;
 		if (!c.topic && picked.topic) set.topic = picked.topic;
 		if (!c.priority && picked.priority) set.priority = picked.priority;
 		if (Object.keys(set).length === 0) return;

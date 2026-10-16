@@ -26,7 +26,8 @@ activity copy; each call writes one activity entry with its counts.
    - `conversations` by `id` (`conv_…`): the visitor (`{ kind: 'guest' | 'user', id }`), contact, `status` (`open`,
      `awaiting_visitor`, `resolved`), waiting and handoff times, the AI pause with who and when, `assignedTo` (an imported
      member of staff), the single `note`, custom field values (checked against the Custom fields list), `summary`,
-     `rating`, `page`, `unreadStaff`, `unreadVisitor`, `lastMessageAt` and `createdAt`.
+     `rating`, `page`, `unreadStaff`, `unreadVisitor`, `tags`, `topic` and `priority` (keys of the website's Tags,
+     Topics and Priorities lists: set them first), `lastMessageAt` and `createdAt`.
    - `messages` by `id` (`msg_…`, one record per message): `conversationId` (imported first), `author` (`visitor`, `ai`,
      `staff`, `system`), `staffId`, `name`, `text`, `format`, `internal` (a staff note), `attachment` (its `key` under
      `chat/` in Chat's storage, `name`, `type` and `size`) and `createdAt`.

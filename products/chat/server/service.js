@@ -577,9 +577,9 @@ export const createService = (product) => {
 				: {}),
 			assignedTo: c.assignedTo ? { id: c.assignedTo, name: names.get(c.assignedTo) ?? c.assignedTo } : null,
 			// the merchant's tags, topic and priority (C7)
-			tags: c.tags ?? [],
-			topic: c.topic ?? null,
-			priority: c.priority ?? null,
+			tags: c.tags,
+			topic: c.topic,
+			priority: c.priority,
 			unread: c.unreadStaff,
 			preview: c.preview,
 			lastMessageAt: iso(c.lastMessageAt),

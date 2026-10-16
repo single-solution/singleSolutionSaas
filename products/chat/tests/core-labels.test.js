@@ -67,7 +67,7 @@ describe('tags, topics and priorities (C7)', () => {
 		const rows = [
 			{ tags: ['vip'], topic: 'billing', priority: 'high' },
 			{ tags: ['vip', 'refund'], topic: 'billing', priority: null },
-			{ topic: null },
+			{ tags: [], topic: null, priority: null },
 		];
 		expect(labelCounts(rows, LABELS)).toEqual({
 			tags: [

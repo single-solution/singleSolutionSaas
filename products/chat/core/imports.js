@@ -16,6 +16,7 @@ import { isId } from '@ss/contracts';
 import { normalisePhone } from '@ss/contracts/phone';
 import { isObject } from '@ss/contracts/util';
 import { PRESENCES, STATUSES, USER_ID, messageText, previewOf } from './conversation.js';
+import { LABEL_LIMITS } from './labels.js';
 import { checkFieldValue } from './fields.js';
 import { plainOf } from './markdown.js';
 import { OTHER_PAGE, PAGE_TYPE_KEY } from './pages.js';
@@ -79,6 +80,9 @@ const IMPORT_FIELDS = Object.freeze({
 		'device',
 		'unreadStaff',
 		'unreadVisitor',
+		'tags',
+		'topic',
+		'priority',
 		'lastMessageAt',
 		'createdAt',
 	]),
@@ -284,15 +288,17 @@ export const checkGuest = (record, { now, rememberDays }) => {
 /**
  * A conversation: who the visitor is (a guest or a signed-in Accounts user), the captured contact, the status, waiting
  * for a person, the AI pause with who and when, the assignment, the single note, custom field values, the AI summary,
- * the rating, the page it started on, the unread counts, `lastMessageAt` and `createdAt`. Counters, the preview and
- * the read marks come from the messages (`finish`); until then it reads as a conversation without messages.
+ * the rating, the page it started on, the unread counts, its tags, topic and priority (C7), `lastMessageAt` and
+ * `createdAt`. Counters, the preview and the read marks come from the messages (`finish`); until then it reads as a
+ * conversation without messages.
  * @param {Record<string, unknown>} record
- * @param {{ callingCode: string, staffIds: ReadonlySet<string>, customFields: ReadonlyArray<CustomField> }} rules
+ * @param {{ callingCode: string, staffIds: ReadonlySet<string>, customFields: ReadonlyArray<CustomField>,
+ *   labels: import('./labels.js').Labels }} rules
  *   `callingCode`: the website's, for phones without one; `staffIds`: the staff list (assignments name one of them);
- *   `customFields`: the custom field definitions
+ *   `customFields`: the custom field definitions; `labels`: the website's tags, topics and priorities
  * @returns {Checked}
  */
-export const checkConversation = (record, { callingCode, staffIds, customFields }) => {
+export const checkConversation = (record, { callingCode, staffIds, customFields, labels }) => {
 	const read = reader(record, IMPORT_FIELDS.conversations);
 	if (!isId(record.id, 'conv')) read.fail('/id', 'A conversation id: conv_ and 10–64 of 0–9 a–z.');
 	const visitor = visitorOf(record.visitor, read);
@@ -331,6 +337,9 @@ export const checkConversation = (record, { callingCode, staffIds, customFields 
 		device: read.text(record.device, '/device', IMPORT_TEXT_LIMITS.device) ?? '',
 		unreadStaff: read.whole(record.unreadStaff, '/unreadStaff', 0, 1_000_000, 0),
 		unreadVisitor: read.whole(record.unreadVisitor, '/unreadVisitor', 0, 1_000_000, 0),
+		tags: tagsOf(record.tags, labels.tags, read),
+		topic: labelOf(record.topic, '/topic', labels.topics, read),
+		priority: labelOf(record.priority, '/priority', labels.priorities, read),
 		lastMessageAt: read.time(record.lastMessageAt, '/lastMessageAt', { required: true }),
 		createdAt: read.time(record.createdAt, '/createdAt', { required: true }),
 	};
@@ -352,6 +361,35 @@ export const checkConversation = (record, { callingCode, staffIds, customFields 
 		flow: null,
 		flowsRun: [],
 	}));
+};
+
+/**
+ * A conversation's tags: keys of the website's tags (C7), each once, at most `LABEL_LIMITS.perConversation`.
+ * @param {unknown} value
+ * @param {ReadonlyArray<import('./labels.js').Label>} tags
+ * @param {ReturnType<typeof reader>} read
+ * @returns {string[]}
+ */
+const tagsOf = (value, tags, read) => {
+	if (value === undefined || value === null) return [];
+	const keys = Array.isArray(value) ? [...new Set(value)] : null;
+	if (!keys || keys.length > LABEL_LIMITS.perConversation || keys.some((key) => !tags.some((tag) => tag.key === key)))
+		return read.fail('/tags', `Up to ${LABEL_LIMITS.perConversation} keys of the website's tags: set its tags first.`) ?? [];
+	return /** @type {string[]} */ (keys);
+};
+
+/**
+ * A conversation's topic or priority: a key of the website's list (C7), or null.
+ * @param {unknown} value
+ * @param {string} path
+ * @param {ReadonlyArray<import('./labels.js').Label>} list
+ * @param {ReturnType<typeof reader>} read
+ * @returns {string | null}
+ */
+const labelOf = (value, path, list, read) => {
+	if (value === undefined || value === null) return null;
+	if (typeof value === 'string' && list.some((entry) => entry.key === value)) return value;
+	return read.fail(path, `A key of the website's ${path === '/topic' ? 'topics' : 'priorities'}: set them first.`);
 };
 
 /**

@@ -16,7 +16,14 @@ import {
 	timeOf,
 } from '../core/imports.js';
 
-const RULES = { callingCode: '+44', staffIds: new Set(['usr_000000000000000000000001']), customFields: [] };
+/** @param {string[]} keys */
+const labels = (...keys) => keys.map((key) => ({ key, name: key, description: '' }));
+const RULES = {
+	callingCode: '+44',
+	staffIds: new Set(['usr_000000000000000000000001']),
+	customFields: [],
+	labels: { tags: labels('vip', 'refund'), topics: labels('orders'), priorities: labels('urgent', 'low') },
+};
 const CONVERSATION = {
 	id: 'conv_000000000000000000000001',
 	visitor: { kind: 'user', id: 'usr_000000000000000000000009' },
@@ -107,7 +114,27 @@ describe('conversations', () => {
 			preview: '',
 			flow: null,
 			flowsRun: [],
+			tags: [],
+			topic: null,
+			priority: null,
 		});
+	});
+
+	it('keeps tags, a topic and a priority of the website’s lists (C7), and refuses others', () => {
+		const checked = checkConversation(
+			{ ...CONVERSATION, tags: ['vip', 'refund', 'vip'], topic: 'orders', priority: 'urgent' },
+			RULES,
+		);
+		expect(checked.ok && checked.value).toMatchObject({ tags: ['vip', 'refund'], topic: 'orders', priority: 'urgent' });
+		expect(
+			paths(checkConversation({ ...CONVERSATION, tags: ['vip', 'unknown'], topic: 'returns', priority: 1 }, RULES)),
+		).toEqual(['/tags', '/topic', '/priority']);
+		const many = Array.from({ length: 11 }, (_, i) => `t${i}`);
+		expect(
+			paths(
+				checkConversation({ ...CONVERSATION, tags: many }, { ...RULES, labels: { ...RULES.labels, tags: labels(...many) } }),
+			),
+		).toEqual(['/tags']);
 	});
 
 	it('takes a page with its defaults and refuses shapes that do not fit', () => {

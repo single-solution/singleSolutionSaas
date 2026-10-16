@@ -263,7 +263,6 @@ describe('import (K10): checks and dry runs', () => {
 			],
 		});
 		expect(conversations.json.failed[1].errors.map((/** @type {any} */ e) => e.path)).toEqual([
-			'/tags',
 			'/visitor',
 			'/phone',
 			'/status',
@@ -277,6 +276,8 @@ describe('import (K10): checks and dry runs', () => {
 			'/rating/at',
 			'/page/url',
 			'/page/kind',
+			// a tag the website's Tags list does not have
+			'/tags',
 			'/lastMessageAt',
 		]);
 		const messages = await sys.send(

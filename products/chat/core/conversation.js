@@ -80,9 +80,9 @@ export const USER_ID = /^[A-Za-z0-9_.:@-]{1,64}$/;
  * @property {Record<string, string | number | boolean>} fields custom field values and flow answers
  * @property {{ id: string, step: number } | null} flow the running flow
  * @property {string[]} flowsRun
- * @property {string[]} [tags] keys of the merchant's tags (C7)
- * @property {string | null} [topic] a key of the merchant's topics (C7)
- * @property {string | null} [priority] a key of the merchant's priorities (C7)
+ * @property {string[]} tags keys of the merchant's tags (C7)
+ * @property {string | null} topic a key of the merchant's topics (C7)
+ * @property {string | null} priority a key of the merchant's priorities (C7)
  * @property {string | null} summary
  * @property {{ kind: RatingKind, score: number, comment: string | null, at: Date } | null} rating csat: 1 to the number
  *   of labels; nps: 0 to 10 (C13)
