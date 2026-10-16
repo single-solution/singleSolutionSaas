@@ -5,6 +5,7 @@
  * @module
  */
 import { MAX_AMOUNT } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
 
 /** @typedef {import('./model.js').OfferScope} OfferScope */
 
@@ -66,12 +67,6 @@ export const inScope = (line, scope) =>
  * @returns {{ ok: false, field: string, message: string }}
  */
 export const fail = (field, message) => ({ ok: false, field, message });
-
-/**
- * @param {unknown} value
- * @returns {value is Record<string, any>}
- */
-export const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * A scope from input (missing lists are empty).

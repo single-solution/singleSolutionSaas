@@ -8,6 +8,13 @@
  * @module
  */
 import { luhnValid } from '@ss/contracts/text';
+import { isObject as isJsonObject } from '@ss/contracts/util';
+
+/**
+ * The shared check, with the members of what it finds read as `any`: this file checks JSON by hand, then trusts what it found.
+ * @type {(value: unknown) => value is Record<string, any>}
+ */
+const isObject = isJsonObject;
 
 /** Which characters a format allows. */
 export const FORMAT_CHARS = Object.freeze(
@@ -167,9 +174,6 @@ export const checkFormat = (value, format) => {
 	if (!checkDigitValid(kept, format.checkDigit)) return { ok: false, code: 'check_digit' };
 	return { ok: true, value: kept };
 };
-
-/** @param {unknown} value @returns {value is Record<string, any>} */
-const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /**
  * @param {unknown} value @param {number} min @param {number} max

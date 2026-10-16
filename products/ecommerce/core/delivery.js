@@ -25,6 +25,7 @@
  */
 import { ADDRESS_LIMITS, countryKey, placeKey, postcodeKey } from './address.js';
 import { isAmount } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
 
 /**
  * Where a zone delivers ([] = any).
@@ -95,9 +96,6 @@ const PLACE_KINDS = Object.freeze(
 		['postcodes', ADDRESS_LIMITS.postalCode, postcodeKey],
 	]),
 );
-
-/** @param {unknown} value */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * @param {unknown} value @param {string} label @param {number} max @param {(value: unknown) => string} keyOf

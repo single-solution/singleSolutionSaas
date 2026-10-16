@@ -31,6 +31,7 @@ import {
 } from '../core/couriers.js';
 import { orderMoney } from '../core/orders.js';
 import { toDecimal } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
 
 /** @typedef {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} OutboundSend */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
@@ -52,9 +53,6 @@ const MAX_STATUS = 200;
  * @property {string} [trackingPath]
  * @property {string} [statusPath]
  */
-
-/** @param {unknown} value @returns {value is Record<string, unknown>} */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Extra headers (an object or JSON object text), or null when invalid.

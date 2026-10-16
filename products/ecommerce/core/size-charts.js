@@ -6,7 +6,8 @@
  * its first category's (or the nearest ancestor's), unless it hides the size guide. No I/O.
  * @module
  */
-import { cleanText, isObject } from './catalog.js';
+import { isObject } from '@ss/contracts/util';
+import { cleanText } from './catalog.js';
 import { sameDimension, unitOf } from './units.js';
 
 /** @typedef {import('./model.js').SizeChartRecord} SizeChartRecord */

@@ -8,6 +8,7 @@
  * @module
  */
 import { decodeEntities, escapeHtml } from '@ss/contracts/text';
+import { isObject } from '@ss/contracts/util';
 
 /** @typedef {{ path: string, message: string }} FieldError */
 
@@ -69,9 +70,6 @@ const MEDIA_SIZES = Object.freeze(/** @type {const} */ (['thumb', 'card', 'detai
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
-
-/** @param {unknown} value @returns {value is Record<string, any>} */
-const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /**
  * Trimmed text without control characters, or null when not text or too long.

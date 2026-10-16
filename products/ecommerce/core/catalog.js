@@ -14,6 +14,7 @@
  */
 import { isId } from '@ss/contracts';
 import { isAmount } from '@ss/contracts/format';
+import { isObject as isJsonObject } from '@ss/contracts/util';
 import { checkValue, fieldApplies, gtinOf, valueProblem } from './fields.js';
 import { DURATION_RULE, durationOf } from './durations.js';
 import { gradeForType } from './grades.js';
@@ -30,6 +31,12 @@ import {
 	mediaExtras,
 	publicPhoto,
 } from './catalog-content.js';
+
+/**
+ * The shared check, with the members of what it finds read as `any`: this file checks JSON by hand, then trusts what it found.
+ * @type {(value: unknown) => value is Record<string, any>}
+ */
+const isObject = isJsonObject;
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
@@ -81,9 +88,6 @@ const MAX_SLUG = 120;
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
-
-/** @param {unknown} value @returns {value is Record<string, any>} */
-export const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /** @param {unknown} value @returns {value is string} */
 export const isSlug = (value) => typeof value === 'string' && value.length <= MAX_SLUG && SLUG_PATTERN.test(value);

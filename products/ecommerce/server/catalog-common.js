@@ -4,9 +4,10 @@
  * @module
  */
 import { problem } from '@ss/app-kit';
+import { isObject } from '@ss/contracts/util';
 import { categoriesOf, loadRules } from '../adapters/catalog-store.js';
 import { COLLECTIONS } from '../core/model.js';
-import { contentChanged, isObject } from '../core/catalog.js';
+import { contentChanged } from '../core/catalog.js';
 import { gradeTypes, gradesByKey } from '../core/grades.js';
 import { createMedia } from './catalog-media.js';
 import { hiddenFor } from './catalog-visibility.js';

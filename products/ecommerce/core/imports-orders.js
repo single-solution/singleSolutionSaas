@@ -13,6 +13,7 @@
  * @module
  */
 import { isId } from '@ss/contracts';
+import { normalizeEmail } from '@ss/contracts/email';
 import { normalisePhone } from '@ss/contracts/phone';
 import { countryCodeOf, tidyPostcode } from '@ss/contracts/address';
 import { ADDRESS_LIMITS } from './address.js';
@@ -24,6 +25,7 @@ import { statusOf } from './flow.js';
 import { guestKeyOf, guestRules, phoneDigitsOf, phoneRules } from './guests.js';
 import { ID_PREFIX } from './model.js';
 import { MAX_AMOUNT } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
 import { describeNumberForm, numberFormOf, numberMatcher } from './order-numbers.js';
 import {
 	MAX_NOTE,
@@ -83,16 +85,12 @@ const MAX_SEEN = 50;
 const MAX_KEY = 300;
 const MAX_URL = 2000;
 
-const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 /** A phone as checkout keeps one the normalizer cannot read (digits, spaces, + ( ) -). */
 const PHONE_TEXT = /^\+?[0-9][0-9 ()-]{5,38}$/;
 /** A staff member's id (who opened a record), a Payments id, a stored key hash (SHA-256, base64url). */
 const STAFF_ID = /^[A-Za-z0-9_.:@-]{1,80}$/;
 const PAYMENTS_ID = /^[A-Za-z0-9_-]{1,80}$/;
 const KEY_HASH = /^[A-Za-z0-9_-]{43}$/;
-
-/** @param {unknown} value @returns {value is Record<string, unknown>} */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** @param {unknown} value */
 const missing = (value) => value === undefined || value === null;
@@ -279,9 +277,10 @@ const checker = () => {
 	 * @param {unknown} value @param {string} path
 	 */
 	const email = (value, path) => {
-		const clean = text(value, path, MAX_EMAIL).toLowerCase();
-		if (clean !== '' && !EMAIL.test(clean)) fail(path, 'An email address or nothing is expected.');
-		return clean;
+		const clean = text(value, path, MAX_EMAIL);
+		const address = clean === '' ? '' : normalizeEmail(clean);
+		if (address === null) fail(path, 'An email address or nothing is expected.');
+		return address ?? '';
 	};
 
 	/**

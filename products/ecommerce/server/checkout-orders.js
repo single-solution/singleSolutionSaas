@@ -28,6 +28,7 @@
  */
 import { created, paginate, problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
+import { isEmailAddress } from '@ss/contracts/email';
 import { normalisePhone } from '@ss/contracts/phone';
 import { originAllowed } from '@ss/protocol';
 import { fieldsOn, unitsOfOrders } from '../adapters/catalog-store.js';
@@ -77,8 +78,6 @@ const SYSTEM_ACTOR = Object.freeze({ kind: 'system', id: 'checkout', name: 'Syst
 const PROOF_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' });
 const PROOF_MAX_BYTES = 10 * 1_048_576;
 const PROOF_SECONDS = 900;
-
-const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 
 /** @param {string} url @param {string} name @param {string} value */
 const withParam = (url, name, value) => {
@@ -210,7 +209,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				customer: {
 					id: customer.userId || customer.customerId || '',
 					...(customer.name ? { name: customer.name.slice(0, 120) } : {}),
-					...(EMAIL.test(customer.email) ? { email: customer.email } : {}),
+					...(isEmailAddress(customer.email) ? { email: customer.email } : {}),
 					...(phone ? { phone } : {}),
 				},
 				metadata: { orderId: order.id },

@@ -9,6 +9,7 @@
  * `pricesIncludeTax`) the tax is the part of the price it already holds; otherwise it is added on top. No I/O.
  * @module
  */
+import { isObject } from '@ss/contracts/util';
 import { ADDRESS_LIMITS, countryKey, placeKey, postcodeKey } from './address.js';
 
 /** @typedef {{ country: string, region: string, city: string, postcode: string }} TaxRegion */
@@ -16,9 +17,6 @@ import { ADDRESS_LIMITS, countryKey, placeKey, postcodeKey } from './address.js'
 
 /** At most this many rules. */
 const MAX_RULES = 50;
-
-/** @param {unknown} value */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** @param {unknown} value */
 const textOf = (value) => (typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '');

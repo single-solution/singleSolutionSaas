@@ -21,6 +21,7 @@
  * or given back through Payments). Pure functions, no I/O.
  * @module
  */
+import { isObject } from '@ss/contracts/util';
 
 /** The kinds of payment methods (Payments' manual methods use the same names). */
 export const PAYMENT_KINDS = Object.freeze(/** @type {const} */ (['gateway', 'pay_first', 'on_delivery', 'at_pickup']));
@@ -146,8 +147,6 @@ export const defaultPaymentMethods = () => [
 	{ key: 'pickup', name: 'Pay at pickup', kind: 'at_pickup', ...defaultsOf('at_pickup') },
 ];
 
-/** @param {unknown} value */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 /** @param {unknown} value @param {number} max */
 const isWhole = (value, max) => Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= max;
 

@@ -8,6 +8,7 @@
 import { COUPON_TYPES } from './model.js';
 import { allocateUnits, percentOf, roundDown } from './money.js';
 import { MAX_AMOUNT, isAmount } from '@ss/contracts/format';
+import { isObject as isJsonObject } from '@ss/contracts/util';
 import {
 	checkAmount,
 	checkBoolean,
@@ -17,11 +18,16 @@ import {
 	fail,
 	gather,
 	inScope,
-	isObject,
 	isoOrNull,
 	MAX_LIMIT,
 	phaseOf,
 } from './promotions-rules.js';
+
+/**
+ * The shared check, with the members of what it finds read as `any`: this file checks JSON by hand, then trusts what it found.
+ * @type {(value: unknown) => value is Record<string, any>}
+ */
+const isObject = isJsonObject;
 
 /** @typedef {import('./model.js').CouponRecord} CouponRecord */
 /** @typedef {import('./promotions-rules.js').Checked} Checked */

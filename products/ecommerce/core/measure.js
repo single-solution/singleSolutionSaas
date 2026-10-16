@@ -15,6 +15,13 @@
  * @module
  */
 import { MAX_AMOUNT } from '@ss/contracts/format';
+import { isObject as isJsonObject } from '@ss/contracts/util';
+
+/**
+ * The shared check, with the members of what it finds read as `any`: this file checks JSON by hand, then trusts what it found.
+ * @type {(value: unknown) => value is Record<string, any>}
+ */
+const isObject = isJsonObject;
 
 /** Thousandths of the unit in one unit (the integer base of measured quantities). */
 export const MILLI = 1000;
@@ -75,9 +82,6 @@ export const STANDARD_UNITS = Object.freeze({
  * What an order line keeps of its item's measure at placement (none: counted in pieces).
  * @typedef {{ unit: string, decimals: number, step: number }} LineMeasure
  */
-
-/** @param {unknown} value @returns {value is Record<string, any>} */
-const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /** @param {unknown} value @param {number} min @param {number} max */
 const whole = (value, min, max) => Number.isSafeInteger(value) && Number(value) >= min && Number(value) <= max;

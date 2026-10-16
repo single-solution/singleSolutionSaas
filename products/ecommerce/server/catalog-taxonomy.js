@@ -13,6 +13,7 @@
  */
 import { createId } from '@ss/contracts';
 import { created, defineRoute, ok, paginate, problem } from '@ss/app-kit';
+import { isObject } from '@ss/contracts/util';
 import {
 	NO_ID,
 	attributesOf,
@@ -25,7 +26,7 @@ import {
 	stockedUnits,
 	unitRulesOf,
 } from '../adapters/catalog-store.js';
-import { cleanText, isObject } from '../core/catalog.js';
+import { cleanText } from '../core/catalog.js';
 import { FIELD_LIMITS, checkUnit, sharedKeys } from '../core/fields.js';
 import { typeByKey, typeOf, typeTree } from '../core/item-types.js';
 import {

@@ -356,6 +356,11 @@ describe('guests and order keys (E21)', () => {
 			ok: true,
 			value: { name: 'Ella', phone: '', email: 'ella@example.com', guestKey: 'e:ella@example.com' },
 		});
+		// the platform's one email rule: a Unicode domain is kept as punycode, an address nothing can deliver to is refused
+		expect(checkGuest({ name: 'Ella', email: 'Ella@Bücher.de' }, rules, email)).toMatchObject({
+			value: { email: 'ella@xn--bcher-kva.de' },
+		});
+		expect(checkGuest({ name: 'Ella', email: 'ella@localhost' }, rules, email)).toMatchObject({ field: 'customer/email' });
 		expect(checkGuest({ name: 'Ella', phone: '555 000 1234' }, rules, email)).toMatchObject({ field: 'customer/email' });
 		// by email with a phone needed: both
 		expect(checkGuest({ name: 'Ella', email: 'e@example.com' }, rules, { ...email, phoneRequired: true })).toMatchObject({

@@ -4,7 +4,8 @@
  * from its answer. Suggestions are only shown to staff, never saved by themselves. No I/O.
  * @module
  */
-import { LIMITS, cleanText, isObject } from './catalog.js';
+import { isObject } from '@ss/contracts/util';
+import { LIMITS, cleanText } from './catalog.js';
 import { checkFaqs } from './catalog-content.js';
 
 /** The texts AI copy can suggest, with their longest length. */

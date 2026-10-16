@@ -21,6 +21,7 @@ import { ADDRESS_LIMITS, placeKey, regionsFor } from './address.js';
 import { MAX_LINES, MAX_MEASURED, MAX_QUANTITY, grossFits, limitsOf, lineGross, piecesOf, quantityProblem } from './measure.js';
 import { allocateUnits, roundHalfUp } from './money.js';
 import { isAmount } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
 import { isMethodKey, methodFee } from './payment-methods.js';
 import { taxOf, taxPercent } from './taxes.js';
 
@@ -61,9 +62,6 @@ const PHONE = /^\+?[0-9][0-9 ()-]{5,22}$/;
  *   postalCode: string, country: string, notes: string }} Address
  */
 /** @typedef {{ ok: false, field: string, message: string }} InputError */
-
-/** @param {unknown} value */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * A trimmed text of at most `max` characters ('' when missing), or null when it is not a text or too long.

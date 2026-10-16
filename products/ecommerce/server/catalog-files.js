@@ -10,8 +10,9 @@
  */
 import { createId } from '@ss/contracts';
 import { defineRoute, problem } from '@ss/app-kit';
+import { isObject } from '@ss/contracts/util';
 import { NO_ID } from '../adapters/catalog-store.js';
-import { LIMITS, cleanText, heldKeys, isObject } from '../core/catalog.js';
+import { LIMITS, cleanText, heldKeys } from '../core/catalog.js';
 import { VIDEO_TYPES, mediaExtras } from '../core/catalog-content.js';
 import { COLLECTIONS } from '../core/model.js';
 import { IMAGE_TYPES, bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';

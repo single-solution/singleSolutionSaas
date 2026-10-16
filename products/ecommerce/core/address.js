@@ -9,6 +9,7 @@
  * @module
  */
 import { PLACE_LIMITS, countryCodeOf } from '@ss/contracts/address';
+import { isObject } from '@ss/contracts/util';
 
 // the address-format table the widgets use too (they import packages only through core/)
 export {
@@ -92,9 +93,6 @@ export const placeOf = (where, homeCountry) => {
 /** At most this many countries in `address_regions`, and this many region names in one. */
 const MAX_REGION_COUNTRIES = 50;
 const MAX_REGION_NAMES = 200;
-
-/** @param {unknown} value */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Check the `address_regions` list the merchant saves.

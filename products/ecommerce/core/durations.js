@@ -4,6 +4,13 @@
  * last day of February). Shown in the reader's language by `Intl` (`1 year`, `2 Jahre`). No I/O.
  * @module
  */
+import { isObject as isJsonObject } from '@ss/contracts/util';
+
+/**
+ * The shared check, with the members of what it finds read as `any`: this file checks JSON by hand, then trusts what it found.
+ * @type {(value: unknown) => value is Record<string, any>}
+ */
+const isObject = isJsonObject;
 
 /** The units of a time. */
 export const DURATION_UNITS = Object.freeze(/** @type {const} */ (['days', 'months', 'years']));
@@ -14,9 +21,6 @@ export const DURATION_MAX = Object.freeze({ days: 3650, months: 120, years: 10 }
 /** A time: `amount` of `unit` (0: none). @typedef {{ amount: number, unit: DurationUnit }} Duration */
 
 const DAY_MS = 86_400_000;
-
-/** @param {unknown} value @returns {value is Record<string, any>} */
-const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /**
  * Whether a value is a time: `{ amount, unit }`, a whole amount from 0 to the unit's most.

@@ -6,9 +6,10 @@
  * `searchMatch` at `phrase` the whole phrase in the name or a SKU (SF-10). No I/O.
  * @module
  */
-import { isObject, valueLabel } from './catalog.js';
+import { valueLabel } from './catalog.js';
 import { levelOf } from './measure.js';
 import { MAX_AMOUNT } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
 
 /** @typedef {import('./model.js').AttributeRecord} AttributeRecord */
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */

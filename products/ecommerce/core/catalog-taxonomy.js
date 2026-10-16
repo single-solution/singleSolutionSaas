@@ -4,7 +4,8 @@
  * moved branch), and the tree with product counts shown to shoppers. No I/O.
  * @module
  */
-import { LIMITS, cleanText, isObject, isSlug } from './catalog.js';
+import { isObject as isJsonObject } from '@ss/contracts/util';
+import { LIMITS, cleanText, isSlug } from './catalog.js';
 import { EMPTY_CONTENT, checkContent, checkFaqs, checkSeo, iconOf } from './catalog-content.js';
 import {
 	FIELD_DATES,
@@ -16,6 +17,12 @@ import {
 	checkShow,
 	showDefaults,
 } from './fields.js';
+
+/**
+ * The shared check, with the members of what it finds read as `any`: this file checks JSON by hand, then trusts what it found.
+ * @type {(value: unknown) => value is Record<string, any>}
+ */
+const isObject = isJsonObject;
 
 /** @typedef {import('./model.js').CategoryRecord} CategoryRecord */
 /** @typedef {import('./model.js').BrandRecord} BrandRecord */

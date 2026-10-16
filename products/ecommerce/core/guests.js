@@ -10,10 +10,10 @@
  * and customers also keep the phone's digits for search (E31). No I/O.
  * @module
  */
+import { normalizeEmail } from '@ss/contracts/email';
 import { normalisePhone, phoneInCountries, websiteCallingCode } from '@ss/contracts/phone';
 import { postcodeKey } from './address.js';
 
-const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 /** An order key's length. */
 export const ORDER_KEY_LENGTH = 32;
 /** A phone of a country the website does not serve (SE-5). */
@@ -129,8 +129,8 @@ export const checkGuestContact = (input, rules, guests) => {
 	const phone = typedPhone ? normalisePhone(input.phone, rules) : null;
 	if (typedPhone && !phone) return { ok: false, field: 'phone', message: 'Give your phone number with its country code.' };
 	if (phone && !phoneAllowed(phone, rules)) return { ok: false, field: 'phone', ...COUNTRY_REFUSED };
-	const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : '';
-	if (input.email !== undefined && input.email !== null && input.email !== '' && !EMAIL.test(email))
+	const email = normalizeEmail(input.email) ?? '';
+	if (input.email !== undefined && input.email !== null && input.email !== '' && !email)
 		return { ok: false, field: 'email', message: 'Give a valid email address or none.' };
 	if (!phone && (guests.identity === 'phone' || guests.phoneRequired))
 		return { ok: false, field: 'phone', message: 'Give your phone number with its country code.' };

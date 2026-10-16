@@ -14,7 +14,8 @@
  * @module
  */
 import { isId } from '@ss/contracts';
-import { LIMITS, checkProduct, cleanText, givenFacts, isObject, isSlug, summarize } from './catalog.js';
+import { isObject as isJsonObject } from '@ss/contracts/util';
+import { LIMITS, checkProduct, cleanText, givenFacts, isSlug, summarize } from './catalog.js';
 import { keyAllowed, mediaExtras, publicPhoto } from './catalog-content.js';
 import { checkAttribute, checkBrand, checkCategory } from './catalog-taxonomy.js';
 import { checkBundleInput } from './bundles.js';
@@ -24,6 +25,12 @@ import { GRADE_FACET, checkLanding } from './landings.js';
 import { MAX_PREVIOUS_SLUGS } from './links.js';
 import { ID_PREFIX } from './model.js';
 import { checkSizeChart } from './size-charts.js';
+
+/**
+ * The shared check, with the members of what it finds read as `any`: this file checks JSON by hand, then trusts what it found.
+ * @type {(value: unknown) => value is Record<string, any>}
+ */
+const isObject = isJsonObject;
 
 /** @typedef {import('./catalog.js').FieldError} FieldError */
 /** @typedef {import('./catalog.js').CatalogRules} CatalogRules */

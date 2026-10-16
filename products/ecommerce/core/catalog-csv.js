@@ -12,11 +12,12 @@
  * values: an empty cell clears that one value, a column left out keeps it. No I/O.
  * @module
  */
-import { LIMITS, isObject, slugify } from './catalog.js';
+import { LIMITS, slugify } from './catalog.js';
 import { MILLI, quantityText } from './measure.js';
 import { attributeOf } from './catalog-query.js';
 import { lineageOf } from './catalog-taxonomy.js';
 import { fromDecimal, toDecimal } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
 import { spentKey } from './orders.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
