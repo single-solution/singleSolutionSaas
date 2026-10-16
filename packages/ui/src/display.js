@@ -297,7 +297,7 @@ export function ErrorState({ title = 'This could not be loaded', message, action
 		<div
 			role="alert"
 			className={cx(
-				'flex flex-col items-center gap-3 rounded-card border border-line-soft bg-surface px-6 py-10 text-center',
+				'flex flex-col items-center gap-3 rounded-card border border-line-soft bg-surface px-6 py-10 text-center shadow-card',
 				className,
 			)}>
 			<span className="flex size-10 items-center justify-center rounded-xl bg-danger-soft text-on-danger-soft">
@@ -369,7 +369,7 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, kind, classNa
 					? 'text-success'
 					: 'text-muted';
 	return (
-		<div className={cx('@container min-w-0 rounded-card border border-line-soft bg-surface px-5 py-4', className)}>
+		<div className={cx('@container min-w-0 rounded-card border border-line-soft bg-surface px-5 py-4 shadow-card', className)}>
 			<div className="space-y-2">
 				<div className="flex items-center gap-2">
 					{icon ? (

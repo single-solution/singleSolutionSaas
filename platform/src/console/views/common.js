@@ -160,7 +160,7 @@ export function ListPane({ title, count, action, tools, children, footer }) {
 	return (
 		<div
 			className={cx(
-				'@container space-y-3 rounded-card border border-line-soft bg-surface p-3 sm:p-4',
+				'@container space-y-3 rounded-card border border-line-soft bg-surface p-3 shadow-card sm:p-4',
 				fades && 'animate-ss-fade',
 			)}>
 			<div className="flex flex-wrap items-center justify-between gap-2 px-1 pt-1">
