@@ -43,7 +43,7 @@ import {
 	pickVersion,
 	renderTemplate,
 } from '../core/templates.js';
-import { DRAIN_BATCH, LEASE_MS, RETRY_PRESETS, nextAttemptAt, quietUntil, retryDelaysOf, withinLimits } from '../core/timing.js';
+import { DRAIN_BATCH, LEASE_MS, nextAttemptAt, quietUntil, retryDelaysOf, withinLimits } from '../core/timing.js';
 import { SIGNATURE_HEADER, urlsFor } from '../core/webhooks.js';
 import { messageAadOf } from '../adapters/crypto.js';
 import { createStore } from '../adapters/store.js';
@@ -125,7 +125,7 @@ export const messageView = (message) => ({
 	status: message.status,
 	reason: message.reason,
 	reasonValues: message.reasonValues ?? {},
-	topic: message.topic ?? null,
+	topic: message.topic,
 	subject: message.subject,
 	text: message.text,
 	attempts: message.attempts.map((attempt) => ({
@@ -384,7 +384,7 @@ export const createSending = (product) => {
 				const replyTo = normalizeEmail((await product.settings.values(s.websiteId, 'email')).replyTo);
 				if (replyTo) extra.replyTo = replyTo;
 				if (!message.required) {
-					const link = await unsubscribeLinkOf(s, message.address, message.topic ?? null);
+					const link = await unsubscribeLinkOf(s, message.address, message.topic);
 					extra.headers = { 'List-Unsubscribe': `<${link}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' };
 				}
 			}
@@ -452,15 +452,14 @@ export const createSending = (product) => {
 	 */
 	const fallbackOf = async (s, message) => {
 		if (!s.on.includes('fallback')) return null;
-		const chain = message.fallbackChain ?? [];
+		const chain = message.fallbackChain;
 		for (const [at, target] of chain.entries()) {
 			const left = chain.slice(at + 1);
 			if (!s.on.includes(CHANNEL_FEATURES[target])) continue;
 			const address = addressFor(target, message.to);
 			if (!address) continue;
-			if (!message.required && (await optedOut(s, address, message.topic ?? null))) continue;
-			if (message.template !== null && (await switchedOff(s, message.template, message.fallbackTemplate ?? null, target)))
-				continue;
+			if (!message.required && (await optedOut(s, address, message.topic))) continue;
+			if (message.template !== null && (await switchedOff(s, message.template, message.fallbackTemplate, target))) continue;
 			if (message.template === null) {
 				if (isTitled(target) && message.subject === '') continue;
 				/** @type {Words} */
@@ -481,7 +480,7 @@ export const createSending = (product) => {
 			}
 			const made = await fromTemplate(s, {
 				key: message.template,
-				fallbackKey: message.fallbackTemplate ?? null,
+				fallbackKey: message.fallbackTemplate,
 				channel: target,
 				address,
 				values: message.values,
@@ -489,7 +488,7 @@ export const createSending = (product) => {
 				secretValues: message.hidden,
 				defaults: message.defaults ?? {},
 				longValues: message.longValues ?? [],
-				topic: message.topic ?? null,
+				topic: message.topic,
 			});
 			if (made)
 				return {
@@ -552,7 +551,7 @@ export const createSending = (product) => {
 			return sent;
 		}
 		const tries = message.channelAttempts + 1;
-		const next = result.retryable ? nextAttemptAt(tries, now(), message.retryDelays ?? RETRY_PRESETS.short) : null;
+		const next = result.retryable ? nextAttemptAt(tries, now(), message.retryDelays) : null;
 		const why = { reason: result.reason, reasonValues: result.values ?? null };
 		if (next !== null)
 			return s.store.messages.update(message.id, {
@@ -848,7 +847,7 @@ export const createSending = (product) => {
 		for (let i = 0; i < DRAIN_BATCH; i += 1) {
 			const message = await s.store.messages.claimDue();
 			if (!message) break;
-			if (!message.required && (await optedOut(s, message.address, message.topic ?? null)))
+			if (!message.required && (await optedOut(s, message.address, message.topic)))
 				await s.store.messages.update(message.id, {
 					status: 'skipped',
 					reason: 'unsubscribed',
