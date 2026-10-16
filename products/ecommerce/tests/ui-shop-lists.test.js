@@ -222,8 +222,7 @@ describe('texts', () => {
 			...Object.entries(LABEL_KINDS).flatMap(([part, kinds]) => kinds.map((kind) => `address.${part}.${kind}`)),
 			...['earn', 'redeem', 'refund', 'expire', 'adjust', 'reverse'].map((key) => `orders.points.kind.${key}`),
 			...['unpaid', 'pending', 'paid', 'partially_refunded', 'refunded'].map((key) => `orders.payment.${key}`),
-			...['return', 'warranty'].map((key) => `returns.kind.${key}`),
-			...['requested', 'approved', 'rejected', 'received', 'refunded', 'closed'].map((key) => `returns.status.${key}`),
+			// claim kinds and statuses are the merchant's own names (E18)
 			...LINE_PROBLEMS.map((key) => `cart.problem.${key}`),
 		];
 		const missing = [...used, ...dynamic].filter((key) => !Object.hasOwn(TEXTS, key));

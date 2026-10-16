@@ -10,6 +10,7 @@
  * fields, fuller orders and accounts, and the live store context (`GET /v1/chat/context`) Chat's AI replies add (C1).
  * @module
  */
+import { addressFormat } from '@ss/contracts/address';
 import { defineRoute, problem } from '@ss/app-kit';
 import { categoriesOf, locationsOf, productTypes } from '../adapters/catalog-store.js';
 import { ADDRESS_LIMITS } from '../core/address.js';
@@ -658,14 +659,16 @@ export const createChatLookup = (product, service, media) => {
 	/**
 	 * The extra fields a shopper lookup gives Chat (C19: `[{ label, value }]` in the website's words): the loyalty
 	 * points balance while Loyalty is on, and the area of the shopper's default address when it has one.
-	 * @param {Site} s @param {number | null} points @param {{ area?: string } | null} [profile]
+	 * @param {Site} s @param {number | null} points @param {{ area?: string, country?: string } | null} [profile]
 	 * @returns {Promise<Array<{ label: string, value: string }>>}
 	 */
 	const extraFieldsOf = async (s, points, profile = null) => {
 		const texts = await s.texts();
+		// the area by its country's name for it (a neighborhood, district, suburb …; A1)
+		const area = `address.area.${addressFormat(profile?.country ?? '').labels.area}`;
 		return [
 			...(points === null ? [] : [{ label: texts['orders.points.title'] ?? 'Loyalty points', value: String(points) }]),
-			...(profile?.area ? [{ label: texts['checkout.field.area'] ?? 'Area', value: profile.area }] : []),
+			...(profile?.area ? [{ label: texts[area] ?? texts['address.area.area'] ?? 'Area', value: profile.area }] : []),
 		];
 	};
 

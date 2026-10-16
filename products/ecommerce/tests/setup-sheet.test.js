@@ -213,10 +213,7 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 			],
 			['address_regions', 'No countries with regions yet.'],
 			['customer_segments', '3 customer segments: Loyalty members, Active customers, Guests.'],
-			[
-				'cancel_reasons',
-				'3 cancel reasons: The customer asked to cancel, Items not available, The customer did not confirm.',
-			],
+			['cancel_reasons', '3 cancel reasons: The customer asked to cancel, Items not available, The customer did not confirm.'],
 			['delivery_failure_reasons', '2 failed delivery reasons: Could not be delivered (counts), Sent back by the customer.'],
 			['attachment_kinds', '1 attachment kind: Packing video (video).'],
 		]);
@@ -298,10 +295,7 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 			],
 			['address_regions', 'No countries with regions yet.'],
 			['customer_segments', expect.stringMatching(/^3 customer segments: /)],
-			[
-				'cancel_reasons',
-				'3 cancel reasons: The customer asked to cancel, Items not available, The customer did not confirm.',
-			],
+			['cancel_reasons', '3 cancel reasons: The customer asked to cancel, Items not available, The customer did not confirm.'],
 			['delivery_failure_reasons', '2 failed delivery reasons: Could not be delivered (counts), Sent back by the customer.'],
 			['attachment_kinds', '1 attachment kind: Packing video (video).'],
 		]);
