@@ -847,6 +847,8 @@ describe('CSV', () => {
 			'JPY',
 			'cod',
 			'unpaid',
+			// its tags (E11)
+			'',
 		]);
 	});
 });
