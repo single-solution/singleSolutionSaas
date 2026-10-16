@@ -9,6 +9,7 @@
  * the policy pages; the Accounts Orders lookup, the courier connection and the storage CORS rule. Plain text; no I/O.
  * @module
  */
+import { widgetScriptTag } from '@ss/contracts/text';
 import { ADD_TO_CART_EVENT, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js';
 
 /**
@@ -191,7 +192,7 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		return `<div ${WIDGET_ATTRIBUTE}="${key}"${attributes}></div>`;
 	};
 	const visitor = [
-		`<script src="${base}/widget.js" data-token="${browserToken}" async></script>`,
+		widgetScriptTag({ src: `${base}/widget.js`, token: browserToken }),
 		'',
 		'<!-- place each widget where it belongs on your pages -->',
 		...keys('visitor').map(place),
@@ -224,7 +225,7 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		"if (!event.defaultPrevented) window.location.href = '/products/blue-kettle';",
 	].join('\n');
 	const admin = [
-		`<script src="${base}/widget.js"></script>`,
+		widgetScriptTag({ src: `${base}/widget.js`, loading: 'blocking' }),
 		...keys('admin').map(place),
 		'<script>',
 		`  window.${WIDGET_GLOBAL}.admin({`,

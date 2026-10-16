@@ -3,15 +3,7 @@
  * COD safety, booking slots and digital goods.
  */
 import { describe, expect, it } from 'vitest';
-import {
-	checkBookingSchedules,
-	defaultSchedules,
-	scheduleOf,
-	instantOf,
-	slotAt,
-	slotsBetween,
-	wallClock,
-} from '../core/bookings.js';
+import { checkBookingSchedules, defaultSchedules, scheduleOf, instantOf, slotAt, slotsBetween } from '../core/bookings.js';
 import {
 	checkAddress,
 	checkCart,
@@ -24,7 +16,7 @@ import {
 import { ADDRESS_LIMITS, checkAddressRegions, countryKey, placeKey, postcodeKey, regionsFor } from '../core/address.js';
 import { checkZones, defaultZones, homeRate, matchZone, rateFee, rateFits, zoneCities } from '../core/delivery.js';
 import { canDownload, checkLicenceKeys, downloadLimitOf, fileKey, fileNameOf, safeFileName } from '../core/digital.js';
-import { MAX_AMOUNT } from '@ss/contracts/format';
+import { MAX_AMOUNT, zonedParts } from '@ss/contracts/format';
 import { checkTaxRules, taxOf, taxPercent } from '../core/taxes.js';
 
 /** @returns {any} */
@@ -921,7 +913,7 @@ describe('bookings', () => {
 
 	it('converts wall-clock times', () => {
 		const at = instantOf({ year: 2026, month: 3, day: 29 }, 120, 'Europe/Berlin');
-		expect(wallClock(at, 'Europe/Berlin')).toMatchObject({ hour: 3, minute: 0, weekday: 0 });
+		expect(zonedParts(at, 'Europe/Berlin')).toMatchObject({ hour: 3, minute: 0, weekday: 0 });
 	});
 });
 

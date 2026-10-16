@@ -8,9 +8,11 @@
  * schedule (`booking.schedule`, '' = the first of the list). Times are in the time zone of the website's business.json.
  * A product's slots are back-to-back periods of its `durationMinutes` from the start of each opening period, ending
  * inside it. Booked slots are kept with a unique index (the ledger), so one start of one product is booked once.
- * Time-zone arithmetic uses `Intl` (no I/O); an unknown zone is read as UTC.
+ * Time-zone arithmetic is `zonedParts` of `@ss/contracts/format` (no I/O); an unknown zone is read as UTC.
  * @module
  */
+import { zonedParts } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
 
 /** @typedef {{ start: string, end: string }} TimeRange `HH:MM`, the end after the start (`24:00` = the end of the day) */
 /** @typedef {TimeRange & { day: number }} HoursWindow one weekly window: `day` 1 = Monday … 7 = Sunday (ISO 8601) */
@@ -29,9 +31,6 @@ const DAY_MS = 86_400_000;
 
 /** @param {string} time 'HH:MM' @returns {number} minutes after midnight ('24:00' = 1440) */
 const minutesOf = (time) => (time === '24:00' ? 1440 : Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5)));
-
-/** @param {unknown} value */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * A time range as saved, or null: two `HH:MM` times, the end after the start (`24:00` = the end of the day).
@@ -139,69 +138,9 @@ export const checkBookingSchedules = (value) => {
  */
 export const scheduleOf = (schedules, key) => (key ? schedules.find((entry) => entry.key === key) : schedules[0]) ?? null;
 
-/** @type {Map<string, Intl.DateTimeFormat>} */
-const formats = new Map();
-
-/** @param {string} timeZone */
-const newFormat = (timeZone) =>
-	new Intl.DateTimeFormat('en-US', {
-		timeZone,
-		hourCycle: 'h23',
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit',
-		hour: '2-digit',
-		minute: '2-digit',
-		second: '2-digit',
-	});
-
-/**
- * The wall-clock format of a time zone (an unknown zone reads as UTC).
- * @param {string} timeZone
- * @returns {Intl.DateTimeFormat}
- */
-const formatOf = (timeZone) => {
-	const known = formats.get(timeZone);
-	if (known) return known;
-	/** @type {Intl.DateTimeFormat} */
-	let format;
-	try {
-		format = newFormat(timeZone);
-	} catch {
-		format = newFormat('UTC');
-	}
-	formats.set(timeZone, format);
-	return format;
-};
-
-/**
- * The wall-clock date and time of an instant in a time zone.
- * @param {number} at epoch ms
- * @param {string} timeZone
- * @returns {{ year: number, month: number, day: number, hour: number, minute: number, second: number, weekday: number }}
- */
-export const wallClock = (at, timeZone) => {
-	/** @type {Record<string, number>} */
-	const parts = {};
-	for (const part of formatOf(timeZone).formatToParts(new Date(at)))
-		if (part.type !== 'literal') parts[part.type] = Number(part.value);
-	const year = parts.year ?? 1970;
-	const month = parts.month ?? 1;
-	const day = parts.day ?? 1;
-	return {
-		year,
-		month,
-		day,
-		hour: parts.hour ?? 0,
-		minute: parts.minute ?? 0,
-		second: parts.second ?? 0,
-		weekday: new Date(Date.UTC(year, month - 1, day)).getUTCDay(),
-	};
-};
-
 /** The zone's offset from UTC at an instant, in ms. @param {number} at @param {string} timeZone */
 const offsetAt = (at, timeZone) => {
-	const w = wallClock(at, timeZone);
+	const w = zonedParts(at, timeZone);
 	return Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second) - (at - (((at % 1000) + 1000) % 1000));
 };
 
@@ -242,7 +181,7 @@ export const slotsBetween = ({ hours, durationMinutes, from, to, timeZone }) => 
 	if (!(durationMinutes > 0) || to <= from || (hours.weekly.length === 0 && hours.exceptions.length === 0)) return [];
 	/** @type {Array<{ start: number, end: number }>} */
 	const out = [];
-	const first = wallClock(from - DAY_MS, timeZone);
+	const first = zonedParts(from - DAY_MS, timeZone);
 	const days = Math.ceil((to - from) / DAY_MS) + 2;
 	for (let n = 0; n <= days; n += 1) {
 		const noon = new Date(Date.UTC(first.year, first.month - 1, first.day + n, 12));
