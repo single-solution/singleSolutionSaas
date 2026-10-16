@@ -380,7 +380,7 @@ export const setup = async ({
 		if (response.status !== 204) throw new Error(`setting ${feature}.${name}: ${response.status} ${response.text}`);
 	};
 
-	/** Save a list setting (order_flow, couriers, delivery_zones, tax_rules, grades, booking_hours). @param {string} name @param {unknown} value */
+	/** Save a list setting (order_flow, couriers, delivery_zones, tax_rules, grades, booking_schedules). @param {string} name @param {unknown} value */
 	const list = async (name, value) => {
 		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/lists/${name}`, {
 			value,

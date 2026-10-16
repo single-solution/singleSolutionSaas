@@ -82,10 +82,9 @@ beforeAll(async () => {
 		{ key: 'a', label: 'A' },
 		{ key: 'mint', label: 'Mint', typeKeys: ['used_phone'] },
 	]);
-	await shop.list(
-		'booking_hours',
-		[0, 1, 2, 3, 4, 5, 6].map((day) => ({ day, from: '09:00', to: '17:00' })),
-	);
+	await shop.list('booking_schedules', [
+		{ key: 'main', name: 'Main', weekly: [1, 2, 3, 4, 5, 6, 7].map((day) => ({ day, start: '09:00', end: '17:00' })) },
+	]);
 	await shop.list('couriers', [{ key: 'post', name: 'Post', trackingUrl: 'https://post.example/track/{tracking}' }]);
 	ids.battery = await api('POST', '/v1/attributes', { name: 'Battery health', type: 'number' });
 	ids.note = await api('POST', '/v1/attributes', { name: 'Note' });

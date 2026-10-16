@@ -688,14 +688,21 @@ export const TEXTS = Object.freeze({
 			noFields: 'No fields',
 			noParts: 'No parts',
 		}),
-		bookingHours: Object.freeze({
-			title: 'Booking hours',
-			help: 'The weekly hours in which services can be booked, in your business time zone.',
-			item: 'Hours',
+		bookingSchedules: Object.freeze({
+			title: 'Booking schedules',
+			help: "When services can be booked, in your business time zone. A schedule can stand for a place, a person or a service; each service names its schedule (the first when it names none). Dated exceptions replace that date's weekly hours: holidays, special hours.",
+			item: 'Schedule',
+			name: 'Name',
+			key: 'Key (lower-case letters, digits or _)',
+			weekly: 'Weekly hours',
 			day: 'Day',
 			from: 'From',
 			to: 'To',
-			days: Object.freeze(['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']),
+			addWindow: 'Add hours',
+			days: Object.freeze(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']),
+			exceptions: 'Dated exceptions (one per line)',
+			exceptionsHelp:
+				'A date, a name and, after |, its own hours: 2026-12-25 Christmas (closed all day), or 2026-12-24 Christmas Eve | 09:00-12:00.',
 		}),
 	}),
 	connections: Object.freeze({

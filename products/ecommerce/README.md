@@ -55,7 +55,7 @@ does: only public https addresses and TLS databases.
 
 Every route is in `openapi.json` and in `/docs`. Besides the shop's own routes, the merchant's server reaches the kit's
 settings API (features, settings, texts, theme, Format, connections, and the lists `order_flow`, `couriers`,
-`address_regions`, `delivery_zones`, `tax_rules`, `grades`, `item_types`, `booking_hours` and `role_prices` at `/v1/lists/:list`), the activity log
+`address_regions`, `delivery_zones`, `tax_rules`, `grades`, `item_types`, `booking_schedules` and `role_prices` at `/v1/lists/:list`), the activity log
 (`/v1/activity`) and counts of the main lists (`/v1/orders`, `/v1/products`, `/v1/customers`, `/v1/reviews` and
 `/v1/returns`, each with `/count` and `/counts?by=`, and ticket twins under `/v1/admin/`). Server-token calls may name
 the acting staff member with the `SS-Actor-*` headers, and the shopper routes (`/v1/shop/…`) also take the server token

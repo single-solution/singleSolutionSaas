@@ -8229,6 +8229,11 @@
 												"type": "integer",
 												"minimum": 5,
 												"maximum": 1440
+											},
+											"schedule": {
+												"type": "string",
+												"pattern": "^$|^[a-z][a-z0-9_]{1,39}$",
+												"description": "The key of the booking schedule it is booked on (the booking_schedules list); '' = the first."
 											}
 										},
 										"description": "A service booked in time slots (its item type's slots): required."
@@ -9694,6 +9699,11 @@
 												"type": "integer",
 												"minimum": 5,
 												"maximum": 1440
+											},
+											"schedule": {
+												"type": "string",
+												"pattern": "^$|^[a-z][a-z0-9_]{1,39}$",
+												"description": "The key of the booking schedule it is booked on (the booking_schedules list); '' = the first."
 											}
 										},
 										"description": "A service booked in time slots (its item type's slots): required."
@@ -25108,6 +25118,11 @@
 												"type": "integer",
 												"minimum": 5,
 												"maximum": 1440
+											},
+											"schedule": {
+												"type": "string",
+												"pattern": "^$|^[a-z][a-z0-9_]{1,39}$",
+												"description": "The key of the booking schedule it is booked on (the booking_schedules list); '' = the first."
 											}
 										},
 										"description": "A service booked in time slots (its item type's slots): required."
@@ -26652,6 +26667,11 @@
 												"type": "integer",
 												"minimum": 5,
 												"maximum": 1440
+											},
+											"schedule": {
+												"type": "string",
+												"pattern": "^$|^[a-z][a-z0-9_]{1,39}$",
+												"description": "The key of the booking schedule it is booked on (the booking_schedules list); '' = the first."
 											}
 										},
 										"description": "A service booked in time slots (its item type's slots): required."
@@ -34858,7 +34878,7 @@
 		"/v1/shop/slots": {
 			"get": {
 				"summary": "The free slots of a booking product",
-				"description": "At most 14 days from from, inside the bookings settings’ leadMinutes and daysAhead, by the weekly booking hours in the business time zone; booked slots are left out. Send a slot’s start as a cart line’s slot. 422 validation_failed at /productId or /from (from must be before to); 404 not_found when it is not an active booking product.",
+				"description": "At most 14 days from from, inside the bookings settings’ leadMinutes and daysAhead, by the service's booking schedule in the business time zone (its weekly hours, a dated exception replacing a date's hours; E30); booked slots are left out. Send a slot’s start as a cart line’s slot. 422 validation_failed at /productId or /from (from must be before to); 404 not_found when it is not an active booking product.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "bookings",
 				"security": [
@@ -48319,7 +48339,8 @@
 							{
 								"type": "object",
 								"required": [
-									"durationMinutes"
+									"durationMinutes",
+									"schedule"
 								],
 								"additionalProperties": false,
 								"properties": {
@@ -48327,6 +48348,11 @@
 										"type": "integer",
 										"minimum": 5,
 										"maximum": 1440
+									},
+									"schedule": {
+										"type": "string",
+										"pattern": "^$|^[a-z][a-z0-9_]{1,39}$",
+										"description": "The key of the booking schedule it is booked on (the booking_schedules list); '' = the first."
 									}
 								}
 							}

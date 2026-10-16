@@ -69,7 +69,7 @@
 		{
 			"key": "bookings",
 			"name": "Services and bookings",
-			"description": "Services, sold without a time or booked in simple slots as their item type says: a duration, weekly hours and no double booking.",
+			"description": "Services, sold without a time or booked in simple slots as their item type says: a duration, booking schedules per place, person or service with weekly hours and dated exceptions (holidays, special hours), and no double booking.",
 			"dependsOn": ["checkout"],
 			"recommendFor": ["sells.services"],
 			"settings": {

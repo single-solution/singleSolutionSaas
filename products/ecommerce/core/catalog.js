@@ -1134,14 +1134,19 @@ export const checkProduct = (body, rules, existing) => {
 			downloadLimit: isCount(raw.downloadLimit, LIMITS.downloadLimit) ? raw.downloadLimit : before.downloadLimit,
 		};
 	}
-	// a service booked in time slots (its type's `slots`): how long one lasts
+	// a service booked in time slots (its type's `slots`): how long one lasts, and the booking schedule it is booked on
+	// ('' = the first; E30)
 	/** @type {ProductRecord['booking']} */
 	let booking = null;
 	if (kind === 'service' && type.elements.slots) {
-		const minutes = isObject(input.booking) ? input.booking.durationMinutes : existing?.booking?.durationMinutes;
+		const given = isObject(input.booking) ? input.booking : {};
+		const minutes = given.durationMinutes ?? existing?.booking?.durationMinutes;
+		const schedule = given.schedule ?? existing?.booking?.schedule ?? '';
 		if (!Number.isSafeInteger(minutes) || Number(minutes) < 5 || Number(minutes) > 1440)
 			fail('/booking/durationMinutes', 'A booking lasts 5 to 1440 minutes.');
-		else booking = { durationMinutes: Number(minutes) };
+		else if (schedule !== '' && (typeof schedule !== 'string' || !/^[a-z][a-z0-9_]{1,39}$/.test(schedule)))
+			fail('/booking/schedule', 'The schedule is the key of a booking schedule, or empty for the first.');
+		else booking = { durationMinutes: Number(minutes), schedule: String(schedule) };
 	}
 
 	const seo = checkSeo(input.seo, existing?.seo, '/seo', errors);

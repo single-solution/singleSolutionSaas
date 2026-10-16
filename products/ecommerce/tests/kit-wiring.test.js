@@ -157,7 +157,7 @@ describe('K1: list settings for the merchant’s server', () => {
 		const flow = await shop.api('GET', '/v1/lists/order_flow');
 		expect(flow.status).toBe(200);
 		expect(flow.json.value).toEqual(DEFAULT_FLOW);
-		for (const name of ['couriers', 'delivery_zones', 'tax_rules', 'grades', 'booking_hours'])
+		for (const name of ['couriers', 'delivery_zones', 'tax_rules', 'grades', 'booking_schedules'])
 			expect((await shop.api('GET', `/v1/lists/${name}`)).json, name).toEqual({ value: expect.any(Array) });
 		const couriers = [
 			{ key: 'swift', name: 'Swift Post', trackingUrl: 'https://track.example.org/t?n={tracking}', connection: '' },

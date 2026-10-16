@@ -3,7 +3,7 @@
  * records, which a settings schema cannot hold — the order flow (statuses and allowed moves), the payment methods
  * (fixed-choices E2), delivery zones, couriers, the shop's policies (E27), saved customer segments (E11; today's three
  * until saved),
- * the region names checkout offers per country (dynamic model §5), tax rules, condition grades, unit states (E38), item types (dynamic model §1), booking hours and role prices (E19). They are kept per website in the kit's settings collection (so a
+ * the region names checkout offers per country (dynamic model §5), tax rules, condition grades, unit states (E38), item types (dynamic model §1), booking schedules with their dated exceptions (E30) and role prices (E19). They are kept per website in the kit's settings collection (so a
  * removed website's lists go with its settings), each checked by its feature's rules, edited in the dashboard
  * (Settings, `/v1/dashboard/websites/:websiteId/lists/:list`) and recorded in Recent changes and the activity log. Lists have no global
  * defaults; an unsaved list reads as its code default. A list may also be checked against the merchant's data before
@@ -12,7 +12,7 @@
  * @module
  */
 import { checkAddressRegions } from '../core/address.js';
-import { checkBookingHours } from '../core/bookings.js';
+import { checkBookingSchedules, defaultSchedules } from '../core/bookings.js';
 import { checkCouriers } from '../core/couriers.js';
 import { DEFAULT_SEGMENTS, checkSegments } from '../core/customer-segments.js';
 import { checkZones, defaultZones } from '../core/delivery.js';
@@ -74,7 +74,12 @@ export const LISTS = Object.freeze({
 		fallback: () => DEFAULT_UNIT_STATES.map((state) => ({ ...state })),
 	},
 	item_types: { feature: 'catalog', title: 'Item types', check: checkItemTypes, fallback: () => [] },
-	booking_hours: { feature: 'bookings', title: 'Booking hours', check: checkBookingHours, fallback: () => [] },
+	booking_schedules: {
+		feature: 'bookings',
+		title: 'Booking schedules',
+		check: checkBookingSchedules,
+		fallback: defaultSchedules,
+	},
 	role_prices: { feature: 'role_pricing', title: 'Role prices', check: checkRolePrices, fallback: () => [] },
 });
 

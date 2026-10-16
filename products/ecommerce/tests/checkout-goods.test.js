@@ -52,10 +52,19 @@ const paymentOf = async (id) =>
 
 beforeAll(async () => {
 	shop = await readyShop();
-	await shop.list(
-		'booking_hours',
-		[0, 1, 2, 3, 4, 5, 6].map((day) => ({ day, from: '09:00', to: '17:00' })),
-	);
+	await shop.list('booking_schedules', [
+		{ key: 'main', name: 'Main', weekly: [1, 2, 3, 4, 5, 6, 7].map((day) => ({ day, start: '09:00', end: '17:00' })) },
+		// a second place, open on Mondays only, closed on one Monday and open on one Tuesday (E30)
+		{
+			key: 'branch',
+			name: 'Branch',
+			weekly: [{ day: 1, start: '14:00', end: '16:00' }],
+			exceptions: [
+				{ date: '2026-10-12', name: 'Holiday' },
+				{ date: '2026-10-06', name: 'Open Tuesday', hours: [{ start: '10:00', end: '11:00' }] },
+			],
+		},
+	]);
 });
 afterAll(async () => shop.product.close());
 
@@ -64,7 +73,7 @@ describe('bookings', () => {
 		const service = await shop.seedProduct({
 			kind: 'service',
 			trackStock: false,
-			booking: { durationMinutes: 60 },
+			booking: { durationMinutes: 60, schedule: '' },
 			price: 5000,
 		});
 		const free = await visit('GET', `/v1/shop/slots?productId=${service.id}&to=2026-10-06T00:00:00Z`);
@@ -107,6 +116,41 @@ describe('bookings', () => {
 		const odd = await place(second, { lines: [{ productId: service.id, slot: '2026-10-05T12:30:00Z' }], payment: 'online' });
 		expect(odd.status).toBe(422);
 		expect(odd.json.errors[0].code).toBe('slot_unavailable');
+	});
+
+	it('books each service on its own schedule, with its dated exceptions (E30)', async () => {
+		const service = await shop.seedProduct({
+			kind: 'service',
+			trackStock: false,
+			booking: { durationMinutes: 60, schedule: 'branch' },
+			price: 5000,
+		});
+		const free = await visit('GET', `/v1/shop/slots?productId=${service.id}&to=2026-10-14T00:00:00Z`);
+		expect(free.json.slots.map((/** @type {any} */ slot) => slot.start)).toEqual([
+			'2026-10-05T14:00:00.000Z',
+			'2026-10-05T15:00:00.000Z',
+			// the open Tuesday; the Monday holiday has none
+			'2026-10-06T10:00:00.000Z',
+		]);
+		const shopper = await newShopper();
+		const closed = await place(shopper, {
+			lines: [{ productId: service.id, slot: '2026-10-12T14:00:00.000Z' }],
+			payment: 'online',
+		});
+		expect(closed.json.errors[0].code).toBe('slot_unavailable');
+		const placed = await place(shopper, {
+			lines: [{ productId: service.id, slot: '2026-10-06T10:00:00.000Z' }],
+			payment: 'online',
+		});
+		expect(placed.status).toBe(201);
+		// a schedule the list no longer has: nothing can be booked
+		const gone = await shop.seedProduct({
+			kind: 'service',
+			trackStock: false,
+			booking: { durationMinutes: 60, schedule: 'gone' },
+			price: 5000,
+		});
+		expect((await visit('GET', `/v1/shop/slots?productId=${gone.id}&to=2026-10-14T00:00:00Z`)).json.slots).toEqual([]);
 	});
 
 	it('checks the slot query', async () => {

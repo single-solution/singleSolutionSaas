@@ -1,7 +1,7 @@
 'use client';
 /**
  * Settings list editors (Ecommerce's list settings, `adapters/lists.js`): couriers, policies, delivery zones, tax rules, booking
- * hours and role prices, and the pieces the order flow editor (`./flow-editor.js`), the condition grades editor (`./grades.js`) and the
+ * schedules and role prices, and the pieces the order flow editor (`./flow-editor.js`), the condition grades editor (`./grades.js`) and the
  * item types editor (`./item-types.js`) share. Each list is read with `GET /v1/dashboard/websites/:websiteId/lists/:list` and saved whole
  * with `PUT … { value }`; a 422 lists the server's check errors, which are shown under the editor.
  * @module
@@ -786,37 +786,139 @@ function RatesPart({ rates, currency, step, onChange }) {
 	);
 }
 
-const B = L.bookingHours;
+const B = L.bookingSchedules;
 
-/** Weekly booking hours: a day (0 Sunday – 6 Saturday) and a time range (`booking_hours`). @param {EditorProps} props */
-export function BookingHoursEditor({ websiteId, off }) {
+/**
+ * Booking schedules (E30, `booking_schedules`): each a name and key, weekly windows (an ISO weekday 1 Monday – 7 Sunday
+ * and a time range) and dated exceptions (a date, a name and its own windows; none = closed all day), in Chat's
+ * office-hours shape. Services name the schedule they are booked on (the first when they name none).
+ * @param {EditorProps} props
+ */
+export function BookingSchedulesEditor({ websiteId, off }) {
+	/** A time range as typed: `HH:MM-HH:MM`. @param {Item} range */
+	const rangeLine = (range) => `${range.start}-${range.end}`;
+	/** @param {string} line */
+	const rangeOfLine = (line) => {
+		const [start = '', end = ''] = line.split('-').map((part) => part.trim());
+		return { start, end };
+	};
 	return (
 		<ListEditor
 			websiteId={websiteId}
-			list="booking_hours"
+			list="booking_schedules"
 			title={B.title}
 			help={B.help}
 			itemLabel={B.item}
-			max={70}
+			max={20}
 			off={off}
-			blank={() => ({ day: 1, from: '09:00', to: '17:00' })}
-			clean={(hours) => ({ day: Number(hours.day), from: String(hours.from ?? ''), to: String(hours.to ?? '') })}
-			render={(hours, set) => (
-				<FieldGrid>
-					<Select
-						label={B.day}
-						value={String(hours.day ?? 1)}
-						options={B.days.map((label, day) => ({ value: String(day), label }))}
-						onChange={(event) => set({ day: Number(event.target.value) })}
+			blank={() => ({ key: '', name: '', weekly: [{ day: 1, start: '09:00', end: '17:00' }], exceptions: '' })}
+			load={(schedule) => ({
+				key: schedule.key ?? '',
+				name: schedule.name ?? '',
+				weekly: Array.isArray(schedule.weekly) ? schedule.weekly : [],
+				// one dated exception per line: `YYYY-MM-DD Name | HH:MM-HH:MM, HH:MM-HH:MM` (no hours = closed)
+				exceptions: (Array.isArray(schedule.exceptions) ? schedule.exceptions : [])
+					.map(
+						(/** @type {Item} */ entry) =>
+							`${entry.date} ${entry.name ?? ''}`.trim() +
+							((entry.hours ?? []).length > 0 ? ` | ${entry.hours.map(rangeLine).join(', ')}` : ''),
+					)
+					.join('\n'),
+			})}
+			clean={(schedule) => ({
+				key: keyOf(schedule.key, schedule.name),
+				name: String(schedule.name ?? '').trim(),
+				weekly: schedule.weekly.map((/** @type {Item} */ window) => ({
+					day: Number(window.day),
+					start: String(window.start ?? ''),
+					end: String(window.end ?? ''),
+				})),
+				exceptions: cleanLines(String(schedule.exceptions ?? '').split('\n')).map((line) => {
+					const [head = '', hours = ''] = line.split('|');
+					const [date = '', ...name] = head.trim().split(/\s+/);
+					return {
+						date,
+						name: name.join(' '),
+						hours: cleanLines(hours.split(',')).map(rangeOfLine),
+					};
+				}),
+			})}
+			render={(schedule, set) => (
+				<>
+					<FieldGrid>
+						<Input
+							label={B.name}
+							value={schedule.name}
+							maxLength={80}
+							onChange={(event) => set({ name: event.target.value })}
+						/>
+						<Input
+							label={B.key}
+							value={schedule.key}
+							maxLength={40}
+							autoComplete="off"
+							onChange={(event) => set({ key: event.target.value })}
+						/>
+					</FieldGrid>
+					<p className="text-sm font-bold">{B.weekly}</p>
+					{schedule.weekly.map((/** @type {Item} */ window, /** @type {number} */ index) => {
+						/** @param {Item} patch */
+						const change = (patch) =>
+							set({
+								weekly: schedule.weekly.map((/** @type {Item} */ entry, /** @type {number} */ at) =>
+									at === index ? { ...entry, ...patch } : entry,
+								),
+							});
+						return (
+							<div key={index} data-window="" className="flex flex-wrap items-end gap-2">
+								<Select
+									label={B.day}
+									value={String(window.day ?? 1)}
+									options={B.days.map((label, at) => ({ value: String(at + 1), label }))}
+									onChange={(event) => change({ day: Number(event.target.value) })}
+								/>
+								<Input
+									label={B.from}
+									type="time"
+									value={window.start ?? ''}
+									onChange={(event) => change({ start: event.target.value })}
+								/>
+								<Input
+									label={B.to}
+									type="time"
+									value={window.end ?? ''}
+									onChange={(event) => change({ end: event.target.value })}
+								/>
+								<Button
+									size="sm"
+									variant="ghost"
+									onClick={() =>
+										set({
+											weekly: schedule.weekly.filter(
+												(/** @type {Item} */ _, /** @type {number} */ at) => at !== index,
+											),
+										})
+									}>
+									{L.remove}
+								</Button>
+							</div>
+						);
+					})}
+					<Button
+						size="sm"
+						variant="secondary"
+						disabled={schedule.weekly.length >= 70}
+						onClick={() => set({ weekly: [...schedule.weekly, { day: 1, start: '09:00', end: '17:00' }] })}>
+						{B.addWindow}
+					</Button>
+					<TextArea
+						label={B.exceptions}
+						help={B.exceptionsHelp}
+						rows={4}
+						value={schedule.exceptions}
+						onChange={(event) => set({ exceptions: event.target.value })}
 					/>
-					<Input
-						label={B.from}
-						type="time"
-						value={hours.from ?? ''}
-						onChange={(event) => set({ from: event.target.value })}
-					/>
-					<Input label={B.to} type="time" value={hours.to ?? ''} onChange={(event) => set({ to: event.target.value })} />
-				</FieldGrid>
+				</>
 			)}
 		/>
 	);

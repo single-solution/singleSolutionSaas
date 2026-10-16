@@ -719,6 +719,7 @@
 	"catalogAdmin.downloadLimit": "Downloads allowed (0 = no limit)",
 	"catalogAdmin.booking": "Booking",
 	"catalogAdmin.duration": "Duration in minutes",
+	"catalogAdmin.schedule": "Booking schedule key (empty: the first schedule)",
 	"catalogAdmin.seo": "Search engines",
 	"catalogAdmin.seoTitle": "Page title",
 	"catalogAdmin.seoDescription": "Meta description",

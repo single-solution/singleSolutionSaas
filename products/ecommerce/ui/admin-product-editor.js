@@ -234,9 +234,14 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			max: '1440',
 			step: '5',
 		});
+		// the booking schedule it is booked on, by key ('' = the first of Settings → Booking schedules; E30)
+		const schedule = kit.input(product.booking?.schedule ?? '', { maxlength: '40', autocomplete: 'off' });
 		const downloadField = kit.field(t('catalogAdmin.downloadLimit'), downloadLimit);
 		const digitalGroup = kit.group(t('catalogAdmin.digital'), [licenceKeys.node, downloadField]);
-		const bookingGroup = kit.group(t('catalogAdmin.booking'), [kit.field(t('catalogAdmin.duration'), duration)]);
+		const bookingGroup = kit.group(t('catalogAdmin.booking'), [
+			kit.field(t('catalogAdmin.duration'), duration),
+			kit.field(t('catalogAdmin.schedule'), schedule),
+		]);
 		const chart = kit.select(chartChoices(kit, charts), product.sizeChartId ?? '');
 		const hideGuide = kit.check(t('catalogAdmin.hideSizeGuide'), product.hideSizeGuide === true);
 		const guideGroup = kit.group(t('catalogAdmin.sizeGuide'), [
@@ -378,7 +383,9 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 							},
 						}
 					: {}),
-				...(parts.slots ? { booking: { durationMinutes: Number(duration.value) } } : {}),
+				...(parts.slots
+					? { booking: { durationMinutes: Number(duration.value), schedule: schedule.value.trim().toLowerCase() } }
+					: {}),
 				...(parts.chart ? { sizeChartId: chart.value || null, hideSizeGuide: hideGuide.box.checked } : {}),
 				seo: seo.value(),
 				faqs: faqs.value(),

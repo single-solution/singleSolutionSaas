@@ -18,7 +18,7 @@ import { ItemTypesEditor } from './item-types.js';
 import { OrderFlowEditor } from './flow-editor.js';
 import {
 	AddressRegionsEditor,
-	BookingHoursEditor,
+	BookingSchedulesEditor,
 	CouriersEditor,
 	PoliciesEditor,
 	RolePricesEditor,
@@ -276,7 +276,7 @@ export function SettingsTab({ websiteId: id }) {
 							catalog: (
 								<>
 									<ItemTypesEditor websiteId={websiteId} off={off('catalog')} />
-									{seen('bookings') ? <BookingHoursEditor websiteId={websiteId} off={off('bookings')} /> : null}
+									{seen('bookings') ? <BookingSchedulesEditor websiteId={websiteId} off={off('bookings')} /> : null}
 								</>
 							),
 							grades: seen('grades_serials') ? (

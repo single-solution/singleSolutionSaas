@@ -332,7 +332,12 @@ describe('product checks', () => {
 		]);
 		const booking = record({ kind: 'service', booking: { durationMinutes: 30 } });
 		const longer = checkProduct({ booking: { durationMinutes: 60 } }, rules(), booking);
-		expect(longer.ok && longer.value.booking).toEqual({ durationMinutes: 60 });
+		expect(longer.ok && longer.value.booking).toEqual({ durationMinutes: 60, schedule: '' });
+		// the booking schedule it is booked on (E30), kept on later changes
+		const branch = checkProduct({ booking: { schedule: 'branch' } }, rules(), booking);
+		expect(branch.ok && branch.value.booking).toEqual({ durationMinutes: 30, schedule: 'branch' });
+		const badSchedule = checkProduct({ booking: { schedule: 'Not a key' } }, rules(), booking);
+		expect(!badSchedule.ok && badSchedule.errors[0]?.path).toBe('/booking/schedule');
 		expect(paths({ seo: { description: 'x'.repeat(600) } }, {}, single)).toEqual(['/seo/description']);
 		expect(paths({ seo: { title: 'T' } }, {}, single)).toEqual([]);
 		expect(paths({ typeKey: 'nope', slug: 'Bad Slug', warrantyTime: -1 }, {}, single)).toEqual([

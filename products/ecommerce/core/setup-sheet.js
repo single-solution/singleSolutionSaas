@@ -1,6 +1,6 @@
 /**
  * Ecommerce's own part of the website Setup sheet (owner request 2026-10-14, `ss.blueprint/1`): its lists in its own
- * words — the order flow, couriers, delivery zones, tax rules, grades, item types, booking hours and role prices, by name and
+ * words — the order flow, couriers, delivery zones, tax rules, grades, item types, booking schedules and role prices, by name and
  * number, never an address or a key — and short summaries of what the merchant's website builds around the shop: the
  * pages and their addresses, what the website serves from its own domain, and the SEO tags of its page heads. The
  * adapter (`adapters/product.js`) reads the lists and settings and adds the event types (`core/events.js`). No I/O.
@@ -15,7 +15,7 @@ import { SITE_ROUTES } from './snippets.js';
 /** @typedef {import('./taxes.js').TaxRule} TaxRule */
 /** @typedef {import('./grades.js').Grade} Grade */
 /** @typedef {import('./item-types.js').ItemType} ItemType */
-/** @typedef {import('./bookings.js').OpeningHours} OpeningHours */
+/** @typedef {import('./bookings.js').BookingSchedule} BookingSchedule */
 /** @typedef {import('./role-pricing.js').RolePrice} RolePrice */
 
 /** Longest list summary on the Setup sheet (the kit's limit). */
@@ -104,20 +104,30 @@ const typeWords = (types) => {
 	return listed(counted(types.length, 'item type', 'item types'), names);
 };
 
-/** The booking hours by day (`Mon 9:00 AM–5:00 PM`), Sunday first. @param {OpeningHours[]} hours */
-const hoursWords = (hours) => {
-	if (hours.length === 0) return 'No booking hours yet, so no slot can be booked.';
-	const days = [0, 1, 2, 3, 4, 5, 6]
-		.map((day) =>
-			hours
+/**
+ * One booking schedule: its weekly hours by day (`Mon 9:00 AM–5:00 PM`), Monday first, and how many dated exceptions it
+ * has (E30). @param {BookingSchedule} schedule
+ */
+const scheduleWords = (schedule) => {
+	const days = [1, 2, 3, 4, 5, 6, 7]
+		.map((day) => {
+			const windows = schedule.weekly
 				.filter((period) => period.day === day)
-				.sort((a, b) => a.from.localeCompare(b.from))
-				.map((period) => `${clockText(period.from)}–${clockText(period.to)}`),
-		)
-		.map((periods, day) => (periods.length > 0 ? `${WEEKDAYS[day]} ${periods.join(' and ')}` : ''))
+				.sort((a, b) => a.start.localeCompare(b.start))
+				.map((period) => `${clockText(period.start)}–${clockText(period.end)}`);
+			return windows.length > 0 ? `${WEEKDAYS[day % 7]} ${windows.join(' and ')}` : '';
+		})
 		.filter(Boolean);
-	return listed(`Bookable ${counted(days.length, 'day', 'days')} a week`, days);
+	const dated =
+		schedule.exceptions.length > 0 ? `; ${counted(schedule.exceptions.length, 'dated exception', 'dated exceptions')}` : '';
+	return `${nameOf(schedule.name)} (${days.length > 0 ? days.join(', ') : 'no weekly hours'}${dated})`;
 };
+
+/** The booking schedules, each by name with its hours. @param {BookingSchedule[]} schedules */
+const schedulesWords = (schedules) =>
+	schedules.every((schedule) => schedule.weekly.length === 0 && schedule.exceptions.length === 0)
+		? 'No booking hours yet, so no slot can be booked.'
+		: listed(counted(schedules.length, 'booking schedule', 'booking schedules'), schedules.map(scheduleWords));
 
 /**
  * @param {string} one @param {string} many
@@ -158,7 +168,7 @@ export const LIST_WORDS = Object.freeze({
 	grades: gradeWords,
 	unit_states: named('unit state', 'unit states', (/** @type {{ label: string }} */ state) => nameOf(state.label)),
 	item_types: typeWords,
-	booking_hours: hoursWords,
+	booking_schedules: schedulesWords,
 	role_prices: named('role price', 'role prices', (/** @type {RolePrice} */ price) =>
 		price.kind === 'prices'
 			? `${nameOf(price.role)} ${counted(price.prices.length, 'fixed price', 'fixed prices')}`

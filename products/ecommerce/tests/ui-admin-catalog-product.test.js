@@ -172,6 +172,8 @@ describe('catalog admin: a product', () => {
 		await click(buttonIn(editor, 'Add a question'));
 		// a service of the built-in type (the category's type is for physical items)
 		await change(fieldIn(editor, 'Item type'), 'service');
+		// booked on the Branch schedule (E30)
+		type(fieldIn(editor, 'Booking schedule key (empty: the first schedule)'), ' Branch ');
 		await change(fieldIn(editor, 'Size chart'), '');
 		await tick(checkIn(editor, 'Hide the size guide'), true);
 		await tick(checkIn(editor, 'Featured product'), false);
@@ -181,7 +183,7 @@ describe('catalog admin: a product', () => {
 		const body = patches[0];
 		expect(body.specs).toEqual({ att_1: 6.1, att_3: false, att_4: 'X1', att_7: ['x', 'y'] });
 		expect(body.kind).toBe('service');
-		expect(body.booking).toEqual({ durationMinutes: 30 });
+		expect(body.booking).toEqual({ durationMinutes: 30, schedule: 'branch' });
 		expect(body.returnTime).toBeNull();
 		expect(body.featured).toBe(false);
 		expect(body.typeKey).toBe('service');
@@ -645,7 +647,7 @@ describe('catalog admin: other product shapes', () => {
 			returnTime: null,
 			warrantyTime: { amount: 30, unit: /** @type {const} */ ('days') },
 			hideSizeGuide: true,
-			booking: { durationMinutes: 45 },
+			booking: { durationMinutes: 45, schedule: '' },
 			priceMax: 125000,
 			trackStock: false,
 			media: [{ key: 'ecommerce/products/prd_1/a.jpg', type: 'image/jpeg', size: 1, alt: '', url: null }],

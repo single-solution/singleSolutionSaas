@@ -170,10 +170,18 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 			{ key: 'b', label: 'Good', description: 'Light marks.' },
 			{ key: 'c', label: 'Fair', description: 'Marks.', active: false, condition: 'used' },
 		]);
-		await env.list('booking_hours', [
-			{ day: 1, from: '13:00', to: '17:30' },
-			{ day: 1, from: '09:00', to: '12:00' },
-			{ day: 6, from: '10:00', to: '14:00' },
+		await env.list('booking_schedules', [
+			{
+				key: 'main',
+				name: 'Main',
+				weekly: [
+					{ day: 1, start: '13:00', end: '17:30' },
+					{ day: 1, start: '09:00', end: '12:00' },
+					{ day: 6, start: '10:00', end: '14:00' },
+				],
+				exceptions: [{ date: '2026-12-25', name: 'Holiday' }],
+			},
+			{ key: 'branch', name: 'Branch', weekly: [] },
 		]);
 		await env.list('role_prices', [{ role: 'wholesale', percent: 10, label: 'Trade price' }]);
 		await env.list('item_types', [
@@ -215,7 +223,10 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 			['unit_states', '1 unit state: Faulty.'],
 		]);
 		expect(listsOf(on, 'bookings')).toEqual([
-			['booking_hours', 'Bookable 2 days a week: Mon 9:00 AM–12:00 PM and 1:00 PM–5:30 PM, Sat 10:00 AM–2:00 PM.'],
+			[
+				'booking_schedules',
+				'2 booking schedules: Main (Mon 9:00 AM–12:00 PM and 1:00 PM–5:30 PM, Sat 10:00 AM–2:00 PM; 1 dated exception), Branch (no weekly hours).',
+			],
 		]);
 		expect(listsOf(on, 'role_pricing')).toEqual([['role_prices', '1 role price: wholesale 10% off.']]);
 		expect(listsOf(on, 'catalog')).toEqual([
@@ -290,7 +301,9 @@ describe('Ecommerce’s Setup sheet words', () => {
 		expect(LIST_WORDS.couriers([])).toBe('No couriers yet.');
 		expect(LIST_WORDS.grades([])).toBe('No grades yet.');
 		expect(LIST_WORDS.item_types([])).toBe('No item types yet: every item has the built-in type of its kind.');
-		expect(LIST_WORDS.booking_hours([])).toBe('No booking hours yet, so no slot can be booked.');
+		expect(LIST_WORDS.booking_schedules([{ key: 'main', name: 'Main', weekly: [], exceptions: [] }])).toBe(
+			'No booking hours yet, so no slot can be booked.',
+		);
 		const zones = Array.from({ length: 40 }, (_, at) => ({ name: `Zone number ${at + 1}`, rates: [{ name: 'Standard' }] }));
 		const text = LIST_WORDS.delivery_zones(zones);
 		expect(text.length).toBeLessThanOrEqual(300);
@@ -305,9 +318,9 @@ describe('Ecommerce’s Setup sheet words', () => {
 	});
 
 	it('writes booking times the way the Portal shows them', () => {
-		const hours = ['00:00', '00:30', '09:05', '12:00', '23:59'].map((from, day) => ({ day, from, to: '23:59' }));
-		expect(LIST_WORDS.booking_hours(hours)).toBe(
-			'Bookable 5 days a week: Sun 12:00 AM–11:59 PM, Mon 12:30 AM–11:59 PM, Tue 9:05 AM–11:59 PM, Wed 12:00 PM–11:59 PM, Thu 11:59 PM–11:59 PM.',
+		const weekly = ['00:00', '00:30', '09:05', '12:00', '23:58'].map((start, at) => ({ day: at + 3, start, end: '23:59' }));
+		expect(LIST_WORDS.booking_schedules([{ key: 'main', name: 'Main', weekly, exceptions: [] }])).toBe(
+			'1 booking schedule: Main (Wed 12:00 AM–11:59 PM, Thu 12:30 AM–11:59 PM, Fri 9:05 AM–11:59 PM, Sat 12:00 PM–11:59 PM, Sun 11:58 PM–11:59 PM).',
 		);
 	});
 

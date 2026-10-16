@@ -3,7 +3,15 @@
  * COD safety, booking slots and digital goods.
  */
 import { describe, expect, it } from 'vitest';
-import { checkBookingHours, instantOf, slotAt, slotsBetween, wallClock } from '../core/bookings.js';
+import {
+	checkBookingSchedules,
+	defaultSchedules,
+	scheduleOf,
+	instantOf,
+	slotAt,
+	slotsBetween,
+	wallClock,
+} from '../core/bookings.js';
 import {
 	checkAddress,
 	checkCart,
@@ -94,6 +102,7 @@ describe('cart checks', () => {
 		expect(checked.value.coupon).toBe('SAVE10');
 		expect(checked.value.delivery).toEqual({
 			method: 'pickup',
+			rate: null,
 			city: 'X',
 			area: '',
 			region: '',
@@ -727,34 +736,88 @@ describe('taxes', () => {
 });
 
 describe('bookings', () => {
-	it('checks opening hours', () => {
-		expect(checkBookingHours([{ day: 1, from: '09:00', to: '24:00' }])).toEqual({
+	/** Weekly hours only. @param {Array<{ day: number, start: string, end: string }>} weekly */
+	const only = (weekly) => ({ weekly, exceptions: [] });
+
+	it("checks schedules: weekly windows by ISO weekday and dated exceptions, in the shape of Chat's office hours (E30)", () => {
+		const schedule = {
+			key: 'downtown',
+			name: ' Downtown ',
+			weekly: [{ day: 7, start: '09:00', end: '24:00' }],
+			exceptions: [
+				{ date: '2026-12-25', name: 'Christmas' },
+				{ date: '2026-12-24', name: 'Christmas Eve', hours: [{ start: '09:00', end: '12:00' }] },
+			],
+		};
+		expect(checkBookingSchedules([schedule])).toEqual({
 			ok: true,
-			value: [{ day: 1, from: '09:00', to: '24:00' }],
+			value: [
+				{
+					key: 'downtown',
+					name: 'Downtown',
+					weekly: [{ day: 7, start: '09:00', end: '24:00' }],
+					// sorted by date; no hours = closed all day
+					exceptions: [
+						{ date: '2026-12-24', name: 'Christmas Eve', hours: [{ start: '09:00', end: '12:00' }] },
+						{ date: '2026-12-25', name: 'Christmas', hours: [] },
+					],
+				},
+			],
 		});
+		expect(checkBookingSchedules(defaultSchedules())).toEqual({ ok: true, value: defaultSchedules() });
 		const errors = (/** @type {unknown} */ value) => {
-			const checked = checkBookingHours(value);
+			const checked = checkBookingSchedules(value);
 			return checked.ok ? '' : checked.errors.join(' ');
 		};
+		/** One schedule with these parts. @param {Record<string, unknown>} over */
+		const one = (over) => [{ key: 'main', name: 'Main', ...over }];
 		expect(errors({})).toContain('list');
-		expect(errors(Array.from({ length: 71 }, () => ({ day: 1, from: '09:00', to: '10:00' })))).toContain('At most');
-		expect(errors([{ day: 7, from: '09:00', to: '10:00' }])).toContain('day');
-		expect(errors([{ day: 1, from: '9', to: '10:00' }])).toContain('HH:MM');
-		expect(errors([{ day: 1, from: '10:00', to: '09:00' }])).toContain('end after');
-		expect(errors([null])).toContain('day');
+		expect(errors([])).toContain('list');
+		expect(errors(Array.from({ length: 21 }, (_, i) => ({ key: `s${i}`, name: 'S' })))).toContain('list');
+		expect(errors([{ key: 'X', name: 'x' }])).toContain('Schedule key');
+		expect(errors([...one({}), ...one({})])).toContain('twice');
+		expect(errors(one({ name: '' }))).toContain('name');
+		expect(errors(one({ weekly: Array.from({ length: 71 }, () => ({ day: 1, start: '09:00', end: '10:00' })) }))).toContain(
+			'at most 70',
+		);
+		expect(errors(one({ weekly: [{ day: 0, start: '09:00', end: '10:00' }] }))).toContain('1 (Monday)');
+		expect(errors(one({ weekly: [{ day: 1, start: '9', end: '10:00' }] }))).toContain('HH:MM');
+		expect(errors(one({ weekly: [{ day: 1, start: '10:00', end: '09:00' }] }))).toContain('later end');
+		expect(errors(one({ weekly: [null] }))).toContain('1 (Monday)');
 		expect(
-			errors([
-				{ day: 1, from: '09:00', to: '12:00' },
-				{ day: 1, from: '11:00', to: '13:00' },
-			]),
-		).toContain('overlaps');
+			errors(
+				one({
+					weekly: [
+						{ day: 1, start: '09:00', end: '12:00' },
+						{ day: 1, start: '11:00', end: '13:00' },
+					],
+				}),
+			),
+		).toContain('overlap');
+		expect(errors(one({ exceptions: [{ date: '2026-02-30' }] }))).toContain('real date');
+		expect(errors(one({ exceptions: [{ date: '2026-02-03' }, { date: '2026-02-03' }] }))).toContain('once');
+		expect(errors(one({ exceptions: [{ date: '2026-02-03', name: 'x'.repeat(81) }] }))).toContain('name');
+		expect(errors(one({ exceptions: [{ date: '2026-02-03', hours: [{ start: '12:00', end: '11:00' }] }] }))).toContain(
+			'later end',
+		);
+	});
+
+	it('finds the schedule of a service: the one it names, else the first; none when it is gone', () => {
+		const schedules = [
+			{ key: 'main', name: 'Main', weekly: [], exceptions: [] },
+			{ key: 'branch', name: 'Branch', weekly: [], exceptions: [] },
+		];
+		expect(scheduleOf(schedules, '')?.key).toBe('main');
+		expect(scheduleOf(schedules, 'branch')?.key).toBe('branch');
+		expect(scheduleOf(schedules, 'gone')).toBeNull();
+		expect(scheduleOf([], '')).toBeNull();
 	});
 
 	it('lists slots in the business time zone', () => {
-		const hours = [
-			{ day: 1, from: '09:00', to: '11:30' },
-			{ day: 2, from: '09:00', to: '10:00' },
-		];
+		const hours = only([
+			{ day: 1, start: '09:00', end: '11:30' },
+			{ day: 2, start: '09:00', end: '10:00' },
+		]);
 		const monday = Date.parse('2026-10-05T00:00:00Z');
 		const utc = slotsBetween({ hours, durationMinutes: 60, from: monday, to: monday + 2 * 86_400_000, timeZone: 'UTC' });
 		expect(utc.map((slot) => new Date(slot.start).toISOString())).toEqual([
@@ -773,9 +836,48 @@ describe('bookings', () => {
 		expect(
 			slotsBetween({ hours, durationMinutes: 60, from: monday, to: monday + 86_400_000, timeZone: 'Nowhere/Land' }),
 		).toHaveLength(2);
-		expect(slotsBetween({ hours: [], durationMinutes: 60, from: monday, to: monday + 1, timeZone: 'UTC' })).toEqual([]);
+		expect(slotsBetween({ hours: only([]), durationMinutes: 60, from: monday, to: monday + 1, timeZone: 'UTC' })).toEqual([]);
 		expect(slotAt({ hours, durationMinutes: 60, start: Date.parse('2026-10-05T10:00:00Z'), timeZone: 'UTC' })).not.toBeNull();
 		expect(slotAt({ hours, durationMinutes: 60, start: Date.parse('2026-10-05T10:30:00Z'), timeZone: 'UTC' })).toBeNull();
+		// Sunday is day 7
+		const sunday = slotsBetween({
+			hours: only([{ day: 7, start: '10:00', end: '11:00' }]),
+			durationMinutes: 60,
+			from: monday - 86_400_000,
+			to: monday,
+			timeZone: 'UTC',
+		});
+		expect(sunday.map((slot) => new Date(slot.start).toISOString())).toEqual(['2026-10-04T10:00:00.000Z']);
+	});
+
+	it("replaces a date's weekly hours with its exception: closed all day, or special hours (E30)", () => {
+		const hours = {
+			weekly: [
+				{ day: 1, start: '09:00', end: '11:00' },
+				{ day: 2, start: '09:00', end: '11:00' },
+			],
+			exceptions: [
+				{ date: '2026-10-05', name: 'Holiday', hours: [] },
+				{ date: '2026-10-06', name: 'Short day', hours: [{ start: '14:00', end: '15:00' }] },
+				// a date with no weekly hours can open
+				{ date: '2026-10-10', name: 'Open Saturday', hours: [{ start: '10:00', end: '11:00' }] },
+			],
+		};
+		const monday = Date.parse('2026-10-05T00:00:00Z');
+		const week = slotsBetween({ hours, durationMinutes: 60, from: monday, to: monday + 7 * 86_400_000, timeZone: 'UTC' });
+		expect(week.map((slot) => new Date(slot.start).toISOString())).toEqual([
+			'2026-10-06T14:00:00.000Z',
+			'2026-10-10T10:00:00.000Z',
+		]);
+		// the dates are the business time zone's: 2026-10-05 in Tokyo starts at 15:00 UTC the day before
+		const tokyo = slotsBetween({
+			hours: { weekly: [], exceptions: [{ date: '2026-10-05', name: '', hours: [{ start: '00:00', end: '01:00' }] }] },
+			durationMinutes: 60,
+			from: monday - 86_400_000,
+			to: monday + 86_400_000,
+			timeZone: 'Asia/Tokyo',
+		});
+		expect(tokyo.map((slot) => new Date(slot.start).toISOString())).toEqual(['2026-10-04T15:00:00.000Z']);
 	});
 
 	it('converts wall-clock times', () => {

@@ -141,7 +141,8 @@ export const ID_PREFIX = Object.freeze({
  * @property {{ files: MediaRecord[], retired: Array<MediaRecord & { removedAt: Date }>, licenceKeys: boolean,
  *   downloadLimit: number } | null} digital digital goods: `retired` are files removed while orders had the product,
  *   still downloadable for the orders placed before `removedAt`
- * @property {{ durationMinutes: number } | null} booking bookings
+ * @property {{ durationMinutes: number, schedule: string } | null} booking bookings: a slot's length, and the key of
+ *   the booking schedule it is booked on ('' = the first; E30)
  * @property {import('./catalog-content.js').SeoRecord} seo '' = derived from name and summary (E16)
  * @property {boolean} featured (E2)
  * @property {'none' | 'out' | 'partial' | 'full'} stockState derived on save (E2)

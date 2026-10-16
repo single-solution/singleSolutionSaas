@@ -17,7 +17,7 @@ import { readLock, signLock } from '../adapters/crypto.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { loadOffers } from '../adapters/promotions-store.js';
-import { MAX_SLOT_DAYS, slotAt, slotsBetween } from '../core/bookings.js';
+import { MAX_SLOT_DAYS, scheduleOf, slotAt, slotsBetween } from '../core/bookings.js';
 import { MAX_QUANTITY, afterOffers, feeBaseOf, grossOf, priceLines, resolveLines, roleDiscounts } from '../core/checkout.js';
 import { pricesFor, roleTermsOf } from '../core/role-pricing.js';
 import { placeOf } from '../core/address.js';
@@ -145,13 +145,13 @@ export const createQuoting = (product, service) => {
 	const media = createMedia(product);
 
 	/**
-	 * What booking checks need: the weekly hours, the business time zone, the lead time and the days ahead.
+	 * What booking checks need: the schedules (E30), the business time zone, the lead time and the days ahead.
 	 * @param {Site} s
 	 */
 	const bookingRules = async (s) => {
 		const settings = await s.values('bookings');
 		return {
-			hours: /** @type {import('../core/bookings.js').OpeningHours[]} */ (await s.list('booking_hours')),
+			schedules: /** @type {import('../core/bookings.js').BookingSchedule[]} */ (await s.list('booking_schedules')),
 			timeZone: String((await s.business()).timeZone || 'UTC'),
 			leadMs: Number(settings.leadMinutes) * 60_000,
 			aheadMs: Number(settings.daysAhead) * DAY_MS,
@@ -238,10 +238,12 @@ export const createQuoting = (product, service) => {
 			booked,
 			// called only for booking lines with a slot, so the rules were read
 			slotOf: (item, start) => {
-				const { hours, timeZone, leadMs, aheadMs } = /** @type {NonNullable<typeof rules>} */ (rules);
+				const { schedules, timeZone, leadMs, aheadMs } = /** @type {NonNullable<typeof rules>} */ (rules);
 				if (start < now + leadMs || start > now + aheadMs) return null;
-				const durationMinutes = /** @type {{ durationMinutes: number }} */ (item.booking).durationMinutes;
-				return slotAt({ hours, durationMinutes, start, timeZone });
+				const booking = /** @type {NonNullable<typeof item.booking>} */ (item.booking);
+				// the service's schedule: the one it names, else the first (E30)
+				const hours = scheduleOf(schedules, booking.schedule);
+				return hours ? slotAt({ hours, durationMinutes: booking.durationMinutes, start, timeZone }) : null;
 			},
 		});
 		// staff may set a line's unit price when editing an order (E29), within what a line may come to
@@ -726,7 +728,8 @@ export const createQuoting = (product, service) => {
 		const from = Math.max(range.from, now + rules.leadMs);
 		const to = Math.min(range.to, range.from + MAX_SLOT_DAYS * DAY_MS, now + rules.aheadMs);
 		const durationMinutes = item.booking?.durationMinutes ?? 0;
-		const slots = slotsBetween({ hours: rules.hours, durationMinutes, from, to, timeZone: rules.timeZone });
+		const hours = scheduleOf(rules.schedules, item.booking?.schedule);
+		const slots = hours ? slotsBetween({ hours, durationMinutes, from, to, timeZone: rules.timeZone }) : [];
 		const booked = slots.length > 0 ? await createOrdersStore(await s.data()).booked([item.id], from, to) : new Set();
 		return {
 			productId: item.id,
