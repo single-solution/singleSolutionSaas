@@ -218,19 +218,39 @@ const buttonIn = (scope, text) => {
 };
 /** @param {ParentNode} scope @param {string} text */
 const hasButton = (scope, text) => [...scope.querySelectorAll('button')].some((b) => b.textContent === text);
+/** A choice group (segmented control or cards) read and set like the select it replaced. @param {Element} group */
+const groupAsSelect = (group) => ({
+	get value() {
+		return /** @type {HTMLInputElement | null} */ (group.querySelector('input:checked'))?.value ?? '';
+	},
+	set value(next) {
+		/** @type {HTMLInputElement} */ ([...group.querySelectorAll('input')].find((input) => input.value === next)).click();
+	},
+	querySelectorAll: () => [...group.querySelectorAll('input')].map((input) => ({ value: input.value })),
+	// picking a radio already fires its change
+	dispatchEvent: () => true,
+});
 /** @param {ParentNode} scope @param {string} label @returns {any} */
 const fieldIn = (scope, label) => {
 	const found = /** @type {HTMLLabelElement | undefined} */ (
-		[...scope.querySelectorAll('label')].find((l) => l.textContent === label && !l.classList.contains('check'))
+		[...scope.querySelectorAll('label')].find((l) => l.textContent === label && !l.classList.contains('check') && l.htmlFor)
 	);
-	if (!found) throw new Error(`no field ${label}`);
+	if (!found) {
+		const caption = [...scope.querySelectorAll('.field > .cap')].find((c) => c.textContent === label);
+		if (!caption) throw new Error(`no field ${label}`);
+		return groupAsSelect(/** @type {Element} */ (caption.parentElement?.querySelector('[role="radiogroup"]')));
+	}
 	return /** @type {ShadowRoot} */ (found.getRootNode()).getElementById(found.htmlFor);
 };
-/** @param {ParentNode} scope @param {string} text @returns {HTMLInputElement} */
+/** A checkbox or a switch by its text. @param {ParentNode} scope @param {string} text @returns {HTMLInputElement} */
 const checkIn = (scope, text) => {
-	const found = [...scope.querySelectorAll('label.check')].find((l) => (l.textContent ?? '').startsWith(text));
-	if (!found) throw new Error(`no check ${text}`);
-	return /** @type {HTMLInputElement} */ (found.querySelector('input'));
+	const found = [...scope.querySelectorAll('label.check, label.switch')].find((l) => (l.textContent ?? '').startsWith(text));
+	if (found) return /** @type {HTMLInputElement} */ (found.querySelector('input'));
+	const row = /** @type {HTMLLabelElement | undefined} */ (
+		[...scope.querySelectorAll('.setting .text > label')].find((l) => (l.textContent ?? '').startsWith(text))
+	);
+	if (!row) throw new Error(`no check ${text}`);
+	return /** @type {HTMLInputElement} */ (/** @type {ShadowRoot} */ (row.getRootNode()).getElementById(row.htmlFor));
 };
 /** @param {ParentNode} scope */
 const statusIn = (scope) => /** @type {HTMLElement} */ (scope.querySelector('[role="status"]')).textContent;
@@ -2318,7 +2338,7 @@ describe('admin widgets', () => {
 		await click(buttonIn(form, strings['roles.new']));
 
 		// own permissions
-		const ownPart = /** @type {HTMLElement} */ (root.querySelector('section.part'));
+		const ownPart = /** @type {HTMLElement} */ (root.querySelector('.box > section.block:last-child'));
 		expect(fieldIn(ownPart, strings['roles.ownKey']).value).toBe('reports.view');
 		await click(buttonIn(ownPart, strings['roles.ownAdd']));
 		const keys = [...ownPart.querySelectorAll('.own')];

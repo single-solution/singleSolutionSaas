@@ -7,7 +7,7 @@
  * 0.8.10 K9.
  * @module
  */
-import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
+import { adminCall, block, element, formatText, mountWidget } from '@ss/app-kit/widget';
 import { datesOf, errorText, fieldMaker, setHidden, textsOf } from './common.js';
 import { chips } from './parts.js';
 import { WIDGET_CSS } from './styles.js';
@@ -57,15 +57,11 @@ export const mountActivityAdmin = ({ host, api, config }) => {
 			const note = element(doc, 'p', { class: 'status', role: 'status' });
 			const list = element(doc, 'ul');
 			const more = element(doc, 'button', { type: 'button', class: 'secondary', hidden: '' }, t('activity.more'));
-			const box = element(doc, 'section', { class: 'box' });
+			const box = element(doc, 'section', { class: 'box admin' });
 			box.append(
 				element(doc, 'h2', {}, t('activity.title')),
-				element(doc, 'p', { class: 'meta' }, t('activity.help')),
-				productChips.group,
-				filters,
-				note,
-				list,
-				more,
+				block(doc, { body: [element(doc, 'p', { class: 'meta' }, t('activity.help')), productChips.group, filters] }),
+				block(doc, { body: [note, list, more] }),
 			);
 			root.append(box);
 

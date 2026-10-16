@@ -11,7 +11,7 @@
  * a right to left page. Motion is short and stops with `prefers-reduced-motion`.
  *
  * The classes the builders in controls.js set: `check` (checkbox or radio with its text), `switch`, `setting`
- * (`wide` when its control is a field), `choices` with `choice` (cards), `segmented`, `field` with `hint` (`error`), `fields` (a grid of fields),
+ * (`wide` when its control is a field), `choice-grid` with `choice` (cards), `segmented`, `field` with `hint` (`error`), `fields` (a grid of fields),
  * `affix` (field with `pre` / `suf`), `block` with `block-head`, `help`, and the existing `box`.
  * @module
  */
@@ -28,6 +28,7 @@ export const CONTROLS_CSS = `
   --ss-kit-card: var(--ss-color-background, #111827); --ss-kit-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.3); }
 .box { border: 1px solid var(--ss-kit-hair); border-radius: var(--ss-kit-rc); padding: 20px; background: var(--ss-kit-card); box-shadow: var(--ss-kit-shadow); }
 .box.admin { padding: 8px; border: 0; background: transparent; box-shadow: none; }
+.box.admin > :is(.block, form, .split, .picker) { margin-top: 16px; }
 label { display: block; margin: 12px 0 6px; font-size: 0.875em; font-weight: 500; }
 :where(textarea, select, input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='hidden'])) {
   width: 100%; box-sizing: border-box; min-height: 38px; padding: 8px 12px; font: inherit; color: inherit; background-color: transparent;
@@ -86,7 +87,7 @@ input:is([type='checkbox'], [type='radio']):disabled { opacity: 0.5; cursor: not
 .setting > .text > label { margin: 0; font-size: 1em; cursor: pointer; }
 .setting > .ctl { flex: 0 1 auto; min-width: 0; } .setting.wide > .ctl { flex: 1 1 16rem; max-width: 24rem; }
 @container (max-width: 30rem) { .setting.wide > .ctl { max-width: none; } }
-.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 10px; margin: 8px 0; }
+.choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 10px; margin: 8px 0; }
 .choice { display: flex; align-items: flex-start; gap: 12px; margin: 0; padding: 12px 14px; font-size: 1em; font-weight: 400; cursor: pointer;
   border: 1px solid var(--ss-kit-line); border-radius: var(--ss-kit-r); transition: border-color 120ms, background-color 120ms; }
 .choice:hover { border-color: color-mix(in srgb, currentColor 40%, transparent); }

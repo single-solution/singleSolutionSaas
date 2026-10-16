@@ -6,7 +6,7 @@
  * (Owner and the sign-up role; the ready-made templates too, A3), and name their own permissions (the `site` group).
  * @module
  */
-import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
+import { adminCall, block, element, formatText, mountWidget } from '@ss/app-kit/widget';
 import { datesOf, errorText, fieldMaker, setHidden, textsOf } from './common.js';
 import { SIGN_IN_METHODS } from '../core/widgets.js';
 import { WIDGET_CSS } from './styles.js';
@@ -79,16 +79,15 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 			const list = element(doc, 'ul');
 
 			// the role form
-			const form = element(doc, 'form', { class: 'part' });
+			const form = element(doc, 'form');
 			const heading = element(doc, 'h3');
 			const key = make.field('input', t('roles.key'), { maxlength: '40', pattern: '[a-z][a-z0-9_]{1,39}', required: '' });
 			const name = make.field('input', t('roles.name'), { maxlength: '60', required: '' });
 			const description = make.field('textarea', t('roles.description'), { rows: '2', maxlength: '300' });
-			const twoStepField = make.field('select', t('roles.twoStep'));
-			twoStepField.input.append(
-				element(doc, 'option', { value: 'optional' }, t('roles.twoStepOptional')),
-				element(doc, 'option', { value: 'required' }, t('roles.twoStepRequired')),
-			);
+			const twoStepField = make.choose(t('roles.twoStep'), [
+				{ value: 'optional', label: t('roles.twoStepOptional') },
+				{ value: 'required', label: t('roles.twoStepRequired') },
+			]);
 			const sessionHours = make.field('input', t('roles.sessionHours'), {
 				type: 'number',
 				min: '1',
@@ -103,64 +102,55 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				step: '1',
 				required: '',
 			});
-			const sessionRolling = make.check(t('roles.sessionRolling'));
+			const sessionRolling = make.flip(t('roles.sessionRolling'));
 			const rank = make.field('input', t('roles.rank'), { type: 'number', min: '101', max: '999', step: '1' });
-			const remember = make.field('select', t('roles.remember'));
-			remember.input.append(
-				element(doc, 'option', { value: 'ask' }, t('roles.rememberAsk')),
-				element(doc, 'option', { value: 'ask_ticked' }, t('roles.rememberAskTicked')),
-				element(doc, 'option', { value: 'always' }, t('roles.rememberAlways')),
-				element(doc, 'option', { value: 'never' }, t('roles.rememberNever')),
+			const remember = make.choose(
+				t('roles.remember'),
+				[
+					{ value: 'ask', label: t('roles.rememberAsk') },
+					{ value: 'ask_ticked', label: t('roles.rememberAskTicked') },
+					{ value: 'always', label: t('roles.rememberAlways') },
+					{ value: 'never', label: t('roles.rememberNever') },
+				],
+				'card',
 			);
-			const signIn = make.field('select', t('roles.signIn'));
-			signIn.input.append(
-				element(doc, 'option', { value: 'on' }, t('roles.signInOn')),
-				element(doc, 'option', { value: 'paused' }, t('roles.signInPaused')),
-			);
-			const logSignIns = make.check(t('roles.logSignIns'));
-			const signUp = make.check(t('roles.signUp'));
-			const membership = make.check(t('roles.membership'));
-			const methodSet = element(doc, 'fieldset');
-			methodSet.append(element(doc, 'legend', {}, t('roles.methods')));
+			const signIn = make.choose(t('roles.signIn'), [
+				{ value: 'on', label: t('roles.signInOn') },
+				{ value: 'paused', label: t('roles.signInPaused') },
+			]);
+			const logSignIns = make.flip(t('roles.logSignIns'));
+			const signUp = make.flip(t('roles.signUp'));
+			const membership = make.flip(t('roles.membership'));
+			const methodSet = block(doc, { title: t('roles.methods') });
 			/** @type {Map<string, HTMLInputElement>} */
 			const methodBoxes = new Map();
 			for (const method of SIGN_IN_METHODS.filter((key) => config.features.includes(key))) {
-				const made = make.check(t(`method.${method}`));
+				const made = make.flip(t(`method.${method}`));
 				methodBoxes.set(method, made.input);
 				methodSet.append(made.wrap);
 			}
-			const signInRow = element(doc, 'div', { class: 'row' });
-			signInRow.append(rank.wrap, remember.wrap, signIn.wrap);
-			const all = make.check(t('roles.allPermissions'));
+			const signInRow = element(doc, 'div', { class: 'fields' });
+			signInRow.append(rank.wrap, signIn.wrap);
+			const all = make.flip(t('roles.allPermissions'));
 			const permissionArea = element(doc, 'div', { class: 'permissions' });
 			const save = element(doc, 'button', { type: 'submit' }, t('roles.save'));
 			const fresh = button(t('roles.new'), { class: 'secondary' });
 			const formNote = element(doc, 'p', { class: 'status', role: 'status' });
-			const lengths = element(doc, 'div', { class: 'row' });
+			const lengths = element(doc, 'div', { class: 'fields' });
 			lengths.append(sessionHours.wrap, rememberDays.wrap);
 			form.append(
-				heading,
-				key.wrap,
-				name.wrap,
-				description.wrap,
-				...(twoStepOn ? [twoStepField.wrap] : []),
-				lengths,
-				sessionRolling.wrap,
-				signInRow,
+				block(doc, {
+					body: [heading, key.wrap, name.wrap, description.wrap, ...(twoStepOn ? [twoStepField.wrap] : [])],
+				}),
+				block(doc, { body: [lengths, sessionRolling.wrap, signInRow, remember.wrap] }),
 				methodSet,
-				logSignIns.wrap,
-				signUp.wrap,
-				membership.wrap,
-				element(doc, 'h4', {}, t('roles.permissions')),
-				all.wrap,
-				permissionArea,
-				save,
-				fresh,
-				formNote,
+				block(doc, { body: [logSignIns.wrap, signUp.wrap, membership.wrap] }),
+				block(doc, { title: t('roles.permissions'), body: [all.wrap, permissionArea] }),
+				block(doc, { body: [save, fresh, formNote] }),
 			);
 
 			// the merchant's own permission names
-			const own = element(doc, 'section', { class: 'part' });
+			const own = element(doc, 'section', { class: 'block' });
 			const ownRows = element(doc, 'div');
 			const ownAdd = button(t('roles.ownAdd'), { class: 'secondary' });
 			const ownSave = button(t('roles.ownSave'));
@@ -174,8 +164,8 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				ownNote,
 			);
 
-			const box = element(doc, 'section', { class: 'box' });
-			box.append(element(doc, 'h2', {}, t('roles.title')), note, list, form, own);
+			const box = element(doc, 'section', { class: 'box admin' });
+			box.append(element(doc, 'h2', {}, t('roles.title')), block(doc, { body: [note, list] }), form, own);
 			root.append(box);
 
 			/** @param {string[]} selected */
@@ -345,7 +335,7 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				all.input.checked ? [ALL] : [...boxes].filter(([, input]) => input.checked).map(([permission]) => permission);
 
 			all.input.addEventListener('change', () => setHidden(permissionArea, all.input.checked));
-			twoStepField.input.addEventListener('change', () => {
+			twoStepField.input.node.addEventListener('change', () => {
 				twoStep = twoStepField.input.value === 'required' ? 'required' : 'optional';
 			});
 			fresh.addEventListener('click', () => fill(null));

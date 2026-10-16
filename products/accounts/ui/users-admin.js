@@ -11,7 +11,7 @@
  * invited), open again. PLAN 0.8.6, 0.8.10 A3–A5.
  * @module
  */
-import { adminCall, badge, element, formatText, moreMenu, mountWidget, openDialog, stateSlot } from '@ss/app-kit/widget';
+import { adminCall, badge, block, element, formatText, moreMenu, mountWidget, openDialog, stateSlot } from '@ss/app-kit/widget';
 import { customInputs, datesOf, errorText, fieldMaker, setHidden, textsOf } from './common.js';
 import { addressInputs, addressText } from './address.js';
 import { card, chips, copyable } from './parts.js';
@@ -121,7 +121,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 
 			// ------------------------------------------------------------------------------------------- the frame
 
-			const box = element(doc, 'section', { class: 'box' });
+			const box = element(doc, 'section', { class: 'box admin' });
 			const head = element(doc, 'div', { class: 'head' });
 			const mainActions = element(doc, 'div', { class: 'actions' });
 			const add = button(t('users.add'));
@@ -155,7 +155,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 			const joined = make.field('input', t('users.joinedAfter'), { type: 'date' });
 			const tagFilter = make.field('input', t('users.tagsFilter'), { maxlength: '200', list: 'ss-users-tags' });
 			const knownTags = element(doc, 'datalist', { id: 'ss-users-tags' });
-			const hideBlocked = make.check(t('users.hideBlocked'));
+			const hideBlocked = make.flip(t('users.hideBlocked'));
 			const search = element(doc, 'button', { type: 'submit' }, t('users.searchButton'));
 			filters.append(
 				q.wrap,
@@ -185,7 +185,9 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 			const detail = element(doc, 'div', { class: 'detail-pane' });
 			const layout = element(doc, 'div', { class: 'layout' });
 			layout.append(listPane, detail);
-			box.append(head, statusChips.group, layout);
+			const toolbar = block(doc, { body: [head, statusChips.group] });
+			toolbar.classList.add('tools');
+			box.append(toolbar, layout);
 			root.append(box);
 
 			const fillRoleFilters = () => {
@@ -694,7 +696,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 					fieldset.append(element(doc, 'legend', {}, t('users.addresses')));
 					// the parts of the address's country, in its order with its labels (A1)
 					const inputs = addressInputs({ doc, make, t, box: fieldset, address });
-					const isDefault = make.check(t('address.default'));
+					const isDefault = make.flip(t('address.default'));
 					isDefault.input.checked = address.default === true;
 					const remove = button(t('account.remove'), { class: 'secondary small' });
 					const entry = { id: address.id, inputs, isDefault: isDefault.input, node: fieldset };
@@ -774,7 +776,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 			const deleteDialog = (user, done) => {
 				const confirmWord = nameOf(user);
 				const reason = make.field('input', t('users.deleteReason'), { maxlength: '300' });
-				const keep = make.check(t('users.deleteKeep'));
+				const keep = make.flip(t('users.deleteKeep'));
 				for (const made of [reason, keep]) made.wrap.classList.add('wide');
 				formDialog(
 					formatText(t('users.deleteTitle'), { name: confirmWord }),
@@ -820,7 +822,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 				const contactField = make.field('input', t('users.inviteContact'), { maxlength: '254', required: '' });
 				const name = make.field('input', t('fields.name'), { maxlength: '120' });
 				const role = roleField(t('users.role'));
-				const keep = make.check(t('users.inviteReturn'));
+				const keep = make.flip(t('users.inviteReturn'));
 				keep.wrap.classList.add('wide');
 				formDialog(
 					t('users.inviteTitle'),

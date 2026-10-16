@@ -228,7 +228,7 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 						required: rules.addressRequired,
 						country: rules.country,
 					});
-					const isDefault = make.check(t('address.default'));
+					const isDefault = make.flip(t('address.default'));
 					isDefault.input.checked = address?.default === true;
 					const submit = element(doc, 'button', { type: 'submit' }, t('account.addressSave'));
 					const cancel = button(t('account.cancel'), { class: 'secondary' });

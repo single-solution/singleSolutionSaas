@@ -4,7 +4,17 @@
  * fields and the consent boxes included). Text is always set as text, never as HTML.
  * @module
  */
-import { element, formatDate, formatMoney, formatText, viewerOf } from '@ss/app-kit/widget';
+import {
+	checkbox,
+	element,
+	field as kitField,
+	formatDate,
+	formatMoney,
+	formatText,
+	radioGroup,
+	toggle,
+	viewerOf,
+} from '@ss/app-kit/widget';
 
 /** @typedef {import('@ss/app-kit/widget').Answer} Answer status 0 when signed out or unreachable */
 /** @typedef {(key: string) => string} Texts */
@@ -214,12 +224,25 @@ export const fieldMaker = (doc, prefix) => {
 	};
 	/** A checkbox with its text. @param {string} label */
 	const check = (label) => {
-		const input = /** @type {HTMLInputElement} */ (element(doc, 'input', { type: 'checkbox' }));
-		const wrap = element(doc, 'label', { class: 'check' });
-		wrap.append(input, doc.createTextNode(label));
-		return { wrap, input };
+		const { box, node } = checkbox(doc, label);
+		return { wrap: node, input: box };
 	};
-	return { field, check };
+	/** A switch row for a yes or no setting. @param {string} label @param {string} [help] */
+	const flip = (label, help = '') => {
+		const { box, node } = toggle(doc, label, { help });
+		return { wrap: node, input: box };
+	};
+	/**
+	 * One choice from a few, as a segmented control (short choices) or cards, under its label; `input.value` reads and
+	 * sets the choice.
+	 * @param {string} label @param {Array<{ value: string, label: string }>} items @param {'segmented' | 'card'} [look]
+	 */
+	const choose = (label, items, look = 'segmented') => {
+		n += 1;
+		const input = radioGroup(doc, { label, name: `${prefix}-choice-${n}`, items, look, value: items[0]?.value });
+		return { wrap: kitField(doc, label, input.node), input };
+	};
+	return { field, check, flip, choose };
 };
 
 /** @typedef {ReturnType<typeof fieldMaker>} FieldMaker */
@@ -252,13 +275,11 @@ export const customInputs = (doc, make, t, fields, { values = {}, required = fal
 		/** @type {{ wrap: HTMLElement, input: HTMLInputElement, boxes?: HTMLInputElement[] }} */
 		let made;
 		if (definition.type === 'boolean') {
-			const box = make.check(definition.label);
+			const box = make.flip(definition.label);
 			box.input.checked = value === true;
-			const wrap = element(doc, 'div', { class: 'field' });
-			wrap.append(box.wrap);
-			made = { wrap, input: box.input };
+			made = { wrap: box.wrap, input: box.input };
 		} else if (definition.type === 'multi_choice') {
-			const wrap = element(doc, 'fieldset', { class: 'choices' });
+			const wrap = element(doc, 'fieldset');
 			wrap.append(element(doc, 'legend', {}, definition.label));
 			const chosen = Array.isArray(value) ? value : [];
 			const boxes = definition.options.map((option) => {

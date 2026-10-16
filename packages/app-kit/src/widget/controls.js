@@ -151,7 +151,7 @@ const group = (doc, { label, name, items, value = '', look = 'plain', onChange }
 	const type = multiple ? 'checkbox' : 'radio';
 	const chosen = Array.isArray(value) ? value : [value];
 	const node = element(doc, 'div', {
-		class: { plain: 'opts', card: 'choices', segmented: 'segmented' }[look],
+		class: { plain: 'opts', card: 'choice-grid', segmented: 'segmented' }[look],
 		role: multiple ? 'group' : 'radiogroup',
 		'aria-label': label,
 	});
