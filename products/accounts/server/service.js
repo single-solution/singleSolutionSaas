@@ -14,7 +14,7 @@
  */
 import { problem, verifyIdentityToken } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
-import { normalisePhone, websiteCallingCode } from '@ss/contracts/phone';
+import { normalizePhone, websiteCallingCode } from '@ss/contracts/phone';
 import { constantTimeEqual, randomToken, sha256Hex } from '@ss/protocol';
 import { labelOf, valuesOf } from '../core/activity.js';
 import { ROLE_TEMPLATES, SIGN_UP_TEMPLATE, remembered, sessionEnd, signInRefusal } from '../core/roles.js';
@@ -177,7 +177,7 @@ export const createService = (product) => {
 		const { defaultCallingCode, trunkPrefix } = await settings(s, 'phone');
 		const code =
 			websiteCallingCode(defaultCallingCode) || websiteCallingCode('', (await product.business(s.websiteId)).country);
-		return normalisePhone(value, { defaultCallingCode: code, trunkPrefix: String(trunkPrefix) });
+		return normalizePhone(value, { defaultCallingCode: code, trunkPrefix: String(trunkPrefix) });
 	};
 
 	/**

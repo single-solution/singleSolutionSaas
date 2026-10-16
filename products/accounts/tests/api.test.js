@@ -612,7 +612,7 @@ describe('Google, Apple and Facebook', () => {
 		expect(back.headers.get('location')).toBe(`${ORIGIN}/account#ss_accounts_error=provider_failed`);
 		const { url: u2 } = await start('google');
 		const back2 = await env.call('GET', `/oauth/google/callback?state=${u2?.searchParams.get('state')}&error=access_denied`);
-		expect(back2.headers.get('location')).toBe(`${ORIGIN}/account#ss_accounts_error=cancelled`);
+		expect(back2.headers.get('location')).toBe(`${ORIGIN}/account#ss_accounts_error=canceled`);
 		expect((await env.call('GET', '/oauth/google/callback?state=bad&code=abc')).status).toBe(400);
 		expect((await env.call('GET', `/oauth/google/callback?state=web_0000000000zzz.abc&code=abc`)).status).toBe(404);
 		expect((await env.call('GET', `/oauth/google/callback?state=${env.websiteId}.unknown&code=abc`)).status).toBe(400);
@@ -1244,7 +1244,7 @@ describe('data rights', () => {
 		for (const base of [CHAT, SHOP, NOTIFY])
 			env.responders.set(`${base}/v1/data-rights/delete`, (call) => {
 				deletes.push(`${base} ${call.body}`);
-				return { status: 200, body: { deleted: 1, anonymised: 0 } };
+				return { status: 200, body: { deleted: 1, anonymized: 0 } };
 			});
 		await env.setting('data_rights', 'deleteAfterDays', 0);
 		const s = await signIn('pen@example.com');
@@ -1279,7 +1279,7 @@ describe('data rights', () => {
 		let chatCalls = 0;
 		env.responders.set(`${CHAT}/v1/data-rights/delete`, () => {
 			chatCalls += 1;
-			return chatCalls === 1 ? { status: 503, body: {} } : { status: 200, body: { deleted: 1, anonymised: 0 } };
+			return chatCalls === 1 ? { status: 503, body: {} } : { status: 200, body: { deleted: 1, anonymized: 0 } };
 		});
 		env.advance(2 * 86_400_000 + 1000);
 		await env.serverCall('GET', '/v1/roles');

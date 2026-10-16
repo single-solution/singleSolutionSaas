@@ -12,7 +12,7 @@
  */
 import { isId, validateActivityCopy } from '@ss/contracts';
 import { normalizeEmail } from '@ss/contracts/email';
-import { normalisePhone } from '@ss/contracts/phone';
+import { normalizePhone } from '@ss/contracts/phone';
 import { isObject } from '@ss/contracts/util';
 import { MAX_ADDRESSES, checkAddresses, checkTags, checkCustomValues, checkFieldDefinition, checkName } from './profile.js';
 import { checkRole } from './roles.js';
@@ -225,7 +225,7 @@ const textOf = (record, name, max, errors, at = '') => {
 const contactsOf = (record, phoneFormat, errors) => {
 	const email = absent(record.email) ? null : normalizeEmail(record.email);
 	if (email === null && !absent(record.email)) errors.push({ path: '/email', message: 'Not a valid email address.' });
-	const phone = absent(record.phone) ? null : normalisePhone(record.phone, phoneFormat);
+	const phone = absent(record.phone) ? null : normalizePhone(record.phone, phoneFormat);
 	if (phone === null && !absent(record.phone))
 		errors.push({ path: '/phone', message: 'Not a phone number: give it with its country code.' });
 	if (absent(record.email) && absent(record.phone))

@@ -17,7 +17,7 @@ import {
 	generateCode,
 	lockAfter,
 	newUserNameOf,
-	normaliseCode,
+	normalizeCode,
 	passwordProblem,
 	returnAddress,
 	setupLinkState,
@@ -314,7 +314,7 @@ export const createFlows = (product, service) => {
 	const staffCodeOf = async (s, user, typed) => {
 		if (!s.on.includes('staff_links')) return null;
 		const record = await s.store.codes.latest('staff_code', user.id);
-		const code = record ? normaliseCode(typed, STAFF_CODE_LENGTH) : null;
+		const code = record ? normalizeCode(typed, STAFF_CODE_LENGTH) : null;
 		return record && code !== null && constantTimeEqual(record.hash, sha256Hex(`${record.id}:${code}`)) ? record.id : null;
 	};
 
@@ -383,7 +383,7 @@ export const createFlows = (product, service) => {
 			kind === 'phone' ? await s.store.users.byPhone(target) : kind === 'email' ? await s.store.users.byEmail(target) : null;
 		const staff = user && s.on.includes('staff_links') ? await s.store.codes.latest('staff_code', user.id) : null;
 		for (const record of [sent, staff]) {
-			const code = record ? normaliseCode(typed, Number(record.data.length)) : null;
+			const code = record ? normalizeCode(typed, Number(record.data.length)) : null;
 			if (record && code !== null && constantTimeEqual(record.hash, sha256Hex(`${record.id}:${code}`)))
 				return { id: record.id, staff: record === staff };
 		}
@@ -754,7 +754,7 @@ export const createFlows = (product, service) => {
 			});
 		const code = params.get('code');
 		const key = await product.connections.value(websiteId, provider);
-		if (!code || typeof key !== 'object' || key === null) return back(`${LINK_PARAMS.error}=cancelled`);
+		if (!code || typeof key !== 'object' || key === null) return back(`${LINK_PARAMS.error}=canceled`);
 		/** @type {import('../adapters/providers.js').ProviderIdentity | null} */
 		let identity = null;
 		try {

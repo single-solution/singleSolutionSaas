@@ -112,7 +112,7 @@
 	"error.not_sent": "The message could not be sent. Try again later.",
 	"error.signed_out": "You were signed out. Sign in again.",
 	"error.rate_limited": "Too many tries. Wait a little and try again.",
-	"error.cancelled": "Sign-in was canceled.",
+	"error.canceled": "Sign-in was canceled.",
 	"error.provider_failed": "Sign-in with this service did not work. Try again.",
 	"error.code_cooldown": "Please wait a moment before asking for another code.",
 	"error.code_limit": "Too many codes were asked for. Try again later.",

@@ -801,8 +801,8 @@ describe('social sign-in and links', () => {
 
 	it('shows why a social sign-in did not work, and a failed or pending link', async () => {
 		const host = place('sign_in');
-		await start({}, { features: ['google'], hash: 'ss_accounts_error=cancelled' });
-		expect(statusIn(shadow(host))).toBe(strings['error.cancelled']);
+		await start({}, { features: ['google'], hash: 'ss_accounts_error=canceled' });
+		expect(statusIn(shadow(host))).toBe(strings['error.canceled']);
 		vi.restoreAllMocks();
 		document.body.replaceChildren();
 		const again = place('sign_in');

@@ -56,7 +56,7 @@ export const generateCode = ({ length, randomBytes }) => {
  * @param {unknown} input
  * @param {number} length
  */
-export const normaliseCode = (input, length) => {
+export const normalizeCode = (input, length) => {
 	if (typeof input !== 'string' || input.length > 32) return null;
 	const value = input.replace(/[\s-]/g, '');
 	return new RegExp(`^\\d{${length}}$`).test(value) ? value : null;

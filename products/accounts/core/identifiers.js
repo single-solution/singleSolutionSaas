@@ -1,6 +1,6 @@
 /**
  * Email address parts (pure). Addresses themselves are normalized by the shared rule every product uses
- * (`normalizeEmail` of `@ss/contracts/email`), phone numbers by `normalisePhone` of `@ss/contracts/phone`.
+ * (`normalizeEmail` of `@ss/contracts/email`), phone numbers by `normalizePhone` of `@ss/contracts/phone`.
  * @module
  */
 

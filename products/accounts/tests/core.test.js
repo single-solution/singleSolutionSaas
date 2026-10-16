@@ -30,7 +30,7 @@ import {
 	deviceOf,
 	emailRefused,
 	generateCode,
-	normaliseCode,
+	normalizeCode,
 	passwordProblem,
 	returnAddress,
 	setupLinkState,
@@ -54,7 +54,7 @@ describe('profile', () => {
 	it('checks custom field definitions and values', () => {
 		expect(checkFieldDefinition('Bad', {}).ok).toBe(false);
 		expect(checkFieldDefinition('a', null).ok).toBe(false);
-		expect(checkFieldDefinition('a', { label: 'A', type: 'colour' }).ok).toBe(false);
+		expect(checkFieldDefinition('a', { label: 'A', type: 'color' }).ok).toBe(false);
 		expect(checkFieldDefinition('a', { label: 'A', type: 'choice', options: ['x', ''] }).ok).toBe(false);
 		expect(checkFieldDefinition('a', { label: 'A', type: 'text', options: ['x'] })).toEqual({
 			ok: true,
@@ -226,9 +226,9 @@ describe('roles and rules', () => {
 		let n = 0;
 		const bytes = (/** @type {number} */ size) => Uint8Array.from({ length: size }, () => (n++ % 2 === 0 ? 255 : 7));
 		expect(generateCode({ length: 6, randomBytes: bytes })).toBe('777777');
-		expect(normaliseCode('12 34-56', 6)).toBe('123456');
-		expect(normaliseCode(5, 6)).toBeNull();
-		expect(normaliseCode('1'.repeat(40), 6)).toBeNull();
+		expect(normalizeCode('12 34-56', 6)).toBe('123456');
+		expect(normalizeCode(5, 6)).toBeNull();
+		expect(normalizeCode('1'.repeat(40), 6)).toBeNull();
 		expect(passwordProblem(undefined, { minLength: 8 })).toBe('too_short');
 		expect(passwordProblem('long enough', { minLength: 8 })).toBeNull();
 		expect(passwordProblem('a1'.repeat(65), { minLength: 8 })).toBeNull();

@@ -46,7 +46,7 @@ export const OWN_TEXT = new Set([
 	'not_sent',
 	'signed_out',
 	'rate_limited',
-	'cancelled',
+	'canceled',
 	'provider_failed',
 	'code_cooldown',
 	'code_limit',

@@ -13,7 +13,7 @@
  */
 import { createProduct, createProductBase } from '@ss/app-kit';
 import { normalizeEmail } from '@ss/contracts/email';
-import { normalisePhone } from '@ss/contracts/phone';
+import { normalizePhone } from '@ss/contracts/phone';
 import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -133,7 +133,7 @@ const ownDataRights = (now) => ({
 		const found = await store.users.matching({
 			...(user.id ? { id: user.id } : {}),
 			email: normalizeEmail(user.email),
-			phone: normalisePhone(user.phone),
+			phone: normalizePhone(user.phone),
 		});
 		const devices = await Promise.all(found.map((u) => store.sessions.ofUser(u.id)));
 		// staff-only custom fields stay out of the export, like the merchant's notes (A6)
@@ -153,7 +153,7 @@ const ownDataRights = (now) => ({
 		const found = await store.users.matching({
 			...(user.id ? { id: user.id } : {}),
 			email: normalizeEmail(user.email),
-			phone: normalisePhone(user.phone),
+			phone: normalizePhone(user.phone),
 		});
 		let deleted = 0;
 		for (const u of found) {
@@ -162,7 +162,7 @@ const ownDataRights = (now) => ({
 			deleted += await store.outbox.removeTo(u);
 			if (await store.users.remove(u.id)) deleted += 1;
 		}
-		return { deleted, anonymised: 0 };
+		return { deleted, anonymized: 0 };
 	},
 });
 
