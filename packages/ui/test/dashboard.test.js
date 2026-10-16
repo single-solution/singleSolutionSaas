@@ -38,6 +38,7 @@ import { act, allByRole, byLabel, byText, cleanup, click, render, type } from '.
 
 afterEach(() => {
 	cleanup();
+	window.history.replaceState(null, '', window.location.pathname);
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
 	window.history.replaceState(null, '', '/');
