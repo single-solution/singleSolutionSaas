@@ -10,14 +10,22 @@
 				"type": "string",
 				"maxLength": 20
 			},
-			"description": "Language codes such as en, fr, ar or pt-BR. Empty = any language."
+			"description": "Language codes such as en, fr, ar or pt-BR. Empty = any language.",
+			"x-ui": {
+				"group": "Languages",
+				"order": 1
+			}
 		},
 		"defaultLanguage": {
 			"type": "string",
 			"title": "Default language",
 			"default": "",
 			"maxLength": 20,
-			"description": "The language of answers when a message shows none, for example en. Empty = the first allowed language, else English."
+			"description": "The language of answers when a message shows none, for example en. Empty = the first allowed language, else English.",
+			"x-ui": {
+				"group": "Languages",
+				"order": 2
+			}
 		},
 		"markerWords": {
 			"type": "array",
@@ -27,14 +35,22 @@
 				"type": "string",
 				"maxLength": 500
 			},
-			"description": "One line per language, for example `tl: po salamat ako \"wala po\"` (quoted words count only together). Words in Latin letters under a language written in another script mark that language in Latin letters (<code>-Latn)."
+			"description": "One line per language, for example `tl: po salamat ako \"wala po\"` (quoted words count only together). Words in Latin letters under a language written in another script mark that language in Latin letters (<code>-Latn).",
+			"x-ui": {
+				"group": "Detection",
+				"order": 11
+			}
 		},
 		"minMarkers": {
 			"type": "integer",
 			"title": "Marker words that pick a language",
 			"default": 2,
 			"minimum": 1,
-			"maximum": 10
+			"maximum": 10,
+			"x-ui": {
+				"group": "Detection",
+				"order": 12
+			}
 		},
 		"markerShare": {
 			"type": "number",
@@ -42,27 +58,43 @@
 			"default": 0,
 			"minimum": 0,
 			"maximum": 1,
-			"description": "For example 0.15, counted from the number of words below. 0 = off: then one marker word is enough in a message of up to 3 words."
+			"description": "For example 0.15, counted from the number of words below. 0 = off: then one marker word is enough in a message of up to 3 words.",
+			"x-ui": {
+				"group": "Detection",
+				"order": 13
+			}
 		},
 		"minWordsForShare": {
 			"type": "integer",
 			"title": "Words a message needs for the share",
 			"default": 4,
 			"minimum": 1,
-			"maximum": 50
+			"maximum": 50,
+			"x-ui": {
+				"group": "Detection",
+				"order": 14
+			}
 		},
 		"strict": {
 			"type": "boolean",
 			"title": "Strict check",
 			"default": false,
-			"description": "With the Whole check: a reply must also match the visitor’s language by its share of marker words."
+			"description": "With the Whole check: a reply must also match the visitor’s language by its share of marker words.",
+			"x-ui": {
+				"group": "Reply check",
+				"order": 22
+			}
 		},
 		"checkMode": {
 			"type": "string",
 			"title": "How replies are checked",
 			"default": "whole",
 			"enum": ["whole", "presence"],
-			"description": "Whole: the whole answer must be in the visitor's language. Presence: each part of the answer needs one marker word of the language (or a letter of its script); a language without marker words fails with as many marker words of another language as pick it, or with letters of another script."
+			"description": "Whole: the whole answer must be in the visitor's language. Presence: each part of the answer needs one marker word of the language (or a letter of its script); a language without marker words fails with as many marker words of another language as pick it, or with letters of another script.",
+			"x-ui": {
+				"group": "Reply check",
+				"order": 21
+			}
 		},
 		"acceptLatinFor": {
 			"type": "array",
@@ -72,7 +104,11 @@
 				"type": "string",
 				"maxLength": 20
 			},
-			"description": "Languages written in another script whose replies may also be in Latin letters, and the reverse, for example hi. Latin replies are checked with the marker words of <code>-Latn."
+			"description": "Languages written in another script whose replies may also be in Latin letters, and the reverse, for example hi. Latin replies are checked with the marker words of <code>-Latn.",
+			"x-ui": {
+				"group": "Reply check",
+				"order": 23
+			}
 		},
 		"unavailableTexts": {
 			"type": "array",
@@ -82,7 +118,11 @@
 				"type": "string",
 				"maxLength": 500
 			},
-			"description": "Sent instead of the unavailable text to a visitor writing that language, one line per language, for example `es: Lo siento, ahora no puedo responder.`"
+			"description": "Sent instead of the unavailable text to a visitor writing that language, one line per language, for example `es: Lo siento, ahora no puedo responder.`",
+			"x-ui": {
+				"group": "Languages",
+				"order": 3
+			}
 		}
 	}
 }

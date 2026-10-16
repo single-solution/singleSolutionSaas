@@ -10,7 +10,11 @@
 				"type": "string",
 				"enum": ["card", "iban", "email", "phone", "ip"]
 			},
-			"description": "In visitor messages and AI answers (ip: IPv4 and IPv6). Your own kinds: Redaction patterns, below."
+			"description": "In visitor messages and AI answers (ip: IPv4 and IPv6). Your own kinds: Redaction patterns, below.",
+			"x-ui": {
+				"group": "Visitor messages",
+				"order": 1
+			}
 		},
 		"blockedTerms": {
 			"type": "array",
@@ -19,19 +23,31 @@
 			"items": {
 				"type": "string",
 				"maxLength": 100
+			},
+			"x-ui": {
+				"group": "Visitor messages",
+				"order": 2
 			}
 		},
 		"blockedAction": {
 			"type": "string",
 			"title": "Blocked terms in visitor messages",
 			"default": "mask",
-			"enum": ["mask", "reject"]
+			"enum": ["mask", "reject"],
+			"x-ui": {
+				"group": "Visitor messages",
+				"order": 3
+			}
 		},
 		"linkPolicy": {
 			"type": "string",
 			"title": "Links in AI answers",
 			"default": "website",
-			"enum": ["website", "allow_list", "none", "any"]
+			"enum": ["website", "allow_list", "none", "any"],
+			"x-ui": {
+				"group": "AI answers",
+				"order": 11
+			}
 		},
 		"allowedLinkHosts": {
 			"type": "array",
@@ -42,7 +58,11 @@
 				"maxLength": 253,
 				"format": "hostname"
 			},
-			"description": "With Links in AI answers set to Allow list."
+			"description": "With Links in AI answers set to Allow list.",
+			"x-ui": {
+				"group": "AI answers",
+				"order": 12
+			}
 		},
 		"leakPhrases": {
 			"type": "array",
@@ -51,6 +71,10 @@
 			"items": {
 				"type": "string",
 				"maxLength": 200
+			},
+			"x-ui": {
+				"group": "AI answers",
+				"order": 13
 			}
 		}
 	}

@@ -9,7 +9,8 @@
 			"maxLength": 500,
 			"description": "Leave empty for the first letter of the bot's name (the widget text chat.botName).",
 			"x-ui": {
-				"group": "Branding"
+				"group": "Window",
+				"order": 13
 			}
 		},
 		"launcherPosition": {
@@ -18,7 +19,8 @@
 			"default": "bottom-right",
 			"enum": ["bottom-right", "bottom-left"],
 			"x-ui": {
-				"group": "Launcher"
+				"group": "Launcher",
+				"order": 2
 			}
 		},
 		"launcherStyle": {
@@ -28,7 +30,8 @@
 			"enum": ["round", "label"],
 			"description": "Round: a round button. Label: a button with the launcher text.",
 			"x-ui": {
-				"group": "Launcher"
+				"group": "Launcher",
+				"order": 1
 			}
 		},
 		"hideOnPages": {
@@ -42,7 +45,8 @@
 			},
 			"description": "Path patterns, each starting with /: an exact path, * = any characters inside one segment, ** = any segments (for example /checkout/**).",
 			"x-ui": {
-				"group": "Launcher"
+				"group": "Launcher",
+				"order": 3
 			}
 		},
 		"windowStyle": {
@@ -51,7 +55,8 @@
 			"default": "floating",
 			"enum": ["floating", "side_panel"],
 			"x-ui": {
-				"group": "Window"
+				"group": "Window",
+				"order": 11
 			}
 		},
 		"fullScreenOnMobile": {
@@ -59,7 +64,8 @@
 			"title": "Full screen on phones",
 			"default": true,
 			"x-ui": {
-				"group": "Window"
+				"group": "Window",
+				"order": 12
 			}
 		},
 		"proactiveDismissDays": {
@@ -70,7 +76,8 @@
 			"maximum": 365,
 			"description": "After a visitor dismisses a proactive message, none shows again for this many days.",
 			"x-ui": {
-				"group": "Proactive"
+				"group": "Messages",
+				"order": 21
 			}
 		},
 		"showTimes": {
@@ -78,7 +85,8 @@
 			"title": "Show times and day dividers",
 			"default": false,
 			"x-ui": {
-				"group": "Window"
+				"group": "Window",
+				"order": 14
 			}
 		},
 		"showPaused": {
@@ -87,7 +95,8 @@
 			"default": false,
 			"description": "While staff paused the AI, the visitor sees the paused notice (Texts).",
 			"x-ui": {
-				"group": "Window"
+				"group": "Window",
+				"order": 15
 			}
 		},
 		"pollFocusedSeconds": {
@@ -98,7 +107,8 @@
 			"maximum": 60,
 			"description": "While the chat window is open and the page is in view. After 5 minutes without activity the widget checks half as often, after 15 minutes it stops until the visitor is back; while an AI reply is on its way it checks every 3 seconds. Shorter shows replies sooner and makes more requests.",
 			"x-ui": {
-				"group": "Checks for new messages"
+				"group": "Messages",
+				"order": 22
 			}
 		},
 		"pollBackgroundSeconds": {
@@ -109,7 +119,8 @@
 			"maximum": 300,
 			"description": "While the chat window is closed and the page is in view, the launcher checks for replies the visitor has not seen this often (and when the page opens or the visitor comes back to it). Shorter shows staff replies on the launcher sooner and makes more requests.",
 			"x-ui": {
-				"group": "Checks for new messages"
+				"group": "Messages",
+				"order": 23
 			}
 		}
 	}

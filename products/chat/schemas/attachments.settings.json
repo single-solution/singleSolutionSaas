@@ -7,7 +7,11 @@
 			"title": "Visitors may attach",
 			"default": "off",
 			"enum": ["off", "signed_in", "everyone"],
-			"description": "Staff can always attach. Which file types visitors may send, and how large each may be, is your list of upload types (Settings → Attachments)."
+			"description": "Staff can always attach. Which file types visitors may send, and how large each may be, is your list of upload types (Settings → Attachments).",
+			"x-ui": {
+				"group": "Who can send",
+				"order": 1
+			}
 		},
 		"staffTypes": {
 			"type": "array",
@@ -41,20 +45,32 @@
 					"text/plain"
 				]
 			},
-			"description": "Videos and audio play in the chat; HEIC and HEIF photos, Word, Excel and text files are offered as downloads."
+			"description": "Videos and audio play in the chat; HEIC and HEIF photos, Word, Excel and text files are offered as downloads.",
+			"x-ui": {
+				"group": "Who can send",
+				"order": 2
+			}
 		},
 		"staffMaxSizeMb": {
 			"type": "integer",
 			"title": "Largest staff file (MB)",
 			"default": 10,
 			"minimum": 1,
-			"maximum": 100
+			"maximum": 100,
+			"x-ui": {
+				"group": "Files",
+				"order": 11
+			}
 		},
 		"pdfInline": {
 			"type": "boolean",
 			"title": "Open PDFs in the browser",
 			"default": false,
-			"description": "Off: PDFs are downloads. On: they open in a new tab. HEIC photos, Word, Excel and text files are always downloads."
+			"description": "Off: PDFs are downloads. On: they open in a new tab. HEIC photos, Word, Excel and text files are always downloads.",
+			"x-ui": {
+				"group": "Files",
+				"order": 12
+			}
 		}
 	}
 }

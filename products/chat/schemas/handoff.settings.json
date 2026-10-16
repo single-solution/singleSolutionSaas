@@ -10,7 +10,11 @@
 				"type": "string",
 				"maxLength": 100
 			},
-			"description": "In each language your visitors write in. The visitor can also use the Talk to a person button."
+			"description": "In each language your visitors write in. The visitor can also use the Talk to a person button.",
+			"x-ui": {
+				"group": "Triggers",
+				"order": 1
+			}
 		},
 		"keywords": {
 			"type": "array",
@@ -20,7 +24,11 @@
 				"type": "string",
 				"maxLength": 100
 			},
-			"description": "A visitor message containing one of these goes to a person."
+			"description": "A visitor message containing one of these goes to a person.",
+			"x-ui": {
+				"group": "Triggers",
+				"order": 3
+			}
 		},
 		"failuresBeforeHandoff": {
 			"type": "integer",
@@ -28,24 +36,40 @@
 			"default": 2,
 			"minimum": 0,
 			"maximum": 10,
-			"description": "0 = never."
+			"description": "0 = never.",
+			"x-ui": {
+				"group": "Triggers",
+				"order": 4
+			}
 		},
 		"answerFirst": {
 			"type": "boolean",
 			"title": "The AI answers the message that asked for a person",
 			"default": false,
-			"description": "Then the chat goes to a person. Off: it goes to a person at once."
+			"description": "Then the chat goes to a person. Off: it goes to a person at once.",
+			"x-ui": {
+				"group": "After the handoff",
+				"order": 11
+			}
 		},
 		"showNotice": {
 			"type": "boolean",
 			"title": "Tell the visitor when the chat goes to a person",
 			"default": true,
-			"description": "With the handoff notice of your widget texts (chat.handoffNotice). Outside office hours the visitor is told when staff are back."
+			"description": "With the handoff notice of your widget texts (chat.handoffNotice). Outside office hours the visitor is told when staff are back.",
+			"x-ui": {
+				"group": "After the handoff",
+				"order": 12
+			}
 		},
 		"showButton": {
 			"type": "boolean",
 			"title": "Show the Talk to a person button",
-			"default": true
+			"default": true,
+			"x-ui": {
+				"group": "Triggers",
+				"order": 2
+			}
 		},
 		"reassureAfterMinutes": {
 			"type": "integer",
@@ -53,7 +77,11 @@
 			"default": 0,
 			"minimum": 0,
 			"maximum": 1440,
-			"description": "From this many minutes after the handoff, the AI answers the visitor’s next messages with reassurance only, until staff reply. 0 = off."
+			"description": "From this many minutes after the handoff, the AI answers the visitor’s next messages with reassurance only, until staff reply. 0 = off.",
+			"x-ui": {
+				"group": "After the handoff",
+				"order": 13
+			}
 		}
 	}
 }

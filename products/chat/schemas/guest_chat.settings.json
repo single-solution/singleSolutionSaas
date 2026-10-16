@@ -8,27 +8,43 @@
 			"default": 5,
 			"minimum": 0,
 			"maximum": 1000,
-			"description": "0 = no limit. Uploads count too."
+			"description": "0 = no limit. Uploads count too.",
+			"x-ui": {
+				"group": "Limits",
+				"order": 1
+			}
 		},
 		"noLimitWithoutSignIn": {
 			"type": "boolean",
 			"title": "No limit while customer sign-in is paused",
 			"default": false,
-			"description": "On: guests have no message limit while the Customer role's sign-in is paused in Accounts (Roles and permissions), as on a website that does not use sign-in. Needs the Accounts token in Connections; a change in Accounts applies within a minute."
+			"description": "On: guests have no message limit while the Customer role's sign-in is paused in Accounts (Roles and permissions), as on a website that does not use sign-in. Needs the Accounts token in Connections; a change in Accounts applies within a minute.",
+			"x-ui": {
+				"group": "Limits",
+				"order": 2
+			}
 		},
 		"rememberDays": {
 			"type": "integer",
 			"title": "Remember guests on their device (days)",
 			"default": 90,
 			"minimum": 1,
-			"maximum": 365
+			"maximum": 365,
+			"x-ui": {
+				"group": "Guests",
+				"order": 12
+			}
 		},
 		"contactCapture": {
 			"type": "string",
 			"title": "Ask guests for contact details",
 			"default": "never",
 			"enum": ["never", "before_first", "on_handoff"],
-			"description": "Never: guests are not asked. Before first: before the first message. On handoff: when the chat is handed to a person."
+			"description": "Never: guests are not asked. Before first: before the first message. On handoff: when the chat is handed to a person.",
+			"x-ui": {
+				"group": "Guests",
+				"order": 11
+			}
 		},
 		"newGuestsPerNetwork": {
 			"type": "integer",
@@ -36,7 +52,11 @@
 			"default": 0,
 			"minimum": 0,
 			"maximum": 1000,
-			"description": "A device that sends no guest key starts a new guest; more new guests than this from one network address in 15 minutes are refused for a while (too many requests). 0 = no limit (many shoppers can share one mobile network address)."
+			"description": "A device that sends no guest key starts a new guest; more new guests than this from one network address in 15 minutes are refused for a while (too many requests). 0 = no limit (many shoppers can share one mobile network address).",
+			"x-ui": {
+				"group": "Limits",
+				"order": 3
+			}
 		}
 	}
 }

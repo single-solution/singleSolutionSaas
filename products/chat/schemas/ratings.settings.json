@@ -7,7 +7,11 @@
 			"title": "Rating kind",
 			"default": "csat",
 			"enum": ["csat", "nps"],
-			"description": "csat: the visitor picks one of your labels (satisfaction). nps: How likely are you to recommend us, from 0 to 10 (Net Promoter Score; the words are widget texts)."
+			"description": "csat: the visitor picks one of your labels (satisfaction). nps: How likely are you to recommend us, from 0 to 10 (Net Promoter Score; the words are widget texts).",
+			"x-ui": {
+				"group": "Scale",
+				"order": 1
+			}
 		},
 		"labels": {
 			"type": "array",
@@ -17,19 +21,31 @@
 				"type": "string",
 				"maxLength": 40
 			},
-			"description": "For csat: one label per point, from the lowest to the highest, 2 to 10 of them (for example Bad and Good, or 1 to 5). Fewer than 2: 1 to 5."
+			"description": "For csat: one label per point, from the lowest to the highest, 2 to 10 of them (for example Bad and Good, or 1 to 5). Fewer than 2: 1 to 5.",
+			"x-ui": {
+				"group": "Scale",
+				"order": 2
+			}
 		},
 		"askWhen": {
 			"type": "string",
 			"title": "Ask for a rating",
 			"default": "on_resolve",
 			"enum": ["on_resolve", "after_staff", "manual"],
-			"description": "On resolve: when the chat is resolved. After staff: only when a person took part. Manual: only when staff ask."
+			"description": "On resolve: when the chat is resolved. After staff: only when a person took part. Manual: only when staff ask.",
+			"x-ui": {
+				"group": "Asking",
+				"order": 11
+			}
 		},
 		"askComment": {
 			"type": "boolean",
 			"title": "Ask for a comment",
-			"default": true
+			"default": true,
+			"x-ui": {
+				"group": "Asking",
+				"order": 12
+			}
 		}
 	}
 }
