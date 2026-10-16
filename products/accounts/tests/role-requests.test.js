@@ -120,6 +120,30 @@ describe('a repeat ask answers what is there', () => {
 	});
 });
 
+describe('reading one request', () => {
+	it('is read by its id with the server token and by staff, with the permission of the list', async () => {
+		const asked = await ask({ name: 'Ola Reed', phone: '07700 900777', note: 'Hello' });
+		const one = await server('GET', `/v1/role-requests/${asked.json.id}`);
+		expect(one.status).toBe(200);
+		// the row the list gives, nothing more
+		expect(one.json).toEqual(await requestOf(asked.json.id));
+		expect(one.json).toMatchObject({ id: asked.json.id, role: 'member', name: 'Ola Reed', status: 'pending', note: 'Hello' });
+		// the staff widget reads it with users.read, as it reads the list
+		const reader = await env.ticket(['users.read']);
+		expect((await env.admin(reader, 'GET', `/v1/admin/role-requests/${asked.json.id}`)).json).toEqual(one.json);
+		const writer = await env.ticket(['users.manage']);
+		expect(code(await env.admin(writer, 'GET', `/v1/admin/role-requests/${asked.json.id}`))).toBe('forbidden');
+		expect(code(await env.admin(writer, 'GET', '/v1/admin/role-requests'))).toBe('forbidden');
+		// no such request; the counts keep their own routes
+		expect(code(await server('GET', '/v1/role-requests/rrq_missing'))).toBe('not_found');
+		expect(code(await env.admin(reader, 'GET', '/v1/admin/role-requests/rrq_missing'))).toBe('not_found');
+		expect((await server('GET', '/v1/role-requests/count')).json).toHaveProperty('count');
+		// it follows the request
+		await server('POST', `/v1/role-requests/${asked.json.id}/invite`);
+		expect((await server('GET', `/v1/role-requests/${asked.json.id}`)).json).toMatchObject({ status: 'invited' });
+	});
+});
+
 describe('staff: a new link or a decline for an invited request', () => {
 	it('a new link replaces the old one, also once it ran out; a user with a password completes at once', async () => {
 		const asked = await ask({ name: 'Nel Ford', phone: '07700 900560' });

@@ -1559,6 +1559,52 @@
 				}
 			}
 		},
+		"/v1/admin/role-requests/{id}": {
+			"get": {
+				"summary": "One role request (Users admin widget)",
+				"description": "The row the list gives, its status judged now (expired once an invite's setup link ran out). Read with the permission of the list (users.read). 404 not_found for an unknown id.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "role_requests",
+				"x-ss-permission": "users.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RoleRequest"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/admin/role-requests/{id}/decline": {
 			"post": {
 				"summary": "Decline a pending or invited role request (Users admin widget)",
@@ -6964,6 +7010,63 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Counts"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/role-requests/{id}": {
+			"get": {
+				"summary": "One role request",
+				"description": "The row the list gives, its status judged now (expired once an invite's setup link ran out). Read with the same access as the list. 404 not_found for an unknown id.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "role_requests",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RoleRequest"
 								}
 							}
 						}

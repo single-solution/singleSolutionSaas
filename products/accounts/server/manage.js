@@ -796,6 +796,9 @@ export const createManage = (product, service, flows) => {
 		return found;
 	};
 
+	/** `GET /v1/role-requests/:id`: one request, as the list gives it. @param {any} ctx */
+	const readRequest = async (ctx) => requestView(await requestOr404(await service.site(ctx), ctx.params.id), now());
+
 	/**
 	 * Whether nobody could ever sign in to a user: no password, no social sign-in and never signed in (for example a
 	 * user an earlier invite made, whose setup link was not used).
@@ -1377,6 +1380,7 @@ export const createManage = (product, service, flows) => {
 		setupLink,
 		requestRole,
 		listRequests,
+		readRequest,
 		countRequests: requestCounts.count,
 		countRequestsBy: requestCounts.counts,
 		inviteRequest,

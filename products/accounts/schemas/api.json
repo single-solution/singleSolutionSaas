@@ -3403,6 +3403,13 @@
 			"$ref": "#/components/schemas/Counts"
 		}
 	},
+	"GET /v1/role-requests/:id": {
+		"summary": "One role request",
+		"description": "The row the list gives, its status judged now (expired once an invite's setup link ran out). Read with the same access as the list. 404 not_found for an unknown id.",
+		"response": {
+			"$ref": "#/components/schemas/RoleRequest"
+		}
+	},
 	"POST /v1/role-requests/:id/invite": {
 		"summary": "Invite the person of a pending request",
 		"description": "Creates their user, or finds the user with that phone number (else email address), and answers a setup link for your staff to send, unless the user already has a password (the request is then completed). The role is given at the invite, or with Role requests → giveRoleAt set to completion when the request is completed (a new user has the default role until then, an existing user keeps theirs). 409 contact_unverified when that user never proved the phone or email and someone signed in to it (check with the person, confirm it on their user or remove that account, then invite again); 409 conflict when the request is not pending, its role is gone, another user has the contact, or the user's role ranks above the request's (a user has one role and a request never lowers it: change the role on their user if that is what you want); 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
@@ -4614,6 +4621,13 @@
 		},
 		"response": {
 			"$ref": "#/components/schemas/Counts"
+		}
+	},
+	"GET /v1/admin/role-requests/:id": {
+		"summary": "One role request (Users admin widget)",
+		"description": "The row the list gives, its status judged now (expired once an invite's setup link ran out). Read with the permission of the list (users.read). 404 not_found for an unknown id.",
+		"response": {
+			"$ref": "#/components/schemas/RoleRequest"
 		}
 	},
 	"POST /v1/admin/role-requests/:id/invite": {

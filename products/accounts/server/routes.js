@@ -486,6 +486,13 @@ export const createRoutes = (product) => {
 			handler: manage.countRequestsBy,
 		}),
 		defineRoute({
+			method: 'GET',
+			path: '/v1/role-requests/:id',
+			auth: 'server',
+			feature: 'role_requests',
+			handler: manage.readRequest,
+		}),
+		defineRoute({
 			method: 'POST',
 			path: '/v1/role-requests/:id/invite',
 			auth: 'server',
@@ -757,6 +764,14 @@ export const createRoutes = (product) => {
 			feature: 'role_requests',
 			permission: 'users.read',
 			handler: manage.countRequestsBy,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/role-requests/:id',
+			auth: 'ticket',
+			feature: 'role_requests',
+			permission: 'users.read',
+			handler: manage.readRequest,
 		}),
 		defineRoute({
 			method: 'POST',
