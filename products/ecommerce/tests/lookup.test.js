@@ -174,6 +174,8 @@ describe('core/lookup', () => {
 			stockLeft: null,
 			stockLeftText: null,
 			measure: null,
+			limits: { step: 1, min: 1, max: 100_000 },
+			unit: null,
 		});
 		expect(productCard({ ...product, variants: [] }, context)).toMatchObject({
 			price: 500,
@@ -374,6 +376,9 @@ describe('Chat lookups', () => {
 			stockLeft: null,
 			stockLeftText: null,
 			measure: null,
+			// Chat's Add to cart adds the least: pieces of 1 up to the shop's most of one item (checkout.maxQuantity)
+			limits: { step: 1, min: 1, max: expect.any(Number) },
+			unit: null,
 		});
 		const galaxy = await shop.api('GET', '/v1/chat/products?q=galaxy&limit=5');
 		expect(galaxy.json.items.map((/** @type {any} */ item) => item.name)).toEqual(['Galaxy S24', 'Old Galaxy']);

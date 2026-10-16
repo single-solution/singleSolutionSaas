@@ -133,6 +133,11 @@ describe('the cart', () => {
 			typeKey: 'cases',
 		});
 		expect((await shopper('GET', `/v1/shop/products/${water.id}`)).json.limits).toEqual({ step: 6, min: 12, max: 60 });
+		// Chat's cards carry them too, so its Add to cart adds the least (pieces: no unit)
+		const card = (await api('GET', '/v1/chat/products?q=water&limit=5')).items.find(
+			(/** @type {any} */ item) => item.id === water.id,
+		);
+		expect(card).toMatchObject({ limits: { step: 6, min: 12, max: 60 }, unit: null });
 		/** @param {number} quantity */
 		const codes = async (quantity) =>
 			(await quote([{ productId: water.id, quantity }])).lines[0].problems.map((/** @type {any} */ p) => p.code);

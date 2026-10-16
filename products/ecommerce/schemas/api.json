@@ -2877,7 +2877,9 @@
 				"inStock",
 				"variantId",
 				"grade",
-				"stockLeft"
+				"stockLeft",
+				"limits",
+				"unit"
 			],
 			"additionalProperties": false,
 			"properties": {
@@ -2976,6 +2978,30 @@
 				"stockLeft": {
 					"type": ["integer", "null"],
 					"description": "Units shoppers are told are left (catalog.showStock), else null."
+				},
+				"limits": {
+					"type": "object",
+					"description": "The quantities a shopper may buy (E4): pieces, or thousandths of the item's unit (unit); Chat's Add to cart adds min.",
+					"required": ["step", "min", "max"],
+					"additionalProperties": false,
+					"properties": {
+						"step": {
+							"type": "integer",
+							"minimum": 1
+						},
+						"min": {
+							"type": "integer",
+							"minimum": 1
+						},
+						"max": {
+							"type": "integer",
+							"minimum": 1
+						}
+					}
+				},
+				"unit": {
+					"type": ["string", "null"],
+					"description": "The item's own unit when it is sold in one (quantities in thousandths of it); null: pieces."
 				}
 			}
 		},
@@ -3007,7 +3033,9 @@
 				"options",
 				"priceRange",
 				"specs",
-				"variants"
+				"variants",
+				"limits",
+				"unit"
 			],
 			"additionalProperties": false,
 			"properties": {
@@ -3181,6 +3209,30 @@
 						"$ref": "#/components/schemas/ChatVariant"
 					},
 					"maxItems": 20
+				},
+				"limits": {
+					"type": "object",
+					"description": "The quantities a shopper may buy (E4): pieces, or thousandths of the item's unit (unit); Chat's Add to cart adds min.",
+					"required": ["step", "min", "max"],
+					"additionalProperties": false,
+					"properties": {
+						"step": {
+							"type": "integer",
+							"minimum": 1
+						},
+						"min": {
+							"type": "integer",
+							"minimum": 1
+						},
+						"max": {
+							"type": "integer",
+							"minimum": 1
+						}
+					}
+				},
+				"unit": {
+					"type": ["string", "null"],
+					"description": "The item's own unit when it is sold in one (quantities in thousandths of it); null: pieces."
 				}
 			}
 		},

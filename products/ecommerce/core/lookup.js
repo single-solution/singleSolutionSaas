@@ -8,7 +8,7 @@
  * @module
  */
 import { shopperLabelOf } from './flow.js';
-import { measureView, quantityLabel } from './measure.js';
+import { MAX_QUANTITY, limitsOf, measureView, quantityLabel } from './measure.js';
 import { orderMoney } from './orders.js';
 import { activeVariants, variantInStock } from './seo.js';
 
@@ -244,6 +244,8 @@ const shownParts = (price, text) => ({
  * @property {(variant: VariantRecord) => number | null} [stockLeft] units shoppers are told are left (E9)
  * @property {import('./measure.js').Measure | null} [measure] sold in a unit of its own (its type's `measure`,
  *   while Sell in any unit is on): prices per unit, quantities and stock in thousandths of it
+ * @property {import('./measure.js').QuantityLimits} [limits] the quantities a shopper may buy (E4; none: from the
+ *   measure, else from 1 in steps of 1)
  */
 
 /**
@@ -278,6 +280,9 @@ export const productCard = (product, context, chosen = null) => {
 		grade: variant?.grade ? (context.grades?.get(variant.grade) ?? variant.grade) : null,
 		...stockParts(variant ? (context.stockLeft?.(variant) ?? null) : null, context.measure ?? null),
 		measure: measureInfo(context.measure ?? null),
+		// what Chat's Add to cart adds: the least, in the item's steps (pieces, or thousandths of its unit)
+		limits: context.limits ?? limitsOf(context.measure ?? null, null, MAX_QUANTITY),
+		unit: context.measure?.unit ?? null,
 	};
 };
 

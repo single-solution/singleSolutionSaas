@@ -44,7 +44,7 @@ import {
 	variantFilter,
 	warrantyOf,
 } from '../core/lookup.js';
-import { MAX_QUANTITY, measureView, toThousandths } from '../core/measure.js';
+import { MAX_QUANTITY, limitsOf, measureView, toThousandths } from '../core/measure.js';
 import { COLLECTIONS } from '../core/model.js';
 import { customerOwner, isCustomerId } from '../core/orders.js';
 import { isLoyaltyMember } from '../core/loyalty.js';
@@ -265,7 +265,15 @@ export const createChatLookup = (product, service, media) => {
 	 * @param {import('../core/lookup.js').ChatFilters | null} [filters]
 	 */
 	const cards = async (s, data, items, filters = null) => {
-		const [rules, shownOf, measures] = await Promise.all([cardRules(s), pricesFor(s, data), measuresOf(s, data, items)]);
+		const [rules, shownOf, measures, types, checkout] = await Promise.all([
+			cardRules(s),
+			pricesFor(s, data),
+			measuresOf(s, data, items),
+			s.list('item_types').then((list) => productTypes(data, items, list)),
+			s.has('checkout') ? s.values('checkout') : Promise.resolve(null),
+		]);
+		// the most of one item a cart takes (E4)
+		const cap = checkout ? Number(checkout.maxQuantity) || MAX_QUANTITY : MAX_QUANTITY;
 		return Promise.all(
 			items.map(async (item) => {
 				const shown = await shownOf(item);
@@ -281,6 +289,8 @@ export const createChatLookup = (product, service, media) => {
 						grades: rules.labels(item),
 						stockLeft: rules.stockLeft(item, measure),
 						measure,
+						// the quantities a shopper may buy, so Chat's Add to cart adds the least in its steps (EU)
+						limits: limitsOf(measure, types.get(item.id)?.elements.quantity ?? null, cap),
 					},
 					filters ? matchingVariant(item, filters, shown) : null,
 				);
