@@ -64,8 +64,14 @@ export {
 	SaveBar,
 	SectionNav,
 	SectionLayout,
+	PillTabs,
+	Disclosure,
+	NO_STRETCH,
+	CARD_FLOW,
+	CardFlow,
 	useHashSection,
 } from './blocks.js';
+export { Paged, PAGED_TEXTS } from './paged.js';
 export { ThemeScript } from './theme-script.js';
 export { DisplayLocale, LocalTime, useDisplayLocale, useViewerTimeZone } from './time.js';
 export { BarChart, isEmptySeries } from './charts.js';
@@ -90,6 +96,7 @@ export { describeProblem, fieldErrors, problemCode } from './problems.js';
 
 /** @typedef {import('./AppShell.js').NavSection} NavSection */
 /** @typedef {import('./blocks.js').SectionItem} SectionItem */
+/** @typedef {import('./blocks.js').SectionSpec} SectionSpec */
 /** @typedef {import('./icons.js').IconName} IconName */
 /** @typedef {import('./display.js').Kind} Kind */
 /** @typedef {import('./Menu.js').MenuItem} MenuItem */

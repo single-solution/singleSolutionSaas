@@ -11,6 +11,11 @@
  * the control on the right; an on/off setting is a toggle, a choice of up to four is a segmented control, a longer one
  * a select; long text and lists take the whole row. Rows stack on a narrow card.
  *
+ * One view fits one screen (owner 2026-10-16): settings marked `x-ui.advanced` (or in a group named Advanced) are in
+ * a collapsed Advanced block after the cards; a form with three or more groups shows one group at a time under a tab
+ * strip (`tabs={false}` lists the cards instead; `group` shows just that group, which a page with an inner sidebar uses
+ * to list the groups as sub-items).
+ *
  * With `onSave` it also shows the sticky Save changes bar (with Discard) while `dirty` is true.
  *
  * It is controlled: `values` holds the value of every setting, `onChange(name, value)` reports edits. Bounds show on
@@ -18,7 +23,7 @@
  * @module
  */
 import { useId, useState } from 'react';
-import { SaveBar, SettingList, SettingsCard } from './blocks.js';
+import { CARD_FLOW, Disclosure, PillTabs, SaveBar, SettingList, SettingsCard } from './blocks.js';
 import {
 	CheckboxGroup,
 	ChoicePicker,
@@ -31,7 +36,7 @@ import {
 	TextArea,
 } from './fields.js';
 import { cx } from './cx.js';
-import { fieldsOf, groupFields, optionLabel } from './schema.js';
+import { ADVANCED_GROUP, GROUPS_AS_TABS_FROM, fieldsOf, groupFields, optionLabel } from './schema.js';
 
 /** @typedef {import('./schema.js').SettingsSchema} SettingsSchema */
 /** @typedef {import('./schema.js').SettingNode} SettingNode */
@@ -243,13 +248,15 @@ function NodeControl({ id, label, node, widget, value, onChange, error, help, di
  * `overridden` marks settings the website saved itself; with `onReset` they get a Reset link (back to the default).
  * `title` (and `description`) name the feature: with one group it is the card's title, with several it is a heading
  * above the group cards; `before` and `after` are shown above and below the cards. `onSave` shows the Save changes
- * bar while `dirty`.
+ * bar while `dirty`. `group` shows only that group's card (`Advanced`: the advanced settings, open); `tabs` (on by
+ * default) shows one group at a time from three groups on; `advancedTexts` words the Advanced block.
  * @param {{ schema: SettingsSchema | null | undefined, values: Record<string, unknown>,
  *   onChange: (name: string, value: unknown) => void, errors?: Record<string, string>,
  *   overridden?: Record<string, boolean>, onReset?: (name: string) => void, disabled?: boolean, idPrefix?: string,
  *   emptyText?: string, className?: string, title?: import('react').ReactNode, description?: import('react').ReactNode,
  *   before?: import('react').ReactNode, after?: import('react').ReactNode, dirty?: boolean, saving?: boolean,
- *   onSave?: () => unknown, onDiscard?: () => void,
+ *   onSave?: () => unknown, onDiscard?: () => void, group?: string, tabs?: boolean,
+ *   advancedTexts?: { title?: string, description?: string, errors?: string, groups?: string },
  *   saveTexts?: { message?: string, save?: string, discard?: string } }} props
  */
 export function SchemaForm({
@@ -271,14 +278,29 @@ export function SchemaForm({
 	saving = false,
 	onSave,
 	onDiscard,
+	group: only,
+	tabs = true,
+	advancedTexts = {},
 	saveTexts = {},
 }) {
 	const auto = useId();
 	const prefix = idPrefix ?? `sf${auto.replace(/[^a-zA-Z0-9_-]/g, '')}`;
+	const [picked, setPicked] = useState(/** @type {string | null} */ (null));
 	const fields = fieldsOf(schema);
 	if (fields.length === 0) return <p className="text-sm text-muted">{emptyText}</p>;
-	const groups = groupFields(fields);
+	const groups = groupFields(fields.filter((field) => !field.advanced));
+	const advanced = groupFields(fields.filter((field) => field.advanced));
+	const advancedWords = {
+		title: ADVANCED_GROUP,
+		description: 'Settings most people never change',
+		errors: 'Needs attention',
+		groups: 'Groups',
+		...advancedTexts,
+	};
 	const single = groups.length === 1;
+	const tabbed = tabs && only === undefined && groups.length >= GROUPS_AS_TABS_FROM;
+	const failing = (/** @type {Array<{ fields: FieldDescriptor[] }>} */ list) =>
+		list.some((entry) => entry.fields.some((field) => errors[field.name] !== undefined));
 
 	/** @param {FieldDescriptor} field */
 	const renderField = (field) => {
@@ -310,27 +332,103 @@ export function SchemaForm({
 		);
 	};
 
+	/** @param {{ name: string, fields: FieldDescriptor[] }} entry @param {string} id @param {import('react').ReactNode} cardTitle @param {import('react').ReactNode} [text] */
+	const card = (entry, id, cardTitle, text) => (
+		<SettingsCard key={id} id={id} title={cardTitle} {...(text ? { description: text } : {})}>
+			<SettingList>{entry.fields.map(renderField)}</SettingList>
+		</SettingsCard>
+	);
+	/** The cards of the advanced settings: one per group they name, a card without title for the rest. */
+	const advancedCards = () =>
+		advanced.map((entry, index) =>
+			card(
+				entry,
+				`${prefix}-advanced-${index}`,
+				entry.fields[0]?.grouped && entry.name.trim().toLowerCase() !== ADVANCED_GROUP.toLowerCase() ? entry.name : undefined,
+			),
+		);
+
+	let cards;
+	if (only !== undefined) {
+		const index = groups.findIndex((entry) => entry.name === only);
+		cards =
+			only === ADVANCED_GROUP
+				? advancedCards()
+				: index >= 0 && groups[index]
+					? [card(groups[index], `${prefix}-group-${index}`, undefined)]
+					: [];
+	} else if (tabbed) {
+		const ids = [...groups.map((entry) => entry.name), ...(advanced.length > 0 ? [ADVANCED_GROUP] : [])];
+		const shown = picked && ids.includes(picked) ? picked : (ids[0] ?? '');
+		cards = [
+			<PillTabs
+				key="tabs"
+				idPrefix={prefix}
+				label={advancedWords.groups}
+				active={shown}
+				onSelect={setPicked}
+				tabs={ids.map((name) => ({
+					id: name,
+					label:
+						name === ADVANCED_GROUP ? (
+							advancedWords.title
+						) : failing([/** @type {{ fields: FieldDescriptor[] }} */ (groups.find((entry) => entry.name === name))]) ? (
+							<>
+								{name}
+								<span className="ml-1 text-danger" role="img" aria-label={advancedWords.errors}>
+									•
+								</span>
+							</>
+						) : (
+							name
+						),
+				}))}
+			/>,
+			<div
+				key="panel"
+				id={`${prefix}-panel-${shown}`}
+				role="tabpanel"
+				aria-labelledby={`${prefix}-tab-${shown}`}
+				className={CARD_FLOW}>
+				{shown === ADVANCED_GROUP
+					? advancedCards()
+					: groups.map((entry, index) => (entry.name === shown ? card(entry, `${prefix}-group-${index}`, undefined) : null))}
+			</div>,
+		];
+	} else {
+		cards = [
+			...groups.map((entry, index) =>
+				card(
+					entry,
+					`${prefix}-group-${index}`,
+					single ? (title ?? (entry.fields[0]?.grouped ? entry.name : undefined)) : entry.name,
+					single && description ? description : undefined,
+				),
+			),
+			...(advanced.length > 0
+				? [
+						<Disclosure
+							key="advanced"
+							title={advancedWords.title}
+							description={advancedWords.description}
+							forceOpen={failing(advanced)}>
+							<div className={CARD_FLOW}>{advancedCards()}</div>
+						</Disclosure>,
+					]
+				: []),
+		];
+	}
+
 	return (
-		<div className={cx('min-w-0 space-y-4', className)}>
+		<div className={cx(CARD_FLOW, className)}>
 			{before}
-			{!single && title ? (
+			{only === undefined && (!single || groups.length === 0) && title ? (
 				<div className="min-w-0 px-1">
 					<h3 className="text-lead leading-6 font-semibold tracking-tight text-fg">{title}</h3>
 					{description ? <p className="mt-0.5 text-sm text-muted">{description}</p> : null}
 				</div>
 			) : null}
-			{groups.map((group, index) => {
-				const cardTitle = single ? (title ?? (group.fields[0]?.grouped ? group.name : undefined)) : group.name;
-				return (
-					<SettingsCard
-						key={group.name}
-						id={`${prefix}-group-${index}`}
-						title={cardTitle}
-						{...(single && description ? { description } : {})}>
-						<SettingList>{group.fields.map(renderField)}</SettingList>
-					</SettingsCard>
-				);
-			})}
+			{cards}
 			{after}
 			{onSave ? (
 				<SaveBar

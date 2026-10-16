@@ -665,6 +665,11 @@ describe('standard tabs', () => {
 		expect(/** @type {HTMLElement} */ (container.querySelector('#section-theme')).hidden).toBe(false);
 		expect(/** @type {HTMLElement} */ (container.querySelector('#section-features')).hidden).toBe(true);
 		expect(container.textContent).toContain('Our own words');
+		// a section is mounted when first opened, then kept
+		for (const section of ['format', 'texts']) {
+			click(/** @type {HTMLElement} */ (container.querySelector(`nav[aria-label="Settings"] a[href="#${section}"]`)));
+			await settle();
+		}
 		type(/** @type {HTMLInputElement} */ (container.querySelector('[data-field="greeting"] input')), 'Hey');
 		type(/** @type {HTMLInputElement} */ (container.querySelector('input[aria-describedby="text-hello-english"]')), 'Howdy');
 		for (const save of [...buttonsOf(container, 'Save changes'), ...buttonsOf(container, 'Save')])

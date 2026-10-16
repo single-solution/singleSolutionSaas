@@ -6,6 +6,7 @@
  *
  * `x-ui`: `widget` (switch|number|text|textarea|select|segmented|radio|url|email|checkboxes|tags; one that does not fit
  * the type is ignored), `group` (the card the setting is shown in; settings without one share the feature's own card),
+ * `advanced` (the setting sits in the collapsed Advanced block; so does every setting of a group named Advanced),
  * `order` (a whole number: the settings with an `order` come first, ascending), `placeholder`, `labels` (`country`, or each choice's own words: labels are data, fixed-choices
  * audit K3), `suggestions` (values a text or a list of texts offers while the merchant may type their own), `wide`
  * (span the whole row of the field grid; a `textarea` widget and lists are wide anyway). A setting's `description` is
@@ -39,7 +40,7 @@ import { humanize } from './format.js';
  * @property {string} [format]
  * @property {SettingItem} [items] every list setting has them
  * @property {{ widget?: string, group?: string, order?: number, placeholder?: string, wide?: boolean,
- *   labels?: 'country' | Record<string, string>, suggestions?: string[] }} [x-ui]
+ *   advanced?: boolean, labels?: 'country' | Record<string, string>, suggestions?: string[] }} [x-ui]
  */
 
 /**
@@ -58,9 +59,17 @@ import { humanize } from './format.js';
  * @property {boolean} wide spans the whole row of the field grid
  * @property {number | null} order the setting's `x-ui.order`
  * @property {boolean} grouped whether the setting names its own `x-ui.group`
+ * @property {boolean} advanced the setting belongs in the collapsed Advanced block (`x-ui.advanced`, or a group named
+ *   Advanced)
  */
 
 const DEFAULT_GROUP = 'General';
+
+/** The name of the Advanced block (a setting group of this name is advanced too). */
+export const ADVANCED_GROUP = 'Advanced';
+
+/** A form with at least this many (non-advanced) groups shows one group at a time. */
+export const GROUPS_AS_TABS_FROM = 3;
 
 /** English country names from the runtime's own data (no list to keep up to date). */
 const REGION_NAMES = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['en'], { type: 'region' }) : null;
@@ -160,6 +169,9 @@ export const fieldsOf = (schema) =>
 					wide: isWide(node, widget),
 					group: node['x-ui']?.group ?? DEFAULT_GROUP,
 					grouped: node['x-ui']?.group !== undefined,
+					advanced:
+						node['x-ui']?.advanced === true ||
+						(node['x-ui']?.group ?? '').trim().toLowerCase() === ADVANCED_GROUP.toLowerCase(),
 					order: typeof order === 'number' ? order : null,
 					help: node.description ?? null,
 					placeholder: node['x-ui']?.placeholder ?? null,
@@ -185,4 +197,18 @@ export const groupFields = (fields) => {
 		groups.set(field.group, list);
 	}
 	return [...groups].map(([name, list]) => ({ name, fields: list }));
+};
+
+/**
+ * The shape of a settings form: the names of its everyday groups in order, whether it has an Advanced block, and
+ * its advanced settings split by their own group (a setting named `Advanced` or flagged `x-ui.advanced`).
+ * @param {SettingsSchema | null | undefined} schema
+ * @returns {{ groups: string[], advanced: boolean }}
+ */
+export const shapeOf = (schema) => {
+	const fields = fieldsOf(schema);
+	return {
+		groups: groupFields(fields.filter((field) => !field.advanced)).map((group) => group.name),
+		advanced: fields.some((field) => field.advanced),
+	};
 };

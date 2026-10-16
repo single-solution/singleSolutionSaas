@@ -4,11 +4,15 @@ import { useState } from 'react';
 import {
 	AccountMenu,
 	Avatar,
+	CARD_FLOW,
 	Checkbox,
 	CheckboxInput,
+	CardFlow,
 	Col,
+	Disclosure,
 	Grid,
 	Input,
+	Masonry,
 	RadioGroup,
 	SaveBar,
 	SectionLayout,
@@ -312,6 +316,27 @@ describe('SaveBar', () => {
 	});
 });
 
+describe('cards keep their own height', () => {
+	it('aligns the cells of the grid, the sidebar layout and masonry to the start so no card stretches', () => {
+		const grid = render(
+			<Grid>
+				<Col span={8}>a</Col>
+				<Col span={4}>b</Col>
+			</Grid>,
+		);
+		expect(grid.container.firstElementChild?.className).toContain('items-start');
+		expect(grid.container.firstElementChild?.className).not.toContain('items-stretch');
+		const layout = render(<SectionLayout sections={[{ id: 'a', label: 'A', content: <p>x</p> }]} />);
+		expect(layout.container.firstElementChild?.className).toContain('items-start');
+		const masonry = render(
+			<Masonry>
+				<div>one</div>
+			</Masonry>,
+		);
+		expect(masonry.container.querySelector('.break-inside-avoid, [class*="break-inside-avoid"]')).not.toBeNull();
+	});
+});
+
 describe('Grid', () => {
 	it('spans the 12 columns: a phone gets the whole row', () => {
 		const { container } = render(
@@ -331,6 +356,37 @@ describe('Grid', () => {
 	});
 });
 
+describe('Disclosure', () => {
+	it('is collapsed by default, opens and closes with its bar, and can start open or be forced open', () => {
+		const { container } = render(
+			<Disclosure title="Advanced" description="Rarely changed">
+				<p>Hidden until opened</p>
+			</Disclosure>,
+		);
+		const bar = /** @type {HTMLButtonElement} */ (container.querySelector('button'));
+		expect(bar.getAttribute('aria-expanded')).toBe('false');
+		expect(container.textContent).not.toContain('Hidden until opened');
+		click(bar);
+		expect(bar.getAttribute('aria-expanded')).toBe('true');
+		expect(container.textContent).toContain('Hidden until opened');
+		expect(bar.getAttribute('aria-controls')).toBe(container.querySelector('p')?.parentElement?.id);
+		click(bar);
+		expect(container.textContent).not.toContain('Hidden until opened');
+		const started = render(
+			<Disclosure title="More" defaultOpen>
+				<p>Open at start</p>
+			</Disclosure>,
+		);
+		expect(started.container.textContent).toContain('Open at start');
+		const forced = render(
+			<Disclosure title="Errors" forceOpen>
+				<p>Forced open</p>
+			</Disclosure>,
+		);
+		expect(forced.container.textContent).toContain('Forced open');
+	});
+});
+
 describe('SectionLayout', () => {
 	const sections = [
 		{ id: 'mail', label: 'Email', icon: /** @type {const} */ ('mail'), group: 'Site', content: <p>Mail form</p> },
@@ -347,21 +403,77 @@ describe('SectionLayout', () => {
 
 	afterEach(() => window.history.replaceState(null, '', window.location.pathname));
 
-	it('shows one section at a time but keeps all mounted; the choice is in the address hash', () => {
+	it('shows one section at a time and mounts a section when it is first opened; the choice is in the address hash', () => {
 		const { container } = render(<SectionLayout sections={sections} label="Settings sections" />);
 		const nav = /** @type {HTMLElement} */ (container.querySelector('nav[aria-label="Settings sections"]'));
 		expect(nav.textContent).toContain('Site');
 		expect(nav.querySelector('[aria-current="true"]')?.textContent).toBe('Email');
-		const panel = (/** @type {string} */ id) => /** @type {HTMLElement} */ (container.querySelector(`#section-${id}`));
-		expect(panel('mail').hidden).toBe(false);
-		expect(panel('security').hidden).toBe(true);
-		// every section is in the page, so an edit in one survives opening another
-		expect(container.textContent).toContain('Security form');
+		const panel = (/** @type {string} */ id) => /** @type {HTMLElement | null} */ (container.querySelector(`#section-${id}`));
+		expect(panel('mail')?.hidden).toBe(false);
+		// a section nobody opened is not on the page
+		expect(panel('security')).toBeNull();
+		expect(container.textContent).not.toContain('Security form');
 		click(/** @type {HTMLElement} */ (nav.querySelector('a[href="#security"]')));
-		expect(panel('mail').hidden).toBe(true);
-		expect(panel('security').hidden).toBe(false);
+		expect(panel('mail')?.hidden).toBe(true);
+		expect(panel('security')?.hidden).toBe(false);
 		expect(nav.querySelector('[aria-current="true"]')?.textContent).toBe('Security2');
 		expect(window.location.hash).toBe('#security');
+		// an opened section stays mounted (an edit in it survives opening another)
+		expect(container.textContent).toContain('Mail form');
+		expect(panel('keys')).toBeNull();
+	});
+
+	it('adds a history entry per section so Back returns to the one before', () => {
+		const before = window.history.length;
+		const { container } = render(<SectionLayout sections={sections} />);
+		const nav = /** @type {HTMLElement} */ (container.querySelector('nav'));
+		click(/** @type {HTMLElement} */ (nav.querySelector('a[href="#security"]')));
+		click(/** @type {HTMLElement} */ (nav.querySelector('a[href="#keys"]')));
+		expect(window.history.length).toBe(before + 2);
+		window.history.back();
+		return new Promise((resolve) => setTimeout(resolve, 30)).then(() => {
+			expect(window.location.hash).toBe('#security');
+			expect(/** @type {HTMLElement} */ (container.querySelector('#section-security')).hidden).toBe(false);
+		});
+	});
+
+	it('lists sub-sections under their heading, opens the first one, and shows one at a time', () => {
+		const nested = [
+			{
+				id: 'checkout',
+				label: 'Checkout',
+				content: null,
+				children: [
+					{ id: 'checkout.basics', label: 'Basics', content: <p>Basics cards</p> },
+					{ id: 'checkout.limits', label: 'Limits', content: <p>Limits cards</p> },
+				],
+			},
+			{ id: 'seo', label: 'Search', content: <p>Search cards</p> },
+		];
+		const { container } = render(<SectionLayout sections={nested} />);
+		const nav = /** @type {HTMLElement} */ (container.querySelector('nav'));
+		expect(container.textContent).toContain('Basics cards');
+		expect(nav.querySelector('li li a[href="#checkout.basics"]')?.getAttribute('aria-current')).toBe('true');
+		expect(nav.textContent).toContain('Limits');
+		click(/** @type {HTMLElement} */ (nav.querySelector('li li a[href="#checkout.limits"]')));
+		expect(/** @type {HTMLElement} */ (container.querySelector('[id="section-checkout.limits"]')).hidden).toBe(false);
+		expect(/** @type {HTMLElement} */ (container.querySelector('[id="section-checkout.basics"]')).hidden).toBe(true);
+		// another heading's sub-items stay closed until it is open
+		click(/** @type {HTMLElement} */ (nav.querySelector('a[href="#seo"]')));
+		expect(nav.querySelector('a[href="#checkout.limits"]')).toBeNull();
+	});
+
+	it('filters a long list of sections with a search box', () => {
+		const many = Array.from({ length: 12 }, (_, i) => ({
+			id: `s${i}`,
+			label: i === 7 ? 'Shipping rates' : `Section ${i}`,
+			content: <p>{i}</p>,
+		}));
+		const { container } = render(<SectionLayout sections={many} />);
+		const search = /** @type {HTMLInputElement} */ (container.querySelector('nav input[type="search"]'));
+		type(search, 'ship');
+		const links = [...container.querySelectorAll('nav a')].map((a) => a.textContent);
+		expect(links).toEqual(['Shipping rates']);
 	});
 
 	it('opens the section named by the hash and follows hash changes', () => {
@@ -432,5 +544,35 @@ describe('AccountMenu', () => {
 		expect(container.querySelector('[role="menu"]')?.className).toContain('bottom-full');
 		const avatars = [...container.querySelectorAll('span[aria-hidden="true"].rounded-full')].map((el) => el.textContent);
 		expect(avatars).toEqual(['MO', 'SI', '?']);
+	});
+});
+
+describe('card flow', () => {
+	it('places small cards side by side while there is room: auto-fill columns, natural heights, wide content on its own row', () => {
+		expect(CARD_FLOW).toContain('repeat(auto-fill,minmax(min(100%,24rem),1fr))');
+		expect(CARD_FLOW).toContain('items-start');
+		expect(CARD_FLOW).not.toContain('items-stretch');
+		// anything that is not a card takes the whole row; a flagged card takes one column
+		expect(CARD_FLOW).toContain('*:col-span-full');
+		expect(CARD_FLOW).toContain('[&>[data-flow=card]]:col-auto');
+		const { container } = render(
+			<CardFlow>
+				<SettingsCard title="One">a</SettingsCard>
+				<SettingsCard title="Table" wide>
+					b
+				</SettingsCard>
+				<p>Callout</p>
+			</CardFlow>,
+		);
+		expect(container.firstElementChild?.className).toContain('auto-fill');
+		const [small, wide, other] = /** @type {HTMLElement[]} */ ([...(container.firstElementChild?.children ?? [])]);
+		expect(small?.getAttribute('data-flow')).toBe('card');
+		expect(wide?.getAttribute('data-flow')).toBeNull();
+		expect(other?.getAttribute('data-flow')).toBeNull();
+	});
+
+	it('is what a section and a settings form lay their cards out in', () => {
+		const layout = render(<SectionLayout sections={[{ id: 'a', label: 'A', content: <p>x</p> }]} />);
+		expect(layout.container.querySelector('#section-a')?.className).toContain('auto-fill');
 	});
 });

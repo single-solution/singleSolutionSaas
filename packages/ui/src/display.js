@@ -97,32 +97,40 @@ export function Avatar({ name, size = 'md', className }) {
  * Surface card: a rounded section floating on the canvas (hairline edge, a very soft shadow) with a heading and a
  * lighter one-line description.
  * @param {{ title?: ReactNode, subtitle?: ReactNode, actions?: ReactNode, children?: ReactNode, className?: string,
- *   bodyClassName?: string, as?: 'section' | 'div' | 'article', id?: string, padded?: boolean }} props
+ *   bodyClassName?: string, as?: 'section' | 'div' | 'article', id?: string, padded?: boolean, flow?: boolean }} props
+ *   `flow`: a small card that takes one column of a `CardFlow` and sits beside the others (anything else in a flow takes
+ *   the whole row)
  */
-export function Card({ title, subtitle, actions, children, className, bodyClassName, as = 'section', id, padded = true }) {
+export function Card({
+	title,
+	subtitle,
+	actions,
+	children,
+	className,
+	bodyClassName,
+	as = 'section',
+	id,
+	padded = true,
+	flow = false,
+}) {
 	const Tag = as;
 	const hasHeader = Boolean(title || actions);
 	return (
 		<Tag
 			id={id}
+			{...(flow ? { 'data-flow': 'card' } : {})}
 			className={cx('min-w-0 rounded-card border border-line-soft bg-surface shadow-card', className)}
 			{...(title && typeof title === 'string' && as === 'section' ? { 'aria-label': title } : {})}>
 			{title || actions ? (
-				<header className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5 sm:px-6">
+				<header className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5">
 					<div className="min-w-0">
 						{title ? <h2 className="text-lead leading-6 font-semibold tracking-tight text-fg">{title}</h2> : null}
-						{subtitle ? <p className="mt-0.5 text-sm text-muted">{subtitle}</p> : null}
+						{subtitle ? <p className="mt-0.5 text-[13px] leading-snug text-muted">{subtitle}</p> : null}
 					</div>
 					{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
 				</header>
 			) : null}
-			<div
-				className={cx(
-					padded && 'p-5 sm:p-6',
-					padded && hasHeader && 'pt-4 sm:pt-4',
-					!padded && hasHeader && 'pt-4',
-					bodyClassName,
-				)}>
+			<div className={cx(padded && 'p-5', padded && hasHeader && 'pt-3.5', !padded && hasHeader && 'pt-3.5', bodyClassName)}>
 				{children}
 			</div>
 		</Tag>

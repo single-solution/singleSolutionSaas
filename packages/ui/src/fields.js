@@ -44,9 +44,9 @@ export const FieldLayoutContext = createContext(/** @type {'stack' | 'row'} */ (
  * rows separated by hairlines; anything that is not a field (buttons, callouts) sits below with a gap.
  */
 export const ROW_LIST =
-	'flex flex-col [&>[data-cell]]:py-4 [&>[data-cell]:first-child]:pt-0 [&>[data-cell]:last-child]:pb-0 ' +
+	'flex flex-col [&>[data-cell]]:py-3 [&>[data-cell]:first-child]:pt-0 [&>[data-cell]:last-child]:pb-0 ' +
 	'[&>[data-cell]:has(+:not([data-cell]))]:pb-0 [&>[data-cell]+[data-cell]]:border-t [&>[data-cell]+[data-cell]]:border-line-soft ' +
-	'[&>:not([data-cell])]:mt-4 [&>:first-child:not([data-cell])]:mt-0 [&>a]:self-start [&>button]:self-start';
+	'[&>:not([data-cell])]:mt-3 [&>:first-child:not([data-cell])]:mt-0 [&>a]:self-start [&>button]:self-start';
 
 /**
  * A responsive grid of fields (its own size container): short controls side by side, long ones full width.
@@ -122,7 +122,7 @@ function FieldMessages({ ids, help, error, part }) {
 	return (
 		<>
 			{help && part !== 'error' ? (
-				<p id={ids.help} className="text-xs leading-relaxed text-muted">
+				<p id={ids.help} className="text-xs leading-snug text-muted">
 					{help}
 				</p>
 			) : null}
@@ -178,8 +178,8 @@ function Field({ id, label, hideLabel = false, required = false, help, error, as
 		return (
 			<div
 				{...cell(wide)}
-				className={cx('grid min-w-0 items-start gap-x-8 gap-y-2 @md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]', className)}>
-				<div className="min-w-0 space-y-0.5 @md:pt-2">
+				className={cx('grid min-w-0 items-start gap-x-8 gap-y-1.5 @md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]', className)}>
+				<div className="min-w-0 space-y-0.5 @md:pt-1.5">
 					{labelRow}
 					<FieldMessages ids={ids} help={help} part="help" />
 				</div>
@@ -581,8 +581,8 @@ function ChoiceGroup({ legend, ids, help, error, disabled, wide, layout, classNa
 				aria-describedby={describedBy({ help, error }, ids)}
 				aria-disabled={disabled || undefined}
 				onKeyDown={onKeyDown}
-				className={cx('grid min-w-0 items-start gap-x-8 gap-y-2 @md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]', className)}>
-				<div className="min-w-0 space-y-0.5 @md:pt-2">
+				className={cx('grid min-w-0 items-start gap-x-8 gap-y-1.5 @md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]', className)}>
+				<div className="min-w-0 space-y-0.5 @md:pt-1.5">
 					<div id={`${ids.id}-legend`} className={LABEL_CLASS}>
 						{legend}
 					</div>

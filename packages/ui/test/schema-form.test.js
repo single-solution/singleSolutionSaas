@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { SchemaForm } from '../src/SchemaForm.js';
-import { fieldsOf, groupFields, isWide, widgetOf } from '../src/schema.js';
+import { fieldsOf, groupFields, isWide, shapeOf, widgetOf } from '../src/schema.js';
 import { allByRole, byLabel, byText, cleanup, click, render, type } from '../src/testing.js';
 
 afterEach(cleanup);
@@ -131,6 +131,7 @@ function Harness({ schema, initial, onChange, ...rest }) {
 				onChange?.(name, value);
 				setValues((v) => ({ ...v, [name]: value }));
 			}}
+			tabs={false}
 			{...rest}
 		/>
 	);
@@ -403,6 +404,83 @@ describe('SchemaForm', () => {
 		expect(onSave).toHaveBeenCalledTimes(1);
 		click(/** @type {HTMLElement} */ (byTextButton(view.container, 'Throw away')));
 		expect(onDiscard).toHaveBeenCalledTimes(1);
+	});
+
+	describe('advanced settings and many groups', () => {
+		const many = () =>
+			/** @type {any} */ ({
+				type: 'object',
+				properties: {
+					name: { type: 'string', title: 'Shop name', default: '', 'x-ui': { group: 'Basics' } },
+					email: { type: 'string', title: 'Sender email', default: '', 'x-ui': { group: 'Messages' } },
+					limit: { type: 'integer', title: 'Daily limit', default: 5, 'x-ui': { group: 'Limits' } },
+					timeout: { type: 'integer', title: 'Timeout seconds', default: 30, 'x-ui': { group: 'Limits', advanced: true } },
+					salt: { type: 'string', title: 'Hash salt', default: 'x', 'x-ui': { group: 'Advanced' } },
+				},
+			});
+
+		it('puts x-ui.advanced settings and an Advanced group in a collapsed Advanced block that opens on click', () => {
+			const schema = /** @type {any} */ ({
+				type: 'object',
+				properties: {
+					name: { type: 'string', title: 'Shop name', default: '' },
+					retries: { type: 'integer', title: 'Retries', default: 3, 'x-ui': { advanced: true } },
+					salt: { type: 'string', title: 'Hash salt', default: 'x', 'x-ui': { group: 'Advanced' } },
+				},
+			});
+			const { container } = render(<Harness schema={schema} initial={defaults(schema)} title="Mail" />);
+			expect(container.querySelector('[data-field="name"]')).not.toBeNull();
+			expect(container.querySelector('[data-field="retries"]')).toBeNull();
+			expect(container.querySelector('[data-field="salt"]')).toBeNull();
+			const toggle = /** @type {HTMLElement} */ (container.querySelector('button[aria-expanded]'));
+			expect(toggle.getAttribute('aria-expanded')).toBe('false');
+			click(toggle);
+			expect(toggle.getAttribute('aria-expanded')).toBe('true');
+			expect(container.querySelector('[data-field="retries"]')).not.toBeNull();
+			expect(container.querySelector('[data-field="salt"]')).not.toBeNull();
+			click(toggle);
+			expect(container.querySelector('[data-field="retries"]')).toBeNull();
+		});
+
+		it('opens the Advanced block by itself when a setting inside has an error', () => {
+			const schema = many();
+			const { container } = render(
+				<Harness schema={schema} initial={defaults(schema)} tabs={false} errors={{ timeout: 'Too long.' }} />,
+			);
+			expect(container.querySelector('[data-field="timeout"]')).not.toBeNull();
+		});
+
+		it('shows one group at a time from three groups on, Advanced as the last tab', () => {
+			const schema = many();
+			const { container } = render(<Harness schema={schema} initial={defaults(schema)} tabs title="Mail" />);
+			const tabs = allByRole(container, 'tab').map((tab) => tab.textContent);
+			expect(tabs).toEqual(['Basics', 'Messages', 'Limits', 'Advanced']);
+			expect(container.querySelector('[data-field="name"]')).not.toBeNull();
+			expect(container.querySelector('[data-field="email"]')).toBeNull();
+			click(/** @type {HTMLElement} */ (allByRole(container, 'tab')[2]));
+			expect(container.querySelector('[data-field="limit"]')).not.toBeNull();
+			expect(container.querySelector('[data-field="name"]')).toBeNull();
+			expect(container.querySelector('[data-field="timeout"]')).toBeNull();
+			click(/** @type {HTMLElement} */ (allByRole(container, 'tab')[3]));
+			expect(container.querySelector('[data-field="timeout"]')).not.toBeNull();
+			expect(container.querySelector('[data-field="salt"]')).not.toBeNull();
+		});
+
+		it('reads the shape of a form: its everyday groups in order, and whether it has an Advanced block', () => {
+			expect(shapeOf(many())).toEqual({ groups: ['Basics', 'Messages', 'Limits'], advanced: true });
+			expect(shapeOf(coupons()).advanced).toBe(false);
+			expect(shapeOf(null)).toEqual({ groups: [], advanced: false });
+		});
+
+		it('shows only the group it is asked for (an inner sidebar lists the groups as sub-items)', () => {
+			const schema = many();
+			const { container } = render(<Harness schema={schema} initial={defaults(schema)} group="Messages" />);
+			expect([...container.querySelectorAll('[data-field]')].map((f) => f.getAttribute('data-field'))).toEqual(['email']);
+			const advanced = render(<Harness schema={schema} initial={defaults(schema)} group="Advanced" />);
+			expect([...advanced.container.querySelectorAll('[data-field]')].map((f) => f.getAttribute('data-field')).sort()).toEqual(
+				['salt', 'timeout'],
+			);
+		});
 	});
 
 	it('renders an empty schema message', () => {

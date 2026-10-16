@@ -61,6 +61,15 @@ describe('checkSettingsSchema', () => {
 			value.properties.pages['x-ui'] = { wide };
 			expect(checkSettingsSchema(value)).toEqual([]);
 		}
+		// `advanced` puts a setting in the collapsed Advanced block
+		for (const advanced of [true, false]) {
+			const value = schema();
+			value.properties.pages['x-ui'] = { advanced, group: 'Limits' };
+			expect(checkSettingsSchema(value)).toEqual([]);
+		}
+		const notABoolean = schema();
+		notABoolean.properties.pages['x-ui'] = { advanced: 'yes' };
+		expect(checkSettingsSchema(notABoolean).map((problem) => problem.path)).toContain('/properties/pages/x-ui/advanced');
 		// the dashboard's cards: `group` names the card, `order` sorts the settings
 		for (const order of [0, 1, 10000]) {
 			const value = schema();
@@ -104,7 +113,7 @@ describe('checkSettingsSchema', () => {
 			'/properties/ratio/x-ui/tooltip',
 			'additionalProperties',
 		],
-		...['help', 'advanced', 'hidden'].map(
+		...['help', 'hidden'].map(
 			(hint) =>
 				/** @type {[string, (s: any) => unknown, string, string]} */ ([
 					`the x-ui member ${hint}`,
