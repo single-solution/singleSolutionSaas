@@ -234,7 +234,7 @@ const checkIn = (scope, text) => {
 };
 /** @param {ParentNode} scope */
 const statusIn = (scope) => /** @type {HTMLElement} */ (scope.querySelector('[role="status"]')).textContent;
-/** The text of a list's state (loading, empty or failed). @param {Element} scope */
+/** The text of a list's state (loading, empty or failed). @param {Element | ShadowRoot} scope */
 const stateIn = (scope) => /** @type {HTMLElement} */ (scope.querySelector('.state p')).textContent;
 /** @param {Element} node */
 const submit = async (node) => {

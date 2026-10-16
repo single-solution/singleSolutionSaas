@@ -495,7 +495,7 @@ describe('the redirects widget', () => {
 		expect(inside(host, '.state.error p').textContent).toBe(T['redirects.failed']);
 		expect(inside(host, '.state.error').getAttribute('role')).toBe('alert');
 		failing = false;
-		button(host, T['redirects.tryAgain']).click();
+		button(host, T['redirects.tryAgain'] ?? '').click();
 		await flush();
 		expect(inside(host, '.state.error')).toBeNull();
 		expect(inside(host, 'ul.rows li.empty').textContent).toBe(T['redirects.none']);
