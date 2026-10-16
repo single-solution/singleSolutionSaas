@@ -10,10 +10,9 @@
  * - `earned`: the points it earns are `none` yet, `credited` or `reversed`;
  * - `units`: serial numbers are `captured` for it, or `none`.
  *
- * Orders written before the facts existed get them from their flags (`derivedFacts`: `stockHeld`, `returnRestocked`,
- * `promotions.released`, `pointsCredited`, `pointsReversed`, the lines' serials and the history's return reasons), the
- * same flags today's give-backs check, and keep them from their first transition on (an upgrade on use, no timer).
- * Pure functions, no I/O.
+ * Every order is written with them: a placed order with {@link PLACED_FACTS}, an imported one with the facts its flags
+ * give (`derivedFacts`: `stockHeld`, `returnRestocked`, `promotions.released`, `pointsCredited`, the lines' serials and
+ * the history's return reasons). Pure functions, no I/O.
  * @module
  */
 
@@ -25,17 +24,10 @@
  *   earned: 'none' | 'credited' | 'reversed', units: 'none' | 'captured' }} OrderFacts
  */
 
-/** The facts and their values, in the order they are written. */
-const FACT_VALUES = Object.freeze({
-	stock: Object.freeze(['held', 'sold', 'back', 'none']),
-	offers: Object.freeze(['counted', 'released']),
-	redeemed: Object.freeze(['spent', 'given_back']),
-	earned: Object.freeze(['none', 'credited', 'reversed']),
-	units: Object.freeze(['none', 'captured']),
-});
-
-/** @type {ReadonlyArray<keyof OrderFacts>} */
-export const FACT_KEYS = Object.freeze(/** @type {Array<keyof OrderFacts>} */ (Object.keys(FACT_VALUES)));
+/** The facts, in the order they are written. @type {ReadonlyArray<keyof OrderFacts>} */
+export const FACT_KEYS = Object.freeze(
+	/** @type {Array<keyof OrderFacts>} */ (['stock', 'offers', 'redeemed', 'earned', 'units']),
+);
 
 /** The facts of an order just placed: it holds its stock, counts its offer uses and spent its points. @type {Readonly<OrderFacts>} */
 export const PLACED_FACTS = Object.freeze({
@@ -47,31 +39,21 @@ export const PLACED_FACTS = Object.freeze({
 });
 
 /**
- * What the facts are derived from: an order record, or one an import checked.
+ * What the facts are derived from: an order an import checked.
  * @typedef {{ role: StatusRole, stockHeld: boolean, lines: ReadonlyArray<{ serials?: string[] }>,
  *   promotions?: { released?: boolean, pointsCredited?: boolean } | null, deliveredAt?: Date | null,
- *   returnRestocked?: boolean, history?: ReadonlyArray<{ reason?: string }>, facts?: unknown }} FactSource
+ *   returnRestocked?: boolean, history?: ReadonlyArray<{ reason?: string }> }} FactSource
  */
 
 /** Roles of an order that was delivered (or came back after delivery). */
 const AFTER_DELIVERY = Object.freeze(/** @type {StatusRole[]} */ (['delivered', 'returned']));
-/** Roles whose orders may hold earned points from before (an order whose flag was never written). */
+/** Roles whose orders hold earned points when the import names no `pointsCredited`. */
 const SETTLED = Object.freeze(/** @type {StatusRole[]} */ (['delivered', 'returned_to_origin', 'returned', 'refunded']));
 /** Why a package came back (a move into a returned_to_origin or returned status keeps it in the history). */
 const CAME_BACK = Object.freeze(['rto', 'customer_return']);
 
 /**
- * Whether a value is a whole set of facts.
- * @param {unknown} value
- * @returns {value is OrderFacts}
- */
-export const isFacts = (value) =>
-	typeof value === 'object' &&
-	value !== null &&
-	FACT_KEYS.every((key) => /** @type {ReadonlyArray<string>} */ (FACT_VALUES[key]).includes(/** @type {any} */ (value)[key]));
-
-/**
- * The facts of an order written before they existed, from the flags today's give-backs check: stock from `stockHeld`
+ * The facts of an imported order, from its flags: stock from `stockHeld`
  * (sold once delivered), `returnRestocked` and whether a package came back; offer uses released and redeemed points
  * given back by `promotions.released` (a return gives the points back but keeps the offers counted); earned points
  * credited by `pointsCredited` (an order that never wrote it counts as credited once settled, as the reversal reads
@@ -105,27 +87,21 @@ export const derivedFacts = (order) => {
 };
 
 /**
- * An order's facts: as written, else derived from its flags.
- * @param {FactSource} order
+ * An order's facts, as written (a copy).
+ * @param {{ facts: OrderFacts }} order
  * @returns {OrderFacts}
  */
-export const factsOf = (order) =>
-	isFacts(order.facts)
-		? {
-				stock: order.facts.stock,
-				offers: order.facts.offers,
-				redeemed: order.facts.redeemed,
-				earned: order.facts.earned,
-				units: order.facts.units,
-			}
-		: derivedFacts(order);
+export const factsOf = ({ facts }) => ({
+	stock: facts.stock,
+	offers: facts.offers,
+	redeemed: facts.redeemed,
+	earned: facts.earned,
+	units: facts.units,
+});
 
 /**
- * The part of a compare-and-set that the facts guard: each fact as read, or none written yet.
- * @param {{ facts?: unknown }} order as read
+ * The part of a compare-and-set that the facts guard: each fact as read.
+ * @param {{ facts: OrderFacts }} order as read
  * @returns {Record<string, unknown>}
  */
-export const factsGuard = (order) =>
-	isFacts(order.facts)
-		? Object.fromEntries(FACT_KEYS.map((key) => [`facts.${key}`, /** @type {OrderFacts} */ (order.facts)[key]]))
-		: { facts: { $exists: false } };
+export const factsGuard = (order) => Object.fromEntries(FACT_KEYS.map((key) => [`facts.${key}`, order.facts[key]]));

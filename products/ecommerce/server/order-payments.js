@@ -56,17 +56,13 @@ export const expectedOf = (order) => ({
  * @param {OrderRecord} order
  */
 const tookIn = (order) =>
-	(order.payments ?? []).some((entry) => entry.method === VIA_PAYMENTS && entry.reference === order.payment.paymentId);
+	order.payments.some((entry) => entry.method === VIA_PAYMENTS && entry.reference === order.payment.paymentId);
 
 /**
- * Whether an order's Payments payment may still be paid: started, not canceled at Payments, and not paid yet (records
- * from before the payments log, E26: while the order waits for it).
+ * Whether an order's Payments payment may still be paid: started, not canceled at Payments, and not paid yet.
  * @param {OrderRecord} order
  */
-export const openAtPayments = (order) =>
-	Boolean(order.payment.paymentId) &&
-	!order.payment.voidedAt &&
-	((order.payments ?? []).length === 0 ? order.payment.state === 'pending' : !tookIn(order));
+export const openAtPayments = (order) => Boolean(order.payment.paymentId) && !order.payment.voidedAt && !tookIn(order);
 
 /**
  * Whether money may still arrive for a canceled order whose payment was canceled at Payments (K-13).

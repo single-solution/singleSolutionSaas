@@ -436,7 +436,7 @@ export const createOrdersStore = (data) => {
 		 * @param {string} orderId @param {string} lineId @param {number} limit
 		 */
 		countDownload: async (orderId, lineId, limit) => {
-			const under = limit > 0 ? { $or: [{ downloads: { $exists: false } }, { downloads: { $lt: limit } }] } : {};
+			const under = limit > 0 ? { downloads: { $lt: limit } } : {};
 			const result = await orders.updateOne(
 				{ websiteId, id: orderId, lines: { $elemMatch: { id: lineId, ...under } } },
 				{ $inc: { 'lines.$.downloads': 1 } },

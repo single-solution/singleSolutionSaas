@@ -545,8 +545,8 @@ export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 		.join(' · ');
 	const { seller, footer } = sellerAndFooter(order, context);
 	const entries =
-		entriesBlock(t.labelPayments, order.payments ?? [], order, context, money, shopper) +
-		entriesBlock(t.labelRefunds, order.refunds ?? [], order, context, money, shopper);
+		entriesBlock(t.labelPayments, order.payments, order, context, money, shopper) +
+		entriesBlock(t.labelRefunds, order.refunds, order, context, money, shopper);
 	const customer = order.customer;
 	const billed = [customer.name, customer.email, customer.phone]
 		.filter(Boolean)

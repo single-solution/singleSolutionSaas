@@ -37,7 +37,7 @@ import { createOrdersStore } from '../adapters/orders-store.js';
 import { STOCK_PROBLEMS, checkAddress, checkCart, checkOrderExtras } from '../core/checkout.js';
 import { PAY_LATER_KINDS } from '../core/payment-methods.js';
 import { shipmentLink } from '../core/couriers.js';
-import { PLACED_FACTS, factsGuard, isFacts } from '../core/facts.js';
+import { PLACED_FACTS, factsGuard } from '../core/facts.js';
 import { checkFieldValues, fieldValuesShown, unitsShown } from '../core/fields.js';
 import { WAITING_ROLES, shopperCancelOf, shopperLabelOf, shopperTextOf, statusOf, statusWithRole } from '../core/flow.js';
 import { shopperInvoiceReady } from '../core/invoice.js';
@@ -500,13 +500,13 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				payBy: order.role === 'awaiting_payment' ? iso(order.holdUntil) : null,
 				proof: order.payment.proof ? { reference: order.payment.proof.reference, at: iso(order.payment.proof.at) } : null,
 				// the payments log without staff names (E26)
-				entries: (order.payments ?? []).map((entry) => ({
+				entries: order.payments.map((entry) => ({
 					method: entry.method,
 					amount: entry.amount,
 					reference: entry.reference,
 					at: iso(entry.at),
 				})),
-				refunds: (order.refunds ?? []).map((entry) => ({
+				refunds: order.refunds.map((entry) => ({
 					method: entry.method,
 					amount: entry.amount,
 					reference: entry.reference,
@@ -872,7 +872,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				const result = await data.collection(COLLECTIONS.orders).updateOne(
 					{ websiteId: data.websiteId, id: order.id, updatedAt: order.updatedAt, ...factsGuard(order) },
 					{
-						$set: { ...set, stockHeld: true, ...(isFacts(order.facts) ? { 'facts.stock': 'held' } : {}) },
+						$set: { ...set, stockHeld: true, 'facts.stock': 'held' },
 						$push: {
 							history: {
 								at: new Date(now),

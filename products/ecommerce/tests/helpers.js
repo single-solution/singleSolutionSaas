@@ -18,6 +18,7 @@ import { summarize } from '../core/catalog.js';
 import { EMPTY_SEO } from '../core/catalog-content.js';
 import { checkAttribute, checkBrand, checkCategory } from '../core/catalog-taxonomy.js';
 import { COLLECTIONS } from '../core/model.js';
+import { derivedFacts } from '../core/facts.js';
 
 /** @typedef {import('../core/model.js').VariantRecord} VariantRecord */
 /** What a test may leave out of a variant. @typedef {'attributes' | 'media' | 'soldOut' | 'warrantyTime'} VariantExtras */
@@ -123,6 +124,36 @@ export const storedUnit = (given) => ({
 	orderId: null,
 	lineId: null,
 	locationId: null,
+	...given,
+});
+
+/**
+ * An order as every write stores it, for tests that put orders straight into the database: its payments log (what its
+ * Payments payment took, as the confirmation writes it), an empty refunds log, no staff who opened it and its facts (as
+ * an import writes them, from its flags), unless given.
+ * @template {{ role: import('../core/model.js').StatusRole, stockHeld: boolean, lines: ReadonlyArray<{ serials?: string[] }>,
+ *   payment: { paymentId?: string | null, paid: number }, placedAt?: Date }} T
+ * @param {T} given
+ */
+export const storedOrder = (given) => ({
+	payments:
+		given.payment.paymentId && given.payment.paid > 0
+			? [
+					{
+						id: createId('opy'),
+						method: 'payments',
+						amount: given.payment.paid,
+						reference: given.payment.paymentId,
+						proofKey: null,
+						note: '',
+						by: { kind: 'system', id: 'payments', name: 'Payments' },
+						at: given.placedAt ?? new Date(0),
+					},
+				]
+			: [],
+	refunds: [],
+	seenBy: [],
+	facts: derivedFacts(given),
 	...given,
 });
 

@@ -1,6 +1,6 @@
 /**
  * The order engine on the database (PLAN 0.8.10 dynamic model §3, phase 1): one transaction per transition (of two
- * moves at once one wins), facts written on the first transition of an older order, `flow_changed`, the refund a
+ * moves at once one wins), facts written by every transition, `flow_changed`, the refund a
  * cancel asks of Payments kept pending when Payments fails and done exactly once on a later use, the flow-save guard on
  * both save routes, restatus, an activity line for every way an order moves, and a delete given back once (the
  * property test is `transitions-property.test.js`).
@@ -98,9 +98,9 @@ describe('one transaction per move', () => {
 		expect(await stockOf(other.product.id)).toBe(won.value.order.role === 'cancelled' ? 5 : 4);
 	});
 
-	it('writes the facts of an older order on its first move, and refuses an order whose status changed its role', async () => {
+	it('keeps the facts through a move, and refuses an order whose status changed its role', async () => {
 		const { order } = await seedOrder();
-		expect(order.facts).toBeUndefined();
+		expect(order.facts).toEqual(PLACED_FACTS);
 		const detail = await shop.api('GET', `/v1/orders/${order.id}`);
 		expect(detail.json.facts).toEqual(PLACED_FACTS);
 		expect(detail.json.effects).toEqual([]);

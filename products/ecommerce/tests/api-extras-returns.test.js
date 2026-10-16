@@ -10,7 +10,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { placeOrder } from '../adapters/ledger.js';
 import { INDEXES } from '../adapters/product.js';
 import { COLLECTIONS } from '../core/model.js';
-import { readyShop } from './helpers.js';
+import { readyShop, storedOrder } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -77,7 +77,7 @@ const delivered = async (products) => {
 		data,
 		{
 			numberPrefix: 'A-',
-			order: {
+			order: storedOrder({
 				id,
 				customer: { userId: SARA, name: 'Sara Shopper', email: 'sara@example.com', phone: '' },
 				address: null,
@@ -115,7 +115,7 @@ const delivered = async (products) => {
 				staffNote: '',
 				placedAt: new Date(shop.now()),
 				deliveredAt: null,
-			},
+			}),
 		},
 		{ now: shop.now() },
 	);

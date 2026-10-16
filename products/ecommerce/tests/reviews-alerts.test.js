@@ -12,7 +12,7 @@ import { newOrderKey, orderKeyHash } from '../adapters/crypto.js';
 import { INDEXES } from '../adapters/product.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
-import { ALL, DOMAIN, ORIGIN, readyShop } from './helpers.js';
+import { ALL, DOMAIN, ORIGIN, readyShop, storedOrder } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -87,7 +87,7 @@ const productOf = async (id) =>
  *   variant?: number, variantName?: string }>, key?: string, patch?: Record<string, unknown> }} input
  */
 const seedOrder = async ({ userId = SARA, name = 'Sara Shopper', lines, key, patch = {} }) => {
-	const record = {
+	const record = storedOrder({
 		id: createId('ord'),
 		number: `R-${createId('num').slice(4, 12)}`,
 		customer: { userId, customerId: '', name, email: '', phone: '' },
@@ -155,7 +155,7 @@ const seedOrder = async ({ userId = SARA, name = 'Sara Shopper', lines, key, pat
 		deliveredAt: new Date(shop.now()),
 		...(key ? { accessKeyHash: orderKeyHash(key) } : {}),
 		...patch,
-	};
+	});
 	await data.collection(COLLECTIONS.orders).insertOne({ ...record });
 	return record;
 };

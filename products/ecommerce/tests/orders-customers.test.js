@@ -6,7 +6,7 @@
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COLLECTIONS } from '../core/model.js';
-import { ACCOUNTS, ORIGIN, readyShop } from './helpers.js';
+import { ACCOUNTS, ORIGIN, readyShop, storedOrder } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -29,6 +29,7 @@ beforeAll(async () => {
 			rtoCount: 0,
 			orderCount: 2,
 			note: '',
+			seenBy: [],
 		},
 		{
 			id: createId('cus'),
@@ -41,6 +42,7 @@ beforeAll(async () => {
 			rtoCount: 3,
 			orderCount: 3,
 			note: '',
+			seenBy: [],
 		},
 		{
 			id: createId('cus'),
@@ -53,6 +55,7 @@ beforeAll(async () => {
 			rtoCount: 1,
 			orderCount: 0,
 			note: '',
+			seenBy: [],
 		},
 	]);
 	await data
@@ -70,37 +73,47 @@ afterAll(async () => shop.product.close());
  * @param {string} userId @param {string} name @param {number} paid @param {number} refunded
  * @param {string} [customerId]
  */
-const order = (userId, name, paid, refunded, customerId) => ({
-	id: createId('ord'),
-	number: `C-${createId('num').slice(4, 12)}`,
-	customer: { userId, name, email: `${name.toLowerCase()}@example.com`, phone: '', ...(customerId ? { customerId } : {}) },
-	address: null,
-	delivery: { method: 'none', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
-	lines: [],
-	totals: { subtotal: paid, discount: 0, delivery: 0, tax: 0, total: paid, currency: 'USD', taxIncluded: true },
-	promotions: {
-		couponId: null,
-		couponCode: '',
-		dealIds: [],
-		bundleIds: [],
-		pointsRedeemed: 0,
-		pointsValue: 0,
-		pointsEarned: 0,
-		released: false,
-	},
-	payment: { method: 'online', kind: 'gateway', state: 'paid', paymentId: 'pay_1', advance: 0, paid, refunded, checkedAt: null },
-	status: 'delivered',
-	role: 'delivered',
-	history: [],
-	shipment: null,
-	stockHeld: true,
-	holdUntil: null,
-	idempotencyKey: createId('key'),
-	note: '',
-	staffNote: '',
-	placedAt: new Date(shop.now()),
-	deliveredAt: null,
-});
+const order = (userId, name, paid, refunded, customerId) =>
+	storedOrder({
+		id: createId('ord'),
+		number: `C-${createId('num').slice(4, 12)}`,
+		customer: { userId, name, email: `${name.toLowerCase()}@example.com`, phone: '', ...(customerId ? { customerId } : {}) },
+		address: null,
+		delivery: { method: 'none', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
+		lines: [],
+		totals: { subtotal: paid, discount: 0, delivery: 0, tax: 0, total: paid, currency: 'USD', taxIncluded: true },
+		promotions: {
+			couponId: null,
+			couponCode: '',
+			dealIds: [],
+			bundleIds: [],
+			pointsRedeemed: 0,
+			pointsValue: 0,
+			pointsEarned: 0,
+			released: false,
+		},
+		payment: {
+			method: 'online',
+			kind: 'gateway',
+			state: 'paid',
+			paymentId: 'pay_1',
+			advance: 0,
+			paid,
+			refunded,
+			checkedAt: null,
+		},
+		status: 'delivered',
+		role: 'delivered',
+		history: [],
+		shipment: null,
+		stockHeld: true,
+		holdUntil: null,
+		idempotencyKey: createId('key'),
+		note: '',
+		staffNote: '',
+		placedAt: new Date(shop.now()),
+		deliveredAt: null,
+	});
 
 describe('customers', () => {
 	it('lists customers A to Z with what they paid, searches and pages', async () => {
@@ -186,6 +199,7 @@ describe('guests and members by customer id (K-6, CU-5)', () => {
 				rtoCount: 0,
 				orderCount: 2,
 				note: '',
+				seenBy: [],
 			},
 			{
 				id: MEMBER,
@@ -198,6 +212,7 @@ describe('guests and members by customer id (K-6, CU-5)', () => {
 				rtoCount: 0,
 				orderCount: 1,
 				note: '',
+				seenBy: [],
 			},
 		]);
 		guestOrder = order('', 'Gail', 3000, 0, GUEST);

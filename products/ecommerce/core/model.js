@@ -448,8 +448,8 @@ export const STATUS_ROLES = Object.freeze([
  *   recorded by staff (E23, E24); `proof`: the shopper's proof (E24); `voidedAt`: its Payments payment was canceled with
  *   the order; `voidPendingAt`: the order was canceled while Payments could not take that cancel (tried again on use,
  *   K-13); `checkedAt`: when Payments was last asked. `paid` and `refunded` add up `payments` and `refunds` (E26)
- * @property {OrderPaymentEntry[]} [payments] money received (E26)
- * @property {OrderRefundEntry[]} [refunds] money given back (E26)
+ * @property {OrderPaymentEntry[]} payments money received (E26)
+ * @property {OrderRefundEntry[]} refunds money given back (E26)
  * @property {string} status a status key of the website's order flow
  * @property {StatusRole} role the role of `status`
  * @property {Array<{ at: Date, from: string | null, to: string, by: string, note: string, reason?: string,
@@ -464,12 +464,12 @@ export const STATUS_ROLES = Object.freeze([
  *   name or key, its link built on read from the `couriers` list (E28)
  * @property {Array<{ kind: 'dispatch_video', key?: string | null, url?: string | null, at?: Date, by?: string }>} [media]
  *   the dispatch video: an upload key, or a YouTube or https address (E28)
- * @property {string[]} [seenBy] staff ids who opened it (E31, at most 50)
+ * @property {string[]} seenBy staff ids who opened it (E31, at most 50)
  * @property {string} [phoneDigits] the digits of the customer's phone, its whole number (E31)
  * @property {string | null} [accessKeyHash] the hash of a guest order's key (E21)
  * @property {boolean} stockHeld stock (and booked slots) are held by this order; false after cancel or RTO
- * @property {import('./facts.js').OrderFacts} [facts] what the order holds or gave back (the order engine's facts, PLAN
- *   0.8.10 dynamic model §3.2): written by every transition; an order written before them has them derived from its flags
+ * @property {import('./facts.js').OrderFacts} facts what the order holds or gave back (the order engine's facts, PLAN
+ *   0.8.10 dynamic model §3.2): written when it is placed or imported, and by every transition
  * @property {import('./transitions.js').OrderEffect[]} [effects] work outside the database a transition asked for (a
  *   refund through Payments): pending until done, tried again on use
  * @property {boolean} [returnRestocked] its return (RTO or a customer's return) put its units back in stock: a claim

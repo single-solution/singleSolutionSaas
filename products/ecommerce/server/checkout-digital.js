@@ -233,7 +233,7 @@ export const createDigital = (product, service) => {
 		const limit = downloadLimitOf(item, downloadLimit);
 		const allowed = canDownload({
 			paymentState: order.payment.state,
-			downloads: Number(/** @type {any} */ (line).downloads ?? 0),
+			downloads: Number(/** @type {any} */ (line).downloads),
 			limit,
 		});
 		if (!allowed.ok)

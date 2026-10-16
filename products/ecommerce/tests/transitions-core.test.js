@@ -5,7 +5,7 @@
  * (repeated ones included), applied in memory, never give anything back or take anything twice.
  */
 import { describe, expect, it } from 'vitest';
-import { FACT_KEYS, PLACED_FACTS, derivedFacts, factsGuard, factsOf, isFacts } from '../core/facts.js';
+import { FACT_KEYS, PLACED_FACTS, derivedFacts, factsGuard, factsOf } from '../core/facts.js';
 import { DEFAULT_FLOW, checkRestatus, flowChangeProblems } from '../core/flow.js';
 import { checkTransition, nothingPaid, planRelease, planTransition } from '../core/transitions.js';
 import { randomFlow, randomOf } from './transitions-helpers.js';
@@ -17,11 +17,11 @@ const RULES = { paymentWindowMinutes: 60, loyalty: null, timeZone: 'UTC' };
 const LOYALTY = { earnPercent: 10, pointValue: 100 };
 
 /**
- * An order record (the default flow), paid online, with a coupon, 50 points redeemed and 30 earned.
+ * An order record's flags (the default flow), paid online, with a coupon, 50 points redeemed and 30 earned.
  * @param {Record<string, any>} [patch]
  * @returns {any}
  */
-const order = (patch = {}) => ({
+const flagged = (patch = {}) => ({
 	id: 'ord_1',
 	number: 'S-2026-000001',
 	customer: { userId: 'usr_1', name: 'Sara', email: '', phone: '', customerId: 'cus_1' },
@@ -66,6 +66,16 @@ const order = (patch = {}) => ({
 });
 
 /**
+ * An order record with the facts its flags give, as an import writes them (unless the patch names its facts).
+ * @param {Record<string, any>} [patch]
+ * @returns {any}
+ */
+const order = (patch = {}) => {
+	const record = flagged(patch);
+	return { facts: derivedFacts(record), ...record };
+};
+
+/**
  * Plan a staff move of the default flow.
  * @param {any} from @param {string} to @param {Partial<import('../core/transitions.js').TransitionInput>} [input]
  * @param {Partial<import('../core/transitions.js').TransitionRules>} [rules] @param {import('../core/model.js').FlowInput} [flow]
@@ -89,7 +99,7 @@ const planOf = (result) => {
 /** @param {import('../core/transitions.js').TransitionPlan} p */
 const kinds = (p) => p.ledger.map((effect) => effect.kind);
 
-describe('facts derived from the flags orders had before them', () => {
+describe('facts of an imported order, from its flags', () => {
 	it('match every state today’s give-backs leave', () => {
 		expect(derivedFacts(order({ role: 'awaiting_payment', status: 'pending_payment' }))).toEqual(PLACED_FACTS);
 		// delivered: sold, earned points credited
@@ -163,8 +173,6 @@ describe('facts derived from the flags orders had before them', () => {
 	it('are read as written once a transition wrote them, and guard its write', () => {
 		const written = { stock: 'back', offers: 'released', redeemed: 'given_back', earned: 'none', units: 'none' };
 		expect(factsOf(order({ facts: written }))).toEqual(written);
-		expect(isFacts({ ...written, stock: 'gone' })).toBe(false);
-		expect(factsOf(order({ facts: { ...written, stock: 'gone' } }))).toEqual(PLACED_FACTS);
 		expect(factsGuard(order({ facts: written }))).toEqual({
 			'facts.stock': 'back',
 			'facts.offers': 'released',
@@ -172,7 +180,6 @@ describe('facts derived from the flags orders had before them', () => {
 			'facts.earned': 'none',
 			'facts.units': 'none',
 		});
-		expect(factsGuard(order())).toEqual({ facts: { $exists: false } });
 		expect(FACT_KEYS).toEqual(['stock', 'offers', 'redeemed', 'earned', 'units']);
 	});
 });
@@ -189,7 +196,7 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 		expect(confirmed.guard).toMatchObject({
 			status: 'pending_payment',
 			updatedAt: waiting.updatedAt,
-			facts: { $exists: false },
+			'facts.stock': 'held',
 		});
 
 		const units = {
@@ -660,7 +667,7 @@ describe('property: random flows × random transitions never give back or take t
 					}
 					counted.external = (counted.external ?? 0) + p.external.length;
 					// every fact the plan writes is a fact, and only the stage contract's changes happen
-					expect(isFacts(p.set.facts)).toBe(true);
+					expect(Object.keys(/** @type {object} */ (p.set.facts))).toEqual(FACT_KEYS);
 					if (p.facts.before.stock !== 'held' && p.facts.before.stock !== 'sold')
 						expect(p.ledger.some((e) => e.kind === 'release_stock' || e.kind === 'restock_return')).toBe(false);
 					if (p.facts.before.offers === 'released') expect(kinds(p)).not.toContain('release_offers');

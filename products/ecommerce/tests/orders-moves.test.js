@@ -8,7 +8,7 @@ import { createMoves } from '../server/orders-moves.js';
 import { createService } from '../server/service.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
-import { ALL, DOMAIN, UNIT_TYPES, readyShop, storedUnit } from './helpers.js';
+import { ALL, DOMAIN, readyShop, storedOrder, storedUnit, UNIT_TYPES } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -44,7 +44,7 @@ const seed = async (patch = {}, numbered = false) => {
 	const product = await shop.seedProduct({ stock: 5, ...(numbered ? { typeKey: 'numbered' } : {}) });
 	const variant = /** @type {import('../core/model.js').VariantRecord} */ (product.variants[0]);
 	const data = await shop.db();
-	const order = {
+	const order = storedOrder({
 		id: createId('ord'),
 		number: `M-${createId('num').slice(4, 12)}`,
 		customer: { userId: 'usr_moves0000001', name: 'Mo', email: '', phone: '' },
@@ -110,7 +110,7 @@ const seed = async (patch = {}, numbered = false) => {
 		placedAt: new Date(shop.now()),
 		deliveredAt: null,
 		...patch,
-	};
+	});
 	await data.collection(COLLECTIONS.orders).insertOne({ ...order });
 	return /** @type {any} */ (
 		await data.collection(COLLECTIONS.orders).findOne({ websiteId: shop.websiteId, id: order.id }, { projection: { _id: 0 } })

@@ -262,7 +262,7 @@ export const createSeo = (product, service) => {
 							terms: {
 								method: returns.returnMethod,
 								fee: returns.returnShippingFee,
-								feeAmount: Number(returns.returnShippingFeeAmount ?? 0),
+								feeAmount: Number(returns.returnShippingFeeAmount),
 							},
 						}
 					: null,

@@ -212,7 +212,7 @@ export const createCatalogCommon = (product, service) => {
 					async (variant) =>
 						/** @type {[string, Array<string | null>]} */ ([
 							variant.id,
-							await Promise.all((variant.media ?? []).map((file) => media.mediaUrl(s, file.key))),
+							await Promise.all(variant.media.map((file) => media.mediaUrl(s, file.key))),
 						]),
 				),
 			),

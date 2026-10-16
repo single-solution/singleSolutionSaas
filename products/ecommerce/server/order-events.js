@@ -95,7 +95,7 @@ export const createOrderEvents = (product, service) => {
 				status: statusLabel(await flowOf(s), order.status),
 				paymentMethod: (await messageWords(s)).payment(order.payment.method),
 				business: String((await s.business()).name ?? ''),
-				...(includePhone === true ? { [STAFF_ALERT_PHONE]: order.customer.phone ?? '' } : {}),
+				...(includePhone === true ? { [STAFF_ALERT_PHONE]: order.customer.phone } : {}),
 				...extra,
 			},
 		});
@@ -200,7 +200,7 @@ export const createOrderEvents = (product, service) => {
 	});
 
 	/** The catalog setting `lowStock` (E44). @param {Site} s */
-	const lowStockOf = async (s) => Number((await s.values('catalog')).lowStock ?? 0);
+	const lowStockOf = async (s) => Number((await s.values('catalog')).lowStock);
 
 	/**
 	 * The products sold in a unit of their own among some (their stock counts thousandths of their unit, so the

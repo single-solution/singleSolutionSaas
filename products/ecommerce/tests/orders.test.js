@@ -12,7 +12,7 @@ import { createCheckout } from '../server/checkout.js';
 import { createOrders } from '../server/orders.js';
 import { createService } from '../server/service.js';
 import { COLLECTIONS } from '../core/model.js';
-import { ALL_PERMISSIONS, DOMAIN, PAYMENTS, UNIT_TYPES, readyShop, storedUnit } from './helpers.js';
+import { ALL_PERMISSIONS, DOMAIN, PAYMENTS, readyShop, storedOrder, storedUnit, UNIT_TYPES } from './helpers.js';
 
 /** Today's payment methods' kinds, by key (the `payment_methods` list's seed). @type {Record<string, any>} */
 const KIND_OF = { cod: 'on_delivery', online: 'gateway', bank_transfer: 'pay_first', pickup: 'at_pickup' };
@@ -92,7 +92,7 @@ const place = async (options = {}) => {
 		data,
 		{
 			numberPrefix: 'T-',
-			order: {
+			order: storedOrder({
 				id: createId('ord'),
 				customer: { userId, name, email, phone, customerId: String(customer.id) },
 				address,
@@ -157,7 +157,7 @@ const place = async (options = {}) => {
 				staffNote: '',
 				placedAt: new Date(shop.now()),
 				deliveredAt: null,
-			},
+			}),
 		},
 		{ now: shop.now() },
 	);

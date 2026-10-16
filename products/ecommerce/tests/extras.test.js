@@ -12,7 +12,7 @@ import { createCards } from '../server/extras-cards.js';
 import { createExtras } from '../server/extras.js';
 import { createService } from '../server/service.js';
 import { COLLECTIONS } from '../core/model.js';
-import { DOMAIN, PAYMENTS, readyShop, STORAGE, storedAttribute, storedUnit } from './helpers.js';
+import { DOMAIN, PAYMENTS, readyShop, STORAGE, storedAttribute, storedOrder, storedUnit } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -102,7 +102,7 @@ const order = async ({
 		data,
 		{
 			numberPrefix: 'T-',
-			order: {
+			order: storedOrder({
 				id,
 				customer: {
 					userId,
@@ -157,7 +157,7 @@ const order = async ({
 				staffNote: '',
 				placedAt: new Date(placedAt),
 				deliveredAt: null,
-			},
+			}),
 		},
 		{ now: shop.now() },
 	);

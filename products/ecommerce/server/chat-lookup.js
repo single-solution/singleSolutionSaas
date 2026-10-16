@@ -461,7 +461,7 @@ export const createChatLookup = (product, service, media) => {
 	 * @param {import('../core/lookup.js').Shown} shown its variants' shown prices
 	 */
 	const detailsOf = async (s, data, item, shown) => {
-		const specIds = Object.keys(item.specs ?? {});
+		const specIds = Object.keys(item.specs);
 		const [brands, attributes, rules, measures] = await Promise.all([
 			brandNames(data, [item.brandId]),
 			specIds.length === 0

@@ -91,7 +91,7 @@ const moneyGuard = (order, plan) =>
  * @param {OrderRecord} order @param {import('./service.js').PaymentFacts} payment @param {number} amount
  */
 const unrecordedRefund = (order, payment, amount) => {
-	const recorded = new Set((order.refunds ?? []).map((entry) => entry.refundId).filter(Boolean));
+	const recorded = new Set(order.refunds.map((entry) => entry.refundId).filter(Boolean));
 	return payment.refunds.find((refund) => refund.id && !recorded.has(refund.id) && refund.amount === amount) ?? null;
 };
 
@@ -517,7 +517,7 @@ export const createTransitions = (product, service, { refunded } = {}) => {
 				return 'unavailable';
 			}
 			// what Payments refunded of the payment that the order records
-			const recorded = (order.refunds ?? []).filter((entry) => entry.refundId).reduce((sum, entry) => sum + entry.amount, 0);
+			const recorded = order.refunds.filter((entry) => entry.refundId).reduce((sum, entry) => sum + entry.amount, 0);
 			if (payment.refunded > recorded) {
 				/** @type {EffectOutcome[]} */
 				const outcomes = [];

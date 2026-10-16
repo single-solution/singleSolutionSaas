@@ -295,7 +295,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			const placed = moved ? placeCategory(existing.id, checked.value.parentId, new Map(all.map((c) => [c.id, c]))) : null;
 			if (placed && !placed.ok) throw refuse([{ path: '/parentId', message: placed.message }]);
 			const path = placed?.ok ? placed.path : existing.path;
-			if (moved || checked.value.typeKey !== (existing.typeKey ?? null)) {
+			if (moved || checked.value.typeKey !== existing.typeKey) {
 				const paths = new Map(moved ? movedPaths(existing.id, path, all).map((next) => [next.id, next.path]) : []);
 				const next = all.map((category) =>
 					category.id === existing.id

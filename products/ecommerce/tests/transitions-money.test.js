@@ -1,9 +1,9 @@
 /**
  * The order engine keeps stock, money and points right where a path could lose or double them (the engine review of
  * 2026-10-14, `audit/review-order-engine-2026-10-14.md`): an edit of a waiting order that held no stock, a refund whose
- * answer was lost (also after Payments forgot its key), two refunds at once, a delete while money is still due, refunds
- * of orders without a payments log, a guest's points, a claim's points with a return at the same time, and a move that
- * loses its race after Payments or a courier was called.
+ * answer was lost (also after Payments forgot its key), two refunds at once, a delete while money is still due, a refund
+ * through Payments not sent once the order was refunded meanwhile, a guest's points, a claim's points with a return at
+ * the same time, and a move that loses its race after Payments or a courier was called.
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -275,55 +275,7 @@ describe('a delete', () => {
 	});
 });
 
-describe('orders without a payments log', () => {
-	it('count only refunds made through Payments as given back by it (review 5)', async () => {
-		const paymentId = `pay_${createId('ord').slice(4, 16)}`;
-		const { order } = await records.seedOrder({
-			status: 'delivered',
-			role: 'delivered',
-			cod: true,
-			patch: {
-				// cash on delivery with an advance of 200 through Payments, from before the payments log (E26); 500 given
-				// back in cash
-				payment: {
-					method: 'cod',
-					kind: 'on_delivery',
-					state: 'partially_refunded',
-					paymentId,
-					advance: 200,
-					paid: 1000,
-					refunded: 500,
-					checkedAt: null,
-				},
-				payments: [],
-				refunds: [
-					{
-						id: createId('orf'),
-						method: 'cod',
-						amount: 500,
-						reference: '',
-						claimId: null,
-						note: 'By hand',
-						by: { kind: 'staff', id: 'usr_staff', name: 'Sam' },
-						at: new Date(shop.now()),
-						refundId: null,
-					},
-				],
-				deliveredAt: new Date(shop.now()),
-			},
-		});
-		const moved = await records.moveTo(order.id, 'refunded');
-		expect(moved.status).toBe(200);
-		// the advance Payments still holds goes back through it, the rest is recorded
-		expect(records.refundCalls(paymentId).map((call) => JSON.parse(call.body ?? '{}').amount)).toEqual([200]);
-		expect(moved.json.refunds).toEqual([
-			expect.objectContaining({ method: 'cod', amount: 500 }),
-			expect.objectContaining({ method: 'other', amount: 300 }),
-			expect.objectContaining({ method: 'payments', amount: 200 }),
-		]);
-		expect(moved.json.payment).toMatchObject({ refunded: 1000, state: 'refunded' });
-	});
-
+describe('a refund through Payments', () => {
 	it('warn when a refund through Payments is not sent because the order was refunded meanwhile', async () => {
 		const { order, paymentId } = await records.seedOrder({
 			status: 'cancelled',

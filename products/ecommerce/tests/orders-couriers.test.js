@@ -10,7 +10,7 @@ import { bookingValues, courierViolation, createCouriers } from '../adapters/cou
 import { placeOrder } from '../adapters/ledger.js';
 import { checkCouriers, cleanTracking, courierOf, fillTemplate, readPath, trackingLink } from '../core/couriers.js';
 import { COLLECTIONS } from '../core/model.js';
-import { ALL, COURIER, readyShop } from './helpers.js';
+import { ALL, COURIER, readyShop, storedOrder } from './helpers.js';
 
 /** Today's payment methods' kinds, by key (the `payment_methods` list's seed). @type {Record<string, any>} */
 const KIND_OF = { cod: 'on_delivery', online: 'gateway', bank_transfer: 'pay_first', pickup: 'at_pickup' };
@@ -81,7 +81,7 @@ const packedOrder = async ({ method = 'cod', name = 'Sara "Quotes" Shopper', wei
 		data,
 		{
 			numberPrefix: '',
-			order: {
+			order: storedOrder({
 				id: createId('ord'),
 				customer: { userId: 'usr_courier00001', name, email: 'sara@example.com', phone: '+15550001111' },
 				address: {
@@ -156,7 +156,7 @@ const packedOrder = async ({ method = 'cod', name = 'Sara "Quotes" Shopper', wei
 				staffNote: '',
 				placedAt: new Date(shop.now()),
 				deliveredAt: null,
-			},
+			}),
 		},
 		{ now: shop.now() },
 	);

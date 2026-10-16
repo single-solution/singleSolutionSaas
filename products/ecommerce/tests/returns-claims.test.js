@@ -21,7 +21,7 @@ import {
 	holdsUnits,
 	refundCap,
 } from '../core/returns.js';
-import { PAYMENTS, readyShop, storedUnit } from './helpers.js';
+import { PAYMENTS, readyShop, storedOrder, storedUnit } from './helpers.js';
 
 /** Every hook the shop's service emits, in order. */
 const hooks = vi.hoisted(() => /** @type {Array<{ name: string, payload: any }>} */ ([]));
@@ -117,7 +117,7 @@ const order = async ({ lines, delivery = 0, payment = {}, pointsEarned = 0 }) =>
 		data,
 		{
 			numberPrefix: 'T-',
-			order: {
+			order: storedOrder({
 				id,
 				customer: { userId: SARA, name: 'Sara Shopper', email: 'sara@example.com', phone: '' },
 				address: {
@@ -167,7 +167,7 @@ const order = async ({ lines, delivery = 0, payment = {}, pointsEarned = 0 }) =>
 				staffNote: '',
 				placedAt: new Date(shop.now()),
 				deliveredAt: null,
-			},
+			}),
 		},
 		{ now: shop.now() },
 	);

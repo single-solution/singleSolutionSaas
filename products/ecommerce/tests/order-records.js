@@ -6,7 +6,7 @@
 import { createId } from '@ss/contracts';
 import { givePoints } from '../adapters/ledger.js';
 import { COLLECTIONS } from '../core/model.js';
-import { PAYMENTS } from './helpers.js';
+import { PAYMENTS, storedOrder } from './helpers.js';
 
 /**
  * @param {Awaited<ReturnType<typeof import('./helpers.js').readyShop>>} shop
@@ -22,7 +22,7 @@ export const orderRecords = (shop) => {
 
 	/**
 	 * An order record in the shape checkout writes: one physical line of a new product, paid online (with its Payments
-	 * entry) unless `cod`, written as it was before the engine (no facts) unless `patch` gives them.
+	 * entry) unless `cod`, with the facts its flags give unless `patch` gives them (`storedOrder` of `./helpers.js`).
 	 * @param {{ status?: string, role?: string, cod?: boolean, quantity?: number, stock?: number, typeKey?: string,
 	 *   patch?: Record<string, any> }} [options] `typeKey`: the product's item type (`UNIT_TYPES` of `./helpers.js`)
 	 */
@@ -40,7 +40,7 @@ export const orderRecords = (shop) => {
 		const id = createId('ord');
 		const paymentId = `pay_${id.slice(4, 16)}`;
 		const total = 1000 * quantity;
-		const record = {
+		const record = storedOrder({
 			id,
 			number: `T-${createId('num').slice(4, 14)}`,
 			customer: { userId: 'usr_engine000001', name: 'Eve', email: '', phone: '', customerId: 'cus_engine000001' },
@@ -136,7 +136,7 @@ export const orderRecords = (shop) => {
 			placedAt: new Date(shop.now()),
 			deliveredAt: null,
 			...patch,
-		};
+		});
 		if (record.stockHeld)
 			await (
 				await shop.db()

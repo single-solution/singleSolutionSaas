@@ -11,7 +11,7 @@ import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import { parseRange } from '../core/reports.js';
 import { actorHeaders } from '../server/service.js';
-import { ALL, ORIGIN, PAYMENTS, readyShop } from './helpers.js';
+import { ALL, ORIGIN, PAYMENTS, readyShop, storedOrder } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -60,7 +60,7 @@ const useTimeZone = async (timeZone) => {
  * @returns {Promise<import('../core/model.js').OrderRecord>}
  */
 const seedOrder = async (patch = {}) => {
-	const order = {
+	const order = storedOrder({
 		id: createId('ord'),
 		number: `K-${createId('num').slice(4, 14)}`,
 		customer: { userId: 'usr_kitshopper01', name: 'Kit Shopper', email: 'kit@example.com', phone: '' },
@@ -126,7 +126,7 @@ const seedOrder = async (patch = {}) => {
 		placedAt: new Date(shop.now()),
 		deliveredAt: null,
 		...patch,
-	};
+	});
 	await (await shop.db()).collection(COLLECTIONS.orders).insertOne({ ...order });
 	return /** @type {any} */ (order);
 };

@@ -13,7 +13,7 @@ import { ID_PREFIX, STATUS_ROLES } from './model.js';
 import { MAX_MEASURED, piecesOf } from './measure.js';
 import { isAmount } from './money.js';
 import { MAX_TRACKING, cleanTracking, hasControl } from './couriers.js';
-import { OTHER_WAY, PAY_LATER_KINDS, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
+import { OTHER_WAY, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
 import { TAG_LIMITS, checkTags } from './customer-segments.js';
 
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
@@ -163,32 +163,18 @@ export const wire = (value) => {
  * What Payments took for an order and has not refunded yet (paid online or first, an advance): the `payments` entries
  * of its payments log for its Payments payment, less the refunds made through Payments (`payments`, or with a Payments
  * refund id when Payments only recorded them, OR-8) (PM-2). Money staff recorded (a transfer, cash, another way) is never
- * Payments' to refund, even on an order that has a Payments payment. Records from before the payments log (E26) have no
- * entries: what was paid counts as before (all of it, or the COD advance), less the refunds logged through Payments
- * (all it refunded when no refund was logged).
+ * Payments' to refund, even on an order that has a Payments payment.
  * @param {OrderRecord} order
  */
 const leftAtPayments = (order) => {
 	const { paymentId } = order.payment;
 	if (!paymentId) return 0;
-	const entries = order.payments ?? [];
-	const took =
-		entries.length === 0
-			? PAY_LATER_KINDS.includes(order.payment.kind)
-				? Math.min(order.payment.advance, order.payment.paid)
-				: order.payment.paid
-			: entries
-					.filter((entry) => entry.method === VIA_PAYMENTS && entry.reference === paymentId)
-					.reduce((sum, entry) => sum + entry.amount, 0);
-	const refunds = order.refunds ?? [];
-	// a refund staff gave by hand is not Payments' even on an order from before the payments log; only an order whose
-	// refunds were never logged either counts all it refunded (it cannot tell)
-	const gave =
-		entries.length === 0 && refunds.length === 0
-			? order.payment.refunded
-			: refunds
-					.filter((entry) => entry.method === VIA_PAYMENTS || Boolean(entry.refundId))
-					.reduce((sum, entry) => sum + entry.amount, 0);
+	const took = order.payments
+		.filter((entry) => entry.method === VIA_PAYMENTS && entry.reference === paymentId)
+		.reduce((sum, entry) => sum + entry.amount, 0);
+	const gave = order.refunds
+		.filter((entry) => entry.method === VIA_PAYMENTS || Boolean(entry.refundId))
+		.reduce((sum, entry) => sum + entry.amount, 0);
 	return Math.max(0, took - gave);
 };
 

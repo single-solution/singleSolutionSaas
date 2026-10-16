@@ -212,7 +212,7 @@ export const createReports = (product, service) => {
 					if (by === 'tag')
 						values.set(
 							product.id,
-							(product.tags ?? []).map((tag) => ({ key: tag, name: tag })),
+							product.tags.map((tag) => ({ key: tag, name: tag })),
 						);
 					else if (perVariant)
 						for (const variant of product.variants)

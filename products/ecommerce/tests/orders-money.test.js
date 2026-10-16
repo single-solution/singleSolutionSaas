@@ -16,11 +16,12 @@ const entry = (method, amount, reference = '') => ({ method, amount, reference }
  * @param {Record<string, any>} payment @param {Record<string, any>} [lists] `payments`, `refunds`, `role`, `total`
  * @returns {any}
  */
-const order = (payment, { payments, refunds = [], role = 'open', total = 1000 } = {}) => ({
+const order = (payment, { payments = [], refunds = [], role = 'open', total = 1000 } = {}) => ({
 	role,
 	totals: { total, currency: 'USD' },
 	payment: { method: 'online', kind: 'gateway', paymentId: 'pay_1', advance: 0, paid: 0, refunded: 0, ...payment },
-	...(payments ? { payments, refunds } : {}),
+	payments,
+	refunds,
 });
 
 describe('refundSplit (PM-2)', () => {
@@ -52,14 +53,6 @@ describe('refundSplit (PM-2)', () => {
 		expect(refundSplit(order({ paymentId: null, paid: 1000 }, { payments: [entry('cod', 1000)] }), 10)).toEqual({
 			online: 0,
 			manual: 10,
-		});
-	});
-
-	it('counts records from before the payments log as before', () => {
-		expect(refundSplit(order({ paid: 1000, refunded: 400 }), 600)).toEqual({ online: 600, manual: 0 });
-		expect(refundSplit(order({ method: 'cod', kind: 'on_delivery', advance: 300, paid: 1000 }), 1000)).toEqual({
-			online: 300,
-			manual: 700,
 		});
 	});
 });

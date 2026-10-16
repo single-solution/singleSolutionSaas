@@ -426,7 +426,7 @@ export const facetStage = (filterable) => {
 		$facet: {
 			categories: [{ $unwind: '$categoryIds' }, { $group: { _id: '$categoryIds', count: { $sum: 1 } } }],
 			brands: [{ $match: { brandId: { $type: 'string' } } }, { $group: { _id: '$brandId', count: { $sum: 1 } } }],
-			price: [{ $group: { _id: null, min: { $min: '$price' }, max: { $max: { $ifNull: ['$priceMax', '$price'] } } } }],
+			price: [{ $group: { _id: null, min: { $min: '$price' }, max: { $max: '$priceMax' } } }],
 			attributes: [
 				{
 					$project: {

@@ -159,10 +159,7 @@ export const markSeenBy = (data, collection, match, staffId) =>
 				seenBy: {
 					$slice: [
 						{
-							$concatArrays: [
-								{ $filter: { input: { $ifNull: ['$seenBy', []] }, cond: { $ne: ['$$this', staffId] } } },
-								[staffId],
-							],
+							$concatArrays: [{ $filter: { input: '$seenBy', cond: { $ne: ['$$this', staffId] } } }, [staffId]],
 						},
 						-MAX_SEEN,
 					],

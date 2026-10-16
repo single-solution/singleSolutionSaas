@@ -8,7 +8,7 @@ import { DEFAULT_FORMAT, createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { cashToCollect, invoiceHtml, invoiceTexts, packingSlipsHtml, pickListHtml } from '../core/invoice.js';
 import { COLLECTIONS } from '../core/model.js';
-import { ALL, UNIT_TYPES, readyShop } from './helpers.js';
+import { ALL, readyShop, storedOrder, UNIT_TYPES } from './helpers.js';
 
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 /** @typedef {OrderRecord['lines'][number]} OrderLine */
@@ -65,95 +65,96 @@ const lineOf = (patch = {}) => ({
  * @param {Partial<OrderRecord>} [patch]
  * @returns {OrderRecord}
  */
-const orderOf = (patch = {}) => ({
-	id: createId('ord'),
-	number: `DOC-2026-${String(Math.floor(Math.random() * 1e6)).padStart(6, '0')}`,
-	customer: { userId: 'usr_shopper0000001', name: 'Sara Shopper', email: 'sara@example.com', phone: '+15550001111' },
-	address: {
-		name: 'Sara Shopper',
-		phone: '+15550001111',
-		line1: '1 Main Street',
-		line2: '',
-		city: 'Springfield',
-		area: 'North',
-		region: '',
-		postalCode: '12345',
-		country: 'US',
-		notes: '',
-	},
-	delivery: { method: 'delivery', zone: 'city', rate: 'standard', rateName: 'Standard', fee: 250, locationId: null },
-	lines: [lineOf()],
-	totals: {
-		subtotal: 100000,
-		discount: 10000,
-		delivery: 250,
-		tax: 0,
-		total: 90750,
-		currency: 'USD',
-		taxIncluded: false,
-		fee: 500,
-		roleDiscount: 3000,
-	},
-	promotions: {
-		couponId: null,
-		couponCode: '',
-		dealIds: [],
-		bundleIds: [],
-		pointsRedeemed: 200,
-		pointsValue: 2000,
-		pointsEarned: 0,
-		released: false,
-		role: { key: 'member', kind: 'percent', percent: 3, label: 'Club price', prices: [] },
-	},
-	payment: {
-		method: 'cod',
-		kind: 'on_delivery',
-		state: 'unpaid',
-		paymentId: null,
-		advance: 10000,
-		paid: 10000,
-		refunded: 1000,
-		checkedAt: null,
-	},
-	payments: [
-		{
-			id: 'opy_1',
-			method: 'bank_transfer',
-			amount: 10000,
-			reference: 'TRX-778',
-			proofKey: null,
-			note: 'Checked the bank app',
-			by: STAFF,
-			at: new Date('2026-10-04T12:00:00Z'),
+const orderOf = (patch = {}) =>
+	storedOrder({
+		id: createId('ord'),
+		number: `DOC-2026-${String(Math.floor(Math.random() * 1e6)).padStart(6, '0')}`,
+		customer: { userId: 'usr_shopper0000001', name: 'Sara Shopper', email: 'sara@example.com', phone: '+15550001111' },
+		address: {
+			name: 'Sara Shopper',
+			phone: '+15550001111',
+			line1: '1 Main Street',
+			line2: '',
+			city: 'Springfield',
+			area: 'North',
+			region: '',
+			postalCode: '12345',
+			country: 'US',
+			notes: '',
 		},
-	],
-	refunds: [
-		{
-			id: 'orf_1',
+		delivery: { method: 'delivery', zone: 'city', rate: 'standard', rateName: 'Standard', fee: 250, locationId: null },
+		lines: [lineOf()],
+		totals: {
+			subtotal: 100000,
+			discount: 10000,
+			delivery: 250,
+			tax: 0,
+			total: 90750,
+			currency: 'USD',
+			taxIncluded: false,
+			fee: 500,
+			roleDiscount: 3000,
+		},
+		promotions: {
+			couponId: null,
+			couponCode: '',
+			dealIds: [],
+			bundleIds: [],
+			pointsRedeemed: 200,
+			pointsValue: 2000,
+			pointsEarned: 0,
+			released: false,
+			role: { key: 'member', kind: 'percent', percent: 3, label: 'Club price', prices: [] },
+		},
+		payment: {
 			method: 'cod',
-			amount: 1000,
-			reference: 'RF-1',
-			claimId: null,
-			note: 'Goodwill',
-			by: STAFF,
-			at: new Date('2026-10-05T08:00:00Z'),
+			kind: 'on_delivery',
+			state: 'unpaid',
+			paymentId: null,
+			advance: 10000,
+			paid: 10000,
+			refunded: 1000,
+			checkedAt: null,
 		},
-	],
-	status: 'confirmed',
-	role: 'open',
-	history: [],
-	shipment: null,
-	stockHeld: true,
-	holdUntil: null,
-	idempotencyKey: createId('key'),
-	note: '',
-	staffNote: '',
-	placedAt: new Date('2026-10-04T10:00:00Z'),
-	deliveredAt: null,
-	createdAt: new Date(shop.now()),
-	updatedAt: new Date(shop.now()),
-	...patch,
-});
+		payments: [
+			{
+				id: 'opy_1',
+				method: 'bank_transfer',
+				amount: 10000,
+				reference: 'TRX-778',
+				proofKey: null,
+				note: 'Checked the bank app',
+				by: STAFF,
+				at: new Date('2026-10-04T12:00:00Z'),
+			},
+		],
+		refunds: [
+			{
+				id: 'orf_1',
+				method: 'cod',
+				amount: 1000,
+				reference: 'RF-1',
+				claimId: null,
+				note: 'Goodwill',
+				by: STAFF,
+				at: new Date('2026-10-05T08:00:00Z'),
+			},
+		],
+		status: 'confirmed',
+		role: 'open',
+		history: [],
+		shipment: null,
+		stockHeld: true,
+		holdUntil: null,
+		idempotencyKey: createId('key'),
+		note: '',
+		staffNote: '',
+		placedAt: new Date('2026-10-04T10:00:00Z'),
+		deliveredAt: null,
+		createdAt: new Date(shop.now()),
+		updatedAt: new Date(shop.now()),
+		...patch,
+	});
 
 /** @param {OrderRecord} order */
 const seed = async (order) => {
@@ -376,10 +377,6 @@ describe('document parts (E35)', () => {
 		expect(html).not.toContain('Cash due on delivery');
 		expect(html).not.toContain('<h2>Refunds</h2>');
 		expect(html).toContain('<td>VOUCHER-9 · Omar Staff</td>');
-		const unlogged = { ...plain };
-		delete unlogged.payments;
-		const without = invoiceHtml(unlogged, context, { shopper: true });
-		expect(without).not.toContain('<h2>Payments</h2>');
 		const slips = packingSlipsHtml(
 			[orderOf({ address: null, delivery: { method: 'pickup', zone: '', rate: '', rateName: '', fee: 0, locationId: null } })],
 			context,

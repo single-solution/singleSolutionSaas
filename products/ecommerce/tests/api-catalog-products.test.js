@@ -1,7 +1,7 @@
 /**
  * The catalog's product routes as schemas/api.json describes them: the catalog admin widget's twins (create, count,
  * the variant generator, stock, images, the products CSV), deleting with the server token, and the staff view of a
- * product saved before its newer fields existed (every field answered). The helper's `call()` checks every answer
+ * product as stored (every field answered). The helper's `call()` checks every answer
  * against the description.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -187,7 +187,7 @@ describe('GTIN and MPN (SEO audit G5.6)', () => {
 });
 
 describe('the staff view of a product', () => {
-	it('answers every field of a product saved before the newer fields existed', async () => {
+	it('answers every field of a product as stored', async () => {
 		const seeded = await shop.seedProduct({ name: 'Old phone' });
 		const read = await shop.api('GET', `/v1/products/${seeded.id}`);
 		expect(read.status).toBe(200);
