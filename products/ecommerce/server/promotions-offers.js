@@ -12,7 +12,7 @@
 import { randomBytes } from 'node:crypto';
 import { created, defineRoute, paginate, problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
-import { productTypes } from '../adapters/catalog-store.js';
+import { attributesOf, productTypes } from '../adapters/catalog-store.js';
 import { bundleView, checkBundleInput } from '../core/bundles.js';
 import { IMAGE_TYPES } from '../core/catalog-content.js';
 import { checkBatchInput, checkCouponInput, couponView, drawCode } from '../core/coupons.js';
@@ -68,6 +68,37 @@ export const createOfferRoutes = (service) => {
 			const shown = view(record);
 			return { ...shown, seo: { ...record.seo, ...dealScore(record) } };
 		};
+	};
+
+	/**
+	 * A deal's rules on the merchant's fields name each field by its id: a rule that names it by slug is changed to the id,
+	 * and a rule on a key that is no field of products or variants is refused (it could never hold).
+	 * @param {import('@ss/app-kit').WebsiteData} data
+	 * @param {Record<string, any>} value checked offer fields (changed in place)
+	 */
+	const resolveFields = async (data, value) => {
+		const conditions = value.conditions;
+		if (!conditions) return;
+		/** @type {Array<[any, string]>} */
+		const places = [
+			.../** @type {any[]} */ (conditions.rules).map(
+				(rule, at) => /** @type {[any, string]} */ ([rule, `conditions/rules/${at}`]),
+			),
+			.../** @type {any[]} */ (conditions.groups).flatMap((group, g) =>
+				group.rules.map(
+					(/** @type {any} */ rule, /** @type {number} */ at) =>
+						/** @type {[any, string]} */ ([rule, `conditions/groups/${g}/rules/${at}`]),
+				),
+			),
+		].filter(([rule]) => rule.field === 'attribute');
+		if (places.length === 0) return;
+		const fields = (await attributesOf(data)).filter((field) => field.on === 'product' || field.on === 'variant');
+		for (const [rule, path] of places) {
+			const found =
+				fields.find((field) => field.id === rule.attributeId) ?? fields.find((field) => field.slug === rule.attributeId);
+			if (!found) throw invalid(`${path}/field`, `There is no field ${rule.attributeId} on products or variants.`, 'unknown');
+			rule.attributeId = found.id;
+		}
 	};
 
 	/**
@@ -183,6 +214,7 @@ export const createOfferRoutes = (service) => {
 		if (!checked.ok) return invalid(checked.field, checked.message);
 		const data = await dataOf(ctx);
 		await checkRefs(data, checked.value);
+		if (kind === 'deals') await resolveFields(data, checked.value);
 		if (kind === 'bundles') await noMeasured(ctx, data, checked.value);
 		if (!(await slugFree(data, kind, checked.value, null))) return problem('slug_taken', 'Another deal uses this slug.');
 		const record = { id: createId(KINDS[kind].prefix), ...checked.value, used: 0 };
@@ -212,6 +244,7 @@ export const createOfferRoutes = (service) => {
 		);
 		if (!checked.ok) return invalid(checked.field, checked.message);
 		await checkRefs(data, checked.value);
+		if (kind === 'deals') await resolveFields(data, checked.value);
 		if (kind === 'bundles') await noMeasured(ctx, data, checked.value);
 		if (!(await slugFree(data, kind, checked.value, id))) return problem('slug_taken', 'Another deal uses this slug.');
 		/** @type {any} */

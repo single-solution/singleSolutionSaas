@@ -144,6 +144,110 @@ export const couponFields = (kit, searches, names, coupon, withCode) => {
 	};
 };
 
+/** Conditions a deal starts with: none of them narrows it. */
+const OPEN_CONDITIONS = Object.freeze({
+	match: 'all',
+	rules: [],
+	groups: [],
+	priceRange: null,
+	minQuantity: 0,
+	cartTotal: 0,
+	paymentMethods: [],
+});
+
+/**
+ * A deal's conditions on the shop's own fields: each a field (its key: slug or id), whether its value is one of or none
+ * of the values typed, joined by all or any. The deal's other conditions (products, categories, brands, grades, groups,
+ * price, quantity, cart total and payment methods) are kept as they are.
+ * @param {Kit} kit @param {Searches} searches @param {any} existing the deal's conditions, or null
+ */
+const fieldRulesOf = (kit, searches, existing) => {
+	const { t, h } = kit;
+	/** @type {Array<{ field: HTMLInputElement, op: HTMLElement & { value: string }, values: HTMLInputElement }>} */
+	let rows = [];
+	const list = h('div');
+	const keys = h('datalist', { id: 'ss-deal-fields' });
+	const match = kit.pick(
+		[
+			{ value: 'all', label: t('promotionsAdmin.fieldMatch.all') },
+			{ value: 'any', label: t('promotionsAdmin.fieldMatch.any') },
+		],
+		existing?.match ?? 'all',
+		{ 'aria-label': t('promotionsAdmin.fieldMatch') },
+	);
+	/** @param {string} key @param {string} op @param {string} values */
+	const add = (key, op, values) => {
+		rows.push({
+			field: kit.input(key, { list: 'ss-deal-fields', maxlength: '64', 'aria-label': t('promotionsAdmin.fieldKey') }),
+			op: kit.pick(
+				[
+					{ value: 'in', label: t('promotionsAdmin.fieldOp.in') },
+					{ value: 'not_in', label: t('promotionsAdmin.fieldOp.not_in') },
+				],
+				op,
+				{ 'aria-label': t('promotionsAdmin.fieldOp') },
+			),
+			values: kit.input(values, { 'aria-label': t('promotionsAdmin.fieldValues') }),
+		});
+		draw();
+	};
+	const draw = () =>
+		list.replaceChildren(
+			...rows.map((row) =>
+				h('div', { class: 'fields' }, [
+					kit.field(t('promotionsAdmin.fieldKey'), row.field),
+					kit.field(t('promotionsAdmin.fieldOp'), row.op),
+					kit.field(t('promotionsAdmin.fieldValues'), row.values),
+					kit.button(t('admin.remove'), () => {
+						rows = rows.filter((other) => other !== row);
+						draw();
+					}),
+				]),
+			),
+		);
+	for (const rule of existing?.rules ?? [])
+		if (rule.field === 'attribute') add(rule.attributeId ?? '', rule.op ?? 'in', (rule.values ?? []).join(', '));
+	// the shop's fields, as suggestions for the key (the key may be typed when they cannot be read)
+	searches
+		.fields()
+		.then((found) => {
+			for (const item of found ?? []) keys.append(kit.h('option', { value: item.key }, [item.label]));
+		})
+		.catch(() => {});
+	return {
+		node: kit.group(t('promotionsAdmin.fieldRules'), [
+			kit.text('p', { class: 'muted' }, t('promotionsAdmin.fieldRulesHint')),
+			list,
+			keys,
+			kit.button(t('promotionsAdmin.addFieldRule'), () => add('', 'in', '')),
+			match,
+		]),
+		/** @returns {Record<string, unknown> | undefined} the conditions to save; undefined: the deal has none to send */
+		value: () => {
+			const rules = rows
+				.map((row) => ({
+					field: row.field.value.trim(),
+					op: row.op.value,
+					values: row.values.value
+						.split(',')
+						.map((each) => each.trim())
+						.filter(Boolean),
+				}))
+				.filter((rule) => rule.field !== '' && rule.values.length > 0);
+			if (rules.length === 0 && !existing) return undefined;
+			const base = existing ?? OPEN_CONDITIONS;
+			return {
+				...base,
+				match: match.value,
+				rules: [
+					...(base.rules ?? []).filter((/** @type {{ field: string }} */ rule) => rule.field !== 'attribute'),
+					...rules,
+				],
+			};
+		},
+	};
+};
+
 /**
  * A deal's fields.
  * @param {Kit} kit @param {Searches} searches @param {Map<string, string>} names @param {any} deal
@@ -160,6 +264,7 @@ export const dealFields = (kit, searches, names, deal) => {
 	const value = kit.input(deal.type === 'fixed' ? kit.decimal(deal.value) : (deal.value ?? ''), { inputmode: 'decimal' });
 	const priority = kit.input(String(deal.priority ?? 0), { type: 'number', step: '1' });
 	const scope = scopeOf(kit, searches, names, t('promotionsAdmin.scope'), deal.scope);
+	const fieldRules = fieldRulesOf(kit, searches, deal.conditions ?? null);
 	const common = commonOf(kit, deal);
 	const valueField = kit.field(t('promotionsAdmin.dealValue', { currency: kit.currency }), value);
 	// a free-delivery deal has no value
@@ -178,10 +283,12 @@ export const dealFields = (kit, searches, names, deal) => {
 			]),
 			kit.field(t('promotionsAdmin.description'), description),
 			scope.node,
+			fieldRules.node,
 			...common.nodes,
 		],
 		values: () => {
 			const rest = common.values();
+			const conditions = fieldRules.value();
 			// a free-delivery deal has no value
 			const amount =
 				type.value === 'free_delivery' ? 0 : type.value === 'fixed' ? kit.amount(value.value) : Number(value.value);
@@ -194,6 +301,7 @@ export const dealFields = (kit, searches, names, deal) => {
 				value: amount,
 				priority: rank ?? 0,
 				scope: scope.value(),
+				...(conditions === undefined ? {} : { conditions }),
 				...rest,
 			};
 		},

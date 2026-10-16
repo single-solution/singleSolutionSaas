@@ -427,6 +427,66 @@ describe('promotions admin: deals and bundles', () => {
 		expect(fieldIn(dialogOf(root), 'Percent, or amount in USD').value).toBe('15');
 	});
 
+	it('sets conditions on the values of the shop’s fields, keeping the deal’s other conditions', async () => {
+		const OTHER = {
+			match: 'any',
+			rules: [{ field: 'brands', op: 'in', values: ['brd_1'] }],
+			groups: [],
+			priceRange: null,
+			minQuantity: 2,
+			cartTotal: 0,
+			paymentMethods: [],
+		};
+		const { root, server } = await start({
+			'GET /v1/admin/attributes': () =>
+				answer(200, {
+					items: [
+						{ id: 'atr_1', slug: 'material', name: 'Material', on: 'product' },
+						{ id: 'atr_2', slug: 'tier', name: 'Tier', on: 'customer' },
+					],
+				}),
+			'PATCH /v1/admin/deals/deal_1': (/** @type {any} */ call) => answer(200, { ...DEAL, ...call.body }),
+		});
+		const panel = await openTab(root, 'deals');
+		await click(buttonIn(detailOf(panel), 'Edit'));
+		const dialog = dialogOf(root);
+		// the fields the shop has are offered by their key (a customer field is not a field of products)
+		expect([...dialog.querySelectorAll('#ss-deal-fields option')].map((option) => option.getAttribute('value'))).toEqual([
+			'material',
+		]);
+		await click(buttonIn(dialog, 'Add a condition on a field'));
+		type(fieldIn(dialog, 'Field (its slug or id)'), 'material');
+		type(fieldIn(dialog, 'Values (separated by commas)'), 'wool, silk');
+		await submitDialog(root);
+		expect(server.last('PATCH /v1/admin/deals/deal_1')?.body).toMatchObject({
+			conditions: {
+				match: 'all',
+				rules: [{ field: 'material', op: 'in', values: ['wool', 'silk'] }],
+				minQuantity: 0,
+			},
+		});
+		// a deal with other conditions keeps them, and shows its field conditions to change or remove
+		server.routes['GET /v1/admin/deals/deal_1'] = () =>
+			answer(200, {
+				...DEAL,
+				conditions: {
+					...OTHER,
+					rules: [...OTHER.rules, { field: 'attribute', attributeId: 'atr_1', op: 'not_in', values: ['wool'] }],
+				},
+			});
+		await openRow(panel, 'deal_2');
+		await openRow(panel, 'deal_1');
+		await click(buttonIn(detailOf(panel), 'Edit'));
+		const again = dialogOf(root);
+		expect(fieldIn(again, 'Field (its slug or id)').value).toBe('atr_1');
+		expect(fieldIn(again, 'Values (separated by commas)').value).toBe('wool');
+		await click(buttonIn(again, 'Remove', 0));
+		await submitDialog(root);
+		expect(server.last('PATCH /v1/admin/deals/deal_1')?.body).toMatchObject({
+			conditions: { match: 'any', rules: [{ field: 'brands', op: 'in', values: ['brd_1'] }], minQuantity: 2 },
+		});
+	});
+
 	it('uploads, describes and removes a deal’s banner', async () => {
 		const KEY = 'ecommerce/deals/deal_1/abc.png';
 		/** @param {string} key */

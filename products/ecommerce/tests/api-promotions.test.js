@@ -88,6 +88,9 @@ describe('coupons', () => {
 
 describe('deals', () => {
 	it('answers a deal with conditions, hours, a banner and display fields to staff and shoppers', async () => {
+		// a rule on a field names a field the shop has (by slug or id)
+		const colorField = (await shop.api('POST', '/v1/attributes', { name: 'Color', slug: 'color', type: 'text', on: 'product' }))
+			.json;
 		const made = await shop.api('POST', '/v1/deals', {
 			name: 'Sunday morning phones',
 			description: 'Early birds',
@@ -123,7 +126,12 @@ describe('deals', () => {
 		expect(made.json).toMatchObject({
 			target: 'cart',
 			days: [0, 6],
-			conditions: { match: 'any', priceRange: { min: 1_000, max: null }, paymentMethods: ['cod', 'online'] },
+			conditions: {
+				match: 'any',
+				rules: [{ field: 'attribute', attributeId: colorField.id, values: ['black'], op: 'not_in' }],
+				priceRange: { min: 1_000, max: null },
+				paymentMethods: ['cod', 'online'],
+			},
 			banner: { key: 'ecommerce/deals/sunday.webp', alt: 'A phone', type: 'image/webp', size: 2048 },
 			seo: { title: 'Sunday phones', description: '' },
 			allowPoints: false,

@@ -288,6 +288,8 @@ export const productDeals = (product, deals, { categoryIds, now, clock, attribut
 
 /** An attribute id a field path may name. */
 const FIELD_ID = /^[A-Za-z0-9_-]{1,80}$/;
+/** The key (slug or id) of a merchant's field a rule may name. */
+const FIELD_KEY = /^[A-Za-z0-9_-]{1,64}$/;
 
 /**
  * One rule of conditions as a MongoDB expression over a product and one of its variants (`$$v`).
@@ -455,14 +457,22 @@ export const better = (candidate, best) =>
 // ----------------------------------------------------------------------------------------------- merchant input
 
 /**
- * One rule of conditions.
+ * One rule of conditions: `{ field, op, values }` where `field` is `products`, `categories`, `brands` or `grades`, or
+ * the key (slug or id) of one of the merchant's own fields — `{ field: 'material', values: ['wool'] }` — which is kept
+ * as the rule on that field's values (`field: 'attribute'` with its `attributeId`, which the long form also takes).
  * @param {unknown} value
  * @param {string} field
  * @returns {Checked}
  */
 const checkRule = (value, field) => {
 	if (!isObject(value)) return fail(field, 'A rule is { field, op, values }.');
-	if (!RULE_FIELDS.includes(value.field)) return fail(`${field}/field`, `field is one of ${RULE_FIELDS.join(', ')}.`);
+	const builtIn = RULE_FIELDS.includes(value.field);
+	const named = typeof value.field === 'string' && !builtIn && FIELD_KEY.test(value.field);
+	if (!builtIn && !named)
+		return fail(
+			`${field}/field`,
+			`field is one of ${RULE_FIELDS.filter((name) => name !== 'attribute').join(', ')}, or the key (slug or id) of one of your fields.`,
+		);
 	const op = value.op ?? 'in';
 	if (op !== 'in' && op !== 'not_in') return fail(`${field}/op`, 'op is in or not_in.');
 	const values = value.values;
@@ -473,15 +483,16 @@ const checkRule = (value, field) => {
 		!values.every((item) => typeof item === 'string' && item.length > 0 && item.length <= 120)
 	)
 		return fail(`${field}/values`, `values lists 1–${MAX_VALUES} texts of at most 120 characters.`);
-	if (value.field === 'attribute' && (typeof value.attributeId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(value.attributeId)))
-		return fail(`${field}/attributeId`, 'An attribute rule names its attributeId.');
+	const attributeId = named ? value.field : value.field === 'attribute' ? value.attributeId : null;
+	if ((named || value.field === 'attribute') && (typeof attributeId !== 'string' || !FIELD_KEY.test(attributeId)))
+		return fail(`${field}/attributeId`, 'A field rule names its field: attributeId, or the field key as the rule field.');
 	return {
 		ok: true,
 		value: {
-			field: value.field,
+			field: named ? 'attribute' : value.field,
 			op,
 			values: [...new Set(/** @type {string[]} */ (values))],
-			...(value.field === 'attribute' ? { attributeId: value.attributeId } : {}),
+			...(attributeId === null ? {} : { attributeId }),
 		},
 	};
 };

@@ -44256,7 +44256,7 @@
 			},
 			"DealRule": {
 				"type": "object",
-				"description": "A rule: the line’s product, categories (with their parents), brand, grade or an attribute’s values are (in) or are not (not_in) among values.",
+				"description": "A rule: the line’s product, categories (with their parents), brand, grade or the values of one of the shop’s fields are (in) or are not (not_in) among values.",
 				"required": [
 					"field",
 					"op",
@@ -44266,12 +44266,14 @@
 				"properties": {
 					"field": {
 						"type": "string",
-						"enum": [
+						"pattern": "^[A-Za-z0-9_-]{1,64}$",
+						"description": "products, categories, brands or grades; or the key (slug or id) of one of the shop’s own fields of products or variants — { field: 'material', values: ['wool'] } — which is saved and answered as field attribute with its attributeId (the id). attribute with attributeId is the same rule. 422 at the rule’s field when the key is no field of products or variants.",
+						"examples": [
 							"products",
 							"categories",
 							"brands",
 							"grades",
-							"attribute"
+							"material"
 						]
 					},
 					"op": {
@@ -44293,7 +44295,7 @@
 					},
 					"attributeId": {
 						"type": "string",
-						"description": "The attribute (field attribute only)."
+						"description": "The shop’s field (its id, or its slug when sent) — set on every rule on a field."
 					}
 				}
 			},

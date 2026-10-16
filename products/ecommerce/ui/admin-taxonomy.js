@@ -162,6 +162,18 @@ export const createSearches = (kit) => {
 		},
 		categories: byName('categories'),
 		brands: byName('brands'),
+		/**
+		 * The shop's own fields of products and variants (their slug and name), for the fields a deal's condition names;
+		 * null when the ticket cannot read them (the editor then takes typed keys).
+		 * @returns {Promise<Array<{ key: string, label: string }> | null>}
+		 */
+		fields: async () => {
+			const answer = await kit.call('GET', '/v1/admin/attributes');
+			if (!answer.ok) return null;
+			return /** @type {Named[]} */ (answer.data.items ?? [])
+				.filter((item) => item.on === 'product' || item.on === 'variant')
+				.map((item) => ({ key: item.slug ?? item.id, label: item.name }));
+		},
 		/** Names of known categories and brands, for chips. */
 		names: async () => {
 			const [categories, brands] = await Promise.all([listOf('categories'), listOf('brands')]);
