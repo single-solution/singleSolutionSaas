@@ -1,14 +1,15 @@
 import { readFile } from 'node:fs/promises';
-import { KIT_GUIDE, apiAnchor } from '@ss/app-kit';
+import { KIT_GUIDE, apiAnchor, docsOperations } from '@ss/app-kit';
 import { createMemoryStore } from '@ss/app-kit/testing';
 import { createId } from '@ss/contracts';
+import { escapeHtml as escape } from '@ss/contracts/text';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import manifest from '../manifest.json' with { type: 'json' };
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
 import { createProductInstance } from '../adapters/product.js';
 import staffAlertSettings from '../schemas/staff_alerts.settings.json' with { type: 'json' };
-import { escape, featuresOf, operationOf, operations, renderDocs } from '../server/docs.js';
+import { operationOf, renderDocs } from '../server/docs.js';
 import { ORDER_MESSAGE_VALUES, ORDER_TEMPLATES } from '../server/order-messages.js';
 import { createRoutes } from '../server/routes.js';
 import { BUSINESS_VALUE } from '../server/service.js';
@@ -30,7 +31,7 @@ const SECTIONS = /** @type {Sections} */ (guide.catalogSeo.sections);
 /** Every guide group's sections: Catalog and SEO; Checkout, orders and promotions; Import. */
 const ALL_SECTIONS = /** @type {Sections} */ ([...guide.catalogSeo.sections, ...guide.orders.sections, ...guide.import.sections]);
 /** The documented operations, as the API reference lists them. */
-const KNOWN = operations(openapi.paths);
+const KNOWN = docsOperations(openapi);
 const permissions = manifest.permissions.map((permission) => permission.key);
 
 describe('createSnippets', () => {
@@ -255,7 +256,7 @@ describe('renderDocs', () => {
 			features: [route.feature ?? []].flat(),
 		}));
 		// kit routes (the list settings) are only in openapi.json
-		const kit = operations(openapi.paths).map(([method, path]) => ({
+		const kit = docsOperations(openapi).map(([method, path]) => ({
 			method,
 			path: path.replace(/\{(\w+)\}/g, ':$1'),
 			features: /** @type {string[] | null} */ (null),
@@ -309,7 +310,7 @@ describe('renderDocs', () => {
 			'/v1/tickets': { post: { 'x-ss-auth': 'server' } },
 			'/v1/odd': { get: {} },
 		};
-		const page = renderDocs({ base: BASE, paths });
+		const page = renderDocs({ base: BASE, openapi: { paths } });
 		expect(page).toContain('<a href="#op-get-v1-shop-products"><code>GET /v1/shop/products</code></a> List &#60;products&#62;');
 		expect(page).toContain('ticket (customers.manage)');
 		expect(page).toContain('checkout or reviews');
@@ -351,15 +352,6 @@ describe('renderDocs', () => {
 		const page = renderDocs({ base: 'https://x.example/"><script>alert(1)</script>' });
 		expect(page).not.toContain('<script>alert(1)</script>');
 		expect(page).toContain('&#34;&#62;&#60;script&#62;alert(1)&#60;/script&#62;');
-		expect(escape(`<a href="x">'&'</a>`)).toBe('&#60;a href=&#34;x&#34;&#62;&#39;&#38;&#39;&#60;/a&#62;');
-	});
-
-	it('reads operations and their features', () => {
-		expect(operations(undefined)).toEqual([]);
-		expect(operations({ '/a': { post: { summary: 's' } } })).toEqual([['POST', '/a', { summary: 's' }]]);
-		expect(featuresOf({})).toEqual([]);
-		expect(featuresOf({ 'x-ss-feature': 'seo' })).toEqual(['seo']);
-		expect(featuresOf({ 'x-ss-feature': ['seo', 'feeds'] })).toEqual(['seo', 'feeds']);
 	});
 });
 

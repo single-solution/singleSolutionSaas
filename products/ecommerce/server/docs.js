@@ -12,12 +12,13 @@
  * in the website's Setup sheet), the admin widgets and the ticket snippet (Node.js and cURL), the kit's routes for
  * your server (settings and lists, the acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the
  * business.json template, the localhost note and the API reference from `openapi.json`: every call with its auth,
- * feature, parameters, request fields and answer fields (`renderApiReference`, from `schemas/api.json` and the kit's
- * own descriptions), which every route the page names links to. Plain HTML; every value is escaped.
+ * feature, parameters, request fields and answer fields, which every route the page names links to. The page, the
+ * feature sections and the small HTML pieces are the kit's (`renderDocsPage`, `docsFeatureSections`); this file keeps
+ * Ecommerce's own sections. Plain HTML; every value is escaped.
  * @module
  */
-import { KIT_GUIDE, apiAnchor, renderApiReference } from '@ss/app-kit';
-import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
+import { apiAnchor, docsBlock, docsFeatureSections, docsList, docsOperations, docsParagraph, renderDocsPage } from '@ss/app-kit';
+import { escapeHtml } from '@ss/contracts/text';
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
 import { DEFAULT_FLOW } from '../core/flow.js';
@@ -29,57 +30,14 @@ import { ORDER_MESSAGE_VALUES, ORDER_TEMPLATES } from './order-messages.js';
 import { BUSINESS_VALUE } from './service.js';
 import { STAFF_ALERT_EVENTS, STAFF_ALERT_LINK, STAFF_ALERT_PHONE, STAFF_ALERT_VALUES } from './staff-alerts.js';
 
-/** The API reference, rendered on the first docs request (it is the same for every request). @type {string | null} */
-let reference = null;
-
-/** @param {unknown} value */
-export const escape = (value) => String(value).replace(/[&<>"']/g, (ch) => `&#${/** @type {string} */ (ch).charCodeAt(0)};`);
-
-/** @param {string} code */
-const block = (code) => `<pre><code>${escape(code)}</code></pre>`;
-
-/** @param {string} text */
-const para = (text) => `<p>${escape(text)}</p>`;
-
-/** @param {string[]} items already escaped */
-const list = (items) => (items.length > 0 ? `<ul>${items.map((item) => `<li>${item}</li>`).join('')}</ul>` : '');
-
-/** @typedef {{ 'x-ss-auth'?: string, 'x-ss-feature'?: string | string[], 'x-ss-permission'?: string, summary?: string }} Operation */
-/** @typedef {ReadonlyArray<readonly [string, string, Operation]>} Rows */
-
-/**
- * Every documented operation: `[method, path, operation]`.
- * @param {unknown} paths `openapi.paths`
- * @returns {Rows}
- */
-export const operations = (paths) =>
-	Object.entries(/** @type {Record<string, Record<string, Operation>>} */ (paths ?? {})).flatMap(([path, methods]) =>
-		Object.entries(methods).map(([method, operation]) => /** @type {const} */ ([method.toUpperCase(), path, operation])),
-	);
-
-/**
- * The features of an operation (`x-ss-feature` is one key or a list of which any is enough).
- * @param {Operation} operation
- * @returns {string[]}
- */
-export const featuresOf = (operation) => [operation['x-ss-feature'] ?? []].flat();
-
-/** @param {Rows} rows */
-const routeTable = (rows) =>
-	`<table><thead><tr><th>Route</th><th>Auth</th><th>Feature</th></tr></thead><tbody>${rows
-		.map(
-			([method, path, operation]) =>
-				`<tr><td><a href="#${escape(apiAnchor(method, path))}"><code>${escape(`${method} ${path}`)}</code></a>${operation.summary ? ` ${escape(operation.summary)}` : ''}</td><td>${escape(
-					`${operation['x-ss-auth'] ?? ''}${operation['x-ss-permission'] ? ` (${operation['x-ss-permission']})` : ''}`,
-				)}</td><td>${escape(featuresOf(operation).length > 0 ? featuresOf(operation).join(' or ') : 'always')}</td></tr>`,
-		)
-		.join('')}</tbody></table>`;
+/** The documented operations (the same for every request). */
+const KNOWN = docsOperations(openapi);
 
 /**
  * The operation of `openapi.json` a guide route names (`POST /v1/orders/:id/move`, `GET /v1/reports/sales?by=grade` …):
  * its `[method, path]`, the one with the most fixed parts when several match, else null.
  * @param {string} route
- * @param {Rows} rows
+ * @param {ReadonlyArray<import('@ss/app-kit').DocsRow>} rows
  * @returns {readonly [string, string] | null}
  */
 export const operationOf = (route, rows) => {
@@ -111,56 +69,36 @@ export const operationOf = (route, rows) => {
 
 /**
  * The docs page.
- * @param {{ base: string, paths?: unknown }} input Ecommerce's address (snippets point at it); `paths` replaces the
- *   operations of `openapi.json` (tests)
+ * @param {{ base: string, openapi?: unknown }} input Ecommerce's address (snippets point at it); `openapi` replaces
+ *   `openapi.json` (tests)
  * @returns {string}
  */
-export const renderDocs = ({ base, paths = openapi.paths }) => {
-	const features = /** @type {Record<string, string[]>} */ (guide.features);
-	const build = /** @type {Record<string, string>} */ (guide.build);
+export const renderDocs = ({ base, openapi: document = openapi }) => {
 	const widgetHelp = /** @type {Record<string, string>} */ (guide.widgets);
 	const roles = /** @type {Record<string, string>} */ (guide.roles);
 	const siteHelp = /** @type {Record<string, string>} */ (guide.siteRoutes);
 	const permissions = manifest.permissions.map((permission) => permission.key);
 	const snippets = createSnippets({ base, widgets: manifest.widgets, permissions });
-	const rows = operations(paths);
+	const rows = docsOperations(document);
 	const nameOf = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
 	/** Code blocks a guide section names. @type {Record<string, string>} */
 	const codes = { searchIndex: JSON.stringify(SEARCH_INDEX_DEFINITION, null, 2) };
 
 	const widgetRows = manifest.widgets.map((widget) => {
 		const attributes = (WIDGET_ATTRIBUTES[widget.key] ?? []).map(
-			(attribute) => `<code>${escape(attribute.name)}</code>: ${escape(attribute.help)}`,
+			(attribute) => `<code>${escapeHtml(attribute.name)}</code>: ${escapeHtml(attribute.help)}`,
 		);
-		return `<li><code>${escape(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code> (${escape(widget.kind)}, ${escape(
+		return `<li><code>${escapeHtml(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code> (${escapeHtml(widget.kind)}, ${escapeHtml(
 			[widget.feature]
 				.flat()
 				.map((key) => nameOf.get(key) ?? key)
 				.join(' or '),
-		)}): ${escape(widgetHelp[widget.key] ?? '')}${list(attributes)}</li>`;
+		)}): ${escapeHtml(widgetHelp[widget.key] ?? '')}${docsList(attributes)}</li>`;
 	});
-	const featureSections = manifest.features.map((feature) => {
-		const widgets = manifest.widgets.filter((widget) => [widget.feature].flat().includes(feature.key));
-		const needs = feature.dependsOn.map((key) => nameOf.get(key) ?? key);
-		return [
-			`<section id="feature-${escape(feature.key)}"><h3>${escape(feature.name)} <code>${escape(feature.key)}</code></h3>`,
-			para(feature.description),
-			...(features[feature.key] ?? []).map(para),
-			needs.length > 0 ? para(`Needs: ${needs.join(', ')}.`) : '',
-			build[feature.key] ? `<p><strong>What your website builds.</strong> ${escape(build[feature.key])}</p>` : '',
-			list(
-				widgets.map(
-					(widget) => `${escape(widget.kind)} widget <code>${escape(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code>`,
-				),
-			),
-			routeTable(rows.filter(([, , operation]) => featuresOf(operation).includes(feature.key))),
-			'</section>',
-		].join('');
-	});
-	const flowStatuses = list(
+	const flowStatuses = docsList(
 		DEFAULT_FLOW.statuses.map(
 			(status) =>
-				`<code>${escape(status.key)}</code> ${escape(status.label)} (role <code>${escape(status.role)}</code>): ${escape(
+				`<code>${escapeHtml(status.key)}</code> ${escapeHtml(status.label)} (role <code>${escapeHtml(status.role)}</code>): ${escapeHtml(
 					DEFAULT_FLOW.moves
 						.filter((move) => move.from === status.key)
 						.map((move) => move.to)
@@ -168,47 +106,49 @@ export const renderDocs = ({ base, paths = openapi.paths }) => {
 				)}`,
 		),
 	);
-	const roleList = list(Object.entries(roles).map(([role, help]) => `<code>${escape(role)}</code>: ${escape(help)}`));
+	const roleList = docsList(
+		Object.entries(roles).map(([role, help]) => `<code>${escapeHtml(role)}</code>: ${escapeHtml(help)}`),
+	);
 	/**
 	 * Template values with what each one holds.
 	 * @param {ReadonlyArray<string>} keys @param {Record<string, string>} help
 	 */
-	const valueList = (keys, help) => list(keys.map((key) => `<code>{${escape(key)}}</code>: ${escape(help[key] ?? '')}`));
+	const valueList = (keys, help) =>
+		docsList(keys.map((key) => `<code>{${escapeHtml(key)}}</code>: ${escapeHtml(help[key] ?? '')}`));
 	const messageHelp = /** @type {Record<string, string>} */ (guide.messageValues);
-	const orderTemplates = list(
+	const orderTemplates = docsList(
 		[
 			[ORDER_TEMPLATES.placed, guide.orderTemplates.placed],
 			[ORDER_TEMPLATES.status, guide.orderTemplates.status],
 			[`${ORDER_TEMPLATES.status}.<status key>`, guide.orderTemplates.perStatus],
-		].map(([key, help]) => `<code>${escape(key)}</code>: ${escape(help)}`),
+		].map(([key, help]) => `<code>${escapeHtml(key)}</code>: ${escapeHtml(help)}`),
 	);
-	const otherTemplates = list(
+	const otherTemplates = docsList(
 		Object.entries(/** @type {Record<string, string[]>} */ (guide.templates)).map(
 			([key, values]) =>
-				`<code>${escape(key)}</code>: ${[...values, BUSINESS_VALUE].map((value) => `<code>{${escape(value)}}</code>`).join(', ')}`,
+				`<code>${escapeHtml(key)}</code>: ${[...values, BUSINESS_VALUE].map((value) => `<code>{${escapeHtml(value)}}</code>`).join(', ')}`,
 		),
 	);
 	const staffHelp = /** @type {Record<string, string>} */ (guide.staffValues);
-	const staffEvents = list(
+	const staffEvents = docsList(
 		Object.entries(STAFF_ALERT_EVENTS).map(
 			([event, extra]) =>
-				`<code>ecommerce.staff_${escape(event)}</code> (<code>${escape(event)}</code>): ${escape(
+				`<code>ecommerce.staff_${escapeHtml(event)}</code> (<code>${escapeHtml(event)}</code>): ${escapeHtml(
 					/** @type {Record<string, string>} */ (guide.staffEvents)[event] ?? '',
-				)}${extra.length > 0 ? ` Also ${extra.map((key) => `<code>{${escape(key)}}</code>`).join(', ')}.` : ''}`,
+				)}${extra.length > 0 ? ` Also ${extra.map((key) => `<code>{${escapeHtml(key)}}</code>`).join(', ')}.` : ''}`,
 		),
 	);
-	const eventTypes = list(
+	const eventTypes = docsList(
 		Object.entries(/** @type {Record<string, string>} */ (guide.eventTypes)).map(
-			([type, help]) => `<code>${escape(`${manifest.id}.${type}`)}</code>: ${escape(help)}`,
+			([type, help]) => `<code>${escapeHtml(`${manifest.id}.${type}`)}</code>: ${escapeHtml(help)}`,
 		),
 	);
 	const site = SITE_ROUTES.map(
 		(entry) =>
-			`<h3><code>${escape(`GET ${entry.route}`)}</code></h3>${para(siteHelp[entry.name] ?? '')}${block(
+			`<h3><code>${escapeHtml(`GET ${entry.route}`)}</code></h3>${docsParagraph(siteHelp[entry.name] ?? '')}${docsBlock(
 				/** @type {string} */ (snippets.site[entry.name]),
 			)}`,
 	).join('\n');
-	const known = operations(openapi.paths);
 	/**
 	 * A guide group's sections, each route linked to its place in the API reference.
 	 * @param {GuideGroup} group
@@ -216,13 +156,15 @@ export const renderDocs = ({ base, paths = openapi.paths }) => {
 	const groupSections = (group) =>
 		group.sections.map((section) =>
 			[
-				`<section id="${escape(section.id)}"><h3>${escape(section.title)}</h3>`,
-				...section.paragraphs.map((part) => (typeof part === 'string' ? para(part) : block(codes[part.code] ?? ''))),
-				list(
+				`<section id="${escapeHtml(section.id)}"><h3>${escapeHtml(section.title)}</h3>`,
+				...section.paragraphs.map((part) =>
+					typeof part === 'string' ? docsParagraph(part) : docsBlock(codes[part.code] ?? ''),
+				),
+				docsList(
 					section.routes.map(([route, feature]) => {
-						const found = operationOf(route, known);
-						const code = `<code>${escape(route)}</code>`;
-						return `${found ? `<a href="#${escape(apiAnchor(...found))}">${code}</a>` : code} (${escape(nameOf.get(feature) ?? feature)}, <code>${escape(feature)}</code>)`;
+						const found = operationOf(route, KNOWN);
+						const code = `<code>${escapeHtml(route)}</code>`;
+						return `${found ? `<a href="#${escapeHtml(apiAnchor(...found))}">${code}</a>` : code} (${escapeHtml(nameOf.get(feature) ?? feature)}, <code>${escapeHtml(feature)}</code>)`;
 					}),
 				),
 				'</section>',
@@ -231,130 +173,104 @@ export const renderDocs = ({ base, paths = openapi.paths }) => {
 	const catalogSeo = /** @type {GuideGroup} */ (guide.catalogSeo);
 	const shop = /** @type {GuideGroup} */ (guide.orders);
 	const imports = /** @type {GuideGroup} */ (guide.import);
-	const permissionList = list(
+	const permissionList = docsList(
 		manifest.permissions.map(
 			(permission) =>
-				`<code>${escape(permission.key)}</code>: ${escape(permission.name)} (${escape(nameOf.get(permission.feature) ?? permission.feature)})`,
+				`<code>${escapeHtml(permission.key)}</code>: ${escapeHtml(permission.name)} (${escapeHtml(nameOf.get(permission.feature) ?? permission.feature)})`,
 		),
 	);
 
-	return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escape(guide.title)}</title>
-<style>
-body { font: 16px/1.6 system-ui, sans-serif; max-width: 860px; margin: 0 auto; padding: 24px 16px; color: CanvasText; background: Canvas; }
-pre { overflow-x: auto; padding: 12px; border: 1px solid GrayText; border-radius: 8px; }
-table { border-collapse: collapse; width: 100%; } th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid GrayText; }
-td code { overflow-wrap: anywhere; }
-.ss-api-op { margin-top: 32px; } .ss-api-op h3 code, .ss-api-schema h4 { overflow-wrap: anywhere; }
-</style>
-</head>
-<body>
-<h1>${escape(guide.title)}</h1>
-${para(guide.intro)}
-<p><strong>Local testing.</strong> ${escape(guide.localhost)}</p>
-<h2 id="install">Install the widgets</h2>
-${para(guide.install)}
-${block(snippets.visitor)}
-${para(guide.attributes)}
-${list(widgetRows)}
+	return renderDocsPage({
+		guide,
+		openapi: document,
+		body: `<h2 id="install">Install the widgets</h2>
+${docsParagraph(guide.install)}
+${docsBlock(snippets.visitor)}
+${docsParagraph(guide.attributes)}
+${docsList(widgetRows)}
 <h2 id="js-api">The JS API</h2>
-${para(guide.jsApi)}
-${block(snippets.api)}
-<h3>The <code>${escape(ADD_TO_CART_EVENT)}</code> event</h3>
-${para(guide.addToCart)}
-${block(snippets.addToCartEvent)}
+${docsParagraph(guide.jsApi)}
+${docsBlock(snippets.api)}
+<h3>The <code>${escapeHtml(ADD_TO_CART_EVENT)}</code> event</h3>
+${docsParagraph(guide.addToCart)}
+${docsBlock(snippets.addToCartEvent)}
 <h3>Events for Growth</h3>
-${para(guide.growthEvents)}
+${docsParagraph(guide.growthEvents)}
 <h2 id="sign-in">Guests, order keys and the Accounts sign-in</h2>
-${para(guide.signIn)}
+${docsParagraph(guide.signIn)}
 <h2 id="payments">Checkout and payments</h2>
-${para(guide.payments)}
-${para(guide.success)}
+${docsParagraph(guide.payments)}
+${docsParagraph(guide.success)}
 <h2 id="order-flow">Order statuses and roles</h2>
-${para(guide.orderFlow)}
+${docsParagraph(guide.orderFlow)}
 ${flowStatuses}
-${para(guide.orderRoles)}
+${docsParagraph(guide.orderRoles)}
 ${roleList}
 <h2 id="messages">Order messages and alerts</h2>
-${para(guide.messages)}
+${docsParagraph(guide.messages)}
 ${orderTemplates}
-${para(guide.orderValuesIntro)}
+${docsParagraph(guide.orderValuesIntro)}
 ${valueList([...ORDER_MESSAGE_VALUES, BUSINESS_VALUE], messageHelp)}
-${para(guide.otherTemplates)}
+${docsParagraph(guide.otherTemplates)}
 ${otherTemplates}
 <h2 id="staff-alerts">Staff alerts</h2>
-${para(guide.staffAlerts)}
+${docsParagraph(guide.staffAlerts)}
 ${staffEvents}
-${para(guide.staffValuesIntro)}
+${docsParagraph(guide.staffValuesIntro)}
 ${valueList([...STAFF_ALERT_VALUES, ...new Set(Object.values(STAFF_ALERT_EVENTS).flat()), STAFF_ALERT_LINK, STAFF_ALERT_PHONE], staffHelp)}
 <h2 id="events">Events and webhooks</h2>
-${para(guide.events)}
+${docsParagraph(guide.events)}
 ${eventTypes}
 <h2 id="couriers">Couriers</h2>
-${para(guide.couriers)}
-${para(guide.courierApi)}
-${block(snippets.courier)}
+${docsParagraph(guide.couriers)}
+${docsParagraph(guide.courierApi)}
+${docsBlock(snippets.courier)}
 <h2 id="storage">Storage and CORS</h2>
-${para(guide.storage)}
-${block(snippets.cors)}
+${docsParagraph(guide.storage)}
+${docsBlock(snippets.cors)}
 <h2 id="site">Your site serves</h2>
-${para(guide.site)}
+${docsParagraph(guide.site)}
 ${site}
 <h3><code>GET /v1/seo/site</code></h3>
-${para(guide.homePage)}
-${block(snippets.homePage)}
+${docsParagraph(guide.homePage)}
+${docsBlock(snippets.homePage)}
 <h3><code>GET /v1/seo/products/:ref</code></h3>
-${para(guide.productMeta)}
-${block(snippets.productMeta)}
+${docsParagraph(guide.productMeta)}
+${docsBlock(snippets.productMeta)}
 <h3><code>GET /v1/seo/listing</code></h3>
-${para(guide.listing)}
-${block(snippets.listingPage)}
+${docsParagraph(guide.listing)}
+${docsBlock(snippets.listingPage)}
 <h3>Clearing your cache</h3>
-${para(guide.cacheRoute)}
-${block(snippets.cacheRoute)}
+${docsParagraph(guide.cacheRoute)}
+${docsBlock(snippets.cacheRoute)}
 <h3><code>GET /v1/policies</code></h3>
-${para(guide.policies)}
-${block(snippets.policies)}
+${docsParagraph(guide.policies)}
+${docsBlock(snippets.policies)}
 <h2 id="catalog-seo">Catalog and SEO</h2>
-${para(catalogSeo.intro)}
+${docsParagraph(catalogSeo.intro)}
 ${groupSections(catalogSeo).join('\n')}
 <h2 id="orders-guide">Checkout, orders and promotions</h2>
-${para(shop.intro)}
+${docsParagraph(shop.intro)}
 ${groupSections(shop).join('\n')}
 <h2 id="import">Import</h2>
-${para(imports.intro)}
+${docsParagraph(imports.intro)}
 ${groupSections(imports).join('\n')}
 <h2 id="chat">Chat lookups</h2>
-${para(guide.chat)}
-${list(guide.chatRoutes.map((route) => `<code>${escape(route)}</code>`))}
+${docsParagraph(guide.chat)}
+${docsList(guide.chatRoutes.map((route) => `<code>${escapeHtml(route)}</code>`))}
 <h2 id="customers">Orders in Accounts</h2>
-${para(guide.customers)}
-${block(snippets.customerOrders)}
+${docsParagraph(guide.customers)}
+${docsBlock(snippets.customerOrders)}
 <h2 id="data-rights">Data rights and the activity log</h2>
-${para(guide.dataRights)}
+${docsParagraph(guide.dataRights)}
 <h2 id="features">Features</h2>
-${featureSections.join('\n')}
+${docsFeatureSections({ manifest, rows, guide })}
 <h2 id="admin">Admin widgets and tickets</h2>
-${para(guide.admin)}
-${block(snippets.admin)}
-${para(guide.tickets)}
+${docsParagraph(guide.admin)}
+${docsBlock(snippets.admin)}
+${docsParagraph(guide.tickets)}
 ${permissionList}
-${block(snippets.ticketNode)}
-${block(snippets.ticketCurl)}
-${KIT_GUIDE.map((section) => `<h2 id="${escape(section.id)}">${escape(section.title)}</h2>\n${section.paragraphs.map(para).join('\n')}`).join('\n')}
-${para(guide.kit)}
-<h2 id="business">business.json</h2>
-${para(guide.business)}
-${block(JSON.stringify(BUSINESS_JSON_TEMPLATE, null, 2))}
-<h2 id="api">API reference</h2>
-${para(guide.api)}
-${routeTable(rows)}
-${(reference ??= renderApiReference(openapi))}
-</body>
-</html>
-`;
+${docsBlock(snippets.ticketNode)}
+${docsBlock(snippets.ticketCurl)}`,
+	});
 };
