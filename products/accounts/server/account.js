@@ -250,7 +250,7 @@ export const createAccount = (product, service, flows) => {
 	/** Download my data: Accounts' records and every connected product's, as one single-use link (15 minutes). @param {any} ctx */
 	const exportData = async (ctx) => {
 		const { s, user } = await service.signedIn(ctx);
-		return service.exportFor(s, ctx, user);
+		return service.exportFor(s, user);
 	};
 
 	/** The download itself (the link's only delivery: single use, 15 minutes). @param {any} ctx */

@@ -17,7 +17,7 @@ export const MAX_ADDRESSES = 50;
 export const MAX_CUSTOM_FIELDS = 100;
 export const MAX_CHOICES = 200;
 /** Most tags one user has (A5). */
-export const MAX_TAGS = 20;
+const MAX_TAGS = 20;
 /** Longest tag. */
 const TAG_LENGTH = 40;
 const FIELD_TYPES = Object.freeze(
@@ -27,7 +27,7 @@ const FIELD_TYPES = Object.freeze(
  * Who sees a custom field (A6): `edit` the user sees and changes it (sign-up asks the required ones), `view` the user
  * sees it and only staff change it, `staff` only staff and the merchant's server see it.
  */
-export const FIELD_VISIBILITY = Object.freeze(/** @type {const} */ (['edit', 'view', 'staff']));
+const FIELD_VISIBILITY = Object.freeze(/** @type {const} */ (['edit', 'view', 'staff']));
 /** The types whose fields have options. */
 const CHOICE_TYPES = Object.freeze(['choice', 'multi_choice']);
 /** Longest value of a long-text field, and of the other text values. */

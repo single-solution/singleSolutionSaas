@@ -7,7 +7,7 @@
 /** Most saved views a website keeps. */
 export const MAX_VIEWS = 50;
 /** The users list's filters a view may keep (the query parameters of `GET /v1/users`). */
-export const VIEW_FILTERS = Object.freeze([
+const VIEW_FILTERS = Object.freeze([
 	'q',
 	'role',
 	'roles',

@@ -11,7 +11,7 @@
  */
 
 /** The purposes a consent may have. */
-export const CONSENT_PURPOSES = Object.freeze(/** @type {const} */ (['agreement', 'marketing']));
+const CONSENT_PURPOSES = Object.freeze(/** @type {const} */ (['agreement', 'marketing']));
 /** Most consents a website asks for. */
 export const MAX_CONSENTS = 20;
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;

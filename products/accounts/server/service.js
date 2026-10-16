@@ -648,9 +648,9 @@ export const createService = (product) => {
 
 	/**
 	 * The user's data from Accounts and every connected product, kept for one download (15 minutes).
-	 * @param {Site} s @param {any} ctx @param {UserRecord} user
+	 * @param {Site} s @param {UserRecord} user
 	 */
-	const exportFor = async (s, ctx, user) => {
+	const exportFor = async (s, user) => {
 		const sessions = await s.store.sessions.ofUser(user.id);
 		/** @type {Record<string, unknown>} */
 		const records = {
