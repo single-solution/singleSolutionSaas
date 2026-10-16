@@ -5,6 +5,7 @@
  * sign-in on visitor calls, the cart in the browser, the add-to-cart event Chat's product cards dispatch, and the
  * admin widgets with tickets. The widgets themselves are replaced by spies here (they have their own tests).
  */
+import manifest from '../manifest.json' with { type: 'json' };
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ADD_TO_CART_EVENT, STORAGE_KEYS, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { MAX_LINES, MAX_QUANTITY, createCartStore } from '../ui/cart-store.js';
@@ -45,8 +46,22 @@ const { ADMIN_CONFIG_PATH, CONFIG_PATH, IN_PROGRESS_RETRIES, startWidget } = awa
 
 const BASE = 'https://ecommerce.example.dev';
 
-/** @param {string[]} features */
-const configOf = (features) => ({ texts: {}, theme: { mode: 'light' }, customCss: '', features, settings: { currency: 'USD' } });
+/**
+ * The widgets whose feature is on, as the kit's widget config names them (from manifest.json, as the kit reads it).
+ * @param {string[]} features
+ */
+const widgetsOf = (features) =>
+	manifest.widgets.filter((widget) => [widget.feature].flat().some((key) => features.includes(key))).map((widget) => widget.key);
+
+/** A widget config as the kit answers it. @param {string[]} features */
+const configOf = (features) => ({
+	texts: {},
+	theme: { mode: 'light' },
+	customCss: '',
+	features,
+	widgets: widgetsOf(features),
+	settings: { currency: 'USD' },
+});
 
 /** @param {string} key */
 const place = (key) => {

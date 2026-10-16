@@ -23,7 +23,7 @@
  */
 import { GROWTH_EVENTS, growthItem, itemsDetail } from '../core/growth-events.js';
 import { isCurrency } from '../core/money.js';
-import { ADD_TO_CART_EVENT, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
+import { ADD_TO_CART_EVENT, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountAlertsStop } from './alerts-stop.js';
 import { mountCart } from './cart.js';
 import { MAX_MEASURED, MAX_QUANTITY, createCartStore } from './cart-store.js';
@@ -68,6 +68,7 @@ const retryAfterSeconds = (header) => {
  * @property {typeof import('@ss/app-kit/widget').DEFAULT_FORMAT} [format] how money and dates look (PLAN 0.8.10 K7)
  * @property {string} [timeZone] the business.json time zone (UTC when missing)
  * @property {string[]} features the switched-on features
+ * @property {string[]} widgets the keys of the widgets whose feature is on
  * @property {Record<string, any>} settings what the visitor widgets need (`currency`, and each part's `widgetSettings`)
  */
 
@@ -161,11 +162,8 @@ export const startWidget = ({ window: win, script }) => {
 	const hosts = (key) => /** @type {HTMLElement[]} */ ([...doc.querySelectorAll(`[${WIDGET_ATTRIBUTE}="${key}"]`)]);
 	/** @type {typeof globalThis.fetch} */
 	const request = (input, init) => win.fetch(input, init);
-	/** @param {WidgetConfig} config @param {string} key */
-	const on = (config, key) =>
-		(WIDGET_FEATURES[/** @type {keyof typeof WIDGET_FEATURES} */ (key)] ?? []).some((feature) =>
-			config.features.includes(feature),
-		);
+	/** A widget mounts while its feature is on (the kit's config names those widgets). @param {WidgetConfig} config @param {string} key */
+	const on = (config, key) => config.widgets.includes(key);
 
 	const cart = createCartStore({ storage: storageOf(win) });
 	const orderKeys = createOrderKeys({ storage: storageOf(win) });

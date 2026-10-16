@@ -4,6 +4,7 @@
  * widget config with the English texts, timers the tests run by hand, and finders inside shadow roots.
  * @module
  */
+import manifest from '../manifest.json' with { type: 'json' };
 import { GROWTH_EVENTS } from '../core/growth-events.js';
 import strings from '../strings/en.json' with { type: 'json' };
 import { createCartStore } from '../ui/cart-store.js';
@@ -12,7 +13,7 @@ import { createCartStore } from '../ui/cart-store.js';
 export const TEXTS = /** @type {Record<string, string>} */ (strings);
 
 /**
- * A widget config.
+ * A widget config, with the widgets whose feature is on (as the kit's config names them).
  * @param {string[]} features
  * @param {Record<string, any>} [settings]
  */
@@ -21,6 +22,9 @@ export const configOf = (features, settings = {}) => ({
 	theme: { mode: /** @type {const} */ ('light') },
 	customCss: '',
 	features,
+	widgets: manifest.widgets
+		.filter((widget) => [widget.feature].flat().some((key) => features.includes(key)))
+		.map((widget) => widget.key),
 	settings: { currency: 'USD', ...settings },
 });
 
