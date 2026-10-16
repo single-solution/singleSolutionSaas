@@ -6725,11 +6725,14 @@
 				"totals",
 				"promotions",
 				"payment",
+				"payments",
+				"refunds",
 				"status",
 				"statusLabel",
 				"role",
 				"history",
 				"shipment",
+				"seenBy",
 				"stockHeld",
 				"facts",
 				"effects",
@@ -6794,14 +6797,14 @@
 					"items": {
 						"$ref": "#/components/schemas/OrderPayment"
 					},
-					"description": "Money received (missing on orders from before the payments log)."
+					"description": "Money received."
 				},
 				"refunds": {
 					"type": "array",
 					"items": {
 						"$ref": "#/components/schemas/OrderRefund"
 					},
-					"description": "Money given back (missing on orders from before the refunds log)."
+					"description": "Money given back."
 				},
 				"status": {
 					"type": "string",
@@ -7720,7 +7723,7 @@
 		},
 		"OrderFacts": {
 			"type": "object",
-			"description": "What the order holds or gave back, whatever its status is called (the order engine's facts; every transition writes them, guarded by them, so nothing is given back or taken twice). Orders written before them show them derived from their flags.",
+			"description": "What the order holds or gave back, whatever its status is called (the order engine's facts; every transition writes them, guarded by them, so nothing is given back or taken twice). An imported order has the facts its flags give.",
 			"required": ["stock", "offers", "redeemed", "earned", "units"],
 			"additionalProperties": false,
 			"properties": {
@@ -8109,11 +8112,14 @@
 				"totals",
 				"promotions",
 				"payment",
+				"payments",
+				"refunds",
 				"status",
 				"statusLabel",
 				"role",
 				"history",
 				"shipment",
+				"seenBy",
 				"stockHeld",
 				"facts",
 				"effects",
@@ -8180,14 +8186,14 @@
 					"items": {
 						"$ref": "#/components/schemas/OrderPayment"
 					},
-					"description": "Money received (missing on orders from before the payments log)."
+					"description": "Money received."
 				},
 				"refunds": {
 					"type": "array",
 					"items": {
 						"$ref": "#/components/schemas/OrderRefund"
 					},
-					"description": "Money given back (missing on orders from before the refunds log)."
+					"description": "Money given back."
 				},
 				"status": {
 					"type": "string",
