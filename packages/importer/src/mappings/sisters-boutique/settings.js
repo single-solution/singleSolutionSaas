@@ -417,6 +417,10 @@ export const settingsPlan = (values) => {
 					'Shop {brand} {category}. From {price}. {products} designs, {variants} in-stock configurations at {storeName}.',
 			},
 			lists: {
+				// SB's dispatch video, required when packing and shown to shoppers (E20; mechanical, store mapping to review)
+				attachment_kinds: [
+					{ key: 'dispatch_video', label: 'Dispatch video', type: 'video', requiredAt: 'packed', shoppers: true },
+				],
 				// SB's return and privacy policies in the SaaS's seeded list (E27; mechanical, store mapping to review)
 				policies: [
 					{ key: 'shipping', title: 'Delivery policy', text: '' },
@@ -438,8 +442,8 @@ export const settingsPlan = (values) => {
 						['awaiting-confirmation', 'confirmed', { options: { paidOnConfirm: ['bank_transfer'] } }],
 						['awaiting-confirmation', 'cancelled', { who: ['staff', 'shopper'] }],
 						['confirmed', 'pending-payment'],
-						// the dispatch video is required when packing (route.ts:106-110)
-						['confirmed', 'packed', { options: { video: 'required' } }],
+						// the dispatch video is required when packing (route.ts:106-110): the attachment kind below
+						['confirmed', 'packed'],
 						// a paid order too: cancelled, its refund left due
 						['confirmed', 'cancelled', { who: ['staff', 'shopper'], options: { shopperPaid: 'flag' } }],
 						['confirmed', 'refunded'],

@@ -363,7 +363,7 @@ export const orderStep = {
 				: {}),
 			...(video
 				? {
-						media: [
+						attachments: [
 							{
 								kind: 'dispatch_video',
 								...(/^(https?:)?\/\//i.test(video) ? { url: siteAddress(video) } : { key: mediaKey(video) }),

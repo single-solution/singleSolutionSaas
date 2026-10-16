@@ -267,6 +267,8 @@ describe('the Sisters Boutique mapping through the products’ checks', () => {
 			catalog: { currency: plan['catalog.currency'] },
 			country: 'PK',
 			now: Date.now(),
+			// the mapping's own attachment kinds (E20)
+			attachmentKinds: /** @type {any} */ (settings.ecommerce?.lists?.attachment_kinds),
 		});
 		const customers = await records('ecommerce.customers');
 		expect(refusals(customers, (record) => orders.checkImportedCustomer(record, rules))).toEqual([]);

@@ -384,7 +384,9 @@ describe('the Sisters Boutique mapping', () => {
 			payments: [{ method: 'cod', amount: 1_231_600, note: 'Imported', at: '2026-08-25T10:00:00.000Z' }],
 			deliveredAt: '2026-08-25T10:00:00.000Z',
 			shipment: { trackingNote: 'Courier booked' },
-			media: [{ kind: 'dispatch_video', url: 'https://media.example.com/dispatch/0001.mp4', at: '2026-08-21T10:00:00.000Z' }],
+			attachments: [
+				{ kind: 'dispatch_video', url: 'https://media.example.com/dispatch/0001.mp4', at: '2026-08-21T10:00:00.000Z' },
+			],
 			seenBy: [id('usr', SB_IDS.owner), id('usr', SB_IDS.productManager)],
 			stockHeld: true,
 			idempotencyKey: 'checkout-0001',
@@ -418,7 +420,7 @@ describe('the Sisters Boutique mapping', () => {
 				{ to: 'confirmed' },
 				{ from: 'confirmed', to: 'packed', at: '2026-09-05T10:00:00.000Z', note: 'Imported: the status at the move' },
 			],
-			media: [{ url: 'https://media.example.com/dispatch/0006.mp4' }],
+			attachments: [{ url: 'https://media.example.com/dispatch/0006.mp4' }],
 		});
 		expect(orders.get('IM-2026-0007')).toMatchObject({
 			payments: [{ method: 'cod' }],
@@ -507,7 +509,10 @@ describe('the Sisters Boutique mapping', () => {
 		/** @param {string} from @param {string} to */
 		const move = (from, to) => flow.moves.find((/** @type {any} */ entry) => entry.from === from && entry.to === to);
 		expect(move('pending-payment', 'confirmed').options).toEqual({ paidOnConfirm: ['bank_transfer'] });
-		expect(move('confirmed', 'packed').options).toEqual({ video: 'required' });
+		expect(move('confirmed', 'packed').options).toBeUndefined();
+		expect(settings.ecommerce?.lists?.attachment_kinds).toEqual([
+			{ key: 'dispatch_video', label: 'Dispatch video', type: 'video', requiredAt: 'packed', shoppers: true },
+		]);
 		expect(move('packed', 'dispatched').options).toEqual({ tracking: 'optional' });
 		expect(move('confirmed', 'cancelled')).toMatchObject({ who: ['staff', 'shopper'], options: { shopperPaid: 'flag' } });
 		expect(move('delivered', 'returned').options).toEqual({ restock: 'yes', points: 'keep' });
@@ -743,7 +748,7 @@ describe('the Sisters Boutique mapping', () => {
 			payments: [],
 			history: [{ from: null, to: 'delivered', note: 'Imported: no timeline' }],
 			deliveredAt: '2026-08-27T10:00:00.000Z',
-			media: [{ key: 'uploads/clip.mp4' }],
+			attachments: [{ key: 'uploads/clip.mp4' }],
 			totals: { discount: 300_000, total: 0 },
 		});
 	});
