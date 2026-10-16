@@ -15,13 +15,7 @@
  * @module
  */
 import { MAX_AMOUNT } from '@ss/contracts/format';
-import { isObject as isJsonObject } from '@ss/contracts/util';
-
-/**
- * The shared check, with the members of what it finds read as `any`: this file checks JSON by hand, then trusts what it found.
- * @type {(value: unknown) => value is Record<string, any>}
- */
-const isObject = isJsonObject;
+import { isObject } from './json.js';
 
 /** Thousandths of the unit in one unit (the integer base of measured quantities). */
 export const MILLI = 1000;

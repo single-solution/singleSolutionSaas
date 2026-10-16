@@ -21,7 +21,7 @@
  * of a deal. No I/O.
  * @module
  */
-import { isObject as isJsonObject } from '@ss/contracts/util';
+import { isObject } from './json.js';
 import { publicPhoto } from './catalog-content.js';
 import { MAX_QUANTITY, lineGross, perMeasure, piecesOf } from './measure.js';
 import { DEAL_TYPES } from './model.js';
@@ -41,12 +41,6 @@ import {
 	isLive,
 	isoOrNull,
 } from './promotions-rules.js';
-
-/**
- * The shared check, with the members of what it finds read as `any`: this file checks JSON by hand, then trusts what it found.
- * @type {(value: unknown) => value is Record<string, any>}
- */
-const isObject = isJsonObject;
 
 /** @typedef {import('./model.js').DealRecord} DealRecord */
 /** @typedef {import('./model.js').DealConditions} DealConditions */

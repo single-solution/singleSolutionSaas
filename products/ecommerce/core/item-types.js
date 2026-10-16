@@ -16,15 +16,9 @@
  * stock is in thousandths of the unit), but they are not sold then. No I/O.
  * @module
  */
-import { isObject as isJsonObject } from '@ss/contracts/util';
+import { isObject } from './json.js';
 import { FIELD_LIMITS } from './fields.js';
 import { checkMeasure, checkQuantityRule, sameMeaning } from './measure.js';
-
-/**
- * The shared check, with the members of what it finds read as `any`: this file checks JSON by hand, then trusts what it found.
- * @type {(value: unknown) => value is Record<string, any>}
- */
-const isObject = isJsonObject;
 
 /** Item kinds (fixed in code): physical goods (delivery or pickup), digital goods (paid before given), services. */
 export const ITEM_KINDS = Object.freeze(/** @type {const} */ (['physical', 'digital', 'service']));

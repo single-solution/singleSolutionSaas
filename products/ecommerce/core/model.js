@@ -23,6 +23,9 @@ export const isDuplicate = (error) => {
 	return /** @type {any} */ (error).code === 11000;
 };
 
+/** Products in a wishlist, at most. */
+export const MAX_WISHLIST = 200;
+
 /** Most products on one page of a listing (E8): the `limit` of a read and the `pageSize` setting stop here. */
 export const MAX_PAGE_SIZE = 60;
 /** Highest page number of a listing. */

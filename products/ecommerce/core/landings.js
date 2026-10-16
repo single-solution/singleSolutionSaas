@@ -10,16 +10,10 @@
  * parameter: `grade` or `attr.<slug>`) and `{value}`; query pairs with an empty name or value are left out. No I/O.
  * @module
  */
-import { isObject as isJsonObject } from '@ss/contracts/util';
+import { isObject } from './json.js';
 import { cleanText } from './catalog.js';
 import { checkFaqs } from './catalog-content.js';
 import { MAX_FAQS } from './catalog-taxonomy.js';
-
-/**
- * The shared check, with the members of what it finds read as `any`: this file checks JSON by hand, then trusts what it found.
- * @type {(value: unknown) => value is Record<string, any>}
- */
-const isObject = isJsonObject;
 
 /** @typedef {import('./model.js').LandingRecord} LandingRecord */
 /** @typedef {import('./model.js').LandingFacet} LandingFacet */

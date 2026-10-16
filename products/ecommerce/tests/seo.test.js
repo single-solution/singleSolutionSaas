@@ -598,6 +598,10 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		expect(written.headers.get('content-type')).toContain('text/plain');
 		await shop.setting('llms_txt', 'custom', '');
 		expect((await shop.api('GET', '/v1/llms.txt')).text).toContain('# ');
+		// no description of its own: the shop's home description of the SEO settings (said once, not three times)
+		await shop.setting('llms_txt', 'description', '');
+		await shop.setting('seo', 'defaultDescription', 'Phones, books and more.');
+		expect((await shop.api('GET', '/v1/llms.txt')).text).toContain('> Phones, books and more.');
 	});
 
 	it('answers the policies to visitors and the server', async () => {

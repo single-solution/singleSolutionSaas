@@ -17,6 +17,7 @@ import {
 	fieldGrid,
 	formatDate,
 	formatMoney,
+	formatText,
 	moreMenu,
 	mountWidget,
 	openDialog,
@@ -34,14 +35,6 @@ import { WIDGET_CSS } from './styles.js';
 /** @typedef {import('@ss/app-kit/widget').Answer} Answer status 0 when signed out or unreachable */
 /** @typedef {Node | string | null | undefined | false} Child */
 /** @typedef {{ value: string, label: string }} Choice */
-
-/**
- * A text with its `{placeholders}` filled.
- * @param {string} text
- * @param {Record<string, string | number>} values
- */
-const fill = (text, values) =>
-	text.replace(/\{(\w+)\}/g, (match, key) => (Object.hasOwn(values, key) ? String(values[key]) : match));
 
 /**
  * The start of a day (`YYYY-MM-DD` from a date input) in the business time zone as ISO-8601, or ''.
@@ -186,7 +179,7 @@ const createKit = ({ root, config, api, win, save, open }) => {
 	let ids = 0;
 
 	/** @param {string} key @param {Record<string, string | number>} [values] */
-	const t = (key, values = {}) => fill(config.texts[key] ?? key, values);
+	const t = (key, values = {}) => formatText(config.texts[key] ?? key, values);
 	/** @param {string} feature */
 	const has = (feature) => config.features.includes(feature);
 

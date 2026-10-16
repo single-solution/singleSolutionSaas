@@ -7,7 +7,7 @@
  */
 import { summarize, valueLabel, variantInStock, variantName } from './catalog.js';
 import { gradeView } from './grades.js';
-import { MAX_QUANTITY, levelOf, limitsOf } from './measure.js';
+import { levelOf } from './measure.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
@@ -222,22 +222,21 @@ export const specsOf = (product, attributes) =>
  * @param {Array<{ id: string, slug: string, name: string, url: string }>} context.breadcrumb
  * @param {ReadonlyMap<string, AttributeRecord>} context.attributes
  * @param {ReadonlyMap<string, Grade>} context.grades
- * @param {ReadonlyMap<string, MediaView[]>} [context.variantMedia] each variant's photos (E6)
- * @param {ReadonlyMap<string, string>} [context.variantUrls] each variant's page (E13)
- * @param {{ showStock: string, lowStockShown: number }} [context.stock] what shoppers are told of stock (E9)
- * @param {import('./durations.js').Duration | null} [context.warrantyTime] the `returns` setting (E12, E14)
- * @param {ReturnType<typeof import('./size-charts.js').chartView> | null} [context.sizeChart] (E5)
- * @param {Record<string, unknown> | null} [context.video] (E4)
+ * @param {ReadonlyMap<string, MediaView[]>} context.variantMedia each variant's photos (E6)
+ * @param {ReadonlyMap<string, string>} context.variantUrls each variant's page (E13)
+ * @param {{ showStock: string, lowStockShown: number }} context.stock what shoppers are told of stock (E9)
+ * @param {import('./durations.js').Duration | null} context.warrantyTime the `returns` setting (E12, E14)
+ * @param {ReturnType<typeof import('./size-charts.js').chartView> | null} context.sizeChart (E5)
+ * @param {Record<string, unknown> | null} context.video (E4)
  * @param {Shown} context.shown each variant's shown price (G4)
  * @param {{ key: string, kind: string }} context.type its item type (dynamic model §1)
  * @param {boolean} context.slots it is booked in time slots (its type's `slots`, while Services and bookings is on)
- * @param {import('./measure.js').Measure | null} [context.measure] it is sold in a unit of its own (its type's
+ * @param {import('./measure.js').Measure | null} context.measure it is sold in a unit of its own (its type's
  *   `measure`, while Sell in any unit is on)
- * @param {import('./measure.js').QuantityLimits} [context.limits] the quantities a shopper may buy (E4)
+ * @param {import('./measure.js').QuantityLimits} context.limits the quantities a shopper may buy (E4)
  */
 export const pageOf = (product, context) => {
 	const { currency, url, media, brand, breadcrumb, attributes, grades, shown } = context;
-	const stock = context.stock ?? { showStock: 'none', lowStockShown: 0 };
 	const variants = product.variants
 		.filter((variant) => variant.active)
 		.map((variant) => {
@@ -261,11 +260,11 @@ export const pageOf = (product, context) => {
 				deal: price.deal ? { ...price.deal, savings: price.savings } : null,
 				inStock: variantInStock(variant, product.trackStock),
 				soldOut: variant.soldOut,
-				stockLeft: stockLeftOf(variant, product.trackStock, stock, context.measure),
+				stockLeft: stockLeftOf(variant, product.trackStock, context.stock, context.measure),
 				grade: grade ? gradeView(grade) : null,
-				warrantyTime: variant.warrantyTime ?? product.warrantyTime ?? grade?.warrantyTime ?? context.warrantyTime ?? null,
-				media: context.variantMedia?.get(variant.id) ?? [],
-				url: context.variantUrls?.get(variant.id) ?? url,
+				warrantyTime: variant.warrantyTime ?? product.warrantyTime ?? grade?.warrantyTime ?? context.warrantyTime,
+				media: context.variantMedia.get(variant.id) ?? [],
+				url: context.variantUrls.get(variant.id) ?? url,
 			};
 		});
 	return {
@@ -275,9 +274,9 @@ export const pageOf = (product, context) => {
 		kind: product.kind,
 		type: { key: context.type.key, kind: context.type.kind },
 		// sold in a unit of its own: prices are per unit, quantities and stock thousandths of it
-		measure: context.measure ?? null,
+		measure: context.measure,
 		// the quantities a shopper may buy: in pieces, or thousandths of the unit (E4)
-		limits: context.limits ?? limitsOf(context.measure, null, MAX_QUANTITY),
+		limits: context.limits,
 		summary: product.summary,
 		description: product.description,
 		descriptionHtml: product.descriptionHtml,
@@ -287,7 +286,7 @@ export const pageOf = (product, context) => {
 		featured: product.featured,
 		url,
 		media,
-		video: context.video ?? null,
+		video: context.video,
 		options: product.options,
 		variants,
 		specs: specsOf(product, attributes),
@@ -296,7 +295,7 @@ export const pageOf = (product, context) => {
 		tags: product.tags,
 		rating: product.rating,
 		booking: context.slots && product.booking ? { durationMinutes: product.booking.durationMinutes } : null,
-		sizeChart: context.sizeChart ?? null,
+		sizeChart: context.sizeChart,
 		faqs: product.faqs,
 		seo: {
 			title: product.seo.title || product.name,

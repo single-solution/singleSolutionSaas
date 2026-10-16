@@ -1062,9 +1062,10 @@ const customerFlags = (customer) => ({
 
 /**
  * Members of an order record the staff view leaves out: what only the shopper's browser may know (the guest order's key
- * hash, the checkout's Idempotency-Key) and the search's own copy of the phone's digits.
+ * hash, the checkout's Idempotency-Key), the search's own copy of the phone's digits and the mark a return claim leaves
+ * when it puts units back in stock (it only locks the order against a second claim).
  */
-const LEFT_OUT = Object.freeze(['accessKeyHash', 'idempotencyKey', 'phoneDigits']);
+const LEFT_OUT = Object.freeze(['accessKeyHash', 'idempotencyKey', 'phoneDigits', 'claimRestockedAt']);
 
 /**
  * An order as staff see it: everything but the guest order's key hash and the checkout's Idempotency-Key (secrets of

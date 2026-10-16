@@ -23,7 +23,7 @@ import { DURATION_RULE, durationOf } from './durations.js';
 import { derivedFacts } from './facts.js';
 import { statusOf } from './flow.js';
 import { guestKeyOf, guestRules, phoneDigitsOf, phoneRules } from './guests.js';
-import { ID_PREFIX } from './model.js';
+import { ID_PREFIX, MAX_WISHLIST } from './model.js';
 import { MAX_AMOUNT } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
 import { describeNumberForm, numberFormOf, numberMatcher } from './order-numbers.js';
@@ -75,8 +75,6 @@ const MAX_ENTRIES = 1000;
 /** Lots and history entries of an imported loyalty account, at most (the product keeps the newest 200 entries). */
 const MAX_LOTS = 5000;
 const MAX_POINTS_HISTORY = 5000;
-/** Products of a wishlist, at most (as `server/extras-shopper.js` keeps them). */
-const MAX_WISHLIST = 200;
 /** Photos of a claim, staff notes of a claim, staff ids that opened a record, at most. */
 const MAX_PHOTOS = 10;
 const MAX_CLAIM_NOTES = 200;

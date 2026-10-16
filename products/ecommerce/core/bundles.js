@@ -10,7 +10,7 @@
  * best saving first. Units are counted per line (never expanded), so large quantities stay cheap. No I/O.
  * @module
  */
-import { isObject as isJsonObject } from '@ss/contracts/util';
+import { isObject } from './json.js';
 import { BUNDLE_TYPES } from './model.js';
 import { allocateUnits, percentOf, roundDown } from './money.js';
 import {
@@ -26,12 +26,6 @@ import {
 	isLive,
 	isoOrNull,
 } from './promotions-rules.js';
-
-/**
- * The shared check, with the members of what it finds read as `any`: this file checks JSON by hand, then trusts what it found.
- * @type {(value: unknown) => value is Record<string, any>}
- */
-const isObject = isJsonObject;
 
 /** @typedef {import('./model.js').BundleRecord} BundleRecord */
 /** @typedef {import('./promotions-rules.js').Checked} Checked */

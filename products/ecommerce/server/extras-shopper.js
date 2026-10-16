@@ -9,7 +9,7 @@ import { defineRoute, problem } from '@ss/app-kit';
 import { categoriesOf } from '../adapters/catalog-store.js';
 import { userIdsOf } from '../adapters/extras-store.js';
 import { MAX_COMPARE, compareRows, gradeLabels, parseCompareIds } from '../core/compare.js';
-import { COLLECTIONS, NO_ID } from '../core/model.js';
+import { COLLECTIONS, MAX_WISHLIST, NO_ID } from '../core/model.js';
 import { VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -19,9 +19,6 @@ import { VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/model.js').WishlistRecord} WishlistRecord */
 /** @typedef {import('../core/model.js').AttributeRecord} AttributeRecord */
-
-/** Products in a wishlist, at most. */
-export const MAX_WISHLIST = 200;
 
 /**
  * @param {Product} _product

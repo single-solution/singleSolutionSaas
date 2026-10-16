@@ -5,7 +5,7 @@
 		"description": {
 			"type": "string",
 			"title": "About your shop",
-			"description": "A short description of your shop for AI assistants, shown under your business name.",
+			"description": "A short description of your shop for AI assistants, shown under your business name. Empty: the default description of your SEO settings.",
 			"default": "",
 			"maxLength": 2000,
 			"x-ui": {

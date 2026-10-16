@@ -14,7 +14,7 @@
  */
 import { isId } from '@ss/contracts';
 import { isAmount } from '@ss/contracts/format';
-import { isObject as isJsonObject } from '@ss/contracts/util';
+import { isObject } from './json.js';
 import { checkValue, fieldApplies, gtinOf, valueProblem } from './fields.js';
 import { DURATION_RULE, durationOf } from './durations.js';
 import { gradeForType } from './grades.js';
@@ -31,12 +31,6 @@ import {
 	mediaExtras,
 	publicPhoto,
 } from './catalog-content.js';
-
-/**
- * The shared check, with the members of what it finds read as `any`: this file checks JSON by hand, then trusts what it found.
- * @type {(value: unknown) => value is Record<string, any>}
- */
-const isObject = isJsonObject;
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */

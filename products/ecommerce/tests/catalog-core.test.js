@@ -711,6 +711,14 @@ describe('views', () => {
 			shown: listShown,
 			type: BUILT_IN_TYPES.physical,
 			slots: false,
+			variantMedia: new Map(),
+			variantUrls: new Map(),
+			stock: { showStock: 'none', lowStockShown: 0 },
+			warrantyTime: null,
+			sizeChart: null,
+			video: null,
+			measure: null,
+			limits: { min: 1, max: 100, step: 1 },
 		});
 		expect(page.type).toEqual({ key: 'physical', kind: 'physical' });
 		expect(page.seo).toEqual({ title: 'T', description: 'D' });

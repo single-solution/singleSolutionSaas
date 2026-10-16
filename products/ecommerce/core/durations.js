@@ -4,13 +4,7 @@
  * last day of February). Shown in the reader's language by `Intl` (`1 year`, `2 Jahre`). No I/O.
  * @module
  */
-import { isObject as isJsonObject } from '@ss/contracts/util';
-
-/**
- * The shared check, with the members of what it finds read as `any`: this file checks JSON by hand, then trusts what it found.
- * @type {(value: unknown) => value is Record<string, any>}
- */
-const isObject = isJsonObject;
+import { isObject } from './json.js';
 
 /** The units of a time. */
 export const DURATION_UNITS = Object.freeze(/** @type {const} */ (['days', 'months', 'years']));

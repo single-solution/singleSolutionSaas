@@ -1079,6 +1079,14 @@ export const createSeo = (product, service) => {
 		return treeOrder((await allCategories(data)).filter((category) => !hidden.categoryIds.includes(category.id)));
 	};
 
+	/**
+	 * The shop's description under its name in llms.txt: the `llms_txt` setting, else the SEO settings' default
+	 * description (a shop says what it is once).
+	 * @param {Site} s @param {Record<string, any>} settings the `llms_txt` settings
+	 */
+	const llmsDescription = async (s, settings) =>
+		String(settings.description).trim() || String((await seoSettingsOf(s)).defaultDescription ?? '');
+
 	/** @param {any} ctx */
 	const llmsTxt = async (ctx) => {
 		const s = await service.site(ctx);
@@ -1127,7 +1135,7 @@ export const createSeo = (product, service) => {
 		const policies = settings.policies === false ? null : await policiesOf(s);
 		const text = buildLlmsTxt({
 			name: business.name,
-			description: String(settings.description),
+			description: await llmsDescription(s, settings),
 			home: `https://${s.domain}/`,
 			categories: await Promise.all(
 				ordered.map(async (category) => ({
@@ -1231,7 +1239,7 @@ export const createSeo = (product, service) => {
 			.flatMap(([, list]) => list);
 		const text = buildLlmsFull({
 			name: business.name,
-			description: String(settings.description),
+			description: await llmsDescription(s, settings),
 			home: `https://${s.domain}/`,
 			sections: [...sections, { name: LLMS_HEADINGS.products, url: null, grades: [], products: loose }],
 			headings: { grades: LLMS_HEADINGS.grades },
