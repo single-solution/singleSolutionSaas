@@ -407,30 +407,6 @@ describe("a product's state and its money history never disagree (BP-3)", () => 
 		expect([await rows(h, 'added'), await rows(h, 'removed')]).toEqual([1, 1]);
 	});
 
-	it('repeating an add or a remove repairs a history entry lost before both were one write', async () => {
-		const { h, clock } = await boot('cm_bp3_repair');
-		const products = h.db.collection('commerce_products');
-		const _id = /** @type {any} */ (`${W1}:${PRODUCT}`);
-		await h.service.addProduct(PAIR);
-		await report(h, 1, ['codes']);
-		// what a Remove whose history insert failed left: removed, while the history still charges it
-		clock.set(T0 + HOUR + 5 * MIN);
-		await products.updateOne({ _id }, { $set: { status: 'removed', removedAt: new Date(clock.now()) } });
-		expect((await h.service.billingSummary(M1)).products).toHaveLength(1);
-		expect(await h.service.removeProduct(PAIR)).toMatchObject({ status: 'removed' });
-		const removed = await h.service.billingSummary(M1);
-		expect(removed).toMatchObject({ products: [], dailySpend: 0 });
-		await expect(h.service.removeProduct(PAIR)).rejects.toMatchObject({ code: 'not_found' });
-		// what an Add whose history insert failed left: added (switches reported since), but not in the history
-		clock.set(T0 + 2 * HOUR + 5 * MIN);
-		await products.updateOne({ _id }, { $set: { status: 'added', on: ['codes'] } });
-		expect((await h.service.billingSummary(M1)).products).toEqual([]);
-		expect(await h.service.addProduct(PAIR)).toMatchObject({ status: 'active', featuresOn: ['codes'], hourlyCost: 1000 });
-		await expect(h.service.addProduct(PAIR)).rejects.toMatchObject({ code: 'conflict' });
-		// 10:00 and 11:00 charged before the repaired remove, 12:00 after the repaired add
-		expect((await h.service.billingSummary(M1)).balance).toBe(100_000 - 3000);
-	});
-
 	it('a feature report writes the switches and their history together', async () => {
 		const { h, service, failures } = await boot('cm_bp3_features');
 		await h.service.addProduct(PAIR);

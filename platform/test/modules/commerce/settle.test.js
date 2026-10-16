@@ -161,9 +161,6 @@ describe('the check reads from the last settled point only (K-19)', () => {
 		h.clock.set(at(7, 9));
 		const late = numbers(await h.service.billingSummary(M1));
 		expect(late.dailySpend).toBe(24 * (2000 + 500));
-		// what the pre-K-19 check (whole history from the settled point) found
-		await h.db.collection('commerce_billing').updateOne({ _id: /** @type {any} */ (M1) }, { $unset: { held: '' } });
-		expect(numbers(await h.service.billingSummary(M1))).toEqual(late);
 	});
 
 	it('a check never waits long for a ledger held by another write: it answers live and writes nothing', async () => {

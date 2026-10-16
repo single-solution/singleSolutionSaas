@@ -4,8 +4,7 @@
  * - **Add** (Owner, Support): only active connected products not yet on the website; the two tokens are created, or
  *   restored on a re-add; the switches start all off. **Remove**: status removed, nothing is charged from the next hour;
  *   it works even when the product cannot be reached. Both tell the product (`status.changed`). The product's state
- *   and its money history are written in one transaction, and repeating an add or remove repairs a history entry that
- *   was lost before they were.
+ *   and its money history are written in one transaction.
  * - **Price reports** (row 2): refused whole (422) for a bad shape or price, 409 when the version is not higher;
  *   accepted lists apply at once and are written to Activity as reported by the product.
  * - **Feature reports** (row 3): refused whole for an unknown key, a switched-on feature without a price, a dependency
@@ -110,20 +109,11 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 	};
 
 	/**
-	 * Whether the money history has the product on the website now (its last added or removed entry is `added`).
-	 * @param {string} merchantId @param {string} websiteId @param {string} productId
-	 * @param {import('mongodb').ClientSession} [session]
-	 */
-	const addedInHistory = async (merchantId, websiteId, productId, session) =>
-		(await repo.lastHistory(merchantId, ['added', 'removed'], { websiteId, productId }, session))?.kind === 'added';
-
-	/**
 	 * Add a product to a website (Owner, Support): active connected products not yet on the website. A re-add restores
 	 * the same tokens; the switches start all off and `featuresVersion` rises by one, so a product that could not be
 	 * reached across both the removal and the re-add (it never saw `removed`) learns from its next status read that its
 	 * switches were reset (PLAN 0.4.12 row 4). The tokens come first; the product's state and its money history are then
-	 * written in one transaction. A product whose state says added but whose history lost the entry (written before
-	 * both were one transaction) is repaired by adding it again.
+	 * written in one transaction.
 	 * @param {{ merchantId: string, websiteId: string, productId: string } & Caller} input
 	 */
 	const add = async ({ merchantId, websiteId, productId, actor, requestId = null, ip = null }) => {
@@ -133,19 +123,11 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 		const ops = repo.productsOf(merchantId);
 		const _id = productKey(websiteId, productId);
 		const already = () => problem('conflict', 'This product is already on the website.');
-		const existing = await ops.findOne({ merchantId, _id });
-		if (existing?.status === 'added' && (await addedInHistory(merchantId, websiteId, productId))) throw already();
+		if ((await ops.findOne({ merchantId, _id }))?.status === 'added') throw already();
 		await deps.ensureTokens({ merchantId, websiteId, productId });
 		await ctx.withTransaction(async (session) => {
 			const doc = await ops.findOne({ merchantId, _id }, { session });
-			if (doc?.status === 'added') {
-				if (await addedInHistory(merchantId, websiteId, productId, session)) throw already();
-				// repair: the history follows the state, the switches it reported included
-				await billing.recordProductAdded({ merchantId, websiteId, productId }, session);
-				if (Array.isArray(doc.on) && doc.on.length > 0)
-					await billing.recordSwitches({ merchantId, websiteId, productId, on: doc.on }, session);
-				return;
-			}
+			if (doc?.status === 'added') throw already();
 			const at = new Date(ctx.now());
 			try {
 				if (doc)
@@ -173,8 +155,7 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 	/**
 	 * Remove a product from a website (typed confirmation in the screen): status removed; its tokens are refused by
 	 * the status and kept for a re-add. Works even when the product cannot be reached. The state and the money history
-	 * are written in one transaction; removing a removed product whose history lost the entry (written before both
-	 * were one transaction) writes it, so nothing more is charged.
+	 * are written in one transaction.
 	 * @param {{ merchantId: string, websiteId: string, productId: string } & Caller} input
 	 */
 	const remove = async ({ merchantId, websiteId, productId, actor, requestId = null, ip = null }) => {
@@ -191,12 +172,7 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 			await billing.recordProductRemoved({ merchantId, websiteId, productId }, session);
 			return true;
 		});
-		if (!removed) {
-			const doc = await ops.findOne({ merchantId, _id });
-			if (doc?.status !== 'removed' || !(await addedInHistory(merchantId, websiteId, productId)))
-				throw problem('not_found', 'This product is not on the website.');
-			await billing.recordProductRemoved({ merchantId, websiteId, productId });
-		}
+		if (!removed) throw problem('not_found', 'This product is not on the website.');
 		await audit(actor, 'product.removed', { merchantId, websiteId, productId }, { requestId, ip });
 		await deps.statusChanged(productId, websiteId);
 		return { websiteId, productId, status: /** @type {const} */ ('removed') };

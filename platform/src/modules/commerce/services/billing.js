@@ -313,12 +313,9 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	const runCheck = async (merchantId) => {
 		const now = ctx.now();
 		const stored = await repo.billingOf(merchantId);
-		const settledAt = stored?.settledThrough instanceof Date ? stored.settledThrough.getTime() : null;
-		/** @type {HeldState | null} the products and suspension at the settled point (none in a doc from before it was kept) */
-		const held =
-			settledAt !== null && Array.isArray(stored?.held?.products)
-				? { suspended: stored?.held.suspended === true, products: stored?.held.products }
-				: null;
+		const settledAt = stored ? stored.settledThrough.getTime() : null;
+		/** @type {HeldState | null} the products and suspension at the settled point */
+		const held = stored ? { suspended: stored.held.suspended, products: stored.held.products } : null;
 		const [{ events, graceEnds, earliest }, settledOpening] = await Promise.all([
 			inputsOf(merchantId, now, settledAt !== null && held ? { from: settledAt, held } : null),
 			settledAt === null ? null : openingOf(merchantId, settledAt),
