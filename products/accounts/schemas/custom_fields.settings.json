@@ -8,7 +8,10 @@
 			"description": "How many custom fields the website can have.",
 			"default": 50,
 			"minimum": 1,
-			"maximum": 100
+			"maximum": 100,
+			"x-ui": {
+				"advanced": true
+			}
 		},
 		"maxChoices": {
 			"type": "integer",
@@ -16,7 +19,10 @@
 			"description": "How many choices a choice field can have.",
 			"default": 50,
 			"minimum": 2,
-			"maximum": 200
+			"maximum": 200,
+			"x-ui": {
+				"advanced": true
+			}
 		}
 	}
 }

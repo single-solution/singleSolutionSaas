@@ -7,7 +7,7 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DashboardProvider } from '@ss/ui/dashboard';
-import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
+import { allByRole, byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import manifest from '../manifest.json' with { type: 'json' };
 import { MethodsEditor } from '../app/dashboard/methods.js';
 import { TABS } from '../app/dashboard/tabs.js';
@@ -204,10 +204,10 @@ describe('the manual payment methods editor (P1, P2)', () => {
 		return saved;
 	};
 
-	/** @param {string} websiteId @param {boolean} [off] */
-	const Editor = (websiteId, off = false) => (
+	/** @param {string} websiteId */
+	const Editor = (websiteId) => (
 		<DashboardProvider manifest={manifest} texts={TEXTS}>
-			<MethodsEditor websiteId={websiteId} off={off} />
+			<MethodsEditor websiteId={websiteId} />
 		</DashboardProvider>
 	);
 
@@ -216,20 +216,19 @@ describe('the manual payment methods editor (P1, P2)', () => {
 		const { container } = render(Editor(`web_${(website += 1)}`));
 		await settle();
 		expect(byLabel(container, 'Name payers see').value).toBe('Bank transfer');
+		// one method at a time: the new one is picked after Add method
 		click(byText(container, 'Add method', 'button'));
-		const names = [...container.querySelectorAll('label')].filter((label) => label.textContent?.startsWith('Name payers see'));
-		expect(names).toHaveLength(2);
-		const second = /** @type {HTMLInputElement} */ (
-			document.getElementById(/** @type {HTMLLabelElement} */ (names[1]).htmlFor)
-		);
-		type(second, 'Cash on delivery');
-		const kinds = /** @type {HTMLSelectElement[]} */ ([...container.querySelectorAll('select')]);
-		type(/** @type {HTMLSelectElement} */ (kinds[1]), 'on_delivery');
-		// a row more on the bank account
+		expect(
+			[...container.querySelectorAll('label')].filter((label) => label.textContent?.startsWith('Name payers see')),
+		).toHaveLength(1);
+		type(byLabel(container, 'Name payers see'), 'Cash on delivery');
+		type(/** @type {HTMLSelectElement} */ (container.querySelector('select')), 'on_delivery');
+		// a row more on the bank account of the first method
+		click(/** @type {HTMLElement} */ (allByRole(container, 'tab')[0]));
 		click(byText(container, 'Add row', 'button'));
-		// the new method first (the last Move up is the second method's)
-		const ups = [...container.querySelectorAll('button')].filter((b) => b.textContent === 'Move up');
-		click(/** @type {HTMLElement} */ (ups.at(-1)));
+		// the new method first
+		click(/** @type {HTMLElement} */ (allByRole(container, 'tab')[1]));
+		click(byText(container, 'Move up', 'button'));
 		click(byText(container, 'Save', 'button'));
 		await settle();
 		expect(saved).toHaveLength(1);
@@ -284,6 +283,7 @@ describe("Payments's dashboard Developers tab", () => {
 			</DashboardProvider>,
 		);
 		await settle();
+		click(/** @type {HTMLElement} */ (container.querySelector('nav a[href="#callbacks"]')));
 		expect(container.textContent).toContain('Stripe: https://p.example/v1/gateways/stripe/web_9');
 		expect(container.textContent).toContain('JazzCash (Pakistan): https://p.example/return/jazzcash/web_9/<paymentId>');
 	});

@@ -12,8 +12,8 @@ import manifest from '../../manifest.json' with { type: 'json' };
 import { searchParamsOf, tagsReady } from '../../core/config.js';
 import { createSnippets } from '../../core/snippets.js';
 import { BROWSER_EVENTS, SITE_EVENTS } from '../../core/widgets.js';
-import { ListCards } from './lists.js';
-import { AtAGlance, settingsNotice } from './setup.js';
+import { listExtras } from './lists.js';
+import { settingsNotice } from './setup.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('@ss/ui/dashboard').TabProps} TabProps */
@@ -33,11 +33,10 @@ const valuesOf = (data) =>
 
 /**
  * Growth's part of the Overview (PLAN 0.6 "Overviews talk"), from the website's settings: the tags ready (while a tag
- * feature is on), the tag features with no id or script yet, and the setup of the switched-on features at a glance.
+ * feature is on) and the tag features with no id or script yet.
  * @type {import('@ss/ui/dashboard').UseOverviewMore}
  */
 const useGrowthOverview = (overview, { websiteId, open }) => {
-	const timeZone = useViewerTimeZone();
 	const settings = useLoad(`/v1/dashboard/websites/${websiteId}/settings`);
 	// custom scripts live in the consent categories (G3): read them only while Custom scripts is on
 	const scripts = overview?.ok === true && overview.data.featuresOn.includes('custom_scripts');
@@ -76,9 +75,6 @@ const useGrowthOverview = (overview, { websiteId, open }) => {
 					kind="connection"
 				/>
 			) : null,
-		children: (
-			<AtAGlance values={values} context={{ on: data.featuresOn, domain: data.website.domain, now: Date.now(), timeZone }} />
-		),
 	};
 };
 
@@ -103,13 +99,7 @@ function GrowthSettings(props) {
 				String(features.find((feature) => feature.key === 'searches_404s')?.values.searchParams?.value ?? ''),
 			),
 		});
-	return (
-		<SettingsTab
-			{...props}
-			notice={notice}
-			featureCards={(features) => (props.websiteId ? <ListCards websiteId={props.websiteId} features={features} /> : null)}
-		/>
-	);
+	return <SettingsTab {...props} notice={notice} {...(props.websiteId ? { extras: listExtras(props.websiteId) } : {})} />;
 }
 
 /**
@@ -135,33 +125,69 @@ function GrowthDevelopers(props) {
 		permissions: manifest.permissions.map((permission) => permission.key),
 		loading: /** @type {'async' | 'blocking'} */ (manifest.widgetScriptLoading),
 	});
+	/** @param {string} id @param {string} title @param {string} help @param {import('react').ReactNode} body @param {import('@ss/ui').IconName} icon */
+	const part = (id, title, help, body, icon) => ({
+		id,
+		label: title,
+		icon,
+		content: (
+			<Section title={title} description={help}>
+				{body}
+			</Section>
+		),
+	});
 	return (
-		<DevelopersTab {...props}>
-			<Section title={D.script} description={D.scriptHelp}>
-				<CodeBlock code={snippets.pageScript} />
-				<CodeBlock code={snippets.consent} />
-			</Section>
-			<Section title={D.events} description={D.eventsHelp}>
-				<CodeBlock code={[...Object.keys(BROWSER_EVENTS), ...Object.keys(SITE_EVENTS)].join('\n')} />
-				<CodeBlock code={snippets.events} />
-				<CodeBlock code={snippets.page} />
-			</Section>
-			<Section title={D.api} description={D.apiHelp}>
-				<CodeBlock code={snippets.analytics} />
-				<CodeBlock code={snippets.robots} />
-				<CodeBlock code={snippets.indexNow} />
-				<CodeBlock code={snippets.seo} />
-				<CodeBlock code={snippets.redirects} />
-				<CodeBlock code={snippets.notice} />
-			</Section>
-			<Section title={D.widgets} description={D.widgetsHelp}>
-				<CodeBlock code={snippets.admin} />
-			</Section>
-			<Section title={D.ticket} description={D.ticketHelp}>
-				<CodeBlock code={snippets.ticketNode} />
-				<CodeBlock code={snippets.ticketCurl} />
-			</Section>
-		</DevelopersTab>
+		<DevelopersTab
+			{...props}
+			sections={[
+				part(
+					'script',
+					D.script,
+					D.scriptHelp,
+					<>
+						<CodeBlock code={snippets.pageScript} />
+						<CodeBlock code={snippets.consent} />
+					</>,
+					'code',
+				),
+				part(
+					'events',
+					D.events,
+					D.eventsHelp,
+					<>
+						<CodeBlock code={[...Object.keys(BROWSER_EVENTS), ...Object.keys(SITE_EVENTS)].join('\n')} />
+						<CodeBlock code={snippets.events} />
+						<CodeBlock code={snippets.page} />
+					</>,
+					'activity',
+				),
+				part(
+					'api',
+					D.api,
+					D.apiHelp,
+					<>
+						<CodeBlock code={snippets.analytics} />
+						<CodeBlock code={snippets.robots} />
+						<CodeBlock code={snippets.indexNow} />
+						<CodeBlock code={snippets.seo} />
+						<CodeBlock code={snippets.redirects} />
+						<CodeBlock code={snippets.notice} />
+					</>,
+					'database',
+				),
+				part('widgets', D.widgets, D.widgetsHelp, <CodeBlock code={snippets.admin} />, 'box'),
+				part(
+					'ticket',
+					D.ticket,
+					D.ticketHelp,
+					<>
+						<CodeBlock code={snippets.ticketNode} />
+						<CodeBlock code={snippets.ticketCurl} />
+					</>,
+					'key',
+				),
+			]}
+		/>
 	);
 }
 

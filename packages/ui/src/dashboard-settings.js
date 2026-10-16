@@ -27,7 +27,7 @@ import { Outcome, hasSettings } from './dashboard-parts.js';
 /** @typedef {import('react').ReactNode} ReactNode */
 /**
  * What a product adds to a feature's view: a node shown under the feature's settings, or `{ items }`, views of their
- * own listed under the feature (a list editor each).
+ * own listed under the feature (a list editor each). A node or an item brings its own heading (a `Section`).
  * @typedef {ReactNode | { items: Array<{ id: string, label: ReactNode, content: ReactNode }> }} FeatureExtra
  */
 
@@ -123,7 +123,7 @@ export function SettingsBar({ editor, texts }) {
 /**
  * One feature's settings (all its groups, or just `group`) with the edits laid over its saved values.
  * @param {{ feature: FeatureSettings, features: FeatureSettings[], editor: SettingsEditor, savedSource: string,
- *   notice?: SettingsNotice, group?: string, texts: Dashboard['texts'] }} props
+ *   notice?: SettingsNotice, group?: string, texts: Dashboard['texts'] }} props the `notice` is shown above the cards
  */
 function FeatureForm({ feature, features, editor, savedSource, notice, group, texts }) {
 	const changed = editor.edits[feature.key] ?? {};
@@ -143,7 +143,7 @@ function FeatureForm({ feature, features, editor, savedSource, notice, group, te
 			advancedTexts={{ title: texts.settings.advanced, description: texts.settings.advancedHelp }}
 			onReset={(name) => void editor.reset(feature.key, name)}
 			onChange={(name, value) => editor.change(feature.key, name, value)}
-			before={notice && group === undefined ? notice(feature.key, values, features) : null}
+			before={notice ? notice(feature.key, values, features) : null}
 			after={editor.result?.feature === feature.key ? <Outcome result={editor.result.answer} /> : null}
 		/>
 	);
@@ -181,14 +181,15 @@ export function featureSections({ features, editor, savedSource, dash, hideOff =
 			const shape = shapeOf(feature.schema);
 			const names = [...shape.groups, ...(shape.advanced ? [S.advanced] : [])];
 			const split = names.length >= GROUPS_AS_TABS_FROM;
-			const form = (/** @type {string | undefined} */ group) => (
+			// the notice sits above the first view of a feature that has several
+			const form = (/** @type {string | undefined} */ group, /** @type {boolean} */ first = true) => (
 				<FeatureForm
 					feature={feature}
 					features={features}
 					editor={editor}
 					savedSource={savedSource}
 					texts={texts}
-					{...(notice ? { notice } : {})}
+					{...(notice && first ? { notice } : {})}
 					{...(group !== undefined ? { group } : {})}
 				/>
 			);
@@ -205,7 +206,7 @@ export function featureSections({ features, editor, savedSource, dash, hideOff =
 							content: (
 								<>
 									<ViewTitle title={feature.name} description={name} />
-									{form(advanced ? 'Advanced' : name)}
+									{form(advanced ? 'Advanced' : name, index === 0)}
 									{index === names.length - 1 && extra !== undefined && !hasItems(extra) ? extra : null}
 								</>
 							),
@@ -224,27 +225,13 @@ export function featureSections({ features, editor, savedSource, dash, hideOff =
 						),
 					});
 			} else if (extra !== undefined && !hasItems(extra))
-				views.push({
-					id: `${key}.${slug(S.settingsView)}`,
-					label: S.settingsView,
-					content: (
-						<>
-							<ViewTitle title={feature.name} description={description} />
-							{extra}
-						</>
-					),
-				});
+				views.push({ id: `${key}.${slug(S.settingsView)}`, label: S.settingsView, content: extra });
 			if (hasItems(extra))
 				for (const item of extra.items)
 					views.push({
 						id: `${key}.${item.id}`,
 						label: item.label,
-						content: (
-							<>
-								<ViewTitle title={feature.name} description={typeof item.label === 'string' ? item.label : description} />
-								{item.content}
-							</>
-						),
+						content: item.content,
 					});
 			const only = views.length === 1 ? views[0] : undefined;
 			return only

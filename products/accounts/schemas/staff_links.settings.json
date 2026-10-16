@@ -7,7 +7,10 @@
 			"title": "Sign-in codes valid for (minutes)",
 			"default": 15,
 			"minimum": 5,
-			"maximum": 60
+			"maximum": 60,
+			"x-ui": {
+				"advanced": true
+			}
 		},
 		"setupDays": {
 			"type": "integer",
@@ -19,7 +22,7 @@
 		"setupPageUrl": {
 			"type": "string",
 			"title": "Setup page",
-			"description": "Your page that takes the link's code, for example https://www.example.com/account/setup/{code}, or a page with the sign-in widget (the code comes as ?ss_setup=<code>). Empty: your home page, with ?ss_setup=<code>.",
+			"description": "Your page that takes the setup link, for example https://www.example.com/account/setup/{code}. Empty: your home page.",
 			"default": "",
 			"maxLength": 2048
 		}

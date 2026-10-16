@@ -126,18 +126,15 @@ const usePaymentsOverview = (overview, { websiteId, open }) => {
 const PaymentsOverview = (props) => <OverviewTab {...props} useMore={usePaymentsOverview} />;
 
 /**
- * Settings: the shared one, with the manual payment methods editor beside the features' settings while the feature is
- * shown (merchants see switched-on features only; Owner and Support may prepare it while it is off).
+ * Settings: the shared one, with the manual payment methods editor under the Manual payment methods feature (shown
+ * while the feature is on).
  * @param {TabProps} props
  */
 const PaymentsSettings = (props) => (
 	<SettingsTab
 		{...props}
-		featureCards={(features) => {
-			const manual = features.find((feature) => feature.key === 'manual_payments');
-			return manual && props.websiteId ? (
-				<MethodsEditor websiteId={String(props.websiteId)} off={manual.on === false} />
-			) : null;
+		extras={{
+			manual_payments: props.websiteId ? <MethodsEditor websiteId={String(props.websiteId)} /> : null,
 		}}
 	/>
 );
@@ -168,32 +165,64 @@ function PaymentsDevelopers(props) {
 	const addresses = useLoad(props.websiteId ? `/v1/dashboard/websites/${props.websiteId}/gateway-addresses` : null);
 	/** @type {Array<{ gateway: string, name: string, urls: string[] }>} */
 	const items = addresses.answer?.ok ? addresses.answer.data.items : [];
+	/** @param {string} id @param {string} title @param {string} help @param {import('react').ReactNode} body @param {import('@ss/ui').IconName} icon */
+	const part = (id, title, help, body, icon) => ({
+		id,
+		label: title,
+		icon,
+		content: (
+			<Section title={title} description={help}>
+				{body}
+			</Section>
+		),
+	});
 	return (
-		<DevelopersTab {...props}>
-			<Section title={D.api} description={D.apiHelp}>
-				<CodeBlock code={snippets.create} />
-				<CodeBlock code={snippets.verify} />
-			</Section>
-			<Section title={D.callbacks} description={D.callbacksHelp}>
-				<CodeBlock code={items.flatMap((item) => item.urls.map((url) => `${item.name}: ${url}`)).join('\n')} />
-			</Section>
-			<Section title={D.events} description={D.eventsHelp}>
-				<CodeBlock code={snippets.webhook} />
-			</Section>
-			<Section title={D.more} description={D.moreHelp}>
-				<CodeBlock code={snippets.link} />
-				<CodeBlock code={snippets.refund} />
-				<CodeBlock code={snippets.methods} />
-				<CodeBlock code={snippets.subscription} />
-			</Section>
-			<Section title={D.widgets} description={D.widgetsHelp}>
-				<CodeBlock code={snippets.visitor} />
-				<CodeBlock code={snippets.admin} />
-			</Section>
-			<Section title={D.ticket} description={D.ticketHelp}>
-				<CodeBlock code={snippets.ticketNode} />
-			</Section>
-		</DevelopersTab>
+		<DevelopersTab
+			{...props}
+			sections={[
+				part(
+					'api',
+					D.api,
+					D.apiHelp,
+					<>
+						<CodeBlock code={snippets.create} />
+						<CodeBlock code={snippets.verify} />
+					</>,
+					'code',
+				),
+				part(
+					'callbacks',
+					D.callbacks,
+					D.callbacksHelp,
+					<CodeBlock code={items.flatMap((item) => item.urls.map((url) => `${item.name}: ${url}`)).join('\n')} />,
+					'link',
+				),
+				part('events', D.events, D.eventsHelp, <CodeBlock code={snippets.webhook} />, 'bell'),
+				part(
+					'more',
+					D.more,
+					D.moreHelp,
+					<>
+						<CodeBlock code={snippets.link} />
+						<CodeBlock code={snippets.refund} />
+						<CodeBlock code={snippets.methods} />
+						<CodeBlock code={snippets.subscription} />
+					</>,
+					'layers',
+				),
+				part(
+					'widgets',
+					D.widgets,
+					D.widgetsHelp,
+					<>
+						<CodeBlock code={snippets.visitor} />
+						<CodeBlock code={snippets.admin} />
+					</>,
+					'box',
+				),
+				part('ticket', D.ticket, D.ticketHelp, <CodeBlock code={snippets.ticketNode} />, 'key'),
+			]}
+		/>
 	);
 }
 

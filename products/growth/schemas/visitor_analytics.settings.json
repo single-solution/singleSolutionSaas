@@ -5,7 +5,7 @@
 		"detail": {
 			"type": "string",
 			"title": "Detail",
-			"description": "Anonymous: visits, pages, sources, devices and countries. Sessions: each visit in a browser tab also gets a random session id (kept in that tab's session storage, never a cross-site id), its browser and system family and its city, for sessions, bounce, duration, journeys, live visitors, Web Vitals per page and 404 referrers. Sessions are still anonymous: no IP address, user agent or cookie is kept.",
+			"description": "Anonymous: visits, pages, sources, devices, countries. Sessions: also a random id per browser tab for bounce, duration and journeys. No IP address or cookie is kept.",
 			"default": "anonymous",
 			"enum": ["anonymous", "sessions"],
 			"x-ui": {
@@ -16,7 +16,7 @@
 		"retentionMonths": {
 			"type": "integer",
 			"title": "Keep raw events (months)",
-			"description": "Raw events are removed by your database's expiry index after this many months (applies to events recorded from now on). Daily totals are kept forever.",
+			"description": "Raw events are removed after this many months. Daily totals are kept.",
 			"default": 13,
 			"minimum": 1,
 			"maximum": 25,
@@ -38,7 +38,7 @@
 		"recordCountry": {
 			"type": "boolean",
 			"title": "Record the visitor's country (and city)",
-			"description": "From your host's country header (and its city header with Detail set to Sessions); no IP address is ever kept.",
+			"description": "From your host’s country header; no IP address is kept.",
 			"default": true,
 			"x-ui": {
 				"group": "Data kept",

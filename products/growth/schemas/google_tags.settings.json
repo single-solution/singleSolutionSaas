@@ -16,7 +16,7 @@
 		"adsId": {
 			"type": "string",
 			"title": "Google Ads id",
-			"description": "AW-XXXXXXXXX. Loads only after the visitor consents to marketing. Which events are Google Ads conversions, with which label, is the list Conversion actions.",
+			"description": "AW-XXXXXXXXX. Loads after marketing consent. Conversions are set in Conversion actions.",
 			"default": "",
 			"maxLength": 30,
 			"x-ui": {
@@ -27,7 +27,7 @@
 		"gtmId": {
 			"type": "string",
 			"title": "Google Tag Manager container id",
-			"description": "GTM-XXXXXXX. Loads after the visitor consents to analytics or marketing; Consent Mode tells its tags what was granted.",
+			"description": "GTM-XXXXXXX. Loads after analytics or marketing consent.",
 			"default": "",
 			"maxLength": 30,
 			"x-ui": {
@@ -38,11 +38,12 @@
 		"ga4ViaGtm": {
 			"type": "boolean",
 			"title": "Google Analytics 4 runs inside Tag Manager",
-			"description": "On: Growth does not load Google Analytics itself; your Tag Manager container's Google Analytics tag takes the events from the dataLayer, so they are counted once. Needs the Tag Manager container id.",
+			"description": "On: your Tag Manager container loads Google Analytics, so events are counted once. Needs the container id.",
 			"default": false,
 			"x-ui": {
 				"group": "Analytics",
-				"order": 2
+				"order": 2,
+				"advanced": true
 			}
 		}
 	}

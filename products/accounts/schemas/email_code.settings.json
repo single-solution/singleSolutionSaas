@@ -56,7 +56,8 @@
 			"maximum": 10000,
 			"x-ui": {
 				"group": "Limits",
-				"order": 13
+				"order": 13,
+				"advanced": true
 			}
 		},
 		"codeTries": {
@@ -68,7 +69,8 @@
 			"maximum": 10,
 			"x-ui": {
 				"group": "Code",
-				"order": 3
+				"order": 3,
+				"advanced": true
 			}
 		}
 	}

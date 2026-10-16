@@ -11,7 +11,8 @@
 			"x-ui": {
 				"widget": "textarea",
 				"group": "robots.txt",
-				"order": 1
+				"order": 1,
+				"advanced": true
 			}
 		},
 		"blockSearchPages": {
@@ -84,7 +85,8 @@
 			},
 			"x-ui": {
 				"group": "AI crawlers",
-				"order": 12
+				"order": 12,
+				"advanced": true
 			}
 		},
 		"sitemaps": {

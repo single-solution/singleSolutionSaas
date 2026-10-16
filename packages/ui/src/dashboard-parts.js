@@ -28,7 +28,7 @@ import { dashboardTexts, resealAdvice } from './dashboard-texts.js';
 /**
  * The feature categories of a product, in the order they are listed (the most used first); a feature in none is listed
  * under More. They head the groups of the Features and Settings sidebars.
- * @typedef {Array<{ title: string, features: string[] }>} DashboardCategories
+ * @typedef {ReadonlyArray<{ title: string, features: ReadonlyArray<string> }>} DashboardCategories
  */
 /**
  * @typedef {object} Dashboard

@@ -7,19 +7,19 @@
 			"title": "Banner position",
 			"default": "bottom",
 			"enum": ["bottom", "top", "center", "bottom_left", "bottom_right"],
-			"description": "Bottom or top: a bar across the page. Center: a dialog in the middle of the page, over it. Bottom left or bottom right: a small box in that corner."
+			"description": "A bar at the top or bottom, a dialog in the center, or a small box in a bottom corner."
 		},
 		"privacyUrl": {
 			"type": "string",
 			"title": "Privacy policy link",
-			"description": "An https address or a path on your website (for example /privacy). The categories and their words are the list Consent categories; the banner's other words are in Texts.",
+			"description": "An https address or a path on your website, for example /privacy.",
 			"default": "",
 			"maxLength": 2048
 		},
 		"askAgainMonths": {
 			"type": "integer",
 			"title": "Ask again after (months)",
-			"description": "How long a visitor's choice holds before the banner asks again, 1 to 24 months (with the banner off, a choice from your own consent tool holds 12 months). Check what the law where you operate allows: many privacy authorities expect at most 12 or 13 months.",
+			"description": "How long a visitor’s choice holds before the banner asks again (1–24 months). Many privacy authorities expect at most 12.",
 			"default": 12,
 			"minimum": 1,
 			"maximum": 24

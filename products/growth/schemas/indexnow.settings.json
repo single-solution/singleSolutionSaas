@@ -14,7 +14,10 @@
 			"title": "Key file address",
 			"description": "The path on your website where your site serves the key, for example /indexnow-key.txt. Empty: /<key>.txt.",
 			"default": "",
-			"maxLength": 300
+			"maxLength": 300,
+			"x-ui": {
+				"advanced": true
+			}
 		}
 	}
 }

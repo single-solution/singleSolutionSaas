@@ -5,7 +5,7 @@
 		"retentionDays": {
 			"type": "integer",
 			"title": "Keep the delivery log (days)",
-			"description": "Messages and outgoing webhook events are removed by your database's expiry index this many days after they are sent, failed or skipped (waiting ones stay). 0 keeps them forever. Applies to messages finished from now on.",
+			"description": "Messages and webhook events are removed this many days after they are sent, failed or skipped. 0 keeps them forever.",
 			"default": 0,
 			"minimum": 0,
 			"maximum": 3650

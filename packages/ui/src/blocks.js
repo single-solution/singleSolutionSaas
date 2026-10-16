@@ -534,6 +534,75 @@ export function PillTabs({ tabs, active, onSelect, label, className, idPrefix = 
 	);
 }
 
+/** A list with more items than this is picked from a select, not a strip of tabs. */
+const SWITCHER_TABS_UP_TO = 8;
+
+/**
+ * The items of a list editor one at a time (owner 2026-10-16: no long stacks of item cards): a strip with one tab per
+ * item (named by `nameOf`; a select from nine items on) and an Add button; `renderItem` draws the picked item only. The picked item moves to the
+ * one just added.
+ * @template T
+ * @param {{ items: T[], legend: string, nameOf: (item: T, index: number) => string,
+ *   renderItem: (item: T, index: number) => ReactNode, onAdd?: () => void, addLabel?: string, addDisabled?: boolean,
+ *   emptyText?: ReactNode, className?: string }} props
+ */
+export function ItemSwitcher({
+	items,
+	legend,
+	nameOf,
+	renderItem,
+	onAdd,
+	addLabel = 'Add',
+	addDisabled = false,
+	emptyText,
+	className,
+}) {
+	const [picked, setPicked] = useState(0);
+	const at = Math.max(0, Math.min(picked, items.length - 1));
+	const item = items[at];
+	return (
+		<div className={cx('min-w-0 space-y-3', className)}>
+			<div className="flex min-w-0 flex-wrap items-center gap-2">
+				{items.length > SWITCHER_TABS_UP_TO ? (
+					<select
+						aria-label={legend}
+						value={String(at)}
+						onChange={(event) => setPicked(Number(event.target.value))}
+						className="h-9 min-w-0 max-w-full flex-1 rounded-control border border-line bg-surface px-3 text-sm text-fg focus-visible:outline-2 focus-visible:outline-focus">
+						{items.map((entry, index) => (
+							<option key={index} value={String(index)}>
+								{nameOf(entry, index) || `#${index + 1}`}
+							</option>
+						))}
+					</select>
+				) : items.length > 0 ? (
+					<PillTabs
+						className="min-w-0 flex-1"
+						label={legend}
+						idPrefix={`is${at}`}
+						active={String(at)}
+						onSelect={(id) => setPicked(Number(id))}
+						tabs={items.map((entry, index) => ({ id: String(index), label: nameOf(entry, index) || `#${index + 1}` }))}
+					/>
+				) : null}
+				{onAdd ? (
+					<Button
+						size="sm"
+						variant="secondary"
+						disabled={addDisabled}
+						onClick={() => {
+							onAdd();
+							setPicked(items.length);
+						}}>
+						{addLabel}
+					</Button>
+				) : null}
+			</div>
+			{item !== undefined ? renderItem(item, at) : emptyText ? <p className="text-sm text-muted">{emptyText}</p> : null}
+		</div>
+	);
+}
+
 /**
  * A collapsed block for what most people never change (Advanced): a bar with a title that opens it. Collapsed by
  * default; `forceOpen` opens it (a field inside has an error). The content is not on the page while it is closed.

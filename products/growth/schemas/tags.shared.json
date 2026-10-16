@@ -5,7 +5,7 @@
 		"consentRequired": {
 			"type": "boolean",
 			"title": "Tags wait for the visitor's consent",
-			"description": "On: each tag loads only once the visitor consents to its category (analytics or marketing). Off: tags load at once, with Google Consent Mode granted, until the visitor makes a choice; a choice the visitor makes is still followed. Laws in many places (for example the EU's GDPR and ePrivacy rules and the UK's PECR) require consent before tracking; if you turn this off, you are responsible for following the law where you operate.",
+			"description": "On: tags load only after the visitor consents. Off: they load at once. Many laws (EU GDPR and ePrivacy, UK PECR) require consent first; if you turn this off, you follow the law yourself.",
 			"default": true
 		}
 	}

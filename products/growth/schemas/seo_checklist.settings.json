@@ -25,7 +25,8 @@
 			"maximum": 1000,
 			"x-ui": {
 				"group": "Title length",
-				"order": 11
+				"order": 11,
+				"advanced": true
 			}
 		},
 		"titleMax": {
@@ -37,7 +38,8 @@
 			"maximum": 1000,
 			"x-ui": {
 				"group": "Title length",
-				"order": 12
+				"order": 12,
+				"advanced": true
 			}
 		},
 		"descriptionMin": {
@@ -49,7 +51,8 @@
 			"maximum": 1000,
 			"x-ui": {
 				"group": "Description length",
-				"order": 21
+				"order": 21,
+				"advanced": true
 			}
 		},
 		"descriptionMax": {
@@ -61,7 +64,8 @@
 			"maximum": 1000,
 			"x-ui": {
 				"group": "Description length",
-				"order": 22
+				"order": 22,
+				"advanced": true
 			}
 		}
 	}

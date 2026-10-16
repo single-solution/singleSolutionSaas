@@ -8,9 +8,10 @@
  */
 import { ProductDashboard } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
+import { CATEGORIES } from './categories.js';
 import { TABS } from './tabs.js';
 import { TEXTS } from './texts.js';
 
 export default function Dashboard() {
-	return <ProductDashboard manifest={manifest} texts={TEXTS} tabs={TABS} />;
+	return <ProductDashboard manifest={manifest} texts={TEXTS} categories={CATEGORIES} tabs={TABS} />;
 }

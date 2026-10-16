@@ -137,6 +137,29 @@ const Defaults = (tab) => (
 	</DashboardProvider>
 );
 
+/**
+ * Opens a view of the inner sidebar (a sub-item, when it is one, is the last link to it).
+ * @param {ParentNode} root @param {string} id
+ */
+const openSection = (root, id) => click(/** @type {HTMLElement} */ ([...root.querySelectorAll(`nav a[href="#${id}"]`)].at(-1)));
+
+/**
+ * Opens every view of the inner sidebar, so the text of all of them is on the page (a view stays mounted once opened).
+ * @param {ParentNode} root
+ */
+const visitAll = async (root) => {
+	/** @type {Set<string>} */
+	const seen = new Set();
+	for (let pass = 0; pass < 3; pass += 1)
+		for (const link of [...root.querySelectorAll('nav[aria-label] a[href^="#"]')]) {
+			const id = String(link.getAttribute('href')).slice(1);
+			if (seen.has(id)) continue;
+			seen.add(id);
+			openSection(root, id);
+			await settle();
+		}
+};
+
 afterEach(() => {
 	cleanup();
 	vi.restoreAllMocks();
@@ -145,52 +168,6 @@ afterEach(() => {
 });
 
 describe('the dashboard (setup only)', () => {
-	it('Overview shows the setup of the switched-on features at a glance', async () => {
-		vi.useFakeTimers({ toFake: ['Date'] });
-		vi.setSystemTime(NOW);
-		serve(ON);
-		const { container } = render(<Overview {...props} />);
-		await settle();
-		const text = container.textContent ?? '';
-		for (const words of [
-			TEXTS.setup.title,
-			TEXTS.setup.noWait,
-			TEXTS.setup.ownTool,
-			'Meta' + TEXTS.setup.notSet,
-			'Google Analytics 4' + TEXTS.setup.notSet,
-			TEXTS.setup.ids.variant,
-			TEXTS.setup.sessions,
-			'6 months',
-			'Web Vitals',
-			TEXTS.setup.blocked.replace('{count}', '1'),
-			'yandex-verification',
-			`https://${DOMAIN}/indexnow-key.txt`,
-			'2 pages',
-		])
-			expect(text).toContain(words);
-	});
-
-	it('Overview counts the Sitemap lines robots.txt serves, /sitemap.xml when none is set', async () => {
-		const saved = VALUES.robots_verification ?? {};
-		const glance = async () => {
-			serve(['robots_verification']);
-			const { container } = render(<Overview {...props} />);
-			await settle();
-			const text = container.textContent ?? '';
-			cleanup();
-			return text;
-		};
-		try {
-			VALUES.robots_verification = { sitemaps: [] };
-			expect(await glance()).toContain(`${TEXTS.setup.sitemaps}1`);
-			// a sitemap on another site is never named
-			VALUES.robots_verification = { sitemaps: ['https://other.example/sitemap.xml'] };
-			expect(await glance()).toContain(`${TEXTS.setup.sitemaps}0`);
-		} finally {
-			VALUES.robots_verification = saved;
-		}
-	});
-
 	it('Overview asks for the ids of tag features that have none, counts the tags ready and opens Settings', async () => {
 		const saved = { meta_pixel: VALUES.meta_pixel ?? {}, google_tags: VALUES.google_tags ?? {} };
 		try {
@@ -219,37 +196,30 @@ describe('the dashboard (setup only)', () => {
 		}
 	});
 
-	it('Overview leaves out what is off', async () => {
-		serve([]);
-		const { container } = render(<Overview {...props} />);
-		await settle();
-		expect(container.textContent).not.toContain(TEXTS.setup.title);
-	});
-
 	it('edits a merchant list: add, rename, reorder and remove, then saves the whole list (G1)', async () => {
 		sent.length = 0;
 		serve(ON.filter((key) => key !== 'google_tags').concat('conversion_funnel'));
 		const { container } = render(<Settings {...props} />);
 		await settle();
-		const card = /** @type {HTMLElement} */ (byText(container, TEXTS.lists.goals.title).closest('section'));
-		expect(card.textContent).toContain('1. Purchase');
-		expect(card.textContent).toContain('2. Contact');
+		openSection(container, 'conversion_funnel.goals');
+		await settle();
+		const card = /** @type {HTMLElement} */ (container.querySelector('[id="section-conversion_funnel.goals"]'));
+		// one entry at a time, from a strip of tabs
+		expect([...card.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual(['1. Purchase', '2. Contact']);
 		await click(byText(card, TEXTS.lists.add, 'button'));
 		// the new entry's key, name and event (the kind is a select)
-		const fresh = [
-			.../** @type {HTMLElement} */ ([...card.querySelectorAll('.rounded-card')].at(-1)).querySelectorAll('input'),
-		];
+		const fresh = [...card.querySelectorAll('.rounded-card input')];
 		await type(/** @type {HTMLInputElement} */ (fresh[1]), 'Booked a demo');
 		await type(/** @type {HTMLInputElement} */ (fresh[2]), 'book_demo');
 		// move the new goal up, rename Purchase, remove Contact
-		const ups = [...card.querySelectorAll(`button[aria-label="${TEXTS.lists.up}"]`)];
-		await click(/** @type {HTMLElement} */ (ups.at(-1)));
+		await click(/** @type {HTMLElement} */ (card.querySelector(`button[aria-label="${TEXTS.lists.up}"]`)));
+		await click(/** @type {HTMLElement} */ (card.querySelectorAll('[role="tab"]')[0]));
 		await type(
 			/** @type {HTMLInputElement} */ ([...card.querySelectorAll('input')].find((input) => input.value === 'Purchase')),
 			'Order',
 		);
-		const removes = [...card.querySelectorAll('button')].filter((button) => button.textContent === TEXTS.lists.remove);
-		await click(/** @type {HTMLElement} */ (removes.at(-1)));
+		await click(/** @type {HTMLElement} */ (card.querySelectorAll('[role="tab"]')[2]));
+		await click(byText(card, TEXTS.lists.remove, 'button'));
 		await click(byText(card, TEXTS.lists.save, 'button'));
 		await settle();
 		expect(sent.at(-1)).toEqual({
@@ -270,6 +240,8 @@ describe('the dashboard (setup only)', () => {
 		vi.stubGlobal('location', { ...window.location, reload });
 		const { container } = render(<Settings {...props} />);
 		await settle();
+		openSection(container, 'robots_verification.robots-txt');
+		openSection(container, 'robots_verification.preset');
 		await click(byText(container, TEXTS.lists.preset.apply, 'button'));
 		await settle();
 		expect(sent.map((write) => [write.path.split('/').pop(), write.body.value])).toEqual([
@@ -282,14 +254,14 @@ describe('the dashboard (setup only)', () => {
 	it('Settings warn about the law, name ids that are not loaded and show what the site serves', async () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(NOW);
-		serve(ON.filter((key) => key !== 'google_tags'));
+		serve([...ON, 'google_tags']);
 		const { container } = render(<Settings {...props} />);
 		await settle();
+		await visitAll(container);
 		const text = container.textContent ?? '';
 		expect(text).toContain(TEXTS.settings.consentWarning);
 		expect(text).toContain('Not loaded, as they are not well formed: pixelId.');
 		expect(text).toContain(TEXTS.settings.gtmMissing);
-		expect(text).toContain(TEXTS.setup.vitalsNoGoogle);
 		expect(text).toContain('User-agent: GPTBot');
 		// the presets (G12), with the search parameters of Searches and 404s
 		expect(text).toContain('Disallow: /*?term=');
@@ -307,6 +279,7 @@ describe('the dashboard (setup only)', () => {
 		serve(['indexnow', 'notice_bar', 'robots_verification']);
 		const { container } = render(<Settings {...props} />);
 		await settle();
+		await visitAll(container);
 		const text = container.textContent ?? '';
 		expect(text).toContain(TEXTS.setup.keyPathBad);
 		expect(text).toContain(TEXTS.setup.noTags);
@@ -318,6 +291,7 @@ describe('the dashboard (setup only)', () => {
 		serve(['notice_bar']);
 		const { container } = render(<Settings {...props} />);
 		await settle();
+		await visitAll(container);
 		expect(container.textContent).toContain(TEXTS.setup.noticeOff);
 	});
 
@@ -326,12 +300,22 @@ describe('the dashboard (setup only)', () => {
 		serve(['web_vitals', 'google_tags']);
 		const ga4 = render(<Settings {...props} />);
 		await settle();
+		await visitAll(ga4.container);
 		expect(ga4.container.textContent).toContain(TEXTS.setup.vitalsGa4Only);
 		cleanup();
 		VALUES.web_vitals = { toGa4: false };
 		const nowhere = render(<Settings {...props} />);
 		await settle();
+		await visitAll(nowhere.container);
 		expect(nowhere.container.textContent).toContain(TEXTS.setup.vitalsNowhere);
+		// a feature that is off is not listed, so Web Vitals without Google tags says so on its own
+		cleanup();
+		VALUES.web_vitals = { toGa4: true };
+		serve(['web_vitals']);
+		const alone = render(<Settings {...props} />);
+		await settle();
+		await visitAll(alone.container);
+		expect(alone.container.textContent).toContain(TEXTS.setup.vitalsNoGoogle);
 	});
 
 	it('Defaults say what the values alone tell (no website: no robots.txt or key file address)', async () => {
@@ -340,6 +324,7 @@ describe('the dashboard (setup only)', () => {
 		serve(['indexnow', 'robots_verification']);
 		const { container } = render(<Defaults {...props} />);
 		await settle();
+		await visitAll(container);
 		const text = container.textContent ?? '';
 		expect(text).toContain(TEXTS.settings.consentWarning);
 		expect(text).not.toContain(TEXTS.setup.keyPathBad);

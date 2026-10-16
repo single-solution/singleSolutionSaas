@@ -67,6 +67,7 @@ export {
 	PillTabs,
 	ViewTitle,
 	Disclosure,
+	ItemSwitcher,
 	NO_STRETCH,
 	CARD_FLOW,
 	CardFlow,

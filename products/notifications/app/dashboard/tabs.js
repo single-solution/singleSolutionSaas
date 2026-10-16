@@ -15,7 +15,7 @@ import { createSnippets } from '../../core/snippets.js';
 import { PROVIDER_FORMS, ProviderForm } from './providers.js';
 import { TemplatesSection } from './templates.js';
 import { TEXTS } from './texts.js';
-import { MerchantLists } from './lists.js';
+import { FallbackChainsCard, QuietHoursCard, StopKeywordsCard, TemplateSettingsCard, TopicsCard } from './lists.js';
 import { WebhookUrlsCard } from './webhooks.js';
 
 /** @typedef {import('@ss/ui/dashboard').TabProps} TabProps */
@@ -69,27 +69,53 @@ function NotificationsOverview(props) {
 	return <OverviewTab {...props} useMore={useNotificationsOverview} />;
 }
 
-/** @param {TabProps} props */
+/**
+ * The webhook URLs under Outgoing webhooks, at most as many as its setting allows.
+ * @param {{ websiteId: string }} props
+ */
+function WebhookUrls({ websiteId }) {
+	const settings = useLoad(`/v1/dashboard/websites/${websiteId}/settings`);
+	/** @type {Array<{ key: string, values?: Record<string, { value: unknown }> }>} */
+	const features = settings.answer?.ok ? settings.answer.data.features : [];
+	const max = Number(features.find((feature) => feature.key === 'webhooks')?.values?.maxUrls?.value ?? 5);
+	return <WebhookUrlsCard websiteId={websiteId} off={false} max={max} />;
+}
+
+/**
+ * Settings: the templates, their topics and settings, and the stop words under Templates; the fallback channels under
+ * Fallback channel; the quiet hours under Quiet hours; and the webhook URLs under Outgoing webhooks. Each is listed
+ * while its feature is on.
+ * @param {TabProps} props
+ */
 function NotificationsSettings(props) {
 	const websiteId = /** @type {string} */ (props.websiteId);
 	return (
 		<SettingsTab
 			{...props}
-			sections={<TemplatesSection websiteId={websiteId} />}
-			featureCards={(features) => {
-				const webhooks = features.find((feature) => feature.key === 'webhooks');
-				return (
-					<>
-						{webhooks ? (
-							<WebhookUrlsCard
-								websiteId={websiteId}
-								off={webhooks.on === false}
-								max={Number(webhooks.values?.maxUrls?.value ?? 5)}
-							/>
-						) : null}
-						<MerchantLists websiteId={websiteId} features={features} />
-					</>
-				);
+			extras={{
+				templates: {
+					items: [
+						{ id: 'list', label: TEXTS.settings.templatesTitle, content: <TemplatesSection websiteId={websiteId} /> },
+						{
+							id: 'topics',
+							label: TEXTS.settings.lists.topics.title,
+							content: <TopicsCard websiteId={websiteId} off={false} />,
+						},
+						{
+							id: 'settings',
+							label: TEXTS.settings.lists.templates.title,
+							content: <TemplateSettingsCard websiteId={websiteId} off={false} />,
+						},
+						{
+							id: 'stop',
+							label: TEXTS.settings.lists.keywords.title,
+							content: <StopKeywordsCard websiteId={websiteId} off={false} />,
+						},
+					],
+				},
+				fallback: <FallbackChainsCard websiteId={websiteId} off={false} />,
+				quiet_hours: <QuietHoursCard websiteId={websiteId} off={false} />,
+				webhooks: <WebhookUrls websiteId={websiteId} />,
 			}}
 		/>
 	);
@@ -121,43 +147,73 @@ function NotificationsDevelopers(props) {
 	for (const item of templates.answer?.ok ? templates.answer.data.items : [])
 		keys.set(item.key, [...new Set([...(keys.get(item.key) ?? []), item.channel])]);
 	const D = TEXTS.developers;
+	/** @param {string} id @param {string} title @param {string} help @param {import('react').ReactNode} body @param {import('@ss/ui').IconName} icon */
+	const part = (id, title, help, body, icon) => ({
+		id,
+		label: title,
+		icon,
+		content: (
+			<Section title={title} description={help}>
+				{body}
+			</Section>
+		),
+	});
 	return (
-		<DevelopersTab {...props}>
-			<Section title={D.send} description={D.sendHelp}>
-				<CodeBlock code={snippets.send} />
-				<CodeBlock code={snippets.sendCurl} />
-			</Section>
-			<Section title={D.keys} description={D.keysHelp}>
-				<Card>
-					{keys.size === 0 ? <p className="text-sm text-muted">{D.noKeys}</p> : null}
-					<ul className="space-y-2 text-sm">
-						{[...keys].map(([key, channels]) => (
-							<li key={key} className="flex flex-wrap items-center gap-2">
-								<code className="font-semibold">{key}</code>
-								{channels.map((channel) => (
-									<Badge key={channel} tone="info">
-										{TEXTS.settings.channels[/** @type {keyof typeof TEXTS.settings.channels} */ (channel)]}
-									</Badge>
-								))}
-							</li>
-						))}
-					</ul>
-				</Card>
-			</Section>
-			<Section title={D.widgets} description={D.widgetsHelp}>
-				<CodeBlock code={snippets.visitor} />
-				<CodeBlock code={snippets.admin} />
-			</Section>
-			<Section title={D.ticket} description={D.ticketHelp}>
-				<CodeBlock code={snippets.ticketNode} />
-			</Section>
-			<Section title={D.webhook} description={D.webhookHelp}>
-				<CodeBlock code={snippets.webhook} />
-			</Section>
-			<Section title={D.replies} description={D.repliesHelp}>
-				<CodeBlock code={snippets.inbound.replaceAll('<websiteId>', String(props.websiteId))} />
-			</Section>
-		</DevelopersTab>
+		<DevelopersTab
+			{...props}
+			sections={[
+				part(
+					'send',
+					D.send,
+					D.sendHelp,
+					<>
+						<CodeBlock code={snippets.send} />
+						<CodeBlock code={snippets.sendCurl} />
+					</>,
+					'mail',
+				),
+				part(
+					'keys',
+					D.keys,
+					D.keysHelp,
+					<Card>
+						{keys.size === 0 ? <p className="text-sm text-muted">{D.noKeys}</p> : null}
+						<ul className="space-y-2 text-sm">
+							{[...keys].map(([key, channels]) => (
+								<li key={key} className="flex flex-wrap items-center gap-2">
+									<code className="font-semibold">{key}</code>
+									{channels.map((channel) => (
+										<Badge key={channel} tone="info">
+											{TEXTS.settings.channels[/** @type {keyof typeof TEXTS.settings.channels} */ (channel)]}
+										</Badge>
+									))}
+								</li>
+							))}
+						</ul>
+					</Card>,
+					'key',
+				),
+				part(
+					'widgets',
+					D.widgets,
+					D.widgetsHelp,
+					<>
+						<CodeBlock code={snippets.visitor} />
+						<CodeBlock code={snippets.admin} />
+					</>,
+					'box',
+				),
+				part('ticket', D.ticket, D.ticketHelp, <CodeBlock code={snippets.ticketNode} />, 'shield'),
+				part('webhook', D.webhook, D.webhookHelp, <CodeBlock code={snippets.webhook} />, 'bell'),
+				part(
+					'replies',
+					D.replies,
+					D.repliesHelp,
+					<CodeBlock code={snippets.inbound.replaceAll('<websiteId>', String(props.websiteId))} />,
+					'link',
+				),
+			]}
+		/>
 	);
 }
 

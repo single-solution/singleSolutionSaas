@@ -37,6 +37,7 @@ export const TEXTS = dashboardTexts({
 		save: 'Save the list',
 		saved: 'Saved.',
 		untitled: '(no name yet)',
+		entries: 'Entries',
 		goals: {
 			title: 'Goals',
 			help: 'What you count as a success: an event (a shop event, contact, or your own event sent with SSGrowth.track) or a page (a path; * is one segment, ** any). The analytics dashboard counts each one.',

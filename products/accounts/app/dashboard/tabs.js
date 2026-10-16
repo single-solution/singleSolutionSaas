@@ -69,15 +69,14 @@ function AccountsOverview(props) {
 /** @param {TabProps} props */
 function AccountsSettings(props) {
 	const websiteId = /** @type {string} */ (props.websiteId);
+	// the lists sit under their feature (a merchant sees them while it is on)
 	return (
 		<SettingsTab
 			{...props}
-			sections={
-				<>
-					<FieldsSection websiteId={websiteId} />
-					<ConsentsSection websiteId={websiteId} />
-				</>
-			}
+			extras={{
+				custom_fields: <FieldsSection websiteId={websiteId} />,
+				consents: <ConsentsSection websiteId={websiteId} />,
+			}}
 		/>
 	);
 }
@@ -116,39 +115,77 @@ function AccountsDevelopers(props) {
 	});
 	const D = TEXTS.developers;
 	return (
-		<DevelopersTab {...props}>
-			<Section title={D.verification} description={D.verificationHelp}>
-				<CodeBlock label={D.keysUrl} code={snippets.keysUrl} />
-				<CodeBlock code={snippets.verify} />
-				<CodeBlock code={snippets.verifyJose} />
-			</Section>
-			<Section title={D.widgets} description={D.widgetsHelp}>
-				<CodeBlock code={snippets.visitor} />
-				<CodeBlock code={snippets.signedInCall} />
-				<CodeBlock code={snippets.admin} />
-			</Section>
-			<Section title={D.ticket} description={D.ticketHelp}>
-				<CodeBlock code={snippets.ticketNode} />
-				<CodeBlock code={snippets.ticketCurl} />
-			</Section>
-			<Section title={D.returns} description={D.returnsHelp}>
-				<CodeBlock code={snippets.returnAddresses} />
-			</Section>
-			<Section title={D.templates} description={D.templatesHelp}>
-				<Card>
-					<ul className="space-y-2 text-sm">
-						{messages.messages.map((message) => (
-							<li key={message.key} className="flex flex-wrap items-center gap-2">
-								<code className="font-semibold">{message.key}</code>
-								{message.values.map((name) => (
-									<Badge key={name} tone="info">{`{${name}}`}</Badge>
-								))}
-							</li>
-						))}
-					</ul>
-				</Card>
-			</Section>
-		</DevelopersTab>
+		<DevelopersTab
+			{...props}
+			sections={[
+				{
+					id: 'verification',
+					label: D.verification,
+					icon: 'shield',
+					content: (
+						<Section title={D.verification} description={D.verificationHelp}>
+							<CodeBlock label={D.keysUrl} code={snippets.keysUrl} />
+							<CodeBlock code={snippets.verify} />
+							<CodeBlock code={snippets.verifyJose} />
+						</Section>
+					),
+				},
+				{
+					id: 'widgets',
+					label: D.widgets,
+					icon: 'code',
+					content: (
+						<Section title={D.widgets} description={D.widgetsHelp}>
+							<CodeBlock code={snippets.visitor} />
+							<CodeBlock code={snippets.signedInCall} />
+							<CodeBlock code={snippets.admin} />
+						</Section>
+					),
+				},
+				{
+					id: 'ticket',
+					label: D.ticket,
+					icon: 'key',
+					content: (
+						<Section title={D.ticket} description={D.ticketHelp}>
+							<CodeBlock code={snippets.ticketNode} />
+							<CodeBlock code={snippets.ticketCurl} />
+						</Section>
+					),
+				},
+				{
+					id: 'returns',
+					label: D.returns,
+					icon: 'link',
+					content: (
+						<Section title={D.returns} description={D.returnsHelp}>
+							<CodeBlock code={snippets.returnAddresses} />
+						</Section>
+					),
+				},
+				{
+					id: 'templates',
+					label: D.templates,
+					icon: 'mail',
+					content: (
+						<Section title={D.templates} description={D.templatesHelp}>
+							<Card>
+								<ul className="space-y-2 text-sm">
+									{messages.messages.map((message) => (
+										<li key={message.key} className="flex flex-wrap items-center gap-2">
+											<code className="font-semibold">{message.key}</code>
+											{message.values.map((name) => (
+												<Badge key={name} tone="info">{`{${name}}`}</Badge>
+											))}
+										</li>
+									))}
+								</ul>
+							</Card>
+						</Section>
+					),
+				},
+			]}
+		/>
 	);
 }
 

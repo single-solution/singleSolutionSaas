@@ -11,6 +11,7 @@ import {
 	Col,
 	Disclosure,
 	Grid,
+	ItemSwitcher,
 	Input,
 	Masonry,
 	RadioGroup,
@@ -574,5 +575,33 @@ describe('card flow', () => {
 	it('is what a section and a settings form lay their cards out in', () => {
 		const layout = render(<SectionLayout sections={[{ id: 'a', label: 'A', content: <p>x</p> }]} />);
 		expect(layout.container.querySelector('#section-a')?.className).toContain('auto-fill');
+	});
+});
+
+describe('ItemSwitcher', () => {
+	it('shows one item at a time under a strip of tabs, and moves to the item just added', () => {
+		/** @param {{ items: string[] }} props */
+		function Harness({ items: start }) {
+			const [items, setItems] = useState(start);
+			return (
+				<ItemSwitcher
+					items={items}
+					legend="Methods"
+					nameOf={(item) => item}
+					addLabel="Add method"
+					onAdd={() => setItems([...items, `New ${items.length + 1}`])}
+					renderItem={(item) => <p>{`editing ${item}`}</p>}
+				/>
+			);
+		}
+		const { container } = render(<Harness items={['Bank', 'Cash']} />);
+		expect(allByRole(container, 'tab').map((tab) => tab.textContent)).toEqual(['Bank', 'Cash']);
+		expect(container.textContent).toContain('editing Bank');
+		expect(container.textContent).not.toContain('editing Cash');
+		click(/** @type {HTMLElement} */ (allByRole(container, 'tab')[1]));
+		expect(container.textContent).toContain('editing Cash');
+		click(/** @type {HTMLElement} */ (button(container, 'Add method')));
+		expect(container.textContent).toContain('editing New 3');
+		expect(container.textContent).not.toContain('editing Cash');
 	});
 });

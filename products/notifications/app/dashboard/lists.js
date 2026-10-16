@@ -174,7 +174,7 @@ export function TopicsCard({ websiteId, off }) {
 /** @typedef {{ key: string, topic: string | null, fallback: string[] | null, capped: boolean | null }} TemplateSettingsRow */
 
 /** @param {{ websiteId: string, off: boolean }} props */
-function TemplateSettingsCard({ websiteId, off }) {
+export function TemplateSettingsCard({ websiteId, off }) {
 	const topics = useLoad(`/v1/dashboard/websites/${websiteId}/lists/topics`);
 	const known = topics.answer?.ok ? /** @type {Array<{ id: string, name: string }>} */ (topics.answer.data.value) : [];
 	return (

@@ -17,6 +17,7 @@ import {
 	Icon,
 	IconButton,
 	Input,
+	ItemSwitcher,
 	Select,
 	TextArea,
 	describeProblem,
@@ -180,61 +181,73 @@ function EntryHead({ label, index, count, onMove, onRemove }) {
 }
 
 /**
- * The entries of a list (or of an entry's rows), each with its fields.
+ * The entries of a list (or of an entry's rows), each with its fields. With `one` (a list, not an entry's rows) only
+ * the picked entry is shown, from a strip of tabs (a select when there are many), so a long list is not a long page.
  * @param {{ fields: Record<string, Field>, entries: Entry[], at: string, errors: Record<string, string>, max: number,
- *   label: (entry: Entry, index: number) => string, onChange: (entries: Entry[]) => void }} props
+ *   label: (entry: Entry, index: number) => string, onChange: (entries: Entry[]) => void, one?: boolean }} props
  *   `at`: the path of the entries in the server's errors (`/value`, `/value/0/steps`)
  */
-function Entries({ fields, entries, at, errors, max, label, onChange }) {
+function Entries({ fields, entries, at, errors, max, label, onChange, one = false }) {
+	/** @param {Entry} entry @param {number} index */
+	const entryView = (entry, index) => (
+		<div key={index} className="space-y-2 rounded-card border border-line-soft p-3">
+			<EntryHead
+				label={label(entry, index)}
+				index={index}
+				count={entries.length}
+				onMove={(step) => onChange(moved(entries, index, step))}
+				onRemove={() => onChange(entries.filter((_, other) => other !== index))}
+			/>
+			<FieldGrid>
+				{Object.entries(fields).map(([name, field]) =>
+					field.type === 'rows' ? (
+						<div key={name} data-cell="" data-wide="" className="min-w-0 space-y-2">
+							<p className="text-sm font-semibold">{wordsOf(name).label}</p>
+							<Entries
+								fields={field.fields}
+								entries={entry[name] ?? []}
+								at={`${at}/${index}/${name}`}
+								errors={errors}
+								max={field.max}
+								label={(row, rowIndex) => `${rowIndex + 1}. ${row.name || L.untitled}`}
+								onChange={(rows) =>
+									onChange(entries.map((other, i) => (i === index ? { ...other, [name]: rows } : other)))
+								}
+							/>
+						</div>
+					) : (
+						<FieldInput
+							key={name}
+							name={name}
+							field={field}
+							value={entry[name]}
+							{...(errors[`${at}/${index}/${name}`] ? { error: errors[`${at}/${index}/${name}`] } : {})}
+							onChange={(value) =>
+								onChange(entries.map((other, i) => (i === index ? { ...other, [name]: value } : other)))
+							}
+						/>
+					),
+				)}
+			</FieldGrid>
+		</div>
+	);
+	const add = () => onChange([...entries, blankEntry(fields, entries)]);
+	if (one)
+		return (
+			<ItemSwitcher
+				items={entries}
+				legend={L.entries}
+				nameOf={label}
+				addLabel={L.add}
+				addDisabled={entries.length >= max}
+				onAdd={add}
+				renderItem={entryView}
+			/>
+		);
 	return (
 		<div className="space-y-3">
-			{entries.map((entry, index) => (
-				<div key={index} className="space-y-2 rounded-card border border-line-soft p-3">
-					<EntryHead
-						label={label(entry, index)}
-						index={index}
-						count={entries.length}
-						onMove={(step) => onChange(moved(entries, index, step))}
-						onRemove={() => onChange(entries.filter((_, other) => other !== index))}
-					/>
-					<FieldGrid>
-						{Object.entries(fields).map(([name, field]) =>
-							field.type === 'rows' ? (
-								<div key={name} data-cell="" data-wide="" className="min-w-0 space-y-2">
-									<p className="text-sm font-semibold">{wordsOf(name).label}</p>
-									<Entries
-										fields={field.fields}
-										entries={entry[name] ?? []}
-										at={`${at}/${index}/${name}`}
-										errors={errors}
-										max={field.max}
-										label={(row, rowIndex) => `${rowIndex + 1}. ${row.name || L.untitled}`}
-										onChange={(rows) =>
-											onChange(entries.map((other, i) => (i === index ? { ...other, [name]: rows } : other)))
-										}
-									/>
-								</div>
-							) : (
-								<FieldInput
-									key={name}
-									name={name}
-									field={field}
-									value={entry[name]}
-									{...(errors[`${at}/${index}/${name}`] ? { error: errors[`${at}/${index}/${name}`] } : {})}
-									onChange={(value) =>
-										onChange(entries.map((other, i) => (i === index ? { ...other, [name]: value } : other)))
-									}
-								/>
-							),
-						)}
-					</FieldGrid>
-				</div>
-			))}
-			<Button
-				size="sm"
-				variant="secondary"
-				disabled={entries.length >= max}
-				onClick={() => onChange([...entries, blankEntry(fields, entries)])}>
+			{entries.map(entryView)}
+			<Button size="sm" variant="secondary" disabled={entries.length >= max} onClick={add}>
 				{L.add}
 			</Button>
 		</div>
@@ -279,6 +292,7 @@ export function ListCard({ websiteId, name }) {
 						max={spec.max}
 						label={entryLabel}
 						onChange={setDraft}
+						one
 					/>
 					<Button
 						disabled={draft === null}
@@ -340,22 +354,36 @@ function StorePresetCard({ websiteId }) {
 	);
 }
 
+/** The feature or shared group each list belongs under (where its cards are listed in Settings). */
+const HOME = /** @type {Record<ListName, string>} */ ({
+	goals: 'conversion_funnel',
+	funnels: 'conversion_funnel',
+	consent_categories: 'tags',
+	announcements: 'notice_bar',
+	conversion_actions: 'pixels',
+	verification_tags: 'robots_verification',
+	seo_ignored: 'seo_checklist',
+});
+
 /**
- * The cards of the lists whose feature is on (Owner and Support also prepare those of features that are off), and the
- * online store preset while robots and verification is on.
- * @param {{ websiteId: string, features: Array<{ key: string, on?: boolean }> }} props
+ * The lists (and the online store preset) as the extras of Settings: each is a view of its own under the feature it
+ * belongs to, which is listed while that feature is on.
+ * @param {string} websiteId
+ * @returns {Record<string, { items: Array<{ id: string, label: string, content: import('react').ReactNode }> }>}
  */
-export function ListCards({ websiteId, features }) {
-	const on = features.filter((feature) => feature.on !== false).map((feature) => feature.key);
-	const names = /** @type {ListName[]} */ (Object.keys(LISTS)).filter((name) =>
-		[LISTS[name].feature].flat().some((feature) => on.includes(feature)),
-	);
-	return (
-		<>
-			{names.map((name) => (
-				<ListCard key={name} websiteId={websiteId} name={name} />
-			))}
-			{on.includes('robots_verification') ? <StorePresetCard websiteId={websiteId} /> : null}
-		</>
-	);
-}
+export const listExtras = (websiteId) => {
+	/** @type {Record<string, { items: Array<{ id: string, label: string, content: import('react').ReactNode }> }>} */
+	const out = {};
+	/** @param {string} home @param {{ id: string, label: string, content: import('react').ReactNode }} item */
+	const put = (home, item) => {
+		out[home] = { items: [...(out[home]?.items ?? []), item] };
+	};
+	for (const name of /** @type {ListName[]} */ (Object.keys(LISTS)))
+		put(HOME[name], {
+			id: name,
+			label: /** @type {{ title: string }} */ (/** @type {Record<string, unknown>} */ (L)[name]).title,
+			content: <ListCard websiteId={websiteId} name={name} />,
+		});
+	put('robots_verification', { id: 'preset', label: L.preset.title, content: <StorePresetCard websiteId={websiteId} /> });
+	return out;
+};

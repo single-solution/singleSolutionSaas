@@ -8,7 +8,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, Checkbox, FieldGrid, Input, Select, TextArea, describeProblem } from '@ss/ui';
+import { Button, Callout, Card, Checkbox, FieldGrid, Input, ItemSwitcher, Select, TextArea, describeProblem } from '@ss/ui';
 import { BANK_ROW_LABELS, METHOD_KINDS, METHOD_LIMITS, methodReady } from '../../core/methods.js';
 import { call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
@@ -218,10 +218,9 @@ function MethodEditor({ method, index, count, noStorage, onChange, onMove, onRem
 
 /**
  * The editor: the saved list (or today's bank transfer before one is saved), edited locally and saved whole.
- * @param {{ websiteId: string, off: boolean }} props `off`: Manual payment methods is switched off (Owner and Support
- *   may prepare the list)
+ * @param {{ websiteId: string }} props
  */
-export function MethodsEditor({ websiteId, off }) {
+export function MethodsEditor({ websiteId }) {
 	const path = `/v1/dashboard/websites/${websiteId}/lists/manual_methods`;
 	const { answer, reload } = useLoad(path);
 	const connections = useLoad(`/v1/dashboard/websites/${websiteId}/connections`);
@@ -253,27 +252,29 @@ export function MethodsEditor({ websiteId, off }) {
 				<h3 id="manual-methods-title" className="text-base font-semibold">
 					{M.title}
 				</h3>
-				<p className="text-sm text-muted">{off ? `${M.help} ${M.off}` : M.help}</p>
+				<p className="text-sm text-muted">{M.help}</p>
 			</div>
-			{methods.map((method, index) => (
-				<MethodEditor
-					key={index}
-					method={method}
-					index={index}
-					count={methods.length}
-					noStorage={noStorage}
-					onChange={(next) => change(methods.map((item, i) => (i === index ? next : item)))}
-					onMove={(step) => change(moved(methods, index, step))}
-					onRemove={() => change(methods.filter((_, i) => i !== index))}
-				/>
-			))}
+			<ItemSwitcher
+				items={methods}
+				legend={M.title}
+				nameOf={(method) => method.name}
+				addLabel={M.addMethod}
+				addDisabled={methods.length >= METHOD_LIMITS.methods}
+				onAdd={() => change([...methods, newMethod(methods)])}
+				renderItem={(method, index) => (
+					<MethodEditor
+						key={index}
+						method={method}
+						index={index}
+						count={methods.length}
+						noStorage={noStorage}
+						onChange={(next) => change(methods.map((item, i) => (i === index ? next : item)))}
+						onMove={(step) => change(moved(methods, index, step))}
+						onRemove={() => change(methods.filter((_, i) => i !== index))}
+					/>
+				)}
+			/>
 			<div className="flex flex-wrap gap-2">
-				<Button
-					variant="secondary"
-					disabled={methods.length >= METHOD_LIMITS.methods}
-					onClick={() => change([...methods, newMethod(methods)])}>
-					{M.addMethod}
-				</Button>
 				<Button
 					disabled={draft === null}
 					onClick={async () => {

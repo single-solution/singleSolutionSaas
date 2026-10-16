@@ -5,7 +5,7 @@
 		"searchParams": {
 			"type": "string",
 			"title": "Search query parameters",
-			"description": "The query parameters of your search results page, comma-separated (for example q, s); empty: none (your code calls SSGrowth.search() instead). With Robots presets, search pages with them are kept out of search engines.",
+			"description": "Query parameters of your search results page, comma-separated (for example q, s). Empty: none.",
 			"default": "q, s, search, query",
 			"maxLength": 200
 		}

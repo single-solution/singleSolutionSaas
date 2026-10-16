@@ -8,7 +8,10 @@
 			"description": "A send may name a time at most this many days ahead.",
 			"default": 30,
 			"minimum": 1,
-			"maximum": 90
+			"maximum": 90,
+			"x-ui": {
+				"advanced": true
+			}
 		}
 	}
 }
