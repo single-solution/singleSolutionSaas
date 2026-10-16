@@ -2,7 +2,8 @@
  * The lookups Chat's shop tools call (exactly `products/chat/core/shop.js`) and the customer orders lookup, all with
  * the server token; the `me` lookups only with the visitor's verified Accounts sign-in, and only that user's data.
  */
-import { DEFAULT_FORMAT, createId, formatMoney } from '@ss/contracts';
+import { createId } from '@ss/contracts';
+import { DEFAULT_FORMAT, formatMoney } from '@ss/contracts/format';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	cardVariant,

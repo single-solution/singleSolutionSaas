@@ -10,7 +10,8 @@
  * run inside a transaction, the driver session.
  * @module
  */
-import { createId, zonedParts } from '@ss/contracts';
+import { createId } from '@ss/contracts';
+import { zonedParts } from '@ss/contracts/format';
 import { summarize } from '../core/catalog.js';
 import { unitKeys } from '../core/fields.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';

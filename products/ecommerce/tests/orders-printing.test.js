@@ -4,7 +4,8 @@
  * the shopper's invoice from placement or from confirmation (`shopperFrom`); packing slips of up to 50 orders as one
  * document with the cash to collect and empty serial slots; a pick list of up to 100 orders by variant.
  */
-import { DEFAULT_FORMAT, createId } from '@ss/contracts';
+import { createId } from '@ss/contracts';
+import { DEFAULT_FORMAT } from '@ss/contracts/format';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { cashToCollect, invoiceHtml, invoiceTexts, packingSlipsHtml, pickListHtml } from '../core/invoice.js';
 import { COLLECTIONS } from '../core/model.js';

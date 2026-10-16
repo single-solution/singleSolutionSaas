@@ -2,7 +2,8 @@
  * Invoices and packing slips (PLAN 0.8.8: serials per line): printable HTML for staff and the merchant's server, the
  * shopper's own invoice, texts from the `invoices` settings, business details from business.json.
  */
-import { DEFAULT_FORMAT, createId } from '@ss/contracts';
+import { createId } from '@ss/contracts';
+import { DEFAULT_FORMAT } from '@ss/contracts/format';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	DEFAULT_COLUMNS,

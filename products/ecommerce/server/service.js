@@ -7,7 +7,8 @@
  * `callProduct` (pasted tokens only, PLAN 0.4.6).
  * @module
  */
-import { actorOf, problem, zonedParts } from '@ss/app-kit';
+import { actorOf, problem } from '@ss/app-kit';
+import { zonedParts } from '@ss/contracts/format';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { KEEP_MS, createOutbox } from '../adapters/outbox.js';
 import { unitOf } from '../core/money.js';

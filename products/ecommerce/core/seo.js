@@ -6,9 +6,8 @@
  * `<script>` element. Pure functions, no I/O.
  * @module
  */
-import { zonedDay } from '@ss/contracts';
 import { valueLabel } from './catalog.js';
-import { toDecimal } from '@ss/contracts/format';
+import { toDecimal, zonedDay } from '@ss/contracts/format';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */

@@ -11,7 +11,7 @@
  * `guests: earn` and redeem once signed in. Checkout and orders call these; the ledger moves the points. No I/O.
  * @module
  */
-import { zonedDay, zonedDayStart, zonedParts } from '@ss/contracts';
+import { zonedDay, zonedDayStart, zonedParts } from '@ss/contracts/format';
 import { roundDown } from './money.js';
 
 /** @typedef {import('./model.js').LoyaltyRecord} LoyaltyRecord */
