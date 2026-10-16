@@ -5,13 +5,13 @@
  * row the domain, a status dot and the daily cost) beside the selected website's card (on wide screens the first one
  * until another is picked; its products with Open, and Install and tokens and Usage as dialogs; no admin actions).
  * With no websites yet, the welcome with the support contact (PLAN 0.8.2 Sign-in).
+ * Layout: the Overview has an inner sidebar (Websites, Needs you, Credits, Latest), one view at a time.
  * @module
  */
 import { useEffect, useState } from 'react';
 import {
+	Badge,
 	BarChart,
-	Col,
-	Grid,
 	Button,
 	ButtonLink,
 	Callout,
@@ -20,16 +20,14 @@ import {
 	Icon,
 	IconBadge,
 	LocalTime,
-	Masonry,
 	NeedsList,
 	PageHeader,
-	Section,
+	SectionLayout,
 	SoftBreaks,
 	Stat,
 	StatGrid,
 	describeProblem,
 	formatCredits,
-	formatDate,
 	isEmptySeries,
 	useToast,
 } from '@ss/ui';
@@ -123,96 +121,106 @@ export function OverviewView(props) {
 	}
 	const name = props.me?.merchant?.ownerName || props.me?.merchant?.name || '';
 
-	return (
-		<div className="space-y-6">
-			<FrameBilling billing={billing} />
-			<PageHeader
-				title={MERCHANT.welcome(name)}
-				subtitle={MERCHANT.summary({ websites: rows.length, products: productCount, needs: needs.length })}
-			/>
-			{rows.length === 0 ? (
-				<Welcome branding={props.branding} />
-			) : (
-				<Grid>
-					<Col span={12} xl={7}>
-						<Card title={MERCHANT.needs.title} subtitle={needs.length > 0 ? MERCHANT.needs.intro : undefined}>
-							<NeedsList items={needs} none={MERCHANT.needs.none} />
-						</Card>
-					</Col>
-					<Col span={12} xl={5}>
-						<Card title={MERCHANT.spendChart} subtitle={props.usage ? formatCredits(props.usage.total ?? 0) : undefined}>
-							<BarChart
-								label={MERCHANT.spendChart}
-								data={creditDayBars(props.usage?.days)}
-								format={formatChartCredits}
-								height={132}
-							/>
-						</Card>
-					</Col>
-				</Grid>
-			)}
-			<StatGrid>
-				{billing ? (
-					<>
-						<Stat label={BILLING.balance} value={formatCredits(billing.balance)} icon="wallet" kind="credit" />
-						<Stat label={BILLING.daysLeft} value={<DaysLeft summary={billing} />} icon="clock" kind="credit" />
-						<Stat label={BILLING.dailySpend} value={formatCredits(billing.dailySpend)} icon="trendingUp" kind="credit" />
-						<Stat
-							label={BILLING.spentThisMonth}
-							value={formatCredits(billing.spentThisMonth)}
-							icon="calendar"
-							kind="credit"
+	const sections = [
+		{
+			id: 'websites',
+			label: MERCHANT.websitesTitle,
+			icon: /** @type {const} */ ('globe'),
+			content: rows.map(({ website, cards }) => (
+				<Card
+					flow
+					key={website.websiteId}
+					title={
+						<span className="flex min-w-0 items-center gap-3">
+							<IconBadge icon="globe" kind="website" size="sm" />
+							<Link
+								href={routes.website(website.websiteId)}
+								title={website.domain}
+								className="line-clamp-2 min-w-0 break-words text-fg hover:text-primary hover:underline">
+								<SoftBreaks text={website.domain} />
+							</Link>
+						</span>
+					}
+					subtitle={WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}>
+					{cards.length === 0 ? (
+						<p className="text-sm text-muted">{WEBSITE.noProductsMerchant}</p>
+					) : (
+						<ul className="divide-y divide-line-soft">
+							{cards.map((card) => (
+								<li key={card.productId} className="flex flex-wrap items-center justify-between gap-2 py-2">
+									<span className="flex min-w-0 flex-wrap items-center gap-2">
+										<span className="truncate text-sm font-semibold text-fg">{card.name}</span>
+										<ProductStatusBadge status={card.status} featuresOn={card.featuresOn} />
+									</span>
+									{openButton(website, card)}
+								</li>
+							))}
+						</ul>
+					)}
+				</Card>
+			)),
+		},
+		{
+			id: 'needs',
+			label: MERCHANT.needs.title,
+			icon: /** @type {const} */ ('bell'),
+			...(needs.length > 0 ? { badge: <Badge tone="warning">{needs.length}</Badge> } : {}),
+			content: (
+				<Card title={MERCHANT.needs.title} subtitle={needs.length > 0 ? MERCHANT.needs.intro : undefined}>
+					<NeedsList items={needs} none={MERCHANT.needs.none} />
+				</Card>
+			),
+		},
+		{
+			id: 'credits',
+			label: MERCHANT.creditsSection,
+			icon: /** @type {const} */ ('coins'),
+			content: (
+				<>
+					<StatGrid>
+						{billing ? (
+							<>
+								<Stat label={BILLING.balance} value={formatCredits(billing.balance)} icon="wallet" kind="credit" />
+								<Stat label={BILLING.daysLeft} value={<DaysLeft summary={billing} />} icon="clock" kind="credit" />
+								<Stat
+									label={BILLING.dailySpend}
+									value={formatCredits(billing.dailySpend)}
+									icon="trendingUp"
+									kind="credit"
+								/>
+								<Stat
+									label={BILLING.spentThisMonth}
+									value={formatCredits(billing.spentThisMonth)}
+									icon="calendar"
+									kind="credit"
+								/>
+							</>
+						) : (
+							<>
+								<Stat label={MERCHANT.tiles.websites} value={rows.length} icon="globe" kind="website" />
+								<Stat label={MERCHANT.tiles.products} value={productCount} icon="box" kind="product" />
+							</>
+						)}
+					</StatGrid>
+					<Card title={MERCHANT.spendChart} subtitle={props.usage ? formatCredits(props.usage.total ?? 0) : undefined}>
+						<BarChart
+							label={MERCHANT.spendChart}
+							data={creditDayBars(props.usage?.days)}
+							format={formatChartCredits}
+							height={132}
 						/>
-					</>
-				) : (
-					<>
-						<Stat label={MERCHANT.tiles.websites} value={rows.length} icon="globe" kind="website" />
-						<Stat label={MERCHANT.tiles.products} value={productCount} icon="box" kind="product" />
-					</>
-				)}
-			</StatGrid>
-			{rows.length > 0 ? (
-				<Section id="overview-websites" title={MERCHANT.websitesTitle} description={MERCHANT.websitesIntro}>
-					<Masonry as="ul" label={MERCHANT.websitesTitle} wideAlone>
-						{rows.map(({ website, cards }) => (
-							<li key={website.websiteId}>
-								<Card
-									title={
-										<span className="flex min-w-0 items-center gap-3">
-											<IconBadge icon="globe" kind="website" size="sm" />
-											<Link
-												href={routes.website(website.websiteId)}
-												title={website.domain}
-												className="line-clamp-2 min-w-0 break-words text-fg hover:text-primary hover:underline">
-												<SoftBreaks text={website.domain} />
-											</Link>
-										</span>
-									}
-									subtitle={WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}>
-									{cards.length === 0 ? (
-										<p className="text-sm text-muted">{WEBSITE.noProductsMerchant}</p>
-									) : (
-										<ul className="divide-y divide-line-soft">
-											{cards.map((card) => (
-												<li key={card.productId} className="flex flex-wrap items-center justify-between gap-2 py-2">
-													<span className="flex min-w-0 flex-wrap items-center gap-2">
-														<span className="truncate text-sm font-semibold text-fg">{card.name}</span>
-														<ProductStatusBadge status={card.status} featuresOn={card.featuresOn} />
-													</span>
-													{openButton(website, card)}
-												</li>
-											))}
-										</ul>
-									)}
-								</Card>
-							</li>
-						))}
-					</Masonry>
-				</Section>
-			) : null}
-			<Grid>
-				<Col span={12} xl={6}>
+					</Card>
+				</>
+			),
+		},
+		{
+			id: 'latest',
+			label: MERCHANT.latestSection,
+			icon: /** @type {const} */ ('activity'),
+			content: (
+				<>
 					<Card
+						flow
 						title={MORE.recentActivity}
 						subtitle={MORE.recentActivityIntro}
 						actions={
@@ -222,9 +230,8 @@ export function OverviewView(props) {
 						}>
 						<ActivityTimeline items={props.activity ?? []} empty={MORE.noActivity} showMerchant={false} />
 					</Card>
-				</Col>
-				<Col span={12} xl={6}>
 					<Card
+						flow
 						title={MORE.latestReceipts}
 						subtitle={MORE.latestReceiptsIntro}
 						padded={false}
@@ -235,17 +242,32 @@ export function OverviewView(props) {
 						}>
 						<ReceiptsTable receipts={props.receipts ?? []} />
 					</Card>
-				</Col>
-			</Grid>
+				</>
+			),
+		},
+	];
+
+	return (
+		<div className="space-y-6">
+			<FrameBilling billing={billing} />
+			<PageHeader
+				title={MERCHANT.welcome(name)}
+				subtitle={MERCHANT.summary({ websites: rows.length, products: productCount, needs: needs.length })}
+			/>
+			{rows.length === 0 ? (
+				<Welcome branding={props.branding} />
+			) : (
+				<SectionLayout label={MERCHANT.overviewTitle} sections={sections} />
+			)}
 		</div>
 	);
 }
 
 /**
- * The spend on one website over the last 30 UTC days (all its products), and when it was added.
- * @param {{ merchantId: string, website: any, cards: ProductCard[] }} props
+ * The spend on one website over the last 30 UTC days (all its products).
+ * @param {{ merchantId: string, website: any }} props
  */
-function WebsiteSpend({ merchantId, website, cards }) {
+function WebsiteSpend({ merchantId, website }) {
 	const [result, setResult] = useState(/** @type {import('../client.js').ApiResult<any> | null} */ (null));
 	const websiteId = String(website.websiteId);
 	useEffect(() => {
@@ -261,31 +283,9 @@ function WebsiteSpend({ merchantId, website, cards }) {
 	const bars = creditDayBars(usage?.days);
 	return (
 		<>
-			<StatGrid>
-				<Stat
-					label={MORE.websiteSpend}
-					value={usage ? formatCredits(usage.total ?? 0) : '—'}
-					hint={MORE.websiteSpendIntro}
-					icon="trendingUp"
-					kind="credit"
-				/>
-				<Stat
-					label={MORE.featuresOn}
-					value={cards.reduce((n, c) => n + c.featuresOn.length, 0)}
-					icon="sliders"
-					kind="product"
-				/>
-				<Stat
-					label={MORE.websiteAdded}
-					value={formatDate(website.createdAt)}
-					hint={<LocalTime value={website.createdAt} />}
-					icon="calendar"
-					kind="website"
-				/>
-			</StatGrid>
 			{result && !result.ok ? <Callout tone="danger">{describeProblem(result.problem)}</Callout> : null}
 			{usage && !isEmptySeries(bars) ? (
-				<Card title={MORE.websiteSpend} subtitle={MORE.websiteSpendIntro}>
+				<Card title={MORE.websiteSpend} subtitle={formatCredits(usage.total ?? 0)}>
 					<BarChart label={MORE.websiteSpend} data={bars} format={formatChartCredits} height={120} />
 				</Card>
 			) : null}
@@ -352,12 +352,7 @@ export function WebsitesView(props) {
 								setupHref={routes.websiteSetup(shownId)}
 								launch={(productId) => ({ path: api.launch(props.merchantId, shownId, productId) })}
 							/>
-							<WebsiteSpend
-								key={`spend-${shownId}`}
-								merchantId={props.merchantId}
-								website={selected.website}
-								cards={selected.cards}
-							/>
+							<WebsiteSpend key={`spend-${shownId}`} merchantId={props.merchantId} website={selected.website} />
 						</>
 					) : auto ? null : (
 						<PageProblem

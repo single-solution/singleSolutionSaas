@@ -5,7 +5,7 @@
  * an admin; the page shows the support contact instead of a payment form.
  * @module
  */
-import { Button, Callout, Card, Input, PageHeader, Select, describeProblem } from '@ss/ui';
+import { Button, Callout, Card, Input, PageHeader, SectionLayout, Select, describeProblem } from '@ss/ui';
 import { BILLING, MORE } from '../../texts/console.js';
 import { FilterForm } from '../navigation.js';
 import { query, routes } from '../paths.js';
@@ -56,17 +56,38 @@ export function CreditsView(props) {
 			<FrameBilling billing={props.billing} />
 			<PageHeader title={BILLING.usageTitle} subtitle={BILLING.usageIntro} />
 			<BillingStats summary={props.billing} />
-			<Card>
-				<RangeForm range={props.filter} websites={props.websites} websiteId={props.filter.websiteId} />
-			</Card>
-			{props.usageProblem ? (
-				<Callout tone="danger">{describeProblem(props.usageProblem)}</Callout>
-			) : (
-				<UsageView usage={props.usage} />
-			)}
-			<Card title={BILLING.receiptsTitle} subtitle={BILLING.receiptsIntro} padded={false}>
-				<ReceiptsTable receipts={props.receipts} />
-			</Card>
+			<SectionLayout
+				label={BILLING.usageTitle}
+				sections={[
+					{
+						id: 'usage',
+						label: BILLING.usageSection,
+						icon: 'trendingUp',
+						content: (
+							<>
+								<Card>
+									<RangeForm range={props.filter} websites={props.websites} websiteId={props.filter.websiteId} />
+								</Card>
+								{props.usageProblem ? (
+									<Callout tone="danger">{describeProblem(props.usageProblem)}</Callout>
+								) : (
+									<UsageView usage={props.usage} />
+								)}
+							</>
+						),
+					},
+					{
+						id: 'receipts',
+						label: BILLING.receiptsTitle,
+						icon: 'receipt',
+						content: (
+							<Card title={BILLING.receiptsTitle} subtitle={BILLING.receiptsIntro} padded={false}>
+								<ReceiptsTable receipts={props.receipts} />
+							</Card>
+						),
+					},
+				]}
+			/>
 		</div>
 	);
 }

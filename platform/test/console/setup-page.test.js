@@ -23,6 +23,7 @@ import {
 	clickEl,
 	createWorld,
 	dialog,
+	openSection,
 	press,
 	pressDialog,
 	quiet,
@@ -102,8 +103,12 @@ describe('Setup page (jsdom)', () => {
 			expect(shows('Setup · shop.example.com')).toBe(true);
 			expect(shows('Found: Example Shop')).toBe(true);
 			expect(shows('https://shop.example.com')).toBe(true);
+			// a product on its own view: the one that did not answer says so, the one that did has its panel
+			await openSection('Products');
+			await openSection('Chatty');
 			expect(shows('Chatty did not answer')).toBe(true);
 			expect(shows('It could not be reached. Try Refresh in a moment.')).toBe(true);
+			await openSection('Notes');
 			// the product's panel: what is left to do, a feature on with its settings, one off, connections, install, events
 			expect(shows('Add the widget script to every page of your website.')).toBe(true);
 			expect(shows('Notes per visitor per daySet (holds a secret, not shown)')).toBe(true);
@@ -134,6 +139,7 @@ describe('Setup page (jsdom)', () => {
 			await until(() => shows('Setup gathered again.'));
 
 			// share links: refused days, then a link without values, shown once and listed
+			await openSection('Share links');
 			expect(shows('No share links yet.')).toBe(true);
 			await press('Create share link');
 			const days = /** @type {HTMLInputElement} */ (dialog().querySelector('input[type="number"]'));
@@ -184,6 +190,7 @@ describe('Setup page (jsdom)', () => {
 					back={{ href: '/admin', label: 'Back to the website' }}
 				/>,
 			);
+			await openSection('Share links');
 			await press('Create share link');
 			await pressDialog('Create link');
 			await ownerBrowser.waitCall('POST', `/v1/merchants/${merchantId}/websites/${websiteId}/setup/links`, (s) => s === 201);
@@ -282,6 +289,7 @@ describe('Setup page (jsdom)', () => {
 					back={{ href: `/websites/${websiteId}`, label: 'Back to the website' }}
 				/>,
 			);
+			await openSection('Business profile');
 			expect(shows('Not filled out yet.')).toBe(true);
 			expect(shows('Fill out the business profile to see which features this website should use.')).toBe(true);
 			await press('Fill out the profile');

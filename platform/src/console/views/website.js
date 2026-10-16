@@ -249,7 +249,7 @@ export function WebsiteCard({ website, cards: initial, can, launch, addable, onC
 
 	const DomainHeading = headline ? 'h2' : 'h3';
 	return (
-		<Card as="article" id={`website-${websiteId}`} className="@container scroll-mt-24">
+		<Card as="article" flow={!headline} id={`website-${websiteId}`} className="@container scroll-mt-24">
 			<header className="mb-4 flex items-start justify-between gap-3">
 				<span className="flex min-w-0 items-center gap-3">
 					<IconBadge icon="globe" kind="website" size={headline ? 'md' : 'sm'} />

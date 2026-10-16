@@ -28,7 +28,20 @@ import { ConsoleShell } from '../../src/console/views/shell.js';
 import { OverviewView, WebsitesView } from '../../src/console/views/websites.js';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { startMongo } from '../helpers.js';
-import { browserOf, button, clickEl, createWorld, fill, press, quiet, settle, shows, until } from './merchant-harness.js';
+import {
+	browserOf,
+	button,
+	clickEl,
+	createWorld,
+	fill,
+	openSection,
+	press,
+	quiet,
+	resetHash,
+	settle,
+	shows,
+	until,
+} from './merchant-harness.js';
 
 vi.mock('next/navigation.js', async (importOriginal) => {
 	const { testRouter } = await import('./router.js');
@@ -149,6 +162,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		await a.waitCall('PATCH', '/v1/me', (st) => st === 200);
 		await until(() => shows('Business details saved.'));
 		// the sign-in email: a wrong password, then the confirmation link
+		await openSection('Email and password');
 		fill('New email', 'owner2@shop.test');
 		fill('Current password', 'wrong password!!');
 		await press('Change email');
@@ -166,6 +180,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		await press('Change password');
 		await until(() => shows('Password changed.'));
 		// two-step: set up with the QR code, then save the recovery codes
+		await openSection('Two-step sign-in');
 		await press('Set up two-step sign-in');
 		await press('Set up two-step sign-in');
 		const started = await a.waitCall('POST', '/v1/me/two-step/start', (st) => st === 200);
@@ -182,7 +197,9 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		await clickEl(byLabel(document, 'I have stored the recovery codes safely'));
 		await press('Done');
 		cleanup();
+		resetHash();
 		withToasts(<AccountView {...await loaders.loadAccount(a.api, merchantId)} />);
+		await openSection('Two-step sign-in');
 		expect(shows('10 recovery codes left')).toBe(true);
 		await press('Make new recovery codes');
 		const codesForm = /** @type {HTMLElement} */ (document.querySelector('form[aria-label="Make new recovery codes"]'));
@@ -203,6 +220,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		cleanup();
 		render(<AccountView ok={false} problem={{ status: 401, title: 'Unauthorized', code: 'unauthorized' }} />);
 		cleanup();
+		resetHash();
 
 		// ---------------------------------------------------------------- sign-in with two-step and a recovery code
 		const b = browserOf(portal);
@@ -330,7 +348,10 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		const open = vi.fn();
 		vi.stubGlobal('open', open);
 		withToasts(<OverviewView {...await loaders.loadOverview(e.api, beta.merchantId)} branding={BRANDING} />);
-		expect(shows('Spend per UTC day (last 30 days)') && shows('No features on')).toBe(true);
+		// the websites first; the spend chart is in Credits
+		expect(shows('No features on')).toBe(true);
+		await openSection('Credits');
+		expect(shows('Spend per UTC day (last 30 days)')).toBe(true);
 		await press('Open Notes · beta.example.com');
 		const launched = await e.waitCall(
 			'POST',

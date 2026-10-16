@@ -98,7 +98,9 @@ describe('merchant console smoke', () => {
 			// Overview: balance, the spend chart, websites with product chips and Open buttons
 			const overview = await loaders.loadOverview(merchant.api, merchantId);
 			const overviewText = text(ssr(<OverviewView {...overview} branding={BRANDING} />));
-			expect(overviewText).toContain('Spend per UTC day (last 30 days)');
+			// an inner sidebar with one view at a time: the websites first, the others are links
+			for (const section of ['Needs you', 'Credits', 'Latest']) expect(overviewText).toContain(section);
+			expect(overviewText).not.toContain('Spend per UTC day (last 30 days)');
 			expect(overviewText).toContain('shop.example.com');
 			expect(overviewText).toContain('Notes');
 			expect(overviewText).toContain('Chatty');

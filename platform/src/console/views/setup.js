@@ -32,7 +32,6 @@ import {
 	Input,
 	KeyValueList,
 	LocalTime,
-	Masonry,
 	PageHeader,
 	SectionLayout,
 	SegmentedControl,
@@ -679,7 +678,8 @@ function ProfileDialog({ manage, profile, onClose, onSaved }) {
  * product's panel. The console puts them behind an inner sidebar, the public copy stacks them.
  * @param {Blueprint} sheet
  * @param {SheetActions | null} actions `actions`: in the consoles
- * @returns {Array<{ id: string, label: string, icon: import('@ss/ui').IconName, content: import('react').ReactNode }>}
+ * @returns {Array<{ id: string, label: string, icon: import('@ss/ui').IconName, content?: import('react').ReactNode,
+ *   children?: Array<{ id: string, label: string, content: import('react').ReactNode }> }>}
  */
 const sheetSections = (sheet, actions) => {
 	const { website, access } = sheet;
@@ -748,28 +748,43 @@ const sheetSections = (sheet, actions) => {
 			id: 'products',
 			label: SETUP.products,
 			icon: 'box',
-			content: (
-				<Section title={SETUP.products}>
-					{sheet.products.length === 0 ? (
-						<EmptyState compact icon="box" kind="product" title={SETUP.noProducts} />
-					) : (
-						<Masonry columns={2}>
-							{sheet.products.map((product) =>
-								product.reachable ? (
-									<ProductPanel key={product.productId} product={product} valuesShown={sheet.share?.values !== false} />
+			// several products: one view each, so a product's panel is never a long column under another's
+			...(sheet.products.length > 1
+				? {
+						children: sheet.products.map((product) => ({
+							id: `product-${product.productId}`,
+							label: product.name,
+							content: productEntry(product, sheet.share?.values !== false),
+						})),
+					}
+				: {
+						content: (
+							<Section title={SETUP.products}>
+								{sheet.products.length === 0 ? (
+									<EmptyState compact icon="box" kind="product" title={SETUP.noProducts} />
 								) : (
-									<Callout key={product.productId} tone="warning" title={SETUP.notReachable(product.name)}>
-										{SETUP.reasons[product.reason]}
-									</Callout>
-								),
-							)}
-						</Masonry>
-					)}
-				</Section>
-			),
+									sheet.products.map((product) => productEntry(product, sheet.share?.values !== false))
+								)}
+							</Section>
+						),
+					}),
 		},
 	];
 };
+
+/**
+ * One product of the sheet: its panel, or why it could not be reached.
+ * @param {Blueprint['products'][number]} product
+ * @param {boolean} valuesShown
+ */
+const productEntry = (product, valuesShown) =>
+	product.reachable ? (
+		<ProductPanel key={product.productId} product={product} valuesShown={valuesShown} />
+	) : (
+		<Callout key={product.productId} tone="warning" title={SETUP.notReachable(product.name)}>
+			{SETUP.reasons[product.reason]}
+		</Callout>
+	);
 
 /**
  * The website's facts, its business profile and the recommendations, and every product's panel, one under the other.
@@ -778,11 +793,13 @@ const sheetSections = (sheet, actions) => {
 function SheetBody({ sheet, actions = null }) {
 	return (
 		<div className="space-y-6">
-			{sheetSections(sheet, actions).map((section) => (
-				<div key={section.id} className="space-y-6">
-					{section.content}
-				</div>
-			))}
+			{sheetSections(sheet, actions).flatMap((section) =>
+				(section.children ?? [section]).map((part) => (
+					<div key={part.id} className="space-y-6">
+						{part.content}
+					</div>
+				)),
+			)}
 		</div>
 	);
 }
