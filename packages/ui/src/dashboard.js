@@ -18,6 +18,7 @@ import { createContext, startTransition, useCallback, useContext, useEffect, use
 import { AppShell } from './AppShell.js';
 import { Callout, Skeleton } from './display.js';
 import { Select } from './fields.js';
+import { Icon } from './icons.js';
 import { SwapTransition } from './motion.js';
 import { describeProblem } from './problems.js';
 import { call, fill, useLoad } from './dashboard-api.js';
@@ -210,6 +211,20 @@ function DashboardPage({ tabs: own }) {
 	const Tab = current.component;
 	const needsWebsite = !current.global;
 
+	const picker = (
+		<Select
+			label={texts.website}
+			hideLabel
+			value={site ? site.websiteId : ''}
+			placeholder={texts.pickWebsite}
+			options={sites.map((entry) => ({
+				value: entry.websiteId,
+				label: admin ? `${entry.merchantName} / ${entry.domain}` : entry.domain,
+			}))}
+			onChange={(event) => go(href(needsWebsite ? view : 'overview', event.target.value))}
+		/>
+	);
+
 	return (
 		<GoContext.Provider value={go}>
 			<AppShell
@@ -226,21 +241,13 @@ function DashboardPage({ tabs: own }) {
 						})),
 					},
 				]}
-				topbar={
-					<Select
-						label={texts.website}
-						hideLabel
-						value={site ? site.websiteId : ''}
-						placeholder={texts.pickWebsite}
-						options={sites.map((entry) => ({
-							value: entry.websiteId,
-							label: admin ? `${entry.merchantName} / ${entry.domain}` : entry.domain,
-						}))}
-						onChange={(event) => go(href(needsWebsite ? view : 'overview', event.target.value))}
-					/>
-				}
+				switcher={picker}
+				topbar={<span className="min-w-0 flex-1 lg:hidden">{picker}</span>}
 				actions={
-					<a className="ss-motion text-sm font-semibold text-primary hover:underline" href={portalUrl}>
+					<a
+						className="ss-motion inline-flex h-9 items-center gap-1.5 rounded-control px-3 text-sm font-semibold text-primary hover:bg-primary-soft"
+						href={portalUrl}>
+						<Icon name="chevronLeft" size={14} />
 						{texts.backToPortal}
 					</a>
 				}

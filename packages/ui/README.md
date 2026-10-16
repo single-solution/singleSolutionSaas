@@ -23,6 +23,27 @@ badges; surfaces are neutral; green, amber and red mean status only (`tone` `suc
 every kind takes the same indigo tint (`primary-soft`), and leaving `kind` out keeps the item neutral. No screen names a
 color for meaning. The `hero` card is solid indigo.
 
+## The premium frame and blocks (owner 2026-10-16)
+
+Panels float on a quiet canvas with 12-16 px of space around them and between them (hairline edge, very soft shadow);
+the page is as wide as the window leaves it. Nothing is centered in a narrow column except long reading text.
+
+- `AppShell`: a floating sidebar (brand, optional `switcher`, groups of links with icons and a soft pill on the current
+  page, help and account in `sidebarFooter`; it folds to an icon rail, remembered in `localStorage`), a sticky header panel
+  (`topbar`, `search`, theme switch, `actions`) and a phone drawer. `switcher` and `sidebarFooter` may be functions of
+  `{ rail }` (also `useShell()`).
+- `Grid` / `Col span lg xl`: the page's 12 columns (one column on a phone).
+- `SettingsCard` (title, one-line description, actions, `footer`) with setting rows: label and muted help on the left,
+  the control on the right, hairlines between, stacked in a narrow card. Fields inside a card (and a `Form` inside one)
+  become rows by themselves (`FieldLayoutContext`); `SettingRow` is a row for any other control; `Dialog` and `ListEditor`
+  items stack again. `layout="stack" | "row"` on a field overrides.
+- `SectionLayout` / `SectionNav` / `useHashSection`: the inner sidebar for pages with sections (grouped links, badges,
+  sticky, a button that opens the list on phones). All sections stay mounted, the chosen one is in the hash.
+- Controls on native inputs: `Switch` (`role="switch"`), `Checkbox` / `CheckboxInput` (`indeterminate`), `RadioGroup`
+  (`cards`: title plus `description`; arrow keys), `SegmentedControl` (up to about four short choices), `Input` with
+  `prefix` / `suffix` adornments, `Select`, `TextArea`; 36 px high, the accent focus ring, error and disabled states.
+- `SaveBar`: the floating Save changes / Discard bar, shown only while something changed. `AccountMenu`, `Avatar`.
+
 ## Widths: containers, not the screen
 
 Components follow the width they are given (Tailwind container queries), so a narrow detail pane or card gets the
@@ -126,10 +147,14 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
 
 ## SchemaForm
 
-`<SchemaForm schema values onChange errors? overridden? onReset? disabled? />` renders each setting of a settings schema
-(what `@ss/contracts` allows: string, integer, number, boolean and list settings), in the schema's order, as a control
-chosen by its type, its `format` (`email`, `uri`) and `x-ui.widget`, grouped by `x-ui.group`, with its `description` as
-help. Fields sit in the field grid; long text (a `textarea` widget), lists and fields with `x-ui.wide` span the row. A list of more than 12 choices (or `x-ui.widget: 'tags'`) is a searchable picker
+`<SchemaForm schema values onChange errors? overridden? onReset? disabled? title? description? before? after? dirty? onSave? onDiscard? />`
+renders each setting of a settings schema (what `@ss/contracts` allows: string, integer, number, boolean and list
+settings) as a control chosen by its type, its `format` (`email`, `uri`) and `x-ui.widget`, with its `description` as help.
+The settings are titled cards, one per `x-ui.group` (settings without a group share one card, titled with the feature's
+`title`; with several groups `title` heads them), each setting a row, in the schema's order or by `x-ui.order` (those
+with an order first, ascending). A boolean is a toggle, a choice of up to four short words a segmented control (longer
+words a radio list), more choices a select. With `onSave` the sticky Save changes bar (Discard) shows while `dirty`; the
+dashboards' `SettingsForms` use one bar for all features. Long text (a `textarea` widget), lists and fields with `x-ui.wide` take the whole row. A list of more than 12 choices (or `x-ui.widget: 'tags'`) is a searchable picker
 (`ChoicePicker`: chosen ones as chips, a search box, a scrolling list); `x-ui.labels: 'country'` shows ISO country codes
 by their names, and a map (`{ cod: 'Pay on delivery' }`) gives each choice the product's own words. `x-ui.suggestions`
 makes "pick one or type your own": a text is a `SuggestInput` (the suggestions as the browser's list), a list of texts

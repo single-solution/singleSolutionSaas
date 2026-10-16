@@ -44,7 +44,7 @@ A feature's settings are `{ type: 'object', properties: { <setting>: <node> }, a
 setting has `type` (`string`, `integer`, `number`, `boolean`, `array`), `title` and `default`, and may add
 `description`, `minimum` / `maximum` (the hard maximums of limits), `maxLength`, `enum`, `format` (`email`, `uri` or
 `hostname`), `items` (lists, item `type` plus `minimum`, `maximum`, `maxLength`, `enum`, `format`) and `x-ui` (`widget`,
-`group`, `placeholder`, `labels`: `country` shows ISO country codes by name, or a map of each choice to its own words
+`group` (the card the setting is shown in), `order` (a whole number from 0; the settings with an order come first, ascending), `placeholder`, `labels`: `country` shows ISO country codes by name, or a map of each choice to its own words
 (labels are data, never made from a code; it names only choices), `suggestions`: values a text or a list of texts
 without choices offers while the merchant may type their own, `wide`: spans the whole row of the form or, `false`,
 keeps a list or long text in one cell). Keywords must fit the type, lists need `items`, defaults and enum values must

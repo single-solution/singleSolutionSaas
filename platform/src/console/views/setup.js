@@ -34,7 +34,8 @@ import {
 	LocalTime,
 	Masonry,
 	PageHeader,
-	RadioGroup,
+	SectionLayout,
+	SegmentedControl,
 	Section,
 	Skeleton,
 	StatusBadge,
@@ -633,10 +634,9 @@ function ProfileDialog({ manage, profile, onClose, onSaved }) {
 						</div>
 					))}
 					{YES_NO.map((question) => (
-						<RadioGroup
+						<SegmentedControl
 							key={question}
 							legend={PROFILE.questions[question]}
-							inline
 							options={[
 								{ value: 'yes', label: PROFILE.yes },
 								{ value: 'no', label: PROFILE.no },
@@ -675,74 +675,114 @@ function ProfileDialog({ manage, profile, onClose, onSaved }) {
 }
 
 /**
- * The website's facts, its business profile and the recommendations, and every product's panel.
+ * The sections of a setup sheet: the website's facts, its business profile with the recommendations, and every
+ * product's panel. The console puts them behind an inner sidebar, the public copy stacks them.
+ * @param {Blueprint} sheet
+ * @param {SheetActions | null} actions `actions`: in the consoles
+ * @returns {Array<{ id: string, label: string, icon: import('@ss/ui').IconName, content: import('react').ReactNode }>}
+ */
+const sheetSections = (sheet, actions) => {
+	const { website, access } = sheet;
+	return [
+		{
+			id: 'website',
+			label: SETUP.website,
+			icon: 'globe',
+			content: (
+				<Card title={SETUP.website}>
+					<dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+						<div className="min-w-0 space-y-0.5">
+							<dt className="text-xs font-medium text-muted">{SETUP.domain}</dt>
+							<dd className="text-sm break-words text-fg">{website.domain}</dd>
+						</div>
+						<div className="min-w-0 space-y-0.5">
+							<dt className="text-xs font-medium text-muted">{SETUP.websiteStatus}</dt>
+							<dd className="text-sm text-fg">
+								<StatusBadge status={website.status} />
+							</dd>
+						</div>
+						<div className="min-w-0 space-y-0.5">
+							<dt className="text-xs font-medium text-muted">{SETUP.business}</dt>
+							<dd className="text-sm break-words text-fg">
+								{website.business.found
+									? SETUP.businessFound(website.business.name ?? website.domain)
+									: SETUP.businessMissing(website.domain)}
+							</dd>
+						</div>
+						<div className="min-w-0 space-y-0.5">
+							<dt className="text-xs font-medium text-muted">{SETUP.allowedOrigins}</dt>
+							<dd className="text-sm break-words text-fg">{access.allowedOrigins.join(', ')}</dd>
+						</div>
+						<div className="min-w-0 space-y-0.5">
+							<dt className="text-xs font-medium text-muted">{SETUP.testingOrigins}</dt>
+							<dd className="text-sm break-words text-fg">
+								{access.testingOrigins.join(', ')} <span className="text-muted">({SETUP.testingNote})</span>
+							</dd>
+						</div>
+						<div className="min-w-0 space-y-0.5 sm:col-span-2">
+							<dt className="text-xs font-medium text-muted">{SETUP.serverTokens}</dt>
+							<dd className="text-sm text-fg">{access.serverTokens}</dd>
+						</div>
+						<div className="min-w-0 space-y-0.5">
+							<dt className="text-xs font-medium text-muted">{SETUP.made}</dt>
+							<dd className="text-sm text-fg">
+								<LocalTime value={sheet.generatedAt} />
+							</dd>
+						</div>
+					</dl>
+				</Card>
+			),
+		},
+		{
+			id: 'profile',
+			label: PROFILE.title,
+			icon: 'user',
+			content: (
+				<>
+					<ProfileCard profile={website.profile} actions={actions} />
+					<Recommendations sheet={sheet} actions={actions} />
+				</>
+			),
+		},
+		{
+			id: 'products',
+			label: SETUP.products,
+			icon: 'box',
+			content: (
+				<Section title={SETUP.products}>
+					{sheet.products.length === 0 ? (
+						<EmptyState compact icon="box" kind="product" title={SETUP.noProducts} />
+					) : (
+						<Masonry columns={2}>
+							{sheet.products.map((product) =>
+								product.reachable ? (
+									<ProductPanel key={product.productId} product={product} valuesShown={sheet.share?.values !== false} />
+								) : (
+									<Callout key={product.productId} tone="warning" title={SETUP.notReachable(product.name)}>
+										{SETUP.reasons[product.reason]}
+									</Callout>
+								),
+							)}
+						</Masonry>
+					)}
+				</Section>
+			),
+		},
+	];
+};
+
+/**
+ * The website's facts, its business profile and the recommendations, and every product's panel, one under the other.
  * @param {{ sheet: Blueprint, actions?: SheetActions | null }} props `actions`: in the consoles
  */
 function SheetBody({ sheet, actions = null }) {
-	const { website, access } = sheet;
 	return (
 		<div className="space-y-6">
-			<Card title={SETUP.website}>
-				<dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-					<div className="min-w-0 space-y-0.5">
-						<dt className="text-xs font-medium text-muted">{SETUP.domain}</dt>
-						<dd className="text-sm break-words text-fg">{website.domain}</dd>
-					</div>
-					<div className="min-w-0 space-y-0.5">
-						<dt className="text-xs font-medium text-muted">{SETUP.websiteStatus}</dt>
-						<dd className="text-sm text-fg">
-							<StatusBadge status={website.status} />
-						</dd>
-					</div>
-					<div className="min-w-0 space-y-0.5">
-						<dt className="text-xs font-medium text-muted">{SETUP.business}</dt>
-						<dd className="text-sm break-words text-fg">
-							{website.business.found
-								? SETUP.businessFound(website.business.name ?? website.domain)
-								: SETUP.businessMissing(website.domain)}
-						</dd>
-					</div>
-					<div className="min-w-0 space-y-0.5">
-						<dt className="text-xs font-medium text-muted">{SETUP.allowedOrigins}</dt>
-						<dd className="text-sm break-words text-fg">{access.allowedOrigins.join(', ')}</dd>
-					</div>
-					<div className="min-w-0 space-y-0.5">
-						<dt className="text-xs font-medium text-muted">{SETUP.testingOrigins}</dt>
-						<dd className="text-sm break-words text-fg">
-							{access.testingOrigins.join(', ')} <span className="text-muted">({SETUP.testingNote})</span>
-						</dd>
-					</div>
-					<div className="min-w-0 space-y-0.5 sm:col-span-2">
-						<dt className="text-xs font-medium text-muted">{SETUP.serverTokens}</dt>
-						<dd className="text-sm text-fg">{access.serverTokens}</dd>
-					</div>
-					<div className="min-w-0 space-y-0.5">
-						<dt className="text-xs font-medium text-muted">{SETUP.made}</dt>
-						<dd className="text-sm text-fg">
-							<LocalTime value={sheet.generatedAt} />
-						</dd>
-					</div>
-				</dl>
-			</Card>
-			<ProfileCard profile={website.profile} actions={actions} />
-			<Recommendations sheet={sheet} actions={actions} />
-			<Section title={SETUP.products}>
-				{sheet.products.length === 0 ? (
-					<EmptyState compact icon="box" kind="product" title={SETUP.noProducts} />
-				) : (
-					<Masonry columns={2}>
-						{sheet.products.map((product) =>
-							product.reachable ? (
-								<ProductPanel key={product.productId} product={product} valuesShown={sheet.share?.values !== false} />
-							) : (
-								<Callout key={product.productId} tone="warning" title={SETUP.notReachable(product.name)}>
-									{SETUP.reasons[product.reason]}
-								</Callout>
-							),
-						)}
-					</Masonry>
-				)}
-			</Section>
+			{sheetSections(sheet, actions).map((section) => (
+				<div key={section.id} className="space-y-6">
+					{section.content}
+				</div>
+			))}
 		</div>
 	);
 }
@@ -988,8 +1028,13 @@ export function SetupView({ sheet: initial, links, manage, back, canSwitch }) {
 					</>
 				}
 			/>
-			<SheetBody sheet={sheet} actions={actions} />
-			<ShareLinks manage={manage} initial={links} />
+			<SectionLayout
+				label={SETUP.title(sheet.website.domain)}
+				sections={[
+					...sheetSections(sheet, actions),
+					{ id: 'share', label: SETUP.linksTitle, icon: 'link', content: <ShareLinks manage={manage} initial={links} /> },
+				]}
+			/>
 			{editing ? (
 				<ProfileDialog
 					manage={manage}

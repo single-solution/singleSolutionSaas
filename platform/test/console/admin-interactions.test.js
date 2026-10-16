@@ -514,7 +514,7 @@ describe('admin console interactions (jsdom)', () => {
 		await press('Invite');
 		fillDialog('Email', 'help@ss.test');
 		await act(async () => {
-			type(byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Role'), 'support');
+			byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Support').click();
 		});
 		await pressInDialog('Invite');
 		const invited = /** @type {any} */ (
@@ -543,7 +543,7 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => shows('helpdesk@ss.test'));
 		await choose('Change role');
 		await act(async () => {
-			type(byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Role'), 'finance');
+			byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Finance').click();
 		});
 		await pressInDialog('Change role');
 		await until(() =>

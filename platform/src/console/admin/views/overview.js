@@ -10,6 +10,8 @@
  */
 import { useState } from 'react';
 import {
+	Col,
+	Grid,
 	ActionMenu,
 	Badge,
 	BarChart,
@@ -25,7 +27,6 @@ import {
 	SetupChecklist,
 	Stat,
 	StatGrid,
-	cx,
 	describeProblem,
 	formatCredits,
 	initialsOf,
@@ -165,8 +166,8 @@ export function OverviewView(props) {
 					) : null
 				}
 			/>
-			<div className="@container">
-				<div className={cx('grid gap-6', settingUp && '@4xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]')}>
+			<Grid>
+				<Col span={12} xl={settingUp ? 7 : 12}>
 					<Card id="overview-needs" title={ADMIN.needs.title} subtitle={needs.length > 0 ? ADMIN.needs.intro : undefined}>
 						<div className="space-y-3">
 							<NeedsList items={needs} none={ADMIN.needs.none} />
@@ -177,7 +178,9 @@ export function OverviewView(props) {
 							) : null}
 						</div>
 					</Card>
-					{settingUp ? (
+				</Col>
+				{settingUp ? (
+					<Col span={12} xl={5}>
 						<SetupChecklist
 							id="overview-ready"
 							title={ADMIN.ready.title}
@@ -192,9 +195,9 @@ export function OverviewView(props) {
 								...(step.onClick ? { onSelect: step.onClick } : {}),
 							}))}
 						/>
-					) : null}
-				</div>
-			</div>
+					</Col>
+				) : null}
+			</Grid>
 			<StatGrid>
 				<Stat label={ADMIN.creditsThisMonth} value={formatCredits(earned)} icon="coins" kind="credit" />
 				<Stat
@@ -206,8 +209,8 @@ export function OverviewView(props) {
 				<Stat label={ADMIN.totals.merchants} value={o.merchants ?? 0} icon="users" kind="merchant" />
 				<Stat label={ADMIN.totals.websites} value={o.websites ?? 0} icon="globe" kind="website" />
 			</StatGrid>
-			<div className="@container">
-				<div className="grid gap-6 @4xl:grid-cols-2">
+			<Grid>
+				<Col span={12} xl={5}>
 					<Card title={ADMIN.creditsChart}>
 						<BarChart
 							label={ADMIN.creditsChart}
@@ -216,6 +219,8 @@ export function OverviewView(props) {
 							height={132}
 						/>
 					</Card>
+				</Col>
+				<Col span={12} xl={7}>
 					<Card
 						title={ADMIN.merchantsTitle}
 						subtitle={merchants.length > 0 ? ADMIN.merchantsIntro : undefined}
@@ -271,8 +276,8 @@ export function OverviewView(props) {
 							</ul>
 						)}
 					</Card>
-				</div>
-			</div>
+				</Col>
+			</Grid>
 			<Section id="overview-products" title={ADMIN.productsTitle} description={ADMIN.productsIntro}>
 				{products.length === 0 ? (
 					<EmptyState compact icon="box" kind="product" title={ADMIN.noProducts} />

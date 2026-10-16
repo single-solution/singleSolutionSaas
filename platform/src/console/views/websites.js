@@ -10,6 +10,8 @@
 import { useEffect, useState } from 'react';
 import {
 	BarChart,
+	Col,
+	Grid,
 	Button,
 	ButtonLink,
 	Callout,
@@ -131,11 +133,13 @@ export function OverviewView(props) {
 			{rows.length === 0 ? (
 				<Welcome branding={props.branding} />
 			) : (
-				<div className="@container">
-					<div className="grid gap-6 @4xl:grid-cols-2">
+				<Grid>
+					<Col span={12} xl={7}>
 						<Card title={MERCHANT.needs.title} subtitle={needs.length > 0 ? MERCHANT.needs.intro : undefined}>
 							<NeedsList items={needs} none={MERCHANT.needs.none} />
 						</Card>
+					</Col>
+					<Col span={12} xl={5}>
 						<Card title={MERCHANT.spendChart} subtitle={props.usage ? formatCredits(props.usage.total ?? 0) : undefined}>
 							<BarChart
 								label={MERCHANT.spendChart}
@@ -144,8 +148,8 @@ export function OverviewView(props) {
 								height={132}
 							/>
 						</Card>
-					</div>
-				</div>
+					</Col>
+				</Grid>
 			)}
 			<StatGrid>
 				{billing ? (
@@ -206,8 +210,8 @@ export function OverviewView(props) {
 					</Masonry>
 				</Section>
 			) : null}
-			<div className="@container">
-				<div className="grid gap-6 @4xl:grid-cols-2">
+			<Grid>
+				<Col span={12} xl={6}>
 					<Card
 						title={MORE.recentActivity}
 						subtitle={MORE.recentActivityIntro}
@@ -218,6 +222,8 @@ export function OverviewView(props) {
 						}>
 						<ActivityTimeline items={props.activity ?? []} empty={MORE.noActivity} showMerchant={false} />
 					</Card>
+				</Col>
+				<Col span={12} xl={6}>
 					<Card
 						title={MORE.latestReceipts}
 						subtitle={MORE.latestReceiptsIntro}
@@ -229,8 +235,8 @@ export function OverviewView(props) {
 						}>
 						<ReceiptsTable receipts={props.receipts ?? []} />
 					</Card>
-				</div>
-			</div>
+				</Col>
+			</Grid>
 		</div>
 	);
 }

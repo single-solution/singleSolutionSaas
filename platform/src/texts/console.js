@@ -628,6 +628,11 @@ export const ADMIN = Object.freeze({
 	menuGroups: Object.freeze({ operate: 'Operate', money: 'Money', portal: 'Portal' }),
 	accountMenu: 'Account menu',
 	roles: Object.freeze({ owner: 'Owner', support: 'Support', finance: 'Finance' }),
+	roleHelp: Object.freeze({
+		owner: 'Everything, including admins and Settings.',
+		support: 'Merchants, websites and products. No money.',
+		finance: 'Credits and billing. Read-only elsewhere.',
+	}),
 	consoleTagline: 'Admin',
 	signOut: 'Sign out',
 	totals: Object.freeze({ merchants: 'Merchants', websites: 'Websites' }),

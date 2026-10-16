@@ -26,6 +26,7 @@ import {
 	KeyValueList,
 	LocalTime,
 	Masonry,
+	RadioGroup,
 	PageHeader,
 	Select,
 	describeProblem,
@@ -47,6 +48,11 @@ const ROLE_OPTIONS = Object.freeze([
 	{ value: 'support', label: ADMIN.roles.support },
 	{ value: 'finance', label: ADMIN.roles.finance },
 ]);
+
+/** The roles as radio cards: the role and what it may do. */
+const ROLE_CARDS = Object.freeze(
+	ROLE_OPTIONS.map((option) => ({ ...option, description: ADMIN.roleHelp[/** @type {'owner'} */ (option.value)] })),
+);
 
 /**
  * The latest entries an admin made (the Activity page filtered by them), with a link to all of them.
@@ -311,12 +317,7 @@ export function AdminsView(props) {
 						error={fieldErrors(problem).email}
 						required
 					/>
-					<Select
-						label={ADMIN.role}
-						value={role}
-						onChange={(e) => setRole(e.currentTarget.value)}
-						options={[...ROLE_OPTIONS]}
-					/>
+					<RadioGroup legend={ADMIN.role} cards value={role} onChange={setRole} options={[...ROLE_CARDS]} />
 					<FormError problem={problem} fields={['email', 'role']} />
 					<div className="flex flex-wrap gap-2">
 						<Button type="submit" loading={busy}>
@@ -350,12 +351,7 @@ export function AdminsView(props) {
 				) : dialog?.kind === 'role' ? (
 					<div className="space-y-3">
 						<p className="text-sm text-muted">{ADMIN.roleChangeHelp}</p>
-						<Select
-							label={ADMIN.role}
-							value={role}
-							onChange={(e) => setRole(e.currentTarget.value)}
-							options={[...ROLE_OPTIONS]}
-						/>
+						<RadioGroup legend={ADMIN.role} cards value={role} onChange={setRole} options={[...ROLE_CARDS]} />
 					</div>
 				) : dialog?.kind === 'twoStep' ? (
 					<p className="text-sm text-muted">{ADMIN.turnOffTwoStepHelp}</p>
