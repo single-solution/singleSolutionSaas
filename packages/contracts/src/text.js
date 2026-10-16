@@ -107,7 +107,7 @@ export const widgetScriptTag = ({ src, token = null, loading = 'async' }) =>
 export const SUPPORT_CHANNEL_TYPES = Object.freeze(/** @type {const} */ (['email', 'phone', 'link']));
 /** The most channels, and the longest label. */
 export const SUPPORT_CHANNELS_MAX = 10;
-export const SUPPORT_LABEL_MAX = 60;
+const SUPPORT_LABEL_MAX = 60;
 
 /** @typedef {{ type: 'email' | 'phone' | 'link', label: string, url: string }} SupportChannel */
 

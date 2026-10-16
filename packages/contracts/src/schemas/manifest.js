@@ -12,7 +12,7 @@ import { commonRef as ref } from './common.js';
 import { recommendForSchema } from './profile.js';
 
 /** How a website loads a product's widget script: `async` (the default) or `blocking` (in page order). */
-export const WIDGET_SCRIPT_LOADING = Object.freeze(/** @type {const} */ (['async', 'blocking']));
+const WIDGET_SCRIPT_LOADING = Object.freeze(/** @type {const} */ (['async', 'blocking']));
 
 /** Widget kinds. */
 const WIDGET_KINDS = Object.freeze(/** @type {const} */ (['visitor', 'admin']));

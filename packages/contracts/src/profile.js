@@ -51,7 +51,7 @@ export const PROFILE_OTHER = Object.freeze(['sells', 'pays', 'delivers', 'signIn
 export const OTHER_MAX = Object.freeze({ answers: 5, length: 60 });
 
 /** The option of a tag that stands for the merchant's own answers to a choice. */
-export const PROFILE_OTHER_OPTION = 'other';
+const PROFILE_OTHER_OPTION = 'other';
 
 /** Questions answered yes or no (tags `<question>.yes` and `<question>.no`). */
 export const PROFILE_YES_NO = Object.freeze(/** @type {const} */ (['moving', 'taxes']));
