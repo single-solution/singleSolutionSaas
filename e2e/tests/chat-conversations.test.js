@@ -302,7 +302,9 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 					name: 'Rea Der',
 					email: 'rea@example.com',
 					password: PASSWORD,
-					addresses: [{ line1: '5 Rue Cler', city: 'Paris', area: '7th arrondissement' }],
+					addresses: [
+						{ line1: '5 Rue Cler', city: 'Paris', area: '7th arrondissement', postalCode: '75007', country: 'FR' },
+					],
 				},
 			],
 			['nadia', { name: 'Nadia Noor', email: 'nadia@example.com', phone: '+33612345678', password: PASSWORD }],

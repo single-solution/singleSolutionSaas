@@ -45,7 +45,15 @@ const ORIGIN = `https://${DOMAIN}`;
 const PASSWORD = 'a long shopper password';
 const TEAM = 'orders@shop.example.com';
 const MANAGER = 'manager@shop.example.com';
-const ADDRESS = { name: 'Sara Shopper', phone: '+447700900111', line1: '1 High Street', city: 'London', country: 'GB' };
+// the UK address format asks for a postcode
+const ADDRESS = {
+	name: 'Sara Shopper',
+	phone: '+447700900111',
+	line1: '1 High Street',
+	city: 'London',
+	postalCode: 'SW1A 1AA',
+	country: 'GB',
+};
 const LONDON = { city: 'London' };
 /** Prices in pence (GBP minor units): whole pounds, as the merchant enters them. */
 const PHONE_PRICE = 4_999_900;

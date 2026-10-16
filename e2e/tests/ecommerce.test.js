@@ -42,7 +42,16 @@ const DOMAIN = 'store.example.com';
 const ORIGIN = `https://${DOMAIN}`;
 const ADMIN_ORIGIN = 'https://admin.store.example.com';
 const STRIPE_KEYS = { secretKey: 'sk_test_e2e0123456789', webhookSecret: 'whsec_e2e0123456789' };
-const ADDRESS = { name: 'Sara Shopper', phone: '+15550001111', line1: '1 Main Street', city: 'Springfield', country: 'US' };
+// the US address format asks for a state and a ZIP code
+const ADDRESS = {
+	name: 'Sara Shopper',
+	phone: '+15550001111',
+	line1: '1 Main Street',
+	city: 'Springfield',
+	region: 'IL',
+	postalCode: '62701',
+	country: 'US',
+};
 
 /** Calls the merchant's Stripe account received. @type {Array<{ path: string, form: URLSearchParams }>} */
 const stripeCalls = [];

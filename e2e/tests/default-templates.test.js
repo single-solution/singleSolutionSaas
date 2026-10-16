@@ -203,7 +203,15 @@ describe('default templates: no template written, messages still go (parity P1)'
 				body: {
 					lines: [{ productId: item.json.id }],
 					payment: 'cod',
-					address: { name: 'Sam Lee', phone: '+12025550143', line1: '1 Main Street', city: 'New York', country: 'US' },
+					address: {
+						name: 'Sam Lee',
+						phone: '+12025550143',
+						line1: '1 Main Street',
+						city: 'New York',
+						region: 'NY',
+						postalCode: '10001',
+						country: 'US',
+					},
 				},
 				headers: { 'ss-sign-in': String(up.json.signIn), 'idempotency-key': key },
 			});
