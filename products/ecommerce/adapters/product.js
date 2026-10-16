@@ -12,9 +12,7 @@
  * clock, network). Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
-import { PRODUCT_DATABASE_OPTIONS, createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
-import { allowHostsFor, createOutboundPolicy, safeFetch } from '@ss/net';
-import { MongoClient } from 'mongodb';
+import { createProduct, createProductBase } from '@ss/app-kit';
 import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -188,8 +186,6 @@ export const INDEXES = [
  *   | 'problemCodes' | 'messages' | 'imports' | 'events' | 'lists' | 'openapi' | 'build'>} InstanceOptions
  */
 
-/** Used only while the deployable is misconfigured (it then answers 503 everywhere). */
-const UNCONFIGURED = '';
 /** The fallback key a misconfigured product builds its sealer with (it answers 503 everywhere anyway). */
 const UNCONFIGURED_KEY = 'unconfigured-ecommerce-encryption-key-00000';
 
@@ -201,22 +197,9 @@ const UNCONFIGURED_KEY = 'unconfigured-ecommerce-encryption-key-00000';
 export const createProductInstance = (options) => {
 	const now = options.now ?? Date.now;
 	const healthy = (options.problems ?? []).length === 0;
-	const uri = options.config?.mongodbUri ?? UNCONFIGURED;
-	// Ecommerce keeps its list settings in the product database too, so it owns the store; its client has the kit's
-	// pool and deadlines, so a database that cannot be reached answers 503 database_unavailable (K-16)
-	const store =
-		options.store ??
-		(healthy && uri
-			? createMongoStore({ db: new MongoClient(uri, { ...PRODUCT_DATABASE_OPTIONS }).db(), now })
-			: createMemoryStore({ now }));
-	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
-	// the same policy the kit uses for addresses merchants enter (this machine too under next dev, never in production)
-	const policy = createOutboundPolicy({
-		...outboundRest,
-		allowHosts: allowHostsFor(options.nodeEnv ?? process.env.NODE_ENV, allowHosts),
-	});
-	/** @type {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} */
-	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
+	// the kit's store and outbound send: Ecommerce keeps its list settings in the product database too, so the kit and the
+	// product share one store
+	const { store, send } = createProductBase(options);
 	const couriers = createCouriers({ send });
 	const ai = createAi({ send });
 	/** The kit's product, once made (the order flow's guard reads the merchant database through it). @type {ReturnType<typeof createProduct> | null} */
