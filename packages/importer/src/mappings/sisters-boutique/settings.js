@@ -35,7 +35,7 @@ export const STORE_DEFAULTS = Object.freeze({
 	freeDeliveryThresholdRupees: 50_000, // :171
 	courierFlatFeeRupees: 1_500, // :172
 	returnPolicyHtml: `<h2>Return &amp; moneyback</h2><p>You may request a full refund within <strong>15 days</strong> of delivery if the item is unused and in the same condition you received it.</p><ul><li>Contact us on WhatsApp with your order number.</li><li>We arrange pickup or in-store drop-off.</li><li>Refunds are processed to your original payment method once the return is verified.</li></ul>`, // :175
-	privacyPolicyHtml: `<h2>Privacy</h2><p>We collect your name, phone number, and delivery address to fulfil orders and send updates on WhatsApp.</p><p>We do not sell your data. Order history is kept for warranty and support. You may ask us to delete your account data by contacting support.</p>`, // :176
+	privacyPolicyHtml: `<h2>Privacy</h2><p>We collect your name, phone number, and delivery address to fulfill orders and send updates on WhatsApp.</p><p>We do not sell your data. Order history is kept for warranty and support. You may ask us to delete your account data by contacting support.</p>`, // :176
 	loyaltyEarnPercent: 1, // :177
 	memberDiscountPercent: 10, // :178
 	paymentBankTransferEnabled: true, // :180
@@ -352,7 +352,7 @@ export const settingsPlan = (values) => {
 				'loyalty.memberFlag': 'off',
 				// alerts on placement, status changes and cancels (`apps/admin/src/app/api/orders/[id]/route.ts`:336-342); the
 				// status changes are each status's staffAlert in the order flow below (E36)
-				'staff_alerts.events': ['placed', 'cancelled'],
+				'staff_alerts.events': ['placed', 'canceled'],
 				'staff_alerts.recipients': recipientsOf(values),
 				'staff_alerts.staffPermission': 'orders.read',
 				'staff_alerts.phoneChannel': 'whatsapp',
@@ -432,26 +432,26 @@ export const settingsPlan = (values) => {
 				// SB's moves (`apps/admin/src/app/api/orders/[id]/route.ts`:11-13, :77-123) that the role rules allow, with SB's
 				// rules as their options (`packages/db/src/orderTransitions.ts`); SB sends shoppers no message (D5)
 				order_flow: {
-					statuses: STATUSES.map((status) => ({ ...status, notify: false, staffAlert: status.role !== 'cancelled' })),
+					statuses: STATUSES.map((status) => ({ ...status, notify: false, staffAlert: status.role !== 'canceled' })),
 					moves: /** @type {Array<[string, string, Record<string, unknown>?]>} */ ([
 						// staff confirm a transfer by hand: it counts as paid (OR-7)
 						['pending-payment', 'confirmed', { options: { paidOnConfirm: ['bank_transfer'] } }],
 						// shoppers cancel before dispatch (`packages/shared/src/orderLifecycle.ts`:2)
-						['pending-payment', 'cancelled', { who: ['staff', 'shopper'] }],
+						['pending-payment', 'canceled', { who: ['staff', 'shopper'] }],
 						['pending-payment', 'refunded'],
 						['awaiting-confirmation', 'confirmed', { options: { paidOnConfirm: ['bank_transfer'] } }],
-						['awaiting-confirmation', 'cancelled', { who: ['staff', 'shopper'] }],
+						['awaiting-confirmation', 'canceled', { who: ['staff', 'shopper'] }],
 						['confirmed', 'pending-payment'],
 						// the dispatch video is required when packing (route.ts:106-110): the attachment kind below
 						['confirmed', 'packed'],
-						// a paid order too: cancelled, its refund left due
-						['confirmed', 'cancelled', { who: ['staff', 'shopper'], options: { shopperPaid: 'flag' } }],
+						// a paid order too: canceled, its refund left due
+						['confirmed', 'canceled', { who: ['staff', 'shopper'], options: { shopperPaid: 'flag' } }],
 						['confirmed', 'refunded'],
 						['packed', 'pending-payment'],
 						['packed', 'confirmed'],
 						// no tracking number needed
 						['packed', 'dispatched', { options: { tracking: 'optional' } }],
-						['packed', 'cancelled'],
+						['packed', 'canceled'],
 						['packed', 'refunded'],
 						['dispatched', 'delivered'],
 						// a return puts the items back and keeps the points earned (orderTransitions.ts:13)
@@ -461,7 +461,7 @@ export const settingsPlan = (values) => {
 						['returned', 'refunded'],
 					]).map(([from, to, rest = {}]) => ({ from, to, ...rest })),
 					// Payments' confirmation and an ended window as by default; refunds never move an order by themselves
-					triggers: { paid: 'confirmed', windowEnd: 'cancelled', refundsCover: '' },
+					triggers: { paid: 'confirmed', windowEnd: 'canceled', refundsCover: '' },
 					// cash on delivery starts confirmed (orders/route.ts:676), pay at pickup awaiting confirmation, free orders
 					// wait in pending-payment (CK-41)
 					starts: { on_delivery: 'confirmed', at_pickup: 'awaiting-confirmation', free: 'pending-payment' },

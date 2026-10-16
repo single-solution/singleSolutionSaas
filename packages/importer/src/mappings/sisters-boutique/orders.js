@@ -3,12 +3,12 @@
  * Money, Payments, Orders, Loyalty, "Per store" Orders and Loyalty; IMP-5, IMP-9, IMP-10, IMP-13, IMP-17, IMP-19,
  * IMP-23, IMP-49, CU-6; owner quirk 7):
  *
- * - **customers**: one per normalised phone (`@ss/contracts/phone`, +92); SB's duplicates merge, the member's record
+ * - **customers**: one per normalized phone (`@ss/contracts/phone`, +92); SB's duplicates merge, the member's record
  *   winning, with their notes and "seen" markers; members and password holders name their Accounts user.
  * - **orders**: numbers and status keys kept (the `order_flow` list gives them their roles); money × 100, the stored
  *   discount (offers, member discount and points: what makes SB's total) spread over the lines so every line has its
  *   discount and total (IMP-10); a payment entry by the status rule (bank transfer and card: the total at the first
- *   `confirmed` entry; cash on delivery: at the last `delivered` one; none for a cancelled order) and a refund entry
+ *   `confirmed` entry; cash on delivery: at the last `delivered` one; none for a canceled order) and a refund entry
  *   for a refunded one, noted "Imported" (IMP-13); `deliveredAt` from the last `delivered` entry (IMP-9); the
  *   idempotency key, else `import:<hex>` (IMP-23); stock held and the points flags from SB's flags and timeline
  *   (IMP-49); staff "seen" markers copied (quirk 7); each line's category and brand snapshot from its product (IMP-17).
@@ -54,10 +54,14 @@ export const STATUSES = Object.freeze([
 	{ key: 'packed', label: 'Packed', role: 'packed' },
 	{ key: 'dispatched', label: 'Dispatched', role: 'shipped' },
 	{ key: 'delivered', label: 'Delivered', role: 'delivered' },
-	{ key: 'cancelled', label: 'Cancelled', role: 'cancelled' },
+	{ key: 'canceled', label: 'Canceled', role: 'canceled' },
 	{ key: 'refunded', label: 'Refunded', role: 'refunded' },
 	{ key: 'returned', label: 'Returned', role: 'returned' },
 ]);
+/** SB's stored status words that Ecommerce spells differently now (US English). */
+const STORE_STATUSES = Object.freeze(/** @type {Record<string, string>} */ ({ cancelled: 'canceled' }));
+/** @param {unknown} value SB's stored status, as Ecommerce names it */
+const statusOf = (value) => STORE_STATUSES[text(value)] ?? text(value);
 /** @param {string} status */
 const roleOf = (status) => STATUSES.find((each) => each.key === status)?.role ?? 'open';
 
@@ -73,20 +77,20 @@ const ENTRY_METHODS = Object.freeze(
 	/** @type {Record<string, string>} */ ({ bank_transfer: 'bank_transfer', cod: 'cod', online: 'payments' }),
 );
 /** Roles of orders that gave their stock back, and of orders never delivered (Ecommerce's import rules). */
-const RELEASED = Object.freeze(['cancelled', 'returned_to_origin', 'returned']);
+const RELEASED = Object.freeze(['canceled', 'returned_to_origin', 'returned']);
 const UNDELIVERED = Object.freeze([
 	'awaiting_payment',
 	'awaiting_confirmation',
 	'open',
 	'packed',
 	'shipped',
-	'cancelled',
+	'canceled',
 	'returned_to_origin',
 ]);
 /** Statuses whose move gives redeemed points back in SB (`packages/db/src/orderTransitions.ts`:17). */
-const REDEEM_REFUND = Object.freeze(['cancelled', 'refunded', 'returned']);
+const REDEEM_REFUND = Object.freeze(['canceled', 'refunded', 'returned']);
 /** Statuses a delivered order's earned points are reversed in (`orderTransitions.ts`:16). */
-const REVERSING = Object.freeze(['cancelled', 'refunded']);
+const REVERSING = Object.freeze(['canceled', 'refunded']);
 /** Most staff ids a record keeps as having opened it (Ecommerce's `seenBy`). */
 const MAX_SEEN = 50;
 /** The note of what the importer adds. */
@@ -101,7 +105,7 @@ const seenOf = (ids) =>
 	[...new Set((Array.isArray(ids) ? ids : []).map((id) => idOrNull('usr', id)).filter((id) => id !== null))].slice(-MAX_SEEN);
 
 /**
- * Ecommerce customers: SB's customers, one per normalised phone; the member's record wins a merge (its id is the one
+ * Ecommerce customers: SB's customers, one per normalized phone; the member's record wins a merge (its id is the one
  * the member's Accounts user and orders name).
  * @type {MappingStep}
  */
@@ -181,12 +185,12 @@ const snapshotOf = (productId, ctx) => ({
  * @param {Array<{ status: string, at: string }>} timeline @param {MapContext} ctx
  */
 const moneyOf = (doc, method, total, timeline, ctx) => {
-	const role = roleOf(text(doc.status));
+	const role = roleOf(statusOf(doc.status));
 	const paidAt =
 		method === 'cod'
 			? timeline.filter((entry) => entry.status === 'delivered').at(-1)?.at
 			: timeline.find((entry) => entry.status === 'confirmed')?.at;
-	if (total <= 0 || role === 'cancelled' || !paidAt) return { payments: [], refunds: [] };
+	if (total <= 0 || role === 'canceled' || !paidAt) return { payments: [], refunds: [] };
 	const entryMethod = ENTRY_METHODS[method] ?? 'other';
 	const payments = [{ id: ctx.id('opy', doc._id), method: entryMethod, amount: total, note: IMPORTED, at: paidAt }];
 	const refundedAt = role === 'refunded' ? timeline.filter((entry) => entry.status === 'refunded').at(-1)?.at : undefined;
@@ -210,7 +214,7 @@ const moneyOf = (doc, method, total, timeline, ctx) => {
  * @param {Record<string, any>} doc @param {Array<{ status: string, at: string, note: string }>} timeline
  */
 const historyOf = (doc, timeline) => {
-	const status = text(doc.status);
+	const status = statusOf(doc.status);
 	const entries = timeline.map((entry, index) => ({
 		at: entry.at,
 		from: index === 0 ? null : /** @type {{ status: string }} */ (timeline[index - 1]).status,
@@ -234,7 +238,7 @@ const historyOf = (doc, timeline) => {
 
 /**
  * What the order's points did (IMP-49): credited when it reached `delivered` (SB credits there), reversed when a
- * delivered order was cancelled or refunded, given back (`released`) once it was cancelled, refunded or returned.
+ * delivered order was canceled or refunded, given back (`released`) once it was canceled, refunded or returned.
  * @param {Record<string, any>} doc @param {Array<{ status: string }>} timeline
  */
 const pointsOf = (doc, timeline) => {
@@ -253,7 +257,7 @@ const pointsOf = (doc, timeline) => {
 		pointsEarned: earned,
 		...(earned > 0 ? { pointsCredited: credited > 0 } : {}),
 		...(earned > 0 && credited > 0 && reversed >= credited ? { pointsReversed: earned } : {}),
-		released: timeline.some((entry) => REDEEM_REFUND.includes(entry.status)) || REDEEM_REFUND.includes(text(doc.status)),
+		released: timeline.some((entry) => REDEEM_REFUND.includes(entry.status)) || REDEEM_REFUND.includes(statusOf(doc.status)),
 	};
 };
 
@@ -268,7 +272,7 @@ export const orderStep = {
 	prefix: 'ord',
 	lookups: { [ORDER_NUMBERS]: (record) => String(record.number) },
 	map: (doc, ctx) => {
-		const status = text(doc.status);
+		const status = statusOf(doc.status);
 		const role = roleOf(status);
 		const totals = isObject(doc.totals) ? doc.totals : {};
 		const items = (Array.isArray(doc.items) ? doc.items : []).filter(isObject);
@@ -302,7 +306,7 @@ export const orderStep = {
 		const timeline = (Array.isArray(doc.timeline) ? doc.timeline : [])
 			.filter(isObject)
 			.map((entry) => ({
-				status: text(entry.status),
+				status: statusOf(entry.status),
 				at: /** @type {string} */ (iso(entry.occurredAt)),
 				note: text(entry.note),
 			}))

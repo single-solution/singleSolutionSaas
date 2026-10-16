@@ -8,7 +8,7 @@
  */
 import { createHash } from 'node:crypto';
 import { ObjectId } from 'mongodb';
-import { normalisePhone } from '@ss/contracts/phone';
+import { normalizePhone } from '@ss/contracts/phone';
 import { defineMapping } from '../mapping.js';
 
 /** The example shop's calling code: its phones were typed nationally (the products read them with business.json). */
@@ -45,7 +45,7 @@ export const SHOP_IDS = Object.freeze({
 	tote: shopHex(15),
 	delivered: shopHex(18),
 	confirmed: shopHex(20),
-	cancelled: shopHex(22),
+	canceled: shopHex(22),
 	alert: shopHex(28),
 	chat: shopHex(30),
 });
@@ -72,17 +72,17 @@ export const shopSource = () => ({
 				{ key: 'packed', name: 'Packed', stage: 'packed' },
 				{ key: 'shipped', name: 'Shipped', stage: 'shipped' },
 				{ key: 'delivered', name: 'Delivered', stage: 'delivered' },
-				{ key: 'cancelled', name: 'Cancelled', stage: 'cancelled' },
+				{ key: 'canceled', name: 'Canceled', stage: 'canceled' },
 			],
 			orderMoves: [
 				['awaiting_payment', 'confirmed'],
-				['awaiting_payment', 'cancelled'],
+				['awaiting_payment', 'canceled'],
 				['pending', 'confirmed'],
-				['pending', 'cancelled'],
+				['pending', 'canceled'],
 				['confirmed', 'packed'],
-				['confirmed', 'cancelled'],
+				['confirmed', 'canceled'],
 				['packed', 'shipped'],
-				['packed', 'cancelled'],
+				['packed', 'canceled'],
 				['shipped', 'delivered'],
 			],
 			updatedAt: at('2026-01-01T00:00:00Z'),
@@ -288,10 +288,10 @@ export const shopSource = () => ({
 					price: 25,
 				},
 			],
-			status: 'cancelled',
+			status: 'canceled',
 			history: [
 				{ status: 'pending', at: at('2026-09-01T10:00:00Z'), by: 'Gus Guest' },
-				{ status: 'cancelled', at: at('2026-09-01T11:00:00Z'), by: 'Sam Support' },
+				{ status: 'canceled', at: at('2026-09-01T11:00:00Z'), by: 'Sam Support' },
 			],
 			placedAt: at('2026-09-01T10:00:00Z'),
 		},
@@ -428,7 +428,7 @@ const STAGE_ROLES = Object.freeze({
 	packed: 'packed',
 	shipped: 'shipped',
 	delivered: 'delivered',
-	cancelled: 'cancelled',
+	canceled: 'canceled',
 });
 /** The old shop's payment methods → the keys of Ecommerce's payment methods list (IMP-32), with each one's kind. */
 const METHODS = Object.freeze({ cod: 'cod', 'bank-transfer': 'bank_transfer', card: 'online' });
@@ -446,7 +446,7 @@ const paymentsOf = (doc, total, ctx) => {
 	const entry = doc.history.find(
 		(/** @type {{ status: string }} */ step) => step.status === (method === 'cod' ? 'delivered' : 'confirmed'),
 	);
-	if (!entry || doc.status === 'cancelled') return [];
+	if (!entry || doc.status === 'canceled') return [];
 	return [
 		{
 			id: ctx.id('opy', doc._id),
@@ -644,7 +644,7 @@ export const SHOP_MAPPING = defineMapping({
 			source: 'customers',
 			prefix: 'cus',
 			// one customer per phone (K12): the guest saved twice becomes one, the oldest record kept
-			mergeKey: (doc) => normalisePhone(doc.phone, CALLING_CODE) ?? hexKey(doc._id),
+			mergeKey: (doc) => normalizePhone(doc.phone, CALLING_CODE) ?? hexKey(doc._id),
 			lookups: { customers: (_record, doc) => hexKey(doc._id) },
 			map: (doc, ctx) => {
 				const userId = ctx.lookup('members', hexKey(doc._id));
@@ -717,7 +717,7 @@ export const SHOP_MAPPING = defineMapping({
 					lines,
 					totals: { subtotal: goods, discount: 0, delivery: fee, tax: 0, total, currency: 'USD', taxIncluded: true },
 					promotions: {
-						released: doc.status === 'cancelled',
+						released: doc.status === 'canceled',
 						...(doc.pointsEarned ? { pointsEarned: doc.pointsEarned, pointsCredited: true } : {}),
 					},
 					payment: (() => {
@@ -733,7 +733,7 @@ export const SHOP_MAPPING = defineMapping({
 						by: step.by,
 						note: '',
 					})),
-					stockHeld: doc.status !== 'cancelled',
+					stockHeld: doc.status !== 'canceled',
 					placedAt: iso(doc.placedAt),
 					deliveredAt: delivered ? iso(delivered.at) : null,
 				};

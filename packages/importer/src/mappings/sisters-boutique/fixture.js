@@ -44,7 +44,7 @@ export const SB_IDS = Object.freeze({
 	luxeLawn: sbHex(34),
 	luxeFormals: sbHex(35),
 	sizeLawn: sbHex(36),
-	colourLawn: sbHex(37),
+	colorLawn: sbHex(37),
 	sizeFormals: sbHex(38),
 	suit: sbHex(40),
 	variantM: sbHex(41),
@@ -65,7 +65,7 @@ export const SB_IDS = Object.freeze({
 	delivered: sbHex(60),
 	confirmed: sbHex(61),
 	pending: sbHex(62),
-	cancelled: sbHex(63),
+	canceled: sbHex(63),
 	refunded: sbHex(64),
 	packed: sbHex(65),
 	returned: sbHex(66),
@@ -439,8 +439,8 @@ export const sbSource = () => ({
 		{
 			_id: oid(37),
 			categorySlug: 'lawn',
-			slug: 'colour',
-			label: 'Colour',
+			slug: 'color',
+			label: 'Color',
 			options: [
 				{ value: 'red', label: 'Red' },
 				{ value: 'blue', label: 'Blue' },
@@ -448,7 +448,7 @@ export const sbSource = () => ({
 			visibility: { type: 'brand', brandSlugs: ['house-brand'] },
 			cardPosition: 'image-overlay',
 			isActive: true,
-			seo: { title: 'Colours', description: 'Our colours.', faqs: [] },
+			seo: { title: 'Colors', description: 'Our colors.', faqs: [] },
 		},
 		// the same slug in another category: its own record
 		{
@@ -460,7 +460,7 @@ export const sbSource = () => ({
 				{ value: 's', label: 'S' },
 				{ value: 'm', label: 'M' },
 			],
-			visibility: { type: 'attribute', attributeSlug: 'colour', optionValues: ['red'] },
+			visibility: { type: 'attribute', attributeSlug: 'color', optionValues: ['red'] },
 			cardPosition: 'title-chips',
 			isActive: true,
 		},
@@ -517,9 +517,9 @@ export const sbSource = () => ({
 			images: [photo('lawn-suit-one', 1)],
 			video: 'https://youtu.be/abcdefghijk',
 			descriptionHtml: '<p>Soft <strong>lawn</strong>.</p>',
-			attributeSlugs: ['size', 'colour'],
-			attributeOptionPool: { size: ['m', 'l'], colour: ['red', 'blue'] },
-			attributeCustomOptions: { colour: [{ value: 'dusty-pink', label: 'Dusty Pink' }] },
+			attributeSlugs: ['size', 'color'],
+			attributeOptionPool: { size: ['m', 'l'], color: ['red', 'blue'] },
+			attributeCustomOptions: { color: [{ value: 'dusty-pink', label: 'Dusty Pink' }] },
 			attributeDefaults: { size: 'm' },
 			variants: [
 				// two colors at once, and a stale key
@@ -528,14 +528,14 @@ export const sbSource = () => ({
 					priceRupees: 5000,
 					quantity: 4,
 					forceOutOfStock: false,
-					attributes: { size: 'm', colour: ['red', 'blue'], fit: 'old' },
+					attributes: { size: 'm', color: ['red', 'blue'], fit: 'old' },
 				},
 				{
 					_id: oid(42),
 					priceRupees: 5000,
 					quantity: 0,
 					forceOutOfStock: true,
-					attributes: { size: 'l', colour: 'dusty-pink' },
+					attributes: { size: 'l', color: 'dusty-pink' },
 				},
 			],
 			seo: {
@@ -1078,7 +1078,7 @@ export const sbSource = () => ({
 					kind: 'adjust',
 					amount: -64,
 					occurredAt: at('2026-08-31T10:00:00Z'),
-					reason: 'Reversed for cancelled order IM-2026-0004',
+					reason: 'Reversed for canceled order IM-2026-0004',
 					orderRef: 'IM-2026-0004',
 				},
 				{
@@ -1086,7 +1086,7 @@ export const sbSource = () => ({
 					kind: 'adjust',
 					amount: 100,
 					occurredAt: at('2026-08-31T10:00:01Z'),
-					reason: 'Redeemed points refunded for cancelled order IM-2026-0004',
+					reason: 'Redeemed points refunded for canceled order IM-2026-0004',
 					orderRef: 'IM-2026-0004',
 				},
 				{

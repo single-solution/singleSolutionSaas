@@ -83,8 +83,8 @@ describe('the example shop (fixture)', () => {
 				'orders.delivered.total': 3000,
 				'orders.confirmed.count': 1,
 				'orders.confirmed.total': 3000,
-				'orders.cancelled.count': 1,
-				'orders.cancelled.total': 5500,
+				'orders.canceled.count': 1,
+				'orders.canceled.total': 5500,
 				'loyalty.points': 35,
 				reviews: 1,
 				returns: 1,
@@ -117,7 +117,7 @@ describe('the example shop (fixture)', () => {
 			sold: 40,
 			rating: { average: 4.5, count: 6 },
 		});
-		const [delivered, confirmed, cancelled] = await records('ecommerce.orders');
+		const [delivered, confirmed, canceled] = await records('ecommerce.orders');
 		expect(delivered).toMatchObject({
 			customer: { userId: `usr_${SHOP_IDS.member}`, customerId: `cus_${SHOP_IDS.member}` },
 			totals: { subtotal: 2500, delivery: 500, total: 3000 },
@@ -133,7 +133,7 @@ describe('the example shop (fixture)', () => {
 			payments: [{ method: 'bank_transfer', amount: 3000, at: '2026-08-10T12:00:00.000Z' }],
 			history: [{ to: 'awaiting_payment' }, { from: 'awaiting_payment', to: 'confirmed' }],
 		});
-		expect(cancelled).toMatchObject({ payments: [], stockHeld: false, promotions: { released: true }, deliveredAt: null });
+		expect(canceled).toMatchObject({ payments: [], stockHeld: false, promotions: { released: true }, deliveredAt: null });
 		expect(await records('ecommerce.loyalty')).toEqual([
 			expect.objectContaining({
 				customerId: `cus_${SHOP_IDS.member}`,
@@ -190,7 +190,7 @@ describe('the example shop (fixture)', () => {
 			{ key: 'packed', label: 'Packed', role: 'packed' },
 			{ key: 'shipped', label: 'Shipped', role: 'shipped' },
 			{ key: 'delivered', label: 'Delivered', role: 'delivered' },
-			{ key: 'cancelled', label: 'Cancelled', role: 'cancelled' },
+			{ key: 'canceled', label: 'Canceled', role: 'canceled' },
 		]);
 		expect(plan.ecommerce.lists.order_flow.moves).toContainEqual({ from: 'packed', to: 'shipped' });
 		const idmap = JSON.parse(await readFile(path.join(dir, IDMAP_FILE), 'utf8'));

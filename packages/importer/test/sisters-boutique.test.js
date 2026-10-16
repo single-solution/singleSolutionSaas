@@ -89,8 +89,8 @@ describe('the Sisters Boutique mapping', () => {
 				'orders.confirmed.total': 650_000,
 				'orders.pending-payment.count': 1,
 				'orders.pending-payment.total': 450_000,
-				'orders.cancelled.count': 1,
-				'orders.cancelled.total': 640_000,
+				'orders.canceled.count': 1,
+				'orders.canceled.total': 640_000,
 				'orders.refunded.count': 1,
 				'orders.refunded.total': 300_000,
 				'orders.packed.count': 1,
@@ -205,7 +205,7 @@ describe('the Sisters Boutique mapping', () => {
 			attributes.map((attribute) => [attribute.slug, attribute.categoryId, attribute.multiple, attribute.show.card]),
 		).toEqual([
 			['size', id('cat', SB_IDS.lawn), false, 'chips'],
-			['colour', id('cat', SB_IDS.lawn), true, 'image'],
+			['color', id('cat', SB_IDS.lawn), true, 'image'],
 			['size', id('cat', SB_IDS.formals), false, 'chips'],
 		]);
 		expect(attributes[1].visibility).toEqual({ when: 'brands', ids: [id('brd', SB_IDS.houseBrand)] });
@@ -235,14 +235,14 @@ describe('the Sisters Boutique mapping', () => {
 				{
 					price: 500_000,
 					stock: 4,
-					attributes: { [id('att', SB_IDS.sizeLawn)]: 'm', [id('att', SB_IDS.colourLawn)]: ['red', 'blue'] },
+					attributes: { [id('att', SB_IDS.sizeLawn)]: 'm', [id('att', SB_IDS.colorLawn)]: ['red', 'blue'] },
 				},
 				// a product-only color keeps its label
-				{ soldOut: true, attributes: { [id('att', SB_IDS.colourLawn)]: 'Dusty Pink' } },
+				{ soldOut: true, attributes: { [id('att', SB_IDS.colorLawn)]: 'Dusty Pink' } },
 			],
 			attributeSetup: [
 				{ attributeId: id('att', SB_IDS.sizeLawn), values: ['m', 'l'], defaultValue: 'm' },
-				{ attributeId: id('att', SB_IDS.colourLawn), customValues: ['Dusty Pink'] },
+				{ attributeId: id('att', SB_IDS.colorLawn), customValues: ['Dusty Pink'] },
 			],
 			seo: { canonicalUrl: 'https://shop.example.com/lawn/lawn-suit-one', ogImage: '/lawn/og.webp' },
 			faqs: [{ question: 'Machine washable?', answer: 'Yes, cold.' }],
@@ -433,8 +433,8 @@ describe('the Sisters Boutique mapping', () => {
 			[50, 0, 'adjust', null],
 			[300, 47, 'adjust', null],
 			[123, 123, 'earn', id('ord', SB_IDS.delivered)],
-			[64, 0, 'earn', id('ord', SB_IDS.cancelled)],
-			[100, 100, 'refund', id('ord', SB_IDS.cancelled)],
+			[64, 0, 'earn', id('ord', SB_IDS.canceled)],
+			[100, 100, 'refund', id('ord', SB_IDS.canceled)],
 			[30, 30, 'earn', id('ord', SB_IDS.returned)],
 			// SB stored 307 where its transactions give 300
 			[7, 7, 'adjust', null],
@@ -514,7 +514,7 @@ describe('the Sisters Boutique mapping', () => {
 			{ key: 'dispatch_video', label: 'Dispatch video', type: 'video', requiredAt: 'packed', shoppers: true },
 		]);
 		expect(move('packed', 'dispatched').options).toEqual({ tracking: 'optional' });
-		expect(move('confirmed', 'cancelled')).toMatchObject({ who: ['staff', 'shopper'], options: { shopperPaid: 'flag' } });
+		expect(move('confirmed', 'canceled')).toMatchObject({ who: ['staff', 'shopper'], options: { shopperPaid: 'flag' } });
 		expect(move('delivered', 'returned').options).toEqual({ restock: 'yes', points: 'keep' });
 		expect(move('delivered', 'refunded').options).toEqual({ restock: 'yes', points: 'take_back' });
 		expect(ecommerce).toMatchObject({ 'checkout.editPricing': 'keep_placed', 'checkout.deleteGivesBack': 'all' });

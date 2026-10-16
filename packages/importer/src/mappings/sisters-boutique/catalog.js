@@ -71,7 +71,7 @@ const DEFAULT_CHART = Object.freeze({
 	convertTo: 'cm',
 	advice:
 		'Designed for a standard relaxed fit. Select your standard size or use our interactive size finder to match your body measurements.',
-	notes: 'All measurements are body measurements in inches unless toggled to centimetres.',
+	notes: 'All measurements are body measurements in inches unless toggled to centimeters.',
 	active: true,
 });
 

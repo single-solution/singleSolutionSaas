@@ -7,7 +7,7 @@
  * @module
  */
 import { createHash } from 'node:crypto';
-import { normalisePhone } from '@ss/contracts/phone';
+import { normalizePhone } from '@ss/contracts/phone';
 import { hexOf, legacyId } from '../../mapping.js';
 
 /** @typedef {import('../../mapping.js').MapContext} MapContext */
@@ -61,7 +61,7 @@ export const hexKey = (id) => {
 export const idOrNull = (prefix, id) => (hexKey(id) === '' ? null : legacyId(prefix, id));
 
 /** A phone as E.164 with SB's format, or null. @param {unknown} raw */
-export const phoneOf = (raw) => normalisePhone(text(raw), PHONE_FORMAT);
+export const phoneOf = (raw) => normalizePhone(text(raw), PHONE_FORMAT);
 
 /** A phone as the products keep it: E.164 when it reads as one, else as typed (the product's check names it). @param {unknown} raw */
 export const phoneText = (raw) => phoneOf(raw) ?? text(raw);
