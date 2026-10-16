@@ -6,9 +6,8 @@
  *   one set: the Ed25519 Portal signing key(s) (launches, notices), the token signing key(s) (browser and server
  *   tokens, PLAN 0.4.4), the session secret and the idempotency secret. Lists stay lists (the first that opens signs;
  *   all are published), so older tokens keep verifying. Each signing key's seed is sealed with `ENCRYPTION_KEY` and
- *   its public key kept readable (PLAN 0.4.8, K-21); a seed kept in clear before is sealed on first use. When no key
- *   of a list opens (`ENCRYPTION_KEY` lost), a new key is added first and the others stay published by their public
- *   keys: tokens signed before keep verifying.
+ *   its public key kept readable (PLAN 0.4.8, K-21). When no key of a list opens (`ENCRYPTION_KEY` lost), a new key
+ *   is added first and the others stay published by their public keys: tokens signed before keep verifying.
  * - `settings` — recorded by Owners (PLAN 0.8.2 Settings): email sending (its password sealed with `ENCRYPTION_KEY`,
  *   `crypto.js`), branding, support contact, security and billing rules. `version` increases with every change so
  *   other instances notice and rebuild.
@@ -30,9 +29,12 @@ const SYSTEM_COLLECTION = COLLECTIONS.system;
 
 /** @typedef {import('./config.js').SystemState} SystemState */
 /**
- * A signing key as stored: its seed sealed with `ENCRYPTION_KEY` and its public key (K-21), or, before K-21, its seed
- * in clear (`seed`, sealed on first use).
- * @typedef {{ kid: string, sealed?: string, seed?: string, publicJwk?: import('@ss/protocol').PublicJwk, createdAt: string }} StoredKey
+ * A signing key as stored: its seed sealed with `ENCRYPTION_KEY` and its public key (K-21).
+ * @typedef {{ kid: string, sealed: string, publicJwk: import('@ss/protocol').PublicJwk, createdAt: string }} StoredKey
+ */
+/**
+ * A signing key just generated, before it is sealed (never stored like this).
+ * @typedef {{ kid: string, seed: string, createdAt: string }} FreshKey
  */
 /**
  * @typedef {object} SecretsDoc
@@ -80,9 +82,9 @@ const kidOf = (prefix, now, randomBytes) =>
 	`${prefix}-${new Date(now()).toISOString().slice(0, 10).replace(/-/g, '')}-${Buffer.from(randomBytes(3)).toString('hex')}`;
 
 /**
- * A fresh set of secrets (first start; tests).
+ * A fresh set of secrets (first start, sealed before they are stored; tests).
  * @param {{ now?: () => number, randomBytes?: (n: number) => Uint8Array }} [options]
- * @returns {Omit<SecretsDoc, '_id'>}
+ * @returns {{ signingKeys: FreshKey[], tokenSigningKeys: FreshKey[], sessionSecret: string, idempotencySecret: string }}
  */
 export const generateSecrets = ({ now = Date.now, randomBytes = (n) => new Uint8Array(nodeRandomBytes(n)) } = {}) => {
 	const createdAt = new Date(now()).toISOString();
@@ -98,16 +100,17 @@ export const generateSecrets = ({ now = Date.now, randomBytes = (n) => new Uint8
 const keyAad = (kid) => ({ purpose: 'signing_key', kid });
 
 /**
- * The secrets part of the system state: the signing keys whose seed opens (in clear, or with `open`), and the public
- * keys of those that do not (published only).
- * @param {Omit<SecretsDoc, '_id'>} doc
- * @param {(key: StoredKey) => string | null} [open] opens a sealed seed (none: only seeds in clear)
+ * The secrets part of the system state: the signing keys whose seed opens with `open`, and the public keys of those
+ * that do not (published only).
+ * @template {{ kid: string, publicJwk?: import('@ss/protocol').PublicJwk }} K
+ * @param {{ signingKeys: K[], tokenSigningKeys: K[], sessionSecret: string, idempotencySecret: string }} doc
+ * @param {(key: K) => string | null} open the seed of a key, or null when it does not open
  * @returns {Omit<SystemState, 'mail'>}
  */
-export const secretsOf = (doc, open = () => null) => {
-	/** @param {StoredKey[]} list */
+export const secretsOf = (doc, open) => {
+	/** @param {K[]} list */
 	const split = (list) => {
-		const seeds = list.map((key) => key.seed ?? open(key));
+		const seeds = list.map(open);
 		return {
 			keys: list.flatMap((key, i) => (seeds[i] ? [signingKeyFromSeed(key.kid, /** @type {string} */ (seeds[i]))] : [])),
 			published: list.flatMap((key, i) => (!seeds[i] && key.publicJwk ? [key.publicJwk] : [])),
@@ -154,16 +157,15 @@ export const createSystemStore = (
 		}
 	};
 
-	/** @param {StoredKey} key @returns {StoredKey} the key with its seed sealed (K-21) */
+	/** @param {FreshKey} key @returns {StoredKey} the key with its seed sealed (K-21) */
 	const sealKey = ({ kid, seed, createdAt }) => ({
 		kid,
-		sealed: box.seal(/** @type {string} */ (seed), { aad: keyAad(kid) }),
-		publicJwk: toPublicJwk(signingKeyFromSeed(kid, /** @type {string} */ (seed))),
+		sealed: box.seal(seed, { aad: keyAad(kid) }),
+		publicJwk: toPublicJwk(signingKeyFromSeed(kid, seed)),
 		createdAt,
 	});
 	/** @param {StoredKey} key @returns {string | null} the seed, or null when it does not open */
 	const openSeed = (key) => {
-		if (key.seed) return key.seed;
 		try {
 			return box.openText(key.sealed, { aad: keyAad(key.kid) });
 		} catch {
@@ -180,9 +182,8 @@ export const createSystemStore = (
 	};
 
 	/**
-	 * The secrets, generated and inserted if absent (concurrent starts agree). Seeds kept in clear are sealed (K-21);
-	 * a list none of whose keys opens gets a new key first (another instance may add it: the list is replaced only if
-	 * unchanged).
+	 * The secrets, generated, sealed and inserted if absent (concurrent starts agree; K-21). A list none of whose keys
+	 * opens gets a new key first (another instance may add it: the list is replaced only if unchanged).
 	 * @returns {Promise<SecretsDoc>}
 	 */
 	const secrets = async () => {
@@ -200,18 +201,7 @@ export const createSystemStore = (
 			}
 		}
 		let doc = await stored();
-		const lists = /** @type {const} */ (['signingKeys', 'tokenSigningKeys']);
-		if (lists.some((list) => doc[list].some((key) => typeof key.seed === 'string'))) {
-			await replaceIf(
-				{ signingKeys: doc.signingKeys, tokenSigningKeys: doc.tokenSigningKeys },
-				{
-					signingKeys: doc.signingKeys.map((key) => (key.seed ? sealKey(key) : key)),
-					tokenSigningKeys: doc.tokenSigningKeys.map((key) => (key.seed ? sealKey(key) : key)),
-				},
-			);
-			doc = await stored();
-		}
-		for (const list of lists) {
+		for (const list of /** @type {const} */ (['signingKeys', 'tokenSigningKeys'])) {
 			if (doc[list].some((key) => openSeed(key) !== null)) continue;
 			const prefix = list === 'signingKeys' ? 'portal' : 'token';
 			const created = new Date(now()).toISOString();

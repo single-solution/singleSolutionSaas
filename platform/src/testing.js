@@ -24,7 +24,7 @@ export { commerceModule } from './modules/commerce/index.js';
  * @returns {import('./infra/config.js').SystemState}
  */
 export const testSystemState = ({ mail = null, settings } = {}) => ({
-	...secretsOf(generateSecrets()),
+	...secretsOf(generateSecrets(), (key) => key.seed),
 	mail,
 	...(settings ? { settings } : {}),
 });

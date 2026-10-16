@@ -281,18 +281,6 @@ describe('system store (secrets generated on first start, settings recorded late
 		expect(state.publishedOnly).toEqual({ signing: [], token: [] });
 	});
 
-	it('seals seeds kept in clear before on first use, and signs with the same keys (K-21)', async () => {
-		const db = mongo.db('system_keys_plain');
-		const plain = generateSecrets();
-		await db.collection('platform_system').insertOne(/** @type {any} */ ({ _id: 'secrets', ...plain }));
-		const { state } = await createSystemStore(db, { encryptionKey: ENCRYPTION_KEY }).load();
-		expect(state.signingKeys.map((k) => k.d)).toEqual(secretsOf(plain).signingKeys.map((k) => k.d));
-		expect(state.tokenSigningKeys.map((k) => k.d)).toEqual(secretsOf(plain).tokenSigningKeys.map((k) => k.d));
-		const raw = /** @type {any} */ (await db.collection('platform_system').findOne({ _id: /** @type {any} */ ('secrets') }));
-		expect(JSON.stringify(raw)).not.toContain(/** @type {string} */ (plain.signingKeys[0]?.seed));
-		expect(raw.signingKeys[0].sealed).toMatch(/^ss2\./);
-	});
-
 	it('when no signing key opens (ENCRYPTION_KEY lost) a new one signs and the old ones stay published (K-21)', async () => {
 		const db = mongo.db('system_keys_lost');
 		const first = (await createSystemStore(db, { encryptionKey: ENCRYPTION_KEY }).load()).state;
@@ -361,7 +349,7 @@ describe('system store (secrets generated on first start, settings recorded late
 	it('builds complete states for tests and tools', () => {
 		const state = testSystemState();
 		expect(state.mail).toBeNull();
-		expect(secretsOf(generateSecrets()).signingKeys).toHaveLength(1);
+		expect(secretsOf(generateSecrets(), (key) => key.seed).signingKeys).toHaveLength(1);
 	});
 
 	it('records the applied schema fingerprint', async () => {
