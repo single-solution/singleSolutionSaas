@@ -358,7 +358,7 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 			// phones get SMS by default; this website has its WhatsApp templates approved
 			'staff_alerts.phoneChannel': 'whatsapp',
 		});
-	});
+	}, 120_000); // sets up four products end to end: well over the 30 s default on a busy machine
 
 	it('C1: 32,000 characters of instructions, and each AI reply adds Ecommerce’s live store context, cached 60 s', async () => {
 		await configure('chat', { 'ai_instructions.instructions': `Be kind. ${'x'.repeat(31_991)}` });
