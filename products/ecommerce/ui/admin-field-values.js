@@ -7,7 +7,7 @@
  * @module
  */
 import { FORMAT_REFUSALS, checkValue } from '../core/fields.js';
-import { card } from './admin-lists.js';
+import { card } from './admin-screen.js';
 import { specControl } from './admin-product-editor.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */

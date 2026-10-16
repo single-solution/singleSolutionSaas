@@ -11,7 +11,7 @@
  */
 import { toCsv } from '@ss/app-kit/widget';
 import { dayEnd, dayStart, query } from './admin-kit.js';
-import { card } from './admin-lists.js';
+import { card } from './admin-screen.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {{ label: string, value: (row: any) => string | number | null, money?: boolean }} Column */

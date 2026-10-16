@@ -8,7 +8,7 @@
  * @module
  */
 import { entriesOf, mountAdmin, wholeOf } from './admin-kit.js';
-import { card, detailHead } from './admin-lists.js';
+import { card, detailHead } from './admin-screen.js';
 import { offersTab } from './admin-offers.js';
 import { createSearches } from './admin-taxonomy.js';
 
@@ -91,7 +91,10 @@ const loyaltyTab = (kit, panel) => {
 		/** @type {any[]} */
 		const soon = data.expiringSoon ?? [];
 		kit.put(account, [
-			detailHead(kit, [data.userId || data.customerId], [kit.button(t('promotionsAdmin.adjust'), adjust, { primary: true })]),
+			detailHead(kit, {
+				title: String(data.userId || data.customerId),
+				actions: [kit.button(t('promotionsAdmin.adjust'), adjust, { primary: true })],
+			}),
 			note,
 			kit.fieldGrid([
 				[t('promotionsAdmin.balanceLabel'), t('promotionsAdmin.pointsText', { points: data.balance })],

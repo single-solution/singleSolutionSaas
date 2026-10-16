@@ -111,7 +111,7 @@ button.danger { background: #dc2626; color: #ffffff; }
 @keyframes ss-pop { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
 @keyframes ss-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .menu, .overlay, .dialog, li.item { animation: none; transition: none; } }
-/* list heads with their count, filter chips with counts, row checkboxes and more filters (ui/admin-lists.js) */
+/* list heads with their count, filter chips with counts, row checkboxes and more filters (ui/admin-screen.js) */
 .list-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
 .list-head h3 { margin: 0; display: flex; align-items: center; gap: 2px; }
 .list-head .actions button { margin-top: 0; }

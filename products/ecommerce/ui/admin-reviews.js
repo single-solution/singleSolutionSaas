@@ -8,11 +8,11 @@
  * @module
  */
 import { query } from './admin-kit.js';
-import { card, chipFilter, detailHead, listScreen, scopeChip } from './admin-lists.js';
+import { card, chipFilter, detailHead, listScreen, scopeChip } from './admin-screen.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-kit.js').Tone} Tone */
-/** @typedef {import('./admin-lists.js').Detail} Detail */
+/** @typedef {import('./admin-screen.js').Detail} Detail */
 
 /** Review statuses and their tones. @type {Record<string, Tone>} */
 const TONES = Object.freeze({ pending: 'warning', approved: 'success', rejected: 'danger' });
@@ -129,22 +129,22 @@ const renderReview = (kit, review, detail, message, ofProduct) => {
 		});
 	kit.put(detail.pane, [
 		detail.back,
-		detailHead(
-			kit,
-			[review.title || stars(review.rating), kit.badge(t(`customersAdmin.review.${review.status}`), TONES[review.status])],
-			[
+		detailHead(kit, {
+			title: review.title || stars(review.rating),
+			badges: [kit.badge(t(`customersAdmin.review.${review.status}`), TONES[review.status])],
+			actions: [
 				review.status === 'approved'
 					? null
 					: kit.button(t('customersAdmin.approve'), moderate('/approve'), { primary: true }),
 				review.status === 'rejected' ? null : kit.button(t('customersAdmin.reject'), moderate('/reject')),
-				kit.moreMenu([
-					{ label: t(review.reply ? 'customersAdmin.editReply' : 'customersAdmin.replyTitle'), onSelect: reply },
-					review.status === 'pending' ? null : { label: t('customersAdmin.backToPending'), onSelect: moderate('/pending') },
-					{ label: t('customersAdmin.productReviews'), onSelect: () => ofProduct(review) },
-					{ label: t('customersAdmin.deleteReview'), onSelect: remove, danger: true },
-				]),
 			],
-		),
+			more: [
+				{ label: t(review.reply ? 'customersAdmin.editReply' : 'customersAdmin.replyTitle'), onSelect: reply },
+				review.status === 'pending' ? null : { label: t('customersAdmin.backToPending'), onSelect: moderate('/pending') },
+				{ label: t('customersAdmin.productReviews'), onSelect: () => ofProduct(review) },
+				{ label: t('customersAdmin.deleteReview'), onSelect: remove, danger: true },
+			],
+		}),
 		note,
 		kit.fieldGrid([
 			[t('customersAdmin.rating'), `${stars(review.rating)} ${review.rating}/5`],

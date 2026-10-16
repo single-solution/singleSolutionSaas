@@ -13,11 +13,11 @@
 import { quantityLabel } from '../core/measure.js';
 import { CLAIM_NOTES } from '../core/returns.js';
 import { query } from './admin-kit.js';
-import { card, chipFilter, detailHead, listScreen, scopeChip } from './admin-lists.js';
+import { card, chipFilter, detailHead, listScreen, scopeChip } from './admin-screen.js';
 import { CLAIM_TONES, historyBy, warningsText } from './admin-order.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
-/** @typedef {import('./admin-lists.js').Detail} Detail */
+/** @typedef {import('./admin-screen.js').Detail} Detail */
 
 /** The actions that move a claim forward, in the order they are offered (the claim's `actions` say which apply). */
 const FORWARD = Object.freeze(['approve', 'receive', 'replace', 'repair', 'refund', 'credit', 'restock', 'close']);
@@ -163,33 +163,31 @@ const renderClaim = (kit, claim, detail, list, message) => {
 	/** @type {Array<{ key: string, label: string }>} */
 	const others = claim.statuses ?? [];
 	const customer = [claim.order?.customer?.name, claim.order?.customer?.email].filter(Boolean).join(' · ');
-	const head = detailHead(
-		kit,
-		[t('ordersAdmin.claimHead', { reference: claim.reference }), kit.badge(claim.statusLabel, CLAIM_TONES[claim.role])],
-		[
-			...forward.slice(0, 2).map((action, index) => kit.button(labelOf(action), run(action), { primary: index === 0 })),
-			kit.moreMenu([
-				...forward.slice(2).map((action) => ({ label: labelOf(action), onSelect: run(action) })),
-				...others.map((status) => ({
-					label: t('ordersAdmin.claimMoveTo', { status: status.label }),
-					onSelect: () => statusDialog(kit, claim, status, done),
-				})),
-				{
-					label: t('ordersAdmin.showOrderClaims'),
-					onSelect: () => list.narrow('orderId', claim.orderId, t('ordersAdmin.orderHead', { number: claim.orderNumber })),
-				},
-				claim.userId
-					? {
-							label: t('ordersAdmin.showCustomerClaims'),
-							onSelect: () =>
-								list.narrow('userId', claim.userId, t('ordersAdmin.claimsOf', { name: customer || claim.userId })),
-						}
-					: null,
-				{ label: t('ordersAdmin.addClaimNote'), onSelect: () => noteDialog(kit, claim, done) },
-				actions.has('reject') ? { label: t('ordersAdmin.claimAction.reject'), onSelect: run('reject'), danger: true } : null,
-			]),
+	const head = detailHead(kit, {
+		title: t('ordersAdmin.claimHead', { reference: claim.reference }),
+		badges: [kit.badge(claim.statusLabel, CLAIM_TONES[claim.role])],
+		actions: forward.slice(0, 2).map((action, index) => kit.button(labelOf(action), run(action), { primary: index === 0 })),
+		more: [
+			...forward.slice(2).map((action) => ({ label: labelOf(action), onSelect: run(action) })),
+			...others.map((status) => ({
+				label: t('ordersAdmin.claimMoveTo', { status: status.label }),
+				onSelect: () => statusDialog(kit, claim, status, done),
+			})),
+			{
+				label: t('ordersAdmin.showOrderClaims'),
+				onSelect: () => list.narrow('orderId', claim.orderId, t('ordersAdmin.orderHead', { number: claim.orderNumber })),
+			},
+			claim.userId
+				? {
+						label: t('ordersAdmin.showCustomerClaims'),
+						onSelect: () =>
+							list.narrow('userId', claim.userId, t('ordersAdmin.claimsOf', { name: customer || claim.userId })),
+					}
+				: null,
+			{ label: t('ordersAdmin.addClaimNote'), onSelect: () => noteDialog(kit, claim, done) },
+			actions.has('reject') ? { label: t('ordersAdmin.claimAction.reject'), onSelect: run('reject'), danger: true } : null,
 		],
-	);
+	});
 	const photos = claim.photos.filter((/** @type {any} */ photo) => typeof photo.url === 'string');
 	kit.put(detail.pane, [
 		detail.back,

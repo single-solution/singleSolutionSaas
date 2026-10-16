@@ -13,7 +13,7 @@
 import { STATUS_ROLES } from '../core/model.js';
 import { PAYMENT_STATES } from '../core/orders.js';
 import { dayEnd, dayStart, mountAdmin, query } from './admin-kit.js';
-import { chipFilter, countedSelect, listScreen } from './admin-lists.js';
+import { chipFilter, countedSelect, listScreen } from './admin-screen.js';
 import { ROLE_TONES, methodName, methodsOf, orderDetail } from './admin-order.js';
 import { returnsTab } from './admin-returns.js';
 

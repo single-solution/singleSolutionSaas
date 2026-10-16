@@ -10,13 +10,13 @@
  */
 import { toCsv } from '@ss/app-kit/widget';
 import { query } from './admin-kit.js';
-import { card, chipFilter, detailHead, listScreen } from './admin-lists.js';
+import { card, chipFilter, detailHead, listScreen } from './admin-screen.js';
 import { bundleFields, couponFields, dealFields } from './admin-offer-fields.js';
 import { IMAGE_ACCEPT } from './admin-taxonomy.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-kit.js').Tone} Tone */
-/** @typedef {import('./admin-lists.js').Detail} Detail */
+/** @typedef {import('./admin-screen.js').Detail} Detail */
 /** @typedef {import('./admin-offer-fields.js').Searches} Searches */
 /** @typedef {import('./admin-offer-fields.js').Part} Part */
 /** @typedef {'coupons' | 'deals' | 'bundles'} Kind */
@@ -417,20 +417,20 @@ const renderOffer = (kit, context, item, message) => {
 					: [scopeCard(t('promotionsAdmin.scope'), item.scope)];
 	kit.put(detail.pane, [
 		detail.back,
-		detailHead(
-			kit,
-			[spec.label(item), kit.badge(t(`promotionsAdmin.state.${state.key}`), state.tone)],
-			[
+		detailHead(kit, {
+			title: spec.label(item),
+			badges: [kit.badge(t(`promotionsAdmin.state.${state.key}`), state.tone)],
+			actions: [
 				kit.button(t('admin.edit'), () => context.editor(item, false, (saved) => done(saved, t('admin.saved'))), {
 					primary: true,
 				}),
 				kit.button(t(item.active ? 'promotionsAdmin.turnOff' : 'promotionsAdmin.turnOn'), toggle),
-				kit.moreMenu([
-					{ label: t('promotionsAdmin.duplicate'), onSelect: () => context.editor(spec.copy(item), true, context.created) },
-					{ label: t('admin.delete'), onSelect: remove, danger: true },
-				]),
 			],
-		),
+			more: [
+				{ label: t('promotionsAdmin.duplicate'), onSelect: () => context.editor(spec.copy(item), true, context.created) },
+				{ label: t('admin.delete'), onSelect: remove, danger: true },
+			],
+		}),
 		note,
 		kit.fieldGrid([...facts, .../** @type {Array<[string, string]>} */ (common)]),
 		h('div', {}, [kit.masonry(cards)]),

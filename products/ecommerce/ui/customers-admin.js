@@ -13,13 +13,13 @@
 import { addressEditor, addressText } from './admin-address.js';
 import { mountAdmin, query } from './admin-kit.js';
 import { fieldsCard, fieldsDialog } from './admin-field-values.js';
-import { card, chipFilter, detailHead, listScreen, tagsDialog } from './admin-lists.js';
+import { card, chipFilter, detailHead, listScreen, tagsDialog } from './admin-screen.js';
 import { CLAIM_TONES } from './admin-order.js';
 import { csvTab, reportsTab } from './admin-reports.js';
 import { reviewsTab } from './admin-reviews.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
-/** @typedef {import('./admin-lists.js').Detail} Detail */
+/** @typedef {import('./admin-screen.js').Detail} Detail */
 
 /**
  * @param {import('./widget.js').AdminMount} input
@@ -340,45 +340,45 @@ const renderCustomer = (kit, customer, detail, message) => {
 	);
 	kit.put(detail.pane, [
 		detail.back,
-		detailHead(
-			kit,
-			[nameOf(customer), customer.blocked ? kit.badge(t('customersAdmin.blocked'), 'danger') : null],
-			[
+		detailHead(kit, {
+			title: nameOf(customer),
+			badges: [customer.blocked ? kit.badge(t('customersAdmin.blocked'), 'danger') : null],
+			actions: [
 				customer.blocked
 					? kit.button(t('customersAdmin.unblock'), unblock, { primary: true })
 					: kit.button(t('customersAdmin.block'), block),
 				kit.button(t('customersAdmin.editNote'), editNote),
-				kit.moreMenu([
-					customer.rtoCount > 0 ? { label: t('customersAdmin.resetRto'), onSelect: resetRto } : null,
-					{ label: t('customersAdmin.addAddress'), onSelect: addAddress },
-					{ label: t('admin.editTags'), onSelect: editTags },
-					loyaltyOn
-						? {
-								label: t(customer.loyaltyMember ? 'customersAdmin.unmarkMember' : 'customersAdmin.markMember'),
-								onSelect: () =>
-									void change(
-										{ loyaltyMember: !customer.loyaltyMember },
-										t(customer.loyaltyMember ? 'customersAdmin.unmarkedMember' : 'customersAdmin.markedMember'),
-									).then((error) => error && kit.say(note, error, true)),
-							}
-						: null,
-					customer.ordersPlaced === 0 && customer.orderCount === 0
-						? { label: t('customersAdmin.delete'), onSelect: remove }
-						: null,
-					(customer.customerFields ?? []).some((/** @type {any} */ field) => field.active)
-						? {
-								label: t('admin.editFields'),
-								onSelect: () =>
-									fieldsDialog(kit, {
-										fields: customer.customerFields,
-										values: customer.fields ?? {},
-										save: (body) => change(body, t('admin.saved')),
-									}),
-							}
-						: null,
-				]),
 			],
-		),
+			more: [
+				customer.rtoCount > 0 ? { label: t('customersAdmin.resetRto'), onSelect: resetRto } : null,
+				{ label: t('customersAdmin.addAddress'), onSelect: addAddress },
+				{ label: t('admin.editTags'), onSelect: editTags },
+				loyaltyOn
+					? {
+							label: t(customer.loyaltyMember ? 'customersAdmin.unmarkMember' : 'customersAdmin.markMember'),
+							onSelect: () =>
+								void change(
+									{ loyaltyMember: !customer.loyaltyMember },
+									t(customer.loyaltyMember ? 'customersAdmin.unmarkedMember' : 'customersAdmin.markedMember'),
+								).then((error) => error && kit.say(note, error, true)),
+						}
+					: null,
+				customer.ordersPlaced === 0 && customer.orderCount === 0
+					? { label: t('customersAdmin.delete'), onSelect: remove }
+					: null,
+				(customer.customerFields ?? []).some((/** @type {any} */ field) => field.active)
+					? {
+							label: t('admin.editFields'),
+							onSelect: () =>
+								fieldsDialog(kit, {
+									fields: customer.customerFields,
+									values: customer.fields ?? {},
+									save: (body) => change(body, t('admin.saved')),
+								}),
+						}
+					: null,
+			],
+		}),
 		note,
 		kit.fieldGrid([
 			[t('customersAdmin.email'), customer.email],

@@ -698,6 +698,13 @@ describe('catalog admin: logos and deletions', () => {
 		await menu(detailOf(brands), 'Delete');
 		await confirmDialog(root, 'Acme');
 		expect(rowsOf(brands)).toEqual(['Zed']);
+		// deleting the last brand empties the list: a narrow widget goes back to it
+		server.routes['DELETE /v1/admin/brands/brd_2'] = () => answer(204);
+		server.routes['GET /v1/admin/brands'] = () => answer(200, { items: [] });
+		await menu(detailOf(brands), 'Delete');
+		await confirmDialog(root, 'Zed');
+		expect(rowsOf(brands)).toEqual([]);
+		expect(brands.querySelector('.split')?.getAttribute('data-view')).toBe('list');
 		const attributes = await openTab(root, 'attributes');
 		server.routes['GET /v1/admin/attributes'] = () => answer(200, { items: ATTRIBUTES.slice(1) });
 		await menu(detailOf(attributes), 'Delete');

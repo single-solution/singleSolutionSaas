@@ -20,7 +20,7 @@ import { OTHER_WAY } from '../core/payment-methods.js';
 import { addressEditor, addressText } from './admin-address.js';
 import { query } from './admin-kit.js';
 import { fieldsCard, fieldsDialog } from './admin-field-values.js';
-import { card, detailHead, tagsDialog } from './admin-lists.js';
+import { card, detailHead, tagsDialog } from './admin-screen.js';
 import { serialForm, serialLines, shipForm, typedLine, unitsMissing, warrantyOf } from './admin-order-forms.js';
 import { codeOf } from './problem-code.js';
 import { variantLabel } from './admin-taxonomy.js';
@@ -40,7 +40,7 @@ export const methodsOf = (kit) => kit.settings.orders.paymentMethods ?? [];
  */
 export const methodName = (kit, key) => methodsOf(kit).find((method) => method.key === key)?.name ?? key;
 /** @typedef {import('./admin-kit.js').Tone} Tone */
-/** @typedef {import('./admin-lists.js').Detail} Detail */
+/** @typedef {import('./admin-screen.js').Detail} Detail */
 /** @typedef {import('./admin-order-forms.js').SerialValues} SerialValues */
 /** A code the server wrote, with the values its words take. @typedef {{ code: string, values?: Record<string, string | number> }} Coded */
 
@@ -237,60 +237,60 @@ const renderOrder = (kit, order, detail, message) => {
 		second === 'serials' ? kit.button(t('ordersAdmin.typeSerials'), serials) : null,
 		second === 'payment' ? kit.button(t('ordersAdmin.recordPayment'), pay) : null,
 		second === 'refund' ? kit.button(t('ordersAdmin.refund'), refund) : null,
-		kit.moreMenu([
-			...forward
-				.slice(1)
-				.map((status) => ({ label: t('ordersAdmin.moveToStatus', { status: status.label }), onSelect: moveTo(status) })),
-			typed.length > 0 && second !== 'serials' ? { label: t('ordersAdmin.typeSerials'), onSelect: serials } : null,
-			balanceDue > 0 && second !== 'payment' ? { label: t('ordersAdmin.recordPayment'), onSelect: pay } : null,
-			refundable > 0 && second !== 'refund' ? { label: t('ordersAdmin.refund'), onSelect: refund } : null,
-			editable ? { label: t('ordersAdmin.editItems'), onSelect: () => editDialog(kit, order, done) } : null,
-			order.address && EDITABLE_ROLES.includes(order.role)
-				? { label: t('ordersAdmin.editAddress'), onSelect: () => addressDialog(kit, order, done) }
-				: null,
-			// attachments of the merchant's kinds, at any time (E20)
-			(order.attachmentKinds ?? []).length > 0
-				? { label: t('ordersAdmin.addAttachment'), onSelect: () => attachDialog(kit, order, done) }
-				: null,
-			{ label: t('ordersAdmin.editNote'), onSelect: () => noteDialog(kit, order, done) },
-			{
-				label: t('admin.editTags'),
-				onSelect: () =>
-					tagsDialog(kit, order.tags ?? [], async (tags) => {
-						const answer = await kit.call('PATCH', `/v1/admin/orders/${order.id}`, { tags });
-						if (!answer.ok) return kit.reason(answer);
-						done(answer.data, t('admin.saved'));
-						return null;
-					}),
-			},
-			// the order fields staff fill (dynamic model §2)
-			(order.orderFields ?? []).some((/** @type {any} */ field) => field.active)
-				? {
-						label: t('admin.editFields'),
-						onSelect: () =>
-							fieldsDialog(kit, {
-								fields: order.orderFields,
-								values: order.fields ?? {},
-								save: async (body) => {
-									const answer = await kit.call('PATCH', `/v1/admin/orders/${order.id}`, body);
-									if (!answer.ok) return kit.reason(answer);
-									done(answer.data, t('admin.saved'));
-									return null;
-								},
-							}),
-					}
-				: null,
-			has('invoices') ? { label: t('ordersAdmin.invoice'), onSelect: document('invoice', t('ordersAdmin.invoice')) } : null,
-			has('invoices')
-				? { label: t('ordersAdmin.packingSlip'), onSelect: document('packing-slip', t('ordersAdmin.packingSlip')) }
-				: null,
-			...cancels.map((status) => ({
-				label: t('ordersAdmin.moveToStatus', { status: status.label }),
-				onSelect: moveTo(status),
-				danger: true,
-			})),
-			{ label: t('ordersAdmin.deleteOrder'), onSelect: () => deleteDialog(kit, order, detail), danger: true },
-		]),
+	];
+	const more = [
+		...forward
+			.slice(1)
+			.map((status) => ({ label: t('ordersAdmin.moveToStatus', { status: status.label }), onSelect: moveTo(status) })),
+		typed.length > 0 && second !== 'serials' ? { label: t('ordersAdmin.typeSerials'), onSelect: serials } : null,
+		balanceDue > 0 && second !== 'payment' ? { label: t('ordersAdmin.recordPayment'), onSelect: pay } : null,
+		refundable > 0 && second !== 'refund' ? { label: t('ordersAdmin.refund'), onSelect: refund } : null,
+		editable ? { label: t('ordersAdmin.editItems'), onSelect: () => editDialog(kit, order, done) } : null,
+		order.address && EDITABLE_ROLES.includes(order.role)
+			? { label: t('ordersAdmin.editAddress'), onSelect: () => addressDialog(kit, order, done) }
+			: null,
+		// attachments of the merchant's kinds, at any time (E20)
+		(order.attachmentKinds ?? []).length > 0
+			? { label: t('ordersAdmin.addAttachment'), onSelect: () => attachDialog(kit, order, done) }
+			: null,
+		{ label: t('ordersAdmin.editNote'), onSelect: () => noteDialog(kit, order, done) },
+		{
+			label: t('admin.editTags'),
+			onSelect: () =>
+				tagsDialog(kit, order.tags ?? [], async (tags) => {
+					const answer = await kit.call('PATCH', `/v1/admin/orders/${order.id}`, { tags });
+					if (!answer.ok) return kit.reason(answer);
+					done(answer.data, t('admin.saved'));
+					return null;
+				}),
+		},
+		// the order fields staff fill (dynamic model §2)
+		(order.orderFields ?? []).some((/** @type {any} */ field) => field.active)
+			? {
+					label: t('admin.editFields'),
+					onSelect: () =>
+						fieldsDialog(kit, {
+							fields: order.orderFields,
+							values: order.fields ?? {},
+							save: async (body) => {
+								const answer = await kit.call('PATCH', `/v1/admin/orders/${order.id}`, body);
+								if (!answer.ok) return kit.reason(answer);
+								done(answer.data, t('admin.saved'));
+								return null;
+							},
+						}),
+				}
+			: null,
+		has('invoices') ? { label: t('ordersAdmin.invoice'), onSelect: document('invoice', t('ordersAdmin.invoice')) } : null,
+		has('invoices')
+			? { label: t('ordersAdmin.packingSlip'), onSelect: document('packing-slip', t('ordersAdmin.packingSlip')) }
+			: null,
+		...cancels.map((status) => ({
+			label: t('ordersAdmin.moveToStatus', { status: status.label }),
+			onSelect: moveTo(status),
+			danger: true,
+		})),
+		{ label: t('ordersAdmin.deleteOrder'), onSelect: () => deleteDialog(kit, order, detail), danger: true },
 	];
 
 	// ---------------------------------------------------------------------------------------------- what it is
@@ -438,14 +438,12 @@ const renderOrder = (kit, order, detail, message) => {
 
 	kit.put(detail.pane, [
 		detail.back,
-		detailHead(
-			kit,
-			[
-				t('ordersAdmin.orderHead', { number: order.number }),
-				kit.badge(order.statusLabel, ROLE_TONES[order.role] ?? 'neutral'),
-			],
+		detailHead(kit, {
+			title: t('ordersAdmin.orderHead', { number: order.number }),
+			badges: [kit.badge(order.statusLabel, ROLE_TONES[order.role] ?? 'neutral')],
 			actions,
-		),
+			more,
+		}),
 		note,
 		figures,
 		table,
