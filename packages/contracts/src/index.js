@@ -42,7 +42,7 @@ export {
 	zonedParts,
 } from './format.js';
 export { PROBLEM_CODES, createProblemFactory } from './errors.js';
-export { createId, isId, normaliseDomain } from './ids.js';
+export { createId, isId, normalizeDomain } from './ids.js';
 
 /** @typedef {import('./constants.js').ProductUnavailableReason} ProductUnavailableReason */
 /** @typedef {import('./constants.js').AdminRole} AdminRole */

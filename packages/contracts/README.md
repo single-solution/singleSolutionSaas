@@ -84,7 +84,7 @@ upper-case), `timeZone` an IANA name the runtime knows (returned in canonical fo
 ## Cross-product shapes (0.4.11)
 
 - `validateDataRightsRequest`: `{ user: { id?, email?, phone? } }` with at least one member. Answers: export
-  `{ records }`, delete `{ deleted, anonymised }`.
+  `{ records }`, delete `{ deleted, anonymized }`.
 - `validateActivityCopy`: `{ websiteId, productId, actor: { kind, id, name?, role? }, action, target, label?, detail?, at }`
   (`label` at most 200 characters, `detail` at most 2,000 plain-text characters; PLAN 0.8.10 K9).
 - `IMPORT_LIMITS`: one call of a product's import route takes NDJSON of at most 1,000 records and 4 MB (K10).
@@ -172,7 +172,7 @@ defaults with the same rules.
 Pure and browser-safe, so products' `core/` and widgets (through `@ss/app-kit/widget`) use the same code.
 
 - `DEFAULT_FORMAT` `{ locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' }`,
-  `FORMAT_FIELDS`, `formatViolation(field, value)`, `normaliseFormat(value)`. `currencySymbols` is the merchant's own
+  `FORMAT_FIELDS`, `formatViolation(field, value)`, `normalizeFormat(value)`. `currencySymbols` is the merchant's own
   symbol per currency (`{ PKR: 'Rs', CHF: 'Fr.' }`, at most 20, each 1 to 8 characters): one currency's symbol never
   replaces another's.
 - `formatMoney(amount, currency, format?, viewer?)`: integer minor units (ISO 4217 exponents, `currencyDigits`) as
@@ -213,7 +213,7 @@ parts `line1`, `line2`, `area`, `city`, `region`, `postalCode` (`PLACE_PARTS`, l
 
 Pure and browser-safe; every product normalizes phones with it, so one person has one number everywhere.
 
-- `normalisePhone(input, defaultCallingCode | { defaultCallingCode, trunkPrefix })` → E.164 or null. Spaces, dashes,
+- `normalizePhone(input, defaultCallingCode | { defaultCallingCode, trunkPrefix })` → E.164 or null. Spaces, dashes,
   dots, slashes and brackets are dropped; `+` or `00` name the calling code (any assigned code, +800 and +882 too);
   after it a trunk `0` (also `(0)`) is dropped, except where national numbers keep their 0 (Italy, San Marino, Côte
   d'Ivoire, Benin, Gabon, Congo). A number without `+`/`00` needs the default calling code and is read as already
@@ -306,7 +306,7 @@ Codes include `invalid_token` (401), `product_unavailable` (403, with `reason`),
 letters naming the kind, such as `web`, `mer` or `req`); `isId(value, prefix?)` checks one. `PATTERNS` holds the
 patterns of the schemas (product ids, feature, permission, widget and setting keys, versions, times, countries,
 host names) for code that checks the same values.
-`normaliseDomain(input, { allowLocal?, isPublicSuffix? })` returns `{ ok, value }` or `{ ok: false, code, message }`:
+`normalizeDomain(input, { allowLocal?, isPublicSuffix? })` returns `{ ok, value }` or `{ ok: false, code, message }`:
 lower-case punycode, no scheme, port, path or trailing dot; IP literals, `localhost` and single-label names refused.
 
 ## Testing entry

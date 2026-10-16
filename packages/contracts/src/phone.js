@@ -165,7 +165,7 @@ const usualLength = (code, national) => {
  *   +7, none where national numbers keep their 0)
  * @returns {string | null}
  */
-export const normalisePhone = (input, options = {}) => {
+export const normalizePhone = (input, options = {}) => {
 	if (typeof input !== 'string') return null;
 	const raw = input.trim();
 	if (raw.length === 0 || raw.length > MAX_INPUT || !PHONE_CHARACTERS.test(raw)) return null;

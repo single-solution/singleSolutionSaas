@@ -19,7 +19,7 @@ import {
 	isAmount,
 	isCurrency,
 	isPositiveAmount,
-	normaliseFormat,
+	normalizeFormat,
 	toDecimal,
 } from '../src/format.js';
 import { WEBSITE } from './fixtures.js';
@@ -68,9 +68,9 @@ describe('Format values (K7)', () => {
 	});
 
 	it('normalizes stored and partial values', () => {
-		expect(normaliseFormat(undefined)).toEqual(DEFAULT_FORMAT);
-		expect(normaliseFormat([])).toEqual(DEFAULT_FORMAT);
-		expect(normaliseFormat({ wholeUnits: true, times: 'nope', extra: 1 })).toEqual({ ...DEFAULT_FORMAT, wholeUnits: true });
+		expect(normalizeFormat(undefined)).toEqual(DEFAULT_FORMAT);
+		expect(normalizeFormat([])).toEqual(DEFAULT_FORMAT);
+		expect(normalizeFormat({ wholeUnits: true, times: 'nope', extra: 1 })).toEqual({ ...DEFAULT_FORMAT, wholeUnits: true });
 	});
 });
 

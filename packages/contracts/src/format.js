@@ -114,7 +114,7 @@ export const formatViolation = (field, value) => {
  * @param {unknown} value
  * @returns {Format}
  */
-export const normaliseFormat = (value) => {
+export const normalizeFormat = (value) => {
 	const input =
 		typeof value === 'object' && value !== null && !Array.isArray(value) ? /** @type {Record<string, unknown>} */ (value) : {};
 	/** @type {Record<string, unknown>} */
@@ -238,7 +238,7 @@ const localeOf = (format, viewer) => {
  */
 export const formatMoney = (amount, currency, format = DEFAULT_FORMAT, viewer = null) => {
 	if (typeof amount !== 'number' || !Number.isFinite(amount)) return '';
-	const f = normaliseFormat(format);
+	const f = normalizeFormat(format);
 	const digits = currencyDigits(currency);
 	const fraction = f.wholeUnits ? 0 : digits;
 	const major = amount / 10 ** digits;
@@ -308,7 +308,7 @@ const dateOf = (value) => {
 export const formatDate = (value, format = DEFAULT_FORMAT, { timeZone = 'UTC', style = 'datetime', viewer = null } = {}) => {
 	const at = dateOf(value);
 	if (!at) return '';
-	const f = normaliseFormat(format);
+	const f = normalizeFormat(format);
 	const business = knownTimeZone(timeZone) ? timeZone : 'UTC';
 	const zone =
 		f.times === 'business' || viewer === null ? business : knownTimeZone(viewer.timeZone) ? viewer.timeZone : undefined;

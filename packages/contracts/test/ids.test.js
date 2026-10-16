@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createId, isId, normaliseDomain } from '../src/index.js';
+import { createId, isId, normalizeDomain } from '../src/index.js';
 import { encodeBase32, ID_ALPHABET, idPattern } from '../src/ids.js';
 import { SCHEMA_IDS } from '../src/schemas/schema-ids.js';
 import { getDefaultValidator } from '../src/validate.js';
@@ -50,7 +50,7 @@ describe('ids', () => {
 	});
 });
 
-describe('normaliseDomain', () => {
+describe('normalizeDomain', () => {
 	/** @type {Array<[unknown, string]>} */
 	const accepted = [
 		['example.com', 'example.com'],
@@ -78,7 +78,7 @@ describe('normaliseDomain', () => {
 		['123.example.com', '123.example.com'],
 	];
 	it.each(accepted)('accepts %j → %s', (input, expected) => {
-		expect(normaliseDomain(input)).toEqual({ ok: true, value: expected });
+		expect(normalizeDomain(input)).toEqual({ ok: true, value: expected });
 	});
 
 	/** @type {Array<[unknown, string]>} */
@@ -114,7 +114,7 @@ describe('normaliseDomain', () => {
 		['com', 'single_label'],
 	];
 	it.each(rejected)('rejects %j (%s)', (input, code) => {
-		const result = normaliseDomain(input);
+		const result = normalizeDomain(input);
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.code).toBe(code);
@@ -123,24 +123,24 @@ describe('normaliseDomain', () => {
 	});
 
 	it('allows local hosts and IPs with allowLocal', () => {
-		expect(normaliseDomain('http://localhost:3000', { allowLocal: true })).toEqual({ ok: true, value: 'localhost' });
-		expect(normaliseDomain('shop.localhost', { allowLocal: true })).toEqual({ ok: true, value: 'shop.localhost' });
-		expect(normaliseDomain('127.0.0.1:8080', { allowLocal: true })).toEqual({ ok: true, value: '127.0.0.1' });
-		expect(normaliseDomain('[::1]:3000', { allowLocal: true })).toEqual({ ok: true, value: '::1' });
-		expect(normaliseDomain('[2001:DB8::1]', { allowLocal: true })).toEqual({ ok: true, value: '2001:db8::1' });
-		expect(normaliseDomain('devbox', { allowLocal: true })).toEqual({ ok: true, value: 'devbox' });
+		expect(normalizeDomain('http://localhost:3000', { allowLocal: true })).toEqual({ ok: true, value: 'localhost' });
+		expect(normalizeDomain('shop.localhost', { allowLocal: true })).toEqual({ ok: true, value: 'shop.localhost' });
+		expect(normalizeDomain('127.0.0.1:8080', { allowLocal: true })).toEqual({ ok: true, value: '127.0.0.1' });
+		expect(normalizeDomain('[::1]:3000', { allowLocal: true })).toEqual({ ok: true, value: '::1' });
+		expect(normalizeDomain('[2001:DB8::1]', { allowLocal: true })).toEqual({ ok: true, value: '2001:db8::1' });
+		expect(normalizeDomain('devbox', { allowLocal: true })).toEqual({ ok: true, value: 'devbox' });
 	});
 
 	it('rejects public suffixes through an injected predicate', () => {
 		const isPublicSuffix = (/** @type {string} */ d) => ['co.uk', 'com.br'].includes(d);
-		expect(normaliseDomain('CO.UK', { isPublicSuffix })).toMatchObject({ ok: false, code: 'public_suffix' });
-		expect(normaliseDomain('shop.co.uk', { isPublicSuffix })).toEqual({ ok: true, value: 'shop.co.uk' });
+		expect(normalizeDomain('CO.UK', { isPublicSuffix })).toMatchObject({ ok: false, code: 'public_suffix' });
+		expect(normalizeDomain('shop.co.uk', { isPublicSuffix })).toEqual({ ok: true, value: 'shop.co.uk' });
 	});
 
 	it('produces values accepted by the hostname schema', () => {
 		const v = getDefaultValidator();
 		for (const [input] of accepted) {
-			const result = normaliseDomain(input);
+			const result = normalizeDomain(input);
 			if (result.ok) expect(v.validate(`${SCHEMA_IDS.common}#/$defs/hostname`, result.value).ok).toBe(true);
 		}
 	});

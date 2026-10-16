@@ -82,7 +82,7 @@ export const isId = (value, prefix) =>
  */
 
 /**
- * @typedef {object} NormaliseDomainOptions
+ * @typedef {object} NormalizeDomainOptions
  * @property {boolean} [allowLocal] accept `localhost`, `*.localhost`, IP literals and single-label hosts (development only)
  * @property {(domain: string) => boolean} [isPublicSuffix] optional public-suffix-list predicate; matching domains are rejected
  */
@@ -99,7 +99,7 @@ const fail = (code, message) => ({ ok: false, code, message });
 
 /**
  * @param {string} ip
- * @param {NormaliseDomainOptions} options
+ * @param {NormalizeDomainOptions} options
  * @returns {DomainResult}
  */
 const ipResult = (ip, options) =>
@@ -111,10 +111,10 @@ const ipResult = (ip, options) =>
  * Normalize user input to a bare ASCII (punycode) hostname: lowercase, no scheme, userinfo, path, query, fragment,
  * port or trailing dot. Rejects IPs, `localhost` and single-label names unless `allowLocal` is set.
  * @param {unknown} input e.g. `HTTPS://Shop.Example.COM:443/path?q`
- * @param {NormaliseDomainOptions} [options]
+ * @param {NormalizeDomainOptions} [options]
  * @returns {DomainResult}
  */
-export const normaliseDomain = (input, options = {}) => {
+export const normalizeDomain = (input, options = {}) => {
 	if (typeof input !== 'string') return fail('invalid_type', 'Domain must be a string.');
 	let host = input.trim();
 	if (host === '') return fail('empty', 'Domain is empty.');

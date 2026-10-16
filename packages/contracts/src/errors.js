@@ -74,7 +74,7 @@ export const PROBLEM_CODES = Object.freeze({
  * @param {ProblemError} error
  * @returns {ProblemError}
  */
-const normaliseError = (error) =>
+const normalizeError = (error) =>
 	Object.freeze({
 		path: typeof error.path === 'string' ? error.path : '',
 		message: String(error.message),
@@ -100,7 +100,7 @@ export const problem = ({ type, title, status, detail, instance, requestId, reas
 		...(instance === undefined ? {} : { instance }),
 		...(requestId === undefined ? {} : { requestId }),
 		...(reason === undefined ? {} : { reason }),
-		...(errors === undefined || errors.length === 0 ? {} : { errors: Object.freeze(errors.map(normaliseError)) }),
+		...(errors === undefined || errors.length === 0 ? {} : { errors: Object.freeze(errors.map(normalizeError)) }),
 	});
 };
 

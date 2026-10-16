@@ -2,7 +2,7 @@
  * Cross-product shapes (PLAN 0.4.11).
  *
  * - Data rights request (`POST /v1/data-rights/export` and `/delete`): `{ user: { id?, email?, phone? } }` with at
- *   least one member. Answers: export `{ records: object }`, delete `{ deleted: integer, anonymised: integer }`.
+ *   least one member. Answers: export `{ records: object }`, delete `{ deleted: integer, anonymized: integer }`.
  * - Activity copy (sent to Accounts after a logged action): `{ websiteId, productId, actor: { kind, id, name?, role? },
  *   action, target, label?, detail?, at }` (PLAN 0.8.10 K9: `label` names the target, for example an order number;
  *   `detail` is plain text). Never message contents, secrets or addresses.
