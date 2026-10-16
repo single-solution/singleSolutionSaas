@@ -341,7 +341,15 @@ export const orderStep = {
 						notes: '',
 					}
 				: null,
-			delivery: { method: doc.delivery === 'pickup' ? 'pickup' : 'delivery', zone: '', fee: delivery, locationId: null },
+			// the rate of the seeded zone the order went by (E5; store mapping to review)
+			delivery: {
+				method: doc.delivery === 'pickup' ? 'pickup' : 'delivery',
+				zone: 'everywhere',
+				rate: doc.delivery === 'pickup' ? 'pickup' : 'standard',
+				rateName: doc.delivery === 'pickup' ? 'Pickup' : 'Standard',
+				fee: delivery,
+				locationId: null,
+			},
 			lines,
 			totals: { subtotal, discount, delivery, tax: 0, total, currency: CURRENCY, taxIncluded: true, fee, roleDiscount: 0 },
 			promotions: { dealIds: deals, ...pointsOf(doc, timeline) },

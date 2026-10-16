@@ -309,12 +309,9 @@ export const settingsPlan = (values) => {
 				'checkout.deleteGivesBack': 'all',
 				'checkout.orderUrl': '',
 				'checkout.reviewUrl': '',
-				'delivery_zones.defaultFee': store.courierFlatFeeRupees * 100,
-				'delivery_zones.defaultFreeOver': store.freeDeliveryThresholdRupees * 100,
-				// SaaS defaults: no delivery days said (store mapping to review when the owner asks)
+				// SaaS defaults: no delivery days said (store mapping to review when the owner asks); the flat fee is the
+				// Standard rate of the delivery_zones list below (E5)
 				'delivery_zones.handlingDays': [],
-				'delivery_zones.transitDays': [],
-				'delivery_zones.defaultMethod': 'pickup',
 				'delivery_zones.pickupEnabled': true,
 				'delivery_zones.pickupName': '',
 				'delivery_zones.pickupAddress': [store.storeAddressLine1, store.storeAddressLine2].filter(Boolean).join(', '),
@@ -507,7 +504,25 @@ export const settingsPlan = (values) => {
 					{ key: 'pickup', name: 'Pay at pickup', kind: 'at_pickup', active: false },
 				],
 				couriers: [],
-				delivery_zones: [],
+				// one zone for every place with the flat courier fee, free over the threshold, and pickup first (SB preselects
+				// pickup); mechanical (E5, store mapping to review)
+				delivery_zones: [
+					{
+						key: 'everywhere',
+						name: 'Everywhere',
+						match: { countries: [], regions: [], cities: [], areas: [], postcodes: [] },
+						rates: [
+							{ key: 'pickup', name: 'Pickup', kind: 'pickup', price: 0, freeOver: 0 },
+							{
+								key: 'standard',
+								name: 'Standard',
+								kind: 'delivery',
+								price: store.courierFlatFeeRupees * 100,
+								freeOver: store.freeDeliveryThresholdRupees * 100,
+							},
+						],
+					},
+				],
 				// the member discount (E19; `apps/web/src/app/checkout/_components/CheckoutPanels.tsx`:466)
 				role_prices: [{ role: MEMBER_ROLE, percent: store.memberDiscountPercent, label: 'Member discount' }],
 			},

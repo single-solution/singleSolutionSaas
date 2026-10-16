@@ -459,13 +459,16 @@ describe('the Sisters Boutique mapping', () => {
 		const { settings } = await readSisters({ cleanups });
 		expect(Object.keys(settings)).toEqual(['accounts', 'ecommerce', 'notifications', 'payments', 'growth']);
 		const ecommerce = /** @type {Record<string, any>} */ (settings.ecommerce?.settings);
+		// the flat fee and free-delivery threshold are the Standard rate of one zone for every place (E5)
+		expect(/** @type {any} */ (settings.ecommerce?.lists)?.delivery_zones[0].rates).toMatchObject([
+			{ key: 'pickup', kind: 'pickup' },
+			{ key: 'standard', kind: 'delivery', price: 150_000, freeOver: 2_000_000 },
+		]);
 		expect(ecommerce).toMatchObject({
 			'checkout.numberPattern': '{prefix}{year}-{number}',
 			'checkout.numberPrefix': 'IM-',
 			'checkout.numberDigits': 4,
 			'checkout.messageChannels': [],
-			'delivery_zones.defaultFreeOver': 2_000_000,
-			'delivery_zones.defaultFee': 150_000,
 			'delivery_zones.pickupAddress': '1 Sample Road, Sample City',
 			// a row of the wrong type falls back to the code default
 			'catalog.lowStock': STORE_DEFAULTS.lowStockThreshold,
@@ -569,8 +572,11 @@ describe('the Sisters Boutique mapping', () => {
 			{ key: 'online' },
 			{ key: 'pickup' },
 		]);
+		expect(/** @type {any} */ (plan.ecommerce?.lists)?.delivery_zones[0].rates[1]).toMatchObject({
+			key: 'standard',
+			freeOver: 5_000_000,
+		});
 		expect(plan.ecommerce?.settings).toMatchObject({
-			'delivery_zones.defaultFreeOver': 5_000_000,
 			'catalog.lowStock': 2,
 			'seo.titleTemplate': '{name} | {business}',
 			// SB alerts every active staff user; those whose role reads orders come through the permission

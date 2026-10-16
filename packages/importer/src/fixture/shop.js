@@ -706,7 +706,14 @@ export const SHOP_MAPPING = defineMapping({
 						country: 'US',
 						notes: '',
 					},
-					delivery: { method: 'delivery', zone: doc.address.city, fee, locationId: null },
+					delivery: {
+						method: 'delivery',
+						zone: doc.address.city,
+						rate: 'standard',
+						rateName: 'Standard',
+						fee,
+						locationId: null,
+					},
 					lines,
 					totals: { subtotal: goods, discount: 0, delivery: fee, tax: 0, total, currency: 'USD', taxIncluded: true },
 					promotions: {

@@ -67,7 +67,7 @@ shopper messages and no card (D5), bank transfer by hand and cash on delivery wi
 threshold, the totals rules (`total_half_up`, `first`, `one_after_items`, `after_item_deals`, `cart_offer`,
 `goods_after_discounts`), loyalty (1 point = Rs 1, earned on the total at placement, guests too, `returnPoints: keep`),
 staff alerts, SEO, the Google feed, landing pages, the payments' bank details and Growth's tags, robots and notice bar;
-lists `order_flow`, `role_prices` (the member discount), `couriers` and `delivery_zones` (empty). `PENDING` lists the
+lists `order_flow`, `role_prices` (the member discount), `couriers` and `delivery_zones` (one zone for every place: Pickup, and the flat fee as the Standard rate free over the threshold). `PENDING` lists the
 settings written before their PLAN item is built (E39): until then the products refuse them as "No such setting".
 
 **Entered by hand** (the per-store table, `send --settings <file>`): the feature switches (`FEATURES`, and `import`);
