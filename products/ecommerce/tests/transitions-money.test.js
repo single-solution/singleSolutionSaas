@@ -58,7 +58,7 @@ const DELIVERY = {
 		country: 'US',
 		notes: '',
 	},
-	delivery: { method: 'delivery', zone: '', fee: 0, locationId: null },
+	delivery: { method: 'delivery', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 };
 
 /** A move's input as the routes check it. @param {string} to @param {Record<string, unknown>} [extra] */

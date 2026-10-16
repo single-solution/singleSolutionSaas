@@ -65,7 +65,7 @@ const seedOrder = async (patch = {}) => {
 		number: `K-${createId('num').slice(4, 14)}`,
 		customer: { userId: 'usr_kitshopper01', name: 'Kit Shopper', email: 'kit@example.com', phone: '' },
 		address: null,
-		delivery: { method: 'none', zone: '', fee: 0, locationId: null },
+		delivery: { method: 'none', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 		lines: [
 			{
 				id: createId('oln'),

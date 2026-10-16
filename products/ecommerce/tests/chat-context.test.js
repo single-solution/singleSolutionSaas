@@ -245,10 +245,57 @@ describe('core: Chat filters, warranties and the context text', () => {
 					{ method: 'cod', name: 'Cash on delivery', note: 'Pay the courier in cash.', feePercent: 2 },
 					{ method: 'bank_transfer', name: 'Bank transfer', note: '', feePercent: 0 },
 				],
-				delivery: { fee: 500, feeText: '$5', freeOver: 5000, freeOverText: '$50' },
 				zones: [
-					{ name: 'City', fee: 0, feeText: '$0', freeOver: 0, freeOverText: '$0' },
-					{ name: 'Far away', fee: 900, feeText: '$9', freeOver: 0, freeOverText: '$0' },
+					{
+						name: 'City',
+						rates: [
+							{
+								name: 'Standard',
+								kind: 'delivery',
+								fee: 0,
+								feeText: '$0',
+								freeOver: 0,
+								freeOverText: '$0',
+								minDays: null,
+								maxDays: null,
+							},
+							{
+								name: 'Pickup',
+								kind: 'pickup',
+								fee: 0,
+								feeText: '$0',
+								freeOver: 0,
+								freeOverText: '$0',
+								minDays: null,
+								maxDays: null,
+							},
+						],
+					},
+					{
+						name: 'Far away',
+						rates: [
+							{
+								name: 'Standard',
+								kind: 'delivery',
+								fee: 500,
+								feeText: '$5',
+								freeOver: 5000,
+								freeOverText: '$50',
+								minDays: null,
+								maxDays: null,
+							},
+							{
+								name: 'Express',
+								kind: 'delivery',
+								fee: 900,
+								feeText: '$9',
+								freeOver: 0,
+								freeOverText: '$0',
+								minDays: null,
+								maxDays: null,
+							},
+						],
+					},
 				],
 				pickup: [{ name: 'Main shop', address: '1 Road', hours: 'Mon–Fri 9–5' }],
 				earnPercent: 1,
@@ -262,9 +309,9 @@ describe('core: Chat filters, warranties and the context text', () => {
 		expect(text.indexOf('## Shop basics')).toBeLessThan(text.indexOf('## Store policies'));
 		for (const part of [
 			'- Payment: Cash on delivery (Pay the courier in cash.; adds a 2% fee); Bank transfer',
-			'- Delivery: $5, free over $50',
-			'- Delivery to City: free',
-			'- Delivery to Far away: $9',
+			// each zone with its named rates (E5)
+			'- Delivery to City: Standard free; Pickup free',
+			'- Delivery to Far away: Standard $5, free over $50; Express $9',
 			'- Pickup: Main shop, 1 Road, hours Mon–Fri 9–5',
 			'- Loyalty: 1% back in points',
 			'- Categories: Phones, Cases',
@@ -331,7 +378,6 @@ describe('core: Chat filters, warranties and the context text', () => {
 			visitor: null,
 			basics: {
 				payments: [],
-				delivery: null,
 				zones: [],
 				pickup: [],
 				earnPercent: null,
@@ -464,11 +510,20 @@ describe('Chat lookups (E37)', () => {
 			deal({ id: 'deal_gone', name: 'Over', active: false }),
 		]);
 		await shop.list('delivery_zones', [
-			{ key: 'bos', name: 'Boston', match: { cities: ['Boston'] }, fee: 25000, freeOver: 500000, minDays: 1, maxDays: 2 },
-			{ key: 'bos_center', name: 'Boston center', match: { postcodes: ['021'] }, fee: 20000, minDays: 1, maxDays: 1 },
+			{ key: 'everywhere', name: 'Everywhere', rates: [{ key: 'standard', name: 'Standard', price: 30000 }] },
+			{
+				key: 'bos',
+				name: 'Boston',
+				match: { cities: ['Boston'] },
+				rates: [{ key: 'courier', name: 'Courier', price: 25000, freeOver: 500000, minDays: 1, maxDays: 2 }],
+			},
+			{
+				key: 'bos_center',
+				name: 'Boston center',
+				match: { postcodes: ['021'] },
+				rates: [{ key: 'standard', name: 'Standard', price: 20000, minDays: 1, maxDays: 1 }],
+			},
 		]);
-		await shop.setting('delivery_zones', 'defaultFee', 30000);
-		await shop.setting('delivery_zones', 'defaultFreeOver', 0);
 		await shop.list('policies', [
 			{ key: 'shipping', title: 'Delivery', text: 'We deliver in {business} style.' },
 			{ key: 'returns', title: 'Returns', text: 'Returns within {returnTime}.' },
@@ -491,7 +546,7 @@ describe('Chat lookups (E37)', () => {
 				country: 'US',
 				notes: '',
 			},
-			delivery: { method: 'delivery', zone: 'lhr', fee: 0, locationId: null },
+			delivery: { method: 'delivery', zone: 'lhr', rate: 'standard', rateName: 'Standard', fee: 0, locationId: null },
 			lines: [
 				{
 					id: 'oln_1',
@@ -632,7 +687,15 @@ describe('Chat lookups (E37)', () => {
 			discount: 22000,
 			fee: 0,
 			roleDiscount: 0,
-			delivery: { method: 'delivery', name: 'Boston', fee: 25000, feeText: 'USD 250.00', minDays: 1, maxDays: 2 },
+			delivery: {
+				method: 'delivery',
+				name: 'Boston',
+				rateName: 'Courier',
+				fee: 25000,
+				feeText: 'USD 250.00',
+				minDays: 1,
+				maxDays: 2,
+			},
 			freeDeliveryOver: 500000,
 			freeDeliveryOverText: 'USD 5,000.00',
 			total: 223000,
@@ -829,7 +892,14 @@ describe('Chat lookups (E37)', () => {
 		expect(guest.json.text).toContain('256 GB, grade Grade B, USD 990.00 (was USD 1,100.00), 4 in stock');
 		// the shop basics: payment methods with their notes, delivery, categories shoppers see, returns and warranty
 		expect(guest.json.basics).toMatchObject({
-			delivery: { fee: 30000, feeText: 'USD 300.00', freeOver: 0 },
+			zones: [
+				{
+					name: 'Everywhere',
+					rates: [{ name: 'Standard', kind: 'delivery', fee: 30000, feeText: 'USD 300.00', freeOver: 0 }],
+				},
+				{ name: 'Boston', rates: [{ name: 'Courier', fee: 25000, freeOver: 500000, minDays: 1, maxDays: 2 }] },
+				expect.objectContaining({ name: 'Boston center' }),
+			],
 			categories: ['Phones', 'Accessories'],
 			warrantyTime: { amount: 7, unit: /** @type {const} */ ('days') },
 		});
@@ -839,7 +909,12 @@ describe('Chat lookups (E37)', () => {
 			note: 'Have cash ready.',
 			feePercent: 0,
 		});
-		for (const part of ['## Shop basics', '- Categories: Phones, Accessories', '- Delivery: USD 300.00', '- Warranty: 7 days'])
+		for (const part of [
+			'## Shop basics',
+			'- Categories: Phones, Accessories',
+			'- Delivery to Everywhere: Standard USD 300.00',
+			'- Warranty: 7 days',
+		])
 			expect(guest.json.text).toContain(part);
 		const token = await shop.signIn({ id: sara, name: 'Sara Shopper' });
 		const signed = await shop.api('GET', '/v1/chat/context', undefined, { 'ss-sign-in': token });
@@ -853,7 +928,7 @@ describe('Chat lookups (E37)', () => {
 			policies: [],
 			deals: [],
 			visitor: { points: null },
-			basics: { payments: [], delivery: null, returnTime: null, warrantyTime: null, earnPercent: null },
+			basics: { payments: [], zones: [], returnTime: null, warrantyTime: null, earnPercent: null },
 		});
 		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote')).status).toBe(403);
 	});

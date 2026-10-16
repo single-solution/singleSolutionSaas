@@ -51,7 +51,7 @@ const orderOf = (patch = {}) => ({
 		country: 'US',
 		notes: '',
 	},
-	delivery: { method: 'delivery', zone: 'city', fee: 250, locationId: null },
+	delivery: { method: 'delivery', zone: 'city', rate: 'standard', rateName: 'Standard', fee: 250, locationId: null },
 	lines: [
 		{
 			id: createId('oln'),
@@ -252,7 +252,7 @@ describe('document parts', () => {
 		};
 		const order = orderOf({
 			address: null,
-			delivery: { method: 'pickup', zone: '', fee: 0, locationId: null },
+			delivery: { method: 'pickup', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 			shipment: null,
 			note: '',
 			totals: { subtotal: 1000, discount: 0, delivery: 0, tax: 100, total: 1000, currency: 'USD', taxIncluded: true },
@@ -283,7 +283,7 @@ describe('document parts', () => {
 		expect(slip).toContain('Store pickup');
 		const none = orderOf({
 			address: null,
-			delivery: { method: 'none', zone: '', fee: 0, locationId: null },
+			delivery: { method: 'none', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 			payment: { ...order.payment, method: /** @type {any} */ ('other'), state: /** @type {any} */ ('odd') },
 		});
 		// a method the list no longer has and a state the texts have no words for print none: no code or English shows

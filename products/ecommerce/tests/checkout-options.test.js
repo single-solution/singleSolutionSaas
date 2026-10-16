@@ -77,7 +77,21 @@ const newDeal = async (input) => {
 beforeAll(async () => {
 	shop = await readyShop();
 	await shop.list('delivery_zones', [
-		{ key: 'city', name: 'Springfield', match: { cities: ['Springfield'] }, fee: 300, freeOver: 0, minDays: 1, maxDays: 2 },
+		// every other place: today's seeded rates, free (E5)
+		{
+			key: 'everywhere',
+			name: 'Everywhere',
+			rates: [
+				{ key: 'standard', name: 'Standard' },
+				{ key: 'pickup', name: 'Pickup', kind: 'pickup' },
+			],
+		},
+		{
+			key: 'city',
+			name: 'Springfield',
+			match: { cities: ['Springfield'] },
+			rates: [{ key: 'standard', name: 'Standard', price: 300, minDays: 1, maxDays: 2 }],
+		},
 	]);
 });
 afterAll(async () => shop.product.close());

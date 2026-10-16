@@ -205,7 +205,7 @@ describe('property: random flows × every way an order moves, retries, two at on
 								id,
 								customer: { userId: user, name: 'Pat', email: '', phone: '', customerId },
 								address: null,
-								delivery: { method: 'none', zone: '', fee: 0, locationId: null },
+								delivery: { method: 'none', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 								lines: lines.map(({ product, quantity }) => ({
 									id: createId('oln'),
 									productId: product.id,

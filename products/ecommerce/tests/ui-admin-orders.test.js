@@ -99,6 +99,7 @@ const detail = (over = {}) => ({
 		},
 	],
 	totals: { subtotal: 250000, discount: 1000, delivery: 0, tax: 500, total: 250000, currency: 'USD', taxIncluded: true },
+	delivery: { method: 'delivery', zone: 'everywhere', rate: 'express', rateName: 'Express', fee: 0, locationId: null },
 	promotions: { couponCode: 'SAVE', pointsRedeemed: 20, pointsEarned: 25 },
 	payment: { method: 'online', kind: 'gateway', state: 'paid', paid: 250000, refunded: 1000, refundable: 249000, advance: 5000 },
 	address: {
@@ -396,7 +397,13 @@ describe('orders admin: the list', () => {
 		const { root, server } = await mountWith(mountOrdersAdmin, {
 			features: ['checkout'],
 			settings: SETTINGS,
-			format: { locale: 'en-US', currencyDisplay: 'symbol', currencySymbols: { USD: 'US$' }, wholeUnits: true, times: 'business' },
+			format: {
+				locale: 'en-US',
+				currencyDisplay: 'symbol',
+				currencySymbols: { USD: 'US$' },
+				wholeUnits: true,
+				times: 'business',
+			},
 			timeZone: 'Asia/Tokyo',
 			routes: {
 				'GET /v1/admin/orders': () => answer(200, { items: [summary()], nextCursor: null, hasMore: false }),
@@ -447,6 +454,8 @@ describe('orders admin: one order', () => {
 		for (const part of [
 			'Order SO2026-1',
 			'Confirmed',
+			// the delivery rate the shopper picked (E5)
+			'Delivery rateExpress',
 			'Phone · Red · A',
 			'365 days',
 			'None',
@@ -1429,7 +1438,7 @@ describe('orders admin: payments, edits, deletes and batches the API has', () =>
 				balanceDue: 250000,
 				refundDue: 0,
 			},
-			delivery: { method: 'delivery', zone: 'Everywhere', fee: 0, locationId: null },
+			delivery: { method: 'delivery', zone: 'everywhere', rate: 'standard', rateName: 'Standard', fee: 0, locationId: null },
 			nextStatuses: [{ key: 'confirmed', label: 'Confirmed', role: 'open' }],
 			...over,
 		});

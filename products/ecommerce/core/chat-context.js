@@ -33,8 +33,8 @@ export const CONTEXT_WORDS = Object.freeze(
 		'basics',
 		'payment',
 		'fee',
-		'delivery',
 		'deliveryTo',
+		'rate',
 		'free',
 		'freeOver',
 		'pickup',
@@ -112,13 +112,19 @@ const say = (text, values = {}) =>
  */
 
 /**
+ * A delivery zone's rate as the context says it: its name and kind, its fee and the amount over which it is free
+ * (0 = never), and its days (null = not said).
+ * @typedef {{ name: string, kind: 'delivery' | 'pickup', fee: number, feeText: string, freeOver: number,
+ *   freeOverText: string, minDays: number | null, maxDays: number | null }} ContextRate
+ */
+
+/**
  * The shop basics (parity P5-17): each part empty or null while its feature is off.
  * @typedef {object} ShopBasics
  * @property {Array<{ method: string, name: string, note: string, feePercent: number }>} payments the methods offered,
  *   in the list's order, with the merchant's name, note and fee (a percent, 0 = none) for each
- * @property {{ fee: number, feeText: string, freeOver: number, freeOverText: string } | null} delivery the fee where no
- *   zone matches and the amount over which delivery is free (0 = never)
- * @property {Array<{ name: string, fee: number, feeText: string, freeOver: number, freeOverText: string }>} zones
+ * @property {Array<{ name: string, rates: ContextRate[] }>} zones the delivery zones with their rates (E5), in the list's
+ *   order
  * @property {Array<{ name: string, address: string, hours: string }>} pickup the pickup points
  * @property {number | null} earnPercent loyalty points earned, as a percent back
  * @property {string[]} categories the top categories shoppers see
@@ -263,8 +269,14 @@ const basicsLines = (basics, words) => {
 	const warranty = timeWords(basics.warrantyTime, words);
 	const lines = [
 		payments.length > 0 ? say(words.payment, { methods: payments.join('; ') }) : '',
-		basics.delivery ? say(words.delivery, { fee: feeWords(basics.delivery, words) }) : '',
-		...basics.zones.map((zone) => say(words.deliveryTo, { zone: oneLine(zone.name, 80), fee: feeWords(zone, words) })),
+		...basics.zones.map((zone) =>
+			say(words.deliveryTo, {
+				zone: oneLine(zone.name, 80),
+				rates: zone.rates
+					.map((rate) => say(words.rate, { name: oneLine(rate.name, 60), fee: feeWords(rate, words) }))
+					.join('; '),
+			}),
+		),
 		...basics.pickup.map((point) =>
 			say(words.pickup, {
 				point: oneLine(

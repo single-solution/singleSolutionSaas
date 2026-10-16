@@ -2,55 +2,21 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
-		"defaultFee": {
-			"type": "integer",
-			"title": "Delivery fee where no zone matches",
-			"description": "In minor units of your currency.",
-			"default": 0,
-			"minimum": 0,
-			"maximum": 1000000000000
-		},
-		"defaultFreeOver": {
-			"type": "integer",
-			"title": "Free delivery over (where no zone matches)",
-			"description": "Orders worth at least this much (after discounts, in minor units) are delivered free. 0 = never free.",
-			"default": 0,
-			"minimum": 0,
-			"maximum": 1000000000000
-		},
 		"handlingDays": {
 			"type": "array",
 			"title": "Handling days",
-			"description": "Working days from an order to its dispatch: one number (always that many) or two (the fewest and the most), one per line, for example 0 and 1. With Transit days and your business.json country, search engines show your shipping.",
+			"description": "Working days from an order to its dispatch: one number (always that many) or two (the fewest and the most), one per line, for example 0 and 1. With the days of your business country's first delivery rate and your business.json country, search engines show your shipping.",
 			"default": [],
 			"items": {
 				"type": "integer",
 				"minimum": 0,
 				"maximum": 60
 			}
-		},
-		"transitDays": {
-			"type": "array",
-			"title": "Transit days",
-			"description": "Days on the way where no zone matches: one number or two (the fewest and the most), one per line, for example 2 and 5.",
-			"default": [],
-			"items": {
-				"type": "integer",
-				"minimum": 0,
-				"maximum": 60
-			}
-		},
-		"defaultMethod": {
-			"type": "string",
-			"title": "Preselected delivery",
-			"description": "What the cart picks first.",
-			"default": "delivery",
-			"enum": ["delivery", "pickup"]
 		},
 		"pickupEnabled": {
 			"type": "boolean",
-			"title": "Store pickup",
-			"description": "Offer pickup at one point (without Multi-location stock; with it, pickup locations are used).",
+			"title": "Pickup point",
+			"description": "Without Multi-location stock: the one place where a zone's pickup rates are picked up (with it, the stock locations that take pickups are used).",
 			"default": false
 		},
 		"pickupName": {
@@ -80,7 +46,7 @@
 		"deliveryNote": {
 			"type": "string",
 			"title": "Delivery time text",
-			"description": "Shown with delivery in the cart and on orders, for example \"2–4 working days\".",
+			"description": "Shown with delivery in the cart and on orders, for example \"Orders ship on weekdays\". Each rate shows its own days.",
 			"default": "",
 			"maxLength": 500
 		},

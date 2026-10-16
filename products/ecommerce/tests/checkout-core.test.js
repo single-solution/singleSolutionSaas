@@ -14,7 +14,7 @@ import {
 	resolveLines,
 } from '../core/checkout.js';
 import { ADDRESS_LIMITS, checkAddressRegions, countryKey, placeKey, postcodeKey, regionsFor } from '../core/address.js';
-import { checkZones, matchZone, zoneCities, zoneFee } from '../core/delivery.js';
+import { checkZones, defaultZones, homeRate, matchZone, rateFee, rateFits, zoneCities } from '../core/delivery.js';
 import { canDownload, checkLicenceKeys, downloadLimitOf, fileKey, fileNameOf, safeFileName } from '../core/digital.js';
 import { MAX_AMOUNT } from '../core/money.js';
 import { checkTaxRules, taxOf, taxPercent } from '../core/taxes.js';
@@ -483,18 +483,17 @@ describe('addresses', () => {
 });
 
 describe('delivery zones', () => {
+	/** One rate of a price. @param {number} price @param {Record<string, unknown>} [over] */
+	const rate = (price, over = {}) => [{ key: 'standard', name: 'Standard', price, ...over }];
 	const zones = [
-		{ key: 'everywhere', name: 'Everywhere', fee: 900 },
+		{ key: 'everywhere', name: 'Everywhere', rates: rate(900) },
 		{
 			key: 'city',
 			name: 'City',
 			match: { cities: ['Springfield', ' springfield '] },
-			fee: 300,
-			freeOver: 5000,
-			minDays: 1,
-			maxDays: 2,
+			rates: rate(300, { freeOver: 5000, minDays: 1, maxDays: 2 }),
 		},
-		{ key: 'centre', name: 'Centre', match: { cities: ['Springfield'], areas: ['Downtown'] }, fee: 100 },
+		{ key: 'centre', name: 'Centre', match: { cities: ['Springfield'], areas: ['Downtown'] }, rates: rate(100) },
 	];
 
 	it('checks and matches the most specific zone', () => {
@@ -512,21 +511,93 @@ describe('delivery zones', () => {
 		expect(matchZone(checked.value, placeAt({ city: 'Springfield' }))?.key).toBe('city');
 		expect(matchZone(checked.value, placeAt({ city: 'Shelbyville' }))?.key).toBe('everywhere');
 		expect(matchZone(checked.value.slice(1), placeAt())).toBeNull();
-		expect(zoneFee({ fee: 300, freeOver: 5000 }, 5000)).toBe(0);
-		expect(zoneFee({ fee: 300, freeOver: 0 }, 99_999)).toBe(300);
+		expect(rateFee({ price: 300, freeOver: 5000 }, 5000)).toBe(0);
+		expect(rateFee({ price: 300, freeOver: 0 }, 99_999)).toBe(300);
 		expect(zoneCities(checked.value)).toEqual(['Springfield']);
+	});
+
+	it('keeps named rates per zone, each with its kind, days, condition and pickup locations (E5)', () => {
+		const checked = checkZones([
+			{
+				key: 'home',
+				name: 'Home',
+				rates: [
+					{ key: 'standard', name: ' Standard ', price: 500, freeOver: 10_000, minDays: 2, maxDays: 4 },
+					{ key: 'express', name: 'Express', price: 1500, minDays: 1, condition: { by: 'weight', min: 0, max: 5000 } },
+					{ key: 'bulky', name: 'Bulky', price: 4000, condition: { by: 'weight', min: 5001 } },
+					{ key: 'small_orders', name: 'Small orders', price: 200, condition: { by: 'value', min: 0, max: 2000 } },
+					{ key: 'pickup', name: 'Pickup', kind: 'pickup', locations: ['loc_1', 'loc_1'] },
+				],
+			},
+		]);
+		expect(checked.ok).toBe(true);
+		if (!checked.ok) return;
+		const [standard, express, bulky, small, pickup] = /** @type {any[]} */ (checked.value[0]?.rates ?? []);
+		expect(standard).toEqual({
+			key: 'standard',
+			name: 'Standard',
+			kind: 'delivery',
+			price: 500,
+			freeOver: 10_000,
+			minDays: 2,
+			maxDays: 4,
+			condition: { by: 'none', min: 0, max: 0 },
+			locations: [],
+		});
+		// one number of days is that many; none is not said
+		expect([express.minDays, express.maxDays, bulky.minDays, bulky.maxDays]).toEqual([1, 1, null, null]);
+		expect(pickup).toMatchObject({ kind: 'pickup', price: 0, locations: ['loc_1'] });
+		// a condition fits from min to max, both included; max 0 = no upper end
+		const cart = (/** @type {number} */ weightG, /** @type {number} */ value) => ({ weightG, value });
+		expect(rateFits(express, cart(5000, 0))).toBe(true);
+		expect(rateFits(express, cart(5001, 0))).toBe(false);
+		expect(rateFits(bulky, cart(99_999_999, 0))).toBe(true);
+		expect(rateFits(bulky, cart(5000, 0))).toBe(false);
+		expect(rateFits(small, cart(0, 2000))).toBe(true);
+		expect(rateFits(small, cart(0, 2001))).toBe(false);
+		expect(rateFits(standard, cart(10 ** 9, 10 ** 9))).toBe(true);
+	});
+
+	it("seeds one zone for every place with today's free Standard rate and pickup", () => {
+		const seeded = defaultZones();
+		expect(checkZones(seeded)).toEqual({ ok: true, value: seeded });
+		expect(seeded[0]?.rates.map((entry) => [entry.key, entry.name, entry.kind, entry.price])).toEqual([
+			['standard', 'Standard', 'delivery', 0],
+			['pickup', 'Pickup', 'pickup', 0],
+		]);
+		expect(matchZone(seeded, placeAt({ country: 'JP', city: 'Kyoto' }))?.key).toBe('everywhere');
+	});
+
+	it('tells search engines the first plain delivery rate of the business country', () => {
+		const checked = checkZones([
+			{ key: 'abroad', name: 'Abroad', rates: rate(3000) },
+			{
+				key: 'home',
+				name: 'Home',
+				match: { countries: ['DE'] },
+				rates: [
+					{ key: 'pickup', name: 'Pickup', kind: 'pickup' },
+					{ key: 'light', name: 'Light', price: 300, condition: { by: 'weight', min: 0, max: 1000 } },
+					{ key: 'standard', name: 'Standard', price: 500, minDays: 1, maxDays: 2 },
+				],
+			},
+		]);
+		if (!checked.ok) throw new Error(checked.errors.join(' '));
+		expect(homeRate(checked.value, 'DE')?.key).toBe('standard');
+		expect(homeRate(checked.value, 'FR')?.price).toBe(3000);
+		expect(homeRate(checked.value.slice(1), 'FR')).toBeNull();
 	});
 
 	it('wins by the longest postcode start, then area, city, region, country, then the catch-all', () => {
 		const checked = checkZones([
-			{ key: 'all', name: 'All', fee: 1 },
-			{ key: 'gb', name: 'UK', match: { countries: ['United Kingdom'] }, fee: 2 },
-			{ key: 'england', name: 'England', match: { countries: ['GB'], regions: ['England'] }, fee: 3 },
-			{ key: 'london', name: 'London', match: { cities: ['London'] }, fee: 4 },
-			{ key: 'soho', name: 'Soho', match: { cities: ['London'], areas: ['Soho'] }, fee: 5 },
-			{ key: 'sw', name: 'SW', match: { postcodes: ['sw'] }, fee: 6 },
-			{ key: 'sw1', name: 'SW1', match: { postcodes: ['SW1 '] }, fee: 7 },
-			{ key: 'sw1_us', name: 'SW1 abroad', match: { countries: ['US'], postcodes: ['SW1A'] }, fee: 8 },
+			{ key: 'all', name: 'All', rates: rate(1) },
+			{ key: 'gb', name: 'UK', match: { countries: ['United Kingdom'] }, rates: rate(2) },
+			{ key: 'england', name: 'England', match: { countries: ['GB'], regions: ['England'] }, rates: rate(3) },
+			{ key: 'london', name: 'London', match: { cities: ['London'] }, rates: rate(4) },
+			{ key: 'soho', name: 'Soho', match: { cities: ['London'], areas: ['Soho'] }, rates: rate(5) },
+			{ key: 'sw', name: 'SW', match: { postcodes: ['sw'] }, rates: rate(6) },
+			{ key: 'sw1', name: 'SW1', match: { postcodes: ['SW1 '] }, rates: rate(7) },
+			{ key: 'sw1_us', name: 'SW1 abroad', match: { countries: ['US'], postcodes: ['SW1A'] }, rates: rate(8) },
 		]);
 		expect(checked.ok).toBe(true);
 		if (!checked.ok) return;
@@ -544,32 +615,43 @@ describe('delivery zones', () => {
 		expect(zone({ country: 'FR', city: 'Paris' })).toBe('all');
 		// equals: the first in the list
 		const twins = checkZones([
-			{ key: 'first', name: 'A', match: { cities: ['Lyon'] }, fee: 1 },
-			{ key: 'second', name: 'B', match: { cities: ['lyon'] }, fee: 2 },
+			{ key: 'first', name: 'A', match: { cities: ['Lyon'] }, rates: rate(1) },
+			{ key: 'second', name: 'B', match: { cities: ['lyon'] }, rates: rate(2) },
 		]);
 		expect(twins.ok && matchZone(twins.value, placeAt({ city: 'LYON' }))?.key).toBe('first');
 	});
 
+	const one = (/** @type {Record<string, unknown>} */ over) => [{ key: 'zz', name: 'A', rates: rate(0), ...over }];
+	const withRate = (/** @type {Record<string, unknown>} */ over) => one({ rates: rate(0, over) });
 	it.each([
 		[{}, 'A list'],
-		[Array.from({ length: 101 }, (_, i) => ({ key: `z${i}`, name: 'Z' })), 'At most'],
+		[Array.from({ length: 101 }, (_, i) => ({ key: `z${i}`, name: 'Z', rates: rate(0) })), 'At most'],
 		[[{ key: 'X' }], 'Zone key'],
-		[
-			[
-				{ key: 'zz', name: 'A' },
-				{ key: 'zz', name: 'B' },
-			],
-			'twice',
-		],
-		[[{ key: 'zz', name: '' }], 'name'],
-		[[{ key: 'zz', name: 'A', match: { cities: 'x' } }], 'cities'],
-		[[{ key: 'zz', name: 'A', match: { areas: [''] } }], 'areas'],
-		[[{ key: 'zz', name: 'A', match: { postcodes: ['1'.repeat(21)] } }], 'postcodes'],
-		[[{ key: 'zz', name: 'A', match: { towns: ['x'] } }], 'match takes'],
-		[[{ key: 'zz', name: 'A', match: 'x' }], 'match lists'],
-		[[{ key: 'zz', name: 'A', fee: -1 }], 'fee'],
-		[[{ key: 'zz', name: 'A', freeOver: 1.5 }], 'free over'],
-		[[{ key: 'zz', name: 'A', minDays: 3, maxDays: 1 }], 'days'],
+		[[...one({}), ...one({ name: 'B' })], 'twice'],
+		[one({ name: '' }), 'name'],
+		[one({ match: { cities: 'x' } }), 'cities'],
+		[one({ match: { areas: [''] } }), 'areas'],
+		[one({ match: { postcodes: ['1'.repeat(21)] } }), 'postcodes'],
+		[one({ match: { towns: ['x'] } }), 'match takes'],
+		[one({ match: 'x' }), 'match lists'],
+		[one({ rates: [] }), 'rates is a list'],
+		[one({ rates: undefined }), 'rates is a list'],
+		[one({ rates: Array.from({ length: 21 }, (_, i) => ({ key: `r${i}`, name: 'R' })) }), 'rates is a list'],
+		[one({ rates: [{ key: 'R', name: 'R' }] }), 'rate key'],
+		[one({ rates: [...rate(0), ...rate(1)] }), 'listed twice'],
+		[withRate({ name: '' }), 'needs a name'],
+		[withRate({ kind: 'drone' }), 'the kind'],
+		[withRate({ price: -1 }), 'price'],
+		[withRate({ freeOver: 1.5 }), 'free over'],
+		[withRate({ minDays: 3, maxDays: 1 }), 'days'],
+		[withRate({ minDays: 400 }), 'days'],
+		[withRate({ condition: 'heavy' }), 'condition is {'],
+		[withRate({ condition: { by: 'size' } }), 'condition is by'],
+		[withRate({ condition: { by: 'value', min: 500, max: 100 } }), 'whole min'],
+		[withRate({ condition: { by: 'weight', min: 0, max: 1e10 } }), 'whole min'],
+		[withRate({ locations: ['loc_1'] }), 'only a pickup rate'],
+		[withRate({ kind: 'pickup', locations: 'loc_1' }), 'locations is a list'],
+		[withRate({ kind: 'pickup', locations: ['bad id'] }), 'locations is a list'],
 	])('refuses %#', (value, message) => {
 		const checked = checkZones(value);
 		expect(checked.ok).toBe(false);

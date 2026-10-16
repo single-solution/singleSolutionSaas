@@ -254,8 +254,13 @@ describe('SEO and feed settings through the API', () => {
 	});
 
 	it('ships free from the free-delivery amount in feeds (SG-2); structured data waits for delivery days (G5)', async () => {
-		await shop.setting('delivery_zones', 'defaultFee', 25_000);
-		await shop.setting('delivery_zones', 'defaultFreeOver', 1_000_000);
+		await shop.list('delivery_zones', [
+			{
+				key: 'everywhere',
+				name: 'Everywhere',
+				rates: [{ key: 'standard', name: 'Standard', price: 25_000, freeOver: 1_000_000 }],
+			},
+		]);
 		const jsonLd = JSON.parse((await api('GET', `/v1/seo/products/${ids.lamp.slug}`)).jsonLd)['@graph'][0];
 		expect(jsonLd.hasVariant.map((/** @type {any} */ v) => v.offers.shippingDetails)).toEqual([undefined, undefined]);
 		shop.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({

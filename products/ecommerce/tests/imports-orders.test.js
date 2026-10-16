@@ -104,7 +104,7 @@ const orderOf = ({
 		number,
 		customer: { name: 'Sara Shopper', email: '', phone: '+15550001111', ...customer },
 		address: ADDRESS,
-		delivery: { method: 'delivery', zone: 'city', fee: delivery, locationId: null },
+		delivery: { method: 'delivery', zone: 'city', rate: 'standard', rateName: 'Standard', fee: delivery, locationId: null },
 		lines,
 		totals: {
 			subtotal: lines.reduce((n, line) => n + line.unitPrice * line.quantity, 0),

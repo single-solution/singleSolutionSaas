@@ -418,7 +418,9 @@ export const STATUS_ROLES = Object.freeze([
  * @property {{ userId: string, name: string, email: string, phone: string, customerId?: string }} customer from the
  *   Accounts sign-in, or the guest's details (`userId` '' for guests, E21); `customerId` the shop's customer record
  * @property {import('./checkout.js').Address | null} address null for pickup, digital and booking-only orders
- * @property {{ method: 'delivery' | 'pickup' | 'none', zone: string, fee: number, locationId: string | null }} delivery
+ * @property {{ method: 'delivery' | 'pickup' | 'none', zone: string, rate: string, rateName: string, fee: number,
+ *   locationId: string | null }} delivery the delivery it was placed with: the zone and the rate the shopper picked
+ *   (its key, and its name then; '' without delivery zones, E5)
  * @property {OrderLineRecord[]} lines
  * @property {{ subtotal: number, discount: number, delivery: number, tax: number, total: number, currency: string,
  *   taxIncluded: boolean, fee?: number, roleDiscount?: number }} totals `discount` = deals + bundles + coupon + points

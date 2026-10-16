@@ -22,8 +22,15 @@ beforeAll(async () => {
 		business: { country: 'US' },
 	});
 	await shop.api('POST', '/v1/products', { name: 'Desk Lamp', status: 'active', price: 4500, stock: 3 });
-	await shop.setting('delivery_zones', 'defaultFee', 500);
-	await shop.setting('delivery_zones', 'defaultFreeOver', 5000);
+	await shop.list('delivery_zones', [
+		{ key: 'abroad', name: 'Abroad', rates: [{ key: 'standard', name: 'Standard', price: 9900 }] },
+		{
+			key: 'home',
+			name: 'Home',
+			match: { countries: ['US'] },
+			rates: [{ key: 'standard', name: 'Standard', price: 500, freeOver: 5000 }],
+		},
+	]);
 });
 afterAll(async () => shop.product.close());
 
@@ -49,8 +56,16 @@ describe('the store-wide shipping policy', () => {
 	});
 
 	it('gives the fee, free delivery and delivery days to the business’s country, and offers point to it', async () => {
-		// the fewest and the most days, in any order
-		await shop.setting('delivery_zones', 'transitDays', [5, 2]);
+		await shop.list('delivery_zones', [
+			{ key: 'abroad', name: 'Abroad', rates: [{ key: 'standard', name: 'Standard', price: 9900, minDays: 9, maxDays: 20 }] },
+			{
+				key: 'home',
+				name: 'Home',
+				match: { countries: ['US'] },
+				// the business country's first plain rate: its days are the days in transit (E5)
+				rates: [{ key: 'standard', name: 'Standard', price: 500, freeOver: 5000, minDays: 2, maxDays: 5 }],
+			},
+		]);
 		const service = (await business()).hasShippingService;
 		expect(service).toMatchObject({
 			'@id': `${HOME}#shipping_policy`,

@@ -85,7 +85,7 @@ const seedOrder = async (input) => {
 		idempotencyKey: id,
 		customer: { userId: input.userId ?? '', customerId: '', name: 'Sara Shopper', email: '', phone: '' },
 		address: { name: '', phone: '', line1: '', line2: '', city: input.city ?? '', area: '', postalCode: '', country: '' },
-		delivery: { method: 'delivery', zone: '', fee: 0, locationId: null },
+		delivery: { method: 'delivery', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 		lines: [line],
 		totals: { subtotal: total, discount: 0, delivery: 0, tax: 0, total, currency: 'USD', taxIncluded: true, fee: 0 },
 		payment: { method: input.method ?? 'cod', state: 'paid', paymentId: null, advance: 0, paid: total, refunded: 0 },

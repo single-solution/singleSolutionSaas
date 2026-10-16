@@ -84,7 +84,7 @@ const seedOrder = async ({ userId = SARA, name = 'Sara Shopper', lines, key, pat
 		number: `R-${createId('num').slice(4, 12)}`,
 		customer: { userId, customerId: '', name, email: '', phone: '' },
 		address: null,
-		delivery: { method: 'none', zone: '', fee: 0, locationId: null },
+		delivery: { method: 'none', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 		lines: lines.map((line) => {
 			const variant = /** @type {import('../core/model.js').VariantRecord} */ (line.product.variants[line.variant ?? 0]);
 			return {

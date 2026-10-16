@@ -81,7 +81,7 @@ const orderOf = (patch = {}) => ({
 		country: 'US',
 		notes: '',
 	},
-	delivery: { method: 'delivery', zone: 'city', fee: 250, locationId: null },
+	delivery: { method: 'delivery', zone: 'city', rate: 'standard', rateName: 'Standard', fee: 250, locationId: null },
 	lines: [lineOf()],
 	totals: {
 		subtotal: 100000,
@@ -381,7 +381,7 @@ describe('document parts (E35)', () => {
 		const without = invoiceHtml(unlogged, context, { shopper: true });
 		expect(without).not.toContain('<h2>Payments</h2>');
 		const slips = packingSlipsHtml(
-			[orderOf({ address: null, delivery: { method: 'pickup', zone: '', fee: 0, locationId: null } })],
+			[orderOf({ address: null, delivery: { method: 'pickup', zone: '', rate: '', rateName: '', fee: 0, locationId: null } })],
 			context,
 			new Set(['prd_1']),
 		);

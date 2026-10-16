@@ -276,9 +276,15 @@ describe('feed routes', () => {
 	});
 
 	it('sends delivery days with shipping, and nothing of shipping when switched off', async () => {
-		await shop.setting('delivery_zones', 'defaultFee', 500);
+		// the business country's first plain delivery rate, its days in transit (E5)
+		await shop.list('delivery_zones', [
+			{
+				key: 'everywhere',
+				name: 'Everywhere',
+				rates: [{ key: 'standard', name: 'Standard', price: 500, minDays: 3, maxDays: 3 }],
+			},
+		]);
 		await shop.setting('delivery_zones', 'handlingDays', [0, 1]);
-		await shop.setting('delivery_zones', 'transitDays', [3]);
 		expect(await itemOf('Plain mug')).toContain(
 			'<g:shipping><g:country>US</g:country><g:price>5.00 USD</g:price><g:min_handling_time>0</g:min_handling_time>' +
 				'<g:max_handling_time>1</g:max_handling_time><g:min_transit_time>3</g:min_transit_time>' +

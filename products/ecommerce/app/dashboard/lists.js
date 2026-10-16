@@ -496,14 +496,46 @@ const Z = L.zones;
 /** The kinds of place a zone may list (`match`), in the editor's order. */
 const PLACE_KINDS = Object.freeze(/** @type {const} */ (['countries', 'regions', 'cities', 'areas', 'postcodes']));
 
+/** A new rate as the editor holds it. @param {string} kind */
+const blankRate = (kind) => ({
+	key: '',
+	name: '',
+	kind,
+	price: '',
+	freeOver: '',
+	minDays: '',
+	maxDays: '',
+	by: 'none',
+	min: '',
+	max: '',
+	locations: [],
+});
+
 /**
- * Delivery zones: the places each delivers to (countries, regions, cities, areas, postcode starts; one per line), the
- * fee and free-over amount (typed as decimals in the shop currency, saved as minor units) and the delivery days
- * (`delivery_zones`).
+ * Delivery zones: the places each delivers to (countries, regions, cities, areas, postcode starts; one per line) and
+ * its named rates (fixed-choices E5): each a name, a kind (delivery or pickup at the pickup places, some or all), a
+ * price and free-over amount (typed as decimals in the shop currency, saved as minor units), its days, and when it is
+ * offered (always, by the package's grams or by the goods' value) (`delivery_zones`).
  * @param {EditorProps & { currency: string }} props
  */
 export function ZonesEditor({ websiteId, off, currency }) {
 	const step = exponentOf(currency) === 0 ? '1' : String(10 ** -exponentOf(currency));
+	/** The days as typed: '' = not said. @param {unknown} text */
+	const daysOf = (text) => (String(text ?? '').trim() === '' ? null : Number(String(text).trim()));
+	/** @param {Item} rate */
+	const amounts = (rate) => [
+		{ text: rate.price, empty: 0 },
+		{ text: rate.freeOver, empty: 0 },
+		...(rate.by === 'value'
+			? [
+					{ text: rate.min, empty: 0 },
+					{ text: rate.max, empty: 0 },
+				]
+			: []),
+	];
+	/** A rate's limit as typed: grams, or a decimal amount. @param {Item} rate @param {'min' | 'max'} end */
+	const limitOf = (rate, end) =>
+		rate.by === 'value' ? amountOf(rate[end], currency, 0) : Number(String(rate[end] ?? '').trim() || 0);
 	return (
 		<ListEditor
 			websiteId={websiteId}
@@ -517,94 +549,225 @@ export function ZonesEditor({ websiteId, off, currency }) {
 				key: '',
 				name: '',
 				...Object.fromEntries(PLACE_KINDS.map((kind) => [kind, []])),
-				fee: '',
-				freeOver: '',
-				minDays: '1',
-				maxDays: '3',
+				rates: [{ ...blankRate('delivery'), key: 'standard', name: Z.standard, minDays: '1', maxDays: '3' }],
 			})}
 			load={(zone) => ({
 				...zone,
 				...Object.fromEntries(PLACE_KINDS.map((kind) => [kind, Array.isArray(zone.match?.[kind]) ? zone.match[kind] : []])),
-				fee: decimalOf(zone.fee, currency),
-				freeOver: zone.freeOver ? decimalOf(zone.freeOver, currency) : '',
-				minDays: String(zone.minDays ?? ''),
-				maxDays: String(zone.maxDays ?? ''),
+				rates: (Array.isArray(zone.rates) ? zone.rates : []).map((/** @type {Item} */ rate) => ({
+					key: rate.key ?? '',
+					name: rate.name ?? '',
+					kind: rate.kind ?? 'delivery',
+					price: decimalOf(rate.price, currency),
+					freeOver: rate.freeOver ? decimalOf(rate.freeOver, currency) : '',
+					minDays: rate.minDays === null || rate.minDays === undefined ? '' : String(rate.minDays),
+					maxDays: rate.maxDays === null || rate.maxDays === undefined ? '' : String(rate.maxDays),
+					by: rate.condition?.by ?? 'none',
+					min: rate.condition?.by === 'value' ? decimalOf(rate.condition.min, currency) : String(rate.condition?.min || ''),
+					max:
+						rate.condition?.by === 'value'
+							? rate.condition.max
+								? decimalOf(rate.condition.max, currency)
+								: ''
+							: String(rate.condition?.max || ''),
+					locations: Array.isArray(rate.locations) ? rate.locations : [],
+				})),
 			})}
 			check={(zones) =>
 				zones.flatMap((zone, index) =>
-					[
-						{ text: zone.fee, empty: 0 },
-						{ text: zone.freeOver, empty: 0 },
-					]
-						.filter((entry) => amountOf(entry.text, currency, entry.empty) === undefined)
-						.map((entry) =>
-							fill(Z.badAmount, { zone: zone.name || `${Z.item} ${index + 1}`, value: String(entry.text), currency }),
-						),
+					(Array.isArray(zone.rates) ? zone.rates : []).flatMap((/** @type {Item} */ rate) =>
+						amounts(rate)
+							.filter((entry) => amountOf(entry.text, currency, entry.empty) === undefined)
+							.map((entry) =>
+								fill(Z.badAmount, {
+									zone: `${zone.name || `${Z.item} ${index + 1}`} / ${rate.name || Z.rate}`,
+									value: String(entry.text),
+									currency,
+								}),
+							),
+					),
 				)
 			}
 			clean={(zone) => ({
 				key: keyOf(zone.key, zone.name),
 				name: String(zone.name ?? '').trim(),
 				match: Object.fromEntries(PLACE_KINDS.map((kind) => [kind, cleanLines(zone[kind])])),
-				fee: amountOf(zone.fee, currency, 0),
-				freeOver: amountOf(zone.freeOver, currency, 0),
-				minDays: Number(String(zone.minDays).trim() || 0),
-				maxDays: Number(String(zone.maxDays).trim() || zone.minDays || 0),
+				rates: (Array.isArray(zone.rates) ? zone.rates : []).map((/** @type {Item} */ rate) => ({
+					key: keyOf(rate.key, rate.name),
+					name: String(rate.name ?? '').trim(),
+					kind: rate.kind,
+					price: amountOf(rate.price, currency, 0),
+					freeOver: amountOf(rate.freeOver, currency, 0),
+					minDays: daysOf(rate.minDays),
+					maxDays: daysOf(rate.maxDays) ?? daysOf(rate.minDays),
+					condition:
+						rate.by === 'none'
+							? { by: 'none', min: 0, max: 0 }
+							: { by: rate.by, min: limitOf(rate, 'min'), max: limitOf(rate, 'max') },
+					locations: rate.kind === 'pickup' ? cleanLines(rate.locations) : [],
+				})),
 			})}
 			render={(zone, set) => (
-				<FieldGrid>
-					<Input label={Z.name} value={zone.name ?? ''} onChange={(event) => set({ name: event.target.value })} />
-					<Input
-						label={Z.key}
-						value={zone.key ?? ''}
-						maxLength={40}
-						autoComplete="off"
-						onChange={(event) => set({ key: event.target.value })}
-					/>
-					<Input
-						label={fill(Z.fee, { currency })}
-						type="number"
-						min={0}
-						step={step}
-						inputMode="decimal"
-						value={zone.fee}
-						onChange={(event) => set({ fee: event.target.value })}
-					/>
-					<Input
-						label={fill(Z.freeOver, { currency })}
-						type="number"
-						min={0}
-						step={step}
-						inputMode="decimal"
-						value={zone.freeOver}
-						onChange={(event) => set({ freeOver: event.target.value })}
-					/>
-					<Input
-						label={Z.minDays}
-						type="number"
-						min={0}
-						value={zone.minDays}
-						onChange={(event) => set({ minDays: event.target.value })}
-					/>
-					<Input
-						label={Z.maxDays}
-						type="number"
-						min={0}
-						value={zone.maxDays}
-						onChange={(event) => set({ maxDays: event.target.value })}
-					/>
-					{PLACE_KINDS.map((kind) => (
-						<TextArea
-							key={kind}
-							label={Z[kind]}
-							rows={3}
-							value={zone[kind].join('\n')}
-							onChange={(event) => set({ [kind]: event.target.value.split('\n') })}
+				<>
+					<FieldGrid>
+						<Input label={Z.name} value={zone.name ?? ''} onChange={(event) => set({ name: event.target.value })} />
+						<Input
+							label={Z.key}
+							value={zone.key ?? ''}
+							maxLength={40}
+							autoComplete="off"
+							onChange={(event) => set({ key: event.target.value })}
 						/>
-					))}
-				</FieldGrid>
+						{PLACE_KINDS.map((kind) => (
+							<TextArea
+								key={kind}
+								label={Z[kind]}
+								rows={3}
+								value={zone[kind].join('\n')}
+								onChange={(event) => set({ [kind]: event.target.value.split('\n') })}
+							/>
+						))}
+					</FieldGrid>
+					<RatesPart rates={zone.rates} currency={currency} step={step} onChange={(rates) => set({ rates })} />
+				</>
 			)}
 		/>
+	);
+}
+
+/**
+ * The rates of one zone, in the order the cart offers them (the first is picked first).
+ * @param {{ rates: Item[], currency: string, step: string, onChange: (rates: Item[]) => void }} props
+ */
+function RatesPart({ rates, currency, step, onChange }) {
+	/** @param {number} index @param {Item} patch */
+	const set = (index, patch) => onChange(rates.map((rate, at) => (at === index ? { ...rate, ...patch } : rate)));
+	return (
+		<div className="space-y-3">
+			<p className="text-sm font-bold">{Z.rates}</p>
+			<p className="text-sm text-muted">{Z.ratesHelp}</p>
+			{rates.map((rate, index) => (
+				<div key={index} data-rate="" className="space-y-3 rounded-lg border border-border p-3">
+					<EntryHead
+						label={Z.rate}
+						index={index}
+						count={rates.length}
+						onMove={(step) => onChange(moved(rates, index, step))}
+						onRemove={() => onChange(rates.filter((_, at) => at !== index))}
+					/>
+					<FieldGrid>
+						<Input
+							label={Z.rateName}
+							value={rate.name}
+							maxLength={60}
+							onChange={(event) => set(index, { name: event.target.value })}
+						/>
+						<Input
+							label={Z.key}
+							value={rate.key}
+							maxLength={40}
+							autoComplete="off"
+							onChange={(event) => set(index, { key: event.target.value })}
+						/>
+						<Select
+							label={Z.kind}
+							value={rate.kind}
+							options={[
+								{ value: 'delivery', label: Z.kinds.delivery },
+								{ value: 'pickup', label: Z.kinds.pickup },
+							]}
+							onChange={(event) => set(index, { kind: event.target.value })}
+						/>
+						<Input
+							label={fill(Z.price, { currency })}
+							type="number"
+							min={0}
+							step={step}
+							inputMode="decimal"
+							value={rate.price}
+							onChange={(event) => set(index, { price: event.target.value })}
+						/>
+						<Input
+							label={fill(Z.freeOver, { currency })}
+							type="number"
+							min={0}
+							step={step}
+							inputMode="decimal"
+							value={rate.freeOver}
+							onChange={(event) => set(index, { freeOver: event.target.value })}
+						/>
+						<Input
+							label={Z.minDays}
+							type="number"
+							min={0}
+							value={rate.minDays}
+							onChange={(event) => set(index, { minDays: event.target.value })}
+						/>
+						<Input
+							label={Z.maxDays}
+							type="number"
+							min={0}
+							value={rate.maxDays}
+							onChange={(event) => set(index, { maxDays: event.target.value })}
+						/>
+						<Select
+							label={Z.by}
+							value={rate.by}
+							options={[
+								{ value: 'none', label: Z.conditions.none },
+								{ value: 'weight', label: Z.conditions.weight },
+								{ value: 'value', label: fill(Z.conditions.value, { currency }) },
+							]}
+							onChange={(event) => set(index, { by: event.target.value, min: '', max: '' })}
+						/>
+						{rate.by === 'none' ? null : (
+							<>
+								<Input
+									label={rate.by === 'weight' ? Z.minGrams : fill(Z.minValue, { currency })}
+									type="number"
+									min={0}
+									step={rate.by === 'weight' ? '1' : step}
+									value={rate.min}
+									onChange={(event) => set(index, { min: event.target.value })}
+								/>
+								<Input
+									label={rate.by === 'weight' ? Z.maxGrams : fill(Z.maxValue, { currency })}
+									type="number"
+									min={0}
+									step={rate.by === 'weight' ? '1' : step}
+									value={rate.max}
+									onChange={(event) => set(index, { max: event.target.value })}
+								/>
+							</>
+						)}
+						{rate.kind === 'pickup' ? (
+							<TextArea
+								label={Z.locations}
+								rows={2}
+								value={rate.locations.join('\n')}
+								onChange={(event) => set(index, { locations: event.target.value.split('\n') })}
+							/>
+						) : null}
+					</FieldGrid>
+				</div>
+			))}
+			<div className="flex flex-wrap gap-2">
+				<Button
+					size="sm"
+					variant="secondary"
+					disabled={rates.length >= 20}
+					onClick={() => onChange([...rates, blankRate('delivery')])}>
+					{Z.addRate}
+				</Button>
+				<Button
+					size="sm"
+					variant="secondary"
+					disabled={rates.length >= 20}
+					onClick={() => onChange([...rates, blankRate('pickup')])}>
+					{Z.addPickup}
+				</Button>
+			</div>
+		</div>
 	);
 }
 

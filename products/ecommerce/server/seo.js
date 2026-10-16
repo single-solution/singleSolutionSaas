@@ -15,6 +15,7 @@ import { valueLabel } from '../core/catalog.js';
 import { toDecimal } from '../core/money.js';
 import { htmlToText, siteAddress } from '../core/catalog-content.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
+import { homeRate } from '../core/delivery.js';
 import { shownRange, specsOf } from '../core/catalog-views.js';
 import { GOOGLE_FOOT, MAX_FEED_ROWS, META_HEADER, feedRows, googleHead, googleItem, metaLine } from '../core/feeds.js';
 import { gradeCondition, gradesFor } from '../core/grades.js';
@@ -199,20 +200,40 @@ export const createSeo = (product, service) => {
 	};
 
 	/**
-	 * The delivery fee where no zone matches and the amount it is free from, to the business's country, with the delivery
-	 * days once both are set, for feeds (E17, SG-2, G11); null without delivery zones or with the `feeds` setting
-	 * `shipping` off (shipping set in the catalog's own account).
+	 * The delivery to the business's country search engines and feeds are told about (E17, SG-2, G11): the first delivery
+	 * rate without a condition of the zone of that country (E5), its fee, the amount it is free from, its days as the
+	 * transit days and the `delivery_zones` handling days; null without delivery zones or without such a rate.
+	 * @param {Site} s
+	 */
+	const homeShipping = async (s) => {
+		if (!s.has('delivery_zones')) return null;
+		const [settings, zones, business] = await Promise.all([s.values('delivery_zones'), s.list('delivery_zones'), s.business()]);
+		const country = String(business.country ?? '');
+		const rate = homeRate(/** @type {import('../core/delivery.js').Zone[]} */ (zones), country);
+		if (!rate) return null;
+		return {
+			country,
+			fee: rate.price,
+			freeOver: rate.freeOver,
+			handling: daysRange(settings.handlingDays),
+			transit: rate.minDays === null || rate.maxDays === null ? null : { min: rate.minDays, max: rate.maxDays },
+		};
+	};
+
+	/**
+	 * The delivery to the business's country for feeds, with its days once both are known; null without it or with the
+	 * `feeds` setting `shipping` off (shipping set in the catalog's own account).
 	 * @param {Site} s @param {Record<string, unknown>} settings the `feeds` settings
 	 */
 	const shippingOf = async (s, settings) => {
-		if (!s.has('delivery_zones') || settings.shipping === false) return null;
-		const [zones, business] = await Promise.all([s.values('delivery_zones'), s.business()]);
-		const handling = daysRange(zones.handlingDays);
-		const transit = daysRange(zones.transitDays);
+		if (settings.shipping === false) return null;
+		const home = await homeShipping(s);
+		if (!home) return null;
+		const { handling, transit } = home;
 		return {
-			fee: Number(zones.defaultFee ?? 0),
-			freeOver: Number(zones.defaultFreeOver ?? 0),
-			country: String(business.country ?? ''),
+			fee: home.fee,
+			freeOver: home.freeOver,
+			country: home.country,
 			deliveryTime: handling && transit ? { handling, transit } : null,
 		};
 	};
@@ -220,17 +241,15 @@ export const createSeo = (product, service) => {
 	/**
 	 * The store-wide policies of structured data (G2, G5), only with the business's country: the return policy — the
 	 * `returns` settings while Returns is on; while it is off none, or no returns when the `checkout` setting
-	 * `returnsAccepted` says so — and the shipping policy while Delivery zones is on and both its delivery days are set
-	 * (Google shows shipping only with them).
+	 * `returnsAccepted` says so — and the shipping policy while the business country's rate and the handling days give
+	 * both delivery days (Google shows shipping only with them).
 	 * @param {Site} s
 	 */
 	const storePoliciesOf = async (s) => {
 		const [business, returns] = await Promise.all([s.business(), s.values('returns')]);
 		const country = String(business.country ?? '');
 		const noReturns = !s.has('returns') && s.has('checkout') && (await s.values('checkout')).returnsAccepted === 'no';
-		const zones = s.has('delivery_zones') ? await s.values('delivery_zones') : null;
-		const handling = daysRange(zones?.handlingDays);
-		const transit = daysRange(zones?.transitDays);
+		const home = await homeShipping(s);
 		return {
 			returns:
 				country && (s.has('returns') || noReturns)
@@ -248,12 +267,12 @@ export const createSeo = (product, service) => {
 						}
 					: null,
 			shipping:
-				country && zones && handling && transit
+				country && home?.handling && home.transit
 					? {
 							country,
-							fee: Number(zones.defaultFee ?? 0),
-							freeOver: Number(zones.defaultFreeOver ?? 0),
-							deliveryTime: { handling, transit },
+							fee: home.fee,
+							freeOver: home.freeOver,
+							deliveryTime: { handling: home.handling, transit: home.transit },
 						}
 					: null,
 		};

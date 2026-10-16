@@ -107,6 +107,32 @@ const fillAddress = (template, order) =>
 	template.replaceAll('{number}', encodeURIComponent(order.number)).replaceAll('{id}', encodeURIComponent(order.id));
 
 /**
+ * What an order keeps of the delivery it was placed with: the method, the zone, the rate (its key and the name it had
+ * then, E5), the fee and the pickup location.
+ * @param {import('./checkout-quote.js').DeliveryChoice} delivery
+ * @returns {OrderRecord['delivery']}
+ */
+const deliveryOf = (delivery) => ({
+	method: delivery.method,
+	zone: delivery.zone,
+	rate: delivery.rate,
+	rateName: delivery.rateName,
+	fee: delivery.fee,
+	locationId: delivery.locationId,
+});
+
+/**
+ * Why an order cannot be delivered as asked (the quote's `deliveryProblem`).
+ * @param {import('./service.js').Service} service @param {string} code
+ */
+const deliveryRefusal = (service, code) =>
+	code === 'choose_pickup_location'
+		? service.invalid('delivery/locationId', 'Choose a pickup location.')
+		: code === 'pickup_unavailable'
+			? service.invalid('delivery/method', 'Pickup is not available for this order.')
+			: service.invalid('delivery', 'We do not deliver to this address.', 'no_delivery');
+
+/**
  * @param {Product} product
  * @param {Service} service
  * @param {{ quoting: Quoting, digital: Digital }} parts
@@ -747,6 +773,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			: null;
 		const delivery = input.delivery ?? {
 			method: order.delivery.method === 'none' ? null : order.delivery.method,
+			rate: order.delivery.rate || null,
 			city: order.address?.city ?? '',
 			area: order.address?.area ?? '',
 			region: order.address?.region ?? '',
@@ -804,6 +831,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 									),
 									delivery: order.totals.delivery,
 									deliveryMethod: order.delivery.method,
+									deliveryRate: order.delivery.rate,
 									fee: order.totals.fee ?? 0,
 									method: order.payment.method,
 								},
@@ -816,7 +844,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const other = q.lines.filter((line) => !line.priced || line.problems.some((issue) => !STOCK_PROBLEMS.includes(issue.code)));
 		if (other.length > 0) throw service.invalid('lines', 'Some items cannot be ordered.');
 		if (q.delivery.method === 'delivery' && !address) throw service.invalid('address', 'A delivery address is required.');
-		if (q.deliveryProblem) throw service.invalid('delivery/locationId', 'Choose a pickup location.');
+		if (q.deliveryProblem) throw deliveryRefusal(service, q.deliveryProblem);
 		const option = q.payments.find((entry) => entry.method === method);
 		if (!option?.available) throw service.invalid('paymentMethod', 'This payment method cannot be used for this order.');
 		const { lines } = await linesOf(s, q);
@@ -826,7 +854,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const set = {
 			lines,
 			totals: { ...q.totals, currency: order.totals.currency },
-			delivery: { method: q.delivery.method, zone: q.delivery.zone, fee: q.delivery.fee, locationId: q.delivery.locationId },
+			delivery: deliveryOf(q.delivery),
 			address: q.delivery.method === 'delivery' ? address : null,
 			'payment.method': method,
 			'payment.kind': option.kind,
@@ -951,7 +979,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				address?.ok === false ? address.field : 'address',
 				address?.ok === false ? address.message : 'A delivery address is required.',
 			);
-		if (q.deliveryProblem) throw service.invalid('delivery/locationId', 'Choose a pickup location.');
+		if (q.deliveryProblem) throw deliveryRefusal(service, q.deliveryProblem);
 		const option = q.payments.find((entry) => entry.method === method);
 		if (!option) throw service.invalid('payment', 'This payment method is not offered.');
 		if (!option.available)
@@ -1023,7 +1051,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				customerId: /** @type {string} */ (customer.id),
 			},
 			address: q.delivery.method === 'delivery' && address?.ok ? address.value : null,
-			delivery: { method: q.delivery.method, zone: q.delivery.zone, fee: q.delivery.fee, locationId: q.delivery.locationId },
+			delivery: deliveryOf(q.delivery),
 			lines,
 			totals: { ...q.totals, currency: s.currency },
 			promotions: {

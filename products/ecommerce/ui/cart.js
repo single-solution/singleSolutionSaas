@@ -81,8 +81,9 @@ export const mountCart = async ({ host, config, shop, win }) => {
 			let quote = null;
 			let quoteFailed = false;
 			let points = 0;
-			/** @type {{ method: 'delivery' | 'pickup', locationId: string | null }} */
-			let delivery = { method: 'delivery', locationId: null };
+			/** the shopper's pick: a rate of the zone (E5) and, for pickup, its place; null = the zone's first */
+			/** @type {{ method: 'delivery' | 'pickup' | null, rate: string | null, locationId: string | null }} */
+			let delivery = { method: null, rate: null, locationId: null };
 			/** @type {string | null} */
 			let payment = null;
 			/** @type {string | null} */
@@ -177,6 +178,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					points,
 					delivery: {
 						method: delivery.method,
+						rate: delivery.rate,
 						city: address.value('city'),
 						area: address.value('area'),
 						region: address.value('region'),
@@ -448,7 +450,8 @@ export const mountCart = async ({ host, config, shop, win }) => {
 				pointsBox.replaceChildren(h(doc, 'div', { class: 'box' }, ...parts));
 			};
 
-			const physical = () => Boolean(quote && quote.deliveryOptions.length > 0);
+			// something to deliver: a delivery or pickup, even where no rate fits yet (the address may change that)
+			const physical = () => Boolean(quote && quote.delivery.method !== 'none');
 
 			const renderDelivery = () => {
 				address.node.hidden = !physical() || quote.delivery.method !== 'delivery';
@@ -463,9 +466,11 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						h(doc, 'input', { type: 'radio', name: 'ss-cart-delivery', 'data-focus': `delivery${index}` })
 					);
 					radio.checked =
-						quote.delivery.method === option.method && (!pickup || quote.delivery.locationId === option.locationId);
+						quote.delivery.method === option.method &&
+						quote.delivery.rate === option.rate &&
+						(!pickup || quote.delivery.locationId === option.locationId);
 					radio.addEventListener('change', () => {
-						delivery = { method: option.method, locationId: option.locationId };
+						delivery = { method: option.method, rate: option.rate || null, locationId: option.locationId };
 						requote();
 					});
 					const fee = option.fee > 0 ? money(option.fee, cur) : t('checkout.free');
@@ -478,9 +483,10 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						'label',
 						{ class: 'check' },
 						radio,
+						// the merchant's name for the rate (E5), else the plain words
 						pickup
-							? t('checkout.pickupAt', { name: option.name })
-							: t('checkout.deliver', { fee, zone: option.name || t('checkout.zoneUnknown') }),
+							? t('checkout.pickupAt', { rate: option.rateName || t('checkout.pickup'), name: option.name, fee })
+							: t('checkout.deliver', { rate: option.rateName || t('checkout.delivery'), fee }),
 						days ? h(doc, 'span', { class: 'meta' }, days) : null,
 						// the pickup point of the settings: its address and hours (E22)
 						pickup && option.address ? h(doc, 'span', { class: 'meta' }, option.address) : null,
@@ -582,7 +588,10 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					]);
 				if (quote.points?.value > 0) rows.push([t('cart.pointsDiscount'), `−${money(quote.points.value, cur)}`]);
 				if (physical() && quote.delivery.method === 'delivery')
-					rows.push([t('cart.delivery'), totals.delivery > 0 ? money(totals.delivery, cur) : t('checkout.free')]);
+					rows.push([
+						quote.delivery.rateName ? t('cart.deliveryRate', { rate: quote.delivery.rateName }) : t('cart.delivery'),
+						totals.delivery > 0 ? money(totals.delivery, cur) : t('checkout.free'),
+					]);
 				if (totals.tax > 0)
 					rows.push(
 						totals.taxIncluded ? [t('cart.taxIncluded'), money(totals.tax, cur)] : [t('cart.tax'), money(totals.tax, cur)],

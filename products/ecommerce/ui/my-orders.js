@@ -405,6 +405,7 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 					order.delivery.method === 'pickup'
 						? [
 								h(doc, 'p', {}, t('orders.pickupAt', { name: order.delivery.locationName || point?.name || '' })),
+								order.delivery.rateName ? h(doc, 'p', { class: 'meta' }, order.delivery.rateName) : null,
 								point?.address ? h(doc, 'p', { class: 'meta' }, point.address) : null,
 								point?.hours ? h(doc, 'p', { class: 'meta' }, t('checkout.pickupHours', { hours: point.hours })) : null,
 							]
@@ -457,7 +458,12 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 				/** @type {Array<[string, string]>} */
 				const rows = [[t('cart.subtotal'), money(totals.subtotal, currency)]];
 				if (totals.discount > 0) rows.push([t('orders.discount'), `−${money(totals.discount, currency)}`]);
-				if (order.delivery.method === 'delivery') rows.push([t('cart.delivery'), money(totals.delivery, currency)]);
+				// the delivery rate the shopper picked, by its name (E5)
+				if (order.delivery.method === 'delivery')
+					rows.push([
+						order.delivery.rateName ? t('cart.deliveryRate', { rate: order.delivery.rateName }) : t('cart.delivery'),
+						money(totals.delivery, currency),
+					]);
 				if (totals.tax > 0) rows.push([t(totals.taxIncluded ? 'cart.taxIncluded' : 'cart.tax'), money(totals.tax, currency)]);
 				rows.push([t('cart.total'), money(totals.total, currency)]);
 

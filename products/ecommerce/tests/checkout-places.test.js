@@ -36,21 +36,24 @@ const place = (body, signIn) => visit('POST', '/v1/shop/orders', { body, signIn,
 /** @param {Record<string, unknown>} body */
 const quote = (body) => visit('POST', '/v1/shop/cart/quote', { body });
 
+/** One Standard rate of a price (E5). @param {number} price */
+const rate = (price) => [{ key: 'standard', name: 'Standard', price }];
+
 beforeAll(async () => {
 	shop = await readyShop({ business: { country: 'US' } });
 	await shop.list('delivery_zones', [
-		{ key: 'us', name: 'United States', match: { countries: ['United States'] }, fee: 900 },
-		{ key: 'ca', name: 'California', match: { countries: ['US'], regions: ['California'] }, fee: 500 },
-		{ key: 'sf', name: 'San Francisco', match: { postcodes: ['941'] }, fee: 300 },
-		{ key: 'mission', name: 'Mission', match: { cities: ['San Francisco'], areas: ['Mission'] }, fee: 200 },
+		{ key: 'world', name: 'Rest of the world', rates: rate(1500) },
+		{ key: 'us', name: 'United States', match: { countries: ['United States'] }, rates: rate(900) },
+		{ key: 'ca', name: 'California', match: { countries: ['US'], regions: ['California'] }, rates: rate(500) },
+		{ key: 'sf', name: 'San Francisco', match: { postcodes: ['941'] }, rates: rate(300) },
+		{ key: 'mission', name: 'Mission', match: { cities: ['San Francisco'], areas: ['Mission'] }, rates: rate(200) },
 	]);
-	await shop.setting('delivery_zones', 'defaultFee', 1500);
 	await shop.list('address_regions', [{ country: 'United States', names: ['California', 'New York', 'Texas'] }]);
 });
 afterAll(async () => shop.product.close());
 
 describe('delivery zones by place', () => {
-	it('takes the most specific zone: postcode start, area, city, region, country; else the default fee', async () => {
+	it('takes the most specific zone: postcode start, area, city, region, country; else the catch-all zone', async () => {
 		const item = await shop.seedProduct({ price: 10_000, stock: 10 });
 		/** @param {Record<string, string>} delivery */
 		const zoneOf = async (delivery) => {
@@ -67,7 +70,7 @@ describe('delivery zones by place', () => {
 			300,
 		]);
 		expect(await zoneOf({ city: 'san francisco', area: 'mission' })).toEqual(['mission', 200]);
-		expect(await zoneOf({ country: 'Canada', city: 'Toronto' })).toEqual(['', 1500]);
+		expect(await zoneOf({ country: 'Canada', city: 'Toronto' })).toEqual(['world', 1500]);
 	});
 });
 

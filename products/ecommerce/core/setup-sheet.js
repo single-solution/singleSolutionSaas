@@ -148,7 +148,12 @@ export const LIST_WORDS = Object.freeze({
 	customer_segments: named('customer segment', 'customer segments', (/** @type {{ name: string }} */ segment) =>
 		nameOf(segment.name),
 	),
-	delivery_zones: named('zone', 'zones', (/** @type {Zone} */ zone) => nameOf(zone.name)),
+	// each zone with its rates by name (E5)
+	delivery_zones: named(
+		'zone',
+		'zones',
+		(/** @type {Zone} */ zone) => `${nameOf(zone.name)} (${zone.rates.map((rate) => nameOf(rate.name)).join(', ')})`,
+	),
 	tax_rules: named('tax rule', 'tax rules', (/** @type {TaxRule} */ rule) => `${nameOf(rule.name)} ${rule.percent}%`),
 	grades: gradeWords,
 	unit_states: named('unit state', 'unit states', (/** @type {{ label: string }} */ state) => nameOf(state.label)),

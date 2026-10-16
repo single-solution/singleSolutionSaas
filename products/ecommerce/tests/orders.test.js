@@ -96,7 +96,7 @@ const place = async (options = {}) => {
 				id: createId('ord'),
 				customer: { userId, name, email, phone, customerId: String(customer.id) },
 				address,
-				delivery: { method: address ? 'delivery' : 'pickup', zone: '', fee: 0, locationId: null },
+				delivery: { method: address ? 'delivery' : 'pickup', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 				lines: [
 					{
 						id: createId('oln'),

@@ -314,6 +314,8 @@ const renderOrder = (kit, order, detail, message) => {
 		[t('ordersAdmin.subtotal'), money(order.totals.subtotal)],
 		[t('ordersAdmin.discount'), order.totals.discount > 0 ? money(order.totals.discount) : ''],
 		[t('ordersAdmin.deliveryFee'), money(order.totals.delivery)],
+		// the delivery rate the shopper picked, by its name when the order was placed (E5)
+		[t('ordersAdmin.deliveryRate'), order.delivery.rateName ?? ''],
 		[t('ordersAdmin.tax'), order.totals.tax > 0 ? money(order.totals.tax) : ''],
 		[t('ordersAdmin.couponCode'), promotions.couponCode ?? ''],
 		[t('ordersAdmin.pointsUsed'), promotions.pointsRedeemed > 0 ? String(promotions.pointsRedeemed) : ''],

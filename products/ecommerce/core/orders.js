@@ -844,6 +844,8 @@ const waitingEditOf = (input) => {
 		const text = (field) => (typeof raw[field] === 'string' ? String(raw[field]).trim().slice(0, ADDRESS_LIMITS[field]) : '');
 		value.delivery = {
 			method,
+			// the zone's rate staff pick (E5; null = the first of the method)
+			rate: typeof raw.rate === 'string' && /^[a-z][a-z0-9_]{1,39}$/.test(raw.rate) ? raw.rate : null,
 			city: text('city'),
 			area: text('area'),
 			region: text('region'),

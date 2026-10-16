@@ -122,7 +122,7 @@ const order = async ({
 					country: 'GB',
 					notes: '',
 				},
-				delivery: { method: 'delivery', zone: '', fee: 0, locationId: null },
+				delivery: { method: 'delivery', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 				lines: records,
 				totals: { subtotal: total, discount: 0, delivery: 0, tax: 0, total, currency, taxIncluded: true },
 				promotions: {

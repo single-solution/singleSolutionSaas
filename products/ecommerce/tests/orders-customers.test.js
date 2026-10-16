@@ -75,7 +75,7 @@ const order = (userId, name, paid, refunded, customerId) => ({
 	number: `C-${createId('num').slice(4, 12)}`,
 	customer: { userId, name, email: `${name.toLowerCase()}@example.com`, phone: '', ...(customerId ? { customerId } : {}) },
 	address: null,
-	delivery: { method: 'none', zone: '', fee: 0, locationId: null },
+	delivery: { method: 'none', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 	lines: [],
 	totals: { subtotal: paid, discount: 0, delivery: 0, tax: 0, total: paid, currency: 'USD', taxIncluded: true },
 	promotions: {

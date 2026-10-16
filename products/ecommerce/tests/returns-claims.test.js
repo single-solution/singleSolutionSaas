@@ -132,7 +132,7 @@ const order = async ({ lines, delivery = 0, payment = {}, pointsEarned = 0 }) =>
 					country: 'XX',
 					notes: '',
 				},
-				delivery: { method: 'delivery', zone: '', fee: delivery, locationId: null },
+				delivery: { method: 'delivery', zone: '', rate: '', rateName: '', fee: delivery, locationId: null },
 				lines: records,
 				totals: { subtotal, discount: 0, delivery, tax: 0, total: subtotal + delivery, currency: 'USD', taxIncluded: true },
 				promotions: {

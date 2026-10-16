@@ -524,7 +524,9 @@ export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 	if (offers > 0) totals.push([t.labelDiscount, `−${money(offers)}`]);
 	if (roleDiscount > 0) totals.push([role?.label || t.labelRoleDiscount, `−${money(roleDiscount)}`]);
 	if (pointsValue > 0) totals.push([t.labelPoints.replaceAll('{points}', String(pointsRedeemed)), `−${money(pointsValue)}`]);
-	if (delivery > 0) totals.push([t.labelDelivery, money(delivery)]);
+	// the delivery rate the shopper picked, by its name then (E5)
+	const rateName = order.delivery.rateName ?? '';
+	if (delivery > 0) totals.push([rateName ? `${t.labelDelivery} (${rateName})` : t.labelDelivery, money(delivery)]);
 	if (fee > 0) totals.push([t.labelFee, money(fee)]);
 	if (tax > 0) totals.push([taxIncluded ? t.labelTaxIncluded : t.labelTax, money(tax)]);
 	totals.push([t.labelTotal, money(total), true]);
@@ -554,10 +556,11 @@ export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 		.filter(Boolean)
 		.map((line) => `<p>${esc(line)}</p>`)
 		.join('');
+	const rate = order.delivery.rateName ? `<p class="small">${esc(order.delivery.rateName)}</p>` : '';
 	const shipTo = order.address
-		? `<div><h2>${esc(t.labelShipTo)}</h2>${addressLines(order.address)}</div>`
+		? `<div><h2>${esc(t.labelShipTo)}</h2>${addressLines(order.address)}${rate}</div>`
 		: order.delivery.method === 'pickup'
-			? `<div><h2>${esc(t.labelShipTo)}</h2><p>${esc(t.labelPickup)}</p></div>`
+			? `<div><h2>${esc(t.labelShipTo)}</h2><p>${esc(t.labelPickup)}</p>${rate}</div>`
 			: '<div></div>';
 	const body = `<header><div><h1>${esc(t.title)}</h1><p>${esc(t.labelNumber)} <strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business, seller)}</header><div class="grid"><div><h2>${esc(t.labelBilledTo)}</h2>${billed}${fieldLines(order, context, 'invoice')}</div>${shipTo}</div><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table><table class="totals"><tbody>${totalsRows}</tbody></table>${paymentWords ? `<p>${esc(t.labelPayment)}: ${esc(paymentWords)}</p>` : ''}${entries}${footer}`;
 	return page(`${t.title} ${order.number}`, body);

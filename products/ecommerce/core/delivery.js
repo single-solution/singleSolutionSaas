@@ -1,14 +1,26 @@
 /**
- * Delivery zones and fees (PLAN 0.8.8: zones and fees by place, free over an amount, store pickup; dynamic model §5).
- * The merchant keeps the zones as the `delivery_zones` list:
- * `[{ key, name, match: { countries, regions, cities, areas, postcodes }, fee, freeOver, minDays, maxDays }]`.
+ * Delivery zones and their named rates (PLAN 0.8.8: zones by place, free over an amount, store pickup; dynamic model
+ * §5; fixed-choices E5, like Shopify's shipping profiles). The merchant keeps the zones as the `delivery_zones` list:
+ * `[{ key, name, match: { countries, regions, cities, areas, postcodes }, rates }]`, each rate
+ * `{ key, name, kind, price, freeOver, minDays, maxDays, condition: { by, min, max }, locations }`:
+ *
+ * - `kind`: `delivery` (to the shopper's address) or `pickup` (at the pickup places: the stock locations that take
+ *   pickups with Multi-location stock, `locations` naming some of them, [] = every one; else the one pickup point of
+ *   the `delivery_zones` settings while it is on);
+ * - `condition.by`: `none`, `weight` (the package's grams: the items' package weights, an item without one counts 0)
+ *   or `value` (the goods after offers and the role price, minor units); it fits from `min` to `max` (both included;
+ *   `max` 0 = no upper end);
+ * - `freeOver`: the rate is free when the goods come to at least this much (0 = never); `minDays`/`maxDays`: the days it
+ *   takes (null = not said).
+ *
  * A zone fits an address when the address is in every kind of place the zone lists (one of its countries, regions,
  * cities and areas; its postcode starts with one of the postcodes); a zone that lists nothing fits every address. The
  * most specific fitting zone wins: the longest postcode start, then a zone listing areas, cities, regions, countries,
- * then the catch-all; between equals, the first in the list. No match: the `delivery_zones` settings `defaultFee` and
- * `defaultFreeOver`. An address without a country is in the business.json country. Money is minor units; `freeOver`
- * 0 = never free. Names compare without letter case and extra spaces, countries by code or English name, postcodes
- * upper-cased without spaces (`core/address.js`). No I/O.
+ * then the catch-all; between equals, the first in the list. The shopper picks one of the fitting zone's rates whose
+ * condition the cart meets, in the zone's order; no fitting zone or rate = no delivery to that place. An address without
+ * a country is in the business.json country. Until the merchant saves the list, it is one zone for every place with
+ * today's single rate, `Standard` (free), and `Pickup`. Money is minor units. Names compare without letter case and
+ * extra spaces, countries by code or English name, postcodes upper-cased without spaces (`core/address.js`). No I/O.
  * @module
  */
 import { ADDRESS_LIMITS, countryKey, placeKey, postcodeKey } from './address.js';
@@ -19,15 +31,60 @@ import { isPrice } from './money.js';
  * @typedef {{ countries: string[], regions: string[], cities: string[], areas: string[], postcodes: string[] }} ZoneMatch
  */
 /**
- * @typedef {{ key: string, name: string, match: ZoneMatch, fee: number, freeOver: number, minDays: number,
- *   maxDays: number }} Zone
+ * When a rate is offered: the package's grams (`weight`) or the goods' value in minor units (`value`) from `min` to
+ * `max` (0 = no upper end); `none` = always.
+ * @typedef {{ by: 'none' | 'weight' | 'value', min: number, max: number }} RateCondition
  */
+/**
+ * @typedef {{ key: string, name: string, kind: 'delivery' | 'pickup', price: number, freeOver: number,
+ *   minDays: number | null, maxDays: number | null, condition: RateCondition, locations: string[] }} Rate
+ */
+/** @typedef {{ key: string, name: string, match: ZoneMatch, rates: Rate[] }} Zone */
+
+/** The kinds of rate. */
+export const RATE_KINDS = Object.freeze(/** @type {const} */ (['delivery', 'pickup']));
+/** What a rate's condition measures. */
+export const RATE_CONDITIONS = Object.freeze(/** @type {const} */ (['none', 'weight', 'value']));
+/** At most this many rates in a zone, and this many pickup locations named by one rate. */
+const MAX_RATES = 20;
+const MAX_LOCATIONS = 50;
+/** The heaviest package a weight condition names (grams: 1,000 t). */
+const MAX_GRAMS = 1_000_000_000;
+
+/** A rate that always fits, free, its days not said. @param {string} key @param {string} name @param {Rate['kind']} kind */
+const plainRate = (key, name, kind) => ({
+	key,
+	name,
+	kind,
+	price: 0,
+	freeOver: 0,
+	minDays: null,
+	maxDays: null,
+	condition: { by: /** @type {const} */ ('none'), min: 0, max: 0 },
+	locations: [],
+});
+
+/**
+ * The zones until the merchant saves the list: every place, with today's one rate (`Standard`, free) and pickup at the
+ * pickup places there are.
+ * @returns {Zone[]}
+ */
+export const defaultZones = () => [
+	{
+		key: 'everywhere',
+		name: 'Everywhere',
+		match: { countries: [], regions: [], cities: [], areas: [], postcodes: [] },
+		rates: [plainRate('standard', 'Standard', 'delivery'), plainRate('pickup', 'Pickup', 'pickup')],
+	},
+];
 
 /** At most this many zones, and this many places of one kind in one zone. */
 const MAX_ZONES = 100;
 const MAX_PLACES = 500;
-/** A zone key. */
+/** A zone or rate key. */
 const KEY = /^[a-z][a-z0-9_]{1,39}$/;
+/** A stock location id. */
+const LOCATION = /^[A-Za-z0-9_-]{1,64}$/;
 /** The kinds of place a zone may list, with the longest name of each. */
 const PLACE_KINDS = Object.freeze(
 	/** @type {Array<[keyof ZoneMatch, number, (value: unknown) => string]>} */ ([
@@ -67,6 +124,82 @@ const places = (value, label, max, keyOf, postcode, errors) => {
 	return out;
 };
 
+/** @param {unknown} n */
+const isDays = (n) => Number.isSafeInteger(n) && Number(n) >= 0 && Number(n) <= 365;
+
+/**
+ * Check a zone's rates.
+ * @param {unknown} value @param {string} label @param {string[]} errors
+ * @returns {Rate[]}
+ */
+const checkRates = (value, label, errors) => {
+	if (!Array.isArray(value) || value.length === 0 || value.length > MAX_RATES) {
+		errors.push(`${label}: rates is a list of 1–${MAX_RATES} rates.`);
+		return [];
+	}
+	/** @type {Rate[]} */
+	const rates = [];
+	const keys = new Set();
+	for (const raw of value) {
+		const rate = isObject(raw) ? /** @type {Record<string, unknown>} */ (raw) : {};
+		const key = typeof rate.key === 'string' ? rate.key : '';
+		if (!KEY.test(key)) {
+			errors.push(`${label}: rate key '${key}' must be 2–40 lowercase letters, digits or _ starting with a letter.`);
+			continue;
+		}
+		const at = `${label} rate '${key}'`;
+		if (keys.has(key)) errors.push(`${at} is listed twice.`);
+		keys.add(key);
+		const name = typeof rate.name === 'string' ? rate.name.trim() : '';
+		if (!name || name.length > 60) errors.push(`${at} needs a name of at most 60 characters.`);
+		const kind = rate.kind ?? 'delivery';
+		if (!RATE_KINDS.includes(/** @type {any} */ (kind))) errors.push(`${at}: the kind is ${RATE_KINDS.join(' or ')}.`);
+		const price = rate.price ?? 0;
+		const freeOver = rate.freeOver ?? 0;
+		if (!isPrice(price)) errors.push(`${at}: the price is a whole amount in minor units.`);
+		if (!isPrice(freeOver)) errors.push(`${at}: free over is a whole amount in minor units (0 = never free).`);
+		const minDays = rate.minDays ?? null;
+		const maxDays = rate.maxDays ?? minDays;
+		const said = minDays !== null || maxDays !== null;
+		if (said && (!isDays(minDays) || !isDays(maxDays) || Number(minDays) > Number(maxDays)))
+			errors.push(`${at}: its days are 0–365, the least first (or none).`);
+		const given = isObject(rate.condition) ? /** @type {Record<string, unknown>} */ (rate.condition) : {};
+		if (rate.condition !== undefined && !isObject(rate.condition)) errors.push(`${at}: the condition is { by, min, max }.`);
+		const by = given.by ?? 'none';
+		const min = given.min ?? 0;
+		const max = given.max ?? 0;
+		const most = by === 'weight' ? MAX_GRAMS : Number.MAX_SAFE_INTEGER;
+		if (!RATE_CONDITIONS.includes(/** @type {any} */ (by)))
+			errors.push(`${at}: the condition is by ${RATE_CONDITIONS.join(', ')}.`);
+		else if (
+			!isPrice(min) ||
+			!isPrice(max) ||
+			Number(min) > most ||
+			Number(max) > most ||
+			(Number(max) > 0 && Number(max) < Number(min))
+		)
+			errors.push(`${at}: the condition runs from a whole min to a whole max at least as large (max 0 = no upper end).`);
+		const locations = rate.locations ?? [];
+		const ids = Array.isArray(locations) ? locations.filter((id) => typeof id === 'string' && LOCATION.test(id)) : [];
+		if (!Array.isArray(locations) || ids.length !== locations.length || ids.length > MAX_LOCATIONS)
+			errors.push(`${at}: locations is a list of at most ${MAX_LOCATIONS} pickup location ids.`);
+		else if (kind !== 'pickup' && ids.length > 0) errors.push(`${at}: only a pickup rate names locations.`);
+		rates.push({
+			key,
+			name,
+			kind: /** @type {Rate['kind']} */ (kind),
+			price: Number(price),
+			freeOver: Number(freeOver),
+			minDays: said ? Number(minDays) : null,
+			maxDays: said ? Number(maxDays) : null,
+			condition:
+				by === 'none' ? { by: 'none', min: 0, max: 0 } : { by: /** @type {any} */ (by), min: Number(min), max: Number(max) },
+			locations: [...new Set(ids)],
+		});
+	}
+	return rates;
+};
+
 /**
  * Check the list the merchant saves.
  * @param {unknown} value
@@ -100,24 +233,7 @@ export const checkZones = (value) => {
 		const clean = { countries: [], regions: [], cities: [], areas: [], postcodes: [] };
 		for (const [kind, max, keyOf] of PLACE_KINDS)
 			clean[kind] = places(match[kind], `Zone '${key}' ${kind}`, max, keyOf, kind === 'postcodes', errors);
-		const fee = zone.fee ?? 0;
-		const freeOver = zone.freeOver ?? 0;
-		if (!isPrice(fee)) errors.push(`Zone '${key}': the fee is a whole amount in minor units.`);
-		if (!isPrice(freeOver)) errors.push(`Zone '${key}': free over is a whole amount in minor units (0 = never free).`);
-		const minDays = zone.minDays ?? 0;
-		const maxDays = zone.maxDays ?? minDays;
-		const days = (/** @type {unknown} */ n) => Number.isSafeInteger(n) && Number(n) >= 0 && Number(n) <= 365;
-		if (!days(minDays) || !days(maxDays) || Number(minDays) > Number(maxDays))
-			errors.push(`Zone '${key}': delivery days are 0–365, the least first.`);
-		zones.push({
-			key,
-			name,
-			match: clean,
-			fee: Number(fee),
-			freeOver: Number(freeOver),
-			minDays: Number(minDays),
-			maxDays: Number(maxDays),
-		});
+		zones.push({ key, name, match: clean, rates: checkRates(zone.rates, `Zone '${key}'`, errors) });
 	}
 	if (errors.length > 0) return { ok: false, errors };
 	return { ok: true, value: zones };
@@ -173,11 +289,35 @@ export const matchZone = (zones, place) => {
 };
 
 /**
- * The fee for an order's items worth `merchandise` (after promotions): free at or over `freeOver` (0 = never).
- * @param {{ fee: number, freeOver: number }} zone
- * @param {number} merchandise minor units
+ * Whether a cart meets a rate's condition.
+ * @param {Rate} rate
+ * @param {{ weightG: number, value: number }} cart the package's grams and the goods' value (minor units)
  */
-export const zoneFee = (zone, merchandise) => (zone.freeOver > 0 && merchandise >= zone.freeOver ? 0 : zone.fee);
+export const rateFits = (rate, cart) => {
+	const { by, min, max } = rate.condition;
+	if (by === 'none') return true;
+	const measured = by === 'weight' ? cart.weightG : cart.value;
+	return measured >= min && (max === 0 || measured <= max);
+};
+
+/**
+ * The fee of a rate for goods worth `value` (after offers): free at or over `freeOver` (0 = never).
+ * @param {{ price: number, freeOver: number }} rate
+ * @param {number} value minor units
+ */
+export const rateFee = (rate, value) => (rate.freeOver > 0 && value >= rate.freeOver ? 0 : rate.price);
+
+/**
+ * The rate search engines and feeds are told about: the first delivery rate without a condition of the zone of the
+ * business's country (an address with nothing but that country); null when there is none.
+ * @param {Zone[]} zones
+ * @param {string} country
+ * @returns {Rate | null}
+ */
+export const homeRate = (zones, country) => {
+	const zone = matchZone(zones, { country, region: '', city: '', area: '', postalCode: '' });
+	return zone?.rates.find((rate) => rate.kind === 'delivery' && rate.condition.by === 'none') ?? null;
+};
 
 /**
  * The cities the zones name (for the checkout form's suggestions), in their order, without repeats.

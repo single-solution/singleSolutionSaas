@@ -90,11 +90,15 @@ describe('the pickup point and coupon problems', () => {
 		const body = { lines: [{ productId: item.id }], delivery: { method: 'pickup' }, coupon: 'nope' };
 		const quote = await visit('POST', '/v1/shop/cart/quote', { body, signIn: shopper });
 		expect(quote.status).toBe(200);
+		// the seeded zone (every place) with today's rates: Standard and Pickup (E5)
 		expect(quote.json.delivery).toEqual({
 			method: 'pickup',
-			zone: '',
+			zone: 'everywhere',
+			rate: 'pickup',
+			rateName: 'Pickup',
 			name: 'Front desk',
 			fee: 0,
+			freeOver: 0,
 			locationId: null,
 			minDays: null,
 			maxDays: null,
@@ -141,7 +145,15 @@ describe('the pickup point and coupon problems', () => {
 			role: 'awaiting_confirmation',
 			guest: false,
 			address: null,
-			delivery: { method: 'pickup', zone: '', fee: 0, locationId: null, locationName: '' },
+			delivery: {
+				method: 'pickup',
+				zone: 'everywhere',
+				rate: 'pickup',
+				rateName: 'Pickup',
+				fee: 0,
+				locationId: null,
+				locationName: '',
+			},
 			pickupPoint: { name: 'Front desk', address: '1 Market Road', hours: '9–5' },
 			notes: { pickupReady: 'We text you when it is ready.' },
 			payment: { method: 'pickup', kind: 'at_pickup', state: 'unpaid', via: 'payments', payUrl: null, balanceDue: 2000 },

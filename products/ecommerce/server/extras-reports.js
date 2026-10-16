@@ -42,6 +42,7 @@ import {
 import { badTagIds, healthOf, healthPipeline, paymentMethodsOn, taxonomyHealth } from '../core/health.js';
 import { paidByHand } from '../core/payment-methods.js';
 import { daysRange } from '../core/seo.js';
+import { homeRate } from '../core/delivery.js';
 import { hiddenFor } from './catalog-visibility.js';
 import { csvFile } from './catalog-tools.js';
 import { SERVER_LIMITS } from './service.js';
@@ -437,8 +438,13 @@ export const createReports = (product, service) => {
 	 */
 	const paymentMethods = async (s, data) => {
 		const zones = s.has('delivery_zones') ? await s.values('delivery_zones') : null;
+		// pickup is a kind of delivery rate (E5): possible while a zone has one and there is a pickup place
+		const pickupRates = /** @type {import('../core/delivery.js').Zone[]} */ (zones ? await s.list('delivery_zones') : []).some(
+			(zone) => zone.rates.some((rate) => rate.kind === 'pickup'),
+		);
 		const pickup =
 			zones !== null &&
+			pickupRates &&
 			(s.has('multi_location')
 				? (await data
 						.collection(COLLECTIONS.locations)
@@ -581,8 +587,12 @@ export const createReports = (product, service) => {
 			paymentMethods: methods,
 			badTags: tags,
 			shortLived,
-			// the delivery days structured data needs (G5.4), while Delivery zones is on
-			deliveryDays: zones ? daysRange(zones.handlingDays) !== null && daysRange(zones.transitDays) !== null : null,
+			// the delivery days structured data needs (G5.4), while Delivery zones is on: the handling days and the days of the
+			// business country's first plain delivery rate (E5)
+			deliveryDays: zones
+				? daysRange(zones.handlingDays) !== null &&
+					(homeRate(await s.list('delivery_zones'), String(business.country ?? ''))?.minDays ?? null) !== null
+				: null,
 			setup: {
 				storage: storage !== null,
 				payUnready: unready,

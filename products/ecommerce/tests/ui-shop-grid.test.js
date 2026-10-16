@@ -741,7 +741,13 @@ describe('shared helpers', () => {
 		const business = formatsOf(
 			{
 				...config,
-				format: { locale: 'fr-FR', currencyDisplay: 'symbol', currencySymbols: { EUR: '€' }, wholeUnits: true, times: 'business' },
+				format: {
+					locale: 'fr-FR',
+					currencyDisplay: 'symbol',
+					currencySymbols: { EUR: '€' },
+					wholeUnits: true,
+					times: 'business',
+				},
 				timeZone: 'Asia/Tokyo',
 			},
 			viewer,

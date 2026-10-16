@@ -533,7 +533,7 @@ export const createChatLookup = (product, service, media) => {
 				lines: [{ productId: item.id, variantId: variant.id, quantity, slot: null }],
 				coupon: '',
 				points: 0,
-				delivery: { method: asked?.kind === 'at_pickup' ? 'pickup' : null, ...place, locationId: null },
+				delivery: { method: asked?.kind === 'at_pickup' ? 'pickup' : null, rate: null, ...place, locationId: null },
 				payment: paymentMethod,
 			},
 			shopper,
@@ -600,6 +600,7 @@ export const createChatLookup = (product, service, media) => {
 				? {
 						method: delivery.method,
 						name: delivery.name,
+						rateName: delivery.rateName,
 						fee: delivery.fee,
 						feeText: text(delivery.fee),
 						minDays: delivery.minDays,
@@ -730,8 +731,8 @@ export const createChatLookup = (product, service, media) => {
 
 	/**
 	 * The shop basics of the context (parity P5-17): the payment methods offered (in the merchant's order, as a cart
-	 * with delivery lists them) with the merchant's notes, the cash handling fee, the delivery fee where no zone matches
-	 * and each zone's (with its free-delivery amount), the pickup points, the loyalty earn rate, the top categories
+	 * with delivery lists them) with the merchant's notes, the cash handling fee, each delivery zone's rates (with their
+	 * free-delivery amounts and days, E5), the pickup points, the loyalty earn rate, the top categories
 	 * shoppers see, the return window and the warranty. Each part is there only while its feature is on.
 	 * @param {Site} s @param {WebsiteData} data
 	 * @returns {Promise<import('../core/chat-context.js').ShopBasics>}
@@ -758,28 +759,27 @@ export const createChatLookup = (product, service, media) => {
 		]);
 		/** @param {number} amount */
 		const text = (amount) => money(amount, s.currency);
-		/** @param {unknown} fee @param {unknown} freeOver */
-		const feeOf = (fee, freeOver) => ({
-			fee: Number(fee) || 0,
-			feeText: text(Number(fee) || 0),
-			freeOver: Number(freeOver) || 0,
-			freeOverText: text(Number(freeOver) || 0),
-		});
 		// one pickup point of the settings while stock has no locations, else the stock locations that take pickups (E22)
-		const pickup = s.has('multi_location')
-			? /** @type {import('../core/model.js').LocationRecord[]} */ (locations)
-					.filter((location) => location.pickup)
-					.sort((a, b) => a.sort - b.sort)
-					.map((location) => ({ name: location.name, address: '', hours: '' }))
-			: zones?.pickupEnabled === true
-				? [
-						{
-							name: String(zones.pickupName ?? ''),
-							address: String(zones.pickupAddress ?? ''),
-							hours: String(zones.pickupHours ?? ''),
-						},
-					]
-				: [];
+		// pickup is a kind of rate (E5): the pickup places count while a zone has a pickup rate
+		const pickupRates = /** @type {import('../core/delivery.js').Zone[]} */ (zoneList).some((zone) =>
+			zone.rates.some((rate) => rate.kind === 'pickup'),
+		);
+		const pickup = !pickupRates
+			? []
+			: s.has('multi_location')
+				? /** @type {import('../core/model.js').LocationRecord[]} */ (locations)
+						.filter((location) => location.pickup)
+						.sort((a, b) => a.sort - b.sort)
+						.map((location) => ({ name: location.name, address: '', hours: '' }))
+				: zones?.pickupEnabled === true
+					? [
+							{
+								name: String(zones.pickupName ?? ''),
+								address: String(zones.pickupAddress ?? ''),
+								hours: String(zones.pickupHours ?? ''),
+							},
+						]
+					: [];
 		// the methods the shop can take now, by the merchant's names, notes and fees
 		const on = new Set(paymentMethodsOn({ methods: listed, paymentsConnected: payments !== null, pickup: pickup.length > 0 }));
 		const methods = listed
@@ -787,10 +787,19 @@ export const createChatLookup = (product, service, media) => {
 			.map((method) => ({ method: method.key, name: method.name, note: method.note, feePercent: method.feePercent }));
 		return {
 			payments: methods,
-			delivery: zones ? feeOf(zones.defaultFee, zones.defaultFreeOver) : null,
-			zones: /** @type {Array<{ name: string, fee: number, freeOver: number }>} */ (zoneList)
-				.slice(0, CONTEXT_BASICS)
-				.map((zone) => ({ name: String(zone.name), ...feeOf(zone.fee, zone.freeOver) })),
+			zones: /** @type {import('../core/delivery.js').Zone[]} */ (zoneList).slice(0, CONTEXT_BASICS).map((zone) => ({
+				name: zone.name,
+				rates: zone.rates.map((rate) => ({
+					name: rate.name,
+					kind: rate.kind,
+					fee: rate.price,
+					feeText: text(rate.price),
+					freeOver: rate.freeOver,
+					freeOverText: text(rate.freeOver),
+					minDays: rate.minDays,
+					maxDays: rate.maxDays,
+				})),
+			})),
 			pickup,
 			earnPercent: loyalty ? Number(loyalty.earnPercent) || 0 : null,
 			categories: categories.map((category) => String(category.name)),

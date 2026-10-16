@@ -49,7 +49,7 @@ const seed = async (patch = {}, numbered = false) => {
 		number: `M-${createId('num').slice(4, 12)}`,
 		customer: { userId: 'usr_moves0000001', name: 'Mo', email: '', phone: '' },
 		address: null,
-		delivery: { method: 'none', zone: '', fee: 0, locationId: null },
+		delivery: { method: 'none', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 		lines: [
 			{
 				id: createId('oln'),

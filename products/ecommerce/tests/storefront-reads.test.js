@@ -183,8 +183,13 @@ describe('storefront reads through the API', () => {
 
 	it('fills policies with business contacts and delivery amounts, as HTML with headings and contact links (SF-1)', async () => {
 		await shop.setting('returns', 'returnTime', 14);
-		await shop.setting('delivery_zones', 'defaultFee', 25_000);
-		await shop.setting('delivery_zones', 'defaultFreeOver', 1_000_000);
+		await shop.list('delivery_zones', [
+			{
+				key: 'everywhere',
+				name: 'Everywhere',
+				rates: [{ key: 'standard', name: 'Standard', price: 25_000, freeOver: 1_000_000 }],
+			},
+		]);
 		await shop.setting('checkout', 'policyFormat', 'html');
 		await shop.list('policies', [
 			{
@@ -198,7 +203,9 @@ describe('storefront reads through the API', () => {
 		expect(answer.policies[0].text).toBe(
 			'<h2>Returns</h2><p>14 days. Delivery USD 250.00, free from USD 10,000.00. <a href="mailto:hello@shop.example.com">Write</a></p>',
 		);
-		await shop.setting('delivery_zones', 'defaultFreeOver', 0);
+		await shop.list('delivery_zones', [
+			{ key: 'everywhere', name: 'Everywhere', rates: [{ key: 'standard', name: 'Standard', price: 25_000 }] },
+		]);
 		expect((await api('GET', '/v1/policies')).policies[0].text).toContain('free from .');
 	});
 

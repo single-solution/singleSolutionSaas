@@ -66,7 +66,9 @@ afterAll(async () => shop.product.close());
 
 describe('E10 grades and E16 structured data', () => {
 	it('writes each variant with its grade condition, return policy, reviews and FAQs', async () => {
-		await shop.setting('delivery_zones', 'defaultFee', 25000);
+		await shop.list('delivery_zones', [
+			{ key: 'everywhere', name: 'Everywhere', rates: [{ key: 'standard', name: 'Standard', price: 25000 }] },
+		]);
 		await shop.setting('returns', 'returnTime', 14);
 		await shop.setting('seo', 'faqMarkup', true);
 		const data = await shop.db();

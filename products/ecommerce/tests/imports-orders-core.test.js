@@ -59,7 +59,7 @@ const order = (patch = {}) => ({
 	number: 'S-2026-0007',
 	customer: { userId: 'usr_member0000000001', customerId: idOf('cus', 1), name: 'Sara', phone: '5550001111' },
 	address: { name: 'Sara', phone: '(555) 000-1111', line1: '1 Main Street', city: 'Springfield' },
-	delivery: { method: 'delivery', zone: 'city', fee: 200, locationId: null },
+	delivery: { method: 'delivery', zone: 'city', rate: 'standard', rateName: 'Standard', fee: 200, locationId: null },
 	lines: [LINE],
 	totals: { subtotal: 2000, discount: 100, delivery: 200, tax: 0, total: 2100, currency: 'USD', taxIncluded: true },
 	promotions: { released: false },

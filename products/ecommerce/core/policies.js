@@ -65,7 +65,7 @@ export const checkPolicies = (value) => {
 
 /**
  * What the placeholders stand for: the return and warranty days, the business's name and contacts (business.json),
- * and the delivery fee where no zone matches and the amount delivery is free from, written as money ('' when none).
+ * and the price and free-over amount of the business country's first plain delivery rate (E5), as money ('' when none).
  * @typedef {{ returnTime: import('./durations.js').Duration, warrantyTime: import('./durations.js').Duration,
  *   locale?: string, business: string, email?: string, phone?: string,
  *   address?: string, deliveryFee?: string, freeDeliveryOver?: string }} PolicyValues

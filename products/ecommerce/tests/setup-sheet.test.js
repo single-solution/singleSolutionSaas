@@ -146,15 +146,20 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 		await env.switchOn(ALL);
 		await env.list('couriers', [{ key: 'fastship', name: 'FastShip', trackingUrl: 'https://track.example/{tracking}' }]);
 		await env.list('delivery_zones', [
-			{ key: 'city', name: 'Springfield', match: { cities: ['Springfield'] }, fee: 300, freeOver: 0, minDays: 1, maxDays: 2 },
+			{
+				key: 'city',
+				name: 'Springfield',
+				match: { cities: ['Springfield'] },
+				rates: [{ key: 'standard', name: 'Standard', price: 300, minDays: 1, maxDays: 2 }],
+			},
 			{
 				key: 'state',
 				name: 'Rest of the state',
 				match: { cities: ['Shelbyville'] },
-				fee: 900,
-				freeOver: 0,
-				minDays: 2,
-				maxDays: 4,
+				rates: [
+					{ key: 'standard', name: 'Standard', price: 900, minDays: 2, maxDays: 4 },
+					{ key: 'pickup', name: 'Pickup', kind: 'pickup' },
+				],
 			},
 		]);
 		await env.list('tax_rules', [
@@ -201,7 +206,9 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 			['address_regions', 'No countries with regions yet.'],
 			['customer_segments', '3 customer segments: Loyalty members, Active customers, Guests.'],
 		]);
-		expect(listsOf(on, 'delivery_zones')).toEqual([['delivery_zones', '2 zones: Springfield, Rest of the state.']]);
+		expect(listsOf(on, 'delivery_zones')).toEqual([
+			['delivery_zones', '2 zones: Springfield (Standard), Rest of the state (Standard, Pickup).'],
+		]);
 		expect(listsOf(on, 'taxes')).toEqual([['tax_rules', '1 tax rule: Sales tax 8.25%.']]);
 		expect(listsOf(on, 'grades_serials')).toEqual([
 			['grades', '3 grades: Like new (refurbished), Good (used), Fair (used, not offered).'],
@@ -284,10 +291,10 @@ describe('Ecommerce’s Setup sheet words', () => {
 		expect(LIST_WORDS.grades([])).toBe('No grades yet.');
 		expect(LIST_WORDS.item_types([])).toBe('No item types yet: every item has the built-in type of its kind.');
 		expect(LIST_WORDS.booking_hours([])).toBe('No booking hours yet, so no slot can be booked.');
-		const zones = Array.from({ length: 40 }, (_, at) => ({ name: `Zone number ${at + 1}` }));
+		const zones = Array.from({ length: 40 }, (_, at) => ({ name: `Zone number ${at + 1}`, rates: [{ name: 'Standard' }] }));
 		const text = LIST_WORDS.delivery_zones(zones);
 		expect(text.length).toBeLessThanOrEqual(300);
-		expect(text).toMatch(/^40 zones: Zone number 1, Zone number 2, .* and \d+ more\.$/);
+		expect(text).toMatch(/^40 zones: Zone number 1 \(Standard\), Zone number 2 \(Standard\), .* and \d+ more\.$/);
 		// a name longer than a summary is cut
 		expect(LIST_WORDS.couriers([{ name: 'X'.repeat(500) }])).toBe(`1 courier: ${'X'.repeat(59)}….`);
 		const flow = { statuses: [{ key: 'open', label: 'Open', notify: true }], moves: [] };

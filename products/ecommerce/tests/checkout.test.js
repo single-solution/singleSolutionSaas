@@ -3,6 +3,7 @@
  * confirmation through the fake Payments, the shopper's orders, canceling, the end of waiting windows on use, pickup,
  * loyalty points and the widget settings.
  */
+import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { givePoints } from '../adapters/ledger.js';
 import { COLLECTIONS } from '../core/model.js';
@@ -69,19 +70,26 @@ const nextUse = async () => {
 
 beforeAll(async () => {
 	shop = await readyShop();
-	await shop.list('delivery_zones', [
-		{
-			key: 'city',
-			name: 'Springfield',
-			match: { cities: ['Springfield'] },
-			fee: 300,
-			freeOver: 50_000,
-			minDays: 1,
-			maxDays: 2,
-		},
-	]);
-	await shop.setting('delivery_zones', 'defaultFee', 900);
+	await shop.list('delivery_zones', ZONES);
 });
+
+/** The zones of these tests: a catch-all zone with a rate and pickup, and a city with a rate of its own. */
+const ZONES = [
+	{
+		key: 'everywhere',
+		name: 'Everywhere',
+		rates: [
+			{ key: 'standard', name: 'Standard', price: 900 },
+			{ key: 'pickup', name: 'Pickup', kind: 'pickup' },
+		],
+	},
+	{
+		key: 'city',
+		name: 'Springfield',
+		match: { cities: ['Springfield'] },
+		rates: [{ key: 'standard', name: 'Standard', price: 300, freeOver: 50_000, minDays: 1, maxDays: 2 }],
+	},
+];
 afterAll(async () => shop.product.close());
 
 describe('quote', () => {
@@ -98,7 +106,7 @@ describe('quote', () => {
 		expect(response.json).toMatchObject({
 			currency: 'USD',
 			lines: [{ productId: item.id, quantity: 2, unitPrice: 10_000, tax: 2000, total: 22_000, problems: [] }],
-			delivery: { method: 'delivery', zone: 'city', fee: 300, minDays: 1, maxDays: 2 },
+			delivery: { method: 'delivery', zone: 'city', rate: 'standard', rateName: 'Standard', fee: 300, minDays: 1, maxDays: 2 },
 			totals: { subtotal: 20_000, tax: 2000, delivery: 300, total: 22_300, taxIncluded: false },
 			points: null,
 			ready: true,
@@ -107,16 +115,116 @@ describe('quote', () => {
 		expect(response.json.paymentMethods.map((/** @type {any} */ m) => m.method)).toEqual(['online', 'bank_transfer', 'cod']);
 	});
 
-	it('uses the default fee, reports shortfalls without stock counts and checks the body', async () => {
+	it('uses the catch-all zone, reports shortfalls without stock counts and checks the body', async () => {
 		const item = await shop.seedProduct({ price: 1000, stock: 1 });
 		const response = await visit('POST', '/v1/shop/cart/quote', {
 			body: { lines: [{ productId: item.id, quantity: 3 }, { productId: 'prd_missing' }], delivery: { city: 'Elsewhere' } },
 		});
-		expect(response.json.delivery).toMatchObject({ zone: '', fee: 900 });
+		expect(response.json.delivery).toMatchObject({ zone: 'everywhere', rate: 'standard', fee: 900 });
 		expect(response.json.lines.map((/** @type {any} */ l) => l.problems[0]?.code)).toEqual(['not_enough_stock', 'unavailable']);
 		expect(JSON.stringify(response.json)).not.toContain('"stock"');
 		expect(response.json.ready).toBe(false);
 		expect((await visit('POST', '/v1/shop/cart/quote', { body: { lines: [] } })).status).toBe(422);
+	});
+
+	it("offers the zone's named rates the cart meets; the shopper picks one and the order keeps it (E5)", async () => {
+		/** A product whose one variant weighs `weightG`. @param {number} weightG @param {number} price */
+		const weighing = (weightG, price) =>
+			shop.seedProduct({
+				variants: [
+					{
+						id: createId('var'),
+						sku: '',
+						options: {},
+						price,
+						compareAtPrice: null,
+						cost: null,
+						stock: 9,
+						locations: {},
+						grade: null,
+						active: true,
+						parcel: { weightG, lengthMm: null, widthMm: null, heightMm: null },
+					},
+				],
+			});
+		await shop.list('delivery_zones', [
+			{
+				key: 'metro',
+				name: 'Metro',
+				match: { cities: ['Metropolis'] },
+				rates: [
+					{ key: 'standard', name: 'Standard', price: 500, freeOver: 20_000, minDays: 2, maxDays: 4 },
+					{ key: 'express', name: 'Express', price: 1500, minDays: 1, condition: { by: 'weight', min: 0, max: 2000 } },
+					{ key: 'freight', name: 'Freight', price: 4000, condition: { by: 'weight', min: 2001 } },
+					{ key: 'small', name: 'Small order', price: 200, condition: { by: 'value', min: 0, max: 3000 } },
+				],
+			},
+		]);
+		try {
+			const light = await weighing(400, 2500);
+			const heavy = await weighing(1500, 2500);
+			const quote = (/** @type {any} */ lines, /** @type {Record<string, unknown>} */ delivery = {}) =>
+				visit('POST', '/v1/shop/cart/quote', { body: { lines, delivery: { city: 'Metropolis', ...delivery } } });
+			// 800 g worth 50.00: standard, express (up to 2 kg) and the small-order rate (up to 30.00)
+			const one = await quote([{ productId: light.id, quantity: 2 }]);
+			expect(one.json.deliveryOptions.map((/** @type {any} */ o) => [o.rate, o.rateName, o.fee])).toEqual([
+				['standard', 'Standard', 500],
+				['express', 'Express', 1500],
+			]);
+			// no rate asked: the zone's first
+			expect(one.json.delivery).toMatchObject({ zone: 'metro', rate: 'standard', rateName: 'Standard', fee: 500 });
+			expect(one.json.totals.delivery).toBe(500);
+			const cheap = await quote([{ productId: light.id, quantity: 1 }]);
+			expect(cheap.json.deliveryOptions.map((/** @type {any} */ o) => o.rate)).toEqual(['standard', 'express', 'small']);
+			// 3 kg: freight instead of express; picked by its key
+			const picked = await quote([{ productId: heavy.id, quantity: 2 }], { rate: 'freight' });
+			expect(picked.json.deliveryOptions.map((/** @type {any} */ o) => o.rate)).toEqual(['standard', 'freight']);
+			expect(picked.json.delivery).toMatchObject({ rate: 'freight', rateName: 'Freight', fee: 4000, minDays: null });
+			// a rate the cart no longer meets falls back to the first of its method
+			const gone = await quote([{ productId: heavy.id, quantity: 2 }], { rate: 'express' });
+			expect(gone.json.delivery.rate).toBe('standard');
+			// free over its amount
+			const big = await quote([{ productId: light.id, quantity: 8 }]);
+			expect(big.json.delivery).toMatchObject({ rate: 'standard', fee: 0, freeOver: 20_000 });
+			// no zone fits the place: no delivery there
+			const nowhere = await visit('POST', '/v1/shop/cart/quote', {
+				body: { lines: [{ productId: light.id, quantity: 1 }], delivery: { city: 'Gotham' } },
+			});
+			expect(nowhere.json).toMatchObject({
+				deliveryOptions: [],
+				delivery: { method: 'delivery', rate: '', fee: 0 },
+				deliveryProblem: 'no_delivery',
+				ready: false,
+			});
+			// the order keeps the rate picked, by key and name, and refuses a place no rate fits
+			const shopper = await newShopper();
+			const address = { ...ADDRESS, city: 'Metropolis' };
+			const body = { lines: [{ productId: light.id, quantity: 1 }], payment: 'cod', address, delivery: { rate: 'express' } };
+			const placed = await place(shopper.token, body);
+			expect(placed.status).toBe(201);
+			expect(placed.json.order.delivery).toMatchObject({
+				method: 'delivery',
+				zone: 'metro',
+				rate: 'express',
+				rateName: 'Express',
+			});
+			expect((await orderRecord(placed.json.order.id)).delivery).toEqual({
+				method: 'delivery',
+				zone: 'metro',
+				rate: 'express',
+				rateName: 'Express',
+				fee: 1500,
+				locationId: null,
+			});
+			const refused = await place(shopper.token, { ...body, address: { ...ADDRESS, city: 'Gotham' } });
+			expect(refused.status).toBe(422);
+			expect(refused.json.errors[0]).toMatchObject({ path: '/delivery', code: 'no_delivery' });
+			expect((await visit('POST', '/v1/shop/cart/quote', { body: { lines: [], delivery: { rate: 'Bad key' } } })).status).toBe(
+				422,
+			);
+		} finally {
+			await shop.list('delivery_zones', ZONES);
+		}
 	});
 
 	it('takes deals off and redeems points for a signed-in shopper', async () => {
@@ -587,7 +695,14 @@ describe('store pickup and the widget settings', () => {
 		const quote = await visit('POST', '/v1/shop/cart/quote', {
 			body: { lines: [{ productId: item.id }], delivery: { method: 'pickup' } },
 		});
-		expect(quote.json.delivery).toMatchObject({ method: 'pickup', locationId: 'loc_shop', name: 'Main shop', fee: 0 });
+		expect(quote.json.delivery).toMatchObject({
+			method: 'pickup',
+			rate: 'pickup',
+			rateName: 'Pickup',
+			locationId: 'loc_shop',
+			name: 'Main shop',
+			fee: 0,
+		});
 		expect(quote.json.paymentMethods.find((/** @type {any} */ m) => m.method === 'pickup')).toMatchObject({ available: true });
 		const shopper = await newShopper();
 		const placed = await place(shopper.token, {
@@ -609,8 +724,13 @@ describe('store pickup and the widget settings', () => {
 			payment: 'pickup',
 		});
 		expect(wrong.json.errors[0].path).toBe('/delivery/locationId');
-		const notHere = await place(shopper.token, { lines: [{ productId: item.id }], payment: 'pickup', address: ADDRESS });
+		// delivered where its zone also offers pickup: paid at pickup needs pickup; where no pickup rate fits, it is not
+		// offered at all (E5)
+		const elsewhere = { ...ADDRESS, city: 'Shelbyville' };
+		const notHere = await place(shopper.token, { lines: [{ productId: item.id }], payment: 'pickup', address: elsewhere });
 		expect([codeOf(notHere), notHere.json.paymentReason]).toEqual(['payment_not_allowed', 'needs_pickup']);
+		const noPickup = await place(shopper.token, { lines: [{ productId: item.id }], payment: 'pickup', address: ADDRESS });
+		expect(noPickup.json.errors[0].path).toBe('/payment');
 
 		const config = await visit('GET', '/v1/widget/config');
 		expect(config.json.settings.checkout).toMatchObject({

@@ -81,7 +81,7 @@ const delivered = async (products) => {
 				id,
 				customer: { userId: SARA, name: 'Sara Shopper', email: 'sara@example.com', phone: '' },
 				address: null,
-				delivery: { method: 'pickup', zone: '', fee: 0, locationId: null },
+				delivery: { method: 'pickup', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 				lines,
 				totals: { subtotal: total, discount: 0, delivery: 0, tax: 0, total, currency: 'USD', taxIncluded: true },
 				promotions: {

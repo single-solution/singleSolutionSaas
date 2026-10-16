@@ -51,7 +51,7 @@ const orderOf = (lines, promotions = {}, key = createId('key')) => ({
 	id: createId('ord'),
 	customer: { userId: 'usr_1', name: 'Sara', email: 'sara@example.com', phone: '', customerId: CUSTOMER_ID },
 	address: null,
-	delivery: { method: 'none', zone: '', fee: 0, locationId: null },
+	delivery: { method: 'none', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 	lines: lines.map((line) => ({
 		id: createId('oln'),
 		productId: line.productId,

@@ -49,8 +49,28 @@ const line = (over = {}) => ({
 	...over,
 });
 
-const DELIVERY = { method: 'delivery', zone: 'z1', name: 'City', fee: 20000, locationId: null, minDays: 1, maxDays: 3 };
-const PICKUP = { method: 'pickup', zone: '', name: 'Main shop', fee: 0, locationId: 'loc_1', minDays: null, maxDays: null };
+const DELIVERY = {
+	method: 'delivery',
+	zone: 'z1',
+	rate: 'standard',
+	rateName: 'Standard',
+	name: 'City',
+	fee: 20000,
+	locationId: null,
+	minDays: 1,
+	maxDays: 3,
+};
+const PICKUP = {
+	method: 'pickup',
+	zone: 'z1',
+	rate: 'pickup',
+	rateName: 'Pickup',
+	name: 'Main shop',
+	fee: 0,
+	locationId: 'loc_1',
+	minDays: null,
+	maxDays: null,
+};
 
 /** @param {Record<string, unknown>} [over] */
 const quoteOf = (over = {}) => ({
@@ -164,7 +184,8 @@ describe('cart', () => {
 			lines: [{ productId: 'prd_1', variantId: 'var_1', quantity: 2 }],
 			coupon: '',
 			points: 0,
-			delivery: { method: 'delivery', city: '', area: '', region: '', postalCode: '', country: '', locationId: null },
+			// no rate picked yet: the zone's first (E5)
+			delivery: { method: null, rate: null, city: '', area: '', region: '', postalCode: '', country: '', locationId: null },
 			payment: null,
 		});
 		const page = textOf(host);
@@ -180,7 +201,9 @@ describe('cart', () => {
 			'EUR 2,100.00',
 			text('checkout.advance', { amount: 'EUR 50.00' }),
 			text('checkout.days', { min: 1, max: 3 }),
-			text('checkout.pickupAt', { name: 'Main shop' }),
+			text('checkout.deliver', { rate: 'Standard', fee: 'EUR 200.00' }),
+			text('checkout.pickupAt', { rate: 'Pickup', name: 'Main shop', fee: text('checkout.free') }),
+			text('cart.deliveryRate', { rate: 'Standard' }),
 			'Ships fast.',
 			'Really fast.',
 			'How we ship',
@@ -556,6 +579,40 @@ describe('cart', () => {
 		expect(page).toContain(notes.prep);
 	});
 
+	it("offers the zone's named rates, sends the one picked and says when nothing delivers to the address (E5)", async () => {
+		const EXPRESS = { ...DELIVERY, rate: 'express', rateName: 'Express', fee: 35000, minDays: 1, maxDays: 1 };
+		const { fake, timers, host } = await setup({
+			quote: (call) =>
+				call.body.delivery.city === 'Nowhere'
+					? ok(
+							quoteOf({
+								delivery: { ...DELIVERY, rate: '', rateName: '', fee: 0 },
+								deliveryOptions: [],
+								deliveryProblem: 'no_delivery',
+							}),
+						)
+					: ok(
+							quoteOf({
+								delivery: call.body.delivery.rate === 'express' ? EXPRESS : DELIVERY,
+								deliveryOptions: [DELIVERY, EXPRESS, PICKUP],
+							}),
+						),
+		});
+		const radios = () => $$(host, 'input[name="ss-cart-delivery"]');
+		expect(radios().map((radio) => radio.checked)).toEqual([true, false, false]);
+		expect(textOf(host)).toContain(text('checkout.deliver', { rate: 'Express', fee: 'EUR 350.00' }));
+		await setValue(radios()[1], true);
+		await timers.run();
+		expect(fake.last('POST /v1/shop/cart/quote')?.body.delivery).toMatchObject({ method: 'delivery', rate: 'express' });
+		expect(radios().map((radio) => radio.checked)).toEqual([false, true, false]);
+		expect(textOf(host)).toContain(text('cart.deliveryRate', { rate: 'Express' }));
+		// no rate for the place: the shopper is told, and the address stays to change
+		await setValue($(host, '#ss-cart-city'), 'Nowhere');
+		await timers.run();
+		expect(textOf(host)).toContain(text('checkout.deliveryProblem.no_delivery'));
+		expect($(host, '#ss-cart-name').closest('fieldset').hidden).toBe(false);
+	});
+
 	it('switches between delivery and pickup and prices the address city', async () => {
 		const { fake, timers, host } = await setup({
 			quote: (call) => {
@@ -566,8 +623,8 @@ describe('cart', () => {
 							? call.body.delivery.locationId
 								? PICKUP
 								: { ...PICKUP, locationId: null, name: '' }
-							: { ...DELIVERY, name: '', minDays: null, maxDays: null, fee: 0 },
-						deliveryOptions: [{ ...DELIVERY, name: '', minDays: null, maxDays: null, fee: 0 }, PICKUP],
+							: { ...DELIVERY, rateName: '', name: '', minDays: null, maxDays: null, fee: 0 },
+						deliveryOptions: [{ ...DELIVERY, rateName: '', name: '', minDays: null, maxDays: null, fee: 0 }, PICKUP],
 						deliveryProblem: pickup && !call.body.delivery.locationId ? 'choose_pickup_location' : null,
 						totals: { ...quoteOf().totals, delivery: 0, tax: 3000, taxIncluded: false },
 					}),
@@ -575,7 +632,8 @@ describe('cart', () => {
 			},
 		});
 		expect(textOf(host)).toContain(
-			text('checkout.deliver', { fee: text('checkout.free'), zone: text('checkout.zoneUnknown') }),
+			// a rate without a name (delivery zones off): the plain word
+			text('checkout.deliver', { rate: text('checkout.delivery'), fee: text('checkout.free') }),
 		);
 		expect(textOf(host)).toContain(text('cart.tax'));
 		await setValue($(host, '#ss-cart-city'), 'Paris');
@@ -586,6 +644,7 @@ describe('cart', () => {
 		await timers.run();
 		expect(fake.last('POST /v1/shop/cart/quote')?.body.delivery).toEqual({
 			method: 'pickup',
+			rate: 'pickup',
 			city: 'Paris',
 			area: '',
 			region: '',

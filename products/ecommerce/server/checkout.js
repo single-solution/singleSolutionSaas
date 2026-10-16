@@ -78,13 +78,17 @@ export const createCheckout = (product, service) => {
 		const checkout = await s.values('checkout');
 		const paymentsConnected = (await product.connections.value(s.websiteId, 'payments')) !== null;
 		const zonesOn = s.has('delivery_zones');
-		const pickupLocations = zonesOn
-			? (await createOrdersStore(await s.data()).locations())
-					.filter((location) => location.pickup)
-					.map((location) => ({ id: location.id, name: location.name }))
-			: [];
-		// the one pickup point of the settings while stock has no locations (E22)
-		const zonesPickup = zonesOn && !s.has('multi_location') && (await s.values('delivery_zones')).pickupEnabled === true;
+		const zones = zonesOn ? /** @type {import('../core/delivery.js').Zone[]} */ (await s.list('delivery_zones')) : [];
+		// pickup is a kind of rate (E5): offered at the stock locations that take pickups (Multi-location stock), else at
+		// the one pickup point of the settings (E22)
+		const pickupRates = zones.some((zone) => zone.rates.some((rate) => rate.kind === 'pickup'));
+		const pickupLocations =
+			pickupRates && s.has('multi_location')
+				? (await createOrdersStore(await s.data()).locations())
+						.filter((location) => location.pickup)
+						.map((location) => ({ id: location.id, name: location.name }))
+				: [];
+		const zonesPickup = pickupRates && !s.has('multi_location') && (await s.values('delivery_zones')).pickupEnabled === true;
 		// the methods a cart may offer: active ones, through Payments while it is connected, at pickup with a pickup point
 		const methods = (await service.methods.methodsOf(s)).filter(
 			(method) =>
@@ -106,7 +110,7 @@ export const createCheckout = (product, service) => {
 				pickupLocations,
 				delivery: {
 					zones: zonesOn,
-					cities: zonesOn ? zoneCities(await s.list('delivery_zones')) : [],
+					cities: zoneCities(zones),
 				},
 				pricesIncludeTax: s.has('taxes') ? (await s.values('taxes')).pricesIncludeTax === true : true,
 				...(await (async () => {

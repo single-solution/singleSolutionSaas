@@ -470,7 +470,7 @@ const ORDER_FIELDS = fieldList(
 		'idempotencyKey note fields staffNote placedAt deliveredAt createdAt updatedAt',
 );
 const ORDER_CUSTOMER_FIELDS = fieldList('userId customerId name email phone');
-const DELIVERY_FIELDS = fieldList('method zone fee locationId');
+const DELIVERY_FIELDS = fieldList('method zone rate rateName fee locationId');
 const LINE_FIELDS = fieldList(
 	'id productId variantId kind name variantName sku grade gradeLabel image unitPrice quantity discount tax ' +
 		'total cost categoryIds brandId locationId serials booking licences downloads returnedQuantity ' +
@@ -965,6 +965,8 @@ export const checkImportedOrder = (record, rules) => {
 	const delivery = {
 		method: c.oneOf(deliveryInput.method, /** @type {const} */ (['delivery', 'pickup', 'none']), '/delivery/method'),
 		zone: c.text(deliveryInput.zone, '/delivery/zone', 80),
+		rate: c.text(deliveryInput.rate, '/delivery/rate', 40),
+		rateName: c.text(deliveryInput.rateName, '/delivery/rateName', 60),
 		fee: c.whole(deliveryInput.fee, '/delivery/fee', { fallback: 0 }),
 		locationId: c.id(deliveryInput.locationId, ID_PREFIX.location, '/delivery/locationId', { nullable: true }),
 	};

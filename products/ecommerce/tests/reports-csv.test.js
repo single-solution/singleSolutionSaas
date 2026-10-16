@@ -49,7 +49,7 @@ const seedOrder = async (input) => {
 		idempotencyKey: input.number,
 		customer: { userId: input.userId ?? '', name: input.name ?? 'Shopper', email: '', phone: '' },
 		address: { name: '', phone: '', line1: '', line2: '', city: 'Tokyo', area: '', postalCode: '', country: '', notes: '' },
-		delivery: { method: 'delivery', zone: '', fee: input.delivery ?? 0, locationId: null },
+		delivery: { method: 'delivery', zone: '', rate: '', rateName: '', fee: input.delivery ?? 0, locationId: null },
 		lines: [
 			{
 				id: createId('oln'),

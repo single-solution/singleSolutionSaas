@@ -6,7 +6,7 @@
  *    limits of items sold in a unit of their own: their quantities are thousandths of the unit, `core/measure.js`),
  *    stock shortfalls reported per line (never the exact stock), booked slots and license keys;
  * 2. promotions — deals, bundles and the coupon take their part off each line (`core/promotions.js`);
- * 3. delivery — the fee of the delivery zone (or store pickup) after promotions, waived by a free-delivery coupon;
+ * 3. delivery — the fee of the delivery rate the shopper picked (or pickup) after promotions, waived by a free-delivery offer;
  * 4. loyalty points — their value spread over the lines in proportion (`allocate`);
  * 5. taxes — per line, included in the price or added on top;
  * 6. totals.
@@ -38,6 +38,8 @@ export { MAX_LINES, MAX_QUANTITY };
 const MAX_LOCK = 600;
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
+/** A delivery rate key (`core/delivery.js`). */
+const RATE_KEY = /^[a-z][a-z0-9_]{1,39}$/;
 /** A phone as typed: digits, spaces, + ( ) - (kept when the website's phone rules cannot read it as E.164). */
 const PHONE = /^\+?[0-9][0-9 ()-]{5,22}$/;
 
@@ -47,8 +49,9 @@ const PHONE = /^\+?[0-9][0-9 ()-]{5,22}$/;
  *   lock the last quote gave (E18 `lockMinutes`)
  */
 /**
- * @typedef {{ method: 'delivery' | 'pickup' | null, city: string, area: string, region: string, postalCode: string,
- *   country: string, locationId: string | null }} DeliveryInput
+ * @typedef {{ method: 'delivery' | 'pickup' | null, rate: string | null, city: string, area: string, region: string,
+ *   postalCode: string, country: string, locationId: string | null }} DeliveryInput `rate`: the key of the zone's rate
+ *   the shopper picked (E5; null = the first of `method`, else the zone's first)
  */
 /** @typedef {{ lines: CartLineInput[], coupon: string, points: number, delivery: DeliveryInput, payment: PaymentMethod | null }} CartInput */
 /**
@@ -150,6 +153,9 @@ export const checkCart = (body, { maxLines = MAX_LINES } = {}) => {
 			};
 		place[field] = value;
 	}
+	const rate = delivery.rate ?? null;
+	if (rate !== null && (typeof rate !== 'string' || !RATE_KEY.test(rate)))
+		return { ok: false, field: 'delivery/rate', message: 'delivery.rate is the key of a delivery rate.' };
 	const locationId = delivery.locationId ?? null;
 	if (locationId !== null && (typeof locationId !== 'string' || !ID.test(locationId)))
 		return { ok: false, field: 'delivery/locationId', message: 'delivery.locationId is a pickup location id.' };
@@ -162,7 +168,12 @@ export const checkCart = (body, { maxLines = MAX_LINES } = {}) => {
 			lines: [...merged.values()],
 			coupon: coupon.toUpperCase(),
 			points: Number(points),
-			delivery: { method, ...place, locationId: /** @type {string | null} */ (locationId) },
+			delivery: {
+				method,
+				rate: /** @type {string | null} */ (rate),
+				...place,
+				locationId: /** @type {string | null} */ (locationId),
+			},
 			payment: /** @type {PaymentMethod | null} */ (payment),
 		},
 	};

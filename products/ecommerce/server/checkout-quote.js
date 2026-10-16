@@ -4,7 +4,8 @@
  * `applyPromotions`, while `deals`, `bundles` and `coupons` are on: conditions, hours in the business time zone, the
  * payment method, the shopper's picked deal and signed deal locks, E18; how they round, D4), the role price of a
  * signed-in shopper (`role_pricing`, E19), loyalty points (while `loyalty` is on and the shopper takes part, E20),
- * delivery zones, pickup locations or the one pickup point (`delivery_zones`, E22), tax rules (`taxes`), the payment
+ * delivery zones and their named rates for the cart's weight and value, pickup at the pickup locations or the one pickup
+ * point (`delivery_zones`, E22, fixed-choices E5), tax rules (`taxes`), the payment
  * methods in the list's order with their fees (each on its `feeBase`, D4) and what each method paid first tells
  * shoppers (its own accounts, or Payments' manual method of the same key, E8, E24). Every amount rounds to whole units with Format's `wholeUnits` (E25). Used by
  * the quote route and again, on the server, when an order is placed. Also the bookable slots of a product
@@ -20,7 +21,7 @@ import { MAX_SLOT_DAYS, slotAt, slotsBetween } from '../core/bookings.js';
 import { MAX_QUANTITY, afterOffers, feeBaseOf, grossOf, priceLines, resolveLines, roleDiscounts } from '../core/checkout.js';
 import { pricesFor, roleTermsOf } from '../core/role-pricing.js';
 import { placeOf } from '../core/address.js';
-import { matchZone, zoneFee } from '../core/delivery.js';
+import { matchZone, rateFee, rateFits } from '../core/delivery.js';
 import { dealRulesOf } from '../core/deals.js';
 import { checkoutFields } from '../core/fields.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
@@ -58,16 +59,33 @@ import { createMedia } from './catalog-media.js';
 
 const DAY_MS = 86_400_000;
 
+/** No delivery: the order has nothing to deliver (or no rate fits; then `method` says what was asked). */
+const NO_DELIVERY = Object.freeze({
+	method: /** @type {'delivery' | 'pickup' | 'none'} */ ('none'),
+	zone: '',
+	rate: '',
+	rateName: '',
+	name: '',
+	fee: 0,
+	locationId: null,
+	minDays: null,
+	maxDays: null,
+});
+
 /**
+ * One way an order can get to the shopper: a rate of the zone of the shopper's place (E5); a pickup rate is one choice
+ * per pickup place.
  * @typedef {object} DeliveryChoice
  * @property {'delivery' | 'pickup' | 'none'} method
- * @property {string} zone zone key ('' = no zone matched or zones off)
- * @property {string} name zone or pickup location name
+ * @property {string} zone zone key ('' = no zone fits, or zones off)
+ * @property {string} rate the zone's rate key ('' = none)
+ * @property {string} rateName the rate's name, as the merchant named it
+ * @property {string} name the zone's name, or the pickup place's
  * @property {number} fee
  * @property {string | null} locationId pickup location
  * @property {number | null} minDays
  * @property {number | null} maxDays
- * @property {number} [freeOver] delivery is free from this amount of goods after promotions (0 = never; E37)
+ * @property {number} [freeOver] the rate is free from this amount of goods after promotions (0 = never; E37)
  * @property {string} [address] the pickup point's address (E22)
  * @property {string} [hours] the pickup point's hours (E22)
  */
@@ -83,7 +101,8 @@ const DAY_MS = 86_400_000;
  * @property {import('../core/model.js').CouponRecord | null} coupon the coupon of the code entered
  * @property {DeliveryChoice} delivery the chosen delivery
  * @property {DeliveryChoice[]} deliveryOptions
- * @property {string | null} deliveryProblem `choose_pickup_location` when pickup names no location
+ * @property {string | null} deliveryProblem `no_delivery` when no rate fits the place and the cart,
+ *   `pickup_unavailable` when pickup is asked and not offered, `choose_pickup_location` when pickup names no place
  * @property {Array<import('../core/payment-methods.js').PaymentOption & { note: string }>} payments the payment
  *   methods in the list's order, each with the merchant's note
  * @property {PaymentMethod | null} paymentMethod the method priced: the one asked, else the first available (E22)
@@ -109,12 +128,13 @@ const DAY_MS = 86_400_000;
  * Re-pricing an order staff edit (E29): the order keeps the offers it was placed with (its deals, bundles and coupon,
  * even ended, switched off or used up, by the website's deal rules; OR-9), its role price and the points it spent; staff
  * may set unit prices. `keep` (`checkout.editPricing: keep_placed`): it keeps the amounts it was placed with instead of
- * pricing them again — its offer discount, its delivery fee while its delivery method stays, and its payment method's
+ * pricing them again — its offer discount, its delivery fee while its delivery method and rate stay, and its payment method's
  * fee while its payment method stays.
  * @typedef {{ prices: Map<string, number>, deals: DealRecord[], bundles: import('../core/model.js').BundleRecord[],
  *   coupon: import('../core/model.js').CouponRecord | null,
  *   role: import('../core/role-pricing.js').RolePrice | null, points: { used: number, value: number },
- *   keep?: { promotions: number, delivery: number, deliveryMethod: string, fee: number, method: string } }} QuoteEdit
+ *   keep?: { promotions: number, delivery: number, deliveryMethod: string, deliveryRate: string, fee: number,
+ *   method: string } }} QuoteEdit
  */
 
 /**
@@ -349,14 +369,20 @@ export const createQuoting = (product, service) => {
 						hours: String(zoneSettings.pickupHours ?? ''),
 					}
 				: null;
-		const pickupPossible = pickups.length > 0 || pickupPoint !== null;
+		// the package's grams for rates by weight: each item's package weight (an item without one counts 0; E5)
+		const weightG = priced.reduce((sum, line) => {
+			const grams = products.get(line.productId)?.variants.find((v) => v.id === line.variantId)?.parcel?.weightG ?? 0;
+			return line.kind !== 'physical' || !grams
+				? sum
+				: sum + (line.measure ? Math.ceil((grams * line.quantity) / 1000) : grams * line.quantity);
+		}, 0);
 		// where a delivery goes (an address without a country is in the business.json country); a pickup or undelivered
 		// order is at the business, in its country (taxes)
 		const homeCountry = (await s.business()).country ?? '';
 		const where = placeOf(address ?? cart.delivery, homeCountry);
 		const atBusiness = placeOf(null, homeCountry);
 		const zones = zonesOn ? /** @type {import('../core/delivery.js').Zone[]} */ (await s.list('delivery_zones')) : [];
-		const wantedMethod = cart.delivery.method ?? (zoneSettings?.defaultMethod === 'pickup' && pickupPossible ? 'pickup' : null);
+		const zone = zonesOn && physical ? matchZone(zones, where) : null;
 		const taxesOn = s.has('taxes');
 		const taxRules = taxesOn ? /** @type {import('../core/taxes.js').TaxRule[]} */ (await s.list('tax_rules')) : [];
 		const taxIncluded = taxesOn ? (await s.values('taxes')).pricesIncludeTax === true : true;
@@ -387,70 +413,70 @@ export const createQuoting = (product, service) => {
 			const merchandise = after.reduce((a, b) => a + b, 0);
 			const goods = merchandise - roleDiscounts(priced, after, roleTerms, unit).total;
 
-			// delivery
+			// delivery: the rates of the zone of the place that the cart's weight and value meet, in the zone's order, a pickup
+			// rate once per pickup place it names (E5); without zones, delivery is free
 			const free = promotions?.freeDelivery === true;
 			/** @type {DeliveryChoice[]} */
 			const deliveryOptions = [];
-			if (physical) {
-				const zone = zonesOn ? matchZone(zones, where) : null;
-				const rule = zone ?? {
-					fee: Number(zoneSettings?.defaultFee ?? 0),
-					freeOver: Number(zoneSettings?.defaultFreeOver ?? 0),
-				};
-				const fee = zonesOn ? zoneFee(rule, goods) : 0;
-				deliveryOptions.push({
-					method: 'delivery',
+			if (physical && !zonesOn) deliveryOptions.push({ ...NO_DELIVERY, method: 'delivery' });
+			for (const rate of zone?.rates.filter((entry) => rateFits(entry, { weightG, value: goods })) ?? []) {
+				const base = {
 					zone: zone?.key ?? '',
-					name: zone?.name ?? '',
-					fee: free ? 0 : fee,
-					locationId: null,
-					minDays: zone?.minDays ?? null,
-					maxDays: zone?.maxDays ?? null,
-					freeOver: zonesOn ? rule.freeOver : 0,
-				});
-				for (const location of pickups)
-					deliveryOptions.push({
-						method: 'pickup',
-						zone: '',
-						name: location.name,
-						fee: 0,
-						locationId: location.id,
-						minDays: null,
-						maxDays: null,
-					});
-				if (pickupPoint)
-					deliveryOptions.push({
-						method: 'pickup',
-						zone: '',
-						name: pickupPoint.name,
-						fee: 0,
-						locationId: null,
-						minDays: null,
-						maxDays: null,
-						address: pickupPoint.address,
-						hours: pickupPoint.hours,
-					});
+					rate: rate.key,
+					rateName: rate.name,
+					fee: free ? 0 : rateFee(rate, goods),
+					minDays: rate.minDays,
+					maxDays: rate.maxDays,
+					freeOver: rate.freeOver,
+				};
+				if (rate.kind === 'delivery')
+					deliveryOptions.push({ ...base, method: 'delivery', name: zone?.name ?? '', locationId: null });
+				else {
+					for (const location of pickups.filter((entry) => rate.locations.length === 0 || rate.locations.includes(entry.id)))
+						deliveryOptions.push({ ...base, method: 'pickup', name: location.name, locationId: location.id });
+					if (pickupPoint)
+						deliveryOptions.push({
+							...base,
+							method: 'pickup',
+							name: pickupPoint.name,
+							locationId: null,
+							address: pickupPoint.address,
+							hours: pickupPoint.hours,
+						});
+				}
 			}
-			const wantsPickup = physical && wantedMethod === 'pickup' && pickupPossible;
-			const pickupOptions = deliveryOptions.filter((option) => option.method === 'pickup');
-			const pickup = wantsPickup
-				? (pickupOptions.find((option) => option.locationId !== null && option.locationId === cart.delivery.locationId) ??
-					(pickupOptions.length === 1 && (cart.delivery.locationId === null || pickupPoint) ? pickupOptions[0] : undefined))
-				: undefined;
+			const pickupPossible = deliveryOptions.some((option) => option.method === 'pickup');
+			// the shopper's rate (and pickup place), else the first of the method asked, else the zone's first
+			const asked = cart.delivery;
+			const ofMethod = deliveryOptions.filter((option) => asked.method === null || option.method === asked.method);
+			const ofRate = ofMethod.filter((option) => option.rate === asked.rate);
+			const candidates = ofRate.length > 0 ? ofRate : ofMethod.filter((option) => option.rate === ofMethod[0]?.rate);
+			// one place is taken without asking, unless the shopper named another
+			const picked =
+				candidates.find((option) => option.locationId !== null && option.locationId === asked.locationId) ??
+				(candidates.length === 1 && (asked.locationId === null || candidates[0]?.locationId === null)
+					? candidates[0]
+					: undefined);
 			/** @type {DeliveryChoice} */
 			const chosen = !physical
-				? { method: 'none', zone: '', name: '', fee: 0, locationId: null, minDays: null, maxDays: null }
-				: wantsPickup
-					? (pickup ?? { method: 'pickup', zone: '', name: '', fee: 0, locationId: null, minDays: null, maxDays: null })
-					: /** @type {DeliveryChoice} */ (deliveryOptions[0]);
-			// an edited order that keeps its placed amounts keeps its delivery fee while its delivery method stays
-			const delivery = keep && chosen.method === keep.deliveryMethod ? { ...chosen, fee: keep.delivery } : chosen;
+				? NO_DELIVERY
+				: (picked ?? {
+						...NO_DELIVERY,
+						method: candidates[0]?.method ?? (asked.method === 'pickup' ? 'pickup' : 'delivery'),
+					});
+			// an edited order that keeps its placed amounts keeps its delivery fee while its delivery method and rate stay
+			const delivery =
+				keep && chosen.method === keep.deliveryMethod && chosen.rate === keep.deliveryRate
+					? { ...chosen, fee: keep.delivery }
+					: chosen;
 			const deliveryProblem =
-				physical && wantedMethod === 'pickup' && !pickup
-					? !pickupPossible
-						? 'pickup_unavailable'
-						: 'choose_pickup_location'
-					: null;
+				!physical || picked
+					? null
+					: candidates.length > 0
+						? 'choose_pickup_location'
+						: asked.method === 'pickup'
+							? 'pickup_unavailable'
+							: 'no_delivery';
 
 			// loyalty points (E20): none while a deal that allows no points applies
 			/** @type {Quote['points']} */

@@ -15,7 +15,7 @@ import { checkAddressRegions } from '../core/address.js';
 import { checkBookingHours } from '../core/bookings.js';
 import { checkCouriers } from '../core/couriers.js';
 import { DEFAULT_SEGMENTS, checkSegments } from '../core/customer-segments.js';
-import { checkZones } from '../core/delivery.js';
+import { checkZones, defaultZones } from '../core/delivery.js';
 import { DEFAULT_FLOW, checkOrderFlow, readOrderFlow } from '../core/flow.js';
 import { checkGrades } from '../core/grades.js';
 import { DEFAULT_POLICIES, checkPolicies } from '../core/policies.js';
@@ -64,7 +64,7 @@ export const LISTS = Object.freeze({
 		check: checkSegments,
 		fallback: () => structuredClone(DEFAULT_SEGMENTS),
 	},
-	delivery_zones: { feature: 'delivery_zones', title: 'Delivery zones', check: checkZones, fallback: () => [] },
+	delivery_zones: { feature: 'delivery_zones', title: 'Delivery zones', check: checkZones, fallback: defaultZones },
 	tax_rules: { feature: 'taxes', title: 'Tax rules', check: checkTaxRules, fallback: () => [] },
 	grades: { feature: 'grades_serials', title: 'Condition grades', check: checkGrades, fallback: () => [] },
 	unit_states: {

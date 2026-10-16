@@ -91,7 +91,7 @@ const packedOrder = async ({ method = 'cod', name = 'Sara "Quotes" Shopper', wei
 					country: 'US',
 					notes: 'Gate 2',
 				},
-				delivery: { method: 'delivery', zone: '', fee: 0, locationId: null },
+				delivery: { method: 'delivery', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 				lines: [
 					{
 						id: createId('oln'),

@@ -338,7 +338,9 @@ describe('the product answer', () => {
 			{ key: 'fair', label: 'Fair' },
 		]);
 		await shop.setting('returns', 'returnTime', 14);
-		await shop.setting('delivery_zones', 'defaultFee', 500);
+		await shop.list('delivery_zones', [
+			{ key: 'everywhere', name: 'Everywhere', rates: [{ key: 'standard', name: 'Standard', price: 500 }] },
+		]);
 	});
 	afterAll(async () => shop.product.close());
 

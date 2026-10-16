@@ -389,7 +389,7 @@ describe('my orders', () => {
 		expect(textOf(host)).toContain(notes.prep);
 		// the pickup point of the settings (no stock location): its name, address and hours
 		order = detail({
-			delivery: { method: 'pickup', zone: '', fee: 0, locationId: null, locationName: '' },
+			delivery: { method: 'pickup', zone: '', rate: '', rateName: '', fee: 0, locationId: null, locationName: '' },
 			address: null,
 			shipment: null,
 			notes: { ...notes, delivery: '' },
@@ -582,7 +582,7 @@ describe('my orders', () => {
 		let pay = fail(503, 'payments_unavailable');
 		const waiting = detail({
 			role: 'awaiting_payment',
-			delivery: { method: 'pickup', zone: '', fee: 0, locationId: 'loc_1', locationName: 'Main shop' },
+			delivery: { method: 'pickup', zone: '', rate: '', rateName: '', fee: 0, locationId: 'loc_1', locationName: 'Main shop' },
 			address: null,
 			shipment: null,
 			note: '',
@@ -641,7 +641,15 @@ describe('my orders', () => {
 				'GET /v1/shop/orders/ord_1': () =>
 					ok(
 						detail({
-							delivery: { method: 'delivery', zone: '', fee: 0, locationId: null, locationName: '' },
+							delivery: {
+								method: 'delivery',
+								zone: '',
+								rate: '',
+								rateName: '',
+								fee: 0,
+								locationId: null,
+								locationName: '',
+							},
 							address: null,
 							shipment: { courier: 'Fast', trackingNumber: 'T1', trackingUrl: '' },
 							totals: { ...detail().totals, discount: 0, tax: 0 },

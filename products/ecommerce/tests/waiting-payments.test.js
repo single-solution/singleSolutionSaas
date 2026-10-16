@@ -168,7 +168,7 @@ describe('a delete, a recorded payment or an edit that loses its race (L1)', () 
 			role: 'awaiting_payment',
 			patch: {
 				address: { ...ADDRESS, line2: '', area: '', postalCode: '', notes: '' },
-				delivery: { method: 'delivery', zone: '', fee: 0, locationId: null },
+				delivery: { method: 'delivery', zone: '', rate: '', rateName: '', fee: 0, locationId: null },
 				payment: {
 					method: 'online',
 					kind: 'gateway',

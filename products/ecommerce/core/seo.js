@@ -279,7 +279,7 @@ export const feedGroupId = (product, many) => product.feedGroupId || (many ? pro
  */
 
 /**
- * The days a list of whole days says (the delivery settings `handlingDays` and `transitDays`): the fewest and the most
+ * The days a list of whole days says (the delivery settings `handlingDays`): the fewest and the most
  * of them, or null for an empty list (not set).
  * @param {unknown} list
  * @returns {{ min: number, max: number } | null}
@@ -555,8 +555,8 @@ const offerExtras = ({ product, currency, shippingPolicy, returns }, variant) =>
 
 /**
  * The store-wide shipping policy (G5.5, Google's `ShippingService` of the business, launched 2025-11-12): delivery to
- * the business's country at the delivery fee where no zone matches, free from the free-delivery amount (0 = never), with
- * the handling and transit days.
+ * the business's country at the first plain delivery rate of its zone (E5), free from the rate's free-delivery amount
+ * (0 = never), with the handling days and the rate's days in transit.
  * @param {{ country: string, fee: number, freeOver: number, deliveryTime: DeliveryTime }} shipping
  * @param {string} currency
  * @param {string} id its `@id`

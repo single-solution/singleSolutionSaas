@@ -98,7 +98,7 @@
 		{
 			"key": "delivery_zones",
 			"name": "Delivery zones",
-			"description": "Delivery zones by any place (countries, regions, cities, areas or postcodes) with their fees and days, free delivery over an amount, and store pickup.",
+			"description": "Delivery zones by any place (countries, regions, cities, areas or postcodes), each with named rates the shopper picks (Standard, Express …; by package weight or order value, free over an amount, with their days), and pickup.",
 			"dependsOn": ["checkout"],
 			"recommendFor": ["delivers.*", "pays.pickup"],
 			"settings": {

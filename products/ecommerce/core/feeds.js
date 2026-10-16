@@ -92,8 +92,8 @@ const APPAREL = Object.freeze({
  */
 
 /**
- * Working days from an order to its dispatch, and days on the way (the `delivery_zones` settings `handlingDays` and
- * `transitDays`).
+ * Working days from an order to its dispatch (the `delivery_zones` setting `handlingDays`), and days on the way (the
+ * days of the business country's delivery rate, E5).
  * @typedef {{ handling: { min: number, max: number }, transit: { min: number, max: number } }} DeliveryTime
  */
 
@@ -122,7 +122,8 @@ const APPAREL = Object.freeze({
  * @property {(variant: import('./model.js').VariantRecord) => string[]} [extraImages] photos besides the row's own, in
  *   order (the row's own and repeats are left out)
  * @property {{ fee: number, freeOver?: number, country: string, deliveryTime?: DeliveryTime | null } | null} [shipping]
- *   the default delivery fee, free from `freeOver` (0 = never; SG-2), with its delivery days; null = shipping not sent
+ *   the business country's delivery rate (E5), free from `freeOver` (0 = never; SG-2), with its delivery days; null =
+ *   shipping not sent
  * @property {boolean} [wholeUnits] amounts without minor units (K7, E17)
  * @property {(variant: import('./model.js').VariantRecord) => string} [variantLink] a variant's page (E13)
  * @property {(variant: import('./model.js').VariantRecord) => string} [variantImage] a variant's first photo (E6)
