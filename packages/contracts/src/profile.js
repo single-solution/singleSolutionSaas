@@ -66,8 +66,38 @@ export const PROFILE_LISTS = Object.freeze({ countries: 250, languages: 20 });
  */
 export const PROFILE_REGIONS = Object.freeze({
 	eea: Object.freeze([
-		'AT', 'BE', 'BG', 'CH', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IS', 'IT',
-		'LI', 'LT', 'LU', 'LV', 'MT', 'NL', 'NO', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK',
+		'AT',
+		'BE',
+		'BG',
+		'CH',
+		'CY',
+		'CZ',
+		'DE',
+		'DK',
+		'EE',
+		'ES',
+		'FI',
+		'FR',
+		'GB',
+		'GR',
+		'HR',
+		'HU',
+		'IE',
+		'IS',
+		'IT',
+		'LI',
+		'LT',
+		'LU',
+		'LV',
+		'MT',
+		'NL',
+		'NO',
+		'PL',
+		'PT',
+		'RO',
+		'SE',
+		'SI',
+		'SK',
 	]),
 });
 
@@ -129,9 +159,7 @@ export const isRecommendTag = (tag) => {
 	if (rest.length > 0) return false;
 	if (isChoice(question))
 		return (
-			option === '*' ||
-			PROFILE_CHOICES[question].includes(option) ||
-			(option === PROFILE_OTHER_OPTION && takesOther(question))
+			option === '*' || PROFILE_CHOICES[question].includes(option) || (option === PROFILE_OTHER_OPTION && takesOther(question))
 		);
 	if (isYesNo(question)) return option === 'yes' || option === 'no';
 	if (question === 'countries' && Object.hasOwn(PROFILE_REGIONS, option)) return true;
