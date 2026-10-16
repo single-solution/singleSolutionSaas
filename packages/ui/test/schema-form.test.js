@@ -249,8 +249,8 @@ describe('SchemaForm', () => {
 		// a text offers its suggestions and takes its own value
 		const unit = byLabel(container, 'Unit');
 		expect([...(unit.list?.options ?? [])].map((o) => o.value)).toEqual(['piece', 'box', 'meter']);
-		type(unit, 'litre');
-		expect(onChange).toHaveBeenLastCalledWith('unit', 'litre');
+		type(unit, 'liter');
+		expect(onChange).toHaveBeenLastCalledWith('unit', 'liter');
 		// a list of texts: pick a suggestion, or add what is typed (once, any case)
 		click(/** @type {HTMLElement} */ (container.querySelector('input[id$="-M"]')));
 		expect(onChange).toHaveBeenLastCalledWith('sizes', ['S', 'M']);
