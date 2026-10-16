@@ -21,15 +21,15 @@ export const SETUP_TRACE_DAYS = 30;
 
 /**
  * The state of a setup link as a setup page may learn it (A3, A5), from what Accounts keeps of a link whose code
- * matched: its live record (null once it was used, replaced or removed, or past its end) and its trace (null for a link
- * made before traces were kept). The trace says `used` or `canceled` (a newer link replaced it, or staff declined its
+ * matched: its live record (null once it was used, replaced or removed, or past its end) and its trace (every link is
+ * made with one; none: no link Accounts made). The trace says `used` or `canceled` (a newer link replaced it, or staff declined its
  * request); past its end the link is `expired`; a link gone without a trace saying why is `canceled` (for example its
  * user was removed). Neither: `invalid` (an unknown or wrong code).
  * @param {{ live: { expireAt: Date } | null, trace: { data: Record<string, any> } | null, now: number }} input
  * @returns {SetupLinkState}
  */
 export const setupLinkState = ({ live, trace, now }) => {
-	if (!trace) return live ? { status: 'valid', until: live.expireAt } : { status: 'invalid' };
+	if (!trace) return { status: 'invalid' };
 	const state = trace.data.state;
 	if (state === 'used' || state === 'canceled') return { status: state };
 	const until = new Date(trace.data.validUntil);

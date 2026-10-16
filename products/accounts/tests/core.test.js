@@ -290,8 +290,8 @@ describe('roles and rules', () => {
 		/** @param {string} state @param {number} [until] */
 		const trace = (state, until = 10_000) => ({ data: { state, validUntil: new Date(until) } });
 		expect(setupLinkState({ live: null, trace: null, now: 0 })).toEqual({ status: 'invalid' });
-		// a link made before traces were kept
-		expect(setupLinkState({ live, trace: null, now: 0 })).toEqual({ status: 'valid', until: end });
+		// every link is made with its trace: none is no link Accounts made
+		expect(setupLinkState({ live, trace: null, now: 0 })).toEqual({ status: 'invalid' });
 		expect(setupLinkState({ live, trace: trace('issued'), now: 0 })).toEqual({ status: 'valid', until: end });
 		expect(setupLinkState({ live: null, trace: trace('issued'), now: 10_000 })).toEqual({ status: 'expired' });
 		expect(setupLinkState({ live: null, trace: trace('used'), now: 0 })).toEqual({ status: 'used' });

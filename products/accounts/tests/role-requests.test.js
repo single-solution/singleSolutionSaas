@@ -392,12 +392,10 @@ describe('the setup-link lookup', () => {
 		expect((await lookup(codeOf(second.json.url))).json).toEqual({ status: 'invalid' });
 		expect((await lookup(linkCode)).json).toEqual({ status: 'invalid' });
 
-		// a link made before traces were kept: valid while it works
+		// a working link whose user is removed from Accounts: invalid
 		const fay = await server('POST', '/v1/users', { name: 'Fay Holt', phone: '07700 900581' });
 		const fayLink = await server('POST', `/v1/users/${fay.json.id}/setup-link`);
-		await (await env.store()).codes.removeSetupTraces(fay.json.id);
 		expect((await lookup(codeOf(fayLink.json.url))).json).toMatchObject({ status: 'valid', name: 'Fay Holt' });
-		// its user removed from Accounts: invalid
 		await server('DELETE', `/v1/users/${fay.json.id}?scope=accounts`, { reason: 'Test' });
 		expect((await lookup(codeOf(fayLink.json.url))).json).toEqual({ status: 'invalid' });
 	});
