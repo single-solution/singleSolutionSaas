@@ -559,7 +559,7 @@ describe('statuses, data rights and public routes', () => {
 		const deleted = await (
 			await env.call('POST', '/v1/data-rights/delete', { token: env.server, body: { user: { email: 'a@b.co' } } })
 		).json();
-		expect(deleted).toMatchObject({ deleted: 0, anonymised: 0 });
+		expect(deleted).toMatchObject({ deleted: 0, anonymized: 0 });
 	});
 
 	it('serves the page script and the public docs', async () => {
