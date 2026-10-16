@@ -910,7 +910,7 @@ describe('data rights, statuses and notices', () => {
 		expect(deleted.deleted).toBeGreaterThan(3);
 		expect(
 			await (await env.call('POST', '/v1/data-rights/delete', { token: env.server, body: { user: { id: 'u_9' } } })).json(),
-		).toEqual({ deleted: 0, anonymised: 0 });
+		).toEqual({ deleted: 0, anonymized: 0 });
 	});
 
 	it('obeys stopped, suspended and removed, and the hosted page says unavailable', async () => {

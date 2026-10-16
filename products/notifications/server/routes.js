@@ -13,7 +13,7 @@ import { isId } from '@ss/contracts';
 import { normalizeEmail } from '@ss/contracts/email';
 import { TEMPLATE_KEY, TEXT_LIMITS } from '@ss/contracts/templates';
 import { actorOf, countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
-import { CHANNELS, CHANNEL_FEATURES, checkRecipient, normalisePhone } from '../core/channels.js';
+import { CHANNELS, CHANNEL_FEATURES, checkRecipient, normalizePhone } from '../core/channels.js';
 import { gatewayRepliesOf, isOptOut, repliesOf } from '../core/inbound.js';
 import { logFilters } from '../core/log.js';
 import { verifyMeta, verifyTwilio } from '../adapters/signatures.js';
@@ -629,7 +629,7 @@ export const createRoutes = (product) => {
 				const id = typeof body.to === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.to) ? body.to : null;
 				const to = {
 					email: channel === 'email' ? normalizeEmail(body.to) : null,
-					phone: channel === 'sms' || channel === 'whatsapp' ? normalisePhone(body.to) : null,
+					phone: channel === 'sms' || channel === 'whatsapp' ? normalizePhone(body.to) : null,
 					subscriberId: channel === 'push' ? id : null,
 					staffId: channel === 'staff_push' ? id : null,
 					language: null,
@@ -854,7 +854,7 @@ export const createRoutes = (product) => {
 						? gatewayRepliesOf(ctx.rawBody, { from: String(v.inboundFrom ?? ''), text: String(v.inboundText ?? '') })
 						: repliesOf(v.provider === 'twilio' ? 'twilio' : 'meta', ctx.rawBody);
 				for (const reply of replies) {
-					const phone = normalisePhone(reply.from);
+					const phone = normalizePhone(reply.from);
 					if (phone && isOptOut(reply.text, keywords)) await sending.unsubscribe(s, phone, 'keyword');
 				}
 				return v.provider === 'twilio'

@@ -33,7 +33,7 @@ import staffPush from '../schemas/staff_push.settings.json' with { type: 'json' 
 import templateLimits from '../schemas/templates.shared.json' with { type: 'json' };
 import webhooks from '../schemas/webhooks.settings.json' with { type: 'json' };
 import whatsapp from '../schemas/whatsapp.settings.json' with { type: 'json' };
-import { normalisePhone } from '../core/channels.js';
+import { normalizePhone } from '../core/channels.js';
 import { WEBHOOK_EVENTS, webhookUrlsSummary } from '../core/webhooks.js';
 import { createSealer, resealWebsite } from './crypto.js';
 import { createDefaults } from './defaults.js';
@@ -104,7 +104,7 @@ const PROBLEM_CODES = Object.freeze({
  * @param {{ email?: string, phone?: string }} user
  */
 const addressesOf = (user) =>
-	/** @type {string[]} */ ([normalizeEmail(user.email), normalisePhone(user.phone)].filter((address) => address !== null));
+	/** @type {string[]} */ ([normalizeEmail(user.email), normalizePhone(user.phone)].filter((address) => address !== null));
 
 /**
  * Data rights (PLAN 0.4.11): a person's messages, unsubscribes (from everything or a topic) and unsubscribe codes are found by their email address
@@ -147,14 +147,14 @@ const dataRights = (now) => ({
 	},
 	deleteUser: async (ctx, user) => {
 		const addresses = addressesOf(user);
-		if (addresses.length === 0) return { deleted: 0, anonymised: 0 };
+		if (addresses.length === 0) return { deleted: 0, anonymized: 0 };
 		const store = createStore(await ctx.data(), { now });
 		const deleted =
 			(await store.messages.deleteByAddresses(addresses)) +
 			(await store.optouts.deleteByAddresses(addresses)) +
 			(await store.topicOptouts.deleteByAddresses(addresses)) +
 			(await store.recipients.deleteByAddresses(addresses));
-		return { deleted, anonymised: 0 };
+		return { deleted, anonymized: 0 };
 	},
 });
 

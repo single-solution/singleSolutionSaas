@@ -172,7 +172,7 @@ describe('templates for the merchant’s server (N4)', () => {
 			'PUT',
 			'/v1/templates',
 			{
-				key: 'ecommerce.order_cancelled',
+				key: 'ecommerce.order_canceled',
 				channel: 'sms',
 				text: 'Order {order} was canceled.{?reason} Reason: {reason}{/reason}',
 				required: true,
@@ -181,13 +181,13 @@ describe('templates for the merchant’s server (N4)', () => {
 		);
 		expect(saved).toMatchObject({
 			status: 200,
-			json: { key: 'ecommerce.order_cancelled', channel: 'sms', language: 'default', required: true, buttons: [] },
+			json: { key: 'ecommerce.order_canceled', channel: 'sms', language: 'default', required: true, buttons: [] },
 		});
 		expect(await recent()).toContainEqual(
 			expect.objectContaining({
 				who: { kind: 'user', id: 'usr_7', name: 'Alex Morgan', role: 'Manager' },
 				what: 'templates',
-				detail: 'Template ecommerce.order_cancelled (sms, default): saved',
+				detail: 'Template ecommerce.order_canceled (sms, default): saved',
 			}),
 		);
 		// the dashboard's checks
@@ -200,13 +200,13 @@ describe('templates for the merchant’s server (N4)', () => {
 		expect(off.json.type).toMatch(/feature_off$/);
 		expect((await server('DELETE', '/v1/templates/alert/push/default')).status).toBe(403);
 
-		expect((await server('DELETE', '/v1/templates/ecommerce.order_cancelled/sms/default')).status).toBe(204);
-		expect((await server('DELETE', '/v1/templates/ecommerce.order_cancelled/sms/default')).status).toBe(404);
+		expect((await server('DELETE', '/v1/templates/ecommerce.order_canceled/sms/default')).status).toBe(204);
+		expect((await server('DELETE', '/v1/templates/ecommerce.order_canceled/sms/default')).status).toBe(404);
 		expect((await server('DELETE', '/v1/templates/x/fax/default')).status).toBe(404);
 		expect(await recent()).toContainEqual(
 			expect.objectContaining({
 				who: { kind: 'server', id: 'server', name: 'Server' },
-				detail: 'Template ecommerce.order_cancelled (sms, default): deleted',
+				detail: 'Template ecommerce.order_canceled (sms, default): deleted',
 			}),
 		);
 		// each change is in the activity log too, by who made it (the dashboard's save of the push template as well)
@@ -216,8 +216,8 @@ describe('templates for the merchant’s server (N4)', () => {
 			expect.arrayContaining([
 				expect.objectContaining({
 					actor: { kind: 'user', id: 'usr_7', name: 'Alex Morgan', role: 'Manager' },
-					target: 'ecommerce.order_cancelled/sms/default',
-					label: 'ecommerce.order_cancelled (sms, default)',
+					target: 'ecommerce.order_canceled/sms/default',
+					label: 'ecommerce.order_canceled (sms, default)',
 				}),
 				expect.objectContaining({ actor: expect.objectContaining({ kind: 'admin' }), target: 'alert/push/default' }),
 			]),
@@ -225,7 +225,7 @@ describe('templates for the merchant’s server (N4)', () => {
 		expect(await activity('template.deleted')).toContainEqual(
 			expect.objectContaining({
 				actor: { kind: 'server', id: 'server', name: 'Server' },
-				target: 'ecommerce.order_cancelled/sms/default',
+				target: 'ecommerce.order_canceled/sms/default',
 			}),
 		);
 		// every channel off: the routes answer feature_off

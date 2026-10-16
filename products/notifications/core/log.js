@@ -4,7 +4,7 @@
  * @module
  */
 import { normalizeEmail } from '@ss/contracts/email';
-import { CHANNELS, normalisePhone } from './channels.js';
+import { CHANNELS, normalizePhone } from './channels.js';
 
 /** @typedef {'queued' | 'retrying' | 'sent' | 'failed' | 'skipped'} MessageStatus */
 
@@ -32,6 +32,6 @@ export const logFilters = (query) => {
 	if (CHANNELS.includes(/** @type {import('./channels.js').Channel} */ (query.channel)))
 		filters.channel = /** @type {import('./channels.js').Channel} */ (query.channel);
 	if (typeof query.to === 'string' && query.to !== '')
-		filters.address = normalizeEmail(query.to) ?? normalisePhone(query.to) ?? query.to;
+		filters.address = normalizeEmail(query.to) ?? normalizePhone(query.to) ?? query.to;
 	return filters;
 };

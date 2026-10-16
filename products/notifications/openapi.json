@@ -1206,7 +1206,7 @@
 									"type": "object",
 									"required": [
 										"deleted",
-										"anonymised"
+										"anonymized"
 									],
 									"additionalProperties": false,
 									"properties": {
@@ -1214,7 +1214,7 @@
 											"type": "integer",
 											"minimum": 0
 										},
-										"anonymised": {
+										"anonymized": {
 											"type": "integer",
 											"minimum": 0,
 											"description": "Records kept without the person's details."

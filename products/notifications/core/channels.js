@@ -4,7 +4,7 @@
  * @module
  */
 import { normalizeEmail } from '@ss/contracts/email';
-import { normalisePhone as normaliseAnyPhone } from '@ss/contracts/phone';
+import { normalizePhone as normalizeAnyPhone } from '@ss/contracts/phone';
 import { TEMPLATE_CHANNELS } from '@ss/contracts/templates';
 
 /** @typedef {import('@ss/contracts/templates').TemplateChannel} Channel */
@@ -58,21 +58,21 @@ export const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
  * @param {unknown} value
  * @returns {string | null}
  */
-export const normalisePhone = (value) => normaliseAnyPhone(value);
+export const normalizePhone = (value) => normalizeAnyPhone(value);
 
 /**
  * A language tag (`en`, `fr`, `pt-BR`), or null.
  * @param {unknown} value
  * @returns {string | null}
  */
-export const normaliseLanguage = (value) => (typeof value === 'string' && LANGUAGE.test(value) ? value : null);
+export const normalizeLanguage = (value) => (typeof value === 'string' && LANGUAGE.test(value) ? value : null);
 
 /**
  * An IANA time zone the runtime knows, or null.
  * @param {unknown} value
  * @returns {string | null}
  */
-export const normaliseTimeZone = (value) => {
+export const normalizeTimeZone = (value) => {
 	if (typeof value !== 'string' || value.length === 0 || value.length > 64) return null;
 	try {
 		new Intl.DateTimeFormat('en-US', { timeZone: value });
@@ -103,7 +103,7 @@ export const checkRecipient = (input) => {
 	/** @type {Recipient} */
 	const value = {
 		email: to.email === undefined ? null : normalizeEmail(to.email),
-		phone: to.phone === undefined ? null : normalisePhone(to.phone),
+		phone: to.phone === undefined ? null : normalizePhone(to.phone),
 		subscriberId:
 			to.subscriberId === undefined
 				? null
@@ -111,8 +111,8 @@ export const checkRecipient = (input) => {
 					? to.subscriberId
 					: null,
 		staffId: to.staffId === undefined ? null : typeof to.staffId === 'string' && ID.test(to.staffId) ? to.staffId : null,
-		language: to.language === undefined ? null : normaliseLanguage(to.language),
-		timeZone: to.timeZone === undefined ? null : normaliseTimeZone(to.timeZone),
+		language: to.language === undefined ? null : normalizeLanguage(to.language),
+		timeZone: to.timeZone === undefined ? null : normalizeTimeZone(to.timeZone),
 	};
 	for (const field of /** @type {const} */ (['email', 'phone', 'subscriberId', 'staffId', 'language', 'timeZone']))
 		if (to[field] !== undefined && value[field] === null) return { ok: false, field: `to/${field}` };

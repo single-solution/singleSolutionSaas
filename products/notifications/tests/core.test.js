@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import apiJson from '../schemas/api.json' with { type: 'json' };
-import { addressFor, checkRecipient, normaliseLanguage, normalisePhone, normaliseTimeZone } from '../core/channels.js';
+import { addressFor, checkRecipient, normalizeLanguage, normalizePhone, normalizeTimeZone } from '../core/channels.js';
 import { gatewayRepliesOf, isOptOut, repliesOf } from '../core/inbound.js';
 import { STATUSES, logFilters } from '../core/log.js';
 import {
@@ -31,20 +31,20 @@ import { keyBytes } from '../core/widgets.js';
 
 describe('channels', () => {
 	it('normalizes addresses without guessing a country', () => {
-		expect(normalisePhone('+1 (202) 555-0143')).toBe('+12025550143');
-		expect(normalisePhone('0044 7700 900123')).toBe('+447700900123');
-		expect(normalisePhone('07700900123')).toBeNull();
+		expect(normalizePhone('+1 (202) 555-0143')).toBe('+12025550143');
+		expect(normalizePhone('0044 7700 900123')).toBe('+447700900123');
+		expect(normalizePhone('07700900123')).toBeNull();
 		// the shared normalizer: a trunk 0 after the code is dropped, in any country; an unassigned code is refused
-		expect(normalisePhone('+44 (0)20 7946 0018')).toBe('+442079460018');
-		expect(normalisePhone('+33 (0)6 12 34 56 78')).toBe('+33612345678');
-		expect(normalisePhone('+92 0300 1234567')).toBe('+923001234567');
-		expect(normalisePhone('+999 1234 5678')).toBeNull();
-		expect(normalisePhone(3)).toBeNull();
-		expect(normaliseLanguage('pt-BR')).toBe('pt-BR');
-		expect(normaliseLanguage('Portuguese')).toBeNull();
-		expect(normaliseTimeZone('America/Sao_Paulo')).toBe('America/Sao_Paulo');
-		expect(normaliseTimeZone('Mars/Base')).toBeNull();
-		expect(normaliseTimeZone('')).toBeNull();
+		expect(normalizePhone('+44 (0)20 7946 0018')).toBe('+442079460018');
+		expect(normalizePhone('+33 (0)6 12 34 56 78')).toBe('+33612345678');
+		expect(normalizePhone('+92 0300 1234567')).toBe('+923001234567');
+		expect(normalizePhone('+999 1234 5678')).toBeNull();
+		expect(normalizePhone(3)).toBeNull();
+		expect(normalizeLanguage('pt-BR')).toBe('pt-BR');
+		expect(normalizeLanguage('Portuguese')).toBeNull();
+		expect(normalizeTimeZone('America/Sao_Paulo')).toBe('America/Sao_Paulo');
+		expect(normalizeTimeZone('Mars/Base')).toBeNull();
+		expect(normalizeTimeZone('')).toBeNull();
 	});
 
 	it('checks a recipient and finds the address of a channel', () => {
@@ -264,7 +264,7 @@ describe('templates', () => {
 			field: 'subject',
 		});
 		const checked = checkTemplate({
-			key: 'ecommerce.order_cancelled',
+			key: 'ecommerce.order_canceled',
 			channel: 'email',
 			subject: 'Order {order} canceled{?reason}: {reason}{/reason}',
 			text: 'Your order {order} was canceled.{?reason} Reason: {reason}{/reason}',
