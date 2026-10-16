@@ -39,16 +39,7 @@ import { PAY_LATER_KINDS } from '../core/payment-methods.js';
 import { shipmentLink } from '../core/couriers.js';
 import { PLACED_FACTS, factsGuard, isFacts } from '../core/facts.js';
 import { checkFieldValues, fieldValuesShown, unitsShown } from '../core/fields.js';
-import {
-	WAITING_ROLES,
-	shopperCancelOf,
-	shopperLabelOf,
-	shopperTextOf,
-	startsOfFlow,
-	statusOf,
-	statusWithRole,
-	triggersOfFlow,
-} from '../core/flow.js';
+import { WAITING_ROLES, shopperCancelOf, shopperLabelOf, shopperTextOf, statusOf, statusWithRole } from '../core/flow.js';
 import { shopperInvoiceReady } from '../core/invoice.js';
 import { checkGuest, guestRules, phoneDigitsOf, savedAddresses } from '../core/guests.js';
 import { earnsAsMember, loyaltyRules, pointsToEarn, takesPart } from '../core/loyalty.js';
@@ -265,7 +256,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const flow = await flowOf(s);
 		const who = by === 'system' ? 'system' : 'shopper';
 		const listed = who === 'shopper';
-		const to = target ?? triggersOfFlow(flow).windowEnd;
+		const to = target ?? flow.triggers.windowEnd;
 		if (!checkTransition({ order, flow, to, listed, who }).ok) return null;
 		const step = await payments.beforeCancel(s, order, note);
 		if (step.paid) return step.paid;
@@ -1011,7 +1002,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const viaPayments = total > 0 && !manual && (!later || advance > 0);
 		// orders paid on delivery or at pickup and a free order paid online or first (nothing to pay) start where the
 		// flow's `starts` say; a free one in awaiting payment waits for staff without a time to pay (CK-41)
-		const starts = startsOfFlow(flow);
+		const starts = flow.starts;
 		const startKey = kind === 'on_delivery' ? starts.on_delivery : kind === 'at_pickup' ? starts.at_pickup : starts.free;
 		const freeWaits = total === 0 && !later && statusOf(flow, starts.free)?.role === 'awaiting_payment';
 		const waitsPayment = viaPayments || (total > 0 && manual) || freeWaits;

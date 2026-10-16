@@ -509,11 +509,12 @@ const measureProblems = (draft) => {
 // ------------------------------------------------------------------------------------------------- order flow
 
 /** @typedef {import('../../core/model.js').OrderFlow} OrderFlow */
+/** @typedef {import('../../core/model.js').FlowInput} FlowInput */
 
 /**
  * The flow with a status's key changed: its moves, triggers and starts follow it.
- * @param {Required<OrderFlow>} flow @param {string} from the key before @param {string} to the key now
- * @returns {Required<OrderFlow>}
+ * @param {OrderFlow} flow @param {string} from the key before @param {string} to the key now
+ * @returns {OrderFlow}
  */
 export const renameFlowStatus = (flow, from, to) => {
 	/** @param {string} key */
@@ -537,8 +538,8 @@ export const renameFlowStatus = (flow, from, to) => {
 /**
  * The flow without a status: its moves go, and a trigger or start that named it is left out (the server fills today's
  * choice; `paid` and `refundsCover` become none).
- * @param {Required<OrderFlow>} flow @param {string} key
- * @returns {OrderFlow}
+ * @param {OrderFlow} flow @param {string} key
+ * @returns {FlowInput}
  */
 export const removeFlowStatus = (flow, key) => ({
 	statuses: flow.statuses.filter((status) => status.key !== key),
@@ -557,8 +558,8 @@ export const removeFlowStatus = (flow, key) => ({
  * The flow to save: statuses saved without a key get one from their name (`keyOf`) and everything naming them follows;
  * names are trimmed; moves the role rules do not allow (`allowed`) are left out. Every other field is kept as it is, so
  * saving never drops an option, a shopper text, a trigger or a start.
- * @param {OrderFlow} flow @param {(flow: OrderFlow, move: OrderFlow['moves'][number]) => boolean} allowed
- * @returns {OrderFlow}
+ * @param {FlowInput} flow @param {(flow: FlowInput, move: FlowInput['moves'][number]) => boolean} allowed
+ * @returns {FlowInput}
  */
 export const flowToSave = (flow, allowed) => {
 	const keys = new Map(flow.statuses.map((status) => [status.key, keyOf(status.key, status.label)]));

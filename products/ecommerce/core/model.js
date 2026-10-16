@@ -366,10 +366,14 @@ export const STATUS_ROLES = Object.freeze([
  * @typedef {{ on_delivery: string, at_pickup: string, free: string }} FlowStarts
  */
 /**
- * The merchant's order flow (the `order_flow` list). `triggers` and `starts` are filled from the statuses and moves
- * when missing (older saved flows, flows built in code).
- * @typedef {{ statuses: OrderStatusDefinition[], moves: OrderMove[], triggers?: FlowTriggers,
- *   starts?: FlowStarts }} OrderFlow
+ * The merchant's order flow (the `order_flow` list) as it is saved: checked, every field filled (`core/flow.js`
+ * `checkOrderFlow`).
+ * @typedef {{ statuses: OrderStatusDefinition[], moves: OrderMove[], triggers: FlowTriggers, starts: FlowStarts }} OrderFlow
+ */
+/**
+ * A flow given to the check or being edited: `triggers` and `starts` are filled from the statuses and moves when
+ * missing.
+ * @typedef {{ statuses: OrderStatusDefinition[], moves: OrderMove[], triggers?: FlowTriggers, starts?: FlowStarts }} FlowInput
  */
 
 /** A payment method's key in the website's `payment_methods` list (`core/payment-methods.js`). @typedef {string} PaymentMethod */

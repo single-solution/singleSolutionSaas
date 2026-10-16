@@ -35,6 +35,7 @@ import { STATUS_ROLES } from './model.js';
 import { isMethodKey } from './payment-methods.js';
 
 /** @typedef {import('./model.js').OrderFlow} OrderFlow */
+/** @typedef {import('./model.js').FlowInput} FlowInput */
 /** @typedef {import('./model.js').OrderMove} OrderMove */
 /** @typedef {import('./model.js').MoveOptions} MoveOptions */
 /** @typedef {import('./model.js').StatusRole} StatusRole */
@@ -192,8 +193,8 @@ const OPTION_NAMES = Object.freeze([
 const defaultWho = (from, to) => (WAITING_ROLES.includes(from) && to === 'cancelled' ? ['staff', 'shopper'] : ['staff']);
 
 /**
- * A move with every field: as given, else its defaults (a move of a flow built in code, or saved before phase 2).
- * @param {OrderFlow} flow @param {OrderMove} move
+ * A move with every field: as given, else its defaults (a move given to the check, or of a flow being edited).
+ * @param {FlowInput} flow @param {OrderMove} move
  * @returns {Required<OrderMove> & { options: Required<MoveOptions> }} unknown statuses give an empty set of options
  */
 export const moveRules = (flow, move) => {
@@ -322,7 +323,7 @@ export const checkOrderFlow = (value) => {
 	if (counted('awaiting_confirmation') > 1) errors.push('At most one status has the role awaiting_confirmation.');
 	for (const role of /** @type {StatusRole[]} */ (['open', 'delivered', 'cancelled']))
 		if (counted(role) === 0) errors.push(`At least one status has the role ${role}.`);
-	const draft = /** @type {OrderFlow} */ ({ statuses: cleanStatuses, moves: [] });
+	const draft = /** @type {FlowInput} */ ({ statuses: cleanStatuses, moves: [] });
 	/** @type {Array<Required<OrderMove>>} */
 	const cleanMoves = [];
 	const seen = new Set();
@@ -360,7 +361,7 @@ export const checkOrderFlow = (value) => {
 			);
 	}
 	if (errors.length > 0) return { ok: false, errors };
-	/** @type {OrderFlow} */
+	/** @type {FlowInput} */
 	const checked = { statuses: cleanStatuses, moves: cleanMoves };
 	const triggers = triggersOf(checked, objectOf(input.triggers), errors);
 	const starts = startsOf(checked, objectOf(input.starts), errors);
@@ -436,7 +437,7 @@ const moveProblems = (name, move, from, to) => {
  * The flow's triggers, checked: `paid` an open status listed from the awaiting-payment status ('' = Payments'
  * confirmation leaves the order where it is, paid), `windowEnd` a canceled status, `refundsCover` a refunded status or
  * ''. Missing ones are today's choices.
- * @param {OrderFlow} flow checked @param {Record<string, unknown>} input @param {string[]} errors
+ * @param {FlowInput} flow checked @param {Record<string, unknown>} input @param {string[]} errors
  * @returns {import('./model.js').FlowTriggers}
  */
 const triggersOf = (flow, input, errors) => {
@@ -462,7 +463,7 @@ const triggersOf = (flow, input, errors) => {
  * Where orders that need no payment first start, checked: those paid on delivery and at pickup in the
  * awaiting-confirmation status or an open one, free orders also in the awaiting-payment status (they wait there for
  * staff, with no time to pay).
- * @param {OrderFlow} flow checked @param {Record<string, unknown>} input @param {string[]} errors
+ * @param {FlowInput} flow checked @param {Record<string, unknown>} input @param {string[]} errors
  * @returns {import('./model.js').FlowStarts}
  */
 const startsOf = (flow, input, errors) => {
@@ -487,7 +488,7 @@ const startsOf = (flow, input, errors) => {
 
 /**
  * Today's triggers of a flow (see {@link checkOrderFlow}).
- * @param {OrderFlow} flow
+ * @param {FlowInput} flow
  * @returns {import('./model.js').FlowTriggers}
  */
 const defaultTriggers = (flow) => {
@@ -501,7 +502,7 @@ const defaultTriggers = (flow) => {
 
 /**
  * Today's starts of a flow: the awaiting-confirmation status, else the first open one.
- * @param {OrderFlow} flow
+ * @param {FlowInput} flow
  * @returns {import('./model.js').FlowStarts}
  */
 const defaultStarts = (flow) => {
@@ -510,15 +511,15 @@ const defaultStarts = (flow) => {
 };
 
 /**
- * A flow with every field filled (see {@link checkOrderFlow}): a saved flow as it reads, or one built in code. A flow
- * that does not pass the check (never saved so) is returned as it is, with its triggers and starts filled.
+ * A flow being edited with every field filled (see {@link checkOrderFlow}). A flow that does not pass the check yet is
+ * returned as it is, with its triggers and starts filled.
  * @param {unknown} value
- * @returns {Required<OrderFlow>}
+ * @returns {OrderFlow}
  */
 export const readOrderFlow = (value) => {
 	const checked = checkOrderFlow(value);
 	if (checked.ok) return checked.value;
-	const flow = /** @type {OrderFlow} */ (value);
+	const flow = /** @type {FlowInput} */ (value);
 	return {
 		statuses: flow.statuses,
 		moves: flow.moves,
@@ -528,25 +529,12 @@ export const readOrderFlow = (value) => {
 };
 
 /**
- * The triggers of a flow (filled when missing).
- * @param {OrderFlow} flow
- */
-export const triggersOfFlow = (flow) => flow.triggers ?? defaultTriggers(flow);
-
-/**
- * The starts of a flow (filled when missing).
- * @param {OrderFlow} flow
- */
-export const startsOfFlow = (flow) => flow.starts ?? defaultStarts(flow);
-
-/**
  * What saving a flow would do to orders already in a status (the flow-save guard, PLAN 0.8.10 dynamic model §3.3): a
  * status of the saved flow that has orders keeps its key and its kind of step (role) — removing or re-keying it, or
  * changing its role, is refused (its orders' facts follow their role); names and moves may change. The kind of step
- * its orders are in is always accepted: a status that comes back (orders left from before), or one whose role was
- * changed before this guard existed, takes its orders' role, which puts it right.
- * @param {OrderFlow} saved the flow saved now
- * @param {OrderFlow} next the flow to save (checked)
+ * its orders are in is always accepted: a status that comes back (orders left from before) takes its orders' role.
+ * @param {FlowInput} saved the flow saved now
+ * @param {FlowInput} next the flow to save (checked)
  * @param {ReadonlyArray<{ status: string, role: string, count: number }>} counts orders per status and role
  * @returns {Array<{ path: string, message: string, code: 'status_in_use' }>}
  */
@@ -589,7 +577,7 @@ export const flowChangeProblems = (saved, next, counts) => {
 /**
  * Check moving every order of one status to another of the same kind of step (`POST /v1/orders/restatus`): `to` a
  * status of the flow other than `from`, and `from` (when the flow still has it) of the same role.
- * @param {OrderFlow} flow @param {string} from @param {string} to
+ * @param {FlowInput} flow @param {string} from @param {string} to
  * @returns {{ ok: true, role: StatusRole } | { ok: false, field: 'from' | 'to', message: string }}
  */
 export const checkRestatus = (flow, from, to) => {
@@ -609,13 +597,13 @@ export const checkRestatus = (flow, from, to) => {
 
 /**
  * The status definition of a key, or null.
- * @param {OrderFlow} flow @param {string} key
+ * @param {FlowInput} flow @param {string} key
  */
 export const statusOf = (flow, key) => flow.statuses.find((status) => status.key === key) ?? null;
 
 /**
  * The first status with a role.
- * @param {OrderFlow} flow @param {StatusRole} role
+ * @param {FlowInput} flow @param {StatusRole} role
  * @returns {string} its key ('' when none, which a checked flow never allows for the required roles)
  */
 export const statusWithRole = (flow, role) => flow.statuses.find((status) => status.role === role)?.key ?? '';
@@ -624,7 +612,7 @@ export const statusWithRole = (flow, role) => flow.statuses.find((status) => sta
  * The listed move from one status to another that `who` may make (`system`, the shop itself: any listed move), with
  * every field ({@link moveRules}); null when the flow does not list it, `who` may not make it or the role rules refuse it
  * (checked again, so an order whose status was renamed or removed meanwhile cannot slip through).
- * @param {OrderFlow} flow @param {string} from @param {string} to @param {Mover} [who]
+ * @param {FlowInput} flow @param {string} from @param {string} to @param {Mover} [who]
  */
 export const moveOf = (flow, from, to, who = 'system') => {
 	const fromRole = statusOf(flow, from)?.role;
@@ -638,7 +626,7 @@ export const moveOf = (flow, from, to, who = 'system') => {
 
 /**
  * Whether the flow allows moving an order from one status to another (`who` may make it; by default any listed move).
- * @param {OrderFlow} flow @param {string} from @param {string} to @param {Mover} [who]
+ * @param {FlowInput} flow @param {string} from @param {string} to @param {Mover} [who]
  */
 export const canMove = (flow, from, to, who = 'system') => moveOf(flow, from, to, who) !== null;
 
@@ -651,14 +639,14 @@ export const rolesAllow = (from, to) => (ALLOWED_FROM[to] ?? []).includes(from);
 
 /**
  * The statuses an order may move to next (by `who`; by default any listed move).
- * @param {OrderFlow} flow @param {string} from @param {Mover} [who]
+ * @param {FlowInput} flow @param {string} from @param {Mover} [who]
  */
 export const nextStatuses = (flow, from, who = 'system') =>
 	flow.statuses.filter((status) => canMove(flow, from, status.key, who));
 
 /**
  * Where a waiting order goes once it is paid or confirmed: the first allowed move into an `open` status.
- * @param {OrderFlow} flow @param {string} from @param {Mover} [who]
+ * @param {FlowInput} flow @param {string} from @param {Mover} [who]
  * @returns {string | null}
  */
 export const confirmedStatus = (flow, from, who = 'system') =>
@@ -666,7 +654,7 @@ export const confirmedStatus = (flow, from, who = 'system') =>
 
 /**
  * The first canceled status listed from a status, else the first canceled status (an ended window's default).
- * @param {OrderFlow} flow @param {string} from
+ * @param {FlowInput} flow @param {string} from
  * @returns {string}
  */
 export const cancelledStatus = (flow, from) =>
@@ -675,7 +663,7 @@ export const cancelledStatus = (flow, from) =>
 /**
  * The move a shopper cancels with from a status: the first listed move into a canceled status the shopper may make, or
  * null.
- * @param {OrderFlow} flow @param {string} from
+ * @param {FlowInput} flow @param {string} from
  */
 export const shopperCancelOf = (flow, from) => {
 	for (const status of flow.statuses) {
@@ -688,7 +676,7 @@ export const shopperCancelOf = (flow, from) => {
 
 /**
  * The name a shopper reads for a status: its shopper name, else its name (an unknown status shows its key).
- * @param {OrderFlow} flow @param {string} key
+ * @param {FlowInput} flow @param {string} key
  */
 export const shopperLabelOf = (flow, key) => {
 	const status = statusOf(flow, key);
@@ -697,14 +685,14 @@ export const shopperLabelOf = (flow, key) => {
 
 /**
  * The line a shopper reads under a status for a payment method ('' = none).
- * @param {OrderFlow} flow @param {string} key @param {string} method
+ * @param {FlowInput} flow @param {string} key @param {string} method
  */
 export const shopperTextOf = (flow, key, method) =>
 	String(/** @type {Record<string, string> | undefined} */ (statusOf(flow, key)?.shopperText)?.[method] ?? '');
 
 /**
  * Whether entering a status sends the shopper a message (today's default list when the flow does not say).
- * @param {OrderFlow} flow @param {string} key
+ * @param {FlowInput} flow @param {string} key
  */
 export const notifiesOf = (flow, key) => {
 	const status = statusOf(flow, key);
@@ -713,7 +701,7 @@ export const notifiesOf = (flow, key) => {
 
 /**
  * Whether entering a status alerts the staff (E36: the status's `staffAlert`, off unless the flow says so).
- * @param {OrderFlow} flow @param {string} key
+ * @param {FlowInput} flow @param {string} key
  */
 export const staffAlertOf = (flow, key) => statusOf(flow, key)?.staffAlert === true;
 

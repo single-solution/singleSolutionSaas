@@ -40,15 +40,7 @@ import { fieldsOn, productTypes, unitRulesOf } from '../adapters/catalog-store.j
 import { heldStockBefore } from '../adapters/ledger.js';
 import { checkUnit, missingOrderFields, sharedKeys, unitKeys } from '../core/fields.js';
 import { bookingCourier, courierNamed, trackingLink } from '../core/couriers.js';
-import {
-	BEFORE_DELIVERY_ROLES,
-	WAITING_ROLES as WAITING,
-	canMove,
-	confirmedStatus,
-	moveOf,
-	statusOf,
-	triggersOfFlow,
-} from '../core/flow.js';
+import { BEFORE_DELIVERY_ROLES, WAITING_ROLES as WAITING, canMove, confirmedStatus, moveOf, statusOf } from '../core/flow.js';
 import { createId } from '@ss/contracts';
 import { elementsOf } from '../core/item-types.js';
 import { OTHER_WAY, VIA_PAYMENTS } from '../core/payment-methods.js';
@@ -638,7 +630,7 @@ export const createMoves = (product, service) => {
 	 * @param {OrderFlow} flow @param {OrderRecord} order @param {number} [refunded]
 	 */
 	const coverStatus = (flow, order, refunded = order.payment.refunded) => {
-		const to = triggersOfFlow(flow).refundsCover;
+		const to = flow.triggers.refundsCover;
 		return to && order.payment.paid > 0 && refunded >= order.payment.paid && canMove(flow, order.status, to) ? to : null;
 	};
 

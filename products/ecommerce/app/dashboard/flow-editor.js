@@ -31,7 +31,7 @@ import { TEXTS } from './texts.js';
 /** @typedef {import('../../core/model.js').OrderFlow} OrderFlow */
 /** @typedef {import('../../core/model.js').OrderMove} OrderMove */
 /** @typedef {import('../../core/model.js').StatusRole} StatusRole */
-/** @typedef {Required<OrderFlow>} FullFlow */
+/** @typedef {import('../../core/model.js').FlowInput} FlowInput */
 /** The website's payment methods by key and name (`payment_methods`): shopper lines and `paidOnConfirm` name them. @typedef {Array<{ key: string, name: string }>} Methods */
 
 const L = TEXTS.lists;
@@ -51,12 +51,12 @@ const AFTER_DELIVERY = Object.freeze(['delivered', 'returned_to_origin', 'return
 
 /**
  * The statuses an order in `from` could move to under the role rules (whether or not the move is checked).
- * @param {OrderFlow} flow @param {string} from
+ * @param {FlowInput} flow @param {string} from
  */
 const possibleTargets = (flow, from) =>
 	flow.statuses.filter((status) => canMove({ statuses: flow.statuses, moves: [{ from, to: status.key }] }, from, status.key));
 
-/** @param {OrderFlow} flow @param {OrderMove} move */
+/** @param {FlowInput} flow @param {OrderMove} move */
 const allowed = (flow, move) => canMove(flow, move.from, move.to);
 
 /** @param {string[]} who */
@@ -68,7 +68,7 @@ const whoKey = (who) =>
 
 /**
  * The settings of one move: who, permission, needs and the options its kinds of step take.
- * @param {{ flow: FullFlow, move: OrderMove, methods: Methods, onChange: (move: OrderMove) => void }} props
+ * @param {{ flow: OrderFlow, move: OrderMove, methods: Methods, onChange: (move: OrderMove) => void }} props
  */
 function MoveSettings({ flow, move, methods, onChange }) {
 	const rules = moveRules(flow, move);
@@ -145,8 +145,8 @@ function MoveSettings({ flow, move, methods, onChange }) {
 
 /**
  * What shoppers read of a status: its name for them, whether it sends a message and a line per payment method.
- * @param {{ status: FullFlow['statuses'][number], methods: Methods,
- *   onChange: (patch: Partial<FullFlow['statuses'][number]>) => void }} props
+ * @param {{ status: OrderFlow['statuses'][number], methods: Methods,
+ *   onChange: (patch: Partial<OrderFlow['statuses'][number]>) => void }} props
  */
 function ShopperFields({ status, methods, onChange }) {
 	const texts = /** @type {Record<string, string>} */ (status.shopperText ?? {});
@@ -188,7 +188,7 @@ function ShopperFields({ status, methods, onChange }) {
 
 /**
  * The moves the shop makes by itself and where orders that need no payment first start.
- * @param {{ flow: FullFlow, onChange: (flow: FullFlow) => void }} props
+ * @param {{ flow: OrderFlow, onChange: (flow: OrderFlow) => void }} props
  */
 function TriggersAndStarts({ flow, onChange }) {
 	/** @param {StatusRole[]} roles @param {boolean} none */
@@ -200,7 +200,7 @@ function TriggersAndStarts({ flow, onChange }) {
 	];
 	/** @param {'paid' | 'windowEnd' | 'refundsCover'} name @param {string} value */
 	const setTrigger = (name, value) => onChange({ ...flow, triggers: { ...flow.triggers, [name]: value } });
-	/** @param {keyof FullFlow['starts']} name @param {string} value */
+	/** @param {keyof OrderFlow['starts']} name @param {string} value */
 	const setStart = (name, value) => onChange({ ...flow, starts: { ...flow.starts, [name]: value } });
 	return (
 		<div className="space-y-4 rounded-xl bg-surface-2 p-4">
@@ -264,16 +264,13 @@ export function OrderFlowEditor({ websiteId, off }) {
 		<Card title={F.title} subtitle={off ? TEXTS.settings.off : F.help}>
 			<Loaded answer={state.answer}>
 				{(data) => {
-					/** @type {FullFlow} */
-					const saved =
-						data.value && Array.isArray(data.value.statuses) && Array.isArray(data.value.moves)
-							? readOrderFlow(data.value)
-							: DEFAULT_FLOW;
-					/** @type {FullFlow} */
+					/** @type {OrderFlow} */
+					const saved = data.value;
+					/** @type {OrderFlow} */
 					const flow = state.draft ?? saved;
-					/** @param {FullFlow} next */
+					/** @param {OrderFlow} next */
 					const setFlow = (next) => state.setDraft(next);
-					/** @param {number} index @param {Partial<FullFlow['statuses'][number]>} patch */
+					/** @param {number} index @param {Partial<OrderFlow['statuses'][number]>} patch */
 					const setStatus = (index, patch) => {
 						const old = flow.statuses[index]?.key ?? '';
 						const renamed = patch.key === undefined || patch.key === old ? flow : renameFlowStatus(flow, old, patch.key);

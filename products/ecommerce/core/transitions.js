@@ -60,7 +60,7 @@ import { earnedLeft, pointsOwner, refundSplit, refundable, stateAfterRefund } fr
 import { OTHER_WAY, PAY_LATER_KINDS, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
 
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
-/** @typedef {import('./model.js').OrderFlow} OrderFlow */
+/** @typedef {import('./model.js').FlowInput} FlowInput */
 /** @typedef {import('./model.js').StatusRole} StatusRole */
 /** @typedef {import('./facts.js').OrderFacts} OrderFacts */
 /** @typedef {import('./orders.js').HistoryNote} HistoryNote */
@@ -223,7 +223,7 @@ const notOrdered = (order) => ({
  * Whether a transition may happen, before anything is called or read for it: the flow's moves, who may make them and
  * the role rules, and the order's role still the flow's role of its status. `move` is the listed move with every field
  * (null for a transition that needs none: an ended window).
- * @param {{ order: OrderRecord, flow: OrderFlow, to: string, listed?: boolean,
+ * @param {{ order: OrderRecord, flow: FlowInput, to: string, listed?: boolean,
  *   who?: 'staff' | 'shopper' | 'system' }} request
  * @returns {{ ok: true, target: import('./model.js').OrderStatusDefinition, move: ReturnType<typeof import('./flow.js').moveRules> | null }
  *   | Extract<PlanResult, { ok: false }>}
@@ -385,7 +385,7 @@ const redeemedBack = (order) => {
 
 /**
  * Plan a transition of an order to the status `to`.
- * @param {{ order: OrderRecord, flow: OrderFlow, to: string, input: TransitionInput, rules: TransitionRules,
+ * @param {{ order: OrderRecord, flow: FlowInput, to: string, input: TransitionInput, rules: TransitionRules,
  *   now: number }} request
  * @returns {PlanResult}
  */

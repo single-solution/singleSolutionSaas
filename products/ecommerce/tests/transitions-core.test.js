@@ -68,7 +68,7 @@ const order = (patch = {}) => ({
 /**
  * Plan a staff move of the default flow.
  * @param {any} from @param {string} to @param {Partial<import('../core/transitions.js').TransitionInput>} [input]
- * @param {Partial<import('../core/transitions.js').TransitionRules>} [rules] @param {import('../core/model.js').OrderFlow} [flow]
+ * @param {Partial<import('../core/transitions.js').TransitionRules>} [rules] @param {import('../core/model.js').FlowInput} [flow]
  */
 const plan = (from, to, input = {}, rules = {}, flow = DEFAULT_FLOW) =>
 	planTransition({

@@ -16,7 +16,7 @@
  */
 import { createId } from '@ss/contracts';
 import { createOrdersStore } from '../adapters/orders-store.js';
-import { canMove, statusOf, triggersOfFlow } from '../core/flow.js';
+import { canMove, statusOf } from '../core/flow.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { paymentStateOf, serverNote } from '../core/orders.js';
 import { VIA_PAYMENTS } from '../core/payment-methods.js';
@@ -102,7 +102,7 @@ export const createOrderPayments = (product, service) => {
 		const store = createOrdersStore(await s.data());
 		const flow = await flowOf(s);
 		const now = service.now();
-		const trigger = triggersOfFlow(flow).paid;
+		const trigger = flow.triggers.paid;
 		const to = trigger && canMove(flow, order.status, trigger) ? trigger : null;
 		const advance = order.payment.advance > 0;
 		const amount = expectedOf(order).amount;

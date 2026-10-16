@@ -16,7 +16,7 @@ import { checkBookingSchedules, defaultSchedules } from '../core/bookings.js';
 import { checkCouriers } from '../core/couriers.js';
 import { DEFAULT_SEGMENTS, checkSegments } from '../core/customer-segments.js';
 import { checkZones, defaultZones } from '../core/delivery.js';
-import { DEFAULT_FLOW, checkOrderFlow, readOrderFlow } from '../core/flow.js';
+import { DEFAULT_FLOW, checkOrderFlow } from '../core/flow.js';
 import { checkGrades } from '../core/grades.js';
 import { DEFAULT_POLICIES, checkPolicies } from '../core/policies.js';
 import { checkItemTypes } from '../core/item-types.js';
@@ -27,9 +27,7 @@ import { DEFAULT_UNIT_STATES, checkUnitStates } from '../core/unit-states.js';
 
 /**
  * @typedef {{ ok: true, value: any } | { ok: false, errors: Array<string | { path: string, message: string, code?: string }> }} ListCheck
- * @typedef {{ feature: string, title: string, check: (value: unknown) => ListCheck, fallback: () => any,
- *   read?: (value: unknown) => any }} ListDefinition `read`: a saved value as the code reads it today (the order flow
- *   fills what a flow saved before phase 2 leaves out with today's behavior)
+ * @typedef {{ feature: string, title: string, check: (value: unknown) => ListCheck, fallback: () => any }} ListDefinition
  * @typedef {(websiteId: string, saved: any, next: any) => Promise<Array<{ path: string, message: string, code?: string }>>} ListGuard
  *   what saving a list would break in the merchant's data (the order flow: statuses that have orders; item types: the
  *   fields they name, the types in use and units in stock)
@@ -42,7 +40,6 @@ export const LISTS = Object.freeze({
 		title: 'Order statuses and moves',
 		check: checkOrderFlow,
 		fallback: () => DEFAULT_FLOW,
-		read: readOrderFlow,
 	},
 	payment_methods: {
 		feature: 'checkout',
@@ -109,10 +106,7 @@ export const createLists = ({ store, now, guards = {} }) => {
 		 */
 		get: async (websiteId, name) => {
 			const doc = await store.get('settings', idOf(websiteId, `list.${name}`));
-			const value = doc && doc.value !== undefined ? doc.value : LISTS[name].fallback();
-			/** @type {ListDefinition} */
-			const list = LISTS[name];
-			return list.read ? list.read(value) : value;
+			return doc ? doc.value : LISTS[name].fallback();
 		},
 		/**
 		 * Check and save a list.
@@ -127,7 +121,7 @@ export const createLists = ({ store, now, guards = {} }) => {
 			const guard = guards[name];
 			if (guard) {
 				const doc = await store.get('settings', idOf(websiteId, `list.${name}`));
-				const saved = doc && doc.value !== undefined ? doc.value : LISTS[name].fallback();
+				const saved = doc ? doc.value : LISTS[name].fallback();
 				const problems = await guard(websiteId, saved, checked.value);
 				if (problems.length > 0) return { ok: false, errors: problems };
 			}
