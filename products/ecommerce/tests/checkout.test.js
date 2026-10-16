@@ -294,8 +294,8 @@ describe('quote', () => {
 		const order = await orderRecord(placed.json.order.id);
 		expect(order.promotions).toMatchObject({ dealIds: ['deal_checkout1'], pointsRedeemed: 150, pointsValue: 15_000 });
 		expect(order.promotions.pointsEarned).toBeGreaterThan(0);
-		const cancelled = await visit('POST', `/v1/shop/orders/${order.id}/cancel`, { signIn: shopper.token });
-		expect(cancelled.json.order.statusLabel).toBe('Canceled');
+		const canceled = await visit('POST', `/v1/shop/orders/${order.id}/cancel`, { signIn: shopper.token });
+		expect(canceled.json.order.statusLabel).toBe('Canceled');
 		const again = await visit('POST', '/v1/shop/cart/quote', { body, signIn: shopper.token });
 		expect(again.json.points.balance).toBe(300);
 		await data
@@ -318,7 +318,7 @@ describe('placing with cash on delivery', () => {
 		const bad = await place(shopper.token, { ...body, address: { ...ADDRESS, city: '' } });
 		expect(bad.json.errors[0].path).toBe('/address/city');
 		expect((await place(shopper.token, { ...body, address: ADDRESS, returnUrl: 'https://evil.example/x' })).status).toBe(422);
-		expect((await place(shopper.token, { ...body, payment: 'cheque' })).status).toBe(422);
+		expect((await place(shopper.token, { ...body, payment: 'check' })).status).toBe(422);
 		const long = await place(shopper.token, { ...body, address: ADDRESS, note: 'x'.repeat(1001) });
 		expect(long.json.errors[0].path).toBe('/note');
 		const odd = await place(shopper.token, { ...body, address: ADDRESS, returnUrl: 'not an address' });
@@ -608,8 +608,8 @@ describe("the shopper's orders", () => {
 		const shopper = await newShopper();
 		const placed = await place(shopper.token, { lines: [{ productId: item.id }], payment: 'cod', address: ADDRESS });
 		expect(await stockOf(item.id)).toBe(2);
-		const cancelled = await visit('POST', `/v1/shop/orders/${placed.json.order.id}/cancel`, { signIn: shopper.token });
-		expect(cancelled.json.order).toMatchObject({ status: 'cancelled', canCancel: false });
+		const canceled = await visit('POST', `/v1/shop/orders/${placed.json.order.id}/cancel`, { signIn: shopper.token });
+		expect(canceled.json.order).toMatchObject({ status: 'canceled', canCancel: false });
 		expect(await stockOf(item.id)).toBe(3);
 		const again = await visit('POST', `/v1/shop/orders/${placed.json.order.id}/cancel`, { signIn: shopper.token });
 		expect(codeOf(again)).toBe('move_not_allowed');
@@ -633,7 +633,7 @@ describe('waiting orders that end (on use)', () => {
 
 		shop.advance(61 * 60_000);
 		await nextUse();
-		expect((await orderRecord(online.id)).status).toBe('cancelled');
+		expect((await orderRecord(online.id)).status).toBe('canceled');
 		expect((await orderRecord(online.id)).history.at(-1)).toMatchObject({
 			by: 'system',
 			note: 'Not paid in time',
@@ -651,7 +651,7 @@ describe('waiting orders that end (on use)', () => {
 
 		shop.advance(24 * 3_600_000);
 		await nextUse();
-		expect((await orderRecord(cod.id)).status).toBe('cancelled');
+		expect((await orderRecord(cod.id)).status).toBe('canceled');
 		// a day later the kit forgets the key; the ledger still answers with the order placed with it, as the first answer
 		const again = await visit('POST', '/v1/shop/orders', {
 			body: codBody,
@@ -659,7 +659,7 @@ describe('waiting orders that end (on use)', () => {
 			key: 'sweep-cod',
 		});
 		expect(again.status).toBe(201);
-		expect(again.json.order).toMatchObject({ id: cod.id, status: 'cancelled' });
+		expect(again.json.order).toMatchObject({ id: cod.id, status: 'canceled' });
 		expect(again.json.next).toEqual({ kind: 'done', url: null });
 		expect(await stockOf(item.id)).toBe(9);
 	});
@@ -676,7 +676,7 @@ describe('waiting orders that end (on use)', () => {
 		expect((await orderRecord(placed.id)).status).toBe('pending_payment');
 		shop.responders.set(PAYMENTS, normal);
 		await nextUse();
-		expect((await orderRecord(placed.id)).status).toBe('cancelled');
+		expect((await orderRecord(placed.id)).status).toBe('canceled');
 	});
 });
 

@@ -131,7 +131,7 @@ export const invoiceColumnsOf = (settings) => {
  * @param {Record<string, unknown>} settings the invoices settings
  */
 export const shopperInvoiceReady = (order, settings) =>
-	settings.shopperFrom !== 'confirmed' || !(WAITING_ROLES.includes(order.role) || order.role === 'cancelled');
+	settings.shopperFrom !== 'confirmed' || !(WAITING_ROLES.includes(order.role) || order.role === 'canceled');
 
 /** The editable texts (the `invoices` settings) and their defaults. */
 export const INVOICE_TEXTS = Object.freeze({

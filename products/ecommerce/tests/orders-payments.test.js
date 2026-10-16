@@ -151,7 +151,7 @@ describe('the payments log (E26)', () => {
 			['cod', 300, 'R-1', null],
 			['bank_transfer', 700, '', 'ret_abc'],
 		]);
-		expect(codeOf(await refund(order.id, { amount: 1, reason: 'x', method: 'cheque' }))).toBe('validation_failed');
+		expect(codeOf(await refund(order.id, { amount: 1, reason: 'x', method: 'check' }))).toBe('validation_failed');
 		await shop.flow((flow) => ({ ...flow, triggers: { ...flow.triggers, refundsCover: '' } }));
 	});
 
@@ -183,12 +183,12 @@ describe('the payments log (E26)', () => {
 		expect(staff.json.payment).toMatchObject({ balanceDue: 0, refundable: 700, refundDue: 0 });
 
 		// a canceled cash order: nothing due, no cash to collect on its invoice, and no payment recorded on it
-		const cancelled = await placeOrder();
-		await moveTo(cancelled.order.id, 'cancelled');
-		expect((await shop.api('GET', `/v1/orders/${cancelled.order.id}`)).json.payment).toMatchObject({ balanceDue: 0 });
-		const invoice = await shop.api('GET', `/v1/orders/${cancelled.order.id}/invoice`);
+		const canceled = await placeOrder();
+		await moveTo(canceled.order.id, 'canceled');
+		expect((await shop.api('GET', `/v1/orders/${canceled.order.id}`)).json.payment).toMatchObject({ balanceDue: 0 });
+		const invoice = await shop.api('GET', `/v1/orders/${canceled.order.id}/invoice`);
 		expect(invoice.text).not.toContain('Cash due on delivery');
-		const closed = await pay(cancelled.order.id, { method: 'cod', amount: 1000 });
+		const closed = await pay(canceled.order.id, { method: 'cod', amount: 1000 });
 		expect(closed.status).toBe(422);
 		expect(closed.json.errors[0].message).toContain('closed');
 	});
@@ -212,11 +212,11 @@ describe('the payments log (E26)', () => {
 				refunds: [{ id: `rfd_${paymentId}_1`, amount: JSON.parse(call.body).amount, manual: true }],
 			},
 		}));
-		const cancelled = await moveTo(order.id, 'cancelled');
-		expect(cancelled.json.warnings).toEqual([
+		const canceled = await moveTo(order.id, 'canceled');
+		expect(canceled.json.warnings).toEqual([
 			`Return USD ${(order.totals.total / 100).toFixed(2)} to the shopper by hand: Payments only recorded the refund.`,
 		]);
-		expect(cancelled.json.warningCodes).toEqual([{ code: 'refund_by_hand', values: { amount: order.totals.total } }]);
+		expect(canceled.json.warningCodes).toEqual([{ code: 'refund_by_hand', values: { amount: order.totals.total } }]);
 		const record = await orderRecord(order.id);
 		expect(record.refunds).toEqual([
 			expect.objectContaining({ method: 'bank_transfer', manual: true, refundId: `rfd_${paymentId}_1` }),
@@ -305,13 +305,13 @@ describe('more moves (E27)', () => {
 		expect(await stockOf(item.id)).toBe(2);
 		// a flow cannot list the cancel of a shipped package, nor its refund as a cancel
 		const cookie = await shop.adminSession();
-		for (const to of ['cancelled', 'refunded']) {
+		for (const to of ['canceled', 'refunded']) {
 			const saved = await shop.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${shop.websiteId}/lists/order_flow`, {
 				value: { ...FLOW, moves: [...FLOW.moves, { from: 'dispatched', to }] },
 			});
 			expect(saved.status).toBe(422);
 		}
-		expect(codeOf(await moveTo(order.id, 'cancelled'))).toBe('move_not_allowed');
+		expect(codeOf(await moveTo(order.id, 'canceled'))).toBe('move_not_allowed');
 		const back = await moveTo(order.id, 'returned', { reason: 'rto' });
 		expect(back.json.role).toBe('returned_to_origin');
 		expect(await stockOf(item.id)).toBe(3);
@@ -320,8 +320,8 @@ describe('more moves (E27)', () => {
 	it('refunds before delivery as a cancel; with nothing paid it cancels with no money unless the move refuses', async () => {
 		const unpaid = await placeOrder({ stock: 2 });
 		await moveTo(unpaid.order.id, 'confirmed');
-		const cancelled = await moveTo(unpaid.order.id, 'refunded');
-		expect(cancelled.json).toMatchObject({ status: 'refunded', payment: { refunded: 0 } });
+		const canceled = await moveTo(unpaid.order.id, 'refunded');
+		expect(canceled.json).toMatchObject({ status: 'refunded', payment: { refunded: 0 } });
 		expect(await stockOf(unpaid.item.id)).toBe(2);
 		await shop.moveOptions('confirmed', 'refunded', { unpaid: 'refuse' });
 		const refused = await placeOrder({ stock: 2 });

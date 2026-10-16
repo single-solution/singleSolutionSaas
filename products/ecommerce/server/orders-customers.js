@@ -10,7 +10,7 @@
 import { countHandlers, created, paginate, problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { fieldsOn } from '../adapters/catalog-store.js';
-import { createFulfilmentStore, customerFilter, markSeenBy } from '../adapters/fulfilment-store.js';
+import { createFulfillmentStore, customerFilter, markSeenBy } from '../adapters/fulfillment-store.js';
 import { givePoints } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { checkAddress } from '../core/checkout.js';
@@ -51,7 +51,7 @@ const MAX_USER_IDS = 100;
  */
 export const createCustomers = (service) => {
 	/** @param {Site} s */
-	const storeOf = async (s) => createFulfilmentStore(await s.data());
+	const storeOf = async (s) => createFulfillmentStore(await s.data());
 
 	/** @param {any} ctx */
 	const refOf = (ctx) => {

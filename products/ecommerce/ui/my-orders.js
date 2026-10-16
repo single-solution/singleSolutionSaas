@@ -351,13 +351,13 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 						line.downloadsLeft !== null && line.downloads.length > 0
 							? h(doc, 'span', { class: 'meta' }, t('orders.downloadsLeft', { count: line.downloadsLeft }))
 							: null,
-						line.licenceKeys.length > 0
+						line.licenseKeys.length > 0
 							? h(
 									doc,
 									'div',
 									{},
-									h(doc, 'span', { class: 'meta' }, t('orders.licenceKeys')),
-									...line.licenceKeys.map((/** @type {string} */ key) => h(doc, 'p', {}, h(doc, 'code', {}, key))),
+									h(doc, 'span', { class: 'meta' }, t('orders.licenseKeys')),
+									...line.licenseKeys.map((/** @type {string} */ key) => h(doc, 'p', {}, h(doc, 'code', {}, key))),
 								)
 							: null,
 						line.canReview === true && shop.has('reviews') ? reviewBox(order, line, lineName) : null,

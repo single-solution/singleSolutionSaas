@@ -166,17 +166,17 @@ describe('digital goods', () => {
 		const item = await shop.seedProduct({
 			kind: 'digital',
 			trackStock: false,
-			digital: { files: [], retired: [], licenceKeys: true, downloadLimit: 0 },
+			digital: { files: [], retired: [], licenseKeys: true, downloadLimit: 0 },
 		});
-		const added = await shop.api('POST', `/v1/products/${item.id}/licences`, { keys: ['K-1', 'K-2', 'K-1'] });
+		const added = await shop.api('POST', `/v1/products/${item.id}/licenses`, { keys: ['K-1', 'K-2', 'K-1'] });
 		expect(added.json).toEqual({ added: 2, available: 2 });
 		const ticket = await shop.ticket(['catalog.edit']);
-		const more = await shop.admin(ticket, 'POST', `/v1/admin/products/${item.id}/licences`, { keys: ['K-2', 'K-3'] });
+		const more = await shop.admin(ticket, 'POST', `/v1/admin/products/${item.id}/licenses`, { keys: ['K-2', 'K-3'] });
 		expect(more.json).toEqual({ added: 1, available: 3 });
-		expect((await shop.api('POST', `/v1/products/${item.id}/licences`, { keys: [] })).status).toBe(422);
-		expect((await shop.api('POST', '/v1/products/prd_nothing/licences', { keys: ['x'] })).status).toBe(404);
+		expect((await shop.api('POST', `/v1/products/${item.id}/licenses`, { keys: [] })).status).toBe(422);
+		expect((await shop.api('POST', '/v1/products/prd_nothing/licenses', { keys: ['x'] })).status).toBe(404);
 		const physical = await shop.seedProduct();
-		expect((await shop.api('POST', `/v1/products/${physical.id}/licences`, { keys: ['x'] })).status).toBe(422);
+		expect((await shop.api('POST', `/v1/products/${physical.id}/licenses`, { keys: ['x'] })).status).toBe(422);
 
 		const file = await shop.admin(ticket, 'POST', `/v1/admin/products/${item.id}/files`, {
 			name: 'User Guide.pdf',
@@ -191,7 +191,7 @@ describe('digital goods', () => {
 			await (await shop.db()).collection(COLLECTIONS.products).findOne({ websiteId: shop.websiteId, id: item.id })
 		);
 		expect(stored.digital).toMatchObject({
-			licenceKeys: true,
+			licenseKeys: true,
 			files: [{ key: `ecommerce/digital/${item.id}/User-Guide.pdf` }],
 		});
 		for (const [body, field] of /** @type {Array<[unknown, string]>} */ ([
@@ -212,11 +212,11 @@ describe('digital goods', () => {
 			digital: {
 				files: [{ key: 'ecommerce/digital/x/book.pdf', type: 'application/pdf', size: 10, alt: 'The book' }],
 				retired: [],
-				licenceKeys: true,
+				licenseKeys: true,
 				downloadLimit: 2,
 			},
 		});
-		await shop.api('POST', `/v1/products/${item.id}/licences`, { keys: ['AAA', 'BBB', 'CCC'] });
+		await shop.api('POST', `/v1/products/${item.id}/licenses`, { keys: ['AAA', 'BBB', 'CCC'] });
 		const shopper = await newShopper();
 		const many = await visit('POST', '/v1/shop/cart/quote', { body: { lines: [{ productId: item.id, quantity: 4 }] } });
 		expect(many.json.lines[0].problems[0].code).toBe('not_enough_stock');
@@ -227,7 +227,7 @@ describe('digital goods', () => {
 		expect(placed.status).toBe(201);
 		const id = placed.json.order.id;
 		const lineId = placed.json.order.lines[0].id;
-		expect(placed.json.order.lines[0]).toMatchObject({ downloads: [], licenceKeys: [] });
+		expect(placed.json.order.lines[0]).toMatchObject({ downloads: [], licenseKeys: [] });
 		const early = await visit('GET', `/v1/shop/orders/${id}/downloads/${lineId}/book.pdf`, { signIn: shopper });
 		expect(early.status).toBe(403);
 		expect(codeOf(early)).toBe('download_not_allowed');
@@ -240,8 +240,8 @@ describe('digital goods', () => {
 			downloads: [{ file: 'book.pdf', name: 'The book', type: 'application/pdf', size: 10 }],
 			downloadsLeft: 2,
 		});
-		expect(paid.json.lines[0].licenceKeys).toHaveLength(2);
-		expect(['AAA', 'BBB', 'CCC']).toEqual(expect.arrayContaining(paid.json.lines[0].licenceKeys));
+		expect(paid.json.lines[0].licenseKeys).toHaveLength(2);
+		expect(['AAA', 'BBB', 'CCC']).toEqual(expect.arrayContaining(paid.json.lines[0].licenseKeys));
 
 		for (let n = 0; n < 2; n += 1) {
 			const link = await visit('GET', `/v1/shop/orders/${id}/downloads/${lineId}/book.pdf`, { signIn: shopper });
@@ -267,18 +267,18 @@ describe('removing digital files and license keys', () => {
 			kind: 'digital',
 			trackStock: false,
 			price: 900,
-			digital: { files: [book, extra], retired: [], licenceKeys: true, downloadLimit: 0 },
+			digital: { files: [book, extra], retired: [], licenseKeys: true, downloadLimit: 0 },
 		});
 		const ticket = await shop.ticket(['catalog.edit']);
-		await shop.api('POST', `/v1/products/${item.id}/licences`, { keys: ['K-1', 'K-2', 'K-3'] });
+		await shop.api('POST', `/v1/products/${item.id}/licenses`, { keys: ['K-1', 'K-2', 'K-3'] });
 		// keys not given yet go; unknown ones are not counted
-		const removed = await shop.admin(ticket, 'POST', `/v1/admin/products/${item.id}/licences/remove`, {
+		const removed = await shop.admin(ticket, 'POST', `/v1/admin/products/${item.id}/licenses/remove`, {
 			keys: ['K-3', 'NOPE'],
 		});
 		expect(removed.status).toBe(200);
 		expect(removed.json).toEqual({ removed: 1, given: 0, available: 2 });
-		expect((await shop.api('POST', `/v1/products/${item.id}/licences/remove`, { keys: [] })).status).toBe(422);
-		expect((await shop.api('POST', '/v1/products/prd_nothing/licences/remove', { keys: ['x'] })).status).toBe(404);
+		expect((await shop.api('POST', `/v1/products/${item.id}/licenses/remove`, { keys: [] })).status).toBe(422);
+		expect((await shop.api('POST', '/v1/products/prd_nothing/licenses/remove', { keys: ['x'] })).status).toBe(404);
 
 		// a paid order gets a key and both files
 		const shopper = await newShopper();
@@ -288,11 +288,11 @@ describe('removing digital files and license keys', () => {
 		shop.payPayment(await paymentOf(id));
 		shop.advance(31_000);
 		const paid = await visit('GET', `/v1/shop/orders/${id}`, { signIn: shopper });
-		const [given] = paid.json.lines[0].licenceKeys;
+		const [given] = paid.json.lines[0].licenseKeys;
 		expect(['K-1', 'K-2']).toContain(given);
 
 		// a key given to an order stays with it
-		const kept = await shop.api('POST', `/v1/products/${item.id}/licences/remove`, { keys: [given] });
+		const kept = await shop.api('POST', `/v1/products/${item.id}/licenses/remove`, { keys: [given] });
 		expect(kept.json).toEqual({ removed: 0, given: 1, available: 1 });
 		shop.advance(1000);
 
@@ -307,7 +307,7 @@ describe('removing digital files and license keys', () => {
 		expect(stored.digital.retired).toEqual([{ ...extra, removedAt: expect.any(Date) }]);
 		expect((await shop.api('DELETE', `/v1/products/${item.id}/files/extra.pdf`)).status).toBe(404);
 		const before = await visit('GET', `/v1/shop/orders/${id}`, { signIn: shopper });
-		expect(before.json.lines[0].licenceKeys).toEqual([given]);
+		expect(before.json.lines[0].licenseKeys).toEqual([given]);
 		expect(before.json.lines[0].downloads.map((/** @type {any} */ file) => file.file)).toEqual(['book.pdf', 'extra.pdf']);
 		expect((await visit('GET', `/v1/shop/orders/${id}/downloads/${lineId}/extra.pdf`, { signIn: shopper })).status).toBe(200);
 
@@ -340,7 +340,7 @@ describe('removing digital files and license keys', () => {
 			digital: {
 				files: [{ key: 'ecommerce/digital/y/a.pdf', type: 'application/pdf', size: 1, alt: 'a.pdf' }],
 				retired: [],
-				licenceKeys: false,
+				licenseKeys: false,
 				downloadLimit: 0,
 			},
 		});
@@ -353,7 +353,7 @@ describe('removing digital files and license keys', () => {
 		expect((await shop.api('DELETE', `/v1/products/prd_nothing/files/a.pdf`)).status).toBe(404);
 		const physical = await shop.seedProduct();
 		expect((await shop.api('DELETE', `/v1/products/${physical.id}/files/a.pdf`)).status).toBe(422);
-		expect((await shop.api('POST', `/v1/products/${physical.id}/licences/remove`, { keys: ['x'] })).status).toBe(422);
+		expect((await shop.api('POST', `/v1/products/${physical.id}/licenses/remove`, { keys: ['x'] })).status).toBe(422);
 		// a ticket without catalog.edit
 		const ticket = await shop.ticket(['orders.read']);
 		expect((await shop.admin(ticket, 'DELETE', `/v1/admin/products/${item.id}/files/a.pdf`)).status).toBe(403);
@@ -366,16 +366,16 @@ describe('free orders', () => {
 			kind: 'digital',
 			trackStock: false,
 			price: 0,
-			digital: { files: [], retired: [], licenceKeys: true, downloadLimit: 0 },
+			digital: { files: [], retired: [], licenseKeys: true, downloadLimit: 0 },
 		});
-		await shop.api('POST', `/v1/products/${item.id}/licences`, { keys: ['FREE-1'] });
+		await shop.api('POST', `/v1/products/${item.id}/licenses`, { keys: ['FREE-1'] });
 		const placed = await place(await newShopper(), { lines: [{ productId: item.id }], payment: 'online' });
 		expect(placed.status).toBe(201);
 		expect(placed.json.next).toEqual({ kind: 'done', url: null });
 		expect(placed.json.order).toMatchObject({
 			status: 'awaiting_confirmation',
 			payment: { state: 'paid' },
-			lines: [{ licenceKeys: ['FREE-1'], downloadsLeft: 5 }],
+			lines: [{ licenseKeys: ['FREE-1'], downloadsLeft: 5 }],
 		});
 	});
 
@@ -455,7 +455,7 @@ describe('a shop with only the catalog and checkout', () => {
 			);
 			other.advance(62 * 60_000);
 			await other.visitor('POST', '/v1/shop/cart/quote', { body: { lines: [{ productId: item.id }] } });
-			expect((await record(unpaid.id)).status).toBe('cancelled');
+			expect((await record(unpaid.id)).status).toBe('canceled');
 			expect((await record(paid.id)).status).toBe('pending_payment');
 			// without Payments only the methods it does not take part in stay
 			expect(

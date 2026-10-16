@@ -492,7 +492,7 @@ describe('the messages, staff alerts and events the code sends', () => {
 			});
 			expect(paid.status).toBe(201);
 			// a cancel with the staff's note
-			await move((await place('cod')).id, { to: 'cancelled', note: 'Out of stock' });
+			await move((await place('cod')).id, { to: 'canceled', note: 'Out of stock' });
 			// a transfer proof
 			await shop.methods({ bank_transfer: { via: 'manual', instructions: 'Pay to account 0000 0000.' } });
 			const transfer = await place('bank_transfer');

@@ -5,7 +5,7 @@
  * @module
  */
 import { COLLECTIONS, isDuplicate } from '../core/model.js';
-import { normaliseCode } from '../core/coupons.js';
+import { normalizeCode } from '../core/coupons.js';
 import { dealLive } from '../core/deals.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -69,7 +69,7 @@ const liveOffers = async (data, collection, now) => {
  * @returns {Promise<{ deals: DealRecord[], bundles: BundleRecord[], coupon: CouponRecord | null }>}
  */
 export const loadOffers = async (data, { now, couponCode = '', deals = false, bundles = false }) => {
-	const code = normaliseCode(couponCode);
+	const code = normalizeCode(couponCode);
 	const [dealList, bundleList, coupon] = await Promise.all([
 		deals ? liveOffers(data, 'deals', now) : [],
 		bundles ? liveOffers(data, 'bundles', now) : [],

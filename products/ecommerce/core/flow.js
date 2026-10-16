@@ -8,7 +8,7 @@
  * - exactly one `awaiting_payment` status and at most one `awaiting_confirmation` status: orders start there (a flow
  *   without a confirmation step starts orders paid on delivery or at pickup and free orders in an open status, `starts`); an `open`
  *   or `packed` order may wait for its payment again (PLAN 0.8.10 E27), nothing else moves into them;
- * - `cancelled` from waiting, open or packed statuses; `refunded` from waiting, open or packed statuses (E27: it acts
+ * - `canceled` from waiting, open or packed statuses; `refunded` from waiting, open or packed statuses (E27: it acts
  *   as a cancel; with nothing paid only when the move says `unpaid: cancel`, the default), and after delivery;
  * - a `shipped` package is delivered, comes back (`returned_to_origin`) or moves to another `shipped` status: once
  *   dispatched it is never canceled or refunded as a cancel — it comes back first (owner, 2026-10-14), while money
@@ -62,7 +62,7 @@ export const MOVE_PERMISSIONS = Object.freeze(
 	/** @type {Array<'orders.manage' | 'orders.refund'>} */ (['orders.manage', 'orders.refund']),
 );
 /** The statuses whose entering sends the shopper a message unless the flow says otherwise (today's default list). */
-const NOTIFIED_KEYS = Object.freeze(['confirmed', 'dispatched', 'delivered', 'cancelled', 'refunded']);
+const NOTIFIED_KEYS = Object.freeze(['confirmed', 'dispatched', 'delivered', 'canceled', 'refunded']);
 
 /** Roles whose orders still wait (counted by the open-order cap; canceled when their window ends). */
 export const WAITING_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['awaiting_payment', 'awaiting_confirmation']));
@@ -76,7 +76,7 @@ const BEFORE_DISPATCH_ROLES = Object.freeze(
 );
 /** Roles of a closed order: nothing is left to pay on it and no payment is recorded on it any more. */
 export const CLOSED_ROLES = Object.freeze(
-	/** @type {StatusRole[]} */ (['cancelled', 'returned_to_origin', 'refunded', 'returned']),
+	/** @type {StatusRole[]} */ (['canceled', 'returned_to_origin', 'refunded', 'returned']),
 );
 
 /** Roles that may move into each role (the role rules). @type {Record<StatusRole, ReadonlyArray<StatusRole>>} */
@@ -88,13 +88,13 @@ const ALLOWED_FROM = /** @type {Record<StatusRole, ReadonlyArray<StatusRole>>} *
 	shipped: ['open', 'packed', 'shipped'],
 	delivered: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'shipped'],
 	// E40: a cancel after delivery and between closed statuses, when listed
-	cancelled: [
+	canceled: [
 		'awaiting_payment',
 		'awaiting_confirmation',
 		'open',
 		'packed',
 		'delivered',
-		'cancelled',
+		'canceled',
 		'returned_to_origin',
 		'returned',
 		'refunded',
@@ -107,7 +107,7 @@ const ALLOWED_FROM = /** @type {Record<StatusRole, ReadonlyArray<StatusRole>>} *
 		'open',
 		'packed',
 		'delivered',
-		'cancelled',
+		'canceled',
 		'returned_to_origin',
 		'returned',
 		'refunded',
@@ -130,7 +130,7 @@ Object.freeze(ALLOWED_FROM);
  * - into delivered: `paidOnDelivery`, an order paid on delivery or at pickup counts as paid with it (`yes`, the
  *   default: the money was taken at the door or the counter) or staff record that money (`no`; decision 11);
  * - into shipped: `tracking`, the tracking number `required` (default) or `optional`;
- * - into cancelled: `refund`, what Payments took is refunded `auto`matically when staff cancel (default) or by `staff`
+ * - into canceled: `refund`, what Payments took is refunded `auto`matically when staff cancel (default) or by `staff`
  *   from the order; with the shopper among `who`, `shopperPaid`: a paid order the shopper cancels is refused
  *   (`refuse`, the default out of open or packed), canceled with the refund left due (`flag`, the default out of
  *   waiting) or canceled and refunded (`refund`);
@@ -138,9 +138,9 @@ Object.freeze(ALLOWED_FROM);
  *   default, owner 2026-10-14) or refused (`refuse`);
  * - into returned to origin or returned: `restock`, the package goes back in stock (`yes`, the default), stays out
  *   (`no`) or staff say so with each move (`ask`);
- * - into cancelled or refunded from delivered or a closed status (the items may still be with the customer): `restock`,
+ * - into canceled or refunded from delivered or a closed status (the items may still be with the customer): `restock`,
  *   default `no` (owner, 2026-10-14);
- * - into returned, and into cancelled or refunded from delivered or a closed status: `points`, earned points are taken
+ * - into returned, and into canceled or refunded from delivered or a closed status: `points`, earned points are taken
  *   back (`take_back`, the default) or kept (`keep`, E39); redeemed points always come back.
  * @param {StatusRole} from @param {StatusRole} to @param {ReadonlyArray<Mover>} [who]
  * @returns {Record<keyof MoveOptions, OptionSpec>}
@@ -156,15 +156,15 @@ export const moveOptionSpecs = (from, to, who = ['staff']) => {
 	if (to === 'awaiting_payment') specs.window = one(['restart', 'none'], 'restart');
 	if (to === 'delivered') specs.paidOnDelivery = one(['yes', 'no'], 'yes');
 	if (to === 'shipped') specs.tracking = one(['required', 'optional'], 'required');
-	if (to === 'cancelled') {
+	if (to === 'canceled') {
 		specs.refund = one(['auto', 'staff'], 'auto');
 		if (who.includes('shopper'))
 			specs.shopperPaid = one(['refuse', 'flag', 'refund'], WAITING_ROLES.includes(from) ? 'flag' : 'refuse');
 	}
 	if (to === 'refunded' && !afterDelivery) specs.unpaid = one(['cancel', 'refuse'], 'cancel');
 	if (to === 'returned_to_origin' || to === 'returned') specs.restock = one(['yes', 'no', 'ask'], 'yes');
-	if ((to === 'cancelled' || to === 'refunded') && afterDelivery) specs.restock = one(['no', 'yes', 'ask'], 'no');
-	if (to === 'returned' || ((to === 'cancelled' || to === 'refunded') && afterDelivery))
+	if ((to === 'canceled' || to === 'refunded') && afterDelivery) specs.restock = one(['no', 'yes', 'ask'], 'no');
+	if (to === 'returned' || ((to === 'canceled' || to === 'refunded') && afterDelivery))
 		specs.points = one(['take_back', 'keep'], 'take_back');
 	return /** @type {Record<keyof MoveOptions, OptionSpec>} */ (specs);
 };
@@ -187,7 +187,7 @@ const OPTION_NAMES = Object.freeze([
  * @param {StatusRole} from @param {StatusRole} to
  * @returns {Mover[]}
  */
-const defaultWho = (from, to) => (WAITING_ROLES.includes(from) && to === 'cancelled' ? ['staff', 'shopper'] : ['staff']);
+const defaultWho = (from, to) => (WAITING_ROLES.includes(from) && to === 'canceled' ? ['staff', 'shopper'] : ['staff']);
 
 /**
  * A move with every field: as given, else its defaults (a move given to the check, or of a flow being edited).
@@ -225,21 +225,21 @@ const DEFAULT_DEFINITION = {
 		{ key: 'packed', label: 'Packed', role: /** @type {StatusRole} */ ('packed') },
 		{ key: 'dispatched', label: 'Dispatched', role: /** @type {StatusRole} */ ('shipped') },
 		{ key: 'delivered', label: 'Delivered', role: /** @type {StatusRole} */ ('delivered') },
-		{ key: 'cancelled', label: 'Canceled', role: /** @type {StatusRole} */ ('cancelled') },
+		{ key: 'canceled', label: 'Canceled', role: /** @type {StatusRole} */ ('canceled') },
 		{ key: 'returned', label: 'Returned to origin', role: /** @type {StatusRole} */ ('returned_to_origin') },
 		{ key: 'refunded', label: 'Refunded', role: /** @type {StatusRole} */ ('refunded') },
 	],
 	moves: [
 		{ from: 'pending_payment', to: 'confirmed' },
-		{ from: 'pending_payment', to: 'cancelled' },
+		{ from: 'pending_payment', to: 'canceled' },
 		{ from: 'awaiting_confirmation', to: 'confirmed' },
-		{ from: 'awaiting_confirmation', to: 'cancelled' },
+		{ from: 'awaiting_confirmation', to: 'canceled' },
 		{ from: 'confirmed', to: 'packed' },
 		{ from: 'confirmed', to: 'delivered' },
-		{ from: 'confirmed', to: 'cancelled' },
+		{ from: 'confirmed', to: 'canceled' },
 		{ from: 'packed', to: 'dispatched' },
 		{ from: 'packed', to: 'delivered' },
-		{ from: 'packed', to: 'cancelled' },
+		{ from: 'packed', to: 'canceled' },
 		{ from: 'dispatched', to: 'delivered' },
 		{ from: 'dispatched', to: 'returned' },
 		{ from: 'delivered', to: 'refunded' },
@@ -249,7 +249,7 @@ const DEFAULT_DEFINITION = {
 
 /**
  * Check a flow the merchant saves, and fill what it leaves out with the defaults: a status's shopper name ('' =
- * its name), shopper lines ('' each) and message (the statuses `confirmed`, `dispatched`, `delivered`, `cancelled` and
+ * its name), shopper lines ('' each) and message (the statuses `confirmed`, `dispatched`, `delivered`, `canceled` and
  * `refunded` send one); a move's `who`, permission, needs and options
  * ({@link moveRules}); the triggers (Payments' confirmation: the first open status listed from the awaiting-payment
  * status; an ended window: the first canceled status listed from it, else the first; refunds covering the payments:
@@ -318,7 +318,7 @@ export const checkOrderFlow = (value) => {
 	const counted = (/** @type {StatusRole} */ role) => [...roles.values()].filter((r) => r === role).length;
 	if (counted('awaiting_payment') !== 1) errors.push('Exactly one status has the role awaiting_payment.');
 	if (counted('awaiting_confirmation') > 1) errors.push('At most one status has the role awaiting_confirmation.');
-	for (const role of /** @type {StatusRole[]} */ (['open', 'delivered', 'cancelled']))
+	for (const role of /** @type {StatusRole[]} */ (['open', 'delivered', 'canceled']))
 		if (counted(role) === 0) errors.push(`At least one status has the role ${role}.`);
 	const draft = /** @type {FlowInput} */ ({ statuses: cleanStatuses, moves: [] });
 	/** @type {Array<Required<OrderMove>>} */
@@ -395,7 +395,7 @@ const moveProblems = (name, move, from, to) => {
 		if (!set) problems.push(`${name}: who is staff, shopper (with staff or alone) or system.`);
 		else who = /** @type {Mover[]} */ (set);
 	}
-	if (who.includes('shopper') && (to !== 'cancelled' || !BEFORE_DISPATCH_ROLES.includes(from)))
+	if (who.includes('shopper') && (to !== 'canceled' || !BEFORE_DISPATCH_ROLES.includes(from)))
 		problems.push(`${name}: shoppers may only cancel, and only before dispatch.`);
 	if (move.permission !== undefined) {
 		if (!MOVE_PERMISSIONS.includes(/** @type {any} */ (move.permission)))
@@ -453,7 +453,7 @@ const triggersOf = (flow, input, errors) => {
 	const paid = pick('paid', 'open', true);
 	if (paid && !flow.moves.some((move) => move.from === waiting && move.to === paid))
 		errors.push(`The paid trigger needs the move ${waiting} → ${paid} in the flow.`);
-	return { paid, windowEnd: pick('windowEnd', 'cancelled', false), refundsCover: pick('refundsCover', 'refunded', true) };
+	return { paid, windowEnd: pick('windowEnd', 'canceled', false), refundsCover: pick('refundsCover', 'refunded', true) };
 };
 
 /**
@@ -492,7 +492,7 @@ const defaultTriggers = (flow) => {
 	const waiting = statusWithRole(flow, 'awaiting_payment');
 	return {
 		paid: confirmedStatus(flow, waiting, 'system') ?? '',
-		windowEnd: cancelledStatus(flow, waiting),
+		windowEnd: canceledStatus(flow, waiting),
 		refundsCover: '',
 	};
 };
@@ -654,8 +654,8 @@ export const confirmedStatus = (flow, from, who = 'system') =>
  * @param {FlowInput} flow @param {string} from
  * @returns {string}
  */
-export const cancelledStatus = (flow, from) =>
-	nextStatuses(flow, from).find((status) => status.role === 'cancelled')?.key ?? statusWithRole(flow, 'cancelled');
+export const canceledStatus = (flow, from) =>
+	nextStatuses(flow, from).find((status) => status.role === 'canceled')?.key ?? statusWithRole(flow, 'canceled');
 
 /**
  * The move a shopper cancels with from a status: the first listed move into a canceled status the shopper may make, or
@@ -664,7 +664,7 @@ export const cancelledStatus = (flow, from) =>
  */
 export const shopperCancelOf = (flow, from) => {
 	for (const status of flow.statuses) {
-		if (status.role !== 'cancelled') continue;
+		if (status.role !== 'canceled') continue;
 		const move = moveOf(flow, from, status.key, 'shopper');
 		if (move) return move;
 	}

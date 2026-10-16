@@ -111,28 +111,28 @@ describe('a move that gives money back (H2)', () => {
 
 	it('needs the refund permission, whatever permission the move names', async () => {
 		await withFlow(
-			(flow) => ({ ...flow, moves: [...flow.moves, { from: 'delivered', to: 'cancelled' }] }),
+			(flow) => ({ ...flow, moves: [...flow.moves, { from: 'delivered', to: 'canceled' }] }),
 			async () => {
 				const manager = await shop.ticket(['orders.read', 'orders.manage']);
 				// after delivery: the cancel would give back what Payments took
 				const after = await delivered();
 				expect((await moveAs(manager, after.order.id, 'refunded')).status).toBe(403);
-				expect((await moveAs(manager, after.order.id, 'cancelled')).status).toBe(403);
+				expect((await moveAs(manager, after.order.id, 'canceled')).status).toBe(403);
 				expect(records.refundCalls(after.paymentId)).toHaveLength(0);
 				expect(await records.recordOf(after.order.id)).toMatchObject({ status: 'delivered', payment: { refunded: 0 } });
 				// before delivery too: a paid order's cancel refunds it
 				const before = await records.seedOrder();
-				expect((await moveAs(manager, before.order.id, 'cancelled')).status).toBe(403);
+				expect((await moveAs(manager, before.order.id, 'canceled')).status).toBe(403);
 				expect(records.refundCalls(before.paymentId)).toHaveLength(0);
 				expect((await records.recordOf(before.order.id)).status).toBe('confirmed');
 				// nothing paid, nothing given back: the move's own permission is enough
 				const unpaid = await records.seedOrder({ cod: true });
-				expect((await moveAs(manager, unpaid.order.id, 'cancelled')).status).toBe(200);
+				expect((await moveAs(manager, unpaid.order.id, 'canceled')).status).toBe(200);
 				// staff who may refund: the money goes back
 				const refunder = await shop.ticket(['orders.read', 'orders.manage', 'orders.refund']);
-				const moved = await moveAs(refunder, after.order.id, 'cancelled');
+				const moved = await moveAs(refunder, after.order.id, 'canceled');
 				expect(moved.status).toBe(200);
-				expect(moved.json).toMatchObject({ status: 'cancelled', payment: { refunded: 1000 } });
+				expect(moved.json).toMatchObject({ status: 'canceled', payment: { refunded: 1000 } });
 				expect(records.refundCalls(after.paymentId)).toHaveLength(1);
 			},
 		);
@@ -140,13 +140,13 @@ describe('a move that gives money back (H2)', () => {
 
 	it('is not needed for a cancel that leaves the refund to staff', async () => {
 		await withFlow(
-			(flow) => ({ ...flow, moves: [...flow.moves, { from: 'delivered', to: 'cancelled', options: { refund: 'staff' } }] }),
+			(flow) => ({ ...flow, moves: [...flow.moves, { from: 'delivered', to: 'canceled', options: { refund: 'staff' } }] }),
 			async () => {
 				const manager = await shop.ticket(['orders.read', 'orders.manage']);
 				const { order, paymentId } = await delivered();
-				const moved = await moveAs(manager, order.id, 'cancelled');
+				const moved = await moveAs(manager, order.id, 'canceled');
 				expect(moved.status).toBe(200);
-				expect(moved.json).toMatchObject({ status: 'cancelled', payment: { refunded: 0 } });
+				expect(moved.json).toMatchObject({ status: 'canceled', payment: { refunded: 0 } });
 				expect(records.refundCalls(paymentId)).toHaveLength(0);
 			},
 		);

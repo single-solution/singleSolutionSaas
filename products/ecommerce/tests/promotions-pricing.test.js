@@ -11,7 +11,7 @@ import {
 	couponBlocked,
 	couponView,
 	drawCode,
-	normaliseCode,
+	normalizeCode,
 } from '../core/coupons.js';
 import { bestDeal, byShowOrder, checkDealInput, DEAL_RULES, dealUnitDiscount, dealView, publicDeal } from '../core/deals.js';
 import {
@@ -904,7 +904,7 @@ describe('merchant input', () => {
 		expect(field({ active: 'yes' })).toBe('active');
 		expect(field({ perCustomer: 0 })).toBe('perCustomer');
 		expect(field({ firstOrderOnly: 1 })).toBe('firstOrderOnly');
-		expect(normaliseCode(5)).toBe('');
+		expect(normalizeCode(5)).toBe('');
 		expect(couponView({ ...coupon(), startsAt: new Date(NOW) })).toMatchObject({
 			code: 'SAVE10',
 			startsAt: new Date(NOW).toISOString(),

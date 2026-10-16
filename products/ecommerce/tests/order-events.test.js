@@ -39,7 +39,7 @@ const placeOrder = async () => {
 beforeAll(async () => {
 	shop = await readyShop();
 	await shop.setting('staff_alerts', 'recipients', ['team@shop.example.com']);
-	await shop.setting('staff_alerts', 'events', ['placed', 'cancelled']);
+	await shop.setting('staff_alerts', 'events', ['placed', 'canceled']);
 	await shop.setting('checkout', 'orderUrl', `${ORIGIN}/orders/{number}`);
 });
 afterAll(async () => shop.product.close());
@@ -55,17 +55,17 @@ describe('events and staff alerts (E32)', () => {
 		const mine = sent.find((m) => m.template === 'ecommerce.order_placed');
 		expect(mine.values).toMatchObject({ firstName: 'Sara', orderUrl: `${ORIGIN}/orders/${order.number}` });
 
-		await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'cancelled' });
+		await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'canceled' });
 		await shop.flush();
-		const events = await shop.api('GET', '/v1/events?types=ecommerce.order.placed,ecommerce.order.cancelled');
+		const events = await shop.api('GET', '/v1/events?types=ecommerce.order.placed,ecommerce.order.canceled');
 		const types = events.json.items
 			.filter((/** @type {any} */ e) => e.data.orderId === order.id)
 			.map((/** @type {any} */ e) => e.type);
-		expect(types).toEqual(expect.arrayContaining(['ecommerce.order.placed', 'ecommerce.order.cancelled']));
-		const cancelled = events.json.items.find((/** @type {any} */ e) => e.type === 'ecommerce.order.cancelled');
-		expect(cancelled.data).toMatchObject({ number: order.number, reason: 'staff' });
+		expect(types).toEqual(expect.arrayContaining(['ecommerce.order.placed', 'ecommerce.order.canceled']));
+		const canceled = events.json.items.find((/** @type {any} */ e) => e.type === 'ecommerce.order.canceled');
+		expect(canceled.data).toMatchObject({ number: order.number, reason: 'staff' });
 		expect(JSON.stringify(events.json)).not.toContain(ADDRESS.line1);
-		expect(shop.messages().map((m) => m.template)).toContain('ecommerce.staff_cancelled');
+		expect(shop.messages().map((m) => m.template)).toContain('ecommerce.staff_canceled');
 	});
 
 	it('alerts the staff of a move only into a status whose staff alert is on (E36), by SMS on phones by default', async () => {
@@ -142,20 +142,18 @@ describe('events and staff alerts (E32)', () => {
 		// the note staff typed stays with staff (owner, 2026-10-14 (3)): the shopper gets the website's text for who
 		// canceled, the staff alert the note
 		const noted = shop.messages().length;
-		await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'cancelled', note: 'Fraud check failed, card flagged' });
+		await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'canceled', note: 'Fraud check failed, card flagged' });
 		const told = shop.messages().slice(noted);
 		const shopperValues = told.find((m) => m.template === 'ecommerce.order_status')?.values;
 		expect(shopperValues).toMatchObject({ cancelReason: 'Canceled by the shop', shopperNote: '' });
 		expect(JSON.stringify(shopperValues)).not.toContain('Fraud');
-		expect(told.find((m) => m.template === 'ecommerce.staff_cancelled')?.values.reason).toBe(
-			'Fraud check failed, card flagged',
-		);
+		expect(told.find((m) => m.template === 'ecommerce.staff_canceled')?.values.reason).toBe('Fraud check failed, card flagged');
 
 		// a note for the shopper is the cancel's reason (once: shopperNote stays empty, so the message says it once)
 		const third = await placeOrder();
 		const asked = shop.messages().length;
 		await shop.api('POST', `/v1/orders/${third.id}/move`, {
-			to: 'cancelled',
+			to: 'canceled',
 			note: 'Supplier never delivered',
 			shopperNote: 'The item is no longer available',
 		});
@@ -164,14 +162,14 @@ describe('events and staff alerts (E32)', () => {
 			cancelReason: 'The item is no longer available',
 			shopperNote: '',
 		});
-		expect(reasoned.find((m) => m.template === 'ecommerce.staff_cancelled')?.values.reason).toBe('Supplier never delivered');
+		expect(reasoned.find((m) => m.template === 'ecommerce.staff_canceled')?.values.reason).toBe('Supplier never delivered');
 
 		const other = await placeOrder();
 		expect(
 			(await shop.api('PUT', '/v1/texts/messages.cancelReason.staff', { value: 'We had to cancel it' })).status,
 		).toBeLessThan(300);
 		const plain = shop.messages().length;
-		await shop.api('POST', `/v1/orders/${other.id}/move`, { to: 'cancelled' });
+		await shop.api('POST', `/v1/orders/${other.id}/move`, { to: 'canceled' });
 		expect(
 			shop
 				.messages()

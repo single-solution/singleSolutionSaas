@@ -850,7 +850,7 @@ describe('bank transfers recorded by staff (E24)', () => {
 		expect((await orderRecord(unproved.json.order.id)).holdUntil).not.toBeNull();
 		shop.advance(61 * 60_000);
 		await visit('POST', '/v1/shop/cart/quote', { body: { lines: [{ productId: item.id }] } });
-		expect((await orderRecord(unproved.json.order.id)).role).toBe('cancelled');
+		expect((await orderRecord(unproved.json.order.id)).role).toBe('canceled');
 		expect((await orderRecord(id)).role).toBe('awaiting_payment');
 		await shop.methods({ bank_transfer: { via: 'payments' } });
 	});
@@ -865,7 +865,7 @@ describe('bank transfers recorded by staff (E24)', () => {
 				status: 200,
 				body: {
 					methods: [
-						{ key: 'cheque', kind: 'pay_first', ready: true },
+						{ key: 'check', kind: 'pay_first', ready: true },
 						{ key: 'bank_transfer', kind: 'pay_first', ...details },
 					],
 				},

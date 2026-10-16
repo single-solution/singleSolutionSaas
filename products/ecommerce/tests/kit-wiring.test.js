@@ -89,7 +89,7 @@ const seedOrder = async (patch = {}) => {
 				locationId: null,
 				serials: [],
 				booking: null,
-				licences: [],
+				licenses: [],
 				returnedQuantity: 0,
 			},
 		],
@@ -452,7 +452,7 @@ describe('K4: counts equal to their lists', () => {
 		await seedOrder({ number: 'CNT-2', status: 'confirmed', role: 'open', payment: pay('online', 'paid') });
 		await seedOrder({ number: 'CNT-3', status: 'quality_check', role: 'open', payment: pay('cod', 'unpaid') });
 		await seedOrder({ number: 'CNT-4', status: 'packed', role: 'packed', payment: pay('bank_transfer', 'pending') });
-		await seedOrder({ number: 'CNT-5', status: 'cancelled', role: 'cancelled', payment: pay('online', 'refunded') });
+		await seedOrder({ number: 'CNT-5', status: 'canceled', role: 'canceled', payment: pay('online', 'refunded') });
 		await seedOrder({ number: 'CNT-6', status: 'retired_status', role: 'open', payment: pay('online', 'paid') });
 
 		for (const query of [
@@ -469,11 +469,11 @@ describe('K4: counts equal to their lists', () => {
 		const by = async (/** @type {string} */ field) => (await shop.api('GET', `/v1/orders/counts?q=CNT-&by=${field}`)).json;
 		expect(await by('status')).toEqual({
 			total: 6,
-			groups: { awaiting_confirmation: 1, cancelled: 1, confirmed: 1, packed: 1, quality_check: 1, retired_status: 1 },
+			groups: { awaiting_confirmation: 1, canceled: 1, confirmed: 1, packed: 1, quality_check: 1, retired_status: 1 },
 		});
 		expect(await by('role')).toEqual({
 			total: 6,
-			groups: { open: 2, awaiting_confirmation: 1, cancelled: 1, none: 1, packed: 1 },
+			groups: { open: 2, awaiting_confirmation: 1, canceled: 1, none: 1, packed: 1 },
 		});
 		expect((await by('paymentMethod')).groups).toEqual({ online: 3, cod: 2, bank_transfer: 1 });
 		expect((await by('paymentState')).groups).toEqual({ paid: 2, unpaid: 2, pending: 1, refunded: 1 });

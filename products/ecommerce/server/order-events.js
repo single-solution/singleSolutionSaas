@@ -6,7 +6,7 @@
  *   `notify`; one template, or one per status with `statusTemplates: per_status`); an order its window cancels says so
  *   (`expired`);
  * - events (feature `events`, the kit's K5; `EVENT_TYPES` in `core/events.js`): `order.placed`, `order.status_changed`,
- *   `order.paid`, `order.payment_recorded`, `order.proof_uploaded`, `order.cancelled`, `order.refunded`,
+ *   `order.paid`, `order.payment_recorded`, `order.proof_uploaded`, `order.canceled`, `order.refunded`,
  *   `return.requested`, `return.status_changed`, `review.submitted`, `catalog.changed`, `stock.low` and `stock.out` —
  *   ids and small facts only, listed by `GET /v1/events` and sent to the merchant's webhooks through Notifications;
  *   the stock events follow E44's levels: a variant that counts for stock (`countsForStock`) whose units an order or a
@@ -68,7 +68,7 @@ export const createOrderEvents = (product, service) => {
 	/**
 	 * Alert the staff of an event the `staff_alerts` setting lists, or of a move into a status whose staff alert is on
 	 * (`status`, E36: the order flow says, not the setting).
-	 * @param {Site} s @param {string} event `placed`, `status`, `paid`, `proof_uploaded`, `cancelled`, `expired`,
+	 * @param {Site} s @param {string} event `placed`, `status`, `paid`, `proof_uploaded`, `canceled`, `expired`,
 	 *   `return_requested` or `refund_due` @param {OrderRecord} order
 	 * @param {Record<string, string | number>} [extra]
 	 */
@@ -116,7 +116,7 @@ export const createOrderEvents = (product, service) => {
 		// words, K-10): the shopper reads the note for the shopper, else the website's text for it — the note staff typed
 		// stays with staff (owner, 2026-10-14 (3)), whose alert reads it first
 		const cancelReason =
-			role === 'cancelled' ? (reason === 'expired' ? 'expired' : reason === 'shopper' ? 'shopper' : 'staff') : '';
+			role === 'canceled' ? (reason === 'expired' ? 'expired' : reason === 'shopper' ? 'shopper' : 'staff') : '';
 		/** @type {import('./order-messages.js').CancelCode} */
 		const cancelCode =
 			cancelReason === 'expired'
@@ -126,11 +126,11 @@ export const createOrderEvents = (product, service) => {
 				: /** @type {'staff' | 'shopper'} */ (cancelReason || 'staff');
 		const forShopper = typeof shopperNote === 'string' ? shopperNote : '';
 		const words = await messageWords(s);
-		const cancelWords = role === 'cancelled' ? words.cancel(cancelCode, forShopper) : '';
+		const cancelWords = role === 'canceled' ? words.cancel(cancelCode, forShopper) : '';
 		// a cancel's note for the shopper is its reason, said once (shopperNote is then empty)
 		await messages.status(s, order, shopperLabelOf(flow, to), {
 			cancelReason: cancelWords,
-			shopperNote: role === 'cancelled' ? '' : forShopper,
+			shopperNote: role === 'canceled' ? '' : forShopper,
 			notify: notifiesOf(flow, to),
 		});
 		await publish(s, 'order.status_changed', {
@@ -140,9 +140,9 @@ export const createOrderEvents = (product, service) => {
 			reason: reason ?? null,
 			by: typeof by === 'object' && by !== null ? String(/** @type {any} */ (by).name ?? '') : String(by ?? ''),
 		});
-		if (role === 'cancelled') await publish(s, 'order.cancelled', { ...orderFacts(order), reason: cancelReason });
-		if (role === 'cancelled')
-			await alert(s, cancelReason === 'expired' ? 'expired' : 'cancelled', order, {
+		if (role === 'canceled') await publish(s, 'order.canceled', { ...orderFacts(order), reason: cancelReason });
+		if (role === 'canceled')
+			await alert(s, cancelReason === 'expired' ? 'expired' : 'canceled', order, {
 				reason: words.cancel(cancelCode, (typeof note === 'string' ? note : '') || forShopper),
 			});
 		else if (staffAlertOf(flow, to)) await alert(s, 'status', order, { from: statusLabel(flow, from) });

@@ -370,7 +370,7 @@ export const USED_PHONE = Object.freeze({
 		parcel: true,
 		warranty: true,
 		downloads: false,
-		licenceKeys: false,
+		licenseKeys: false,
 		slots: false,
 	},
 	fieldIds: null,

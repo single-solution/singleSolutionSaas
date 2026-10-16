@@ -43,11 +43,11 @@ export const createExtras = (product, service) => {
 			return records;
 		},
 		deleteUser: async (s, user) => {
-			const total = { deleted: 0, anonymised: 0 };
+			const total = { deleted: 0, anonymized: 0 };
 			for (const part of withData) {
 				const done = await part.deleteUser(s, user);
 				total.deleted += done.deleted;
-				total.anonymised += done.anonymised;
+				total.anonymized += done.anonymized;
 			}
 			return total;
 		},

@@ -46,7 +46,7 @@ const WHO = Object.freeze({
 });
 
 /** Roles after which the items may be with the customer (a move from them into a canceled or refunded status is E40's). */
-const AFTER_DELIVERY = Object.freeze(['delivered', 'returned_to_origin', 'returned', 'cancelled', 'refunded']);
+const AFTER_DELIVERY = Object.freeze(['delivered', 'returned_to_origin', 'returned', 'canceled', 'refunded']);
 
 /**
  * The statuses an order in `from` could move to under the role rules (whether or not the move is checked).
@@ -73,7 +73,7 @@ function MoveSettings({ flow, move, methods, onChange }) {
 	const rules = moveRules(flow, move);
 	const from = /** @type {StatusRole} */ (statusOf(flow, move.from)?.role);
 	const to = /** @type {StatusRole} */ (statusOf(flow, move.to)?.role);
-	const shopperAllowed = to === 'cancelled' && ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed'].includes(from);
+	const shopperAllowed = to === 'canceled' && ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed'].includes(from);
 	/** @type {WhoChoice[]} */
 	const whoChoices = ['staff', ...(shopperAllowed ? /** @type {WhoChoice[]} */ (['staff_shopper', 'shopper']) : []), 'system'];
 	const specs = moveOptionSpecs(from, to, rules.who);
@@ -86,7 +86,7 @@ function MoveSettings({ flow, move, methods, onChange }) {
 		<details className="rounded-lg border border-line p-3">
 			<summary className="cursor-pointer text-sm font-medium">
 				{fill(F.moveSettings, { status: target })}
-				{AFTER_DELIVERY.includes(from) && (to === 'cancelled' || to === 'refunded') ? ` (${F.afterDelivery})` : ''}
+				{AFTER_DELIVERY.includes(from) && (to === 'canceled' || to === 'refunded') ? ` (${F.afterDelivery})` : ''}
 			</summary>
 			<div className="mt-3 space-y-3">
 				<FieldGrid>
@@ -101,7 +101,7 @@ function MoveSettings({ flow, move, methods, onChange }) {
 							label={F.permission}
 							value={rules.permission}
 							options={MOVE_PERMISSIONS.map((permission) => ({ value: permission, label: F.permissions[permission] }))}
-							{...(to === 'cancelled' ? { help: F.refundPermission } : {})}
+							{...(to === 'canceled' ? { help: F.refundPermission } : {})}
 							onChange={(event) => set({ permission: /** @type {OrderMove['permission']} */ (event.target.value) })}
 						/>
 					)}
@@ -214,7 +214,7 @@ function TriggersAndStarts({ flow, onChange }) {
 				<Select
 					label={F.triggerFields.windowEnd}
 					value={flow.triggers.windowEnd}
-					options={choices(['cancelled'], false)}
+					options={choices(['canceled'], false)}
 					onChange={(event) => setTrigger('windowEnd', event.target.value)}
 				/>
 				<Select

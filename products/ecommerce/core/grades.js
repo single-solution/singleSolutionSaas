@@ -28,7 +28,7 @@ export const GRADE_LIMITS = Object.freeze({
 /** Grade and item type keys. */
 export const KEY = new RegExp(`^[a-z][a-z0-9_-]{0,${GRADE_LIMITS.key - 1}}$`);
 /** A CSS color as the website writes it (a name, `#rgb`, `#rrggbb`, `rgb(…)` …). */
-const COLOUR = new RegExp(`^[#A-Za-z0-9(),.%\\s-]{0,${GRADE_LIMITS.color}}$`);
+const COLOR = new RegExp(`^[#A-Za-z0-9(),.%\\s-]{0,${GRADE_LIMITS.color}}$`);
 /** Grade conditions (schema.org item conditions), the standard condition every grade maps to (owner, 2026-10-14). */
 export const CONDITIONS = Object.freeze(/** @type {const} */ (['new', 'refurbished', 'used']));
 
@@ -118,7 +118,7 @@ export const checkGrades = (value) => {
 		)
 			errors.push(`Grade ${n}: item types are a list of at most ${GRADE_LIMITS.types} item type keys.`);
 		const color = entry.color === undefined ? '' : entry.color;
-		if (typeof color !== 'string' || !COLOUR.test(color))
+		if (typeof color !== 'string' || !COLOR.test(color))
 			errors.push(`Grade ${n}: the color is a CSS color of up to 40 characters.`);
 		const video = entry.video === undefined ? '' : shortText(entry.video, 500);
 		if (video === null) errors.push(`Grade ${n}: the video is a file key or a YouTube id.`);

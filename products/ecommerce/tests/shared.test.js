@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	DEFAULT_FLOW,
 	canMove,
-	cancelledStatus,
+	canceledStatus,
 	checkOrderFlow,
 	confirmedStatus,
 	nextStatuses,
@@ -29,7 +29,7 @@ describe('the order flow', () => {
 				{ key: 'odd', label: 'Odd', role: 'nope' },
 				'junk',
 			],
-			moves: [{ from: 'delivered', to: 'cancelled' }, { from: 'ghost', to: 'confirmed' }, 'junk'],
+			moves: [{ from: 'delivered', to: 'canceled' }, { from: 'ghost', to: 'confirmed' }, 'junk'],
 		});
 		expect(broken.ok).toBe(false);
 		if (!broken.ok) expect(broken.errors.length).toBeGreaterThanOrEqual(5);
@@ -50,13 +50,13 @@ describe('the order flow', () => {
 		expect(statusWithRole(DEFAULT_FLOW, 'refunded')).toBe('refunded');
 		expect(statusWithRole({ statuses: [], moves: [] }, 'refunded')).toBe('');
 		expect(canMove(DEFAULT_FLOW, 'dispatched', 'returned')).toBe(true);
-		expect(canMove(DEFAULT_FLOW, 'delivered', 'cancelled')).toBe(false);
-		expect(canMove(DEFAULT_FLOW, 'ghost', 'cancelled')).toBe(false);
-		expect(nextStatuses(DEFAULT_FLOW, 'pending_payment').map((s) => s.key)).toEqual(['confirmed', 'cancelled']);
+		expect(canMove(DEFAULT_FLOW, 'delivered', 'canceled')).toBe(false);
+		expect(canMove(DEFAULT_FLOW, 'ghost', 'canceled')).toBe(false);
+		expect(nextStatuses(DEFAULT_FLOW, 'pending_payment').map((s) => s.key)).toEqual(['confirmed', 'canceled']);
 		expect(confirmedStatus(DEFAULT_FLOW, 'awaiting_confirmation')).toBe('confirmed');
 		expect(confirmedStatus(DEFAULT_FLOW, 'delivered')).toBeNull();
-		expect(cancelledStatus(DEFAULT_FLOW, 'pending_payment')).toBe('cancelled');
-		expect(cancelledStatus(DEFAULT_FLOW, 'delivered')).toBe('cancelled');
+		expect(canceledStatus(DEFAULT_FLOW, 'pending_payment')).toBe('canceled');
+		expect(canceledStatus(DEFAULT_FLOW, 'delivered')).toBe('canceled');
 	});
 });
 
@@ -129,7 +129,7 @@ describe('shared routes', () => {
 		expect(exported.status).toBe(200);
 		expect(Object.keys(exported.json.records)).toEqual(expect.arrayContaining(['orders', 'loyalty']));
 		const deleted = await shop.api('POST', '/v1/data-rights/delete', { user: { id: 'usr_nobody000000' } });
-		expect(deleted.json).toMatchObject({ deleted: expect.any(Number), anonymised: expect.any(Number) });
+		expect(deleted.json).toMatchObject({ deleted: expect.any(Number), anonymized: expect.any(Number) });
 		const config = await shop.visitor('GET', '/v1/widget/config');
 		expect(config.json.settings).toMatchObject({
 			currency: 'USD',

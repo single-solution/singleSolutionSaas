@@ -131,7 +131,7 @@ describe('an edit of a waiting order', () => {
 		expect(edited.status).toBe(200);
 		expect(await records.stockOf(product.id)).toBe(3);
 		expect(await records.recordOf(order.id)).toMatchObject({ stockHeld: true, facts: { stock: 'held' } });
-		expect((await records.moveTo(order.id, 'cancelled')).status).toBe(200);
+		expect((await records.moveTo(order.id, 'canceled')).status).toBe(200);
 		expect(await records.stockOf(product.id)).toBe(5);
 		expect((await records.recordOf(order.id)).facts.stock).toBe('back');
 	});
@@ -161,8 +161,8 @@ describe('a refund whose answer was lost', () => {
 		const { order, paymentId } = await records.seedOrder();
 		const payments = lostAnswer(paymentId);
 		try {
-			const cancelled = await records.moveTo(order.id, 'cancelled');
-			expect(cancelled.json.effects[0]).toMatchObject({ state: 'pending', tries: 1 });
+			const canceled = await records.moveTo(order.id, 'canceled');
+			expect(canceled.json.effects[0]).toMatchObject({ state: 'pending', tries: 1 });
 			expect(records.refundCalls(paymentId)).toHaveLength(1);
 			// a day later Payments forgot the key; it cannot be read right now: the refund waits, nothing is sent
 			payments.state.readFails = true;
@@ -232,7 +232,7 @@ describe('a delete', () => {
 		const pending = await records.seedOrder();
 		const restore = records.refundsAnswer({ status: 503, body: {} });
 		try {
-			expect((await records.moveTo(pending.order.id, 'cancelled')).status).toBe(200);
+			expect((await records.moveTo(pending.order.id, 'canceled')).status).toBe(200);
 		} finally {
 			restore();
 		}
@@ -244,10 +244,10 @@ describe('a delete', () => {
 		expect((await shop.api('DELETE', `/v1/orders/${pending.order.id}`)).status).toBe(204);
 
 		// canceled with the refund left to staff: the money is still the shopper's
-		await shop.moveOptions('confirmed', 'cancelled', { refund: 'staff' });
+		await shop.moveOptions('confirmed', 'canceled', { refund: 'staff' });
 		try {
 			const held = await records.seedOrder();
-			expect((await records.moveTo(held.order.id, 'cancelled')).json.payment).toMatchObject({ refundDue: 1000 });
+			expect((await records.moveTo(held.order.id, 'canceled')).json.payment).toMatchObject({ refundDue: 1000 });
 			const holds = await shop.api('DELETE', `/v1/orders/${held.order.id}`);
 			expect(holds.status).toBe(409);
 			expect(holds.json.detail).toMatch(/Refund the USD 10\.00 it still holds/);
@@ -256,7 +256,7 @@ describe('a delete', () => {
 			);
 			expect((await shop.api('DELETE', `/v1/orders/${held.order.id}`)).status).toBe(204);
 		} finally {
-			await shop.moveOptions('confirmed', 'cancelled', {});
+			await shop.moveOptions('confirmed', 'canceled', {});
 		}
 
 		// a delivered order keeps what was paid for it
@@ -278,8 +278,8 @@ describe('a delete', () => {
 describe('a refund through Payments', () => {
 	it('warn when a refund through Payments is not sent because the order was refunded meanwhile', async () => {
 		const { order, paymentId } = await records.seedOrder({
-			status: 'cancelled',
-			role: 'cancelled',
+			status: 'canceled',
+			role: 'canceled',
 			patch: {
 				stockHeld: false,
 				payment: {
@@ -373,8 +373,8 @@ describe('loyalty points', () => {
 			});
 		const owner = { customerId: GUEST.customerId };
 		const start = await balanceOf(owner);
-		const cancelled = await guestOrder();
-		expect((await records.moveTo(cancelled.order.id, 'cancelled')).status).toBe(200);
+		const canceled = await guestOrder();
+		expect((await records.moveTo(canceled.order.id, 'canceled')).status).toBe(200);
 		expect(await balanceOf(owner)).toBe(start + 40);
 		const deleted = await guestOrder();
 		expect((await shop.api('DELETE', `/v1/orders/${deleted.order.id}`)).status).toBe(204);
@@ -494,7 +494,7 @@ describe('a move that loses its race after calling out', () => {
 		});
 		await changeMeanwhile(order.id);
 		const s = await service.site(ctx());
-		await expect(moves.move(s, ctx(), order, input('cancelled'), DEFAULT_FLOW)).rejects.toMatchObject({ code: 'conflict' });
+		await expect(moves.move(s, ctx(), order, input('canceled'), DEFAULT_FLOW)).rejects.toMatchObject({ code: 'conflict' });
 		expect(shop.callsTo(`${PAYMENTS}/v1/payments/${paymentId}/cancel`)).toHaveLength(1);
 		// the payment Payments canceled is dropped: the shopper's next pay starts a new one
 		expect(await records.recordOf(order.id)).toMatchObject({

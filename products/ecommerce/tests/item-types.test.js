@@ -55,7 +55,7 @@ describe('the item types list', () => {
 				parcel: true,
 				warranty: true,
 				downloads: false,
-				licenceKeys: false,
+				licenseKeys: false,
 				slots: false,
 			},
 			fieldIds: ['att_battery'],
@@ -86,12 +86,12 @@ describe('the item types list', () => {
 		expect(problems([{ key: 'a', name: 'A', kind: 'digital', elements: { slots: true, units: {}, downloads: true } }])).toEqual(
 			['/value/0/elements/units', '/value/0/elements/slots'],
 		);
-		expect(problems([{ key: 'a', name: 'A', kind: 'service', elements: { parcel: true, licenceKeys: true } }])).toEqual([
+		expect(problems([{ key: 'a', name: 'A', kind: 'service', elements: { parcel: true, licenseKeys: true } }])).toEqual([
 			'/value/0/elements/parcel',
-			'/value/0/elements/licenceKeys',
+			'/value/0/elements/licenseKeys',
 		]);
-		expect(problems([{ key: 'a', name: 'A', elements: { colours: true, chart: 'yes' } }])).toEqual([
-			'/value/0/elements/colours',
+		expect(problems([{ key: 'a', name: 'A', elements: { colors: true, chart: 'yes' } }])).toEqual([
+			'/value/0/elements/colors',
 			'/value/0/elements/chart',
 		]);
 		expect(
@@ -161,10 +161,10 @@ describe('the type of a product', () => {
 			parcel: true,
 			warranty: true,
 			downloads: false,
-			licenceKeys: false,
+			licenseKeys: false,
 			slots: false,
 		});
-		expect(elementsOf(BUILT_IN_TYPES.digital, ALL_ON)).toMatchObject({ parcel: false, downloads: true, licenceKeys: true });
+		expect(elementsOf(BUILT_IN_TYPES.digital, ALL_ON)).toMatchObject({ parcel: false, downloads: true, licenseKeys: true });
 		expect(elementsOf(BUILT_IN_TYPES.service, ALL_ON)).toMatchObject({ parcel: false, slots: true, downloads: false });
 		expect(typeTakes(BUILT_IN_TYPES.physical, 'att_any')).toBe(true);
 		expect(typeTakes(/** @type {any} */ (merchant[0]), 'att_battery')).toBe(true);

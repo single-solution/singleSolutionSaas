@@ -353,7 +353,7 @@ describe('products', () => {
 				stockState: 'none',
 				sold: 0,
 				rating: { average: 0, count: 0 },
-				digital: { files: [{ key: 'files/guide.pdf', size: 10 }], downloadLimit: 3, licenceKeys: false },
+				digital: { files: [{ key: 'files/guide.pdf', size: 10 }], downloadLimit: 3, licenseKeys: false },
 				previousSlugs: [],
 			},
 		});

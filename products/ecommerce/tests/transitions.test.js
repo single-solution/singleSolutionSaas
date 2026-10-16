@@ -74,8 +74,8 @@ describe('one transaction per move', () => {
 		const s = await service.site(ctx());
 		const input = (/** @type {string} */ to) => ({ to, note: '', serials: {}, shipment: null, updatedAt: null });
 		const both = await Promise.allSettled([
-			moves.move(s, ctx(), order, input('cancelled'), DEFAULT_FLOW),
-			moves.move(await service.site(ctx()), ctx(), order, input('cancelled'), DEFAULT_FLOW),
+			moves.move(s, ctx(), order, input('canceled'), DEFAULT_FLOW),
+			moves.move(await service.site(ctx()), ctx(), order, input('canceled'), DEFAULT_FLOW),
 		]);
 		expect(both.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
 		const refused = /** @type {PromiseRejectedResult} */ (both.find((result) => result.status === 'rejected'));
@@ -83,7 +83,7 @@ describe('one transaction per move', () => {
 		// the stock came back once, and the money went back once
 		expect(await stockOf(product.id)).toBe(5);
 		const after = await recordOf(order.id);
-		expect(after.history.filter((/** @type {any} */ entry) => entry.to === 'cancelled')).toHaveLength(1);
+		expect(after.history.filter((/** @type {any} */ entry) => entry.to === 'canceled')).toHaveLength(1);
 		expect(after.refunds).toHaveLength(1);
 		expect(after.facts).toEqual({ stock: 'back', offers: 'released', redeemed: 'given_back', earned: 'none', units: 'none' });
 
@@ -91,11 +91,11 @@ describe('one transaction per move', () => {
 		const other = await seedOrder();
 		const race = await Promise.allSettled([
 			moves.move(s, ctx(), other.order, input('packed'), DEFAULT_FLOW),
-			moves.move(await service.site(ctx()), ctx(), other.order, input('cancelled'), DEFAULT_FLOW),
+			moves.move(await service.site(ctx()), ctx(), other.order, input('canceled'), DEFAULT_FLOW),
 		]);
 		expect(race.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
 		const won = /** @type {PromiseFulfilledResult<any>} */ (race.find((result) => result.status === 'fulfilled'));
-		expect(await stockOf(other.product.id)).toBe(won.value.order.role === 'cancelled' ? 5 : 4);
+		expect(await stockOf(other.product.id)).toBe(won.value.order.role === 'canceled' ? 5 : 4);
 	});
 
 	it('keeps the facts through a move, and refuses an order whose status changed its role', async () => {
@@ -120,7 +120,7 @@ describe('one transaction per move', () => {
 				s,
 				ctx(),
 				await recordOf(order.id),
-				{ to: 'cancelled', note: '', serials: {}, shipment: null, updatedAt: null },
+				{ to: 'canceled', note: '', serials: {}, shipment: null, updatedAt: null },
 				reRoled,
 			),
 		).rejects.toMatchObject({ code: 'flow_changed' });
@@ -133,19 +133,19 @@ describe('the refund a staff cancel asks of Payments', () => {
 		const { order, paymentId } = await seedOrder({ quantity: 2 });
 		const restore = refundsAnswer({ status: 503, body: {} });
 		/** @type {any} */
-		let cancelled;
+		let canceled;
 		try {
-			cancelled = await moveTo(order.id, 'cancelled', { note: 'Shop closed' });
+			canceled = await moveTo(order.id, 'canceled', { note: 'Shop closed' });
 		} finally {
 			restore();
 		}
-		expect(cancelled.status).toBe(200);
-		expect(cancelled.json.warningCodes).toEqual([{ code: 'cancel_refund_failed', values: { amount: 2000 } }]);
-		expect(cancelled.json.warnings[0]).toContain('tried again');
-		expect(cancelled.json.effects).toEqual([
+		expect(canceled.status).toBe(200);
+		expect(canceled.json.warningCodes).toEqual([{ code: 'cancel_refund_failed', values: { amount: 2000 } }]);
+		expect(canceled.json.warnings[0]).toContain('tried again');
+		expect(canceled.json.effects).toEqual([
 			expect.objectContaining({ id: `${order.id}:cancel`, kind: 'refund', amount: 2000, state: 'pending', tries: 1 }),
 		]);
-		expect(cancelled.json.payment).toMatchObject({ refunded: 0, refundable: 2000 });
+		expect(canceled.json.payment).toMatchObject({ refunded: 0, refundable: 2000 });
 		expect(refundCalls(paymentId)).toHaveLength(1);
 
 		// within the minute nothing is tried again
@@ -179,7 +179,7 @@ describe('the refund a staff cancel asks of Payments', () => {
 		const byStaff = await seedOrder();
 		const refused = await seedOrder();
 		try {
-			for (const { order } of [onUse, byStaff, refused]) expect((await moveTo(order.id, 'cancelled')).status).toBe(200);
+			for (const { order } of [onUse, byStaff, refused]) expect((await moveTo(order.id, 'canceled')).status).toBe(200);
 		} finally {
 			restore();
 		}
@@ -234,7 +234,7 @@ describe('the refund a staff cancel asks of Payments', () => {
 			return normal(call);
 		});
 		try {
-			expect((await moveTo(order.id, 'cancelled')).json.effects[0]).toMatchObject({ state: 'pending', tries: 1 });
+			expect((await moveTo(order.id, 'canceled')).json.effects[0]).toMatchObject({ state: 'pending', tries: 1 });
 			expect(done).toBe(1000);
 			// Payments cannot be reached to tell: staff cannot refund by hand yet
 			const unreachable = await shop.admin(ticket, 'POST', `/v1/admin/orders/${order.id}/refunds`, {
@@ -276,7 +276,7 @@ describe('the refund a staff cancel asks of Payments', () => {
 		const restore = refundsAnswer({ status: 503, body: {} });
 		const { order, paymentId } = await seedOrder();
 		try {
-			expect((await moveTo(order.id, 'cancelled')).status).toBe(200);
+			expect((await moveTo(order.id, 'canceled')).status).toBe(200);
 		} finally {
 			restore();
 		}
@@ -431,12 +431,12 @@ describe('every way an order moves goes through the engine', () => {
 			});
 		const cod = (await place('cod', 'engine-1')).json.order;
 		expect((await recordOf(cod.id)).facts).toEqual(PLACED_FACTS);
-		const cancelled = await shop.call('POST', `/v1/shop/orders/${cod.id}/cancel`, {
+		const canceled = await shop.call('POST', `/v1/shop/orders/${cod.id}/cancel`, {
 			token: shop.browser,
 			origin: ORIGIN,
 			headers: { 'ss-sign-in': token },
 		});
-		expect(cancelled.status).toBe(200);
+		expect(canceled.status).toBe(200);
 		expect((await recordOf(cod.id)).facts).toMatchObject({ stock: 'back', offers: 'released' });
 		expect((await activityOf(cod.id))[0]).toMatchObject({
 			actor: { kind: 'shopper', id: 'usr_engineshop01', name: 'Shopper' },
@@ -458,7 +458,7 @@ describe('every way an order moves goes through the engine', () => {
 		const ending = (await place('cod', 'engine-333')).json.order;
 		shop.advance(25 * 3_600_000);
 		await shop.call('POST', '/v1/shop/cart/quote', { token: shop.browser, origin: ORIGIN, body: { lines: [] } });
-		expect(await recordOf(ending.id)).toMatchObject({ role: 'cancelled', facts: { stock: 'back' } });
+		expect(await recordOf(ending.id)).toMatchObject({ role: 'canceled', facts: { stock: 'back' } });
 		expect((await activityOf(ending.id))[0]).toMatchObject({
 			actor: { kind: 'system', id: 'checkout' },
 			action: 'order.moved',
@@ -481,7 +481,7 @@ describe('every way an order moves goes through the engine', () => {
 		const serials = (await shop.db()).collection(COLLECTIONS.serials);
 		expect(await serials.countDocuments({ websiteId: shop.websiteId, serial: 'SN-0002' })).toBe(0);
 		// canceled: the typed number goes (it never was in stock)
-		expect((await moveTo(order.id, 'cancelled')).json.facts.units).toBe('none');
+		expect((await moveTo(order.id, 'canceled')).json.facts.units).toBe('none');
 		expect(await serials.countDocuments({ websiteId: shop.websiteId, serial: 'SN-0001' })).toBe(0);
 	});
 

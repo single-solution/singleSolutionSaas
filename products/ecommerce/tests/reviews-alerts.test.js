@@ -117,7 +117,7 @@ const seedOrder = async ({ userId = SARA, name = 'Sara Shopper', lines, key, pat
 				locationId: null,
 				serials: [],
 				booking: null,
-				licences: [],
+				licenses: [],
 				returnedQuantity: 0,
 			};
 		}),
@@ -503,7 +503,7 @@ describe('alerts', () => {
 				.map((m) => m.values.name);
 
 		// a shopper's cancel and an ended window (orders placed through checkout hold the last unit)
-		const cancelled = await shop.seedProduct({ name: 'Canceled', stock: 1 });
+		const canceled = await shop.seedProduct({ name: 'Canceled', stock: 1 });
 		const expired = await shop.seedProduct({ name: 'Expired', stock: 1 });
 		const buyer = await shop.signIn({ id: 'usr_buyer0000001', name: 'Bo Buyer', email: 'bo@example.com' });
 		const place = (/** @type {string} */ id) =>
@@ -512,10 +512,10 @@ describe('alerts', () => {
 				signIn: buyer,
 				key: `e34-${id}`,
 			});
-		const toCancel = (await place(cancelled.id)).json.order;
+		const toCancel = (await place(canceled.id)).json.order;
 		await place(expired.id);
-		expect((await productOf(cancelled.id)).inStock).toBe(false);
-		for (const item of [cancelled, expired])
+		expect((await productOf(canceled.id)).inStock).toBe(false);
+		for (const item of [canceled, expired])
 			expect(
 				(await visit('POST', '/v1/shop/alerts', { body: { kind: 'back_in_stock', productId: item.id }, signIn: sara }))
 					.status,
@@ -569,7 +569,7 @@ describe('alerts', () => {
 			},
 		});
 		for (const [order, to, name] of /** @type {Array<[{ id: string }, string, string]>} */ ([
-			[a, 'cancelled', 'Staff cancel'],
+			[a, 'canceled', 'Staff cancel'],
 			[b, 'refunded', 'Refund'],
 			[c, 'returned', 'Return to origin'],
 		])) {
@@ -584,7 +584,7 @@ describe('alerts', () => {
 			lines: [{ product: staffCancel }],
 			patch: { status: 'confirmed', role: 'open', deliveredAt: null },
 		});
-		await shop.api('POST', `/v1/orders/${d.id}/move`, { to: 'cancelled' });
+		await shop.api('POST', `/v1/orders/${d.id}/move`, { to: 'canceled' });
 		expect(backSince(from)).toEqual([]);
 
 		// an import (stock without locations)

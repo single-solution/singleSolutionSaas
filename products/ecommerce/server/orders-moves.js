@@ -15,7 +15,7 @@
  *   template), or a booking through the courier API (Courier APIs; a failed booking moves nothing);
  * - `delivered`: cash on delivery and pay at pickup become paid; products count the units sold; loyalty points are
  *   earned (Loyalty);
- * - `cancelled`: stock, slots, offer uses and redeemed points go back once, serials go back in stock, and money paid
+ * - `canceled`: stock, slots, offer uses and redeemed points go back once, serials go back in stock, and money paid
  *   through Payments is refunded right after (a refund Payments cannot take now stays pending on the order and is
  *   tried again on use);
  * - `returned_to_origin`: stock comes back once and the customer's RTO count rises;
@@ -401,7 +401,7 @@ export const createMoves = (product, service) => {
 		// why staff cancel or a package came back: a reason of the merchant's list for that move (E19), with whether it
 		// counts against the customer
 		const reasons =
-			target.role === 'cancelled'
+			target.role === 'canceled'
 				? await s.list('cancel_reasons')
 				: target.role === 'returned_to_origin'
 					? await s.list('delivery_failure_reasons')
@@ -413,7 +413,7 @@ export const createMoves = (product, service) => {
 		if (!why.ok)
 			throw service.invalid(
 				'reason',
-				`reason is a key of the ${target.role === 'cancelled' ? 'cancel_reasons' : 'delivery_failure_reasons'} list.`,
+				`reason is a key of the ${target.role === 'canceled' ? 'cancel_reasons' : 'delivery_failure_reasons'} list.`,
 			);
 		const data = await s.data();
 		const now = product.now();
@@ -478,15 +478,15 @@ export const createMoves = (product, service) => {
 		}
 
 		async function moveOn() {
-			const cancelling =
-				(target.role === 'cancelled' || target.role === 'refunded') && BEFORE_DELIVERY_ROLES.includes(order.role);
+			const canceling =
+				(target.role === 'canceled' || target.role === 'refunded') && BEFORE_DELIVERY_ROLES.includes(order.role);
 			// a waiting order staff move on counts as paid when its method is listed (`paidOnConfirm`, OR-7)
 			const paid = paidOnConfirm(ctx, order, target.role, rules.options.paidOnConfirm ?? []);
 			// its open Payments payment is canceled there first (K-13): a cancel before dispatch, or a refund acting as one
 			// (the canceled order watches it for money that still comes), and a waiting order staff move on (it lets the
 			// payment go, or keeps it canceled with the payment staff record)
-			const step = cancelling
-				? await cancelAtPayments(s, order, input.note || (target.role === 'cancelled' ? 'Order canceled' : 'Order refunded'))
+			const step = canceling
+				? await cancelAtPayments(s, order, input.note || (target.role === 'canceled' ? 'Order canceled' : 'Order refunded'))
 				: WAITING.includes(order.role)
 					? await leaveWaiting(s, order, paid ? 'Paid by hand' : 'Moved on by staff')
 					: null;
@@ -497,7 +497,7 @@ export const createMoves = (product, service) => {
 					: shipping.shipment
 				: undefined;
 			// stock an order gives back tells the alerts (E34): what its products were before
-			const held = ['cancelled', 'returned_to_origin', 'returned', 'refunded'].includes(target.role)
+			const held = ['canceled', 'returned_to_origin', 'returned', 'refunded'].includes(target.role)
 				? await heldStockBefore(data, order)
 				: null;
 			const planned = planTransition({
@@ -510,7 +510,7 @@ export const createMoves = (product, service) => {
 					...(attachments.length > 0 ? { attachments } : {}),
 					...(units ? { units } : {}),
 					...(paid ? { paid: { ...paid, set: { ...step?.set, ...paid.set } } } : {}),
-					...(step && !paid ? { payments: cancelling ? step.set : { ...DROPPED } } : {}),
+					...(step && !paid ? { payments: canceling ? step.set : { ...DROPPED } } : {}),
 				},
 				rules: settings,
 				now,
@@ -522,7 +522,7 @@ export const createMoves = (product, service) => {
 			const { plan } = planned;
 			let after = await transitions.apply(s, order, plan);
 			// money paid after an earlier cancel of its payment is recorded on the canceled order (K-13)
-			if (step && target.role === 'cancelled') {
+			if (step && target.role === 'canceled') {
 				await payments.afterCancel(s, after, step);
 				after = /** @type {OrderRecord} */ (
 					await data

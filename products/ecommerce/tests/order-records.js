@@ -69,7 +69,7 @@ export const orderRecords = (shop) => {
 					locationId: null,
 					serials: [],
 					booking: null,
-					licences: [],
+					licenses: [],
 					returnedQuantity: 0,
 				},
 			],

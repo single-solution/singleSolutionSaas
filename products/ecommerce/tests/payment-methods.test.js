@@ -46,11 +46,11 @@ describe('the payment methods list (E2, E8)', () => {
 	});
 
 	it('takes the merchant’s own methods on the fixed kinds, filling what each leaves out', () => {
-		const [cheque, card] = listOf([
-			{ key: 'cheque', name: 'Cheque', kind: 'pay_first', via: 'manual', instructions: 'Payable to Example Shop.' },
+		const [check, card] = listOf([
+			{ key: 'check', name: 'Check', kind: 'pay_first', via: 'manual', instructions: 'Payable to Example Shop.' },
 			{ key: 'card_on_delivery', name: 'Card on delivery', kind: 'on_delivery', feePercent: 1.5, pickup: true },
 		]);
-		expect(cheque).toMatchObject({ active: true, via: 'manual', proof: true, delivery: true, pickup: true, accounts: [] });
+		expect(check).toMatchObject({ active: true, via: 'manual', proof: true, delivery: true, pickup: true, accounts: [] });
 		expect(card).toMatchObject({ feePercent: 1.5, delivery: true, pickup: true, rtoThreshold: 2, advanceVia: 'payments' });
 		// what a kind does not use keeps its default
 		const [online, wire] = listOf([

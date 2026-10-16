@@ -72,7 +72,7 @@ const delivered = async (products) => {
 			locationId: null,
 			serials: [],
 			booking: null,
-			licences: [],
+			licenses: [],
 			returnedQuantity: 0,
 		};
 	});

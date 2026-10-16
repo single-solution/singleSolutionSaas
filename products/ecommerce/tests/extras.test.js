@@ -93,7 +93,7 @@ const order = async ({
 			locationId: null,
 			serials: line.serials ?? [],
 			booking: null,
-			licences: [],
+			licenses: [],
 			returnedQuantity: 0,
 		};
 	});
@@ -779,7 +779,7 @@ describe('reports', () => {
 		const from = new Date(shop.now()).toISOString().slice(0, 10);
 		const first = await order({ lines: [{ product: tab, quantity: 2, cost: 7000 }], city: ' Paris ' });
 		await order({ userId: OMAR, lines: [{ product: tab, quantity: 1 }], city: 'paris' });
-		await order({ lines: [{ product: tab, quantity: 5 }], role: 'cancelled', delivered: false });
+		await order({ lines: [{ product: tab, quantity: 5 }], role: 'canceled', delivered: false });
 		await order({ lines: [{ product: tab, quantity: 1 }], currency: 'EUR' });
 		const claim = await shop.visitor('POST', '/v1/shop/returns', {
 			signIn: sara,
@@ -854,18 +854,18 @@ describe('data rights and widget settings', () => {
 		expect((await productOf(item.id)).rating.count).toBe(1);
 		const removed = await shop.api('POST', '/v1/data-rights/delete', { user: { id: OMAR } });
 		expect(removed.json.deleted).toBeGreaterThanOrEqual(2);
-		expect(removed.json.anonymised).toBeGreaterThanOrEqual(1);
+		expect(removed.json.anonymized).toBeGreaterThanOrEqual(1);
 		expect((await productOf(item.id)).rating).toEqual({ average: 0, count: 0 });
 		const left = await data.collection(COLLECTIONS.returns).find({ websiteId: data.websiteId, userId: OMAR }).toArray();
 		expect(left).toEqual([]);
 		expect((await shop.api('POST', '/v1/data-rights/delete', { user: { phone: '+19990000000' } })).json).toEqual({
 			deleted: 0,
-			anonymised: 0,
+			anonymized: 0,
 		});
 
 		// Sara's claims with photos: the photos are deleted from storage
 		const deleted = await shop.api('POST', '/v1/data-rights/delete', { user: { id: SARA, email: 'sara@example.com' } });
-		expect(deleted.json.anonymised).toBeGreaterThan(0);
+		expect(deleted.json.anonymized).toBeGreaterThan(0);
 		expect(shop.callsTo(STORAGE).some((c) => c.method === 'DELETE')).toBe(true);
 	});
 

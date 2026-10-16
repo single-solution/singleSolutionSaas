@@ -195,8 +195,8 @@ export const createQuoting = (product, service) => {
 		 * (E45). @param {string} key @param {string[]} categoryIds
 		 */
 		const gradeLabel = (key, categoryIds) => gradesFor(grades, lineageOf(categoryIds, tree)).get(key)?.label ?? key;
-		const licences = await store.availableLicences(
-			[...products.values()].filter((item) => item.kind === 'digital' && item.digital?.licenceKeys).map((item) => item.id),
+		const licenses = await store.availableLicenses(
+			[...products.values()].filter((item) => item.kind === 'digital' && item.digital?.licenseKeys).map((item) => item.id),
 		);
 		// services booked in time slots: their item type's `slots`; items sold in a unit of their own: its `measure`
 		// (dynamic model §1, §4)
@@ -233,7 +233,7 @@ export const createQuoting = (product, service) => {
 			// staff editing an order are held to the most of one item, not the shop's own limit (E29)
 			maxQuantity: edit ? MAX_QUANTITY : Number(checkout.maxQuantity ?? MAX_QUANTITY),
 			unit,
-			licences,
+			licenses,
 			booked,
 			// called only for booking lines with a slot, so the rules were read
 			slotOf: (item, start) => {

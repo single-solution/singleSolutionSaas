@@ -217,7 +217,7 @@ describe('orders', () => {
 		const counts = await api('GET', '/v1/products/counts?by=variantStock');
 		expect(counts.groups.low).toBeGreaterThanOrEqual(1);
 		// the canceled order gives its 3 m back
-		await api('POST', `/v1/orders/${answer.json.order.id}/move`, { to: 'cancelled' });
+		await api('POST', `/v1/orders/${answer.json.order.id}/move`, { to: 'canceled' });
 		expect(await linenStock()).toBe(7500);
 		await shop.setting('catalog', 'lowStock', 0);
 	});

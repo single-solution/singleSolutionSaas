@@ -60,7 +60,7 @@ const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /** HH:MM. */
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 /** A CSS color (a name, `#rgb`, `#rrggbb`, `rgb(…)` …). */
-const COLOUR = /^[#A-Za-z0-9(),.%\s-]{0,40}$/;
+const COLOR = /^[#A-Za-z0-9(),.%\s-]{0,40}$/;
 
 /**
  * What deals see of a cart line.
@@ -648,7 +648,7 @@ const checkDisplay = (input, keys) => {
 	if (typeof slug !== 'string' || (slug !== '' && (!SLUG.test(slug) || slug.length > 80)))
 		return fail('slug', 'slug is lowercase letters, digits and hyphens (at most 80), or empty.');
 	const color = input.color ?? '';
-	if (typeof color !== 'string' || !COLOUR.test(color)) return fail('color', 'color is a CSS color of at most 40 characters.');
+	if (typeof color !== 'string' || !COLOR.test(color)) return fail('color', 'color is a CSS color of at most 40 characters.');
 	const seoIn = input.seo ?? {};
 	if (!isObject(seoIn)) return fail('seo', 'seo is { title, description }.');
 	return gather([

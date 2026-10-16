@@ -69,7 +69,7 @@ export const openAtPayments = (order) => Boolean(order.payment.paymentId) && !or
  * @param {OrderRecord} order
  */
 const watched = (order) =>
-	order.role === 'cancelled' && Boolean(order.payment.paymentId) && Boolean(order.payment.voidedAt) && !tookIn(order);
+	order.role === 'canceled' && Boolean(order.payment.paymentId) && Boolean(order.payment.voidedAt) && !tookIn(order);
 
 /**
  * What canceling an order's payment at Payments means for the cancel: `paid` the order, recorded as paid, when the money

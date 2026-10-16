@@ -78,7 +78,7 @@ export const rulesOf = async (s) => {
  * @returns {Record<string, unknown>}
  */
 const moneyGuard = (order, plan) =>
-	plan.stage === 'cancelled' || plan.stage === 'refunded'
+	plan.stage === 'canceled' || plan.stage === 'refunded'
 		? {
 				'payment.refunded': order.payment.refunded,
 				effects: { $not: { $elemMatch: { state: 'pending', runningAt: { $ne: null } } } },

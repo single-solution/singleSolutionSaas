@@ -256,7 +256,7 @@ describe('E11 serial capture', () => {
 		expect(twice.status).toBe(422);
 		// a cancel deletes typed units of the other order (they never were in stock)
 		await move(other.order.id, 'packed', { serials: { [otherLine]: ['352099001761481'] } });
-		expect((await move(other.order.id, 'cancelled')).status).toBe(200);
+		expect((await move(other.order.id, 'canceled')).status).toBe(200);
 		expect(
 			await data.collection(COLLECTIONS.serials).countDocuments({ websiteId: shop.websiteId, serial: '352099001761481' }),
 		).toBe(0);

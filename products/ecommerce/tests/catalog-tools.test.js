@@ -388,7 +388,7 @@ describe('bulk edit any field (E23)', () => {
 describe('staff filters and counts by filterable fields (E24)', () => {
 	it('filters the staff list and counts products by any field marked filterable', async () => {
 		const color = await ok('POST', '/v1/attributes', {
-			name: 'Colour',
+			name: 'Color',
 			slug: 'color',
 			type: 'choice',
 			choices: ['red', 'blue'],

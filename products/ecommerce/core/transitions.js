@@ -21,11 +21,11 @@
  * - into `delivered`: stock held → sold, units counted sold, an order paid on delivery or at pickup paid (the move's
  *   `paidOnDelivery`), earned
  *   points credited once (`loyalty`, none → credited);
- * - into `cancelled`, or `refunded` before delivery (a cancel): stock and slots back, offer uses released, redeemed
+ * - into `canceled`, or `refunded` before delivery (a cancel): stock and slots back, offer uses released, redeemed
  *   points given back, serial numbers back, each only while the facts say it was not; what Payments took is refunded
  *   after the transaction when the move says so (staff: `refund: auto`; the shopper: `shopperPaid: refund`; an ended
  *   window never);
- * - into `cancelled` or `refunded` after delivery or from a closed status (E40): items still with the customer (stock
+ * - into `canceled` or `refunded` after delivery or from a closed status (E40): items still with the customer (stock
  *   sold) go back in stock only when the move says so (`restock`; default no), offer uses are released by a cancel,
  *   redeemed points come back and earned points are taken back unless the move keeps them (`points: keep`, E39);
  * - into `returned_to_origin` or `returned`: stock back or kept out (the move's `restock`), serial numbers back, an RTO
@@ -243,7 +243,7 @@ export const checkTransition = ({ order, flow, to, listed = true, who = 'staff' 
 	if (!target || order.status === to) return refused;
 	const move = listed ? moveOf(flow, order.status, to, who) : null;
 	// a transition without a listed move is only a waiting order's cancel (an ended window)
-	if (listed ? !move : !WAITING_ROLES.includes(order.role) || target.role !== 'cancelled') return refused;
+	if (listed ? !move : !WAITING_ROLES.includes(order.role) || target.role !== 'canceled') return refused;
 	const current = statusOf(flow, order.status);
 	if (current && current.role !== order.role)
 		return {
@@ -454,14 +454,14 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 			: stage === 'returned'
 				? 'customer_return'
 				: input.who === 'staff'
-					? stage === 'cancelled'
+					? stage === 'canceled'
 						? input.reason
 						: undefined
 					: input.cancelReason;
 	/** Whether the move adds one to the customer's returned-packages counter. */
 	const countsAgainst = input.countsAgainst ?? (stage === 'returned_to_origin' && reason !== 'customer_return');
 	// the reason a closing move gives is kept on the order, for its lists, counts and reports
-	if ((stage === 'cancelled' || stage === 'returned_to_origin') && reason) set.closeReason = reason;
+	if ((stage === 'canceled' || stage === 'returned_to_origin') && reason) set.closeReason = reason;
 
 	// a payment the move records (paid when staff confirm, OR-7; Payments' confirmation)
 	if (input.paid) {
@@ -679,7 +679,7 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 			if (before.stock === 'held') after.stock = 'sold';
 			break;
 		}
-		case 'cancelled': {
+		case 'canceled': {
 			if (BEFORE_DELIVERY.includes(fromStage)) release();
 			else settleAfter({ cancel: true });
 			if (countsAgainst && order.customer.customerId)

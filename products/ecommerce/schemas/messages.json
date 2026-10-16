@@ -186,9 +186,9 @@
 			}
 		},
 		{
-			"key": "ecommerce.staff_cancelled",
+			"key": "ecommerce.staff_canceled",
 			"name": "Order canceled",
-			"description": "Tells the staff that they or the shopper canceled an order (staff alert event cancelled).",
+			"description": "Tells the staff that they or the shopper canceled an order (staff alert event canceled).",
 			"values": ["id", "number", "name", "total", "status", "paymentMethod", "business", "reason", "link", "phone"],
 			"required": true,
 			"channels": {

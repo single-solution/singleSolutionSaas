@@ -52,7 +52,7 @@ const lineOf = (line) =>
 		locationId: null,
 		serials: [],
 		booking: null,
-		licences: [],
+		licenses: [],
 		returnedQuantity: 0,
 		...line,
 	});

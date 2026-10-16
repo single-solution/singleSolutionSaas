@@ -51,7 +51,7 @@ import { nextPreviousSlugs } from '../core/links.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { orderFilters, orderQuery } from '../core/orders.js';
 import { phoneSearchOf } from '../core/guests.js';
-import { createFulfilmentStore } from '../adapters/fulfilment-store.js';
+import { createFulfillmentStore } from '../adapters/fulfillment-store.js';
 import { refuse } from './catalog-common.js';
 import { phoneRulesOf } from './guests.js';
 import { SERVER_LIMITS, bodyOf } from './service.js';
@@ -205,7 +205,7 @@ export const createCatalogTools = (product, service, common) => {
 				.toArray()
 		);
 		const [spent, fields] = await Promise.all([
-			createFulfilmentStore(data).orders.spent(customers),
+			createFulfillmentStore(data).orders.spent(customers),
 			columnsOn(data, ['customer']),
 		]);
 		await service.log(ctx, 'csv.customers_exported', 'customers', {

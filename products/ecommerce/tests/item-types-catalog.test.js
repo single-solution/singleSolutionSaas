@@ -76,7 +76,7 @@ const saveTypes = (phoneUnits = {}) =>
 			},
 			fieldIds: [ids.battery.id, ids.color.id],
 		},
-		{ key: 'gift_card', name: 'Gift card', kind: 'digital', elements: { licenceKeys: true } },
+		{ key: 'gift_card', name: 'Gift card', kind: 'digital', elements: { licenseKeys: true } },
 		{ key: 'repair', name: 'Repair', kind: 'service', elements: { warranty: true } },
 		{ key: 'session', name: 'Session', kind: 'service', elements: { slots: true } },
 		{ key: 'plain_box', name: 'Plain box', kind: 'physical', elements: {} },
@@ -209,12 +209,12 @@ describe('the type of a product', () => {
 					name: 'Card',
 					typeKey: 'gift_card',
 					price: 1,
-					digital: { downloadLimit: 3, licenceKeys: true },
+					digital: { downloadLimit: 3, licenseKeys: true },
 				}),
 			),
 		).toEqual(['/digital/downloadLimit']);
 		const card = await api('POST', '/v1/products', { name: 'Card', typeKey: 'gift_card', price: 1 });
-		expect((await api('POST', `/v1/products/${card.id}/licences`, { keys: ['KEY-1'] })).added).toBe(1);
+		expect((await api('POST', `/v1/products/${card.id}/licenses`, { keys: ['KEY-1'] })).added).toBe(1);
 		const file = await shop.api('POST', `/v1/products/${card.id}/files`, {
 			name: 'card.pdf',
 			type: 'application/pdf',

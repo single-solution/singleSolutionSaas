@@ -76,7 +76,7 @@ const orderOf = (patch = {}) =>
 				locationId: null,
 				serials: ['SN-111', 'SN-222'],
 				booking: null,
-				licences: [],
+				licenses: [],
 				returnedQuantity: 0,
 			},
 			{
@@ -101,7 +101,7 @@ const orderOf = (patch = {}) =>
 				locationId: null,
 				serials: [],
 				booking: null,
-				licences: [],
+				licenses: [],
 				returnedQuantity: 0,
 			},
 		],
@@ -133,7 +133,7 @@ const orderOf = (patch = {}) =>
 		stockHeld: true,
 		holdUntil: null,
 		idempotencyKey: createId('key'),
-		note: 'Leave with the neighbour',
+		note: 'Leave with the neighbor',
 		staffNote: 'Secret staff note',
 		placedAt: new Date('2026-10-04T23:30:00Z'),
 		deliveredAt: null,
@@ -188,7 +188,7 @@ describe('printable documents', () => {
 		expect(slip.text).toContain('SN-111, SN-222');
 		expect(slip.text).toContain('Swift Post');
 		expect(slip.text).toContain('TR-9');
-		expect(slip.text).toContain('Leave with the neighbour');
+		expect(slip.text).toContain('Leave with the neighbor');
 		expect(slip.text).not.toContain('USD');
 		expect(slip.text).not.toContain('Ebook');
 		expect((await shop.admin(ticket, 'GET', `/v1/admin/orders/${order.id}/packing-slip`)).status).toBe(200);

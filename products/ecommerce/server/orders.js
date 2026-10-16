@@ -13,7 +13,7 @@
 import { createId } from '@ss/contracts';
 import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
 import { documentFieldsOf, fieldsOn, unitsOfOrders } from '../adapters/catalog-store.js';
-import { createFulfilmentStore, markSeenBy } from '../adapters/fulfilment-store.js';
+import { createFulfillmentStore, markSeenBy } from '../adapters/fulfillment-store.js';
 import { setOrderCounter } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { createOutbox } from '../adapters/outbox.js';
@@ -131,7 +131,7 @@ export const createOrders = (product, service, { ordering }) => {
 	const media = createMedia(product);
 
 	/** @param {Site} s */
-	const storeOf = async (s) => createFulfilmentStore(await s.data());
+	const storeOf = async (s) => createFulfillmentStore(await s.data());
 
 	/**
 	 * The order of a request's `:id`, or 404.
@@ -760,9 +760,9 @@ export const createOrders = (product, service, { ordering }) => {
 			phones: known(people.map((person) => person.phone)),
 			numbers: known(orders.map((order) => order.number)),
 		});
-		const anonymised = await store.orders.anonymise(user);
+		const anonymized = await store.orders.anonymize(user);
 		const deleted = (await store.customers.forget(user)) + forgotten;
-		return { deleted, anonymised };
+		return { deleted, anonymized };
 	};
 
 	return {

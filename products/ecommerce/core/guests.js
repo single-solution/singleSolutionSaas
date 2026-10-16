@@ -11,7 +11,7 @@
  * @module
  */
 import { normalizeEmail } from '@ss/contracts/email';
-import { normalisePhone, phoneInCountries, websiteCallingCode } from '@ss/contracts/phone';
+import { normalizePhone, phoneInCountries, websiteCallingCode } from '@ss/contracts/phone';
 import { postcodeKey } from './address.js';
 
 /** An order key's length. */
@@ -63,7 +63,7 @@ export const phoneDigitsOf = (phone) => (typeof phone === 'string' ? phone.repla
 export const phoneSearchOf = (q, rules) => {
 	const digits = q.replace(/\D/g, '');
 	if (digits.length < 4) return [];
-	const phone = rules ? normalisePhone(q, rules) : null;
+	const phone = rules ? normalizePhone(q, rules) : null;
 	return [...new Set([digits, digits.replace(/^0+/, ''), phone ? phone.slice(1) : ''])].filter((run) => run.length >= 4);
 };
 
@@ -126,7 +126,7 @@ export const checkGuest = (body, rules, guests = { identity: 'phone', phoneRequi
  */
 export const checkGuestContact = (input, rules, guests) => {
 	const typedPhone = input.phone !== undefined && input.phone !== null && input.phone !== '';
-	const phone = typedPhone ? normalisePhone(input.phone, rules) : null;
+	const phone = typedPhone ? normalizePhone(input.phone, rules) : null;
 	if (typedPhone && !phone) return { ok: false, field: 'phone', message: 'Give your phone number with its country code.' };
 	if (phone && !phoneAllowed(phone, rules)) return { ok: false, field: 'phone', ...COUNTRY_REFUSED };
 	const email = normalizeEmail(input.email) ?? '';

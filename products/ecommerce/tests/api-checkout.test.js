@@ -50,7 +50,7 @@ describe('digital files with the server token', () => {
 		const item = await shop.seedProduct({
 			kind: 'digital',
 			trackStock: false,
-			digital: { files: [], retired: [], licenceKeys: false, downloadLimit: 0 },
+			digital: { files: [], retired: [], licenseKeys: false, downloadLimit: 0 },
 		});
 		const added = await shop.api('POST', `/v1/products/${item.id}/files`, {
 			name: 'Manual v2.pdf',
@@ -207,14 +207,14 @@ describe('a guest order and its key (SS-Order-Key)', () => {
 		});
 		expect(codeOf(proof)).toBe('nothing_to_pay');
 
-		const cancelled = await visit('POST', `/v1/shop/orders/${order.id}/cancel`, { orderKey });
-		expect(cancelled.status).toBe(200);
-		expect(cancelled.json.order).toMatchObject({
-			role: 'cancelled',
+		const canceled = await visit('POST', `/v1/shop/orders/${order.id}/cancel`, { orderKey });
+		expect(canceled.status).toBe(200);
+		expect(canceled.json.order).toMatchObject({
+			role: 'canceled',
 			canCancel: false,
 			payment: { payUrl: null, payBy: null },
 		});
-		expect(cancelled.json.order.history.at(-1)).toMatchObject({ status: 'cancelled', label: 'Canceled' });
+		expect(canceled.json.order.history.at(-1)).toMatchObject({ status: 'canceled', label: 'Canceled' });
 		expect(codeOf(await visit('POST', `/v1/shop/orders/${order.id}/pay`, { orderKey, key: 'guest-pay-2' }))).toBe(
 			'nothing_to_pay',
 		);

@@ -236,7 +236,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 
 		// ------------------------------------------------------------------------------------- stock and kinds
 		const trackStock = kit.check(t('catalogAdmin.trackStock'), product.trackStock);
-		const licenceKeys = kit.check(t('catalogAdmin.licenceKeys'), product.digital?.licenceKeys === true);
+		const licenseKeys = kit.check(t('catalogAdmin.licenseKeys'), product.digital?.licenseKeys === true);
 		const downloadLimit = kit.input(String(product.digital?.downloadLimit ?? 0), { type: 'number', min: '0', step: '1' });
 		const duration = kit.input(String(product.booking?.durationMinutes ?? 60), {
 			type: 'number',
@@ -247,7 +247,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 		// the booking schedule it is booked on, by key ('' = the first of Settings → Catalog → Booking schedules; E30)
 		const schedule = kit.input(product.booking?.schedule ?? '', { maxlength: '40', autocomplete: 'off' });
 		const downloadField = kit.field(t('catalogAdmin.downloadLimit'), downloadLimit);
-		const digitalGroup = kit.group(t('catalogAdmin.digital'), [licenceKeys.node, downloadField]);
+		const digitalGroup = kit.group(t('catalogAdmin.digital'), [licenseKeys.node, downloadField]);
 		const bookingGroup = kit.group(t('catalogAdmin.booking'), [
 			kit.field(t('catalogAdmin.duration'), duration),
 			kit.field(t('catalogAdmin.schedule'), schedule),
@@ -284,7 +284,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 		// its own return and warranty times: a number and its unit (E14)
 		const returnTime = timeInputs(kit, product.returnTime ?? null, t('catalogAdmin.returnTime'));
 		const warrantyTime = timeInputs(kit, product.warrantyTime ?? null, t('catalogAdmin.warrantyTime'));
-		/** @param {string} label @param {ReturnType<typeof timeInputs>} time the number labelled, its unit beside it */
+		/** @param {string} label @param {ReturnType<typeof timeInputs>} time the number labeled, its unit beside it */
 		const timeField = (label, time) => {
 			const node = kit.field(label, time.amount);
 			node.append(time.unit);
@@ -344,7 +344,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 				chart: has('size_charts') && on.chart,
 				days: has('returns') && on.warranty,
 				downloads: kind.value === 'digital' && on.downloads,
-				licenceKeys: kind.value === 'digital' && on.licenceKeys,
+				licenseKeys: kind.value === 'digital' && on.licenseKeys,
 				slots: kind.value === 'service' && on.slots,
 			};
 		};
@@ -354,8 +354,8 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			specsGroup.hidden = specs.every((spec) => spec.node.hidden);
 			setup.node.hidden = !parts.variants || attributes.length === 0;
 			options.node.hidden = !parts.variants;
-			digitalGroup.hidden = !parts.downloads && !parts.licenceKeys;
-			licenceKeys.node.hidden = !parts.licenceKeys;
+			digitalGroup.hidden = !parts.downloads && !parts.licenseKeys;
+			licenseKeys.node.hidden = !parts.licenseKeys;
 			downloadField.hidden = !parts.downloads;
 			bookingGroup.hidden = !parts.slots;
 			guideGroup.hidden = !parts.chart;
@@ -410,7 +410,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 				...(kind.value === 'digital'
 					? {
 							digital: {
-								...(parts.licenceKeys ? { licenceKeys: licenceKeys.box.checked } : {}),
+								...(parts.licenseKeys ? { licenseKeys: licenseKeys.box.checked } : {}),
 								...(parts.downloads ? { downloadLimit: Number(downloadLimit.value) || 0 } : {}),
 							},
 						}

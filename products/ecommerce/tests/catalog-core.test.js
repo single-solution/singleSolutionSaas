@@ -322,12 +322,12 @@ describe('product checks', () => {
 		const cleared = checkProduct({ brandId: '' }, rules(), { ...single, brandId: 'brd_1' });
 		expect(cleared.ok && cleared.value.brandId).toBeNull();
 		// a kind that is now off may stay, but not be chosen again
-		const digital = record({ kind: 'digital', digital: { licenceKeys: true } });
+		const digital = record({ kind: 'digital', digital: { licenseKeys: true } });
 		expect(paths({ name: 'E' }, { digital: false }, digital)).toEqual([]);
 		expect(paths({ kind: 'digital' }, { digital: false }, digital)).toEqual(['/kind']);
 		expect(paths({ digital: 'x' }, {}, digital)).toEqual(['/digital']);
-		expect(paths({ digital: { licenceKeys: 1, downloadLimit: -1 } }, {}, digital)).toEqual([
-			'/digital/licenceKeys',
+		expect(paths({ digital: { licenseKeys: 1, downloadLimit: -1 } }, {}, digital)).toEqual([
+			'/digital/licenseKeys',
 			'/digital/downloadLimit',
 		]);
 		const booking = record({ kind: 'service', booking: { durationMinutes: 30 } });

@@ -14,7 +14,7 @@ import { addressFormat } from '@ss/contracts/address';
 import { defineRoute, problem } from '@ss/app-kit';
 import { categoriesOf, locationsOf, productTypes } from '../adapters/catalog-store.js';
 import { ADDRESS_LIMITS } from '../core/address.js';
-import { ownerOrders } from '../adapters/fulfilment-store.js';
+import { ownerOrders } from '../adapters/fulfillment-store.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { dealsLiveNow, loadOffers } from '../adapters/promotions-store.js';
 import { htmlToText } from '../core/catalog-content.js';

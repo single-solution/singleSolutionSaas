@@ -340,35 +340,35 @@ export const digitalCard = (kit, product) => {
 				return null;
 			},
 		});
-	const addKeys = kit.button(t('catalogAdmin.addLicences'), () => {
+	const addKeys = kit.button(t('catalogAdmin.addLicenses'), () => {
 		const keys = kit.area('', { rows: '6' });
 		kit.dialog({
-			title: t('catalogAdmin.addLicences'),
-			body: [kit.field(t('catalogAdmin.licencesOnePerLine'), keys)],
-			submitLabel: t('catalogAdmin.addLicences'),
+			title: t('catalogAdmin.addLicenses'),
+			body: [kit.field(t('catalogAdmin.licensesOnePerLine'), keys)],
+			submitLabel: t('catalogAdmin.addLicenses'),
 			onSubmit: async () => {
-				const answer = await kit.call('POST', `/v1/admin/products/${product.id}/licences`, { keys: entriesOf(keys.value) });
+				const answer = await kit.call('POST', `/v1/admin/products/${product.id}/licenses`, { keys: entriesOf(keys.value) });
 				if (!answer.ok) return kit.reason(answer);
-				kit.say(note, t('catalogAdmin.licencesAdded', { added: answer.data.added, available: answer.data.available }));
+				kit.say(note, t('catalogAdmin.licensesAdded', { added: answer.data.added, available: answer.data.available }));
 				return null;
 			},
 		});
 	});
-	const removeKeys = kit.button(t('catalogAdmin.removeLicences'), () => {
+	const removeKeys = kit.button(t('catalogAdmin.removeLicenses'), () => {
 		const keys = kit.area('', { rows: '6' });
 		kit.dialog({
-			title: t('catalogAdmin.removeLicences'),
-			body: [kit.text('p', {}, t('catalogAdmin.removeLicencesHint')), kit.field(t('catalogAdmin.licencesToRemove'), keys)],
-			submitLabel: t('catalogAdmin.removeLicences'),
+			title: t('catalogAdmin.removeLicenses'),
+			body: [kit.text('p', {}, t('catalogAdmin.removeLicensesHint')), kit.field(t('catalogAdmin.licensesToRemove'), keys)],
+			submitLabel: t('catalogAdmin.removeLicenses'),
 			danger: true,
 			onSubmit: async () => {
 				const typed = entriesOf(keys.value);
-				if (typed.length === 0) return t('catalogAdmin.licencesNone');
-				const answer = await kit.call('POST', `/v1/admin/products/${product.id}/licences/remove`, { keys: typed });
+				if (typed.length === 0) return t('catalogAdmin.licensesNone');
+				const answer = await kit.call('POST', `/v1/admin/products/${product.id}/licenses/remove`, { keys: typed });
 				if (!answer.ok) return kit.reason(answer);
 				kit.say(
 					note,
-					t('catalogAdmin.licencesRemoved', {
+					t('catalogAdmin.licensesRemoved', {
 						removed: answer.data.removed,
 						given: answer.data.given,
 						available: answer.data.available,
@@ -401,7 +401,7 @@ export const digitalCard = (kit, product) => {
 		t('catalogAdmin.digitalDelivery'),
 		[
 			kit.fieldGrid([
-				[t('catalogAdmin.licenceKeys'), kit.t(product.digital?.licenceKeys ? 'admin.yes' : 'admin.no')],
+				[t('catalogAdmin.licenseKeys'), kit.t(product.digital?.licenseKeys ? 'admin.yes' : 'admin.no')],
 				[t('catalogAdmin.downloadLimit'), String(product.digital?.downloadLimit ?? 0)],
 			]),
 			files,

@@ -37,7 +37,7 @@ beforeEach(resetPage);
 afterEach(resetPage);
 
 /** An input of the panel by its accessible label. @param {ParentNode} scope @param {string} label @returns {any} */
-const labelled = (scope, label) => {
+const labeled = (scope, label) => {
 	const found = scope.querySelector(`[aria-label="${label}"]`);
 	if (!found) throw new Error(`no control ${label}`);
 	return found;
@@ -117,10 +117,10 @@ describe('catalog admin: a product', () => {
 		expect(checkIn(editor, 'Featured product').checked).toBe(true);
 		expect(checkIn(editor, 'X').checked).toBe(true);
 		expect(fieldIn(editor, 'Description (HTML)').value).toBe('<p>One</p>\n<p>Two &amp; &lt;three&gt;</p>');
-		expect(labelled(editor, 'Grade of Red').value).toBe('a');
-		expect(labelled(editor, 'Warranty of Red').value).toBe('30');
-		expect(labelled(editor, 'Blue is sold out').checked).toBe(true);
-		expect(labelled(editor, 'Bands of Blue').value).toBe('b1, b2');
+		expect(labeled(editor, 'Grade of Red').value).toBe('a');
+		expect(labeled(editor, 'Warranty of Red').value).toBe('30');
+		expect(labeled(editor, 'Blue is sold out').checked).toBe(true);
+		expect(labeled(editor, 'Bands of Blue').value).toBe('b1, b2');
 		expect(textOf(editor)).toContain('2 at Shop, 1 at Store room');
 		// specs and the kind
 		await change(fieldIn(editor, 'Color'), '');
@@ -141,28 +141,28 @@ describe('catalog admin: a product', () => {
 		// variants: a third value makes a new row with stock per location
 		type(fieldIn(editor, 'Option 1 values (comma separated)'), 'Red, Blue, Green');
 		await click(buttonIn(editor, 'Make variants from the options'));
-		type(labelled(editor, 'Stock at Shop'), '4');
-		type(labelled(editor, 'Price of Green'), '99.5');
-		type(labelled(editor, 'Was price of Green'), 'abc');
-		await change(labelled(editor, 'Storage of Green'), '128');
+		type(labeled(editor, 'Stock at Shop'), '4');
+		type(labeled(editor, 'Price of Green'), '99.5');
+		type(labeled(editor, 'Was price of Green'), 'abc');
+		await change(labeled(editor, 'Storage of Green'), '128');
 		await click(buttonIn(editor, 'Save'));
 		expect(statuses(editor)).toContain('Check the amounts and numbers you typed.');
-		type(labelled(editor, 'Was price of Green'), '');
+		type(labeled(editor, 'Was price of Green'), '');
 		type(fieldIn(editor, 'Return time (empty = default)'), '1.5');
 		await click(buttonIn(editor, 'Save'));
 		expect(patches).toHaveLength(0);
 		type(fieldIn(editor, 'Return time (empty = default)'), '');
-		type(labelled(editor, 'Warranty of Green'), '1.5');
+		type(labeled(editor, 'Warranty of Green'), '1.5');
 		await click(buttonIn(editor, 'Save'));
 		expect(patches).toHaveLength(0);
-		type(labelled(editor, 'Warranty of Green'), '');
+		type(labeled(editor, 'Warranty of Green'), '');
 		// a GTIN must end in its check digit (G5.6)
-		type(labelled(editor, 'GTIN (barcode number) of Green'), '4006381333932');
+		type(labeled(editor, 'GTIN (barcode number) of Green'), '4006381333932');
 		await click(buttonIn(editor, 'Save'));
 		expect(patches).toHaveLength(0);
-		expect(labelled(editor, 'GTIN (barcode number) of Green').hasAttribute('aria-invalid')).toBe(true);
-		type(labelled(editor, 'GTIN (barcode number) of Green'), '4006381 333931');
-		type(labelled(editor, 'Manufacturer part number of Green'), ' MX-1 ');
+		expect(labeled(editor, 'GTIN (barcode number) of Green').hasAttribute('aria-invalid')).toBe(true);
+		type(labeled(editor, 'GTIN (barcode number) of Green'), '4006381 333931');
+		type(labeled(editor, 'Manufacturer part number of Green'), ' MX-1 ');
 		// the rest of the form
 		type(fieldIn(editor, 'Focus keyword'), 'mobile');
 		await tick(checkIn(editor, 'Keep out of search results (noindex)'), true);
@@ -244,7 +244,7 @@ describe('catalog admin: a product', () => {
 		await click(buttonIn(editor, 'Save'));
 		expect(patches[1].variants).toHaveLength(2);
 		expect(patches[1].attributeSetup).toHaveLength(1);
-		expect(patches[1].digital).toEqual({ licenceKeys: true, downloadLimit: 0 });
+		expect(patches[1].digital).toEqual({ licenseKeys: true, downloadLimit: 0 });
 		expect(patches[1]).toMatchObject({ descriptionHtml: '', description: '' });
 		// back in the detail with the saved product
 		expect(statuses(detailOf(panel))).toContain('Saved.');
@@ -346,11 +346,11 @@ describe('catalog admin: a product', () => {
 		expect(textOf(editor)).toContain('New product');
 		expect(editor.querySelector('[aria-current="true"]')).toBeNull();
 		type(fieldIn(editor, 'Name'), 'Mug');
-		type(labelled(editor, 'Price of Default'), '');
+		type(labeled(editor, 'Price of Default'), '');
 		await click(buttonIn(editor, 'Save'));
 		expect(statuses(editor)).toContain('Check the amounts and numbers you typed.');
-		type(labelled(editor, 'Price of Default'), '0');
-		type(labelled(editor, 'Stock of Default'), '7');
+		type(labeled(editor, 'Price of Default'), '0');
+		type(labeled(editor, 'Stock of Default'), '7');
 		type(fieldIn(editor, 'Description (HTML)'), '<p>Big</p>');
 		await tick(checkIn(editor, 'Track stock'), false);
 		await click(buttonIn(editor, 'Save'));
@@ -383,13 +383,13 @@ describe('catalog admin: a product', () => {
 		expect(textOf(dialog)).toContain('2 at Shop, 1 at Store room');
 		await submitDialog(root);
 		expect(statuses(dialog)).toContain('Type units or change Sold out first.');
-		type(labelled(dialog, 'Units of Red'), '1.5');
+		type(labeled(dialog, 'Units of Red'), '1.5');
 		await submitDialog(root);
 		expect(statuses(dialog)).toContain('Check the amounts and numbers you typed.');
-		type(labelled(dialog, 'Units of Red'), '2');
-		await change(labelled(dialog, 'How to change Red'), 'set');
-		await change(labelled(dialog, 'Location of Red'), 'loc_2');
-		await tick(labelled(dialog, 'Blue is sold out'), false);
+		type(labeled(dialog, 'Units of Red'), '2');
+		await change(labeled(dialog, 'How to change Red'), 'set');
+		await change(labeled(dialog, 'Location of Red'), 'loc_2');
+		await tick(labeled(dialog, 'Blue is sold out'), false);
 		reply = () => problem(409, 'conflict');
 		await submitDialog(root);
 		expect(statuses(dialog)).toContain(TEXTS['problem.conflict']);
@@ -413,7 +413,7 @@ describe('catalog admin: a product', () => {
 		});
 		await click(buttonIn(detailOf(panelOf(plain.root, 'products')), 'Stock'));
 		expect(textOf(dialogOf(plain.root))).toContain('Stock is not tracked for this product');
-		type(labelled(dialogOf(plain.root), 'Units of Red'), '-1');
+		type(labeled(dialogOf(plain.root), 'Units of Red'), '-1');
 		await submitDialog(plain.root);
 		expect(plain.server.last('POST /v1/admin/products/prd_1/stock')?.body).toEqual({
 			changes: [{ variantId: 'var_1', adjust: -1 }],
@@ -501,10 +501,10 @@ describe('catalog admin: a product', () => {
 		expect(textOf(dialog)).toContain('The product is saved first');
 		await submitDialog(root);
 		expect(statuses(dialog)).toContain(TEXTS['problem.conflict']);
-		type(labelled(detailOf(panel), 'Price of Red'), 'x');
+		type(labeled(detailOf(panel), 'Price of Red'), 'x');
 		await submitDialog(root);
 		expect(statuses(dialog)).toContain('Check the amounts and numbers you typed.');
-		type(labelled(detailOf(panel), 'Price of Red'), '1250');
+		type(labeled(detailOf(panel), 'Price of Red'), '1250');
 		patch = () => answer(200, product());
 		const before = server.all('POST /v1/admin/products/prd_1/variants/generate').length;
 		await submitDialog(root);
@@ -560,7 +560,7 @@ describe('catalog admin: a product by its item type', () => {
 				parcel: true,
 				warranty: false,
 				downloads: false,
-				licenceKeys: false,
+				licenseKeys: false,
 				slots: false,
 			},
 			fieldIds: ['att_1'],
@@ -595,13 +595,13 @@ describe('catalog admin: a product by its item type', () => {
 		const editor = detailOf(panel);
 		expect(fieldIn(editor, 'Item type').value).toBe('plain_box');
 		// the plain box: one variant with its package, the one field it names, no grade, size guide or own days
-		expect(() => labelled(editor, 'Grade of Red')).toThrow();
-		expect(() => labelled(editor, 'Warranty of Red')).toThrow();
+		expect(() => labeled(editor, 'Grade of Red')).toThrow();
+		expect(() => labeled(editor, 'Warranty of Red')).toThrow();
 		expect(fieldIn(editor, 'Screen (in)').value).toBe('6.1');
 		expect(() => fieldIn(editor, 'Model')).toThrow();
 		expect(() => fieldIn(editor, 'Size chart')).toThrow();
-		type(labelled(editor, 'Package weight in kg of Red'), '0.25');
-		type(labelled(editor, 'Package length in cm of Red'), '12.5');
+		type(labeled(editor, 'Package weight in kg of Red'), '0.25');
+		type(labeled(editor, 'Package length in cm of Red'), '12.5');
 		await click(buttonIn(editor, 'Save'));
 		expect(patches[0]).toMatchObject({ typeKey: 'plain_box', specs: { att_1: 6.1 } });
 		expect(patches[0]).not.toHaveProperty('options');
@@ -613,12 +613,12 @@ describe('catalog admin: a product by its item type', () => {
 		await click(buttonIn(detailOf(panel), 'Edit'));
 		const again = detailOf(panel);
 		await change(fieldIn(again, 'Item type'), '');
-		expect(labelled(again, 'Grade of Red').value).toBe('a');
+		expect(labeled(again, 'Grade of Red').value).toBe('a');
 		// only the grades of the type are offered
-		const mint = /** @type {HTMLOptionElement} */ (labelled(again, 'Grade of Red').querySelector('option[value="mint"]'));
+		const mint = /** @type {HTMLOptionElement} */ (labeled(again, 'Grade of Red').querySelector('option[value="mint"]'));
 		expect(mint.disabled).toBe(false);
 		// a grade turned off is not offered for a variant that does not have it
-		const worn = /** @type {HTMLOptionElement} */ (labelled(again, 'Grade of Red').querySelector('option[value="worn"]'));
+		const worn = /** @type {HTMLOptionElement} */ (labeled(again, 'Grade of Red').querySelector('option[value="worn"]'));
 		expect(worn.disabled).toBe(true);
 		await change(fieldIn(again, 'Item type'), 'physical');
 		expect(mint.disabled).toBe(true);
@@ -760,8 +760,8 @@ describe('catalog admin: other product shapes', () => {
 		await click(buttonIn(detailOf(panel), 'Edit'));
 		const editor = detailOf(panel);
 		const label = 'Red / 100 g';
-		expect(labelled(editor, `Weight of ${label}`).value).toBe('100');
-		expect([...labelled(editor, `Colors of ${label}`).selectedOptions].map((/** @type {any} */ o) => o.value)).toEqual([
+		expect(labeled(editor, `Weight of ${label}`).value).toBe('100');
+		expect([...labeled(editor, `Colors of ${label}`).selectedOptions].map((/** @type {any} */ o) => o.value)).toEqual([
 			'red',
 			'green',
 		]);
@@ -769,16 +769,16 @@ describe('catalog admin: other product shapes', () => {
 		expect(fieldIn(editor, 'Made (required)').value).toBe('2026-01-05');
 		expect(fieldIn(editor, 'Made (required)').getAttribute('type')).toBe('date');
 		expect(checkIn(editor, 'Slim').checked).toBe(true);
-		type(labelled(editor, `Weight of ${label}`), '');
-		type(labelled(editor, `Material of ${label}`), '');
-		for (const option of labelled(editor, `Colors of ${label}`).options) option.selected = false;
-		type(labelled(editor, `Grade of ${label}`), 'b');
+		type(labeled(editor, `Weight of ${label}`), '');
+		type(labeled(editor, `Material of ${label}`), '');
+		for (const option of labeled(editor, `Colors of ${label}`).options) option.selected = false;
+		type(labeled(editor, `Grade of ${label}`), 'b');
 		type(fieldIn(editor, 'Notes (comma separated)'), '');
 		await tick(checkIn(editor, 'Slim'), false);
 		await click(buttonIn(editor, 'Add a variant'));
-		type(labelled(editor, 'Stock of Default'), '3');
-		type(labelled(editor, 'Weight of Default'), '250');
-		type(labelled(editor, 'Material of Default'), 'Wool');
+		type(labeled(editor, 'Stock of Default'), '3');
+		type(labeled(editor, 'Weight of Default'), '250');
+		type(labeled(editor, 'Material of Default'), 'Wool');
 		await click(buttonIn(editor, 'Save'));
 		const body = server.last('PATCH /v1/admin/products/prd_1')?.body;
 		expect(body.specs).toEqual({ att_d: '2026-01-05' });
@@ -806,6 +806,6 @@ describe('catalog admin: other product shapes', () => {
 		type(fieldIn(detailOf(panel), 'Option 1 name'), 'Size');
 		type(fieldIn(detailOf(panel), 'Option 1 values (comma separated)'), 'S');
 		await click(buttonIn(detailOf(panel), 'Make variants from the options'));
-		expect(labelled(detailOf(panel), 'Price of S')).toBeTruthy();
+		expect(labeled(detailOf(panel), 'Price of S')).toBeTruthy();
 	});
 });

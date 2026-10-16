@@ -61,10 +61,10 @@ export const INDEXES = [
 		partialFilterExpression: { 'payment.voidPendingAt': { $type: 'date' } },
 	},
 	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, role: 1, 'payment.voidedAt': 1 }, name: 'by_role_voided' },
-	{ collection: COLLECTIONS.licences, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
-	{ collection: COLLECTIONS.licences, keys: { websiteId: 1, productId: 1, key: 1 }, name: 'one_key', unique: true },
-	{ collection: COLLECTIONS.licences, keys: { websiteId: 1, productId: 1, status: 1 }, name: 'by_status' },
-	{ collection: COLLECTIONS.licences, keys: { websiteId: 1, orderId: 1 }, name: 'by_order' },
+	{ collection: COLLECTIONS.licenses, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
+	{ collection: COLLECTIONS.licenses, keys: { websiteId: 1, productId: 1, key: 1 }, name: 'one_key', unique: true },
+	{ collection: COLLECTIONS.licenses, keys: { websiteId: 1, productId: 1, status: 1 }, name: 'by_status' },
+	{ collection: COLLECTIONS.licenses, keys: { websiteId: 1, orderId: 1 }, name: 'by_order' },
 ];
 
 /** Waiting orders handled per sweep, and waiting payments rechecked per use. */
@@ -111,13 +111,13 @@ export const createOrdersStore = (data) => {
 				await data.collection(COLLECTIONS.locations).find({ websiteId }, NO_ID).sort({ sort: 1, id: 1 }).limit(200).toArray()
 			),
 		/** Available license keys per product. @param {string[]} productIds @returns {Promise<Map<string, number>>} */
-		availableLicences: async (productIds) => {
+		availableLicenses: async (productIds) => {
 			/** @type {Map<string, number>} */
 			const counts = new Map();
 			for (const productId of new Set(productIds))
 				counts.set(
 					productId,
-					await data.collection(COLLECTIONS.licences).countDocuments({ websiteId, productId, status: 'available' }),
+					await data.collection(COLLECTIONS.licenses).countDocuments({ websiteId, productId, status: 'available' }),
 				);
 			return counts;
 		},
@@ -399,7 +399,7 @@ export const createOrdersStore = (data) => {
 					.find(
 						{
 							websiteId,
-							role: 'cancelled',
+							role: 'canceled',
 							'payment.voidedAt': { $gte: new Date(now - windowMs) },
 							'payment.paymentId': { $ne: null },
 							payments: { $not: { $elemMatch: { method: VIA_PAYMENTS } } },
@@ -445,10 +445,10 @@ export const createOrdersStore = (data) => {
 		 * @param {string} productId @param {Array<{ id: string, key: string }>} keys
 		 * @returns {Promise<number>} how many were added
 		 */
-		addLicences: async (productId, keys) => {
+		addLicenses: async (productId, keys) => {
 			if (keys.length === 0) return 0;
 			try {
-				const result = await data.collection(COLLECTIONS.licences).insertMany(
+				const result = await data.collection(COLLECTIONS.licenses).insertMany(
 					keys.map(({ id, key }) => ({ id, productId, key, status: 'available', orderId: null, lineId: null })),
 					{ ordered: false },
 				);
@@ -465,11 +465,11 @@ export const createOrdersStore = (data) => {
 		 * @param {string} productId @param {string[]} keys
 		 * @returns {Promise<{ removed: number, given: number }>} given: how many of them an order has
 		 */
-		removeLicences: async (productId, keys) => {
-			const licences = data.collection(COLLECTIONS.licences);
-			const removed = (await licences.deleteMany({ websiteId, productId, key: { $in: keys }, status: 'available' }))
+		removeLicenses: async (productId, keys) => {
+			const licenses = data.collection(COLLECTIONS.licenses);
+			const removed = (await licenses.deleteMany({ websiteId, productId, key: { $in: keys }, status: 'available' }))
 				.deletedCount;
-			const given = await licences.countDocuments({ websiteId, productId, key: { $in: keys }, status: 'assigned' });
+			const given = await licenses.countDocuments({ websiteId, productId, key: { $in: keys }, status: 'assigned' });
 			return { removed: Number(removed ?? 0), given };
 		},
 		/**
@@ -479,19 +479,19 @@ export const createOrdersStore = (data) => {
 		productOrdered: async (productId) =>
 			(await orders.countDocuments({ websiteId, 'lines.productId': productId }, { limit: 1 })) > 0,
 		/** @param {string} productId */
-		countLicences: (productId) =>
-			data.collection(COLLECTIONS.licences).countDocuments({ websiteId, productId, status: 'available' }),
+		countLicenses: (productId) =>
+			data.collection(COLLECTIONS.licenses).countDocuments({ websiteId, productId, status: 'available' }),
 		/**
 		 * Give an order line up to `count` available license keys of a product (each to one line only).
 		 * @param {{ productId: string, orderId: string, lineId: string, count: number }} give
 		 * @returns {Promise<string[]>} the license ids given
 		 */
-		assignLicences: async ({ productId, orderId, lineId, count }) => {
+		assignLicenses: async ({ productId, orderId, lineId, count }) => {
 			/** @type {string[]} */
 			const ids = [];
 			for (let n = 0; n < count; n += 1) {
 				const taken = await data
-					.collection(COLLECTIONS.licences)
+					.collection(COLLECTIONS.licenses)
 					.findOneAndUpdate(
 						{ websiteId, productId, status: 'available' },
 						{ $set: { status: 'assigned', orderId, lineId } },
@@ -503,11 +503,11 @@ export const createOrdersStore = (data) => {
 			return ids;
 		},
 		/** Record licenses given to an order line. @param {string} orderId @param {string} lineId @param {string[]} ids */
-		addLineLicences: async (orderId, lineId, ids) => {
+		addLineLicenses: async (orderId, lineId, ids) => {
 			if (ids.length === 0) return;
 			await orders.updateOne(
 				{ websiteId, id: orderId, 'lines.id': lineId },
-				{ $push: { 'lines.$.licences': { $each: ids } } },
+				{ $push: { 'lines.$.licenses': { $each: ids } } },
 			);
 		},
 		/**
@@ -517,13 +517,13 @@ export const createOrdersStore = (data) => {
 		setDigital: (productId, digital) =>
 			data.collection(COLLECTIONS.products).updateOne({ websiteId, id: productId }, { $set: { digital } }),
 		/** The keys of licenses. @param {string[]} ids @returns {Promise<Map<string, string>>} id → key */
-		licenceKeys: async (ids) => {
+		licenseKeys: async (ids) => {
 			if (ids.length === 0) return new Map();
 			const found = await data
-				.collection(COLLECTIONS.licences)
+				.collection(COLLECTIONS.licenses)
 				.find({ websiteId, id: { $in: ids } }, { projection: { _id: 0, id: 1, key: 1 } })
 				.toArray();
-			return new Map(found.map((licence) => [String(licence.id), String(licence.key)]));
+			return new Map(found.map((license) => [String(license.id), String(license.key)]));
 		},
 	});
 };

@@ -220,7 +220,7 @@ describe('core/feeds and core/llms', () => {
 		});
 		expect(legacy[1]).toMatchObject({ id: 'var_new', customLabels: ['', '', '', '', ''], image: 'https://cdn.example/i.jpg' });
 		// field values the merchant sends (`show.feeds`): the grade label keeps custom label 0, the first value wins a column
-		const [labelled] = feedRows(product, {
+		const [labeled] = feedRows(product, {
 			...context,
 			gradeLabel: () => 'Grade A',
 			values: () =>
@@ -234,17 +234,17 @@ describe('core/feeds and core/llms', () => {
 					{ target: 'pattern', name: 'Pattern', value: 'x'.repeat(150) },
 				].map((entry) => ({ ...entry, values: [entry.value], raw: [entry.value] })),
 		});
-		expect(labelled).toMatchObject({
+		expect(labeled).toMatchObject({
 			customLabels: ['Grade A', '', 'Summer', '', ''],
 			color: 'Red',
 			material: 'Cotton',
 			size: 'M',
 			pattern: 'x'.repeat(100),
 		});
-		const labelledItem = googleItem(/** @type {any} */ (labelled));
-		expect(labelledItem).toContain('<g:color>Red</g:color><g:material>Cotton</g:material><g:size>M</g:size>');
-		expect(labelledItem).toContain('<g:custom_label_0>Grade A</g:custom_label_0><g:custom_label_2>Summer</g:custom_label_2>');
-		expect(metaLine(/** @type {any} */ (labelled))).toContain(',Red,Cotton,M,');
+		const labeledItem = googleItem(/** @type {any} */ (labeled));
+		expect(labeledItem).toContain('<g:color>Red</g:color><g:material>Cotton</g:material><g:size>M</g:size>');
+		expect(labeledItem).toContain('<g:custom_label_0>Grade A</g:custom_label_0><g:custom_label_2>Summer</g:custom_label_2>');
+		expect(metaLine(/** @type {any} */ (labeled))).toContain(',Red,Cotton,M,');
 		const item = googleItem(/** @type {any} */ (legacy[0]));
 		expect(item).toContain('<g:google_product_category>267</g:google_product_category>');
 		expect(item).toContain('<g:custom_label_0>Grade A</g:custom_label_0>');

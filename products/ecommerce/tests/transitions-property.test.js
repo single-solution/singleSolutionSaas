@@ -235,7 +235,7 @@ describe('property: random flows × every way an order moves, retries, two at on
 										locationId: null,
 										serials: [],
 										booking: null,
-										licences: [],
+										licenses: [],
 										returnedQuantity: 0,
 									})),
 									totals: {
@@ -336,7 +336,7 @@ describe('property: random flows × every way an order moves, retries, two at on
 						if (failing) counts.failing += 1;
 						const read = await recordOf(id);
 						const next = nextStatuses(flow, read.status);
-						const onward = next.filter((status) => status.role !== 'cancelled' && status.role !== 'refunded');
+						const onward = next.filter((status) => status.role !== 'canceled' && status.role !== 'refunded');
 						/** Every random choice of an action is made before it runs, so a seed replays. */
 						const choose = () => {
 							const pick = random();
@@ -374,7 +374,7 @@ describe('property: random flows × every way an order moves, retries, two at on
 							const reasonFor = (to, reason) => {
 								const role = flow.statuses.find((status) => status.key === to)?.role;
 								if (role === 'returned_to_origin') return { reason };
-								if (role === 'cancelled') return { reason: reason === 'rto' ? 'fraud' : 'customer_request' };
+								if (role === 'canceled') return { reason: reason === 'rto' ? 'fraud' : 'customer_request' };
 								return {};
 							};
 							counts.attempts += 1;

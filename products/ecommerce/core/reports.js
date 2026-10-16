@@ -124,7 +124,7 @@ const ordersMatch = (websiteId, range, currency) => ({
 	$match: {
 		websiteId,
 		placedAt: { $gte: range.from, $lt: range.to },
-		role: { $ne: 'cancelled' },
+		role: { $ne: 'canceled' },
 		'totals.currency': currency,
 	},
 });
@@ -298,7 +298,7 @@ export const marginPipeline = (websiteId, range, currency) => [
  * @param {string} websiteId @param {string[]} productIds
  */
 export const lastSalePipeline = (websiteId, productIds) => [
-	{ $match: { websiteId, role: { $ne: 'cancelled' }, 'lines.productId': { $in: productIds } } },
+	{ $match: { websiteId, role: { $ne: 'canceled' }, 'lines.productId': { $in: productIds } } },
 	{ $unwind: '$lines' },
 	{ $match: { 'lines.productId': { $in: productIds } } },
 	{ $group: { _id: '$lines.productId', last: { $max: '$placedAt' } } },
@@ -395,7 +395,7 @@ export const summaryPipeline = (websiteId, range, currency, statuses, timeZone, 
 			websiteId,
 			placedAt: { $gte: range.from, $lt: range.to },
 			'totals.currency': currency,
-			...(statuses ? { status: { $in: statuses } } : { role: { $ne: 'cancelled' } }),
+			...(statuses ? { status: { $in: statuses } } : { role: { $ne: 'canceled' } }),
 		},
 	},
 	{
@@ -505,7 +505,7 @@ export const sellThroughRows = (sold, products) => {
  * @param {string} websiteId @param {string[]} productIds
  */
 export const lastVariantSalePipeline = (websiteId, productIds) => [
-	{ $match: { websiteId, role: { $ne: 'cancelled' }, 'lines.productId': { $in: productIds } } },
+	{ $match: { websiteId, role: { $ne: 'canceled' }, 'lines.productId': { $in: productIds } } },
 	{ $unwind: '$lines' },
 	{ $match: { 'lines.productId': { $in: productIds } } },
 	{ $group: { _id: '$lines.variantId', last: { $max: '$placedAt' } } },

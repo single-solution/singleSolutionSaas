@@ -14,7 +14,7 @@
  */
 import { isId } from '@ss/contracts';
 import { normalizeEmail } from '@ss/contracts/email';
-import { normalisePhone } from '@ss/contracts/phone';
+import { normalizePhone } from '@ss/contracts/phone';
 import { countryCodeOf, tidyPostcode } from '@ss/contracts/address';
 import { ADDRESS_LIMITS } from './address.js';
 import { ALERT_TRIES, checkAlertInput } from './alerts.js';
@@ -291,7 +291,7 @@ const checker = () => {
 	const phone = (value, path, rules, { required = false, strict = false } = {}) => {
 		const raw = text(value, path, 40, { required });
 		if (raw === '') return '';
-		const normal = normalisePhone(raw, rules);
+		const normal = normalizePhone(raw, rules);
 		if (normal) return normal;
 		if (!strict && PHONE_TEXT.test(raw)) return raw;
 		fail(
@@ -487,7 +487,7 @@ const ORDER_CUSTOMER_FIELDS = fieldList('userId customerId name email phone');
 const DELIVERY_FIELDS = fieldList('method zone rate rateName fee locationId');
 const LINE_FIELDS = fieldList(
 	'id productId variantId kind name variantName sku grade gradeLabel image unitPrice quantity discount tax ' +
-		'total cost categoryIds brandId locationId serials booking licences downloads returnedQuantity ' +
+		'total cost categoryIds brandId locationId serials booking licenses downloads returnedQuantity ' +
 		'warrantyTime dealId',
 );
 const TOTALS_FIELDS = fieldList('subtotal discount delivery tax total currency taxIncluded fee roleDiscount');
@@ -515,12 +515,12 @@ const UNDELIVERED_ROLES = Object.freeze(
 		'open',
 		'packed',
 		'shipped',
-		'cancelled',
+		'canceled',
 		'returned_to_origin',
 	]),
 );
 /** Roles whose orders gave their stock back: they hold none (IMP-49). */
-const RELEASED_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['cancelled', 'returned_to_origin', 'returned']));
+const RELEASED_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['canceled', 'returned_to_origin', 'returned']));
 /** Roles that wait (the only ones with a time to wait until). */
 const WAITING = Object.freeze(/** @type {StatusRole[]} */ (['awaiting_payment', 'awaiting_confirmation']));
 /** Who wrote a log entry when an import does not say. */
@@ -648,7 +648,7 @@ const lineOf = (c, value, path, taxIncluded, now) => {
 		locationId: c.id(input.locationId, ID_PREFIX.location, `${path}/locationId`, { nullable: true }),
 		serials,
 		booking: bookingOf(c, input.booking, `${path}/booking`, now),
-		licences: c.ids(input.licences, ID_PREFIX.licence, `${path}/licences`, MAX_QUANTITY),
+		licenses: c.ids(input.licenses, ID_PREFIX.license, `${path}/licenses`, MAX_QUANTITY),
 		returnedQuantity,
 		...(downloads === undefined ? (kind === 'digital' ? { downloads: 0 } : {}) : { downloads }),
 		...(warrantyTime === undefined || warrantyTime === null ? {} : { warrantyTime }),
@@ -1412,7 +1412,7 @@ export const rtoKeysOf = (flow) =>
  * The statuses of the flow that cancel (`finish` counts a cancel whose reason counts against the customer, E19).
  * @param {OrderFlow} flow
  */
-export const cancelKeysOf = (flow) => flow.statuses.filter((status) => status.role === 'cancelled').map((status) => status.key);
+export const cancelKeysOf = (flow) => flow.statuses.filter((status) => status.role === 'canceled').map((status) => status.key);
 
 /**
  * A customer's counts from the sums of their orders (`finish`): orders placed, packages returned to origin, the last

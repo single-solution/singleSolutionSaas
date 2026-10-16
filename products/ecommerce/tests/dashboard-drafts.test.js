@@ -187,7 +187,7 @@ describe('order flow drafts (the flow editor)', () => {
 		};
 		const removed = removeFlowStatus(withRefund, 'refunded');
 		expect(removed.moves.some((move) => move.to === 'refunded')).toBe(false);
-		expect(removed.triggers).toEqual({ paid: 'confirmed', windowEnd: 'cancelled', refundsCover: '' });
+		expect(removed.triggers).toEqual({ paid: 'confirmed', windowEnd: 'canceled', refundsCover: '' });
 		const noCod = removeFlowStatus(withRefund, 'confirmed');
 		expect(noCod.starts).toEqual({ at_pickup: 'awaiting_confirmation', free: 'awaiting_confirmation' });
 		expect(noCod.triggers).toMatchObject({ paid: '' });
@@ -203,7 +203,7 @@ describe('order flow drafts (the flow editor)', () => {
 			shopperText: { online: 'We hold it' },
 			notify: false,
 		});
-		flow.moves.push({ from: '', to: 'cancelled' }, { from: 'delivered', to: 'confirmed' });
+		flow.moves.push({ from: '', to: 'canceled' }, { from: 'delivered', to: 'confirmed' });
 		flow.moves[0] = {
 			.../** @type {import('../core/model.js').OrderMove} */ (flow.moves[0]),
 			options: { paidOnConfirm: ['bank_transfer'] },
@@ -211,7 +211,7 @@ describe('order flow drafts (the flow editor)', () => {
 		const saved = flowToSave(flow, (next, move) => canMove(next, move.from, move.to));
 		const hold = saved.statuses.at(-1);
 		expect(hold).toMatchObject({ key: 'on_hold', label: 'On hold', shopperLabel: 'Waiting', notify: false });
-		expect(saved.moves).toContainEqual(expect.objectContaining({ from: 'on_hold', to: 'cancelled' }));
+		expect(saved.moves).toContainEqual(expect.objectContaining({ from: 'on_hold', to: 'canceled' }));
 		expect(saved.moves.some((move) => move.from === 'delivered' && move.to === 'confirmed')).toBe(false);
 		expect(saved.moves[0]).toMatchObject({ options: { paidOnConfirm: ['bank_transfer'] } });
 		expect(saved.triggers).toEqual(DEFAULT_FLOW.triggers);

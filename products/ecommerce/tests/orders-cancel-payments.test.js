@@ -96,8 +96,8 @@ afterAll(async () => shop.product.close());
 describe('a canceled order cancels its Payments payment (K-13)', () => {
 	it('when the shopper cancels it, and keeps it paid when the money came just before', async () => {
 		const { order, token, paymentId } = await placeOrder();
-		const cancelled = await visit('POST', `/v1/shop/orders/${order.id}/cancel`, token);
-		expect(cancelled.json.order.status).toBe('cancelled');
+		const canceled = await visit('POST', `/v1/shop/orders/${order.id}/cancel`, token);
+		expect(canceled.json.order.status).toBe('canceled');
 		expect(cancelsOf(paymentId).map((call) => JSON.parse(call.body))).toEqual([{ reason: 'Canceled by the shopper' }]);
 		expect((await orderRecord(order.id)).payment.voidedAt).toBeInstanceOf(Date);
 		expect((await orderRecord(order.id)).history.at(-1)).toMatchObject({ by: 'shopper', reason: 'shopper', code: 'shopper' });
@@ -117,17 +117,17 @@ describe('a canceled order cancels its Payments payment (K-13)', () => {
 
 	it('when staff cancel it, refusing once when the shopper paid meanwhile', async () => {
 		const { order, paymentId } = await placeOrder();
-		expect((await moveTo(order.id, 'cancelled', { note: 'Out of stock' })).json.status).toBe('cancelled');
+		expect((await moveTo(order.id, 'canceled', { note: 'Out of stock' })).json.status).toBe('canceled');
 		expect(JSON.parse(String(cancelsOf(paymentId)[0]?.body))).toEqual({ reason: 'Out of stock' });
 
 		const paid = await placeOrder();
 		shop.payPayment(paid.paymentId);
-		const refused = await moveTo(paid.order.id, 'cancelled');
+		const refused = await moveTo(paid.order.id, 'canceled');
 		expect(codeOf(refused)).toBe('move_not_allowed');
 		expect((await orderRecord(paid.order.id)).status).toBe('confirmed');
 		// canceling the paid order now refunds it through Payments, with the event other refunds raise
-		const again = await moveTo(paid.order.id, 'cancelled');
-		expect(again.json).toMatchObject({ status: 'cancelled', payment: { state: 'refunded', refundDue: 0 } });
+		const again = await moveTo(paid.order.id, 'canceled');
+		expect(again.json).toMatchObject({ status: 'canceled', payment: { state: 'refunded', refundDue: 0 } });
 		expect(shop.callsTo(`${PAYMENTS}/v1/payments/${paid.paymentId}/refunds`)).toHaveLength(1);
 		const total = (await orderRecord(paid.order.id)).totals.total;
 		/** @param {string} id */
@@ -150,7 +150,7 @@ describe('a canceled order cancels its Payments payment (K-13)', () => {
 		const { order, paymentId } = await placeOrder();
 		shop.advance(61 * 60_000);
 		await nextUse();
-		expect((await orderRecord(order.id)).status).toBe('cancelled');
+		expect((await orderRecord(order.id)).status).toBe('canceled');
 		expect(JSON.parse(String(cancelsOf(paymentId)[0]?.body))).toEqual({ reason: 'Not paid in time' });
 	});
 
@@ -193,9 +193,9 @@ describe('when Payments cannot be reached, and money paid after the cancel (K-13
 	it('cancels the order, keeps the step and cancels the payment on a later use', async () => {
 		const { order, token, paymentId } = await placeOrder();
 		const restore = cancelAnswers({ status: 503, body: {} });
-		const cancelled = await visit('POST', `/v1/shop/orders/${order.id}/cancel`, token);
+		const canceled = await visit('POST', `/v1/shop/orders/${order.id}/cancel`, token);
 		restore();
-		expect(cancelled.json.order.status).toBe('cancelled');
+		expect(canceled.json.order.status).toBe('canceled');
 		const pending = (await orderRecord(order.id)).payment;
 		expect(pending.voidPendingAt).toBeInstanceOf(Date);
 		expect(pending.voidedAt).toBeUndefined();
@@ -223,7 +223,7 @@ describe('when Payments cannot be reached, and money paid after the cancel (K-13
 		shop.payPayment(paymentId);
 		await nextUse();
 		const record = await orderRecord(order.id);
-		expect(record).toMatchObject({ status: 'cancelled', payment: { paid: record.totals.total, voidPendingAt: null } });
+		expect(record).toMatchObject({ status: 'canceled', payment: { paid: record.totals.total, voidPendingAt: null } });
 		expect(record.history.at(-1).note).toContain('arrived after the order was canceled');
 		expect(record.history.at(-1)).toMatchObject({ code: 'paid_after_cancel', values: { amount: record.totals.total } });
 		expect((await shop.api('GET', `/v1/orders/${order.id}`)).json.payment.refundDue).toBe(record.totals.total);
@@ -238,7 +238,7 @@ describe('when Payments cannot be reached, and money paid after the cancel (K-13
 		const sent = shop.messages().length;
 		const read = await shop.api('GET', `/v1/orders/${order.id}`);
 		const total = read.json.totals.total;
-		expect(read.json).toMatchObject({ status: 'cancelled', payment: { paid: total, refundDue: total, refundable: total } });
+		expect(read.json).toMatchObject({ status: 'canceled', payment: { paid: total, refundDue: total, refundable: total } });
 		expect(read.json.payments).toEqual([
 			expect.objectContaining({ method: 'payments', reference: paymentId, note: 'Paid after the order was canceled' }),
 		]);
@@ -365,10 +365,10 @@ describe('money staff take, deletes and two "pay" at once (CK-21)', () => {
 		expect((await orderRecord(id)).payment.paymentId).toBe(winner);
 		const calls = shop.calls.slice(since).filter((call) => call.url.startsWith(PAYMENTS));
 		const started = calls.find((call) => call.method === 'POST' && call.path === '/v1/payments');
-		const cancelled = calls.filter((call) => call.path.endsWith('/cancel')).map((call) => call.path);
+		const canceled = calls.filter((call) => call.path.endsWith('/cancel')).map((call) => call.path);
 		expect(started).toBeDefined();
-		expect(cancelled).toHaveLength(1);
-		expect(cancelled[0]).not.toContain(winner);
+		expect(canceled).toHaveLength(1);
+		expect(canceled[0]).not.toContain(winner);
 		await shop.setting('checkout', 'guests', 'off');
 	});
 

@@ -23,7 +23,7 @@
  * @module
  */
 import { formBundles } from './bundles.js';
-import { couponBlocked, couponDiscount, couponProblem, normaliseCode } from './coupons.js';
+import { couponBlocked, couponDiscount, couponProblem, normalizeCode } from './coupons.js';
 import {
 	bestDeal,
 	better,
@@ -418,7 +418,7 @@ export const applyPromotions = ({
 		applied.push({ id, name: bundle.name, kind: 'bundle', amount });
 	}
 
-	const code = normaliseCode(couponCode);
+	const code = normalizeCode(couponCode);
 	/** @type {PromotionsResult} */
 	const result = {
 		lines: priced,

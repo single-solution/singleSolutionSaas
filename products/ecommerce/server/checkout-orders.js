@@ -29,7 +29,7 @@
 import { created, paginate, problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { isEmailAddress } from '@ss/contracts/email';
-import { normalisePhone } from '@ss/contracts/phone';
+import { normalizePhone } from '@ss/contracts/phone';
 import { originAllowed } from '@ss/protocol';
 import { fieldsOn, unitsOfOrders } from '../adapters/catalog-store.js';
 import { keyOpens, newOrderKey, orderKeyHash } from '../adapters/crypto.js';
@@ -195,7 +195,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	const startPayment = async (s, order, returnUrl, idempotencyKey) => {
 		const back = await paymentBackOf(s, order, returnUrl);
 		const { customer } = order;
-		const phone = normalisePhone(customer.phone);
+		const phone = normalizePhone(customer.phone);
 		try {
 			const payment = await service.payments.create(s, {
 				...expectedOf(order),
@@ -465,7 +465,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 						booking: line.booking ? { start: iso(line.booking.start), end: iso(line.booking.end) } : null,
 						downloads: extra?.files ?? [],
 						downloadsLeft: extra?.downloadsLeft ?? null,
-						licenceKeys: extra?.licenceKeys ?? [],
+						licenseKeys: extra?.licenseKeys ?? [],
 						// with reviews per order line: delivered and not reviewed yet (E34)
 						canReview: reviewed !== null && !reviewed.has(line.id),
 					};
@@ -686,7 +686,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				serials: [],
 				warrantyTime: warrantyOf(line),
 				booking,
-				licences: [],
+				licenses: [],
 				returnedQuantity: 0,
 				dealId: q.promotions?.lines.find((entry) => entry.key === line.key)?.dealId ?? null,
 				...(line.kind === 'digital' ? { downloads: 0 } : {}),
@@ -1239,18 +1239,18 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		// canceled and refunded through Payments
 		if (current.payment.paid > 0 && move.options.shopperPaid === 'refuse')
 			throw problem('move_not_allowed', 'This order is paid; please ask the shop to cancel and refund it.');
-		const cancelled = await cancel(s, current, {
+		const canceled = await cancel(s, current, {
 			by: shopper ? 'shopper' : 'guest',
 			note: 'Canceled by the shopper',
 			code: 'shopper',
 			reason: 'shopper',
 			to: move.to,
 		});
-		if (!cancelled) throw problem('move_not_allowed', 'This order can no longer be canceled here.');
+		if (!canceled) throw problem('move_not_allowed', 'This order can no longer be canceled here.');
 		// paid at Payments just before (K-13): it is paid now, and staff cancel and refund paid orders
-		if (cancelled.role !== 'cancelled')
+		if (canceled.role !== 'canceled')
 			throw problem('move_not_allowed', 'This order is paid; please ask the shop to cancel and refund it.');
-		return { order: await shopperView(s, cancelled, flow) };
+		return { order: await shopperView(s, canceled, flow) };
 	};
 
 	/** @param {any} ctx */

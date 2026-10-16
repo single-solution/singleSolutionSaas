@@ -381,9 +381,9 @@ export const createAlerts = (_product, service, cards) => {
 	 */
 	const deleteUser = async (s, person) => {
 		const { data, filter } = await personFilter(s, person);
-		if (!filter) return { deleted: 0, anonymised: 0 };
+		if (!filter) return { deleted: 0, anonymized: 0 };
 		const result = await alerts(data).deleteMany(filter);
-		return { deleted: result.deletedCount, anonymised: 0 };
+		return { deleted: result.deletedCount, anonymized: 0 };
 	};
 
 	const routes = [

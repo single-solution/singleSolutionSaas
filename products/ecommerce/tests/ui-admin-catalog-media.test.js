@@ -260,7 +260,7 @@ describe('catalog admin: product files', () => {
 			digital: {
 				files: [{ key: 'ecommerce/digital/prd_1/manual.pdf', type: 'application/pdf', size: 2048, alt: '' }],
 				retired: [],
-				licenceKeys: true,
+				licenseKeys: true,
 				downloadLimit: 3,
 			},
 			media: [],
@@ -268,7 +268,7 @@ describe('catalog admin: product files', () => {
 		let keys = () => answer(200, { added: 2, available: 5 });
 		const { root, server } = await start(['catalog', 'digital_goods'], {
 			'GET /v1/admin/products/prd_1': () => answer(200, digital),
-			'POST /v1/admin/products/prd_1/licences': () => keys(),
+			'POST /v1/admin/products/prd_1/licenses': () => keys(),
 			'POST /v1/admin/products/prd_1/files': (/** @type {any} */ call) =>
 				answer(200, {
 					file: { name: call.body.name, type: call.body.type, size: call.body.size },
@@ -286,7 +286,7 @@ describe('catalog admin: product files', () => {
 		expect(statuses(dialogOf(root))).toContain(TEXTS['problem.field.keys']);
 		keys = () => answer(200, { added: 2, available: 5 });
 		await submitDialog(root);
-		expect(server.last('POST /v1/admin/products/prd_1/licences')?.body).toEqual({ keys: ['K1', 'K2'] });
+		expect(server.last('POST /v1/admin/products/prd_1/licenses')?.body).toEqual({ keys: ['K1', 'K2'] });
 		expect(statuses(detail)).toContain('2 keys added; 5 available.');
 		const picker = fieldIn(detail, 'Add a file');
 		await choose(picker, []);
@@ -319,7 +319,7 @@ describe('catalog admin: product files', () => {
 					{ key: 'ecommerce/digital/prd_1/extra.zip', type: 'application/zip', size: 4096, alt: '' },
 				],
 				retired: [],
-				licenceKeys: true,
+				licenseKeys: true,
 				downloadLimit: 0,
 			},
 			media: [],
@@ -329,7 +329,7 @@ describe('catalog admin: product files', () => {
 		const { root, server } = await start(['catalog', 'digital_goods'], {
 			'GET /v1/admin/products/prd_1': () => answer(200, digital),
 			'DELETE /v1/admin/products/prd_1/files/extra.zip': () => removeFile(),
-			'POST /v1/admin/products/prd_1/licences/remove': () => removeKeys(),
+			'POST /v1/admin/products/prd_1/licenses/remove': () => removeKeys(),
 		});
 		const detail = detailOf(panelOf(root, 'products'));
 		await click(/** @type {HTMLElement} */ (detail.querySelector('button[aria-label="Remove extra.zip"]')));
@@ -350,13 +350,13 @@ describe('catalog admin: product files', () => {
 		expect(statuses(dialogOf(root))).toContain(TEXTS['problem.field.keys']);
 		removeKeys = () => answer(200, { removed: 1, given: 1, available: 4 });
 		await submitDialog(root);
-		expect(server.last('POST /v1/admin/products/prd_1/licences/remove')?.body).toEqual({ keys: ['K1', 'K9'] });
+		expect(server.last('POST /v1/admin/products/prd_1/licenses/remove')?.body).toEqual({ keys: ['K1', 'K9'] });
 		expect(statuses(detail)).toContain('1 keys removed; 1 were given to orders and stay with them; 4 available.');
 		// nothing typed: refused before asking
 		await click(buttonIn(detail, 'Remove license keys'));
 		await submitDialog(root);
-		expect(statuses(dialogOf(root))).toContain(TEXTS['catalogAdmin.licencesNone']);
-		expect(server.all('POST /v1/admin/products/prd_1/licences/remove')).toHaveLength(2);
+		expect(statuses(dialogOf(root))).toContain(TEXTS['catalogAdmin.licensesNone']);
+		expect(server.all('POST /v1/admin/products/prd_1/licenses/remove')).toHaveLength(2);
 	});
 
 	it('formats the rich description with the toolbar and previews it safely', async () => {

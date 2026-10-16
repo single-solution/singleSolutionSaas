@@ -52,7 +52,7 @@ export const ROLE_TONES = Object.freeze({
 	packed: 'neutral',
 	shipped: 'neutral',
 	delivered: 'success',
-	cancelled: 'danger',
+	canceled: 'danger',
 	returned_to_origin: 'danger',
 	refunded: 'neutral',
 	returned: 'neutral',
@@ -198,8 +198,8 @@ const renderOrder = (kit, order, detail, message) => {
 	// ---------------------------------------------------------------------------------------------- actions
 	/** @type {NextStatus[]} */
 	const next = order.nextStatuses ?? [];
-	const forward = next.filter((status) => status.role !== 'cancelled');
-	const cancels = next.filter((status) => status.role === 'cancelled');
+	const forward = next.filter((status) => status.role !== 'canceled');
+	const cancels = next.filter((status) => status.role === 'canceled');
 	const refundable = Number(order.payment.refundable ?? 0);
 	const balanceDue = Number(order.payment.balanceDue ?? 0);
 	// lines whose units are typed (their item type), and typed numbers still missing make Type serial numbers a main action
@@ -526,20 +526,20 @@ const moveDialog = (kit, order, status, done) => {
 		input: kit.input('', { maxlength: '2000', inputmode: 'url' }),
 	}));
 	const restock = options.restock === 'ask' ? kit.check(t('ordersAdmin.restockAsk')) : null;
-	const cancelling = status.role === 'cancelled';
+	const canceling = status.role === 'canceled';
 	// why: a cancel may give one of the merchant's reasons, a package that came back takes one (the first by default)
 	const reasons = status.reasons ?? [];
 	const why =
 		reasons.length > 0
 			? kit.select([
-					...(cancelling ? [{ value: '', label: t('ordersAdmin.noReason') }] : []),
+					...(canceling ? [{ value: '', label: t('ordersAdmin.noReason') }] : []),
 					...reasons.map((entry) => ({ value: entry.key, label: entry.label })),
 				])
 			: null;
 	kit.dialog({
 		title: t('ordersAdmin.moveToStatus', { status: status.label }),
 		body: [
-			cancelling ? kit.text('p', {}, t('ordersAdmin.cancelHint', { number: order.number })) : null,
+			canceling ? kit.text('p', {}, t('ordersAdmin.cancelHint', { number: order.number })) : null,
 			packing?.node,
 			...needed.map((entry) => kit.field(t('ordersAdmin.attachmentNeeded', { kind: entry.label }), entry.input)),
 			shipping?.node,
@@ -549,9 +549,9 @@ const moveDialog = (kit, order, status, done) => {
 			kit.field(t(needs.includes('reason') ? 'ordersAdmin.shopperNoteRequired' : 'ordersAdmin.shopperNoteField'), forShopper),
 		],
 		submitLabel: t('ordersAdmin.move'),
-		danger: cancelling,
+		danger: canceling,
 		wide: Boolean(packing),
-		confirmText: cancelling ? order.number : '',
+		confirmText: canceling ? order.number : '',
 		onSubmit: async () => {
 			const serials = packing ? packing.values() : /** @type {SerialValues} */ ({ ok: true, value: {} });
 			if (!serials.ok) return serials.error;

@@ -109,7 +109,7 @@ describe('facts of an imported order, from its flags', () => {
 			),
 		).toEqual({ stock: 'sold', offers: 'counted', redeemed: 'spent', earned: 'credited', units: 'none' });
 		// a cancel (or a refund before delivery) gave everything back
-		for (const role of ['cancelled', 'refunded'])
+		for (const role of ['canceled', 'refunded'])
 			expect(
 				derivedFacts(order({ role, stockHeld: false, promotions: { ...order().promotions, released: true } })),
 				role,
@@ -162,7 +162,7 @@ describe('facts of an imported order, from its flags', () => {
 			serials: line.kind === 'physical' ? ['S1', 'S2'] : [],
 		}));
 		expect(derivedFacts(order({ role: 'packed', lines })).units).toBe('captured');
-		expect(derivedFacts(order({ role: 'cancelled', stockHeld: false, lines })).units).toBe('none');
+		expect(derivedFacts(order({ role: 'canceled', stockHeld: false, lines })).units).toBe('none');
 		// an order that never wrote pointsCredited counts as credited once settled, as the reversal reads it
 		const unwritten = { ...order().promotions, pointsCredited: undefined };
 		expect(derivedFacts(order({ role: 'delivered', promotions: unwritten })).earned).toBe('credited');
@@ -289,32 +289,32 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 	});
 
 	it('cancels: everything back once, and a refund of what Payments took after the transaction', () => {
-		const cancelled = planOf(
-			plan(order(), 'cancelled', { note: 'Out of stock', payments: { 'payment.voidedAt': new Date(NOW) } }),
+		const canceled = planOf(
+			plan(order(), 'canceled', { note: 'Out of stock', payments: { 'payment.voidedAt': new Date(NOW) } }),
 		);
-		expect(kinds(cancelled)).toEqual(['release_stock', 'release_slots', 'count_ordered', 'release_offers', 'give_points']);
-		expect(cancelled.ledger[0]).toEqual({
+		expect(kinds(canceled)).toEqual(['release_stock', 'release_slots', 'count_ordered', 'release_offers', 'give_points']);
+		expect(canceled.ledger[0]).toEqual({
 			kind: 'release_stock',
 			lines: [{ productId: 'prd_1', variantId: 'var_1', quantity: 2, locationId: null }],
 		});
 		// its units are no longer ordered, every line's (P3-10)
-		expect(cancelled.ledger[2]).toEqual({
+		expect(canceled.ledger[2]).toEqual({
 			kind: 'count_ordered',
 			lines: [
 				{ productId: 'prd_1', quantity: -2 },
 				{ productId: 'prd_2', quantity: -1 },
 			],
 		});
-		expect(cancelled.ledger[4]).toMatchObject({ owner: { userId: 'usr_1' }, points: 50, reason: 'refund' });
-		expect(cancelled.set).toMatchObject({ stockHeld: false, 'promotions.released': true, 'payment.voidedAt': new Date(NOW) });
-		expect(cancelled.facts.after).toEqual({
+		expect(canceled.ledger[4]).toMatchObject({ owner: { userId: 'usr_1' }, points: 50, reason: 'refund' });
+		expect(canceled.set).toMatchObject({ stockHeld: false, 'promotions.released': true, 'payment.voidedAt': new Date(NOW) });
+		expect(canceled.facts.after).toEqual({
 			stock: 'back',
 			offers: 'released',
 			redeemed: 'given_back',
 			earned: 'none',
 			units: 'none',
 		});
-		expect(cancelled.external).toEqual([
+		expect(canceled.external).toEqual([
 			expect.objectContaining({
 				id: 'ord_1:cancel',
 				kind: 'refund',
@@ -325,33 +325,33 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 				note: 'Out of stock',
 			}),
 		]);
-		expect(cancelled.push.effects).toEqual({ $each: cancelled.external });
-		expect(cancelled.event).toEqual({ from: 'confirmed', to: 'cancelled', by: 'Sam', note: 'Out of stock' });
+		expect(canceled.push.effects).toEqual({ $each: canceled.external });
+		expect(canceled.event).toEqual({ from: 'confirmed', to: 'canceled', by: 'Sam', note: 'Out of stock' });
 		// a shopper's cancel (by default) or an ended window refunds nothing (the money shows as due)
 		const waiting = order({ status: 'pending_payment', role: 'awaiting_payment' });
 		const shopper = planOf(
-			plan(waiting, 'cancelled', { who: 'shopper', by: 'shopper', byKind: undefined, cancelReason: 'shopper' }),
+			plan(waiting, 'canceled', { who: 'shopper', by: 'shopper', byKind: undefined, cancelReason: 'shopper' }),
 		);
 		expect(shopper.external).toEqual([]);
 		expect(shopper.history).toMatchObject({ by: 'shopper', reason: 'shopper' });
-		expect(shopper.event).toEqual({ from: 'pending_payment', to: 'cancelled', by: 'shopper', reason: 'shopper' });
+		expect(shopper.event).toEqual({ from: 'pending_payment', to: 'canceled', by: 'shopper', reason: 'shopper' });
 		const expired = planOf(
-			plan(waiting, 'cancelled', { who: 'system', by: 'system', byKind: undefined, cancelReason: 'expired', listed: false }),
+			plan(waiting, 'canceled', { who: 'system', by: 'system', byKind: undefined, cancelReason: 'expired', listed: false }),
 		);
 		expect(expired.external).toEqual([]);
 		// staff whose move says the refund is theirs: nothing is refunded now
 		const byHand = {
 			...DEFAULT_FLOW,
 			moves: DEFAULT_FLOW.moves.map((move) =>
-				move.from === 'confirmed' && move.to === 'cancelled'
+				move.from === 'confirmed' && move.to === 'canceled'
 					? { ...move, options: { refund: /** @type {const} */ ('staff') } }
 					: move,
 			),
 		};
-		expect(planOf(plan(order(), 'cancelled', {}, {}, byHand)).external).toEqual([]);
+		expect(planOf(plan(order(), 'canceled', {}, {}, byHand)).external).toEqual([]);
 		// facts that say it was given back already: nothing is given back again
 		const back = order({ facts: { stock: 'back', offers: 'released', redeemed: 'given_back', earned: 'none', units: 'none' } });
-		expect(planOf(plan(back, 'cancelled')).ledger).toEqual([]);
+		expect(planOf(plan(back, 'canceled')).ledger).toEqual([]);
 	});
 
 	it('takes packages back: restocked or kept out, an RTO counted, points of a customer’s return', () => {
@@ -428,10 +428,10 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 		expect(told.external).toEqual([expect.objectContaining({ reason: 'Sorry, it broke in transit', note: 'Damaged' })]);
 		// nothing paid: by default it cancels the order with no money; a move that refuses it says so
 		const unpaid = order({ payment: { ...order().payment, paid: 0 } });
-		const cancelled = planOf(plan(unpaid, 'refunded', {}, {}, flow));
-		expect(cancelled.facts.after).toMatchObject({ stock: 'back' });
-		expect(cancelled.external).toEqual([]);
-		expect(cancelled.refunded).toBe(0);
+		const canceled = planOf(plan(unpaid, 'refunded', {}, {}, flow));
+		expect(canceled.facts.after).toMatchObject({ stock: 'back' });
+		expect(canceled.external).toEqual([]);
+		expect(canceled.refunded).toBe(0);
 		const refusing = {
 			...flow,
 			moves: flow.moves.map((move) =>
@@ -441,7 +441,7 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 			),
 		};
 		expect(plan(unpaid, 'refunded', {}, {}, refusing)).toMatchObject({ ok: false, code: 'nothing_paid' });
-		expect(nothingPaid(unpaid, 'cancelled')).toBeNull();
+		expect(nothingPaid(unpaid, 'canceled')).toBeNull();
 
 		const delivered = order({
 			status: 'delivered',
@@ -470,20 +470,20 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 			statuses: DEFAULT_FLOW.statuses.map((status) =>
 				status.key === 'delivered' ? { ...status, role: /** @type {const} */ ('open') } : status,
 			),
-			moves: [...DEFAULT_FLOW.moves, { from: 'delivered', to: 'cancelled' }],
+			moves: [...DEFAULT_FLOW.moves, { from: 'delivered', to: 'canceled' }],
 		};
 		const delivered = order({ status: 'delivered', role: 'delivered' });
-		expect(plan(delivered, 'cancelled', {}, {}, reRoled)).toMatchObject({ ok: false, code: 'flow_changed' });
+		expect(plan(delivered, 'canceled', {}, {}, reRoled)).toMatchObject({ ok: false, code: 'flow_changed' });
 		// a cancel that needs no listed move (an ended window, a shopper) still follows the role rules
-		const strict = { ...DEFAULT_FLOW, moves: DEFAULT_FLOW.moves.filter((move) => move.to !== 'cancelled') };
+		const strict = { ...DEFAULT_FLOW, moves: DEFAULT_FLOW.moves.filter((move) => move.to !== 'canceled') };
 		const waiting = order({ status: 'awaiting_confirmation', role: 'awaiting_confirmation' });
-		expect(checkTransition({ order: waiting, flow: strict, to: 'cancelled' }).ok).toBe(false);
-		expect(checkTransition({ order: waiting, flow: strict, to: 'cancelled', listed: false }).ok).toBe(true);
-		expect(checkTransition({ order: delivered, flow: strict, to: 'cancelled', listed: false }).ok).toBe(false);
+		expect(checkTransition({ order: waiting, flow: strict, to: 'canceled' }).ok).toBe(false);
+		expect(checkTransition({ order: waiting, flow: strict, to: 'canceled', listed: false }).ok).toBe(true);
+		expect(checkTransition({ order: delivered, flow: strict, to: 'canceled', listed: false }).ok).toBe(false);
 		// a status the flow no longer has: refused when listed (as before), by its role when not
 		const gone = order({ status: 'retired', role: 'awaiting_confirmation' });
-		expect(checkTransition({ order: gone, flow: DEFAULT_FLOW, to: 'cancelled' }).ok).toBe(false);
-		expect(checkTransition({ order: gone, flow: DEFAULT_FLOW, to: 'cancelled', listed: false }).ok).toBe(true);
+		expect(checkTransition({ order: gone, flow: DEFAULT_FLOW, to: 'canceled' }).ok).toBe(false);
+		expect(checkTransition({ order: gone, flow: DEFAULT_FLOW, to: 'canceled', listed: false }).ok).toBe(true);
 	});
 
 	it('plans a delete as a release without a status, once', () => {
@@ -682,7 +682,7 @@ describe('property: random flows × random transitions never give back or take t
 					if (p.facts.before.offers === 'released') expect(kinds(p)).not.toContain('release_offers');
 					if (p.facts.before.earned !== 'credited') expect(kinds(p)).not.toContain('take_points');
 					// a shopper or the shop itself only cancels, and a shopper only before dispatch
-					if (input.who !== 'staff') expect(p.stage).toBe('cancelled');
+					if (input.who !== 'staff') expect(p.stage).toBe('canceled');
 					if (input.who === 'shopper')
 						expect(['awaiting_payment', 'awaiting_confirmation', 'open', 'packed']).toContain(p.fromStage);
 					// repeating the same transition on the order as it is now changes nothing

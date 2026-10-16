@@ -50,7 +50,7 @@ export const COLLECTIONS = Object.freeze({
 	bundles: 'bundles',
 	loyalty: 'loyalty',
 	slots: 'slots',
-	licences: 'licences',
+	licenses: 'licenses',
 	returns: 'returns',
 	reviews: 'reviews',
 	wishlists: 'wishlists',
@@ -75,7 +75,7 @@ export const ID_PREFIX = Object.freeze({
 	coupon: 'cpn',
 	deal: 'deal',
 	bundle: 'bnd',
-	licence: 'lic',
+	license: 'lic',
 	slot: 'slot',
 	claim: 'ret',
 	review: 'rev',
@@ -161,7 +161,7 @@ export const ID_PREFIX = Object.freeze({
  * @property {Array<{ name: string, values: string[] }>} options variant axes (variants)
  * @property {VariantRecord[]} variants at least one
  * @property {boolean} trackStock false = never runs out (services, made to order)
- * @property {{ files: MediaRecord[], retired: Array<MediaRecord & { removedAt: Date }>, licenceKeys: boolean,
+ * @property {{ files: MediaRecord[], retired: Array<MediaRecord & { removedAt: Date }>, licenseKeys: boolean,
  *   downloadLimit: number } | null} digital digital goods: `retired` are files removed while orders had the product,
  *   still downloadable for the orders placed before `removedAt`
  * @property {{ durationMinutes: number, schedule: string } | null} booking bookings: a slot's length, and the key of
@@ -322,14 +322,14 @@ export const BUNDLE_TYPES = Object.freeze(/** @type {const} */ (['bundle', 'buy_
  * PLAN 0.8.8; the options of each move, PLAN 0.8.10 dynamic model phase 2, `core/flow.js`); the role of a status decides
  * what entering it does, so the stock, offer-use and points rules hold whatever the flow:
  * - `awaiting_payment`: start of online, bank-transfer and COD-with-advance orders; stock is held until it is paid or
- *   the payment window ends (then `cancelled`);
+ *   the payment window ends (then `canceled`);
  * - `awaiting_confirmation`: start of plain COD and pickup orders by default (a flow may have none, then they start
  *   `open`); held until staff confirm or the confirmation window ends;
  * - `open`: confirmed and being prepared (custom statuses are `open` too);
  * - `packed`: units of lines whose item type numbers them are captured (also with a later move, as the type says);
  * - `shipped`: with the courier (tracking number);
  * - `delivered`: points are earned, reviews open, return windows start;
- * - `cancelled`: stock, offer use and points are given back; paid money is refunded as the move says; after delivery
+ * - `canceled`: stock, offer use and points are given back; paid money is refunded as the move says; after delivery
  *   (E40, a listed move) the items go back in stock only as the move says;
  * - `returned_to_origin`: the package came back (RTO); stock comes back as the move says and the customer's RTO count
  *   rises;
@@ -345,7 +345,7 @@ export const STATUS_ROLES = Object.freeze([
 	'packed',
 	'shipped',
 	'delivered',
-	'cancelled',
+	'canceled',
 	'returned_to_origin',
 	'refunded',
 	'returned',
@@ -429,7 +429,7 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string | null} locationId where its stock was taken (multi_location)
  * @property {string[]} serials serial numbers captured when packed
  * @property {{ start: Date, end: Date } | null} booking the booked slot
- * @property {string[]} licences license ids given after payment (digital)
+ * @property {string[]} licenses license ids given after payment (digital)
  * @property {number} [downloads] downloads made so far (digital)
  * @property {number} returnedQuantity units returned through approved return claims (thousandths of the unit of a
  *   measured line)
@@ -619,7 +619,7 @@ export const STATUS_ROLES = Object.freeze([
 /**
  * A license key of a digital product: `available` until an order is paid, then `assigned` to it.
  * @typedef {{ id: string, productId: string, key: string, status: 'available' | 'assigned', orderId: string | null,
- *   lineId: string | null }} LicenceRecord
+ *   lineId: string | null }} LicenseRecord
  */
 
 // ------------------------------------------------------------------------------------------------- shopper extras

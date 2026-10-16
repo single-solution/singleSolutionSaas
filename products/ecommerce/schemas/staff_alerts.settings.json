@@ -6,10 +6,10 @@
 			"type": "array",
 			"title": "Alert staff of",
 			"description": "Moves into a status alert the staff when that status's Staff alert is on (Order statuses and moves).",
-			"default": ["placed", "cancelled", "proof_uploaded", "return_requested", "refund_due"],
+			"default": ["placed", "canceled", "proof_uploaded", "return_requested", "refund_due"],
 			"items": {
 				"type": "string",
-				"enum": ["placed", "paid", "proof_uploaded", "cancelled", "expired", "return_requested", "refund_due"]
+				"enum": ["placed", "paid", "proof_uploaded", "canceled", "expired", "return_requested", "refund_due"]
 			}
 		},
 		"recipients": {

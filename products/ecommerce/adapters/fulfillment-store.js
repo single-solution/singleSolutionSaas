@@ -33,14 +33,14 @@ export const ownerOrders = (owner) => {
 
 /** Merchant database indexes of this part. @type {import('@ss/app-kit').IndexDefinition[]} */
 export const INDEXES = [
-	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, createdAt: -1, id: -1 }, name: 'fulfil_recent' },
-	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, status: 1, createdAt: -1, id: -1 }, name: 'fulfil_by_status' },
-	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, 'customer.email': 1 }, name: 'fulfil_by_email' },
-	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, 'customer.phone': 1 }, name: 'fulfil_by_phone' },
-	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, name: 1, id: 1 }, name: 'fulfil_by_name' },
-	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, createdAt: -1, id: -1 }, name: 'fulfil_newest' },
-	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, email: 1 }, name: 'fulfil_by_email' },
-	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, phone: 1 }, name: 'fulfil_by_phone' },
+	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, createdAt: -1, id: -1 }, name: 'fulfill_recent' },
+	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, status: 1, createdAt: -1, id: -1 }, name: 'fulfill_by_status' },
+	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, 'customer.email': 1 }, name: 'fulfill_by_email' },
+	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, 'customer.phone': 1 }, name: 'fulfill_by_phone' },
+	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, name: 1, id: 1 }, name: 'fulfill_by_name' },
+	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, createdAt: -1, id: -1 }, name: 'fulfill_newest' },
+	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, email: 1 }, name: 'fulfill_by_email' },
+	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, phone: 1 }, name: 'fulfill_by_phone' },
 ];
 
 /**
@@ -167,7 +167,7 @@ export const markSeenBy = (data, collection, match, staffId) =>
 /**
  * @param {WebsiteData} data the website's guarded merchant database
  */
-export const createFulfilmentStore = (data) => {
+export const createFulfillmentStore = (data) => {
 	const websiteId = data.websiteId;
 	const orders = data.collection(COLLECTIONS.orders);
 	const customers = data.collection(COLLECTIONS.customers);
@@ -282,7 +282,7 @@ export const createFulfilmentStore = (data) => {
 			 * Remove a person's details from their orders (the amounts stay: they are the merchant's money records).
 			 * @param {Person} person
 			 */
-			anonymise: async (person) => {
+			anonymize: async (person) => {
 				const or = personOr(person, { id: 'customer.userId', email: 'customer.email', phone: 'customer.phone' });
 				if (or.length === 0) return 0;
 				// the order fields go too: what the shopper gave at checkout may name them (a gift message, a tax number)
@@ -382,4 +382,4 @@ export const createFulfilmentStore = (data) => {
 	});
 };
 
-/** @typedef {ReturnType<typeof createFulfilmentStore>} FulfilmentStore */
+/** @typedef {ReturnType<typeof createFulfillmentStore>} FulfillmentStore */

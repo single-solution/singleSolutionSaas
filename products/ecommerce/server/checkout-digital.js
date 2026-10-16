@@ -1,6 +1,6 @@
 /**
- * Digital goods (PLAN 0.8.8: download/licence after payment): the merchant adds and removes license keys and files of
- * a digital product whose item type has them (`licenceKeys`, `downloads`; server routes and the matching admin-widget
+ * Digital goods (PLAN 0.8.8: download/license after payment): the merchant adds and removes license keys and files of
+ * a digital product whose item type has them (`licenseKeys`, `downloads`; server routes and the matching admin-widget
  * routes, permission `catalog.edit`). A removal takes them from new buyers only: a key given to an order stays with
  * it, and a file removed while orders have the product is kept (`retired`) for the orders placed before. When an
  * order is paid its digital lines get license keys (one per unit, each key given once); the shopper downloads the
@@ -15,7 +15,7 @@ import {
 	DOWNLOAD_SECONDS,
 	MAX_FILE_BYTES,
 	canDownload,
-	checkLicenceKeys,
+	checkLicenseKeys,
 	downloadLimitOf,
 	fileKey,
 	fileNameOf,
@@ -42,8 +42,8 @@ const MEDIA_TYPE = /^[a-z]+\/[a-z0-9.+-]{1,100}$/;
  */
 export const createDigital = (product, service) => {
 	/**
-	 * A digital product whose item type has the part (`licenceKeys` or `downloads`).
-	 * @param {Site} s @param {string} id @param {'licenceKeys' | 'downloads'} part
+	 * A digital product whose item type has the part (`licenseKeys` or `downloads`).
+	 * @param {Site} s @param {string} id @param {'licenseKeys' | 'downloads'} part
 	 */
 	const digitalProduct = async (s, id, part) => {
 		const data = await s.data();
@@ -56,24 +56,24 @@ export const createDigital = (product, service) => {
 		if (!elementsOf(type, s.has)[part])
 			throw service.invalid(
 				'id',
-				part === 'licenceKeys' ? 'Its item type has no license keys.' : 'Its item type has no downloads.',
+				part === 'licenseKeys' ? 'Its item type has no license keys.' : 'Its item type has no downloads.',
 			);
 		return found;
 	};
 
 	/** Add license keys to a product (`{ keys }`). @param {any} ctx */
-	const addLicences = async (ctx) => {
+	const addLicenses = async (ctx) => {
 		const s = await service.site(ctx);
-		const checked = checkLicenceKeys(ctx.body?.keys);
+		const checked = checkLicenseKeys(ctx.body?.keys);
 		if (!checked.ok) throw service.invalid('keys', checked.message);
-		const item = await digitalProduct(s, String(ctx.params.id), 'licenceKeys');
+		const item = await digitalProduct(s, String(ctx.params.id), 'licenseKeys');
 		const store = createOrdersStore(await s.data());
-		const added = await store.addLicences(
+		const added = await store.addLicenses(
 			item.id,
-			checked.value.map((key) => ({ id: createId(ID_PREFIX.licence), key })),
+			checked.value.map((key) => ({ id: createId(ID_PREFIX.license), key })),
 		);
-		await service.log(ctx, 'product.licences_added', item.id, { label: item.name, detail: `${added} license key(s) added` });
-		return { added, available: await store.countLicences(item.id) };
+		await service.log(ctx, 'product.licenses_added', item.id, { label: item.name, detail: `${added} license key(s) added` });
+		return { added, available: await store.countLicenses(item.id) };
 	};
 
 	/** A signed upload of a file for a product (`{ name, type, size }`); the file is listed on the product. @param {any} ctx */
@@ -137,22 +137,22 @@ export const createDigital = (product, service) => {
 	};
 
 	/**
-	 * POST /v1/products/:id/licences/remove `{ keys }`: the keys no order was given go; a key given to an order stays
+	 * POST /v1/products/:id/licenses/remove `{ keys }`: the keys no order was given go; a key given to an order stays
 	 * with it (counted as `given`).
 	 * @param {any} ctx
 	 */
-	const removeLicences = async (ctx) => {
+	const removeLicenses = async (ctx) => {
 		const s = await service.site(ctx);
-		const checked = checkLicenceKeys(ctx.body?.keys);
+		const checked = checkLicenseKeys(ctx.body?.keys);
 		if (!checked.ok) throw service.invalid('keys', checked.message);
-		const item = await digitalProduct(s, String(ctx.params.id), 'licenceKeys');
+		const item = await digitalProduct(s, String(ctx.params.id), 'licenseKeys');
 		const store = createOrdersStore(await s.data());
-		const { removed, given } = await store.removeLicences(item.id, checked.value);
-		await service.log(ctx, 'product.licences_removed', item.id, {
+		const { removed, given } = await store.removeLicenses(item.id, checked.value);
+		await service.log(ctx, 'product.licenses_removed', item.id, {
 			label: item.name,
 			detail: `${removed} license key(s) removed`,
 		});
-		return { removed, given, available: await store.countLicences(item.id) };
+		return { removed, given, available: await store.countLicenses(item.id) };
 	};
 
 	/**
@@ -160,20 +160,20 @@ export const createDigital = (product, service) => {
 	 * @param {Site} s
 	 * @param {OrderRecord} order
 	 */
-	const giveLicences = async (s, order) => {
-		const lines = order.lines.filter((line) => line.kind === 'digital' && line.licences.length < line.quantity);
+	const giveLicenses = async (s, order) => {
+		const lines = order.lines.filter((line) => line.kind === 'digital' && line.licenses.length < line.quantity);
 		if (lines.length === 0) return;
 		const store = createOrdersStore(await s.data());
 		const products = await store.products(lines.map((line) => line.productId));
 		for (const line of lines) {
-			if (!products.get(line.productId)?.digital?.licenceKeys) continue;
-			const ids = await store.assignLicences({
+			if (!products.get(line.productId)?.digital?.licenseKeys) continue;
+			const ids = await store.assignLicenses({
 				productId: line.productId,
 				orderId: order.id,
 				lineId: line.id,
-				count: line.quantity - line.licences.length,
+				count: line.quantity - line.licenses.length,
 			});
-			await store.addLineLicences(order.id, line.id, ids);
+			await store.addLineLicenses(order.id, line.id, ids);
 		}
 	};
 
@@ -182,16 +182,16 @@ export const createDigital = (product, service) => {
 	 * @param {Site} s
 	 * @param {OrderRecord} order
 	 * @returns {Promise<Map<string, { files: Array<{ file: string, name: string, type: string, size: number }>,
-	 *   downloadsLeft: number | null, licenceKeys: string[] }>>}
+	 *   downloadsLeft: number | null, licenseKeys: string[] }>>}
 	 */
 	const linesOf = async (s, order) => {
-		/** @type {Map<string, { files: Array<{ file: string, name: string, type: string, size: number }>, downloadsLeft: number | null, licenceKeys: string[] }>} */
+		/** @type {Map<string, { files: Array<{ file: string, name: string, type: string, size: number }>, downloadsLeft: number | null, licenseKeys: string[] }>} */
 		const out = new Map();
 		const lines = order.lines.filter((line) => line.kind === 'digital');
 		if (lines.length === 0 || !['paid', 'partially_refunded'].includes(order.payment.state)) return out;
 		const store = createOrdersStore(await s.data());
 		const products = await store.products(lines.map((line) => line.productId));
-		const keys = await store.licenceKeys(lines.flatMap((line) => line.licences));
+		const keys = await store.licenseKeys(lines.flatMap((line) => line.licenses));
 		const { downloadLimit } = await s.values('digital_goods');
 		for (const line of lines) {
 			const item = products.get(line.productId);
@@ -205,7 +205,7 @@ export const createDigital = (product, service) => {
 					size: file.size,
 				})),
 				downloadsLeft: limit > 0 ? Math.max(0, limit - used) : null,
-				licenceKeys: line.licences.map((id) => keys.get(id)).filter((key) => key !== undefined),
+				licenseKeys: line.licenses.map((id) => keys.get(id)).filter((key) => key !== undefined),
 			});
 		}
 		return out;
@@ -249,7 +249,7 @@ export const createDigital = (product, service) => {
 		return { url: signed.url, expiresAt: signed.expiresAt };
 	};
 
-	return Object.freeze({ addLicences, removeLicences, addFile, removeFile, giveLicences, linesOf, download });
+	return Object.freeze({ addLicenses, removeLicenses, addFile, removeFile, giveLicenses, linesOf, download });
 };
 
 /** @typedef {ReturnType<typeof createDigital>} Digital */

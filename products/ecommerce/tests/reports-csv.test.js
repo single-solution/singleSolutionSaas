@@ -73,7 +73,7 @@ const seedOrder = async (input) => {
 				locationId: null,
 				serials: [],
 				booking: null,
-				licences: [],
+				licenses: [],
 				returnedQuantity: 0,
 			},
 		],
@@ -160,8 +160,8 @@ beforeAll(async () => {
 	await seedOrder({
 		number: 'R-C',
 		placedAt: '2026-10-03T10:00:00Z',
-		status: 'cancelled',
-		role: 'cancelled',
+		status: 'canceled',
+		role: 'canceled',
 		productId: sold.id,
 		quantity: 5,
 		subtotal: 5000,
@@ -211,8 +211,8 @@ describe('reports', () => {
 		]);
 
 		// statuses decide which orders count as revenue
-		const chosen = await shop.api('GET', `/v1/reports/summary?${RANGE}&statuses=delivered,cancelled`);
-		expect(chosen.json).toMatchObject({ statuses: ['delivered', 'cancelled'], orders: 2, total: 6500, units: 7 });
+		const chosen = await shop.api('GET', `/v1/reports/summary?${RANGE}&statuses=delivered,canceled`);
+		expect(chosen.json).toMatchObject({ statuses: ['delivered', 'canceled'], orders: 2, total: 6500, units: 7 });
 		expect(chosen.json.periods).toEqual([
 			{ period: '2026-10-03', orders: 1, total: 5000 },
 			{ period: '2026-10-04', orders: 0, total: 0 },
@@ -221,7 +221,7 @@ describe('reports', () => {
 		expect((await shop.api('GET', `/v1/reports/summary?${RANGE}&statuses=nothing_like_it`)).status).toBe(422);
 		// by ISO week and by month (E12)
 		expect(
-			(await shop.api('GET', `/v1/reports/summary?${RANGE}&series=week&statuses=delivered,cancelled`)).json.periods,
+			(await shop.api('GET', `/v1/reports/summary?${RANGE}&series=week&statuses=delivered,canceled`)).json.periods,
 		).toEqual([
 			{ period: '2026-W40', orders: 1, total: 5000 },
 			{ period: '2026-W41', orders: 1, total: 1500 },
@@ -341,7 +341,7 @@ describe('reports', () => {
 		expect(await rowsBy('day')).toEqual([['2026-10-05', '2026-10-05', 3, 2200]]);
 		expect(await rowsBy('week')).toEqual([['2026-W41', '2026-W41', 3, 2200]]);
 		expect(await rowsBy('month')).toEqual([['2026-10', '2026-10', 3, 2200]]);
-		expect((await shop.api('GET', `/v1/reports/sales?by=colour&${RANGE}`)).status).toBe(422);
+		expect((await shop.api('GET', `/v1/reports/sales?by=color&${RANGE}`)).status).toBe(422);
 		expect((await shop.api('GET', `/v1/reports/sales?by=field:att_none&${RANGE}`)).status).toBe(422);
 		// the groupings the widget offers, read from the server
 		const staff = await shop.ticket(['reports.read']);
@@ -438,14 +438,14 @@ describe('CSV', () => {
 			'number,placed_at,status,customer,city,region,country,lines,units,subtotal,discount,delivery,fee,tax,total,currency,payment_method,payment_state,paid,refunded,tags',
 			'R-B,2026-10-05T05:00:00.000Z,confirmed,Bea,Tokyo,,,1,1,11.00,1.00,0.00,0.00,0.00,10.00,USD,bank_transfer,partially_refunded,10.00,3.00,',
 		]);
-		expect(linesOf(await shop.api('GET', '/v1/csv/orders?per=order&role=cancelled')).slice(1)).toEqual([
-			'R-C,2026-10-03T10:00:00.000Z,cancelled,Ann,Tokyo,,,1,5,50.00,0.00,0.00,0.00,0.00,50.00,USD,cod,unpaid,0.00,0.00,',
+		expect(linesOf(await shop.api('GET', '/v1/csv/orders?per=order&role=canceled')).slice(1)).toEqual([
+			'R-C,2026-10-03T10:00:00.000Z,canceled,Ann,Tokyo,,,1,5,50.00,0.00,0.00,0.00,0.00,50.00,USD,cod,unpaid,0.00,0.00,',
 		]);
 		const searched = linesOf(await shop.api('GET', '/v1/csv/orders?q=R-A'));
 		expect(searched[0]?.startsWith('number,placed_at,status,customer,city,region,country,product,')).toBe(true);
 		expect(searched.slice(1).map((line) => line.split(',')[0])).toEqual(['R-A']);
 		expect((await shop.api('GET', '/v1/csv/orders?per=week')).status).toBe(422);
-		expect((await shop.api('GET', '/v1/csv/orders?paymentMethod=Cheque!')).status).toBe(422);
+		expect((await shop.api('GET', '/v1/csv/orders?paymentMethod=Check!')).status).toBe(422);
 		const staff = await shop.ticket(['csv.run']);
 		const twin = await shop.admin(staff, 'GET', '/v1/admin/csv/orders?per=order&status=delivered');
 		expect(

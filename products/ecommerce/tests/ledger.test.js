@@ -75,7 +75,7 @@ const orderOf = (lines, promotions = {}, key = createId('key')) =>
 			locationId: null,
 			serials: [],
 			booking: null,
-			licences: [],
+			licenses: [],
 			returnedQuantity: 0,
 		})),
 		totals: { subtotal: 1000, discount: 0, delivery: 0, tax: 0, total: 1000, currency: 'USD', taxIncluded: true },
@@ -232,8 +232,8 @@ describe('placing an order', () => {
 		const stored = /** @type {any} */ (
 			await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id: placed.order.id })
 		);
-		expect(await transition(stored, 'cancelled')).toBe(true);
-		expect(await transition(stored, 'cancelled')).toBe(false);
+		expect(await transition(stored, 'canceled')).toBe(true);
+		expect(await transition(stored, 'canceled')).toBe(false);
 		expect((await stockOf(product.id)).stock).toBe(3);
 		expect(
 			/** @type {any} */ (await data.collection(COLLECTIONS.coupons).findOne({ websiteId: data.websiteId, id: couponId }))
@@ -265,7 +265,7 @@ describe('placing an order', () => {
 		expect(first.ok && second.ok).toBe(true);
 		// the first is canceled: its use goes back, the second's stays (uses 2 of the customer: numbers 1 and 2 → 2)
 		const stored = await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id: first.order.id });
-		expect(await transition(stored, 'cancelled')).toBe(true);
+		expect(await transition(stored, 'canceled')).toBe(true);
 		// a third order with the same coupon is placed (it used to take number 2 again and be refused)
 		const third = await place();
 		expect(third).toMatchObject({ ok: true });

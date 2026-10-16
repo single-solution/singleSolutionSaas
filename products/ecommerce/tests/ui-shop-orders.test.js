@@ -65,7 +65,7 @@ const detail = (over = {}) => ({
 			booking: null,
 			downloads: [],
 			downloadsLeft: null,
-			licenceKeys: [],
+			licenseKeys: [],
 		},
 		{
 			id: 'oln_2',
@@ -84,7 +84,7 @@ const detail = (over = {}) => ({
 			booking: { start: '2026-10-09T05:00:00.000Z', end: '2026-10-09T05:30:00.000Z' },
 			downloads: [{ file: 'book.pdf', name: 'The book', type: 'application/pdf', size: 10 }],
 			downloadsLeft: 2,
-			licenceKeys: ['KEY-1'],
+			licenseKeys: ['KEY-1'],
 		},
 	],
 	totals: { subtotal: 201000, discount: 1000, delivery: 20000, tax: 500, total: 220000, currency: 'GBP', taxIncluded: false },
@@ -358,7 +358,7 @@ describe('my orders', () => {
 		await click(buttonOf(host, text('orders.cancel')));
 		await click(buttonOf(host, text('orders.cancelYes')));
 		expect(textOf(host)).toContain(text('orders.problem.move_not_allowed'));
-		cancel = ok({ order: detail({ statusLabel: 'Canceled', role: 'cancelled', canCancel: false }) });
+		cancel = ok({ order: detail({ statusLabel: 'Canceled', role: 'canceled', canCancel: false }) });
 		await click(buttonOf(host, text('orders.cancel')));
 		await click(buttonOf(host, text('orders.cancelYes')));
 		expect(textOf(host)).toContain(text('orders.placed', { date: '', status: 'Canceled' }).split('·')[1]?.trim() ?? '');

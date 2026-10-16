@@ -37,7 +37,7 @@ const line = (quantity, over = {}) =>
 			gradeLabel: (/** @type {string} */ key) => key,
 			features: { digital: true, bookings: true, measured: true },
 			slots: () => false,
-			licences: new Map(),
+			licenses: new Map(),
 			slotOf: () => null,
 			booked: new Set(),
 			quantityOf: () => CASES,

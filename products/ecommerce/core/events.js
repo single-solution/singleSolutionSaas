@@ -13,7 +13,7 @@ export const EVENT_TYPES = Object.freeze(
 		'order.paid',
 		'order.payment_recorded',
 		'order.proof_uploaded',
-		'order.cancelled',
+		'order.canceled',
 		'order.refunded',
 		'return.requested',
 		'return.status_changed',

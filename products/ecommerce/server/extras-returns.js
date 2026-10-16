@@ -1095,7 +1095,7 @@ export const createReturns = (product, service) => {
 	const deleteUser = async (s, person) => {
 		const data = await s.data();
 		const users = await userIdsOf(data, person);
-		if (users.length === 0) return { deleted: 0, anonymised: 0 };
+		if (users.length === 0) return { deleted: 0, anonymized: 0 };
 		const rows = /** @type {StoredClaim[]} */ (
 			await claims(data)
 				.find({ websiteId: data.websiteId, userId: { $in: users } }, NO_ID)
@@ -1108,7 +1108,7 @@ export const createReturns = (product, service) => {
 			{ websiteId: data.websiteId, userId: { $in: users } },
 			{ $set: { userId: '', reason: '', photos: [] } },
 		);
-		return { deleted: 0, anonymised: result.modifiedCount };
+		return { deleted: 0, anonymized: result.modifiedCount };
 	};
 
 	const routes = [

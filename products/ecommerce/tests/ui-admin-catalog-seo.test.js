@@ -42,7 +42,7 @@ beforeEach(resetPage);
 afterEach(resetPage);
 
 /** A control by its accessible label. @param {ParentNode} scope @param {string} label @returns {any} */
-const labelled = (scope, label) => {
+const labeled = (scope, label) => {
 	const found = scope.querySelector(`[aria-label="${label}"]`);
 	if (!found) throw new Error(`no control ${label}`);
 	return found;
@@ -71,17 +71,17 @@ describe('catalog admin: size charts', () => {
 		await click(buttonIn(detailOf(panel), 'Edit'));
 		const dialog = dialogOf(root);
 		expect(fieldIn(dialog, 'Column 1').value).toBe('Chest');
-		expect(labelled(dialog, 'Row 1, Waist').value).toBe('30');
+		expect(labeled(dialog, 'Row 1, Waist').value).toBe('30');
 		await click(buttonIn(dialog, 'Add a column'));
 		const hip = fieldIn(dialog, 'Column 3');
 		hip.value = 'Hip';
 		hip.dispatchEvent(new window.Event('change', { bubbles: true }));
-		type(labelled(dialog, 'Row 1, Hip'), '38');
-		await click(labelled(dialog, 'Remove column 2'));
+		type(labeled(dialog, 'Row 1, Hip'), '38');
+		await click(labeled(dialog, 'Remove column 2'));
 		await click(buttonIn(dialog, 'Add a size'));
-		type(labelled(dialog, 'Size of row 3'), 'L');
+		type(labeled(dialog, 'Size of row 3'), 'L');
 		await click(buttonIn(dialog, 'Add a size'));
-		await click(labelled(dialog, 'Remove row 2'));
+		await click(labeled(dialog, 'Remove row 2'));
 		expect(fieldIn(dialog, 'Unit').getAttribute('list')).toBe('ss-chart-units');
 		await change(fieldIn(dialog, 'Unit'), 'cm');
 		await change(fieldIn(dialog, 'Shoppers can switch to'), 'in');

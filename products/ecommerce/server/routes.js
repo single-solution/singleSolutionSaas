@@ -32,7 +32,7 @@ import { WIDGET_SCRIPT } from './widget-script.js';
  * @typedef {object} Area
  * @property {import('@ss/app-kit').RouteDefinition[]} routes
  * @property {(s: Site, user: Person) => Promise<Record<string, unknown[]>>} [exportUser] the person's records (data rights)
- * @property {(s: Site, user: Person) => Promise<{ deleted: number, anonymised: number }>} [deleteUser] erase or anonymize them
+ * @property {(s: Site, user: Person) => Promise<{ deleted: number, anonymized: number }>} [deleteUser] erase or anonymize them
  * @property {(s: Site) => Promise<Record<string, unknown>>} [widgetSettings] settings the visitor widgets need (never secrets)
  */
 
@@ -63,12 +63,12 @@ export const createRoutes = (product) => {
 		},
 		deleteUser: async (ctx, user) => {
 			const s = await service.site(ctx);
-			const total = { deleted: 0, anonymised: 0 };
+			const total = { deleted: 0, anonymized: 0 };
 			for (const area of areas)
 				if (area.deleteUser) {
 					const done = await area.deleteUser(s, user);
 					total.deleted += done.deleted;
-					total.anonymised += done.anonymised;
+					total.anonymized += done.anonymized;
 				}
 			return total;
 		},

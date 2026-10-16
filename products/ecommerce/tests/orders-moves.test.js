@@ -73,7 +73,7 @@ const seed = async (patch = {}, numbered = false) => {
 				locationId: null,
 				serials: [],
 				booking: null,
-				licences: [],
+				licenses: [],
 				returnedQuantity: 0,
 			},
 		],
@@ -142,7 +142,7 @@ describe('changed meanwhile', () => {
 		for (const [patch, to] of /** @type {Array<[Partial<import('../core/model.js').OrderRecord>, string]>} */ ([
 			[{}, 'packed'],
 			[{}, 'delivered'],
-			[{}, 'cancelled'],
+			[{}, 'canceled'],
 			[{ status: 'dispatched', role: 'shipped' }, 'returned'],
 		])) {
 			const order = await stale(patch);

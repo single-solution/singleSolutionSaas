@@ -44,7 +44,7 @@ export const randomFlow = (random, { full = false, plain = false } = {}) => {
 					moves.push({ from: from.key, to: to.key });
 					continue;
 				}
-				const shopper = to.role === 'cancelled' && BEFORE_DISPATCH.includes(from.role) && random() < 0.5;
+				const shopper = to.role === 'canceled' && BEFORE_DISPATCH.includes(from.role) && random() < 0.5;
 				/** @type {Array<'staff' | 'shopper' | 'system'>} */
 				const who = shopper ? ['staff', 'shopper'] : ['staff'];
 				/** @type {Record<string, unknown>} */

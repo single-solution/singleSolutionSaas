@@ -15,7 +15,7 @@
  * methods a cart may use. Pure functions, no I/O.
  * @module
  */
-import { normalisePhone } from '@ss/contracts/phone';
+import { normalizePhone } from '@ss/contracts/phone';
 import { addressProblem, countryCodeOf, countryName, tidyPostcode } from '@ss/contracts/address';
 import { ADDRESS_LIMITS, placeKey, regionsFor } from './address.js';
 import { MAX_LINES, MAX_MEASURED, MAX_QUANTITY, grossFits, limitsOf, lineGross, piecesOf, quantityProblem } from './measure.js';
@@ -245,7 +245,7 @@ export const checkAddress = (body, rules) => {
 		out.region = named;
 	}
 	if (out.phone === '') return { ok: true, value: /** @type {Address} */ (/** @type {unknown} */ (out)) };
-	const phone = normalisePhone(out.phone, rules.phoneRules) ?? (PHONE.test(String(out.phone)) ? String(out.phone) : null);
+	const phone = normalizePhone(out.phone, rules.phoneRules) ?? (PHONE.test(String(out.phone)) ? String(out.phone) : null);
 	if (!phone)
 		return { ok: false, field: 'address/phone', message: 'address.phone is a phone number (digits, spaces, + ( ) -).' };
 	return { ok: true, value: /** @type {Address} */ (/** @type {unknown} */ ({ ...out, phone })) };
@@ -355,7 +355,7 @@ const problemOf = (code) => ({ code, message: PROBLEM_TEXT[code] ?? code });
  * @param {{ digital: boolean, bookings: boolean, measured?: boolean }} context.features `measured`: Sell in any unit is on
  * @param {(product: ProductRecord) => boolean} context.slots whether a service is booked in time slots (its item type's
  *   `slots`, dynamic model §1): one per slot, a slot needed
- * @param {Map<string, number>} context.licences available license keys by product id
+ * @param {Map<string, number>} context.licenses available license keys by product id
  * @param {(product: ProductRecord, start: number) => { start: number, end: number } | null} context.slotOf the slot
  *   starting then (inside the hours, the lead time and the days ahead), or null
  * @param {Set<string>} context.booked `<productId>|<start ms>` of booked slots
@@ -375,7 +375,7 @@ export const resolveLines = (
 		gradeLabel,
 		features,
 		slots,
-		licences,
+		licenses,
 		slotOf,
 		booked,
 		measureOf = () => null,
@@ -508,8 +508,8 @@ export const resolveLines = (
 		if (line.kind === 'physical' && product.trackStock) {
 			available = product.variants.find((variant) => variant.id === line.variantId)?.stock ?? 0;
 			wanted = out.filter((other) => other.priced && other.variantId === line.variantId).reduce((n, o) => n + o.quantity, 0);
-		} else if (line.kind === 'digital' && product.digital?.licenceKeys) {
-			available = licences.get(product.id) ?? 0;
+		} else if (line.kind === 'digital' && product.digital?.licenseKeys) {
+			available = licenses.get(product.id) ?? 0;
 			wanted = out.filter((other) => other.priced && other.productId === line.productId).reduce((n, o) => n + o.quantity, 0);
 		}
 		if (available === null) continue;

@@ -89,7 +89,7 @@ describe('categories, brands and attributes', () => {
 		expect(ram.status).toBe(201);
 		expect((await api('POST', '/v1/attributes', { name: 'Color', type: 'choice' })).status).toBe(422);
 		expect(
-			(await api('POST', '/v1/attributes', { name: 'Bad', type: 'colour', show: { filter: 'yes' } })).json.errors,
+			(await api('POST', '/v1/attributes', { name: 'Bad', type: 'color', show: { filter: 'yes' } })).json.errors,
 		).toHaveLength(2);
 		const color = await api('POST', '/v1/attributes', {
 			name: 'Color',
@@ -257,12 +257,12 @@ describe('products', () => {
 			name: 'E-book',
 			kind: 'digital',
 			price: 500,
-			digital: { licenceKeys: true, downloadLimit: 3 },
+			digital: { licenseKeys: true, downloadLimit: 3 },
 		});
 		expect(digital.json).toMatchObject({
 			trackStock: false,
 			inStock: true,
-			digital: { files: [], retired: [], licenceKeys: true, downloadLimit: 3 },
+			digital: { files: [], retired: [], licenseKeys: true, downloadLimit: 3 },
 			booking: null,
 		});
 		const booking = await api('POST', '/v1/products', {

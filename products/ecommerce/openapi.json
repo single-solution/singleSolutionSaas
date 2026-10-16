@@ -2579,7 +2579,7 @@
 								"packed",
 								"shipped",
 								"delivered",
-								"cancelled",
+								"canceled",
 								"returned_to_origin",
 								"refunded",
 								"returned"
@@ -5187,7 +5187,7 @@
 								"packed",
 								"shipped",
 								"delivered",
-								"cancelled",
+								"canceled",
 								"returned_to_origin",
 								"refunded",
 								"returned"
@@ -5634,7 +5634,7 @@
 								"packed",
 								"shipped",
 								"delivered",
-								"cancelled",
+								"canceled",
 								"returned_to_origin",
 								"refunded",
 								"returned"
@@ -5868,7 +5868,7 @@
 								"packed",
 								"shipped",
 								"delivered",
-								"cancelled",
+								"canceled",
 								"returned_to_origin",
 								"refunded",
 								"returned"
@@ -6212,7 +6212,7 @@
 												"packed",
 												"shipped",
 												"delivered",
-												"cancelled",
+												"canceled",
 												"returned_to_origin",
 												"refunded",
 												"returned"
@@ -7006,7 +7006,7 @@
 		"/v1/admin/orders/{id}/move": {
 			"post": {
 				"summary": "Move an order to another status of the flow (Orders admin widget)",
-				"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed, shipped and delivered take serial numbers (serials, grades_serials) for the lines whose item type numbers their units: picked from units in stock (unitCapture stock) when packing, or typed (unitCapture packing) with this move or later, and every unit of a line is needed by the step its type names (unitsRequiredBefore: packed, or shipped, which also covers delivered); any move takes attachments, and one into a status that a kind of your attachment_kinds list names in requiredAt needs that kind (E20); shipped needs a shipment (its tracking number unless the move's tracking is optional); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order staff move on (into an open, packed or delivered status) lets go of its open Payments payment: it is canceled at Payments first, so the shopper can no longer pay it (money that still arrives Payments flags to give back), and the order waits for a new one if it waits again; paid just before, the move is refused (409 move_not_allowed) and the payment recorded; 503 payments_unavailable when Payments cannot be reached. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund), and any move that gives money back (a cancel that refunds what was paid, before or after delivery) needs orders.refund too, whatever permission the move names; refused with 403 forbidden before anything is called. The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once. A move into a packed, shipped or delivered status needs the order fields required by that stage (requiredAt) first: 422 validation_failed at /fields/<id>.",
+				"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed, shipped and delivered take serial numbers (serials, grades_serials) for the lines whose item type numbers their units: picked from units in stock (unitCapture stock) when packing, or typed (unitCapture packing) with this move or later, and every unit of a line is needed by the step its type names (unitsRequiredBefore: packed, or shipped, which also covers delivered); any move takes attachments, and one into a status that a kind of your attachment_kinds list names in requiredAt needs that kind (E20); shipped needs a shipment (its tracking number unless the move's tracking is optional); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; canceled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order staff move on (into an open, packed or delivered status) lets go of its open Payments payment: it is canceled at Payments first, so the shopper can no longer pay it (money that still arrives Payments flags to give back), and the order waits for a new one if it waits again; paid just before, the move is refused (409 move_not_allowed) and the payment recorded; 503 payments_unavailable when Payments cannot be reached. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund), and any move that gives money back (a cancel that refunds what was paid, before or after delivery) needs orders.refund too, whatever permission the move names; refused with 403 forbidden before anything is called. The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once. A move into a packed, shipped or delivered status needs the order fields required by that stage (requiredAt) first: 422 validation_failed at /fields/<id>.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "orders.manage",
@@ -7736,7 +7736,7 @@
 			},
 			"post": {
 				"summary": "Create a product (Catalog admin widget)",
-				"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade, location or item type, several variants without Variants; values of a part its item type does not have, each at its path: /variants and /options (variants), /variants/<n>/grade (grades), /sizeChartId (chart), /variants/<n>/parcel (parcel), /returnTime, /warrantyTime and /variants/<n>/warrantyTime (warranty), /digital/downloadLimit (downloads), /digital/licenceKeys (licenceKeys), /booking (slots), /specs/<id> and /variants/<n>/attributes/<id> (a field the type does not name)); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
+				"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade, location or item type, several variants without Variants; values of a part its item type does not have, each at its path: /variants and /options (variants), /variants/<n>/grade (grades), /sizeChartId (chart), /variants/<n>/parcel (parcel), /returnTime, /warrantyTime and /variants/<n>/warrantyTime (warranty), /digital/downloadLimit (downloads), /digital/licenseKeys (licenseKeys), /booking (slots), /specs/<id> and /variants/<n>/attributes/<id> (a field the type does not name)); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -8246,7 +8246,7 @@
 									"digital": {
 										"type": "object",
 										"properties": {
-											"licenceKeys": {
+											"licenseKeys": {
 												"type": "boolean"
 											},
 											"downloadLimit": {
@@ -9716,7 +9716,7 @@
 									"digital": {
 										"type": "object",
 										"properties": {
-											"licenceKeys": {
+											"licenseKeys": {
 												"type": "boolean"
 											},
 											"downloadLimit": {
@@ -10187,7 +10187,7 @@
 				}
 			}
 		},
-		"/v1/admin/products/{id}/licences": {
+		"/v1/admin/products/{id}/licenses": {
 			"post": {
 				"summary": "Add license keys to a digital product (Catalog admin widget)",
 				"description": "Keys are trimmed; repeats and keys the product already has are skipped. When an order is paid each unit of a digital line gets one key (each key is given once). 422 validation_failed at /keys or /id (not a digital product, or its item type has no license keys); 404 not_found. The ticket needs catalog.edit.",
@@ -10240,7 +10240,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/LicenceKeysAdded"
+									"$ref": "#/components/schemas/LicenseKeysAdded"
 								}
 							}
 						}
@@ -10258,7 +10258,7 @@
 				}
 			}
 		},
-		"/v1/admin/products/{id}/licences/remove": {
+		"/v1/admin/products/{id}/licenses/remove": {
 			"post": {
 				"summary": "Remove license keys from a digital product (Catalog admin widget)",
 				"description": "Keys are trimmed. Keys no order was given are removed; a key already given to an order stays with that order (counted in given), and keys the product does not have are skipped. 422 validation_failed at /keys or /id (not a digital product, or its item type has no license keys); 404 not_found. The ticket needs catalog.edit.",
@@ -10311,7 +10311,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/LicenceKeysRemoved"
+									"$ref": "#/components/schemas/LicenseKeysRemoved"
 								}
 							}
 						}
@@ -17335,7 +17335,7 @@
 								"packed",
 								"shipped",
 								"delivered",
-								"cancelled",
+								"canceled",
 								"returned_to_origin",
 								"refunded",
 								"returned"
@@ -19165,7 +19165,7 @@
 									"type": "object",
 									"required": [
 										"deleted",
-										"anonymised"
+										"anonymized"
 									],
 									"additionalProperties": false,
 									"properties": {
@@ -19173,7 +19173,7 @@
 											"type": "integer",
 											"minimum": 0
 										},
-										"anonymised": {
+										"anonymized": {
 											"type": "integer",
 											"minimum": 0,
 											"description": "Records kept without the person's details."
@@ -21875,7 +21875,7 @@
 								"packed",
 								"shipped",
 								"delivered",
-								"cancelled",
+								"canceled",
 								"returned_to_origin",
 								"refunded",
 								"returned"
@@ -22344,7 +22344,7 @@
 								"packed",
 								"shipped",
 								"delivered",
-								"cancelled",
+								"canceled",
 								"returned_to_origin",
 								"refunded",
 								"returned"
@@ -22702,7 +22702,7 @@
 								"packed",
 								"shipped",
 								"delivered",
-								"cancelled",
+								"canceled",
 								"returned_to_origin",
 								"refunded",
 								"returned"
@@ -23091,7 +23091,7 @@
 												"packed",
 												"shipped",
 												"delivered",
-												"cancelled",
+												"canceled",
 												"returned_to_origin",
 												"refunded",
 												"returned"
@@ -23977,7 +23977,7 @@
 		"/v1/orders/{id}/move": {
 			"post": {
 				"summary": "Move an order to another status of the flow",
-				"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed, shipped and delivered take serial numbers (serials, grades_serials) for the lines whose item type numbers their units: picked from units in stock (unitCapture stock) when packing, or typed (unitCapture packing) with this move or later, and every unit of a line is needed by the step its type names (unitsRequiredBefore: packed, or shipped, which also covers delivered); any move takes attachments, and one into a status that a kind of your attachment_kinds list names in requiredAt needs that kind (E20); shipped needs a shipment (its tracking number unless the move's tracking is optional); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order staff move on (into an open, packed or delivered status) lets go of its open Payments payment: it is canceled at Payments first, so the shopper can no longer pay it (money that still arrives Payments flags to give back), and the order waits for a new one if it waits again; paid just before, the move is refused (409 move_not_allowed) and the payment recorded; 503 payments_unavailable when Payments cannot be reached. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund), and any move that gives money back (a cancel that refunds what was paid, before or after delivery) needs orders.refund too, whatever permission the move names; refused with 403 forbidden before anything is called. The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once. A move into a packed, shipped or delivered status needs the order fields required by that stage (requiredAt) first: 422 validation_failed at /fields/<id>.",
+				"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed, shipped and delivered take serial numbers (serials, grades_serials) for the lines whose item type numbers their units: picked from units in stock (unitCapture stock) when packing, or typed (unitCapture packing) with this move or later, and every unit of a line is needed by the step its type names (unitsRequiredBefore: packed, or shipped, which also covers delivered); any move takes attachments, and one into a status that a kind of your attachment_kinds list names in requiredAt needs that kind (E20); shipped needs a shipment (its tracking number unless the move's tracking is optional); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; canceled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order staff move on (into an open, packed or delivered status) lets go of its open Payments payment: it is canceled at Payments first, so the shopper can no longer pay it (money that still arrives Payments flags to give back), and the order waits for a new one if it waits again; paid just before, the move is refused (409 move_not_allowed) and the payment recorded; 503 payments_unavailable when Payments cannot be reached. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund), and any move that gives money back (a cancel that refunds what was paid, before or after delivery) needs orders.refund too, whatever permission the move names; refused with 403 forbidden before anything is called. The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once. A move into a packed, shipped or delivered status needs the order fields required by that stage (requiredAt) first: 422 validation_failed at /fields/<id>.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -24898,7 +24898,7 @@
 			},
 			"post": {
 				"summary": "Create a product",
-				"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade, location or item type, several variants without Variants; values of a part its item type does not have, each at its path: /variants and /options (variants), /variants/<n>/grade (grades), /sizeChartId (chart), /variants/<n>/parcel (parcel), /returnTime, /warrantyTime and /variants/<n>/warrantyTime (warranty), /digital/downloadLimit (downloads), /digital/licenceKeys (licenceKeys), /booking (slots), /specs/<id> and /variants/<n>/attributes/<id> (a field the type does not name)); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
+				"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade, location or item type, several variants without Variants; values of a part its item type does not have, each at its path: /variants and /options (variants), /variants/<n>/grade (grades), /sizeChartId (chart), /variants/<n>/parcel (parcel), /returnTime, /warrantyTime and /variants/<n>/warrantyTime (warranty), /digital/downloadLimit (downloads), /digital/licenseKeys (licenseKeys), /booking (slots), /specs/<id> and /variants/<n>/attributes/<id> (a field the type does not name)); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -25419,7 +25419,7 @@
 									"digital": {
 										"type": "object",
 										"properties": {
-											"licenceKeys": {
+											"licenseKeys": {
 												"type": "boolean"
 											},
 											"downloadLimit": {
@@ -26968,7 +26968,7 @@
 									"digital": {
 										"type": "object",
 										"properties": {
-											"licenceKeys": {
+											"licenseKeys": {
 												"type": "boolean"
 											},
 											"downloadLimit": {
@@ -27472,7 +27472,7 @@
 				}
 			}
 		},
-		"/v1/products/{id}/licences": {
+		"/v1/products/{id}/licenses": {
 			"post": {
 				"summary": "Add license keys to a digital product",
 				"description": "Keys are trimmed; repeats and keys the product already has are skipped. When an order is paid each unit of a digital line gets one key (each key is given once). 422 validation_failed at /keys or /id (not a digital product, or its item type has no license keys); 404 not_found.",
@@ -27536,7 +27536,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/LicenceKeysAdded"
+									"$ref": "#/components/schemas/LicenseKeysAdded"
 								}
 							}
 						}
@@ -27554,7 +27554,7 @@
 				}
 			}
 		},
-		"/v1/products/{id}/licences/remove": {
+		"/v1/products/{id}/licenses/remove": {
 			"post": {
 				"summary": "Remove license keys from a digital product",
 				"description": "Keys are trimmed. Keys no order was given are removed; a key already given to an order stays with that order (counted in given), and keys the product does not have are skipped. 422 validation_failed at /keys or /id (not a digital product, or its item type has no license keys); 404 not_found.",
@@ -27618,7 +27618,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/LicenceKeysRemoved"
+									"$ref": "#/components/schemas/LicenseKeysRemoved"
 								}
 							}
 						}
@@ -44963,7 +44963,7 @@
 					}
 				}
 			},
-			"LicenceKeysAdded": {
+			"LicenseKeysAdded": {
 				"type": "object",
 				"description": "License keys added.",
 				"required": [
@@ -44982,7 +44982,7 @@
 					}
 				}
 			},
-			"LicenceKeysRemoved": {
+			"LicenseKeysRemoved": {
 				"type": "object",
 				"description": "License keys removed.",
 				"required": [
@@ -45678,7 +45678,7 @@
 							"packed",
 							"shipped",
 							"delivered",
-							"cancelled",
+							"canceled",
 							"returned_to_origin",
 							"refunded",
 							"returned"
@@ -46215,7 +46215,7 @@
 							"ecommerce.order.paid",
 							"ecommerce.order.payment_recorded",
 							"ecommerce.order.proof_uploaded",
-							"ecommerce.order.cancelled",
+							"ecommerce.order.canceled",
 							"ecommerce.order.refunded",
 							"ecommerce.return.requested",
 							"ecommerce.return.status_changed",
@@ -46225,7 +46225,7 @@
 							"ecommerce.stock.out",
 							"ecommerce.settings.changed"
 						],
-						"description": "data by type: order.placed OrderEventOrder, order.status_changed OrderEventStatusChanged, order.paid OrderEventPaid, order.payment_recorded OrderEventPaymentRecorded, order.proof_uploaded OrderEventProofUploaded, order.cancelled OrderEventCancelled, order.refunded OrderEventRefunded, return.requested OrderEventReturnRequested, return.status_changed OrderEventReturnStatusChanged, review.submitted OrderEventReviewSubmitted, catalog.changed OrderEventCatalogChanged, stock.low and stock.out OrderEventStock, settings.changed OrderEventSettingsChanged."
+						"description": "data by type: order.placed OrderEventOrder, order.status_changed OrderEventStatusChanged, order.paid OrderEventPaid, order.payment_recorded OrderEventPaymentRecorded, order.proof_uploaded OrderEventProofUploaded, order.canceled OrderEventCanceled, order.refunded OrderEventRefunded, return.requested OrderEventReturnRequested, return.status_changed OrderEventReturnStatusChanged, review.submitted OrderEventReviewSubmitted, catalog.changed OrderEventCatalogChanged, stock.low and stock.out OrderEventStock, settings.changed OrderEventSettingsChanged."
 					},
 					"at": {
 						"type": "string",
@@ -46240,7 +46240,7 @@
 								"$ref": "#/components/schemas/OrderEventStatusChanged"
 							},
 							{
-								"$ref": "#/components/schemas/OrderEventCancelled"
+								"$ref": "#/components/schemas/OrderEventCanceled"
 							},
 							{
 								"$ref": "#/components/schemas/OrderEventPaid"
@@ -46286,9 +46286,9 @@
 					}
 				}
 			},
-			"OrderEventCancelled": {
+			"OrderEventCanceled": {
 				"type": "object",
-				"description": "ecommerce.order.cancelled (also an ecommerce.order.status_changed).",
+				"description": "ecommerce.order.canceled (also an ecommerce.order.status_changed).",
 				"required": [
 					"orderId",
 					"number",
@@ -47095,7 +47095,7 @@
 					"locationId",
 					"serials",
 					"booking",
-					"licences",
+					"licenses",
 					"returnedQuantity"
 				],
 				"additionalProperties": false,
@@ -47241,7 +47241,7 @@
 						],
 						"description": "The booked slot (bookings)."
 					},
-					"licences": {
+					"licenses": {
 						"type": "array",
 						"items": {
 							"type": "string"
@@ -47471,7 +47471,7 @@
 							"packed",
 							"shipped",
 							"delivered",
-							"cancelled",
+							"canceled",
 							"returned_to_origin",
 							"refunded",
 							"returned"
@@ -47658,7 +47658,7 @@
 			},
 			"OrderMoveOptions": {
 				"type": "object",
-				"description": "The options of a move of the order flow, those its stage takes (lists/order_flow): paidOnConfirm (out of waiting into open, packed or shipped: the payment methods whose balance a staff move records as paid), window (into awaiting payment: restart the time to pay, or none), tracking (into shipped: required or optional), refund (into cancelled: auto refunds what Payments took when staff cancel, staff leaves it due), shopperPaid (into cancelled when the shopper may cancel: refuse a paid order, flag it as due to refund, or refund it through Payments), unpaid (into refunded before dispatch: an order with nothing paid is canceled with no money, the default, or refused), restock (into returned_to_origin and returned: yes, no or ask; into cancelled or refunded after delivery: no, yes or ask) and points (into returned, and into cancelled or refunded after delivery: take_back or keep the earned points; redeemed points always come back).",
+				"description": "The options of a move of the order flow, those its stage takes (lists/order_flow): paidOnConfirm (out of waiting into open, packed or shipped: the payment methods whose balance a staff move records as paid), window (into awaiting payment: restart the time to pay, or none), tracking (into shipped: required or optional), refund (into canceled: auto refunds what Payments took when staff cancel, staff leaves it due), shopperPaid (into canceled when the shopper may cancel: refuse a paid order, flag it as due to refund, or refund it through Payments), unpaid (into refunded before dispatch: an order with nothing paid is canceled with no money, the default, or refused), restock (into returned_to_origin and returned: yes, no or ask; into canceled or refunded after delivery: no, yes or ask) and points (into returned, and into canceled or refunded after delivery: take_back or keep the earned points; redeemed points always come back).",
 				"additionalProperties": false,
 				"properties": {
 					"paidOnConfirm": {
@@ -47758,7 +47758,7 @@
 							"packed",
 							"shipped",
 							"delivered",
-							"cancelled",
+							"canceled",
 							"returned_to_origin",
 							"refunded",
 							"returned"
@@ -48512,7 +48512,7 @@
 							"packed",
 							"shipped",
 							"delivered",
-							"cancelled",
+							"canceled",
 							"returned_to_origin",
 							"refunded",
 							"returned"
@@ -49045,7 +49045,7 @@
 								"required": [
 									"files",
 									"retired",
-									"licenceKeys",
+									"licenseKeys",
 									"downloadLimit"
 								],
 								"additionalProperties": false,
@@ -49167,7 +49167,7 @@
 										},
 										"description": "Files removed while orders had the product: still downloadable for the orders placed before removedAt, never for later ones."
 									},
-									"licenceKeys": {
+									"licenseKeys": {
 										"type": "boolean"
 									},
 									"downloadLimit": {
@@ -54011,7 +54011,7 @@
 							"packed",
 							"shipped",
 							"delivered",
-							"cancelled",
+							"canceled",
 							"returned_to_origin",
 							"refunded",
 							"returned"
@@ -54585,7 +54585,7 @@
 					"booking",
 					"downloads",
 					"downloadsLeft",
-					"licenceKeys",
+					"licenseKeys",
 					"canReview"
 				],
 				"additionalProperties": false,
@@ -54719,7 +54719,7 @@
 						],
 						"description": "null: no limit (or not a paid digital line)."
 					},
-					"licenceKeys": {
+					"licenseKeys": {
 						"type": "array",
 						"items": {
 							"type": "string"

@@ -120,7 +120,7 @@ const packedOrder = async ({ method = 'cod', name = 'Sara "Quotes" Shopper', wei
 						locationId: null,
 						serials: [],
 						booking: null,
-						licences: [],
+						licenses: [],
 						returnedQuantity: 0,
 					},
 				],

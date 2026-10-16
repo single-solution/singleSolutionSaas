@@ -7,7 +7,7 @@ import { checkBookingSchedules, defaultSchedules, scheduleOf, instantOf, slotAt,
 import { checkAddress, checkCart, checkOrderExtras, priceLines, promotionDiscounts, resolveLines } from '../core/checkout.js';
 import { ADDRESS_LIMITS, checkAddressRegions, countryKey, placeKey, postcodeKey, regionsFor } from '../core/address.js';
 import { checkZones, defaultZones, homeRate, matchZone, rateFee, rateFits, zoneCities } from '../core/delivery.js';
-import { canDownload, checkLicenceKeys, downloadLimitOf, fileKey, fileNameOf, safeFileName } from '../core/digital.js';
+import { canDownload, checkLicenseKeys, downloadLimitOf, fileKey, fileNameOf, safeFileName } from '../core/digital.js';
 import { MAX_AMOUNT, zonedParts } from '@ss/contracts/format';
 import { checkTaxRules, taxOf, taxPercent } from '../core/taxes.js';
 
@@ -51,7 +51,7 @@ const context = (products, over = {}) => ({
 	features: { digital: true, bookings: true },
 	// services are booked in time slots unless a test says otherwise (their item type's `slots`)
 	slots: (/** @type {any} */ product) => product.kind === 'service',
-	licences: new Map(),
+	licenses: new Map(),
 	slotOf: () => null,
 	booked: new Set(),
 	...over,
@@ -118,7 +118,7 @@ describe('cart checks', () => {
 		[{ lines: [{ productId: 'p' }], delivery: { method: 'drone' } }, 'delivery/method'],
 		[{ lines: [{ productId: 'p' }], delivery: { city: 'x'.repeat(101) } }, 'delivery/city'],
 		[{ lines: [{ productId: 'p' }], delivery: { locationId: 'a b' } }, 'delivery/locationId'],
-		[{ lines: [{ productId: 'p' }], payment: 'Cheque!' }, 'payment'],
+		[{ lines: [{ productId: 'p' }], payment: 'Check!' }, 'payment'],
 	])('refuses %j', (body, field) => {
 		const checked = checkCart(body);
 		expect(checked.ok).toBe(false);
@@ -345,7 +345,7 @@ describe('lines', () => {
 			id: 'prd_dig',
 			kind: 'digital',
 			trackStock: false,
-			digital: { files: [], retired: [], licenceKeys: true, downloadLimit: 0 },
+			digital: { files: [], retired: [], licenseKeys: true, downloadLimit: 0 },
 		});
 		const start = Date.parse('2026-10-06T10:00:00Z');
 		const lines = resolveLines(
@@ -357,7 +357,7 @@ describe('lines', () => {
 				{ productId: 'prd_dig', variantId: null, quantity: 3, slot: null },
 			],
 			context([booking, digital], {
-				licences: new Map([['prd_dig', 2]]),
+				licenses: new Map([['prd_dig', 2]]),
 				slotOf: (_product, at) => (at % 3_600_000 === 0 ? { start: at, end: at + 3_600_000 } : null),
 				booked: new Set([`prd_book|${start + 3_600_000}`]),
 			}),
@@ -524,7 +524,7 @@ describe('delivery zones', () => {
 			match: { cities: ['Springfield', ' springfield '] },
 			rates: rate(300, { freeOver: 5000, minDays: 1, maxDays: 2 }),
 		},
-		{ key: 'centre', name: 'Centre', match: { cities: ['Springfield'], areas: ['Downtown'] }, rates: rate(100) },
+		{ key: 'center', name: 'Center', match: { cities: ['Springfield'], areas: ['Downtown'] }, rates: rate(100) },
 	];
 
 	it('checks and matches the most specific zone', () => {
@@ -538,7 +538,7 @@ describe('delivery zones', () => {
 			areas: [],
 			postcodes: [],
 		});
-		expect(matchZone(checked.value, placeAt({ city: 'SPRINGFIELD', area: 'downtown' }))?.key).toBe('centre');
+		expect(matchZone(checked.value, placeAt({ city: 'SPRINGFIELD', area: 'downtown' }))?.key).toBe('center');
 		expect(matchZone(checked.value, placeAt({ city: 'Springfield' }))?.key).toBe('city');
 		expect(matchZone(checked.value, placeAt({ city: 'Shelbyville' }))?.key).toBe('everywhere');
 		expect(matchZone(checked.value.slice(1), placeAt())).toBeNull();
@@ -915,9 +915,9 @@ describe('digital goods', () => {
 		expect(safeFileName(5)).toBeNull();
 		expect(fileKey('prd_1', 'a.pdf')).toBe('ecommerce/digital/prd_1/a.pdf');
 		expect(fileNameOf('ecommerce/digital/prd_1/a.pdf')).toBe('a.pdf');
-		expect(checkLicenceKeys([' A ', 'A', 'B'])).toEqual({ ok: true, value: ['A', 'B'] });
-		expect(checkLicenceKeys([])).toMatchObject({ ok: false });
-		expect(checkLicenceKeys([''])).toMatchObject({ ok: false });
+		expect(checkLicenseKeys([' A ', 'A', 'B'])).toEqual({ ok: true, value: ['A', 'B'] });
+		expect(checkLicenseKeys([])).toMatchObject({ ok: false });
+		expect(checkLicenseKeys([''])).toMatchObject({ ok: false });
 	});
 
 	it('limits downloads', () => {

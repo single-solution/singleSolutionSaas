@@ -1,5 +1,5 @@
 /**
- * Digital goods (PLAN 0.8.8: download/licence after payment). A digital product keeps its files in the merchant's own
+ * Digital goods (PLAN 0.8.8: download/license after payment). A digital product keeps its files in the merchant's own
  * storage (`ecommerce/digital/<productId>/<name>`) and may have license keys (one per unit sold, given when the order
  * is paid). Downloads are short-lived signed links (5 minutes), counted per order line up to the product's download
  * limit (else the `digital_goods` setting `downloadLimit`; 0 = no limit). No I/O.
@@ -54,7 +54,7 @@ export const filesOfOrder = (digital, placedAt) => [
  * @param {unknown} value
  * @returns {{ ok: true, value: string[] } | { ok: false, message: string }}
  */
-export const checkLicenceKeys = (value) => {
+export const checkLicenseKeys = (value) => {
 	const message = `keys is a list of 1–${MAX_KEYS_PER_CALL} license keys of at most ${MAX_KEY_LENGTH} characters.`;
 	if (!Array.isArray(value) || value.length === 0 || value.length > MAX_KEYS_PER_CALL) return { ok: false, message };
 	/** @type {Set<string>} */

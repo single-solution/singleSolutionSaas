@@ -34,7 +34,7 @@ export const createCheckout = (product, service) => {
 	const ordering = createOrdering(product, service, { quoting, digital });
 
 	service.whenUsed(ordering.sweep);
-	service.on('order.paid', (s, { order }) => (s.has('digital_goods') ? digital.giveLicences(s, order) : undefined));
+	service.on('order.paid', (s, { order }) => (s.has('digital_goods') ? digital.giveLicenses(s, order) : undefined));
 
 	/**
 	 * The free slots of a service booked in time slots (its item type's `slots`; `productId`, optional `from` and `to`,
@@ -219,37 +219,37 @@ export const createCheckout = (product, service) => {
 			}),
 			defineRoute({
 				method: 'POST',
-				path: '/v1/products/:id/licences',
+				path: '/v1/products/:id/licenses',
 				auth: 'server',
 				feature: 'digital_goods',
 				rateLimit: SERVER_LIMITS,
-				handler: digital.addLicences,
+				handler: digital.addLicenses,
 			}),
 			defineRoute({
 				method: 'POST',
-				path: '/v1/admin/products/:id/licences',
+				path: '/v1/admin/products/:id/licenses',
 				auth: 'ticket',
 				feature: 'digital_goods',
 				permission: 'catalog.edit',
 				rateLimit: SERVER_LIMITS,
-				handler: digital.addLicences,
+				handler: digital.addLicenses,
 			}),
 			defineRoute({
 				method: 'POST',
-				path: '/v1/products/:id/licences/remove',
+				path: '/v1/products/:id/licenses/remove',
 				auth: 'server',
 				feature: 'digital_goods',
 				rateLimit: SERVER_LIMITS,
-				handler: digital.removeLicences,
+				handler: digital.removeLicenses,
 			}),
 			defineRoute({
 				method: 'POST',
-				path: '/v1/admin/products/:id/licences/remove',
+				path: '/v1/admin/products/:id/licenses/remove',
 				auth: 'ticket',
 				feature: 'digital_goods',
 				permission: 'catalog.edit',
 				rateLimit: SERVER_LIMITS,
-				handler: digital.removeLicences,
+				handler: digital.removeLicenses,
 			}),
 			defineRoute({
 				method: 'DELETE',

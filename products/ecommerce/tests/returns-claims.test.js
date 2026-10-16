@@ -121,7 +121,7 @@ const order = async ({ lines, delivery = 0, payment = {}, pointsEarned = 0 }) =>
 			locationId: null,
 			serials: line.serials ?? [],
 			booking: null,
-			licences: [],
+			licenses: [],
 			returnedQuantity: 0,
 		};
 	});
@@ -496,7 +496,7 @@ describe('claim refunds', () => {
 		const refund = (/** @type {string} */ id, /** @type {Record<string, unknown>} */ body) =>
 			shop.api('POST', `/v1/returns/${id}/refund`, body);
 		expect((await refund(a.json.id, { amount: 100, method: 'payments' })).json.errors[0].path).toBe('/method');
-		expect((await refund(a.json.id, { amount: 100, method: 'cheque' })).json.errors[0].path).toBe('/method');
+		expect((await refund(a.json.id, { amount: 100, method: 'check' })).json.errors[0].path).toBe('/method');
 		expect((await refund(a.json.id, { amount: 100, reference: 'x'.repeat(121) })).json.errors[0].path).toBe('/reference');
 		expect((await refund(a.json.id, { amount: 100, reference: 7 })).json.errors[0].path).toBe('/reference');
 
@@ -871,7 +871,7 @@ describe('claim rules', () => {
 			reference: '',
 		});
 		// a way the list does not have, and Payments for an order not paid through it
-		expect(checkRefundMethod({ method: 'cheque' }, false, keys)).toMatchObject({ ok: false, field: 'method' });
+		expect(checkRefundMethod({ method: 'check' }, false, keys)).toMatchObject({ ok: false, field: 'method' });
 		expect(checkRefundMethod({ method: 'payments' }, false, keys)).toMatchObject({ ok: false, field: 'method' });
 		expect(checkRestockChoices(undefined, { lines: [] })).toMatchObject({ ok: true });
 		expect(checkRestockChoices([null], { lines: [] })).toMatchObject({ field: 'lines/0/lineId' });

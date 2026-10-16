@@ -196,7 +196,7 @@ export const orderMoney = (order) => {
 		net,
 		due: CLOSED_ROLES.includes(order.role) ? 0 : Math.max(0, order.totals.total - paid),
 		refundable: net,
-		refundDue: order.role === 'cancelled' ? net : 0,
+		refundDue: order.role === 'canceled' ? net : 0,
 	};
 };
 
@@ -395,7 +395,7 @@ export const orderQuery = (filters, { seenBy = '' } = {}) => {
 	if (filters.tags) query.tags = { $in: filters.tags };
 	if (filters.unseen && seenBy) query.seenBy = { $ne: seenBy };
 	// a canceled order whose money is not all given back (orderMoney's refundDue)
-	if (filters.refundDue) Object.assign(query, { role: 'cancelled', $expr: { $gt: ['$payment.paid', '$payment.refunded'] } });
+	if (filters.refundDue) Object.assign(query, { role: 'canceled', $expr: { $gt: ['$payment.paid', '$payment.refunded'] } });
 	if (filters.q) {
 		const term = escapeRegex(filters.q);
 		const digits = filters.q.replace(/\D/g, '');
@@ -1156,7 +1156,7 @@ export const orderDetail = (
 		nextStatuses: nextStatuses(flow, order.status, 'staff').map(({ key, label, role }) => {
 			const move = /** @type {NonNullable<ReturnType<typeof moveOf>>} */ (moveOf(flow, order.status, key, 'staff'));
 			// a cancel or a package that came back offers the merchant's reasons (E19)
-			const offered = role === 'cancelled' ? reasons.cancel : role === 'returned_to_origin' ? reasons.failure : null;
+			const offered = role === 'canceled' ? reasons.cancel : role === 'returned_to_origin' ? reasons.failure : null;
 			return {
 				key,
 				label,

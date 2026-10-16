@@ -268,7 +268,7 @@ describe('orders', () => {
 			address: { phone: '+15550001111', line2: '', notes: '' },
 			payment: { kind: 'on_delivery', state: 'paid', paid: 2100, refunded: 0, advance: 0, checkoutUrl: '', proof: null },
 			payments: [{ by: { kind: 'server', id: 'server', name: 'Server' }, reference: '', proofKey: null }],
-			lines: [{ kind: 'physical', serials: [], booking: null, licences: [], returnedQuantity: 0, grade: null, image: null }],
+			lines: [{ kind: 'physical', serials: [], booking: null, licenses: [], returnedQuantity: 0, grade: null, image: null }],
 			phoneDigits: '15550001111',
 			shipment: null,
 			attachments: [],
@@ -305,7 +305,7 @@ describe('orders', () => {
 							categoryIds: [idOf('cat', 1)],
 							brandId: idOf('brd', 1),
 							serials: [' 354000000000001 ', '354000000000002'],
-							licences: [idOf('lic', 1)],
+							licenses: [idOf('lic', 1)],
 							booking: { start: '2027-01-01T10:00:00Z', end: '2027-01-01T11:00:00Z' },
 							warrantyTime: { amount: 365, unit: /** @type {const} */ ('days') },
 							dealId: idOf('deal', 1),
@@ -554,7 +554,7 @@ describe('orders', () => {
 		expect(
 			pathsOf(
 				checkImportedOrder(
-					order({ status: 'cancelled', history: [{ at: '2026-03-01T00:00:00Z', to: 'cancelled' }], deliveredAt: null }),
+					order({ status: 'canceled', history: [{ at: '2026-03-01T00:00:00Z', to: 'canceled' }], deliveredAt: null }),
 					RULES,
 				),
 			),
@@ -753,7 +753,7 @@ describe('orders', () => {
 							{ id: idOf('opy', 1), method: 'cod', amount: 3000, at: '2026-03-04T00:00:00Z' },
 							{
 								id: idOf('opy', 1),
-								method: 'Cheque!',
+								method: 'Check!',
 								amount: 0,
 								reference: 'x'.repeat(121),
 								at: '2099-01-01T00:00:00Z',
@@ -762,7 +762,7 @@ describe('orders', () => {
 						],
 						refunds: [{ id: idOf('orf', 1), method: 'cod', amount: 4000, at: '2026-03-05T00:00:00Z', manual: 'no' }],
 						payment: {
-							method: 'Cheque!',
+							method: 'Check!',
 							kind: 'on_delivery',
 							state: 'partially_refunded',
 							paymentId: 'pay 1',
@@ -997,7 +997,7 @@ describe('reviews, claims, alerts and wishlists', () => {
 						history: [],
 						notes: [{ at: '2026-05-02T00:00:00Z', by: 'Sam', text: '' }],
 						refundReference: 'x'.repeat(121),
-						refundMethod: 'Cheque!',
+						refundMethod: 'Check!',
 						status: 'lost',
 						orderNumber: '',
 						refundId: 7,
@@ -1138,7 +1138,7 @@ describe('finish', () => {
 		expect(holdsSerials({ role: 'refunded', deliveredAt: new Date() })).toBe(true);
 		const orders = [
 			{ id: 'o1', role: 'delivered', lines: [{ id: 'l1', serials: ['A', 'B'] }, { id: 'l2' }] },
-			{ id: 'o2', role: 'cancelled', lines: [{ id: 'l3', serials: ['C'] }] },
+			{ id: 'o2', role: 'canceled', lines: [{ id: 'l3', serials: ['C'] }] },
 			{ id: 'o3', role: 'shipped', lines: [{ id: 'l4', serials: ['D', 'E'] }] },
 		];
 		const claims = [

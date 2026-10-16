@@ -205,7 +205,7 @@ describe('shop health (E41)', () => {
 	});
 
 	it('answers the checks with counts and links for the server and the reports widget', async () => {
-		await shop.seedProduct({ name: 'Stocky old favourite', status: 'archived', featured: true });
+		await shop.seedProduct({ name: 'Stocky old favorite', status: 'archived', featured: true });
 		const health = await shop.api('GET', '/v1/reports/health');
 		expect(health.status).toBe(200);
 		/** @type {Record<string, any>} */

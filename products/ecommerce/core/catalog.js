@@ -887,7 +887,7 @@ const isGiven = (value) =>
  * Refuse values given for elements the product's item type does not have (dynamic model §1; a built-in type has every
  * one), each at its path: several variants, options, variant fields and their setup (`variants`), grades, a size chart
  * (`chart`), packages (`parcel`), per-item return and warranty days (`warranty`), a download limit (`downloads`), license
- * keys (`licenceKeys`) and a booking duration (`slots`); and values of fields a merchant's type does not name.
+ * keys (`licenseKeys`) and a booking duration (`slots`); and values of fields a merchant's type does not name.
  * @param {Record<string, any>} input
  * @param {import('./item-types.js').ItemType} type
  * @param {FieldError[]} errors
@@ -934,7 +934,7 @@ const typeGuards = (input, type, errors) => {
 	if (type.kind === 'digital' && isObject(input.digital)) {
 		if (!on.downloads && isGiven(input.digital.downloadLimit) && input.digital.downloadLimit !== 0)
 			refuse('/digital/downloadLimit', 'downloads');
-		if (!on.licenceKeys && input.digital.licenceKeys === true) refuse('/digital/licenceKeys', 'license keys');
+		if (!on.licenseKeys && input.digital.licenseKeys === true) refuse('/digital/licenseKeys', 'license keys');
 	}
 	if (type.kind === 'service' && !on.slots && isGiven(input.booking)) refuse('/booking', 'booked time slots');
 	if (type.fieldIds === null) return;
@@ -1117,18 +1117,18 @@ export const checkProduct = (body, rules, existing) => {
 	/** @type {ProductRecord['digital']} */
 	let digital = null;
 	if (kind === 'digital') {
-		const before = existing?.digital ?? { files: [], retired: [], licenceKeys: false, downloadLimit: 0 };
+		const before = existing?.digital ?? { files: [], retired: [], licenseKeys: false, downloadLimit: 0 };
 		const given = input.digital === undefined ? {} : input.digital;
 		if (!isObject(given)) fail('/digital', 'Give the download settings.');
 		const raw = isObject(given) ? given : {};
-		if (raw.licenceKeys !== undefined && typeof raw.licenceKeys !== 'boolean')
-			fail('/digital/licenceKeys', 'License keys is true or false.');
+		if (raw.licenseKeys !== undefined && typeof raw.licenseKeys !== 'boolean')
+			fail('/digital/licenseKeys', 'License keys is true or false.');
 		if (raw.downloadLimit !== undefined && !isCount(raw.downloadLimit, LIMITS.downloadLimit))
 			fail('/digital/downloadLimit', `Downloads are a whole number from 0 (no limit) to ${LIMITS.downloadLimit}.`);
 		digital = {
 			files: before.files,
 			retired: before.retired,
-			licenceKeys: typeof raw.licenceKeys === 'boolean' ? raw.licenceKeys : before.licenceKeys,
+			licenseKeys: typeof raw.licenseKeys === 'boolean' ? raw.licenseKeys : before.licenseKeys,
 			downloadLimit: isCount(raw.downloadLimit, LIMITS.downloadLimit) ? raw.downloadLimit : before.downloadLimit,
 		};
 	}

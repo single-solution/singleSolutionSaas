@@ -69,7 +69,7 @@ const moveWith = (from, to, fields) => (/** @type {any} */ flow) => ({
 describe('a paid order the shopper cancels', () => {
 	it('is refused, canceled with the refund due, or canceled and refunded, as the move says', async () => {
 		await withFlow(
-			moveWith('confirmed', 'cancelled', { who: ['staff', 'shopper'], options: { shopperPaid: 'refuse' } }),
+			moveWith('confirmed', 'canceled', { who: ['staff', 'shopper'], options: { shopperPaid: 'refuse' } }),
 			async () => {
 				const refused = await records.seedOrder();
 				const answer = await asShopper('POST', `/v1/shop/orders/${refused.order.id}/cancel`);
@@ -78,18 +78,18 @@ describe('a paid order the shopper cancels', () => {
 			},
 		);
 		await withFlow(
-			moveWith('confirmed', 'cancelled', { who: ['staff', 'shopper'], options: { shopperPaid: 'flag' } }),
+			moveWith('confirmed', 'canceled', { who: ['staff', 'shopper'], options: { shopperPaid: 'flag' } }),
 			async () => {
 				const flagged = await records.seedOrder();
 				const answer = await asShopper('POST', `/v1/shop/orders/${flagged.order.id}/cancel`);
 				expect(answer.status).toBe(200);
-				expect(answer.json.order.role).toBe('cancelled');
+				expect(answer.json.order.role).toBe('canceled');
 				expect(records.refundCalls(flagged.paymentId)).toHaveLength(0);
 				expect((await shop.api('GET', `/v1/orders/${flagged.order.id}`)).json.payment).toMatchObject({ refundDue: 1000 });
 			},
 		);
 		await withFlow(
-			moveWith('confirmed', 'cancelled', { who: ['staff', 'shopper'], options: { shopperPaid: 'refund' } }),
+			moveWith('confirmed', 'canceled', { who: ['staff', 'shopper'], options: { shopperPaid: 'refund' } }),
 			async () => {
 				const refunded = await records.seedOrder();
 				const answer = await asShopper('POST', `/v1/shop/orders/${refunded.order.id}/cancel`);
@@ -101,10 +101,10 @@ describe('a paid order the shopper cancels', () => {
 	});
 
 	it('is not the shopper’s to cancel when the move is staff’s only', async () => {
-		await withFlow(moveWith('awaiting_confirmation', 'cancelled', { who: ['staff'] }), async () => {
+		await withFlow(moveWith('awaiting_confirmation', 'canceled', { who: ['staff'] }), async () => {
 			const { order } = await records.seedOrder({ status: 'awaiting_confirmation', role: 'awaiting_confirmation', cod: true });
 			expect(codeOf(await asShopper('POST', `/v1/shop/orders/${order.id}/cancel`))).toBe('move_not_allowed');
-			expect((await records.moveTo(order.id, 'cancelled')).status).toBe(200);
+			expect((await records.moveTo(order.id, 'canceled')).status).toBe(200);
 		});
 	});
 });
@@ -278,11 +278,11 @@ describe('the extra moves (E40)', () => {
 		};
 		// by default: the items stay with the customer, the earned points are taken back
 		await withFlow(
-			(flow) => ({ ...flow, moves: [...flow.moves, { from: 'delivered', to: 'cancelled', options: { refund: 'staff' } }] }),
+			(flow) => ({ ...flow, moves: [...flow.moves, { from: 'delivered', to: 'canceled', options: { refund: 'staff' } }] }),
 			async () => {
 				const { order, product } = await delivered();
 				const before = await balanceOf(SHOPPER);
-				expect((await records.moveTo(order.id, 'cancelled')).status).toBe(200);
+				expect((await records.moveTo(order.id, 'canceled')).status).toBe(200);
 				expect(await records.stockOf(product.id)).toBe(4);
 				expect(await balanceOf(SHOPPER)).toBe(before - 20);
 				expect((await records.recordOf(order.id)).facts).toMatchObject({
@@ -298,13 +298,13 @@ describe('the extra moves (E40)', () => {
 				...flow,
 				moves: [
 					...flow.moves,
-					{ from: 'delivered', to: 'cancelled', options: { refund: 'staff', restock: 'yes', points: 'keep' } },
+					{ from: 'delivered', to: 'canceled', options: { refund: 'staff', restock: 'yes', points: 'keep' } },
 				],
 			}),
 			async () => {
 				const { order, product } = await delivered();
 				const before = await balanceOf(SHOPPER);
-				expect((await records.moveTo(order.id, 'cancelled')).status).toBe(200);
+				expect((await records.moveTo(order.id, 'canceled')).status).toBe(200);
 				expect(await records.stockOf(product.id)).toBe(5);
 				expect(await balanceOf(SHOPPER)).toBe(before);
 				expect((await records.recordOf(order.id)).facts).toMatchObject({ stock: 'back', earned: 'credited' });
@@ -386,7 +386,7 @@ describe('checkout options of the flow', () => {
 	it('a flow without a confirmation step starts cash-on-delivery orders open', async () => {
 		// a status with orders cannot go (the flow-save guard): the orders waiting in it are canceled first
 		const waiting = await shop.api('GET', '/v1/orders?status=awaiting_confirmation&limit=100');
-		for (const order of waiting.json.items) expect((await records.moveTo(order.id, 'cancelled')).status).toBe(200);
+		for (const order of waiting.json.items) expect((await records.moveTo(order.id, 'canceled')).status).toBe(200);
 		await withFlow(
 			(flow) => ({
 				...flow,

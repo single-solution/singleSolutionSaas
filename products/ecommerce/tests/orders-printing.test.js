@@ -54,7 +54,7 @@ const lineOf = (patch = {}) => ({
 	locationId: null,
 	serials: ['SN-111', 'SN-222'],
 	booking: null,
-	licences: [],
+	licenses: [],
 	returnedQuantity: 0,
 	warrantyTime: { amount: 365, unit: /** @type {const} */ ('days') },
 	...patch,
@@ -211,14 +211,14 @@ describe('the invoice (E35)', () => {
 		const url = (/** @type {string} */ id) => `/v1/shop/orders/${id}/invoice`;
 		const waiting = await seed(orderOf({ status: 'pending', role: 'awaiting_confirmation' }));
 		const open = await seed(orderOf());
-		const cancelled = await seed(orderOf({ status: 'cancelled', role: 'cancelled' }));
+		const canceled = await seed(orderOf({ status: 'canceled', role: 'canceled' }));
 		expect((await shop.visitor('GET', url(waiting.id), { signIn })).status).toBe(200);
 		await shop.setting('invoices', 'shopperFrom', 'confirmed');
 		try {
 			const early = await shop.visitor('GET', url(waiting.id), { signIn });
 			expect(early.status).toBe(404);
 			expect(early.json.type).toMatch(/not_found$/);
-			expect((await shop.visitor('GET', url(cancelled.id), { signIn })).status).toBe(404);
+			expect((await shop.visitor('GET', url(canceled.id), { signIn })).status).toBe(404);
 			expect((await shop.visitor('GET', url(open.id), { signIn })).status).toBe(200);
 			// staff always print it
 			expect((await shop.api('GET', `/v1/orders/${waiting.id}/invoice`)).status).toBe(200);

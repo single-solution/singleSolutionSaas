@@ -70,8 +70,8 @@ describe('the shop events (GET /v1/events)', () => {
 		});
 		expect(refund.status).toBe(201);
 		expect(refund.json.refund).toEqual({ amount: 400, online: 0, manual: 400, refundId: null, recorded: true });
-		const { order: cancelled, item } = await placeOrder();
-		expect((await shop.api('POST', `/v1/orders/${cancelled.id}/move`, { to: 'cancelled' })).status).toBe(200);
+		const { order: canceled, item } = await placeOrder();
+		expect((await shop.api('POST', `/v1/orders/${canceled.id}/move`, { to: 'canceled' })).status).toBe(200);
 		await shop.flush();
 
 		const listed = await shop.api('GET', '/v1/events?limit=100');
@@ -97,9 +97,9 @@ describe('the shop events (GET /v1/events)', () => {
 		});
 		expect(find('ecommerce.order.paid', paid.id)[0]?.data).toMatchObject({ paid: 1000 });
 		expect(find('ecommerce.order.refunded', paid.id)[0]?.data).toMatchObject({ amount: 400, claimId: null });
-		expect(find('ecommerce.order.cancelled', cancelled.id)[0]?.data).toMatchObject({ reason: 'staff' });
-		// a staff move carries no reason of its own (only order.cancelled says who)
-		expect(find('ecommerce.order.status_changed', cancelled.id)[0]?.data).toMatchObject({ to: 'cancelled', reason: null });
+		expect(find('ecommerce.order.canceled', canceled.id)[0]?.data).toMatchObject({ reason: 'staff' });
+		// a staff move carries no reason of its own (only order.canceled says who)
+		expect(find('ecommerce.order.status_changed', canceled.id)[0]?.data).toMatchObject({ to: 'canceled', reason: null });
 		// the order took 10 down to 9, the low-stock level; the cancel gives the stock back: the product changed, and a
 		// rise publishes no stock event
 		expect(events).toContainEqual(
@@ -126,7 +126,7 @@ describe('the shop events (GET /v1/events)', () => {
 		expect(all.json).toEqual({ count: events.length, capped: false });
 		const byType = await shop.api('GET', '/v1/events/counts?by=type');
 		expect(byType.json.total).toBe(events.length);
-		expect(byType.json.groups).toMatchObject({ 'ecommerce.order.placed': 2, 'ecommerce.order.cancelled': 1 });
+		expect(byType.json.groups).toMatchObject({ 'ecommerce.order.placed': 2, 'ecommerce.order.canceled': 1 });
 		const byDelivery = await shop.api('GET', '/v1/events/counts?by=delivery&types=ecommerce.order.paid');
 		expect(byDelivery.json).toEqual({ total: 1, groups: { sent: 1 } });
 
@@ -210,7 +210,7 @@ describe('a guest’s order for staff', () => {
 			customerFlags: { blocked: false, rtoCount: 0 },
 			payment: { method: 'cod', kind: 'on_delivery', state: 'unpaid', balanceDue: 1000, refundable: 0, refundDue: 0 },
 		});
-		expect(read.json.nextStatuses.map((/** @type {any} */ next) => next.role)).toEqual(['open', 'cancelled']);
+		expect(read.json.nextStatuses.map((/** @type {any} */ next) => next.role)).toEqual(['open', 'canceled']);
 
 		const guests = await shop.api('GET', '/v1/customers?segment=guest');
 		expect(guests.json.items).toEqual([

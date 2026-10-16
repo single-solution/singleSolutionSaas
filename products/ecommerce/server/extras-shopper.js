@@ -186,9 +186,9 @@ export const createShopperLists = (_product, service, cards) => {
 	const deleteUser = async (s, person) => {
 		const data = await s.data();
 		const users = await userIdsOf(data, person);
-		if (users.length === 0) return { deleted: 0, anonymised: 0 };
+		if (users.length === 0) return { deleted: 0, anonymized: 0 };
 		const result = await wishlists(data).deleteMany({ websiteId: data.websiteId, userId: { $in: users } });
-		return { deleted: result.deletedCount, anonymised: 0 };
+		return { deleted: result.deletedCount, anonymized: 0 };
 	};
 
 	const routes = [

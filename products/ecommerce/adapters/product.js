@@ -63,7 +63,7 @@ import { INDEXES as CATALOG_INDEXES, typeUses } from './catalog-store.js';
 import { createCouriers } from './couriers.js';
 import { COURIER_CONNECTIONS } from '../core/couriers.js';
 import { INDEXES as EXTRAS_INDEXES } from './extras-store.js';
-import { INDEXES as FULFILMENT_INDEXES } from './fulfilment-store.js';
+import { INDEXES as FULFILLMENT_INDEXES } from './fulfillment-store.js';
 import { createImportOptions } from './imports.js';
 import { LEDGER_INDEXES } from './ledger.js';
 import { LISTS, createLists } from './lists.js';
@@ -177,7 +177,7 @@ export const INDEXES = [
 	...LEDGER_INDEXES,
 	...CATALOG_INDEXES,
 	...ORDERS_INDEXES,
-	...FULFILMENT_INDEXES,
+	...FULFILLMENT_INDEXES,
 	...PROMOTIONS_INDEXES,
 	...EXTRAS_INDEXES,
 	...OUTBOX_INDEXES,

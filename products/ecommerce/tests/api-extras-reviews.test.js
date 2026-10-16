@@ -75,7 +75,7 @@ const seedOrder = async (input) => {
 		locationId: null,
 		serials: [],
 		booking: null,
-		licences: [],
+		licenses: [],
 		returnedQuantity: 0,
 	};
 	const id = createId('ord');

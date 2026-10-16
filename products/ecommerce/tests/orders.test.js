@@ -120,7 +120,7 @@ const place = async (options = {}) => {
 						locationId: null,
 						serials: [],
 						booking: null,
-						licences: [],
+						licenses: [],
 						returnedQuantity: 0,
 					},
 				],
@@ -238,7 +238,7 @@ describe('the order list and detail', () => {
 			payment: { method: 'cod', kind: 'on_delivery', refundable: 0 },
 			staffNote: '',
 		});
-		expect(detail.json.nextStatuses.map((/** @type {any} */ s) => s.key)).toEqual(['confirmed', 'cancelled']);
+		expect(detail.json.nextStatuses.map((/** @type {any} */ s) => s.key)).toEqual(['confirmed', 'canceled']);
 		expect(detail.json.history[0]).toMatchObject({ fromLabel: '', toLabel: 'Awaiting confirmation', by: 'Sara Shopper' });
 		expect(detail.json.lines[0].imageUrl).toBeNull();
 		expect(typeof detail.json.placedAt).toBe('string');
@@ -280,7 +280,7 @@ describe('moving orders', () => {
 		expect((await move(order.id, 'nowhere')).json.type).toMatch(/move_not_allowed$/);
 		expect((await move(order.id, 'BAD')).status).toBe(422);
 		expect((await move(order.id, 'confirmed', { note: 5 })).status).toBe(422);
-		const viaServer = await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'cancelled' });
+		const viaServer = await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'canceled' });
 		expect(viaServer.status).toBe(200);
 		// the server token keeps its kind, so the widgets tell it from a member of the staff named Server (PLAN 0.4.10)
 		expect(viaServer.json.history.at(-1)).toMatchObject({ by: 'Server', byKind: 'server' });
@@ -338,8 +338,8 @@ describe('moving orders', () => {
 		expect((await serials.findOne({ websiteId: data.websiteId, serial: 'SN-3' }))?.orderId).toBe(order.id);
 		await shop.list('order_flow', (await import('../core/flow.js')).DEFAULT_FLOW);
 		// canceling puts the serials back in stock
-		const cancelled = await move(order.id, 'cancelled', { note: 'Out of stock' });
-		expect(cancelled.status).toBe(200);
+		const canceled = await move(order.id, 'canceled', { note: 'Out of stock' });
+		expect(canceled.status).toBe(200);
 		expect(await serials.countDocuments({ websiteId: data.websiteId, orderId: order.id })).toBe(0);
 	});
 
@@ -419,10 +419,10 @@ describe('moving orders', () => {
 			/** @type {any} */ (await data.collection(COLLECTIONS.coupons).findOne({ websiteId: data.websiteId, id: couponId }));
 		expect((await coupon()).used).toBe(1);
 		const before = shop.callsTo(PAYMENTS).length;
-		const cancelled = await move(order.id, 'cancelled', { note: 'Asked by shopper', shopperNote: 'Canceled as you asked' });
-		expect(cancelled.status).toBe(200);
-		expect(cancelled.json).toMatchObject({ status: 'cancelled', stockHeld: false, warnings: [] });
-		expect(cancelled.json.payment).toMatchObject({ state: 'refunded', refunded: 3000 });
+		const canceled = await move(order.id, 'canceled', { note: 'Asked by shopper', shopperNote: 'Canceled as you asked' });
+		expect(canceled.status).toBe(200);
+		expect(canceled.json).toMatchObject({ status: 'canceled', stockHeld: false, warnings: [] });
+		expect(canceled.json.payment).toMatchObject({ state: 'refunded', refunded: 3000 });
 		const refundCall = shop
 			.callsTo(PAYMENTS)
 			.slice(before)
@@ -442,12 +442,12 @@ describe('moving orders', () => {
 			call.path.endsWith('/refunds') ? { status: 500, body: {} } : keep ? keep(call) : { status: 200 },
 		);
 		try {
-			const cancelled = await move(order.id, 'cancelled');
-			expect(cancelled.status).toBe(200);
-			expect(cancelled.json.status).toBe('cancelled');
-			expect(cancelled.json.warnings[0]).toContain('refund failed');
-			expect(cancelled.json.warningCodes).toEqual([{ code: 'cancel_refund_failed', values: { amount: 200 } }]);
-			expect(cancelled.json.payment).toMatchObject({ state: 'unpaid', refunded: 0, paid: 200, refundable: 200 });
+			const canceled = await move(order.id, 'canceled');
+			expect(canceled.status).toBe(200);
+			expect(canceled.json.status).toBe('canceled');
+			expect(canceled.json.warnings[0]).toContain('refund failed');
+			expect(canceled.json.warningCodes).toEqual([{ code: 'cancel_refund_failed', values: { amount: 200 } }]);
+			expect(canceled.json.payment).toMatchObject({ state: 'unpaid', refunded: 0, paid: 200, refundable: 200 });
 		} finally {
 			if (keep) shop.responders.set(PAYMENTS, keep);
 		}
@@ -488,22 +488,22 @@ describe('moving orders', () => {
 			// a cancel offers the reasons; a reason of another list, or on another move, is refused
 			const { order } = await place({ userId: 'usr_reason00000001' });
 			const read = await shop.admin(ticket, 'GET', `/v1/admin/orders/${order.id}`);
-			expect(read.json.nextStatuses.find((/** @type {any} */ next) => next.key === 'cancelled').reasons).toEqual([
+			expect(read.json.nextStatuses.find((/** @type {any} */ next) => next.key === 'canceled').reasons).toEqual([
 				{ key: 'customer_request', label: 'The customer asked' },
 				{ key: 'fake', label: 'Fake order' },
 			]);
 			expect(read.json.nextStatuses.find((/** @type {any} */ next) => next.key === 'confirmed').reasons).toBeUndefined();
-			expect((await move(order.id, 'cancelled', { reason: 'refused' })).json.errors[0].path).toBe('/reason');
+			expect((await move(order.id, 'canceled', { reason: 'refused' })).json.errors[0].path).toBe('/reason');
 			expect((await move(order.id, 'confirmed', { reason: 'fake' })).json.errors[0].path).toBe('/reason');
-			const canceled = await move(order.id, 'cancelled', { reason: 'fake' });
+			const canceled = await move(order.id, 'canceled', { reason: 'fake' });
 			expect(canceled.status).toBe(200);
 			expect(canceled.json).toMatchObject({ closeReason: 'fake', closeReasonLabel: 'Fake order' });
 			expect(canceled.json.customerFlags.rtoCount).toBe(1);
-			expect(canceled.json.history.at(-1)).toMatchObject({ to: 'cancelled', reason: 'fake' });
+			expect(canceled.json.history.at(-1)).toMatchObject({ to: 'canceled', reason: 'fake' });
 
 			// a cancel without a reason, and one that does not count
 			const second = await place({ userId: 'usr_reason00000001' });
-			expect((await move(second.order.id, 'cancelled', { reason: 'customer_request' })).json.customerFlags.rtoCount).toBe(1);
+			expect((await move(second.order.id, 'canceled', { reason: 'customer_request' })).json.customerFlags.rtoCount).toBe(1);
 
 			// a package that came back: the first reason by default (it counts), customer_return does not
 			let tracking = 0;
@@ -762,14 +762,14 @@ describe('data rights', () => {
 		expect(byPhone.orders).toHaveLength(1);
 		expect(await exportOf(s, {})).toEqual({ orders: [], customers: [] });
 		const done = await /** @type {NonNullable<typeof area.deleteUser>} */ (area.deleteUser)(s, { email: 'Rights@Example.com' });
-		expect(done).toEqual({ deleted: 1, anonymised: 1 });
+		expect(done).toEqual({ deleted: 1, anonymized: 1 });
 		const after = await orderRecord(order.id);
 		expect(after.customer).toEqual({ userId, name: '', email: '', phone: '', customerId: expect.stringMatching(/^cus_/) });
 		expect(after.address).toBeNull();
 		expect(after.totals.total).toBe(1000);
 		expect(await /** @type {NonNullable<typeof area.deleteUser>} */ (area.deleteUser)(s, {})).toEqual({
 			deleted: 0,
-			anonymised: 0,
+			anonymized: 0,
 		});
 	});
 });

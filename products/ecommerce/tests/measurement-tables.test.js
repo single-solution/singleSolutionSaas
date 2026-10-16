@@ -173,15 +173,15 @@ describe('the Size guide', () => {
 	});
 
 	it('shows an own label or a unit without a switch, and nothing without a unit', () => {
-		const labelled = open({
+		const labeled = open({
 			...base,
 			unit: 'EU',
 			convertTo: '',
 			columns: [{ key: 'width', label: 'Width', unit: '' }],
 			advice: '',
 		});
-		expect(labelled.layer.querySelector('[data-unit]')).toBeNull();
-		expect(labelled.layer.querySelector('p.meta')?.textContent).toBe('Measurements in EU');
+		expect(labeled.layer.querySelector('[data-unit]')).toBeNull();
+		expect(labeled.layer.querySelector('p.meta')?.textContent).toBe('Measurements in EU');
 		const plain = open({ ...base, unit: '', convertTo: '', columns: [{ key: 'width', label: 'Width', unit: '' }], advice: '' });
 		expect(plain.layer.querySelector('p.meta')).toBeNull();
 		expect(plain.heads()).toEqual(['Size', 'Width']);

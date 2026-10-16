@@ -50,7 +50,7 @@ const COUPON_PROBLEMS = Object.freeze({
  * A code as typed: trimmed and upper case ('' when not a text).
  * @param {unknown} value
  */
-export const normaliseCode = (value) => (typeof value === 'string' ? value.trim().toUpperCase() : '');
+export const normalizeCode = (value) => (typeof value === 'string' ? value.trim().toUpperCase() : '');
 
 /**
  * @param {CouponProblemCode} code
@@ -109,7 +109,7 @@ export const couponDiscount = (coupon, lines, unit = 1) => {
  */
 export const checkCouponInput = (input) => {
 	if (!isObject(input)) return fail('', 'Send a coupon object.');
-	const code = normaliseCode(input.code);
+	const code = normalizeCode(input.code);
 	if (!CODE_PATTERN.test(code)) return fail('code', 'code is 3 to 40 characters: letters, digits, - and _.');
 	if (!COUPON_TYPES.includes(input.type)) return fail('type', `type is one of ${COUPON_TYPES.join(', ')}.`);
 	/** @type {'percent' | 'fixed' | 'free_delivery'} */
@@ -188,7 +188,7 @@ const BATCH_RANDOM_LENGTH = 8;
  */
 export const checkBatchInput = (input) => {
 	if (!isObject(input)) return fail('', 'Send { prefix, count, coupon }.');
-	const prefix = normaliseCode(input.prefix ?? '');
+	const prefix = normalizeCode(input.prefix ?? '');
 	if (!/^[A-Z0-9_-]{0,30}$/.test(prefix)) return fail('prefix', 'prefix is up to 30 characters: letters, digits, - and _.');
 	const count = checkWhole(input.count, 'count', { min: 1, max: MAX_BATCH });
 	if (!count.ok) return count;

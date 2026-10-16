@@ -199,7 +199,7 @@ describe('grades per category (E45)', () => {
 			},
 			features: { digital: false, bookings: false },
 			slots: () => false,
-			licences: new Map(),
+			licenses: new Map(),
 			booked: new Set(),
 			slotOf: () => null,
 		});

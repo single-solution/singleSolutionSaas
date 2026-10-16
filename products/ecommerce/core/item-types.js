@@ -34,7 +34,7 @@ export const ELEMENTS = Object.freeze(
 		'parcel',
 		'warranty',
 		'downloads',
-		'licenceKeys',
+		'licenseKeys',
 		'slots',
 	]),
 );
@@ -49,7 +49,7 @@ const ELEMENT_FEATURES = Object.freeze({
 	parcel: 'delivery_zones',
 	warranty: 'returns',
 	downloads: 'digital_goods',
-	licenceKeys: 'digital_goods',
+	licenseKeys: 'digital_goods',
 	slots: 'bookings',
 });
 /** The kinds an element is for (the others are for every kind). */
@@ -59,7 +59,7 @@ const ELEMENT_KINDS = Object.freeze(
 		measure: ['physical'],
 		parcel: ['physical'],
 		downloads: ['digital'],
-		licenceKeys: ['digital'],
+		licenseKeys: ['digital'],
 		slots: ['service'],
 	}),
 );
@@ -92,7 +92,7 @@ const CONTROL = /[\u0000-\u001F\u007F]/;
  * of items counted in pieces (null: from 1 in steps of 1).
  * @typedef {{ variants: boolean, grades: boolean, units: UnitsElement | null, chart: boolean,
  *   measure: import('./measure.js').Measure | null, quantity: import('./measure.js').QuantityRule | null, parcel: boolean, warranty: boolean, downloads: boolean,
- *   licenceKeys: boolean, slots: boolean }} Elements
+ *   licenseKeys: boolean, slots: boolean }} Elements
  */
 /**
  * An item type: a merchant's (`item_types` list) or a built-in one (`builtIn`, its key is its kind). `fieldIds`: the
@@ -138,7 +138,7 @@ const builtIn = (kind) =>
 			parcel: elementFor('parcel', kind),
 			warranty: true,
 			downloads: elementFor('downloads', kind),
-			licenceKeys: elementFor('licenceKeys', kind),
+			licenseKeys: elementFor('licenseKeys', kind),
 			slots: elementFor('slots', kind),
 		}),
 	});

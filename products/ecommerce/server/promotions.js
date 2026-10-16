@@ -354,8 +354,8 @@ export const createPromotions = (product, service) => {
 		},
 
 		deleteUser: async (s, user) => {
-			if (!user.id) return { deleted: 0, anonymised: 0 };
-			return { deleted: await deletePerson(await s.data(), user.id), anonymised: 0 };
+			if (!user.id) return { deleted: 0, anonymized: 0 };
+			return { deleted: await deletePerson(await s.data(), user.id), anonymized: 0 };
 		},
 	};
 };
