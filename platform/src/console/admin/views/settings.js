@@ -27,7 +27,7 @@ import {
 	useToast,
 } from '@ss/ui';
 import { SUPPORT_CHANNELS_MAX, SUPPORT_CHANNEL_TYPES, supportChannelValue } from '@ss/contracts/text';
-import { LOGO_MAX_BYTES, LOGO_TYPES } from '../../../infra/config.js';
+import { LOGO_MAX_BYTES, LOGO_TYPES } from '../../../infra/branding.js';
 import { ADMIN, LOGIN } from '../../../texts/console.js';
 import { apiFetch } from '../../client.js';
 import { adminApi } from '../paths.js';

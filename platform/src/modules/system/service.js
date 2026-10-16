@@ -4,7 +4,8 @@
  * Overview. Every Settings change is written to Activity.
  * @module
  */
-import { LOGO_MAX_BYTES, LOGO_TYPES, MAIL_FROM, SETTINGS_BOUNDS, logoUrlOf } from '../../infra/config.js';
+import { LOGO_MAX_BYTES, LOGO_TYPES } from '../../infra/branding.js';
+import { MAIL_FROM, SETTINGS_BOUNDS, logoUrlOf } from '../../infra/config.js';
 import { sumCounts } from '../../infra/crypto.js';
 import { problem } from '../../infra/http.js';
 import { createSmtpMailer, mailContextOf } from '../../infra/mailer.js';

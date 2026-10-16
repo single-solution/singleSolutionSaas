@@ -105,10 +105,6 @@ export const SETTINGS_BOUNDS = Object.freeze({
 	lowBalanceDays: Object.freeze({ min: 1, max: 30, default: 3 }),
 });
 
-/** Logo file types (never SVG) and size cap (PLAN 0.8.2 Branding). */
-export const LOGO_TYPES = Object.freeze(['image/png', 'image/jpeg', 'image/webp']);
-export const LOGO_MAX_BYTES = 200 * 1024;
-
 /**
  * The address of the Branding logo (it changes with each new logo, so caches never show an old one), or null.
  * @param {string} portalUrl
