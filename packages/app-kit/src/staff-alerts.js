@@ -48,12 +48,10 @@ import { formatText } from './text.js';
  */
 
 /** The `staffPermission` value that means every staff member who works with the alert (the alert's `allStaff`). */
-export const ALL_STAFF = 'all_staff';
+const ALL_STAFF = 'all_staff';
 /** People one alert goes to unless the feature's `maxRecipients` setting says otherwise, and the most it may say. */
 export const MAX_RECIPIENTS = 20;
-export const RECIPIENTS_CAP = 200;
-/** The channels a recipient may name (`push` is staff push). */
-export const RECIPIENT_CHANNELS = Object.freeze(/** @type {const} */ (['email', 'sms', 'whatsapp', 'push']));
+const RECIPIENTS_CAP = 200;
 /** The Notifications route of each channel. */
 const CHANNEL_PATHS = Object.freeze({ email: 'email', sms: 'sms', whatsapp: 'whatsapp', staff_push: 'staff-push' });
 const STAFF_ID = /^[A-Za-z0-9_-]{1,64}$/;

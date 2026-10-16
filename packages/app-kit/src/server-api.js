@@ -53,7 +53,7 @@ export const SETTINGS_WRITE_LIMIT = Object.freeze({
 });
 /** List saves in the product dashboard per website (code constant; a window of their own, so the merchant's server
  * cannot use up the dashboard's). */
-export const DASHBOARD_LIST_WRITE_LIMIT = Object.freeze({ ...SETTINGS_WRITE_LIMIT, bucket: 'kit-dashboard-list-writes' });
+const DASHBOARD_LIST_WRITE_LIMIT = Object.freeze({ ...SETTINGS_WRITE_LIMIT, bucket: 'kit-dashboard-list-writes' });
 /** Reads of the merchant's server per route per website (code constant; the window SEO reads have, SG-31). */
 export const SETTINGS_READ_LIMIT = Object.freeze({ limit: 3000, windowSeconds: 60, per: /** @type {const} */ ('website') });
 

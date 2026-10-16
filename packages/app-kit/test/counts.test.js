@@ -79,7 +79,7 @@ describe('counts (K4)', () => {
 		const many = countHandlers({
 			source: async () => ({
 				collection: {
-					countDocuments: async (/** @type {any} */ filter, /** @type {any} */ options) => {
+					countDocuments: async (/** @type {any} */ _filter, /** @type {any} */ options) => {
 						calls.push(options);
 						return COUNT_CAP + 1;
 					},
