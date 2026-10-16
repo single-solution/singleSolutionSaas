@@ -538,7 +538,7 @@ describe('activity log and data rights', () => {
 			},
 			deleteUser: async (/** @type {any} */ ctx, /** @type {any} */ user) => {
 				seen.push(['delete', ctx.websiteId, user]);
-				return { deleted: 2, anonymised: 1 };
+				return { deleted: 2, anonymized: 1 };
 			},
 		};
 		const { accounts, handler, server, websiteId, switchOn, connectDatabase, call } = await setup({ hooks });
@@ -559,7 +559,7 @@ describe('activity log and data rights', () => {
 		const exported = await accounts.exportUser({ handler, baseUrl: BASE, token: server.token, user: { email: 'sam@x.com' } });
 		expect(exported).toEqual({ status: 200, body: { records: { notes: [{ text: 'hi' }] } } });
 		const deleted = await accounts.deleteUser({ handler, baseUrl: BASE, token: server.token, user: { id: 'u1' } });
-		expect(deleted).toEqual({ status: 200, body: { deleted: 2, anonymised: 1 } });
+		expect(deleted).toEqual({ status: 200, body: { deleted: 2, anonymized: 1 } });
 		expect(seen[0]).toEqual(['export', websiteId, { email: 'sam@x.com' }]);
 		expect((await accounts.exportUser({ handler, baseUrl: BASE, token: server.token, user: {} })).status).toBe(422);
 	});
@@ -591,11 +591,11 @@ describe('activity log and data rights', () => {
 		).toEqual({ records: {} });
 		expect((await accounts.deleteUser({ handler, baseUrl: BASE, token: server.token, user: { id: 'u1' } })).body).toEqual({
 			deleted: 1,
-			anonymised: 0,
+			anonymized: 0,
 		});
 		expect(
 			(await accounts.deleteUser({ handler, baseUrl: BASE, token: server.token, user: { phone: '+15550100' } })).body,
-		).toEqual({ deleted: 0, anonymised: 0 });
+		).toEqual({ deleted: 0, anonymized: 0 });
 	});
 });
 

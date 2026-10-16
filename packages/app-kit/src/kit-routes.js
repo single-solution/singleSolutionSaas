@@ -30,7 +30,7 @@ import { noContent, problem } from './http/results.js';
  * @typedef {object} ProductHooks
  * @property {(ctx: RequestContext, user: DataRightsUser) => Promise<Record<string, unknown>>} [exportUser] the user's
  *   records, by collection or kind
- * @property {(ctx: RequestContext, user: DataRightsUser) => Promise<{ deleted: number, anonymised: number }>} [deleteUser]
+ * @property {(ctx: RequestContext, user: DataRightsUser) => Promise<{ deleted: number, anonymized: number }>} [deleteUser]
  * @property {(ctx: RequestContext) => Promise<Record<string, unknown>>} [widgetConfig] the settings the widgets need
  *   (for example limits), answered as `settings` by the widget config routes; never secrets
  * @property {() => Promise<import('./reseal.js').ResealCounts>} [resealProduct] the Owner's Re-seal (RT-14): seal the
@@ -159,14 +159,14 @@ export const createKitRoutes = (kit, hooks) => {
 				: [];
 			return { records: rows.length > 0 && !Object.hasOwn(records, 'staff') ? { ...records, staff: rows } : records };
 		}
-		const result = hooks.deleteUser ? await hooks.deleteUser(ctx, user) : { deleted: 0, anonymised: 0 };
+		const result = hooks.deleteUser ? await hooks.deleteUser(ctx, user) : { deleted: 0, anonymized: 0 };
 		const removed = filter ? (await staff.deleteMany(filter)).deletedCount : 0;
 		// saved staff alerts to the person or naming their email address or phone (the product's hook removes those it
 		// names otherwise, for example by conversation)
 		const alerts = await kit.staffAlerts.forget(/** @type {{ websiteId: string, merchantId: string | null }} */ (ctx), {
 			addresses: [user.email, user.phone],
 		});
-		return { deleted: result.deleted + removed + alerts, anonymised: result.anonymised };
+		return { deleted: result.deleted + removed + alerts, anonymized: result.anonymized };
 	};
 
 	/**

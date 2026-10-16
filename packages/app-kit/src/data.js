@@ -339,7 +339,7 @@ const guardCollection = (collection, { websiteId, now, stamp }) => {
  * @param {IndexDefinition[] | Record<string, ReadonlyArray<Omit<IndexDefinition, 'collection'> | (Omit<IndexDefinition, 'collection' | 'keys'> & { key: IndexDefinition['keys'] })>>} defs
  * @returns {IndexDefinition[]}
  */
-const normaliseIndexes = (defs) => {
+const normalizeIndexes = (defs) => {
 	/** @param {any} def @param {string | undefined} collection */
 	const one = (def, collection) => {
 		if (!isObject(def)) throw kitError('invalid_index', 'every index must be an object');
@@ -358,11 +358,11 @@ const normaliseIndexes = (defs) => {
 
 /**
  * Validate index definitions and return driver specs grouped by collection.
- * @param {Parameters<typeof normaliseIndexes>[0]} input
+ * @param {Parameters<typeof normalizeIndexes>[0]} input
  * @returns {Map<string, import('mongodb').IndexDescription[]>}
  */
 export const planIndexes = (input) => {
-	const defs = normaliseIndexes(input);
+	const defs = normalizeIndexes(input);
 	/** @type {Map<string, import('mongodb').IndexDescription[]>} */
 	const byCollection = new Map();
 	for (const def of defs) {

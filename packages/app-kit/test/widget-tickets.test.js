@@ -105,7 +105,7 @@ describe('createTicketSource', () => {
 		expect(tickets.current()).toBeNull();
 	});
 
-	it('stops renewing: the timer is cancelled', () => {
+	it('stops renewing: the timer is canceled', () => {
 		const clock = manualClock();
 		const tickets = createTicketSource({
 			first: { ticket: 't1', expiresAt: expiresIn(15) },

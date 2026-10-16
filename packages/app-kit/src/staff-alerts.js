@@ -29,7 +29,7 @@
  * @module
  */
 import { createId } from '@ss/contracts';
-import { normalisePhone } from '@ss/contracts/phone';
+import { normalizePhone } from '@ss/contracts/phone';
 import { formatText } from './text.js';
 
 /** @typedef {{ email?: string | null, phone?: string | null, id?: string | null }} Assignee */
@@ -119,7 +119,7 @@ export const addressOf = (value) => {
 	if (typeof value !== 'string') return null;
 	const text = value.trim();
 	if (EMAIL.test(text)) return { key: `e:${text.toLowerCase()}`, to: { email: text.toLowerCase() } };
-	const phone = normalisePhone(text);
+	const phone = normalizePhone(text);
 	return phone ? { key: `p:${phone.slice(1)}`, to: { phone } } : null;
 };
 

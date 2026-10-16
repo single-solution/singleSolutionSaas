@@ -556,14 +556,14 @@
 		},
 		"response": {
 			"type": "object",
-			"required": ["deleted", "anonymised"],
+			"required": ["deleted", "anonymized"],
 			"additionalProperties": false,
 			"properties": {
 				"deleted": {
 					"type": "integer",
 					"minimum": 0
 				},
-				"anonymised": {
+				"anonymized": {
 					"type": "integer",
 					"minimum": 0,
 					"description": "Records kept without the person's details."

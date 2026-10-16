@@ -25,12 +25,12 @@ import {
 	formatMoney,
 	fromDecimal,
 	isCurrency,
-	normaliseFormat,
+	normalizeFormat,
 	toDecimal,
 } from '@ss/contracts/format';
 import { formatText } from './text.js';
 
-export { DEFAULT_FORMAT, formatDate, formatMoney, formatText, fromDecimal, isCurrency, normaliseFormat, toCsv, toDecimal };
+export { DEFAULT_FORMAT, formatDate, formatMoney, formatText, fromDecimal, isCurrency, normalizeFormat, toCsv, toDecimal };
 export { badge, dot, fieldGrid, moreMenu, openDialog, splitView } from './widget/admin.js';
 export { element } from './widget/dom.js';
 export { REFRESH_BEFORE_MS, adminCall, createTicketSource, requestJson } from './widget/tickets.js';
