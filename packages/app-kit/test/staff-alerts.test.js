@@ -49,6 +49,21 @@ const routes = () => [
 	defineRoute({ method: 'GET', path: '/v1/server/ping', auth: 'server', handler: () => ({ pong: true }) }),
 	defineRoute({
 		method: 'POST',
+		path: '/v1/server/alert-prepared',
+		auth: 'server',
+		feature: 'notes',
+		database: false,
+		handler: async (ctx) => ({
+			messages: await holder.product.staffAlerts.prepare(ctx, {
+				feature: 'alerts',
+				event: 'note_created',
+				values: { noteId: 'not_42', preview: 'Hello' },
+				allStaff: 'notes.read',
+			}),
+		}),
+	}),
+	defineRoute({
+		method: 'POST',
 		path: '/v1/server/alert',
 		auth: 'server',
 		feature: 'notes',
@@ -98,7 +113,10 @@ const start = async () => {
 		await ctx.settle();
 		return (await response.json()).queued;
 	};
-	return { ...ctx, set, alert };
+	/** The messages `prepare` gives, with nothing sent. */
+	const prepared = async () =>
+		(await (await ctx.call('POST', '/v1/server/alert-prepared', { token: ctx.server.token, body: {} })).json()).messages;
+	return { ...ctx, set, alert, prepared };
 };
 
 describe('staff alerts (K6)', () => {
@@ -164,6 +182,33 @@ describe('staff alerts (K6)', () => {
 		await set('maxRecipients', 2);
 		expect(await alert()).toBe(2);
 		expect(notifications.messages.map((m) => m.channel)).toEqual(['email', 'sms']);
+	});
+
+	it('prepare gives the messages of an alert, channels and staff push included, and sends and saves none (a product delivers them itself)', async () => {
+		const { set, prepared, notifications, accounts } = await start();
+		expect(await prepared()).toEqual([]);
+		await set('recipients', ['ops@shop.example.com', 'sms:+44 7700 900123', 'push:usr_9']);
+		await set('adminUrl', 'https://admin.shop.example.com/notes/{noteId}');
+		accounts.setUsers([{ id: 'u1', email: 'sana@shop.example.com', permissions: ['notes:notes.read'] }]);
+		await set('staffPermission', 'all_staff');
+		await set('staffPush', true);
+		const messages = await prepared();
+		expect(messages.map((/** @type {any} */ m) => [m.channel, m.to])).toEqual([
+			['email', { email: 'ops@shop.example.com' }],
+			['sms', { phone: '+447700900123' }],
+			['staff_push', { staffId: 'usr_9' }],
+			['email', { email: 'sana@shop.example.com' }],
+			['staff_push', { staffId: 'u1' }],
+		]);
+		expect(messages[0]).toMatchObject({
+			template: 'notes.staff_note_created',
+			values: { noteId: 'not_42', preview: 'Hello', link: 'https://admin.shop.example.com/notes/not_42' },
+		});
+		// each message has its own id (a send uses it as the Idempotency-Key)
+		expect(new Set(messages.map((/** @type {any} */ m) => m.id)).size).toBe(5);
+		// all_staff asked Accounts for the permission the alert named; nothing went to Notifications
+		expect(accounts.userReads).toEqual(['notes:notes.read']);
+		expect(notifications.messages).toEqual([]);
 	});
 
 	it('go to the recipients, the staff with the permission and the assignee, once per address', async () => {

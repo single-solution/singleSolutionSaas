@@ -16,6 +16,9 @@
  *   request with `required: true` and its own `Idempotency-Key`, carrying the product's default words of the template
  *   (`callProduct`, parity P1); the link is built from the feature's `adminUrl` template (`{placeholders}` filled from
  *   the values) and sent as the value `link`.
+ * - A product that keeps its own outbox (saved before the request is answered, one retry queue for all its messages)
+ *   takes the messages from `prepare` and delivers them itself; `send`, the saved messages here, `retry` and `forget` are
+ *   then not used.
  * - Nothing that matters is lost (K-17, owner decision D7): a message Notifications did not take (no answer, 5xx, a
  *   refused token, 408, 409 `in_progress` or 429) is saved in the merchant database (`ss_<product>_staff_alerts`) and
  *   tried again with the same key on the website's next uses ({@link RETRY_MS}, then every 3 hours), for at most a day;
@@ -241,32 +244,46 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 	};
 
 	/**
-	 * Alert the merchant's staff of an event, right after the request. Never throws.
-	 * @param {AlertContext} ctx
+	 * The messages of an alert, without sending or saving any: who gets it (the feature's recipients, the Accounts staff
+	 * with the permission, the assignee; at most `maxRecipients`), on which channel, with the template
+	 * `<product>.staff_<event>`, the values and the link built from `adminUrl`. For a product that delivers its alerts
+	 * itself (its own outbox: saved before the request is answered, one retry queue for all its messages); {@link send}
+	 * delivers them with the kit's own queue.
+	 * @param {{ websiteId: string }} ctx
 	 * @param {{ feature: string, event: string, values: Record<string, string | number>, assignee?: Assignee | null,
 	 *   allStaff?: string }} alert
 	 *   `feature`: the feature whose settings hold `recipients`, `staffPermission`, `phoneChannel`, `adminUrl` and,
 	 *   when it has them, `staffPush` and `maxRecipients`;
 	 *   `event`: the template is `<product>.staff_<event>`; `values`: the template's values (at most 1,000 characters each);
 	 *   `allStaff`: the permission key the setting's `all_staff` stands for (every staff member who works with the alert)
-	 * @returns {Promise<number>} the messages queued after the request
+	 * @returns {Promise<AlertMessage[]>} each with its own `id` (a send uses it as the Idempotency-Key)
 	 */
-	const send = async (ctx, { feature, event, values, assignee = null, allStaff = '' }) => {
-		if (!EVENT.test(event)) return 0;
+	const prepare = async (ctx, { feature, event, values, assignee = null, allStaff = '' }) => {
+		if (!EVENT.test(event)) return [];
 		const own = await settings.values(ctx.websiteId, feature);
 		const to = await recipientsOf(ctx.websiteId, own, assignee, allStaff);
-		if (to.length === 0) return 0;
 		const template = `${productId}.staff_${event}`;
 		const adminUrl = typeof own.adminUrl === 'string' ? own.adminUrl : '';
 		const link = adminUrl === '' ? '' : formatText(adminUrl, values);
-		/** @type {AlertMessage[]} */
-		const messages = to.map((recipient) => ({
+		return to.map((recipient) => ({
 			id: createId('sal'),
 			channel: recipient.channel,
 			template,
 			to: recipient.to,
 			values: { ...values, ...(link === '' ? {} : { link }) },
 		}));
+	};
+
+	/**
+	 * Alert the merchant's staff of an event, right after the request. Never throws.
+	 * @param {AlertContext} ctx
+	 * @param {Parameters<typeof prepare>[1]} alert as for {@link prepare}
+	 * @returns {Promise<number>} the messages queued after the request
+	 */
+	const send = async (ctx, alert) => {
+		const messages = await prepare(ctx, alert);
+		if (messages.length === 0) return 0;
+		const template = `${productId}.staff_${alert.event}`;
 		ctx.after(async () => {
 			/** @type {AlertMessage[]} */
 			const missed = [];
@@ -301,7 +318,7 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 				logger.warn('staff alert not sent and not saved', { websiteId: ctx.websiteId, template, error });
 			}
 		});
-		return to.length;
+		return messages.length;
 	};
 
 	/**
@@ -381,7 +398,7 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 		return ids.length === 0 ? 0 : (await rows.deleteMany({ websiteId: ctx.websiteId, id: { $in: ids } })).deletedCount;
 	};
 
-	return Object.freeze({ send, retry, forget, recipients: recipientsOf });
+	return Object.freeze({ send, prepare, retry, forget, recipients: recipientsOf });
 };
 
 /** @typedef {ReturnType<typeof createStaffAlerts>} StaffAlerts */

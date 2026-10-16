@@ -519,7 +519,7 @@ export const createProduct = (options) => {
 			/** Forward due events of a website after a public request (token requests do it by themselves). */
 			drain: events.drain,
 		}),
-		staffAlerts: Object.freeze({ send: staffAlerts.send, forget: staffAlerts.forget }),
+		staffAlerts: Object.freeze({ send: staffAlerts.send, prepare: staffAlerts.prepare, forget: staffAlerts.forget }),
 		imports: Object.freeze({ upsert: imports.upsert, prune: imports.prune, finish: imports.finish, status: imports.status }),
 		recentChanges: Object.freeze({ record: recent.record, list: recent.list }),
 		/** Accounts sign-ins of a website, verified offline with its pasted Accounts token (PLAN 0.4.6). */
