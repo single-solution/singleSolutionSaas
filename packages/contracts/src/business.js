@@ -165,3 +165,20 @@ export const validateBusinessJson = (value) => {
 		}),
 	});
 };
+
+/**
+ * Build the business.json document a website serves at `/.well-known/business.json` from what a business keeps (for
+ * example a product's store details): the same checks and normalizing as {@link validateBusinessJson}, and only the
+ * members that have a value (`name` always; the others are left out rather than `null`). Unknown members are dropped.
+ * @param {unknown} value
+ * @returns {ValidationResult<Partial<BusinessInfo> & { name: string }>}
+ */
+export const buildBusinessJson = (value) => {
+	const checked = validateBusinessJson(value);
+	if (!checked.ok) return checked;
+	/** @type {Record<string, unknown>} */
+	const out = {};
+	for (const [name, member] of Object.entries(checked.value))
+		if (member !== null && !(Array.isArray(member) && member.length === 0)) out[name] = member;
+	return Object.freeze({ ok: true, value: Object.freeze(/** @type {Partial<BusinessInfo> & { name: string }} */ (out)) });
+};

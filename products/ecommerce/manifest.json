@@ -10,6 +10,15 @@
 	"docsUrl": "/docs",
 	"features": [
 		{
+			"key": "store_details",
+			"name": "Store details",
+			"description": "Who your store is: its name and tagline, logo and icon (kept in your own storage), contact email, phone and WhatsApp, address, opening hours with dated exceptions and social links, shown by the shop read GET /v1/shop/store and made into your business.json (GET /v1/shop/store/business-json) for a headless website to serve.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/store_details.settings.json"
+			}
+		},
+		{
 			"key": "catalog",
 			"name": "Catalog",
 			"description": "Products, item types (what each item is and which parts it has), categories with SEO text, brands, the shop's own fields (product, variant, unit, order and customer), media in the merchant's own storage, search, listings and filters, the product page and the catalog admin widget, with best-practice SEO for every page: meta tags, structured data (products, listings, the business and the website) and sitemaps.",

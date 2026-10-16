@@ -34,6 +34,7 @@ import {
 	ZonesEditor,
 } from './lists.js';
 import { PaymentMethodsEditor } from './payment-methods.js';
+import { StoreDetailsEditor } from './store-details.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('@ss/ui/dashboard').FeatureSettings} FeatureSettings */
@@ -117,6 +118,7 @@ function WithCurrency({ websiteId, editor }) {
 const extrasOf = (websiteId) => {
 	const L = TEXTS.lists;
 	return {
+		store_details: <StoreDetailsEditor websiteId={websiteId} off={false} />,
 		catalog: {
 			items: [{ id: 'item-types', label: L.itemTypes.title, content: <ItemTypesEditor websiteId={websiteId} off={false} /> }],
 		},

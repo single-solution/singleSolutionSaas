@@ -56,10 +56,13 @@ does: only public https addresses and TLS databases.
 Every route is in `openapi.json` and in `/docs`. Besides the shop's own routes, the merchant's server reaches the kit's
 settings API (features, settings, texts, theme, Format, connections, and the lists `order_flow`, `payment_methods`,
 `couriers`, `policies`, `address_regions`, `customer_segments`, `delivery_zones`, `tax_rules`, `grades`, `unit_states`,
-`item_types`, `booking_schedules`, `role_prices`, `cancel_reasons`, `delivery_failure_reasons`, `attachment_kinds`,
+`item_types`, `booking_schedules`, `store_details`, `role_prices`, `cancel_reasons`, `delivery_failure_reasons`, `attachment_kinds`,
 `review_questions`, `claim_kinds` and `claim_statuses` at `/v1/lists/:list`), the activity log
 (`/v1/activity`) and counts of the main lists (`/v1/orders`, `/v1/products`, `/v1/customers`, `/v1/reviews` and
-`/v1/returns`, each with `/count` and `/counts?by=`, and ticket twins under `/v1/admin/`). Server-token calls may name
+`/v1/returns`, each with `/count` and `/counts?by=`, and ticket twins under `/v1/admin/`). Store details (Settings → Store
+details, or `PUT /v1/lists/store_details`: name, tagline, logo and icon in the merchant's storage, contacts, address, opening
+hours, social links) are read in public form at `GET /v1/shop/store`, and `GET /v1/shop/store/business-json` gives the
+business.json a headless website serves at `/.well-known/business.json`. Server-token calls may name
 the acting staff member with the `SS-Actor-*` headers, and the shopper routes (`/v1/shop/…`: cart, checkout, my orders,
 cancel, loyalty, wishlist) also take the server token with `SS-Sign-In` and `SS-Visitor-IP`, so a headless website acts
 as the shopper who signed in through Accounts: the kit checks that sign-in for the website of the token and refuses a

@@ -16955,6 +16955,293 @@
 					"type": "string"
 				}
 			}
+		},
+		"StoreFile": {
+			"type": "object",
+			"description": "The store's logo or icon in the merchant's storage, with its address (the catalog setting mediaBaseUrl, else a link signed for an hour).",
+			"required": ["key", "type", "size", "alt", "url"],
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"type": "string",
+					"description": "The storage key, under ecommerce/store/."
+				},
+				"type": {
+					"type": "string",
+					"enum": ["image/jpeg", "image/png", "image/webp", "image/avif"]
+				},
+				"size": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Bytes."
+				},
+				"alt": {
+					"type": "string"
+				},
+				"url": {
+					"type": ["string", "null"],
+					"description": "null without storage."
+				}
+			}
+		},
+		"ShopStore": {
+			"type": "object",
+			"description": "The store's public details (Settings → Store details): everything a website shows in its header, footer and contact page. No storage keys.",
+			"required": ["name", "tagline", "logo", "icon", "contact", "address", "hours", "social", "timeZone", "language"],
+			"additionalProperties": false,
+			"properties": {
+				"name": {
+					"type": "string",
+					"description": "The store name; the business.json name while none is set."
+				},
+				"tagline": {
+					"type": "string"
+				},
+				"logo": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["url", "alt", "type"],
+							"additionalProperties": false,
+							"properties": {
+								"url": {
+									"type": "string"
+								},
+								"alt": {
+									"type": "string"
+								},
+								"type": {
+									"type": "string"
+								}
+							}
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "The logo's public address (never changes for the file) and alternative text; null when not set."
+				},
+				"icon": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["url", "alt", "type"],
+							"additionalProperties": false,
+							"properties": {
+								"url": {
+									"type": "string"
+								},
+								"alt": {
+									"type": "string"
+								},
+								"type": {
+									"type": "string"
+								}
+							}
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "The icon's public address and alternative text; null when not set."
+				},
+				"contact": {
+					"type": "object",
+					"required": ["email", "phone", "whatsapp", "whatsappUrl"],
+					"additionalProperties": false,
+					"properties": {
+						"email": {
+							"type": "string"
+						},
+						"phone": {
+							"type": "string"
+						},
+						"whatsapp": {
+							"type": "string"
+						},
+						"whatsappUrl": {
+							"type": "string",
+							"description": "https://wa.me/<digits> for the WhatsApp number; '' without a usable number."
+						}
+					}
+				},
+				"address": {
+					"type": "object",
+					"required": ["line1", "line2", "area", "city", "region", "postalCode", "country", "countryName", "lines", "text"],
+					"additionalProperties": false,
+					"properties": {
+						"line1": {
+							"type": "string"
+						},
+						"line2": {
+							"type": "string"
+						},
+						"area": {
+							"type": "string"
+						},
+						"city": {
+							"type": "string"
+						},
+						"region": {
+							"type": "string"
+						},
+						"postalCode": {
+							"type": "string"
+						},
+						"country": {
+							"type": "string",
+							"description": "ISO 3166-1 alpha-2 code, '' when not set."
+						},
+						"countryName": {
+							"type": "string"
+						},
+						"lines": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "The address as its country writes it, one string per line."
+						},
+						"text": {
+							"type": "string",
+							"description": "The lines joined by commas."
+						}
+					}
+				},
+				"hours": {
+					"type": "object",
+					"required": ["weekly", "exceptions"],
+					"additionalProperties": false,
+					"properties": {
+						"weekly": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": ["day", "start", "end"],
+								"additionalProperties": false,
+								"properties": {
+									"day": {
+										"type": "integer",
+										"minimum": 1,
+										"maximum": 7,
+										"description": "1 Monday to 7 Sunday."
+									},
+									"start": {
+										"type": "string",
+										"description": "HH:MM"
+									},
+									"end": {
+										"type": "string",
+										"description": "HH:MM (24:00 = the end of the day)"
+									}
+								}
+							}
+						},
+						"exceptions": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": ["date", "name", "hours"],
+								"additionalProperties": false,
+								"properties": {
+									"date": {
+										"type": "string",
+										"description": "YYYY-MM-DD"
+									},
+									"name": {
+										"type": "string"
+									},
+									"hours": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": ["start", "end"],
+											"additionalProperties": false,
+											"properties": {
+												"start": {
+													"type": "string"
+												},
+												"end": {
+													"type": "string"
+												}
+											}
+										},
+										"description": "The date's own windows; none = closed all day."
+									}
+								}
+							}
+						}
+					},
+					"description": "Opening hours in the store time zone. A date in exceptions replaces that day of the week."
+				},
+				"social": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["label", "url"],
+						"additionalProperties": false,
+						"properties": {
+							"label": {
+								"type": "string"
+							},
+							"url": {
+								"type": "string",
+								"format": "uri"
+							}
+						}
+					}
+				},
+				"timeZone": {
+					"type": "string",
+					"description": "IANA time zone name, '' when not set."
+				},
+				"language": {
+					"type": "string",
+					"description": "BCP 47 tag, '' when not set."
+				}
+			}
+		},
+		"StoreBusinessJson": {
+			"type": "object",
+			"description": "business.json version 1 (name required; the members with no value are left out), made from the store details for a website to serve at /.well-known/business.json.",
+			"required": ["name"],
+			"additionalProperties": false,
+			"properties": {
+				"name": {
+					"type": "string"
+				},
+				"logo": {
+					"type": "string",
+					"format": "uri"
+				},
+				"email": {
+					"type": "string"
+				},
+				"phone": {
+					"type": "string"
+				},
+				"address": {
+					"type": "string"
+				},
+				"country": {
+					"type": "string"
+				},
+				"timeZone": {
+					"type": "string"
+				},
+				"currency": {
+					"type": "string"
+				},
+				"currencies": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"language": {
+					"type": "string"
+				}
+			}
 		}
 	},
 	"POST /v1/products/variants/generate": {
@@ -30828,6 +31115,124 @@
 							}
 						}
 					}
+				}
+			}
+		}
+	},
+	"GET /v1/shop/store": {
+		"summary": "The store's public details",
+		"description": "For the visitor (browser token, or the server token with SS-Visitor-IP). The Store details record (Settings → Store details, or lists/store_details): name (the business.json name while none is set), tagline, logo and icon (public addresses that never change for the file), contacts, address in parts and as lines, opening hours, social links, time zone and language. Every field is public.",
+		"response": {
+			"$ref": "#/components/schemas/ShopStore"
+		}
+	},
+	"GET /v1/shop/store/business-json": {
+		"summary": "The business.json made from the store details",
+		"description": "For the visitor (browser token, or the server token with SS-Visitor-IP). The business.json version 1 your website serves at /.well-known/business.json: name (the store name, else the business name), logo, email, phone, the address as text, country, time zone, the shop currency and currencies, and language; members with no value are left out. 409 conflict when neither the store details nor business.json give a name.",
+		"response": {
+			"$ref": "#/components/schemas/StoreBusinessJson"
+		}
+	},
+	"GET /v1/store-details/files": {
+		"summary": "The store's logo and icon",
+		"description": "The two files kept in your storage, each with its key, type, size, alternative text and address (null when not set).",
+		"response": {
+			"type": "object",
+			"required": ["logo", "icon"],
+			"additionalProperties": false,
+			"properties": {
+				"logo": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/StoreFile"
+						},
+						{
+							"type": "null"
+						}
+					]
+				},
+				"icon": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/StoreFile"
+						},
+						{
+							"type": "null"
+						}
+					]
+				}
+			}
+		}
+	},
+	"POST /v1/store-details/uploads": {
+		"summary": "Get a presigned upload for the logo or the icon",
+		"description": "Upload the file with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then keep it with PUT /v1/store-details/logo or /icon and the key. Images up to the catalog setting imageMaxBytes (at most 5 MB). 422 validation_failed at /for, /type or /size; 503 storage_not_connected.",
+		"body": {
+			"type": "object",
+			"required": ["for", "type", "size"],
+			"properties": {
+				"for": {
+					"type": "string",
+					"enum": ["logo", "icon"]
+				},
+				"type": {
+					"type": "string",
+					"enum": ["image/jpeg", "image/png", "image/webp", "image/avif"]
+				},
+				"size": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Bytes."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ProductUpload"
+		}
+	},
+	"PUT /v1/store-details/:file": {
+		"summary": "Set the store's logo or icon",
+		"description": "file is logo or icon (404 not_found otherwise). Upload the file first: POST /v1/store-details/uploads, then PUT it to the presigned address. The file is checked in your bucket: 422 validation_failed at /key when it is not the upload made for this file, not uploaded, or not a JPEG, PNG, WebP or AVIF image within the limit (such a file is deleted), at /alt; 503 storage_not_connected; 502 upstream_error when your storage cannot be reached. The file it replaces is deleted from your storage.",
+		"body": {
+			"type": "object",
+			"required": ["key"],
+			"properties": {
+				"key": {
+					"type": "string",
+					"description": "The key POST /v1/store-details/uploads gave."
+				},
+				"alt": {
+					"type": "string",
+					"maxLength": 200
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"logo": {
+					"$ref": "#/components/schemas/StoreFile"
+				},
+				"icon": {
+					"$ref": "#/components/schemas/StoreFile"
+				}
+			},
+			"description": "The file that was set, under its name."
+		}
+	},
+	"DELETE /v1/store-details/:file": {
+		"summary": "Remove the store's logo or icon",
+		"description": "file is logo or icon (404 not_found otherwise). The file is deleted from your storage.",
+		"response": {
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"logo": {
+					"type": "null"
+				},
+				"icon": {
+					"type": "null"
 				}
 			}
 		}

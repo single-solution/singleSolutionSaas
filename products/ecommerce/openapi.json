@@ -35951,6 +35951,116 @@
 				}
 			}
 		},
+		"/v1/shop/store": {
+			"get": {
+				"summary": "The store's public details",
+				"description": "For the visitor (browser token, or the server token with SS-Visitor-IP). The Store details record (Settings → Store details, or lists/store_details): name (the business.json name while none is set), tagline, logo and icon (public addresses that never change for the file), contacts, address in parts and as lines, opening hours, social links, time zone and language. Every field is public.",
+				"x-ss-auth": "browser",
+				"x-ss-feature": "store_details",
+				"security": [
+					{
+						"browserToken": []
+					},
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSVisitorIp"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ShopStore"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/shop/store/business-json": {
+			"get": {
+				"summary": "The business.json made from the store details",
+				"description": "For the visitor (browser token, or the server token with SS-Visitor-IP). The business.json version 1 your website serves at /.well-known/business.json: name (the store name, else the business name), logo, email, phone, the address as text, country, time zone, the shop currency and currencies, and language; members with no value are left out. 409 conflict when neither the store details nor business.json give a name.",
+				"x-ss-auth": "browser",
+				"x-ss-feature": "store_details",
+				"security": [
+					{
+						"browserToken": []
+					},
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSVisitorIp"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StoreBusinessJson"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/shop/wishlist": {
 			"get": {
 				"summary": "The shopper's wishlist",
@@ -36633,6 +36743,323 @@
 				}
 			}
 		},
+		"/v1/store-details/files": {
+			"get": {
+				"summary": "The store's logo and icon",
+				"description": "The two files kept in your storage, each with its key, type, size, alternative text and address (null when not set).",
+				"x-ss-auth": "server",
+				"x-ss-feature": "store_details",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"logo",
+										"icon"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"logo": {
+											"oneOf": [
+												{
+													"$ref": "#/components/schemas/StoreFile"
+												},
+												{
+													"type": "null"
+												}
+											]
+										},
+										"icon": {
+											"oneOf": [
+												{
+													"$ref": "#/components/schemas/StoreFile"
+												},
+												{
+													"type": "null"
+												}
+											]
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/store-details/uploads": {
+			"post": {
+				"summary": "Get a presigned upload for the logo or the icon",
+				"description": "Upload the file with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then keep it with PUT /v1/store-details/logo or /icon and the key. Images up to the catalog setting imageMaxBytes (at most 5 MB). 422 validation_failed at /for, /type or /size; 503 storage_not_connected.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "store_details",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"for",
+									"type",
+									"size"
+								],
+								"properties": {
+									"for": {
+										"type": "string",
+										"enum": [
+											"logo",
+											"icon"
+										]
+									},
+									"type": {
+										"type": "string",
+										"enum": [
+											"image/jpeg",
+											"image/png",
+											"image/webp",
+											"image/avif"
+										]
+									},
+									"size": {
+										"type": "integer",
+										"minimum": 1,
+										"description": "Bytes."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProductUpload"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/store-details/{file}": {
+			"delete": {
+				"summary": "Remove the store's logo or icon",
+				"description": "file is logo or icon (404 not_found otherwise). The file is deleted from your storage.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "store_details",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "file",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"additionalProperties": false,
+									"properties": {
+										"logo": {
+											"type": "null"
+										},
+										"icon": {
+											"type": "null"
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"summary": "Set the store's logo or icon",
+				"description": "file is logo or icon (404 not_found otherwise). Upload the file first: POST /v1/store-details/uploads, then PUT it to the presigned address. The file is checked in your bucket: 422 validation_failed at /key when it is not the upload made for this file, not uploaded, or not a JPEG, PNG, WebP or AVIF image within the limit (such a file is deleted), at /alt; 503 storage_not_connected; 502 upstream_error when your storage cannot be reached. The file it replaces is deleted from your storage.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "store_details",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "file",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"key"
+								],
+								"properties": {
+									"key": {
+										"type": "string",
+										"description": "The key POST /v1/store-details/uploads gave."
+									},
+									"alt": {
+										"type": "string",
+										"maxLength": 200
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"additionalProperties": false,
+									"properties": {
+										"logo": {
+											"$ref": "#/components/schemas/StoreFile"
+										},
+										"icon": {
+											"$ref": "#/components/schemas/StoreFile"
+										}
+									},
+									"description": "The file that was set, under its name."
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/texts": {
 			"get": {
 				"summary": "Widget texts",
@@ -37181,7 +37608,7 @@
 			"serverToken": {
 				"type": "http",
 				"scheme": "bearer",
-				"description": "The website's server token: the merchant's server only, never with an Origin header. It also reaches every visitor route, acting for the visitor named by SS-Visitor-IP (and SS-Sign-In)."
+				"description": "The website's server token: the merchant's server only, never with an Origin header. It also reaches every visitor route, acting for the visitor named by SS-Visitor-IP and, for a signed-in shopper, SS-Sign-In (their Accounts sign-in, checked for this website; a wrong, expired or foreign one is 401 invalid_sign_in)."
 			},
 			"ticket": {
 				"type": "http",
@@ -42534,6 +42961,8 @@
 					"totalSpent",
 					"totalSpentText",
 					"ordersPlaced",
+					"lastOrderAt",
+					"loyaltyPoints",
 					"createdAt",
 					"updatedAt"
 				],
@@ -42619,6 +43048,22 @@
 						"minimum": 0,
 						"description": "Their orders."
 					},
+					"lastOrderAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "When they last ordered (null: never)."
+					},
+					"loyaltyPoints": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"description": "Their loyalty points (0 without an account; null while Loyalty is off)."
+					},
 					"createdAt": {
 						"type": [
 							"string",
@@ -42657,6 +43102,8 @@
 					"totalSpent",
 					"totalSpentText",
 					"ordersPlaced",
+					"lastOrderAt",
+					"loyaltyPoints",
 					"createdAt",
 					"updatedAt",
 					"addresses",
@@ -42745,6 +43192,22 @@
 						"type": "integer",
 						"minimum": 0,
 						"description": "Their orders."
+					},
+					"lastOrderAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "When they last ordered (null: never)."
+					},
+					"loyaltyPoints": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"description": "Their loyalty points (0 without an account; null while Loyalty is off)."
 					},
 					"createdAt": {
 						"type": [
@@ -48867,6 +49330,9 @@
 					"role",
 					"customer",
 					"city",
+					"delivery",
+					"lineCount",
+					"lines",
 					"itemCount",
 					"total",
 					"totalText",
@@ -48915,6 +49381,100 @@
 					"city": {
 						"type": "string",
 						"description": "The delivery city ('' without an address)."
+					},
+					"delivery": {
+						"type": "object",
+						"description": "How it is delivered: the method, the name of the delivery rate the shopper picked ('' without delivery zones or rates) and the delivery city ('' without an address).",
+						"required": [
+							"method",
+							"rateName",
+							"city"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"method": {
+								"type": "string",
+								"enum": [
+									"delivery",
+									"pickup",
+									"none"
+								]
+							},
+							"rateName": {
+								"type": "string"
+							},
+							"city": {
+								"type": "string"
+							}
+						}
+					},
+					"lineCount": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "All lines of the order; lines shows the first five."
+					},
+					"lines": {
+						"type": "array",
+						"maxItems": 5,
+						"description": "The first five lines, in order.",
+						"items": {
+							"type": "object",
+							"required": [
+								"name",
+								"variantName",
+								"quantity",
+								"measure",
+								"total",
+								"totalText"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"name": {
+									"type": "string",
+									"description": "The product name when it was ordered."
+								},
+								"variantName": {
+									"type": "string",
+									"description": "For example 'Blue / Large' ('' without options)."
+								},
+								"quantity": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Pieces, or thousandths of the unit of a measured item (see measure)."
+								},
+								"measure": {
+									"oneOf": [
+										{
+											"type": "object",
+											"required": [
+												"unit",
+												"quantityText"
+											],
+											"additionalProperties": false,
+											"properties": {
+												"unit": {
+													"type": "string"
+												},
+												"quantityText": {
+													"type": "string"
+												}
+											}
+										},
+										{
+											"type": "null"
+										}
+									],
+									"description": "An item sold in a unit of its own: the unit and the quantity in units as text; null for pieces."
+								},
+								"total": {
+									"type": "integer",
+									"description": "What the line comes to, minor units."
+								},
+								"totalText": {
+									"type": "string"
+								}
+							}
+						}
 					},
 					"itemCount": {
 						"type": "integer",
@@ -50076,6 +50636,10 @@
 					"typeKey",
 					"status",
 					"price",
+					"priceMax",
+					"priceText",
+					"priceMaxText",
+					"currency",
 					"inStock",
 					"stock",
 					"trackStock",
@@ -50129,6 +50693,23 @@
 						"type": "integer",
 						"minimum": 0,
 						"description": "The lowest active variant price, minor units."
+					},
+					"priceMax": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "The highest active variant price, minor units (equal to price with one price)."
+					},
+					"priceText": {
+						"type": "string",
+						"description": "price as text, by the Format."
+					},
+					"priceMaxText": {
+						"type": "string",
+						"description": "priceMax as text, by the Format."
+					},
+					"currency": {
+						"type": "string",
+						"description": "The shop currency."
 					},
 					"inStock": {
 						"type": "boolean"
@@ -56497,6 +57078,275 @@
 					}
 				}
 			},
+			"ShopStore": {
+				"type": "object",
+				"description": "The store's public details (Settings → Store details): everything a website shows in its header, footer and contact page. No storage keys.",
+				"required": [
+					"name",
+					"tagline",
+					"logo",
+					"icon",
+					"contact",
+					"address",
+					"hours",
+					"social",
+					"timeZone",
+					"language"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"name": {
+						"type": "string",
+						"description": "The store name; the business.json name while none is set."
+					},
+					"tagline": {
+						"type": "string"
+					},
+					"logo": {
+						"oneOf": [
+							{
+								"type": "object",
+								"required": [
+									"url",
+									"alt",
+									"type"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"url": {
+										"type": "string"
+									},
+									"alt": {
+										"type": "string"
+									},
+									"type": {
+										"type": "string"
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "The logo's public address (never changes for the file) and alternative text; null when not set."
+					},
+					"icon": {
+						"oneOf": [
+							{
+								"type": "object",
+								"required": [
+									"url",
+									"alt",
+									"type"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"url": {
+										"type": "string"
+									},
+									"alt": {
+										"type": "string"
+									},
+									"type": {
+										"type": "string"
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "The icon's public address and alternative text; null when not set."
+					},
+					"contact": {
+						"type": "object",
+						"required": [
+							"email",
+							"phone",
+							"whatsapp",
+							"whatsappUrl"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"email": {
+								"type": "string"
+							},
+							"phone": {
+								"type": "string"
+							},
+							"whatsapp": {
+								"type": "string"
+							},
+							"whatsappUrl": {
+								"type": "string",
+								"description": "https://wa.me/<digits> for the WhatsApp number; '' without a usable number."
+							}
+						}
+					},
+					"address": {
+						"type": "object",
+						"required": [
+							"line1",
+							"line2",
+							"area",
+							"city",
+							"region",
+							"postalCode",
+							"country",
+							"countryName",
+							"lines",
+							"text"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"line1": {
+								"type": "string"
+							},
+							"line2": {
+								"type": "string"
+							},
+							"area": {
+								"type": "string"
+							},
+							"city": {
+								"type": "string"
+							},
+							"region": {
+								"type": "string"
+							},
+							"postalCode": {
+								"type": "string"
+							},
+							"country": {
+								"type": "string",
+								"description": "ISO 3166-1 alpha-2 code, '' when not set."
+							},
+							"countryName": {
+								"type": "string"
+							},
+							"lines": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								},
+								"description": "The address as its country writes it, one string per line."
+							},
+							"text": {
+								"type": "string",
+								"description": "The lines joined by commas."
+							}
+						}
+					},
+					"hours": {
+						"type": "object",
+						"required": [
+							"weekly",
+							"exceptions"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"weekly": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"day",
+										"start",
+										"end"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"day": {
+											"type": "integer",
+											"minimum": 1,
+											"maximum": 7,
+											"description": "1 Monday to 7 Sunday."
+										},
+										"start": {
+											"type": "string",
+											"description": "HH:MM"
+										},
+										"end": {
+											"type": "string",
+											"description": "HH:MM (24:00 = the end of the day)"
+										}
+									}
+								}
+							},
+							"exceptions": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"date",
+										"name",
+										"hours"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"date": {
+											"type": "string",
+											"description": "YYYY-MM-DD"
+										},
+										"name": {
+											"type": "string"
+										},
+										"hours": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"start",
+													"end"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"start": {
+														"type": "string"
+													},
+													"end": {
+														"type": "string"
+													}
+												}
+											},
+											"description": "The date's own windows; none = closed all day."
+										}
+									}
+								}
+							}
+						},
+						"description": "Opening hours in the store time zone. A date in exceptions replaces that day of the week."
+					},
+					"social": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": [
+								"label",
+								"url"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"label": {
+									"type": "string"
+								},
+								"url": {
+									"type": "string",
+									"format": "uri"
+								}
+							}
+						}
+					},
+					"timeZone": {
+						"type": "string",
+						"description": "IANA time zone name, '' when not set."
+					},
+					"language": {
+						"type": "string",
+						"description": "BCP 47 tag, '' when not set."
+					}
+				}
+			},
 			"ShopVariant": {
 				"type": "object",
 				"required": [
@@ -57176,6 +58026,92 @@
 								}
 							}
 						}
+					}
+				}
+			},
+			"StoreBusinessJson": {
+				"type": "object",
+				"description": "business.json version 1 (name required; the members with no value are left out), made from the store details for a website to serve at /.well-known/business.json.",
+				"required": [
+					"name"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"logo": {
+						"type": "string",
+						"format": "uri"
+					},
+					"email": {
+						"type": "string"
+					},
+					"phone": {
+						"type": "string"
+					},
+					"address": {
+						"type": "string"
+					},
+					"country": {
+						"type": "string"
+					},
+					"timeZone": {
+						"type": "string"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"currencies": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"language": {
+						"type": "string"
+					}
+				}
+			},
+			"StoreFile": {
+				"type": "object",
+				"description": "The store's logo or icon in the merchant's storage, with its address (the catalog setting mediaBaseUrl, else a link signed for an hour).",
+				"required": [
+					"key",
+					"type",
+					"size",
+					"alt",
+					"url"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"key": {
+						"type": "string",
+						"description": "The storage key, under ecommerce/store/."
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"image/jpeg",
+							"image/png",
+							"image/webp",
+							"image/avif"
+						]
+					},
+					"size": {
+						"type": "integer",
+						"minimum": 1,
+						"description": "Bytes."
+					},
+					"alt": {
+						"type": "string"
+					},
+					"url": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "null without storage."
 					}
 				}
 			},

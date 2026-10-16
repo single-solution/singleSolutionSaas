@@ -29,7 +29,7 @@ export {
 	validateBlueprint,
 } from './validate.js';
 export { manifestPriceList } from './semantics.js';
-export { BUSINESS_JSON_TEMPLATE, validateBusinessJson } from './business.js';
+export { BUSINESS_JSON_TEMPLATE, buildBusinessJson, validateBusinessJson } from './business.js';
 export { PROFILE_CHOICES, adviseFeatures } from './profile.js';
 export {
 	DEFAULT_FORMAT,

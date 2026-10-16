@@ -34,6 +34,7 @@ import dealsSettings from '../schemas/deals.settings.json' with { type: 'json' }
 import loyaltySettings from '../schemas/loyalty.settings.json' with { type: 'json' };
 import bundlesSettings from '../schemas/bundles.settings.json' with { type: 'json' };
 import reviewsSettings from '../schemas/reviews.settings.json' with { type: 'json' };
+import storeDetailsSettings from '../schemas/store_details.settings.json' with { type: 'json' };
 import wishlistSettings from '../schemas/wishlist.settings.json' with { type: 'json' };
 import rolePricingSettings from '../schemas/role_pricing.settings.json' with { type: 'json' };
 import eventsSettings from '../schemas/events.settings.json' with { type: 'json' };
@@ -75,6 +76,7 @@ import { createSealer, createSiteSecrets } from './site-secret.js';
 
 /** Settings schema of each feature (manifest.json points at them with `$ref`). @type {Record<string, unknown>} */
 const SETTINGS = {
+	store_details: storeDetailsSettings,
 	catalog: catalogSettings,
 	variants: variantsSettings,
 	size_charts: sizeChartsSettings,
@@ -296,7 +298,7 @@ export const createProductInstance = (options) => {
 			storage: {
 				label: 'Storage for product images, downloads and return photos (S3-compatible)',
 				kind: 'storage',
-				neededBy: ['catalog', 'digital_goods'],
+				neededBy: ['catalog', 'digital_goods', 'store_details'],
 			},
 			accounts: {
 				label: 'Accounts token (shoppers sign in, activity-log copies)',

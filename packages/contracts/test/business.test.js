@@ -1,7 +1,59 @@
 import { describe, expect, it } from 'vitest';
-import { BUSINESS_JSON_TEMPLATE, validateActivityCopy, validateBusinessJson, validateDataRightsRequest } from '../src/index.js';
+import {
+	BUSINESS_JSON_TEMPLATE,
+	buildBusinessJson,
+	validateActivityCopy,
+	validateBusinessJson,
+	validateDataRightsRequest,
+} from '../src/index.js';
 import { WEBSITE, businessJson } from './fixtures.js';
 import { expectProblem } from './helpers.js';
+
+describe('buildBusinessJson', () => {
+	it('builds the document a website serves at /.well-known/business.json: normalized, without the members it has no value for', () => {
+		expect(
+			buildBusinessJson({
+				name: '  Example Shop ',
+				logo: 'https://shop.example.com/logo.png',
+				email: 'hello@shop.example.com',
+				phone: '+1 555 0100',
+				address: '1 Example Street\nExample City',
+				country: 'us',
+				timeZone: 'America/New_York',
+				currency: 'usd',
+				currencies: ['USD', 'EUR'],
+				language: 'en-us',
+				tagline: 'ignored: not a business.json member',
+			}),
+		).toEqual({
+			ok: true,
+			value: {
+				name: 'Example Shop',
+				logo: 'https://shop.example.com/logo.png',
+				email: 'hello@shop.example.com',
+				phone: '+1 555 0100',
+				address: '1 Example Street\nExample City',
+				country: 'US',
+				timeZone: 'America/New_York',
+				currency: 'USD',
+				currencies: ['USD', 'EUR'],
+				language: 'en-US',
+			},
+		});
+		expect(buildBusinessJson({ name: 'Shop', logo: 'http://insecure.example.com/logo.png', email: 'not-an-email' })).toEqual({
+			ok: true,
+			value: { name: 'Shop' },
+		});
+		// what it builds is what validateBusinessJson reads back
+		const built = /** @type {any} */ (buildBusinessJson({ name: 'Shop', country: 'PK', currency: 'PKR' })).value;
+		expect(validateBusinessJson(built)).toMatchObject({ ok: true, value: { name: 'Shop', country: 'PK', currency: 'PKR' } });
+	});
+
+	it('fails without a name', () => {
+		expect(buildBusinessJson({ email: 'a@b.co' }).ok).toBe(false);
+		expect(buildBusinessJson(null).ok).toBe(false);
+	});
+});
 
 describe('validateBusinessJson', () => {
 	it('normalizes a full file', () => {

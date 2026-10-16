@@ -79,7 +79,9 @@ field becomes `null` (`currencies`: `[]`). `logo` must be an https URL, `country
 upper-case), `timeZone` an IANA name the runtime knows (returned in canonical form), `currency` the store currency
 (ISO 4217, upper-case), `currencies` the currencies the business takes (the store currency first, each once, at most
 `MAX_CURRENCIES` 20; codes that are not currencies are dropped) and `language` the default language (a canonical BCP
-47 tag). `BUSINESS_JSON_TEMPLATE` is the example every product's docs ship.
+47 tag). `BUSINESS_JSON_TEMPLATE` is the example every product's docs ship. `buildBusinessJson(value)` makes the document a
+website serves at `/.well-known/business.json` from what a business keeps (for example Ecommerce's store details): the
+same checks and normalizing, and only the members that have a value are kept (it fails only without a `name`).
 
 ## Cross-product shapes (0.4.11)
 

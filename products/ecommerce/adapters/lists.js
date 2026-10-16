@@ -1,7 +1,7 @@
 /**
  * Ecommerce's list settings, in the product database (like Chat's, PLAN 0.8.4 step 8): settings that are lists or
  * records, which a settings schema cannot hold — the order flow (statuses and allowed moves), the payment methods
- * (fixed-choices E2), delivery zones, couriers, the shop's policies (E27), saved customer segments (E11; today's three
+ * (fixed-choices E2), the store details (one record: name, logo, contacts, address, hours, social links), delivery zones, couriers, the shop's policies (E27), saved customer segments (E11; today's three
  * until saved),
  * the region names checkout offers per country (dynamic model §5), tax rules, condition grades, unit states (E38), item types (dynamic model §1), booking schedules with their dated exceptions (E30), role prices (E19), the
  * cancel and failed-delivery reasons (fixed-choices E19), the order attachment kinds (E20) and the claim kinds and
@@ -28,6 +28,7 @@ import { checkReviewQuestions } from '../core/reviews.js';
 import { DEFAULT_ATTACHMENT_KINDS, checkAttachmentKinds } from '../core/attachments.js';
 import { DEFAULT_CANCEL_REASONS, DEFAULT_DELIVERY_FAILURE_REASONS, checkReasons } from '../core/order-reasons.js';
 import { DEFAULT_CLAIM_KINDS, DEFAULT_CLAIM_STATUSES, checkClaimKinds, checkClaimStatuses } from '../core/returns.js';
+import { checkStoreDetails, defaultStoreDetails } from '../core/store-details.js';
 import { checkTaxRules } from '../core/taxes.js';
 import { DEFAULT_UNIT_STATES, checkUnitStates } from '../core/unit-states.js';
 
@@ -41,6 +42,12 @@ import { DEFAULT_UNIT_STATES, checkUnitStates } from '../core/unit-states.js';
 
 /** Each list: the feature it belongs to, its name on screens, its check and its value before it is saved. */
 export const LISTS = Object.freeze({
+	store_details: {
+		feature: 'store_details',
+		title: 'Store details',
+		check: checkStoreDetails,
+		fallback: defaultStoreDetails,
+	},
 	order_flow: {
 		feature: 'checkout',
 		title: 'Order statuses and moves',

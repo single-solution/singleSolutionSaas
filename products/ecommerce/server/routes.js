@@ -21,6 +21,7 @@ import { createOrders } from './orders.js';
 import { createPromotions } from './promotions.js';
 import { createSeo } from './seo.js';
 import { createService } from './service.js';
+import { createStoreDetails } from './store-details.js';
 import { WIDGET_SCRIPT } from './widget-script.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -51,6 +52,7 @@ export const createRoutes = (product) => {
 		createPromotions(product, service),
 		createExtras(product, service),
 		createSeo(product, service),
+		createStoreDetails(product, service),
 	];
 
 	product.attach({

@@ -5,6 +5,7 @@
 
 /** @type {import('@ss/ui/dashboard').DashboardCategories} */
 export const CATEGORIES = Object.freeze([
+	{ title: 'Your store', features: ['store_details'] },
 	{
 		title: 'Products',
 		features: [

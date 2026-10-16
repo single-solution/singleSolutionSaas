@@ -55,6 +55,61 @@ const overlapping = (ranges) =>
 export const defaultSchedules = () => [{ key: 'main', name: 'Main', weekly: [], exceptions: [] }];
 
 /**
+ * Check the weekly windows and dated exceptions of one entry (`weekly`, `exceptions`), pushing a message for each
+ * problem to `errors`, each starting with `at`: the hours of a booking schedule, and the opening hours of the store
+ * details. Windows of one day may not overlap; exceptions are sorted by date.
+ * @param {Record<string, unknown>} entry
+ * @param {string} at what the messages begin with ("Schedule 'main'")
+ * @param {string[]} errors
+ * @returns {Hours}
+ */
+export const checkHours = (entry, at, errors) => {
+	const weeklyRaw = entry.weekly ?? [];
+	/** @type {HoursWindow[]} */
+	const weekly = [];
+	if (!Array.isArray(weeklyRaw) || weeklyRaw.length > SCHEDULE_LIMITS.windows)
+		errors.push(`${at}: weekly is a list of at most ${SCHEDULE_LIMITS.windows} windows.`);
+	else
+		weeklyRaw.forEach((item, index) => {
+			const range = rangeOf(item);
+			const day = isObject(item) ? /** @type {Record<string, unknown>} */ (item).day : undefined;
+			if (!range || !Number.isInteger(day) || Number(day) < 1 || Number(day) > 7)
+				return void errors.push(
+					`${at} period ${index + 1}: a day from 1 (Monday) to 7 (Sunday), and a start and a later end as HH:MM (24:00 = the end of the day).`,
+				);
+			weekly.push({ day: Number(day), ...range });
+		});
+	for (let day = 1; day <= 7; day += 1)
+		if (overlapping(weekly.filter((period) => period.day === day))) errors.push(`${at}: two windows of the same day overlap.`);
+	const exceptionsRaw = entry.exceptions ?? [];
+	/** @type {HoursException[]} */
+	const exceptions = [];
+	const dates = new Set();
+	if (!Array.isArray(exceptionsRaw) || exceptionsRaw.length > SCHEDULE_LIMITS.exceptions)
+		errors.push(`${at}: exceptions is a list of at most ${SCHEDULE_LIMITS.exceptions} dates.`);
+	else
+		exceptionsRaw.forEach((item, index) => {
+			const where = `${at} date ${index + 1}`;
+			const exception = isObject(item) ? /** @type {Record<string, unknown>} */ (item) : {};
+			const date = typeof exception.date === 'string' ? exception.date : '';
+			const real = DATE.test(date) && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
+			if (!real || dates.has(date)) return void errors.push(`${where}: a real date as YYYY-MM-DD, once.`);
+			dates.add(date);
+			const label = typeof exception.name === 'string' ? exception.name.trim() : '';
+			if (label.length > SCHEDULE_LIMITS.name)
+				return void errors.push(`${where}: a name of at most ${SCHEDULE_LIMITS.name} characters.`);
+			const given = exception.hours ?? [];
+			const hours = Array.isArray(given) && given.length <= SCHEDULE_LIMITS.perDay ? given.map(rangeOf) : [null];
+			if (hours.some((range) => range === null) || overlapping(/** @type {TimeRange[]} */ (hours)))
+				return void errors.push(
+					`${where}: up to ${SCHEDULE_LIMITS.perDay} windows that do not overlap, each a start and a later end as HH:MM (none = closed all day).`,
+				);
+			exceptions.push({ date, name: label, hours: /** @type {TimeRange[]} */ (hours) });
+		});
+	return { weekly, exceptions: exceptions.sort((a, b) => a.date.localeCompare(b.date)) };
+};
+
+/**
  * Check the schedules the merchant saves.
  * @param {unknown} value
  * @returns {{ ok: true, value: BookingSchedule[] } | { ok: false, errors: string[] }}
@@ -80,50 +135,8 @@ export const checkBookingSchedules = (value) => {
 		const name = typeof entry.name === 'string' ? entry.name.trim() : '';
 		if (!name || name.length > SCHEDULE_LIMITS.name)
 			errors.push(`${at} needs a name of at most ${SCHEDULE_LIMITS.name} characters.`);
-		const weeklyRaw = entry.weekly ?? [];
-		/** @type {HoursWindow[]} */
-		const weekly = [];
-		if (!Array.isArray(weeklyRaw) || weeklyRaw.length > SCHEDULE_LIMITS.windows)
-			errors.push(`${at}: weekly is a list of at most ${SCHEDULE_LIMITS.windows} windows.`);
-		else
-			weeklyRaw.forEach((item, index) => {
-				const range = rangeOf(item);
-				const day = isObject(item) ? /** @type {Record<string, unknown>} */ (item).day : undefined;
-				if (!range || !Number.isInteger(day) || Number(day) < 1 || Number(day) > 7)
-					return void errors.push(
-						`${at} period ${index + 1}: a day from 1 (Monday) to 7 (Sunday), and a start and a later end as HH:MM (24:00 = the end of the day).`,
-					);
-				weekly.push({ day: Number(day), ...range });
-			});
-		for (let day = 1; day <= 7; day += 1)
-			if (overlapping(weekly.filter((period) => period.day === day)))
-				errors.push(`${at}: two windows of the same day overlap.`);
-		const exceptionsRaw = entry.exceptions ?? [];
-		/** @type {HoursException[]} */
-		const exceptions = [];
-		const dates = new Set();
-		if (!Array.isArray(exceptionsRaw) || exceptionsRaw.length > SCHEDULE_LIMITS.exceptions)
-			errors.push(`${at}: exceptions is a list of at most ${SCHEDULE_LIMITS.exceptions} dates.`);
-		else
-			exceptionsRaw.forEach((item, index) => {
-				const where = `${at} date ${index + 1}`;
-				const exception = isObject(item) ? /** @type {Record<string, unknown>} */ (item) : {};
-				const date = typeof exception.date === 'string' ? exception.date : '';
-				const real = DATE.test(date) && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
-				if (!real || dates.has(date)) return void errors.push(`${where}: a real date as YYYY-MM-DD, once.`);
-				dates.add(date);
-				const label = typeof exception.name === 'string' ? exception.name.trim() : '';
-				if (label.length > SCHEDULE_LIMITS.name)
-					return void errors.push(`${where}: a name of at most ${SCHEDULE_LIMITS.name} characters.`);
-				const given = exception.hours ?? [];
-				const hours = Array.isArray(given) && given.length <= SCHEDULE_LIMITS.perDay ? given.map(rangeOf) : [null];
-				if (hours.some((range) => range === null) || overlapping(/** @type {TimeRange[]} */ (hours)))
-					return void errors.push(
-						`${where}: up to ${SCHEDULE_LIMITS.perDay} windows that do not overlap, each a start and a later end as HH:MM (none = closed all day).`,
-					);
-				exceptions.push({ date, name: label, hours: /** @type {TimeRange[]} */ (hours) });
-			});
-		out.push({ key, name, weekly, exceptions: exceptions.sort((a, b) => a.date.localeCompare(b.date)) });
+		const { weekly, exceptions } = checkHours(entry, at, errors);
+		out.push({ key, name, weekly, exceptions });
 	}
 	if (errors.length > 0) return { ok: false, errors };
 	return { ok: true, value: out };

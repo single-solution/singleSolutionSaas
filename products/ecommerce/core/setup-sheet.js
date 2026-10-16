@@ -137,8 +137,29 @@ const schedulesWords = (schedules) =>
 const named = (one, many, name) => (items) =>
 	items.length === 0 ? `No ${many} yet.` : listed(counted(items.length, one, many), items.map(name));
 
+/**
+ * The store details in a line: the name, and what else is set (tagline, logo, icon, contacts, address, hours, social links).
+ * @param {import('./store-details.js').StoreDetails} details
+ */
+const storeDetailsWords = (details) => {
+	const set = [
+		details.tagline ? 'a tagline' : '',
+		details.logo ? 'a logo' : '',
+		details.icon ? 'an icon' : '',
+		details.email ? 'an email address' : '',
+		details.phone ? 'a phone number' : '',
+		details.whatsapp ? 'a WhatsApp number' : '',
+		details.address.line1 || details.address.city ? 'an address' : '',
+		details.hours.weekly.length > 0 || details.hours.exceptions.length > 0 ? 'opening hours' : '',
+		details.social.length > 0 ? counted(details.social.length, 'social link', 'social links') : '',
+	].filter(Boolean);
+	const name = details.name ? nameOf(details.name) : 'No store name';
+	return set.length > 0 ? `${name}, with ${set.join(', ')}.` : `${name}; nothing else is set yet.`;
+};
+
 /** Each list in Ecommerce's own words (`hooks.blueprint` lists). */
 export const LIST_WORDS = Object.freeze({
+	store_details: storeDetailsWords,
 	order_flow: flowWords,
 	payment_methods: named(
 		'payment method',
