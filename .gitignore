@@ -18,3 +18,8 @@ next-env.d.ts
 
 # What ss-import read writes (store data: never commit it)
 import-out/
+
+# Claude working notes (kept locally, never in the repo)
+/CLAUDE.md
+/HANDOFF.md
+/audit/
