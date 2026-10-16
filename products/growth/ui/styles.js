@@ -112,6 +112,14 @@ ul { list-style: none; margin: 0; padding: 0; }
 .card { border-radius: calc(var(--ss-radius, 8px) * 2); padding: 14px 16px;
   background: color-mix(in srgb, var(--ss-color-accent, #4f46e5) 6%, transparent); }
 .card-head { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.table-scroll { overflow-x: auto; max-width: 100%; }
+.products-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+.products-table th, .products-table td { padding: 6px 10px; text-align: right; white-space: nowrap; }
+.products-table th:first-child, .products-table td:first-child { text-align: left; white-space: normal; min-width: 10em; }
+.products-table tbody tr:nth-child(odd) { background: rgba(127, 127, 127, 0.07); }
+.products-table th button { font: inherit; font-weight: 600; padding: 0; margin: 0; }
+.products-table th[aria-sort='ascending'] button::after { content: ' ↑'; }
+.products-table th[aria-sort='descending'] button::after { content: ' ↓'; }
 .card details.preview { margin-top: 10px; }
 .card details.preview > summary { cursor: pointer; font-weight: 600; }
 .card-head h3, .card-head h4 { margin: 0; overflow-wrap: anywhere; }

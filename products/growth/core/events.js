@@ -18,6 +18,7 @@
 import { isAmount, isCurrency, zonedDay } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
 import { pathMatches } from '@ss/contracts/text';
+import { itemTotals } from './product-performance.js';
 import { FUNNEL_STEPS, STANDARD_EVENTS, VISIT_IDLE_MS } from './widgets.js';
 
 /** The feature each event type belongs to. */
@@ -96,6 +97,8 @@ export const MAX_BATCH = 25;
 
 /** Most items kept of one funnel event. */
 const MAX_ITEMS = 50;
+/** Most characters of an item's name the product totals keep (R7 #113). */
+const MAX_ITEM_NAME = 120;
 
 /** Device classes the page script reports (from the screen width). */
 export const DEVICES = Object.freeze(['mobile', 'tablet', 'desktop']);
@@ -288,8 +291,10 @@ const wholeIn = (value, min, max) =>
 	typeof value === 'number' && Number.isSafeInteger(value) && value >= min && value <= max ? value : null;
 
 /**
- * The items of a funnel event: ids and quantities only.
+ * The items of a funnel event: ids, quantities, and the name and price (minor units) the event gave, which only the
+ * product totals take (R7 #113; the raw event keeps ids and quantities).
  * @param {unknown} value
+ * @returns {import('./product-performance.js').EventItem[]}
  */
 const itemsOf = (value) =>
 	(Array.isArray(value) ? value : [])
@@ -299,6 +304,8 @@ const itemsOf = (value) =>
 			id: textOf(item.id, 80),
 			variantId: textOf(item.variantId, 80) || null,
 			quantity: wholeIn(item.quantity, 1, 10_000) ?? 1,
+			name: textOf(item.name, MAX_ITEM_NAME),
+			price: isAmount(item.price) ? item.price : null,
 		}))
 		.filter((item) => item.id !== '');
 
@@ -418,13 +425,21 @@ const checkBase = (raw, { domain, country }) => {
 		const currency = isCurrency(raw.currency) ? raw.currency : null;
 		const value = currency !== null && isAmount(raw.value) ? raw.value : 0;
 		const orderId = type === 'purchase' ? textOf(raw.orderId, 80) || null : null;
+		const items = itemsOf(raw.items);
 		return {
 			type,
 			path,
-			data: { items: itemsOf(raw.items), value, currency, ...(type === 'purchase' ? { orderId } : {}) },
+			data: {
+				items: items.map((item) => ({ id: item.id, variantId: item.variantId, quantity: item.quantity })),
+				value,
+				currency,
+				...(type === 'purchase' ? { orderId } : {}),
+			},
 			totals: [
 				{ metric: 'event', key: type, count: 1, sum: 0 },
 				...(type === 'purchase' && currency !== null ? [{ metric: 'revenue', key: currency, count: 1, sum: value }] : []),
+				// each product's step, units, revenue and name (R7 #113)
+				...itemTotals(type, items, currency),
 			],
 		};
 	}

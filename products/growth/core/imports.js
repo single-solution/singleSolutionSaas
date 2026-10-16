@@ -36,6 +36,17 @@ const pathAnd = (second) => (/** @type {string} */ key) => {
 };
 /** @param {ReadonlyArray<string>} values */
 const oneOf = (values) => (/** @type {string} */ key) => values.includes(key);
+/** A product id as the shop events give it (R7 #113): 1–80 characters, no control characters. @param {string} key */
+// eslint-disable-next-line no-control-regex
+const isItem = (key) => key.length > 0 && key.length <= 80 && !/[\u0000-\u001f\u007f]/.test(key);
+/**
+ * A product id and a second part joined by a line break (`<product id>\n<part>`), the second part checked.
+ * @param {(part: string) => boolean} second
+ */
+const itemAnd = (second) => (/** @type {string} */ key) => {
+	const cut = key.indexOf('\n');
+	return cut > 0 && isItem(key.slice(0, cut)) && second(key.slice(cut + 1));
+};
 
 /**
  * The metrics of the daily totals (as `events.js` writes them): what their keys are (`keys`, for messages, and the
@@ -78,6 +89,13 @@ const METRICS = Object.freeze({
 	vital_value: { keys: VITAL_NAMES.join(', '), key: oneOf(VITAL_NAMES), sum: true },
 	vital_page: { keys: '<path>\\n<vital>', key: pathAnd(oneOf(VITAL_NAMES)), sum: true },
 	not_found_from: { keys: '<path>\\n<where from>', key: pathAnd(isText), sum: false },
+	// product performance (R7 #113): each product's steps (a cart's and a purchase's sum: units), revenue and name
+	item_view: { keys: 'a product id', key: isItem, sum: false },
+	item_cart: { keys: 'a product id', key: isItem, sum: true },
+	item_checkout: { keys: 'a product id', key: isItem, sum: false },
+	item_purchase: { keys: 'a product id', key: isItem, sum: true },
+	item_revenue: { keys: '<product id>\\n<currency>', key: itemAnd(isCurrency), sum: true },
+	item_name: { keys: '<product id>\\n<name>', key: itemAnd(isText), sum: false },
 });
 
 /**

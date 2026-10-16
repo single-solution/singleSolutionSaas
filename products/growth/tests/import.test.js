@@ -73,6 +73,13 @@ const dayOf = (day, visits) => ({
 		vital: { 'LCP:good': { c: 1 } },
 		vital_value: { LCP: { c: 1, s: 1800 } },
 		search: { case: { c: 1, s: 0 } },
+		// product performance (R7 #113): a product's steps, units, revenue per currency and name
+		item_view: { prd_1: { c: visits } },
+		item_cart: { prd_1: { c: 2, s: 3 } },
+		item_checkout: { prd_1: { c: 1 } },
+		item_purchase: { prd_1: { c: 1, s: 2 } },
+		item_revenue: { 'prd_1\nUSD': { c: 2, s: 5000 } },
+		item_name: { 'prd_1\nBlue Lamp': { c: visits } },
 	},
 });
 
@@ -95,6 +102,9 @@ describe('import of daily totals (K10, G8)', () => {
 						revenue: { USD: { c: 1, s: 'many' } },
 						vital_page: { '/a\nLCP': { c: 1, s: 900 }, '/a\nXYZ': { c: 1 } },
 						not_found_from: { '/gone\nwww.example.com': { c: 1 }, '/gone\n': { c: 1 } },
+						item_view: { 'prd_1\nx': { c: 1 } },
+						item_checkout: { prd_1: { c: 1, s: 2 } },
+						item_revenue: { 'prd_1\nmoney': { c: 1, s: 1 } },
 					},
 				},
 			],
@@ -129,6 +139,9 @@ describe('import of daily totals (K10, G8)', () => {
 					{ path: '/totals/revenue/USD/s', message: 'The sum: a finite number.' },
 					{ path: '/totals/vital_page/~1a\nXYZ', message: 'A key of vital_page is <path>\\n<vital>.' },
 					{ path: '/totals/not_found_from/~1gone\n', message: 'A key of not_found_from is <path>\\n<where from>.' },
+					{ path: '/totals/item_view/prd_1\nx', message: 'A key of item_view is a product id.' },
+					{ path: '/totals/item_checkout/prd_1/s', message: 'item_checkout keeps no sum.' },
+					{ path: '/totals/item_revenue/prd_1\nmoney', message: 'A key of item_revenue is <product id>\\n<currency>.' },
 				],
 			},
 		]);

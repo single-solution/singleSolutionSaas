@@ -10,6 +10,7 @@
  */
 import { actorOf, countHandlers, defineRoute, ok, paginate, problem } from '@ss/app-kit';
 import { JOURNEYS, LIVE_MS, buildReport, rangeOf, shiftDay, topOf } from '../core/analytics.js';
+import { MAX_LIMIT, PRODUCT_METRICS, PRODUCT_SORTS, productReport, productsCsv } from '../core/product-performance.js';
 import { noticeAnswer, noticesOf } from '../core/config.js';
 import {
 	COLLECT_FEATURES,
@@ -107,6 +108,50 @@ export const createRoutes = (product) => {
 			journeys,
 			goals,
 			funnels,
+		});
+	};
+
+	/**
+	 * The products report of a range of days (R7 #113; `?from=&to=` as the analytics report, `sort` one of
+	 * {@link PRODUCT_SORTS}, `order` asc or desc, `limit` 1–1,000, 100 by default): each product's views, add-to-carts,
+	 * checkouts, purchases, units, revenue per currency and rates, from the day's totals (one read).
+	 * @param {any} ctx
+	 * @param {{ all?: boolean }} [options] `all`: every product (the CSV file)
+	 */
+	const productsOf = async (ctx, { all = false } = {}) => {
+		const timeZone = await timeZoneOf(ctx);
+		const range = rangeOf(ctx.query, now(), timeZone);
+		if (!range.ok) return { refused: invalid('from', range.message) };
+		const { sort, order, limit } = ctx.query;
+		if (sort !== undefined && !PRODUCT_SORTS.includes(sort))
+			return { refused: invalid('sort', `sort is one of ${PRODUCT_SORTS.join(', ')}.`) };
+		if (order !== undefined && order !== 'asc' && order !== 'desc')
+			return { refused: invalid('order', 'order is asc or desc.') };
+		const size = limit === undefined ? undefined : /^\d{1,4}$/.test(limit) ? Number(limit) : NaN;
+		if (size !== undefined && !(size >= 1 && size <= MAX_LIMIT))
+			return { refused: invalid('limit', `limit is a whole number from 1 to ${MAX_LIMIT}.`) };
+		const rows = await (await storeOf(ctx)).metricTotals(range.from, range.to, [...PRODUCT_METRICS]);
+		return {
+			range,
+			timeZone,
+			report: productReport(rows, { sort, order, limit: all ? Number.POSITIVE_INFINITY : size }),
+		};
+	};
+	/** GET /v1/analytics/products. @param {any} ctx */
+	const products = async (ctx) => {
+		const found = await productsOf(ctx);
+		if (found.refused) return found.refused;
+		return { from: found.range.from, to: found.range.to, timeZone: found.timeZone, ...found.report };
+	};
+	/** GET /v1/analytics/products/csv: every product of the range, sorted as asked. @param {any} ctx */
+	const productsFile = async (ctx) => {
+		const found = await productsOf(ctx, { all: true });
+		if (found.refused) return found.refused;
+		return new Response(productsCsv(found.report), {
+			headers: {
+				'content-type': 'text/csv; charset=utf-8',
+				'content-disposition': `attachment; filename="products-${found.range.from}-${found.range.to}.csv"`,
+			},
 		});
 	};
 
@@ -267,6 +312,37 @@ export const createRoutes = (product) => {
 		// --------------------------------------------------------------------------- analytics (server, ticket)
 		defineRoute({ method: 'GET', path: '/v1/analytics', auth: 'server', feature: 'visitor_analytics', handler: analytics }),
 		defineRoute({ method: 'GET', path: '/v1/events', auth: 'server', feature: 'visitor_analytics', handler: eventList }),
+		// product performance (R7 #113)
+		defineRoute({
+			method: 'GET',
+			path: '/v1/analytics/products',
+			auth: 'server',
+			feature: 'conversion_funnel',
+			handler: products,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/analytics/products/csv',
+			auth: 'server',
+			feature: 'conversion_funnel',
+			handler: productsFile,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/analytics/products',
+			auth: 'ticket',
+			permission: 'analytics.read',
+			feature: 'conversion_funnel',
+			handler: products,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/analytics/products/csv',
+			auth: 'ticket',
+			permission: 'analytics.read',
+			feature: 'conversion_funnel',
+			handler: productsFile,
+		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/events/count',

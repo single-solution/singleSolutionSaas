@@ -4,7 +4,9 @@
  * menu), visits as the hero card with a bar per day, page views, revenue; with the `sessions` detail also live
  * visitors, sessions, bounce rate, average time and pages per session. Then masonries of ranked lists (top pages,
  * sources, devices, countries; browsers, systems and cities with sessions), each with See all in a dialog; the funnel
- * with each step's share of the one before; searches and 404s (and 404 referrers); Web Vitals (and the slowest pages);
+ * with each step's share of the one before; with the conversion funnel, each product's views, add-to-carts, checkouts,
+ * purchases, units, revenue and rates in a table sorted by any column, with its CSV file (R7 #113); searches and 404s
+ * (and 404 referrers); Web Vitals (and the slowest pages);
  * the latest journeys, each opening its steps and every event of the visit in a dialog; and the event log with a
  * filter chip per event type and its count. Every word is a widget text; days are days of the business time zone and
  * the widget says which zone; money and times follow the website's Format (PLAN 0.8.10 K7, K8).
@@ -34,6 +36,20 @@ const TOP = 50;
 const SHOWN = 6;
 /** Events of the log per page. */
 const LOG_PAGE = 25;
+/** Products the table shows (the CSV file has them all). */
+const PRODUCTS = 50;
+/** The products table's columns: the sort key and the widget text of each (R7 #113). */
+const PRODUCT_COLUMNS = Object.freeze([
+	'name',
+	'views',
+	'carts',
+	'checkouts',
+	'purchases',
+	'units',
+	'revenue',
+	'cartRate',
+	'conversion',
+]);
 /** The event types, in the order of the log's chips. */
 const EVENT_TYPES = Object.freeze(Object.keys(EVENT_FEATURES));
 /** The widget texts of refused calls (a range the report does not take: its days out of order or too many). */
@@ -41,9 +57,10 @@ export const ANALYTICS_PROBLEMS = Object.freeze({ ...PROBLEM_TEXTS, 'validation_
 
 /**
  * @param {{ host: HTMLElement, api: import('@ss/app-kit/widget').AdminApi, config: import('./widget.js').WidgetConfig,
- *   viewer: import('./widget.js').Viewer, now: () => number }} input `viewer`: the browser's language and time zone
+ *   viewer: import('./widget.js').Viewer, now: () => number, download?: (name: string, bytes: ArrayBuffer) => void }} input
+ *   `viewer`: the browser's language and time zone; `download`: save a file the widget made (the products' CSV file)
  */
-export const mountAnalyticsDashboard = ({ host, api, config, viewer, now }) => {
+export const mountAnalyticsDashboard = ({ host, api, config, viewer, now, download = () => {} }) => {
 	/** @param {string} key @param {Record<string, string | number>} [values] */
 	const t = (key, values) => formatText(config.texts[key] ?? key, values);
 	/**
@@ -494,6 +511,99 @@ export const mountAnalyticsDashboard = ({ host, api, config, viewer, now }) => {
 				return list;
 			};
 
+			// ------------------------------------------------------------------------- products (R7 #113)
+			/** @type {{ sort: string, order: 'asc' | 'desc' }} */
+			let productOrder = { sort: 'views', order: 'desc' };
+			const productsPart = h('div');
+			/** The query of the products report: the dashboard's days and the table's order. @param {number} [limit] */
+			const productQuery = (limit) =>
+				new URLSearchParams({
+					from: range.from,
+					to: range.to,
+					sort: productOrder.sort,
+					order: productOrder.order,
+					...(limit ? { limit: String(limit) } : {}),
+				}).toString();
+			/** Load the table in the dashboard's days and order. */
+			const loadProducts = async () => {
+				const answer = await adminCall(api, 'GET', `/v1/admin/analytics/products?${productQuery(PRODUCTS)}`);
+				productsPart.replaceChildren(answer.ok ? productsTable(answer.data) : h('p', { class: 'sub' }, failure(answer)));
+			};
+			/** Save the CSV file of every product, in the table's order. */
+			const productsCsv = async () => {
+				const ticket = api.tickets.current();
+				if (!ticket) return;
+				const response = await api
+					.fetch(`${api.base}/v1/admin/analytics/products/csv?${productQuery()}`, {
+						headers: { authorization: `Bearer ${ticket}` },
+					})
+					.catch(() => null);
+				// the bytes as sent (text() would drop the byte order mark spreadsheets need to read UTF-8)
+				if (response?.ok) download(`products-${range.from}-${range.to}.csv`, await response.arrayBuffer());
+				else productsPart.append(h('p', { class: 'sub' }, t('analytics.failed')));
+			};
+			/** @param {any} report the products report */
+			const productsTable = (report) => {
+				/** @type {import('../core/product-performance.js').ProductRow[]} */
+				const items = report.items;
+				if (items.length === 0) return h('p', { class: 'lead' }, t('analytics.products.none'));
+				/** @param {number | null} value */
+				const percent = (value) => (value === null ? '—' : t('analytics.percent', { value }));
+				const table = h('table', { class: 'products-table' });
+				const head = h('tr');
+				for (const key of PRODUCT_COLUMNS) {
+					const sorted = productOrder.sort === key;
+					const cell = h('th', {
+						scope: 'col',
+						'aria-sort': sorted ? (productOrder.order === 'asc' ? 'ascending' : 'descending') : 'none',
+					});
+					const sort = h('button', { type: 'button', class: 'link' }, t(`analytics.products.${key}`));
+					sort.addEventListener('click', () => {
+						// a column sorts the most first (names A to Z); again, the other way
+						const first = key === 'name' ? 'asc' : 'desc';
+						productOrder = {
+							sort: key,
+							order: sorted ? (productOrder.order === 'asc' ? 'desc' : 'asc') : first,
+						};
+						void loadProducts();
+					});
+					cell.append(sort);
+					head.append(cell);
+				}
+				const thead = h('thead');
+				thead.append(head);
+				const tbody = h('tbody');
+				for (const item of items) {
+					const row = h('tr');
+					for (const text of [
+						item.name || item.id,
+						String(item.views),
+						String(item.carts),
+						String(item.checkouts),
+						String(item.purchases),
+						String(item.units),
+						item.revenue.map((entry) => money(entry.amount, entry.currency)).join(', ') || '—',
+						percent(item.cartRate),
+						percent(item.conversion),
+					])
+						row.append(h('td', {}, text));
+					tbody.append(row);
+				}
+				table.append(thead, tbody);
+				const scroll = h('div', { class: 'table-scroll' });
+				scroll.append(table);
+				const save = h('button', { type: 'button', class: 'secondary' }, t('analytics.products.csv'));
+				save.addEventListener('click', () => void productsCsv());
+				const foot = h('div', { class: 'actions' });
+				foot.append(
+					h('span', { class: 'sub' }, t('analytics.products.shown', { shown: items.length, total: report.total })),
+					save,
+				);
+				const box = h('div');
+				box.append(scroll, foot);
+				return box;
+			};
+
 			/** @param {Report} report */
 			const draw = (report) => {
 				span.textContent = `${t('analytics.span', { from: dayText(report.from, report.timeZone), to: dayText(report.to, report.timeZone) })} · ${t('analytics.timeZone', { timeZone: report.timeZone })}`;
@@ -547,6 +657,14 @@ export const mountAnalyticsDashboard = ({ host, api, config, viewer, now }) => {
 					);
 				if (report.funnels && report.funnels.length > 0)
 					parts.push(section(t('analytics.funnel'), t('analytics.funnelHelp'), report.funnels.map(funnelSteps)));
+				// each product's funnel, loaded in the same days (R7 #113)
+				if (config.features.includes('conversion_funnel')) {
+					const products = section(t('analytics.products'), t('analytics.productsHelp'), [productsPart]);
+					products.classList.add('products');
+					parts.push(products);
+					productsPart.replaceChildren(h('p', { class: 'sub' }, t('analytics.loading')));
+					void loadProducts();
+				}
 				if (report.searches && report.emptySearches && report.notFound)
 					parts.push(
 						section(t('analytics.searches'), t('analytics.searchesHelp'), [

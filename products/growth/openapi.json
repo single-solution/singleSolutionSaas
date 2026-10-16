@@ -443,6 +443,219 @@
 				}
 			}
 		},
+		"/v1/admin/analytics/products": {
+			"get": {
+				"summary": "The products report (analytics dashboard widget)",
+				"description": "As GET /v1/analytics/products; the analytics.read permission.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "conversion_funnel",
+				"x-ss-permission": "analytics.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"description": "The first day (default: 29 days before to).",
+						"schema": {
+							"type": "string",
+							"format": "date",
+							"description": "The first day (default: 29 days before to)."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "The last day (default: today).",
+						"schema": {
+							"type": "string",
+							"format": "date",
+							"description": "The last day (default: today)."
+						}
+					},
+					{
+						"name": "sort",
+						"in": "query",
+						"required": false,
+						"description": "What the rows are sorted by: revenue compares the currencies in the order of currencies; name sorts by the product's name, else its id; rows without views come last when sorted by a rate.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"views",
+								"carts",
+								"checkouts",
+								"purchases",
+								"units",
+								"revenue",
+								"cartRate",
+								"conversion",
+								"name"
+							],
+							"default": "views",
+							"description": "What the rows are sorted by: revenue compares the currencies in the order of currencies; name sorts by the product's name, else its id; rows without views come last when sorted by a rate."
+						}
+					},
+					{
+						"name": "order",
+						"in": "query",
+						"required": false,
+						"description": "desc: the most first; asc: the least first (name: A to Z).",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"desc",
+								"asc"
+							],
+							"default": "desc",
+							"description": "desc: the most first; asc: the least first (name: A to Z)."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Rows answered (the CSV file has every product).",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 1000,
+							"default": 100,
+							"description": "Rows answered (the CSV file has every product)."
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProductsReport"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/analytics/products/csv": {
+			"get": {
+				"summary": "The products report as CSV (analytics dashboard widget)",
+				"description": "As GET /v1/analytics/products/csv; the analytics.read permission.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "conversion_funnel",
+				"x-ss-permission": "analytics.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"description": "The first day (default: 29 days before to).",
+						"schema": {
+							"type": "string",
+							"format": "date",
+							"description": "The first day (default: 29 days before to)."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "The last day (default: today).",
+						"schema": {
+							"type": "string",
+							"format": "date",
+							"description": "The last day (default: today)."
+						}
+					},
+					{
+						"name": "sort",
+						"in": "query",
+						"required": false,
+						"description": "What the rows are sorted by: revenue compares the currencies in the order of currencies; name sorts by the product's name, else its id; rows without views come last when sorted by a rate.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"views",
+								"carts",
+								"checkouts",
+								"purchases",
+								"units",
+								"revenue",
+								"cartRate",
+								"conversion",
+								"name"
+							],
+							"default": "views",
+							"description": "What the rows are sorted by: revenue compares the currencies in the order of currencies; name sorts by the product's name, else its id; rows without views come last when sorted by a rate."
+						}
+					},
+					{
+						"name": "order",
+						"in": "query",
+						"required": false,
+						"description": "desc: the most first; asc: the least first (name: A to Z).",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"desc",
+								"asc"
+							],
+							"default": "desc",
+							"description": "desc: the most first; asc: the least first (name: A to Z)."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Rows answered (the CSV file has every product).",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 1000,
+							"default": 100,
+							"description": "Rows answered (the CSV file has every product)."
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/admin/events": {
 			"get": {
 				"summary": "The event log (analytics dashboard widget)",
@@ -1514,6 +1727,241 @@
 								}
 							}
 						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/analytics/products": {
+			"get": {
+				"summary": "How each product does in the shop funnel",
+				"description": "Each product of the shop events (ss:view_item, ss:add_to_cart, ss:begin_checkout, ss:purchase, from Ecommerce's widgets or your own pages) over a range of days of your business time zone: the events that named it (views, add-to-carts, checkouts, purchases: orders naming it), the units bought, the revenue per currency (price × quantity of its purchased items that had a price), add-to-carts and purchases per 100 views, and the name the events gave it most. Counted in the daily totals as the events arrive (raw events keep only ids and quantities). While the conversion funnel is on. 422 validation_failed for a range as GET /v1/analytics refuses, an unknown sort or order, or a limit out of range.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "conversion_funnel",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"description": "The first day (default: 29 days before to).",
+						"schema": {
+							"type": "string",
+							"format": "date",
+							"description": "The first day (default: 29 days before to)."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "The last day (default: today).",
+						"schema": {
+							"type": "string",
+							"format": "date",
+							"description": "The last day (default: today)."
+						}
+					},
+					{
+						"name": "sort",
+						"in": "query",
+						"required": false,
+						"description": "What the rows are sorted by: revenue compares the currencies in the order of currencies; name sorts by the product's name, else its id; rows without views come last when sorted by a rate.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"views",
+								"carts",
+								"checkouts",
+								"purchases",
+								"units",
+								"revenue",
+								"cartRate",
+								"conversion",
+								"name"
+							],
+							"default": "views",
+							"description": "What the rows are sorted by: revenue compares the currencies in the order of currencies; name sorts by the product's name, else its id; rows without views come last when sorted by a rate."
+						}
+					},
+					{
+						"name": "order",
+						"in": "query",
+						"required": false,
+						"description": "desc: the most first; asc: the least first (name: A to Z).",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"desc",
+								"asc"
+							],
+							"default": "desc",
+							"description": "desc: the most first; asc: the least first (name: A to Z)."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Rows answered (the CSV file has every product).",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 1000,
+							"default": 100,
+							"description": "Rows answered (the CSV file has every product)."
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProductsReport"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/analytics/products/csv": {
+			"get": {
+				"summary": "The products report as CSV",
+				"description": "Answers text/csv (an attachment named products-<from>-<to>.csv), not JSON: comma-separated UTF-8 with a byte order mark, the columns product_id, name, views, add_to_carts, checkouts, purchases, units, cart_rate_percent, conversion_percent and revenue_<currency> per currency (major units, 60.00), every product of the range sorted as asked (limit is ignored); text that starts with =, +, -, @ gets a leading ' so spreadsheets never run it. The query and refusals of GET /v1/analytics/products.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "conversion_funnel",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"description": "The first day (default: 29 days before to).",
+						"schema": {
+							"type": "string",
+							"format": "date",
+							"description": "The first day (default: 29 days before to)."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "The last day (default: today).",
+						"schema": {
+							"type": "string",
+							"format": "date",
+							"description": "The last day (default: today)."
+						}
+					},
+					{
+						"name": "sort",
+						"in": "query",
+						"required": false,
+						"description": "What the rows are sorted by: revenue compares the currencies in the order of currencies; name sorts by the product's name, else its id; rows without views come last when sorted by a rate.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"views",
+								"carts",
+								"checkouts",
+								"purchases",
+								"units",
+								"revenue",
+								"cartRate",
+								"conversion",
+								"name"
+							],
+							"default": "views",
+							"description": "What the rows are sorted by: revenue compares the currencies in the order of currencies; name sorts by the product's name, else its id; rows without views come last when sorted by a rate."
+						}
+					},
+					{
+						"name": "order",
+						"in": "query",
+						"required": false,
+						"description": "desc: the most first; asc: the least first (name: A to Z).",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"desc",
+								"asc"
+							],
+							"default": "desc",
+							"description": "desc: the most first; asc: the least first (name: A to Z)."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Rows answered (the CSV file has every product).",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 1000,
+							"default": 100,
+							"description": "Rows answered (the CSV file has every product)."
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success"
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -2702,7 +3150,7 @@
 		"/v1/import/{collection}": {
 			"post": {
 				"summary": "Import days of daily totals (ss-import)",
-				"description": "collection is totals. The body is NDJSON (Content-Type application/x-ndjson), not JSON: one day per line, { \"day\": \"YYYY-MM-DD\", \"part\": 0, \"totals\": { \"<metric>\": { \"<key>\": { \"c\": <count>, \"s\": <sum> } } } }, the day in your business time zone and the keys as readable text; at most 1,000 lines or 4 MB. Each metric must be one Growth counts, with keys of the form it writes, a whole count of 0 or more and a finite sum (only revenue, duration, vital_value and vital_page keep sums); unknown fields are refused by name. A day replaces the day's document, so totals counted live that day are replaced too. Nothing is sent and no raw events are made. 404 not_found for another collection; 415 unsupported_media_type without NDJSON.",
+				"description": "collection is totals. The body is NDJSON (Content-Type application/x-ndjson), not JSON: one day per line, { \"day\": \"YYYY-MM-DD\", \"part\": 0, \"totals\": { \"<metric>\": { \"<key>\": { \"c\": <count>, \"s\": <sum> } } } }, the day in your business time zone and the keys as readable text; at most 1,000 lines or 4 MB. Each metric must be one Growth counts, with keys of the form it writes, a whole count of 0 or more and a finite sum (only revenue, duration, vital_value, vital_page, item_cart, item_purchase and item_revenue keep sums); unknown fields are refused by name. A day replaces the day's document, so totals counted live that day are replaced too. Nothing is sent and no raw events are made. 404 not_found for another collection; 415 unsupported_media_type without NDJSON.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
 				"security": [
@@ -5412,6 +5860,15 @@
 									"minimum": 1,
 									"maximum": 10000,
 									"description": "1 when missing or out of range."
+								},
+								"name": {
+									"type": "string",
+									"description": "The product's name (at most 120 characters): the products report shows the name the events gave most. Only the product totals keep it, never the raw event."
+								},
+								"price": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "The price of one unit in minor units: a purchase's revenue per product is price × quantity (with currency). Only the product totals keep it."
 								}
 							}
 						}
@@ -6299,6 +6756,135 @@
 									"type": "string"
 								}
 							}
+						}
+					}
+				}
+			},
+			"ProductPerformance": {
+				"type": "object",
+				"required": [
+					"id",
+					"name",
+					"views",
+					"carts",
+					"checkouts",
+					"purchases",
+					"units",
+					"revenue",
+					"cartRate",
+					"conversion"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string",
+						"description": "The product id the events gave."
+					},
+					"name": {
+						"type": "string",
+						"description": "The name the events gave it most ('' when they gave none)."
+					},
+					"views": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"carts": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Add-to-cart events naming it."
+					},
+					"checkouts": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"purchases": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Orders naming it."
+					},
+					"units": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Units bought."
+					},
+					"revenue": {
+						"type": "array",
+						"description": "Per currency, in the order of currencies.",
+						"items": {
+							"type": "object",
+							"required": [
+								"currency",
+								"amount"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"currency": {
+									"type": "string"
+								},
+								"amount": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Minor units."
+								}
+							}
+						}
+					},
+					"cartRate": {
+						"type": [
+							"number",
+							"null"
+						],
+						"description": "Add-to-carts per 100 views (one decimal); null without views."
+					},
+					"conversion": {
+						"type": [
+							"number",
+							"null"
+						],
+						"description": "Purchases per 100 views (one decimal); null without views."
+					}
+				}
+			},
+			"ProductsReport": {
+				"type": "object",
+				"required": [
+					"from",
+					"to",
+					"timeZone",
+					"currencies",
+					"total",
+					"items"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"from": {
+						"type": "string",
+						"format": "date"
+					},
+					"to": {
+						"type": "string",
+						"format": "date"
+					},
+					"timeZone": {
+						"type": "string",
+						"description": "The business time zone the days are in."
+					},
+					"currencies": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "The currencies of the revenue, the most first."
+					},
+					"total": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Products in the range (items holds the first limit)."
+					},
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ProductPerformance"
 						}
 					}
 				}

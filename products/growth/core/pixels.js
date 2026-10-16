@@ -319,7 +319,7 @@ export const vitalCalls = (name, value, rating, loaded, id) =>
 	);
 
 /**
- * What `POST /v1/collect` takes for a funnel event (ids and quantities; money in minor units).
+ * What `POST /v1/collect` takes for a funnel event (each item's ids, name, price and quantity; money in minor units).
  * @param {Step} step
  * @param {Detail} detail
  * @param {string} path
@@ -327,7 +327,14 @@ export const vitalCalls = (name, value, rating, loaded, id) =>
 export const funnelEvent = (step, detail, path) => ({
 	type: step,
 	path,
-	items: detail.items.map((item) => ({ id: item.id, variantId: item.variantId, quantity: item.quantity })),
+	// each item's name and price go too: Growth's product totals keep them (R7 #113), the raw event does not
+	items: detail.items.map((item) => ({
+		id: item.id,
+		variantId: item.variantId,
+		name: item.name,
+		price: item.price,
+		quantity: item.quantity,
+	})),
 	...(detail.currency !== null && detail.value !== null ? { value: detail.value, currency: detail.currency } : {}),
 	...(step === 'purchase' && detail.orderId ? { orderId: detail.orderId } : {}),
 });

@@ -343,7 +343,8 @@ export const startWidget = ({ window: win, script }) => {
 		const api = { base, tickets, fetch: request };
 		const viewer = viewerOf(win);
 		if (config.widgets.includes('analytics_dashboard'))
-			for (const host of hosts('analytics_dashboard')) mountAnalyticsDashboard({ host, api, config, viewer, now });
+			for (const host of hosts('analytics_dashboard'))
+				mountAnalyticsDashboard({ host, api, config, viewer, now, download: save });
 		if (config.widgets.includes('seo_checklist'))
 			for (const host of hosts('seo_checklist'))
 				mountSeoChecklist({ host, api, config, viewer, now, open: (url) => void win.open(url, '_blank', 'noopener') });
@@ -352,7 +353,7 @@ export const startWidget = ({ window: win, script }) => {
 	};
 
 	/**
-	 * Save a file a widget made (the redirects' CSV export) through a download link.
+	 * Save a file a widget made (the redirects' and the products' CSV files) through a download link.
 	 * @param {string} name @param {ArrayBuffer} bytes
 	 */
 	const save = (name, bytes) => {

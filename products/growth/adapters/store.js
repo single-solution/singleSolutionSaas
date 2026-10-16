@@ -16,6 +16,7 @@
  * @module
  */
 import { createId } from '@ss/contracts';
+import { PRODUCT_METRICS } from '../core/product-performance.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/events.js').KeptEvent} KeptEvent */
@@ -124,10 +125,14 @@ export const createStore = (data, { merchantId }) => {
 	 * metric, or only of those named.
 	 * @param {Record<string, unknown>} range
 	 * @param {string[] | null} metrics
+	 * @param {ReadonlyArray<string>} [except] metrics left out when every metric is read
 	 * @returns {Promise<Array<{ metric: string, key: string, count: number, sum: number }>>}
 	 */
-	const groupedTotals = async (range, metrics) => {
-		const all = { $objectToArray: '$totals' };
+	const groupedTotals = async (range, metrics, except = []) => {
+		const all =
+			except.length === 0
+				? { $objectToArray: '$totals' }
+				: { $filter: { input: { $objectToArray: '$totals' }, cond: { $not: [{ $in: ['$$this.k', except] }] } } };
 		const rows = await totals
 			.aggregate([
 				{ $match: range },
@@ -193,7 +198,8 @@ export const createStore = (data, { merchantId }) => {
 		totals: async (from, to) => {
 			const range = { websiteId, day: { $gte: from, $lte: to } };
 			const [grouped, documents] = await Promise.all([
-				groupedTotals(range, null),
+				// the products' totals are their own report's (R7 #113)
+				groupedTotals(range, null, PRODUCT_METRICS),
 				totals.find(range, { projection: { _id: 0, day: 1, 'totals.visits': 1, 'totals.page_views': 1 } }).toArray(),
 			]);
 			/** @type {Map<string, Record<string, number>>} visits and page views of each day */

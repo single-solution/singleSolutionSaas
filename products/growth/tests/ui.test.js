@@ -270,7 +270,8 @@ describe('the page script', () => {
 				type: 'view_item',
 				value: 1250,
 				currency: 'USD',
-				items: [{ id: 'p1', variantId: null, quantity: 1 }],
+				// each item's name and price go too, for the product totals (R7 #113)
+				items: [{ id: 'p1', variantId: null, name: '', price: null, quantity: 1 }],
 			}),
 		]);
 		expect(requests.find((r) => r.path === '/v1/collect')?.init).toMatchObject({ keepalive: true, method: 'POST' });
@@ -1600,6 +1601,111 @@ describe('admin widgets', () => {
 		button(checklist, strings['seo.run']).click();
 		await flush();
 		expect(inside(checklist, '[role="status"]').textContent).toBe('Checked 8 Oct 2026, 21:00');
+	});
+
+	it('the analytics dashboard’s products: sortable columns, rates, revenue per currency and the CSV file (R7 #113)', async () => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		vi.setSystemTime(NOW);
+		const host = place('analytics_dashboard');
+		/** @type {URL[]} */
+		const asked = [];
+		/** @type {Array<[string, ArrayBuffer]>} */
+		const saved = [];
+		w.URL.createObjectURL = () => 'blob:x';
+		w.URL.revokeObjectURL = () => {};
+		const clicked = vi.spyOn(window.HTMLAnchorElement.prototype, 'click').mockImplementation(function () {
+			// @ts-ignore the link the widget made
+			saved.push([this.download, this.href]);
+		});
+		await startAdmin(['visitor_analytics', 'conversion_funnel'], {
+			'GET /v1/admin/analytics': () => answer(200, REPORT),
+			'GET /v1/admin/analytics/products': (init, url) => {
+				asked.push(url);
+				return answer(200, {
+					from: '2026-09-09',
+					to: '2026-10-08',
+					timeZone: 'UTC',
+					currencies: ['USD'],
+					total: 3,
+					items: [
+						{
+							id: 'prd_mug',
+							name: 'Blue Mug',
+							views: 40,
+							carts: 8,
+							checkouts: 5,
+							purchases: 4,
+							units: 6,
+							revenue: [{ currency: 'USD', amount: 7200 }],
+							cartRate: 20,
+							conversion: 10,
+						},
+						{
+							id: 'prd_x',
+							name: '',
+							views: 0,
+							carts: 1,
+							checkouts: 0,
+							purchases: 0,
+							units: 0,
+							revenue: [],
+							cartRate: null,
+							conversion: null,
+						},
+					],
+				});
+			},
+			'GET /v1/admin/analytics/products/csv': () => new Response('\uFEFFproduct_id\r\n', { status: 200 }),
+			...EVENTS,
+		});
+		expect(asked[0]?.searchParams.get('from')).toBe('2026-09-09');
+		expect(asked[0]?.searchParams.get('sort')).toBe('views');
+		const section = /** @type {HTMLElement} */ (inside(host, '.products'));
+		expect(section.querySelector('h3')?.textContent).toBe(strings['analytics.products']);
+		const headers = [...section.querySelectorAll('th')].map((th) => th.textContent);
+		expect(headers).toEqual([
+			strings['analytics.products.name'],
+			strings['analytics.products.views'],
+			strings['analytics.products.carts'],
+			strings['analytics.products.checkouts'],
+			strings['analytics.products.purchases'],
+			strings['analytics.products.units'],
+			strings['analytics.products.revenue'],
+			strings['analytics.products.cartRate'],
+			strings['analytics.products.conversion'],
+		]);
+		expect(section.querySelector('th[aria-sort="descending"]')?.textContent).toBe(strings['analytics.products.views']);
+		const cells = [...section.querySelectorAll('tbody tr:first-child td')].map((td) => td.textContent);
+		expect(cells).toEqual(['Blue Mug', '40', '8', '5', '4', '6', 'USD 72.00', '20%', '10%']);
+		// a product the events named without a name shows its id; no views: no rates
+		const bare = [...section.querySelectorAll('tbody tr:nth-child(2) td')].map((td) => td.textContent);
+		expect(bare).toEqual(['prd_x', '0', '1', '0', '0', '0', '—', '—', '—']);
+		expect(section.textContent).toContain('The first 2 of 3 products');
+		// a column sorts the most first, again the least first
+		/** @param {string} text */
+		const sortBy = async (text) => {
+			const found = /** @type {HTMLButtonElement} */ (
+				[...section.querySelectorAll('th button')].find((b) => b.textContent === text)
+			);
+			found.click();
+			await flush();
+		};
+		await sortBy(strings['analytics.products.conversion']);
+		expect([asked.at(-1)?.searchParams.get('sort'), asked.at(-1)?.searchParams.get('order')]).toEqual(['conversion', 'desc']);
+		await sortBy(strings['analytics.products.conversion']);
+		expect(asked.at(-1)?.searchParams.get('order')).toBe('asc');
+		// the CSV file of every product
+		const csv = /** @type {HTMLButtonElement} */ (
+			[...(inside(host, '.products')?.querySelectorAll('button') ?? [])].find(
+				(b) => b.textContent === strings['analytics.products.csv'],
+			)
+		);
+		csv.click();
+		await flush();
+		expect(saved).toEqual([['products-2026-09-09-2026-10-08.csv', 'blob:x']]);
+		const file = requests.find((r) => r.path.startsWith('/v1/admin/analytics/products/csv'));
+		expect(file?.path).toContain('sort=conversion');
+		clicked.mockRestore();
 	});
 
 	it('the analytics dashboard says when nothing was recorded or the ticket is gone', async () => {
