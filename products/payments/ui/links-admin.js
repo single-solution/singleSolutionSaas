@@ -17,6 +17,7 @@ import {
 	mountWidget,
 	openDialog,
 	splitView,
+	stateSlot,
 } from '@ss/app-kit/widget';
 import { GATEWAYS, GATEWAY_CURRENCIES, GATEWAY_FEATURES } from '../core/gateways.js';
 import { field } from './admin-kit.js';
@@ -64,12 +65,13 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 			const head = element(doc, 'div', { class: 'head' });
 			head.append(element(doc, 'h2', {}, t('links.title')), create);
 			const status = element(doc, 'p', { class: 'status', role: 'status' });
+			const state = stateSlot(doc);
 			const list = element(doc, 'ul');
 			const more = element(doc, 'button', { type: 'button', class: 'secondary', hidden: '' }, t('links.more'));
 			const view = splitView(doc, t('links.back'));
 			view.list.append(list, more);
 			const box = element(doc, 'section', { class: 'box' });
-			box.append(head, status, view.root);
+			box.append(head, status, state.root, view.root);
 			root.append(box);
 			/** @type {string | null} */
 			let cursor = null;
@@ -362,19 +364,29 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 				await manual;
 				const params = new URLSearchParams({ limit: '25' });
 				if (!fresh && cursor) params.set('cursor', cursor);
+				status.textContent = '';
+				if (list.childElementCount === 0) state.loading(t('admin.loading'));
 				const answer = await adminCall(api, 'GET', `/v1/admin/links?${params.toString()}`);
 				if (fresh) {
 					list.replaceChildren();
 					shown.clear();
 				}
 				if (!answer.ok) {
-					status.textContent = failed(answer);
+					state.failed(
+						failed(answer),
+						api.tickets.current() ? { label: t('admin.tryAgain'), onRetry: () => load(fresh) } : undefined,
+					);
 					more.setAttribute('hidden', '');
 					return;
 				}
 				cursor = answer.data.nextCursor;
 				if (fresh) lastCurrency = answer.data.items[0]?.currency ?? '';
-				status.textContent = fresh && answer.data.items.length === 0 ? t('links.empty') : '';
+				if (fresh && answer.data.items.length === 0) {
+					// the next step: the same New link button as in the heading
+					const first = element(doc, 'button', { type: 'button' }, t('links.new'));
+					first.addEventListener('click', () => create.click());
+					state.empty(t('links.empty'), first);
+				} else state.clear();
 				for (const link of answer.data.items) {
 					const item = put(link);
 					if (item) list.append(item);

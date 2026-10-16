@@ -34,7 +34,18 @@ import {
 import { formatText } from './text.js';
 
 export { DEFAULT_FORMAT, formatDate, formatMoney, formatText, fromDecimal, isCurrency, normalizeFormat, toCsv, toDecimal };
-export { badge, dot, emptyState, errorState, fieldGrid, loadingState, moreMenu, openDialog, splitView } from './widget/admin.js';
+export {
+	badge,
+	dot,
+	emptyState,
+	errorState,
+	fieldGrid,
+	loadingState,
+	moreMenu,
+	openDialog,
+	splitView,
+	stateSlot,
+} from './widget/admin.js';
 export { ADMIN_KIT_CSS } from './widget/admin-css.js';
 export { element } from './widget/dom.js';
 export { REFRESH_BEFORE_MS, adminCall, createTicketSource, requestJson } from './widget/tickets.js';

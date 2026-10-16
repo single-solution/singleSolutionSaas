@@ -66,6 +66,8 @@
 	"admin.more": "Show more",
 	"admin.empty": "No payments yet.",
 	"admin.failed": "The payments could not be loaded.",
+	"admin.loading": "Loading…",
+	"admin.tryAgain": "Try again",
 	"admin.signedOut": "Signed out",
 	"admin.export": "Export CSV",
 	"admin.refund": "Refund",

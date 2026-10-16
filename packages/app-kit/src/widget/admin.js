@@ -2,7 +2,7 @@
  * Building blocks of the admin widgets (PLAN 0.6): status badges and dots, a grid of labeled values, the
  * list-and-detail layout, the More menu (⋯) with a destructive action last in danger text, and dialogs for secondary
  * forms with an optional typed confirmation, and the three states of a list: loading, empty (with a next step) and
- * failed (with Try again). They set these classes, which `ADMIN_KIT_CSS` (admin-css.js) styles for every product:
+ * failed (with Try again), and `stateSlot` to show them in one place. They set these classes, which `ADMIN_KIT_CSS` (admin-css.js) styles for every product:
  * `badge <tone>`, `dot <tone>`, `facts`, `split` (`data-view="list" | "detail"`) with `pane list-pane` /
  * `pane detail-pane` and `link back`, `more` with `secondary icon` and `menu` (`danger` on a destructive item),
  * `overlay` with `dialog` (`wide`), `field`, `status` (`error` while it shows a problem), `actions`, `danger` and
@@ -78,6 +78,25 @@ export const errorState = (doc, text, retry) => {
 		box.append(again);
 	}
 	return box;
+};
+
+/**
+ * The place under a list's heading where its state shows: loading, empty (with its next step), failed (with Try again),
+ * or nothing. Each call replaces the one before.
+ * @param {Document} doc
+ */
+export const stateSlot = (doc) => {
+	const root = element(doc, 'div', { class: 'state-slot' });
+	return {
+		root,
+		/** @param {string} text */
+		loading: (text) => root.replaceChildren(loadingState(doc, text)),
+		/** @param {string} text @param {HTMLElement | null} [action] */
+		empty: (text, action = null) => root.replaceChildren(emptyState(doc, text, action)),
+		/** @param {string} text @param {{ label: string, onRetry: () => unknown }} [retry] */
+		failed: (text, retry) => root.replaceChildren(errorState(doc, text, retry)),
+		clear: () => root.replaceChildren(),
+	};
 };
 
 /**

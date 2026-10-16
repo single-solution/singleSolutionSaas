@@ -16,6 +16,7 @@ import {
 	mountWidget,
 	openDialog,
 	splitView,
+	stateSlot,
 } from '@ss/app-kit/widget';
 import { SUBSCRIPTION_STATUSES } from '../core/payments.js';
 import { field, listSection } from './admin-kit.js';
@@ -48,12 +49,13 @@ export const mountSubscriptionsAdmin = ({ host, api, config, copy = () => {} }) 
 			const head = element(doc, 'div', { class: 'head' });
 			head.append(element(doc, 'h2', {}, t('subs.title')), statusFilter);
 			const status = element(doc, 'p', { class: 'status', role: 'status' });
+			const state = stateSlot(doc);
 			const list = element(doc, 'ul');
 			const more = element(doc, 'button', { type: 'button', class: 'secondary', hidden: '' }, t('subs.more'));
 			const view = splitView(doc, t('subs.back'));
 			view.list.append(list, more);
 			const box = element(doc, 'section', { class: 'box' });
-			box.append(head, status, view.root);
+			box.append(head, status, state.root, view.root);
 			root.append(box);
 			/** @type {string | null} */
 			let cursor = null;
@@ -158,18 +160,24 @@ export const mountSubscriptionsAdmin = ({ host, api, config, copy = () => {} }) 
 				const params = new URLSearchParams({ limit: '25' });
 				if (statusFilter.value) params.set('status', statusFilter.value);
 				if (!fresh && cursor) params.set('cursor', cursor);
+				status.textContent = '';
+				if (list.childElementCount === 0) state.loading(t('admin.loading'));
 				const answer = await adminCall(api, 'GET', `/v1/admin/subscriptions?${params.toString()}`);
 				if (fresh) {
 					list.replaceChildren();
 					shown.clear();
 				}
 				if (!answer.ok) {
-					status.textContent = failed(answer);
+					state.failed(
+						failed(answer),
+						api.tickets.current() ? { label: t('admin.tryAgain'), onRetry: () => load(fresh) } : undefined,
+					);
 					more.setAttribute('hidden', '');
 					return;
 				}
 				cursor = answer.data.nextCursor;
-				status.textContent = fresh && answer.data.items.length === 0 ? t('subs.empty') : '';
+				if (fresh && answer.data.items.length === 0) state.empty(t('subs.empty'));
+				else state.clear();
 				for (const subscription of answer.data.items) {
 					shown.set(subscription.id, subscription);
 					const item = element(doc, 'li', { class: 'item', tabindex: '0', 'data-id': subscription.id });

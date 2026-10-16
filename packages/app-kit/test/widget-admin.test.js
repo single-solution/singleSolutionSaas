@@ -12,6 +12,7 @@ import {
 	moreMenu,
 	openDialog,
 	splitView,
+	stateSlot,
 } from '../src/widget.js';
 
 afterEach(() => document.body.replaceChildren());
@@ -417,5 +418,23 @@ describe('list states', () => {
 		again.click();
 		expect(onRetry).toHaveBeenCalledOnce();
 		expect(errorState(document, 'No retry.').querySelector('button')).toBeNull();
+	});
+});
+
+describe('stateSlot', () => {
+	it('shows one state at a time and clears', () => {
+		const slot = stateSlot(document);
+		expect(slot.root.className).toBe('state-slot');
+		slot.loading('Loading');
+		expect(slot.root.querySelector('.state.loading')?.textContent).toBe('Loading');
+		const retry = vi.fn();
+		slot.failed('Not loaded', { label: 'Try again', onRetry: retry });
+		expect(slot.root.children).toHaveLength(1);
+		/** @type {HTMLButtonElement} */ (slot.root.querySelector('button')).click();
+		expect(retry).toHaveBeenCalledOnce();
+		slot.empty('Nothing yet.');
+		expect(slot.root.querySelector('.state.empty p')?.textContent).toBe('Nothing yet.');
+		slot.clear();
+		expect(slot.root.childElementCount).toBe(0);
 	});
 });

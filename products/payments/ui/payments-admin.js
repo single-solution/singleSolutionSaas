@@ -21,6 +21,7 @@ import {
 	mountWidget,
 	openDialog,
 	splitView,
+	stateSlot,
 } from '@ss/app-kit/widget';
 import { PAYMENT_STATUSES, paymentsCsv } from '../core/payments.js';
 import { field, listSection } from './admin-kit.js';
@@ -96,12 +97,13 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 			head.append(title, exportButton);
 			const byGateway = element(doc, 'p', { class: 'meta', hidden: '' });
 			const status = element(doc, 'p', { class: 'status', role: 'status' });
+			const state = stateSlot(doc);
 			const list = element(doc, 'ul');
 			const more = element(doc, 'button', { type: 'button', class: 'secondary', hidden: '' }, t('admin.more'));
 			const view = splitView(doc, t('admin.back'));
 			view.list.append(list, more);
 			const box = element(doc, 'section', { class: 'box' });
-			box.append(head, filters, byGateway, status, view.root);
+			box.append(head, filters, byGateway, status, state.root, view.root);
 			root.append(box);
 
 			/** @type {string | null} */
@@ -366,18 +368,24 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 
 			/** @param {boolean} fresh */
 			const load = async (fresh) => {
+				status.textContent = '';
+				if (list.childElementCount === 0) state.loading(t('admin.loading'));
 				const answer = await adminCall(api, 'GET', query(fresh ? null : cursor));
 				if (fresh) {
 					list.replaceChildren();
 					void loadCounts();
 				}
 				if (!answer.ok) {
-					status.textContent = failed(answer);
+					state.failed(
+						failed(answer),
+						api.tickets.current() ? { label: t('admin.tryAgain'), onRetry: () => load(fresh) } : undefined,
+					);
 					more.setAttribute('hidden', '');
 					return;
 				}
 				cursor = answer.data.nextCursor;
-				status.textContent = fresh && answer.data.items.length === 0 ? t('admin.empty') : '';
+				if (fresh && answer.data.items.length === 0) state.empty(t('admin.empty'));
+				else state.clear();
 				for (const payment of answer.data.items) {
 					const item = element(doc, 'li', { class: 'item', tabindex: '0', 'data-id': payment.id });
 					row(payment, item);

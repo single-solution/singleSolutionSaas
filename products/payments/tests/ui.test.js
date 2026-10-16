@@ -81,6 +81,11 @@ const button = (host, text) =>
 	);
 /** @param {HTMLElement} host */
 const statusText = (host) => inside(host, '[role="status"]')?.textContent;
+/**
+ * The text of a list's state (loading, empty or failed).
+ * @param {HTMLElement} host
+ */
+const stateText = (host) => inside(host, '.state p')?.textContent;
 
 /** A ticket source with a fixed ticket (or none). @param {string | null} [ticket] */
 const tickets = (ticket = 't1') => {
@@ -616,15 +621,21 @@ describe('Payments admin widget', () => {
 		list = answer(200, { items: [], nextCursor: null, hasMore: false });
 		inside(host, 'form').dispatchEvent(new window.Event('submit'));
 		await flush();
-		expect(statusText(host)).toBe(strings['admin.empty']);
+		expect(stateText(host)).toBe(strings['admin.empty']);
 		expect(detailText(host)).toBe('');
 		list = answer(500);
 		inside(host, 'form').dispatchEvent(new window.Event('submit'));
 		await flush();
-		expect(statusText(host)).toBe(strings['admin.failed']);
+		expect(stateText(host)).toBe(strings['admin.failed']);
 		button(host, strings['admin.export']).click();
 		await flush();
 		expect(statusText(host)).toBe(strings['admin.failed']);
+		// the failed list offers Try again, which loads it again
+		list = answer(200, { items: [], nextCursor: null, hasMore: false });
+		button(host, strings['admin.tryAgain']).click();
+		await flush();
+		expect(stateText(host)).toBe(strings['admin.empty']);
+		expect(inside(host, '.state.error')).toBeNull();
 		/** @type {any} */ (client.tickets).emit(true);
 		/** @type {any} */ (client.tickets).emit(false);
 		expect(statusText(host)).toBe(strings['admin.signedOut']);
@@ -638,7 +649,7 @@ describe('Payments admin widget', () => {
 			open: vi.fn(),
 		});
 		await flush();
-		expect(statusText(signedOut)).toBe(strings['admin.signedOut']);
+		expect(stateText(signedOut)).toBe(strings['admin.signedOut']);
 		const detailsFail = place('payments_admin');
 		const failing = adminApi({
 			'GET /v1/admin/payments': () => answer(200, { items: [PAYMENT], nextCursor: null, hasMore: false }),
@@ -740,15 +751,15 @@ describe('Subscriptions admin widget', () => {
 		const none = { 'GET /v1/admin/subscriptions': () => answer(200, { items: [], nextCursor: null, hasMore: false }) };
 		mountSubscriptionsAdmin({ host: empty, api: adminApi(none), config: configOf(['subscriptions']) });
 		await flush();
-		expect(statusText(empty)).toBe(strings['subs.empty']);
+		expect(stateText(empty)).toBe(strings['subs.empty']);
 		const failing = place('subscriptions_admin');
 		mountSubscriptionsAdmin({ host: failing, api: adminApi({}), config: configOf(['subscriptions']) });
 		await flush();
-		expect(statusText(failing)).toBe(strings['subs.failed']);
+		expect(stateText(failing)).toBe(strings['subs.failed']);
 		const out = place('subscriptions_admin');
 		mountSubscriptionsAdmin({ host: out, api: adminApi(none, tickets(null)), config: configOf(['subscriptions']) });
 		await flush();
-		expect(statusText(out)).toBe(strings['subs.signedOut']);
+		expect(stateText(out)).toBe(strings['subs.signedOut']);
 	});
 });
 
@@ -864,7 +875,9 @@ describe('Payment links admin widget', () => {
 		});
 		mountLinksAdmin({ host, api: client, config: configOf(['payment_links', 'stripe', 'manual_payments']), open: vi.fn() });
 		await flush();
-		expect(statusText(host)).toBe(strings['links.empty']);
+		expect(stateText(host)).toBe(strings['links.empty']);
+		// the empty list's next step is the New link button
+		expect(inside(host, '.state.empty button')?.textContent).toBe(strings['links.new']);
 		button(host, strings['links.new']).click();
 		await flush();
 		const form = /** @type {HTMLFormElement} */ (dialog(host));
@@ -995,12 +1008,12 @@ describe('Payment links admin widget', () => {
 		const failing = place('links_admin');
 		mountLinksAdmin({ host: failing, api: adminApi({}), config: configOf(['payment_links']), open: vi.fn() });
 		await flush();
-		expect(statusText(failing)).toBe(strings['links.failed']);
+		expect(stateText(failing)).toBe(strings['links.failed']);
 		const none = { 'GET /v1/admin/links': () => answer(200, { items: [], nextCursor: null, hasMore: false }) };
 		const out = place('links_admin');
 		mountLinksAdmin({ host: out, api: adminApi(none, tickets(null)), config: configOf(['payment_links']), open: vi.fn() });
 		await flush();
-		expect(statusText(out)).toBe(strings['links.signedOut']);
+		expect(stateText(out)).toBe(strings['links.signedOut']);
 		const later = place('links_admin');
 		const client = adminApi(none);
 		mountLinksAdmin({ host: later, api: client, config: configOf(['payment_links']), open: vi.fn() });
@@ -1025,7 +1038,7 @@ describe('admin widgets through widget.js', () => {
 		const { admin } = startWidget({ window, script: script(null) });
 		await admin({ getTicket: async () => ({ ticket: 't1', expiresAt: new Date(Date.now() + 900_000).toISOString() }) });
 		await flush();
-		expect(statusText(payments)).toBe(strings['admin.empty']);
+		expect(stateText(payments)).toBe(strings['admin.empty']);
 		expect(subscriptions.shadowRoot).toBeNull();
 		await admin({
 			getTicket: async () => {
@@ -1050,8 +1063,8 @@ describe('admin widgets through widget.js', () => {
 			getTicket: async () => ({ ticket: 't1', expiresAt: new Date(Date.now() + 900_000).toISOString() }),
 		});
 		await flush();
-		expect(statusText(host)).toBe(strings['subs.empty']);
-		expect(statusText(links)).toBe(strings['links.empty']);
+		expect(stateText(host)).toBe(strings['subs.empty']);
+		expect(stateText(links)).toBe(strings['links.empty']);
 	});
 });
 
