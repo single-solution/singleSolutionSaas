@@ -272,6 +272,17 @@ describe('orders', () => {
 		expect(value.createdAt).toEqual(new Date('2026-03-01T00:00:00Z'));
 	});
 
+	it('keep an address’s country as its code (given as a code or an English name) and its postal code upper case', () => {
+		const at = (/** @type {Record<string, string>} */ place) =>
+			checkImportedOrder({ ...order(), address: { ...order().address, ...place } }, RULES);
+		expect(valueOf(at({ country: 'United Kingdom', postalCode: 'sw1a 1aa' })).address).toMatchObject({
+			country: 'GB',
+			postalCode: 'SW1A 1AA',
+		});
+		expect(valueOf(at({ country: 'us' })).address.country).toBe('US');
+		expect(pathsOf(at({ country: 'Atlantis' }))).toEqual(['/address/country']);
+	});
+
 	it('take the rest of an order’s shape: refunds, shipment, video, flags and given keys', () => {
 		const value = valueOf(
 			checkImportedOrder(

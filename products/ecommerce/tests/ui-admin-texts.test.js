@@ -3,6 +3,7 @@
  * value of the code's lists has its text, so a new status, kind or type without one fails here instead of showing its
  * text key; and a refusal picks the website's words for its field or code, never the server's English.
  */
+import { LABEL_KINDS } from '@ss/contracts/address';
 import { describe, expect, it } from 'vitest';
 import strings from '../strings/en.json' with { type: 'json' };
 import { SORTS } from '../core/catalog-query.js';
@@ -55,8 +56,16 @@ describe('widget texts named after a code (PLAN 0.4.10)', () => {
 			...keysOf('returns.status.', CLAIM_STATUSES),
 			...keysOf('ordersAdmin.claimAction.', claimMoves),
 			...keysOf('ordersAdmin.claimDone.', claimMoves),
-			...keysOf('ordersAdmin.address.', [...ADDRESS_FIELDS]),
-			...keysOf('checkout.field.', [...ADDRESS_FIELDS]),
+			// the area, city, region and postal code are named by their country's label kind
+			...keysOf(
+				'ordersAdmin.address.',
+				[...ADDRESS_FIELDS].filter((field) => !(field in LABEL_KINDS)),
+			),
+			...keysOf(
+				'checkout.field.',
+				[...ADDRESS_FIELDS].filter((field) => !(field in LABEL_KINDS)),
+			),
+			...Object.entries(LABEL_KINDS).flatMap(([part, kinds]) => keysOf(`address.${part}.`, kinds)),
 			...keysOf('ordersAdmin.by.', [...HISTORY_ACTORS, SERVER_KIND]),
 			// what the server writes itself, and `expired` of entries written before the codes
 			...keysOf('ordersAdmin.historyNote.', [...HISTORY_NOTES, ...CLAIM_NOTES, 'expired']),

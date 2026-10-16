@@ -5,7 +5,17 @@
  * status, totals and, while it waits for a payment, the way to pay) and paying an order again.
  * @module
  */
-import { ADDRESS_FIELDS, ADDRESS_LIMITS, regionsFor } from '../core/address.js';
+import {
+	ADDRESS_FIELDS,
+	ADDRESS_LIMITS,
+	LABEL_KINDS,
+	PLACE_PARTS,
+	addressFields,
+	addressProblem,
+	countryChoices,
+	countryCodeOf,
+	regionsFor,
+} from '../core/address.js';
 import { button, codeOf, currencyOf, field, formatsOf, h, problemText, quantityShown, select } from './shop-common.js';
 import { transferParts } from './shop-payment.js';
 
@@ -31,68 +41,103 @@ const AUTOFILL = Object.freeze({
 });
 
 /**
- * The delivery address form: the fields the merchant asks for (the `checkout` settings), each at most its length in
- * the one address table (`core/address.js`); the region is a list to pick from in a country `address_regions` names
- * (the business.json country while the country is left empty). `onPlace` runs when a field the delivery fee and taxes
- * depend on changes.
+ * A field's label: for the area, city, region and postal code the country's label kind as a widget text
+ * (`address.<part>.<kind>`, for example `address.region.state`, which a website renames), else the field's own text.
+ * @param {Texts} t @param {string} name @param {string} [kind] the country's (`addressFormat(country).labels`)
+ */
+export const addressLabel = (t, name, kind) =>
+	name in LABEL_KINDS
+		? t(`address.${name}.${kind ?? LABEL_KINDS[/** @type {keyof typeof LABEL_KINDS} */ (name)][0]}`)
+		: t(`checkout.field.${name}`);
+
+/**
+ * The delivery address form: the name and phone, the country (a picker of every country, the business.json country
+ * chosen first), the place parts the country's format uses (`@ss/contracts/address`: its order, its labels such as
+ * State, Province or ZIP code, the region and postal code it requires) plus those the website requires, then the
+ * delivery directions. Picking another country lays the place parts out again, keeping what was typed. Each field takes
+ * at most its length in the one address table (`core/address.js`); the region is a list to pick from in a country
+ * `address_regions` names. `onPlace` runs when a field the delivery fee and taxes depend on changes.
  * @param {{ doc: Document, t: Texts, settings: ShopSettings, onPlace: () => void }} input
  */
 export const addressForm = ({ doc, t, settings, onPlace }) => {
-	const { required, optional, regions, country: homeCountry } = settings.checkout.address;
+	const { required, regions, country: homeCountry } = settings.checkout.address;
 	/** @type {Map<string, HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>} */
 	const inputs = new Map();
+	/** @type {Map<string, string>} the label of each field shown */
+	const labels = new Map();
 	/** @param {string} name */
 	const value = (name) => inputs.get(name)?.value.trim() ?? '';
-	/** The region names offered where the address is, or null. */
-	const regionNames = () => regionsFor(regions, value('country') || homeCountry);
-	/** @param {AddressField} name @param {boolean} needed */
-	const control = (name, needed) => {
-		const names = name === 'region' ? regionNames() : null;
-		const node = names
-			? select(
-					doc,
-					[['', t('checkout.region.choose')], ...names.map((entry) => /** @type {[string, string]} */ ([entry, entry]))],
-					'',
-					{
-						autocomplete: AUTOFILL.region,
-					},
-				)
-			: /** @type {HTMLInputElement | HTMLTextAreaElement} */ (
-					h(doc, name === 'notes' ? 'textarea' : 'input', {
-						maxlength: String(ADDRESS_LIMITS[name]),
-						autocomplete: AUTOFILL[name],
-						...(name === 'phone' ? { type: 'tel', inputmode: 'tel' } : {}),
-						...(name === 'city' && settings.checkout.cities.length > 0 ? { list: 'ss-cart-cities' } : {}),
-					})
-				);
+	/** @param {string} name */
+	const isRequired = (name) => inputs.get(name)?.hasAttribute('required') === true;
+	/**
+	 * @param {AddressField} name @param {boolean} needed @param {string} label
+	 * @param {HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement} node
+	 */
+	const fieldOf = (name, needed, label, node) => {
 		if (needed) {
 			node.setAttribute('required', '');
 			node.setAttribute('aria-required', 'true');
 		}
 		if (['city', 'area', 'region', 'postalCode', 'country'].includes(name)) node.addEventListener('change', onPlace);
 		inputs.set(name, node);
-		return node;
+		labels.set(name, label);
+		return field(doc, `ss-cart-${name}`, needed ? label : t('checkout.optional', { field: label }), node);
 	};
-	const fields = ADDRESS_FIELDS.filter((name) => required.includes(name) || optional.includes(name)).map((name) => {
-		const needed = required.includes(name);
-		return field(
-			doc,
-			`ss-cart-${name}`,
-			t(needed ? `checkout.field.${name}` : 'checkout.optional', { field: t(`checkout.field.${name}`) }),
-			control(name, needed),
+	/** @param {AddressField} name */
+	const input = (name) =>
+		/** @type {HTMLInputElement | HTMLTextAreaElement} */ (
+			h(doc, name === 'notes' ? 'textarea' : 'input', {
+				maxlength: String(ADDRESS_LIMITS[name]),
+				autocomplete: AUTOFILL[name],
+				...(name === 'phone' ? { type: 'tel', inputmode: 'tel' } : {}),
+				...(name === 'city' && settings.checkout.cities.length > 0 ? { list: 'ss-cart-cities' } : {}),
+			})
 		);
-	});
-	// a new country may offer its own regions: the region field follows (a typed region is kept where it can be)
-	inputs.get('country')?.addEventListener('change', () => {
-		const old = inputs.get('region');
-		if (!old) return;
-		const kept = old.value;
-		const next = control('region', required.includes('region'));
-		next.setAttribute('id', 'ss-cart-region');
-		old.replaceWith(next);
-		const options = next.tagName === 'SELECT' ? [.../** @type {HTMLSelectElement} */ (next).options] : null;
-		if (!options || options.some((option) => option.value === kept)) next.value = kept;
-	});
+	const country = select(
+		doc,
+		[
+			...(homeCountry ? [] : /** @type {Array<[string, string]>} */ ([['', t('checkout.region.choose')]])),
+			...countryChoices().map(({ value: code, label }) => /** @type {[string, string]} */ ([code, label])),
+		],
+		countryCodeOf(homeCountry) ?? '',
+		{ autocomplete: AUTOFILL.country },
+	);
+	const where = () => value('country') || homeCountry;
+	const places = h(doc, 'div', { class: 'address-parts' });
+	/** Lay out the place parts of the country picked, keeping what was typed. */
+	const layOut = () => {
+		const typed = new Map(PLACE_PARTS.map((name) => [name, inputs.get(name)?.value ?? '']));
+		for (const name of PLACE_PARTS) {
+			inputs.delete(name);
+			labels.delete(name);
+		}
+		const names = regionsFor(regions, where());
+		const parts = addressFields(where(), { required, ask: names ? ['region'] : [] }).map(
+			({ part, label, required: needed }) => {
+				const node =
+					part === 'region' && names
+						? select(
+								doc,
+								[
+									['', t('checkout.region.choose')],
+									...names.map((entry) => /** @type {[string, string]} */ ([entry, entry])),
+								],
+								'',
+								{ autocomplete: AUTOFILL.region },
+							)
+						: input(part);
+				const kept = typed.get(part) ?? '';
+				const options = node.tagName === 'SELECT' ? [.../** @type {HTMLSelectElement} */ (node).options] : null;
+				if (!options || options.some((option) => option.value === kept)) node.value = kept;
+				return fieldOf(part, needed, addressLabel(t, part, label), node);
+			},
+		);
+		places.replaceChildren(...parts);
+	};
+	country.addEventListener('change', layOut);
+	layOut();
+	/** @param {'name' | 'phone' | 'notes'} name */
+	const own = (name) => fieldOf(name, required.includes(name), t(`checkout.field.${name}`), input(name));
 	const cities =
 		settings.checkout.cities.length > 0
 			? h(
@@ -102,15 +147,42 @@ export const addressForm = ({ doc, t, settings, onPlace }) => {
 					...settings.checkout.cities.map((city) => h(doc, 'option', { value: city })),
 				)
 			: null;
-	const node = h(doc, 'fieldset', { class: 'box' }, h(doc, 'legend', {}, t('checkout.address')), ...fields, cities);
+	const node = h(
+		doc,
+		'fieldset',
+		{ class: 'box' },
+		h(doc, 'legend', {}, t('checkout.address')),
+		own('name'),
+		own('phone'),
+		fieldOf('country', required.includes('country'), t('checkout.field.country'), country),
+		places,
+		own('notes'),
+		cities,
+	);
 
 	return {
 		node,
 		value,
 		/** The address as the order takes it. */
 		values: () => Object.fromEntries(ADDRESS_FIELDS.map((name) => [name, value(name)])),
-		/** The first required field left empty, or null. */
-		missing: () => required.find((name) => inputs.has(name) && value(name) === '') ?? null,
+		/**
+		 * The first field to fix, with what to say: a required one left empty, or a postal code not in the country's
+		 * shape; null when none.
+		 * @returns {{ name: string, text: string } | null}
+		 */
+		problem: () => {
+			// in the order the form shows them
+			const shown = [...node.querySelectorAll('input, select, textarea')].map((control) => control.id.slice(8));
+			const empty = shown.find((name) => isRequired(name) && value(name) === '');
+			if (empty) return { name: empty, text: t('checkout.missing', { field: labels.get(empty) ?? empty }) };
+			const refused = addressProblem({
+				...Object.fromEntries(PLACE_PARTS.map((name) => [name, value(name)])),
+				country: where(),
+			});
+			return refused?.problem === 'postcode'
+				? { name: 'postalCode', text: t('checkout.fieldWrong', { field: labels.get('postalCode') ?? '' }) }
+				: null;
+		},
 		/** @param {string} name */
 		focus: (name) => inputs.get(name)?.focus(),
 	};

@@ -894,6 +894,14 @@ describe('orders admin: one order', () => {
 		type(fieldIn(dialogOf(root), 'City'), 'Osaka');
 		await submitDialog(root);
 		expect(server.last('PATCH /v1/admin/orders/ord_1')?.body.address).toMatchObject({ city: 'Osaka', line1: 'Street 1' });
+		// the editor follows the address's country: its order and labels, laid out again for another country
+		await pickMenu(pane, 'Edit delivery address');
+		const labels = () => [...dialogOf(root).querySelectorAll('label')].map((label) => label.textContent);
+		expect(labels().slice(2, 6)).toEqual(['Country', 'Postal code', 'Prefecture', 'City']);
+		await change(fieldIn(dialogOf(root), 'Country'), 'US');
+		expect(labels().slice(3)).toEqual(['Address', 'Address line 2', 'City', 'State', 'ZIP code', 'Delivery notes']);
+		expect(fieldIn(dialogOf(root), 'ZIP code').value).toBe('100-0001');
+		await click(buttonIn(dialogOf(root), 'Cancel'));
 		server.routes['PATCH /v1/admin/orders/ord_1'] = () => problem(500, 'internal_error');
 		await pickMenu(pane, 'Edit staff note');
 		await submitDialog(root);
@@ -1001,7 +1009,7 @@ describe('orders admin: one order', () => {
 		);
 		const panel = panelOf(root, 'orders');
 		const pane = detailOf(panel);
-		expect(textOf(pane)).toContain('Street 1, Tokyo, Tokyo, 100-0001, JP');
+		expect(textOf(pane)).toContain('Ana, +12025550143, 100-0001, Tokyo, Tokyo, Street 1, Japan');
 		expect(textOf(pane)).toContain('USD 10.00');
 		expect(textOf(pane)).not.toContain('Notes');
 		expect(pane.querySelector('a')).toBeNull();

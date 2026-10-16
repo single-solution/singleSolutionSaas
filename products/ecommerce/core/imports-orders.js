@@ -14,6 +14,7 @@
  */
 import { isId } from '@ss/contracts';
 import { normalisePhone } from '@ss/contracts/phone';
+import { countryCodeOf, tidyPostcode } from '@ss/contracts/address';
 import { ADDRESS_LIMITS } from './address.js';
 import { ALERT_TRIES, checkAlertInput } from './alerts.js';
 import { LIMITS } from './catalog.js';
@@ -562,6 +563,13 @@ const addressOf = (c, value, rules) => {
 			field === 'phone'
 				? c.phone(input.phone, '/address/phone', rules.phoneRules)
 				: c.text(input[field], `/address/${field}`, max);
+	// the country as its code, as checkout keeps it; the postal code upper case
+	if (out.country) {
+		const code = countryCodeOf(out.country);
+		if (code) out.country = code;
+		else c.fail('/address/country', 'The country is its ISO 3166-1 alpha-2 code or English name.');
+	}
+	out.postalCode = tidyPostcode(out.postalCode);
 	return out;
 };
 

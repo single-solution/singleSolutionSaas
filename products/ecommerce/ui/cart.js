@@ -679,10 +679,10 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					announce(win, GROWTH_EVENTS.beginCheckout, itemsDetail(currency(), quote.lines.map(growthItem)));
 				}
 				const isDelivery = physical() && quote.delivery.method === 'delivery';
-				const missing = isDelivery ? address.missing() : null;
-				if (missing) {
-					sayPlace(t('checkout.missing', { field: t(`checkout.field.${missing}`) }));
-					address.focus(missing);
+				const refused = isDelivery ? address.problem() : null;
+				if (refused) {
+					sayPlace(refused.text);
+					address.focus(refused.name);
 					return;
 				}
 				const given = fields.values();

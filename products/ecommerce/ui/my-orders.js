@@ -10,6 +10,7 @@
  * which open with their key (paying, canceling, the transfer proof, the invoice, downloads and reviews of items).
  * @module
  */
+import { addressLines, countryName } from '../core/address.js';
 import {
 	button,
 	codeOf,
@@ -415,18 +416,8 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 										doc,
 										'p',
 										{},
-										[
-											address.name,
-											address.line1,
-											address.line2,
-											address.area,
-											address.city,
-											address.region,
-											address.postalCode,
-											address.country,
-										]
-											.filter(Boolean)
-											.join(', '),
+										// the place as its country writes it, the country by name
+										[address.name, ...addressLines(address), countryName(address.country)].filter(Boolean).join(', '),
 									),
 								]
 							: [];

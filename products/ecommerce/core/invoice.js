@@ -15,6 +15,7 @@
  * website's Format, dates in the business time zone (PLAN 0.8.10 K7, K8). No I/O.
  * @module
  */
+import { addressLines as placeLines, countryName } from '@ss/contracts/address';
 import { formatDate, formatMoney } from '@ss/contracts/format';
 import { durationText } from './durations.js';
 import { fieldPlaceholders, fieldValuesShown, unitsShown } from './fields.js';
@@ -249,17 +250,12 @@ const businessBlock = (business, seller = '') =>
 		.map((line) => `<p>${esc(line)}</p>`)
 		.join('')}${seller}</div>`;
 
-/** @param {NonNullable<OrderRecord['address']>} address */
-const addressLines = (address) =>
-	[
-		address.name,
-		address.phone,
-		address.line1,
-		address.line2,
-		[address.area, address.city].filter(Boolean).join(', '),
-		[address.region, address.postalCode].filter(Boolean).join(' '),
-		address.country,
-	]
+/**
+ * The delivery address as its country writes it (`@ss/contracts/address`), the country by name.
+ * @param {NonNullable<OrderRecord['address']>} address
+ */
+const addressBlock = (address) =>
+	[address.name, address.phone, ...placeLines(address), countryName(address.country)]
 		.filter(Boolean)
 		.map((line) => `<p>${esc(line)}</p>`)
 		.join('');
@@ -558,7 +554,7 @@ export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 		.join('');
 	const rate = order.delivery.rateName ? `<p class="small">${esc(order.delivery.rateName)}</p>` : '';
 	const shipTo = order.address
-		? `<div><h2>${esc(t.labelShipTo)}</h2>${addressLines(order.address)}${rate}</div>`
+		? `<div><h2>${esc(t.labelShipTo)}</h2>${addressBlock(order.address)}${rate}</div>`
 		: order.delivery.method === 'pickup'
 			? `<div><h2>${esc(t.labelShipTo)}</h2><p>${esc(t.labelPickup)}</p>${rate}</div>`
 			: '<div></div>';
@@ -587,7 +583,7 @@ const slipBody = (order, context, batch) => {
 		)
 		.join('');
 	const shipTo = order.address
-		? addressLines(order.address)
+		? addressBlock(order.address)
 		: `<p>${esc(order.delivery.method === 'pickup' ? t.labelPickup : order.customer.name)}</p>`;
 	const shipment = order.shipment
 		? `<p>${esc(t.labelCourier)}: ${esc(order.shipment.courier)}</p><p>${esc(t.labelTracking)}: <span class="mono">${esc(order.shipment.trackingNumber)}</span></p>`

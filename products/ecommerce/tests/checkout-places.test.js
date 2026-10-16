@@ -104,7 +104,13 @@ describe('addresses with a region', () => {
 	it('keeps the region on the order, picked from address_regions in a listed country', async () => {
 		const item = await shop.seedProduct({ price: 1000, stock: 10 });
 		const shopper = await shop.signIn({ id: 'usr_places0000001' });
-		const address = { name: 'Sara Shopper', phone: '+15550001111', line1: '1 Main Street', city: 'Austin' };
+		const address = {
+			name: 'Sara Shopper',
+			phone: '+15550001111',
+			line1: '1 Main Street',
+			city: 'Austin',
+			postalCode: '78701',
+		};
 		const placed = await place(
 			{ lines: [{ productId: item.id }], payment: 'cod', address: { ...address, region: ' new  york ' } },
 			shopper,
@@ -119,7 +125,11 @@ describe('addresses with a region', () => {
 		expect(wrong.json.errors[0].path).toBe('/address/region');
 		// another country's region is the shopper's own words
 		const abroad = await place(
-			{ lines: [{ productId: item.id }], payment: 'cod', address: { ...address, country: 'CA', region: 'Ontario' } },
+			{
+				lines: [{ productId: item.id }],
+				payment: 'cod',
+				address: { ...address, country: 'CA', region: 'Ontario', postalCode: 'K1A 0B1' },
+			},
 			shopper,
 		);
 		expect(abroad.status).toBe(201);
@@ -153,8 +163,9 @@ describe('addresses with a region', () => {
 		});
 		await shop.setting('checkout', 'phoneRequired', false);
 		const optional = (await visit('GET', '/v1/widget/config')).json.settings.checkout.address;
+		// the form shows the other parts each country's format uses (no fixed list of optional ones)
 		expect(optional.required).toEqual(['name', 'line1', 'city']);
-		expect(optional.optional).toContain('phone');
+		expect(optional.optional).toBeUndefined();
 		await shop.setting('checkout', 'phoneRequired', true);
 	});
 });
@@ -167,7 +178,14 @@ describe('phones found by their whole number', () => {
 		const placed = await place({
 			lines: [{ productId: item.id }],
 			payment: 'cod',
-			address: { name: 'Lea Guest', phone: '06 12 34 56 78', line1: '1 rue de la Paix', city: 'Paris', country: 'FR' },
+			address: {
+				name: 'Lea Guest',
+				phone: '06 12 34 56 78',
+				line1: '1 rue de la Paix',
+				city: 'Paris',
+				postalCode: '75002',
+				country: 'FR',
+			},
 			customer: { name: 'Lea Guest', phone: '06 12 34 56 78' },
 		});
 		expect(placed.status).toBe(201);

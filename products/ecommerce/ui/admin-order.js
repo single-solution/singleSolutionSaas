@@ -13,11 +13,11 @@
  * too. Opening an order marks it opened by the staff member (the list's "not opened by me" filter).
  * @module
  */
-import { ADDRESS_FIELDS, ADDRESS_LIMITS } from '../core/address.js';
 import { WAITING_ROLES } from '../core/flow.js';
 import { quantityLabel } from '../core/measure.js';
 import { EDITABLE_ROLES } from '../core/orders.js';
 import { OTHER_WAY } from '../core/payment-methods.js';
+import { addressEditor, addressText } from './admin-address.js';
 import { query } from './admin-kit.js';
 import { fieldsCard, fieldsDialog } from './admin-field-values.js';
 import { card, detailHead, tagsDialog } from './admin-lists.js';
@@ -357,15 +357,7 @@ const renderOrder = (kit, order, detail, message) => {
 		]),
 	]);
 	const address = order.address
-		? card(kit, t('ordersAdmin.addressTitle'), [
-				kit.text(
-					'p',
-					{},
-					ADDRESS_FIELDS.map((key) => order.address[key])
-						.filter(Boolean)
-						.join(', '),
-				),
-			])
+		? card(kit, t('ordersAdmin.addressTitle'), [kit.text('p', {}, addressText(order.address))])
 		: null;
 	const shipment = order.shipment
 		? card(kit, t('ordersAdmin.shipment'), [
@@ -654,24 +646,16 @@ const refundDialog = (kit, order, done) => {
  */
 const addressDialog = (kit, order, done) => {
 	const { t } = kit;
-	// the address fields staff may change before shipping, each at most its length in the one address table
-	const inputs = new Map(
-		ADDRESS_FIELDS.map((key) => [key, kit.input(order.address[key] ?? '', { maxlength: String(ADDRESS_LIMITS[key]) })]),
-	);
+	// the address staff may change before shipping, laid out by its country
+	const editor = addressEditor(kit, order.address);
 	kit.dialog({
 		title: t('ordersAdmin.addressTitle'),
-		body: [
-			kit.h(
-				'div',
-				{ class: 'fields' },
-				[...inputs].map(([key, input]) => kit.field(t(`ordersAdmin.address.${key}`), input)),
-			),
-		],
+		body: [editor.node],
 		submitLabel: t('ordersAdmin.saveAddress'),
 		wide: true,
 		onSubmit: async () => {
 			const answer = await kit.call('PATCH', `/v1/admin/orders/${order.id}`, {
-				address: Object.fromEntries([...inputs].map(([key, input]) => [key, input.value])),
+				address: editor.values(),
 			});
 			if (!answer.ok) return kit.reason(answer);
 			done(answer.data, t('admin.saved'));

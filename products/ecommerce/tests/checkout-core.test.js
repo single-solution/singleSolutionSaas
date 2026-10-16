@@ -182,11 +182,42 @@ describe('cart checks', () => {
 		expect(checkAddress({ ...good, phone: '447700900123' }, gb)).toMatchObject({ value: { phone: '+447700900123' } });
 	});
 
+	it('checks an address by its country: a country picked by code or name, its region and postal code (A1, E6)', () => {
+		const rules = addressRules();
+		const base = { name: 'Sara', phone: '+15550001111', line1: '1 Main St', city: 'Austin' };
+		expect(checkAddress({ ...base, country: 'united kingdom', postalCode: 'sw1a  1aa' }, rules)).toMatchObject({
+			ok: true,
+			value: { country: 'GB', postalCode: 'SW1A 1AA' },
+		});
+		expect(checkAddress({ ...base, country: 'Atlantis' }, rules)).toMatchObject({ ok: false, field: 'address/country' });
+		// the US requires a state and a ZIP code of its own shape
+		expect(checkAddress({ ...base, country: 'us', postalCode: '78701' }, rules)).toMatchObject({
+			ok: false,
+			field: 'address/region',
+		});
+		expect(checkAddress({ ...base, country: 'US', region: 'TX', postalCode: '787' }, rules)).toMatchObject({
+			ok: false,
+			field: 'address/postalCode',
+			message: 'address.postalCode is not a postal code of the United States.',
+		});
+		expect(checkAddress({ ...base, country: 'US', region: 'TX', postalCode: '78701' }, rules)).toMatchObject({
+			ok: true,
+			value: { country: 'US', region: 'TX' },
+		});
+		// an address without a country is in the business.json country
+		expect(checkAddress(base, addressRules({ homeCountry: 'US' }))).toMatchObject({ ok: false, field: 'address/region' });
+		// no postal code is asked where the country has none, even when the website requires one
+		expect(checkAddress({ ...base, country: 'AE', region: 'Dubai' }, addressRules({ required: ['postalCode'] }))).toMatchObject(
+			{ ok: true },
+		);
+	});
+
 	it('takes every address field up to its length in the one address table (checkout, widget, staff, imports)', () => {
 		const rules = addressRules();
 		const base = { name: 'Sara', phone: '+15550001111' };
 		for (const [field, max] of Object.entries(ADDRESS_LIMITS)) {
-			if (field === 'phone') continue;
+			// a phone is a number and a country a country
+			if (field === 'phone' || field === 'country') continue;
 			expect(checkAddress({ ...base, [field]: 'x'.repeat(max) }, rules), field).toMatchObject({ ok: true });
 			expect(checkAddress({ ...base, [field]: 'x'.repeat(max + 1) }, rules), field).toMatchObject({
 				ok: false,
@@ -219,12 +250,12 @@ describe('cart checks', () => {
 
 	it('takes a region of the address_regions list in a listed country, as the list spells it', () => {
 		const regions = [{ country: 'US', names: ['California', 'New York'] }];
-		const good = { name: 'Sara', phone: '+15550001111', line1: '1 Main St', city: 'Town' };
+		const good = { name: 'Sara', phone: '+15550001111', line1: '1 Main St', city: 'Town', postalCode: '10001' };
 		// the country by code or English name; an address without a country is in the business.json country
 		expect(checkAddress({ ...good, country: 'United States', region: ' new  york ' }, addressRules({ regions }))).toMatchObject(
 			{
 				ok: true,
-				value: { region: 'New York' },
+				value: { region: 'New York', country: 'US' },
 			},
 		);
 		expect(checkAddress({ ...good, region: 'california' }, addressRules({ regions, homeCountry: 'US' }))).toMatchObject({
@@ -235,9 +266,17 @@ describe('cart checks', () => {
 			ok: false,
 			field: 'address/region',
 		});
-		// another country's region is free text; an empty region stays allowed unless required
-		expect(checkAddress({ ...good, country: 'CA', region: 'Ontario' }, addressRules({ regions }))).toMatchObject({ ok: true });
-		expect(checkAddress({ ...good, country: 'US' }, addressRules({ regions }))).toMatchObject({ ok: true });
+		// another country's region is free text; the US requires its state, other countries a region only when the
+		// website does
+		const ontario = { ...good, country: 'CA', region: 'Ontario', postalCode: 'K1A 0B1' };
+		expect(checkAddress(ontario, addressRules({ regions }))).toMatchObject({ ok: true });
+		expect(checkAddress({ ...good, country: 'US' }, addressRules({ regions }))).toMatchObject({
+			ok: false,
+			field: 'address/region',
+		});
+		expect(checkAddress({ ...good, country: 'FR', postalCode: '75002' }, addressRules({ regions }))).toMatchObject({
+			ok: true,
+		});
 	});
 
 	it('checks what placing adds', () => {

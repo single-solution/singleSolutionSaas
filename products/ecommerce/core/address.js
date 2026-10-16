@@ -1,22 +1,33 @@
 /**
- * Addresses (dynamic model §5): the fields of a delivery address in the order forms show them, with the longest value
- * each takes — one table for checkout, the cart widget, staff edits and imports — and how places compare: names
- * without letter case and extra spaces, postcodes upper-cased without spaces (zones and tax rules match their starts),
- * countries by ISO 3166-1 alpha-2 code or English name. An address without a country is in the business.json country.
- * No I/O and no imports (the widgets use it too).
+ * Addresses (dynamic model §5): the fields of a delivery address with the longest value each takes — one table for
+ * checkout, the cart widget, staff edits and imports, its place parts and their order, labels, required parts and
+ * postal code shapes per country from the one address-format table (`@ss/contracts/address`, shared with Accounts) —
+ * and how places compare: names without letter case and extra spaces, postcodes upper-cased without spaces (zones and
+ * tax rules match their starts), countries by ISO 3166-1 alpha-2 code (an address keeps the code; zones and rules may
+ * name a country by code or English name). An address without a country is in the business.json country.
+ * No I/O (the widgets use it too).
  * @module
  */
+import { PLACE_LIMITS, countryCodeOf } from '@ss/contracts/address';
 
-/** The address fields in form order, with the longest value each takes. */
+// the address-format table the widgets use too (they import packages only through core/)
+export {
+	LABEL_KINDS,
+	PLACE_PARTS,
+	addressFields,
+	addressLines,
+	addressProblem,
+	countryChoices,
+	countryCodeOf,
+	countryName,
+	tidyPostcode,
+} from '@ss/contracts/address';
+
+/** The address fields in form order, with the longest value each takes (the country: a code or an English name). */
 export const ADDRESS_LIMITS = Object.freeze({
 	name: 120,
 	phone: 40,
-	line1: 200,
-	line2: 200,
-	city: 100,
-	area: 100,
-	region: 100,
-	postalCode: 20,
+	...PLACE_LIMITS,
 	country: 60,
 	notes: 500,
 });
@@ -38,27 +49,6 @@ export const placeKey = (value) => (typeof value === 'string' ? value.trim().rep
 /** A postcode as compared: upper case without spaces (`sw1a 1aa` = `SW1A1AA`). @param {unknown} value */
 export const postcodeKey = (value) => (typeof value === 'string' ? value.replace(/\s+/g, '').toUpperCase() : '');
 
-/** @type {Map<string, string> | null} English country names (as compared) → ISO code, made on first use. */
-let countryCodes = null;
-
-/** @returns {Map<string, string>} */
-const codesByName = () => {
-	if (countryCodes) return countryCodes;
-	countryCodes = new Map();
-	try {
-		const names = new Intl.DisplayNames(['en'], { type: 'region', fallback: 'none' });
-		for (let first = 65; first <= 90; first += 1)
-			for (let second = 65; second <= 90; second += 1) {
-				const code = String.fromCharCode(first, second);
-				const name = names.of(code);
-				if (name && name !== code) countryCodes.set(placeKey(name), code);
-			}
-	} catch {
-		// no region names in this runtime: countries then compare by code or as typed
-	}
-	return countryCodes;
-};
-
 /**
  * A country as compared: its ISO 3166-1 alpha-2 code for a code or an English name (`pk`, `Pakistan` → `PK`), else the
  * text as a place name; '' when empty.
@@ -67,7 +57,7 @@ const codesByName = () => {
 export const countryKey = (value) => {
 	const key = placeKey(value);
 	if (/^[a-z]{2}$/.test(key)) return key.toUpperCase();
-	return codesByName().get(key) ?? key;
+	return countryCodeOf(key) ?? key;
 };
 
 /**

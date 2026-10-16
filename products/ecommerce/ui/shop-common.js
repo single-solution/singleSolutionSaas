@@ -98,10 +98,8 @@ export const settingsOf = (config) => {
 			/** how a shopper orders without signing in (E21): the contact guests check out by; null while guests sign in */
 			guests: guestsOf(checkout.guests),
 			address: {
+				/** the fields the website requires (the place parts a country requires come from its format) */
 				required: /** @type {string[]} */ (checkout.address?.required ?? ['name', 'phone', 'line1', 'city']),
-				optional: /** @type {string[]} */ (
-					checkout.address?.optional ?? ['line2', 'area', 'region', 'postalCode', 'country', 'notes']
-				),
 				/** the region names offered per country (`address_regions`) */
 				regions: /** @type {Array<{ country: string, names: string[] }>} */ (
 					Array.isArray(checkout.address?.regions) ? checkout.address.regions : []

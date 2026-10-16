@@ -2,6 +2,7 @@
 /* global window */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { LABEL_KINDS } from '@ss/contracts/address';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { LINE_PROBLEMS } from '../core/checkout.js';
 import { mountCompare } from '../ui/compare.js';
@@ -216,9 +217,9 @@ describe('texts', () => {
 			...['newest', 'price_asc', 'price_desc', 'top', 'rating', 'name', 'updated', 'sold_asc'].map(
 				(key) => `grid.sort.${key}`,
 			),
-			...['name', 'phone', 'line1', 'line2', 'city', 'area', 'postalCode', 'country', 'notes'].map(
-				(key) => `checkout.field.${key}`,
-			),
+			...['name', 'phone', 'line1', 'line2', 'country', 'notes'].map((key) => `checkout.field.${key}`),
+			// the area, city, region and postal code under each label kind of the address-format table
+			...Object.entries(LABEL_KINDS).flatMap(([part, kinds]) => kinds.map((kind) => `address.${part}.${kind}`)),
 			...['earn', 'redeem', 'refund', 'expire', 'adjust', 'reverse'].map((key) => `orders.points.kind.${key}`),
 			...['unpaid', 'pending', 'paid', 'partially_refunded', 'refunded'].map((key) => `orders.payment.${key}`),
 			...['return', 'warranty'].map((key) => `returns.kind.${key}`),

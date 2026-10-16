@@ -516,7 +516,6 @@ describe('cart', () => {
 				...SETTINGS.checkout,
 				address: {
 					required: ['name', 'phone', 'line1', 'region'],
-					optional: ['city', 'postalCode', 'country', 'notes'],
 					regions: [{ country: 'US', names: ['California', 'Texas'] }],
 					country: 'US',
 				},
@@ -527,19 +526,51 @@ describe('cart', () => {
 		const picker = /** @type {HTMLSelectElement} */ ($(host, '#ss-cart-region'));
 		expect(picker.tagName).toBe('SELECT');
 		expect([...picker.options].map((option) => option.value)).toEqual(['', 'California', 'Texas']);
-		expect($(host, 'label[for="ss-cart-region"]').textContent).toBe(text('checkout.field.region'));
+		// the business.json country is picked first, and the form follows its format: US order, State and ZIP code required
+		expect(/** @type {HTMLSelectElement} */ ($(host, '#ss-cart-country')).value).toBe('US');
+		/** The address fields shown, in order, with their labels. */
+		const shown = () =>
+			$$(host, 'fieldset.box .field label')
+				.map((label) => `${label.getAttribute('for')?.replace('ss-cart-', '')}:${label.textContent}`)
+				.filter((entry) => !entry.startsWith('guest'));
+		expect(shown()).toEqual([
+			`name:${text('checkout.field.name')}`,
+			`phone:${text('checkout.field.phone')}`,
+			`country:${text('checkout.optional', { field: text('checkout.field.country') })}`,
+			`line1:${text('checkout.field.line1')}`,
+			`line2:${text('checkout.optional', { field: text('checkout.field.line2') })}`,
+			`city:${text('checkout.optional', { field: text('address.city.city') })}`,
+			`region:${text('address.region.state')}`,
+			`postalCode:${text('address.postalCode.zip')}`,
+			`notes:${text('checkout.optional', { field: text('checkout.field.notes') })}`,
+		]);
 		await setValue(picker, 'Texas');
 		await setValue($(host, '#ss-cart-postalCode'), '73301');
 		await timers.run();
 		expect(fake.last('POST /v1/shop/cart/quote')?.body.delivery).toMatchObject({ region: 'Texas', postalCode: '73301' });
 		// another country: the region is typed (what was picked stays)
-		await setValue($(host, '#ss-cart-country'), 'Canada');
+		await setValue($(host, '#ss-cart-country'), 'CA');
+		expect(shown().slice(5, 8)).toEqual([
+			`city:${text('checkout.optional', { field: text('address.city.city') })}`,
+			`region:${text('address.region.province')}`,
+			`postalCode:${text('address.postalCode.postal')}`,
+		]);
 		const typed = /** @type {HTMLInputElement} */ ($(host, '#ss-cart-region'));
 		expect(typed.tagName).toBe('INPUT');
 		expect(typed.value).toBe('Texas');
 		expect(typed.getAttribute('maxlength')).toBe('100');
 		await setValue(typed, 'Ontario');
-		await setValue($(host, '#ss-cart-country'), 'United States');
+		// Japan writes the postal code and prefecture first; a country with no postal codes asks for none
+		await setValue($(host, '#ss-cart-country'), 'JP');
+		expect(shown().slice(3, 5)).toEqual([
+			`postalCode:${text('address.postalCode.postal')}`,
+			`region:${text('address.region.prefecture')}`,
+		]);
+		expect(/** @type {HTMLInputElement} */ ($(host, '#ss-cart-postalCode')).value).toBe('73301');
+		await setValue($(host, '#ss-cart-country'), 'AE');
+		expect($(host, '#ss-cart-postalCode')).toBeNull();
+		expect(shown()).toContain(`region:${text('address.region.emirate')}`);
+		await setValue($(host, '#ss-cart-country'), 'US');
 		expect($(host, '#ss-cart-region').tagName).toBe('SELECT');
 		expect(/** @type {HTMLSelectElement} */ ($(host, '#ss-cart-region')).value).toBe('');
 		// each field at most its length in the one address table
@@ -746,6 +777,14 @@ describe('checkout', () => {
 		expect(textOf(host)).toContain(text('checkout.missing', { field: text('checkout.field.name') }));
 		expect(host.shadowRoot?.activeElement?.id).toBe('ss-cart-name');
 		await fillAddress(host);
+		// a postal code is checked against the shape of the country's codes before placing
+		await setValue($(host, '#ss-cart-country'), 'US');
+		$(host, '#ss-cart-region').value = 'TX';
+		$(host, '#ss-cart-postalCode').value = '787';
+		await click(buttonOf(host, text('checkout.place')));
+		expect(textOf(host)).toContain(text('checkout.fieldWrong', { field: text('address.postalCode.zip') }));
+		expect(fake.all('POST /v1/shop/orders')).toHaveLength(0);
+		await setValue($(host, '#ss-cart-country'), '');
 		await timers.run();
 		await setValue($$(host, 'input[name="ss-cart-payment"]')[1], true);
 		$(host, '#ss-cart-note').value = ' Ring twice ';

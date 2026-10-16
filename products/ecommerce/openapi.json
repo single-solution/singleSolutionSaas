@@ -3986,11 +3986,12 @@
 												"postalCode": {
 													"type": "string",
 													"maxLength": 20,
-													"description": "Zones and tax rules compare it upper-cased without spaces."
+													"description": "Kept upper case; in the shape of the country's postal codes where they are known (US 12345 or 12345-6789, Canada A1A 1A1 …; 422 at /address/postalCode otherwise). Zones and tax rules compare it upper-cased without spaces."
 												},
 												"country": {
 													"type": "string",
-													"maxLength": 60
+													"maxLength": 60,
+													"description": "The country's ISO 3166-1 alpha-2 code (sent as a code or its English name, kept as the code); its address format orders, names and requires the other parts."
 												},
 												"notes": {
 													"type": "string",
@@ -6671,11 +6672,12 @@
 											"postalCode": {
 												"type": "string",
 												"maxLength": 20,
-												"description": "Zones and tax rules compare it upper-cased without spaces."
+												"description": "Kept upper case; in the shape of the country's postal codes where they are known (US 12345 or 12345-6789, Canada A1A 1A1 …; 422 at /address/postalCode otherwise). Zones and tax rules compare it upper-cased without spaces."
 											},
 											"country": {
 												"type": "string",
-												"maxLength": 60
+												"maxLength": 60,
+												"description": "The country's ISO 3166-1 alpha-2 code (sent as a code or its English name, kept as the code); its address format orders, names and requires the other parts."
 											},
 											"notes": {
 												"type": "string",
@@ -6848,7 +6850,8 @@
 											},
 											"country": {
 												"type": "string",
-												"maxLength": 60
+												"maxLength": 60,
+												"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business.json country)."
 											},
 											"locationId": {
 												"type": [
@@ -16234,9 +16237,11 @@
 						"name": "country",
 						"in": "query",
 						"required": false,
+						"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business.json country).",
 						"schema": {
 							"type": "string",
-							"maxLength": 60
+							"maxLength": 60,
+							"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business.json country)."
 						}
 					},
 					{
@@ -18642,11 +18647,12 @@
 												"postalCode": {
 													"type": "string",
 													"maxLength": 20,
-													"description": "Zones and tax rules compare it upper-cased without spaces."
+													"description": "Kept upper case; in the shape of the country's postal codes where they are known (US 12345 or 12345-6789, Canada A1A 1A1 …; 422 at /address/postalCode otherwise). Zones and tax rules compare it upper-cased without spaces."
 												},
 												"country": {
 													"type": "string",
-													"maxLength": 60
+													"maxLength": 60,
+													"description": "The country's ISO 3166-1 alpha-2 code (sent as a code or its English name, kept as the code); its address format orders, names and requires the other parts."
 												},
 												"notes": {
 													"type": "string",
@@ -23347,11 +23353,12 @@
 											"postalCode": {
 												"type": "string",
 												"maxLength": 20,
-												"description": "Zones and tax rules compare it upper-cased without spaces."
+												"description": "Kept upper case; in the shape of the country's postal codes where they are known (US 12345 or 12345-6789, Canada A1A 1A1 …; 422 at /address/postalCode otherwise). Zones and tax rules compare it upper-cased without spaces."
 											},
 											"country": {
 												"type": "string",
-												"maxLength": 60
+												"maxLength": 60,
+												"description": "The country's ISO 3166-1 alpha-2 code (sent as a code or its English name, kept as the code); its address format orders, names and requires the other parts."
 											},
 											"notes": {
 												"type": "string",
@@ -23524,7 +23531,8 @@
 											},
 											"country": {
 												"type": "string",
-												"maxLength": 60
+												"maxLength": 60,
+												"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business.json country)."
 											},
 											"locationId": {
 												"type": [
@@ -32092,7 +32100,8 @@
 											},
 											"country": {
 												"type": "string",
-												"maxLength": 60
+												"maxLength": 60,
+												"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business.json country)."
 											},
 											"locationId": {
 												"type": [
@@ -32777,7 +32786,8 @@
 											},
 											"country": {
 												"type": "string",
-												"maxLength": 60
+												"maxLength": 60,
+												"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business.json country)."
 											},
 											"locationId": {
 												"type": [
@@ -32796,7 +32806,7 @@
 									},
 									"address": {
 										"type": "object",
-										"description": "Required when the order is delivered: the name always, the phone while checkout.phoneRequired is on, and the fields checkout.addressRequired lists (of line1, line2, area, city, region, postalCode, country). In a country the address_regions list names, region is one of its names (422 at /address/region otherwise).",
+										"description": "Required when the order is delivered: the name always, the phone while checkout.phoneRequired is on, and the fields checkout.addressRequired lists (of line1, line2, area, city, region, postalCode, country). In a country the address_regions list names, region is one of its names (422 at /address/region otherwise). The country's address format (one table shared with Accounts) also requires the region and the postal code where the country does (a state and ZIP code in the US, a province and postal code in Canada …), never asks a postal code where the country has none, and checks the postal code's shape (422 at /address/<field>).",
 										"required": [
 											"name"
 										],
@@ -32834,11 +32844,12 @@
 											"postalCode": {
 												"type": "string",
 												"maxLength": 20,
-												"description": "Zones and tax rules compare it upper-cased without spaces."
+												"description": "Kept upper case; in the shape of the country's postal codes where they are known (US 12345 or 12345-6789, Canada A1A 1A1 …; 422 at /address/postalCode otherwise). Zones and tax rules compare it upper-cased without spaces."
 											},
 											"country": {
 												"type": "string",
-												"maxLength": 60
+												"maxLength": 60,
+												"description": "The country's ISO 3166-1 alpha-2 code (sent as a code or its English name, kept as the code); its address format orders, names and requires the other parts."
 											},
 											"notes": {
 												"type": "string",
@@ -45140,11 +45151,12 @@
 					"postalCode": {
 						"type": "string",
 						"maxLength": 20,
-						"description": "Zones and tax rules compare it upper-cased without spaces."
+						"description": "Kept upper case; in the shape of the country's postal codes where they are known (US 12345 or 12345-6789, Canada A1A 1A1 …; 422 at /address/postalCode otherwise). Zones and tax rules compare it upper-cased without spaces."
 					},
 					"country": {
 						"type": "string",
-						"maxLength": 60
+						"maxLength": 60,
+						"description": "The country's ISO 3166-1 alpha-2 code (sent as a code or its English name, kept as the code); its address format orders, names and requires the other parts."
 					},
 					"notes": {
 						"type": "string",
@@ -53296,11 +53308,12 @@
 					"postalCode": {
 						"type": "string",
 						"maxLength": 20,
-						"description": "Zones and tax rules compare it upper-cased without spaces."
+						"description": "Kept upper case; in the shape of the country's postal codes where they are known (US 12345 or 12345-6789, Canada A1A 1A1 …; 422 at /address/postalCode otherwise). Zones and tax rules compare it upper-cased without spaces."
 					},
 					"country": {
 						"type": "string",
-						"maxLength": 60
+						"maxLength": 60,
+						"description": "The country's ISO 3166-1 alpha-2 code (sent as a code or its English name, kept as the code); its address format orders, names and requires the other parts."
 					},
 					"notes": {
 						"type": "string",

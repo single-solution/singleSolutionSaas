@@ -16,6 +16,7 @@
  * @module
  */
 import { normalisePhone } from '@ss/contracts/phone';
+import { addressProblem, countryCodeOf, countryName, tidyPostcode } from '@ss/contracts/address';
 import { ADDRESS_LIMITS, placeKey, regionsFor } from './address.js';
 import { MAX_LINES, MAX_MEASURED, MAX_QUANTITY, grossFits, limitsOf, lineGross, piecesOf, quantityProblem } from './measure.js';
 import { allocateUnits, isPrice, roundHalfUp } from './money.js';
@@ -190,10 +191,13 @@ export const checkCart = (body, { maxLines = MAX_LINES } = {}) => {
  */
 
 /**
- * Check a delivery address (every field at most its {@link ADDRESS_LIMITS} length). Its phone (the one the courier
- * calls) is kept as E.164 when the website's phone rules can read it (K12), else as typed, so a website with no calling
- * code still takes national numbers. In a country `address_regions` lists, the region is one of its names, kept as the
- * list spells it.
+ * Check a delivery address (every field at most its {@link ADDRESS_LIMITS} length) by its country's format
+ * (`@ss/contracts/address`): the country is kept as its ISO code (given as a code or an English name), the place parts
+ * the website requires (`checkout.addressRequired`) and the region and postal code the country requires are filled
+ * (never a postal code where the country has none), and the postal code is in the country's shape (kept upper case).
+ * Its phone (the one the courier calls) is kept as E.164 when the website's phone rules can read it (K12), else as
+ * typed, so a website with no calling code still takes national numbers. In a country `address_regions` lists, the
+ * region is one of its names, kept as the list spells it.
  * @param {unknown} body
  * @param {AddressRules} rules
  * @returns {{ ok: true, value: Address } | InputError}
@@ -208,11 +212,33 @@ export const checkAddress = (body, rules) => {
 		if (value === null)
 			return { ok: false, field: `address/${field}`, message: `address.${field} is at most ${max} characters.` };
 		const needed =
-			field === 'name' || (field === 'phone' ? rules.phoneRequired : field !== 'notes' && rules.required.includes(field));
+			field === 'name' || (field === 'phone' ? rules.phoneRequired : field === 'country' && rules.required.includes(field));
 		if (needed && value === '') return { ok: false, field: `address/${field}`, message: `address.${field} is required.` };
 		out[field] = value;
 	}
-	const names = regionsFor(rules.regions, out.country || rules.homeCountry);
+	if (out.country) {
+		const code = countryCodeOf(out.country);
+		if (!code)
+			return {
+				ok: false,
+				field: 'address/country',
+				message: 'address.country is a country: its ISO 3166-1 alpha-2 code or English name.',
+			};
+		out.country = code;
+	}
+	out.postalCode = tidyPostcode(out.postalCode);
+	const where = out.country || rules.homeCountry;
+	const names = regionsFor(rules.regions, where);
+	const refused = addressProblem(out, { country: rules.homeCountry, required: rules.required, ask: names ? ['region'] : [] });
+	if (refused)
+		return {
+			ok: false,
+			field: `address/${refused.part}`,
+			message:
+				refused.problem === 'required'
+					? `address.${refused.part} is required.`
+					: `address.postalCode is not a postal code of ${countryName(where).replace(/^United /, 'the United ')}.`,
+		};
 	if (names && out.region !== '') {
 		const named = names.find((name) => placeKey(name) === placeKey(out.region));
 		if (!named)

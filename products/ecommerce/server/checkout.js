@@ -125,15 +125,11 @@ export const createCheckout = (product, service) => {
 				// needed (phase 5); null while guests sign in
 				guests: checkout.guests === 'off' ? null : guestRules(checkout),
 				address: {
+					// the fields the website requires; the form shows the parts each country's format uses besides
 					required: [
 						'name',
 						...(phoneNeeded ? ['phone'] : []),
 						...OPTIONAL_ADDRESS_FIELDS.filter((f) => required.includes(f)),
-					],
-					optional: [
-						...(phoneNeeded ? [] : ['phone']),
-						...OPTIONAL_ADDRESS_FIELDS.filter((f) => !required.includes(f)),
-						'notes',
 					],
 					// the region names offered per country (`address_regions`), and the country of an address without one
 					regions: await s.list('address_regions'),

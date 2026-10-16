@@ -10,7 +10,7 @@
  * `reports.read`) and CSV (CSV, `csv.run`) from `./admin-reports.js`.
  * @module
  */
-import { ADDRESS_FIELDS, ADDRESS_LIMITS } from '../core/address.js';
+import { addressEditor, addressText } from './admin-address.js';
 import { mountAdmin, query } from './admin-kit.js';
 import { fieldsCard, fieldsDialog } from './admin-field-values.js';
 import { card, chipFilter, detailHead, listScreen, tagsDialog } from './admin-lists.js';
@@ -149,7 +149,7 @@ const customersTab = (kit, panel) => {
 				kit.field(t('checkout.field.name'), name),
 				kit.field(t('customersAdmin.phone'), phone),
 				kit.field(t('customersAdmin.email'), email),
-				kit.field(t('checkout.field.city'), city),
+				kit.field(t('address.city.city'), city),
 				...(kit.has('loyalty') ? [kit.field(t('customersAdmin.openingPoints'), points), member.node] : []),
 			],
 			submitLabel: t('customersAdmin.add'),
@@ -271,31 +271,15 @@ const renderCustomer = (kit, customer, detail, message) => {
 		return null;
 	};
 	const addAddress = () => {
-		// the address fields, each at most its length in the one address table (core/address.js)
-		const inputs = ADDRESS_FIELDS.map((field) => ({
-			field,
-			control: kit.input(field === 'name' ? customer.name : field === 'phone' ? customer.phone : '', {
-				maxlength: String(ADDRESS_LIMITS[field]),
-				...(field === 'phone' ? { type: 'tel' } : {}),
-			}),
-		}));
+		// the address laid out by its country, each field at most its length in the one address table (core/address.js)
+		const editor = addressEditor(kit, { name: customer.name, phone: customer.phone });
 		kit.dialog({
 			title: t('customersAdmin.addAddress'),
-			body: inputs.map(({ field, control }) => kit.field(t(`checkout.field.${field}`), control)),
+			body: [editor.node],
 			submitLabel: t('admin.save'),
-			onSubmit: () =>
-				saveAddresses(
-					[Object.fromEntries(inputs.map(({ field, control }) => [field, control.value])), ...addresses],
-					t('customersAdmin.addressSaved'),
-				),
+			onSubmit: () => saveAddresses([editor.values(), ...addresses], t('customersAdmin.addressSaved')),
 		});
 	};
-	/** @param {any} address */
-	const addressText = (address) =>
-		ADDRESS_FIELDS.filter((field) => field !== 'notes')
-			.map((field) => address[field])
-			.filter(Boolean)
-			.join(', ');
 	const loyaltyOn = has('loyalty');
 	const remove = () =>
 		kit.dialog({
@@ -399,7 +383,7 @@ const renderCustomer = (kit, customer, detail, message) => {
 		kit.fieldGrid([
 			[t('customersAdmin.email'), customer.email],
 			[t('customersAdmin.phone'), customer.phone],
-			[t('checkout.field.city'), customer.city ?? ''],
+			[t('address.city.city'), customer.city ?? ''],
 			[t('customersAdmin.userId'), customer.userId || t('customersAdmin.guest')],
 			[t('admin.tags'), (customer.tags ?? []).join(', ')],
 			...(loyaltyOn
