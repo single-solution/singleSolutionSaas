@@ -146,7 +146,7 @@ const UNSPACED =
  * @param {unknown} lines
  * @returns {Array<{ word: string, factor: number }>}
  */
-export const multipliersOf = (lines) =>
+const multipliersOf = (lines) =>
 	(Array.isArray(lines) ? lines : [])
 		.map((line) => MULTIPLIER.exec(typeof line === 'string' ? line.trim() : ''))
 		.filter((match) => match !== null)

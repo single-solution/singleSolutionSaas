@@ -11,7 +11,7 @@ import { checkFieldValue } from './fields.js';
 export const QUESTION_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'yes_no', 'choice', 'email', 'phone']));
 
 /** Most questions and services, and the longest label, name and description. */
-export const BOOKING_LIMITS = Object.freeze({ questions: 20, services: 50, label: 80, description: 300, options: 30 });
+const BOOKING_LIMITS = Object.freeze({ questions: 20, services: 50, label: 80, description: 300, options: 30 });
 
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;
 /** Keys the booking tool uses itself. */

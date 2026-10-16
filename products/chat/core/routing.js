@@ -10,7 +10,7 @@ import { primary } from './language.js';
 import { pathMatches } from './text.js';
 
 /** The list's limits. */
-export const TEAM_LIMITS = Object.freeze({ teams: 20, name: 60, members: 100, languages: 20, pages: 20 });
+const TEAM_LIMITS = Object.freeze({ teams: 20, name: 60, members: 100, languages: 20, pages: 20 });
 
 /** How chats are given out automatically (setting Assign automatically of Assignment). */
 export const ROUTED = Object.freeze(/** @type {const} */ (['round_robin', 'least_busy']));

@@ -13,7 +13,7 @@ import { isOpenAt, minutesOf, nextOpenAt } from './time.js';
 /** @typedef {import('./time.js').OfficeHours} OfficeHours */
 
 /** Most weekly windows, dated exceptions, and windows on one exception day. */
-export const HOURS_LIMITS = Object.freeze({ windows: 50, exceptions: 200, perDay: 6, name: 80 });
+const HOURS_LIMITS = Object.freeze({ windows: 50, exceptions: 200, perDay: 6, name: 80 });
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 

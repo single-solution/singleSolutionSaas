@@ -193,7 +193,7 @@ export const passages = (ranked, { maxChars }) =>
 	}));
 
 /** The longest collection name (C21). */
-export const COLLECTION_MAX = 60;
+const COLLECTION_MAX = 60;
 const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/;
 
 /**

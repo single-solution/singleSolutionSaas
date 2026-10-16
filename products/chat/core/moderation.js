@@ -35,7 +35,7 @@ const IPV6_CANDIDATE = /(?<![\p{L}\p{N}:.])[0-9a-f:.]{3,45}(?![\p{L}\p{N}:])/giu
  * an IPv4 address.
  * @param {string} value
  */
-export const isIPv6 = (value) => {
+const isIPv6 = (value) => {
 	const halves = value.split('::');
 	if (halves.length > 2) return false;
 	/** @param {string} part */
@@ -55,7 +55,7 @@ export const isIPv6 = (value) => {
 };
 
 /** The list's limits: patterns, and the longest name and replacement. */
-export const REDACTION_LIMITS = Object.freeze({ patterns: 30, name: 60, replacement: 60 });
+const REDACTION_LIMITS = Object.freeze({ patterns: 30, name: 60, replacement: 60 });
 
 /**
  * A merchant redaction pattern (C14).

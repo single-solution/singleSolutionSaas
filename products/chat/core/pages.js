@@ -15,7 +15,7 @@ export const OTHER_PAGE = 'other';
 export const PAGE_TYPE_KEY = /^[a-z][a-z0-9_-]{0,39}$/;
 
 /** Most page types, and the longest name, path pattern and nudge. */
-export const PAGE_TYPE_LIMITS = Object.freeze({ types: 30, name: 60, path: 200, nudge: 300 });
+const PAGE_TYPE_LIMITS = Object.freeze({ types: 30, name: 60, path: 200, nudge: 300 });
 
 /** @typedef {{ key: string, name: string, path: string, nudge: string }} PageType */
 
