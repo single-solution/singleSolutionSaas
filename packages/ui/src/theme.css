@@ -48,6 +48,14 @@
 	--font-sans: var(--ss-font-text, ui-sans-serif), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 	--font-display: var(--ss-font-display, var(--ss-font-text, ui-sans-serif)), ui-sans-serif, system-ui, sans-serif;
 	--font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+	/* the type scale beside Tailwind's: label 13px (buttons, labels, compact rows), lead 15px (card titles, large buttons),
+	   heading 17px (dialog titles), page 26px (page titles), figure 28px (key figures), micro 11px (counters) */
+	--text-micro: 0.6875rem;
+	--text-label: 0.8125rem;
+	--text-lead: 0.9375rem;
+	--text-heading: 1.0625rem;
+	--text-page: 1.625rem;
+	--text-figure: 1.75rem;
 	--radius-card: 0.875rem;
 	--radius-control: 0.625rem;
 	/* flat at rest (owner, 2026-10-14: elevation by default is not premium): buttons glow on hover; menus, dialogs and

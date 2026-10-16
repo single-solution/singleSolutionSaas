@@ -285,6 +285,16 @@ describe('display', () => {
 });
 
 describe('Table', () => {
+	it('puts its scrolling box in the tab order as a labeled region, so the keyboard can scroll it', () => {
+		const { container } = render(
+			<Table caption="Things" rows={[]} rowKey={(r) => String(r)} columns={[{ key: 'name', header: 'Name' }]} />,
+		);
+		const box = /** @type {HTMLElement} */ (container.querySelector('[role="region"]'));
+		expect(box.getAttribute('aria-label')).toBe('Things');
+		expect(box.tabIndex).toBe(0);
+		expect(box.querySelector('table')).not.toBeNull();
+	});
+
 	const rows = [
 		{ id: 'a', name: 'Beta', n: 2 },
 		{ id: 'b', name: 'Alpha', n: 10 },
@@ -494,7 +504,7 @@ describe('widths follow the container', () => {
 		expect(STAT_GRID).toContain('@2xl:[&:has(>:nth-child(3):last-child)]:grid-cols-3');
 		const values = [...grid.querySelectorAll('.tabular-nums.font-display')].map((el) => el.className);
 		expect(values[0]).toContain('whitespace-nowrap');
-		expect(values[0]).toContain('@[14rem]:text-[28px]');
+		expect(values[0]).toContain('@[14rem]:text-figure');
 		expect(values[1]).toContain('whitespace-nowrap');
 		expect(values[1]).toContain('text-lg');
 		expect(values[2]).toContain('text-balance');
@@ -593,12 +603,20 @@ describe('overlays', () => {
 			</ConfirmDialog>,
 		);
 		const dialog = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
-		expect(document.activeElement?.textContent).toBe('Delete');
+		// a destructive confirmation starts on the safe choice
+		expect(document.activeElement?.textContent).toBe('Cancel');
 		expect(dialog.textContent).toContain('Nope');
 		click(byText(dialog, 'Delete', 'button'));
 		expect(onConfirm).toHaveBeenCalled();
 		click(byText(dialog, 'Cancel', 'button'));
 		expect(onClose).toHaveBeenCalled();
+		cleanup();
+		render(
+			<ConfirmDialog open onClose={onClose} onConfirm={onConfirm} title="Publish?" confirmLabel="Publish">
+				Sure?
+			</ConfirmDialog>,
+		);
+		expect(document.activeElement?.textContent).toBe('Publish');
 	});
 });
 

@@ -35,9 +35,9 @@ const VARIANTS = {
 
 /** @type {Record<ButtonSize, string>} */
 const SIZES = {
-	sm: 'min-h-8 px-3 py-1 text-[13px]',
+	sm: 'min-h-8 px-3 py-1 text-label',
 	md: 'min-h-9 px-4 py-1.5 text-sm',
-	lg: 'min-h-11 px-5 py-2 text-[15px]',
+	lg: 'min-h-11 px-5 py-2 text-lead',
 };
 
 /**

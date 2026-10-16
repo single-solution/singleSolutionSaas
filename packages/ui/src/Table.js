@@ -4,7 +4,7 @@
  * client-side sorting of the loaded rows (`aria-sort` on headers, sort buttons are keyboard operable) and cursor
  * pagination (`hasMore` + `onLoadMore`, the Portal's `nextCursor`). Cells keep their text on one line, so a column is
  * never squeezed into a word per line; a table wider than its card (a narrow pane, a phone) scrolls horizontally inside
- * the card. A column of longer text (`wrap`) wraps on whole words within a readable minimum width instead. With no rows
+ * the card (the scrolling box is a labeled region that takes focus, so the keyboard can scroll it). A column of longer text (`wrap`) wraps on whole words within a readable minimum width instead. With no rows
  * the table is just its empty message, as wide as the card (no header row to scroll past).
  * @module
  */
@@ -75,7 +75,11 @@ export function Table({
 	return (
 		<div className={cx('@container space-y-3', className)}>
 			{/* framed on the page; inside a card (which frames it already) no second frame */}
-			<div className="overflow-x-auto rounded-card border border-line-soft bg-surface in-[.rounded-card]:rounded-none in-[.rounded-card]:border-0">
+			<div
+				role="region"
+				aria-label={caption}
+				tabIndex={0}
+				className="overflow-x-auto rounded-card border border-line-soft bg-surface focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus in-[.rounded-card]:rounded-none in-[.rounded-card]:border-0">
 				<table className={cx('w-full border-collapse text-sm', sorted.length > 0 && 'min-w-[32rem]')}>
 					<caption className="sr-only">{caption}</caption>
 					<thead className={cx(sorted.length === 0 && 'hidden')}>

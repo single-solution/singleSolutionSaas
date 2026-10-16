@@ -251,7 +251,7 @@ export function OverviewView(props) {
 												className="ss-motion -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-surface-2">
 												<span
 													aria-hidden="true"
-													className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-primary-soft text-xs font-bold text-on-primary-soft">
+													className="flex size-9 shrink-0 items-center justify-center rounded-control bg-primary-soft text-xs font-bold text-on-primary-soft">
 													{initialsOf(m.name)}
 												</span>
 												<span className="min-w-0 flex-1">

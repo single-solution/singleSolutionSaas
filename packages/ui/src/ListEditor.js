@@ -69,7 +69,7 @@ export function ListEditor({
 	const full = max !== undefined && items.length >= max;
 	return (
 		<fieldset className={cx('col-span-full min-w-0 space-y-3', className)} disabled={disabled}>
-			<legend className="mb-2 block text-[13px] font-medium leading-5 text-fg">
+			<legend className="mb-2 block text-label font-medium leading-5 text-fg">
 				{legend}
 				{items.length > 0 ? <span className="ml-1.5 font-normal text-muted">{items.length}</span> : null}
 			</legend>

@@ -15,7 +15,7 @@ import { Icon } from './icons.js';
 /** @typedef {import('react').ReactNode} ReactNode */
 
 /** A field's label: sentence case, medium weight (one look for labels and legends everywhere). */
-const LABEL_CLASS = 'block text-[13px] font-medium leading-5 text-fg';
+const LABEL_CLASS = 'block text-label font-medium leading-5 text-fg';
 
 /**
  * Classes of a responsive field grid: 1 / 2 / 3 columns by the width of the nearest `@container`, packed densely

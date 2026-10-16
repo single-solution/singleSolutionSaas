@@ -48,7 +48,7 @@ export function CodeBlock({ code, label, secret = false, wrap = true, className 
 	const copy = async () => setCopied(await copyText(code));
 	return (
 		<div className={cx('space-y-2', className)}>
-			{label ? <p className="text-[13px] font-medium text-fg">{label}</p> : null}
+			{label ? <p className="text-label font-medium text-fg">{label}</p> : null}
 			<div className="flex items-start gap-2 rounded-xl bg-surface-2 p-3.5">
 				<pre
 					className={cx(

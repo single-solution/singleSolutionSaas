@@ -136,7 +136,7 @@ export function Dialog({
 				)}>
 				<div className="flex items-start justify-between gap-4 px-6 pb-1 pt-6">
 					<div className="min-w-0">
-						<h2 id={titleId} className="text-[17px] leading-snug font-semibold tracking-tight text-fg">
+						<h2 id={titleId} className="text-heading leading-snug font-semibold tracking-tight text-fg">
 							{title}
 						</h2>
 						{description ? (
@@ -164,7 +164,8 @@ export function Dialog({
 }
 
 /**
- * Confirmation dialog for destructive or irreversible actions.
+ * Confirmation dialog for destructive or irreversible actions. Focus starts on the action that is safe: Cancel when `danger`
+ * is set, the confirm button otherwise.
  * @param {{ open: boolean, onClose: () => void, onConfirm: () => void, title: ReactNode, children?: ReactNode,
  *   confirmLabel?: string, cancelLabel?: string, danger?: boolean, busy?: boolean, error?: ReactNode }} props
  */
@@ -188,10 +189,14 @@ export function ConfirmDialog({
 			size="sm"
 			footer={
 				<>
-					<Button variant="secondary" onClick={onClose} disabled={busy}>
+					<Button variant="secondary" onClick={onClose} disabled={busy} data-autofocus={danger ? '' : undefined}>
 						{cancelLabel}
 					</Button>
-					<Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} loading={busy} data-autofocus>
+					<Button
+						variant={danger ? 'danger' : 'primary'}
+						onClick={onConfirm}
+						loading={busy}
+						data-autofocus={danger ? undefined : ''}>
 						{confirmLabel}
 					</Button>
 				</>

@@ -199,7 +199,7 @@ export function SettingsSections({ features, forms, extras }) {
 									aria-current={section.id === active.id ? 'true' : undefined}
 									onClick={() => pick(section.id)}
 									className={cx(
-										'ss-motion ss-press w-full rounded-[10px] px-3 py-2 text-left text-sm',
+										'ss-motion ss-press w-full rounded-control px-3 py-2 text-left text-sm',
 										'focus-visible:outline-2 focus-visible:outline-focus',
 										section.id === active.id
 											? 'bg-primary-soft font-semibold text-on-primary-soft'

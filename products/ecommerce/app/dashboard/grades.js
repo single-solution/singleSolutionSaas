@@ -45,7 +45,7 @@ const L = TEXTS.lists;
 const G = L.grades;
 
 /** The look of a field label (as the shared form controls have it). */
-const LEGEND = 'block text-[13px] font-medium leading-5 text-fg';
+const LEGEND = 'block text-label font-medium leading-5 text-fg';
 
 /**
  * `{length}/{max}` beside a long text's label.

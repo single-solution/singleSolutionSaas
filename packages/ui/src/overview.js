@@ -86,7 +86,7 @@ function NeedItem({ tone, title, effect, action }) {
 			{/* on a narrow card the button goes under the words (lined up with them) instead of squeezing them */}
 			<div className="min-w-0 flex-[1_1_14rem]">
 				<p className="text-sm font-semibold break-words text-fg">{title}</p>
-				<p className="mt-0.5 text-[13px] leading-relaxed text-muted">{effect}</p>
+				<p className="mt-0.5 text-label leading-relaxed text-muted">{effect}</p>
 			</div>
 			{action ? <div className="shrink-0 pl-[1.625rem] @lg:pl-0">{action}</div> : null}
 		</li>
@@ -198,7 +198,7 @@ export function Timeline({ items, empty }) {
 				<li key={item.key} className="flex gap-3">
 					<span
 						aria-hidden="true"
-						className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[11px] font-bold text-on-primary-soft">
+						className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-micro font-bold text-on-primary-soft">
 						{initialsOf(item.who)}
 					</span>
 					<div className="min-w-0 text-sm">

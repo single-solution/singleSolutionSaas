@@ -82,7 +82,7 @@ export function Card({ title, subtitle, actions, children, className, bodyClassN
 			{title || actions ? (
 				<header className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5 sm:px-6">
 					<div className="min-w-0">
-						{title ? <h2 className="text-[15px] font-semibold tracking-tight text-fg">{title}</h2> : null}
+						{title ? <h2 className="text-lead font-semibold tracking-tight text-fg">{title}</h2> : null}
 						{subtitle ? <p className="mt-0.5 text-sm text-muted">{subtitle}</p> : null}
 					</div>
 					{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
@@ -116,7 +116,7 @@ export function PageHeader({ title, subtitle, actions, breadcrumbs, badge, level
 			{breadcrumbs}
 			<div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
 				<div className="min-w-0 flex-auto">
-					<Heading className="flex flex-wrap items-center gap-2 font-display text-[26px] leading-tight font-extrabold tracking-[-0.02em] text-balance text-fg">
+					<Heading className="flex flex-wrap items-center gap-2 font-display text-page leading-tight font-extrabold tracking-[-0.02em] text-balance text-fg">
 						<span className="min-w-0 break-words">{title}</span>
 						{badge}
 					</Heading>
@@ -317,7 +317,7 @@ const valueSize = (value) =>
 	typeof value === 'string' || typeof value === 'number'
 		? String(value).length > 13
 			? 'whitespace-nowrap text-lg @[11.5rem]:text-xl @[16rem]:text-2xl'
-			: 'whitespace-nowrap text-2xl @[14rem]:text-[28px]'
+			: 'whitespace-nowrap text-2xl @[14rem]:text-figure'
 		: 'text-balance text-xl @[16rem]:text-2xl';
 
 /**
@@ -355,7 +355,7 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, kind, classNa
 							</span>
 						)
 					) : null}
-					<span className="min-w-0 text-[13px] font-medium text-pretty text-muted">{label}</span>
+					<span className="min-w-0 text-label font-medium text-pretty text-muted">{label}</span>
 				</div>
 				<div
 					key={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}

@@ -216,8 +216,8 @@ function Settings({ settings }) {
 		<dl className="divide-y divide-line-soft rounded-xl bg-surface-2/60">
 			{settings.map((setting) => (
 				<div key={setting.key} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-3 py-2">
-					<dt className="min-w-0 text-[13px] text-fg">{setting.title}</dt>
-					<dd className="flex min-w-0 items-center gap-2 text-[13px] font-medium break-words text-fg">
+					<dt className="min-w-0 text-label text-fg">{setting.title}</dt>
+					<dd className="flex min-w-0 items-center gap-2 text-label font-medium break-words text-fg">
 						{'value' in setting ? <span className="min-w-0">{valueText(setting.value)}</span> : null}
 						{setting.set ? <span className="min-w-0 text-muted">{SETUP.secretSet}</span> : null}
 						{setting.default ? <Badge>{SETUP.defaultValue}</Badge> : null}
@@ -285,7 +285,7 @@ function ProductPanel({ product, valuesShown }) {
 								<p className="text-xs text-muted">{feature.description}</p>
 								<Settings settings={feature.settings} />
 								{feature.lists.map((list) => (
-									<p key={list.name} className="text-[13px] text-fg">
+									<p key={list.name} className="text-label text-fg">
 										<span className="font-medium">{list.title}:</span> {list.summary}
 									</p>
 								))}
@@ -336,7 +336,7 @@ function ProductPanel({ product, valuesShown }) {
 						{product.widgets.map((widget) => (
 							<li key={widget.key} className="flex flex-wrap items-center justify-between gap-2 text-sm text-fg">
 								<span className="min-w-0">
-									<code className="font-mono text-[13px]">{widget.key}</code>
+									<code className="font-mono text-label">{widget.key}</code>
 									<span className="ml-2 text-xs text-muted">{SETUP.widgetKinds[widget.kind]}</span>
 								</span>
 								<Badge tone={widget.ready ? 'success' : widget.on ? 'warning' : 'neutral'} dot>
@@ -395,7 +395,7 @@ function ProductPanel({ product, valuesShown }) {
 						<ul className="space-y-1">
 							{product.staffPermissions.map((permission) => (
 								<li key={permission.key} className="flex flex-wrap items-baseline gap-2 text-sm text-fg">
-									<code className="font-mono text-[13px]">{permission.key}</code>
+									<code className="font-mono text-label">{permission.key}</code>
 									<span className={cx('text-xs', permission.on ? 'text-fg' : 'text-muted')}>{permission.name}</span>
 								</li>
 							))}

@@ -52,7 +52,7 @@ export function ThemeToggle({ className }) {
 	const [choice, setChoice] = useState(/** @type {ThemeChoice} */ ('system'));
 	useEffect(() => setChoice(readThemeChoice()), []);
 	return (
-		<div role="group" aria-label="Theme" className={cx('inline-flex rounded-[10px] bg-surface-2 p-0.5', className)}>
+		<div role="group" aria-label="Theme" className={cx('inline-flex rounded-control bg-surface-2 p-0.5', className)}>
 			{CHOICES.map((item) => (
 				<button
 					key={item.value}

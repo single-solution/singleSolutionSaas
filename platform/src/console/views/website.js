@@ -631,7 +631,7 @@ export function InstallBlock({ entry, domain, merchantId, websiteId }) {
 				<p className="text-xs text-muted">{WEBSITE.browserTokenHelp(domain)}</p>
 			</div>
 			<div className="space-y-2">
-				<p className="text-[13px] font-medium text-fg">{WEBSITE.serverToken}</p>
+				<p className="text-label font-medium text-fg">{WEBSITE.serverToken}</p>
 				{cannot ? (
 					<Callout tone="warning">{WEBSITE.cannotShow}</Callout>
 				) : shown && value ? (

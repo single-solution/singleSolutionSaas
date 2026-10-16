@@ -72,7 +72,7 @@ function Nav({ sections, linkAs, onNavigate }) {
 				ref={marker}
 				aria-hidden="true"
 				className={cx(
-					'pointer-events-none absolute inset-x-0 top-0 -z-10 rounded-[10px] bg-primary-soft opacity-0',
+					'pointer-events-none absolute inset-x-0 top-0 -z-10 rounded-control bg-primary-soft opacity-0',
 					placed && 'transition-[transform,opacity] duration-(--ss-motion-slow) ease-ss-move',
 				)}
 			/>
@@ -92,7 +92,7 @@ function Nav({ sections, linkAs, onNavigate }) {
 										}}
 										aria-current={item.current ? 'page' : undefined}
 										className={cx(
-											'ss-motion ss-press flex items-center gap-2.5 rounded-[10px] px-2 py-1.5 text-sm',
+											'ss-motion ss-press flex items-center gap-2.5 rounded-control px-2 py-1.5 text-sm',
 											'focus-visible:outline-2 focus-visible:outline-focus',
 											on
 												? cx('font-semibold text-on-primary-soft', placed ? 'bg-transparent' : 'bg-primary-soft')
@@ -132,7 +132,7 @@ function Nav({ sections, linkAs, onNavigate }) {
 function Brand({ name, tagline, compact = false }) {
 	return (
 		<div className={cx('flex min-w-0 items-center gap-2.5', !compact && 'px-1.5')}>
-			<span className="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-primary text-on-primary">
+			<span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-primary text-on-primary">
 				<Icon name="zap" size={16} />
 			</span>
 			<span className="min-w-0">
