@@ -11,6 +11,7 @@ import declaration from '../schemas/messages.json' with { type: 'json' };
 import guide from '../docs/guide.json' with { type: 'json' };
 import { STOCK_ALERT_VALUES } from '../server/extras-alerts.js';
 import { RETURN_MESSAGE_VALUES } from '../server/extras-returns.js';
+import { COLLECTIONS } from '../core/model.js';
 import { ORDER_MESSAGE_VALUES, ORDER_TEMPLATES } from '../server/order-messages.js';
 import { BUSINESS_VALUE } from '../server/service.js';
 import {
@@ -220,6 +221,55 @@ describe('Ecommerce’s messages and their defaults (parity P1)', () => {
 				.find((message) => message.template === 'ecommerce.staff_placed');
 			expect(plain?.values).not.toHaveProperty(STAFF_ALERT_PHONE);
 			await shop.setting('staff_alerts', 'staffPermission', '');
+		});
+
+		it('names a channel for one recipient and sends a staff push to Accounts staff, saved in the outbox like every alert (K8)', async () => {
+			shop.accounts.setUsers([
+				{ id: 'usr_orders1', email: 'orders@shop.example.com', permissions: ['ecommerce:orders.manage'] },
+			]);
+			await shop.setting('staff_alerts', 'recipients', [
+				'email:team@shop.example.com',
+				'whatsapp:+44 7700 900123',
+				'push:usr_ops00001',
+			]);
+			await shop.setting('staff_alerts', 'staffPermission', 'orders.manage');
+			await shop.setting('staff_alerts', 'staffPush', true);
+			const since = shop.messages().length;
+			await placeOrder();
+			const alerts = shop
+				.messages()
+				.slice(since)
+				.filter((message) => message.template === 'ecommerce.staff_placed');
+			expect(alerts.map((m) => [m.channel, m.to])).toEqual([
+				['email', { email: 'team@shop.example.com' }],
+				['whatsapp', { phone: '+447700900123' }],
+				['staff-push', { staffId: 'usr_ops00001' }],
+				['email', { email: 'orders@shop.example.com' }],
+				['staff-push', { staffId: 'usr_orders1' }],
+			]);
+			// every alert was saved before it was sent, and removed once Notifications took it
+			const stuck = await (
+				await shop.db()
+			)
+				.collection(COLLECTIONS.outbox)
+				.find({ websiteId: shop.websiteId, template: 'ecommerce.staff_placed' })
+				.toArray();
+			expect(stuck).toEqual([]);
+			// the limit is a setting: the list first
+			await shop.setting('staff_alerts', 'maxRecipients', 2);
+			const limited = shop.messages().length;
+			await placeOrder();
+			expect(
+				shop
+					.messages()
+					.slice(limited)
+					.filter((message) => message.template === 'ecommerce.staff_placed')
+					.map((m) => m.channel),
+			).toEqual(['email', 'whatsapp']);
+			await shop.setting('staff_alerts', 'maxRecipients', 100);
+			await shop.setting('staff_alerts', 'staffPush', false);
+			await shop.setting('staff_alerts', 'staffPermission', '');
+			await shop.setting('staff_alerts', 'recipients', ['team@shop.example.com']);
 		});
 	});
 });

@@ -152,6 +152,9 @@ export const BUSINESS_VALUE = 'business';
 /** @typedef {import('../adapters/outbox.js').OutboxEntry} OutboxEntry */
 /** What became of a message. @typedef {'sent' | 'queued' | 'not_connected' | 'failed' | 'skipped'} SendResult */
 
+/** The Notifications route of each outbox channel (a staff push goes to `staff-push`). */
+const CHANNEL_PATHS = Object.freeze({ email: 'email', sms: 'sms', whatsapp: 'whatsapp', staff_push: 'staff-push' });
+
 /**
  * What a call to Notifications means for a saved message: taken (a 409 `duplicate_request` is an earlier try of the same
  * message that got through), not connected, to try again (no answer, 5xx, the address book down, a refused token, 408,
@@ -439,7 +442,7 @@ export const createService = (product) => {
 	 */
 	const post = (s, message, key) =>
 		product
-			.callProduct(s.websiteId, 'notifications', `/v1/messages/${message.channel}`, {
+			.callProduct(s.websiteId, 'notifications', `/v1/messages/${CHANNEL_PATHS[message.channel]}`, {
 				method: 'POST',
 				body: {
 					template: message.template,

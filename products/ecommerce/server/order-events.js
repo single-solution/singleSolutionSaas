@@ -27,7 +27,7 @@ import { notifiesOf, shopperLabelOf, staffAlertOf, statusOf } from '../core/flow
 import { statusLabel } from '../core/orders.js';
 import { createOrderMessages, messageWords } from './order-messages.js';
 import { SERVER_LIMITS } from './service.js';
-import { STAFF_ALERT_PHONE, createStaffAlerts } from './staff-alerts.js';
+import { ALL_STAFF_PERMISSIONS, STAFF_ALERT_PHONE } from './staff-alerts.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -57,7 +57,6 @@ const orderFacts = (order) => ({
  */
 export const createOrderEvents = (product, service) => {
 	const messages = createOrderMessages(service);
-	const staffAlerts = createStaffAlerts(product, service);
 
 	/** @param {Site} s */
 	const flowOf = async (s) =>
@@ -84,21 +83,30 @@ export const createOrderEvents = (product, service) => {
 		const { events, includePhone } = await s.values('staff_alerts');
 		if (event !== 'status' && (!Array.isArray(events) || !events.includes(event))) return;
 		const { money } = await s.format();
-		await staffAlerts.send(s, {
-			feature: 'staff_alerts',
-			event,
-			values: {
-				id: order.id,
-				number: order.number,
-				name: order.customer.name.slice(0, 200),
-				total: money(order.totals.total, order.totals.currency),
-				status: statusLabel(await flowOf(s), order.status),
-				paymentMethod: (await messageWords(s)).payment(order.payment.method),
-				business: String((await s.business()).name ?? ''),
-				...(includePhone === true ? { [STAFF_ALERT_PHONE]: order.customer.phone } : {}),
-				...extra,
-			},
-		});
+		/** @type {import('./staff-alerts.js').StaffAlertValues} */
+		const values = {
+			id: order.id,
+			number: order.number,
+			name: order.customer.name.slice(0, 200),
+			total: money(order.totals.total, order.totals.currency),
+			status: statusLabel(await flowOf(s), order.status),
+			paymentMethod: (await messageWords(s)).payment(order.payment.method),
+			business: String((await s.business()).name ?? ''),
+			...(includePhone === true ? { [STAFF_ALERT_PHONE]: order.customer.phone } : {}),
+			...extra,
+		};
+		// who gets it, on which channel, and the link are the kit's; the messages are saved in Ecommerce's outbox before the
+		// answer and tried after it, with the order messages' retry queue (K-17, D7)
+		const byEvent = /** @type {Readonly<Record<string, string>>} */ (ALL_STAFF_PERMISSIONS);
+		const prepared = await product.staffAlerts.prepare(
+			{ websiteId: s.websiteId },
+			{ feature: 'staff_alerts', event, values, allStaff: byEvent[event] ?? ALL_STAFF_PERMISSIONS.placed },
+		);
+		await service.sendRequired(
+			s,
+			prepared.map(({ channel, template, to, values: own }) => ({ channel, template, to, values: own })),
+			{ later: true },
+		);
 	};
 
 	service.on('order.placed', async (s, { order, statusLabel: label }) => {

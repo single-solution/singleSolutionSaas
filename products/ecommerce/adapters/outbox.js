@@ -14,8 +14,8 @@ import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 /**
  * One message to send; `fallbackTemplate`: the key Notifications uses when the website has no template of its own for
  * `template` (a per-status order message falls back to the general one).
- * @typedef {{ channel: 'email' | 'sms' | 'whatsapp', template: string, fallbackTemplate?: string,
- *   to: { email: string } | { phone: string }, values: Record<string, string | number> }} OutboxMessage
+ * @typedef {{ channel: 'email' | 'sms' | 'whatsapp' | 'staff_push', template: string, fallbackTemplate?: string,
+ *   to: { email: string } | { phone: string } | { staffId: string }, values: Record<string, string | number> }} OutboxMessage
  */
 
 /**

@@ -20,7 +20,7 @@
 				"type": "string",
 				"maxLength": 254
 			},
-			"description": "Email addresses and international phone numbers (+ or 00 first; phones get SMS, or WhatsApp with Phones get set to it), up to 20."
+			"description": "Email addresses and international phone numbers (+ or 00 first; phones get the channel below). Name a channel first to choose it for one person: sms:+15550100, whatsapp:+15550100, email:ops@example.com, or push:<Accounts user id> for staff push."
 		},
 		"staffPermission": {
 			"type": "string",
@@ -35,6 +35,20 @@
 			"description": "SMS goes out with Ecommerce's default words; WhatsApp needs your own approved templates in Notifications.",
 			"default": "sms",
 			"enum": ["sms", "whatsapp"]
+		},
+		"staffPush": {
+			"type": "boolean",
+			"title": "Staff push too",
+			"default": false,
+			"description": "Accounts staff also get a push in their browser (Notifications: Staff push, with your push keys)."
+		},
+		"maxRecipients": {
+			"type": "integer",
+			"title": "People per alert",
+			"default": 100,
+			"minimum": 1,
+			"maximum": 200,
+			"description": "At most this many people get one alert (the list first, then the Accounts staff)."
 		},
 		"adminUrl": {
 			"type": "string",
