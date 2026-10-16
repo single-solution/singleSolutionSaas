@@ -1653,7 +1653,7 @@ intervals, retry counts) are constants in code, not settings (the widget's poll 
   booking URL set (book-a-slot), the Ecommerce / Notifications / Accounts tokens (for features that need them), widget
   installed, and business.json found (warning only).
 - **Features**: read-only for merchants (0.4.3).
-- **Settings**: Assistant (bot name, avatar, AI instructions, AI label on/off with the law warning, on-failure
+- **Settings**: Assistant (avatar, AI instructions, AI label on/off with the law warning, on-failure
   behavior, token caps, cost alert share, the don't-know answer, language lock options); Tools (webhook tools, tool
   signing secret, booking URL); Widget look, theme and custom CSS; Texts (every widget word, welcome messages included);
   Guests; Proactive rules; Flows; Lead capture fields and consent text; Custom fields; Handoff and office hours (queue
@@ -1767,7 +1767,7 @@ Stock, offer use and points change in **one database step** at order placement. 
 Ecommerce (per website; our admin sets defaults and prices). Features start at 0.
 
 - **Feature switches (per area + extras)**: Catalog · Variants · Multi-location stock · Grades and serials · Digital
-  goods · Bookings · Cart and checkout · Cash on delivery · Delivery zones · Courier APIs · Taxes · Coupons · Deals ·
+  goods · Bookings · Cart and checkout · Delivery zones · Courier APIs · Taxes · Coupons · Deals ·
   Loyalty · Bundles · Reviews · Wishlist · Alerts · Compare · Returns · Invoices · CSV · Bulk actions · Reports · SEO ·
   Feeds · AI copy · llms.txt.
 - **Items**: physical goods (including used/graded items with condition grades and serial numbers such as IMEI —
@@ -2371,7 +2371,7 @@ session: settings only of switched-on features, never feature switches, prices o
 - `GET /v1/texts`, `PUT|DELETE /v1/texts/:key`; `GET|PUT /v1/theme`; `GET|PUT /v1/format` (K7).
 - `GET /v1/lists/:list` and `PUT /v1/lists/:list` with `{ value }`: the whole list, checked by the product's own list
   check (422 with its errors). Ecommerce: `order_flow`, `couriers`, `delivery_zones`, `tax_rules`, `grades`,
-  `booking_hours` and the new lists below; Chat: tools, flows, custom fields, page rules and the new lists below.
+  `booking_schedules` and the new lists below; Chat: tools, flows, custom fields, page rules and the new lists below.
 - `GET /v1/connections` → `{ connections: [{ name, kind, neededBy, state, last4, message }] }` with `state` `connected`,
   `not_connected` or `test_failed`; `PUT /v1/connections/:name` with `{ value }` (checked and tested live, as in the
   dashboard); `DELETE /v1/connections/:name`; `POST /v1/connections/:name/test`. Secrets never come back.
@@ -2441,8 +2441,8 @@ browser-token route also accepts it.
 that shows money or dates, and `GET|PUT /v1/format` (K1).
 
 - Fields: `locale` (BCP 47; '' = the viewer's browser in widgets and `en` in text the server makes); `currencyDisplay`
-  (`code` default, "PKR 12,500.00" | `symbol`, the locale's symbol, "Rs 12,500.00" | `custom`); `currencySymbol` (at
-  most 8 characters, with `custom`); `wholeUnits` (false; true shows no minor units, "Rs 12,500"); `times` (`viewer`
+  (`code` default, "PKR 12,500.00" | `symbol`, the merchant's own symbol of the currency, else the locale's, "Rs 12,500.00");
+  `currencySymbols` (the merchant's own symbol per currency, at most 20 currencies, each symbol 1 to 8 characters); `wholeUnits` (false; true shows no minor units, "Rs 12,500"); `times` (`viewer`
   default | `business`: dates and times in the business.json time zone).
 - One kit `formatMoney` and `formatDate` serve widgets, messages, invoices, hosted pages and chat answers (Ecommerce
   sends `priceText`). Feeds keep the currency code. Ecommerce also rounds its amounts when `wholeUnits` is on (E25).
@@ -2807,24 +2807,25 @@ copied. It is tested in PayFast's sandbox before a store switches.
 **P1. Bank details for the merchant's server.**
 
 - Why: SB, CT and IM show bank details at checkout, on the success page and on order pages.
-- Key: `bank_transfer`.
-- API: `GET /v1/bank-transfer` (server token) → `{ ready, accountTitle, bankName, accountNumber, iban, instructions }`;
-  Ecommerce reads it with its pasted token (E24).
+- Key: `manual_payments` (was `bank_transfer`; its bank fields became the list `manual_methods`).
+- API: `GET /v1/manual-methods` (server token) → `{ methods }`: each method's words, whether it is ready and its accounts
+  (was `GET /v1/bank-transfer`); Ecommerce reads it with its pasted token (E24).
 - Data: none.
 
 **P2. Bank transfer without details.**
 
 - Why: CT offers bank transfer by its switch alone and sends the details over WhatsApp.
-- Key: setting `requireDetails` of `bank_transfer` (true); false makes bank transfer ready with only its instructions.
+- Key: none any more (was the setting `requireDetails` of `bank_transfer`): a manual method with instructions is ready, else it
+  needs an account with a value.
 - Data: none.
-- Built 2026-10-15 (ff9f151c): bank transfer is ready only when payers are told how to pay; with `requireDetails` off
-  it needs its instructions or an account number or IBAN. `GET /v1/bank-transfer` answers `missing` (`accountHolder`,
-  `accountNumber` for the number or IBAN, `instructions`) and the dashboard's Overview says what to set.
+- Built 2026-10-15 (ff9f151c): a manual method is ready only when payers are told how to pay (its
+  instructions, or an account with a value). `GET /v1/manual-methods` answers `missing` (`account`) and the dashboard's
+  Overview says what to set.
 
 **P3. Proof reference and confirmation note.**
 
 - Why: IM keeps a reference with each proof and a note with each confirmation.
-- Key: `bank_transfer`.
+- Key: `manual_payments` (was `bank_transfer`).
 - API: the proof upload takes `reference` (at most 120 characters); `POST /v1/payments/:id/confirm` takes `reference`
   and `note`; new event `payment.proof_uploaded` (K5).
 - Data: payment history entries carry them.
@@ -2873,7 +2874,7 @@ Catalog:
 - API: products gain `descriptionHtml` (cleaned on save to `p`, `br`, `strong`, `em`, `u`, `ul`, `ol`, `li`, `h3`, `h4`,
   `blockquote` and `a` with an https or site-relative `href`; at most 20,000 characters); when it is set, `description`
   (plain) is derived from it and serves search, feeds and AI. Policies may hold the same HTML; `GET /v1/policies` fills
-  `{returnDays}`, `{warrantyDays}`, `{warrantyMonths}` and `{business}` and leaves out empty policies. The product page
+  `{returnTime}`, `{warrantyTime}` and `{business}` and leaves out empty policies. The product page
   widget renders the HTML.
 - Data: `ProductRecord.descriptionHtml`.
 
@@ -2894,7 +2895,7 @@ Catalog:
   answers the resolved `sizeChart` or null. Product page widget: a Size guide table with an in/cm switch; catalog
   widget: a chart editor.
 - Data: new collection `ss_ecommerce_size_charts` with `id` (`szc_…`), `name`, `unit` (`in` | `cm`), `columns`
-  (at most 12 `{ key, label }`), `rows` (at most 40 `{ size, label, values }`), `fitAdvice`, `notes` and `active`.
+  (at most 12 `{ key, label }`), `rows` (at most 40 `{ size, label, values }`), `advice`, `notes` and `active`.
 
 **E6. Media sizes and per-variant galleries.**
 
@@ -2965,9 +2966,9 @@ Catalog:
 
 - Why: SB and IM keep warranty per variant and on the order line.
 - Key: `catalog` fields; `returns` windows.
-- API: variants gain `warrantyDays` (null = the product's, then the grade's, then the setting); order lines keep
-  `warrantyDays` from placement and claims use it; shop answers and invoices show it.
-- Data: `VariantRecord.warrantyDays`, `OrderLineRecord.warrantyDays`.
+- API: variants gain `warrantyTime` (a number and its unit; null = the product's, then the grade's, then the setting); order
+  lines keep `warrantyTime` from placement and claims use it; shop answers and invoices show it.
+- Data: `VariantRecord.warrantyTime`, `OrderLineRecord.warrantyTime`.
 
 **E13. URL templates and slug history.**
 
@@ -3097,11 +3098,12 @@ Checkout:
 - Why: SB, CT and IM (free pickup is the default, with the store's hours; one free-text address with no city; bank
   transfer listed first and preselected; a note per payment method; delivery-time texts; 20 lines of at most 10; the
   shopper returns to the store's own success and checkout pages).
-- Key: settings of `checkout`: `paymentOrder` (["cod", "online", "bank_transfer", "pickup"]; the first available is
-  preselected), `noteCod`, `noteOnline`, `noteBankTransfer` and `notePickup` (''), `addressRequired` now lists every
+- Key: the `payment_methods` list of `checkout` (EP; was the settings `paymentOrder`, `noteCod`, `noteOnline`,
+  `noteBankTransfer` and `notePickup`): its order is the order shoppers see (the first available is preselected) and each
+  method has its note; settings of `checkout`: `addressRequired` now lists every
   required address field besides name and phone (default ["line1", "city"]), `maxLines` (50; 1–50), `maxQuantity` (99;
   1–99), `successUrl` and `cancelUrl` ('' = today's return with `ss_order`; templates with `{number}` and `{id}`).
-  Settings of `delivery_zones`: `defaultMethod` (`delivery` default | `pickup`), one pickup point without
+  Settings of `delivery_zones`: one pickup point without
   `multi_location` (`pickupEnabled`, `pickupName`, `pickupAddress`, `pickupHours`), `deliveryNote`, `prepNote` and
   `pickupReadyNote`.
 - API: quotes and order answers carry the notes, the pickup point and the method order. The cart widget follows them.
@@ -3111,9 +3113,10 @@ Checkout:
 
 - Why: SB (COD confirmed at placement; a "Cash handling" percent), CT (COD at pickup; the surcharge), IM (confirmation
   may wait forever; the COD fee; cash recorded by staff; the advance paid by bank transfer).
-- Key: settings of `cod`: `startStatus` (`awaiting_confirmation` default | `open`), `atPickup` (false), `feePercent` (0;
-  0–20), `paidOnDelivery` (true; false waits for staff to record the cash, E26), `advanceVia` (`payments` default |
-  `manual`); `checkout.confirmationHours` takes 0 = never.
+- Key: the `cod` feature and its settings are gone (EP): each payment method of kind `on_delivery` or `at_pickup` in the
+  `payment_methods` list carries the options (`feePercent`, the advance and `advanceVia` (`payments` default | `manual`),
+  `rtoThreshold` …), the start status is a start of the `order_flow` list and "Paid on delivery" is an option on the
+  move into delivered; `checkout.confirmationHours` takes 0 = never.
 - API: totals gain `fee`, shown in quotes, orders and invoices with the widget text `Cash handling`.
 - Data: `totals.fee`.
 
@@ -3121,9 +3124,9 @@ Checkout:
 
 - Why: SB, CT and IM show bank details inline; SB and CT never cancel unpaid transfers; CT offers transfer with no
   details; IM takes the proof on its order page.
-- Key: settings of `checkout`: `paymentWindowMinutes` takes 0 = never; `bankTransferVia` (`payments` default |
-  `manual`).
-- API: quotes and order answers carry `bankDetails`, read from Payments (P1; cached 5 minutes). With `manual`, the order
+- Key: settings of `checkout`: `paymentWindowMinutes` takes 0 = never; each `pay_first` method says `via` (`payments`
+  default | `manual`).
+- API: quotes and order answers carry `payDetails`, read from Payments (P1; cached 5 minutes). With `manual`, the order
   waits in its awaiting-payment status with no Payments payment, is offered even without bank details, takes the
   shopper's proof (`POST /v1/shop/orders/:id/proof`: a presigned JPEG, PNG, WebP or PDF up to 10 MB, plus `reference`),
   and staff record the payment (E26).
@@ -3341,18 +3344,18 @@ Orders:
 **E43. Automatic landing pages and SEO copy.** (owner, 2026-10-12)
 
 - Why: merchants get category × brand (× grade) pages without creating each, and SEO copy written as they save.
-- Key: settings of `landing_pages`: `auto` (`off` default | `category_brand` | `category_brand_grade`),
+- Key: settings of `landing_pages`: `auto` (`off` default | `category_brand` | `category_brand_facet`),
   `autoMinProducts` (2), `autoMinInStockVariants` (3), `autoCopy` (`formula` default | `ai`); setting `autoSeo` of
   `seo` (`off` default | `on_save`, with the merchant's AI key).
 - API: E15's landing reads and sitemaps include every eligible combination (no record needed; a stored landing page
   wins); with `autoSeo`, saving a product or attribute writes its SEO title, description and FAQs when empty.
 - Data: none new.
-- Built (2026-10-14, f1f1d1aa): patterns `autoTitle` (default `{category} {brand} {grade}`) and `autoDescription`
+- Built (2026-10-14, f1f1d1aa): patterns `autoTitle` (default `{category} {brand} {value}`) and `autoDescription`
   ({products}, {variants}, {price}, {storeName}); eligible combinations judged on each read, in the listing read
   (`landing.automatic`) and the sitemaps, a stored page wins; while `auto` is on a stored Automatic page also needs the
   in-stock variants (SG-10); `autoCopy: ai` keeps one editable page per product save; `autoSeo: on_save` fills empty
   SEO title, description and FAQs once (AI when on and keyed, else the patterns; the formula writes no FAQs).
-  `category_brand_grade` covers category × brand and category × brand × grade (not category × grade alone). To change
+  `category_brand_facet` covers category × brand and category × brand × the facet of `autoFacet` (a grade or an attribute; not category × facet alone). To change
   (owner 2026-10-14): landing pages by category + brand + any attribute (grade one choice) — in the dynamic Ecommerce
   design.
 
@@ -3444,7 +3447,7 @@ the last two. API: a line's `dealDiscount` includes its share of the checkout de
 `deals.pointsBlockedBy` (`any_deal` default | `cart_offer`). Importer: item deals get `allowPoints: true` (PR-5).
 
 **E56. COD fee base.** Why: the stores take the COD fee on goods after offers and the member discount (K-3). Key:
-`cod.feeBase` (`order_total` default | `goods_after_discounts`: goods after deals and the role discount, before
+`feeBase` of a method of the `payment_methods` list (EP; was `cod.feeBase`; `order_total` default | `goods_after_discounts`: goods after deals and the role discount, before
 points, delivery and tax).
 
 **E57. Edits keep placed offers (always; E29, OR-9).** An edited order is priced with the deals and coupon it was placed
@@ -3471,7 +3474,7 @@ signed-in shopper's record is made on their first visit). Opening an Accounts us
 (createdAt from Accounts); `GET /v1/customers?userIds=` (up to 100); customer and loyalty records get `createdAt`.
 
 **E61. Message words (always; K-10).** Message values are words from the merchant's editable texts: `paymentMethod`
-from `checkout.method.*`, `deliveryMethod` from `messages.delivery.*`, `cancelReason` from the staff move note, else
+from the method's name in the `payment_methods` list, `deliveryMethod` from `messages.delivery.*`, `cancelReason` from the staff move note, else
 `messages.cancelReason.*`; claim `kind` and `status` in words plus `reason`. Events keep the codes. (A staff cancel note
 now reaches the shopper as the reason — raised with the owner.)
 
@@ -3509,8 +3512,8 @@ payments. A claim refund is an order refund: capped at paid − refunded, split 
 only records gets method `bank_transfer` or `other` with a "return by hand" warning. A delivered order that is refunded
 gives its redeemed points back; earned points are reversed once.
 
-**E67. Paid when staff confirm (OR-7).** Key: `checkout.paidOnConfirm` (`[]` default | any of `cod`, `online`,
-`bank_transfer`, `pickup`): when staff move a waiting order of a listed method to open, packed or shipped, its balance
+**E67. Paid when staff confirm (OR-7).** Key: the option `paidOnConfirm` of a move of the `order_flow` list (EP; was the
+setting `checkout.paidOnConfirm`; `[]` default | keys of the `payment_methods` list): when staff move a waiting order of a listed method to open, packed or shipped, its balance
 is recorded as a payment of that method, after its open Payments payment is canceled.
 
 **E68. Guest claim points (always).** Points of a refunded claim are taken back from the guest's record by customer id.
@@ -3544,11 +3547,12 @@ without blocked, blockedReason, rtoCount, seenBy, note or phoneDigits.
 their addresses or about their orders). An alert that reached no one waits and is tried again on use after 1, 5, 15 and
 60 minutes, then ends `failed`; it is sent per channel, so a channel that got through is never sent twice.
 
-**E75. Manual transfers need the details (always; CK-33).** With `bankTransferVia: manual` and Payments connected, bank
-transfer is `not_ready` until Payments reports `ready` (its `requireDetails` is respected).
+**E75. Manual transfers need the details (always; CK-33).** A method of kind `pay_first` is `not_ready` until payers can
+be told how to pay: its own instructions or an account with a value, or (with `via: payments`) those of Payments'
+manual method of the same key, as `GET /v1/manual-methods` reports `ready`.
 
-**E76. Merchant COD switch (AO-2).** Key: `cod.enabled` (true default | false: no cash on delivery for new orders; staff
-edits of existing COD orders keep it).
+**E76. Merchant COD switch (AO-2).** Key: `active` of a method of the `payment_methods` list (EP; was `cod.enabled`;
+true default | false: the method is offered no more for new orders; staff edits of existing orders keep it).
 
 **E77. Free prepaid orders (CK-41).** Key: `checkout.freeOrderStart` (`awaiting_confirmation` default |
 `awaiting_payment`: a free online or bank-transfer order starts awaiting payment, already paid, with no Payments payment
@@ -3567,8 +3571,8 @@ Built after the re-audit, fifth batch (2026-10-13; commits 314076ea, 72c85505, 5
 **E80. Sealed deal-lock secret (always; RT-14).** Sealed with the label `ecommerce`; a clear one is sealed on first use;
 Re-seal (Prices page) re-seals it; a key that no longer opens it gives a new secret.
 
-**E81. Free delivery in feeds and JSON-LD (always; SG-2).** A variant priced at or above `delivery_zones.defaultFreeOver`
-ships at 0.
+**E81. Free delivery in feeds and JSON-LD (always; SG-2).** A variant priced at or above the `freeOver` of the business country's
+delivery rate (the `delivery_zones` list) ships at 0.
 
 **E82. Title and description patterns (SG-5, SG-21).** Keys: `seo.brandName` ('' = the business name; what
 `{business}` and `{storeName}` stand for); `seo.productTitle` and `seo.categoryTitle` ('{name}' default: the page's part
@@ -3770,8 +3774,9 @@ deal's folder; the promotions widget uploads, changes the alt text or removes a 
 
 - Why: IM (a strict language check), CT and IM (nudge texts per page kind; once per product; none on phones).
 - Key: setting `strict` of `language_lock` (false: when true, a reply must also match the visitor's language by its
-  share of marker words); settings of `proactive_idle`: `messageProduct`, `messageCategory`, `messageDeals` and
-  `messageCart` ('' = the general text; `{product}`), `oncePer` (`session` default | `product`), `hideOnMobile` (false).
+  share of marker words); the nudge text of each page kind is the `nudge` field of the list `page_types` ('' = the
+  general text; `{product}`; was the settings `messageProduct`, `messageCategory`, `messageDeals` and `messageCart` of
+  `proactive_idle`); settings of `proactive_idle`: `oncePer` (`session` default | `product`), `hideOnMobile` (false).
 - API: `setPage` also updates the context of later messages (always).
 - Data: none.
 
@@ -3985,8 +3990,8 @@ changes in the activity log; the guide has a tested middleware example. Also fix
 **G4. Robots and verification.**
 
 - Why: IM blocks AI-training crawlers and verifies with Yandex.
-- Key: settings of `robots_verification`: `blockAiCrawlers` (false; the crawler list is kept in code),
-  `yandexVerification` ('').
+- Key: settings of `robots_verification`: `aiCrawlers` (none by default; the crawlers to block, from a fixed list) and
+  `moreAiCrawlers` (other user agents to block, at most 30), `yandexVerification` ('').
 - Data: none.
 
 **G5. IndexNow key path.**
@@ -3998,8 +4003,9 @@ changes in the activity log; the guide has a tested middleware example. Also fix
 **G6. Notice bar for custom UIs.**
 
 - Why: SB hides its bar on the home page and closes it per page; CT and IM draw their own.
-- Key: settings of `notice_bar`: `dismissFor` (`visit` default | `page`), `hideOnPages` ([]).
-- API: `GET /v1/notice` (browser and server token) → `{ text, linkText, linkUrl, dismissible }` or null.
+- Key: the list `announcements` of `notice_bar` (FX-G; was settings of `notice_bar`): each announcement has `dismiss` (`visit`
+  default | `page` | `days`), `dismissDays`, `pages` ([]) and `hideOnPages` ([]).
+- API: `GET /v1/notice` (browser and server token) → `{ key, text, linkText, linkUrl, dismissible }` or null.
 - Data: none.
 
 **G7. Web Vitals to GA4.**
@@ -4164,7 +4170,7 @@ turn, against live `main`), and is checked by the dry run's diff.
   `returned` (returned_to_origin, with its reason) and `returned-delivered` (role `returned`), chosen by the order's
   history. Payment state: in IM from its payments log (E26); in SB and CT from the status (bank transfer and card paid
   from `confirmed`, COD paid at `delivered`). `holdUntil`: IM's reservation end; null in SB and CT (window 0, E24).
-  Lines keep `warrantyDays` and serials (IM also writes a `sold` serial per IMEI). Dispatch videos, tracking notes and
+  Lines keep `warrantyTime` and serials (IM also writes a `sold` serial per IMEI). Dispatch videos, tracking notes and
   expected dates go into `media` and `shipment` (E28).
 - **Loyalty.** Lots are rebuilt oldest first from the transactions (earn credits; redeem and expire debits), with expiry
   by the website's rule (IM: calendar months).
@@ -4452,20 +4458,20 @@ The owner confirms or changes each one.
 
 #### Builder choices, Phase 2 (Payments) (awaiting owner review)
 
-- **P1**: `GET /v1/bank-transfer` belongs to `bank_transfer` (403 `feature_off` while it is off, like every feature
-  route) and needs no merchant database (it reads settings only). `ready` is the rule the payers' gateway list uses; the
-  details come back as saved whether or not it is ready.
-- **P2**: with `requireDetails` off, bank transfer is ready by its switch alone, even with empty instructions (CT offers
-  it by its switch). The bank page leaves out empty detail rows and then opens with its own text (`bank.introNoDetails`,
-  "as explained below"). The dashboard's gateways-ready tile and a new setup-checklist line (Bank transfer: Ready / Not
-  offered yet) use the same rule.
+- **P1**: `GET /v1/manual-methods` belongs to `manual_payments` (was `GET /v1/bank-transfer` of `bank_transfer`; 403
+  `feature_off` while it is off, like every feature route) and needs no merchant database (it reads settings only).
+  `ready` is the rule the payers' gateway list uses; the details come back as saved whether or not it is ready.
+- **P2**: there is no `requireDetails` setting any more: a manual method is ready with its instructions alone (CT offers
+  it by its instructions), else it needs an account with a value. The payer's page leaves out empty rows. The
+  dashboard's gateways-ready tile and a setup-checklist line (Manual payment methods: Ready / Not offered yet) use the
+  same rule.
 - **P3**: the payer types the reference on the bank page (optional); it is sent with the proof's last step
   (`/pay/<websiteId>/<paymentId>/proof/done` `{ key, reference }`). The confirmation's `note` is one line of at most 500
   characters (P3 names no limit); both are trimmed, and empty ones are not stored. They live on the history entries
   (`proof`, `paid`) only, not on the proof mark. `payment.proof_uploaded` carries the payment view like Payments' other
   events. A confirmation's activity detail names the reference; the note stays out of the activity log.
 - **K1 and K5**: no new settings were needed: gateway keys stay connections (`/v1/connections`, tested live, never
-  answered) and bank details stay `bank_transfer` settings; feature switches stay our admins'. Every Payments event goes
+  answered) and bank details stay in the list `manual_methods`; feature switches stay our admins'. Every Payments event goes
   through the kit's `events.emit`; `payment.proof_uploaded` joins the list.
 - **Every server action in the UI** (owner request relayed 2026-10-10): the Payments admin and Subscriptions admin are
   list-and-detail screens (0.6) with dialogs and More menus (status filter with counts, total badge, counts per
@@ -4602,7 +4608,7 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
   also covers invites and setup links, methods only the seven sign-in methods. Refusals: 403 `sign_in_paused` (detail:
   the paused text) and 403 `method_refused`. Sessions already open continue.
 - **A7**: `code_cooldown` answers `retryAt`; the hourly caps count each code sent in fixed clock hours (TTL counters in
-  the merchant database), sign-in and reset codes alike; e-mail codes keep their code constants and `too_soon`.
+  the merchant database), sign-in and reset codes alike; e-mail codes keep their code constants (a code asked for too soon answers `code_cooldown`, too many `code_limit`).
   `countries` takes ISO codes from a built-in calling-code table (NANP countries share +1; Russia and Kazakhstan +7),
   checked when a sign-in code is asked for. `newUserName` names phone-code sign-ups without a name only.
 - **A8**: recovery codes are stored as `{ hash, format }`; the old format is SHA-256 hex of `recovery:` and the code
@@ -4683,11 +4689,11 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
 - **G5**: `keyPath` is checked on use (a path on the website, at most 300 characters, without query, fragment, spaces or
   backslashes); another value refuses submissions with 422 `validation_failed` at `/keyPath`. `keyLocation` is always
   sent; `GET /v1/indexnow/key.txt` still answers the key.
-- **G6**: `dismissFor` `page` remembers nothing: the bar shows again on the next page. `hideOnPages` takes Chat's path
+- **G6**: `dismiss` `page` remembers nothing: the bar shows again on the next page. `hideOnPages` takes Chat's path
   patterns (exact, `*`, `**`), at most 50 used, checked in the browser. `GET /v1/notice` belongs to `notice_bar`, takes
   the browser token and the server token (K3), needs no merchant database (settings only), counts 3,000 per minute per
   website and 60 per visitor (code constants), and takes an optional `?path=` that answers null on a hidden page; the
-  answer is exactly `{ text, linkText, linkUrl, dismissible }` (`linkUrl` null when not an https address or a path) or
+  answer is exactly `{ key, text, linkText, linkUrl, dismissible }` (`linkUrl` null when not an https address or a path) or
   `null`.
 - **G7**: the GA4 event is named after the vital with `value` (whole milliseconds; CLS × 1000), `metric_value`,
   `metric_rating` (`good`, `needs-improvement`, `poor`) and `non_interaction`, sent once when the page is first hidden,
@@ -4730,7 +4736,7 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
   `strong` and `em`; `script`, `style`, frames and similar are dropped with their content; an `a` whose `href` is not
   https or site-relative keeps its text without the link. Emptying `descriptionHtml` without sending `description`
   empties the derived text. `GET /v1/policies` answers `{ format, <policy>… }` (the `format` key added beside the filled,
-  non-empty policies); `{warrantyMonths}` is the warranty days divided by 30, rounded; the checkout widget config carries
+  non-empty policies); `{warrantyTime}` is the time as typed (`1 year`); the checkout widget config carries
   the same filled policies and `policyFormat`.
 - **E4**: a video file is an upload made for the product, checked in the bucket (MP4 or WebM, at most `videoMaxBytes`)
   the first time it is named; YouTube takes an id or a YouTube address and shoppers get a `youtube-nocookie.com` embed
@@ -4772,7 +4778,7 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
   passing Luhn. Serial numbers are 1–64 characters (were 80).
 - **E12**: each physical line keeps the warranty resolved at placement (variant, product, grade, then the `returns`
   setting); claims use it, older orders keep the old rule; invoices print it with the new `invoices` text
-  `labelWarranty` ("Warranty: {days} days"); shopper order answers carry `serials` and `warrantyDays` per line.
+  `labelWarranty` ("Warranty: {time}"); shopper order answers carry `serials` and `warrantyTime` per line.
 - **E13**: `{category}` is the first category's slug and `{categoryPath}` its slugs from the root (an empty segment
   collapses); `{path}` in `categoryUrl` the same for categories; `variantQuery` drops pairs with empty values and joins
   several values with commas. Old slugs and slugs in any case answer 200 `{ moved: { slug, url } }` on the shop product
@@ -4795,7 +4801,7 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
   One landing page per category, brand and grade; at most 2,000.
 - **E16**: a product is a ProductGroup only with two or more active variants (one variant stays a Product); `variesBy`
   maps Size, Color, Color, Material and Pattern to schema.org properties and names other options as they are.
-  `shippingDetails` come from the Delivery zones setting `defaultFee` and the business.json country while that feature
+  `shippingDetails` come from the business.json country's delivery rate (the `delivery_zones` list) while that feature
   is on; the return policy while Returns is on (0 days = not permitted); the five newest approved reviews are review
   nodes. SEO answers add `robots` (`index|noindex, follow|nofollow`) and products `focusKeyword`. Files of a sitemap
   index are at the sitemap address with `?file=<name>`; the categories file is not split (at most 5,000 categories);
@@ -5084,7 +5090,7 @@ actor, action, target, at }` sent to Accounts at `POST /v1/activity-copies`.
         Done line stays empty until then.
    - **Step 7, Accounts** (0.8.6; each item open for owner review):
       - **Feature keys**: `phone_code`, `email_password`, `email_code`, `google`, `apple`, `facebook`, `roles`,
-        `custom_fields`, `two_step`, `approval`, `risk_checks`, `terms`, `data_rights`, `activity_copies`,
+        `custom_fields`, `two_step`, `approval`, `risk_checks`, `consents` (was `terms`), `data_rights`, `activity_copies`,
         `orders_tab`; none depends on another.
       - **Routes and widgets of several features**: the routes of a signed-in user (session renew and sign-out, My
         account, devices) and the `sign_in` and `my_account` widgets work while **any** sign-in method is on. The kit
@@ -5169,10 +5175,11 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
         Reports); the caps apply only with AI token caps on. On failure: `message`, `handoff` or both (default both);
         AI failures before a handoff default 2. Ask-for-a-person phrases default to a few English words (editable). The
         credential leak check of AI answers always runs; there is no "present as human" check.
-      - **Settings placement**: bot name, avatar, launcher, window and the proactive quiet days are `visitor_chat`
-        settings; the sign-in page URL is `signed_in_chat`'s; the Inbox address and alert recipients are
-        `staff_alerts`'; the default max chats and queue position are `presence_queue`'s. Rating scales are 2, 3 or 5
-        (asked on resolve, only after staff took part, or only when staff ask).
+      - **Settings placement**: avatar, launcher, window and the proactive quiet days are `visitor_chat`
+        settings (the bot's name is the widget text `chat.botName`); the sign-in page URL is `signed_in_chat`'s; the Inbox address and alert recipients are
+        `staff_alerts`'; the default max chats and queue position are `presence_queue`'s. Ratings are satisfaction with the
+        merchant's own 2 to 10 labels, or NPS from 0 to 10 (asked on resolve, only after staff took part, or only when
+        staff ask).
       - **Notifications templates** (e-mail): `chat.new_message`, `chat.needs_you`, `chat.transcript`,
         `chat.cost_alert` (values in the docs). A transcript carries the most recent 1,000 characters of the chat,
         because Notifications caps a value at 1,000 characters; a longer transcript needs a Notifications change
@@ -5190,7 +5197,7 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
 
    - **Step 9, Payments** (0.8.7; each item open for owner review):
       - **Feature keys**: `stripe`, `paypal`, `payfast` (South Africa), `payfast_pk` (Pakistan), `jazzcash`,
-        `easypaisa`, `rapid`, `bank_transfer`, `generic_gateway`, `payment_links`, `payment_api`, `subscriptions`,
+        `easypaisa`, `rapid`, `manual_payments` (was `bank_transfer`), `generic_gateway`, `payment_links`, `payment_api`, `subscriptions`,
         `refunds`; none depends on another (a subscription also needs Stripe or PayPal on; the route checks it, because
         `dependsOn` cannot say "one of").
       - **Routes and widgets per feature**: creating, listing, reading and verifying payments and the event list
@@ -5198,7 +5205,7 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
         (`payments.read`) belong to `payment_api`, which the merchant's server and Ecommerce (through the pasted Payments
         token) use alike; links (`/v1/links…`, created by API only, as 0.8.7 lists no links widget), the hosted link page
         and the pay button with `data-link` to `payment_links`; refunds (`payments.refund`) to `refunds`; confirming a
-        transfer and its proof (`payments.confirm`) to `bank_transfer`; `subscriptions.read` and `subscriptions.cancel`
+        transfer and its proof (`payments.confirm`) to `manual_payments`; `subscriptions.read` and `subscriptions.cancel`
         to `subscriptions`. The pay button widget belongs to `payment_links` or `payment_api` (either on).
       - **Money**: integer minor units plus an ISO 4217 code per payment, at most 10^12 minor units; the zero- and
         three-decimal currencies are a code list. Currencies per gateway: Stripe any (Stripe refuses the few it does not
@@ -5251,8 +5258,9 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
         carry only random ids (no personal data); the payer goes back with `?ss_payment=<id>` (`ss_subscription`) to
         return and cancel addresses on the website's exact https domain or a local address. The pages run only
         `/pay.js` (posting a gateway form, uploading a proof) and allow form posts to https gateways.
-      - **Bank transfer**: the bank details are `bank_transfer` settings (account title, bank, account number, IBAN,
-        instructions, proof upload on/off, largest proof 1–10 MB, default 5). Proofs (JPEG, PNG, WebP, PDF) go to
+      - **Manual payment methods**: the methods are the list `manual_methods` of the feature `manual_payments` (each with
+        a kind, instructions, accounts of label and value rows per currency and proof upload on/off; setting
+        `proofMaxMb`, the largest proof 1–10 MB, default 5). Proofs (JPEG, PNG, WebP, PDF) go to
         `payments/proofs/<paymentId>.<ext>` in the merchant's storage with a 5-minute presigned PUT; proof links last 5
         minutes.
       - **Data rights**: matched on the Accounts user id, e-mail or phone; export lists payments (without metadata and
@@ -5269,7 +5277,7 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
 
    - **Step 10, Ecommerce** (0.8.8; each item open for owner review):
       - **Feature keys**: `catalog`, `variants`, `multi_location`, `grades_serials`, `digital_goods`, `bookings`,
-        `checkout`, `cod`, `delivery_zones`, `courier_apis`, `taxes`, `coupons`, `deals`, `loyalty`, `bundles`,
+        `checkout`, `delivery_zones`, `courier_apis`, `taxes`, `coupons`, `deals`, `loyalty`, `bundles`,
         `reviews`, `wishlist`, `alerts`, `compare`, `returns`, `invoices`, `csv`, `bulk_actions`, `reports`, `seo`,
         `feeds`, `ai_copy`, `llms_txt`. `catalog` needs nothing; `variants`, `multi_location`, `grades_serials`,
         `checkout`, `deals`, `wishlist`, `alerts`, `compare`, `csv`, `bulk_actions`, `seo`, `feeds`, `ai_copy` and
@@ -5290,7 +5298,7 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
         A missing sign-in answers 403 `sign_in_required` (a 401 would make a calling product's kit treat its pasted
         token as refused).
       - **Payments**: online payments and bank transfers both go through Payments (bank transfer = Payments'
-        `bank_transfer` gateway with its proof upload and the merchant's confirmation); a COD advance is a Payments
+        manual method with its proof upload and the merchant's confirmation); a COD advance is a Payments
         payment for the advance. Online, bank transfer and COD with an advance start in the flow's `awaiting_payment`
         status; plain COD and pay at pickup in `awaiting_confirmation`. **Rechecks without timers** (the 0.3 open
         point): an order is marked paid only after `POST /v1/payments/:id/verify` answers verified for its exact amount
@@ -5309,7 +5317,7 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
         list and a tracking number, or books through the courier API; delivered marks COD and pickup orders paid,
         counts sales and earns points; canceled gives everything back and refunds online money.
       - **List settings** (product database, like Chat's): `order_flow`, `couriers` (name, tracking link with
-        `{tracking}`), `delivery_zones`, `tax_rules`, `grades` (with return and warranty days) and `booking_hours`,
+        `{tracking}`), `delivery_zones`, `tax_rules`, `grades` (with return and warranty times) and `booking_schedules`,
         edited in the dashboard with Recent changes, no global defaults.
       - **Couriers**: no named couriers in code: the tracking-link list, plus one generic courier API adapter (booking
         and tracking addresses, headers, a body template, answer paths) for `courier_apis`. **AI copy**: the merchant's
@@ -5401,7 +5409,7 @@ currency, createdAt }], loyaltyPoints }`. `context_panel` is not marked Not work
 orderId? }` with money in minor units (as everywhere); pixels get major units. Names per pixel: Meta
         ViewContent / AddToCart / InitiateCheckout / Purchase, GA4 `view_item` / `add_to_cart` / `begin_checkout` /
         `purchase`, TikTok ViewContent / AddToCart / InitiateCheckout / CompletePayment; a purchase is also sent as the
-        Google Ads conversion of the `adsPurchaseLabel` setting. Ecommerce dispatches `ss:view_item` when a product page
+        Google Ads conversion of the `adsLabel` of the `purchase` action in the list `conversion_actions`. Ecommerce dispatches `ss:view_item` when a product page
         first shows a product, `ss:add_to_cart` from the product page, the wishlist and `SSEcommerce.addToCart` (Chat's
         cards), `ss:begin_checkout` on the first press of Place order, `ss:purchase` once the order exists.
       - **Searches and 404s**: searches come from the search query parameters setting (default `q, s, search, query`)
@@ -5420,8 +5428,8 @@ orderId? }` with money in minor units (as everywhere); pixels get major units. N
         not noindex, title 10–60, description 50–160, one h1, canonical on the domain, lang, viewport, og:title and
         og:image, image alt, JSON-LD. Results are not stored. ibrahimMobiles' catalog, feed and local-business checks
         stay with Ecommerce or are left out. IndexNow and the checklist are limited to 10 runs per hour per website.
-      - **Notice bar**: its text, link, link text, dates and "visitors can close it" are `notice_bar` settings (the close
-        label is a widget text). Dates are plain ISO 8601 strings checked on use (settings schemas allow no optional
+      - **Notice bar**: its text, link, link text, dates and "visitors can close it" are fields of the announcements in the
+        list `announcements` of `notice_bar` (the close label is a widget text). Dates are plain ISO 8601 strings checked on use (settings schemas allow no optional
         date-time); an invalid date hides the bar. A closed bar stays closed for the visit (sessionStorage).
       - **Tag ids** are checked on use (settings schemas allow no pattern): a malformed id is not loaded, and Overview's
         Tags ready tile counts the tag features with a well-formed id or a script. Overview: today's cost, features on,
