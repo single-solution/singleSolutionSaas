@@ -125,7 +125,7 @@ export const SHOP_ANSWERS = Object.freeze({
 		'id, name, price (the shown price: after the best live deal on one unit), priceText, compareAtPrice and compareAtPriceText (the price struck through beside it, or null), deal ({ name, savings, savingsText } or null), priceMax, priceMaxText, currency, image (https or null), url (the product page), inStock, variantId (or null), grade (the label, or null), stockLeft (or null)',
 	details:
 		'a product plus summary, description, brand, options: [{ name, values: [text] }], specs: [{ name, value (text, number, true/false or a list), unit }], variants: [{ id, options: { name: value }, price, priceText, compareAtPrice, compareAtPriceText, deal, grade, gradeKey, inStock, soldOut, stockLeft, warrantyTime }]',
-	quote: 'productId, variantId, quantity, paymentMethod, price (one unit before deals), compareAtPrice (its own price struck through, or null), priceAfterDeals, savings, subtotal, discount, roleDiscount, fee, tax, freeDeliveryOver, total (each with its …Text), currency, delivery ({ method, name, fee, feeText, minDays, maxDays } or null), limits ({ step, min, max } of pieces, or thousandths of its unit with measure { unit, quantityText }), inStock, deals: [name], paymentMethods: [{ method (the website’s payment method key), name, available, reason (or null), advance, advanceText, fee }]',
+	quote: 'productId, variantId, quantity, paymentMethod, price (one unit before deals), compareAtPrice (its own price struck through, or null), priceAfterDeals, savings, subtotal, discount, roleDiscount, fee, tax, freeDeliveryOver, total (each with its …Text), currency, delivery ({ method, name, rateName, fee, feeText, minDays, maxDays } or null), limits ({ step, min, max } of pieces, or thousandths of its unit with measure { unit, quantityText }), inStock, deals: [name], paymentMethods: [{ method (the website’s payment method key), name, available, reason (or null), advance, advanceText, fee }]',
 	deals: 'items: [{ name, description, valueText, badgeLabel, discountLabel, minQuantity, days (weekdays, 0 = Sunday), timeFrom, timeTo, endsAt, endsText }]',
 	orders:
 		'items: [{ number, status (the label), total, totalText, currency, placedAt, paymentMethod, balanceDue, balanceDueText, courier, trackingNumber, trackingUrl, trackingNote, expectedAt, dispatchVideo ({ kind, url } or null), lines: [{ name, variantName, gradeLabel, quantity, totalText, warrantyTime }] }] (the latest, as many as asked), loyaltyPoints, name',
@@ -858,7 +858,8 @@ export const shopAnswer = (name, body, look = {}) => {
 			const d = b.delivery;
 			const fee = priceOf({ ...d, currency: b.currency }, 'fee', look);
 			const days = deliveryDaysOf(d.minDays, d.maxDays, look);
-			content.delivery = [textOf(d.name, 80), fee, days].filter(Boolean).join(', ');
+			// the zone or pickup place, then the delivery rate's name (Ecommerce E5)
+			content.delivery = [textOf(d.name, 80), textOf(d.rateName, 60), fee, days].filter(Boolean).join(', ');
 		}
 		if (b.inStock === false) content.inStock = false;
 		// the website's payment methods in its list's order, by their own names (C1): whether each can pay for it (why

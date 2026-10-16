@@ -726,7 +726,15 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				feeText: '€1.50',
 				tax: 0,
 				taxText: '€0.00',
-				delivery: { method: 'delivery', name: 'Standard', fee: 0, feeText: '€0.00', minDays: null, maxDays: null },
+				delivery: {
+					method: 'delivery',
+					name: 'City',
+					rateName: 'Express',
+					fee: 0,
+					feeText: '€0.00',
+					minDays: null,
+					maxDays: null,
+				},
 				freeDeliveryOver: null,
 				freeDeliveryOverText: '',
 				total: 8250,
@@ -748,7 +756,8 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 			discount: '€9.00',
 			fee: '€1.50',
 			total: '€82.50',
-			delivery: 'Standard, €0.00',
+			// the zone, then the delivery rate's name (Ecommerce E5)
+			delivery: 'City, Express, €0.00',
 			// in the merchant's order, with why one cannot be used; the advance and the fee as the website shows money
 			paymentMethods: [
 				{ method: 'online', name: 'Online payment', available: true },
