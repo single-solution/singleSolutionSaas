@@ -36,7 +36,7 @@ import {
 import { ADMIN, MORE, TWO_STEP } from '../../../texts/console.js';
 import { useNavigation } from '../../navigation.js';
 import { apiFetch, useResource } from '../../client.js';
-import { DetailTabs, HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
+import { DetailTabs, HeaderActions, ListDetail, ListPane, PaneRow, ListSearch } from '../../views/common.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, RoleBadge } from './common.js';
@@ -245,7 +245,7 @@ export function AdminsView(props) {
 							</li>
 						) : null}
 						{shown.map((a) => (
-							<ListRow
+							<PaneRow
 								key={a.adminId}
 								href={adminRoutes.admin(a.adminId)}
 								current={a.adminId === current?.adminId ? (auto ? 'wide' : true) : false}

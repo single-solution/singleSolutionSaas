@@ -43,7 +43,7 @@ import { api, withCursor } from '../../paths.js';
 import { DaysLeft, MerchantStatusBadge } from '../../views/billing.js';
 import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
 import { COUNTRY_NAMES } from '../../../modules/identity/core/countries.js';
-import { DetailTabs, HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
+import { DetailTabs, HeaderActions, ListDetail, ListPane, PaneRow, ListSearch } from '../../views/common.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { AddWebsiteDialog, MerchantUsageDialog, WebsiteCard } from '../../views/website.js';
 import { useNavigation } from '../../navigation.js';
@@ -330,7 +330,7 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 					list.items.map((m) => {
 						const status = statusOf(m, billingOf(m.merchantId));
 						return (
-							<ListRow
+							<PaneRow
 								key={m.merchantId}
 								href={adminRoutes.merchant(m.merchantId, keep)}
 								current={m.merchantId === selectedId ? true : m.merchantId === autoId ? 'wide' : false}

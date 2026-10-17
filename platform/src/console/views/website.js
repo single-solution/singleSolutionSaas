@@ -299,8 +299,7 @@ export function WebsiteCard({ website, cards: initial, can, launch, addable, onC
 					{cards.map((card) => (
 						<ListRow
 							key={card.productId}
-							icon="box"
-							kind="product"
+							product={card.productId}
 							title={card.name}
 							status={<ProductStatusBadge status={card.status} featuresOn={card.featuresOn} />}
 							meta={
@@ -418,8 +417,7 @@ function AddProductDialog({ merchantId, website, products, onClose, onAdded }) {
 					{products.map((p) => (
 						<ListRow
 							key={p.productId}
-							icon="box"
-							kind="product"
+							product={p.productId}
 							title={p.name}
 							action={
 								<Button
@@ -614,7 +612,7 @@ export function InstallBlock({ entry, domain, merchantId, websiteId, twoStepOn =
 		<Card
 			title={
 				<span className="flex items-center gap-2.5">
-					<IconBadge icon="box" kind="product" size="sm" />
+					<IconBadge product={entry.productId} size="sm" />
 					{entry.name}
 				</span>
 			}

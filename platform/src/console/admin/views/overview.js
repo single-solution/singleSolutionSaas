@@ -295,7 +295,7 @@ export function OverviewView(props) {
 							key={p.productId}
 							title={
 								<span className="flex items-center gap-3">
-									<IconBadge icon="box" kind="product" size="sm" />
+									<IconBadge product={p.productId} size="sm" />
 									{linked ? (
 										<TextLink as={Link} tone="plain" href={adminRoutes.product(p.productId)}>
 											{p.name}

@@ -19,7 +19,7 @@ import {
 	EmptyState,
 	Icon,
 	IconBadge,
-	ListRow as Row,
+	ListRow,
 	LocalTime,
 	NeedsList,
 	PageHeader,
@@ -40,7 +40,7 @@ import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
 import { DaysLeft, ProductStatusBadge, ReceiptsTable, creditDayBars, formatChartCredits } from './billing.js';
 import { FrameBilling } from './frame-billing.js';
-import { ListDetail, ListPane, ListRow, ListSearch, PageProblem, openDashboard } from './common.js';
+import { ListDetail, ListPane, ListSearch, PageProblem, PaneRow, openDashboard } from './common.js';
 import { ActivityTimeline } from './login-settings.js';
 import { contactLine } from './sign-in.js';
 import { WebsiteCard, dailyCostOf, websiteDot } from './website.js';
@@ -153,10 +153,9 @@ export function OverviewView(props) {
 					) : (
 						<RowList inset label={WEBSITE.productsOf(website.domain)}>
 							{cards.map((card) => (
-								<Row
+								<ListRow
 									key={card.productId}
-									icon="box"
-									kind="product"
+									product={card.productId}
 									title={card.name}
 									status={<ProductStatusBadge status={card.status} featuresOn={card.featuresOn} />}
 									action={openButton(website, card)}
@@ -333,7 +332,7 @@ export function WebsitesView(props) {
 							</li>
 						) : (
 							shown.map(({ website, cards }) => (
-								<ListRow
+								<PaneRow
 									key={website.websiteId}
 									href={routes.website(website.websiteId)}
 									current={String(website.websiteId) === shownId ? (auto ? 'wide' : true) : false}

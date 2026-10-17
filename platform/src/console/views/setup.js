@@ -195,7 +195,7 @@ function Mark({ done }) {
 			aria-hidden="true"
 			className={cx(
 				'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full',
-				done ? 'bg-success-soft text-on-success-soft' : 'bg-warning-soft text-on-warning-soft',
+				done ? 'bg-success-solid text-on-solid' : 'bg-attention-soft text-attention',
 			)}>
 			<Icon name={done ? 'check' : 'clock'} size={12} />
 		</span>
@@ -244,7 +244,7 @@ function ProductPanel({ product, valuesShown }) {
 			as="article"
 			title={
 				<span className="flex flex-wrap items-center gap-2">
-					<IconBadge icon="box" kind="product" size="sm" />
+					<IconBadge product={product.productId} size="sm" />
 					{product.name}
 					<StatusBadge status={product.status} />
 				</span>

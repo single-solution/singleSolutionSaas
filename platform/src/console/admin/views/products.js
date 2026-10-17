@@ -46,7 +46,7 @@ import { ADMIN, MORE, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
 import { ProductStatusBadge, creditDayBars, formatChartCredits } from '../../views/billing.js';
-import { DetailTabs, HeaderActions, ListDetail, ListPane, ListRow, ListSearch, openDashboard } from '../../views/common.js';
+import { DetailTabs, HeaderActions, ListDetail, ListPane, PaneRow, ListSearch, openDashboard } from '../../views/common.js';
 import { apiFetch } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
@@ -211,7 +211,7 @@ function ProductList({ props, owner, selectedId, autoId = null }) {
 					</li>
 				) : (
 					rows.map((p) => (
-						<ListRow
+						<PaneRow
 							key={p.productId}
 							href={adminRoutes.product(p.productId, keep)}
 							current={p.productId === selectedId ? true : p.productId === autoId ? 'wide' : false}

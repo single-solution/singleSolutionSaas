@@ -2,7 +2,8 @@
 /**
  * The signed-in admin console frame (PLAN 0.6, premium layout 2026-10-16): the admin menu (Overview · Merchants ·
  * Products · Credits and billing · Admins · Settings · Activity, in three groups) filtered by the admin's role, the
- * account menu (My account, Sign out) in the header and at the bottom of the sidebar, with the Branding. While
+ * account menu (My account, the theme, Sign out) at the bottom of the sidebar (in the header on phones), with the
+ * Branding. While
  * Settings → Security → Require two-step for admins applies to this admin, the frame shows only the two-step setup.
  * @module
  */
@@ -11,7 +12,6 @@ import { AppShell, Callout, Card, PageHeader, ToastProvider } from '@ss/ui';
 import { useRouter } from 'next/navigation.js';
 import { ADMIN, TWO_STEP } from '../../../texts/console.js';
 import { NavLink } from '../../link.js';
-import { FrameFooter } from '../../views/frame-footer.js';
 import { accentStyle } from '../../views/brand.js';
 import { TwoStepSetup } from '../../views/login-settings.js';
 import { apiFetch } from '../../client.js';
@@ -127,13 +127,7 @@ export function AdminShell({ admin, twoStepRequired = false, branding, children 
 					sections={twoStepRequired ? [] : adminSections(admin, pathname)}
 					topbar={<RoleBadge role={admin?.role} />}
 					scrollKey={pathname}
-					account={{ name, ...(admin?.email ? { email: admin.email } : {}), items: accountItems, label: ADMIN.accountMenu }}
-					sidebarFooter={({ rail }) => (
-						<FrameFooter
-							rail={rail}
-							account={{ name, email: admin?.email, label: ADMIN.accountMenu, items: accountItems }}
-						/>
-					)}>
+					account={{ name, ...(admin?.email ? { email: admin.email } : {}), items: accountItems, label: ADMIN.accountMenu }}>
 					{twoStepRequired ? (
 						<div className="mx-auto max-w-2xl space-y-6">
 							<PageHeader title={TWO_STEP.requiredTitle} />

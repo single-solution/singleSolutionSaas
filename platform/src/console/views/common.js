@@ -18,6 +18,7 @@ import {
 	Button,
 	ButtonLink,
 	CARD_FLOW,
+	DOTS,
 	ErrorState,
 	Icon,
 	Input,
@@ -131,9 +132,6 @@ export function DetailTabs({ tabs, label, idPrefix = 'dt' }) {
 		</div>
 	);
 }
-
-/** Status dot colors (PLAN 0.6: color is used for status only). */
-const DOTS = Object.freeze({ success: 'bg-success', warning: 'bg-warning', danger: 'bg-danger', neutral: 'bg-line-strong' });
 
 /** @typedef {'success' | 'warning' | 'danger' | 'neutral'} Dot */
 
@@ -255,7 +253,7 @@ export function ListPane({ title, count, action, tools, children, footer }) {
 const pathOf = (href) => href.split(/[?#]/)[0] ?? href;
 
 /**
- * One row of a list pane: a link with the name, an optional second line, a status dot and a right-hand figure; the
+ * One row of a list pane (`PaneRow`, not the content rows of `@ss/ui`'s `ListRow`): a link with the name, an optional second line, a status dot and a right-hand figure; the
  * selected row is marked. The name wraps to two lines — on whole words, a domain or email between its parts — before
  * it is cut (the full name on hover). In a pane narrower than 24rem the figure moves under the name, beside the second
  * line (or under it, where both do not fit), so the name and the second line get the whole width. `current="wide"`
@@ -265,7 +263,7 @@ const pathOf = (href) => href.split(/[?#]/)[0] ?? href;
  * @param {{ href: string, label: import('react').ReactNode, sublabel?: import('react').ReactNode, dot?: Dot,
  *   dotLabel?: string, meta?: import('react').ReactNode, current?: boolean | 'wide', leading?: import('react').ReactNode }} props
  */
-export function ListRow({ href, label, sublabel, dot, dotLabel, meta, current = false, leading }) {
+export function PaneRow({ href, label, sublabel, dot, dotLabel, meta, current = false, leading }) {
 	const { going, strip } = useScreen();
 	const marked = going === null ? current : pathOf(href) === going;
 	return (

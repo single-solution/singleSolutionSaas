@@ -1,8 +1,8 @@
 'use client';
 /**
- * The signed-in merchant console frame (PLAN 0.6, premium layout 2026-10-17): the menu Overview · Websites · Usage and
- * credits · Account, the website switcher (in the sidebar and its phone drawer), the merchant and page title, the
- * balance chip and the one account menu (My account, the theme, Sign out) in the header, help and account at the bottom of the sidebar, and the billing banner,
+ * The signed-in merchant console frame (PLAN 0.6, redesign 2 2026-10-17): the menu Overview · Websites · Usage and
+ * credits · Account; at the bottom of the sidebar (and its phone drawer) the website switcher, help and the account menu
+ * (My account, the theme, Sign out); the merchant, page title and balance chip in the header; and the billing banner,
  * with the Branding. The frame is the console's
  * layout, so it stays across navigations: pages hand it their fresh billing summary (frame-billing.js). The public
  * account pages render without it.
@@ -135,7 +135,7 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 							billing && typeof billing.balance === 'number' ? (
 								<Link
 									href={routes.credits()}
-									className="ss-motion hidden h-8 items-center gap-1.5 rounded-full border border-line-soft bg-surface-2 px-3 text-label font-medium text-fg hover:bg-surface-3 sm:inline-flex"
+									className="ss-motion hidden h-8 items-center gap-1.5 rounded-full bg-surface-2 px-3 text-label font-medium text-fg hover:bg-surface-3 sm:inline-flex"
 									title={MERCHANT.balanceLink}>
 									<Icon name="wallet" size={14} className="text-muted" />
 									<span className="tabular-nums">{formatCredits(billing.balance)}</span>
@@ -143,11 +143,7 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 							) : null
 						}
 						sidebarFooter={({ rail }) => (
-							<FrameFooter
-								rail={rail}
-								help={helpChannel ? { label: MERCHANT.help, url: helpChannel.url } : null}
-								account={{ name: accountName, email: merchant?.email, label: MERCHANT.accountMenu, items: accountItems }}
-							/>
+							<FrameFooter rail={rail} help={helpChannel ? { label: MERCHANT.help, url: helpChannel.url } : null} />
 						)}>
 						{children}
 					</AppShell>

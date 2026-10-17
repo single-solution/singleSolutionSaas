@@ -1,13 +1,16 @@
 'use client';
 /**
  * The Branding on screens (PLAN 0.8.2 Branding): the logo (or a mark) with the name, and the accent color when an
- * Owner changed it from the default indigo.
+ * Owner changed it from the default blue.
  * @module
  */
 import { Icon } from '@ss/ui';
 
-/** The default accent (the theme's own primary color). */
-const DEFAULT_ACCENT = '#4f46e5';
+/**
+ * The default accents: the theme's own primary color (Integrity blue, redesign 2) and the one before it, which a Portal
+ * set up earlier may still have stored; either leaves the theme's primary (with its dark-mode shade) in place.
+ */
+const DEFAULT_ACCENTS = new Set(['#2226f7', '#4f46e5']);
 
 /**
  * Inline style that applies a changed accent to a subtree (the theme reads `--ss-primary`).
@@ -15,7 +18,7 @@ const DEFAULT_ACCENT = '#4f46e5';
  * @returns {Record<string, string> | undefined}
  */
 export const accentStyle = (accent) =>
-	accent && /^#[0-9a-f]{6}$/i.test(accent) && accent.toLowerCase() !== DEFAULT_ACCENT
+	accent && /^#[0-9a-f]{6}$/i.test(accent) && !DEFAULT_ACCENTS.has(accent.toLowerCase())
 		? { '--ss-primary': accent, '--ss-primary-hover': accent }
 		: undefined;
 

@@ -211,7 +211,7 @@ export const createSystemService = (ctx) => {
 			const name = optionalLine(input.name, 60);
 			if (!name.ok || !name.value) errors.push({ path: '/name', message: 'must be 1..60 characters' });
 			const accent = typeof input.accent === 'string' ? input.accent.trim().toLowerCase() : '';
-			if (!ACCENT.test(accent)) errors.push({ path: '/accent', message: 'must be a color such as #4f46e5' });
+			if (!ACCENT.test(accent)) errors.push({ path: '/accent', message: 'must be a color such as #2226f7' });
 			refuse(errors, 'The branding is invalid.');
 			await system.update({ branding: { name: /** @type {string} */ (name.ok ? name.value : ''), accent } });
 			await record(actor, 'branding', { after: { name: name.ok ? name.value : null, accent }, requestId, ip });

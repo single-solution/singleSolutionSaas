@@ -12,7 +12,7 @@ import { Input } from '@ss/ui';
 import { createConsoleApi } from '../../src/console/api.js';
 import { Link, NavLink } from '../../src/console/link.js';
 import { FilterForm, useNavigation } from '../../src/console/navigation.js';
-import { ListDetail, ListPane, ListRow } from '../../src/console/views/common.js';
+import { ListDetail, ListPane, PaneRow } from '../../src/console/views/common.js';
 import { ConsoleLoading, screenOf } from '../../src/console/views/loading.js';
 import { listScroll, listWasPlaceholder, stripOpen } from '../../src/console/views/screen-memory.js';
 import { memoize, runInRequestScope } from '../../src/infra/request-scope.js';
@@ -38,8 +38,8 @@ afterEach(() => {
  */
 const merchantList = (selected) => (
 	<ListPane title="Merchants" count={2}>
-		<ListRow href="/admin/merchants/mer_a?q=x" label="Alpha" current={selected === 'mer_a'} dot="success" meta="1 credit" />
-		<ListRow href="/admin/merchants/mer_b" label="Beta" current={selected === null ? 'wide' : selected === 'mer_b'} />
+		<PaneRow href="/admin/merchants/mer_a?q=x" label="Alpha" current={selected === 'mer_a'} dot="success" meta="1 credit" />
+		<PaneRow href="/admin/merchants/mer_b" label="Beta" current={selected === null ? 'wide' : selected === 'mer_b'} />
 	</ListPane>
 );
 
@@ -184,14 +184,14 @@ describe('list-and-detail widths', () => {
 	it('shows names in full where it can: two lines, a domain wrapping between its parts, the figure under it in a narrow pane', () => {
 		const { container } = render(
 			<ListPane title="Websites">
-				<ListRow
+				<PaneRow
 					href="/websites/web_a"
 					label="shop.example.com"
 					sublabel="owner@shop.test"
 					meta="2 credits / day"
 					dot="success"
 				/>
-				<ListRow href="/websites/web_b" label={<b>Node</b>} />
+				<PaneRow href="/websites/web_b" label={<b>Node</b>} />
 			</ListPane>,
 		);
 		expect(container.firstElementChild?.className).toContain('@container');
