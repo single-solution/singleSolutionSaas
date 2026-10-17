@@ -19651,6 +19651,7 @@
 		"/v1/format": {
 			"get": {
 				"summary": "The Format of money and dates",
+				"description": "From the Portal (sources `portal`) once it holds the website's settings; the product's own saved Format before that.",
 				"x-ss-auth": "server",
 				"x-ss-access": "runtime",
 				"security": [
@@ -19688,6 +19689,7 @@
 			},
 			"put": {
 				"summary": "Save Format fields (null resets one)",
+				"description": "Answers 409 managed_by_portal once the Portal holds the website's settings: the Format is set in the Portal (Website settings › Region and format).",
 				"x-ss-auth": "server",
 				"x-ss-permission": "settings.manage",
 				"x-ss-access": "staff",
@@ -35543,6 +35545,7 @@
 		"/v1/theme": {
 			"get": {
 				"summary": "The widgets' theme",
+				"description": "From the Portal (sources `portal`) once it holds the website's settings; the product's own saved theme before that.",
 				"x-ss-auth": "server",
 				"x-ss-access": "runtime",
 				"security": [
@@ -35580,6 +35583,7 @@
 			},
 			"put": {
 				"summary": "Save theme fields (null resets one)",
+				"description": "Answers 409 managed_by_portal once the Portal holds the website's settings: the theme is set in the Portal (Website settings › Brand and look).",
 				"x-ss-auth": "server",
 				"x-ss-permission": "settings.manage",
 				"x-ss-access": "staff",
@@ -43215,19 +43219,19 @@
 						"additionalProperties": false,
 						"properties": {
 							"locale": {
-								"$ref": "#/components/schemas/ValueSource"
+								"$ref": "#/components/schemas/LookSource"
 							},
 							"currencyDisplay": {
-								"$ref": "#/components/schemas/ValueSource"
+								"$ref": "#/components/schemas/LookSource"
 							},
 							"currencySymbols": {
-								"$ref": "#/components/schemas/ValueSource"
+								"$ref": "#/components/schemas/LookSource"
 							},
 							"wholeUnits": {
-								"$ref": "#/components/schemas/ValueSource"
+								"$ref": "#/components/schemas/LookSource"
 							},
 							"times": {
-								"$ref": "#/components/schemas/ValueSource"
+								"$ref": "#/components/schemas/LookSource"
 							}
 						}
 					}
@@ -44176,6 +44180,16 @@
 						}
 					}
 				}
+			},
+			"LookSource": {
+				"type": "string",
+				"enum": [
+					"website",
+					"default",
+					"built-in",
+					"portal"
+				],
+				"description": "Where a theme or Format value comes from: saved for this website, the global default, built in, or the website's settings in the Portal (then a save is refused with 409 managed_by_portal)."
 			},
 			"LoyaltyAccount": {
 				"type": "object",
@@ -56952,19 +56966,19 @@
 						"additionalProperties": false,
 						"properties": {
 							"colors": {
-								"$ref": "#/components/schemas/ValueSource"
+								"$ref": "#/components/schemas/LookSource"
 							},
 							"fontFamily": {
-								"$ref": "#/components/schemas/ValueSource"
+								"$ref": "#/components/schemas/LookSource"
 							},
 							"radius": {
-								"$ref": "#/components/schemas/ValueSource"
+								"$ref": "#/components/schemas/LookSource"
 							},
 							"mode": {
-								"$ref": "#/components/schemas/ValueSource"
+								"$ref": "#/components/schemas/LookSource"
 							},
 							"customCss": {
-								"$ref": "#/components/schemas/ValueSource"
+								"$ref": "#/components/schemas/LookSource"
 							}
 						}
 					}

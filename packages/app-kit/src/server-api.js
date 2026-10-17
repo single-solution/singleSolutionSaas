@@ -194,6 +194,12 @@ export const createServerApi = (kit, lists) => {
 			throw problem('feature_off', `The feature ${features.join(' or ')} is off: its lists cannot be changed.`);
 		const list = await definition.save(website(ctx), valueOf(ctx));
 		if (!list.ok) {
+			// a list the Portal owns (its website settings): not a bad value but a place that is not here (409)
+			const owned = list.errors.find((error) => typeof error !== 'string' && error.code === 'managed_by_portal');
+			if (owned && typeof owned !== 'string')
+				throw problem('managed_by_portal', owned.message, {
+					extensions: { portalUrl: kit.connection.connected() ? kit.connection.active().portalUrl : null },
+				});
 			const errors = list.errors.map((error) =>
 				typeof error === 'string'
 					? { path: '/value', message: error }

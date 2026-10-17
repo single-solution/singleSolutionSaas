@@ -6,6 +6,10 @@
  * bucket and kept in the record). The record is the `store_details` list: the kit's `GET|PUT /v1/lists/store_details`
  * and the dashboard's list routes read and save all of it; the routes here only add the files, which the dashboard
  * editor uses too (setup only: no business data).
+ *
+ * Once the Portal holds the website's settings the record is its Business and Brand sections, read only (the list's
+ * `managed` value, `portal: true`; the pictures are https addresses): the shop read, the business.json and the lists API
+ * answer from it, and a save, an upload or a removal is 409 `managed_by_portal`.
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -46,8 +50,28 @@ export const createStoreDetails = (product, service) => {
 		.../** @type {Partial<StoreDetails>} */ (await s.list('store_details')),
 	});
 
-	/** The public address of a stored file that never changes (a search engine or a shopping catalog keeps it). @param {Site} s @param {{ key: string } | null} file */
-	const urlOf = async (s, file) => (file ? await media.stableUrl(s, file.key) : null);
+	/**
+	 * The public address of a stored file that never changes (a search engine or a shopping catalog keeps it); a picture of
+	 * the Portal's settings is its own https address.
+	 * @param {Site} s @param {{ key: string, url?: string } | null} file
+	 */
+	const urlOf = async (s, file) => (file ? (file.url ?? (await media.stableUrl(s, file.key))) : null);
+
+	/**
+	 * Refuse a change of the record while the Portal owns it: 409 `managed_by_portal`, naming where to change it.
+	 * @param {Site} s
+	 */
+	const mustBeOwn = async (s) => {
+		// (not through the site's list, which is read once per request)
+		if ((await product.website(s.websiteId)).version > 0)
+			throw problem(
+				'managed_by_portal',
+				'The store details are set in the Portal (Website settings › Business and Brand and look).',
+				{
+					extensions: { portalUrl: product.portalUrl() },
+				},
+			);
+	};
 
 	/** GET /v1/shop/store: the public record. @param {any} ctx */
 	const read = async (ctx) => {
@@ -89,7 +113,15 @@ export const createStoreDetails = (product, service) => {
 		const details = await detailsOf(s);
 		/** @param {StoreDetails['logo']} file */
 		const view = async (file) =>
-			file ? { key: file.key, type: file.type, size: file.size, alt: file.alt, url: await media.mediaUrl(s, file.key) } : null;
+			file
+				? {
+						key: file.key,
+						type: file.type,
+						size: file.size,
+						alt: file.alt,
+						url: file.url ?? (await media.mediaUrl(s, file.key)),
+					}
+				: null;
 		const views = await Promise.all(STORE_FILES.map((name) => view(details[name])));
 		return /** @type {Record<StoreFileName, Awaited<ReturnType<typeof view>>>} */ (
 			Object.fromEntries(STORE_FILES.map((name, at) => [name, views[at]]))
@@ -109,6 +141,7 @@ export const createStoreDetails = (product, service) => {
 
 	/** POST …/uploads `{ for: 'logo' | 'logoDark' | 'icon' | 'favicon' | 'faviconDark', type, size }` → a presigned upload (JPEG, PNG, WebP or AVIF). @param {any} ctx */
 	const upload = async (ctx) => {
+		await mustBeOwn(await service.site(ctx));
 		const body = bodyOf(ctx);
 		if (!STORE_FILES.includes(/** @type {StoreFileName} */ (String(body.for))))
 			throw refuse([{ path: '/for', message: `Upload one of: ${STORE_FILES.join(', ')}.` }]);
@@ -155,6 +188,7 @@ export const createStoreDetails = (product, service) => {
 		const name = fileName(ctx);
 		const body = bodyOf(ctx);
 		const s = await service.site(ctx);
+		await mustBeOwn(s);
 		const storage = await service.storage(s);
 		const key = typeof body.key === 'string' ? body.key : '';
 		if (!key.startsWith(`${STORE_FOLDER}${name}-`) || key.includes('..'))
@@ -183,6 +217,7 @@ export const createStoreDetails = (product, service) => {
 	/** DELETE …/<picture>. @param {any} ctx */
 	const detach = async (ctx) => {
 		const name = fileName(ctx);
+		await mustBeOwn(await service.site(ctx));
 		const { s, before } = await keep(ctx, name, null);
 		if (before) {
 			await deleteFile(s, before.key);

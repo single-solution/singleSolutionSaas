@@ -9,7 +9,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Card, EntryGroup, FieldGrid, Input, Select, TextArea, useToast } from '@ss/ui';
+import { Button, Card, EntryGroup, FieldGrid, Input, KeyValueList, ManagedNote, Select, TextArea, useToast } from '@ss/ui';
 import { Loaded, call, fill, useLoad } from '@ss/ui/dashboard';
 import { countryChoices } from '../../core/address.js';
 import { STORE_FILES, STORE_LIMITS } from '../../core/store-details.js';
@@ -181,10 +181,36 @@ function FileField({ websiteId, name, file, onChanged }) {
 }
 
 /**
- * The Store details editor.
- * @param {{ websiteId: string, off?: boolean }} props
+ * The record while the Portal owns it: where it is set, with a link, and what it says.
+ * @param {{ record: Item, websiteId: string, portal?: string }} props
  */
-export function StoreDetailsEditor({ websiteId, off }) {
+function FromPortal({ record, websiteId, portal }) {
+	const href = portal ? `${portal.replace(/\/+$/, '')}/websites/${encodeURIComponent(websiteId)}/settings#business` : undefined;
+	const address = [record.address?.line1, record.address?.city, record.address?.country].filter(Boolean).join(', ');
+	return (
+		<div className="space-y-4">
+			<ManagedNote title={S.managedTitle} {...(href ? { href } : {})} linkLabel={S.managedOpen}>
+				{S.managed}
+			</ManagedNote>
+			<KeyValueList
+				items={[
+					{ label: S.name, value: record.name || '—' },
+					{ label: S.email, value: record.email || '—' },
+					{ label: S.phone, value: record.phone || '—' },
+					{ label: S.address, value: address || '—' },
+					{ label: S.timeZone, value: record.timeZone || '—' },
+				]}
+			/>
+		</div>
+	);
+}
+
+/**
+ * The Store details editor. While the Portal holds the website's settings the record is its Business and Brand
+ * sections (`portal: true`): a note where it is set and what it says, not a form.
+ * @param {{ websiteId: string, off?: boolean, portal?: string }} props `portal`: the Portal's address
+ */
+export function StoreDetailsEditor({ websiteId, off, portal }) {
 	const state = useList(websiteId, 'store_details');
 	const files = useLoad(`/v1/dashboard/websites/${websiteId}/store-details/files`);
 	return (
@@ -192,6 +218,7 @@ export function StoreDetailsEditor({ websiteId, off }) {
 			<Loaded answer={state.answer}>
 				{(data) => {
 					const saved = /** @type {Item} */ (data.value ?? {});
+					if (saved.portal === true) return <FromPortal record={saved} websiteId={websiteId} portal={portal} />;
 					/** @type {Item} */
 					const draft = state.draft ?? draftOf(saved);
 					/** @param {Item} patch */

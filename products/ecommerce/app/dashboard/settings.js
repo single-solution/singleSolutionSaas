@@ -113,12 +113,13 @@ function WithCurrency({ websiteId, editor }) {
  * The shop's list editors, each under its feature (a feature that is off is not listed). The ones of Cart and checkout
  * are listed beside it (`top`), as they are many.
  * @param {string} websiteId
+ * @param {string} [portal] the Portal's address
  * @returns {Record<string, import('@ss/ui/dashboard').FeatureExtra>}
  */
-const extrasOf = (websiteId) => {
+const extrasOf = (websiteId, portal) => {
 	const L = TEXTS.lists;
 	return {
-		store_details: <StoreDetailsEditor websiteId={websiteId} off={false} />,
+		store_details: <StoreDetailsEditor websiteId={websiteId} off={false} portal={portal} />,
 		catalog: {
 			items: [{ id: 'item-types', label: L.itemTypes.title, content: <ItemTypesEditor websiteId={websiteId} off={false} /> }],
 		},
@@ -186,5 +187,5 @@ const extrasOf = (websiteId) => {
 
 /** @param {import('@ss/ui/dashboard').TabProps} props */
 export function SettingsTab(props) {
-	return <SharedSettingsTab {...props} notice={settingsNotice} extras={extrasOf(String(props.websiteId))} />;
+	return <SharedSettingsTab {...props} notice={settingsNotice} extras={extrasOf(String(props.websiteId), props.portal)} />;
 }

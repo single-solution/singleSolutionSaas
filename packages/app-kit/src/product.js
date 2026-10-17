@@ -527,6 +527,8 @@ export const createProduct = (options) => {
 		recentChanges: Object.freeze({ record: recent.record, list: recent.list }),
 		/** Accounts sign-ins of a website, verified offline with its pasted Accounts token (PLAN 0.4.6). */
 		accounts,
+		/** The pinned Portal address (what a link to "change it in the Portal" is built from), or null before the first connect. */
+		portalUrl: () => (kit.connection.connected() ? kit.connection.active().portalUrl : null),
 		/** This product's own address (the base URL it was connected with), or null before the first connect. */
 		address: () => (kit.connection.connected() ? kit.connection.active().baseUrl : null),
 		/** Close pooled merchant database connections (tests, shutdown). */

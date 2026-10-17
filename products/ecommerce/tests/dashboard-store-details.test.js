@@ -166,3 +166,39 @@ describe('the store details editor', () => {
 		expect(container.textContent).toContain('overlap');
 	});
 });
+
+describe('the editor while the Portal holds the website’s settings', () => {
+	it('is a note with a link to the Portal and what it says, not a form', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (/** @type {string} */ path) =>
+				path === `${BASE}/lists/store_details`
+					? new Response(
+							JSON.stringify({
+								value: {
+									portal: true,
+									name: 'Portal Store',
+									email: 'hello@portal-store.test',
+									phone: '+1 555 0100',
+									address: { line1: '1 Main Street', city: 'Springfield', country: 'US' },
+									timeZone: 'America/Chicago',
+								},
+							}),
+							{ status: 200 },
+						)
+					: new Response(JSON.stringify({}), { status: 200 }),
+			),
+		);
+		const { container } = render(
+			inDashboard(<StoreDetailsEditor websiteId={WEBSITE} off={false} portal="https://portal.example.com/" />),
+		);
+		await settle();
+		expect(container.textContent).toContain('Set in the Portal');
+		expect(container.textContent).toContain('Portal Store');
+		expect(container.textContent).toContain('1 Main Street, Springfield, US');
+		expect(container.querySelector('input, textarea, select')).toBeNull();
+		expect(container.textContent).not.toContain('Save');
+		const link = container.querySelector('a');
+		expect(link?.getAttribute('href')).toBe(`https://portal.example.com/websites/${WEBSITE}/settings#business`);
+	});
+});

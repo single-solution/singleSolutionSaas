@@ -23,7 +23,11 @@ import { isObject } from '@ss/contracts/util';
 import { checkHours } from './bookings.js';
 import { IMAGE_TYPES } from './catalog-content.js';
 
-/** @typedef {{ key: string, type: string, size: number, alt: string }} StoreFile a picture of the store in the merchant's storage */
+/**
+ * A picture of the store in the merchant's storage; from the Portal's website settings a picture has no key, only its
+ * https address (`url`).
+ * @typedef {{ key: string, type: string, size: number, alt: string, url?: string }} StoreFile
+ */
 /** @typedef {'logo' | 'logoDark' | 'icon' | 'favicon' | 'faviconDark'} StoreFileName */
 /** @typedef {Record<'line1' | 'line2' | 'area' | 'city' | 'region' | 'postalCode', string> & { country: string }} StoreAddress */
 /**
@@ -44,6 +48,7 @@ import { IMAGE_TYPES } from './catalog-content.js';
  * @property {Array<{ label: string, url: string }>} social
  * @property {string} timeZone an IANA time zone name, '' when not set
  * @property {string} language a BCP 47 tag, '' when not set
+ * @property {true} [portal] set on the record read from the Portal's website settings (read only)
  */
 
 /** The longest text of each field. */
@@ -376,3 +381,35 @@ export const businessJsonOf = (details, context = {}) =>
 		currencies: context.currencies,
 		language: details.language || context.language,
 	});
+
+/**
+ * The store details the Portal's website settings make (settings-ownership design 8.1): the same record, read only
+ * (`portal: true`). The facts are the Business section, the time zone and language the Region section; the pictures are
+ * the https addresses of Brand and look, which have no key in the merchant's storage (`url`).
+ * @param {import('@ss/contracts').WebsiteSettings} website
+ * @returns {StoreDetails}
+ */
+export const storeDetailsFromWebsite = (website) => {
+	const { business, brand, region } = website;
+	/** @param {string} url @param {string} alt @returns {StoreFile | null} */
+	const picture = (url, alt) => (url ? { key: '', type: '', size: 0, alt, url } : null);
+	return {
+		name: business.name,
+		tagline: business.tagline,
+		logo: picture(brand.files.logo, business.name),
+		logoDark: picture(brand.files.logoDark, business.name),
+		icon: picture(brand.files.icon, ''),
+		favicon: picture(brand.files.favicon, ''),
+		faviconDark: picture(brand.files.faviconDark, ''),
+		email: business.email,
+		phone: business.phone,
+		phones: business.phones.map(({ label, number }) => ({ label, number })),
+		whatsapp: business.whatsapp,
+		address: { ...business.address },
+		hours: structuredClone(business.hours),
+		social: business.social.map(({ label, url }) => ({ label, url })),
+		timeZone: region.timeZone,
+		language: region.language,
+		portal: true,
+	};
+};

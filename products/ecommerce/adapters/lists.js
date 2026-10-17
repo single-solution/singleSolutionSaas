@@ -127,22 +127,26 @@ export const LISTS = Object.freeze({
 /** @typedef {keyof typeof LISTS} ListName */
 
 /**
- * @param {{ store: import('@ss/app-kit').Store, now: () => number, guards?: Partial<Record<ListName, ListGuard>> }} options
+ * @param {{ store: import('@ss/app-kit').Store, now: () => number, guards?: Partial<Record<ListName, ListGuard>>,
+ *   managed?: Partial<Record<ListName, (websiteId: string) => Promise<any | null>>> }} options
  *   `guards`: checks of a list against the merchant's data before it is saved (both the dashboard and the settings API
- *   save through here)
+ *   save through here). `managed`: a list the Portal owns (its website settings): while it answers a value, that is the
+ *   list (read only) and a save is refused with the code `managed_by_portal`
  */
-export const createLists = ({ store, now, guards = {} }) => {
+export const createLists = ({ store, now, guards = {}, managed = {} }) => {
 	/** @param {string} websiteId @param {string} key */
 	const idOf = (websiteId, key) => `${websiteId}|ecommerce|${key}`;
 
 	return Object.freeze({
 		/**
-		 * The saved value of a list, else its default.
+		 * The list: the Portal's while it owns it, else the saved value, else its default.
 		 * @param {string} websiteId
 		 * @param {ListName} name
 		 * @returns {Promise<any>}
 		 */
 		get: async (websiteId, name) => {
+			const owned = await managed[name]?.(websiteId);
+			if (owned) return owned;
 			const doc = await store.get('settings', idOf(websiteId, `list.${name}`));
 			return doc ? doc.value : LISTS[name].fallback();
 		},
@@ -154,6 +158,17 @@ export const createLists = ({ store, now, guards = {} }) => {
 		 * @returns {Promise<ListCheck>}
 		 */
 		save: async (websiteId, name, value) => {
+			if (await managed[name]?.(websiteId))
+				return {
+					ok: false,
+					errors: [
+						{
+							path: '/value',
+							message: `${LISTS[name].title} is set in the Portal (Website settings), for all your products.`,
+							code: 'managed_by_portal',
+						},
+					],
+				};
 			const checked = LISTS[name].check(value);
 			if (!checked.ok) return checked;
 			const guard = guards[name];
