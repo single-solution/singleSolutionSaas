@@ -685,6 +685,15 @@ export const createRoutes = (product) => {
 			feature: 'custom_fields',
 			handler: manage.customFields,
 		}),
+		// the definitions a user sees, public (the merchant's own sign-up and My account pages); the route above is the staff's
+		defineRoute({
+			method: 'GET',
+			path: '/v1/fields/public',
+			auth: 'browser',
+			feature: 'custom_fields',
+			rateLimit: PUBLIC_LIMITS,
+			handler: manage.publicFields,
+		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/roles',

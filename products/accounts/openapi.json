@@ -4232,6 +4232,65 @@
 				}
 			}
 		},
+		"/v1/fields/public": {
+			"get": {
+				"summary": "The custom fields a user sees",
+				"description": "The definitions sign-up and My account show, in your order: label, type, choices, help and whether the user edits the field (edit) or only sees it (view). Staff-only fields are not in it. Open to the browser and to your server, with no sign-in, like the widgets. The full list is `GET /v1/fields`, a staff route.",
+				"x-ss-auth": "browser",
+				"x-ss-feature": "custom_fields",
+				"security": [
+					{
+						"browserToken": []
+					},
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSVisitorIp"
+					},
+					{
+						"$ref": "#/components/parameters/SSSignIn"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"maxItems": 100,
+											"items": {
+												"$ref": "#/components/schemas/CustomField"
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/format": {
 			"get": {
 				"summary": "The Format of money and dates",

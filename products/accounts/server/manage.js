@@ -1335,6 +1335,15 @@ export const createManage = (product, service, flows) => {
 	 */
 	const customFields = async (ctx) => ({ items: await (await service.site(ctx)).store.fields.list() });
 
+	/**
+	 * The custom fields a user sees (A6), public like the widgets' own: sign-up and My account on the merchant's own pages
+	 * need the definitions (label, type, choices, help and whether the user edits the field). Staff-only fields never leave.
+	 * @param {any} ctx
+	 */
+	const publicFields = async (ctx) => ({
+		items: (await (await service.site(ctx)).store.fields.list()).filter((field) => field.visibility !== 'staff'),
+	});
+
 	/** @param {any} ctx */
 	const saveField = async (ctx) => {
 		await editable(ctx);
@@ -1372,6 +1381,7 @@ export const createManage = (product, service, flows) => {
 		deleteConsent,
 		orderConsents,
 		customFields,
+		publicFields,
 		orderFields,
 		countUsers: userCounts.count,
 		countUsersBy: userCounts.counts,

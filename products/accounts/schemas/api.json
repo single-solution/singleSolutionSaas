@@ -3540,6 +3540,24 @@
 			}
 		}
 	},
+	"GET /v1/fields/public": {
+		"summary": "The custom fields a user sees",
+		"description": "The definitions sign-up and My account show, in your order: label, type, choices, help and whether the user edits the field (edit) or only sees it (view). Staff-only fields are not in it. Open to the browser and to your server, with no sign-in, like the widgets. The full list is `GET /v1/fields`, a staff route.",
+		"response": {
+			"type": "object",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"maxItems": 100,
+					"items": {
+						"$ref": "#/components/schemas/CustomField"
+					}
+				}
+			}
+		}
+	},
 	"GET /v1/roles": {
 		"summary": "The roles",
 		"description": "Highest rank first, with the role for new sign-ups. The ready-made templates are made on first use; then they are your roles to change or delete.",
