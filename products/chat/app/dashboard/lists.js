@@ -7,7 +7,21 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, Checkbox, CodeBlock, ConfirmDialog, EntryGroup, FieldGrid, Input, ItemSwitcher, Select, TextArea, SaveRow } from '@ss/ui';
+import {
+	Button,
+	Callout,
+	Card,
+	Checkbox,
+	CodeBlock,
+	ConfirmDialog,
+	EntryGroup,
+	FieldGrid,
+	Input,
+	ItemSwitcher,
+	Select,
+	TextArea,
+	SaveRow,
+} from '@ss/ui';
 import { FALLBACK_LIMITS, PLACEHOLDERS, fallbackProblems, placeholdersOf } from '../../core/fallback.js';
 import { FIELD_TYPES } from '../../core/fields.js';
 import { STANDARD_FIELDS } from '../../core/flows.js';
@@ -87,13 +101,13 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 								emptyText={L.none}
 								renderItem={(item, index) => (
 									<EntryGroup
- key={index}
- title={`${itemLabel} ${index + 1}`}
- first={index === 0}
- last={index === items.length - 1}
- texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
- onMove={(step) => setDraft(moved(items, index, step))}
- onRemove={() => setDraft(items.filter((_, at) => at !== index))}>
+										key={index}
+										title={`${itemLabel} ${index + 1}`}
+										first={index === 0}
+										last={index === items.length - 1}
+										texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
+										onMove={(step) => setDraft(moved(items, index, step))}
+										onRemove={() => setDraft(items.filter((_, at) => at !== index))}>
 										{render(item, (patch) => set(index, patch))}
 									</EntryGroup>
 								)}
@@ -177,14 +191,14 @@ export function ToolsEditor({ websiteId, off }) {
 						<p className="text-sm font-semibold">{T.parameters}</p>
 						{parameters.map((parameter, index) => (
 							<EntryGroup
- key={index}
- compact
- title={`${T.parameter} ${index + 1}`}
- first={index === 0}
- last={index === parameters.length - 1}
- texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
- onMove={(step) => set({ parameters: moved(parameters, index, step) })}
- onRemove={() => set({ parameters: parameters.filter((_, at) => at !== index) })}>
+								key={index}
+								compact
+								title={`${T.parameter} ${index + 1}`}
+								first={index === 0}
+								last={index === parameters.length - 1}
+								texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
+								onMove={(step) => set({ parameters: moved(parameters, index, step) })}
+								onRemove={() => set({ parameters: parameters.filter((_, at) => at !== index) })}>
 								<FieldGrid>
 									<Input
 										label={T.parameter}
@@ -565,14 +579,14 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 						<p className="text-sm font-semibold">{F.steps}</p>
 						{steps.map((step, index) => (
 							<EntryGroup
- key={index}
- compact
- title={`${F.step} ${index + 1}`}
- first={index === 0}
- last={index === steps.length - 1}
- texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
- onMove={(move) => set({ steps: moved(steps, index, move) })}
- onRemove={() => set({ steps: steps.filter((_, at) => at !== index) })}>
+								key={index}
+								compact
+								title={`${F.step} ${index + 1}`}
+								first={index === 0}
+								last={index === steps.length - 1}
+								texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
+								onMove={(move) => set({ steps: moved(steps, index, move) })}
+								onRemove={() => set({ steps: steps.filter((_, at) => at !== index) })}>
 								<FieldGrid>
 									<Select
 										label={F.step}

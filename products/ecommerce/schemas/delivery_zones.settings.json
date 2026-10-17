@@ -30,6 +30,7 @@
 		"pickupName": {
 			"type": "string",
 			"title": "Pickup point name",
+			"description": "The name shoppers see for the place where they collect their order.",
 			"default": "",
 			"maxLength": 120,
 			"x-ui": {
@@ -40,6 +41,7 @@
 		"pickupAddress": {
 			"type": "string",
 			"title": "Pickup point address",
+			"description": "Where shoppers collect their order.",
 			"default": "",
 			"maxLength": 500,
 			"x-ui": {
@@ -51,6 +53,7 @@
 		"pickupHours": {
 			"type": "string",
 			"title": "Pickup hours",
+			"description": "When shoppers can collect, for example Mon–Sat 9 to 6.",
 			"default": "",
 			"maxLength": 500,
 			"x-ui": {

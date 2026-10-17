@@ -282,7 +282,13 @@ export function Input({
 						required={required}
 						aria-invalid={error ? true : undefined}
 						aria-describedby={ids.describedBy}
-						className={cx(controlClass(Boolean(error)), LINE, rest.type === 'color' && COLOR, rest.type === 'file' && FILE, className)}
+						className={cx(
+							controlClass(Boolean(error)),
+							LINE,
+							rest.type === 'color' && COLOR,
+							rest.type === 'file' && FILE,
+							className,
+						)}
 						{...rest}
 					/>
 				)

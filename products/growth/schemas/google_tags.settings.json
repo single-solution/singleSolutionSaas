@@ -4,8 +4,8 @@
 	"properties": {
 		"ga4Id": {
 			"type": "string",
-			"title": "Google Analytics 4 measurement id",
-			"description": "G-XXXXXXX. Loads only after the visitor consents to analytics.",
+			"title": "Google Analytics 4 measurement ID",
+			"description": "Looks like G-XXXXXXX. Loads only after the visitor agrees to analytics.",
 			"default": "",
 			"maxLength": 30,
 			"x-ui": {
@@ -15,8 +15,8 @@
 		},
 		"adsId": {
 			"type": "string",
-			"title": "Google Ads id",
-			"description": "AW-XXXXXXXXX. Loads after marketing consent. Conversions are set in Conversion actions.",
+			"title": "Google Ads ID",
+			"description": "Looks like AW-XXXXXXXXX. Loads after the visitor agrees to marketing. Set conversions in Conversion actions.",
 			"default": "",
 			"maxLength": 30,
 			"x-ui": {
@@ -26,8 +26,8 @@
 		},
 		"gtmId": {
 			"type": "string",
-			"title": "Google Tag Manager container id",
-			"description": "GTM-XXXXXXX. Loads after analytics or marketing consent.",
+			"title": "Google Tag Manager container ID",
+			"description": "Looks like GTM-XXXXXXX. Loads after the visitor agrees to analytics or marketing.",
 			"default": "",
 			"maxLength": 30,
 			"x-ui": {

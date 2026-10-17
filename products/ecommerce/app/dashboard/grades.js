@@ -16,7 +16,26 @@
  * @module
  */
 import { useState } from 'react';
-import { ActionMenu, Badge, Button, Card, Checkbox, Dialog, EntryGroup, FieldGrid, Icon, IconButton, Input, SeoPreview, Select, TextArea, cx, Paged, ListRow, RowList } from '@ss/ui';
+import {
+	ActionMenu,
+	Badge,
+	Button,
+	Card,
+	Checkbox,
+	Dialog,
+	EntryGroup,
+	FieldGrid,
+	Icon,
+	IconButton,
+	Input,
+	SeoPreview,
+	Select,
+	TextArea,
+	cx,
+	Paged,
+	ListRow,
+	RowList,
+} from '@ss/ui';
 import { DURATION_MAX, DURATION_UNITS } from '../../core/durations.js';
 import { asWritten, fillTitle, metaDescription, patternText } from '../../core/seo-text.js';
 import { Loaded, fill } from '@ss/ui/dashboard';

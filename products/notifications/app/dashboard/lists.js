@@ -72,13 +72,13 @@ function ListCard({ websiteId, name, title, help, off, blank, render, rows: toRo
 				{rows.length === 0 ? <p className="text-sm text-muted">{L.none}</p> : null}
 				{rows.map((row, at) => (
 					<EntryGroup
- key={at}
- first={at === 0}
- last={at === rows.length - 1}
- texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
- onMove={(step) => move(at, at + step)}
- onRemove={() => setDraft(rows.filter((_, i) => i !== at))}>
- {render(row, (patch) => set(at, patch), at)}
+						key={at}
+						first={at === 0}
+						last={at === rows.length - 1}
+						texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
+						onMove={(step) => move(at, at + step)}
+						onRemove={() => setDraft(rows.filter((_, i) => i !== at))}>
+						{render(row, (patch) => set(at, patch), at)}
 					</EntryGroup>
 				))}
 				<SaveRow

@@ -90,7 +90,15 @@ const REQUIREMENTS = [
 		action: 'Set address',
 		detail: (value) => `Now ${String(value)}`,
 	},
-	{ key: 'guests', when: ['checkout'], setting: 'checkout.guests', optional: true, label: 'Guests', why: 'Why three.', action: 'Choose' },
+	{
+		key: 'guests',
+		when: ['checkout'],
+		setting: 'checkout.guests',
+		optional: true,
+		label: 'Guests',
+		why: 'Why three.',
+		action: 'Choose',
+	},
 	{
 		key: 'zone',
 		when: ['shipping'],
@@ -101,7 +109,15 @@ const REQUIREMENTS = [
 		action: 'Open zones',
 		section: 'shipping.zones',
 	},
-	{ key: 'later', when: ['shipping'], after: 'storage', setting: 'catalog.currency', label: 'After storage', why: 'Why five.', action: 'Go' },
+	{
+		key: 'later',
+		when: ['shipping'],
+		after: 'storage',
+		setting: 'catalog.currency',
+		label: 'After storage',
+		why: 'Why five.',
+		action: 'Go',
+	},
 ];
 
 /** The steps as the hook makes them, printed. @param {{ overview: any, websiteId: string, open: (tab: string, section?: string) => void, settings?: any }} props */
@@ -126,7 +142,15 @@ const serve = ({ on, connections = [], zones = [] }) => {
 	const answers = /** @type {Record<string, unknown>} */ ({
 		'/v1/dashboard/websites/w1/settings': {
 			features: [
-				{ key: 'catalog', on: true, schema: SCHEMAS.catalog, values: { productUrl: { value: '/products/{slug}', source: 'built-in' }, currency: { value: '', source: 'built-in' } } },
+				{
+					key: 'catalog',
+					on: true,
+					schema: SCHEMAS.catalog,
+					values: {
+						productUrl: { value: '/products/{slug}', source: 'built-in' },
+						currency: { value: '', source: 'built-in' },
+					},
+				},
 				{ key: 'checkout', on: true, schema: SCHEMAS.checkout, values: { guests: { value: 'off', source: 'website' } } },
 			],
 		},
@@ -148,7 +172,9 @@ const settle = async () => {
 
 /** @param {HTMLElement} container */
 const rows = (container) =>
-	Object.fromEntries([...container.querySelectorAll('li')].map((li) => [li.textContent, [li.dataset.done, li.dataset.optional]]));
+	Object.fromEntries(
+		[...container.querySelectorAll('li')].map((li) => [li.textContent, [li.dataset.done, li.dataset.optional]]),
+	);
 
 describe('useSetupSteps', () => {
 	it('ticks each step from the saved state, shows only what the switched-on features need, and opens the exact section', async () => {
@@ -173,7 +199,11 @@ describe('useSetupSteps', () => {
 		// the settings are read once and the list once
 		expect(calls().sort()).toEqual(['/v1/dashboard/websites/w1/lists/zones', '/v1/dashboard/websites/w1/settings']);
 		const press = async (/** @type {string} */ label) =>
-			act(async () => /** @type {HTMLButtonElement} */ ([...container.querySelectorAll('button')].find((b) => b.textContent === label)).click());
+			act(async () =>
+				/** @type {HTMLButtonElement} */ (
+					[...container.querySelectorAll('button')].find((b) => b.textContent === label)
+				).click(),
+			);
 		await press('Set address');
 		await press('Open zones');
 		await press('See features');
@@ -197,7 +227,11 @@ describe('useSetupSteps', () => {
 		// Catalog and Shipping are off: no address step, no zone step, no list read
 		expect(calls()).toEqual(['/v1/dashboard/websites/w1/settings']);
 		cleanup();
-		const ready = serve({ on: ['shipping'], connections: [{ name: 'storage', status: 'connected' }], zones: [{ rates: [{}] }] });
+		const ready = serve({
+			on: ['shipping'],
+			connections: [{ name: 'storage', status: 'connected' }],
+			zones: [{ rates: [{}] }],
+		});
 		const second = render(
 			<DashboardProvider manifest={MANIFEST} texts={{ title: 'Shop' }}>
 				<Steps overview={ready.overview} websiteId="w1" open={() => undefined} />

@@ -4,7 +4,8 @@
 	"properties": {
 		"temperature": {
 			"type": "number",
-			"title": "Creativity (temperature)",
+			"title": "Creativity",
+			"description": "From 0 (careful, predictable answers) to 1 (more varied answers).",
 			"default": 0.4,
 			"minimum": 0,
 			"maximum": 1,
@@ -17,6 +18,7 @@
 		"maxOutputTokens": {
 			"type": "integer",
 			"title": "Longest answer (AI tokens)",
+			"description": "The most the AI writes in one answer, counted in AI tokens (about four letters each): 500 is roughly 350 words.",
 			"default": 500,
 			"minimum": 50,
 			"maximum": 4000,
@@ -62,6 +64,7 @@
 		"dontKnow": {
 			"type": "string",
 			"title": "When the AI does not know",
+			"description": "What the AI says when it does not have the answer.",
 			"default": "Say that you are not sure and offer to connect the visitor with a person.",
 			"maxLength": 500,
 			"x-ui": {

@@ -23,9 +23,7 @@ export function RowList({ children, inset = false, label, className }) {
 			{...(label ? { 'aria-label': label } : {})}
 			className={cx(
 				'min-w-0 divide-y divide-line-soft',
-				inset
-					? '[&>li]:px-5 [&>li]:hover:bg-surface-2/60'
-					: '[&>li:first-child]:pt-0 [&>li:last-child]:pb-0',
+				inset ? '[&>li]:px-5 [&>li]:hover:bg-surface-2/60' : '[&>li:first-child]:pt-0 [&>li:last-child]:pb-0',
 				className,
 			)}>
 			{children}
@@ -58,7 +56,9 @@ export function ListRow({
 	id,
 	wrap = false,
 }) {
-	const lead = media ?? (icon ? <IconBadge icon={icon} {...(kind ? { kind } : {})} size="sm" /> : avatar ? <Avatar name={avatar} /> : null);
+	const lead =
+		media ??
+		(icon ? <IconBadge icon={icon} {...(kind ? { kind } : {})} size="sm" /> : avatar ? <Avatar name={avatar} /> : null);
 	return (
 		<li id={id} className={cx('ss-motion min-w-0 py-3', className)}>
 			<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">

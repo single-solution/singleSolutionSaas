@@ -4,10 +4,10 @@
 	"properties": {
 		"adminUrl": {
 			"type": "string",
-			"title": "Conversation page in your admin",
+			"title": "Conversation page address in your admin",
 			"default": "",
 			"maxLength": 500,
-			"description": "With {conversationId}, for example https://admin.example.com/inbox?conversation={conversationId} (the inbox widget opens the conversation named by ?conversation= in its page address). Alerts link to it.",
+			"description": "The page of your admin where staff open a conversation, for example https://admin.example.com/inbox?conversation={conversationId}. Alerts link to it.",
 			"x-ui": {
 				"group": "Contents",
 				"order": 21
@@ -15,13 +15,13 @@
 		},
 		"recipients": {
 			"type": "array",
-			"title": "Alert recipients",
+			"title": "Who gets staff alerts",
 			"default": [],
 			"items": {
 				"type": "string",
 				"maxLength": 254
 			},
-			"description": "Email addresses and international phone numbers (+ or 00 first; phones get the channel below). Name a channel first to choose it for one person: sms:+15550100, whatsapp:+15550100, email:ops@example.com, or push:<Accounts user id> for staff push. The assigned person is added.",
+			"description": "Email addresses and phone numbers with a country code (+44 …). Start an entry with sms:, whatsapp:, email: or push: to pick the channel for one person (push: takes an Accounts user ID). The person a chat is assigned to is added.",
 			"x-ui": {
 				"group": "Recipients",
 				"order": 1
@@ -43,7 +43,7 @@
 			"title": "Also alert Accounts staff who can",
 			"default": "",
 			"enum": ["", "inbox.reply", "all_staff"],
-			"description": "inbox.reply: every unblocked Accounts user whose role may reply in the inbox; all_staff: every unblocked Accounts user whose role may see the inbox (inbox.read). Both need the Accounts token. Empty = only the list above.",
+			"description": "Also alert Accounts staff whose role may reply in the inbox (inbox.reply), or all_staff for everyone who may see it. Needs the Accounts connection. Empty: only the people listed above.",
 			"x-ui": {
 				"group": "Recipients",
 				"order": 2

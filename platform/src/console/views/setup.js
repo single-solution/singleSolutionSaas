@@ -13,7 +13,41 @@
  */
 import { useEffect, useState } from 'react';
 import { OTHER_MAX, PROFILE_CHOICES, PROFILE_NONE, PROFILE_OTHER } from '@ss/contracts/profile';
-import { Badge, Button, ButtonLink, Callout, Card, CheckboxGroup, ChoicePicker, CodeBlock, Dialog, EmptyState, ErrorState, FieldGrid, FormError, Icon, IconBadge, Input, KeyValueList, ListRow, LocalTime, PageHeader, RowList, SectionLayout, SegmentedControl, Section, Skeleton, StatusBadge, Switch, ToastProvider, copyText, cx, describeProblem, useToast, TextLink } from '@ss/ui';
+import {
+	Badge,
+	Button,
+	ButtonLink,
+	Callout,
+	Card,
+	CheckboxGroup,
+	ChoicePicker,
+	CodeBlock,
+	Dialog,
+	EmptyState,
+	ErrorState,
+	FieldGrid,
+	FormError,
+	Icon,
+	IconBadge,
+	Input,
+	KeyValueList,
+	ListRow,
+	LocalTime,
+	PageHeader,
+	RowList,
+	SectionLayout,
+	SegmentedControl,
+	Section,
+	Skeleton,
+	StatusBadge,
+	Switch,
+	ToastProvider,
+	copyText,
+	cx,
+	describeProblem,
+	useToast,
+	TextLink,
+} from '@ss/ui';
 import { COUNTRY_CHOICES, COUNTRY_NAMES } from '../../modules/identity/core/countries.js';
 import { PROFILE, SETUP } from '../../texts/console.js';
 import { apiFetch, takeFragmentToken } from '../client.js';

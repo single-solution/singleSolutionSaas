@@ -5,7 +5,7 @@
 		"currency": {
 			"type": "string",
 			"title": "Currency",
-			"description": "The shop's currency: an ISO 4217 code (USD, EUR, JPY …). Every price is in it.",
+			"description": "The currency of every price in your shop, as a three-letter code such as USD, EUR or JPY.",
 			"default": "USD",
 			"maxLength": 3,
 			"x-ui": {
@@ -16,7 +16,7 @@
 		"productUrl": {
 			"type": "string",
 			"title": "Product page address",
-			"description": "Where a product's page is on your website: a path with {slug} (or {id}), and optionally {category} (its first category's slug), {categoryPath} (that category's slugs from the top) and {brand}; for example /{category}/{slug}.",
+			"description": "Where your product pages live on your website, for example /shop/{slug}. {slug} is the product's short name in the address; {id}, {category} and {brand} work too.",
 			"default": "/products/{slug}",
 			"maxLength": 200,
 			"x-ui": {
@@ -27,7 +27,7 @@
 		"categoryUrl": {
 			"type": "string",
 			"title": "Category page address",
-			"description": "Where a category's page is on your website: a path with {slug}, or {path} (its slugs from the top category), for example /categories/{slug}.",
+			"description": "Where your category pages live on your website, for example /categories/{slug}. {path} adds the parent categories.",
 			"default": "/categories/{slug}",
 			"maxLength": 200,
 			"x-ui": {
@@ -38,7 +38,7 @@
 		"variantQuery": {
 			"type": "string",
 			"title": "Variant address",
-			"description": "What is added to a product's address to open one variant: {grade} and {attributes} (the variant's slug=value pairs of the fields shown on the product page), for example grade={grade}&{attributes}. Empty: variants have no address of their own.",
+			"description": "What is added to a product page address to open one variant, for example grade={grade}&{attributes}. Empty: variants have no address of their own.",
 			"default": "",
 			"maxLength": 200,
 			"x-ui": {
@@ -62,7 +62,7 @@
 		"mediaBaseUrl": {
 			"type": "string",
 			"title": "Public address of your images",
-			"description": "The public https address your storage or CDN serves your files from (for example https://cdn.shop.example.com): images then have lasting addresses everywhere, browsers keep them, and pages load faster. Set it right after connecting storage (a public bucket or a CDN in front of it). Empty: the shop's widgets show images through short-lived signed links, and search engines, sitemaps and feeds get your website's media addresses (Media path).",
+			"description": "The public web address your storage or CDN serves your files from, for example https://cdn.shop.example.com. Set it right after you connect storage; empty, images load through short-lived links.",
 			"default": "",
 			"maxLength": 300,
 			"x-ui": {

@@ -4,10 +4,10 @@
 	"properties": {
 		"avatarUrl": {
 			"type": "string",
-			"title": "Avatar (https image URL)",
+			"title": "Avatar image address",
 			"default": "",
 			"maxLength": 500,
-			"description": "Leave empty for the first letter of the bot's name (the widget text chat.botName).",
+			"description": "The web address (https) of the picture shown for your bot. Empty: the first letter of the bot's name.",
 			"x-ui": {
 				"group": "Window",
 				"order": 13
@@ -16,6 +16,7 @@
 		"launcherPosition": {
 			"type": "string",
 			"title": "Launcher position",
+			"description": "Which bottom corner of the page the chat button sits in.",
 			"default": "bottom-right",
 			"enum": ["bottom-right", "bottom-left"],
 			"x-ui": {
@@ -43,7 +44,7 @@
 				"pattern": "^/",
 				"maxLength": 200
 			},
-			"description": "Path patterns, each starting with /: an exact path, * = any characters inside one segment, ** = any segments (for example /checkout/**).",
+			"description": "Pages where the chat is hidden: paths starting with /, where * stands for any characters in one part and ** for any number of parts (for example /checkout/**).",
 			"x-ui": {
 				"group": "Launcher",
 				"order": 3
@@ -52,6 +53,7 @@
 		"windowStyle": {
 			"type": "string",
 			"title": "Window style",
+			"description": "Floating: a window above the page. Side panel: a panel along the side of the page.",
 			"default": "floating",
 			"enum": ["floating", "side_panel"],
 			"x-ui": {
@@ -62,6 +64,7 @@
 		"fullScreenOnMobile": {
 			"type": "boolean",
 			"title": "Full screen on phones",
+			"description": "On phones the chat fills the whole screen when it is open.",
 			"default": true,
 			"x-ui": {
 				"group": "Window",
@@ -84,6 +87,7 @@
 		"showTimes": {
 			"type": "boolean",
 			"title": "Show times and day dividers",
+			"description": "Shows the time of each message and a divider between days.",
 			"default": false,
 			"x-ui": {
 				"group": "Window",

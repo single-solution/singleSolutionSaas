@@ -196,7 +196,9 @@ describe("Accounts's dashboard Overview", () => {
 
 /** An item of the open More menu. @param {string} label */
 const menuItem = (label) =>
-	/** @type {HTMLButtonElement} */ ([...document.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent === label));
+	/** @type {HTMLButtonElement} */ (
+		[...document.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent === label)
+	);
 
 describe('Settings → Custom fields (A6)', () => {
 	it('lists the fields with their type and who sees them, and saves a new order', async () => {
@@ -220,7 +222,9 @@ describe('Settings → Custom fields (A6)', () => {
 		expect(container.textContent).toContain(TEXTS.settings.fieldTypes.boolean);
 		expect(container.textContent).toContain(TEXTS.settings.fieldVisibility.staff);
 		// the row's own actions are in its More menu: the first field cannot go up
-		click(/** @type {HTMLButtonElement} */ (container.querySelector(`button[aria-label="${TEXTS.settings.field.more}: FIRST"]`)));
+		click(
+			/** @type {HTMLButtonElement} */ (container.querySelector(`button[aria-label="${TEXTS.settings.field.more}: FIRST"]`)),
+		);
 		expect(menuItem(TEXTS.settings.field.up).disabled).toBe(true);
 		click(menuItem(TEXTS.settings.field.down));
 		await settle();

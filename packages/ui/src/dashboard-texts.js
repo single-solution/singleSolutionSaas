@@ -137,6 +137,12 @@ export const DASHBOARD_TEXTS = Object.freeze({
 		removeTitle: 'Remove {name}?',
 		removeHelp: 'The saved value is deleted here. The features that need it stop working until it is connected again.',
 		none: 'No connections.',
+		/** The help under a connection a product says nothing about, by the kind of connection. */
+		hints: Object.freeze({
+			database:
+				'The address of your MongoDB database, a connection string that starts with mongodb+srv://. Your setup data is kept there.',
+			token: 'Paste the server token of that product for this website. You find it in the Portal under Install and tokens.',
+		}),
 	}),
 	developers: Object.freeze({
 		start: 'Start here',

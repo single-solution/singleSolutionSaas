@@ -164,7 +164,7 @@
 		"guests": {
 			"type": "string",
 			"title": "Guest checkout",
-			"description": "Off: shoppers sign in to order. On: anyone orders with a name and the contact Guests check out by asks for. Unless password: a phone or email address that belongs to a member with a password must sign in (checked with Accounts).",
+			"description": "Off: shoppers must sign in to order. On: anyone can order with a name and contact details. Unless password: someone whose phone or email already has a password account must sign in.",
 			"default": "off",
 			"enum": ["off", "on", "unless_password"],
 			"x-ui": {
@@ -506,8 +506,8 @@
 		},
 		"successUrl": {
 			"type": "string",
-			"title": "Success page",
-			"description": "Where shoppers return after placing or paying, with {number} and {id}. Empty = the page they ordered from with ss_order.",
+			"title": "Order placed page address",
+			"description": "Where shoppers land after they place or pay for an order; {number} and {id} fill in the order. Empty: they stay on the page they ordered from.",
 			"default": "",
 			"maxLength": 500,
 			"x-ui": {
@@ -517,8 +517,8 @@
 		},
 		"cancelUrl": {
 			"type": "string",
-			"title": "Payment canceled page",
-			"description": "Where shoppers return when they leave a payment, with {number} and {id}. Empty = as the success page.",
+			"title": "Payment canceled page address",
+			"description": "Where shoppers land when they leave a payment without paying; {number} and {id} fill in the order. Empty: the same page as above.",
 			"default": "",
 			"maxLength": 500,
 			"x-ui": {
@@ -575,7 +575,7 @@
 		"orderUrl": {
 			"type": "string",
 			"title": "Order page address",
-			"description": "For messages, with {number}, for example https://example.com/orders/{number}.",
+			"description": "The page where a shopper sees their order, linked from order messages, for example https://example.com/orders/{number}.",
 			"default": "",
 			"maxLength": 500,
 			"x-ui": {
@@ -586,7 +586,7 @@
 		"reviewUrl": {
 			"type": "string",
 			"title": "Review page address",
-			"description": "For messages, with {number}.",
+			"description": "The page where a shopper writes a review, linked from messages; {number} fills in the order number.",
 			"default": "",
 			"maxLength": 500,
 			"x-ui": {

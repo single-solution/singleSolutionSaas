@@ -26,7 +26,7 @@ export const TEXTS = dashboardTexts({
 		currency: {
 			title: 'Set your currency',
 			effect:
-				'Every price is in {currency}, the default, until you set your shop’s currency (an ISO 4217 code such as EUR or JPY) in Settings → Catalog. Set it before you add prices.',
+				'Every price is in {currency}, the default, until you set your shop’s currency (a three-letter code such as EUR or JPY) in Settings → Catalog. Set it before you add prices.',
 			step: 'Set your currency',
 			now: 'Now {currency}',
 			action: 'Set it',
@@ -34,7 +34,7 @@ export const TEXTS = dashboardTexts({
 		search: {
 			title: 'The Atlas Search index {index} is missing',
 			effect:
-				'Shop and Chat searches use basic search until the index is created on ss_ecommerce_products and Atlas shows it ready. Last try {time}.',
+				'Searches in the shop and in Chat use basic search until the index is created on ss_ecommerce_products and Atlas shows it ready. Last try {time}.',
 			message: 'Atlas Search: {message}',
 			step: 'Create the Atlas Search index {index}',
 			ready: 'Answered {time}',
@@ -89,7 +89,7 @@ export const TEXTS = dashboardTexts({
 			taxes: { title: 'Taxes', help: 'Tax rules per category or region, prices with or without tax.' },
 			orders: {
 				title: 'Orders and messages',
-				help: 'Order statuses and moves, order numbers and the messages shoppers get.',
+				help: 'Order steps, order numbers and the messages shoppers get.',
 			},
 			customers: {
 				title: 'Customers',
@@ -143,8 +143,8 @@ export const TEXTS = dashboardTexts({
 		count: '{count}/{max}',
 		removeId: 'Remove {id}',
 		orderFlow: {
-			title: 'Order statuses and moves',
-			help: 'Name your statuses, add your own and choose where an order may move next, who may move it and what each move does where its kind of step leaves a choice. The kinds of step keep stock, offers, points and money right.',
+			title: 'Order steps',
+			help: 'The steps an order goes through, from placed to delivered. Name each step, choose where an order can go next and who can move it. The kind of each step keeps stock, offers, points and money right.',
 			statuses: 'Statuses',
 			status: 'Status',
 			key: 'Key (lower-case letters, digits, _ or -)',
@@ -232,7 +232,7 @@ export const TEXTS = dashboardTexts({
 		},
 		paymentMethods: {
 			title: 'Payment methods',
-			help: 'The ways shoppers pay, in the order the cart lists them. Only the kind is fixed: paid online through Payments, paid first (a bank transfer, a wallet …), paid on delivery or paid at pickup.',
+			help: 'The ways shoppers can pay, in the order the cart shows them: paid online, paid first (such as a bank transfer), paid on delivery or paid at pickup.',
 			item: 'Payment method',
 			name: 'Name shoppers see',
 			key: 'Key (lower-case letters, digits or _)',
@@ -377,7 +377,7 @@ export const TEXTS = dashboardTexts({
 		},
 		zones: {
 			title: 'Delivery zones',
-			help: "A shopper's address goes to the most specific zone it is in: the longest postcode start, then a zone listing areas, cities, regions, countries; a zone listing nothing covers every address. Empty lists match any place; an address without a country is in your business.json country.",
+			help: 'Where you deliver. A zone covers places (countries, regions, cities, areas or postcode starts) and has the rates a shopper picks from; a zone that lists no places covers every address, and the most specific zone wins.',
 			item: 'Zone',
 			key: 'Key (lower-case letters, digits or _)',
 			name: 'Name',
@@ -801,7 +801,8 @@ export const TEXTS = dashboardTexts({
 		},
 		badHeaders: 'Extra headers must be a JSON object of text values.',
 		hints: {
-			database: 'A MongoDB connection string (mongodb+srv://…). Products, orders and customers live here.',
+			database:
+				'The address of your MongoDB database, a connection string that starts with mongodb+srv://. Your products, orders and customers are kept there.',
 			storage:
 				'An S3-compatible bucket (AWS S3, Cloudflare R2 and others) for product images, downloads and return photos. Allow PUT from your website and admin origins in its CORS (see Developers).',
 			accounts:

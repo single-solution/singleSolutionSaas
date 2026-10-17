@@ -7,7 +7,33 @@
  * @module
  */
 import { useMemo, useState } from 'react';
-import { Badge, BarChart, Button, ButtonLink, Card, Dialog, EmptyState, Form, FormError, Icon, Input, LinkTabs, PageHeader, SectionLayout, Select, Stat, StatGrid, Table, Toolbar, describeProblem, fieldErrors, formatCredits, isEmptySeries, useToast, TextLink } from '@ss/ui';
+import {
+	Badge,
+	BarChart,
+	Button,
+	ButtonLink,
+	Card,
+	Dialog,
+	EmptyState,
+	Form,
+	FormError,
+	Icon,
+	Input,
+	LinkTabs,
+	PageHeader,
+	SectionLayout,
+	Select,
+	Stat,
+	StatGrid,
+	Table,
+	Toolbar,
+	describeProblem,
+	fieldErrors,
+	formatCredits,
+	isEmptySeries,
+	useToast,
+	TextLink,
+} from '@ss/ui';
 import { BILLING, MORE } from '../../../texts/console.js';
 import { FilterForm } from '../../navigation.js';
 import { Link } from '../../link.js';
@@ -406,11 +432,13 @@ export function FinanceView(props) {
 										<LinkTabs
 											label={S.charges.title}
 											linkAs={Link}
-											items={/** @type {const} */ (['day', 'merchant', 'product']).map((by) => ({
-												href: `${adminRoutes.finance({ ...filter, by })}#billing-charges`,
-												label: BILLING.chargesBy[by],
-												current: filter.by === by,
-											}))}
+											items={
+												/** @type {const} */ (['day', 'merchant', 'product']).map((by) => ({
+													href: `${adminRoutes.finance({ ...filter, by })}#billing-charges`,
+													label: BILLING.chargesBy[by],
+													current: filter.by === by,
+												}))
+											}
 										/>
 									}
 								/>

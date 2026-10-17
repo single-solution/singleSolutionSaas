@@ -8,7 +8,20 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, Checkbox, EntryGroup, FieldGrid, Input, ItemSwitcher, Select, TextArea, describeProblem, SaveRow } from '@ss/ui';
+import {
+	Button,
+	Callout,
+	Card,
+	Checkbox,
+	EntryGroup,
+	FieldGrid,
+	Input,
+	ItemSwitcher,
+	Select,
+	TextArea,
+	describeProblem,
+	SaveRow,
+} from '@ss/ui';
 import { BANK_ROW_LABELS, METHOD_KINDS, METHOD_LIMITS, methodReady } from '../../core/methods.js';
 import { SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';

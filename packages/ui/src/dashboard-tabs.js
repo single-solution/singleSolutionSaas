@@ -493,7 +493,9 @@ export function ConnectionsTab({ websiteId, form, hint }) {
 					/** @param {unknown} value */
 					const save = (value) => act(call('PUT', `${base}/${item.name}`, { value }));
 					const own = form ? form(item, save) : null;
-					const help = hint ? hint(item.name) : null;
+					const help =
+						(hint ? hint(item.name) : null) ??
+						(item.kind === 'database' || item.kind === 'token' ? C.hints[item.kind] : null);
 					const tone = toneOf(item.status);
 					return {
 						id: `connection-${item.name}`,

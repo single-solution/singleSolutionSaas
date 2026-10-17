@@ -29,7 +29,7 @@ export const TEXTS = dashboardTexts({
 		consentWarning:
 			'Tags load without waiting for consent. Laws in many places (for example the EU’s GDPR and ePrivacy rules and the UK’s PECR) require a visitor’s consent before tracking; you are responsible for following the law where you operate.',
 		gtmMissing:
-			'Google Analytics 4 is left to Tag Manager, but no well-formed Tag Manager container id is set, so Google Analytics gets nothing.',
+			'Google Analytics 4 is left to Tag Manager, but no well-formed Tag Manager container ID is set, so Google Analytics gets nothing.',
 	},
 	lists: {
 		up: 'Move up',
@@ -105,7 +105,7 @@ export const TEXTS = dashboardTexts({
 			tiktok: { label: 'TikTok event name' },
 			adsLabel: {
 				label: 'Google Ads conversion label',
-				help: 'Sends this event as that conversion too (needs the Google Ads id).',
+				help: 'Sends this event as that conversion too (needs the Google Ads ID).',
 			},
 			content: { label: 'Content' },
 			check: { label: 'Check', help: 'The check’s id, for example title or image_alt.' },

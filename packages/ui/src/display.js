@@ -295,9 +295,7 @@ export function Callout({ tone = 'info', title, children, actions, className, li
 	const { box, icon } = CALLOUTS[tone];
 	const role = !live ? undefined : tone === 'danger' || tone === 'warning' ? 'alert' : 'status';
 	return (
-		<div
-			role={role}
-			className={cx('flex animate-ss-enter gap-2.5 rounded-card border px-3.5 py-2.5 text-sm', box, className)}>
+		<div role={role} className={cx('flex animate-ss-enter gap-2.5 rounded-card border px-3.5 py-2.5 text-sm', box, className)}>
 			<span className="mt-0.5 shrink-0">
 				<Icon name={icon} size={15} />
 			</span>

@@ -4,14 +4,15 @@
 	"properties": {
 		"bookingUrl": {
 			"type": "string",
-			"title": "Booking endpoint",
+			"title": "Booking address",
 			"default": "",
 			"maxLength": 500,
-			"description": "Your own https endpoint for free slots and bookings (requests in the docs)."
+			"description": "The web address on your own server that lists free times and takes bookings. The requests it receives are described in the docs."
 		},
 		"daysAhead": {
 			"type": "integer",
 			"title": "Offer slots up to (days ahead)",
+			"description": "How many days ahead the AI offers free times.",
 			"default": 14,
 			"minimum": 1,
 			"maximum": 90

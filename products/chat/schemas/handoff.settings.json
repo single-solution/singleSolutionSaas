@@ -65,6 +65,7 @@
 		"showButton": {
 			"type": "boolean",
 			"title": "Show the Talk to a person button",
+			"description": "Shows a button visitors can press to talk to a person.",
 			"default": true,
 			"x-ui": {
 				"group": "Triggers",

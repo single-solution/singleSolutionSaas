@@ -18,13 +18,13 @@
 		},
 		"recipients": {
 			"type": "array",
-			"title": "Alert recipients",
+			"title": "Who gets staff alerts",
 			"default": [],
 			"items": {
 				"type": "string",
 				"maxLength": 254
 			},
-			"description": "Email addresses and international phone numbers (+ or 00 first; phones get the channel below). Name a channel first to choose it for one person: sms:+15550100, whatsapp:+15550100, email:ops@example.com, or push:<Accounts user id> for staff push.",
+			"description": "Email addresses and phone numbers with a country code (+44 …). Start an entry with sms:, whatsapp:, email: or push: to pick the channel for one person (push: takes an Accounts user ID).",
 			"x-ui": {
 				"group": "Recipients",
 				"order": 11
@@ -35,7 +35,7 @@
 			"title": "Also alert Accounts staff who can",
 			"default": "",
 			"enum": ["", "orders.read", "orders.manage", "orders.refund", "returns.manage", "all_staff"],
-			"description": "Every unblocked Accounts user whose role has this Ecommerce permission; all_staff: every one who works with the alert's subject (orders.read for orders, returns.manage for claims). Both need the Accounts token. Empty = only the list above.",
+			"description": "Also alert Accounts staff whose role has this permission (orders.read for orders, returns.manage for claims), or all_staff for everyone who works with what the alert is about. Needs the Accounts connection. Empty: only the people listed above.",
 			"x-ui": {
 				"group": "Recipients",
 				"order": 12
@@ -77,10 +77,10 @@
 		},
 		"adminUrl": {
 			"type": "string",
-			"title": "Order page in your admin",
+			"title": "Order page address in your admin",
 			"default": "",
 			"maxLength": 500,
-			"description": "With {number} and {id}, for example https://admin.example.com/orders/{id}. Alerts link to it.",
+			"description": "The page of your admin where staff open an order, for example https://admin.example.com/orders/{id}. Alerts link to it; {number} and {id} fill in the order.",
 			"x-ui": {
 				"group": "Contents",
 				"order": 21

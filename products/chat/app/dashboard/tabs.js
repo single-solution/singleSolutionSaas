@@ -7,7 +7,16 @@
  * @module
  */
 import { Button, CodeBlock, Section } from '@ss/ui';
-import { ConnectionsTab, DefaultsTab, DevelopersTab, FeaturesTab, OverviewTab, useLoad, useSetupSteps, wantsSettings } from '@ss/ui/dashboard';
+import {
+	ConnectionsTab,
+	DefaultsTab,
+	DevelopersTab,
+	FeaturesTab,
+	OverviewTab,
+	useLoad,
+	useSetupSteps,
+	wantsSettings,
+} from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
 import { AiForm, FORMS, StorageForm } from './forms.js';

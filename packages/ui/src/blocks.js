@@ -214,7 +214,16 @@ export function SaveBar({
  *   cancelLabel?: string, children?: ReactNode, className?: string }} props `disabled`: save is off even though
  *   something changed (an entry the server would refuse)
  */
-export function SaveRow({ dirty, onSave, onCancel, disabled = false, saveLabel = 'Save', cancelLabel = 'Cancel', children, className }) {
+export function SaveRow({
+	dirty,
+	onSave,
+	onCancel,
+	disabled = false,
+	saveLabel = 'Save',
+	cancelLabel = 'Cancel',
+	children,
+	className,
+}) {
 	return (
 		<div className={cx('flex flex-wrap items-center gap-2', className)}>
 			{children}
@@ -364,7 +373,9 @@ export function SectionNav({ items, active, onSelect, label = 'Sections', classN
 					</span>
 				) : null}
 				<span className="min-w-0 flex-1 truncate">{item.label}</span>
-				{item.badge ? <span className="ml-auto shrink-0 text-micro font-medium text-muted tabular-nums">{item.badge}</span> : null}
+				{item.badge ? (
+					<span className="ml-auto shrink-0 text-micro font-medium text-muted tabular-nums">{item.badge}</span>
+				) : null}
 				{!child && item.children?.length ? (
 					<span aria-hidden="true" className={cx('ss-motion text-subtle', (holds || needle !== '') && 'rotate-180')}>
 						<Icon name="chevronDown" size={13} />
@@ -539,7 +550,10 @@ export function PillTabs({ tabs, active, onSelect, label, className, idPrefix = 
 		<div
 			role="tablist"
 			aria-label={label}
-			className={cx('ss-scroll flex w-fit max-w-full min-w-0 gap-0.5 rounded-control bg-surface-2 p-0.5 ring-1 ring-line-soft ring-inset', className)}>
+			className={cx(
+				'ss-scroll flex w-fit max-w-full min-w-0 gap-0.5 rounded-control bg-surface-2 p-0.5 ring-1 ring-line-soft ring-inset',
+				className,
+			)}>
 			{tabs.map((tab) => {
 				const on = tab.id === active;
 				return (
@@ -574,7 +588,10 @@ export function LinkTabs({ items, label, linkAs, className }) {
 	return (
 		<nav
 			aria-label={label}
-			className={cx('ss-scroll flex w-fit max-w-full min-w-0 gap-0.5 rounded-control bg-surface-2 p-0.5 ring-1 ring-line-soft ring-inset', className)}>
+			className={cx(
+				'ss-scroll flex w-fit max-w-full min-w-0 gap-0.5 rounded-control bg-surface-2 p-0.5 ring-1 ring-line-soft ring-inset',
+				className,
+			)}>
 			{items.map((item) => (
 				<LinkTag
 					key={item.href}

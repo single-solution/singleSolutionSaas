@@ -4,10 +4,10 @@
 	"properties": {
 		"signInUrl": {
 			"type": "string",
-			"title": "Sign-in page URL",
+			"title": "Sign-in page address",
 			"default": "",
 			"maxLength": 500,
-			"description": "Where Sign in to continue links to (an https address on your website); the visitor comes back to the same page."
+			"description": "The page of your website (https) where visitors are sent when they must sign in to continue; they come back to the chat afterward."
 		},
 		"claimByPhone": {
 			"type": "boolean",

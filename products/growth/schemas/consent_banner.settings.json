@@ -12,7 +12,7 @@
 		"privacyUrl": {
 			"type": "string",
 			"title": "Privacy policy link",
-			"description": "An https address or a path on your website, for example /privacy.",
+			"description": "Where your privacy policy is: a web address or a path on your website, for example /privacy.",
 			"default": "",
 			"maxLength": 2048
 		},

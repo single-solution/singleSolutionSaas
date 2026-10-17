@@ -5,6 +5,7 @@
 		"perHour": {
 			"type": "integer",
 			"title": "Messages per recipient per hour",
+			"description": "The most messages one recipient gets in an hour (1–100).",
 			"default": 5,
 			"minimum": 1,
 			"maximum": 100
@@ -12,6 +13,7 @@
 		"perDay": {
 			"type": "integer",
 			"title": "Messages per recipient per day",
+			"description": "The most messages one recipient gets in a day (1–1000).",
 			"default": 20,
 			"minimum": 1,
 			"maximum": 1000

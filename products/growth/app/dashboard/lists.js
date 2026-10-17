@@ -7,7 +7,21 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, Checkbox, CheckboxGroup, EntryGroup, FieldGrid, Input, ItemSwitcher, Select, TextArea, describeProblem, SaveRow } from '@ss/ui';
+import {
+	Button,
+	Callout,
+	Card,
+	Checkbox,
+	CheckboxGroup,
+	EntryGroup,
+	FieldGrid,
+	Input,
+	ItemSwitcher,
+	Select,
+	TextArea,
+	describeProblem,
+	SaveRow,
+} from '@ss/ui';
 import { SaveOutcome, call, useLoad } from '@ss/ui/dashboard';
 import { LISTS } from '../../core/lists.js';
 import { ONLINE_STORE_PRESET } from '../../core/seo.js';
@@ -156,14 +170,14 @@ function Entries({ fields, entries, at, errors, max, label, onChange, one = fals
 	/** @param {Entry} entry @param {number} index */
 	const entryView = (entry, index) => (
 		<EntryGroup
- key={index}
- compact
- title={label(entry, index)}
- first={index === 0}
- last={index === entries.length - 1}
- texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
- onMove={(step) => onChange(moved(entries, index, step))}
- onRemove={() => onChange(entries.filter((_, other) => other !== index))}>
+			key={index}
+			compact
+			title={label(entry, index)}
+			first={index === 0}
+			last={index === entries.length - 1}
+			texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
+			onMove={(step) => onChange(moved(entries, index, step))}
+			onRemove={() => onChange(entries.filter((_, other) => other !== index))}>
 			<FieldGrid>
 				{Object.entries(fields).map(([name, field]) =>
 					field.type === 'rows' ? (

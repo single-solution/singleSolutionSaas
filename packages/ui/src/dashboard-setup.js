@@ -51,7 +51,11 @@ import { settingSectionOf } from './dashboard-settings.js';
 
 /** Whether a saved value holds something: text, a list or any number or switch. @param {unknown} value */
 export const isFilled = (value) =>
-	typeof value === 'string' ? value.trim() !== '' : Array.isArray(value) ? value.length > 0 : value !== null && value !== undefined;
+	typeof value === 'string'
+		? value.trim() !== ''
+		: Array.isArray(value)
+			? value.length > 0
+			: value !== null && value !== undefined;
 
 /**
  * Whether any requirement that applies reads a setting (a product that loads the settings itself loads them only then).
@@ -62,7 +66,8 @@ export const wantsSettings = (overview, requirements) =>
 	overview?.ok === true &&
 	requirements.some(
 		(requirement) =>
-			requirement.setting !== undefined && (!requirement.when || requirement.when.some((key) => overview.data.featuresOn.includes(key))),
+			requirement.setting !== undefined &&
+			(!requirement.when || requirement.when.some((key) => overview.data.featuresOn.includes(key))),
 	);
 
 /**

@@ -7,7 +7,19 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Card, EntryGroup, FieldGrid, Icon, IconButton, Input, ItemSwitcher, Select, TextArea, SaveRow as SharedSaveRow } from '@ss/ui';
+import {
+	Button,
+	Card,
+	EntryGroup,
+	FieldGrid,
+	Icon,
+	IconButton,
+	Input,
+	ItemSwitcher,
+	Select,
+	TextArea,
+	SaveRow as SharedSaveRow,
+} from '@ss/ui';
 import { COURIER_CONNECTIONS } from '../../core/couriers.js';
 import { currencyDigits, fromDecimal, toDecimal } from '@ss/contracts/format';
 import { UNIT_STATE_LIMITS } from '../../core/unit-states.js';
@@ -97,7 +109,9 @@ export function IdTags({ label, help, values, max, none, onChange }) {
 			{values.length > 0 ? (
 				<ul className="flex flex-wrap gap-2">
 					{values.map((id) => (
-						<li key={id} className="inline-flex items-center gap-1 rounded-md border border-line-soft bg-surface-2 py-0.5 pl-2 pr-1 text-xs">
+						<li
+							key={id}
+							className="inline-flex items-center gap-1 rounded-md border border-line-soft bg-surface-2 py-0.5 pl-2 pr-1 text-xs">
 							<code className="break-all">{id}</code>
 							<button
 								type="button"

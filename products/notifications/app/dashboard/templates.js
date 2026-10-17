@@ -8,7 +8,27 @@
  * @module
  */
 import { useState } from 'react';
-import { Badge, Button, Callout, Card, Checkbox, ConfirmDialog, Dialog, EmptyState, EntryGroup, FieldGrid, Form, Input, Section, Select, Skeleton, TextArea, describeProblem, ListRow, RowList } from '@ss/ui';
+import {
+	Badge,
+	Button,
+	Callout,
+	Card,
+	Checkbox,
+	ConfirmDialog,
+	Dialog,
+	EmptyState,
+	EntryGroup,
+	FieldGrid,
+	Form,
+	Input,
+	Section,
+	Select,
+	Skeleton,
+	TextArea,
+	describeProblem,
+	ListRow,
+	RowList,
+} from '@ss/ui';
 import { LONG_VALUE_LIMIT, VALUE_LIMIT, isTitled } from '@ss/contracts/templates';
 import { CHANNELS } from '../../core/channels.js';
 import { MAX_BUTTONS, fillText, templateRows, valueNamesOf } from '../../core/templates.js';

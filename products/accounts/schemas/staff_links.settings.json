@@ -21,8 +21,8 @@
 		},
 		"setupPageUrl": {
 			"type": "string",
-			"title": "Setup page",
-			"description": "Your page that takes the setup link, for example https://www.example.com/account/setup/{code}. Empty: your home page.",
+			"title": "Setup page address",
+			"description": "The page of your website where staff finish their setup, for example https://www.example.com/account/setup/{code}. Empty: your home page.",
 			"default": "",
 			"maxLength": 2048
 		}

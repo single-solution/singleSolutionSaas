@@ -29,8 +29,8 @@
 		},
 		"invitePageUrl": {
 			"type": "string",
-			"title": "Invite page",
-			"description": "A page of your website with the sign-in widget; invites link to it.",
+			"title": "Invite page address",
+			"description": "The page of your website that has the sign-in widget. Invitation emails link to it.",
 			"default": "",
 			"maxLength": 2048,
 			"x-ui": {

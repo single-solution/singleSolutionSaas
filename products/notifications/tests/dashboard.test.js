@@ -295,7 +295,9 @@ describe('Overview (PLAN 0.6 "Overviews talk")', () => {
 		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Merchant');
 		expect(needs(container)).toContain('Outgoing webhooks is on, but no address is added yet');
 		click(byText(container, 'Add an address', 'button'));
-		expect(container.textContent).toContain('Outgoing webhooks send nothing until at least one address on your server is added.');
+		expect(container.textContent).toContain(
+			'Outgoing webhooks send nothing until at least one address on your server is added.',
+		);
 		click(byText(container, 'Add address', 'button'));
 		expect(tab.open.mock.calls).toEqual([
 			['settings', 'webhooks'],

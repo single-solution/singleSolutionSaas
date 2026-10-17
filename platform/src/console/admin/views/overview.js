@@ -11,7 +11,28 @@
  * @module
  */
 import { useState } from 'react';
-import { ActionMenu, Badge, BarChart, Button, ButtonLink, Card, EmptyState, Icon, IconBadge, NeedsList, PageHeader, SectionLayout, SetupChecklist, Stat, StatGrid, describeProblem, formatCredits, initialsOf, useToast, TextLink } from '@ss/ui';
+import {
+	ActionMenu,
+	Badge,
+	BarChart,
+	Button,
+	ButtonLink,
+	Card,
+	EmptyState,
+	Icon,
+	IconBadge,
+	NeedsList,
+	PageHeader,
+	SectionLayout,
+	SetupChecklist,
+	Stat,
+	StatGrid,
+	describeProblem,
+	formatCredits,
+	initialsOf,
+	useToast,
+	TextLink,
+} from '@ss/ui';
 import { ADMIN, BILLING, MORE, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';

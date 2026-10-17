@@ -10,7 +10,33 @@
  * @module
  */
 import { useEffect, useState } from 'react';
-import { ActionMenu, Button, Callout, Card, CodeBlock, Dialog, EmptyState, Form, FormError, Icon, IconBadge, Input, ListRow, RowList, Skeleton, SoftBreaks, TypedConfirmDialog, copyText, cx, describeProblem, fieldErrors, formatCredits, problemCode, useToast, TextLink } from '@ss/ui';
+import {
+	ActionMenu,
+	Button,
+	Callout,
+	Card,
+	CodeBlock,
+	Dialog,
+	EmptyState,
+	Form,
+	FormError,
+	Icon,
+	IconBadge,
+	Input,
+	ListRow,
+	RowList,
+	Skeleton,
+	SoftBreaks,
+	TypedConfirmDialog,
+	copyText,
+	cx,
+	describeProblem,
+	fieldErrors,
+	formatCredits,
+	problemCode,
+	useToast,
+	TextLink,
+} from '@ss/ui';
 import { widgetScriptTag } from '@ss/contracts/text';
 import { BILLING, MORE, WEBSITE } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
@@ -200,7 +226,9 @@ export function WebsiteCard({ website, cards: initial, can, launch, addable, onC
 	// domain, and Remove website last (danger) for those who remove websites
 	/** @type {import('@ss/ui').MenuItem[]} */
 	const more = [
-		...(can.tokens && setupHref ? [{ label: WEBSITE.setup, icon: /** @type {const} */ ('layers'), onSelect: () => nav.go(setupHref) }] : []),
+		...(can.tokens && setupHref
+			? [{ label: WEBSITE.setup, icon: /** @type {const} */ ('layers'), onSelect: () => nav.go(setupHref) }]
+			: []),
 		...(can.tokens ? [{ label: WEBSITE.tokens, icon: /** @type {const} */ ('key'), onSelect: () => setDialog('tokens') }] : []),
 		{ label: WEBSITE.usage, icon: 'trendingUp', onSelect: () => setDialog('usage') },
 		{
@@ -264,11 +292,7 @@ export function WebsiteCard({ website, cards: initial, can, launch, addable, onC
 				</>
 			}>
 			{cards.length === 0 ? (
-				<EmptyState
-					compact
-					icon="box"
-					title={can.manage ? WEBSITE.noProducts : WEBSITE.noProductsMerchant}
-				/>
+				<EmptyState compact icon="box" title={can.manage ? WEBSITE.noProducts : WEBSITE.noProductsMerchant} />
 			) : (
 				<RowList inset label={WEBSITE.productsOf(website.domain)}>
 					{cards.map((card) => (
@@ -281,7 +305,8 @@ export function WebsiteCard({ website, cards: initial, can, launch, addable, onC
 							meta={
 								<>
 									{card.featuresOn.length > 0 ? `${WEBSITE.featuresOn(card.featuresOn.length)} · ` : ''}
-									{BILLING.dailyCost}: <span className="font-medium tabular-nums text-fg">{formatCredits(card.dailyCost)}</span>
+									{BILLING.dailyCost}:{' '}
+									<span className="font-medium tabular-nums text-fg">{formatCredits(card.dailyCost)}</span>
 								</>
 							}
 							action={

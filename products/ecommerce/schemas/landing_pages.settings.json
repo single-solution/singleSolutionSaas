@@ -125,8 +125,8 @@
 		},
 		"attributeUrl": {
 			"type": "string",
-			"title": "Attribute glossary address",
-			"description": "Where an attribute's glossary page is on your website, with {slug} and {category} (the category's slug), for example /glossary/{slug} or /attributes/{category}/{slug}. With {category}, an attribute defined for one category has its page there, one for every category a page in each category it names. Set, every active attribute's page is listed in the sitemap. Empty: there are no attribute glossary pages.",
+			"title": "Attribute page address",
+			"description": "Where the page of one attribute (a color, a size …) lives on your website, for example /glossary/{slug}. Empty: no attribute pages.",
 			"default": "",
 			"maxLength": 200,
 			"x-ui": {
@@ -161,8 +161,8 @@
 		},
 		"gradeUrl": {
 			"type": "string",
-			"title": "Grade glossary address",
-			"description": "Where a grade's glossary page is on your website, with {key} and {category} (the category's slug), for example /grades/{key} or /grades/{category}/{key}. With {category}, a grade defined for one category has its page there, one for every category a page in each category it names. Empty: there are no grade glossary pages (they are left out of the sitemap).",
+			"title": "Condition grade page address",
+			"description": "Where the page of one condition grade lives on your website, for example /grades/{key}. Empty: no grade pages.",
 			"default": "",
 			"maxLength": 200,
 			"x-ui": {

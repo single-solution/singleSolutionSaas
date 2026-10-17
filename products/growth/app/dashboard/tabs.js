@@ -76,7 +76,9 @@ const useGrowthOverview = (overview, { websiteId, open }) => {
 							label: O.scriptsStep,
 							why: O.scriptsWhy,
 							actionLabel: O.scriptsAction,
-							done: tagsReady(['custom_scripts'], values, categories.answer?.ok ? categories.answer.data.value : []).ready === 1,
+							done:
+								tagsReady(['custom_scripts'], values, categories.answer?.ok ? categories.answer.data.value : []).ready ===
+								1,
 							onSelect: () => open('settings', 'tags.consent_categories'),
 						},
 					]

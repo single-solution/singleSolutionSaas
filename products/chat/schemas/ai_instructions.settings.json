@@ -4,7 +4,8 @@
 	"properties": {
 		"instructions": {
 			"type": "string",
-			"title": "AI instructions",
+			"title": "What the AI should know about your business",
+			"description": "Tell the AI about your business: what you sell, how you want it to sound and anything it must never say. Every answer follows it.",
 			"default": "",
 			"maxLength": 32000,
 			"x-ui": {
