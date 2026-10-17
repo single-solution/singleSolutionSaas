@@ -506,7 +506,7 @@ export const createProduct = (options) => {
 			texts: settings.texts,
 			theme: async (/** @type {string} */ websiteId) => (await settings.themeOf(websiteId)).theme,
 		}),
-		connections: Object.freeze({ value: connections.value, storage: connections.storage }),
+		connections: Object.freeze({ value: connections.value, storage: connections.storage, hasLink: connections.hasLink }),
 		callProduct: connections.callProduct,
 		/** Another product's address (the Portal's directory, cached 5 minutes); throws when it cannot be found. */
 		addressOf: connections.addressOf,

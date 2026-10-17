@@ -916,6 +916,71 @@ export const staffCaller = ({ accounts, websiteId, paste }) => {
 	};
 };
 
+/**
+ * What a merchant does in the Portal for a test product, as the product then gets it: the one database of the website
+ * (the product's own database is the one the connection string names, so a test can read it), the storage, and the link
+ * to another product (with every scope the product's manifest needs of it). The Portal tells the product, which fetches
+ * it right after answering; this waits until it holds the value. Anything else (a provider key) is the product's own and
+ * is left to the caller (`null`).
+ * @param {{ portal: Awaited<ReturnType<typeof createFakePortal>>, websiteId: string, manifest: Record<string, any>,
+ *   product: { connections: { value: (websiteId: string, name: string) => Promise<unknown> } },
+ *   drain?: () => Promise<unknown>, view?: (name: string) => Promise<unknown> }} input `drain`: runs the work the product did
+ *   after answering (the fetch); `view`: how the product shows a connection (its dashboard)
+ * @returns {((name: string, value: unknown) => Promise<unknown | null>) & { tokens: Map<string, string>,
+ *   disconnect: (name: string) => Promise<void> }} the link keys given so far are in `tokens` (by the other product's id);
+ *   `disconnect` ends a link or removes the storage in the Portal
+ */
+export const portalConnector = ({ portal, websiteId, manifest, product, drain, view }) => {
+	/** @type {Map<string, string[]>} */
+	const scopes = new Map();
+	for (const need of manifest.links?.needs ?? [])
+		scopes.set(need.product, [...new Set([...(scopes.get(need.product) ?? []), ...need.scopes])]);
+	/**
+	 * @param {() => Promise<boolean>} held
+	 */
+	const until = async (held) => {
+		for (let waited = 0; waited < 5000; waited += 5) {
+			await drain?.();
+			if (await held()) return;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		throw new Error('the product did not take what the Portal delivered');
+	};
+	/** @type {Map<string, string>} */
+	const tokens = new Map();
+	/** @type {(name: string, value: unknown) => Promise<unknown | null>} */
+	const connect = async (name, value) => {
+		if (name === 'database') {
+			const uri = String(value);
+			await portal.saveConnections(websiteId, { database: uri, dbNames: { [manifest.id]: new URL(uri).pathname.slice(1) } });
+			await until(async () => (await product.connections.value(websiteId, 'database')) === uri);
+		} else if (name === 'storage') {
+			await portal.saveConnections(websiteId, { storage: /** @type {Record<string, unknown>} */ (value) });
+			await until(async () => JSON.stringify(await product.connections.value(websiteId, 'storage')) === JSON.stringify(value));
+		} else if (scopes.has(name)) {
+			const { token } = await portal.link(websiteId, manifest.id, name, /** @type {string[]} */ (scopes.get(name)));
+			tokens.set(name, token);
+			await until(async () => (await product.connections.value(websiteId, `link_${name.replace(/-/g, '_')}`)) === token);
+			return view ? view(`link_${name.replace(/-/g, '_')}`) : { name, set: true };
+		} else return null;
+		return view ? view(name) : { name, set: true };
+	};
+	return Object.assign(connect, {
+		tokens,
+		/** @param {string} name */
+		disconnect: async (name) => {
+			if (name === 'storage') {
+				await portal.saveConnections(websiteId, { storage: null });
+				await until(async () => (await product.connections.value(websiteId, 'storage')) === null);
+			} else if (scopes.has(name)) {
+				await portal.unlink(websiteId, manifest.id, name);
+				tokens.delete(name);
+				await until(async () => (await product.connections.value(websiteId, `link_${name.replace(/-/g, '_')}`)) === null);
+			}
+		},
+	});
+};
+
 /** @typedef {import('./api.js').ApiDescription} ApiDescription */
 /** @typedef {import('./api.js').ApiEntry} ApiEntry */
 

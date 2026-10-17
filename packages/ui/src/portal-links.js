@@ -12,6 +12,8 @@ export const WEBSITE_SECTION_NAMES = Object.freeze({
 	region: 'Region and format',
 	pages: 'Domains, pages and legal',
 	team: 'Team and alerts',
+	connections: 'Data and files',
+	links: 'Between your products',
 });
 
 /**

@@ -301,8 +301,8 @@ export function RecentChanges({ items, intro, limit }) {
  * @property {{ status: string, graceEndsAt: string | null }} status the product's status on this website
  * @property {string[]} featuresOn
  * @property {number} todayMillicredits credits charged so far today (UTC)
- * @property {{ connections: Array<{ name: string, label: string, neededBy: string[], status: string,
- *   message?: string }>, widget: { installed: boolean, lastSeenAt: string | null } | null,
+ * @property {{ connections: Array<{ name: string, label: string, kind?: string, managed?: boolean, neededBy: string[],
+ *   status: string, message?: string }>, widget: { installed: boolean, lastSeenAt: string | null } | null,
  *   website: { version: number, requires: string[], missing: string[] } }} checklist only what the switched-on features
  *   need; `website`: the version of the website's settings in the Portal (0: nothing saved yet), the values of them this
  *   product needs and the ones still empty
@@ -481,7 +481,14 @@ export function ProductOverview({
 			tone: failed ? 'danger' : 'warning',
 			title: fillText(words.title, { label: connection.label }),
 			effect: failed && connection.message ? `${connection.message} ${effect}` : effect,
-			action: go(words.action, 'connections'),
+			// the database, the storage and the links belong to the Portal: it is set (or fixed) there
+			action: connection.managed ? (
+				<ButtonLink size="sm" href={settingsAt(connection.kind === 'link' ? 'links' : 'connections')}>
+					{N.website.action}
+				</ButtonLink>
+			) : (
+				go(words.action, 'connections')
+			),
 		});
 	}
 	/** @type {Need[]} */
@@ -559,9 +566,15 @@ export function ProductOverview({
 				connection.status === 'test_failed' && connection.message
 					? connection.message
 					: fillText(S.connectionWhy, { features: featureList(connection.neededBy) }),
-			actionLabel: connection.status === 'test_failed' ? S.connectionFix : S.connectionAction,
+			actionLabel: connection.managed
+				? S.websiteAction
+				: connection.status === 'test_failed'
+					? S.connectionFix
+					: S.connectionAction,
 			done: connection.status === 'connected',
-			onSelect: () => open('connections', `connection-${connection.name}`),
+			...(connection.managed
+				? { href: settingsAt(connection.kind === 'link' ? 'links' : 'connections') }
+				: { onSelect: () => open('connections', `connection-${connection.name}`) }),
 		})),
 		...steps,
 		...(widget

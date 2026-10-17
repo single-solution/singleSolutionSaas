@@ -13,7 +13,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button } from './Button.js';
+import { Button, ButtonLink } from './Button.js';
 import { CodeBlock } from './CodeBlock.js';
 import { Badge, Callout, Card, EmptyState, ManagedNote, StatusPill, TextLink } from './display.js';
 import { SaveBar, SectionLayout, SettingList, SettingsCard, ViewTitle } from './blocks.js';
@@ -56,7 +56,7 @@ import { websiteSettingsUrl } from './portal-links.js';
 /**
  * One connection of a website (`GET …/connections`).
  * @typedef {{ name: string, label: string, kind?: string, neededBy: string[], status: string, message?: string,
- *   last4?: string | null }} Connection
+ *   managed?: boolean, last4?: string | null }} Connection `managed`: the Portal owns it (the database, the storage, the links)
  */
 /**
  * What a product adds to its Overview: its own "Needs you" items, setup steps, number tiles and sections.
@@ -116,7 +116,7 @@ export function OverviewTab(props) {
  * features picked (shown above the list and in the confirmation).
  * @param {TabProps & { warnings?: (on: string[]) => string[] }} props
  */
-export function FeaturesTab({ websiteId, who, support, warnings, open, brand }) {
+export function FeaturesTab({ websiteId, merchantId, who, portal, support, warnings, open, brand }) {
 	const { texts, namesOf, byCategory } = useDashboard();
 	const locale = useDisplayLocale();
 	const F = texts.features;
@@ -223,17 +223,35 @@ export function FeaturesTab({ websiteId, who, support, warnings, open, brand }) 
 													}>
 													{feature.on && broken.length > 0 ? (
 														<div className="flex flex-wrap gap-2">
-															{broken.map((link) => (
-																<Button
-																	key={link.name}
-																	size="sm"
-																	variant="secondary"
-																	title={fill(F.notWorking, { connection: link.label })}
-																	// the Connections tab opens on this connection
-																	onClick={() => open?.('connections', `connection-${link.name}`)}>
-																	{`${F.connect} ${link.label}`}
-																</Button>
-															))}
+															{broken.map((link) =>
+																link.managed ? (
+																	// the database, the storage and the links are set in the Portal
+																	<ButtonLink
+																		key={link.name}
+																		size="sm"
+																		variant="secondary"
+																		title={fill(F.notWorking, { connection: link.label })}
+																		href={websiteSettingsUrl({
+																			portal,
+																			admin,
+																			websiteId,
+																			merchantId,
+																			section: link.kind === 'link' ? 'links' : 'connections',
+																		})}>
+																		{`${F.connect} ${link.label}`}
+																	</ButtonLink>
+																) : (
+																	<Button
+																		key={link.name}
+																		size="sm"
+																		variant="secondary"
+																		title={fill(F.notWorking, { connection: link.label })}
+																		// the Connections tab opens on this connection
+																		onClick={() => open?.('connections', `connection-${link.name}`)}>
+																		{`${F.connect} ${link.label}`}
+																	</Button>
+																),
+															)}
 														</div>
 													) : null}
 												</ListRow>
@@ -436,10 +454,12 @@ function TextsPanel({ items, saveUrl, resetBody, savedSource, reload }) {
  * Connections: the inner sidebar lists the connections with their state; the view is one connection with its status, a
  * value to save (and test), Test, and Remove in its ⋯ menu once something is saved (after a confirmation). `form`
  * gives the product's own form for a connection (null: the one value field); `hint` its help line under the status.
+ * A connection the Portal owns (`managed`: the database, the storage and the links to other products) has no form and no
+ * Remove here: a note says where it is set, with a link to the Portal; the database and the storage can be tested.
  * @param {TabProps & { form?: (item: Connection, save: (value: unknown) => Promise<void>) => ReactNode,
  *   hint?: (name: string) => ReactNode }} props
  */
-export function ConnectionsTab({ websiteId, form, hint }) {
+export function ConnectionsTab({ websiteId, merchantId, who, portal, form, hint }) {
 	const { texts, namesOf } = useDashboard();
 	const C = texts.connections;
 	const base = `/v1/dashboard/websites/${websiteId}/connections`;
@@ -460,10 +480,9 @@ export function ConnectionsTab({ websiteId, form, hint }) {
 				const sections = connections.map((item) => {
 					/** @param {unknown} value */
 					const save = (value) => act(call('PUT', `${base}/${item.name}`, { value }));
-					const own = form ? form(item, save) : null;
-					const help =
-						(hint ? hint(item.name) : null) ??
-						(item.kind === 'database' || item.kind === 'token' ? C.hints[item.kind] : null);
+					const managed = item.managed === true;
+					const own = form && !managed ? form(item, save) : null;
+					const help = hint ? hint(item.name) : null;
 					const tone = toneOf(item.status);
 					return {
 						id: `connection-${item.name}`,
@@ -494,37 +513,57 @@ export function ConnectionsTab({ websiteId, form, hint }) {
 										{item.last4 ? <code>••••{item.last4}</code> : null}
 										{item.message ? <span className="text-muted">{item.message}</span> : null}
 									</p>
-									{help ? <p className="mt-2 text-help text-muted">{help}</p> : null}
-									{own ?? (
-										<div className="mt-3 flex flex-wrap items-end gap-2">
-											<Input
-												fieldClassName="min-w-0 flex-1 basis-64"
-												label={item.kind === 'token' ? C.token : C.value}
-												type="password"
-												autoComplete="off"
-												value={values[item.name] ?? ''}
-												onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
-											/>
+									{managed ? (
+										<ManagedNote
+											className="mt-3"
+											title={texts.managed.title}
+											href={websiteSettingsUrl({
+												portal,
+												admin: who.kind === 'admin',
+												websiteId,
+												merchantId,
+												section: item.kind === 'link' ? 'links' : 'connections',
+											})}
+											linkLabel={C.managed.open}>
+											{C.managed[/** @type {'database'} */ (item.kind ?? 'database')] ?? C.managed.link}
+										</ManagedNote>
+									) : help ? (
+										<p className="mt-2 text-help text-muted">{help}</p>
+									) : null}
+									{managed
+										? null
+										: (own ?? (
+												<div className="mt-3 flex flex-wrap items-end gap-2">
+													<Input
+														fieldClassName="min-w-0 flex-1 basis-64"
+														label={C.value}
+														type="password"
+														autoComplete="off"
+														value={values[item.name] ?? ''}
+														onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
+													/>
+													<Button
+														size="sm"
+														disabled={!values[item.name]?.trim()}
+														onClick={() => {
+															const done = save(values[item.name]?.trim());
+															setValues({ ...values, [item.name]: '' });
+															return done;
+														}}>
+														{C.save}
+													</Button>
+												</div>
+											))}
+									<div className="mt-3 flex flex-wrap gap-2">
+										{item.kind === 'link' ? null : (
 											<Button
 												size="sm"
-												disabled={!values[item.name]?.trim()}
-												onClick={() => {
-													const done = save(values[item.name]?.trim());
-													setValues({ ...values, [item.name]: '' });
-													return done;
-												}}>
-												{C.save}
+												variant="secondary"
+												onClick={() => act(call('POST', `${base}/${item.name}/test`))}>
+												{C.test}
 											</Button>
-										</div>
-									)}
-									<div className="mt-3 flex flex-wrap gap-2">
-										<Button
-											size="sm"
-											variant="secondary"
-											onClick={() => act(call('POST', `${base}/${item.name}/test`))}>
-											{C.test}
-										</Button>
-										{item.status === 'not_connected' ? null : (
+										)}
+										{item.status === 'not_connected' || managed ? null : (
 											<ActionMenu
 												label={fill(C.more, { name: item.label })}
 												items={[

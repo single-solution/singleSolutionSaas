@@ -37,6 +37,7 @@ import { currentFeatures } from './connection.js';
 import { activityFilter, activityPage, activityView } from './activity.js';
 import { countHandlers } from './counts.js';
 import { defineRoute } from './http/routes.js';
+import { KIT_LINK_SCOPES } from './link-scopes.js';
 import { noContent, ok, paginate, problem } from './http/results.js';
 
 /** @typedef {import('./http/handler.js').RequestContext} RequestContext */
@@ -269,6 +270,12 @@ export const createServerApi = (kit, lists) => {
 			method: 'GET',
 			path: '/v1/settings',
 			runtime: true,
+			// Ecommerce reads Growth's tag ids through a link (Growth offers `settings.read`)
+			...(kit.manifest.links?.offers?.some(
+				(/** @type {{ scope: string }} */ offer) => offer.scope === KIT_LINK_SCOPES.settingsRead,
+			)
+				? { scope: KIT_LINK_SCOPES.settingsRead }
+				: {}),
 			handler: async (ctx) => {
 				const [{ on }, values] = await Promise.all([
 					kit.reports.switches(website(ctx)),

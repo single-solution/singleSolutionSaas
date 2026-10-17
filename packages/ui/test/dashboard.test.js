@@ -854,7 +854,7 @@ describe('standard tabs', () => {
 						last4: 'abcd',
 						message: 'Fine',
 					},
-					{ name: 'mail', label: 'Mail', kind: 'token', neededBy: [], status: 'not_connected' },
+					{ name: 'mail', label: 'Mail', kind: 'secret', neededBy: [], status: 'not_connected' },
 					{ name: 'storage', label: 'Storage', neededBy: ['alerts'], status: 'test_failed' },
 				],
 			}),
@@ -889,11 +889,14 @@ describe('standard tabs', () => {
 		await act(async () => buttonsOf(container, TEXTS.connections.test)[0]?.click());
 		await settle();
 		expect(container.textContent).toContain('Cannot reach it');
-		// Mail: a token field, Save and test sends it trimmed, and the field empties; nothing saved yet, so no Remove menu
+		// Mail: a value field, Save and test sends it trimmed, and the field empties; nothing saved yet, so no Remove menu
 		openSection(container, 'connection-mail');
 		expect(container.textContent).toContain('Optional');
 		expect(container.querySelector('#section-connection-mail button[aria-haspopup="menu"]')).toBeNull();
-		const token = byLabel(container, TEXTS.connections.token);
+		const token = byLabel(
+			/** @type {HTMLElement} */ (container.querySelector('#section-connection-mail')),
+			TEXTS.connections.value,
+		);
 		type(token, '  secret  ');
 		await act(async () =>
 			byText(container.querySelector('#section-connection-mail') ?? container, TEXTS.connections.save, 'button').click(),
@@ -937,6 +940,67 @@ describe('standard tabs', () => {
 		expect(requests.filter((request) => request.method === 'DELETE')).toEqual([
 			{ method: 'DELETE', path: `${base}/database`, body: undefined },
 		]);
+	});
+
+	it('Connections: the database, the storage and the links belong to the Portal: a note and a link to it, no form, no Remove', async () => {
+		const id = freshSite();
+		const base = `/v1/dashboard/websites/${id}/connections`;
+		serve({
+			[`GET ${base}`]: ok({
+				connections: [
+					{ name: 'database', label: 'Database', kind: 'database', neededBy: ['notes'], status: 'connected', managed: true },
+					{ name: 'storage', label: 'Storage', kind: 'storage', neededBy: [], status: 'test_failed', managed: true },
+					{
+						name: 'link_accounts',
+						label: 'Link to Accounts',
+						kind: 'link',
+						neededBy: ['notes'],
+						status: 'not_connected',
+						managed: true,
+					},
+					{ name: 'ai', label: 'AI key', kind: 'secret', neededBy: [], status: 'not_connected', managed: false },
+				],
+			}),
+			[`POST ${base}/database/test`]: ok({}),
+		});
+		const { container } = render(inDashboard(<ConnectionsTab {...tabProps(id)} />));
+		await settle();
+		for (const [name, words] of /** @type {const} */ ([
+			['database', TEXTS.connections.managed.database],
+			['storage', TEXTS.connections.managed.storage],
+			['link_accounts', TEXTS.connections.managed.link],
+		])) {
+			openSection(container, `connection-${name}`);
+			const section = /** @type {HTMLElement} */ (container.querySelector(`#section-connection-${name}`));
+			expect(section.textContent).toContain(TEXTS.managed.title);
+			expect(section.textContent).toContain(words);
+			// the way to change it is the Portal, at the section that holds it; nothing is typed or removed here
+			const link = /** @type {HTMLAnchorElement} */ (section.querySelector('a[href^="https://portal.example.com"]'));
+			expect(link.getAttribute('href')).toBe(
+				`https://portal.example.com/admin/merchants/mer_1/websites/${id}/settings#${name === 'link_accounts' ? 'links' : 'connections'}`,
+			);
+			expect(section.querySelector('input')).toBeNull();
+			expect(section.querySelector('button[aria-haspopup="menu"]')).toBeNull();
+			expect(buttonsOf(section, TEXTS.connections.save)).toHaveLength(0);
+		}
+		// the database and the storage can be tested here; a link cannot
+		expect(
+			buttonsOf(/** @type {HTMLElement} */ (container.querySelector('#section-connection-database')), TEXTS.connections.test),
+		).toHaveLength(1);
+		expect(
+			buttonsOf(
+				/** @type {HTMLElement} */ (container.querySelector('#section-connection-link_accounts')),
+				TEXTS.connections.test,
+			),
+		).toHaveLength(0);
+		await act(async () => buttonsOf(container, TEXTS.connections.test)[0]?.click());
+		await settle();
+		expect(requests.some((request) => request.method === 'POST' && request.path === `${base}/database/test`)).toBe(true);
+		// the product's own provider key still has its field
+		openSection(container, 'connection-ai');
+		expect(
+			/** @type {HTMLElement} */ (container.querySelector('#section-connection-ai')).querySelector('input'),
+		).not.toBeNull();
 	});
 
 	it('Connections: says when there are none', async () => {

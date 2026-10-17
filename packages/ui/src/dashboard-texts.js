@@ -90,7 +90,6 @@ export const DASHBOARD_TEXTS = Object.freeze({
 		not_connected: 'Not connected',
 		test_failed: 'Test failed',
 		value: 'New value',
-		token: 'Server token of that product for this website',
 		neededByNone: 'Optional',
 		save: 'Save and test',
 		test: 'Test',
@@ -99,11 +98,14 @@ export const DASHBOARD_TEXTS = Object.freeze({
 		removeTitle: 'Remove {name}?',
 		removeHelp: 'The saved value is deleted here. The features that need it stop working until it is connected again.',
 		none: 'No connections.',
-		/** The help under a connection a product says nothing about, by the kind of connection. */
-		hints: Object.freeze({
-			database:
-				'The address of your MongoDB database, a connection string that starts with mongodb+srv://. Your setup data is kept there.',
-			token: 'Paste the server token of that product for this website. You find it in the Portal under Install and tokens.',
+		/** What a connection the Portal owns says instead of a form: the database, the storage and the links to other products. */
+		managed: Object.freeze({
+			database: 'The database is entered once for all your products, in the Portal. This product uses its own database in it.',
+			storage:
+				'The storage is entered once for all your products, in the Portal. This product keeps its files in its own folder.',
+			link: 'The Portal links your products by itself. Nothing is pasted here; a link ends when a product leaves the website.',
+			open: 'Open it in the Portal',
+			notLinked: 'Not linked yet.',
 		}),
 	}),
 	developers: Object.freeze({

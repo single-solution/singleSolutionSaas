@@ -23,6 +23,7 @@
 import { validateDataRightsRequest } from '@ss/contracts';
 import { CONNECT_PATH, NOTICE_PATH, isProtocolError, ticketOriginAllowed, verifyNotice } from '@ss/protocol';
 import { isObject } from '@ss/contracts/util';
+import { KIT_LINK_SCOPES } from './link-scopes.js';
 import { defineRoute } from './http/routes.js';
 import { noContent, problem } from './http/results.js';
 import { KIT_PERMISSIONS, grantedOf } from './staff.js';
@@ -44,16 +45,6 @@ import { KIT_PERMISSIONS, grantedOf } from './staff.js';
  *   what the product adds to its part of the website's Setup sheet (`GET /v1/blueprint`): event types, list summaries
  *   in its own words and short summaries; never secrets
  */
-
-/**
- * The link scopes of the kit's own routes. A product offers them in its manifest (`links.offers`) when other products call
- * these routes: Accounts reads every product's permissions and asks it to export or erase a person's data.
- */
-export const KIT_LINK_SCOPES = Object.freeze({
-	permissionsRead: 'permissions.read',
-	dataRightsExport: 'data_rights.export',
-	dataRightsErase: 'data_rights.erase',
-});
 
 /** Product database collections that hold per-website data (`website.deleted` removes them). */
 const WEBSITE_COLLECTIONS = /** @type {const} */ ([

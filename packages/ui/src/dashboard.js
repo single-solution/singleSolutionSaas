@@ -103,15 +103,19 @@ const STANDARD_TABS = [
 
 /**
  * The tabs of a product: the standard ones with the product's own sections in their place, then its new tabs (a
- * website's before the Owner tabs).
- * @param {Record<string, TabComponent | TabSpec>} own
+ * website's before the Owner tabs). A standard tab set to `null` is not shown (Growth has no provider key, so no
+ * Connections tab).
+ * @param {Record<string, TabComponent | TabSpec | null>} own
  * @returns {Array<[string, TabSpec]>}
  */
 const tabsOf = (own) => {
 	const found = new Map(STANDARD_TABS);
 	for (const [key, value] of Object.entries(own)) {
 		const standard = found.get(key);
-		if (typeof value === 'function') {
+		if (value === null) {
+			if (!standard) throw new Error(`ProductDashboard: there is no standard tab “${key}” to leave out`);
+			found.delete(key);
+		} else if (typeof value === 'function') {
 			if (!standard) throw new Error(`ProductDashboard: the new tab “${key}” needs { component, icon, kind }`);
 			found.set(key, { ...standard, component: value });
 		} else found.set(key, value);
@@ -174,7 +178,7 @@ function WebsiteLocale({ websiteId, children }) {
  * tab (its label in `texts.tabs`).
  * `categories` groups the features for the Features and Settings sidebars (most used first).
  * @param {{ manifest: DashboardManifest, texts: { title: string } & Record<string, any>, categories?: DashboardCategories,
- *   tabs?: Record<string, TabComponent | TabSpec> }} props
+ *   tabs?: Record<string, TabComponent | TabSpec | null> }} props
  */
 export function ProductDashboard({ manifest, texts, categories, tabs = {} }) {
 	return (
@@ -187,7 +191,7 @@ export function ProductDashboard({ manifest, texts, categories, tabs = {} }) {
 /**
  * The page inside the provider: the session, the address, the sidebar and the section shown. `product` (the manifest's
  * id) gives the sidebar's mark the product's meaning color.
- * @param {{ tabs: Record<string, TabComponent | TabSpec>, product?: string }} props
+ * @param {{ tabs: Record<string, TabComponent | TabSpec | null>, product?: string }} props
  */
 function DashboardPage({ tabs: own, product }) {
 	const { texts } = useDashboard();
