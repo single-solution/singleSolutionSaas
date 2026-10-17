@@ -5,7 +5,8 @@
  * A token is a compact JWS with `alg` EdDSA, ES256 or RS256 matching the key type (`none`, HMAC, header-borne keys and
  * `crit` refused), signed by a key of the issuer (by `kid`, or the only compatible key), with `iss` = issuer, `aud`
  * containing the website, `exp` (required) in the future, `nbf` reached and `iat` (required) not in the future and at
- * most 24 hours old (60 s skew). A sign-in only says who the person is; it never authorizes admin actions.
+ * most 24 hours old (60 s skew). A sign-in says who the person is and, for staff, the permissions of their role
+ * (`staff.js`): a staff route of the server token needs it, the server token alone changes nothing.
  * @module
  */
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
@@ -147,10 +148,14 @@ const ACCOUNTS_REFETCH_MS = 60_000;
  * Accounts server token into the product's Connections. The website's public keys are fetched from Accounts with that
  * token (through `@ss/net`, cached 10 minutes; an unknown key id refetches them at most once a minute) and each sign-in
  * is verified offline: signed by Accounts, issued for this website (`aud`) and not expired (they last 15 minutes). A
- * sign-in only says who the person is; it never authorizes admin actions.
- * @param {{ connections: import('./connections.js').Connections, now: () => number }} options
+ * sign-in says who the person is and the permissions of their role; the server token alone never authorizes
+ * configuration or staff work (`staff.js`).
+ * `own` is for Accounts itself, which issues the sign-ins: it checks its own with its own signing key, and may judge the
+ * session and the live role too (`verify({ websiteId, token, ctx })`); the keys are then never fetched.
+ * @param {{ connections: import('./connections.js').Connections, now: () => number,
+ *   own?: (input: { websiteId: string, token: string, ctx?: any }) => Promise<AccountsSignInResult> }} options
  */
-export const createAccountsSignIns = ({ connections, now }) => {
+export const createAccountsSignIns = ({ connections, now, own }) => {
 	/** @type {Map<string, { issuer: string, jwks: Array<Record<string, any>>, fetchedAt: number }>} */
 	const cache = new Map();
 
@@ -174,7 +179,9 @@ export const createAccountsSignIns = ({ connections, now }) => {
 		(definition) => definition.kind === 'token' && definition.productId === 'accounts',
 	);
 
-	return Object.freeze({
+	/** @type {any} */
+	let self = null;
+	self = Object.freeze({
 		/** Whether this product takes Accounts sign-ins (it declares the `accounts` token connection). */
 		trusted,
 		/**
@@ -215,7 +222,20 @@ export const createAccountsSignIns = ({ connections, now }) => {
 				},
 			};
 		},
+		/** Whether this product can check a staff member's sign-in (it has the Accounts token connection, or is Accounts). */
+		staffTrusted: own !== undefined || trusted,
+		/**
+		 * Verify a staff member's sign-in for a website (`staff.js`): Accounts checks its own (`own`: its signing key, the
+		 * open session and the live role), every other product checks it with the website's pasted Accounts token.
+		 * @param {{ websiteId: string, token: unknown, ctx?: any }} input
+		 * @returns {Promise<AccountsSignInResult>}
+		 */
+		verifyStaff: async ({ websiteId, token, ctx }) => {
+			if (typeof token !== 'string' || token.length === 0) return { ok: false, code: 'identity_missing' };
+			return own !== undefined ? own({ websiteId, token, ctx }) : self.verify({ websiteId, token });
+		},
 	});
+	return self;
 };
 
 /** The header a visitor's Accounts sign-in travels in: from the browser next to the browser token, and from the merchant's server next to the server token. */
@@ -244,6 +264,29 @@ export const requestSignIn = ({ accounts, websiteId, headers }) => {
 			const token = (headers.get(SIGN_IN_HEADER) ?? '').trim();
 			if (!accounts.trusted || token.length === 0 || websiteId === null) return null;
 			const verified = await accounts.verify({ websiteId, token });
+			return verified.ok ? { ok: true, token, user: verified.user, claims: verified.claims } : verified;
+		})();
+		return once;
+	};
+};
+
+/**
+ * The sign-in of a staff member on a request (`ctx.staffSignIn()`), for the staff routes of the server token (`staff.js`):
+ * read from `SS-Sign-In`, checked once for the website of the request's own token and judged by the product's
+ * verification (`verifyStaff`: with the website's pasted Accounts token, or Accounts' own keys). Null when the request
+ * carries no sign-in; a product that cannot check a sign-in at all answers `accounts_not_connected` to one.
+ * @param {{ accounts: ReturnType<typeof createAccountsSignIns>, websiteId: string | null, headers: Headers, ctx?: any }} input
+ * @returns {() => Promise<RequestSignIn | null>}
+ */
+export const requestStaffSignIn = ({ accounts, websiteId, headers, ctx }) => {
+	/** @type {Promise<RequestSignIn | null> | null} */
+	let once = null;
+	return () => {
+		once ??= (async () => {
+			const token = (headers.get(SIGN_IN_HEADER) ?? '').trim();
+			if (token.length === 0 || websiteId === null) return null;
+			if (!accounts.staffTrusted) return { ok: false, code: 'accounts_not_connected' };
+			const verified = await accounts.verifyStaff({ websiteId, token, ctx });
 			return verified.ok ? { ok: true, token, user: verified.user, claims: verified.claims } : verified;
 		})();
 		return once;

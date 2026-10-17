@@ -15,14 +15,18 @@
  * website is `?websiteId=`; 401 `unauthorized` otherwise; no CORS) and `none`. Every token or ticket failure is the
  * same 401 `invalid_token`.
  *
- * Server-token requests may name the acting member of the merchant's staff with `SS-Actor-*` headers (K2; 400
- * `invalid_actor` when malformed). A visitor call from the merchant's server names its visitor with `SS-Visitor-IP`
+ * A server-token route says who may call it (`staff.js`): `runtime` (the server token alone: shop reads, sends, imports
+ * while the feature is on, calls between products), `permission` (the call must also carry the verified Accounts
+ * sign-in of a staff member whose role grants it) or `staff` (any verified staff member). The acting person is the one
+ * that verified sign-in names (`ctx.actor`); no header the caller wrote is ever taken as a person. A bare server token on
+ * a staff route is 403 `needs_signed_in_staff`, a sign-in of another website, an expired or a forged one 401
+ * `invalid_sign_in`, a role without the permission 403 `forbidden`. A visitor call from the merchant's server names its visitor with `SS-Visitor-IP`
  * (required on writes, else 400 `visitor_ip_required`), counts in its own window of 3,000 requests per minute per
  * route per website instead of the browser one, keeps the per-visitor limits (by that address) and never counts as
  * widget installed.
  *
  * Right after the response (Next.js `after`, through `toNextRoute`): a pending price report, a stale business.json,
- * unsent activity copies, events and staff alerts, the staff named in a ticket or by the actor headers, the widget last-seen time,
+ * unsent activity copies, events and staff alerts, the staff named in a ticket or by a verified sign-in, the widget last-seen time,
  * the route's own work, and last a status copy older than 5 minutes and the revocation list, fetched again (K-19).
  * @module
  */
@@ -37,9 +41,9 @@ import {
 	verifyToken,
 } from '@ss/protocol';
 import { createId } from '@ss/contracts';
-import { parseActor } from '../actor.js';
+import { KIT_PERMISSIONS, SIGN_IN_DETAIL, checkStaff } from '../staff.js';
 import { isDatabaseUnavailable } from '../data.js';
-import { requestSignIn } from '../identity.js';
+import { requestSignIn, requestStaffSignIn } from '../identity.js';
 import { isKitError } from '../util.js';
 import { isProblem, isResult, noContent, ok, problem } from './results.js';
 import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
@@ -73,14 +77,18 @@ import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
  * @property {import('@ss/contracts').StatusResponse | null} status the status response of the website
  * @property {import('@ss/protocol').TokenClaims | null} token browser or server token claims
  * @property {import('@ss/protocol').TicketClaims | null} ticket
- * @property {import('../actor.js').ActingUser | null} actor the member of the merchant's staff a server-token request
- *   names with `SS-Actor-*` headers (PLAN 0.8.10 K2), else null
+ * @property {import('../actor.js').ActingUser | null} actor the member of the merchant's staff whose verified
+ *   `SS-Sign-In` a staff route of the server token was called with (never a header the caller wrote), else null
  * @property {() => Promise<import('../identity.js').RequestSignIn | null>} signIn the visitor's Accounts sign-in from
  *   `SS-Sign-In`, verified once per request for the website of the request's own token (`{ ok: true, token, user, claims }`,
  *   `{ ok: false, code }`, or null without the header). On a browser route the merchant's server called for a visitor
  *   (`visitor.server`), a sign-in that is not valid never reaches the route: 401 `invalid_sign_in` (`cause`: the failure,
  *   for example `audience`, `expired`, `signature`), or 503 `accounts_unavailable`. A browser call keeps a wrong or
  *   expired sign-in as none.
+ * @property {() => Promise<import('../identity.js').RequestSignIn | null>} staffSignIn the sign-in of a staff member from
+ *   `SS-Sign-In`, verified once for the request's website by the product's own way (`staff.js`): the website's pasted
+ *   Accounts token, or Accounts' own keys, session and live role. The staff routes of the server token use it; null
+ *   without the header
  * @property {{ server: boolean, ip: string | null }} visitor on browser routes: `server` when the merchant's server
  *   called with the server token for one visitor (K3), `ip` that visitor's `SS-Visitor-IP` (null when not sent)
  * @property {string} clientIp the visitor's address for per-visitor limits and risk checks: `SS-Visitor-IP` on a
@@ -122,20 +130,6 @@ const CORS_HEADERS = 'authorization, content-type, idempotency-key, ss-guest, ss
 /** Visitor calls from the merchant's server: their own window per route per website (PLAN 0.8.10 K3, code constant). */
 export const SERVER_VISITOR_LIMIT = Object.freeze({ limit: 3000, windowSeconds: 60 });
 const VISITOR_IP_HEADER = 'ss-visitor-ip';
-/** What a refused sign-in tells the merchant's server (the failure code of `verifyIdentityToken`). @type {Record<string, string>} */
-const SIGN_IN_DETAIL = Object.freeze({
-	accounts_not_connected: "Paste the website's Accounts token in this product's Connections to take sign-ins.",
-	audience: 'The sign-in was made for another website.',
-	expired: 'The sign-in has expired. Renew it at Accounts and send the new one.',
-	too_old: 'The sign-in is too old. Renew it at Accounts and send the new one.',
-	not_yet_valid: 'The sign-in is not valid yet.',
-	signature: 'The sign-in is not signed by the keys of this website’s Accounts.',
-	unknown_key: 'The sign-in is signed by a key this website’s Accounts does not have.',
-	issuer: 'The sign-in was not issued by this website’s Accounts.',
-	algorithm: 'The sign-in uses a signature algorithm that is not accepted.',
-	subject: 'The sign-in does not name a user.',
-	malformed: 'SS-Sign-In must be the Accounts sign-in of the shopper.',
-});
 const LAST_SEEN_EVERY_MS = 60 * 60_000;
 const STAFF_EVERY_MS = 10 * 60_000;
 const NO_FRAMES = Object.freeze({ 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" });
@@ -195,6 +189,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 	const { problems, logger, now, randomBytes, store, manifest } = kit;
 	const compiled = compileRoutes(routes);
 	const featureKeys = manifest.features.map((/** @type {{ key: string }} */ f) => f.key);
+	const kitPermissions = new Set(KIT_PERMISSIONS.map((permission) => permission.key));
 	/** @type {Map<string, string>} */
 	const featureOfPermission = new Map(
 		manifest.permissions.map((/** @type {{ key: string, feature: string }} */ p) => [p.key, p.feature]),
@@ -202,7 +197,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 	for (const route of compiled) {
 		for (const key of route.feature === undefined ? [] : [route.feature].flat())
 			if (!featureKeys.includes(key)) throw new TypeError(`route ${route.id}: unknown feature ${key}`);
-		if (route.permission !== undefined && !featureOfPermission.has(route.permission))
+		if (route.permission !== undefined && !featureOfPermission.has(route.permission) && !kitPermissions.has(route.permission))
 			throw new TypeError(`route ${route.id}: unknown permission ${route.permission}`);
 	}
 	/** @type {Map<string, number>} */
@@ -304,7 +299,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				await store.put('widget', websiteId, { websiteId, lastSeenAt: now() });
 			},
 			async () => {
-				// the merchant's staff named in a ticket, or by the actor headers of a server-token call (K2)
+				// the merchant's staff named in a ticket, or by the verified sign-in of a staff route called with the server token
 				const ticketUser = ctx.ticket?.user;
 				const actor = ctx.actor;
 				const user = ticketUser ? { id: ticketUser.id, name: ticketUser.name, email: ticketUser.email } : actor;
@@ -458,6 +453,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				actor: null,
 				visitor: { server: false, ip: null },
 				signIn: async () => null,
+				staffSignIn: async () => null,
 				clientIp: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
 				session: null,
 				after: (task) => {
@@ -485,11 +481,6 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				ctx.websiteId = claims.websiteId;
 				if (r.auth === 'browser' && ctx.origin)
 					Object.assign(extra, { 'access-control-allow-origin': ctx.origin, vary: 'Origin' });
-				if (claims.kind === 'server') {
-					const named = parseActor(request.headers);
-					if (!named.ok) return fail(problem('invalid_actor', named.message));
-					ctx.actor = named.actor;
-				}
 				if (r.auth === 'browser' && claims.kind === 'server') {
 					// a visitor call from the merchant's server (K3): its visitor's address names the visitor
 					const ip = (request.headers.get(VISITOR_IP_HEADER) ?? '').trim();
@@ -542,6 +533,12 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 			}
 			websiteId = ctx.websiteId;
 			ctx.signIn = requestSignIn({ accounts: kit.accounts, websiteId: ctx.websiteId, headers: request.headers });
+			ctx.staffSignIn = requestStaffSignIn({
+				accounts: kit.accounts,
+				websiteId: ctx.websiteId,
+				headers: request.headers,
+				ctx,
+			});
 
 			if (r.auth === 'browser' || r.auth === 'server' || r.auth === 'ticket') {
 				const id = /** @type {string} */ (ctx.websiteId);
@@ -619,6 +616,17 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 						}),
 					);
 				}
+			}
+
+			// a staff route of the server token: the verified Accounts sign-in of a staff member whose role grants the route's
+			// permission; the server token alone changes nothing (staff.js)
+			if (r.auth === 'server' && (r.permission !== undefined || r.staff === true)) {
+				const refused = await checkStaff(ctx, {
+					productId: manifest.id,
+					...(r.permission === undefined ? {} : { permission: r.permission }),
+					headers: extra,
+				});
+				if (refused) return fail(refused);
 			}
 
 			// a repeated Idempotency-Key (same website, route, address, body and visitor, signed-in shopper or staff member) gets the first

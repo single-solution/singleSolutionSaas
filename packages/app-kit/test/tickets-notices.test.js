@@ -7,7 +7,7 @@ const USER = { id: 'u1', name: 'Sam Staff', email: 'sam@shop.example.com' };
 describe('tickets', () => {
 	it('are issued with the server token for permissions of switched-on features only', async () => {
 		const { call, server, switchOn } = await setup();
-		const ask = (/** @type {unknown} */ body) => call('POST', '/v1/tickets', { token: server.token, body });
+		const ask = (/** @type {unknown} */ body) => call('POST', '/v1/tickets', { token: server.token, staff: USER, body });
 		const off = await ask({ user: USER, permissions: ['notes.read'], origin: ADMIN });
 		expect(off.status).toBe(200);
 		expect(await off.json()).toMatchObject({ ticket: expect.any(String), expiresAt: '2026-10-01T10:15:00.000Z' });
@@ -18,7 +18,7 @@ describe('tickets', () => {
 		for (const body of [
 			{ user: USER, permissions: ['notes.read'], origin: 'http://admin.shop.example.com' },
 			{ user: USER, permissions: ['unknown'], origin: ADMIN },
-			{ user: { id: 'u1' }, permissions: [], origin: ADMIN },
+			{ permissions: 'all', origin: ADMIN },
 			'"nope"',
 		]) {
 			expect((await ask(body)).status).toBe(422);
@@ -41,7 +41,8 @@ describe('tickets', () => {
 		const { ticket } = await (
 			await call('POST', '/v1/tickets', {
 				token: server.token,
-				body: { user: USER, permissions: ['notes.read'], origin: ADMIN },
+				staff: USER,
+				body: { permissions: ['notes.read'], origin: ADMIN },
 			})
 		).json();
 		const ok = await call('GET', '/v1/inbox', { token: ticket, origin: ADMIN });
@@ -59,7 +60,7 @@ describe('tickets', () => {
 			(await call('POST', '/v1/tickets', { token: ticket, body: { user: USER, permissions: [], origin: ADMIN } })).status,
 		).toBe(401);
 		const bare = await (
-			await call('POST', '/v1/tickets', { token: server.token, body: { user: USER, permissions: [], origin: ADMIN } })
+			await call('POST', '/v1/tickets', { token: server.token, staff: USER, body: { permissions: [], origin: ADMIN } })
 		).json();
 		expect((await call('GET', '/v1/inbox', { token: bare.ticket, origin: ADMIN })).status).toBe(403);
 		portal.revoke(server.jti);

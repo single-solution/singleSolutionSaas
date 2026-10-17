@@ -56,8 +56,15 @@ describe('the kit routes as openapi.json documents them', () => {
 	it('carry the auth the kit serves them with, and every documented kit route is listed', () => {
 		const kit = /** @type {any} */ ({ manifest: manifest(), store: {}, now: Date.now });
 		const served = [...createKitRoutes(kit, {}), ...createServerApi(kit, {})];
-		for (const route of KIT_ROUTES)
-			expect(served.find((each) => each.method === route.method && each.path === route.path)?.auth).toBe(route.auth);
+		for (const route of KIT_ROUTES) {
+			const found = served.find((each) => each.method === route.method && each.path === route.path);
+			expect(found?.auth).toBe(route.auth);
+			// who may call it: the OpenAPI document says what the route says (staff with a permission, or the token alone)
+			if (route.auth === 'server') {
+				expect([route.path, route.access]).toEqual([route.path, found?.runtime === true ? 'runtime' : 'staff']);
+				expect([route.path, route.permission]).toEqual([route.path, found?.permission]);
+			}
+		}
 		const documented = served.filter((route) => ['browser', 'server', 'ticket'].includes(route.auth));
 		expect(documented.map((route) => `${route.method} ${route.path}`).sort()).toEqual(
 			KIT_ROUTES.map((route) => `${route.method} ${route.path}`).sort(),
@@ -69,7 +76,13 @@ describe('the kit routes as openapi.json documents them', () => {
 			business: async () => /** @type {any} */ ({}),
 		}).routes;
 		expect(
-			imports.map((route) => ({ method: route.method, path: route.path, auth: route.auth, feature: route.feature })),
+			imports.map((route) => ({
+				method: route.method,
+				path: route.path,
+				auth: route.auth,
+				feature: route.feature,
+				access: route.runtime === true ? 'runtime' : 'staff',
+			})),
 		).toEqual(KIT_IMPORT_ROUTES);
 	});
 });

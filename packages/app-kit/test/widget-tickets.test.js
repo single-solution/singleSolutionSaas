@@ -179,13 +179,31 @@ describe('adminCall', () => {
 		});
 	});
 
+	it('sends the staff member’s sign-in next to the ticket when the store’s server handed it over', async () => {
+		const fetch = vi.fn(async () => new Response('{}', { headers: { 'content-type': 'application/json' } }));
+		const source = createTicketSource({
+			first: { ticket: 't1', expiresAt: new Date(NOW + 10 * 60_000).toISOString(), signIn: 'a.sign.in' },
+			getTicket: async () => ({ ticket: 't2', expiresAt: new Date(NOW + 20 * 60_000).toISOString() }),
+			schedule: () => 1,
+			cancel: () => {},
+			now: () => NOW,
+		});
+		await adminCall({ base: BASE, tickets: source, fetch }, 'POST', '/v1/admin/orders/o1/refunds', { amount: 1 });
+		expect(fetch).toHaveBeenCalledWith(
+			`${BASE}/v1/admin/orders/o1/refunds`,
+			expect.objectContaining({ headers: expect.objectContaining({ authorization: 'Bearer t1', 'ss-sign-in': 'a.sign.in' }) }),
+		);
+	});
+
 	it('answers status 0 without calling when signed out', async () => {
 		const fetch = vi.fn();
-		const tickets = /** @type {import('../src/widget.js').TicketSource} */ ({
-			current: () => null,
-			onChange: () => () => true,
-			stop: () => {},
-		});
+		const tickets = /** @type {import('../src/widget.js').TicketSource} */ (
+			/** @type {unknown} */ ({
+				current: () => null,
+				onChange: () => () => true,
+				stop: () => {},
+			})
+		);
 		expect(await adminCall({ base: BASE, tickets, fetch }, 'GET', '/v1/admin/items')).toEqual({
 			ok: false,
 			status: 0,

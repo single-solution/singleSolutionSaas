@@ -4,11 +4,12 @@
  * - `POST /.well-known/ss-connect` (none): the connect handshake (PLAN 0.4.12 row 1);
  * - `POST /.well-known/ss-events` (none, signed by the Portal): notices (0.4.12); `status.changed` drops the cached
  *   status and fetches it again right after the answer;
- * - `POST /v1/tickets` (server token): tickets for admin widgets (0.4.5);
+ * - `POST /v1/tickets` (server token and the verified sign-in of a staff member): tickets for admin widgets (0.4.5). The
+ *   ticket is for the person that sign-in names and carries only the permissions their role grants out of those asked;
  * - `POST /v1/data-rights/export` and `POST /v1/data-rights/delete` (server token, merchant database required, no
  *   feature): data rights for one end user (0.4.11); a deletion also removes the person's saved staff alerts;
- * - `GET /v1/permissions` (server token, no feature, no merchant database): the product's permissions, which Accounts
- *   reads with the pasted server token to offer them on roles (0.8.6);
+ * - `GET /v1/permissions` (server token, no feature, no merchant database): the product's permissions and the kit's own
+ *   (`staff.js`), which Accounts reads with the pasted server token to offer them on roles (0.8.6);
  * - `GET /v1/message-defaults` (none, the same for every website): the messages the product sends through
  *   Notifications with their default words (`{ productId, messages }`, parity P1), which Notifications' dashboard shows;
  * - `GET /v1/widget/config` (browser token, Origin required) and `GET /v1/widget/admin/config` (ticket): what the
@@ -23,6 +24,7 @@ import { CONNECT_PATH, NOTICE_PATH, isProtocolError, ticketOriginAllowed, verify
 import { isObject } from '@ss/contracts/util';
 import { defineRoute } from './http/routes.js';
 import { noContent, problem } from './http/results.js';
+import { KIT_PERMISSIONS, grantedOf } from './staff.js';
 
 /** @typedef {import('./http/handler.js').RequestContext} RequestContext */
 /** @typedef {{ id?: string, email?: string, phone?: string }} DataRightsUser */
@@ -108,13 +110,25 @@ export const createKitRoutes = (kit, hooks) => {
 	/** @param {RequestContext} ctx */
 	const tickets = async (ctx) => {
 		const body = isObject(ctx.body) ? ctx.body : {};
-		const { user, permissions, origin } = body;
+		const { permissions, origin } = body;
 		if (!ticketOriginAllowed(origin))
 			return problem('validation_failed', '`origin` must be an https origin, or a local one for testing.');
 		if (!Array.isArray(permissions) || permissions.some((key) => typeof key !== 'string' || !featureOfPermission.has(key)))
 			return problem('validation_failed', '`permissions` must list permissions of this product.');
+		// the ticket is for the person of the verified sign-in (never a user the body names), with the permissions of their
+		// role out of those asked for
+		const found = await ctx.staffSignIn();
+		if (!found?.ok)
+			return problem('needs_signed_in_staff', 'A ticket is for the signed-in staff member: send their Accounts sign-in.');
 		const { on } = await kit.reports.switches(/** @type {string} */ (ctx.websiteId));
-		const kept = [...new Set(permissions)].filter((key) => on.includes(/** @type {string} */ (featureOfPermission.get(key))));
+		const kept = grantedOf(found.user, manifest.id, [...new Set(permissions)]).filter((key) =>
+			on.includes(/** @type {string} */ (featureOfPermission.get(key))),
+		);
+		const user = {
+			id: found.user.id,
+			name: found.user.name ?? found.user.email ?? found.user.id,
+			email: found.user.email ?? found.user.phone ?? found.user.id,
+		};
 		try {
 			return await kit.tickets.issue({
 				websiteId: /** @type {string} */ (ctx.websiteId),
@@ -207,19 +221,23 @@ export const createKitRoutes = (kit, hooks) => {
 			handler: (ctx) => kit.connection.handleConnect({ headers: ctx.headers, rawBody: ctx.rawBody }),
 		}),
 		defineRoute({ method: 'POST', path: NOTICE_PATH, auth: 'none', rawBody: true, maxBodyBytes: 16 * 1024, handler: notice }),
-		defineRoute({ method: 'POST', path: '/v1/tickets', auth: 'server', database: false, handler: tickets }),
+		defineRoute({ method: 'POST', path: '/v1/tickets', auth: 'server', staff: true, database: false, handler: tickets }),
 		// the product's permissions, for the roles of the merchant's users in Accounts (PLAN 0.8.6)
 		defineRoute({
 			method: 'GET',
 			path: '/v1/permissions',
 			auth: 'server',
+			runtime: true,
 			database: false,
 			handler: () => ({
-				permissions: manifest.permissions.map((/** @type {{ key: string, name: string, feature: string }} */ p) => ({
-					key: p.key,
-					name: p.name,
-					feature: p.feature,
-				})),
+				permissions: [
+					...manifest.permissions.map((/** @type {{ key: string, name: string, feature: string }} */ p) => ({
+						key: p.key,
+						name: p.name,
+						feature: p.feature,
+					})),
+					...KIT_PERMISSIONS.map((p) => ({ key: p.key, name: p.name })),
+				],
 			}),
 		}),
 		// the messages the product sends through Notifications with their defaults: public, the same for every website
@@ -232,7 +250,19 @@ export const createKitRoutes = (kit, hooks) => {
 					headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' },
 				}),
 		}),
-		defineRoute({ method: 'POST', path: '/v1/data-rights/export', auth: 'server', handler: dataRights('export') }),
-		defineRoute({ method: 'POST', path: '/v1/data-rights/delete', auth: 'server', handler: dataRights('delete') }),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/data-rights/export',
+			auth: 'server',
+			runtime: true,
+			handler: dataRights('export'),
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/data-rights/delete',
+			auth: 'server',
+			runtime: true,
+			handler: dataRights('delete'),
+		}),
 	];
 };

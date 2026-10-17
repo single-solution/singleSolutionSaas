@@ -5,7 +5,10 @@ import { SETTINGS_READ_LIMIT, SETTINGS_WRITE_LIMIT } from '../src/server-api.js'
 import { DOMAIN, openDb, productRoutes, setup } from './helpers.js';
 
 const SITE = `https://${DOMAIN}`;
+/** Alex, signed in at Accounts as an Owner (the test harness turns these into the sign-in's person). */
 const ACTOR = { 'ss-actor-id': 'usr_1', 'ss-actor-name': 'Alex%20M.', 'ss-actor-role': 'Owner' };
+/** The staff member every other call of the harness is signed in as. */
+const STAFF = { kind: 'user', id: 'usr_test_staff', name: 'Test Staff', role: 'owner' };
 
 /** A product list setting kept in memory (Chat's and Ecommerce's lists keep theirs in the product database). */
 const memoryLists = () => {
@@ -85,13 +88,13 @@ describe('settings API for the merchant’s server (K1)', () => {
 		clock.advance(1000);
 		const reset = await body(await call('DELETE', '/v1/settings/notes.maxNotes', { token: server.token }));
 		expect(reset.json).toEqual({ key: 'notes.maxNotes', value: 5, source: 'built-in' });
-		// Recent changes name the acting user, else the server
+		// Recent changes name the signed-in staff member
 		const cookie = await session({ kind: 'merchant' });
 		const overview = await (await dash(cookie, 'GET', `/v1/dashboard/websites/${websiteId}/overview`)).json();
-		expect(overview.recentChanges.slice(0, 2).map((/** @type {any} */ c) => c.who)).toEqual([
-			{ kind: 'server', id: 'server', name: 'Server' },
-			{ kind: 'user', id: 'usr_1', name: 'Alex M.', role: 'Owner' },
-		]);
+		// (the harness pasted the Accounts token from an admin session first: not a change of these two)
+		expect(
+			overview.recentChanges.map((/** @type {any} */ c) => c.who).filter((/** @type {any} */ who) => who.kind === 'user'),
+		).toEqual([STAFF, { kind: 'user', id: 'usr_1', name: 'Alex M.', role: 'Owner' }]);
 	});
 
 	it('edits widget texts, the theme and the Format', async () => {
@@ -257,16 +260,18 @@ describe('settings API for the merchant’s server (K1)', () => {
 			label: 'AI provider key',
 			kind: 'secret',
 			neededBy: ['notes'],
+			set: false,
 			state: 'not_connected',
-			last4: '',
 			message: null,
 			testedAt: null,
 		});
 		const saved = await body(
 			await call('PUT', '/v1/connections/ai', { token: server.token, body: { value: 'sk-secret-1234' } }),
 		);
-		expect(saved.json).toMatchObject({ name: 'ai', state: 'connected', last4: '1234', message: null });
+		expect(saved.json).toMatchObject({ name: 'ai', state: 'connected', set: true, message: null });
+		// the value never comes back, not even its last characters
 		expect(JSON.stringify(saved.json)).not.toContain('sk-secret');
+		expect(JSON.stringify(saved.json)).not.toContain('1234');
 		const failed = await body(
 			await call('PUT', '/v1/connections/ai', { token: server.token, body: { value: 'bad-key-0000' } }),
 		);
@@ -320,7 +325,7 @@ describe('settings API for the merchant’s server (K1)', () => {
 			[user, 'theme', 'Theme', 'radius, mode changed'],
 			[user, 'texts.form.title', 'Text form.title', 'changed'],
 			[
-				{ kind: 'server', id: 'server', name: 'Server' },
+				{ kind: 'user', id: 'usr_test_staff', name: 'Test Staff', role: 'owner' },
 				'settings.notes.maxNotes',
 				'Notes › Notes per visitor per day',
 				'reset to default',
@@ -455,6 +460,7 @@ describe('activity reads (K9)', () => {
 			method: 'POST',
 			path: '/v1/log',
 			auth: 'server',
+			runtime: true,
 			handler: async (ctx) => {
 				const body = /** @type {any} */ (ctx.body);
 				await holder.product.activity.record(ctx, body);

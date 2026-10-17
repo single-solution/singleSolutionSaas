@@ -3,7 +3,8 @@
  * website, in the product database.
  *
  * - Values are encrypted (`sealing.js`: with `ENCRYPTION_KEY`, or `ENCRYPTION_KEY_PREVIOUS` while the key changes)
- *   and write-only: screens get only `{ name, label, kind, neededBy, status, message?, last4, testedAt }`. A value
+ *   and write-only: screens get only `{ name, label, kind, neededBy, set, status, message?, testedAt }`: whether a value is
+ *   stored (`set`) and how its last test went, never the value and not even its last characters. A value
  *   that no longer decrypts (the key changed without the previous one) shows as `not_connected`. `reseal` seals every
  *   stored value with the current key (the Owner's Re-seal, `reseal.js`).
  * - Each value is tested live when saved and on Test: `database` connects and pings through the guarded lookup,
@@ -40,7 +41,7 @@ import { omit } from './util.js';
  */
 /**
  * @typedef {{ name: string, label: string, kind: ConnectionKind, neededBy: string[], status: 'connected' | 'not_connected' | 'test_failed',
- *   message?: string, last4: string, testedAt: string | null }} ConnectionView
+ *   set: boolean, message?: string, testedAt: string | null }} ConnectionView
  */
 /** @typedef {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} OutboundSend */
 /** @typedef {{ productId: string, name: string, baseUrl: string }} DirectoryEntry a connected product, its name and address */
@@ -59,7 +60,8 @@ const MAX_VALUE_LENGTH = 4096;
 const RESEAL_LIMIT = 100_000;
 
 /**
- * Check connection definitions against the manifest; adds the built-in `database` connection when none is declared.
+ * Check connection definitions against the manifest; adds the built-in `database` connection when none is declared, and the
+ * `accounts` token connection (the keys of the staff's and shoppers' sign-ins) to every product but Accounts when none is declared.
  * @param {Record<string, ConnectionDefinition> | undefined} definitions
  * @param {import('@ss/contracts').Manifest} manifest
  * @returns {Record<string, ConnectionDefinition>}
@@ -80,6 +82,9 @@ export const checkConnectionDefinitions = (definitions = {}, manifest) => {
 		out[name] = def;
 	}
 	out.database ??= { label: 'Database (MongoDB)', kind: 'database', neededBy: [...keys] };
+	// every product but Accounts reads its staff's sign-ins with the website's Accounts token (`staff.js`)
+	if (manifest.id !== 'accounts' && !Object.values(out).some((def) => def.kind === 'token' && def.productId === 'accounts'))
+		out.accounts = { label: 'Accounts token (staff and shopper sign-ins)', kind: 'token', productId: 'accounts', neededBy: [] };
 	return out;
 };
 
@@ -160,16 +165,6 @@ export const createConnections = ({
 	};
 
 	/**
-	 * @param {ConnectionDefinition} def
-	 * @param {ConnectionValue} value
-	 */
-	const last4Of = (def, value) => {
-		const secret =
-			typeof value === 'string' ? value : value[def.kind === 'storage' ? 'secretAccessKey' : (def.secretField ?? 'apiKey')];
-		return typeof secret === 'string' ? secret.slice(-4) : '';
-	};
-
-	/**
 	 * Run the tests of a value.
 	 * @param {string} websiteId
 	 * @param {ConnectionDefinition} def
@@ -208,12 +203,12 @@ export const createConnections = ({
 			Object.entries(definitions).map(async ([name, def]) => {
 				const found = await read(websiteId, name);
 				const base = { name, label: def.label, kind: def.kind, neededBy: [...def.neededBy] };
-				if (!found) return { ...base, status: /** @type {const} */ ('not_connected'), last4: '', testedAt: null };
+				if (!found) return { ...base, set: false, status: /** @type {const} */ ('not_connected'), testedAt: null };
 				return {
 					...base,
+					set: true,
 					status: found.doc.status,
 					...(found.doc.message ? { message: found.doc.message } : {}),
-					last4: found.doc.last4,
 					testedAt: new Date(found.doc.testedAt).toISOString(),
 				};
 			}),
@@ -258,7 +253,6 @@ export const createConnections = ({
 			websiteId,
 			name,
 			sealed: sealer.seal(JSON.stringify(checked), aad(websiteId, name)),
-			last4: last4Of(def, checked),
 			status: result.ok ? 'connected' : 'test_failed',
 			...(result.message ? { message: result.message } : {}),
 			testedAt: t,

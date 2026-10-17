@@ -21,12 +21,27 @@ const notes = countHandlers({
 
 const routes = () => [
 	...productRoutes(),
-	defineRoute({ method: 'GET', path: '/v1/server/notes/count', auth: 'server', feature: 'notes', handler: notes.count }),
-	defineRoute({ method: 'GET', path: '/v1/server/notes/counts', auth: 'server', feature: 'notes', handler: notes.counts }),
+	defineRoute({
+		method: 'GET',
+		path: '/v1/server/notes/count',
+		auth: 'server',
+		runtime: true,
+		feature: 'notes',
+		handler: notes.count,
+	}),
+	defineRoute({
+		method: 'GET',
+		path: '/v1/server/notes/counts',
+		auth: 'server',
+		runtime: true,
+		feature: 'notes',
+		handler: notes.counts,
+	}),
 	defineRoute({
 		method: 'POST',
 		path: '/v1/server/notes',
 		auth: 'server',
+		runtime: true,
 		feature: 'notes',
 		handler: async (ctx) => {
 			const db = await ctx.data();
@@ -151,7 +166,14 @@ describe('counts (K4)', () => {
 		const { call, server } = await setup({
 			routes: [
 				...productRoutes(),
-				defineRoute({ method: 'GET', path: '/v1/slow/count', auth: 'server', database: false, handler: slow.count }),
+				defineRoute({
+					method: 'GET',
+					path: '/v1/slow/count',
+					auth: 'server',
+					runtime: true,
+					database: false,
+					handler: slow.count,
+				}),
 			],
 		});
 		const response = await call('GET', '/v1/slow/count', { token: server.token });

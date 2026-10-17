@@ -25,7 +25,8 @@
  * - `GET /v1/import/status` → `{ collections: { <name>: <records> }, imported: { <name>: <records an import wrote> },
  *   totals: { <name>: <number> } }` (`totals`: the product's verification sums, for `ss-import verify`).
  *
- * The kit serves the four routes (server token, feature `import`, which the manifest must have) when the product passes
+ * The kit serves the four routes (server token alone, only while the feature `import` is on, which the manifest must have and
+ * Portal admins switch on for a migration and off after it; the importer is a program, not a person) when the product passes
  * `imports`; the product describes them in its `schemas/api.json` (its collections, its finish and its totals), and
  * `ss app assets` documents them for every manifest with the `import` feature (`KIT_IMPORT_ROUTES`, `@ss/app-kit/api`).
  * @module
@@ -495,6 +496,7 @@ export const createImports = ({ options, now, record, business }) => {
 			method: 'POST',
 			path: '/v1/import/:collection',
 			auth: 'server',
+			runtime: true,
 			feature: IMPORT_FEATURE,
 			rawBody: true,
 			maxBodyBytes: IMPORT_LIMITS.bytes + ENVELOPE,
@@ -504,13 +506,28 @@ export const createImports = ({ options, now, record, business }) => {
 			method: 'POST',
 			path: '/v1/import/:collection/prune',
 			auth: 'server',
+			runtime: true,
 			feature: IMPORT_FEATURE,
 			rawBody: true,
 			maxBodyBytes: IMPORT_LIMITS.bytes + ENVELOPE,
 			handler: prune,
 		}),
-		defineRoute({ method: 'POST', path: '/v1/import/finish', auth: 'server', feature: IMPORT_FEATURE, handler: finish }),
-		defineRoute({ method: 'GET', path: '/v1/import/status', auth: 'server', feature: IMPORT_FEATURE, handler: status }),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/import/finish',
+			auth: 'server',
+			runtime: true,
+			feature: IMPORT_FEATURE,
+			handler: finish,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/import/status',
+			auth: 'server',
+			runtime: true,
+			feature: IMPORT_FEATURE,
+			handler: status,
+		}),
 	]);
 
 	return Object.freeze({

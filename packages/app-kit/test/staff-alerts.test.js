@@ -46,11 +46,12 @@ const holder = { product: null };
 
 const routes = () => [
 	...productRoutes(),
-	defineRoute({ method: 'GET', path: '/v1/server/ping', auth: 'server', handler: () => ({ pong: true }) }),
+	defineRoute({ method: 'GET', path: '/v1/server/ping', auth: 'server', runtime: true, handler: () => ({ pong: true }) }),
 	defineRoute({
 		method: 'POST',
 		path: '/v1/server/alert-prepared',
 		auth: 'server',
+		runtime: true,
 		feature: 'notes',
 		database: false,
 		handler: async (ctx) => ({
@@ -66,6 +67,7 @@ const routes = () => [
 		method: 'POST',
 		path: '/v1/server/alert',
 		auth: 'server',
+		runtime: true,
 		feature: 'notes',
 		database: false,
 		handler: async (ctx) => {

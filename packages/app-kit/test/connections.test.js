@@ -37,6 +37,7 @@ const routes = () => [
 		method: 'POST',
 		path: '/v1/actions',
 		auth: 'server',
+		runtime: true,
 		handler: async (ctx) => {
 			await holder.product.activity.record(ctx, {
 				actor: { kind: 'merchant', id: 'srv' },
@@ -93,19 +94,22 @@ describe('connections', () => {
 			label: 'Database (MongoDB)',
 			kind: 'database',
 			neededBy: ['notes', 'inbox'],
+			set: false,
 			status: 'not_connected',
-			last4: '',
 			testedAt: null,
 		});
 		const saved = await (await dash(cookie, 'PUT', `${path}/ai`, { value: 'sk-live-abcdef1234' })).json();
-		expect(saved).toMatchObject({ name: 'ai', status: 'connected', last4: '1234' });
+		expect(saved).toMatchObject({ name: 'ai', status: 'connected', set: true });
+		// nothing of the secret comes back, not even its last characters
+		expect(JSON.stringify(saved)).not.toContain('1234');
 		expect(JSON.stringify(await store.list('connections', { websiteId }))).not.toContain('sk-live');
 		const failed = await (await dash(cookie, 'PUT', `${path}/ai`, { value: 'bad-key-0000' })).json();
-		expect(failed).toMatchObject({ status: 'test_failed', message: 'Key refused', last4: '0000' });
+		expect(failed).toMatchObject({ status: 'test_failed', message: 'Key refused', set: true });
 		const smtp = await (
 			await dash(cookie, 'PUT', `${path}/smtp`, { value: { host: 'smtp.example.com', password: 'pw-9876' } })
 		).json();
-		expect(smtp.last4).toBe('9876');
+		expect(smtp.last4).toBeUndefined();
+		expect(JSON.stringify(smtp)).not.toContain('9876');
 		for (const [name, value] of /** @type {Array<[string, unknown]>} */ ([
 			['ai', ''],
 			['smtp', { nested: { a: 1 } }],
@@ -145,7 +149,7 @@ describe('connections', () => {
 			new Request(`${BASE}/v1/dashboard/websites/${websiteId}/connections`, { headers: { cookie: String(cookie) } }),
 		);
 		const ai = (await response.json()).connections.find((/** @type {{ name: string }} */ c) => c.name === 'ai');
-		expect(ai).toMatchObject({ status: 'not_connected', last4: '' });
+		expect(ai).toMatchObject({ status: 'not_connected', set: false });
 		expect(ENCRYPTION_KEY).not.toBe('another-encryption-key-0123456789abcdef');
 	});
 
@@ -251,7 +255,8 @@ describe('storage', () => {
 		const saved = await (
 			await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/storage`, { value })
 		).json();
-		expect(saved).toMatchObject({ status: 'connected', last4: '5678' });
+		expect(saved).toMatchObject({ status: 'connected', set: true });
+		expect(JSON.stringify(saved)).not.toContain('5678');
 		expect(seen[0]).toMatch(/^HEAD \/shop\/notes\/.+\/ss-connection-test AWS4-HMAC-SHA256/);
 		status = 403;
 		expect(
@@ -402,7 +407,7 @@ describe('activity log and data rights', () => {
 		holder.product = ctx.product;
 		const { session, dash, websiteId, portal, accounts, call, server, settle, connectDatabase } = ctx;
 		const dbName = await connectDatabase();
-		expect((await call('POST', '/v1/actions', { token: server.token })).status).toBe(200);
+		expect((await call('POST', '/v1/actions', { token: server.token, bare: true })).status).toBe(200);
 		await settle();
 		expect(accounts.copies).toHaveLength(0);
 		const cookie = await session({ kind: 'merchant' });
@@ -410,17 +415,17 @@ describe('activity log and data rights', () => {
 			value: (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token,
 		});
 		accounts.setFailing(true);
-		await call('POST', '/v1/actions', { token: server.token });
+		await call('POST', '/v1/actions', { token: server.token, bare: true });
 		await settle();
 		const { client, db } = await openDb(dbName);
 		const log = db.collection('ss_notes_activity');
 		expect(await log.countDocuments({ copy: 'pending' })).toBe(1);
 		expect(await log.countDocuments({ copy: 'none' })).toBe(1);
 		accounts.setFailing(false);
-		await call('GET', '/v1/server/open', { token: server.token });
+		await call('GET', '/v1/server/open', { token: server.token, bare: true });
 		await settle();
 		expect(await log.countDocuments({ copy: 'pending' })).toBe(1);
-		await call('POST', '/v1/actions', { token: server.token });
+		await call('POST', '/v1/actions', { token: server.token, bare: true });
 		await settle();
 		expect(await log.countDocuments({ copy: 'sent' })).toBe(2);
 		expect(accounts.copies.map((c) => c.copy.action)).toEqual(['note.created', 'note.created']);
@@ -461,13 +466,14 @@ describe('activity log and data rights', () => {
 		let asked = 0;
 		const original = /** @type {(request: Request) => Promise<Response>} */ (handlers[accounts.url]);
 		handlers[accounts.url] = async (request) => {
-			asked += 1;
+			// (the keys of staff sign-ins are fetched with GET)
+			if (request.method === 'POST') asked += 1;
 			return refusing
 				? new Response(JSON.stringify({ type: `${accounts.url}/problems/feature_off`, status: 403 }), { status: 403 })
 				: original(request);
 		};
 		const act = async () => {
-			expect((await call('POST', '/v1/actions', { token: server.token })).status).toBe(200);
+			expect((await call('POST', '/v1/actions', { token: server.token, bare: true })).status).toBe(200);
 			await settle();
 		};
 		await act();
@@ -516,10 +522,10 @@ describe('activity log and data rights', () => {
 			value: (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token,
 		});
 		accounts.setFailing(true);
-		await call('POST', '/v1/actions', { token: server.token });
+		await call('POST', '/v1/actions', { token: server.token, bare: true });
 		await settle();
 		accounts.setFailing(false);
-		await call('GET', '/v1/server/open', { token: server.token });
+		await call('GET', '/v1/server/open', { token: server.token, bare: true });
 		await settle();
 		expect(accounts.copies).toHaveLength(0);
 		// a route without the database never looks
@@ -572,7 +578,8 @@ describe('activity log and data rights', () => {
 		const ticket = await (
 			await call('POST', '/v1/tickets', {
 				token: server.token,
-				body: { user: { id: 'u1', name: 'Sam', email: 'sam@x.com' }, permissions: ['notes.read'], origin },
+				staff: { id: 'u1', name: 'Sam', email: 'sam@x.com' },
+				body: { permissions: ['notes.read'], origin },
 			})
 		).json();
 		await call('GET', '/v1/inbox', { token: ticket.ticket, origin });

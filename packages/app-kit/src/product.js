@@ -82,6 +82,9 @@ import { verifyToken } from '@ss/protocol';
  *   /v1/dashboard/websites/:websiteId/lists/:list`
  * @property {boolean} [events] the product publishes events (K5): `product.events.emit`, forwarded through
  *   Notifications right after the request
+ * @property {(input: { websiteId: string, token: string, ctx?: any }) => Promise<import('./identity.js').AccountsSignInResult>} [ownSignIns]
+ *   Accounts only: it issues the sign-ins, so it verifies its own (with its signing key, the open session and the live
+ *   role) instead of fetching keys from Accounts with a pasted token
  * @property {import('./imports.js').ImportOptions} [imports] what the product's `import` feature takes (K10): the kit
  *   serves the import routes (`/v1/import/…`, server token, feature `import`, which the manifest must have)
  * @property {unknown} [messages] the messages the product sends through Notifications with their default words (its
@@ -128,7 +131,7 @@ import { verifyToken } from '@ss/protocol';
 const KIT_PROBLEM_CODES = Object.freeze({
 	duplicate_request: Object.freeze({ status: 409, title: 'Duplicate request' }),
 	in_progress: Object.freeze({ status: 409, title: 'Request in progress' }),
-	invalid_actor: Object.freeze({ status: 400, title: 'Invalid acting user' }),
+	needs_signed_in_staff: Object.freeze({ status: 403, title: 'A signed-in staff member is needed' }),
 	invalid_sign_in: Object.freeze({ status: 401, title: 'The sign-in is not valid' }),
 	accounts_unavailable: Object.freeze({ status: 503, title: 'Accounts cannot be reached' }),
 	visitor_ip_required: Object.freeze({ status: 400, title: "The visitor's IP address is required" }),
@@ -343,7 +346,7 @@ export const createProduct = (options) => {
 		)
 			throw kitError('invalid_config', `list ${name} must name features of the manifest`);
 	const tickets = createTickets({ store, productId: manifest.id, sealer, now, randomBytes });
-	const accounts = createAccountsSignIns({ connections, now });
+	const accounts = createAccountsSignIns({ connections, now, ...(options.ownSignIns ? { own: options.ownSignIns } : {}) });
 	const hooks = options.hooks ?? {};
 	const reseal = createReseal({
 		sealer,

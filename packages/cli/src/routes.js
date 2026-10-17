@@ -17,7 +17,9 @@ import { findRoutes, lex } from './validate/scan.js';
  * @property {string} path
  * @property {string} auth
  * @property {string | string[]} [feature] one feature, or several (the route works while any of them is on)
- * @property {string} [permission]
+ * @property {string} [permission] a ticket route's permission; a server route's: the staff member's role must grant it
+ * @property {'staff' | 'runtime'} [access] server routes: `staff` (`permission`, or `staff: true`): the call needs the verified
+ *   sign-in of a signed-in staff member next to the token; `runtime`: the server token alone
  * @property {boolean} idempotent
  */
 
@@ -68,6 +70,9 @@ export const scanRoutes = async (files) => {
 				auth: /** @type {string} */ (text('auth')),
 				...(feature === undefined ? {} : { feature }),
 				...(text('permission') === undefined ? {} : { permission: text('permission') }),
+				...(text('auth') === 'server'
+					? { access: /** @type {'runtime' | 'staff'} */ (members.runtime?.value === true ? 'runtime' : 'staff') }
+					: {}),
 				idempotent: members.idempotent?.value === true,
 			});
 		}

@@ -102,7 +102,7 @@ describe('connect handshake', () => {
 
 	it('answers 503 before a Portal connects, except public routes', async () => {
 		const { call, server } = await setup({ connect: false });
-		const response = await call('GET', '/v1/server/open', { token: server.token });
+		const response = await call('GET', '/v1/server/open', { token: server.token, bare: true });
 		expect(response.status).toBe(503);
 		expect((await call('GET', '/docs')).status).toBe(200);
 		const notice = await call('POST', '/.well-known/ss-events', { body: '{}' });

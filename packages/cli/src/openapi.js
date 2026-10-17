@@ -4,8 +4,11 @@
  * list, the settings API and the activity log, PLAN 0.8.10 K1, K9, each with its auth) and, for a manifest with the
  * feature `import`, the kit's import routes (K10). Each operation names its auth (`x-ss-auth`), its feature
  * (`x-ss-feature`: one key, or a list when any of them is enough) and, for ticket routes, its permission
- * (`x-ss-permission`). Server-token operations take the optional `SS-Actor-*` headers (K2); visitor (browser-token)
- * operations also take the server token with `SS-Visitor-IP` (K3). Errors are RFC 9457 problems whose `type` ends with
+ * (`x-ss-permission`: a ticket route's permission, and a server route's: the staff member's role must grant it). A
+ * server-token operation is the website's runtime (`x-ss-access: runtime`: the token alone) or a staff member's
+ * (`x-ss-access: staff`: the token and the verified Accounts sign-in of a signed-in staff member in `SS-Sign-In`; a bare
+ * token is 403 `needs_signed_in_staff`). Visitor (browser-token) operations also take the server token with
+ * `SS-Visitor-IP` (K3). Errors are RFC 9457 problems whose `type` ends with
  * a stable code.
  *
  * What each call takes and answers comes from the API descriptions: the product's `schemas/api.json` and the kit's own
@@ -62,9 +65,6 @@ const PROBLEM = Object.freeze({
  * @returns {Record<string, unknown>}
  */
 const sharedOf = (api) => (isObject(api.$schemas) ? api.$schemas : {});
-
-/** Headers of the acting user on server-token calls (K2). */
-const ACTOR_PARAMETERS = Object.freeze(['SSActorId', 'SSActorName', 'SSActorRole', 'SSActorEmail']);
 
 /** Auth modes documented in the API reference and their security schemes. */
 const SCHEMES = Object.freeze({
@@ -180,6 +180,7 @@ export const renderOpenapi = ({ manifest, routes, api = {} }) => {
 			'x-ss-auth': route.auth,
 			...(feature ? { 'x-ss-feature': feature } : {}),
 			...(scanned.permission ? { 'x-ss-permission': scanned.permission } : {}),
+			...(route.auth === 'server' ? { 'x-ss-access': scanned.access ?? 'staff' } : {}),
 			security: [{ [SCHEMES[/** @type {keyof typeof SCHEMES} */ (route.auth)]]: [] }],
 			...(route.auth === 'browser' ? { security: [{ browserToken: [] }, { serverToken: [] }] } : {}),
 			parameters: [
@@ -198,8 +199,11 @@ export const renderOpenapi = ({ manifest, routes, api = {} }) => {
 						]
 					: []),
 				...(route.auth === 'browser' ? [{ $ref: '#/components/parameters/SSVisitorIp' }] : []),
-				...(route.auth === 'server' || route.auth === 'browser'
-					? ACTOR_PARAMETERS.map((name) => ({ $ref: `#/components/parameters/${name}` }))
+				...(route.auth === 'browser' || (route.auth === 'server' && (scanned.access ?? 'staff') === 'runtime')
+					? [{ $ref: '#/components/parameters/SSSignIn' }]
+					: []),
+				...(route.auth === 'server' && (scanned.access ?? 'staff') === 'staff'
+					? [{ $ref: '#/components/parameters/SSSignInStaff' }]
 					: []),
 			],
 			...requestBody(entry?.body),
@@ -241,7 +245,7 @@ export const renderOpenapi = ({ manifest, routes, api = {} }) => {
 					type: 'http',
 					scheme: 'bearer',
 					description:
-						"The website's server token: the merchant's server only, never with an Origin header. It also reaches every visitor route, acting for the visitor named by SS-Visitor-IP and, for a signed-in shopper, SS-Sign-In (their Accounts sign-in, checked for this website; a wrong, expired or foreign one is 401 invalid_sign_in).",
+						"The website's server token: the merchant's server only, never with an Origin header. On its own it runs the shop (x-ss-access: runtime): it also reaches every visitor route, acting for the visitor named by SS-Visitor-IP and, for a signed-in shopper, SS-Sign-In (their Accounts sign-in, checked for this website; a wrong, expired or foreign one is 401 invalid_sign_in). Every change of configuration and every piece of staff work (x-ss-access: staff) also needs the verified Accounts sign-in of a signed-in staff member in SS-Sign-In, whose role has the permission: a stolen server token changes nothing by itself.",
 				},
 				ticket: {
 					type: 'http',
@@ -258,33 +262,21 @@ export const renderOpenapi = ({ manifest, routes, api = {} }) => {
 						"With the server token: the visitor's IP address (required on writes, else 400 visitor_ip_required). These calls count in their own window of 3,000 requests per minute per route per website, plus the per-visitor limits.",
 					schema: { type: 'string', maxLength: 45 },
 				},
-				SSActorId: {
-					name: 'SS-Actor-Id',
+				SSSignIn: {
+					name: 'SS-Sign-In',
 					in: 'header',
 					required: false,
-					description: 'With the server token: the member of your staff the call acts for (1–64 of A–Z a–z 0–9 _ . : @ -).',
-					schema: { type: 'string', pattern: '^[A-Za-z0-9_.:@-]{1,64}$' },
+					description:
+						"The signed-in shopper's Accounts sign-in, checked for this website (a wrong, expired or foreign one is 401 invalid_sign_in). Only a verified sign-in names the shopper: a user id alone is never taken.",
+					schema: { type: 'string', maxLength: 8192 },
 				},
-				SSActorName: {
-					name: 'SS-Actor-Name',
+				SSSignInStaff: {
+					name: 'SS-Sign-In',
 					in: 'header',
-					required: false,
-					description: "The acting member's name, percent-encoded UTF-8, at most 120 characters (with SS-Actor-Id).",
-					schema: { type: 'string' },
-				},
-				SSActorRole: {
-					name: 'SS-Actor-Role',
-					in: 'header',
-					required: false,
-					description: "The acting member's role, percent-encoded UTF-8, at most 40 characters.",
-					schema: { type: 'string' },
-				},
-				SSActorEmail: {
-					name: 'SS-Actor-Email',
-					in: 'header',
-					required: false,
-					description: "The acting member's email address.",
-					schema: { type: 'string', maxLength: 320 },
+					required: true,
+					description:
+						"The Accounts sign-in of the signed-in staff member whose role has the permission this call needs, checked for this website. The server token alone changes nothing: without it the call is 403 needs_signed_in_staff, with a role that lacks the permission 403 forbidden, with a sign-in of another website or an expired or forged one 401 invalid_sign_in. The person it names is who the activity log and the histories record.",
+					schema: { type: 'string', maxLength: 8192 },
 				},
 			},
 			schemas: Object.fromEntries(

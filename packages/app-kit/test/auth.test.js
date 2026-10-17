@@ -174,7 +174,7 @@ describe('status on use', () => {
 	it('answers invalid_token when the Portal does not know the website', async () => {
 		const { call, server, portal, websiteId } = await setup();
 		portal.deleteWebsite(websiteId);
-		expect((await call('GET', '/v1/server/open', { token: server.token })).status).toBe(401);
+		expect((await call('GET', '/v1/server/open', { token: server.token, bare: true })).status).toBe(401);
 	});
 });
 
@@ -396,6 +396,7 @@ describe('idempotent routes (K-14)', () => {
 				method: 'POST',
 				path: '/v1/orders',
 				auth: 'server',
+				runtime: true,
 				database: false,
 				idempotent: true,
 				handler: async (ctx) => {
@@ -416,6 +417,7 @@ describe('idempotent routes (K-14)', () => {
 				method: 'POST',
 				path: '/v1/big',
 				auth: 'server',
+				runtime: true,
 				database: false,
 				idempotent: true,
 				handler: () => {
@@ -510,6 +512,7 @@ describe('databases that cannot be reached (K-16)', () => {
 				method: 'GET',
 				path: '/v1/orders',
 				auth: 'server',
+				runtime: true,
 				handler: async (ctx) => {
 					await (await ctx.data()).collection('orders').findOne({ websiteId: ctx.websiteId });
 					return { ok: true };
@@ -519,6 +522,7 @@ describe('databases that cannot be reached (K-16)', () => {
 				method: 'GET',
 				path: '/v1/slow',
 				auth: 'server',
+				runtime: true,
 				database: false,
 				handler: () => {
 					throw Object.assign(new Error('operation exceeded time limit'), { code: 50 });

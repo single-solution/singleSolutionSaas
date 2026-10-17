@@ -185,6 +185,7 @@ describe('message defaults (parity P1)', () => {
 					method: 'POST',
 					path: '/v1/server/notify',
 					auth: 'server',
+					runtime: true,
 					feature: 'notes',
 					database: false,
 					handler: async (request) => {

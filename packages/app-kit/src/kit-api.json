@@ -198,7 +198,7 @@
 		"Connection": {
 			"type": "object",
 			"description": "A connection as screens see it: secrets never come back.",
-			"required": ["name", "label", "kind", "neededBy", "state", "last4", "message", "testedAt"],
+			"required": ["name", "label", "kind", "neededBy", "set", "state", "message", "testedAt"],
 			"additionalProperties": false,
 			"properties": {
 				"name": {
@@ -222,10 +222,9 @@
 					"type": "string",
 					"enum": ["connected", "not_connected", "test_failed"]
 				},
-				"last4": {
-					"type": "string",
-					"maxLength": 4,
-					"description": "The last 4 characters of the secret ('' when none)."
+				"set": {
+					"type": "boolean",
+					"description": "Whether a value is stored. Nothing of the value ever comes back, not even its last characters."
 				},
 				"message": {
 					"type": ["string", "null"],
@@ -424,38 +423,17 @@
 	},
 	"POST /v1/tickets": {
 		"summary": "Ticket for an admin widget (15 minutes)",
-		"description": "Your server asks for a ticket for the member of your staff who opens an admin widget. Permissions of switched-off features are left out of the ticket.",
+		"description": "Your server asks for a ticket for the signed-in member of your staff who opens an admin widget: send their Accounts sign-in in SS-Sign-In next to the server token. The ticket is for that person and carries only the permissions of their role out of those asked for (and of switched-on features); the server token alone gets 403 needs_signed_in_staff.",
 		"body": {
 			"type": "object",
-			"required": ["user", "permissions", "origin"],
+			"required": ["permissions", "origin"],
 			"properties": {
-				"user": {
-					"type": "object",
-					"required": ["id", "name", "email"],
-					"properties": {
-						"id": {
-							"type": "string",
-							"minLength": 1,
-							"maxLength": 256
-						},
-						"name": {
-							"type": "string",
-							"minLength": 1,
-							"maxLength": 200
-						},
-						"email": {
-							"type": "string",
-							"minLength": 1,
-							"maxLength": 320
-						}
-					}
-				},
 				"permissions": {
 					"type": "array",
 					"items": {
 						"type": "string"
 					},
-					"description": "Permissions of this product (GET /v1/permissions)."
+					"description": "Permissions of this product (GET /v1/permissions) the widget needs; the ticket gets those the person's role grants."
 				},
 				"origin": {
 					"type": "string",
@@ -572,7 +550,7 @@
 		}
 	},
 	"GET /v1/permissions": {
-		"summary": "This product's permissions (for Accounts roles)",
+		"summary": "This product's permissions and the kit's own (for Accounts roles)",
 		"response": {
 			"type": "object",
 			"required": ["permissions"],
@@ -582,7 +560,7 @@
 					"type": "array",
 					"items": {
 						"type": "object",
-						"required": ["key", "name", "feature"],
+						"required": ["key", "name"],
 						"additionalProperties": false,
 						"properties": {
 							"key": {
@@ -592,7 +570,8 @@
 								"type": "string"
 							},
 							"feature": {
-								"type": "string"
+								"type": "string",
+								"description": "The feature it belongs to (the kit's own permissions, which every product offers, belong to none)."
 							}
 						}
 					}

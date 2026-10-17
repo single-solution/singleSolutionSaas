@@ -126,6 +126,17 @@ describe('GET /v1/blueprint (Portal call)', () => {
 				state: 'not_connected',
 				testedAt: null,
 			},
+			// every product but Accounts takes its staff's and shoppers' sign-ins with the website's Accounts token
+			{
+				key: 'accounts',
+				title: 'Accounts token (staff and shopper sign-ins)',
+				kind: 'token',
+				neededBy: [],
+				needed: false,
+				set: false,
+				state: 'not_connected',
+				testedAt: null,
+			},
 		]);
 		// not ready without the merchant database
 		expect(body.widgets).toEqual([

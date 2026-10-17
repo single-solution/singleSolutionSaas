@@ -85,24 +85,58 @@ export const apiEntries = (api) => (isObject(api) ? Object.entries(api).filter((
 export const sharedSchemas = (api) =>
 	isObject(api) && isObject(api.$schemas) ? /** @type {Record<string, Schema>} */ (api.$schemas) : {};
 
+/**
+ * The kit's server routes that are a staff member's (the server token and the verified sign-in of a person whose role has
+ * the permission, `staff.js`); `staff` stands for any staff member. Every other kit server route is the website's runtime
+ * (reads of the settings and the shop, calls between products, imports while the feature is on).
+ * @type {Readonly<Record<string, string>>}
+ */
+export const KIT_STAFF_ROUTES = Object.freeze({
+	'PUT /v1/settings/:key': 'settings.manage',
+	'DELETE /v1/settings/:key': 'settings.manage',
+	'PUT /v1/texts/:key': 'settings.manage',
+	'DELETE /v1/texts/:key': 'settings.manage',
+	'PUT /v1/theme': 'settings.manage',
+	'PUT /v1/format': 'settings.manage',
+	'PUT /v1/lists/:list': 'settings.manage',
+	'GET /v1/connections': 'connections.manage',
+	'PUT /v1/connections/:name': 'connections.manage',
+	'DELETE /v1/connections/:name': 'connections.manage',
+	'POST /v1/connections/:name/test': 'connections.manage',
+	'GET /v1/activity': 'audit.read',
+	'GET /v1/activity/count': 'audit.read',
+	'GET /v1/activity/counts': 'audit.read',
+	'POST /v1/tickets': 'staff',
+});
+
 /** Kit routes whose auth is not the server token. */
 const KIT_ROUTE_AUTH = Object.freeze({ 'GET /v1/widget/config': 'browser', 'GET /v1/widget/admin/config': 'ticket' });
 
 /**
  * A documented route the kit serves: its method, path and auth (`browser`, `server` or `ticket`), and its feature when
  * it has one.
- * @typedef {{ method: string, path: string, auth: string, feature?: string }} KitRoute
+ * @typedef {{ method: string, path: string, auth: string, feature?: string, access?: 'staff' | 'runtime', permission?: string }} KitRoute
+ *   `access` of a server route: `staff` (a verified signed-in staff member, with `permission` when one is named) or `runtime`
+ *   (the server token alone)
  */
 
 /** The routes the kit serves for every product, as `kit-api.json` describes them, with their auth (no feature). */
 export const KIT_ROUTES = /** @type {ReadonlyArray<KitRoute>} */ (
 	Object.freeze(
-		apiEntries(KIT_API).map(([key]) =>
-			Object.freeze({
+		apiEntries(KIT_API).map(([key]) => {
+			/** @type {string} */
+			const auth = KIT_ROUTE_AUTH[/** @type {keyof typeof KIT_ROUTE_AUTH} */ (key)] ?? 'server';
+			const staff = Object.hasOwn(KIT_STAFF_ROUTES, key) ? /** @type {string} */ (KIT_STAFF_ROUTES[key]) : null;
+			return Object.freeze({
 				.../** @type {{ method: string, path: string }} */ (parseRouteKey(key)),
-				auth: KIT_ROUTE_AUTH[/** @type {keyof typeof KIT_ROUTE_AUTH} */ (key)] ?? 'server',
-			}),
-		),
+				auth,
+				...(auth === 'server'
+					? staff === null
+						? { access: /** @type {const} */ ('runtime') }
+						: { access: /** @type {const} */ ('staff'), ...(staff === 'staff' ? {} : { permission: staff }) }
+					: {}),
+			});
+		}),
 	)
 );
 
@@ -118,7 +152,7 @@ export const KIT_IMPORT_ROUTES = /** @type {ReadonlyArray<KitRoute>} */ (
 			['POST', '/v1/import/:collection/prune'],
 			['POST', '/v1/import/finish'],
 			['GET', '/v1/import/status'],
-		].map(([method, path]) => Object.freeze({ method, path, auth: 'server', feature: 'import' })),
+		].map(([method, path]) => Object.freeze({ method, path, auth: 'server', feature: 'import', access: 'runtime' })),
 	)
 );
 

@@ -75,6 +75,8 @@ const importManifest = () => {
 	return value;
 };
 
+// Every call here is the importer: the server token alone, no staff member signed in (`bare`). It works only while a
+// Portal admin has the `import` feature switched on.
 /** A product that imports notes. @param {Record<string, unknown>} [options] */
 const setupImports = (options = {}) => setup({ manifest: importManifest(), ...options });
 
@@ -167,18 +169,19 @@ describe('import routes (K10)', () => {
 			['import.notes', { inserted: 2, updated: 0, failed: 0 }, undefined, 'none'],
 			['import.notes', { inserted: 0, updated: 2, failed: 0 }, undefined, 'none'],
 		]);
-		expect(entries[0]?.actor).toEqual({ kind: 'user', id: 'usr_1', name: 'Importer' });
+		// the importer is a program: never a person it names (no sign-in, no actor headers)
+		expect(entries[0]?.actor).toEqual({ kind: 'server', id: 'server', name: 'Server' });
 		expect(entries[1]?.actor).toEqual({ kind: 'server', id: 'server', name: 'Server' });
 		// another collection, its own table; status counts each
 		expect((await send('labels', ndjson([{ id: 'lab_0123456789abcdef01234567', name: 'vip' }]))).json.inserted).toBe(1);
 		expect(await db.collection('ss_notes_note_labels').countDocuments({})).toBe(1);
-		const status = await call('GET', '/v1/import/status', { token: server.token });
+		const status = await call('GET', '/v1/import/status', { token: server.token, bare: true });
 		expect(await status.json()).toEqual({
 			collections: { notes: 2, labels: 1, days: 0 },
 			imported: { notes: 2, labels: 1, days: 0 },
 			totals: { 'notes.words': 3 },
 		});
-		const finished = await call('POST', '/v1/import/finish', { token: server.token });
+		const finished = await call('POST', '/v1/import/finish', { token: server.token, bare: true });
 		expect(await finished.json()).toEqual({ finished: true, notes: 2 });
 		const finishedEntry = await db.collection('ss_notes_activity').findOne({ action: 'import.finish' });
 		expect(finishedEntry?.values).toEqual({ notes: 2 });
@@ -285,7 +288,7 @@ describe('import routes (K10)', () => {
 		});
 		expect((await send('days', ndjson([{ day: '2024-01-01', part: 1, visits: 2 }]))).json).toMatchObject({ updated: 1 });
 		expect(await days.countDocuments({})).toBe(3);
-		const status = await call('GET', '/v1/import/status', { token: server.token });
+		const status = await call('GET', '/v1/import/status', { token: server.token, bare: true });
 		expect((await status.json()).imported).toMatchObject({ days: 3 });
 		await client.close();
 	});
@@ -321,7 +324,7 @@ describe('import routes (K10)', () => {
 		expect((await prune('notes', { keep: [ids[0], ids[2], ids[4]] })).json).toMatchObject({ removed: 0, keys: [] });
 		expect((await prune('notes', { keep: [] })).json).toMatchObject({ removed: 3 });
 		expect((await notes.find({}).toArray()).map((note) => note.id)).toEqual(['not_0123456789abcdef01234599']);
-		const status = await call('GET', '/v1/import/status', { token: server.token });
+		const status = await call('GET', '/v1/import/status', { token: server.token, bare: true });
 		expect((await status.json()).imported).toMatchObject({ notes: 0 });
 		const entries = await db.collection('ss_notes_activity').find({ action: 'import.notes.prune' }).toArray();
 		expect(entries.map((entry) => entry.values)).toEqual([
@@ -406,6 +409,7 @@ describe('import routes (K10)', () => {
 			method: 'GET',
 			path: '/v1/import/status',
 			auth: 'server',
+			runtime: true,
 			feature: 'notes',
 			handler: () => ({}),
 		});

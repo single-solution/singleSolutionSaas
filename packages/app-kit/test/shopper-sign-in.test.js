@@ -56,6 +56,7 @@ const routes = () => [
 		method: 'GET',
 		path: '/v1/server/me',
 		auth: 'server',
+		runtime: true,
 		database: false,
 		handler: async (ctx) => ({ signIn: (await ctx.signIn()) === null ? null : 'read' }),
 	}),
@@ -203,29 +204,24 @@ describe('acting as a signed-in shopper from the website’s server (SS-Sign-In 
 		expect((await browserCall.json()).signIn).toMatchObject({ ok: false, code: 'audience' });
 	});
 
-	it('keeps the staff acting rules: SS-Actor headers still name the actor and a malformed set is still refused', async () => {
+	it('never takes actor headers as a person: the shopper is the sign-in, nobody else is named', async () => {
 		const { call, server, accounts, websiteId } = await connected();
 		const signIn = await accounts.signIn({ websiteId, sub: 'usr_shopper1' });
 		const named = await call('GET', '/v1/visitor/me', {
 			token: server.token,
 			headers: { ...IP, 'ss-sign-in': signIn, 'ss-actor-id': 'usr_staff1', 'ss-actor-name': 'Alex' },
 		});
-		expect(await named.json()).toEqual({
-			signIn: { id: 'usr_shopper1', email: null },
-			actor: { kind: 'user', id: 'usr_staff1', name: 'Alex' },
-		});
-		const malformed = await call('GET', '/v1/visitor/me', {
+		expect(await named.json()).toEqual({ signIn: { id: 'usr_shopper1', email: null }, actor: null });
+		// a half set of them is no longer an error: they mean nothing
+		const half = await call('GET', '/v1/visitor/me', {
 			token: server.token,
 			headers: { ...IP, 'ss-sign-in': signIn, 'ss-actor-id': 'usr_staff1' },
 		});
-		expect(malformed.status).toBe(400);
-		expect(await malformed.json()).toMatchObject({ type: 'https://notes.example.dev/problems/invalid_actor' });
-		// a staff call without a sign-in is untouched
-		const staff = await call('GET', '/v1/server/notes', {
-			token: server.token,
-			headers: { 'ss-actor-id': 'u1', 'ss-actor-name': 'Sam' },
-		});
-		expect(staff.status).toBe(200);
+		expect(half.status).toBe(200);
+		expect((await half.json()).actor).toBeNull();
+		// a shopper's sign-in is no staff: a staff route refuses it
+		const staff = await call('GET', '/v1/inbox/open', { token: server.token, bare: true, headers: { 'ss-sign-in': signIn } });
+		expect(staff.status).toBe(403);
 	});
 
 	it('is read on server routes only when asked for: SS-Sign-In never changes a staff call', async () => {
@@ -253,13 +249,12 @@ describe('acting as a signed-in shopper from the website’s server (SS-Sign-In 
 		expect((await post('usr_b')).status).toBe(409);
 	});
 
-	it('leaves SS-Sign-In to a product that declares no Accounts token connection (Accounts reads its own sign-ins)', async () => {
+	it('takes sign-ins only once the website’s Accounts token is pasted: a product declares the connection by itself', async () => {
 		const { call, server, switchOn } = await setup({ routes: routes() });
 		await switchOn(['notes']);
 		const sign = { ...IP, 'ss-sign-in': 'a-sign-in-of-the-product-itself' };
 		const found = await call('GET', '/v1/visitor/me', { token: server.token, headers: sign });
-		expect(found.status).toBe(200);
-		expect((await found.json()).signIn).toBeNull();
-		expect((await call('POST', '/v1/visitor/orders', { token: server.token, body: {}, headers: sign })).status).toBe(200);
+		expect(found.status).toBe(401);
+		expect(await found.json()).toMatchObject({ cause: 'accounts_not_connected' });
 	});
 });

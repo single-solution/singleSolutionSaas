@@ -36,6 +36,7 @@ import { createMemoryReplayStore } from '@ss/protocol/testing';
 import { KIT_API, apiEntries, checkApiDescription, parseRouteKey, sharedSchemas } from './api.js';
 import { validateValue } from './api-schema.js';
 import { PRODUCT_KEY_AAD } from './connection.js';
+import { verifyIdentityToken } from './identity.js';
 import { createSealer, openKey } from './sealing.js';
 import { createMemoryStore } from './stores/memory.js';
 
@@ -606,11 +607,71 @@ export const createAccountsDouble = ({ url = 'https://accounts.test', now = Date
 		return `${input}.${signature.toString('base64url')}`;
 	};
 
+	/**
+	 * The `SS-Sign-In` header of a staff member for a call from the merchant's server (tests): by default an Owner
+	 * (`permissions: ['*']`). The acting user the tests used to name with `SS-Actor-*` headers
+	 * (`SS-Actor-Id`, `-Name` (percent-encoded), `-Role`, `-Email`) becomes the sign-in's person, so those tests keep
+	 * their meaning; the actor headers themselves are dropped (the kit ignores them).
+	 * @param {{ websiteId: string, headers?: Record<string, string>, staff?: { id?: string, name?: string, role?: string,
+	 *   email?: string, permissions?: string[] } & Record<string, unknown> }} input
+	 * @returns {Promise<Record<string, string>>} the given headers with `ss-sign-in` (a header already given stays)
+	 */
+	const staffHeaders = async ({ websiteId, headers = {}, staff = {} }) => {
+		const { 'ss-actor-id': id, 'ss-actor-name': name, 'ss-actor-role': role, 'ss-actor-email': email } = headers;
+		const rest = withoutActor(headers);
+		if (rest['ss-sign-in'] !== undefined) return rest;
+		const decode = (/** @type {string | undefined} */ value) => (value === undefined ? undefined : decodeURIComponent(value));
+		const { id: staffId, permissions = ['*'], ...more } = staff;
+		const sub = staffId ?? id ?? 'usr_test_staff';
+		const claims = {
+			name: decode(name) ?? 'Test Staff',
+			// (a person named by actor headers has the role they name, if any; otherwise an Owner is signed in)
+			...(decode(role) !== undefined || id === undefined ? { role: decode(role) ?? 'owner' } : {}),
+			email: email ?? 'staff@shop.example.com',
+			permissions,
+			...more,
+		};
+		return { ...rest, 'ss-sign-in': await signIn({ websiteId, sub, ...claims }) };
+	};
+
+	/**
+	 * A product's own check of this double's sign-ins (`ownSignIns` of `createProduct`), for systems that run no Accounts:
+	 * signed by this double's key, made for the website, not expired; the person and the permissions of their role are
+	 * what the sign-in says.
+	 * @param {{ websiteId: string, token: string }} input
+	 * @returns {Promise<import('./identity.js').AccountsSignInResult>}
+	 */
+	const ownSignIns = async ({ websiteId, token }) => {
+		const { privateJwk } = await keyOf();
+		const checked = verifyIdentityToken(
+			token,
+			{ issuer: url, jwks: [{ ...toPublicJwk(privateJwk), alg: 'EdDSA', use: 'sig' }], audience: websiteId },
+			{ now },
+		);
+		if (!checked.ok) return { ok: false, code: checked.code };
+		const { claims } = checked.identity;
+		return {
+			ok: true,
+			claims,
+			user: {
+				id: checked.identity.subject,
+				...(checked.identity.email === undefined ? {} : { email: checked.identity.email }),
+				...(typeof claims.name === 'string' ? { name: claims.name } : {}),
+				...(typeof claims.role === 'string' ? { role: claims.role } : {}),
+				...(Array.isArray(claims.permissions)
+					? { permissions: claims.permissions.filter((p) => typeof p === 'string') }
+					: {}),
+			},
+		};
+	};
+
 	return Object.freeze({
 		url,
 		handle,
 		copies,
 		signIn,
+		staffHeaders,
+		ownSignIns,
 		/** @param {boolean} value answer 503 to copies while true */
 		setFailing: (value) => {
 			failing = value;
@@ -626,6 +687,38 @@ export const createAccountsDouble = ({ url = 'https://accounts.test', now = Date
 		exportUser: dataRights('export'),
 		deleteUser: dataRights('delete'),
 	});
+};
+
+/**
+ * Headers without the old `SS-Actor-*` ones (the kit ignores them; tests that used them name the person by `staff`).
+ * @param {Record<string, string>} headers
+ * @returns {Record<string, string>}
+ */
+const withoutActor = (headers) => Object.fromEntries(Object.entries(headers).filter(([name]) => !name.startsWith('ss-actor-')));
+
+/**
+ * The staff sign-in of a test product's calls from the website's server (the same everywhere): the first use pastes the
+ * website's Accounts token (`paste()`, the product's own way, for example through its dashboard), then each call gets
+ * `ss-sign-in` of a staff member (an Owner unless `staff` says who; the old `ss-actor-*` headers name the person, see
+ * `createAccountsDouble().staffHeaders`).
+ * @param {{ accounts: ReturnType<typeof createAccountsDouble>, websiteId: string, paste: () => Promise<unknown> }} input
+ * @returns {(input?: { headers?: Record<string, string>, staff?: Record<string, any> }) => Promise<Record<string, string>>}
+ */
+export const staffCaller = ({ accounts, websiteId, paste }) => {
+	/** @type {Promise<boolean> | null} */
+	let pasted = null;
+	return async ({ headers = {}, staff } = {}) => {
+		// (a Portal that cannot be reached cannot open the dashboard: the call goes without a sign-in then, and pastes next time)
+		pasted ??= paste().then(
+			() => true,
+			() => false,
+		);
+		if (!(await pasted)) {
+			pasted = null;
+			return withoutActor(headers);
+		}
+		return accounts.staffHeaders({ websiteId, headers, ...(staff ? { staff } : {}) });
+	};
 };
 
 /** @typedef {import('./api.js').ApiDescription} ApiDescription */

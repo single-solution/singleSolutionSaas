@@ -14,6 +14,7 @@ const routes = () => [
 		method: 'POST',
 		path: '/v1/server/notes',
 		auth: 'server',
+		runtime: true,
 		feature: 'notes',
 		handler: async (ctx) => {
 			const body = /** @type {any} */ (ctx.body);
@@ -24,6 +25,7 @@ const routes = () => [
 		method: 'GET',
 		path: '/v1/events',
 		auth: 'server',
+		runtime: true,
 		feature: 'notes',
 		handler: (ctx) => holder.product.events.list(ctx),
 	}),
@@ -31,6 +33,7 @@ const routes = () => [
 		method: 'GET',
 		path: '/v1/events/count',
 		auth: 'server',
+		runtime: true,
 		feature: 'notes',
 		handler: (ctx) => holder.product.events.count(ctx),
 	}),
@@ -38,6 +41,7 @@ const routes = () => [
 		method: 'GET',
 		path: '/v1/events/counts',
 		auth: 'server',
+		runtime: true,
 		feature: 'notes',
 		handler: (ctx) => holder.product.events.counts(ctx),
 	}),

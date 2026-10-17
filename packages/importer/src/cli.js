@@ -38,7 +38,8 @@ Usage:
         source no longer has (POST …/prune; the final pass), and after each product's last file POST
         /v1/import/finish (again with ?after=<next> while it answers more; not on a dry run); a dry run lists every
         refused record and setting and the settings that would change; the server token of each product comes from
-        SS_IMPORT_TOKEN_<ID>
+        SS_IMPORT_TOKEN_<ID>; the settings, the Format, the lists and the count routes are a staff member's, so the
+        Accounts sign-in of the person who runs the migration comes from SS_IMPORT_SIGN_IN_<ID> (valid 15 minutes)
   ss-import verify --dir <dir> --product <id>=<url> [--product …] [--json]
         compare the records read and their sums with GET /v1/import/status and the mapping's count routes
 
@@ -59,10 +60,10 @@ const usageError = (io, message) => {
  * The products named by `--product <id>=<url>`, with their tokens from the environment.
  * @param {string[]} pairs
  * @param {Record<string, string | undefined>} env
- * @returns {{ ok: true, products: Record<string, { url: string, token: string }> } | { ok: false, message: string }}
+ * @returns {{ ok: true, products: Record<string, { url: string, token: string, signIn?: string }> } | { ok: false, message: string }}
  */
 const productsOf = (pairs, env) => {
-	/** @type {Record<string, { url: string, token: string }>} */
+	/** @type {Record<string, { url: string, token: string, signIn?: string }>} */
 	const products = {};
 	for (const pair of pairs) {
 		const match = /^([a-z][a-z0-9-]{1,30})=(https?:\/\/\S+)$/.exec(pair);
@@ -71,7 +72,8 @@ const productsOf = (pairs, env) => {
 		const variable = `SS_IMPORT_TOKEN_${id.toUpperCase().replace(/-/g, '_')}`;
 		const token = env[variable];
 		if (!token) return { ok: false, message: `set ${variable} to the website's server token of ${id}` };
-		products[id] = { url, token };
+		const signIn = env[`SS_IMPORT_SIGN_IN_${id.toUpperCase().replace(/-/g, '_')}`];
+		products[id] = { url, token, ...(signIn ? { signIn } : {}) };
 	}
 	return { ok: true, products };
 };

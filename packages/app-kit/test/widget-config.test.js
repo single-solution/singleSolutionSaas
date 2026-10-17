@@ -41,7 +41,7 @@ describe('widget config', () => {
 		const { ticket } = await (
 			await call('POST', '/v1/tickets', {
 				token: server.token,
-				body: { user: { id: 'u1', name: 'Sam', email: 'sam@example.com' }, permissions: [], origin: ADMIN },
+				body: { permissions: [], origin: ADMIN },
 			})
 		).json();
 		const admin = await call('GET', '/v1/widget/admin/config', { token: ticket, origin: ADMIN });

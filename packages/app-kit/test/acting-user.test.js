@@ -1,14 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { SERVER_VISITOR_LIMIT } from '../src/http/handler.js';
 import { actorOf, defineRoute } from '../src/index.js';
-import { ACTOR_HEADERS, parseActor } from '../src/actor.js';
 import { DOMAIN, openDb, productRoutes, setup } from './helpers.js';
 
 const SITE = `https://${DOMAIN}`;
 const SERVER = { kind: 'server', id: 'server', name: 'Server' };
-
-/** @param {Record<string, string>} values */
-const headers = (values) => new Headers(values);
 
 /** @type {{ product: any }} */
 const holder = { product: null };
@@ -20,6 +16,7 @@ const routes = () => [
 		method: 'POST',
 		path: '/v1/server/actions',
 		auth: 'server',
+		permission: 'notes.read',
 		handler: async (ctx) => {
 			const actor = actorOf(ctx, SERVER);
 			await holder.product.activity.record(ctx, { actor, action: 'note.moved', target: 'not_1', label: 'Note 1' });
@@ -48,49 +45,8 @@ const routes = () => [
 	}),
 ];
 
-describe('acting user headers (K2)', () => {
-	it('are parsed, decoded and checked', () => {
-		expect(parseActor(headers({}))).toEqual({ ok: true, actor: null });
-		expect(
-			parseActor(
-				headers({
-					[ACTOR_HEADERS.id]: 'usr_01:chloe@shop',
-					[ACTOR_HEADERS.name]: encodeURIComponent('Chloé Martin'),
-					[ACTOR_HEADERS.role]: encodeURIComponent('Support staff'),
-					[ACTOR_HEADERS.email]: 'Chloe@Shop.Example.com',
-				}),
-			),
-		).toEqual({
-			ok: true,
-			actor: {
-				kind: 'user',
-				id: 'usr_01:chloe@shop',
-				name: 'Chloé Martin',
-				role: 'Support staff',
-				email: 'chloe@shop.example.com',
-			},
-		});
-		expect(parseActor(headers({ [ACTOR_HEADERS.id]: 'u1', [ACTOR_HEADERS.name]: 'Sam' }))).toEqual({
-			ok: true,
-			actor: { kind: 'user', id: 'u1', name: 'Sam' },
-		});
-		for (const bad of /** @type {Array<Record<string, string>>} */ ([
-			{ [ACTOR_HEADERS.id]: 'u1' },
-			{ [ACTOR_HEADERS.name]: 'Sam' },
-			{ [ACTOR_HEADERS.role]: 'Owner' },
-			{ [ACTOR_HEADERS.id]: 'has space', [ACTOR_HEADERS.name]: 'Sam' },
-			{ [ACTOR_HEADERS.id]: 'x'.repeat(65), [ACTOR_HEADERS.name]: 'Sam' },
-			{ [ACTOR_HEADERS.id]: 'u1', [ACTOR_HEADERS.name]: '%E0%A4%A' },
-			{ [ACTOR_HEADERS.id]: 'u1', [ACTOR_HEADERS.name]: encodeURIComponent('a'.repeat(121)) },
-			{ [ACTOR_HEADERS.id]: 'u1', [ACTOR_HEADERS.name]: '%0Aevil' },
-			{ [ACTOR_HEADERS.id]: 'u1', [ACTOR_HEADERS.name]: '%20' },
-			{ [ACTOR_HEADERS.id]: 'u1', [ACTOR_HEADERS.name]: 'Sam', [ACTOR_HEADERS.role]: encodeURIComponent('r'.repeat(41)) },
-			{ [ACTOR_HEADERS.id]: 'u1', [ACTOR_HEADERS.name]: 'Sam', [ACTOR_HEADERS.email]: 'not-an-email' },
-		]))
-			expect(parseActor(headers(bad)).ok).toBe(false);
-	});
-
-	it('name who acts: the ticket user first, then the headers, then the fallback', () => {
+describe('the acting user is the staff member of a verified sign-in (K2)', () => {
+	it('names who acts: the ticket user first, then the verified staff member, then the fallback', () => {
 		const ticket = { user: { id: 'staff_1', name: 'Tia', email: 'tia@shop.example.com' } };
 		expect(actorOf({ ticket }, SERVER)).toEqual({ kind: 'staff', id: 'staff_1', name: 'Tia', email: 'tia@shop.example.com' });
 		expect(actorOf({ ticket: { user: { id: 's', name: 'S' } } }, SERVER)).toEqual({ kind: 'staff', id: 's', name: 'S' });
@@ -99,19 +55,15 @@ describe('acting user headers (K2)', () => {
 		expect(actorOf({}, SERVER)).toBe(SERVER);
 	});
 
-	it('reach the product on server-token calls, are refused when malformed and record the staff member', async () => {
+	it('reaches the product from the sign-in only and records the staff member', async () => {
 		const ctx = await setup({ routes: routes() });
 		holder.product = ctx.product;
-		const { call, server, settle, connectDatabase, websiteId } = ctx;
+		const { call, server, settle, connectDatabase, websiteId, switchOn } = ctx;
+		await switchOn(['notes', 'inbox']);
 		const dbName = await connectDatabase();
 		const named = await call('POST', '/v1/server/actions', {
 			token: server.token,
-			headers: {
-				'ss-actor-id': 'usr_7',
-				'ss-actor-name': 'Alex%20M.',
-				'ss-actor-role': 'Owner',
-				'ss-actor-email': 'alex@shop.example.com',
-			},
+			staff: { id: 'usr_7', name: 'Alex M.', role: 'Owner', email: 'alex@shop.example.com' },
 		});
 		expect(named.status).toBe(200);
 		expect((await named.json()).actor).toEqual({
@@ -122,11 +74,35 @@ describe('acting user headers (K2)', () => {
 			email: 'alex@shop.example.com',
 		});
 		await settle();
-		const unnamed = await call('POST', '/v1/server/actions', { token: server.token });
-		expect((await unnamed.json()).actor).toEqual(SERVER);
-		const malformed = await call('POST', '/v1/server/actions', { token: server.token, headers: { 'ss-actor-id': 'usr_7' } });
-		expect(malformed.status).toBe(400);
-		expect(await malformed.json()).toMatchObject({ type: 'https://notes.example.dev/problems/invalid_actor', status: 400 });
+		// actor headers are never taken as a person: not alone, and not next to a sign-in of someone else
+		const forged = await call('POST', '/v1/server/actions', {
+			token: server.token,
+			bare: true,
+			headers: { 'ss-actor-id': 'usr_7', 'ss-actor-name': 'Alex%20M.', 'ss-actor-role': 'Owner' },
+		});
+		expect(forged.status).toBe(403);
+		expect(await forged.json()).toMatchObject({ type: 'https://notes.example.dev/problems/needs_signed_in_staff' });
+		const signIn = await ctx.accounts.signIn({
+			websiteId,
+			sub: 'usr_real',
+			name: 'Real Rita',
+			role: 'owner',
+			permissions: ['*'],
+		});
+		const next = await call('POST', '/v1/server/actions', {
+			token: server.token,
+			bare: true,
+			headers: { 'ss-sign-in': signIn, 'ss-actor-id': 'usr_boss', 'ss-actor-name': 'The%20Boss', 'ss-actor-role': 'Owner' },
+		});
+		expect(next.status).toBe(200);
+		expect((await next.json()).actor).toMatchObject({ kind: 'user', id: 'usr_real', name: 'Real Rita' });
+		// a malformed set of actor headers is no longer a thing: they are ignored
+		const malformed = await call('POST', '/v1/server/actions', {
+			token: server.token,
+			bare: true,
+			headers: { 'ss-sign-in': signIn, 'ss-actor-id': 'usr_7' },
+		});
+		expect(malformed.status).toBe(200);
 		await settle();
 		const { client, db } = await openDb(dbName);
 		expect(
@@ -138,23 +114,26 @@ describe('acting user headers (K2)', () => {
 			role: 'Owner',
 			email: 'alex@shop.example.com',
 		});
+		expect(await db.collection('ss_notes_staff').countDocuments({ id: 'usr_boss' })).toBe(0);
 		const entries = await db.collection('ss_notes_activity').find({}).sort({ at: 1 }).toArray();
 		expect(entries.map((entry) => entry.actor)).toEqual([
 			{ kind: 'user', id: 'usr_7', name: 'Alex M.', role: 'Owner' },
-			SERVER,
+			{ kind: 'user', id: 'usr_real', name: 'Real Rita', role: 'owner' },
+			{ kind: 'user', id: 'usr_real', name: 'Real Rita', role: 'owner' },
 		]);
 		expect(entries[0]).toMatchObject({ label: 'Note 1', action: 'note.moved' });
 		await client.close();
 	});
 
-	it('record the staff member of a route without the database only once one is connected', async () => {
+	it('records the staff member of a route without the database only once one is connected', async () => {
 		const ctx = await setup();
-		const { call, server, settle, connectDatabase } = ctx;
-		const actor = { 'ss-actor-id': 'usr_8', 'ss-actor-name': 'Noor' };
-		expect((await call('GET', '/v1/server/open', { token: server.token, headers: actor })).status).toBe(200);
+		const { call, server, settle, connectDatabase, switchOn } = ctx;
+		await switchOn(['notes', 'inbox']);
+		const staff = { id: 'usr_8', name: 'Noor' };
+		expect((await call('GET', '/v1/inbox/open', { token: server.token, staff })).status).toBe(200);
 		await settle();
 		const dbName = await connectDatabase();
-		expect((await call('GET', '/v1/server/open', { token: server.token, headers: actor })).status).toBe(200);
+		expect((await call('GET', '/v1/inbox/open', { token: server.token, staff })).status).toBe(200);
 		await settle();
 		const { client, db } = await openDb(dbName);
 		expect(await db.collection('ss_notes_staff').countDocuments({ id: 'usr_8', name: 'Noor' })).toBe(1);
@@ -202,7 +181,7 @@ describe('visitor calls from the merchant’s server (K3)', () => {
 		expect(await store.get('widget', websiteId)).toBeNull();
 	});
 
-	it("need the visitor's IP on writes and take the actor headers", async () => {
+	it("need the visitor's IP on writes and never take actor headers", async () => {
 		const { call, server, switchOn } = await setup({ routes: routes() });
 		await switchOn(['notes']);
 		const missing = await call('POST', '/v1/visitor/whoami', { token: server.token, body: {} });
@@ -214,13 +193,8 @@ describe('visitor calls from the merchant’s server (K3)', () => {
 			headers: { 'ss-visitor-ip': '2001:db8::1', 'ss-actor-id': 'u1', 'ss-actor-name': 'Sam' },
 		});
 		expect(named.status).toBe(200);
-		expect(await named.json()).toEqual({
-			visitor: { server: true, ip: '2001:db8::1' },
-			actor: { kind: 'user', id: 'u1', name: 'Sam' },
-		});
-		expect(
-			(await call('POST', '/v1/visitor/whoami', { token: server.token, body: {}, headers: { 'ss-actor-id': 'u1' } })).status,
-		).toBe(400);
+		// a visitor call has no staff member: the actor headers are ignored
+		expect(await named.json()).toEqual({ visitor: { server: true, ip: '2001:db8::1' }, actor: null });
 	});
 
 	it('count in their own window per route per website, plus the per-visitor limits', async () => {

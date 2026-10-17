@@ -23,15 +23,21 @@ const instance = (ctx, encryptionKey, previousEncryptionKey = null) => {
 		fetch: ctx.portal.fetch,
 		now: ctx.clock.now,
 		nodeEnv: 'test',
+		outbound: { allowHosts: ['127.0.0.1', 'localhost'] },
+		outboundSend: ctx.network.send,
 	});
 	const handler = product.handler(productRoutes());
 	/** A ticket asked with the server token (the status is fetched with the product key, the ticket signed). */
-	const ticket = () =>
+	const ticket = async () =>
 		handler(
 			new Request(`${BASE}/v1/tickets`, {
 				method: 'POST',
-				headers: { authorization: `Bearer ${ctx.server.token}`, 'content-type': 'application/json' },
-				body: JSON.stringify({ user: USER, permissions: [], origin: ADMIN }),
+				headers: {
+					authorization: `Bearer ${ctx.server.token}`,
+					'content-type': 'application/json',
+					...(await ctx.staffHeaders({ staff: USER })),
+				},
+				body: JSON.stringify({ permissions: [], origin: ADMIN }),
 			}),
 		);
 	return { product, handler, ticket };
@@ -39,7 +45,7 @@ const instance = (ctx, encryptionKey, previousEncryptionKey = null) => {
 
 /** @param {Awaited<ReturnType<typeof setup>>} ctx */
 const ticketOf = (ctx) =>
-	ctx.call('POST', '/v1/tickets', { token: ctx.server.token, body: { user: USER, permissions: [], origin: ADMIN } });
+	ctx.call('POST', '/v1/tickets', { token: ctx.server.token, staff: USER, body: { permissions: [], origin: ADMIN } });
 
 describe('signing keys sealed (K-21)', () => {
 	it('keeps the product key and the ticket key sealed, their public keys readable', async () => {
@@ -63,6 +69,21 @@ describe('signing keys sealed (K-21)', () => {
 		expect((await lost.ticket()).status).toBe(503);
 		expect(await ctx.store.get('state', 'productKey')).toEqual(before.product); // nothing destroyed
 		await ctx.portal.connect({ handler: lost.handler, baseUrl: BASE, secret: SECRET });
+		// the Accounts token (the staff sign-in keys) was sealed with the lost key too: pasted again
+		const launch = await ctx.portal.issueLaunch({ productId: 'notes', kind: 'admin', role: 'owner', websiteId: ctx.websiteId });
+		const cookie = /** @type {string} */ (
+			(await lost.handler(new Request(`${BASE}/sso?launch=${launch}`))).headers.get('set-cookie')
+		).split(';')[0];
+		const accountsToken = (await ctx.portal.issueToken({ websiteId: ctx.websiteId, productId: 'accounts', kind: 'server' }))
+			.token;
+		const pasted = await lost.handler(
+			new Request(`${BASE}/v1/dashboard/websites/${ctx.websiteId}/connections/accounts`, {
+				method: 'PUT',
+				headers: { cookie: String(cookie), origin: BASE, 'content-type': 'application/json' },
+				body: JSON.stringify({ value: accountsToken }),
+			}),
+		);
+		expect(pasted.status).toBe(200);
 		expect((await lost.ticket()).status).toBe(200);
 		const after = { product: await ctx.store.get('state', 'productKey'), ticket: await ctx.store.get('state', 'ticketKey') };
 		expect(after.product.publicJwk.kid).not.toBe(before.product.publicJwk.kid);
@@ -72,6 +93,7 @@ describe('signing keys sealed (K-21)', () => {
 		expect(openKey(sealer, after.ticket, 'state|ticketKey')).not.toBeNull();
 	});
 
+	// (the third sealed item is the website's Accounts token, pasted for the staff sign-ins)
 	it('the Owner’s Re-seal moves both keys to the new ENCRYPTION_KEY (RT-14)', async () => {
 		const ctx = await setup();
 		expect((await ticketOf(ctx)).status).toBe(200);
@@ -83,8 +105,8 @@ describe('signing keys sealed (K-21)', () => {
 			changing.handler(
 				new Request(`${BASE}/v1/dashboard/reseal`, { method: 'POST', headers: { cookie: owner, origin: BASE } }),
 			);
-		expect(await (await reseal()).json()).toMatchObject({ resealed: 2, current: 0, unreadable: 0 });
-		expect(await (await reseal()).json()).toMatchObject({ resealed: 0, current: 2, unreadable: 0 });
+		expect(await (await reseal()).json()).toMatchObject({ resealed: 3, current: 0, unreadable: 0 });
+		expect(await (await reseal()).json()).toMatchObject({ resealed: 0, current: 3, unreadable: 0 });
 		// the previous key removed: both keys open with the new one alone, the product key unchanged
 		const after = instance(ctx, KEY_B);
 		expect((await after.ticket()).status).toBe(200);

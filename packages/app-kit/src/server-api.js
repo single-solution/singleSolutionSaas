@@ -1,8 +1,14 @@
 /**
- * The settings API for the merchant's server (PLAN 0.8.10 K1) and the activity reads (K9): kit routes, server token
- * only, with the rights of a merchant dashboard session (settings only of switched-on features; never feature
- * switches, prices or global defaults). Kit routes have no feature of their own: whatever they read or write stays
- * gated by its own feature.
+ * The settings API for the merchant's server (PLAN 0.8.10 K1) and the activity reads (K9): kit routes, server token,
+ * with the rights of a merchant dashboard session (settings only of switched-on features; never feature switches,
+ * prices or global defaults). Kit routes have no feature of their own: whatever they read or write stays gated by its
+ * own feature.
+ *
+ * **The server token alone changes no configuration.** Reads of settings, texts, theme, Format, lists and features are
+ * runtime (the website's server renders pages from them). Every write, and the connections and the activity log,
+ * needs the verified Accounts sign-in of a staff member (`SS-Sign-In` next to the server token, `staff.js`) whose role
+ * grants `settings.manage`, `connections.manage` or `audit.read`; a bare server token is 403 `needs_signed_in_staff`.
+ * The change is recorded with that person. The dashboard twin takes the human's session instead.
  *
  * - `GET /v1/features` → `{ features: [{ key, name, description, on, millicreditsPerHour }] }`.
  * - `GET /v1/settings` → `{ features: [{ key, name, on, schema, values }] }`; `values` (`{ <setting>: { value, source } }`)
@@ -13,13 +19,13 @@
  *   while one of its features is on (403 `feature_off`). Its dashboard twin, `GET|PUT
  *   /v1/dashboard/websites/:websiteId/lists/:list` (dashboard session), follows the same rules, except that Owner and
  *   Support may prepare the list of a switched-off feature (as the dashboard's settings).
- * - `GET /v1/connections` → `{ connections: [{ name, label, kind, neededBy, state, last4, message, testedAt }] }`;
+ * - `GET /v1/connections` → `{ connections: [{ name, label, kind, neededBy, set, state, message, testedAt }] }`;
  *   `PUT /v1/connections/:name` with `{ value }` (checked and tested live), `DELETE`, `POST …/test`. Secrets never
- *   come back.
+ *   come back, not even their last characters: only `set` (true or false).
  * - `GET /v1/activity?actor=&action=&target=&q=&from=&to=&cursor=&limit=` (newest first) and its counts.
  *
- * Every write is a Recent change by the acting user (K2), else `Server` (on the dashboard twin: the session's merchant
- * or admin); a setting, text, theme, Format or list save is also an activity-log entry (`settings.changed`) and raises
+ * Every write is a Recent change by the acting user (the verified staff member, K2; on the dashboard twin: the session's
+ * merchant or admin); a setting, text, theme, Format or list save is also an activity-log entry (`settings.changed`) and raises
  * the `settings.changed` event. At most 60 writes per minute per website (the dashboard's list saves in a window of
  * their own), and 3,000 reads per minute per route per website (the window of SEO reads, SG-31: a storefront rendered
  * on the merchant's server reads its settings on every page).
@@ -82,7 +88,7 @@ export const createServerApi = (kit, lists) => {
 	/** @param {RequestContext} ctx */
 	const website = (ctx) => /** @type {string} */ (ctx.websiteId);
 	/**
-	 * Who changed it: on the dashboard, the session's merchant or admin; else the acting user, else the server.
+	 * Who changed it: on the dashboard, the session's merchant or admin; else the verified staff member, else the server.
 	 * @param {RequestContext} ctx
 	 * @returns {Who}
 	 */
@@ -207,8 +213,8 @@ export const createServerApi = (kit, lists) => {
 		label: view.label,
 		kind: view.kind,
 		neededBy: view.neededBy,
+		set: view.set,
 		state: view.status,
-		last4: view.last4,
 		message: view.message ?? null,
 		testedAt: view.testedAt,
 	});
@@ -243,6 +249,7 @@ export const createServerApi = (kit, lists) => {
 		route({
 			method: 'GET',
 			path: '/v1/features',
+			runtime: true,
 			handler: async (ctx) => {
 				const [{ on }, prices] = await Promise.all([kit.reports.switches(website(ctx)), kit.connection.acceptedPrices()]);
 				return {
@@ -259,6 +266,7 @@ export const createServerApi = (kit, lists) => {
 		route({
 			method: 'GET',
 			path: '/v1/settings',
+			runtime: true,
 			handler: async (ctx) => {
 				const [{ on }, values] = await Promise.all([
 					kit.reports.switches(website(ctx)),
@@ -278,19 +286,21 @@ export const createServerApi = (kit, lists) => {
 				};
 			},
 		}),
-		route({ method: 'PUT', path: '/v1/settings/:key', rateLimit: writes, handler: setting }),
-		route({ method: 'DELETE', path: '/v1/settings/:key', rateLimit: writes, handler: setting }),
+		route({ method: 'PUT', path: '/v1/settings/:key', permission: 'settings.manage', rateLimit: writes, handler: setting }),
+		route({ method: 'DELETE', path: '/v1/settings/:key', permission: 'settings.manage', rateLimit: writes, handler: setting }),
 		route({
 			method: 'GET',
 			path: '/v1/texts',
+			runtime: true,
 			handler: async (ctx) => ({ texts: await kit.settings.textsOf(website(ctx)) }),
 		}),
-		route({ method: 'PUT', path: '/v1/texts/:key', rateLimit: writes, handler: text }),
-		route({ method: 'DELETE', path: '/v1/texts/:key', rateLimit: writes, handler: text }),
-		route({ method: 'GET', path: '/v1/theme', handler: async (ctx) => kit.settings.themeOf(website(ctx)) }),
+		route({ method: 'PUT', path: '/v1/texts/:key', permission: 'settings.manage', rateLimit: writes, handler: text }),
+		route({ method: 'DELETE', path: '/v1/texts/:key', permission: 'settings.manage', rateLimit: writes, handler: text }),
+		route({ method: 'GET', path: '/v1/theme', runtime: true, handler: async (ctx) => kit.settings.themeOf(website(ctx)) }),
 		route({
 			method: 'PUT',
 			path: '/v1/theme',
+			permission: 'settings.manage',
 			rateLimit: writes,
 			handler: async (ctx) => {
 				await saved(
@@ -301,10 +311,11 @@ export const createServerApi = (kit, lists) => {
 				return kit.settings.themeOf(website(ctx));
 			},
 		}),
-		route({ method: 'GET', path: '/v1/format', handler: async (ctx) => kit.settings.formatOf(website(ctx)) }),
+		route({ method: 'GET', path: '/v1/format', runtime: true, handler: async (ctx) => kit.settings.formatOf(website(ctx)) }),
 		route({
 			method: 'PUT',
 			path: '/v1/format',
+			permission: 'settings.manage',
 			rateLimit: writes,
 			handler: async (ctx) => {
 				await saved(
@@ -315,8 +326,8 @@ export const createServerApi = (kit, lists) => {
 				return kit.settings.formatOf(website(ctx));
 			},
 		}),
-		route({ method: 'GET', path: '/v1/lists/:list', handler: readList }),
-		route({ method: 'PUT', path: '/v1/lists/:list', rateLimit: writes, handler: saveList }),
+		route({ method: 'GET', path: '/v1/lists/:list', runtime: true, handler: readList }),
+		route({ method: 'PUT', path: '/v1/lists/:list', permission: 'settings.manage', rateLimit: writes, handler: saveList }),
 		defineRoute({ method: 'GET', path: DASHBOARD_LIST_PATH, auth: 'dashboard', handler: readList }),
 		defineRoute({
 			method: 'PUT',
@@ -328,11 +339,13 @@ export const createServerApi = (kit, lists) => {
 		route({
 			method: 'GET',
 			path: '/v1/connections',
+			permission: 'connections.manage',
 			handler: async (ctx) => ({ connections: (await kit.connections.list(website(ctx))).map(connectionView) }),
 		}),
 		route({
 			method: 'PUT',
 			path: '/v1/connections/:name',
+			permission: 'connections.manage',
 			rateLimit: writes,
 			handler: async (ctx) => {
 				const result = await kit.connections.save({
@@ -348,6 +361,7 @@ export const createServerApi = (kit, lists) => {
 		route({
 			method: 'DELETE',
 			path: '/v1/connections/:name',
+			permission: 'connections.manage',
 			rateLimit: writes,
 			handler: async (ctx) => {
 				orThrow(await kit.connections.remove({ websiteId: website(ctx), name: String(ctx.params.name), who: whoOf(ctx) }));
@@ -357,6 +371,7 @@ export const createServerApi = (kit, lists) => {
 		route({
 			method: 'POST',
 			path: '/v1/connections/:name/test',
+			permission: 'connections.manage',
 			rateLimit: writes,
 			handler: async (ctx) => {
 				const result = await kit.connections.test({ websiteId: website(ctx), name: String(ctx.params.name) });
@@ -367,6 +382,7 @@ export const createServerApi = (kit, lists) => {
 		route({
 			method: 'GET',
 			path: '/v1/activity',
+			permission: 'audit.read',
 			database: true,
 			handler: async (ctx) => {
 				const page = paginate(
@@ -382,7 +398,19 @@ export const createServerApi = (kit, lists) => {
 				return ok({ ...out, items: out.items.map(activityView) }, { headers: link ? { link } : {} });
 			},
 		}),
-		route({ method: 'GET', path: '/v1/activity/count', database: true, handler: activityCounts.count }),
-		route({ method: 'GET', path: '/v1/activity/counts', database: true, handler: activityCounts.counts }),
+		route({
+			method: 'GET',
+			path: '/v1/activity/count',
+			permission: 'audit.read',
+			database: true,
+			handler: activityCounts.count,
+		}),
+		route({
+			method: 'GET',
+			path: '/v1/activity/counts',
+			permission: 'audit.read',
+			database: true,
+			handler: activityCounts.counts,
+		}),
 	];
 };

@@ -24,7 +24,14 @@
  *   in `?websiteId=`; `none`: public
  * @property {string | string[]} [feature] browser, server and ticket routes: answers 403 `feature_off` while the feature
  *   is off (a list: while all of them are off); ticket routes default to the feature of their `permission`
- * @property {string} [permission] ticket routes: the ticket must carry this permission
+ * @property {string} [permission] ticket routes: the ticket must carry this permission. Server routes: the call must
+ *   carry the verified Accounts sign-in (`SS-Sign-In`) of a staff member whose role grants this permission (the server
+ *   token alone is refused: 403 `needs_signed_in_staff`)
+ * @property {boolean} [staff] server routes: the call must carry the verified Accounts sign-in of a signed-in staff member
+ *   (any role); the route itself narrows what that person may do (tickets)
+ * @property {boolean} [runtime] server routes: the website's server may call it with the server token alone (shop
+ *   reads, sends, imports while the feature is on, calls between products). Every server route says one of
+ *   `permission`, `staff` or `runtime`; a server route that says none is refused when the routes are compiled
  * @property {boolean} [database] browser, server and ticket routes: false skips the 403 `database_not_connected` check
  * @property {boolean} [idempotent] a repeated `Idempotency-Key` (same website, same route, within 24 h) gets the first
  *   answer again (with `Idempotent-Replayed: true`) when it is the same request (method, address, body, visitor or
@@ -64,7 +71,17 @@ export const defineRoute = (definition) => {
 		!(typeof definition.feature === 'string' || (Array.isArray(definition.feature) && definition.feature.length > 0))
 	)
 		throw new TypeError(`feature is a feature key or a non-empty list of them ${where}`);
-	if (definition.permission !== undefined && auth !== 'ticket') throw new TypeError(`permission needs ticket auth ${where}`);
+	if (definition.permission !== undefined && auth !== 'ticket' && auth !== 'server')
+		throw new TypeError(`permission needs ticket or server auth ${where}`);
+	if ((definition.staff !== undefined || definition.runtime !== undefined) && auth !== 'server')
+		throw new TypeError(`staff and runtime need server auth ${where}`);
+	if (auth === 'server') {
+		const said = [definition.permission !== undefined, definition.staff === true, definition.runtime === true].filter(Boolean);
+		if (said.length !== 1)
+			throw new TypeError(
+				`a server route says who may call it: one of permission (a verified signed-in staff member), staff (any verified signed-in staff member) or runtime (the server token alone) ${where}`,
+			);
+	}
 	if (
 		definition.roles !== undefined &&
 		(auth !== 'dashboard' || !Array.isArray(definition.roles) || definition.roles.some((role) => !ROLES.has(role)))

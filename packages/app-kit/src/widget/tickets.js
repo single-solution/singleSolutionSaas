@@ -9,7 +9,11 @@
 export const REFRESH_BEFORE_MS = 60_000;
 
 /** @typedef {{ ok: boolean, status: number, data: any }} Answer status 0 when signed out or unreachable */
-/** @typedef {{ ticket: string, expiresAt: string }} Ticket */
+/**
+ * @typedef {{ ticket: string, expiresAt: string, signIn?: string }} Ticket `signIn`: the staff member's current Accounts sign-in,
+ *   which the store's server may hand over with the ticket so a call that needs another product's staff route (a refund
+ *   through Payments) can name the verified person (`SS-Sign-In` next to the ticket)
+ */
 /** @typedef {() => Promise<Ticket>} GetTicket */
 
 /**
@@ -42,6 +46,8 @@ export const requestJson = async (fetch, url, { method = 'GET', headers = {}, bo
 export const createTicketSource = ({ first, getTicket, schedule, cancel, now }) => {
 	/** @type {string | null} */
 	let current = null;
+	/** @type {string | null} */
+	let signIn = null;
 	/** @type {number | null} */
 	let timer = null;
 	let stopped = false;
@@ -56,6 +62,7 @@ export const createTicketSource = ({ first, getTicket, schedule, cancel, now }) 
 		const expires = Date.parse(String(got?.expiresAt));
 		if (typeof got?.ticket !== 'string' || Number.isNaN(expires)) return false;
 		current = got.ticket;
+		signIn = typeof got.signIn === 'string' && got.signIn.length > 0 ? got.signIn : null;
 		timer = schedule(() => void renew(), Math.max(0, expires - now() - REFRESH_BEFORE_MS));
 		return true;
 	};
@@ -78,6 +85,8 @@ export const createTicketSource = ({ first, getTicket, schedule, cancel, now }) 
 	return Object.freeze({
 		/** The ticket now, or null when signed out. */
 		current: () => current,
+		/** The staff member's Accounts sign-in the store's server gave with the ticket, or null. */
+		signIn: () => signIn,
 		/** @param {(signedIn: boolean) => void} listener called after each renewal */
 		onChange: (listener) => {
 			listeners.add(listener);
@@ -93,7 +102,7 @@ export const createTicketSource = ({ first, getTicket, schedule, cancel, now }) 
 };
 
 /** @typedef {ReturnType<typeof createTicketSource>} TicketSource */
-/** @typedef {{ base: string, tickets: TicketSource, fetch: typeof globalThis.fetch }} AdminApi */
+/** @typedef {{ base: string, tickets: Pick<TicketSource, 'current' | 'onChange' | 'stop'> & { signIn?: () => string | null }, fetch: typeof globalThis.fetch }} AdminApi */
 
 /**
  * A JSON call to an admin route with the current ticket.
@@ -106,5 +115,10 @@ export const createTicketSource = ({ first, getTicket, schedule, cancel, now }) 
 export const adminCall = async ({ base, tickets, fetch }, method, path, body) => {
 	const ticket = tickets.current();
 	if (!ticket) return { ok: false, status: 0, data: null };
-	return requestJson(fetch, `${base}${path}`, { method, headers: { authorization: `Bearer ${ticket}` }, body });
+	const signIn = tickets.signIn?.() ?? null;
+	return requestJson(fetch, `${base}${path}`, {
+		method,
+		headers: { authorization: `Bearer ${ticket}`, ...(signIn ? { 'ss-sign-in': signIn } : {}) },
+		body,
+	});
 };

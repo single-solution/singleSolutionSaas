@@ -2,7 +2,7 @@
  * `ss-import verify` (PLAN 0.8.10 Migration, cut-over step 6): compares what `read` found with what each product holds.
  * Per target: the records read with the records an import wrote and the product holds (`GET <product>/v1/import/status`
  * `imported`; after a final pass with prune they are equal) and, where the mapping names one, the product's count
- * route (K4). Per product: the verification sums the mapping's steps added up (order totals per status, stock units,
+ * route (K4), which must equal the records the product holds (`collections`). Per product: the verification sums the mapping's steps added up (order totals per status, stock units,
  * points balances …) with the product's own (`status.totals`).
  * @module
  */
@@ -62,7 +62,9 @@ export const verify = async ({ dir, products, fetch = globalThis.fetch }) => {
 			imported,
 			stored,
 			counted,
-			match: imported === target.records && (counted === null || counted === target.records),
+			// the count route counts what the product holds (the merchant's own records and the staff member who runs the
+			// migration too): it must equal the records the product says it holds
+			match: imported === target.records && (counted === null || counted === (stored ?? target.records)),
 		});
 	}
 	/** @type {VerifyTotal[]} */

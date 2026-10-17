@@ -155,10 +155,12 @@ const operationHtml = (method, path, operation, openapi) => {
 	const features = [operation['x-ss-feature'] ?? []].flat();
 	const parameters = Array.isArray(operation.parameters) ? operation.parameters : [];
 	const own = parameters.filter((parameter) => isObject(parameter) && typeof parameter.name === 'string');
-	const shared = parameters
+	const sharedParameters = parameters
 		.map((parameter) => (isObject(parameter) && typeof parameter.$ref === 'string' ? parameter.$ref.split('/').pop() : null))
-		.map((name) => openapi.components?.parameters?.[name ?? '']?.name)
-		.filter((name) => typeof name === 'string');
+		.map((name) => openapi.components?.parameters?.[name ?? ''])
+		.filter((parameter) => isObject(parameter) && typeof parameter.name === 'string');
+	const shared = sharedParameters.filter((parameter) => parameter.required !== true).map((parameter) => parameter.name);
+	const sharedRequired = sharedParameters.filter((parameter) => parameter.required === true).map((parameter) => parameter.name);
 	const body = operation.requestBody?.content?.['application/json']?.schema;
 	const [status, answer] =
 		Object.entries(/** @type {Node} */ (operation.responses ?? {})).find(([code]) => /^2/.test(code)) ?? [];
@@ -167,7 +169,11 @@ const operationHtml = (method, path, operation, openapi) => {
 		`<section class="ss-api-op" id="${escape(apiAnchor(method, path))}">`,
 		`<h3><code>${escape(`${method} ${path}`)}</code>${operation.summary ? ` ${escape(operation.summary)}` : ''}</h3>`,
 		operation.description ? `<p>${escape(operation.description)}</p>` : '',
-		`<p><strong>Auth:</strong> ${escape(AUTH_TEXT[auth] ?? auth ?? 'none')}${
+		`<p><strong>Auth:</strong> ${escape(
+			auth === 'server' && operation['x-ss-access'] === 'staff'
+				? 'server token and the verified sign-in of a signed-in staff member (the server token alone changes nothing)'
+				: (AUTH_TEXT[auth] ?? auth ?? 'none'),
+		)}${
 			operation['x-ss-permission'] ? ` with the permission <code>${escape(operation['x-ss-permission'])}</code>` : ''
 		}. <strong>Feature:</strong> ${features.length > 0 ? features.map((key) => `<code>${escape(key)}</code>`).join(' or ') : 'always on'}.</p>`,
 		own.length > 0
@@ -177,6 +183,9 @@ const operationHtml = (method, path, operation, openapi) => {
 							`<tr><td><code>${escape(parameter.name)}</code></td><td>${escape(parameter.in)}</td><td>${typeOf(parameter.schema)}</td><td>${parameter.required ? 'yes' : 'no'}</td><td>${notesOf(parameter.description, parameter.schema)}</td></tr>`,
 					)
 					.join('')}</tbody></table>`
+			: '',
+		sharedRequired.length > 0
+			? `<p>Required headers: ${sharedRequired.map((name) => `<code>${escape(name)}</code>`).join(', ')}.</p>`
 			: '',
 		shared.length > 0 ? `<p>Optional headers: ${shared.map((name) => `<code>${escape(name)}</code>`).join(', ')}.</p>` : '',
 		body === undefined ? '' : `<h4>Request body (JSON)</h4>${schemaHtml(body)}`,

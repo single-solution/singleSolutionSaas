@@ -76,12 +76,12 @@ export const createRoutes = (product) => [
 			return created({ id: note.id, createdAt: noteView(note).createdAt });
 		},
 	}),
-	// the merchant's server reads the notes (server token)
-	defineRoute({ method: 'GET', path: '/v1/notes', auth: 'server', feature: 'notes', handler: listNotes }),
+	// the merchant's server reads the notes (server token and the sign-in of a staff member who has notes.read)
+	defineRoute({ method: 'GET', path: '/v1/notes', auth: 'server', permission: 'notes.read', feature: 'notes', handler: listNotes }),
 	// the admin widget reads the notes (ticket with notes.read, from the ticket's origin)
 	defineRoute({ method: 'GET', path: '/v1/admin/notes', auth: 'ticket', permission: 'notes.read', handler: listNotes }),
 	// how many notes the list has (same filters as the list; ticket twin under /v1/admin)
-	defineRoute({ method: 'GET', path: '/v1/notes/count', auth: 'server', feature: 'notes', handler: noteCounts.count }),
+	defineRoute({ method: 'GET', path: '/v1/notes/count', auth: 'server', permission: 'notes.read', feature: 'notes', handler: noteCounts.count }),
 	defineRoute({
 		method: 'GET',
 		path: '/v1/admin/notes/count',

@@ -160,10 +160,20 @@ describe('ss app init → validate → own tests (integration)', () => {
 			'/v1/widget/admin/config',
 			'/v1/widget/config',
 		]);
-		// visitor routes also take the server token with SS-Visitor-IP; server routes take the SS-Actor headers
+		// visitor routes also take the server token with SS-Visitor-IP; a staff route of the server token needs the signed-in staff
+		// member's SS-Sign-In (the token alone is 403), a runtime route takes the token alone
 		expect(openapi.paths['/v1/notes'].post.security).toEqual([{ browserToken: [] }, { serverToken: [] }]);
 		expect(openapi.paths['/v1/notes'].post.parameters).toContainEqual({ $ref: '#/components/parameters/SSVisitorIp' });
-		expect(openapi.paths['/v1/settings/{key}'].put.parameters).toContainEqual({ $ref: '#/components/parameters/SSActorId' });
+		expect(openapi.paths['/v1/settings/{key}'].put.parameters).toContainEqual({
+			$ref: '#/components/parameters/SSSignInStaff',
+		});
+		expect(openapi.paths['/v1/settings/{key}'].put).toMatchObject({
+			'x-ss-access': 'staff',
+			'x-ss-permission': 'settings.manage',
+		});
+		expect(openapi.paths['/v1/theme'].get).toMatchObject({ 'x-ss-access': 'runtime' });
+		expect(openapi.paths['/v1/notes'].get).toMatchObject({ 'x-ss-access': 'staff', 'x-ss-permission': 'notes.read' });
+		expect(openapi.components.parameters.SSSignInStaff).toMatchObject({ name: 'SS-Sign-In', required: true });
 		expect(openapi.components.parameters.SSVisitorIp.name).toBe('SS-Visitor-IP');
 		expect(openapi.paths['/v1/admin/notes'].get).toMatchObject({ 'x-ss-auth': 'ticket', 'x-ss-feature': 'notes' });
 

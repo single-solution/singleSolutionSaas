@@ -1,3 +1,4 @@
+import { KIT_PERMISSIONS } from '../src/staff.js';
 import { describe, expect, it } from 'vitest';
 import { created, defineRoute, noContent, ok, paginate, problem, toNextRoute } from '../src/index.js';
 import { collectionPrefix, isKitError, kitError, omit } from '../src/util.js';
@@ -62,8 +63,20 @@ describe('defineRoute', () => {
 		expect(() => defineRoute(/** @type {any} */ ({ method: 'GET', path: '/', auth: 'website', handler }))).toThrow(/auth/);
 		expect(() => defineRoute(/** @type {any} */ ({ method: 'GET', path: '/', auth: 'none' }))).toThrow(/handler/);
 		expect(() => defineRoute({ method: 'GET', path: '/', auth: 'none', feature: 'notes', handler })).toThrow(/feature/);
-		expect(() => defineRoute({ method: 'GET', path: '/', auth: 'server', permission: 'notes.read', handler })).toThrow(
+		expect(() => defineRoute({ method: 'GET', path: '/', auth: 'browser', permission: 'notes.read', handler })).toThrow(
 			/permission/,
+		);
+		// a server route says who may call it: exactly one of permission, staff or runtime
+		expect(() => defineRoute({ method: 'GET', path: '/', auth: 'server', handler })).toThrow(/who may call it/);
+		expect(() =>
+			defineRoute({ method: 'GET', path: '/', auth: 'server', runtime: true, permission: 'notes.read', handler }),
+		).toThrow(/who may call it/);
+		expect(() => defineRoute({ method: 'GET', path: '/', auth: 'server', staff: true, runtime: true, handler })).toThrow(
+			/who may call it/,
+		);
+		expect(() => defineRoute({ method: 'GET', path: '/', auth: 'ticket', runtime: true, handler })).toThrow(/server auth/);
+		expect(defineRoute({ method: 'GET', path: '/', auth: 'server', permission: 'notes.read', handler }).permission).toBe(
+			'notes.read',
 		);
 		expect(() =>
 			defineRoute(/** @type {any} */ ({ method: 'GET', path: '/', auth: 'dashboard', roles: ['admin'], handler })),
@@ -91,7 +104,7 @@ describe('defineRoute', () => {
 		const route = defineRoute({ method: 'GET', path: '/v1/a/:id', auth: 'none', handler });
 		expect(() => product.handler([route, { ...route, path: '/v1/a/:other' }])).toThrow(/duplicate/);
 		expect(() =>
-			product.handler([defineRoute({ method: 'GET', path: '/x', auth: 'server', feature: 'nope', handler })]),
+			product.handler([defineRoute({ method: 'GET', path: '/x', auth: 'server', runtime: true, feature: 'nope', handler })]),
 		).toThrow(/feature/);
 		expect(() =>
 			product.handler([defineRoute({ method: 'GET', path: '/x', auth: 'ticket', permission: 'nope', handler })]),
@@ -234,6 +247,7 @@ describe('handler results and the Next.js adapter', () => {
 				method: 'GET',
 				path: '/v1/nested',
 				auth: 'server',
+				runtime: true,
 				database: false,
 				handler: (ctx) => {
 					ctx.after(async () => {
@@ -293,6 +307,7 @@ describe('routes of several features and the permission list', () => {
 				method: 'GET',
 				path: '/v1/either',
 				auth: 'server',
+				runtime: true,
 				feature: ['notes', 'inbox'],
 				database: false,
 				handler: () => ({ either: true }),
@@ -306,17 +321,21 @@ describe('routes of several features and the permission list', () => {
 		expect(await (await env.call('GET', '/v1/either', { token: env.server.token })).json()).toEqual({ either: true });
 		const permissions = await env.call('GET', '/v1/permissions', { token: env.server.token });
 		expect(await permissions.json()).toEqual({
-			permissions: env.product.manifest.permissions.map((/** @type {any} */ p) => ({
-				key: p.key,
-				name: p.name,
-				feature: p.feature,
-			})),
+			permissions: [
+				.../** @type {any[]} */ (env.product.manifest.permissions).map((/** @type {any} */ p) => ({
+					key: p.key,
+					name: p.name,
+					feature: p.feature,
+				})),
+				// the kit's own permissions (staff.js) are offered on roles too
+				...KIT_PERMISSIONS.map((p) => ({ key: p.key, name: p.name })),
+			],
 		});
 		const preflight = await env.call('OPTIONS', '/v1/notes', { origin: 'https://shop.example.com' });
 		expect(preflight.headers.get('access-control-allow-headers')).toContain('ss-sign-in');
 		expect(preflight.headers.get('access-control-allow-headers')).toContain('ss-guest');
-		expect(() => defineRoute({ method: 'GET', path: '/x', auth: 'server', feature: [], handler: () => 1 })).toThrow(
-			/non-empty list/,
-		);
+		expect(() =>
+			defineRoute({ method: 'GET', path: '/x', auth: 'server', runtime: true, feature: [], handler: () => 1 }),
+		).toThrow(/non-empty list/);
 	});
 });

@@ -525,11 +525,10 @@ describe('helpers', () => {
 		expect(doc.paths['/v1/items/{itemId}'].delete.parameters.map((/** @type {any} */ p) => p.name ?? p.$ref)).toEqual([
 			'itemId',
 			'Idempotency-Key',
-			'#/components/parameters/SSActorId',
-			'#/components/parameters/SSActorName',
-			'#/components/parameters/SSActorRole',
-			'#/components/parameters/SSActorEmail',
+			// a server route with no `runtime` is a staff route: the signed-in staff member's sign-in is required
+			'#/components/parameters/SSSignInStaff',
 		]);
+		expect(doc.paths['/v1/items/{itemId}'].delete['x-ss-access']).toBe('staff');
 		expect(doc.paths['/v1/items/{itemId}'].delete.security).toEqual([{ serverToken: [] }]);
 		expect(doc.paths['/v1/x'].get).toMatchObject({ 'x-ss-permission': 'x.read', security: [{ ticket: [] }] });
 		expect(doc.paths['/v1/x'].get['x-ss-feature']).toBeUndefined();

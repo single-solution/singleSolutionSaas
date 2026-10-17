@@ -96,11 +96,28 @@ export const productRoutes = () => [
 		method: 'GET',
 		path: '/v1/server/notes',
 		auth: 'server',
+		runtime: true,
 		feature: 'notes',
 		database: false,
 		handler: (ctx) => ({ kind: ctx.token.kind }),
 	}),
-	defineRoute({ method: 'GET', path: '/v1/server/open', auth: 'server', database: false, handler: () => ({ open: true }) }),
+	defineRoute({
+		method: 'GET',
+		path: '/v1/server/open',
+		auth: 'server',
+		runtime: true,
+		database: false,
+		handler: () => ({ open: true }),
+	}),
+	// a staff route: the server token and the sign-in of a staff member whose role grants notes.read
+	defineRoute({
+		method: 'GET',
+		path: '/v1/inbox/open',
+		auth: 'server',
+		permission: 'notes.read',
+		database: false,
+		handler: (ctx) => ({ actor: ctx.actor }),
+	}),
 	defineRoute({
 		method: 'GET',
 		path: '/v1/inbox',
@@ -185,9 +202,14 @@ export const setup = async (options = {}) => {
 	/**
 	 * @param {string} method
 	 * @param {string} path
-	 * @param {{ token?: string, origin?: string | null, body?: unknown, headers?: Record<string, string>, cookie?: string }} [init]
+	 * @param {{ token?: string, origin?: string | null, body?: unknown, headers?: Record<string, string>, cookie?: string,
+	 *   bare?: boolean, staff?: Record<string, any> }} [init] `bare`: the server token alone; `staff`: who is signed in
 	 */
-	const call = async (method, path, { token, origin, body, headers = {}, cookie } = {}) => {
+	const call = async (method, path, { token, origin, body, headers = {}, cookie, bare = false, staff } = {}) => {
+		// the website's server with a staff member signed in (an Owner unless `staff` says who); `bare: true` sends the
+		// server token alone
+		if (token === server.token && !bare && headers['ss-sign-in'] === undefined && headers['ss-visitor-ip'] === undefined)
+			headers = await staffHeaders({ headers, staff });
 		const response = await handler(
 			new Request(`${BASE}${path}`, {
 				method,
@@ -204,6 +226,22 @@ export const setup = async (options = {}) => {
 		const json = method !== 'HEAD' && (response.headers.get('content-type') ?? '').startsWith('application/json');
 		KIT_API.assert({ method, path, status: response.status, body: json ? await response.clone().json() : null });
 		return response;
+	};
+
+	let accountsPasted = false;
+	/**
+	 * The headers of a staff member's call: the website's Accounts token is pasted on first use (the keys of the sign-ins).
+	 * @param {{ headers?: Record<string, string>, staff?: Record<string, any> }} [input]
+	 */
+	const staffHeaders = async ({ headers = {}, staff } = {}) => {
+		if (!accountsPasted) {
+			accountsPasted = true;
+			const token = (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token;
+			const cookie = await session();
+			const pasted = await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, { value: token });
+			if (pasted.status !== 200) throw new Error(`accounts token failed: ${pasted.status} ${await pasted.text()}`);
+		}
+		return accounts.staffHeaders({ websiteId, headers, ...(staff ? { staff } : {}) });
 	};
 
 	/**
@@ -261,6 +299,7 @@ export const setup = async (options = {}) => {
 		browser,
 		server,
 		call,
+		staffHeaders,
 		session,
 		dash,
 		switchOn,
