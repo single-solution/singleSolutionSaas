@@ -114,11 +114,12 @@ function ConfirmChange({ open, title, help, confirmLabel, danger = false, send, 
 }
 
 /**
- * The state of a value in words, as a badge.
- * @param {{ state: string, message?: string | undefined }} props
+ * The state of a value (or of a link) in words, as a badge.
+ * @param {{ state: string, message?: string | undefined, words?: Record<string, string> }} props `words`: the names of the states
+ *   (a product's value by default, a link's states for a link)
  */
-function StateBadge({ state, message }) {
-	const words = /** @type {Record<string, string>} */ (T.data.state)[state] ?? state;
+function StateBadge({ state, message, words: names = T.data.state }) {
+	const words = names[state] ?? state;
 	return (
 		<span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
 			<Badge tone={TONES[state] ?? 'neutral'} dot>
@@ -404,7 +405,7 @@ export function LinksSection({ view, manage, canWrite, onChanged }) {
 								key={`${link.caller}>${link.callee}`}
 								product={link.caller}
 								title={what}
-								status={<StateBadge state={link.state} />}
+								status={<StateBadge state={link.state} words={T.links.state} />}
 								meta={
 									<span className="flex flex-col gap-1">
 										{link.state === 'on' ? (

@@ -18,7 +18,6 @@ import {
 	dialog,
 	fillDialog,
 	openSection,
-	press,
 	pressDialog,
 	quiet,
 	resetHash,
@@ -105,6 +104,18 @@ const openPage = async ({ b, merchantId, websiteId }) => {
 	await settle(2);
 };
 
+/**
+ * Press the n-th button with this text (the database card comes first, then the storage card).
+ * @param {string} label @param {number} [at]
+ */
+const pressNth = async (label, at = 0) => {
+	const found = buttons(label, document.body)[at];
+	if (!found) throw new Error(`no button “${label}” at ${at}`);
+	await until(() => !found.disabled);
+	await act(async () => found.click());
+	await settle(1);
+};
+
 /** The label's input. @param {string} label @returns {any} */
 const field = (label) => byLabel(document, label);
 
@@ -123,14 +134,14 @@ describe('Data and files (jsdom)', () => {
 			expect(shows('Folder payments/')).toBe(true);
 			// the value goes in a password field; nothing is saved without the person's password
 			type(field('Connection string'), URI);
-			await press('Save', document.body);
+			await pressNth('Save');
 			expect(dialog().textContent).toContain('Save Database (MongoDB)');
 			fillDialog('Your password', 'not my password');
 			await pressDialog('Save');
 			await until(() => dialog().textContent?.includes('That password is not right'));
 			x.b.use();
 			const unchanged = await x.b.api.get(`/v1/merchants/${x.merchantId}/websites/${x.websiteId}/connections`);
-			expect(unchanged.ok && unchanged.data.database.set).toBe(false);
+			expect(unchanged.ok && /** @type {any} */ (unchanged).data.database.set).toBe(false);
 			fillDialog('Your password', 'correct horse battery');
 			await pressDialog('Save');
 			await until(() => !document.querySelector('[role="dialog"]'));
@@ -142,8 +153,8 @@ describe('Data and files (jsdom)', () => {
 			expect(buttons('Replace').length).toBe(1);
 			expect(buttons('Remove').length).toBeGreaterThan(0);
 			const stored = await x.b.api.get(`/v1/merchants/${x.merchantId}/websites/${x.websiteId}/connections`);
-			expect(stored.ok && stored.data.database.set).toBe(true);
-			expect(JSON.stringify(stored.data)).not.toContain('Sup3rSecret');
+			expect(stored.ok && /** @type {any} */ (stored).data.database.set).toBe(true);
+			expect(JSON.stringify(/** @type {any} */ (stored).data)).not.toContain('Sup3rSecret');
 			// the Portal e-mailed the merchant, without the value
 			expect(x.w.mail.some((mail) => mail.template === 'connection_changed')).toBe(true);
 			expect(JSON.stringify(x.w.mail)).not.toContain('Sup3rSecret');
@@ -159,7 +170,7 @@ describe('Data and files (jsdom)', () => {
 			await openPage(x);
 			await openSection('Data and files');
 			type(field('Connection string'), 'postgres://nope');
-			await press('Save', document.body);
+			await pressNth('Save');
 			fillDialog('Your password', 'correct horse battery');
 			await pressDialog('Save');
 			await until(() => !document.querySelector('[role="dialog"]'));
@@ -182,25 +193,22 @@ describe('Data and files (jsdom)', () => {
 			type(field('Bucket'), 'shop-media');
 			type(field('Access key ID'), 'AKIAEXAMPLE');
 			type(field('Secret access key'), 'sTorAgeSecret');
-			await press('Save', document.body);
-			// (the first Save button is the database's; the storage's is the enabled one)
-			const save = buttons('Save', document.body).find((b) => !b.disabled);
-			if (save) await act(async () => save.click());
-			await settle(1);
+			// (the first Save button is the database's, the second the storage's)
+			await pressNth('Save', 1);
 			fillDialog('Your password', 'correct horse battery');
 			await pressDialog('Save');
 			await until(() => !document.querySelector('[role="dialog"]'));
 			x.b.use();
 			const stored = await x.b.api.get(`/v1/merchants/${x.merchantId}/websites/${x.websiteId}/connections`);
-			expect(stored.ok && stored.data.storage.set).toBe(true);
+			expect(stored.ok && /** @type {any} */ (stored).data.storage.set).toBe(true);
 			expect(document.body.textContent).not.toContain('sTorAgeSecret');
-			// Remove asks for the password too
-			await press('Remove', document.body);
+			// Remove asks for the password too (the database is not set: the storage's Remove is the only one)
+			await pressNth('Remove');
 			fillDialog('Your password', 'correct horse battery');
 			await pressDialog('Remove');
 			await until(() => !document.querySelector('[role="dialog"]'));
 			const gone = await x.b.api.get(`/v1/merchants/${x.merchantId}/websites/${x.websiteId}/connections`);
-			expect(gone.ok && gone.data.storage.set).toBe(false);
+			expect(gone.ok && /** @type {any} */ (gone).data.storage.set).toBe(false);
 		} finally {
 			restore();
 		}
@@ -253,9 +261,10 @@ describe('Between your products (jsdom)', () => {
 			fillDialog('Your password', 'correct horse battery');
 			await pressDialog('Regenerate the key');
 			await until(() => !document.querySelector('[role="dialog"]'));
-			const changes = await x.w.portal.modules
-				.service('website')
-				.connectionsView({ merchantId: x.merchantId, websiteId: x.websiteId });
+			x.b.use();
+			const changes = /** @type {any} */ (
+				await x.b.api.get(`/v1/merchants/${x.merchantId}/websites/${x.websiteId}/connections`)
+			).data;
 			expect(changes.links[0]).toMatchObject({ state: 'on', caller: 'ecommerce', callee: 'payments' });
 		} finally {
 			restore();
