@@ -85,11 +85,12 @@
 				"title": "Category and brand status and content",
 				"paragraphs": [
 					"Categories have a status: active, coming_soon (listed with their content, their products hidden) or hidden. Brands are active or hidden, and list the categories they belong to (categoryIds; none = every category). A hidden category or brand hides its products from every shopper read, feed, sitemap, llms.txt and Chat lookup, judged on every read, so switching it back shows them again at once. A brand's hiddenIn (category ids) leaves its products out of those categories' listings only (and of those below them, with their counts, facets and landing pages): they stay on their own pages, in search and in every other listing.",
-					"Categories also carry an icon (a name of at most 40 characters your website maps to its own icon), content { summary, bullets: [{ text, icon }] } with at most 12 bullets, at most 20 FAQs, a size chart, typeKey (the item type its products have unless they name their own; null: its parent's) and the SEO fields; brands carry the SEO fields and a size chart. Earlier slugs are kept in previousSlugs (read-only)."
+					"Categories also carry an icon (a name of at most 40 characters your website maps to its own icon), content { summary, bullets: [{ text, icon }] } with at most 12 bullets, at most 20 FAQs, a size chart, typeKey (the item type its products have unless they name their own; null: its parent's) and the SEO fields; brands carry the SEO fields and a size chart. Earlier slugs are kept in previousSlugs (read-only). The fields shoppers meet (names, units, choices and where each one shows) are read from GET /v1/shop/attributes, open to the browser and to your server with no staff sign-in; it never carries the staff rules, order or customer fields, or fields of unlisted categories (the staff list is GET /v1/attributes)."
 				],
 				"routes": [
 					["GET /v1/shop/categories?include=coming_soon", "catalog"],
 					["GET /v1/shop/brands?category=<id or slug>", "catalog"],
+					["GET /v1/shop/attributes", "catalog"],
 					["PATCH /v1/categories/:id", "catalog"],
 					["PATCH /v1/brands/:id", "catalog"]
 				]

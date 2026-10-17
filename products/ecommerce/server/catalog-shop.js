@@ -609,6 +609,51 @@ export const createCatalogShop = (product, service, common) => {
 		};
 	};
 
+	/**
+	 * GET /v1/shop/attributes: the product and variant fields a shopper meets: active, shown where shoppers look (the
+	 * product page, cards, filters or compare), with the names, units and choices the pages draw them with. Never the
+	 * staff's rules (required, format, visibility, SEO), fields of orders, customers or units, fields shown nowhere a
+	 * shopper looks, or fields of categories that are not listed (the staff's list is `GET /v1/attributes`).
+	 * @param {any} ctx
+	 */
+	const attributeList = async (ctx) => {
+		const { s, data } = await common.open(ctx);
+		const [fields, hidden] = await Promise.all([attributesOf(data), hiddenFor(s)]);
+		/** @param {string[]} categoryIds */
+		const listed = (categoryIds) => categoryIds.filter((id) => !hidden.unlisted.has(id));
+		return {
+			items: fields
+				.filter(
+					(field) =>
+						field.active &&
+						(field.on === 'product' || field.on === 'variant') &&
+						(field.show.page || field.show.card !== 'none' || field.show.filter || field.show.compare) &&
+						!(field.categoryId && hidden.unlisted.has(field.categoryId)) &&
+						!(field.categoryIds.length > 0 && listed(field.categoryIds).length === 0),
+				)
+				.sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
+				.map((field) => ({
+					id: field.id,
+					slug: field.slug,
+					name: field.name,
+					on: field.on,
+					type: field.type,
+					unit: field.unit,
+					choices: field.choices.map((choice) => ({ value: choice.value, label: choice.label })),
+					multiple: field.multiple,
+					categoryId: field.categoryId,
+					categoryIds: listed(field.categoryIds),
+					sort: field.sort,
+					show: {
+						page: field.show.page,
+						card: field.show.card,
+						filter: field.show.filter,
+						compare: field.show.compare,
+					},
+				})),
+		};
+	};
+
 	return [
 		defineRoute({
 			method: 'GET',
@@ -633,6 +678,14 @@ export const createCatalogShop = (product, service, common) => {
 			feature: 'catalog',
 			rateLimit: VISITOR_LIMITS,
 			handler: conditional(categoryList, service.now),
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/shop/attributes',
+			auth: 'browser',
+			feature: 'catalog',
+			rateLimit: VISITOR_LIMITS,
+			handler: conditional(attributeList, service.now),
 		}),
 		defineRoute({
 			method: 'GET',

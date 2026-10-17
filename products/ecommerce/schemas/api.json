@@ -12847,6 +12847,106 @@
 			},
 			"description": "A visible brand."
 		},
+		"ShopField": {
+			"type": "object",
+			"required": [
+				"id",
+				"slug",
+				"name",
+				"on",
+				"type",
+				"unit",
+				"choices",
+				"multiple",
+				"categoryId",
+				"categoryIds",
+				"sort",
+				"show"
+			],
+			"additionalProperties": false,
+			"description": "A product or variant field a shopper meets: only what the pages need to draw it, never the staff rules.",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "att_…"
+				},
+				"slug": {
+					"type": "string",
+					"description": "The filter name: listings filter by attr.<slug>."
+				},
+				"name": {
+					"type": "string"
+				},
+				"on": {
+					"type": "string",
+					"enum": ["product", "variant"]
+				},
+				"type": {
+					"type": "string",
+					"enum": ["text", "number", "choice", "yes_no", "date"],
+					"description": "date values are YYYY-MM-DD."
+				},
+				"unit": {
+					"type": "string",
+					"maxLength": 20,
+					"description": "Shown after its values, for example cm or kg ('' for yes/no and date fields)."
+				},
+				"choices": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/AttributeChoice"
+					},
+					"description": "A choice field’s options, label first for shoppers."
+				},
+				"multiple": {
+					"type": "boolean",
+					"description": "It takes several values (text and choice fields)."
+				},
+				"categoryId": {
+					"type": ["string", "null"],
+					"maxLength": 64,
+					"description": "The category this attribute is the definition for (E45): the same slug may exist once per category, with its own name, choices, unit, glossary and SEO, and once for every category. null: every category. Products, listings and glossary pages take the definition of the product's or page's category, or of the nearest category above it, first, then the one for every category."
+				},
+				"categoryIds": {
+					"type": "array",
+					"maxItems": 200,
+					"items": {
+						"type": "string"
+					},
+					"description": "The listed categories it applies to (empty: every category)."
+				},
+				"sort": {
+					"type": "integer",
+					"minimum": -1000000,
+					"maximum": 1000000,
+					"description": "Lower first, then by name."
+				},
+				"show": {
+					"type": "object",
+					"required": ["page", "card", "filter", "compare"],
+					"additionalProperties": false,
+					"properties": {
+						"page": {
+							"type": "boolean",
+							"description": "The product page shows it (variant fields: they make the options shoppers pick)."
+						},
+						"card": {
+							"type": "string",
+							"enum": ["none", "image", "chips"],
+							"description": "How product cards show it (variant fields: the card variants carry it)."
+						},
+						"filter": {
+							"type": "boolean",
+							"description": "Shoppers can filter listings by it."
+						},
+						"compare": {
+							"type": "boolean",
+							"description": "Shown in the product comparison (product fields)."
+						}
+					}
+				}
+			}
+		},
 		"ShopCategory": {
 			"type": "object",
 			"required": [
@@ -21363,6 +21463,23 @@
 					"type": "array",
 					"items": {
 						"$ref": "#/components/schemas/ShopBrand"
+					}
+				}
+			}
+		}
+	},
+	"GET /v1/shop/attributes": {
+		"summary": "The fields shoppers meet",
+		"description": "Browser token from your website (or the server token, for pages your server renders). The active product and variant fields a shopper sees: shown on the product page, cards, filters or comparison, with the names, units and choices the pages draw them with, in the shop’s order. No staff rules (required, format, visibility, SEO), no order, customer or unit fields, no fields shown nowhere a shopper looks and none of unlisted categories. The staff’s list is `GET /v1/attributes`. The answer carries an ETag and Cache-Control like the other shop reads; an If-None-Match naming the ETag is answered 304 without a body.",
+		"response": {
+			"type": "object",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/ShopField"
 					}
 				}
 			}

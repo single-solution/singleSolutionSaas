@@ -42,6 +42,7 @@ const SERVER_READS = [
 	'/v1/shop/products/desk-lamp',
 	'/v1/shop/categories',
 	'/v1/shop/brands',
+	'/v1/shop/attributes',
 ];
 
 describe('conditional reads', () => {
