@@ -141,7 +141,7 @@ export const createRoutes = (product) => {
 
 	/**
 	 * Who acts (PLAN 0.8.10 K2): the ticket's member of the merchant's staff, else the acting user a server-token call
-	 * names with `SS-Actor-*` headers, else the server.
+	 * names with verified `SS-Sign-In`, else the server.
 	 * @param {any} ctx
 	 */
 	const who = (ctx) => actorOf(ctx, SERVER_ACTOR);
@@ -813,7 +813,7 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/payments',
-			auth: 'server',
+			auth: 'server', runtime: true,
 			feature: 'payment_api',
 			idempotent: true,
 			rateLimit: SERVER_LIMITS,
@@ -825,11 +825,12 @@ export const createRoutes = (product) => {
 				return created(service.view(s, payment));
 			},
 		}),
-		defineRoute({ method: 'GET', path: '/v1/payments', auth: 'server', feature: 'payment_api', handler: listPayments }),
+		defineRoute({ method: 'GET', path: '/v1/payments', auth: 'server', permission: 'payments.read', feature: 'payment_api', handler: listPayments }),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/payments/count',
 			auth: 'server',
+			permission: 'payments.read',
 			feature: 'payment_api',
 			handler: paymentCounts.count,
 		}),
@@ -837,14 +838,15 @@ export const createRoutes = (product) => {
 			method: 'GET',
 			path: '/v1/payments/counts',
 			auth: 'server',
+			permission: 'payments.read',
 			feature: 'payment_api',
 			handler: paymentCounts.counts,
 		}),
-		defineRoute({ method: 'GET', path: '/v1/payments/:id', auth: 'server', feature: 'payment_api', handler: readPayment }),
+		defineRoute({ method: 'GET', path: '/v1/payments/:id', auth: 'server', runtime: true, feature: 'payment_api', handler: readPayment }),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/payments/:id/cancel',
-			auth: 'server',
+			auth: 'server', runtime: true,
 			feature: 'payment_api',
 			rateLimit: SERVER_LIMITS,
 			handler: cancelPayment,
@@ -852,7 +854,7 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/payments/:id/verify',
-			auth: 'server',
+			auth: 'server', runtime: true,
 			feature: 'payment_api',
 			rateLimit: SERVER_LIMITS,
 			handler: async (ctx) => {
@@ -866,21 +868,21 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/events',
-			auth: 'server',
+			auth: 'server', permission: 'payments.read',
 			feature: 'payment_api',
 			handler: (ctx) => product.events.list(ctx),
 		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/events/count',
-			auth: 'server',
+			auth: 'server', permission: 'payments.read',
 			feature: 'payment_api',
 			handler: (ctx) => product.events.count(ctx),
 		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/events/counts',
-			auth: 'server',
+			auth: 'server', permission: 'payments.read',
 			feature: 'payment_api',
 			handler: (ctx) => product.events.counts(ctx),
 		}),
@@ -890,7 +892,7 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/manual-methods',
-			auth: 'server',
+			auth: 'server', runtime: true,
 			feature: 'manual_payments',
 			database: false,
 			handler: manualMethods,
@@ -899,6 +901,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/payments/:id/confirm',
 			auth: 'server',
+			permission: 'payments.confirm',
 			feature: 'manual_payments',
 			handler: confirmPayment,
 		}),
@@ -906,6 +909,7 @@ export const createRoutes = (product) => {
 			method: 'GET',
 			path: '/v1/payments/:id/proof',
 			auth: 'server',
+			permission: 'payments.confirm',
 			feature: 'manual_payments',
 			handler: proofLink,
 		}),
@@ -913,6 +917,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/payments/:id/refunds',
 			auth: 'server',
+			permission: 'payments.refund',
 			feature: 'refunds',
 			idempotent: true,
 			rateLimit: SERVER_LIMITS,
@@ -924,20 +929,21 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/links',
 			auth: 'server',
+			permission: 'links.manage',
 			feature: 'payment_links',
 			idempotent: true,
 			rateLimit: SERVER_LIMITS,
 			handler: createLink,
 		}),
-		defineRoute({ method: 'GET', path: '/v1/links', auth: 'server', feature: 'payment_links', handler: listLinks }),
-		defineRoute({ method: 'GET', path: '/v1/links/:id', auth: 'server', feature: 'payment_links', handler: readLink }),
-		defineRoute({ method: 'PATCH', path: '/v1/links/:id', auth: 'server', feature: 'payment_links', handler: switchLink }),
+		defineRoute({ method: 'GET', path: '/v1/links', auth: 'server', permission: 'links.read', feature: 'payment_links', handler: listLinks }),
+		defineRoute({ method: 'GET', path: '/v1/links/:id', auth: 'server', permission: 'links.read', feature: 'payment_links', handler: readLink }),
+		defineRoute({ method: 'PATCH', path: '/v1/links/:id', auth: 'server', permission: 'links.manage', feature: 'payment_links', handler: switchLink }),
 
 		// ------------------------------------------------------------------------------------------- subscriptions
 		defineRoute({
 			method: 'POST',
 			path: '/v1/subscriptions',
-			auth: 'server',
+			auth: 'server', runtime: true,
 			feature: 'subscriptions',
 			idempotent: true,
 			rateLimit: SERVER_LIMITS,
@@ -953,13 +959,14 @@ export const createRoutes = (product) => {
 			method: 'GET',
 			path: '/v1/subscriptions',
 			auth: 'server',
+			permission: 'subscriptions.read',
 			feature: 'subscriptions',
 			handler: listSubscriptions,
 		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/subscriptions/:id',
-			auth: 'server',
+			auth: 'server', runtime: true,
 			feature: 'subscriptions',
 			handler: async (ctx) => {
 				const s = await siteOf(ctx);
@@ -971,6 +978,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/subscriptions/:id/cancel',
 			auth: 'server',
+			permission: 'subscriptions.cancel',
 			feature: 'subscriptions',
 			handler: cancelSubscription,
 		}),

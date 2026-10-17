@@ -162,7 +162,7 @@ describe('before setup', () => {
 		expect(await env.connect('stripe', STRIPE)).toMatchObject({ status: 'test_failed' });
 		expect(await env.connect('stripe', { secretKey: 'nope' })).toMatchObject({ status: 'test_failed' });
 		stripeAnswers();
-		expect(await env.connect('stripe', STRIPE)).toMatchObject({ status: 'connected', last4: 'ijkl' });
+		expect(await env.connect('stripe', STRIPE)).toMatchObject({ status: 'connected', set: true });
 		env.gateways.respond('https://api-m.paypal.com', (c) =>
 			c.path === '/v1/oauth2/token' ? { status: 200, body: { access_token: 'tok' } } : { status: 404 },
 		);
@@ -332,7 +332,7 @@ describe('the payment API and Stripe', () => {
 		expect(part.json).toMatchObject({
 			status: 'partially_refunded',
 			refunded: 50000,
-			refunds: [{ amount: 50000, reason: 'One item returned', manual: false, by: 'Server' }],
+			refunds: [{ amount: 50000, reason: 'One item returned', manual: false, by: 'Test Staff' }],
 		});
 		const call = env.gateways.callsTo('https://api.stripe.com').at(-1);
 		const form = new URLSearchParams(call?.body);
@@ -527,7 +527,7 @@ describe('the other gateways', () => {
 		env.gateways.respond('https://ipg1.apps.net.pk', (c) =>
 			c.path === '/Ecommerce/api/Transaction/GetAccessToken' ? { status: 200, body: { ACCESS_TOKEN: 'tok' } } : undefined,
 		);
-		expect(await env.connect('payfast_pk', PAYFAST_PK)).toMatchObject({ status: 'connected', last4: '0123' });
+		expect(await env.connect('payfast_pk', PAYFAST_PK)).toMatchObject({ status: 'connected', set: true });
 		const payment = await createPayment({ gateway: 'payfast_pk', currency: 'PKR' });
 		const form = await page(`/pay/${env.websiteId}/${payment.id}`);
 		expect(form.text).toContain('https://ipg1.apps.net.pk/Ecommerce/api/Transaction/PostTransaction');
@@ -579,7 +579,7 @@ describe('the other gateways', () => {
 			const sent = JSON.parse(c.body);
 			return { status: 201, body: { id: `rp_${sent.metadata.ss_payment}`, checkout_url: 'https://checkout.rapid.test/x' } };
 		});
-		expect(await env.connect('rapid', RAPID)).toMatchObject({ status: 'connected', last4: '0123' });
+		expect(await env.connect('rapid', RAPID)).toMatchObject({ status: 'connected', set: true });
 		const payment = await createPayment({ gateway: 'rapid', currency: 'PKR' });
 		const go = await page(`/pay/${env.websiteId}/${payment.id}`);
 		expect(go.headers.get('location')).toBe('https://checkout.rapid.test/x');
@@ -734,7 +734,7 @@ describe('manual payment methods (P1, P2)', () => {
 		});
 		expect(confirmed.json.history.at(-1)).toMatchObject({
 			event: 'paid',
-			by: 'Server',
+			by: 'Test Staff',
 			reference: 'TRX-5501',
 			note: 'Seen in the bank app',
 		});
@@ -1451,14 +1451,20 @@ describe('kit features (PLAN 0.8.10)', () => {
 			label: 'club-9',
 			detail: 'Card (Stripe) · price_2 · Canceled by the merchant',
 		});
-		// the server itself, and a ticket's staff member
+		// a staff route called with the server token alone is refused, whoever the headers claim to be; the staff member of
+		// the harness's sign-in is the actor otherwise
 		const plain = await createPayment({ gateway: 'bank_transfer' });
+		const forged = await env.call('POST', `/v1/payments/${plain.id}/confirm`, {
+			token: env.server,
+			bare: true,
+			body: {},
+			headers: { 'ss-actor-id': 'staff_7', 'ss-actor-name': 'Zo%C3%AB%20Martin' },
+		});
+		expect(forged.status).toBe(403);
+		expect(forged.json.type).toMatch(/needs_signed_in_staff$/);
 		await env.api('POST', `/v1/payments/${plain.id}/confirm`, {});
 		const server = (await env.api('GET', `/v1/activity?target=${plain.id}`)).json.items[0];
-		expect(server).toMatchObject({ actor: { kind: 'server', id: 'server', name: 'Server' }, label: plain.id });
-		const malformed = await env.api('POST', `/v1/payments/${plain.id}/refunds`, {}, { 'ss-actor-id': 'not valid!' });
-		expect(malformed.status).toBe(400);
-		expect(malformed.json.type).toMatch(/invalid_actor$/);
+		expect(server).toMatchObject({ actor: { kind: 'user', id: 'usr_test_staff', name: 'Test Staff' }, label: plain.id });
 		expect((await env.api('GET', `/v1/payments/${plain.id}`)).json.refunded).toBe(0);
 	});
 
@@ -1538,16 +1544,16 @@ describe('kit features (PLAN 0.8.10)', () => {
 		const byName = Object.fromEntries(listed.json.connections.map((/** @type {any} */ c) => [c.name, c]));
 		for (const name of ['stripe', 'paypal', 'payfast', 'payfast_pk', 'jazzcash', 'easypaisa', 'rapid', 'generic_1', 'storage'])
 			expect(byName[name]).toMatchObject({ state: 'connected' });
-		expect(byName.payfast_pk).toMatchObject({ kind: 'secret', neededBy: ['payfast_pk'], last4: '0123' });
+		expect(byName.payfast_pk).toMatchObject({ kind: 'secret', neededBy: ['payfast_pk'], set: true });
 		expect(listed.text).not.toContain(PAYFAST_PK.securedKey);
 		// the merchant's server replaces a gateway's keys: tested live with the gateway, as in the dashboard
 		env.gateways.respond('https://ipg1.apps.net.pk', () => ({ status: 401 }));
 		const other = { ...PAYFAST_PK, securedKey: 'secured-key-9999' };
 		const failed = await env.api('PUT', '/v1/connections/payfast_pk', { value: other }, ACTOR);
-		expect(failed.json).toMatchObject({ name: 'payfast_pk', state: 'test_failed', last4: '9999' });
+		expect(failed.json).toMatchObject({ name: 'payfast_pk', state: 'test_failed', set: true });
 		env.gateways.respond('https://ipg1.apps.net.pk', () => ({ status: 200, body: { ACCESS_TOKEN: 'tok' } }));
 		expect((await env.api('POST', '/v1/connections/payfast_pk/test', {})).json.state).toBe('connected');
-		expect((await env.api('PUT', '/v1/connections/payfast_pk', { value: PAYFAST_PK })).json.last4).toBe('0123');
+		expect((await env.api('PUT', '/v1/connections/payfast_pk', { value: PAYFAST_PK })).json.set).toBe(true);
 	});
 
 	it('explains the kit’s routes in the docs', async () => {
@@ -1618,7 +1624,7 @@ describe('data rights, statuses and public files', () => {
 			'<td><code>gateway</code></td><td><a href="#schema-Method">Method</a> or null</td>',
 			'<td><code>status</code></td><td>query</td><td>&#34;pending&#34; | &#34;paid&#34;',
 			'<td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>A key of your own per request',
-			'Optional headers: <code>SS-Actor-Id</code>',
+			'Optional headers: <code>SS-Sign-In</code>',
 			'id="schema-PaymentsEvent"',
 		])
 			expect(docs.text).toContain(part);
@@ -1656,12 +1662,12 @@ describe('data rights, statuses and public files', () => {
 	it('handles the other notices: revoked tokens and sessions, and a deleted website', async () => {
 		env.advance(1000);
 		const revoked = (await env.portal.issueToken({ websiteId: env.websiteId, productId: 'payments', kind: 'server' })).token;
-		expect((await env.call('GET', '/v1/payments', { token: revoked })).status).toBe(200);
+		expect((await env.call('GET', '/v1/features', { token: revoked })).status).toBe(200);
 		const claims = JSON.parse(Buffer.from(revoked.split('.')[1] ?? '', 'base64url').toString());
 		env.portal.revoke(claims.jti);
 		expect((await env.portal.sendNotice('payments', { type: 'token.revoked', websiteId: env.websiteId })).status).toBe(204);
 		await env.flush();
-		expect((await env.call('GET', '/v1/payments', { token: revoked })).status).toBe(401);
+		expect((await env.call('GET', '/v1/features', { token: revoked })).status).toBe(401);
 		const cookie = await env.adminSession();
 		const session = await env.dashboard(cookie, 'GET', '/v1/dashboard/session');
 		expect(session.status).toBe(200);

@@ -14,6 +14,8 @@
 			"get": {
 				"summary": "The activity log, newest first",
 				"x-ss-auth": "server",
+				"x-ss-permission": "audit.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -104,16 +106,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -167,6 +160,8 @@
 			"get": {
 				"summary": "Count the activity log",
 				"x-ss-auth": "server",
+				"x-ss-permission": "audit.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -224,16 +219,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -264,6 +250,8 @@
 			"get": {
 				"summary": "Count the activity log by action, actor or kind",
 				"x-ss-auth": "server",
+				"x-ss-permission": "audit.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -334,16 +322,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -1393,16 +1372,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -1552,16 +1522,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -1681,16 +1642,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -1765,6 +1717,8 @@
 			"get": {
 				"summary": "Connections (state and last 4 characters only)",
 				"x-ss-auth": "server",
+				"x-ss-permission": "connections.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -1772,16 +1726,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -1824,6 +1769,8 @@
 			"delete": {
 				"summary": "Remove a connection",
 				"x-ss-auth": "server",
+				"x-ss-permission": "connections.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -1839,16 +1786,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -1870,6 +1808,8 @@
 			"put": {
 				"summary": "Save a connection ({ value }), tested live",
 				"x-ss-auth": "server",
+				"x-ss-permission": "connections.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -1885,16 +1825,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -1947,6 +1878,8 @@
 			"post": {
 				"summary": "Test a connection again",
 				"x-ss-auth": "server",
+				"x-ss-permission": "connections.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -1962,16 +1895,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -2002,6 +1926,7 @@
 			"post": {
 				"summary": "Delete one user's records",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -2009,16 +1934,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -2102,6 +2018,7 @@
 			"post": {
 				"summary": "Export one user's records",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -2109,16 +2026,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -2201,6 +2109,8 @@
 				"description": "Also sent to your webhook URLs through Notifications when its token is pasted.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_api",
+				"x-ss-permission": "payments.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -2250,16 +2160,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -2291,6 +2192,8 @@
 				"summary": "Count the events",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_api",
+				"x-ss-permission": "payments.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -2319,16 +2222,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -2360,6 +2254,8 @@
 				"summary": "Count the events by type or delivery",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_api",
+				"x-ss-permission": "payments.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -2400,16 +2296,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -2440,6 +2327,7 @@
 			"get": {
 				"summary": "Features with on/off and hourly price",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -2447,16 +2335,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -2525,6 +2404,7 @@
 			"get": {
 				"summary": "The Format of money and dates",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -2532,16 +2412,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -2570,6 +2441,8 @@
 			"put": {
 				"summary": "Save Format fields (null resets one)",
 				"x-ss-auth": "server",
+				"x-ss-permission": "settings.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -2577,16 +2450,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -2681,6 +2545,8 @@
 				"summary": "The payment links, newest first",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_links",
+				"x-ss-permission": "links.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -2709,16 +2575,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -2749,6 +2606,8 @@
 				"description": "Share its url. A fixed amount, or null to let the payer enter one (at least minAmount).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_links",
+				"x-ss-permission": "links.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -2766,16 +2625,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -2915,6 +2765,8 @@
 				"summary": "Read a payment link",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_links",
+				"x-ss-permission": "links.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -2930,16 +2782,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -2969,6 +2812,8 @@
 				"summary": "Turn a payment link off or on",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_links",
+				"x-ss-permission": "links.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -2984,16 +2829,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -3043,6 +2879,7 @@
 			"get": {
 				"summary": "A list setting ({ value })",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -3058,16 +2895,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -3105,6 +2933,8 @@
 			"put": {
 				"summary": "Save a whole list setting ({ value })",
 				"x-ss-auth": "server",
+				"x-ss-permission": "settings.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -3120,16 +2950,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -3187,6 +3008,7 @@
 				"description": "Each method's words, whether it is offered and its accounts; with currency, readiness and accounts for that currency (else every account with a value). Kept with GET and PUT /v1/lists/manual_methods.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "manual_payments",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -3205,16 +3027,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -3258,6 +3071,8 @@
 				"summary": "The payments, newest first",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_api",
+				"x-ss-permission": "payments.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -3315,16 +3130,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -3355,6 +3161,7 @@
 				"description": "Send the payer to checkoutUrl. Without a gateway the payer picks one on that page. 422 gateway_not_ready when the gateway (or every gateway, without one) is off or not connected for the currency; 422 currency_not_supported. Send an Idempotency-Key so a retried request makes one payment.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_api",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -3372,16 +3179,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -3486,6 +3284,8 @@
 				"summary": "Count the payments (the list's filters)",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_api",
+				"x-ss-permission": "payments.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -3522,16 +3322,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -3564,6 +3355,8 @@
 				"description": "by=state counts by status; by=gateway by gateway (none: no gateway picked yet).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_api",
+				"x-ss-permission": "payments.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -3612,16 +3405,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -3654,6 +3438,7 @@
 				"description": "A pending payment is asked of its gateway again (at most every 30 seconds) when you read it.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_api",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -3669,16 +3454,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -3711,6 +3487,7 @@
 				"description": "For example when its order was canceled or expired: the payment becomes voided and its page closes. A paid payment answers 409 already_paid (with the payment): refund it instead. Canceling it again changes nothing.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_api",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -3726,16 +3503,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -3785,6 +3553,8 @@
 				"description": "Only a pending payment of a manual payment method (409 conflict otherwise): a transfer, cash on delivery, payment at pickup. One you canceled is confirmed too, and is then to be refunded (refundDue).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "manual_payments",
+				"x-ss-permission": "payments.confirm",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -3800,16 +3570,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -3863,6 +3624,8 @@
 				"description": "404 not_found when the payment has no proof; 503 storage_not_connected without Storage.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "manual_payments",
+				"x-ss-permission": "payments.confirm",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -3878,16 +3641,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -3920,6 +3674,8 @@
 				"description": "Only a paid payment (409 not_refundable). Stripe, PayPal, PayFast (South Africa) and the generic adapter with a refund address refund at the gateway (502 gateway_failed when it refuses); the others are recorded (manual) and you return the money yourself. Send an Idempotency-Key.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "refunds",
+				"x-ss-permission": "payments.refund",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -3945,16 +3701,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -4008,6 +3755,7 @@
 				"description": "Use it before marking an order paid: verified is true only for a payment confirmed by the gateway (refunded later included) with the same amount and currency, never for one you canceled.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_api",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4023,16 +3771,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -4101,8 +3840,9 @@
 		},
 		"/v1/permissions": {
 			"get": {
-				"summary": "This product's permissions (for Accounts roles)",
+				"summary": "This product's permissions and the kit's own (for Accounts roles)",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4110,16 +3850,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -4140,8 +3871,7 @@
 												"type": "object",
 												"required": [
 													"key",
-													"name",
-													"feature"
+													"name"
 												],
 												"additionalProperties": false,
 												"properties": {
@@ -4152,7 +3882,8 @@
 														"type": "string"
 													},
 													"feature": {
-														"type": "string"
+														"type": "string",
+														"description": "The feature it belongs to (the kit's own permissions, which every product offers, belong to none)."
 													}
 												}
 											}
@@ -4179,6 +3910,7 @@
 			"get": {
 				"summary": "Settings schemas, and values of switched-on features",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4186,16 +3918,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -4282,6 +4005,8 @@
 			"delete": {
 				"summary": "Reset one setting to the default",
 				"x-ss-auth": "server",
+				"x-ss-permission": "settings.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -4297,16 +4022,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -4350,6 +4066,8 @@
 				"summary": "Save one setting (<feature>.<setting>, { value })",
 				"description": "The feature must be on (else 403 feature_off); an invalid value answers 422 validation_failed with errors.",
 				"x-ss-auth": "server",
+				"x-ss-permission": "settings.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -4365,16 +4083,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -4438,6 +4147,8 @@
 				"summary": "The subscriptions, newest first",
 				"x-ss-auth": "server",
 				"x-ss-feature": "subscriptions",
+				"x-ss-permission": "subscriptions.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -4484,16 +4195,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -4524,6 +4226,7 @@
 				"description": "Create the plan at the gateway first (a recurring Stripe price or a PayPal billing plan); send the payer to checkoutUrl. 422 gateway_not_ready; 502 gateway_failed.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "subscriptions",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4541,16 +4244,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -4628,6 +4322,7 @@
 				"summary": "Read a subscription",
 				"x-ss-auth": "server",
 				"x-ss-feature": "subscriptions",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4643,16 +4338,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -4685,6 +4371,8 @@
 				"description": "409 conflict when it has already ended; 502 gateway_failed when the gateway refuses.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "subscriptions",
+				"x-ss-permission": "subscriptions.cancel",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -4700,16 +4388,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -4757,6 +4436,7 @@
 			"get": {
 				"summary": "Widget texts",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4764,16 +4444,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -4816,6 +4487,8 @@
 			"delete": {
 				"summary": "Reset one widget text to English",
 				"x-ss-auth": "server",
+				"x-ss-permission": "settings.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -4831,16 +4504,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -4870,6 +4534,8 @@
 				"summary": "Save one widget text ({ value })",
 				"description": "1–2000 characters with the same {placeholders} as the English text.",
 				"x-ss-auth": "server",
+				"x-ss-permission": "settings.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -4885,16 +4551,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -4945,6 +4602,7 @@
 			"get": {
 				"summary": "The widgets' theme",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4952,16 +4610,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -4990,6 +4639,8 @@
 			"put": {
 				"summary": "Save theme fields (null resets one)",
 				"x-ss-auth": "server",
+				"x-ss-permission": "settings.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -4997,16 +4648,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -5088,8 +4730,9 @@
 		"/v1/tickets": {
 			"post": {
 				"summary": "Ticket for an admin widget (15 minutes)",
-				"description": "Your server asks for a ticket for the member of your staff who opens an admin widget. Permissions of switched-off features are left out of the ticket.",
+				"description": "Your server asks for a ticket for the signed-in member of your staff who opens an admin widget: send their Accounts sign-in in SS-Sign-In next to the server token. The ticket is for that person and carries only the permissions of their role out of those asked for (and of switched-on features); the server token alone gets 403 needs_signed_in_staff.",
 				"x-ss-auth": "server",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -5097,16 +4740,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -5116,42 +4750,16 @@
 							"schema": {
 								"type": "object",
 								"required": [
-									"user",
 									"permissions",
 									"origin"
 								],
 								"properties": {
-									"user": {
-										"type": "object",
-										"required": [
-											"id",
-											"name",
-											"email"
-										],
-										"properties": {
-											"id": {
-												"type": "string",
-												"minLength": 1,
-												"maxLength": 256
-											},
-											"name": {
-												"type": "string",
-												"minLength": 1,
-												"maxLength": 200
-											},
-											"email": {
-												"type": "string",
-												"minLength": 1,
-												"maxLength": 320
-											}
-										}
-									},
 									"permissions": {
 										"type": "array",
 										"items": {
 											"type": "string"
 										},
-										"description": "Permissions of this product (GET /v1/permissions)."
+										"description": "Permissions of this product (GET /v1/permissions) the widget needs; the ticket gets those the person's role grants."
 									},
 									"origin": {
 										"type": "string",
@@ -5254,16 +4862,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -5301,7 +4900,7 @@
 			"serverToken": {
 				"type": "http",
 				"scheme": "bearer",
-				"description": "The website's server token: the merchant's server only, never with an Origin header. It also reaches every visitor route, acting for the visitor named by SS-Visitor-IP and, for a signed-in shopper, SS-Sign-In (their Accounts sign-in, checked for this website; a wrong, expired or foreign one is 401 invalid_sign_in)."
+				"description": "The website's server token: the merchant's server only, never with an Origin header. On its own it runs the shop (x-ss-access: runtime): it also reaches every visitor route, acting for the visitor named by SS-Visitor-IP and, for a signed-in shopper, SS-Sign-In (their Accounts sign-in, checked for this website; a wrong, expired or foreign one is 401 invalid_sign_in). Every change of configuration and every piece of staff work (x-ss-access: staff) also needs the verified Accounts sign-in of a signed-in staff member in SS-Sign-In, whose role has the permission: a stolen server token changes nothing by itself."
 			},
 			"ticket": {
 				"type": "http",
@@ -5320,42 +4919,24 @@
 					"maxLength": 45
 				}
 			},
-			"SSActorId": {
-				"name": "SS-Actor-Id",
+			"SSSignIn": {
+				"name": "SS-Sign-In",
 				"in": "header",
 				"required": false,
-				"description": "With the server token: the member of your staff the call acts for (1–64 of A–Z a–z 0–9 _ . : @ -).",
+				"description": "The signed-in shopper's Accounts sign-in, checked for this website (a wrong, expired or foreign one is 401 invalid_sign_in). Only a verified sign-in names the shopper: a user id alone is never taken.",
 				"schema": {
 					"type": "string",
-					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$"
+					"maxLength": 8192
 				}
 			},
-			"SSActorName": {
-				"name": "SS-Actor-Name",
+			"SSSignInStaff": {
+				"name": "SS-Sign-In",
 				"in": "header",
-				"required": false,
-				"description": "The acting member's name, percent-encoded UTF-8, at most 120 characters (with SS-Actor-Id).",
-				"schema": {
-					"type": "string"
-				}
-			},
-			"SSActorRole": {
-				"name": "SS-Actor-Role",
-				"in": "header",
-				"required": false,
-				"description": "The acting member's role, percent-encoded UTF-8, at most 40 characters.",
-				"schema": {
-					"type": "string"
-				}
-			},
-			"SSActorEmail": {
-				"name": "SS-Actor-Email",
-				"in": "header",
-				"required": false,
-				"description": "The acting member's email address.",
+				"required": true,
+				"description": "The Accounts sign-in of the signed-in staff member whose role has the permission this call needs, checked for this website. The server token alone changes nothing: without it the call is 403 needs_signed_in_staff, with a role that lacks the permission 403 forbidden, with a sign-in of another website or an expired or forged one 401 invalid_sign_in. The person it names is who the activity log and the histories record.",
 				"schema": {
 					"type": "string",
-					"maxLength": 320
+					"maxLength": 8192
 				}
 			}
 		},
@@ -5452,8 +5033,8 @@
 					"label",
 					"kind",
 					"neededBy",
+					"set",
 					"state",
-					"last4",
 					"message",
 					"testedAt"
 				],
@@ -5489,10 +5070,9 @@
 							"test_failed"
 						]
 					},
-					"last4": {
-						"type": "string",
-						"maxLength": 4,
-						"description": "The last 4 characters of the secret ('' when none)."
+					"set": {
+						"type": "boolean",
+						"description": "Whether a value is stored. Nothing of the value ever comes back, not even its last characters."
 					},
 					"message": {
 						"type": [

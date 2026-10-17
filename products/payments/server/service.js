@@ -47,7 +47,7 @@ import { createStore } from '../adapters/store.js';
  */
 /**
  * Who did it: a member of the merchant's staff (a ticket's user, or the acting user a server-token call names with
- * `SS-Actor-*` headers, PLAN 0.8.10 K2), or the server.
+ * verified `SS-Sign-In`, PLAN 0.8.10 K2), or the server.
  * @typedef {{ kind: string, id: string, name?: string, role?: string }} Actor
  */
 

@@ -6,7 +6,7 @@
  * routes: a test fails when an answer does not fit its description.
  * @module
  */
-import { apiChecker, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import { apiChecker, createAccountsDouble, createFakePortal, createMemoryStore, createNetwork, staffCaller } from '@ss/app-kit/testing';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
@@ -109,8 +109,9 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	const now = () => t;
 	const portal = await createFakePortal({ now });
 	const gateways = createFakeGateways();
+	const accounts = createAccountsDouble({ now });
 	/** @type {Record<string, (request: Request) => Promise<Response>>} */
-	const handlers = { [portal.url]: portal.handle, ...gateways.handlers };
+	const handlers = { [portal.url]: portal.handle, [accounts.url]: accounts.handle, ...gateways.handlers };
 	const network = createNetwork(handlers);
 	const product = createProductInstance({
 		config: { mongodbUri: '', connectSecret: SECRET, encryptionKey: ENCRYPTION_KEY },
@@ -127,6 +128,7 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	handlers[BASE] = handler;
 	await portal.connect({ handler, baseUrl: BASE, secret: SECRET });
 	portal.addProduct({ productId: 'notifications', baseUrl: NOTIFY_BASE });
+	portal.addProduct({ productId: 'accounts', baseUrl: accounts.url });
 	const websiteId = portal.addWebsite({ domain: DOMAIN });
 	const browser = (await portal.issueToken({ websiteId, productId: manifest.id, kind: 'browser' })).token;
 	const server = (await portal.issueToken({ websiteId, productId: manifest.id, kind: 'server' })).token;
@@ -141,9 +143,13 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	 * @param {string} method
 	 * @param {string} path
 	 * @param {{ token?: string, origin?: string, body?: unknown, form?: Record<string, string> | string, cookie?: string,
-	 *   headers?: Record<string, string>, after?: boolean }} [init]
+	 *   headers?: Record<string, string>, after?: boolean, bare?: boolean, staff?: Record<string, any> }} [init] `bare`: the
+	 *   server token alone; `staff`: who is signed in (the website's server with a staff Owner signed in otherwise)
 	 */
-	const call = async (method, path, { token, origin, body, form, cookie, headers = {}, after = true } = {}) => {
+	const call = async (method, path, { token, origin, body, form, cookie, headers = {}, after = true, bare = false, staff } = {}) => {
+		if (token === server && !bare && headers['ss-sign-in'] === undefined && headers['ss-visitor-ip'] === undefined)
+			// eslint-disable-next-line no-param-reassign -- the harness signs the staff member in
+			headers = await staffHeaders({ headers, staff });
 		const raw = form === undefined ? undefined : typeof form === 'string' ? form : new URLSearchParams(form).toString();
 		const response = await handler(
 			new Request(path.startsWith('http') ? path : `${BASE}${path}`, {
@@ -172,6 +178,16 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		API.assert({ method, path, status: response.status, body: json });
 		return { status: response.status, headers: response.headers, json, text };
 	};
+
+	// the website's Accounts token, pasted through the dashboard on first use
+	const staffHeaders = staffCaller({
+		accounts,
+		websiteId,
+		paste: async () => {
+			const token = (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token;
+			await connect('accounts', token);
+		},
+	});
 
 	/** An admin's dashboard session (Owner by default); returns the cookie. @param {'owner' | 'support'} [role] */
 	const adminSession = async (role = 'owner') => {
@@ -227,13 +243,16 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	) => {
 		const response = await call('POST', '/v1/tickets', {
 			token: server,
-			body: { user: { id: 'u_1', name: 'Sam Staff', email: 'sam@example.com' }, permissions, origin: ADMIN_ORIGIN },
+			staff: { id: 'u_1', name: 'Sam Staff', email: 'sam@example.com' },
+			body: { permissions, origin: ADMIN_ORIGIN },
 		});
 		return /** @type {{ ticket: string }} */ (response.json).ticket;
 	};
 
 	return {
 		portal,
+		accounts,
+		staffHeaders,
 		product,
 		gateways,
 		websiteId,
