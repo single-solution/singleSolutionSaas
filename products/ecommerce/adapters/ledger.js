@@ -16,7 +16,6 @@ import { summarize } from '../core/catalog.js';
 import { unitKeys } from '../core/fields.js';
 import { COLLECTIONS, ID_PREFIX, isDuplicate } from '../core/model.js';
 import { lotsByRule } from '../core/loyalty.js';
-import { piecesOf } from '../core/measure.js';
 import { counterIdOf, counterNumbers, numberFormOf, orderNumberOf } from '../core/order-numbers.js';
 import { balanceOf, compactLots, expireLots, spendFromLots, takeFromLots } from '../core/points.js';
 
@@ -650,22 +649,6 @@ const tracked = (taken) =>
 	);
 
 /**
- * Add units to the products' `ordered` counts (parity P3-10: units of orders placed and not given back before delivery),
- * one write per product; negative units take them off. Counted in pieces: a measured line is one (`core/measure.js`).
- * @param {WebsiteData} data @param {ReadonlyArray<{ productId: string, quantity: number }>} lines @param {Session} [session]
- */
-const countOrdered = async (data, lines, session) => {
-	/** @type {Map<string, number>} */
-	const units = new Map();
-	for (const line of lines) units.set(line.productId, (units.get(line.productId) ?? 0) + line.quantity);
-	for (const [productId, quantity] of units)
-		if (quantity !== 0)
-			await data
-				.collection(COLLECTIONS.products)
-				.updateOne({ websiteId: data.websiteId, id: productId }, { $inc: { ordered: quantity } }, { session });
-};
-
-/**
  * A business-rule refusal inside the transaction: thrown, it aborts everything.
  * @param {Exclude<PlacementResult, { ok: true }>} result
  */
@@ -673,7 +656,7 @@ const refused = (result) => Object.assign(new Error(result.code), { refused: res
 
 /**
  * Place an order in one transaction: number it, hold its stock, count its offer uses, spend its points, hold its
- * booked slots, count its units as ordered and insert it. Nothing is written when any part fails. A number used already
+ * booked slots and insert it. Nothing is written when any part fails. A number used already
  * (its counter fell behind the numbers of its form) moves the counter past the highest and places it again, once.
  * @param {WebsiteData} data
  * @param {Placement} placement
@@ -744,11 +727,6 @@ export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => 
 					(placement.slots ?? []).map((slot) => ({ ...slot, orderId: order.id })),
 					session,
 				);
-				await countOrdered(
-					data,
-					order.lines.map((line) => ({ productId: line.productId, quantity: piecesOf(line) })),
-					session,
-				);
 				const record = {
 					...order,
 					number,
@@ -789,26 +767,16 @@ export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => 
 
 /**
  * Swap the stock an edited order holds (E29), in one transaction: its old physical lines go back, the new ones are
- * held, its old lines leave the `ordered` counts (while it held them) and its new ones join them, and `update` writes
- * the order (claimed by its `updatedAt`). Nothing changes when the new stock is short or the order changed meanwhile.
+ * held, and `update` writes the order (claimed by its `updatedAt`). Nothing changes when the new stock is short or the order changed meanwhile.
  * `taken`: the variants the edit leaves with fewer units than before, by how many.
  * @param {WebsiteData} data
  * @param {OrderRecord} order as read
- * @param {{ lines: StockLine[], ordered: ReadonlyArray<{ productId: string, quantity: number }>,
- *   update: (session: Session) => Promise<boolean> }} swap `ordered`: every new line (any kind)
+ * @param {{ lines: StockLine[], update: (session: Session) => Promise<boolean> }} swap
  * @returns {Promise<{ ok: true, taken: TakenStock[] } | { ok: false, code: 'out_of_stock', productId: string, variantId: string } | { ok: false, code: 'changed' }>}
  */
-export const swapOrderStock = async (data, order, { lines, ordered, update }) => {
+export const swapOrderStock = async (data, order, { lines, update }) => {
 	try {
 		return await data.transaction(async (session) => {
-			await countOrdered(
-				data,
-				[
-					...(order.stockHeld ? order.lines.map((line) => ({ productId: line.productId, quantity: -piecesOf(line) })) : []),
-					...ordered,
-				],
-				session,
-			);
 			const back = order.stockHeld
 				? order.lines
 						.filter((line) => line.kind === 'physical')
@@ -1092,9 +1060,6 @@ const applyEffect = async (data, orderId, effect, { now, session }) => {
 				await data
 					.collection(COLLECTIONS.products)
 					.updateOne({ websiteId, id: line.productId }, { $inc: { sold: line.quantity } }, { session });
-			return;
-		case 'count_ordered':
-			await countOrdered(data, effect.lines, session);
 			return;
 		case 'count_rto':
 			// a package that came back counts on its customer's record (K-6)

@@ -171,7 +171,7 @@ const stockStateOf = (variants, trackStock) => {
  * can be bought is shown, `inStock`).
  */
 const NOT_CONTENT = Object.freeze(
-	new Set(['sold', 'ordered', 'rating', 'publishedAt', 'contentUpdatedAt', 'createdAt', 'updatedAt', 'stockState']),
+	new Set(['sold', 'rating', 'publishedAt', 'contentUpdatedAt', 'createdAt', 'updatedAt', 'stockState']),
 );
 
 /**

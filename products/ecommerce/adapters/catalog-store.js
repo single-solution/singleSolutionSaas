@@ -36,7 +36,6 @@ export const INDEXES = [
 	{ collection: COLLECTIONS.products, keys: { websiteId: 1, status: 1, publishedAt: -1, id: -1 }, name: 'newest' },
 	{ collection: COLLECTIONS.products, keys: { websiteId: 1, status: 1, price: 1, id: 1 }, name: 'by_price' },
 	{ collection: COLLECTIONS.products, keys: { websiteId: 1, status: 1, sold: -1, id: -1 }, name: 'top' },
-	{ collection: COLLECTIONS.products, keys: { websiteId: 1, status: 1, ordered: -1, id: -1 }, name: 'top_ordered' },
 	{ collection: COLLECTIONS.products, keys: { websiteId: 1, status: 1, 'rating.average': -1, id: -1 }, name: 'by_rating' },
 	{ collection: COLLECTIONS.products, keys: { websiteId: 1, status: 1, name: 1, id: 1 }, name: 'by_name' },
 	{ collection: COLLECTIONS.products, keys: { websiteId: 1, categoryIds: 1 }, name: 'by_category' },

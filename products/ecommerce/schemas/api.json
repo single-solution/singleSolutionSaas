@@ -6064,7 +6064,7 @@
 				"productsSoldRatingUpdated": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "Products whose sold count (from delivered order lines, when they have any), ordered count (from the lines of open and delivered orders) or rating (from approved reviews, when they have any) changed."
+					"description": "Products whose sold count (from delivered order lines, when they have any) or rating (from approved reviews, when they have any) changed."
 				},
 				"serialsSold": {
 					"type": "integer",
@@ -9449,7 +9449,6 @@
 				"previousSlugs",
 				"replacedBy",
 				"sold",
-				"ordered",
 				"rating",
 				"price",
 				"priceMax",
@@ -9888,11 +9887,6 @@
 					"type": "integer",
 					"minimum": 0,
 					"description": "Units sold (delivered orders)."
-				},
-				"ordered": {
-					"type": "integer",
-					"minimum": 0,
-					"description": "Units of orders that hold their stock or were delivered (open and delivered orders): a count kept for reports; top products rank by units sold (P3-10)."
 				},
 				"rating": {
 					"type": "object",

@@ -863,7 +863,6 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			lines: lines
 				.filter((line) => line.kind === 'physical')
 				.map((line) => ({ productId: line.productId, variantId: line.variantId, quantity: line.quantity, locationId: null })),
-			ordered: lines.map((line) => ({ productId: line.productId, quantity: piecesOf(line) })),
 			update: async (session) => {
 				// it holds its new lines' stock now, also an imported order that held none (its facts say so: a cancel gives
 				// it back), only while its facts are as read

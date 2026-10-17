@@ -1,7 +1,6 @@
 /**
  * What ranks top products (parity P3-10): units sold (delivered orders; no setting changes it) for the listing's `top`
- * and `sold_asc` sorts and Chat's top products. How placing, editing and giving back count the units ordered is checked
- * by the ledger test and the order engine's property tests.
+ * and `sold_asc` sorts and Chat's top products.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readyShop } from './helpers.js';
@@ -15,10 +14,10 @@ const names = async (query) =>
 
 beforeAll(async () => {
 	shop = await readyShop();
-	// A has delivered the most, B is ordered the most (open orders), C is in between on both
-	await shop.seedProduct({ name: 'Top A', sold: 5, ordered: 6 });
-	await shop.seedProduct({ name: 'Top B', sold: 1, ordered: 9 });
-	await shop.seedProduct({ name: 'Top C', sold: 3, ordered: 4 });
+	// A has delivered the most, B the fewest, C is in between
+	await shop.seedProduct({ name: 'Top A', sold: 5 });
+	await shop.seedProduct({ name: 'Top B', sold: 1 });
+	await shop.seedProduct({ name: 'Top C', sold: 3 });
 });
 afterAll(async () => shop?.product.close());
 
@@ -39,9 +38,7 @@ describe('top products (P3-10)', () => {
 		expect(head.status).toBe(200);
 	});
 
-	it('never ranks by units ordered (open orders do not make a product a top seller), and no setting offers it', async () => {
-		// Top B is the most ordered (9) but has delivered the fewest (1)
-		expect((await names('sort=top'))[0]).toBe('Top A');
-		await expect(shop.setting('catalog', 'topBasis', 'ordered')).rejects.toThrow(/404/);
+	it('no setting changes what ranks them', async () => {
+		await expect(shop.setting('catalog', 'topBasis', 'sold')).rejects.toThrow(/404/);
 	});
 });

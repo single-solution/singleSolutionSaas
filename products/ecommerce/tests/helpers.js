@@ -581,7 +581,6 @@ export const setup = async ({
 			booking: null,
 			seo: { ...EMPTY_SEO },
 			sold: 0,
-			ordered: 0,
 			rating: { average: 0, count: 0 },
 			publishedAt: new Date(t),
 			contentUpdatedAt: new Date(t),

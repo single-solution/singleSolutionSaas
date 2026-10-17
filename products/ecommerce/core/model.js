@@ -208,8 +208,6 @@ export const ID_PREFIX = Object.freeze({
  * @property {import('./durations.js').Duration | null} warrantyTime this item's warranty after delivery (null = the
  *   grade's, else the setting)
  * @property {number} sold units sold (delivered orders), for top products
- * @property {number} ordered units of orders placed and not given back before delivery (open and delivered orders), for
- *   a count nothing ranks by now (top products go by units sold, `TOP_FIELD`; parity P3-10)
  * @property {{ average: number, count: number }} rating approved reviews
  * @property {number} price lowest active variant price (listings, sorting)
  * @property {boolean} inStock some active variant can be sold now

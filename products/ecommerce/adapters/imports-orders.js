@@ -190,28 +190,23 @@ const finishLoyalty = async (data, now, { after, limit }) => {
 };
 
 /**
- * Products' units sold and ordered and rating, each derived only from what it can be: `sold` (the units of delivered
- * orders, as delivery counts them) and `ordered` (the units of orders that hold their stock or were delivered, as
- * placing and giving back count them; P3-10) from the order lines when the product has at least one, `rating` from the
- * approved reviews when it has at least one review (of any status). A product with no order line or no review keeps
- * the number it was imported with (the old shop's count, whose orders or reviews were not moved). A page of products.
+ * Products' units sold and rating, each derived only from what it can be: `sold` (the units of delivered orders, as
+ * delivery counts them) from the order lines when the product has at least one, `rating` from the approved reviews when
+ * it has at least one review (of any status). A product with no order line or no review keeps the number it was
+ * imported with (the old shop's count, whose orders or reviews were not moved). A page of products.
  * @param {WebsiteData} data @param {Page} page
  */
 const finishSold = async (data, { after, limit }) => {
 	const { websiteId } = data;
 	const products = data.collection(COLLECTIONS.products);
 	const batch = await products
-		.find(
-			{ websiteId, ...afterId(after) },
-			{ projection: { _id: 1, id: 1, sold: 1, ordered: 1, rating: 1 }, sort: { _id: 1 }, limit },
-		)
+		.find({ websiteId, ...afterId(after) }, { projection: { _id: 1, id: 1, sold: 1, rating: 1 }, sort: { _id: 1 }, limit })
 		.toArray();
 	let updated = 0;
 	if (batch.length > 0) {
 		const ids = batch.map((product) => String(product.id));
 		const delivered = { $ne: [{ $ifNull: ['$deliveredAt', null] }, null] };
-		const counted = { $or: [delivered, { $eq: ['$stockHeld', true] }] };
-		// a product with order lines, with its delivered units and its units ordered
+		// a product with order lines, with its delivered units
 		const units = new Map(
 			(
 				await data
@@ -224,12 +219,11 @@ const finishSold = async (data, { after, limit }) => {
 							$group: {
 								_id: '$lines.productId',
 								sold: { $sum: { $cond: [delivered, '$lines.quantity', 0] } },
-								ordered: { $sum: { $cond: [counted, '$lines.quantity', 0] } },
 							},
 						},
 					])
 					.toArray()
-			).map((row) => [String(row._id), { sold: Number(row.sold), ordered: Number(row.ordered) }]),
+			).map((row) => [String(row._id), { sold: Number(row.sold) }]),
 		);
 		// a product with reviews, with its approved ones per star
 		/** @type {Map<string, Array<{ rating: number, count: number }>>} */
@@ -255,7 +249,6 @@ const finishSold = async (data, { after, limit }) => {
 			const changed = {};
 			const lines = units.get(id);
 			if (lines !== undefined && product.sold !== lines.sold) changed.sold = lines.sold;
-			if (lines !== undefined && product.ordered !== lines.ordered) changed.ordered = lines.ordered;
 			const reviewed = stars.get(id);
 			if (reviewed) {
 				const { average, count } = ratingSummary(reviewed);

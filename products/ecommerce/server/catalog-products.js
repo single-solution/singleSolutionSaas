@@ -514,7 +514,6 @@ export const createCatalogProducts = (product, service, common) => {
 			slug,
 			media: [],
 			sold: 0,
-			ordered: 0,
 			rating: { average: 0, count: 0 },
 			...summarize(fields.variants, fields.trackStock),
 			previousSlugs: [],

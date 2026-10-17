@@ -413,7 +413,6 @@ describe('placing an order', () => {
 		const edit = (/** @type {number} */ quantity, /** @type {any} */ current) =>
 			swapOrderStock(data, current, {
 				lines: [{ productId: product.id, variantId, quantity }],
-				ordered: [{ productId: product.id, quantity }],
 				update: async (session) =>
 					(
 						await data
@@ -433,10 +432,6 @@ describe('placing an order', () => {
 		// 5 → 4 units: the variant got one back, nothing was taken
 		expect(await edit(4, edited)).toEqual({ ok: true, taken: [] });
 		expect((await stockOf(product.id)).stock).toBe(2);
-		// the units ordered follow the edit (P3-10)
-		expect((await data.collection(COLLECTIONS.products).findOne({ websiteId: data.websiteId, id: product.id }))?.ordered).toBe(
-			4,
-		);
 	});
 
 	it('returns to origin and restocks a claim exactly once', async () => {
