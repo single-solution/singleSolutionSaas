@@ -185,28 +185,17 @@ export const settingsPlan = (values) => {
 				'phone.trunkPrefix': PHONE_FORMAT.trunkPrefix,
 				// phone codes: the SaaS defaults (SB sends none: Forgot password is its WhatsApp chat); mechanical, to review
 				'phone.channel': 'sms',
-				'phone.codeLength': 6,
-				'phone.codeMinutes': 10,
-				'phone.cooldownSeconds': 30,
-				'phone.perHour': 6,
 				'phone.websitePerHour': 0,
 				// SaaS default (A9; store mapping to review)
-				'phone.codeTries': 5,
 				// addresses: at most 6, name, phone and city needed (`packages/shared/src/customerAddresses.ts`:4, :55-80)
-				'profile.maxAddresses': 6,
 				'profile.keepOneAddress': false,
 				'profile.addressRequired': ['name', 'phone', 'city'],
 				// members: invite only (owner 2026-10-14, SA-2); passwords 8–128 with a letter and a digit
 				// (`packages/shared/src/validation.ts`:16-18, :83-97); no breach check; owner's lock answer of 2026-10-14
 				'phone_password.signUp': false,
 				'phone_password.minLength': 8,
-				'phone_password.maxLength': 128,
 				'phone_password.letterAndDigit': true,
-				'phone_password.breachedCheck': false,
-				'phone_password.maxAttempts': 20,
-				'phone_password.lockMinutes': 1,
 				// SaaS default (K-27; SB counts no failures per account): store mapping to review when the owner asks
-				'phone_password.forgetHours': 24,
 				// forgot password: a WhatsApp chat with the shop (`apps/web/src/app/account/_components/SignIn.tsx`:31)
 				'phone_password.selfReset': 'off',
 				'phone_password.forgotUrl': store.whatsappNumber
@@ -215,31 +204,19 @@ export const settingsPlan = (values) => {
 				// staff: the same password rules; reset links last an hour (`apps/admin/src/app/api/auth/forgot-password/
 				// route.ts`:19); 8 tries per network (`packages/shared/src/constants.ts`:214)
 				'email_password.minLength': 8,
-				'email_password.maxLength': 128,
 				'email_password.letterAndDigit': true,
-				'email_password.breachedCheck': false,
-				'email_password.maxAttempts': 20,
-				'email_password.lockMinutes': 1,
-				'email_password.forgetHours': 24,
-				'email_password.resetMinutes': 60,
-				'email_password.resetLimit': 3,
 				'email_password.resetHosts': [],
-				'passwords.lockMode': 'fixed',
-				'passwords.networkLimit': 8,
 				'passwords.personalCheck': false,
 				// staff-issued codes last 15 minutes (`apps/admin/src/app/api/customers/[id]/access-code/route.ts`:15); setup
 				// links 7 days (`apps/admin/src/app/api/membership-requests/[id]/setup-link/route.ts`:16-17)
-				'staff_links.codeMinutes': 15,
 				'staff_links.setupDays': 7,
 				...(site ? { 'staff_links.setupPageUrl': `${site}/account/setup/{code}` } : {}),
 				// SaaS default (A12; store mapping to review)
-				'roles.maxRoles': 100,
 				'role_requests.requestableRoles': [MEMBER_ROLE],
 				'role_requests.requireNote': false,
 				// SB tells a repeat ask that the number already belongs to a member, "already-member"
 				// (`apps/web/src/app/api/membership/requests/route.ts`:95-99, `account/_components/RequestMembership.tsx`:56-57):
 				// Accounts' detailed answers keep that (its default answers every ask the same)
-				'role_requests.revealStatus': true,
 				// the member role comes when the setup link is used, not when staff invite
 				// (`apps/web/src/app/api/account/setup/route.ts`:68 sets isMember with the password)
 				'role_requests.giveRoleAt': 'completion',
@@ -267,16 +244,11 @@ export const settingsPlan = (values) => {
 				'catalog.weightUnit': 'g',
 				'catalog.sizeUnit': 'mm',
 				'catalog.lowStock': store.lowStockThreshold,
-				'catalog.topBasis': 'delivered', // SaaS default (store mapping to review when the owner asks)
-				'catalog.imageMaxBytes': 12_582_912, // `apps/admin/src/lib/uploads/limits.ts`:9-10
 				'catalog.showStock': 'always',
 				'catalog.lowStockShown': 5,
-				'catalog.videoMaxBytes': 67_108_864, // limits.ts:12
 				'catalog.search': 'basic',
-				'catalog.chatSearch': 'same',
 				// the shop search matches the whole phrase in the name (`apps/web/src/lib/core/queries.ts`:363-364)
 				'catalog.searchMatch': 'phrase',
-				'catalog.searchIndex': 'ss_ecommerce_products_search',
 				'size_charts.defaultChartId': DEFAULT_CHART_ID,
 				'checkout.numberPattern': ORDER_PATTERN,
 				'checkout.numberPrefix': ORDER_PREFIX,
@@ -285,15 +257,11 @@ export const settingsPlan = (values) => {
 				// SB sends shoppers no message (owner decision D5, "Store facts corrected after the re-audit")
 				'checkout.messageChannels': [],
 				'checkout.statusTemplates': 'one',
-				'checkout.policyFormat': 'html',
 				'checkout.returnsAccepted': 'unknown', // SaaS default (store mapping to review when the owner asks)
 				// nothing expires and no open-order cap (no expiry code in SB; `apps/web/src/app/api/orders/route.ts`:107)
 				'checkout.paymentWindowMinutes': 0,
 				'checkout.confirmationHours': 0,
-				'checkout.openOrderCap': 0,
 				// the SaaS default (no burst limit; store mapping to review when the owner asks)
-				'checkout.placeLimit': 0,
-				'checkout.placeWindowMinutes': 15, // mechanical default (E39), store mapping to review
 				'checkout.addressRequired': ['line1'],
 				// guests order unless the phone is a member's (`apps/web/src/app/api/orders/route.ts`:195-198)
 				'checkout.guests': 'unless_password',
@@ -305,8 +273,6 @@ export const settingsPlan = (values) => {
 				'checkout.trunkPrefix': PHONE_FORMAT.trunkPrefix,
 				'checkout.countries': ['PK'],
 				'checkout.customerRecords': 'first_order',
-				'checkout.maxLines': 20, // orders/route.ts:102
-				'checkout.maxQuantity': 10, // orders/route.ts:105
 				'checkout.successUrl': '',
 				'checkout.cancelUrl': '',
 				// an edit keeps the delivery fee, discount and surcharge placed (`apps/admin/src/app/api/orders/[id]/route.ts`:215)
@@ -360,7 +326,6 @@ export const settingsPlan = (values) => {
 				'staff_alerts.includePhone': false,
 				// SaaS defaults (SB has no staff push and no recipient cap)
 				'staff_alerts.staffPush': false,
-				'staff_alerts.maxRecipients': 100,
 				...(admin ? { 'staff_alerts.adminUrl': `${admin}/orders?order={number}` } : {}),
 				// SEO (`apps/web/src/lib/seo/seoSettings.ts`:51-62, `packages/shared/src/seo/composeSeoMeta.ts`:224)
 				'seo.titleTemplate': (seo.titleTemplate || '{title} | {storeName}')
@@ -381,7 +346,6 @@ export const settingsPlan = (values) => {
 				'seo.pagedListings': 'index',
 				'seo.emptyCategories': 'noindex', // SaaS default (store mapping to review when the owner asks)
 				'seo.sitemapUrl': '/sitemap.xml',
-				'seo.sitemapSize': 10_000,
 				'seo.defaultDescription': seo.defaultDescription || store.siteTagline,
 				'seo.defaultImage': store.brandLogoLight || store.brandLogoDark || seo.ogImageDefault || seo.storeLogo,
 				'seo.indexNowOnSave': false,
@@ -400,7 +364,6 @@ export const settingsPlan = (values) => {
 				'feeds.shipping': true, // SaaS default (store mapping to review when the owner asks)
 				// category × brand pages `?brand=` and glossary pages (`packages/shared/src/seo/intentSurface.ts`:33-36,
 				// `apps/web/src/app/attributes/[category]/[attribute]`)
-				'landing_pages.landingMinProducts': 2,
 				'landing_pages.landingUrl': '{categoryUrl}?brand={brand}',
 				'landing_pages.attributeUrl': '/attributes/{category}/{slug}',
 				'landing_pages.attributeTitle': '{name}',
@@ -410,9 +373,6 @@ export const settingsPlan = (values) => {
 				'landing_pages.gradeDescription': '', // SaaS default (store mapping to review when the owner asks)
 				'landing_pages.auto': 'category_brand',
 				'landing_pages.autoFacet': '', // SaaS default (store mapping to review when the owner asks)
-				'landing_pages.autoMaxPages': 2000, // SaaS default (store mapping to review when the owner asks)
-				'landing_pages.autoMinProducts': 2,
-				'landing_pages.autoMinInStockVariants': 3,
 				'landing_pages.autoCopy': 'formula',
 				// SB's formula copy (`packages/shared/src/seo/intentSurface.ts`:180-225)
 				'landing_pages.autoTitle': '{brand} {category}',
@@ -545,14 +505,11 @@ export const settingsPlan = (values) => {
 			// the SaaS default waits (store mapping to review)
 			settings: {
 				'email.replyTo': '',
-				'email.retryPlan': 'short',
-				'email.retryWaits': [1, 5],
 				'delivery_log.retentionDays': 0,
 			},
 		},
 		payments: {
 			format,
-			settings: { 'manual_payments.proofMaxMb': 5 },
 			lists: {
 				// Payments' manual payment method bank_transfer (paid first) with SB's one account as label/value rows: SB's
 				// account title is the account holder's name; the proof comes on WhatsApp, not as an upload
@@ -592,7 +549,6 @@ export const settingsPlan = (values) => {
 				// tags load without a consent step (`apps/web/src/app/_components/marketing/MarketingPixels.tsx`:52-89)
 				'tags.consentRequired': false,
 				'pixels.contentIds': 'product',
-				'pixels.searchFromUrl': false,
 				'robots_verification.robotsRules': ['User-agent: *', 'Allow: /', ...disallow.map((path) => `Disallow: ${path}`)].join(
 					'\n',
 				),

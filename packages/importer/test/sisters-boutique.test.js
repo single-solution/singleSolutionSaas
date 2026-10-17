@@ -520,14 +520,10 @@ describe('the Sisters Boutique mapping', () => {
 		expect(ecommerce).toMatchObject({ 'checkout.editPricing': 'keep_placed', 'checkout.deleteGivesBack': 'all' });
 		expect(settings.accounts?.settings).toMatchObject({
 			'phone_password.signUp': false,
-			'phone_password.maxAttempts': 20,
-			'phone_password.lockMinutes': 1,
-			'passwords.networkLimit': 8,
 			'phone_password.forgotUrl': expect.stringMatching(/^https:\/\/wa\.me\/923000000099\?text=Salam!%20I%20forgot/),
 			'staff_links.setupPageUrl': 'https://shop.example.com/account/setup/{code}',
 			'role_requests.requestableRoles': ['member'],
 			// SB says "already a member" to a repeat ask: Accounts' detailed answers (its default is private)
-			'role_requests.revealStatus': true,
 		});
 		expect(/** @type {any} */ (settings.growth?.lists)?.announcements).toEqual([
 			{

@@ -295,7 +295,7 @@ export const taxonomySteps = Object.freeze([
 				title: text(doc.titleOverride) || text(doc.title),
 				description: text(doc.descriptionOverride) || text(doc.description),
 				intro: text(doc.introOverride) || text(doc.intro),
-				// indexed while enough of its products are in stock (landing_pages.landingMinProducts, SG-10)
+				// indexed while enough of its products are in stock (Ecommerce's fixed LANDING_MIN_PRODUCTS, SG-10)
 				indexable: 'auto',
 				...created(doc.createdAt),
 			};
