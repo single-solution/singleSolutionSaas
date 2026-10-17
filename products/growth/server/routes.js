@@ -310,22 +310,8 @@ export const createRoutes = (product) => {
 		}),
 
 		// --------------------------------------------------------------------------- analytics (server, ticket)
-		defineRoute({
-			method: 'GET',
-			path: '/v1/analytics',
-			auth: 'server',
-			permission: 'analytics.read',
-			feature: 'visitor_analytics',
-			handler: analytics,
-		}),
-		defineRoute({
-			method: 'GET',
-			path: '/v1/events',
-			auth: 'server',
-			permission: 'analytics.read',
-			feature: 'visitor_analytics',
-			handler: eventList,
-		}),
+		defineRoute({ method: 'GET', path: '/v1/analytics', auth: 'server', permission: 'analytics.read', feature: 'visitor_analytics', handler: analytics }),
+		defineRoute({ method: 'GET', path: '/v1/events', auth: 'server', permission: 'analytics.read', feature: 'visitor_analytics', handler: eventList }),
 		// product performance (R7 #113)
 		defineRoute({
 			method: 'GET',
@@ -403,8 +389,7 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/robots.txt',
-			auth: 'server',
-			runtime: true,
+			auth: 'server', runtime: true,
 			feature: 'robots_verification',
 			database: false,
 			// the presets keep out the search results of Searches and 404s' search parameters (G12)
@@ -418,8 +403,7 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/verification',
-			auth: 'server',
-			runtime: true,
+			auth: 'server', runtime: true,
 			feature: 'robots_verification',
 			database: false,
 			// the four known tags of the settings and the merchant's own list (G8)
@@ -434,8 +418,7 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/indexnow/key.txt',
-			auth: 'server',
-			runtime: true,
+			auth: 'server', runtime: true,
 			feature: 'indexnow',
 			database: false,
 			handler: async (ctx) => {
@@ -447,8 +430,7 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/indexnow',
-			auth: 'server',
-			runtime: true,
+			auth: 'server', runtime: true,
 			feature: 'indexnow',
 			database: false,
 			rateLimit: WEB_LIMITS,
