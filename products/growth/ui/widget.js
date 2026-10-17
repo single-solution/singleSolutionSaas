@@ -273,7 +273,7 @@ export const startWidget = ({ window: win, script }) => {
 			const search = found ? `${found.path}\n${String(found.term)}` : null;
 			if (found && search !== searched) {
 				if (record.searches) collector.record(() => found);
-				if (config.settings.tags.searchFromUrl) tags.search(String(found.term));
+				tags.search(String(found.term));
 			}
 			searched = search;
 			if (!record.searches) return;

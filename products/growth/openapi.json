@@ -7765,7 +7765,7 @@
 							"min": {
 								"type": "integer",
 								"minimum": 0,
-								"description": "title, description: the shortest good length, in characters (the merchant's setting, G9)."
+								"description": "title, description: the shortest good length, in characters (10 for a title, 50 for a description)."
 							},
 							"max": {
 								"type": "integer",

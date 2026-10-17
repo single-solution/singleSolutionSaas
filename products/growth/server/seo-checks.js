@@ -47,7 +47,6 @@ import {
 	suggestionsCheck,
 	summaryOf,
 	isIgnored,
-	limitsOf,
 	verificationCheck,
 } from '../core/seo-checks.js';
 import { scanHtml, sitemapOf, sitemapsIn } from '../core/seo-scan.js';
@@ -202,12 +201,7 @@ export const seoCheckRoutes = (product, { log }) => {
 		const domain = String(ctx.status.domain);
 		const origin = `https://${domain}`;
 		const until = web.deadline(RUN_MS);
-		const [on, checklist] = await Promise.all([
-			product.featuresOn(ctx.websiteId),
-			product.settings.values(ctx.websiteId, 'seo_checklist'),
-		]);
-		// the merchant's title and description lengths (G9)
-		const limits = limitsOf(checklist);
+		const on = await product.featuresOn(ctx.websiteId);
 		const rules = on.includes('redirects')
 			? await createRedirectStore(await ctx.data(), { merchantId: String(ctx.merchantId) }).all()
 			: [];
@@ -251,7 +245,6 @@ export const seoCheckRoutes = (product, { log }) => {
 				domain,
 				listed: listed.has(comparableOf(read.url)),
 				vitals: totals.vitals ? pageVitalsOf(totals.vitals, new URL(read.url).pathname) : null,
-				limits,
 			}),
 		});
 		const own = typedReads.map((read) => checkPage(read, false));
@@ -418,7 +411,8 @@ export const seoCheckRoutes = (product, { log }) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/seo/checks',
-			auth: 'server', permission: 'seo.check',
+			auth: 'server',
+			permission: 'seo.check',
 			feature: 'seo_checklist',
 			rateLimit: RUN_LIMITS,
 			handler: async (ctx) => {
@@ -426,7 +420,14 @@ export const seoCheckRoutes = (product, { log }) => {
 				return checked.ok ? checked.report : checked.problem;
 			},
 		}),
-		defineRoute({ method: 'GET', path: '/v1/seo/report', auth: 'server', permission: 'seo.check', feature: 'seo_checklist', handler: keptReport }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/seo/report',
+			auth: 'server',
+			permission: 'seo.check',
+			feature: 'seo_checklist',
+			handler: keptReport,
+		}),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/admin/seo/checks',

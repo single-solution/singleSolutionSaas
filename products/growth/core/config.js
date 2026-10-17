@@ -130,8 +130,8 @@ export const noticeAnswer = (notices, path) => {
  * The merchant's tags of switched-on features (malformed ids left out), and how they load (PLAN 0.8.10 G1): whether
  * they wait for consent (the `tags` shared setting `consentRequired`, true unless the merchant turns it off) and
  * whether Google Analytics 4 runs inside the Tag Manager container (`ga4ViaGtm`: Growth then does not load it); which
- * item ids the pixels get (the `pixels` shared setting `contentIds`, G2: the product's, or the variant's) and whether a
- * search found in the page address goes to them (`searchFromUrl`, SG-38: true unless the merchant turns it off).
+ * item ids the pixels get (the `pixels` shared setting `contentIds`, G2: the product's, or the variant's). A search
+ * found in the page address always goes to them too (SG-38).
  * @param {ReadonlyArray<string>} on
  * @param {FeatureValues} values
  * @param {ReadonlyArray<Record<string, unknown>>} [categories] the consent categories (their scripts, G3)
@@ -145,7 +145,6 @@ export const tagsOf = (on, values, categories = [], actions = []) => {
 		consentRequired: values.tags?.consentRequired !== false,
 		ga4ViaGtm: google && values.google_tags?.ga4ViaGtm === true,
 		contentIds: values.pixels?.contentIds === 'variant' ? /** @type {const} */ ('variant') : /** @type {const} */ ('product'),
-		searchFromUrl: values.pixels?.searchFromUrl !== false,
 		meta: on.includes('meta_pixel') ? idOf(text(values, 'meta_pixel', 'pixelId'), TAG_IDS.meta) : null,
 		ga4: google ? idOf(text(values, 'google_tags', 'ga4Id'), TAG_IDS.ga4) : null,
 		ads: adsId,

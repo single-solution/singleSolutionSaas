@@ -333,22 +333,6 @@ describe('SEO checklist: the live site', () => {
 		).toBe(422);
 	});
 
-	it('judges titles and descriptions by the merchant’s lengths (G9)', async () => {
-		await env.setting('seo_checklist', 'titleMax', 20);
-		await env.setting('seo_checklist', 'descriptionMin', 10);
-		env.advance(MIN_INTERVAL_MS + 1000);
-		const report = await (
-			await env.call('POST', '/v1/seo/checks', { token: env.server, body: { paths: ['/products/blue-lamp'] } })
-		).json();
-		const title = report.checks.find(
-			(/** @type {any} */ item) => item.id === 'title' && item.page === `${ORIGIN}/products/blue-lamp`,
-		);
-		expect(title).toMatchObject({ status: 'warn', finding: 'long', detail: { max: 20 } });
-		expect(title.reason).toContain('after about 20');
-		await env.setting('seo_checklist', 'titleMax', 60);
-		await env.setting('seo_checklist', 'descriptionMin', 50);
-	});
-
 	it('says what is wrong when the site does not answer', async () => {
 		env.web.siteDown(true);
 		const down = await (await env.call('POST', '/v1/seo/checks', { token: env.server, body: { paths: [] } })).json();

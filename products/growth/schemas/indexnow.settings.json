@@ -5,9 +5,12 @@
 		"key": {
 			"type": "string",
 			"title": "IndexNow key",
-			"description": "A key you make up: 8 to 128 letters, digits or dashes. Your website must serve it as a plain text file at the key file address below.",
+			"description": "Press Generate to make one (8 to 128 letters, digits or dashes). Your website must serve it as a plain text file at the key file address below.",
 			"default": "",
-			"maxLength": 128
+			"maxLength": 128,
+			"x-ui": {
+				"generate": 32
+			}
 		},
 		"keyPath": {
 			"type": "string",

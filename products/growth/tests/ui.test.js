@@ -837,7 +837,7 @@ describe('single-page apps (SG-4)', () => {
 		delete w.PerformanceObserver;
 	});
 
-	it('keeps searches found in the page address away from the pixels when the merchant asks, still recording them (SG-38)', async () => {
+	it('records searches found in the page address and sends them to the pixels with the ones the app sends (SG-38)', async () => {
 		vi.useFakeTimers({ toFake: ['setTimeout'] });
 		window.history.replaceState(null, '', '/search?q=lamp');
 		serve({
@@ -846,7 +846,6 @@ describe('single-page apps (SG-4)', () => {
 					200,
 					configOf(['visitor_analytics', 'searches_404s', 'meta_pixel'], {
 						tags: { consentRequired: false },
-						pixels: { searchFromUrl: false },
 						meta_pixel: { pixelId: '1234567' },
 						visitor_analytics: { requireConsent: false },
 					}),
@@ -865,6 +864,8 @@ describe('single-page apps (SG-4)', () => {
 				.map((event) => event.term),
 		).toEqual(['lamp', 'desk', 'chair']);
 		expect(w.fbq.queue.filter((/** @type {unknown[]} */ call) => call[1] === 'Search')).toEqual([
+			['track', 'Search', { search_string: 'lamp' }],
+			['track', 'Search', { search_string: 'desk' }],
 			['track', 'Search', { search_string: 'chair' }],
 		]);
 	});

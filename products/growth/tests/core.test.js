@@ -475,7 +475,6 @@ describe('page script settings', () => {
 			consentRequired: true,
 			ga4ViaGtm: false,
 			contentIds: 'product',
-			searchFromUrl: true,
 			meta: '123456789',
 			ga4: 'G-ABCD12',
 			ads: 'AW-123456',
@@ -500,8 +499,6 @@ describe('page script settings', () => {
 		expect(tagsReady(['google_tags'], viaGtm)).toEqual({ ready: 0, total: 1 });
 		expect(tagsOf([], viaGtm).ga4ViaGtm).toBe(false);
 		expect(tagsOf([], { pixels: { contentIds: 'variant' } }).contentIds).toBe('variant');
-		// SG-38: searches found in the page address may stay away from the pixels
-		expect(tagsOf([], { pixels: { searchFromUrl: false } }).searchFromUrl).toBe(false);
 	});
 
 	it('shows the announcements whose times on the business clock say so, in the merchant’s order (G4)', () => {

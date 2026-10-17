@@ -7,6 +7,7 @@
  * @module
  */
 import { VITALS, ratingOf } from './events.js';
+import { SEO_LIMITS } from './limits.js';
 import { allNodesOf, numbersIn, robotsAllows, robotsGroupsOf, scanHtml, typesOf } from './seo-scan.js';
 import { pathMatches } from '@ss/contracts/text';
 import { ORGANIZATION_TYPES } from './schema-types.js';
@@ -20,36 +21,6 @@ export const MAX_CANDIDATES = 6;
 
 /** Most sample pages one full run reads from the sitemap, each of another kind. */
 export const MAX_SAMPLES = 4;
-
-/**
- * Title and description lengths search results show without cutting: the defaults of the merchant's own (the SEO
- * checklist settings, G9).
- */
-const DEFAULT_LIMITS = Object.freeze({ titleMin: 10, titleMax: 60, descriptionMin: 50, descriptionMax: 160 });
-
-/** @typedef {{ titleMin: number, titleMax: number, descriptionMin: number, descriptionMax: number }} Limits */
-
-/**
- * The lengths a run judges by (G9): the `seo_checklist` settings when they are whole numbers from 1 to 1,000 and each
- * least is below its most, else the defaults.
- * @param {Record<string, unknown>} values
- * @returns {Limits}
- */
-export const limitsOf = (values) => {
-	/** @param {keyof Limits} name */
-	const read = (name) => {
-		const value = values[name];
-		return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 1000 ? value : DEFAULT_LIMITS[name];
-	};
-	const title = read('titleMin') < read('titleMax');
-	const description = read('descriptionMin') < read('descriptionMax');
-	return {
-		titleMin: title ? read('titleMin') : DEFAULT_LIMITS.titleMin,
-		titleMax: title ? read('titleMax') : DEFAULT_LIMITS.titleMax,
-		descriptionMin: description ? read('descriptionMin') : DEFAULT_LIMITS.descriptionMin,
-		descriptionMax: description ? read('descriptionMax') : DEFAULT_LIMITS.descriptionMax,
-	};
-};
 
 /** Fewest Web Vitals measurements a judgment is made on. */
 const MIN_VITAL_SAMPLES = 5;
@@ -384,13 +355,12 @@ const priceText = (value) => (Number.isInteger(value * 100) ? value.toFixed(2) :
  * The checks of one page that answered 200.
  * @param {Fetched} page
  * @param {import('./seo-scan.js').Scan} scan
- * @param {{ domain: string, kind: PageKind, listed: boolean, limits: Limits }} context `listed`: the sitemap lists the
- *   page; `limits`: the title and description lengths (G9)
+ * @param {{ domain: string, kind: PageKind, listed: boolean }} context `listed`: the sitemap lists the page
  * @returns {Check[]}
  */
-const contentChecks = (page, scan, { domain, kind, listed, limits }) => {
-	const TITLE_LENGTH = { min: limits.titleMin, max: limits.titleMax };
-	const DESCRIPTION_LENGTH = { min: limits.descriptionMin, max: limits.descriptionMax };
+const contentChecks = (page, scan, { domain, kind, listed }) => {
+	const TITLE_LENGTH = { min: SEO_LIMITS.titleMin, max: SEO_LIMITS.titleMax };
+	const DESCRIPTION_LENGTH = { min: SEO_LIMITS.descriptionMin, max: SEO_LIMITS.descriptionMax };
 	const at = page.url;
 	const header = (page.headers['x-robots-tag'] ?? '').toLowerCase();
 	const titleLength = scan.title?.length ?? 0;
@@ -632,11 +602,10 @@ export const headOf = (scan, url) => {
  * The checks of one page: whether it answered, then (when it did) its content, its structured data by kind, its speed,
  * and its Web Vitals (pages like it, when measured).
  * @param {Fetched} page
- * @param {{ domain: string, listed: boolean, vitals?: PageVitals | null, limits?: Limits }} context `limits`: the
- *   merchant's title and description lengths (G9; the defaults without them)
+ * @param {{ domain: string, listed: boolean, vitals?: PageVitals | null }} context
  * @returns {{ kind: PageKind, checks: Check[], scan: import('./seo-scan.js').Scan | null }}
  */
-export const pageChecks = (page, { domain, listed, vitals = null, limits = DEFAULT_LIMITS }) => {
+export const pageChecks = (page, { domain, listed, vitals = null }) => {
 	const reachable = reachableCheck(page, listed);
 	if (page.status !== 200) {
 		const parsed = new URL(page.url);
@@ -649,7 +618,7 @@ export const pageChecks = (page, { domain, listed, vitals = null, limits = DEFAU
 		scan,
 		checks: [
 			reachable,
-			...contentChecks(page, scan, { domain, kind, listed, limits }),
+			...contentChecks(page, scan, { domain, kind, listed }),
 			...speedChecks(page),
 			...(vitals ? [vitalsCheck(page.url, vitals)] : []),
 		],
