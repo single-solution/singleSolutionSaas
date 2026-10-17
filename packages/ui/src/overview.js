@@ -74,21 +74,20 @@ export const initialsOf = (name) => {
  */
 function NeedItem({ tone, title, effect, action }) {
 	return (
-		<li
-			className={cx(
-				'flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl px-4 py-3.5 @lg:flex-nowrap',
-				tone === 'danger' ? 'bg-danger-soft' : 'bg-warning-soft',
-			)}>
+		<li className="flex flex-wrap items-start gap-x-3 gap-y-2 py-3.5 first:pt-0 last:pb-0 @lg:flex-nowrap @lg:items-center">
 			<span
 				aria-hidden="true"
-				className={cx('size-2.5 shrink-0 rounded-full', tone === 'danger' ? 'bg-danger' : 'bg-warning')}
+				className={cx(
+					'mt-1.5 size-2 shrink-0 rounded-full ring-4 @lg:mt-0',
+					tone === 'danger' ? 'bg-danger ring-danger-soft' : 'bg-warning ring-warning-soft',
+				)}
 			/>
 			{/* on a narrow card the button goes under the words (lined up with them) instead of squeezing them */}
 			<div className="min-w-0 flex-[1_1_14rem]">
-				<p className="text-sm font-semibold break-words text-fg">{title}</p>
-				<p className="mt-0.5 text-label leading-relaxed text-muted">{effect}</p>
+				<p className="text-sm font-medium break-words text-fg">{title}</p>
+				<p className="mt-0.5 text-help text-muted">{effect}</p>
 			</div>
-			{action ? <div className="shrink-0 pl-[1.625rem] @lg:pl-0">{action}</div> : null}
+			{action ? <div className="shrink-0 pl-5 @lg:pl-0">{action}</div> : null}
 		</li>
 	);
 }
@@ -115,7 +114,7 @@ function NothingNeeded({ children }) {
 export function NeedsList({ items, none }) {
 	if (items.length === 0) return <NothingNeeded>{none}</NothingNeeded>;
 	return (
-		<ul className="@container space-y-2.5">
+		<ul className="@container divide-y divide-line-soft">
 			{items.map(({ key, ...need }) => (
 				<NeedItem key={key} {...need} />
 			))}

@@ -9,7 +9,7 @@
  * @module
  */
 export const ADMIN_KIT_CSS = `
-button.icon { padding: 6px 12px; line-height: 1; }
+button.icon { min-width: 32px; min-height: 32px; padding: 6px 10px; line-height: 1; }
 button.danger { background: var(--ss-color-danger, #b91c1c); color: var(--ss-color-onDanger, #ffffff); }
 .status.error { color: var(--ss-kit-bad); }
 .state { display: grid; justify-items: start; gap: 8px; padding: 12px 0; }
@@ -21,8 +21,9 @@ button.danger { background: var(--ss-color-danger, #b91c1c); color: var(--ss-col
   border: 2px solid currentColor; border-inline-end-color: transparent; animation: ss-spin 800ms linear infinite; }
 .dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--ss-color-muted, #9ca3af); }
 .dot.success { background: var(--ss-kit-ok); } .dot.warning { background: var(--ss-kit-warn); } .dot.danger { background: var(--ss-kit-bad); }
-.badge { display: inline-block; flex: none; padding: 2px 10px; border-radius: 999px; font-size: 0.75em; font-weight: 600;
-  white-space: nowrap; background: rgba(127, 127, 127, 0.14); }
+.badge { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 2px 8px; border-radius: 999px; font-size: 0.75em;
+  font-weight: 500; line-height: 1.5; white-space: nowrap; background: rgba(127, 127, 127, 0.12); }
+.badge:is(.success, .warning, .danger)::before { content: ''; width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; }
 .badge.success { color: var(--ss-kit-ok); background: color-mix(in srgb, var(--ss-kit-ok) 14%, transparent); }
 .badge.warning { color: var(--ss-kit-warn); background: color-mix(in srgb, var(--ss-kit-warn) 14%, transparent); }
 .badge.danger { color: var(--ss-kit-bad); background: color-mix(in srgb, var(--ss-kit-bad) 14%, transparent); }
@@ -41,18 +42,19 @@ button.danger { background: var(--ss-color-danger, #b91c1c); color: var(--ss-col
 }
 .more { position: relative; display: inline-block; }
 .menu { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 5; min-width: 200px; max-width: calc(100vw - 32px);
-  padding: 6px; border: 1px solid var(--ss-kit-hair); border-radius: var(--ss-kit-rc); background: var(--ss-kit-card);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18); animation: ss-pop 120ms ease-out; }
-.menu button { display: block; width: 100%; margin: 0; padding: 8px 12px; font-weight: 500; text-align: start; background: transparent; color: inherit; }
+  padding: 4px; border: 1px solid var(--ss-kit-hair); border-radius: var(--ss-kit-rc); background: var(--ss-kit-card);
+  box-shadow: var(--ss-kit-pop); animation: ss-pop 120ms ease-out; }
+.menu button { display: block; width: 100%; min-height: 32px; margin: 0; padding: 6px 10px; font-weight: 500; text-align: start;
+  background: transparent; color: inherit; box-shadow: none; border-radius: calc(var(--ss-kit-r) - 2px); }
 .menu button:hover, .menu button:focus-visible { background: rgba(127, 127, 127, 0.12); }
 .menu button.danger { color: var(--ss-kit-bad); }
 .overlay { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; padding: 16px;
-  background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(2px); animation: ss-fade 150ms ease-out; }
+  background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(2px); animation: ss-fade 150ms ease-out; }
 .dialog { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; padding: 22px 24px;
   border: 1px solid var(--ss-kit-hair); border-radius: var(--ss-kit-rc); background: var(--ss-kit-card);
-  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.3); animation: ss-pop 150ms ease-out; container-type: inline-size; }
+  box-shadow: var(--ss-kit-pop); animation: ss-pop 150ms ease-out; container-type: inline-size; }
 .dialog.wide { width: min(920px, 100%); }
-.dialog h3 { margin: 0 0 12px; font-size: 1.1em; font-weight: 600; }
+.dialog h3 { margin: 0 0 12px; font-size: 1.25em; font-weight: 600; letter-spacing: -0.01em; }
 .dialog .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 .dialog .actions button { margin-top: 0; }
 @media (max-width: 639px) { .overlay { padding: 0; } .dialog, .dialog.wide { width: 100%; height: 100%; max-height: none; border-radius: 0; } }
