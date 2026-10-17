@@ -14,7 +14,10 @@
 			"title": "Language",
 			"description": "The language suggestions are written in. Empty: the language of the product's own texts.",
 			"default": "",
-			"maxLength": 40
+			"maxLength": 40,
+			"x-ui": {
+				"defaultFrom": "region.language"
+			}
 		},
 		"words": {
 			"type": "integer",

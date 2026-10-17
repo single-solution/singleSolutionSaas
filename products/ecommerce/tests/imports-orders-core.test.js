@@ -2,6 +2,7 @@
  * The shoppers' and orders' checks in import mode (`core/imports-orders.js`, PLAN 0.8.10 K10): what each collection
  * takes and refuses, field by field, and the pure parts of finish. No database.
  */
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { MAX_NOTE } from '../core/orders.js';
@@ -22,11 +23,15 @@ import {
 } from '../core/imports-orders.js';
 
 const NOW = Date.parse('2026-10-05T10:00:00Z');
+/** The Portal's Region and format with what a test needs: the currency, the country and the calling code. @param {string} currency @param {string} country @param {string} [callingCode] */
+const regionOf = (currency, country, callingCode = '') => {
+	const { region } = emptyWebsiteSettings('web_00000000000000000000000001');
+	return { ...region, currency, country, phone: { ...region.phone, callingCode } };
+};
 const RULES = importRules({
 	flow: DEFAULT_FLOW,
-	checkout: { numberPattern: '{prefix}{year}-{number}', numberPrefix: 'S-', numberDigits: 4, defaultCallingCode: '+1' },
-	catalog: { currency: 'USD' },
-	country: 'GB',
+	checkout: { numberPattern: '{prefix}{year}-{number}', numberPrefix: 'S-', numberDigits: 4 },
+	region: regionOf('USD', 'GB', '+1'),
 	now: NOW,
 });
 
@@ -87,8 +92,7 @@ describe('import rules', () => {
 			importRules({
 				flow: DEFAULT_FLOW,
 				checkout: { numberDigits: 12 },
-				catalog: { currency: 'USD' },
-				country: null,
+				region: regionOf('USD', ''),
 				now: NOW,
 			}),
 		).toMatchObject({
@@ -96,12 +100,11 @@ describe('import rules', () => {
 			currency: 'USD',
 			phoneRules: { defaultCallingCode: '', trunkPrefix: '' },
 		});
-		// without the setting, national numbers take the business.json country's calling code (K12)
+		// without a calling code, national numbers take the country's calling code (K12)
 		const british = importRules({
 			flow: DEFAULT_FLOW,
 			checkout: { numberDigits: 'x' },
-			catalog: { currency: 'GBP' },
-			country: 'GB',
+			region: regionOf('GBP', 'GB'),
 			now: NOW,
 		});
 		expect(british).toMatchObject({ numbers: { digits: 6 }, currency: 'GBP', phoneRules: { defaultCallingCode: '+44' } });
@@ -155,7 +158,7 @@ describe('customers', () => {
 	it('key guests as checkout.guestIdentity says: an email guest needs no phone (dynamic model §5)', () => {
 		/** @param {string} guestIdentity */
 		const rulesFor = (guestIdentity) =>
-			importRules({ flow: DEFAULT_FLOW, checkout: { guestIdentity }, catalog: { currency: 'USD' }, country: 'US', now: NOW });
+			importRules({ flow: DEFAULT_FLOW, checkout: { guestIdentity }, region: regionOf('USD', 'US'), now: NOW });
 		const byEmail = { id: idOf('cus', 5), guest: true, name: 'Ella', email: 'Ella@Example.com' };
 		expect(valueOf(checkImportedCustomer(byEmail, rulesFor('email')))).toMatchObject({
 			guestKey: 'e:ella@example.com',
@@ -222,9 +225,8 @@ describe('customers', () => {
 		});
 		const rules = importRules({
 			flow: DEFAULT_FLOW,
-			checkout: { numberPattern: '{prefix}{year}-{number}', numberPrefix: 'S-', numberDigits: 4, defaultCallingCode: '+1' },
-			catalog: { currency: 'USD' },
-			country: 'GB',
+			checkout: { numberPattern: '{prefix}{year}-{number}', numberPrefix: 'S-', numberDigits: 4 },
+			region: regionOf('USD', 'GB', '+1'),
 			now: NOW,
 			fields: {
 				customer: [

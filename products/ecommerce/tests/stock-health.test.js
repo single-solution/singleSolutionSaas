@@ -220,8 +220,12 @@ describe('shop health (E41)', () => {
 		expect(byKey.archived_featured).toMatchObject({ status: 'attention', count: 1 });
 		expect(byKey.variants_out_of_stock).toMatchObject({ status: 'attention', count: 2 });
 		expect(byKey.variants_low_stock).toMatchObject({ status: 'attention', count: 2, link: '/v1/products?lowStock=1' });
-		expect(byKey.business_name).toMatchObject({ status: 'ok', link: 'https://shop.example.com/.well-known/business.json' });
-		// business.json gives no country and no logo, and the delivery days are not set
+		// the business checks link to the Portal's Website settings › Business, where the merchant fills them in
+		expect(byKey.business_name).toMatchObject({
+			status: 'ok',
+			link: `${shop.portal.url}/websites/${shop.websiteId}/settings#business`,
+		});
+		// the Portal's business facts hold no country and no logo, and the delivery days are not set
 		expect(byKey.business_country).toMatchObject({ status: 'attention', count: 1 });
 		expect(byKey.business_logo).toMatchObject({ status: 'attention', count: 1 });
 		expect(byKey.delivery_days).toEqual({ key: 'delivery_days', status: 'attention', count: 1, link: null });

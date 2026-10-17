@@ -1,11 +1,10 @@
 /**
  * What Ecommerce's staff alerts (PLAN 0.8.10 K6, E32) are made of: their events, the values they carry and the
  * permission `staffPermission: all_staff` stands for in each. Who gets an alert is the kit's rule
- * (`product.staffAlerts.prepare`): the feature's `recipients` setting (an email address, or an international phone
- * number that gets SMS, or WhatsApp with `phoneChannel`; name a channel first for one person: `email:`, `sms:`,
- * `whatsapp:` or `push:<Accounts user id>`), plus every unblocked Accounts user whose role grants `staffPermission`
- * (asked through the pasted Accounts token, kept 5 minutes on this instance; with `staffPush` they get a staff push
- * too), at most `maxRecipients` people; the template is `ecommerce.staff_<event>` (default words in
+ * (`product.staffAlerts.prepare`): the website's alert team in the Portal (Website settings › Team and alerts: an email
+ * address, or an international phone number that gets SMS, or WhatsApp when the team says so), plus every unblocked
+ * Accounts user whose role grants `staffPermission` (asked through the pasted Accounts token, kept 5 minutes on this
+ * instance; with the team's staff push on they get a staff push too), at most `maxRecipients` people; the template is `ecommerce.staff_<event>` (default words in
  * `schemas/messages.json`, parity P1), and `adminUrl` filled from the values is sent as `link`. With `includePhone` on,
  * an alert also carries the shopper's phone as `phone`. `server/order-events.js` hands the prepared messages to
  * Ecommerce's outbox, which saves every alert before the answer (K-17, owner decision D7) and shares its one retry

@@ -5,6 +5,7 @@
  * gives the visitor widgets their settings. The catalog holds no personal data (no data-rights answers).
  * @module
  */
+import { DEFAULT_SIZE_UNIT, DEFAULT_WEIGHT_UNIT } from '../core/limits.js';
 import { createCatalogCharts } from './catalog-charts.js';
 import { createCatalogCommon } from './catalog-common.js';
 import { createCatalogFiles } from './catalog-files.js';
@@ -40,7 +41,9 @@ export const createCatalog = (product, service) => {
 		 * @param {Site} s
 		 */
 		widgetSettings: async (s) => {
-			const { productUrl, categoryUrl, pageSize, lowStockShown, weightUnit, sizeUnit } = await s.values('catalog');
+			const { productUrl, categoryUrl, pageSize, lowStockShown } = await s.values('catalog');
+			// the units packages are typed in are the website's, set once in the Portal (Region and format)
+			const { units } = (await s.website()).region;
 			const types = await s.list('item_types');
 			return {
 				catalog: {
@@ -50,8 +53,8 @@ export const createCatalog = (product, service) => {
 					lowStockShown,
 					types,
 					// the units staff type and read package weights and sizes in (E13)
-					weightUnit,
-					sizeUnit,
+					weightUnit: units.weight || DEFAULT_WEIGHT_UNIT,
+					sizeUnit: units.size || DEFAULT_SIZE_UNIT,
 					// the merchant's unit states (E38)
 					unitStates: s.has('grades_serials') ? await s.list('unit_states') : [],
 				},

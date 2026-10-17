@@ -19,12 +19,11 @@ import {
 	ReasonsEditor,
 	ReviewQuestionsEditor,
 } from './merchant-lists.js';
-import { SEARCH_INDEX } from '../../core/limits.js';
+import { DEFAULT_CURRENCY, SEARCH_INDEX } from '../../core/limits.js';
 import { GradesEditor } from './grades.js';
 import { ItemTypesEditor } from './item-types.js';
 import { OrderFlowEditor } from './flow-editor.js';
 import {
-	AddressRegionsEditor,
 	BookingSchedulesEditor,
 	CouriersEditor,
 	PoliciesEditor,
@@ -35,7 +34,7 @@ import {
 	ZonesEditor,
 } from './lists.js';
 import { PaymentMethodsEditor } from './payment-methods.js';
-import { StoreDetailsEditor } from './store-details.js';
+import { StoreDetailsView } from './store-details.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('@ss/ui/dashboard').FeatureSettings} FeatureSettings */
@@ -61,43 +60,44 @@ export const settingsNotice = (key, values) =>
 	) : null;
 
 /**
- * The settings a grade's glossary page preview takes (R7 #105): the title pattern, brand name, default description and
- * share image of `seo`, and the grade patterns of `landing_pages`.
- * @param {FeatureSettings[]} features
+ * The settings a grade's glossary page preview takes (R7 #105): the title pattern and default description of `seo`, the
+ * website's name and share image (the Portal's), and the grade patterns of `landing_pages`.
+ * @param {FeatureSettings[]} features @param {import('@ss/contracts').WebsiteSettings | null} website
  * @returns {import('./grades.js').GradePreview}
  */
-const gradePreview = (features) => {
+const gradePreview = (features, website) => {
 	/** @param {string} key @param {string} name */
 	const value = (key, name) => String(features.find((feature) => feature.key === key)?.values[name]?.value ?? '');
 	return {
 		titleTemplate: value('seo', 'titleTemplate'),
-		siteName: value('seo', 'brandName'),
+		// the site name and the share picture are the website's, set once in the Portal
+		siteName: website?.business.name ?? '',
 		defaultDescription: value('seo', 'defaultDescription'),
-		defaultImage: value('seo', 'defaultImage'),
+		defaultImage: website?.brand.files.shareImage ?? '',
 		gradeTitle: value('landing_pages', 'gradeTitle'),
 		gradeDescription: value('landing_pages', 'gradeDescription'),
 	};
 };
 
 /**
- * The shop's currency (the Catalog setting) and every feature's settings, from the settings answer the tab has already
- * read.
+ * The shop's currency (the Portal's Region and format; USD until it is set), the website's settings and every feature's
+ * settings, from the answers the tab reads.
  * @param {string} websiteId
  */
 const useShop = (websiteId) => {
 	const settings = useLoad(`/v1/dashboard/websites/${websiteId}/settings`);
+	const website = useLoad(`/v1/dashboard/websites/${websiteId}/website-settings`);
 	/** @type {FeatureSettings[]} */
 	const features = settings.answer?.ok ? settings.answer.data.features : [];
-	return {
-		currency: String(features.find((feature) => feature.key === 'catalog')?.values.currency?.value ?? ''),
-		features,
-	};
+	/** @type {import('@ss/contracts').WebsiteSettings | null} */
+	const portal = website.answer?.ok ? website.answer.data.settings : null;
+	return { currency: portal?.region.currency || DEFAULT_CURRENCY, website: portal, features };
 };
 
 /** The grades, with a preview of the glossary page they make. @param {{ websiteId: string }} props */
 function Grades({ websiteId }) {
-	const { features } = useShop(websiteId);
-	return <GradesEditor websiteId={websiteId} off={false} preview={gradePreview(features)} />;
+	const { features, website } = useShop(websiteId);
+	return <GradesEditor websiteId={websiteId} off={false} preview={gradePreview(features, website)} />;
 }
 
 /**
@@ -112,14 +112,17 @@ function WithCurrency({ websiteId, editor }) {
 /**
  * The shop's list editors, each under its feature (a feature that is off is not listed). The ones of Cart and checkout
  * are listed beside it (`top`), as they are many.
- * @param {string} websiteId
- * @param {string} [portal] the Portal's address
+ * @param {import('@ss/ui/dashboard').TabProps} props the tab's props (the website, the viewer and the Portal's address)
  * @returns {Record<string, import('@ss/ui/dashboard').FeatureExtra>}
  */
-const extrasOf = (websiteId, portal) => {
+const extrasOf = (props) => {
+	const websiteId = String(props.websiteId);
+	const { portal, who, merchantId } = props;
 	const L = TEXTS.lists;
 	return {
-		store_details: <StoreDetailsEditor websiteId={websiteId} off={false} portal={portal} />,
+		store_details: (
+			<StoreDetailsView websiteId={websiteId} off={false} portal={portal} admin={who.kind === 'admin'} merchantId={merchantId ?? null} />
+		),
 		catalog: {
 			items: [{ id: 'item-types', label: L.itemTypes.title, content: <ItemTypesEditor websiteId={websiteId} off={false} /> }],
 		},
@@ -137,12 +140,6 @@ const extrasOf = (websiteId, portal) => {
 					label: L.paymentMethods.title,
 					top: true,
 					content: <WithCurrency websiteId={websiteId} editor={(props) => <PaymentMethodsEditor {...props} />} />,
-				},
-				{
-					id: 'address-regions',
-					label: L.addressRegions.title,
-					top: true,
-					content: <AddressRegionsEditor websiteId={websiteId} off={false} />,
 				},
 				{
 					id: 'order-flow',
@@ -187,5 +184,5 @@ const extrasOf = (websiteId, portal) => {
 
 /** @param {import('@ss/ui/dashboard').TabProps} props */
 export function SettingsTab(props) {
-	return <SharedSettingsTab {...props} notice={settingsNotice} extras={extrasOf(String(props.websiteId), props.portal)} />;
+	return <SharedSettingsTab {...props} notice={settingsNotice} extras={extrasOf(props)} />;
 }

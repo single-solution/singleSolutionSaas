@@ -9,7 +9,7 @@ import { SEO_DEFAULTS } from '../adapters/product.js';
 import { siteAddress } from '../core/catalog-content.js';
 import { absolute } from '../core/links.js';
 import { COLLECTIONS } from '../core/model.js';
-import { pageName, pageTitle } from '../core/seo.js';
+import { BUSINESS_TYPES, pageName, pageTitle } from '../core/seo.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/model.js').ProductRecord} ProductRecord */
@@ -23,11 +23,25 @@ const MAX_CATEGORIES = 5000;
 /**
  * The `seo` settings a page's SEO follows: the merchant's while the SEO feature is on; else the schema's defaults, so
  * every shop with a catalog gets best-practice SEO (baseline SEO with the catalog; the priced SEO feature is the SEO
- * product: the merchant's own patterns, site settings, automatic copy, IndexNow, landing and glossary pages).
+ * product: the merchant's own patterns, site settings, automatic copy, IndexNow, landing and glossary pages). The facts
+ * of the business are the website's, set once in the Portal (Website settings): the name (`brandName`), its other names
+ * (`alternateName`), the kind of business (`businessType`), its social profiles (`socialProfiles`) and the picture
+ * social sites show (`defaultImage`) come from there, whether SEO is on or not.
  * @param {Site} s
  * @returns {Promise<Readonly<Record<string, any>>>}
  */
-export const seoSettingsOf = async (s) => (s.has('seo') ? s.values('seo') : SEO_DEFAULTS);
+export const seoSettingsOf = async (s) => {
+	const [own, { business, brand }] = await Promise.all([s.has('seo') ? s.values('seo') : SEO_DEFAULTS, s.website()]);
+	return {
+		...own,
+		brandName: business.name,
+		alternateName: business.otherNames,
+		// only schema.org's own type names are taken; any other text is an online store
+		businessType: BUSINESS_TYPES.includes(business.businessType) ? business.businessType : 'OnlineStore',
+		socialProfiles: business.social.map((link) => link.url),
+		defaultImage: brand.files.shareImage,
+	};
+};
 
 /**
  * The newest of some times as ISO 8601 text, or null without any (an answer's `lastModified`, SEO audit G10).
@@ -42,8 +56,8 @@ export const newestOf = (times) => {
 };
 
 /**
- * The name `{business}` and `{storeName}` stand for in titles and descriptions: the `seo` setting `brandName`, else the
- * business name (SG-5).
+ * The name `{business}` and `{storeName}` stand for in titles and descriptions: the business name of the Portal's website
+ * settings (SG-5; `seoSettingsOf` puts it in `brandName`).
  * @param {Record<string, unknown>} settings the `seo` settings
  * @param {{ name: string }} business
  */

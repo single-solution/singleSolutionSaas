@@ -11,7 +11,8 @@
 			"x-ui": {
 				"widget": "textarea",
 				"group": "Shop summary",
-				"order": 1
+				"order": 1,
+				"defaultFrom": "business.tagline"
 			}
 		},
 		"policies": {

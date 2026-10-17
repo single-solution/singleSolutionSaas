@@ -29,7 +29,7 @@ const serve = ({ storage, mediaBaseUrl }) => {
 			checklist: {
 				connections: [{ name: 'storage', label: 'Storage', neededBy: ['catalog'], status: storage, testedAt: null }],
 				widget: null,
-				business: { found: true },
+				website: { version: 1, requires: [], missing: [] },
 			},
 			recentChanges: [],
 		},

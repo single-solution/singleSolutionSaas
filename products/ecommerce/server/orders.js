@@ -28,6 +28,7 @@ import {
 	invoiceHtml,
 	invoiceTexts,
 	packingSlipHtml,
+	sellerDetailsOf,
 	shopperInvoiceReady,
 } from '../core/invoice.js';
 import {
@@ -75,8 +76,9 @@ import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
  * @returns {Promise<import('../core/invoice.js').DocumentContext>}
  */
 export const documentContextOf = async (s, orders) => {
-	const [business, settings, texts, { format, timeZone }, fields, methods] = await Promise.all([
+	const [business, website, settings, texts, { format, timeZone }, fields, methods] = await Promise.all([
 		s.business(),
+		s.website(),
 		s.values('invoices'),
 		s.texts(),
 		s.format(),
@@ -85,7 +87,8 @@ export const documentContextOf = async (s, orders) => {
 	]);
 	return {
 		business: /** @type {import('../core/invoice.js').BusinessLike} */ (business),
-		texts: invoiceTexts(settings, texts),
+		// the seller's legal name and tax number are the website's, set once in the Portal (Business)
+		texts: invoiceTexts(settings, texts, sellerDetailsOf(website.business, texts)),
 		words: documentWordsOf(texts, /** @type {import('../core/payment-methods.js').PaymentMethodRecord[]} */ (methods)),
 		columns: invoiceColumnsOf(settings),
 		format,

@@ -5,11 +5,11 @@
  * here, and no store value is written into the code: a step is ticked from what the merchant saved.
  *
  * `when`: the features that make a step apply; `section`: the inner-sidebar section its button opens (a setting opens
- * the section of its own group). The currency and the image address are ticked the same way (their warnings stay in
- * `tabs.js`); Payments, Notifications and the Atlas Search index have steps of their own there.
+ * the section of its own group). The image address is ticked the same way (its warning stays in `tabs.js`); Payments,
+ * Notifications and the Atlas Search index have steps of their own there. What the Portal's website settings must say
+ * (the currency, the country) is the manifest's `websiteSettings.requires`: the Overview lists it with a link.
  * @module
  */
-import { fill } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('@ss/ui/dashboard').SetupRequirement} SetupRequirement */
@@ -21,27 +21,6 @@ const list = (value) => (Array.isArray(value) ? value : []);
 
 /** @type {ReadonlyArray<SetupRequirement>} */
 export const SETUP = Object.freeze([
-	{
-		key: 'store-details',
-		when: ['store_details'],
-		list: 'store_details',
-		done: (/** @type {{ name?: string } | null} */ value) => String(value?.name ?? '').trim() !== '',
-		label: 'Add your store details',
-		why: 'Your store name, contact details and opening hours show on your site, in order emails and in search results.',
-		action: 'Add details',
-		section: 'store_details',
-	},
-	{
-		key: 'currency',
-		when: ['catalog'],
-		setting: 'catalog.currency',
-		// ticked only when the merchant sets it themselves (USD stays the default until then)
-		own: true,
-		label: O.currency.step,
-		why: 'Every price is in this currency. Set it before you add prices.',
-		action: 'Set currency',
-		detail: (/** @type {unknown} */ value) => fill(O.currency.now, { currency: String(value ?? '') }),
-	},
 	{
 		key: 'product-url',
 		when: ['catalog'],

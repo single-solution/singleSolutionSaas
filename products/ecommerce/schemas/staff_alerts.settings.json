@@ -16,20 +16,6 @@
 				"order": 1
 			}
 		},
-		"recipients": {
-			"type": "array",
-			"title": "Who gets staff alerts",
-			"default": [],
-			"items": {
-				"type": "string",
-				"maxLength": 254
-			},
-			"description": "Email addresses and phone numbers with a country code (+44 …). Start an entry with sms:, whatsapp:, email: or push: to pick the channel for one person (push: takes an Accounts user ID).",
-			"x-ui": {
-				"group": "Recipients",
-				"order": 11
-			}
-		},
 		"staffPermission": {
 			"type": "string",
 			"title": "Also alert Accounts staff who can",
@@ -39,27 +25,6 @@
 			"x-ui": {
 				"group": "Recipients",
 				"order": 12
-			}
-		},
-		"phoneChannel": {
-			"type": "string",
-			"title": "Phones get",
-			"description": "SMS goes out with Ecommerce's default words; WhatsApp needs your own approved templates in Notifications.",
-			"default": "sms",
-			"enum": ["sms", "whatsapp"],
-			"x-ui": {
-				"group": "Alerts",
-				"order": 3
-			}
-		},
-		"staffPush": {
-			"type": "boolean",
-			"title": "Staff push too",
-			"default": false,
-			"description": "Accounts staff also get a push in their browser (Notifications: Staff push, with your push keys).",
-			"x-ui": {
-				"group": "Alerts",
-				"order": 2
 			}
 		},
 		"adminUrl": {

@@ -1,40 +1,18 @@
 /**
  * Store details (the `store_details` feature): the public read for a website's header, footer and contact page
- * (`GET /v1/shop/store`), the business.json a headless website serves at `/.well-known/business.json`
- * (`GET /v1/shop/store/business-json`), and the store's pictures (logo, dark logo, icon, favicon, dark favicon) in the
- * merchant's own storage, uploaded like product images (a short presigned upload, then the file is checked in the
- * bucket and kept in the record). The record is the `store_details` list: the kit's `GET|PUT /v1/lists/store_details`
- * and the dashboard's list routes read and save all of it; the routes here only add the files, which the dashboard
- * editor uses too (setup only: no business data).
- *
- * Once the Portal holds the website's settings the record is its Business and Brand sections, read only (the list's
- * `managed` value, `portal: true`; the pictures are https addresses): the shop read, the business.json and the lists API
- * answer from it, and a save, an upload or a removal is 409 `managed_by_portal`.
+ * (`GET /v1/shop/store`) and the business.json a headless website serves at `/.well-known/business.json`
+ * (`GET /v1/shop/store/business-json`). Both are made from the website's settings in the Portal (Website settings ›
+ * Business, Brand and look, Region and format), which are set once for every product: Ecommerce keeps no record of its
+ * own, takes no picture and has no save here. The pictures are the https addresses of Brand and look.
  * @module
  */
-import { createId } from '@ss/contracts';
 import { defineRoute, problem } from '@ss/app-kit';
-import { IMAGE_TYPES } from '../core/catalog-content.js';
-import { IMAGE_MAX_BYTES } from '../core/limits.js';
-import {
-	STORE_FILES,
-	STORE_FILE_LABELS,
-	STORE_FOLDER,
-	STORE_LIMITS,
-	businessJsonOf,
-	defaultStoreDetails,
-	publicStoreDetails,
-} from '../core/store-details.js';
-import { refuse } from './catalog-common.js';
-import { createMedia } from './catalog-media.js';
+import { businessJsonOf, publicStoreDetails, storeDetailsFromWebsite } from '../core/store-details.js';
 import { conditional } from './http-cache.js';
-import { SERVER_LIMITS, UPLOAD_SECONDS, VISITOR_LIMITS, bodyOf } from './service.js';
+import { VISITOR_LIMITS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
-/** @typedef {import('./service.js').Site} Site */
-/** @typedef {import('../core/store-details.js').StoreDetails} StoreDetails */
-/** @typedef {import('../core/store-details.js').StoreFileName} StoreFileName */
 
 /**
  * @param {Product} product
@@ -42,61 +20,29 @@ import { SERVER_LIMITS, UPLOAD_SECONDS, VISITOR_LIMITS, bodyOf } from './service
  * @returns {import('./routes.js').Area}
  */
 export const createStoreDetails = (product, service) => {
-	const media = createMedia(product);
-
-	/** The record; a record saved before a field existed has it empty. @param {Site} s @returns {Promise<StoreDetails>} */
-	const detailsOf = async (s) => ({
-		...defaultStoreDetails(),
-		.../** @type {Partial<StoreDetails>} */ (await s.list('store_details')),
-	});
-
-	/**
-	 * The public address of a stored file that never changes (a search engine or a shopping catalog keeps it); a picture of
-	 * the Portal's settings is its own https address.
-	 * @param {Site} s @param {{ key: string, url?: string } | null} file
-	 */
-	const urlOf = async (s, file) => (file ? (file.url ?? (await media.stableUrl(s, file.key))) : null);
-
-	/**
-	 * Refuse a change of the record while the Portal owns it: 409 `managed_by_portal`, naming where to change it.
-	 * @param {Site} s
-	 */
-	const mustBeOwn = async (s) => {
-		// (not through the site's list, which is read once per request)
-		if ((await product.website(s.websiteId)).version > 0)
-			throw problem(
-				'managed_by_portal',
-				'The store details are set in the Portal (Website settings › Business and Brand and look).',
-				{
-					extensions: { portalUrl: product.portalUrl() },
-				},
-			);
-	};
-
 	/** GET /v1/shop/store: the public record. @param {any} ctx */
 	const read = async (ctx) => {
 		const s = await service.site(ctx);
-		const [details, business] = await Promise.all([detailsOf(s), s.business()]);
-		const urls = /** @type {Record<StoreFileName, string | null>} */ (
-			Object.fromEntries(await Promise.all(STORE_FILES.map(async (name) => [name, await urlOf(s, details[name])])))
-		);
+		const [website, business] = await Promise.all([s.website(), s.business()]);
+		const details = storeDetailsFromWebsite(website);
 		return publicStoreDetails(details, {
-			logoUrl: urls.logo,
-			logoDarkUrl: urls.logoDark,
-			iconUrl: urls.icon,
-			faviconUrl: urls.favicon,
-			faviconDarkUrl: urls.faviconDark,
+			logoUrl: details.logo?.url ?? null,
+			logoDarkUrl: details.logoDark?.url ?? null,
+			iconUrl: details.icon?.url ?? null,
+			faviconUrl: details.favicon?.url ?? null,
+			faviconDarkUrl: details.faviconDark?.url ?? null,
 			businessName: String(business.name ?? ''),
 			siteUrl: s.domain ? `https://${s.domain}` : '',
 		});
 	};
 
-	/** GET /v1/shop/store/business-json: the website's business.json made from the record. @param {any} ctx */
+	/** GET /v1/shop/store/business-json: the website's business.json made from the Portal's settings. @param {any} ctx */
 	const businessJson = async (ctx) => {
 		const s = await service.site(ctx);
-		const [details, business] = await Promise.all([detailsOf(s), s.business()]);
+		const [website, business] = await Promise.all([s.website(), s.business()]);
+		const details = storeDetailsFromWebsite(website);
 		const made = businessJsonOf(details, {
-			logoUrl: await urlOf(s, details.logo),
+			logoUrl: details.logo?.url ?? null,
 			currency: s.currency,
 			currencies: Array.isArray(business.currencies) && business.currencies.length > 0 ? business.currencies : [s.currency],
 			businessName: String(business.name ?? ''),
@@ -104,130 +50,10 @@ export const createStoreDetails = (product, service) => {
 			language: String(business.language ?? ''),
 			country: String(business.country ?? ''),
 		});
-		if (!made.ok) throw problem('conflict', 'Give the store a name (Store details) before its business.json can be made.');
+		if (!made.ok)
+			throw problem('conflict', 'Give the business a name (Portal › Website settings › Business) before its business.json can be made.');
 		return made.value;
 	};
-
-	/** The pictures with their addresses. @param {Site} s */
-	const filesOf = async (s) => {
-		const details = await detailsOf(s);
-		/** @param {StoreDetails['logo']} file */
-		const view = async (file) =>
-			file
-				? {
-						key: file.key,
-						type: file.type,
-						size: file.size,
-						alt: file.alt,
-						url: file.url ?? (await media.mediaUrl(s, file.key)),
-					}
-				: null;
-		const views = await Promise.all(STORE_FILES.map((name) => view(details[name])));
-		return /** @type {Record<StoreFileName, Awaited<ReturnType<typeof view>>>} */ (
-			Object.fromEntries(STORE_FILES.map((name, at) => [name, views[at]]))
-		);
-	};
-
-	/**
-	 * The file named in the path (`logo`, `logoDark`, `icon`, `favicon` or `faviconDark`), or 404.
-	 * @param {any} ctx @returns {StoreFileName}
-	 */
-	const fileName = (ctx) => {
-		const name = String(ctx.params.file);
-		if (!STORE_FILES.includes(/** @type {StoreFileName} */ (name)))
-			throw problem('not_found', `The store has these pictures: ${STORE_FILES.join(', ')}.`);
-		return /** @type {StoreFileName} */ (name);
-	};
-
-	/** POST …/uploads `{ for: 'logo' | 'logoDark' | 'icon' | 'favicon' | 'faviconDark', type, size }` → a presigned upload (JPEG, PNG, WebP or AVIF). @param {any} ctx */
-	const upload = async (ctx) => {
-		await mustBeOwn(await service.site(ctx));
-		const body = bodyOf(ctx);
-		if (!STORE_FILES.includes(/** @type {StoreFileName} */ (String(body.for))))
-			throw refuse([{ path: '/for', message: `Upload one of: ${STORE_FILES.join(', ')}.` }]);
-		const type = String(body.type);
-		const extension = /** @type {Record<string, string>} */ (IMAGE_TYPES)[type];
-		if (!extension) throw refuse([{ path: '/type', message: 'Images are JPEG, PNG, WebP or AVIF.' }]);
-		const s = await service.site(ctx);
-		const limit = Math.min(IMAGE_MAX_BYTES, STORE_LIMITS.file);
-		if (!Number.isSafeInteger(body.size) || body.size < 1 || body.size > limit)
-			throw refuse([{ path: '/size', message: `An image has at most ${limit} bytes.` }]);
-		const storage = await service.storage(s);
-		const key = `${STORE_FOLDER}${body.for}-${createId('img').slice(-10).toLowerCase()}.${extension}`;
-		const signed = storage.presignPut({ key, contentType: type, contentLength: body.size, expiresIn: UPLOAD_SECONDS });
-		return { key, upload: { method: signed.method, url: signed.url, headers: signed.headers, expiresAt: signed.expiresAt } };
-	};
-
-	/** A picture's name in an activity action (lower-case words joined by _): logoDark → logo_dark. @param {StoreFileName} name */
-	const snake = (name) => name.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
-
-	/** A picture's name for the activity log. @param {StoreFileName} name */
-	const labelOf = (name) => STORE_FILE_LABELS[name].replace(/^./, (first) => first.toUpperCase());
-
-	/** Delete a file of the store from the bucket (only one under the store's folder). @param {Site} s @param {string} key */
-	const deleteFile = async (s, key) => {
-		if (!key.startsWith(STORE_FOLDER)) return;
-		const storage = await product.connections.storage(s.websiteId);
-		if (storage) await storage.deleteObject({ key }).catch(() => null);
-	};
-
-	/** Save the details with a file set or removed, through the list's own check and save. @param {any} ctx @param {StoreFileName} name @param {StoreDetails['logo']} file */
-	const keep = async (ctx, name, file) => {
-		const s = await service.site(ctx);
-		const details = await detailsOf(s);
-		const saved = await product.lists.save(s.websiteId, 'store_details', { ...details, [name]: file });
-		if (!saved.ok)
-			throw refuse(
-				saved.errors.map((error) => ({ path: `/${name}`, message: typeof error === 'string' ? error : error.message })),
-			);
-		return { s, before: details[name] };
-	};
-
-	/** PUT …/<picture> `{ key, alt }`: the uploaded file is checked in the bucket and kept. @param {any} ctx */
-	const attach = async (ctx) => {
-		const name = fileName(ctx);
-		const body = bodyOf(ctx);
-		const s = await service.site(ctx);
-		await mustBeOwn(s);
-		const storage = await service.storage(s);
-		const key = typeof body.key === 'string' ? body.key : '';
-		if (!key.startsWith(`${STORE_FOLDER}${name}-`) || key.includes('..'))
-			throw refuse([{ path: '/key', message: `Give the key of the upload made for the ${name}.` }]);
-		const alt = body.alt === undefined ? '' : String(body.alt).trim();
-		if (alt.length > STORE_LIMITS.alt)
-			throw refuse([{ path: '/alt', message: `Alternative text has at most ${STORE_LIMITS.alt} characters.` }]);
-		const head = await storage.headObject({ key }).catch(() => {
-			throw problem('upstream_error', 'Your storage cannot be reached right now.');
-		});
-		if (!head.exists) throw refuse([{ path: '/key', message: 'The file has not been uploaded.' }]);
-		const type = String(head.contentType ?? '')
-			.replace(/;.*$/, '')
-			.trim();
-		const limit = Math.min(IMAGE_MAX_BYTES, STORE_LIMITS.file);
-		if (!Object.hasOwn(IMAGE_TYPES, type) || head.size > limit) {
-			await storage.deleteObject({ key }).catch(() => null);
-			throw refuse([{ path: '/key', message: 'The file is not an image of an allowed type and size.' }]);
-		}
-		const { before } = await keep(ctx, name, { key, type, size: head.size, alt });
-		if (before && before.key !== key) await deleteFile(s, before.key);
-		await service.log(ctx, `store_details.${snake(name)}_set`, name, { label: labelOf(name) });
-		return { [name]: (await filesOf(s))[name] };
-	};
-
-	/** DELETE …/<picture>. @param {any} ctx */
-	const detach = async (ctx) => {
-		const name = fileName(ctx);
-		await mustBeOwn(await service.site(ctx));
-		const { s, before } = await keep(ctx, name, null);
-		if (before) {
-			await deleteFile(s, before.key);
-			await service.log(ctx, `store_details.${snake(name)}_removed`, name, { label: labelOf(name) });
-		}
-		return { [name]: null };
-	};
-
-	/** GET …/files: the pictures with their addresses (the dashboard editor shows them). @param {any} ctx */
-	const files = async (ctx) => filesOf(await service.site(ctx));
 
 	return {
 		routes: [
@@ -246,67 +72,6 @@ export const createStoreDetails = (product, service) => {
 				feature: 'store_details',
 				rateLimit: VISITOR_LIMITS,
 				handler: conditional(businessJson, service.now),
-			}),
-			defineRoute({
-				method: 'GET',
-				path: '/v1/store-details/files',
-				auth: 'server',
-				runtime: true,
-				feature: 'store_details',
-				rateLimit: SERVER_LIMITS,
-				handler: files,
-			}),
-			defineRoute({
-				method: 'POST',
-				path: '/v1/store-details/uploads',
-				auth: 'server',
-				permission: 'catalog.edit',
-				feature: 'store_details',
-				rateLimit: SERVER_LIMITS,
-				handler: upload,
-			}),
-			defineRoute({
-				method: 'PUT',
-				path: '/v1/store-details/:file',
-				auth: 'server',
-				permission: 'catalog.edit',
-				feature: 'store_details',
-				rateLimit: SERVER_LIMITS,
-				handler: attach,
-			}),
-			defineRoute({
-				method: 'DELETE',
-				path: '/v1/store-details/:file',
-				auth: 'server',
-				permission: 'catalog.edit',
-				feature: 'store_details',
-				rateLimit: SERVER_LIMITS,
-				handler: detach,
-			}),
-			// the dashboard editor (setup only: the two files, nothing of the shop's business data)
-			defineRoute({
-				method: 'GET',
-				path: '/v1/dashboard/websites/:websiteId/store-details/files',
-				auth: 'dashboard',
-				handler: files,
-			}),
-			defineRoute({
-				method: 'POST',
-				path: '/v1/dashboard/websites/:websiteId/store-details/uploads',
-				auth: 'dashboard',
-				handler: upload,
-			}),
-			defineRoute({
-				method: 'PUT',
-				path: '/v1/dashboard/websites/:websiteId/store-details/:file',
-				auth: 'dashboard',
-				handler: attach,
-			}),
-			defineRoute({
-				method: 'DELETE',
-				path: '/v1/dashboard/websites/:websiteId/store-details/:file',
-				auth: 'dashboard',
-				handler: detach,
 			}),
 		],
 	};

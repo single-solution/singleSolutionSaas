@@ -13,6 +13,7 @@ import {
 	invoiceHtml,
 	invoiceTexts,
 	packingSlipHtml,
+	sellerDetailsOf,
 } from '../core/invoice.js';
 import strings from '../strings/en.json' with { type: 'json' };
 import { COLLECTIONS } from '../core/model.js';
@@ -212,6 +213,25 @@ describe('printable documents', () => {
 		}
 	});
 
+	it('prints the legal name and tax number the merchant set once in the Portal under the business, on the invoice and the packing slip', async () => {
+		const before = shop.site.business;
+		try {
+			const order = await seed(orderOf());
+			expect((await shop.api('GET', `/v1/orders/${order.id}/invoice`)).text).not.toContain('Tax number');
+			await shop.setWebsite({ business: { ...before, legalName: 'Shop Trading Ltd', taxNumber: 'GB123 456' } });
+			await shop.text('invoice.taxNumber', 'VAT no.');
+			const invoice = (await shop.api('GET', `/v1/orders/${order.id}/invoice`)).text;
+			expect(invoice).toContain('<p class="small seller">Shop Trading Ltd<br>VAT no.: GB123 456</p>');
+			expect((await shop.api('GET', `/v1/orders/${order.id}/packing-slip`)).text).toContain('Shop Trading Ltd');
+			// there is no seller details setting of the invoices any more
+			const features = (await shop.api('GET', '/v1/settings')).json.features;
+			expect(Object.keys(features.find((/** @type {any} */ f) => f.key === 'invoices').values)).not.toContain('sellerDetails');
+		} finally {
+			await shop.text('invoice.taxNumber', strings['invoice.taxNumber']);
+			await shop.setWebsite({ business: before });
+		}
+	});
+
 	it('needs the Invoices feature and orders.read', async () => {
 		const order = await seed(orderOf());
 		const reader = await shop.ticket(['orders.manage']);
@@ -340,16 +360,19 @@ describe('document parts', () => {
 			},
 		};
 		expect(context.columns).toEqual(['item', 'field.hs-code', 'sku', 'quantity', 'tax', 'amount']);
-		const texts = invoiceTexts(
-			{ sellerDetails: 'VAT GB123 · {business}', footer: 'Order {number}, PO {field.po} {other}' },
-			strings,
-		);
+		// the seller details are the Portal's legal name and tax number (Website settings › Business), one line each
+		const sellerDetails = sellerDetailsOf({ legalName: 'Northwind Trading Ltd', taxNumber: 'GB123' }, strings);
+		expect(sellerDetails).toBe('Northwind Trading Ltd\nTax number: GB123');
+		expect(sellerDetailsOf({ legalName: '', taxNumber: '' })).toBe('');
+		const texts = invoiceTexts({ footer: 'Order {number}, PO {field.po} {other}' }, strings, sellerDetails);
 		const html = invoiceHtml(order, { business, texts, ...context });
 		expect(html).toContain('<th>Item</th><th>HS code</th><th>SKU</th><th class="num">Qty</th><th class="num">Tax</th>');
 		expect(html).toContain('<td>8517.13</td>');
 		// the SKU has its own column, so it leaves the line's details
 		expect(html).not.toContain(' · SKU PH-128');
-		expect(html).toContain('VAT GB123 · Northwind');
+		expect(html).toContain('Northwind Trading Ltd<br>Tax number: GB123');
+		// a seller details setting of the old kind is not read any more
+		expect(invoiceTexts({ sellerDetails: 'VAT GB1' }, strings).sellerDetails).toBe('');
 		expect(html).toContain(`Order ${order.number}, PO PO-77 {other}`);
 		expect(invoiceColumnsOf({ columns: ['nothing'] })).toEqual([...DEFAULT_COLUMNS]);
 	});

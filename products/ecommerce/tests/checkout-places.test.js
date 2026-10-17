@@ -1,7 +1,7 @@
 /**
  * Places (dynamic model §5): addresses with a region, picked from the address_regions list in a listed country;
  * delivery zones by country, region, city, area and postcode start (the most specific wins); tax by country, region,
- * city and postcode start, a pickup taxed in the business.json country; a staff address change checked by the
+ * city and postcode start, a pickup taxed in the business country; a staff address change checked by the
  * website's rules; phones found by their whole number.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -48,7 +48,7 @@ beforeAll(async () => {
 		{ key: 'sf', name: 'San Francisco', match: { postcodes: ['941'] }, rates: rate(300) },
 		{ key: 'mission', name: 'Mission', match: { cities: ['San Francisco'], areas: ['Mission'] }, rates: rate(200) },
 	]);
-	await shop.list('address_regions', [{ country: 'United States', names: ['California', 'New York', 'Texas'] }]);
+	await shop.list('address_regions', [{ country: 'US', names: ['California', 'New York', 'Texas'] }]);
 });
 afterAll(async () => shop.product.close());
 
@@ -61,7 +61,7 @@ describe('delivery zones by place', () => {
 			expect(answer.status).toBe(200);
 			return [answer.json.delivery.zone, answer.json.delivery.fee];
 		};
-		// an address without a country is in the business.json country
+		// an address without a country is in the business country
 		expect(await zoneOf({ city: 'Austin', region: 'Texas' })).toEqual(['us', 900]);
 		expect(await zoneOf({ region: 'california' })).toEqual(['ca', 500]);
 		expect(await zoneOf({ region: 'California', postalCode: '94105' })).toEqual(['sf', 300]);
@@ -75,7 +75,7 @@ describe('delivery zones by place', () => {
 });
 
 describe('tax by place', () => {
-	it('adds the rules of where a delivery goes, and taxes a pickup in the business.json country', async () => {
+	it('adds the rules of where a delivery goes, and taxes a pickup in the business country', async () => {
 		await shop.list('tax_rules', [
 			{ name: 'Federal', percent: 1, regions: [{ country: 'US' }] },
 			{ name: 'California', percent: 7.25, regions: [{ country: 'US', region: 'California' }] },
@@ -153,11 +153,11 @@ describe('addresses with a region', () => {
 		for (const id of [order.id, abroad.json.order.id]) await shop.api('DELETE', `/v1/orders/${id}`);
 	});
 
-	it('gives the cart widget the region lists and the business.json country', async () => {
+	it('gives the cart widget the region lists and the business country', async () => {
 		const config = await visit('GET', '/v1/widget/config');
 		expect(config.status).toBe(200);
 		expect(config.json.settings.checkout.address).toMatchObject({
-			regions: [{ country: 'United States', names: ['California', 'New York', 'Texas'] }],
+			regions: [{ country: 'US', names: ['California', 'New York', 'Texas'] }],
 			country: 'US',
 			required: ['name', 'phone', 'line1', 'city'],
 		});

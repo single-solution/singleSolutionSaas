@@ -263,11 +263,7 @@ describe('SEO and feed settings through the API', () => {
 		]);
 		const jsonLd = JSON.parse((await api('GET', `/v1/seo/products/${ids.lamp.slug}`)).jsonLd)['@graph'][0];
 		expect(jsonLd.hasVariant.map((/** @type {any} */ v) => v.offers.shippingDetails)).toEqual([undefined, undefined]);
-		shop.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
-			status: 200,
-			body: { version: 1, name: 'Shop', country: 'US', timeZone: 'UTC' },
-		}));
-		await shop.dashboard(await shop.adminSession(), 'POST', `/v1/dashboard/websites/${shop.websiteId}/business/refresh`);
+		await shop.setBusiness({ name: 'Shop', country: 'US', timeZone: 'UTC' });
 		await shop.setting('feeds', 'items', 'all');
 		const google = (await shop.api('GET', '/v1/feeds/products.xml')).text;
 		expect(google).toContain('<g:price>250.00 USD</g:price></g:shipping>');

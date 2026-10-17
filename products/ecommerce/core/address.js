@@ -4,12 +4,11 @@
  * postal code shapes per country from the one address-format table (`@ss/contracts/address`, shared with Accounts) —
  * and how places compare: names without letter case and extra spaces, postcodes upper-cased without spaces (zones and
  * tax rules match their starts), countries by ISO 3166-1 alpha-2 code (an address keeps the code; zones and rules may
- * name a country by code or English name). An address without a country is in the business.json country.
+ * name a country by code or English name). An address without a country is in the business country.
  * No I/O (the widgets use it too).
  * @module
  */
 import { PLACE_LIMITS, countryCodeOf } from '@ss/contracts/address';
-import { isObject } from '@ss/contracts/util';
 
 // the address-format table the widgets use too (they import packages only through core/)
 export {
@@ -69,7 +68,7 @@ export const countryKey = (value) => {
 /**
  * The place of an address (or of the cart's delivery choice); without a country it is in `homeCountry`.
  * @param {Partial<Record<'country' | 'region' | 'city' | 'area' | 'postalCode', unknown>> | null | undefined} where
- * @param {unknown} homeCountry the business.json country
+ * @param {unknown} homeCountry the business country
  * @returns {Place}
  */
 export const placeOf = (where, homeCountry) => {
@@ -85,58 +84,10 @@ export const placeOf = (where, homeCountry) => {
 };
 
 /**
- * The region names checkout offers per country (`address_regions`, `[{ country, names }]`): an address in a listed
- * country names one of them exactly.
+ * The region names checkout offers per country (the Portal's Region and format › Address rules, `[{ country, names }]`):
+ * an address in a listed country names one of them exactly.
  * @typedef {{ country: string, names: string[] }} AddressRegions
  */
-
-/** At most this many countries in `address_regions`, and this many region names in one. */
-const MAX_REGION_COUNTRIES = 50;
-const MAX_REGION_NAMES = 200;
-
-/**
- * Check the `address_regions` list the merchant saves.
- * @param {unknown} value
- * @returns {{ ok: true, value: AddressRegions[] } | { ok: false, errors: string[] }}
- */
-export const checkAddressRegions = (value) => {
-	if (!Array.isArray(value)) return { ok: false, errors: ['A list of countries with their regions is expected.'] };
-	/** @type {string[]} */
-	const errors = [];
-	if (value.length > MAX_REGION_COUNTRIES) errors.push(`At most ${MAX_REGION_COUNTRIES} countries.`);
-	/** @type {AddressRegions[]} */
-	const out = [];
-	const seen = new Set();
-	for (const [index, raw] of value.slice(0, MAX_REGION_COUNTRIES).entries()) {
-		const entry = isObject(raw) ? /** @type {Record<string, unknown>} */ (raw) : {};
-		const country = typeof entry.country === 'string' ? entry.country.trim() : '';
-		const label = `Country ${index + 1}`;
-		if (!country || country.length > ADDRESS_LIMITS.country) {
-			errors.push(`${label} needs a country of at most ${ADDRESS_LIMITS.country} characters.`);
-			continue;
-		}
-		if (seen.has(countryKey(country))) errors.push(`${country} is listed twice.`);
-		seen.add(countryKey(country));
-		const names = Array.isArray(entry.names) ? entry.names : null;
-		if (!names || names.length === 0 || names.length > MAX_REGION_NAMES) {
-			errors.push(`${country}: list 1–${MAX_REGION_NAMES} region names.`);
-			continue;
-		}
-		/** @type {string[]} */
-		const clean = [];
-		for (const name of names) {
-			const text = typeof name === 'string' ? name.trim().replace(/\s+/g, ' ') : '';
-			if (!text || text.length > ADDRESS_LIMITS.region) {
-				errors.push(`${country}: every region name has 1–${ADDRESS_LIMITS.region} characters.`);
-				break;
-			}
-			if (!clean.some((known) => placeKey(known) === placeKey(text))) clean.push(text);
-		}
-		out.push({ country, names: clean });
-	}
-	if (errors.length > 0) return { ok: false, errors };
-	return { ok: true, value: out };
-};
 
 /**
  * The region names offered for a country, or null when the list does not name it.

@@ -63,7 +63,7 @@ beforeAll(async () => {
 	shop = await readyShop();
 	// orders wait for confirmation without end, so no cancel message joins in while the clock moves
 	await shop.setting('checkout', 'confirmationHours', 0);
-	await shop.setting('staff_alerts', 'recipients', ['team@shop.example.com', '+44 7700 900123', 'nobody']);
+	await shop.setting('staff_alerts', 'recipients', ['team@shop.example.com', '+44 7700 900123']);
 	await shop.setting('staff_alerts', 'events', ['placed']);
 	await shop.setting('staff_alerts', 'adminUrl', 'https://admin.shop.example.com/orders/{id}');
 	shop.responders.set(NOTIFY, (call) => {

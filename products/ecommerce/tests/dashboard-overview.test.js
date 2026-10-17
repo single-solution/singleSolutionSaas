@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * Ecommerce's Overview on the shared `@ss/ui` pattern (PLAN 0.6 "Overviews talk"): the kit's greeting, Needs you, setup
- * and Recent changes, with Ecommerce's own items judged from setup only — the currency until the merchant sets it (USD
- * stays the default, Claude's decision 9), Payments (recommended) with checkout, the Atlas Search index, staff alerts
+ * and Recent changes, with Ecommerce's own items judged from setup only — the currency and country the Portal's website
+ * settings still lack (a link to the Portal, not a form here), Payments (recommended) with checkout, the Atlas Search index, staff alerts
  * that reach nobody or link nowhere, and bank transfer recorded by staff without bank details — each with its button to
  * the right section; only the loads the switched-on features need.
  */
@@ -20,8 +20,9 @@ const BASE = `/v1/dashboard/websites/${WEBSITE}`;
  * The dashboard API's answers for a website with these features on, connections and settings (`{ value, source }`).
  * @param {{ on: string[], connections?: Array<Record<string, unknown>>, needed?: Array<Record<string, unknown>>,
  *   settings?: Record<string, Record<string, { value: unknown, source: string }>>, schemas?: Record<string, unknown>,
- *   lists?: Record<string, unknown>, search?: unknown, methods?: unknown[] }} state `methods`: the `payment_methods`
- *   list (today's four by default); `lists`: other lists by name
+ *   lists?: Record<string, unknown>, search?: unknown, methods?: unknown[], missing?: string[] }} state `methods`: the
+ *   `payment_methods` list (today's four by default); `lists`: other lists by name; `missing`: what the Portal's website
+ *   settings still lack of what Ecommerce requires
  */
 const serve = ({
 	on,
@@ -32,15 +33,20 @@ const serve = ({
 	lists = {},
 	search = { search: 'basic', index: 'x', state: null },
 	methods = defaultPaymentMethods(),
+	missing = [],
 }) => {
 	/** @type {Record<string, unknown>} */
 	const answers = {
 		[`${BASE}/overview`]: {
-			website: { domain: 'shop.example.com' },
+			website: { websiteId: WEBSITE, merchantId: 'm_1', domain: 'shop.example.com' },
 			status: { status: 'active', graceEndsAt: null },
 			featuresOn: on,
 			todayMillicredits: 1500,
-			checklist: { connections: needed, widget: null, business: { found: true } },
+			checklist: {
+				connections: needed,
+				widget: null,
+				website: { version: 1, requires: ['region.currency', 'region.country'], missing },
+			},
 			recentChanges: [],
 		},
 		[`${BASE}/connections`]: { connections },
@@ -93,27 +99,30 @@ afterEach(() => {
 });
 
 describe('Ecommerce’s Overview', () => {
-	it('greets, asks for the currency until it is set, and reads only what the features need', async () => {
-		const loads = serve({ on: ['catalog'], settings: { catalog: { currency: value('USD'), mediaBaseUrl: value('') } } });
+	it('greets, sends the missing currency and country to the Portal, and reads only what the features need', async () => {
+		const loads = serve({
+			on: ['catalog'],
+			missing: ['region.currency', 'region.country'],
+			settings: { catalog: { currency: value('USD', 'portal'), mediaBaseUrl: value('') } },
+		});
 		const Overview = TABS.overview;
 		const { container } = render(inDashboard(<Overview {...props} />));
 		await settle();
 		const text = container.textContent ?? '';
 		expect(text).toContain('Welcome back, Sam');
-		expect(text).toContain('Set your currency.');
-		expect(text).toContain('Every price is in USD, the default, until you set your shop’s currency');
-		expect(text).toContain('Now USD');
-		await press(container, 'Set it');
-		expect(opened).toEqual(['settings#catalog']);
+		expect(text).toContain('Needs setup: set currency, country in the Portal');
+		// one link to the Portal's Region and format; no form and no "Set currency" step of Ecommerce's own
+		expect(text).not.toContain('Set your currency');
+		const link = [...container.querySelectorAll('a')].find((node) => node.textContent === 'Open Website settings');
+		expect(link?.getAttribute('href')).toBe('https://portal.example.com/websites/web_1/settings#region');
 		// no checkout or staff alerts: no connections read
 		expect(loads()).not.toContain('/connections');
 		cleanup();
-		serve({ on: ['catalog'], settings: { catalog: { currency: value('EUR', 'website'), mediaBaseUrl: value('') } } });
+		serve({ on: ['catalog'], settings: { catalog: { currency: value('EUR', 'portal'), mediaBaseUrl: value('') } } });
 		const set = render(inDashboard(<Overview {...props} />));
 		await settle();
-		expect(set.container.textContent).not.toContain('Every price is in');
+		expect(set.container.textContent).not.toContain('Needs setup');
 		expect(set.container.textContent).toContain('Everything on shop.example.com is ready');
-		expect(set.container.textContent).toContain('Set your currencyNow EUR');
 	});
 
 	it('recommends Payments with checkout and counts the connections the features need', async () => {
@@ -222,7 +231,6 @@ describe('Ecommerce’s Overview', () => {
 				},
 			},
 			lists: {
-				store_details: { name: '' },
 				delivery_zones: [{ key: 'all', name: 'Everywhere', rates: [] }],
 				order_flow: { statuses: [{ key: 'placed' }, { key: 'done' }] },
 				tax_rules: [],
@@ -232,7 +240,7 @@ describe('Ecommerce’s Overview', () => {
 		const { container } = render(inDashboard(<Overview {...props} />));
 		await settle();
 		const text = container.textContent ?? '';
-		// not done yet: the product address is only the built-in start, the zone has no rate, no tax rule, no store name
+		// not done yet: the product address is only the built-in start, the zone has no rate, no tax rule
 		for (const words of [
 			'Set the product page address',
 			'Where your product pages live on your website, for example /shop/{slug}.',

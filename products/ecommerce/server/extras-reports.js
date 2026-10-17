@@ -482,15 +482,15 @@ export const createReports = (product, service) => {
 	};
 
 	/**
-	 * Whether staff alerts reach someone (P5-18): recipients, or Accounts staff by permission with the Accounts token,
-	 * through Notifications; and the admin page they link to. Null while Staff alerts is off.
+	 * Whether staff alerts reach someone (P5-18): the website's alert team in the Portal, or Accounts staff by permission
+	 * with the Accounts token, through Notifications; and the admin page they link to. Null while Staff alerts is off.
 	 * @param {Site} s
 	 */
 	const staffAlertSetup = async (s) => {
 		if (!s.has('staff_alerts')) return { staffAlerted: null, adminUrl: null };
 		const own = await s.values('staff_alerts');
 		const connected = async (/** @type {string} */ name) => (await product.connections.value(s.websiteId, name)) !== null;
-		const listed = Array.isArray(own.recipients) && own.recipients.length > 0;
+		const listed = (await s.website()).team.recipients.length > 0;
 		const staff = typeof own.staffPermission === 'string' && own.staffPermission !== '' && (await connected('accounts'));
 		return {
 			staffAlerted: (listed || staff) && (await connected('notifications')),
@@ -542,6 +542,7 @@ export const createReports = (product, service) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
 		const { lowStock, mediaBaseUrl } = await s.values('catalog');
+		const portalLink = product.portalUrl()?.replace(/\/+$/, '') ?? null;
 		const zones = s.has('delivery_zones') ? await s.values('delivery_zones') : null;
 		const feeds = s.has('feeds') ? await s.values('feeds') : null;
 		const skuAs = feeds?.skuAs === 'gtin' || feeds?.skuAs === 'mpn' ? feeds.skuAs : 'none';
@@ -580,6 +581,8 @@ export const createReports = (product, service) => {
 			}),
 			business,
 			domain: s.domain,
+			// where the merchant sets the business facts: the Portal's Website settings › Business
+			businessLink: portalLink ? `${portalLink}/websites/${encodeURIComponent(s.websiteId)}/settings#business` : null,
 			paymentMethods: methods,
 			badTags: tags,
 			shortLived,

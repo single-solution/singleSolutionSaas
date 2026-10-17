@@ -341,46 +341,6 @@ export function UnitStatesEditor({ websiteId, off }) {
 	);
 }
 
-const AR = L.addressRegions;
-
-/**
- * The region names checkout offers per country (`address_regions`): a country and its regions, one per line; an
- * address in a listed country picks one of them (exact names, so zones and tax rules match them).
- * @param {EditorProps} props
- */
-export function AddressRegionsEditor({ websiteId, off }) {
-	return (
-		<ListEditor
-			websiteId={websiteId}
-			list="address_regions"
-			title={AR.title}
-			help={AR.help}
-			itemLabel={AR.item}
-			max={50}
-			off={off}
-			blank={() => ({ country: '', names: [] })}
-			load={(entry) => ({ country: entry.country ?? '', names: Array.isArray(entry.names) ? entry.names : [] })}
-			clean={(entry) => ({ country: String(entry.country ?? '').trim(), names: cleanLines(entry.names) })}
-			render={(entry, set) => (
-				<FieldGrid>
-					<Input
-						label={AR.country}
-						value={entry.country}
-						maxLength={60}
-						onChange={(event) => set({ country: event.target.value })}
-					/>
-					<TextArea
-						label={AR.names}
-						rows={4}
-						value={entry.names.join('\n')}
-						onChange={(event) => set({ names: event.target.value.split('\n') })}
-					/>
-				</FieldGrid>
-			)}
-		/>
-	);
-}
-
 const P = L.policies;
 
 /**

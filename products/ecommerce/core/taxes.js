@@ -4,7 +4,7 @@
  * `[{ name, percent, categoryIds, regions: [{ country, region, city, postcode }] }]`. A rule applies to a line when it
  * names none of the categories or one of the line's categories (with their ancestors), and when it names no regions or
  * one that fits where the order goes: the same country, and the region, city and postcode start when the entry names
- * them (a delivery's address, without a country in the business.json country; a pickup order is at the business, in
+ * them (a delivery's address, without a country in the business country; a pickup order is at the business, in
  * its country). The percents of every applying rule add up. With prices that include tax (the `taxes` setting
  * `pricesIncludeTax`) the tax is the part of the price it already holds; otherwise it is added on top. No I/O.
  * @module

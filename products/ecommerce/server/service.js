@@ -1,7 +1,7 @@
 /**
  * The shop's shared service: what every part (catalog, checkout and orders, promotions, returns, extras, SEO, the
  * Chat lookups) uses while serving a website — the website context (merchant database, switched-on features, settings,
- * business.json), the shopper's verified Accounts sign-in, staff actors and the activity log, messages through the
+ * website settings from the Portal), the shopper's verified Accounts sign-in, staff actors and the activity log, messages through the
  * pasted Notifications token, payments through the pasted Payments token, and in-process hooks between the parts
  * (for example a catalog change tells the alerts). Nothing here calls the network except through the kit's
  * `callProduct` (pasted tokens only, PLAN 0.4.6).
@@ -12,6 +12,7 @@ import { zonedParts } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { KEEP_MS, createOutbox } from '../adapters/outbox.js';
+import { DEFAULT_CURRENCY } from '../core/limits.js';
 import { unitOf } from '../core/money.js';
 import { createPaymentMethods } from './payment-methods.js';
 
@@ -99,13 +100,16 @@ export const staffSignInHeaders = async (s, by) => {
  * @property {(feature: string) => boolean} has whether a feature is on
  * @property {(feature: string) => Promise<Record<string, any>>} values a feature's resolved settings
  * @property {() => Promise<WebsiteData>} data the guarded merchant database
- * @property {() => ReturnType<Product['business']>} business business.json (defaults: name = the domain, time zone UTC)
+ * @property {() => ReturnType<Product['business']>} business the business facts (the Portal's website settings; defaults:
+ *   name = the domain, time zone UTC)
+ * @property {() => Promise<import('@ss/contracts').WebsiteSettings>} website the website's settings from the Portal
+ *   (business, brand, region, pages, team), read once per request
  * @property {() => Promise<Record<string, string>>} texts the website's widget texts
  * @property {(name: string) => Promise<any[]>} list a list setting of the product database (`adapters/lists.js`)
  * @property {() => Promise<OrderFlow>} flow the website's order flow (the `order_flow` list)
  * @property {() => ReturnType<Product['format']>} format the Format and business time zone, with `money` and `date` for
  *   text the server makes (PLAN 0.8.10 K7, K8)
- * @property {string} currency the shop's currency (`catalog` setting)
+ * @property {string} currency the shop's currency (the Portal's Region and format; USD until it is set)
  */
 
 /**
@@ -240,7 +244,9 @@ export const createService = (product) => {
 		const lists = new Map();
 		/** @type {ReturnType<Product['format']> | null} */
 		let formatted = null;
-		const catalog = await product.settings.values(websiteId, 'catalog');
+		/** @type {Promise<import('@ss/contracts').WebsiteSettings> | null} */
+		let website = null;
+		const portal = await product.website(websiteId);
 		/** @type {Site} */
 		const s = {
 			websiteId,
@@ -262,6 +268,7 @@ export const createService = (product) => {
 				return /** @type {Promise<WebsiteData>} */ (data);
 			},
 			business: () => product.business(websiteId),
+			website: () => (website ??= product.website(websiteId)),
 			texts: () => product.settings.texts(websiteId),
 			list: (name) => {
 				let found = lists.get(name);
@@ -276,7 +283,7 @@ export const createService = (product) => {
 				formatted ??= product.format(websiteId);
 				return formatted;
 			},
-			currency: catalog.currency,
+			currency: portal.region.currency || DEFAULT_CURRENCY,
 		};
 		scheduleUse(s);
 		return s;
@@ -352,7 +359,7 @@ export const createService = (product) => {
 
 	/**
 	 * What pricing needs of the website now: the whole unit amounts round to (Format's `wholeUnits`, E25) and the
-	 * business time (weekday and minutes in the business.json time zone, K8) deal hours are judged by.
+	 * business time (weekday and minutes in the business time zone, K8) deal hours are judged by.
 	 * @param {Site} s
 	 * @returns {Promise<{ unit: number, weekday: number, minutes: number, timeZone: string }>}
 	 */

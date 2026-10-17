@@ -13,7 +13,6 @@
  * key and role of every status that has claims; item types keep what products, categories and units in stock rely on).
  * @module
  */
-import { checkAddressRegions } from '../core/address.js';
 import { checkBookingSchedules, defaultSchedules } from '../core/bookings.js';
 import { checkCouriers } from '../core/couriers.js';
 import { DEFAULT_SEGMENTS, checkSegments } from '../core/customer-segments.js';
@@ -28,7 +27,6 @@ import { checkReviewQuestions } from '../core/reviews.js';
 import { DEFAULT_ATTACHMENT_KINDS, checkAttachmentKinds } from '../core/attachments.js';
 import { DEFAULT_CANCEL_REASONS, DEFAULT_DELIVERY_FAILURE_REASONS, checkReasons } from '../core/order-reasons.js';
 import { DEFAULT_CLAIM_KINDS, DEFAULT_CLAIM_STATUSES, checkClaimKinds, checkClaimStatuses } from '../core/returns.js';
-import { checkStoreDetails, defaultStoreDetails } from '../core/store-details.js';
 import { checkTaxRules } from '../core/taxes.js';
 import { DEFAULT_UNIT_STATES, checkUnitStates } from '../core/unit-states.js';
 
@@ -42,12 +40,6 @@ import { DEFAULT_UNIT_STATES, checkUnitStates } from '../core/unit-states.js';
 
 /** Each list: the feature it belongs to, its name on screens, its check and its value before it is saved. */
 export const LISTS = Object.freeze({
-	store_details: {
-		feature: 'store_details',
-		title: 'Store details',
-		check: checkStoreDetails,
-		fallback: defaultStoreDetails,
-	},
 	order_flow: {
 		feature: 'checkout',
 		title: 'Order statuses and moves',
@@ -67,7 +59,6 @@ export const LISTS = Object.freeze({
 		check: checkPolicies,
 		fallback: () => DEFAULT_POLICIES.map((policy) => ({ ...policy })),
 	},
-	address_regions: { feature: 'checkout', title: 'Address regions', check: checkAddressRegions, fallback: () => [] },
 	customer_segments: {
 		feature: 'checkout',
 		title: 'Customer segments',
@@ -127,26 +118,22 @@ export const LISTS = Object.freeze({
 /** @typedef {keyof typeof LISTS} ListName */
 
 /**
- * @param {{ store: import('@ss/app-kit').Store, now: () => number, guards?: Partial<Record<ListName, ListGuard>>,
- *   managed?: Partial<Record<ListName, (websiteId: string) => Promise<any | null>>> }} options
+ * @param {{ store: import('@ss/app-kit').Store, now: () => number, guards?: Partial<Record<ListName, ListGuard>> }} options
  *   `guards`: checks of a list against the merchant's data before it is saved (both the dashboard and the settings API
- *   save through here). `managed`: a list the Portal owns (its website settings): while it answers a value, that is the
- *   list (read only) and a save is refused with the code `managed_by_portal`
+ *   save through here)
  */
-export const createLists = ({ store, now, guards = {}, managed = {} }) => {
+export const createLists = ({ store, now, guards = {} }) => {
 	/** @param {string} websiteId @param {string} key */
 	const idOf = (websiteId, key) => `${websiteId}|ecommerce|${key}`;
 
 	return Object.freeze({
 		/**
-		 * The list: the Portal's while it owns it, else the saved value, else its default.
+		 * The saved value of a list, else its default.
 		 * @param {string} websiteId
 		 * @param {ListName} name
 		 * @returns {Promise<any>}
 		 */
 		get: async (websiteId, name) => {
-			const owned = await managed[name]?.(websiteId);
-			if (owned) return owned;
 			const doc = await store.get('settings', idOf(websiteId, `list.${name}`));
 			return doc ? doc.value : LISTS[name].fallback();
 		},
@@ -158,17 +145,6 @@ export const createLists = ({ store, now, guards = {}, managed = {} }) => {
 		 * @returns {Promise<ListCheck>}
 		 */
 		save: async (websiteId, name, value) => {
-			if (await managed[name]?.(websiteId))
-				return {
-					ok: false,
-					errors: [
-						{
-							path: '/value',
-							message: `${LISTS[name].title} is set in the Portal (Website settings), for all your products.`,
-							code: 'managed_by_portal',
-						},
-					],
-				};
 			const checked = LISTS[name].check(value);
 			if (!checked.ok) return checked;
 			const guard = guards[name];

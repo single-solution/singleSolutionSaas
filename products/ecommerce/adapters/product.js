@@ -57,7 +57,6 @@ import { flowChangeProblems } from '../core/flow.js';
 import { typeChangeProblems } from '../core/item-types.js';
 import { COLLECTIONS } from '../core/model.js';
 import { claimStatusProblems } from '../core/returns.js';
-import { storeDetailsFromWebsite } from '../core/store-details.js';
 import { EVENT_TYPES } from '../core/events.js';
 import { LIST_WORDS, setupSummaries } from '../core/setup-sheet.js';
 import { createAi } from './ai.js';
@@ -210,14 +209,6 @@ export const createProductInstance = (options) => {
 	const lists = createLists({
 		store,
 		now,
-		// the store's facts are the website's: once the Portal holds the website's settings they are its Business and Brand
-		// sections, read only
-		managed: {
-			store_details: async (websiteId) => {
-				const website = kitProduct ? await kitProduct.website(websiteId) : null;
-				return website && website.version > 0 ? storeDetailsFromWebsite(website) : null;
-			},
-		},
 		guards: {
 			// a status that has orders keeps its key and kind of step (the order engine's facts follow them)
 			order_flow: async (websiteId, saved, next) => {
@@ -370,6 +361,7 @@ export const createProductInstance = (options) => {
 		imports: createImportOptions({
 			list: (websiteId, name) => lists.get(websiteId, /** @type {any} */ (name)),
 			settings: (websiteId, feature) => product.settings.values(websiteId, feature),
+			website: (websiteId) => product.website(websiteId),
 			featuresOn: (websiteId) => product.featuresOn(websiteId),
 			now,
 		}),

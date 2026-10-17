@@ -18,7 +18,7 @@
  * most specific fitting zone wins: the longest postcode start, then a zone listing areas, cities, regions, countries,
  * then the catch-all; between equals, the first in the list. The shopper picks one of the fitting zone's rates whose
  * condition the cart meets, in the zone's order; no fitting zone or rate = no delivery to that place. An address without
- * a country is in the business.json country. Until the merchant saves the list, it is one zone for every place with
+ * a country is in the business country. Until the merchant saves the list, it is one zone for every place with
  * today's single rate, `Standard` (free), and `Pickup`. Money is minor units. Names compare without letter case and
  * extra spaces, countries by code or English name, postcodes upper-cased without spaces (`core/address.js`). No I/O.
  * @module

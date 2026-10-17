@@ -6,7 +6,7 @@
  * names, SEO titles and SEO descriptions used twice, SEO titles over 60 characters, canonical addresses on another
  * site, products the feeds send of a brand without a GTIN, or with neither a brand nor a GTIN or MPN (G5, G11), categories shoppers see without a product, glossary pages without their own text (G7), archived
  * products still featured, variants out of stock and low on stock (E44's level). The setup: the business name,
- * country, logo and phone (business.json; search engines need the country for shipping and return markup and show the
+ * country, logo and phone (the website settings in the Portal; search engines need the country for shipping and return markup and show the
  * logo, G2, G5), the website's address, the storage for photos, the delivery days (Google shows shipping only with
  * them, G5.4), a payment method shoppers can use, the bank details shoppers pay to, someone to get staff alerts and the
  * admin page they link to, and badly formed tag ids in Growth (only while Growth's token is pasted). A check that does
@@ -314,8 +314,10 @@ export const paymentMethodsOn = ({ methods, paymentsConnected, pickup }) =>
  * @param {any} input.facets the single document {@link healthPipeline} answers
  * @param {ReturnType<typeof taxonomyHealth>} input.taxonomy
  * @param {{ name: string, country: string | null, logo: string | null, phone: string | null }} input.business
- *   business.json with its defaults (name = the domain when missing)
+ *   the business facts of the Portal's website settings, with their defaults (name = the domain when missing)
  * @param {string} input.domain the website's address
+ * @param {string | null} [input.businessLink] where the merchant sets the business facts (the Portal's Website settings ›
+ *   Business), the link of the business checks; null: none
  * @param {string[]} input.paymentMethods {@link paymentMethodsOn}
  * @param {string[] | null} input.badTags {@link badTagIds}, or null when Growth's token is not pasted or Growth did not
  *   answer (the check is skipped)
@@ -326,14 +328,25 @@ export const paymentMethodsOn = ({ methods, paymentsConnected, pickup }) =>
  * @param {SetupFacts} input.setup
  * @returns {{ checks: HealthCheck[], attention: number }}
  */
-export const healthOf = ({ facets, taxonomy, business, domain, paymentMethods, badTags, shortLived, deliveryDays, setup }) => {
+export const healthOf = ({
+	facets,
+	taxonomy,
+	business,
+	domain,
+	businessLink = null,
+	paymentMethods,
+	badTags,
+	shortLived,
+	deliveryDays,
+	setup,
+}) => {
 	/** @param {string} name */
 	const counted = (name) => Number(facets?.[name]?.[0]?.n ?? 0);
 	/** @param {boolean | null | undefined} fine */
 	const flag = (fine) => (fine === null || fine === undefined ? null : fine ? 0 : 1);
 	const variants = variantStockCounts(Array.isArray(facets?.variants) ? facets.variants : []);
 	const name = String(business.name ?? '').trim();
-	const file = `https://${domain}/.well-known/business.json`;
+	const file = businessLink;
 	/** @type {Record<HealthKey, { count: number | null, link: string | null }>} */
 	const found = {
 		no_products: { count: counted('active') === 0 ? 1 : 0, link: null },

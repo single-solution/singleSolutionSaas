@@ -127,7 +127,7 @@ describe('what Shop health asks the merchant to fill', () => {
 			key: 'business_country',
 			status: 'ok',
 			count: 0,
-			link: `${ORIGIN}/.well-known/business.json`,
+			link: `${shop.portal.url}/websites/${shop.websiteId}/settings#business`,
 		});
 		expect(await health('business_logo')).toMatchObject({ status: 'attention', count: 1 });
 		// without delivery zones there are no delivery days to ask for

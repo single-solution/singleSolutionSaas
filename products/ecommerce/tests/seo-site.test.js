@@ -214,7 +214,7 @@ describe('baseline SEO with the catalog', () => {
 		// saved while SEO is off (an admin may prepare them): they count only once SEO is on
 		await shop.setting('seo', 'titleTemplate', '{name} — {business} shop');
 		await shop.setting('seo', 'homeTitle', 'Northwind: lamps and lights');
-		await shop.setting('seo', 'socialProfiles', ['https://social.example.com/northwind', 'http://old.example.com/x']);
+		await shop.setting('seo', 'socialProfiles', ['https://social.example.com/northwind']);
 	});
 	afterAll(async () => shop.product.close());
 
@@ -250,7 +250,8 @@ describe('baseline SEO with the catalog', () => {
 			// the returns setting's window (7 days by default), with the business's country
 			hasMerchantReturnPolicy: { applicableCountry: 'US', merchantReturnDays: 7 },
 		});
-		expect(business.sameAs).toBeUndefined();
+		// the social profiles are the website's (Portal › Business), given whether SEO is on or not
+		expect(business.sameAs).toEqual(['https://social.example.com/northwind']);
 		expect(nodeOf(site.jsonLd, 'WebSite')).toMatchObject({ name: 'Northwind Goods', url: HOME });
 	});
 
@@ -285,7 +286,6 @@ describe('baseline SEO with the catalog', () => {
 		expect((await read('/v1/seo/products/desk-lamp')).json.title).toBe('Desk Lamp — Northwind Goods shop');
 		const site = (await read('/v1/seo/site')).json;
 		expect(site.title).toBe('Northwind: lamps and lights');
-		// only https profiles are given
 		expect(nodeOf(site.jsonLd, 'OnlineStore').sameAs).toEqual(['https://social.example.com/northwind']);
 	});
 
@@ -320,7 +320,10 @@ describe('baseline SEO with the catalog', () => {
 		const site = (await read('/v1/seo/site')).json;
 		expect(nodeOf(site.jsonLd, 'ClothingStore')).toMatchObject({ openingHours: ['Mo-Sa 10:00-19:00'] });
 		expect(nodeOf(site.jsonLd, 'OnlineStore')).toBeUndefined();
-		// only schema.org's own type names are taken
-		await expect(shop.setting('seo', 'businessType', 'Shop Of Dreams')).rejects.toThrow(/422|400/);
+		// only schema.org's own type names are taken: any other text the Portal holds is an online store
+		await shop.setting('seo', 'businessType', 'Shop Of Dreams');
+		const other = (await read('/v1/seo/site')).json;
+		expect(nodeOf(other.jsonLd, 'OnlineStore')).toBeDefined();
+		expect(nodeOf(other.jsonLd, 'ClothingStore')).toBeUndefined();
 	});
 });

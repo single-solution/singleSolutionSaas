@@ -36,18 +36,6 @@
 				"order": 3
 			}
 		},
-		"sellerDetails": {
-			"type": "string",
-			"title": "Seller details",
-			"description": "Printed under your business on invoices and packing slips: your tax or company number and anything else the law asks. Takes the same placeholders as the footer.",
-			"default": "",
-			"maxLength": 1000,
-			"x-ui": {
-				"widget": "textarea",
-				"group": "Basics",
-				"order": 4
-			}
-		},
 		"footer": {
 			"type": "string",
 			"title": "Footer",

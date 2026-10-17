@@ -520,11 +520,11 @@ describe('cart', () => {
 			},
 		};
 		const { fake, timers, host } = await setup({ settings });
-		// without a country the address is in the business.json country: its regions are a list to pick from
+		// without a country the address is in the business country: its regions are a list to pick from
 		const picker = /** @type {HTMLSelectElement} */ ($(host, '#ss-cart-region'));
 		expect(picker.tagName).toBe('SELECT');
 		expect([...picker.options].map((option) => option.value)).toEqual(['', 'California', 'Texas']);
-		// the business.json country is picked first, and the form follows its format: US order, State and ZIP code required
+		// the business country is picked first, and the form follows its format: US order, State and ZIP code required
 		expect(/** @type {HTMLSelectElement} */ ($(host, '#ss-cart-country')).value).toBe('US');
 		/** The address fields shown, in order, with their labels. */
 		const shown = () =>

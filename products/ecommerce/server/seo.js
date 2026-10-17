@@ -576,13 +576,15 @@ export const createSeo = (product, service) => {
 		// a local business type at its pickup point, once the merchant picks one and the point has an address and hours (E35)
 		const zones = s.has('delivery_zones') ? await s.values('delivery_zones') : null;
 		const pickup = zones && String(zones.pickupAddress ?? '').trim() && String(zones.pickupHours ?? '').trim() ? zones : null;
-		const businessType = String(settings.businessType ?? ONLINE_STORE);
+		const businessType = String(settings.businessType || ONLINE_STORE);
+		/** @type {string[]} */
+		const otherNames = Array.isArray(settings.alternateName) ? settings.alternateName.map(String) : [];
 		const local = businessType !== ONLINE_STORE && pickup !== null;
 		const jsonLd = siteJsonLd({
 			home,
 			name,
 			memberTiers: await memberTiersOf(s),
-			alternateName: String(settings.alternateName ?? '').trim(),
+			alternateName: otherNames.length === 1 ? String(otherNames[0]) : otherNames,
 			type: local ? businessType : ONLINE_STORE,
 			logo: business.logo ?? null,
 			email: business.email ?? null,

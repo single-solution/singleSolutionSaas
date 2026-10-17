@@ -11,6 +11,7 @@ import { createOrdersStore } from '../adapters/orders-store.js';
 import { elementsOf } from '../core/item-types.js';
 import { OPTIONAL_ADDRESS_FIELDS } from '../core/address.js';
 import { zoneCities } from '../core/delivery.js';
+import { addressRequiredOf } from '@ss/contracts/website-settings';
 import { guestRules } from '../core/guests.js';
 import { createDigital } from './checkout-digital.js';
 import { createOrdering } from './checkout-orders.js';
@@ -93,8 +94,9 @@ export const createCheckout = (product, service) => {
 					: true) &&
 				(method.kind === 'at_pickup' ? pickupLocations.length > 0 || zonesPickup : true),
 		);
-		/** @type {string[]} */
-		const required = checkout.addressRequired;
+		const website = await s.website();
+		// the address parts every address needs: the website's, set once in the Portal (Region and format › Address rules)
+		const required = addressRequiredOf(website);
 		const phoneNeeded = checkout.phoneRequired !== false;
 		return {
 			checkout: {
@@ -112,9 +114,9 @@ export const createCheckout = (product, service) => {
 						...(phoneNeeded ? ['phone'] : []),
 						...OPTIONAL_ADDRESS_FIELDS.filter((f) => required.includes(f)),
 					],
-					// the region names offered per country (`address_regions`), and the country of an address without one
-					regions: await s.list('address_regions'),
-					country: (await s.business()).country ?? '',
+					// the region names offered per country and the country of an address without one: the website's
+					regions: website.region.address.regions,
+					country: website.region.country,
 				},
 			},
 		};

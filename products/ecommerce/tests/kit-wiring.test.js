@@ -11,7 +11,7 @@ import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import { parseRange } from '../core/reports.js';
 import { staffSignInHeaders } from '../server/service.js';
-import { ALL, ORIGIN, PAYMENTS, readyShop, storedOrder } from './helpers.js';
+import { ALL, PAYMENTS, readyShop, storedOrder } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -38,20 +38,11 @@ const codeOf = (response) =>
 		.pop();
 
 /**
- * Serve business.json with a time zone and read it again.
+ * The merchant sets the business time zone in the Portal (Website settings › Region and format).
  * @param {string} timeZone
  */
 const useTimeZone = async (timeZone) => {
-	shop.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
-		status: 200,
-		body: { version: 1, name: 'Shop', email: 'hello@shop.example.com', timeZone },
-	}));
-	const refreshed = await shop.dashboard(
-		await shop.adminSession(),
-		'POST',
-		`/v1/dashboard/websites/${shop.websiteId}/business/refresh`,
-	);
-	expect(refreshed.status).toBeLessThan(300);
+	await shop.setBusiness({ name: 'Shop', email: 'hello@shop.example.com', timeZone });
 };
 
 /**
@@ -635,14 +626,15 @@ describe('K4: counts equal to their lists', () => {
 describe('K7 and K8: Format and business time zone', () => {
 	it('formats the texts the server makes with the Format, and dates in the business time zone', async () => {
 		await useTimeZone('Asia/Tokyo');
-		const saved = await shop.api('PUT', '/v1/format', {
+		// the Format is the Portal's: a server cannot save it, the merchant does there
+		expect((await shop.api('PUT', '/v1/format', { wholeUnits: true })).status).toBe(409);
+		await shop.setFormat({
 			locale: 'en-US',
 			currencyDisplay: 'symbol',
 			currencySymbols: { USD: 'US$' },
 			wholeUnits: true,
 			times: 'business',
 		});
-		expect(saved.status).toBe(200);
 		try {
 			const config = await shop.visitor('GET', '/v1/widget/config');
 			expect(config.json).toMatchObject({
@@ -680,13 +672,7 @@ describe('K7 and K8: Format and business time zone', () => {
 			expect(sales.json).toMatchObject({ from: '2026-10-04T15:00:00.000Z', to: '2026-10-05T15:00:00.000Z' });
 			expect(sales.json.totals.orders).toBeGreaterThanOrEqual(1);
 		} finally {
-			await shop.api('PUT', '/v1/format', {
-				locale: null,
-				currencyDisplay: null,
-				currencySymbols: null,
-				wholeUnits: null,
-				times: null,
-			});
+			await shop.setFormat({ locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' });
 		}
 	});
 

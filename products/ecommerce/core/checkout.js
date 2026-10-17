@@ -181,7 +181,7 @@ export const checkCart = (body) => {
 /**
  * What a delivery address must hold on a website: the fields the merchant requires besides the name
  * (`checkout.addressRequired`), whether the phone is needed (`checkout.phoneRequired`), how phones are read (K12),
- * the region names offered per country (`address_regions`) and the business.json country (an address without a country
+ * the region names offered per country (`address_regions`) and the business country (an address without a country
  * is there).
  * @typedef {{ required: ReadonlyArray<string>, phoneRequired: boolean,
  *   phoneRules: Pick<PhoneRules, 'defaultCallingCode' | 'trunkPrefix'>,
@@ -622,7 +622,7 @@ export const roleDiscounts = (lines, after, terms, unit = 1) => {
  * @param {number} input.delivery the delivery fee
  * @param {number} input.pointsValue what the redeemed points take off, minor units
  * @param {TaxRule[]} input.taxRules [] without the `taxes` feature
- * @param {import('./address.js').Place | null} input.region where the order goes (a pickup order: the business.json
+ * @param {import('./address.js').Place | null} input.region where the order goes (a pickup order: the business
  *   country; null: no place, then only tax rules without regions apply)
  * @param {boolean} input.taxIncluded
  * @param {import('./role-pricing.js').RoleTerms | null} [input.role] the shopper's role prices (E19, E31)

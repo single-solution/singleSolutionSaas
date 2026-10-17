@@ -373,7 +373,8 @@ const finishCounters = async (data, form) => {
 export const orderImports = (deps) => {
 	/**
 	 * What every check of a call reads of the website: the order flow, the checkout and catalog settings, the
-	 * business.json country (national phone numbers, K12), the order and customer fields, the time.
+	 * Portal's Region and format (the currency, and the calling code and country of national phone numbers, K12), the order
+	 * and customer fields, the time.
 	 * @param {{ websiteId: string, data: import('@ss/app-kit').WebsiteData, now: () => number,
 	 *   business: () => Promise<{ country?: string | null }> }} ctx
 	 * @returns {Promise<ImportRules>}
@@ -382,8 +383,7 @@ export const orderImports = (deps) => {
 		importRules({
 			flow: await deps.list(ctx.websiteId, 'order_flow'),
 			checkout: await deps.settings(ctx.websiteId, 'checkout'),
-			catalog: /** @type {any} */ (await deps.settings(ctx.websiteId, 'catalog')),
-			country: (await ctx.business()).country,
+			region: (await deps.website(ctx.websiteId)).region,
 			now: ctx.now(),
 			fields: { order: await fieldsOn(ctx.data, 'order'), customer: await fieldsOn(ctx.data, 'customer') },
 			attachmentKinds: /** @type {any[]} */ (await deps.list(ctx.websiteId, 'attachment_kinds')),

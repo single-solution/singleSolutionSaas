@@ -13,12 +13,13 @@ import { catalogImports } from './imports-catalog.js';
 import { orderImports } from './imports-orders.js';
 
 /**
- * What the import checks read of the website (built in `product.js` on the kit's product). The business.json copy
- * (its `country` gives national phone numbers their calling code, K12) comes with each call's check context
- * (`ctx.business()`, read once per call).
+ * What the import checks read of the website (built in `product.js` on the kit's product). The Portal's website settings
+ * (its Region and format: the currency, and the country and calling code that give national phone numbers theirs, K12).
  * @typedef {object} ImportDeps
  * @property {(websiteId: string, name: string) => Promise<unknown>} list a list setting (`order_flow`, `grades` …)
  * @property {(websiteId: string, feature: string) => Promise<Record<string, unknown>>} settings a feature's settings
+ * @property {(websiteId: string) => Promise<import('@ss/contracts').WebsiteSettings>} website the website's settings from the
+ *   Portal
  * @property {(websiteId: string) => Promise<string[]>} featuresOn the switched-on features
  * @property {() => number} now
  */

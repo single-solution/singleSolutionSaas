@@ -676,11 +676,42 @@ export const openingHoursOf = (text) => {
 };
 
 /**
+ * The schema.org types of the business the home page may name (the Portal's `business.businessType`, set in Website settings ›
+ * Business): `OnlineStore`, or a local business type given at the pickup point (E35). Any other value is an `OnlineStore`.
+ */
+export const BUSINESS_TYPES = Object.freeze([
+	'OnlineStore', 'LocalBusiness', 'Store', 'AutoPartsStore', 'BikeStore', 'BookStore', 'ClothingStore',
+	'ComputerStore', 'ConvenienceStore', 'DepartmentStore', 'ElectronicsStore', 'Florist', 'FurnitureStore',
+	'GardenStore', 'GroceryStore', 'HardwareStore', 'HobbyShop', 'HomeGoodsStore', 'JewelryStore', 'LiquorStore',
+	'MensClothingStore', 'MobilePhoneStore', 'MovieRentalStore', 'MusicStore', 'OfficeEquipmentStore', 'OutletStore',
+	'PawnShop', 'PetStore', 'ShoeStore', 'SportingGoodsStore', 'TireShop', 'ToyStore', 'WholesaleStore',
+	'AnimalShelter', 'ArchiveOrganization', 'AutomotiveBusiness', 'AutoBodyShop', 'AutoDealer', 'AutoRental',
+	'AutoRepair', 'AutoWash', 'GasStation', 'MotorcycleDealer', 'MotorcycleRepair', 'ChildCare', 'Dentist',
+	'DryCleaningOrLaundry', 'EmergencyService', 'FireStation', 'Hospital', 'PoliceStation', 'EmploymentAgency',
+	'EntertainmentBusiness', 'AdultEntertainment', 'AmusementPark', 'ArtGallery', 'Casino', 'ComedyClub',
+	'MovieTheater', 'NightClub', 'FinancialService', 'AccountingService', 'AutomatedTeller', 'BankOrCreditUnion',
+	'InsuranceAgency', 'FoodEstablishment', 'Bakery', 'BarOrPub', 'Brewery', 'CafeOrCoffeeShop', 'Distillery',
+	'FastFoodRestaurant', 'IceCreamShop', 'Restaurant', 'Winery', 'GovernmentOffice', 'PostOffice',
+	'HealthAndBeautyBusiness', 'BeautySalon', 'DaySpa', 'HairSalon', 'HealthClub', 'NailSalon', 'TattooParlor',
+	'HomeAndConstructionBusiness', 'Electrician', 'GeneralContractor', 'HVACBusiness', 'HousePainter', 'Locksmith',
+	'MovingCompany', 'Plumber', 'RoofingContractor', 'InternetCafe', 'LegalService', 'Attorney', 'Notary', 'Library',
+	'LodgingBusiness', 'BedAndBreakfast', 'Campground', 'Hostel', 'Hotel', 'Motel', 'Resort', 'VacationRental',
+	'MedicalBusiness', 'CommunityHealth', 'Dermatology', 'DietNutrition', 'Emergency', 'Geriatric', 'Gynecologic',
+	'MedicalClinic', 'Midwifery', 'Nursing', 'Obstetric', 'Oncologic', 'Optician', 'Optometric', 'Otolaryngologic',
+	'Pediatric', 'Pharmacy', 'Physician', 'Physiotherapy', 'PlasticSurgery', 'Podiatric', 'PrimaryCare', 'Psychiatric',
+	'PublicHealth', 'ProfessionalService', 'RadioStation', 'RealEstateAgent', 'RecyclingCenter', 'SelfStorage',
+	'ShoppingCenter', 'SportsActivityLocation', 'BowlingAlley', 'ExerciseGym', 'GolfCourse', 'PublicSwimmingPool',
+	'SkiResort', 'SportsClub', 'StadiumOrArena', 'TennisComplex', 'TelevisionStation', 'TouristInformationCenter',
+	'TravelAgency',
+]);
+
+/**
  * What the home page says about the business and the website (E49, SEO audit G2).
  * @typedef {object} SitePage
  * @property {string} home the home page's address
  * @property {string} name the site name (the `seo` setting `brandName`, else the business name)
- * @property {string} alternateName another name of the site ('' = none)
+ * @property {string | string[]} alternateName another name of the site, or several (the Portal's other names; '' or none: left
+ *   out)
  * @property {string} type the schema.org type: `OnlineStore`, or the local business type the merchant picked (E35)
  * @property {string | null} logo
  * @property {string | null} email

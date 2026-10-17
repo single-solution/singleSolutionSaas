@@ -476,14 +476,9 @@ describe('E17 feed options', () => {
 		await shop.setting('feeds', 'items', 'all');
 		await shop.setting('feeds', 'googleCategory', '267');
 		await shop.setting('feeds', 'gradeLabel', true);
-		const business = shop.responders.get(`${ORIGIN}/.well-known/business.json`);
-		shop.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
-			status: 200,
-			body: { version: 1, name: 'Shop', country: 'GB', timeZone: 'UTC' },
-		}));
-		await shop.dashboard(await shop.adminSession(), 'POST', `/v1/dashboard/websites/${shop.websiteId}/business/refresh`);
-		const format = await shop.api('PUT', '/v1/format', { wholeUnits: true });
-		expect(format.status).toBe(200);
+		// the country and the Format are the website's, set once in the Portal
+		await shop.setBusiness({ name: 'Shop', country: 'GB', timeZone: 'UTC' });
+		await shop.setFormat({ wholeUnits: true });
 		const google = (await shop.api('GET', '/v1/feeds/products.xml')).text;
 		expect(google).toContain('<g:id>0123456789abcdef01234567_76543210fedcba9876543210</g:id>');
 		// the imported group id reaches the feed (it was not read with the feed's fields)
@@ -494,6 +489,7 @@ describe('E17 feed options', () => {
 		expect(google).toContain('<g:shipping><g:country>GB</g:country><g:price>250 USD</g:price></g:shipping>');
 		const csv = (await shop.api('GET', '/v1/feeds/products.csv')).text;
 		expect(csv).toContain(',267,,Mint,,,,\r\n');
-		if (business) shop.responders.set(`${ORIGIN}/.well-known/business.json`, business);
+		await shop.setBusiness({ name: 'Shop', country: '', timeZone: 'UTC' });
+		await shop.setFormat({ wholeUnits: false });
 	});
 });

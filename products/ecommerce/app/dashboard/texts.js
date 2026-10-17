@@ -23,14 +23,6 @@ export const TEXTS = dashboardTexts({
 		notificationsStep: 'Connect Notifications for order messages to shoppers',
 		notificationsWhy: 'Order messages and staff alerts cannot be sent until it is connected.',
 		notificationsAction: 'Connect',
-		currency: {
-			title: 'Set your currency',
-			effect:
-				'Every price is in {currency}, the default, until you set your shop’s currency (a three-letter code such as EUR or JPY) in Settings → Catalog. Set it before you add prices.',
-			step: 'Set your currency',
-			now: 'Now {currency}',
-			action: 'Set it',
-		},
 		search: {
 			title: 'The Atlas Search index {index} is missing',
 			effect:
@@ -117,7 +109,7 @@ export const TEXTS = dashboardTexts({
 			ai: { title: 'AI copy', help: 'Product descriptions and meta text written with your AI key.' },
 			policies: {
 				title: 'Policies',
-				help: 'Your policies: delivery, returns, warranty, privacy and terms to start with, and any you add, as plain text or HTML.',
+				help: 'Your policies: delivery, returns and warranty to start with, and any you add, as plain text or HTML. Your privacy policy and terms are set once in the Portal.',
 			},
 			texts: { title: 'Texts', help: 'Every word the widgets show.' },
 			theme: {
@@ -362,18 +354,11 @@ export const TEXTS = dashboardTexts({
 		},
 		policies: {
 			title: 'Policies',
-			help: 'Shown at checkout, to Chat and in llms.txt, each on its own page of your site (/policies/<key>). The texts take {returnTime}, {warrantyTime} (as typed: 30 days, 1 year), {business}, {email}, {phone}, {address}, {deliveryFee} and {freeDeliveryOver}; a policy without text is not shown.',
+			help: 'Shown at checkout, to Chat and in llms.txt, each on its own page of your site (/policies/<key>), after your privacy policy and terms (set once in the Portal under Website settings › Domains, pages and legal). The texts take {returnTime}, {warrantyTime} (as typed: 30 days, 1 year), {business}, {email}, {phone}, {address}, {deliveryFee} and {freeDeliveryOver}; a policy without text is not shown.',
 			item: 'Policy',
 			name: 'Title',
 			key: 'Key (lower-case letters, digits, _ or -; names its page)',
 			text: 'Text',
-		},
-		addressRegions: {
-			title: 'Address regions',
-			help: 'Countries whose shoppers pick their state, province or region from a list (exact names, so zones and tax rules match them). An address without a country is in your business.json country.',
-			item: 'Country',
-			country: 'Country (code or name)',
-			names: 'Regions (one per line)',
 		},
 		zones: {
 			title: 'Delivery zones',
@@ -485,7 +470,7 @@ export const TEXTS = dashboardTexts({
 		},
 		taxRules: {
 			title: 'Tax rules',
-			help: 'Every rule that applies to a line adds its percent. Empty categories or regions apply everywhere. A delivery is taxed where it goes, a pickup or download where your business is (its business.json country).',
+			help: 'Every rule that applies to a line adds its percent. Empty categories or regions apply everywhere. A delivery is taxed where it goes, a pickup or download where your business is (its business country).',
 			item: 'Rule',
 			name: 'Name',
 			percent: 'Percent (0–100)',
@@ -717,55 +702,15 @@ export const TEXTS = dashboardTexts({
 		storeDetails: {
 			managedTitle: 'Set in the Portal',
 			managed:
-				'Your store’s name, contacts, address, hours, social links and pictures are set once for all your products, in the Portal under Website settings › Business and Brand and look. Your website reads them from here as before.',
+				'Your store’s name, contacts, address, hours, social links and pictures are set once for all your products, in the Portal under Website settings › Business and Brand and look. Your website reads them from here.',
 			managedOpen: 'Open Website settings',
 			title: 'Store details',
-			help: 'Who your store is, as your customers see it: name, logos, contacts, address, opening hours and social links. Your website reads them for its header, footer and contact page, and serves its business.json from them.',
+			help: 'Who your store is, as your customers see it. Your website reads them for its header, footer and contact page, and serves its business.json from them.',
 			name: 'Store name',
-			tagline: 'Tagline',
-			files: {
-				logo: { title: 'Logo', help: 'For light backgrounds.' },
-				logoDark: { title: 'Dark logo', help: 'For dark mode and dark backgrounds.' },
-				icon: { title: 'Icon', help: 'Your square mark, for apps and social cards.' },
-				favicon: { title: 'Favicon', help: 'The small picture on a browser tab.' },
-				faviconDark: { title: 'Dark favicon', help: 'The browser-tab picture for dark mode.' },
-			},
-			alt: 'Alternative text',
-			noFile: 'Nothing uploaded yet.',
-			uploadFailed:
-				'The file was not saved. Check that your storage is connected and the file is a JPEG, PNG, WebP or AVIF image.',
-			contact: 'Contact',
 			email: 'Email address',
 			phone: 'Phone number',
-			phones: 'More phone numbers (one per line)',
-			phonesHelp: 'A name, then | and the number: Landline | (555) 010-0100. The name is optional. At most 10.',
-			whatsapp: 'WhatsApp number',
 			address: 'Address',
-			country: 'Country',
-			noCountry: 'Not set',
-			parts: {
-				line1: 'Street address',
-				line2: 'Apartment, suite or building',
-				area: 'Area or district',
-				city: 'City',
-				region: 'State, province or region',
-				postalCode: 'Postal code',
-			},
-			hours: 'Opening hours',
 			timeZone: 'Time zone',
-			timeZoneHelp: 'The hours below follow it (an IANA name).',
-			language: 'Language',
-			languageHelp: 'The default language of your website (BCP 47).',
-			day: 'Day',
-			from: 'From',
-			to: 'To',
-			addWindow: 'Add hours',
-			days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
-			exceptions: 'Dated exceptions (one per line)',
-			exceptionsHelp:
-				'A date, a name and, after |, its own hours: 2026-12-25 Christmas (closed all day), or 2026-12-24 Christmas Eve | 09:00-12:00.',
-			social: 'Social links (one per line)',
-			socialHelp: 'A name, then | and the https address: Instagram | https://instagram.com/yourstore',
 			siteHelp: 'Your website reads these at {read} and serves {json} as /.well-known/business.json.',
 		},
 		bookingSchedules: {

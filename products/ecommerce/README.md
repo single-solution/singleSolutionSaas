@@ -54,14 +54,15 @@ does: only public https addresses and TLS databases.
 ## API
 
 Every route is in `openapi.json` and in `/docs`. Besides the shop's own routes, the merchant's server reaches the kit's
-settings API (features, settings, texts, theme, Format, connections, and the lists `order_flow`, `payment_methods`,
-`couriers`, `policies`, `address_regions`, `customer_segments`, `delivery_zones`, `tax_rules`, `grades`, `unit_states`,
-`item_types`, `booking_schedules`, `store_details`, `role_prices`, `cancel_reasons`, `delivery_failure_reasons`, `attachment_kinds`,
+settings API (features, settings, texts, connections, theme and Format to read, and the lists `order_flow`,
+`payment_methods`, `couriers`, `policies`, `customer_segments`, `delivery_zones`, `tax_rules`, `grades`, `unit_states`,
+`item_types`, `booking_schedules`, `role_prices`, `cancel_reasons`, `delivery_failure_reasons`, `attachment_kinds`,
 `review_questions`, `claim_kinds` and `claim_statuses` at `/v1/lists/:list`), the activity log
 (`/v1/activity`) and counts of the main lists (`/v1/orders`, `/v1/products`, `/v1/customers`, `/v1/reviews` and
-`/v1/returns`, each with `/count` and `/counts?by=`, and ticket twins under `/v1/admin/`). Store details (Settings → Store
-details, or `PUT /v1/lists/store_details`: name, tagline, logo, dark logo, icon, favicon and dark favicon in the merchant's
-storage, contacts with more phone numbers, address, opening hours, social links) are read in public form at
+`/v1/returns`, each with `/count` and `/counts?by=`, and ticket twins under `/v1/admin/`). Store details (name, tagline,
+pictures, contacts with more phone numbers, address, opening hours, social links) belong to the website: they are set once
+in the Portal (Website settings › Business and Brand and look) for every product, Settings → Store details only shows them,
+and they are read in public form at
 `GET /v1/shop/store` (with the website's own address, `siteUrl`), and `GET /v1/shop/store/business-json` gives the
 business.json a headless website serves at `/.well-known/business.json`. Staff work with the server token needs
 the verified `SS-Sign-In` of a signed-in staff member with the permission (the token alone is 403), and the shopper routes (`/v1/shop/…`: cart, checkout, my orders,
@@ -155,8 +156,7 @@ this order, then `POST /v1/import/finish`:
 
 The checks are the product's own, in import mode (`core/imports-orders.js`): ids, numbers and past times are taken as
 given; fields the record type does not have (with `websiteId` and `merchantId`) and text over a limit are refused by
-path (never cut). Customers: phones as E.164, or national numbers with the website's calling code (the
-`checkout.defaultCallingCode` setting, else the business.json country's; refused when there is neither), a guest has a
+path (never cut). Customers: phones as E.164, or national numbers with the website's calling code (the calling code in the Portal's Region and format, else the business country's; refused when there is neither), a guest has a
 name and the contact `checkout.guestIdentity` keys them by (a phone, an email address, or either; one guest per key), a
 block has its reason; `orderCount`, `rtoCount`, `lastOrderAt`, `phoneDigits` and `guestKey` are derived (given ones
 are ignored; the counts are 0 until finish). Orders: `number` in the website's form (`checkout.numberPattern`:

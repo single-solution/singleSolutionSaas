@@ -16,6 +16,13 @@ export const VIDEO_MAX_BYTES = 64 * 1024 * 1024;
 /** The name of the Atlas Search index on the products collection (the dashboard shows the definition to create). */
 export const SEARCH_INDEX = 'ss_ecommerce_products_search';
 
+/** The currency of every price until the merchant sets the shop's currency in the Portal (Website settings › Region and format). */
+export const DEFAULT_CURRENCY = 'USD';
+/** The package weight unit staff type and read until the merchant sets one in the Portal (kept in grams). */
+export const DEFAULT_WEIGHT_UNIT = 'g';
+/** The package size unit staff type and read until the merchant sets one in the Portal (kept in millimeters). */
+export const DEFAULT_SIZE_UNIT = 'mm';
+
 // --------------------------------------------------------------------------------------------------------- checkout
 
 /** Orders waiting for payment or confirmation one customer may have at once. */

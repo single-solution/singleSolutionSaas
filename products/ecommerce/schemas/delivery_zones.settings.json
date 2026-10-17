@@ -5,7 +5,7 @@
 		"handlingDays": {
 			"type": "array",
 			"title": "Handling days",
-			"description": "Working days from an order to its dispatch: one number (always that many) or two (the fewest and the most), one per line, for example 0 and 1. With the days of your business country's first delivery rate and your business.json country, search engines show your shipping.",
+			"description": "Working days from an order to its dispatch: one number (always that many) or two (the fewest and the most), one per line, for example 0 and 1. With the days of your business country's first delivery rate and your business country, search engines show your shipping.",
 			"default": [],
 			"items": {
 				"type": "integer",

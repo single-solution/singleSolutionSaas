@@ -52,7 +52,7 @@ const addressLabel = (t, name, kind) =>
 		: t(`checkout.field.${name}`);
 
 /**
- * The delivery address form: the name and phone, the country (a picker of every country, the business.json country
+ * The delivery address form: the name and phone, the country (a picker of every country, the business country
  * chosen first), the place parts the country's format uses (`@ss/contracts/address`: its order, its labels such as
  * State, Province or ZIP code, the region and postal code it requires) plus those the website requires, then the
  * delivery directions. Picking another country lays the place parts out again, keeping what was typed. Each field takes

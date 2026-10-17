@@ -176,7 +176,8 @@ describe('renderDocs', () => {
 		expect(html).toContain(escape(guide.localhost));
 		expect(html).toContain(escape(guide.growthEvents));
 		for (const name of Object.values(GROWTH_EVENTS)) expect(html).toContain(name);
-		expect(html).toContain('<h2 id="business">business.json</h2>');
+		expect(html).toContain('<h2 id="business">Your website\'s settings</h2>');
+		expect(html).toContain(escape(guide.business));
 	});
 
 	it('names every feature, widget, permission, template and status role', () => {

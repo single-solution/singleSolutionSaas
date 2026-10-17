@@ -46,7 +46,7 @@ import { WIDGET_CSS } from './styles.js';
 /**
  * The start of a day (`YYYY-MM-DD` from a date input) in the business time zone as ISO-8601, or ''.
  * @param {string} value
- * @param {string} timeZone the business.json time zone (widget config)
+ * @param {string} timeZone the business time zone (widget config)
  */
 export const dayStart = (value, timeZone) => {
 	const day = dayBounds(value, timeZone);
@@ -656,7 +656,7 @@ const createKit = ({ root, config, api, win, save, open }) => {
 		doc,
 		win,
 		currency,
-		/** The business.json time zone (days of date pickers). */
+		/** The business time zone (days of date pickers). */
 		timeZone,
 		/** @type {Record<string, any>} */
 		settings: config.settings ?? {},

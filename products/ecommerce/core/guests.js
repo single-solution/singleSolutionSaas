@@ -2,8 +2,8 @@
  * Guest checkout (PLAN 0.8.10 E21; dynamic model §5): a guest orders with a name and the contact the `checkout` setting
  * `guestIdentity` asks for — a phone (the default), an email address, or either — and a phone while
  * `checkout.phoneRequired` is on. The phone is read as E.164 by the normalizer every product shares
- * (`@ss/contracts/phone`, K12) with the website's phone rules (`phoneRules`: the `checkout` settings
- * `defaultCallingCode`, else the business.json country's, and `trunkPrefix`); the email address is kept in lower case.
+ * (`@ss/contracts/phone`, K12) with the website's phone rules (`phoneRules`: the Portal's Region and format › Phone
+ * rules, the calling code its own or its country's, and the trunk prefix); the email address is kept in lower case.
  * One guest has one customer record, found by its key (`guestKey`): `p:<E.164>` or `e:<email>` (under `either` the phone
  * when given). A guest order gets a key — 32 random characters, shown once and kept only as its hash — that the guest
  * sends as `SS-Order-Key` to read, pay, cancel and send proof for it (made and checked in `adapters/crypto.js`). Orders
@@ -30,15 +30,16 @@ const COUNTRY_REFUSED = Object.freeze({
  */
 
 /**
- * A website's phone rules from its `checkout` settings and its business.json country.
- * @param {Record<string, unknown>} checkout the `checkout` settings
- * @param {unknown} country business.json `country`
+ * A website's phone rules from the Portal's Region and format (Website settings › Phone rules, one set for every
+ * product); the calling code is its own, else its country's.
+ * @param {{ country: string, phone: { callingCode: string, trunkPrefix: string, countries: readonly string[] } }} region
+ *   the website settings' `region`
  * @returns {PhoneRules}
  */
-export const phoneRules = (checkout, country) => ({
-	defaultCallingCode: websiteCallingCode(checkout.defaultCallingCode, country),
-	trunkPrefix: typeof checkout.trunkPrefix === 'string' ? checkout.trunkPrefix : '',
-	countries: Array.isArray(checkout.countries) ? checkout.countries.filter((code) => typeof code === 'string') : [],
+export const phoneRules = (region) => ({
+	defaultCallingCode: websiteCallingCode(region.phone.callingCode, region.country),
+	trunkPrefix: region.phone.trunkPrefix,
+	countries: [...region.phone.countries],
 });
 
 /**

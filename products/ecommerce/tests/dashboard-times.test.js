@@ -33,7 +33,7 @@ const ANSWERS = {
 				},
 			],
 			widget: { installed: true, lastSeenAt: '2026-10-05T23:15:00.000Z' },
-			business: { found: true },
+			website: { version: 1, requires: [], missing: [] },
 		},
 		recentChanges: [
 			{

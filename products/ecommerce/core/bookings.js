@@ -5,7 +5,7 @@
  * Chat's office hours: `day` is the ISO weekday (1 = Monday … 7 = Sunday), times are `HH:MM` (`24:00` = the end of the
  * day; a period ends after it starts), and a dated exception (a holiday, special hours) replaces that date's weekly
  * hours (no hours = closed all day). A schedule may stand for a place, a person or a service: each service names its
- * schedule (`booking.schedule`, '' = the first of the list). Times are in the time zone of the website's business.json.
+ * schedule (`booking.schedule`, '' = the first of the list). Times are in the website's time zone (the Portal's Region and format).
  * A product's slots are back-to-back periods of its `durationMinutes` from the start of each opening period, ending
  * inside it. Booked slots are kept with a unique index (the ledger), so one start of one product is booked once.
  * Time-zone arithmetic is `zonedParts` of `@ss/contracts/format` (no I/O); an unknown zone is read as UTC.

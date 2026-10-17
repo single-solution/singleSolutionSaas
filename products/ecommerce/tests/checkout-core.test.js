@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { checkBookingSchedules, defaultSchedules, scheduleOf, instantOf, slotAt, slotsBetween } from '../core/bookings.js';
 import { checkAddress, checkCart, checkOrderExtras, priceLines, promotionDiscounts, resolveLines } from '../core/checkout.js';
-import { ADDRESS_LIMITS, checkAddressRegions, countryKey, placeKey, postcodeKey, regionsFor } from '../core/address.js';
+import { ADDRESS_LIMITS, countryKey, placeKey, postcodeKey, regionsFor } from '../core/address.js';
 import { checkZones, defaultZones, homeRate, matchZone, rateFee, rateFits, zoneCities } from '../core/delivery.js';
 import { canDownload, checkLicenseKeys, downloadLimitOf, fileKey, fileNameOf, safeFileName } from '../core/digital.js';
 import { MAX_AMOUNT, zonedParts } from '@ss/contracts/format';
@@ -188,7 +188,7 @@ describe('cart checks', () => {
 			ok: true,
 			value: { country: 'US', region: 'TX' },
 		});
-		// an address without a country is in the business.json country
+		// an address without a country is in the business country
 		expect(checkAddress(base, addressRules({ homeCountry: 'US' }))).toMatchObject({ ok: false, field: 'address/region' });
 		// no postal code is asked where the country has none, even when the website requires one
 		expect(checkAddress({ ...base, country: 'AE', region: 'Dubai' }, addressRules({ required: ['postalCode'] }))).toMatchObject(
@@ -235,7 +235,7 @@ describe('cart checks', () => {
 	it('takes a region of the address_regions list in a listed country, as the list spells it', () => {
 		const regions = [{ country: 'US', names: ['California', 'New York'] }];
 		const good = { name: 'Sara', phone: '+15550001111', line1: '1 Main St', city: 'Town', postalCode: '10001' };
-		// the country by code or English name; an address without a country is in the business.json country
+		// the country by code or English name; an address without a country is in the business country
 		expect(checkAddress({ ...good, country: 'United States', region: ' new  york ' }, addressRules({ regions }))).toMatchObject(
 			{
 				ok: true,
@@ -489,27 +489,12 @@ describe('addresses', () => {
 		expect(countryKey('')).toBe('');
 	});
 
-	it('checks the address_regions list and finds a country’s regions', () => {
-		const checked = checkAddressRegions([{ country: 'US', names: [' California ', 'california', 'Texas'] }]);
-		expect(checked).toEqual({ ok: true, value: [{ country: 'US', names: ['California', 'Texas'] }] });
-		if (!checked.ok) return;
-		expect(regionsFor(checked.value, 'United States')).toEqual(['California', 'Texas']);
-		expect(regionsFor(checked.value, 'CA')).toBeNull();
-		expect(regionsFor(checked.value, '')).toBeNull();
-		const errors = (/** @type {unknown} */ value) => {
-			const found = checkAddressRegions(value);
-			return found.ok ? '' : found.errors.join(' ');
-		};
-		expect(errors('x')).toContain('list');
-		expect(errors([{ country: '', names: ['A'] }])).toContain('country');
-		expect(errors([{ country: 'US', names: [] }])).toContain('region names');
-		expect(errors([{ country: 'US', names: ['x'.repeat(101)] }])).toContain('1–100');
-		expect(
-			errors([
-				{ country: 'US', names: ['A'] },
-				{ country: 'United States', names: ['B'] },
-			]),
-		).toContain('twice');
+	it('finds the regions the Portal lists for a country', () => {
+		const regions = [{ country: 'US', names: ['California', 'Texas'] }];
+		expect(regionsFor(regions, 'United States')).toEqual(['California', 'Texas']);
+		expect(regionsFor(regions, 'US')).toEqual(['California', 'Texas']);
+		expect(regionsFor(regions, 'CA')).toBeNull();
+		expect(regionsFor(regions, '')).toBeNull();
 	});
 });
 

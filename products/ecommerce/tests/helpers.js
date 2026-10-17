@@ -2,7 +2,7 @@
  * Test harness: Ecommerce on the kit, connected to the kit's fake Portal (`@ss/app-kit/testing`), with one website,
  * its two tokens, dashboard sessions, a merchant database on the run's MongoDB replica set (`TEST_MONGODB_URI`, so
  * transactions work), the kit's Accounts double (shopper sign-ins and public keys), and fakes for every other address:
- * Notifications, Payments, an S3 bucket, a courier API, an AI provider and the website itself (business.json). Every
+ * Notifications, Payments, an S3 bucket, a courier API, an AI provider and the website's settings in the Portal. Every
  * call to them is recorded and answered in process (no real network call is ever made). `seedProduct` writes catalog
  * records straight into the merchant database in the shape of `core/model.js`, so each part can be tested on its own.
  * Every answer `call()` sees is checked against `schemas/api.json` and the kit's own routes: a test fails when an
@@ -16,8 +16,10 @@ import {
 	createFakePortal,
 	createMemoryStore,
 	createNetwork,
+	portalSectionsOf,
 	staffCaller,
 } from '@ss/app-kit/testing';
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
@@ -177,8 +179,9 @@ export const storedAttribute = (given) => {
 /**
  * A connected product with one website.
  * @param {{ start?: number, business?: Record<string, unknown>,
- *   store?: (store: import('@ss/app-kit').Store) => import('@ss/app-kit').Store }} [options] `business`: more fields of
- *   the website's business.json (its country …); `store` wraps the product database (a test can make a read fail)
+ *   store?: (store: import('@ss/app-kit').Store) => import('@ss/app-kit').Store }} [options] `business`: more business
+ *   facts the merchant saved in the Portal's Website settings (its country, currency …); `store` wraps the product
+ *   database (a test can make a read fail)
  */
 export const setup = async ({
 	start = Date.parse('2026-10-05T10:00:00Z'),
@@ -294,10 +297,6 @@ export const setup = async ({
 		}
 		return { status: 404, body: { code: 'not_found' } };
 	});
-	responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
-		status: 200,
-		body: { version: 1, name: 'Shop', email: 'hello@shop.example.com', timeZone: 'UTC', ...business },
-	}));
 	const network = createNetwork(handlers);
 	const product = createProductInstance({
 		config: { mongodbUri: '', connectSecret: SECRET, encryptionKey: ENCRYPTION_KEY },
@@ -314,6 +313,14 @@ export const setup = async ({
 	handlers[BASE] = handler;
 	await portal.connect({ handler, baseUrl: BASE, secret: SECRET });
 	const websiteId = portal.addWebsite({ domain: DOMAIN });
+	// what the merchant saved in the Portal's Website settings: the business facts, the pages and the alert team
+	const empty = emptyWebsiteSettings(websiteId);
+	const site = {
+		...portalSectionsOf(websiteId, { name: 'Shop', email: 'hello@shop.example.com', timeZone: 'UTC', ...business }),
+		pages: empty.pages,
+		team: empty.team,
+	};
+	portal.setWebsiteSettings(websiteId, site);
 	portal.addProduct({ productId: 'notifications', baseUrl: NOTIFY });
 	portal.addProduct({ productId: 'accounts', baseUrl: ACCOUNTS });
 	portal.addProduct({ productId: 'payments', baseUrl: PAYMENTS });
@@ -413,8 +420,76 @@ export const setup = async ({
 			secretAccessKey: 'secret-access-key-0123456789',
 		});
 
+	/**
+	 * The merchant saves website settings in the Portal (Website settings): the product is told and fetches them.
+	 * @param {Partial<Pick<import('@ss/contracts').WebsiteSettings, 'business' | 'brand' | 'region' | 'pages' | 'team'>>} sections
+	 */
+	const setWebsite = async (sections) => {
+		Object.assign(site, sections);
+		t += 1000; // a second notice at the same second would read as a replay
+		await portal.saveWebsiteSettings(websiteId, site);
+		await flush();
+	};
+
+	/**
+	 * The business facts in the Portal (name, country, time zone, currency …): what a test passes stays, the rest as it was.
+	 * @param {Parameters<typeof portalSectionsOf>[1]} info
+	 */
+	const setBusiness = (info) => {
+		const next = portalSectionsOf(websiteId, info);
+		/** @type {Partial<typeof site.region>} */
+		const patch = {};
+		if (info.country !== undefined) patch.country = next.region.country;
+		if (info.timeZone !== undefined) patch.timeZone = next.region.timeZone;
+		if (info.currency !== undefined) Object.assign(patch, { currency: next.region.currency, currencies: next.region.currencies });
+		if (info.language !== undefined) patch.language = next.region.language;
+		return setWebsite({ business: { ...site.business, ...next.business }, region: { ...site.region, ...patch } });
+	};
+
+	/** The Format in the Portal (Region and format): what a test passes changes, the rest stays. @param {Partial<typeof site.region.format>} format */
+	const setFormat = (format) => setWebsite({ region: { ...site.region, format: { ...site.region.format, ...format } } });
+
+	/** The Region section with some values changed. @param {Partial<typeof site.region>} patch */
+	const region = (patch) => ({ ...site.region, ...patch });
+	/** The Business section with some values changed. @param {Partial<typeof site.business>} patch */
+	const businessWith = (patch) => ({ ...site.business, ...patch });
+
+	/**
+	 * What used to be Ecommerce settings and is now the website's in the Portal: the currency and units, the phone rules,
+	 * the required address parts, the business facts SEO shares, the share picture, and the alert team.
+	 * @type {Record<string, (value: any) => Parameters<typeof setWebsite>[0]>}
+	 */
+	const PORTAL_SETTINGS = {
+		'catalog.currency': (value) => ({ region: region({ currency: value, currencies: [value] }) }),
+		'catalog.weightUnit': (value) => ({ region: region({ units: { ...site.region.units, weight: value } }) }),
+		'catalog.sizeUnit': (value) => ({ region: region({ units: { ...site.region.units, size: value } }) }),
+		'checkout.addressRequired': (value) => ({ region: region({ address: { ...site.region.address, required: value } }) }),
+		'checkout.defaultCallingCode': (value) => ({ region: region({ phone: { ...site.region.phone, callingCode: value } }) }),
+		'checkout.trunkPrefix': (value) => ({ region: region({ phone: { ...site.region.phone, trunkPrefix: value } }) }),
+		'checkout.countries': (value) => ({ region: region({ phone: { ...site.region.phone, countries: value } }) }),
+		'seo.brandName': (value) => ({ business: businessWith({ name: value }) }),
+		'seo.alternateName': (value) => ({ business: businessWith({ otherNames: value ? [value] : [] }) }),
+		'seo.businessType': (value) => ({ business: businessWith({ businessType: value }) }),
+		'seo.socialProfiles': (value) => ({
+			business: businessWith({ social: value.map((/** @type {string} */ url) => ({ label: 'Profile', url })) }),
+		}),
+		'seo.defaultImage': (value) => ({ brand: { ...site.brand, files: { ...site.brand.files, shareImage: value } } }),
+		'staff_alerts.recipients': (value) => ({
+			team: {
+				...site.team,
+				recipients: /** @type {string[]} */ (value).map((entry) =>
+					entry.includes('@') ? { name: '', email: entry, phone: '' } : { name: '', email: '', phone: entry },
+				),
+			},
+		}),
+		'staff_alerts.phoneChannel': (value) => ({ team: { ...site.team, phoneChannel: value } }),
+		'staff_alerts.staffPush': (value) => ({ team: { ...site.team, staffPush: value } }),
+	};
+
 	/** @param {string} feature @param {string} name @param {unknown} value */
 	const setting = async (feature, name, value) => {
+		const portalSetting = PORTAL_SETTINGS[`${feature}.${name}`];
+		if (portalSetting) return setWebsite(portalSetting(value));
 		const response = await dashboard(
 			await adminSession(),
 			'PUT',
@@ -436,6 +511,11 @@ export const setup = async ({
 
 	/** Save a list setting (order_flow, couriers, delivery_zones, tax_rules, grades, booking_schedules). @param {string} name @param {unknown} value */
 	const list = async (name, value) => {
+		// the regions people pick from are the website's (Portal › Region and format › Address rules)
+		if (name === 'address_regions') {
+			await setWebsite({ region: region({ address: { ...site.region.address, regions: /** @type {any} */ (value) } }) });
+			return value;
+		}
 		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/lists/${name}`, {
 			value,
 		});
@@ -643,6 +723,11 @@ export const setup = async ({
 		connectStorage,
 		connectDatabase: () => connect('database', merchantDatabase()),
 		setting,
+		/** The website settings the fake Portal holds now (read only; change them with `setWebsite`). */
+		site,
+		setWebsite,
+		setBusiness,
+		setFormat,
 		methods,
 		list,
 		flow,

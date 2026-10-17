@@ -4,7 +4,7 @@
  * the aggregation pipelines over orders (each starts with a `$match` on the website; no `$lookup`) and the rows built
  * from their results. Money is minor units of the shop's currency; only orders in that currency and not canceled
  * count (the summary's `statuses` can name the status keys that count instead). Days are business days: a
- * `YYYY-MM-DD` day is that day in the business.json time zone (PLAN 0.8.10 K8). No I/O.
+ * `YYYY-MM-DD` day is that day in the business time zone (PLAN 0.8.10 K8). No I/O.
  * @module
  */
 import { zonedDay } from '@ss/contracts/format';
@@ -99,7 +99,7 @@ const timeOf = (value, end, timeZone) => {
  * The range of `?from=&to=` (default: the last 30 days up to now).
  * @param {Record<string, unknown>} query
  * @param {number} now
- * @param {string} [timeZone] the business.json time zone (UTC when missing)
+ * @param {string} [timeZone] the business time zone (UTC when missing)
  * @returns {{ ok: true, range: Range } | { ok: false, field: string, message: string }}
  */
 export const parseRange = (query, now, timeZone = 'UTC') => {

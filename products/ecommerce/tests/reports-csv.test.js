@@ -7,7 +7,7 @@ import { createId } from '@ss/contracts';
 import { parseCsv, toCsv } from '@ss/contracts/csv';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COLLECTIONS } from '../core/model.js';
-import { ORIGIN, readyShop } from './helpers.js';
+import { readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -107,16 +107,7 @@ beforeAll(async () => {
 	shop = await readyShop();
 	data = await shop.db();
 	// the business time zone is nine hours ahead of UTC (PLAN 0.8.10 K8)
-	shop.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
-		status: 200,
-		body: { version: 1, name: 'Shop', email: 'hello@shop.example.com', timeZone: 'Asia/Tokyo' },
-	}));
-	const refreshed = await shop.dashboard(
-		await shop.adminSession(),
-		'POST',
-		`/v1/dashboard/websites/${shop.websiteId}/business/refresh`,
-	);
-	expect(refreshed.status).toBeLessThan(300);
+	await shop.setBusiness({ name: 'Shop', email: 'hello@shop.example.com', timeZone: 'Asia/Tokyo' });
 
 	sold = await shop.seedProduct({ name: 'Sold phone', stock: 3 });
 	gone = await shop.seedProduct({ name: 'Last tablet', stock: 0 });

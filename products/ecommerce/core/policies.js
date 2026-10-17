@@ -1,7 +1,7 @@
 /**
  * The shop's policies (PLAN 0.8.8 Business details; PLAN 0.8.10 E3, SF-1, E27): the merchant's list `policies` — each
- * `{ key, title, text }`, in the order shown, seeded with delivery, returns, privacy, terms and warranty and open to any
- * other the merchant adds — in rich text (HTML cleaned to paragraphs, lists, headings, emphasis, quotes and links), with the
+ * `{ key, title, text }`, in the order shown, seeded with delivery, returns and warranty and open to any other the
+ * merchant adds (the privacy policy and the terms are the website's documents in the Portal, shown after them) — in rich text (HTML cleaned to paragraphs, lists, headings, emphasis, quotes and links), with the
  * placeholders `{returnTime}`, `{warrantyTime}` (as typed: `30 days`, `1 year`, E14), `{business}`, `{email}`, `{phone}`, `{address}`,
  * `{deliveryFee}` and `{freeDeliveryOver}` filled (also written with double braces, `{{business}}`); other text in
  * braces stays as typed. Policies without text are left out. No I/O.
@@ -21,14 +21,15 @@ const MAX_TEXT = 20_000;
 /** A policy key: it names the policy's page (`/policies/<key>`) on the merchant's site. */
 const KEY = /^[a-z][a-z0-9_-]{0,39}$/;
 
-/** The list of a new website: the five usual policies, without text until the merchant writes them. */
+/**
+ * The list of a new website: the three policies that use the shop's own numbers, without text until the merchant writes
+ * them. The privacy policy and the terms are the website's legal documents in the Portal.
+ */
 export const DEFAULT_POLICIES = Object.freeze(
 	/** @type {Policy[]} */ ([
 		{ key: 'shipping', title: 'Delivery policy', text: '' },
 		{ key: 'returns', title: 'Returns policy', text: '' },
 		{ key: 'warranty', title: 'Warranty policy', text: '' },
-		{ key: 'privacy', title: 'Privacy policy', text: '' },
-		{ key: 'terms', title: 'Terms and conditions', text: '' },
 	]).map((policy) => Object.freeze(policy)),
 );
 
@@ -65,7 +66,7 @@ export const checkPolicies = (value) => {
 };
 
 /**
- * What the placeholders stand for: the return and warranty days, the business's name and contacts (business.json),
+ * What the placeholders stand for: the return and warranty days, the business's name and contacts (the Portal's website settings),
  * and the price and free-over amount of the business country's first plain delivery rate (E5), as money ('' when none).
  * @typedef {{ returnTime: import('./durations.js').Duration, warrantyTime: import('./durations.js').Duration,
  *   locale?: string, business: string, email?: string, phone?: string,

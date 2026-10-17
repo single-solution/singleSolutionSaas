@@ -322,24 +322,32 @@ describe('loyalty options (E20)', () => {
 	});
 });
 
+/**
+ * The phone rules the Portal's Region and format give, from the calling code, trunk prefix and countries a test sets and
+ * the website's country.
+ * @param {{ callingCode?: string, trunkPrefix?: string, countries?: string[] }} phone @param {string | null} country
+ */
+const phoneRulesOf = (phone, country) =>
+	phoneRules({ country: country ?? '', phone: { callingCode: '', trunkPrefix: '', countries: [], ...phone } });
+
 describe('guests and order keys (E21)', () => {
 	it('reads phones with the shared normalizer and the website’s rules (K12)', () => {
-		expect(phoneRules({ defaultCallingCode: '', trunkPrefix: '' }, 'GB')).toEqual({
+		expect(phoneRulesOf({}, 'GB')).toEqual({
 			defaultCallingCode: '+44',
 			trunkPrefix: '',
 			countries: [],
 		});
-		expect(phoneRules({ defaultCallingCode: '+33', trunkPrefix: '0' }, 'GB')).toEqual({
+		expect(phoneRulesOf({ callingCode: '+33', trunkPrefix: '0' }, 'GB')).toEqual({
 			defaultCallingCode: '+33',
 			trunkPrefix: '0',
 			countries: [],
 		});
-		expect(phoneRules({}, null)).toEqual({ defaultCallingCode: '', trunkPrefix: '', countries: [] });
-		expect(phoneRules({ countries: ['GB', 7] }, 'GB').countries).toEqual(['GB']);
+		expect(phoneRulesOf({}, null)).toEqual({ defaultCallingCode: '', trunkPrefix: '', countries: [] });
+		expect(phoneRulesOf({ countries: ['GB', 'US'] }, 'GB').countries).toEqual(['GB', 'US']);
 		// the whole number (before, the last 10 digits: a national number typed with its trunk 0 was never found)
 		expect(phoneDigitsOf('+447700900123')).toBe('447700900123');
 		expect(phoneDigitsOf(null)).toBe('');
-		const fr = phoneRules({}, 'FR');
+		const fr = phoneRulesOf({}, 'FR');
 		expect(phoneSearchOf('06 12 34 56 78', fr)).toEqual(['0612345678', '612345678', '33612345678']);
 		expect(phoneSearchOf('0000001', null)).toEqual(['0000001']);
 		expect(phoneSearchOf('12 3', fr)).toEqual([]);
@@ -347,7 +355,7 @@ describe('guests and order keys (E21)', () => {
 	});
 
 	it('checks a guest by what checkout.guestIdentity asks, with a phone while phoneRequired is on (dynamic model §5)', () => {
-		const rules = phoneRules({}, 'US');
+		const rules = phoneRulesOf({}, 'US');
 		const email = guestRules({ guestIdentity: 'email', phoneRequired: false });
 		const either = guestRules({ guestIdentity: 'either', phoneRequired: false });
 		expect(guestRules({})).toEqual({ identity: 'phone', phoneRequired: true });
@@ -382,7 +390,7 @@ describe('guests and order keys (E21)', () => {
 	});
 
 	it('checks a guest', () => {
-		const rules = phoneRules({}, 'GB');
+		const rules = phoneRulesOf({}, 'GB');
 		expect(checkGuest({ name: ' Chloé ', phone: '07700900123', email: 'Chloe@Example.co.uk' }, rules)).toEqual({
 			ok: true,
 			value: { name: 'Chloé', phone: '+447700900123', email: 'chloe@example.co.uk', guestKey: 'p:+447700900123' },
@@ -396,7 +404,7 @@ describe('guests and order keys (E21)', () => {
 		])
 			expect(checkGuest({ name: 'A', phone: typed }, rules)).toMatchObject({ value: { phone } });
 		// without a calling code (no setting, no business country) only international numbers are read
-		const none = phoneRules({}, null);
+		const none = phoneRulesOf({}, null);
 		expect(checkGuest({ name: 'A', phone: '07700900123' }, none)).toMatchObject({ field: 'customer/phone' });
 		expect(checkGuest({ name: 'A', phone: '+44 7700 900123' }, none)).toMatchObject({ value: { phone: '+447700900123' } });
 		expect(checkGuest(null, rules)).toMatchObject({ ok: false, field: 'customer' });
@@ -407,7 +415,7 @@ describe('guests and order keys (E21)', () => {
 	});
 
 	it('takes guest phones only of the countries the website serves (SE-5)', () => {
-		const gb = phoneRules({ countries: ['GB'] }, 'GB');
+		const gb = phoneRulesOf({ countries: ['GB'] }, 'GB');
 		expect(checkGuest({ name: 'A', phone: '07700900123' }, gb)).toMatchObject({ ok: true });
 		for (const phone of ['+12025550143', '0012025550143', '+8823123456789'])
 			expect(checkGuest({ name: 'A', phone }, gb)).toMatchObject({
@@ -415,8 +423,8 @@ describe('guests and order keys (E21)', () => {
 				field: 'customer/phone',
 				code: 'country_not_allowed',
 			});
-		expect(phoneAllowed('+12025550143', phoneRules({}, 'GB'))).toBe(true);
-		expect(phoneAllowed('+15550001111', phoneRules({ countries: ['CA'] }, 'GB'))).toBe(true);
+		expect(phoneAllowed('+12025550143', phoneRulesOf({}, 'GB'))).toBe(true);
+		expect(phoneAllowed('+15550001111', phoneRulesOf({ countries: ['CA'] }, 'GB'))).toBe(true);
 	});
 
 	it('opens an order only with its own key', () => {

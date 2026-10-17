@@ -377,7 +377,7 @@ export const createQuoting = (product, service) => {
 				? sum
 				: sum + (line.measure ? Math.ceil((grams * line.quantity) / 1000) : grams * line.quantity);
 		}, 0);
-		// where a delivery goes (an address without a country is in the business.json country); a pickup or undelivered
+		// where a delivery goes (an address without a country is in the business country); a pickup or undelivered
 		// order is at the business, in its country (taxes)
 		const homeCountry = (await s.business()).country ?? '';
 		const where = placeOf(address ?? cart.delivery, homeCountry);

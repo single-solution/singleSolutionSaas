@@ -2,17 +2,6 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
-		"currency": {
-			"type": "string",
-			"title": "Currency",
-			"description": "The currency of every price in your shop, as a three-letter code such as USD, EUR or JPY.",
-			"default": "USD",
-			"maxLength": 3,
-			"x-ui": {
-				"group": "Basics",
-				"order": 1
-			}
-		},
 		"productUrl": {
 			"type": "string",
 			"title": "Product page address",
@@ -80,28 +69,6 @@
 				"group": "Page addresses",
 				"order": 16,
 				"advanced": true
-			}
-		},
-		"weightUnit": {
-			"type": "string",
-			"title": "Package weight unit",
-			"description": "The unit staff type and read package weights in (kept in grams for couriers and feeds).",
-			"default": "g",
-			"enum": ["g", "kg", "oz", "lb"],
-			"x-ui": {
-				"group": "Units and uploads",
-				"order": 31
-			}
-		},
-		"sizeUnit": {
-			"type": "string",
-			"title": "Package size unit",
-			"description": "The unit staff type and read package lengths, widths and heights in (kept in millimeters).",
-			"default": "mm",
-			"enum": ["mm", "cm", "in"],
-			"x-ui": {
-				"group": "Units and uploads",
-				"order": 32
 			}
 		},
 		"pageSize": {

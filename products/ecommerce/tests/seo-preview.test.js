@@ -116,7 +116,7 @@ describe('the admin widget gets what the preview needs', () => {
 		await shop.setting('seo', 'titleTemplate', '{name} · {business}');
 		await shop.setting('seo', 'brandName', 'Northwind');
 		await shop.setting('seo', 'defaultDescription', 'Kitchen things.');
-		await shop.setting('seo', 'defaultImage', '/share.png');
+		await shop.setting('seo', 'defaultImage', 'https://cdn.example.com/share.png');
 	});
 	afterAll(async () => shop.product.close());
 
@@ -127,7 +127,7 @@ describe('the admin widget gets what the preview needs', () => {
 			siteName: 'Northwind',
 			titleTemplate: '{name} · {business}',
 			defaultDescription: 'Kitchen things.',
-			defaultImage: '/share.png',
+			defaultImage: 'https://cdn.example.com/share.png',
 			productTitle: expect.any(String),
 			categoryTitle: expect.any(String),
 			productDescription: expect.any(String),

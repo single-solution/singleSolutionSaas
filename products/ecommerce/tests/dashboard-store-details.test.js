@@ -1,66 +1,48 @@
 // @vitest-environment jsdom
 /**
- * The Store details editor in the browser (jsdom) on a faked dashboard API: it shows the saved record, its logo, and
- * saves every field with one PUT (the five pictures stay as they are saved), with the hours, phones and links as the
- * lines the merchant types.
+ * The Store details view in the browser (jsdom) on a faked dashboard API: who the store is is the website's, set once in
+ * the Portal, so the view shows what the Portal says, read only, with a link to where it is changed. It has no field,
+ * no picture slot and no save.
  */
 import { act } from 'react';
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
-import { StoreDetailsEditor, draftOf, valueOf } from '../app/dashboard/store-details.js';
-import { checkStoreDetails } from '../core/store-details.js';
+import { cleanup, render } from '@ss/ui/testing';
+import { StoreDetailsView, factsOf } from '../app/dashboard/store-details.js';
 import { inDashboard } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 const BASE = `/v1/dashboard/websites/${WEBSITE}`;
-const LOGO = { key: 'ecommerce/store/logo-abcdefghij.png', type: 'image/png', size: 900, alt: 'Logo' };
-const DARK = { key: 'ecommerce/store/logoDark-abcdefghij.png', type: 'image/png', size: 900, alt: 'Dark logo' };
-const FAVICON = { key: 'ecommerce/store/favicon-abcdefghij.png', type: 'image/png', size: 90, alt: 'Favicon' };
 
-/** The records the editor saved. @type {any[]} */
-let saved = [];
-
-const serve = () => {
-	saved = [];
-	/** @type {any} */
-	let record = checkStoreDetails({
-		name: 'Example Store',
-		logo: LOGO,
-		favicon: FAVICON,
-		phones: [{ label: 'Landline', number: '021 111 222' }],
-		hours: {
-			weekly: [{ day: 1, start: '09:00', end: '17:00' }],
-			exceptions: [
-				{ date: '2026-12-24', name: 'Christmas Eve', hours: [{ start: '09:00', end: '12:00' }] },
-				{ date: '2026-12-25', name: 'Christmas', hours: [] },
-			],
+/** What the merchant saved in the Portal (Business and Region and format). */
+const settings = () => {
+	const empty = emptyWebsiteSettings(WEBSITE);
+	return {
+		...empty,
+		version: 3,
+		business: {
+			...empty.business,
+			name: 'Example Store',
+			email: 'hello@example-store.test',
+			phone: '+1 555 0100',
+			address: { ...empty.business.address, line1: '1 Main Street', city: 'Springfield', country: 'US' },
 		},
-		social: [{ label: 'Instagram', url: 'https://instagram.com/examplestore' }],
-	});
-	record = /** @type {any} */ (record).value;
+		region: { ...empty.region, timeZone: 'America/Chicago' },
+	};
+};
+
+/** @type {string[]} */
+let calls = [];
+/** @param {unknown} answer the website settings the dashboard API answers */
+const serve = (answer) => {
+	calls = [];
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) => {
-			if (path === `${BASE}/store-details/files`)
-				return new Response(
-					JSON.stringify({
-						logo: { ...LOGO, url: 'https://cdn.example.com/logo.png' },
-						logoDark: null,
-						icon: null,
-						favicon: { ...FAVICON, url: 'https://cdn.example.com/favicon.png' },
-						faviconDark: null,
-					}),
-					{ status: 200 },
-				);
-			if (path !== `${BASE}/lists/store_details`) return new Response(JSON.stringify({ status: 404 }), { status: 404 });
-			if (init.method === 'PUT') {
-				const { value } = JSON.parse(String(init.body));
-				saved.push(value);
-				const checked = checkStoreDetails(value);
-				if (!checked.ok) return new Response(JSON.stringify({ status: 422, errors: checked.errors }), { status: 422 });
-				record = checked.value;
-			}
-			return new Response(JSON.stringify({ value: record }), { status: 200 });
+			calls.push(`${init.method ?? 'GET'} ${path}`);
+			return path === `${BASE}/website-settings`
+				? new Response(JSON.stringify({ settings: answer }), { status: 200 })
+				: new Response(JSON.stringify({ status: 404 }), { status: 404 });
 		}),
 	);
 };
@@ -74,131 +56,56 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-describe('the store details drafts', () => {
-	it('turn the hours exceptions, phones and social links into lines and back, keeping the files', () => {
-		const record = /** @type {any} */ (
-			checkStoreDetails({
-				name: 'Shop',
-				logo: LOGO,
-				logoDark: DARK,
-				phones: [
-					{ label: 'Landline', number: '021 111 222' },
-					{ label: '', number: '+1 555 0100' },
-				],
-				hours: { weekly: [], exceptions: [{ date: '2026-12-24', name: 'Eve', hours: [{ start: '09:00', end: '12:00' }] }] },
-				social: [{ label: 'X', url: 'https://x.com/shop' }],
-			})
-		).value;
-		const draft = draftOf(record);
-		expect(draft.exceptions).toBe('2026-12-24 Eve | 09:00-12:00');
-		expect(draft.social).toBe('X | https://x.com/shop');
-		expect(draft.phones).toBe('Landline | 021 111 222\n+1 555 0100');
-		expect(valueOf(draft, record)).toMatchObject({
-			logo: LOGO,
-			logoDark: DARK,
-			icon: null,
-			favicon: null,
-			faviconDark: null,
-			phones: [
-				{ label: 'Landline', number: '021 111 222' },
-				{ label: '', number: '+1 555 0100' },
-			],
-			hours: { exceptions: [{ date: '2026-12-24', name: 'Eve', hours: [{ start: '09:00', end: '12:00' }] }] },
-			social: [{ label: 'X', url: 'https://x.com/shop' }],
-		});
-	});
-});
-
-describe('the store details editor', () => {
-	it('shows the saved record and its logo, and saves every field with one PUT', async () => {
-		serve();
-		const { container } = render(inDashboard(<StoreDetailsEditor websiteId={WEBSITE} />));
-		await settle();
-		expect(/** @type {HTMLInputElement} */ (byLabel(container, 'Store name')).value).toBe('Example Store');
-		expect(/** @type {HTMLImageElement} */ (container.querySelector('[data-file="logo"] img')).src).toBe(
-			'https://cdn.example.com/logo.png',
-		);
-		expect(/** @type {HTMLImageElement} */ (container.querySelector('[data-file="favicon"] img')).src).toBe(
-			'https://cdn.example.com/favicon.png',
-		);
-		// every picture has its own slot
-		expect([...container.querySelectorAll('[data-file]')].map((slot) => slot.getAttribute('data-file'))).toEqual([
-			'logo',
-			'logoDark',
-			'icon',
-			'favicon',
-			'faviconDark',
+describe('the facts the view lists', () => {
+	it('are the Portal’s name, contacts, address and time zone, with a dash for what is not set', () => {
+		expect(factsOf(settings())).toEqual([
+			{ label: 'Store name', value: 'Example Store' },
+			{ label: 'Email address', value: 'hello@example-store.test' },
+			{ label: 'Phone number', value: '+1 555 0100' },
+			{ label: 'Address', value: '1 Main Street, Springfield, US' },
+			{ label: 'Time zone', value: 'America/Chicago' },
 		]);
-		expect(
-			/** @type {HTMLTextAreaElement} */ (/** @type {unknown} */ (byLabel(container, 'More phone numbers (one per line)')))
-				.value,
-		).toBe('Landline | 021 111 222');
-		expect(container.querySelectorAll('[data-window]')).toHaveLength(1);
-		type(byLabel(container, 'More phone numbers (one per line)'), 'Landline | 021 111 222\nSales | +1 555 0123');
-		type(byLabel(container, 'Tagline'), 'Everything for the home');
-		type(byLabel(container, 'WhatsApp number'), '+1 555 0199');
-		type(byLabel(container, 'City'), 'Springfield');
-		click(byText(container, 'Add hours'));
-		await settle();
-		expect(container.querySelectorAll('[data-window]')).toHaveLength(2);
-		click(byText(container, 'Save list'));
-		await settle();
-		expect(saved).toHaveLength(1);
-		expect(saved[0]).toMatchObject({
-			name: 'Example Store',
-			tagline: 'Everything for the home',
-			whatsapp: '+1 555 0199',
-			address: { city: 'Springfield' },
-			logo: LOGO,
-			favicon: FAVICON,
-			phones: [
-				{ label: 'Landline', number: '021 111 222' },
-				{ label: 'Sales', number: '+1 555 0123' },
-			],
-			hours: {
-				weekly: [
-					{ day: 1, start: '09:00', end: '17:00' },
-					{ day: 1, start: '09:00', end: '17:00' },
-				],
-			},
-		});
-		// two windows on one day overlap: the server's check is shown, nothing is lost
-		expect(container.textContent).toContain('overlap');
+		expect(factsOf(emptyWebsiteSettings(WEBSITE)).map((fact) => fact.value)).toEqual(['—', '—', '—', '—', '—']);
 	});
 });
 
-describe('the editor while the Portal holds the website’s settings', () => {
-	it('is a note with a link to the Portal and what it says, not a form', async () => {
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async (/** @type {string} */ path) =>
-				path === `${BASE}/lists/store_details`
-					? new Response(
-							JSON.stringify({
-								value: {
-									portal: true,
-									name: 'Portal Store',
-									email: 'hello@portal-store.test',
-									phone: '+1 555 0100',
-									address: { line1: '1 Main Street', city: 'Springfield', country: 'US' },
-									timeZone: 'America/Chicago',
-								},
-							}),
-							{ status: 200 },
-						)
-					: new Response(JSON.stringify({}), { status: 200 }),
-			),
-		);
+describe('the Store details view', () => {
+	it('shows what the Portal says, read only, with the link to change it, and what the website reads', async () => {
+		serve(settings());
 		const { container } = render(
-			inDashboard(<StoreDetailsEditor websiteId={WEBSITE} off={false} portal="https://portal.example.com/" />),
+			inDashboard(<StoreDetailsView websiteId={WEBSITE} portal="https://portal.example.com" merchantId="mer_1" />),
 		);
 		await settle();
-		expect(container.textContent).toContain('Set in the Portal');
-		expect(container.textContent).toContain('Portal Store');
-		expect(container.textContent).toContain('1 Main Street, Springfield, US');
-		expect(container.querySelector('input, textarea, select')).toBeNull();
-		expect(container.textContent).not.toContain('Save');
-		const link = container.querySelector('a');
-		expect(link?.getAttribute('href')).toBe(`https://portal.example.com/websites/${WEBSITE}/settings#business`);
+		const text = container.textContent ?? '';
+		for (const words of ['Set in the Portal', 'Example Store', 'hello@example-store.test', '1 Main Street, Springfield, US'])
+			expect(text).toContain(words);
+		expect(text).toContain('/v1/shop/store');
+		expect(text).toContain('/v1/shop/store/business-json');
+		const link = [...container.querySelectorAll('a')].find((node) => node.textContent === 'Open Website settings');
+		expect(link?.getAttribute('href')).toBe('https://portal.example.com/websites/web_1/settings#business');
+		// nothing to type into and nothing to save
+		expect(container.querySelectorAll('input, textarea, select')).toHaveLength(0);
+		expect([...container.querySelectorAll('button')].map((node) => node.textContent)).not.toContain('Save');
+		expect(calls).toEqual([`GET ${BASE}/website-settings`]);
+	});
+
+	it('links an Owner or Support admin to the merchant’s page of the website', async () => {
+		serve(settings());
+		const { container } = render(
+			inDashboard(<StoreDetailsView websiteId={WEBSITE} portal="https://portal.example.com" merchantId="mer_1" admin />),
+		);
+		await settle();
+		const link = [...container.querySelectorAll('a')].find((node) => node.textContent === 'Open Website settings');
+		expect(link?.getAttribute('href')).toBe('https://portal.example.com/admin/merchants/mer_1/websites/web_1/settings#business');
+	});
+
+	it('says the feature is off when it is, and shows dashes while the Portal holds nothing yet', async () => {
+		serve(emptyWebsiteSettings(WEBSITE));
+		const { container } = render(inDashboard(<StoreDetailsView websiteId={WEBSITE} off />));
+		await settle();
+		expect(container.textContent).toContain('This feature is off.');
+		expect(container.textContent).toContain('—');
+		// without the Portal's address there is no link, only the note
+		expect([...container.querySelectorAll('a')].some((node) => node.textContent === 'Open Website settings')).toBe(false);
 	});
 });

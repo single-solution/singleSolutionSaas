@@ -98,7 +98,7 @@ export const settingsOf = (config) => {
 				regions: /** @type {Array<{ country: string, names: string[] }>} */ (
 					Array.isArray(checkout.address?.regions) ? checkout.address.regions : []
 				),
-				/** the country of an address without one (business.json) */
+				/** the country of an address without one (the website's country in the Portal) */
 				country: typeof checkout.address?.country === 'string' ? checkout.address.country : '',
 			},
 		},

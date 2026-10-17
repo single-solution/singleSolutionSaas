@@ -9,6 +9,7 @@
  * pasted Accounts token), and the website's phone and address rules (K12).
  * @module
  */
+import { addressRequiredOf } from '@ss/contracts/website-settings';
 import { mergeLoyalty } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { phoneRules, savedAddresses } from '../core/guests.js';
@@ -20,25 +21,26 @@ import { MAX_STAFF_NOTE } from '../core/orders.js';
 /** @typedef {import('./service.js').Shopper} Shopper */
 
 /**
- * How the website reads the phones shoppers type (K12): the `checkout` settings and its business.json country.
+ * How the website reads the phones shoppers type (K12): the `checkout` settings and its business country.
  * @param {Site} s
  */
-export const phoneRulesOf = async (s) => phoneRules(await s.values('checkout'), (await s.business()).country);
+export const phoneRulesOf = async (s) => phoneRules((await s.website()).region);
 
 /**
  * What a delivery address must hold on the website (`core/checkout.js` `checkAddress`): the `checkout` settings
- * `addressRequired` and `phoneRequired`, its phone rules, the `address_regions` list and the business.json country.
+ * `phoneRequired`, the address parts the Portal requires, its phone rules, the region names and its country (all from the
+ * Portal's Region and format).
  * @param {Site} s
  * @returns {Promise<import('../core/checkout.js').AddressRules>}
  */
 export const addressRulesOf = async (s) => {
-	const [checkout, business, regions] = await Promise.all([s.values('checkout'), s.business(), s.list('address_regions')]);
+	const [checkout, website] = await Promise.all([s.values('checkout'), s.website()]);
 	return {
-		required: /** @type {string[]} */ (checkout.addressRequired),
+		required: addressRequiredOf(website),
 		phoneRequired: checkout.phoneRequired !== false,
-		phoneRules: phoneRules(checkout, business.country),
-		regions,
-		homeCountry: business.country ?? '',
+		phoneRules: phoneRules(website.region),
+		regions: website.region.address.regions,
+		homeCountry: website.region.country,
 	};
 };
 

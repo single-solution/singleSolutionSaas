@@ -706,17 +706,13 @@ describe('import of shoppers and orders (K10)', () => {
 		await shop.setting('checkout', 'numberPattern', '{prefix}{year}-{number}');
 	});
 
-	it('reads national phone numbers with the business.json country’s calling code (K12)', async () => {
+	it('reads national phone numbers with the website’s country’s calling code (the Portal’s Region and format, K12)', async () => {
 		const guest = { id: idOf('cus', 5), name: 'Local Buyer', phone: '(555) 000-5555' };
-		// no checkout.defaultCallingCode and no country: a national number cannot be read
+		// no calling code and no country in the Portal: a national number cannot be read
 		expect((await send('customers', [guest], { dryRun: true })).json.failed).toEqual([
-			{ line: 1, id: guest.id, errors: [{ path: '/phone', message: expect.stringContaining('business.json country') }] },
+			{ line: 1, id: guest.id, errors: [{ path: '/phone', message: expect.stringContaining('in the Portal') }] },
 		]);
-		shop.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
-			status: 200,
-			body: { version: 1, name: 'Shop', country: 'US', timeZone: 'UTC' },
-		}));
-		await shop.dashboard(await shop.adminSession(), 'POST', `/v1/dashboard/websites/${shop.websiteId}/business/refresh`);
+		await shop.setBusiness({ name: 'Shop', country: 'US', timeZone: 'UTC' });
 		expect((await send('customers', [guest])).json).toMatchObject({ inserted: 1, failed: [] });
 		expect((await all(COLLECTIONS.customers)).find((c) => c.id === guest.id)).toMatchObject({
 			phone: '+15550005555',

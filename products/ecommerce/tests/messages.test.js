@@ -224,15 +224,13 @@ describe('Ecommerce’s messages and their defaults (parity P1)', () => {
 			await shop.setting('staff_alerts', 'staffPermission', '');
 		});
 
-		it('names a channel for one recipient and sends a staff push to Accounts staff, saved in the outbox like every alert (K8)', async () => {
+		it('sends phones on the team’s channel and a staff push to Accounts staff, saved in the outbox like every alert (K8)', async () => {
 			shop.accounts.setUsers([
 				{ id: 'usr_orders1', email: 'orders@shop.example.com', permissions: ['ecommerce:orders.manage'] },
 			]);
-			await shop.setting('staff_alerts', 'recipients', [
-				'email:team@shop.example.com',
-				'whatsapp:+44 7700 900123',
-				'push:usr_ops00001',
-			]);
+			// the alert team is the website's, set once in the Portal: people with an email or a phone, one phone channel
+			await shop.setting('staff_alerts', 'recipients', ['team@shop.example.com', '+44 7700 900123']);
+			await shop.setting('staff_alerts', 'phoneChannel', 'whatsapp');
 			await shop.setting('staff_alerts', 'staffPermission', 'orders.manage');
 			await shop.setting('staff_alerts', 'staffPush', true);
 			const since = shop.messages().length;
@@ -244,7 +242,6 @@ describe('Ecommerce’s messages and their defaults (parity P1)', () => {
 			expect(alerts.map((m) => [m.channel, m.to])).toEqual([
 				['email', { email: 'team@shop.example.com' }],
 				['whatsapp', { phone: '+447700900123' }],
-				['staff-push', { staffId: 'usr_ops00001' }],
 				['email', { email: 'orders@shop.example.com' }],
 				['staff-push', { staffId: 'usr_orders1' }],
 			]);
@@ -256,12 +253,14 @@ describe('Ecommerce’s messages and their defaults (parity P1)', () => {
 				.find({ websiteId: shop.websiteId, template: 'ecommerce.staff_placed' })
 				.toArray();
 			expect(stuck).toEqual([]);
-			// the limit is fixed (STAFF_ALERT_MAX_RECIPIENTS people): the list first
-			await shop.setting(
-				'staff_alerts',
-				'recipients',
-				Array.from({ length: STAFF_ALERT_MAX_RECIPIENTS + 5 }, (_, index) => `person${index}@shop.example.com`),
-			);
+			// the limit is fixed (STAFF_ALERT_MAX_RECIPIENTS addresses): the Portal's team first, a person by email and phone
+			const team = Array.from({ length: 50 }, (_, index) => ({
+				name: `Person ${index}`,
+				email: `person${index}@shop.example.com`,
+				phone: `+4477009${String(index).padStart(5, '0')}`,
+			}));
+			await shop.setWebsite({ team: { recipients: team, phoneChannel: 'sms', staffPush: false, support: { email: '', phone: '' } } });
+			await shop.setting('staff_alerts', 'staffPermission', 'orders.manage');
 			const limited = shop.messages().length;
 			await placeOrder();
 			expect(
@@ -271,6 +270,7 @@ describe('Ecommerce’s messages and their defaults (parity P1)', () => {
 					.filter((message) => message.template === 'ecommerce.staff_placed'),
 			).toHaveLength(STAFF_ALERT_MAX_RECIPIENTS);
 			await shop.setting('staff_alerts', 'staffPush', false);
+			await shop.setting('staff_alerts', 'phoneChannel', 'sms');
 			await shop.setting('staff_alerts', 'staffPermission', '');
 			await shop.setting('staff_alerts', 'recipients', ['team@shop.example.com']);
 		});

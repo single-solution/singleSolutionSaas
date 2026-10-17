@@ -660,7 +660,7 @@ const refused = (result) => Object.assign(new Error(result.code), { refused: res
  * (its counter fell behind the numbers of its form) moves the counter past the highest and places it again, once.
  * @param {WebsiteData} data
  * @param {Placement} placement
- * @param {{ now: number, timeZone?: string }} clock `timeZone`: the business.json time zone (UTC when missing), whose
+ * @param {{ now: number, timeZone?: string }} clock `timeZone`: the business time zone (UTC when missing), whose
  *   year numbers the order
  * @returns {Promise<PlacementResult>}
  */

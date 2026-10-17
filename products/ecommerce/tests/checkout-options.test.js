@@ -1036,7 +1036,7 @@ describe('loyalty options (E20)', () => {
 
 describe('whole-unit amounts (E25)', () => {
 	it('rounds deal discounts down and fees half up to whole units', async () => {
-		await shop.api('PUT', '/v1/format', { wholeUnits: true });
+		await shop.setFormat({ wholeUnits: true });
 		await shop.methods({ cod: { feePercent: 3 } });
 		const item = await shop.seedProduct({ price: 1999, stock: 10 });
 		const deal = await newDeal({ scope: { productIds: [item.id], categoryIds: [], brandIds: [] }, value: 15 });
@@ -1045,11 +1045,11 @@ describe('whole-unit amounts (E25)', () => {
 		expect(priced.json.totals.fee % 100).toBe(0);
 		await shop.api('DELETE', `/v1/deals/${deal.id}`);
 		await shop.methods({ cod: { feePercent: 0 } });
-		await shop.api('PUT', '/v1/format', { wholeUnits: false });
+		await shop.setFormat({ wholeUnits: false });
 	});
 
 	it('rounds the deals once, half up, with rounding total_half_up: cart, order and product price (D4)', async () => {
-		await shop.api('PUT', '/v1/format', { wholeUnits: true });
+		await shop.setFormat({ wholeUnits: true });
 		const item = await shop.seedProduct({ price: 499_900, stock: 10 });
 		const deal = await newDeal({ scope: { productIds: [item.id], categoryIds: [], brandIds: [] }, value: 7 });
 		// 7% off 4,999.00 is 349.93: per_unit_down gives 349, total_half_up 350
@@ -1063,6 +1063,6 @@ describe('whole-unit amounts (E25)', () => {
 		expect(placed.json.order.totals).toMatchObject({ discount: 35_000, delivery: 300, total: 465_200 });
 		await shop.setting('deals', 'rounding', 'per_unit_down');
 		await shop.api('DELETE', `/v1/deals/${deal.id}`);
-		await shop.api('PUT', '/v1/format', { wholeUnits: false });
+		await shop.setFormat({ wholeUnits: false });
 	});
 });

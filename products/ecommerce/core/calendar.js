@@ -1,5 +1,5 @@
 /**
- * Calendar days in the business time zone (PLAN 0.8.10 K8: every calendar rule uses the business.json `timeZone`, UTC
+ * Calendar days in the business time zone (PLAN 0.8.10 K8: every calendar rule uses the business `timeZone`, UTC
  * when it is missing): where a `YYYY-MM-DD` day starts and ends. Report ranges use it on the server, and the admin
  * widgets' date pickers to turn a picked day into the instants they send. Pure and browser-safe, no I/O.
  * @module

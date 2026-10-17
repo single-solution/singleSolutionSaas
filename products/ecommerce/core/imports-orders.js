@@ -19,6 +19,7 @@ import { countryCodeOf, tidyPostcode } from '@ss/contracts/address';
 import { ADDRESS_LIMITS } from './address.js';
 import { ALERT_TRIES, checkAlertInput } from './alerts.js';
 import { LIMITS } from './catalog.js';
+import { DEFAULT_CURRENCY } from './limits.js';
 import { DURATION_RULE, durationOf } from './durations.js';
 import { derivedFacts } from './facts.js';
 import { statusOf } from './flow.js';
@@ -54,8 +55,8 @@ import { REVIEW_STATUSES, checkReply, checkReviewInput } from './reviews.js';
 /**
  * What the checks of one import call read of the website (the collections' `prepare`): the order flow, the order
  * number's form (`checkout.numberPattern`, `numberPrefix`, `numberDigits`; `core/order-numbers.js`), the shop's
- * currency (`catalog.currency`), its phone rules (as checkout reads phones, K12: `checkout.defaultCallingCode`, else
- * the business.json country's calling code, and `trunkPrefix`; so national numbers read as the shop's), what guests
+ * currency (the Portal's Region and format), its phone rules (as checkout reads phones, K12: the Portal's calling code,
+ * else its country's, and the trunk prefix; so national numbers read as the shop's), what guests
  * are known by (`checkout.guestIdentity`, a guest record's key), its order and customer fields (imported values are
  * checked as staff's are), its claim kinds and statuses (E18) and the time of the call.
  * @typedef {{ now: number, flow: OrderFlow, numbers: import('./order-numbers.js').NumberForm, currency: string,
@@ -296,7 +297,7 @@ const checker = () => {
 		if (!strict && PHONE_TEXT.test(raw)) return raw;
 		fail(
 			path,
-			'A phone number with its country code (+…) is expected, or set checkout.defaultCallingCode (or the business.json country) first.',
+			'A phone number with its country code (+…) is expected, or set the calling code or the country in the Portal (Website settings › Region and format) first.',
 		);
 		return '';
 	};
@@ -372,29 +373,28 @@ const answer = (c, value) => (c.errors.length > 0 ? { ok: false, errors: c.error
 
 /**
  * The rules of one import call from what the website has (`prepare`).
- * @param {{ flow: unknown, checkout: Record<string, unknown>, catalog: { currency: string }, country: unknown,
+ * @param {{ flow: unknown, checkout: Record<string, unknown>, region: import('@ss/contracts').WebsiteSettings['region'],
  *   now: number, fields?: ImportRules['fields'], claims?: ImportRules['claims'],
- *   attachmentKinds?: ImportRules['attachmentKinds'] }} input `country`: business.json's;
- *   `fields`: the shop's order and customer fields (none: no field value is taken); `claims`: the claim kinds and
- *   statuses (none: the seeded ones)
+ *   attachmentKinds?: ImportRules['attachmentKinds'] }} input `region`: the Portal's Region and format (the currency,
+ *   the phone rules and the country); `fields`: the shop's order and customer fields (none: no field value is taken);
+ *   `claims`: the claim kinds and statuses (none: the seeded ones)
  * @returns {ImportRules}
  */
 export const importRules = ({
 	flow,
 	checkout,
-	catalog,
-	country,
+	region,
 	now,
 	fields = { order: [], customer: [] },
 	claims = { kinds: DEFAULT_CLAIM_KINDS, statuses: DEFAULT_CLAIM_STATUSES },
 	attachmentKinds = DEFAULT_ATTACHMENT_KINDS,
 }) => {
-	const { defaultCallingCode, trunkPrefix } = phoneRules(checkout, country);
+	const { defaultCallingCode, trunkPrefix } = phoneRules(region);
 	return {
 		now,
 		flow: /** @type {OrderFlow} */ (flow),
 		numbers: numberFormOf(checkout),
-		currency: catalog.currency,
+		currency: region.currency || DEFAULT_CURRENCY,
 		phoneRules: { defaultCallingCode, trunkPrefix },
 		guestIdentity: guestRules(checkout).identity,
 		fields,

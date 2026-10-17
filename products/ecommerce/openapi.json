@@ -2979,7 +2979,7 @@
 									"phone": {
 										"type": "string",
 										"maxLength": 40,
-										"description": "Read as the website reads guests’ phones (checkout setting defaultCallingCode, else the business country’s)."
+										"description": "Read as the website reads guests’ phones (the calling code in the Portal’s Region and format, else the business country’s)."
 									},
 									"email": {
 										"type": "string",
@@ -3898,7 +3898,7 @@
 		"/v1/admin/customers/{userId}/addresses": {
 			"put": {
 				"summary": "Set the addresses kept for a customer (Customers admin widget)",
-				"description": "Replaces the customer’s addresses (E46): at most 6, the first the newest, each checked as checkout checks a delivery address (the checkout setting addressRequired; the phone read by the website’s phone rules). A guest’s orders add the address they were delivered to (the same address once). 422 validation_failed at /addresses or /addresses/<n>/<field>; 404 not_found. The widget needs the customers.manage permission.",
+				"description": "Replaces the customer’s addresses (E46): at most 6, the first the newest, each checked as checkout checks a delivery address (the address parts the Portal requires; the phone read by the website’s phone rules). A guest’s orders add the address they were delivered to (the same address once). 422 validation_failed at /addresses or /addresses/<n>/<field>; 404 not_found. The widget needs the customers.manage permission.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "customers.manage",
@@ -3960,7 +3960,7 @@
 												"region": {
 													"type": "string",
 													"maxLength": 100,
-													"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
+													"description": "The state, province or region: one of the region names the Portal lists for that country (Website settings › Region and format › Address rules), kept as listed."
 												},
 												"postalCode": {
 													"type": "string",
@@ -6678,7 +6678,7 @@
 											"region": {
 												"type": "string",
 												"maxLength": 100,
-												"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
+												"description": "The state, province or region: one of the region names the Portal lists for that country (Website settings › Region and format › Address rules), kept as listed."
 											},
 											"postalCode": {
 												"type": "string",
@@ -6862,7 +6862,7 @@
 											"country": {
 												"type": "string",
 												"maxLength": 60,
-												"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business.json country)."
+												"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business country (the Portal's Region and format))."
 											},
 											"locationId": {
 												"type": [
@@ -10855,7 +10855,7 @@
 		"/v1/admin/reports/health": {
 			"get": {
 				"summary": "Shop health: what needs fixing (Customers admin widget)",
-				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the business.json copy, the connections, what each active method paid first tells shoppers (its own accounts and instructions, or Payments' manual method of the same key), the payment methods shoppers can use now (the active methods of the payment_methods list: those through Payments while Payments is connected, those at pickup with a pickup point), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
+				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the website settings copy from the Portal, the connections, what each active method paid first tells shoppers (its own accounts and instructions, or Payments' manual method of the same key), the payment methods shoppers can use now (the active methods of the payment_methods list: those through Payments while Payments is connected, those at pickup with a pickup point), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "reports",
 				"x-ss-permission": "reports.read",
@@ -16264,11 +16264,11 @@
 						"name": "country",
 						"in": "query",
 						"required": false,
-						"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business.json country).",
+						"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business country (the Portal's Region and format)).",
 						"schema": {
 							"type": "string",
 							"maxLength": 60,
-							"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business.json country)."
+							"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business country (the Portal's Region and format))."
 						}
 					},
 					{
@@ -16284,11 +16284,11 @@
 						"name": "city",
 						"in": "query",
 						"required": false,
-						"description": "For the delivery zone and taxes, with country, region, area and postalCode (a place without a country is in the business.json country).",
+						"description": "For the delivery zone and taxes, with country, region, area and postalCode (a place without a country is in the business country (the Portal's Region and format)).",
 						"schema": {
 							"type": "string",
 							"maxLength": 100,
-							"description": "For the delivery zone and taxes, with country, region, area and postalCode (a place without a country is in the business.json country)."
+							"description": "For the delivery zone and taxes, with country, region, area and postalCode (a place without a country is in the business country (the Portal's Region and format))."
 						}
 					},
 					{
@@ -17441,7 +17441,7 @@
 									"phone": {
 										"type": "string",
 										"maxLength": 40,
-										"description": "Read as the website reads guests’ phones (checkout setting defaultCallingCode, else the business country’s)."
+										"description": "Read as the website reads guests’ phones (the calling code in the Portal’s Region and format, else the business country’s)."
 									},
 									"email": {
 										"type": "string",
@@ -18405,7 +18405,7 @@
 		"/v1/customers/{userId}/addresses": {
 			"put": {
 				"summary": "Set the addresses kept for a customer",
-				"description": "Replaces the customer’s addresses (E46): at most 6, the first the newest, each checked as checkout checks a delivery address (the checkout setting addressRequired; the phone read by the website’s phone rules). A guest’s orders add the address they were delivered to (the same address once). 422 validation_failed at /addresses or /addresses/<n>/<field>; 404 not_found. The widget needs the customers.manage permission.",
+				"description": "Replaces the customer’s addresses (E46): at most 6, the first the newest, each checked as checkout checks a delivery address (the address parts the Portal requires; the phone read by the website’s phone rules). A guest’s orders add the address they were delivered to (the same address once). 422 validation_failed at /addresses or /addresses/<n>/<field>; 404 not_found. The widget needs the customers.manage permission.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "customers.manage",
@@ -18471,7 +18471,7 @@
 												"region": {
 													"type": "string",
 													"maxLength": 100,
-													"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
+													"description": "The state, province or region: one of the region names the Portal lists for that country (Website settings › Region and format › Address rules), kept as listed."
 												},
 												"postalCode": {
 													"type": "string",
@@ -19651,7 +19651,7 @@
 		"/v1/format": {
 			"get": {
 				"summary": "The Format of money and dates",
-				"description": "From the Portal (sources `portal`) once it holds the website's settings; the product's own saved Format before that.",
+				"description": "The website's Format from the Portal (sources `portal`: Website settings › Region and format); the built-in Format (sources `built-in`) while the Portal holds no settings yet.",
 				"x-ss-auth": "server",
 				"x-ss-access": "runtime",
 				"security": [
@@ -19688,8 +19688,8 @@
 				}
 			},
 			"put": {
-				"summary": "Save Format fields (null resets one)",
-				"description": "Answers 409 managed_by_portal once the Portal holds the website's settings: the Format is set in the Portal (Website settings › Region and format).",
+				"summary": "The Format is set in the Portal",
+				"description": "Always answers 409 managed_by_portal: the Format is set once for every product, in the Portal (Website settings › Region and format).",
 				"x-ss-auth": "server",
 				"x-ss-permission": "settings.manage",
 				"x-ss-access": "staff",
@@ -22811,7 +22811,7 @@
 											"region": {
 												"type": "string",
 												"maxLength": 100,
-												"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
+												"description": "The state, province or region: one of the region names the Portal lists for that country (Website settings › Region and format › Address rules), kept as listed."
 											},
 											"postalCode": {
 												"type": "string",
@@ -22995,7 +22995,7 @@
 											"country": {
 												"type": "string",
 												"maxLength": 60,
-												"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business.json country)."
+												"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business country (the Portal's Region and format))."
 											},
 											"locationId": {
 												"type": [
@@ -23724,7 +23724,7 @@
 		"/v1/policies": {
 			"get": {
 				"summary": "The shop's policies",
-				"description": "For your own policy pages (server token). The policies list (Settings → Policies; lists/policies), in its order, those without text left out, with {returnTime}, {warrantyTime} (as typed: 30 days, 1 year), {business}, {email}, {phone}, {address} (business.json), {deliveryFee} and {freeDeliveryOver} (Delivery zones, as money) filled in (also written with double braces); other text in braces stays.",
+				"description": "For your own policy pages (server token). The policies list (Settings → Policies; lists/policies), in its order, those without text left out, with {returnTime}, {warrantyTime} (as typed: 30 days, 1 year), {business}, {email}, {phone}, {address} (from your website settings in the Portal), {deliveryFee} and {freeDeliveryOver} (Delivery zones, as money) filled in (also written with double braces); other text in braces stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"x-ss-access": "runtime",
@@ -27204,7 +27204,7 @@
 		"/v1/reports/health": {
 			"get": {
 				"summary": "Shop health: what needs fixing",
-				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the business.json copy, the connections, what each active method paid first tells shoppers (its own accounts and instructions, or Payments' manual method of the same key), the payment methods shoppers can use now (the active methods of the payment_methods list: those through Payments while Payments is connected, those at pickup with a pickup point), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
+				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the website settings copy from the Portal, the connections, what each active method paid first tells shoppers (its own accounts and instructions, or Payments' manual method of the same key), the payment methods shoppers can use now (the active methods of the payment_methods list: those through Payments while Payments is connected, those at pickup with a pickup point), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "reports",
 				"x-ss-permission": "reports.read",
@@ -30484,7 +30484,7 @@
 		"/v1/seo/site": {
 			"get": {
 				"summary": "The home page's head and structured data",
-				"description": "Baseline SEO with the catalog (E49): the home page's title (the seo setting homeTitle as written, else the name in titles: brandName, else the business name), description (homeDescription, else defaultDescription, as written), canonical address, social image (defaultImage) and site name, and the JSON-LD of the business and the website: an OnlineStore — or, with the seo setting businessType set to any schema.org local business type (LocalBusiness, Store, ClothingStore, Bakery …) and Delivery zones' pickupAddress and pickupHours set, that type at the pickup point, its hours as openingHours when every line is written like Mo-Fr 09:00-17:00 — with name, alternateName, url, logo, email, telephone and address from business.json, sameAs (socialProfiles), and its store-wide policies, whose @id product offers point to, only with the business.json country: the return policy (with Returns on: returnTime, returnMethod and the return shipping fee; with Returns off only when the checkout setting returnsAccepted is no: no returns) and the shipping policy (with Delivery zones on, handlingDays set and the days of the country's first plain delivery rate: delivery to the country at that rate, free from its freeOver, with the handling days and the rate's days in transit); and a WebSite with the same name. Only values the shop has are given. Put it on the home page only. While the SEO feature is off, the seo settings' defaults apply. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
+				"description": "Baseline SEO with the catalog (E49): the home page's title (the seo setting homeTitle as written, else the name in titles: the business name), description (homeDescription, else defaultDescription, as written), canonical address, social image (the share picture of the Portal's Brand and look) and site name, and the JSON-LD of the business and the website: an OnlineStore — or, with the type of business set in the Portal (Website settings › Business) to any schema.org local business type (LocalBusiness, Store, ClothingStore, Bakery …) and Delivery zones' pickupAddress and pickupHours set, that type at the pickup point, its hours as openingHours when every line is written like Mo-Fr 09:00-17:00 — with name, alternateName, url, logo, email, telephone and address from the website settings in the Portal, sameAs (the social links), and its store-wide policies, whose @id product offers point to, only with the business country: the return policy (with Returns on: returnTime, returnMethod and the return shipping fee; with Returns off only when the checkout setting returnsAccepted is no: no returns) and the shipping policy (with Delivery zones on, handlingDays set and the days of the country's first plain delivery rate: delivery to the country at that rate, free from its freeOver, with the handling days and the rate's days in transit); and a WebSite with the same name. Only values the shop has are given. Put it on the home page only. While the SEO feature is off, the seo settings' defaults apply. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"x-ss-access": "runtime",
@@ -31015,6 +31015,10 @@
 																"value": {},
 																"source": {
 																	"$ref": "#/components/schemas/ValueSource"
+																},
+																"from": {
+																	"type": "string",
+																	"description": "With source `portal`: the value of the website's settings it comes from, for example region.language."
 																}
 															}
 														}
@@ -31083,6 +31087,10 @@
 										"value": {},
 										"source": {
 											"$ref": "#/components/schemas/ValueSource"
+										},
+										"from": {
+											"type": "string",
+											"description": "With source `portal`: the value of the website's settings it comes from."
 										}
 									}
 								}
@@ -31162,6 +31170,10 @@
 										"value": {},
 										"source": {
 											"$ref": "#/components/schemas/ValueSource"
+										},
+										"from": {
+											"type": "string",
+											"description": "With source `portal`: the value of the website's settings it comes from."
 										}
 									}
 								}
@@ -31717,7 +31729,7 @@
 									},
 									"delivery": {
 										"type": "object",
-										"description": "Where it goes, for the delivery zone and taxes (placing an order: the address wins). Without a country it is in the business.json country; a pickup order is taxed at the business.",
+										"description": "Where it goes, for the delivery zone and taxes (placing an order: the address wins). Without a country it is in the business country (the Portal's Region and format); a pickup order is taxed at the business.",
 										"properties": {
 											"method": {
 												"type": [
@@ -31758,7 +31770,7 @@
 											"country": {
 												"type": "string",
 												"maxLength": 60,
-												"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business.json country)."
+												"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business country (the Portal's Region and format))."
 											},
 											"locationId": {
 												"type": [
@@ -32327,7 +32339,7 @@
 									},
 									"delivery": {
 										"type": "object",
-										"description": "Where it goes, for the delivery zone and taxes (placing an order: the address wins). Without a country it is in the business.json country; a pickup order is taxed at the business.",
+										"description": "Where it goes, for the delivery zone and taxes (placing an order: the address wins). Without a country it is in the business country (the Portal's Region and format); a pickup order is taxed at the business.",
 										"properties": {
 											"method": {
 												"type": [
@@ -32368,7 +32380,7 @@
 											"country": {
 												"type": "string",
 												"maxLength": 60,
-												"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business.json country)."
+												"description": "For the delivery zone and taxes: an ISO 3166-1 alpha-2 code or an English name (a place without a country is in the business country (the Portal's Region and format))."
 											},
 											"locationId": {
 												"type": [
@@ -32387,7 +32399,7 @@
 									},
 									"address": {
 										"type": "object",
-										"description": "Required when the order is delivered: the name always, the phone while checkout.phoneRequired is on, and the fields checkout.addressRequired lists (of line1, line2, area, city, region, postalCode, country). In a country the address_regions list names, region is one of its names (422 at /address/region otherwise). The country's address format (one table shared with Accounts) also requires the region and the postal code where the country does (a state and ZIP code in the US, a province and postal code in Canada …), never asks a postal code where the country has none, and checks the postal code's shape (422 at /address/<field>).",
+										"description": "Required when the order is delivered: the name always, the phone while checkout.phoneRequired is on, and the address parts the Portal requires (Website settings › Region and format › Address rules: of line1, line2, area, city, region, postalCode, country). In a country the Portal lists regions for, region is one of them (422 at /address/region otherwise). The country's address format (one table shared with Accounts) also requires the region and the postal code where the country does (a state and ZIP code in the US, a province and postal code in Canada …), never asks a postal code where the country has none, and checks the postal code's shape (422 at /address/<field>).",
 										"required": [
 											"name"
 										],
@@ -32420,7 +32432,7 @@
 											"region": {
 												"type": "string",
 												"maxLength": 100,
-												"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
+												"description": "The state, province or region: one of the region names the Portal lists for that country (Website settings › Region and format › Address rules), kept as listed."
 											},
 											"postalCode": {
 												"type": "string",
@@ -32455,7 +32467,7 @@
 													"string",
 													"null"
 												],
-												"description": "Read by the website’s phone rules (checkout.defaultCallingCode …); of a country in checkout.countries. '' or missing for none where it is not needed."
+												"description": "Read by the website’s phone rules (the Portal’s Region and format); of a country the Portal lists for phones. '' or missing for none where it is not needed."
 											},
 											"email": {
 												"type": [
@@ -33395,7 +33407,7 @@
 		"/v1/shop/policies": {
 			"get": {
 				"summary": "The shop's policies",
-				"description": "For the visitor (browser token). The policies list (Settings → Policies; lists/policies), in its order, those without text left out, with {returnTime}, {warrantyTime} (as typed: 30 days, 1 year), {business}, {email}, {phone}, {address} (business.json), {deliveryFee} and {freeDeliveryOver} (Delivery zones, as money) filled in (also written with double braces); other text in braces stays.",
+				"description": "For the visitor (browser token). The policies list (Settings → Policies; lists/policies), in its order, those without text left out, with {returnTime}, {warrantyTime} (as typed: 30 days, 1 year), {business}, {email}, {phone}, {address} (from your website settings in the Portal), {deliveryFee} and {freeDeliveryOver} (Delivery zones, as money) filled in (also written with double braces); other text in braces stays.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -34333,7 +34345,7 @@
 		"/v1/shop/store": {
 			"get": {
 				"summary": "The store's public details",
-				"description": "For the visitor (browser token, or the server token with SS-Visitor-IP). The Store details record (Settings → Store details, or lists/store_details): name (the business.json name while none is set), tagline, the pictures (logo, logoDark, icon, favicon and faviconDark: public addresses that never change for the file), contacts (the main phone and the phone list), address in parts and as lines, opening hours, social links, time zone, language and siteUrl (the website's own address). Every field is public.",
+				"description": "For the visitor (browser token, or the server token with SS-Visitor-IP). The store's details as the website's settings in the Portal hold them (Website settings › Business, Brand and look and Region and format; Ecommerce keeps no record of its own): name (the business name while none is set), tagline, the pictures (logo, logoDark, icon, favicon and faviconDark: the https addresses set in Brand and look), contacts (the main phone and the phone list), address in parts and as lines, opening hours, social links, time zone, language and siteUrl (the website's own address). Every field is public.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "store_details",
 				"security": [
@@ -34378,8 +34390,8 @@
 		},
 		"/v1/shop/store/business-json": {
 			"get": {
-				"summary": "The business.json made from the store details",
-				"description": "For the visitor (browser token, or the server token with SS-Visitor-IP). The business.json version 1 your website serves at /.well-known/business.json: name (the store name, else the business name), logo, email, phone (the main one, else the first of the phone list), the address as text, country, time zone, the shop currency and currencies, and language; members with no value are left out. 409 conflict when neither the store details nor business.json give a name. business.json has one logo and one phone: the dark logo, icon, favicons and other phones are in GET /v1/shop/store only.",
+				"summary": "The business.json made from the website settings",
+				"description": "For the visitor (browser token, or the server token with SS-Visitor-IP). The business.json version 1 your website serves at /.well-known/business.json: name (the Portal's business name), logo, email, phone (the main one, else the first of the phone list), the address as text, country, time zone, the shop currency and currencies, and language; members with no value are left out. 409 conflict when the Portal's Business section gives no name. business.json has one logo and one phone: the dark logo, icon, favicons and other phones are in GET /v1/shop/store only.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "store_details",
 				"security": [
@@ -35033,349 +35045,6 @@
 				}
 			}
 		},
-		"/v1/store-details/files": {
-			"get": {
-				"summary": "The store's pictures",
-				"description": "The five pictures kept in your storage (logo, logoDark, icon, favicon, faviconDark), each with its key, type, size, alternative text and address (null when not set).",
-				"x-ss-auth": "server",
-				"x-ss-feature": "store_details",
-				"x-ss-access": "runtime",
-				"security": [
-					{
-						"serverToken": []
-					}
-				],
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/SSSignIn"
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "Success",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object",
-									"required": [
-										"logo",
-										"logoDark",
-										"icon",
-										"favicon",
-										"faviconDark"
-									],
-									"additionalProperties": false,
-									"properties": {
-										"logo": {
-											"oneOf": [
-												{
-													"$ref": "#/components/schemas/StoreFile"
-												},
-												{
-													"type": "null"
-												}
-											]
-										},
-										"logoDark": {
-											"oneOf": [
-												{
-													"$ref": "#/components/schemas/StoreFile"
-												},
-												{
-													"type": "null"
-												}
-											]
-										},
-										"icon": {
-											"oneOf": [
-												{
-													"$ref": "#/components/schemas/StoreFile"
-												},
-												{
-													"type": "null"
-												}
-											]
-										},
-										"favicon": {
-											"oneOf": [
-												{
-													"$ref": "#/components/schemas/StoreFile"
-												},
-												{
-													"type": "null"
-												}
-											]
-										},
-										"faviconDark": {
-											"oneOf": [
-												{
-													"$ref": "#/components/schemas/StoreFile"
-												},
-												{
-													"type": "null"
-												}
-											]
-										}
-									}
-								}
-							}
-						}
-					},
-					"default": {
-						"description": "Problem (RFC 9457) with a stable code",
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/Problem"
-								}
-							}
-						}
-					}
-				}
-			}
-		},
-		"/v1/store-details/uploads": {
-			"post": {
-				"summary": "Get a presigned upload for a picture of the store",
-				"description": "Upload the file with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then keep it with PUT /v1/store-details/<picture> (logo, logoDark, icon, favicon or faviconDark) and the key. Images up to 5 MB. 422 validation_failed at /for, /type or /size; 503 storage_not_connected.",
-				"x-ss-auth": "server",
-				"x-ss-feature": "store_details",
-				"x-ss-permission": "catalog.edit",
-				"x-ss-access": "staff",
-				"security": [
-					{
-						"serverToken": []
-					}
-				],
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/SSSignInStaff"
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": [
-									"for",
-									"type",
-									"size"
-								],
-								"properties": {
-									"for": {
-										"type": "string",
-										"enum": [
-											"logo",
-											"logoDark",
-											"icon",
-											"favicon",
-											"faviconDark"
-										],
-										"description": "Which picture: logo (light backgrounds), logoDark (dark mode), icon (the square mark), favicon (browser tab) or faviconDark (browser tab, dark mode)."
-									},
-									"type": {
-										"type": "string",
-										"enum": [
-											"image/jpeg",
-											"image/png",
-											"image/webp",
-											"image/avif"
-										]
-									},
-									"size": {
-										"type": "integer",
-										"minimum": 1,
-										"description": "Bytes."
-									}
-								}
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "Success",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/ProductUpload"
-								}
-							}
-						}
-					},
-					"default": {
-						"description": "Problem (RFC 9457) with a stable code",
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/Problem"
-								}
-							}
-						}
-					}
-				}
-			}
-		},
-		"/v1/store-details/{file}": {
-			"delete": {
-				"summary": "Remove one of the store's pictures",
-				"description": "file is logo, logoDark, icon, favicon or faviconDark (404 not_found otherwise). The file is deleted from your storage.",
-				"x-ss-auth": "server",
-				"x-ss-feature": "store_details",
-				"x-ss-permission": "catalog.edit",
-				"x-ss-access": "staff",
-				"security": [
-					{
-						"serverToken": []
-					}
-				],
-				"parameters": [
-					{
-						"name": "file",
-						"in": "path",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"$ref": "#/components/parameters/SSSignInStaff"
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "Success",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object",
-									"additionalProperties": false,
-									"properties": {
-										"logo": {
-											"type": "null"
-										},
-										"logoDark": {
-											"type": "null"
-										},
-										"icon": {
-											"type": "null"
-										},
-										"favicon": {
-											"type": "null"
-										},
-										"faviconDark": {
-											"type": "null"
-										}
-									}
-								}
-							}
-						}
-					},
-					"default": {
-						"description": "Problem (RFC 9457) with a stable code",
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/Problem"
-								}
-							}
-						}
-					}
-				}
-			},
-			"put": {
-				"summary": "Set one of the store's pictures",
-				"description": "file is logo, logoDark, icon, favicon or faviconDark (404 not_found otherwise). Upload the file first: POST /v1/store-details/uploads, then PUT it to the presigned address. The file is checked in your bucket: 422 validation_failed at /key when it is not the upload made for this file, not uploaded, or not a JPEG, PNG, WebP or AVIF image within the limit (such a file is deleted), at /alt; 503 storage_not_connected; 502 upstream_error when your storage cannot be reached. The file it replaces is deleted from your storage.",
-				"x-ss-auth": "server",
-				"x-ss-feature": "store_details",
-				"x-ss-permission": "catalog.edit",
-				"x-ss-access": "staff",
-				"security": [
-					{
-						"serverToken": []
-					}
-				],
-				"parameters": [
-					{
-						"name": "file",
-						"in": "path",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"$ref": "#/components/parameters/SSSignInStaff"
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": [
-									"key"
-								],
-								"properties": {
-									"key": {
-										"type": "string",
-										"description": "The key POST /v1/store-details/uploads gave."
-									},
-									"alt": {
-										"type": "string",
-										"maxLength": 200
-									}
-								}
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "Success",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object",
-									"additionalProperties": false,
-									"properties": {
-										"logo": {
-											"$ref": "#/components/schemas/StoreFile"
-										},
-										"logoDark": {
-											"$ref": "#/components/schemas/StoreFile"
-										},
-										"icon": {
-											"$ref": "#/components/schemas/StoreFile"
-										},
-										"favicon": {
-											"$ref": "#/components/schemas/StoreFile"
-										},
-										"faviconDark": {
-											"$ref": "#/components/schemas/StoreFile"
-										}
-									},
-									"description": "The file that was set, under its name."
-								}
-							}
-						}
-					},
-					"default": {
-						"description": "Problem (RFC 9457) with a stable code",
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/Problem"
-								}
-							}
-						}
-					}
-				}
-			}
-		},
 		"/v1/texts": {
 			"get": {
 				"summary": "Widget texts",
@@ -35545,7 +35214,7 @@
 		"/v1/theme": {
 			"get": {
 				"summary": "The widgets' theme",
-				"description": "From the Portal (sources `portal`) once it holds the website's settings; the product's own saved theme before that.",
+				"description": "The website's theme from the Portal (sources `portal`: Website settings › Brand and look); the built-in look (sources `built-in`) while the Portal holds no settings yet.",
 				"x-ss-auth": "server",
 				"x-ss-access": "runtime",
 				"security": [
@@ -35582,8 +35251,8 @@
 				}
 			},
 			"put": {
-				"summary": "Save theme fields (null resets one)",
-				"description": "Answers 409 managed_by_portal once the Portal holds the website's settings: the theme is set in the Portal (Website settings › Brand and look).",
+				"summary": "The theme is set in the Portal",
+				"description": "Always answers 409 managed_by_portal: the theme is set once for every product, in the Portal (Website settings › Brand and look).",
 				"x-ss-auth": "server",
 				"x-ss-permission": "settings.manage",
 				"x-ss-access": "staff",
@@ -38391,7 +38060,7 @@
 					},
 					"business": {
 						"type": "string",
-						"description": "The business name (business.json)."
+						"description": "The business name."
 					},
 					"currency": {
 						"type": "string"
@@ -40346,7 +40015,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
+						"description": "The shop's currency (set in the Portal’s Region and format: an ISO 4217 code such as USD or EUR)."
 					},
 					"inStock": {
 						"type": "boolean",
@@ -42792,7 +42461,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
+						"description": "The shop's currency (set in the Portal’s Region and format: an ISO 4217 code such as USD or EUR)."
 					},
 					"inStock": {
 						"type": "boolean",
@@ -43284,7 +42953,7 @@
 							"admin_url",
 							"pixel_ids"
 						],
-						"description": "no_products: no active product at all (1 or 0); products_without_photos: active products with no photo; products_not_buyable: active products without an offered variant priced above 0; variants_priced_zero: offered variants of active products priced 0 (left out of structured data and feeds); images_without_alt: active products with a photo that has no alternative text; images_too_small: active products with a photo under 500 × 500 pixels (the shopping catalogs' minimum); images_short_lived: storage is connected but the catalog setting mediaBaseUrl (the public address of your images) is empty, so the shop's widgets show images through links that last an hour (no browser caching; search engines, sitemaps and feeds get your website's media addresses instead) (1 or 0; skipped without storage); short_descriptions: active products whose description has fewer than 20 words; duplicate_names: active products sharing a name with another (any letter case); duplicate_titles and duplicate_descriptions: active products, and categories and brands, whose own SEO title or description another record of the same kind also uses; long_titles: own SEO titles over 60 characters (search engines cut them); canonical_elsewhere: active products, categories and brands whose canonical address is on another site; branded_without_gtin: products the feeds send (active, with an offered variant priced above 0) of a brand without a GTIN on any offered variant (or a SKU, with the feeds setting skuAs gtin) (skipped while Feeds is off); missing_identifiers: products the feeds send with no brand and no GTIN or MPN (or a SKU sent as one) (skipped while Feeds is off or its identifierExists is no); empty_categories: categories shoppers see with no active product in them or below them; glossary_without_text: active product and variant fields without their glossary text, so their pages stay out of search results (skipped while Landing pages is off or attributeUrl is empty); archived_featured: archived products still featured; variants_out_of_stock and variants_low_stock: offered variants of products that track stock and are not archived, with no units (or marked sold out) and with 1 to the catalog setting lowStock units; business_name: business.json is missing or gives no name (1 or 0); business_country, business_logo and business_phone: business.json gives no country (search engines need it for your shipping and return policies), no logo (shown with your business in search results; at least 112 × 112 pixels) or no phone (shoppers and search engines reach you by it) (1 or 0); website_address: the website's address is not a public web address, such as localhost, an IP address or a .local or .test name (1 or 0); storage: no Storage connection, so no photo can be uploaded (1 or 0); delivery_days: the delivery setting handlingDays or the days of the business country's first plain delivery rate are not set, so search engines show no shipping (1 or 0; skipped while Delivery zones is off); payment_methods: shoppers have no payment method they can use (1 or 0); pay_details: active payment methods paid first (or with an advance paid by hand) that do not tell shoppers where to pay: no instructions and no account with a value of their own (by hand), or Payments' manual method of their key not ready (skipped while there is none or Payments does not answer); staff_alerts: Staff alerts is on but nobody gets them (no recipients, no Accounts staff by permission with the Accounts token) or Notifications is not connected (1 or 0); admin_url: the staff_alerts setting adminUrl is empty, so alerts link to no order page (1 or 0); both skipped while Staff alerts is off; pixel_ids: tag ids set in Growth (Meta and TikTok pixels, Google tags) that are not in the form their tag takes."
+						"description": "no_products: no active product at all (1 or 0); products_without_photos: active products with no photo; products_not_buyable: active products without an offered variant priced above 0; variants_priced_zero: offered variants of active products priced 0 (left out of structured data and feeds); images_without_alt: active products with a photo that has no alternative text; images_too_small: active products with a photo under 500 × 500 pixels (the shopping catalogs' minimum); images_short_lived: storage is connected but the catalog setting mediaBaseUrl (the public address of your images) is empty, so the shop's widgets show images through links that last an hour (no browser caching; search engines, sitemaps and feeds get your website's media addresses instead) (1 or 0; skipped without storage); short_descriptions: active products whose description has fewer than 20 words; duplicate_names: active products sharing a name with another (any letter case); duplicate_titles and duplicate_descriptions: active products, and categories and brands, whose own SEO title or description another record of the same kind also uses; long_titles: own SEO titles over 60 characters (search engines cut them); canonical_elsewhere: active products, categories and brands whose canonical address is on another site; branded_without_gtin: products the feeds send (active, with an offered variant priced above 0) of a brand without a GTIN on any offered variant (or a SKU, with the feeds setting skuAs gtin) (skipped while Feeds is off); missing_identifiers: products the feeds send with no brand and no GTIN or MPN (or a SKU sent as one) (skipped while Feeds is off or its identifierExists is no); empty_categories: categories shoppers see with no active product in them or below them; glossary_without_text: active product and variant fields without their glossary text, so their pages stay out of search results (skipped while Landing pages is off or attributeUrl is empty); archived_featured: archived products still featured; variants_out_of_stock and variants_low_stock: offered variants of products that track stock and are not archived, with no units (or marked sold out) and with 1 to the catalog setting lowStock units; business_name: the website settings in the Portal give no business name (1 or 0); business_country, business_logo and business_phone: they give no country (search engines need it for your shipping and return policies), no logo (shown with your business in search results; at least 112 × 112 pixels) or no phone (shoppers and search engines reach you by it) (1 or 0); website_address: the website's address is not a public web address, such as localhost, an IP address or a .local or .test name (1 or 0); storage: no Storage connection, so no photo can be uploaded (1 or 0); delivery_days: the delivery setting handlingDays or the days of the business country's first plain delivery rate are not set, so search engines show no shipping (1 or 0; skipped while Delivery zones is off); payment_methods: shoppers have no payment method they can use (1 or 0); pay_details: active payment methods paid first (or with an advance paid by hand) that do not tell shoppers where to pay: no instructions and no account with a value of their own (by hand), or Payments' manual method of their key not ready (skipped while there is none or Payments does not answer); staff_alerts: Staff alerts is on but nobody gets them (nobody in the Portal’s alert team, no Accounts staff by permission with the Accounts token) or Notifications is not connected (1 or 0); admin_url: the staff_alerts setting adminUrl is empty, so alerts link to no order page (1 or 0); both skipped while Staff alerts is off; pixel_ids: tag ids set in Growth (Meta and TikTok pixels, Google tags) that are not in the form their tag takes."
 					},
 					"status": {
 						"type": "string",
@@ -43305,7 +42974,7 @@
 							"string",
 							"null"
 						],
-						"description": "Where to fix it: a list of this API with the filter that shows them (for example /v1/products?lowStock=1), the website's business.json address, or null."
+						"description": "Where to fix it: a list of this API with the filter that shows them (for example /v1/products?lowStock=1), the Portal's Website settings page where the merchant sets it, or null."
 					}
 				}
 			},
@@ -44184,12 +43853,10 @@
 			"LookSource": {
 				"type": "string",
 				"enum": [
-					"website",
-					"default",
 					"built-in",
 					"portal"
 				],
-				"description": "Where a theme or Format value comes from: saved for this website, the global default, built in, or the website's settings in the Portal (then a save is refused with 409 managed_by_portal)."
+				"description": "Where a theme or Format value comes from: the website's settings in the Portal, or built in while the Portal holds none yet. It cannot be saved in a product (409 managed_by_portal)."
 			},
 			"LoyaltyAccount": {
 				"type": "object",
@@ -44234,7 +43901,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
+						"description": "The shop's currency (set in the Portal’s Region and format: an ISO 4217 code such as USD or EUR)."
 					},
 					"lots": {
 						"type": "array",
@@ -44390,7 +44057,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
+						"description": "The shop's currency (set in the Portal’s Region and format: an ISO 4217 code such as USD or EUR)."
 					},
 					"totals": {
 						"type": "object",
@@ -44978,7 +44645,7 @@
 					"region": {
 						"type": "string",
 						"maxLength": 100,
-						"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
+						"description": "The state, province or region: one of the region names the Portal lists for that country (Website settings › Region and format › Address rules), kept as listed."
 					},
 					"postalCode": {
 						"type": "string",
@@ -49317,7 +48984,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
+						"description": "The shop's currency (set in the Portal’s Region and format: an ISO 4217 code such as USD or EUR)."
 					},
 					"statuses": {
 						"type": [
@@ -51076,7 +50743,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
+						"description": "The shop's currency (set in the Portal’s Region and format: an ISO 4217 code such as USD or EUR)."
 					},
 					"by": {
 						"type": "string",
@@ -51388,7 +51055,7 @@
 							"null"
 						],
 						"format": "uri",
-						"description": "Its ogImage, else its image, else the seo setting defaultImage (null: none)."
+						"description": "Its ogImage, else its image, else the share picture of the Portal's Brand and look (null: none)."
 					},
 					"og": {
 						"$ref": "#/components/schemas/SeoOpenGraph"
@@ -51878,7 +51545,7 @@
 							"null"
 						],
 						"format": "uri",
-						"description": "The social image: its ogImage, else its first photo, else the seo setting defaultImage (null: none)."
+						"description": "The social image: its ogImage, else its first photo, else the share picture of the Portal's Brand and look (null: none)."
 					},
 					"og": {
 						"$ref": "#/components/schemas/SeoOpenGraph"
@@ -51894,7 +51561,7 @@
 					},
 					"jsonLd": {
 						"type": "string",
-						"description": "The JSON-LD as text safe to put in a script tag: a ProductGroup of the variants offered (active, priced above 0; one: a Product; none: no product node), each with its photo (else the product's), its SKU (else its feed item id), offer (the price shown after the best item deal on one unit, the higher price as a StrikethroughPrice, and for a deal that holds all day with an end validFrom and priceValidUntil), condition, return policy (the product's, its grade's or the returns setting's days, with the business.json country only: { @id } of the store-wide policy of GET /v1/seo/site when it is the store's, else its own with the return method and fees) and shipping details (physical goods: { @type: OfferShippingDetails, hasShippingService: { @id } } of the store-wide shipping policy, once it is complete), reviews, a BreadcrumbList and, with the seo setting faqMarkup on, a FAQPage. While Role pricing has role prices above 0 %, each offer adds a UnitPriceSpecification per role with its member price (the price shown less the role's percent, rounded as the cart rounds it) and validForMemberTier { @id } of the site answer's member program tier (G17)."
+						"description": "The JSON-LD as text safe to put in a script tag: a ProductGroup of the variants offered (active, priced above 0; one: a Product; none: no product node), each with its photo (else the product's), its SKU (else its feed item id), offer (the price shown after the best item deal on one unit, the higher price as a StrikethroughPrice, and for a deal that holds all day with an end validFrom and priceValidUntil), condition, return policy (the product's, its grade's or the returns setting's days, with the business country only: { @id } of the store-wide policy of GET /v1/seo/site when it is the store's, else its own with the return method and fees) and shipping details (physical goods: { @type: OfferShippingDetails, hasShippingService: { @id } } of the store-wide shipping policy, once it is complete), reviews, a BreadcrumbList and, with the seo setting faqMarkup on, a FAQPage. While Role pricing has role prices above 0 %, each offer adds a UnitPriceSpecification per role with its member price (the price shown less the role's percent, rounded as the cart rounds it) and validForMemberTier { @id } of the site answer's member program tier (G17)."
 					},
 					"lastModified": {
 						"type": [
@@ -51954,7 +51621,7 @@
 							"null"
 						],
 						"format": "uri",
-						"description": "The seo setting defaultImage (null: none)."
+						"description": "The share picture of the Portal's Brand and look (null: none)."
 					},
 					"og": {
 						"$ref": "#/components/schemas/SeoOpenGraph"
@@ -51964,7 +51631,7 @@
 					},
 					"siteName": {
 						"type": "string",
-						"description": "The site name (the seo setting brandName, else the business name): use it as og:site_name, as the structured data does."
+						"description": "The site name (the business name): use it as og:site_name, as the structured data does."
 					},
 					"jsonLd": {
 						"type": "string",
@@ -53111,7 +52778,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
+						"description": "The shop's currency (set in the Portal’s Region and format: an ISO 4217 code such as USD or EUR)."
 					},
 					"pointValue": {
 						"type": "integer",
@@ -53825,7 +53492,7 @@
 					"region": {
 						"type": "string",
 						"maxLength": 100,
-						"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
+						"description": "The state, province or region: one of the region names the Portal lists for that country (Website settings › Region and format › Address rules), kept as listed."
 					},
 					"postalCode": {
 						"type": "string",
@@ -55438,7 +55105,7 @@
 				"properties": {
 					"name": {
 						"type": "string",
-						"description": "The store name; the business.json name while none is set."
+						"description": "The store name (the Portal's Business name), else the business name."
 					},
 					"tagline": {
 						"type": "string"
@@ -56482,7 +56149,7 @@
 			},
 			"StoreBusinessJson": {
 				"type": "object",
-				"description": "business.json version 1 (name required; the members with no value are left out), made from the store details for a website to serve at /.well-known/business.json.",
+				"description": "business.json version 1 (name required; the members with no value are left out), made from the website settings in the Portal for a website to serve at /.well-known/business.json.",
 				"required": [
 					"name"
 				],
@@ -56989,9 +56656,10 @@
 				"enum": [
 					"website",
 					"default",
-					"built-in"
+					"built-in",
+					"portal"
 				],
-				"description": "Where a value comes from: saved for this website, the global default, or built in."
+				"description": "Where a value comes from: saved for this website, the global default, built in, or the website's settings in the Portal (`portal`: a setting that starts from them, x-ui.defaultFrom, until this website saves its own value)."
 			},
 			"Variant": {
 				"type": "object",
@@ -57371,7 +57039,7 @@
 					},
 					"timeZone": {
 						"type": "string",
-						"description": "The business time zone (business.json), default UTC."
+						"description": "The business time zone (the website's settings in the Portal), default UTC."
 					},
 					"features": {
 						"type": "array",

@@ -66,8 +66,7 @@ const settingOf = (answer, feature, key) => {
 /**
  * Ecommerce's part of the Overview (PLAN 0.6 "Overviews talk"), judged from setup only (no business data): with
  * checkout, Payments (recommended) and Notifications (optional, when no feature needs it), payment methods paid by hand
- * with no instructions or account details for shoppers; with the catalog, the shop's currency until the merchant sets
- * it (USD by default, Claude's decision 9), the Atlas Search index while the shop or Chat searches with Atlas and the
+ * with no instructions or account details for shoppers; with the catalog, the Atlas Search index while the shop or Chat searches with Atlas and the
  * public address of the images once storage is connected; with Staff alerts, someone to alert and the admin page they
  * link to; and how many of the connections the features need are ready. `/connections` is read only with checkout or
  * Staff alerts, `/search-index` and `/settings` only with the catalog.
@@ -145,19 +144,6 @@ const useShopOverview = (overview, { websiteId, open }) => {
 			done: messages.status === 'connected',
 			onSelect: () => open('connections', 'connection-notifications'),
 		});
-	// the shop's currency, until the merchant sets it (decision 9: USD stays the default)
-	const currency = catalog ? settingOf(settings.answer, 'catalog', 'currency') : null;
-	if (currency) {
-		const code = String(currency.value ?? '');
-		if (!currency.set)
-			needs.push({
-				key: 'currency',
-				tone: 'warning',
-				title: O.currency.title,
-				effect: fill(O.currency.effect, { currency: code }),
-				action: go(O.currency.action, 'settings', sectionOf('catalog', 'currency')),
-			});
-	}
 	// the Atlas Search index, while the shop or Chat searches with Atlas (E14)
 	/** @type {NonNullable<import('@ss/ui/dashboard').OverviewMore['steps']>[number] | null} */
 	let searchStep = null;
@@ -316,11 +302,6 @@ function Developers(props) {
 	return (
 		<DevelopersTab
 			{...props}
-			links={
-				<TextLink className="text-sm" href="/docs#catalog-seo">
-					{D.catalogSeo}
-				</TextLink>
-			}
 			sections={[
 				part('visitor', D.visitor, D.visitorHelp, <CodeBlock code={snippets.visitor} />, 'users'),
 				part('api', D.api, D.apiHelp, <CodeBlock code={snippets.api} />, 'code'),
@@ -349,6 +330,9 @@ function Developers(props) {
 						<CodeBlock code={snippets.policies} />
 					</div>,
 					'globe',
+					<TextLink className="text-sm" href="/docs#catalog-seo">
+						{D.catalogSeo}
+					</TextLink>,
 				),
 				part(
 					'search-index',
@@ -366,7 +350,7 @@ function Developers(props) {
 	);
 }
 
-/** Defaults (Owner): the global defaults of the same features, the widget texts, the theme and Format. @param {TabProps} props */
+/** Defaults (Owner): the global defaults of the same features and the widget texts. @param {TabProps} props */
 const Defaults = (props) => <DefaultsTab {...props} notice={settingsNotice} />;
 
 /** Ecommerce's tabs in place of the standard ones (Features and Prices are the standard tabs). */

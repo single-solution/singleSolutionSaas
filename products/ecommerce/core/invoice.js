@@ -1,7 +1,7 @@
 /**
  * Invoices, packing slips and pick lists (PLAN 0.8.8: invoices and packing slips with the serial numbers on each line;
  * E35) as printable, self-contained HTML: inline `<style>`, no script, every value HTML-escaped. Everything printed
- * comes from the order snapshot, business.json (name, address, email, phone) and the `invoices` settings (their titles
+ * comes from the order snapshot, the website settings (name, address, email, phone, tax number) and the `invoices` settings (their titles
  * and footer, `INVOICE_TEXTS` being the English defaults) and the website's texts (the labels, `invoice.*`); payment methods are named as the website's
  * `payment_methods` list names them (E2, E16) and payment states are the website's texts (`orders.payment.*`; decision
  * 10), so each word lives in one place. The invoice's line columns
@@ -139,7 +139,6 @@ export const INVOICE_TEXTS = Object.freeze({
 	packingSlipTitle: 'Packing slip',
 	footer: '',
 	pickListTitle: 'Pick list',
-	sellerDetails: '',
 });
 
 /**
@@ -181,25 +180,41 @@ export const INVOICE_LABELS = Object.freeze({
 	labelRefunds: 'invoice.refunds',
 });
 
-/** @typedef {{ [name in keyof typeof INVOICE_TEXTS | keyof typeof INVOICE_LABELS]: string }} InvoiceTexts */
+/** @typedef {{ [name in keyof typeof INVOICE_TEXTS | keyof typeof INVOICE_LABELS | 'sellerDetails']: string }} InvoiceTexts */
 
 /**
- * The words to print: the settings, with the defaults for anything missing, and the labels from the website's texts.
+ * What is printed under the business on invoices and packing slips: its legal name and tax number, set once in the
+ * Portal (Website settings › Business). One line each; '' while neither is set.
+ * @param {{ legalName: string, taxNumber: string }} business the website settings' `business`
+ * @param {Readonly<Record<string, string>>} [texts] the website's texts (`invoice.taxNumber` words the tax number's label)
+ * @returns {string}
+ */
+export const sellerDetailsOf = (business, texts = {}) =>
+	[
+		business.legalName,
+		business.taxNumber ? `${texts['invoice.taxNumber'] || 'Tax number'}: ${business.taxNumber}` : '',
+	]
+		.filter(Boolean)
+		.join('\n');
+
+/**
+ * The words to print: the settings, with the defaults for anything missing, the labels from the website's texts and the
+ * seller details (`sellerDetailsOf`).
  * @param {Record<string, unknown>} settings
  * @param {Readonly<Record<string, string>>} [texts] the website's texts (`invoice.*` hold the labels)
+ * @param {string} [sellerDetails] printed under the business
  * @returns {InvoiceTexts}
  */
-export const invoiceTexts = (settings, texts = {}) =>
+export const invoiceTexts = (settings, texts = {}, sellerDetails = '') =>
 	/** @type {InvoiceTexts} */ ({
 		...Object.fromEntries(
 			Object.entries(INVOICE_TEXTS).map(([key, fallback]) => [
 				key,
-				typeof settings[key] === 'string' && (settings[key] !== '' || key === 'footer' || key === 'sellerDetails')
-					? settings[key]
-					: fallback,
+				typeof settings[key] === 'string' && (settings[key] !== '' || key === 'footer') ? settings[key] : fallback,
 			]),
 		),
 		...Object.fromEntries(Object.entries(INVOICE_LABELS).map(([name, key]) => [name, texts[key] ?? ''])),
+		sellerDetails,
 	});
 
 /**
@@ -379,7 +394,7 @@ const sellerAndFooter = (order, context) => {
 	const seller = context.texts.sellerDetails.trim();
 	const footer = context.texts.footer.trim();
 	return {
-		seller: seller ? `<p class="small seller">${escapeHtml(filled(seller, values))}</p>` : '',
+		seller: seller ? `<p class="small seller">${escapeHtml(filled(seller, values)).replaceAll('\n', '<br>')}</p>` : '',
 		footer: footer ? `<div class="footer small">${escapeHtml(filled(footer, values))}</div>` : '',
 	};
 };
