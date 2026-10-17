@@ -13,7 +13,7 @@
  *    a re-run that changes nothing, and a prune after one record is removed from the source.
  */
 import { randomBytes } from 'node:crypto';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { MongoClient, ObjectId } from 'mongodb';
@@ -38,6 +38,7 @@ import * as ecommerce from '@ss/product-ecommerce/product';
 import * as ecommerceRoutes from '@ss/product-ecommerce/routes';
 import * as growth from '@ss/product-growth/product';
 import * as growthRoutes from '@ss/product-growth/routes';
+import { staffSignIns } from '@ss/product-accounts/testing';
 import { PRODUCT_URL, codeOf, startSystem } from './helpers.js';
 
 /**
@@ -86,6 +87,24 @@ describe('importing a store into a product (K10, ss-import)', () => {
 	let cookie = '';
 	/** @type {typeof globalThis.fetch} */
 	let fetch;
+	/**
+	 * The product and its token, with the sign-in of the staff member who runs the migration (the settings and the count
+	 * routes are theirs; the import routes take the token alone).
+	 */
+	const notesTarget = async () => ({
+		notes: {
+			url: PRODUCT_URL,
+			token: tokens.server,
+			signIn: await sys.staffIssuer.signIn({
+				websiteId,
+				sub: 'usr_importer',
+				name: 'Ira Importer',
+				role: 'owner',
+				permissions: ['*'],
+				ttlSeconds: 86_400,
+			}),
+		},
+	});
 
 	beforeAll(async () => {
 		sys = await startSystem();
@@ -120,7 +139,7 @@ describe('importing a store into a product (K10, ss-import)', () => {
 		const { dir } = source;
 		const manifest = await read({ mapping: FIXTURE_MAPPING, db: source.db, dir });
 		expect(manifest.steps[0]).toMatchObject({ product: 'notes', collection: 'notes', ...EXPECTED });
-		const products = { notes: { url: PRODUCT_URL, token: tokens.server } };
+		const products = await notesTarget();
 		const dry = await send({ dir, products, dryRun: true, fetch });
 		expect(dry).toMatchObject({ dryRun: true, ok: true, finished: [] });
 		expect(dry.steps[0]).toMatchObject({ inserted: EXPECTED.records, updated: 0, failed: [] });
@@ -132,7 +151,7 @@ describe('importing a store into a product (K10, ss-import)', () => {
 
 	it('imports for real with the given ids, finishes, re-runs safely and verifies', async () => {
 		const { dir } = source;
-		const products = { notes: { url: PRODUCT_URL, token: tokens.server } };
+		const products = await notesTarget();
 		const real = await send({ dir, products, fetch });
 		expect(real.steps[0]).toMatchObject({ inserted: 3, updated: 0, failed: [] });
 		expect(real.finished).toEqual([{ product: 'notes', summary: { finished: true } }]);
@@ -234,8 +253,43 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 	let source;
 	/** @type {typeof globalThis.fetch} */
 	let fetch;
-	/** @type {Record<string, { url: string, token: string }>} */
+	/** @type {Record<string, { url: string, token: string, signIn?: string }>} */
 	let products;
+	/** The sign-in of a staff Owner of the website's Accounts (a real user of it). @type {(who?: { id?: string, name?: string, role?: string, email?: string }) => Promise<string>} */
+	let accountsStaff;
+	/**
+	 * Read the old shop. The staff Owner who runs the migration is a user of the new Accounts that the old shop does not
+	 * have: the product's sums hold one more staff member and one more Owner, so the expected sums say so.
+	 */
+	const readShop = async () => {
+		const manifest = await read({ mapping: SHOP_MAPPING, db: source.db, dir: source.dir });
+		const file = path.join(source.dir, 'manifest.json');
+		const written = JSON.parse(await readFile(file, 'utf8'));
+		written.totals.accounts['users.staff'] += 1;
+		written.totals.accounts['users.role.owner'] += 1;
+		await writeFile(file, JSON.stringify(written, null, 2));
+		return manifest;
+	};
+	/**
+	 * The sign-in of the staff member who runs the migration, for every product (Accounts' is a real user's, the others'
+	 * come from the harness's issuer): the settings and the count routes are theirs. Renewed before each run.
+	 */
+	const signInStaff = async () => {
+		for (const key of Object.keys(products)) {
+			const target = /** @type {{ signIn?: string }} */ (products[key]);
+			target.signIn =
+				key === 'accounts'
+					? await accountsStaff()
+					: await sys.staffIssuer.signIn({
+							websiteId,
+							sub: 'usr_importer',
+							name: 'Ira Importer',
+							role: 'owner',
+							permissions: ['*'],
+							ttlSeconds: 86_400,
+						});
+		}
+	};
 
 	/**
 	 * A call of the merchant's server to a product with its server token.
@@ -246,6 +300,8 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 		sys.call(method, route, {
 			base: BASES[key],
 			token: tokens[key]?.server,
+			// (a shop page read by the server is a visitor's: no staff member signed in)
+			bare: route.startsWith('/v1/shop/'),
 			...(body === undefined ? {} : { body }),
 			headers,
 		});
@@ -260,14 +316,14 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 		for (const [key, db] of Object.entries(databases))
 			for (const { name } of await db.listCollections().toArray()) {
 				// the activity log and the kit's own bookkeeping grow with every call
-				if (/_(activity|idempotency|limits|events)$/.test(name)) continue;
+				if (/_(activity|idempotency|limits|events|sessions)$/.test(name)) continue;
 				all[`${key}:${name}`] = (
 					await db
 						.collection(name)
 						.find({}, { projection: { _id: 0 } })
 						.toArray()
 				)
-					.map(({ updatedAt, ...rest }) => (void updatedAt, rest))
+					.map(({ updatedAt, lastSignInAt, ...rest }) => (void updatedAt, void lastSignInAt, rest))
 					.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 			}
 		return all;
@@ -315,6 +371,12 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 		products = Object.fromEntries(
 			Object.entries(BASES).map(([key, url]) => [key, { url, token: String(tokens[key]?.server) }]),
 		);
+		accountsStaff = staffSignIns(/** @type {any} */ (sys.product), {
+			websiteId,
+			merchantId: m.merchantId,
+			domain: DOMAIN,
+			base: BASES.accounts,
+		});
 		source = await sourceAndFolder();
 		await seedShop(source.db);
 	});
@@ -324,8 +386,9 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 	});
 
 	it('dry-runs the shop: the settings that would change and every refused record listed, nothing written', async () => {
-		const manifest = await read({ mapping: SHOP_MAPPING, db: source.db, dir: source.dir });
+		const manifest = await readShop();
 		expect(manifest.targets).toHaveLength(20);
+		await signInStaff();
 		const dry = await send({ dir: source.dir, products, dryRun: true, fetch });
 		expect(dry).toMatchObject({ dryRun: true, ok: false, finished: [] });
 		// read from the old shop, written explicitly even where it equals the built-in default (RT-15)
@@ -405,6 +468,7 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 	});
 
 	it('imports for real: the settings first, every collection in order, each product finished after its last file', async () => {
+		await signInStaff();
 		const real = await send({ dir: source.dir, products, fetch });
 		expect(real.ok, JSON.stringify(real.steps.filter((step) => step.failed.length > 0))).toBe(true);
 		expect(real.settings).toMatchObject({ refused: [] });
@@ -440,6 +504,7 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 	});
 
 	it('verifies the counts and the sums of every product', async () => {
+		await signInStaff();
 		const report = await verify({ dir: source.dir, products, fetch });
 		expect(report.steps.filter((step) => !step.match)).toEqual([]);
 		expect(report.totals.filter((total) => !total.match)).toEqual([]);
@@ -450,7 +515,7 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 			['conversations', 1],
 		]);
 		expect(Object.fromEntries(report.totals.map((total) => [`${total.product} ${total.key}`, total.actual]))).toMatchObject({
-			'accounts users.staff': 2,
+			'accounts users.staff': 3,
 			'accounts users.role.member': 1,
 			'ecommerce stock.units': 17,
 			'ecommerce customers': 2,
@@ -529,26 +594,32 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 			['accounts:ss_accounts_users', 'ecommerce:ss_ecommerce_orders', 'chat:ss_chat_messages', 'growth:ss_growth_totals'].map(
 				(name) => before[name]?.length,
 			),
-		).toEqual([3, 3, 2, 2]);
+		).toEqual([4, 3, 2, 2]);
+		// (the fourth user is the staff Owner who runs the migration)
+		await signInStaff();
 		const again = await send({ dir: source.dir, products, fetch });
 		expect(again.ok).toBe(true);
 		expect(again.steps.every((step) => step.inserted === 0 && step.failed.length === 0)).toBe(true);
 		expect(await snapshot()).toEqual(before);
+		await signInStaff();
 		expect(await verify({ dir: source.dir, products, fetch })).toMatchObject({ ok: true });
 	});
 
 	it('prunes what the source no longer has, a dry run first', async () => {
 		// the shopper's stock alert was removed in the old shop since the last read
 		await source.db.collection('stockalerts').deleteOne({ _id: new ObjectId(SHOP_IDS.alert) });
-		await read({ mapping: SHOP_MAPPING, db: source.db, dir: source.dir });
+		await readShop();
 		const pruned = (/** @type {Awaited<ReturnType<typeof send>>} */ report) =>
 			report.steps.filter((step) => (step.pruned?.removed ?? 0) > 0).map((step) => [step.collection, step.pruned]);
+		await signInStaff();
 		const dry = await send({ dir: source.dir, products, dryRun: true, prune: true, fetch });
 		expect(pruned(dry)).toEqual([['alerts', { removed: 1, keys: [idOf('alr', SHOP_IDS.alert)] }]]);
 		expect(await databases.ecommerce?.collection('ss_ecommerce_alerts').countDocuments({})).toBe(1);
+		await signInStaff();
 		const real = await send({ dir: source.dir, products, prune: true, fetch });
 		expect(pruned(real)).toEqual([['alerts', { removed: 1, keys: [idOf('alr', SHOP_IDS.alert)] }]]);
 		expect(await databases.ecommerce?.collection('ss_ecommerce_alerts').countDocuments({})).toBe(0);
+		await signInStaff();
 		expect(await verify({ dir: source.dir, products, fetch })).toMatchObject({ ok: true });
 	});
 

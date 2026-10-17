@@ -86,7 +86,7 @@ describe('Notifications on the real Portal', () => {
 		const provider = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/email`, {
 			value: { provider: 'resend', secret: 're_live_key_0001', from: 'Shop <shop@notify.example.com>' },
 		});
-		expect(provider.json).toMatchObject({ status: 'connected', last4: '0001' });
+		expect(provider.json).toMatchObject({ status: 'connected', set: true });
 		const template = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/templates`, {
 			key: 'order_ready',
 			channel: 'email',
@@ -110,11 +110,8 @@ describe('Notifications on the real Portal', () => {
 		// the merchant's staff read the delivery log in their own admin with a ticket
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			token: server,
-			body: {
-				user: { id: 'u_1', name: 'Sam Staff', email: 'sam@notify.example.com' },
-				permissions: ['log.read'],
-				origin: ADMIN_ORIGIN,
-			},
+			staff: { id: 'u_1', name: 'Sam Staff', email: 'sam@notify.example.com' },
+			body: { permissions: ['log.read'], origin: ADMIN_ORIGIN },
 		});
 		const log = await sys.call('GET', '/v1/admin/messages', { token: String(ticket.json.ticket), origin: ADMIN_ORIGIN });
 		expect(log.json.items).toEqual([expect.objectContaining({ id: res.json.id, status: 'sent' })]);

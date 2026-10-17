@@ -244,11 +244,8 @@ describe('Growth on the real Portal', () => {
 	it('the analytics dashboard reads the totals with a ticket bound to the merchant’s admin page', async () => {
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			token: tokens.server,
-			body: {
-				user: { id: 'u_9', name: 'Ana Admin', email: 'ana@shop.test' },
-				permissions: ['analytics.read'],
-				origin: ADMIN_ORIGIN,
-			},
+			staff: { id: 'u_9', name: 'Ana Admin', email: 'ana@shop.test' },
+			body: { permissions: ['analytics.read'], origin: ADMIN_ORIGIN },
 		});
 		expect(ticket.status).toBe(200);
 		const report = await sys.call('GET', '/v1/admin/analytics?from=2026-10-01&to=2026-10-01', {
@@ -363,11 +360,8 @@ describe('Growth on the real Portal', () => {
 		expect(again.json).toEqual({ ...run.json, cached: true });
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			token: tokens.server,
-			body: {
-				user: { id: 'u_9', name: 'Ana Admin', email: 'ana@shop.test' },
-				permissions: ['seo.check'],
-				origin: ADMIN_ORIGIN,
-			},
+			staff: { id: 'u_9', name: 'Ana Admin', email: 'ana@shop.test' },
+			body: { permissions: ['seo.check'], origin: ADMIN_ORIGIN },
 		});
 		const kept = await sys.call('GET', '/v1/admin/seo/report', { token: ticket.json.ticket, origin: ADMIN_ORIGIN });
 		expect(kept.json.checkedAt).toBe(run.json.checkedAt);

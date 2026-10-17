@@ -18,6 +18,7 @@ import * as notifications from '@ss/product-notifications/product';
 import * as notificationsRoutes from '@ss/product-notifications/routes';
 import * as payments from '@ss/product-payments/product';
 import * as paymentsRoutes from '@ss/product-payments/routes';
+import { staffSignIns } from '@ss/product-accounts/testing';
 import { codeOf, startSystem } from './helpers.js';
 
 const ACTOR = { 'ss-actor-id': 'usr_settings_1', 'ss-actor-name': encodeURIComponent('Zara Qureshi'), 'ss-actor-role': 'Owner' };
@@ -39,7 +40,7 @@ const CASES = [
 		id: 'accounts',
 		product: accounts,
 		routes: accountsRoutes,
-		on: ['phone_code'],
+		on: ['phone_code', 'roles'],
 		setting: 'phone_code.countries',
 		value: ['GB'],
 		list: null,
@@ -131,9 +132,25 @@ describe.each(CASES)('settings API of $id (K1)', ({ id, product, routes, on, set
 		await sys.addProduct(m.merchantId, websiteId, id);
 		await sys.switchFeatures(await sys.adminSession(await sys.owner(), websiteId, id), websiteId, on);
 		const { server } = await sys.tokens(m.merchantId, websiteId, id);
+		// every product but Accounts takes the staff member the harness signs in; Accounts takes a real user of its own
+		/** @type {((who?: { id?: string, name?: string, role?: string, email?: string }) => Promise<string>) | null} */
+		let accountsStaff = null;
+		if (id === 'accounts') {
+			await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId, id), websiteId, `https://${id}.test`);
+			accountsStaff = staffSignIns(/** @type {any} */ (sys.product), {
+				websiteId,
+				merchantId: m.merchantId,
+				domain: `settings-${id}.example.com`,
+				base: `https://${id}.test`,
+			});
+		}
 		/** @param {string} method @param {string} path @param {unknown} [body] */
-		const api = (method, path, body) =>
-			sys.call(method, path, { token: server, headers: ACTOR, ...(body === undefined ? {} : { body }) });
+		const api = async (method, path, body) =>
+			sys.call(method, path, {
+				token: server,
+				headers: accountsStaff ? { 'ss-sign-in': await accountsStaff() } : ACTOR,
+				...(body === undefined ? {} : { body }),
+			});
 
 		// features: read-only, with on/off and the hourly price
 		const features = await api('GET', '/v1/features');
@@ -176,7 +193,9 @@ describe.each(CASES)('settings API of $id (K1)', ({ id, product, routes, on, set
 		);
 		expect(overview.json.recentChanges[0]).toMatchObject({
 			what: 'settings',
-			who: { kind: 'user', id: 'usr_settings_1', name: 'Zara Qureshi', role: 'Owner' },
+			who: accountsStaff
+				? { kind: 'user', name: 'Test Staff', role: 'owner' }
+				: { kind: 'user', id: 'usr_settings_1', name: 'Zara Qureshi', role: 'Owner' },
 		});
 		const reset = await api('DELETE', `/v1/settings/${setting}`);
 		expect(reset.json).toMatchObject({ key: setting, source: 'built-in' });
@@ -223,7 +242,12 @@ describe.each(CASES)('settings API of $id (K1)', ({ id, product, routes, on, set
 		// connections: never the secrets
 		const connections = await api('GET', '/v1/connections');
 		expect(connections.json.connections).toContainEqual(
-			expect.objectContaining({ name: 'database', kind: 'database', state: 'not_connected', last4: '' }),
+			expect.objectContaining({
+				name: 'database',
+				kind: 'database',
+				state: accountsStaff ? 'connected' : 'not_connected',
+				set: Boolean(accountsStaff),
+			}),
 		);
 	});
 });

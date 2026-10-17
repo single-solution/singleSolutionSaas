@@ -59,7 +59,7 @@ describe('visitor calls from the merchant’s server (K3)', () => {
 		expect(sent.status).toBe(201);
 		expect(sent.json).toMatchObject({ id: expect.stringMatching(/^note_/) });
 		expect(sent.headers.get('access-control-allow-origin')).toBeNull();
-		const config = await sys.call('GET', '/v1/widget/config', { token: tokens.server });
+		const config = await sys.call('GET', '/v1/widget/config', { token: tokens.server, bare: true });
 		expect(config.status).toBe(200);
 		expect(config.json).toMatchObject({ features: ['notes'], format: { currencyDisplay: 'code' }, timeZone: 'UTC' });
 		// a server token with an Origin is still refused; a browser token without one too
@@ -111,11 +111,8 @@ describe('counts equal list lengths (K4)', () => {
 		expect(count.json).toEqual({ count: ids.length, capped: false });
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			token: tokens.server,
-			body: {
-				user: { id: 'u_1', name: 'Sam Staff', email: 'sam@calls.example.com' },
-				permissions: ['notes.read'],
-				origin: ADMIN_ORIGIN,
-			},
+			staff: { id: 'u_1', name: 'Sam Staff', email: 'sam@calls.example.com' },
+			body: { permissions: ['notes.read'], origin: ADMIN_ORIGIN },
 		});
 		const admin = await sys.call('GET', '/v1/admin/notes/count', { token: ticket.json.ticket, origin: ADMIN_ORIGIN });
 		expect(admin.json).toEqual({ count: ids.length, capped: false });

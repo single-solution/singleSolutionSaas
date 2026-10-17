@@ -80,7 +80,12 @@ afterAll(async () => {
  * @param {string} domain @param {string} method @param {string} path @param {unknown} [body]
  */
 const serverCall = async (domain, method, path, body) =>
-	sys.call(method, path, { token: stores[domain]?.tokens.server, ...(body === undefined ? {} : { body }) });
+	sys.call(method, path, {
+		token: stores[domain]?.tokens.server,
+		// (a shop page read by the server is a visitor's: no staff member signed in)
+		bare: path.startsWith('/v1/shop/'),
+		...(body === undefined ? {} : { body }),
+	});
 
 /** @param {string} domain @param {string} method @param {string} path @param {unknown} [body] */
 const write = async (domain, method, path, body) => {

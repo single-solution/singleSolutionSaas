@@ -3,7 +3,7 @@
  * while the product is stopped, and ended by regenerating the server token in the Portal.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DAY, codeOf, startSystem } from './helpers.js';
+import { DAY, PASSWORD, codeOf, startSystem } from './helpers.js';
 
 const ADMIN_ORIGIN = 'https://admin.tickets.example.com';
 const USER = { id: 'u_1', name: 'Sam Staff', email: 'sam@tickets.example.com' };
@@ -34,7 +34,7 @@ afterAll(async () => {
 
 /** Ask for a ticket with a server token. @param {string} token @param {string} [origin] */
 const ask = (token, origin = ADMIN_ORIGIN) =>
-	sys.call('POST', '/v1/tickets', { token, body: { user: USER, permissions: ['notes.read'], origin } });
+	sys.call('POST', '/v1/tickets', { token, staff: USER, body: { permissions: ['notes.read'], origin } });
 
 /** The admin widget's call with a ticket (null: no Origin). @param {string} ticket @param {string | null} [origin] */
 const inbox = (ticket, origin = ADMIN_ORIGIN) =>
@@ -99,6 +99,7 @@ describe('tickets', () => {
 			await sys.owner()
 		).post(`/v1/merchants/${m.merchantId}/websites/${websiteId}/tokens/notes/regenerate`, {
 			kind: 'server',
+			password: PASSWORD,
 		});
 		expect(regenerated.status).toBe(200);
 		const ended = await inbox(json.ticket);

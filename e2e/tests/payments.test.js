@@ -122,7 +122,7 @@ describe('Payments on the real Portal', () => {
 		const keys = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/stripe`, {
 			value: STRIPE_KEYS,
 		});
-		expect(keys.json).toMatchObject({ status: 'connected', last4: '6789' });
+		expect(keys.json).toMatchObject({ status: 'connected', set: true });
 		const notifyCookie = await sys.adminSession(await sys.owner(), websiteId, 'notifications');
 		expect(
 			(await sys.dashboard(notifyCookie, 'PUT', `/v1/dashboard/websites/${websiteId}/features`, { on: ['webhooks'] }, NOTIFY))

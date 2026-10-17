@@ -5,6 +5,7 @@
  * pasted Accounts token), Notifications' activity-log copies arriving in Accounts, "delete my account" erased in
  * Notifications through the pasted Notifications token, and the hourly charge.
  */
+import { staffSignIns } from '@ss/product-accounts/testing';
 import { createPublicKey, verify } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -38,6 +39,10 @@ let accountsTokens;
 let notifyTokens;
 /** @type {any} */
 let signedUp;
+/** The sign-in of a staff Owner of the website, once its database is connected. @type {(who?: { id?: string, name?: string, role?: string, email?: string }) => Promise<string>} */
+let staffSignIn;
+/** The headers of a staff member’s call from the website’s server. */
+const asStaff = async () => ({ 'ss-sign-in': await staffSignIn() });
 
 beforeAll(async () => {
 	sys = await startSystem({
@@ -99,6 +104,12 @@ describe('Accounts on the real Portal', () => {
 	it('signs up with email and password through the Portal-issued browser token', async () => {
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);
 		await sys.connectDatabase(cookie, websiteId);
+		staffSignIn = staffSignIns(/** @type {any} */ (sys.product), {
+			websiteId,
+			merchantId: m.merchantId,
+			domain: DOMAIN,
+			base: ACCOUNTS,
+		});
 		const up = await sys.call('POST', '/v1/sign-up/password', {
 			token: accountsTokens.browser,
 			origin: ORIGIN,
@@ -148,7 +159,7 @@ describe('Accounts on the real Portal', () => {
 			NOTIFY,
 		);
 		expect(pasted.json).toMatchObject({ status: 'connected' });
-		expect(await notify.accounts.verify({ websiteId, token: signedUp.signIn })).toEqual({
+		expect(await notify.accounts.verify({ websiteId, token: signedUp.signIn })).toMatchObject({
 			ok: true,
 			user: { id: signedUp.user.id, email: 'reader@example.com', name: 'Rea Der', role: 'customer', permissions: [] },
 		});
@@ -168,11 +179,8 @@ describe('Accounts on the real Portal', () => {
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			base: NOTIFY,
 			token: notifyTokens.server,
-			body: {
-				user: { id: 'u_9', name: 'Sam Staff', email: 'sam@people.example.com' },
-				permissions: ['templates.edit'],
-				origin: ADMIN_ORIGIN,
-			},
+			staff: { id: 'u_9', name: 'Sam Staff', email: 'sam@people.example.com' },
+			body: { permissions: ['templates.edit'], origin: ADMIN_ORIGIN },
 		});
 		const saved = await sys.call('PUT', '/v1/admin/templates', {
 			base: NOTIFY,
@@ -181,7 +189,7 @@ describe('Accounts on the real Portal', () => {
 			body: { key: 'welcome', channel: 'email', subject: 'Hi', text: 'Hello' },
 		});
 		expect(saved.status).toBe(200);
-		const copies = await sys.call('GET', '/v1/activity-copies', { token: accountsTokens.server });
+		const copies = await sys.call('GET', '/v1/activity-copies', { token: accountsTokens.server, headers: await asStaff() });
 		expect(copies.json.items).toEqual([
 			expect.objectContaining({
 				productId: 'notifications',
@@ -193,15 +201,24 @@ describe('Accounts on the real Portal', () => {
 		// the copies carry the label and are read with the activity filters and counts (PLAN 0.8.10 K9, K4)
 		const found = await sys.call('GET', '/v1/activity-copies?q=welcome&productId=notifications&actor=u_9', {
 			token: accountsTokens.server,
+			headers: await asStaff(),
 		});
 		expect(found.json.items).toHaveLength(1);
 		expect(
-			(await sys.call('GET', '/v1/activity-copies?q=nothing-like-it', { token: accountsTokens.server })).json.items,
+			(
+				await sys.call('GET', '/v1/activity-copies?q=nothing-like-it', {
+					token: accountsTokens.server,
+					headers: await asStaff(),
+				})
+			).json.items,
 		).toEqual([]);
-		const copyCount = await sys.call('GET', '/v1/activity-copies/count', { token: accountsTokens.server });
+		const copyCount = await sys.call('GET', '/v1/activity-copies/count', {
+			token: accountsTokens.server,
+			headers: await asStaff(),
+		});
 		expect(copyCount.json).toEqual({ count: copies.json.items.length, capped: false });
-		const users = await sys.call('GET', '/v1/users?limit=100', { token: accountsTokens.server });
-		const userCount = await sys.call('GET', '/v1/users/count', { token: accountsTokens.server });
+		const users = await sys.call('GET', '/v1/users?limit=100', { token: accountsTokens.server, headers: await asStaff() });
+		const userCount = await sys.call('GET', '/v1/users/count', { token: accountsTokens.server, headers: await asStaff() });
 		expect(userCount.json).toEqual({ count: users.json.items.length, capped: false });
 		expect(users.json.items.length).toBeGreaterThan(0);
 
@@ -232,6 +249,7 @@ describe('Accounts on the real Portal', () => {
 		expect(asked.status).toBe(202);
 		const approved = await sys.call('POST', `/v1/users/${signedUp.user.id}/deletion/approve`, {
 			token: accountsTokens.server,
+			headers: await asStaff(),
 			body: {},
 		});
 		expect(approved.json).toEqual({ deleted: true, pending: [] });

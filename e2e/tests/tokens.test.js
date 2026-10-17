@@ -4,7 +4,7 @@
  * Origin, revocation after `token.revoked`, tokens of another product refused).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PRODUCT_URL, codeOf, startSystem } from './helpers.js';
+import { PASSWORD, PRODUCT_URL, codeOf, startSystem } from './helpers.js';
 
 const DOMAIN = 'tokens.example.com';
 const ORIGIN = `https://${DOMAIN}`;
@@ -58,9 +58,16 @@ describe('tokens of a product on a website', () => {
 		const finance = await sys.admin('finance');
 		const base = `/v1/merchants/${m.merchantId}/websites/${websiteId}/tokens`;
 		expect((await finance.client.get(base)).status).toBe(403);
-		expect((await finance.client.post(`${base}/notes/reveal`, {})).status).toBe(403);
-		expect((await finance.client.post(`${base}/notes/regenerate`, { kind: 'server' })).status).toBe(403);
-		const revealed = await m.client.post(`${base}/notes/reveal`, {});
+		expect((await finance.client.post(`${base}/notes/reveal`, { password: PASSWORD })).status).toBe(403);
+		expect((await finance.client.post(`${base}/notes/regenerate`, { kind: 'server', password: PASSWORD })).status).toBe(403);
+		// Support sees the tab, but showing or renewing a server token is the Owner's (and the merchant's, for its own)
+		const support = await sys.admin('support');
+		expect((await support.client.get(base)).status).toBe(200);
+		expect((await support.client.post(`${base}/notes/reveal`, { password: PASSWORD })).status).toBe(403);
+		// and nobody shows one without their password: a session alone (a stolen cookie) shows nothing
+		expect((await m.client.post(`${base}/notes/reveal`, {})).status).toBe(422);
+		expect((await m.client.post(`${base}/notes/reveal`, { password: 'not my password' })).status).toBeGreaterThanOrEqual(400);
+		const revealed = await m.client.post(`${base}/notes/reveal`, { password: PASSWORD });
 		expect(revealed.status).toBe(200);
 		expect(revealed.headers.get('cache-control')).toMatch(/no-store/);
 		expect((await sys.activity('token.revealed')).length).toBeGreaterThan(0);
@@ -114,7 +121,9 @@ describe('tokens of a product on a website', () => {
 		const wrongBrowser = await sys.call('GET', '/v1/widget/config', { token: other.browser, origin: ORIGIN });
 		expect([wrongBrowser.status, codeOf(wrongBrowser)]).toEqual([401, 'invalid_token']);
 		// and the other product takes its own
-		expect((await sys.call('POST', '/v1/tickets', { base: memo.base, token: other.server, body: {} })).status).toBe(422);
+		// (it takes its own token, then wants the signed-in staff member a ticket is for)
+		const takesIt = await sys.call('POST', '/v1/tickets', { base: memo.base, token: other.server, body: {} });
+		expect([takesIt.status, codeOf(takesIt)]).toEqual([403, 'needs_signed_in_staff']);
 		// a token that only looks like one
 		const [head = '', body = ''] = server.split('.');
 		expect((await sys.call('GET', '/v1/notes', { token: `${head}.${body}.AAAA` })).status).toBe(401);
@@ -123,7 +132,7 @@ describe('tokens of a product on a website', () => {
 	it('regenerating the server token revokes the old one at the product after token.revoked', async () => {
 		const before = await sys.tokens(m.merchantId, websiteId);
 		const base = `/v1/merchants/${m.merchantId}/websites/${websiteId}/tokens/notes`;
-		const res = await m.client.post(`${base}/regenerate`, { kind: 'server' });
+		const res = await m.client.post(`${base}/regenerate`, { kind: 'server', password: PASSWORD });
 		expect(res.status).toBe(200);
 		expect(res.json).toMatchObject({ productId: 'notes', kind: 'server', token: expect.any(String) });
 		expect(res.json.token).not.toBe(before.server);
@@ -133,7 +142,7 @@ describe('tokens of a product on a website', () => {
 		const old = await sys.call('GET', '/v1/notes', { token: before.server });
 		expect([old.status, codeOf(old)]).toEqual([401, 'invalid_token']);
 		expect((await sys.call('GET', '/v1/notes', { token: res.json.token })).status).toBe(200);
-		expect((await m.client.post(`${base}/reveal`, {})).json.serverToken).toBe(res.json.token);
+		expect((await m.client.post(`${base}/reveal`, { password: PASSWORD })).json.serverToken).toBe(res.json.token);
 		// the browser token is untouched
 		expect((await sys.tokens(m.merchantId, websiteId)).browser).toBe(before.browser);
 	});

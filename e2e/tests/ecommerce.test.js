@@ -177,10 +177,10 @@ const setUp = async (base, productKey, path, body, method = 'PUT') => {
 
 /** A ticket of the merchant's staff for the admin widgets. @param {string[]} permissions */
 const ticket = async (permissions) => {
-	const answer = await merchantServer('POST', '/v1/tickets', {
-		user: { id: 'u_staff', name: 'Sam Staff', email: 'sam@store.example.com' },
-		permissions,
-		origin: ADMIN_ORIGIN,
+	const answer = await sys.call('POST', '/v1/tickets', {
+		token: tokens.ecommerce?.server,
+		staff: { id: 'u_staff', name: 'Sam Staff', email: 'sam@store.example.com' },
+		body: { permissions, origin: ADMIN_ORIGIN },
 	});
 	return String(answer.json.ticket);
 };
@@ -411,9 +411,9 @@ describe('Ecommerce on the real Portal', () => {
 		expect(activity.json.items[0]).toMatchObject({
 			actor: { kind: 'user', id: 'usr_staff_7', name: 'Alex Morgan', role: 'Packer' },
 		});
-		// without the headers the server is the actor
+		// without a named person the harness's staff Owner is signed in: every move is a signed-in person's
 		const unpacked = await sys.call('POST', `/v1/orders/${codOrderId}/move`, { token: server, body: { to: 'delivered' } });
-		expect(unpacked.json.history.at(-1)).toMatchObject({ to: 'delivered', by: 'Server' });
+		expect(unpacked.json.history.at(-1)).toMatchObject({ to: 'delivered', by: 'Test Staff' });
 		// counts equal the lists (PLAN 0.8.10 K4)
 		for (const list of ['orders', 'products', 'customers', 'returns']) {
 			const items = await sys.call('GET', `/v1/${list}?limit=100`, { token: server });
@@ -452,7 +452,16 @@ describe('Ecommerce on the real Portal', () => {
 			token: staff,
 			origin: ADMIN_ORIGIN,
 			body: { amount: 50_000 },
-			headers: { 'idempotency-key': 'refund-claim-1' },
+			// the widget sends the staff member's sign-in next to the ticket (the store's server handed it over with the ticket):
+			// Ecommerce forwards it, because Payments moves money for a signed-in person, not for a server token
+			headers: {
+				'idempotency-key': 'refund-claim-1',
+				...(await sys.staffIssuer.staffHeaders({
+					websiteId,
+					headers: {},
+					staff: { id: 'u_staff', name: 'Sam Staff', email: 'sam@store.example.com' },
+				})),
+			},
 		});
 		expect(refunded.status).toBe(200);
 		expect(refunded.json).toMatchObject({ status: 'refunded', refundAmount: 50_000 });

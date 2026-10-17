@@ -6,6 +6,7 @@
  * fake in this process), the guest limit lifted while Accounts pauses the Customer role's sign-in (C17), every
  * conversation deleted before going live (C20), and the hourly charge.
  */
+import { staffSignIns } from '@ss/product-accounts/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	createProductInstance as createAccounts,
@@ -142,7 +143,7 @@ describe('Chat on the real Portal', () => {
 		const ai = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/ai`, {
 			value: { provider: 'openai', apiKey: 'sk-merchant-000123', model: 'gpt-4.1-mini' },
 		});
-		expect(ai.json).toMatchObject({ status: 'connected', last4: '0123' });
+		expect(ai.json).toMatchObject({ status: 'connected', set: true });
 		const sent = await visitor('POST', '/v1/chat/messages', { body: { text: 'How fast do you ship?' } });
 		expect(sent.status).toBe(201);
 		const guestKey = String(sent.json.guestKey);
@@ -194,11 +195,8 @@ describe('Chat on the real Portal', () => {
 	it('the merchant’s staff reply in the inbox with a ticket; the visitor sees the reply', async () => {
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			token: chatTokens.server,
-			body: {
-				user: { id: 'u_7', name: 'Sam Staff', email: 'sam@talk.example.com' },
-				permissions: ['inbox.read', 'inbox.reply'],
-				origin: ADMIN_ORIGIN,
-			},
+			staff: { id: 'u_7', name: 'Sam Staff', email: 'sam@talk.example.com' },
+			body: { permissions: ['inbox.read', 'inbox.reply'], origin: ADMIN_ORIGIN },
 		});
 		expect(ticket.status).toBe(200);
 		const auth = { token: String(ticket.json.ticket), origin: ADMIN_ORIGIN };
@@ -232,12 +230,12 @@ describe('Chat on the real Portal', () => {
 		expect(replied.json.message).toMatchObject({ author: 'staff', name: 'Alex Morgan' });
 		const seen = await visitor('GET', '/v1/chat', { headers: signedIn });
 		expect(seen.json.messages.at(-1)).toMatchObject({ author: 'staff', name: 'Alex Morgan', text: 'Your order is packed.' });
-		// without the headers the server is the team
+		// every reply is a signed-in staff member's: the harness's, when no one else is named
 		const team = await sys.call('POST', `/v1/conversations/${conversationId}/messages`, {
 			token: chatTokens.server,
 			body: { text: 'Anything else?' },
 		});
-		expect(team.json.message).toMatchObject({ author: 'staff', name: null });
+		expect(team.json.message).toMatchObject({ author: 'staff', name: 'Test Staff' });
 		const activity = await sys.call('GET', `/v1/activity?target=${conversationId}&actor=usr_staff_42`, {
 			token: chatTokens.server,
 		});
@@ -346,8 +344,24 @@ describe('Chat on the real Portal', () => {
 		);
 		expect(switched.status).toBe(200);
 		/** @param {string} method @param {string} path @param {unknown} [body] */
-		const accounts = (method, path, body) =>
-			sys.call(method, path, { base: ACCOUNTS, token: accountsTokens.server, ...(body === undefined ? {} : { body }) });
+		// (a role is defined by a staff member of the website's Accounts: a real user of it, signed in)
+		const staffSignIn = staffSignIns(/** @type {any} */ (sys.others.accounts), {
+			websiteId,
+			merchantId: m.merchantId,
+			domain: DOMAIN,
+			base: ACCOUNTS,
+		});
+		const accounts = async (
+			/** @type {string} */ method,
+			/** @type {string} */ path,
+			/** @type {unknown} */ body = undefined,
+		) =>
+			sys.call(method, path, {
+				base: ACCOUNTS,
+				token: accountsTokens.server,
+				headers: { 'ss-sign-in': await staffSignIn() },
+				...(body === undefined ? {} : { body }),
+			});
 		const customer = (await accounts('GET', '/v1/roles')).json.items.find((/** @type {any} */ r) => r.key === 'customer');
 		expect((await accounts('PUT', '/v1/roles/customer', { ...customer, signIn: 'paused' })).status).toBe(200);
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);

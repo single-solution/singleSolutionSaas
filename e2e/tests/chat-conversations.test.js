@@ -18,6 +18,7 @@
  * Notifications, and merchants delete one lead or every lead. The AI provider (OpenAI), the email provider (Resend) and the
  * WhatsApp Cloud API (Meta) are fakes in this process; no real network call is made.
  */
+import { staffSignIns } from '@ss/product-accounts/testing';
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -109,6 +110,9 @@ const openai = async (request) => {
 /** @type {import('./helpers.js').System} */
 let sys;
 let websiteId = '';
+let merchantId = '';
+/** The sign-in of a staff Owner of the website's Accounts (a real user of it), made on first use. @type {(() => Promise<string>) | null} */
+let accountsStaff = null;
 /** @type {Record<string, { browser: string, server: string }>} */
 const tokens = {};
 /** @type {Record<string, string>} */
@@ -160,13 +164,24 @@ const setUp = async (productKey, path, body) => {
  * @param {string} productKey @param {string} method @param {string} path @param {unknown} [body]
  * @param {Record<string, string>} [headers]
  */
-const server = (productKey, method, path, body, headers = {}) =>
-	sys.call(method, path, {
+const server = async (productKey, method, path, body, headers = {}) => {
+	// Accounts takes the sign-in of a real staff user of its own (the other products take the harness's staff member)
+	if (productKey === 'accounts' && !headers['ss-sign-in'] && !headers['ss-visitor-ip']) {
+		accountsStaff ??= staffSignIns(/** @type {any} */ (sys.others.accounts), {
+			websiteId,
+			merchantId,
+			domain: DOMAIN,
+			base: ACCOUNTS,
+		});
+		headers = { ...headers, 'ss-sign-in': await accountsStaff() };
+	}
+	return sys.call(method, path, {
 		base: BASES[productKey],
 		token: tokens[productKey]?.server,
 		...(body === undefined ? {} : { body }),
 		headers,
 	});
+};
 
 /**
  * Save Ecommerce's policies list (E27) through its server API.
@@ -233,6 +248,7 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		for (const base of [CHAT, ACCOUNTS, NOTIFY, SHOP]) await sys.connect({ base });
 		const m = await sys.merchant('lamps@shop.test', [DOMAIN]);
 		websiteId = m.websiteIds[0] ?? '';
+		merchantId = m.merchantId;
 		for (const id of ['chat', 'accounts', 'notifications', 'ecommerce']) {
 			await sys.addProduct(m.merchantId, websiteId, id);
 			tokens[id] = await sys.tokens(m.merchantId, websiteId, id);
@@ -527,9 +543,12 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		await guest('POST', '/v1/chat/messages', { text: 'one' });
 		await guest('POST', '/v1/chat/messages', { text: 'two' });
 		const alerts = mails.slice(mailsBefore).filter((mail) => mail.subject === 'New chat message');
+		// (the staff Owner the server calls sign in as holds every permission: alerted like the other staff)
 		expect(alerts.map((mail) => mail.to[0]).sort()).toEqual([
 			'agent@lamps.example.com',
 			'agent@lamps.example.com',
+			'staff@shop.example.com',
+			'staff@shop.example.com',
 			'team@lamps.example.com',
 			'team@lamps.example.com',
 		]);
@@ -567,7 +586,11 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		);
 		// `Chat needs you` to the same recipients through the real Notifications
 		const needsYou = mails.slice(mailsBefore).filter((mail) => mail.subject === 'Chat needs you');
-		expect(needsYou.map((mail) => mail.to[0]).sort()).toEqual(['agent@lamps.example.com', 'team@lamps.example.com']);
+		expect(needsYou.map((mail) => mail.to[0]).sort()).toEqual([
+			'agent@lamps.example.com',
+			'staff@shop.example.com',
+			'team@lamps.example.com',
+		]);
 		expect(needsYou[0].text).toContain(`${ADMIN_ORIGIN}/inbox?conversation=${sent.json.chat.conversation.id}`);
 		const needsYouPhoned = whatsapp
 			.slice(whatsappBefore)

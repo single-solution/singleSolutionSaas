@@ -14,7 +14,7 @@
 import { randomBytes } from 'node:crypto';
 import { MongoClient } from 'mongodb';
 import { createMongoStore, createProduct } from '@ss/app-kit';
-import { createNetwork, productKeyOf } from '@ss/app-kit/testing';
+import { createAccountsDouble, createNetwork, productKeyOf } from '@ss/app-kit/testing';
 import {
 	closeMongoClients,
 	commerceModule,
@@ -40,6 +40,19 @@ export const HOUR = 3_600_000;
 export const DAY = 24 * HOUR;
 const PORTAL_KEY = 'e2e-portal-encryption-key-0123456789abcdef';
 const PRODUCT_KEY = 'e2e-notes-encryption-key-0123456789abcdef';
+
+/**
+ * The website of a server token (its claims, unverified: the product verifies them), else null.
+ * @param {string | undefined} token
+ */
+const serverTokenWebsite = (token) => {
+	try {
+		const claims = JSON.parse(Buffer.from(String(token).split('.')[1] ?? '', 'base64url').toString('utf8'));
+		return claims?.kind === 'server' && typeof claims.websiteId === 'string' ? claims.websiteId : null;
+	} catch {
+		return null;
+	}
+};
 
 /** @typedef {(request: Request) => Promise<Response>} Handler */
 /** @typedef {{ status: number, headers: Headers, json: any }} Answer */
@@ -133,6 +146,12 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	/** @type {Record<string, Handler>} */
 	const handlers = { ...unit.handlers };
 	const network = createNetwork(handlers);
+	// the staff members' sign-ins: a product's staff routes need the server token AND the verified sign-in of a person
+	// (the kit's `staff.js`). Every product but Accounts checks them against this issuer's key (`ownSignIns`), so a test
+	// signs a person in without running Accounts; Accounts itself checks its own users (a test signs in a real user).
+	const staffIssuer = createAccountsDouble({ url: 'https://staff.test', now: clock.now });
+	/** The products whose staff sign-ins this issuer makes (every one but Accounts). @type {Set<string>} */
+	const staffBases = new Set();
 	/** @type {Array<() => Promise<unknown>>} */
 	const queued = [];
 	/** Run the queued work; the clock moves one second unless `tick` is false (calls inside one rate window). */
@@ -166,7 +185,9 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	// ---------------------------------------------------------------------------------------------- the product
 	const productDb = database(productManifest.id);
 	const productStore = createMongoStore({ db: productDb, now: clock.now });
+	if (productManifest.id !== 'accounts') staffBases.add(productUrl);
 	const product = unit.createProductInstance({
+		ownSignIns: staffIssuer.ownSignIns,
 		config: { mongodbUri: '', connectSecret: CONNECT_SECRET, encryptionKey: PRODUCT_KEY },
 		store: productStore,
 		fetch: network.fetch,
@@ -181,7 +202,9 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	/** The other products of this system, by product id. @type {Record<string, any>} */
 	const others = {};
 	for (const extra of extras) {
+		if (extra.manifest.id !== 'accounts') staffBases.add(extra.url);
 		const other = extra.createProductInstance({
+			ownSignIns: staffIssuer.ownSignIns,
 			config: { mongodbUri: '', connectSecret: CONNECT_SECRET, encryptionKey: PRODUCT_KEY },
 			store: createMongoStore({ db: database(extra.manifest.id), now: clock.now }),
 			fetch: network.fetch,
@@ -218,16 +241,28 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	 * @param {string} method
 	 * @param {string} path
 	 * @param {{ token?: string, origin?: string, body?: unknown, form?: Record<string, string>, cookie?: string, base?: string,
-	 *   headers?: Record<string, string>, tick?: boolean }} [init] `form`: an HTML form post
-	 *   (`application/x-www-form-urlencoded`); `tick: false` keeps the clock still (many calls inside one rate window)
+	 *   headers?: Record<string, string>, tick?: boolean, bare?: boolean, staff?: Record<string, any> }} [init] `form`: an HTML
+	 *   form post (`application/x-www-form-urlencoded`); `tick: false` keeps the clock still (many calls inside one rate
+	 *   window); a call with a server token is the website's server with a staff Owner signed in, unless `bare: true` (the
+	 *   server token alone) or `staff` names who
 	 * @returns {Promise<Answer>}
 	 */
 	const call = async (
 		method,
 		path,
-		{ token, origin, body, form, cookie, base = productUrl, headers = {}, tick = true } = {},
+		{ token, origin, body, form, cookie, base = productUrl, headers = {}, tick = true, bare = false, staff } = {},
 	) => {
 		const handler = /** @type {Handler} */ (handlers[base]);
+		const websiteId = serverTokenWebsite(token);
+		if (
+			websiteId &&
+			!bare &&
+			staffBases.has(base) &&
+			headers['ss-sign-in'] === undefined &&
+			headers['ss-visitor-ip'] === undefined
+		)
+			// eslint-disable-next-line no-param-reassign -- the harness signs the staff member in
+			headers = await staffIssuer.staffHeaders({ websiteId, headers, ...(staff ? { staff } : {}) });
 		const response = await handler(
 			new Request(`${base}${path}`, {
 				method,
@@ -372,7 +407,8 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 		const base = `/v1/merchants/${merchantId}/websites/${websiteId}/tokens`;
 		const list = await by.get(base);
 		const item = list.json.items.find((/** @type {{ productId: string }} */ i) => i.productId === productId);
-		const revealed = await by.post(`${base}/${productId}/reveal`, {});
+		// (showing a server token is confirmed with the person's password)
+		const revealed = await by.post(`${base}/${productId}/reveal`, { password: PASSWORD });
 		return { browser: String(item.browserToken), server: String(revealed.json.serverToken) };
 	};
 
@@ -465,6 +501,7 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	return {
 		clock,
 		api,
+		staffIssuer,
 		productDb,
 		entries,
 		product,

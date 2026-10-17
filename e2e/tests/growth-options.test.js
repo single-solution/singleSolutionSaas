@@ -258,11 +258,8 @@ describe('Growth options with the real page script (PLAN 0.8.10 G1–G7)', () =>
 		// the analytics dashboard's ticket reads sessions, live visitors, the journey and the visit's events
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			token: tokens.server,
-			body: {
-				user: { id: 'u_9', name: 'Ana Admin', email: 'ana@shop.test' },
-				permissions: ['analytics.read'],
-				origin: ADMIN_ORIGIN,
-			},
+			staff: { id: 'u_9', name: 'Ana Admin', email: 'ana@shop.test' },
+			body: { permissions: ['analytics.read'], origin: ADMIN_ORIGIN },
 		});
 		const report = await sys.call('GET', '/v1/admin/analytics', { token: ticket.json.ticket, origin: ADMIN_ORIGIN });
 		expect(report.json).toMatchObject({
@@ -293,7 +290,7 @@ describe('Growth options with the real page script (PLAN 0.8.10 G1–G7)', () =>
 			linkUrl: null,
 			dismissible: true,
 		});
-		const hidden = await sys.call('GET', '/v1/notice?path=/checkout/pay', { token: tokens.server });
+		const hidden = await sys.call('GET', '/v1/notice?path=/checkout/pay', { token: tokens.server, bare: true });
 		expect(hidden.json).toBeNull();
 		const checkout = openPage('/checkout/pay');
 		await checkout.page.ready;

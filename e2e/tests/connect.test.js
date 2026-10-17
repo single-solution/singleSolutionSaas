@@ -99,11 +99,8 @@ describe('connecting a product', () => {
 		// the product still takes the same tokens and keeps its switches
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			token: before.server,
-			body: {
-				user: { id: 'u1', name: 'Sam', email: 'sam@shop.test' },
-				permissions: ['notes.read'],
-				origin: 'https://admin.reconnect.example.com',
-			},
+			staff: { id: 'u1', name: 'Sam', email: 'sam@shop.test' },
+			body: { permissions: ['notes.read'], origin: 'https://admin.reconnect.example.com' },
 		});
 		expect(ticket.status).toBe(200);
 		expect(await sys.product.featuresOn(websiteId)).toEqual(['notes']);

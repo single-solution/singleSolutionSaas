@@ -12,6 +12,7 @@
  * REAL Portal with the real Accounts, Payments and Notifications next to it; the email provider (Resend), the
  * merchant's S3 bucket and the shop's own site (its business.json) are fakes in this process.
  */
+import { staffSignIns } from '@ss/product-accounts/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	createProductInstance as createAccounts,
@@ -142,6 +143,19 @@ const storeSite = async (request) =>
 /** @type {import('./helpers.js').System} */
 let sys;
 let websiteId = '';
+let merchantId = '';
+/** The sign-in of a staff Owner of the website's Accounts (a real user of it), made on first use. @type {(() => Promise<string>) | null} */
+let accountsStaff = null;
+/** The headers of a call to Accounts' staff routes: a real staff user of its own signed in. */
+const accountsHeaders = async () => {
+	accountsStaff ??= staffSignIns(/** @type {any} */ (sys.others.accounts), {
+		websiteId,
+		merchantId,
+		domain: DOMAIN,
+		base: ACCOUNTS,
+	});
+	return { 'ss-sign-in': await accountsStaff() };
+};
 /** @type {Record<string, { browser: string, server: string }>} */
 const tokens = {};
 /** Records the tests share. @type {Record<string, any>} */
@@ -202,7 +216,12 @@ const write = async (method, path, body) => {
 const configureOn = async (base, productId, values) => {
 	for (const [key, value] of Object.entries(values)) {
 		const path = key.startsWith('list.') ? `/v1/lists/${key.slice(5)}` : `/v1/settings/${key}`;
-		const saved = await sys.call('PUT', path, { base, token: tokens[productId]?.server, body: { value } });
+		const saved = await sys.call('PUT', path, {
+			base,
+			token: tokens[productId]?.server,
+			...(productId === 'accounts' ? { headers: await accountsHeaders() } : {}),
+			body: { value },
+		});
 		expect(saved.status, `${productId} ${key}: ${JSON.stringify(saved.json)}`).toBeLessThan(300);
 	}
 };
@@ -229,6 +248,7 @@ const accountsUser = async (user) => {
 	const made = await sys.call('POST', '/v1/users', {
 		base: ACCOUNTS,
 		token: tokens.accounts?.server,
+		headers: await accountsHeaders(),
 		body: { ...user, password: PASSWORD },
 	});
 	expect(made.status, JSON.stringify(made.json)).toBe(201);
@@ -311,6 +331,7 @@ beforeAll(async () => {
 	for (const base of [ACCOUNTS, PAYMENTS, NOTIFY]) await sys.connect({ base });
 	const m = await sys.merchant('owner@shop.test', [DOMAIN]);
 	websiteId = m.websiteIds[0] ?? '';
+	merchantId = m.merchantId;
 	for (const id of ['ecommerce', 'accounts', 'payments', 'notifications']) {
 		await sys.addProduct(m.merchantId, websiteId, id);
 		tokens[id] = await sys.tokens(m.merchantId, websiteId, id);
@@ -329,6 +350,7 @@ beforeAll(async () => {
 	const role = await sys.call('PUT', '/v1/roles/member', {
 		base: ACCOUNTS,
 		token: tokens.accounts?.server,
+		headers: await accountsHeaders(),
 		body: { name: 'Member', permissions: ['site:discount'] },
 	});
 	expect(role.status, JSON.stringify(role.json)).toBe(200);

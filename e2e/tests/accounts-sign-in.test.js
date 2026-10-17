@@ -11,6 +11,7 @@ import { JSDOM } from 'jsdom';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createProductInstance, manifest, strings } from '@ss/product-accounts/product';
 import { createRoutes } from '@ss/product-accounts/routes';
+import { staffSignIns } from '@ss/product-accounts/testing';
 import { startWidget } from '@ss/product-accounts/widget';
 import { codeOf, startSystem } from './helpers.js';
 
@@ -95,11 +96,22 @@ const submit = async (win, node) => {
 	await settle();
 };
 
-/** A server-token call, as a visitor (K3) or as an acting member of staff (K2). */
+/** The sign-in of a staff Owner of the website (a user of Accounts with a session). @type {(who?: { id?: string, name?: string, role?: string, email?: string }) => Promise<string>} */
+let staffSignIn;
+
+/** A server-token call, as a visitor (K3) or as the signed-in member of staff (K2: the staff routes need their sign-in). */
 const server = {
 	/** @param {string} method @param {string} path @param {unknown} [body] @param {Record<string, string>} [headers] */
-	call: (method, path, body, headers = {}) =>
-		sys.call(method, path, { token: tokens.server, ...(body === undefined ? {} : { body }), headers }),
+	call: async (method, path, body, headers = {}) =>
+		sys.call(method, path, {
+			token: tokens.server,
+			...(body === undefined ? {} : { body }),
+			headers:
+				headers['ss-visitor-ip'] || headers['ss-sign-in']
+					? headers
+					: // (a user an older test named by `ss-actor-id` is signed in as themselves)
+						{ ...headers, 'ss-sign-in': await staffSignIn(headers['ss-actor-id'] ? { id: headers['ss-actor-id'] } : {}) },
+		}),
 };
 
 /** The users in the merchant database (the importer writes records there directly). */
@@ -123,6 +135,12 @@ beforeAll(async () => {
 		'role_requests',
 	]);
 	await sys.connectDatabase(cookie, websiteId);
+	staffSignIn = staffSignIns(/** @type {any} */ (sys.product), {
+		websiteId,
+		merchantId: m.merchantId,
+		domain: DOMAIN,
+		base: ACCOUNTS,
+	});
 	for (const [key, value] of /** @type {const} */ ([
 		['phone.defaultCallingCode', '+44'],
 		['phone.trunkPrefix', '0'],
@@ -204,7 +222,10 @@ describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 	});
 
 	it('a staff sign-in code and a setup link, issued through the server, work in the widget', async () => {
-		const owner = (await server.call('GET', '/v1/users?roles=owner')).json.items[0];
+		// (the staff Owner the calls sign in as is an Owner too: Olivia is the one with this address)
+		const owner = (await server.call('GET', '/v1/users?roles=owner')).json.items.find(
+			(/** @type {any} */ user) => user.email === 'olivia@members.example.com',
+		);
 		const actor = { 'ss-actor-id': owner.id, 'ss-actor-name': 'Olivia' };
 		const customer = await server.call('POST', '/v1/users', { name: 'Kai', phone: '07700 900233' }, actor);
 		const issued = await server.call('POST', `/v1/users/${customer.json.id}/sign-in-code`, undefined, actor);
@@ -258,11 +279,8 @@ describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 		await ask(strings['request.alreadyRequested']);
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			token: tokens.server,
-			body: {
-				user: { id: 'staff_1', name: 'Sam', email: 'sam@members.example.com' },
-				permissions: ['users.manage'],
-				origin: ADMIN_ORIGIN,
-			},
+			headers: { 'ss-sign-in': await staffSignIn({ id: 'staff_1', name: 'Sam', email: 'sam@members.example.com' }) },
+			body: { permissions: ['users.manage'], origin: ADMIN_ORIGIN },
 		});
 		const invited = await sys.call('POST', `/v1/admin/role-requests/${pending.json.items[0].id}/invite`, {
 			token: ticket.json.ticket,
@@ -299,11 +317,8 @@ describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 		expect((await server.call('PUT', '/v1/settings/role_requests.revealStatus', { value: true })).status).toBe(200);
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			token: tokens.server,
-			body: {
-				user: { id: 'staff_2', name: 'Sam', email: 'sam@members.example.com' },
-				permissions: ['users.manage'],
-				origin: ADMIN_ORIGIN,
-			},
+			headers: { 'ss-sign-in': await staffSignIn({ id: 'staff_2', name: 'Sam', email: 'sam@members.example.com' }) },
+			body: { permissions: ['users.manage'], origin: ADMIN_ORIGIN },
 		});
 		/** @param {string} method @param {string} path */
 		const asStaff = (method, path) => sys.call(method, path, { token: ticket.json.ticket, origin: ADMIN_ORIGIN });
@@ -342,7 +357,10 @@ describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 	});
 
 	it('the guards refuse through the server and a ticket', async () => {
-		const owner = (await server.call('GET', '/v1/users?roles=owner')).json.items[0];
+		// (the staff Owner the calls sign in as is an Owner too: Olivia is the one with this address)
+		const owner = (await server.call('GET', '/v1/users?roles=owner')).json.items.find(
+			(/** @type {any} */ user) => user.email === 'olivia@members.example.com',
+		);
 		const manager = await server.call('POST', '/v1/users', {
 			name: 'Mia',
 			email: 'mia@members.example.com',
@@ -356,11 +374,8 @@ describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 		expect(codeOf(last)).toBe('forbidden');
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			token: tokens.server,
-			body: {
-				user: { id: manager.json.id, name: 'Mia', email: 'mia@members.example.com' },
-				permissions: ['users.manage'],
-				origin: ADMIN_ORIGIN,
-			},
+			headers: { 'ss-sign-in': await staffSignIn({ id: manager.json.id }) },
+			body: { permissions: ['users.manage'], origin: ADMIN_ORIGIN },
 		});
 		const viaTicket = await sys.call('DELETE', `/v1/admin/users/${owner.id}`, {
 			token: ticket.json.ticket,
@@ -431,7 +446,10 @@ describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 	});
 
 	it('an imported two-step sign-in: an old recovery code works once', async () => {
-		const owner = (await server.call('GET', '/v1/users?roles=owner')).json.items[0];
+		// (the staff Owner the calls sign in as is an Owner too: Olivia is the one with this address)
+		const owner = (await server.call('GET', '/v1/users?roles=owner')).json.items.find(
+			(/** @type {any} */ user) => user.email === 'olivia@members.example.com',
+		);
 		const hashes = ['ABCDE-FGHJK'].map((code) =>
 			createHash('sha256')
 				.update(`recovery:${code.replace('-', '')}`)
