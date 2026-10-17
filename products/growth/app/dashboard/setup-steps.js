@@ -37,15 +37,6 @@ export const SETUP = Object.freeze([
 		action: 'Add id',
 	},
 	{
-		key: 'privacy-link',
-		when: ['consent_banner'],
-		setting: 'consent_banner.privacyUrl',
-		label: 'Link your privacy policy',
-		why: 'The consent banner sends visitors to your privacy policy, so they know what they agree to.',
-		action: 'Set link',
-		detail: (/** @type {unknown} */ value) => String(value ?? ''),
-	},
-	{
 		key: 'indexnow-key',
 		when: ['indexnow'],
 		setting: 'indexnow.key',

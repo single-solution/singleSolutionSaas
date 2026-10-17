@@ -4,7 +4,7 @@
  * `openapi.json` is generated from these definitions (`ss app assets`), so `method`, `path`, `auth`, `feature` and
  * `permission` stay string literals. Nothing runs on a timer: events are written as they arrive, the SEO checklist and
  * IndexNow run when the merchant asks, redirect rules change when staff change them. Days (daily totals, analytics
- * ranges) are days of the website's business time zone (business.json `timeZone`, UTC when missing; PLAN 0.8.10 K8).
+ * ranges) are days of the website's business time zone (business `timeZone`, UTC when missing; PLAN 0.8.10 K8).
  * Public entry `./routes` of this package: `product.handler(createRoutes(product))`.
  * @module
  */
@@ -60,7 +60,7 @@ export const createRoutes = (product) => {
 	const storeOf = async (ctx) => createStore(await ctx.data(), { merchantId: String(ctx.merchantId) });
 
 	/**
-	 * The website's business time zone (business.json `timeZone`, else UTC): the zone of every day Growth counts.
+	 * The website's business time zone (business `timeZone`, else UTC): the zone of every day Growth counts.
 	 * @param {any} ctx
 	 */
 	const timeZoneOf = async (ctx) => (await product.business(ctx.websiteId)).timeZone ?? 'UTC';

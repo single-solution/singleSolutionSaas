@@ -218,10 +218,11 @@ export const adminSettings = (on, values, domain) => {
 /**
  * The page script's settings; with `admin` (the admin widgets' config, PLAN 0.4.5) also {@link adminSettings}.
  * @param {{ on: ReadonlyArray<string>, values: FeatureValues, now: number, admin?: { domain: string } | null,
- *   lists?: PageLists, timeZone?: string }} input `lists`: the merchant's lists (consent categories …); `timeZone`: the
- *   business time zone (announcement times are on its clock)
+ *   lists?: PageLists, timeZone?: string, privacyUrl?: string }} input `lists`: the merchant's lists (consent categories
+ *   …); `timeZone`: the business time zone (announcement times are on its clock); `privacyUrl`: the website's privacy
+ *   page from the Portal's website settings (an https address or a path; empty: none)
  */
-export const widgetSettings = ({ on, values, now, admin = null, lists = {}, timeZone = 'UTC' }) => {
+export const widgetSettings = ({ on, values, now, admin = null, lists = {}, timeZone = 'UTC', privacyUrl = '' }) => {
 	const analytics = values.visitor_analytics ?? {};
 	const categories = lists.consent_categories ?? readList('consent_categories', undefined);
 	return {
@@ -232,7 +233,8 @@ export const widgetSettings = ({ on, values, now, admin = null, lists = {}, time
 			position: BANNER_POSITIONS.includes(String(values.consent_banner?.position))
 				? String(values.consent_banner?.position)
 				: 'bottom',
-			privacyUrl: on.includes('consent_banner') ? linkOf(text(values, 'consent_banner', 'privacyUrl')) : null,
+			// the website's privacy page (Website settings › Domains, pages and legal), set once in the Portal
+			privacyUrl: on.includes('consent_banner') ? linkOf(privacyUrl) : null,
 			// G6: a kept choice is asked again after the merchant's months (also with their own consent tool)
 			askAgainMonths: consentMonthsOf(values.consent_banner?.askAgainMonths),
 			// G3: the merchant's categories (their scripts go with the tags)

@@ -573,10 +573,11 @@ describe('page script settings', () => {
 		const settings = widgetSettings({
 			on: ['consent_banner', 'visitor_analytics', 'notice_bar'],
 			values: {
-				consent_banner: { position: 'top', privacyUrl: '/privacy' },
+				consent_banner: { position: 'top' },
 				visitor_analytics: { requireConsent: false },
 			},
 			now: NOW,
+			privacyUrl: '/privacy',
 			lists: {
 				announcements: [
 					{

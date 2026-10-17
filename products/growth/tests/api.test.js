@@ -1,3 +1,4 @@
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AI_TRAINING_CRAWLERS } from '../core/seo.js';
 import { ADMIN_ORIGIN, ALL, BASE, DOMAIN, ORIGIN, dailyRows, setup } from './helpers.js';
@@ -284,12 +285,21 @@ describe('events and totals', () => {
 	});
 });
 
+/** The website's settings in the Portal: its name and the time zone, Tokyo. @param {string} websiteId @param {Record<string, any>} [format] */
+const TOKYO = (websiteId, format = {}) => {
+	const empty = emptyWebsiteSettings(websiteId);
+	return {
+		business: { ...empty.business, name: 'Shop' },
+		region: { ...empty.region, timeZone: 'Asia/Tokyo', format: { ...empty.region.format, ...format } },
+	};
+};
+
 describe('the widget config', () => {
 	it('gives the page script the switched-on tags, consent and the announcements while their times say so (G4)', async () => {
 		await env.setting('meta_pixel', 'pixelId', '1234567890');
 		await env.setting('google_tags', 'ga4Id', 'G-ABC123');
 		await env.setting('google_tags', 'gtmId', 'not-an-id');
-		// times on the business time zone's clock (UTC here, without a time zone in business.json)
+		// times on the business time zone's clock (UTC here: the Portal holds no settings yet)
 		const saved = await env.call('PUT', '/v1/lists/announcements', {
 			token: env.server,
 			body: {
@@ -595,19 +605,25 @@ describe('store conversion kit (PLAN 0.8.10 K2–K9)', () => {
 		kit = await setup({ start: Date.parse('2026-10-01T20:00:00Z') });
 		await kit.switchOn(ALL);
 		await kit.connectDatabase();
-		kit.web.pages['/.well-known/business.json'] = {
-			status: 200,
-			body: JSON.stringify({ name: 'Shop', timeZone: 'Asia/Tokyo' }),
-		};
-		const refreshed = await kit.dashboard(
-			await kit.adminSession(),
-			'POST',
-			`/v1/dashboard/websites/${kit.websiteId}/business/refresh`,
-		);
-		expect((await refreshed.json()).business.timeZone).toBe('Asia/Tokyo');
+		// the website's time zone is set once, in the Portal
+		await kit.setWebsite(TOKYO(kit.websiteId));
+		expect((await kit.product.business(kit.websiteId)).timeZone).toBe('Asia/Tokyo');
 	});
 	afterAll(async () => {
 		await kit.close();
+	});
+
+	it('links the consent banner to the privacy page the merchant set once in the Portal; the banner has no setting for it', async () => {
+		const empty = emptyWebsiteSettings(kit.websiteId);
+		await kit.setWebsite({
+			...TOKYO(kit.websiteId),
+			pages: { ...empty.pages, privacy: 'https://shop.example.com/privacy' },
+		});
+		const config = await (await kit.call('GET', '/v1/widget/config', { token: kit.browser, origin: ORIGIN })).json();
+		expect(config.settings.consent.privacyUrl).toBe('https://shop.example.com/privacy');
+		const settings = await (await kit.call('GET', '/v1/settings', { token: kit.server })).json();
+		const banner = settings.features.find((/** @type {any} */ feature) => feature.key === 'consent_banner');
+		expect(Object.keys(banner.schema.properties)).toEqual(['position', 'askAgainMonths']);
 	});
 
 	it('counts the daily totals and the analytics days in the business time zone (K8)', async () => {
@@ -704,18 +720,25 @@ describe('store conversion kit (PLAN 0.8.10 K2–K9)', () => {
 		});
 		expect(forged.status).toBe(403);
 		expect(await codeOf(forged)).toBe('needs_signed_in_staff');
-		const format = await kit.call('PUT', '/v1/format', {
+		// a change by a signed-in staff member is recorded with that person
+		const saved = await kit.call('PUT', '/v1/settings/consent_banner.position', {
 			token: kit.server,
-			body: {
+			body: { value: 'top' },
+			headers: { 'ss-actor-id': 'u_7', 'ss-actor-name': encodeURIComponent('Alex Morgan'), 'ss-actor-role': 'Manager' },
+		});
+		expect(saved.status).toBe(200);
+		// the Format is the Portal's: a server cannot save it, the merchant saves it there
+		const refused = await kit.call('PUT', '/v1/format', { token: kit.server, body: { wholeUnits: true } });
+		expect(refused.status).toBe(409);
+		await kit.setWebsite(
+			TOKYO(kit.websiteId, {
 				locale: 'en-GB',
 				currencyDisplay: 'symbol',
 				currencySymbols: { USD: 'US$' },
 				wholeUnits: true,
 				times: 'business',
-			},
-			headers: { 'ss-actor-id': 'u_7', 'ss-actor-name': encodeURIComponent('Alex Morgan'), 'ss-actor-role': 'Manager' },
-		});
-		expect(format.status).toBe(200);
+			}),
+		);
 		const overview = await (
 			await kit.dashboard(await kit.adminSession(), 'GET', `/v1/dashboard/websites/${kit.websiteId}/overview`)
 		).json();

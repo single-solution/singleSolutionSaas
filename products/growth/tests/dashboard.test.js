@@ -61,7 +61,6 @@ const settingsAnswer = (/** @type {string[]} */ on) => ({
 	})),
 });
 
-const THEME = { colors: {}, fontFamily: 'inherit', radius: 8, mode: 'auto', customCss: '' };
 const FORMAT = { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' };
 
 /** The writes the dashboard made. @type {Array<{ path: string, body: any }>} */
@@ -79,14 +78,18 @@ const serve = (on) =>
 			const base = `/v1/dashboard/websites/${WEBSITE}`;
 			const body =
 				path === '/v1/dashboard/defaults'
-					? { ...settingsAnswer(on), texts: [], theme: { theme: THEME }, format: { format: FORMAT }, recentChanges: [] }
+					? { ...settingsAnswer(on), texts: [], recentChanges: [] }
 					: path === `${base}/overview`
 						? {
 								website: { websiteId: WEBSITE, domain: DOMAIN, merchantId: 'm_1', merchantName: 'Merchant' },
 								status: { status: 'active', graceEndsAt: null },
 								featuresOn: on,
 								todayMillicredits: 0,
-								checklist: { connections: [], widget: null, business: { found: true } },
+								checklist: {
+									connections: [],
+									widget: null,
+									website: { version: 1, requires: ['pages.privacy'], missing: [] },
+								},
 								recentChanges: [],
 							}
 						: path.startsWith(`${base}/lists/`)
@@ -95,11 +98,9 @@ const serve = (on) =>
 								? settingsAnswer(on)
 								: path === `${base}/texts`
 									? { texts: [] }
-									: path === `${base}/theme`
-										? { theme: THEME }
-										: path === `${base}/format`
-											? { format: FORMAT }
-											: null;
+									: path === `${base}/format`
+										? { format: FORMAT }
+										: null;
 			return new Response(JSON.stringify(body), { status: body ? 200 : 404 });
 		}),
 	);
@@ -111,6 +112,7 @@ const settle = async () => {
 
 const props = {
 	websiteId: WEBSITE,
+	merchantId: 'm_1',
 	domain: DOMAIN,
 	who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Merchant' }),
 	support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] },

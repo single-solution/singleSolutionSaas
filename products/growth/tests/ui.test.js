@@ -59,6 +59,7 @@ const configOf = (features, values = {}, look = {}) => ({
 		on: features,
 		values: { searches_404s: { searchParams: searchesSchema.properties.searchParams.default }, ...values },
 		now: NOW,
+		privacyUrl: '/privacy',
 		...(look.lists ? { lists: look.lists } : {}),
 	}),
 });
@@ -186,7 +187,6 @@ describe('the page script', () => {
 							'searches_404s',
 						],
 						{
-							consent_banner: { privacyUrl: '/privacy' },
 							meta_pixel: { pixelId: '1234567' },
 							google_tags: { ga4Id: 'G-ABCD12', adsId: 'AW-12345', gtmId: 'GTM-ABCD1' },
 							tiktok_pixel: { pixelId: 'CABCDEFGHIJ12' },

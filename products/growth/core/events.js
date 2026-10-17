@@ -6,7 +6,7 @@
  *
  * Every kept event becomes a raw event (removed by the database expiry index after the retention) and increments of
  * the daily totals (kept forever): `{ day, metric, key, count, sum }`, where `day` is the day in the website's business
- * time zone (business.json `timeZone`, UTC when missing; PLAN 0.8.10 K8).
+ * time zone (business `timeZone`, UTC when missing; PLAN 0.8.10 K8).
  *
  * With the `detail` setting `sessions` (PLAN 0.8.10 G3), events also carry the tab's random session id (never a
  * cross-site id), the browser and system family and the city of the host's header; a page view says which page of the
@@ -511,7 +511,7 @@ export const checkBatch = (body, { on, ...context }) => {
 /**
  * The day of a time in the business time zone, `YYYY-MM-DD`: the key of the daily totals (PLAN 0.8.10 K8, always).
  * @param {number} at
- * @param {string | null | undefined} timeZone the business.json time zone (UTC when missing or unknown)
+ * @param {string | null | undefined} timeZone the business time zone (UTC when missing or unknown)
  */
 export const dayOf = (at, timeZone) => zonedDay(at, timeZone);
 

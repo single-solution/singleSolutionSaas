@@ -9,6 +9,7 @@
 	"widgetScriptUrl": "/widget.js",
 	"widgetScriptLoading": "blocking",
 	"docsUrl": "/docs",
+	"websiteSettings": { "requires": ["pages.privacy"] },
 	"features": [
 		{
 			"key": "meta_pixel",

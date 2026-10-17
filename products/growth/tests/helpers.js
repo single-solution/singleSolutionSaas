@@ -334,6 +334,16 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		flush: async () => {
 			while (tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();
 		},
+		/**
+		 * The merchant saves website settings in the Portal (the business facts, the Format, the time zone …): the product
+		 * is told and fetches them.
+		 * @param {Parameters<typeof portal.setWebsiteSettings>[1]} sections
+		 */
+		setWebsite: async (sections) => {
+			t += 1000; // a second notice at the same second would read as a replay
+			await portal.saveWebsiteSettings(websiteId, sections);
+			while (tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();
+		},
 		now,
 		/** @param {number} ms */
 		advance: (ms) => {

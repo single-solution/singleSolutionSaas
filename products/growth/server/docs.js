@@ -1,6 +1,6 @@
 /**
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.9): the kit's page (`renderDocsPage`: the intro, the localhost note, the
- * kit's routes for your server, the business.json template and the API reference from `openapi.json`) around Growth's
+ * kit's routes for your server, the website settings note and the API reference from `openapi.json`) around Growth's
  * own sections: the page script, consent and Google Consent Mode, privacy and storage, the shop events, searches, 404s
  * and Web Vitals, robots.txt and verification, IndexNow, the SEO checklist, redirects, the notice bar, the features
  * (`docsFeatureSections`: words, routes and widgets; a feature with none shows no table or list) and the widget and

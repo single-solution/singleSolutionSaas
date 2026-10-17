@@ -22,10 +22,6 @@ export const TEXTS = dashboardTexts({
 		},
 	},
 	settings: {
-		looksHelp:
-			'Every word of the consent banner, the notice bar and the admin widgets (the consent words included), their theme, and how money and dates look.',
-		formatHelp: 'How money and dates look in the widgets (revenue and days in the analytics dashboard).',
-		localeHelp: "A tag such as en-US or fr-FR; empty uses each visitor's browser.",
 		consentWarning:
 			'Tags load without waiting for consent. Laws in many places (for example the EU’s GDPR and ePrivacy rules and the UK’s PECR) require a visitor’s consent before tracking; you are responsible for following the law where you operate.',
 		gtmMissing:

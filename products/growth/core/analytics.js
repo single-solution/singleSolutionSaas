@@ -3,7 +3,7 @@
  * sources, devices and countries, the merchant's goals and funnels (G1: each step an event or a page, counted per day;
  * the shop funnel view → cart → checkout → purchase to start with) with revenue per currency, site
  * searches and 404s, and Web Vitals (average and the share of good, needs-improvement and poor). Each part is there
- * only while its feature is on. Days are the days of the website's business time zone (business.json `timeZone`, UTC
+ * only while its feature is on. Days are the days of the website's business time zone (business `timeZone`, UTC
  * when missing; PLAN 0.8.10 K8), and the report says which zone.
  *
  * With the `detail` setting `sessions` (PLAN 0.8.10 G3) it adds sessions, bounce (sessions that saw one page), their
@@ -63,7 +63,7 @@ export const isDay = (day) => typeof day === 'string' && DAY.test(day) && !Numbe
 /**
  * The instant a day starts in the business time zone (epoch ms), for showing the day with the website's Format.
  * @param {string} day `YYYY-MM-DD`
- * @param {string | null | undefined} timeZone the business.json time zone (UTC when missing or unknown)
+ * @param {string | null | undefined} timeZone the business time zone (UTC when missing or unknown)
  * @returns {number} NaN for a value that is not a day
  */
 export const dayStart = (day, timeZone) => zonedDayStart(day, timeZone);
@@ -97,7 +97,7 @@ export const presetRange = (preset, now, timeZone) => {
  * last 30 days up to today in that zone.
  * @param {{ from?: unknown, to?: unknown }} query
  * @param {number} now
- * @param {string | null | undefined} timeZone the business.json time zone (UTC when missing or unknown)
+ * @param {string | null | undefined} timeZone the business time zone (UTC when missing or unknown)
  * @returns {{ ok: true, from: string, to: string } | { ok: false, message: string }}
  */
 export const rangeOf = (query, now, timeZone) => {
@@ -214,7 +214,7 @@ const sessionsOf = (totals) => {
  *   live?: { visitors: number, pages: Array<{ key: string, count: number }> } | null,
  *   journeys?: Journey[] | null, goals?: ReadonlyArray<{ key: string, name: string, kind: string, match: string }>,
  *   funnels?: ReadonlyArray<{ key: string, name: string, steps: ReadonlyArray<{ name: string, kind: string, match: string }> }> }} input
- *   `timeZone`: the zone of the days (the business.json time zone, else UTC); `top`: rows of each top list; `detail`:
+ *   `timeZone`: the zone of the days (the business time zone, else UTC); `top`: rows of each top list; `detail`:
  *   the `visitor_analytics` setting; `live` and `journeys`: read from the raw events with `sessions`; `goals` and
  *   `funnels`: the merchant's lists (G1)
  */

@@ -58,14 +58,13 @@ describe('every connection of the product (database, storage, provider keys, pas
 });
 
 describe('Growth’s writes with the server token', () => {
-	it('alone: refused 403 needs_signed_in_staff (rules, settings, texts, theme)', async () => {
+	it('alone: refused 403 needs_signed_in_staff (rules, settings, texts)', async () => {
 		for (const [method, path, body] of /** @type {Array<[string, string, unknown]>} */ ([
 			['POST', '/v1/redirects', RULE],
 			['PATCH', '/v1/redirects/rdr_none', { to: '/x' }],
 			['DELETE', '/v1/redirects/rdr_none', undefined],
 			['POST', '/v1/redirects/csv', undefined],
 			['POST', '/v1/seo/checks', { paths: ['/'] }],
-			['PUT', '/v1/theme', { radius: 3 }],
 			['PUT', '/v1/texts/consent.title', { value: 'x' }],
 		])) {
 			const refused = await env.call(method, path, { token: env.server, bare: true, ...(body === undefined ? {} : { body }) });
@@ -123,7 +122,9 @@ describe('Growth’s writes with the server token', () => {
 
 	it('the dashboard session’s writes are unchanged', async () => {
 		const cookie = await env.adminSession();
-		const saved = await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/theme`, { radius: 5 });
-		expect(saved.status).toBe(200);
+		const saved = await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/texts/consent.title`, {
+			value: 'Your choice',
+		});
+		expect(saved.status).toBe(204);
 	});
 });

@@ -50,7 +50,7 @@ export const ADMIN_CONFIG_PATH = '/v1/widget/admin/config';
  * @property {import('@ss/app-kit/widget').WidgetTheme} theme
  * @property {string} customCss
  * @property {Partial<import('@ss/contracts/format').Format>} format how money and dates look (PLAN 0.8.10 K7)
- * @property {string} timeZone the business.json time zone (UTC without it; K8)
+ * @property {string} timeZone the business time zone (UTC without it; K8)
  * @property {string[]} features the switched-on features
  * @property {string[]} widgets the keys of the widgets whose feature is on
  * @property {import('../core/config.js').WidgetSettings} settings what the page script needs
