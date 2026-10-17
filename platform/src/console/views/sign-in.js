@@ -131,16 +131,16 @@ function TwoStepStep({ challenge, onDone, onRestart, onProblem }) {
 					{AUTH.verify}
 				</Button>
 			)}
-			<button
-				type="button"
-				className="w-full text-center text-sm font-semibold text-primary hover:underline"
+			<Button
+				variant="ghost"
+				block
 				onClick={() => {
 					setUseRecovery((v) => !v);
 					setCode('');
 					setError(null);
 				}}>
 				{useRecovery ? AUTH.useApp : AUTH.useRecovery}
-			</button>
+			</Button>
 		</Form>
 	);
 }

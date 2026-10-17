@@ -233,7 +233,9 @@ export function ListPane({ title, count, action, tools, children, footer }) {
 					</div>
 				) : null}
 			</div>
-			<div id={body} className={cx('space-y-3 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col', strip && !strip.open && 'lg:max-xl:hidden')}>
+			<div
+				id={body}
+				className={cx('space-y-3 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col', strip && !strip.open && 'lg:max-xl:hidden')}>
 				{tools}
 				<ul
 					ref={rows}
@@ -375,4 +377,14 @@ export const openDashboard = async (path, body) => {
 	const result = await apiFetch(path, { method: 'POST', ...(body === undefined ? {} : { body }) });
 	if (result.ok && typeof result.data?.url === 'string') window.open(result.data.url, '_blank', 'noopener,noreferrer');
 	return result;
+};
+
+/**
+ * A two-step or recovery code field value → the API members.
+ * @param {string} value
+ */
+export const factorOf = (value) => {
+	const v = value.trim();
+	if (!v) return {};
+	return /^\d{6}$/.test(v) ? { code: v } : { recoveryCode: v };
 };

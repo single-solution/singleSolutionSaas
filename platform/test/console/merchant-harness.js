@@ -154,7 +154,7 @@ export const shows = (snippet) => document.body.textContent?.replace(/\s+/g, ' '
 /**
  * A browser for one Portal: `fetch` goes to `portal.handle` with this browser's cookies (same origin).
  * @param {import('../../src/portal.js').Portal} portal
- * @param {string} [password] the password of the person (the console's confirmation of a server token asks for it)
+ * @param {string} [password] the password of the person (a test types it into the confirmation of a server token)
  */
 export const browserOf = (portal, password = 'correct horse battery') => {
 	/** @type {Map<string, string>} */
@@ -182,18 +182,8 @@ export const browserOf = (portal, password = 'correct horse battery') => {
 			headers.set('origin', PORTAL_URL);
 			headers.set('sec-fetch-site', 'same-origin');
 		}
-		let payload = init.body;
-		// Showing or regenerating a server token asks the person for their password (a fresh confirmation); the console
-		// has no dialog for it yet, so the harness answers for the person (every test person uses PASSWORD)
-		if (method === 'POST' && /\/tokens\/[^/]+\/(reveal|regenerate)$/.test(url.pathname)) {
-			payload = JSON.stringify({
-				...(typeof payload === 'string' && payload ? JSON.parse(payload) : {}),
-				password,
-			});
-			headers.set('content-type', 'application/json');
-		}
 		const response = await portal.handle(
-			new Request(url, { method, headers, ...(payload === undefined ? {} : { body: /** @type {any} */ (payload) }) }),
+			new Request(url, { method, headers, ...(init.body === undefined ? {} : { body: /** @type {any} */ (init.body) }) }),
 		);
 		store(response.headers.getSetCookie());
 		const text = await response.text();
@@ -257,7 +247,7 @@ export const browserOf = (portal, password = 'correct horse battery') => {
 		await settle(3);
 		return /** @type {(typeof calls)[number]} */ (found);
 	};
-	return { jar, calls, fetch: fetchImpl, api, waitCall, use: () => vi.stubGlobal('fetch', fetchImpl) };
+	return { jar, calls, password, fetch: fetchImpl, api, waitCall, use: () => vi.stubGlobal('fetch', fetchImpl) };
 };
 
 /** The Portal modules with outbound calls allowed to loopback hosts (fake products run on 127.0.0.1). */

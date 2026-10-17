@@ -186,10 +186,10 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		await press('Set up two-step sign-in');
 		const started = await a.waitCall('POST', '/v1/me/two-step/start', (st) => st === 200);
 		expect(document.querySelector('svg[aria-label="QR code"]')).not.toBeNull();
-		fill('Confirm a code', '000000');
+		fill('6-digit code from your app', '000000');
 		await press('Turn it on');
 		await a.waitCall('POST', '/v1/me/two-step/confirm', (st) => st >= 400);
-		fill('Confirm a code', code(started.body.secret));
+		fill('6-digit code from your app', code(started.body.secret));
 		await press('Turn it on');
 		const confirmed = await a.waitCall('POST', '/v1/me/two-step/confirm', (st) => st === 200);
 		const recoveryCodes = /** @type {string[]} */ (confirmed.body.recoveryCodes);

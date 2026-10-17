@@ -31,9 +31,10 @@ import {
 	TextLink,
 } from '@ss/ui';
 import { AUTH, LOGIN, MORE, TWO_STEP } from '../../texts/console.js';
-import { apiFetch, usePagedList } from '../client.js';
+import { apiConfirm, apiFetch, usePagedList } from '../client.js';
 import { Link } from '../link.js';
 import { withCursor } from '../paths.js';
+import { factorOf } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
@@ -69,16 +70,6 @@ export function QrCode({ text, size = 192 }) {
 }
 
 /**
- * A two-step or recovery code field value → the API members.
- * @param {string} value
- */
-const factorOf = (value) => {
-	const v = value.trim();
-	if (!v) return {};
-	return /^\d{6}$/.test(v) ? { code: v } : { recoveryCode: v };
-};
-
-/**
  * Setting two-step up: scan, confirm a code, save the 10 recovery codes.
  * @param {{ onDone: () => void }} props
  */
@@ -101,7 +92,7 @@ export function TwoStepSetup({ onDone }) {
 	const confirm = async () => {
 		setBusy(true);
 		setProblem(null);
-		const result = await apiFetch('/v1/me/two-step/confirm', { method: 'POST', body: { code: code.trim() } });
+		const result = await apiConfirm('/v1/me/two-step/confirm', { method: 'POST', body: { code: code.trim() } });
 		setBusy(false);
 		if (result.ok) {
 			setSecret(null);
@@ -135,7 +126,7 @@ export function TwoStepSetup({ onDone }) {
 					</div>
 					<CodeBlock label={TWO_STEP.key} code={secret.secret} secret />
 					<Input
-						label={TWO_STEP.stepConfirm}
+						label={TWO_STEP.codeLabel}
 						value={code}
 						onChange={(e) => setCode(e.currentTarget.value)}
 						autoComplete="one-time-code"
@@ -186,7 +177,7 @@ function ProveForm({ title, help, label, path, onDone, onCancel }) {
 	const submit = async () => {
 		setBusy(true);
 		setProblem(null);
-		const result = await apiFetch(path, { method: 'POST', body: { password, ...factorOf(code) } });
+		const result = await apiConfirm(path, { method: 'POST', body: { password, ...factorOf(code) } });
 		setBusy(false);
 		if (result.ok) onDone(result.data);
 		else setProblem(result.problem);
@@ -318,7 +309,7 @@ export function EmailPanel({ email, twoStepOn }) {
 	const submit = async () => {
 		setBusy(true);
 		setProblem(null);
-		const result = await apiFetch('/v1/me/email', {
+		const result = await apiConfirm('/v1/me/email', {
 			method: 'POST',
 			body: { email: next.trim(), password, ...factorOf(code) },
 		});
@@ -392,7 +383,7 @@ export function PasswordPanel({ twoStepOn }) {
 		setError(null);
 		setBusy(true);
 		setProblem(null);
-		const result = await apiFetch('/v1/me/password', {
+		const result = await apiConfirm('/v1/me/password', {
 			method: 'POST',
 			body: { currentPassword: current, newPassword: next, ...factorOf(code) },
 		});

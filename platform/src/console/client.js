@@ -7,7 +7,7 @@
  * @module
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { networkProblem } from '@ss/ui/problems';
+import { networkProblem, problemCode } from '@ss/ui/problems';
 
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
 /**
@@ -70,6 +70,21 @@ export const apiFetch = async (path, { method = 'GET', body, idempotencyKey, sig
 	if (response.status === 401 && redirectOn401) signInAgain();
 	const problem = data && typeof data === 'object' ? data : { title: response.statusText || 'Error' };
 	return { ok: false, status: response.status, problem: { status: response.status, ...problem } };
+};
+
+/**
+ * A call that checks the signed-in person's password or code (a fresh confirmation, changing the password or the email,
+ * two-step): a wrong one also answers 401 though the session is fine, so only an ended session (`unauthorized`) goes to
+ * the sign-in page, and a wrong password stays on the form that asked.
+ * @template [T=any]
+ * @param {string} path `/v1/...`
+ * @param {{ method?: string, body?: unknown }} [init]
+ * @returns {Promise<ApiResult<T>>}
+ */
+export const apiConfirm = async (path, init = {}) => {
+	const result = await apiFetch(path, { ...init, redirectOn401: false });
+	if (!result.ok && problemCode(result.problem) === 'unauthorized') signInAgain();
+	return result;
 };
 
 /**

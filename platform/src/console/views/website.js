@@ -36,14 +36,15 @@ import {
 	problemCode,
 	useToast,
 	TextLink,
+	PasswordConfirmDialog,
 } from '@ss/ui';
 import { widgetScriptTag } from '@ss/contracts/text';
 import { BILLING, MORE, WEBSITE } from '../../texts/console.js';
-import { apiFetch } from '../client.js';
+import { apiConfirm, apiFetch } from '../client.js';
 import { useNavigation } from '../navigation.js';
 import { api } from '../paths.js';
 import { productTone, ProductStatusBadge, UsageView } from './billing.js';
-import { openDashboard } from './common.js';
+import { factorOf, openDashboard } from './common.js';
 
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
 /**
@@ -464,6 +465,9 @@ const useOnce = (path) => {
 function TokensDialog({ merchantId, website, onClose }) {
 	const websiteId = String(website.websiteId);
 	const result = useOnce(api.tokens(merchantId, websiteId));
+	// two-step on: the confirmation of a server token asks for the code at once
+	const me = useOnce('/v1/me');
+	const twoStepOn = me?.ok === true && me.data?.twoStep?.enabled === true;
 	const tokens = /** @type {TokenEntry[]} */ (result?.ok ? (result.data?.items ?? []) : []);
 	return (
 		<Dialog open onClose={onClose} size="lg" title={WEBSITE.tokensOf(website.domain)}>
@@ -482,6 +486,7 @@ function TokensDialog({ merchantId, website, onClose }) {
 							domain={website.domain}
 							merchantId={merchantId}
 							websiteId={websiteId}
+							twoStepOn={twoStepOn}
 						/>
 					))}
 				</div>
@@ -510,64 +515,94 @@ function UsageDialog({ merchantId, website, onClose }) {
 }
 
 /**
- * One product's install block: the widget script tag (products with widgets), the browser token, the server token
- * (reveal / copy / regenerate with a typed confirmation of the product name) and the docs link (PLAN 0.4.4, 0.8.2).
- * @param {{ entry: TokenEntry, domain: string, merchantId: string, websiteId: string }} props
+ * What the Portal said to a refused confirmation, as words for the field it belongs to: a wrong password under the
+ * password, a missing or wrong code under the code; anything else (too many tries, a server problem) under the fields.
+ * @param {Problem | null} problem
+ * @returns {{ password?: string, code?: string, form?: string }}
  */
-export function InstallBlock({ entry, domain, merchantId, websiteId }) {
+const confirmationErrors = (problem) => {
+	if (!problem) return {};
+	const fields = fieldErrors(problem);
+	if (fields.code || fields.recoveryCode) return { code: WEBSITE.needsCode };
+	if (problemCode(problem) === 'invalid_credentials')
+		return /code/i.test(String(problem.detail ?? '')) ? { code: WEBSITE.wrongCode } : { password: WEBSITE.wrongPassword };
+	if (fields.password) return { password: WEBSITE.wrongPassword };
+	return { form: describeProblem(problem) };
+};
+
+/**
+ * One product's install block: the widget script tag (products with widgets), the browser token, the server token
+ * (reveal / copy / regenerate, each after the person's password in a dialog; regenerate also with a typed confirmation
+ * of the product name) and the docs link (PLAN 0.4.4, 0.8.2).
+ * @param {{ entry: TokenEntry, domain: string, merchantId: string, websiteId: string, twoStepOn?: boolean }} props
+ */
+export function InstallBlock({ entry, domain, merchantId, websiteId, twoStepOn = false }) {
 	const toast = useToast();
 	const [value, setValue] = useState(/** @type {string | null} */ (null));
 	const [shown, setShown] = useState(false);
 	const [cannot, setCannot] = useState(entry.serverToken?.canShow === false);
 	const [busy, setBusy] = useState(false);
-	const [regenerating, setRegenerating] = useState(false);
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	// the action waiting for the person's password: showing the token, copying it, or making a new one
+	const [asking, setAsking] = useState(/** @type {null | 'show' | 'copy' | 'regenerate'} */ (null));
+	const [errors, setErrors] = useState(/** @type {{ password?: string, code?: string, form?: string }} */ ({}));
+	// the code field shows at once while two-step is on, and when the Portal asks for a code
+	const [wantsCode, setWantsCode] = useState(false);
 
-	/** @returns {Promise<string | null>} */
-	const reveal = async () => {
-		if (value) return value;
-		setBusy(true);
-		setProblem(null);
-		const result = await apiFetch(api.reveal(merchantId, websiteId, entry.productId), { method: 'POST' });
-		setBusy(false);
-		if (!result.ok) {
-			if (problemCode(result.problem) === 'conflict' || result.status === 409) setCannot(true);
-			else setProblem(result.problem);
-			return null;
-		}
-		setValue(result.data.serverToken);
-		return result.data.serverToken;
+	/** @param {'show' | 'copy' | 'regenerate'} action */
+	const ask = (action) => {
+		setErrors({});
+		setAsking(action);
 	};
-	const show = async () => {
-		if (shown) {
-			setShown(false);
-			return;
-		}
-		if (await reveal()) setShown(true);
+	const show = () => {
+		if (shown) setShown(false);
+		else if (value) setShown(true);
+		else ask('show');
 	};
 	const copy = async () => {
-		const token = await reveal();
-		if (!token) return;
-		const ok = await copyText(token);
+		if (!value) return ask('copy');
+		const ok = await copyText(value);
 		toast.show(ok ? { title: WEBSITE.copied } : { tone: 'danger', title: WEBSITE.copyFailed });
 	};
-	const regenerate = async () => {
+	/** Send the confirmation with the action; the dialog stays open, with the reason under its field, when refused. */
+	const confirm = async (/** @type {{ password: string, code: string }} */ { password, code }) => {
+		const action = asking;
+		if (!action) return;
 		setBusy(true);
-		setProblem(null);
-		const result = await apiFetch(api.regenerate(merchantId, websiteId, entry.productId), {
-			method: 'POST',
-			body: { kind: 'server' },
-		});
+		setErrors({});
+		const body = { password, ...factorOf(code) };
+		const result =
+			action === 'regenerate'
+				? await apiConfirm(api.regenerate(merchantId, websiteId, entry.productId), {
+						method: 'POST',
+						body: { kind: 'server', ...body },
+					})
+				: await apiConfirm(api.reveal(merchantId, websiteId, entry.productId), { method: 'POST', body });
 		setBusy(false);
 		if (!result.ok) {
-			setProblem(result.problem);
+			if (action !== 'regenerate' && (problemCode(result.problem) === 'conflict' || result.status === 409)) {
+				setCannot(true);
+				setAsking(null);
+				return;
+			}
+			const found = confirmationErrors(result.problem);
+			if (found.code) setWantsCode(true);
+			setErrors(found);
 			return;
 		}
-		setValue(result.data.token);
-		setShown(true);
-		setCannot(false);
-		setRegenerating(false);
-		toast.show({ title: WEBSITE.regenerated });
+		setAsking(null);
+		if (action === 'regenerate') {
+			setValue(result.data.token);
+			setShown(true);
+			setCannot(false);
+			toast.show({ title: WEBSITE.regenerated });
+			return;
+		}
+		setValue(result.data.serverToken);
+		if (action === 'show') setShown(true);
+		else {
+			const ok = await copyText(result.data.serverToken);
+			toast.show(ok ? { title: WEBSITE.copied } : { tone: 'danger', title: WEBSITE.copyFailed });
+		}
 	};
 
 	return (
@@ -620,7 +655,7 @@ export function InstallBlock({ entry, domain, merchantId, websiteId }) {
 				<div className="flex flex-wrap gap-2">
 					{cannot ? null : (
 						<>
-							<Button variant="secondary" size="sm" onClick={() => void show()} loading={busy && !regenerating}>
+							<Button variant="secondary" size="sm" onClick={show}>
 								{shown ? WEBSITE.hide : WEBSITE.reveal}
 							</Button>
 							<Button variant="secondary" size="sm" onClick={() => void copy()} disabled={busy}>
@@ -628,32 +663,31 @@ export function InstallBlock({ entry, domain, merchantId, websiteId }) {
 							</Button>
 						</>
 					)}
-					<Button
-						variant="secondary"
-						size="sm"
-						disabled={busy}
-						onClick={() => {
-							setProblem(null);
-							setRegenerating(true);
-						}}>
+					<Button variant="secondary" size="sm" disabled={busy} onClick={() => ask('regenerate')}>
 						{WEBSITE.regenerate}
 					</Button>
 				</div>
 				<p className="text-xs text-muted">{WEBSITE.serverTokenHelp}</p>
-				{problem && !regenerating ? <Callout tone="danger">{describeProblem(problem)}</Callout> : null}
 			</div>
-			<TypedConfirmDialog
-				open={regenerating}
-				onClose={() => setRegenerating(false)}
-				onConfirm={() => void regenerate()}
-				expected={entry.name}
+			<PasswordConfirmDialog
+				open={asking !== null}
+				onClose={() => setAsking(null)}
+				onConfirm={(input) => void confirm(input)}
 				busy={busy}
-				danger
-				confirmLabel={WEBSITE.regenerate}
-				title={WEBSITE.regenerateTitle(entry.name)}
-				error={problem ? describeProblem(problem) : null}>
-				<p className="text-sm text-muted">{WEBSITE.regenerateHelp}</p>
-			</TypedConfirmDialog>
+				danger={asking === 'regenerate'}
+				showCode={twoStepOn || wantsCode}
+				{...(asking === 'regenerate' ? { expected: entry.name } : {})}
+				confirmLabel={asking === 'regenerate' ? WEBSITE.regenerate : WEBSITE.showConfirm}
+				title={asking === 'regenerate' ? WEBSITE.regenerateTitle(entry.name) : WEBSITE.showTitle(entry.name)}
+				errors={errors}
+				texts={{
+					password: WEBSITE.password,
+					passwordHelp: WEBSITE.passwordHelp,
+					code: WEBSITE.code,
+					codeHelp: WEBSITE.codeHelp,
+				}}>
+				<p className="text-sm text-muted">{asking === 'regenerate' ? WEBSITE.regenerateHelp : WEBSITE.showHelp}</p>
+			</PasswordConfirmDialog>
 		</Card>
 	);
 }

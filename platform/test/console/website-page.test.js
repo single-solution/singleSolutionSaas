@@ -24,6 +24,7 @@ import {
 	createWorld,
 	dialog,
 	fill,
+	fillDialog,
 	press,
 	pressDialog,
 	pressMenu,
@@ -208,15 +209,32 @@ describe('website cards (jsdom)', () => {
 			);
 			expect(shows('Accepted only from https://shop.example.com and from localhost')).toBe(true);
 			expect(dialog().querySelector('a[href$="/docs"]')?.textContent).toContain('Docs');
+			// Reveal asks for the password in a dialog: a wrong one is said under the field and shows nothing
 			await press('Reveal');
+			expect(shows('Show the server token of Notes')).toBe(true);
+			expect(button('Show token', dialog()).disabled).toBe(true);
+			fillDialog('Your password', 'not my password');
+			await pressDialog('Show token');
+			await ownerBrowser.waitCall(
+				'POST',
+				`/v1/merchants/${merchantId}/websites/${websiteId}/tokens/notes/reveal`,
+				(st) => st === 401,
+			);
+			await until(() => shows('That password is not right. Check it and try again.'));
+			expect(dialog().querySelector('[aria-invalid="true"]')).not.toBeNull();
+			// the right password shows it and closes the dialog
+			fillDialog('Your password', ownerBrowser.password);
+			await pressDialog('Show token');
 			const revealed = await ownerBrowser.waitCall(
 				'POST',
 				`/v1/merchants/${merchantId}/websites/${websiteId}/tokens/notes/reveal`,
+				(st) => st === 200,
 			);
-			expect(revealed.status).toBe(200);
-			expect(shows(revealed.body.serverToken)).toBe(true);
+			await until(() => shows(revealed.body.serverToken));
+			expect(document.querySelector('[role="dialog"] [aria-invalid]')).toBeNull();
 			await press('Hide');
 			expect(shows(revealed.body.serverToken)).toBe(false);
+			// the token is in memory: showing it again and copying it ask for nothing
 			await press('Copy', /** @type {HTMLElement} */ (button('Regenerate').parentElement));
 			await until(() => shows('Copied to the clipboard.'));
 			expect(writeText).toHaveBeenLastCalledWith(revealed.body.serverToken);
@@ -224,11 +242,13 @@ describe('website cards (jsdom)', () => {
 			writeText.mockRejectedValueOnce(new Error('denied'));
 			await press('Copy', /** @type {HTMLElement} */ (button('Regenerate').parentElement));
 			await until(() => shows('Copy failed.'));
-			// regenerate: typed confirmation with the product name; the old token stops at once
+			// regenerate: the product name and the password; the old token stops at once
 			await press('Regenerate');
 			expect(shows('the old one stops at once')).toBe(true);
 			expect(button('Regenerate', dialog()).disabled).toBe(true);
 			type(confirmInput(), 'Notes');
+			expect(button('Regenerate', dialog()).disabled).toBe(true);
+			fillDialog('Your password', ownerBrowser.password);
 			await pressDialog('Regenerate');
 			const regenerated = await ownerBrowser.waitCall(
 				'POST',
@@ -312,6 +332,8 @@ describe('website cards (jsdom)', () => {
 			await pressMenu('Actions for shop.example.com', 'Install and tokens');
 			await until(() => buttons('Reveal').length === 1);
 			await press('Reveal');
+			fillDialog('Your password', merchant.password);
+			await pressDialog('Show token');
 			await merchant.waitCall(
 				'POST',
 				`/v1/merchants/${merchantId}/websites/${websiteId}/tokens/notes/reveal`,
@@ -442,13 +464,21 @@ describe('website cards (jsdom)', () => {
 		expect(shows('Widget script tag')).toBe(false); // no widgets
 		expect(document.querySelector('a')).toBeNull(); // no docs
 		await press('Reveal');
+		fillDialog('Your password', 'secret pass');
+		await pressDialog('Show token');
 		await until(() => shows('Cannot be shown: regenerate'));
 		expect(buttons('Reveal')).toHaveLength(0);
-		expect(seen[0]).toEqual(['/v1/merchants/mer_1/websites/web_1/tokens/notes/reveal', { method: 'POST' }]);
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		// the password goes with the request, and nothing else is asked of a person without two-step
+		expect(seen[0]).toEqual([
+			'/v1/merchants/mer_1/websites/web_1/tokens/notes/reveal',
+			{ method: 'POST', body: { password: 'secret pass' } },
+		]);
 		// a failed regenerate keeps the dialog open with the problem
 		answer = async () => ({ ok: false, status: 500, problem: { status: 500, title: 'Boom' } });
 		await press('Regenerate');
 		type(confirmInput(), 'Notes');
+		fillDialog('Your password', 'secret pass');
 		await pressDialog('Regenerate');
 		await until(() => dialog().textContent?.includes('Something went wrong on our side.'));
 		answer = async () => ({ ok: true, status: 200, data: { productId: 'notes', kind: 'server', token: 'fresh-server-token' } });
@@ -456,7 +486,7 @@ describe('website cards (jsdom)', () => {
 		await until(() => shows('fresh-server-token'));
 		expect(seen.at(-1)).toEqual([
 			'/v1/merchants/mer_1/websites/web_1/tokens/notes/regenerate',
-			{ method: 'POST', body: { kind: 'server' } },
+			{ method: 'POST', body: { kind: 'server', password: 'secret pass' } },
 		]);
 		// copying the shown token needs no new reveal
 		vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: vi.fn(async () => undefined) } });
@@ -465,7 +495,7 @@ describe('website cards (jsdom)', () => {
 		expect(seen.length).toBe(before);
 		cleanup();
 
-		// a stored token that cannot be decrypted shows the message at once; another reveal failure is shown as a problem
+		// a stored token that cannot be decrypted shows the message at once; another reveal failure is shown in the dialog
 		withToasts(
 			<InstallBlock
 				entry={{ ...entry, serverToken: { canShow: false } }}
@@ -479,7 +509,92 @@ describe('website cards (jsdom)', () => {
 		answer = async () => ({ ok: false, status: 403, problem: { status: 403, detail: 'Not yours.', type: 'forbidden' } });
 		withToasts(<InstallBlock entry={entry} domain="shop.com" merchantId="mer_1" websiteId="web_1" />);
 		await press('Copy', /** @type {HTMLElement} */ (button('Regenerate').parentElement));
-		await until(() => shows('Not yours.'));
+		fillDialog('Your password', 'secret pass');
+		await pressDialog('Show token');
+		await until(() => dialog().textContent?.includes('Not yours.'));
 		await settle(1);
+	});
+
+	it('asks for the password, then the two-step code while two-step is on, and says plainly what was wrong', async () => {
+		const entry = {
+			productId: 'notes',
+			name: 'Notes',
+			widgetScriptUrl: null,
+			widgetScriptLoading: /** @type {const} */ ('async'),
+			docsUrl: null,
+			browserToken: 'browser-token',
+			serverToken: { canShow: true },
+		};
+		/** @type {(path: string, init?: any) => Promise<any>} */
+		let answer = async () => ({ ok: true, status: 200, data: { serverToken: 'the-server-token' } });
+		const seen = stubApi((path, init) => answer(path, init));
+		const writeText = vi.fn(async () => undefined);
+		vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+		// a wrong password or code answers 401 too, but the session is fine: the person stays on the form
+		const assign = vi.fn();
+		vi.stubGlobal('location', { ...window.location, pathname: '/websites', search: '', assign });
+		// without a code the Portal asks for one; the field appears with the reason
+		answer = async () => ({
+			ok: false,
+			status: 422,
+			problem: {
+				status: 422,
+				type: 'validation_failed',
+				errors: [{ path: '/code', message: 'is required while two-step is on' }],
+			},
+		});
+		withToasts(<InstallBlock entry={entry} domain="shop.com" merchantId="mer_1" websiteId="web_1" />);
+		await press('Copy', /** @type {HTMLElement} */ (button('Regenerate').parentElement));
+		expect(shows('Two-step or recovery code')).toBe(false);
+		fillDialog('Your password', 'right pass');
+		await pressDialog('Show token');
+		await until(() => shows('Two-step sign-in is on for you: enter a code from your app, or a recovery code.'));
+		expect(shows('Two-step or recovery code')).toBe(true);
+		// a wrong code is said as a wrong code, not as a wrong password
+		answer = async () => ({
+			ok: false,
+			status: 401,
+			problem: { status: 401, type: 'invalid_credentials', detail: 'The code is incorrect.' },
+		});
+		fillDialog('Two-step or recovery code', '123456');
+		await pressDialog('Show token');
+		await until(() => shows('That code is not right.'));
+		expect(shows('That password is not right')).toBe(false);
+		// ... and a wrong password is said under the password
+		answer = async () => ({
+			ok: false,
+			status: 401,
+			problem: { status: 401, type: 'invalid_credentials', detail: 'The email or password is incorrect.' },
+		});
+		await pressDialog('Show token');
+		await until(() => shows('That password is not right. Check it and try again.'));
+		expect(assign).not.toHaveBeenCalled();
+		// too many tries: said under the fields
+		answer = async () => ({ ok: false, status: 429, problem: { status: 429, type: 'rate_limited', title: 'Too many' } });
+		await pressDialog('Show token');
+		await until(() => shows('Too many attempts. Wait a moment, then try again.'));
+		// a six-digit code goes as a code, a longer one as a recovery code, with the password; the token is then copied
+		answer = async () => ({ ok: true, status: 200, data: { serverToken: 'the-server-token' } });
+		fillDialog('Two-step or recovery code', '654321');
+		await pressDialog('Show token');
+		await until(() => writeText.mock.calls.length === 1);
+		expect(writeText).toHaveBeenCalledWith('the-server-token');
+		expect(seen.at(-1)).toEqual([
+			'/v1/merchants/mer_1/websites/web_1/tokens/notes/reveal',
+			{ method: 'POST', body: { password: 'right pass', code: '654321' } },
+		]);
+		await until(() => shows('Copied to the clipboard.'));
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		// only an ended session goes to sign-in (the token is not shown yet in a new block)
+		cleanup();
+		answer = async () => ({ ok: false, status: 401, problem: { status: 401, type: 'unauthorized' } });
+		withToasts(<InstallBlock entry={entry} domain="shop.com" merchantId="mer_1" websiteId="web_1" twoStepOn />);
+		await press('Reveal');
+		expect(shows('Two-step or recovery code')).toBe(true); // two-step on: the code is asked for at once
+		fillDialog('Your password', 'right pass');
+		fillDialog('Two-step or recovery code', '654321');
+		await pressDialog('Show token');
+		await until(() => assign.mock.calls.length === 1);
+		expect(assign).toHaveBeenCalledWith('/login?next=%2Fwebsites&expired=1');
 	});
 });
