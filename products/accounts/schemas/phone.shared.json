@@ -2,20 +2,6 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
-		"defaultCallingCode": {
-			"type": "string",
-			"title": "Default calling code",
-			"description": "Added to phone numbers typed without a country code, for example +44 or +1. Empty: your country's code from business.json; without one, numbers must start with + or 00.",
-			"default": "",
-			"maxLength": 4
-		},
-		"trunkPrefix": {
-			"type": "string",
-			"title": "Prefix to drop from national numbers",
-			"description": "Dropped from a national number before the calling code is added, for example 0. Empty: the usual prefix of your country.",
-			"default": "",
-			"maxLength": 2
-		},
 		"channel": {
 			"type": "string",
 			"title": "Send codes by",

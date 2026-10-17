@@ -143,9 +143,12 @@ describe('a staff sign-in', () => {
 	});
 
 	it('the dashboard session’s writes are unchanged', async () => {
-		const saved = await env.dashboard(await env.adminSession(), 'PUT', `/v1/dashboard/websites/${env.websiteId}/theme`, {
-			radius: 5,
-		});
-		expect(saved.status).toBe(200);
+		const saved = await env.dashboard(
+			await env.adminSession(),
+			'PUT',
+			`/v1/dashboard/websites/${env.websiteId}/texts/signIn.title`,
+			{ value: 'Welcome' },
+		);
+		expect(saved.status).toBe(204);
 	});
 });

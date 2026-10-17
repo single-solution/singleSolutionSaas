@@ -36,6 +36,7 @@ export {
 	WEBSITE_SETTINGS_SCHEMA,
 	WEBSITE_SETTINGS_SECTIONS,
 	WEBSITE_SETTINGS_PATHS,
+	addressRequiredOf,
 	businessInfoOf,
 	emptyWebsiteSettings,
 	formatOf,

@@ -28,7 +28,7 @@ export const addressText = (address, homeCountry = '') =>
 
 /**
  * The inputs of one address, appended to `box`: the label, the name, the country (a picker of every country; the
- * business.json country for a new address), the place parts of the country picked in its order with its labels (the
+ * business country for a new address), the place parts of the country picked in its order with its labels (the
  * area, city, region and postal code as widget texts `address.<part>.<kind>`, renamable per website) and the phone.
  * Picking another country lays the place parts out again, keeping what was typed; a part already filled stays shown.
  * `required` (the Profile setting) marks the parts the website requires; the country adds its own.

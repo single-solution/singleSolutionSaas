@@ -23,8 +23,6 @@ export const TEXTS = dashboardTexts({
 		fieldsTitle: 'Custom fields',
 		fieldsHelp:
 			'Your own profile fields, in your order. Each one says who sees it: the user (who edits it, or only sees it) or only your staff. The fields users edit are asked at sign-up (required ones must be filled) and shown in My account. They need the Custom fields feature.',
-		looksHelp:
-			'Every word of the sign-in, My account, role request and admin widgets, their theme, and how money and dates look.',
 		field: {
 			key: 'Key (lower-case letters, digits or _)',
 			label: 'Label',

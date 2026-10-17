@@ -607,3 +607,15 @@ export const themeOf = (settings) => {
 
 /** The address parts a website may require of a customer's address (Region & format › address rules). */
 export const ADDRESS_REQUIRED_PARTS = Object.freeze([...PLACE_PARTS, 'country']);
+
+/** The parts every address needs while the merchant ticked none (each country's own format adds what it needs). */
+export const DEFAULT_ADDRESS_REQUIRED = Object.freeze(['line1', 'city']);
+
+/**
+ * The address parts a website requires of an address: the ones the Portal lists (Region and format › Address rules), the
+ * street line and the city while none is ticked.
+ * @param {WebsiteSettings} settings
+ * @returns {string[]}
+ */
+export const addressRequiredOf = (settings) =>
+	settings.region.address.required.length > 0 ? [...settings.region.address.required] : [...DEFAULT_ADDRESS_REQUIRED];

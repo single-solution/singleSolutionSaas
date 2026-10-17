@@ -1,6 +1,6 @@
 /**
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.6): the kit's page (`renderDocsPage`: title, intro, the localhost note,
- * the kit's routes for your server, business.json and the API reference from `openapi.json`) around Accounts' own
+ * the kit's routes for your server, the website settings note and the API reference from `openapi.json`) around Accounts' own
  * sections: sign-in methods and the Notifications templates they use (`schemas/messages.json`), social sign-in return
  * addresses, sign-ins and their offline verification (public keys, Node.js and jose snippets), the visitor API, roles
  * and permissions, sign-up rules and security, data rights, activity-log copies, the Orders tab, staff and sign-in from

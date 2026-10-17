@@ -15,6 +15,7 @@
 import { problem, verifyIdentityToken } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { normalizePhone, websiteCallingCode } from '@ss/contracts/phone';
+import { addressRequiredOf } from '@ss/contracts/website-settings';
 import { constantTimeEqual, randomToken, sha256Hex } from '@ss/protocol';
 import { labelOf, valuesOf } from '../core/activity.js';
 import { ROLE_TEMPLATES, SIGN_UP_TEMPLATE, remembered, sessionEnd, signInRefusal } from '../core/roles.js';
@@ -170,15 +171,17 @@ export const createService = (product) => {
 			: OPEN_SIGN_UP;
 
 	/**
-	 * A phone number as typed, in E.164 with the website's phone format (shared by Phone code and Phone + password; the
-	 * default calling code is the setting's, else the business.json country's), or null.
+	 * A phone number as typed, in E.164 with the website's phone format (shared by Phone code and Phone + password: the
+	 * Portal's phone rules, Website settings › Region and format; the calling code is its own, else its country's), or
+	 * null.
 	 * @param {Site} s @param {unknown} value
 	 */
 	const phoneOf = async (s, value) => {
-		const { defaultCallingCode, trunkPrefix } = await settings(s, 'phone');
-		const code =
-			websiteCallingCode(defaultCallingCode) || websiteCallingCode('', (await product.business(s.websiteId)).country);
-		return normalizePhone(value, { defaultCallingCode: code, trunkPrefix: String(trunkPrefix) });
+		const { region } = await product.website(s.websiteId);
+		return normalizePhone(value, {
+			defaultCallingCode: websiteCallingCode(region.phone.callingCode, region.country),
+			trunkPrefix: region.phone.trunkPrefix,
+		});
 	};
 
 	/**
@@ -521,14 +524,16 @@ export const createService = (product) => {
 	 * @param {Site} s @param {unknown} input @param {Pick<UserRecord, 'addresses'> | null} user null for a new user
 	 */
 	const addressesOf = async (s, input, user) => {
-		const { keepOneAddress, addressRequired } = await settings(s, 'profile');
+		const { keepOneAddress } = await settings(s, 'profile');
+		const website = await product.website(s.websiteId);
 		const checked = checkAddresses(input, () => createId('adr'), {
 			max: ADDRESSES_PER_USER,
-			required: /** @type {string[]} */ (addressRequired),
+			// the parts every address needs are the website's (Portal › Region and format › Address rules)
+			required: addressRequiredOf(website),
 			keepOne: keepOneAddress === true,
 			before: user?.addresses.length ?? 0,
-			// an address without a country is in the business.json country, whose format it follows (A1)
-			country: (await product.business(s.websiteId)).country ?? '',
+			// an address without a country is in the business country, whose format it follows (A1)
+			country: website.region.country,
 		});
 		if (!checked.ok)
 			throw problem('validation_failed', checked.message, {

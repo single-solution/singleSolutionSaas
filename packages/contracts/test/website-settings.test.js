@@ -7,6 +7,7 @@ import {
 	WEBSITE_SETTINGS_PATHS,
 	WEBSITE_SETTINGS_SCHEMA,
 	WEBSITE_SETTINGS_SECTIONS,
+	addressRequiredOf,
 	businessInfoOf,
 	emptyWebsiteSettings,
 	formatOf,
@@ -289,6 +290,13 @@ describe('the website-settings document (ss.website-settings/1)', () => {
 				'business.address.city',
 				'region.currencies',
 			]);
+		});
+
+		it('asks the street and the city of an address until the merchant ticks other parts', () => {
+			expect(addressRequiredOf(emptyWebsiteSettings(WEBSITE))).toEqual(['line1', 'city']);
+			const own = full();
+			own.region.address.required = ['line1', 'postalCode'];
+			expect(addressRequiredOf(own)).toEqual(['line1', 'postalCode']);
 		});
 
 		it('reads a value by its path, tells its kind and its section of the Portal page', () => {

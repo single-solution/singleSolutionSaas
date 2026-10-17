@@ -14,6 +14,7 @@
 import { createProduct, createProductBase } from '@ss/app-kit';
 import { normalizeEmail } from '@ss/contracts/email';
 import { normalizePhone } from '@ss/contracts/phone';
+import { addressRequiredOf } from '@ss/contracts/website-settings';
 import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -289,6 +290,7 @@ export const createProductInstance = (options) => {
 					? await product.settings.values(websiteId, 'phone_password')
 					: null;
 				const profile = await product.settings.values(websiteId, 'profile');
+				const website = await ctx.website();
 				// the role every sign-up gets: its "remember me" and paused sign-in shape the sign-in widget (A6)
 				const signUpRole = on.includes('roles') ? await store.roles.signUp() : null;
 				const requests = on.includes('role_requests') ? await product.settings.values(websiteId, 'role_requests') : null;
@@ -315,9 +317,10 @@ export const createProductInstance = (options) => {
 					profile: {
 						maxAddresses: ADDRESSES_PER_USER,
 						keepOneAddress: profile.keepOneAddress,
-						addressRequired: profile.addressRequired,
-						// the country of an address without one, whose format the address form follows (A1)
-						country: (await product.business(websiteId)).country ?? '',
+						// the parts every address needs and the country of an address without one, whose format the address
+						// form follows (A1): the website's, set once in the Portal (Region and format)
+						addressRequired: addressRequiredOf(website),
+						country: website.region.country,
 					},
 					roleRequests: requests
 						? {
@@ -344,7 +347,7 @@ export const createProductInstance = (options) => {
 		// records moved in from another system with ss-import (feature `import`, PLAN 0.8.10 K10)
 		imports: createImportOptions({
 			settings: (websiteId, feature) => product.settings.values(websiteId, feature),
-			business: (websiteId) => product.business(websiteId),
+			website: (websiteId) => product.website(websiteId),
 			twoStepFromImport,
 		}),
 	});

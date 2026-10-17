@@ -207,7 +207,7 @@ export const checkCustomValues = (fields, input, { complete, current = {}, by })
  * when none is chosen). Each address follows its country's format (`@ss/contracts/address`, A1): the country kept as
  * its ISO code (given as a code or an English name), the region and postal code filled where the country requires them
  * (never a postal code where it has none) and the postal code in the country's shape, kept upper case. An address
- * without a country is in `country` (the business.json country). Imports pass `byCountry: false`: an imported
+ * without a country is in `country` (the business country). Imports pass `byCountry: false`: an imported
  * address keeps its parts as they were (only the country as its code and the postal code upper case).
  * @param {unknown} input
  * @param {(index: number) => string} idOf a new id for an address without one

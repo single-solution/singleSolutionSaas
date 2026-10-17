@@ -33,7 +33,8 @@ import { createStore, phoneReversedOf } from './store.js';
  * @typedef {object} ImportDeps
  * @property {(websiteId: string, feature: string) => Promise<Record<string, unknown>>} settings a feature's settings
  *   (or a shared group's, such as `phone`)
- * @property {(websiteId: string) => Promise<{ country: string | null }>} business the business.json copy
+ * @property {(websiteId: string) => Promise<import('@ss/contracts').WebsiteSettings>} website the website's settings from the
+ *   Portal (its phone rules)
  * @property {(websiteId: string, userId: string, input: { secret: string, recoveryHashes: string[] }) => unknown} twoStepFromImport
  *   two-step sign-in with the secret sealed (A8)
  */
@@ -90,14 +91,16 @@ const fieldKeysOf = async ({ data, websiteId }) =>
 	);
 
 /**
- * The website's phone format (shared by Phone code and Phone + password): its calling code, else the business.json
- * country's, and its trunk prefix.
+ * The website's phone format (the Portal's phone rules, shared by Phone code and Phone + password): its calling code,
+ * else its country's, and its trunk prefix.
  * @param {ImportDeps} deps @param {string} websiteId
  */
 const phoneFormatOf = async (deps, websiteId) => {
-	const { defaultCallingCode, trunkPrefix } = await deps.settings(websiteId, 'phone');
-	const code = websiteCallingCode(defaultCallingCode) || websiteCallingCode('', (await deps.business(websiteId)).country);
-	return { defaultCallingCode: code, trunkPrefix: String(trunkPrefix ?? '') };
+	const { region } = await deps.website(websiteId);
+	return {
+		defaultCallingCode: websiteCallingCode(region.phone.callingCode, region.country),
+		trunkPrefix: region.phone.trunkPrefix,
+	};
 };
 
 /**

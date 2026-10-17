@@ -35,7 +35,7 @@ const ERROR_PARAM = LINK_PARAMS.error;
  * @property {import('@ss/app-kit/widget').WidgetTheme} theme
  * @property {string} customCss
  * @property {import('./common.js').Format} format how money and dates look (Settings → Format, PLAN 0.8.10 K7)
- * @property {string} timeZone the business.json time zone (UTC when missing, K8)
+ * @property {string} timeZone the business time zone (UTC when missing, K8)
  * @property {string[]} features the switched-on features
  * @property {string[]} widgets the keys of the widgets whose feature is on
  * @property {WidgetSettings} settings
@@ -52,7 +52,7 @@ const ERROR_PARAM = LINK_PARAMS.error;
  * @property {'ask' | 'ask_ticked' | 'always' | 'never'} [remember] "Remember me" of the role sign-ups get (A6, A14)
  * @property {boolean} [signInPaused] the role sign-ups get has its sign-in paused (A6)
  * @property {{ maxAddresses: number, keepOneAddress: boolean, addressRequired: string[], country: string }} profile (A11;
- *   `country`: the business.json country, of an address without one)
+ *   `country`: the business country, of an address without one)
  * @property {{ roles: Array<{ key: string, name: string }>, requireNote: boolean } | null} [roleRequests]
  *   (A5; every ask gets one private text)
  */

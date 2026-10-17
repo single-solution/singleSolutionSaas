@@ -3,6 +3,7 @@
  * server, the acting user and the labels of Accounts' own activity log, counts with the list's filters, activity-log
  * copies with the kit's filters and counts, the Format and the business time zone, and the kit guide in /docs.
  */
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ORIGIN, setup } from './helpers.js';
 
@@ -56,11 +57,7 @@ beforeAll(async () => {
 	await env.connectDatabase();
 	await env.paste('notifications');
 	// the business keeps Tokyo time (UTC+9): calendar days are its days (K8)
-	env.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
-		status: 200,
-		body: { name: 'Shop', timeZone: 'Asia/Tokyo' },
-	}));
-	await env.refreshBusiness();
+	await env.setBusiness({ name: 'Shop', timeZone: 'Asia/Tokyo' });
 });
 afterAll(async () => {
 	await env.product.close();
@@ -427,12 +424,15 @@ describe('activity-log copies (K9)', () => {
 
 describe('Format and time zone (K7, K8) and the docs', () => {
 	it('the widget config carries the website’s Format and business time zone', async () => {
-		const cookie = await env.adminSession();
-		const saved = await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/format`, {
-			locale: 'en-GB',
-			times: 'business',
+		// the Format is the Portal's (Website settings › Region and format), set there with the time zone
+		const empty = emptyWebsiteSettings(env.websiteId);
+		await env.setWebsite({
+			region: {
+				...empty.region,
+				timeZone: 'Asia/Tokyo',
+				format: { ...empty.region.format, locale: 'en-GB', times: 'business' },
+			},
 		});
-		expect(saved.status).toBe(200);
 		const config = await env.visitor('GET', '/v1/widget/config');
 		expect(config.json).toMatchObject({
 			format: { locale: 'en-GB', currencyDisplay: 'code', wholeUnits: false, times: 'business' },

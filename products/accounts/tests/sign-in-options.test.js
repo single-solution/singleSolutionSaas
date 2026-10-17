@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { totpCode } from '../adapters/crypto.js';
 import { ADDRESSES_PER_USER, CODE_ATTEMPTS, CODE_COOLDOWN_SECONDS, CODE_MINUTES, CODES_PER_HOUR } from '../core/limits.js';
-import { ALL, ORIGIN, setup } from './helpers.js';
+import { ALL, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
 let env;
@@ -99,15 +99,29 @@ describe('A7: phone-code options', () => {
 		expect(own.json.user.name).toBe('Own Name');
 	});
 
-	it('reads a phone typed any usual way as one number, with the business.json country’s calling code (K-7, SA-3)', async () => {
+	it('has no setting for the phone rules, the required address parts or the reset hosts: they are the website’s in the Portal', async () => {
+		const features = (await env.serverCall('GET', '/v1/settings')).json.features;
+		/** @param {string} key */
+		const names = (key) => Object.keys(features.find((/** @type {any} */ f) => f.key === key)?.schema.properties ?? {});
+		expect(names('phone')).not.toEqual(expect.arrayContaining(['defaultCallingCode']));
+		expect(names('phone')).not.toContain('trunkPrefix');
+		expect(names('phone_code')).not.toContain('countries');
+		expect(names('profile')).not.toContain('addressRequired');
+		expect(names('email_password')).not.toContain('resetHosts');
+		// the phone countries of the Portal limit who gets a code
+		await env.setting('phone_code', 'countries', ['GB']);
+		await env.setBusiness({ name: 'shop.example.com', country: 'GB' });
+		env.advance(3_600_000);
+		expect(code(await askCode('+1 202 555 0143'))).toBe('country_not_allowed');
+		await env.setting('phone_code', 'countries', []);
+		await env.setBusiness({ name: 'shop.example.com' });
+	});
+
+	it('reads a phone typed any usual way as one number, with the business country’s calling code (K-7, SA-3)', async () => {
 		env.advance(3_600_000);
 		// no calling code set and no country: a national number is refused
 		expect(code(await askCode('07700 900008'))).toBe('validation_failed');
-		env.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
-			status: 200,
-			body: { name: 'shop.example.com', country: 'GB' },
-		}));
-		await env.refreshBusiness();
+		await env.setBusiness({ name: 'shop.example.com', country: 'GB' });
 		expect((await askCode('07700 900008')).status).toBe(202);
 		const sent = env.messages().at(-1);
 		expect(sent.to).toMatchObject({ phone: '+447700900008' });
@@ -675,13 +689,14 @@ describe('K-27: rolling sessions, new recovery codes and reset links to another 
 			'https://other.shop.example.com/x',
 		])
 			expect(code(await forgot(url))).toBe('validation_failed');
-		const refused = await env.dashboard(
+		// the host names are the website's (Portal › Domains, pages and legal), and the Accounts setting is gone
+		const gone = await env.dashboard(
 			await env.adminSession(),
 			'PUT',
 			`/v1/dashboard/websites/${env.websiteId}/settings/email_password.resetHosts`,
-			{ value: ['not a host!'] },
+			{ value: ['admin.shop.example.com'] },
 		);
-		expect(refused.status).toBe(422);
+		expect(gone.status).toBe(404);
 		await env.setting('email_password', 'resetHosts', []);
 		expect(code(await forgot(page))).toBe('validation_failed');
 	});

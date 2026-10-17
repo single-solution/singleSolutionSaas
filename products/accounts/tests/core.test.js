@@ -11,7 +11,6 @@ import {
 	verifyTotp,
 } from '../adapters/crypto.js';
 import { appleClientSecret, createProviders, pkceChallenge } from '../adapters/providers.js';
-import { PHONE_COUNTRIES } from '@ss/contracts/phone';
 import { emailDomain } from '../core/identifiers.js';
 import {
 	checkAddresses,
@@ -39,16 +38,12 @@ import {
 import { createSnippets } from '../core/snippets.js';
 import { parseSecret } from '../server/service.js';
 import { appleKey, idToken } from './helpers.js';
-import phoneCode from '../schemas/phone_code.settings.json' with { type: 'json' };
 
 describe('identifiers', () => {
 	it('the domain of an address', () => {
 		expect(emailDomain('a@shop.example.com')).toBe('shop.example.com');
 	});
 
-	it('the allowed phone countries are the shared normalizer’s countries', () => {
-		expect(phoneCode.properties.countries.items.enum).toEqual([...PHONE_COUNTRIES]);
-	});
 });
 
 describe('profile', () => {
@@ -126,7 +121,7 @@ describe('profile', () => {
 			message: 'Use a postal code of the United States.',
 		});
 		expect(at({ country: 'ZZ' })).toMatchObject({ ok: false, field: 'addresses/0/country' });
-		// an address without a country is in the business.json country; no postal code where a country has none
+		// an address without a country is in the business country; no postal code where a country has none
 		expect(at({}, { country: 'JP' })).toMatchObject({ ok: false, field: 'addresses/0/postalCode' });
 		expect(at({ country: 'AE', region: 'Dubai' }, { required: ['postalCode'] })).toMatchObject({ ok: true });
 	});

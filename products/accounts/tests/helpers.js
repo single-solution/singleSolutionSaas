@@ -2,13 +2,14 @@
  * Test harness: Accounts on the kit, connected to the kit's fake Portal (`@ss/app-kit/testing`), with one website, its
  * two tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`) and fakes for every
  * outside service: Notifications (records what Accounts sends), other products (permissions, data rights, orders),
- * Google, Apple, Facebook, the breached-password list and the website itself (business.json). No real network call is
+ * Google, Apple, Facebook, the breached-password list and the website's settings in the Portal. No real network call is
  * ever made. Every answer `call()` sees is checked against `schemas/api.json` and the kit's own routes: a test fails
  * when an answer does not fit its description.
  * @module
  */
 import { generateKeyPairSync } from 'node:crypto';
-import { apiChecker, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import { apiChecker, createFakePortal, createMemoryStore, createNetwork, portalSectionsOf } from '@ss/app-kit/testing';
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createStore } from '../adapters/store.js';
@@ -286,8 +287,48 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	const paste = async (productId) =>
 		connect(productId, (await portal.issueToken({ websiteId, productId, kind: 'server' })).token);
 
+	/** What the merchant saved in the Portal's Website settings: no business facts and no phone, address or host rules yet. */
+	const site = { ...portalSectionsOf(websiteId, {}), pages: emptyWebsiteSettings(websiteId).pages };
+
+	/**
+	 * The merchant saves website settings in the Portal (Website settings): the product is told and fetches them.
+	 * @param {Partial<Pick<import('@ss/contracts').WebsiteSettings, 'business' | 'brand' | 'region' | 'pages' | 'team'>>} sections
+	 */
+	const setWebsite = async (sections) => {
+		Object.assign(site, sections);
+		t += 1000; // a second notice at the same second would read as a replay
+		await portal.saveWebsiteSettings(websiteId, site);
+		await flush();
+	};
+
+	/** The business facts in the Portal (name, country, time zone …). @param {Parameters<typeof portalSectionsOf>[1]} info */
+	const setBusiness = (info) => {
+		const next = portalSectionsOf(websiteId, info);
+		// the phone, address and currency rules the test saved stay
+		return setWebsite({
+			business: next.business,
+			brand: next.brand,
+			region: { ...site.region, country: next.region.country, timeZone: next.region.timeZone, language: next.region.language },
+		});
+	};
+
+	/**
+	 * What used to be Accounts settings and is now the website's in the Portal: the phone rules (calling code, trunk
+	 * prefix, countries), the required address parts and the extra host names.
+	 * @type {Record<string, (value: any) => Parameters<typeof setWebsite>[0]>}
+	 */
+	const PORTAL_SETTINGS = {
+		'phone.defaultCallingCode': (value) => ({ region: { ...site.region, phone: { ...site.region.phone, callingCode: value } } }),
+		'phone.trunkPrefix': (value) => ({ region: { ...site.region, phone: { ...site.region.phone, trunkPrefix: value } } }),
+		'phone_code.countries': (value) => ({ region: { ...site.region, phone: { ...site.region.phone, countries: value } } }),
+		'profile.addressRequired': (value) => ({ region: { ...site.region, address: { ...site.region.address, required: value } } }),
+		'email_password.resetHosts': (value) => ({ pages: { ...site.pages, hosts: value.map((/** @type {string} */ host) => host.toLowerCase()) } }),
+	};
+
 	/** @param {string} feature @param {string} name @param {unknown} value */
 	const setting = async (feature, name, value) => {
+		const portalSetting = PORTAL_SETTINGS[`${feature}.${name}`];
+		if (portalSetting) return setWebsite(portalSetting(value));
 		const response = await dashboard(
 			await adminSession(),
 			'PUT',
@@ -297,13 +338,6 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 			},
 		);
 		if (response.status !== 204) throw new Error(`setting: ${response.status} ${response.text}`);
-	};
-
-	/** Read business.json again (dashboard button), for example after a test changed its time zone. */
-	const refreshBusiness = async () => {
-		const response = await dashboard(await adminSession(), 'POST', `/v1/dashboard/websites/${websiteId}/business/refresh`);
-		if (response.status !== 200) throw new Error(`business: ${response.status} ${response.text}`);
-		return response.json;
 	};
 
 	/** A ticket for the admin widgets. @param {string[]} [permissions] */
@@ -354,7 +388,8 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		ticket,
 		admin,
 		messages,
-		refreshBusiness,
+		setWebsite,
+		setBusiness,
 		flush,
 		connectDatabase: () => connect('database', merchantDatabase()),
 		/** The website's records in the merchant database (tests put imported records straight in). */

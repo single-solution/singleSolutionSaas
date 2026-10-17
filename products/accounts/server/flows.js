@@ -567,9 +567,9 @@ export const createFlows = (product, service) => {
 		const body = bodyOf(ctx.body);
 		const email = normalizeEmail(body.email);
 		if (!email) throw invalid('email', 'Enter a valid email address.');
-		const { resetHosts } = await service.settings(s, 'email_password');
-		// a page of the website, or of a host of the merchant's listed for reset links (an admin on its own host, K-27)
-		const returnTo = returnAddress(body.returnTo, s.domain, /** @type {unknown[]} */ (resetHosts));
+		// a page of the website, or of a host of the merchant's listed for it in the Portal (Website settings › Domains, pages
+		// and legal: www, an admin on its own host, K-27)
+		const returnTo = returnAddress(body.returnTo, s.domain, (await product.website(s.websiteId)).pages.hosts);
 		if (!returnTo)
 			throw invalid(
 				'returnTo',
@@ -626,9 +626,9 @@ export const createFlows = (product, service) => {
 		const s = await service.site(ctx);
 		const phone = await service.phoneOf(s, bodyOf(ctx.body).phone);
 		if (!phone) throw invalid('phone', 'Enter the phone number with its country code.');
-		const { countries } = await service.settings(s, 'phone_code');
 		const { channel } = await service.settings(s, 'phone');
-		if (!phoneInCountries(phone, countries))
+		// the countries phone numbers are accepted from are the website's (Portal › Region and format › Phone rules)
+		if (!phoneInCountries(phone, (await product.website(s.websiteId)).region.phone.countries))
 			throw problem('country_not_allowed', 'Codes go only to numbers of the countries this website serves.');
 		await service.allowCode(s, await s.store.users.byPhone(phone), 'phone_code');
 		const sent = await sendCode(s, 'phone', phone, {}, (code) =>

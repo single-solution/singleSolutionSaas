@@ -7,16 +7,6 @@
 			"title": "Keep at least one address",
 			"description": "Once a user has an address, the last one cannot be removed.",
 			"default": false
-		},
-		"addressRequired": {
-			"type": "array",
-			"title": "Required address fields",
-			"description": "Each country's address format adds what it needs (a state and ZIP code in the US, a province and postal code in Canada, no postal code where a country has none), in its own order and with its own labels.",
-			"default": ["line1", "city"],
-			"items": {
-				"type": "string",
-				"enum": ["name", "line1", "line2", "area", "city", "region", "postalCode", "country", "phone"]
-			}
 		}
 	}
 }

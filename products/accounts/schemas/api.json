@@ -121,7 +121,7 @@
 				"country": {
 					"type": "string",
 					"maxLength": 60,
-					"description": "The country: its ISO 3166-1 alpha-2 code (any case) or English name, kept as the code; empty for the business.json country. Its address format (one table shared with Ecommerce) also requires the region and the postal code where the country does (a state and ZIP code in the US …), never a postal code where it has none, and checks the postal code's shape (422 at /addresses/<n>/<part>)."
+					"description": "The country: its ISO 3166-1 alpha-2 code (any case) or English name, kept as the code; empty for the business country (Website settings in the Portal). Its address format (one table shared with Ecommerce) also requires the region and the postal code where the country does (a state and ZIP code in the US …), never a postal code where it has none, and checks the postal code's shape (422 at /addresses/<n>/<part>)."
 				},
 				"phone": {
 					"type": "string",
