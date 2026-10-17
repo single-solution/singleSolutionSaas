@@ -268,7 +268,8 @@ describe('A2: phone + password', () => {
 		expect(sent).toMatchObject({ channel: 'whatsapp', template: 'accounts.phone_code', values: { minutes: 15 } });
 		expect(String(sent.values.code)).toMatch(/^\d{8}$/);
 		// staff invite someone by phone on the same channel
-		await env.switchOn(['email_password', 'phone_password', 'approval']);
+		// (a staff member's authority is the permissions of their role: Roles and permissions is on for staff routes)
+		await env.switchOn(['email_password', 'phone_password', 'approval', 'roles']);
 		await env.setting('approval', 'invitePageUrl', 'https://shop.example.com/join');
 		const invited = await env.serverCall('POST', '/v1/users/invite', { name: 'Ira Vale', phone: '+447700900344' });
 		expect(invited.status).toBe(201);

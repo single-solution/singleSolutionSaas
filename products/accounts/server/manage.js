@@ -3,7 +3,7 @@
  * requests) and roles with their permissions, through the merchant's server (server token) and the Users and Roles
  * admin widgets (tickets); the activity-log copies other products send (with their filters and counts); and the custom
  * fields set in the dashboard. Every change made through the server token or a ticket is written to the activity log
- * with the acting user (the ticket's staff member, else the `SS-Actor-*` user of a server-token call, else the
+ * with the acting user (the ticket's staff member, else the signed-in staff member of a server-token call, else the
  * server; PLAN 0.8.10 K2), the target's label and what changed as values (K9, A8: codes, numbers and yes/no, never a
  * sentence in one language).
  * @module

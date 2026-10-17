@@ -6,7 +6,7 @@
  * `product.handler(createRoutes(product))`.
  * @module
  */
-import { defineRoute, problem } from '@ss/app-kit';
+import { checkStaff, defineRoute, problem } from '@ss/app-kit';
 import { createAccount } from './account.js';
 import { renderDocs } from './docs.js';
 import { createFlows } from './flows.js';
@@ -36,6 +36,24 @@ export const createRoutes = (product) => {
 	const flows = createFlows(product, service);
 	const account = createAccount(product, service, flows);
 	const manage = createManage(product, service, flows);
+
+	/**
+	 * The user lookups the other products make with the pasted Accounts token (staff alerts and Chat's picker ask who has
+	 * a permission, Ecommerce asks whether an email address or phone number is a member): a call with the server token
+	 * alone may ask for a narrow answer only: a permission, an exact phone or email address, a search of at least 6
+	 * characters with at most 10 results. Listing or browsing users is the signed-in staff member's (`users.read`).
+	 * @param {(ctx: any) => unknown} handler
+	 */
+	const narrowOrStaff = (handler) => async (/** @type {any} */ ctx) => {
+		const { permission, phone, email, q, limit } = ctx.query;
+		const narrow =
+			Boolean(permission || phone || email) || (typeof q === 'string' && q.length >= 6 && Number(limit ?? Infinity) <= 10);
+		if (!narrow) {
+			const refused = await checkStaff(ctx, { productId: 'accounts', permission: 'users.read' });
+			if (refused) throw refused;
+		}
+		return handler(ctx);
+	};
 
 	/** The website's public keys for verifying sign-ins (no token: the merchant's server and products fetch them). @param {any} ctx */
 	const keys = async (ctx) => {
@@ -423,19 +441,69 @@ export const createRoutes = (product) => {
 		}),
 
 		// ------------------------------------------------------------------- the merchant's server (server token)
-		defineRoute({ method: 'GET', path: '/v1/users', auth: 'server', feature: 'roles', handler: manage.listUsers }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/users',
+			auth: 'server',
+			runtime: true,
+			feature: 'roles',
+			handler: narrowOrStaff(manage.listUsers),
+		}),
 		// counts with the list's filters (PLAN 0.8.10 K4)
-		defineRoute({ method: 'GET', path: '/v1/users/count', auth: 'server', feature: 'roles', handler: manage.countUsers }),
-		defineRoute({ method: 'GET', path: '/v1/users/counts', auth: 'server', feature: 'roles', handler: manage.countUsersBy }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/users/count',
+			auth: 'server',
+			permission: 'users.read',
+			feature: 'roles',
+			handler: manage.countUsers,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/users/counts',
+			auth: 'server',
+			permission: 'users.read',
+			feature: 'roles',
+			handler: manage.countUsersBy,
+		}),
 		// tags and saved views of the users list (A5)
-		defineRoute({ method: 'GET', path: '/v1/users/tags', auth: 'server', feature: 'roles', handler: manage.listTags }),
-		defineRoute({ method: 'GET', path: '/v1/users/views', auth: 'server', feature: 'roles', handler: manage.listViews }),
-		defineRoute({ method: 'PUT', path: '/v1/users/views', auth: 'server', feature: 'roles', handler: manage.orderViews }),
-		defineRoute({ method: 'PUT', path: '/v1/users/views/:key', auth: 'server', feature: 'roles', handler: manage.saveView }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/users/tags',
+			auth: 'server',
+			permission: 'users.read',
+			feature: 'roles',
+			handler: manage.listTags,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/users/views',
+			auth: 'server',
+			permission: 'users.read',
+			feature: 'roles',
+			handler: manage.listViews,
+		}),
+		defineRoute({
+			method: 'PUT',
+			path: '/v1/users/views',
+			auth: 'server',
+			permission: 'users.manage',
+			feature: 'roles',
+			handler: manage.orderViews,
+		}),
+		defineRoute({
+			method: 'PUT',
+			path: '/v1/users/views/:key',
+			auth: 'server',
+			permission: 'users.manage',
+			feature: 'roles',
+			handler: manage.saveView,
+		}),
 		defineRoute({
 			method: 'DELETE',
 			path: '/v1/users/views/:key',
 			auth: 'server',
+			permission: 'users.manage',
 			feature: 'roles',
 			handler: manage.deleteView,
 		}),
@@ -443,17 +511,40 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/users',
 			auth: 'server',
+			permission: 'users.manage',
 			feature: 'roles',
 			idempotent: true,
 			handler: manage.createUser,
 		}),
-		defineRoute({ method: 'GET', path: '/v1/users/:id', auth: 'server', feature: 'roles', handler: manage.getUser }),
-		defineRoute({ method: 'PATCH', path: '/v1/users/:id', auth: 'server', feature: 'roles', handler: manage.updateUser }),
-		defineRoute({ method: 'DELETE', path: '/v1/users/:id', auth: 'server', feature: 'roles', handler: manage.deleteUser }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/users/:id',
+			auth: 'server',
+			runtime: true,
+			feature: 'roles',
+			handler: manage.getUser,
+		}),
+		defineRoute({
+			method: 'PATCH',
+			path: '/v1/users/:id',
+			auth: 'server',
+			permission: 'users.manage',
+			feature: 'roles',
+			handler: manage.updateUser,
+		}),
+		defineRoute({
+			method: 'DELETE',
+			path: '/v1/users/:id',
+			auth: 'server',
+			permission: 'users.manage',
+			feature: 'roles',
+			handler: manage.deleteUser,
+		}),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/users/:id/sign-in-code',
 			auth: 'server',
+			permission: 'users.manage',
 			feature: 'staff_links',
 			handler: manage.signInCode,
 		}),
@@ -461,6 +552,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/users/:id/setup-link',
 			auth: 'server',
+			permission: 'users.manage',
 			feature: 'staff_links',
 			handler: manage.setupLink,
 		}),
@@ -468,6 +560,7 @@ export const createRoutes = (product) => {
 			method: 'GET',
 			path: '/v1/role-requests',
 			auth: 'server',
+			permission: 'users.read',
 			feature: 'role_requests',
 			handler: manage.listRequests,
 		}),
@@ -475,6 +568,7 @@ export const createRoutes = (product) => {
 			method: 'GET',
 			path: '/v1/role-requests/count',
 			auth: 'server',
+			permission: 'users.read',
 			feature: 'role_requests',
 			handler: manage.countRequests,
 		}),
@@ -482,6 +576,7 @@ export const createRoutes = (product) => {
 			method: 'GET',
 			path: '/v1/role-requests/counts',
 			auth: 'server',
+			permission: 'users.read',
 			feature: 'role_requests',
 			handler: manage.countRequestsBy,
 		}),
@@ -489,6 +584,7 @@ export const createRoutes = (product) => {
 			method: 'GET',
 			path: '/v1/role-requests/:id',
 			auth: 'server',
+			permission: 'users.read',
 			feature: 'role_requests',
 			handler: manage.readRequest,
 		}),
@@ -496,6 +592,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/role-requests/:id/invite',
 			auth: 'server',
+			permission: 'users.manage',
 			feature: 'role_requests',
 			handler: manage.inviteRequest,
 		}),
@@ -503,6 +600,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/role-requests/:id/setup-link',
 			auth: 'server',
+			permission: 'users.manage',
 			feature: 'role_requests',
 			handler: manage.renewRequestLink,
 		}),
@@ -510,6 +608,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/role-requests/:id/decline',
 			auth: 'server',
+			permission: 'users.manage',
 			feature: 'role_requests',
 			handler: manage.declineRequest,
 		}),
@@ -517,6 +616,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/role-requests/:id/reopen',
 			auth: 'server',
+			permission: 'users.manage',
 			feature: 'role_requests',
 			handler: manage.reopenRequest,
 		}),
@@ -524,6 +624,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/users/:id/sign-out',
 			auth: 'server',
+			permission: 'users.manage',
 			feature: 'roles',
 			handler: manage.signOutUser,
 		}),
@@ -531,6 +632,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/users/invite',
 			auth: 'server',
+			permission: 'users.manage',
 			feature: 'approval',
 			idempotent: true,
 			handler: manage.invite,
@@ -539,6 +641,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/users/:id/approve',
 			auth: 'server',
+			permission: 'users.manage',
 			feature: 'approval',
 			handler: manage.approve,
 		}),
@@ -546,6 +649,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/users/:id/decline',
 			auth: 'server',
+			permission: 'users.manage',
 			feature: 'approval',
 			handler: manage.decline,
 		}),
@@ -553,6 +657,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/users/:id/deletion/approve',
 			auth: 'server',
+			permission: 'users.manage',
 			feature: 'data_rights',
 			handler: manage.approveDeletion,
 		}),
@@ -560,6 +665,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/users/:id/deletion/reject',
 			auth: 'server',
+			permission: 'users.manage',
 			feature: 'data_rights',
 			handler: manage.rejectDeletion,
 		}),
@@ -567,6 +673,7 @@ export const createRoutes = (product) => {
 			method: 'GET',
 			path: '/v1/consents',
 			auth: 'server',
+			permission: 'users.read',
 			feature: 'consents',
 			handler: manage.consentList,
 		}),
@@ -574,25 +681,56 @@ export const createRoutes = (product) => {
 			method: 'GET',
 			path: '/v1/fields',
 			auth: 'server',
+			permission: 'users.read',
 			feature: 'custom_fields',
 			handler: manage.customFields,
 		}),
-		defineRoute({ method: 'GET', path: '/v1/roles', auth: 'server', feature: 'roles', handler: manage.listRoles }),
-		defineRoute({ method: 'GET', path: '/v1/roles/permissions', auth: 'server', feature: 'roles', handler: manage.catalog }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/roles',
+			auth: 'server',
+			runtime: true,
+			feature: 'roles',
+			handler: manage.listRoles,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/roles/permissions',
+			auth: 'server',
+			permission: 'roles.manage',
+			feature: 'roles',
+			handler: manage.catalog,
+		}),
 		defineRoute({
 			method: 'PUT',
 			path: '/v1/roles/permissions',
 			auth: 'server',
+			permission: 'roles.manage',
 			feature: 'roles',
 			handler: manage.saveOwnPermissions,
 		}),
-		defineRoute({ method: 'PUT', path: '/v1/roles/:key', auth: 'server', feature: 'roles', handler: manage.saveRole }),
-		defineRoute({ method: 'DELETE', path: '/v1/roles/:key', auth: 'server', feature: 'roles', handler: manage.deleteRole }),
+		defineRoute({
+			method: 'PUT',
+			path: '/v1/roles/:key',
+			auth: 'server',
+			permission: 'roles.manage',
+			feature: 'roles',
+			handler: manage.saveRole,
+		}),
+		defineRoute({
+			method: 'DELETE',
+			path: '/v1/roles/:key',
+			auth: 'server',
+			permission: 'roles.manage',
+			feature: 'roles',
+			handler: manage.deleteRole,
+		}),
 		// activity-log copies: other products send them with this website's Accounts token; the merchant's server reads them
 		defineRoute({
 			method: 'POST',
 			path: '/v1/activity-copies',
 			auth: 'server',
+			runtime: true,
 			feature: 'activity_copies',
 			handler: manage.receiveCopy,
 		}),
@@ -600,6 +738,7 @@ export const createRoutes = (product) => {
 			method: 'GET',
 			path: '/v1/activity-copies',
 			auth: 'server',
+			permission: 'activity.read',
 			feature: 'activity_copies',
 			handler: manage.listCopies,
 		}),
@@ -607,6 +746,7 @@ export const createRoutes = (product) => {
 			method: 'GET',
 			path: '/v1/activity-copies/count',
 			auth: 'server',
+			permission: 'activity.read',
 			feature: 'activity_copies',
 			handler: manage.countCopies,
 		}),
@@ -614,6 +754,7 @@ export const createRoutes = (product) => {
 			method: 'GET',
 			path: '/v1/activity-copies/counts',
 			auth: 'server',
+			permission: 'activity.read',
 			feature: 'activity_copies',
 			handler: manage.countCopiesBy,
 		}),

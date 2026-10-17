@@ -14,6 +14,8 @@
 			"get": {
 				"summary": "The activity log, newest first",
 				"x-ss-auth": "server",
+				"x-ss-permission": "audit.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -104,16 +106,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -169,6 +162,8 @@
 				"description": "422 validation_failed for a filter that does not fit.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "activity_copies",
+				"x-ss-permission": "activity.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -270,16 +265,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -310,6 +296,7 @@
 				"description": "Another product sends each logged staff action with this website’s Accounts server token: never message contents, secrets or addresses. 422 validation_failed when the entry does not fit or is for another website.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "activity_copies",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -317,16 +304,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -459,6 +437,8 @@
 				"summary": "Count the activity-log copies (the list’s filters)",
 				"x-ss-auth": "server",
 				"x-ss-feature": "activity_copies",
+				"x-ss-permission": "activity.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -539,16 +519,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -581,6 +552,8 @@
 				"description": "by=actor groups by the actor’s id.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "activity_copies",
+				"x-ss-permission": "activity.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -674,16 +647,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -714,6 +678,8 @@
 			"get": {
 				"summary": "Count the activity log",
 				"x-ss-auth": "server",
+				"x-ss-permission": "audit.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -771,16 +737,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -811,6 +768,8 @@
 			"get": {
 				"summary": "Count the activity log by action, actor or kind",
 				"x-ss-auth": "server",
+				"x-ss-permission": "audit.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -881,16 +840,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -3709,6 +3659,8 @@
 			"get": {
 				"summary": "Connections (state and last 4 characters only)",
 				"x-ss-auth": "server",
+				"x-ss-permission": "connections.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -3716,16 +3668,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -3768,6 +3711,8 @@
 			"delete": {
 				"summary": "Remove a connection",
 				"x-ss-auth": "server",
+				"x-ss-permission": "connections.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -3783,16 +3728,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -3814,6 +3750,8 @@
 			"put": {
 				"summary": "Save a connection ({ value }), tested live",
 				"x-ss-auth": "server",
+				"x-ss-permission": "connections.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -3829,16 +3767,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -3891,6 +3820,8 @@
 			"post": {
 				"summary": "Test a connection again",
 				"x-ss-auth": "server",
+				"x-ss-permission": "connections.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -3906,16 +3837,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -3948,6 +3870,8 @@
 				"description": "Your consents in your order (the terms consent is made on first use).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "consents",
+				"x-ss-permission": "users.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -3955,16 +3879,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -4008,6 +3923,7 @@
 			"post": {
 				"summary": "Delete one user's records",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4015,16 +3931,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -4108,6 +4015,7 @@
 			"post": {
 				"summary": "Export one user's records",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4115,16 +4023,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -4205,6 +4104,7 @@
 			"get": {
 				"summary": "Features with on/off and hourly price",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4212,16 +4112,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -4292,6 +4183,8 @@
 				"description": "Every custom field in your order, staff-only ones too (the visitor widgets get only the fields the user sees).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "custom_fields",
+				"x-ss-permission": "users.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -4299,16 +4192,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -4352,6 +4236,7 @@
 			"get": {
 				"summary": "The Format of money and dates",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4359,16 +4244,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -4397,6 +4273,8 @@
 			"put": {
 				"summary": "Save Format fields (null resets one)",
 				"x-ss-auth": "server",
+				"x-ss-permission": "settings.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -4404,16 +4282,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -4509,6 +4378,7 @@
 				"description": "Accounts derives nothing: it reports users whose role does not exist (they act as customer until it is imported) and role requests whose user is gone.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4516,16 +4386,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -4576,6 +4437,7 @@
 				"summary": "What the import holds now (ss-import verify)",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4583,16 +4445,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -4715,6 +4568,7 @@
 				"description": "collection: roles and fields (found by key), users (usr_…), requests (rrq_…) or copies, in that order (a user’s role must exist); 404 not_found for another. Send application/x-ndjson, one record of Accounts’ own shape per line, at most 1,000 records or 4 MB (413 payload_too_large; 415 unsupported_media_type). Each record replaces the stored one with its key; an unknown field (websiteId too) refuses the record by name. A user's roleSince defaults to its createdAt; a user or request without createdAt keeps the one stored, else gets the time of the import. Users keep their password hashes (bcrypt, pbkdf2$… with the imported_password_pepper connection, scrypt$…) and two-step secrets (sealed at once); an email address or phone number another user holds is refused. Nothing is sent.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4744,16 +4598,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -4853,6 +4698,7 @@
 				"description": "Removes the records an import wrote whose key lies after after and up to through (open ends when left out) and is not in keep, at most 1,000 per call (more: true: call again). Send the source’s keys sorted (byte order of their UTF-8), cut into calls. Only records an import wrote are removed: records made in Accounts itself stay, and a removed ready-made role comes back with its defaults. 422 validation_failed for keep; 413 payload_too_large over 1,000 keys.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -4882,16 +4728,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -5005,16 +4842,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -5092,6 +4920,7 @@
 			"get": {
 				"summary": "A list setting ({ value })",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -5107,16 +4936,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -5154,6 +4974,8 @@
 			"put": {
 				"summary": "Save a whole list setting ({ value })",
 				"x-ss-auth": "server",
+				"x-ss-permission": "settings.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -5169,16 +4991,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -5257,16 +5070,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -5318,16 +5122,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -5401,16 +5196,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -5482,16 +5268,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -5557,16 +5334,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -5612,16 +5380,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -5715,16 +5474,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -5793,16 +5543,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -5877,16 +5618,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -5933,16 +5665,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -5981,16 +5704,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -6048,16 +5762,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -6143,16 +5848,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -6234,16 +5930,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -6310,16 +5997,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -6383,16 +6061,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -6449,16 +6118,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -6524,16 +6184,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -6579,8 +6230,9 @@
 		},
 		"/v1/permissions": {
 			"get": {
-				"summary": "This product's permissions (for Accounts roles)",
+				"summary": "This product's permissions and the kit's own (for Accounts roles)",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -6588,16 +6240,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -6618,8 +6261,7 @@
 												"type": "object",
 												"required": [
 													"key",
-													"name",
-													"feature"
+													"name"
 												],
 												"additionalProperties": false,
 												"properties": {
@@ -6630,7 +6272,8 @@
 														"type": "string"
 													},
 													"feature": {
-														"type": "string"
+														"type": "string",
+														"description": "The feature it belongs to (the kit's own permissions, which every product offers, belong to none)."
 													}
 												}
 											}
@@ -6658,6 +6301,8 @@
 				"summary": "The role requests, newest first",
 				"x-ss-auth": "server",
 				"x-ss-feature": "role_requests",
+				"x-ss-permission": "users.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -6713,16 +6358,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -6766,16 +6402,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -6869,6 +6496,8 @@
 				"summary": "Count the role requests (the list’s filters)",
 				"x-ss-auth": "server",
 				"x-ss-feature": "role_requests",
+				"x-ss-permission": "users.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -6903,16 +6532,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -6945,6 +6565,8 @@
 				"description": "by=status groups the stored status: an expired request counts as invited.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "role_requests",
+				"x-ss-permission": "users.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -6991,16 +6613,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -7033,6 +6646,8 @@
 				"description": "The row the list gives, its status judged now (expired once an invite's setup link ran out). Read with the same access as the list. 404 not_found for an unknown id.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "role_requests",
+				"x-ss-permission": "users.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -7048,16 +6663,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -7090,6 +6696,8 @@
 				"description": "A pending request, or an invited one whose setup link still works or ran out. An invited request’s link stops working (its lookup says canceled), and what the invite did is undone: a user the invite created who was never signed in to and has no password is removed from Accounts (the request’s userId becomes null); otherwise, when the invite gave the role and the user still holds it, they get their role from before back. 409 conflict when it is completed or declined; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "role_requests",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -7105,16 +6713,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -7147,6 +6746,8 @@
 				"description": "Creates their user, or finds the user with that phone number (else email address), and answers a setup link for your staff to send, unless the user already has a password (the request is then completed). The role is given at the invite, or with Role requests → giveRoleAt set to completion when the request is completed (a new user has the default role until then, an existing user keeps theirs). 409 contact_unverified when that user never proved the phone or email and someone signed in to it (check with the person, confirm it on their user or remove that account, then invite again); 409 conflict when the request is not pending, its role is gone, another user has the contact, or the user's role ranks above the request's (a user has one role and a request never lowers it: change the role on their user if that is what you want); 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "role_requests",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -7162,16 +6763,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -7229,6 +6821,8 @@
 				"description": "It becomes pending. 409 conflict otherwise; 404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "role_requests",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -7244,16 +6838,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -7286,6 +6871,8 @@
 				"description": "For a request whose setup link still works or ran out (status invited or expired): the old link stops working (its lookup says canceled) and the request ends with the new one. A user who has a password by now completes the request at once (setupLink null; the role is given then with giveRoleAt completion). 409 conflict when the request is not invited, its role is gone or its user no longer exists (decline it, open it again and invite); 403 blocked; 404 not_found; 422 validation_failed when setupPageUrl is not a page of your website. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "role_requests",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -7301,16 +6888,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -7368,6 +6946,7 @@
 				"description": "Highest rank first, with the role for new sign-ups. The ready-made templates are made on first use; then they are your roles to change or delete.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -7375,16 +6954,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -7436,6 +7006,8 @@
 				"description": "Accounts’ own, each product’s whose server token you pasted (its GET /v1/permissions, kept 5 minutes) and your own names (source site).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "roles.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -7443,16 +7015,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -7504,6 +7067,8 @@
 				"description": "422 validation_failed for permissions.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "roles.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -7511,16 +7076,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -7587,6 +7143,8 @@
 				"description": "Any role but Owner and the role for new sign-ups (409 conflict: choose another role for new sign-ups first); the ready-made templates too, for good. Its users get the role for new sign-ups. 404 not_found for an unknown key.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "roles.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -7602,16 +7160,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -7635,6 +7184,8 @@
 				"description": "Creates the role or replaces it; the key is the path’s (2–40 lower-case letters, digits or _). Owner keeps every permission and rank 100. 422 validation_failed for the field, or for a role past the website’s Roles setting maxRoles (default 100).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "roles.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -7650,16 +7201,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -7723,16 +7265,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -7805,16 +7338,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -7856,6 +7380,7 @@
 			"get": {
 				"summary": "Settings schemas, and values of switched-on features",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -7863,16 +7388,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -7959,6 +7475,8 @@
 			"delete": {
 				"summary": "Reset one setting to the default",
 				"x-ss-auth": "server",
+				"x-ss-permission": "settings.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -7974,16 +7492,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -8027,6 +7536,8 @@
 				"summary": "Save one setting (<feature>.<setting>, { value })",
 				"description": "The feature must be on (else 403 feature_off); an invalid value answers 422 validation_failed with errors.",
 				"x-ss-auth": "server",
+				"x-ss-permission": "settings.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -8042,16 +7553,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -8132,16 +7634,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -8233,16 +7726,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -8341,16 +7825,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -8436,16 +7911,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -8546,16 +8012,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -8640,16 +8097,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -8726,16 +8174,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -8821,16 +8260,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -8916,16 +8346,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -9014,16 +8435,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -9123,16 +8535,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -9221,16 +8624,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -9305,16 +8699,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -9388,16 +8773,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -9499,16 +8875,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"requestBody": {
@@ -9594,6 +8961,7 @@
 			"get": {
 				"summary": "Widget texts",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -9601,16 +8969,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -9653,6 +9012,8 @@
 			"delete": {
 				"summary": "Reset one widget text to English",
 				"x-ss-auth": "server",
+				"x-ss-permission": "settings.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -9668,16 +9029,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -9707,6 +9059,8 @@
 				"summary": "Save one widget text ({ value })",
 				"description": "1–2000 characters with the same {placeholders} as the English text.",
 				"x-ss-auth": "server",
+				"x-ss-permission": "settings.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -9722,16 +9076,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -9782,6 +9127,7 @@
 			"get": {
 				"summary": "The widgets' theme",
 				"x-ss-auth": "server",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -9789,16 +9135,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -9827,6 +9164,8 @@
 			"put": {
 				"summary": "Save theme fields (null resets one)",
 				"x-ss-auth": "server",
+				"x-ss-permission": "settings.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -9834,16 +9173,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -9925,8 +9255,9 @@
 		"/v1/tickets": {
 			"post": {
 				"summary": "Ticket for an admin widget (15 minutes)",
-				"description": "Your server asks for a ticket for the member of your staff who opens an admin widget. Permissions of switched-off features are left out of the ticket.",
+				"description": "Your server asks for a ticket for the signed-in member of your staff who opens an admin widget: send their Accounts sign-in in SS-Sign-In next to the server token. The ticket is for that person and carries only the permissions of their role out of those asked for (and of switched-on features); the server token alone gets 403 needs_signed_in_staff.",
 				"x-ss-auth": "server",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -9934,16 +9265,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -9953,42 +9275,16 @@
 							"schema": {
 								"type": "object",
 								"required": [
-									"user",
 									"permissions",
 									"origin"
 								],
 								"properties": {
-									"user": {
-										"type": "object",
-										"required": [
-											"id",
-											"name",
-											"email"
-										],
-										"properties": {
-											"id": {
-												"type": "string",
-												"minLength": 1,
-												"maxLength": 256
-											},
-											"name": {
-												"type": "string",
-												"minLength": 1,
-												"maxLength": 200
-											},
-											"email": {
-												"type": "string",
-												"minLength": 1,
-												"maxLength": 320
-											}
-										}
-									},
 									"permissions": {
 										"type": "array",
 										"items": {
 											"type": "string"
 										},
-										"description": "Permissions of this product (GET /v1/permissions)."
+										"description": "Permissions of this product (GET /v1/permissions) the widget needs; the ticket gets those the person's role grants."
 									},
 									"origin": {
 										"type": "string",
@@ -10044,6 +9340,7 @@
 				"description": "Customers and staff in one list; filters combine.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -10204,16 +9501,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -10244,6 +9532,8 @@
 				"description": "An active user with a name and an email address or a phone number (both marked verified); nothing is sent. 422 validation_failed for the field, weak_password; 409 already_exists when another user has the address or number. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -10261,16 +9551,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -10361,6 +9642,8 @@
 				"summary": "Count the users (the list’s filters)",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "users.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -10500,16 +9783,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -10542,6 +9816,8 @@
 				"description": "by=status groups the stored status (active, pending, invited); count blocked users with status=blocked.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "users.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -10693,16 +9969,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -10735,6 +10002,8 @@
 				"description": "Makes an invited user and sends the invite link (inviteDays, default 7) by email when there is an address, else by SMS or WhatsApp (template accounts.invite); with deliver: return nothing is sent and the link comes back. 422 validation_failed for the field, or when invitePageUrl is not a page of your website; 409 already_exists; 503 notifications_not_connected and 502 not_sent (the invited user is removed again). 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "approval",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -10752,16 +10021,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -10830,6 +10090,8 @@
 				"description": "Your tags with how many users have each, by name.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "users.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -10837,16 +10099,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -10906,6 +10159,8 @@
 				"description": "The users list's saved views, in your order.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "users.read",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -10913,16 +10168,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -10966,6 +10212,8 @@
 				"description": "422 validation_failed for order unless it holds every view key once.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -10973,16 +10221,7 @@
 				],
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -11052,6 +10291,8 @@
 				"description": "404 not_found for an unknown key.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -11067,16 +10308,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -11100,6 +10332,8 @@
 				"description": "Creates the view or replaces it; the key is the path’s (1–40 lower-case letters, digits or _). 422 validation_failed for the field, or for the 51st view.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -11115,16 +10349,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -11186,6 +10411,8 @@
 				"description": "scope=all (default) erases the user at once here and in every connected product, as an approved deletion request does; scope=accounts removes them from Accounts only (the user, their sessions and codes) and every other product keeps its data: use it to remove someone from your team. 404 not_found; 422 validation_failed for scope. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -11214,16 +10441,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -11270,6 +10488,7 @@
 				"description": "404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-access": "runtime",
 				"security": [
 					{
 						"serverToken": []
@@ -11285,16 +10504,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -11325,6 +10535,8 @@
 				"description": "Only the members sent change. Blocking, and a new password, sign the user out everywhere. 404 not_found; 422 validation_failed for the field, weak_password; 409 already_exists when another user has the address or number. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -11340,16 +10552,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"requestBody": {
@@ -11457,6 +10660,8 @@
 				"description": "409 conflict when the user is not waiting; 404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "approval",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -11472,16 +10677,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -11514,6 +10710,8 @@
 				"description": "The account is removed. 409 conflict when the user is not waiting; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "approval",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -11529,16 +10727,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -11564,6 +10753,8 @@
 				"description": "Erases the user here and in every connected product. 409 conflict when the user did not ask; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "data_rights",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -11579,16 +10770,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -11621,6 +10803,8 @@
 				"description": "409 conflict when the user did not ask; 404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "data_rights",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -11636,16 +10820,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -11678,6 +10853,8 @@
 				"description": "The user chooses a password with it (POST /v1/setup-links/accept), also without an email address; valid setupDays (default 7). The link is your setupPageUrl with {code} replaced, else that page (or your website’s home page) with ?ss_setup=<code>. A new one cancels the old. 403 blocked; 404 not_found; 422 validation_failed when setupPageUrl is not a page of your website. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "staff_links",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -11693,16 +10870,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -11735,6 +10903,8 @@
 				"description": "6 digits for your staff to give the user (never sent), valid codeMinutes (Staff sign-in codes and setup links, default 15), single use; typed into the phone code, email code or phone + password screen. A new one cancels the old. 403 blocked; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "staff_links",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -11750,16 +10920,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -11807,6 +10968,8 @@
 				"description": "Sign-ins already given end within 15 minutes. 404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
+				"x-ss-permission": "users.manage",
+				"x-ss-access": "staff",
 				"security": [
 					{
 						"serverToken": []
@@ -11822,16 +10985,7 @@
 						}
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignInStaff"
 					}
 				],
 				"responses": {
@@ -11904,16 +11058,7 @@
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
-						"$ref": "#/components/parameters/SSActorId"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorName"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorRole"
-					},
-					{
-						"$ref": "#/components/parameters/SSActorEmail"
+						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
 				"responses": {
@@ -11951,7 +11096,7 @@
 			"serverToken": {
 				"type": "http",
 				"scheme": "bearer",
-				"description": "The website's server token: the merchant's server only, never with an Origin header. It also reaches every visitor route, acting for the visitor named by SS-Visitor-IP and, for a signed-in shopper, SS-Sign-In (their Accounts sign-in, checked for this website; a wrong, expired or foreign one is 401 invalid_sign_in)."
+				"description": "The website's server token: the merchant's server only, never with an Origin header. On its own it runs the shop (x-ss-access: runtime): it also reaches every visitor route, acting for the visitor named by SS-Visitor-IP and, for a signed-in shopper, SS-Sign-In (their Accounts sign-in, checked for this website; a wrong, expired or foreign one is 401 invalid_sign_in). Every change of configuration and every piece of staff work (x-ss-access: staff) also needs the verified Accounts sign-in of a signed-in staff member in SS-Sign-In, whose role has the permission: a stolen server token changes nothing by itself."
 			},
 			"ticket": {
 				"type": "http",
@@ -11970,42 +11115,24 @@
 					"maxLength": 45
 				}
 			},
-			"SSActorId": {
-				"name": "SS-Actor-Id",
+			"SSSignIn": {
+				"name": "SS-Sign-In",
 				"in": "header",
 				"required": false,
-				"description": "With the server token: the member of your staff the call acts for (1–64 of A–Z a–z 0–9 _ . : @ -).",
+				"description": "The signed-in shopper's Accounts sign-in, checked for this website (a wrong, expired or foreign one is 401 invalid_sign_in). Only a verified sign-in names the shopper: a user id alone is never taken.",
 				"schema": {
 					"type": "string",
-					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$"
+					"maxLength": 8192
 				}
 			},
-			"SSActorName": {
-				"name": "SS-Actor-Name",
+			"SSSignInStaff": {
+				"name": "SS-Sign-In",
 				"in": "header",
-				"required": false,
-				"description": "The acting member's name, percent-encoded UTF-8, at most 120 characters (with SS-Actor-Id).",
-				"schema": {
-					"type": "string"
-				}
-			},
-			"SSActorRole": {
-				"name": "SS-Actor-Role",
-				"in": "header",
-				"required": false,
-				"description": "The acting member's role, percent-encoded UTF-8, at most 40 characters.",
-				"schema": {
-					"type": "string"
-				}
-			},
-			"SSActorEmail": {
-				"name": "SS-Actor-Email",
-				"in": "header",
-				"required": false,
-				"description": "The acting member's email address.",
+				"required": true,
+				"description": "The Accounts sign-in of the signed-in staff member whose role has the permission this call needs, checked for this website. The server token alone changes nothing: without it the call is 403 needs_signed_in_staff, with a role that lacks the permission 403 forbidden, with a sign-in of another website or an expired or forged one 401 invalid_sign_in. The person it names is who the activity log and the histories record.",
 				"schema": {
 					"type": "string",
-					"maxLength": 320
+					"maxLength": 8192
 				}
 			}
 		},
@@ -12359,8 +11486,8 @@
 					"label",
 					"kind",
 					"neededBy",
+					"set",
 					"state",
-					"last4",
 					"message",
 					"testedAt"
 				],
@@ -12396,10 +11523,9 @@
 							"test_failed"
 						]
 					},
-					"last4": {
-						"type": "string",
-						"maxLength": 4,
-						"description": "The last 4 characters of the secret ('' when none)."
+					"set": {
+						"type": "boolean",
+						"description": "Whether a value is stored. Nothing of the value ever comes back, not even its last characters."
 					},
 					"message": {
 						"type": [

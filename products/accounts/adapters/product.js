@@ -226,8 +226,14 @@ export const createProductInstance = (options) => {
 	const twoStepFromImport = (websiteId, userId, { secret, recoveryHashes }) =>
 		importedTwoStep(sealer, { secret, recoveryHashes, aad: totpAadOf(websiteId, userId), now: now() });
 
+	// Accounts issues the sign-ins, so it checks the staff's itself (with its signing key, the open session and the live
+	// role); the verification is given by the service, built once the routes are
+	const signIns = /** @type {{ verify: ((input: { websiteId: string, token: string, ctx?: any }) => Promise<any>) | null }} */ ({
+		verify: null,
+	});
 	const product = createProduct({
 		...options,
+		ownSignIns: async (input) => (signIns.verify ? signIns.verify(input) : { ok: false, code: 'accounts_unavailable' }),
 		store,
 		manifest,
 		strings,
@@ -342,7 +348,18 @@ export const createProductInstance = (options) => {
 			twoStepFromImport,
 		}),
 	});
-	return Object.freeze({ ...product, providers, sealer, now, send, twoStepFromImport });
+	return Object.freeze({
+		...product,
+		providers,
+		sealer,
+		now,
+		send,
+		twoStepFromImport,
+		/** The service's check of a staff member's sign-in (`createService`). @param {NonNullable<typeof signIns.verify>} verify */
+		useStaffSignIns: (verify) => {
+			signIns.verify = verify;
+		},
+	});
 };
 
 /** @typedef {ReturnType<typeof createProductInstance>} Product */

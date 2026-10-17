@@ -446,6 +446,40 @@ export const createService = (product) => {
 	};
 
 	/**
+	 * A staff member's sign-in on a staff route of the server token (the kit's `staff.js`): signed by this website's key and
+	 * made for it, its session still open, its user not blocked, and the permissions of the user's role as they are now
+	 * (not as they were at sign-in; none while Roles and permissions is off).
+	 * @param {{ websiteId: string, token: string, ctx?: any }} input
+	 * @returns {Promise<{ ok: true, user: Record<string, any>, claims: Readonly<Record<string, unknown>> } | { ok: false, code: string }>}
+	 */
+	const verifyStaffSignIn = async ({ websiteId, token, ctx }) => {
+		if (!ctx || ctx.websiteId !== websiteId) return { ok: false, code: 'audience' };
+		const s = await site(ctx);
+		const { publicJwk } = await signingKey(s);
+		const checked = verifyIdentityToken(token, { issuer: s.base, jwks: [publicJwk], audience: s.websiteId }, { now });
+		if (!checked.ok) return { ok: false, code: checked.code };
+		const sid = checked.identity.claims.sid;
+		if (typeof sid !== 'string') return { ok: false, code: 'malformed' };
+		const session = await s.store.sessions.get(sid);
+		const user = await s.store.users.get(checked.identity.subject);
+		if (!session || session.revokedAt || session.expiresAt.getTime() <= now() || !user || user.blocked || endedByPassword(session, user))
+			return { ok: false, code: 'expired' };
+		const role = s.on.includes('roles') ? await roleOf(s, user) : null;
+		return {
+			ok: true,
+			claims: checked.identity.claims,
+			user: {
+				id: user.id,
+				...(user.name ? { name: user.name } : {}),
+				...(user.email ? { email: user.email } : {}),
+				...(user.phone ? { phone: user.phone } : {}),
+				...(role ? { role: role.key, permissions: role.permissions } : {}),
+			},
+		};
+	};
+	product.useStaffSignIns(verifyStaffSignIn);
+
+	/**
 	 * Check a user's password (PLAN 0.8.10 A1): Accounts' own scrypt hash, or an imported bcrypt or peppered PBKDF2
 	 * hash (the pepper from the `imported_password_pepper` connection), which is replaced with scrypt after a good
 	 * check. A user without a password takes as long as a real check.

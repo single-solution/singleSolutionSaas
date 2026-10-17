@@ -129,20 +129,22 @@ describe('A4: staff and customer management', () => {
 		expect(await ids('phoneDigits=5678')).toEqual([rome.id]);
 		await server('DELETE', `/v1/users/${berlin.id}`, { reason: 'test' });
 		await server('DELETE', `/v1/users/${rome.id}`, { reason: 'test' });
+		// (the staff member of the harness's server calls is an Owner as well)
+		const harness = (await server('GET', '/v1/users?q=staff%40shop.example.com')).json.items[0].id;
 		expect((await ids('permission=chat:inbox.reply')).sort()).toEqual(
-			[people.owner.id, people.manager.id, people.support.id].sort(),
+			[people.owner.id, people.manager.id, people.support.id, harness].sort(),
 		);
-		expect(await ids('permission=accounts:users.manage&roles=owner')).toEqual([people.owner.id]);
+		expect((await ids('permission=accounts:users.manage&roles=owner')).sort()).toEqual([people.owner.id, harness].sort());
 		// Owner holds every permission
-		expect(await ids('permission=nobody:nothing')).toEqual([people.owner.id]);
+		expect((await ids('permission=nobody:nothing')).sort()).toEqual([people.owner.id, harness].sort());
 		expect(code(await server('GET', '/v1/users?permission=bad'))).toBe('validation_failed');
-		expect((await ids('roles=owner,support_staff')).sort()).toEqual([people.owner.id, people.support.id].sort());
+		expect((await ids('roles=owner,support_staff')).sort()).toEqual([people.owner.id, people.support.id, harness].sort());
 		expect(await ids(`createdAfter=${encodeURIComponent(new Date(env.now() + 1).toISOString())}`)).toEqual([]);
 		expect(code(await server('GET', '/v1/users?createdAfter=yesterday'))).toBe('validation_failed');
 		await server('PATCH', `/v1/users/${people.customer.id}`, { blocked: true, blockedReason: 'Test' });
 		expect(await ids('blocked=true')).toEqual([people.customer.id]);
 		expect(await ids('blocked=false&roles=customer')).toEqual([people.ada.id]);
-		expect((await server('GET', '/v1/users/count?blocked=false&permission=chat:inbox.reply')).json.count).toBe(3);
+		expect((await server('GET', '/v1/users/count?blocked=false&permission=chat:inbox.reply')).json.count).toBe(4);
 		await server('PATCH', `/v1/users/${people.customer.id}`, { blocked: false });
 		// the server answers what Chat and Ecommerce staff alerts read (K6)
 		const alerts = await server('GET', '/v1/users?permission=chat:inbox.reply&blocked=false&limit=100');
@@ -163,23 +165,25 @@ describe('A4: staff and customer management', () => {
 		expect(code(await server('PATCH', `/v1/users/${people.owner.id}`, { role: 'customer' }, olga))).toBe('forbidden');
 		const second = await create({ name: 'Otto Owner', email: 'otto@example.com', role: 'owner' });
 		expect(code(await server('PATCH', `/v1/users/${second.id}`, { blocked: true }, olga))).toBe('ok'.slice(2));
+		// a blocked Owner is signed out and cannot act at all: the sign-in is checked against the live user
 		const otto = asUser(second.id, 'Otto Owner');
-		const last = await server('PATCH', `/v1/users/${people.owner.id}`, { role: 'customer' }, otto);
-		expect(code(last)).toBe('forbidden');
-		expect(last.json.detail).toMatch(/last Owner/);
-		// an acting user who is not a user of Accounts is checked by id only; without one the server is all-powerful
-		expect((await server('PATCH', `/v1/users/${people.owner.id}`, { notes: 'set by the shop' }, asUser('ext_1'))).status).toBe(
-			200,
-		);
+		const blockedActing = await server('PATCH', `/v1/users/${people.owner.id}`, { role: 'customer' }, otto);
+		expect(code(blockedActing)).toBe('invalid_sign_in');
+		// (the guard for the last Owner stays as a second wall: two Owners can never both be demoted by one of them)
+		// nobody who is not a user of Accounts can act: no sign-in, no change (the server token alone is not a person)
+		const nobody = await env.call('PATCH', `/v1/users/${people.owner.id}`, {
+			token: env.server,
+			bare: true,
+			body: { notes: 'set by the shop' },
+			headers: { 'ss-actor-id': 'ext_1', 'ss-actor-name': 'Ext' },
+		});
+		expect(code(nobody)).toBe('needs_signed_in_staff');
 		expect((await server('PATCH', `/v1/users/${second.id}`, { blocked: false })).status).toBe(200);
 		// a ticket's user is checked the same way
 		const ticket = await env.call('POST', '/v1/tickets', {
 			token: env.server,
-			body: {
-				user: { id: people.manager.id, name: 'Mo', email: 'mo@example.com' },
-				permissions: ['users.read', 'users.manage'],
-				origin: ADMIN_ORIGIN,
-			},
+			staff: { id: people.manager.id, name: 'Mo', email: 'mo@example.com' },
+			body: { permissions: ['users.read', 'users.manage'], origin: ADMIN_ORIGIN },
 		});
 		expect(code(await env.admin(ticket.json.ticket, 'DELETE', `/v1/admin/users/${people.owner.id}`, {}))).toBe('forbidden');
 	});

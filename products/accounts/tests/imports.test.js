@@ -26,6 +26,10 @@ const code = (res) =>
 		.split('/')
 		.pop();
 
+/** A call of the importer (a program): the server token alone, while the import feature is on. @param {string} method @param {string} path @param {unknown} [body] */
+const importer = (method, path, body) =>
+	env.call(method, path, { token: env.server, bare: true, ...(body === undefined ? {} : { body }) });
+
 /** NDJSON of records (a string line is sent as it is). @param {Array<unknown>} records */
 const ndjson = (records) => records.map((record) => (typeof record === 'string' ? record : JSON.stringify(record))).join('\n');
 
@@ -36,6 +40,7 @@ const ndjson = (records) => records.map((record) => (typeof record === 'string' 
 const send = (collection, records, { dryRun = false } = {}) =>
 	env.call('POST', `/v1/import/${collection}${dryRun ? '?dryRun=1' : ''}`, {
 		token: env.server,
+		bare: true,
 		raw: ndjson(records),
 		headers: { 'content-type': 'application/x-ndjson' },
 	});
@@ -163,7 +168,7 @@ afterAll(async () => {
 describe('import routes', () => {
 	it('answer 403 feature_off while import is off', async () => {
 		expect(code(await send('users', [users()[0]]))).toBe('feature_off');
-		expect(code(await env.serverCall('GET', '/v1/import/status'))).toBe('feature_off');
+		expect(code(await importer('GET', '/v1/import/status'))).toBe('feature_off');
 		await env.switchOn([
 			'email_password',
 			'phone_password',
@@ -218,7 +223,7 @@ describe('import routes', () => {
 		expect(pathsOf(answer, 12)).toEqual(['/custom/shoe']);
 		// the role of a dry run is not there yet: roles are imported first
 		expect(pathsOf(answer, 13)).toEqual(['/role']);
-		const status = (await env.serverCall('GET', '/v1/import/status')).json;
+		const status = (await importer('GET', '/v1/import/status')).json;
 		expect(status.collections).toMatchObject({ users: 0, requests: 0, copies: 0, fields: 0 });
 		expect(status.imported).toMatchObject({ roles: 0, users: 0 });
 		expect(env.messages()).toEqual([]);
@@ -336,9 +341,9 @@ describe('import routes', () => {
 
 	it('prunes what the source no longer has; finish reports what points nowhere; status sums', async () => {
 		const keep = [ids.staff, ids.owner, ids.member].sort();
-		const dry = (await env.serverCall('POST', '/v1/import/users/prune?dryRun=1', { keep })).json;
+		const dry = (await importer('POST', '/v1/import/users/prune?dryRun=1', { keep })).json;
 		expect(dry).toMatchObject({ removed: 1, keys: [ids.customer], dryRun: true });
-		expect((await env.serverCall('POST', '/v1/import/users/prune', { keep })).json).toMatchObject({ removed: 1 });
+		expect((await importer('POST', '/v1/import/users/prune', { keep })).json).toMatchObject({ removed: 1 });
 		expect(code(await env.serverCall('GET', `/v1/users/${ids.customer}`))).toBe('not_found');
 
 		// a request whose user is gone, and users of a role pruned away
@@ -353,24 +358,25 @@ describe('import routes', () => {
 				completedAt: '2024-02-02T00:00:00Z',
 			},
 		]);
-		expect((await env.serverCall('POST', '/v1/import/roles/prune', { keep: [] })).json).toMatchObject({ removed: 1 });
-		expect((await env.serverCall('POST', '/v1/import/finish')).json).toEqual({
+		expect((await importer('POST', '/v1/import/roles/prune', { keep: [] })).json).toMatchObject({ removed: 1 });
+		expect((await importer('POST', '/v1/import/finish')).json).toEqual({
 			finished: true,
 			usersWithUnknownRole: 1,
 			requestsWithUnknownUser: 1,
 		});
 		await send('roles', roles);
-		expect((await env.serverCall('POST', '/v1/import/finish')).json).toMatchObject({ usersWithUnknownRole: 0 });
+		expect((await importer('POST', '/v1/import/finish')).json).toMatchObject({ usersWithUnknownRole: 0 });
 
-		const status = (await env.serverCall('GET', '/v1/import/status')).json;
+		const status = (await importer('GET', '/v1/import/status')).json;
 		expect(status.imported).toEqual({ roles: 1, fields: 2, users: 3, requests: 3, copies: 1 });
-		expect(status.collections).toMatchObject({ fields: 2, users: 3, requests: 3, copies: 1 });
+		// (users: the three imported and the staff member the harness's staff calls signed in as)
+		expect(status.collections).toMatchObject({ fields: 2, users: 4, requests: 3, copies: 1 });
 		expect(status.totals).toEqual({
-			'users.staff': 2,
+			'users.staff': 3,
 			'users.withPassword': 3,
 			'users.twoStep': 1,
 			'users.role.member': 1,
-			'users.role.owner': 1,
+			'users.role.owner': 2,
 			'users.role.support_staff': 1,
 			'requests.pending': 1,
 		});

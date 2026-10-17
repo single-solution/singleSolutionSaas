@@ -19,10 +19,11 @@ const code = (res) =>
 const ZOE = Object.freeze({
 	'ss-actor-id': 'usr_staff1',
 	'ss-actor-name': encodeURIComponent('Zoë Staff'),
-	'ss-actor-role': encodeURIComponent('Business manager'),
+	'ss-actor-role': encodeURIComponent('Owner'),
 });
-const ZOE_ACTOR = { kind: 'user', id: 'usr_staff1', name: 'Zoë Staff', role: 'Business manager' };
-const SERVER_ACTOR = { kind: 'server', id: 'server', name: 'Server' };
+// (the staff members are users of Accounts: the harness makes them, with the id Accounts gives)
+const ZOE_ACTOR = { kind: 'user', id: expect.stringMatching(/^usr_/), name: 'Zoë Staff', role: 'owner' };
+const SERVER_ACTOR = { kind: 'user', id: expect.stringMatching(/^usr_/), name: 'Test Staff', role: 'owner' };
 
 /**
  * A server-token call (no Origin), optionally for one visitor (`SS-Visitor-IP`) and by an acting user.
@@ -119,11 +120,13 @@ describe('the acting user and the labels of Accounts’ own activity log (K2, K9
 		const quinn = await userOf('quinn@example.com');
 		const dee = await userOf('dee@example.com');
 
-		// a malformed acting user is refused before anything happens
-		const bad = await fromServer('POST', `/v1/users/${pia.id}/approve`, {
-			headers: { 'ss-actor-id': 'not valid!', 'ss-actor-name': 'X' },
+		// headers that only name a person are refused before anything happens: nobody is signed in
+		const bad = await env.call('POST', `/v1/users/${pia.id}/approve`, {
+			token: env.server,
+			bare: true,
+			headers: { 'ss-actor-id': 'usr_owner', 'ss-actor-name': 'X' },
 		});
-		expect(code(bad)).toBe('invalid_actor');
+		expect(code(bad)).toBe('needs_signed_in_staff');
 		expect((await userOf('pia@example.com')).status).toBe('pending');
 
 		expect((await fromServer('POST', `/v1/users/${pia.id}/approve`, { headers: ZOE })).json.status).toBe('active');
@@ -172,7 +175,7 @@ describe('the acting user and the labels of Accounts’ own activity log (K2, K9
 		const t = await env.ticket(['users.read', 'users.manage', 'roles.manage']);
 		expect((await env.admin(t, 'POST', `/v1/admin/users/${quinn.id}/sign-out`)).status).toBe(204);
 		expect((await activity('action=user.signed_out'))[0]).toMatchObject({
-			actor: { kind: 'staff', id: 'usr_staff', name: 'Sam Staff' },
+			actor: { kind: 'staff', id: expect.stringMatching(/^usr_/), name: 'Sam Staff' },
 			label: 'Quinn Q',
 			values: { signedOut: 1 },
 		});
@@ -324,7 +327,7 @@ describe('activity-log copies (K9)', () => {
 			}),
 			copy('2026-10-01T14:59:00Z', {
 				productId: 'ecommerce',
-				actor: SERVER_ACTOR,
+				actor: { kind: 'server', id: 'server', name: 'Server' },
 				action: 'order.refunded',
 				target: 'ord_1',
 				label: 'SH-2026-0043',

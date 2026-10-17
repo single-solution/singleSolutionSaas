@@ -13,6 +13,7 @@ import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createStore } from '../adapters/store.js';
 import { createRoutes } from '../server/routes.js';
+import { staffSignIns } from '../testing.js';
 
 export const BASE = 'https://accounts.example.dev';
 const DOMAIN = 'shop.example.com';
@@ -144,10 +145,18 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	 * @param {string} method
 	 * @param {string} path
 	 * @param {{ token?: string, origin?: string, body?: unknown, raw?: string, cookie?: string, signIn?: string,
-	 *   headers?: Record<string, string>, after?: boolean }} [init]
+	 *   headers?: Record<string, string>, after?: boolean, bare?: boolean, staff?: Record<string, any> }} [init] `bare`: the
+	 *   server token alone; `staff`: who is signed in (the website's server with a staff Owner signed in otherwise)
 	 */
-	const call = async (method, path, { token, origin, body, raw, cookie, signIn, headers = {}, after = true } = {}) => {
+	const call = async (
+		method,
+		path,
+		{ token, origin, body, raw, cookie, signIn, headers = {}, after = true, bare = false, staff } = {},
+	) => {
 		requests += 1;
+		if (token === server && !bare && !signIn && headers['ss-sign-in'] === undefined && headers['ss-visitor-ip'] === undefined)
+			// eslint-disable-next-line no-param-reassign -- the harness signs the staff member in
+			headers = await staffHeaders({ headers, staff });
 		const response = await handler(
 			new Request(`${BASE}${path}`, {
 				method,
@@ -192,8 +201,53 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 			...(signIn ? { signIn } : {}),
 		});
 
-	/** A server-token request. @param {string} method @param {string} path @param {unknown} [body] */
-	const serverCall = (method, path, body) => call(method, path, { token: server, ...(body === undefined ? {} : { body }) });
+	/**
+	 * A server-token request (a staff Owner signed in unless `staff` says who). @param {string} method @param {string} path
+	 * @param {unknown} [body] @param {Record<string, any>} [staff]
+	 */
+	const serverCall = (method, path, body, staff) =>
+		call(method, path, { token: server, ...(body === undefined ? {} : { body }), ...(staff ? { staff } : {}) });
+
+	// ---------------------------------------------------------------------------------------- staff sign-ins
+	// A staff member's sign-in is Accounts' own: a user of the website with a role and an open session, signed with the
+	// website's key. The harness makes the user on first use (the website's database connected, Roles on) and signs them in
+	// the way a person would be (`issue`); without them the call goes with the server token alone.
+	const staffSignIn = staffSignIns(product, {
+		websiteId,
+		merchantId: 'mer_0123456789abcdefghjkmnpq',
+		domain: DOMAIN,
+		base: BASE,
+	});
+
+	/**
+	 * The headers of a staff member's call from the website's server: the `ss-actor-*` headers of older tests name an
+	 * existing user (or a new one made for the name), `staff` names one too; an Owner otherwise.
+	 * @param {{ headers?: Record<string, string>, staff?: Record<string, any> }} [input]
+	 * @returns {Promise<Record<string, string>>}
+	 */
+	const staffHeaders = async ({ headers = {}, staff = {} } = {}) => {
+		const { 'ss-actor-id': id, 'ss-actor-name': name, 'ss-actor-role': role, 'ss-actor-email': email, ...rest } = headers;
+		if (rest['ss-sign-in'] !== undefined) return rest;
+		try {
+			const signIn = await staffSignIn({
+				...((staff.id ?? id) ? { id: staff.id ?? id } : {}),
+				...((staff.name ?? name) ? { name: staff.name ?? (name ? decodeURIComponent(name) : undefined) } : {}),
+				// (older tests name a role by its label, 'Business manager'; the user's role is its key)
+				...((staff.role ?? role)
+					? {
+							role: decodeURIComponent(String(staff.role ?? role))
+								.toLowerCase()
+								.replace(/\s+/g, '_'),
+						}
+					: {}),
+				...((staff.email ?? email) ? { email: staff.email ?? email } : {}),
+			});
+			return { ...rest, 'ss-sign-in': signIn };
+		} catch {
+			// no database or no Roles yet: the server token goes alone
+			return rest;
+		}
+	};
 
 	/** An admin's dashboard session (Owner by default); returns the cookie. @param {'owner' | 'support'} [role] */
 	const adminSession = async (role = 'owner') => {
@@ -254,11 +308,16 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 
 	/** A ticket for the admin widgets. @param {string[]} [permissions] */
 	const ticket = async (permissions = ['users.read', 'users.manage', 'roles.manage']) => {
-		const response = await serverCall('POST', '/v1/tickets', {
-			user: { id: 'usr_staff', name: 'Sam Staff', email: 'sam@example.com' },
-			permissions,
-			origin: ADMIN_ORIGIN,
-		});
+		const response = await serverCall(
+			'POST',
+			'/v1/tickets',
+			{ permissions, origin: ADMIN_ORIGIN },
+			{
+				id: 'usr_staff',
+				name: 'Sam Staff',
+				email: 'sam@example.com',
+			},
+		);
 		return /** @type {string} */ (response.json.ticket);
 	};
 
@@ -275,6 +334,8 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	return {
 		portal,
 		product,
+		staffSignIn,
+		staffHeaders,
 		calls,
 		responders,
 		websiteId,
