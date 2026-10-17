@@ -336,11 +336,10 @@ beforeAll(async () => {
 		tokens[id] = await sys.tokens(m.merchantId, websiteId, id);
 	}
 	await sys.addCredits(m.merchantId, 100);
-	const owner = await sys.owner();
 
 	// Accounts: phone + password sign-in with roles; a member role; a manager whose role grants ecommerce:orders.read
 	await dashboardOf(ACCOUNTS, 'accounts', '/features', { on: ['phone_password', 'roles'] });
-	await sys.connectDatabase(await sys.adminSession(owner, websiteId, 'accounts'), websiteId, ACCOUNTS);
+	await sys.connectDatabase(websiteId, ACCOUNTS);
 	await configureOn(ACCOUNTS, 'accounts', {
 		'phone.defaultCallingCode': '+44',
 		'phone.trunkPrefix': '0',
@@ -361,7 +360,7 @@ beforeAll(async () => {
 
 	// Payments: the payment API and its manual payment method bank_transfer with the store's account (P1, P2)
 	await dashboardOf(PAYMENTS, 'payments', '/features', { on: ['payment_api', 'manual_payments'] });
-	await sys.connectDatabase(await sys.adminSession(owner, websiteId, 'payments'), websiteId, PAYMENTS);
+	await sys.connectDatabase(websiteId, PAYMENTS);
 	await configureOn(PAYMENTS, 'payments', {
 		'list.manual_methods': [
 			{
@@ -388,7 +387,7 @@ beforeAll(async () => {
 
 	// Notifications: email through the merchant's provider, with the shopper's and the staff's templates
 	await dashboardOf(NOTIFY, 'notifications', '/features', { on: ['email'] });
-	await sys.connectDatabase(await sys.adminSession(owner, websiteId, 'notifications'), websiteId, NOTIFY);
+	await sys.connectDatabase(websiteId, NOTIFY);
 	await dashboardOf(NOTIFY, 'notifications', '/connections/email', {
 		value: { provider: 'resend', secret: 're_live_key_0044', from: 'Example Shop <shop@shop.example.com>' },
 	});
@@ -406,7 +405,7 @@ beforeAll(async () => {
 	])
 		await dashboardOf(NOTIFY, 'notifications', '/templates', { key, channel: 'email', subject, text });
 
-	// Ecommerce: the features these tests use, its database, the bucket and the three pasted tokens
+	// Ecommerce: the features these tests use, its database and the bucket (entered once in the Portal); its links to Accounts, Payments and Notifications are the Portal's
 	const support = await sys.admin('support');
 	await sys.switchFeatures(await sys.adminSession(support.client, websiteId), websiteId, [
 		'catalog',
@@ -424,21 +423,14 @@ beforeAll(async () => {
 		'staff_alerts',
 		'alerts',
 	]);
-	const cookie = await sys.adminSession(owner, websiteId);
-	await sys.connectDatabase(cookie, websiteId);
-	await dashboardOf(SHOP, 'ecommerce', '/connections/storage', {
-		value: {
-			endpoint: BUCKET,
-			region: 'auto',
-			bucket: 'shop',
-			accessKeyId: 'AKIAORDERS',
-			secretAccessKey: 'orders-secret-0123456789',
-		},
+	await sys.connectDatabase(websiteId);
+	await sys.connectStorage(websiteId, {
+		endpoint: BUCKET,
+		region: 'auto',
+		bucket: 'shop',
+		accessKeyId: 'AKIAORDERS',
+		secretAccessKey: 'orders-secret-0123456789',
 	});
-	for (const id of ['accounts', 'payments', 'notifications']) {
-		const pasted = await dashboardOf(SHOP, 'ecommerce', `/connections/${id}`, { value: tokens[id]?.server });
-		expect(pasted).toMatchObject({ status: 'connected' });
-	}
 	await configure({
 		// the website's facts, region and Format (Website settings in the Portal)
 		'business.name': 'Example Shop',

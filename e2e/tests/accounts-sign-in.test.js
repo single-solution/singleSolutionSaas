@@ -134,7 +134,7 @@ beforeAll(async () => {
 		'staff_links',
 		'role_requests',
 	]);
-	await sys.connectDatabase(cookie, websiteId);
+	await sys.connectDatabase(websiteId);
 	staffSignIn = staffSignIns(/** @type {any} */ (sys.product), {
 		websiteId,
 		merchantId: m.merchantId,

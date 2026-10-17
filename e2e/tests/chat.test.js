@@ -1,8 +1,8 @@
 /**
  * PLAN 0.12 step 8: Chat against the REAL Portal, with the real Accounts and Notifications next to it — connect
  * (manifest and price list), price and feature reports, a guest message answered by a faked AI provider through the
- * browser token the Portal issued, a signed-in visitor trusted through the pasted Accounts token, an inbox reply through
- * a ticket, a `Chat needs you` staff alert delivered through the pasted Notifications token (the email provider is a
+ * browser token the Portal issued, a signed-in visitor trusted through the Portal's link to Accounts, an inbox reply through
+ * a ticket, a `Chat needs you` staff alert delivered through the Portal's link to Notifications (the email provider is a
  * fake in this process), the guest limit lifted while Accounts pauses the Customer role's sign-in (C17), every
  * conversation deleted before going live (C20), and the hourly charge.
  */
@@ -60,8 +60,6 @@ let websiteId = '';
 let chatTokens;
 /** @type {{ browser: string, server: string }} */
 let accountsTokens;
-/** @type {{ browser: string, server: string }} */
-let notifyTokens;
 let conversationId = '';
 /** The signed-in visitor's headers. @type {Record<string, string>} */
 let signedIn = {};
@@ -122,7 +120,6 @@ describe('Chat on the real Portal', () => {
 		await sys.addCredits(m.merchantId, 100);
 		chatTokens = await sys.tokens(m.merchantId, websiteId, 'chat');
 		accountsTokens = await sys.tokens(m.merchantId, websiteId, 'accounts');
-		notifyTokens = await sys.tokens(m.merchantId, websiteId, 'notifications');
 	});
 
 	it('an Owner prices features and a Support admin switches them on: both reports are accepted', async () => {
@@ -139,7 +136,7 @@ describe('Chat on the real Portal', () => {
 
 	it('a guest’s message is answered by the merchant’s AI provider (faked) through the Portal-issued browser token', async () => {
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);
-		await sys.connectDatabase(cookie, websiteId);
+		await sys.connectDatabase(websiteId);
 		const ai = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/ai`, {
 			value: { provider: 'openai', apiKey: 'sk-merchant-000123', model: 'gpt-4.1-mini' },
 		});
@@ -158,7 +155,7 @@ describe('Chat on the real Portal', () => {
 		expect(elsewhere.status).toBe(401);
 	});
 
-	it('a visitor signed in with Accounts chats as themselves once the Accounts token is pasted', async () => {
+	it('a visitor signed in with Accounts chats as themselves: the Portal linked Chat to Accounts, nothing is pasted', async () => {
 		const accountsCookie = await sys.adminSession(await sys.owner(), websiteId, 'accounts');
 		const switched = await sys.dashboard(
 			accountsCookie,
@@ -168,7 +165,7 @@ describe('Chat on the real Portal', () => {
 			ACCOUNTS,
 		);
 		expect(switched.status).toBe(200);
-		await sys.connectDatabase(accountsCookie, websiteId, ACCOUNTS);
+		await sys.connectDatabase(websiteId, ACCOUNTS);
 		const up = await sys.call('POST', '/v1/sign-up/password', {
 			base: ACCOUNTS,
 			token: accountsTokens.browser,
@@ -178,13 +175,6 @@ describe('Chat on the real Portal', () => {
 		expect(up.json.status).toBe('signed_in');
 		const headers = { 'ss-sign-in': String(up.json.signIn) };
 		signedIn = headers;
-		// not trusted until the Accounts server token is pasted: a guest without a key cannot read a chat
-		expect((await visitor('GET', '/v1/chat', { headers })).json.visitor.kind).toBe('none');
-		const cookie = await sys.adminSession(await sys.owner(), websiteId);
-		const pasted = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, {
-			value: accountsTokens.server,
-		});
-		expect(pasted.json).toMatchObject({ status: 'connected' });
 		const sent = await visitor('POST', '/v1/chat/messages', { body: { text: 'Where is my order?' }, headers });
 		expect(sent.status).toBe(201);
 		expect(sent.json.chat.visitor).toEqual({ kind: 'user', name: 'Rea Der', email: 'reader@example.com' });
@@ -261,7 +251,7 @@ describe('Chat on the real Portal', () => {
 			NOTIFY,
 		);
 		expect(on.status).toBe(200);
-		await sys.connectDatabase(notifyCookie, websiteId, NOTIFY);
+		await sys.connectDatabase(websiteId, NOTIFY);
 		const provider = await sys.dashboard(
 			notifyCookie,
 			'PUT',
@@ -279,10 +269,7 @@ describe('Chat on the real Portal', () => {
 		);
 		expect(template.status).toBe(200);
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);
-		const pasted = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/notifications`, {
-			value: notifyTokens.server,
-		});
-		expect(pasted.json).toMatchObject({ status: 'connected' });
+		// (Chat sends through Notifications by the Portal's link, nothing is pasted)
 		// the alert team is the website's, set once in the Portal (Team and alerts)
 		await savePortalSettings(m, `/v1/merchants/${m.merchantId}/websites/${websiteId}/settings`, {
 			'staff_alerts.recipients': ['team@talk.example.com'],
@@ -298,7 +285,7 @@ describe('Chat on the real Portal', () => {
 		expect(alert.text).toContain(`${ADMIN_ORIGIN}/inbox?conversation=${sent.json.chat.conversation.id}`);
 	});
 
-	it('Accounts exports a signed-in visitor’s chats through the pasted Chat token', async () => {
+	it('Accounts exports a signed-in visitor’s chats through the Portal’s link to Chat', async () => {
 		const accountsCookie = await sys.adminSession(await sys.owner(), websiteId, 'accounts');
 		const switched = await sys.dashboard(
 			accountsCookie,
@@ -308,14 +295,6 @@ describe('Chat on the real Portal', () => {
 			ACCOUNTS,
 		);
 		expect(switched.status).toBe(200);
-		const pasted = await sys.dashboard(
-			accountsCookie,
-			'PUT',
-			`/v1/dashboard/websites/${websiteId}/connections/chat`,
-			{ value: chatTokens.server },
-			ACCOUNTS,
-		);
-		expect(pasted.json).toMatchObject({ status: 'connected' });
 		const exported = await sys.call('POST', '/v1/me/export', {
 			base: ACCOUNTS,
 			token: accountsTokens.browser,

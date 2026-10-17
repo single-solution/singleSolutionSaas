@@ -56,8 +56,6 @@ let m;
 let websiteId = '';
 /** @type {{ browser: string, server: string }} */
 let payTokens;
-/** @type {{ browser: string, server: string }} */
-let notifyTokens;
 let linkId = '';
 let paymentId = '';
 
@@ -101,7 +99,6 @@ describe('Payments on the real Portal', () => {
 		for (const id of ['payments', 'notifications']) await sys.addProduct(m.merchantId, websiteId, id);
 		await sys.addCredits(m.merchantId, 100);
 		payTokens = await sys.tokens(m.merchantId, websiteId, 'payments');
-		notifyTokens = await sys.tokens(m.merchantId, websiteId, 'notifications');
 	});
 
 	it('an Owner prices features and a Support admin switches them on: both reports are accepted', async () => {
@@ -118,7 +115,7 @@ describe('Payments on the real Portal', () => {
 
 	it('sets up Stripe with the merchant’s keys and Notifications’ signed webhooks', async () => {
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);
-		await sys.connectDatabase(cookie, websiteId);
+		await sys.connectDatabase(websiteId);
 		const keys = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/stripe`, {
 			value: STRIPE_KEYS,
 		});
@@ -128,7 +125,7 @@ describe('Payments on the real Portal', () => {
 			(await sys.dashboard(notifyCookie, 'PUT', `/v1/dashboard/websites/${websiteId}/features`, { on: ['webhooks'] }, NOTIFY))
 				.status,
 		).toBe(200);
-		await sys.connectDatabase(notifyCookie, websiteId, NOTIFY);
+		await sys.connectDatabase(websiteId, NOTIFY);
 		const secret = await sys.dashboard(
 			notifyCookie,
 			'PUT',
@@ -145,10 +142,7 @@ describe('Payments on the real Portal', () => {
 			NOTIFY,
 		);
 		expect(urls.status).toBe(200);
-		const pasted = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/notifications`, {
-			value: notifyTokens.server,
-		});
-		expect(pasted.json).toMatchObject({ status: 'connected' });
+		// (Payments forwards its events to Notifications by the Portal's link, nothing is pasted)
 	});
 
 	it('creates a payment link with the Portal-issued server token; the payer pays it on Stripe', async () => {

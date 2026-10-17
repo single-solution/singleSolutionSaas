@@ -177,7 +177,7 @@ describe('Growth on the real Portal', () => {
 		expect([...report.on].sort()).toEqual(on);
 		const [entry] = await sys.activity('product.features_changed');
 		expect(entry?.after).toMatchObject({ on });
-		merchantDb = await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId), websiteId);
+		merchantDb = await sys.connectDatabase(websiteId);
 	});
 
 	it('asks for consent first, then records the page view, the search and the shop events', async () => {

@@ -82,7 +82,7 @@ describe('Notifications on the real Portal', () => {
 
 	it('sends through the send API with the Portal-issued server token and a fake provider', async () => {
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);
-		await sys.connectDatabase(cookie, websiteId);
+		await sys.connectDatabase(websiteId);
 		const provider = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/email`, {
 			value: { provider: 'resend', secret: 're_live_key_0001', from: 'Shop <shop@notify.example.com>' },
 		});

@@ -537,24 +537,63 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 		return res.json;
 	};
 
+	/** The database name each product has on a website (the merchant's one connection, a name of its own per product). @type {Map<string, Record<string, string>>} */
+	const databaseNames = new Map();
+	/** The products of this system by address. @type {Map<string, string>} */
+	const idByBase = new Map([
+		[productUrl, productManifest.id],
+		...extras.map((extra) => /** @type {[string, string]} */ ([extra.url, extra.manifest.id])),
+	]);
+
 	/**
-	 * Connect a fresh merchant database (Connections screen; tested live when saved).
-	 * @param {string} cookie @param {string} websiteId @param {string} [base] the product's address
+	 * Enter the website's one database in the Portal, as an Owner does (Website settings › Data and files, the password
+	 * again). Every product of this system gets a database name of its own on that connection (the Owner's per-product
+	 * names, so a test can read it and runs never share one); the first call saves it, and a product added to the website
+	 * later gets it without anything entered again. Returns the product's database.
+	 * @param {string} websiteId @param {string} [base] the product's address
 	 */
-	const connectDatabase = async (cookie, websiteId, base = productUrl) => {
-		const name = `${prefix}_merchant_${databases.length}`;
-		databases.push(name);
-		const target = new URL(/** @type {string} */ (uri));
-		target.pathname = `/${name}`;
-		const res = await dashboard(
-			cookie,
-			'PUT',
-			`/v1/dashboard/websites/${websiteId}/connections/database`,
-			{ value: target.toString() },
-			base,
-		);
-		if (res.status !== 200) throw new Error(`database ${res.status} ${JSON.stringify(res.json)}`);
+	const connectDatabase = async (websiteId, base = productUrl) => {
+		const productId = idByBase.get(base) ?? new URL(base).hostname.split('.')[0] ?? productManifest.id;
+		let names = databaseNames.get(websiteId);
+		if (!names) {
+			names = Object.fromEntries(
+				[...new Set([...idByBase.values(), productId])].map((id) => [
+					id,
+					`${prefix}_merchant_${databases.length}_${id.replace(/-/g, '_')}`,
+				]),
+			);
+			for (const name of Object.values(names)) databases.push(name);
+			const target = new URL(/** @type {string} */ (uri));
+			target.pathname = '/';
+			const record = await portalDb.collection('identity_websites').findOne({ _id: /** @type {any} */ (websiteId) });
+			const res = await (
+				await owner()
+			).put(`/v1/merchants/${record?.merchantId}/websites/${websiteId}/connections/database`, {
+				value: target.toString(),
+				names,
+				password: PASSWORD,
+			});
+			if (res.status !== 200) throw new Error(`database ${res.status} ${JSON.stringify(res.json)}`);
+			databaseNames.set(websiteId, names);
+			await settle();
+		}
+		const name = names[productId];
+		if (!name) throw new Error(`no database name for ${productId}`);
 		return client.db(name);
+	};
+
+	/**
+	 * Enter the website's one storage in the Portal, as an Owner does (Website settings › Data and files, the password
+	 * again). Every product of the website that needs storage gets it, in a folder of its own.
+	 * @param {string} websiteId @param {Record<string, unknown>} value `{ bucket, region, accessKeyId, secretAccessKey, … }`
+	 */
+	const connectStorage = async (websiteId, value) => {
+		const record = await portalDb.collection('identity_websites').findOne({ _id: /** @type {any} */ (websiteId) });
+		const res = await (
+			await owner()
+		).put(`/v1/merchants/${record?.merchantId}/websites/${websiteId}/connections/storage`, { value, password: PASSWORD });
+		if (res.status !== 200) throw new Error(`storage ${res.status} ${JSON.stringify(res.json)}`);
+		await settle();
 	};
 
 	/**
@@ -602,6 +641,7 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 		switchFeatures,
 		setPrices,
 		connectDatabase,
+		connectStorage,
 		addCredits,
 		waitingNotices,
 		activity,

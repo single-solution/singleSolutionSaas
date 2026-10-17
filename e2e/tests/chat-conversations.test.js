@@ -250,7 +250,7 @@ const authors = (json) => json.messages.map((/** @type {any} */ m) => [m.author,
 const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 
 describe('Chat conversations on the real Portal, Accounts, Notifications and Ecommerce', () => {
-	it('sets up the four products: features, databases, providers, templates, people, a product, a deal and the tokens', async () => {
+	it('sets up the four products: features, databases, providers, templates, people, a product and a deal', async () => {
 		for (const base of [CHAT, ACCOUNTS, NOTIFY, SHOP]) await sys.connect({ base });
 		const m = await sys.merchant('lamps@shop.test', [DOMAIN]);
 		websiteId = m.websiteIds[0] ?? '';
@@ -284,9 +284,8 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 			ecommerce: ['catalog', 'checkout', 'deals'],
 		};
 		for (const [id, on] of Object.entries(features)) {
-			const cookie = await sys.adminSession(await sys.owner(), websiteId, id);
 			expect((await setUp(id, '/features', { on })).status).toBe(200);
-			await sys.connectDatabase(cookie, websiteId, BASES[id]);
+			await sys.connectDatabase(websiteId, BASES[id]);
 		}
 
 		// Notifications: email (Resend) and WhatsApp (Meta), with Chat's templates
@@ -337,10 +336,7 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 			users[who] = String(created.json.id);
 		}
 
-		// Ecommerce: the Accounts token (sign-ins), a policy, a lamp and a deal with its display fields
-		expect((await setUp('ecommerce', '/connections/accounts', { value: tokens.accounts?.server })).json).toMatchObject({
-			status: 'connected',
-		});
+		// Ecommerce: a policy, a lamp and a deal with its display fields (the Portal linked it to Accounts for the sign-ins)
 		await shipping('We deliver nationwide in 2 days.');
 		const lamp = await server('ecommerce', 'POST', '/v1/products', {
 			name: 'Lamp Max',
@@ -362,7 +358,7 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		});
 		expect(deal.status, JSON.stringify(deal.json)).toBe(201);
 
-		// Chat: the AI provider (faked) and the three pasted tokens
+		// Chat: the AI provider (faked); its links to Accounts, Notifications and Ecommerce are the Portal's
 		expect(
 			(
 				await setUp('chat', '/connections/ai', {
@@ -370,10 +366,6 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 				})
 			).json,
 		).toMatchObject({ status: 'connected' });
-		for (const id of ['accounts', 'notifications', 'ecommerce']) {
-			const pasted = await setUp('chat', `/connections/${id}`, { value: tokens[id]?.server });
-			expect(pasted.json, id).toMatchObject({ status: 'connected' });
-		}
 		await configure('chat', {
 			'ai_replies.onFailure': 'message',
 			'staff_alerts.adminUrl': `${ADMIN_ORIGIN}/inbox?conversation={conversationId}`,

@@ -2,8 +2,8 @@
  * PLAN 0.12 step 7: Accounts against the REAL Portal, with the real Notifications next to it — connect (manifest and
  * price list), price and feature reports, a sign-up with email and password through the browser token the Portal
  * issued, the sign-in verified offline with the public keys (by the merchant's server and by Notifications through the
- * pasted Accounts token), Notifications' activity-log copies arriving in Accounts, "delete my account" erased in
- * Notifications through the pasted Notifications token, and the hourly charge.
+ * Portal's link to Accounts), Notifications' activity-log copies arriving in Accounts, "delete my account" erased in
+ * Notifications through the Portal's link to Notifications, and the hourly charge.
  */
 import { staffSignIns } from '@ss/product-accounts/testing';
 import { createPublicKey, verify } from 'node:crypto';
@@ -102,8 +102,7 @@ describe('Accounts on the real Portal', () => {
 	});
 
 	it('signs up with email and password through the Portal-issued browser token', async () => {
-		const cookie = await sys.adminSession(await sys.owner(), websiteId);
-		await sys.connectDatabase(cookie, websiteId);
+		await sys.connectDatabase(websiteId);
 		staffSignIn = staffSignIns(/** @type {any} */ (sys.product), {
 			websiteId,
 			merchantId: m.merchantId,
@@ -129,7 +128,7 @@ describe('Accounts on the real Portal', () => {
 		expect(me.status).toBe(401);
 	});
 
-	it('the sign-in verifies offline: the merchant’s server with the public keys, Notifications with the pasted Accounts token', async () => {
+	it('the sign-in verifies offline: the merchant’s server with the public keys, Notifications with the Portal’s link to Accounts', async () => {
 		const keys = await sys.call('GET', `/v1/websites/${websiteId}/keys`);
 		expect(keys.json.issuer).toBe(ACCOUNTS);
 		const [header, payload, signature] = String(signedUp.signIn).split('.');
@@ -144,21 +143,8 @@ describe('Accounts on the real Portal', () => {
 		).toBe(true);
 		const claims = JSON.parse(Buffer.from(String(payload), 'base64url').toString('utf8'));
 		expect(claims).toMatchObject({ iss: ACCOUNTS, aud: websiteId, sub: signedUp.user.id, role: 'customer', permissions: [] });
-		// Notifications trusts Accounts sign-ins once the Accounts server token is pasted into its Connections
+		// Notifications trusts Accounts sign-ins because the Portal linked the two products of the website: nothing is pasted
 		const notify = sys.others.notifications;
-		expect(await notify.accounts.verify({ websiteId, token: signedUp.signIn })).toEqual({
-			ok: false,
-			code: 'accounts_not_connected',
-		});
-		const cookie = await sys.adminSession(await sys.owner(), websiteId, 'notifications');
-		const pasted = await sys.dashboard(
-			cookie,
-			'PUT',
-			`/v1/dashboard/websites/${websiteId}/connections/accounts`,
-			{ value: accountsTokens.server },
-			NOTIFY,
-		);
-		expect(pasted.json).toMatchObject({ status: 'connected' });
 		expect(await notify.accounts.verify({ websiteId, token: signedUp.signIn })).toMatchObject({
 			ok: true,
 			user: { id: signedUp.user.id, email: 'reader@example.com', name: 'Rea Der', role: 'customer', permissions: [] },
@@ -175,7 +161,7 @@ describe('Accounts on the real Portal', () => {
 			NOTIFY,
 		);
 		expect(switched.status).toBe(200);
-		await sys.connectDatabase(cookie, websiteId, NOTIFY);
+		await sys.connectDatabase(websiteId, NOTIFY);
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			base: NOTIFY,
 			token: notifyTokens.server,
@@ -222,12 +208,7 @@ describe('Accounts on the real Portal', () => {
 		expect(userCount.json).toEqual({ count: users.json.items.length, capped: false });
 		expect(users.json.items.length).toBeGreaterThan(0);
 
-		// Accounts calls Notifications' data-rights routes with the pasted Notifications token
-		const accountsCookie = await sys.adminSession(await sys.owner(), websiteId);
-		const pasted = await sys.dashboard(accountsCookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/notifications`, {
-			value: notifyTokens.server,
-		});
-		expect(pasted.json).toMatchObject({ status: 'connected' });
+		// Accounts calls Notifications' data-rights routes with the Portal's link to Notifications (scoped to data rights)
 		const fresh = await sys.call('POST', '/v1/sign-in/password', {
 			token: accountsTokens.browser,
 			origin: ORIGIN,

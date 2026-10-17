@@ -56,18 +56,14 @@ beforeAll(async () => {
 			websiteId,
 			manifest.features.map((feature) => feature.key).filter((key) => key !== 'multi_location'),
 		);
-		const cookie = await sys.adminSession(await sys.owner(), websiteId);
-		await sys.connectDatabase(cookie, websiteId);
-		const storage = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/storage`, {
-			value: {
-				endpoint: BUCKET,
-				region: 'auto',
-				bucket: 'shop',
-				accessKeyId: 'AKIACATALOGS',
-				secretAccessKey: 'catalogs-secret-0123456789',
-			},
+		await sys.connectDatabase(websiteId);
+		await sys.connectStorage(websiteId, {
+			endpoint: BUCKET,
+			region: 'auto',
+			bucket: 'shop',
+			accessKeyId: 'AKIACATALOGS',
+			secretAccessKey: 'catalogs-secret-0123456789',
 		});
-		expect(storage.json).toMatchObject({ status: 'connected' });
 	}
 });
 afterAll(async () => {

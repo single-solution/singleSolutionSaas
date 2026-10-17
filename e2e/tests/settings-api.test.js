@@ -138,7 +138,7 @@ describe.each(CASES)('settings API of $id (K1)', ({ id, product, routes, on, set
 		/** @type {((who?: { id?: string, name?: string, role?: string, email?: string }) => Promise<string>) | null} */
 		let accountsStaff = null;
 		if (id === 'accounts') {
-			await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId, id), websiteId, `https://${id}.test`);
+			await sys.connectDatabase(websiteId, `https://${id}.test`);
 			accountsStaff = staffSignIns(/** @type {any} */ (sys.product), {
 				websiteId,
 				merchantId: m.merchantId,

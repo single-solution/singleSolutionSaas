@@ -49,8 +49,8 @@ beforeAll(async () => {
 	}
 	await sys.addCredits(m.merchantId, 100);
 	// each product has a merchant database (its widget config needs one)
-	await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId), websiteId);
-	await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId, 'chat'), websiteId, CHAT);
+	await sys.connectDatabase(websiteId);
+	await sys.connectDatabase(websiteId, CHAT);
 	// Ecommerce's Store details feature is on (its list is only open to the website's server while it is)
 	await sys.switchFeatures(await sys.adminSession(await sys.owner(), websiteId), websiteId, ['store_details']);
 });

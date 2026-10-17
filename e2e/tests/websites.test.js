@@ -25,7 +25,7 @@ beforeAll(async () => {
 	websiteId = m.websiteIds[0] ?? '';
 	await sys.addProduct(m.merchantId, websiteId);
 	const cookie = await sys.adminSession(await sys.owner(), websiteId);
-	merchantDb = await sys.connectDatabase(cookie, websiteId);
+	merchantDb = await sys.connectDatabase(websiteId);
 	await sys.switchFeatures(cookie, websiteId, ['notes']);
 	tokens = await sys.tokens(m.merchantId, websiteId);
 });

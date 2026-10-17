@@ -59,7 +59,7 @@ beforeAll(async () => {
 		websiteId,
 		manifest.features.map((feature) => feature.key),
 	);
-	merchantDb = await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId), websiteId);
+	merchantDb = await sys.connectDatabase(websiteId);
 });
 afterAll(async () => {
 	await sys?.stop();

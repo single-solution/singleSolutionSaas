@@ -103,7 +103,7 @@ describe('Setup sheet (end to end)', () => {
 		await sys.addCredits(merchantId, 100);
 		const notes = await sys.adminSession(await sys.owner(), websiteId);
 		await sys.switchFeatures(notes, websiteId, ['notes']);
-		await sys.connectDatabase(notes, websiteId);
+		await sys.connectDatabase(websiteId);
 		expect(
 			(await sys.dashboard(notes, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/notes.maxLength`, { value: 300 }))
 				.status,
@@ -209,7 +209,7 @@ describe('Setup sheet (end to end)', () => {
 			expect(
 				(await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/features`, { on }, baseOf(id))).status,
 			).toBe(200);
-			await sys.connectDatabase(cookie, websiteId, baseOf(id));
+			await sys.connectDatabase(websiteId, baseOf(id));
 		}
 		const res = await merchant.client.get(`${sheetPath()}?fresh=1`);
 		expect(res.status).toBe(200);

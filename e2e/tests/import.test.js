@@ -114,7 +114,7 @@ describe('importing a store into a product (K10, ss-import)', () => {
 		websiteId = m.websiteIds[0] ?? '';
 		await sys.addProduct(m.merchantId, websiteId);
 		cookie = await sys.adminSession(await sys.owner(), websiteId);
-		merchantDb = await sys.connectDatabase(cookie, websiteId);
+		merchantDb = await sys.connectDatabase(websiteId);
 		tokens = await sys.tokens(m.merchantId, websiteId);
 		source = await sourceAndFolder();
 		await seed(source.db);
@@ -363,7 +363,7 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 				BASES[key],
 			);
 			expect(saved.status, `${key}: ${JSON.stringify(saved.json)}`).toBe(200);
-			databases[key] = await sys.connectDatabase(cookie, websiteId, BASES[key]);
+			databases[key] = await sys.connectDatabase(websiteId, BASES[key]);
 		}
 		products = Object.fromEntries(
 			Object.entries(BASES).map(([key, url]) => [key, { url, token: String(tokens[key]?.server) }]),

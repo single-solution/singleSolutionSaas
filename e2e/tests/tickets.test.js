@@ -24,7 +24,7 @@ beforeAll(async () => {
 	await sys.addProduct(m.merchantId, websiteId);
 	await sys.addCredits(m.merchantId, 100);
 	const cookie = await sys.adminSession(await sys.owner(), websiteId);
-	await sys.connectDatabase(cookie, websiteId);
+	await sys.connectDatabase(websiteId);
 	await sys.switchFeatures(cookie, websiteId, ['notes']);
 	tokens = await sys.tokens(m.merchantId, websiteId);
 });

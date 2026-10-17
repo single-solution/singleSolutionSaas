@@ -67,7 +67,7 @@
 			{
 				"product": "notifications",
 				"scopes": ["messages.send"],
-				"features": ["alerts", "staff_alerts"]
+				"features": ["checkout", "returns", "alerts", "staff_alerts"]
 			},
 			{
 				"product": "notifications",

@@ -121,7 +121,7 @@ describe('default templates: no template written, messages still go (parity P1)'
 		};
 		for (const [id, on] of Object.entries(features)) {
 			expect((await dash(id, 'PUT', '/features', { on })).status).toBe(200);
-			await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId, id), websiteId, BASES[id]);
+			await sys.connectDatabase(websiteId, BASES[id]);
 		}
 		expect(
 			(
@@ -130,10 +130,6 @@ describe('default templates: no template written, messages still go (parity P1)'
 				})
 			).json,
 		).toMatchObject({ status: 'connected' });
-		for (const id of ['accounts', 'chat'])
-			expect(
-				(await dash(id, 'PUT', '/connections/notifications', { value: tokens.notifications?.server })).json,
-			).toMatchObject({ status: 'connected' });
 		await alertTeam(['ops@defaults.example.com']);
 		const saved = await dash('notifications', 'GET', '/templates');
 		expect(saved.json.items).toEqual([]);
@@ -181,11 +177,7 @@ describe('default templates: no template written, messages still go (parity P1)'
 		await sys.addProduct(merchantId, websiteId, 'ecommerce');
 		tokens.ecommerce = await sys.tokens(merchantId, websiteId, 'ecommerce');
 		expect((await dash('ecommerce', 'PUT', '/features', { on: ['catalog', 'checkout', 'staff_alerts'] })).status).toBe(200);
-		await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId, 'ecommerce'), websiteId, SHOP);
-		for (const id of ['accounts', 'notifications'])
-			expect((await dash('ecommerce', 'PUT', `/connections/${id}`, { value: tokens[id]?.server })).json).toMatchObject({
-				status: 'connected',
-			});
+		await sys.connectDatabase(websiteId, SHOP);
 		await alertTeam(['ops@defaults.example.com']);
 		/** @param {string} method @param {string} path @param {unknown} [body] */
 		const server = (method, path, body) =>

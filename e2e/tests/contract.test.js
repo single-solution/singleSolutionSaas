@@ -123,7 +123,7 @@ describe('notices', () => {
 		const [a1 = ''] = a.websiteIds;
 		const merchantCookie = await sys.merchantSession(a, a1);
 		const cookie = await sys.adminSession(owner, a1);
-		await sys.connectDatabase(cookie, a1);
+		await sys.connectDatabase(a1);
 		await sys.switchFeatures(cookie, a1, ['notes']);
 		const { server } = await sys.tokens(a.merchantId, a1);
 		expect((await sys.call('GET', '/v1/notes', { token: server })).status).toBe(200);

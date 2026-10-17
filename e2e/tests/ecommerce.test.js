@@ -219,19 +219,19 @@ describe('Ecommerce on the real Portal', () => {
 		expect(entry?.after).toMatchObject({ on });
 	});
 
-	it('sets up the shop: its database, and the pasted Accounts, Payments and Notifications tokens', async () => {
+	it('sets up the shop: its database entered once in the Portal, and its links to Accounts, Payments and Notifications made by the Portal', async () => {
 		// Accounts: email and password sign-in
 		expect((await setUp(ACCOUNTS, 'accounts', '/features', { on: ['email_password'] })).status).toBe(200);
-		await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId, 'accounts'), websiteId, ACCOUNTS);
+		await sys.connectDatabase(websiteId, ACCOUNTS);
 		// Payments: Stripe with the merchant's keys, the payment API and refunds
 		expect((await setUp(PAYMENTS, 'payments', '/features', { on: ['payment_api', 'refunds', 'stripe'] })).status).toBe(200);
-		await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId, 'payments'), websiteId, PAYMENTS);
+		await sys.connectDatabase(websiteId, PAYMENTS);
 		expect((await setUp(PAYMENTS, 'payments', '/connections/stripe', { value: STRIPE_KEYS })).json).toMatchObject({
 			status: 'connected',
 		});
 		// Notifications: email through the merchant's provider, with the order-placed template
 		expect((await setUp(NOTIFY, 'notifications', '/features', { on: ['email'] })).status).toBe(200);
-		await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId, 'notifications'), websiteId, NOTIFY);
+		await sys.connectDatabase(websiteId, NOTIFY);
 		const provider = await setUp(NOTIFY, 'notifications', '/connections/email', {
 			value: { provider: 'resend', secret: 're_live_key_0003', from: 'Store <shop@store.example.com>' },
 		});
@@ -243,20 +243,26 @@ describe('Ecommerce on the real Portal', () => {
 			text: 'Thank you {name}: order {number}, {total}.',
 		});
 		expect(template.status).toBe(200);
-		// Ecommerce: its merchant database and the three pasted tokens
+		// Ecommerce: its merchant database is the website's one, entered once in the Portal; its links to Accounts, Payments
+		// and Notifications are the Portal's: nothing is pasted, and a key pasted by hand is refused
+		await sys.connectDatabase(websiteId);
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);
-		await sys.connectDatabase(cookie, websiteId);
-		for (const id of ['accounts', 'payments', 'notifications']) {
-			const pasted = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/${id}`, {
-				value: tokens[id]?.server,
-			});
-			expect(pasted.json).toMatchObject({ status: 'connected' });
-		}
-		// a token of another product is refused where Payments' is expected
-		const wrong = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/payments`, {
-			value: tokens.chat?.server,
+		const pasted = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/link_payments`, {
+			value: tokens.payments?.server,
 		});
-		expect(wrong.status).toBe(422);
+		expect([pasted.status, codeOf(pasted)]).toEqual([409, 'managed_by_portal']);
+		const shown = await sys.dashboard(cookie, 'GET', `/v1/dashboard/websites/${websiteId}/connections`);
+		expect(
+			shown.json.connections
+				.filter((/** @type {{ name: string }} */ each) => each.name.startsWith('link_'))
+				.map((/** @type {any} */ each) => [each.name, each.set, each.managed]),
+		).toEqual(
+			expect.arrayContaining([
+				['link_accounts', true, true],
+				['link_payments', true, true],
+				['link_notifications', true, true],
+			]),
+		);
 	});
 
 	it('the merchant’s server adds a catalog item with the Portal-issued server token; shoppers find it', async () => {
@@ -477,15 +483,13 @@ describe('Ecommerce on the real Portal', () => {
 	});
 
 	it('Chat’s shop search looks the product up in the real Ecommerce and shows a product card', async () => {
-		const chatCookie = await sys.adminSession(await sys.owner(), websiteId, 'chat');
 		const on = ['ai_replies', 'guest_chat', 'product_cards', 'shop_search', 'visitor_chat'];
 		expect((await setUp(CHAT, 'chat', '/features', { on })).status).toBe(200);
-		await sys.connectDatabase(chatCookie, websiteId, CHAT);
+		await sys.connectDatabase(websiteId, CHAT);
 		await setUp(CHAT, 'chat', '/connections/ai', {
 			value: { provider: 'openai', apiKey: 'sk-merchant-000456', model: 'gpt-4.1-mini' },
 		});
-		const pasted = await setUp(CHAT, 'chat', '/connections/ecommerce', { value: tokens.ecommerce?.server });
-		expect(pasted.json).toMatchObject({ status: 'connected' });
+		// (Chat reads the catalog by the Portal's link to Ecommerce, which allows it only while a shop feature of Chat is on)
 		aiAnswers.push({ tool: 'search_catalog', arguments: { query: 'phone' } }, { text: 'Phone X is in stock.' });
 		const sent = await sys.call('POST', '/v1/chat/messages', {
 			base: CHAT,

@@ -22,7 +22,7 @@ beforeAll(async () => {
 	await sys.addProduct(m.merchantId, websiteId);
 	const owner = await sys.owner();
 	const cookie = await sys.adminSession(owner, websiteId);
-	await sys.connectDatabase(cookie, websiteId);
+	await sys.connectDatabase(websiteId);
 	await sys.switchFeatures(cookie, websiteId, ['notes']);
 });
 afterAll(async () => {
