@@ -245,15 +245,19 @@ describe('SettingsCard rows', () => {
 		expect(container.querySelector('section h2')?.textContent).toBe('Sending');
 		const host = byLabel(container, 'Host');
 		const row = /** @type {HTMLElement} */ (host.closest('[data-cell]'));
-		expect(row.className).toContain('grid-cols-[minmax(0,1fr)_minmax(0,22rem)]');
+		// Stripe-like rows: a ~280 px label column, the control at most 560 px wide; they stack in a narrow card
+		expect(row.className).toContain('@2xl:grid-cols-[minmax(0,17.5rem)_minmax(0,1fr)]');
 		// the label and the help share the left column, the control and its error the right one
 		const [left, right] = /** @type {HTMLElement[]} */ ([...row.children]);
 		expect(left?.textContent).toContain('Host');
 		expect(left?.textContent).toContain('The SMTP server');
 		expect(right?.contains(host)).toBe(true);
 		expect(right?.querySelector('[role="alert"]')?.textContent).toBe('Required');
-		// long text stacks above its control even in a row layout
-		expect(byLabel(container, 'Signature').closest('[data-cell]')?.className).not.toContain('grid-cols');
+		expect(right?.className).toContain('max-w-[35rem]');
+		// long text is a row too, its control column a little wider (640 px); no control spans the whole card
+		const signature = /** @type {HTMLElement} */ (byLabel(container, 'Signature').closest('[data-cell]'));
+		expect(signature.className).toContain('grid-cols-[minmax(0,17.5rem)_minmax(0,1fr)]');
+		expect(signature.children[1]?.className).toContain('max-w-[40rem]');
 		expect(container.querySelector('[data-cell]')?.parentElement?.className).toContain('[&>[data-cell]+[data-cell]]:border-t');
 	});
 
@@ -550,7 +554,7 @@ describe('AccountMenu', () => {
 
 describe('card flow', () => {
 	it('places small cards side by side while there is room: auto-fill columns, natural heights, wide content on its own row', () => {
-		expect(CARD_FLOW).toContain('repeat(auto-fill,minmax(min(100%,24rem),1fr))');
+		expect(CARD_FLOW).toContain('repeat(auto-fill,minmax(min(100%,52rem),1fr))');
 		expect(CARD_FLOW).toContain('items-start');
 		expect(CARD_FLOW).not.toContain('items-stretch');
 		// anything that is not a card takes the whole row; a flagged card takes one column

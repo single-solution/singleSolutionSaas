@@ -13,7 +13,7 @@ import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { cx } from './cx.js';
 import { Button } from './Button.js';
 import { Card } from './display.js';
-import { FieldLayoutContext, ROW_LIST } from './fields.js';
+import { FieldLayoutContext, ROW_GRID, ROW_LABEL, ROW_LIST, rowControl } from './fields.js';
 import { Icon } from './icons.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
@@ -22,13 +22,13 @@ import { Icon } from './icons.js';
 export const NO_STRETCH = 'items-start';
 
 /**
- * The responsive flow of cards (owner 2026-10-16: what can sit in a row must): as many columns as fit at least 24 rem
- * each (one on a phone, two on a tablet, three on a wide screen), every card at its natural height. A
- * {@link SettingsCard} (`data-flow="card"`) takes one column; anything else in the flow (a table, an editor, a preview,
- * a callout) takes the whole row.
+ * The responsive flow of cards: settings cards hold two-column rows (owner 2026-10-17, like Stripe), so a card takes
+ * the whole width up to very wide panes, where two cards of at least 52 rem sit side by side; every card keeps its
+ * natural height. A {@link SettingsCard} (`data-flow="card"`) takes one column; anything else in the flow (a table, an
+ * editor, a preview, a callout) takes the whole row. Cards are 16 px apart.
  */
 export const CARD_FLOW =
-	'grid min-w-0 items-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(min(100%,24rem),1fr))] ' +
+	'grid min-w-0 items-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(min(100%,52rem),1fr))] ' +
 	'*:col-span-full [&>[data-flow=card]]:col-auto';
 
 /**
@@ -81,7 +81,7 @@ const SPAN_XL = Object.freeze({
  * @param {{ children?: ReactNode, className?: string }} props
  */
 export function Grid({ children, className }) {
-	return <div className={cx('grid min-w-0 grid-cols-12 gap-4 lg:gap-5', NO_STRETCH, className)}>{children}</div>;
+	return <div className={cx('grid min-w-0 grid-cols-12 gap-4', NO_STRETCH, className)}>{children}</div>;
 }
 
 /**
@@ -125,7 +125,9 @@ export function SettingsCard({ title, description, actions, footer, children, id
 				bodyClassName="@container">
 				{children}
 				{footer ? (
-					<div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line-soft pt-3">{footer}</div>
+					<div className="-mx-5 mt-5 -mb-5 flex flex-wrap items-center justify-end gap-2 border-t border-line-soft px-5 py-3">
+						{footer}
+					</div>
 				) : null}
 			</Card>
 		</FieldLayoutContext.Provider>
@@ -146,24 +148,20 @@ export function SettingRow({ label, description, htmlFor, children, stacked = fa
 		<div
 			data-cell=""
 			{...(htmlFor ? {} : { role: 'group', 'aria-labelledby': labelId })}
-			className={cx(
-				'grid min-w-0 items-start gap-x-8 gap-y-1.5',
-				!stacked && '@md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]',
-				className,
-			)}>
-			<div className={cx('min-w-0 space-y-0.5', !stacked && '@md:pt-1.5')}>
+			className={cx(stacked ? 'grid min-w-0 items-start gap-y-2' : ROW_GRID, className)}>
+			<div className={stacked ? 'min-w-0 space-y-1' : ROW_LABEL}>
 				{htmlFor ? (
-					<label htmlFor={htmlFor} className="block text-label leading-5 font-medium text-fg">
+					<label htmlFor={htmlFor} className="block text-label font-medium text-fg">
 						{label}
 					</label>
 				) : (
-					<div id={labelId} className="text-label leading-5 font-medium text-fg">
+					<div id={labelId} className="text-label font-medium text-fg">
 						{label}
 					</div>
 				)}
-				{description ? <p className="text-xs leading-snug text-muted">{description}</p> : null}
+				{description ? <p className="text-help text-muted">{description}</p> : null}
 			</div>
-			<div className="min-w-0 space-y-2">{children}</div>
+			<div className={cx(stacked ? 'min-w-0 space-y-2' : rowControl(true), 'space-y-2')}>{children}</div>
 		</div>
 	);
 }
@@ -190,7 +188,7 @@ export function SaveBar({
 			role="region"
 			aria-label={saveLabel}
 			className={cx('pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-3', className)}>
-			<div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-panel border border-line-soft bg-surface px-4 py-2.5 shadow-overlay animate-ss-sheet">
+			<div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-x-6 gap-y-2 rounded-panel border border-line-soft bg-surface py-2 pr-2 pl-4 shadow-overlay animate-ss-sheet">
 				<p role="status" className="flex items-center gap-2 text-sm font-medium text-fg">
 					<span aria-hidden="true" className="size-2 rounded-full bg-warning" />
 					{message}
@@ -326,31 +324,31 @@ export function SectionNav({ items, active, onSelect, label = 'Sections', classN
 					if (phone && !item.children?.length) setOpen(false);
 				}}
 				className={cx(
-					'ss-motion ss-press flex items-center gap-2.5 rounded-lg text-sm focus-visible:outline-2 focus-visible:outline-focus',
-					child ? 'h-8 pr-2.5 pl-9' : 'h-9 px-2.5',
+					'ss-motion ss-press flex h-8 items-center gap-2 rounded-md text-label focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+					child ? 'pr-2 pl-3' : 'px-2',
 					on
-						? 'bg-primary-soft font-semibold text-on-primary-soft'
+						? 'bg-primary-soft font-medium text-on-primary-soft'
 						: holds
-							? 'font-semibold text-fg'
-							: 'font-medium text-fg/80 hover:bg-surface-2 hover:text-fg',
+							? 'font-medium text-fg'
+							: 'font-medium text-fg/75 hover:bg-surface-2 hover:text-fg',
 				)}>
 				{!child && item.icon ? (
 					<span aria-hidden="true" className={on || holds ? 'text-primary' : 'text-muted'}>
-						<Icon name={item.icon} size={16} />
+						<Icon name={item.icon} size={15} />
 					</span>
 				) : null}
 				<span className="min-w-0 flex-1 truncate">{item.label}</span>
-				{item.badge}
+				{item.badge ? <span className="ml-auto shrink-0 text-micro font-medium text-muted tabular-nums">{item.badge}</span> : null}
 				{!child && item.children?.length ? (
-					<span aria-hidden="true" className={cx('ss-motion text-muted', (holds || needle !== '') && 'rotate-180')}>
-						<Icon name="chevronDown" size={14} />
+					<span aria-hidden="true" className={cx('ss-motion text-subtle', (holds || needle !== '') && 'rotate-180')}>
+						<Icon name="chevronDown" size={13} />
 					</span>
 				) : null}
 			</a>
 		);
 	};
 	const list = (/** @type {boolean} */ phone) => (
-		<nav aria-label={label} className="space-y-3">
+		<nav aria-label={label} className="space-y-4">
 			{leaves.length >= searchFrom ? (
 				<input
 					type="search"
@@ -358,13 +356,15 @@ export function SectionNav({ items, active, onSelect, label = 'Sections', classN
 					placeholder={searchLabel}
 					value={query}
 					onChange={(event) => setQuery(event.target.value)}
-					className="h-9 w-full rounded-control border border-line bg-surface px-3 text-sm text-fg placeholder:text-muted/70 focus-visible:outline-2 focus-visible:outline-focus"
+					className="h-8 w-full rounded-control border border-line bg-surface px-2.5 text-label text-fg shadow-card placeholder:text-subtle focus-visible:outline-2 focus-visible:outline-focus"
 				/>
 			) : null}
 			{groupsOf(visible).map(([group, entries], index) => (
 				<div key={group || index} className="space-y-0.5">
-					{group ? <p className="px-2.5 pb-1 text-micro font-semibold tracking-wide text-muted uppercase">{group}</p> : null}
-					<ul className="space-y-0.5">
+					{group ? (
+						<p className="px-2 pb-1 text-micro font-semibold tracking-[0.06em] text-muted uppercase">{group}</p>
+					) : null}
+					<ul className="space-y-px">
 						{entries.map((item) => {
 							const expanded =
 								item.children?.length && (needle !== '' || item.children.some((child) => child.id === active));
@@ -372,7 +372,7 @@ export function SectionNav({ items, active, onSelect, label = 'Sections', classN
 								<li key={item.id}>
 									{link(item, phone, false)}
 									{expanded ? (
-										<ul className="mt-0.5 space-y-0.5">
+										<ul className="mt-px mb-1 ml-[1.0625rem] space-y-px border-l border-line pl-1.5">
 											{item.children?.map((child) => (
 												<li key={child.id}>{link(child, phone, true)}</li>
 											))}
@@ -395,7 +395,7 @@ export function SectionNav({ items, active, onSelect, label = 'Sections', classN
 					aria-expanded={open}
 					aria-controls={listId}
 					onClick={() => setOpen((o) => !o)}
-					className="ss-motion ss-press flex h-11 w-full items-center gap-2.5 rounded-panel border border-line-soft bg-surface px-3.5 text-sm font-semibold text-fg shadow-card">
+					className="ss-motion ss-press flex h-10 w-full items-center gap-2.5 rounded-control border border-line bg-surface px-3 text-sm font-medium text-fg shadow-card">
 					{(parent?.icon ?? current?.icon) ? (
 						<span aria-hidden="true" className="text-primary">
 							<Icon name={/** @type {import('./icons.js').IconName} */ (parent?.icon ?? current?.icon)} size={16} />
@@ -418,12 +418,12 @@ export function SectionNav({ items, active, onSelect, label = 'Sections', classN
 				{open ? (
 					<div
 						id={listId}
-						className="mt-2 max-h-[70vh] animate-ss-pop overflow-y-auto rounded-panel border border-line-soft bg-surface p-2 shadow-panel">
+						className="ss-scroll mt-2 max-h-[60vh] animate-ss-pop rounded-card border border-line-soft bg-surface p-2 shadow-overlay">
 						{list(true)}
 					</div>
 				) : null}
 			</div>
-			<div className="hidden max-h-[calc(100vh-8rem)] overflow-y-auto rounded-panel border border-line-soft bg-surface p-2.5 shadow-card lg:block">
+			<div className="ss-scroll hidden max-h-[calc(100dvh-8rem)] rounded-panel border border-line-soft bg-surface p-2 shadow-panel lg:block lg:max-h-(--ss-pane-h)">
 				{list(false)}
 			</div>
 		</div>
@@ -470,7 +470,7 @@ export function SectionLayout({ sections, label = 'Sections', initial, className
 	// one view needs no sidebar
 	if (leaves.length === 1) return <div className={cx('grid min-w-0', NO_STRETCH, className)}>{panels}</div>;
 	return (
-		<div className={cx('grid min-w-0 gap-4 lg:grid-cols-[13.5rem_minmax(0,1fr)] lg:gap-5', NO_STRETCH, className)}>
+		<div className={cx('grid min-w-0 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-6', NO_STRETCH, className)}>
 			<SectionNav
 				items={items}
 				active={active}
@@ -478,7 +478,7 @@ export function SectionLayout({ sections, label = 'Sections', initial, className
 				label={label}
 				{...(searchFrom ? { searchFrom } : {})}
 				{...(searchLabel ? { searchLabel } : {})}
-				className="lg:sticky lg:top-24"
+				className="lg:sticky lg:top-0"
 			/>
 			{panels}
 		</div>
@@ -492,10 +492,10 @@ export function SectionLayout({ sections, label = 'Sections', initial, className
  */
 export function ViewTitle({ title, description, actions, className }) {
 	return (
-		<header className={cx('flex min-w-0 flex-wrap items-end justify-between gap-3 px-1', className)}>
+		<header className={cx('flex min-w-0 flex-wrap items-center justify-between gap-3 pb-1', className)}>
 			<div className="min-w-0">
-				<h2 className="text-lead leading-6 font-semibold tracking-tight text-fg">{title}</h2>
-				{description ? <p className="mt-0.5 text-[13px] leading-snug text-muted">{description}</p> : null}
+				<h2 className="text-page font-semibold tracking-[-0.015em] text-fg">{title}</h2>
+				{description ? <p className="mt-0.5 text-sm text-muted">{description}</p> : null}
 			</div>
 			{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
 		</header>
@@ -510,7 +510,10 @@ export function ViewTitle({ title, description, actions, className }) {
  */
 export function PillTabs({ tabs, active, onSelect, label, className, idPrefix = 'pt' }) {
 	return (
-		<div role="tablist" aria-label={label} className={cx('flex min-w-0 gap-1 overflow-x-auto pb-1', className)}>
+		<div
+			role="tablist"
+			aria-label={label}
+			className={cx('ss-scroll flex w-fit max-w-full min-w-0 gap-0.5 rounded-control bg-surface-2 p-0.5 ring-1 ring-line-soft ring-inset', className)}>
 			{tabs.map((tab) => {
 				const on = tab.id === active;
 				return (
@@ -523,8 +526,8 @@ export function PillTabs({ tabs, active, onSelect, label, className, idPrefix = 
 						aria-controls={`${idPrefix}-panel-${tab.id}`}
 						onClick={() => onSelect(tab.id)}
 						className={cx(
-							'ss-motion ss-press h-8 shrink-0 rounded-full px-3.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-focus',
-							on ? 'bg-primary-soft font-semibold text-on-primary-soft' : 'text-fg/80 hover:bg-surface-2 hover:text-fg',
+							'ss-motion h-7 shrink-0 rounded-md px-3 text-label font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+							on ? 'bg-surface text-fg shadow-card ring-1 ring-line-soft' : 'text-muted hover:text-fg',
 						)}>
 						{tab.label}
 					</button>
@@ -614,22 +617,22 @@ export function Disclosure({ title, description, badge, defaultOpen = false, for
 	const id = useId();
 	const shown = open || forceOpen;
 	return (
-		<section className={cx('min-w-0 rounded-card border border-dashed border-line bg-surface/60', className)}>
+		<section className={cx('min-w-0 rounded-card border border-line-soft bg-surface shadow-card', className)}>
 			<button
 				type="button"
 				aria-expanded={shown}
 				aria-controls={shown ? id : undefined}
 				onClick={() => setOpen(!shown)}
-				className="ss-motion flex w-full items-center gap-2.5 rounded-card px-5 py-3 text-left focus-visible:outline-2 focus-visible:outline-focus">
+				className="ss-motion flex min-h-12 w-full items-center gap-2.5 rounded-card px-5 py-3 text-left hover:bg-surface-2/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus">
 				<span aria-hidden="true" className={cx('ss-motion text-muted', shown && 'rotate-90')}>
 					<Icon name="chevronRight" size={16} />
 				</span>
-				<span className="text-sm font-semibold text-fg">{title}</span>
+				<span className="text-title font-semibold text-fg">{title}</span>
 				{badge}
-				{description ? <span className="min-w-0 flex-1 truncate text-xs text-muted">{description}</span> : null}
+				{description ? <span className="min-w-0 flex-1 truncate text-help text-muted">{description}</span> : null}
 			</button>
 			{shown ? (
-				<div id={id} className="min-w-0 space-y-4 px-5 pb-5">
+				<div id={id} className="min-w-0 space-y-4 border-t border-line-soft p-5">
 					{children}
 				</div>
 			) : null}

@@ -309,7 +309,7 @@ export function SchemaForm({
 				<button
 					type="button"
 					onClick={() => onReset(field.name)}
-					className="rounded text-xs font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-focus">
+					className="rounded text-help font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-focus">
 					Reset
 				</button>
 			) : undefined;
@@ -429,8 +429,8 @@ export function SchemaForm({
 			{before}
 			{only === undefined && (!single || groups.length === 0) && title ? (
 				<div className="min-w-0 px-1">
-					<h3 className="text-lead leading-6 font-semibold tracking-tight text-fg">{title}</h3>
-					{description ? <p className="mt-0.5 text-sm text-muted">{description}</p> : null}
+					<h3 className="text-title font-semibold tracking-[-0.01em] text-fg">{title}</h3>
+					{description ? <p className="mt-0.5 text-help text-muted">{description}</p> : null}
 				</div>
 			) : null}
 			{cards}

@@ -44,7 +44,7 @@ export function SoftBreaks({ text }) {
 /** The accent tint of icon tiles, chips and empty-state icons. */
 const ACCENT = 'bg-primary-soft text-primary';
 /** Icon tiles without a `kind`: neutral. */
-const NEUTRAL = 'bg-surface-2 text-muted';
+const NEUTRAL = 'bg-surface-2 text-muted ring-1 ring-inset ring-line-soft';
 
 /**
  * Rounded icon badge: in the accent tint with a `kind`, neutral without one.
@@ -57,10 +57,10 @@ export function IconBadge({ icon, kind, size = 'md', className }) {
 			className={cx(
 				'inline-flex shrink-0 items-center justify-center',
 				kind ? ACCENT : NEUTRAL,
-				size === 'xs' ? 'size-6 rounded-md' : size === 'sm' ? 'size-8 rounded-lg' : 'size-10 rounded-xl',
+				size === 'xs' ? 'size-6 rounded-md' : size === 'sm' ? 'size-8 rounded-lg' : 'size-9 rounded-[10px]',
 				className,
 			)}>
-			<Icon name={icon} size={size === 'xs' ? 13 : size === 'sm' ? 15 : 18} />
+			<Icon name={icon} size={size === 'xs' ? 13 : size === 'sm' ? 15 : 17} />
 		</span>
 	);
 }
@@ -94,8 +94,9 @@ export function Avatar({ name, size = 'md', className }) {
 }
 
 /**
- * Surface card: a rounded section floating on the canvas (hairline edge, a very soft shadow) with a heading and a
- * lighter one-line description.
+ * Surface card (level 1: a hairline edge and a very soft shadow): its header holds the title, a one-line description
+ * and up to two actions (the rest in a More menu), with a hairline under it; the body is padded 20 px. Never put grey
+ * boxes inside a card: use rows divided by hairlines (`RowList`, setting rows).
  * @param {{ title?: ReactNode, subtitle?: ReactNode, actions?: ReactNode, children?: ReactNode, className?: string,
  *   bodyClassName?: string, as?: 'section' | 'div' | 'article', id?: string, padded?: boolean, flow?: boolean }} props
  *   `flow`: a small card that takes one column of a `CardFlow` and sits beside the others (anything else in a flow takes
@@ -121,18 +122,16 @@ export function Card({
 			{...(flow ? { 'data-flow': 'card' } : {})}
 			className={cx('min-w-0 rounded-card border border-line-soft bg-surface shadow-card', className)}
 			{...(title && typeof title === 'string' && as === 'section' ? { 'aria-label': title } : {})}>
-			{title || actions ? (
-				<header className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5">
-					<div className="min-w-0">
-						{title ? <h2 className="text-lead leading-6 font-semibold tracking-tight text-fg">{title}</h2> : null}
-						{subtitle ? <p className="mt-0.5 text-[13px] leading-snug text-muted">{subtitle}</p> : null}
+			{hasHeader ? (
+				<header className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line-soft px-5 py-3.5">
+					<div className="min-w-0 flex-1">
+						{title ? <h2 className="text-title font-semibold tracking-[-0.01em] text-fg">{title}</h2> : null}
+						{subtitle ? <p className="mt-0.5 text-help text-muted">{subtitle}</p> : null}
 					</div>
-					{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+					{actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
 				</header>
 			) : null}
-			<div className={cx(padded && 'p-5', padded && hasHeader && 'pt-3.5', !padded && hasHeader && 'pt-3.5', bodyClassName)}>
-				{children}
-			</div>
+			<div className={cx(padded && 'p-5', bodyClassName)}>{children}</div>
 		</Tag>
 	);
 }
@@ -150,9 +149,9 @@ export function PageHeader({ title, subtitle, actions, breadcrumbs, badge, level
 	return (
 		<div className="space-y-2">
 			{breadcrumbs}
-			<div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+			<div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
 				<div className="min-w-0 flex-auto">
-					<Heading className="flex flex-wrap items-center gap-2 font-display text-page leading-tight font-extrabold tracking-[-0.02em] text-balance text-fg">
+					<Heading className="flex flex-wrap items-center gap-2.5 text-page font-semibold tracking-[-0.015em] text-balance text-fg">
 						<span className="min-w-0 break-words">{title}</span>
 						{badge}
 					</Heading>
@@ -166,7 +165,7 @@ export function PageHeader({ title, subtitle, actions, breadcrumbs, badge, level
 
 /** @type {Record<Tone, string>} */
 const TONES = {
-	neutral: 'border-transparent bg-surface-2 text-fg',
+	neutral: 'border-transparent bg-surface-2 text-fg/75',
 	primary: 'border-transparent bg-primary-soft text-on-primary-soft',
 	success: 'border-transparent bg-success-soft text-on-success-soft',
 	warning: 'border-transparent bg-warning-soft text-on-warning-soft',
@@ -194,7 +193,7 @@ export function Badge({ tone = 'neutral', kind, children, dot = false, className
 		<span
 			title={title}
 			className={cx(
-				'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs leading-4 font-medium',
+				'inline-flex h-[22px] items-center gap-1.5 whitespace-nowrap rounded-full border px-2 text-xs leading-4 font-medium',
 				TONES[look],
 				className,
 			)}>
@@ -234,14 +233,31 @@ export function StatusBadge({ status, label, className }) {
 	);
 }
 
+/** @typedef {'active' | 'setup' | 'off' | 'error' | 'info'} PillStatus */
+/** @type {Record<PillStatus, Tone>} */
+const PILL_TONES = { active: 'success', setup: 'warning', off: 'neutral', error: 'danger', info: 'primary' };
+
+/**
+ * The one look of a state across the Portal and the dashboards: a pill with a dot — Active (emerald), Needs setup
+ * (amber), Off (neutral), an error (rose) or a note (the accent).
+ * @param {{ status: PillStatus, children: ReactNode, title?: string, className?: string }} props
+ */
+export function StatusPill({ status, children, title, className }) {
+	return (
+		<Badge tone={PILL_TONES[status]} dot {...(title ? { title } : {})} {...(className ? { className } : {})}>
+			{children}
+		</Badge>
+	);
+}
+
 /** @type {Record<Tone, { box: string, icon: import('./icons.js').IconName }>} */
 const CALLOUTS = {
-	neutral: { box: 'border-transparent bg-surface-2 text-fg', icon: 'info' },
-	primary: { box: 'border-transparent bg-primary-soft text-on-primary-soft', icon: 'info' },
-	info: { box: 'border-transparent bg-info-soft text-on-info-soft', icon: 'info' },
-	success: { box: 'border-transparent bg-success-soft text-on-success-soft', icon: 'check' },
-	warning: { box: 'border-transparent bg-warning-soft text-on-warning-soft', icon: 'alert' },
-	danger: { box: 'border-transparent bg-danger-soft text-on-danger-soft', icon: 'alert' },
+	neutral: { box: 'border-line-soft bg-surface-2 text-fg', icon: 'info' },
+	primary: { box: 'border-primary/15 bg-primary-soft text-on-primary-soft', icon: 'info' },
+	info: { box: 'border-primary/15 bg-info-soft text-on-info-soft', icon: 'info' },
+	success: { box: 'border-success/20 bg-success-soft text-on-success-soft', icon: 'check' },
+	warning: { box: 'border-warning/20 bg-warning-soft text-on-warning-soft', icon: 'alert' },
+	danger: { box: 'border-danger/20 bg-danger-soft text-on-danger-soft', icon: 'alert' },
 };
 
 /**
@@ -256,9 +272,9 @@ export function Callout({ tone = 'info', title, children, actions, className, li
 	return (
 		<div
 			role={role}
-			className={cx('flex animate-ss-enter gap-3 rounded-xl border px-4 py-3.5 text-sm leading-relaxed', box, className)}>
-			<span className="mt-[3px] shrink-0">
-				<Icon name={icon} size={16} />
+			className={cx('flex animate-ss-enter gap-2.5 rounded-card border px-3.5 py-2.5 text-sm', box, className)}>
+			<span className="mt-0.5 shrink-0">
+				<Icon name={icon} size={15} />
 			</span>
 			<div className="min-w-0 flex-1 space-y-1">
 				{title ? <p className="font-semibold">{title}</p> : null}
@@ -281,15 +297,15 @@ export function EmptyState({ title, description, action, icon = 'box', kind, cla
 			className={cx(
 				// a dashed frame on the page; inside a card (which already frames it) no second frame
 				'flex flex-col items-center justify-center rounded-card border border-dashed border-line text-center in-[.rounded-card]:border-0',
-				compact ? 'gap-2 px-4 py-6' : 'gap-3 px-6 py-12',
+				compact ? 'gap-2 px-4 py-6' : 'gap-3 px-6 py-10',
 				className,
 			)}>
-			<span className={cx('flex size-10 items-center justify-center rounded-xl', kind ? ACCENT : NEUTRAL)}>
-				<Icon name={icon} size={18} />
+			<span className={cx('flex size-9 items-center justify-center rounded-[10px]', kind ? ACCENT : NEUTRAL)}>
+				<Icon name={icon} size={17} />
 			</span>
-			<div className="max-w-md space-y-1">
-				<p className="text-sm font-semibold text-fg">{title}</p>
-				{description ? <p className="text-sm text-muted">{description}</p> : null}
+			<div className="max-w-sm space-y-0.5">
+				<p className="text-sm font-medium text-fg">{title}</p>
+				{description ? <p className="text-help text-muted">{description}</p> : null}
 			</div>
 			{action ? <div className="pt-1">{action}</div> : null}
 		</div>
@@ -308,12 +324,12 @@ export function ErrorState({ title = 'This could not be loaded', message, action
 				'flex flex-col items-center gap-3 rounded-card border border-line-soft bg-surface px-6 py-10 text-center shadow-card',
 				className,
 			)}>
-			<span className="flex size-10 items-center justify-center rounded-xl bg-danger-soft text-on-danger-soft">
-				<Icon name="alert" size={18} />
+			<span className="flex size-9 items-center justify-center rounded-[10px] bg-danger-soft text-on-danger-soft">
+				<Icon name="alert" size={17} />
 			</span>
-			<div className="max-w-md space-y-1">
-				<p className="text-sm font-semibold text-fg">{title}</p>
-				<p className="text-sm text-muted">{message}</p>
+			<div className="max-w-md space-y-0.5">
+				<p className="text-sm font-medium text-fg">{title}</p>
+				<p className="text-help text-muted">{message}</p>
 			</div>
 			{action ? <div>{action}</div> : null}
 		</div>
@@ -396,12 +412,12 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, kind, classNa
 				<div
 					key={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
 					className={cx(
-						'animate-ss-fade font-display font-extrabold tracking-[-0.02em] text-fg tabular-nums',
+						'animate-ss-fade font-display font-semibold tracking-[-0.02em] text-fg tabular-nums',
 						valueSize(value),
 					)}>
 					{value}
 				</div>
-				{hint ? <div className={cx('text-xs font-medium text-pretty', hintTone)}>{hint}</div> : null}
+				{hint ? <div className={cx('text-help font-medium text-pretty', hintTone)}>{hint}</div> : null}
 			</div>
 		</div>
 	);
@@ -440,10 +456,10 @@ export function Section({ title, description, actions, children, id, className }
 		<section className={cx('min-w-0 space-y-3', className)} {...(id ? { 'aria-labelledby': id } : {})}>
 			<div className="flex flex-wrap items-end justify-between gap-3">
 				<div className="min-w-0">
-					<h2 id={id} className="text-base font-semibold tracking-tight text-fg">
+					<h2 id={id} className="text-title font-semibold tracking-[-0.01em] text-fg">
 						{title}
 					</h2>
-					{description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}
+					{description ? <p className="mt-0.5 text-help text-muted">{description}</p> : null}
 				</div>
 				{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
 			</div>
@@ -534,7 +550,7 @@ export function KeyValueList({ items, className, columns = 2 }) {
 				)}>
 				{items.map((item, i) => (
 					<div key={i} className="min-w-0 space-y-0.5">
-						<dt className="text-xs font-medium text-muted">{item.label}</dt>
+						<dt className="text-help font-medium text-muted">{item.label}</dt>
 						<dd className="break-words text-sm text-fg">{item.value}</dd>
 					</div>
 				))}

@@ -1,7 +1,8 @@
 'use client';
 /**
  * Color theme switch: the OS setting by default (`prefers-color-scheme`, see theme.css), or a stored choice.
- * `ThemeToggle` is the System / Light / Dark switch of the console header; the choice is kept in `localStorage` (when
+ * The header's account menu (or its theme menu) lists System / Light / Dark (`themeMenuItems`), the phone drawer
+ * shows `ThemeToggle`; the choice is kept in `localStorage` (when
  * storage is blocked the OS setting applies) and applied before paint by `ThemeScript` (theme-script.js).
  * @module
  */
@@ -46,6 +47,38 @@ const applyThemeChoice = (choice) => {
 };
 
 /**
+ * The theme choice and a setter that stores and applies it (the header's account or theme menu).
+ * @returns {[ThemeChoice, (next: ThemeChoice) => void]}
+ */
+export function useThemeChoice() {
+	const [choice, setChoice] = useState(/** @type {ThemeChoice} */ ('system'));
+	useEffect(() => setChoice(readThemeChoice()), []);
+	return [
+		choice,
+		(next) => {
+			applyThemeChoice(next);
+			setChoice(next);
+		},
+	];
+}
+
+/**
+ * The theme choices as menu items (a radio group under a "Theme" heading), for `ActionMenu` / `AccountMenu`.
+ * @param {ThemeChoice} choice
+ * @param {(next: ThemeChoice) => void} pick
+ * @returns {import('./Menu.js').MenuItem[]}
+ */
+export const themeMenuItems = (choice, pick) =>
+	CHOICES.map((item) => ({
+		label: item.label,
+		icon: item.icon,
+		section: 'Theme',
+		checked: choice === item.value,
+		onSelect: () => pick(item.value),
+	}));
+
+/**
+ * The System / Light / Dark switch as a row of icon buttons (the phone drawer).
  * @param {{ className?: string }} props
  */
 export function ThemeToggle({ className }) {

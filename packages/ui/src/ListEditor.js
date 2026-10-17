@@ -70,19 +70,19 @@ export function ListEditor({
 	const full = max !== undefined && items.length >= max;
 	return (
 		<fieldset data-cell="" data-wide="" className={cx('col-span-full min-w-0 space-y-3', className)} disabled={disabled}>
-			<legend className="mb-2 block text-label font-medium leading-5 text-fg">
+			<legend className="mb-2 block text-label font-medium text-fg">
 				{legend}
 				{items.length > 0 ? <span className="ml-1.5 font-normal text-muted">{items.length}</span> : null}
 			</legend>
-			{help ? <p className="text-xs text-muted">{help}</p> : null}
+			{help ? <p className="text-help text-muted">{help}</p> : null}
 			{items.length === 0 ? <p className="text-sm text-muted">{T.empty}</p> : null}
-			<ol className="space-y-2">
+			<ol className="divide-y divide-line-soft rounded-card border border-line-soft empty:hidden">
 				{items.map((item, index) => {
 					const name = nameOf(item, index);
 					return (
 						<li
 							key={index}
-							className="flex flex-wrap items-start gap-3 rounded-xl border border-line bg-surface-2/40 px-3 py-3">
+							className="flex flex-wrap items-start gap-3 px-4 py-3.5">
 							<div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-3">
 								<FieldLayoutContext.Provider value="stack">
 									{renderItem(item, index, (next) => onChange(items.map((old, i) => (i === index ? next : old))))}
@@ -112,7 +112,7 @@ export function ListEditor({
 				})}
 			</ol>
 			{full ? (
-				<p className="text-xs text-muted">{T.full(/** @type {number} */ (max))}</p>
+				<p className="text-help text-muted">{T.full(/** @type {number} */ (max))}</p>
 			) : (
 				<Button type="button" size="sm" variant="secondary" onClick={() => onChange([...items, newItem()])}>
 					<Icon name="plus" size={14} />
@@ -120,7 +120,7 @@ export function ListEditor({
 				</Button>
 			)}
 			{error ? (
-				<p role="alert" className="text-xs text-danger">
+				<p role="alert" className="text-help text-danger">
 					{error}
 				</p>
 			) : null}

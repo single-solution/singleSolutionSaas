@@ -67,7 +67,7 @@ export function ToastProvider({ children, durationMs = 5000 }) {
 	return (
 		<ToastContext.Provider value={api}>
 			{children}
-			<div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex flex-col items-center gap-2 p-4 sm:items-end">
+			<div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex flex-col items-center gap-2 p-4 sm:items-end sm:p-6">
 				<div aria-live="polite" role="status" className="flex w-full flex-col items-center gap-2 sm:items-end">
 					{polite.map((t) => (
 						<ToastCard key={t.id} toast={t} onDismiss={dismiss} onGone={remove} />
@@ -99,7 +99,7 @@ function ToastCard({ toast, onDismiss, onGone }) {
 			ref={presence.ref}
 			data-state={presence.closing ? 'closed' : 'open'}
 			className={cx(
-				'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border border-line-soft bg-surface px-4 py-3 text-sm text-fg shadow-overlay',
+				'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-card border border-line-soft bg-surface px-3.5 py-3 text-sm text-fg shadow-overlay',
 				'animate-ss-toast data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-toast-out',
 			)}>
 			<Icon
@@ -108,8 +108,8 @@ function ToastCard({ toast, onDismiss, onGone }) {
 				className={cx('mt-0.5 shrink-0', tone)}
 			/>
 			<div className="min-w-0 flex-1">
-				<p className="font-semibold">{toast.title}</p>
-				{toast.description ? <p className="mt-0.5 break-words text-muted">{toast.description}</p> : null}
+				<p className="font-medium">{toast.title}</p>
+				{toast.description ? <p className="mt-0.5 break-words text-help text-muted">{toast.description}</p> : null}
 			</div>
 			<button
 				type="button"

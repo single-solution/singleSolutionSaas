@@ -14,8 +14,22 @@ import { Icon } from './icons.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 
-/** A field's label: sentence case, medium weight (one look for labels and legends everywhere). */
-const LABEL_CLASS = 'block text-label font-medium leading-5 text-fg';
+/** A field's label: sentence case, 13/18 medium (one look for labels and legends everywhere). */
+const LABEL_CLASS = 'block text-label font-medium text-fg';
+
+/**
+ * A setting row (owner 2026-10-17, like Stripe's settings): the label and help in a left column of about 280 px, the
+ * control in the right column at most 560 px wide (640 for long text), stacked when the card is narrower than 42rem.
+ * No control stretches across the whole card.
+ */
+export const ROW_GRID = 'grid min-w-0 items-start gap-x-10 gap-y-2 @2xl:grid-cols-[minmax(0,17.5rem)_minmax(0,1fr)]';
+/** The left column of a setting row (the label lines up with the control's text). */
+export const ROW_LABEL = 'min-w-0 space-y-1 @2xl:pt-2';
+/**
+ * The right column of a setting row.
+ * @param {boolean | undefined} wide a long control (text area, list of choices): 640 px instead of 560
+ */
+export const rowControl = (wide) => cx('min-w-0 space-y-1.5', wide ? 'max-w-[40rem]' : 'max-w-[35rem]');
 
 /**
  * Classes of a responsive field grid: 1 / 2 / 3 columns by the width of the nearest `@container`, packed densely
@@ -44,9 +58,9 @@ export const FieldLayoutContext = createContext(/** @type {'stack' | 'row'} */ (
  * rows separated by hairlines; anything that is not a field (buttons, callouts) sits below with a gap.
  */
 export const ROW_LIST =
-	'flex flex-col [&>[data-cell]]:py-3 [&>[data-cell]:first-child]:pt-0 [&>[data-cell]:last-child]:pb-0 ' +
+	'flex flex-col [&>[data-cell]]:py-4 [&>[data-cell]:first-child]:pt-0 [&>[data-cell]:last-child]:pb-0 ' +
 	'[&>[data-cell]:has(+:not([data-cell]))]:pb-0 [&>[data-cell]+[data-cell]]:border-t [&>[data-cell]+[data-cell]]:border-line-soft ' +
-	'[&>:not([data-cell])]:mt-3 [&>:first-child:not([data-cell])]:mt-0 [&>a]:self-start [&>button]:self-start';
+	'[&>:not([data-cell])]:mt-4 [&>:first-child:not([data-cell])]:mt-0 [&>a]:self-start [&>button]:self-start';
 
 /**
  * A responsive grid of fields (its own size container): short controls side by side, long ones full width.
@@ -61,7 +75,7 @@ export function FieldGrid({ children, className }) {
 }
 // flat at rest; focus shows the accent edge with a soft halo (no outline jump)
 const CONTROL =
-	'w-full rounded-control border bg-surface px-3 py-2 text-sm text-fg placeholder:text-muted/70 ss-motion ' +
+	'w-full max-w-[35rem] rounded-control border bg-surface px-3 py-2 text-sm text-fg shadow-card placeholder:text-subtle ss-motion ' +
 	'focus:outline-none focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/20 ' +
 	'disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted [&:read-only:not(select)]:bg-surface-2';
 
@@ -89,7 +103,7 @@ const controlClass = (invalid) =>
  */
 const adornedClass = (invalid) =>
 	cx(
-		'flex h-9 w-full items-center rounded-control border bg-surface text-sm ss-motion',
+		'flex h-9 w-full max-w-[35rem] items-center rounded-control border bg-surface text-sm shadow-card ss-motion',
 		'has-[input:focus-visible]:ring-[3px] has-[input:disabled]:cursor-not-allowed has-[input:disabled]:bg-surface-2 has-[input:disabled]:text-muted has-[input:read-only]:bg-surface-2',
 		invalid
 			? 'border-danger has-[input:focus-visible]:border-danger has-[input:focus-visible]:ring-danger/20'
@@ -122,7 +136,7 @@ function FieldMessages({ ids, help, error, part }) {
 	return (
 		<>
 			{help && part !== 'error' ? (
-				<p id={ids.help} className="text-xs leading-snug text-muted">
+				<p id={ids.help} className="text-help text-muted">
 					{help}
 				</p>
 			) : null}
@@ -130,7 +144,7 @@ function FieldMessages({ ids, help, error, part }) {
 				<p
 					key={typeof error === 'string' ? error : undefined}
 					id={ids.error}
-					className="flex animate-ss-shake items-center gap-1 text-xs font-medium text-danger"
+					className="flex animate-ss-shake items-center gap-1 text-help font-medium text-danger"
 					role="alert">
 					<Icon name="alert" size={12} />
 					{error}
@@ -141,17 +155,17 @@ function FieldMessages({ ids, help, error, part }) {
 }
 
 /**
- * Whether a field in the given layout is a row: its label and help on the left, the control on the right.
+ * Whether a field in the given layout is a row: its label and help on the left, the control on the right (a `wide`
+ * control too: it gets the wider right column).
  * @param {'stack' | 'row' | undefined} layout the field's own layout
  * @param {'stack' | 'row'} inherited the layout of the card around it
- * @param {boolean | undefined} wide
  */
-const isRow = (layout, inherited, wide) => (layout ?? inherited) === 'row' && !wide;
+const isRow = (layout, inherited) => (layout ?? inherited) === 'row';
 
 /**
  * Label + control + messages layout (for custom controls). In a row layout (inside a {@link SettingsCard}, or with
  * `layout="row"`) the label and its help sit on the left and the control and its error on the right, stacking again
- * when the card is narrow (container query); `wide` fields and hidden labels always stack.
+ * when the card is narrow (container query); hidden labels always stack.
  * @param {{ id?: string, label: ReactNode, hideLabel?: boolean, required?: boolean, help?: ReactNode,
  *   error?: ReactNode, aside?: ReactNode, className?: string, wide?: boolean, layout?: 'stack' | 'row',
  *   children: (ids: { id: string, help: string, error: string, describedBy: string | undefined }) => ReactNode }} props
@@ -159,7 +173,7 @@ const isRow = (layout, inherited, wide) => (layout ?? inherited) === 'row' && !w
 function Field({ id, label, hideLabel = false, required = false, help, error, aside, className, wide, layout, children }) {
 	const ids = useFieldIds(id);
 	const inherited = useContext(FieldLayoutContext);
-	const row = isRow(layout, inherited, wide) && !hideLabel;
+	const row = isRow(layout, inherited) && !hideLabel;
 	const labelRow = (
 		<div className={cx('flex items-center justify-between gap-2', hideLabel && 'sr-only')}>
 			<label htmlFor={ids.id} className={cx(LABEL_CLASS, 'min-w-0 break-words')}>
@@ -171,19 +185,17 @@ function Field({ id, label, hideLabel = false, required = false, help, error, as
 					</span>
 				) : null}
 			</label>
-			{aside ? <span className="text-xs text-muted">{aside}</span> : null}
+			{aside ? <span className="text-help text-muted">{aside}</span> : null}
 		</div>
 	);
 	if (row)
 		return (
-			<div
-				{...cell(wide)}
-				className={cx('grid min-w-0 items-start gap-x-8 gap-y-1.5 @md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]', className)}>
-				<div className="min-w-0 space-y-0.5 @md:pt-1.5">
+			<div {...cell(wide)} className={cx(ROW_GRID, className)}>
+				<div className={ROW_LABEL}>
 					{labelRow}
 					<FieldMessages ids={ids} help={help} part="help" />
 				</div>
-				<div className="min-w-0 space-y-1.5">
+				<div className={rowControl(wide)}>
 					{children({ ...ids, describedBy: describedBy({ help, error }, ids) })}
 					<FieldMessages ids={ids} error={error} part="error" />
 				</div>
@@ -311,7 +323,7 @@ export function TextArea({
 					required={required}
 					aria-invalid={error ? true : undefined}
 					aria-describedby={ids.describedBy}
-					className={cx(controlClass(Boolean(error)), 'min-h-20', className)}
+					className={cx(controlClass(Boolean(error)), 'min-h-20 max-w-[40rem]', className)}
 					{...rest}
 				/>
 			)}
@@ -357,13 +369,13 @@ export function Select({
 			aside={aside}
 			{...(fieldClassName ? { className: fieldClassName } : {})}>
 			{(ids) => (
-				<div className="relative">
+				<div className="relative max-w-[35rem]">
 					<select
 						id={ids.id}
 						required={required}
 						aria-invalid={error ? true : undefined}
 						aria-describedby={ids.describedBy}
-						className={cx(controlClass(Boolean(error)), LINE, 'cursor-pointer appearance-none pr-9', className)}
+						className={cx(controlClass(Boolean(error)), LINE, 'cursor-pointer appearance-none bg-none pr-9', className)}
 						{...rest}>
 						{placeholder ? (
 							<option value="" disabled>
@@ -487,20 +499,28 @@ export function Switch({
 	wide,
 }) {
 	const ids = useFieldIds(id);
+	const row = useContext(FieldLayoutContext) === 'row' && !hideLabel;
 	const inactive = disabled || locked;
 	const track = size === 'sm' ? 'h-5 w-9' : 'h-6 w-11';
 	const knob = size === 'sm' ? 'size-4' : 'size-5';
 	const shift = size === 'sm' ? 'translate-x-4' : 'translate-x-5';
 	return (
-		<div {...cell(wide)} className={cx('flex min-w-0 items-start justify-between gap-4', className)}>
-			<div className={cx('min-w-0 space-y-0.5', hideLabel && 'sr-only')}>
-				<label htmlFor={ids.id} className="flex items-center gap-1.5 text-sm leading-6 font-medium text-fg">
+		<div
+			{...cell(wide)}
+			className={cx(
+				row
+					? 'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-10 gap-y-2 @2xl:grid-cols-[minmax(0,17.5rem)_minmax(0,1fr)]'
+					: 'flex min-w-0 items-start justify-between gap-4',
+				className,
+			)}>
+			<div className={cx('min-w-0 space-y-1', hideLabel && 'sr-only')}>
+				<label htmlFor={ids.id} className="flex items-center gap-1.5 text-label leading-6 font-medium text-fg">
 					{label}
 					{locked ? <Icon name="lock" size={13} title={lockedLabel} /> : null}
 				</label>
 				<FieldMessages ids={ids} help={description} error={error} />
 			</div>
-			<div className="flex shrink-0 items-center gap-3">
+			<div className={cx('flex shrink-0 items-center gap-3', row && '@2xl:pt-0.5')}>
 				{aside}
 				<button
 					id={ids.id}
@@ -572,7 +592,7 @@ const radioKeys =
  */
 function ChoiceGroup({ legend, ids, help, error, disabled, wide, layout, className, onKeyDown, children }) {
 	const inherited = useContext(FieldLayoutContext);
-	if (isRow(layout, inherited, wide))
+	if (isRow(layout, inherited))
 		return (
 			<div
 				{...cell(wide)}
@@ -581,14 +601,14 @@ function ChoiceGroup({ legend, ids, help, error, disabled, wide, layout, classNa
 				aria-describedby={describedBy({ help, error }, ids)}
 				aria-disabled={disabled || undefined}
 				onKeyDown={onKeyDown}
-				className={cx('grid min-w-0 items-start gap-x-8 gap-y-1.5 @md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]', className)}>
-				<div className="min-w-0 space-y-0.5 @md:pt-1.5">
+				className={cx(ROW_GRID, className)}>
+				<div className={ROW_LABEL}>
 					<div id={`${ids.id}-legend`} className={LABEL_CLASS}>
 						{legend}
 					</div>
 					<FieldMessages ids={ids} help={help} part="help" />
 				</div>
-				<div className="min-w-0 space-y-1.5">
+				<div className={rowControl(wide)}>
 					{children}
 					<FieldMessages ids={ids} error={error} part="error" />
 				</div>

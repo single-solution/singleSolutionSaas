@@ -386,7 +386,7 @@ describe('ActionMenu', () => {
 		);
 		const button = /** @type {HTMLElement} */ (container.querySelector('button[aria-haspopup="menu"]'));
 		expect(button.getAttribute('aria-label')).toBe('More actions');
-		expect(button.className).toContain('w-10');
+		expect(button.className).toContain('w-9');
 		expect(button.getAttribute('aria-expanded')).toBe('false');
 		click(button);
 		const menu = /** @type {HTMLElement} */ (container.querySelector('[role="menu"]'));
@@ -972,25 +972,61 @@ describe('theme', () => {
 		vi.restoreAllMocks();
 	});
 
-	it('the console header has a System / Light / Dark switch that stores the choice and sets data-theme', () => {
+	it('the console header has one menu with System / Light / Dark that stores the choice and sets data-theme', () => {
 		const { container } = render(
 			<AppShell sections={[{ items: [{ href: '/a', label: 'A' }] }]}>
 				<p>Body</p>
 			</AppShell>,
 		);
-		const group = /** @type {HTMLElement} */ (container.querySelector('header [role="group"][aria-label="Theme"]'));
-		const button = (/** @type {string} */ label) =>
-			/** @type {HTMLElement} */ ([...group.querySelectorAll('button')].find((b) => b.textContent === label));
-		expect(button('System').getAttribute('aria-pressed')).toBe('true');
-		click(button('Dark'));
+		const trigger = /** @type {HTMLElement} */ (container.querySelector('header button[aria-label="Theme"]'));
+		/** @param {string} label */
+		const pick = (label) => {
+			click(trigger);
+			const item = /** @type {HTMLElement} */ (
+				[...container.querySelectorAll('[role="menuitemradio"]')].find((b) => b.textContent === label)
+			);
+			click(item);
+		};
+		const checked = () => {
+			click(trigger);
+			const found = container.querySelector('[role="menuitemradio"][aria-checked="true"]')?.textContent;
+			click(trigger);
+			return found;
+		};
+		expect(checked()).toBe('System');
+		pick('Dark');
 		expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
 		expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
-		expect(button('Dark').getAttribute('aria-pressed')).toBe('true');
-		click(button('Light'));
+		expect(checked()).toBe('Dark');
+		pick('Light');
 		expect(document.documentElement.getAttribute('data-theme')).toBe('light');
-		click(button('System'));
+		pick('System');
 		expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
 		expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
+	});
+
+	it('an account menu in the header holds the theme choice above Sign out', () => {
+		const out = vi.fn();
+		const { container } = render(
+			<AppShell
+				sections={[{ items: [{ href: '/a', label: 'A', current: true }] }]}
+				crumbs={[{ label: 'Acme' }]}
+				context="Viewing as admin"
+				back={{ href: '/portal', label: 'Back to Portal' }}
+				account={{ name: 'Sam Lee', email: 'sam@x.test', items: [{ label: 'Sign out', onSelect: out, danger: true }] }}>
+				<p>Body</p>
+			</AppShell>,
+		);
+		const header = /** @type {HTMLElement} */ (container.querySelector('header'));
+		// never empty: the breadcrumbs and the page title, the context pill, Back to Portal and the account menu
+		expect(header.querySelector('[aria-current="page"]')?.textContent).toBe('A');
+		expect(header.textContent).toContain('Acme');
+		expect(header.textContent).toContain('Viewing as admin');
+		expect(header.querySelector('a[href="/portal"]')?.textContent).toBe('Back to Portal');
+		click(/** @type {HTMLElement} */ (header.querySelector('button[aria-haspopup="menu"]')));
+		const items = [...container.querySelectorAll('[role="menu"] button')].map((b) => b.textContent);
+		expect(items).toEqual(['System', 'Light', 'Dark', 'Sign out']);
+		expect(container.querySelector('[role="group"][aria-label="Theme"]')).toBeNull();
 	});
 
 	it('reads the stored choice and survives blocked storage', () => {

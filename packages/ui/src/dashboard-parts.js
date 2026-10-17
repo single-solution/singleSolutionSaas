@@ -5,7 +5,7 @@
  * Format forms (a website's values or the global defaults) and the Owner's Re-seal card.
  * @module
  */
-import { ViewTransition, createContext, useContext, useMemo, useState } from 'react';
+import { ViewTransition, createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from './Button.js';
 import { SaveBar, SettingList, SettingRow, SettingsCard } from './blocks.js';
 import { Callout, Card, ErrorState, Skeleton, SoftBreaks } from './display.js';
@@ -13,6 +13,7 @@ import { Input, RadioGroup, SegmentedControl, Switch, TextArea } from './fields.
 import { ListEditor } from './ListEditor.js';
 import { SchemaForm } from './SchemaForm.js';
 import { describeProblem } from './problems.js';
+import { ToastProvider, useToast } from './Toast.js';
 import { call, fill } from './dashboard-api.js';
 import { symbolRowsOf, symbolsOf } from './format.js';
 import { dashboardTexts, resealAdvice } from './dashboard-texts.js';
@@ -93,7 +94,11 @@ export function DashboardProvider({ manifest, texts, categories = NO_CATEGORIES,
 			},
 		};
 	}, [manifest, texts, categories]);
-	return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;
+	return (
+		<DashboardContext.Provider value={value}>
+			<ToastProvider>{children}</ToastProvider>
+		</DashboardContext.Provider>
+	);
 }
 
 /**
@@ -172,17 +177,24 @@ export function Loaded({ answer, skeleton, children }) {
 }
 
 /**
- * The outcome of the last write: saved, or the problem.
+ * The outcome of the last write as a toast at the bottom right (owner 2026-10-17: no Saved banners): Saved, or the
+ * problem. Each new result shows once; the component draws nothing in the page.
  * @param {{ result: Answer | null }} props
  */
 export function Outcome({ result }) {
 	const { texts } = useDashboard();
-	if (!result) return null;
-	return result.ok ? (
-		<Callout tone="success">{texts.saved}</Callout>
-	) : (
-		<Callout tone="danger">{describeProblem(result.problem)}</Callout>
-	);
+	const toast = useToast();
+	const shown = useRef(/** @type {Answer | null} */ (null));
+	useEffect(() => {
+		if (!result || shown.current === result) return;
+		shown.current = result;
+		toast.show(
+			result.ok
+				? { title: texts.saved }
+				: { tone: 'danger', title: texts.saveFailed, description: describeProblem(result.problem) },
+		);
+	}, [result, toast, texts]);
+	return null;
 }
 
 /**

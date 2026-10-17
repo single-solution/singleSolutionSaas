@@ -33,6 +33,7 @@ export {
 	PageHeader,
 	Badge,
 	StatusBadge,
+	StatusPill,
 	Callout,
 	EmptyState,
 	ErrorState,
@@ -50,11 +51,12 @@ export {
 } from './display.js';
 export { Table } from './Table.js';
 export { Dialog, ConfirmDialog } from './overlay.js';
-export { ActionMenu, AccountMenu } from './Menu.js';
+export { ActionMenu, AccountMenu, ThemeMenu } from './Menu.js';
+export { RowList, ListRow, Toolbar } from './rows.js';
 export { TypedConfirmDialog } from './TypedConfirm.js';
 export { ToastProvider, useToast } from './Toast.js';
 export { CodeBlock, copyText } from './CodeBlock.js';
-export { AppShell, useShell } from './AppShell.js';
+export { AppShell, ContextPill, ScrollArea, SwitcherSelect, useShell } from './AppShell.js';
 export {
 	Grid,
 	Col,
@@ -75,6 +77,7 @@ export {
 } from './blocks.js';
 export { Paged, PAGED_TEXTS } from './paged.js';
 export { ThemeScript } from './theme-script.js';
+export { ThemeToggle, useThemeChoice } from './theme.js';
 export { DisplayLocale, LocalTime, useDisplayLocale, useViewerTimeZone } from './time.js';
 export { BarChart, isEmptySeries } from './charts.js';
 export { SeoPreview } from './SeoPreview.js';

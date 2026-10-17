@@ -366,7 +366,8 @@ describe('shared pieces', () => {
 				<SettingsForms features={features.slice(2)} saveUrl={() => ''} resetBody savedSource="default" reload={reload} />,
 			),
 		);
-		expect(container.innerHTML).toBe('');
+		// no form on the page (only the toasts of the saves above)
+		expect(container.querySelector('form, section, [role="switch"], input')).toBeNull();
 	});
 
 	it('TextsForm finds, saves and resets a text (DELETE for a website, PUT null for defaults)', async () => {
@@ -570,7 +571,12 @@ describe('standard tabs', () => {
 		await settle();
 		expect(container.textContent).toContain('Price: 1 credits/h');
 		expect(container.textContent).toContain('Needs: Notes');
-		expect(container.textContent).toContain('Not working: connect Database');
+		// a feature whose connection fails shows an amber Needs setup pill (the reason as its tooltip) and Connect
+		const pill = /** @type {HTMLElement} */ ([...container.querySelectorAll('span[title]')].find((el) => el.textContent === 'Needs setup'));
+		expect(pill.getAttribute('title')).toBe('Not working: connect Database');
+		expect(pill.className).toContain('bg-warning-soft');
+		expect(container.querySelector('.text-danger')).toBeNull();
+		expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'Connect Database')).toBe(true);
 		const boxes = /** @type {HTMLButtonElement[]} */ ([...container.querySelectorAll('[role="switch"]')]);
 		const checks = () => boxes.map((box) => box.getAttribute('aria-checked') === 'true');
 		expect(checks()).toEqual([true, true, false]);
@@ -1284,7 +1290,7 @@ describe('ProductDashboard', () => {
 		type(picker, 'p2');
 		await settle();
 		expect(window.location.search).toBe('?websiteId=p2&view=overview');
-		expect(document.body.textContent).toContain('Admin view: Other / other.example.com');
+		expect(document.body.textContent).toContain('Viewing as admin · Other / other.example.com');
 		expect(document.body.textContent).toContain('tab for p2');
 		// from a website tab, the same tab of the other website
 		click(/** @type {HTMLElement} */ ([...document.querySelectorAll('nav[aria-label="Main"] a')][7]));

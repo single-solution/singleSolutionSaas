@@ -26,8 +26,11 @@ import { Icon } from './icons.js';
  * @property {boolean} [wrap] let the text wrap on whole words (at least 10rem wide); other cells keep one line
  */
 
-/** Cell padding: a little more room in a wide card (the table's own width, not the screen's). */
+/** Cell padding (44 px rows): a little more room in a wide card (the table's own width, not the screen's). */
 const PAD = 'px-4 py-3 @4xl:px-5';
+
+/** A table longer than this scrolls inside its card, under a sticky header row. */
+const SCROLL_FROM = 12;
 
 /**
  * @template T
@@ -79,7 +82,11 @@ export function Table({
 				role="region"
 				aria-label={caption}
 				tabIndex={0}
-				className="overflow-x-auto rounded-card border border-line-soft bg-surface focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus in-[.rounded-card]:rounded-none in-[.rounded-card]:border-0">
+				className={cx(
+					'ss-scroll rounded-card border border-line-soft bg-surface shadow-card focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+					'in-[.rounded-card]:rounded-none in-[.rounded-card]:border-0 in-[.rounded-card]:shadow-none',
+					sorted.length > SCROLL_FROM && 'max-h-[36rem]',
+				)}>
 				<table className={cx('w-full border-collapse text-sm', sorted.length > 0 && 'min-w-[32rem]')}>
 					<caption className="sr-only">{caption}</caption>
 					<thead className={cx(sorted.length === 0 && 'hidden')}>
@@ -99,7 +106,7 @@ export function Table({
 										scope="col"
 										aria-sort={ariaSort}
 										className={cx(
-											PAD,
+											'sticky top-0 z-10 border-b border-line-soft bg-surface px-4 py-2.5 @4xl:px-5',
 											alignClass(column.align),
 											'whitespace-nowrap text-xs font-medium text-muted',
 											column.className,
@@ -138,7 +145,7 @@ export function Table({
 							sorted.map((row) => (
 								<tr
 									key={rowKey(row)}
-									className="ss-motion animate-ss-fade border-t border-line-soft hover:bg-surface-2/60">
+									className="ss-motion animate-ss-fade border-t border-line-soft first:border-t-0 hover:bg-surface-2/60">
 									{columns.map((column) => {
 										const value = column.render
 											? column.render(row)

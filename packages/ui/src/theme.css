@@ -1,19 +1,22 @@
 /*
  * @ss/ui design tokens. Import after Tailwind: `@import 'tailwindcss'; @import '@ss/ui/theme.css';` and add an
  * `@source` for the package sources. Every color is a CSS variable (light by default, dark with the OS setting or
- * `data-theme="dark"` on <html>, set before paint by `ThemeScript` from the `ThemeToggle` choice); utilities read them
- * through `@theme inline`, so components never need `dark:`. Text/background pairs keep a contrast ratio of at least
- * 4.5:1 (WCAG AA) in both themes; `line-strong` (form controls) keeps 3:1 against surfaces, `line` stays visible.
- * Visual style (PLAN 0.6, owner 2026-10-14 and 2026-10-16): panels and cards float on a quiet canvas with space around
- * them (never glued to the window edges), a hairline `line-soft` edge and a very soft shadow (`shadow-card`, panels
- * `shadow-panel`); a glow appears only on hover (buttons), a deeper shadow only on things that sit above the page
- * (menus, dialogs, toasts). Two typefaces (owner's pick, look "A. Workbench"):
- * Figtree for text and Bricolage Grotesque for page titles and key figures (`font-display`), loaded by each app's
- * layout; warm neutrals, kept light; a short type scale.
+ * `data-theme="dark"` on <html>, set before paint by `ThemeScript` from the theme choice in the header menu);
+ * utilities read them through `@theme inline`, so components never need `dark:`. Text/background pairs keep a contrast
+ * ratio of at least 4.5:1 (WCAG AA) in both themes; `line-strong` (checkboxes, a hovered control) keeps 3:1 against
+ * surfaces. `subtle` text (placeholders, meta that is also said elsewhere) is decorative only.
  *
- * Color rule (PLAN 0.6, owner decision 2026-10-09: one accent): indigo is the only accent — primary buttons, links,
- * the active item, icon tiles and badges (`primary-soft` tint); surfaces are neutral; green, amber and red mean status
- * only. `info` is the indigo tint too, so no second hue appears.
+ * Visual system (owner 2026-10-17, "premium, at the level of Stripe, Linear and Vercel"):
+ * - Neutrals on a cool slate scale: a quiet canvas, white panels (#111318 in dark), hairline borders
+ *   (rgba(15,23,42,.07)).
+ * - ONE accent, the brand indigo: primary actions, the active item, focus rings and links only. Status colors are
+ *   emerald, amber and rose as soft pairs (a 50 tint with readable 700 text).
+ * - Radii: panels 14, cards 12, controls 8, pills full.
+ * - Elevation: level 1 (panels, cards) a hairline and `0 1px 2px`; level 2 (sticky bars) a soft 12px lift; level 3
+ *   (menus, dialogs, toasts) a deep 32px shadow. In dark, shadows give way to borders.
+ * - A 4-pt spacing scale: page padding 24, card gap 16, section gap 24.
+ * - Type: body 14/20, labels 13/18 medium, help 12.5/18 muted, section titles 15/22 semibold, page titles 20/28
+ *   semibold. Figtree for text and Bricolage Grotesque for key figures (`font-display`), loaded by each app's layout.
  */
 @theme inline {
 	--color-canvas: var(--ss-canvas);
@@ -23,6 +26,7 @@
 	--color-line-strong: var(--ss-line-strong);
 	--color-fg: var(--ss-fg);
 	--color-muted: var(--ss-muted);
+	--color-subtle: var(--ss-subtle);
 	--color-primary: var(--ss-primary);
 	--color-primary-hover: var(--ss-primary-hover);
 	--color-on-primary: var(--ss-on-primary);
@@ -45,33 +49,43 @@
 	--color-line-soft: var(--ss-line-soft);
 	--color-surface-3: var(--ss-surface-3);
 	--color-overlay: var(--ss-overlay);
-	/* text and headings/figures: each app's layout loads the faces (`--ss-font-text`, `--ss-font-display`) */
+	/* text and key figures: each app's layout loads the faces (`--ss-font-text`, `--ss-font-display`) */
 	--font-sans: var(--ss-font-text, ui-sans-serif), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 	--font-display: var(--ss-font-display, var(--ss-font-text, ui-sans-serif)), ui-sans-serif, system-ui, sans-serif;
 	--font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-	/* the type scale (12 / 13 / 14 / 16 / 20 / 24 / 30 with Tailwind's text-sm = 14): micro 12px (counters), label 13px
-	   (buttons, labels, compact rows), lead 16px (card titles, large buttons), heading 20px (dialog titles), page 24px
-	   (page titles), figure 30px (key figures) */
-	--text-micro: 0.75rem;
+	/* the type scale: micro 11px (group labels, counters), help 12.5/18 (help text), label 13/18 (labels, buttons,
+	   compact rows), body 14/20 (Tailwind's text-sm), title 15/22 (card and section titles), lead 16 (large buttons),
+	   page 20/28 (page and dialog titles), figure 28 (key figures) */
+	--text-micro: 0.6875rem;
+	--text-micro--line-height: 1rem;
+	--text-help: 0.78125rem;
+	--text-help--line-height: 1.125rem;
 	--text-label: 0.8125rem;
+	--text-label--line-height: 1.125rem;
+	--text-title: 0.9375rem;
+	--text-title--line-height: 1.375rem;
 	--text-lead: 1rem;
+	--text-lead--line-height: 1.5rem;
 	--text-heading: 1.25rem;
-	--text-page: 1.5rem;
-	--text-figure: 1.875rem;
-	/* floating panels (sidebars, header) 16px, cards 14px, controls 8px */
-	--radius-panel: 1rem;
-	--radius-card: 0.875rem;
+	--text-heading--line-height: 1.75rem;
+	--text-page: 1.25rem;
+	--text-page--line-height: 1.75rem;
+	--text-figure: 1.75rem;
+	--text-figure--line-height: 2.125rem;
+	/* panels (sidebars, header) 14px, cards 12px, controls 8px */
+	--radius-panel: 0.875rem;
+	--radius-card: 0.75rem;
 	--radius-control: 0.5rem;
-	/* flat at rest (owner, 2026-10-14: elevation by default is not premium): buttons glow on hover; menus, dialogs and
-	   toasts sit above the page */
-	--shadow-glow-primary: 0 6px 18px -8px color-mix(in srgb, var(--ss-primary) 75%, transparent);
-	--shadow-glow-danger: 0 6px 18px -8px color-mix(in srgb, var(--ss-danger) 75%, transparent);
+	/* level 1 (panels and cards), level 2 (sticky bars), level 3 (menus, dialogs, toasts); in dark the borders carry
+	   the edges and the shadows go (see the color blocks); a glow shows on hovered filled buttons only */
+	--shadow-glow-primary: var(--ss-glow-primary);
+	--shadow-glow-danger: var(--ss-glow-danger);
 	--shadow-knob: 0 1px 2px rgb(15 23 42 / 0.25);
-	/* floating panels and cards: a hairline-thin lift, never a heavy drop shadow */
-	--shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 1px rgb(15 23 42 / 0.02);
-	--shadow-panel: 0 1px 3px rgb(15 23 42 / 0.05), 0 8px 24px -12px rgb(15 23 42 / 0.1);
-	--shadow-overlay: 0 24px 48px -12px rgb(15 23 42 / 0.35);
-	--shadow-pop: 0 12px 32px -12px rgb(15 23 42 / 0.28), 0 0 0 1px var(--ss-line-soft);
+	--shadow-card: var(--ss-shadow-1);
+	--shadow-panel: var(--ss-shadow-1);
+	--shadow-bar: var(--ss-shadow-2);
+	--shadow-overlay: var(--ss-shadow-3);
+	--shadow-pop: var(--ss-shadow-3), 0 0 0 1px var(--ss-line-soft);
 	/* motion (see "Motion" below): `ease-ss`, `ease-ss-move`, `duration-(--ss-motion)` and the `animate-ss-*` utilities */
 	--ease-ss: var(--ss-ease);
 	--ease-ss-move: var(--ss-ease-move);
@@ -353,119 +367,296 @@
 	}
 }
 
+/* light (the default) */
 :root {
 	color-scheme: light;
-	--ss-canvas: #f3f2ef;
+	--ss-canvas: #f6f7f9;
 	--ss-surface: #ffffff;
-	--ss-surface-2: #f5f4f1;
-	--ss-line: #dbd6cf;
-	--ss-line-strong: #8a837a;
-	--ss-fg: #1d1b26;
-	--ss-muted: #625d6b;
+	--ss-surface-2: #f3f4f6;
+	--ss-surface-3: #e9ebef;
+	--ss-line: rgb(15 23 42 / 0.12);
+	--ss-line-soft: rgb(15 23 42 / 0.07);
+	--ss-line-strong: #8a94a6;
+	--ss-fg: #0f172a;
+	--ss-muted: #617086;
+	--ss-subtle: #94a3b8;
 	--ss-primary: #4f46e5;
 	--ss-primary-hover: #4338ca;
 	--ss-on-primary: #ffffff;
 	--ss-primary-soft: #eef2ff;
-	--ss-on-primary-soft: #3730a3;
+	--ss-on-primary-soft: #4338ca;
 	--ss-success: #047857;
 	--ss-success-soft: #ecfdf5;
-	--ss-on-success-soft: #065f46;
+	--ss-on-success-soft: #047857;
 	--ss-warning: #b45309;
 	--ss-warning-soft: #fffbeb;
-	--ss-on-warning-soft: #92400e;
-	--ss-danger: #dc2626;
-	--ss-danger-hover: #b91c1c;
+	--ss-on-warning-soft: #b45309;
+	--ss-danger: #e11d48;
+	--ss-danger-hover: #be123c;
 	--ss-on-danger: #ffffff;
-	--ss-danger-soft: #fef2f2;
-	--ss-on-danger-soft: #991b1b;
+	--ss-danger-soft: #fff1f2;
+	--ss-on-danger-soft: #be123c;
 	--ss-info-soft: #eef2ff;
-	--ss-on-info-soft: #3730a3;
+	--ss-on-info-soft: #4338ca;
 	--ss-focus: #4f46e5;
-	--ss-overlay: rgb(29 27 38 / 0.45);
-	--ss-line-soft: #e8e5e0;
-	--ss-surface-3: #e9e6e1;
+	--ss-overlay: rgb(15 23 42 / 0.4);
+	--ss-shadow-1: 0 1px 2px rgb(15 23 42 / 0.04);
+	--ss-shadow-2: 0 4px 12px -2px rgb(15 23 42 / 0.08);
+	--ss-shadow-3: 0 12px 32px -8px rgb(15 23 42 / 0.18);
+	--ss-glow-primary: 0 4px 12px -4px rgb(79 70 229 / 0.45);
+	--ss-glow-danger: 0 4px 12px -4px rgb(225 29 72 / 0.45);
+	--ss-scrollbar: rgb(15 23 42 / 0.18);
+	--ss-scrollbar-hover: rgb(15 23 42 / 0.32);
+	--ss-selection: rgb(79 70 229 / 0.18);
 }
 
+/* dark: from the OS setting unless light was chosen, or chosen (the two blocks hold the same values) */
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme='light']) {
 		color-scheme: dark;
-		--ss-canvas: #0f0e12;
-		--ss-surface: #19171d;
-		--ss-surface-2: #23212a;
-		--ss-line: #3a3641;
-		--ss-line-strong: #6f6879;
-		--ss-fg: #f1edf3;
-		--ss-muted: #aca4b4;
+		--ss-canvas: #0a0b0f;
+		--ss-surface: #111318;
+		--ss-surface-2: #181b21;
+		--ss-surface-3: #20242b;
+		--ss-line: #2c3039;
+		--ss-line-soft: #1f2229;
+		--ss-line-strong: #5e6675;
+		--ss-fg: #edeff3;
+		--ss-muted: #9aa3b2;
+		--ss-subtle: #6b7486;
 		--ss-primary: #818cf8;
 		--ss-primary-hover: #a5b4fc;
 		--ss-on-primary: #0b1120;
-		--ss-primary-soft: #1e1b4b;
+		--ss-primary-soft: #1e1f3b;
 		--ss-on-primary-soft: #c7d2fe;
 		--ss-success: #34d399;
-		--ss-success-soft: #052e22;
+		--ss-success-soft: #0b2a20;
 		--ss-on-success-soft: #6ee7b7;
 		--ss-warning: #fbbf24;
-		--ss-warning-soft: #33240a;
+		--ss-warning-soft: #2e2109;
 		--ss-on-warning-soft: #fcd34d;
-		--ss-danger: #f87171;
-		--ss-danger-hover: #fca5a5;
-		--ss-on-danger: #1a0505;
-		--ss-danger-soft: #3b0d0d;
-		--ss-on-danger-soft: #fca5a5;
-		--ss-info-soft: #1e1b4b;
+		--ss-danger: #fb7185;
+		--ss-danger-hover: #fda4af;
+		--ss-on-danger: #1a0508;
+		--ss-danger-soft: #2f0f16;
+		--ss-on-danger-soft: #fda4af;
+		--ss-info-soft: #1e1f3b;
 		--ss-on-info-soft: #c7d2fe;
 		--ss-focus: #a5b4fc;
-		--ss-overlay: rgb(8 7 10 / 0.7);
-		--ss-line-soft: #26232b;
-		--ss-surface-3: #2c2933;
+		--ss-overlay: rgb(3 4 7 / 0.72);
+		--ss-shadow-1: 0 0 #0000;
+		--ss-shadow-2: 0 0 #0000;
+		--ss-shadow-3: 0 0 0 1px #2c3039;
+		--ss-glow-primary: 0 0 #0000;
+		--ss-glow-danger: 0 0 #0000;
+		--ss-scrollbar: rgb(255 255 255 / 0.16);
+		--ss-scrollbar-hover: rgb(255 255 255 / 0.28);
+		--ss-selection: rgb(129 140 248 / 0.3);
 	}
 }
 
 :root[data-theme='dark'] {
 	color-scheme: dark;
-	--ss-canvas: #0f0e12;
-	--ss-surface: #19171d;
-	--ss-surface-2: #23212a;
-	--ss-line: #3a3641;
-	--ss-line-strong: #6f6879;
-	--ss-fg: #f1edf3;
-	--ss-muted: #aca4b4;
+	--ss-canvas: #0a0b0f;
+	--ss-surface: #111318;
+	--ss-surface-2: #181b21;
+	--ss-surface-3: #20242b;
+	--ss-line: #2c3039;
+	--ss-line-soft: #1f2229;
+	--ss-line-strong: #5e6675;
+	--ss-fg: #edeff3;
+	--ss-muted: #9aa3b2;
+	--ss-subtle: #6b7486;
 	--ss-primary: #818cf8;
 	--ss-primary-hover: #a5b4fc;
 	--ss-on-primary: #0b1120;
-	--ss-primary-soft: #1e1b4b;
+	--ss-primary-soft: #1e1f3b;
 	--ss-on-primary-soft: #c7d2fe;
 	--ss-success: #34d399;
-	--ss-success-soft: #052e22;
+	--ss-success-soft: #0b2a20;
 	--ss-on-success-soft: #6ee7b7;
 	--ss-warning: #fbbf24;
-	--ss-warning-soft: #33240a;
+	--ss-warning-soft: #2e2109;
 	--ss-on-warning-soft: #fcd34d;
-	--ss-danger: #f87171;
-	--ss-danger-hover: #fca5a5;
-	--ss-on-danger: #1a0505;
-	--ss-danger-soft: #3b0d0d;
-	--ss-on-danger-soft: #fca5a5;
-	--ss-info-soft: #1e1b4b;
+	--ss-danger: #fb7185;
+	--ss-danger-hover: #fda4af;
+	--ss-on-danger: #1a0508;
+	--ss-danger-soft: #2f0f16;
+	--ss-on-danger-soft: #fda4af;
+	--ss-info-soft: #1e1f3b;
 	--ss-on-info-soft: #c7d2fe;
 	--ss-focus: #a5b4fc;
-	--ss-overlay: rgb(8 7 10 / 0.7);
-	--ss-line-soft: #26232b;
-	--ss-surface-3: #2c2933;
+	--ss-overlay: rgb(3 4 7 / 0.72);
+	--ss-shadow-1: 0 0 #0000;
+	--ss-shadow-2: 0 0 #0000;
+	--ss-shadow-3: 0 0 0 1px #2c3039;
+	--ss-glow-primary: 0 0 #0000;
+	--ss-glow-danger: 0 0 #0000;
+	--ss-scrollbar: rgb(255 255 255 / 0.16);
+	--ss-scrollbar-hover: rgb(255 255 255 / 0.28);
+	--ss-selection: rgb(129 140 248 / 0.3);
 }
 
+/*
+ * Nothing at browser defaults (owner 2026-10-17): scrollbars, selection, focus rings, placeholders, autofill, number
+ * fields, date and file inputs, selects, `details` / `summary`, checkboxes, radios and ranges all take the theme.
+ */
 @layer base {
 	html {
 		-webkit-text-size-adjust: 100%;
+		accent-color: var(--ss-primary);
 	}
 	body {
 		background-color: var(--ss-canvas);
 		color: var(--ss-fg);
 		font-family: var(--font-sans);
+		font-size: 0.875rem;
+		line-height: 1.25rem;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		text-rendering: optimizeLegibility;
+	}
+	::selection {
+		background-color: var(--ss-selection);
 	}
 	:focus-visible {
 		outline: 2px solid var(--ss-focus);
 		outline-offset: 2px;
+	}
+	::placeholder {
+		color: var(--ss-subtle);
+		opacity: 1;
+	}
+	/* scrollbars: thin, rounded, in the theme, shown while the pointer is over the scrolling box (or it has focus) */
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: transparent transparent;
+	}
+	*:hover,
+	*:focus-within,
+	*:focus-visible {
+		scrollbar-color: var(--ss-scrollbar) transparent;
+	}
+	@supports not (scrollbar-color: auto) {
+		::-webkit-scrollbar {
+			width: 10px;
+			height: 10px;
+		}
+		::-webkit-scrollbar-track,
+		::-webkit-scrollbar-corner {
+			background: transparent;
+		}
+		::-webkit-scrollbar-thumb {
+			border: 3px solid transparent;
+			border-radius: 9999px;
+			background-clip: content-box;
+			background-color: transparent;
+		}
+		*:hover::-webkit-scrollbar-thumb {
+			background-color: var(--ss-scrollbar);
+		}
+		::-webkit-scrollbar-thumb:hover {
+			background-color: var(--ss-scrollbar-hover);
+		}
+	}
+	/* autofill keeps the field's own colors (the browser's tint would otherwise cover them) */
+	input:-webkit-autofill,
+	input:-webkit-autofill:hover,
+	input:-webkit-autofill:focus,
+	textarea:-webkit-autofill,
+	select:-webkit-autofill {
+		-webkit-text-fill-color: var(--ss-fg);
+		caret-color: var(--ss-fg);
+		transition:
+			background-color 600000s 0s,
+			color 600000s 0s;
+	}
+	/* number fields: no browser spinners (type the number, or use the arrow keys) */
+	input[type='number'] {
+		-moz-appearance: textfield;
+		appearance: textfield;
+	}
+	input[type='number']::-webkit-inner-spin-button,
+	input[type='number']::-webkit-outer-spin-button {
+		-webkit-appearance: none;
+		margin: 0;
+	}
+	/* date and time fields: the picker icon in the muted text color */
+	::-webkit-calendar-picker-indicator {
+		cursor: pointer;
+		opacity: 0.55;
+		border-radius: 4px;
+		transition: opacity var(--ss-motion-fast) var(--ss-ease);
+	}
+	::-webkit-calendar-picker-indicator:hover {
+		opacity: 0.9;
+	}
+	::-webkit-datetime-edit-fields-wrapper {
+		padding: 0;
+	}
+	/* file fields: the button looks like a secondary button */
+	::file-selector-button {
+		margin-right: 0.75rem;
+		height: 1.75rem;
+		padding: 0 0.75rem;
+		border: 1px solid var(--ss-line);
+		border-radius: 0.375rem;
+		background-color: var(--ss-surface);
+		color: var(--ss-fg);
+		font: inherit;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: background-color var(--ss-motion-fast) var(--ss-ease);
+	}
+	::file-selector-button:hover {
+		background-color: var(--ss-surface-2);
+	}
+	/* a plain select gets the kit's chevron (the kit's `Select` draws its own) */
+	select:not([multiple]):not([size]) {
+		-webkit-appearance: none;
+		appearance: none;
+		background-image: linear-gradient(45deg, transparent 50%, var(--ss-muted) 50%),
+			linear-gradient(135deg, var(--ss-muted) 50%, transparent 50%);
+		background-position:
+			calc(100% - 15px) 50%,
+			calc(100% - 11px) 50%;
+		background-size:
+			4px 4px,
+			4px 4px;
+		background-repeat: no-repeat;
+		padding-right: 2rem;
+	}
+	option {
+		background-color: var(--ss-surface);
+		color: var(--ss-fg);
+	}
+	/* details / summary: a chevron instead of the browser's triangle */
+	summary {
+		cursor: pointer;
+		list-style: none;
+	}
+	summary::-webkit-details-marker {
+		display: none;
+	}
+	details > summary:not([data-ss-plain])::before {
+		content: '';
+		display: inline-block;
+		width: 0.375rem;
+		height: 0.375rem;
+		margin-right: 0.5rem;
+		margin-bottom: 0.125rem;
+		border-right: 1.5px solid currentColor;
+		border-bottom: 1.5px solid currentColor;
+		rotate: -45deg;
+		opacity: 0.6;
+		transition: rotate var(--ss-motion-fast) var(--ss-ease);
+	}
+	details[open] > summary:not([data-ss-plain])::before {
+		rotate: 45deg;
+	}
+	hr {
+		border-color: var(--ss-line-soft);
 	}
 	/* a clicked router link whose page is still on the way looks pressed (`data-link-pending` inside it) */
 	a:has(> [data-link-pending]) {
@@ -485,4 +676,11 @@
 			transition-delay: 0ms !important;
 		}
 	}
+}
+
+/* a scrolling pane (`ScrollArea`, the frame's panes): its own scroll, never the page's; the thumb shows on hover */
+@utility ss-scroll {
+	overflow: auto;
+	overscroll-behavior: contain;
+	scrollbar-gutter: stable;
 }

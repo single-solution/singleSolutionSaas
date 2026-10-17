@@ -14,7 +14,7 @@
 import { useState } from 'react';
 import { Button } from './Button.js';
 import { CodeBlock } from './CodeBlock.js';
-import { Badge, Callout, Card } from './display.js';
+import { Badge, Callout, Card, StatusPill } from './display.js';
 import { SaveBar, SectionLayout, SettingList, SettingsCard, ViewTitle } from './blocks.js';
 import { Input, Switch } from './fields.js';
 import { ActionMenu } from './Menu.js';
@@ -76,7 +76,7 @@ const slug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
 /** A small count shown at the right of a sidebar link. @param {{ children: ReactNode }} props */
 function Count({ children }) {
-	return <span className="rounded-full bg-surface-2 px-1.5 text-xs font-semibold text-muted tabular-nums">{children}</span>;
+	return <span className="rounded-md bg-surface-2 px-1.5 py-px text-micro font-medium text-muted tabular-nums">{children}</span>;
 }
 
 /**
@@ -120,7 +120,7 @@ export function OverviewTab(props) {
  * features picked (shown above the list and in the confirmation).
  * @param {TabProps & { warnings?: (on: string[]) => string[] }} props
  */
-export function FeaturesTab({ websiteId, who, support, warnings }) {
+export function FeaturesTab({ websiteId, who, support, warnings, open }) {
 	const { texts, namesOf, byCategory } = useDashboard();
 	const locale = useDisplayLocale();
 	const F = texts.features;
@@ -161,7 +161,7 @@ export function FeaturesTab({ websiteId, who, support, warnings }) {
 						content: (
 							<>
 								<ViewTitle title={category.title} description={fill(F.countOn, { on: count, total: list.length })} />
-								<Card>
+								<Card padded={false}>
 									<ul className="divide-y divide-line-soft">
 										{list.map((feature) => {
 											const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
@@ -169,34 +169,58 @@ export function FeaturesTab({ websiteId, who, support, warnings }) {
 												(link) => link.neededBy.includes(feature.key) && link.status !== 'connected',
 											);
 											return (
-												<li key={feature.key} className="flex items-start gap-4 py-3 first:pt-0 last:pb-0">
-													<div className="min-w-0 flex-1 space-y-0.5">
-														<p className="flex flex-wrap items-baseline gap-x-2">
+												<li key={feature.key} className="flex items-start gap-4 px-5 py-4">
+													<div className="min-w-0 flex-1 space-y-1">
+														<p className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
 															<span className="text-sm font-medium text-fg">{feature.name}</span>
-															<span className="text-xs text-muted">
+															{feature.on && broken.length > 0 ? (
+																<StatusPill
+																	status="setup"
+																	title={broken
+																		.map((link) => fill(F.notWorking, { connection: link.label }))
+																		.join(' · ')}>
+																	{F.needsSetup}
+																</StatusPill>
+															) : null}
+														</p>
+														<p className="max-w-[40rem] text-help text-muted">{feature.description}</p>
+														<p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-help text-muted">
+															<span>
 																{fill(F.price, {
 																	price: formatCreditsPerHour(feature.millicreditsPerHour, { locale }),
 																})}
 															</span>
+															{feature.dependsOn.length > 0 ? (
+																<span>{fill(F.needs, { features: namesOf(feature.dependsOn) })}</span>
+															) : null}
 															<a
-																className="text-xs font-semibold text-primary"
+																className="font-medium text-primary hover:underline"
 																href={`/docs#feature-${feature.key}`}>
 																{F.docs}
 															</a>
 														</p>
-														<p className="text-[13px] leading-snug text-muted">{feature.description}</p>
-														{feature.dependsOn.length > 0 ? (
-															<p className="text-xs text-muted">
-																{fill(F.needs, { features: namesOf(feature.dependsOn) })}
-															</p>
+														{feature.on && broken.length > 0 ? (
+															<div className="flex flex-wrap gap-2 pt-1.5">
+																{broken.map((link) => (
+																	<Button
+																		key={link.name}
+																		size="sm"
+																		variant="secondary"
+																		title={fill(F.notWorking, { connection: link.label })}
+																		onClick={() => {
+																			// the Connections tab opens on this connection (its view is kept in the hash)
+																			open?.('connections');
+																			try {
+																				window.history.replaceState(window.history.state, '', `#connection-${link.name}`);
+																			} catch {
+																				// no history: the tab opens on its first connection
+																			}
+																		}}>
+																		{`${F.connect} ${link.label}`}
+																	</Button>
+																))}
+															</div>
 														) : null}
-														{feature.on
-															? broken.map((link) => (
-																	<p key={link.name} className="text-xs text-danger">
-																		{fill(F.notWorking, { connection: link.label })}
-																	</p>
-																))
-															: null}
 													</div>
 													<Switch
 														size="sm"
@@ -502,7 +526,7 @@ export function ConnectionsTab({ websiteId, form, hint }) {
 										{item.last4 ? <code>••••{item.last4}</code> : null}
 										{item.message ? <span className="text-muted">{item.message}</span> : null}
 									</p>
-									{help ? <p className="mt-2 text-[13px] leading-snug text-muted">{help}</p> : null}
+									{help ? <p className="mt-2 text-help text-muted">{help}</p> : null}
 									{own ?? (
 										<div className="mt-3 flex flex-wrap items-end gap-2">
 											<Input

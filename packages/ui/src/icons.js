@@ -6,6 +6,7 @@
 
 const PATHS = Object.freeze({
 	lock: 'M7 11V7a5 5 0 0 1 10 0v4M5 11h14v10H5z',
+	eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
 	check: 'M5 12l5 5L20 7',
 	copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
 	close: 'M6 6l12 12M18 6L6 18',
@@ -73,7 +74,7 @@ export function Icon({ name, size = 16, className, title }) {
 			viewBox="0 0 24 24"
 			fill="none"
 			stroke="currentColor"
-			strokeWidth={2}
+			strokeWidth={1.8}
 			strokeLinecap="round"
 			strokeLinejoin="round"
 			className={className}

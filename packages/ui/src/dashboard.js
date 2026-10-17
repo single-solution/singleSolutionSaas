@@ -2,8 +2,9 @@
 /**
  * `@ss/ui/dashboard` — the product dashboard (PLAN 0.4.3), one for every product: one page, opened from the Portal
  * (`/sso` → `/dashboard?websiteId=…`), with the left sidebar Overview · Features · Settings · Connections ·
- * Developers, plus Defaults and Prices for Owners. Admins get the website switcher's merchant names and the `Admin
- * view` banner; everyone gets Back to Portal. Setup only: it calls the kit's dashboard API and shows no business data.
+ * Developers, plus Defaults and Prices for Owners. Admins get the website switcher's merchant names and a small
+ * "Viewing as admin" pill in the header; everyone gets Back to Portal (a subtle link in the header). Saved and errors
+ * show as toasts at the bottom right. Setup only: it calls the kit's dashboard API and shows no business data.
  *
  * Sections and websites switch inside the page (the address follows; Back and Forward work): the session is loaded
  * once, the menu marks the new section at once, and its content cross-fades in, showing its last answer at once
@@ -15,10 +16,8 @@
  * @module
  */
 import { createContext, startTransition, useCallback, useContext, useEffect, useState } from 'react';
-import { AppShell } from './AppShell.js';
-import { Callout, Skeleton } from './display.js';
-import { Select } from './fields.js';
-import { Icon } from './icons.js';
+import { AppShell, SwitcherSelect } from './AppShell.js';
+import { Callout, EmptyState, Skeleton } from './display.js';
 import { SwapTransition } from './motion.js';
 import { describeProblem } from './problems.js';
 import { call, fill, useLoad } from './dashboard-api.js';
@@ -233,16 +232,15 @@ function DashboardPage({ tabs: own }) {
 	const needsWebsite = !current.global;
 
 	const picker = (
-		<Select
+		<SwitcherSelect
 			label={texts.website}
-			hideLabel
 			value={site ? site.websiteId : ''}
 			placeholder={texts.pickWebsite}
 			options={sites.map((entry) => ({
 				value: entry.websiteId,
 				label: admin ? `${entry.merchantName} / ${entry.domain}` : entry.domain,
 			}))}
-			onChange={(event) => go(href(needsWebsite ? view : 'overview', event.target.value))}
+			onChange={(next) => go(href(needsWebsite ? view : 'overview', next))}
 		/>
 	);
 
@@ -263,23 +261,15 @@ function DashboardPage({ tabs: own }) {
 					},
 				]}
 				switcher={picker}
-				topbar={<span className="min-w-0 flex-1 lg:hidden">{picker}</span>}
-				actions={
-					<a
-						className="ss-motion inline-flex h-9 items-center gap-1.5 rounded-control px-3 text-sm font-semibold text-primary hover:bg-primary-soft"
-						href={portalUrl}>
-						<Icon name="chevronLeft" size={14} />
-						{texts.backToPortal}
-					</a>
-				}
-				banner={
-					admin && site ? (
-						<Callout tone="info">{fill(texts.adminView, { merchant: site.merchantName, domain: site.domain })}</Callout>
-					) : null
-				}>
+				crumbs={[{ label: texts.title }]}
+				scrollKey={`${view}|${site ? site.websiteId : ''}`}
+				back={{ href: portalUrl, label: texts.backToPortal }}
+				{...(admin && site
+					? { context: fill(texts.adminView, { merchant: site.merchantName, domain: site.domain }) }
+					: {})}>
 				<SwapTransition id={`${view}|${site ? site.websiteId : ''}`}>
 					{needsWebsite && !site ? (
-						<Callout tone="info">{texts.pickWebsite}</Callout>
+						<EmptyState icon="globe" title={texts.pickWebsite} action={<div className="w-64 max-w-full text-left">{picker}</div>} />
 					) : (
 						<WebsiteLocale websiteId={site ? site.websiteId : null}>
 							<Tab
