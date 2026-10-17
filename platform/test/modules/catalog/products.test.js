@@ -81,6 +81,7 @@ describe('Products (PLAN 0.8.2): Add product, Reconnect, active / inactive', () 
 			widgetScriptUrl: 'https://notes.example.dev/widget.js',
 			widgetScriptLoading: 'async',
 			docsUrl: `${product.url}/docs`,
+			websiteSettingsRequires: [],
 			connectedAt: '2026-10-01T10:00:00.000Z',
 			reconnectedAt: null,
 		});

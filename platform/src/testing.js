@@ -17,6 +17,7 @@ export { systemModule } from './modules/system/index.js';
 export { createCatalogModule } from './modules/catalog/index.js';
 export { createIdentityModule } from './modules/identity/index.js';
 export { commerceModule } from './modules/commerce/index.js';
+export { websiteModule } from './modules/website/index.js';
 
 /**
  * A complete system state: fresh secrets plus the given settings.

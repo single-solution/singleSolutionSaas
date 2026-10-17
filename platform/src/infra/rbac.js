@@ -7,8 +7,9 @@
  *   own), with the merchant column of the table.
  * - `product` actors (client assertions) have no rights here: their routes authorize by protocol, so `can` is false
  *   for them.
- * - Rows the products enforce on their own servers (switching features, settings, widget texts, theme, connections,
- *   global defaults and prices) have no Portal permission. The Portal's part of them is
+ * - Rows the products enforce on their own servers (switching features, product settings, widget texts, connections,
+ *   global defaults and prices) have no Portal permission. A website's own facts, theme and Format are the Portal's
+ *   (`website_settings.*`): a product's server token cannot change them. The Portal's part of them is
  *   what it signs and accepts: launches carry the role (Finance is never launched), and a feature report is accepted
  *   only for a current Owner or Support admin.
  * - `system` actors may do everything.
@@ -73,6 +74,9 @@ export const PERMISSIONS = Object.freeze({
 	adminsManage: 'admins.manage',
 	/** Settings (email, billing rules, branding, support contact, security) */
 	settingsPortalWrite: 'portal_settings.write',
+	/** A website's settings (business facts, brand, region, pages, team): see them; change them (Finance: none) */
+	websiteSettingsRead: 'website_settings.read',
+	websiteSettingsWrite: 'website_settings.write',
 });
 
 const P = PERMISSIONS;
@@ -98,6 +102,8 @@ export const ROLE_PERMISSIONS = Object.freeze({
 		P.dashboardsOpen,
 		P.productsRead,
 		P.billingRead,
+		P.websiteSettingsRead,
+		P.websiteSettingsWrite,
 	]),
 	finance: Object.freeze([
 		P.overviewRead,
@@ -121,6 +127,8 @@ export const MERCHANT_PERMISSIONS = Object.freeze([
 	P.tokensReveal,
 	P.dashboardsOpen,
 	P.billingRead,
+	P.websiteSettingsRead,
+	P.websiteSettingsWrite,
 ]);
 
 /**

@@ -17,6 +17,7 @@ import { NOTICES, PRODUCTS } from './schema.js';
 /** @typedef {import('./service.js').SafeFetch} SafeFetch */
 /**
  * @typedef {{ type: 'status.changed' | 'token.revoked' | 'website.deleted', websiteId: string }
+ *   | { type: 'website.settings_changed', websiteId: string, what?: 'settings' | 'connections' | 'links' }
  *   | { type: 'sessions.revoked', subject: string }} NoticeBody
  */
 

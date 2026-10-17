@@ -20,6 +20,7 @@ import { defineModule } from '../../../../src/infra/modules.js';
  * @property {boolean} [failTokens] ensureTokens throws
  * @property {boolean} [failContacts] billingContacts throws
  * @property {boolean} [failWebsites] getWebsite throws a database error
+ * @property {Map<string, number>} [settingsVersions] the save counter of a website's settings (default 0)
  */
 
 /** @returns {World} */
@@ -102,5 +103,10 @@ export const fakeModules = (world) => [
 				return jwks ? createKeyResolver({ jwks: /** @type {any} */ (jwks) }) : null;
 			},
 		}),
+	}),
+	// the website settings: the status answer carries their save counter
+	defineModule({
+		name: 'website',
+		service: () => ({ versionOf: async (/** @type {string} */ websiteId) => world.settingsVersions?.get(websiteId) ?? 0 }),
 	}),
 ];

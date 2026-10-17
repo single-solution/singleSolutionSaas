@@ -1,5 +1,5 @@
 /**
- * Test harness of the Portal: the real modules (system, catalog, identity, commerce) on the shared
+ * Test harness of the Portal: the real modules (system, catalog, identity, commerce, website) on the shared
  * MongoMemoryReplSet, driven through the HTTP API with `@ss/platform/testing`'s `createPortalClient`, fake products on
  * local HTTP servers (`fakes/product.js`), and helpers that create people and websites the way PLAN 0.2 says. Work after
  * responses (notices, emails) runs before each call returns.
@@ -13,6 +13,7 @@ import { createCatalogModule } from '../../../src/modules/catalog/index.js';
 import { commerceModule } from '../../../src/modules/commerce/index.js';
 import { createIdentityModule } from '../../../src/modules/identity/index.js';
 import { systemModule } from '../../../src/modules/system/index.js';
+import { websiteModule } from '../../../src/modules/website/index.js';
 import { createPortal } from '../../../src/portal.js';
 import { ENCRYPTION_KEY, PORTAL_URL, T0, createClock, createTestLogger, testConfig } from '../../helpers.js';
 import { memoryMailer } from '../identity/fakes/modules.js';
@@ -36,7 +37,13 @@ export const bootPortal = async ({ db, clock = createClock(T0), settings, allowH
 	const portal = createPortal({
 		config,
 		db,
-		modules: [systemModule, createCatalogModule({ allowHosts }), createIdentityModule({ mailer }), commerceModule],
+		modules: [
+			systemModule,
+			createCatalogModule({ allowHosts }),
+			createIdentityModule({ mailer }),
+			commerceModule,
+			websiteModule,
+		],
 		logger,
 		now: clock.now,
 		system: createSystemStore(db, {

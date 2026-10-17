@@ -1,6 +1,6 @@
 /**
  * Other modules commerce depends on, reached only through `ctx.service(name)` (INTERFACES.md): `identity` (merchants,
- * websites, admins, tokens) and `catalog` (connected products, notices). Notices never fail a money operation: a
+ * websites, admins, tokens), `catalog` (connected products, notices) and `website` (the version of a website's settings). Notices never fail a money operation: a
  * failure to queue one is logged.
  * @module
  */
@@ -71,6 +71,12 @@ export const createDeps = (ctx) => {
 		},
 		/** @param {string} productId @returns {Promise<boolean>} */
 		productActive: (productId) => catalog().isActive(productId),
+		/**
+		 * The save counter of the website's settings (0: none yet), for the status answer.
+		 * @param {string} websiteId
+		 * @returns {Promise<number>}
+		 */
+		settingsVersion: (websiteId) => ctx.service('website').versionOf(websiteId),
 		/**
 		 * `status.changed` to a product for a website (queued and retried by catalog).
 		 * @param {string} productId @param {string} websiteId

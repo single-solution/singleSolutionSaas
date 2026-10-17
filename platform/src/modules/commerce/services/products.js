@@ -333,6 +333,7 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 			graceEndsAt: graceEnd === null ? null : new Date(graceEnd).toISOString(),
 			todayMillicredits,
 			featuresVersion: doc.featuresVersion,
+			settingsVersion: await deps.settingsVersion(websiteId),
 			validUntil: new Date(validUntil).toISOString(),
 		};
 	};

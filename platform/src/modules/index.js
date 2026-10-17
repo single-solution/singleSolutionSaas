@@ -8,6 +8,7 @@ import { systemModule } from './system/index.js';
 import { catalogModule } from './catalog/index.js';
 import { identityModule } from './identity/index.js';
 import { commerceModule } from './commerce/index.js';
+import { websiteModule } from './website/index.js';
 
 /** @type {ReadonlyArray<Readonly<import('../infra/modules.js').ModuleDefinition>>} */
-export const modules = Object.freeze([systemModule, catalogModule, identityModule, commerceModule]);
+export const modules = Object.freeze([systemModule, catalogModule, identityModule, commerceModule, websiteModule]);

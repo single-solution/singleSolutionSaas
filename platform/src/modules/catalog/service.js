@@ -185,6 +185,7 @@ export const createCatalogService = (ctx, options = {}) => {
 			widgetScriptUrl: absolute(manifest.widgetScriptUrl, doc.baseUrl),
 			widgetScriptLoading: manifest.widgetScriptLoading ?? 'async',
 			docsUrl: absolute(manifest.docsUrl, doc.baseUrl),
+			websiteSettingsRequires: [...(manifest.websiteSettings?.requires ?? [])],
 			connectedAt: iso(doc.connectedAt),
 			reconnectedAt: iso(doc.reconnectedAt),
 		};

@@ -14,6 +14,7 @@ describe('@ss/platform/testing', () => {
 			'loadConfig',
 			'systemModule',
 			'testSystemState',
+			'websiteModule',
 		]);
 		for (const factory of [testing.createCatalogModule, testing.createIdentityModule]) {
 			expect(factory().name).toBeTypeOf('string');

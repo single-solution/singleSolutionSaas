@@ -209,6 +209,7 @@ describe('status (PLAN 0.4.12 row 4)', () => {
 			graceEndsAt: null,
 			todayMillicredits: 1000,
 			featuresVersion: 1,
+			settingsVersion: 0,
 			validUntil: new Date(T0 + 35 * MIN).toISOString(),
 		});
 		expect(validateStatusResponse(active.json).ok).toBe(true);

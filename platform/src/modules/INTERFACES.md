@@ -41,7 +41,7 @@ Connected products, launches, notices, websites' Setup sheets and their share li
 - `reconnect({ productId, url | null, secret, actor })`: same id required (409 otherwise); sends the last accepted
   version; an answered version lower than it → 409; higher → recorded as a price report; equal → nothing to record.
 - `setStatus({ productId, status })`, `getProduct(productId)` → `{ productId, name, status, baseUrl, version,
-widgetScriptUrl, widgetScriptLoading, docsUrl, connectedAt, reconnectedAt }` (addresses from the manifest made absolute
+widgetScriptUrl, widgetScriptLoading, docsUrl, websiteSettingsRequires, connectedAt, reconnectedAt }` (addresses from the manifest made absolute
   against the base URL; `widgetScriptLoading` `async` unless the manifest says `blocking`), `listProducts({ status? })`, `productDetail(productId)` (+ `priceListVersion`, `features` of the last accepted
   list, `numbers`), `isActive(productId)`, `directory(productId)` → `{ baseUrl }`.
 - `merchantLaunch({ merchantId, websiteId, productId, session, actor })` and `adminLaunch({ productId, websiteId |
@@ -130,6 +130,30 @@ Encryption key → Re-seal (`reseal`, Owner) seals every stored secret again wit
 system store's signing keys and mail password, and `identity.resealSecrets()` (server tokens, two-step secrets), each
 counted per part; the answer's `unreadableIn` names the parts with values neither key opens.
 
+## website (`modules/website`)
+
+The website settings: the facts every product of one website shares (`@ss/contracts` `ss.website-settings/1`: business,
+brand and theme, region and Format, pages and legal texts, team), kept once here and delivered to every product on the
+website (settings-ownership design, steps 2–4).
+
+- `get({ merchantId, websiteId })` → `{ settings, readiness }`: the document (version 0 and empty until the first save)
+  and, per product on the website, what its manifest `websiteSettings.requires` still finds empty
+  (`[{ productId, name, requires, missing }]`). The website must be the merchant's and active, else 404.
+- `save({ merchantId, websiteId, section, version, value, actor, requestId, ip })` → `{ settings, readiness }`:
+  replaces one section (`business`, `brand`, `region`, `pages`, `team`). `version` must be the one the person read (409
+  `conflict` otherwise); the section is tidied (`tidyWebsiteSection`) and the whole document checked
+  (`validateWebsiteSettings`, 422 with JSON Pointer paths); a save that changes nothing writes nothing. A save raises the
+  version by one, writes Activity `website.settings_saved` (`after: { section, version, changed: [field names], values }`;
+  `values` only for brand, region and pages, small before/after pairs) and queues `website.settings_changed` (`what:
+'settings'`) for every product on the website; a product that cannot be reached never fails the save.
+- `changes({ merchantId, websiteId, viewer })` → `{ items: [{ at, section, version, changed, who }] }`: Recent changes,
+  newest first, field names only; an admin is shown to a merchant under the Branding name.
+- `versionOf(websiteId)` → the save counter (0: none yet), which the status answer carries as `settingsVersion`.
+- `forProduct({ productId, websiteId, since })` → `{ version, settings }`: `settings` is the document when `version >
+since`, else null. Only for an active website that has the product (404 `website_not_found` otherwise).
+- Rights: `website_settings.read` and `.write` for the merchant (own websites), Owner and Support; Finance none. Only a
+  signed-in session writes: no `/v1/product/*` route does.
+
 ## Product API routes (`/v1/product/*`, `auth: 'product'`)
 
 | Route                                          | Module   |
@@ -137,6 +161,7 @@ counted per part; the answer's `unreadableIn` names the parts with values neithe
 | `PUT /v1/product/prices`                       | commerce |
 | `PUT /v1/product/websites/:websiteId/features` | commerce |
 | `GET /v1/product/websites/:websiteId/status`   | commerce |
+| `GET /v1/product/websites/:websiteId/settings` | website  |
 | `GET /v1/product/websites?cursor=`             | catalog  |
 | `GET /v1/product/revocations?since=`           | identity |
 | `GET /v1/product/directory`                    | catalog  |
