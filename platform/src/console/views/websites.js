@@ -18,6 +18,7 @@ import {
 	Card,
 	EmptyState,
 	Icon,
+	HeaderFact,
 	IconBadge,
 	ListRow,
 	LocalTime,
@@ -259,6 +260,16 @@ export function OverviewView(props) {
 			<PageHeader
 				title={MERCHANT.welcome(name)}
 				subtitle={MERCHANT.summary({ websites: rows.length, products: productCount, needs: needs.length })}
+				meta={
+					<>
+						<HeaderFact label={MERCHANT.tiles.websites}>{rows.length}</HeaderFact>
+						{needs.length > 0 ? (
+							<HeaderFact tone="attention" label={MERCHANT.needs.title}>
+								{needs.length}
+							</HeaderFact>
+						) : null}
+					</>
+				}
 			/>
 			{rows.length === 0 ? (
 				<Welcome branding={props.branding} />

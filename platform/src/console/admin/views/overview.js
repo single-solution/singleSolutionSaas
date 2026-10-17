@@ -20,6 +20,7 @@ import {
 	Card,
 	EmptyState,
 	Icon,
+	HeaderFact,
 	IconBadge,
 	NeedsList,
 	PageHeader,
@@ -359,6 +360,13 @@ export function OverviewView(props) {
 			<PageHeader
 				title={ADMIN.welcome(props.admin?.name ?? '')}
 				subtitle={ADMIN.summary({ merchants: o.merchants ?? 0, websites: o.websites ?? 0, needs: needCount })}
+				meta={
+					needCount > 0 ? (
+						<HeaderFact tone="attention" label={ADMIN.needs.title}>
+							{needCount}
+						</HeaderFact>
+					) : null
+				}
 				actions={
 					canAddMerchant ? (
 						<Button onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
