@@ -12,11 +12,11 @@ import { Callout, Card, ErrorState, Skeleton, SoftBreaks } from './display.js';
 import { Input, RadioGroup, SegmentedControl, Switch, TextArea } from './fields.js';
 import { ListEditor } from './ListEditor.js';
 import { SchemaForm } from './SchemaForm.js';
-import { describeProblem } from './problems.js';
+import { describeProblem, problemLines } from './problems.js';
 import { ToastProvider, useToast } from './Toast.js';
 import { call, fill } from './dashboard-api.js';
 import { symbolRowsOf, symbolsOf } from './format.js';
-import { dashboardTexts, resealAdvice } from './dashboard-texts.js';
+import { DASHBOARD_TEXTS, dashboardTexts, resealAdvice } from './dashboard-texts.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
 /** @typedef {import('react').ReactNode} ReactNode */
@@ -195,6 +195,47 @@ export function Outcome({ result }) {
 		);
 	}, [result, toast, texts]);
 	return null;
+}
+
+/**
+ * The outcome of saving a list or form the merchant edits, for every product's editors (owner 2026-10-17: a save error is
+ * a toast, a field error stays where the merchant is working). Saved is a toast; a refused save is a toast with the
+ * reason; the errors that name a row or a field stay inline under the editor as a short list. Each new result shows
+ * once; the toasts draw nothing in the page.
+ * @param {{ result: Answer | null, local?: string[], format?: (problem: any) => string[], title?: string }} props
+ *   `local`: errors the editor found itself before sending (they come first); `format`: the product's own wording of
+ *   the server's row errors (default: `path: message`); `title`: the heading of the inline list
+ */
+export function SaveOutcome({ result, local = [], format = problemLines, title }) {
+	// an editor drawn alone (a product's own test) has the shared words
+	const texts = useContext(DashboardContext)?.texts ?? DASHBOARD_TEXTS;
+	const toast = useToast();
+	const shown = useRef(/** @type {unknown} */ (null));
+	const failed = result !== null && !result.ok;
+	const lines = local.length > 0 ? local : failed ? format(result.problem) : [];
+	const trigger = local.length > 0 ? local : result;
+	useEffect(() => {
+		if (!trigger || shown.current === trigger) return;
+		shown.current = trigger;
+		if (local.length > 0 || failed)
+			toast.show({
+				tone: 'danger',
+				title: texts.saveFailed,
+				description:
+					lines.length > 0 ? texts.fixThese : describeProblem(/** @type {Answer & { ok: false }} */ (result).problem),
+			});
+		else toast.show({ title: texts.saved });
+	}, [trigger, local.length, failed, lines.length, result, toast, texts]);
+	if (lines.length === 0) return null;
+	return (
+		<Callout tone="danger" title={title ?? texts.saveFailed}>
+			<ul className="list-disc pl-5">
+				{lines.map((line) => (
+					<li key={line}>{line}</li>
+				))}
+			</ul>
+		</Callout>
+	);
 }
 
 /**

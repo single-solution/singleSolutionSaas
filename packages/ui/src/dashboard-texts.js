@@ -15,6 +15,7 @@ export const DASHBOARD_TEXTS = Object.freeze({
 	adminView: 'Viewing as admin · {merchant} / {domain}',
 	saved: 'Saved',
 	saveFailed: 'Not saved',
+	fixThese: 'Fix what is listed under the editor, then save again.',
 	save: 'Save',
 	reset: 'Reset to default',
 	cancel: 'Cancel',

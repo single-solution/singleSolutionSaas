@@ -14,15 +14,12 @@ import {
 	Checkbox,
 	CodeBlock,
 	ConfirmDialog,
+	EntryGroup,
 	FieldGrid,
-	Icon,
-	IconButton,
 	Input,
 	ItemSwitcher,
 	Select,
 	TextArea,
-	ToastOnce,
-	describeProblem,
 } from '@ss/ui';
 import { FALLBACK_LIMITS, PLACEHOLDERS, fallbackProblems, placeholdersOf } from '../../core/fallback.js';
 import { FIELD_TYPES } from '../../core/fields.js';
@@ -34,7 +31,7 @@ import { LABEL_LIMITS } from '../../core/labels.js';
 import { PARAMETER_TYPES } from '../../core/tools.js';
 import { UPLOAD_MAX_MB } from '../../core/uploads.js';
 import { ATTACHMENT_TYPES } from '../../core/widgets.js';
-import { Loaded, call, fill, useLoad } from '@ss/ui/dashboard';
+import { Loaded, SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
 /** @typedef {Record<string, any>} Item */
@@ -70,39 +67,6 @@ const moved = (items, index, step) => {
 };
 
 /**
- * The `errors` of a 422 answer (`{ path, message }`) as lines; an error of the whole list shows its message only.
- * @param {any} problem
- * @returns {string[]}
- */
-const errorLines = (problem) =>
-	Array.isArray(problem?.errors)
-		? problem.errors.map((/** @type {{ path?: string, message?: string }} */ entry) =>
-				entry.path && entry.path !== '/value' ? `${entry.path}: ${entry.message}` : String(entry.message),
-			)
-		: [];
-
-/**
- * Up, down and remove buttons of one entry.
- * @param {{ label: string, index: number, count: number, onMove: (step: number) => void, onRemove: () => void }} props
- */
-function EntryHead({ label, index, count, onMove, onRemove }) {
-	return (
-		<div className="flex flex-wrap items-center gap-1">
-			<span className="mr-auto text-sm font-semibold">{`${label} ${index + 1}`}</span>
-			<IconButton label={L.up} disabled={index === 0} onClick={() => onMove(-1)}>
-				<Icon name="arrowUp" size={14} />
-			</IconButton>
-			<IconButton label={L.down} disabled={index === count - 1} onClick={() => onMove(1)}>
-				<Icon name="arrowDown" size={14} />
-			</IconButton>
-			<Button size="sm" variant="ghost" onClick={onRemove}>
-				{L.remove}
-			</Button>
-		</div>
-	);
-}
-
-/**
  * One list, edited as a whole and saved with one PUT.
  * @param {{ websiteId: string, list: string, title: string, help: string, itemLabel: string, max: number,
  *   blank: () => Item, clean: (item: Item) => Item, off?: boolean, invalid?: (item: Item) => boolean,
@@ -122,7 +86,6 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 					const items = draft ?? data.value;
 					/** @param {number} index @param {Item} patch */
 					const set = (index, patch) => setDraft(items.map((item, at) => (at === index ? { ...item, ...patch } : item)));
-					const problems = result && !result.ok ? errorLines(result.problem) : [];
 					return (
 						<div className="space-y-4">
 							<ItemSwitcher
@@ -136,16 +99,16 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 								onAdd={() => setDraft([...items, blank()])}
 								emptyText={L.none}
 								renderItem={(item, index) => (
-									<div key={index} className="space-y-3 rounded-card border border-line-soft p-4">
-										<EntryHead
-											label={itemLabel}
-											index={index}
-											count={items.length}
-											onMove={(step) => setDraft(moved(items, index, step))}
-											onRemove={() => setDraft(items.filter((_, at) => at !== index))}
-										/>
+									<EntryGroup
+ key={index}
+ title={`${itemLabel} ${index + 1}`}
+ first={index === 0}
+ last={index === items.length - 1}
+ texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
+ onMove={(step) => setDraft(moved(items, index, step))}
+ onRemove={() => setDraft(items.filter((_, at) => at !== index))}>
 										{render(item, (patch) => set(index, patch))}
-									</div>
+									</EntryGroup>
 								)}
 							/>
 							<div className="flex flex-wrap gap-2">
@@ -168,19 +131,7 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 									</Button>
 								) : null}
 							</div>
-							{result && !result.ok && problems.length > 0 ? (
-								<Callout tone="danger" title={L.errors}>
-									<ul className="list-disc pl-5">
-										{problems.map((line) => (
-											<li key={line}>{line}</li>
-										))}
-									</ul>
-								</Callout>
-							) : result && !result.ok ? (
-								<Callout tone="danger">{describeProblem(result.problem)}</Callout>
-							) : result ? (
-								<ToastOnce title={TEXTS.saved} trigger={result} />
-							) : null}
+							<SaveOutcome result={result} title={L.errors} />
 						</div>
 					);
 				}}
@@ -243,14 +194,15 @@ export function ToolsEditor({ websiteId, off }) {
 						/>
 						<p className="text-sm font-semibold">{T.parameters}</p>
 						{parameters.map((parameter, index) => (
-							<div key={index} className="space-y-3 rounded-control border border-line-soft p-3">
-								<EntryHead
-									label={T.parameter}
-									index={index}
-									count={parameters.length}
-									onMove={(step) => set({ parameters: moved(parameters, index, step) })}
-									onRemove={() => set({ parameters: parameters.filter((_, at) => at !== index) })}
-								/>
+							<EntryGroup
+ key={index}
+ compact
+ title={`${T.parameter} ${index + 1}`}
+ first={index === 0}
+ last={index === parameters.length - 1}
+ texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
+ onMove={(step) => set({ parameters: moved(parameters, index, step) })}
+ onRemove={() => set({ parameters: parameters.filter((_, at) => at !== index) })}>
 								<FieldGrid>
 									<Input
 										label={T.parameter}
@@ -275,7 +227,7 @@ export function ToolsEditor({ websiteId, off }) {
 									checked={parameter.required === true}
 									onChange={(event) => setParameter(index, { required: event.target.checked })}
 								/>
-							</div>
+							</EntryGroup>
 						))}
 						<Button
 							size="sm"
@@ -630,14 +582,15 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 						)}
 						<p className="text-sm font-semibold">{F.steps}</p>
 						{steps.map((step, index) => (
-							<div key={index} className="space-y-3 rounded-control border border-line-soft p-3">
-								<EntryHead
-									label={F.step}
-									index={index}
-									count={steps.length}
-									onMove={(move) => set({ steps: moved(steps, index, move) })}
-									onRemove={() => set({ steps: steps.filter((_, at) => at !== index) })}
-								/>
+							<EntryGroup
+ key={index}
+ compact
+ title={`${F.step} ${index + 1}`}
+ first={index === 0}
+ last={index === steps.length - 1}
+ texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
+ onMove={(move) => set({ steps: moved(steps, index, move) })}
+ onRemove={() => set({ steps: steps.filter((_, at) => at !== index) })}>
 								<FieldGrid>
 									<Select
 										label={F.step}
@@ -674,7 +627,7 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 										onChange={(event) => setStep(index, { ...step, buttons: toLines(event.target.value) })}
 									/>
 								) : null}
-							</div>
+							</EntryGroup>
 						))}
 						<Button
 							size="sm"
@@ -1205,7 +1158,7 @@ export function ToolSecret({ websiteId }) {
 					{S.regenerate}
 				</Button>
 			</div>
-			{result && !result.ok ? <Callout tone="danger">{describeProblem(result.problem)}</Callout> : null}
+			<SaveOutcome result={result} />
 			<ConfirmDialog
 				open={confirming}
 				busy={busy}

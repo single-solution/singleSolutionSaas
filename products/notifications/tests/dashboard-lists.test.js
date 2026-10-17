@@ -57,7 +57,7 @@ describe('unsubscribe topics', () => {
 		await type(byLabel(container, 'Topic 2'), 'Back in stock');
 		await type(byLabel(container, 'Topic 1'), 'Deals');
 		// Back in stock first
-		await click(/** @type {Element} */ ([...container.querySelectorAll('button')].filter((b) => b.textContent === L.up)[1]));
+		await click(/** @type {Element} */ ([...container.querySelectorAll(`button[aria-label="${L.up}"]`)][1]));
 		await click(byText(container, TEXTS.save, 'button'));
 		await settle();
 		expect(puts()[0]).toEqual({

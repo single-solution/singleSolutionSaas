@@ -18,6 +18,7 @@ import {
 	ConfirmDialog,
 	Dialog,
 	EmptyState,
+	EntryGroup,
 	FieldGrid,
 	Form,
 	Input,
@@ -25,13 +26,12 @@ import {
 	Select,
 	Skeleton,
 	TextArea,
-	ToastOnce,
 	describeProblem,
 } from '@ss/ui';
 import { LONG_VALUE_LIMIT, VALUE_LIMIT, isTitled } from '@ss/contracts/templates';
 import { CHANNELS } from '../../core/channels.js';
 import { MAX_BUTTONS, fillText, templateRows, valueNamesOf } from '../../core/templates.js';
-import { call, fill, useLoad } from '@ss/ui/dashboard';
+import { SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
 /** @typedef {{ index: number, type: string, value: string }} TemplateButton */
@@ -72,7 +72,7 @@ function ButtonsEditor({ buttons, onChange }) {
 				<p className="text-sm text-muted">{T.buttonsHelp}</p>
 			</div>
 			{buttons.map((button, at) => (
-				<div key={at} className="space-y-3 rounded-card border border-line-soft p-4">
+				<EntryGroup key={at} texts={{ remove: T.removeButton }} onRemove={() => onChange(buttons.filter((_, i) => i !== at))}>
 					<FieldGrid>
 						<Input
 							label={T.buttonIndex}
@@ -98,10 +98,7 @@ function ButtonsEditor({ buttons, onChange }) {
 							onChange={(event) => set(at, { value: event.target.value })}
 						/>
 					</FieldGrid>
-					<Button size="sm" variant="ghost" onClick={() => onChange(buttons.filter((_, i) => i !== at))}>
-						{T.removeButton}
-					</Button>
-				</div>
+				</EntryGroup>
 			))}
 			<Button
 				size="sm"
@@ -132,11 +129,8 @@ function TemplatePreview({ template, longValues }) {
 		unsubscribeUrl: T.sampleUnsubscribe,
 	};
 	return (
-		<div className="space-y-3 rounded-card border border-line-soft p-4">
-			<div>
-				<p className="text-sm font-semibold text-fg">{T.preview}</p>
-				<p className="text-sm text-muted">{names.length > 0 ? T.previewHelp : T.previewNoValues}</p>
-			</div>
+		<EntryGroup title={T.preview}>
+			<p className="text-sm text-muted">{names.length > 0 ? T.previewHelp : T.previewNoValues}</p>
 			{names.length > 0 ? (
 				<FieldGrid>
 					{names.map((name) =>
@@ -160,7 +154,7 @@ function TemplatePreview({ template, longValues }) {
 					)}
 				</FieldGrid>
 			) : null}
-			<div className="space-y-2 rounded-control border border-line-soft p-3 text-sm text-fg" aria-live="polite">
+			<EntryGroup compact aria-live="polite" className="text-sm text-fg">
 				{titled ? <p className="font-semibold break-words">{fillText(template.subject, values)}</p> : null}
 				<p className="whitespace-pre-wrap break-words">{fillText(template.text, values)}</p>
 				{buttons.map((button) => (
@@ -172,8 +166,8 @@ function TemplatePreview({ template, longValues }) {
 						})}
 					</p>
 				))}
-			</div>
-		</div>
+			</EntryGroup>
+		</EntryGroup>
 	);
 }
 
@@ -258,7 +252,7 @@ export function TemplatesSection({ websiteId }) {
 		const { isNew: _isNew, fixed: _fixed, name: _name, values: _values, longValues: _longValues, ...template } = draft;
 		const atMeta = template.channel === 'whatsapp' && template.providerTemplate.trim() !== '';
 		const next = await call('PUT', base, { ...template, buttons: atMeta ? template.buttons : [] });
-		if (!next.ok) return setProblem(next.problem);
+		if (!next.ok) return setProblem(next);
 		setResult(next);
 		setDraft(null);
 		refresh();
@@ -468,13 +462,7 @@ export function TemplatesSection({ websiteId }) {
 					{fill(T.unavailable, { products: unavailable.map((id) => productName(id)).join(', ') })}
 				</Callout>
 			) : null}
-			{result ? (
-				result.ok ? (
-					<ToastOnce title={TEXTS.saved} trigger={result} />
-				) : (
-					<Callout tone="danger">{describeProblem(result.problem)}</Callout>
-				)
-			) : null}
+			<SaveOutcome result={result} />
 			<ConfirmDialog
 				open={deleting !== null}
 				danger={deleting?.reset !== true}
@@ -568,7 +556,7 @@ export function TemplatesSection({ websiteId }) {
 							onChange={(event) => edit({ sensitive: event.target.checked })}
 						/>
 						<TemplatePreview template={draft} longValues={draft.longValues ?? []} />
-						{problem ? <Callout tone="danger">{describeProblem(problem)}</Callout> : null}
+						<SaveOutcome result={problem} />
 						<div className="flex flex-wrap gap-2">
 							<Button type="submit">{TEXTS.save}</Button>
 							<Button variant="ghost" onClick={() => setDraft(null)}>

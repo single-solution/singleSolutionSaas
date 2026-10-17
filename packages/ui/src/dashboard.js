@@ -43,6 +43,7 @@ export {
 	Loaded,
 	Outcome,
 	ResealCard,
+	SaveOutcome,
 	SettingsForms,
 	TextsForm,
 	ThemeForm,
@@ -268,12 +269,14 @@ function DashboardPage({ tabs: own }) {
 				crumbs={[{ label: texts.title }]}
 				scrollKey={`${view}|${site ? site.websiteId : ''}`}
 				back={{ href: portalUrl, label: texts.backToPortal }}
-				{...(admin && site
-					? { context: fill(texts.adminView, { merchant: site.merchantName, domain: site.domain }) }
-					: {})}>
+				{...(admin && site ? { context: fill(texts.adminView, { merchant: site.merchantName, domain: site.domain }) } : {})}>
 				<SwapTransition id={`${view}|${site ? site.websiteId : ''}`}>
 					{needsWebsite && !site ? (
-						<EmptyState icon="globe" title={texts.pickWebsite} action={<div className="w-64 max-w-full text-left">{picker}</div>} />
+						<EmptyState
+							icon="globe"
+							title={texts.pickWebsite}
+							action={<div className="w-64 max-w-full text-left">{picker}</div>}
+						/>
 					) : (
 						<WebsiteLocale websiteId={site ? site.websiteId : null}>
 							<Tab

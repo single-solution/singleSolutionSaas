@@ -23,6 +23,7 @@ import {
 	Card,
 	Checkbox,
 	Dialog,
+	EntryGroup,
 	FieldGrid,
 	Icon,
 	IconButton,
@@ -153,15 +154,16 @@ function FaqsField({ faqs, onChange }) {
 				</span>
 			</p>
 			{faqs.map((faq, index) => (
-				<div key={index} className="space-y-3 rounded-card border border-line-soft p-4">
-					<div className="flex items-center gap-2">
-						<span className="mr-auto text-sm font-semibold">{fill(G.faq, { number: index + 1 })}</span>
+				<EntryGroup
+					key={index}
+					title={fill(G.faq, { number: index + 1 })}
+					actions={
 						<IconButton
 							label={fill(G.removeFaq, { number: index + 1 })}
 							onClick={() => onChange(faqs.filter((_, at) => at !== index))}>
 							<Icon name="close" size={14} />
 						</IconButton>
-					</div>
+					}>
 					<FieldGrid>
 						<Input
 							wide
@@ -178,7 +180,7 @@ function FaqsField({ faqs, onChange }) {
 							onChange={(event) => set(index, { answer: event.target.value })}
 						/>
 					</FieldGrid>
-				</div>
+				</EntryGroup>
 			))}
 			<Button
 				size="sm"

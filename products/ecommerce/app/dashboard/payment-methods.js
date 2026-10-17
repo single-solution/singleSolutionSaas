@@ -9,7 +9,7 @@
  * (`core/payment-methods.js` `checkPaymentMethods`).
  * @module
  */
-import { Button, Checkbox, FieldGrid, Input, Select, TextArea } from '@ss/ui';
+import { Button, Checkbox, EntryGroup, FieldGrid, Input, Select, TextArea } from '@ss/ui';
 import { currencyDigits } from '@ss/contracts/format';
 import { PAYMENT_KINDS, PAY_LATER_KINDS, newAccount, paidByHand } from '../../core/payment-methods.js';
 import { fill } from '@ss/ui/dashboard';
@@ -264,7 +264,11 @@ export function PaymentMethodsEditor({ websiteId, off, currency }) {
 									onChange={(event) => set({ instructions: event.target.value })}
 								/>
 								{accounts.map((account, index) => (
-									<div key={index} className="space-y-2 rounded-lg border border-line p-3">
+									<EntryGroup
+										key={index}
+										compact
+										texts={{ remove: P.removeAccount }}
+										onRemove={() => set({ accounts: accounts.filter((_, at) => at !== index) })}>
 										<FieldGrid>
 											<Input
 												label={P.accountLabel}
@@ -285,13 +289,7 @@ export function PaymentMethodsEditor({ websiteId, off, currency }) {
 											value={account.rows ?? ''}
 											onChange={(event) => setAccount(index, { rows: event.target.value })}
 										/>
-										<Button
-											size="sm"
-											variant="secondary"
-											onClick={() => set({ accounts: accounts.filter((_, at) => at !== index) })}>
-											{P.removeAccount}
-										</Button>
-									</div>
+									</EntryGroup>
 								))}
 								<Button
 									size="sm"

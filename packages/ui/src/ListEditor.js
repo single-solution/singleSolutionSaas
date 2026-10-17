@@ -80,9 +80,7 @@ export function ListEditor({
 				{items.map((item, index) => {
 					const name = nameOf(item, index);
 					return (
-						<li
-							key={index}
-							className="flex flex-wrap items-start gap-3 px-4 py-3.5">
+						<li key={index} className="flex flex-wrap items-start gap-3 px-4 py-3.5">
 							<div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-3">
 								<FieldLayoutContext.Provider value="stack">
 									{renderItem(item, index, (next) => onChange(items.map((old, i) => (i === index ? next : old))))}
@@ -125,5 +123,72 @@ export function ListEditor({
 				</p>
 			) : null}
 		</fieldset>
+	);
+}
+
+/**
+ * One entry of a list editor the caller lays out itself (a zone with its rates, a payment method, a file): a group set
+ * apart by a hairline, with the entry's name, and Move up / Move down / Remove when the caller can move and remove it.
+ * One look for every editor of every product; never draw such a box by hand.
+ * @param {Omit<import('react').HTMLAttributes<HTMLElement>, 'title'> & { title?: import('react').ReactNode,
+ *   onMove?: (step: -1 | 1) => void, onRemove?: () => void, first?: boolean, last?: boolean,
+ *   texts?: Partial<Pick<ListEditorTexts, 'moveUp' | 'moveDown' | 'remove'>>, actions?: import('react').ReactNode,
+ *   compact?: boolean, summary?: import('react').ReactNode, as?: 'div' | 'fieldset' | 'li',
+ *   children?: import('react').ReactNode }} props
+ *   `first` / `last`: the entry is at an end of the list (that move is off); `actions`: more buttons in the head;
+ *   `compact`: less padding for an entry inside another; `summary`: the group is collapsed under this line and opens on a
+ *   click; other props (`data-entry`, `id`) go to the box
+ */
+export function EntryGroup({
+	title,
+	onMove,
+	onRemove,
+	first = false,
+	last = false,
+	texts,
+	actions,
+	compact = false,
+	summary,
+	as = 'div',
+	className,
+	children,
+	...rest
+}) {
+	const T = { ...LIST_EDITOR_TEXTS, ...texts };
+	const Tag = as;
+	const box = cx('min-w-0 space-y-3 rounded-card border border-line-soft', compact ? 'p-3' : 'p-4', className);
+	if (summary)
+		return (
+			<details {...rest} className={box}>
+				<summary className="cursor-pointer text-sm font-medium text-fg">{summary}</summary>
+				<div className="mt-3 space-y-3">{children}</div>
+			</details>
+		);
+	const head = title || onMove || onRemove || actions;
+	return (
+		<Tag {...rest} className={box}>
+			{head ? (
+				<div className="flex flex-wrap items-center gap-1">
+					<span className="mr-auto min-w-0 text-sm font-semibold text-fg">{title}</span>
+					{actions}
+					{onMove ? (
+						<>
+							<IconButton label={T.moveUp} disabled={first} onClick={() => onMove(-1)}>
+								<Icon name="arrowUp" size={14} />
+							</IconButton>
+							<IconButton label={T.moveDown} disabled={last} onClick={() => onMove(1)}>
+								<Icon name="arrowDown" size={14} />
+							</IconButton>
+						</>
+					) : null}
+					{onRemove ? (
+						<Button size="sm" variant="ghost" onClick={onRemove}>
+							{T.remove}
+						</Button>
+					) : null}
+				</div>
+			) : null}
+			{children}
+		</Tag>
 	);
 }

@@ -10,7 +10,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, Checkbox, CheckboxGroup, FieldGrid, Input, Select } from '@ss/ui';
+import { Button, Callout, Card, Checkbox, CheckboxGroup, EntryGroup, FieldGrid, Input, Select } from '@ss/ui';
 import {
 	DEFAULT_FLOW,
 	MOVE_NEEDS,
@@ -24,7 +24,7 @@ import {
 import { STATUS_ROLES } from '../../core/model.js';
 import { Loaded, fill, useLoad } from '@ss/ui/dashboard';
 import { flowToSave, removeFlowStatus, renameFlowStatus } from './drafts.js';
-import { EntryHead, ListOutcome, SaveRow, moved, useList } from './lists.js';
+import { ListOutcome, SaveRow, moved, useList } from './lists.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('../../core/model.js').OrderFlow} OrderFlow */
@@ -83,12 +83,15 @@ function MoveSettings({ flow, move, methods, onChange }) {
 	const setOption = (name, value) => set({ options: { ...rules.options, [name]: value } });
 	const target = statusOf(flow, move.to)?.label ?? move.to;
 	return (
-		<details className="rounded-lg border border-line p-3">
-			<summary className="cursor-pointer text-sm font-medium">
-				{fill(F.moveSettings, { status: target })}
-				{AFTER_DELIVERY.includes(from) && (to === 'canceled' || to === 'refunded') ? ` (${F.afterDelivery})` : ''}
-			</summary>
-			<div className="mt-3 space-y-3">
+		<EntryGroup
+			compact
+			summary={
+				<>
+					{fill(F.moveSettings, { status: target })}
+					{AFTER_DELIVERY.includes(from) && (to === 'canceled' || to === 'refunded') ? ` (${F.afterDelivery})` : ''}
+				</>
+			}>
+			<>
 				<FieldGrid>
 					<Select
 						label={F.who}
@@ -137,8 +140,8 @@ function MoveSettings({ flow, move, methods, onChange }) {
 					value={rules.needs}
 					onChange={(next) => set({ needs: /** @type {OrderMove['needs']} */ (next) })}
 				/>
-			</div>
-		</details>
+			</>
+		</EntryGroup>
 	);
 }
 
@@ -150,9 +153,8 @@ function MoveSettings({ flow, move, methods, onChange }) {
 function ShopperFields({ status, methods, onChange }) {
 	const texts = /** @type {Record<string, string>} */ (status.shopperText ?? {});
 	return (
-		<details className="rounded-lg border border-line p-3">
-			<summary className="cursor-pointer text-sm font-medium">{F.shopperTexts}</summary>
-			<div className="mt-3 space-y-3">
+		<EntryGroup compact summary={F.shopperTexts}>
+			<>
 				<FieldGrid>
 					<Input
 						label={F.shopperLabel}
@@ -180,8 +182,8 @@ function ShopperFields({ status, methods, onChange }) {
 					checked={status.staffAlert === true}
 					onChange={(event) => onChange({ staffAlert: event.target.checked })}
 				/>
-			</div>
-		</details>
+			</>
+		</EntryGroup>
 	);
 }
 
@@ -202,8 +204,7 @@ function TriggersAndStarts({ flow, onChange }) {
 	/** @param {keyof OrderFlow['starts']} name @param {string} value */
 	const setStart = (name, value) => onChange({ ...flow, starts: { ...flow.starts, [name]: value } });
 	return (
-		<div className="space-y-4 rounded-card border border-line-soft p-4">
-			<p className="text-sm font-semibold">{F.triggers}</p>
+		<EntryGroup title={F.triggers}>
 			<FieldGrid>
 				<Select
 					label={F.triggerFields.paid}
@@ -245,7 +246,7 @@ function TriggersAndStarts({ flow, onChange }) {
 					onChange={(event) => setStart('free', event.target.value)}
 				/>
 			</FieldGrid>
-		</div>
+		</EntryGroup>
 	);
 }
 
@@ -302,14 +303,14 @@ export function OrderFlowEditor({ websiteId, off }) {
 								const targets = possibleTargets(flow, status.key);
 								const ticked = flow.moves.filter((move) => move.from === status.key);
 								return (
-									<div key={index} className="space-y-3 rounded-card border border-line-soft p-4">
-										<EntryHead
-											label={F.status}
-											index={index}
-											count={flow.statuses.length}
-											onMove={(step) => setFlow({ ...flow, statuses: moved(flow.statuses, index, step) })}
-											onRemove={() => removeStatus(index)}
-										/>
+									<EntryGroup
+										key={index}
+										title={`${F.status} ${index + 1}`}
+										first={index === 0}
+										last={index === flow.statuses.length - 1}
+										texts={{ moveUp: TEXTS.lists.up, moveDown: TEXTS.lists.down, remove: TEXTS.lists.remove }}
+										onMove={(step) => setFlow({ ...flow, statuses: moved(flow.statuses, index, step) })}
+										onRemove={() => removeStatus(index)}>
 										<FieldGrid>
 											<Input
 												label={F.label}
@@ -364,7 +365,7 @@ export function OrderFlowEditor({ websiteId, off }) {
 											.map((move) => (
 												<MoveSettings key={move.to} flow={flow} move={move} methods={methods} onChange={setMove} />
 											))}
-									</div>
+									</EntryGroup>
 								);
 							})}
 							<TriggersAndStarts flow={flow} onChange={setFlow} />

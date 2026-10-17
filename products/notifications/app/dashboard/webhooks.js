@@ -5,22 +5,25 @@
  * @module
  */
 import { useState } from 'react';
-import {
-	Button,
-	Callout,
-	Card,
-	Input,
-	Skeleton,
-	TextArea,
-	ToastOnce,
-	describeProblem,
-} from '@ss/ui';
-import { call, fill, useLoad } from '@ss/ui/dashboard';
+import { Button, Callout, Card, EntryGroup, Input, Skeleton, TextArea, describeProblem } from '@ss/ui';
+import { SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
 /** @typedef {{ url: string, events: string }} Row events as typed: one type per line */
 
 const W = TEXTS.settings.webhooks;
+
+/**
+ * The refused rows of a save as lines (`URL 2: message`).
+ * @param {any} problem
+ * @returns {string[]}
+ */
+const rowErrors = (problem) =>
+	Array.isArray(problem?.errors)
+		? problem.errors.map((/** @type {{ path: string, message: string }} */ error) =>
+				fill(W.error, { n: Number(error.path.split('/')[2] ?? 0) + 1, message: error.message }),
+			)
+		: [];
 
 /** @param {Array<{ url: string, events: string[] }>} value @returns {Row[]} */
 const rowsOf = (value) => value.map((entry) => ({ url: entry.url, events: entry.events.join('\n') }));
@@ -49,13 +52,12 @@ export function WebhookUrlsCard({ websiteId, off, max }) {
 	const rows = draft ?? rowsOf(answer.data.value);
 	/** @param {number} at @param {Partial<Row>} patch */
 	const set = (at, patch) => setDraft(rows.map((row, i) => (i === at ? { ...row, ...patch } : row)));
-	const errors = result && !result.ok && Array.isArray(result.problem?.errors) ? result.problem.errors : [];
 	return (
 		<Card title={W.title} subtitle={off ? TEXTS.settings.off : fill(W.help, { max })}>
 			<div className="space-y-4">
 				{rows.length === 0 ? <p className="text-sm text-muted">{W.none}</p> : null}
 				{rows.map((row, at) => (
-					<div key={at} className="space-y-3 rounded-card border border-line-soft p-4">
+					<EntryGroup key={at} texts={{ remove: W.remove }} onRemove={() => setDraft(rows.filter((_, i) => i !== at))}>
 						<Input
 							label={fill(W.url, { n: at + 1 })}
 							type="url"
@@ -71,10 +73,7 @@ export function WebhookUrlsCard({ websiteId, off, max }) {
 							value={row.events}
 							onChange={(event) => set(at, { events: event.target.value })}
 						/>
-						<Button size="sm" variant="ghost" onClick={() => setDraft(rows.filter((_, i) => i !== at))}>
-							{W.remove}
-						</Button>
-					</div>
+					</EntryGroup>
 				))}
 				<div className="flex flex-wrap gap-2">
 					<Button
@@ -98,21 +97,7 @@ export function WebhookUrlsCard({ websiteId, off, max }) {
 						{TEXTS.save}
 					</Button>
 				</div>
-				{result ? (
-					result.ok ? (
-						<ToastOnce title={TEXTS.saved} trigger={result} />
-					) : (
-						<Callout tone="danger">
-							{errors.length > 0
-								? errors.map((/** @type {{ path: string, message: string }} */ error) => (
-										<span key={error.path} className="block">
-											{fill(W.error, { n: Number(error.path.split('/')[2] ?? 0) + 1, message: error.message })}
-										</span>
-									))
-								: describeProblem(result.problem)}
-						</Callout>
-					)
-				) : null}
+				<SaveOutcome result={result} format={rowErrors} />
 			</div>
 		</Card>
 	);

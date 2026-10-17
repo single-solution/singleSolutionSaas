@@ -9,7 +9,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, FieldGrid, Input, Select, TextArea } from '@ss/ui';
+import { Button, Card, EntryGroup, FieldGrid, Input, Select, TextArea, useToast } from '@ss/ui';
 import { Loaded, call, fill, useLoad } from '@ss/ui/dashboard';
 import { countryChoices } from '../../core/address.js';
 import { STORE_FILES, STORE_LIMITS } from '../../core/store-details.js';
@@ -117,15 +117,16 @@ function FileField({ websiteId, name, file, onChanged }) {
 	const base = `/v1/dashboard/websites/${websiteId}/store-details`;
 	const [busy, setBusy] = useState(false);
 	const [alt, setAlt] = useState(file?.alt ?? '');
-	const [problem, setProblem] = useState('');
+	const toast = useToast();
+	/** A failed upload is a toast, not a message in the page. */
+	const failed = () => toast.show({ tone: 'danger', title: TEXTS.saveFailed, description: S.uploadFailed });
 	/** @param {File | undefined} chosen */
 	const send = async (chosen) => {
 		if (!chosen) return;
 		setBusy(true);
-		setProblem('');
 		const signed = await call('POST', `${base}/uploads`, { for: name, type: chosen.type, size: chosen.size });
 		if (!signed.ok) {
-			setProblem(S.uploadFailed);
+			failed();
 			return setBusy(false);
 		}
 		const { method, url, headers } = signed.data.upload;
@@ -133,17 +134,16 @@ function FileField({ websiteId, name, file, onChanged }) {
 			const put = await fetch(url, { method, headers, body: chosen });
 			if (!put.ok) throw new Error('upload');
 		} catch {
-			setProblem(S.uploadFailed);
+			failed();
 			return setBusy(false);
 		}
 		const kept = await call('PUT', `${base}/${name}`, { key: signed.data.key, alt });
 		setBusy(false);
-		if (!kept.ok) return setProblem(S.uploadFailed);
+		if (!kept.ok) return failed();
 		onChanged();
 	};
 	return (
-		<div data-file={name} className="space-y-2 rounded-card border border-line-soft p-4">
-			<p className="text-sm font-semibold">{S.files[name].title}</p>
+		<EntryGroup data-file={name} title={S.files[name].title}>
 			<p className="text-sm text-muted">{S.files[name].help}</p>
 			{file?.url ? (
 				<img src={file.url} alt={file.alt ?? ''} className="h-16 w-auto max-w-full rounded-lg bg-surface-3 object-contain" />
@@ -176,8 +176,7 @@ function FileField({ websiteId, name, file, onChanged }) {
 					</Button>
 				) : null}
 			</div>
-			{problem ? <Callout tone="danger">{problem}</Callout> : null}
-		</div>
+		</EntryGroup>
 	);
 }
 

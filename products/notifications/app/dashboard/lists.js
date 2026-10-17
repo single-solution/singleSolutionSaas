@@ -11,15 +11,15 @@ import {
 	Callout,
 	Card,
 	Checkbox,
+	EntryGroup,
 	Input,
 	Select,
 	Skeleton,
 	TextArea,
-	ToastOnce,
 	describeProblem,
 } from '@ss/ui';
 import { CHANNELS, FALLBACK_CHANNELS } from '../../core/channels.js';
-import { call, fill, useLoad } from '@ss/ui/dashboard';
+import { SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
 const L = TEXTS.settings.lists;
@@ -41,6 +41,18 @@ const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6];
  * @property {(rows: T[]) => unknown[]} [value] the rows as the list (default: as is)
  * @property {number} max rows at most
  */
+
+/**
+ * The refused rows of a save as lines (`Row 2: message`).
+ * @param {any} problem
+ * @returns {string[]}
+ */
+const rowErrors = (problem) =>
+	Array.isArray(problem?.errors)
+		? problem.errors.map((/** @type {{ path: string, message: string }} */ error) =>
+				fill(L.error, { n: Number(error.path.split('/')[2] ?? 0) + 1, message: error.message }),
+			)
+		: [];
 
 /**
  * A list saved whole: rows with Move up, Move down and Remove, Add, Save, and the errors of a refused save by row.
@@ -65,26 +77,20 @@ function ListCard({ websiteId, name, title, help, off, blank, render, rows: toRo
 		next.splice(to, 0, /** @type {T} */ (row));
 		setDraft(next);
 	};
-	const errors = result && !result.ok && Array.isArray(result.problem?.errors) ? result.problem.errors : [];
 	return (
 		<Card title={title} subtitle={off ? TEXTS.settings.off : help}>
 			<div className="space-y-4">
 				{rows.length === 0 ? <p className="text-sm text-muted">{L.none}</p> : null}
 				{rows.map((row, at) => (
-					<div key={at} className="space-y-3 rounded-card border border-line-soft p-4">
-						{render(row, (patch) => set(at, patch), at)}
-						<div className="flex flex-wrap gap-2">
-							<Button size="sm" variant="ghost" disabled={at === 0} onClick={() => move(at, at - 1)}>
-								{L.up}
-							</Button>
-							<Button size="sm" variant="ghost" disabled={at === rows.length - 1} onClick={() => move(at, at + 1)}>
-								{L.down}
-							</Button>
-							<Button size="sm" variant="ghost" onClick={() => setDraft(rows.filter((_, i) => i !== at))}>
-								{L.remove}
-							</Button>
-						</div>
-					</div>
+					<EntryGroup
+ key={at}
+ first={at === 0}
+ last={at === rows.length - 1}
+ texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
+ onMove={(step) => move(at, at + step)}
+ onRemove={() => setDraft(rows.filter((_, i) => i !== at))}>
+ {render(row, (patch) => set(at, patch), at)}
+					</EntryGroup>
 				))}
 				<div className="flex flex-wrap gap-2">
 					<Button size="sm" variant="secondary" disabled={rows.length >= max} onClick={() => setDraft([...rows, blank()])}>
@@ -104,21 +110,7 @@ function ListCard({ websiteId, name, title, help, off, blank, render, rows: toRo
 						{TEXTS.save}
 					</Button>
 				</div>
-				{result ? (
-					result.ok ? (
-						<ToastOnce title={TEXTS.saved} trigger={result} />
-					) : (
-						<Callout tone="danger">
-							{errors.length > 0
-								? errors.map((/** @type {{ path: string, message: string }} */ error) => (
-										<span key={error.path} className="block">
-											{fill(L.error, { n: Number(error.path.split('/')[2] ?? 0) + 1, message: error.message })}
-										</span>
-									))
-								: describeProblem(result.problem)}
-						</Callout>
-					)
-				) : null}
+				<SaveOutcome result={result} format={rowErrors} />
 			</div>
 		</Card>
 	);

@@ -13,17 +13,15 @@ import {
 	Card,
 	Checkbox,
 	CheckboxGroup,
+	EntryGroup,
 	FieldGrid,
-	Icon,
-	IconButton,
 	Input,
 	ItemSwitcher,
 	Select,
 	TextArea,
-	ToastOnce,
 	describeProblem,
 } from '@ss/ui';
-import { call, useLoad } from '@ss/ui/dashboard';
+import { SaveOutcome, call, useLoad } from '@ss/ui/dashboard';
 import { LISTS } from '../../core/lists.js';
 import { ONLINE_STORE_PRESET } from '../../core/seo.js';
 import { TEXTS } from './texts.js';
@@ -161,27 +159,6 @@ function FieldInput({ name, field, value, error, onChange }) {
 }
 
 /**
- * Up, down and remove buttons of one entry, with its name.
- * @param {{ label: string, index: number, count: number, onMove: (step: number) => void, onRemove: () => void }} props
- */
-function EntryHead({ label, index, count, onMove, onRemove }) {
-	return (
-		<div className="flex flex-wrap items-center gap-1">
-			<span className="mr-auto text-sm font-semibold">{label}</span>
-			<IconButton label={L.up} disabled={index === 0} onClick={() => onMove(-1)}>
-				<Icon name="arrowUp" size={14} />
-			</IconButton>
-			<IconButton label={L.down} disabled={index === count - 1} onClick={() => onMove(1)}>
-				<Icon name="arrowDown" size={14} />
-			</IconButton>
-			<Button size="sm" variant="ghost" onClick={onRemove}>
-				{L.remove}
-			</Button>
-		</div>
-	);
-}
-
-/**
  * The entries of a list (or of an entry's rows), each with its fields. With `one` (a list, not an entry's rows) only
  * the picked entry is shown, from a strip of tabs (a select when there are many), so a long list is not a long page.
  * @param {{ fields: Record<string, Field>, entries: Entry[], at: string, errors: Record<string, string>, max: number,
@@ -191,14 +168,15 @@ function EntryHead({ label, index, count, onMove, onRemove }) {
 function Entries({ fields, entries, at, errors, max, label, onChange, one = false }) {
 	/** @param {Entry} entry @param {number} index */
 	const entryView = (entry, index) => (
-		<div key={index} className="space-y-2 rounded-card border border-line-soft p-3">
-			<EntryHead
-				label={label(entry, index)}
-				index={index}
-				count={entries.length}
-				onMove={(step) => onChange(moved(entries, index, step))}
-				onRemove={() => onChange(entries.filter((_, other) => other !== index))}
-			/>
+		<EntryGroup
+ key={index}
+ compact
+ title={label(entry, index)}
+ first={index === 0}
+ last={index === entries.length - 1}
+ texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
+ onMove={(step) => onChange(moved(entries, index, step))}
+ onRemove={() => onChange(entries.filter((_, other) => other !== index))}>
 			<FieldGrid>
 				{Object.entries(fields).map(([name, field]) =>
 					field.type === 'rows' ? (
@@ -230,7 +208,7 @@ function Entries({ fields, entries, at, errors, max, label, onChange, one = fals
 					),
 				)}
 			</FieldGrid>
-		</div>
+		</EntryGroup>
 	);
 	const add = () => onChange([...entries, blankEntry(fields, entries)]);
 	if (one)
@@ -307,16 +285,7 @@ export function ListCard({ websiteId, name }) {
 						}}>
 						{L.save}
 					</Button>
-					{result ? (
-						result.ok ? (
-							<ToastOnce title={L.saved} trigger={result} />
-						) : (
-							<Callout tone="danger">
-								{describeProblem(result.problem)}
-								{errors['/value'] ? ` ${errors['/value']}` : ''}
-							</Callout>
-						)
-					) : null}
+					<SaveOutcome result={result} format={() => (errors['/value'] ? [errors['/value']] : [])} />
 				</div>
 			)}
 		</Card>
@@ -350,7 +319,7 @@ function StorePresetCard({ websiteId }) {
 				}}>
 				{L.preset.apply}
 			</Button>
-			{result && !result.ok ? <Callout tone="danger">{describeProblem(result.problem)}</Callout> : null}
+			<SaveOutcome result={result} />
 		</Card>
 	);
 }

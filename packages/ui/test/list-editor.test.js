@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
 import { useState } from 'react';
-import { Input, ListEditor } from '../src/index.js';
+import { EntryGroup, Input, ListEditor } from '../src/index.js';
 import { moveItem } from '../src/ListEditor.js';
+import { vi } from 'vitest';
 import { cleanup, click, render, type } from '../src/testing.js';
 
 afterEach(() => cleanup());
@@ -60,5 +61,52 @@ describe('ListEditor (the merchant-list pattern)', () => {
 		click(button('Remove: Cash'));
 		click(button('Remove: Wallet'));
 		expect(container.textContent).toContain('None yet.');
+	});
+});
+
+describe('EntryGroup (one entry of an editor the caller lays out)', () => {
+	it('is a hairline group with the entry name and Move up, Move down and Remove that call the caller', () => {
+		const onMove = vi.fn();
+		const onRemove = vi.fn();
+		const { container } = render(
+			<EntryGroup data-entry="" title="Zone 1" first texts={{ remove: 'Remove zone' }} onMove={onMove} onRemove={onRemove}>
+				<p>Fields</p>
+			</EntryGroup>,
+		);
+		const group = /** @type {HTMLElement} */ (container.firstElementChild);
+		// a hairline box, never a hand-made grey one; the caller's data attribute lands on it
+		expect(group.className).toContain('border-line-soft');
+		expect(group.hasAttribute('data-entry')).toBe(true);
+		expect(container.textContent).toContain('Zone 1');
+		expect(container.textContent).toContain('Fields');
+		const button = (/** @type {string} */ name) =>
+			/** @type {HTMLButtonElement} */ (
+				[...container.querySelectorAll('button')].find((b) => (b.getAttribute('aria-label') ?? b.textContent) === name)
+			);
+		// the first entry cannot go up
+		expect(button('Move up').disabled).toBe(true);
+		click(button('Move down'));
+		expect(onMove).toHaveBeenCalledWith(1);
+		click(button('Remove zone'));
+		expect(onRemove).toHaveBeenCalledTimes(1);
+	});
+
+	it('has no head without a name or actions, and collapses under a summary when given one', () => {
+		const plain = render(
+			<EntryGroup compact>
+				<p>Only fields</p>
+			</EntryGroup>,
+		);
+		expect(plain.container.querySelector('button')).toBeNull();
+		expect(/** @type {HTMLElement} */ (plain.container.firstElementChild).className).toContain('p-3');
+		cleanup();
+		const folded = render(
+			<EntryGroup summary="Shopper words">
+				<p>Inside</p>
+			</EntryGroup>,
+		);
+		const details = /** @type {HTMLDetailsElement} */ (folded.container.querySelector('details'));
+		expect(details.open).toBe(false);
+		expect(details.querySelector('summary')?.textContent).toBe('Shopper words');
 	});
 });

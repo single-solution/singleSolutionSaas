@@ -24,7 +24,7 @@ import {
 	TextArea,
 	describeProblem,
 } from '@ss/ui';
-import { Outcome, call, useLoad } from '@ss/ui/dashboard';
+import { Outcome, SaveOutcome, call, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
 /** @typedef {'text' | 'textarea' | 'number' | 'date' | 'choice' | 'multi_choice' | 'boolean' | 'email' | 'url'} FieldType */
@@ -74,7 +74,7 @@ export function FieldsSection({ websiteId }) {
 			visibility: draft.visibility,
 			help: draft.help.trim(),
 		});
-		if (!next.ok) return setProblem(next.problem);
+		if (!next.ok) return setProblem(next);
 		setResult(next);
 		setDraft(null);
 		reload();
@@ -210,7 +210,7 @@ export function FieldsSection({ websiteId }) {
 								onChange={(event) => edit({ options: event.target.value })}
 							/>
 						) : null}
-						{problem ? <Callout tone="danger">{describeProblem(problem)}</Callout> : null}
+						<SaveOutcome result={problem} />
 						<div className="flex flex-wrap gap-2">
 							<Button type="submit" disabled={draft.key === '' || draft.label.trim() === ''}>
 								{TEXTS.save}

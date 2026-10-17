@@ -7,24 +7,11 @@
  * @module
  */
 import { useState } from 'react';
-import {
-	Button,
-	Callout,
-	Card,
-	FieldGrid,
-	Icon,
-	IconButton,
-	Input,
-	ItemSwitcher,
-	Select,
-	TextArea,
-	ToastOnce,
-	describeProblem,
-} from '@ss/ui';
+import { Button, Card, EntryGroup, FieldGrid, Icon, IconButton, Input, ItemSwitcher, Select, TextArea } from '@ss/ui';
 import { COURIER_CONNECTIONS } from '../../core/couriers.js';
 import { currencyDigits, fromDecimal, toDecimal } from '@ss/contracts/format';
 import { UNIT_STATE_LIMITS } from '../../core/unit-states.js';
-import { Loaded, call, fill, useLoad } from '@ss/ui/dashboard';
+import { Loaded, SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { cleanLines, keyOf, splitIds, taxRegionLine, taxRegionOf } from './drafts.js';
 import { TEXTS } from './texts.js';
 
@@ -50,27 +37,6 @@ export const moved = (items, index, step) => {
 };
 
 /**
- * The `errors` of a 422 answer as lines, whatever their shape (strings, `{ path, message }` or a key → message map).
- * The list routes put every error on `/value`, so that path is left out.
- * @param {any} problem
- * @returns {string[]}
- */
-const errorLines = (problem) => {
-	const errors = problem?.errors;
-	if (Array.isArray(errors))
-		return errors.map((entry) =>
-			typeof entry === 'string'
-				? entry
-				: [entry?.path === '/value' ? undefined : (entry?.path ?? entry?.field), entry?.message ?? entry?.detail]
-						.filter((part) => part !== undefined && part !== null && part !== '')
-						.map(String)
-						.join(': '),
-		);
-	if (errors && typeof errors === 'object') return Object.entries(errors).map(([key, message]) => `${key}: ${String(message)}`);
-	return [];
-};
-
-/**
  * Minor units from a decimal typed in the shop currency: empty → `empty`, zero → 0, else the amount or undefined.
  * @param {unknown} text
  * @param {string} currency
@@ -91,27 +57,6 @@ export const amountOf = (text, currency, empty) => {
  */
 export const decimalOf = (amount, currency) =>
 	typeof amount === 'number' && Number.isSafeInteger(amount) && amount >= 0 ? toDecimal(amount, currency) : '';
-
-/**
- * Up, down and remove buttons of one entry.
- * @param {{ label: string, index: number, count: number, onMove: (step: number) => void, onRemove: () => void }} props
- */
-export function EntryHead({ label, index, count, onMove, onRemove }) {
-	return (
-		<div className="flex flex-wrap items-center gap-1">
-			<span className="mr-auto text-sm font-semibold">{`${label} ${index + 1}`}</span>
-			<IconButton label={L.up} disabled={index === 0} onClick={() => onMove(-1)}>
-				<Icon name="arrowUp" size={14} />
-			</IconButton>
-			<IconButton label={L.down} disabled={index === count - 1} onClick={() => onMove(1)}>
-				<Icon name="arrowDown" size={14} />
-			</IconButton>
-			<Button size="sm" variant="ghost" onClick={onRemove}>
-				{L.remove}
-			</Button>
-		</div>
-	);
-}
 
 /**
  * Ids entered as tags: Enter, a comma or leaving the field adds what was typed; pasting several adds them all; each tag
@@ -170,24 +115,11 @@ export function IdTags({ label, help, values, max, none, onChange }) {
 }
 
 /**
- * The outcome of a save: local errors, the server's check errors, another problem, or saved.
+ * The outcome of a save: Saved and a refused save are toasts; the check errors by row, and the editor's own, stay under the
+ * editor.
  * @param {{ result: import('@ss/ui/dashboard').Answer | null, local: string[] }} props
  */
-export function ListOutcome({ result, local }) {
-	const problems = local.length > 0 ? local : result && !result.ok ? errorLines(result.problem) : [];
-	if (problems.length > 0)
-		return (
-			<Callout tone="danger" title={L.errors}>
-				<ul className="list-disc pl-5">
-					{problems.map((line) => (
-						<li key={line}>{line}</li>
-					))}
-				</ul>
-			</Callout>
-		);
-	if (result && !result.ok) return <Callout tone="danger">{describeProblem(result.problem)}</Callout>;
-	return result ? <ToastOnce title={TEXTS.saved} trigger={result} /> : null;
-}
+export const ListOutcome = ({ result, local }) => <SaveOutcome result={result} local={local} title={L.errors} />;
 
 /**
  * Save and Cancel under an editor.
@@ -292,16 +224,17 @@ export function ListEditor({
 								onAdd={() => setItems([...items, blank()])}
 								emptyText={L.none}
 								renderItem={(item, index) => (
-									<div key={index} data-entry="" className="space-y-3 rounded-card border border-line-soft p-4">
-										<EntryHead
-											label={itemLabel}
-											index={index}
-											count={items.length}
-											onMove={(step) => setItems(moved(items, index, step))}
-											onRemove={() => setItems(items.filter((_, at) => at !== index))}
-										/>
+									<EntryGroup
+										key={index}
+										data-entry=""
+										title={`${itemLabel} ${index + 1}`}
+										first={index === 0}
+										last={index === items.length - 1}
+										texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
+										onMove={(step) => setItems(moved(items, index, step))}
+										onRemove={() => setItems(items.filter((_, at) => at !== index))}>
 										{render(item, (patch) => set(index, patch))}
-									</div>
+									</EntryGroup>
 								)}
 							/>
 							<SaveRow
@@ -665,14 +598,16 @@ function RatesPart({ rates, currency, step, onChange }) {
 			<p className="text-sm font-semibold">{Z.rates}</p>
 			<p className="text-sm text-muted">{Z.ratesHelp}</p>
 			{rates.map((rate, index) => (
-				<div key={index} data-rate="" className="space-y-3 rounded-lg border border-line p-3">
-					<EntryHead
-						label={Z.rate}
-						index={index}
-						count={rates.length}
-						onMove={(step) => onChange(moved(rates, index, step))}
-						onRemove={() => onChange(rates.filter((_, at) => at !== index))}
-					/>
+				<EntryGroup
+					key={index}
+					data-rate=""
+					compact
+					title={`${Z.rate} ${index + 1}`}
+					first={index === 0}
+					last={index === rates.length - 1}
+					texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
+					onMove={(step) => onChange(moved(rates, index, step))}
+					onRemove={() => onChange(rates.filter((_, at) => at !== index))}>
 					<FieldGrid>
 						<Input
 							label={Z.rateName}
@@ -767,7 +702,7 @@ function RatesPart({ rates, currency, step, onChange }) {
 							/>
 						) : null}
 					</FieldGrid>
-				</div>
+				</EntryGroup>
 			))}
 			<div className="flex flex-wrap gap-2">
 				<Button

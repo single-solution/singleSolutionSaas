@@ -13,16 +13,16 @@ import {
 	Callout,
 	Card,
 	Checkbox,
+	EntryGroup,
 	FieldGrid,
 	Input,
 	ItemSwitcher,
 	Select,
 	TextArea,
-	ToastOnce,
 	describeProblem,
 } from '@ss/ui';
 import { BANK_ROW_LABELS, METHOD_KINDS, METHOD_LIMITS, methodReady } from '../../core/methods.js';
-import { call, fill, useLoad } from '@ss/ui/dashboard';
+import { SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
 const M = TEXTS.methods;
@@ -67,8 +67,14 @@ function AccountEditor({ account, index, count, onChange, onMove, onRemove }) {
 	const setRow = (at, change) =>
 		onChange({ ...account, rows: account.rows.map((row, i) => (i === at ? { ...row, ...change } : row)) });
 	return (
-		<fieldset className="space-y-3 rounded-md border border-line p-3">
-			<legend className="px-1 text-sm font-medium">{fill(M.account, { n: index + 1 })}</legend>
+		<EntryGroup
+			compact
+			title={fill(M.account, { n: index + 1 })}
+			first={index === 0}
+			last={index === count - 1}
+			texts={{ moveUp: M.up, moveDown: M.down, remove: M.removeAccount }}
+			onMove={onMove}
+			onRemove={onRemove}>
 			<FieldGrid>
 				<Input
 					label={M.accountLabel}
@@ -118,17 +124,8 @@ function AccountEditor({ account, index, count, onChange, onMove, onRemove }) {
 					onClick={() => onChange({ ...account, rows: [...account.rows, { label: '', value: '' }] })}>
 					{M.addRow}
 				</Button>
-				<Button size="sm" variant="ghost" disabled={index === 0} onClick={() => onMove(-1)}>
-					{M.up}
-				</Button>
-				<Button size="sm" variant="ghost" disabled={index === count - 1} onClick={() => onMove(1)}>
-					{M.down}
-				</Button>
-				<Button size="sm" variant="ghost" onClick={onRemove}>
-					{M.removeAccount}
-				</Button>
 			</div>
-		</fieldset>
+		</EntryGroup>
 	);
 }
 
@@ -303,25 +300,7 @@ export function MethodsEditor({ websiteId }) {
 					{M.cancel}
 				</Button>
 			</div>
-			{result ? (
-				result.ok ? (
-					<ToastOnce title={TEXTS.saved} trigger={result} />
-				) : (
-					<Callout tone="danger" title={describeProblem(result.problem)}>
-						{Array.isArray(result.problem?.errors) ? (
-							<ul className="list-disc pl-5">
-								{result.problem.errors.map(
-									(/** @type {{ path: string, message: string }} */ error, /** @type {number} */ i) => (
-										<li key={i}>
-											{error.path}: {error.message}
-										</li>
-									),
-								)}
-							</ul>
-						) : null}
-					</Callout>
-				)
-			) : null}
+			<SaveOutcome result={result} />
 		</section>
 	);
 }

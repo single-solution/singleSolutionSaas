@@ -22,7 +22,7 @@ import {
 	Skeleton,
 	describeProblem,
 } from '@ss/ui';
-import { Outcome, call, useLoad } from '@ss/ui/dashboard';
+import { Outcome, SaveOutcome, call, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
 /** @typedef {'agreement' | 'marketing'} Purpose */
@@ -57,7 +57,7 @@ export function ConsentsSection({ websiteId }) {
 			required: draft.purpose === 'agreement' && draft.required,
 			purpose: draft.purpose,
 		});
-		if (!next.ok) return setProblem(next.problem);
+		if (!next.ok) return setProblem(next);
 		setResult(next);
 		setDraft(null);
 		reload();
@@ -186,7 +186,7 @@ export function ConsentsSection({ websiteId }) {
 								onChange={(event) => edit({ required: event.target.checked })}
 							/>
 						) : null}
-						{problem ? <Callout tone="danger">{describeProblem(problem)}</Callout> : null}
+						<SaveOutcome result={problem} />
 						<div className="flex flex-wrap gap-2">
 							<Button
 								type="submit"

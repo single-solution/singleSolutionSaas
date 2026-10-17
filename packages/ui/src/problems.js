@@ -79,6 +79,27 @@ export const describeProblem = (problem) => {
 };
 
 /**
+ * The `errors` of a 422 answer as lines, whatever their shape (strings, `{ path, message }` or a key → message map).
+ * The list routes put every error on `/value`, so that path is left out.
+ * @param {{ errors?: unknown } | null | undefined} problem
+ * @returns {string[]}
+ */
+export const problemLines = (problem) => {
+	const errors = problem?.errors;
+	if (Array.isArray(errors))
+		return errors.map((/** @type {any} */ entry) =>
+			typeof entry === 'string'
+				? entry
+				: [entry?.path === '/value' ? undefined : (entry?.path ?? entry?.field), entry?.message ?? entry?.detail]
+						.filter((part) => part !== undefined && part !== null && part !== '')
+						.map(String)
+						.join(': '),
+		);
+	if (errors && typeof errors === 'object') return Object.entries(errors).map(([key, message]) => `${key}: ${String(message)}`);
+	return [];
+};
+
+/**
  * Field errors keyed by dotted field name: `/credentials/uri` → `credentials.uri`. `base` strips a prefix
  * (`/features/bar.message` with base `/features/` → `bar.message`). Only the first message per field is kept.
  * @param {Problem | null | undefined} problem

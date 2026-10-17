@@ -26,7 +26,7 @@ export {
 	SuggestInput,
 } from './fields.js';
 export { Form, FormError } from './Form.js';
-export { ListEditor, LIST_EDITOR_TEXTS, moveItem } from './ListEditor.js';
+export { ListEditor, EntryGroup, LIST_EDITOR_TEXTS, moveItem } from './ListEditor.js';
 export {
 	Card,
 	Avatar,
@@ -100,7 +100,7 @@ export {
 	symbolRowsOf,
 	symbolsOf,
 } from './format.js';
-export { describeProblem, fieldErrors, problemCode } from './problems.js';
+export { describeProblem, fieldErrors, problemCode, problemLines } from './problems.js';
 
 /** @typedef {import('./AppShell.js').NavSection} NavSection */
 /** @typedef {import('./blocks.js').SectionItem} SectionItem */
