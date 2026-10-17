@@ -5,6 +5,7 @@ import { MAPPINGS } from '../src/mappings/index.js';
 import { SB_IDS, sbHex } from '../src/mappings/sisters-boutique/fixture.js';
 import {
 	BY_HAND,
+	PORTAL_BY_HAND,
 	DEAL_HOURS_SHIFT_MINUTES,
 	DEFAULT_CHART_ID,
 	FEATURES,
@@ -481,7 +482,6 @@ describe('the Sisters Boutique mapping', () => {
 			'deals.cartOffer': 'one_after_items',
 			'deals.cartThresholdBase': 'after_item_deals',
 			'deals.pointsBlockedBy': 'cart_offer',
-			'staff_alerts.recipients': ['alerts@example.com', 'support@example.com', 'products@example.com'],
 			'staff_alerts.adminUrl': 'https://admin.example.com/orders?order={number}',
 			'seo.titleTemplate': '{name} — {business}',
 		});
@@ -566,7 +566,11 @@ describe('the Sisters Boutique mapping', () => {
 		const keys = Object.entries(plan).flatMap(([product, part]) =>
 			Object.keys(part.settings ?? {}).map((key) => `${product} ${key}`),
 		);
-		for (const key of Object.keys(BY_HAND).filter((name) => !name.includes('recipients'))) expect(keys).not.toContain(key);
+		for (const key of Object.keys(BY_HAND)) expect(keys).not.toContain(key);
+		// the website's own facts are entered in the Portal: the plan writes none of the settings the Portal owns now
+		for (const gone of ['catalog.currency', 'checkout.addressRequired', 'staff_alerts.recipients', 'seo.brandName', 'phone.trunkPrefix'])
+			expect(keys.filter((key) => key.endsWith(gone))).toEqual([]);
+		expect(Object.keys(PORTAL_BY_HAND)).toContain('region.currency');
 		expect(plan.ecommerce?.lists?.payment_methods).toMatchObject([
 			{ key: 'bank_transfer', instructions: 'Transfer online — send payment screenshot on WhatsApp' },
 			{ key: 'cod', note: 'Pay when you receive your order' },
@@ -580,8 +584,6 @@ describe('the Sisters Boutique mapping', () => {
 		expect(plan.ecommerce?.settings).toMatchObject({
 			'catalog.lowStock': 2,
 			'seo.titleTemplate': '{name} | {business}',
-			// SB alerts every active staff user; those whose role reads orders come through the permission
-			'staff_alerts.recipients': ['products@example.com'],
 		});
 		expect(plan.growth?.settings?.['robots_verification.robotsRules']).toContain('Disallow: /admin');
 		expect(plan.accounts?.settings?.['phone_password.forgotUrl']).toBe('');
@@ -590,14 +592,13 @@ describe('the Sisters Boutique mapping', () => {
 	});
 
 	it('reads an empty database into empty files', async () => {
-		const { manifest, settings } = await readSisters({
+		const { manifest } = await readSisters({
 			cleanups,
 			change: (docs) => {
 				for (const name of Object.keys(docs)) docs[name] = [];
 			},
 		});
 		expect(manifest.targets.every((target) => target.records === 0)).toBe(true);
-		expect(settings.ecommerce?.settings?.['staff_alerts.recipients']).toEqual([]);
 	});
 
 	it('maps the odd shapes SB may hold', async () => {

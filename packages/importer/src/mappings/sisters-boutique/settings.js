@@ -9,7 +9,7 @@
  * @module
  */
 import { DEFAULT_CHART_ID } from './catalog.js';
-import { CURRENCY, ORDER_DIGITS, ORDER_PATTERN, ORDER_PREFIX, PHONE_FORMAT, isObject, text } from './common.js';
+import { ORDER_DIGITS, ORDER_PATTERN, ORDER_PREFIX, isObject, text } from './common.js';
 import { STATUSES } from './orders.js';
 import { MEMBER_ROLE } from './people.js';
 
@@ -108,17 +108,30 @@ export const PENDING = Object.freeze(/** @type {Record<string, string>} */ ({}))
 export const BY_HAND = Object.freeze({
 	'ecommerce catalog.mediaBaseUrl': 'integration.awsS3PublicUrlBase, else AWS_S3_PUBLIC_URL_BASE',
 	'ecommerce staff_alerts.adminUrl': 'integration.adminSiteUrl, else ADMIN_SITE_URL (+ /orders?order={number})',
-	'ecommerce staff_alerts.recipients': 'integration.staffNotifyEmail, else STAFF_NOTIFY_EMAIL (added to the list read)',
 	'accounts staff_links.setupPageUrl': 'store.publicSiteUrl, else the storefront *_SITE_URL (+ /account/setup/{code})',
 	'growth robots_verification.sitemaps': 'store.publicSiteUrl, else the storefront *_SITE_URL (+ /sitemap.xml)',
+});
+
+/**
+ * What SB's website settings hold in the Portal (Website settings), entered by hand there once for every product: the
+ * settings every product used to keep its own copy of are the website's now, so the plan above no longer writes them.
+ * Each is SB's effective value or where it comes from (`packages/shared`, cited by line where SB has it).
+ */
+export const PORTAL_BY_HAND = Object.freeze({
+	'region.country': 'PK',
+	'region.currency': 'PKR (whole rupees)',
+	'region.phone': 'calling code +92, trunk prefix 0, numbers of PK (`packages/shared/src/phone.ts`:21, :56)',
+	'region.units': 'weight g, size mm (mechanical defaults; SB types no package weights or sizes)',
+	'region.address.required': 'ecommerce checkout: line1; accounts profile: name, phone, city (`customerAddresses.ts`:4, :55-80)',
+	'business.name': "the SEO row storeName, else store.siteName (SB's own site name)",
+	'brand.files.shareImage': 'store.brandLogoLight, else brandLogoDark, else the SEO ogImageDefault, else storeLogo',
+	'team.recipients': 'integration.staffNotifyEmail, else STAFF_NOTIFY_EMAIL, the support address and the active staff whose role does not read orders (product and marketing managers); at most 20 (`packages/db/src/staffNotifyContacts.ts`:10-39)',
+	'team.phoneChannel': 'whatsapp',
 });
 
 /** SB's robots defaults: the fallback disallow list and `/api/`, always (`apps/web/src/app/robots.ts`:16-17). */
 const ROBOTS_FALLBACK = Object.freeze(['/admin', '/account', '/cart', '/checkout']);
 const ROBOTS_ALWAYS = '/api/';
-
-/** Staff roles without the Ecommerce permission `orders.read` (Accounts' ready-made roles). */
-const WITHOUT_ORDERS = Object.freeze(['product_manager', 'marketing_manager']);
 
 /** An https address with no trailing slash, or ''. @param {string} value */
 const address = (value) => (/^https:\/\/[^\s/]+/i.test(value) ? value.replace(/\/+$/, '') : '');
@@ -135,27 +148,6 @@ const origin = (value) => {
 		return '';
 	}
 };
-
-/**
- * The staff alert recipients (`packages/db/src/staffNotifyContacts.ts`:10-39): SB alerts the staff address (else the
- * support address), the support address and every active staff user; Accounts users whose role reads orders get them
- * through `staffPermission: orders.read`, so the list adds the others (product and marketing managers). At most 20.
- * @param {SourceValues} values
- */
-const recipientsOf = ({ store, integration, staff }) =>
-	[
-		...new Set(
-			[
-				integration.staffNotifyEmail || store.supportEmail,
-				store.supportEmail,
-				...staff
-					.filter((member) => !member.isSuperAdmin && WITHOUT_ORDERS.includes(member.role))
-					.map((member) => member.email),
-			]
-				.map((email) => email.trim().toLowerCase())
-				.filter(Boolean),
-		),
-	].slice(0, 20);
 
 /**
  * The settings plan from SB's effective values.
@@ -180,16 +172,12 @@ export const settingsPlan = (values) => {
 		accounts: {
 			format,
 			settings: {
-				// phone numbers: Pakistan, +92 and the trunk 0 (`packages/shared/src/phone.ts`:21, :56)
-				'phone.defaultCallingCode': PHONE_FORMAT.defaultCallingCode,
-				'phone.trunkPrefix': PHONE_FORMAT.trunkPrefix,
 				// phone codes: the SaaS defaults (SB sends none: Forgot password is its WhatsApp chat); mechanical, to review
 				'phone.channel': 'sms',
 				'phone.websitePerHour': 0,
 				// SaaS default (A9; store mapping to review)
 				// addresses: at most 6, name, phone and city needed (`packages/shared/src/customerAddresses.ts`:4, :55-80)
 				'profile.keepOneAddress': false,
-				'profile.addressRequired': ['name', 'phone', 'city'],
 				// members: invite only (owner 2026-10-14, SA-2); passwords 8–128 with a letter and a digit
 				// (`packages/shared/src/validation.ts`:16-18, :83-97); no breach check; owner's lock answer of 2026-10-14
 				'phone_password.signUp': false,
@@ -205,7 +193,6 @@ export const settingsPlan = (values) => {
 				// route.ts`:19); 8 tries per network (`packages/shared/src/constants.ts`:214)
 				'email_password.minLength': 8,
 				'email_password.letterAndDigit': true,
-				'email_password.resetHosts': [],
 				'passwords.personalCheck': false,
 				// staff-issued codes last 15 minutes (`apps/admin/src/app/api/customers/[id]/access-code/route.ts`:15); setup
 				// links 7 days (`apps/admin/src/app/api/membership-requests/[id]/setup-link/route.ts`:16-17)
@@ -230,7 +217,6 @@ export const settingsPlan = (values) => {
 		ecommerce: {
 			format,
 			settings: {
-				'catalog.currency': CURRENCY,
 				// `apps/web/src/app/[category]/[slug]`, `[category]`; variant links carry the attributes
 				// (`packages/shared/src/seo/merchantFeed.ts` `buildVariantPdpPath`)
 				'catalog.productUrl': '/{category}/{slug}',
@@ -240,9 +226,6 @@ export const settingsPlan = (values) => {
 				...(media ? { 'catalog.mediaBaseUrl': media } : {}),
 				'catalog.mediaPath': '/media',
 				'catalog.pageSize': 24, // `apps/web/src/lib/core/queries.ts`:153
-				// mechanical defaults (E13), store mapping to review: SB types no package weights or sizes
-				'catalog.weightUnit': 'g',
-				'catalog.sizeUnit': 'mm',
 				'catalog.lowStock': store.lowStockThreshold,
 				'catalog.showStock': 'always',
 				'catalog.lowStockShown': 5,
@@ -262,16 +245,12 @@ export const settingsPlan = (values) => {
 				'checkout.paymentWindowMinutes': 0,
 				'checkout.confirmationHours': 0,
 				// the SaaS default (no burst limit; store mapping to review when the owner asks)
-				'checkout.addressRequired': ['line1'],
 				// guests order unless the phone is a member's (`apps/web/src/app/api/orders/route.ts`:195-198)
 				'checkout.guests': 'unless_password',
 				// mechanical defaults (store mapping to review when the owner asks): SB guests order by phone, and every order
 				// gives a phone
 				'checkout.guestIdentity': 'phone',
 				'checkout.phoneRequired': true,
-				'checkout.defaultCallingCode': PHONE_FORMAT.defaultCallingCode,
-				'checkout.trunkPrefix': PHONE_FORMAT.trunkPrefix,
-				'checkout.countries': ['PK'],
 				'checkout.customerRecords': 'first_order',
 				'checkout.successUrl': '',
 				'checkout.cancelUrl': '',
@@ -319,25 +298,17 @@ export const settingsPlan = (values) => {
 				// alerts on placement, status changes and cancels (`apps/admin/src/app/api/orders/[id]/route.ts`:336-342); the
 				// status changes are each status's staffAlert in the order flow below (E36)
 				'staff_alerts.events': ['placed', 'canceled'],
-				'staff_alerts.recipients': recipientsOf(values),
 				'staff_alerts.staffPermission': 'orders.read',
-				'staff_alerts.phoneChannel': 'whatsapp',
 				// SB's staff alerts never showed the shopper's phone
 				'staff_alerts.includePhone': false,
-				// SaaS defaults (SB has no staff push and no recipient cap)
-				'staff_alerts.staffPush': false,
 				...(admin ? { 'staff_alerts.adminUrl': `${admin}/orders?order={number}` } : {}),
 				// SEO (`apps/web/src/lib/seo/seoSettings.ts`:51-62, `packages/shared/src/seo/composeSeoMeta.ts`:224)
 				'seo.titleTemplate': (seo.titleTemplate || '{title} | {storeName}')
 					.replaceAll('{title}', '{name}')
 					.replaceAll('{storeName}', '{business}'),
-				'seo.brandName': seo.storeName,
 				// the site answer's settings at the SaaS defaults (store mapping to review when the owner asks)
-				'seo.alternateName': '',
 				'seo.homeTitle': '',
 				'seo.homeDescription': '',
-				'seo.businessType': 'OnlineStore',
-				'seo.socialProfiles': [],
 				'seo.productTitle': '{name}',
 				'seo.categoryTitle': 'Shop {name}',
 				'seo.productDescription': '',
@@ -347,7 +318,6 @@ export const settingsPlan = (values) => {
 				'seo.emptyCategories': 'noindex', // SaaS default (store mapping to review when the owner asks)
 				'seo.sitemapUrl': '/sitemap.xml',
 				'seo.defaultDescription': seo.defaultDescription || store.siteTagline,
-				'seo.defaultImage': store.brandLogoLight || store.brandLogoDark || seo.ogImageDefault || seo.storeLogo,
 				'seo.indexNowOnSave': false,
 				'seo.autoSeo': 'off',
 				'seo.faqMarkup': false,
@@ -504,7 +474,6 @@ export const settingsPlan = (values) => {
 			format,
 			// the SaaS default waits (store mapping to review)
 			settings: {
-				'email.replyTo': '',
 				'delivery_log.retentionDays': 0,
 			},
 		},

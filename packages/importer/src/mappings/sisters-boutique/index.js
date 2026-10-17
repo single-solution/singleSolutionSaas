@@ -19,7 +19,7 @@ import { customerStep, loyaltyStep, orderStep } from './orders.js';
 import { copyStep, invitedStep, memberStep, requestStep, roleSteps, staffStep } from './people.js';
 import { readSettings } from './settings.js';
 
-export { BY_HAND, FEATURES, PENDING, STORE_DEFAULTS, readValues, settingsPlan } from './settings.js';
+export { BY_HAND, FEATURES, PENDING, PORTAL_BY_HAND, STORE_DEFAULTS, readValues, settingsPlan } from './settings.js';
 export { DEAL_HOURS_SHIFT_MINUTES, windowOf } from './deals.js';
 export { DEFAULT_CHART_ID } from './catalog.js';
 export { STATUSES, spread } from './orders.js';

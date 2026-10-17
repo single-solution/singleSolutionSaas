@@ -71,10 +71,12 @@ lists `order_flow`, `role_prices` (the member discount), `couriers` and `deliver
 settings written before their PLAN item is built (E39): until then the products refuse them as "No such setting".
 
 **Entered by hand** (the per-store table, `send --settings <file>`): the feature switches (`FEATURES`, and `import`);
-business.json (name, contact, `timeZone: Asia/Karachi`, country PK); every secret; and, when SB has no saved row for them
+the website's settings in the Portal (Website settings: business facts, brand, region and format, pages, alert team; set once
+for every product, so the plan writes none of them: `PORTAL_BY_HAND` lists SB's values, such as country PK, currency PKR,
+calling code +92, `timeZone: Asia/Karachi` and the alert team); every secret; and, when SB has no saved row for them
 (`BY_HAND`), the values only its deployment holds: `catalog.mediaBaseUrl` (`AWS_S3_PUBLIC_URL_BASE`),
-`staff_alerts.adminUrl` (`ADMIN_SITE_URL`), an alert address from `STAFF_NOTIFY_EMAIL`, and the public site address for
-`staff_links.setupPageUrl` and `robots_verification.sitemaps`. After E47 is built: `loyalty.memberFlag: first_order`
+`staff_alerts.adminUrl` (`ADMIN_SITE_URL`), and the public site address for `staff_links.setupPageUrl` and
+`robots_verification.sitemaps`. After E47 is built: `loyalty.memberFlag: first_order`
 together with each customer's flag from SB's `isLoyaltyMember` (left out until both exist, so no customer loses their
 points). After E46: guests' saved addresses (SB keeps them on the customer; until then only members' addresses move).
 

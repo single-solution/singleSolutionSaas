@@ -10,6 +10,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { formatViolation, validateSettingValue } from '@ss/contracts';
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FEATURES, PENDING } from '../src/mappings/sisters-boutique/index.js';
 import { readSisters } from './sb-helpers.js';
@@ -84,10 +85,10 @@ const repeated = (values) => [...new Set(values.filter((value, index) => values.
 describe('the Sisters Boutique mapping through the products’ checks', () => {
 	it('writes only settings the products have, with values they take, and every setting of each feature SB has on', async () => {
 		const { settings } = await readSisters({ cleanups });
+		/** @type {string[]} */
+		const problems = [];
 		for (const [product, part] of Object.entries(settings)) {
 			const sections = await sectionsOf(product);
-			/** @type {string[]} */
-			const problems = [];
 			for (const [full, value] of Object.entries(part.settings ?? {})) {
 				const [section = '', key = ''] = full.split('.');
 				const schema = sections.get(section);
@@ -111,8 +112,8 @@ describe('the Sisters Boutique mapping through the products’ checks', () => {
 				const why = formatViolation(/** @type {any} */ (field), value);
 				if (why) problems.push(`${product} format ${field}: ${why}`);
 			}
-			expect(problems).toEqual([]);
 		}
+		expect(problems).toEqual([]);
 		const lists = /** @type {Record<string, unknown>} */ (settings.ecommerce?.lists);
 		expect(checkOrderFlow(lists.order_flow)).toMatchObject({ ok: true });
 		expect(checkRolePrices(lists.role_prices)).toMatchObject({ ok: true });
@@ -122,13 +123,11 @@ describe('the Sisters Boutique mapping through the products’ checks', () => {
 	});
 
 	it('gives Accounts roles, users, requests and copies its import checks take', async () => {
-		const { records, settings } = await readSisters({ cleanups });
+		const { records } = await readSisters({ cleanups });
 		const roles = await records('accounts.roles');
 		expect(refusals(roles, accounts.checkImportedRole)).toEqual([]);
-		const phoneFormat = {
-			defaultCallingCode: String(settings.accounts?.settings?.['phone.defaultCallingCode']),
-			trunkPrefix: String(settings.accounts?.settings?.['phone.trunkPrefix']),
-		};
+		// the phone format is the website's, entered in the Portal by hand (`PORTAL_BY_HAND`): +92 and the trunk 0
+		const phoneFormat = { defaultCallingCode: '+92', trunkPrefix: '0' };
 		const roleKeys = new Set([
 			...ROLE_TEMPLATES.map((/** @type {{ key: string }} */ role) => role.key),
 			...roles.map((role) => String(role.key)),
@@ -264,8 +263,13 @@ describe('the Sisters Boutique mapping through the products’ checks', () => {
 					.filter(([key]) => key.startsWith('checkout.'))
 					.map(([key, value]) => [key.slice('checkout.'.length), value]),
 			),
-			catalog: { currency: plan['catalog.currency'] },
-			country: 'PK',
+			// the Portal's Region and format for SB (`PORTAL_BY_HAND`)
+			region: {
+				...emptyWebsiteSettings('web_sample').region,
+				country: 'PK',
+				currency: 'PKR',
+				phone: { callingCode: '+92', trunkPrefix: '0', countries: ['PK'] },
+			},
 			now: Date.now(),
 			// the mapping's own attachment kinds (E20)
 			attachmentKinds: /** @type {any} */ (settings.ecommerce?.lists?.attachment_kinds),
