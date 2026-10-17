@@ -99,15 +99,21 @@ export const createWebsiteService = (ctx) => {
 	 * @returns {Promise<Array<{ productId: string, name: string, requires: string[], missing: string[] }>>}
 	 */
 	const readinessOf = async (document) => {
-		const onSite = /** @type {Array<{ productId: string }>} */ (await commerce().productsOnWebsite(document.websiteId));
+		const onSite = /** @type {Array<{ productId: string, on: string[] }>} */ (await commerce().productsOnWebsite(document.websiteId));
 		const found = await Promise.all(
-			onSite.map(async ({ productId }) => {
+			onSite.map(async ({ productId, on }) => {
 				// a product that cannot be read is left out: the readiness line never fails a read or a save
 				const product = await catalog()
 					.getProduct(productId)
 					.catch(() => null);
 				if (!product) return null;
-				const requires = /** @type {string[]} */ ([...(product.websiteSettingsRequires ?? [])]);
+				// the product's own needs, and what each of its features that is on asks for
+				const requires = /** @type {string[]} */ ([
+					...new Set([
+						...(product.websiteSettingsRequires ?? []),
+						...on.flatMap((/** @type {string} */ key) => product.featureRequires?.[key] ?? []),
+					]),
+				]);
 				return { productId, name: String(product.name), requires, missing: missingWebsiteSettings(document, requires) };
 			}),
 		);

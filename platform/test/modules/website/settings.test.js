@@ -102,6 +102,44 @@ describe('Website settings: the Portal keeps the facts every product of a websit
 		]);
 	});
 
+	it('the readiness line counts what a feature that is on asks for, and nothing for one that is off', async () => {
+		const h = await bootPortal({ db: mongo.db('ws_feature_requires') });
+		cleanups.push(h.close);
+		const owner = await h.owner();
+		const base = notesManifest();
+		const notes = await h.connect({
+			...base,
+			features: [
+				{ ...base.features[0], requires: ['pages.signIn'] },
+				{ ...base.features[1], requires: ['team.recipients'] },
+			],
+		});
+		const m = await h.merchant('m@shop.test', ['shop.example.com']);
+		const w1 = m.websiteIds[0] ?? '';
+		await owner.post(`/v1/merchants/${m.merchantId}/websites/${w1}/products`, { productId: 'notes' });
+		const url = `/v1/merchants/${m.merchantId}/websites/${w1}/settings`;
+		const readiness = async () => (await m.client.get(url)).json.readiness[0];
+		// no feature on: nothing asked for
+		expect(await readiness()).toMatchObject({ productId: 'notes', requires: [], missing: [] });
+		const admin = await h.api.call('GET', '/v1/me', { cookie: owner.cookie });
+		const report = async (/** @type {number} */ version, /** @type {string[]} */ on) => {
+			h.clock.advance(1000);
+			const sent = await h.productCall(notes, 'PUT', `/v1/product/websites/${w1}/features`, {
+				version,
+				on,
+				adminId: admin.json.admin.adminId,
+				adminName: 'Olivia',
+			});
+			expect([version, sent.status, JSON.stringify(sent.json)]).toEqual([version, 200, JSON.stringify({ version })]);
+		};
+		await report(1, ['notes']);
+		expect(await readiness()).toMatchObject({ requires: ['pages.signIn'], missing: ['pages.signIn'] });
+		await report(2, ['notes', 'inbox']);
+		expect((await readiness()).requires.sort()).toEqual(['pages.signIn', 'team.recipients']);
+		await report(3, ['notes']);
+		expect((await readiness()).requires).toEqual(['pages.signIn']);
+	});
+
 	it('a merchant saves a section: the version rises, products on that website are told once each, and the change is logged', async () => {
 		const { h, notes, chat, m, w1, w2, url } = await setUp('ws_save');
 		const saved = await m.client.put(url(w1, '/region'), { version: 0, value: region() });

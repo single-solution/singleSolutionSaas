@@ -279,7 +279,15 @@ export const createDashboard = (kit) => {
 					kit.website.document(id, { after: ctx.after }),
 					kit.recent.list(id),
 				]);
-				const requires = manifest.websiteSettings?.requires ?? [];
+				// what the product needs of the website's settings: its own, and what each switched-on feature asks for
+				const requires = [
+					...new Set([
+						...(manifest.websiteSettings?.requires ?? []),
+						...manifest.features.flatMap((/** @type {{ key: string, requires?: string[] }} */ feature) =>
+							on.includes(feature.key) ? (feature.requires ?? []) : [],
+						),
+					]),
+				];
 				const needed = connections.filter((c) => c.neededBy.some((key) => on.includes(key)));
 				const visitorWidgets = manifest.widgets.some(
 					(w) => w.kind === 'visitor' && [w.feature].flat().some((key) => on.includes(key)),

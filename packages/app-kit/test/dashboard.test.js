@@ -339,6 +339,28 @@ describe('overview and the website settings', () => {
 		expect(done.checklist.website).toEqual({ version: 2, requires: ['region.currency', 'business.name'], missing: [] });
 	});
 
+	it('asks for what a switched-on feature needs of the website settings, and nothing for a feature that is off', async () => {
+		const withRequires = manifest();
+		withRequires.features[0].requires = ['pages.signIn'];
+		withRequires.features[1].requires = ['team.recipients', 'pages.signIn'];
+		withRequires.websiteSettings = { requires: ['region.currency'] };
+		const { session, dash, websiteId, switchOn } = await setup({ manifest: withRequires });
+		const cookie = await session({ kind: 'merchant' });
+		const url = `/v1/dashboard/websites/${websiteId}/overview`;
+		const asked = async () => (await (await dash(cookie, 'GET', url)).json()).checklist.website;
+		// nothing on: the product's own needs only
+		expect((await asked()).requires).toEqual(['region.currency']);
+		// the first feature on: its need joins, once
+		await switchOn(['notes']);
+		expect(await asked()).toEqual({ version: 0, requires: ['region.currency', 'pages.signIn'], missing: ['region.currency', 'pages.signIn'] });
+		// the second feature on: its needs join, a value asked twice listed once
+		await switchOn(['notes', 'inbox']);
+		expect((await asked()).requires).toEqual(['region.currency', 'pages.signIn', 'team.recipients']);
+		// off again: no longer asked for
+		await switchOn(['notes']);
+		expect((await asked()).requires).toEqual(['region.currency', 'pages.signIn']);
+	});
+
 	it('gives the dashboard the website’s settings as the Portal holds them, for the parts that show a value the Portal owns', async () => {
 		const { session, dash, websiteId, portal } = await setup();
 		const cookie = await session({ kind: 'merchant' });
