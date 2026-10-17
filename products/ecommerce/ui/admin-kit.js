@@ -15,11 +15,13 @@ import {
 	checkbox,
 	dot,
 	element,
+	emptyState,
 	field as kitField,
 	fieldGrid,
 	formatDate,
 	formatMoney,
 	formatText,
+	loadingState,
 	moreMenu,
 	mountWidget,
 	openDialog,
@@ -702,6 +704,10 @@ const createKit = ({ root, config, api, win, save, open }) => {
 		masonry,
 		/** The list-and-detail layout (PLAN 0.6), with Back on a narrow widget. */
 		splitView: () => splitView(doc, t('admin.back')),
+		/** A list or panel being read: one line with the small spinner. @param {string} text */
+		loadingState: (text) => loadingState(doc, text),
+		/** What a list or panel has none of, with the next step when there is one. @param {string} text @param {HTMLElement | null} [action] */
+		emptyState: (text, action = null) => emptyState(doc, text, action),
 		listRow,
 		/** The More menu (⋯): a short list of actions, a destructive one last. @param {Parameters<typeof moreMenu>[2]} entries */
 		moreMenu: (entries) => moreMenu(doc, t('admin.moreActions'), entries),

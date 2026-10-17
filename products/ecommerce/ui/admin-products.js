@@ -638,7 +638,7 @@ export const productsTab = (kit, panel, lookups, links) => {
 
 	/** @param {any} row */
 	const openProduct = (row) => {
-		const box = h('div', {}, [kit.text('p', { class: 'muted' }, t('catalogAdmin.loading'))]);
+		const box = h('div', {}, [kit.loadingState(t('catalogAdmin.loading'))]);
 		void kit.call('GET', `/v1/admin/products/${row.id}`).then((answer) => {
 			if (screen.current() !== row.id) return;
 			if (answer.ok) context.show(answer.data);

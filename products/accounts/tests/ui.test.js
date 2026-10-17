@@ -1344,7 +1344,7 @@ describe('My account', () => {
 		const rows = [...devices.querySelectorAll('li')];
 		expect(rows[0]?.firstChild?.textContent).toBe('Firefox on Linux');
 		expect(rows[0]?.querySelector('.meta')?.textContent).toBe(`Signed in with Password · Last used ${when(at(60_000))}`);
-		expect(rows[0]?.querySelector('.tag')?.textContent).toBe(strings['account.thisDevice']);
+		expect(rows[0]?.querySelector('.badge')?.textContent).toBe(strings['account.thisDevice']);
 		expect(rows[1]?.firstChild?.textContent).toBe(strings['account.unknownDevice']);
 		await click(buttonIn(devices, strings['account.signOutDevice']));
 		expect(server.calls.some((c) => c.method === 'DELETE' && c.path === '/v1/me/sessions/ses_2')).toBe(true);
@@ -2911,7 +2911,7 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		expect(profile.textContent).toContain(`Member since ${when(at(0), 'date')}`);
 		const addresses = part(host, strings['account.addresses']);
 		expect(addresses.querySelector('li')?.textContent).toContain('Camden');
-		expect(addresses.querySelector('li .tag')?.textContent).toBe(strings['account.defaultAddress']);
+		expect(addresses.querySelector('li .badge')?.textContent).toBe(strings['account.defaultAddress']);
 		expect(hasButton(addresses, strings['account.addressAdd'])).toBe(true);
 		expect(
 			/** @type {HTMLElement} */ (

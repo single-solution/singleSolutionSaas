@@ -263,7 +263,7 @@ export const variantPhotosDialog = (kit, { productId, name, photos, picked, uplo
 	const draw = () =>
 		list.replaceChildren(
 			...(all.length === 0
-				? [kit.text('p', { class: 'muted' }, t('catalogAdmin.noPhotosYet'))]
+				? [kit.emptyState(t('catalogAdmin.noPhotosYet'))]
 				: all.map((photo, index) => {
 						const pick = kit.check(photo.alt || t('catalogAdmin.photoN', { number: index + 1 }), ticked.has(photo.key));
 						pick.box.addEventListener('change', () => {

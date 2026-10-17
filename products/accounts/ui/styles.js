@@ -30,7 +30,6 @@ button.social { display: block; width: 100%; margin-inline-end: 0; }
 .permissions label.check { align-items: flex-start; }
 .status { margin: 8px 0 0; font-size: 0.9em; }
 .code { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
-.tag { display: inline-block; font-size: 0.8em; padding: 2px 8px; margin-top: 4px; border-radius: 999px; border: 1px solid var(--ss-kit-line); }
 ul { list-style: none; margin: 0; padding: 0; }
 li { padding: 10px 0; border-top: 1px solid var(--ss-kit-hair); overflow-wrap: anywhere; } li:first-child { border-top: 0; }
 ul.codes { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 4px; }
@@ -56,8 +55,8 @@ li.row-item:hover { background: var(--ss-kit-soft); }
 li.row-item[aria-current='true'] { box-shadow: inset 3px 0 0 var(--ss-kit-focus); padding-inline-start: 8px; }
 li.row-item .who { min-width: 0; flex: 1 1 auto; } li.row-item .figure { font-size: 0.8em; opacity: 0.7; white-space: nowrap; }
 .cards { column-width: 240px; column-gap: 12px; margin-top: 12px; }
-.card { break-inside: avoid; display: inline-block; width: 100%; box-sizing: border-box; margin: 0 0 12px; padding: 12px;
-  border-radius: var(--ss-kit-r); background: var(--ss-color-surface, var(--ss-kit-soft)); }
+.card { break-inside: avoid; display: inline-block; width: 100%; box-sizing: border-box; margin: 0 0 12px; padding: 12px 14px;
+  border: 1px solid var(--ss-kit-hair); border-radius: var(--ss-kit-rc); background: var(--ss-kit-card); box-shadow: var(--ss-kit-shadow); }
 .card h4 { margin: 0 0 6px; } dl { margin: 0; } dt { font-size: 0.8em; opacity: 0.7; margin-top: 6px; } dd { margin: 0; overflow-wrap: anywhere; }
 .more { position: relative; display: inline-block; } .more > button { margin: 0; }
 button.icon { padding: 4px 12px; min-height: 32px; line-height: 1; }

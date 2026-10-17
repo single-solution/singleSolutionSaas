@@ -20,6 +20,7 @@ import {
 	formatDate,
 	formatMoney,
 	formatText,
+	loadingState,
 	moreMenu,
 	mountWidget,
 	openDialog,
@@ -659,7 +660,7 @@ export const mountAnalyticsDashboard = ({ host, api, config, viewer, now, downlo
 					const products = section(t('analytics.products'), t('analytics.productsHelp'), [productsPart]);
 					products.classList.add('products');
 					parts.push(products);
-					productsPart.replaceChildren(h('p', { class: 'sub' }, t('analytics.loading')));
+					productsPart.replaceChildren(loadingState(doc, t('analytics.loading')));
 					void loadProducts();
 				}
 				if (report.searches && report.emptySearches && report.notFound)

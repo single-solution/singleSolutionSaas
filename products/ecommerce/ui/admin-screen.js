@@ -90,7 +90,7 @@ export const createScreen = (kit, panel, spec) => {
 		opened += 1;
 		const mine = opened;
 		if (item === null) {
-			kit.put(view.detail, [view.back, kit.text('p', { class: 'muted empty' }, spec.empty)]);
+			kit.put(view.detail, [view.back, kit.emptyState(spec.empty)]);
 			view.show('list');
 			return undefined;
 		}
@@ -107,7 +107,7 @@ export const createScreen = (kit, panel, spec) => {
 	const showNodes = (item, pane) => {
 		const detailOf = /** @type {(item: T) => Child[]} */ (spec.detail);
 		if (!spec.read) return kit.put(pane.pane, [pane.back, ...detailOf(item)]);
-		kit.put(pane.pane, [pane.back, kit.text('p', { class: 'muted' }, kit.t('catalogAdmin.loading'))]);
+		kit.put(pane.pane, [pane.back, kit.loadingState(kit.t('catalogAdmin.loading'))]);
 		return spec.read(item).then((fresh) => {
 			if (!pane.current()) return;
 			const shown = fresh ? { ...item, ...fresh } : item;

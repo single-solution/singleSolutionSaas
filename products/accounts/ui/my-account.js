@@ -4,7 +4,7 @@
  * Download my data and Delete my account (Data rights) and the orders (Orders tab). Each part shows only while its feature is on.
  * @module
  */
-import { element, formatText, mountWidget } from '@ss/app-kit/widget';
+import { badge, element, formatText, loadingState, mountWidget } from '@ss/app-kit/widget';
 import {
 	customInputs,
 	datesOf,
@@ -260,7 +260,7 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 							? [element(doc, 'li', {}, t('account.noAddresses'))]
 							: addresses.map((address) => {
 									const item = element(doc, 'li', {}, addressLine(address, rules.country));
-									if (address.default) item.append(element(doc, 'span', { class: 'tag' }, t('account.defaultAddress')));
+									if (address.default) item.append(badge(doc, t('account.defaultAddress')));
 									const change = button(t('account.edit'), { class: 'secondary small' });
 									const remove = button(t('account.remove'), { class: 'secondary small' });
 									const makeDefault = button(t('account.makeDefault'), { class: 'secondary small' });
@@ -451,7 +451,7 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 									].join(' · '),
 								),
 							);
-							if (device.current) item.append(element(doc, 'span', { class: 'tag' }, t('account.thisDevice')));
+							if (device.current) item.append(badge(doc, t('account.thisDevice')));
 							else {
 								const out = button(t('account.signOutDevice'), { class: 'secondary small' });
 								out.addEventListener('click', () =>
@@ -615,7 +615,7 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 					box.replaceChildren(title, element(doc, 'p', { class: 'status', role: 'status' }, t('account.signedOut')));
 					return;
 				}
-				box.replaceChildren(title, element(doc, 'p', { class: 'status', role: 'status' }, t('account.loading')));
+				box.replaceChildren(title, loadingState(doc, t('account.loading')));
 				const answer = await session.me('GET', '/v1/me');
 				if (mine !== generation) return;
 				if (answer.ok) paint(answer.data);

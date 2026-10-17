@@ -241,7 +241,7 @@ export const productDetail = (kit, product, context, message = '') => {
 		? richNodes(kit.doc, product.descriptionHtml)
 		: product.description
 			? [kit.text('p', { class: 'prose' }, product.description)]
-			: [kit.text('p', { class: 'muted' }, t('catalogAdmin.nothingYet'))];
+			: [kit.emptyState(t('catalogAdmin.nothingYet'))];
 	/** @param {string} key */
 	const open = (key) => () => {
 		// a removed photo also leaves the variants (as the server does)
@@ -365,7 +365,7 @@ export const productDetail = (kit, product, context, message = '') => {
 				t('catalogAdmin.images'),
 				[
 					product.media.length === 0
-						? kit.text('p', { class: 'muted' }, t('catalogAdmin.noPhotosYet'))
+						? kit.emptyState(t('catalogAdmin.noPhotosYet'))
 						: h(
 								'div',
 								{ class: 'thumbs' },
@@ -420,7 +420,7 @@ export const productDetail = (kit, product, context, message = '') => {
 								kit.text('dd', {}, faq.answer),
 							]),
 						)
-					: kit.text('p', { class: 'muted' }, t('catalogAdmin.nothingYet')),
+					: kit.emptyState(t('catalogAdmin.nothingYet')),
 			]),
 			card(kit, t('catalogAdmin.seo'), [kit.fieldGrid(seoFacts(kit, product.seo)), seoChecks(kit, product.seo)]),
 			product.kind === 'digital' && has('digital_goods') ? digitalCard(kit, product) : null,

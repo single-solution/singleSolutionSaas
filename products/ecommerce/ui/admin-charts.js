@@ -67,7 +67,7 @@ export const columnKey = (label, taken) => {
  */
 const chartTable = (kit, chart) =>
 	chart.rows.length === 0
-		? kit.text('p', { class: 'muted' }, kit.t('catalogAdmin.chartEmpty'))
+		? kit.emptyState(kit.t('catalogAdmin.chartEmpty'))
 		: kit.table(
 				[
 					kit.t('catalogAdmin.chartSize'),

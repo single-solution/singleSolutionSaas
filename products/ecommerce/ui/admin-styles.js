@@ -43,8 +43,6 @@ td label.check { margin: 0; }
 .thumbs img, .photo { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: var(--ss-radius, 8px); }
 .thumbs button { margin-top: 0; padding: 4px 8px; }
 .ok { color: var(--ss-color-success, #15803d); }
-.pill { display: inline-block; padding: 0 8px; border-radius: 999px; border: 1px solid var(--ss-kit-line); font-size: 0.85em; }
-.pill.warn { border-color: var(--ss-color-danger, #b91c1c); color: var(--ss-color-danger, #b91c1c); }
 dl { display: grid; grid-template-columns: fit-content(40%) minmax(0, 1fr); gap: 4px 12px; margin: 8px 0; }
 dt { opacity: 0.7; } dd { margin: 0; }
 /* list and detail rows and masonry (PLAN 0.6); the badges, dots, facts, More menus and dialogs are the kit's (ADMIN_KIT_CSS); indigo is the theme's accent, status colors only for status */
@@ -67,8 +65,8 @@ li.item .meta { grid-column: 2 / -1; }
 .masonry { columns: 1; column-gap: 16px; }
 @container (min-width: 640px) { .masonry { columns: 2; } }
 @container (min-width: 1040px) { .masonry { columns: 3; } }
-.masonry > .card { break-inside: avoid; margin: 0 0 16px; padding: 12px 16px; border-radius: calc(var(--ss-radius, 8px) * 2);
-  background: var(--ss-kit-soft); }
+.masonry > .card { break-inside: avoid; margin: 0 0 16px; padding: 12px 16px; border: 1px solid var(--ss-kit-hair);
+  border-radius: var(--ss-kit-rc); background: var(--ss-kit-card); box-shadow: var(--ss-kit-shadow); }
 .card h4 { margin: 0 0 8px; font-size: 0.95em; }
 button.link { color: var(--ss-kit-focus); padding: 0; margin-top: 0; }
 /* list heads with their count, filter chips with counts, row checkboxes and more filters (ui/admin-screen.js) */
@@ -84,7 +82,7 @@ li.item .lead { display: inline-flex; gap: 8px; align-items: center; } li.item .
 .selectbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 8px 0; }
 .selectbar label.check { margin: 0; } .selectbar button { margin-top: 0; }
 details.filters { margin: 4px 0 8px; } details.filters > summary { cursor: pointer; font-size: 0.9em; padding: 4px 0; }
-.empty { padding: 24px 0; text-align: center; }
+.detail-pane > .state.empty { justify-items: center; padding: 24px 0; text-align: center; }
 @media (prefers-reduced-motion: reduce) { .chipbar button { transition: none; } }
 /* catalog: list tools, card heads, checkbox groups, FAQs, the rich text editor and preview (ui/admin-screen.js, ui/admin-fields.js) */
 .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; justify-content: space-between; }

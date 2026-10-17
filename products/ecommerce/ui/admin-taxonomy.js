@@ -263,7 +263,7 @@ const imageCard = (kit, { path, for: owner, field, item, changed }) => {
  * @param {Kit} kit @param {string | null | undefined} value
  */
 const textBlock = (kit, value) =>
-	value ? kit.text('p', { class: 'prose' }, value) : kit.text('p', { class: 'muted' }, kit.t('catalogAdmin.nothingYet'));
+	value ? kit.text('p', { class: 'prose' }, value) : kit.emptyState(kit.t('catalogAdmin.nothingYet'));
 
 /**
  * FAQs as a card body.
@@ -276,7 +276,7 @@ export const faqList = (kit, faqs) =>
 				{ class: 'faqs' },
 				faqs.flatMap((faq) => [kit.text('dt', {}, faq.question), kit.text('dd', {}, faq.answer)]),
 			)
-		: kit.text('p', { class: 'muted' }, kit.t('catalogAdmin.nothingYet'));
+		: kit.emptyState(kit.t('catalogAdmin.nothingYet'));
 
 /**
  * The categories section: the tree with status dots, a detail per category and its editor.
