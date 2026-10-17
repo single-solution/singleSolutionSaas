@@ -10,11 +10,10 @@ export const TEXTS = dashboardTexts({
 	overview: {
 		templates: 'Templates',
 		templatesNone: 'Connect the database first',
-		webhookUrlStep: 'Add a webhook URL',
 		noWebhookUrls: {
-			title: 'Outgoing webhooks is on, but no URL is added yet',
-			effect: 'It is charged, but no event is sent until a URL is added in Settings.',
-			action: 'Add a URL',
+			title: 'Outgoing webhooks is on, but no address is added yet',
+			effect: 'It is charged, but no event is sent until an address is added in Settings.',
+			action: 'Add an address',
 		},
 	},
 	settings: {

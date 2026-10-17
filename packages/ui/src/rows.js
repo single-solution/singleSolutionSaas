@@ -38,9 +38,9 @@ export function RowList({ children, inset = false, label, className }) {
  * @param {{ title: ReactNode, meta?: ReactNode, icon?: import('./icons.js').IconName, kind?: import('./display.js').Kind,
  *   avatar?: string, media?: ReactNode, status?: ReactNode, action?: ReactNode,
  *   more?: import('./Menu.js').MenuItem[], moreLabel?: string, children?: ReactNode, className?: string,
- *   id?: string }} props `icon` (accent tile with a `kind`) or `avatar` (initials of a name) or `media` lead the row;
- *   `status` is a `StatusPill`; `action` the one primary action; `more` the other actions; `children` sit under the
- *   row (its own nested rows)
+ *   id?: string, wrap?: boolean }} props `icon` (accent tile with a `kind`) or `avatar` (initials of a name) or `media`
+ *   lead the row; `status` is a `StatusPill`; `action` the one primary action; `more` the other actions; `children` sit
+ *   under the row (its own nested rows); `wrap`: a long title wraps over lines instead of being cut short
  */
 export function ListRow({
 	title,
@@ -56,6 +56,7 @@ export function ListRow({
 	children,
 	className,
 	id,
+	wrap = false,
 }) {
 	const lead = media ?? (icon ? <IconBadge icon={icon} {...(kind ? { kind } : {})} size="sm" /> : avatar ? <Avatar name={avatar} /> : null);
 	return (
@@ -65,7 +66,7 @@ export function ListRow({
 					{lead}
 					<div className="min-w-0 flex-1">
 						<div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-							<span className="min-w-0 truncate text-sm font-medium text-fg">{title}</span>
+							<span className={cx('min-w-0 text-sm font-medium text-fg', wrap ? 'break-words' : 'truncate')}>{title}</span>
 							{status}
 						</div>
 						{meta ? <div className="mt-0.5 text-help break-words text-muted">{meta}</div> : null}

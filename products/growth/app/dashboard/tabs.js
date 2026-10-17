@@ -7,12 +7,13 @@
  * @module
  */
 import { Button, CodeBlock, Section, Stat, useViewerTimeZone } from '@ss/ui';
-import { DefaultsTab, DevelopersTab, OverviewTab, SettingsTab, fill, useLoad } from '@ss/ui/dashboard';
+import { DefaultsTab, DevelopersTab, OverviewTab, SettingsTab, fill, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { searchParamsOf, tagsReady } from '../../core/config.js';
 import { createSnippets } from '../../core/snippets.js';
 import { BROWSER_EVENTS, SITE_EVENTS } from '../../core/widgets.js';
 import { listExtras } from './lists.js';
+import { SETUP } from './setup-steps.js';
 import { settingsNotice } from './setup.js';
 import { TEXTS } from './texts.js';
 
@@ -33,7 +34,8 @@ const valuesOf = (data) =>
 
 /**
  * Growth's part of the Overview (PLAN 0.6 "Overviews talk"), from the website's settings: the tags ready (while a tag
- * feature is on) and the tag features with no id or script yet.
+ * feature is on), the tag features with no id or script yet, and the setup steps (`setup-steps.js`; the custom scripts
+ * have a step of their own, as they live in the consent categories).
  * @type {import('@ss/ui/dashboard').UseOverviewMore}
  */
 const useGrowthOverview = (overview, { websiteId, open }) => {
@@ -41,6 +43,7 @@ const useGrowthOverview = (overview, { websiteId, open }) => {
 	// custom scripts live in the consent categories (G3): read them only while Custom scripts is on
 	const scripts = overview?.ok === true && overview.data.featuresOn.includes('custom_scripts');
 	const categories = useLoad(scripts ? `/v1/dashboard/websites/${websiteId}/lists/consent_categories` : null);
+	const setup = useSetupSteps({ overview, websiteId, open, settings: settings.answer }, SETUP);
 	if (!overview?.ok || !settings.answer?.ok) return {};
 	const data = overview.data;
 	const values = valuesOf(settings.answer.data);
@@ -64,7 +67,21 @@ const useGrowthOverview = (overview, { websiteId, open }) => {
 						},
 					]
 				: [],
-		steps: tags.total > 0 ? [{ key: 'tags', label: O.tagsStep, done: missing === 0, onSelect: () => open('settings') }] : [],
+		steps: [
+			...setup,
+			...(scripts
+				? [
+						{
+							key: 'scripts',
+							label: O.scriptsStep,
+							why: O.scriptsWhy,
+							actionLabel: O.scriptsAction,
+							done: tagsReady(['custom_scripts'], values, categories.answer?.ok ? categories.answer.data.value : []).ready === 1,
+							onSelect: () => open('settings', 'tags.consent_categories'),
+						},
+					]
+				: []),
+		],
 		numbers:
 			tags.total > 0 ? (
 				<Stat

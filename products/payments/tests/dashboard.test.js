@@ -128,7 +128,7 @@ describe("Payments's dashboard Overview: manual payment methods (P1, P2)", () =>
 		// cash on delivery is always ready
 		expect(gateways(container)).toContain('Ways to pay ready1');
 		click(byText(container, 'Open Settings', 'button'));
-		expect(tab.open).toHaveBeenCalledWith('settings');
+		expect(tab.open).toHaveBeenCalledWith('settings', 'manual_payments');
 		for (const method of [transfer([['IBAN', 'DE89']]), transfer([], false, 'We send our details by email.')]) {
 			cleanup();
 			serve({ featuresOn: ['manual_payments'], methods: [method] });
@@ -159,7 +159,7 @@ describe("Payments's dashboard Overview: manual payment methods (P1, P2)", () =>
 			if (item) {
 				expect(item.textContent).toContain('Proof upload is on for Bank transfer, but Storage is not connected');
 				click(byText(container, 'Open Connections', 'button'));
-				expect(tab.open).toHaveBeenCalledWith('connections');
+				expect(tab.open).toHaveBeenCalledWith('connections', 'connection-storage');
 			}
 			// the connections are read only while a method takes proofs
 			expect(vi.mocked(fetch).mock.calls.some(([path]) => String(path).endsWith('/connections'))).toBe(proof);

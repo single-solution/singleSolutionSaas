@@ -9,25 +9,27 @@
  * @module
  */
 import { Badge, Button, Card, CodeBlock, Section, Stat } from '@ss/ui';
-import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, useLoad } from '@ss/ui/dashboard';
+import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
 import { PROVIDER_FORMS, ProviderForm } from './providers.js';
 import { TemplatesSection } from './templates.js';
 import { TEXTS } from './texts.js';
 import { FallbackChainsCard, QuietHoursCard, StopKeywordsCard, TemplateSettingsCard, TopicsCard } from './lists.js';
+import { SETUP } from './setup-steps.js';
 import { WebhookUrlsCard } from './webhooks.js';
 
 /** @typedef {import('@ss/ui/dashboard').TabProps} TabProps */
 
 /**
- * The Overview's own part: the merchant's templates counted, and, while Outgoing webhooks is on (its URL list is read
- * only then), a URL to add while there is none.
+ * The Overview's own part: the merchant's templates counted, the setup steps (`setup-steps.js`) and, while Outgoing
+ * webhooks is on (its address list is read only then), an address to add while there is none.
  * @type {import('@ss/ui/dashboard').UseOverviewMore}
  */
 const useNotificationsOverview = (overview, { websiteId, open }) => {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const templates = useLoad(`${base}/templates`);
+	const setup = useSetupSteps({ overview, websiteId, open }, SETUP);
 	const webhooks = overview?.ok === true && overview.data.featuresOn.includes('webhooks');
 	const webhookUrls = useLoad(webhooks ? `${base}/lists/webhook_urls` : null);
 	/** The webhook URLs, once read (null: not read). */
@@ -43,15 +45,14 @@ const useNotificationsOverview = (overview, { websiteId, open }) => {
 							title: O.noWebhookUrls.title,
 							effect: O.noWebhookUrls.effect,
 							action: (
-								<Button size="sm" variant="secondary" onClick={() => open('settings')}>
+								<Button size="sm" variant="secondary" onClick={() => open('settings', 'webhooks')}>
 									{O.noWebhookUrls.action}
 								</Button>
 							),
 						},
 					]
 				: [],
-		steps:
-			urls === null ? [] : [{ key: 'webhooks', label: O.webhookUrlStep, done: urls > 0, onSelect: () => open('settings') }],
+		steps: setup,
 		numbers: (
 			<Stat
 				label={O.templates}

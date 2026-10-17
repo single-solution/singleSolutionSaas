@@ -121,8 +121,14 @@ describe("Accounts's dashboard Overview", () => {
 		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Merchant');
 		expect(needs(container)).toContain('Custom fields is on, but no field is set up yet');
 		click(byText(container, 'Add a field', 'button'));
-		click(byText(container, 'Add a custom field', 'button'));
-		expect(tab.open.mock.calls).toEqual([['settings'], ['settings']]);
+		// the setup step says why and has its own button to the same section
+		const row = /** @type {HTMLElement} */ (byText(container, 'Add a custom field', 'span').closest('li'));
+		expect(row.textContent).toContain('Sign-up and My account ask for nothing more until a field is added.');
+		click(byText(row, 'Add a field', 'button'));
+		expect(tab.open.mock.calls).toEqual([
+			['settings', 'custom_fields'],
+			['settings', 'custom_fields'],
+		]);
 		expect(tile(container, 'Custom fields')).toBe('Custom fields0');
 	});
 

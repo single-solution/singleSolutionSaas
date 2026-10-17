@@ -36,6 +36,7 @@ import {
 } from './dashboard-tabs.js';
 
 export { call, fill, useLoad } from './dashboard-api.js';
+export { isFilled, useSetupSteps, wantsSettings } from './dashboard-setup.js';
 export {
 	DashboardProvider,
 	FormatForm,
@@ -57,6 +58,7 @@ export {
 	TextsCard,
 	featureSections,
 	lookSections,
+	settingSectionOf,
 	textGroups,
 	textSections,
 	useLookEditor,
@@ -71,6 +73,8 @@ export { ConnectionsTab, DefaultsTab, DevelopersTab, FeaturesTab, LookTab, Overv
 /** @typedef {import('./dashboard-parts.js').SettingsNotice} SettingsNotice */
 /** @typedef {import('./dashboard-parts.js').DashboardCategories} DashboardCategories */
 /** @typedef {import('./dashboard-settings.js').FeatureExtra} FeatureExtra */
+/** @typedef {import('./dashboard-setup.js').SetupRequirement} SetupRequirement */
+/** @typedef {import('./overview.js').SetupStep} SetupStep */
 /** @typedef {import('./blocks.js').SectionSpec} SectionSpec */
 /** @typedef {import('./dashboard-tabs.js').TabProps} TabProps */
 /** @typedef {import('./dashboard-tabs.js').Who} Who */
@@ -278,7 +282,7 @@ function DashboardPage({ tabs: own }) {
 								who={who}
 								support={support}
 								portal={portalUrl}
-								open={(tab) => go(href(tab))}
+								open={(tab, section) => go(href(tab) + (section ? `#${encodeURIComponent(section)}` : ''))}
 							/>
 						</WebsiteLocale>
 					)}

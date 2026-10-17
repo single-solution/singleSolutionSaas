@@ -1,51 +1,55 @@
 'use client';
 /**
  * Chat's parts of the dashboard tabs (PLAN 0.4.3, 0.8.3 Chat dashboard), on the shared tabs of `@ss/ui/dashboard`: the
- * Overview's booking URL while the Book-a-slot tool is on, the rules between features, Chat's settings sections, the
+ * Overview's setup steps and its booking address while the Book-a-slot tool is on, the rules between features, Chat's settings sections, the
  * AI and storage connection forms with each connection's hint, the developer snippets, and the AI label warning in
  * Defaults.
  * @module
  */
 import { Button, CodeBlock, Section } from '@ss/ui';
-import { ConnectionsTab, DefaultsTab, DevelopersTab, FeaturesTab, OverviewTab, useLoad } from '@ss/ui/dashboard';
+import { ConnectionsTab, DefaultsTab, DevelopersTab, FeaturesTab, OverviewTab, useLoad, useSetupSteps, wantsSettings } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
 import { AiForm, FORMS, StorageForm } from './forms.js';
 import { SettingsTab, aiLabelNotice } from './settings.js';
+import { SETUP } from './setup-steps.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('@ss/ui/dashboard').TabProps} TabProps */
 
 /**
- * Chat's part of the Overview (PLAN 0.6 "Overviews talk"): while the Book-a-slot tool is on (the website's settings
- * are read only then), its booking URL to set while there is none.
+ * Chat's part of the Overview (PLAN 0.6 "Overviews talk"): the settings the switched-on features need set
+ * (`setup-steps.js`), and, while the Book-a-slot tool is on, its booking address to set while there is none.
  * @type {import('@ss/ui/dashboard').UseOverviewMore}
  */
-const useBooking = (overview, { websiteId, open }) => {
+const useChatOverview = (overview, { websiteId, open }) => {
 	const booking = overview?.ok === true && overview.data.featuresOn.includes('book_slot');
-	const settings = useLoad(booking ? `/v1/dashboard/websites/${websiteId}/settings` : null);
+	// the settings are read only while a feature that needs one is on
+	const settings = useLoad(booking || wantsSettings(overview, SETUP) ? `/v1/dashboard/websites/${websiteId}/settings` : null);
+	const setup = useSetupSteps({ overview, websiteId, open, settings: settings.answer }, SETUP);
 	if (!settings.answer?.ok) return {};
 	/** @type {Array<{ key: string, values: Record<string, { value: unknown }> }>} */
 	const features = settings.answer.data.features;
 	const set = Boolean(features.find((feature) => feature.key === 'book_slot')?.values.bookingUrl?.value);
 	const O = TEXTS.overview;
 	return {
-		needs: set
-			? []
-			: [
-					{
-						key: 'booking',
-						tone: 'warning',
-						title: O.noBooking.title,
-						effect: O.noBooking.effect,
-						action: (
-							<Button size="sm" variant="secondary" onClick={() => open('settings')}>
-								{O.noBooking.action}
-							</Button>
-						),
-					},
-				],
-		steps: [{ key: 'booking', label: O.bookingStep, done: set, onSelect: () => open('settings') }],
+		needs:
+			booking && !set
+				? [
+						{
+							key: 'booking',
+							tone: /** @type {const} */ ('warning'),
+							title: O.noBooking.title,
+							effect: O.noBooking.effect,
+							action: (
+								<Button size="sm" variant="secondary" onClick={() => open('settings', 'book_slot')}>
+									{O.noBooking.action}
+								</Button>
+							),
+						},
+					]
+				: [],
+		steps: setup,
 	};
 };
 
@@ -77,7 +81,7 @@ const connectionForm = (item, save) =>
 
 /** @param {TabProps} props */
 function Overview(props) {
-	return <OverviewTab {...props} useMore={useBooking} />;
+	return <OverviewTab {...props} useMore={useChatOverview} />;
 }
 
 /** @param {TabProps} props */

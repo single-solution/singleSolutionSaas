@@ -19,14 +19,17 @@ const BASE = `/v1/dashboard/websites/${WEBSITE}`;
 /**
  * The dashboard API's answers for a website with these features on, connections and settings (`{ value, source }`).
  * @param {{ on: string[], connections?: Array<Record<string, unknown>>, needed?: Array<Record<string, unknown>>,
- *   settings?: Record<string, Record<string, { value: unknown, source: string }>>, search?: unknown,
- *   methods?: unknown[] }} state `methods`: the `payment_methods` list (today's four by default)
+ *   settings?: Record<string, Record<string, { value: unknown, source: string }>>, schemas?: Record<string, unknown>,
+ *   lists?: Record<string, unknown>, search?: unknown, methods?: unknown[] }} state `methods`: the `payment_methods`
+ *   list (today's four by default); `lists`: other lists by name
  */
 const serve = ({
 	on,
 	connections = [],
 	needed = [],
 	settings = {},
+	schemas = {},
+	lists = {},
 	search = { search: 'basic', index: 'x', state: null },
 	methods = defaultPaymentMethods(),
 }) => {
@@ -43,8 +46,9 @@ const serve = ({
 		[`${BASE}/connections`]: { connections },
 		[`${BASE}/search-index`]: search,
 		[`${BASE}/lists/payment_methods`]: { value: methods },
+		...Object.fromEntries(Object.entries(lists).map(([name, value]) => [`${BASE}/lists/${name}`, { value }])),
 		[`${BASE}/settings`]: {
-			features: Object.entries(settings).map(([key, values]) => ({ key, on: true, schema: {}, values })),
+			features: Object.entries(settings).map(([key, values]) => ({ key, on: true, schema: schemas[key] ?? {}, values })),
 		},
 	};
 	const fetch = vi.fn(async (/** @type {string} */ path) =>
@@ -68,7 +72,8 @@ const props = {
 	support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] },
 	domain: 'shop.example.com',
 	portal: 'https://portal.example.com',
-	open: (/** @type {string} */ tab) => void opened.push(tab),
+	open: (/** @type {string} */ tab, /** @type {string | undefined} */ section) =>
+		void opened.push(section ? `${tab}#${section}` : tab),
 };
 
 /** @param {HTMLElement} container @param {string} label */
@@ -99,7 +104,7 @@ describe('Ecommerce’s Overview', () => {
 		expect(text).toContain('Every price is in USD, the default, until you set your shop’s currency');
 		expect(text).toContain('Now USD');
 		await press(container, 'Set it');
-		expect(opened).toEqual(['settings']);
+		expect(opened).toEqual(['settings#catalog']);
 		// no checkout or staff alerts: no connections read
 		expect(loads()).not.toContain('/connections');
 		cleanup();
@@ -127,10 +132,10 @@ describe('Ecommerce’s Overview', () => {
 		const text = container.textContent ?? '';
 		expect(text).toContain('Payments is not connected');
 		expect(text).toContain('Connect Payments (recommended)');
-		expect(text).toContain('Connect Notifications for order messages to shoppers (optional)');
+		expect(text).toContain('Connect Notifications for order messages to shoppers');
 		expect(text).toContain('Connections ready1 of 1');
 		await press(container, 'Connect');
-		expect(opened).toEqual(['connections']);
+		expect(opened).toEqual(['connections#connection-payments']);
 	});
 
 	it('asks for staff alert recipients and admin page, how to pay methods paid by hand and the Atlas Search index', async () => {
@@ -169,7 +174,7 @@ describe('Ecommerce’s Overview', () => {
 		const docs = [...container.querySelectorAll('a')].find((node) => node.textContent === 'How to create it');
 		expect(docs?.getAttribute('href')).toBe('/docs#atlas-search');
 		await press(container, 'Add them');
-		expect(opened).toEqual(['settings']);
+		expect(opened).toEqual(['settings#checkout.payment-methods']);
 		cleanup();
 		// recipients set, the admin page set, the note written: nothing of them
 		serve({
@@ -188,5 +193,74 @@ describe('Ecommerce’s Overview', () => {
 		const fine = render(inDashboard(<Overview {...props} />));
 		await settle();
 		expect(fine.container.textContent).toContain('Nothing needs you right now.');
+	});
+
+	it('lists what the switched-on features need set, each with its why and a button to its own section', async () => {
+		/** @param {string} group */
+		const field = (group) => ({ type: 'string', title: 'x', default: '', 'x-ui': { group } });
+		serve({
+			on: ['catalog', 'checkout', 'delivery_zones', 'taxes'],
+			needed: [{ name: 'database', label: 'Database', neededBy: ['catalog'], status: 'connected' }],
+			connections: [{ name: 'payments', label: 'Payments', neededBy: [], status: 'connected' }],
+			settings: {
+				catalog: {
+					currency: value('USD', 'website'),
+					productUrl: value('/products/{slug}', 'built-in'),
+					categoryUrl: value('/categories/{slug}', 'website'),
+					mediaBaseUrl: value(''),
+				},
+				checkout: { guests: value('off', 'built-in') },
+			},
+			schemas: {
+				catalog: {
+					properties: {
+						currency: field('Basics'),
+						productUrl: field('Page addresses'),
+						categoryUrl: field('Page addresses'),
+						weightUnit: field('Units'),
+					},
+				},
+			},
+			lists: {
+				store_details: { name: '' },
+				delivery_zones: [{ key: 'all', name: 'Everywhere', rates: [] }],
+				order_flow: { statuses: [{ key: 'placed' }, { key: 'done' }] },
+				tax_rules: [],
+			},
+		});
+		const Overview = TABS.overview;
+		const { container } = render(inDashboard(<Overview {...props} />));
+		await settle();
+		const text = container.textContent ?? '';
+		// not done yet: the product address is only the built-in start, the zone has no rate, no tax rule, no store name
+		for (const words of [
+			'Set the product page address',
+			'Where your product pages live on your website, for example /shop/{slug}.',
+			'Add a delivery zone with a rate',
+			'Add a tax rule',
+		])
+			expect(text).toContain(words);
+		/** @param {string} label */
+		const row = (label) =>
+			/** @type {HTMLElement} */ (
+				/** @type {HTMLElement[]} */ ([...container.querySelectorAll('li')]).find((li) => li.textContent?.includes(label))
+			);
+		// ticked from what was saved: the category address was chosen, the order steps exist, the optional step is left out of the count
+		expect(row('Set the category page address').querySelector('.line-through')).not.toBeNull();
+		expect(row('Check your order steps').textContent).toContain('2 steps');
+		expect(row('Decide on guest checkout').textContent).toContain('Optional');
+		// the buttons open the exact section: a setting's own group, a list's view, a connection
+		await press(row('Set the product page address'), 'Set address');
+		await press(row('Add a delivery zone with a rate'), 'Open delivery zones');
+		await press(row('Offer a way to pay'), 'Review');
+		await press(row('Add a tax rule'), 'Open tax rules');
+		await press(row('Decide on guest checkout'), 'Choose');
+		expect(opened).toEqual([
+			'settings#catalog.page-addresses',
+			'settings#delivery_zones',
+			'settings#checkout.payment-methods',
+			'settings#taxes',
+			'settings#checkout',
+		]);
 	});
 });

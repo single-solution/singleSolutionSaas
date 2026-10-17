@@ -8,7 +8,7 @@
  * @module
  */
 import { Badge, Button, Card, CodeBlock, Section, Stat } from '@ss/ui';
-import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, fill, useLoad } from '@ss/ui/dashboard';
+import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, fill, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import messages from '../../schemas/messages.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
@@ -16,16 +16,18 @@ import { OTHER_PRODUCTS } from '../../core/widgets.js';
 import { ConsentsSection } from './consents.js';
 import { FieldsSection } from './fields.js';
 import { KEY_FORMS, KeyForm } from './forms.js';
+import { SETUP } from './setup-steps.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('@ss/ui/dashboard').TabProps} TabProps */
 
 /**
- * The Overview's custom fields while the feature is on: the fields counted (the list is read only then), and a field to
- * add while there is none.
+ * The Overview's own part: the settings the features need set (`setup-steps.js`), and the custom fields while the feature
+ * is on: the fields counted (the list is read only then), and a field to add while there is none.
  * @type {import('@ss/ui/dashboard').UseOverviewMore}
  */
 const useFieldsOverview = (overview, { websiteId, open }) => {
+	const setup = useSetupSteps({ overview, websiteId, open }, SETUP);
 	const customFields = overview?.ok === true && overview.data.featuresOn.includes('custom_fields');
 	const fields = useLoad(customFields ? `/v1/dashboard/websites/${websiteId}/fields` : null);
 	/** The custom fields, once read (null: not read, or the database is not connected). */
@@ -41,14 +43,28 @@ const useFieldsOverview = (overview, { websiteId, open }) => {
 							title: O.noFields.title,
 							effect: O.noFields.effect,
 							action: (
-								<Button size="sm" variant="secondary" onClick={() => open('settings')}>
+								<Button size="sm" variant="secondary" onClick={() => open('settings', 'custom_fields')}>
 									{O.noFields.action}
 								</Button>
 							),
 						},
 					]
 				: [],
-		steps: count === null ? [] : [{ key: 'fields', label: O.fieldsStep, done: count > 0, onSelect: () => open('settings') }],
+		steps: [
+			...setup,
+			...(count === null
+				? []
+				: [
+						{
+							key: 'fields',
+							label: O.fieldsStep,
+							why: O.fieldsWhy,
+							actionLabel: O.fieldsAction,
+							done: count > 0,
+							onSelect: () => open('settings', 'custom_fields'),
+						},
+					]),
+		],
 		numbers: customFields ? (
 			<Stat
 				label={O.fields}

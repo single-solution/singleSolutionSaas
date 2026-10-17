@@ -183,8 +183,12 @@ describe('the dashboard (setup only)', () => {
 			expect(needs).toContain('2 tag features have no id or script yet');
 			expect(byText(container, TEXTS.overview.tags, 'span').parentElement?.parentElement?.textContent).toContain('0 of 2');
 			click(byText(container, 'Open Settings', 'button'));
-			click(byText(container, TEXTS.overview.tagsStep, 'button'));
-			expect(props.open.mock.calls).toEqual([['settings'], ['settings']]);
+			// each tag feature is a setup step with its why and a button to its own section
+			expect(container.textContent).toContain('The Meta pixel loads nothing on your pages until its id is set.');
+			expect(container.textContent).toContain('Add a Google tag id');
+			const row = /** @type {HTMLElement} */ (byText(container, 'Add your Meta pixel id', 'span').closest('li'));
+			click(byText(row, 'Add id', 'button'));
+			expect(props.open.mock.calls).toEqual([['settings'], ['settings', 'meta_pixel']]);
 			cleanup();
 			VALUES.meta_pixel = { pixelId: '1234567890' };
 			serve(['meta_pixel', 'google_tags']);

@@ -287,20 +287,24 @@ describe('Overview (PLAN 0.6 "Overviews talk")', () => {
 	const needs = (container) =>
 		[...container.querySelectorAll('section[aria-label="Needs you"] li p:first-child')].map((p) => p.textContent);
 
-	it('counts the templates; with Outgoing webhooks on and no URL, asks for one and opens Settings', async () => {
+	it('counts the templates; with Outgoing webhooks on and no address, asks for one and opens its section of Settings', async () => {
 		serveOverview({ featuresOn: ['email', 'webhooks'] });
 		const tab = props();
 		const { container } = render(overviewOf(tab));
 		await settle();
 		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Merchant');
-		expect(needs(container)).toContain('Outgoing webhooks is on, but no URL is added yet');
-		click(byText(container, 'Add a URL', 'button'));
-		click(byText(container, 'Add a webhook URL', 'button'));
-		expect(tab.open.mock.calls).toEqual([['settings'], ['settings']]);
+		expect(needs(container)).toContain('Outgoing webhooks is on, but no address is added yet');
+		click(byText(container, 'Add an address', 'button'));
+		expect(container.textContent).toContain('Outgoing webhooks send nothing until at least one address on your server is added.');
+		click(byText(container, 'Add address', 'button'));
+		expect(tab.open.mock.calls).toEqual([
+			['settings', 'webhooks'],
+			['settings', 'webhooks'],
+		]);
 		expect(byText(container, 'Templates', 'span').parentElement?.parentElement?.textContent).toBe('Templates2');
 	});
 
-	it('reads no webhook URLs while the feature is off, and asks for none once one is added', async () => {
+	it('reads no webhook addresses while the feature is off, and asks for none once one is added', async () => {
 		serveOverview({ featuresOn: ['email'] });
 		render(overviewOf(props()));
 		await settle();
@@ -311,8 +315,8 @@ describe('Overview (PLAN 0.6 "Overviews talk")', () => {
 		serveOverview({ featuresOn: ['webhooks'], urls: ['https://hooks.example.com/ss'] });
 		const added = render(overviewOf(props()));
 		await settle();
-		expect(needs(added.container)).not.toContain('Outgoing webhooks is on, but no URL is added yet');
-		expect(byText(added.container, 'Add a webhook URL', 'span').className).toContain('line-through');
+		expect(needs(added.container)).not.toContain('Outgoing webhooks is on, but no address is added yet');
+		expect(byText(added.container, 'Add a webhook address', 'span').className).toContain('line-through');
 	});
 
 	it("shows the grace end, the widget's last visit and the changes in the viewer's zone; UTC first", async () => {

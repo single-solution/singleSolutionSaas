@@ -11,7 +11,9 @@ export const TEXTS = dashboardTexts({
 		tags: 'Tags ready',
 		tagsHelp: 'Switched-on tag features with a well-formed id or a script set (Settings).',
 		ofTotal: '{count} of {total}',
-		tagsStep: 'Set the ids of the tag features',
+		scriptsStep: 'Add your custom script',
+		scriptsWhy: 'Custom scripts load nothing until a script is added to a consent category.',
+		scriptsAction: 'Add a script',
 		noTag: {
 			one: 'A tag feature has no id or script yet',
 			many: '{count} tag features have no id or script yet',

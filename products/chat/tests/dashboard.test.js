@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The dashboard's Overview in the browser (jsdom), on a faked dashboard API (PLAN 0.6 "Overviews talk"): the kit's
- * Overview with Chat's own part while the Book-a-slot tool is on (its booking URL asked for while missing; the
+ * Overview with Chat's own part while the Book-a-slot tool is on (its booking address asked for while missing; the
  * settings are read only then), and its times computed in UTC and shown in the viewer's local time (owner
  * 2026-10-14): UTC on the server and in the first render, then the viewer's zone, with UTC on hover. Also the AI label
  * warning of Settings.
@@ -54,7 +54,7 @@ const overview = (featuresOn) => ({
 });
 
 /**
- * The overview, and the website's settings with the Book-a-slot tool's booking URL.
+ * The overview, and the website's settings with the Book-a-slot tool's booking address.
  * @param {{ featuresOn?: string[], bookingUrl?: string }} [options]
  */
 const serve = ({ featuresOn = [], bookingUrl = '' } = {}) =>
@@ -109,26 +109,31 @@ afterEach(() => {
 });
 
 describe("Chat's dashboard Overview", () => {
-	it('with the Book-a-slot tool on and no booking URL, asks for it and opens Settings', async () => {
+	it('with the Book-a-slot tool on and no booking address, asks for it and opens its section of Settings', async () => {
 		serve({ featuresOn: ['visitor_chat', 'book_slot'] });
 		const Overview = TABS.overview;
 		const tab = props();
 		const { container } = render(inDashboard(<Overview {...tab} />));
 		await settle();
 		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Merchant');
-		expect(needs(container)).toContain('The Book-a-slot tool is on, but no booking URL is set');
-		click(byText(container, 'Set the URL', 'button'));
-		click(byText(container, 'Set the booking URL', 'button'));
-		expect(tab.open.mock.calls).toEqual([['settings'], ['settings']]);
+		expect(needs(container)).toContain('The Book-a-slot tool is on, but no booking address is set');
+		click(byText(container, 'Set the address', 'button'));
+		// the setup step says why and has its own button
+		expect(container.textContent).toContain('The AI cannot offer or book times until it knows the address');
+		click(byText(container, 'Set address', 'button'));
+		expect(tab.open.mock.calls).toEqual([
+			['settings', 'book_slot'],
+			['settings', 'book_slot'],
+		]);
 	});
 
-	it('asks for nothing once the URL is set, and reads no settings while the tool is off', async () => {
+	it('asks for nothing once the address is set, and reads no settings while the tool is off', async () => {
 		serve({ featuresOn: ['book_slot'], bookingUrl: 'https://book.example.com/api' });
 		const Overview = TABS.overview;
 		const set = render(inDashboard(<Overview {...props()} />));
 		await settle();
-		expect(needs(set.container)).not.toContain('The Book-a-slot tool is on, but no booking URL is set');
-		expect(byText(set.container, 'Set the booking URL', 'span').className).toContain('line-through');
+		expect(needs(set.container)).not.toContain('The Book-a-slot tool is on, but no booking address is set');
+		expect(byText(set.container, 'Set the booking address', 'span').className).toContain('line-through');
 		cleanup();
 		serve({ featuresOn: ['visitor_chat'] });
 		const off = render(inDashboard(<Overview {...props()} />));
@@ -136,7 +141,7 @@ describe("Chat's dashboard Overview", () => {
 		expect(vi.mocked(fetch).mock.calls.map(([path]) => String(path))).toEqual([
 			`/v1/dashboard/websites/web_${website}/overview`,
 		]);
-		expect(off.container.textContent).not.toContain('booking URL');
+		expect(off.container.textContent).not.toContain('booking address');
 	});
 
 	it("shows the grace end, the widget's last visit and the changes in the viewer's time zone, UTC on hover", async () => {

@@ -6,13 +6,14 @@
  * @module
  */
 import { Button, CodeBlock, Section, Stat } from '@ss/ui';
-import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, fill, useLoad } from '@ss/ui/dashboard';
+import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, fill, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { CUSTOM_GATEWAY_CONNECTIONS, GATEWAY_CONNECTIONS, GATEWAY_FEATURES, GATEWAYS } from '../../core/gateways.js';
 import { methodReady } from '../../core/methods.js';
 import { createSnippets } from '../../core/snippets.js';
 import { ConnectionForm, FORMS } from './forms.js';
 import { MethodsEditor } from './methods.js';
+import { SETUP } from './setup-steps.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('@ss/ui/dashboard').Answer} Answer */
@@ -66,6 +67,7 @@ const gatewaysReady = (data, methods) =>
  * @type {import('@ss/ui/dashboard').UseOverviewMore}
  */
 const usePaymentsOverview = (overview, { websiteId, open }) => {
+	const setup = useSetupSteps({ overview, websiteId, open }, SETUP);
 	const manualOn = overview?.ok === true && overview.data.featuresOn.includes('manual_payments');
 	const list = useLoad(manualOn ? `/v1/dashboard/websites/${websiteId}/lists/manual_methods` : null);
 	const methods = manualOn ? methodsOf(list.answer) : null;
@@ -85,7 +87,7 @@ const usePaymentsOverview = (overview, { websiteId, open }) => {
 							title: O.noMethods.title,
 							effect: fill(O.methodsHelp, { names: methods.waiting.join(', ') }),
 							action: (
-								<Button size="sm" variant="secondary" onClick={() => open('settings')}>
+								<Button size="sm" variant="secondary" onClick={() => open('settings', 'manual_payments')}>
 									{O.noMethods.action}
 								</Button>
 							),
@@ -101,7 +103,7 @@ const usePaymentsOverview = (overview, { websiteId, open }) => {
 							title: O.noStorage.title,
 							effect: fill(O.storageHelp, { names: methods.proof.join(', ') }),
 							action: (
-								<Button size="sm" variant="secondary" onClick={() => open('connections')}>
+								<Button size="sm" variant="secondary" onClick={() => open('connections', 'connection-storage')}>
 									{O.noStorage.action}
 								</Button>
 							),
@@ -109,7 +111,21 @@ const usePaymentsOverview = (overview, { websiteId, open }) => {
 					]
 				: []),
 		],
-		steps: methods ? [{ key: 'methods', label: O.methodsStep, done: !waiting, onSelect: () => open('settings') }] : [],
+		steps: [
+			...setup,
+			...(methods
+				? [
+						{
+							key: 'methods',
+							label: O.methodsStep,
+							why: O.methodsWhy,
+							actionLabel: O.methodsAction,
+							done: !waiting,
+							onSelect: () => open('settings', 'manual_payments'),
+						},
+					]
+				: []),
+		],
 		numbers: (
 			<Stat
 				label={O.gateways}

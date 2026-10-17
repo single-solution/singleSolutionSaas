@@ -15,7 +15,7 @@ import { ListEditor } from './ListEditor.js';
 import { Paged } from './paged.js';
 import { SchemaForm } from './SchemaForm.js';
 import { call, fill } from './dashboard-api.js';
-import { GROUPS_AS_TABS_FROM, shapeOf } from './schema.js';
+import { GROUPS_AS_TABS_FROM, fieldsOf, shapeOf } from './schema.js';
 import { humanize, symbolRowsOf, symbolsOf } from './format.js';
 import { Outcome, hasSettings } from './dashboard-parts.js';
 
@@ -34,6 +34,20 @@ import { Outcome, hasSettings } from './dashboard-parts.js';
 
 /** A name as part of an address. @param {string} name */
 const slug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+/**
+ * The sidebar section of Settings that holds one setting, for a link that opens it (`?view=settings#catalog.page-addresses`):
+ * the feature's view of the setting's group when the feature shows its groups as views, else the feature (its first view).
+ * @param {FeatureSettings} feature
+ * @param {string} name the setting
+ * @param {string} advancedTitle the name of the Advanced view
+ */
+export const settingSectionOf = (feature, name, advancedTitle) => {
+	const shape = shapeOf(feature.schema);
+	const field = fieldsOf(feature.schema).find((entry) => entry.name === name);
+	if (!field || shape.groups.length + (shape.advanced ? 1 : 0) < GROUPS_AS_TABS_FROM) return feature.key;
+	return `${feature.key}.${slug(field.advanced ? advancedTitle : field.group)}`;
+};
 
 /**
  * Whether two plain values hold the same data.

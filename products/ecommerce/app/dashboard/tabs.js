@@ -7,12 +7,24 @@
  */
 import { Fragment } from 'react';
 import { Button, ButtonLink, CodeBlock, LocalTime, Section, Stat } from '@ss/ui';
-import { ConnectionsTab, DefaultsTab, DevelopersTab, OverviewTab, fill, useLoad } from '@ss/ui/dashboard';
+import {
+	ConnectionsTab,
+	DefaultsTab,
+	DevelopersTab,
+	OverviewTab,
+	fill,
+	settingSectionOf,
+	useDashboard,
+	useLoad,
+	useSetupSteps,
+	wantsSettings,
+} from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { paidByHand } from '../../core/payment-methods.js';
 import { SEARCH_INDEX_DEFINITION } from '../../core/search.js';
 import { SITE_ROUTES, createSnippets } from '../../core/snippets.js';
 import { ConnectionForm, formOf } from './forms.js';
+import { SETUP } from './setup-steps.js';
 import { SettingsTab, settingsNotice } from './settings.js';
 import { TEXTS } from './texts.js';
 
@@ -62,6 +74,7 @@ const settingOf = (answer, feature, key) => {
  * @type {import('@ss/ui/dashboard').UseOverviewMore}
  */
 const useShopOverview = (overview, { websiteId, open }) => {
+	const { texts } = useDashboard();
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	/** @type {string[]} */
 	const on = overview?.ok ? overview.data.featuresOn : [];
@@ -70,13 +83,23 @@ const useShopOverview = (overview, { websiteId, open }) => {
 	const alertsOn = on.includes('staff_alerts');
 	const connections = useLoad(shop || alertsOn ? `${base}/connections` : null);
 	const search = useLoad(catalog ? `${base}/search-index` : null);
-	const settings = useLoad(catalog ? `${base}/settings` : null);
+	const settings = useLoad(catalog || wantsSettings(overview, SETUP) ? `${base}/settings` : null);
+	// the settings and lists the switched-on features need to be set, as steps with a button to their section
+	const setup = useSetupSteps({ overview, websiteId, open, settings: settings.answer }, SETUP);
 	const methods = useLoad(shop ? `${base}/lists/payment_methods` : null);
 	if (!overview?.ok) return {};
 	const O = TEXTS.overview;
-	/** @param {string} label @param {string} tab */
-	const go = (label, tab) => (
-		<Button size="sm" variant="secondary" onClick={() => open(tab)}>
+	/** The Settings section that holds a setting, for a button that opens it. @param {string} feature @param {string} name */
+	const sectionOf = (feature, name) => {
+		/** @type {import('@ss/ui/dashboard').FeatureSettings | undefined} */
+		const found = settings.answer?.ok
+			? settings.answer.data.features.find((/** @type {{ key: string }} */ item) => item.key === feature)
+			: undefined;
+		return found ? settingSectionOf(found, name, texts.settings.advanced) : feature;
+	};
+	/** @param {string} label @param {string} tab @param {string} [section] */
+	const go = (label, tab, section) => (
+		<Button size="sm" variant="secondary" onClick={() => (section ? open(tab, section) : open(tab))}>
 			{label}
 		</Button>
 	);
@@ -101,21 +124,26 @@ const useShopOverview = (overview, { websiteId, open }) => {
 				tone: 'warning',
 				title: O.payments.title,
 				effect: O.payments.effect,
-				action: go(O.payments.action, 'connections'),
+				action: go(O.payments.action, 'connections', 'connection-payments'),
 			});
 		steps.push({
 			key: 'payments',
 			label: O.payments.step,
+			why: O.payments.why,
+			actionLabel: O.payments.action,
 			done: payments.status === 'connected',
-			onSelect: () => open('connections'),
+			onSelect: () => open('connections', 'connection-payments'),
 		});
 	}
 	if (messages)
 		steps.push({
 			key: 'notifications',
 			label: O.notificationsStep,
+			why: O.notificationsWhy,
+			actionLabel: O.notificationsAction,
+			optional: true,
 			done: messages.status === 'connected',
-			onSelect: () => open('connections'),
+			onSelect: () => open('connections', 'connection-notifications'),
 		});
 	// the shop's currency, until the merchant sets it (decision 9: USD stays the default)
 	const currency = catalog ? settingOf(settings.answer, 'catalog', 'currency') : null;
@@ -127,17 +155,12 @@ const useShopOverview = (overview, { websiteId, open }) => {
 				tone: 'warning',
 				title: O.currency.title,
 				effect: fill(O.currency.effect, { currency: code }),
-				action: go(O.currency.action, 'settings'),
+				action: go(O.currency.action, 'settings', sectionOf('catalog', 'currency')),
 			});
-		steps.push({
-			key: 'currency',
-			label: O.currency.step,
-			done: currency.set,
-			detail: fill(O.currency.now, { currency: code }),
-			onSelect: () => open('settings'),
-		});
 	}
 	// the Atlas Search index, while the shop or Chat searches with Atlas (E14)
+	/** @type {NonNullable<import('@ss/ui/dashboard').OverviewMore['steps']>[number] | null} */
+	let searchStep = null;
 	/** @type {SearchIndex | null} */
 	const atlas = catalog && search.answer?.ok && search.answer.data?.search === 'atlas' ? search.answer.data : null;
 	if (atlas) {
@@ -158,15 +181,17 @@ const useShopOverview = (overview, { websiteId, open }) => {
 				],
 				action: docs,
 			});
-		steps.push({
+		searchStep = {
 			key: 'search',
 			label: fill(O.search.step, { index }),
+			why: O.search.why,
+			actionLabel: O.search.docs,
 			done: state !== null && !state.missing,
 			detail: !state
 				? O.search.unchecked
 				: say(state.missing ? O.search.missing : O.search.ready, { time: <LocalTime value={state.at} /> }),
 			href: '/docs#atlas-search',
-		});
+		};
 	}
 	// the public address of the images, once storage is connected (SEO audit G1)
 	const media =
@@ -179,15 +204,8 @@ const useShopOverview = (overview, { websiteId, open }) => {
 				tone: 'warning',
 				title: O.media.title,
 				effect: O.media.effect,
-				action: go(O.media.action, 'settings'),
+				action: go(O.media.action, 'settings', sectionOf('catalog', 'mediaBaseUrl')),
 			});
-		steps.push({
-			key: 'media',
-			label: O.media.step,
-			done: address !== '',
-			...(address ? { detail: address } : {}),
-			onSelect: () => open('settings'),
-		});
 	}
 	// someone to alert, and the admin page alerts link to (shop health P5-18, setup part)
 	if (alertsOn && settings.answer?.ok) {
@@ -201,7 +219,7 @@ const useShopOverview = (overview, { websiteId, open }) => {
 				tone: 'warning',
 				title: O.alerts.title,
 				effect: O.alerts.effect,
-				action: go(O.alerts.action, 'settings'),
+				action: go(O.alerts.action, 'settings', sectionOf('staff_alerts', 'recipients')),
 			});
 		if (!String(settingOf(settings.answer, 'staff_alerts', 'adminUrl')?.value ?? '').trim())
 			needs.push({
@@ -209,7 +227,7 @@ const useShopOverview = (overview, { websiteId, open }) => {
 				tone: 'warning',
 				title: O.adminUrl.title,
 				effect: O.adminUrl.effect,
-				action: go(O.adminUrl.action, 'settings'),
+				action: go(O.adminUrl.action, 'settings', sectionOf('staff_alerts', 'adminUrl')),
 			});
 	}
 	// a method paid by hand, offered, with nothing telling shoppers where to pay (no instructions, no account row with
@@ -228,11 +246,12 @@ const useShopOverview = (overview, { websiteId, open }) => {
 			tone: 'warning',
 			title: fill(O.bank.title, { methods: untold.map((/** @type {any} */ method) => method.name).join(', ') }),
 			effect: O.bank.effect,
-			action: go(O.bank.action, 'settings'),
+			action: go(O.bank.action, 'settings', 'checkout.payment-methods'),
 		});
 	return {
 		needs,
-		steps,
+		// the connections first, then what the features need set, then the search index
+		steps: [...steps, ...setup, ...(searchStep ? [searchStep] : [])],
 		numbers: (
 			<Stat
 				label={O.connectionsReady}

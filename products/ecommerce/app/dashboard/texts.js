@@ -17,9 +17,12 @@ export const TEXTS = dashboardTexts({
 			effect:
 				'Online payments, bank transfers through Payments, cash on delivery advances and refunds do not work until it is connected.',
 			step: 'Connect Payments (recommended)',
+			why: 'Online payments, bank transfers through Payments and refunds go through it.',
 			action: 'Connect',
 		},
-		notificationsStep: 'Connect Notifications for order messages to shoppers (optional)',
+		notificationsStep: 'Connect Notifications for order messages to shoppers',
+		notificationsWhy: 'Order messages and staff alerts cannot be sent until it is connected.',
+		notificationsAction: 'Connect',
 		currency: {
 			title: 'Set your currency',
 			effect:
@@ -37,6 +40,7 @@ export const TEXTS = dashboardTexts({
 			ready: 'Answered {time}',
 			missing: 'Missing, last try {time}',
 			unchecked: 'Checked by the first shop search: create it first.',
+			why: 'Until the index exists, searches in the shop and in Chat use basic search.',
 			docs: 'How to create it',
 		},
 		media: {

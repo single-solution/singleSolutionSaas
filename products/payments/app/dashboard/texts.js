@@ -12,6 +12,8 @@ export const TEXTS = dashboardTexts({
 		gatewaysHelp:
 			'Switched-on gateways with their keys connected, and manual payment methods payers see (a method paid first needs an account with details, or instructions).',
 		methodsStep: 'Finish your manual payment methods',
+		methodsWhy: 'Payers see a method only once it has an account with details, or instructions that say how to pay.',
+		methodsAction: 'Open methods',
 		noMethods: {
 			title: 'Payers do not see some of your manual payment methods yet',
 			action: 'Open Settings',

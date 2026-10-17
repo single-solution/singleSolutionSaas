@@ -16,10 +16,11 @@
 import { Fragment, useState } from 'react';
 import { Button, ButtonLink } from './Button.js';
 import { cx } from './cx.js';
-import { Card, EmptyState, PageHeader, STAT_GRID, SkeletonBlock, Stat, StatGrid, StatusBadge } from './display.js';
+import { Badge, Card, EmptyState, PageHeader, STAT_GRID, SkeletonBlock, Stat, StatGrid, StatusBadge } from './display.js';
 import { formatCredits, supportContact } from './format.js';
 import { Icon } from './icons.js';
 import { OVERVIEW_TEXTS } from './overview-texts.js';
+import { ListRow, RowList } from './rows.js';
 import { LocalTime, useDisplayLocale } from './time.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
@@ -32,8 +33,12 @@ import { LocalTime, useDisplayLocale } from './time.js';
 
 /**
  * One step of a setup checklist: done (ticked, struck through) or to do, with where to do it — a link (`href`, drawn
- * with the checklist's `linkAs`) or a button (`onSelect`) — and an optional detail line.
- * @typedef {{ key: string, label: ReactNode, done: boolean, detail?: ReactNode, href?: string, onSelect?: () => void }} SetupStep
+ * with the checklist's `linkAs`) or a button (`onSelect`) — and optional lines under it: `why` (one plain line on why it
+ * matters, shown while it is to do) and `detail` (the value now). With `actionLabel` the where is a button at the end of
+ * the row with those words; without it the label itself is the link or button. `optional` steps are listed but not
+ * counted in the progress.
+ * @typedef {{ key: string, label: ReactNode, done: boolean, why?: ReactNode, detail?: ReactNode, optional?: boolean,
+ *   actionLabel?: string, href?: string, onSelect?: () => void }} SetupStep
  */
 
 /**
@@ -123,14 +128,90 @@ export function NeedsList({ items, none }) {
 }
 
 /**
- * A setup checklist card: how many steps are done (a progress bar), then each step — ticked and struck through when
- * done, else a link or button to where it is done (or plain text when it has neither).
- * @param {{ title: ReactNode, progress: ReactNode, steps: SetupStep[], labels: { done: string, todo: string },
+ * One row of a setup checklist: the tick, the step (with its why, or the value now once done), and its button.
+ * @param {{ step: SetupStep, labels: SetupLabels, LinkTag: import('react').ElementType }} props
+ */
+function SetupRow({ step, labels, LinkTag }) {
+	const action = step.actionLabel && (step.href || step.onSelect);
+	const title = step.done ? (
+		<span className="text-muted line-through decoration-line-strong">{step.label}</span>
+	) : action ? (
+		step.label
+	) : step.href ? (
+		<LinkTag href={step.href} className="font-medium text-fg hover:text-primary hover:underline">
+			{step.label}
+		</LinkTag>
+	) : step.onSelect ? (
+		<button type="button" onClick={step.onSelect} className="text-left font-medium text-fg hover:text-primary hover:underline">
+			{step.label}
+		</button>
+	) : (
+		step.label
+	);
+	const words = step.done ? null : step.why;
+	const button = action
+		? step.done
+			? labels.review
+				? { variant: /** @type {const} */ ('ghost'), text: labels.review }
+				: null
+			: { variant: /** @type {const} */ ('secondary'), text: step.actionLabel }
+		: null;
+	return (
+		<ListRow
+			wrap
+			media={
+				<span
+					className={cx(
+						'flex size-5 shrink-0 items-center justify-center rounded-full',
+						step.done ? 'bg-success-soft text-on-success-soft' : 'border-[1.5px] border-dashed border-line-strong',
+					)}>
+					{step.done ? <Icon name="check" size={12} /> : null}
+					<span className="sr-only">{step.done ? labels.done : labels.todo}</span>
+				</span>
+			}
+			title={title}
+			{...(step.optional && labels.optional ? { status: <Badge tone="neutral">{labels.optional}</Badge> } : {})}
+			{...(words || step.detail
+				? {
+						meta: (
+							<>
+								{words}
+								{step.detail ? <span className={words ? 'mt-0.5 block' : 'block'}>{step.detail}</span> : null}
+							</>
+						),
+					}
+				: {})}
+			{...(button
+				? {
+						action: step.href ? (
+							<ButtonLink as={LinkTag} href={step.href} size="sm" variant={button.variant}>
+								{button.text}
+							</ButtonLink>
+						) : (
+							<Button size="sm" variant={button.variant} onClick={step.onSelect}>
+								{button.text}
+							</Button>
+						),
+					}
+				: {})}
+		/>
+	);
+}
+
+/** @typedef {{ done: string, todo: string, review?: string, optional?: string }} SetupLabels */
+
+/**
+ * A setup checklist card: how many steps are done (a progress bar), then each step as a row — ticked and struck through
+ * when done, else its why and a button to where it is done (or the label as a link or button, or plain text when it has
+ * neither). Optional steps do not count in the progress.
+ * @param {{ title: ReactNode, progress: ReactNode, steps: SetupStep[], labels: SetupLabels,
  *   linkAs?: import('react').ElementType, id?: string, className?: string }} props
- *   `progress`: the card's subtitle (e.g. `3 of 5 done`); `labels`: the screen-reader words of a step's state
+ *   `progress`: the card's subtitle (e.g. `3 of 5 done`); `labels`: the screen-reader words of a step's state, the
+ *   words of the button of a done step (`review`; none: it has no button) and of an optional step
  */
 export function SetupChecklist({ title, progress, steps, labels, linkAs, id, className }) {
-	const done = steps.filter((step) => step.done).length;
+	const counted = steps.filter((step) => !step.optional);
+	const done = counted.filter((step) => step.done).length;
 	const LinkTag = linkAs ?? 'a';
 	const accessibleTitle = typeof title === 'string' ? title : undefined;
 	return (
@@ -140,46 +221,18 @@ export function SetupChecklist({ title, progress, steps, labels, linkAs, id, cla
 				role="progressbar"
 				aria-label={accessibleTitle}
 				aria-valuemin={0}
-				aria-valuemax={steps.length}
+				aria-valuemax={counted.length}
 				aria-valuenow={done}>
 				<div
 					className="h-full rounded-full bg-primary transition-[width] duration-(--ss-motion-slow) ease-ss"
-					style={{ width: `${steps.length === 0 ? 100 : Math.round((done / steps.length) * 100)}%` }}
+					style={{ width: `${counted.length === 0 ? 100 : Math.round((done / counted.length) * 100)}%` }}
 				/>
 			</div>
-			<ul className="space-y-2.5">
+			<RowList>
 				{steps.map((step) => (
-					<li key={step.key} className="flex items-start gap-3 text-sm">
-						<span
-							className={cx(
-								'mt-px flex size-5 shrink-0 items-center justify-center rounded-full',
-								step.done ? 'bg-success-soft text-on-success-soft' : 'border-[1.5px] border-dashed border-line-strong',
-							)}>
-							{step.done ? <Icon name="check" size={12} /> : null}
-							<span className="sr-only">{step.done ? labels.done : labels.todo}</span>
-						</span>
-						<span className="min-w-0">
-							{step.done ? (
-								<span className="text-muted line-through decoration-line-strong">{step.label}</span>
-							) : step.href ? (
-								<LinkTag href={step.href} className="font-medium text-fg hover:text-primary hover:underline">
-									{step.label}
-								</LinkTag>
-							) : step.onSelect ? (
-								<button
-									type="button"
-									onClick={step.onSelect}
-									className="text-left font-medium text-fg hover:text-primary hover:underline">
-									{step.label}
-								</button>
-							) : (
-								<span className="font-medium text-fg">{step.label}</span>
-							)}
-							{step.detail ? <span className="block text-xs text-muted">{step.detail}</span> : null}
-						</span>
-					</li>
+					<SetupRow key={step.key} step={step} labels={labels} LinkTag={LinkTag} />
 				))}
-			</ul>
+			</RowList>
 		</Card>
 	);
 }
@@ -252,7 +305,10 @@ export function RecentChanges({ items, intro, limit }) {
  * @property {ReadonlyArray<{ who: { name: string }, detail: string, at: string }>} recentChanges
  */
 
-/** The dashboard sections an Overview's buttons open. @typedef {'features' | 'settings' | 'connections' | 'developers'} OverviewTab */
+/**
+ * The dashboard sections an Overview's buttons open (and, for a deeper link, the section of its inner sidebar).
+ * @typedef {'features' | 'settings' | 'connections' | 'developers'} OverviewTab
+ */
 
 /** @param {Need[]} needs red items first, each tone in its own order */
 const urgentFirst = (needs) => [
@@ -271,11 +327,11 @@ const urgentFirst = (needs) => [
  * local time.
  * @param {{ data: DashboardOverview, who: { kind: 'merchant' | 'admin', name: string }, product: string,
  *   support: { channels: import('./format.js').SupportChannel[] }, portal: string, namesOf: (keys: string[], max?: number) => string,
- *   open: (tab: OverviewTab) => void, recheck: () => Promise<unknown>, needs?: Need[], steps?: SetupStep[],
+ *   open: (tab: OverviewTab, section?: string) => void, recheck: () => Promise<unknown>, needs?: Need[], steps?: SetupStep[],
  *   numbers?: ReactNode, children?: ReactNode }} props
  *   `product`: the product's name; `support`: the support contact (merchants are told to contact it for credits; the
  *   button opens its first channel);
- *   `portal`: the Portal's address; `namesOf`: feature names of keys, at most `max`; `open`: shows a dashboard section;
+ *   `portal`: the Portal's address; `namesOf`: feature names of keys, at most `max`; `open`: shows a dashboard section, at a section of its inner sidebar when given;
  *   `recheck`: reads business.json again and reloads the Overview
  */
 export function ProductOverview({
@@ -294,6 +350,7 @@ export function ProductOverview({
 }) {
 	const T = OVERVIEW_TEXTS;
 	const N = T.needs;
+	const S = T.setup;
 	const domain = data.website.domain;
 	const on = data.featuresOn;
 	const status = data.status.status;
@@ -397,30 +454,52 @@ export function ProductOverview({
 
 	/** @type {SetupStep[]} */
 	const checklist = [
-		{ key: 'features', label: T.setup.features, done: on.length > 0, onSelect: () => open('features') },
+		{
+			key: 'features',
+			label: S.features,
+			why: fillText(S.featuresWhy, { domain }),
+			actionLabel: S.featuresAction,
+			done: on.length > 0,
+			onSelect: () => open('features'),
+		},
 		...data.checklist.connections.map((connection) => ({
 			key: `connection-${connection.name}`,
-			label: fillText(T.setup.connection, { label: connection.label }),
+			label: fillText(S.connection, { label: connection.label }),
+			why:
+				connection.status === 'test_failed' && connection.message
+					? connection.message
+					: fillText(S.connectionWhy, { features: featureList(connection.neededBy) }),
+			actionLabel: connection.status === 'test_failed' ? S.connectionFix : S.connectionAction,
 			done: connection.status === 'connected',
-			onSelect: () => open('connections'),
+			onSelect: () => open('connections', `connection-${connection.name}`),
 		})),
 		...steps,
 		...(widget
 			? [
 					{
 						key: 'widget',
-						label: T.setup.widget,
+						label: S.widget,
+						why: S.widgetWhy,
+						actionLabel: S.widgetAction,
 						done: widget.installed,
 						...(widget.lastSeenAt
-							? { detail: fillText(T.setup.widgetSeen, { time: <LocalTime value={widget.lastSeenAt} /> }) }
+							? { detail: fillText(S.widgetSeen, { time: <LocalTime value={widget.lastSeenAt} /> }) }
 							: {}),
 						onSelect: () => open('developers'),
 					},
 				]
 			: []),
-		{ key: 'business', label: T.setup.business, done: business.found },
+		{
+			key: 'business',
+			label: S.business,
+			why: S.businessWhy,
+			done: business.found,
+			// once found there is nothing to review: the button only checks again while it is missing
+			...(business.found ? {} : { actionLabel: S.businessAction, onSelect: recheck }),
+		},
 	];
-	const done = checklist.filter((step) => step.done).length;
+	const counted = checklist.filter((step) => !step.optional);
+	const done = counted.filter((step) => step.done).length;
 
 	return (
 		<div className="space-y-5">
@@ -455,10 +534,10 @@ export function ProductOverview({
 					</div>
 					<div className="min-w-0 space-y-5">
 						<SetupChecklist
-							title={T.setup.title}
-							progress={fillText(T.setup.progress, { done, total: checklist.length })}
+							title={S.title}
+							progress={fillText(S.progress, { done, total: counted.length })}
 							steps={checklist}
-							labels={{ done: T.setup.done, todo: T.setup.todo }}
+							labels={{ done: S.done, todo: S.todo, review: S.review, optional: S.optional }}
 						/>
 						<RecentChanges items={data.recentChanges} limit={4} />
 					</div>

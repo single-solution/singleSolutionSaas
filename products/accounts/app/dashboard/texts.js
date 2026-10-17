@@ -11,6 +11,8 @@ export const TEXTS = dashboardTexts({
 		fields: 'Custom fields',
 		fieldsNone: 'Connect the database first',
 		fieldsStep: 'Add a custom field',
+		fieldsWhy: 'Sign-up and My account ask for nothing more until a field is added.',
+		fieldsAction: 'Add a field',
 		noFields: {
 			title: 'Custom fields is on, but no field is set up yet',
 			effect: 'It is charged, but sign-up and My account ask for nothing more until a field is added in Settings.',

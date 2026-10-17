@@ -170,7 +170,14 @@ describe('a product dashboard Overview', () => {
 		// setup: a feature on is done; the connections, the product's step, the widget and business.json are to do
 		expect(text).toContain('1 of 7 done');
 		expect(text).toContain('Add a note form');
-		click(byText(container, 'Put the widget on your pages', 'button'));
+		// each step says why in one plain line and has its own button; a connection opens its own view
+		expect(text).toContain('Needed by notes.');
+		expect(text).toContain('Visitors see nothing until the widget script is on your pages.');
+		const row = /** @type {HTMLElement} */ (byText(container, 'Connect Merchant database', 'span').closest('li'));
+		click(byText(row, 'Connect', 'button'));
+		expect(open).toHaveBeenLastCalledWith('connections', 'connection-database');
+		const widgetRow = /** @type {HTMLElement} */ (byText(container, 'Put the widget on your pages', 'span').closest('li'));
+		click(byText(widgetRow, 'Get the script', 'button'));
 		expect(open).toHaveBeenLastCalledWith('developers');
 		expect(text).toContain('No changes yet.');
 	});
@@ -226,7 +233,15 @@ describe('a product dashboard Overview', () => {
 		expect(text).toContain('None yet');
 		expect(text).toContain('1 of 2 done');
 		click(byText(container, 'See features', 'button'));
-		click(byText(container, 'Switch on a feature', 'button'));
+		expect(text).toContain('Nothing shows on shop.example.com, and nothing is charged, until a feature is on.');
+		expect(byText(container, 'Switch on a feature', 'span').closest('li')?.querySelectorAll('button')).toHaveLength(1);
+		click(
+			byText(
+				/** @type {HTMLElement} */ (byText(container, 'Switch on a feature', 'span').closest('li')),
+				'See features',
+				'button',
+			),
+		);
 		expect(open.mock.calls).toEqual([['features'], ['features']]);
 	});
 
@@ -297,6 +312,59 @@ describe('the shared pieces', () => {
 			null,
 			'100%',
 		]);
+	});
+
+	it('a setup step with a button says why, an optional one is not counted, and a done one can be reviewed', () => {
+		const select = vi.fn();
+		const { container } = render(
+			<SetupChecklist
+				title="Setup"
+				progress="1 of 2 done"
+				labels={{ done: 'Done', todo: 'To do', review: 'Review', optional: 'Optional' }}
+				steps={[
+					{
+						key: 'a',
+						label: 'Set the address',
+						why: 'Links need it.',
+						actionLabel: 'Set it',
+						done: false,
+						onSelect: select,
+					},
+					{
+						key: 'b',
+						label: 'Pick a sign-in',
+						why: 'Hidden once done.',
+						detail: 'Now email',
+						actionLabel: 'Set it',
+						done: true,
+						onSelect: select,
+					},
+					{
+						key: 'c',
+						label: 'Allow guests',
+						why: 'If you want them.',
+						actionLabel: 'Choose',
+						done: false,
+						optional: true,
+						onSelect: select,
+					},
+				]}
+			/>,
+		);
+		const text = container.textContent ?? '';
+		expect(text).toContain('Links need it.');
+		expect(text).not.toContain('Hidden once done.');
+		expect(text).toContain('Now email');
+		expect(byText(container, 'Optional', 'span')).toBeTruthy();
+		// the progress counts the two required steps only
+		const bar = allByRole(container, 'progressbar')[0];
+		expect([bar?.getAttribute('aria-valuemax'), bar?.getAttribute('aria-valuenow')]).toEqual(['2', '1']);
+		click(byText(container, 'Set it', 'button'));
+		click(byText(container, 'Review', 'button'));
+		click(byText(container, 'Choose', 'button'));
+		expect(select).toHaveBeenCalledTimes(3);
+		// the label of a step with a button is plain text, not a second link
+		expect(byText(container, 'Set the address', 'span').closest('button')).toBeNull();
 	});
 
 	it('Needs you shows its calm line when nothing needs the viewer; the timeline its empty state', () => {

@@ -9,11 +9,10 @@ import { dashboardTexts } from '@ss/ui';
 export const TEXTS = dashboardTexts({
 	title: 'Chat',
 	overview: {
-		bookingStep: 'Set the booking URL',
 		noBooking: {
-			title: 'The Book-a-slot tool is on, but no booking URL is set',
-			effect: 'It is charged, but the AI cannot offer or book slots until the URL is set in Settings → Tools.',
-			action: 'Set the URL',
+			title: 'The Book-a-slot tool is on, but no booking address is set',
+			effect: 'It is charged, but the AI cannot offer or book slots until the address is set in Settings → Tools.',
+			action: 'Set the address',
 		},
 	},
 	features: {

@@ -248,7 +248,8 @@ const hashOf = (id) => `#${encodeURIComponent(id)}`;
 /**
  * The section shown, kept in the address hash (`#security`): the first section until the page is in the browser, then
  * the hash's. Choosing a section adds a history entry, so a link opens that section and Back returns to the one before.
- * A hash that names no section leaves the choice alone; no hash at all goes back to the first.
+ * A hash that names no section leaves the choice alone; no hash at all goes back to the first. A hash that names a
+ * feature with several views (`catalog`) opens its first view (`catalog.basics`), so a link needs no more than the name.
  * @param {string[]} ids
  * @param {string} [initial]
  * @returns {[string, (id: string) => void]}
@@ -259,7 +260,8 @@ export function useHashSection(ids, initial) {
 	useEffect(() => {
 		const read = () => {
 			const hash = decodeURIComponent(window.location.hash.replace(/^#/, ''));
-			if (ids.includes(hash)) setActive(hash);
+			const named = ids.includes(hash) ? hash : ids.find((id) => hash !== '' && id.startsWith(`${hash}.`));
+			if (named) setActive(named);
 			else if (hash === '') setActive(first);
 		};
 		read();

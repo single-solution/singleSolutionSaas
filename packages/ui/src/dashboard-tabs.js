@@ -47,9 +47,11 @@ import {
 /** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
 /**
  * What every tab is given: the picked website (null on the Owner's global tabs) and its domain, the viewer, the
- * support contact, the Portal's address, and `open`, which shows another section (the Overview's buttons).
+ * support contact, the Portal's address, and `open`, which shows another section (the Overview's buttons), at the
+ * section of its inner sidebar when one is given (`open('settings', 'catalog.page-addresses')`).
  * @typedef {{ websiteId: string | null, domain: string, who: Who,
- *   support: { channels: import('./format.js').SupportChannel[] }, portal: string, open: (tab: string) => void }} TabProps
+ *   support: { channels: import('./format.js').SupportChannel[] }, portal: string,
+ *   open: (tab: string, section?: string) => void }} TabProps
  */
 /** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
 /**
