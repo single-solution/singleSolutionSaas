@@ -537,6 +537,34 @@ export function PillTabs({ tabs, active, onSelect, label, className, idPrefix = 
 	);
 }
 
+/**
+ * The look of {@link PillTabs} for links (a view of the same list by day, by merchant …): a segmented strip whose
+ * current link is raised. `linkAs` renders router links.
+ * @param {{ items: Array<{ href: string, label: ReactNode, current?: boolean }>, label: string,
+ *   linkAs?: import('react').ElementType, className?: string }} props
+ */
+export function LinkTabs({ items, label, linkAs, className }) {
+	const LinkTag = linkAs ?? 'a';
+	return (
+		<nav
+			aria-label={label}
+			className={cx('ss-scroll flex w-fit max-w-full min-w-0 gap-0.5 rounded-control bg-surface-2 p-0.5 ring-1 ring-line-soft ring-inset', className)}>
+			{items.map((item) => (
+				<LinkTag
+					key={item.href}
+					href={item.href}
+					aria-current={item.current ? 'page' : undefined}
+					className={cx(
+						'ss-motion inline-flex h-7 shrink-0 items-center rounded-md px-3 text-label font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+						item.current ? 'bg-surface text-fg shadow-card ring-1 ring-line-soft' : 'text-muted hover:text-fg',
+					)}>
+					{item.label}
+				</LinkTag>
+			))}
+		</nav>
+	);
+}
+
 /** A list with more items than this is picked from a select, not a strip of tabs. */
 const SWITCHER_TABS_UP_TO = 8;
 

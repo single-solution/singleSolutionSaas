@@ -67,6 +67,7 @@ export {
 	SectionNav,
 	SectionLayout,
 	PillTabs,
+	LinkTabs,
 	ViewTitle,
 	Disclosure,
 	ItemSwitcher,

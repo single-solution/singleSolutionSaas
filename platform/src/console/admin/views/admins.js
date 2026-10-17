@@ -28,6 +28,7 @@ import {
 	RadioGroup,
 	PageHeader,
 	Select,
+	Toolbar,
 	describeProblem,
 	fieldErrors,
 	useToast,
@@ -71,12 +72,14 @@ function AdminActivity({ adminId }) {
 	}, [adminId]);
 	return (
 		<>
-			<div className="flex flex-wrap items-center justify-between gap-3">
-				<p className="min-w-0 text-sm text-muted">{MORE.adminActivityIntro}</p>
-				<Button variant="secondary" size="sm" onClick={() => nav.go(adminRoutes.activity({ adminId }))}>
-					{MORE.openInActivity}
-				</Button>
-			</div>
+			<Toolbar
+				note={MORE.adminActivityIntro}
+				end={
+					<Button variant="secondary" size="sm" onClick={() => nav.go(adminRoutes.activity({ adminId }))}>
+						{MORE.openInActivity}
+					</Button>
+				}
+			/>
 			{result && !result.ok ? <Callout tone="danger">{describeProblem(result.problem)}</Callout> : null}
 			<ActivityTable
 				items={result?.ok ? (result.data?.items ?? []) : []}

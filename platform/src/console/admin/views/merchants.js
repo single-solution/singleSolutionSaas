@@ -31,6 +31,7 @@ import {
 	PageHeader,
 	Select,
 	TextArea,
+	Toolbar,
 	TypedConfirmDialog,
 	describeProblem,
 	fieldErrors,
@@ -295,8 +296,8 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 							</Button>
 						) : null}
 						{canBulk && selected.size > 0 ? (
-							<div className="flex flex-wrap items-center gap-2 rounded-xl bg-primary-soft p-3 text-sm text-on-primary-soft">
-								<span className="font-semibold">{ADMIN.bulk.selected(selected.size)}</span>
+							<Toolbar variant="selection">
+								<span className="font-medium">{ADMIN.bulk.selected(selected.size)}</span>
 								{canSuspend ? (
 									<>
 										<Button size="sm" variant="secondary" onClick={() => setBulk('suspend')}>
@@ -312,7 +313,7 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 										{ADMIN.bulk.resend}
 									</Button>
 								) : null}
-							</div>
+							</Toolbar>
 						) : null}
 					</>
 				}>
@@ -583,17 +584,19 @@ function MerchantDetail({ detail, admin, back }) {
 						label: `${ADMIN.websitesTitle} · ${rows.length}`,
 						content: (
 							<>
-								<div className="flex flex-wrap items-center justify-between gap-3">
-									<p className="min-w-0 text-sm text-muted">{ADMIN.websitesIntro}</p>
-									{can('websites.write') && rows.length > 0 ? (
-										<Button
-											variant="secondary"
-											onClick={() => openDialog('addWebsite')}
-											icon={<Icon name="plus" size={14} />}>
-											{WEBSITE.addWebsite}
-										</Button>
-									) : null}
-								</div>
+								<Toolbar
+									note={ADMIN.websitesIntro}
+									end={
+										can('websites.write') && rows.length > 0 ? (
+											<Button
+												variant="secondary"
+												onClick={() => openDialog('addWebsite')}
+												icon={<Icon name="plus" size={14} />}>
+												{WEBSITE.addWebsite}
+											</Button>
+										) : null
+									}
+								/>
 								{rows.length === 0 ? (
 									<EmptyState
 										compact
@@ -657,11 +660,13 @@ function MerchantDetail({ detail, admin, back }) {
 						label: ADMIN.activityTitle,
 						content: (
 							<>
-								<div className="flex flex-wrap items-center justify-end gap-3">
-									<Button variant="secondary" size="sm" onClick={() => nav.go(adminRoutes.activity({ merchantId }))}>
-										{MORE.openInActivity}
-									</Button>
-								</div>
+								<Toolbar
+									end={
+										<Button variant="secondary" size="sm" onClick={() => nav.go(adminRoutes.activity({ merchantId }))}>
+											{MORE.openInActivity}
+										</Button>
+									}
+								/>
 								{activity.problem ? <Callout tone="danger">{describeProblem(activity.problem)}</Callout> : null}
 								<ActivityTable
 									items={activity.items}

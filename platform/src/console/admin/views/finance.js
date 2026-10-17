@@ -19,13 +19,14 @@ import {
 	FormError,
 	Icon,
 	Input,
+	LinkTabs,
 	PageHeader,
 	SectionLayout,
 	Select,
 	Stat,
 	StatGrid,
 	Table,
-	cx,
+	Toolbar,
 	describeProblem,
 	fieldErrors,
 	formatCredits,
@@ -351,7 +352,7 @@ export function FinanceView(props) {
 						...(attention.length > 0 ? { badge: <Badge tone="warning">{attention.length}</Badge> } : {}),
 						content: (
 							<>
-								<p className="text-sm text-muted">{S.attention.help}</p>
+								<Toolbar note={S.attention.help} />
 								<AttentionTable rows={attention} onAdd={canAdd ? setAdding : null} />
 							</>
 						),
@@ -426,25 +427,20 @@ export function FinanceView(props) {
 						icon: 'trendingUp',
 						content: (
 							<>
-								<div className="flex flex-wrap items-center justify-between gap-3">
-									<p className="min-w-0 text-sm text-muted">{S.charges.help}</p>
-									<nav className="flex flex-wrap gap-1 rounded-xl bg-surface p-1" aria-label={S.charges.title}>
-										{
-											/** @type {const} */ (['day', 'merchant', 'product']).map((by) => (
-												<Link
-													key={by}
-													href={`${adminRoutes.finance({ ...filter, by })}#billing-charges`}
-													aria-current={filter.by === by ? 'page' : undefined}
-													className={cx(
-														'rounded-xl px-3 py-1.5 text-sm font-semibold',
-														filter.by === by ? 'bg-primary-soft text-on-primary-soft' : 'text-muted hover:text-fg',
-													)}>
-													{BILLING.chargesBy[by]}
-												</Link>
-											))
-										}
-									</nav>
-								</div>
+								<Toolbar
+									note={S.charges.help}
+									end={
+										<LinkTabs
+											label={S.charges.title}
+											linkAs={Link}
+											items={/** @type {const} */ (['day', 'merchant', 'product']).map((by) => ({
+												href: `${adminRoutes.finance({ ...filter, by })}#billing-charges`,
+												label: BILLING.chargesBy[by],
+												current: filter.by === by,
+											}))}
+										/>
+									}
+								/>
 								{isEmptySeries(dayBars) ? null : (
 									<Card title={MORE.chargesChart} subtitle={range}>
 										<BarChart label={MORE.chargesChart} data={dayBars} format={formatChartCredits} height={120} />

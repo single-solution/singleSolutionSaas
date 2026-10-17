@@ -31,8 +31,10 @@ import {
 	IconBadge,
 	Input,
 	KeyValueList,
+	ListRow,
 	LocalTime,
 	PageHeader,
+	RowList,
 	SectionLayout,
 	SegmentedControl,
 	Section,
@@ -213,7 +215,7 @@ function Part({ title, children }) {
 function Settings({ settings }) {
 	if (settings.length === 0) return <p className="text-xs text-muted">{SETUP.noSettings}</p>;
 	return (
-		<dl className="divide-y divide-line-soft rounded-xl bg-surface-2/60">
+		<dl className="divide-y divide-line-soft rounded-card border border-line-soft">
 			{settings.map((setting) => (
 				<div key={setting.key} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-3 py-2">
 					<dt className="min-w-0 text-label text-fg">{setting.title}</dt>
@@ -489,39 +491,40 @@ function Recommendations({ sheet, actions }) {
 					<p className="text-sm text-fg">{off.length === 0 ? SETUP.allRecommendedOn : SETUP.recommendedOn(onCount)}</p>
 					{off.length > 0 ? (
 						<Part title={SETUP.recommendedOff}>
-							<ul className="space-y-2">
+							<RowList>
 								{off.map(({ product, entry }) => {
 									const title = titleOf(product, entry.feature);
 									const needed = neededOff(product, entry.feature);
 									const id = `${product.productId}:${entry.feature}`;
 									return (
-										<li
+										<ListRow
 											key={id}
-											className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl bg-surface-2/60 px-4 py-3">
-											<span className="min-w-0 space-y-0.5">
-												<span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-fg">
-													{title}
-													<Badge>{product.name}</Badge>
-												</span>
-												<span className="block text-xs text-muted">{entry.why}</span>
-												{needed.length > 0 ? (
-													<span className="block text-xs text-muted">{SETUP.alsoSwitches(needed.join(', '))}</span>
-												) : null}
-											</span>
-											{actions?.switchOn ? (
-												<Button
-													size="sm"
-													aria-label={SETUP.switchOnLabel(title, product.name)}
-													loading={actions.switching === id}
-													disabled={actions.switching !== null && actions.switching !== id}
-													onClick={() => actions.switchOn?.(product, entry.feature)}>
-													{SETUP.switchOn}
-												</Button>
-											) : null}
-										</li>
+											title={title}
+											status={<Badge>{product.name}</Badge>}
+											meta={
+												<>
+													<span className="block">{entry.why}</span>
+													{needed.length > 0 ? (
+														<span className="block">{SETUP.alsoSwitches(needed.join(', '))}</span>
+													) : null}
+												</>
+											}
+											action={
+												actions?.switchOn ? (
+													<Button
+														size="sm"
+														aria-label={SETUP.switchOnLabel(title, product.name)}
+														loading={actions.switching === id}
+														disabled={actions.switching !== null && actions.switching !== id}
+														onClick={() => actions.switchOn?.(product, entry.feature)}>
+														{SETUP.switchOn}
+													</Button>
+												) : null
+											}
+										/>
 									);
 								})}
-							</ul>
+							</RowList>
 							{actions ? (
 								<p className="text-xs text-muted">{actions.switchOn ? SETUP.billedNote : SETUP.recommendedOffAsk}</p>
 							) : null}
@@ -911,21 +914,21 @@ function ShareLinks({ manage, initial }) {
 			}>
 			{problem ? <Callout tone="danger">{describeProblem(problem)}</Callout> : null}
 			{links.length === 0 ? (
-				<p className="rounded-xl bg-surface-2/60 px-4 py-3 text-sm text-muted">{SETUP.noLinks}</p>
+				<EmptyState compact icon="link" title={SETUP.noLinks} />
 			) : (
-				<ul className="space-y-2" aria-label={SETUP.linksTitle}>
+				<RowList label={SETUP.linksTitle}>
 					{links.map((link) => (
-						<li
+						<ListRow
 							key={link.linkId}
-							className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl bg-surface-2/60 px-4 py-3">
-							<span className="min-w-0 space-y-1">
-								<span className="flex flex-wrap items-center gap-2 text-sm text-fg">
-									<StatusBadge status={link.status} label={SETUP.linkStatus[link.status]} />
-									<span>
-										{SETUP.expires} <LocalTime value={link.expiresAt} />
-									</span>
-								</span>
-								<span className="block text-xs text-muted">
+							icon="link"
+							title={
+								<>
+									{SETUP.expires} <LocalTime value={link.expiresAt} />
+								</>
+							}
+							status={<StatusBadge status={link.status} label={SETUP.linkStatus[link.status]} />}
+							meta={
+								<>
 									{SETUP.createdBy[link.createdBy]} · {SETUP.shows(link.values, link.install)} ·{' '}
 									{SETUP.opens(link.opens)}
 									{link.openedAt ? (
@@ -934,16 +937,18 @@ function ShareLinks({ manage, initial }) {
 											· {SETUP.lastOpened} <LocalTime value={link.openedAt} />
 										</>
 									) : null}
-								</span>
-							</span>
-							{link.status === 'active' ? (
-								<Button variant="secondary" size="sm" loading={busy === link.linkId} onClick={() => void revoke(link)}>
-									{SETUP.revoke}
-								</Button>
-							) : null}
-						</li>
+								</>
+							}
+							action={
+								link.status === 'active' ? (
+									<Button variant="secondary" size="sm" loading={busy === link.linkId} onClick={() => void revoke(link)}>
+										{SETUP.revoke}
+									</Button>
+								) : null
+							}
+						/>
 					))}
-				</ul>
+				</RowList>
 			)}
 			{creating ? (
 				<CreateLinkDialog
