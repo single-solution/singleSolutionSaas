@@ -202,8 +202,8 @@
 		},
 		"Connection": {
 			"type": "object",
-			"description": "A connection as screens see it: secrets never come back.",
-			"required": ["name", "label", "kind", "neededBy", "set", "state", "message", "testedAt"],
+			"description": "A connection as screens see it: secrets never come back. The database, the storage and the links to other products are the Portal's (managed): they are entered or made there, once for the website.",
+			"required": ["name", "label", "kind", "neededBy", "managed", "set", "state", "message", "testedAt"],
 			"additionalProperties": false,
 			"properties": {
 				"name": {
@@ -214,7 +214,11 @@
 				},
 				"kind": {
 					"type": "string",
-					"enum": ["database", "storage", "secret", "token"]
+					"enum": ["database", "storage", "secret", "link"]
+				},
+				"managed": {
+					"type": "boolean",
+					"description": "The Portal owns it (the database, the storage and the links): it cannot be saved or removed here, only tested."
 				},
 				"neededBy": {
 					"type": "array",
@@ -885,7 +889,7 @@
 		}
 	},
 	"GET /v1/connections": {
-		"summary": "Connections (state and last 4 characters only)",
+		"summary": "Connections (whether set, and how the last test went; never a value)",
 		"response": {
 			"type": "object",
 			"required": ["connections"],
@@ -901,7 +905,7 @@
 		}
 	},
 	"PUT /v1/connections/:name": {
-		"summary": "Save a connection ({ value }), tested live",
+		"summary": "Save a provider key ({ value }), tested live. The database, the storage and the links are the Portal's: 409 managed_by_portal",
 		"body": {
 			"type": "object",
 			"required": ["value"],
@@ -917,7 +921,7 @@
 		}
 	},
 	"DELETE /v1/connections/:name": {
-		"summary": "Remove a connection",
+		"summary": "Remove a provider key. The database, the storage and the links are the Portal's: 409 managed_by_portal",
 		"status": 204
 	},
 	"POST /v1/connections/:name/test": {

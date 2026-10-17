@@ -40,7 +40,7 @@ export const BLUEPRINT_UNREACHABLE_REASONS = Object.freeze(
 export const BUILD_TEXT_MAX = 1000;
 
 /** Connection kinds and states (as the kit keeps them). */
-const CONNECTION_KINDS = Object.freeze(['database', 'storage', 'secret', 'token']);
+const CONNECTION_KINDS = Object.freeze(['database', 'storage', 'secret', 'link']);
 const CONNECTION_STATES = Object.freeze(['connected', 'not_connected', 'test_failed']);
 
 const text = (/** @type {number} */ max) => ({ type: 'string', maxLength: max });

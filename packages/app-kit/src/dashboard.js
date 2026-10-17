@@ -457,6 +457,10 @@ export const createDashboard = (kit) => {
 			auth: 'dashboard',
 			handler: async (ctx) => {
 				const result = await kit.connections.test({ websiteId: website(ctx), name: ctx.params.name });
+				if (result.ok && result.tested) {
+					const tested = result.tested;
+					ctx.after(() => kit.portalConnections.reportTest(website(ctx), tested.name, tested));
+				}
 				return result.ok ? result.connection : result.problem;
 			},
 		}),

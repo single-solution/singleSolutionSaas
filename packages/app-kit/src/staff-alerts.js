@@ -156,7 +156,7 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 	/** Per instance: when the saved messages of a website were last looked for. @type {Map<string, number>} */
 	const lookedAt = new Map();
 	/** A product without a Notifications token connection never sends an alert, so it never looks for saved ones. */
-	const sends = Object.values(connections.definitions).some((def) => def.kind === 'token' && def.productId === 'notifications');
+	const sends = connections.declaresLink('notifications');
 
 	/**
 	 * Send one message through Notifications (pasted token), required, with its own Idempotency-Key.
@@ -225,7 +225,10 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 		const { team } = await website.document(websiteId);
 		const phoneChannel = team.phoneChannel === 'whatsapp' ? 'whatsapp' : 'sms';
 		const push = team.staffPush === true;
-		const listed = team.recipients.flatMap((person) => [person.email, person.phone]).filter(Boolean).slice(0, RECIPIENTS_CAP);
+		const listed = team.recipients
+			.flatMap((person) => [person.email, person.phone])
+			.filter(Boolean)
+			.slice(0, RECIPIENTS_CAP);
 		const chosen = typeof values.staffPermission === 'string' ? values.staffPermission : '';
 		const permission = chosen === ALL_STAFF ? allStaff : chosen;
 		const staff =

@@ -138,25 +138,24 @@ describe('a stolen server token alone (403 needs_signed_in_staff)', () => {
 	});
 });
 
-describe('every kind of connection: database, storage, provider keys and pasted product tokens', () => {
+describe('every kind of connection: database, storage, provider keys and links', () => {
 	const CONNECTION_KINDS = {
 		ai: { label: 'AI provider key', kind: /** @type {const} */ ('secret'), neededBy: ['notes'] },
-		files: { label: 'Files', kind: /** @type {const} */ ('storage'), neededBy: ['notes'] },
-		payments: { label: 'Payments token', kind: /** @type {const} */ ('token'), productId: 'payments', neededBy: [] },
+		storage: { label: 'Files', kind: /** @type {const} */ ('storage'), neededBy: ['notes'] },
 	};
 	/** A value of each kind (the shapes the connections take; none of them has to work: the call is refused first). */
 	const VALUES = {
 		database: 'mongodb://attacker.example.com/shop',
 		ai: 'sk-attacker-9999',
-		files: {
+		storage: {
 			endpoint: 'https://attacker.example.com',
 			region: 'auto',
 			bucket: 'x',
 			accessKeyId: 'AKIA',
 			secretAccessKey: 'attacker',
 		},
-		payments: 'a.b.c',
-		accounts: 'a.b.c',
+		link_accounts: 'a.b.c',
+		link_notifications: 'a.b.c',
 	};
 
 	it('a bare server token cannot save, remove or test any of them: 403, and what is saved stays as it was', async () => {
@@ -168,7 +167,7 @@ describe('every kind of connection: database, storage, provider keys and pasted 
 		expect((await env.dash(cookie, 'PUT', `${dashboard}/ai`, { value: 'sk-owner-1111' })).status).toBe(200);
 		const before = await (await env.dash(cookie, 'GET', dashboard)).json();
 		const names = before.connections.map((/** @type {{ name: string }} */ c) => c.name);
-		expect(names).toEqual(expect.arrayContaining(['database', 'ai', 'files', 'payments', 'accounts']));
+		expect(names).toEqual(expect.arrayContaining(['database', 'ai', 'storage', 'link_accounts', 'link_notifications']));
 		for (const name of names) {
 			for (const [method, path, body] of /** @type {Array<[string, string, unknown]>} */ ([
 				['PUT', `/v1/connections/${name}`, { value: VALUES[/** @type {keyof typeof VALUES} */ (name)] ?? 'x' }],
@@ -211,6 +210,28 @@ describe('every kind of connection: database, storage, provider keys and pasted 
 		});
 		expect(manager.status).toBe(200);
 		expect(await env.product.connections.value(env.websiteId, 'ai')).toBe('sk-staff-2222');
+		// not even the Owner's sign-in changes what the Portal owns: the database, the storage and the links are 409
+		const owner = { permissions: ['*'] };
+		for (const name of ['database', 'storage', 'link_accounts', 'link_notifications']) {
+			for (const [method, body] of /** @type {Array<[string, unknown]>} */ ([
+				['PUT', { value: VALUES[/** @type {keyof typeof VALUES} */ (name)] }],
+				['DELETE', undefined],
+			])) {
+				const refused = await env.call(method, `/v1/connections/${name}`, {
+					token: env.server.token,
+					staff: owner,
+					...(body === undefined ? {} : { body }),
+				});
+				expect([method, name, refused.status, (await refused.json()).type.split('/').pop()]).toEqual([
+					method,
+					name,
+					409,
+					'managed_by_portal',
+				]);
+			}
+		}
+		const still = await env.product.connections.value(env.websiteId, 'database');
+		expect(String(still)).toContain(database);
 	});
 });
 

@@ -16,7 +16,14 @@
  * @module
  */
 import { createPrivateKey, sign as cryptoSign } from 'node:crypto';
-import { validateActivityCopy, validateFeatureReport, validatePriceReport, validateWebsiteSettings } from '@ss/contracts';
+import {
+	databaseNameFor,
+	validateActivityCopy,
+	validateConnectionHealth,
+	validateFeatureReport,
+	validatePriceReport,
+	validateWebsiteSettings,
+} from '@ss/contracts';
 import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { netError } from '@ss/net';
 import {
@@ -67,6 +74,11 @@ export const productKeyOf = async ({ store, encryptionKey }) => {
  * @property {number} todayMillicredits
  * @property {Record<string, { version: number, on: string[] }>} features by product id
  * @property {import('@ss/contracts').WebsiteSettings | null} settings the website settings the Portal holds (null: none saved)
+ * @property {{ version: number, database: string | null, storage: Record<string, unknown> | null, dbNames: Record<string, string>,
+ *   links: Array<{ caller: string, callee: string, scopes: string[], token: string, jti: string, on: boolean }> }} connections what
+ *   the Portal holds of the website's connections and links (the one counter `version`)
+ * @property {Record<string, Record<string, { version: number, ok: boolean, message?: string }>>} health what each product
+ *   reported for each delivered connection
  */
 
 /**
@@ -172,6 +184,8 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 	const admins = new Map();
 	/** @type {string[]} */
 	const revoked = [];
+	/** The second each notice (to a product, by its body) was last signed for. @type {Map<string, number>} */
+	const noticeStamps = new Map();
 	/** @type {Set<string>} */
 	const consumed = new Set();
 	/** @type {Array<{ productId: string, body: any }>} */
@@ -214,6 +228,7 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 		todayMillicredits: site.todayMillicredits,
 		featuresVersion: site.features[productId]?.version ?? 0,
 		settingsVersion: site.settings?.version ?? 0,
+		connectionsVersion: site.connections.version,
 		validUntil: new Date(now() + 5 * 60_000).toISOString(),
 	});
 
@@ -244,6 +259,32 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 				const since = Number(searchParams.get('since') ?? '0');
 				const version = site.settings?.version ?? 0;
 				return json(200, { version, settings: site.settings && version > since ? site.settings : null });
+			}
+			if (method === 'GET' && parts[4] === 'connections') {
+				const needs = product.manifest.needs ?? { database: true, storage: 'none' };
+				const held = site.connections;
+				return json(200, {
+					version: held.version,
+					database:
+						held.database && needs.database
+							? { uri: held.database, dbName: held.dbNames[productId] ?? databaseNameFor(productId) }
+							: null,
+					storage: held.storage && needs.storage !== 'none' ? held.storage : null,
+					links: {
+						out: held.links
+							.filter((link) => link.caller === productId && link.on && link.scopes.length > 0)
+							.map((link) => ({ to: link.callee, token: link.token, scopes: link.scopes })),
+						in: held.links
+							.filter((link) => link.callee === productId && link.on && link.scopes.length > 0)
+							.map((link) => ({ from: link.caller, scopes: link.scopes })),
+					},
+				});
+			}
+			if (method === 'PUT' && parts[4] === 'connections' && parts[6] === 'health') {
+				const checked = validateConnectionHealth(body);
+				if (!checked.ok || (parts[5] !== 'database' && parts[5] !== 'storage')) return fail(url, 'validation_failed', 422);
+				site.health[productId] = { ...site.health[productId], [parts[5]]: checked.value };
+				return json(200, { accepted: true });
 			}
 			if (method === 'PUT' && parts[4] === 'features') {
 				const checked = validateFeatureReport(body);
@@ -394,6 +435,8 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 				todayMillicredits,
 				features: {},
 				settings: null,
+				connections: { version: 0, database: null, storage: null, dbNames: {}, links: [] },
+				health: {},
 			});
 			return id;
 		},
@@ -436,6 +479,76 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 					await fakePortal.sendNotice(productId, { type: 'website.settings_changed', websiteId, what: 'settings' });
 			return version;
 		},
+		/**
+		 * The merchant enters the website's connections once in the Portal (the database and the storage, as the Portal keeps
+		 * them) and every connected product is told (`website.settings_changed`, `what: connections`); the products fetch
+		 * them right after. `undefined` leaves a connection as it is, `null` removes it.
+		 * @param {string} websiteId
+		 * @param {{ database?: string | null, storage?: Record<string, unknown> | null, dbNames?: Record<string, string> }} change
+		 * @param {{ notify?: boolean }} [options] `notify: false` tells no product (a lost notice: the status catches up)
+		 * @returns {Promise<number>} the new version
+		 */
+		saveConnections: async (websiteId, { database, storage, dbNames }, { notify = true } = {}) => {
+			const held = site(websiteId).connections;
+			if (database !== undefined) held.database = database;
+			if (storage !== undefined) held.storage = storage;
+			if (dbNames !== undefined) held.dbNames = { ...dbNames };
+			held.version += 1;
+			if (notify) await fakePortal.tell(websiteId, 'connections');
+			return held.version;
+		},
+		/**
+		 * The Portal links two products of a website (a real link token, signed like the Portal's) with the scopes it grants,
+		 * and tells the products. A link made again gets a new token and the old one is revoked.
+		 * @param {string} websiteId @param {string} caller @param {string} callee @param {string[]} scopes
+		 * @returns {Promise<{ token: string, jti: string }>}
+		 */
+		link: async (websiteId, caller, callee, scopes) => {
+			const held = site(websiteId).connections;
+			const old = held.links.find((link) => link.caller === caller && link.callee === callee);
+			if (old) revoked.push(old.jti);
+			held.links = held.links.filter((link) => link !== old);
+			const { token, claims } = await issueToken({
+				signer,
+				issuer: url,
+				websiteId,
+				domain: site(websiteId).domain,
+				productId: callee,
+				kind: 'link',
+				caller,
+				now,
+			});
+			held.links.push({ caller, callee, scopes: [...scopes], token, jti: claims.jti, on: true });
+			held.version += 1;
+			await fakePortal.tell(websiteId, 'links');
+			if (old && products.get(callee)?.handler) await fakePortal.sendNotice(callee, { type: 'token.revoked', websiteId });
+			return { token, jti: claims.jti };
+		},
+		/**
+		 * The Portal ends a link (a product left the website, or it was switched off): its token is revoked at once.
+		 * @param {string} websiteId @param {string} caller @param {string} callee
+		 */
+		unlink: async (websiteId, caller, callee) => {
+			const held = site(websiteId).connections;
+			const old = held.links.find((link) => link.caller === caller && link.callee === callee);
+			if (!old) return;
+			revoked.push(old.jti);
+			held.links = held.links.filter((link) => link !== old);
+			held.version += 1;
+			await fakePortal.tell(websiteId, 'links');
+			if (products.get(callee)?.handler) await fakePortal.sendNotice(callee, { type: 'token.revoked', websiteId });
+		},
+		/**
+		 * Tell every connected product that the connections or links changed.
+		 * @param {string} websiteId @param {'connections' | 'links'} what
+		 */
+		tell: async (websiteId, what) => {
+			for (const productId of products.keys())
+				if (products.get(productId)?.handler)
+					await fakePortal.sendNotice(productId, { type: 'website.settings_changed', websiteId, what });
+		},
+		/** What a product reported for a delivered connection. @param {string} websiteId @param {string} productId @param {'database' | 'storage'} name */
+		health: (websiteId, productId, name) => site(websiteId).health[productId]?.[name] ?? null,
 		/**
 		 * Add a removed product to a website again, as the Portal does (PLAN 0.4.12 row 4): active, every feature off and
 		 * `featuresVersion` one higher.
@@ -541,8 +654,11 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 			const product = products.get(productId);
 			if (!product?.handler) throw new Error(`product ${productId} is not connected`);
 			const body = JSON.stringify(notice);
+			// the same notice twice in one second would be taken for a replay: each carries a later second than the last
+			const stamp = Math.max(Math.floor(now() / 1000), (noticeStamps.get(`${productId}|${body}`) ?? 0) + 1);
+			noticeStamps.set(`${productId}|${body}`, stamp);
 			const headers = {
-				...(await signNotice({ signer, body, timestamp: Math.floor(now() / 1000) })),
+				...(await signNotice({ signer, body, timestamp: stamp })),
 				'content-type': 'application/json',
 			};
 			return product.handler(new Request(`${product.baseUrl}${NOTICE_PATH}`, { method: 'POST', headers, body }));

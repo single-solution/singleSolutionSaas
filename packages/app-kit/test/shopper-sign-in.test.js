@@ -4,7 +4,6 @@ import { createAccountsDouble } from '../src/testing.js';
 import { DOMAIN, productRoutes, setup } from './helpers.js';
 
 const SITE = `https://${DOMAIN}`;
-const CONNECTIONS = { accounts: { label: 'Accounts token', kind: 'token', productId: 'accounts', neededBy: [] } };
 const IP = { 'ss-visitor-ip': '203.0.113.9' };
 
 /** Routes that show who the request acts for. */
@@ -62,13 +61,11 @@ const routes = () => [
 	}),
 ];
 
-/** A connected product whose website pasted its Accounts token. */
+/** A connected product whose website is linked to Accounts by the Portal (the keys of the sign-ins). */
 const connected = async () => {
-	const ctx = await setup({ routes: routes(), connections: CONNECTIONS });
-	const { portal, websiteId, session, dash, switchOn } = ctx;
-	await switchOn(['notes']);
-	const accountsToken = (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token;
-	await dash(await session(), 'PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, { value: accountsToken });
+	const ctx = await setup({ routes: routes() });
+	await ctx.switchOn(['notes']);
+	await ctx.link('accounts');
 	return ctx;
 };
 
@@ -166,8 +163,8 @@ describe('acting as a signed-in shopper from the website’s server (SS-Sign-In 
 		expect(await bare.json()).toEqual({ placedBy: null });
 	});
 
-	it('is refused while the website has not pasted its Accounts token', async () => {
-		const ctx = await setup({ routes: routes(), connections: CONNECTIONS });
+	it('is refused while the Portal has not linked the product to Accounts', async () => {
+		const ctx = await setup({ routes: routes() });
 		await ctx.switchOn(['notes']);
 		const signIn = await ctx.accounts.signIn({ websiteId: ctx.websiteId, sub: 'usr_shopper1' });
 		const refused = await ctx.call('GET', '/v1/visitor/me', {

@@ -42,8 +42,25 @@ export const createTestLogger = () => {
 	return { logger, entries };
 };
 
-/** @returns {any} the sample manifest (product `notes`) */
-export const manifest = () => manifestFixture();
+/**
+ * The sample manifest (product `notes`): a database and optional storage, a scope other products may call it with
+ * (`notes.read`, the route `/v1/server/linked`), and the links it needs (Accounts' keys, Notifications' messages).
+ * @returns {any}
+ */
+export const manifest = () => ({
+	...manifestFixture(),
+	needs: { database: true, storage: 'optional' },
+	links: {
+		offers: [
+			{ scope: 'notes.read', name: 'Read notes', description: 'Other products read the notes.' },
+			{ scope: 'permissions.read', name: 'Read permissions', description: 'List the permissions.' },
+		],
+		needs: [
+			{ product: 'accounts', scopes: ['keys.read', 'activity.write', 'users.read', 'roles.read'], features: [] },
+			{ product: 'notifications', scopes: ['messages.send', 'events.forward'], features: [] },
+		],
+	},
+});
 
 /** A test database URI on the shared MongoDB (`TEST_MONGODB_URI`). @param {string} name */
 export const mongoUri = (name) => {
@@ -100,6 +117,26 @@ export const productRoutes = () => [
 		feature: 'notes',
 		database: false,
 		handler: (ctx) => ({ kind: ctx.token.kind }),
+	}),
+	// a route another product calls through a link: the link key only with the scope, the server token as before
+	defineRoute({
+		method: 'GET',
+		path: '/v1/server/linked',
+		auth: 'server',
+		runtime: true,
+		scope: 'notes.read',
+		database: false,
+		handler: (ctx) => ({ kind: ctx.token.kind, caller: ctx.token.caller ?? null, websiteId: ctx.websiteId }),
+	}),
+	// the same through a link, but a staff route: the link key alone is not a staff member
+	defineRoute({
+		method: 'GET',
+		path: '/v1/server/linked-staff',
+		auth: 'server',
+		permission: 'notes.read',
+		scope: 'notes.read',
+		database: false,
+		handler: (ctx) => ({ kind: ctx.token.kind, actor: ctx.actor }),
 	}),
 	defineRoute({
 		method: 'GET',
@@ -236,10 +273,8 @@ export const setup = async (options = {}) => {
 	const staffHeaders = async ({ headers = {}, staff } = {}) => {
 		if (!accountsPasted) {
 			accountsPasted = true;
-			const token = (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token;
-			const cookie = await session();
-			const pasted = await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, { value: token });
-			if (pasted.status !== 200) throw new Error(`accounts token failed: ${pasted.status} ${await pasted.text()}`);
+			// the Portal links the product to Accounts (the keys of the sign-ins) as it does when both are on the website
+			await link('accounts');
 		}
 		return accounts.staffHeaders({ websiteId, headers, ...(staff ? { staff } : {}) });
 	};
@@ -273,20 +308,35 @@ export const setup = async (options = {}) => {
 		if (response.status !== 200) throw new Error(`features failed: ${response.status} ${await response.text()}`);
 	};
 
-	/** Connect a merchant database for the website (real MongoDB). @param {string} [site] */
+	/**
+	 * The merchant enters a database once in the Portal (real MongoDB; the product's own database is named by the Portal,
+	 * here a fresh one per call so a test can read it) and the product fetches it. @param {string} [site]
+	 */
 	const connectDatabase = async (site = websiteId) => {
-		const cookie = await session({ websiteId: site });
 		const dbName = freshDb('merchant');
-		const response = await dash(cookie, 'PUT', `/v1/dashboard/websites/${site}/connections/database`, {
-			value: mongoUri(dbName),
-		});
-		if (response.status !== 200) throw new Error(`database failed: ${response.status} ${await response.text()}`);
+		await portal.saveConnections(site, { database: mongoUri(dbName), dbNames: { notes: dbName } });
+		await settle();
 		return dbName;
+	};
+
+	/** The scopes a link to each product is given in the sample. */
+	const LINK_SCOPES = {
+		accounts: ['keys.read', 'activity.write', 'users.read', 'roles.read'],
+		notifications: ['messages.send', 'events.forward'],
+	};
+	/**
+	 * The Portal links the product to another one of the website (as it does when both are on the website) and the product
+	 * fetches the key. @param {'accounts' | 'notifications'} productId @param {string[]} [scopes]
+	 */
+	const link = async (productId, scopes = LINK_SCOPES[productId]) => {
+		await portal.link(websiteId, 'notes', productId, scopes);
+		await settle();
 	};
 
 	return {
 		clock,
 		portal,
+		link,
 		accounts,
 		notifications,
 		network,

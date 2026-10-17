@@ -17,7 +17,8 @@ import { ACTIVITY_INDEXES, createActivity } from './activity.js';
 import { createBlueprint } from './blueprint.js';
 import { createBusiness } from './business.js';
 import { createConnection } from './connection.js';
-import { checkConnectionDefinitions, createConnections } from './connections.js';
+import { checkConnectionDefinitions, createConnections, linkDefinitionsOf } from './connections.js';
+import { createPortalConnections } from './website-connections.js';
 import { createDashboard } from './dashboard.js';
 import { PRODUCT_DATABASE_OPTIONS, createData } from './data.js';
 import { EVENT_INDEXES, createEvents } from './events.js';
@@ -41,7 +42,6 @@ import { createMemoryStore } from './stores/memory.js';
 import { createMongoStore } from './stores/mongo.js';
 import { createTickets } from './tickets.js';
 import { defaultRandomBytes, isKitError, kitError } from './util.js';
-import { verifyToken } from '@ss/protocol';
 
 /** @typedef {import('@ss/contracts').Manifest} Manifest */
 /** @typedef {import('./connections.js').ConnectionDefinition} ConnectionDefinition */
@@ -117,6 +117,7 @@ import { verifyToken } from '@ss/protocol';
  * @property {import('./data.js').Data} data
  * @property {import('./business.js').Business} business
  * @property {import('./website-settings.js').WebsiteSettingsCache} website the Portal's copy of each website's settings
+ * @property {import('./website-connections.js').PortalConnections} portalConnections what the Portal delivered of the website's connections and links
  * @property {import('./activity.js').Activity} activity
  * @property {import('./events.js').Events} events
  * @property {(ctx: { websiteId: string | null, merchantId: string | null, after: (task: () => Promise<unknown>) => void },
@@ -140,6 +141,7 @@ const KIT_PROBLEM_CODES = Object.freeze({
 	count_timeout: Object.freeze({ status: 503, title: 'Counting took too long' }),
 	database_unavailable: Object.freeze({ status: 503, title: 'Database unavailable' }),
 	managed_by_portal: Object.freeze({ status: 409, title: 'Managed in the Portal' }),
+	scope_denied: Object.freeze({ status: 403, title: 'The link does not allow this' }),
 });
 
 /**
@@ -224,13 +226,19 @@ export const createProduct = (options) => {
 	});
 	const recent = createRecentChanges({ store, now, randomBytes });
 	const website = createWebsiteSettings({ store, client: () => connection.active().client, now, logger });
+	/** The Portal's connections are built once the connections exist; the status follows them from then on. @type {{ follow: ((websiteId: string, copy: import('@ss/contracts').StatusResponse) => Promise<unknown>) | null }} */
+	const later = { follow: null };
 	const status = createStatus({
 		store,
 		client: () => connection.active().client,
 		now,
 		logger,
-		// a status copy fetched again may show a newer version of the website's settings: they are fetched right after it
-		onRefreshed: (websiteId, copy) => website.followStatus(websiteId, copy),
+		// a status copy fetched again may show a newer version of the website's settings and of its connections and links:
+		// they are fetched right after it
+		onRefreshed: async (websiteId, copy) => {
+			await website.followStatus(websiteId, copy);
+			await later.follow?.(websiteId, copy);
+		},
 	});
 	const reports = createReports({ store, manifest, connection, status, recent, now, logger });
 	const shared = options.sharedSettings ?? {};
@@ -269,39 +277,40 @@ export const createProduct = (options) => {
 		store,
 		productId: manifest.id,
 		definitions: checkConnectionDefinitions(options.connections, manifest),
+		links: linkDefinitionsOf(manifest),
 		sealer,
 		recent,
 		send,
 		policy,
 		testDatabase: (uri) => /** @type {ReturnType<typeof createData>} */ (data).testUri(uri),
-		verifyServerToken: async (token, productId) => {
-			const { portalUrl, portalKeys } = connection.active();
-			try {
-				return await verifyToken({
-					token,
-					keyResolver: portalKeys,
-					issuer: portalUrl,
-					productId,
-					kind: 'server',
-					isRevoked: status.isRevoked,
-					now,
-				});
-			} catch {
-				return null;
-			}
-		},
 		directory: (id) => connection.active().client.directory(id),
 		directoryList: () => connection.active().client.directoryList(),
 		now,
 		logger,
 		attach: messages.attach,
 	});
+	const portalConnections = createPortalConnections({
+		store,
+		client: () => connection.active().client,
+		connections,
+		now,
+		logger,
+	});
+	later.follow = portalConnections.followStatus;
+	/**
+	 * The website's database, asking the Portal for it once when this product holds none yet.
+	 * @param {string} websiteId
+	 */
+	const databaseOf = async (websiteId) => {
+		const held = await connections.databaseOf(websiteId);
+		if (held !== null) return held;
+		await portalConnections.ensure(websiteId);
+		return connections.databaseOf(websiteId);
+	};
 	data = createData({
 		productId: manifest.id,
-		uriOf: async (websiteId) => {
-			const uri = await connections.value(websiteId, 'database');
-			return typeof uri === 'string' ? uri : null;
-		},
+		uriOf: async (websiteId) => (await databaseOf(websiteId))?.uri ?? null,
+		dbNameOf: async (websiteId) => (await databaseOf(websiteId))?.dbName ?? null,
 		now,
 		logger,
 		policy,
@@ -398,6 +407,7 @@ export const createProduct = (options) => {
 		data,
 		business,
 		website,
+		portalConnections,
 		activity,
 		events,
 		settingsChanged,

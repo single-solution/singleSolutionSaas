@@ -175,9 +175,7 @@ export const createAccountsSignIns = ({ connections, now, own }) => {
 
 	// a product trusts Accounts sign-ins only when it declares the Accounts token connection (Accounts itself, which issues
 	// them and checks its own, does not)
-	const trusted = Object.values(connections.definitions).some(
-		(definition) => definition.kind === 'token' && definition.productId === 'accounts',
-	);
+	const trusted = connections.declaresLink('accounts');
 
 	/** @type {any} */
 	let self = null;

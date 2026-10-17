@@ -406,18 +406,21 @@ const poolRegistry = () => {
  * @param {{
  *   productId: string,
  *   uriOf: (websiteId: string) => Promise<string | null>,
+ *   dbNameOf?: (websiteId: string) => Promise<string | null>,
  *   now?: () => number,
  *   logger: Logger,
  *   policy: import('@ss/net').OutboundPolicy,
  *   createClient?: (uri: string, options: import('mongodb').MongoClientOptions) => MongoClient,
  *   idleMs?: number,
  *   indexes?: IndexDefinition[],
- * }} options `uriOf` reads the website's `database` connection; `indexes` are created on a website's first use per
+ * }} options `uriOf` reads the website's `database` connection and `dbNameOf` this product's own database on it (the Portal
+ *   names it `ss_<productId>`; none: the one the connection string names); `indexes` are created on a website's first use per
  *   instance
  */
 export const createData = ({
 	productId,
 	uriOf,
+	dbNameOf = async () => null,
 	now = Date.now,
 	logger,
 	policy,
@@ -482,7 +485,8 @@ export const createData = ({
 		if (idleMs > 0) void closeIdle();
 		const { key, client: clientPromise } = clientFor(uri);
 		const client = await clientPromise;
-		const db = client.db();
+		const dbName = await dbNameOf(websiteId);
+		const db = dbName ? client.db(dbName) : client.db();
 		const scopeKey = `${key}|${db.databaseName}`;
 		const stamp = merchantId ? { merchantId } : {};
 

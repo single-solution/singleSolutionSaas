@@ -7,10 +7,12 @@
  * @module
  */
 import {
+	validateConnectionHealth,
 	validateDirectory,
 	validateDirectoryList,
 	validateRevocations,
 	validateStatusResponse,
+	validateWebsiteConnections,
 	validateWebsiteSettings,
 	validateWebsitesPage,
 } from '@ss/contracts';
@@ -24,6 +26,7 @@ import { kitError } from './util.js';
 /** @typedef {import('@ss/contracts').WebsitesPage} WebsitesPage */
 /** @typedef {import('@ss/contracts').Revocations} Revocations */
 /** @typedef {import('@ss/contracts').WebsiteSettings} WebsiteSettings */
+/** @typedef {import('@ss/contracts').WebsiteConnections} WebsiteConnections */
 
 /** Deadline of one Portal call (a call may ask for a shorter one). */
 const PORTAL_TIMEOUT_MS = 10_000;
@@ -147,6 +150,39 @@ export const createPortalClient = ({ portalUrl, productId, signer, fetch = globa
 			if (document.websiteId !== websiteId || document.version !== version)
 				throw kitError('portal_unreachable', 'Portal website settings answer names another website or version');
 			return { version, settings: document };
+		},
+		/**
+		 * The website's connections for this product: its database (with its own name), its storage and its links (the
+		 * keys it calls other products with and who may call it). Checked: the answer must match the contract.
+		 * @param {string} websiteId
+		 * @param {{ timeoutMs?: number }} [options] a shorter deadline for a use that waits
+		 * @returns {Promise<WebsiteConnections>}
+		 */
+		websiteConnections: async (websiteId, { timeoutMs } = {}) =>
+			checked(
+				validateWebsiteConnections(
+					await call(
+						'GET',
+						`/v1/product/websites/${encodeURIComponent(websiteId)}/connections`,
+						timeoutMs ? { timeoutMs } : {},
+					),
+				),
+				'website connections',
+			),
+		/**
+		 * Tell the Portal how a delivered connection worked (the Portal never opens the merchant's database or bucket).
+		 * @param {string} websiteId
+		 * @param {'database' | 'storage'} name
+		 * @param {{ version: number, ok: boolean, message?: string }} report
+		 * @returns {Promise<void>}
+		 */
+		reportHealth: async (websiteId, name, report) => {
+			const body = checked(validateConnectionHealth(report), 'connection health');
+			await call(
+				'PUT',
+				`/v1/product/websites/${encodeURIComponent(websiteId)}/connections/${encodeURIComponent(name)}/health`,
+				{ body },
+			);
 		},
 		/** @param {string | null} [cursor] @returns {Promise<WebsitesPage>} */
 		websites: async (cursor) =>

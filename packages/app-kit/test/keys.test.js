@@ -3,7 +3,7 @@
  * 0.4.8, K-21): a product key that no longer opens leaves the product not connected until the owner connects it again
  * (a new key); a ticket key that no longer opens is replaced. The Owner's Re-seal covers both (RT-14).
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createProduct } from '../src/index.js';
 import { createMemoryStore, productKeyOf } from '../src/testing.js';
 import { createSealer, openKey } from '../src/sealing.js';
@@ -69,22 +69,10 @@ describe('signing keys sealed (K-21)', () => {
 		expect((await lost.ticket()).status).toBe(503);
 		expect(await ctx.store.get('state', 'productKey')).toEqual(before.product); // nothing destroyed
 		await ctx.portal.connect({ handler: lost.handler, baseUrl: BASE, secret: SECRET });
-		// the Accounts token (the staff sign-in keys) was sealed with the lost key too: pasted again
-		const launch = await ctx.portal.issueLaunch({ productId: 'notes', kind: 'admin', role: 'owner', websiteId: ctx.websiteId });
-		const cookie = /** @type {string} */ (
-			(await lost.handler(new Request(`${BASE}/sso?launch=${launch}`))).headers.get('set-cookie')
-		).split(';')[0];
-		const accountsToken = (await ctx.portal.issueToken({ websiteId: ctx.websiteId, productId: 'accounts', kind: 'server' }))
-			.token;
-		const pasted = await lost.handler(
-			new Request(`${BASE}/v1/dashboard/websites/${ctx.websiteId}/connections/accounts`, {
-				method: 'PUT',
-				headers: { cookie: String(cookie), origin: BASE, 'content-type': 'application/json' },
-				body: JSON.stringify({ value: accountsToken }),
-			}),
-		);
-		expect(pasted.status).toBe(200);
-		expect((await lost.ticket()).status).toBe(200);
+		// the link to Accounts (the staff sign-in keys) was sealed with the lost key too: the Portal delivers it again at the
+		// next status fetch or notice, with no one pasting anything
+		await ctx.portal.sendNotice('notes', { type: 'website.settings_changed', websiteId: ctx.websiteId, what: 'links' });
+		await vi.waitFor(async () => expect((await lost.ticket()).status).toBe(200));
 		const after = { product: await ctx.store.get('state', 'productKey'), ticket: await ctx.store.get('state', 'ticketKey') };
 		expect(after.product.publicJwk.kid).not.toBe(before.product.publicJwk.kid);
 		expect(after.ticket.sealed).not.toBe(before.ticket.sealed);

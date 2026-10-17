@@ -126,11 +126,21 @@ describe('GET /v1/blueprint (Portal call)', () => {
 				state: 'not_connected',
 				testedAt: null,
 			},
-			// every product but Accounts takes its staff's and shoppers' sign-ins with the website's Accounts token
+			// the Portal links the product to the products its manifest needs (Accounts' keys, Notifications' messages)
 			{
-				key: 'accounts',
-				title: 'Accounts token (staff and shopper sign-ins)',
-				kind: 'token',
+				key: 'link_accounts',
+				title: 'Link to Accounts',
+				kind: 'link',
+				neededBy: [],
+				needed: false,
+				set: false,
+				state: 'not_connected',
+				testedAt: null,
+			},
+			{
+				key: 'link_notifications',
+				title: 'Link to Notifications',
+				kind: 'link',
 				neededBy: [],
 				needed: false,
 				set: false,

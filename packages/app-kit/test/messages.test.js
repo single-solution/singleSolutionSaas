@@ -197,9 +197,6 @@ describe('message defaults (parity P1)', () => {
 					},
 				}),
 			],
-			connections: {
-				notifications: { label: 'Notifications token', kind: 'token', productId: 'notifications', neededBy: [] },
-			},
 		});
 		holder.product = ctx.product;
 		const response = await ctx.call('GET', '/v1/message-defaults');
@@ -209,9 +206,7 @@ describe('message defaults (parity P1)', () => {
 		expect(await ctx.product.addressOf('notifications')).toBe(ctx.notifications.url);
 
 		await ctx.switchOn(['notes']);
-		const cookie = await ctx.session({ kind: 'merchant' });
-		const token = (await ctx.portal.issueToken({ websiteId: ctx.websiteId, productId: 'notifications', kind: 'server' })).token;
-		await ctx.dash(cookie, 'PUT', `/v1/dashboard/websites/${ctx.websiteId}/connections/notifications`, { value: token });
+		await ctx.link('notifications');
 		const sent = await ctx.call('POST', '/v1/server/notify', { token: ctx.server.token, body: {} });
 		expect(await sent.json()).toEqual({ ok: true });
 		expect(ctx.notifications.messages.at(-1)?.body).toEqual({

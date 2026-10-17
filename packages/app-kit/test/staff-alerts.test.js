@@ -87,23 +87,19 @@ const start = async () => {
 	const ctx = await setup({
 		manifest: alertsManifest(),
 		routes: routes(),
-		connections: {
-			notifications: { label: 'Notifications token', kind: 'token', productId: 'notifications', neededBy: [] },
-			accounts: { label: 'Accounts token', kind: 'token', productId: 'accounts', neededBy: [] },
-		},
 	});
 	holder.product = ctx.product;
 	await ctx.switchOn(['notes', 'alerts']);
+	// the Portal links the product to Notifications and to Accounts
+	await ctx.link('notifications');
+	await ctx.link('accounts');
 	const cookie = await ctx.session({ kind: 'merchant' });
-	for (const productId of ['notifications', 'accounts']) {
-		const token = (await ctx.portal.issueToken({ websiteId: ctx.websiteId, productId, kind: 'server' })).token;
-		expect(
-			(await ctx.dash(cookie, 'PUT', `/v1/dashboard/websites/${ctx.websiteId}/connections/${productId}`, { value: token }))
-				.status,
-		).toBe(200);
-	}
 	/** The website's alert team in the Portal (Website settings › Team and alerts). */
-	const team = { recipients: /** @type {Array<{ name: string, email: string, phone: string }>} */ ([]), phoneChannel: '', staffPush: false };
+	const team = {
+		recipients: /** @type {Array<{ name: string, email: string, phone: string }>} */ ([]),
+		phoneChannel: '',
+		staffPush: false,
+	};
 	/**
 	 * A setting of the feature, or the Portal's team: `recipients` (addresses and phones, each one person), `phoneChannel`
 	 * and `staffPush` are saved in the Portal and the product is told.
@@ -113,7 +109,11 @@ const start = async () => {
 		if (key === 'recipients' || key === 'phoneChannel' || key === 'staffPush') {
 			if (key === 'recipients')
 				team.recipients = /** @type {string[]} */ (value).flatMap((entry) =>
-					entry.includes('@') ? [{ name: '', email: entry, phone: '' }] : /^\+?[0-9 ().-]{3,40}$/.test(entry) ? [{ name: '', email: '', phone: entry }] : [],
+					entry.includes('@')
+						? [{ name: '', email: entry, phone: '' }]
+						: /^\+?[0-9 ().-]{3,40}$/.test(entry)
+							? [{ name: '', email: '', phone: entry }]
+							: [],
 				);
 			else if (key === 'phoneChannel') team.phoneChannel = String(value);
 			else team.staffPush = value === true;
@@ -412,7 +412,7 @@ describe('staff alerts (K6)', () => {
 			productId: 'notes',
 			settings: /** @type {any} */ ({}),
 			website: /** @type {any} */ ({}),
-			connections: /** @type {any} */ ({ definitions: { database: { kind: 'database' } } }),
+			connections: /** @type {any} */ ({ definitions: { database: { kind: 'database' } }, declaresLink: () => false }),
 			data: /** @type {any} */ ({
 				forWebsite: async () => {
 					looked += 1;

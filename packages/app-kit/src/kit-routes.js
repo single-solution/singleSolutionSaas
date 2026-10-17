@@ -45,6 +45,16 @@ import { KIT_PERMISSIONS, grantedOf } from './staff.js';
  *   in its own words and short summaries; never secrets
  */
 
+/**
+ * The link scopes of the kit's own routes. A product offers them in its manifest (`links.offers`) when other products call
+ * these routes: Accounts reads every product's permissions and asks it to export or erase a person's data.
+ */
+export const KIT_LINK_SCOPES = Object.freeze({
+	permissionsRead: 'permissions.read',
+	dataRightsExport: 'data_rights.export',
+	dataRightsErase: 'data_rights.erase',
+});
+
 /** Product database collections that hold per-website data (`website.deleted` removes them). */
 const WEBSITE_COLLECTIONS = /** @type {const} */ ([
 	'switches',
@@ -53,6 +63,7 @@ const WEBSITE_COLLECTIONS = /** @type {const} */ ([
 	'changes',
 	'status',
 	'website_settings',
+	'portal_connections',
 	'widget',
 ]);
 
@@ -62,6 +73,14 @@ const WEBSITE_COLLECTIONS = /** @type {const} */ ([
  */
 export const createKitRoutes = (kit, hooks) => {
 	const { store, manifest, now } = kit;
+	/**
+	 * The scope a kit route takes link keys for, when the manifest offers it (a product opts in by listing it in
+	 * `links.offers`): the other products' calls to the kit's own routes (Accounts asking for the permissions and for data
+	 * rights).
+	 * @param {string} scope
+	 */
+	const offers = (scope) =>
+		(manifest.links?.offers ?? []).some((/** @type {{ scope: string }} */ offer) => offer.scope === scope) ? { scope } : {};
 	/** @type {Map<string, string>} */
 	const featureOfPermission = new Map(
 		manifest.permissions.map((/** @type {{ key: string, feature: string }} */ p) => [p.key, p.feature]),
@@ -94,11 +113,16 @@ export const createKitRoutes = (kit, hooks) => {
 		}
 		if (body.type === 'website.settings_changed') {
 			const websiteId = body.websiteId;
-			// the next use reads the database; the new settings are fetched right after answering
-			kit.website.forget(websiteId);
-			ctx.after(async () => {
-				await kit.website.refresh(websiteId);
-			});
+			if (body.what === 'connections' || body.what === 'links') {
+				// the website's database, storage or links changed: they are fetched right after answering
+				kit.portalConnections.onNotice(websiteId, ctx.after);
+			} else {
+				// the next use reads the database; the new settings are fetched right after answering
+				kit.website.forget(websiteId);
+				ctx.after(async () => {
+					await kit.website.refresh(websiteId);
+				});
+			}
 		}
 		if (body.type === 'token.revoked') {
 			try {
@@ -111,6 +135,7 @@ export const createKitRoutes = (kit, hooks) => {
 		if (body.type === 'website.deleted') {
 			const websiteId = body.websiteId;
 			kit.website.forget(websiteId);
+			kit.portalConnections.forget(websiteId);
 			await Promise.all(WEBSITE_COLLECTIONS.map((collection) => store.deleteWhere(collection, { websiteId })));
 			await kit.dashboard.endWebsiteSessions(websiteId);
 		}
@@ -238,6 +263,7 @@ export const createKitRoutes = (kit, hooks) => {
 			path: '/v1/permissions',
 			auth: 'server',
 			runtime: true,
+			...offers(KIT_LINK_SCOPES.permissionsRead),
 			database: false,
 			handler: () => ({
 				permissions: [
@@ -265,6 +291,7 @@ export const createKitRoutes = (kit, hooks) => {
 			path: '/v1/data-rights/export',
 			auth: 'server',
 			runtime: true,
+			...offers(KIT_LINK_SCOPES.dataRightsExport),
 			handler: dataRights('export'),
 		}),
 		defineRoute({
@@ -272,6 +299,7 @@ export const createKitRoutes = (kit, hooks) => {
 			path: '/v1/data-rights/delete',
 			auth: 'server',
 			runtime: true,
+			...offers(KIT_LINK_SCOPES.dataRightsErase),
 			handler: dataRights('delete'),
 		}),
 	];

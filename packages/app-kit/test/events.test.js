@@ -3,8 +3,6 @@ import { defineRoute } from '../src/index.js';
 import { EVENT_DATA_MAX_BYTES, EVENT_TTL_MS, createEvents } from '../src/events.js';
 import { openDb, productRoutes, setup } from './helpers.js';
 
-const NOTIFICATIONS = { label: 'Notifications token', kind: 'token', productId: 'notifications', neededBy: [] };
-
 /** @type {{ product: any }} */
 const holder = { product: null };
 
@@ -49,18 +47,12 @@ const routes = () => [
 
 /** A product that publishes events, with its database and (optionally) the Notifications token pasted. */
 const start = async ({ paste = true } = {}) => {
-	const ctx = await setup({ routes: routes(), events: true, connections: { notifications: NOTIFICATIONS } });
+	const ctx = await setup({ routes: routes(), events: true });
 	holder.product = ctx.product;
 	await ctx.switchOn(['notes']);
 	const dbName = await ctx.connectDatabase();
-	if (paste) {
-		const cookie = await ctx.session({ kind: 'merchant' });
-		const token = (await ctx.portal.issueToken({ websiteId: ctx.websiteId, productId: 'notifications', kind: 'server' })).token;
-		const saved = await ctx.dash(cookie, 'PUT', `/v1/dashboard/websites/${ctx.websiteId}/connections/notifications`, {
-			value: token,
-		});
-		expect(saved.status).toBe(200);
-	}
+	// the Portal links the product to Notifications (it gives it the key to call it with)
+	if (paste) await ctx.link('notifications');
 	/** @param {unknown} [body] */
 	const emit = async (body = {}) => {
 		const response = await ctx.call('POST', '/v1/server/notes', { token: ctx.server.token, body });

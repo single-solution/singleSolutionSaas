@@ -4,6 +4,8 @@
  * @module
  */
 
+import { isLinkScope } from '@ss/contracts';
+
 /** @typedef {'browser' | 'server' | 'ticket' | 'dashboard' | 'portal' | 'none'} AuthMode */
 /** @typedef {'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'} Method */
 /** @typedef {'merchant' | 'owner' | 'support'} DashboardRole */
@@ -32,6 +34,10 @@
  * @property {boolean} [runtime] server routes: the website's server may call it with the server token alone (shop
  *   reads, sends, imports while the feature is on, calls between products). Every server route says one of
  *   `permission`, `staff` or `runtime`; a server route that says none is refused when the routes are compiled
+ * @property {string} [scope] server routes another product calls through a link (`links.offers` of the manifest): a call
+ *   with a link key (a token of kind `link`) is accepted only when the Portal granted its caller this scope on the
+ *   website; the route's own `permission`, `staff` or `runtime` rule still applies to it. A route that names no scope
+ *   takes no link key at all, only the website's server token
  * @property {boolean} [database] browser, server and ticket routes: false skips the 403 `database_not_connected` check
  * @property {boolean} [idempotent] a repeated `Idempotency-Key` (same website, same route, within 24 h) gets the first
  *   answer again (with `Idempotent-Replayed: true`) when it is the same request (method, address, body, visitor or
@@ -75,6 +81,8 @@ export const defineRoute = (definition) => {
 		throw new TypeError(`permission needs ticket or server auth ${where}`);
 	if ((definition.staff !== undefined || definition.runtime !== undefined) && auth !== 'server')
 		throw new TypeError(`staff and runtime need server auth ${where}`);
+	if (definition.scope !== undefined && (auth !== 'server' || !isLinkScope(definition.scope)))
+		throw new TypeError(`scope is a link scope (such as payments.create) and needs server auth ${where}`);
 	if (auth === 'server') {
 		const said = [definition.permission !== undefined, definition.staff === true, definition.runtime === true].filter(Boolean);
 		if (said.length !== 1)

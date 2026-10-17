@@ -235,7 +235,7 @@
  *   while on
  * @property {Array<{ key: string, title: string, features: string[], settings: BlueprintSetting[] }>} shared shared
  *   settings in use
- * @property {Array<{ key: string, title: string, kind: 'database' | 'storage' | 'secret' | 'token', neededBy: string[],
+ * @property {Array<{ key: string, title: string, kind: 'database' | 'storage' | 'secret' | 'link', neededBy: string[],
  *   needed: boolean, set: boolean, state: 'connected' | 'not_connected' | 'test_failed', testedAt: string | null }>} connections
  * @property {Array<{ key: string, kind: 'visitor' | 'admin', features: string[], on: boolean, ready: boolean }>} widgets
  * @property {Array<{ key: string, name: string, feature: string, on: boolean }>} staffPermissions

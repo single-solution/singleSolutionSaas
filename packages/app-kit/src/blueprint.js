@@ -231,7 +231,7 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 			kit.connections.list(websiteId),
 			store.get('widget', websiteId),
 			kit.website.document(websiteId, { after: ctx.after }),
-			Promise.all(Object.keys(kit.connections.definitions).map((name) => kit.connections.value(websiteId, name))),
+			kit.connections.allValues(websiteId),
 		]);
 		const secrets = saved.flatMap(secretsIn);
 		/** @template T @param {T} value @returns {T} */

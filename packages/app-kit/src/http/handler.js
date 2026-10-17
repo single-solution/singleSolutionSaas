@@ -182,6 +182,22 @@ const readBody = async (request, max) => {
 const bearerOf = (header) => /^Bearer\s+(\S+)$/i.exec(header ?? '')?.[1] ?? null;
 
 /**
+ * The kind a token says it is, read without checking anything: it only chooses which strict check the token then goes
+ * through (a link key or the website's server token); that check still verifies the signature, issuer, product, website
+ * and revocation.
+ * @param {string} token
+ * @returns {string | null}
+ */
+const kindClaimed = (token) => {
+	try {
+		const payload = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8'));
+		return typeof payload?.kind === 'string' ? payload.kind : null;
+	} catch {
+		return null;
+	}
+};
+
+/**
  * Create the request handler.
  * @param {import('../product.js').Kit} kit the internal parts `createProduct` wires
  * @param {ReadonlyArray<RouteDefinition>} routes
@@ -204,8 +220,26 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 		if (route.permission !== undefined && !featureOfPermission.has(route.permission) && !kitPermissions.has(route.permission))
 			throw new TypeError(`route ${route.id}: unknown permission ${route.permission}`);
 	}
+	// the links: a route takes link keys only for a scope the manifest offers (the Portal grants only offered scopes)
+	const offered = new Set((manifest.links?.offers ?? []).map((/** @type {{ scope: string }} */ offer) => offer.scope));
+	for (const route of compiled)
+		if (route.scope !== undefined && !offered.has(route.scope))
+			throw new TypeError(`route ${route.id}: scope ${route.scope} is not offered in the manifest (links.offers)`);
+
 	/** @type {Map<string, number>} */
 	const lastWrites = new Map();
+
+	/**
+	 * The website's database, asking the Portal for it once when this product holds none yet (a website just connected, or
+	 * a product just added).
+	 * @param {string} websiteId
+	 */
+	const databaseOf = async (websiteId) => {
+		const held = await kit.connections.databaseOf(websiteId);
+		if (held !== null) return held;
+		await kit.portalConnections.ensure(websiteId);
+		return kit.connections.databaseOf(websiteId);
+	};
 
 	/**
 	 * @param {RouteResult} result
@@ -260,13 +294,15 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 		const token = bearerOf(request.headers.get('authorization'));
 		if (!token) return null;
 		const { portalUrl, portalKeys } = kit.connection.active();
+		// a route that names a scope also takes a link key; every other route takes the server token alone
+		const link = kind === 'server' && r.scope !== undefined && kindClaimed(token) === 'link';
 		try {
 			const claims = await verifyToken({
 				token,
 				keyResolver: portalKeys,
 				issuer: portalUrl,
 				productId: manifest.id,
-				kind,
+				kind: link ? 'link' : kind,
 				isRevoked: kit.status.isRevoked,
 				now,
 			});
@@ -480,6 +516,16 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 			if (r.auth === 'browser' || r.auth === 'server') {
 				const claims = await verifyWebsiteToken(r, request, rawOrigin);
 				if (!claims) return fail(problem('invalid_token', 'The token is not valid.'));
+				// a link key proves who calls; this product lets it do only what the Portal granted it on this website
+				if (
+					claims.kind === 'link' &&
+					!(await kit.portalConnections.allows({
+						websiteId: claims.websiteId,
+						caller: /** @type {string} */ (claims.caller),
+						scope: /** @type {string} */ (r.scope),
+					}))
+				)
+					return fail(problem('scope_denied', 'This link does not allow that.'));
 				ctx.token = claims;
 				ctx.websiteId = claims.websiteId;
 				if (r.auth === 'browser' && ctx.origin)
@@ -556,8 +602,13 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				const keys = feature === undefined ? [] : [feature].flat();
 				if (keys.length > 0 && !(await kit.reports.switches(id)).on.some((key) => keys.includes(key)))
 					return fail(problem('feature_off', `The feature ${keys.join(' or ')} is off.`));
-				if (r.database !== false && (await kit.connections.value(id, 'database')) === null)
-					return fail(problem('database_not_connected', 'Connect the merchant database in the product dashboard first.'));
+				if (r.database !== false && (await databaseOf(id)) === null)
+					return fail(
+						problem(
+							'database_not_connected',
+							'The database is not connected: enter it once in the Portal, under Website settings, Data and files.',
+						),
+					);
 				afterTasks.push(() => afterWebsiteRequest(ctx, r));
 			}
 

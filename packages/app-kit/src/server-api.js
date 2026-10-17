@@ -214,6 +214,7 @@ export const createServerApi = (kit, lists) => {
 		label: view.label,
 		kind: view.kind,
 		neededBy: view.neededBy,
+		managed: view.managed,
 		set: view.set,
 		state: view.status,
 		message: view.message ?? null,
@@ -371,6 +372,10 @@ export const createServerApi = (kit, lists) => {
 			handler: async (ctx) => {
 				const result = await kit.connections.test({ websiteId: website(ctx), name: String(ctx.params.name) });
 				if (!result.ok) throw result.problem;
+				if (result.tested) {
+					const tested = result.tested;
+					ctx.after(() => kit.portalConnections.reportTest(website(ctx), tested.name, tested));
+				}
 				return connectionView(result.connection);
 			},
 		}),

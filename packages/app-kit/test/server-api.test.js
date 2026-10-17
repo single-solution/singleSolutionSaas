@@ -270,11 +270,18 @@ describe('settings API for the merchant’s server (K1)', () => {
 			label: 'AI provider key',
 			kind: 'secret',
 			neededBy: ['notes'],
+			managed: false,
 			set: false,
 			state: 'not_connected',
 			message: null,
 			testedAt: null,
 		});
+		// the database, the storage and the links are the Portal's
+		expect(listed.json.connections.filter((/** @type {any} */ c) => c.managed).map((/** @type {any} */ c) => c.name)).toEqual([
+			'database',
+			'link_accounts',
+			'link_notifications',
+		]);
 		const saved = await body(
 			await call('PUT', '/v1/connections/ai', { token: server.token, body: { value: 'sk-secret-1234' } }),
 		);
@@ -480,17 +487,11 @@ describe('activity reads (K9)', () => {
 	];
 
 	it('serves the log newest first with filters, paging and counts; copies carry label, detail and role', async () => {
-		const ctx = await setup({
-			routes: routes(),
-			connections: { accounts: { label: 'Accounts token', kind: 'token', productId: 'accounts', neededBy: [] } },
-		});
+		const ctx = await setup({ routes: routes() });
 		holder.product = ctx.product;
-		const { call, server, connectDatabase, clock, settle, session, dash, websiteId, portal, accounts } = ctx;
+		const { call, server, connectDatabase, clock, settle, accounts } = ctx;
 		await connectDatabase();
-		const cookie = await session({ kind: 'merchant' });
-		await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, {
-			value: (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token,
-		});
+		await ctx.link('accounts');
 		const sam = { kind: 'user', id: 'usr_1', name: 'Sam', role: 'Support staff' };
 		const tia = { kind: 'staff', id: 'stf_2', name: 'Tia' };
 		const entries = [

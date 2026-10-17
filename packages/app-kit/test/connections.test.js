@@ -24,7 +24,6 @@ const CONNECTIONS = {
 	},
 	smtp: { label: 'SMTP', kind: 'secret', neededBy: ['inbox'], secretField: 'password' },
 	storage: { label: 'Storage', kind: 'storage', neededBy: ['notes'] },
-	accounts: { label: 'Accounts token', kind: 'token', productId: 'accounts', neededBy: ['notes'] },
 };
 
 /** @type {{ product: any }} */
@@ -82,22 +81,33 @@ describe('connections', () => {
 		const cookie = await session({ kind: 'merchant' });
 		const path = `/v1/dashboard/websites/${websiteId}/connections`;
 		const listed = await (await dash(cookie, 'GET', path)).json();
+		// the product's own keys, the Portal's database and storage, and the links the manifest needs
 		expect(listed.connections.map((/** @type {{ name: string }} */ c) => c.name)).toEqual([
 			'ai',
 			'smtp',
 			'storage',
-			'accounts',
 			'database',
+			'link_accounts',
+			'link_notifications',
 		]);
-		expect(listed.connections[4]).toEqual({
+		expect(listed.connections[3]).toEqual({
 			name: 'database',
 			label: 'Database (MongoDB)',
 			kind: 'database',
 			neededBy: ['notes', 'inbox'],
+			managed: true,
 			set: false,
 			status: 'not_connected',
 			testedAt: null,
 		});
+		expect(listed.connections.map((/** @type {{ managed: boolean }} */ c) => c.managed)).toEqual([
+			false,
+			false,
+			true,
+			true,
+			true,
+			true,
+		]);
 		const saved = await (await dash(cookie, 'PUT', `${path}/ai`, { value: 'sk-live-abcdef1234' })).json();
 		expect(saved).toMatchObject({ name: 'ai', status: 'connected', set: true });
 		// nothing of the secret comes back, not even its last characters
@@ -113,11 +123,15 @@ describe('connections', () => {
 		for (const [name, value] of /** @type {Array<[string, unknown]>} */ ([
 			['ai', ''],
 			['smtp', { nested: { a: 1 } }],
-			['database', 'postgres://x'],
-			['accounts', ''],
-			['storage', { bucket: 'b' }],
 		])) {
 			expect((await dash(cookie, 'PUT', `${path}/${name}`, { value })).status).toBe(422);
+		}
+		// the database, the storage and the links are the Portal's: nothing is saved or removed here
+		for (const name of ['database', 'storage', 'link_accounts', 'link_notifications']) {
+			const put = await dash(cookie, 'PUT', `${path}/${name}`, { value: 'mongodb://x/y' });
+			expect(put.status, name).toBe(409);
+			expect((await put.json()).type).toMatch(/managed_by_portal$/);
+			expect((await dash(cookie, 'DELETE', `${path}/${name}`)).status, name).toBe(409);
 		}
 		expect((await dash(cookie, 'PUT', `${path}/nope`, { value: 'x' })).status).toBe(404);
 		expect((await dash(cookie, 'POST', `${path}/nope/test`)).status).toBe(404);
@@ -228,15 +242,17 @@ describe('connections', () => {
 		expect(() => make({ 'Bad Name': { label: 'x', kind: 'secret', neededBy: [] } })).toThrow(/name/);
 		expect(() => make({ x: { label: 'x', kind: 'other', neededBy: [] } })).toThrow(/kind/);
 		expect(() => make({ x: { label: 'x', kind: 'secret', neededBy: ['nope'] } })).toThrow(/neededBy/);
-		expect(() => make({ x: { label: 'x', kind: 'token', neededBy: [] } })).toThrow(/productId/);
+		// there are no pasted tokens: the Portal links the products
+		expect(() => make({ x: { label: 'x', kind: 'token', neededBy: [] } })).toThrow(/kind/);
+		expect(() => make({ files: { label: 'x', kind: 'storage', neededBy: [] } })).toThrow(/named storage/);
 		expect(() => make({ db2: { label: 'x', kind: 'database', neededBy: [] } })).toThrow(/database/);
 		expect(() => make({ database: { label: 'My database', kind: 'database', neededBy: ['notes'] } })).not.toThrow();
 	});
 });
 
 describe('storage', () => {
-	it('tests the bucket with a signed HEAD and presigns uploads', async () => {
-		const { session, dash, websiteId, handlers, product } = await setup({ connections: CONNECTIONS });
+	it('arrives from the Portal, is tested with a signed HEAD, reported, and presigns uploads', async () => {
+		const { session, dash, websiteId, handlers, product, portal, settle } = await setup({ connections: CONNECTIONS });
 		/** @type {string[]} */
 		const seen = [];
 		let status = 404;
@@ -244,7 +260,6 @@ describe('storage', () => {
 			seen.push(`${request.method} ${new URL(request.url).pathname} ${request.headers.get('authorization')?.slice(0, 16)}`);
 			return new Response(null, { status });
 		};
-		const cookie = await session({ kind: 'merchant' });
 		const value = {
 			endpoint: 'https://files.example.com',
 			region: 'auto',
@@ -252,16 +267,22 @@ describe('storage', () => {
 			accessKeyId: 'AKID',
 			secretAccessKey: 'secret-key-5678',
 		};
-		const saved = await (
-			await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/storage`, { value })
-		).json();
-		expect(saved).toMatchObject({ status: 'connected', set: true });
+		await portal.saveConnections(websiteId, { storage: value });
+		await settle();
+		const cookie = await session({ kind: 'merchant' });
+		const path = `/v1/dashboard/websites/${websiteId}/connections`;
+		const saved = (await (await dash(cookie, 'GET', path)).json()).connections.find(
+			(/** @type {{ name: string }} */ c) => c.name === 'storage',
+		);
+		expect(saved).toMatchObject({ status: 'connected', set: true, managed: true });
 		expect(JSON.stringify(saved)).not.toContain('5678');
 		expect(seen[0]).toMatch(/^HEAD \/shop\/notes\/.+\/ss-connection-test AWS4-HMAC-SHA256/);
+		// the Portal was told how it worked
+		expect(portal.health(websiteId, 'notes', 'storage')).toMatchObject({ version: 1, ok: true });
 		status = 403;
-		expect(
-			await (await dash(cookie, 'POST', `/v1/dashboard/websites/${websiteId}/connections/storage/test`)).json(),
-		).toMatchObject({ status: 'test_failed' });
+		expect(await (await dash(cookie, 'POST', `${path}/storage/test`)).json()).toMatchObject({ status: 'test_failed' });
+		await settle();
+		expect(portal.health(websiteId, 'notes', 'storage')).toMatchObject({ version: 1, ok: false });
 		const storage = await product.connections.storage(websiteId);
 		const upload = storage?.presignPut({ key: 'a/b.png', contentType: 'image/png', contentLength: 10 });
 		expect(upload?.url).toContain('X-Amz-Signature=');
@@ -269,36 +290,49 @@ describe('storage', () => {
 	});
 });
 
-describe('pasted tokens', () => {
-	it('are saved only as a server token of the expected product for the same website', async () => {
-		const { session, dash, websiteId, portal } = await setup({ connections: CONNECTIONS });
+describe('links to other products', () => {
+	it('are given by the Portal only: the product keeps the key sealed and cannot save, remove or read it', async () => {
+		const { session, dash, websiteId, portal, store, settle } = await setup({ connections: CONNECTIONS });
 		const cookie = await session({ kind: 'merchant' });
-		const path = `/v1/dashboard/websites/${websiteId}/connections/accounts`;
-		const other = portal.addWebsite({ domain: 'other.example.com' });
-		for (const token of [
-			(await portal.issueToken({ websiteId, productId: 'accounts', kind: 'browser' })).token,
-			(await portal.issueToken({ websiteId, productId: 'chat', kind: 'server' })).token,
-			(await portal.issueToken({ websiteId: other, productId: 'accounts', kind: 'server' })).token,
-			'garbage',
-		]) {
-			expect((await dash(cookie, 'PUT', path, { value: token })).status).toBe(422);
-		}
-		const good = await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' });
-		expect(await (await dash(cookie, 'PUT', path, { value: good.token })).json()).toMatchObject({ status: 'connected' });
-		portal.revoke(good.jti);
-		await portal.sendNotice('notes', { type: 'token.revoked', websiteId });
-		expect(await (await dash(cookie, 'POST', `${path}/test`)).json()).toMatchObject({ status: 'test_failed' });
+		const path = `/v1/dashboard/websites/${websiteId}/connections`;
+		const before = (await (await dash(cookie, 'GET', path)).json()).connections.find(
+			(/** @type {{ name: string }} */ c) => c.name === 'link_accounts',
+		);
+		expect(before).toMatchObject({ kind: 'link', managed: true, set: false, status: 'not_connected' });
+		const { token } = await portal.link(websiteId, 'notes', 'accounts', ['keys.read']);
+		await settle();
+		const after = (await (await dash(cookie, 'GET', path)).json()).connections.find(
+			(/** @type {{ name: string }} */ c) => c.name === 'link_accounts',
+		);
+		expect(after).toMatchObject({ set: true, status: 'connected' });
+		// sealed, and never shown
+		expect(JSON.stringify(after)).not.toContain(token.slice(0, 20));
+		expect(JSON.stringify(await store.list('connections', { websiteId }))).not.toContain(token.slice(0, 20));
+		expect((await dash(cookie, 'PUT', `${path}/link_accounts`, { value: 'a.b.c' })).status).toBe(409);
+		expect((await dash(cookie, 'DELETE', `${path}/link_accounts`)).status).toBe(409);
+		// a token pasted by hand into the old connection names is gone from what the product keeps
+		await store.put('connections', `${websiteId}|accounts`, {
+			websiteId,
+			name: 'accounts',
+			sealed: 'x',
+			status: 'connected',
+			at: 1,
+		});
+		await portal.saveConnections(websiteId, { database: null });
+		await settle();
+		expect(await store.get('connections', `${websiteId}|accounts`)).toBeNull();
 	});
 
-	it('call the other product at its directory address and report failures as typed results', async () => {
-		const { session, dash, websiteId, portal, product, accounts, handlers } = await setup({ connections: CONNECTIONS });
+	it('call the other product at its directory address with the link key and report failures as typed results', async () => {
+		const { websiteId, portal, product, accounts, handlers, settle, session, dash } = await setup({ connections: CONNECTIONS });
 		expect(await product.callProduct(websiteId, 'accounts', '/v1/activity-copies')).toEqual({
 			ok: false,
 			reason: 'not_connected',
 		});
-		const cookie = await session({ kind: 'merchant' });
-		const token = (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token;
-		await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, { value: token });
+		// a product the manifest names no link to is never called
+		expect(await product.callProduct(websiteId, 'payments', '/v1/x')).toEqual({ ok: false, reason: 'not_connected' });
+		const { token } = await portal.link(websiteId, 'notes', 'accounts', ['activity.write']);
+		await settle();
 		const copy = {
 			websiteId,
 			productId: 'notes',
@@ -325,6 +359,11 @@ describe('pasted tokens', () => {
 		handlers[accounts.url] = async () =>
 			new Response(JSON.stringify({ type: 'https://a/problems/invalid_token' }), { status: 401 });
 		expect(await product.callProduct(websiteId, 'accounts', '/x')).toMatchObject({ ok: false, reason: 'refused' });
+		const cookie = await session({ kind: 'merchant' });
+		const refused = (
+			await (await dash(cookie, 'GET', `/v1/dashboard/websites/${websiteId}/connections`)).json()
+		).connections.find((/** @type {{ name: string }} */ c) => c.name === 'link_accounts');
+		expect(refused).toMatchObject({ status: 'test_failed', message: expect.stringMatching(/revoked or switched off/) });
 		handlers[accounts.url] = async () =>
 			new Response(JSON.stringify({ type: 'https://a/problems/product_unavailable', reason: 'stopped' }), { status: 403 });
 		expect(await product.callProduct(websiteId, 'accounts', '/x')).toMatchObject({ ok: false, reason: 'unavailable' });
@@ -333,9 +372,21 @@ describe('pasted tokens', () => {
 		delete handlers[accounts.url];
 		expect(await product.callProduct(websiteId, 'accounts', '/x')).toMatchObject({ ok: false, reason: 'unreachable' });
 		const list = await (await dash(cookie, 'GET', `/v1/dashboard/websites/${websiteId}/connections`)).json();
-		expect(list.connections.find((/** @type {{ name: string }} */ c) => c.name === 'accounts')).toMatchObject({
+		expect(list.connections.find((/** @type {{ name: string }} */ c) => c.name === 'link_accounts')).toMatchObject({
 			status: 'connected',
 		});
+	});
+
+	it('end when the Portal ends them: the key is forgotten at the next fetch', async () => {
+		const { websiteId, portal, product, settle, clock } = await setup({ connections: CONNECTIONS });
+		await portal.link(websiteId, 'notes', 'accounts', ['keys.read']);
+		await settle();
+		expect(await product.connections.value(websiteId, 'link_accounts')).toEqual(expect.any(String));
+		clock.advance(1000);
+		await portal.unlink(websiteId, 'notes', 'accounts');
+		await settle();
+		expect(await product.connections.value(websiteId, 'link_accounts')).toBeNull();
+		expect(await product.callProduct(websiteId, 'accounts', '/x')).toEqual({ ok: false, reason: 'not_connected' });
 	});
 
 	it('list every connected product through the Portal directory: kept 5 minutes, the last copy while it is down', async () => {
@@ -382,21 +433,25 @@ describe('pasted tokens', () => {
 		expect((await fresh.product.products()).length).toBe(3);
 	});
 
-	it('mark the connection broken when the directory does not know the product', async () => {
-		const { session, dash, websiteId, portal, product } = await setup({
-			connections: {
-				...CONNECTIONS,
-				payments: { label: 'Payments token', kind: 'token', productId: 'payments', neededBy: ['notes'] },
+	it('mark the link broken when the directory does not know the product', async () => {
+		const { session, dash, websiteId, portal, product, settle } = await setup({
+			manifest: {
+				...manifest(),
+				links: {
+					...manifest().links,
+					needs: [...manifest().links.needs, { product: 'payments', scopes: ['methods.read'], features: ['notes'] }],
+				},
 			},
 		});
+		await portal.link(websiteId, 'notes', 'payments', ['methods.read']);
+		await settle();
 		const cookie = await session({ kind: 'merchant' });
-		const token = (await portal.issueToken({ websiteId, productId: 'payments', kind: 'server' })).token;
-		await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/payments`, { value: token });
 		expect(await product.callProduct(websiteId, 'payments', '/v1/x')).toEqual({ ok: false, reason: 'unavailable' });
 		const list = await (await dash(cookie, 'GET', `/v1/dashboard/websites/${websiteId}/connections`)).json();
-		expect(list.connections.find((/** @type {{ name: string }} */ c) => c.name === 'payments')).toMatchObject({
+		expect(list.connections.find((/** @type {{ name: string }} */ c) => c.name === 'link_payments')).toMatchObject({
 			status: 'test_failed',
 			message: 'payments is not available.',
+			neededBy: ['notes'],
 		});
 	});
 });
@@ -405,15 +460,13 @@ describe('activity log and data rights', () => {
 	it('logs to the merchant database, forwards copies to Accounts and retries unsent ones', async () => {
 		const ctx = await setup({ connections: CONNECTIONS, routes: routes() });
 		holder.product = ctx.product;
-		const { session, dash, websiteId, portal, accounts, call, server, settle, connectDatabase } = ctx;
+		const { websiteId, portal, accounts, call, server, settle, connectDatabase } = ctx;
 		const dbName = await connectDatabase();
 		expect((await call('POST', '/v1/actions', { token: server.token, bare: true })).status).toBe(200);
 		await settle();
 		expect(accounts.copies).toHaveLength(0);
-		const cookie = await session({ kind: 'merchant' });
-		await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, {
-			value: (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token,
-		});
+		await portal.link(websiteId, 'notes', 'accounts', ['activity.write']);
+		await settle();
 		accounts.setFailing(true);
 		await call('POST', '/v1/actions', { token: server.token, bare: true });
 		await settle();
@@ -456,12 +509,10 @@ describe('activity log and data rights', () => {
 	it('drops copies Accounts refuses after 3 refusals, pausing the website 15 minutes after each (RT-5)', async () => {
 		const ctx = await setup({ connections: CONNECTIONS, routes: routes() });
 		holder.product = ctx.product;
-		const { session, dash, websiteId, portal, accounts, handlers, call, server, settle, connectDatabase, clock, entries } = ctx;
+		const { websiteId, portal, accounts, handlers, call, server, settle, connectDatabase, clock, entries } = ctx;
 		const dbName = await connectDatabase();
-		const cookie = await session({ kind: 'merchant' });
-		await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, {
-			value: (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token,
-		});
+		await portal.link(websiteId, 'notes', 'accounts', ['activity.write']);
+		await settle();
 		let refusing = true;
 		let asked = 0;
 		const original = /** @type {(request: Request) => Promise<Response>} */ (handlers[accounts.url]);
@@ -515,12 +566,10 @@ describe('activity log and data rights', () => {
 	it('retries unsent copies on the next request of a fresh instance', async () => {
 		const ctx = await setup({ connections: CONNECTIONS, routes: routes() });
 		holder.product = ctx.product;
-		const { session, dash, websiteId, portal, accounts, call, server, settle, connectDatabase } = ctx;
+		const { websiteId, portal, accounts, call, server, settle, connectDatabase } = ctx;
 		await connectDatabase();
-		const cookie = await session({ kind: 'merchant' });
-		await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, {
-			value: (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token,
-		});
+		await portal.link(websiteId, 'notes', 'accounts', ['activity.write']);
+		await settle();
 		accounts.setFailing(true);
 		await call('POST', '/v1/actions', { token: server.token, bare: true });
 		await settle();
@@ -607,13 +656,36 @@ describe('activity log and data rights', () => {
 });
 
 describe('merchant database connection', () => {
-	it('fails the live test for unreachable or refused addresses', async () => {
-		const { session, dash, websiteId } = await setup();
+	it('arrives from the Portal with the product’s own database name, is tested live and reported', async () => {
+		const { session, dash, websiteId, portal, settle, product, clock, store } = await setup();
 		const cookie = await session({ kind: 'merchant' });
-		const path = `/v1/dashboard/websites/${websiteId}/connections/database`;
-		const refused = await (await dash(cookie, 'PUT', path, { value: 'mongodb://10.0.0.1:27017/shop' })).json();
-		expect(refused).toMatchObject({ status: 'test_failed', message: expect.stringMatching(/not allowed/) });
-		const good = await (await dash(cookie, 'PUT', path, { value: mongoUri(freshDb('conn')) })).json();
-		expect(good).toMatchObject({ status: 'connected' });
+		const path = `/v1/dashboard/websites/${websiteId}/connections`;
+		const row = async () =>
+			(await (await dash(cookie, 'GET', path)).json()).connections.find(
+				(/** @type {{ name: string }} */ c) => c.name === 'database',
+			);
+		// a refused address is stored as failing, and the Portal is told why
+		await portal.saveConnections(websiteId, { database: 'mongodb://10.0.0.1:27017/shop' });
+		await settle();
+		expect(await row()).toMatchObject({ status: 'test_failed', message: expect.stringMatching(/not allowed/), set: true });
+		expect(portal.health(websiteId, 'notes', 'database')).toMatchObject({ version: 1, ok: false });
+		expect(portal.health(websiteId, 'notes', 'database')?.message).toMatch(/not allowed/);
+		// a good one connects; the product's database is the one the Portal named: ss_notes unless the Owner named another
+		clock.advance(1000);
+		await portal.saveConnections(websiteId, { database: mongoUri(freshDb('conn')) });
+		await settle();
+		expect(await row()).toMatchObject({ status: 'connected', set: true });
+		expect(portal.health(websiteId, 'notes', 'database')).toMatchObject({ version: 2, ok: true });
+		expect((await product.connections.value(websiteId, 'database')) ?? '').toMatch(/^mongodb:/);
+		expect((await store.get('connections', `${websiteId}|database`))?.dbName).toBe('ss_notes');
+		clock.advance(1000);
+		const named = freshDb('named');
+		await portal.saveConnections(websiteId, { dbNames: { notes: named } });
+		await settle();
+		const data = await product.data.forWebsite(websiteId);
+		await data.collection('probe').insertOne({ ok: true });
+		const { client, db } = await openDb(named);
+		expect(await db.collection('ss_notes_probe').countDocuments({ websiteId })).toBe(1);
+		await client.close();
 	});
 });

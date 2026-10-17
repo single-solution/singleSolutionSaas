@@ -10,8 +10,8 @@ import { randomToken } from '@ss/protocol';
 /** @typedef {import('./stores/types.js').Store} Store */
 /**
  * Who changed something: a dashboard session (merchant or admin), the member of the merchant's staff a server-token call
- * named (`user`, PLAN 0.8.10 K2), or the merchant's server (`server`).
- * @typedef {{ kind: 'merchant' | 'admin' | 'user' | 'server', id: string, name: string, role?: string }} Who
+ * named (`user`, PLAN 0.8.10 K2), the merchant's server (`server`), or the Portal (`portal`: a connection or link it delivered).
+ * @typedef {{ kind: 'merchant' | 'admin' | 'user' | 'server' | 'portal', id: string, name: string, role?: string }} Who
  */
 /** @typedef {{ websiteId: string | null, who: Who, what: string, detail: string, at: string }} RecentChange */
 

@@ -16,6 +16,7 @@ export { resealEach, sumCounts } from './reseal.js';
 export { formatText } from './text.js';
 export { actorOf } from './actor.js';
 export { KIT_PERMISSIONS, checkStaff, grantedOf, grants } from './staff.js';
+export { KIT_LINK_SCOPES } from './kit-routes.js';
 export { countHandlers } from './counts.js';
 export { KIT_GUIDE } from './guide.js';
 export { apiAnchor, renderApiReference } from './api-reference.js';

@@ -1,7 +1,7 @@
 /**
  * The product database store (PLAN 0.4.8). One small document store backs everything the kit keeps in the product's
  * own database: the Portal connection and keys, switches, settings, widget texts and theme, connections, Recent
- * changes, cached status, revoked token ids, the Portal's copy of each website's settings, widget last-seen times, dashboard sessions, replay
+ * changes, cached status, revoked token ids, the Portal's copy of each website's settings, what the Portal delivered of its connections (the version and who may call this product), widget last-seen times, dashboard sessions, replay
  * records, the answers of idempotent requests and rate-limit counters. It never holds business data.
  *
  * `createMemoryStore` is for development and tests; `createMongoStore` is the production store.
@@ -11,7 +11,7 @@
 /**
  * The collections the kit uses. Per-website documents carry `websiteId`.
  * @typedef {'state' | 'switches' | 'settings' | 'connections' | 'changes' | 'status' | 'revoked'
- *   | 'website_settings' | 'widget' | 'sessions' | 'idempotency'} Collection
+ *   | 'website_settings' | 'portal_connections' | 'widget' | 'sessions' | 'idempotency'} Collection
  */
 
 /** @typedef {Record<string, any>} Doc */

@@ -157,9 +157,6 @@ export const activityView = (entry) => ({
  *   now: () => number, logger: import('./logger.js').Logger }} options
  */
 export const createActivity = ({ productId, data, connections, now, logger }) => {
-	const accountsConnection = Object.entries(connections.definitions).find(
-		([, def]) => def.kind === 'token' && def.productId === 'accounts',
-	)?.[0];
 	/** Per instance: websites known to have no unsent copies. @type {Set<string>} */
 	const clean = new Set();
 	/** Per instance: websites whose copies Accounts refused, until when none is sent. @type {Map<string, number>} */
@@ -169,7 +166,7 @@ export const createActivity = ({ productId, data, connections, now, logger }) =>
 
 	/** @param {string} websiteId */
 	const hasAccounts = async (websiteId) =>
-		accountsConnection !== undefined && (await connections.value(websiteId, accountsConnection)) !== null;
+		connections.declaresLink('accounts') && (await connections.hasLink(websiteId, 'accounts'));
 
 	/**
 	 * Send unsent copies of a website, oldest first; stops at the first failure. A refusal counts once more for every
