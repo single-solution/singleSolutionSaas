@@ -14,6 +14,7 @@ import {
 	createFakePortal,
 	createMemoryStore,
 	createNetwork,
+	portalConnector,
 	portalSectionsOf,
 	staffCaller,
 } from '@ss/app-kit/testing';
@@ -202,7 +203,11 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	 *   headers?: Record<string, string>, after?: boolean, bare?: boolean, staff?: Record<string, any> }} [init] `bare`: the
 	 *   server token alone; `staff`: who is signed in (the website's server with a staff Owner signed in otherwise)
 	 */
-	const call = async (method, path, { token, origin, body, raw, type, cookie, headers = {}, after = true, bare = false, staff } = {}) => {
+	const call = async (
+		method,
+		path,
+		{ token, origin, body, raw, type, cookie, headers = {}, after = true, bare = false, staff } = {},
+	) => {
 		if (token === server && !bare && headers['ss-sign-in'] === undefined && headers['ss-visitor-ip'] === undefined)
 			// eslint-disable-next-line no-param-reassign -- the harness signs the staff member in
 			headers = await staffHeaders({ headers, staff });
@@ -261,11 +266,29 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		if (response.status !== 200) throw new Error(`features: ${response.status} ${await response.text()}`);
 	};
 
+	/** What the merchant does in the Portal (the database, the storage, the links to other products). */
+	const viaPortal = portalConnector({
+		portal,
+		websiteId,
+		manifest,
+		product,
+		drain: async () => {
+			while (tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();
+		},
+		view: async (name) =>
+			(
+				await (await dashboard(await adminSession(), 'GET', `/v1/dashboard/websites/${websiteId}/connections`)).json()
+			).connections.find((/** @type {{ name: string }} */ item) => item.name === name),
+	});
+
 	/**
-	 * Save a connection (Connections screen; tested live when saved).
+	 * Save a connection: the database, the storage and the links through the Portal (the product fetches them), a provider key
+	 * on the Connections screen (tested live when saved).
 	 * @param {string} name @param {unknown} value
 	 */
 	const connect = async (name, value) => {
+		const delivered = await viaPortal(name, value);
+		if (delivered !== null) return delivered;
 		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/connections/${name}`, {
 			value,
 		});

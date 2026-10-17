@@ -8,6 +8,111 @@
 	},
 	"widgetScriptUrl": "/widget.js",
 	"docsUrl": "/docs",
+	"needs": {
+		"database": true,
+		"storage": "none"
+	},
+	"links": {
+		"offers": [
+			{
+				"scope": "activity.write",
+				"name": "Record activity",
+				"description": "Other products send their activity-log entries here, so the website's staff see one history."
+			},
+			{
+				"scope": "users.read",
+				"name": "Look up users",
+				"description": "Other products look up the website's users: one by id, staff who hold a permission, or a person by email or phone."
+			},
+			{
+				"scope": "roles.read",
+				"name": "Read roles",
+				"description": "Other products read the website's staff roles and what each may do."
+			},
+			{
+				"scope": "me.read",
+				"name": "Read the signed-in person",
+				"description": "Other products read the profile of the person whose sign-in they were given."
+			},
+			{
+				"scope": "permissions.read",
+				"name": "Read permissions",
+				"description": "Other products list this product's permissions, for the roles of the website's staff."
+			},
+			{
+				"scope": "data_rights.export",
+				"name": "Export a person's data",
+				"description": "Other products ask this product for everything it keeps about one person."
+			},
+			{
+				"scope": "data_rights.erase",
+				"name": "Erase a person's data",
+				"description": "Other products ask this product to erase or anonymize one person's data."
+			}
+		],
+		"needs": [
+			{
+				"product": "chat",
+				"scopes": ["permissions.read"],
+				"features": ["roles"]
+			},
+			{
+				"product": "chat",
+				"scopes": ["data_rights.export", "data_rights.erase"],
+				"features": ["data_rights"]
+			},
+			{
+				"product": "ecommerce",
+				"scopes": ["orders.read.customer"],
+				"features": ["orders_tab"]
+			},
+			{
+				"product": "ecommerce",
+				"scopes": ["permissions.read"],
+				"features": ["roles"]
+			},
+			{
+				"product": "ecommerce",
+				"scopes": ["data_rights.export", "data_rights.erase"],
+				"features": ["data_rights"]
+			},
+			{
+				"product": "growth",
+				"scopes": ["permissions.read"],
+				"features": ["roles"]
+			},
+			{
+				"product": "growth",
+				"scopes": ["data_rights.export", "data_rights.erase"],
+				"features": ["data_rights"]
+			},
+			{
+				"product": "notifications",
+				"scopes": ["messages.send"],
+				"features": ["phone_code", "phone_password", "email_password", "email_code", "approval"]
+			},
+			{
+				"product": "notifications",
+				"scopes": ["permissions.read"],
+				"features": ["roles"]
+			},
+			{
+				"product": "notifications",
+				"scopes": ["data_rights.export", "data_rights.erase"],
+				"features": ["data_rights"]
+			},
+			{
+				"product": "payments",
+				"scopes": ["permissions.read"],
+				"features": ["roles"]
+			},
+			{
+				"product": "payments",
+				"scopes": ["data_rights.export", "data_rights.erase"],
+				"features": ["data_rights"]
+			}
+		]
+	},
 	"features": [
 		{
 			"key": "phone_code",

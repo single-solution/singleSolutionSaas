@@ -448,7 +448,7 @@ export const createReports = (product, service) => {
 				: zones.pickupEnabled === true);
 		return paymentMethodsOn({
 			methods: await service.methods.methodsOf(s),
-			paymentsConnected: (await product.connections.value(s.websiteId, 'payments')) !== null,
+			paymentsConnected: await product.connections.hasLink(s.websiteId, 'payments'),
 			pickup,
 		});
 	};
@@ -471,7 +471,7 @@ export const createReports = (product, service) => {
 	const payUnready = async (s) => {
 		if (!s.has('checkout')) return null;
 		const methods = await service.methods.methodsOf(s);
-		const paymentsConnected = (await product.connections.value(s.websiteId, 'payments')) !== null;
+		const paymentsConnected = await product.connections.hasLink(s.websiteId, 'payments');
 		const details = await service.methods.payDetails(s, methods, paymentsConnected);
 		const asked = methods.filter(
 			(method) =>
@@ -489,7 +489,7 @@ export const createReports = (product, service) => {
 	const staffAlertSetup = async (s) => {
 		if (!s.has('staff_alerts')) return { staffAlerted: null, adminUrl: null };
 		const own = await s.values('staff_alerts');
-		const connected = async (/** @type {string} */ name) => (await product.connections.value(s.websiteId, name)) !== null;
+		const connected = async (/** @type {string} */ name) => product.connections.hasLink(s.websiteId, name);
 		const listed = (await s.website()).team.recipients.length > 0;
 		const staff = typeof own.staffPermission === 'string' && own.staffPermission !== '' && (await connected('accounts'));
 		return {

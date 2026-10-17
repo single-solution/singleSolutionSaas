@@ -430,7 +430,9 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/indexnow',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			scope: 'indexnow.submit',
+			runtime: true,
 			feature: 'indexnow',
 			database: false,
 			rateLimit: WEB_LIMITS,

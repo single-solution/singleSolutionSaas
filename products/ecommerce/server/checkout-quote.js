@@ -400,7 +400,7 @@ export const createQuoting = (product, service) => {
 					rules: { settings: /** @type {Record<string, any>} */ (loyaltySettings), timeZone: clock.timeZone },
 				})
 			: null;
-		const paymentsConnected = (await product.connections.value(s.websiteId, 'payments')) !== null;
+		const paymentsConnected = await product.connections.hasLink(s.websiteId, 'payments');
 		const payDetails = await service.methods.payDetails(s, methods, paymentsConnected);
 
 		/**

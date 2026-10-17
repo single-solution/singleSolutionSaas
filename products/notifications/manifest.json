@@ -8,6 +8,46 @@
 	},
 	"widgetScriptUrl": "/widget.js",
 	"docsUrl": "/docs",
+	"needs": {
+		"database": true,
+		"storage": "none"
+	},
+	"links": {
+		"offers": [
+			{
+				"scope": "messages.send",
+				"name": "Send messages",
+				"description": "Other products send emails, texts, WhatsApp and push messages through the website's own provider keys."
+			},
+			{
+				"scope": "events.forward",
+				"name": "Forward events",
+				"description": "Other products pass their events on to the merchant's webhook addresses, signed."
+			},
+			{
+				"scope": "permissions.read",
+				"name": "Read permissions",
+				"description": "Other products list this product's permissions, for the roles of the website's staff."
+			},
+			{
+				"scope": "data_rights.export",
+				"name": "Export a person's data",
+				"description": "Other products ask this product for everything it keeps about one person."
+			},
+			{
+				"scope": "data_rights.erase",
+				"name": "Erase a person's data",
+				"description": "Other products ask this product to erase or anonymize one person's data."
+			}
+		],
+		"needs": [
+			{
+				"product": "accounts",
+				"scopes": ["activity.write"],
+				"features": []
+			}
+		]
+	},
 	"features": [
 		{
 			"key": "whatsapp",

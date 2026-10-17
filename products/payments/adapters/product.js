@@ -235,13 +235,6 @@ export const createProductInstance = (options) => {
 					},
 				]),
 			),
-			notifications: {
-				label: 'Notifications token (signed webhooks to your server)',
-				kind: 'token',
-				productId: 'notifications',
-				neededBy: [],
-			},
-			accounts: { label: 'Accounts token (activity-log copies)', kind: 'token', productId: 'accounts', neededBy: [] },
 		},
 		hooks: { ...dataRights(now), blueprint: async (website) => setupPart(website, lists) },
 		data: { indexes: INDEXES },

@@ -217,8 +217,6 @@ export const createProductInstance = (options) => {
 
 	/** @param {'google' | 'apple' | 'facebook'} name */
 	const provider = (name) => ({ test: (/** @type {unknown} */ value) => providers.test(name, value) });
-	/** @param {string} productId @param {string} label @param {string[]} neededBy */
-	const token = (productId, label, neededBy) => ({ label, kind: /** @type {const} */ ('token'), productId, neededBy });
 
 	/**
 	 * Two-step sign-in as the importer writes it for a user (PLAN 0.8.10 A8): the plain TOTP secret sealed at once and
@@ -243,13 +241,6 @@ export const createProductInstance = (options) => {
 		// codes, links and invites with their default words: every send to Notifications carries them (parity P1)
 		messages,
 		connections: {
-			notifications: token('notifications', 'Notifications token (codes, invites and resets)', [
-				'phone_code',
-				'phone_password',
-				'email_password',
-				'email_code',
-				'approval',
-			]),
 			google: {
 				label: 'Google OAuth client',
 				kind: 'secret',
@@ -265,10 +256,6 @@ export const createProductInstance = (options) => {
 				secretField: 'appSecret',
 				...provider('facebook'),
 			},
-			ecommerce: token('ecommerce', 'Ecommerce token (Orders tab, permissions, data rights)', ['orders_tab']),
-			chat: token('chat', 'Chat token (permissions, data rights)', []),
-			payments: token('payments', 'Payments token (permissions, data rights)', []),
-			growth: token('growth', 'Growth token (permissions, data rights)', []),
 			// the pepper of `pbkdf2$` password hashes imported from another system (PLAN 0.8.10 A1): write-only, needed by
 			// no feature
 			imported_password_pepper: { label: 'Pepper of imported passwords', kind: 'secret', neededBy: [] },

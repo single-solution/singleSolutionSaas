@@ -8,7 +8,14 @@
  * @module
  */
 import { generateKeyPairSync } from 'node:crypto';
-import { apiChecker, createFakePortal, createMemoryStore, createNetwork, portalSectionsOf } from '@ss/app-kit/testing';
+import {
+	apiChecker,
+	createFakePortal,
+	createMemoryStore,
+	createNetwork,
+	portalConnector,
+	portalSectionsOf,
+} from '@ss/app-kit/testing';
 import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
@@ -274,8 +281,27 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		if (response.status !== 200) throw new Error(`features: ${response.status} ${response.text}`);
 	};
 
-	/** Save a connection (tested live when saved). @param {string} name @param {unknown} value */
+	/** What the merchant does in the Portal (the database and the links to other products). */
+	const viaPortal = portalConnector({
+		portal,
+		websiteId,
+		manifest,
+		product,
+		drain: flush,
+		view: async (name) =>
+			(await dashboard(await adminSession(), 'GET', `/v1/dashboard/websites/${websiteId}/connections`)).json.connections.find(
+				(/** @type {{ name: string }} */ item) => item.name === name,
+			),
+	});
+
+	/**
+	 * Save a connection: the database and the links through the Portal (the product fetches them), a provider key on the
+	 * Connections screen (tested live when saved).
+	 * @param {string} name @param {unknown} [value]
+	 */
 	const connect = async (name, value) => {
+		const delivered = await viaPortal(name, value);
+		if (delivered !== null) return delivered;
 		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/connections/${name}`, {
 			value,
 		});
@@ -283,9 +309,8 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		return response.json;
 	};
 
-	/** Paste another product's server token. @param {string} productId */
-	const paste = async (productId) =>
-		connect(productId, (await portal.issueToken({ websiteId, productId, kind: 'server' })).token);
+	/** The Portal links this product to another one of the website. @param {string} productId */
+	const paste = async (productId) => connect(productId, null);
 
 	/** What the merchant saved in the Portal's Website settings: no business facts and no phone, address or host rules yet. */
 	const site = { ...portalSectionsOf(websiteId, {}), pages: emptyWebsiteSettings(websiteId).pages };
@@ -318,11 +343,17 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	 * @type {Record<string, (value: any) => Parameters<typeof setWebsite>[0]>}
 	 */
 	const PORTAL_SETTINGS = {
-		'phone.defaultCallingCode': (value) => ({ region: { ...site.region, phone: { ...site.region.phone, callingCode: value } } }),
+		'phone.defaultCallingCode': (value) => ({
+			region: { ...site.region, phone: { ...site.region.phone, callingCode: value } },
+		}),
 		'phone.trunkPrefix': (value) => ({ region: { ...site.region, phone: { ...site.region.phone, trunkPrefix: value } } }),
 		'phone_code.countries': (value) => ({ region: { ...site.region, phone: { ...site.region.phone, countries: value } } }),
-		'profile.addressRequired': (value) => ({ region: { ...site.region, address: { ...site.region.address, required: value } } }),
-		'email_password.resetHosts': (value) => ({ pages: { ...site.pages, hosts: value.map((/** @type {string} */ host) => host.toLowerCase()) } }),
+		'profile.addressRequired': (value) => ({
+			region: { ...site.region, address: { ...site.region.address, required: value } },
+		}),
+		'email_password.resetHosts': (value) => ({
+			pages: { ...site.pages, hosts: value.map((/** @type {string} */ host) => host.toLowerCase()) },
+		}),
 	};
 
 	/** @param {string} feature @param {string} name @param {unknown} value */
@@ -392,6 +423,8 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		setBusiness,
 		flush,
 		connectDatabase: () => connect('database', merchantDatabase()),
+		/** The Portal ends this product's link to another one (or removes the storage). */
+		disconnect: viaPortal.disconnect,
 		/** The website's records in the merchant database (tests put imported records straight in). */
 		store: async () => createStore(await product.data.forWebsite(websiteId), { now }),
 		/** Pin the network of the next requests (null: a new one each request). @param {string | null} value */

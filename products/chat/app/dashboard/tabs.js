@@ -19,7 +19,7 @@ import {
 } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
-import { AiForm, FORMS, StorageForm } from './forms.js';
+import { AiForm, FORMS } from './forms.js';
 import { SettingsTab, aiLabelNotice } from './settings.js';
 import { SETUP } from './setup-steps.js';
 import { TEXTS } from './texts.js';
@@ -81,12 +81,11 @@ const ruleWarnings = (on) =>
 const connectionHint = (name) => TEXTS.connections.hints[/** @type {keyof typeof TEXTS.connections.hints} */ (name)] ?? null;
 
 /**
- * The structured value of the AI providers and the storage (the other connections take one value).
+ * The structured value of the AI providers (the other connections take one value; the storage is the Portal's).
  * @param {import('@ss/ui/dashboard').Connection} item
  * @param {(value: unknown) => Promise<void>} save
  */
-const connectionForm = (item, save) =>
-	item.name === 'storage' ? <StorageForm onSave={save} /> : FORMS.includes(item.name) ? <AiForm onSave={save} /> : null;
+const connectionForm = (item, save) => (FORMS.includes(item.name) ? <AiForm onSave={save} /> : null);
 
 /** @param {TabProps} props */
 function Overview(props) {

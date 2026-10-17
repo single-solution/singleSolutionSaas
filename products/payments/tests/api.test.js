@@ -407,15 +407,12 @@ describe('the payment API and Stripe', () => {
 		}
 		expect(await delivery(lost.id)).toBe('failed');
 		notifyStatus = 202;
-		await env.dashboard(
-			await env.adminSession(),
-			'DELETE',
-			`/v1/dashboard/websites/${env.websiteId}/connections/notifications`,
-		);
+		// the Portal ends the link to Notifications
+		await env.disconnect('notifications');
 		const quiet = await createPayment({ gateway: 'stripe' });
 		await stripePaid(quiet.id, 250000);
 		expect(await delivery(quiet.id)).toBe('not_connected');
-		await env.connect('notifications', env.notificationsToken);
+		await env.connect('notifications');
 	});
 });
 

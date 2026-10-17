@@ -72,7 +72,7 @@ export const createCheckout = (product, service) => {
 	const widgetSettings = async (s) => {
 		if (!s.has('checkout')) return {};
 		const checkout = await s.values('checkout');
-		const paymentsConnected = (await product.connections.value(s.websiteId, 'payments')) !== null;
+		const paymentsConnected = await product.connections.hasLink(s.websiteId, 'payments');
 		const zonesOn = s.has('delivery_zones');
 		const zones = zonesOn ? /** @type {import('../core/delivery.js').Zone[]} */ (await s.list('delivery_zones')) : [];
 		// pickup is a kind of rate (E5): offered at the stock locations that take pickups (Multi-location stock), else at

@@ -13,6 +13,7 @@ import {
 	createFakePortal,
 	createMemoryStore,
 	createNetwork,
+	portalConnector,
 	portalSectionsOf,
 	staffCaller,
 } from '@ss/app-kit/testing';
@@ -270,8 +271,27 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 		if (response.status !== 200) throw new Error(`features: ${response.status} ${response.text}`);
 	};
 
-	/** Save a connection (tested live when saved). @param {string} name @param {unknown} value */
+	/** What the merchant does in the Portal (the database, the storage, the links to other products). */
+	const viaPortal = portalConnector({
+		portal,
+		websiteId,
+		manifest,
+		product,
+		drain: flush,
+		view: async (name) =>
+			(await dashboard(await adminSession(), 'GET', `/v1/dashboard/websites/${websiteId}/connections`)).json.connections.find(
+				(/** @type {{ name: string }} */ item) => item.name === name,
+			),
+	});
+
+	/**
+	 * Save a connection: the database, the storage and the links through the Portal (the product fetches them), a provider key
+	 * on the Connections screen (tested live when saved).
+	 * @param {string} name @param {unknown} [value]
+	 */
 	const connect = async (name, value) => {
+		const delivered = await viaPortal(name, value);
+		if (delivered !== null) return delivered;
 		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/connections/${name}`, {
 			value,
 		});
@@ -279,9 +299,8 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 		return response.json;
 	};
 
-	/** Paste another product's server token. @param {string} productId */
-	const paste = async (productId) =>
-		connect(productId, (await portal.issueToken({ websiteId, productId, kind: 'server' })).token);
+	/** The Portal links this product to another one of the website. @param {string} productId */
+	const paste = async (productId) => connect(productId, null);
 
 	// the website's Accounts token, pasted on first use: the keys of the staff's sign-ins
 	const staffHeaders = staffCaller({ accounts, websiteId, paste: () => paste('accounts') });
@@ -422,6 +441,10 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 			aiAnswers.push(...answers);
 		},
 		connectDatabase: () => connect('database', merchantDatabase()),
+		/** The keys the Portal gave this product for other products, by their ids. */
+		linkTokens: viaPortal.tokens,
+		/** The Portal ends this product's link to another one (or removes the storage). */
+		disconnect: viaPortal.disconnect,
 		now,
 		/** @param {number} ms */
 		advance: (ms) => {

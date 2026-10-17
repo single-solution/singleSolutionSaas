@@ -31,9 +31,13 @@ afterEach(() => {
 });
 
 describe('Ecommerce’s connection forms', () => {
-	it('a courier API connection takes the courier form and hint; a token the one value field', async () => {
+	it('a courier API connection takes the courier form and hint; the storage and a link are the Portal’s: a note, no form', async () => {
 		const answer = {
-			connections: [connection('courier_2', 'secret'), connection('storage', 'storage'), connection('accounts', 'token')],
+			connections: [
+				connection('courier_2', 'secret'),
+				{ ...connection('storage', 'storage'), managed: true },
+				{ ...connection('link_accounts', 'link'), managed: true },
+			],
 		};
 		vi.stubGlobal(
 			'fetch',
@@ -46,7 +50,7 @@ describe('Ecommerce’s connection forms', () => {
 		};
 		await settle();
 		// one connection per view of the sidebar: open each
-		for (const name of ['courier_2', 'storage', 'accounts']) {
+		for (const name of ['courier_2', 'storage', 'link_accounts']) {
 			click(/** @type {HTMLElement} */ (container.querySelector(`nav a[href="#connection-${name}"]`)));
 			await settle();
 		}
@@ -54,8 +58,12 @@ describe('Ecommerce’s connection forms', () => {
 		expect(courier).toContain(TEXTS.connections.fields.bookUrl);
 		expect(courier).toContain(TEXTS.connections.fields.trackingPath);
 		expect(courier).toContain(TEXTS.connections.hints.courier);
-		const text = container.textContent ?? '';
-		expect(text).toContain(TEXTS.connections.fields.bucket);
-		expect(text).toContain(TEXTS.connections.token);
+		// the storage and the links to other products are set in the Portal: a note and a link, no field to type in
+		for (const name of ['storage', 'link_accounts']) {
+			const section = container.querySelector(`[id="section-connection-${name}"]`);
+			expect(section?.textContent).not.toContain('Bucket');
+			expect(section?.querySelector('input')).toBeNull();
+			expect(section?.querySelector('a[href*="/settings#"]')).not.toBeNull();
+		}
 	});
 });

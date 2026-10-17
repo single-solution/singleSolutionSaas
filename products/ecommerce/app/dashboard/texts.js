@@ -735,12 +735,6 @@ export const TEXTS = dashboardTexts({
 			apiKey: 'API key',
 			model: 'Model',
 			baseUrl: 'Base URL (https, OpenAI-compatible)',
-			endpoint: 'Endpoint (optional; empty for AWS S3)',
-			region: 'Region',
-			bucket: 'Bucket',
-			accessKeyId: 'Access key ID',
-			secretAccessKey: 'Secret access key',
-			prefix: 'Key prefix (optional)',
 			bookUrl: 'Booking address (https)',
 			trackUrl: 'Tracking address (https, with {tracking})',
 			headers: 'Extra headers (optional JSON object of text values; may hold {apiKey})',
@@ -750,21 +744,9 @@ export const TEXTS = dashboardTexts({
 		},
 		badHeaders: 'Extra headers must be a JSON object of text values.',
 		hints: {
-			database:
-				'The address of your MongoDB database, a connection string that starts with mongodb+srv://. Your products, orders and customers are kept there.',
-			storage:
-				'An S3-compatible bucket (AWS S3, Cloudflare R2 and others) for product images, downloads and return photos. Allow PUT from your website and admin origins in its CORS (see Developers).',
-			accounts:
-				"Paste the website's Accounts server token from the Portal. Shoppers sign in with Accounts to order, review and keep a wishlist.",
-			payments:
-				"Paste the website's Payments server token from the Portal. Online payments, bank transfers, cash on delivery advances and refunds go through Payments.",
-			notifications:
-				"Paste the website's Notifications server token from the Portal. Order messages and back-in-stock and price-drop alerts are sent with it.",
 			courier:
 				"Your courier's API: where to book and track, your key, extra headers, the booking body and where the answers hold the tracking number and status. See the docs.",
 			ai: 'Your own OpenAI-compatible AI service: base URL, key and model. AI copy suggests product texts with it.',
-			growth:
-				"Paste the website's Growth server token from the Portal. With Send changes to IndexNow on (Settings → SEO and feeds), saved product and category addresses go to search engines through it.",
 		},
 	},
 	developers: {

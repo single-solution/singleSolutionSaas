@@ -130,8 +130,8 @@ describe('Ecommerce’s Overview', () => {
 			on: ['catalog', 'checkout'],
 			needed: [{ name: 'database', label: 'Database', neededBy: ['catalog'], status: 'connected' }],
 			connections: [
-				{ name: 'payments', label: 'Payments', neededBy: [], status: 'not_connected' },
-				{ name: 'notifications', label: 'Notifications', neededBy: [], status: 'connected' },
+				{ name: 'link_payments', label: 'Payments', neededBy: [], status: 'not_connected' },
+				{ name: 'link_notifications', label: 'Notifications', neededBy: [], status: 'connected' },
 			],
 			settings: { catalog: { currency: value('USD', 'website') } },
 		});
@@ -144,7 +144,7 @@ describe('Ecommerce’s Overview', () => {
 		expect(text).toContain('Connect Notifications for order messages to shoppers');
 		expect(text).toContain('Connections ready1 of 1');
 		await press(container, 'Connect');
-		expect(opened).toEqual(['connections#connection-payments']);
+		expect(opened).toEqual(['connections#connection-link_payments']);
 	});
 
 	it('asks for staff alert recipients and admin page, how to pay methods paid by hand and the Atlas Search index', async () => {
@@ -155,7 +155,7 @@ describe('Ecommerce’s Overview', () => {
 			);
 		serve({
 			on: ['catalog', 'checkout', 'staff_alerts'],
-			connections: [{ name: 'payments', label: 'Payments', neededBy: [], status: 'connected' }],
+			connections: [{ name: 'link_payments', label: 'Payments', neededBy: [], status: 'connected' }],
 			methods: byHand({}),
 			settings: {
 				catalog: { currency: value('USD', 'website') },
@@ -188,7 +188,7 @@ describe('Ecommerce’s Overview', () => {
 		// recipients set, the admin page set, the note written: nothing of them
 		serve({
 			on: ['catalog', 'checkout', 'staff_alerts'],
-			connections: [{ name: 'payments', label: 'Payments', neededBy: [], status: 'connected' }],
+			connections: [{ name: 'link_payments', label: 'Payments', neededBy: [], status: 'connected' }],
 			methods: byHand({ accounts: [{ label: '', currency: '', rows: [{ label: 'Account', value: '123' }] }] }),
 			settings: {
 				catalog: { currency: value('USD', 'website') },
@@ -210,7 +210,7 @@ describe('Ecommerce’s Overview', () => {
 		serve({
 			on: ['catalog', 'checkout', 'delivery_zones', 'taxes'],
 			needed: [{ name: 'database', label: 'Database', neededBy: ['catalog'], status: 'connected' }],
-			connections: [{ name: 'payments', label: 'Payments', neededBy: [], status: 'connected' }],
+			connections: [{ name: 'link_payments', label: 'Payments', neededBy: [], status: 'connected' }],
 			settings: {
 				catalog: {
 					currency: value('USD', 'website'),

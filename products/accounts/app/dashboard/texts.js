@@ -97,18 +97,8 @@ export const TEXTS = dashboardTexts({
 			appSecret: 'App secret',
 		},
 		hints: {
-			database:
-				'The address of your MongoDB database, a connection string that starts with mongodb+srv://. Your users, roles and custom fields are kept there.',
-			token: "Paste the website's {product} server token from the Portal.",
 			imported_password_pepper:
 				'Only for passwords imported from another system as pbkdf2$… hashes: the secret (pepper) that system mixed into them. Each imported password is saved the Accounts way at its first sign-in.',
-		},
-		products: {
-			notifications: 'Notifications',
-			ecommerce: 'Ecommerce',
-			chat: 'Chat',
-			payments: 'Payments',
-			growth: 'Growth',
 		},
 		returnAddress: 'Return address to register with the provider',
 	},

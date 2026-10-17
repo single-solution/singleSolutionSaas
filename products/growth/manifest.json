@@ -9,7 +9,46 @@
 	"widgetScriptUrl": "/widget.js",
 	"widgetScriptLoading": "blocking",
 	"docsUrl": "/docs",
-	"websiteSettings": { "requires": ["pages.privacy"] },
+	"needs": {
+		"database": true,
+		"storage": "none"
+	},
+	"links": {
+		"offers": [
+			{
+				"scope": "settings.read",
+				"name": "Read tracking settings",
+				"description": "Other products read which tag ids this website uses."
+			},
+			{
+				"scope": "indexnow.submit",
+				"name": "Send changed addresses",
+				"description": "Other products tell search engines about pages that changed."
+			},
+			{
+				"scope": "permissions.read",
+				"name": "Read permissions",
+				"description": "Other products list this product's permissions, for the roles of the website's staff."
+			},
+			{
+				"scope": "data_rights.export",
+				"name": "Export a person's data",
+				"description": "Other products ask this product for everything it keeps about one person."
+			},
+			{
+				"scope": "data_rights.erase",
+				"name": "Erase a person's data",
+				"description": "Other products ask this product to erase or anonymize one person's data."
+			}
+		],
+		"needs": [
+			{
+				"product": "accounts",
+				"scopes": ["activity.write"],
+				"features": []
+			}
+		]
+	},
 	"features": [
 		{
 			"key": "meta_pixel",
@@ -61,6 +100,7 @@
 				"marketing.tiktok+countries.eea",
 				"marketing.analytics+countries.eea"
 			],
+			"requires": ["pages.privacy"],
 			"settings": {
 				"$ref": "schemas/consent_banner.settings.json"
 			}

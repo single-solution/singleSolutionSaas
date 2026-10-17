@@ -396,7 +396,7 @@ export const createService = (product) => {
 		const verified = await s.ctx.signIn?.();
 		if (!verified?.ok) return null;
 		const answer = await product
-			.callProduct(s.websiteId, 'accounts', '/v1/me', { headers: { [SIGN_IN_HEADER]: verified.token } })
+			.callProduct(s.websiteId, 'accounts', '/v1/lookup/me', { headers: { [SIGN_IN_HEADER]: verified.token } })
 			.catch(() => /** @type {const} */ ({ ok: false }));
 		if (!answer.ok || answer.status !== 200 || typeof answer.body !== 'object' || answer.body === null) return null;
 		const body = /** @type {Record<string, any>} */ (answer.body);

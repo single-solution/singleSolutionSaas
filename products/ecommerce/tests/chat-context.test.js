@@ -834,7 +834,7 @@ describe('Chat lookups (E37)', () => {
 			city: 'Boston',
 			extraFields: [{ label: 'Loyalty points', value: '0' }],
 		});
-		shop.responders.set(`${ACCOUNTS}/v1/me`, (call) =>
+		shop.responders.set(`${ACCOUNTS}/v1/lookup/me`, (call) =>
 			call.headers['ss-sign-in'] === token
 				? {
 						status: 200,
@@ -860,7 +860,7 @@ describe('Chat lookups (E37)', () => {
 				{ label: 'Area', value: 'Downtown' },
 			],
 		});
-		shop.responders.delete(`${ACCOUNTS}/v1/me`);
+		shop.responders.delete(`${ACCOUNTS}/v1/lookup/me`);
 	});
 
 	it('serves the store context with policies, newest products, deals, the viewed product and the visitor', async () => {

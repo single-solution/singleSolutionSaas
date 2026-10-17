@@ -241,7 +241,6 @@ export const createProductInstance = (options) => {
 						? { ok: true }
 						: { ok: false, message: 'Use a random secret of at least 24 characters.' },
 			},
-			accounts: { label: 'Accounts token (activity-log copies)', kind: 'token', productId: 'accounts', neededBy: [] },
 		},
 		hooks: {
 			...dataRights(now),

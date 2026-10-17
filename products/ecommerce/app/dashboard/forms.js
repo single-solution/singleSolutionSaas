@@ -1,6 +1,6 @@
 'use client';
 /**
- * Connections → structured values (PLAN 0.8.8): the S3-compatible `storage`, the OpenAI-compatible `ai` key (base URL,
+ * Connections → structured values (PLAN 0.8.8): the OpenAI-compatible `ai` key (base URL,
  * key, model) and each courier API connection's generic adapter (booking and tracking addresses, key, extra headers as JSON object
  * text, booking body template, where the answers hold the tracking number and status). A value is saved as one
  * connection (tested live, encrypted, write-only), so each form starts empty and saving replaces the whole value.
@@ -18,14 +18,6 @@ const N = TEXTS.connections.fields;
 
 /** Connections with their own form, and their fields. @type {Readonly<Record<string, ReadonlyArray<FieldSpec>>>} */
 const FORMS = Object.freeze({
-	storage: [
-		{ name: 'endpoint', optional: true, type: 'url' },
-		{ name: 'region' },
-		{ name: 'bucket' },
-		{ name: 'accessKeyId' },
-		{ name: 'secretAccessKey', secret: true },
-		{ name: 'prefix', optional: true },
-	],
 	ai: [{ name: 'baseUrl', type: 'url' }, { name: 'model' }, { name: 'apiKey', secret: true }],
 	courier: [
 		{ name: 'bookUrl', type: 'url' },

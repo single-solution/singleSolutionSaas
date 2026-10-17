@@ -8,6 +8,66 @@
 	},
 	"widgetScriptUrl": "/widget.js",
 	"docsUrl": "/docs",
+	"needs": {
+		"database": true,
+		"storage": "optional"
+	},
+	"links": {
+		"offers": [
+			{
+				"scope": "methods.read",
+				"name": "Read the payment methods",
+				"description": "Other products read which manual payment methods the website offers."
+			},
+			{
+				"scope": "payments.create",
+				"name": "Create payments",
+				"description": "Other products start a payment or checkout for an order."
+			},
+			{
+				"scope": "payments.read",
+				"name": "Read payments",
+				"description": "Other products read a payment and check it against what they expect."
+			},
+			{
+				"scope": "payments.cancel",
+				"name": "Cancel unpaid payments",
+				"description": "Other products cancel a payment that is not paid yet."
+			},
+			{
+				"scope": "payments.refund",
+				"name": "Refund payments",
+				"description": "Other products refund a payment, with a signed-in staff member."
+			},
+			{
+				"scope": "permissions.read",
+				"name": "Read permissions",
+				"description": "Other products list this product's permissions, for the roles of the website's staff."
+			},
+			{
+				"scope": "data_rights.export",
+				"name": "Export a person's data",
+				"description": "Other products ask this product for everything it keeps about one person."
+			},
+			{
+				"scope": "data_rights.erase",
+				"name": "Erase a person's data",
+				"description": "Other products ask this product to erase or anonymize one person's data."
+			}
+		],
+		"needs": [
+			{
+				"product": "accounts",
+				"scopes": ["activity.write"],
+				"features": []
+			},
+			{
+				"product": "notifications",
+				"scopes": ["events.forward"],
+				"features": []
+			}
+		]
+	},
 	"features": [
 		{
 			"key": "stripe",

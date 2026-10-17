@@ -297,32 +297,6 @@ export const createProductInstance = (options) => {
 				secretField: 'apiKey',
 				test: ai.test,
 			},
-			accounts: {
-				label: 'Accounts token (signed-in visitors, the guest limit while customer sign-in is paused, activity-log copies)',
-				kind: 'token',
-				productId: 'accounts',
-				neededBy: ['signed_in_chat'],
-			},
-			notifications: {
-				label: 'Notifications token (staff alerts, reply alerts to visitors, transcripts, AI cost alerts)',
-				kind: 'token',
-				productId: 'notifications',
-				neededBy: ['ai_cost_alerts', 'transcripts', 'staff_alerts', 'visitor_alerts'],
-			},
-			ecommerce: {
-				label: 'Ecommerce token (shop tools, track shipment, product cards, store context, shop info in the context panel)',
-				kind: 'token',
-				productId: 'ecommerce',
-				neededBy: [
-					'shop_search',
-					'shop_deals',
-					'shop_top',
-					'shop_my_orders',
-					'track_shipment',
-					'product_cards',
-					'shop_context',
-				],
-			},
 		},
 		// the routes fill these in (they need the merchant database store and the services)
 		hooks: {

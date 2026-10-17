@@ -8,6 +8,61 @@
 	},
 	"widgetScriptUrl": "/widget.js",
 	"docsUrl": "/docs",
+	"needs": {
+		"database": true,
+		"storage": "optional"
+	},
+	"links": {
+		"offers": [
+			{
+				"scope": "permissions.read",
+				"name": "Read permissions",
+				"description": "Other products list this product's permissions, for the roles of the website's staff."
+			},
+			{
+				"scope": "data_rights.export",
+				"name": "Export a person's data",
+				"description": "Other products ask this product for everything it keeps about one person."
+			},
+			{
+				"scope": "data_rights.erase",
+				"name": "Erase a person's data",
+				"description": "Other products ask this product to erase or anonymize one person's data."
+			}
+		],
+		"needs": [
+			{
+				"product": "accounts",
+				"scopes": ["activity.write"],
+				"features": []
+			},
+			{
+				"product": "accounts",
+				"scopes": ["users.read", "roles.read"],
+				"features": []
+			},
+			{
+				"product": "notifications",
+				"scopes": ["messages.send"],
+				"features": ["ai_cost_alerts", "transcripts", "staff_alerts", "visitor_alerts"]
+			},
+			{
+				"product": "ecommerce",
+				"scopes": ["catalog.read"],
+				"features": ["shop_search", "shop_deals", "shop_top", "product_cards"]
+			},
+			{
+				"product": "ecommerce",
+				"scopes": ["orders.read.customer"],
+				"features": ["shop_my_orders", "track_shipment", "context_panel"]
+			},
+			{
+				"product": "ecommerce",
+				"scopes": ["shop.context.read"],
+				"features": ["shop_context", "context_panel"]
+			}
+		]
+	},
 	"features": [
 		{
 			"key": "visitor_chat",
@@ -35,6 +90,7 @@
 			"description": "Visitors signed in with Accounts chat as themselves; a guest chat moves to the account on sign-in.",
 			"dependsOn": ["visitor_chat"],
 			"recommendFor": ["chat.*+signIn.*"],
+			"requires": ["pages.signIn"],
 			"settings": {
 				"$ref": "schemas/signed_in_chat.settings.json"
 			}
@@ -102,6 +158,7 @@
 			"description": "The AI answers in the visitor’s language, from the languages you allow.",
 			"dependsOn": ["ai_replies"],
 			"recommendFor": ["chat.ai+languages.many"],
+			"requires": ["region.language"],
 			"settings": {
 				"$ref": "schemas/language_lock.settings.json"
 			}
@@ -384,6 +441,7 @@
 			"description": "Alerts your staff by email, WhatsApp or SMS about new messages and handoffs, through Notifications.",
 			"dependsOn": ["inbox"],
 			"recommendFor": ["chat.people"],
+			"requires": ["team.recipients"],
 			"settings": {
 				"$ref": "schemas/staff_alerts.settings.json"
 			}

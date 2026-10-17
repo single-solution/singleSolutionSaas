@@ -207,13 +207,18 @@ const start = async (on, { ecommerce = true } = {}) => {
 	const sys = await ready(on);
 	systems.push(sys);
 	await sys.connect('ai', AI_KEY);
-	const { token } = await sys.portal.issueToken({ websiteId: sys.websiteId, productId: 'ecommerce', kind: 'server' });
-	if (ecommerce) await sys.connect('ecommerce', token);
+	// the Portal links Chat to Ecommerce (the key it calls Ecommerce with)
+	if (ecommerce) await sys.connect('ecommerce');
 	sys.responders.set(ECOMMERCE, (call) => {
 		const path = new URL(call.url).pathname;
 		return path in ANSWERS ? { status: 200, body: ANSWERS[path] } : { status: 404, body: { type: 'x/not_found' } };
 	});
-	return Object.assign(sys, { ecommerceToken: token });
+	return Object.assign(sys, {
+		/** The key the Portal gave Chat for Ecommerce. */
+		get ecommerceToken() {
+			return sys.linkTokens.get('ecommerce');
+		},
+	});
 };
 
 /** The tool names the AI was offered in a completion request. @param {any} request */
@@ -557,18 +562,17 @@ describe('context panel shop info', () => {
 		const guest = await sys.admin(ticket, 'GET', `/v1/admin/conversations/${byKind.guest}`);
 		expect(guest.json.conversation.context.shop).toBeNull();
 
-		const cookie = await sys.adminSession();
-		await sys.dashboard(cookie, 'DELETE', `/v1/dashboard/websites/${sys.websiteId}/connections/ecommerce`);
+		await sys.disconnect('ecommerce');
 		const unplugged = await sys.admin(ticket, 'GET', `/v1/admin/conversations/${byKind.user}`);
 		expect(unplugged.json.conversation.context.shop).toBeNull();
 	});
 });
 
 describe('dashboard', () => {
-	it('lists the Ecommerce token in the checklist when a shop feature is on', async () => {
+	it('lists the link to Ecommerce in the checklist when a shop feature is on', async () => {
 		const sys = await start([...SHOP, 'shop_top'], { ecommerce: false });
 		const overview = await sys.dashboard(await sys.adminSession(), 'GET', `/v1/dashboard/websites/${sys.websiteId}/overview`);
-		const ecommerce = overview.json.checklist.connections.find((/** @type {any} */ c) => c.name === 'ecommerce');
+		const ecommerce = overview.json.checklist.connections.find((/** @type {any} */ c) => c.name === 'link_ecommerce');
 		expect(ecommerce).toMatchObject({ status: 'not_connected', neededBy: expect.arrayContaining(['shop_top']) });
 		const plain = await start(SHOP, { ecommerce: false });
 		const without = await plain.dashboard(
@@ -576,6 +580,6 @@ describe('dashboard', () => {
 			'GET',
 			`/v1/dashboard/websites/${plain.websiteId}/overview`,
 		);
-		expect(without.json.checklist.connections.map((/** @type {any} */ c) => c.name)).not.toContain('ecommerce');
+		expect(without.json.checklist.connections.map((/** @type {any} */ c) => c.name)).not.toContain('link_ecommerce');
 	});
 });

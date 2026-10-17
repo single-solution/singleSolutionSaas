@@ -448,11 +448,7 @@ describe('a shop with only the catalog and checkout', () => {
 			const read = await other.visitor('GET', `/v1/shop/orders/${paid.id}`, { signIn: token });
 			expect(read.json).toMatchObject({ status: 'pending_payment', payment: { state: 'paid', paid: 800, payUrl: null } });
 
-			await other.dashboard(
-				await other.adminSession(),
-				'DELETE',
-				`/v1/dashboard/websites/${other.websiteId}/connections/payments`,
-			);
+			await other.disconnect('payments');
 			other.advance(62 * 60_000);
 			await other.visitor('POST', '/v1/shop/cart/quote', { body: { lines: [{ productId: item.id }] } });
 			expect((await record(unpaid.id)).status).toBe('canceled');

@@ -297,30 +297,6 @@ export const createProductInstance = (options) => {
 				kind: 'storage',
 				neededBy: ['catalog', 'digital_goods', 'store_details'],
 			},
-			accounts: {
-				label: 'Accounts token (shoppers sign in, activity-log copies)',
-				kind: 'token',
-				productId: 'accounts',
-				neededBy: ['checkout', 'reviews', 'wishlist', 'role_pricing'],
-			},
-			payments: {
-				label: 'Payments token (online payments and bank transfers at checkout, refunds)',
-				kind: 'token',
-				productId: 'payments',
-				neededBy: [],
-			},
-			notifications: {
-				label: 'Notifications token (order messages, alerts, staff alerts and event webhooks)',
-				kind: 'token',
-				productId: 'notifications',
-				neededBy: ['alerts', 'staff_alerts'],
-			},
-			growth: {
-				label: 'Growth token (send changed addresses to IndexNow; check tag ids in Shop health)',
-				kind: 'token',
-				productId: 'growth',
-				neededBy: [],
-			},
 			// one courier API per courier the merchant books with, named by its entry of the couriers list (E25): the
 			// feature needs the first; the others are there for more
 			...Object.fromEntries(

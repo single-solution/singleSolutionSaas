@@ -606,7 +606,7 @@ export const createService = (product) => {
 	const connectedProducts = async (websiteId) => {
 		/** @type {string[]} */
 		const out = [];
-		for (const id of OTHER_PRODUCTS) if ((await product.connections.value(websiteId, id)) !== null) out.push(id);
+		for (const id of OTHER_PRODUCTS) if (await product.connections.hasLink(websiteId, id)) out.push(id);
 		return out;
 	};
 

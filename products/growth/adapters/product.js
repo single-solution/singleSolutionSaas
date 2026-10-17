@@ -190,9 +190,7 @@ export const createProductInstance = (options) => {
 		manifest,
 		strings,
 		problemCodes: PROBLEM_CODES,
-		connections: {
-			accounts: { label: 'Accounts token (activity-log copies)', kind: 'token', productId: 'accounts', neededBy: [] },
-		},
+		connections: {},
 		hooks: {
 			// what the page script and the widgets need (GET /v1/widget/config): never a secret
 			widgetConfig: async (ctx) => {

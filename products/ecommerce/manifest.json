@@ -8,7 +8,79 @@
 	},
 	"widgetScriptUrl": "/widget.js",
 	"docsUrl": "/docs",
-	"websiteSettings": { "requires": ["region.currency", "region.country"] },
+	"websiteSettings": {
+		"requires": ["region.currency", "region.country"]
+	},
+	"needs": {
+		"database": true,
+		"storage": "optional"
+	},
+	"links": {
+		"offers": [
+			{
+				"scope": "catalog.read",
+				"name": "Read the catalog",
+				"description": "Other products look up products, prices, deals and quotes the way shoppers see them."
+			},
+			{
+				"scope": "orders.read.customer",
+				"name": "Read a customer's orders",
+				"description": "Other products read the orders, shipments and account summary of one signed-in customer."
+			},
+			{
+				"scope": "shop.context.read",
+				"name": "Read the store context",
+				"description": "Other products read the store facts a chat answer can use: hours, delivery, returns and deals."
+			},
+			{
+				"scope": "permissions.read",
+				"name": "Read permissions",
+				"description": "Other products list this product's permissions, for the roles of the website's staff."
+			},
+			{
+				"scope": "data_rights.export",
+				"name": "Export a person's data",
+				"description": "Other products ask this product for everything it keeps about one person."
+			},
+			{
+				"scope": "data_rights.erase",
+				"name": "Erase a person's data",
+				"description": "Other products ask this product to erase or anonymize one person's data."
+			}
+		],
+		"needs": [
+			{
+				"product": "accounts",
+				"scopes": ["activity.write"],
+				"features": []
+			},
+			{
+				"product": "accounts",
+				"scopes": ["users.read", "me.read"],
+				"features": ["checkout", "reviews", "wishlist", "role_pricing", "staff_alerts"]
+			},
+			{
+				"product": "payments",
+				"scopes": ["methods.read", "payments.create", "payments.read", "payments.cancel", "payments.refund"],
+				"features": ["checkout"]
+			},
+			{
+				"product": "notifications",
+				"scopes": ["messages.send"],
+				"features": ["alerts", "staff_alerts"]
+			},
+			{
+				"product": "notifications",
+				"scopes": ["events.forward"],
+				"features": ["events"]
+			},
+			{
+				"product": "growth",
+				"scopes": ["settings.read", "indexnow.submit"],
+				"features": []
+			}
+		]
+	},
 	"features": [
 		{
 			"key": "store_details",
@@ -286,6 +358,7 @@
 			"description": "Email, text (SMS) or WhatsApp your staff about new orders, status changes, payments, transfer proofs, cancels, expiries and return claims, through Notifications.",
 			"dependsOn": ["checkout"],
 			"recommendFor": ["sells.physical+messages.*", "sells.digital+messages.*", "sells.services+messages.*"],
+			"requires": ["team.recipients"],
 			"settings": {
 				"$ref": "schemas/staff_alerts.settings.json"
 			}

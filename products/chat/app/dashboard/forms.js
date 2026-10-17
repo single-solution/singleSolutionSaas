@@ -1,8 +1,8 @@
 'use client';
 /**
  * Connections → structured values (PLAN 0.8.3): the AI providers (`ai`, `ai_backup`: provider, key, model, base URL
- * for an OpenAI-compatible service) and the S3-compatible `storage`. A value is saved as one connection (tested live,
- * encrypted, write-only), so each form starts empty and saving replaces the whole value.
+ * for an OpenAI-compatible service). A value is saved as one connection (tested live, encrypted, write-only), so each
+ * form starts empty and saving replaces the whole value. The storage is the Portal's (one bucket for every product).
  * @module
  */
 import { useId, useState } from 'react';
@@ -13,7 +13,7 @@ import { TEXTS } from './texts.js';
 const N = TEXTS.connections.fields;
 
 /** Connections with their own form. */
-export const FORMS = Object.freeze(['ai', 'ai_backup', 'storage']);
+export const FORMS = Object.freeze(['ai', 'ai_backup']);
 
 /** @param {{ onSave: (value: object) => Promise<void> }} props */
 export function AiForm({ onSave }) {
@@ -72,54 +72,6 @@ export function AiForm({ onSave }) {
 					setError(null);
 					const done = onSave(checked.value);
 					setValues({ provider });
-					return done;
-				}}>
-				{TEXTS.connections.save}
-			</Button>
-		</div>
-	);
-}
-
-/** Storage fields; optional ones are left out when empty. */
-const STORAGE = /** @type {const} */ ([
-	{ name: 'endpoint', optional: true },
-	{ name: 'region' },
-	{ name: 'bucket' },
-	{ name: 'accessKeyId' },
-	{ name: 'secretAccessKey', secret: true },
-	{ name: 'prefix', optional: true },
-]);
-
-/** @param {{ onSave: (value: object) => Promise<void> }} props */
-export function StorageForm({ onSave }) {
-	const [values, setValues] = useState(/** @type {Record<string, string>} */ ({}));
-	/** @param {string} name */
-	const valueOf = (name) => (values[name] ?? '').trim();
-	const ready = STORAGE.every((field) => 'optional' in field || valueOf(field.name) !== '');
-	return (
-		<div className="mt-3 space-y-3">
-			<FieldGrid>
-				{STORAGE.map((field) => (
-					<Input
-						key={field.name}
-						label={N[field.name]}
-						type={'secret' in field ? 'password' : 'text'}
-						autoComplete="off"
-						value={values[field.name] ?? ''}
-						onChange={(event) => setValues({ ...values, [field.name]: event.target.value })}
-					/>
-				))}
-			</FieldGrid>
-			<Button
-				size="sm"
-				disabled={!ready}
-				onClick={() => {
-					const done = onSave(
-						Object.fromEntries(
-							STORAGE.filter((field) => valueOf(field.name) !== '').map((field) => [field.name, valueOf(field.name)]),
-						),
-					);
-					setValues({});
 					return done;
 				}}>
 				{TEXTS.connections.save}

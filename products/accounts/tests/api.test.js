@@ -242,8 +242,7 @@ describe('email + password', () => {
 		expect((await signIn('bo@example.com', 'bo resets later')).json.status).toBe('signed_in');
 
 		// without Notifications the answer is the same; the link goes once it is connected, while it is valid
-		const cookie = await env.adminSession();
-		await env.dashboard(cookie, 'DELETE', `/v1/dashboard/websites/${env.websiteId}/connections/notifications`);
+		await env.disconnect('notifications');
 		expect((await env.visitor('POST', '/v1/password/forgot', { email: 'bo@example.com', returnTo: ORIGIN })).status).toBe(202);
 		expect((await env.visitor('POST', '/v1/password/forgot', { email: 'bo@example.com', returnTo: ORIGIN })).status).toBe(202);
 		await env.paste('notifications');
@@ -516,11 +515,7 @@ describe('phone code and email code', () => {
 	});
 
 	it('answers notifications_not_connected without the Notifications token', async () => {
-		await env.dashboard(
-			await env.adminSession(),
-			'DELETE',
-			`/v1/dashboard/websites/${env.websiteId}/connections/notifications`,
-		);
+		await env.disconnect('notifications');
 		env.advance(31_000);
 		expect(code(await env.visitor('POST', '/v1/sign-in/email/code', { email: 'dee@example.com' }))).toBe(
 			'notifications_not_connected',
@@ -1316,8 +1311,8 @@ describe('edges', () => {
 		expect((await env.visitor('POST', '/v1/me/two-step/disable', { code: '1' }, t)).status).toBe(204);
 		expect(code(await env.visitor('POST', '/v1/me/two-step/enable', { challenge: 'x', code: '1' }, t))).toBe('code_invalid');
 		const cookie = await env.adminSession();
-		for (const name of ['ecommerce', 'google'])
-			await env.dashboard(cookie, 'DELETE', `/v1/dashboard/websites/${env.websiteId}/connections/${name}`);
+		await env.disconnect('ecommerce');
+		await env.dashboard(cookie, 'DELETE', `/v1/dashboard/websites/${env.websiteId}/connections/google`);
 		expect(code(await env.visitor('GET', '/v1/me/orders', undefined, t))).toBe('product_not_connected');
 		expect(code(await env.visitor('POST', '/v1/sign-in/google/start', { returnTo: ORIGIN }))).toBe('provider_failed');
 		expect(code(await env.serverCall('PATCH', '/v1/users/usr_nope', { notes: 'x' }))).toBe('not_found');

@@ -441,8 +441,7 @@ describe('returns and warranty claims', () => {
 			(await shop.visitor('POST', '/v1/shop/returns/photos', { signIn: sara, body: { type: 'image/png', size: 1 } })).status,
 		).toBe(422);
 		await shop.setting('returns', 'maxPhotos', 5);
-		const cookie = await shop.adminSession();
-		await shop.dashboard(cookie, 'DELETE', `/v1/dashboard/websites/${shop.websiteId}/connections/storage`);
+		await shop.disconnect('storage');
 		const none = await shop.visitor('POST', '/v1/shop/returns/photos', { signIn: sara, body: { type: 'image/png', size: 1 } });
 		expect(none.json.type.split('/').pop()).toBe('storage_not_connected');
 		await shop.connectStorage();

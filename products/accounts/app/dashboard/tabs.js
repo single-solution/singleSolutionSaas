@@ -8,11 +8,10 @@
  * @module
  */
 import { Badge, Button, Card, CodeBlock, Section, Stat, ListRow, RowList } from '@ss/ui';
-import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, fill, useLoad, useSetupSteps } from '@ss/ui/dashboard';
+import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import messages from '../../schemas/messages.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
-import { OTHER_PRODUCTS } from '../../core/widgets.js';
 import { ConsentsSection } from './consents.js';
 import { FieldsSection } from './fields.js';
 import { KEY_FORMS, KeyForm } from './forms.js';
@@ -101,12 +100,7 @@ function AccountsSettings(props) {
  * The one-line help under a connection: what to paste.
  * @param {string} name
  */
-const connectionHint = (name) => {
-	if (name === 'database') return TEXTS.connections.hints.database;
-	if (name === 'imported_password_pepper') return TEXTS.connections.hints.imported_password_pepper;
-	const product = OTHER_PRODUCTS.find((entry) => entry === name);
-	return product ? fill(TEXTS.connections.hints.token, { product: TEXTS.connections.products[product] }) : null;
-};
+const connectionHint = (name) => (name === 'imported_password_pepper' ? TEXTS.connections.hints.imported_password_pepper : null);
 
 /**
  * Google, Apple and Facebook take their keys as one structured value (null: the one value field).

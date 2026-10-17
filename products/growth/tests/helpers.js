@@ -9,7 +9,15 @@
  */
 import { MongoClient } from 'mongodb';
 import { validateValue } from '@ss/app-kit/api';
-import { apiChecker, createAccountsDouble, createFakePortal, createMemoryStore, createNetwork, staffCaller } from '@ss/app-kit/testing';
+import {
+	apiChecker,
+	createAccountsDouble,
+	createFakePortal,
+	createMemoryStore,
+	createNetwork,
+	portalConnector,
+	staffCaller,
+} from '@ss/app-kit/testing';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { keyOf } from '../adapters/store.js';
@@ -223,21 +231,23 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		return response;
 	};
 
-	// the website's Accounts token, pasted through the dashboard on first use
+	/** What the merchant does in the Portal (the database, the storage, the links to other products). */
+	const viaPortal = portalConnector({
+		portal,
+		websiteId,
+		manifest,
+		product,
+		drain: async () => {
+			while (tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();
+		},
+	});
+
+	// the Portal links the product to Accounts (the keys of the staff sign-ins) on first use
 	const staffHeaders = staffCaller({
 		accounts,
 		websiteId,
 		paste: async () => {
-			const token = (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token;
-			const launch = await portal.issueLaunch({ productId: manifest.id, kind: 'admin', role: 'owner', websiteId });
-			const sso = await call('GET', `/sso?launch=${launch}`);
-			const cookie = (sso.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
-			const response = await call('PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, {
-				cookie,
-				origin: BASE,
-				body: { value: token },
-			});
-			if (response.status !== 200) throw new Error(`accounts token: ${response.status} ${await response.text()}`);
+			await viaPortal('accounts', null);
 		},
 	});
 
@@ -315,15 +325,7 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		},
 		connectDatabase: async () => {
 			databaseUri = merchantDatabase();
-			const response = await dashboard(
-				await adminSession(),
-				'PUT',
-				`/v1/dashboard/websites/${websiteId}/connections/database`,
-				{
-					value: databaseUri,
-				},
-			);
-			if (response.status !== 200) throw new Error(`database: ${response.status} ${await response.text()}`);
+			await viaPortal('database', databaseUri);
 		},
 		/** The merchant database, read directly. */
 		merchantDb: async () => {

@@ -6,7 +6,15 @@
  * routes: a test fails when an answer does not fit its description.
  * @module
  */
-import { apiChecker, createAccountsDouble, createFakePortal, createMemoryStore, createNetwork, staffCaller } from '@ss/app-kit/testing';
+import {
+	apiChecker,
+	createAccountsDouble,
+	createFakePortal,
+	createMemoryStore,
+	createNetwork,
+	portalConnector,
+	staffCaller,
+} from '@ss/app-kit/testing';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
@@ -132,7 +140,6 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	const websiteId = portal.addWebsite({ domain: DOMAIN });
 	const browser = (await portal.issueToken({ websiteId, productId: manifest.id, kind: 'browser' })).token;
 	const server = (await portal.issueToken({ websiteId, productId: manifest.id, kind: 'server' })).token;
-	const notificationsToken = (await portal.issueToken({ websiteId, productId: 'notifications', kind: 'server' })).token;
 
 	const flush = async () => {
 		while (tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();
@@ -146,7 +153,11 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	 *   headers?: Record<string, string>, after?: boolean, bare?: boolean, staff?: Record<string, any> }} [init] `bare`: the
 	 *   server token alone; `staff`: who is signed in (the website's server with a staff Owner signed in otherwise)
 	 */
-	const call = async (method, path, { token, origin, body, form, cookie, headers = {}, after = true, bare = false, staff } = {}) => {
+	const call = async (
+		method,
+		path,
+		{ token, origin, body, form, cookie, headers = {}, after = true, bare = false, staff } = {},
+	) => {
 		if (token === server && !bare && headers['ss-sign-in'] === undefined && headers['ss-visitor-ip'] === undefined)
 			// eslint-disable-next-line no-param-reassign -- the harness signs the staff member in
 			headers = await staffHeaders({ headers, staff });
@@ -206,8 +217,27 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		if (response.status !== 200) throw new Error(`features: ${response.status} ${response.text}`);
 	};
 
-	/** Save a connection (tested live when saved). @param {string} name @param {unknown} value */
+	/** What the merchant does in the Portal (the database, the storage, the links to other products). */
+	const viaPortal = portalConnector({
+		portal,
+		websiteId,
+		manifest,
+		product,
+		drain: flush,
+		view: async (name) =>
+			(await dashboard(await adminSession(), 'GET', `/v1/dashboard/websites/${websiteId}/connections`)).json.connections.find(
+				(/** @type {{ name: string }} */ item) => item.name === name,
+			),
+	});
+
+	/**
+	 * Save a connection: the database, the storage and the links through the Portal (the product fetches them), a gateway key
+	 * on the Connections screen (tested live when saved).
+	 * @param {string} name @param {unknown} [value]
+	 */
 	const connect = async (name, value) => {
+		const delivered = await viaPortal(name, value);
+		if (delivered !== null) return delivered;
 		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/connections/${name}`, {
 			value,
 		});
@@ -269,7 +299,11 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		websiteId,
 		browser,
 		server,
-		notificationsToken,
+		/** The key the Portal gave this product for Notifications (once the link is connected). */
+		get notificationsToken() {
+			return viaPortal.tokens.get('notifications');
+		},
+		disconnect: viaPortal.disconnect,
 		call,
 		api,
 		dashboard,

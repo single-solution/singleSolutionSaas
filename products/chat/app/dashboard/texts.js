@@ -303,12 +303,6 @@ export const TEXTS = dashboardTexts({
 			apiKey: 'API key',
 			model: 'Model',
 			baseUrl: 'Base URL (https)',
-			endpoint: 'Endpoint (optional; empty for AWS S3)',
-			region: 'Region',
-			bucket: 'Bucket',
-			accessKeyId: 'Access key ID',
-			secretAccessKey: 'Secret access key',
-			prefix: 'Key prefix (optional)',
 		},
 		providers: {
 			openai: 'OpenAI',
@@ -317,16 +311,8 @@ export const TEXTS = dashboardTexts({
 			compatible: 'OpenAI-compatible service',
 		},
 		hints: {
-			database:
-				'The address of your MongoDB database, a connection string that starts with mongodb+srv://. Your conversations, leads and knowledge are kept there.',
-			storage: 'An S3-compatible bucket (AWS S3, Cloudflare R2 and others). Attachments are kept here.',
 			ai: 'Your own AI provider key. The model is free text; suggestions are shown as you type.',
 			ai_backup: 'Answers when the main provider fails.',
-			accounts: "Paste the website's Accounts server token from the Portal. Signed-in chat checks sign-ins with it.",
-			notifications:
-				"Paste the website's Notifications server token from the Portal. Staff alerts, transcripts and cost alerts are sent with it.",
-			ecommerce:
-				"Paste the website's Ecommerce server token from the Portal. The shop tools, track shipment, product cards and the context panel's shop info read your shop with it.",
 		},
 	},
 	developers: {

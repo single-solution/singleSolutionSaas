@@ -210,10 +210,14 @@ function GrowthDevelopers(props) {
 	);
 }
 
-/** Growth's tabs in place of the shared ones; Features, Connections and Prices are the shared ones as they are. */
+/**
+ * Growth's tabs in place of the shared ones; Features and Prices are the shared ones as they are. Growth keeps no provider
+ * key, and its database and links are the Portal's, so it has no Connections tab.
+ */
 export const TABS = Object.freeze({
 	overview: GrowthOverview,
 	settings: GrowthSettings,
 	developers: GrowthDevelopers,
 	defaults: GrowthDefaults,
+	connections: null,
 });

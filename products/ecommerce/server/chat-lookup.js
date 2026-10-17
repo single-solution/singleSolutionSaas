@@ -757,7 +757,7 @@ export const createChatLookup = (product, service, media) => {
 					{ projection: { _id: 0, name: 1 }, sort: { sort: 1, name: 1 }, limit: CONTEXT_BASICS },
 				)
 				.toArray(),
-			checkoutOn ? product.connections.value(s.websiteId, 'payments') : Promise.resolve(null),
+			checkoutOn ? product.connections.hasLink(s.websiteId, 'payments') : Promise.resolve(false),
 			s.format(),
 		]);
 		/** @param {number} amount */
@@ -784,7 +784,7 @@ export const createChatLookup = (product, service, media) => {
 						]
 					: [];
 		// the methods the shop can take now, by the merchant's names, notes and fees
-		const on = new Set(paymentMethodsOn({ methods: listed, paymentsConnected: payments !== null, pickup: pickup.length > 0 }));
+		const on = new Set(paymentMethodsOn({ methods: listed, paymentsConnected: payments, pickup: pickup.length > 0 }));
 		const methods = listed
 			.filter((method) => on.has(method.key))
 			.map((method) => ({ method: method.key, name: method.name, note: method.note, feePercent: method.feePercent }));
@@ -943,6 +943,7 @@ export const createChatLookup = (product, service, media) => {
 				method: 'GET',
 				path: '/v1/chat/products',
 				auth: 'server',
+				scope: 'catalog.read',
 				runtime: true,
 				feature: 'catalog',
 				rateLimit: SERVER_LIMITS,
@@ -953,6 +954,7 @@ export const createChatLookup = (product, service, media) => {
 				method: 'GET',
 				path: '/v1/chat/products/top',
 				auth: 'server',
+				scope: 'catalog.read',
 				runtime: true,
 				feature: 'catalog',
 				rateLimit: SERVER_LIMITS,
@@ -962,6 +964,7 @@ export const createChatLookup = (product, service, media) => {
 				method: 'GET',
 				path: '/v1/chat/products/:id',
 				auth: 'server',
+				scope: 'catalog.read',
 				runtime: true,
 				feature: 'catalog',
 				rateLimit: SERVER_LIMITS,
@@ -971,6 +974,7 @@ export const createChatLookup = (product, service, media) => {
 				method: 'GET',
 				path: '/v1/chat/products/:id/quote',
 				auth: 'server',
+				scope: 'catalog.read',
 				runtime: true,
 				feature: 'deals',
 				rateLimit: SERVER_LIMITS,
@@ -980,6 +984,7 @@ export const createChatLookup = (product, service, media) => {
 				method: 'GET',
 				path: '/v1/chat/deals',
 				auth: 'server',
+				scope: 'catalog.read',
 				runtime: true,
 				feature: 'deals',
 				rateLimit: SERVER_LIMITS,
@@ -989,6 +994,7 @@ export const createChatLookup = (product, service, media) => {
 				method: 'GET',
 				path: '/v1/chat/me/orders',
 				auth: 'server',
+				scope: 'orders.read.customer',
 				runtime: true,
 				feature: 'checkout',
 				rateLimit: SERVER_LIMITS,
@@ -998,6 +1004,7 @@ export const createChatLookup = (product, service, media) => {
 				method: 'GET',
 				path: '/v1/chat/me/account',
 				auth: 'server',
+				scope: 'orders.read.customer',
 				runtime: true,
 				feature: 'checkout',
 				rateLimit: SERVER_LIMITS,
@@ -1007,6 +1014,7 @@ export const createChatLookup = (product, service, media) => {
 				method: 'GET',
 				path: '/v1/chat/me/shipments',
 				auth: 'server',
+				scope: 'orders.read.customer',
 				runtime: true,
 				feature: 'checkout',
 				rateLimit: SERVER_LIMITS,
@@ -1016,6 +1024,7 @@ export const createChatLookup = (product, service, media) => {
 				method: 'GET',
 				path: '/v1/chat/context',
 				auth: 'server',
+				scope: 'shop.context.read',
 				runtime: true,
 				feature: 'catalog',
 				rateLimit: SERVER_LIMITS,
@@ -1025,6 +1034,7 @@ export const createChatLookup = (product, service, media) => {
 				method: 'GET',
 				path: '/v1/customers/:userId/orders',
 				auth: 'server',
+				scope: 'orders.read.customer',
 				runtime: true,
 				feature: 'checkout',
 				rateLimit: SERVER_LIMITS,

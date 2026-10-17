@@ -109,8 +109,8 @@ const useShopOverview = (overview, { websiteId, open }) => {
 	/** @param {string} name */
 	const connection = (name) => [...needed, ...all].find((item) => item.name === name) ?? null;
 	// not required by a feature, but what a shop with checkout normally wants
-	const payments = shop && !needed.some((item) => item.name === 'payments') ? connection('payments') : null;
-	const messages = shop && !needed.some((item) => item.name === 'notifications') ? connection('notifications') : null;
+	const payments = shop && !needed.some((item) => item.name === 'link_payments') ? connection('link_payments') : null;
+	const messages = shop && !needed.some((item) => item.name === 'link_notifications') ? connection('link_notifications') : null;
 	const ready = needed.filter((item) => item.status === 'connected').length;
 	/** @type {import('@ss/ui').Need[]} */
 	const needs = [];
@@ -123,7 +123,7 @@ const useShopOverview = (overview, { websiteId, open }) => {
 				tone: 'warning',
 				title: O.payments.title,
 				effect: O.payments.effect,
-				action: go(O.payments.action, 'connections', 'connection-payments'),
+				action: go(O.payments.action, 'connections', 'connection-link_payments'),
 			});
 		steps.push({
 			key: 'payments',
@@ -131,7 +131,7 @@ const useShopOverview = (overview, { websiteId, open }) => {
 			why: O.payments.why,
 			actionLabel: O.payments.action,
 			done: payments.status === 'connected',
-			onSelect: () => open('connections', 'connection-payments'),
+			onSelect: () => open('connections', 'connection-link_payments'),
 		});
 	}
 	if (messages)
@@ -142,7 +142,7 @@ const useShopOverview = (overview, { websiteId, open }) => {
 			actionLabel: O.notificationsAction,
 			optional: true,
 			done: messages.status === 'connected',
-			onSelect: () => open('connections', 'connection-notifications'),
+			onSelect: () => open('connections', 'connection-link_notifications'),
 		});
 	// the Atlas Search index, while the shop or Chat searches with Atlas (E14)
 	/** @type {NonNullable<import('@ss/ui/dashboard').OverviewMore['steps']>[number] | null} */

@@ -318,7 +318,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		let current = order;
 		if (order.role === 'awaiting_payment' && order.payment.state === 'pending' && order.payment.paymentId) {
 			const checked = await payments.recheck(s, order, { force: true });
-			if (!checked.reached && (await product.connections.value(s.websiteId, 'payments')) !== null) return;
+			if (!checked.reached && (await product.connections.hasLink(s.websiteId, 'payments'))) return;
 			current = checked.order;
 			if (current.status !== order.status || current.payment.state !== 'pending') return;
 		}
@@ -422,7 +422,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 						await service.methods.payDetails(
 							s,
 							method ? [{ ...method, active: true }] : [],
-							(await product.connections.value(s.websiteId, 'payments')) !== null,
+							await product.connections.hasLink(s.websiteId, 'payments'),
 						)
 					).get(order.payment.method) ?? null)
 				: null;

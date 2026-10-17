@@ -220,7 +220,7 @@ describe('deals', () => {
 		expect(await refused({ type: 'image/png', size: 0 })).toEqual([422, '/size']);
 		expect(await refused({ type: 'image/png', size: 100 * 1024 * 1024 })).toEqual([422, '/size']);
 		expect(await refused({ type: 'image/png', size: 10 }, createId('deal'))).toEqual([404, 'not_found']);
-		await shop.dashboard(await shop.adminSession(), 'DELETE', `/v1/dashboard/websites/${shop.websiteId}/connections/storage`);
+		await shop.disconnect('storage');
 		expect(await refused({ type: 'image/png', size: 10 })).toEqual([503, 'storage_not_connected']);
 		await shop.connectStorage();
 		await shop.api('DELETE', `/v1/deals/${deal.id}`);

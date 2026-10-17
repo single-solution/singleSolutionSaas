@@ -158,16 +158,12 @@ describe('shop health: the setup (P5-18)', () => {
 		await shop.setting('staff_alerts', 'recipients', ['orders@shop.example.com']);
 		await shop.setting('staff_alerts', 'adminUrl', 'https://admin.shop.example.com/orders/{id}');
 		expect([await state('staff_alerts'), await state('admin_url')]).toEqual(['ok 0', 'ok 0']);
-		await shop.dashboard(
-			await shop.adminSession(),
-			'DELETE',
-			`/v1/dashboard/websites/${shop.websiteId}/connections/notifications`,
-		);
+		await shop.disconnect('notifications');
 		expect(await state('staff_alerts')).toBe('attention 1');
-		await shop.dashboard(await shop.adminSession(), 'DELETE', `/v1/dashboard/websites/${shop.websiteId}/connections/storage`);
+		await shop.disconnect('storage');
 		expect(await state('storage')).toBe('attention 1');
 		// without Payments, staff record transfers: the method's own instructions or accounts tell shoppers where to pay
-		await shop.dashboard(await shop.adminSession(), 'DELETE', `/v1/dashboard/websites/${shop.websiteId}/connections/payments`);
+		await shop.disconnect('payments');
 		await shop.methods({ bank_transfer: { via: 'manual' } });
 		expect(await state('pay_details')).toBe('attention 1');
 		await shop.methods({ bank_transfer: { instructions: 'Pay to account 0000 0000, quoting your order number.' } });
