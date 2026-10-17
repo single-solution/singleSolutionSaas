@@ -339,6 +339,17 @@ describe('overview and the website settings', () => {
 		expect(done.checklist.website).toEqual({ version: 2, requires: ['region.currency', 'business.name'], missing: [] });
 	});
 
+	it('gives the dashboard the website’s settings as the Portal holds them, for the parts that show a value the Portal owns', async () => {
+		const { session, dash, websiteId, portal } = await setup();
+		const cookie = await session({ kind: 'merchant' });
+		const url = `/v1/dashboard/websites/${websiteId}/website-settings`;
+		const none = await (await dash(cookie, 'GET', url)).json();
+		expect(none.settings).toMatchObject({ version: 0, region: { currency: '' }, business: { name: '' } });
+		portal.setWebsiteSettings(websiteId, { region: { ...emptyWebsiteSettings(websiteId).region, currency: 'PKR' } });
+		await dash(cookie, 'POST', `${url}/refresh`);
+		expect((await (await dash(cookie, 'GET', url)).json()).settings).toMatchObject({ version: 1, region: { currency: 'PKR' } });
+	});
+
 	it('knows the business facts only from the Portal: defaults while it holds nothing, then its Business and Region sections, never the website', async () => {
 		const { session, dash, websiteId, handlers, product, portal, clock } = await setup();
 		let asked = 0;

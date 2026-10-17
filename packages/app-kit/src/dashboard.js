@@ -411,6 +411,14 @@ export const createDashboard = (kit) => {
 			}),
 		),
 		defineRoute({
+			// the website's settings from the Portal (no secret in them), for a product's own dashboard parts that show a
+			// value the Portal owns, such as the shop's currency
+			method: 'GET',
+			path: `${W}/website-settings`,
+			auth: 'dashboard',
+			handler: async (ctx) => ({ settings: await kit.website.document(website(ctx), { after: ctx.after }) }),
+		}),
+		defineRoute({
 			method: 'GET',
 			path: `${W}/format`,
 			auth: 'dashboard',
