@@ -129,7 +129,7 @@ describe('retries (N8)', () => {
 
 describe('quiet hours per weekday, with minutes, per channel (N6)', () => {
 	it('holds only the channels and days a window names', async () => {
-		// Thursday 12:10 UTC (the website's time zone is UTC without business.json)
+		// Thursday 12:10 UTC (the website's time zone is UTC until the Portal holds one)
 		env.advance(Date.parse('2026-10-08T12:10:00Z') - env.now());
 		const lunch = [{ days: [4], from: '12:00', until: '13:30', channels: ['sms'] }];
 		expect((await saveList('quiet_hours', lunch)).json.value).toEqual(lunch);

@@ -224,7 +224,7 @@ describe('Overview (PLAN 0.6 "Overviews talk")', () => {
 		checklist: {
 			connections: [],
 			widget: { installed: true, lastSeenAt: '2026-10-05T23:15:00.000Z' },
-			business: { found: true, fetchedAt: null },
+			website: { version: 1, requires: [], missing: [] },
 		},
 		recentChanges: [
 			{
@@ -268,6 +268,7 @@ describe('Overview (PLAN 0.6 "Overviews talk")', () => {
 	/** The tab's props for a new website (or the last one's with `same`). */
 	const props = (same = false) => ({
 		websiteId: `web_o${same ? website : (website += 1)}`,
+		merchantId: 'm_1',
 		domain: 'shop.example.com',
 		who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Merchant' }),
 		support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] },

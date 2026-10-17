@@ -2,7 +2,7 @@
  * Timing (PLAN 0.8.5): retries on the next uses (the waits are fixed, `core/limits.js`; PLAN 0.8.10 N3), quiet hours per
  * weekday and channel, send limits and delayed send. Nothing runs on a timer:
  * a waiting message gets a due time and is sent on the first use of the website after it. Quiet hours are a wall-clock
- * rule in the recipient's time zone, else the business.json time zone (UTC when missing; PLAN 0.8.10 K8); send limits
+ * rule in the recipient's time zone, else the business time zone (UTC when missing; PLAN 0.8.10 K8); send limits
  * and the delayed-send horizon are rolling spans of time, not calendar days. No I/O.
  * @module
  */

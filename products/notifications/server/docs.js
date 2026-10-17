@@ -1,6 +1,6 @@
 /**
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.5), on the kit's docs page (`renderDocsPage`: the title, intro and
- * localhost note, the kit's routes for your server, business.json and the API reference from `openapi.json`) with
+ * localhost note, the kit's routes for your server, the website settings note and the API reference from `openapi.json`) with
  * Notifications' own sections: the send API and template keys, retries and fallback, timing, languages, providers (with
  * a worked example for a gateway with an HTTP API), unsubscribe keywords, browser and staff push (with the service
  * worker), the webhook signature check and other products' events, the delivery log, one section per feature

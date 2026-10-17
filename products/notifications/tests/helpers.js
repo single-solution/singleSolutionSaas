@@ -1,14 +1,22 @@
 /**
  * Test harness: Notifications on the kit, connected to the kit's fake Portal (`@ss/app-kit/testing`), with one
  * website, its two tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`), the
- * website's business.json (404 until a test serves one) and fake providers: every provider call is answered in process
+ * website's settings (the Portal's, saved by a test) and fake providers: every provider call is answered in process
  * (no real network call is ever made). Every answer `call()` sees is checked against `schemas/api.json` and the kit's
  * own routes: a test fails when an answer does not fit its description.
  * @module
  */
 import { createECDH } from 'node:crypto';
 import { MongoClient } from 'mongodb';
-import { apiChecker, createAccountsDouble, createFakePortal, createMemoryStore, createNetwork, staffCaller } from '@ss/app-kit/testing';
+import {
+	apiChecker,
+	createAccountsDouble,
+	createFakePortal,
+	createMemoryStore,
+	createNetwork,
+	portalSectionsOf,
+	staffCaller,
+} from '@ss/app-kit/testing';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
@@ -135,17 +143,11 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	const providers = createFakeProviders();
 	// Accounts as the directory lists it (OTHER_PRODUCTS): the keys of the staff's sign-ins
 	const accounts = createAccountsDouble({ url: 'https://accounts.example.dev', now });
-	/** The website's business.json, while a test serves one. @type {unknown} */
-	let business = null;
 	/** @type {Record<string, (request: Request) => Promise<Response>>} */
 	const handlers = {
 		[portal.url]: portal.handle,
 		[accounts.url]: accounts.handle,
 		...providers.handlers,
-		[ORIGIN]: async (request) =>
-			new URL(request.url).pathname === '/.well-known/business.json' && business !== null
-				? new Response(JSON.stringify(business), { headers: { 'content-type': 'application/json' } })
-				: new Response('not found', { status: 404 }),
 	};
 	const network = createNetwork(handlers);
 	/** @type {Array<{ options: any, mail: any }>} */
@@ -373,13 +375,23 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 			}
 		},
 		/**
-		 * Serve the website's business.json (null: 404) and read it again, as the dashboard's Refresh does.
-		 * @param {unknown} value
+		 * The merchant saves the business facts in the Portal's website settings (name, time zone, country …): the product is
+		 * told and fetches them.
+		 * @param {Parameters<typeof portalSectionsOf>[1]} info
 		 */
-		businessJson: async (value) => {
-			business = value;
-			const response = await dashboard(await adminSession(), 'POST', `/v1/dashboard/websites/${websiteId}/business/refresh`);
-			if (response.status !== 200) throw new Error(`business: ${response.status} ${await response.text()}`);
+		setBusiness: async (info) => {
+			t += 1000; // a second notice at the same second would read as a replay
+			await portal.saveWebsiteSettings(websiteId, portalSectionsOf(websiteId, info));
+			while (tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();
+		},
+		/**
+		 * The merchant saves website settings in the Portal (the Format, the pages …): the product is told and fetches them.
+		 * @param {Parameters<typeof portal.setWebsiteSettings>[1]} sections
+		 */
+		setWebsite: async (sections) => {
+			t += 1000;
+			await portal.saveWebsiteSettings(websiteId, sections);
+			while (tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();
 		},
 		/**
 		 * Make reads of the product database fail (a brief outage), by `<collection>|<id>` prefix; none: they work again.

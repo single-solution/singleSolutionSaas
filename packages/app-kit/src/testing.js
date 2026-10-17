@@ -123,6 +123,39 @@ export const createNetwork = (handlers) => {
 };
 
 /**
+ * The website-settings sections a business makes, from the facts a test used to serve as business.json (`name`, `email`,
+ * `phone`, `address` as text, `country`, `timeZone`, `currency`, `currencies`, `language`, `logo`): the Business, Brand
+ * and Region sections to save in the Portal (`saveWebsiteSettings`). Facts left out stay empty.
+ * @param {string} websiteId
+ * @param {{ name?: string, email?: string | null, phone?: string | null, address?: string | null, country?: string | null,
+ *   timeZone?: string | null, currency?: string | null, currencies?: readonly string[], language?: string | null,
+ *   logo?: string | null }} info
+ * @returns {Pick<import('@ss/contracts').WebsiteSettings, 'business' | 'brand' | 'region'>}
+ */
+export const portalSectionsOf = (websiteId, info) => {
+	const empty = emptyWebsiteSettings(websiteId);
+	const currency = (info.currency ?? '').toUpperCase();
+	return {
+		business: {
+			...empty.business,
+			name: info.name ?? '',
+			email: info.email ?? '',
+			phone: info.phone ?? '',
+			address: { ...empty.business.address, line1: info.address ?? '' },
+		},
+		brand: { ...empty.brand, files: { ...empty.brand.files, logo: info.logo ?? '' } },
+		region: {
+			...empty.region,
+			country: (info.country ?? '').toUpperCase(),
+			timeZone: info.timeZone ?? '',
+			currency,
+			currencies: (info.currencies ?? (currency ? [currency] : [])).map((code) => code.toUpperCase()),
+			language: info.language ?? '',
+		},
+	};
+};
+
+/**
  * A fake Portal implementing the Portal side of PLAN 0.4.12.
  * @param {{ url?: string, now?: () => number, pageSize?: number }} [options]
  */

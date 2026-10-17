@@ -20,7 +20,6 @@ export const TEXTS = dashboardTexts({
 		templatesTitle: 'Templates',
 		templatesHelp:
 			'Every message your products send is listed with its channel: it goes out with the product’s default words until you edit it. One template per key, channel and language. Write {name} where a value goes, and {?name}…{/name} around text shown only when name has a value; optional messages can use {unsubscribeUrl}. Keys of other products start with their id and a dot (for example chat.).',
-		looksHelp: 'Every word of the widgets and the unsubscribe page, their theme, and how dates look.',
 		template: {
 			key: 'Template key',
 			channel: 'Channel',
@@ -155,8 +154,6 @@ export const TEXTS = dashboardTexts({
 			push: 'Browser push',
 			staff_push: 'Staff push',
 		},
-		formatHelp: 'How dates, times and amounts look in the widgets; the delivery log shows its times this way.',
-		localeHelp: "A tag such as en-US or fr-FR; empty uses each viewer's browser.",
 	},
 	connections: {
 		provider: 'Provider',

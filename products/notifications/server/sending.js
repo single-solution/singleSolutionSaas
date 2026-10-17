@@ -370,7 +370,8 @@ export const createSending = (product) => {
 			/** @type {{ replyTo?: string, headers?: Record<string, string> }} */
 			const extra = {};
 			if (channel === 'email') {
-				const replyTo = normalizeEmail((await product.settings.values(s.websiteId, 'email')).replyTo);
+				// replies go to the business's contact email, set once in the Portal (Website settings › Business)
+				const replyTo = normalizeEmail((await product.website(s.websiteId)).business.email);
 				if (replyTo) extra.replyTo = replyTo;
 				if (!message.required) {
 					const link = await unsubscribeLinkOf(s, message.address, message.topic);

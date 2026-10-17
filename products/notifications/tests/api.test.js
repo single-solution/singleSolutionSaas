@@ -1,4 +1,5 @@
 import { createDecipheriv, createHmac } from 'node:crypto';
+import { portalSectionsOf } from '@ss/app-kit/testing';
 import { createId } from '@ss/contracts';
 import { verifyWebhook } from '@ss/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -182,6 +183,20 @@ describe('the send API', () => {
 		expect(again.status).toBe(409);
 	});
 
+	it('sends the replies of an email to the business email set once in the Portal; no setting of Notifications holds it', async () => {
+		const reply = async () => {
+			await env.send('email', { template: 'welcome', to: { email: 'rita@example.com' }, values: { name: 'Rita' } });
+			return JSON.parse(env.providers.callsTo('https://api.resend.com').at(-1)?.body ?? '{}').reply_to;
+		};
+		expect(await reply()).toBeUndefined();
+		await env.setBusiness({ name: 'Shop', email: 'Help@Shop.Example.com', timeZone: 'UTC' });
+		expect(await reply()).toBe('help@shop.example.com');
+		await env.setBusiness({ name: 'shop.example.com', timeZone: 'UTC' });
+		expect(await reply()).toBeUndefined();
+		const settings = await (await env.call('GET', '/v1/settings', { token: env.server })).json();
+		expect(settings.features.find((/** @type {any} */ feature) => feature.key === 'email').schema.properties).toEqual({});
+	});
+
 	it('refuses unknown templates, bad recipients and values, and own keys without the Merchant send API', async () => {
 		expect((await env.send('email', { template: 'nope', to: { email: 'a@example.com' } })).json.type).toMatch(
 			/template_not_found$/,
@@ -320,14 +335,16 @@ describe('the send API', () => {
 		expect((await env.call('GET', '/unsubscribe/web_nope/abc')).status).toBe(404);
 	});
 
-	it('the merchant edits the hosted page’s words and theme', async () => {
+	it('the merchant edits the hosted page’s words, and its theme comes from the Portal', async () => {
 		const cookie = await env.adminSession();
 		await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/texts/unsubscribe.title`, {
 			value: 'Afmelden',
 		});
-		await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/theme`, {
-			radius: 12,
-			customCss: '.box{color:red}</style>',
+		// the theme is the Portal's (Website settings › Brand and look): there is no dashboard route to save it
+		const business = portalSectionsOf(env.websiteId, { name: 'shop.example.com', timeZone: 'UTC' });
+		await env.setWebsite({
+			...business,
+			brand: { ...business.brand, theme: { ...business.brand.theme, radius: 12, customCss: '.box{color:red}</style>' } },
 		});
 		await env.send('email', { template: 'promo', to: { email: 'nl@example.com' } });
 		const html = await (await env.call('GET', unsubscribeLink())).text();
@@ -405,8 +422,8 @@ describe('the send API', () => {
 		await env.list('quiet_hours', []);
 	});
 
-	it('holds them by the business.json time zone when the recipient names none', async () => {
-		await env.businessJson({ name: 'Shop', timeZone: 'Asia/Singapore' });
+	it('holds them by the business time zone (the Portal’s) when the recipient names none', async () => {
+		await env.setBusiness({ name: 'Shop', timeZone: 'Asia/Singapore' });
 		await env.list('quiet_hours', [{ days: [0, 1, 2, 3, 4, 5, 6], from: '21:00', until: '08:00', channels: [] }]);
 		// 17:30 UTC is 01:30 in Singapore: quiet there, not in UTC
 		env.advance(Date.parse('2026-10-03T17:30:00Z') - env.now());
@@ -415,7 +432,7 @@ describe('the send API', () => {
 		// the recipient's own time zone still wins
 		const own = await env.send('sms', { template: 'welcome', to: { phone: '+15550008898', timeZone: 'UTC' } });
 		expect(own.json.status).toBe('sent');
-		await env.businessJson({ name: 'shop.example.com', timeZone: 'UTC' });
+		await env.setBusiness({ name: 'shop.example.com', timeZone: 'UTC' });
 		const utc = await env.send('sms', { template: 'welcome', to: { phone: '+15550008897' } });
 		expect(utc.json.status).toBe('sent');
 		await env.list('quiet_hours', []);
@@ -791,7 +808,7 @@ describe('the delivery log and the admin widgets (tickets)', () => {
 			'data-ss-notifications',
 			'log.read',
 			'/v1/tickets',
-			'business.json',
+			'managed_by_portal',
 			// the API reference: what each call takes and answers, from schemas/api.json
 			'<a href="#op-post-v1-messages-email"><code>POST /v1/messages/email</code></a> Send an email from a template',
 			'<section class="ss-api-op" id="op-post-v1-messages-email">',
@@ -861,19 +878,18 @@ describe('the merchant’s server and the widget config (PLAN 0.8.10)', () => {
 	});
 
 	it('gives the widgets the Format and the business time zone', async () => {
-		await env.businessJson({ name: 'Shop', timeZone: 'Europe/Paris' });
-		const cookie = await env.adminSession();
-		const saved = await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/format`, {
-			locale: 'en-GB',
-			times: 'business',
+		// the Format and the time zone are the Portal's (Website settings): the merchant saves them there
+		const business = portalSectionsOf(env.websiteId, { name: 'Shop', timeZone: 'Europe/Paris' });
+		await env.setWebsite({
+			...business,
+			region: { ...business.region, format: { ...business.region.format, locale: 'en-GB', times: 'business' } },
 		});
-		expect(saved.status).toBe(200);
 		const ticket = await env.ticket(['log.read']);
 		const admin = await (await env.call('GET', '/v1/widget/admin/config', { token: ticket, origin: ADMIN_ORIGIN })).json();
 		expect(admin).toMatchObject({ format: { locale: 'en-GB', times: 'business' }, timeZone: 'Europe/Paris' });
 		const visitor = await (await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN })).json();
 		expect(visitor).toMatchObject({ format: { locale: 'en-GB', times: 'business' }, timeZone: 'Europe/Paris' });
-		await env.businessJson({ name: 'shop.example.com', timeZone: 'UTC' });
+		await env.setBusiness({ name: 'shop.example.com', timeZone: 'UTC' });
 	});
 
 	it('explains the kit’s routes for the merchant’s server in the docs', async () => {
