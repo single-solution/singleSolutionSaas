@@ -19,6 +19,7 @@ import MerchantsMerchantId, { metadata as MerchantsMerchantIdMeta } from '../_vi
 import AdminsAdminId, { metadata as AdminsAdminIdMeta } from '../_views/admins-adminId.js';
 import ProductsProductId, { metadata as ProductsProductIdMeta } from '../_views/products-productId.js';
 import WebsiteSetup, { metadata as WebsiteSetupMeta } from '../_views/merchants-merchantId-websites-websiteId-setup.js';
+import WebsiteSettings, { metadata as WebsiteSettingsMeta } from '../_views/merchants-merchantId-websites-websiteId-settings.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +42,7 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[['admins', ':adminId'], AdminsAdminId, AdminsAdminIdMeta, 'screen'],
 	[['products', ':productId'], ProductsProductId, ProductsProductIdMeta, 'screen'],
 	[['merchants', ':merchantId', 'websites', ':websiteId', 'setup'], WebsiteSetup, WebsiteSetupMeta, 'page'],
+	[['merchants', ':merchantId', 'websites', ':websiteId', 'settings'], WebsiteSettings, WebsiteSettingsMeta, 'page'],
 ]);
 
 /**

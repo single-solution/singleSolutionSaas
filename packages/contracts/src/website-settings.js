@@ -276,9 +276,9 @@ const knownTimeZone = (zone) => {
 const countryList = (out, path, codes) => {
 	if (!Array.isArray(codes)) return;
 	codes.forEach((code, index) => {
-		if (!isAddressCountry(code)) out.push(problem(`${path}/${index}`, 'country', 'is not a country code'));
+		if (!isAddressCountry(code)) out.push(problem(`${path}/${index}`, 'country', 'must be a country code'));
 	});
-	if (new Set(codes).size !== codes.length) out.push(problem(path, 'unique', 'lists a country twice'));
+	if (new Set(codes).size !== codes.length) out.push(problem(path, 'unique', 'must not list a country twice'));
 };
 
 /**
@@ -293,29 +293,29 @@ const hoursProblems = (out, path, hours) => {
 				problem(
 					`${path}/weekly/${index}`,
 					'window',
-					'is a day from 1 (Monday) to 7 (Sunday) and a start and a later end as HH:MM',
+					'must be a day from 1 (Monday) to 7 (Sunday) with a start and a later end as HH:MM',
 				),
 			);
 	});
 	for (let day = 1; day <= 7; day += 1)
 		if (overlapping(weekly.filter((item) => item?.day === day && isWindow(item))))
-			out.push(problem(`${path}/weekly`, 'overlap', `has two windows of day ${day} that overlap`));
+			out.push(problem(`${path}/weekly`, 'overlap', `must not have two windows of day ${day} that overlap`));
 	const dates = new Set();
 	const exceptions = Array.isArray(hours.exceptions) ? hours.exceptions : [];
 	exceptions.forEach((item, index) => {
 		const date = typeof item?.date === 'string' ? item.date : '';
 		const parsed = new Date(`${date}T00:00:00Z`);
 		const real = DATE.test(date) && !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
-		if (!real) out.push(problem(`${path}/exceptions/${index}/date`, 'date', 'is not a real date (YYYY-MM-DD)'));
-		else if (dates.has(date)) out.push(problem(`${path}/exceptions/${index}/date`, 'unique', 'is listed twice'));
+		if (!real) out.push(problem(`${path}/exceptions/${index}/date`, 'date', 'must be a real date (YYYY-MM-DD)'));
+		else if (dates.has(date)) out.push(problem(`${path}/exceptions/${index}/date`, 'unique', 'must not be listed twice'));
 		dates.add(date);
 		const windows = Array.isArray(item?.hours) ? item.hours : [];
 		windows.forEach((/** @type {unknown} */ candidate, /** @type {number} */ at) => {
 			if (!isWindow(candidate))
-				out.push(problem(`${path}/exceptions/${index}/hours/${at}`, 'window', 'needs a start and a later end as HH:MM'));
+				out.push(problem(`${path}/exceptions/${index}/hours/${at}`, 'window', 'must have a start and a later end as HH:MM'));
 		});
 		if (overlapping(windows.filter(isWindow)))
-			out.push(problem(`${path}/exceptions/${index}/hours`, 'overlap', 'has windows that overlap'));
+			out.push(problem(`${path}/exceptions/${index}/hours`, 'overlap', 'must not have windows that overlap'));
 	});
 };
 
@@ -340,20 +340,20 @@ export const websiteSettingsProblems = (settings) => {
 	/** @type {ValidationProblem[]} */
 	const out = [];
 	if (settings.updatedAt !== null && !isUtcTimestamp(settings.updatedAt))
-		out.push(problem('/updatedAt', 'timestamp', 'is not a real UTC time'));
+		out.push(problem('/updatedAt', 'timestamp', 'must be a real UTC time'));
 	eachString(settings, '', (path, text) => {
-		if (hasControl(text, takesLineBreaks(path))) out.push(problem(path, 'control', 'has a control character'));
+		if (hasControl(text, takesLineBreaks(path))) out.push(problem(path, 'control', 'must not have a control character'));
 	});
 	const { business, brand, region, pages, team } = settings;
 
 	// business
 	const address = business.address;
 	if (address.country !== '' && !isAddressCountry(address.country))
-		out.push(problem('/business/address/country', 'country', 'is not a country code'));
+		out.push(problem('/business/address/country', 'country', 'must be a country code'));
 	else if (address.country !== '' && address.postalCode !== '') {
 		const shape = addressFormat(address.country).postcode;
 		if (shape && !shape.test(tidyPostcode(address.postalCode)))
-			out.push(problem('/business/address/postalCode', 'postalCode', `is not in the form ${address.country} uses`));
+			out.push(problem('/business/address/postalCode', 'postalCode', `must be in the form ${address.country} uses`));
 	}
 	hoursProblems(out, '/business/hours', business.hours);
 
@@ -367,35 +367,35 @@ export const websiteSettingsProblems = (settings) => {
 		if (wrong) out.push(problem(`/business/social/${index}/url`, 'url', wrong));
 	});
 	if (new TextEncoder().encode(brand.theme.customCss).length > WEBSITE_SETTINGS_LIMITS.customCss)
-		out.push(problem('/brand/theme/customCss', 'maxLength', 'is at most 20 kB'));
+		out.push(problem('/brand/theme/customCss', 'maxLength', 'must be at most 20 kB'));
 
 	// region
 	if (region.country !== '' && !isAddressCountry(region.country))
-		out.push(problem('/region/country', 'country', 'is not a country code'));
+		out.push(problem('/region/country', 'country', 'must be a country code'));
 	if (region.timeZone !== '' && !knownTimeZone(region.timeZone))
-		out.push(problem('/region/timeZone', 'timeZone', 'is not an IANA time zone name such as America/New_York'));
+		out.push(problem('/region/timeZone', 'timeZone', 'must be an IANA time zone name such as America/New_York'));
 	if (region.language !== '' && !canonicalLanguage(region.language))
-		out.push(problem('/region/language', 'language', 'is not a language tag such as en-US'));
+		out.push(problem('/region/language', 'language', 'must be a language tag such as en-US'));
 	region.languages.forEach((tag, index) => {
 		if (!canonicalLanguage(tag))
-			out.push(problem(`/region/languages/${index}`, 'language', 'is not a language tag such as en-US'));
+			out.push(problem(`/region/languages/${index}`, 'language', 'must be a language tag such as en-US'));
 	});
 	if (new Set(region.languages).size !== region.languages.length)
-		out.push(problem('/region/languages', 'unique', 'lists a language twice'));
+		out.push(problem('/region/languages', 'unique', 'must not list a language twice'));
 	else if (
 		region.language === ''
 			? region.languages.length > 0
 			: region.languages.length > 0 && region.languages[0] !== region.language
 	)
-		out.push(problem('/region/languages', 'first', 'starts with the default language'));
+		out.push(problem('/region/languages', 'first', 'must start with the default language'));
 	if (new Set(region.currencies).size !== region.currencies.length)
-		out.push(problem('/region/currencies', 'unique', 'lists a currency twice'));
+		out.push(problem('/region/currencies', 'unique', 'must not list a currency twice'));
 	else if (
 		region.currency === ''
 			? region.currencies.length > 0
 			: region.currencies.length > 0 && region.currencies[0] !== region.currency
 	)
-		out.push(problem('/region/currencies', 'first', 'starts with the store currency'));
+		out.push(problem('/region/currencies', 'first', 'must start with the store currency'));
 	countryList(out, '/region/countriesServed', region.countriesServed);
 	countryList(out, '/region/phone/countries', region.phone.countries);
 	for (const field of /** @type {const} */ (['locale', 'currencyDisplay', 'currencySymbols', 'wholeUnits', 'times'])) {
@@ -403,30 +403,31 @@ export const websiteSettingsProblems = (settings) => {
 		if (wrong) out.push(problem(`/region/format/${field}`, 'format', wrong));
 	}
 	if (new Set(region.address.required).size !== region.address.required.length)
-		out.push(problem('/region/address/required', 'unique', 'lists a part twice'));
+		out.push(problem('/region/address/required', 'unique', 'must not list a part twice'));
 	const regionCountries = new Set();
 	region.address.regions.forEach((entry, index) => {
 		if (!isAddressCountry(entry.country))
-			out.push(problem(`/region/address/regions/${index}/country`, 'country', 'is not a country code'));
+			out.push(problem(`/region/address/regions/${index}/country`, 'country', 'must be a country code'));
 		else if (regionCountries.has(entry.country))
-			out.push(problem(`/region/address/regions/${index}/country`, 'unique', 'is listed twice'));
+			out.push(problem(`/region/address/regions/${index}/country`, 'unique', 'must not be listed twice'));
 		regionCountries.add(entry.country);
 		const names = entry.names.map((name) => name.toLowerCase());
 		if (new Set(names).size !== names.length)
-			out.push(problem(`/region/address/regions/${index}/names`, 'unique', 'lists a region twice'));
+			out.push(problem(`/region/address/regions/${index}/names`, 'unique', 'must not list a region twice'));
 	});
 
 	// pages
-	if (new Set(pages.hosts).size !== pages.hosts.length) out.push(problem('/pages/hosts', 'unique', 'lists a host name twice'));
+	if (new Set(pages.hosts).size !== pages.hosts.length)
+		out.push(problem('/pages/hosts', 'unique', 'must not list a host name twice'));
 	for (const field of /** @type {const} */ (['signIn', 'privacy'])) {
 		const text = pages[field];
 		if (text !== '' && !HTTPS_OR_PATH.test(text))
-			out.push(problem(`/pages/${field}`, 'url', 'is an https address or a path on the website'));
+			out.push(problem(`/pages/${field}`, 'url', 'must be an https address or a path on the website'));
 		else if (text.startsWith('https:') && httpsProblem(text))
 			out.push(problem(`/pages/${field}`, 'url', /** @type {string} */ (httpsProblem(text))));
 	}
 	const keys = pages.documents.map((document) => document.key);
-	if (new Set(keys).size !== keys.length) out.push(problem('/pages/documents', 'unique', 'lists a document key twice'));
+	if (new Set(keys).size !== keys.length) out.push(problem('/pages/documents', 'unique', 'must not list a document key twice'));
 
 	// team
 	team.recipients.forEach((entry, index) => {
@@ -435,7 +436,7 @@ export const websiteSettingsProblems = (settings) => {
 	});
 
 	if (new TextEncoder().encode(JSON.stringify(settings)).length > WEBSITE_SETTINGS_MAX_BYTES)
-		out.push(problem('', 'maxBytes', 'is at most 64 kB'));
+		out.push(problem('', 'maxBytes', 'must be at most 64 kB'));
 	return out;
 };
 

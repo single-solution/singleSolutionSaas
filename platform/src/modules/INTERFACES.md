@@ -136,7 +136,7 @@ The website settings: the facts every product of one website shares (`@ss/contra
 brand and theme, region and Format, pages and legal texts, team), kept once here and delivered to every product on the
 website (settings-ownership design, steps 2–4).
 
-- `get({ merchantId, websiteId })` → `{ settings, readiness }`: the document (version 0 and empty until the first save)
+- `get({ merchantId, websiteId })` → `{ settings, readiness, website: { websiteId, domain } }`: the document (version 0 and empty until the first save)
   and, per product on the website, what its manifest `websiteSettings.requires` still finds empty
   (`[{ productId, name, requires, missing }]`). The website must be the merchant's and active, else 404.
 - `save({ merchantId, websiteId, section, version, value, actor, requestId, ip })` → `{ settings, readiness }`:

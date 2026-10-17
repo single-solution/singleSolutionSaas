@@ -44,6 +44,8 @@ export const routes = Object.freeze({
 	website: (/** @type {string} */ id) => `/websites/${e(id)}`,
 	/** the Setup sheet of a website */
 	websiteSetup: (/** @type {string} */ id) => `/websites/${e(id)}/setup`,
+	/** the Website settings of a website */
+	websiteSettings: (/** @type {string} */ id) => `/websites/${e(id)}/settings`,
 	credits: () => '/credits',
 	account: () => '/account',
 });
@@ -81,6 +83,14 @@ export const api = Object.freeze({
 		`/v1/merchants/${e(m)}/websites/${e(w)}/setup/links/${e(l)}`,
 	/** a shared Setup sheet: `POST { key }` (public) */
 	sharedSetup: () => '/v1/setup/shared',
+	/** the website's settings (`GET` → `{ settings, readiness, can }`) */
+	websiteSettings: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/settings`,
+	/** `PUT { version, value }` saves one section → `{ settings, readiness }` */
+	websiteSettingsSection: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ section) =>
+		`/v1/merchants/${e(m)}/websites/${e(w)}/settings/${e(section)}`,
+	/** Recent changes of the settings (`GET` → `{ items }`) */
+	websiteSettingsChanges: (/** @type {string} */ m, /** @type {string} */ w) =>
+		`/v1/merchants/${e(m)}/websites/${e(w)}/settings/changes`,
 	billing: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/billing`,
 	usage: (
 		/** @type {string} */ m,

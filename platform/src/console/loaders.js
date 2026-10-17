@@ -204,3 +204,25 @@ export const loadSetup = async (api, merchantId, websiteId) => {
 	if (failed) return failed;
 	return { ok: /** @type {const} */ (true), sheet: sheet.ok ? sheet.data : null, links: itemsOf(links) };
 };
+
+/**
+ * The Website settings page of a website (both consoles): the document with what the products need from it, and its
+ * Recent changes (the list degrades to empty).
+ * @param {ConsoleApi} api
+ * @param {string} merchantId
+ * @param {string} websiteId
+ */
+export const loadWebsiteSettings = async (api, merchantId, websiteId) => {
+	const [settings, changes] = await Promise.all([
+		api.get(paths.websiteSettings(merchantId, websiteId)),
+		api.get(paths.websiteSettingsChanges(merchantId, websiteId)),
+	]);
+	const failed = firstFailure(settings);
+	if (failed) return failed;
+	return {
+		ok: /** @type {const} */ (true),
+		data: settings.ok ? settings.data : null,
+		changes: itemsOf(changes),
+		domain: settings.ok ? String(settings.data?.website?.domain ?? '') : '',
+	};
+};

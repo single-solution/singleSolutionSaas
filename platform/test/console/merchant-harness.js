@@ -10,6 +10,7 @@ import { systemModule } from '../../src/modules/system/index.js';
 import { createCatalogModule } from '../../src/modules/catalog/index.js';
 import { createIdentityModule } from '../../src/modules/identity/index.js';
 import { commerceModule } from '../../src/modules/commerce/index.js';
+import { websiteModule } from '../../src/modules/website/index.js';
 import { createConsoleApi } from '../../src/console/api.js';
 import { act, byLabel, type } from '@ss/ui/testing';
 import { createSystemStore } from '../../src/infra/system.js';
@@ -256,16 +257,25 @@ const testModules = (/** @type {{ mailer: any }} */ { mailer }) => [
 	createCatalogModule({ allowHosts: ['127.0.0.1'] }),
 	createIdentityModule({ mailer }),
 	commerceModule,
+	websiteModule,
 ];
 
 /**
  * A product manifest for a fake product (the shared test manifest under another id and name).
- * @param {{ id?: string, name?: string, widgets?: boolean }} [options] `widgets: false` drops the widget script
+ * @param {{ id?: string, name?: string, widgets?: boolean, requires?: string[] }} [options] `widgets: false` drops the
+ *   widget script; `requires` is the manifest's `websiteSettings.requires`
  */
-export const productManifest = ({ id = 'notes', name = 'Notes', widgets = true } = {}) => {
+export const productManifest = ({ id = 'notes', name = 'Notes', widgets = true, requires } = {}) => {
 	const base = /** @type {Record<string, any>} */ (manifest());
 	const { widgetScriptUrl, widgets: list, ...rest } = base;
-	return { ...rest, id, name, widgetScriptUrl: widgets ? widgetScriptUrl : null, widgets: widgets ? list : [] };
+	return {
+		...rest,
+		id,
+		name,
+		widgetScriptUrl: widgets ? widgetScriptUrl : null,
+		widgets: widgets ? list : [],
+		...(requires ? { websiteSettings: { requires } } : {}),
+	};
 };
 
 /**

@@ -159,13 +159,25 @@ export function AddWebsiteDialog({ open, merchantId, onClose, onAdded }) {
  * @property {() => void} [onRemoved] after the website was removed
  * @property {boolean} [headline] the card is the page's detail (larger heading, products as tiles)
  * @property {string} [setupHref] the website's Setup page (shown to those who see Install and tokens)
+ * @property {string} [settingsHref] the website's Website settings page (shown to those who may see it)
  */
 
 /**
  * A website card: domain, daily cost, products, and the dialogs launched from it.
  * @param {WebsiteCardProps} props
  */
-export function WebsiteCard({ website, cards: initial, can, launch, addable, onCardsChange, onRemoved, headline, setupHref }) {
+export function WebsiteCard({
+	website,
+	cards: initial,
+	can,
+	launch,
+	addable,
+	onCardsChange,
+	onRemoved,
+	headline,
+	setupHref,
+	settingsHref,
+}) {
 	const toast = useToast();
 	const nav = useNavigation();
 	const merchantId = String(website.merchantId);
@@ -223,10 +235,13 @@ export function WebsiteCard({ website, cards: initial, can, launch, addable, onC
 		const copied = await copyText(website.domain);
 		toast.show(copied ? { title: MORE.copied } : { tone: 'danger', title: website.domain });
 	};
-	// the header keeps Add product; the More menu holds Setup, Install and tokens and Usage, then Visit and Copy
-	// domain, and Remove website last (danger) for those who remove websites
+	// the header keeps Add product; the More menu holds Website settings, Setup, Install and tokens and Usage, then
+	// Visit and Copy domain, and Remove website last (danger) for those who remove websites
 	/** @type {import('@ss/ui').MenuItem[]} */
 	const more = [
+		...(settingsHref
+			? [{ label: WEBSITE.websiteSettings, icon: /** @type {const} */ ('sliders'), onSelect: () => nav.go(settingsHref) }]
+			: []),
 		...(can.tokens && setupHref
 			? [{ label: WEBSITE.setup, icon: /** @type {const} */ ('layers'), onSelect: () => nav.go(setupHref) }]
 			: []),

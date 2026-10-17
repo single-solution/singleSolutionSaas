@@ -140,13 +140,18 @@ export const createWebsiteService = (ctx) => {
 
 	return Object.freeze({
 		/**
-		 * A website's settings and what its products need from them (version 0 and an empty document until the first save).
+		 * A website's settings and what its products need from them (version 0 and an empty document until the first save),
+		 * with the website's domain.
 		 * @param {{ merchantId: string, websiteId: string }} input
 		 */
 		get: async ({ merchantId, websiteId }) => {
-			await websiteOf(merchantId, websiteId);
+			const website = await websiteOf(merchantId, websiteId);
 			const document = documentOf(websiteId, await ownerOps(merchantId).findOne({ merchantId, _id: websiteId }));
-			return { settings: document, readiness: await readinessOf(document) };
+			return {
+				settings: document,
+				readiness: await readinessOf(document),
+				website: { websiteId, domain: String(website.domain) },
+			};
 		},
 
 		/**
