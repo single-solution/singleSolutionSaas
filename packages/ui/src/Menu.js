@@ -25,6 +25,7 @@ import { themeMenuItems, useThemeChoice } from './theme.js';
  * @property {import('./icons.js').IconName} [icon] an icon before the label
  * @property {boolean} [checked] one choice of a group (`menuitemradio`; a check mark shows the chosen one)
  * @property {string} [section] a small heading shown above the first item of each section (Theme …)
+ * @property {boolean} [divider] a hairline above the item (a new group without a heading)
  */
 
 /**
@@ -139,7 +140,9 @@ export function ActionMenu({ label, items, icon = 'more', size = 'sm', className
 						const before = items[index - 1];
 						const heading = item.section && item.section !== before?.section ? item.section : null;
 						// a divider before a new section and before the first destructive action
-						const divided = index > 0 && (heading || (item.section ?? '') !== (before?.section ?? '') || (item.danger && !before?.danger));
+						const divided =
+							index > 0 &&
+							(item.divider || heading || (item.section ?? '') !== (before?.section ?? '') || (item.danger && !before?.danger));
 						const radio = item.checked !== undefined;
 						return (
 							<div key={`${item.section ?? ''}:${item.label}`}>

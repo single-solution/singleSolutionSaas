@@ -26,6 +26,7 @@ import {
 	fill,
 	press,
 	pressDialog,
+	pressMenu,
 	quiet,
 	settle,
 	shows,
@@ -197,7 +198,7 @@ describe('website cards (jsdom)', () => {
 			expect(buttons('Open Chatty')).toHaveLength(0);
 
 			// ---------------------------------------------------------------- Install and tokens, in a dialog
-			await press('Install and tokens of shop.example.com');
+			await pressMenu('Actions for shop.example.com', 'Install and tokens');
 			await ownerBrowser.waitCall('GET', `/v1/merchants/${merchantId}/websites/${websiteId}/tokens`);
 			const tag = /** @type {HTMLElement} */ (
 				await until(() => [...dialog().querySelectorAll('pre')].find((p) => p.textContent?.startsWith('<script')))
@@ -245,7 +246,7 @@ describe('website cards (jsdom)', () => {
 			);
 
 			// ---------------------------------------------------------------- Usage, in a dialog
-			await press('Usage of shop.example.com');
+			await pressMenu('Actions for shop.example.com', 'Usage');
 			await until(() => shows('Spend per UTC day'));
 			await closeDialog();
 
@@ -260,7 +261,7 @@ describe('website cards (jsdom)', () => {
 				(st) => st === 200,
 			);
 			await until(() => shows('No products on this website yet.'));
-			await press('Install and tokens of shop.example.com');
+			await pressMenu('Actions for shop.example.com', 'Install and tokens');
 			await until(() => shows('Tokens appear here once a product is on this website.'));
 			await closeDialog();
 			await menu('Actions for shop.example.com');
@@ -308,7 +309,7 @@ describe('website cards (jsdom)', () => {
 			merchant.use();
 			withToasts(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId, websiteId)} />);
 			expect(document.querySelector('a[aria-current="page"]')?.textContent).toContain('shop.example.com');
-			await press('Install and tokens of shop.example.com');
+			await pressMenu('Actions for shop.example.com', 'Install and tokens');
 			await until(() => buttons('Reveal').length === 1);
 			await press('Reveal');
 			await merchant.waitCall(
@@ -351,8 +352,10 @@ describe('website cards (jsdom)', () => {
 			await press('Open Notes');
 			const theirs = await supportBrowser.waitCall('POST', '/v1/admin/products/notes/launch', (st) => st === 200);
 			expect(open).toHaveBeenLastCalledWith(theirs.body.url, '_blank', 'noopener,noreferrer');
-			expect(buttons('Install and tokens of shop.example.com')).toHaveLength(1);
-			expect(buttons('Usage of shop.example.com')).toHaveLength(1);
+			await menu('Actions for shop.example.com');
+			expect(menuItem('Install and tokens')).toBeTruthy();
+			expect(menuItem('Usage')).toBeTruthy();
+			keydown(document, 'Escape');
 			cleanup();
 
 			// Finance: no Install and tokens, no Open, no admin actions
@@ -369,9 +372,9 @@ describe('website cards (jsdom)', () => {
 			expect(shows('Notes')).toBe(true);
 			expect(buttons('Open Notes')).toHaveLength(0);
 			expect(buttons('Add product to shop.example.com')).toHaveLength(0);
-			expect(buttons('Install and tokens of shop.example.com')).toHaveLength(0);
-			expect(buttons('Usage of shop.example.com')).toHaveLength(1);
 			await menu('Actions for shop.example.com');
+			expect(menuItem('Install and tokens')).toBeUndefined();
+			expect(menuItem('Usage')).toBeTruthy();
 			expect(menuItem('Remove website')).toBeUndefined();
 			keydown(document, 'Escape');
 			expect(financeBrowser.calls.some((c) => c.path.endsWith('/tokens'))).toBe(false);
@@ -407,10 +410,10 @@ describe('website cards (jsdom)', () => {
 			/>,
 		);
 		expect(shows('No products on this website yet.')).toBe(true);
-		await press('Install and tokens of shop.com');
+		await pressMenu('Actions for shop.com', 'Install and tokens');
 		await until(() => dialog().textContent?.includes('Something went wrong on our side.'));
 		await closeDialog();
-		await press('Usage of shop.com');
+		await pressMenu('Actions for shop.com', 'Usage');
 		await until(() => dialog().textContent?.includes('Something went wrong on our side.'));
 		await closeDialog();
 		// Add product with nothing to offer (no list passed)

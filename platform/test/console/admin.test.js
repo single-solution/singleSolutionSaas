@@ -183,10 +183,9 @@ describe('admin console smoke', () => {
 				'Credits',
 				'Details',
 				'Activity',
-				'Install and tokens',
-				'Usage',
 			])
 				expect(detailHtml).toContain(word);
+			// Setup, Install and tokens and Usage sit in the website card's More menu (beside Add product)
 			expect(detailHtml).not.toContain('Credit receipts');
 			// the other actions (Suspend, setup link, two-step off, Delete) sit in the header's More menu
 			expect(raw).toContain('aria-label="More actions for Shop &amp; Co"');
@@ -371,7 +370,6 @@ describe('admin console smoke', () => {
 			for (const word of [
 				'Add product to shop.example.com',
 				'aria-label="Actions for shop.example.com"',
-				'Install and tokens',
 				'Open Notes',
 				'Add website',
 			])
@@ -407,7 +405,7 @@ describe('admin console smoke', () => {
 				/>,
 			);
 			expect(financeHtml).toContain('Notes');
-			expect(financeHtml).toContain('Usage');
+			expect(financeHtml).toContain('aria-label="Actions for shop.example.com"'); // Usage is in its menu
 			expect(financeHtml).toContain('Add credits');
 			for (const word of ['Install and tokens', 'Add product', 'Open Notes', 'Add website', 'Edit merchant'])
 				expect(financeHtml).not.toContain(word);

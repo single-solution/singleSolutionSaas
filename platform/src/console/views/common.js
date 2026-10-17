@@ -170,7 +170,7 @@ export function ListDetail({ label, section, list, detail, empty, back, auto = f
 	return (
 		<ScreenContext.Provider value={screen}>
 			<div className="grid items-start gap-6 xl:grid-cols-[20rem_minmax(0,1fr)] 2xl:grid-cols-[22rem_minmax(0,1fr)] 2xl:gap-8">
-				<aside aria-label={label} className={cx('min-w-0 xl:sticky xl:top-8', chosen ? 'hidden lg:block' : 'block')}>
+				<aside aria-label={label} className={cx('min-w-0 xl:sticky xl:top-0', chosen ? 'hidden lg:block' : 'block')}>
 					{list}
 				</aside>
 				<div className={cx('min-w-0 space-y-6', chosen || !shown ? 'block' : 'hidden lg:block')}>
@@ -202,13 +202,17 @@ export function ListPane({ title, count, action, tools, children, footer }) {
 	return (
 		<div
 			className={cx(
-				'@container space-y-3 rounded-card border border-line-soft bg-surface p-3 shadow-card sm:p-4',
+				'@container space-y-3 rounded-panel border border-line-soft bg-surface p-3 shadow-panel xl:flex xl:max-h-(--ss-pane-h) xl:flex-col',
 				fades && 'animate-ss-fade',
 			)}>
-			<div className="flex flex-wrap items-center justify-between gap-2 px-1 pt-1">
-				<h1 className="text-lg font-bold tracking-tight text-fg">
+			<div className="flex min-h-8 flex-wrap items-center justify-between gap-2 px-1">
+				<h1 className="flex items-center gap-2 text-title font-semibold tracking-[-0.01em] text-fg">
 					{title}
-					{count === undefined ? null : <span className="ml-2 text-sm font-semibold text-muted">{count}</span>}
+					{count === undefined ? null : (
+						<span className="rounded-md bg-surface-2 px-1.5 py-px text-micro font-medium text-muted tabular-nums">
+							{count}
+						</span>
+					)}
 				</h1>
 				{strip || action ? (
 					<div className="flex flex-wrap items-center gap-2">
@@ -229,14 +233,14 @@ export function ListPane({ title, count, action, tools, children, footer }) {
 					</div>
 				) : null}
 			</div>
-			<div id={body} className={cx('space-y-3', strip && !strip.open && 'lg:max-xl:hidden')}>
+			<div id={body} className={cx('space-y-3 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col', strip && !strip.open && 'lg:max-xl:hidden')}>
 				{tools}
 				<ul
 					ref={rows}
 					onScroll={(event) => {
 						if (section) listScroll(section, event.currentTarget.scrollTop);
 					}}
-					className="max-h-none space-y-0.5 overflow-y-auto lg:max-h-[min(28rem,55vh)] xl:max-h-[calc(100vh-17rem)]">
+					className="ss-scroll -mx-1 max-h-none space-y-px px-1 lg:max-h-[min(28rem,55vh)] xl:max-h-none xl:min-h-0 xl:flex-1">
 					{children}
 				</ul>
 				{footer}
@@ -271,7 +275,7 @@ export function ListRow({ href, label, sublabel, dot, dotLabel, meta, current = 
 				aria-current={marked === true ? 'page' : undefined}
 				onClick={strip ? strip.picked : undefined}
 				className={cx(
-					'ss-motion ss-press relative isolate flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm',
+					'ss-motion ss-press relative isolate flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2.5 py-2 text-sm',
 					marked === true
 						? 'text-on-primary-soft'
 						: marked === 'wide'
@@ -282,7 +286,7 @@ export function ListRow({ href, label, sublabel, dot, dotLabel, meta, current = 
 					<ViewTransition name="ss-list-selection" share="ss-vt-morph" default="none">
 						<span
 							aria-hidden="true"
-							className={cx('absolute inset-0 -z-10 rounded-xl bg-primary-soft', marked === 'wide' && 'hidden lg:block')}
+							className={cx('absolute inset-0 -z-10 rounded-lg bg-primary-soft', marked === 'wide' && 'hidden lg:block')}
 						/>
 					</ViewTransition>
 				) : null}
@@ -292,7 +296,7 @@ export function ListRow({ href, label, sublabel, dot, dotLabel, meta, current = 
 						title={typeof label === 'string' ? label : undefined}
 						className={cx(
 							'col-span-2 line-clamp-2 break-words @sm:col-span-1',
-							marked === true ? 'font-bold' : 'font-semibold',
+							marked === true ? 'font-semibold' : 'font-medium',
 						)}>
 						{typeof label === 'string' ? <SoftBreaks text={label} /> : label}
 					</span>
@@ -301,12 +305,12 @@ export function ListRow({ href, label, sublabel, dot, dotLabel, meta, current = 
 							{sublabel ? (
 								<span
 									title={typeof sublabel === 'string' ? sublabel : undefined}
-									className="min-w-0 max-w-full truncate text-xs text-muted @sm:col-start-1 @sm:row-start-2">
+									className="min-w-0 max-w-full truncate text-help text-muted @sm:col-start-1 @sm:row-start-2">
 									{sublabel}
 								</span>
 							) : null}
 							{meta === undefined ? null : (
-								<span className="ml-auto text-right text-xs font-semibold whitespace-nowrap tabular-nums text-muted @sm:col-start-2 @sm:row-span-2 @sm:row-start-1 @sm:self-center">
+								<span className="ml-auto text-right text-help font-medium whitespace-nowrap tabular-nums text-muted @sm:col-start-2 @sm:row-span-2 @sm:row-start-1 @sm:self-center">
 									{meta}
 								</span>
 							)}
@@ -329,7 +333,7 @@ export function ListSearch({ label, value, onChange, onSearch, children }) {
 		<form
 			role="search"
 			aria-label={label}
-			className="flex flex-wrap gap-2 px-1"
+			className="flex flex-wrap gap-2"
 			onSubmit={(event) => {
 				event.preventDefault();
 				onSearch?.();
@@ -354,7 +358,7 @@ export function ListSearch({ label, value, onChange, onSearch, children }) {
  */
 function BackLink({ href, label }) {
 	return (
-		<Link href={href} className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline lg:hidden">
+		<Link href={href} className="inline-flex items-center gap-1 text-label font-medium text-muted hover:text-fg lg:hidden">
 			<Icon name="chevronRight" size={14} className="rotate-180" />
 			{label}
 		</Link>

@@ -1,8 +1,8 @@
 'use client';
 /**
- * The signed-in merchant console frame (PLAN 0.6, premium layout 2026-10-16): the menu Overview · Websites · Usage and
- * credits · Account, the website switcher (in the sidebar, in the header on phones), the balance chip and the account
- * menu (My account, Sign out) in the header, help and account at the bottom of the sidebar, and the billing banner,
+ * The signed-in merchant console frame (PLAN 0.6, premium layout 2026-10-17): the menu Overview · Websites · Usage and
+ * credits · Account, the website switcher (in the sidebar and its phone drawer), the merchant and page title, the
+ * balance chip and the one account menu (My account, the theme, Sign out) in the header, help and account at the bottom of the sidebar, and the billing banner,
  * with the Branding. The frame is the console's
  * layout, so it stays across navigations: pages hand it their fresh billing summary (frame-billing.js). The public
  * account pages render without it.
@@ -10,7 +10,7 @@
  */
 import { usePathname, useRouter } from 'next/navigation.js';
 import { useEffect, useState, useTransition } from 'react';
-import { AccountMenu, AppShell, Icon, Select, ToastProvider, formatCredits, useNavigationProgress } from '@ss/ui';
+import { AppShell, Icon, SwitcherSelect, ToastProvider, formatCredits, useNavigationProgress } from '@ss/ui';
 import { MERCHANT } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link, NavLink } from '../link.js';
@@ -61,20 +61,17 @@ export const merchantSections = (pathname) => {
 };
 
 /**
- * The website switcher: a select of the merchant's websites, "All websites" first.
- * @param {{ websites: any[], current: string, disabled: boolean, onPick: (next: string) => void, className?: string }} props
+ * The website switcher: a select of the merchant's websites, "All websites" first, with a small avatar.
+ * @param {{ websites: any[], current: string, disabled: boolean, onPick: (next: string) => void }} props
  */
-function WebsiteSwitcher({ websites, current, disabled, onPick, className }) {
+function WebsiteSwitcher({ websites, current, disabled, onPick }) {
 	return (
-		<Select
+		<SwitcherSelect
 			label={MERCHANT.website}
-			hideLabel
-			fieldClassName={className ?? 'w-full'}
-			className="truncate font-medium"
 			value={current}
 			disabled={disabled}
 			options={[{ value: '', label: MERCHANT.allWebsites }, ...websites.map((w) => ({ value: w.websiteId, label: w.domain }))]}
-			onChange={(e) => onPick(e.currentTarget.value)}
+			onChange={onPick}
 		/>
 	);
 }
@@ -126,45 +123,24 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 								/>
 							) : null
 						}
-						topbar={
-							<>
-								<span
-									title={merchant?.name ?? merchantId}
-									className="min-w-0 truncate px-1 text-sm font-semibold text-fg">
-									{merchant?.name ?? merchantId}
-								</span>
-								{websites.length > 0 ? (
-									<span className="min-w-0 flex-1 lg:hidden">
-										<WebsiteSwitcher
-											websites={websites}
-											current={currentWebsiteId}
-											disabled={switching}
-											onPick={pickWebsite}
-											className="w-full min-w-28 max-w-[14rem]"
-										/>
-									</span>
-								) : null}
-							</>
-						}
+						crumbs={[{ label: merchant?.name ?? merchantId ?? '' }]}
+						scrollKey={pathname}
+						account={{
+							name: accountName,
+							...(merchant?.email ? { email: merchant.email } : {}),
+							items: accountItems,
+							label: MERCHANT.accountMenu,
+						}}
 						actions={
-							<>
-								{billing && typeof billing.balance === 'number' ? (
-									<Link
-										href={routes.credits()}
-										className="ss-motion hidden h-9 items-center gap-1.5 rounded-control bg-primary-soft px-3 text-sm font-semibold text-on-primary-soft hover:bg-surface-3 sm:inline-flex"
-										title={MERCHANT.balanceLink}>
-										<Icon name="wallet" size={14} />
-										<span className="tabular-nums">{formatCredits(billing.balance)}</span>
-									</Link>
-								) : null}
-								<AccountMenu
-									name={accountName}
-									{...(merchant?.email ? { email: merchant.email } : {})}
-									items={accountItems}
-									label={MERCHANT.accountMenu}
-									compact
-								/>
-							</>
+							billing && typeof billing.balance === 'number' ? (
+								<Link
+									href={routes.credits()}
+									className="ss-motion hidden h-8 items-center gap-1.5 rounded-full border border-line-soft bg-surface-2 px-3 text-label font-medium text-fg hover:bg-surface-3 sm:inline-flex"
+									title={MERCHANT.balanceLink}>
+									<Icon name="wallet" size={14} className="text-muted" />
+									<span className="tabular-nums">{formatCredits(billing.balance)}</span>
+								</Link>
+							) : null
 						}
 						sidebarFooter={({ rail }) => (
 							<FrameFooter

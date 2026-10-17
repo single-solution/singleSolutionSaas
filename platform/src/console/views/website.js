@@ -13,7 +13,6 @@ import { useEffect, useState } from 'react';
 import {
 	ActionMenu,
 	Button,
-	ButtonLink,
 	Callout,
 	Card,
 	CodeBlock,
@@ -24,6 +23,8 @@ import {
 	Icon,
 	IconBadge,
 	Input,
+	ListRow,
+	RowList,
 	Skeleton,
 	SoftBreaks,
 	TypedConfirmDialog,
@@ -38,7 +39,7 @@ import {
 import { widgetScriptTag } from '@ss/contracts/text';
 import { BILLING, MORE, WEBSITE } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
-import { Link } from '../link.js';
+import { useNavigation } from '../navigation.js';
 import { api } from '../paths.js';
 import { productTone, ProductStatusBadge, UsageView } from './billing.js';
 import { openDashboard } from './common.js';
@@ -164,6 +165,7 @@ export function AddWebsiteDialog({ open, merchantId, onClose, onAdded }) {
  */
 export function WebsiteCard({ website, cards: initial, can, launch, addable, onCardsChange, onRemoved, headline, setupHref }) {
 	const toast = useToast();
+	const nav = useNavigation();
 	const merchantId = String(website.merchantId);
 	const websiteId = String(website.websiteId);
 	const [cards, setCardsState] = useState(initial);
@@ -219,116 +221,61 @@ export function WebsiteCard({ website, cards: initial, can, launch, addable, onC
 		const copied = await copyText(website.domain);
 		toast.show(copied ? { title: MORE.copied } : { tone: 'danger', title: website.domain });
 	};
-	// Visit and Copy domain for everyone; Remove website (last, in danger text) for those who remove websites
-	const menu = (
-		<ActionMenu
-			label={WEBSITE.websiteActionsOf(website.domain)}
-			items={[
-				{
-					label: MORE.visitWebsite,
-					onSelect: () => void window.open(`https://${website.domain}`, '_blank', 'noopener,noreferrer'),
-				},
-				{ label: MORE.copyDomain, onSelect: () => void copyDomain() },
-				...(can.removeWebsite
-					? [
-							{
-								label: WEBSITE.removeWebsite,
-								danger: true,
-								disabled: cards.length > 0,
-								...(cards.length > 0 ? { hint: WEBSITE.removeProductsFirst } : {}),
-								onSelect: () => {
-									setProblem(null);
-									setDialog('removeWebsite');
-								},
-							},
-						]
-					: []),
-			]}
-		/>
-	);
+	// the header keeps Add product; the More menu holds Setup, Install and tokens and Usage, then Visit and Copy
+	// domain, and Remove website last (danger) for those who remove websites
+	/** @type {import('@ss/ui').MenuItem[]} */
+	const more = [
+		...(can.tokens && setupHref ? [{ label: WEBSITE.setup, icon: /** @type {const} */ ('layers'), onSelect: () => nav.go(setupHref) }] : []),
+		...(can.tokens ? [{ label: WEBSITE.tokens, icon: /** @type {const} */ ('key'), onSelect: () => setDialog('tokens') }] : []),
+		{ label: WEBSITE.usage, icon: 'trendingUp', onSelect: () => setDialog('usage') },
+		{
+			label: MORE.visitWebsite,
+			icon: 'external',
+			divider: true,
+			onSelect: () => void window.open(`https://${website.domain}`, '_blank', 'noopener,noreferrer'),
+		},
+		{ label: MORE.copyDomain, icon: 'copy', onSelect: () => void copyDomain() },
+		...(can.removeWebsite
+			? [
+					{
+						label: WEBSITE.removeWebsite,
+						danger: true,
+						disabled: cards.length > 0,
+						...(cards.length > 0 ? { hint: WEBSITE.removeProductsFirst } : {}),
+						onSelect: () => {
+							setProblem(null);
+							setDialog('removeWebsite');
+						},
+					},
+				]
+			: []),
+	];
 
 	const DomainHeading = headline ? 'h2' : 'h3';
 	return (
-		<Card as="article" flow={!headline} id={`website-${websiteId}`} className="@container scroll-mt-24">
-			<header className="mb-4 flex items-start justify-between gap-3">
+		<Card
+			as="article"
+			flow={!headline}
+			padded={false}
+			id={`website-${websiteId}`}
+			className="@container scroll-mt-6"
+			title={
 				<span className="flex min-w-0 items-center gap-3">
-					<IconBadge icon="globe" kind="website" size={headline ? 'md' : 'sm'} />
+					<IconBadge icon="globe" kind="website" size="sm" />
 					<span className="min-w-0">
 						<DomainHeading
 							title={website.domain}
-							className={cx(
-								'font-bold tracking-tight text-fg',
-								'break-words',
-								headline ? 'line-clamp-3 text-xl font-extrabold @md:text-2xl' : 'line-clamp-2 text-base',
-							)}>
+							className={cx('line-clamp-2 break-words text-title font-semibold text-fg', headline && '@md:text-lead')}>
 							<SoftBreaks text={website.domain} />
 						</DomainHeading>
-						<span className="block text-sm text-muted">{WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}</span>
+						<span className="block text-help font-normal text-muted">
+							{WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}
+						</span>
 					</span>
 				</span>
-				{menu}
-			</header>
-			<div className="space-y-4">
-				{cards.length === 0 ? (
-					<p className="rounded-xl bg-surface-2/60 px-4 py-3 text-sm text-muted">
-						{can.manage ? WEBSITE.noProducts : WEBSITE.noProductsMerchant}
-					</p>
-				) : (
-					<ul
-						className={headline ? 'grid gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3' : 'space-y-2'}
-						aria-label={WEBSITE.productsOf(website.domain)}>
-						{cards.map((card) => (
-							<li
-								key={card.productId}
-								className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl bg-surface-2/60 px-4 py-3">
-								<span className="flex min-w-0 items-center gap-3">
-									<IconBadge icon="box" kind="product" size="sm" />
-									<span className="min-w-0 space-y-1">
-										<span className="flex flex-wrap items-center gap-2">
-											<span className="truncate text-sm font-semibold text-fg">{card.name}</span>
-											<ProductStatusBadge status={card.status} featuresOn={card.featuresOn} />
-										</span>
-										<span className="block text-xs text-muted">
-											{card.featuresOn.length > 0 ? `${WEBSITE.featuresOn(card.featuresOn.length)} · ` : ''}
-											{BILLING.dailyCost}:{' '}
-											<span className="font-semibold tabular-nums text-fg">{formatCredits(card.dailyCost)}</span>
-										</span>
-									</span>
-								</span>
-								<span className="flex items-center gap-1.5">
-									{can.open ? (
-										<Button
-											variant="secondary"
-											size="sm"
-											loading={opening === card.productId}
-											aria-label={WEBSITE.openLabel(card.name)}
-											title={WEBSITE.openHelp}
-											onClick={() => void open(card)}
-											icon={<Icon name="external" size={14} />}>
-											{WEBSITE.open}
-										</Button>
-									) : null}
-									{can.manage ? (
-										<ActionMenu
-											label={WEBSITE.productActions(card.name)}
-											items={[
-												{
-													label: WEBSITE.remove,
-													danger: true,
-													onSelect: () => {
-														setProblem(null);
-														setRemoving(card);
-													},
-												},
-											]}
-										/>
-									) : null}
-								</span>
-							</li>
-						))}
-					</ul>
-				)}
-				<div className="flex flex-wrap gap-2">
+			}
+			actions={
+				<>
 					{can.manage ? (
 						<Button
 							size="sm"
@@ -338,37 +285,63 @@ export function WebsiteCard({ website, cards: initial, can, launch, addable, onC
 							{WEBSITE.addProduct}
 						</Button>
 					) : null}
-					{can.tokens && setupHref ? (
-						<ButtonLink
-							as={Link}
-							href={setupHref}
-							size="sm"
-							variant="secondary"
-							aria-label={WEBSITE.setupOf(website.domain)}
-							icon={<Icon name="layers" size={14} />}>
-							{WEBSITE.setup}
-						</ButtonLink>
-					) : null}
-					{can.tokens ? (
-						<Button
-							size="sm"
-							variant="secondary"
-							onClick={() => setDialog('tokens')}
-							aria-label={WEBSITE.tokensOf(website.domain)}
-							icon={<Icon name="key" size={14} />}>
-							{WEBSITE.tokens}
-						</Button>
-					) : null}
-					<Button
-						size="sm"
-						variant="secondary"
-						onClick={() => setDialog('usage')}
-						aria-label={WEBSITE.usageOf(website.domain)}
-						icon={<Icon name="trendingUp" size={14} />}>
-						{WEBSITE.usage}
-					</Button>
-				</div>
-			</div>
+					<ActionMenu label={WEBSITE.websiteActionsOf(website.domain)} items={more} />
+				</>
+			}>
+			{cards.length === 0 ? (
+				<EmptyState
+					compact
+					icon="box"
+					title={can.manage ? WEBSITE.noProducts : WEBSITE.noProductsMerchant}
+				/>
+			) : (
+				<RowList inset label={WEBSITE.productsOf(website.domain)}>
+					{cards.map((card) => (
+						<ListRow
+							key={card.productId}
+							icon="box"
+							kind="product"
+							title={card.name}
+							status={<ProductStatusBadge status={card.status} featuresOn={card.featuresOn} />}
+							meta={
+								<>
+									{card.featuresOn.length > 0 ? `${WEBSITE.featuresOn(card.featuresOn.length)} · ` : ''}
+									{BILLING.dailyCost}: <span className="font-medium tabular-nums text-fg">{formatCredits(card.dailyCost)}</span>
+								</>
+							}
+							action={
+								can.open ? (
+									<Button
+										variant="secondary"
+										size="sm"
+										loading={opening === card.productId}
+										aria-label={WEBSITE.openLabel(card.name)}
+										title={WEBSITE.openHelp}
+										onClick={() => void open(card)}
+										icon={<Icon name="external" size={14} />}>
+										{WEBSITE.open}
+									</Button>
+								) : null
+							}
+							moreLabel={WEBSITE.productActions(card.name)}
+							{...(can.manage
+								? {
+										more: [
+											{
+												label: WEBSITE.remove,
+												danger: true,
+												onSelect: () => {
+													setProblem(null);
+													setRemoving(card);
+												},
+											},
+										],
+									}
+								: {})}
+						/>
+					))}
+				</RowList>
+			)}
 			{dialog === 'add' ? (
 				<AddProductDialog
 					merchantId={merchantId}
@@ -440,12 +413,12 @@ function AddProductDialog({ merchantId, website, products, onClose, onAdded }) {
 			{products.length === 0 ? (
 				<p className="text-sm text-muted">{WEBSITE.noneToAdd}</p>
 			) : (
-				<ul className="divide-y divide-line-soft rounded-xl bg-surface-2/60">
+				<ul className="divide-y divide-line-soft rounded-card border border-line-soft">
 					{products.map((p) => (
 						<li key={p.productId} className="flex items-center justify-between gap-3 px-4 py-3">
 							<span className="flex min-w-0 items-center gap-3">
 								<IconBadge icon="box" kind="product" size="sm" />
-								<span className="truncate text-sm font-semibold text-fg">{p.name}</span>
+								<span className="truncate text-sm font-medium text-fg">{p.name}</span>
 							</span>
 							<Button
 								size="sm"
@@ -596,9 +569,9 @@ export function InstallBlock({ entry, domain, merchantId, websiteId }) {
 	};
 
 	return (
-		<section aria-label={entry.name} className="space-y-4 rounded-xl bg-surface-2/60 p-4 sm:p-5">
+		<section aria-label={entry.name} className="space-y-4 rounded-card border border-line-soft p-4 sm:p-5">
 			<div className="flex flex-wrap items-center justify-between gap-2">
-				<h3 className="flex items-center gap-2 text-sm font-bold text-fg">
+				<h3 className="flex items-center gap-2.5 text-title font-semibold text-fg">
 					<IconBadge icon="box" kind="product" size="sm" />
 					{entry.name}
 				</h3>
@@ -607,7 +580,7 @@ export function InstallBlock({ entry, domain, merchantId, websiteId }) {
 						href={entry.docsUrl}
 						target="_blank"
 						rel="noopener noreferrer"
-						className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+						className="inline-flex items-center gap-1 text-label font-medium text-primary hover:underline">
 						{WEBSITE.docs}
 						<Icon name="external" size={13} />
 					</a>
@@ -623,12 +596,12 @@ export function InstallBlock({ entry, domain, merchantId, websiteId }) {
 							loading: entry.widgetScriptLoading,
 						})}
 					/>
-					<p className="text-xs text-muted">{WEBSITE.scriptTagHelp}</p>
+					<p className="text-help text-muted">{WEBSITE.scriptTagHelp}</p>
 				</div>
 			) : null}
 			<div className="space-y-1">
 				<CodeBlock label={WEBSITE.browserToken} code={entry.browserToken} />
-				<p className="text-xs text-muted">{WEBSITE.browserTokenHelp(domain)}</p>
+				<p className="text-help text-muted">{WEBSITE.browserTokenHelp(domain)}</p>
 			</div>
 			<div className="space-y-2">
 				<p className="text-label font-medium text-fg">{WEBSITE.serverToken}</p>
@@ -637,7 +610,7 @@ export function InstallBlock({ entry, domain, merchantId, websiteId }) {
 				) : shown && value ? (
 					<CodeBlock code={value} label={WEBSITE.serverToken} />
 				) : (
-					<p className="rounded-xl bg-surface p-3.5 font-mono text-xs text-muted">
+					<p className="rounded-control border border-line-soft bg-surface-2 px-3 py-2.5 font-mono text-xs text-muted">
 						<span aria-hidden="true">••••••••••••••••••••</span>
 						<span className="sr-only">{WEBSITE.hidden}</span>
 					</p>

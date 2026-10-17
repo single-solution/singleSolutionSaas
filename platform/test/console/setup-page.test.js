@@ -17,15 +17,18 @@ import { AdminSetupView } from '../../src/console/admin/views/setup.js';
 import * as loaders from '../../src/console/loaders.js';
 import { MerchantSetupView, SharedSetupView, neededOff, profileLines, valueText } from '../../src/console/views/setup.js';
 import { startMongo } from '../helpers.js';
+import { testRouter } from './router.js';
 import {
 	browserOf,
 	buttons,
 	clickEl,
 	createWorld,
 	dialog,
+	menuItems,
 	openSection,
 	press,
 	pressDialog,
+	pressMenu,
 	quiet,
 	settle,
 	shows,
@@ -176,8 +179,9 @@ describe('Setup page (jsdom)', () => {
 			const detail = await admin.loadMerchant(ownerBrowser.api, merchantId, owner);
 			if (!detail.ok) throw new Error('merchant');
 			withToasts(<MerchantsView {...list} detail={detail} selectedId={merchantId} admin={owner} />);
-			const setupLink = /** @type {HTMLAnchorElement} */ (document.querySelector('a[aria-label="Setup of shop.example.com"]'));
-			expect(setupLink.getAttribute('href')).toBe(`/admin/merchants/${merchantId}/websites/${websiteId}/setup`);
+			// Setup sits in the website card's More menu and opens the admin's Setup page
+			await pressMenu('Actions for shop.example.com', 'Setup');
+			expect(testRouter.push).toHaveBeenCalledWith(`/admin/merchants/${merchantId}/websites/${websiteId}/setup`);
 			cleanup();
 			const setup = await loaders.loadSetup(ownerBrowser.api, merchantId, websiteId);
 			if (!setup.ok) throw new Error('setup');
@@ -209,7 +213,9 @@ describe('Setup page (jsdom)', () => {
 					admin={finance.admin}
 				/>,
 			);
-			expect(document.querySelector('a[aria-label="Setup of shop.example.com"]')).toBeNull();
+			await press('Actions for shop.example.com');
+			expect(menuItems()).not.toContain('Setup');
+			expect(menuItems()).not.toContain('Install and tokens');
 		} finally {
 			restore();
 			await w.close();

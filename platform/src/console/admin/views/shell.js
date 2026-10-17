@@ -7,7 +7,7 @@
  * @module
  */
 import { usePathname } from 'next/navigation.js';
-import { AccountMenu, AppShell, Callout, Card, PageHeader, ToastProvider } from '@ss/ui';
+import { AppShell, Callout, Card, PageHeader, ToastProvider } from '@ss/ui';
 import { useRouter } from 'next/navigation.js';
 import { ADMIN, TWO_STEP } from '../../../texts/console.js';
 import { NavLink } from '../../link.js';
@@ -126,15 +126,8 @@ export function AdminShell({ admin, twoStepRequired = false, branding, children 
 					linkAs={NavLink}
 					sections={twoStepRequired ? [] : adminSections(admin, pathname)}
 					topbar={<RoleBadge role={admin?.role} />}
-					actions={
-						<AccountMenu
-							name={name}
-							{...(admin?.email ? { email: admin.email } : {})}
-							items={accountItems}
-							label={ADMIN.accountMenu}
-							compact
-						/>
-					}
+					scrollKey={pathname}
+					account={{ name, ...(admin?.email ? { email: admin.email } : {}), items: accountItems, label: ADMIN.accountMenu }}
 					sidebarFooter={({ rail }) => (
 						<FrameFooter
 							rail={rail}

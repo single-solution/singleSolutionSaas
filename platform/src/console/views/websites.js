@@ -19,9 +19,11 @@ import {
 	EmptyState,
 	Icon,
 	IconBadge,
+	ListRow as Row,
 	LocalTime,
 	NeedsList,
 	PageHeader,
+	RowList,
 	SectionLayout,
 	SoftBreaks,
 	Stat,
@@ -129,6 +131,7 @@ export function OverviewView(props) {
 			content: rows.map(({ website, cards }) => (
 				<Card
 					flow
+					padded={false}
 					key={website.websiteId}
 					title={
 						<span className="flex min-w-0 items-center gap-3">
@@ -143,19 +146,20 @@ export function OverviewView(props) {
 					}
 					subtitle={WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}>
 					{cards.length === 0 ? (
-						<p className="text-sm text-muted">{WEBSITE.noProductsMerchant}</p>
+						<EmptyState compact icon="box" title={WEBSITE.noProductsMerchant} />
 					) : (
-						<ul className="divide-y divide-line-soft">
+						<RowList inset label={WEBSITE.productsOf(website.domain)}>
 							{cards.map((card) => (
-								<li key={card.productId} className="flex flex-wrap items-center justify-between gap-2 py-2">
-									<span className="flex min-w-0 flex-wrap items-center gap-2">
-										<span className="truncate text-sm font-semibold text-fg">{card.name}</span>
-										<ProductStatusBadge status={card.status} featuresOn={card.featuresOn} />
-									</span>
-									{openButton(website, card)}
-								</li>
+								<Row
+									key={card.productId}
+									icon="box"
+									kind="product"
+									title={card.name}
+									status={<ProductStatusBadge status={card.status} featuresOn={card.featuresOn} />}
+									action={openButton(website, card)}
+								/>
 							))}
-						</ul>
+						</RowList>
 					)}
 				</Card>
 			)),

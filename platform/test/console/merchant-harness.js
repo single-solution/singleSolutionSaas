@@ -82,6 +82,20 @@ export const press = async (label, root) => {
 	await settle(1);
 };
 
+/**
+ * Open the More menu (⋯) labeled `label` and press its item `item` (a website card's Setup, Install and tokens, Usage …).
+ * @param {string} label
+ * @param {string} item
+ */
+export const pressMenu = async (label, item) => {
+	await press(label);
+	await press(item, /** @type {ParentNode} */ (document.querySelector('[role="menu"]')));
+};
+
+/** The items of the open menu, in order. */
+export const menuItems = () =>
+	[...document.querySelectorAll('[role="menu"] [role^="menuitem"]')].map((b) => b.textContent?.replace(/\s+/g, ' ').trim());
+
 /** Press a button of the open dialog. @param {string} label */
 export const pressDialog = (label) => press(label, dialog());
 

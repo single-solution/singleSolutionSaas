@@ -114,7 +114,7 @@ describe('merchant console smoke', () => {
 			const websitesText = text(websitesRaw);
 			expect(websitesText).toContain('www.shop.example.com');
 			expect(websitesText).toContain('2 products');
-			expect(websitesText).toContain('Install and tokens');
+			expect(websitesRaw).toMatch(/aria-label="Actions for [^"]+"/); // Setup, Install and tokens, Usage
 			expect(websitesRaw).not.toContain('aria-current="page"');
 			expect(websitesRaw).toContain('lg:text-on-primary-soft');
 
@@ -124,8 +124,6 @@ describe('merchant console smoke', () => {
 			expect(selectedText).toContain('Notes');
 			expect(selectedText).toContain('Chatty');
 			expect(selectedText).toContain('No features on');
-			expect(selectedText).toContain('Install and tokens');
-			expect(selectedText).toContain('Usage');
 			expect(selectedText).not.toContain('Add product');
 			expect(selectedText).not.toContain('Remove website');
 
