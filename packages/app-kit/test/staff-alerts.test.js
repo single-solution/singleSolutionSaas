@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { defineRoute } from '../src/index.js';
 import { noopLogger } from '../src/logger.js';
 import {
@@ -12,7 +13,7 @@ import {
 } from '../src/staff-alerts.js';
 import { manifest, openDb, productRoutes, setup } from './helpers.js';
 
-/** The sample product with a staff-alerts feature (its settings as K6 names them). */
+/** The sample product with a staff-alerts feature (its settings as K6 names them; the people are the Portal's team). */
 const alertsManifest = () => {
 	const base = manifest();
 	return {
@@ -28,11 +29,8 @@ const alertsManifest = () => {
 					type: 'object',
 					additionalProperties: false,
 					properties: {
-						recipients: { type: 'array', title: 'Recipients', default: [], items: { type: 'string', maxLength: 320 } },
 						staffPermission: { type: 'string', title: 'Staff with this permission', default: '', maxLength: 64 },
-						phoneChannel: { type: 'string', title: 'Phones get', default: 'whatsapp', enum: ['whatsapp', 'sms'] },
 						adminUrl: { type: 'string', title: 'Admin link', default: '', maxLength: 500 },
-						staffPush: { type: 'boolean', title: 'Staff push too', default: false },
 					},
 				},
 			},
@@ -104,11 +102,31 @@ const start = async () => {
 				.status,
 		).toBe(200);
 	}
-	/** @param {string} key @param {unknown} value */
-	const set = async (key, value) =>
+	/** The website's alert team in the Portal (Website settings › Team and alerts). */
+	const team = { recipients: /** @type {Array<{ name: string, email: string, phone: string }>} */ ([]), phoneChannel: '', staffPush: false };
+	/**
+	 * A setting of the feature, or the Portal's team: `recipients` (addresses and phones, each one person), `phoneChannel`
+	 * and `staffPush` are saved in the Portal and the product is told.
+	 * @param {string} key @param {unknown} value
+	 */
+	const set = async (key, value) => {
+		if (key === 'recipients' || key === 'phoneChannel' || key === 'staffPush') {
+			if (key === 'recipients')
+				team.recipients = /** @type {string[]} */ (value).flatMap((entry) =>
+					entry.includes('@') ? [{ name: '', email: entry, phone: '' }] : /^\+?[0-9 ().-]{3,40}$/.test(entry) ? [{ name: '', email: '', phone: entry }] : [],
+				);
+			else if (key === 'phoneChannel') team.phoneChannel = String(value);
+			else team.staffPush = value === true;
+			const empty = emptyWebsiteSettings(ctx.websiteId);
+			ctx.clock.advance(1000); // a second notice at the same second would read as a replay
+			await ctx.portal.saveWebsiteSettings(ctx.websiteId, { team: { ...empty.team, ...team } });
+			await ctx.settle();
+			return;
+		}
 		expect(
 			(await ctx.dash(cookie, 'PUT', `/v1/dashboard/websites/${ctx.websiteId}/settings/alerts.${key}`, { value })).status,
 		).toBe(204);
+	};
 	/** @param {unknown} [body] */
 	const alert = async (body = {}) => {
 		const response = await ctx.call('POST', '/v1/server/alert', { token: ctx.server.token, body });
@@ -141,54 +159,54 @@ describe('staff alerts (K6)', () => {
 		expect(addressOf(7)).toBeNull();
 	});
 
-	it('gives each recipient its channel: named first, else email for an address and phoneChannel for a phone (K8)', () => {
+	it('gives each recipient its channel: email for an address, the team’s phone channel for a phone (SMS unless WhatsApp), staff push for an Accounts user (K8)', () => {
 		expect(recipientOf('ops@shop.example.com')).toEqual({
 			key: 'email|e:ops@shop.example.com',
 			channel: 'email',
 			to: { email: 'ops@shop.example.com' },
 		});
-		expect(recipientOf('+44 7700 900123')).toMatchObject({ channel: 'whatsapp', to: { phone: '+447700900123' } });
-		expect(recipientOf('+44 7700 900123', 'sms')).toMatchObject({ channel: 'sms' });
-		expect(recipientOf('SMS: +44 7700 900123')).toMatchObject({ channel: 'sms', to: { phone: '+447700900123' } });
-		expect(recipientOf('whatsapp:+44 7700 900123', 'sms')).toMatchObject({ channel: 'whatsapp' });
-		expect(recipientOf('email:ops@shop.example.com')).toMatchObject({ channel: 'email' });
+		expect(recipientOf('+44 7700 900123')).toMatchObject({ channel: 'sms', to: { phone: '+447700900123' } });
+		expect(recipientOf('+44 7700 900123', 'whatsapp')).toMatchObject({ channel: 'whatsapp' });
 		expect(recipientOf('push:usr_01')).toEqual({
 			key: 'staff_push|u:usr_01',
 			channel: 'staff_push',
 			to: { staffId: 'usr_01' },
 		});
-		// a channel that does not fit the address, an unknown channel or a bad id is left out
-		expect(recipientOf('email:+44 7700 900123')).toBeNull();
-		expect(recipientOf('sms:ops@shop.example.com')).toBeNull();
-		expect(recipientOf('fax:+44 7700 900123')).toBeNull();
+		// the channel is the team's, never written in front of an address; a bad id is left out
+		expect(recipientOf('sms:+44 7700 900123')).toBeNull();
 		expect(recipientOf('push:not an id')).toBeNull();
 	});
 
 	it('send each recipient on its own channel, staff push to Accounts staff, and at most the people the setting allows', async () => {
 		const { set, alert, notifications, accounts } = await start();
-		await set('recipients', ['ops@shop.example.com', 'sms:+44 7700 900123', 'whatsapp:+44 7700 900123', 'push:usr_9']);
+		await set('recipients', ['ops@shop.example.com', '+44 7700 900123']);
+		await set('phoneChannel', 'whatsapp');
 		accounts.setUsers([{ id: 'u1', email: 'sana@shop.example.com', permissions: ['notes:notes.read'] }]);
 		await set('staffPermission', 'notes.read');
 		await set('staffPush', true);
-		expect(await alert()).toBe(6);
+		expect(await alert()).toBe(4);
 		expect(notifications.messages.map((m) => [m.channel, m.body.to])).toEqual([
 			['email', { email: 'ops@shop.example.com' }],
-			['sms', { phone: '+447700900123' }],
 			['whatsapp', { phone: '+447700900123' }],
-			['staff-push', { staffId: 'usr_9' }],
 			['email', { email: 'sana@shop.example.com' }],
 			['staff-push', { staffId: 'u1' }],
 		]);
 		// the product names the limit of its alerts (20 without one)
 		notifications.messages.length = 0;
 		expect(await alert({ maxRecipients: 2 })).toBe(2);
-		expect(notifications.messages.map((m) => m.channel)).toEqual(['email', 'sms']);
+		expect(notifications.messages.map((m) => m.channel)).toEqual(['email', 'whatsapp']);
+		// the same team for every product of the website: SMS unless the merchant chose WhatsApp, no push without the switch
+		await set('phoneChannel', 'sms');
+		await set('staffPush', false);
+		notifications.messages.length = 0;
+		expect(await alert()).toBe(3);
+		expect(notifications.messages.map((m) => m.channel)).toEqual(['email', 'sms', 'email']);
 	});
 
 	it('prepare gives the messages of an alert, channels and staff push included, and sends and saves none (a product delivers them itself)', async () => {
 		const { set, prepared, notifications, accounts } = await start();
 		expect(await prepared()).toEqual([]);
-		await set('recipients', ['ops@shop.example.com', 'sms:+44 7700 900123', 'push:usr_9']);
+		await set('recipients', ['ops@shop.example.com', '+44 7700 900123']);
 		await set('adminUrl', 'https://admin.shop.example.com/notes/{noteId}');
 		accounts.setUsers([{ id: 'u1', email: 'sana@shop.example.com', permissions: ['notes:notes.read'] }]);
 		await set('staffPermission', 'all_staff');
@@ -197,7 +215,6 @@ describe('staff alerts (K6)', () => {
 		expect(messages.map((/** @type {any} */ m) => [m.channel, m.to])).toEqual([
 			['email', { email: 'ops@shop.example.com' }],
 			['sms', { phone: '+447700900123' }],
-			['staff_push', { staffId: 'usr_9' }],
 			['email', { email: 'sana@shop.example.com' }],
 			['staff_push', { staffId: 'u1' }],
 		]);
@@ -206,7 +223,7 @@ describe('staff alerts (K6)', () => {
 			values: { noteId: 'not_42', preview: 'Hello', link: 'https://admin.shop.example.com/notes/not_42' },
 		});
 		// each message has its own id (a send uses it as the Idempotency-Key)
-		expect(new Set(messages.map((/** @type {any} */ m) => m.id)).size).toBe(5);
+		expect(new Set(messages.map((/** @type {any} */ m) => m.id)).size).toBe(4);
 		// all_staff asked Accounts for the permission the alert named; nothing went to Notifications
 		expect(accounts.userReads).toEqual(['notes:notes.read']);
 		expect(notifications.messages).toEqual([]);
@@ -228,11 +245,11 @@ describe('staff alerts (K6)', () => {
 		expect(await alert({ assignee: { email: 'sana@shop.example.com', phone: '+33 6 12 34 56 78' } })).toBe(6);
 		expect(notifications.messages.map((m) => [m.channel, m.body.to])).toEqual([
 			['email', { email: 'ops@shop.example.com' }],
-			['whatsapp', { phone: '+447700900123' }],
+			['sms', { phone: '+447700900123' }],
 			['email', { email: 'sana@shop.example.com' }],
-			['whatsapp', { phone: '+14155550101' }],
+			['sms', { phone: '+14155550101' }],
 			['email', { email: 'owner@shop.example.com' }],
-			['whatsapp', { phone: '+33612345678' }],
+			['sms', { phone: '+33612345678' }],
 		]);
 		expect(notifications.messages[0]?.body).toEqual({
 			template: 'notes.staff_note_created',
@@ -242,11 +259,11 @@ describe('staff alerts (K6)', () => {
 		});
 		expect(accounts.userReads).toEqual(['notes:notes.read']);
 		// cached for 5 minutes; then asked again
-		await set('phoneChannel', 'sms');
+		await set('phoneChannel', 'whatsapp');
 		notifications.messages.length = 0;
 		await alert();
 		expect(accounts.userReads).toHaveLength(1);
-		expect(notifications.messages.filter((m) => m.channel === 'sms')).toHaveLength(2);
+		expect(notifications.messages.filter((m) => m.channel === 'whatsapp')).toHaveLength(2);
 		clock.advance(5 * 60_000);
 		accounts.setFailing(true);
 		await alert();
@@ -313,7 +330,7 @@ describe('staff alerts (K6)', () => {
 			await use();
 			expect(notifications.messages.map((m) => [m.channel, m.body.required])).toEqual([
 				['email', true],
-				['whatsapp', true],
+				['sms', true],
 			]);
 			expect(keys.slice(2)).toEqual(keys.slice(0, 2));
 			expect(keys[0]).toMatch(/^notes-sal_[0-9a-z]{26}$/);
@@ -394,6 +411,7 @@ describe('staff alerts (K6)', () => {
 		const alerts = createStaffAlerts({
 			productId: 'notes',
 			settings: /** @type {any} */ ({}),
+			website: /** @type {any} */ ({}),
 			connections: /** @type {any} */ ({ definitions: { database: { kind: 'database' } } }),
 			data: /** @type {any} */ ({
 				forWebsite: async () => {

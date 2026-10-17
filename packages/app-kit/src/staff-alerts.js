@@ -2,16 +2,17 @@
  * Staff alerts (PLAN 0.8.10 K6): one kit helper for products that alert the merchant's staff through Notifications
  * (the pasted Notifications token).
  *
- * - Recipients: the feature's `recipients` setting; plus, when its `staffPermission` setting names a permission, every
+ * - Recipients: the website's alert team in the Portal (Website settings › Team and alerts: each person's email and
+ *   phone); plus, when the feature's `staffPermission` setting names a permission, every
  *   unblocked Accounts user whose role grants it (through the pasted Accounts token:
  *   `GET /v1/users?permission=<product>:<key>&blocked=false`, cached 5 minutes) — the value `all_staff` names the
  *   permission the alert gives as `allStaff` (the one every staff member who works with it has, for example Chat's
  *   `inbox.read`); plus the assignee where the product has one. At most the alert's `maxRecipients` (the product's
  *   own constant; default {@link MAX_RECIPIENTS}, at most {@link RECIPIENTS_CAP}) people per alert.
- * - A channel per recipient (fixed-choices audit K8): a recipient may name it, `email:<address>`, `sms:<phone>`,
- *   `whatsapp:<phone>` or `push:<Accounts user id>` (staff push, the merchant's own push keys); a plain email address
- *   gets email and a plain international phone number the feature's `phoneChannel` (WhatsApp unless `sms`). Accounts
- *   staff get email (or their phone without one), and staff push too with the feature's `staffPush` setting.
+ * - A channel per recipient (fixed-choices audit K8): an email address gets email and an international phone number
+ *   the team's phone channel (SMS unless the merchant chose WhatsApp). Accounts staff get email (or their phone without
+ *   one), and staff push too (`push:<Accounts user id>`, the merchant's own push keys) while the team's staff push is on.
+ *   The channel and staff push are the Portal's, one choice for every product of the website.
  * - Templates `<product>.staff_<event>` (required, not urgent); one message per address per event, sent right after the
  *   request with `required: true` and its own `Idempotency-Key`, carrying the product's default words of the template
  *   (`callProduct`, parity P1); the link is built from the feature's `adminUrl` template (`{placeholders}` filled from
@@ -122,35 +123,34 @@ export const addressOf = (value) => {
 };
 
 /**
- * A recipient with its channel (K8), or null: `email:`, `sms:`, `whatsapp:` or `push:` first names the channel (an
- * address that does not fit it is left out); a plain email address gets email, a plain phone `phoneChannel`. `key`
- * dedupes one person on one channel.
+ * A recipient with its channel (K8), or null: `push:<Accounts user id>` is a staff push; an email address gets email, a
+ * phone `phoneChannel`. `key` dedupes one person on one channel.
  * @param {unknown} value
  * @param {'whatsapp' | 'sms'} [phoneChannel]
  * @returns {{ key: string, channel: AlertMessage['channel'], to: AlertMessage['to'] } | null}
  */
-export const recipientOf = (value, phoneChannel = 'whatsapp') => {
+export const recipientOf = (value, phoneChannel = 'sms') => {
 	if (typeof value !== 'string') return null;
 	const text = value.trim();
-	const named = /^(email|sms|whatsapp|push):\s*(.+)$/i.exec(text);
-	const channel = named ? /** @type {string} */ (named[1]).toLowerCase() : null;
-	const rest = named ? /** @type {string} */ (named[2]).trim() : text;
-	if (channel === 'push')
-		return STAFF_ID.test(rest) ? { key: `staff_push|u:${rest}`, channel: 'staff_push', to: { staffId: rest } } : null;
-	const address = addressOf(rest);
+	const push = /^push:\s*(.+)$/i.exec(text);
+	if (push) {
+		const id = /** @type {string} */ (push[1]).trim();
+		return STAFF_ID.test(id) ? { key: `staff_push|u:${id}`, channel: 'staff_push', to: { staffId: id } } : null;
+	}
+	const address = addressOf(text);
 	if (!address) return null;
 	const email = 'email' in address.to;
-	if (channel === 'email' ? !email : channel !== null && email) return null;
-	const via = email ? 'email' : /** @type {'sms' | 'whatsapp'} */ (channel ?? phoneChannel);
+	const via = email ? 'email' : phoneChannel;
 	return { key: `${via}|${address.key}`, channel: via, to: address.to };
 };
 
 /**
  * @param {{ productId: string, settings: import('./settings.js').Settings,
  *   connections: import('./connections.js').Connections, data: import('./data.js').Data, now: () => number,
- *   logger: import('./logger.js').Logger }} options
+ *   logger: import('./logger.js').Logger, website: import('./website-settings.js').WebsiteSettingsCache }} options
+ *   `website`: the Portal's copy of the website's settings (its team gets the alerts)
  */
-export const createStaffAlerts = ({ productId, settings, connections, data, now, logger }) => {
+export const createStaffAlerts = ({ productId, settings, connections, data, now, logger, website }) => {
 	/** @type {Map<string, { at: number, people: Array<{ address: string, id: string | null }> }>} */
 	const staffCache = new Map();
 	/** Per instance: when the saved messages of a website were last looked for. @type {Map<string, number>} */
@@ -214,16 +214,18 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 	/**
 	 * Everyone an alert of a feature goes to, deduplicated.
 	 * @param {string} websiteId
-	 * @param {Record<string, any>} values the feature's settings
+	 * @param {Record<string, any>} values the feature's settings (`staffPermission`)
 	 * @param {Assignee | null | undefined} assignee
 	 * @param {string} [allStaff] the permission `staffPermission: all_staff` stands for (none: only the list)
 	 * @param {number} [maxRecipients] the most people one alert goes to
 	 */
 	const recipientsOf = async (websiteId, values, assignee, allStaff = '', maxRecipients = MAX_RECIPIENTS) => {
 		const most = Number.isInteger(maxRecipients) ? Math.min(Math.max(maxRecipients, 1), RECIPIENTS_CAP) : MAX_RECIPIENTS;
-		const phoneChannel = values.phoneChannel === 'sms' ? 'sms' : 'whatsapp';
-		const push = values.staffPush === true;
-		const listed = Array.isArray(values.recipients) ? values.recipients.slice(0, RECIPIENTS_CAP) : [];
+		// the alert team is the website's, set once in the Portal for every product (Website settings › Team and alerts)
+		const { team } = await website.document(websiteId);
+		const phoneChannel = team.phoneChannel === 'whatsapp' ? 'whatsapp' : 'sms';
+		const push = team.staffPush === true;
+		const listed = team.recipients.flatMap((person) => [person.email, person.phone]).filter(Boolean).slice(0, RECIPIENTS_CAP);
 		const chosen = typeof values.staffPermission === 'string' ? values.staffPermission : '';
 		const permission = chosen === ALL_STAFF ? allStaff : chosen;
 		const staff =
@@ -249,8 +251,8 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 	 * @param {{ websiteId: string }} ctx
 	 * @param {{ feature: string, event: string, values: Record<string, string | number>, assignee?: Assignee | null,
 	 *   allStaff?: string, maxRecipients?: number }} alert
-	 *   `feature`: the feature whose settings hold `recipients`, `staffPermission`, `phoneChannel`, `adminUrl` and,
-	 *   when it has it, `staffPush`; `maxRecipients`: the most people one alert goes to (the product's own fixed limit);
+	 *   `feature`: the feature whose settings hold `staffPermission` and `adminUrl` (the recipients, their phone channel and
+	 *   staff push are the Portal's team); `maxRecipients`: the most people one alert goes to (the product's own fixed limit);
 	 *   `event`: the template is `<product>.staff_<event>`; `values`: the template's values (at most 1,000 characters each);
 	 *   `allStaff`: the permission key the setting's `all_staff` stands for (every staff member who works with the alert)
 	 * @returns {Promise<AlertMessage[]>} each with its own `id` (a send uses it as the Idempotency-Key)

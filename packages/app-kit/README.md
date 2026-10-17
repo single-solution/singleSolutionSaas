@@ -37,9 +37,9 @@ The exact API is in [API.md](./API.md).
   The product dashboard edits the same lists (`GET|PUT /v1/dashboard/websites/:websiteId/lists/:list`) with the same
   rules.
 - **Events, staff alerts and imports** (K5, K6, K10) — events kept 30 days and forwarded through Notifications; staff
-  alerts to recipients, Accounts staff with a permission (or `all_staff`: every staff member with the alert's own
-  permission) and the assignee, each on its own channel (`sms:`, `whatsapp:`, `email:` or `push:<user id>` first, else
-  email or the feature's `phoneChannel`; staff push for Accounts staff with `staffPush`), at most the alert's
+  alerts to the website's alert team (the Portal's Website settings › Team and alerts, one list for every product: email
+  or phone, SMS unless the team chose WhatsApp, staff push for Accounts staff while the team has it on), Accounts staff
+  with a permission (or `all_staff`: every staff member with the alert's own permission) and the assignee, at most the alert's
   `maxRecipients` people (the product's own fixed limit; default 20, at most 200); checked, idempotent NDJSON import routes, which the kit serves (feature `import`)
   when the product passes `imports`.
 - **Default message templates** (parity P1) — the product declares the messages it sends through Notifications with

@@ -346,7 +346,7 @@ export const createProduct = (options) => {
 		}
 		await events.settingsChanged(ctx, { what, ...(key === undefined ? {} : { key }) });
 	};
-	const staffAlerts = createStaffAlerts({ productId: manifest.id, settings, connections, data, now, logger });
+	const staffAlerts = createStaffAlerts({ productId: manifest.id, settings, connections, data, now, logger, website });
 	if (options.imports !== undefined && !manifest.features.some((/** @type {{ key: string }} */ f) => f.key === IMPORT_FEATURE))
 		throw kitError(
 			'invalid_config',
