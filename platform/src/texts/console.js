@@ -1321,6 +1321,7 @@ export const WEBSITE_SETTINGS = Object.freeze({
 		languageHelp: 'A language tag such as en-US or fr-FR.',
 		languages: 'Languages you offer',
 		languagesHelp: 'The default language comes first.',
+		typeToAdd: 'Type a value to add it.',
 		countriesServed: 'Countries you serve',
 		pick: 'Choose',
 		moneyTitle: 'Currency',

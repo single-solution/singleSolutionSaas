@@ -7,7 +7,7 @@
  * `texts/console.js`; the Portal checks every value again.
  * @module
  */
-import { useEffect, useMemo, useState } from 'react';
+import { createElement, useEffect, useMemo, useState } from 'react';
 import { addressLines, countryChoices } from '@ss/contracts/address';
 import { formatDate, formatMoney } from '@ss/contracts/format';
 import { callingCodeOf } from '@ss/contracts/phone';
@@ -27,6 +27,7 @@ import {
 	RowList,
 	SegmentedControl,
 	Select,
+	SettingList,
 	SettingRow,
 	SettingsCard,
 	Switch,
@@ -59,6 +60,22 @@ const useForm = (props, section) =>
 		onSaved: props.onSaved,
 		onStale: props.onStale,
 	});
+
+/**
+ * A control that is a fieldset (a list editor, a picker, a group of choices) as a row of a card: wrapped in a plain row,
+ * so the hairline between the card's rows is drawn above it and not through its legend.
+ * @template {(props: any) => any} C
+ * @param {C} control
+ * @returns {C}
+ */
+const inRow = (control) =>
+	/** @type {C} */ (
+		/** @type {unknown} */ ((/** @type {any} */ props) => <div data-cell="">{createElement(control, props)}</div>)
+	);
+const RowListEditor = inRow(ListEditor);
+const RowChoicePicker = inRow(ChoicePicker);
+const RowCheckboxGroup = inRow(CheckboxGroup);
+const RowSegmentedControl = inRow(SegmentedControl);
 
 /** @param {import('react').ChangeEvent<any>} event */
 const valueOf = (event) => event.currentTarget.value;
@@ -241,7 +258,7 @@ function HoursEditor({ hours, onChange, error }) {
 					{error(['hours', 'weekly'])}
 				</p>
 			) : null}
-			<ListEditor
+			<RowListEditor
 				legend={B.hoursExceptions}
 				help={B.hoursExceptionsHelp}
 				items={hours.exceptions}
@@ -323,102 +340,112 @@ export function BusinessSection(props) {
 	return (
 		<SectionForm form={form} canWrite={props.canWrite} stale={props.stale} onReload={props.onReload}>
 			<SettingsCard title={B.identityTitle} description={B.identityHelp}>
-				{text('name', B.name, B.nameHelp, { required: true, maxLength: 200 })}
-				{text('tagline', B.tagline, B.taglineHelp, { maxLength: 200 })}
-				<ListEditor
-					legend={B.otherNames}
-					help={B.otherNamesHelp}
-					items={d.otherNames}
-					max={10}
-					onChange={(next) => form.change(['otherNames'], next)}
-					newItem={() => ''}
-					nameOf={(item, index) => item || String(index + 1)}
-					renderItem={(item, index, update) => (
-						<Input
-							label={B.otherName}
-							value={item}
-							error={form.error(['otherNames', index])}
-							onChange={(event) => update(valueOf(event))}
-						/>
-					)}
-				/>
+				<SettingList>
+					{text('name', B.name, B.nameHelp, { required: true, maxLength: 200 })}
+					{text('tagline', B.tagline, B.taglineHelp, { maxLength: 200 })}
+					<RowListEditor
+						legend={B.otherNames}
+						help={B.otherNamesHelp}
+						items={d.otherNames}
+						max={10}
+						onChange={(next) => form.change(['otherNames'], next)}
+						newItem={() => ''}
+						nameOf={(item, index) => item || String(index + 1)}
+						renderItem={(item, index, update) => (
+							<Input
+								label={B.otherName}
+								value={item}
+								error={form.error(['otherNames', index])}
+								onChange={(event) => update(valueOf(event))}
+							/>
+						)}
+					/>
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={B.legalTitle} description={B.legalHelp}>
-				{text('legalName', B.legalName, undefined, { maxLength: 200 })}
-				{text('taxNumber', B.taxNumber, undefined, { maxLength: 60 })}
-				{text('businessType', B.businessType, B.businessTypeHelp, { maxLength: 60 })}
+				<SettingList>
+					{text('legalName', B.legalName, undefined, { maxLength: 200 })}
+					{text('taxNumber', B.taxNumber, undefined, { maxLength: 60 })}
+					{text('businessType', B.businessType, B.businessTypeHelp, { maxLength: 60 })}
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={B.contactTitle} description={B.contactHelp}>
-				{text('email', B.email, undefined, { type: 'email', autoComplete: 'off' })}
-				{text('phone', B.phone, undefined, { type: 'tel', autoComplete: 'off' })}
-				{text('whatsapp', B.whatsapp, undefined, { type: 'tel', autoComplete: 'off' })}
-				<ListEditor
-					legend={B.morePhones}
-					help={B.morePhonesHelp}
-					items={d.phones}
-					max={10}
-					onChange={(next) => form.change(['phones'], next)}
-					newItem={() => ({ label: '', number: '' })}
-					nameOf={(item, index) => item.label || item.number || String(index + 1)}
-					renderItem={(item, index, update) => (
-						<>
-							<Input
-								label={B.phoneLabel}
-								value={item.label}
-								onChange={(event) => update({ ...item, label: valueOf(event) })}
-							/>
-							<Input
-								label={B.phoneNumber}
-								type="tel"
-								value={item.number}
-								error={form.error(['phones', index, 'number'])}
-								onChange={(event) => update({ ...item, number: valueOf(event) })}
-							/>
-						</>
-					)}
-				/>
+				<SettingList>
+					{text('email', B.email, undefined, { type: 'email', autoComplete: 'off' })}
+					{text('phone', B.phone, undefined, { type: 'tel', autoComplete: 'off' })}
+					{text('whatsapp', B.whatsapp, undefined, { type: 'tel', autoComplete: 'off' })}
+					<RowListEditor
+						legend={B.morePhones}
+						help={B.morePhonesHelp}
+						items={d.phones}
+						max={10}
+						onChange={(next) => form.change(['phones'], next)}
+						newItem={() => ({ label: '', number: '' })}
+						nameOf={(item, index) => item.label || item.number || String(index + 1)}
+						renderItem={(item, index, update) => (
+							<>
+								<Input
+									label={B.phoneLabel}
+									value={item.label}
+									onChange={(event) => update({ ...item, label: valueOf(event) })}
+								/>
+								<Input
+									label={B.phoneNumber}
+									type="tel"
+									value={item.number}
+									error={form.error(['phones', index, 'number'])}
+									onChange={(event) => update({ ...item, number: valueOf(event) })}
+								/>
+							</>
+						)}
+					/>
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={B.addressTitle} description={B.addressHelp}>
-				<SummaryRow
-					label={B.addressRow}
-					description={B.addressRowHelp}
-					summary={addressText || T.none}
-					onEdit={() => setDrawer('address')}
-					error={form.error(['address', 'country']) ?? form.error(['address', 'postalCode'])}
-				/>
-				<SummaryRow
-					label={B.hoursRow}
-					description={B.hoursHelp}
-					summary={hoursSummary(d.hours)}
-					onEdit={() => setDrawer('hours')}
-					error={form.error(['hours', 'weekly']) ?? form.error(['hours', 'exceptions'])}
-				/>
+				<SettingList>
+					<SummaryRow
+						label={B.addressRow}
+						description={B.addressRowHelp}
+						summary={addressText || T.none}
+						onEdit={() => setDrawer('address')}
+						error={form.error(['address', 'country']) ?? form.error(['address', 'postalCode'])}
+					/>
+					<SummaryRow
+						label={B.hoursRow}
+						description={B.hoursHelp}
+						summary={hoursSummary(d.hours)}
+						onEdit={() => setDrawer('hours')}
+						error={form.error(['hours', 'weekly']) ?? form.error(['hours', 'exceptions'])}
+					/>
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={B.socialTitle} description={B.socialHelp}>
-				<ListEditor
-					legend={B.social}
-					items={d.social}
-					max={20}
-					onChange={(next) => form.change(['social'], next)}
-					newItem={() => ({ label: '', url: 'https://' })}
-					nameOf={(item, index) => item.label || String(index + 1)}
-					renderItem={(item, index, update) => (
-						<>
-							<Input
-								label={B.socialLabel}
-								value={item.label}
-								onChange={(event) => update({ ...item, label: valueOf(event) })}
-							/>
-							<Input
-								label={B.socialUrl}
-								type="url"
-								value={item.url}
-								error={form.error(['social', index, 'url'])}
-								onChange={(event) => update({ ...item, url: valueOf(event) })}
-							/>
-						</>
-					)}
-				/>
+				<SettingList>
+					<RowListEditor
+						legend={B.social}
+						items={d.social}
+						max={20}
+						onChange={(next) => form.change(['social'], next)}
+						newItem={() => ({ label: '', url: 'https://' })}
+						nameOf={(item, index) => item.label || String(index + 1)}
+						renderItem={(item, index, update) => (
+							<>
+								<Input
+									label={B.socialLabel}
+									value={item.label}
+									onChange={(event) => update({ ...item, label: valueOf(event) })}
+								/>
+								<Input
+									label={B.socialUrl}
+									type="url"
+									value={item.url}
+									error={form.error(['social', index, 'url'])}
+									onChange={(event) => update({ ...item, url: valueOf(event) })}
+								/>
+							</>
+						)}
+					/>
+				</SettingList>
 			</SettingsCard>
 			<Drawer
 				open={drawer === 'address'}
@@ -479,103 +506,114 @@ export function BrandSection(props) {
 	return (
 		<SectionForm form={form} canWrite={props.canWrite} stale={props.stale} onReload={props.onReload}>
 			<SettingsCard title={B.picturesTitle} description={B.picturesHelp}>
-				{PICTURES.map(([name, help]) => (
-					<Input
-						key={name}
-						label={B[name]}
-						help={B[help]}
-						type="url"
-						inputMode="url"
-						placeholder={B.urlPlaceholder}
-						value={d.files[name]}
-						error={form.error(['files', name])}
-						onChange={(event) => form.change(['files', name], valueOf(event))}
-					/>
-				))}
+				<SettingList>
+					{PICTURES.map(([name, help]) => (
+						<Input
+							key={name}
+							label={B[name]}
+							help={B[help]}
+							type="url"
+							inputMode="url"
+							placeholder={B.urlPlaceholder}
+							value={d.files[name]}
+							error={form.error(['files', name])}
+							onChange={(event) => form.change(['files', name], valueOf(event))}
+						/>
+					))}
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={B.themeTitle} description={B.themeHelp}>
-				<SegmentedControl
-					legend={B.mode}
-					value={d.theme.mode}
-					options={['light', 'dark', 'auto'].map((mode) => ({ value: mode, label: B.modes[/** @type {'light'} */ (mode)] }))}
-					onChange={(mode) => form.change(['theme', 'mode'], mode)}
-				/>
-				<Input
-					label={B.fontFamily}
-					help={B.fontFamilyHelp}
-					value={d.theme.fontFamily}
-					error={form.error(['theme', 'fontFamily'])}
-					onChange={(event) => form.change(['theme', 'fontFamily'], valueOf(event))}
-				/>
-				<Input
-					label={B.radius}
-					help={B.radiusHelp}
-					type="number"
-					min={0}
-					max={24}
-					suffix="px"
-					value={String(d.theme.radius)}
-					error={form.error(['theme', 'radius'])}
-					onChange={(event) => form.change(['theme', 'radius'], valueOf(event) === '' ? 0 : Number(valueOf(event)))}
-				/>
-				<Disclosure title={B.advancedTitle}>
-					<TextArea
-						label={B.customCss}
-						help={B.customCssHelp}
-						rows={6}
-						spellCheck={false}
-						value={d.theme.customCss}
-						error={form.error(['theme', 'customCss'])}
-						onChange={(event) => form.change(['theme', 'customCss'], valueOf(event))}
+				<SettingList>
+					<RowSegmentedControl
+						legend={B.mode}
+						value={d.theme.mode}
+						options={['light', 'dark', 'auto'].map((mode) => ({
+							value: mode,
+							label: B.modes[/** @type {'light'} */ (mode)],
+						}))}
+						onChange={(mode) => form.change(['theme', 'mode'], mode)}
 					/>
-				</Disclosure>
+					<Input
+						label={B.fontFamily}
+						help={B.fontFamilyHelp}
+						value={d.theme.fontFamily}
+						error={form.error(['theme', 'fontFamily'])}
+						onChange={(event) => form.change(['theme', 'fontFamily'], valueOf(event))}
+					/>
+					<Input
+						label={B.radius}
+						help={B.radiusHelp}
+						type="number"
+						min={0}
+						max={24}
+						suffix="px"
+						value={String(d.theme.radius)}
+						error={form.error(['theme', 'radius'])}
+						onChange={(event) => form.change(['theme', 'radius'], valueOf(event) === '' ? 0 : Number(valueOf(event)))}
+					/>
+					<Disclosure title={B.advancedTitle}>
+						<TextArea
+							label={B.customCss}
+							help={B.customCssHelp}
+							rows={6}
+							spellCheck={false}
+							value={d.theme.customCss}
+							error={form.error(['theme', 'customCss'])}
+							onChange={(event) => form.change(['theme', 'customCss'], valueOf(event))}
+						/>
+					</Disclosure>
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={B.colorsTitle} description={B.colorsHelp}>
-				<ListEditor
-					legend={B.colors}
-					items={rows}
-					max={24}
-					onChange={setRows}
-					newItem={() => /** @type {[string, string]} */ ([`color${rows.length + 1}`, '#2471e7'])}
-					nameOf={([name], index) => name || String(index + 1)}
-					renderItem={([name, value], index, update) => (
-						<>
-							<Input
-								label={B.colorName}
-								value={name}
-								error={form.error(['theme', 'colors', name])}
-								onChange={(event) => update([valueOf(event), value])}
-							/>
-							<Input
-								label={B.colorValue}
-								type="color"
-								value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : '#000000'}
-								onChange={(event) => update([name, valueOf(event)])}
-							/>
-						</>
-					)}
-				/>
+				<SettingList>
+					<RowListEditor
+						legend={B.colors}
+						items={rows}
+						max={24}
+						onChange={setRows}
+						newItem={() => /** @type {[string, string]} */ ([`color${rows.length + 1}`, '#2471e7'])}
+						nameOf={([name], index) => name || String(index + 1)}
+						renderItem={([name, value], index, update) => (
+							<>
+								<Input
+									label={B.colorName}
+									value={name}
+									error={form.error(['theme', 'colors', name])}
+									onChange={(event) => update([valueOf(event), value])}
+								/>
+								<Input
+									label={B.colorValue}
+									type="color"
+									value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : '#000000'}
+									onChange={(event) => update([name, valueOf(event)])}
+								/>
+							</>
+						)}
+					/>
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={B.previewTitle}>
-				<div
-					className="flex flex-wrap items-center gap-4 border border-line-soft p-4"
-					style={{
-						background: d.theme.mode === 'dark' ? '#0b1220' : '#ffffff',
-						color: d.theme.mode === 'dark' ? '#f4f6fa' : '#0a1c40',
-						borderRadius: `${Math.min(24, Math.max(0, Number(d.theme.radius) || 0))}px`,
-						fontFamily: d.theme.fontFamily === 'inherit' ? 'inherit' : d.theme.fontFamily,
-					}}>
-					<span className="text-sm">{B.previewText}</span>
-					<span
-						className="px-4 py-2 text-sm font-medium"
+				<SettingList>
+					<div
+						className="flex flex-wrap items-center gap-4 border border-line-soft p-4"
 						style={{
-							background: /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : '#2471e7',
-							color: '#ffffff',
+							background: d.theme.mode === 'dark' ? '#0b1220' : '#ffffff',
+							color: d.theme.mode === 'dark' ? '#f4f6fa' : '#0a1c40',
 							borderRadius: `${Math.min(24, Math.max(0, Number(d.theme.radius) || 0))}px`,
+							fontFamily: d.theme.fontFamily === 'inherit' ? 'inherit' : d.theme.fontFamily,
 						}}>
-						{B.previewSample}
-					</span>
-				</div>
+						<span className="text-sm">{B.previewText}</span>
+						<span
+							className="px-4 py-2 text-sm font-medium"
+							style={{
+								background: /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : '#2471e7',
+								color: '#ffffff',
+								borderRadius: `${Math.min(24, Math.max(0, Number(d.theme.radius) || 0))}px`,
+							}}>
+							{B.previewSample}
+						</span>
+					</div>
+				</SettingList>
 			</SettingsCard>
 		</SectionForm>
 	);
@@ -636,180 +674,194 @@ export function RegionSection(props) {
 	return (
 		<SectionForm form={form} canWrite={props.canWrite} stale={props.stale} onReload={props.onReload}>
 			<SettingsCard title={R.whereTitle} description={R.whereHelp}>
-				<Select
-					label={R.country}
-					help={R.countryHelp}
-					value={d.country}
-					placeholder={T.none}
-					options={countries}
-					error={form.error(['country'])}
-					onChange={(event) => chooseCountry(valueOf(event))}
-				/>
-				<SuggestInput
-					label={R.timeZone}
-					help={R.timeZoneHelp}
-					suggestions={zones}
-					value={d.timeZone}
-					error={form.error(['timeZone'])}
-					onChange={(event) => form.change(['timeZone'], valueOf(event))}
-				/>
-				<Input
-					label={R.language}
-					help={R.languageHelp}
-					value={d.language}
-					error={form.error(['language'])}
-					onChange={(event) => form.change(['language'], valueOf(event))}
-				/>
-				<ChoicePicker
-					legend={R.languages}
-					help={R.languagesHelp}
-					options={[]}
-					allowOwn
-					value={d.languages}
-					error={form.error(['languages'])}
-					onChange={(next) => form.change(['languages'], next)}
-				/>
-				<ChoicePicker
-					legend={R.countriesServed}
-					options={countries}
-					value={d.countriesServed}
-					onChange={(next) => form.change(['countriesServed'], next)}
-				/>
+				<SettingList>
+					<Select
+						label={R.country}
+						help={R.countryHelp}
+						value={d.country}
+						placeholder={T.none}
+						options={countries}
+						error={form.error(['country'])}
+						onChange={(event) => chooseCountry(valueOf(event))}
+					/>
+					<SuggestInput
+						label={R.timeZone}
+						help={R.timeZoneHelp}
+						suggestions={zones}
+						value={d.timeZone}
+						error={form.error(['timeZone'])}
+						onChange={(event) => form.change(['timeZone'], valueOf(event))}
+					/>
+					<Input
+						label={R.language}
+						help={R.languageHelp}
+						value={d.language}
+						error={form.error(['language'])}
+						onChange={(event) => form.change(['language'], valueOf(event))}
+					/>
+					<RowChoicePicker
+						legend={R.languages}
+						help={R.languagesHelp}
+						options={[]}
+						allowOwn
+						noMatchText={R.typeToAdd}
+						value={d.languages}
+						error={form.error(['languages'])}
+						onChange={(next) => form.change(['languages'], next)}
+					/>
+					<RowChoicePicker
+						legend={R.countriesServed}
+						options={countries}
+						value={d.countriesServed}
+						onChange={(next) => form.change(['countriesServed'], next)}
+					/>
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={R.moneyTitle} description={R.moneyHelp}>
-				<SuggestInput
-					label={R.currency}
-					help={R.currencyHelp}
-					suggestions={currencyNames}
-					value={d.currency}
-					maxLength={3}
-					error={form.error(['currency'])}
-					onChange={(event) => form.change(['currency'], valueOf(event).toUpperCase())}
-				/>
-				<ChoicePicker
-					legend={R.currencies}
-					help={R.currenciesHelp}
-					options={currencyNames.map((code) => ({ value: code, label: code }))}
-					allowOwn
-					value={d.currencies}
-					error={form.error(['currencies'])}
-					onChange={(next) => form.change(['currencies'], next)}
-				/>
+				<SettingList>
+					<SuggestInput
+						label={R.currency}
+						help={R.currencyHelp}
+						suggestions={currencyNames}
+						value={d.currency}
+						maxLength={3}
+						error={form.error(['currency'])}
+						onChange={(event) => form.change(['currency'], valueOf(event).toUpperCase())}
+					/>
+					<RowChoicePicker
+						legend={R.currencies}
+						help={R.currenciesHelp}
+						options={currencyNames.map((code) => ({ value: code, label: code }))}
+						allowOwn
+						noMatchText={R.typeToAdd}
+						value={d.currencies}
+						error={form.error(['currencies'])}
+						onChange={(next) => form.change(['currencies'], next)}
+					/>
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={R.unitsTitle} description={R.unitsHelp}>
-				<Select
-					label={R.weight}
-					value={d.units.weight}
-					placeholder={R.noUnit}
-					options={WEBSITE_UNITS.weight.map((unit) => ({ value: unit, label: R.weights[/** @type {'g'} */ (unit)] }))}
-					error={form.error(['units', 'weight'])}
-					onChange={(event) => form.change(['units', 'weight'], valueOf(event))}
-				/>
-				<Select
-					label={R.size}
-					value={d.units.size}
-					placeholder={R.noUnit}
-					options={WEBSITE_UNITS.size.map((unit) => ({ value: unit, label: R.sizes[/** @type {'mm'} */ (unit)] }))}
-					error={form.error(['units', 'size'])}
-					onChange={(event) => form.change(['units', 'size'], valueOf(event))}
-				/>
+				<SettingList>
+					<Select
+						label={R.weight}
+						value={d.units.weight}
+						placeholder={R.noUnit}
+						options={WEBSITE_UNITS.weight.map((unit) => ({ value: unit, label: R.weights[/** @type {'g'} */ (unit)] }))}
+						error={form.error(['units', 'weight'])}
+						onChange={(event) => form.change(['units', 'weight'], valueOf(event))}
+					/>
+					<Select
+						label={R.size}
+						value={d.units.size}
+						placeholder={R.noUnit}
+						options={WEBSITE_UNITS.size.map((unit) => ({ value: unit, label: R.sizes[/** @type {'mm'} */ (unit)] }))}
+						error={form.error(['units', 'size'])}
+						onChange={(event) => form.change(['units', 'size'], valueOf(event))}
+					/>
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={R.formatTitle} description={R.formatHelp}>
-				<Input
-					label={R.locale}
-					help={R.localeHelp}
-					value={d.format.locale}
-					error={form.error(['format', 'locale'])}
-					onChange={(event) => form.change(['format', 'locale'], valueOf(event))}
-				/>
-				<SegmentedControl
-					legend={R.currencyDisplay}
-					value={d.format.currencyDisplay}
-					options={['code', 'symbol'].map((mode) => ({
-						value: mode,
-						label: R.currencyDisplays[/** @type {'code'} */ (mode)],
-					}))}
-					onChange={(mode) => form.change(['format', 'currencyDisplay'], mode)}
-				/>
-				<Switch
-					checked={d.format.wholeUnits}
-					label={R.wholeUnits}
-					description={R.wholeUnitsHelp}
-					onChange={(next) => form.change(['format', 'wholeUnits'], next)}
-				/>
-				<SegmentedControl
-					legend={R.times}
-					value={d.format.times}
-					options={['viewer', 'business'].map((mode) => ({
-						value: mode,
-						label: R.timesOptions[/** @type {'viewer'} */ (mode)],
-					}))}
-					onChange={(mode) => form.change(['format', 'times'], mode)}
-				/>
-				<SummaryRow
-					label={R.symbolsRow}
-					description={R.symbolsRowHelp}
-					summary={symbolSummary === 0 ? R.symbolsNone : R.symbolsCount(symbolSummary)}
-					onEdit={() => setDrawer('symbols')}
-					error={form.error(['format', 'currencySymbols'])}
-				/>
-				<SettingRow label={R.preview}>
-					<dl className="grid gap-1 text-sm">
-						<div className="flex gap-2">
-							<dt className="text-muted">{R.previewMoney}</dt>
-							<dd className="text-fg tabular-nums" data-preview="money">
-								{shown.money}
-							</dd>
-						</div>
-						<div className="flex gap-2">
-							<dt className="text-muted">{R.previewDate}</dt>
-							<dd className="text-fg tabular-nums" data-preview="date">
-								{shown.date}
-							</dd>
-						</div>
-					</dl>
-				</SettingRow>
+				<SettingList>
+					<Input
+						label={R.locale}
+						help={R.localeHelp}
+						value={d.format.locale}
+						error={form.error(['format', 'locale'])}
+						onChange={(event) => form.change(['format', 'locale'], valueOf(event))}
+					/>
+					<RowSegmentedControl
+						legend={R.currencyDisplay}
+						value={d.format.currencyDisplay}
+						options={['code', 'symbol'].map((mode) => ({
+							value: mode,
+							label: R.currencyDisplays[/** @type {'code'} */ (mode)],
+						}))}
+						onChange={(mode) => form.change(['format', 'currencyDisplay'], mode)}
+					/>
+					<Switch
+						checked={d.format.wholeUnits}
+						label={R.wholeUnits}
+						description={R.wholeUnitsHelp}
+						onChange={(next) => form.change(['format', 'wholeUnits'], next)}
+					/>
+					<RowSegmentedControl
+						legend={R.times}
+						value={d.format.times}
+						options={['viewer', 'business'].map((mode) => ({
+							value: mode,
+							label: R.timesOptions[/** @type {'viewer'} */ (mode)],
+						}))}
+						onChange={(mode) => form.change(['format', 'times'], mode)}
+					/>
+					<SummaryRow
+						label={R.symbolsRow}
+						description={R.symbolsRowHelp}
+						summary={symbolSummary === 0 ? R.symbolsNone : R.symbolsCount(symbolSummary)}
+						onEdit={() => setDrawer('symbols')}
+						error={form.error(['format', 'currencySymbols'])}
+					/>
+					<SettingRow label={R.preview}>
+						<dl className="grid gap-1 text-sm">
+							<div className="flex gap-2">
+								<dt className="text-muted">{R.previewMoney}</dt>
+								<dd className="text-fg tabular-nums" data-preview="money">
+									{shown.money}
+								</dd>
+							</div>
+							<div className="flex gap-2">
+								<dt className="text-muted">{R.previewDate}</dt>
+								<dd className="text-fg tabular-nums" data-preview="date">
+									{shown.date}
+								</dd>
+							</div>
+						</dl>
+					</SettingRow>
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={R.phoneTitle} description={R.phoneHelp}>
-				<Input
-					label={R.callingCode}
-					help={R.callingCodeHelp}
-					value={d.phone.callingCode}
-					maxLength={4}
-					error={form.error(['phone', 'callingCode'])}
-					onChange={(event) => form.change(['phone', 'callingCode'], valueOf(event))}
-				/>
-				<Input
-					label={R.trunkPrefix}
-					help={R.trunkPrefixHelp}
-					value={d.phone.trunkPrefix}
-					maxLength={2}
-					error={form.error(['phone', 'trunkPrefix'])}
-					onChange={(event) => form.change(['phone', 'trunkPrefix'], valueOf(event))}
-				/>
-				<ChoicePicker
-					legend={R.phoneCountries}
-					help={R.phoneCountriesHelp}
-					options={countries}
-					value={d.phone.countries}
-					onChange={(next) => form.change(['phone', 'countries'], next)}
-				/>
+				<SettingList>
+					<Input
+						label={R.callingCode}
+						help={R.callingCodeHelp}
+						value={d.phone.callingCode}
+						maxLength={4}
+						error={form.error(['phone', 'callingCode'])}
+						onChange={(event) => form.change(['phone', 'callingCode'], valueOf(event))}
+					/>
+					<Input
+						label={R.trunkPrefix}
+						help={R.trunkPrefixHelp}
+						value={d.phone.trunkPrefix}
+						maxLength={2}
+						error={form.error(['phone', 'trunkPrefix'])}
+						onChange={(event) => form.change(['phone', 'trunkPrefix'], valueOf(event))}
+					/>
+					<RowChoicePicker
+						legend={R.phoneCountries}
+						help={R.phoneCountriesHelp}
+						options={countries}
+						value={d.phone.countries}
+						onChange={(next) => form.change(['phone', 'countries'], next)}
+					/>
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={R.addressTitle} description={R.addressHelp}>
-				<CheckboxGroup
-					legend={R.required}
-					help={R.requiredHelp}
-					options={ADDRESS_REQUIRED_PARTS.map((part) => ({ value: part, label: R.parts[/** @type {'line1'} */ (part)] }))}
-					value={d.address.required}
-					onChange={(next) => form.change(['address', 'required'], next)}
-				/>
-				<SummaryRow
-					label={R.regionsRow}
-					description={R.regionsRowHelp}
-					summary={d.address.regions.length === 0 ? R.regionsNone : R.regionsCount(d.address.regions.length)}
-					onEdit={() => setDrawer('regions')}
-					error={form.error(['address', 'regions'])}
-				/>
+				<SettingList>
+					<RowCheckboxGroup
+						legend={R.required}
+						help={R.requiredHelp}
+						options={ADDRESS_REQUIRED_PARTS.map((part) => ({ value: part, label: R.parts[/** @type {'line1'} */ (part)] }))}
+						value={d.address.required}
+						onChange={(next) => form.change(['address', 'required'], next)}
+					/>
+					<SummaryRow
+						label={R.regionsRow}
+						description={R.regionsRowHelp}
+						summary={d.address.regions.length === 0 ? R.regionsNone : R.regionsCount(d.address.regions.length)}
+						onEdit={() => setDrawer('regions')}
+						error={form.error(['address', 'regions'])}
+					/>
+				</SettingList>
 			</SettingsCard>
 			<Drawer
 				open={drawer === 'symbols'}
@@ -817,7 +869,7 @@ export function RegionSection(props) {
 				title={R.symbolsDrawer}
 				description={R.symbolsRowHelp}
 				footer={<Done onClose={() => setDrawer(null)} />}>
-				<ListEditor
+				<RowListEditor
 					legend={R.symbolsRow}
 					items={symbolRows}
 					max={20}
@@ -849,7 +901,7 @@ export function RegionSection(props) {
 				title={R.regionsDrawer}
 				description={R.regionsDrawerHelp}
 				footer={<Done onClose={() => setDrawer(null)} />}>
-				<ListEditor
+				<RowListEditor
 					legend={R.regionsRow}
 					items={d.address.regions}
 					max={50}
@@ -903,37 +955,39 @@ export function PagesSection(props) {
 	return (
 		<SectionForm form={form} canWrite={props.canWrite} stale={props.stale} onReload={props.onReload}>
 			<SettingsCard title={P.domainsTitle} description={P.domainsHelp}>
-				<ListEditor
-					legend={P.hosts}
-					help={P.hostsHelp}
-					items={d.hosts}
-					max={10}
-					onChange={(next) => form.change(['hosts'], next)}
-					newItem={() => ''}
-					nameOf={(item, index) => item || String(index + 1)}
-					renderItem={(item, index, update) => (
-						<Input
-							label={P.host}
-							value={item}
-							error={form.error(['hosts', index])}
-							onChange={(event) => update(valueOf(event))}
-						/>
-					)}
-				/>
-				<Input
-					label={P.signIn}
-					help={P.signInHelp}
-					value={d.signIn}
-					error={form.error(['signIn'])}
-					onChange={(event) => form.change(['signIn'], valueOf(event))}
-				/>
-				<Input
-					label={P.privacy}
-					help={P.privacyHelp}
-					value={d.privacy}
-					error={form.error(['privacy'])}
-					onChange={(event) => form.change(['privacy'], valueOf(event))}
-				/>
+				<SettingList>
+					<RowListEditor
+						legend={P.hosts}
+						help={P.hostsHelp}
+						items={d.hosts}
+						max={10}
+						onChange={(next) => form.change(['hosts'], next)}
+						newItem={() => ''}
+						nameOf={(item, index) => item || String(index + 1)}
+						renderItem={(item, index, update) => (
+							<Input
+								label={P.host}
+								value={item}
+								error={form.error(['hosts', index])}
+								onChange={(event) => update(valueOf(event))}
+							/>
+						)}
+					/>
+					<Input
+						label={P.signIn}
+						help={P.signInHelp}
+						value={d.signIn}
+						error={form.error(['signIn'])}
+						onChange={(event) => form.change(['signIn'], valueOf(event))}
+					/>
+					<Input
+						label={P.privacy}
+						help={P.privacyHelp}
+						value={d.privacy}
+						error={form.error(['privacy'])}
+						onChange={(event) => form.change(['privacy'], valueOf(event))}
+					/>
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard
 				wide
@@ -957,41 +1011,43 @@ export function PagesSection(props) {
 						</Button>
 					</>
 				}>
-				{d.documents.length === 0 ? (
-					<EmptyState compact icon="list" title={P.noDocuments} />
-				) : (
-					<RowList label={P.legalTitle}>
-						{d.documents.map((document, index) => (
-							<ListRow
-								key={index}
-								icon="list"
-								title={document.title || document.key || String(index + 1)}
-								meta={`${document.key} · ${P.documentSummary(document.text.length)}`}
-								action={
-									<Button size="sm" variant="secondary" onClick={() => setEditing(index)}>
-										{T.edit}
-									</Button>
-								}
-								more={[
-									{
-										label: P.remove,
-										danger: true,
-										onSelect: () =>
-											form.change(
-												['documents'],
-												d.documents.filter((_document, at) => at !== index),
-											),
-									},
-								]}
-							/>
-						))}
-					</RowList>
-				)}
-				{form.error(['documents']) ? (
-					<p role="alert" className="text-help text-danger">
-						{form.error(['documents'])}
-					</p>
-				) : null}
+				<SettingList>
+					{d.documents.length === 0 ? (
+						<EmptyState compact icon="list" title={P.noDocuments} />
+					) : (
+						<RowList label={P.legalTitle}>
+							{d.documents.map((document, index) => (
+								<ListRow
+									key={index}
+									icon="list"
+									title={document.title || document.key || String(index + 1)}
+									meta={`${document.key} · ${P.documentSummary(document.text.length)}`}
+									action={
+										<Button size="sm" variant="secondary" onClick={() => setEditing(index)}>
+											{T.edit}
+										</Button>
+									}
+									more={[
+										{
+											label: P.remove,
+											danger: true,
+											onSelect: () =>
+												form.change(
+													['documents'],
+													d.documents.filter((_document, at) => at !== index),
+												),
+										},
+									]}
+								/>
+							))}
+						</RowList>
+					)}
+					{form.error(['documents']) ? (
+						<p role="alert" className="text-help text-danger">
+							{form.error(['documents'])}
+						</p>
+					) : null}
+				</SettingList>
 			</SettingsCard>
 			<Drawer
 				open={open !== null && open !== undefined}
@@ -1057,76 +1113,82 @@ export function TeamSection(props) {
 						{M.addPerson}
 					</Button>
 				}>
-				{d.recipients.length === 0 ? (
-					<EmptyState compact icon="users" title={M.noPeople} />
-				) : (
-					<RowList label={M.peopleTitle}>
-						{d.recipients.map((entry, index) => (
-							<ListRow
-								key={index}
-								avatar={entry.name || entry.email || entry.phone || String(index + 1)}
-								title={entry.name || entry.email || entry.phone}
-								meta={[entry.email, entry.phone].filter(Boolean).join(' · ')}
-								action={
-									<Button size="sm" variant="secondary" onClick={() => setEditing(index)}>
-										{T.edit}
-									</Button>
-								}
-								more={[
-									{
-										label: T.pages.remove,
-										danger: true,
-										onSelect: () =>
-											form.change(
-												['recipients'],
-												d.recipients.filter((_entry, at) => at !== index),
-											),
-									},
-								]}
-							/>
-						))}
-					</RowList>
-				)}
-				{Object.keys(form.errors).some((key) => key.startsWith('recipients')) ? (
-					<p role="alert" className="text-help text-danger">
-						{M.needsContact}
-					</p>
-				) : null}
+				<SettingList>
+					{d.recipients.length === 0 ? (
+						<EmptyState compact icon="users" title={M.noPeople} />
+					) : (
+						<RowList label={M.peopleTitle}>
+							{d.recipients.map((entry, index) => (
+								<ListRow
+									key={index}
+									avatar={entry.name || entry.email || entry.phone || String(index + 1)}
+									title={entry.name || entry.email || entry.phone}
+									meta={[entry.email, entry.phone].filter(Boolean).join(' · ')}
+									action={
+										<Button size="sm" variant="secondary" onClick={() => setEditing(index)}>
+											{T.edit}
+										</Button>
+									}
+									more={[
+										{
+											label: T.pages.remove,
+											danger: true,
+											onSelect: () =>
+												form.change(
+													['recipients'],
+													d.recipients.filter((_entry, at) => at !== index),
+												),
+										},
+									]}
+								/>
+							))}
+						</RowList>
+					)}
+					{Object.keys(form.errors).some((key) => key.startsWith('recipients')) ? (
+						<p role="alert" className="text-help text-danger">
+							{M.needsContact}
+						</p>
+					) : null}
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={M.alertsTitle}>
-				<SegmentedControl
-					legend={M.phoneChannel}
-					help={M.phoneChannelHelp}
-					value={d.phoneChannel}
-					options={[
-						{ value: '', label: T.none },
-						{ value: 'sms', label: M.channels.sms },
-						{ value: 'whatsapp', label: M.channels.whatsapp },
-					]}
-					onChange={(next) => form.change(['phoneChannel'], next)}
-				/>
-				<Switch
-					checked={d.staffPush}
-					label={M.staffPush}
-					description={M.staffPushHelp}
-					onChange={(next) => form.change(['staffPush'], next)}
-				/>
+				<SettingList>
+					<RowSegmentedControl
+						legend={M.phoneChannel}
+						help={M.phoneChannelHelp}
+						value={d.phoneChannel}
+						options={[
+							{ value: '', label: T.none },
+							{ value: 'sms', label: M.channels.sms },
+							{ value: 'whatsapp', label: M.channels.whatsapp },
+						]}
+						onChange={(next) => form.change(['phoneChannel'], next)}
+					/>
+					<Switch
+						checked={d.staffPush}
+						label={M.staffPush}
+						description={M.staffPushHelp}
+						onChange={(next) => form.change(['staffPush'], next)}
+					/>
+				</SettingList>
 			</SettingsCard>
 			<SettingsCard title={M.supportTitle} description={M.supportHelp}>
-				<Input
-					label={M.supportEmail}
-					type="email"
-					value={d.support.email}
-					error={form.error(['support', 'email'])}
-					onChange={(event) => form.change(['support', 'email'], valueOf(event))}
-				/>
-				<Input
-					label={M.supportPhone}
-					type="tel"
-					value={d.support.phone}
-					error={form.error(['support', 'phone'])}
-					onChange={(event) => form.change(['support', 'phone'], valueOf(event))}
-				/>
+				<SettingList>
+					<Input
+						label={M.supportEmail}
+						type="email"
+						value={d.support.email}
+						error={form.error(['support', 'email'])}
+						onChange={(event) => form.change(['support', 'email'], valueOf(event))}
+					/>
+					<Input
+						label={M.supportPhone}
+						type="tel"
+						value={d.support.phone}
+						error={form.error(['support', 'phone'])}
+						onChange={(event) => form.change(['support', 'phone'], valueOf(event))}
+					/>
+				</SettingList>
 			</SettingsCard>
 			<Drawer
 				open={person !== null && person !== undefined}
