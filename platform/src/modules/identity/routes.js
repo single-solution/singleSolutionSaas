@@ -96,6 +96,14 @@ export const identityRoutes = (ctx, service) => {
 		return { merchantId, website };
 	};
 
+	/**
+	 * A fresh confirmation of the signed-in person: their current password, and a code while two-step is on.
+	 * @param {RequestContext} c
+	 * @param {{ password: string, code?: string, recoveryCode?: string }} confirmation
+	 */
+	const confirmed = (c, confirmation) =>
+		accounts.confirm(kindOf(c), { ...confirmation, id: sessionOf(c).subject }, metaOf(c));
+
 	/** @type {RouteDefinition[]} */
 	const routes = [
 		// ---------------------------------------------------------------------------------------------------------
@@ -346,7 +354,8 @@ export const identityRoutes = (ctx, service) => {
 		},
 
 		// ---------------------------------------------------------------------------------------------------------
-		// Install and tokens (merchant: own; Owner and Support; never Finance)
+		// Install and tokens (merchant: own; Owner and Support see the tab; only the Owner, and the merchant for its own
+		// websites, reveal or regenerate a server token, each after a fresh confirmation of their password; never Finance)
 		{
 			method: 'GET',
 			path: '/v1/merchants/:merchantId/websites/:websiteId/tokens',
@@ -363,9 +372,12 @@ export const identityRoutes = (ctx, service) => {
 			idempotent: 'no-store',
 			rateLimit: { limit: 60, windowMs: 60_000 },
 			handler: async (c) => {
-				const { merchantId, website } = await authorizedWebsite(c, P.tokensManage);
+				const { merchantId, website } = await authorizedWebsite(c, P.tokensReveal);
+				const confirmation = valid(inputs.confirmation(c.body));
 				const productId = /** @type {string} */ (c.params.productId);
 				await service.requireProductOn(String(website._id), productId);
+				// a fresh confirmation, whoever the session is: a stolen session cannot show the server token
+				await confirmed(c, confirmation);
 				return ok(
 					await tokens.reveal({ merchantId, websiteId: String(website._id), productId, actor: actorOf(c), meta: metaOf(c) }),
 				);
@@ -378,10 +390,11 @@ export const identityRoutes = (ctx, service) => {
 			idempotent: 'no-store',
 			rateLimit: { limit: 30, windowMs: 60_000 },
 			handler: async (c) => {
-				const { kind } = valid(inputs.tokenRegenerate(c.body));
-				const { merchantId, website } = await authorizedWebsite(c, P.tokensManage);
+				const { merchantId, website } = await authorizedWebsite(c, P.tokensReveal);
+				const { kind, ...confirmation } = valid(inputs.tokenRegenerate(c.body));
 				const productId = /** @type {string} */ (c.params.productId);
 				await service.requireProductOn(String(website._id), productId);
+				await confirmed(c, confirmation);
 				return ok(
 					await tokens.regenerate({
 						merchantId,

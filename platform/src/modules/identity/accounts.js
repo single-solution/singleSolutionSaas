@@ -475,6 +475,24 @@ export const createAccounts = (deps) => {
 		},
 
 		/**
+		 * A fresh confirmation of the signed-in person before something that must not happen from a stolen session:
+		 * the current password, plus a two-step or recovery code while two-step is on (the same throttle as signing in).
+		 * @param {Kind} kind
+		 * @param {SecondFactor & { id: string, password: string }} input
+		 * @param {Meta} meta
+		 */
+		confirm: async (kind, { id, password, code, recoveryCode }, meta) => {
+			const doc = await loadLogin(kind, id);
+			await proveLogin(
+				kind,
+				doc,
+				password,
+				{ ...(code ? { code } : {}), ...(recoveryCode ? { recoveryCode } : {}) },
+				meta,
+			);
+		},
+
+		/**
 		 * Change the password (current password, plus a code while two-step is on); every other session ends.
 		 * @param {Kind} kind
 		 * @param {SecondFactor & { id: string, token: string, currentPassword: string, newPassword: string }} input

@@ -117,7 +117,7 @@ describe('loadEnv: the database, the Portal address and the encryption key (PLAN
 
 describe('buildConfig: environment + system state', () => {
 	it('joins the generated secrets and the recorded settings', async () => {
-		const config = loadConfig(await testEnv(), await testSystem());
+		const config = loadConfig(await testEnv(), { ...(await testSystem()), settings: undefined });
 		expect(config.portalUrl).toBe('https://portal.test');
 		expect(config.cookieSecure).toBe(true);
 		expect(config.problemBaseUri).toBe('https://portal.test/problems/');
@@ -125,6 +125,8 @@ describe('buildConfig: environment + system state', () => {
 		expect(config.tokenSigningKeys.map((k) => k.kid)).toEqual(['token-2026-10']);
 		expect(config.mail).toEqual({ smtp: null, from: null });
 		expect(config.settings).toEqual(DEFAULT_SETTINGS);
+		// two-step is required of every admin until an Owner turns the requirement off
+		expect(config.settings.security.requireTwoStepForAdmins).toBe(true);
 		expect(config.sessionMs).toBe(12 * 3_600_000);
 	});
 

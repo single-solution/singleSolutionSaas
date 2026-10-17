@@ -34,6 +34,7 @@ const TABLE = {
 	'products_on_websites.read': { owner: true, support: true, finance: true, merchant: true },
 	'products_on_websites.write': { owner: true, support: true, finance: false, merchant: false },
 	'tokens.manage': { owner: true, support: true, finance: false, merchant: true },
+	'tokens.reveal': { owner: true, support: false, finance: false, merchant: true },
 	'dashboards.open': { owner: true, support: true, finance: false, merchant: true },
 	'products.manage': { owner: true, support: false, finance: false, merchant: false },
 	'products.read': { owner: true, support: true, finance: false, merchant: false },

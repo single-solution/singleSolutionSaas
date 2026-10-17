@@ -795,7 +795,9 @@ describe('runtime', () => {
 		const settings = await portal.handle(
 			new Request('http://internal/v1/admin/settings', { headers: { ...forwarded, cookie } }),
 		);
-		expect(settings.status).toBe(200);
+		// a fresh Portal requires two-step of every admin: until the first admin sets it up, only its setup routes open
+		expect(settings.status).toBe(403);
+		expect((await settings.json()).type).toMatch(/two_step_required$/);
 		// a write whose Origin is the request's host (not PORTAL_URL) is refused
 		const forged = await portal.handle(
 			new Request('http://internal/v1/me', {

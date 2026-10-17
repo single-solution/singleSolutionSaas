@@ -325,8 +325,18 @@ export const inputs = Object.freeze({
 			(b, options) => object(b, { domain: domain(options) })
 		),
 	websiteRemove: /** @type {(b: unknown) => Parsed<{ confirm: string }>} */ ((b) => object(b, { confirm: text(253) })),
-	tokenRegenerate: /** @type {(b: unknown) => Parsed<{ kind: 'browser' | 'server' }>} */ (
-		(b) => object(b, { kind: oneOf(/** @type {const} */ (['browser', 'server'])) })
+	// a fresh confirmation: the current password, and a two-step or recovery code while two-step is on
+	confirmation: /** @type {(b: unknown) => Parsed<SecondFactor & { password: string }>} */ (
+		(b) => object(b, { password, code: { optional: otp }, recoveryCode: { optional: recoveryCode } })
+	),
+	tokenRegenerate: /** @type {(b: unknown) => Parsed<SecondFactor & { kind: 'browser' | 'server', password: string }>} */ (
+		(b) =>
+			object(b, {
+				kind: oneOf(/** @type {const} */ (['browser', 'server'])),
+				password,
+				code: { optional: otp },
+				recoveryCode: { optional: recoveryCode },
+			})
 	),
 	reason: /** @type {(b: unknown) => Parsed<{ reason: string }>} */ ((b) => object(b, { reason: text(500) })),
 	adminInvite: /** @type {(b: unknown) => Parsed<{ email: string, role: 'owner' | 'support' | 'finance', copy?: boolean }>} */ (

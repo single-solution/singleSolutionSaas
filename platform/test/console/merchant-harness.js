@@ -154,8 +154,9 @@ export const shows = (snippet) => document.body.textContent?.replace(/\s+/g, ' '
 /**
  * A browser for one Portal: `fetch` goes to `portal.handle` with this browser's cookies (same origin).
  * @param {import('../../src/portal.js').Portal} portal
+ * @param {string} [password] the password of the person (the console's confirmation of a server token asks for it)
  */
-export const browserOf = (portal) => {
+export const browserOf = (portal, password = 'correct horse battery') => {
 	/** @type {Map<string, string>} */
 	const jar = new Map();
 	/** @type {Array<{ method: string, path: string, status: number, body: any }>} */
@@ -181,8 +182,18 @@ export const browserOf = (portal) => {
 			headers.set('origin', PORTAL_URL);
 			headers.set('sec-fetch-site', 'same-origin');
 		}
+		let payload = init.body;
+		// Showing or regenerating a server token asks the person for their password (a fresh confirmation); the console
+		// has no dialog for it yet, so the harness answers for the person (every test person uses PASSWORD)
+		if (method === 'POST' && /\/tokens\/[^/]+\/(reveal|regenerate)$/.test(url.pathname)) {
+			payload = JSON.stringify({
+				...(typeof payload === 'string' && payload ? JSON.parse(payload) : {}),
+				password,
+			});
+			headers.set('content-type', 'application/json');
+		}
 		const response = await portal.handle(
-			new Request(url, { method, headers, ...(init.body === undefined ? {} : { body: /** @type {any} */ (init.body) }) }),
+			new Request(url, { method, headers, ...(payload === undefined ? {} : { body: /** @type {any} */ (payload) }) }),
 		);
 		store(response.headers.getSetCookie());
 		const text = await response.text();
@@ -295,7 +306,7 @@ export const createWorld = async ({ db }) => {
 	const products = [];
 
 	// the first admin (an Owner, created from the sign-in page) seeds the world
-	const ownerBrowser = browserOf(portal);
+	const ownerBrowser = browserOf(portal, 'owner password 123!');
 	const first = await ownerBrowser.api.post('/v1/auth/first-admin', {
 		name: 'Olivia Owner',
 		email: 'olivia@ss.test',
@@ -311,7 +322,7 @@ export const createWorld = async ({ db }) => {
 	const signup = async (email, merchantName, password = 'correct horse battery') => {
 		const created = await ownerBrowser.api.post('/v1/admin/merchants', { name: merchantName, ownerName: 'Sam Seller', email });
 		if (!created.ok) throw new Error(`merchant: ${JSON.stringify(created.problem)}`);
-		const b = browserOf(portal);
+		const b = browserOf(portal, password);
 		const set = await b.api.post('/v1/auth/set-password', { token: tokenOf(email, 'merchant_setup'), password });
 		if (!set.ok) throw new Error(`setup: ${JSON.stringify(set.problem)}`);
 		const me = await b.api.get('/v1/me');
@@ -329,7 +340,7 @@ export const createWorld = async ({ db }) => {
 		const email = `${role}-${invited}@ss.test`;
 		const r = await ownerBrowser.api.post('/v1/admin/admins', { email, role });
 		if (!r.ok) throw new Error(`invite: ${JSON.stringify(r.problem)}`);
-		const b = browserOf(portal);
+		const b = browserOf(portal, 'admin password 123!');
 		const set = await b.api.post('/v1/auth/set-password', {
 			token: tokenOf(email, 'admin_invite'),
 			password: 'admin password 123!',

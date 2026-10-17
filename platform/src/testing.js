@@ -26,7 +26,9 @@ export { commerceModule } from './modules/commerce/index.js';
 export const testSystemState = ({ mail = null, settings } = {}) => ({
 	...secretsOf(generateSecrets(), (key) => key.seed),
 	mail,
-	...(settings ? { settings } : {}),
+	// (the Portal requires two-step of every admin by default; most tests are not about it, so a test system does not,
+	// unless a test says so)
+	settings: { ...settings, security: { requireTwoStepForAdmins: false, ...(settings?.security ?? {}) } },
 });
 
 /** Close and forget every Mongo client the Portal cached (`getMongoClient` in `infra/db.js`). */

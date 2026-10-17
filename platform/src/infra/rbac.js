@@ -55,8 +55,10 @@ export const PERMISSIONS = Object.freeze({
 	/** Add and remove products on websites (Finance: view) */
 	productsOnWebsitesRead: 'products_on_websites.read',
 	productsOnWebsitesWrite: 'products_on_websites.write',
-	/** Reveal, copy and regenerate server tokens */
+	/** See the Install and tokens tab: the browser tokens and whether a server token can be shown */
 	tokensManage: 'tokens.manage',
+	/** Reveal and regenerate server tokens: the Owner (and the merchant, for its own websites), after a fresh confirmation */
+	tokensReveal: 'tokens.reveal',
 	/** Open a product dashboard for a website */
 	dashboardsOpen: 'dashboards.open',
 	/** Products: connect, reconnect, set active/inactive, Open as admin with no website */
@@ -116,6 +118,7 @@ export const MERCHANT_PERMISSIONS = Object.freeze([
 	P.websitesRead,
 	P.productsOnWebsitesRead,
 	P.tokensManage,
+	P.tokensReveal,
 	P.dashboardsOpen,
 	P.billingRead,
 ]);

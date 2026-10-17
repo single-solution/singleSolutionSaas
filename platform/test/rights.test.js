@@ -17,7 +17,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { manifest as notesManifest } from '@ss/contracts/testing';
 import { closeMongoClients } from '../src/testing.js';
 import { startMongo } from './helpers.js';
-import { boot as bootIdentity, setupMongo, teardownMongo } from './modules/identity/boot.js';
+import { PASSWORD, boot as bootIdentity, setupMongo, teardownMongo } from './modules/identity/boot.js';
 import { FINANCE_ADMIN, M1, M2, OWNER_ADMIN, PRODUCT, SUPPORT_ADMIN, W1, W2, bootCommerce } from './modules/commerce/fixtures.js';
 import { bootPortal } from './modules/catalog/boot.js';
 
@@ -222,16 +222,25 @@ describe('rights: people, merchants, websites, tokens, admins and Settings', () 
 		{
 			name: 'Reveal, copy and regenerate server tokens (merchant: own)',
 			columns: {
-				owner: async (as) => expect((await as.owner.get(`${as.site}/tokens`)).status).toBe(200),
-				support: async (as) =>
-					expect(allowed(await as.support.post(`${as.site}/tokens/notes/regenerate`, { kind: 'server' }))).toBe(true),
+				owner: async (as) => {
+					expect((await as.owner.get(`${as.site}/tokens`)).status).toBe(200);
+					expect(allowed(await as.owner.post(`${as.site}/tokens/notes/reveal`, { password: PASSWORD }))).toBe(true);
+				},
+				// Support sees the tab but cannot show or renew a server token
+				support: async (as) => {
+					expect((await as.support.get(`${as.site}/tokens`)).status).toBe(200);
+					expect(
+						(await as.support.post(`${as.site}/tokens/notes/regenerate`, { kind: 'server', password: PASSWORD })).status,
+					).toBe(403);
+					expect((await as.support.post(`${as.site}/tokens/notes/reveal`, { password: PASSWORD })).status).toBe(403);
+				},
 				finance: async (as) => {
 					expect((await as.finance.get(`${as.site}/tokens`)).status).toBe(403);
-					expect((await as.finance.post(`${as.site}/tokens/notes/reveal`, {})).status).toBe(403);
+					expect((await as.finance.post(`${as.site}/tokens/notes/reveal`, { password: PASSWORD })).status).toBe(403);
 				},
 				merchant: async (as) => {
 					expect((await as.merchant.get(`${as.site}/tokens`)).status).toBe(200);
-					expect(allowed(await as.merchant.post(`${as.site}/tokens/notes/reveal`, {}))).toBe(true);
+					expect(allowed(await as.merchant.post(`${as.site}/tokens/notes/reveal`, { password: PASSWORD }))).toBe(true);
 					expect(
 						(await as.merchant.get(`/v1/merchants/${as.otherM.merchantId}/websites/${as.otherM.websiteId}/tokens`)).status,
 					).toBe(403);

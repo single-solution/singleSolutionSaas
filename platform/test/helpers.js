@@ -171,6 +171,9 @@ export const testSystem = async (overrides = {}) => {
 		sessionSecret: Buffer.alloc(32, 3),
 		idempotencySecret: Buffer.alloc(32, 5),
 		...overrides,
+		// (the Portal requires two-step of every admin by default; most tests are not about it, so a test system does not,
+		// unless a test says so)
+		settings: { ...overrides.settings, security: { requireTwoStepForAdmins: false, ...(overrides.settings?.security ?? {}) } },
 	};
 };
 

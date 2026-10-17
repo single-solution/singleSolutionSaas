@@ -25,6 +25,9 @@ afterAll(async () => {
 	await mongo?.stop();
 });
 
+/** The fresh confirmation a server token is shown or renewed after: the person's current password. */
+const CONFIRM = { password: PASSWORD };
+
 /** @param {string} name @param {Record<string, string>} [env] */
 const setUp = async (name, env) => {
 	const h = await bootPortal({ db: mongo.db(name), ...(env ? { env } : {}) });
@@ -92,7 +95,14 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 		).toBe(browser.jti);
 		// reveal by an admin: never cached, logged, and the merchant sees it under the Branding name
 		const support = await h.admin('support');
-		const revealed = await support.client.post(`${site}/tokens/notes/reveal`);
+		// Support sees the tab but cannot show or renew a server token: that is the Owner's (and the merchant's, for its own)
+		expect((await support.client.get(`${site}/tokens`)).status).toBe(200);
+		expect(codeOf(await support.client.post(`${site}/tokens/notes/reveal`, CONFIRM))).toEqual([403, 'forbidden']);
+		expect(codeOf(await support.client.post(`${site}/tokens/notes/regenerate`, { kind: 'server', ...CONFIRM }))).toEqual([
+			403,
+			'forbidden',
+		]);
+		const revealed = await owner.post(`${site}/tokens/notes/reveal`, CONFIRM);
 		expect(revealed.status).toBe(200);
 		expect(revealed.headers.get('cache-control')).toBe('no-store');
 		const server = await check(h, revealed.json.serverToken, 'server');
@@ -106,9 +116,9 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 			actor: { type: 'admin', id: null, name: 'Single Solution' },
 			target: { type: 'website', id: websiteId },
 		});
-		expect((await m.client.post(`${site}/tokens/notes/reveal`)).json.serverToken).toBe(revealed.json.serverToken);
+		expect((await m.client.post(`${site}/tokens/notes/reveal`, CONFIRM)).json.serverToken).toBe(revealed.json.serverToken);
 		// a product that is not on the website
-		expect(codeOf(await m.client.post(`${site}/tokens/chat/reveal`))).toEqual([404, 'not_found']);
+		expect(codeOf(await m.client.post(`${site}/tokens/chat/reveal`, CONFIRM))).toEqual([404, 'not_found']);
 	});
 
 	it('Finance never sees tokens; merchants see only their own; Owner and Support manage', async () => {
@@ -120,13 +130,13 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 		await owner.post(`${site}/products`, { productId: 'notes' });
 		const finance = await h.admin('finance');
 		expect(codeOf(await finance.client.get(`${site}/tokens`))).toEqual([403, 'forbidden']);
-		expect(codeOf(await finance.client.post(`${site}/tokens/notes/reveal`))).toEqual([403, 'forbidden']);
-		expect(codeOf(await finance.client.post(`${site}/tokens/notes/regenerate`, { kind: 'server' }))).toEqual([
+		expect(codeOf(await finance.client.post(`${site}/tokens/notes/reveal`, CONFIRM))).toEqual([403, 'forbidden']);
+		expect(codeOf(await finance.client.post(`${site}/tokens/notes/regenerate`, { kind: 'server', ...CONFIRM }))).toEqual([
 			403,
 			'forbidden',
 		]);
 		expect(codeOf(await other.client.get(`${site}/tokens`))).toEqual([403, 'forbidden']);
-		expect(codeOf(await other.client.post(`${site}/tokens/notes/reveal`))).toEqual([403, 'forbidden']);
+		expect(codeOf(await other.client.post(`${site}/tokens/notes/reveal`, CONFIRM))).toEqual([403, 'forbidden']);
 		expect((await owner.get(`${site}/tokens`)).status).toBe(200);
 		expect((await h.api.call('GET', `${site}/tokens`)).status).toBe(401);
 	});
@@ -139,18 +149,18 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 		const site = `/v1/merchants/${m.merchantId}/websites/${websiteId}`;
 		await owner.post(`${site}/products`, { productId: 'notes' });
 		const before = (await m.client.get(`${site}/tokens`)).json.items[0];
-		const oldServer = await check(h, (await m.client.post(`${site}/tokens/notes/reveal`)).json.serverToken, 'server');
+		const oldServer = await check(h, (await m.client.post(`${site}/tokens/notes/reveal`, CONFIRM)).json.serverToken, 'server');
 		h.clock.advance(1000);
-		const fresh = await m.client.post(`${site}/tokens/notes/regenerate`, { kind: 'server' });
+		const fresh = await m.client.post(`${site}/tokens/notes/regenerate`, { kind: 'server', ...CONFIRM });
 		expect(fresh.status).toBe(200);
 		expect(fresh.json).toMatchObject({ productId: 'notes', kind: 'server' });
 		expect((await check(h, fresh.json.token, 'server')).jti).not.toBe(oldServer.jti);
 		expect(product.notices.at(-1)).toEqual({ type: 'token.revoked', websiteId });
 		h.clock.advance(1000);
-		const browser = await owner.post(`${site}/tokens/notes/regenerate`, { kind: 'browser' });
+		const browser = await owner.post(`${site}/tokens/notes/regenerate`, { kind: 'browser', ...CONFIRM });
 		expect(browser.json.token).not.toBe(before.browserToken);
 		expect((await m.client.get(`${site}/tokens`)).json.items[0].browserToken).toBe(browser.json.token);
-		expect(codeOf(await owner.post(`${site}/tokens/notes/regenerate`, { kind: 'both' }))).toEqual([422, 'validation_failed']);
+		expect(codeOf(await owner.post(`${site}/tokens/notes/regenerate`, { kind: 'both', ...CONFIRM }))).toEqual([422, 'validation_failed']);
 		const oldBrowser = await check(h, before.browserToken, 'browser');
 		const revocations = await h.productCall(product, 'GET', '/v1/product/revocations');
 		expect(revocations.json.tokenIds.sort()).toEqual([oldServer.jti, oldBrowser.jti].sort());
@@ -166,7 +176,7 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 		h.clock.advance(1000);
 		await owner.del(`${site}/products/notes`);
 		expect((await m.client.get(`${site}/tokens`)).json.items).toEqual([]);
-		expect(codeOf(await m.client.post(`${site}/tokens/notes/reveal`))).toEqual([404, 'not_found']);
+		expect(codeOf(await m.client.post(`${site}/tokens/notes/reveal`, CONFIRM))).toEqual([404, 'not_found']);
 		h.clock.advance(1000);
 		await owner.post(`${site}/products`, { productId: 'notes' });
 		expect((await m.client.get(`${site}/tokens`)).json.items[0].browserToken).toBe(browser.json.token);
@@ -189,10 +199,10 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 		cleanups.push(other.close);
 		const owner2 = await other.owner();
 		expect((await owner2.get(`${site}/tokens`)).json.items[0].serverToken).toEqual({ canShow: false });
-		const refused = await owner2.post(`${site}/tokens/notes/reveal`);
+		const refused = await owner2.post(`${site}/tokens/notes/reveal`, CONFIRM);
 		expect(codeOf(refused)).toEqual([409, 'conflict']);
 		expect(refused.json.detail).toBe('Cannot be shown: regenerate.');
-		const regenerated = await owner2.post(`${site}/tokens/notes/regenerate`, { kind: 'server' });
+		const regenerated = await owner2.post(`${site}/tokens/notes/regenerate`, { kind: 'server', ...CONFIRM });
 		expect(typeof regenerated.json.token).toBe('string');
 		expect((await owner2.get(`${site}/tokens`)).json.items[0].serverToken).toEqual({ canShow: true });
 	});
@@ -203,7 +213,7 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 		const m = await h.merchant('m@shop.test', ['shop.example.com']);
 		const site = `/v1/merchants/${m.merchantId}/websites/${m.websiteIds[0]}`;
 		await owner.post(`${site}/products`, { productId: 'notes' });
-		const token = (await owner.post(`${site}/tokens/notes/reveal`)).json.serverToken;
+		const token = (await owner.post(`${site}/tokens/notes/reveal`, CONFIRM)).json.serverToken;
 		expect(typeof token).toBe('string');
 		const mail = { host: 'smtp.example.com', port: 587, user: 'mailer', password: 's3cret', senderAddress: 'no@example.com' };
 		expect((await owner.put('/v1/admin/settings/mail', { mail })).status).toBe(200);
@@ -220,7 +230,7 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 		});
 		cleanups.push(changing.close);
 		const owner2 = await changing.owner();
-		expect((await owner2.post(`${site}/tokens/notes/reveal`)).json.serverToken).toBe(token);
+		expect((await owner2.post(`${site}/tokens/notes/reveal`, CONFIRM)).json.serverToken).toBe(token);
 		expect((await owner2.get('/v1/admin/settings')).json.mail).toMatchObject({ hasPassword: true, passwordUnreadable: false });
 		const first = await owner2.post('/v1/admin/settings/reseal');
 		expect(first.status).toBe(200);
@@ -248,7 +258,7 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 			await db.collection('platform_system').findOne(/** @type {any} */ ({ _id: 'settings' }))
 		);
 		expect(createSystemStore(db, { encryptionKey: NEW_KEY }).passwordReadable(settings.mail.passSealed)).toBe(true);
-		const old = await owner.post(`${site}/tokens/notes/reveal`);
+		const old = await owner.post(`${site}/tokens/notes/reveal`, CONFIRM);
 		expect(codeOf(old)).toEqual([409, 'conflict']);
 
 		// a wrong ENCRYPTION_KEY_PREVIOUS opens nothing: Re-seal names what to type or make again and never says the

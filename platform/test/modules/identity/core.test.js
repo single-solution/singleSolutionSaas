@@ -133,7 +133,8 @@ describe('inputs: objects', () => {
 			['linkAction', undefined],
 			['website', { domain: 'a.example' }],
 			['websiteRemove', { confirm: 'a.example' }],
-			['tokenRegenerate', { kind: 'server' }],
+			['tokenRegenerate', { kind: 'server', password: 'correct horse battery' }],
+			['confirmation', { password: 'correct horse battery', code: '123456' }],
 			['reason', { reason: 'r' }],
 			['adminInvite', { email: 'a@b.co', role: 'finance', copy: true }],
 			['adminUpdate', { role: 'owner' }],
@@ -141,7 +142,10 @@ describe('inputs: objects', () => {
 		for (const [name, body] of ok) expect(/** @type {any} */ (I.inputs[name])(body).ok, name).toBe(true);
 		for (const name of /** @type {Array<keyof typeof I.inputs>} */ (Object.keys(I.inputs)))
 			expect(/** @type {any} */ (I.inputs[name])({ unexpected: true }).ok, name).toBe(false);
-		expect(I.inputs.tokenRegenerate({ kind: 'secret' }).ok).toBe(false);
+		expect(I.inputs.tokenRegenerate({ kind: 'secret', password: 'x' }).ok).toBe(false);
+		// a server token is never shown or renewed without the person's password
+		expect(I.inputs.tokenRegenerate({ kind: 'server' }).ok).toBe(false);
+		expect(I.inputs.confirmation({}).ok).toBe(false);
 		expect(I.inputs.merchantCreate(merchant)).toEqual({
 			ok: true,
 			value: { ...merchant, phone: null, address: null, country: null },
