@@ -83,6 +83,8 @@ export const statusResponseSchema = deepFreeze({
 		graceEndsAt: { anyOf: [ref('timestamp'), { type: 'null' }] },
 		todayMillicredits: ref('millicredits'),
 		featuresVersion: ref('count'),
+		// optional until every Portal sends it: the Portal's saves of the website's settings (0: none yet)
+		settingsVersion: ref('count'),
 		validUntil: ref('timestamp'),
 	},
 });

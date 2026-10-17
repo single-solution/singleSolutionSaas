@@ -83,6 +83,8 @@
  * @property {ManifestFeature[]} features
  * @property {ManifestPermission[]} permissions
  * @property {ManifestWidget[]} widgets
+ * @property {{ requires: string[] }} [websiteSettings] what the product needs the website's settings (Portal) to say, as
+ *   dotted paths into the document (`region.currency`, `business.address.city`)
  */
 
 /**
@@ -112,6 +114,8 @@
  * @property {number} todayMillicredits
  * @property {number} featuresVersion last accepted feature-report version, raised by one when the product is added to
  *   the website again (every feature off): a product whose switches are older turns them off
+ * @property {number} [settingsVersion] the Portal's saves of the website's settings (0: none yet); a product holding an
+ *   older copy fetches the new one
  * @property {string} validUntil ISO-8601 UTC; cache at most until then
  */
 
@@ -234,3 +238,40 @@
  */
 
 export {};
+
+/**
+ * The theme of a website: colors by name (`#rrggbb`), the font family (`inherit` or a font name), the corner radius
+ * in px (0 to 24), the mode and custom CSS.
+ * @typedef {{ mode: 'light' | 'dark' | 'auto', fontFamily: string, radius: number, colors: Record<string, string>,
+ *   customCss: string }} WebsiteTheme
+ */
+
+/**
+ * A window of opening hours: `day` 1 (Monday) to 7 (Sunday), `HH:MM` times (`24:00` = the end of the day).
+ * @typedef {{ day: number, start: string, end: string }} WebsiteHoursWindow
+ */
+
+/**
+ * The website-settings document (`ss.website-settings/1`, `@ss/contracts/website-settings`): the facts every product of
+ * one website shares, kept once in the Portal. `''` is an unset text, `[]` an unset list. No secret has a place in it.
+ * @typedef {object} WebsiteSettings
+ * @property {'ss.website-settings/1'} schema
+ * @property {string} websiteId
+ * @property {number} version the Portal's saves (0: nothing saved yet)
+ * @property {string | null} updatedAt ISO-8601 UTC of the last save
+ * @property {{ name: string, otherNames: string[], tagline: string, legalName: string, taxNumber: string,
+ *   businessType: string, email: string, phone: string, phones: Array<{ label: string, number: string }>,
+ *   whatsapp: string, address: Record<'line1' | 'line2' | 'area' | 'city' | 'region' | 'postalCode' | 'country', string>,
+ *   hours: { weekly: WebsiteHoursWindow[], exceptions: Array<{ date: string, name: string, hours: Array<{ start: string, end: string }> }> },
+ *   social: Array<{ label: string, url: string }> }} business
+ * @property {{ files: Record<'logo' | 'logoDark' | 'icon' | 'favicon' | 'faviconDark' | 'shareImage', string>,
+ *   theme: WebsiteTheme }} brand pictures are https addresses
+ * @property {{ country: string, timeZone: string, currency: string, currencies: string[], language: string,
+ *   languages: string[], countriesServed: string[], units: { weight: string, size: string },
+ *   format: import('./format.js').Format, phone: { callingCode: string, trunkPrefix: string, countries: string[] },
+ *   address: { required: string[], regions: Array<{ country: string, names: string[] }> } }} region `currencies` starts
+ *   with `currency` and `languages` with `language`
+ * @property {{ hosts: string[], signIn: string, privacy: string, documents: Array<{ key: string, title: string, text: string }> }} pages
+ * @property {{ recipients: Array<{ name: string, email: string, phone: string }>, phoneChannel: string,
+ *   staffPush: boolean, support: { email: string, phone: string } }} team
+ */

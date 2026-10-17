@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { NOTICE_PATH, signNotice, verifyNotice } from '../src/index.js';
 import { createMemoryReplayStore } from '../src/testing.js';
-import { NOTICE_TYPES, parseNotice } from '../src/notices.js';
+import { NOTICE_TYPES, NOTICE_WHAT, parseNotice } from '../src/notices.js';
 import { createClock, expectCode, expectThrowCode, makeKey, staticResolver } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof makeKey>>} */
@@ -37,9 +37,16 @@ const verify = (clock, headers, overrides = {}) =>
 	});
 
 describe('notices', () => {
-	it('names the path and the four types', () => {
+	it('names the path and the five types', () => {
 		expect(NOTICE_PATH).toBe('/.well-known/ss-events');
-		expect(NOTICE_TYPES).toEqual(['status.changed', 'token.revoked', 'sessions.revoked', 'website.deleted']);
+		expect(NOTICE_TYPES).toEqual([
+			'status.changed',
+			'token.revoked',
+			'sessions.revoked',
+			'website.deleted',
+			'website.settings_changed',
+		]);
+		expect(NOTICE_WHAT).toEqual(['settings', 'connections', 'links']);
 	});
 
 	it('signs and verifies, returning the checked body (plain object, lower-case and Headers inputs)', async () => {
@@ -59,6 +66,9 @@ describe('notices', () => {
 		[{ type: 'token.revoked', websiteId: 'web_1' }],
 		[{ type: 'website.deleted', websiteId: 'web_1' }],
 		[{ type: 'sessions.revoked', subject: 'adm_1' }],
+		[{ type: 'website.settings_changed', websiteId: 'web_1' }],
+		[{ type: 'website.settings_changed', websiteId: 'web_1', what: 'settings' }],
+		[{ type: 'website.settings_changed', websiteId: 'web_1', what: 'links' }],
 	])('accepts %j', async (notice) => {
 		const clock = createClock();
 		const raw = JSON.stringify(notice);
@@ -74,6 +84,16 @@ describe('notices', () => {
 		['sessions.revoked without subject', JSON.stringify({ type: 'sessions.revoked', websiteId: 'web_1' })],
 		['an empty websiteId', JSON.stringify({ type: 'token.revoked', websiteId: '' })],
 		['unknown members', JSON.stringify({ type: 'website.deleted', websiteId: 'web_1', subject: 'x' })],
+		['website.settings_changed without websiteId', JSON.stringify({ type: 'website.settings_changed', what: 'settings' })],
+		[
+			'website.settings_changed with an unknown what',
+			JSON.stringify({ type: 'website.settings_changed', websiteId: 'web_1', what: 'everything' }),
+		],
+		['what on a type that takes none', JSON.stringify({ type: 'status.changed', websiteId: 'web_1', what: 'settings' })],
+		[
+			'website.settings_changed with another member',
+			JSON.stringify({ type: 'website.settings_changed', websiteId: 'web_1', version: 3 }),
+		],
 	])('refuses a body with %s', async (_name, raw) => {
 		expectThrowCode(() => parseNotice(raw), 'malformed');
 		await expectCode(signNotice({ signer: portal.signer, body: raw, timestamp: 1 }), 'malformed');

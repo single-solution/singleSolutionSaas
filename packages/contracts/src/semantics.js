@@ -7,6 +7,7 @@
 import { ruleProblem } from './profile.js';
 import { BUILT_IN_VALUES, longValueProblem, valueNamesOf, wordsProblem } from './templates.js';
 import { isPathOrServiceUrl, isServiceUrl, isUtcTimestamp, pointer } from './internal.js';
+import { isWebsiteSettingsPath } from './website-settings.js';
 import { isObject } from './util.js';
 
 /** @typedef {import('./types.js').ValidationProblem} ValidationProblem */
@@ -39,6 +40,7 @@ export const RULES = Object.freeze({
 	unknownValue: 'unknownValue',
 	recommendRule: 'recommendRule',
 	profileAnswer: 'profileAnswer',
+	websiteSettingsPath: 'websiteSettingsPath',
 });
 
 /**
@@ -156,6 +158,18 @@ export const checkManifest = (manifest) => {
 		out.push(at(['widgetScriptUrl'], RULES.url, 'must be a path or an https URL'));
 	if (manifest.widgetScriptUrl === null && manifest.widgetScriptLoading !== undefined)
 		out.push(at(['widgetScriptLoading'], RULES.widgetScriptUrl, 'only with a widget script'));
+	const requires = manifest.websiteSettings?.requires ?? [];
+	for (const [index, path] of requires.entries())
+		if (!isWebsiteSettingsPath(path))
+			out.push(
+				at(
+					['websiteSettings', 'requires', index],
+					RULES.websiteSettingsPath,
+					`'${path}' is not a value of the website settings`,
+				),
+			);
+	if (new Set(requires).size !== requires.length)
+		out.push(at(['websiteSettings', 'requires'], RULES.duplicateKey, 'names a value twice'));
 	return out;
 };
 

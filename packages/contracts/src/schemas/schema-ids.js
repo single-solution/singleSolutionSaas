@@ -29,6 +29,7 @@ export const SCHEMA_IDS = Object.freeze({
 	activityCopy: schemaId('activity-copy'),
 	messageDefaults: schemaId('message-defaults'),
 	businessProfile: schemaId('business-profile'),
+	websiteSettings: schemaId('website-settings'),
 	productBlueprint: schemaId('product-blueprint'),
 	blueprint: schemaId('blueprint'),
 	problem: schemaId('problem'),

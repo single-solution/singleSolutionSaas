@@ -25,12 +25,24 @@ export {
 	validateActivityCopy,
 	validateMessageDefaults,
 	validateBusinessProfile,
+	validateWebsiteSettings,
 	validateProductBlueprint,
 	validateBlueprint,
 } from './validate.js';
 export { manifestPriceList } from './semantics.js';
 export { BUSINESS_JSON_TEMPLATE, buildBusinessJson, validateBusinessJson } from './business.js';
 export { PROFILE_CHOICES, adviseFeatures } from './profile.js';
+export {
+	WEBSITE_SETTINGS_SCHEMA,
+	WEBSITE_SETTINGS_SECTIONS,
+	WEBSITE_SETTINGS_PATHS,
+	businessInfoOf,
+	emptyWebsiteSettings,
+	formatOf,
+	missingWebsiteSettings,
+	tidyWebsiteSection,
+	themeOf,
+} from './website-settings.js';
 export {
 	DEFAULT_FORMAT,
 	FORMAT_FIELDS,
@@ -55,4 +67,5 @@ export { createId, isId, normalizeDomain } from './ids.js';
 /** @typedef {import('./validate.js').Validator} Validator */
 /** @typedef {import('./ids.js').DomainResult} DomainResult */
 /** @typedef {import('./profile.js').BusinessProfile} BusinessProfile */
+/** @typedef {import('./website-settings.js').WebsiteSection} WebsiteSection */
 /** @typedef {import('./profile.js').FeatureFit} FeatureFit */

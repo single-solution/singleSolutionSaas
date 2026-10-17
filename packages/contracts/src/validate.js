@@ -21,6 +21,7 @@ import {
 	checkStatusResponse,
 } from './semantics.js';
 import { profileProblems } from './profile.js';
+import { websiteSettingsProblems } from './website-settings.js';
 import { escapePointerToken, pointer } from './internal.js';
 import { isObject } from './util.js';
 
@@ -109,6 +110,8 @@ const result = (value, problems) =>
  * @property {(value: unknown) => ValidationResult<import('./types.js').MessageDefaults>} validateMessageDefaults
  * @property {(value: unknown) => ValidationResult<import('./profile.js').BusinessProfile>} validateBusinessProfile the shape,
  *   then `none` alone in its answer
+ * @property {(value: unknown) => ValidationResult<import('./types.js').WebsiteSettings>} validateWebsiteSettings the shape, then the
+ *   rules of `website-settings.js` (real time zone, countries and times, the store currency first, no twice)
  * @property {(value: unknown) => ValidationResult<import('./types.js').ProductBlueprint>} validateProductBlueprint
  * @property {(value: unknown) => ValidationResult<import('./types.js').Blueprint>} validateBlueprint
  */
@@ -275,6 +278,7 @@ export const createValidator = ({ schemas = [] } = {}) => {
 				keyword: RULES.profileAnswer,
 			})),
 		),
+		validateWebsiteSettings: validator(SCHEMA_IDS.websiteSettings, websiteSettingsProblems),
 		validateProductBlueprint: /** @type {Validator['validateProductBlueprint']} */ (validator(SCHEMA_IDS.productBlueprint)),
 		validateBlueprint: /** @type {Validator['validateBlueprint']} */ (validator(SCHEMA_IDS.blueprint)),
 	});
@@ -324,6 +328,8 @@ export const validateActivityCopy = (value) => getDefaultValidator().validateAct
 export const validateMessageDefaults = (value) => getDefaultValidator().validateMessageDefaults(value);
 /** @param {unknown} value */
 export const validateBusinessProfile = (value) => getDefaultValidator().validateBusinessProfile(value);
+/** @param {unknown} value */
+export const validateWebsiteSettings = (value) => getDefaultValidator().validateWebsiteSettings(value);
 /** @param {unknown} value */
 export const validateProductBlueprint = (value) => getDefaultValidator().validateProductBlueprint(value);
 /** @param {unknown} value */

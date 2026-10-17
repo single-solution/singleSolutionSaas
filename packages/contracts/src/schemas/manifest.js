@@ -36,6 +36,13 @@ export const manifestSchema = deepFreeze({
 			properties: { base: ref('url'), dashboard: ref('url') },
 		},
 		widgetScriptUrl: { anyOf: [ref('url'), { type: 'null' }] },
+		// what the product needs the website's settings (Portal) to say, for the readiness line
+		websiteSettings: {
+			type: 'object',
+			required: ['requires'],
+			additionalProperties: false,
+			properties: { requires: { type: 'array', maxItems: 20, items: { type: 'string', maxLength: 64 } } },
+		},
 		widgetScriptLoading: { enum: [...WIDGET_SCRIPT_LOADING] },
 		docsUrl: ref('url'),
 		features: {

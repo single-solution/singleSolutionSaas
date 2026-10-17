@@ -11,8 +11,10 @@
  * keys; the product accepts the notice if any signature verifies under a key it trusts.
  *
  * Verification: timestamp within ±toleranceSec, signature, replay check on `timestamp + body hash` (recorded until the
- * tolerance window closes), then the body: `{ type, websiteId?, subject? }` where `status.changed`, `token.revoked` and
- * `website.deleted` need `websiteId`, and `sessions.revoked` needs `subject`.
+ * tolerance window closes), then the body: `{ type, websiteId?, subject?, what? }` where `status.changed`, `token.revoked`,
+ * `website.deleted` and `website.settings_changed` need `websiteId`, `sessions.revoked` needs `subject`, and only
+ * `website.settings_changed` may carry `what` (`settings`, `connections` or `links`: which of the website's shared
+ * values changed; none means all of them).
  */
 import { createProtocolError } from './errors.js';
 import { fromUtf8, sha256Hex, utf8 } from './encoding.js';
@@ -26,10 +28,13 @@ import { isObject } from './jws.js';
 /** Path of the product's notice endpoint. */
 export const NOTICE_PATH = '/.well-known/ss-events';
 
-/** The four notice types. */
+/** The five notice types. */
 export const NOTICE_TYPES = Object.freeze(
-	/** @type {const} */ (['status.changed', 'token.revoked', 'sessions.revoked', 'website.deleted']),
+	/** @type {const} */ (['status.changed', 'token.revoked', 'sessions.revoked', 'website.deleted', 'website.settings_changed']),
 );
+
+/** What a `website.settings_changed` notice may name as changed. */
+export const NOTICE_WHAT = Object.freeze(/** @type {const} */ (['settings', 'connections', 'links']));
 
 /** Default accepted clock difference, seconds. */
 const NOTICE_TOLERANCE_SECONDS = 300;
@@ -37,8 +42,10 @@ const NOTICE_TOLERANCE_SECONDS = 300;
 const MAX_ID_LENGTH = 256;
 
 /** @typedef {typeof NOTICE_TYPES[number]} NoticeType */
+/** @typedef {typeof NOTICE_WHAT[number]} NoticeWhat */
 /**
  * @typedef {{ type: 'status.changed' | 'token.revoked' | 'website.deleted', websiteId: string }
+ *   | { type: 'website.settings_changed', websiteId: string, what?: NoticeWhat }
  *   | { type: 'sessions.revoked', subject: string }} Notice
  */
 
@@ -57,7 +64,8 @@ const isId = (value) => typeof value === 'string' && value.length > 0 && value.l
 
 /**
  * Parse and check a notice body. Throws `malformed` unless it is exactly `{ type, websiteId }` (status.changed,
- * token.revoked, website.deleted) or `{ type, subject }` (sessions.revoked).
+ * token.revoked, website.deleted), `{ type, websiteId, what? }` (website.settings_changed) or `{ type, subject }`
+ * (sessions.revoked).
  * @param {string | Uint8Array} rawBody
  * @returns {Notice}
  */
@@ -75,8 +83,14 @@ export const parseNotice = (rawBody) => {
 		throw createProtocolError('malformed', 'unknown notice type');
 	const member = type === 'sessions.revoked' ? 'subject' : 'websiteId';
 	if (!isId(parsed[member])) throw createProtocolError('malformed', `${type} needs ${member}`);
-	if (Object.keys(parsed).some((key) => key !== 'type' && key !== member))
+	const takesWhat = type === 'website.settings_changed';
+	if (Object.keys(parsed).some((key) => key !== 'type' && key !== member && !(takesWhat && key === 'what')))
 		throw createProtocolError('malformed', 'notice body has unknown members');
+	if (takesWhat && parsed.what !== undefined) {
+		if (!(/** @type {readonly unknown[]} */ (NOTICE_WHAT).includes(parsed.what)))
+			throw createProtocolError('malformed', 'unknown notice what');
+		return /** @type {Notice} */ ({ type, websiteId: parsed.websiteId, what: parsed.what });
+	}
 	return /** @type {Notice} */ ({ type, [member]: parsed[member] });
 };
 
