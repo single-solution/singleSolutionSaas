@@ -82,6 +82,8 @@ describe('Products (PLAN 0.8.2): Add product, Reconnect, active / inactive', () 
 			widgetScriptLoading: 'async',
 			docsUrl: `${product.url}/docs`,
 			websiteSettingsRequires: [],
+			// what a feature needs of the website's settings (none here)
+			featureRequires: {},
 			// what it needs of the website's connections (a database, no storage) and its links (none)
 			needs: { database: true, storage: 'none' },
 			links: { offers: [], needs: [] },

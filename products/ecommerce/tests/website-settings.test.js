@@ -38,7 +38,9 @@ describe('settings that start from the Portal', () => {
 		// the merchant's own value wins, and the Portal's keeps showing as the start of the other settings
 		const cookie = await shop.adminSession();
 		const base = `/v1/dashboard/websites/${shop.websiteId}`;
-		expect((await shop.dashboard(cookie, 'PUT', `${base}/settings/seo.homeTitle`, { value: 'Our own title' })).status).toBe(204);
+		expect((await shop.dashboard(cookie, 'PUT', `${base}/settings/seo.homeTitle`, { value: 'Our own title' })).status).toBe(
+			204,
+		);
 		expect(await read('seo', 'homeTitle')).toMatchObject({ value: 'Our own title', source: 'website' });
 		expect((await shop.api('GET', '/v1/seo/site')).json.title).toBe('Our own title');
 		expect(await read('seo', 'homeDescription')).toMatchObject({ source: 'portal' });
@@ -89,9 +91,16 @@ describe('what the Overview asks of the Portal', () => {
 		const website = async () =>
 			(await shop.dashboard(cookie, 'GET', `/v1/dashboard/websites/${shop.websiteId}/overview`)).json.checklist.website;
 		await shop.setWebsite({ region: { ...shop.site.region, currency: '', currencies: [], country: '' } });
-		expect(await website()).toMatchObject({ requires: ['region.currency', 'region.country'], missing: ['region.currency', 'region.country'] });
+		// the product's own needs, and those of a feature that is on (the alert team, for staff alerts)
+		expect(await website()).toMatchObject({
+			requires: ['region.currency', 'region.country', 'team.recipients'],
+			missing: ['region.currency', 'region.country', 'team.recipients'],
+		});
 		await shop.setBusiness({ country: 'US', currency: 'USD' });
-		expect(await website()).toMatchObject({ requires: ['region.currency', 'region.country'], missing: [] });
+		expect(await website()).toMatchObject({
+			requires: ['region.currency', 'region.country', 'team.recipients'],
+			missing: ['team.recipients'],
+		});
 	});
 });
 

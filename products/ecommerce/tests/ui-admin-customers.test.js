@@ -641,7 +641,7 @@ describe('customers admin: reports and CSV', () => {
 		expect(textOf(panel)).toContain('Active products without photos3Needs attention');
 		expect(textOf(panel)).toContain('Variants low on stock2Needs attention');
 		expect(textOf(panel)).toContain('Business name missing (Website settings)0OK');
-		expect(textOf(panel)).toContain("Badly formed tag ids in Growth (paste Growth's token in Connections to check)Not checked");
+		expect(textOf(panel)).toContain('Badly formed tag ids in Growth (checked while Growth is on the website)Not checked');
 		expect(statuses(panel)).not.toContain('All clear: nothing needs fixing.');
 		attention = 0;
 		await click(buttonIn(panel, 'Check again'));

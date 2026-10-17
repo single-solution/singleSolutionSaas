@@ -20,19 +20,20 @@ import * as notificationsRoutes from '@ss/product-notifications/routes';
 import * as payments from '@ss/product-payments/product';
 import * as paymentsRoutes from '@ss/product-payments/routes';
 
+/** @type {Array<{ unit: any, routes: any }>} */
 const UNITS = [
-	[accounts, accountsRoutes],
-	[chat, chatRoutes],
-	[ecommerce, ecommerceRoutes],
-	[growth, growthRoutes],
-	[notifications, notificationsRoutes],
-	[payments, paymentsRoutes],
+	{ unit: accounts, routes: accountsRoutes },
+	{ unit: chat, routes: chatRoutes },
+	{ unit: ecommerce, routes: ecommerceRoutes },
+	{ unit: growth, routes: growthRoutes },
+	{ unit: notifications, routes: notificationsRoutes },
+	{ unit: payments, routes: paymentsRoutes },
 ];
 const KIT_SCOPES = new Set(Object.values(KIT_LINK_SCOPES));
 
 /** Each product: its manifest, and the scopes its routes take. */
 const products = new Map(
-	UNITS.map(([unit, routes]) => {
+	UNITS.map(({ unit, routes }) => {
 		const instance = unit.createProductInstance({
 			config: { mongodbUri: '', connectSecret: 'c'.repeat(40), encryptionKey: 'e'.repeat(40) },
 			store: createMemoryStore({ now: () => Date.now() }),
