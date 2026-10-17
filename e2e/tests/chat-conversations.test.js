@@ -310,7 +310,6 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		}
 
 		// Accounts: two customers (one with a phone) and a member of staff whose ready-made role may reply in the inbox
-		await configure('accounts', { 'email_password.breachedCheck': false });
 		for (const [who, body] of /** @type {const} */ ([
 			[
 				'rea',
@@ -560,12 +559,11 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		expect(mails.slice(mailsBefore).some((mail) => mail.to.includes('rea@example.com'))).toBe(false);
 	});
 
-	it('C4: the AI answers the message that asked for a person first, then stays quiet, then reassures after 3 minutes', async () => {
+	it('C4: the AI answers the message that asked for a person first, then stays quiet, then reassures after 5 minutes', async () => {
 		await configure('chat', {
 			'handoff.answerFirst': true,
 			'handoff.showNotice': false,
 			'handoff.showButton': false,
-			'handoff.reassureAfterMinutes': 3,
 		});
 		const config = await sys.call('GET', '/v1/widget/config', { token: tokens.chat?.browser, origin: ORIGIN });
 		expect(config.json.settings.handoff.showButton).toBe(false);
@@ -597,18 +595,18 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 			.filter((message) => message.to === TEAM_DIGITS && String(message.text?.body).startsWith('Needs you: '));
 		expect(needsYouPhoned).toHaveLength(1);
 
-		// quiet until 3 minutes after the handoff, then reassurance only (no tools)
+		// quiet until 5 minutes after the handoff (Chat's fixed wait), then reassurance only (no tools)
 		const asked = prompts.length;
 		await guest('POST', '/v1/chat/messages', { text: 'hello?' });
 		expect(prompts).toHaveLength(asked);
-		sys.clock.advance(3 * 60_000);
+		sys.clock.advance(5 * 60_000);
 		aiAnswers.push('A person will reply here soon.');
 		await guest('POST', '/v1/chat/messages', { text: 'anyone?' });
 		state = await guest('GET', '/v1/chat');
 		expect(authors(state.json).at(-1)).toEqual(['ai', 'A person will reply here soon.']);
 		expect(lastSystemPrompt()).toContain('Only reassure them');
 		expect(prompts.at(-1).tools ?? []).toEqual([]);
-		await configure('chat', { 'handoff.answerFirst': false, 'handoff.reassureAfterMinutes': 0 });
+		await configure('chat', { 'handoff.answerFirst': false });
 	});
 
 	it('C6: a staff reply sends `chat.staff_reply` by WhatsApp to a visitor who left, once until they check again', async () => {

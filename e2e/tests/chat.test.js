@@ -333,7 +333,7 @@ describe('Chat on the real Portal', () => {
 		);
 	});
 
-	it('guests have no message limit while the Customer role’s sign-in is paused at Accounts, with the setting (C17)', async () => {
+	it('guests have no message limit while the Customer role’s sign-in is paused at Accounts (C17)', async () => {
 		const accountsCookie = await sys.adminSession(await sys.owner(), websiteId, 'accounts');
 		const switched = await sys.dashboard(
 			accountsCookie,
@@ -365,15 +365,12 @@ describe('Chat on the real Portal', () => {
 		const customer = (await accounts('GET', '/v1/roles')).json.items.find((/** @type {any} */ r) => r.key === 'customer');
 		expect((await accounts('PUT', '/v1/roles/customer', { ...customer, signIn: 'paused' })).status).toBe(200);
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);
-		for (const [name, value] of /** @type {Array<[string, unknown]>} */ ([
-			['messageLimit', 1],
-			['noLimitWithoutSignIn', true],
-		])) {
-			const saved = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/guest_chat.${name}`, {
-				value,
-			});
-			expect(saved.status).toBe(204);
-		}
+		const saved = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/guest_chat.messageLimit`, {
+			value: 1,
+		});
+		expect(saved.status).toBe(204);
+		// Chat keeps what it read from Accounts for a minute, and earlier messages already read it (not paused then)
+		sys.clock.advance(61_000);
 		const first = await visitor('POST', '/v1/chat/messages', { body: { text: 'Do you have gift cards?' } });
 		const headers = { 'ss-guest': String(first.json.guestKey) };
 		const second = await visitor('POST', '/v1/chat/messages', { body: { text: 'And gift wrap?' }, headers });

@@ -88,9 +88,9 @@ const CASES = [
 		id: 'payments',
 		product: payments,
 		routes: paymentsRoutes,
-		on: ['manual_payments'],
-		setting: 'manual_payments.proofMaxMb',
-		value: 3,
+		on: ['payment_api', 'manual_payments'],
+		setting: 'payment_api.checkoutExpiryHours',
+		value: 48,
 		list: {
 			name: 'manual_methods',
 			value: [

@@ -345,7 +345,6 @@ beforeAll(async () => {
 	await configureOn(ACCOUNTS, 'accounts', {
 		'phone.defaultCallingCode': '+44',
 		'phone.trunkPrefix': '0',
-		'phone_password.breachedCheck': false,
 	});
 	const role = await sys.call('PUT', '/v1/roles/member', {
 		base: ACCOUNTS,
