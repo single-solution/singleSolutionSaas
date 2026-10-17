@@ -5,8 +5,39 @@
  * They are opaque: consumers must never parse meaning out of the random part.
  * @module
  */
-import { domainToASCII } from 'node:url';
-import { isIP } from 'node:net';
+
+/** IPv4 in dotted decimal: four numbers 0–255 without leading zeros. */
+const IPV4 = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+
+/**
+ * 4 for an IPv4 address, 6 for an IPv6 address, 0 otherwise: the same answer as Node's `isIP`, in any runtime (this
+ * module is also bundled for browsers, so it uses no Node built-in).
+ * @param {string} text
+ * @returns {0 | 4 | 6}
+ */
+const ipVersion = (text) => {
+	if (IPV4.test(text)) return 4;
+	if (!text.includes(':') || !/^[0-9a-f:.]+$/i.test(text)) return 0;
+	try {
+		new URL(`http://[${text}]/`);
+		return 6;
+	} catch {
+		return 0;
+	}
+};
+
+/**
+ * A hostname in its ASCII (punycode) form, or '' when it is not a valid host: WHATWG URL parsing, in any runtime.
+ * @param {string} host
+ * @returns {string}
+ */
+const asciiHost = (host) => {
+	try {
+		return new URL(`http://${host}/`).hostname;
+	} catch {
+		return '';
+	}
+};
 
 /** Lowercase Crockford base32 alphabet (no i, l, o, u). */
 export const ID_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
@@ -127,16 +158,16 @@ export const normalizeDomain = (input, options = {}) => {
 	if (host.startsWith('[')) {
 		const end = host.indexOf(']');
 		const literal = end > 0 ? host.slice(1, end) : '';
-		return isIP(literal) === 6 ? ipResult(literal, options) : fail('invalid_domain', 'Malformed IPv6 literal.');
+		return ipVersion(literal) === 6 ? ipResult(literal, options) : fail('invalid_domain', 'Malformed IPv6 literal.');
 	}
-	if (isIP(host) === 6) return ipResult(host, options);
+	if (ipVersion(host) === 6) return ipResult(host, options);
 	host = host.replace(/:\d*$/, '');
 	if (host.endsWith('.')) host = host.slice(0, -1);
 	if (host === '') return fail('empty', 'Domain is empty.');
 	if (host.startsWith('*')) return fail('wildcard', 'Wildcards are not accepted; a website is one exact domain.');
-	const ascii = domainToASCII(host);
+	const ascii = asciiHost(host);
 	if (ascii === '') return fail('invalid_domain', 'Not a valid domain name.');
-	if (isIP(ascii) !== 0) return ipResult(ascii, options);
+	if (ipVersion(ascii) !== 0) return ipResult(ascii, options);
 	if (ascii.length > MAX_DOMAIN) return fail('too_long', `Domain exceeds ${MAX_DOMAIN} characters.`);
 	const labels = ascii.split('.');
 	if (!labels.every((label) => LABEL.test(label)))
