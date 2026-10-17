@@ -258,6 +258,19 @@ export const createWebsiteService = (ctx) => {
 		},
 
 		/**
+		 * The saved document of a website (an empty one, version 0, until the first save), for the Portal's own parts: the
+		 * Setup sheet's header and the advisor's countries and languages. Not scoped to a merchant: the caller has checked
+		 * the website is the merchant's.
+		 * @param {string} websiteId
+		 * @returns {Promise<WebsiteSettings>}
+		 */
+		document: async (websiteId) =>
+			documentOf(
+				websiteId,
+				await /** @type {import('../../infra/db.js').MutableOps} */ (settings.acrossMerchants()).findOne({ _id: websiteId }),
+			),
+
+		/**
 		 * The save counter of a website's settings (0: none yet), for the status answer.
 		 * @param {string} websiteId
 		 * @returns {Promise<number>}

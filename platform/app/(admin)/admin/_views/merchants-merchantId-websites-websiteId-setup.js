@@ -15,5 +15,14 @@ export default async function WebsiteSetupPage({ params }) {
 	const setup = await loadSetup(api, merchantId, websiteId);
 	const back = { href: adminRoutes.website(merchantId, websiteId), label: SETUP.back };
 	if (!setup.ok) return <PageProblem problem={setup.problem} back={back} />;
-	return <AdminSetupView sheet={setup.sheet} links={setup.links} merchantId={merchantId} websiteId={websiteId} back={back} />;
+	return (
+		<AdminSetupView
+			sheet={setup.sheet}
+			links={setup.links}
+			merchantId={merchantId}
+			websiteId={websiteId}
+			back={back}
+			settingsHref={adminRoutes.websiteSettings(merchantId, websiteId)}
+		/>
+	);
 }

@@ -8,11 +8,15 @@ import { PROFILE_OTHER, PROFILE_YES_NO } from '@ss/contracts/profile';
 import { PROFILE } from '../../../texts/console.js';
 
 /** @typedef {import('@ss/contracts').BusinessProfile} BusinessProfile */
+
 /** @typedef {import('@ss/contracts').BlueprintAdvice} BlueprintAdvice */
+
+/** The profile answers that are the website's settings, not the advisor's own. */
+export const SETTINGS_ANSWERS = Object.freeze(/** @type {const} */ (['countries', 'languages']));
 
 /**
  * A profile as kept: only answered questions, the options of a choice in the order people see them, own answers
- * trimmed in the order given.
+ * trimmed in the order given. The countries and languages are not kept: they are the website's settings.
  * @param {BusinessProfile} profile
  * @returns {BusinessProfile}
  */
@@ -31,20 +35,25 @@ const tidy = (profile) => {
 	}
 	if (Object.keys(other).length > 0) out.other = other;
 	for (const question of PROFILE_YES_NO) if (typeof profile[question] === 'boolean') out[question] = profile[question];
-	for (const question of /** @type {const} */ (['countries', 'languages']))
-		if ((profile[question] ?? []).length > 0) out[question] = [...(profile[question] ?? [])];
 	return /** @type {BusinessProfile} */ (out);
 };
 
 /**
  * The body of Save profile: a business profile (`@ss/contracts` `validateBusinessProfile`), kept tidy; null when it
- * answers nothing (the profile is then removed).
+ * answers nothing (the profile is then removed). The countries and languages are refused: they are the website's
+ * settings, which the sheet adds to the profile.
  * @param {unknown} body
  * @returns {{ ok: true, value: BusinessProfile | null } | { ok: false, errors: Array<{ path: string, message: string }> }}
  */
 export const parseProfile = (body) => {
 	const checked = validateBusinessProfile(body);
 	if (!checked.ok) return { ok: false, errors: checked.problems.map(({ path, message }) => ({ path, message })) };
+	// the countries and languages are the website's settings (Region and format): one place, not a second copy here
+	const errors = SETTINGS_ANSWERS.filter((question) => (checked.value[question] ?? []).length > 0).map((question) => ({
+		path: `/${question}`,
+		message: 'is set in Website settings › Region and format, not in the profile',
+	}));
+	if (errors.length > 0) return { ok: false, errors };
 	const value = tidy(checked.value);
 	return { ok: true, value: Object.keys(value).length === 0 ? null : value };
 };

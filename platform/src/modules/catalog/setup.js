@@ -29,6 +29,7 @@ import { isNetError, textOf } from '@ss/net';
 import { signPortalCall } from '@ss/protocol';
 import { isProblem, problem } from '../../infra/http.js';
 import { sha256Hex } from '@ss/protocol';
+import { SETTINGS_ANSWERS } from './core/advisor.js';
 import { assembleSheet, productEntry, reasonOfStatus, sharedCopy } from './core/setup.js';
 import { PRODUCTS, SETUP_LINKS, SETUP_PROFILES } from './schema.js';
 
@@ -72,6 +73,7 @@ export const createSetup = ({ ctx, policy, fetch }) => {
 	/** @param {string} merchantId */
 	const profilesOf = (merchantId) => /** @type {import('../../infra/db.js').MutableOps} */ (profiles.forMerchant(merchantId));
 	const identity = () => ctx.service('identity');
+	const websiteSettings = () => /** @type {import('../website/service.js').WebsiteService} */ (ctx.service('website'));
 	/**
 	 * Gathered products per website, with their status (the profile and the advice are added at each read).
 	 * @type {Map<string, { until: number, at: number, status: Blueprint['website']['status'], products: GatheredProduct[] }>}
@@ -197,13 +199,20 @@ export const createSetup = ({ ctx, policy, fetch }) => {
 	};
 
 	/**
-	 * The business profile of a website, or null.
+	 * The advisor's own answers for a website, or null.
 	 * @param {string} merchantId
 	 * @param {string} websiteId
 	 * @returns {Promise<BusinessProfile | null>}
 	 */
-	const profileOf = async (merchantId, websiteId) =>
-		(await profilesOf(merchantId).findOne({ merchantId, _id: websiteId }))?.profile ?? null;
+	const profileOf = async (merchantId, websiteId) => {
+		const stored = (await profilesOf(merchantId).findOne({ merchantId, _id: websiteId }))?.profile ?? null;
+		if (stored === null) return null;
+		// the countries and languages are the website's settings (a profile saved before they moved may still hold them)
+		const own = Object.fromEntries(
+			Object.entries(stored).filter(([question]) => !(/** @type {readonly string[]} */ (SETTINGS_ANSWERS).includes(question))),
+		);
+		return Object.keys(own).length === 0 ? null : /** @type {BusinessProfile} */ (own);
+	};
 
 	/**
 	 * The sheet of a website: its products as gathered, with its business profile and the advice for it.
@@ -211,11 +220,12 @@ export const createSetup = ({ ctx, policy, fetch }) => {
 	 * @returns {Promise<Blueprint>}
 	 */
 	const sheetOf = async ({ merchantId, websiteId, domain, fresh = false }) => {
-		const [{ at, status, products }, profile] = await Promise.all([
+		const [{ at, status, products }, profile, settings] = await Promise.all([
 			gathered({ merchantId, websiteId, fresh }),
 			profileOf(merchantId, websiteId),
+			websiteSettings().document(websiteId),
 		]);
-		return assembleSheet({ websiteId, domain, status, products, profile, now: at });
+		return assembleSheet({ websiteId, domain, status, products, profile, settings, now: at });
 	};
 
 	/**

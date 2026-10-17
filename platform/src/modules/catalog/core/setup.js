@@ -4,13 +4,14 @@
  * copy a share link shows, and the input of a new share link.
  * @module
  */
-import { BLUEPRINT_SCHEMA, PATTERNS } from '@ss/contracts';
+import { BLUEPRINT_SCHEMA, PATTERNS, emptyWebsiteSettings } from '@ss/contracts';
 import { adviceOf } from './advisor.js';
 import { widgetScriptTag } from '@ss/contracts/text';
 
 /** @typedef {import('@ss/contracts').Blueprint} Blueprint */
 /** @typedef {import('@ss/contracts').ProductBlueprint} ProductBlueprint */
 /** @typedef {import('@ss/contracts').BusinessProfile} BusinessProfile */
+/** @typedef {import('@ss/contracts').WebsiteSettings} WebsiteSettings */
 /** @typedef {Blueprint['products'][number]} SheetProduct */
 /** @typedef {Extract<SheetProduct, { reachable: true }>} ReachableProduct */
 /** @typedef {'timeout' | 'unreachable' | 'refused' | 'invalid'} Unreachable */
@@ -59,23 +60,57 @@ export const productEntry = (entry, answer) => {
 };
 
 /**
+ * The website's facts for the sheet's header, from its settings in the Portal (Website settings › Business and Region and
+ * format): `found` is whether anything has been saved there yet.
+ * @param {WebsiteSettings} settings
+ * @returns {Blueprint['website']['business']}
+ */
+export const websiteBusinessOf = (settings) => ({
+	found: settings.version > 0,
+	name: settings.business.name || null,
+	country: settings.region.country || null,
+	timeZone: settings.region.timeZone || null,
+});
+
+/**
+ * The advisor's profile as the sheet carries it: the answers the advisor keeps, with the countries and languages
+ * of the website's settings (Region and format: countries served, languages), which are the one place for them. A
+ * language is its code (`en-US` answers `en`). Null when there is nothing at all.
+ * @param {BusinessProfile | null} stored the advisor's own answers
+ * @param {WebsiteSettings} settings
+ * @returns {BusinessProfile | null}
+ */
+export const profileWithSettings = (stored, settings) => {
+	const { region } = settings;
+	const tags = region.languages.length > 0 ? region.languages : region.language ? [region.language] : [];
+	const languages = [
+		...new Set(tags.map((tag) => tag.split('-')[0]?.toLowerCase() ?? '').filter((code) => /^[a-z]{2,3}$/.test(code))),
+	];
+	const merged = {
+		...stored,
+		...(region.countriesServed.length > 0 ? { countries: [...region.countriesServed] } : {}),
+		...(languages.length > 0 ? { languages } : {}),
+	};
+	return Object.keys(merged).length === 0 ? null : /** @type {BusinessProfile} */ (merged);
+};
+
+/**
  * The sheet of a website: its facts (with the status its products have), its business profile, and each product
  * gathered with the advisor's view for that profile.
  * @param {{ websiteId: string, domain: string, status: Blueprint['website']['status'], products: GatheredProduct[],
- *   profile: BusinessProfile | null, now: number }} input `now`: when the products were gathered
+ *   profile: BusinessProfile | null, settings?: WebsiteSettings, now: number }} input `now`: when the products were
+ *   gathered; `profile`: the advisor's own answers; `settings`: the website's settings in the Portal, for the header and
+ *   the profile's countries and languages (none saved: an empty document)
  * @returns {Blueprint}
  */
-export const assembleSheet = ({ websiteId, domain, status, products, profile, now }) => {
-	const found = products.find((p) => p.reachable && p.business.found);
-	const business = found?.reachable
-		? { found: true, name: found.business.name, country: found.business.country, timeZone: found.business.timeZone }
-		: { found: false, name: null, country: null, timeZone: null };
+export const assembleSheet = ({ websiteId, domain, status, products, profile, settings = emptyWebsiteSettings(websiteId), now }) => {
+	const whole = profileWithSettings(profile, settings);
 	return {
 		schema: BLUEPRINT_SCHEMA,
 		generatedAt: new Date(now).toISOString(),
-		website: { id: websiteId, domain, status, business, profile },
+		website: { id: websiteId, domain, status, business: websiteBusinessOf(settings), profile: whole },
 		access: { allowedOrigins: [`https://${domain}`], testingOrigins: [...TESTING_HOSTS], serverTokens: SERVER_TOKENS_NOTE },
-		products: products.map((product) => (product.reachable ? { ...product, ...adviceOf(product.features, profile) } : product)),
+		products: products.map((product) => (product.reachable ? { ...product, ...adviceOf(product.features, whole) } : product)),
 	};
 };
 

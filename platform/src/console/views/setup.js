@@ -20,7 +20,6 @@ import {
 	Callout,
 	Card,
 	CheckboxGroup,
-	ChoicePicker,
 	CodeBlock,
 	Dialog,
 	EmptyState,
@@ -48,7 +47,7 @@ import {
 	useToast,
 	TextLink,
 } from '@ss/ui';
-import { COUNTRY_CHOICES, COUNTRY_NAMES } from '../../modules/identity/core/countries.js';
+import { COUNTRY_NAMES } from '../../modules/identity/core/countries.js';
 import { PROFILE, SETUP } from '../../texts/console.js';
 import { apiFetch, takeFragmentToken } from '../client.js';
 import { Link } from '../link.js';
@@ -72,17 +71,16 @@ import { api } from '../paths.js';
  */
 /**
  * @typedef {{ sheet: Blueprint, links: ShareLink[], merchantId: string, websiteId: string,
- *   back: { href: string, label: string } }} SetupPageProps
+ *   back: { href: string, label: string }, settingsHref: string }} SetupPageProps `settingsHref`: the website's settings page
  */
 /**
  * What the consoles can do on the sheet: edit the business profile, and (admins) switch a recommended feature on.
  * @typedef {{ editProfile: () => void, switchOn: ((product: ReachableProduct, feature: string) => void) | null,
- *   switching: string | null }} SheetActions
+ *   switching: string | null, settingsHref: string }} SheetActions `settingsHref`: the website's settings in the Portal
  */
 
 /** Choice questions in the order people see them. */
 const CHOICES = /** @type {Array<keyof typeof PROFILE_CHOICES>} */ (Object.keys(PROFILE_CHOICES));
-const LANGUAGE = /^[a-z]{2,3}$/;
 /** Yes-or-no questions in the order people see them. */
 const YES_NO = /** @type {const} */ (['moving', 'taxes']);
 
@@ -437,6 +435,8 @@ function ProductPanel({ product, valuesShown }) {
  * @param {{ profile: BusinessProfile | null, actions: SheetActions | null }} props
  */
 function ProfileCard({ profile, actions }) {
+	// the countries and languages are the website's settings: the profile is the advisor's own once it has other answers
+	const own = profile !== null && Object.keys(profile).some((question) => question !== 'countries' && question !== 'languages');
 	return (
 		<Card
 			title={PROFILE.title}
@@ -448,11 +448,20 @@ function ProfileCard({ profile, actions }) {
 					</Button>
 				) : null
 			}>
-			{profile ? (
-				<KeyValueList items={profileLines(profile).map((line) => ({ label: line.question, value: line.answer }))} />
-			) : (
-				<p className="text-sm text-muted">{PROFILE.empty}</p>
-			)}
+			<div className="space-y-3">
+				{own ? null : <p className="text-sm text-muted">{PROFILE.empty}</p>}
+				{profile ? (
+					<KeyValueList items={profileLines(profile).map((line) => ({ label: line.question, value: line.answer }))} />
+				) : null}
+				{actions ? (
+					<p className="text-xs text-muted">
+						{PROFILE.fromSettings}{' '}
+						<TextLink as={Link} href={`${actions.settingsHref}#region`}>
+							{SETUP.openSettings}
+						</TextLink>
+					</p>
+				) : null}
+			</div>
 		</Card>
 	);
 }
@@ -542,11 +551,16 @@ function Recommendations({ sheet, actions }) {
 
 /**
  * Edit the business profile: every question optional; `none` stands alone.
- * @param {{ manage: Manage, profile: BusinessProfile | null, onClose: () => void, onSaved: (sheet: Blueprint) => void }} props
+ * @param {{ manage: Manage, profile: BusinessProfile | null, settingsHref: string, onClose: () => void,
+ *   onSaved: (sheet: Blueprint) => void }} props `settingsHref`: where the countries and languages are set
  */
-function ProfileDialog({ manage, profile, onClose, onSaved }) {
-	const [answers, setAnswers] = useState(/** @type {BusinessProfile} */ ({ ...(profile ?? {}) }));
-	const [languages, setLanguages] = useState((profile?.languages ?? []).join(', '));
+function ProfileDialog({ manage, profile, settingsHref, onClose, onSaved }) {
+	// the countries and languages are the website's settings, not answered here
+	const [answers, setAnswers] = useState(
+		/** @type {BusinessProfile} */ (
+			Object.fromEntries(Object.entries(profile ?? {}).filter(([question]) => question !== 'countries' && question !== 'languages'))
+		),
+	);
 	const [own, setOwn] = useState(
 		/** @type {Record<string, string>} */ (
 			Object.fromEntries(PROFILE_OTHER.map((question) => [question, (profile?.other?.[question] ?? []).join(', ')]))
@@ -565,14 +579,8 @@ function ProfileDialog({ manage, profile, onClose, onSaved }) {
 		if (added === PROFILE_NONE && takesOther(question)) setOwn({ ...own, [question]: '' });
 	};
 	const save = async () => {
-		const codes = languages
-			.split(',')
-			.map((code) => code.trim().toLowerCase())
-			.filter((code) => code !== '');
 		/** @type {Record<string, string>} */
 		const found = {};
-		const wrong = codes.filter((code) => !LANGUAGE.test(code));
-		if (wrong.length > 0) found.languages = PROFILE.languagesInvalid(wrong.join(', '));
 		/** @type {Record<string, string[]>} */
 		const other = {};
 		for (const question of PROFILE_OTHER) {
@@ -588,7 +596,7 @@ function ProfileDialog({ manage, profile, onClose, onSaved }) {
 		setProblem(null);
 		const result = await apiFetch(api.setupProfile(manage.merchantId, manage.websiteId), {
 			method: 'PUT',
-			body: { ...answers, other, languages: [...new Set(codes)] },
+			body: { ...answers, other },
 		});
 		setBusy(false);
 		if (!result.ok) {
@@ -640,22 +648,13 @@ function ProfileDialog({ manage, profile, onClose, onSaved }) {
 							}}
 						/>
 					))}
-					<ChoicePicker
-						legend={PROFILE.questions.countries}
-						options={[...COUNTRY_CHOICES]}
-						value={answers.countries ?? []}
-						onChange={(next) => setAnswers({ ...answers, countries: next })}
-						emptyText={PROFILE.notAnswered}
-					/>
-					<Input
-						label={PROFILE.questions.languages}
-						help={PROFILE.languagesHelp}
-						value={languages}
-						onChange={(event) => setLanguages(event.currentTarget.value)}
-						error={errors.languages}
-						wide
-					/>
 				</FieldGrid>
+				<p className="text-sm text-muted">
+					{PROFILE.fromSettings}{' '}
+					<TextLink as={Link} href={`${settingsHref}#region`}>
+						{SETUP.openSettings}
+					</TextLink>
+				</p>
 				<FormError problem={problem} />
 				<Button loading={busy} onClick={() => void save()}>
 					{PROFILE.save}
@@ -698,7 +697,15 @@ const sheetSections = (sheet, actions) => {
 							<dd className="text-sm break-words text-fg">
 								{website.business.found
 									? SETUP.businessFound(website.business.name ?? website.domain)
-									: SETUP.businessMissing(website.domain)}
+									: SETUP.businessMissing}
+								{actions ? (
+									<>
+										{' '}
+										<TextLink as={Link} href={actions.settingsHref}>
+											{SETUP.openSettings}
+										</TextLink>
+									</>
+								) : null}
 							</dd>
 						</div>
 						<div className="min-w-0 space-y-0.5">
@@ -961,9 +968,10 @@ export function MerchantSetupView({ merchantId, websiteId, ...props }) {
 /**
  * The Setup page of a website in a console (each console passes its API client).
  * @param {{ sheet: Blueprint, links: ShareLink[], manage: Manage, back: { href: string, label: string },
- *   canSwitch: boolean }} props `canSwitch`: the admin console (Owner and Support) switches recommended features on
+ *   canSwitch: boolean, settingsHref: string }} props `canSwitch`: the admin console (Owner and Support) switches recommended
+ *   features on; `settingsHref`: the website's settings page, where its business facts, countries and languages are set
  */
-export function SetupView({ sheet: initial, links, manage, back, canSwitch }) {
+export function SetupView({ sheet: initial, links, manage, back, canSwitch, settingsHref }) {
 	const toast = useToast();
 	const [sheet, setSheet] = useState(initial);
 	const [refreshing, setRefreshing] = useState(false);
@@ -993,6 +1001,7 @@ export function SetupView({ sheet: initial, links, manage, back, canSwitch }) {
 		editProfile: () => setEditing(true),
 		switchOn: canSwitch ? (product, feature) => void switchOn(product, feature) : null,
 		switching,
+		settingsHref,
 	};
 	const refresh = async () => {
 		setRefreshing(true);
@@ -1048,6 +1057,7 @@ export function SetupView({ sheet: initial, links, manage, back, canSwitch }) {
 				<ProfileDialog
 					manage={manage}
 					profile={sheet.website.profile}
+					settingsHref={settingsHref}
 					onClose={() => setEditing(false)}
 					onSaved={(saved) => {
 						setSheet(saved);

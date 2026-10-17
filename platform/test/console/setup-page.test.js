@@ -73,6 +73,22 @@ const world = async (name) => {
 	return { w, b, merchantId, websiteId, notes };
 };
 
+/** The Region and format section as the console sends it. @param {Record<string, unknown>} [over] */
+const region = (over = {}) => ({
+	country: 'US',
+	timeZone: 'America/New_York',
+	currency: 'USD',
+	currencies: ['USD'],
+	language: 'en-US',
+	languages: ['en-US'],
+	countriesServed: [],
+	units: { weight: 'lb', size: 'in' },
+	format: { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' },
+	phone: { callingCode: '+1', trunkPrefix: '', countries: [] },
+	address: { required: ['line1', 'city'], regions: [] },
+	...over,
+});
+
 describe('Setup page (jsdom)', () => {
 	it('shows the merchant the sheet, gathers it again, copies it, and makes, lists and revokes share links', async () => {
 		const restore = quiet();
@@ -92,8 +108,35 @@ describe('Setup page (jsdom)', () => {
 			const writeText = vi.fn(async () => undefined);
 			vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
 			b.use();
+			// the merchant has set the business facts once in the Portal's Website settings: the header shows them
+			const settings = `/v1/merchants/${merchantId}/websites/${websiteId}/settings`;
+			await b.api.request('PUT', `${settings}/region`, { version: 0, value: region() });
+			await b.api.request('PUT', `${settings}/business`, {
+				version: 1,
+				value: {
+					name: 'Example Shop',
+					otherNames: [],
+					tagline: '',
+					legalName: '',
+					taxNumber: '',
+					businessType: '',
+					email: 'hello@shop.test',
+					phone: '',
+					phones: [],
+					whatsapp: '',
+					address: { line1: '', line2: '', area: '', city: '', region: '', postalCode: '', country: '' },
+					hours: { weekly: [], exceptions: [] },
+					social: [],
+				},
+			});
 			const setup = await loaders.loadSetup(b.api, merchantId, websiteId);
 			if (!setup.ok) throw new Error('setup');
+			expect(setup.sheet.website.business).toEqual({
+				found: true,
+				name: 'Example Shop',
+				country: 'US',
+				timeZone: 'America/New_York',
+			});
 			withToasts(
 				<MerchantSetupView
 					sheet={setup.sheet}
@@ -101,10 +144,11 @@ describe('Setup page (jsdom)', () => {
 					merchantId={merchantId}
 					websiteId={websiteId}
 					back={{ href: `/websites/${websiteId}`, label: 'Back to the website' }}
+					settingsHref={`/websites/${websiteId}/settings`}
 				/>,
 			);
 			expect(shows('Setup · shop.example.com')).toBe(true);
-			expect(shows('Found: Example Shop')).toBe(true);
+			expect(shows('Set: Example Shop')).toBe(true);
 			expect(shows('https://shop.example.com')).toBe(true);
 			// a product on its own view: the one that did not answer says so, the one that did has its panel
 			await openSection('Products');
@@ -192,6 +236,7 @@ describe('Setup page (jsdom)', () => {
 					merchantId={merchantId}
 					websiteId={websiteId}
 					back={{ href: '/admin', label: 'Back to the website' }}
+					settingsHref={`/admin/merchants/${merchantId}/websites/${websiteId}/settings`}
 				/>,
 			);
 			await openSection('Share links');
@@ -293,8 +338,14 @@ describe('Setup page (jsdom)', () => {
 					merchantId={merchantId}
 					websiteId={websiteId}
 					back={{ href: `/websites/${websiteId}`, label: 'Back to the website' }}
+					settingsHref={`/websites/${websiteId}/settings`}
 				/>,
 			);
+			// the header takes the website's facts from its settings in the Portal: nothing saved there yet
+			expect(shows('Not set yet')).toBe(true);
+			expect(
+				[...document.querySelectorAll('a')].find((a) => a.textContent === 'Open Website settings')?.getAttribute('href'),
+			).toBe(`/websites/${websiteId}/settings`);
 			await openSection('Business profile');
 			expect(shows('Not filled out yet.')).toBe(true);
 			expect(shows('Fill out the business profile to see which features this website should use.')).toBe(true);
@@ -309,10 +360,10 @@ describe('Setup page (jsdom)', () => {
 			await pick('Physical goods');
 			expect(/** @type {HTMLInputElement} */ (byLabel(dialog(), 'Nothing (information only)')).checked).toBe(false);
 			await pick('No');
-			await type(byLabel(dialog(), 'Languages of the website'), 'en, english');
-			await pressDialog('Save profile');
-			expect(dialog().textContent).toContain('Not a language code: english.');
-			await type(byLabel(dialog(), 'Languages of the website'), 'en, FR');
+			// the countries and languages are the website's settings: a note with a link, no field
+			expect(dialog().textContent).toContain('The countries and languages come from the website’s settings (Region and format)');
+			expect(dialog().querySelector('a')?.getAttribute('href')).toBe(`/websites/${websiteId}/settings#region`);
+			expect(() => byLabel(dialog(), 'Languages of the website')).toThrow();
 			// own answers where the options cannot list everything, typed once each
 			const ownPays = /** @type {HTMLInputElement} */ (
 				dialog().querySelector('[aria-label="Other answers: How do shoppers pay?"]')
@@ -330,11 +381,29 @@ describe('Setup page (jsdom)', () => {
 				messages: ['sms'],
 				other: { pays: ['Mobile wallet', 'Store credit'] },
 				moving: false,
-				languages: ['en', 'fr'],
 			});
 			await until(() => shows('Business profile saved. The recommendations are updated.'));
 			expect(shows('Who answers visitors in chat?Your staff')).toBe(true);
-			expect(shows('Languages of the websiteen, fr')).toBe(true);
+			// what the merchant sets once in the website's settings joins the profile, in the one place it lives
+			await b.api.request('PUT', `/v1/merchants/${merchantId}/websites/${websiteId}/settings/region`, {
+				version: 0,
+				value: {
+					country: 'US',
+					timeZone: 'America/New_York',
+					currency: 'USD',
+					currencies: ['USD'],
+					language: 'en-US',
+					languages: ['en-US', 'fr-FR'],
+					countriesServed: ['US', 'GB'],
+					units: { weight: 'lb', size: 'in' },
+					format: { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' },
+					phone: { callingCode: '+1', trunkPrefix: '', countries: [] },
+					address: { required: ['line1', 'city'], regions: [] },
+				},
+			});
+			await press('Refresh');
+			await until(() => shows('Languages of the websiteen, fr'));
+			expect(shows('Countries you sell inUnited States, United Kingdom')).toBe(true);
 			// Notes is on and recommended; its inbox is recommended and off: the merchant asks for it
 			expect(shows('1 recommended feature is on.')).toBe(true);
 			expect(shows('Recommended, not on')).toBe(true);
@@ -365,6 +434,7 @@ describe('Setup page (jsdom)', () => {
 					merchantId={merchantId}
 					websiteId={websiteId}
 					back={{ href: '/admin', label: 'Back to the website' }}
+					settingsHref={`/admin/merchants/${merchantId}/websites/${websiteId}/settings`}
 				/>,
 			);
 			expect(shows('Features are billed by the hour while they are on.')).toBe(true);

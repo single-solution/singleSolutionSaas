@@ -280,9 +280,10 @@ export const SETUP = Object.freeze({
 	website: 'Website',
 	domain: 'Domain',
 	websiteStatus: 'Status',
-	business: 'business.json',
-	businessFound: (/** @type {string} */ name) => `Found: ${name}`,
-	businessMissing: (/** @type {string} */ domain) => `Not found at https://${domain}/.well-known/business.json`,
+	business: 'Website settings',
+	businessFound: (/** @type {string} */ name) => `Set: ${name}`,
+	businessMissing: 'Not set yet',
+	openSettings: 'Open Website settings',
 	allowedOrigins: 'Browser tokens work from',
 	testingOrigins: 'And, for testing, from',
 	testingNote: 'on any port, over http or https',
@@ -490,8 +491,7 @@ export const PROFILE = Object.freeze({
 	otherTooLong: (/** @type {number} */ most) => `Each own answer has at most ${most} characters.`,
 	yes: 'Yes',
 	no: 'No',
-	languagesHelp: 'Language codes, separated by commas, for example en, fr, es.',
-	languagesInvalid: (/** @type {string} */ codes) => `Not a language code: ${codes}.`,
+	fromSettings: 'The countries and languages come from the website’s settings (Region and format), set once for every product.',
 	/** What a tag says, as part of a sentence (`@ss/contracts/profile` tags; codes are kept as written). */
 	tag: (/** @type {string} */ tag) => {
 		const [question = '', option = ''] = tag.split('.');
@@ -1369,7 +1369,7 @@ export const WEBSITE_SETTINGS = Object.freeze({
 		addressTitle: 'Customer addresses',
 		addressHelp: 'What a customer’s address must have, and the region names you offer.',
 		required: 'Required address parts',
-		requiredHelp: 'Each country’s format adds what it needs.',
+		requiredHelp: 'Asked at checkout and in customer profiles, in every product. Each country’s format adds what it needs.',
 		parts: Object.freeze({
 			line1: 'Street address',
 			line2: 'Apartment, suite, floor',

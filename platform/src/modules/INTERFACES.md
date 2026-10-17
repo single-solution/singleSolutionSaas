@@ -59,11 +59,15 @@ download?, actor })` → `{ sheet, domain }`: every product on the website asked
   as the allowed origin, the testing hosts, each product's address (`apiBase`), browser token and script tag and
   `serverToken: { issued: true }` (never a server token). The products as gathered are kept in the
   instance's memory 60 s per website (`fresh` gathers again); Activity `website.setup_opened` or
-  `website.setup_downloaded`. Every sheet carries the website's business profile (`website.profile`,
-  `catalog_setup_profiles`, or null) and, per reachable product, the advisor's view (`core/advisor.js` over
+  `website.setup_downloaded`. The sheet's header (`website.business`: `found`, name, country, time zone) is the
+  website's settings in the Portal (`website.document`; `found` once something was saved there), not anything a
+  product answers. Every sheet carries the website's business profile (`website.profile`: the advisor's own answers
+  in `catalog_setup_profiles`, plus the countries (`region.countriesServed`) and languages (the codes of
+  `region.languages`) of the website's settings, the one place for them; null when there is nothing) and, per reachable product, the advisor's view (`core/advisor.js` over
   `@ss/contracts` `adviseFeatures`): `recommended` `[{ feature, on, because, why }]` and `notRecommended`
   `[{ feature, missing, why }]`. `setup.saveProfile({ merchantId, websiteId, profile | null, actor })` → the sheet
-  (null removes it; Activity `website.setup_profile_saved`). `setup.switchOn({ merchantId, websiteId, productId,
+  (null removes it; Activity `website.setup_profile_saved`; `countries` and `languages` are refused with 422: they are the
+  website's settings). `setup.switchOn({ merchantId, websiteId, productId,
 feature, actor })` (Owner, Support) → `{ added, sheet }`: the product (on the website, else 404) is asked to switch
   the feature on with what it needs (`POST <baseUrl>/v1/blueprint/features?websiteId=` `{ features, admin: { id,
 name, role } }`, signed, 10 s); it reports the switch like its Features page (`acceptFeatures`, Activity
@@ -148,6 +152,9 @@ website (settings-ownership design, steps 2–4).
 'settings'`) for every product on the website; a product that cannot be reached never fails the save.
 - `changes({ merchantId, websiteId, viewer })` → `{ items: [{ at, section, version, changed, who }] }`: Recent changes,
   newest first, field names only; an admin is shown to a merchant under the Branding name.
+- `document(websiteId)` → the saved document (an empty one, version 0, until the first save), for the Portal's own parts
+  (not scoped to a merchant: the caller has checked the website): the Setup sheet's header and the advisor's countries and
+  languages.
 - `versionOf(websiteId)` → the save counter (0: none yet), which the status answer carries as `settingsVersion`.
 - `forProduct({ productId, websiteId, since })` → `{ version, settings }`: `settings` is the document when `version >
 since`, else null. Only for an active website that has the product (404 `website_not_found` otherwise).

@@ -62,6 +62,39 @@ const setUp = async (name) => {
 	return { h, owner, notes, chat, m, w1: String(w1), w2: String(w2), base };
 };
 
+/** The Region and format section as the console sends it. @param {Record<string, unknown>} [over] */
+const region = (over = {}) => ({
+	country: 'US',
+	timeZone: 'America/New_York',
+	currency: 'USD',
+	currencies: ['USD'],
+	language: 'en-US',
+	languages: ['en-US'],
+	countriesServed: [],
+	units: { weight: 'lb', size: 'in' },
+	format: { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' },
+	phone: { callingCode: '+1', trunkPrefix: '', countries: [] },
+	address: { required: ['line1', 'city'], regions: [] },
+	...over,
+});
+
+/** The Business section with a name. */
+const business = () => ({
+	name: 'Example Shop',
+	otherNames: [],
+	tagline: '',
+	legalName: '',
+	taxNumber: '',
+	businessType: '',
+	email: 'hello@shop.test',
+	phone: '',
+	phones: [],
+	whatsapp: '',
+	address: { line1: '', line2: '', area: '', city: '', region: '', postalCode: '', country: '' },
+	hours: { weekly: [], exceptions: [] },
+	social: [],
+});
+
 describe('Setup sheet', () => {
 	it('gathers every product of the website for the merchant and the admin, with the website facts and never a server token', async () => {
 		const { h, owner, notes, chat, m, w1, base } = await setUp('setup_sheet');
@@ -77,7 +110,8 @@ describe('Setup sheet', () => {
 				id: w1,
 				domain: 'shop.example.com',
 				status: 'active',
-				business: { found: true, name: 'Example Shop', country: 'US', timeZone: 'America/New_York' },
+				// nothing saved in the website's settings yet
+				business: { found: false, name: null, country: null, timeZone: null },
 			},
 			access: {
 				allowedOrigins: ['https://shop.example.com'],
@@ -112,6 +146,16 @@ describe('Setup sheet', () => {
 		const opened = await h.activity('website.setup_opened');
 		expect(opened.map((entry) => entry.actor.type).sort()).toEqual(['admin', 'merchant']);
 		expect(opened[0]?.target).toMatchObject({ type: 'website', id: w1, websiteId: w1 });
+		// the header takes the website's facts from its settings in the Portal, as the merchant saves them
+		const settings = `${base}/settings`;
+		expect((await m.client.put(`${settings}/region`, { version: 0, value: region() })).status).toBe(200);
+		expect((await m.client.put(`${settings}/business`, { version: 1, value: business() })).status).toBe(200);
+		expect((await m.client.get(`${base}/setup`)).json.website.business).toEqual({
+			found: true,
+			name: 'Example Shop',
+			country: 'US',
+			timeZone: 'America/New_York',
+		});
 		// the status the website's products have: a suspended merchant's are suspended
 		expect((await owner.post(`/v1/admin/merchants/${m.merchantId}/suspend`, { reason: 'Checks' })).status).toBe(200);
 		expect((await owner.get(`${base}/setup?fresh=1`)).json.website.status).toBe('suspended');
@@ -174,12 +218,11 @@ describe('business profile and advisor', () => {
 			chat: ['people'],
 			sells: ['digital', 'physical'],
 			delivers: [],
-			countries: ['US', 'CA'],
 		});
 		expect(saved.status).toBe(200);
 		expect(validateBlueprint(saved.json).ok).toBe(true);
 		// unanswered questions are left out; options in the order people see them
-		expect(saved.json.website.profile).toEqual({ sells: ['physical', 'digital'], chat: ['people'], countries: ['US', 'CA'] });
+		expect(saved.json.website.profile).toEqual({ sells: ['physical', 'digital'], chat: ['people'] });
 		const part = saved.json.products.find((/** @type {any} */ p) => p.productId === 'notes');
 		expect(part.recommended).toEqual([
 			{ feature: 'notes', on: true, because: ['chat.people'], why: 'Your staff answer visitors in chat.' },
@@ -190,6 +233,17 @@ describe('business profile and advisor', () => {
 		const [entry] = await h.activity('website.setup_profile_saved');
 		expect(entry?.actor.type).toBe('merchant');
 		expect(entry?.after).toEqual({ profile: saved.json.website.profile });
+
+		// the countries and languages are the website's settings (Region and format), added to the profile
+		const settings = `${base}/settings/region`;
+		const served = region({ language: 'en-GB', languages: ['en-GB', 'fr-CA'], countriesServed: ['US', 'CA'] });
+		expect((await m.client.put(settings, { version: 0, value: served })).status).toBe(200);
+		expect((await m.client.get(`${base}/setup`)).json.website.profile).toEqual({
+			sells: ['physical', 'digital'],
+			chat: ['people'],
+			countries: ['US', 'CA'],
+			languages: ['en', 'fr'],
+		});
 
 		// the admin changes it: notes is on although the profile now rules it out
 		const ruled = await owner.put(`${base}/setup/profile`, { chat: ['none'], messages: ['sms'], signIn: ['email'] });
@@ -207,11 +261,31 @@ describe('business profile and advisor', () => {
 		const link = await m.client.post(`${base}/setup/links`, { values: false });
 		const key = String(link.json.url).split('#key=')[1];
 		const copy = (await h.api.call('POST', '/v1/setup/shared', { body: { key } })).json;
-		expect(copy.website.profile).toEqual({ signIn: ['email'], chat: ['none'], messages: ['sms'] });
+		expect(copy.website.profile).toEqual({
+			signIn: ['email'],
+			chat: ['none'],
+			messages: ['sms'],
+			countries: ['US', 'CA'],
+			languages: ['en', 'fr'],
+		});
 		expect(copy.products[1].notRecommended).toHaveLength(1);
-		// clearing every answer removes it
-		expect((await m.client.put(`${base}/setup/profile`, {})).json.website.profile).toBeNull();
+		// clearing every answer removes the advisor's own; the website's settings stay in the sheet
+		expect((await m.client.put(`${base}/setup/profile`, {})).json.website.profile).toEqual({
+			countries: ['US', 'CA'],
+			languages: ['en', 'fr'],
+		});
 		expect(await h.db.collection('catalog_setup_profiles').countDocuments()).toBe(0);
+		// a profile saved before the countries and languages moved keeps only its own answers
+		await h.db.collection('catalog_setup_profiles').insertOne({
+			_id: /** @type {any} */ (base.split('/').pop()),
+			merchantId: m.merchantId,
+			profile: { chat: ['ai'], countries: ['FR'], languages: ['de'] },
+		});
+		expect((await m.client.get(`${base}/setup`)).json.website.profile).toEqual({
+			chat: ['ai'],
+			countries: ['US', 'CA'],
+			languages: ['en', 'fr'],
+		});
 	});
 
 	it('refuses answers it does not know, none with other answers, and other merchants', async () => {
@@ -226,6 +300,18 @@ describe('business profile and advisor', () => {
 			const res = await m.client.put(`${base}/setup/profile`, body);
 			expect(codeOf(res)).toEqual([422, 'validation_failed']);
 			expect(res.json.errors[0].path).toBe(path);
+		}
+		// the countries and languages are the website's settings, not a second place
+		for (const [body, path] of /** @type {Array<[unknown, string]>} */ ([
+			[{ countries: ['US'] }, '/countries'],
+			[{ languages: ['en'] }, '/languages'],
+		])) {
+			const res = await m.client.put(`${base}/setup/profile`, body);
+			expect(codeOf(res)).toEqual([422, 'validation_failed']);
+			expect(res.json.errors[0]).toEqual({
+				path,
+				message: 'is set in Website settings › Region and format, not in the profile',
+			});
 		}
 		const other = await h.merchant('other@shop.test', []);
 		expect(codeOf(await other.client.put(`${base}/setup/profile`, { chat: ['ai'] }))).toEqual([403, 'forbidden']);
@@ -335,6 +421,9 @@ describe('business profile and advisor', () => {
 			errors: [{ path: '/delivers', message: 'none stands alone' }],
 		});
 		expect(parseProfile({})).toEqual({ ok: true, value: null });
+		// countries and languages are the website's settings: an empty answer is nothing, a given one is refused
+		expect(parseProfile({ countries: [], languages: [] })).toEqual({ ok: true, value: null });
+		expect(parseProfile({ languages: ['en'] })).toMatchObject({ ok: false, errors: [{ path: '/languages' }] });
 		expect(parseProfile([])).toMatchObject({ ok: false });
 		const features = [
 			{ key: 'cod', on: false, recommendFor: ['pays.cod+countries.many', 'languages.many'] },
