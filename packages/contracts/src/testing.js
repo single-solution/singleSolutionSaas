@@ -70,13 +70,6 @@ export const productBlueprint = () => ({
 	version: '1.0.0',
 	status: 'active',
 	docs: { guide: 'https://notes.example.dev/docs', openapi: null },
-	business: {
-		found: true,
-		fetchedAt: '2026-10-01T00:00:00Z',
-		name: 'Example Shop',
-		country: 'US',
-		timeZone: 'America/New_York',
-	},
 	install: { scriptUrl: 'https://notes.example.dev/widget.js', scriptLoading: 'async', installed: false, lastSeenAt: null },
 	features: [
 		{

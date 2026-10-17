@@ -169,12 +169,25 @@ export const isWebsiteSettingsPath = (path) => typeof path === 'string' && PATH_
  * True when a value counts as not set: empty text, an empty list or object. A number or yes/no is always set.
  * @param {unknown} value
  */
-const isUnset = (value) =>
+export const isUnsetWebsiteValue = (value) =>
 	value === undefined ||
 	value === null ||
 	value === '' ||
 	(Array.isArray(value) && value.length === 0) ||
 	(isObject(value) && Object.keys(value).length === 0);
+
+/**
+ * The value a dotted path names in the document (`region.currency`), `undefined` when the path leads nowhere.
+ * @param {WebsiteSettings} settings
+ * @param {string} path
+ * @returns {unknown}
+ */
+export const websiteSettingAt = (settings, path) => {
+	/** @type {unknown} */
+	let value = settings;
+	for (const key of path.split('.')) value = isObject(value) ? value[key] : undefined;
+	return value;
+};
 
 /**
  * The paths of `requires` the document leaves empty, in the order asked.
@@ -183,12 +196,30 @@ const isUnset = (value) =>
  * @returns {string[]}
  */
 export const missingWebsiteSettings = (settings, requires) =>
-	requires.filter((path) => {
-		/** @type {unknown} */
-		let value = settings;
-		for (const key of path.split('.')) value = isObject(value) ? value[key] : undefined;
-		return isUnset(value);
-	});
+	requires.filter((path) => isUnsetWebsiteValue(websiteSettingAt(settings, path)));
+
+/**
+ * The kind of value a path holds, `null` for a path that is no value of the document: `string`, `array` (a list of
+ * texts), `boolean` or `number`. A setting of a product can start from a value of its own kind only (`x-ui.defaultFrom`).
+ * @param {string} path
+ * @returns {'string' | 'array' | 'boolean' | 'number' | null}
+ */
+export const websiteSettingKind = (path) => {
+	if (!PATH_SET.has(path)) return null;
+	const sample = websiteSettingAt(emptyWebsiteSettings('web'), path);
+	if (Array.isArray(sample)) return 'array';
+	if (typeof sample === 'string') return 'string';
+	if (typeof sample === 'boolean') return 'boolean';
+	return typeof sample === 'number' ? 'number' : null;
+};
+
+/**
+ * The Portal section of the Website settings page a path belongs to (`region.currency` → `region`): the anchor the
+ * "set it in the Portal" links point to.
+ * @param {string} path
+ * @returns {WebsiteSection}
+ */
+export const websiteSectionOf = (path) => /** @type {WebsiteSection} */ (path.split('.')[0]);
 
 // ---------------------------------------------------------------------------------------------------------------
 // the checks the JSON Schema cannot make

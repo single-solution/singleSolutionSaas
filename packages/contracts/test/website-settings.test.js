@@ -10,10 +10,14 @@ import {
 	businessInfoOf,
 	emptyWebsiteSettings,
 	formatOf,
+	isUnsetWebsiteValue,
 	isWebsiteSettingsPath,
 	missingWebsiteSettings,
 	tidyWebsiteSection,
 	themeOf,
+	websiteSectionOf,
+	websiteSettingAt,
+	websiteSettingKind,
 } from '../src/website-settings.js';
 import { WEBSITE, statusResponse } from './fixtures.js';
 import { manifest } from '../src/testing.js';
@@ -284,6 +288,25 @@ describe('the website-settings document (ss.website-settings/1)', () => {
 			expect(missingWebsiteSettings(partial, ['region.currency', 'business.address.city', 'region.currencies'])).toEqual([
 				'business.address.city',
 				'region.currencies',
+			]);
+		});
+
+		it('reads a value by its path, tells its kind and its section of the Portal page', () => {
+			expect(websiteSettingAt(full(), 'region.currency')).toBe(full().region.currency);
+			expect(websiteSettingAt(full(), 'region.nothing')).toBeUndefined();
+			expect(websiteSettingKind('region.language')).toBe('string');
+			expect(websiteSettingKind('region.languages')).toBe('array');
+			expect(websiteSettingKind('team.staffPush')).toBe('boolean');
+			expect(websiteSettingKind('region.format.wholeUnits')).toBe('boolean');
+			expect(websiteSettingKind('brand.theme.radius')).toBe('number');
+			expect(websiteSettingKind('region.moon')).toBeNull();
+			expect(websiteSectionOf('region.format.locale')).toBe('region');
+			expect(websiteSectionOf('pages.signIn')).toBe('pages');
+			expect([isUnsetWebsiteValue(''), isUnsetWebsiteValue([]), isUnsetWebsiteValue(false), isUnsetWebsiteValue(0)]).toEqual([
+				true,
+				true,
+				false,
+				false,
 			]);
 		});
 

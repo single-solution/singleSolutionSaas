@@ -103,6 +103,9 @@ export const settingsMetaSchema = deepFreeze({
 						},
 						// a text that gets a Generate button: it fills in a new random key of this many characters
 						generate: { type: 'integer', minimum: 8, maximum: 128 },
+						// a setting whose first value comes from the website's settings in the Portal (a dotted path such as
+						// `region.language`): until the merchant changes it, the product uses that value
+						defaultFrom: { type: 'string', pattern: '^[a-z][A-Za-z]*(?:\\.[A-Za-z][A-Za-z0-9]*)+$', maxLength: 64 },
 						// spans the whole row of the form's field grid (`false` keeps a list or long text in one cell)
 						wide: { type: 'boolean' },
 						// shown inside the collapsed Advanced block (for settings most merchants never change)

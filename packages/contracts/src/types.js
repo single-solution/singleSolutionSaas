@@ -44,10 +44,11 @@
  * @property {unknown[]} [enum]
  * @property {string} [format]
  * @property {SettingItem} [items]
- * @property {{ widget?: string, group?: string, order?: number, placeholder?: string, labels?: 'country', wide?: boolean, advanced?: boolean, generate?: number }} [x-ui]
+ * @property {{ widget?: string, group?: string, order?: number, placeholder?: string, labels?: 'country', wide?: boolean, advanced?: boolean, generate?: number, defaultFrom?: string }} [x-ui]
  *   `labels: 'country'` shows ISO country codes by their names; `wide` sets whether it spans the whole row; `advanced`
  *   puts it in the collapsed Advanced block; `generate` gives a text a Generate button that fills in a random key of
- *   that many characters
+ *   that many characters; `defaultFrom` is a value of the website's settings in the Portal (`region.language`) the
+ *   setting takes until the merchant changes it
  */
 
 /**
@@ -196,8 +197,6 @@
  * @property {string} version
  * @property {import('./constants.js').ProductStatus} status
  * @property {{ guide: string, openapi: string | null }} docs
- * @property {{ found: boolean, fetchedAt: string | null, name: string | null, country: string | null,
- *   timeZone: string | null }} business the product's copy of business.json
  * @property {{ scriptUrl: string | null, scriptLoading: 'async' | 'blocking', installed: boolean | null,
  *   lastSeenAt: string | null, browserToken?: string, snippet?: string | null }} install `scriptLoading` from the
  *   manifest's `widgetScriptLoading`; `browserToken` and `snippet` are added by the Portal

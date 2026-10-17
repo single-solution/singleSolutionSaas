@@ -7,7 +7,7 @@
 import { ruleProblem } from './profile.js';
 import { BUILT_IN_VALUES, longValueProblem, valueNamesOf, wordsProblem } from './templates.js';
 import { isPathOrServiceUrl, isServiceUrl, isUtcTimestamp, pointer } from './internal.js';
-import { isWebsiteSettingsPath } from './website-settings.js';
+import { isWebsiteSettingsPath, websiteSettingKind } from './website-settings.js';
 import { isObject } from './util.js';
 
 /** @typedef {import('./types.js').ValidationProblem} ValidationProblem */
@@ -372,7 +372,8 @@ const checkNode = (node, path, out) => {
 /**
  * The choice hints of a setting (fixed-choices audit K3): a `labels` map names only its choices (`enum`, or the items'
  * `enum` of a list); `suggestions` fit a text or a list of texts without choices (the merchant takes one or types
- * their own); `generate` fits a text without choices.
+ * their own); `generate` fits a text without choices; `defaultFrom` names a value of the website settings of the
+ * setting's own kind.
  * @param {Record<string, any>} node
  * @param {Array<string | number>} path
  * @param {ValidationProblem[]} out
@@ -392,6 +393,31 @@ const checkHints = (node, path, out) => {
 		out.push(
 			at([...path, 'x-ui', 'generate'], RULES.settingLabels, 'generate fits a text without choices (a random key to fill in)'),
 		);
+	if (ui.defaultFrom !== undefined) {
+		const kind = websiteSettingKind(String(ui.defaultFrom));
+		const fits = {
+			string: node.type === 'string',
+			array: node.type === 'array' && node.items?.type === 'string',
+			boolean: node.type === 'boolean',
+			number: node.type === 'integer' || node.type === 'number',
+		};
+		if (kind === null)
+			out.push(
+				at(
+					[...path, 'x-ui', 'defaultFrom'],
+					RULES.websiteSettingsPath,
+					`'${ui.defaultFrom}' is not a value of the website settings`,
+				),
+			);
+		else if (!fits[kind])
+			out.push(
+				at(
+					[...path, 'x-ui', 'defaultFrom'],
+					RULES.websiteSettingsPath,
+					`'${ui.defaultFrom}' holds ${kind === 'array' ? 'a list of texts' : `a ${kind}`}: this setting is a ${node.type}`,
+				),
+			);
+	}
 	if (ui.suggestions !== undefined) {
 		const texts = node.type === 'string' || (node.type === 'array' && node.items?.type === 'string');
 		if (!texts || Array.isArray(choices))

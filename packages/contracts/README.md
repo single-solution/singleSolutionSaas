@@ -47,7 +47,7 @@ setting has `type` (`string`, `integer`, `number`, `boolean`, `array`), `title` 
 `group` (the card the setting is shown in), `order` (a whole number from 0; the settings with an order come first, ascending), `placeholder`, `labels`: `country` shows ISO country codes by name, or a map of each choice to its own words
 (labels are data, never made from a code; it names only choices), `suggestions`: values a text or a list of texts
 without choices offers while the merchant may type their own, `wide`: spans the whole row of the form or, `false`,
-keeps a list or long text in one cell). Keywords must fit the type, lists need `items`, defaults and enum values must
+keeps a list or long text in one cell, `defaultFrom`: a value of the website's settings in the Portal such as `region.language`, of the setting's own kind, that the setting takes until the merchant changes it). Keywords must fit the type, lists need `items`, defaults and enum values must
 be valid (`settingLabels` for a label of no choice or suggestions where they do not fit).
 
 - `checkSettingsSchema(schema)` → problems (empty when valid).

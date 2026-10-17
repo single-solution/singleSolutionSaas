@@ -63,6 +63,15 @@ describe('checkSettingsSchema', () => {
 		expect(checkSettingsRules(key)).toEqual([]);
 		key.properties.greeting['x-ui'] = { generate: 4 };
 		expect(checkSettingsSchema(key)).not.toEqual([]);
+		// a setting may start from a value of the website's settings in the Portal (of its own kind)
+		const from = schema();
+		from.properties.greeting['x-ui'] = { defaultFrom: 'region.language' };
+		from.properties.pages['x-ui'] = { defaultFrom: 'region.languages' };
+		from.properties.enabledNudges['x-ui'] = { defaultFrom: 'team.staffPush' };
+		expect(checkSettingsSchema(from)).toEqual([]);
+		expect(checkSettingsRules(from)).toEqual([]);
+		from.properties.greeting['x-ui'] = { defaultFrom: 'Region' };
+		expect(checkSettingsSchema(from)).not.toEqual([]);
 		for (const wide of [true, false]) {
 			const value = schema();
 			value.properties.pages['x-ui'] = { wide };
@@ -223,6 +232,24 @@ describe('checkSettingsSchema', () => {
 			(s) => (s.properties.tone['x-ui'] = { generate: 32 }),
 			'/properties/tone/x-ui/generate',
 			RULES.settingLabels,
+		],
+		[
+			'defaultFrom that is no website setting',
+			(s) => (s.properties.greeting['x-ui'] = { defaultFrom: 'region.nothing' }),
+			'/properties/greeting/x-ui/defaultFrom',
+			RULES.websiteSettingsPath,
+		],
+		[
+			'defaultFrom of another kind (a list into a text)',
+			(s) => (s.properties.greeting['x-ui'] = { defaultFrom: 'region.languages' }),
+			'/properties/greeting/x-ui/defaultFrom',
+			RULES.websiteSettingsPath,
+		],
+		[
+			'defaultFrom of a text into a number',
+			(s) => (s.properties.ratio['x-ui'] = { defaultFrom: 'region.language' }),
+			'/properties/ratio/x-ui/defaultFrom',
+			RULES.websiteSettingsPath,
 		],
 		[
 			'generate on a number',

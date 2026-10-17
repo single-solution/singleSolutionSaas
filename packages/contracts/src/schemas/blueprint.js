@@ -2,7 +2,7 @@
  * The website Setup sheet, `ss.blueprint/1` (owner request 2026-10-14; design `audit/design/website-blueprint.md`).
  *
  * - **Product blueprint** (each product's `GET /v1/blueprint?websiteId=`, a Portal call answered by `@ss/app-kit`):
- *   the product's part for one website: `{ productId, name, version, status, docs, business, install, features,
+ *   the product's part for one website: `{ productId, name, version, status, docs, install, features,
  *   shared, connections, widgets, staffPermissions, events, checklist, summaries, build }`. Features carry the
  *   business profile answers they suit (`recommendFor`, from the manifest) and their settings with values
  *   (`default: true` while the website has not saved its own; a value holding a secret saved in the website's
@@ -95,18 +95,6 @@ const productProperties = {
 		required: ['guide', 'openapi'],
 		additionalProperties: false,
 		properties: { guide: ref('url'), openapi: nullable(ref('url')) },
-	},
-	business: {
-		type: 'object',
-		required: ['found', 'fetchedAt', 'name', 'country', 'timeZone'],
-		additionalProperties: false,
-		properties: {
-			found: { type: 'boolean' },
-			fetchedAt: nullable(ref('timestamp')),
-			name: nullable(text(200)),
-			country: nullable(ref('country')),
-			timeZone: nullable(text(64)),
-		},
 	},
 	install: {
 		type: 'object',

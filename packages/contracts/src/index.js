@@ -39,9 +39,13 @@ export {
 	businessInfoOf,
 	emptyWebsiteSettings,
 	formatOf,
+	isUnsetWebsiteValue,
 	missingWebsiteSettings,
 	tidyWebsiteSection,
 	themeOf,
+	websiteSectionOf,
+	websiteSettingAt,
+	websiteSettingKind,
 } from './website-settings.js';
 export {
 	DEFAULT_FORMAT,
