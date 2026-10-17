@@ -352,7 +352,11 @@ describe('overview and the website settings', () => {
 		expect((await asked()).requires).toEqual(['region.currency']);
 		// the first feature on: its need joins, once
 		await switchOn(['notes']);
-		expect(await asked()).toEqual({ version: 0, requires: ['region.currency', 'pages.signIn'], missing: ['region.currency', 'pages.signIn'] });
+		expect(await asked()).toEqual({
+			version: 0,
+			requires: ['region.currency', 'pages.signIn'],
+			missing: ['region.currency', 'pages.signIn'],
+		});
 		// the second feature on: its needs join, a value asked twice listed once
 		await switchOn(['notes', 'inbox']);
 		expect((await asked()).requires).toEqual(['region.currency', 'pages.signIn', 'team.recipients']);

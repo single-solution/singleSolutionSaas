@@ -173,8 +173,8 @@ Data and files), and the keys between the website's products (Between your produ
 a console answer: a person sees only `set` and how each product's own test of it went.
 
 - `connectionsView({ merchantId, websiteId })` → `{ version, database: { set, setAt }, storage: { set, setAt }, products:
-  [{ productId, name, database: { name, overridden, state } | null, storage: { folder, required, state } | null }],
-  links: [{ caller, callee, state: on|idle|off, scopes: [{ scope, name, description }], delivered }] }` (`state` of a
+[{ productId, name, database: { name, overridden, state } | null, storage: { folder, required, state } | null }],
+links: [{ caller, callee, state: on|idle|off, scopes: [{ scope, name, description }], delivered }] }` (`state` of a
   connection: `not_set`, `waiting`, `connected`, `test_failed`). The routes add `can: { write }`.
 - `saveConnection({ merchantId, websiteId, name, value, names?, actor, requestId, ip })`, `removeConnection(…)`:
   `name` is `database` or `storage`; the value is checked (a MongoDB string; a bucket with its region and keys), sealed
@@ -187,7 +187,7 @@ a console answer: a person sees only `set` and how each product's own test of it
   `GET /v1/product/websites/:websiteId/connections`, signed by the product; only what its manifest `needs`, with its
   own database name and storage folder. Fetches that carry secrets are limited to 6 an hour per product and website
   (429) and each is logged (`website.connections_delivered`). `reportConnectionHealth({ productId, websiteId, name,
-  version, ok, message? })` is the product's report of its own test (`PUT …/connections/:name/health`); the Portal never
+version, ok, message? })` is the product's report of its own test (`PUT …/connections/:name/health`); the Portal never
   opens the merchant's database or bucket.
 - `connectionsVersionOf(websiteId)` → the one counter of connections and links, carried by the status answer as
   `connectionsVersion` (a product fetches again when it is ahead of the copy it holds).
@@ -205,19 +205,19 @@ a console answer: a person sees only `set` and how each product's own test of it
 
 ## Product API routes (`/v1/product/*`, `auth: 'product'`)
 
-| Route                                          | Module   |
-| ---------------------------------------------- | -------- |
-| `PUT /v1/product/prices`                       | commerce |
-| `PUT /v1/product/websites/:websiteId/features` | commerce |
-| `GET /v1/product/websites/:websiteId/status`   | commerce |
-| `GET /v1/product/websites/:websiteId/settings` | website  |
-| `GET /v1/product/websites/:websiteId/connections` | website |
-| `PUT /v1/product/websites/:websiteId/connections/:name/health` | website |
-| `GET /v1/product/websites?cursor=`             | catalog  |
-| `GET /v1/product/revocations?since=`           | identity |
-| `GET /v1/product/directory`                    | catalog  |
-| `GET /v1/product/directory/:productId`         | catalog  |
-| `POST /v1/product/launch/consume`              | catalog  |
+| Route                                                          | Module   |
+| -------------------------------------------------------------- | -------- |
+| `PUT /v1/product/prices`                                       | commerce |
+| `PUT /v1/product/websites/:websiteId/features`                 | commerce |
+| `GET /v1/product/websites/:websiteId/status`                   | commerce |
+| `GET /v1/product/websites/:websiteId/settings`                 | website  |
+| `GET /v1/product/websites/:websiteId/connections`              | website  |
+| `PUT /v1/product/websites/:websiteId/connections/:name/health` | website  |
+| `GET /v1/product/websites?cursor=`                             | catalog  |
+| `GET /v1/product/revocations?since=`                           | identity |
+| `GET /v1/product/directory`                                    | catalog  |
+| `GET /v1/product/directory/:productId`                         | catalog  |
+| `POST /v1/product/launch/consume`                              | catalog  |
 
 Console routes (`/v1/merchants/...`, `/v1/admin/...`, `/v1/me`, `/v1/auth/...`) belong to the module owning the entity.
 The Setup sheet routes are the catalog's (it calls the products): `GET /v1/merchants/:merchantId/websites/:websiteId/setup`

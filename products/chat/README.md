@@ -43,12 +43,12 @@ activity copy; each call writes one activity entry with its counts.
 
 Exactly three variables, and one optional while the encryption key changes (`.env.example`; nothing else is read):
 
-| Variable                  | What it is                                                                                                                                                                                              |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MONGODB_URI`             | this product's own database (never a merchant database)                                                                                                                                                 |
-| `CONNECT_SECRET`          | random, at least 32 characters; typed once into Portal → Products → Add product                                                                                                                         |
-| `ENCRYPTION_KEY`          | random, at least 32 characters, different for each deployable: seals the Connections (the database address and storage keys from the Portal, AI keys, the link keys to other products) and the tool signing secret, and signs attachment links   |
-| `ENCRYPTION_KEY_PREVIOUS` | optional, only while `ENCRYPTION_KEY` is changed: the old key, so sealed values and attachment links keep opening; removed once the dashboard's Re-seal (Prices → Encryption key, Owner) says it can be |
+| Variable                  | What it is                                                                                                                                                                                                                                     |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MONGODB_URI`             | this product's own database (never a merchant database)                                                                                                                                                                                        |
+| `CONNECT_SECRET`          | random, at least 32 characters; typed once into Portal → Products → Add product                                                                                                                                                                |
+| `ENCRYPTION_KEY`          | random, at least 32 characters, different for each deployable: seals the Connections (the database address and storage keys from the Portal, AI keys, the link keys to other products) and the tool signing secret, and signs attachment links |
+| `ENCRYPTION_KEY_PREVIOUS` | optional, only while `ENCRYPTION_KEY` is changed: the old key, so sealed values and attachment links keep opening; removed once the dashboard's Re-seal (Prices → Encryption key, Owner) says it can be                                        |
 
 ## Local development
 

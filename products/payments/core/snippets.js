@@ -74,7 +74,7 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		`  -d '${JSON.stringify({ user: { id: 'u_1', name: 'Sam Staff', email: 'sam@example.com' }, permissions, origin: 'https://admin.example.com' })}'`,
 	].join('\n');
 	const create = [
-		'// your server (Node.js 18+); Ecommerce does the same through the Portal's link to Payments',
+		'// your server (Node.js 18+); Ecommerce does the same through the Portal link to Payments',
 		`const response = await fetch('${base}/v1/payments', {`,
 		"  method: 'POST',",
 		'  headers: {',

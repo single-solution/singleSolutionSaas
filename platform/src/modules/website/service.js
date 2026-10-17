@@ -99,7 +99,9 @@ export const createWebsiteService = (ctx) => {
 	 * @returns {Promise<Array<{ productId: string, name: string, requires: string[], missing: string[] }>>}
 	 */
 	const readinessOf = async (document) => {
-		const onSite = /** @type {Array<{ productId: string, on: string[] }>} */ (await commerce().productsOnWebsite(document.websiteId));
+		const onSite = /** @type {Array<{ productId: string, on: string[] }>} */ (
+			await commerce().productsOnWebsite(document.websiteId)
+		);
 		const found = await Promise.all(
 			onSite.map(async ({ productId, on }) => {
 				// a product that cannot be read is left out: the readiness line never fails a read or a save

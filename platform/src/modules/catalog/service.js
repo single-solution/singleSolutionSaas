@@ -188,7 +188,9 @@ export const createCatalogService = (ctx, options = {}) => {
 			websiteSettingsRequires: [...(manifest.websiteSettings?.requires ?? [])],
 			// what each feature asks the website settings to say, for the readiness line (counted while the feature is on)
 			featureRequires: Object.fromEntries(
-				manifest.features.filter((feature) => (feature.requires ?? []).length > 0).map((feature) => [feature.key, [...(feature.requires ?? [])]]),
+				manifest.features
+					.filter((feature) => (feature.requires ?? []).length > 0)
+					.map((feature) => [feature.key, [...(feature.requires ?? [])]]),
 			),
 			// what the product needs of the website's connections (a database, no storage unless it says) and its links
 			needs: manifest.needs ?? { database: true, storage: /** @type {const} */ ('none') },

@@ -58,7 +58,7 @@ export const grantedOf = (user, productId, wanted) => wanted.filter((key) => gra
 
 /** What a refused sign-in tells the merchant's server (the failure code of `verifyIdentityToken`). @type {Record<string, string>} */
 export const SIGN_IN_DETAIL = Object.freeze({
-	accounts_not_connected: "Accounts is not on this website: add it in the Portal so this product can take sign-ins.",
+	accounts_not_connected: 'Accounts is not on this website: add it in the Portal so this product can take sign-ins.',
 	audience: 'The sign-in was made for another website.',
 	expired: 'The sign-in has expired. Renew it at Accounts and send the new one.',
 	too_old: 'The sign-in is too old. Renew it at Accounts and send the new one.',

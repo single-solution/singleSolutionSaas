@@ -228,7 +228,10 @@ describe('tokens', () => {
 			await expectCode(check(clock, server.token), 'invalid_token');
 			await expectCode(check(clock, await signRaw({ ...server.claims, kind: 'link' })), 'invalid_token');
 			// a caller claim on a server token, a link without one, or a link that names the callee as the caller
-			await expectCode(verify(clock, await signRaw({ ...server.claims, caller: 'chat' }), { productId: 'payments' }), 'invalid_token');
+			await expectCode(
+				verify(clock, await signRaw({ ...server.claims, caller: 'chat' }), { productId: 'payments' }),
+				'invalid_token',
+			);
 			const { claims } = await link(clock);
 			await expectCode(check(clock, await signRaw({ ...claims, caller: undefined })), 'invalid_token');
 			await expectCode(check(clock, await signRaw({ ...claims, caller: 'payments' })), 'invalid_token');
