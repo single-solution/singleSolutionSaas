@@ -64,10 +64,22 @@
  * @property {string} name
  * @property {string} description one line
  * @property {string[]} dependsOn keys of the features it needs
+ * @property {string[]} [requires] what the feature needs the website's settings (Portal) to say, as dotted paths into the
+ *   document (`pages.signIn`); empty or absent: nothing
  * @property {SettingsSchema} settings
  * @property {string[]} [recommendFor] rules of business profile tags the feature suits (`@ss/contracts/profile`)
  */
 
+/**
+ * What a product offers other products on the website: one scope (`payments.create`) with words for the Portal's table.
+ * @typedef {{ scope: string, name: string, description: string }} ManifestLinkOffer
+ */
+/**
+ * What a product needs from another product on the website: the scopes it uses there and the features that use them
+ * (the Portal grants the scopes while one of the features is on; none listed: always). `optional`: the product works
+ * without the link.
+ * @typedef {{ product: string, scopes: string[], features: string[], optional?: boolean }} ManifestLinkNeed
+ */
 /** @typedef {{ key: string, name: string, feature: string }} ManifestPermission */
 /** @typedef {{ key: string, feature: string | string[], kind: 'visitor' | 'admin' }} ManifestWidget */
 
@@ -86,6 +98,9 @@
  * @property {ManifestWidget[]} widgets
  * @property {{ requires: string[] }} [websiteSettings] what the product needs the website's settings (Portal) to say, as
  *   dotted paths into the document (`region.currency`, `business.address.city`)
+ * @property {{ database: boolean, storage: 'none' | 'optional' | 'required' }} [needs] what the product needs of the
+ *   website's connections (default: a database, no storage)
+ * @property {{ offers?: ManifestLinkOffer[], needs?: ManifestLinkNeed[] }} [links] the links to other products
  */
 
 /**
@@ -117,6 +132,8 @@
  *   the website again (every feature off): a product whose switches are older turns them off
  * @property {number} [settingsVersion] the Portal's saves of the website's settings (0: none yet); a product holding an
  *   older copy fetches the new one
+ * @property {number} [connectionsVersion] the Portal's changes to the website's connections and links (0: none yet); a
+ *   product holding an older copy fetches the new one
  * @property {string} validUntil ISO-8601 UTC; cache at most until then
  */
 
@@ -127,6 +144,19 @@
 /** @typedef {{ items: WebsiteRow[], cursor: string | null }} WebsitesPage */
 /** @typedef {{ tokenIds: string[], cursor: string | null }} Revocations */
 /** @typedef {{ baseUrl: string }} Directory */
+/**
+ * What a product fetches from `GET /v1/product/websites/:id/connections`: the website's database (the same connection
+ * string for every product, with the product's own `dbName`), its storage, and the product's links (`out`: keys to call
+ * other products with and what each may do; `in`: who may call this product and with which scopes). Secrets: sealed by
+ * the product on arrival, never served back.
+ * @typedef {object} WebsiteConnections
+ * @property {number} version
+ * @property {{ uri: string, dbName: string } | null} database
+ * @property {{ bucket: string, region: string, accessKeyId: string, secretAccessKey: string, endpoint?: string,
+ *   forcePathStyle?: boolean, prefix?: string } | null} storage
+ * @property {{ out: Array<{ to: string, token: string, scopes: string[] }>, in: Array<{ from: string, scopes: string[] }> }} links
+ */
+/** A product's report of how a delivered connection worked: `PUT …/connections/:name/health`. @typedef {{ version: number, ok: boolean, message?: string }} ConnectionHealth */
 /** @typedef {{ items: Array<{ productId: string, name: string, baseUrl: string }> }} DirectoryList every connected product, by id */
 
 /**

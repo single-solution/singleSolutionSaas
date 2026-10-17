@@ -6,6 +6,7 @@
 import { deepFreeze } from '../util.js';
 import { SCHEMA_IDS } from './schema-ids.js';
 import { MERCHANT_STATUSES, PRODUCT_STATUSES } from '../constants.js';
+import { DATABASE_NAME_PATTERN, LINK_SCOPE_PATTERN } from '../connections.js';
 
 /** Regular-expression sources reused by schemas and semantic checks. */
 export const PATTERNS = Object.freeze({
@@ -49,6 +50,8 @@ export const commonSchema = deepFreeze({
 		opaqueId: { type: 'string', pattern: PATTERNS.opaqueId },
 		hostname: { type: 'string', maxLength: 253, pattern: PATTERNS.hostname },
 		jsonPointer: { type: 'string', maxLength: 1024, pattern: PATTERNS.jsonPointer },
+		linkScope: { type: 'string', maxLength: 140, pattern: LINK_SCOPE_PATTERN },
+		databaseName: { type: 'string', pattern: DATABASE_NAME_PATTERN },
 		name: { type: 'string', minLength: 1, maxLength: 120 },
 		description: { type: 'string', minLength: 1, maxLength: 500 },
 		url: { type: 'string', minLength: 1, maxLength: 2048 },

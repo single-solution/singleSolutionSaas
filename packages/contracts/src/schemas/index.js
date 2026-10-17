@@ -6,12 +6,14 @@ import { commonSchema } from './common.js';
 import { settingsMetaSchema } from './settings-schema.js';
 import { manifestSchema } from './manifest.js';
 import {
+	connectionHealthSchema,
 	directoryListSchema,
 	directorySchema,
 	featureReportSchema,
 	priceReportSchema,
 	revocationsSchema,
 	statusResponseSchema,
+	websiteConnectionsSchema,
 	websitesPageSchema,
 } from './product-api.js';
 import { activityCopySchema, dataRightsRequestSchema, messageDefaultsSchema } from './cross-product.js';
@@ -44,6 +46,8 @@ export const ALL_SCHEMAS = deepFreeze([
 	revocationsSchema,
 	directorySchema,
 	directoryListSchema,
+	websiteConnectionsSchema,
+	connectionHealthSchema,
 	dataRightsRequestSchema,
 	activityCopySchema,
 	messageDefaultsSchema,

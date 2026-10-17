@@ -105,6 +105,8 @@ const result = (value, problems) =>
  * @property {(value: unknown) => ValidationResult<import('./types.js').Revocations>} validateRevocations
  * @property {(value: unknown) => ValidationResult<import('./types.js').Directory>} validateDirectory
  * @property {(value: unknown) => ValidationResult<import('./types.js').DirectoryList>} validateDirectoryList
+ * @property {(value: unknown) => ValidationResult<import('./types.js').WebsiteConnections>} validateWebsiteConnections
+ * @property {(value: unknown) => ValidationResult<import('./types.js').ConnectionHealth>} validateConnectionHealth
  * @property {(value: unknown) => ValidationResult<import('./types.js').DataRightsRequest>} validateDataRightsRequest
  * @property {(value: unknown) => ValidationResult<import('./types.js').ActivityCopy>} validateActivityCopy
  * @property {(value: unknown) => ValidationResult<import('./types.js').MessageDefaults>} validateMessageDefaults
@@ -269,6 +271,10 @@ export const createValidator = ({ schemas = [] } = {}) => {
 		validateRevocations: /** @type {Validator['validateRevocations']} */ (validator(SCHEMA_IDS.revocations)),
 		validateDirectory: validator(SCHEMA_IDS.directory, checkDirectory),
 		validateDirectoryList: validator(SCHEMA_IDS.directoryList, checkDirectoryList),
+		validateWebsiteConnections: /** @type {Validator['validateWebsiteConnections']} */ (
+			validator(SCHEMA_IDS.websiteConnections)
+		),
+		validateConnectionHealth: /** @type {Validator['validateConnectionHealth']} */ (validator(SCHEMA_IDS.connectionHealth)),
 		validateDataRightsRequest: /** @type {Validator['validateDataRightsRequest']} */ (validator(SCHEMA_IDS.dataRightsRequest)),
 		validateActivityCopy: validator(SCHEMA_IDS.activityCopy, checkActivityCopy),
 		validateMessageDefaults: validator(SCHEMA_IDS.messageDefaults, checkMessageDefaults),
@@ -320,6 +326,10 @@ export const validateRevocations = (value) => getDefaultValidator().validateRevo
 export const validateDirectory = (value) => getDefaultValidator().validateDirectory(value);
 /** @param {unknown} value */
 export const validateDirectoryList = (value) => getDefaultValidator().validateDirectoryList(value);
+/** @param {unknown} value */
+export const validateWebsiteConnections = (value) => getDefaultValidator().validateWebsiteConnections(value);
+/** @param {unknown} value */
+export const validateConnectionHealth = (value) => getDefaultValidator().validateConnectionHealth(value);
 /** @param {unknown} value */
 export const validateDataRightsRequest = (value) => getDefaultValidator().validateDataRightsRequest(value);
 /** @param {unknown} value */

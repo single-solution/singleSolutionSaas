@@ -14,6 +14,9 @@ import { recommendForSchema } from './profile.js';
 /** How a website loads a product's widget script: `async` (the default) or `blocking` (in page order). */
 const WIDGET_SCRIPT_LOADING = Object.freeze(/** @type {const} */ (['async', 'blocking']));
 
+/** How much a product needs the website's storage connection. */
+const STORAGE_NEEDS = Object.freeze(/** @type {const} */ (['none', 'optional', 'required']));
+
 /** Widget kinds. */
 const WIDGET_KINDS = Object.freeze(/** @type {const} */ (['visitor', 'admin']));
 
@@ -43,6 +46,47 @@ export const manifestSchema = deepFreeze({
 			additionalProperties: false,
 			properties: { requires: { type: 'array', maxItems: 20, items: { type: 'string', maxLength: 64 } } },
 		},
+		// what the product needs of the website's connections (Portal › Website settings › Data and files): a database and a
+		// bucket. A product that says nothing needs a database and no storage
+		needs: {
+			type: 'object',
+			required: ['database', 'storage'],
+			additionalProperties: false,
+			properties: { database: { type: 'boolean' }, storage: { enum: [...STORAGE_NEEDS] } },
+		},
+		// the links to other products on the website: what this product offers them and what it needs from them
+		links: {
+			type: 'object',
+			additionalProperties: false,
+			properties: {
+				offers: {
+					type: 'array',
+					maxItems: 40,
+					items: {
+						type: 'object',
+						required: ['scope', 'name', 'description'],
+						additionalProperties: false,
+						properties: { scope: ref('linkScope'), name: ref('name'), description: ref('description') },
+					},
+				},
+				needs: {
+					type: 'array',
+					maxItems: 20,
+					items: {
+						type: 'object',
+						required: ['product', 'scopes', 'features'],
+						additionalProperties: false,
+						properties: {
+							product: ref('productId'),
+							scopes: { type: 'array', minItems: 1, maxItems: 40, uniqueItems: true, items: ref('linkScope') },
+							// the features that use the link: the scopes are granted while one is on (none listed: always)
+							features: ref('featureKeys'),
+							optional: { type: 'boolean' },
+						},
+					},
+				},
+			},
+		},
 		widgetScriptLoading: { enum: [...WIDGET_SCRIPT_LOADING] },
 		docsUrl: ref('url'),
 		features: {
@@ -58,6 +102,9 @@ export const manifestSchema = deepFreeze({
 					name: ref('name'),
 					description: ref('description'),
 					dependsOn: ref('featureKeys'),
+					// what the feature needs the website's settings (Portal) to say, as dotted paths (`pages.signIn`): the product's
+					// setup steps link to the Portal while one is empty
+					requires: { type: 'array', maxItems: 20, items: { type: 'string', maxLength: 64 } },
 					settings: { $ref: SCHEMA_IDS.settingsSchema },
 					recommendFor: recommendForSchema,
 				},

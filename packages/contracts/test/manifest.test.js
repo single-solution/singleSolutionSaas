@@ -125,6 +125,102 @@ describe('validateManifest', () => {
 		expectProblem(validateManifest(value), path, keyword);
 	});
 
+	describe('connections, links and what a feature requires', () => {
+		const offered = () => ({
+			scope: 'notes.read',
+			name: 'Read notes',
+			description: 'Other products read the notes of this website.',
+		});
+		it('accepts the connections a product needs, the links it offers and needs, and the website settings a feature requires', () => {
+			const value = manifest();
+			value.needs = { database: true, storage: 'optional' };
+			value.links = {
+				offers: [offered()],
+				needs: [{ product: 'accounts', scopes: ['users.read', 'keys.read'], features: ['notes'], optional: true }],
+			};
+			/** @type {any} */ (value.features[0]).requires = ['pages.signIn', 'team.recipients'];
+			expect(validateManifest(value).ok).toBe(true);
+		});
+
+		/** @type {Array<[string, (m: any) => unknown, string, string]>} */
+		const linkCases = [
+			[
+				'a storage need that is not none, optional or required',
+				(m) => (m.needs = { database: true, storage: 'yes' }),
+				'/needs/storage',
+				'enum',
+			],
+			['a need without a database answer', (m) => (m.needs = { storage: 'none' }), '/needs/database', 'required'],
+			['an offer without words', (m) => (m.links = { offers: [{ scope: 'notes.read' }] }), '/links/offers/0/name', 'required'],
+			[
+				'a scope in capitals',
+				(m) => (m.links = { offers: [{ ...offered(), scope: 'Notes.Read' }] }),
+				'/links/offers/0/scope',
+				'pattern',
+			],
+			[
+				'a need with no scope',
+				(m) => (m.links = { needs: [{ product: 'accounts', scopes: [], features: [] }] }),
+				'/links/needs/0/scopes',
+				'minItems',
+			],
+			[
+				'a scope twice in one need',
+				(m) => (m.links = { needs: [{ product: 'accounts', scopes: ['a.b', 'a.b'], features: [] }] }),
+				'/links/needs/0/scopes',
+				'uniqueItems',
+			],
+			['a link member the contract does not know', (m) => (m.links = { grants: [] }), '/links/grants', 'additionalProperties'],
+			[
+				'a scope offered twice',
+				(m) => (m.links = { offers: [offered(), offered()] }),
+				'/links/offers/1/scope',
+				RULES.duplicateKey,
+			],
+			[
+				'a link to itself',
+				(m) => (m.links = { needs: [{ product: m.id, scopes: ['a.b'], features: [] }] }),
+				'/links/needs/0/product',
+				RULES.linkProduct,
+			],
+			[
+				'a product named twice',
+				(m) =>
+					(m.links = {
+						needs: [
+							{ product: 'accounts', scopes: ['a.b'], features: [] },
+							{ product: 'accounts', scopes: ['c.d'], features: [] },
+						],
+					}),
+				'/links/needs/1/product',
+				RULES.duplicateKey,
+			],
+			[
+				'a need that names a feature the product does not have',
+				(m) => (m.links = { needs: [{ product: 'accounts', scopes: ['a.b'], features: ['nothing'] }] }),
+				'/links/needs/0/features/0',
+				RULES.unknownFeature,
+			],
+			[
+				'a requirement that is not a website setting',
+				(m) => (m.features[0].requires = ['region.nothing']),
+				'/features/0/requires/0',
+				RULES.websiteSettingsPath,
+			],
+			[
+				'a requirement named twice',
+				(m) => (m.features[0].requires = ['pages.signIn', 'pages.signIn']),
+				'/features/0/requires',
+				RULES.duplicateKey,
+			],
+		];
+		it.each(linkCases)('refuses %s', (_name, mutate, path, keyword) => {
+			const value = manifest();
+			mutate(value);
+			expectProblem(validateManifest(value), path, keyword);
+		});
+	});
+
 	it('checkManifest is empty for the fixture', () => {
 		expect(checkManifest(manifest())).toEqual([]);
 	});

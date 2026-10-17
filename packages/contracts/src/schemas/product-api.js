@@ -85,6 +85,8 @@ export const statusResponseSchema = deepFreeze({
 		featuresVersion: ref('count'),
 		// optional until every Portal sends it: the Portal's saves of the website's settings (0: none yet)
 		settingsVersion: ref('count'),
+		// optional until every Portal sends it: the Portal's changes to the website's connections and links (0: none yet)
+		connectionsVersion: ref('count'),
 		validUntil: ref('timestamp'),
 	},
 });
@@ -162,5 +164,102 @@ export const directoryListSchema = deepFreeze({
 				properties: { productId: ref('productId'), name: ref('name'), baseUrl: ref('url') },
 			},
 		},
+	},
+});
+
+const MONGODB_URI = '^mongodb(?:\\+srv)?://\\S+$';
+
+/**
+ * `GET /v1/product/websites/:websiteId/connections` answer (never cached): the website's database and storage and the
+ * product's links. A value that is not set is null.
+ */
+export const websiteConnectionsSchema = deepFreeze({
+	$schema: draft,
+	$id: SCHEMA_IDS.websiteConnections,
+	title: 'Website connections',
+	type: 'object',
+	required: ['version', 'database', 'storage', 'links'],
+	additionalProperties: false,
+	properties: {
+		version: ref('count'),
+		database: {
+			anyOf: [
+				{ type: 'null' },
+				{
+					type: 'object',
+					required: ['uri', 'dbName'],
+					additionalProperties: false,
+					properties: { uri: { type: 'string', maxLength: 4096, pattern: MONGODB_URI }, dbName: ref('databaseName') },
+				},
+			],
+		},
+		storage: {
+			anyOf: [
+				{ type: 'null' },
+				{
+					type: 'object',
+					required: ['bucket', 'region', 'accessKeyId', 'secretAccessKey'],
+					additionalProperties: false,
+					properties: {
+						bucket: { type: 'string', minLength: 1, maxLength: 255 },
+						region: { type: 'string', minLength: 1, maxLength: 64 },
+						accessKeyId: { type: 'string', minLength: 1, maxLength: 256 },
+						secretAccessKey: { type: 'string', minLength: 1, maxLength: 512 },
+						endpoint: ref('url'),
+						forcePathStyle: { type: 'boolean' },
+						prefix: { type: 'string', maxLength: 200 },
+					},
+				},
+			],
+		},
+		links: {
+			type: 'object',
+			required: ['out', 'in'],
+			additionalProperties: false,
+			properties: {
+				out: {
+					type: 'array',
+					maxItems: 20,
+					items: {
+						type: 'object',
+						required: ['to', 'token', 'scopes'],
+						additionalProperties: false,
+						properties: {
+							to: ref('productId'),
+							token: { type: 'string', minLength: 1, maxLength: 4096 },
+							scopes: { type: 'array', maxItems: 40, uniqueItems: true, items: ref('linkScope') },
+						},
+					},
+				},
+				in: {
+					type: 'array',
+					maxItems: 20,
+					items: {
+						type: 'object',
+						required: ['from', 'scopes'],
+						additionalProperties: false,
+						properties: {
+							from: ref('productId'),
+							scopes: { type: 'array', maxItems: 40, uniqueItems: true, items: ref('linkScope') },
+						},
+					},
+				},
+			},
+		},
+	},
+});
+
+/** `PUT /v1/product/websites/:websiteId/connections/:name/health` body: whether the delivered value worked. */
+export const connectionHealthSchema = deepFreeze({
+	$schema: draft,
+	$id: SCHEMA_IDS.connectionHealth,
+	title: 'Connection health',
+	type: 'object',
+	required: ['version', 'ok'],
+	additionalProperties: false,
+	properties: {
+		version: ref('count'),
+		ok: { type: 'boolean' },
+		message: { type: 'string', maxLength: 300 },
 	},
 });

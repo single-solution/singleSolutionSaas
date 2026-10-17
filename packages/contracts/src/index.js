@@ -21,6 +21,8 @@ export {
 	validateRevocations,
 	validateDirectory,
 	validateDirectoryList,
+	validateWebsiteConnections,
+	validateConnectionHealth,
 	validateDataRightsRequest,
 	validateActivityCopy,
 	validateMessageDefaults,
@@ -30,6 +32,15 @@ export {
 	validateBlueprint,
 } from './validate.js';
 export { manifestPriceList } from './semantics.js';
+export {
+	DATABASE_NAME_PATTERN,
+	LINK_SCOPE_PATTERN,
+	WEBSITE_CONNECTIONS,
+	databaseNameFor,
+	isDatabaseName,
+	isLinkScope,
+	storageFolderFor,
+} from './connections.js';
 export { BUSINESS_JSON_TEMPLATE, buildBusinessJson, validateBusinessJson } from './business.js';
 export { PROFILE_CHOICES, adviseFeatures } from './profile.js';
 export {

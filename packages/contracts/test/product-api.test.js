@@ -6,8 +6,10 @@ import {
 	validateDirectoryList,
 	validateFeatureReport,
 	validatePriceReport,
+	validateConnectionHealth,
 	validateRevocations,
 	validateStatusResponse,
+	validateWebsiteConnections,
 	validateWebsitesPage,
 } from '../src/index.js';
 import { MERCHANT_STATUSES, PRODUCT_STATUSES } from '../src/constants.js';
@@ -21,6 +23,62 @@ describe('vocabularies', () => {
 		expect(MERCHANT_STATUSES).toEqual(['active', 'low_balance', 'grace', 'stopped', 'suspended']);
 		expect(ADMIN_ROLES).toEqual(['owner', 'support', 'finance']);
 		expect(PRODUCT_UNAVAILABLE_REASONS).toEqual(['stopped', 'suspended', 'removed']);
+	});
+});
+
+describe('connections of a website', () => {
+	const connections = () => ({
+		version: 3,
+		database: { uri: 'mongodb+srv://user:secret@cluster.example.net/?retryWrites=true', dbName: 'ss_ecommerce' },
+		storage: {
+			bucket: 'media',
+			region: 'auto',
+			accessKeyId: 'AKIA',
+			secretAccessKey: 'secret',
+			endpoint: 'https://acct.r2.cloudflarestorage.com',
+			forcePathStyle: true,
+			prefix: 'shop/',
+		},
+		links: {
+			out: [{ to: 'payments', token: 'a.b.c', scopes: ['payments.create', 'payments.read'] }],
+			in: [{ from: 'chat', scopes: ['orders.read.customer'] }],
+		},
+	});
+	it('accepts a full answer and one with nothing set', () => {
+		expect(validateWebsiteConnections(connections()).ok).toBe(true);
+		expect(validateWebsiteConnections({ version: 0, database: null, storage: null, links: { out: [], in: [] } }).ok).toBe(true);
+	});
+	/** @type {Array<[string, (c: any) => unknown, string, string]>} */
+	const refused = [
+		['a database that is not MongoDB', (c) => (c.database.uri = 'postgres://x'), '/database/uri', 'pattern'],
+		['a database name with a dot', (c) => (c.database.dbName = 'ss.chat'), '/database/dbName', 'pattern'],
+		['a database without its name', (c) => delete c.database.dbName, '/database/dbName', 'required'],
+		['a storage without a secret', (c) => delete c.storage.secretAccessKey, '/storage/secretAccessKey', 'required'],
+		['an unknown storage member', (c) => (c.storage.publicUrl = 'x'), '/storage/publicUrl', 'additionalProperties'],
+		['a link scope in capitals', (c) => (c.links.in[0].scopes = ['Orders']), '/links/in/0/scopes/0', 'pattern'],
+		['a link token that is empty', (c) => (c.links.out[0].token = ''), '/links/out/0/token', 'minLength'],
+		[
+			'a link with an unknown member',
+			(c) => (c.links.out[0].grantVersion = 1),
+			'/links/out/0/grantVersion',
+			'additionalProperties',
+		],
+		['a member the contract does not know', (c) => (c.shared = {}), '/shared', 'additionalProperties'],
+	];
+	it.each(refused)('refuses %s', (_name, mutate, path, keyword) => {
+		const value = connections();
+		mutate(value);
+		expectProblem(validateWebsiteConnections(value), path, keyword);
+	});
+	it('validates the health a product reports', () => {
+		expect(validateConnectionHealth({ version: 2, ok: true }).ok).toBe(true);
+		expect(validateConnectionHealth({ version: 2, ok: false, message: 'The database cannot be reached.' }).ok).toBe(true);
+		expectProblem(validateConnectionHealth({ version: 2 }), '/ok', 'required');
+		expectProblem(validateConnectionHealth({ version: 2, ok: true, uri: 'mongodb://x' }), '/uri', 'additionalProperties');
+	});
+	it('the status answer carries the connections version', () => {
+		expect(validateStatusResponse({ ...statusResponse(), connectionsVersion: 4 }).ok).toBe(true);
+		expectProblem(validateStatusResponse({ ...statusResponse(), connectionsVersion: -1 }), '/connectionsVersion', 'minimum');
 	});
 });
 

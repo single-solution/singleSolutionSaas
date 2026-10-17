@@ -41,6 +41,8 @@ export const RULES = Object.freeze({
 	recommendRule: 'recommendRule',
 	profileAnswer: 'profileAnswer',
 	websiteSettingsPath: 'websiteSettingsPath',
+	linkScope: 'linkScope',
+	linkProduct: 'linkProduct',
 });
 
 /**
@@ -170,7 +172,56 @@ export const checkManifest = (manifest) => {
 			);
 	if (new Set(requires).size !== requires.length)
 		out.push(at(['websiteSettings', 'requires'], RULES.duplicateKey, 'names a value twice'));
+	for (const [index, feature] of manifest.features.entries()) {
+		const needed = feature.requires ?? [];
+		for (const [position, path] of needed.entries())
+			if (!isWebsiteSettingsPath(path))
+				out.push(
+					at(
+						['features', index, 'requires', position],
+						RULES.websiteSettingsPath,
+						`'${path}' is not a value of the website settings`,
+					),
+				);
+		if (new Set(needed).size !== needed.length)
+			out.push(at(['features', index, 'requires'], RULES.duplicateKey, 'names a value twice'));
+	}
+	checkLinks(manifest, features, out);
 	return out;
+};
+
+/**
+ * Rules of a manifest's `links`: each scope offered once; each needed product named once, other than the product itself;
+ * a scope named once per need; the features of a need exist.
+ * @param {Manifest} manifest
+ * @param {ReadonlySet<string>} features
+ * @param {ValidationProblem[]} out
+ */
+const checkLinks = (manifest, features, out) => {
+	const offers = manifest.links?.offers ?? [];
+	const offered = new Set();
+	for (const [index, offer] of offers.entries()) {
+		if (offered.has(offer.scope))
+			out.push(at(['links', 'offers', index, 'scope'], RULES.duplicateKey, `scope '${offer.scope}' is offered twice`));
+		offered.add(offer.scope);
+	}
+	const seen = new Set();
+	for (const [index, need] of (manifest.links?.needs ?? []).entries()) {
+		if (need.product === manifest.id)
+			out.push(at(['links', 'needs', index, 'product'], RULES.linkProduct, 'a product cannot link to itself'));
+		else if (seen.has(need.product))
+			out.push(
+				at(
+					['links', 'needs', index, 'product'],
+					RULES.duplicateKey,
+					`'${need.product}' is named twice: list all its scopes in one entry`,
+				),
+			);
+		seen.add(need.product);
+		for (const [position, key] of need.features.entries())
+			if (!features.has(key))
+				out.push(at(['links', 'needs', index, 'features', position], RULES.unknownFeature, `unknown feature '${key}'`));
+	}
 };
 
 /**
