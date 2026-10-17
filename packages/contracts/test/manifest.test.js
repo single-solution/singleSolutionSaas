@@ -142,6 +142,17 @@ describe('validateManifest', () => {
 			expect(validateManifest(value).ok).toBe(true);
 		});
 
+		it('lets a product be named by several needs, each with the features that use its scopes', () => {
+			const value = manifest();
+			value.links = {
+				needs: [
+					{ product: 'accounts', scopes: ['users.read'], features: ['notes'] },
+					{ product: 'accounts', scopes: ['keys.read'], features: [] },
+				],
+			};
+			expect(validateManifest(value).ok).toBe(true);
+		});
+
 		/** @type {Array<[string, (m: any) => unknown, string, string]>} */
 		const linkCases = [
 			[
@@ -182,18 +193,6 @@ describe('validateManifest', () => {
 				(m) => (m.links = { needs: [{ product: m.id, scopes: ['a.b'], features: [] }] }),
 				'/links/needs/0/product',
 				RULES.linkProduct,
-			],
-			[
-				'a product named twice',
-				(m) =>
-					(m.links = {
-						needs: [
-							{ product: 'accounts', scopes: ['a.b'], features: [] },
-							{ product: 'accounts', scopes: ['c.d'], features: [] },
-						],
-					}),
-				'/links/needs/1/product',
-				RULES.duplicateKey,
 			],
 			[
 				'a need that names a feature the product does not have',

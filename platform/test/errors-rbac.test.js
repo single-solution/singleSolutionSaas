@@ -44,6 +44,8 @@ const TABLE = {
 	'portal_settings.write': { owner: true, support: false, finance: false, merchant: false },
 	'website_settings.read': { owner: true, support: true, finance: false, merchant: true },
 	'website_settings.write': { owner: true, support: true, finance: false, merchant: true },
+	'connections.read': { owner: true, support: true, finance: false, merchant: true },
+	'connections.write': { owner: true, support: true, finance: false, merchant: true },
 };
 
 describe('rbac (PLAN 0.2 rights table)', () => {

@@ -77,6 +77,10 @@ export const PERMISSIONS = Object.freeze({
 	/** A website's settings (business facts, brand, region, pages, team): see them; change them (Finance: none) */
 	websiteSettingsRead: 'website_settings.read',
 	websiteSettingsWrite: 'website_settings.write',
+	/** A website's connections (database, storage) and the links between its products: see how they stand; change them
+	 * (after a fresh confirmation; Finance: none). Nothing returns a secret to anyone. */
+	connectionsRead: 'connections.read',
+	connectionsWrite: 'connections.write',
 });
 
 const P = PERMISSIONS;
@@ -104,6 +108,8 @@ export const ROLE_PERMISSIONS = Object.freeze({
 		P.billingRead,
 		P.websiteSettingsRead,
 		P.websiteSettingsWrite,
+		P.connectionsRead,
+		P.connectionsWrite,
 	]),
 	finance: Object.freeze([
 		P.overviewRead,
@@ -129,6 +135,8 @@ export const MERCHANT_PERMISSIONS = Object.freeze([
 	P.billingRead,
 	P.websiteSettingsRead,
 	P.websiteSettingsWrite,
+	P.connectionsRead,
+	P.connectionsWrite,
 ]);
 
 /**

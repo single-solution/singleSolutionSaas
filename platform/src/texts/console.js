@@ -871,7 +871,7 @@ export const ADMIN = Object.freeze({
 		 * What Re-seal did: ENCRYPTION_KEY_PREVIOUS can be removed only when nothing failed to open; otherwise what to
 		 * type or make again, part by part.
 		 * @param {{ resealed: number, current: number, unreadable: number,
-		 *   unreadableIn: Partial<Record<'signingKeys' | 'mailPassword' | 'serverTokens' | 'twoStep', number>> }} counts
+		 *   unreadableIn: Partial<Record<'signingKeys' | 'mailPassword' | 'serverTokens' | 'twoStep' | 'websiteConnections' | 'linkTokens', number>> }} counts
 		 */
 		result: ({ resealed, current, unreadable, unreadableIn }) => {
 			const counted = `${resealed} re-sealed, ${current} already on the current key, ${unreadable} could not be opened with either key.`;
@@ -886,6 +886,12 @@ export const ADMIN = Object.freeze({
 					: null,
 				unreadableIn.twoStep
 					? `${count(unreadableIn.twoStep, 'two-step sign-in', 'two-step sign-ins')}: an Owner turns that person’s two-step off, and they set it up again`
+					: null,
+				unreadableIn.websiteConnections
+					? `${count(unreadableIn.websiteConnections, 'database or storage connection', 'database and storage connections')}: enter ${unreadableIn.websiteConnections === 1 ? 'it' : 'them'} again under Website settings, Data and files`
+					: null,
+				unreadableIn.linkTokens
+					? `${count(unreadableIn.linkTokens, 'link between products', 'links between products')}: press Regenerate on ${unreadableIn.linkTokens === 1 ? 'it' : 'each'} under Website settings, Between your products`
 					: null,
 				unreadableIn.signingKeys
 					? `${count(unreadableIn.signingKeys, 'signing key', 'signing keys')}: nothing to type, the Portal already signs with a newer key`

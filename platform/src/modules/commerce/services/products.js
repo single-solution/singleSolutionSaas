@@ -149,6 +149,8 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 		});
 		await audit(actor, 'product.added', { merchantId, websiteId, productId }, { requestId, ip });
 		await deps.statusChanged(productId, websiteId);
+		// the product gets the links it needs with the products already there (and they with it)
+		await deps.linksChanged(websiteId);
 		return productOnWebsite(merchantId, websiteId, productId);
 	};
 
@@ -175,6 +177,8 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 		if (!removed) throw problem('not_found', 'This product is not on the website.');
 		await audit(actor, 'product.removed', { merchantId, websiteId, productId }, { requestId, ip });
 		await deps.statusChanged(productId, websiteId);
+		// every link to or from the product is revoked at once
+		await deps.linksChanged(websiteId);
 		return { websiteId, productId, status: /** @type {const} */ ('removed') };
 	};
 
@@ -302,6 +306,8 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 			{ merchantId, websiteId, productId },
 			{ before: { on: doc.on ?? [] }, after: { version: report.version, on: keys }, requestId, ip },
 		);
+		// the grants of a link follow the features that are on
+		await deps.linksChanged(websiteId);
 		return { version: report.version };
 	};
 
@@ -334,6 +340,7 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 			todayMillicredits,
 			featuresVersion: doc.featuresVersion,
 			settingsVersion: await deps.settingsVersion(websiteId),
+			connectionsVersion: await deps.connectionsVersion(websiteId),
 			validUntil: new Date(validUntil).toISOString(),
 		};
 	};
@@ -479,7 +486,11 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 		 */
 		productsOnWebsite: async (websiteId) =>
 			(await repo.allProducts().find({ websiteId, status: 'added' }).sort({ productId: 1 }).limit(100).toArray()).map(
-				(doc) => ({ productId: String(doc.productId), merchantId: String(doc.merchantId) }),
+				(doc) => ({
+					productId: String(doc.productId),
+					merchantId: String(doc.merchantId),
+					on: /** @type {string[]} */ (doc.on ?? []),
+				}),
 			),
 		/**
 		 * The merchant's websites that have the product (not removed): the switcher of a merchant launch.

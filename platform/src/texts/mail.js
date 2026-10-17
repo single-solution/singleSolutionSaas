@@ -61,6 +61,15 @@ export const MAIL_TEXTS = Object.freeze({
 		action: null,
 		footer: 'If you did not ask for this, contact support.',
 	},
+	connection_changed: {
+		subject: (d) => `${d.brand}: a connection of ${d.website ?? 'your website'} was changed`,
+		lines: (d) => [
+			`${d.what ?? 'A connection'} for ${d.website ?? 'your website'}. ${d.who ?? 'Someone'} did it.`,
+			'The products on the website pick the change up on their own. The value itself is never shown again.',
+		],
+		action: null,
+		footer: 'If this was not you, sign in to the Portal and replace the connection, and change your password.',
+	},
 	low_balance: {
 		subject: (d) => `${d.brand}: credits are running low`,
 		lines: (d) => [

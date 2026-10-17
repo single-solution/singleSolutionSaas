@@ -78,6 +78,24 @@ export const createDeps = (ctx) => {
 		 */
 		settingsVersion: (websiteId) => ctx.service('website').versionOf(websiteId),
 		/**
+		 * The change counter of the website's connections and links, for the status answer.
+		 * @param {string} websiteId
+		 * @returns {Promise<number>}
+		 */
+		connectionsVersion: (websiteId) => ctx.service('website').connectionsVersionOf(websiteId),
+		/**
+		 * The products on the website or the features that are on changed: the website's links are worked out again. It
+		 * never fails the change that caused it (a repeat or the next change repairs it).
+		 * @param {string} websiteId
+		 */
+		linksChanged: async (websiteId) => {
+			try {
+				await ctx.service('website').recomputeLinks(websiteId);
+			} catch (error) {
+				ctx.logger.warn('links not worked out', { websiteId, error });
+			}
+		},
+		/**
 		 * `status.changed` to a product for a website (queued and retried by catalog).
 		 * @param {string} productId @param {string} websiteId
 		 */

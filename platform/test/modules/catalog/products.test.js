@@ -82,6 +82,9 @@ describe('Products (PLAN 0.8.2): Add product, Reconnect, active / inactive', () 
 			widgetScriptLoading: 'async',
 			docsUrl: `${product.url}/docs`,
 			websiteSettingsRequires: [],
+			// what it needs of the website's connections (a database, no storage) and its links (none)
+			needs: { database: true, storage: 'none' },
+			links: { offers: [], needs: [] },
 			connectedAt: '2026-10-01T10:00:00.000Z',
 			reconnectedAt: null,
 		});

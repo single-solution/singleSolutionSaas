@@ -21,6 +21,8 @@ import { defineModule } from '../../../../src/infra/modules.js';
  * @property {boolean} [failContacts] billingContacts throws
  * @property {boolean} [failWebsites] getWebsite throws a database error
  * @property {Map<string, number>} [settingsVersions] the save counter of a website's settings (default 0)
+ * @property {Map<string, number>} [connectionsVersions] the change counter of a website's connections and links (default 0)
+ * @property {string[]} [linksWorkedOut] the websites whose links were worked out again, in order
  */
 
 /** @returns {World} */
@@ -107,6 +109,14 @@ export const fakeModules = (world) => [
 	// the website settings: the status answer carries their save counter
 	defineModule({
 		name: 'website',
-		service: () => ({ versionOf: async (/** @type {string} */ websiteId) => world.settingsVersions?.get(websiteId) ?? 0 }),
+		service: () => ({
+			versionOf: async (/** @type {string} */ websiteId) => world.settingsVersions?.get(websiteId) ?? 0,
+			// the connections and links: the status answer carries their counter; the links are worked out again after a
+			// product is added or removed or a feature is switched
+			connectionsVersionOf: async (/** @type {string} */ websiteId) => world.connectionsVersions?.get(websiteId) ?? 0,
+			recomputeLinks: async (/** @type {string} */ websiteId) => {
+				world.linksWorkedOut?.push(websiteId);
+			},
+		}),
 	}),
 ];

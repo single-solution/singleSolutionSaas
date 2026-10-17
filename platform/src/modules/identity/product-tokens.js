@@ -230,6 +230,15 @@ export const createProductTokens = (deps, hooks) => {
 		},
 
 		/**
+		 * Put token ids of a product on the revocation list at once (link tokens, which the website module issues and
+		 * owns). A repeated id is ignored.
+		 * @param {{ merchantId: string, websiteId: string, productId: string, jtis: readonly string[] }} input
+		 */
+		revokeIds: async ({ merchantId, websiteId, productId, jtis }) => {
+			await revoke({ productId, websiteId, merchantId }, [...jtis]);
+		},
+
+		/**
 		 * Revoked token ids of one product after a cursor (PLAN 0.4.12 row 6).
 		 * @param {{ productId: string, since: unknown }} input
 		 */

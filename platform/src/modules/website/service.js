@@ -14,6 +14,10 @@
  *   fails the save).
  * - **Products** learn the version in the status answer (`settingsVersion`) and pull the document only when they hold
  *   an older one.
+ *
+ * Also here (settings-ownership steps 6 and 7): the website's **connections** (one database and one storage connection,
+ * entered once, sealed, write-only; `connections.js`) and the **links** between its products (provisioned by the Portal
+ * from the manifests, scoped, revocable; `links.js`). Both raise `connectionsVersion` of the status answer.
  * @module
  */
 import {
@@ -25,6 +29,8 @@ import {
 } from '@ss/contracts';
 import { problem } from '../../infra/http.js';
 import { isDuplicateKey } from '../../infra/util.js';
+import { createConnections } from './connections.js';
+import { createLinks } from './links.js';
 import { SETTINGS } from './schema.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
@@ -109,24 +115,33 @@ export const createWebsiteService = (ctx) => {
 	};
 
 	/**
-	 * Tell every product on the website to fetch the new settings (queued and retried; never fails a save).
+	 * Tell products on the website (every one, or only `only`) to fetch what changed (queued and retried; never fails a
+	 * change).
 	 * @param {string} websiteId
+	 * @param {'settings' | 'connections' | 'links'} what
+	 * @param {readonly string[]} [only]
 	 */
-	const tellProducts = async (websiteId) => {
+	const tellProducts = async (websiteId, what = 'settings', only) => {
 		try {
 			const onSite = /** @type {Array<{ productId: string }>} */ (await commerce().productsOnWebsite(websiteId));
 			for (const { productId } of onSite) {
+				if (only && !only.includes(productId)) continue;
 				try {
-					await catalog().notify(productId, { type: 'website.settings_changed', websiteId, what: 'settings' });
+					await catalog().notify(productId, { type: 'website.settings_changed', websiteId, what });
 				} catch (error) {
 					ctx.logger.warn('website.settings_changed not queued', { productId, websiteId, error });
 				}
 			}
 		} catch (error) {
-			// the change is saved: products still catch up from the next status (its `settingsVersion`)
+			// the change is saved: products still catch up from the next status (its `settingsVersion` / `connectionsVersion`)
 			ctx.logger.warn('website.settings_changed not sent', { websiteId, error });
 		}
 	};
+	const connections = createConnections(ctx, { notifyProducts: (websiteId, what) => tellProducts(websiteId, what) });
+	const links = createLinks(ctx, {
+		bump: connections.bump,
+		notify: (websiteId, what, productIds) => tellProducts(websiteId, what, productIds),
+	});
 
 	/**
 	 * The fields of a section that differ, with their small before/after values where Activity may keep them.
@@ -216,7 +231,7 @@ export const createWebsiteService = (ctx) => {
 				requestId,
 				ip,
 			});
-			await tellProducts(websiteId);
+			await tellProducts(websiteId, 'settings');
 			return { settings: saved, readiness: await readinessOf(saved) };
 		},
 
@@ -308,6 +323,63 @@ export const createWebsiteService = (ctx) => {
 			const version = Number(record?.version ?? 0);
 			return { version, settings: record && version > since ? documentOf(websiteId, record) : null };
 		},
+
+		// ------------------------------------------------------------------------------------------ connections and links
+
+		/**
+		 * The console's Data and files section: whether each connection is set (never the value), the database name and the
+		 * test result of every product on the website, and the links between them.
+		 * @param {{ merchantId: string, websiteId: string }} input
+		 */
+		connectionsView: async ({ merchantId, websiteId }) => {
+			const view = await connections.view({ merchantId, websiteId });
+			const fetchedBy = await connections.fetchedBy({ merchantId, websiteId });
+			return { ...view, links: await links.view({ merchantId, websiteId, fetchedBy }) };
+		},
+		/** Save a connection (the route has confirmed the person's password). @param {Parameters<typeof connections.save>[0]} input */
+		saveConnection: (input) => connections.save(input),
+		/** Remove a connection. @param {Parameters<typeof connections.remove>[0]} input */
+		removeConnection: (input) => connections.remove(input),
+		/**
+		 * What a product fetches (`GET /v1/product/websites/:websiteId/connections`).
+		 * @param {{ productId: string, websiteId: string }} input
+		 */
+		connectionsForProduct: ({ productId, websiteId }) =>
+			connections.forProduct({
+				productId,
+				websiteId,
+				links: (merchantId) => links.forProduct({ merchantId, websiteId, productId }),
+			}),
+		/** A product's report of how a delivered connection worked. @param {Parameters<typeof connections.reportHealth>[0]} input */
+		reportConnectionHealth: (input) => connections.reportHealth(input),
+		/**
+		 * The change counter of a website's connections and links, for the status answer's `connectionsVersion` (0: none).
+		 * @param {string} websiteId
+		 */
+		connectionsVersionOf: (websiteId) => connections.versionOf(websiteId),
+		/**
+		 * Work the website's links out again (a product was added or removed, a feature was switched). Never throws to the
+		 * caller's money or status work: see commerce.
+		 * @param {string} websiteId
+		 */
+		recomputeLinks: (websiteId) => links.recompute(websiteId),
+		/** Regenerate a link's token. @param {Parameters<typeof links.regenerate>[0]} input */
+		regenerateLink: (input) => links.regenerate(input),
+		/** Switch a link off or on. @param {Parameters<typeof links.switch>[0]} input */
+		switchLink: (input) => links.switch(input),
+		/**
+		 * The website is removed for good: its links are revoked and deleted, its connections deleted.
+		 * @param {{ merchantId: string, websiteId: string }} input
+		 */
+		forgetWebsite: async ({ merchantId, websiteId }) => {
+			await links.forget({ merchantId, websiteId });
+			await connections.forget({ merchantId, websiteId });
+		},
+		/**
+		 * Settings → Encryption key → Re-seal: the sealed connections and link tokens sealed again, counted per part.
+		 * @returns {Promise<{ websiteConnections: import('../../infra/crypto.js').ResealCounts, linkTokens: import('../../infra/crypto.js').ResealCounts }>}
+		 */
+		resealSecrets: async () => ({ websiteConnections: await connections.reseal(), linkTokens: await links.reseal() }),
 	});
 };
 

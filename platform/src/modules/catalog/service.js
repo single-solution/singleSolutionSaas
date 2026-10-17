@@ -186,6 +186,9 @@ export const createCatalogService = (ctx, options = {}) => {
 			widgetScriptLoading: manifest.widgetScriptLoading ?? 'async',
 			docsUrl: absolute(manifest.docsUrl, doc.baseUrl),
 			websiteSettingsRequires: [...(manifest.websiteSettings?.requires ?? [])],
+			// what the product needs of the website's connections (a database, no storage unless it says) and its links
+			needs: manifest.needs ?? { database: true, storage: /** @type {const} */ ('none') },
+			links: { offers: manifest.links?.offers ?? [], needs: manifest.links?.needs ?? [] },
 			connectedAt: iso(doc.connectedAt),
 			reconnectedAt: iso(doc.reconnectedAt),
 		};

@@ -84,4 +84,5 @@ export { createId, isId, normalizeDomain } from './ids.js';
 /** @typedef {import('./ids.js').DomainResult} DomainResult */
 /** @typedef {import('./profile.js').BusinessProfile} BusinessProfile */
 /** @typedef {import('./website-settings.js').WebsiteSection} WebsiteSection */
+/** @typedef {import('./connections.js').WebsiteConnectionName} WebsiteConnectionName */
 /** @typedef {import('./profile.js').FeatureFit} FeatureFit */

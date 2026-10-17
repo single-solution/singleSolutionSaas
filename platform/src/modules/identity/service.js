@@ -9,6 +9,7 @@
  * @module
  */
 import { problem } from '../../infra/http.js';
+import { inputs } from './core/inputs.js';
 import { createAccounts } from './accounts.js';
 import { createAdmins } from './admins.js';
 import { createMerchants } from './merchants.js';
@@ -19,6 +20,7 @@ import { createWebsites } from './websites.js';
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../../infra/auth.js').Session} Session */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
+/** @typedef {import('./repo.js').Meta} Meta */
 
 /**
  * @typedef {object} IdentityOptions
@@ -74,6 +76,13 @@ export const createIdentityService = (ctx, options = {}) => {
 		activeMerchant: (merchantId) => merchants.load(merchantId),
 		productsOn: (websiteId) => ctx.service('commerce').productsOnWebsiteCount(websiteId),
 		onRemoved: async ({ merchantId, websiteId }) => {
+			// the website's links (their tokens are revoked) and connections go with it
+			try {
+				await ctx.service('website').forgetWebsite({ merchantId, websiteId });
+			} catch (error) {
+				// a Portal without the website module (a test of identity alone) has none; any other failure is real
+				if (/** @type {{ code?: string }} */ (error)?.code !== 'unknown_module') throw error;
+			}
 			const productIds = await tokens.revokeWebsite({ merchantId, websiteId });
 			for (const productId of productIds)
 				await notice((catalog) => catalog.notify(productId, { type: 'website.deleted', websiteId }));
@@ -131,6 +140,18 @@ export const createIdentityService = (ctx, options = {}) => {
 				adminEmails: admins.map((a) => String(a.email)),
 			};
 		},
+		/**
+		 * Send the merchant an e-mail (the same mailer as the other Portal e-mails); false when it cannot be sent (no
+		 * e-mail sending set up, a deleted merchant). A failure to send is thrown for the caller to log.
+		 * @param {{ merchantId: string, template: import('../../infra/mailer.js').MailTemplate, data: Record<string, string> }} input
+		 * @returns {Promise<boolean>}
+		 */
+		mailMerchant: async ({ merchantId, template, data }) => {
+			const merchant = await merchants.loadAny(merchantId);
+			if (merchant.status === 'deleted' || !merchant.email || !mailer.available) return false;
+			await mailer.send({ to: String(merchant.email), template, data });
+			return true;
+		},
 		/** Totals of admin Overview: merchants (not deleted) and websites (not removed). */
 		counts: async () => ({
 			merchants: await repo.merchants.countDocuments({ status: { $ne: 'deleted' } }),
@@ -171,6 +192,27 @@ export const createIdentityService = (ctx, options = {}) => {
 		 *   twoStep: import('../../infra/crypto.js').ResealCounts }>}
 		 */
 		resealSecrets: async () => ({ serverTokens: await tokens.reseal(), twoStep: await accounts.resealTwoStep() }),
+		/**
+		 * Put token ids of a product on the revocation list (the website module's link tokens).
+		 * @param {{ merchantId: string, websiteId: string, productId: string, jtis: readonly string[] }} input
+		 */
+		revokeTokenIds: tokens.revokeIds,
+		/**
+		 * A fresh confirmation of the signed-in person before a change that must not happen from a stolen session: their
+		 * current password, and a two-step or recovery code while two-step is on. 422 for a body that is not one; 401/403
+		 * and throttling as signing in.
+		 * @param {{ kind: 'admin' | 'merchant', id: string, body: unknown, meta: Meta }} input `body`: any object holding
+		 *   `password` (and `code` / `recoveryCode`); other members are ignored
+		 */
+		confirmPerson: async ({ kind, id, body, meta }) => {
+			const source =
+				typeof body === 'object' && body !== null && !Array.isArray(body)
+					? /** @type {Record<string, unknown>} */ (body)
+					: {};
+			const parsed = inputs.confirmation({ password: source.password, code: source.code, recoveryCode: source.recoveryCode });
+			if (!parsed.ok) throw problem('validation_failed', 'Confirm with your password.', { errors: parsed.errors });
+			await accounts.confirm(kind, { ...parsed.value, id }, meta);
+		},
 		/**
 		 * 404 unless the product is on the website now (not removed).
 		 * @param {string} websiteId @param {string} productId

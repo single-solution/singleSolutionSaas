@@ -15,5 +15,5 @@ export const websiteModule = defineModule({
 	name: 'website',
 	collections,
 	service: (ctx) => createWebsiteService(ctx),
-	routes: (ctx) => websiteRoutes(/** @type {WebsiteService} */ (ctx.service('website'))),
+	routes: (ctx) => websiteRoutes(/** @type {WebsiteService} */ (ctx.service('website')), () => ctx.service('identity')),
 });
