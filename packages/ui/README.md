@@ -54,6 +54,18 @@ the page is as wide as the window leaves it. Nothing is centered in a narrow col
   (`cards`: title plus `description`; arrow keys), `SegmentedControl` (up to about four short choices), `Input` with
   `prefix` / `suffix` adornments, `Select`, `TextArea`; 36 px high, the accent focus ring, error and disabled states.
 - `SaveBar`: the floating Save changes / Discard bar, shown only while something changed. `AccountMenu`, `Avatar`.
+- Rows and editors (never draw these by hand): `RowList` + `ListRow` (a name, a pill, one primary action and a More menu;
+  `wrap` for long names), `EntryGroup` (one entry of a list editor: a hairline group with its name and Move up, Move down
+  and Remove, or collapsed under a `summary`), `SaveRow` (Save and Cancel under a list saved whole), `TextLink` (the one
+  link in text, a table, a header or a footer; `as` for a router link, `external`, `tone="plain"`), and `Input
+type="file"` for a file field.
+- `SaveOutcome` (`@ss/ui/dashboard`): the outcome of a save in an editor. Saved and a refused save are toasts; the errors
+  that name a row or a field stay inline under the editor (`problemLines` words a 422 answer).
+- The setup checklist (`SetupChecklist`, `useSetupSteps` in `@ss/ui/dashboard`): a product declares a short list of
+  requirements (a setting, a list or "one of these features on", for the features that are on, with a plain label, a
+  one-line why and a button); each is ticked from the saved state and its button opens the exact section
+  (`open('settings', 'catalog.page-addresses')` → `?view=settings#catalog.page-addresses`; a hash that names a feature
+  opens its first view). The connections a feature needs come from the manifest's `neededBy`, not from the product.
 
 ## Widths: containers, not the screen
 

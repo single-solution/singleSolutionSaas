@@ -35,7 +35,8 @@ export const SETUP = Object.freeze([
 		key: 'currency',
 		when: ['catalog'],
 		setting: 'catalog.currency',
-		confirm: true,
+		// ticked only when the merchant sets it themselves (USD stays the default until then)
+		own: true,
 		label: O.currency.step,
 		why: 'Every price is in this currency. Set it before you add prices.',
 		action: 'Set currency',

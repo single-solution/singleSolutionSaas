@@ -13,7 +13,7 @@ import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { cx } from './cx.js';
 import { Button } from './Button.js';
 import { Card } from './display.js';
-import { FieldLayoutContext, ROW_GRID, ROW_LABEL, ROW_LIST, rowControl } from './fields.js';
+import { FieldLayoutContext, ROW_GRID, ROW_LABEL, ROW_LIST, Select, rowControl } from './fields.js';
 import { Icon } from './icons.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
@@ -638,17 +638,17 @@ export function ItemSwitcher({
 		<div className={cx('min-w-0 space-y-3', className)}>
 			<div className="flex min-w-0 flex-wrap items-center gap-2">
 				{items.length > SWITCHER_TABS_UP_TO ? (
-					<select
-						aria-label={legend}
+					<Select
+						hideLabel
+						label={legend}
+						fieldClassName="min-w-0 max-w-full flex-1"
 						value={String(at)}
 						onChange={(event) => setPicked(Number(event.target.value))}
-						className="h-9 min-w-0 max-w-full flex-1 rounded-control border border-line bg-surface px-3 text-sm text-fg focus-visible:outline-2 focus-visible:outline-focus">
-						{items.map((entry, index) => (
-							<option key={index} value={String(index)}>
-								{nameOf(entry, index) || `#${index + 1}`}
-							</option>
-						))}
-					</select>
+						options={items.map((entry, index) => ({
+							value: String(index),
+							label: nameOf(entry, index) || `#${index + 1}`,
+						}))}
+					/>
 				) : items.length > 0 ? (
 					<PillTabs
 						className="min-w-0 flex-1"

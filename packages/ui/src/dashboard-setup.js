@@ -27,7 +27,8 @@ import { settingSectionOf } from './dashboard-settings.js';
  * - `when`: the step applies only while one of these features is on (none: always); `after`: and only once this
  *   connection is connected (a setting that makes sense once storage is connected).
  * - Done: `done(value, context)` when given; else a setting with `confirm` is done once the merchant (or the Owner's
- *   Defaults) chose it, because its built-in value is only a start; any other setting or list is done once it holds a value.
+ *   Defaults) chose it, because its built-in value is only a start, and one with `own` only once the merchant saved it
+ *   on this website; any other setting or list is done once it holds a value.
  * - `optional`: shown, but not counted in the progress.
  * - `label` the thing to do, `why` one plain line saying why it matters, `action` the button's words; the button opens
  *   `tab` (Settings) at `section` (a setting's own section when not given).
@@ -40,6 +41,7 @@ import { settingSectionOf } from './dashboard-settings.js';
  * @property {string[]} [oneOf]
  * @property {(value: any, context: SetupContext) => boolean} [done]
  * @property {boolean} [confirm]
+ * @property {boolean} [own]
  * @property {boolean} [optional]
  * @property {string} label
  * @property {string} why
@@ -130,9 +132,11 @@ export function useSetupSteps({ overview, websiteId, open, settings: given }, re
 			};
 			done = requirement.done
 				? requirement.done(value, context)
-				: requirement.confirm
-					? entry.source !== 'built-in'
-					: isFilled(value);
+				: requirement.own
+					? entry.source === 'website'
+					: requirement.confirm
+						? entry.source !== 'built-in'
+						: isFilled(value);
 			section ??= settingSectionOf(feature, name, texts.settings.advanced);
 		} else if (requirement.list) {
 			const answer = lists.get(requirement.list);

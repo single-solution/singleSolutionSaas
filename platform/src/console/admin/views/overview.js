@@ -29,9 +29,9 @@ import {
 	StatGrid,
 	describeProblem,
 	formatCredits,
-	initialsOf,
 	useToast,
 	TextLink,
+	Avatar,
 } from '@ss/ui';
 import { ADMIN, BILLING, MORE, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
@@ -249,11 +249,7 @@ export function OverviewView(props) {
 										<Link
 											href={adminRoutes.merchant(m.merchantId)}
 											className="ss-motion -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-surface-2">
-											<span
-												aria-hidden="true"
-												className="flex size-9 shrink-0 items-center justify-center rounded-control bg-primary-soft text-xs font-bold text-on-primary-soft">
-												{initialsOf(m.name)}
-											</span>
+											<Avatar name={m.name} />
 											<span className="min-w-0 flex-1">
 												<span className="block truncate text-sm font-semibold text-fg">{m.name}</span>
 												<span className="block truncate text-xs text-muted">{m.email}</span>

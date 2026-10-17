@@ -5,6 +5,7 @@
  * @module
  */
 import { useState } from 'react';
+import { Button } from './Button.js';
 import { cx } from './cx.js';
 import { Icon } from './icons.js';
 
@@ -59,13 +60,13 @@ export function CodeBlock({ code, label, secret = false, wrap = true, className 
 					aria-label={label ?? 'Code'}>
 					<code>{code}</code>
 				</pre>
-				<button
-					type="button"
-					onClick={copy}
-					className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-surface px-2 py-1 text-xs font-semibold text-fg hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-focus">
-					<Icon name={copied ? 'check' : 'copy'} size={13} />
+				<Button
+					size="sm"
+					variant="secondary"
+					icon={<Icon name={copied ? 'check' : 'copy'} size={13} />}
+					onClick={() => void copy()}>
 					{copied ? 'Copied' : 'Copy'}
-				</button>
+				</Button>
 			</div>
 			<p className="sr-only" aria-live="polite">
 				{copied === true

@@ -318,7 +318,8 @@ export const TEXTS = dashboardTexts({
 			compatible: 'OpenAI-compatible service',
 		},
 		hints: {
-			database: 'The address of your MongoDB database, a connection string that starts with mongodb+srv://. Your conversations, leads and knowledge are kept there.',
+			database:
+				'The address of your MongoDB database, a connection string that starts with mongodb+srv://. Your conversations, leads and knowledge are kept there.',
 			storage: 'An S3-compatible bucket (AWS S3, Cloudflare R2 and others). Attachments are kept here.',
 			ai: 'Your own AI provider key. The model is free text; suggestions are shown as you type.',
 			ai_backup: 'Answers when the main provider fails.',

@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from './Button.js';
 import { cx } from './cx.js';
+import { Input } from './fields.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 
@@ -50,13 +51,14 @@ export function Paged({ items, text, children, pageSize = 10, searchFrom = 8, te
 	return (
 		<div className={cx('min-w-0 space-y-3', className)}>
 			{items.length >= searchFrom ? (
-				<input
+				<Input
 					type="search"
-					aria-label={label ?? words.search}
+					hideLabel
+					label={label ?? words.search}
 					placeholder={label ?? words.search}
 					value={query}
 					onChange={(event) => setQuery(event.target.value)}
-					className="h-9 w-full max-w-sm rounded-control border border-line bg-surface px-3 text-sm text-fg placeholder:text-muted/70 focus-visible:outline-2 focus-visible:outline-focus"
+					fieldClassName="max-w-sm"
 				/>
 			) : null}
 			{found.length === 0 ? <p className="text-sm text-muted">{words.none}</p> : children(found.slice(from, from + pageSize))}

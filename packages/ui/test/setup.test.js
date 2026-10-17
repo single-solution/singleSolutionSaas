@@ -249,3 +249,54 @@ describe('useSetupSteps', () => {
 		expect(wantsSettings(null, REQUIREMENTS)).toBe(false);
 	});
 });
+
+describe('a setting only the merchant can settle', () => {
+	it('is ticked when saved on this website, not when the Owner’s Defaults or the built-in value stand', async () => {
+		/** @param {string} source */
+		const run = async (source) => {
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(
+					async () =>
+						new Response(
+							JSON.stringify({
+								features: [{ key: 'catalog', on: true, schema: {}, values: { currency: { value: 'EUR', source } } }],
+							}),
+							{ status: 200 },
+						),
+				),
+			);
+			/** @param {{ overview: any, websiteId: string, open: () => void }} props */
+			const Own = (props) => {
+				const steps = useSetupSteps(props, [
+					{
+						key: 'currency',
+						when: ['catalog'],
+						setting: 'catalog.currency',
+						own: true,
+						label: 'Currency',
+						why: 'Why.',
+						action: 'Set',
+					},
+				]);
+				return <p>{steps.map((step) => `${step.key}:${step.done}`).join(',')}</p>;
+			};
+			const view = render(
+				<DashboardProvider manifest={MANIFEST} texts={{ title: 'Shop' }}>
+					<Own
+						overview={{ ok: true, data: { featuresOn: ['catalog'], checklist: { connections: [] } } }}
+						websiteId="w1"
+						open={() => undefined}
+					/>
+				</DashboardProvider>,
+			);
+			await settle();
+			const text = view.container.textContent;
+			cleanup();
+			return text;
+		};
+		expect(await run('default')).toBe('currency:false');
+		expect(await run('built-in')).toBe('currency:false');
+		expect(await run('website')).toBe('currency:true');
+	});
+});
