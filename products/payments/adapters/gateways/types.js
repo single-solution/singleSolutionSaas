@@ -45,7 +45,7 @@ import { GATEWAY_TIMEOUT_MS, jsonOf } from '../util.js';
  *   (P12): `notice`, the address of its signed notices (`/v1/gateways/<id>/<websiteId>`); `return`, the payer's return
  *   address (`/return/<id>/<websiteId>/<paymentId>`)
  * @property {number} [maxExpiryHours] for a gateway whose checkout takes a time limit: the longest it takes, which caps
- *   the merchant's `payment_api.checkoutExpiryHours` (P9)
+ *   the checkout's end (the caller's `expiresAt`, else the merchant's `payment_api.checkoutExpiryHours`; P9)
  * @property {(keys: unknown) => string | null} violation why a connection value is not usable, or null
  * @property {(keys: Keys, ctx: GatewayContext) => Promise<{ ok: boolean, message?: string }>} test read-only check of the keys
  * @property {(input: { payment: PaymentLike, keys: Keys, urls: Urls, expiresAt: number }, ctx: GatewayContext) => Promise<Started>} start

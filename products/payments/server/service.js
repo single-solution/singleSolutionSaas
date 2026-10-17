@@ -21,6 +21,7 @@ import {
 	takesCurrency,
 } from '../core/gateways.js';
 import { methodReady } from '../core/methods.js';
+import { MIN_CHECKOUT_MINUTES } from '../core/limits.js';
 import {
 	mirrorStatus,
 	paymentEventData,
@@ -223,8 +224,8 @@ export const createService = (product) => {
 	 * @param {Site} s
 	 * @param {{ amount: number, currency: string, gateway: string | null, description: string, reference: string,
 	 *   customer: import('../core/payments.js').Customer, metadata: Record<string, string>,
-	 *   answers: Array<{ label: string, value: string }>, returnUrl: string | null, cancelUrl: string | null }} input
-	 *   checked by `checkPaymentInput` (a link's answers: `checkLinkAnswers`)
+	 *   answers: Array<{ label: string, value: string }>, returnUrl: string | null, cancelUrl: string | null,
+	 *   expiresAt?: Date | null }} input checked by `checkPaymentInput` (a link's answers: `checkLinkAnswers`)
 	 * @param {{ source: 'api' | 'link', linkId?: string | null }} from
 	 */
 	const createPayment = async (s, input, { source, linkId = null }) => {
@@ -246,6 +247,7 @@ export const createService = (product) => {
 		const custom = isCustomGateway(input.gateway) ? await keysOf(s, input.gateway) : null;
 		return s.store.payments.add({
 			...input,
+			expiresAt: input.expiresAt ?? null,
 			manual: method ? { name: method.name, kind: method.kind } : null,
 			gatewayName: custom ? String(custom.name) : null,
 			source,
@@ -283,15 +285,17 @@ export const createService = (product) => {
 		}
 		const keys = /** @type {Record<string, any>} */ (await keysOf(s, gateway));
 		const adapter = gateways[adapterOf(gateway)];
-		// an unpaid checkout ends when the merchant says, within the gateway's own longest (P9)
+		// an unpaid checkout ends when the caller said (a shop passes its order's payment window), else after the
+		// merchant's hours (links and API payments that name no end), within the gateway's own longest (P9)
 		const { checkoutExpiryHours } = await product.settings.values(s.websiteId, 'payment_api');
-		const hours = Math.min(Number(checkoutExpiryHours), adapter.maxExpiryHours ?? Number.POSITIVE_INFINITY);
+		const wanted = payment.expiresAt ? new Date(payment.expiresAt).getTime() : now() + Number(checkoutExpiryHours) * 3_600_000;
+		const longest = now() + (adapter.maxExpiryHours ?? Number.POSITIVE_INFINITY) * 3_600_000;
 		const started = await adapter.start(
 			{
 				payment: { ...payment, websiteId: s.websiteId },
 				keys,
 				urls: urlsOf(s, gateway, payment.id),
-				expiresAt: now() + hours * 3_600_000,
+				expiresAt: Math.min(Math.max(wanted, now() + MIN_CHECKOUT_MINUTES * 60_000), longest),
 			},
 			ctx,
 		);

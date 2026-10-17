@@ -5,7 +5,7 @@
 		"checkoutExpiryHours": {
 			"type": "integer",
 			"title": "Unpaid checkout expires after (hours)",
-			"description": "How long a payer has to finish paying on the gateway page. Each gateway caps it at its own longest time.",
+			"description": "How long a payer has to finish paying on the gateway page, for payment links and API payments that name no end time (a shop names its order's payment window). Each gateway caps it at its own longest time.",
 			"default": 24,
 			"minimum": 1,
 			"maximum": 168,

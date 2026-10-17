@@ -426,6 +426,21 @@ describe('the other gateways', () => {
 		const payment = await createPayment({ gateway: 'jazzcash', currency: 'PKR', reference: 'inv 7' });
 		const form = await page(`/pay/${env.websiteId}/${payment.id}`);
 		expect(form.text).toContain(`name="pp_TxnExpiryDateTime" value="${pakistanTime(env.now() + 6 * 3_600_000)}"`);
+		// a caller names the end itself (a shop passes its order's payment window): that wins over the merchant's hours
+		const HOUR = 3_600_000;
+		/** @param {number} at */
+		const expiryFor = async (at) => {
+			const own = await createPayment({ gateway: 'jazzcash', currency: 'PKR', expiresAt: new Date(at).toISOString() });
+			expect(own.expiresAt).toBe(new Date(at).toISOString());
+			return (await page(`/pay/${env.websiteId}/${own.id}`)).text;
+		};
+		expect(await expiryFor(env.now() + 2 * HOUR)).toContain(`value="${pakistanTime(env.now() + 2 * HOUR)}"`);
+		// never shorter than a gateway takes (30 minutes) nor longer than its own longest (JazzCash: 168 hours)
+		expect(await expiryFor(env.now() + 10 * 60_000)).toContain(`value="${pakistanTime(env.now() + 30 * 60_000)}"`);
+		expect(await expiryFor(env.now() + 400 * HOUR)).toContain(`value="${pakistanTime(env.now() + 168 * HOUR)}"`);
+		expect((await createPayment({ gateway: 'jazzcash', currency: 'PKR' })).expiresAt).toBeNull();
+		const bad = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD', expiresAt: 'soon' });
+		expect([bad.status, bad.json.errors?.[0]?.path]).toEqual([422, '/expiresAt']);
 		await env.api('DELETE', '/v1/settings/payment_api.checkoutExpiryHours');
 		expect(form.text).toContain('payments.jazzcash.com.pk');
 		expect(form.text).toContain('/pay.js');
@@ -1538,7 +1553,7 @@ describe('kit features (PLAN 0.8.10)', () => {
 		expect(features.json.features.map((/** @type {any} */ feature) => feature.key)).toEqual(ALL);
 		const settings = await env.api('GET', '/v1/settings');
 		const manual = settings.json.features.find((/** @type {any} */ feature) => feature.key === 'manual_payments');
-		expect(Object.keys(manual.values)).toEqual(['proofMaxMb']);
+		expect(manual.values).toEqual({});
 		expect((await env.api('GET', '/v1/lists/manual_methods')).json.value).toEqual(BANK);
 		const listed = await env.api('GET', '/v1/connections');
 		const byName = Object.fromEntries(listed.json.connections.map((/** @type {any} */ c) => [c.name, c]));

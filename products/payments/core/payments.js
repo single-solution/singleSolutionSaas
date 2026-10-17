@@ -124,8 +124,10 @@ export const isPaymentMethod = (value) => isGateway(value) || isMethodKey(value)
 /**
  * A new payment from the API: amount (minor units) and currency, optional gateway or manual method (else the payer
  * picks one), the
- * description payers see, the merchant's reference (for example the order id), the payer, metadata and the return and
- * cancel addresses (their origins are checked against the website by the caller).
+ * description payers see, the merchant's reference (for example the order id), the payer, metadata, the return and
+ * cancel addresses (their origins are checked against the website by the caller) and, optionally, when an unpaid
+ * checkout ends (`expiresAt`, an ISO time: a shop passes its order's payment window; without it the Merchant payment
+ * API setting decides).
  * @param {unknown} body
  * @returns {Checked}
  */
@@ -148,6 +150,9 @@ export const checkPaymentInput = (body) => {
 	for (const field of ['returnUrl', 'cancelUrl'])
 		if (input[field] !== undefined && (typeof input[field] !== 'string' || input[field].length > 2048))
 			return { ok: false, field, message: `${field} is an address of at most 2048 characters.` };
+	const expiresAt = input.expiresAt ?? null;
+	if (expiresAt !== null && (typeof expiresAt !== 'string' || Number.isNaN(Date.parse(expiresAt))))
+		return { ok: false, field: 'expiresAt', message: 'expiresAt is an ISO 8601 time, or null to use the default.' };
 	return {
 		ok: true,
 		value: {
@@ -161,6 +166,7 @@ export const checkPaymentInput = (body) => {
 			answers: [],
 			returnUrl: input.returnUrl ?? null,
 			cancelUrl: input.cancelUrl ?? null,
+			expiresAt: expiresAt === null ? null : new Date(expiresAt),
 		},
 	};
 };
@@ -434,6 +440,7 @@ export const paymentView = (payment, checkoutUrl) => ({
 		...(entry.note ? { note: entry.note } : {}),
 	})),
 	checkoutUrl,
+	expiresAt: iso(payment.expiresAt),
 	paidAt: iso(payment.paidAt),
 	voidedAt: iso(payment.voidedAt),
 	createdAt: iso(payment.createdAt),

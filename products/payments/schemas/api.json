@@ -332,6 +332,7 @@
 				"refunds",
 				"history",
 				"checkoutUrl",
+				"expiresAt",
 				"paidAt",
 				"voidedAt",
 				"createdAt",
@@ -569,6 +570,11 @@
 					"type": "string",
 					"format": "uri",
 					"description": "The payer's page for this payment: send them there."
+				},
+				"expiresAt": {
+					"type": ["string", "null"],
+					"format": "date-time",
+					"description": "When an unpaid gateway checkout ends, as the caller asked; null: the Merchant payment API setting decides."
 				},
 				"paidAt": {
 					"type": ["string", "null"],
@@ -917,7 +923,7 @@
 	},
 	"POST /v1/payments": {
 		"summary": "Create a payment",
-		"description": "Send the payer to checkoutUrl. Without a gateway the payer picks one on that page. 422 gateway_not_ready when the gateway (or every gateway, without one) is off or not connected for the currency; 422 currency_not_supported. Send an Idempotency-Key so a retried request makes one payment.",
+		"description": "Send the payer to checkoutUrl. Without a gateway the payer picks one on that page. expiresAt (optional) is when an unpaid gateway checkout ends, for example your order's payment window; without it the Merchant payment API setting decides, and each gateway keeps within its own shortest and longest. 422 gateway_not_ready when the gateway (or every gateway, without one) is off or not connected for the currency; 422 currency_not_supported. Send an Idempotency-Key so a retried request makes one payment.",
 		"body": {
 			"type": "object",
 			"required": ["amount", "currency"],
@@ -978,6 +984,11 @@
 					"type": "string",
 					"maxLength": 2048,
 					"description": "Where the payer goes after canceling at the gateway."
+				},
+				"expiresAt": {
+					"type": ["string", "null"],
+					"format": "date-time",
+					"description": "When an unpaid gateway checkout ends (an ISO time); without it the Merchant payment API setting decides."
 				}
 			}
 		},

@@ -12,6 +12,7 @@ import { isId } from '@ss/contracts';
 import { actorOf, countHandlers, created, defineRoute, formatText, paginate, problem } from '@ss/app-kit';
 import { fromDecimal } from '@ss/contracts/format';
 import { CUSTOM_GATEWAY_CONNECTIONS, GATEWAY_FEATURES, adapterOf, isCustomGateway, isGateway } from '../core/gateways.js';
+import { PROOF_MAX_MB } from '../core/limits.js';
 import { methodView } from '../core/methods.js';
 import { gatewayAddresses } from '../core/snippets.js';
 import { amountOf, decimalSignOf } from '../core/money.js';
@@ -717,7 +718,6 @@ export const createRoutes = (product) => {
 		if (!s || !payment || !payment.manual || payment.status !== 'pending' || payment.proof !== null)
 			return problem('not_found', 'No proof can be uploaded for this payment.');
 		const method = await service.methodOf(s, payment.gateway);
-		const { proofMaxMb } = await product.settings.values(websiteId, 'manual_payments');
 		const storage = method?.proof === true ? await product.connections.storage(websiteId) : null;
 		if (!storage) return problem('storage_not_connected', 'Proofs cannot be uploaded for this website.');
 		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
@@ -727,9 +727,9 @@ export const createRoutes = (product) => {
 				? PROOF_TYPES[/** @type {keyof typeof PROOF_TYPES} */ (body.type)]
 				: null;
 			if (!extension) return invalid('type', 'Upload a JPEG, PNG or WebP photo or a PDF.');
-			const max = Number(proofMaxMb) * 1_048_576;
+			const max = PROOF_MAX_MB * 1_048_576;
 			if (!Number.isSafeInteger(body.size) || body.size < 1 || body.size > max)
-				return invalid('size', `The largest proof is ${proofMaxMb} MB.`);
+				return invalid('size', `The largest proof is ${PROOF_MAX_MB} MB.`);
 			const signed = storage.presignPut({
 				key: `${prefix}${extension}`,
 				contentType: body.type,
@@ -813,7 +813,8 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/payments',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'payment_api',
 			idempotent: true,
 			rateLimit: SERVER_LIMITS,
@@ -825,7 +826,14 @@ export const createRoutes = (product) => {
 				return created(service.view(s, payment));
 			},
 		}),
-		defineRoute({ method: 'GET', path: '/v1/payments', auth: 'server', permission: 'payments.read', feature: 'payment_api', handler: listPayments }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/payments',
+			auth: 'server',
+			permission: 'payments.read',
+			feature: 'payment_api',
+			handler: listPayments,
+		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/payments/count',
@@ -842,11 +850,19 @@ export const createRoutes = (product) => {
 			feature: 'payment_api',
 			handler: paymentCounts.counts,
 		}),
-		defineRoute({ method: 'GET', path: '/v1/payments/:id', auth: 'server', runtime: true, feature: 'payment_api', handler: readPayment }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/payments/:id',
+			auth: 'server',
+			runtime: true,
+			feature: 'payment_api',
+			handler: readPayment,
+		}),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/payments/:id/cancel',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'payment_api',
 			rateLimit: SERVER_LIMITS,
 			handler: cancelPayment,
@@ -854,7 +870,8 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/payments/:id/verify',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'payment_api',
 			rateLimit: SERVER_LIMITS,
 			handler: async (ctx) => {
@@ -868,21 +885,24 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/events',
-			auth: 'server', permission: 'payments.read',
+			auth: 'server',
+			permission: 'payments.read',
 			feature: 'payment_api',
 			handler: (ctx) => product.events.list(ctx),
 		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/events/count',
-			auth: 'server', permission: 'payments.read',
+			auth: 'server',
+			permission: 'payments.read',
 			feature: 'payment_api',
 			handler: (ctx) => product.events.count(ctx),
 		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/events/counts',
-			auth: 'server', permission: 'payments.read',
+			auth: 'server',
+			permission: 'payments.read',
 			feature: 'payment_api',
 			handler: (ctx) => product.events.counts(ctx),
 		}),
@@ -892,7 +912,8 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/manual-methods',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'manual_payments',
 			database: false,
 			handler: manualMethods,
@@ -935,15 +956,37 @@ export const createRoutes = (product) => {
 			rateLimit: SERVER_LIMITS,
 			handler: createLink,
 		}),
-		defineRoute({ method: 'GET', path: '/v1/links', auth: 'server', permission: 'links.read', feature: 'payment_links', handler: listLinks }),
-		defineRoute({ method: 'GET', path: '/v1/links/:id', auth: 'server', permission: 'links.read', feature: 'payment_links', handler: readLink }),
-		defineRoute({ method: 'PATCH', path: '/v1/links/:id', auth: 'server', permission: 'links.manage', feature: 'payment_links', handler: switchLink }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/links',
+			auth: 'server',
+			permission: 'links.read',
+			feature: 'payment_links',
+			handler: listLinks,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/links/:id',
+			auth: 'server',
+			permission: 'links.read',
+			feature: 'payment_links',
+			handler: readLink,
+		}),
+		defineRoute({
+			method: 'PATCH',
+			path: '/v1/links/:id',
+			auth: 'server',
+			permission: 'links.manage',
+			feature: 'payment_links',
+			handler: switchLink,
+		}),
 
 		// ------------------------------------------------------------------------------------------- subscriptions
 		defineRoute({
 			method: 'POST',
 			path: '/v1/subscriptions',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'subscriptions',
 			idempotent: true,
 			rateLimit: SERVER_LIMITS,
@@ -966,7 +1009,8 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/subscriptions/:id',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'subscriptions',
 			handler: async (ctx) => {
 				const s = await siteOf(ctx);

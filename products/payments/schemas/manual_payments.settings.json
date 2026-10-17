@@ -1,17 +1,5 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {
-		"proofMaxMb": {
-			"type": "integer",
-			"title": "Largest proof (MB)",
-			"description": "The largest photo or PDF a payer may upload as proof of a payment.",
-			"default": 5,
-			"minimum": 1,
-			"maximum": 10,
-			"x-ui": {
-				"advanced": true
-			}
-		}
-	}
+	"properties": {}
 }

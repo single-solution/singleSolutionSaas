@@ -6,7 +6,14 @@
  * routes: a test fails when an answer does not fit its description.
  * @module
  */
-import { apiChecker, createAccountsDouble, createFakePortal, createMemoryStore, createNetwork, staffCaller } from '@ss/app-kit/testing';
+import {
+	apiChecker,
+	createAccountsDouble,
+	createFakePortal,
+	createMemoryStore,
+	createNetwork,
+	staffCaller,
+} from '@ss/app-kit/testing';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
@@ -146,7 +153,11 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	 *   headers?: Record<string, string>, after?: boolean, bare?: boolean, staff?: Record<string, any> }} [init] `bare`: the
 	 *   server token alone; `staff`: who is signed in (the website's server with a staff Owner signed in otherwise)
 	 */
-	const call = async (method, path, { token, origin, body, form, cookie, headers = {}, after = true, bare = false, staff } = {}) => {
+	const call = async (
+		method,
+		path,
+		{ token, origin, body, form, cookie, headers = {}, after = true, bare = false, staff } = {},
+	) => {
 		if (token === server && !bare && headers['ss-sign-in'] === undefined && headers['ss-visitor-ip'] === undefined)
 			// eslint-disable-next-line no-param-reassign -- the harness signs the staff member in
 			headers = await staffHeaders({ headers, staff });

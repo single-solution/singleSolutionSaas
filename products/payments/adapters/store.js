@@ -33,6 +33,8 @@ import { createId } from '@ss/contracts';
  * @property {Array<{ label: string, value: string }>} answers the payer's answers to a payment link's questions (P3)
  * @property {string | null} returnUrl
  * @property {string | null} cancelUrl
+ * @property {Date | null} expiresAt when an unpaid gateway checkout ends, as the caller asked (a shop passes its order's
+ *   payment window); null: the Merchant payment API setting decides
  * @property {string | null} gateway a gateway id, or a manual payment method's key (then `manual` says which)
  * @property {{ name: string, kind: import('../core/methods.js').MethodKind } | null} manual the manual payment method
  *   as it was when the payment took it (its name and kind), null for a gateway or before a method is chosen
