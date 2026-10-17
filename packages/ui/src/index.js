@@ -48,6 +48,7 @@ export {
 	Stepper,
 	KeyValueList,
 	Masonry,
+	TextLink,
 } from './display.js';
 export { Table } from './Table.js';
 export { Dialog, ConfirmDialog } from './overlay.js';
@@ -66,6 +67,7 @@ export {
 	SettingsCard,
 	SettingRow,
 	SaveBar,
+	SaveRow,
 	SectionNav,
 	SectionLayout,
 	PillTabs,

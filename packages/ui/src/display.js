@@ -233,6 +233,31 @@ export function StatusBadge({ status, label, className }) {
 	);
 }
 
+/**
+ * A link inside text, a table cell, a header or a footer, in one look: the accent color, underlined on hover; `tone="plain"`
+ * is the text color that takes the accent on hover (the name in a table row). `as` renders a router link; `external`
+ * opens a new tab and marks it with an arrow. Never style a link by hand.
+ * @param {Omit<import('react').AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> & { href: string,
+ *   as?: import('react').ElementType, tone?: 'accent' | 'plain', external?: boolean }} props
+ */
+export function TextLink({ href, as, tone = 'accent', external = false, className, children, ...rest }) {
+	const Tag = as ?? 'a';
+	return (
+		<Tag
+			href={href}
+			{...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+			className={cx(
+				tone === 'accent' ? 'font-semibold text-primary hover:underline' : 'text-fg hover:text-primary hover:underline',
+				external && 'inline-flex items-center gap-1',
+				className,
+			)}
+			{...rest}>
+			{children}
+			{external ? <Icon name="external" size={13} /> : null}
+		</Tag>
+	);
+}
+
 /** @typedef {'active' | 'setup' | 'off' | 'error' | 'info'} PillStatus */
 /** @type {Record<PillStatus, Tone>} */
 const PILL_TONES = { active: 'success', setup: 'warning', off: 'neutral', error: 'danger', info: 'primary' };

@@ -7,7 +7,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Card, EntryGroup, FieldGrid, Icon, IconButton, Input, ItemSwitcher, Select, TextArea } from '@ss/ui';
+import { Button, Card, EntryGroup, FieldGrid, Icon, IconButton, Input, ItemSwitcher, Select, TextArea, SaveRow as SharedSaveRow } from '@ss/ui';
 import { COURIER_CONNECTIONS } from '../../core/couriers.js';
 import { currencyDigits, fromDecimal, toDecimal } from '@ss/contracts/format';
 import { UNIT_STATE_LIMITS } from '../../core/unit-states.js';
@@ -125,30 +125,11 @@ export const ListOutcome = ({ result, local }) => <SaveOutcome result={result} l
  * Save and Cancel under an editor.
  * @param {{ dirty: boolean, onSave: () => Promise<void>, onCancel: () => void, children?: import('react').ReactNode }} props
  */
-export function SaveRow({ dirty, onSave, onCancel, children }) {
-	const [busy, setBusy] = useState(false);
-	return (
-		<div className="flex flex-wrap gap-2">
-			{children}
-			<Button
-				size="sm"
-				disabled={!dirty}
-				loading={busy}
-				onClick={async () => {
-					setBusy(true);
-					await onSave();
-					setBusy(false);
-				}}>
-				{L.saveList}
-			</Button>
-			{dirty ? (
-				<Button size="sm" variant="ghost" onClick={onCancel}>
-					{TEXTS.cancel}
-				</Button>
-			) : null}
-		</div>
-	);
-}
+export const SaveRow = ({ dirty, onSave, onCancel, children }) => (
+	<SharedSaveRow dirty={dirty} onSave={onSave} onCancel={onCancel} saveLabel={L.saveList} cancelLabel={TEXTS.cancel}>
+		{children}
+	</SharedSaveRow>
+);
 
 /**
  * Load and save one list: the saved value, the draft, the last outcome.

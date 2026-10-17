@@ -235,15 +235,15 @@ function BrandingCard({ settings, onSaved }) {
 							className="size-16 rounded-xl bg-surface-2 object-contain"
 						/>
 					) : null}
-					<input
+					<Input
 						type="file"
+						hideLabel
+						label={ADMIN.branding.logo}
 						accept={LOGO_TYPES.join(',')}
-						aria-label={ADMIN.branding.logo}
 						onChange={(e) => {
 							const file = e.currentTarget.files?.[0];
 							if (file) void upload(file);
 						}}
-						className="block w-full text-sm text-muted file:mr-3 file:cursor-pointer file:rounded-control file:border file:border-solid file:border-line file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-fg hover:file:bg-surface-2"
 					/>
 					{logoError ? <Callout tone="danger">{logoError}</Callout> : null}
 					{settings.branding.hasLogo ? (

@@ -11,27 +11,7 @@
  * @module
  */
 import { useState } from 'react';
-import {
-	ActionMenu,
-	Badge,
-	BarChart,
-	Button,
-	ButtonLink,
-	Card,
-	EmptyState,
-	Icon,
-	IconBadge,
-	NeedsList,
-	PageHeader,
-	SectionLayout,
-	SetupChecklist,
-	Stat,
-	StatGrid,
-	describeProblem,
-	formatCredits,
-	initialsOf,
-	useToast,
-} from '@ss/ui';
+import { ActionMenu, Badge, BarChart, Button, ButtonLink, Card, EmptyState, Icon, IconBadge, NeedsList, PageHeader, SectionLayout, SetupChecklist, Stat, StatGrid, describeProblem, formatCredits, initialsOf, useToast, TextLink } from '@ss/ui';
 import { ADMIN, BILLING, MORE, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
@@ -300,11 +280,9 @@ export function OverviewView(props) {
 								<span className="flex items-center gap-3">
 									<IconBadge icon="box" kind="product" size="sm" />
 									{linked ? (
-										<Link
-											href={adminRoutes.product(p.productId)}
-											className="text-fg hover:text-primary hover:underline">
+										<TextLink as={Link} tone="plain" href={adminRoutes.product(p.productId)}>
 											{p.name}
-										</Link>
+										</TextLink>
 									) : (
 										p.name
 									)}

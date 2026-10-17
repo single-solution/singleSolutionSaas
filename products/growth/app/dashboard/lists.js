@@ -7,20 +7,7 @@
  * @module
  */
 import { useState } from 'react';
-import {
-	Button,
-	Callout,
-	Card,
-	Checkbox,
-	CheckboxGroup,
-	EntryGroup,
-	FieldGrid,
-	Input,
-	ItemSwitcher,
-	Select,
-	TextArea,
-	describeProblem,
-} from '@ss/ui';
+import { Button, Callout, Card, Checkbox, CheckboxGroup, EntryGroup, FieldGrid, Input, ItemSwitcher, Select, TextArea, describeProblem, SaveRow } from '@ss/ui';
 import { SaveOutcome, call, useLoad } from '@ss/ui/dashboard';
 import { LISTS } from '../../core/lists.js';
 import { ONLINE_STORE_PRESET } from '../../core/seo.js';
@@ -273,18 +260,20 @@ export function ListCard({ websiteId, name }) {
 						onChange={setDraft}
 						one
 					/>
-					<Button
-						disabled={draft === null}
-						onClick={async () => {
+					<SaveRow
+						dirty={draft !== null}
+						saveLabel={L.save}
+						cancelLabel={TEXTS.cancel}
+						onCancel={() => setDraft(null)}
+						onSave={async () => {
 							const next = await call('PUT', path, { value: draft });
 							setResult(next);
 							if (next.ok) {
 								setDraft(null);
 								reload();
 							}
-						}}>
-						{L.save}
-					</Button>
+						}}
+					/>
 					<SaveOutcome result={result} format={() => (errors['/value'] ? [errors['/value']] : [])} />
 				</div>
 			)}

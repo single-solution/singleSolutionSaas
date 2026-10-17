@@ -9,30 +9,7 @@
  * @module
  */
 import { useEffect, useState } from 'react';
-import {
-	Badge,
-	BarChart,
-	Button,
-	ButtonLink,
-	Callout,
-	Card,
-	EmptyState,
-	Icon,
-	IconBadge,
-	ListRow as Row,
-	LocalTime,
-	NeedsList,
-	PageHeader,
-	RowList,
-	SectionLayout,
-	SoftBreaks,
-	Stat,
-	StatGrid,
-	describeProblem,
-	formatCredits,
-	isEmptySeries,
-	useToast,
-} from '@ss/ui';
+import { Badge, BarChart, Button, ButtonLink, Callout, Card, EmptyState, Icon, IconBadge, ListRow as Row, LocalTime, NeedsList, PageHeader, RowList, SectionLayout, SoftBreaks, Stat, StatGrid, describeProblem, formatCredits, isEmptySeries, useToast, TextLink } from '@ss/ui';
 import { AUTH, BILLING, MERCHANT, MORE, WEBSITE } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
@@ -136,12 +113,14 @@ export function OverviewView(props) {
 					title={
 						<span className="flex min-w-0 items-center gap-3">
 							<IconBadge icon="globe" kind="website" size="sm" />
-							<Link
+							<TextLink
+								as={Link}
+								tone="plain"
 								href={routes.website(website.websiteId)}
 								title={website.domain}
-								className="line-clamp-2 min-w-0 break-words text-fg hover:text-primary hover:underline">
+								className="line-clamp-2 min-w-0 break-words">
 								<SoftBreaks text={website.domain} />
-							</Link>
+							</TextLink>
 						</span>
 					}
 					subtitle={WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}>

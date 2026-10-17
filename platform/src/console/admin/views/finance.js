@@ -7,32 +7,7 @@
  * @module
  */
 import { useMemo, useState } from 'react';
-import {
-	Badge,
-	BarChart,
-	Button,
-	ButtonLink,
-	Card,
-	Dialog,
-	EmptyState,
-	Form,
-	FormError,
-	Icon,
-	Input,
-	LinkTabs,
-	PageHeader,
-	SectionLayout,
-	Select,
-	Stat,
-	StatGrid,
-	Table,
-	Toolbar,
-	describeProblem,
-	fieldErrors,
-	formatCredits,
-	isEmptySeries,
-	useToast,
-} from '@ss/ui';
+import { Badge, BarChart, Button, ButtonLink, Card, Dialog, EmptyState, Form, FormError, Icon, Input, LinkTabs, PageHeader, SectionLayout, Select, Stat, StatGrid, Table, Toolbar, describeProblem, fieldErrors, formatCredits, isEmptySeries, useToast, TextLink } from '@ss/ui';
 import { BILLING, MORE } from '../../../texts/console.js';
 import { FilterForm } from '../../navigation.js';
 import { Link } from '../../link.js';
@@ -215,11 +190,9 @@ function AttentionTable({ rows, onAdd = null }) {
 					header: BILLING.receiptColumns.merchant,
 					rowHeader: true,
 					render: (m) => (
-						<Link
-							href={`${adminRoutes.merchant(m.merchantId)}#merchant-credits`}
-							className="font-semibold text-primary hover:underline">
+						<TextLink as={Link} href={`${adminRoutes.merchant(m.merchantId)}#merchant-credits`}>
 							{m.merchantName ?? m.merchantId}
-						</Link>
+						</TextLink>
 					),
 				},
 				{ key: 'status', header: 'Status', render: (m) => <MerchantStatusBadge status={m.status} /> },
@@ -459,15 +432,13 @@ export function FinanceView(props) {
 											sortable: true,
 											render: (r) =>
 												filter.by === 'merchant' ? (
-													<Link
-														href={`${adminRoutes.merchant(r.key)}#merchant-credits`}
-														className="hover:text-primary hover:underline">
+													<TextLink as={Link} tone="plain" href={`${adminRoutes.merchant(r.key)}#merchant-credits`}>
 														{r.label}
-													</Link>
+													</TextLink>
 												) : filter.by === 'product' && productsLinked ? (
-													<Link href={adminRoutes.product(r.key)} className="hover:text-primary hover:underline">
+													<TextLink as={Link} tone="plain" href={adminRoutes.product(r.key)}>
 														{r.label}
-													</Link>
+													</TextLink>
 												) : (
 													r.label
 												),

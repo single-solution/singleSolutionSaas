@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { Button } from './Button.js';
 import { Disclosure, SaveBar, SettingList, SettingRow, SettingsCard, ViewTitle } from './blocks.js';
-import { Callout, Card, SoftBreaks } from './display.js';
+import { Badge, Callout, Card, SoftBreaks } from './display.js';
 import { Input, RadioGroup, SegmentedControl, Switch, TextArea } from './fields.js';
 import { ListEditor } from './ListEditor.js';
 import { Paged } from './paged.js';
@@ -392,11 +392,7 @@ export function textSections({ items, editor, savedSource, dash, group }) {
 			...(group ? { group } : {}),
 			...(changed > 0
 				? {
-						badge: (
-							<span className="rounded-full bg-primary-soft px-1.5 text-xs font-semibold text-on-primary-soft tabular-nums">
-								{changed}
-							</span>
-						),
+						badge: <Badge tone="primary">{changed}</Badge>,
 					}
 				: {}),
 			content: (

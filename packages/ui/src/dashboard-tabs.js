@@ -14,13 +14,14 @@
 import { useState } from 'react';
 import { Button } from './Button.js';
 import { CodeBlock } from './CodeBlock.js';
-import { Badge, Callout, Card, StatusPill } from './display.js';
+import { Badge, Callout, Card, StatusPill, TextLink } from './display.js';
 import { SaveBar, SectionLayout, SettingList, SettingsCard, ViewTitle } from './blocks.js';
 import { Input, Switch } from './fields.js';
 import { ActionMenu } from './Menu.js';
 import { ConfirmDialog } from './overlay.js';
 import { OverviewSkeleton, ProductOverview, RecentChanges } from './overview.js';
 import { Paged } from './paged.js';
+import { ListRow, RowList } from './rows.js';
 import { formatCreditsPerHour, parseCredits, supportContact } from './format.js';
 import { useDisplayLocale } from './time.js';
 import { call, fill, useLoad } from './dashboard-api.js';
@@ -75,11 +76,6 @@ const useNothingMore = () => ({});
 
 /** A name as part of an address. @param {string} name */
 const slug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-
-/** A small count shown at the right of a sidebar link. @param {{ children: ReactNode }} props */
-function Count({ children }) {
-	return <span className="rounded-md bg-surface-2 px-1.5 py-px text-micro font-medium text-muted tabular-nums">{children}</span>;
-}
 
 /**
  * Overview (PLAN 0.6 "Overviews talk", 0.4.3): the kit's whole Overview (`ProductOverview`) — the greeting, what needs
@@ -159,83 +155,83 @@ export function FeaturesTab({ websiteId, who, support, warnings, open }) {
 					return {
 						id: `category-${slug(category.title)}`,
 						label: category.title,
-						badge: <Count>{`${count}/${list.length}`}</Count>,
+						badge: <Badge>{`${count}/${list.length}`}</Badge>,
 						content: (
 							<>
 								<ViewTitle title={category.title} description={fill(F.countOn, { on: count, total: list.length })} />
 								<Card padded={false}>
-									<ul className="divide-y divide-line-soft">
+									<RowList inset>
 										{list.map((feature) => {
 											const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
 											const broken = links.filter(
 												(link) => link.neededBy.includes(feature.key) && link.status !== 'connected',
 											);
 											return (
-												<li key={feature.key} className="flex items-start gap-4 px-5 py-4">
-													<div className="min-w-0 flex-1 space-y-1">
-														<p className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-															<span className="text-sm font-medium text-fg">{feature.name}</span>
-															{feature.on && broken.length > 0 ? (
-																<StatusPill
-																	status="setup"
-																	title={broken
-																		.map((link) => fill(F.notWorking, { connection: link.label }))
-																		.join(' · ')}>
-																	{F.needsSetup}
-																</StatusPill>
-															) : null}
-														</p>
-														<p className="max-w-[40rem] text-help text-muted">{feature.description}</p>
-														<p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-help text-muted">
-															<span>
-																{fill(F.price, {
-																	price: formatCreditsPerHour(feature.millicreditsPerHour, { locale }),
-																})}
+												<ListRow
+													key={feature.key}
+													wrap
+													className="py-4"
+													title={feature.name}
+													{...(feature.on && broken.length > 0
+														? {
+																status: (
+																	<StatusPill
+																		status="setup"
+																		title={broken
+																			.map((link) => fill(F.notWorking, { connection: link.label }))
+																			.join(' · ')}>
+																		{F.needsSetup}
+																	</StatusPill>
+																),
+															}
+														: {})}
+													meta={
+														<>
+															<span className="block max-w-[40rem]">{feature.description}</span>
+															<span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+																<span>
+																	{fill(F.price, {
+																		price: formatCreditsPerHour(feature.millicreditsPerHour, { locale }),
+																	})}
+																</span>
+																{feature.dependsOn.length > 0 ? (
+																	<span>{fill(F.needs, { features: namesOf(feature.dependsOn) })}</span>
+																) : null}
+																<TextLink className="font-medium" href={`/docs#feature-${feature.key}`}>
+																	{F.docs}
+																</TextLink>
 															</span>
-															{feature.dependsOn.length > 0 ? (
-																<span>{fill(F.needs, { features: namesOf(feature.dependsOn) })}</span>
-															) : null}
-															<a
-																className="font-medium text-primary hover:underline"
-																href={`/docs#feature-${feature.key}`}>
-																{F.docs}
-															</a>
-														</p>
-														{feature.on && broken.length > 0 ? (
-															<div className="flex flex-wrap gap-2 pt-1.5">
-																{broken.map((link) => (
-																	<Button
-																		key={link.name}
-																		size="sm"
-																		variant="secondary"
-																		title={fill(F.notWorking, { connection: link.label })}
-																		onClick={() => {
-																			// the Connections tab opens on this connection (its view is kept in the hash)
-																			open?.('connections');
-																			try {
-																				window.history.replaceState(window.history.state, '', `#connection-${link.name}`);
-																			} catch {
-																				// no history: the tab opens on its first connection
-																			}
-																		}}>
-																		{`${F.connect} ${link.label}`}
-																	</Button>
-																))}
-															</div>
-														) : null}
-													</div>
-													<Switch
-														size="sm"
-														hideLabel
-														label={feature.name}
-														checked={on.includes(feature.key)}
-														disabled={!admin || (missing.length > 0 && !on.includes(feature.key))}
-														onChange={(next) => toggle(feature, next)}
-													/>
-												</li>
+														</>
+													}
+													action={
+														<Switch
+															size="sm"
+															hideLabel
+															label={feature.name}
+															checked={on.includes(feature.key)}
+															disabled={!admin || (missing.length > 0 && !on.includes(feature.key))}
+															onChange={(next) => toggle(feature, next)}
+														/>
+													}>
+													{feature.on && broken.length > 0 ? (
+														<div className="flex flex-wrap gap-2">
+															{broken.map((link) => (
+																<Button
+																	key={link.name}
+																	size="sm"
+																	variant="secondary"
+																	title={fill(F.notWorking, { connection: link.label })}
+																	// the Connections tab opens on this connection
+																	onClick={() => open?.('connections', `connection-${link.name}`)}>
+																	{`${F.connect} ${link.label}`}
+																</Button>
+															))}
+														</div>
+													) : null}
+												</ListRow>
 											);
 										})}
-									</ul>
+									</RowList>
 								</Card>
 							</>
 						),
@@ -650,13 +646,13 @@ export function DevelopersTab({ websiteId, portal, links, sections, children }) 
 											<p className="text-sm">{fill(D.websiteId, { id: String(websiteId) })}</p>
 											<p className="mt-2 text-sm">{D.server}</p>
 											<p className="mt-3 flex flex-wrap gap-4">
-												<a className="text-sm font-semibold text-primary" href="/docs">
+												<TextLink className="text-sm" href="/docs">
 													{D.openDocs}
-												</a>
+												</TextLink>
 												{links}
-												<a className="text-sm font-semibold text-primary" href={portal}>
+												<TextLink className="text-sm" href={portal}>
 													{D.manageTokens}
-												</a>
+												</TextLink>
 											</p>
 										</Card>
 									</>
@@ -680,16 +676,21 @@ export function DevelopersTab({ websiteId, portal, links, sections, children }) 
 												label={D.search}
 												text={(feature) => `${feature.name} ${feature.key}`}>
 												{(page) => (
-													<ul className="divide-y divide-line-soft">
+													<RowList>
 														{page.map((feature) => (
-															<li key={feature.key} className="py-2 text-sm first:pt-0 last:pb-0">
-																<a className="font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
-																	{feature.name}
-																</a>
-																{feature.on ? '' : ` (${D.off})`}
-															</li>
+															<ListRow
+																key={feature.key}
+																wrap
+																className="py-2"
+																title={
+																	<>
+																		<TextLink href={`/docs#feature-${feature.key}`}>{feature.name}</TextLink>
+																		{feature.on ? '' : ` (${D.off})`}
+																	</>
+																}
+															/>
 														))}
-													</ul>
+													</RowList>
 												)}
 											</Paged>
 										</Card>

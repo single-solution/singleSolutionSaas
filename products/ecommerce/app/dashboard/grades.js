@@ -16,24 +16,7 @@
  * @module
  */
 import { useState } from 'react';
-import {
-	ActionMenu,
-	Badge,
-	Button,
-	Card,
-	Checkbox,
-	Dialog,
-	EntryGroup,
-	FieldGrid,
-	Icon,
-	IconButton,
-	Input,
-	SeoPreview,
-	Select,
-	TextArea,
-	cx,
-	Paged,
-} from '@ss/ui';
+import { ActionMenu, Badge, Button, Card, Checkbox, Dialog, EntryGroup, FieldGrid, Icon, IconButton, Input, SeoPreview, Select, TextArea, cx, Paged, ListRow, RowList } from '@ss/ui';
 import { DURATION_MAX, DURATION_UNITS } from '../../core/durations.js';
 import { asWritten, fillTitle, metaDescription, patternText } from '../../core/seo-text.js';
 import { Loaded, fill } from '@ss/ui/dashboard';
@@ -445,30 +428,29 @@ function GradeRow({ grade, index, count, onEdit, onMove, onRemove }) {
 		grade.typeKeys.length === 0 ? G.typesAll : grade.typeKeys.join(', '),
 	];
 	return (
-		<li className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
-			<Swatch color={grade.color.trim()} label={grade.color.trim() || G.colorNone} />
-			<span className="min-w-0 flex-[1_1_16rem]">
-				<span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-					<span className="font-semibold text-fg">{name}</span>
+		<ListRow
+			wrap
+			media={<Swatch color={grade.color.trim()} label={grade.color.trim() || G.colorNone} />}
+			title={name}
+			status={
+				<>
 					<code className="text-xs text-muted">{keyOf(grade.key, grade.label)}</code>
 					{grade.active ? null : <Badge>{G.notOffered}</Badge>}
-				</span>
-				<span className="block text-sm text-muted">{facts.join(' · ')}</span>
-			</span>
-			<span className="flex items-center gap-1">
+				</>
+			}
+			meta={facts.join(' · ')}
+			action={
 				<Button size="sm" variant="secondary" onClick={onEdit}>
 					{G.edit}
 				</Button>
-				<ActionMenu
-					label={fill(G.more, { grade: name })}
-					items={[
-						{ label: L.up, disabled: index === 0, onSelect: () => onMove(-1) },
-						{ label: L.down, disabled: index === count - 1, onSelect: () => onMove(1) },
-						{ label: L.remove, danger: true, onSelect: onRemove },
-					]}
-				/>
-			</span>
-		</li>
+			}
+			moreLabel={fill(G.more, { grade: name })}
+			more={[
+				{ label: L.up, disabled: index === 0, onSelect: () => onMove(-1) },
+				{ label: L.down, disabled: index === count - 1, onSelect: () => onMove(1) },
+				{ label: L.remove, danger: true, onSelect: onRemove },
+			]}
+		/>
 	);
 }
 
@@ -520,7 +502,7 @@ export function GradesEditor({ websiteId, off, preview }) {
 									pageSize={8}
 									text={(entry) => entry.grade.label}>
 									{(page) => (
-										<ul className="divide-y divide-line-soft">
+										<RowList>
 											{page.map(({ grade, index }) => (
 												<GradeRow
 													key={index}
@@ -532,7 +514,7 @@ export function GradesEditor({ websiteId, off, preview }) {
 													onRemove={() => setItems(items.filter((_, at) => at !== index))}
 												/>
 											))}
-										</ul>
+										</RowList>
 									)}
 								</Paged>
 							)}

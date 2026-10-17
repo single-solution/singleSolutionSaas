@@ -8,26 +8,7 @@
  * @module
  */
 import { useState } from 'react';
-import {
-	ActionMenu,
-	Badge,
-	Button,
-	Callout,
-	Card,
-	Checkbox,
-	ConfirmDialog,
-	Dialog,
-	EmptyState,
-	EntryGroup,
-	FieldGrid,
-	Form,
-	Input,
-	Section,
-	Select,
-	Skeleton,
-	TextArea,
-	describeProblem,
-} from '@ss/ui';
+import { Badge, Button, Callout, Card, Checkbox, ConfirmDialog, Dialog, EmptyState, EntryGroup, FieldGrid, Form, Input, Section, Select, Skeleton, TextArea, describeProblem, ListRow, RowList } from '@ss/ui';
 import { LONG_VALUE_LIMIT, VALUE_LIMIT, isTitled } from '@ss/contracts/templates';
 import { CHANNELS } from '../../core/channels.js';
 import { MAX_BUTTONS, fillText, templateRows, valueNamesOf } from '../../core/templates.js';
@@ -322,7 +303,7 @@ export function TemplatesSection({ websiteId }) {
 						return shown.length === 0 ? (
 							<p className="text-sm text-muted">{T.noMatch}</p>
 						) : (
-							<ul className="divide-y divide-line-soft">
+							<RowList>
 								{shown.map((row) => {
 									const words = wordsOf(row);
 									const preview = words ? words.subject || words.text : T.notSetUpHelp;
@@ -393,42 +374,38 @@ export function TemplatesSection({ websiteId }) {
 												},
 											];
 									return (
-										<li
+										<ListRow
 											key={`${row.key}|${row.channel}|${row.language}`}
-											className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 first:pt-0 last:pb-0">
-											<span className="min-w-0 flex-[1_1_12rem]">
-												<span className="block break-words text-sm font-semibold text-fg">
-													{product ? product.name : row.key}
-												</span>
-												<span className="block truncate text-xs text-muted" title={words?.text ?? ''}>
-													{product ? `${row.key} · ${preview}` : preview}
-												</span>
-											</span>
-											<span className="flex flex-wrap gap-1.5">
-												<Badge kind="settings">
-													{TEXTS.settings.channels[/** @type {typeof CHANNELS[number]} */ (row.channel)]}
-												</Badge>
-												{product ? (
-													<>
-														<Badge>{productName(product.productId)}</Badge>
-														<Badge tone={STATE_TONES[/** @type {keyof typeof STATE_TONES} */ (row.state)]}>
-															{T.states[/** @type {keyof typeof T.states} */ (row.state)]}
-														</Badge>
-													</>
-												) : (
-													<Badge>{row.language === 'default' ? T.default : row.language}</Badge>
-												)}
-												{words?.required ? <Badge>{T.required_badge}</Badge> : null}
-												{words?.urgent ? <Badge>{T.urgent_badge}</Badge> : null}
-												{words?.sensitive ? <Badge>{T.sensitive_badge}</Badge> : null}
-												{words?.providerTemplate ? (
-													<Badge>{fill(T.atMeta, { name: words.providerTemplate })}</Badge>
-												) : null}
-												{words?.buttons?.length ? (
-													<Badge>{fill(T.buttonsCount, { count: words.buttons.length })}</Badge>
-												) : null}
-											</span>
-											<span className="flex flex-wrap items-center gap-2">
+											wrap
+											title={product ? product.name : row.key}
+											status={
+												<>
+													<Badge kind="settings">
+														{TEXTS.settings.channels[/** @type {typeof CHANNELS[number]} */ (row.channel)]}
+													</Badge>
+													{product ? (
+														<>
+															<Badge>{productName(product.productId)}</Badge>
+															<Badge tone={STATE_TONES[/** @type {keyof typeof STATE_TONES} */ (row.state)]}>
+																{T.states[/** @type {keyof typeof T.states} */ (row.state)]}
+															</Badge>
+														</>
+													) : (
+														<Badge>{row.language === 'default' ? T.default : row.language}</Badge>
+													)}
+													{words?.required ? <Badge>{T.required_badge}</Badge> : null}
+													{words?.urgent ? <Badge>{T.urgent_badge}</Badge> : null}
+													{words?.sensitive ? <Badge>{T.sensitive_badge}</Badge> : null}
+													{words?.providerTemplate ? (
+														<Badge>{fill(T.atMeta, { name: words.providerTemplate })}</Badge>
+													) : null}
+													{words?.buttons?.length ? (
+														<Badge>{fill(T.buttonsCount, { count: words.buttons.length })}</Badge>
+													) : null}
+												</>
+											}
+											meta={<span title={words?.text ?? ''}>{product ? `${row.key} · ${preview}` : preview}</span>}
+											action={
 												<Button
 													size="sm"
 													variant="secondary"
@@ -445,14 +422,13 @@ export function TemplatesSection({ websiteId }) {
 													}>
 													{row.state === 'not_set_up' ? T.setUp : T.edit}
 												</Button>
-												{more.length > 0 ? (
-													<ActionMenu size="sm" label={fill(T.more, { key: row.key })} items={more} />
-												) : null}
-											</span>
-										</li>
+											}
+											moreLabel={fill(T.more, { key: row.key })}
+											more={more}
+										/>
 									);
 								})}
-							</ul>
+							</RowList>
 						);
 					})()}
 				</Card>

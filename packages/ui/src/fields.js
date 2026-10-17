@@ -87,6 +87,11 @@ const COLOR =
 	'cursor-pointer p-1 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-lg ' +
 	'[&::-webkit-color-swatch]:border-0 [&::-moz-color-swatch]:rounded-lg [&::-moz-color-swatch]:border-0';
 
+/** A file input: the button inside it takes the look of a quiet button, not the browser's. */
+const FILE =
+	'cursor-pointer py-1.5 text-muted file:mr-3 file:cursor-pointer file:rounded-control file:border-0 file:bg-surface-2 ' +
+	'file:px-3 file:py-1 file:text-label file:font-medium file:text-fg hover:file:bg-surface-3';
+
 /**
  * @param {boolean} invalid
  */
@@ -218,7 +223,8 @@ function Field({ id, label, hideLabel = false, required = false, help, error, as
  */
 
 /**
- * Text-like input (`type` text, email, password, number, url, date, color …). `prefix` and `suffix` are adornments
+
+ * Text-like input (`type` text, email, password, number, url, date, color, file …). `prefix` and `suffix` are adornments
  * inside the frame (a currency sign, a unit, `https://`, an icon).
  * @param {Omit<import('react').InputHTMLAttributes<HTMLInputElement>, 'prefix'> & FieldProps & { ref?: import('react').Ref<HTMLInputElement> }} props
  */
@@ -276,7 +282,7 @@ export function Input({
 						required={required}
 						aria-invalid={error ? true : undefined}
 						aria-describedby={ids.describedBy}
-						className={cx(controlClass(Boolean(error)), LINE, rest.type === 'color' && COLOR, className)}
+						className={cx(controlClass(Boolean(error)), LINE, rest.type === 'color' && COLOR, rest.type === 'file' && FILE, className)}
 						{...rest}
 					/>
 				)

@@ -16,7 +16,7 @@
 import { Fragment, useState } from 'react';
 import { Button, ButtonLink } from './Button.js';
 import { cx } from './cx.js';
-import { Badge, Card, EmptyState, PageHeader, STAT_GRID, SkeletonBlock, Stat, StatGrid, StatusBadge } from './display.js';
+import { Badge, Card, EmptyState, PageHeader, STAT_GRID, SkeletonBlock, Stat, StatGrid, StatusBadge, TextLink } from './display.js';
 import { formatCredits, supportContact } from './format.js';
 import { Icon } from './icons.js';
 import { OVERVIEW_TEXTS } from './overview-texts.js';
@@ -138,9 +138,9 @@ function SetupRow({ step, labels, LinkTag }) {
 	) : action ? (
 		step.label
 	) : step.href ? (
-		<LinkTag href={step.href} className="font-medium text-fg hover:text-primary hover:underline">
+		<TextLink as={LinkTag} tone="plain" href={step.href} className="font-medium">
 			{step.label}
-		</LinkTag>
+		</TextLink>
 	) : step.onSelect ? (
 		<button type="button" onClick={step.onSelect} className="text-left font-medium text-fg hover:text-primary hover:underline">
 			{step.label}

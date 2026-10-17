@@ -15,7 +15,7 @@
  * @module
  */
 import { useState } from 'react';
-import { ActionMenu, Badge, Button, Card, Checkbox, Dialog, FieldGrid, Input, Paged, Select } from '@ss/ui';
+import { Badge, Button, Card, Checkbox, Dialog, FieldGrid, Input, Paged, Select, ListRow, RowList } from '@ss/ui';
 import { FIELD_LIMITS } from '../../core/fields.js';
 import { ELEMENTS, ITEM_KINDS, TYPE_LIMITS, UNIT_CAPTURES, elementFor } from '../../core/item-types.js';
 import { MAX_DECIMALS, MAX_UNIT_LABEL, STANDARD_UNITS } from '../../core/measure.js';
@@ -310,30 +310,29 @@ function TypeRow({ type, index, count, onEdit, onMove, onRemove }) {
 				: []),
 	];
 	return (
-		<li className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
-			<span className="min-w-0 flex-[1_1_16rem]">
-				<span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-					<span className="font-semibold text-fg">{name}</span>
+		<ListRow
+			wrap
+			title={name}
+			status={
+				<>
 					<code className="text-xs text-muted">{keyOf(type.key, type.name)}</code>
 					<Badge kind="product">{T.kinds[type.kind]}</Badge>
 					{type.active ? null : <Badge>{T.notOffered}</Badge>}
-				</span>
-				<span className="block text-sm text-muted">{parts.length > 0 ? parts.join(' · ') : T.noParts}</span>
-			</span>
-			<span className="flex items-center gap-1">
+				</>
+			}
+			meta={parts.length > 0 ? parts.join(' · ') : T.noParts}
+			action={
 				<Button size="sm" variant="secondary" onClick={onEdit}>
 					{T.edit}
 				</Button>
-				<ActionMenu
-					label={fill(T.more, { type: name })}
-					items={[
-						{ label: L.up, disabled: index === 0, onSelect: () => onMove(-1) },
-						{ label: L.down, disabled: index === count - 1, onSelect: () => onMove(1) },
-						{ label: L.remove, danger: true, onSelect: onRemove },
-					]}
-				/>
-			</span>
-		</li>
+			}
+			moreLabel={fill(T.more, { type: name })}
+			more={[
+				{ label: L.up, disabled: index === 0, onSelect: () => onMove(-1) },
+				{ label: L.down, disabled: index === count - 1, onSelect: () => onMove(1) },
+				{ label: L.remove, danger: true, onSelect: onRemove },
+			]}
+		/>
 	);
 }
 
@@ -381,7 +380,7 @@ export function ItemTypesEditor({ websiteId, off }) {
 									pageSize={8}
 									text={(entry) => entry.type.name}>
 									{(page) => (
-										<ul className="divide-y divide-line-soft">
+										<RowList>
 											{page.map(({ type, index }) => (
 												<TypeRow
 													key={index}
@@ -393,7 +392,7 @@ export function ItemTypesEditor({ websiteId, off }) {
 													onRemove={() => setItems(items.filter((_, at) => at !== index))}
 												/>
 											))}
-										</ul>
+										</RowList>
 									)}
 								</Paged>
 							)}

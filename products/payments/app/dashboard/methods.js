@@ -8,19 +8,7 @@
  * @module
  */
 import { useState } from 'react';
-import {
-	Button,
-	Callout,
-	Card,
-	Checkbox,
-	EntryGroup,
-	FieldGrid,
-	Input,
-	ItemSwitcher,
-	Select,
-	TextArea,
-	describeProblem,
-} from '@ss/ui';
+import { Button, Callout, Card, Checkbox, EntryGroup, FieldGrid, Input, ItemSwitcher, Select, TextArea, describeProblem, SaveRow } from '@ss/ui';
 import { BANK_ROW_LABELS, METHOD_KINDS, METHOD_LIMITS, methodReady } from '../../core/methods.js';
 import { SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
@@ -283,23 +271,20 @@ export function MethodsEditor({ websiteId }) {
 					/>
 				)}
 			/>
-			<div className="flex flex-wrap gap-2">
-				<Button
-					disabled={draft === null}
-					onClick={async () => {
-						const next = await call('PUT', path, { value: methods });
-						setResult(next);
-						if (next.ok) {
-							setDraft(null);
-							reload();
-						}
-					}}>
-					{TEXTS.save}
-				</Button>
-				<Button variant="ghost" disabled={draft === null} onClick={() => change(saved)}>
-					{M.cancel}
-				</Button>
-			</div>
+			<SaveRow
+				dirty={draft !== null}
+				saveLabel={TEXTS.save}
+				cancelLabel={M.cancel}
+				onCancel={() => change(saved)}
+				onSave={async () => {
+					const next = await call('PUT', path, { value: methods });
+					setResult(next);
+					if (next.ok) {
+						setDraft(null);
+						reload();
+					}
+				}}
+			/>
 			<SaveOutcome result={result} />
 		</section>
 	);

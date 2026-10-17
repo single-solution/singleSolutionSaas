@@ -8,7 +8,7 @@
  * check and the reply addresses).
  * @module
  */
-import { Badge, Button, Card, CodeBlock, Section, Stat } from '@ss/ui';
+import { Badge, Button, Card, CodeBlock, Section, Stat, ListRow, RowList } from '@ss/ui';
 import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
@@ -179,18 +179,20 @@ function NotificationsDevelopers(props) {
 					D.keysHelp,
 					<Card>
 						{keys.size === 0 ? <p className="text-sm text-muted">{D.noKeys}</p> : null}
-						<ul className="space-y-2 text-sm">
+						<RowList>
 							{[...keys].map(([key, channels]) => (
-								<li key={key} className="flex flex-wrap items-center gap-2">
-									<code className="font-semibold">{key}</code>
-									{channels.map((channel) => (
+								<ListRow
+									key={key}
+									wrap
+									title={<code>{key}</code>}
+									status={channels.map((channel) => (
 										<Badge key={channel} tone="info">
 											{TEXTS.settings.channels[/** @type {keyof typeof TEXTS.settings.channels} */ (channel)]}
 										</Badge>
 									))}
-								</li>
+								/>
 							))}
-						</ul>
+						</RowList>
 					</Card>,
 					'key',
 				),

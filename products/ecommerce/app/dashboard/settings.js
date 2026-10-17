@@ -10,7 +10,7 @@
  * for the global defaults.
  * @module
  */
-import { Callout } from '@ss/ui';
+import { Callout, TextLink } from '@ss/ui';
 import { SettingsTab as SharedSettingsTab, fill, useLoad } from '@ss/ui/dashboard';
 import {
 	AttachmentKindsEditor,
@@ -52,9 +52,9 @@ export const settingsNotice = (key, values) =>
 			tone="info"
 			className="mb-4"
 			actions={
-				<a className="text-sm font-semibold text-primary hover:underline" href="/docs#atlas-search">
+				<TextLink className="text-sm" href="/docs#atlas-search">
 					{TEXTS.settings.atlasDocs}
-				</a>
+				</TextLink>
 			}>
 			{fill(TEXTS.settings.atlasNotice, { index: String(values.searchIndex ?? '') })}
 		</Callout>

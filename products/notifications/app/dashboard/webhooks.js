@@ -5,7 +5,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, EntryGroup, Input, Skeleton, TextArea, describeProblem } from '@ss/ui';
+import { Button, Callout, Card, EntryGroup, Input, Skeleton, TextArea, describeProblem, SaveRow } from '@ss/ui';
 import { SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
@@ -75,7 +75,19 @@ export function WebhookUrlsCard({ websiteId, off, max }) {
 						/>
 					</EntryGroup>
 				))}
-				<div className="flex flex-wrap gap-2">
+				<SaveRow
+					dirty={draft !== null}
+					saveLabel={TEXTS.save}
+					cancelLabel={TEXTS.cancel}
+					onCancel={() => setDraft(null)}
+					onSave={async () => {
+						const next = await call('PUT', path, { value: valueOf(rows) });
+						setResult(next);
+						if (next.ok) {
+							setDraft(null);
+							reload();
+						}
+					}}>
 					<Button
 						size="sm"
 						variant="secondary"
@@ -83,20 +95,7 @@ export function WebhookUrlsCard({ websiteId, off, max }) {
 						onClick={() => setDraft([...rows, { url: '', events: '' }])}>
 						{W.add}
 					</Button>
-					<Button
-						size="sm"
-						disabled={draft === null}
-						onClick={async () => {
-							const next = await call('PUT', path, { value: valueOf(rows) });
-							setResult(next);
-							if (next.ok) {
-								setDraft(null);
-								reload();
-							}
-						}}>
-						{TEXTS.save}
-					</Button>
-				</div>
+				</SaveRow>
 				<SaveOutcome result={result} format={rowErrors} />
 			</div>
 		</Card>

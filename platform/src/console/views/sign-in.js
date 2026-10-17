@@ -7,7 +7,7 @@
  * @module
  */
 import { useEffect, useRef, useState } from 'react';
-import { Button, Callout, Form, FormError, Input, Spinner, describeProblem, fieldErrors, problemCode } from '@ss/ui';
+import { Button, Callout, Form, FormError, Input, Spinner, describeProblem, fieldErrors, problemCode, TextLink } from '@ss/ui';
 import { supportContactLine } from '@ss/contracts/text';
 import { AUTH } from '../../texts/console.js';
 import { apiFetch, takeFragmentToken } from '../client.js';
@@ -300,9 +300,9 @@ export function SignInView({ branding, firstAdmin, next = null, notice = null })
 					{AUTH.signIn}
 				</Button>
 				<p className="text-center text-sm">
-					<Link href={routes.forgotPassword()} className="font-semibold text-primary hover:underline">
+					<TextLink as={Link} href={routes.forgotPassword()}>
 						{AUTH.forgot}
-					</Link>
+					</TextLink>
 				</p>
 			</Form>
 		</AuthFrame>
@@ -337,9 +337,9 @@ export function ForgotPasswordView({ branding }) {
 			title={AUTH.forgotTitle}
 			subtitle={AUTH.forgotHelp}
 			footer={
-				<Link href={routes.login()} className="font-semibold text-primary hover:underline">
+				<TextLink as={Link} href={routes.login()}>
 					{AUTH.backToSignIn}
-				</Link>
+				</TextLink>
 			}>
 			{sent ? (
 				<Callout tone="success">{AUTH.forgotSent}</Callout>
@@ -535,9 +535,9 @@ export function ConfirmEmailView({ branding }) {
 			branding={branding}
 			title={AUTH.confirmTitle}
 			footer={
-				<Link href={routes.login()} className="font-semibold text-primary hover:underline">
+				<TextLink as={Link} href={routes.login()}>
 					{AUTH.backToSignIn}
-				</Link>
+				</TextLink>
 			}>
 			{!ready ? (
 				<Spinner />

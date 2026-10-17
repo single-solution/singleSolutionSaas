@@ -7,20 +7,7 @@
  * @module
  */
 import { useState } from 'react';
-import {
-	Button,
-	Callout,
-	Card,
-	Checkbox,
-	CodeBlock,
-	ConfirmDialog,
-	EntryGroup,
-	FieldGrid,
-	Input,
-	ItemSwitcher,
-	Select,
-	TextArea,
-} from '@ss/ui';
+import { Button, Callout, Card, Checkbox, CodeBlock, ConfirmDialog, EntryGroup, FieldGrid, Input, ItemSwitcher, Select, TextArea, SaveRow } from '@ss/ui';
 import { FALLBACK_LIMITS, PLACEHOLDERS, fallbackProblems, placeholdersOf } from '../../core/fallback.js';
 import { FIELD_TYPES } from '../../core/fields.js';
 import { STANDARD_FIELDS } from '../../core/flows.js';
@@ -111,26 +98,21 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 									</EntryGroup>
 								)}
 							/>
-							<div className="flex flex-wrap gap-2">
-								<Button
-									size="sm"
-									disabled={draft === null || (invalid !== undefined && items.some((item) => invalid(clean(item))))}
-									onClick={async () => {
-										const next = await call('PUT', path, { value: items.map(clean) });
-										setResult(next);
-										if (next.ok) {
-											setDraft(null);
-											reload();
-										}
-									}}>
-									{L.saveList}
-								</Button>
-								{draft !== null ? (
-									<Button size="sm" variant="ghost" onClick={() => setDraft(null)}>
-										{TEXTS.cancel}
-									</Button>
-								) : null}
-							</div>
+							<SaveRow
+								dirty={draft !== null}
+								disabled={invalid !== undefined && items.some((item) => invalid(clean(item)))}
+								saveLabel={L.saveList}
+								cancelLabel={TEXTS.cancel}
+								onCancel={() => setDraft(null)}
+								onSave={async () => {
+									const next = await call('PUT', path, { value: items.map(clean) });
+									setResult(next);
+									if (next.ok) {
+										setDraft(null);
+										reload();
+									}
+								}}
+							/>
 							<SaveOutcome result={result} title={L.errors} />
 						</div>
 					);

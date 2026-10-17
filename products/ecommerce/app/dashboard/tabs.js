@@ -6,7 +6,7 @@
  * @module
  */
 import { Fragment } from 'react';
-import { Button, ButtonLink, CodeBlock, LocalTime, Section, Stat } from '@ss/ui';
+import { Button, ButtonLink, CodeBlock, LocalTime, Section, Stat, TextLink } from '@ss/ui';
 import {
 	ConnectionsTab,
 	DefaultsTab,
@@ -317,9 +317,9 @@ function Developers(props) {
 		<DevelopersTab
 			{...props}
 			links={
-				<a className="text-sm font-semibold text-primary" href="/docs#catalog-seo">
+				<TextLink className="text-sm" href="/docs#catalog-seo">
 					{D.catalogSeo}
-				</a>
+				</TextLink>
 			}
 			sections={[
 				part('visitor', D.visitor, D.visitorHelp, <CodeBlock code={snippets.visitor} />, 'users'),
@@ -356,9 +356,9 @@ function Developers(props) {
 					fill(D.searchIndexHelp, { collection: 'ss_ecommerce_products' }),
 					<CodeBlock code={JSON.stringify(SEARCH_INDEX_DEFINITION, null, 2)} />,
 					'database',
-					<a className="text-sm font-semibold text-primary hover:underline" href="/docs#atlas-search">
+					<TextLink className="text-sm" href="/docs#atlas-search">
 						{D.searchIndexDocs}
-					</a>,
+					</TextLink>,
 				),
 				part('cors', D.cors, D.corsHelp, <CodeBlock code={snippets.cors} />, 'shield'),
 			]}

@@ -13,40 +13,7 @@
  */
 import { useEffect, useState } from 'react';
 import { OTHER_MAX, PROFILE_CHOICES, PROFILE_NONE, PROFILE_OTHER } from '@ss/contracts/profile';
-import {
-	Badge,
-	Button,
-	ButtonLink,
-	Callout,
-	Card,
-	CheckboxGroup,
-	ChoicePicker,
-	CodeBlock,
-	Dialog,
-	EmptyState,
-	ErrorState,
-	FieldGrid,
-	FormError,
-	Icon,
-	IconBadge,
-	Input,
-	KeyValueList,
-	ListRow,
-	LocalTime,
-	PageHeader,
-	RowList,
-	SectionLayout,
-	SegmentedControl,
-	Section,
-	Skeleton,
-	StatusBadge,
-	Switch,
-	ToastProvider,
-	copyText,
-	cx,
-	describeProblem,
-	useToast,
-} from '@ss/ui';
+import { Badge, Button, ButtonLink, Callout, Card, CheckboxGroup, ChoicePicker, CodeBlock, Dialog, EmptyState, ErrorState, FieldGrid, FormError, Icon, IconBadge, Input, KeyValueList, ListRow, LocalTime, PageHeader, RowList, SectionLayout, SegmentedControl, Section, Skeleton, StatusBadge, Switch, ToastProvider, copyText, cx, describeProblem, useToast, TextLink } from '@ss/ui';
 import { COUNTRY_CHOICES, COUNTRY_NAMES } from '../../modules/identity/core/countries.js';
 import { PROFILE, SETUP } from '../../texts/console.js';
 import { apiFetch, takeFragmentToken } from '../client.js';
@@ -378,13 +345,9 @@ function ProductPanel({ product, valuesShown }) {
 										{product.features.find((feature) => feature.key === item.feature)?.title ?? item.feature}
 									</span>{' '}
 									<span>{item.what}</span>{' '}
-									<a
-										href={item.docs}
-										target="_blank"
-										rel="noopener noreferrer"
-										className="font-semibold text-primary hover:underline">
+									<TextLink href={item.docs} external>
 										{SETUP.guide}
-									</a>
+									</TextLink>
 								</li>
 							))}
 						</ul>
@@ -420,21 +383,13 @@ function ProductPanel({ product, valuesShown }) {
 				<Part title={SETUP.sections.docs}>
 					<p className="text-sm break-words text-fg">{SETUP.apiBase(product.apiBase)}</p>
 					<p className="flex flex-wrap gap-4 text-sm">
-						<a
-							href={product.docs.guide}
-							target="_blank"
-							rel="noopener noreferrer"
-							className="font-semibold text-primary hover:underline">
+						<TextLink href={product.docs.guide} external>
 							{SETUP.guide}
-						</a>
+						</TextLink>
 						{product.docs.openapi ? (
-							<a
-								href={product.docs.openapi}
-								target="_blank"
-								rel="noopener noreferrer"
-								className="font-semibold text-primary hover:underline">
+							<TextLink href={product.docs.openapi} external>
 								{SETUP.openapi}
-							</a>
+							</TextLink>
 						) : null}
 					</p>
 				</Part>
@@ -1024,11 +979,9 @@ export function SetupView({ sheet: initial, links, manage, back, canSwitch }) {
 		<div className="space-y-8">
 			<PageHeader
 				breadcrumbs={
-					<Link
-						href={back.href}
-						className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+					<TextLink as={Link} href={back.href} className="inline-flex items-center gap-1 text-sm">
 						{back.label}
-					</Link>
+					</TextLink>
 				}
 				title={SETUP.title(sheet.website.domain)}
 				subtitle={SETUP.intro}

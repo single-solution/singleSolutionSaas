@@ -194,6 +194,10 @@ describe("Accounts's dashboard Overview", () => {
 	});
 });
 
+/** An item of the open More menu. @param {string} label */
+const menuItem = (label) =>
+	/** @type {HTMLButtonElement} */ ([...document.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent === label));
+
 describe('Settings → Custom fields (A6)', () => {
 	it('lists the fields with their type and who sees them, and saves a new order', async () => {
 		const { FieldsSection } = await import('../app/dashboard/fields.js');
@@ -215,14 +219,10 @@ describe('Settings → Custom fields (A6)', () => {
 		await settle();
 		expect(container.textContent).toContain(TEXTS.settings.fieldTypes.boolean);
 		expect(container.textContent).toContain(TEXTS.settings.fieldVisibility.staff);
-		const down = /** @type {HTMLButtonElement} */ (
-			container.querySelector(`button[aria-label="${TEXTS.settings.field.down}: FIRST"]`)
-		);
-		expect(
-			/** @type {HTMLButtonElement} */ (container.querySelector(`button[aria-label="${TEXTS.settings.field.up}: FIRST"]`))
-				.disabled,
-		).toBe(true);
-		click(down);
+		// the row's own actions are in its More menu: the first field cannot go up
+		click(/** @type {HTMLButtonElement} */ (container.querySelector(`button[aria-label="${TEXTS.settings.field.more}: FIRST"]`)));
+		expect(menuItem(TEXTS.settings.field.up).disabled).toBe(true);
+		click(menuItem(TEXTS.settings.field.down));
 		await settle();
 		const put = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === 'PUT');
 		expect(String(put?.[0])).toMatch(/\/fields$/);
@@ -260,8 +260,9 @@ describe('Settings → Consents (A2)', () => {
 		expect(container.textContent).toContain(TEXTS.settings.consentPurposes.marketing);
 		expect(container.textContent).toContain(TEXTS.settings.consent.required_badge);
 		click(
-			/** @type {HTMLButtonElement} */ (container.querySelector(`button[aria-label="${TEXTS.settings.consent.down}: TERMS"]`)),
+			/** @type {HTMLButtonElement} */ (container.querySelector(`button[aria-label="${TEXTS.settings.consent.more}: TERMS"]`)),
 		);
+		click(menuItem(TEXTS.settings.consent.down));
 		await settle();
 		const put = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === 'PUT');
 		expect(String(put?.[0])).toMatch(/\/consents$/);

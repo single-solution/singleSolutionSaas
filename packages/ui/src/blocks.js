@@ -207,6 +207,30 @@ export function SaveBar({
 }
 
 /**
+ * Save and Cancel under a list or form that is saved whole (a merchant list editor): Save is on while something changed,
+ * Cancel appears with it, and `children` (an Add button, a note) come first. A save that takes time shows the spinner
+ * on the button. For the settings of a page use {@link SaveBar}.
+ * @param {{ dirty: boolean, onSave: () => unknown, onCancel: () => void, disabled?: boolean, saveLabel?: string,
+ *   cancelLabel?: string, children?: ReactNode, className?: string }} props `disabled`: save is off even though
+ *   something changed (an entry the server would refuse)
+ */
+export function SaveRow({ dirty, onSave, onCancel, disabled = false, saveLabel = 'Save', cancelLabel = 'Cancel', children, className }) {
+	return (
+		<div className={cx('flex flex-wrap items-center gap-2', className)}>
+			{children}
+			<Button size="sm" disabled={!dirty || disabled} onClick={onSave}>
+				{saveLabel}
+			</Button>
+			{dirty ? (
+				<Button size="sm" variant="ghost" onClick={onCancel}>
+					{cancelLabel}
+				</Button>
+			) : null}
+		</div>
+	);
+}
+
+/**
  * One link of the inner sidebar. A link with `children` is a heading that opens its sub-items (a feature with several
  * groups of settings, a list with several parts): choosing it opens its first sub-item.
  * @typedef {object} SectionItem

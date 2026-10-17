@@ -14,33 +14,7 @@
  * @module
  */
 import { useState } from 'react';
-import {
-	Badge,
-	BarChart,
-	Button,
-	Card,
-	Dialog,
-	EmptyState,
-	Form,
-	FormError,
-	Icon,
-	Input,
-	KeyValueList,
-	LocalTime,
-	PageHeader,
-	Select,
-	SoftBreaks,
-	Stat,
-	StatGrid,
-	Table,
-	copyText,
-	describeProblem,
-	fieldErrors,
-	formatCredits,
-	isEmptySeries,
-	problemCode,
-	useToast,
-} from '@ss/ui';
+import { Badge, BarChart, Button, Card, Dialog, EmptyState, Form, FormError, Icon, Input, KeyValueList, LocalTime, PageHeader, Select, SoftBreaks, Stat, StatGrid, Table, copyText, describeProblem, fieldErrors, formatCredits, isEmptySeries, problemCode, useToast, TextLink } from '@ss/ui';
 import { ADMIN, MORE, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
@@ -387,12 +361,13 @@ function ProductDetail({ detail, owner }) {
 											wrap: true,
 											render: (w) => (
 												<span className="block min-w-0">
-													<Link
+													<TextLink
+														as={Link}
 														href={adminRoutes.website(w.merchantId, w.websiteId)}
 														title={w.domain}
-														className="line-clamp-2 break-words font-semibold text-primary hover:underline">
+														className="line-clamp-2 break-words">
 														<SoftBreaks text={w.domain} />
-													</Link>
+													</TextLink>
 													<Link
 														href={adminRoutes.merchant(w.merchantId)}
 														title={w.merchantName}
@@ -509,13 +484,9 @@ function ProductDetail({ detail, owner }) {
 										{
 											label: MORE.connection.docs,
 											value: product.docsUrl ? (
-												<a
-													href={product.docsUrl}
-													target="_blank"
-													rel="noopener noreferrer"
-													className="break-all font-semibold text-primary hover:underline">
+												<TextLink href={product.docsUrl} external className="break-all">
 													{product.docsUrl}
-												</a>
+												</TextLink>
 											) : (
 												'—'
 											),

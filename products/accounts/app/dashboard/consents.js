@@ -7,21 +7,7 @@
  * @module
  */
 import { useState } from 'react';
-import {
-	Badge,
-	Button,
-	Callout,
-	Card,
-	Checkbox,
-	Dialog,
-	EmptyState,
-	Form,
-	Input,
-	Section,
-	Select,
-	Skeleton,
-	describeProblem,
-} from '@ss/ui';
+import { Badge, Button, Callout, Card, Checkbox, Dialog, EmptyState, Form, Input, Section, Select, Skeleton, describeProblem, ListRow, RowList } from '@ss/ui';
 import { Outcome, SaveOutcome, call, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
@@ -92,54 +78,46 @@ export function ConsentsSection({ websiteId }) {
 				<EmptyState compact icon="user" kind="settings" title={T.none} />
 			) : (
 				<Card>
-					<ul className="divide-y divide-line-soft">
+					<RowList>
 						{answer.data.items.map(
 							(/** @type {Consent} */ item, /** @type {number} */ index, /** @type {Consent[]} */ items) => (
-								<li key={item.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 first:pt-0 last:pb-0">
-									<span className="min-w-0 flex-[1_1_12rem]">
-										<span className="block break-words text-sm font-semibold text-fg">{item.label}</span>
-										<code className="block break-all text-xs text-muted">
+								<ListRow
+									key={item.key}
+									wrap
+									title={item.label}
+									status={
+										<>
+											<Badge kind="settings">{TEXTS.settings.consentPurposes[item.purpose]}</Badge>
+											{item.required ? <Badge>{T.required_badge}</Badge> : null}
+										</>
+									}
+									meta={
+										<code className="break-all">
 											{item.key} · {T.versionShort} {item.version}
 										</code>
-									</span>
-									<span className="flex flex-wrap gap-1.5">
-										<Badge kind="settings">{TEXTS.settings.consentPurposes[item.purpose]}</Badge>
-										{item.required ? <Badge>{T.required_badge}</Badge> : null}
-									</span>
-									<span className="flex flex-wrap gap-2">
-										<Button
-											size="sm"
-											variant="ghost"
-											disabled={index === 0}
-											aria-label={`${T.up}: ${item.label}`}
-											onClick={() => move(items, index, -1)}>
-											{T.up}
-										</Button>
-										<Button
-											size="sm"
-											variant="ghost"
-											disabled={index === items.length - 1}
-											aria-label={`${T.down}: ${item.label}`}
-											onClick={() => move(items, index, 1)}>
-											{T.down}
-										</Button>
+									}
+									action={
 										<Button size="sm" variant="secondary" onClick={() => open({ ...item, isNew: false })}>
 											{T.edit}
 										</Button>
-										<Button
-											size="sm"
-											variant="ghost"
-											onClick={async () => {
+									}
+									moreLabel={`${T.more}: ${item.label}`}
+									more={[
+										{ label: T.up, disabled: index === 0, onSelect: () => move(items, index, -1) },
+										{ label: T.down, disabled: index === items.length - 1, onSelect: () => move(items, index, 1) },
+										{
+											label: T.delete,
+											danger: true,
+											onSelect: async () => {
 												setResult(await call('DELETE', `${base}/${encodeURIComponent(item.key)}`));
 												reload();
-											}}>
-											{T.delete}
-										</Button>
-									</span>
-								</li>
+											},
+										},
+									]}
+								/>
 							),
 						)}
-					</ul>
+					</RowList>
 				</Card>
 			)}
 			<Outcome result={result} />

@@ -7,28 +7,7 @@
  */
 import { useState } from 'react';
 import qrcode from 'qrcode-generator';
-import {
-	Badge,
-	Button,
-	Callout,
-	Card,
-	Checkbox,
-	CodeBlock,
-	EmptyState,
-	FieldLayoutContext,
-	Form,
-	FormError,
-	Input,
-	LocalTime,
-	SettingsCard,
-	Stepper,
-	Table,
-	Timeline,
-	describeProblem,
-	fieldErrors,
-	humanize,
-	useToast,
-} from '@ss/ui';
+import { Badge, Button, Callout, Card, Checkbox, CodeBlock, EmptyState, FieldLayoutContext, Form, FormError, Input, LocalTime, SettingsCard, Stepper, Table, Timeline, describeProblem, fieldErrors, humanize, useToast, TextLink } from '@ss/ui';
 import { AUTH, LOGIN, MORE, TWO_STEP } from '../../texts/console.js';
 import { apiFetch, usePagedList } from '../client.js';
 import { Link } from '../link.js';
@@ -536,9 +515,9 @@ export function ActivityTable({
 }) {
 	/** @param {string} name @param {string} href */
 	const filterLink = (name, href) => (
-		<Link href={href} title={MORE.onlyThis(name)} className="hover:text-primary hover:underline">
+		<TextLink as={Link} tone="plain" href={href} title={MORE.onlyThis(name)}>
 			{name}
-		</Link>
+		</TextLink>
 	);
 	return (
 		<Table

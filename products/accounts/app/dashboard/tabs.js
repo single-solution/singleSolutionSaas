@@ -7,7 +7,7 @@
  * verification, widget and ticket snippets, social sign-in return addresses and the message templates).
  * @module
  */
-import { Badge, Button, Card, CodeBlock, Section, Stat } from '@ss/ui';
+import { Badge, Button, Card, CodeBlock, Section, Stat, ListRow, RowList } from '@ss/ui';
 import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, fill, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import messages from '../../schemas/messages.json' with { type: 'json' };
@@ -186,16 +186,18 @@ function AccountsDevelopers(props) {
 					content: (
 						<Section title={D.templates} description={D.templatesHelp}>
 							<Card>
-								<ul className="space-y-2 text-sm">
+								<RowList>
 									{messages.messages.map((message) => (
-										<li key={message.key} className="flex flex-wrap items-center gap-2">
-											<code className="font-semibold">{message.key}</code>
-											{message.values.map((name) => (
+										<ListRow
+											key={message.key}
+											wrap
+											title={<code>{message.key}</code>}
+											status={message.values.map((name) => (
 												<Badge key={name} tone="info">{`{${name}}`}</Badge>
 											))}
-										</li>
+										/>
 									))}
-								</ul>
+								</RowList>
 							</Card>
 						</Section>
 					),

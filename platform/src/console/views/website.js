@@ -10,32 +10,7 @@
  * @module
  */
 import { useEffect, useState } from 'react';
-import {
-	ActionMenu,
-	Button,
-	Callout,
-	Card,
-	CodeBlock,
-	Dialog,
-	EmptyState,
-	Form,
-	FormError,
-	Icon,
-	IconBadge,
-	Input,
-	ListRow,
-	RowList,
-	Skeleton,
-	SoftBreaks,
-	TypedConfirmDialog,
-	copyText,
-	cx,
-	describeProblem,
-	fieldErrors,
-	formatCredits,
-	problemCode,
-	useToast,
-} from '@ss/ui';
+import { ActionMenu, Button, Callout, Card, CodeBlock, Dialog, EmptyState, Form, FormError, Icon, IconBadge, Input, ListRow, RowList, Skeleton, SoftBreaks, TypedConfirmDialog, copyText, cx, describeProblem, fieldErrors, formatCredits, problemCode, useToast, TextLink } from '@ss/ui';
 import { widgetScriptTag } from '@ss/contracts/text';
 import { BILLING, MORE, WEBSITE } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
@@ -413,24 +388,26 @@ function AddProductDialog({ merchantId, website, products, onClose, onAdded }) {
 			{products.length === 0 ? (
 				<p className="text-sm text-muted">{WEBSITE.noneToAdd}</p>
 			) : (
-				<ul className="divide-y divide-line-soft rounded-card border border-line-soft">
+				<RowList>
 					{products.map((p) => (
-						<li key={p.productId} className="flex items-center justify-between gap-3 px-4 py-3">
-							<span className="flex min-w-0 items-center gap-3">
-								<IconBadge icon="box" kind="product" size="sm" />
-								<span className="truncate text-sm font-medium text-fg">{p.name}</span>
-							</span>
-							<Button
-								size="sm"
-								loading={busy === p.productId}
-								disabled={busy !== null}
-								aria-label={`${WEBSITE.add} ${p.name}`}
-								onClick={() => void add(p.productId)}>
-								{WEBSITE.add}
-							</Button>
-						</li>
+						<ListRow
+							key={p.productId}
+							icon="box"
+							kind="product"
+							title={p.name}
+							action={
+								<Button
+									size="sm"
+									loading={busy === p.productId}
+									disabled={busy !== null}
+									aria-label={`${WEBSITE.add} ${p.name}`}
+									onClick={() => void add(p.productId)}>
+									{WEBSITE.add}
+								</Button>
+							}
+						/>
 					))}
-				</ul>
+				</RowList>
 			)}
 			<FormError problem={problem} />
 		</Dialog>
@@ -569,23 +546,23 @@ export function InstallBlock({ entry, domain, merchantId, websiteId }) {
 	};
 
 	return (
-		<section aria-label={entry.name} className="space-y-4 rounded-card border border-line-soft p-4 sm:p-5">
-			<div className="flex flex-wrap items-center justify-between gap-2">
-				<h3 className="flex items-center gap-2.5 text-title font-semibold text-fg">
+		<Card
+			title={
+				<span className="flex items-center gap-2.5">
 					<IconBadge icon="box" kind="product" size="sm" />
 					{entry.name}
-				</h3>
-				{entry.docsUrl ? (
-					<a
-						href={entry.docsUrl}
-						target="_blank"
-						rel="noopener noreferrer"
-						className="inline-flex items-center gap-1 text-label font-medium text-primary hover:underline">
-						{WEBSITE.docs}
-						<Icon name="external" size={13} />
-					</a>
-				) : null}
-			</div>
+				</span>
+			}
+			{...(entry.docsUrl
+				? {
+						actions: (
+							<TextLink href={entry.docsUrl} external className="text-label font-medium">
+								{WEBSITE.docs}
+							</TextLink>
+						),
+					}
+				: {})}
+			bodyClassName="space-y-4">
 			{entry.widgetScriptUrl ? (
 				<div className="space-y-1">
 					<CodeBlock
@@ -652,6 +629,6 @@ export function InstallBlock({ entry, domain, merchantId, websiteId }) {
 				error={problem ? describeProblem(problem) : null}>
 				<p className="text-sm text-muted">{WEBSITE.regenerateHelp}</p>
 			</TypedConfirmDialog>
-		</section>
+		</Card>
 	);
 }

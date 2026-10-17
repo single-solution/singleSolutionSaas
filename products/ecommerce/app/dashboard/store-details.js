@@ -152,15 +152,15 @@ function FileField({ websiteId, name, file, onChanged }) {
 			)}
 			<Input label={S.alt} value={alt} maxLength={STORE_LIMITS.alt} onChange={(event) => setAlt(event.target.value)} />
 			<div className="flex flex-wrap items-center gap-2">
-				<label className="text-sm">
-					<span className="sr-only">{S.files[name].title}</span>
-					<input
-						type="file"
-						accept="image/jpeg,image/png,image/webp,image/avif"
-						disabled={busy}
-						onChange={(event) => send(event.target.files?.[0])}
-					/>
-				</label>
+				<Input
+					type="file"
+					hideLabel
+					label={S.files[name].title}
+					accept="image/jpeg,image/png,image/webp,image/avif"
+					disabled={busy}
+					fieldClassName="min-w-0 flex-1 basis-64"
+					onChange={(event) => send(event.target.files?.[0])}
+				/>
 				{file ? (
 					<Button
 						size="sm"
