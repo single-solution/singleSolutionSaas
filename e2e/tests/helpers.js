@@ -26,6 +26,7 @@ import {
 	loadConfig,
 	systemModule,
 	testSystemState,
+	websiteModule,
 } from '@ss/platform/testing';
 import { createSigner, signAssertion } from '@ss/protocol';
 import { createProductInstance, manifest, strings } from '../fixtures/notes/adapters/product.js';
@@ -171,7 +172,13 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 			testSystemState({ settings: { security: { sessionHours: 336 }, billing: { graceDays } } }),
 		),
 		db: portalDb,
-		modules: [systemModule, createCatalogModule({ fetch: network.send }), createIdentityModule({ mailer }), commerceModule],
+		modules: [
+			systemModule,
+			createCatalogModule({ fetch: network.send }),
+			createIdentityModule({ mailer }),
+			commerceModule,
+			websiteModule,
+		],
 		logger,
 		mailer,
 		now: clock.now,
