@@ -428,18 +428,25 @@ describe('SectionLayout', () => {
 		expect(panel('keys')).toBeNull();
 	});
 
-	it('adds a history entry per section so Back returns to the one before', () => {
+	it('adds a history entry per section so Back returns to the one before', async () => {
 		const before = window.history.length;
 		const { container } = render(<SectionLayout sections={sections} />);
 		const nav = /** @type {HTMLElement} */ (container.querySelector('nav'));
 		click(/** @type {HTMLElement} */ (nav.querySelector('a[href="#security"]')));
 		click(/** @type {HTMLElement} */ (nav.querySelector('a[href="#keys"]')));
 		expect(window.history.length).toBe(before + 2);
-		window.history.back();
-		return new Promise((resolve) => setTimeout(resolve, 30)).then(() => {
-			expect(window.location.hash).toBe('#security');
-			expect(/** @type {HTMLElement} */ (container.querySelector('#section-security')).hidden).toBe(false);
+		// Back is asynchronous (jsdom queues the move in two timer ticks, a browser in its own task) and the section it
+		// opens renders after the event: wait for the popstate itself, inside act so React has drawn the section when it
+		// ends. A fixed wait is a race, lost whenever the machine stalls for longer than it.
+		await act(async () => {
+			const popped = new Promise((resolve) => window.addEventListener('popstate', resolve, { once: true }));
+			window.history.back();
+			await popped;
 		});
+		expect(window.location.hash).toBe('#security');
+		expect(/** @type {HTMLElement} */ (container.querySelector('#section-security')).hidden).toBe(false);
+		expect(/** @type {HTMLElement} */ (container.querySelector('#section-keys')).hidden).toBe(true);
+		expect(nav.querySelector('[aria-current="true"]')?.textContent).toBe('Security2');
 	});
 
 	it('lists sub-sections under their heading, opens the first one, and shows one at a time', () => {
