@@ -268,7 +268,7 @@ describe('dashboard', () => {
 		sys.responders.delete(`${AI}/v1/models`);
 		expect((await sys.dashboard(owner, 'PUT', path, { value: AI_KEY })).json).toMatchObject({
 			status: 'connected',
-			last4: '6789',
+			set: true,
 		});
 	});
 });

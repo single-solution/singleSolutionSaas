@@ -159,10 +159,11 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 		await v('POST', '/v1/chat/contact', { name: 'Ann', email: 'ann@example.com' });
 		sys.advance(61_000);
 		await sys.serverCall('POST', `/v1/conversations/${sent.json.chat.conversation.id}/messages`, { text: 'Bonjour' });
-		expect(sys.messages().map((m) => [m.template, m.values.staff])).toEqual([['chat.staff_reply', 'Équipe']]);
+		// (the reply is by the signed-in staff member, so their name is the one the alert and the transcript give)
+		expect(sys.messages().map((m) => [m.template, m.values.staff])).toEqual([['chat.staff_reply', 'Test Staff']]);
 		// the transcript names the team the same way
 		expect((await v('POST', '/v1/chat/transcript', { email: 'ann@example.com' })).status).toBe(202);
-		expect(sys.messages().at(-1)?.values.transcript).toBe('You: call me\nÉquipe: Bonjour');
+		expect(sys.messages().at(-1)?.values.transcript).toBe('You: call me\nTest Staff: Bonjour');
 	});
 
 	it('with How often every_reply each staff reply alerts a visitor who is away (C16)', async () => {

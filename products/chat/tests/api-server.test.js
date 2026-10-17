@@ -71,7 +71,7 @@ describe('list settings from the merchant’s server (K1)', () => {
 		expect(changes).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({ who: expect.objectContaining({ name: 'Zoë Laurent' }), detail: 'Webhook tools: changed' }),
-				expect.objectContaining({ who: expect.objectContaining({ name: 'Server' }), detail: 'Page rules: changed' }),
+				expect.objectContaining({ who: expect.objectContaining({ name: 'Test Staff' }), detail: 'Page rules: changed' }),
 			]),
 		);
 	});
@@ -98,23 +98,23 @@ describe('the acting member of staff (K2)', () => {
 		expect(named.status).toBe(201);
 		expect(named.json.message).toMatchObject({ author: 'staff', name: 'Zoë Laurent', staffId: 'usr_zoe' });
 		const team = await server(sys, 'POST', `/v1/conversations/${id}/messages`, { body: { text: 'The team again.' } });
-		// the merchant's server writes as the team: no name kept, the widget shows the text chat.staff (C24)
-		expect(team.json.message).toMatchObject({ name: null, staffId: 'server' });
+		// a reply is always by a signed-in staff member (the harness's, when no one else is named)
+		expect(team.json.message).toMatchObject({ name: 'Test Staff', staffId: 'usr_test_staff' });
 		// the conversation's messages, for staff and for the visitor
 		const messages = (await server(sys, 'GET', `/v1/conversations/${id}`)).json.messages;
 		expect(messages.filter((/** @type {any} */ m) => m.author === 'staff').map((/** @type {any} */ m) => m.name)).toEqual([
 			'Zoë Laurent',
-			null,
+			'Test Staff',
 		]);
 		expect((await v('GET', '/v1/chat')).json.messages.map((/** @type {any} */ m) => m.name)).toEqual([
 			null,
 			'Zoë Laurent',
-			null,
+			'Test Staff',
 		]);
 		// the activity log, with the role and the visitor's label (never the message)
 		const activity = (await server(sys, 'GET', '/v1/activity?action=conversation.replied')).json.items;
 		expect(activity.map((/** @type {any} */ e) => [e.actor, e.label, e.detail])).toEqual([
-			[{ kind: 'server', id: 'server', name: 'Server' }, 'Guest', 'Reply'],
+			[{ kind: 'user', id: 'usr_test_staff', name: 'Test Staff', role: 'owner' }, 'Guest', 'Reply'],
 			[{ kind: 'user', id: 'usr_zoe', name: 'Zoë Laurent', role: 'Support' }, 'Guest', 'Reply'],
 		]);
 		expect(JSON.stringify(activity)).not.toContain('Zoë here');
@@ -140,15 +140,17 @@ describe('the acting member of staff (K2)', () => {
 		const moves = (await server(sys, 'GET', '/v1/activity?actor=usr_zoe&action=conversation.assigned')).json.items;
 		expect(moves.map((/** @type {any} */ e) => e.detail)).toEqual(['Assigned to Zoë Laurent']);
 
-		// a ticket's note keeps the ticket's user; malformed actor headers are refused
+		// a ticket's note keeps the ticket's user; headers that only name a person are no staff member
 		const note = await sys.admin(ticket, 'POST', `/v1/admin/conversations/${id}/notes`, { text: 'VIP' });
 		expect(note.json.message).toMatchObject({ name: 'Sam Staff', staffId: 'usr_sam', internal: true });
-		const malformed = await server(sys, 'POST', `/v1/conversations/${id}/messages`, {
+		const forged = await sys.call('POST', `/v1/conversations/${id}/messages`, {
+			token: sys.server,
+			bare: true,
 			body: { text: 'x' },
-			headers: { 'ss-actor-id': 'not valid!', 'ss-actor-name': 'X' },
+			headers: { 'ss-actor-id': 'usr_zoe', 'ss-actor-name': 'Zo%C3%AB' },
 		});
-		expect(malformed.status).toBe(400);
-		expect(malformed.json.type).toMatch(/invalid_actor$/);
+		expect(forged.status).toBe(403);
+		expect(forged.json.type).toMatch(/needs_signed_in_staff$/);
 	});
 });
 

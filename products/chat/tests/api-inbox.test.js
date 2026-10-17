@@ -153,7 +153,10 @@ describe('inbox', () => {
 		sys.advance(6 * 60_000);
 		await sys.admin(ticket, 'GET', '/v1/admin/conversations');
 		const later = await sys.admin(ticket, 'GET', '/v1/admin/staff');
-		expect(later.json.items.map((/** @type {any} */ m) => m.presence)).toEqual(['offline', 'online']);
+		// (the signed-in staff member of the server calls is on the list too)
+		expect(
+			later.json.items.filter((/** @type {any} */ m) => m.id !== 'usr_test_staff').map((/** @type {any} */ m) => m.presence),
+		).toEqual(['offline', 'online']);
 
 		// summary, transcript, rating request, resolve
 		sys.ai({ text: 'Package question; answered.' });
@@ -242,7 +245,7 @@ describe('inbox', () => {
 		expect((await sys.serverCall('GET', '/v1/conversations')).json.items).toHaveLength(1);
 		expect((await sys.serverCall('GET', '/v1/inbox/unread')).json).toEqual({ unread: 1, conversations: 1, open: 1 });
 		const replied = await sys.serverCall('POST', `/v1/conversations/${id}/messages`, { text: 'Nice photo.' });
-		expect(replied.json.message.name).toBeNull();
+		expect(replied.json.message.name).toBe('Test Staff');
 		expect((await sys.serverCall('PATCH', `/v1/conversations/${id}`, { assignedTo: null })).status).toBe(403);
 		const ticket = await sys.ticket(['inbox.read', 'inbox.reply']);
 		await sys.admin(ticket, 'POST', `/v1/admin/conversations/${id}/messages`, { text: 'From Sam.' });
@@ -251,7 +254,7 @@ describe('inbox', () => {
 			.filter((c) => c.copy.action.startsWith('conversation.'))
 			.map((c) => [c.copy.action, c.copy.actor.kind]);
 		expect(copies).toEqual([
-			['conversation.replied', 'server'],
+			['conversation.replied', 'user'],
 			['conversation.replied', 'staff'],
 		]);
 		expect((await sys.serverCall('DELETE', `/v1/conversations/${id}`)).status).toBe(204);
@@ -485,7 +488,7 @@ describe('leads', () => {
 		const deletions = (await sys.serverCall('GET', '/v1/activity?action=lead.deleted')).json.items;
 		expect(deletions.map((/** @type {any} */ e) => [e.label, e.actor.kind]).sort()).toEqual([
 			['Ann', 'staff'],
-			['Bo', 'server'],
+			['Bo', 'user'],
 		]);
 		// every lead, with the domain typed; the conversations stay
 		for (const name of ['Cy', 'Di', 'Ed']) await ann('POST', '/v1/chat/leads', { fields: { name, email: 'x@example.com' } });

@@ -1,7 +1,7 @@
 /**
  * Knowledge (PLAN 0.8.3): FAQ entries and articles (knowledge base) and website pages (fetched through `@ss/net` when
  * added and with Fetch again, never on a schedule), indexed as chunks for keyword retrieval. Edited in the knowledge
- * editor widget (ticket, `knowledge.edit`) or through the server API (acting for the `SS-Actor-*` user); edits are
+ * editor widget (ticket, `knowledge.edit`) or through the server API (acting for the signed-in staff member); edits are
  * written to the activity log with the entry's title or the page's title as their label.
  * @module
  */

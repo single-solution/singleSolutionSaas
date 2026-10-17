@@ -7,7 +7,14 @@
  * `schemas/api.json` and the kit's own routes: a test fails when an answer does not fit its description.
  * @module
  */
-import { apiChecker, createAccountsDouble, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import {
+	apiChecker,
+	createAccountsDouble,
+	createFakePortal,
+	createMemoryStore,
+	createNetwork,
+	staffCaller,
+} from '@ss/app-kit/testing';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
@@ -161,10 +168,19 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 	 * A request, then the work after it (`after: false` leaves that work queued for `flush()`).
 	 * @param {string} method
 	 * @param {string} path
-	 * @param {{ token?: string, origin?: string, body?: unknown, cookie?: string, headers?: Record<string, string>, network?: string, after?: boolean }} [init]
+	 * @param {{ token?: string, origin?: string, body?: unknown, cookie?: string, headers?: Record<string, string>, network?: string,
+	 *   after?: boolean, bare?: boolean, staff?: Record<string, any> }} [init] `bare`: the server token alone; `staff`: who is
+	 *   signed in (the website's server with a staff Owner signed in otherwise)
 	 */
-	const call = async (method, path, { token, origin, body, cookie, headers = {}, network: ip, after = true } = {}) => {
+	const call = async (
+		method,
+		path,
+		{ token, origin, body, cookie, headers = {}, network: ip, after = true, bare = false, staff } = {},
+	) => {
 		requests += 1;
+		if (token === server && !bare && headers['ss-sign-in'] === undefined && headers['ss-visitor-ip'] === undefined)
+			// eslint-disable-next-line no-param-reassign -- the harness signs the staff member in
+			headers = await staffHeaders({ headers, staff });
 		const response = await handler(
 			new Request(`${BASE}${path}`, {
 				method,
@@ -217,8 +233,12 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 		return Object.assign(request, { state });
 	};
 
-	/** A server-token request. @param {string} method @param {string} path @param {unknown} [body] */
-	const serverCall = (method, path, body) => call(method, path, { token: server, ...(body === undefined ? {} : { body }) });
+	/**
+	 * A server-token request (a staff Owner signed in unless `staff` says who).
+	 * @param {string} method @param {string} path @param {unknown} [body] @param {Record<string, any>} [staff]
+	 */
+	const serverCall = (method, path, body, staff) =>
+		call(method, path, { token: server, ...(body === undefined ? {} : { body }), ...(staff ? { staff } : {}) });
 
 	/** An admin's dashboard session (Owner by default); returns the cookie. @param {'owner' | 'support'} [role] */
 	const adminSession = async (role = 'owner') => {
@@ -257,6 +277,9 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 	const paste = async (productId) =>
 		connect(productId, (await portal.issueToken({ websiteId, productId, kind: 'server' })).token);
 
+	// the website's Accounts token, pasted on first use: the keys of the staff's sign-ins
+	const staffHeaders = staffCaller({ accounts, websiteId, paste: () => paste('accounts') });
+
 	/** @param {string} feature @param {string} name @param {unknown} value */
 	const setting = async (feature, name, value) => {
 		const response = await dashboard(
@@ -292,7 +315,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 		permissions = ['inbox.read', 'inbox.reply', 'inbox.manage', 'knowledge.edit', 'reports.read'],
 		user = { id: 'usr_sam', name: 'Sam Staff', email: 'sam@shop.example.com' },
 	) => {
-		const response = await serverCall('POST', '/v1/tickets', { user, permissions, origin: ADMIN_ORIGIN });
+		const response = await serverCall('POST', '/v1/tickets', { permissions, origin: ADMIN_ORIGIN }, user);
 		return /** @type {string} */ (response.json.ticket);
 	};
 
@@ -324,6 +347,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 	return {
 		portal,
 		accounts,
+		staffHeaders,
 		product,
 		calls,
 		responders,

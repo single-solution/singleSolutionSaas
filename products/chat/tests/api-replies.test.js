@@ -235,7 +235,6 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 		await v('POST', '/v1/chat/messages', { text: 'hi' });
 		const id = (await v('GET', '/v1/chat')).json.conversation.id;
 		const path = `/v1/conversations/${id}`;
-		expect((await sys.serverCall('PATCH', path, { assignedTo: 'usr_new' })).status).toBe(422);
 		await sys.paste('accounts');
 		const users = [
 			{ id: 'usr_new', name: 'Nia New', email: 'nia@shop.example.com', permissions: ['chat:inbox.reply'] },
@@ -245,7 +244,11 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 		sys.accounts.setUsers(users);
 		// the picker lists every Accounts user who may answer chats before any is assigned, read once and kept
 		const listed = (await sys.serverCall('GET', '/v1/staff')).json.items;
-		expect(listed.map((/** @type {any} */ m) => [m.id, m.name, m.presence])).toEqual([
+		expect(
+			listed
+				.filter((/** @type {any} */ m) => m.id !== 'usr_test_staff')
+				.map((/** @type {any} */ m) => [m.id, m.name, m.presence]),
+		).toEqual([
 			['usr_new', 'Nia New', 'offline'],
 			['usr_mail', 'mo@shop.example.com', 'offline'],
 		]);
@@ -267,13 +270,15 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 		// someone Accounts lets answer chats since the list was read: asked again when assigned
 		sys.accounts.setUsers([...users, { id: 'usr_late', name: 'Lou', permissions: ['chat:inbox.reply'] }]);
 		expect((await sys.serverCall('PATCH', path, { assignedTo: 'usr_late' })).json.conversation.assignedTo.name).toBe('Lou');
+		// someone Accounts does not let reply in the inbox cannot be assigned
+		expect((await sys.serverCall('PATCH', path, { assignedTo: 'usr_nobody' })).status).toBe(422);
 		// without Assignment the list is the staff Chat keeps (those assigned were kept), by name
 		await sys.switchOn(['visitor_chat', 'guest_chat', 'inbox']);
-		expect((await sys.serverCall('GET', '/v1/staff')).json.items.map((/** @type {any} */ m) => m.name)).toEqual([
-			'Lou',
-			'Nia New',
-			'mo@shop.example.com',
-		]);
+		expect(
+			(await sys.serverCall('GET', '/v1/staff')).json.items
+				.filter((/** @type {any} */ m) => m.id !== 'usr_test_staff')
+				.map((/** @type {any} */ m) => m.name),
+		).toEqual(['Lou', 'Nia New', 'mo@shop.example.com']);
 	});
 
 	it('staff alerts reach the assigned person’s email and their phone from Accounts (CH-12)', async () => {

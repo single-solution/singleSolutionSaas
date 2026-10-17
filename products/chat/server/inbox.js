@@ -1,7 +1,7 @@
 /**
  * The inbox (PLAN 0.8.3 Inbox, staff and assignment): admin widget routes with a ticket (`/v1/admin/*`, the staff
  * member is the ticket's user) and the same work for the merchant's server with the server token (`/v1/*`, acting for
- * the member of staff its `SS-Actor-*` headers name, else as the team, PLAN 0.8.10 K2). Filters, search, counts,
+ * the member of staff its verified `SS-Sign-In` names, else as the team, PLAN 0.8.10 K2). Filters, search, counts,
  * unread counts, replies (markdown, PLAN 0.8.10 C2) and attachments (staff types up to 100 MB, C12), internal notes
  * (a timeline, or one note per conversation, C11), status, AI pause (with who, when and why; by reply or manage
  * rights as the inbox setting says, C11; resuming hands a waiting chat back to the AI, CH-3), assignment with presence
@@ -44,7 +44,7 @@ const STORAGE_DELETES_AT_ONCE = 8;
 const SERVER = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
 
 /**
- * Who acts: the ticket's staff member, else the member of staff a server-token call names with `SS-Actor-*` headers
+ * Who acts: the ticket's staff member, else the member of staff a server-token call names with verified `SS-Sign-In`
  * (K2), else the merchant's server.
  * @param {any} ctx
  * @returns {Actor}

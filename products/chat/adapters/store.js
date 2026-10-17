@@ -4,7 +4,7 @@
  *
  * - `conversations` and `messages` (separate, ordered by a per-conversation `seq`); never deleted because of age
  * - `guests`: guest device keys (hash only), removed by a TTL index when the device forgets them
- * - `staff`: the merchant's staff named in tickets or by the `SS-Actor-*` headers of server calls (the kit records
+ * - `staff`: the merchant's staff named in tickets or by the verified `SS-Sign-In` of server calls (the kit records
  *   them), or assigned from Accounts, with presence and max chats
  * - `leads`, `saved_replies`, `entries` (knowledge), `pages` (website pages and their text), `chunks` (retrieval)
  * - `usage`: AI token counts per day and month window (and the month's cost alert)
