@@ -11,9 +11,9 @@
  *   showing both moves the guest's chats to the account, merged by time into the account's own conversation when it has
  *   one, and with "claim by phone" guest chats whose captured phone is the verified phone move too (PLAN 0.8.10 C7).
  * - Views of a conversation for the visitor and for staff, attachment links (Chat's own, which never expire, CH-8),
- *   the queue position and office hours; the context panel's shop info from Ecommerce (pasted token) for a signed-in
+ *   the queue position and office hours; the context panel's shop info from Ecommerce (Portal link) for a signed-in
  *   visitor.
- * - Messages through Notifications (pasted token): staff alerts and AI cost alerts through the kit's staff alerts (K6:
+ * - Messages through Notifications (Portal link): staff alerts and AI cost alerts through the kit's staff alerts (K6:
  *   email, WhatsApp or SMS, C5), transcripts, and reply alerts to a visitor who left the chat (C6).
  * - AI token counts per day and month window, the caps and the monthly cost alert.
  * @module
@@ -149,7 +149,7 @@ export const createService = (product) => {
 	const signInStates = new Map();
 
 	/**
-	 * Whether the Customer role's sign-in is paused at Accounts (A6): its roles read with the pasted Accounts token
+	 * Whether the Customer role's sign-in is paused at Accounts (A6): its roles read through the Portal's link to Accounts
 	 * (`GET /v1/roles`) and kept 60 s per website. Without the token, with the token refused or Roles and permissions off
 	 * there, it is not paused; while Accounts cannot be reached, the last answer stands (none yet: not paused).
 	 * @param {string} websiteId
@@ -172,7 +172,7 @@ export const createService = (product) => {
 	const accountsStaff = new Map();
 
 	/**
-	 * The unblocked Accounts users whose role may answer chats (`chat:inbox.reply`), read with the pasted Accounts token
+	 * The unblocked Accounts users whose role may answer chats (`chat:inbox.reply`), read through the Portal's link to Accounts
 	 * (up to 500) and kept 5 minutes per website, so the assignment picker (CH-6) and the assignee's alerts (CH-12) cost
 	 * no call each time; `fresh` reads again. While Accounts cannot be reached, the last list stands; without the token
 	 * or refused, none.
@@ -615,7 +615,7 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * The context panel's shop info: the signed-in visitor's last orders and loyalty points from Ecommerce (pasted
+	 * The context panel's shop info: the signed-in visitor's last orders and loyalty points from Ecommerce (Portal
 	 * token); null for a guest, without the token, or when Ecommerce cannot answer.
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
@@ -791,7 +791,7 @@ export const createService = (product) => {
 			{ transcript: transcriptText(lines, { more, earlier }), date },
 		);
 		if (outcome === 'not_connected')
-			throw problem('notifications_not_connected', 'Notifications not connected: paste its token in Connections.');
+			throw problem('notifications_not_connected', 'Notifications is not linked: add it to this website in the Portal.');
 		if (outcome !== 'sent') throw problem('not_sent', 'The transcript could not be sent. Try again later.');
 	};
 
@@ -848,7 +848,7 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * Record a staff action in the activity log (copied to Accounts when its token is pasted): who (with the acting
+	 * Record a staff action in the activity log (copied to Accounts when it is on the website): who (with the acting
 	 * user's role), what, on what, its label (a name or title) and a short detail, never message contents.
 	 * @param {Site} s
 	 * @param {Actor} actor

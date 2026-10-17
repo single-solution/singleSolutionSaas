@@ -6,7 +6,7 @@
  * lacks taken over). Guest orders placed on a member's phone or email address are linked to the member's record but
  * stay out of their account until such a sign-in (owner, 2026-10-14 (2)): then they move in too. Also the check of
  * `unless_password`: whether a guest's phone or email address belongs to an Accounts user with a password (through the
- * pasted Accounts token), and the website's phone and address rules (K12).
+ * Portal link to Accounts), and the website's phone and address rules (K12).
  * @module
  */
 import { addressRequiredOf } from '@ss/contracts/website-settings';

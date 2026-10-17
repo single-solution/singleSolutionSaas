@@ -213,7 +213,7 @@
 		{
 			"key": "shop_search",
 			"name": "Shop tools: product search and details",
-			"description": "The AI searches your Ecommerce catalog and reads a product's details, with the pasted Ecommerce token.",
+			"description": "The AI searches your Ecommerce catalog and reads a product's details, through the Portal's link to Ecommerce.",
 			"dependsOn": ["ai_replies"],
 			"recommendFor": ["chat.ai+sells.physical", "chat.ai+sells.digital"],
 			"settings": {
@@ -223,7 +223,7 @@
 		{
 			"key": "shop_deals",
 			"name": "Shop tools: deals and savings quotes",
-			"description": "The AI lists your active deals and quotes a product's price after them, with the pasted Ecommerce token.",
+			"description": "The AI lists your active deals and quotes a product's price after them, through the Portal's link to Ecommerce.",
 			"dependsOn": ["ai_replies"],
 			"recommendFor": ["chat.ai+offers.discounts", "chat.ai+offers.coupons", "chat.ai+offers.bundles"],
 			"settings": {
@@ -233,7 +233,7 @@
 		{
 			"key": "shop_top",
 			"name": "Shop tools: top and new products",
-			"description": "The AI shows your best-selling and newest products, with the pasted Ecommerce token.",
+			"description": "The AI shows your best-selling and newest products, through the Portal's link to Ecommerce.",
 			"dependsOn": ["ai_replies"],
 			"settings": {
 				"$ref": "schemas/shop_top.settings.json"
@@ -242,7 +242,7 @@
 		{
 			"key": "shop_my_orders",
 			"name": "Shop tools: my orders and account",
-			"description": "The AI tells a signed-in visitor about their own last orders, loyalty points and name, with the pasted Ecommerce token.",
+			"description": "The AI tells a signed-in visitor about their own last orders, loyalty points and name, through the Portal's link to Ecommerce.",
 			"dependsOn": ["ai_replies", "signed_in_chat"],
 			"recommendFor": ["chat.ai+signIn.*+sells.physical", "chat.ai+signIn.*+sells.digital"],
 			"settings": {
@@ -271,7 +271,7 @@
 		{
 			"key": "shop_context",
 			"name": "Store context",
-			"description": "Each AI reply also gets your store’s policies, newest products, deals and the product the visitor is viewing, with the pasted Ecommerce token.",
+			"description": "Each AI reply also gets your store’s policies, newest products, deals and the product the visitor is viewing, through the Portal's link to Ecommerce.",
 			"dependsOn": ["ai_replies"],
 			"recommendFor": ["chat.ai+sells.physical", "chat.ai+sells.digital"],
 			"settings": {

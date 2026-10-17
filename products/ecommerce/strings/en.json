@@ -1753,7 +1753,7 @@
 	"customersAdmin.health.pay_details": "Payment methods paid first that do not tell shoppers where to pay (their accounts or instructions, or those of Payments’ method of the same key)",
 	"customersAdmin.health.staff_alerts": "Staff alerts reach nobody (add recipients or staff, and connect Notifications)",
 	"customersAdmin.health.admin_url": "Staff alerts link to no order page (Settings → Other settings, Staff alerts: order page in your admin)",
-	"customersAdmin.health.pixel_ids": "Badly formed tag ids in Growth (paste Growth's token in Connections to check)",
+	"customersAdmin.health.pixel_ids": "Badly formed tag ids in Growth (checked while Growth is on the website)",
 	"customersAdmin.report.sales": "Sales",
 	"customersAdmin.report.stock_age": "Stock age",
 	"customersAdmin.report.return_rate": "Return rate",

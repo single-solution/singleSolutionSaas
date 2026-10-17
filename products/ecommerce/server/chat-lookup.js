@@ -1,5 +1,5 @@
 /**
- * The lookups other products call with the pasted Ecommerce server token: Chat's shop tools (PLAN 0.8.3 Shop tools;
+ * The lookups other products call through the Portal's link to Ecommerce: Chat's shop tools (PLAN 0.8.3 Shop tools;
  * exactly the endpoints of `products/chat/core/shop.js`) and the customer orders lookup Accounts' Orders tab and
  * Chat's context panel use. All read-only with small answers. The `me` lookups take the visitor's Accounts sign-in
  * forwarded in `SS-Sign-In`, verify it here and answer only that user's data — never street addresses or phone

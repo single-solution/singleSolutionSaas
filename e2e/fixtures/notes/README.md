@@ -63,6 +63,12 @@ database of the product's own in `MONGODB_URI`, then add `http://localhost:3007`
 Under `next dev` (`NODE_ENV=development`) the product may call `localhost` and `127.0.0.1` and use a MongoDB there; in
 production it never does.
 
+The merchant's database (and storage) is never entered in the product: the merchant enters it once for the website in the
+Portal (Website settings › Data and files), and the product gets its own database name on it. The manifest's `needs` says
+what the product needs; `links.offers` lists what other products may do in it (the `scope` of a route) and `links.needs`
+what it needs to do in others. The Portal links the products of a website by itself, so nothing is pasted anywhere; in
+tests, `portalConnector` (`@ss/app-kit/testing`) does what the merchant does in the Portal.
+
 ## Scripts
 
 `pnpm dev` / `pnpm build` (both regenerate `openapi.json` and `server/widget-script.js` first) / `pnpm start`,

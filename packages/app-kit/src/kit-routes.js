@@ -10,7 +10,7 @@
  * - `POST /v1/data-rights/export` and `POST /v1/data-rights/delete` (server token, merchant database required, no
  *   feature): data rights for one end user (0.4.11); a deletion also removes the person's saved staff alerts;
  * - `GET /v1/permissions` (server token, no feature, no merchant database): the product's permissions and the kit's own
- *   (`staff.js`), which Accounts reads with the pasted server token to offer them on roles (0.8.6);
+ *   (`staff.js`), which Accounts reads through the Portal's link to offer them on roles (0.8.6);
  * - `GET /v1/message-defaults` (none, the same for every website): the messages the product sends through
  *   Notifications with their default words (`{ productId, messages }`, parity P1), which Notifications' dashboard shows;
  * - `GET /v1/widget/config` (browser token, Origin required) and `GET /v1/widget/admin/config` (ticket): what the

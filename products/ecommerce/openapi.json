@@ -3739,7 +3739,7 @@
 			},
 			"get": {
 				"summary": "Read a customer with their latest orders (Customers admin widget)",
-				"description": ":userId is a customer id (cus_…, members and guests) or an Accounts user id. A member without a record is shown from their latest order; an Accounts user without orders gets their record made now (through the pasted Accounts token), so staff can note or block them before their first order. 404 not_found.",
+				"description": ":userId is a customer id (cus_…, members and guests) or an Accounts user id. A member without a record is shown from their latest order; an Accounts user without orders gets their record made now (through the Portal's link to Accounts), so staff can note or block them before their first order. 404 not_found.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "customers.manage",
@@ -10855,7 +10855,7 @@
 		"/v1/admin/reports/health": {
 			"get": {
 				"summary": "Shop health: what needs fixing (Customers admin widget)",
-				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the website settings copy from the Portal, the connections, what each active method paid first tells shoppers (its own accounts and instructions, or Payments' manual method of the same key), the payment methods shoppers can use now (the active methods of the payment_methods list: those through Payments while Payments is connected, those at pickup with a pickup point), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
+				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the website settings copy from the Portal, the connections, what each active method paid first tells shoppers (its own accounts and instructions, or Payments' manual method of the same key), the payment methods shoppers can use now (the active methods of the payment_methods list: those through Payments while Payments is connected, those at pickup with a pickup point), and, while Growth is on the same website, Growth's GET /v1/settings for its tag ids.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "reports",
 				"x-ss-permission": "reports.read",
@@ -16349,7 +16349,7 @@
 		},
 		"/v1/connections": {
 			"get": {
-				"summary": "Connections (state and last 4 characters only)",
+				"summary": "Connections (whether set, and how the last test went; never a value)",
 				"x-ss-auth": "server",
 				"x-ss-permission": "connections.manage",
 				"x-ss-access": "staff",
@@ -16401,7 +16401,7 @@
 		},
 		"/v1/connections/{name}": {
 			"delete": {
-				"summary": "Remove a connection",
+				"summary": "Remove a provider key. The database, the storage and the links are the Portal's: 409 managed_by_portal",
 				"x-ss-auth": "server",
 				"x-ss-permission": "connections.manage",
 				"x-ss-access": "staff",
@@ -16440,7 +16440,7 @@
 				}
 			},
 			"put": {
-				"summary": "Save a connection ({ value }), tested live",
+				"summary": "Save a provider key ({ value }), tested live. The database, the storage and the links are the Portal's: 409 managed_by_portal",
 				"x-ss-auth": "server",
 				"x-ss-permission": "connections.manage",
 				"x-ss-access": "staff",
@@ -18238,7 +18238,7 @@
 			},
 			"get": {
 				"summary": "Read a customer with their latest orders",
-				"description": ":userId is a customer id (cus_…, members and guests) or an Accounts user id. A member without a record is shown from their latest order; an Accounts user without orders gets their record made now (through the pasted Accounts token), so staff can note or block them before their first order. 404 not_found.",
+				"description": ":userId is a customer id (cus_…, members and guests) or an Accounts user id. A member without a record is shown from their latest order; an Accounts user without orders gets their record made now (through the Portal's link to Accounts), so staff can note or block them before their first order. 404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "customers.manage",
@@ -19284,7 +19284,7 @@
 		"/v1/events": {
 			"get": {
 				"summary": "Shop events, newest first",
-				"description": "Needs the events feature. Order, return, review, catalog and stock events are recorded while it is on, settings.changed always; kept 30 days; also sent to your webhook URLs through Notifications when its token is pasted. 422 validation_failed for a since that is not an ISO 8601 time or types that are not ecommerce event types. 400 bad_request for a bad cursor or limit.",
+				"description": "Needs the events feature. Order, return, review, catalog and stock events are recorded while it is on, settings.changed always; kept 30 days; also sent to your webhook URLs through Notifications when it is on the website. 422 validation_failed for a since that is not an ISO 8601 time or types that are not ecommerce event types. 400 bad_request for a bad cursor or limit.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "events",
 				"x-ss-permission": "orders.read",
@@ -27204,7 +27204,7 @@
 		"/v1/reports/health": {
 			"get": {
 				"summary": "Shop health: what needs fixing",
-				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the website settings copy from the Portal, the connections, what each active method paid first tells shoppers (its own accounts and instructions, or Payments' manual method of the same key), the payment methods shoppers can use now (the active methods of the payment_methods list: those through Payments while Payments is connected, those at pickup with a pickup point), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
+				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the website settings copy from the Portal, the connections, what each active method paid first tells shoppers (its own accounts and instructions, or Payments' manual method of the same key), the payment methods shoppers can use now (the active methods of the payment_methods list: those through Payments while Payments is connected, those at pickup with a pickup point), and, while Growth is on the same website, Growth's GET /v1/settings for its tag ids.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "reports",
 				"x-ss-permission": "reports.read",
@@ -40101,12 +40101,13 @@
 			},
 			"Connection": {
 				"type": "object",
-				"description": "A connection as screens see it: secrets never come back.",
+				"description": "A connection as screens see it: secrets never come back. The database, the storage and the links to other products are the Portal's (managed): they are entered or made there, once for the website.",
 				"required": [
 					"name",
 					"label",
 					"kind",
 					"neededBy",
+					"managed",
 					"set",
 					"state",
 					"message",
@@ -40126,8 +40127,12 @@
 							"database",
 							"storage",
 							"secret",
-							"token"
+							"link"
 						]
+					},
+					"managed": {
+						"type": "boolean",
+						"description": "The Portal owns it (the database, the storage and the links): it cannot be saved or removed here, only tested."
 					},
 					"neededBy": {
 						"type": "array",

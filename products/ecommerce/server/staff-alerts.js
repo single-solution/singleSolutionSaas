@@ -3,7 +3,7 @@
  * permission `staffPermission: all_staff` stands for in each. Who gets an alert is the kit's rule
  * (`product.staffAlerts.prepare`): the website's alert team in the Portal (Website settings › Team and alerts: an email
  * address, or an international phone number that gets SMS, or WhatsApp when the team says so), plus every unblocked
- * Accounts user whose role grants `staffPermission` (asked through the pasted Accounts token, kept 5 minutes on this
+ * Accounts user whose role grants `staffPermission` (asked through the Portal's link to Accounts, kept 5 minutes on this
  * instance; with the team's staff push on they get a staff push too), at most `maxRecipients` people; the template is `ecommerce.staff_<event>` (default words in
  * `schemas/messages.json`, parity P1), and `adminUrl` filled from the values is sent as `link`. With `includePhone` on,
  * an alert also carries the shopper's phone as `phone`. `server/order-events.js` hands the prepared messages to

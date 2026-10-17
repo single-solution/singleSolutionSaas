@@ -912,7 +912,7 @@ export const createRoutes = (product) => {
 		}),
 		// the manual payment methods as payers see them, for the merchant's server (fixed-choices P1, P2): each one's
 		// words, whether it is ready and, with ?currency=, the accounts of that currency; Ecommerce reads it with its
-		// pasted Payments token
+		// Portal link to Payments
 		defineRoute({
 			method: 'GET',
 			path: '/v1/manual-methods',

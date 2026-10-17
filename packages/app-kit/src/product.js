@@ -85,7 +85,7 @@ import { defaultRandomBytes, isKitError, kitError } from './util.js';
  *   Notifications right after the request
  * @property {(input: { websiteId: string, token: string, ctx?: any }) => Promise<import('./identity.js').AccountsSignInResult>} [ownSignIns]
  *   Accounts only: it issues the sign-ins, so it verifies its own (with its signing key, the open session and the live
- *   role) instead of fetching keys from Accounts with a pasted token
+ *   role) instead of fetching keys from Accounts with the Portal's link
  * @property {import('./imports.js').ImportOptions} [imports] what the product's `import` feature takes (K10): the kit
  *   serves the import routes (`/v1/import/…`, server token, feature `import`, which the manifest must have)
  * @property {unknown} [messages] the messages the product sends through Notifications with their default words (its
@@ -541,7 +541,7 @@ export const createProduct = (options) => {
 		}),
 		staffAlerts: Object.freeze({ send: staffAlerts.send, prepare: staffAlerts.prepare, forget: staffAlerts.forget }),
 		recentChanges: Object.freeze({ record: recent.record, list: recent.list }),
-		/** Accounts sign-ins of a website, verified offline with its pasted Accounts token (PLAN 0.4.6). */
+		/** Accounts sign-ins of a website, verified offline with its Portal link to Accounts (PLAN 0.4.6). */
 		accounts,
 		/** The pinned Portal address (what a link to "change it in the Portal" is built from), or null before the first connect. */
 		portalUrl: () => (kit.connection.connected() ? kit.connection.active().portalUrl : null),

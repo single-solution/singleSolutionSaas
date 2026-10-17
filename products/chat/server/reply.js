@@ -7,7 +7,7 @@
  * person (from `REASSURE_AFTER_MINUTES` after the handoff the AI then only reassures, C4), staff paused the AI, or a
  * limit or cap is reached. The AI uses the website's own provider (backup on failure, when on), knowledge from
  * switched-on features, the store context from Ecommerce (C1), the merchant's webhook tools, the booking endpoint and
- * the shop tools (Ecommerce, pasted token; the products they return become product cards on the answer), the language
+ * the shop tools (Ecommerce, Portal link; the products they return become product cards on the answer), the language
  * lock (C14; its options after the re-audit, CH-16 to CH-19, CH-38), "never disclose" (C1) and moderation.
  * Answers are markdown, split on `---` lines (and around tables with `tableBubble`, CH-21) into at most `bubbles`
  * messages (C2). When the AI fails, a cap is reached or the answer is refused, the first matching fallback answer
@@ -563,7 +563,7 @@ export const createReply = (product, service) => {
 		/** @type {import('../core/shop.js').ProductCard[]} */
 		const cards = [];
 		/**
-		 * A shop tool: one read from Ecommerce with the pasted token (the sign-in tools forward the verified sign-in;
+		 * A shop tool: one read from Ecommerce through the Portal's link (the sign-in tools forward the verified sign-in;
 		 * the model's arguments never name the user). A failed call answers that it cannot be looked up now.
 		 * @param {import('../core/providers.js').ToolCall} call
 		 */
@@ -664,7 +664,7 @@ export const createReply = (product, service) => {
 	};
 
 	/**
-	 * A shop read for a fallback answer (Ecommerce, pasted token): Ecommerce's answer to the tool's request, or null.
+	 * A shop read for a fallback answer (Ecommerce, Portal link): Ecommerce's answer to the tool's request, or null.
 	 * @param {Site} s
 	 * @param {string} tool
 	 * @param {Record<string, unknown>} args

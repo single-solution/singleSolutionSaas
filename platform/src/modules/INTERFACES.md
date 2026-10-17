@@ -26,6 +26,11 @@ productId })` creates both tokens on the first add and keeps them afterwards (a 
   route answers `{ tokenIds, cursor }` (one product's revoked ids, by `revokedAt`).
 - Every person's dashboard sessions end (`catalog.notifyAll({ type: 'sessions.revoked', subject })`) when a merchant is
   suspended or deleted, an admin is removed or changes role, a password is changed or reset, or a person signs out.
+- `revokeTokenIds({ merchantId, websiteId, productId, jtis })` puts token ids on the revocation list (the website
+  module's link tokens; the product is told with `token.revoked`). `confirmPerson({ kind, id, body, meta })` asks for a
+  fresh confirmation of the signed-in person before a change a stolen session must not make (their password, and a
+  code while two-step is on). `mailMerchant({ merchantId, template, data })` e-mails the merchant (false when it cannot
+  be sent). When a website is removed, `website.forgetWebsite` deletes its connections and links.
 - Merchant status changes call `commerce.onMerchantStatus({ merchantId, status })`, also when the status is already
   the one asked for (a repeat repairs a call that failed); a failure fails the request.
 
@@ -161,6 +166,43 @@ since`, else null. Only for an active website that has the product (404 `website
 - Rights: `website_settings.read` and `.write` for the merchant (own websites), Owner and Support; Finance none. Only a
   signed-in session writes: no `/v1/product/*` route does.
 
+### Connections and links (settings-ownership steps 6 and 7)
+
+One MongoDB connection and one S3-compatible storage connection per website, entered once here (Website settings ›
+Data and files), and the keys between the website's products (Between your products). The sealed values never leave in
+a console answer: a person sees only `set` and how each product's own test of it went.
+
+- `connectionsView({ merchantId, websiteId })` → `{ version, database: { set, setAt }, storage: { set, setAt }, products:
+  [{ productId, name, database: { name, overridden, state } | null, storage: { folder, required, state } | null }],
+  links: [{ caller, callee, state: on|idle|off, scopes: [{ scope, name, description }], delivered }] }` (`state` of a
+  connection: `not_set`, `waiting`, `connected`, `test_failed`). The routes add `can: { write }`.
+- `saveConnection({ merchantId, websiteId, name, value, names?, actor, requestId, ip })`, `removeConnection(…)`:
+  `name` is `database` or `storage`; the value is checked (a MongoDB string; a bucket with its region and keys), sealed
+  with `ctx.secretBox` (AAD website, name and the value's own counter) and kept; the version rises by one; Activity
+  `website.connection_saved` / `website.connection_removed` (never a value); every product on the website that needs it
+  gets a `website.settings_changed` notice (`what: 'connections'`) and the merchant an e-mail (`connection_changed`). `names`
+  (`{ productId: databaseName }`) is the Owner's override of a product's database name (default `ss_<productId>`).
+  The routes (`PUT …/connections/:name`, `POST …/connections/:name/remove`) need a fresh password confirmation.
+- `connectionsForProduct({ productId, websiteId })` → `{ version, database?, storage?, links: { out, in } }`:
+  `GET /v1/product/websites/:websiteId/connections`, signed by the product; only what its manifest `needs`, with its
+  own database name and storage folder. Fetches that carry secrets are limited to 6 an hour per product and website
+  (429) and each is logged (`website.connections_delivered`). `reportConnectionHealth({ productId, websiteId, name,
+  version, ok, message? })` is the product's report of its own test (`PUT …/connections/:name/health`); the Portal never
+  opens the merchant's database or bucket.
+- `connectionsVersionOf(websiteId)` → the one counter of connections and links, carried by the status answer as
+  `connectionsVersion` (a product fetches again when it is ahead of the copy it holds).
+- Links: `recomputeLinks(websiteId)` (called when a product is added or removed and when features are accepted) works out
+  every link from the manifests' `links.needs` and `links.offers` and the features that are on: a link's scopes are the
+  union of the scopes offered by the callee that the caller needs while the needing features are on (no features listed:
+  always). A link with nothing to grant is `idle` (its key stays, with no scopes). `regenerateLink`, `switchLink`
+  (`POST …/links/:callee/:caller/regenerate|switch`, password confirmation) revoke the old key; removing a product or the
+  website revokes and deletes its links. The key is a signed `link` token (`@ss/protocol`: `kind: link`, `caller`, the
+  callee as `productId`, the website; no scopes inside): the callee asks the Portal's grant, kept in its own database.
+- `forgetWebsite({ merchantId, websiteId })` and `resealSecrets()` (Settings → Encryption key → Re-seal now counts the
+  website connections and the link tokens too).
+- Rights: `connections.read` and `connections.write` for the merchant (own websites), Owner and Support; Finance none.
+  No `/v1/product/*` route writes a connection or a link, so a stolen product key or server token changes nothing.
+
 ## Product API routes (`/v1/product/*`, `auth: 'product'`)
 
 | Route                                          | Module   |
@@ -169,6 +211,8 @@ since`, else null. Only for an active website that has the product (404 `website
 | `PUT /v1/product/websites/:websiteId/features` | commerce |
 | `GET /v1/product/websites/:websiteId/status`   | commerce |
 | `GET /v1/product/websites/:websiteId/settings` | website  |
+| `GET /v1/product/websites/:websiteId/connections` | website |
+| `PUT /v1/product/websites/:websiteId/connections/:name/health` | website |
 | `GET /v1/product/websites?cursor=`             | catalog  |
 | `GET /v1/product/revocations?since=`           | identity |
 | `GET /v1/product/directory`                    | catalog  |

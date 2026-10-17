@@ -11,7 +11,7 @@
  * - `membership` (A4): the role shows as a membership on the user's own account ("Member since"); the templates show it
  *   for every role but Customer, and a new role shows it unless the merchant turns it off.
  * - A permission is `<source>:<key>`: `<source>` is the product that supplies it (`accounts`, `chat`, `ecommerce`, …,
- *   from each pasted product's `GET /v1/permissions`) or `site` for the merchant's own names. Owner carries every
+ *   from each linked product's `GET /v1/permissions`) or `site` for the merchant's own names. Owner carries every
  *   permission, written `*`.
  * - A role also sets two-step (optional or required) and session lengths: the session length in hours and "remember
  *   me" in days (0: no remember me). Defaults: 1 day and 30 days. With `sessionRolling` (K-27) a session's end moves
@@ -296,7 +296,7 @@ export const sessionEnd = ({ now, remember, role }) => {
 };
 
 /**
- * The permission catalog the Roles admin offers: Accounts' own, each pasted product's and the merchant's own names.
+ * The permission catalog the Roles admin offers: Accounts' own, each linked product's and the merchant's own names.
  * @param {{ products: Array<{ productId: string, permissions: Array<{ key: string, name: string }> }>,
  *   own: Array<{ key: string, name: string }> }} input
  */

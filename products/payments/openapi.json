@@ -1715,7 +1715,7 @@
 		},
 		"/v1/connections": {
 			"get": {
-				"summary": "Connections (state and last 4 characters only)",
+				"summary": "Connections (whether set, and how the last test went; never a value)",
 				"x-ss-auth": "server",
 				"x-ss-permission": "connections.manage",
 				"x-ss-access": "staff",
@@ -1767,7 +1767,7 @@
 		},
 		"/v1/connections/{name}": {
 			"delete": {
-				"summary": "Remove a connection",
+				"summary": "Remove a provider key. The database, the storage and the links are the Portal's: 409 managed_by_portal",
 				"x-ss-auth": "server",
 				"x-ss-permission": "connections.manage",
 				"x-ss-access": "staff",
@@ -1806,7 +1806,7 @@
 				}
 			},
 			"put": {
-				"summary": "Save a connection ({ value }), tested live",
+				"summary": "Save a provider key ({ value }), tested live. The database, the storage and the links are the Portal's: 409 managed_by_portal",
 				"x-ss-auth": "server",
 				"x-ss-permission": "connections.manage",
 				"x-ss-access": "staff",
@@ -2106,7 +2106,7 @@
 		"/v1/events": {
 			"get": {
 				"summary": "Payment events, newest first",
-				"description": "Also sent to your webhook URLs through Notifications when its token is pasted.",
+				"description": "Also sent to your webhook URLs through Notifications when it is on the website.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_api",
 				"x-ss-permission": "payments.read",
@@ -5051,12 +5051,13 @@
 			},
 			"Connection": {
 				"type": "object",
-				"description": "A connection as screens see it: secrets never come back.",
+				"description": "A connection as screens see it: secrets never come back. The database, the storage and the links to other products are the Portal's (managed): they are entered or made there, once for the website.",
 				"required": [
 					"name",
 					"label",
 					"kind",
 					"neededBy",
+					"managed",
 					"set",
 					"state",
 					"message",
@@ -5076,8 +5077,12 @@
 							"database",
 							"storage",
 							"secret",
-							"token"
+							"link"
 						]
+					},
+					"managed": {
+						"type": "boolean",
+						"description": "The Portal owns it (the database, the storage and the links): it cannot be saved or removed here, only tested."
 					},
 					"neededBy": {
 						"type": "array",

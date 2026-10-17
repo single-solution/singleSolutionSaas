@@ -2,7 +2,7 @@
  * The shop tools, track shipment, product cards and the context panel's shop info (PLAN 0.8.3 Shop tools, Context
  * panel; pure): the single list of the Ecommerce endpoints Chat calls (written in Chat's docs first; Ecommerce
  * implements exactly these), the tool schemas the AI sees, the request each tool call makes, and what of each answer the
- * AI, the cards and the context panel get. Chat calls Ecommerce with the pasted Ecommerce server token; the tools only
+ * AI, the cards and the context panel get. Chat calls Ecommerce through the Portal's link to Ecommerce; the tools only
  * read. My orders, account and track shipment run only for a visitor whose Accounts sign-in Chat verified on that
  * request: Chat forwards it in the `SS-Sign-In` header and Ecommerce verifies it itself and answers only that user's
  * data. The AI never chooses the user, the website or the token: those tools take no arguments, and whatever the model

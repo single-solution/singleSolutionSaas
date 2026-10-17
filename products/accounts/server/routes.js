@@ -38,7 +38,7 @@ export const createRoutes = (product) => {
 	const manage = createManage(product, service, flows);
 
 	/**
-	 * The user lookups the other products make with the pasted Accounts token (staff alerts and Chat's picker ask who has
+	 * The user lookups the other products make through the Portal's link to Accounts (staff alerts and Chat's picker ask who has
 	 * a permission, Ecommerce asks whether an email address or phone number is a member): a call with the server token
 	 * alone may ask for a narrow answer only: a permission, an exact phone or email address, a search of at least 6
 	 * characters with at most 10 results. Listing or browsing users is the signed-in staff member's (`users.read`).

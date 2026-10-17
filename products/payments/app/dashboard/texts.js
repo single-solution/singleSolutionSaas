@@ -111,7 +111,7 @@ export const TEXTS = dashboardTexts({
 		callbacksHelp: 'Register these addresses with each gateway (webhook, notice or return URL), for this website.',
 		events: 'Webhooks',
 		eventsHelp:
-			'Paste the Notifications token in Connections and turn on its Outgoing webhooks; check the SS-Signature header of every event.',
+			'Have Notifications on this website (the Portal links the two) and turn on its Outgoing webhooks; check the SS-Signature header of every event.',
 		more: 'Links, refunds and subscriptions',
 		moreHelp:
 			'Payment links for any amount, full and partial refunds, your manual payment methods for your checkout, gateway-managed subscriptions.',

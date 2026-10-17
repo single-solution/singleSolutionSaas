@@ -37,7 +37,7 @@ Payments 3004, Ecommerce 3005, Growth 3006. This product runs on **3004**.
 
 Under `next dev` (`NODE_ENV=development`) the product may call `http://localhost` and `127.0.0.1` (the Portal and the
 other products) and use a MongoDB there, for example a merchant database
-`mongodb://127.0.0.1:27999/shop_1?replicaSet=testset` in Connections. A deployed product (`NODE_ENV=production`) never
+`mongodb://127.0.0.1:27999/?replicaSet=testset` entered in the Portal (Website settings › Data and files). A deployed product (`NODE_ENV=production`) never
 does: only public https addresses and TLS databases.
 
 ## Deploy

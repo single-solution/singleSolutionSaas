@@ -2,9 +2,9 @@
  * The shop's shared service: what every part (catalog, checkout and orders, promotions, returns, extras, SEO, the
  * Chat lookups) uses while serving a website — the website context (merchant database, switched-on features, settings,
  * website settings from the Portal), the shopper's verified Accounts sign-in, staff actors and the activity log, messages through the
- * pasted Notifications token, payments through the pasted Payments token, and in-process hooks between the parts
+ * Portal link to Notifications, payments through the Portal's link to Payments, and in-process hooks between the parts
  * (for example a catalog change tells the alerts). Nothing here calls the network except through the kit's
- * `callProduct` (pasted tokens only, PLAN 0.4.6).
+ * `callProduct` (the Portal's links only, PLAN 0.4.6).
  * @module
  */
 import { actorOf, problem } from '@ss/app-kit';
@@ -291,7 +291,7 @@ export const createService = (product) => {
 
 	/**
 	 * The shopper of a visitor request: the verified Accounts sign-in in `SS-Sign-In` (the kit's `ctx.signIn()`, for the
-	 * website of the request's own token), or null (none, invalid, expired or no Accounts token pasted). From the
+	 * website of the request's own token), or null (none, invalid, expired or no link to Accounts). From the
 	 * merchant's server the kit has already refused an invalid sign-in (401 `invalid_sign_in`); a user id alone never
 	 * names a shopper.
 	 * @param {Site} s
@@ -335,7 +335,7 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * An Accounts user of the website (`GET /v1/users/:id` through the pasted Accounts token): their name, contacts and
+	 * An Accounts user of the website (`GET /v1/users/:id` through the Portal's link to Accounts): their name, contacts and
 	 * when they joined; null when Accounts does not know them or cannot be asked.
 	 * @param {Site} s @param {string} userId
 	 * @returns {Promise<{ id: string, name: string, email: string, phone: string, createdAt: Date } | null>}
@@ -386,8 +386,8 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * The signed-in shopper's own Accounts profile (`GET /v1/me` with the forwarded sign-in, through the pasted
-	 * Accounts token, K3): their name and default address's city, area, region and country. Null without a sign-in or
+	 * The signed-in shopper's own Accounts profile (`GET /v1/me` with the forwarded sign-in, through the Portal's
+	 * link to Accounts, K3): their name and default address's city, area, region and country. Null without a sign-in or
 	 * when Accounts does not answer.
 	 * @param {Site} s
 	 * @returns {Promise<{ name: string, city: string, area: string, region: string, country: string } | null>}
@@ -421,8 +421,8 @@ export const createService = (product) => {
 		/** @type {{ kind: string, id: string, name: string, role?: string, email?: string }} */ (actorOf(ctx, SERVER_ACTOR));
 
 	/**
-	 * Write an activity-log entry for what the merchant's staff or server did (copied to Accounts when its token is
-	 * pasted, PLAN 0.4.11), with the target's `label` (an order number, a product name …) and a short plain-text
+	 * Write an activity-log entry for what the merchant's staff or server did (copied to Accounts when it is on the
+	 * website, PLAN 0.4.11), with the target's `label` (an order number, a product name …) and a short plain-text
 	 * `detail` (never message contents, secrets or addresses; K9).
 	 * @param {any} ctx @param {string} action @param {string} target
 	 * @param {{ label?: string, detail?: string }} [about]
@@ -446,7 +446,7 @@ export const createService = (product) => {
 	// ---------------------------------------------------------------------------------------------- notifications
 
 	/**
-	 * One call to Notifications (pasted token). A required message (K-17, owner decision D7) is sent whatever the
+	 * One call to Notifications (Portal link). A required message (K-17, owner decision D7) is sent whatever the
 	 * recipient opted out of, with its outbox id as the Idempotency-Key, so a retry of a message that got through is
 	 * not sent twice.
 	 * @param {Site} s @param {OutboxMessage} message @param {string | null} key the outbox id of a required message
@@ -526,7 +526,7 @@ export const createService = (product) => {
 	onUse.push(retryMessages);
 
 	/**
-	 * Send one template through Notifications (pasted token) on each given channel the recipient has an address for.
+	 * Send one template through Notifications (Portal link) on each given channel the recipient has an address for.
 	 * Template keys start with `ecommerce.` (Notifications treats them as this product's events). A `required` message
 	 * (order and claim messages) goes through {@link sendRequired}. A `fallbackTemplate` is the key Notifications uses
 	 * when the website has no template of its own for `template` (before the defaults of the declared message). Never
@@ -569,7 +569,7 @@ export const createService = (product) => {
 	// --------------------------------------------------------------------------------------------------- payments
 
 	/**
-	 * One call to Payments with the pasted token; a refused or unreachable call is 503 `payments_unavailable`. With
+	 * One call to Payments through the Portal's link; a refused or unreachable call is 503 `payments_unavailable`. With
 	 * `refusals`, an answer that says Payments did not do it (a 4xx other than 408, 409 and 429: it is not done, and the
 	 * same call is refused again) is 502 `payments_refused` with Payments' words: a refund (an order's refund through
 	 * Payments is tried again only while it may have been done).

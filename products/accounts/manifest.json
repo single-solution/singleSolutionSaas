@@ -89,7 +89,7 @@
 			{
 				"product": "notifications",
 				"scopes": ["messages.send"],
-				"features": ["phone_code", "phone_password", "email_password", "email_code", "approval"]
+				"features": ["phone_code", "phone_password", "email_password", "email_code", "approval", "role_requests"]
 			},
 			{
 				"product": "notifications",
@@ -117,7 +117,7 @@
 		{
 			"key": "phone_code",
 			"name": "Phone code",
-			"description": "Sign-up and sign-in with a one-time code sent by SMS or WhatsApp through the merchant's Notifications (pasted Notifications token).",
+			"description": "Sign-up and sign-in with a one-time code sent by SMS or WhatsApp through the merchant's Notifications (linked by the Portal).",
 			"dependsOn": [],
 			"recommendFor": ["signIn.phone"],
 			"settings": {
@@ -242,7 +242,7 @@
 		{
 			"key": "data_rights",
 			"name": "Data rights",
-			"description": "Download my data at once; Delete my account after the merchant approves (or after N days), erased in every connected product through pasted tokens.",
+			"description": "Download my data at once; Delete my account after the merchant approves (or after N days), erased in every product on the website through the Portal's links.",
 			"dependsOn": [],
 			"recommendFor": ["signIn.*"],
 			"settings": {
@@ -252,7 +252,7 @@
 		{
 			"key": "activity_copies",
 			"name": "Activity log copy",
-			"description": "Keeps a copy of the activity log of every product the merchant pasted the Accounts token into.",
+			"description": "Keeps a copy of the activity log of every other product on the website.",
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/activity_copies.settings.json"
@@ -261,7 +261,7 @@
 		{
 			"key": "orders_tab",
 			"name": "Orders tab",
-			"description": "My account shows the user's orders from Ecommerce (pasted Ecommerce token).",
+			"description": "My account shows the user's orders from Ecommerce (linked by the Portal).",
 			"dependsOn": [],
 			"recommendFor": ["signIn.*+sells.*"],
 			"settings": {

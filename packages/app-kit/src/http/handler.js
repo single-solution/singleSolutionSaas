@@ -86,8 +86,8 @@ import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
  *   for example `audience`, `expired`, `signature`), or 503 `accounts_unavailable`. A browser call keeps a wrong or
  *   expired sign-in as none.
  * @property {() => Promise<import('../identity.js').RequestSignIn | null>} staffSignIn the sign-in of a staff member from
- *   `SS-Sign-In`, verified once for the request's website by the product's own way (`staff.js`): the website's pasted
- *   Accounts token, or Accounts' own keys, session and live role. The staff routes of the server token use it; null
+ *   `SS-Sign-In`, verified once for the request's website by the product's own way (`staff.js`): the keys of the website's
+ *   Accounts, fetched through the link, or Accounts' own keys, session and live role. The staff routes of the server token use it; null
  *   without the header
  * @property {{ server: boolean, ip: string | null }} visitor on browser routes: `server` when the merchant's server
  *   called with the server token for one visitor (K3), `ip` that visitor's `SS-Visitor-IP` (null when not sent)

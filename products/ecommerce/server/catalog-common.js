@@ -226,7 +226,7 @@ export const createCatalogCommon = (product, service) => {
 
 	/**
 	 * Send changed page addresses to search engines through Growth's IndexNow, right after the request, when the
-	 * `seo` setting `indexNowOnSave` is on and the Growth token is pasted (E16); each address once, at most
+	 * `seo` setting `indexNowOnSave` is on and Growth is linked (E16); each address once, at most
 	 * {@link INDEXNOW_MAX}. Failures are only logged.
 	 * @param {Site} s
 	 * @param {string[]} urls

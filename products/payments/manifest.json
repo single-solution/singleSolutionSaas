@@ -171,7 +171,7 @@
 		{
 			"key": "payment_api",
 			"name": "Merchant payment API",
-			"description": "The merchant's server (and Ecommerce through a pasted token) creates, reads and verifies payments; the Payments admin widget.",
+			"description": "The merchant's server (and Ecommerce through the Portal's link) creates, reads and verifies payments; the Payments admin widget.",
 			"dependsOn": [],
 			"recommendFor": ["pays.online"],
 			"settings": {

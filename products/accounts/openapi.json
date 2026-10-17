@@ -1848,7 +1848,7 @@
 		"/v1/admin/roles/permissions": {
 			"get": {
 				"summary": "The permissions roles can grant (Roles admin widget)",
-				"description": "Accounts’ own, each product’s whose server token you pasted (its GET /v1/permissions, kept 5 minutes) and your own names (source site).",
+				"description": "Accounts’ own, each product’s on the same website (its GET /v1/permissions, kept 5 minutes) and your own names (source site).",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "roles",
 				"x-ss-permission": "roles.manage",
@@ -3657,7 +3657,7 @@
 		},
 		"/v1/connections": {
 			"get": {
-				"summary": "Connections (state and last 4 characters only)",
+				"summary": "Connections (whether set, and how the last test went; never a value)",
 				"x-ss-auth": "server",
 				"x-ss-permission": "connections.manage",
 				"x-ss-access": "staff",
@@ -3709,7 +3709,7 @@
 		},
 		"/v1/connections/{name}": {
 			"delete": {
-				"summary": "Remove a connection",
+				"summary": "Remove a provider key. The database, the storage and the links are the Portal's: 409 managed_by_portal",
 				"x-ss-auth": "server",
 				"x-ss-permission": "connections.manage",
 				"x-ss-access": "staff",
@@ -3748,7 +3748,7 @@
 				}
 			},
 			"put": {
-				"summary": "Save a connection ({ value }), tested live",
+				"summary": "Save a provider key ({ value }), tested live. The database, the storage and the links are the Portal's: 409 managed_by_portal",
 				"x-ss-auth": "server",
 				"x-ss-permission": "connections.manage",
 				"x-ss-access": "staff",
@@ -5104,6 +5104,55 @@
 				}
 			}
 		},
+		"/v1/lookup/me": {
+			"get": {
+				"summary": "The signed-in user, for another product",
+				"description": "The same answer as GET /v1/me, for another product of the website that holds the signed-in person's Accounts sign-in (Ecommerce asks for the shopper's name and city). Called with the server token or with a link key that holds the scope me.read, and the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked).",
+				"x-ss-auth": "server",
+				"x-ss-feature": [
+					"phone_code",
+					"phone_password",
+					"email_password",
+					"email_code",
+					"google",
+					"apple",
+					"facebook"
+				],
+				"x-ss-access": "runtime",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSSignIn"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Me"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/me": {
 			"get": {
 				"summary": "The signed-in user",
@@ -5379,7 +5428,7 @@
 		"/v1/me/export": {
 			"post": {
 				"summary": "Download my data",
-				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). One single-use link of 15 minutes (GET, no token) to a JSON file of everything Accounts and each product whose token you pasted keep about the user; a product that cannot be reached is marked unavailable.",
+				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). One single-use link of 15 minutes (GET, no token) to a JSON file of everything Accounts and each product on the same website keep about the user; a product that cannot be reached is marked unavailable.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "data_rights",
 				"security": [
@@ -5425,7 +5474,7 @@
 		"/v1/me/orders": {
 			"get": {
 				"summary": "The signed-in user’s last 20 orders (Orders tab)",
-				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). From Ecommerce through the server token you pasted, newest first, as Ecommerce answers them. 503 product_not_connected without Ecommerce or when it cannot answer.",
+				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). From Ecommerce through the Portal's link to it, newest first, as Ecommerce answers them. 503 product_not_connected without Ecommerce or when it cannot answer.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "orders_tab",
 				"security": [
@@ -7048,7 +7097,7 @@
 		"/v1/roles/permissions": {
 			"get": {
 				"summary": "The permissions roles can grant",
-				"description": "Accounts’ own, each product’s whose server token you pasted (its GET /v1/permissions, kept 5 minutes) and your own names (source site).",
+				"description": "Accounts’ own, each product’s on the same website (its GET /v1/permissions, kept 5 minutes) and your own names (source site).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
 				"x-ss-permission": "roles.manage",
@@ -11539,12 +11588,13 @@
 			},
 			"Connection": {
 				"type": "object",
-				"description": "A connection as screens see it: secrets never come back.",
+				"description": "A connection as screens see it: secrets never come back. The database, the storage and the links to other products are the Portal's (managed): they are entered or made there, once for the website.",
 				"required": [
 					"name",
 					"label",
 					"kind",
 					"neededBy",
+					"managed",
 					"set",
 					"state",
 					"message",
@@ -11564,8 +11614,12 @@
 							"database",
 							"storage",
 							"secret",
-							"token"
+							"link"
 						]
+					},
+					"managed": {
+						"type": "boolean",
+						"description": "The Portal owns it (the database, the storage and the links): it cannot be saved or removed here, only tested."
 					},
 					"neededBy": {
 						"type": "array",
@@ -12647,7 +12701,7 @@
 							"type": "string",
 							"pattern": "^(?:[a-z][a-z0-9-]{1,30}:[a-z][a-z0-9_.]{0,63}|\\*)$"
 						},
-						"description": "<product>:<key> (from each product whose server token you pasted), site:<key> (your own names) or * (every permission)."
+						"description": "<product>:<key> (from each product on the same website), site:<key> (your own names) or * (every permission)."
 					},
 					"twoStep": {
 						"type": "string",
@@ -12754,7 +12808,7 @@
 							"type": "string",
 							"pattern": "^(?:[a-z][a-z0-9-]{1,30}:[a-z][a-z0-9_.]{0,63}|\\*)$"
 						},
-						"description": "<product>:<key> (from each product whose server token you pasted), site:<key> (your own names) or * (every permission). Default []. Owner keeps *."
+						"description": "<product>:<key> (from each product on the same website), site:<key> (your own names) or * (every permission). Default []. Owner keeps *."
 					},
 					"twoStep": {
 						"type": "string",

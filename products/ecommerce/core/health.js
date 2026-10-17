@@ -9,7 +9,7 @@
  * country, logo and phone (the website settings in the Portal; search engines need the country for shipping and return markup and show the
  * logo, G2, G5), the website's address, the storage for photos, the delivery days (Google shows shipping only with
  * them, G5.4), a payment method shoppers can use, the bank details shoppers pay to, someone to get staff alerts and the
- * admin page they link to, and badly formed tag ids in Growth (only while Growth's token is pasted). A check that does
+ * admin page they link to, and badly formed tag ids in Growth (only while Growth is linked). A check that does
  * not apply (its feature off, nothing to read) is skipped. The products' checks are one `$facet` pipeline that starts
  * with a `$match` on the website; categories and brands are judged from their lists. Judged on read; nothing is stored.
  * No I/O.
@@ -319,7 +319,7 @@ export const paymentMethodsOn = ({ methods, paymentsConnected, pickup }) =>
  * @param {string | null} [input.businessLink] where the merchant sets the business facts (the Portal's Website settings ›
  *   Business), the link of the business checks; null: none
  * @param {string[]} input.paymentMethods {@link paymentMethodsOn}
- * @param {string[] | null} input.badTags {@link badTagIds}, or null when Growth's token is not pasted or Growth did not
+ * @param {string[] | null} input.badTags {@link badTagIds}, or null when Growth is not linked or Growth did not
  *   answer (the check is skipped)
  * @param {boolean | null} input.shortLived whether images go out on short-lived signed links (storage connected, no
  *   public address of the images); null without storage (the check is skipped)

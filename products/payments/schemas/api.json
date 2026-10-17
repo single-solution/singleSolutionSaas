@@ -1133,7 +1133,7 @@
 	},
 	"GET /v1/events": {
 		"summary": "Payment events, newest first",
-		"description": "Also sent to your webhook URLs through Notifications when its token is pasted.",
+		"description": "Also sent to your webhook URLs through Notifications when it is on the website.",
 		"query": {
 			"type": "object",
 			"properties": {

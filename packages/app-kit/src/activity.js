@@ -3,8 +3,8 @@
  * through its widgets or API in the merchant database (`ss_<product id>_activity`): who (`actor`: kind, id, name and
  * the acting user's role), what (`action`), on what (`target`, and its `label`, for example an order number), when, and
  * what changed: `values` (codes, numbers and yes/no that the product's texts put into words, A8: no sentence in one
- * language is stored) or an optional plain-text `detail` (never message contents, secrets or addresses). When the
- * merchant pasted the website's Accounts server token, every entry is also sent to Accounts right after the request
+ * language is stored) or an optional plain-text `detail` (never message contents, secrets or addresses). When
+ * Accounts is on the website (the Portal links the products), every entry is also sent to Accounts right after the request
  * (`POST <accounts>/v1/activity-copies`). Unsent entries stay marked `pending` and are retried right after this
  * product's next request for that website. When Accounts refuses them (its activity copies feature off, the token
  * refused …), an instance sends none of that website's copies for {@link REFUSED_PAUSE_MS}, each copy waiting is

@@ -51,8 +51,15 @@ The exact API is in [API.md](./API.md).
   message's defaults and long values. WhatsApp never has a default (it sends only templates approved at Meta).
 - **Format and time zone** (K7, K8) — `formatMoney`, `formatDate` and the calendar helpers from `@ss/contracts`, fed by
   the website's Format and its business time zone, both from the Portal's website settings (`product.format(websiteId)`, the widget config).
-- **Connections** — the merchant's database, storage, provider keys and pasted tokens, encrypted with a key derived
-  from `ENCRYPTION_KEY`, write-only, tested live when saved. `callProduct` calls another product with a pasted token.
+- **Connections** — the website's database and storage and the links to other products are the Portal's: entered or
+  made once there (Website settings › Data and files, Between your products), delivered over one signed fetch
+  (`GET /v1/product/websites/:id/connections`, a `connectionsVersion` in the status answer and a
+  `website.settings_changed` notice with `what` `connections` or `links`), sealed here with `ENCRYPTION_KEY`, tested
+  live and the result reported back. The product's own provider keys are entered in the product. All are write-only,
+  encrypted with a key derived from `ENCRYPTION_KEY`. `callProduct` calls another product with the link key the Portal
+  gave this product for it; a route with a `scope` takes a link key only if the Portal granted the caller that scope on
+  the website. The manifest says what the product needs (`needs`: a database, storage) and which scopes it offers and
+  needs from other products (`links.offers`, `links.needs`).
 - **Sealing and Re-seal** — every stored secret uses the one format of `@ss/protocol` (`ss2.<keyId>.…`; the key id
   names the key that sealed it). While the owner changes `ENCRYPTION_KEY`, the old key is `ENCRYPTION_KEY_PREVIOUS`
   and values open with either; the Owner's Re-seal (`POST /v1/dashboard/reseal`) seals Connections, the product key,

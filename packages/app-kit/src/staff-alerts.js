@@ -1,10 +1,10 @@
 /**
  * Staff alerts (PLAN 0.8.10 K6): one kit helper for products that alert the merchant's staff through Notifications
- * (the pasted Notifications token).
+ * (the Portal link to Notifications).
  *
  * - Recipients: the website's alert team in the Portal (Website settings › Team and alerts: each person's email and
  *   phone); plus, when the feature's `staffPermission` setting names a permission, every
- *   unblocked Accounts user whose role grants it (through the pasted Accounts token:
+ *   unblocked Accounts user whose role grants it (through the Portal's link to Accounts:
  *   `GET /v1/users?permission=<product>:<key>&blocked=false`, cached 5 minutes) — the value `all_staff` names the
  *   permission the alert gives as `allStaff` (the one every staff member who works with it has, for example Chat's
  *   `inbox.read`); plus the assignee where the product has one. At most the alert's `maxRecipients` (the product's
@@ -159,7 +159,7 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 	const sends = connections.declaresLink('notifications');
 
 	/**
-	 * Send one message through Notifications (pasted token), required, with its own Idempotency-Key.
+	 * Send one message through Notifications (Portal link), required, with its own Idempotency-Key.
 	 * @param {string} websiteId
 	 * @param {AlertMessage} message
 	 */

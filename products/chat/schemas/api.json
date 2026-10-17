@@ -531,7 +531,7 @@
 									"type": "null"
 								}
 							],
-							"description": "With the Ecommerce token pasted and a signed-in visitor; null for a guest, without the token or when Ecommerce cannot answer."
+							"description": "With Ecommerce on the website and a signed-in visitor; null for a guest, without the token or when Ecommerce cannot answer."
 						}
 					}
 				}
@@ -1813,7 +1813,7 @@
 				},
 				"SS-Sign-In": {
 					"type": "string",
-					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 				}
 			}
 		},
@@ -1891,7 +1891,7 @@
 				},
 				"SS-Sign-In": {
 					"type": "string",
-					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 				}
 			}
 		},
@@ -1930,7 +1930,7 @@
 				},
 				"SS-Sign-In": {
 					"type": "string",
-					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 				}
 			}
 		},
@@ -2001,7 +2001,7 @@
 				},
 				"SS-Sign-In": {
 					"type": "string",
-					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
 				}
 			}
 		},
@@ -2020,7 +2020,7 @@
 				},
 				"SS-Sign-In": {
 					"type": "string",
-					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
 				}
 			}
 		},
@@ -2041,7 +2041,7 @@
 				},
 				"SS-Sign-In": {
 					"type": "string",
-					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
 				}
 			}
 		},
@@ -2062,7 +2062,7 @@
 				},
 				"SS-Sign-In": {
 					"type": "string",
-					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 				}
 			}
 		},
@@ -2114,7 +2114,7 @@
 				},
 				"SS-Sign-In": {
 					"type": "string",
-					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 				}
 			}
 		},
@@ -2189,7 +2189,7 @@
 				},
 				"SS-Sign-In": {
 					"type": "string",
-					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 				}
 			}
 		},
@@ -2231,7 +2231,7 @@
 				},
 				"SS-Sign-In": {
 					"type": "string",
-					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
 				}
 			}
 		},
@@ -2262,7 +2262,7 @@
 				},
 				"SS-Sign-In": {
 					"type": "string",
-					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
 				}
 			}
 		},
@@ -2288,7 +2288,7 @@
 	},
 	"POST /v1/chat/transcript": {
 		"summary": "Email the visitor a copy of the chat",
-		"description": "The template chat.transcript through Notifications (paste its token in Connections) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed. 404 not_found when the visitor has no chat yet.",
+		"description": "The template chat.transcript through Notifications (linked by the Portal when it is on the website) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed. 404 not_found when the visitor has no chat yet.",
 		"headers": {
 			"type": "object",
 			"properties": {
@@ -2299,7 +2299,7 @@
 				},
 				"SS-Sign-In": {
 					"type": "string",
-					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
 				}
 			}
 		},
@@ -2338,7 +2338,7 @@
 				},
 				"SS-Sign-In": {
 					"type": "string",
-					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 				}
 			}
 		},
@@ -2869,7 +2869,7 @@
 	},
 	"POST /v1/admin/conversations/:id/transcript": {
 		"summary": "Email a copy of the conversation",
-		"description": "The template chat.transcript through Notifications (paste its token in Connections) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
+		"description": "The template chat.transcript through Notifications (linked by the Portal when it is on the website) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
 		"body": {
 			"type": "object",
 			"required": ["email"],
@@ -3682,7 +3682,7 @@
 	},
 	"POST /v1/conversations/:id/transcript": {
 		"summary": "Email a copy of the conversation",
-		"description": "The template chat.transcript through Notifications (paste its token in Connections) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
+		"description": "The template chat.transcript through Notifications (linked by the Portal when it is on the website) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
 		"body": {
 			"type": "object",
 			"required": ["email"],

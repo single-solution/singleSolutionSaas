@@ -73,7 +73,7 @@ Three variables, and one optional while the encryption key is changed (`.env.exa
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `MONGODB_URI`             | this product's own database (never a merchant database)                                                                                                                            |
 | `CONNECT_SECRET`          | random, at least 32 characters; typed once into Portal → Products → Add product                                                                                                    |
-| `ENCRYPTION_KEY`          | random, at least 32 characters, different for each deployable: seals the Connections' secrets (the merchant database address, the Accounts token) and the product's own keys       |
+| `ENCRYPTION_KEY`          | random, at least 32 characters, different for each deployable: seals the Connections' secrets (the merchant database address and the link keys to other products, both from the Portal) and the product's own keys       |
 | `ENCRYPTION_KEY_PREVIOUS` | optional, only while `ENCRYPTION_KEY` is changed: the old key, so sealed values keep opening; removed once the dashboard's Re-seal (Prices → Encryption key, Owner) says it can be |
 
 ## Local development
@@ -97,7 +97,7 @@ Payments 3004, Ecommerce 3005, Growth 3006. This product runs on **3006**.
 
 Under `next dev` (`NODE_ENV=development`) the product may call `http://localhost` and `127.0.0.1` (the Portal and the
 other products) and use a MongoDB there, for example a merchant database
-`mongodb://127.0.0.1:27999/shop_1?replicaSet=testset` in Connections. A deployed product (`NODE_ENV=production`) never
+`mongodb://127.0.0.1:27999/?replicaSet=testset` entered in the Portal (Website settings › Data and files). A deployed product (`NODE_ENV=production`) never
 does: only public https addresses and TLS databases.
 
 ## Deploy

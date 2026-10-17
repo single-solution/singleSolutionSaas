@@ -26991,14 +26991,14 @@
 	},
 	"GET /v1/customers/:userId": {
 		"summary": "Read a customer with their latest orders",
-		"description": ":userId is a customer id (cus_…, members and guests) or an Accounts user id. A member without a record is shown from their latest order; an Accounts user without orders gets their record made now (through the pasted Accounts token), so staff can note or block them before their first order. 404 not_found.",
+		"description": ":userId is a customer id (cus_…, members and guests) or an Accounts user id. A member without a record is shown from their latest order; an Accounts user without orders gets their record made now (through the Portal's link to Accounts), so staff can note or block them before their first order. 404 not_found.",
 		"response": {
 			"$ref": "#/components/schemas/CustomerDetail"
 		}
 	},
 	"GET /v1/admin/customers/:userId": {
 		"summary": "Read a customer with their latest orders (Customers admin widget)",
-		"description": ":userId is a customer id (cus_…, members and guests) or an Accounts user id. A member without a record is shown from their latest order; an Accounts user without orders gets their record made now (through the pasted Accounts token), so staff can note or block them before their first order. 404 not_found.",
+		"description": ":userId is a customer id (cus_…, members and guests) or an Accounts user id. A member without a record is shown from their latest order; an Accounts user without orders gets their record made now (through the Portal's link to Accounts), so staff can note or block them before their first order. 404 not_found.",
 		"response": {
 			"$ref": "#/components/schemas/CustomerDetail"
 		}
@@ -27141,7 +27141,7 @@
 	},
 	"GET /v1/events": {
 		"summary": "Shop events, newest first",
-		"description": "Needs the events feature. Order, return, review, catalog and stock events are recorded while it is on, settings.changed always; kept 30 days; also sent to your webhook URLs through Notifications when its token is pasted. 422 validation_failed for a since that is not an ISO 8601 time or types that are not ecommerce event types. 400 bad_request for a bad cursor or limit.",
+		"description": "Needs the events feature. Order, return, review, catalog and stock events are recorded while it is on, settings.changed always; kept 30 days; also sent to your webhook URLs through Notifications when it is on the website. 422 validation_failed for a since that is not an ISO 8601 time or types that are not ecommerce event types. 400 bad_request for a bad cursor or limit.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -30237,14 +30237,14 @@
 	},
 	"GET /v1/reports/health": {
 		"summary": "Shop health: what needs fixing",
-		"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the website settings copy from the Portal, the connections, what each active method paid first tells shoppers (its own accounts and instructions, or Payments' manual method of the same key), the payment methods shoppers can use now (the active methods of the payment_methods list: those through Payments while Payments is connected, those at pickup with a pickup point), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
+		"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the website settings copy from the Portal, the connections, what each active method paid first tells shoppers (its own accounts and instructions, or Payments' manual method of the same key), the payment methods shoppers can use now (the active methods of the payment_methods list: those through Payments while Payments is connected, those at pickup with a pickup point), and, while Growth is on the same website, Growth's GET /v1/settings for its tag ids.",
 		"response": {
 			"$ref": "#/components/schemas/ShopHealth"
 		}
 	},
 	"GET /v1/admin/reports/health": {
 		"summary": "Shop health: what needs fixing (Customers admin widget)",
-		"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the website settings copy from the Portal, the connections, what each active method paid first tells shoppers (its own accounts and instructions, or Payments' manual method of the same key), the payment methods shoppers can use now (the active methods of the payment_methods list: those through Payments while Payments is connected, those at pickup with a pickup point), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
+		"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the website settings copy from the Portal, the connections, what each active method paid first tells shoppers (its own accounts and instructions, or Payments' manual method of the same key), the payment methods shoppers can use now (the active methods of the payment_methods list: those through Payments while Payments is connected, those at pickup with a pickup point), and, while Growth is on the same website, Growth's GET /v1/settings for its tag ids.",
 		"response": {
 			"$ref": "#/components/schemas/ShopHealth"
 		}

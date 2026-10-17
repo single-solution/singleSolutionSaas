@@ -103,7 +103,7 @@ const copyView = (row) => ({
  */
 export const createManage = (product, service, flows) => {
 	const { now } = product;
-	/** Permission lists of pasted products, per website and product (5 minutes). @type {Map<string, { until: number, permissions: Array<{ key: string, name: string }> }>} */
+	/** Permission lists of the linked products, per website and product (5 minutes). @type {Map<string, { until: number, permissions: Array<{ key: string, name: string }> }>} */
 	const permissionCache = new Map();
 
 	/** Who acts (PLAN 0.8.10 K2). @param {any} ctx */
@@ -1057,7 +1057,7 @@ export const createManage = (product, service, flows) => {
 	};
 
 	/**
-	 * The permission catalog: Accounts' own, each pasted product's (its `GET /v1/permissions`, cached 5 minutes) and
+	 * The permission catalog: Accounts' own, each linked product's (its `GET /v1/permissions`, cached 5 minutes) and
 	 * the merchant's own names. A product that cannot be reached is listed as unavailable.
 	 * @param {any} ctx
 	 */

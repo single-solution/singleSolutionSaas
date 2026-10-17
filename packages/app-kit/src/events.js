@@ -4,7 +4,7 @@
  * addresses or message contents) is stored in the merchant database (`ss_<product>_events`, removed 30 days after it
  * happened by a TTL index) and listed by `GET /v1/events?since=&types=&cursor=&limit=` (server token, newest first).
  *
- * When the merchant pasted the Notifications token, each event is forwarded right after the request to Notifications'
+ * When Notifications is on the website (the Portal links it), each event is forwarded right after the request to Notifications'
  * `POST /v1/events` (the event id as its `Idempotency-Key`), which signs it and sends it to the merchant's webhook URLs.
  * A failed forward is retried on the website's later requests (1 min, 5 min, 30 min, 2 h); without the token an event
  * stays `not_connected` and readable through the API. Nothing runs in the background. A settings, text, theme, Format

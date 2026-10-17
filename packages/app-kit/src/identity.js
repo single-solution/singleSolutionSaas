@@ -1,6 +1,6 @@
 /**
- * Accounts sign-ins (PLAN 0.4.6): a product trusts a website's Accounts sign-ins once the merchant pasted that
- * website's Accounts server token into the product's Connections (`product.accounts.verify`).
+ * Accounts sign-ins (PLAN 0.4.6): a product trusts a website's Accounts sign-ins once the Portal has linked it to that
+ * website's Accounts (the manifest says it needs Accounts; `product.accounts.verify`).
  *
  * A token is a compact JWS with `alg` EdDSA, ES256 or RS256 matching the key type (`none`, HMAC, header-borne keys and
  * `crit` refused), signed by a key of the issuer (by `kid`, or the only compatible key), with `iss` = issuer, `aud`
@@ -144,9 +144,9 @@ const ACCOUNTS_REFETCH_MS = 60_000;
  */
 
 /**
- * Accounts sign-ins (PLAN 0.4.6): a product trusts them for a website only after the merchant pasted that website's
- * Accounts server token into the product's Connections. The website's public keys are fetched from Accounts with that
- * token (through `@ss/net`, cached 10 minutes; an unknown key id refetches them at most once a minute) and each sign-in
+ * Accounts sign-ins (PLAN 0.4.6): a product trusts them for a website only after the Portal has linked it to that website's
+ * Accounts (a link key, never pasted). The website's public keys are fetched from Accounts with that
+ * key (through `@ss/net`, cached 10 minutes; an unknown key id refetches them at most once a minute) and each sign-in
  * is verified offline: signed by Accounts, issued for this website (`aud`) and not expired (they last 15 minutes). A
  * sign-in says who the person is and the permissions of their role; the server token alone never authorizes
  * configuration or staff work (`staff.js`).
@@ -224,7 +224,7 @@ export const createAccountsSignIns = ({ connections, now, own }) => {
 		staffTrusted: own !== undefined || trusted,
 		/**
 		 * Verify a staff member's sign-in for a website (`staff.js`): Accounts checks its own (`own`: its signing key, the
-		 * open session and the live role), every other product checks it with the website's pasted Accounts token.
+		 * open session and the live role), every other product checks it with the website's Portal link to Accounts.
 		 * @param {{ websiteId: string, token: unknown, ctx?: any }} input
 		 * @returns {Promise<AccountsSignInResult>}
 		 */
@@ -271,7 +271,7 @@ export const requestSignIn = ({ accounts, websiteId, headers }) => {
 /**
  * The sign-in of a staff member on a request (`ctx.staffSignIn()`), for the staff routes of the server token (`staff.js`):
  * read from `SS-Sign-In`, checked once for the website of the request's own token and judged by the product's
- * verification (`verifyStaff`: with the website's pasted Accounts token, or Accounts' own keys). Null when the request
+ * verification (`verifyStaff`: with the website's Portal link to Accounts, or Accounts' own keys). Null when the request
  * carries no sign-in; a product that cannot check a sign-in at all answers `accounts_not_connected` to one.
  * @param {{ accounts: ReturnType<typeof createAccountsSignIns>, websiteId: string | null, headers: Headers, ctx?: any }} input
  * @returns {() => Promise<RequestSignIn | null>}

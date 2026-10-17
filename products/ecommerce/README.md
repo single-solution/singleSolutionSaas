@@ -3,7 +3,7 @@
 The whole shop of a merchant's own website (PLAN.md 0.8.8): catalog, variants and stock, cart and checkout, orders,
 delivery and couriers, taxes, promotions, loyalty, returns, reviews, wishlist, alerts, invoices, CSV, reports, catalog
 SEO, feeds and llms.txt. Shoppers order as guests or signed in with Accounts, payments go through Payments and messages
-through Notifications, each with its server token pasted into Connections. Feature keys are in `manifest.json`, the
+through Notifications, each linked to it by the Portal (nothing is pasted). Feature keys are in `manifest.json`, the
 public docs at `/docs`.
 
 ## Environment
@@ -14,7 +14,7 @@ Three variables, and one optional while the encryption key is changed (`.env.exa
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `MONGODB_URI`             | this product's own database (never a merchant database)                                                                                                                                                                                                               |
 | `CONNECT_SECRET`          | random, at least 32 characters; typed once into Portal → Products → Add product                                                                                                                                                                                       |
-| `ENCRYPTION_KEY`          | random, at least 32 characters, different for each deployable: seals the Connections' secrets (the merchant database address, the storage keys, the Accounts, Payments, Notifications and Growth tokens, the courier and AI keys) and each website's deal-lock secret |
+| `ENCRYPTION_KEY`          | random, at least 32 characters, different for each deployable: seals the Connections' secrets (the merchant database address and the storage keys from the Portal, the link keys to the other products, the courier and AI keys) and each website's deal-lock secret |
 | `ENCRYPTION_KEY_PREVIOUS` | optional, only while `ENCRYPTION_KEY` is changed: the old key, so sealed values keep opening; removed once the dashboard's Re-seal (Prices → Encryption key, Owner) says it can be                                                                                    |
 
 ## Local development
@@ -38,7 +38,7 @@ Payments 3004, Ecommerce 3005, Growth 3006. This product runs on **3005**.
 
 Under `next dev` (`NODE_ENV=development`) the product may call `http://localhost` and `127.0.0.1` (the Portal and the
 other products) and use a MongoDB there, for example a merchant database
-`mongodb://127.0.0.1:27999/shop_1?replicaSet=testset` in Connections. A deployed product (`NODE_ENV=production`) never
+`mongodb://127.0.0.1:27999/?replicaSet=testset` entered in the Portal (Website settings › Data and files). A deployed product (`NODE_ENV=production`) never
 does: only public https addresses and TLS databases.
 
 ## Deploy
@@ -46,8 +46,9 @@ does: only public https addresses and TLS databases.
 1. Create a Vercel project with the root directory `products/ecommerce` and set the three variables for Production only
    (and `ENCRYPTION_KEY_PREVIOUS` only while the key is changed).
 2. Deploy, then in the Portal: Products → **Add product** with its address and `CONNECT_SECRET`, then **Set active**.
-3. For each website, the merchant pastes the Accounts, Payments and Notifications server tokens into Connections, and
-   lets their storage's CORS allow `PUT` (and `GET`) from the website's and the admin page's origins.
+3. For each website, the merchant enters the database and the storage once in the Portal (Website settings › Data and
+   files) and adds the other products to the website: the Portal links Ecommerce to Accounts, Payments and
+   Notifications by itself. The storage's CORS must allow `PUT` (and `GET`) from the website's and the admin page's origins.
 4. The merchant's site serves the sitemap, feeds, llms.txt and policies from the server-token routes (snippets in
    `/docs`).
 

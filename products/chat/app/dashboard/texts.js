@@ -70,7 +70,7 @@ export const TEXTS = dashboardTexts({
 		},
 		aiLabelWarning:
 			'AI replies are not labeled. Laws in some places (for example the EU AI Act and California’s bot disclosure law) require telling visitors they are talking to a bot. You are responsible for following the law where you operate.',
-		transcriptsNote: 'Transcripts are emailed through Notifications: paste its server token in Connections.',
+		transcriptsNote: 'Transcripts are emailed through Notifications: have Notifications on this website (the Portal links the two).',
 	},
 	lists: {
 		add: 'Add',

@@ -323,7 +323,7 @@ export const createInbox = (product, service, reply) => {
 	};
 
 	/**
-	 * A member of staff Chat has not seen yet, from Accounts (pasted token): an unblocked user whose role may reply in
+	 * A member of staff Chat has not seen yet, from Accounts (Portal link): an unblocked user whose role may reply in
 	 * the inbox (Accounts is asked again when the kept list does not have them), added to the staff list so a chat can
 	 * be assigned to them (CH-6); else null.
 	 * @param {Site} s

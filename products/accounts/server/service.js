@@ -8,7 +8,7 @@
  *   (`iss` = Accounts' address, `aud` = the website id), sessions with a rotating refresh token whose reuse ends the
  *   session (after a 30-second grace for parallel renewals), and `finish()`: blocked, approval, consents and two-step
  *   checks after the first step of any method.
- * - Messages through Notifications (pasted token): a Forgot password message that cannot go now is kept and sent
+ * - Messages through Notifications (Portal link): a Forgot password message that cannot go now is kept and sent
  *   again right after later requests; the data-rights fan-out to every connected product and the export.
  * @module
  */
@@ -548,7 +548,7 @@ export const createService = (product) => {
 	// ------------------------------------------------------------------------------------------------- messages
 
 	/**
-	 * Send a message through Notifications with the pasted token.
+	 * Send a message through Notifications by the Portal's link to it.
 	 * @param {Site} s @param {'email' | 'sms' | 'whatsapp'} channel @param {string} template
 	 * @param {{ email?: string, phone?: string }} to @param {Record<string, string | number>} values
 	 */
@@ -559,7 +559,7 @@ export const createService = (product) => {
 			body: { template, to, values: { ...values, business } },
 		});
 		if (!answer.ok && answer.reason === 'not_connected')
-			throw problem('notifications_not_connected', 'Notifications not connected: paste its token in Connections.');
+			throw problem('notifications_not_connected', 'Notifications is not linked: add it to this website in the Portal.');
 		const status = answer.ok ? bodyOf(answer.body).status : null;
 		if (!answer.ok || status === 'failed' || status === 'skipped')
 			throw problem('not_sent', 'The message could not be sent. Try again later.');
@@ -602,7 +602,7 @@ export const createService = (product) => {
 
 	// ---------------------------------------------------------------------------------------------- data rights
 
-	/** The other products whose token is pasted for this website. @param {string} websiteId */
+	/** The other products the Portal linked Accounts to on this website. @param {string} websiteId */
 	const connectedProducts = async (websiteId) => {
 		/** @type {string[]} */
 		const out = [];

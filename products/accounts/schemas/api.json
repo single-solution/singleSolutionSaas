@@ -1147,7 +1147,7 @@
 						"type": "string",
 						"pattern": "^(?:[a-z][a-z0-9-]{1,30}:[a-z][a-z0-9_.]{0,63}|\\*)$"
 					},
-					"description": "<product>:<key> (from each product whose server token you pasted), site:<key> (your own names) or * (every permission)."
+					"description": "<product>:<key> (from each product on the same website), site:<key> (your own names) or * (every permission)."
 				},
 				"twoStep": {
 					"type": "string",
@@ -1233,7 +1233,7 @@
 						"type": "string",
 						"pattern": "^(?:[a-z][a-z0-9-]{1,30}:[a-z][a-z0-9_.]{0,63}|\\*)$"
 					},
-					"description": "<product>:<key> (from each product whose server token you pasted), site:<key> (your own names) or * (every permission). Default []. Owner keeps *."
+					"description": "<product>:<key> (from each product on the same website), site:<key> (your own names) or * (every permission). Default []. Owner keeps *."
 				},
 				"twoStep": {
 					"type": "string",
@@ -2490,6 +2490,13 @@
 			"$ref": "#/components/schemas/Me"
 		}
 	},
+	"GET /v1/lookup/me": {
+		"summary": "The signed-in user, for another product",
+		"description": "The same answer as GET /v1/me, for another product of the website that holds the signed-in person's Accounts sign-in (Ecommerce asks for the shopper's name and city). Called with the server token or with a link key that holds the scope me.read, and the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked).",
+		"response": {
+			"$ref": "#/components/schemas/Me"
+		}
+	},
 	"PATCH /v1/me": {
 		"summary": "Change the signed-in user’s name, custom fields or addresses",
 		"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). The email address and phone number change only by signing in with them. 422 validation_failed for the field; 403 feature_off for custom while Custom fields is off.",
@@ -2698,7 +2705,7 @@
 	},
 	"POST /v1/me/export": {
 		"summary": "Download my data",
-		"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). One single-use link of 15 minutes (GET, no token) to a JSON file of everything Accounts and each product whose token you pasted keep about the user; a product that cannot be reached is marked unavailable.",
+		"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). One single-use link of 15 minutes (GET, no token) to a JSON file of everything Accounts and each product on the same website keep about the user; a product that cannot be reached is marked unavailable.",
 		"response": {
 			"$ref": "#/components/schemas/Link"
 		}
@@ -2727,7 +2734,7 @@
 	},
 	"GET /v1/me/orders": {
 		"summary": "The signed-in user’s last 20 orders (Orders tab)",
-		"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). From Ecommerce through the server token you pasted, newest first, as Ecommerce answers them. 503 product_not_connected without Ecommerce or when it cannot answer.",
+		"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). From Ecommerce through the Portal's link to it, newest first, as Ecommerce answers them. 503 product_not_connected without Ecommerce or when it cannot answer.",
 		"response": {
 			"type": "object",
 			"required": ["items"],
@@ -3573,7 +3580,7 @@
 	},
 	"GET /v1/roles/permissions": {
 		"summary": "The permissions roles can grant",
-		"description": "Accounts’ own, each product’s whose server token you pasted (its GET /v1/permissions, kept 5 minutes) and your own names (source site).",
+		"description": "Accounts’ own, each product’s on the same website (its GET /v1/permissions, kept 5 minutes) and your own names (source site).",
 		"response": {
 			"type": "object",
 			"required": ["groups", "unavailable"],
@@ -4775,7 +4782,7 @@
 	},
 	"GET /v1/admin/roles/permissions": {
 		"summary": "The permissions roles can grant (Roles admin widget)",
-		"description": "Accounts’ own, each product’s whose server token you pasted (its GET /v1/permissions, kept 5 minutes) and your own names (source site).",
+		"description": "Accounts’ own, each product’s on the same website (its GET /v1/permissions, kept 5 minutes) and your own names (source site).",
 		"response": {
 			"type": "object",
 			"required": ["groups", "unavailable"],

@@ -454,7 +454,7 @@ export const createReports = (product, service) => {
 	};
 
 	/**
-	 * Growth's badly formed tag ids, or null while its token is not pasted or it does not answer (E41).
+	 * Growth's badly formed tag ids, or null while it is not linked or it does not answer (E41).
 	 * @param {Site} s
 	 */
 	const badTags = async (s) => {

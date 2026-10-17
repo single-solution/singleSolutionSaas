@@ -1546,7 +1546,7 @@
 		"/v1/admin/conversations/{id}/transcript": {
 			"post": {
 				"summary": "Email a copy of the conversation",
-				"description": "The template chat.transcript through Notifications (paste its token in Connections) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
+				"description": "The template chat.transcript through Notifications (linked by the Portal when it is on the website) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "transcripts",
 				"x-ss-permission": "inbox.reply",
@@ -2872,10 +2872,10 @@
 						"name": "SS-Sign-In",
 						"in": "header",
 						"required": false,
-						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
 						"schema": {
 							"type": "string",
-							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 						}
 					},
 					{
@@ -3020,10 +3020,10 @@
 						"name": "SS-Sign-In",
 						"in": "header",
 						"required": false,
-						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
 						"schema": {
 							"type": "string",
-							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 						}
 					},
 					{
@@ -3127,10 +3127,10 @@
 						"name": "SS-Sign-In",
 						"in": "header",
 						"required": false,
-						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
 						"schema": {
 							"type": "string",
-							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
 						}
 					},
 					{
@@ -3194,10 +3194,10 @@
 						"name": "SS-Sign-In",
 						"in": "header",
 						"required": false,
-						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
 						"schema": {
 							"type": "string",
-							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
 						}
 					},
 					{
@@ -3288,10 +3288,10 @@
 						"name": "SS-Sign-In",
 						"in": "header",
 						"required": false,
-						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
 						"schema": {
 							"type": "string",
-							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 						}
 					},
 					{
@@ -3386,10 +3386,10 @@
 						"name": "SS-Sign-In",
 						"in": "header",
 						"required": false,
-						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
 						"schema": {
 							"type": "string",
-							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
 						}
 					},
 					{
@@ -3453,10 +3453,10 @@
 						"name": "SS-Sign-In",
 						"in": "header",
 						"required": false,
-						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
 						"schema": {
 							"type": "string",
-							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 						}
 					},
 					{
@@ -3614,10 +3614,10 @@
 						"name": "SS-Sign-In",
 						"in": "header",
 						"required": false,
-						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
 						"schema": {
 							"type": "string",
-							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 						}
 					},
 					{
@@ -3750,10 +3750,10 @@
 						"name": "SS-Sign-In",
 						"in": "header",
 						"required": false,
-						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
 						"schema": {
 							"type": "string",
-							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
 						}
 					},
 					{
@@ -3842,10 +3842,10 @@
 						"name": "SS-Sign-In",
 						"in": "header",
 						"required": false,
-						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
 						"schema": {
 							"type": "string",
-							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
 						}
 					},
 					{
@@ -3875,7 +3875,7 @@
 		"/v1/chat/transcript": {
 			"post": {
 				"summary": "Email the visitor a copy of the chat",
-				"description": "The template chat.transcript through Notifications (paste its token in Connections) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed. 404 not_found when the visitor has no chat yet.",
+				"description": "The template chat.transcript through Notifications (linked by the Portal when it is on the website) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed. 404 not_found when the visitor has no chat yet.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "transcripts",
 				"security": [
@@ -3902,10 +3902,10 @@
 						"name": "SS-Sign-In",
 						"in": "header",
 						"required": false,
-						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
 						"schema": {
 							"type": "string",
-							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
 						}
 					},
 					{
@@ -3997,10 +3997,10 @@
 						"name": "SS-Sign-In",
 						"in": "header",
 						"required": false,
-						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
 						"schema": {
 							"type": "string",
-							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 						}
 					},
 					{
@@ -4074,10 +4074,10 @@
 						"name": "SS-Sign-In",
 						"in": "header",
 						"required": false,
-						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
 						"schema": {
 							"type": "string",
-							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts on the website); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 						}
 					},
 					{
@@ -4255,7 +4255,7 @@
 		},
 		"/v1/connections": {
 			"get": {
-				"summary": "Connections (state and last 4 characters only)",
+				"summary": "Connections (whether set, and how the last test went; never a value)",
 				"x-ss-auth": "server",
 				"x-ss-permission": "connections.manage",
 				"x-ss-access": "staff",
@@ -4307,7 +4307,7 @@
 		},
 		"/v1/connections/{name}": {
 			"delete": {
-				"summary": "Remove a connection",
+				"summary": "Remove a provider key. The database, the storage and the links are the Portal's: 409 managed_by_portal",
 				"x-ss-auth": "server",
 				"x-ss-permission": "connections.manage",
 				"x-ss-access": "staff",
@@ -4346,7 +4346,7 @@
 				}
 			},
 			"put": {
-				"summary": "Save a connection ({ value }), tested live",
+				"summary": "Save a provider key ({ value }), tested live. The database, the storage and the links are the Portal's: 409 managed_by_portal",
 				"x-ss-auth": "server",
 				"x-ss-permission": "connections.manage",
 				"x-ss-access": "staff",
@@ -5711,7 +5711,7 @@
 		"/v1/conversations/{id}/transcript": {
 			"post": {
 				"summary": "Email a copy of the conversation",
-				"description": "The template chat.transcript through Notifications (paste its token in Connections) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
+				"description": "The template chat.transcript through Notifications (linked by the Portal when it is on the website) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "transcripts",
 				"x-ss-permission": "inbox.reply",
@@ -9135,12 +9135,13 @@
 			},
 			"Connection": {
 				"type": "object",
-				"description": "A connection as screens see it: secrets never come back.",
+				"description": "A connection as screens see it: secrets never come back. The database, the storage and the links to other products are the Portal's (managed): they are entered or made there, once for the website.",
 				"required": [
 					"name",
 					"label",
 					"kind",
 					"neededBy",
+					"managed",
 					"set",
 					"state",
 					"message",
@@ -9160,8 +9161,12 @@
 							"database",
 							"storage",
 							"secret",
-							"token"
+							"link"
 						]
+					},
+					"managed": {
+						"type": "boolean",
+						"description": "The Portal owns it (the database, the storage and the links): it cannot be saved or removed here, only tested."
 					},
 					"neededBy": {
 						"type": "array",
@@ -9485,7 +9490,7 @@
 										"type": "null"
 									}
 								],
-								"description": "With the Ecommerce token pasted and a signed-in visitor; null for a guest, without the token or when Ecommerce cannot answer."
+								"description": "With Ecommerce on the website and a signed-in visitor; null for a guest, without the token or when Ecommerce cannot answer."
 							}
 						}
 					}
