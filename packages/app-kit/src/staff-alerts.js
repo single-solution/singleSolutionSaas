@@ -6,8 +6,8 @@
  *   unblocked Accounts user whose role grants it (through the pasted Accounts token:
  *   `GET /v1/users?permission=<product>:<key>&blocked=false`, cached 5 minutes) — the value `all_staff` names the
  *   permission the alert gives as `allStaff` (the one every staff member who works with it has, for example Chat's
- *   `inbox.read`); plus the assignee where the product has one. At most the feature's `maxRecipients` setting (default
- *   {@link MAX_RECIPIENTS}, at most {@link RECIPIENTS_CAP}) people per alert.
+ *   `inbox.read`); plus the assignee where the product has one. At most the alert's `maxRecipients` (the product's
+ *   own constant; default {@link MAX_RECIPIENTS}, at most {@link RECIPIENTS_CAP}) people per alert.
  * - A channel per recipient (fixed-choices audit K8): a recipient may name it, `email:<address>`, `sms:<phone>`,
  *   `whatsapp:<phone>` or `push:<Accounts user id>` (staff push, the merchant's own push keys); a plain email address
  *   gets email and a plain international phone number the feature's `phoneChannel` (WhatsApp unless `sms`). Accounts
@@ -49,7 +49,7 @@ import { formatText } from './text.js';
 
 /** The `staffPermission` value that means every staff member who works with the alert (the alert's `allStaff`). */
 const ALL_STAFF = 'all_staff';
-/** People one alert goes to unless the feature's `maxRecipients` setting says otherwise, and the most it may say. */
+/** People one alert goes to unless the alert's `maxRecipients` says otherwise, and the most it may say. */
 export const MAX_RECIPIENTS = 20;
 const RECIPIENTS_CAP = 200;
 /** The Notifications route of each channel. */
@@ -217,11 +217,10 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 	 * @param {Record<string, any>} values the feature's settings
 	 * @param {Assignee | null | undefined} assignee
 	 * @param {string} [allStaff] the permission `staffPermission: all_staff` stands for (none: only the list)
+	 * @param {number} [maxRecipients] the most people one alert goes to
 	 */
-	const recipientsOf = async (websiteId, values, assignee, allStaff = '') => {
-		const most = Number.isInteger(values.maxRecipients)
-			? Math.min(Math.max(/** @type {number} */ (values.maxRecipients), 1), RECIPIENTS_CAP)
-			: MAX_RECIPIENTS;
+	const recipientsOf = async (websiteId, values, assignee, allStaff = '', maxRecipients = MAX_RECIPIENTS) => {
+		const most = Number.isInteger(maxRecipients) ? Math.min(Math.max(maxRecipients, 1), RECIPIENTS_CAP) : MAX_RECIPIENTS;
 		const phoneChannel = values.phoneChannel === 'sms' ? 'sms' : 'whatsapp';
 		const push = values.staffPush === true;
 		const listed = Array.isArray(values.recipients) ? values.recipients.slice(0, RECIPIENTS_CAP) : [];
@@ -243,23 +242,23 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 
 	/**
 	 * The messages of an alert, without sending or saving any: who gets it (the feature's recipients, the Accounts staff
-	 * with the permission, the assignee; at most `maxRecipients`), on which channel, with the template
+	 * with the permission, the assignee; at most the alert's `maxRecipients`), on which channel, with the template
 	 * `<product>.staff_<event>`, the values and the link built from `adminUrl`. For a product that delivers its alerts
 	 * itself (its own outbox: saved before the request is answered, one retry queue for all its messages); {@link send}
 	 * delivers them with the kit's own queue.
 	 * @param {{ websiteId: string }} ctx
 	 * @param {{ feature: string, event: string, values: Record<string, string | number>, assignee?: Assignee | null,
-	 *   allStaff?: string }} alert
+	 *   allStaff?: string, maxRecipients?: number }} alert
 	 *   `feature`: the feature whose settings hold `recipients`, `staffPermission`, `phoneChannel`, `adminUrl` and,
-	 *   when it has them, `staffPush` and `maxRecipients`;
+	 *   when it has it, `staffPush`; `maxRecipients`: the most people one alert goes to (the product's own fixed limit);
 	 *   `event`: the template is `<product>.staff_<event>`; `values`: the template's values (at most 1,000 characters each);
 	 *   `allStaff`: the permission key the setting's `all_staff` stands for (every staff member who works with the alert)
 	 * @returns {Promise<AlertMessage[]>} each with its own `id` (a send uses it as the Idempotency-Key)
 	 */
-	const prepare = async (ctx, { feature, event, values, assignee = null, allStaff = '' }) => {
+	const prepare = async (ctx, { feature, event, values, assignee = null, allStaff = '', maxRecipients }) => {
 		if (!EVENT.test(event)) return [];
 		const own = await settings.values(ctx.websiteId, feature);
-		const to = await recipientsOf(ctx.websiteId, own, assignee, allStaff);
+		const to = await recipientsOf(ctx.websiteId, own, assignee, allStaff, maxRecipients);
 		const template = `${productId}.staff_${event}`;
 		const adminUrl = typeof own.adminUrl === 'string' ? own.adminUrl : '';
 		const link = adminUrl === '' ? '' : formatText(adminUrl, values);

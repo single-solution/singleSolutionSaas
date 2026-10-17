@@ -33,7 +33,6 @@ const alertsManifest = () => {
 						phoneChannel: { type: 'string', title: 'Phones get', default: 'whatsapp', enum: ['whatsapp', 'sms'] },
 						adminUrl: { type: 'string', title: 'Admin link', default: '', maxLength: 500 },
 						staffPush: { type: 'boolean', title: 'Staff push too', default: false },
-						maxRecipients: { type: 'integer', title: 'People per alert', default: 20, minimum: 1, maximum: 200 },
 					},
 				},
 			},
@@ -79,6 +78,7 @@ const routes = () => [
 					values: body.values ?? { noteId: 'not_42', preview: 'Hello' },
 					assignee: body.assignee ?? null,
 					...(body.allStaff ? { allStaff: body.allStaff } : {}),
+					...(body.maxRecipients ? { maxRecipients: body.maxRecipients } : {}),
 				}),
 			};
 		},
@@ -179,10 +179,9 @@ describe('staff alerts (K6)', () => {
 			['email', { email: 'sana@shop.example.com' }],
 			['staff-push', { staffId: 'u1' }],
 		]);
-		// the limit is a setting
+		// the product names the limit of its alerts (20 without one)
 		notifications.messages.length = 0;
-		await set('maxRecipients', 2);
-		expect(await alert()).toBe(2);
+		expect(await alert({ maxRecipients: 2 })).toBe(2);
 		expect(notifications.messages.map((m) => m.channel)).toEqual(['email', 'sms']);
 	});
 
