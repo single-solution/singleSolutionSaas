@@ -253,16 +253,17 @@ export function AccountMenu({
 
 /**
  * The header's theme menu where there is no account menu (a product dashboard): an icon button opening System / Light /
- * Dark.
- * @param {{ label?: string, className?: string }} props
+ * Dark (`placement` `up` in the sidebar's icon rail).
+ * @param {{ label?: string, className?: string, placement?: 'down' | 'up' }} props
  */
-export function ThemeMenu({ label = 'Theme', className }) {
+export function ThemeMenu({ label = 'Theme', className, placement = 'down' }) {
 	const [choice, pick] = useThemeChoice();
 	return (
 		<ActionMenu
 			label={label}
 			icon={choice === 'dark' ? 'moon' : choice === 'light' ? 'sun' : 'monitor'}
 			items={themeMenuItems(choice, pick)}
+			placement={placement}
 			{...(className ? { className } : {})}
 		/>
 	);

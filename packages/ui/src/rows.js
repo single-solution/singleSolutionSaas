@@ -23,7 +23,7 @@ export function RowList({ children, inset = false, label, className }) {
 			{...(label ? { 'aria-label': label } : {})}
 			className={cx(
 				'min-w-0 divide-y divide-line-soft',
-				inset ? '[&>li]:px-5 [&>li]:hover:bg-surface-2/60' : '[&>li:first-child]:pt-0 [&>li:last-child]:pb-0',
+				inset ? '[&>li]:px-5 [&>li]:hover:bg-surface-2/70' : '[&>li:first-child]:pt-0 [&>li:last-child]:pb-0',
 				className,
 			)}>
 			{children}
@@ -98,7 +98,7 @@ export function Toolbar({ children, note, end, className, label, variant = 'plai
 			className={cx(
 				'flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2',
 				variant === 'selection' &&
-					'animate-ss-enter rounded-card border border-primary/15 bg-primary-soft px-3 py-2 text-sm text-on-primary-soft',
+					'animate-ss-enter rounded-card bg-primary-soft px-3 py-2 text-sm text-on-primary-soft',
 				className,
 			)}>
 			{note ? <p className="min-w-0 flex-1 basis-60 text-sm text-muted">{note}</p> : null}

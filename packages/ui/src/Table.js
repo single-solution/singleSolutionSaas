@@ -83,8 +83,8 @@ export function Table({
 				aria-label={caption}
 				tabIndex={0}
 				className={cx(
-					'ss-scroll rounded-card border border-line-soft bg-surface shadow-card focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
-					'in-[.rounded-card]:rounded-none in-[.rounded-card]:border-0 in-[.rounded-card]:shadow-none',
+					'ss-scroll rounded-card border border-line-soft bg-surface focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+					'in-[.rounded-card]:rounded-none in-[.rounded-card]:border-0',
 					sorted.length > SCROLL_FROM && 'max-h-[36rem]',
 				)}>
 				<table className={cx('w-full border-collapse text-sm', sorted.length > 0 && 'min-w-[32rem]')}>

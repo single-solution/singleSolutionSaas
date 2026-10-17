@@ -574,7 +574,7 @@ describe('standard tabs', () => {
 		// a feature whose connection fails shows an amber Needs setup pill (the reason as its tooltip) and Connect
 		const pill = /** @type {HTMLElement} */ ([...container.querySelectorAll('span[title]')].find((el) => el.textContent === 'Needs setup'));
 		expect(pill.getAttribute('title')).toBe('Not working: connect Database');
-		expect(pill.className).toContain('bg-warning-soft');
+		expect(pill.className).toContain('bg-attention-soft');
 		expect(container.querySelector('.text-danger')).toBeNull();
 		expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'Connect Database')).toBe(true);
 		const boxes = /** @type {HTMLButtonElement[]} */ ([...container.querySelectorAll('[role="switch"]')]);

@@ -76,11 +76,11 @@ export function ListEditor({
 			</legend>
 			{help ? <p className="text-help text-muted">{help}</p> : null}
 			{items.length === 0 ? <p className="text-sm text-muted">{T.empty}</p> : null}
-			<ol className="divide-y divide-line-soft rounded-card border border-line-soft empty:hidden">
+			<ol className="divide-y divide-line-soft border-y border-line-soft empty:hidden">
 				{items.map((item, index) => {
 					const name = nameOf(item, index);
 					return (
-						<li key={index} className="flex flex-wrap items-start gap-3 px-4 py-3.5">
+						<li key={index} className="flex flex-wrap items-start gap-3 py-3.5">
 							<div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-3">
 								<FieldLayoutContext.Provider value="stack">
 									{renderItem(item, index, (next) => onChange(items.map((old, i) => (i === index ? next : old))))}
@@ -127,9 +127,10 @@ export function ListEditor({
 }
 
 /**
- * One entry of a list editor the caller lays out itself (a zone with its rates, a payment method, a file): a group set
- * apart by a hairline, with the entry's name, and Move up / Move down / Remove when the caller can move and remove it.
- * One look for every editor of every product; never draw such a box by hand.
+ * One entry of a list editor the caller lays out itself (a zone with its rates, a payment method, a file): a flat group
+ * set apart by a hairline above it (no box: entries in a card read as one list), with the entry's name, and Move up /
+ * Move down / Remove when the caller can move and remove it. One look for every editor of every product; never draw
+ * such a box by hand.
  * @param {Omit<import('react').HTMLAttributes<HTMLElement>, 'title'> & { title?: import('react').ReactNode,
  *   onMove?: (step: -1 | 1) => void, onRemove?: () => void, first?: boolean, last?: boolean,
  *   texts?: Partial<Pick<ListEditorTexts, 'moveUp' | 'moveDown' | 'remove'>>, actions?: import('react').ReactNode,
@@ -156,7 +157,7 @@ export function EntryGroup({
 }) {
 	const T = { ...LIST_EDITOR_TEXTS, ...texts };
 	const Tag = as;
-	const box = cx('min-w-0 space-y-3 rounded-card border border-line-soft', compact ? 'p-3' : 'p-4', className);
+	const box = cx('min-w-0 space-y-3 border-t border-line-soft', compact ? 'pt-3' : 'pt-4', className);
 	if (summary)
 		return (
 			<details {...rest} className={box}>

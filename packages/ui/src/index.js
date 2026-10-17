@@ -30,7 +30,6 @@ export { ListEditor, EntryGroup, LIST_EDITOR_TEXTS, moveItem } from './ListEdito
 export {
 	Card,
 	Avatar,
-	PageHeader,
 	Badge,
 	StatusBadge,
 	StatusPill,
@@ -39,6 +38,10 @@ export {
 	ErrorState,
 	Skeleton,
 	SkeletonBlock,
+	LockedState,
+	DOTS,
+	TINTS,
+	productLook,
 	Stat,
 	StatGrid,
 	STAT_GRID,
@@ -50,8 +53,9 @@ export {
 	Masonry,
 	TextLink,
 } from './display.js';
+export { PageHeader, HeaderMeta, HeaderFact } from './header.js';
 export { Table } from './Table.js';
-export { Dialog, ConfirmDialog } from './overlay.js';
+export { Dialog, Drawer, ConfirmDialog } from './overlay.js';
 export { ActionMenu, AccountMenu, ThemeMenu } from './Menu.js';
 export { RowList, ListRow, Toolbar } from './rows.js';
 export { TypedConfirmDialog } from './TypedConfirm.js';

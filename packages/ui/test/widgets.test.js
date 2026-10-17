@@ -237,7 +237,7 @@ describe('display', () => {
 		expect(byText(container, 'Owner').className).toContain('bg-primary-soft');
 		expect(byText(container, 'No websites').closest('.rounded-card')?.querySelector('.bg-primary-soft')).not.toBeNull();
 		expect(container.querySelector('section[aria-labelledby="s1"] h2')?.textContent).toBe('Websites');
-		expect(container.querySelector('h2 > span')?.textContent).toBe('Detail');
+		expect([...container.querySelectorAll('h2')].some((heading) => heading.textContent === 'Detail')).toBe(true);
 		expect(container.querySelector('svg[aria-label^="Spend"]')).not.toBeNull();
 		expect(container.textContent).toContain('No data for this period.');
 		// only zeros: the empty text, not a row of empty tracks that reads like full bars
@@ -909,7 +909,8 @@ describe('AppShell without the optional parts', () => {
 		expect(container.textContent).toContain('Console');
 		expect(container.querySelector('a[href="#content"]')).not.toBeNull();
 		expect(container.querySelector('a[data-router="yes"]')?.textContent).toBe('Home3');
-		expect(container.querySelector('header')?.children).toHaveLength(2);
+		// the menu button, the title row and the slot for the page's own actions (empty, so hidden)
+		expect(container.querySelector('header')?.children).toHaveLength(3);
 		const menu = /** @type {HTMLElement} */ (container.querySelector('button[aria-label="Open navigation"]'));
 		const panel = () => container.querySelector('[role="dialog"][aria-label="Navigation"]');
 		click(menu);
@@ -1026,7 +1027,9 @@ describe('theme', () => {
 		click(/** @type {HTMLElement} */ (header.querySelector('button[aria-haspopup="menu"]')));
 		const items = [...container.querySelectorAll('[role="menu"] button')].map((b) => b.textContent);
 		expect(items).toEqual(['System', 'Light', 'Dark', 'Sign out']);
-		expect(container.querySelector('[role="group"][aria-label="Theme"]')).toBeNull();
+		// on wide screens the theme is the switch at the bottom of the sidebar, not a second control in the header
+		expect(header.querySelector('[role="group"][aria-label="Theme"]')).toBeNull();
+		expect(container.querySelector('aside [role="group"][aria-label="Theme"]')).not.toBeNull();
 	});
 
 	it('reads the stored choice and survives blocked storage', () => {

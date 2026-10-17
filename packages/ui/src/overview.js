@@ -20,7 +20,6 @@ import {
 	Badge,
 	Card,
 	EmptyState,
-	PageHeader,
 	STAT_GRID,
 	SkeletonBlock,
 	Stat,
@@ -29,6 +28,7 @@ import {
 	TextLink,
 } from './display.js';
 import { formatCredits, supportContact } from './format.js';
+import { HeaderFact, PageHeader } from './header.js';
 import { Icon } from './icons.js';
 import { OVERVIEW_TEXTS } from './overview-texts.js';
 import { ListRow, RowList } from './rows.js';
@@ -95,7 +95,7 @@ function NeedItem({ tone, title, effect, action }) {
 				aria-hidden="true"
 				className={cx(
 					'mt-1.5 size-2 shrink-0 rounded-full ring-4 @lg:mt-0',
-					tone === 'danger' ? 'bg-danger ring-danger-soft' : 'bg-warning ring-warning-soft',
+					tone === 'danger' ? 'bg-danger-solid ring-danger-soft' : 'bg-attention-solid ring-attention-soft',
 				)}
 			/>
 			{/* on a narrow card the button goes under the words (lined up with them) instead of squeezing them */}
@@ -115,7 +115,7 @@ function NeedItem({ tone, title, effect, action }) {
 function NothingNeeded({ children }) {
 	return (
 		<p className="flex items-center gap-2 text-sm text-muted">
-			<span className="flex size-5 items-center justify-center rounded-full bg-success-soft text-on-success-soft">
+			<span className="flex size-5 items-center justify-center rounded-full bg-success-solid text-on-solid">
 				<Icon name="check" size={12} />
 			</span>
 			{children}
@@ -174,7 +174,7 @@ function SetupRow({ step, labels, LinkTag }) {
 				<span
 					className={cx(
 						'flex size-5 shrink-0 items-center justify-center rounded-full',
-						step.done ? 'bg-success-soft text-on-success-soft' : 'border-[1.5px] border-dashed border-line-strong',
+						step.done ? 'bg-success-solid text-on-solid' : 'border-[1.5px] border-dashed border-attention-solid',
 					)}>
 					{step.done ? <Icon name="check" size={12} /> : null}
 					<span className="sr-only">{step.done ? labels.done : labels.todo}</span>
@@ -228,14 +228,14 @@ export function SetupChecklist({ title, progress, steps, labels, linkAs, id, cla
 	return (
 		<Card {...(id ? { id } : {})} {...(className ? { className } : {})} title={title} subtitle={progress}>
 			<div
-				className="mb-4 h-2 overflow-hidden rounded-full bg-surface-3"
+				className="mb-4 h-2 overflow-hidden rounded-full bg-surface-2"
 				role="progressbar"
 				aria-label={accessibleTitle}
 				aria-valuemin={0}
 				aria-valuemax={counted.length}
 				aria-valuenow={done}>
 				<div
-					className="h-full rounded-full bg-primary transition-[width] duration-(--ss-motion-slow) ease-ss"
+					className="h-full rounded-full bg-success-solid transition-[width] duration-(--ss-motion-slow) ease-ss"
 					style={{ width: `${counted.length === 0 ? 100 : Math.round((done / counted.length) * 100)}%` }}
 				/>
 			</div>
@@ -517,7 +517,12 @@ export function ProductOverview({
 			<PageHeader
 				title={fillText(T.welcome, { name: who.name })}
 				subtitle={sentence}
-				actions={<StatusBadge status={status} label={T.status[/** @type {'active'} */ (status)] ?? status} />}
+				badge={<StatusBadge status={status} label={T.status[/** @type {'active'} */ (status)] ?? status} />}
+				meta={
+					<HeaderFact tone={done === counted.length ? 'success' : 'attention'}>
+						{fillText(S.progress, { done, total: counted.length })}
+					</HeaderFact>
+				}
 			/>
 			<div className="@container">
 				<div className="grid items-start gap-5 @4xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">

@@ -380,7 +380,12 @@ export function AdminsView(props) {
 					<p className="text-sm text-muted">{ADMIN.removeAdminHelp}</p>
 				)}
 			</ConfirmDialog>
-			<Dialog open={Boolean(link)} onClose={() => setLink(null)} title={ADMIN.copyInvite} description={ADMIN.setupLinkCopy}>
+			<Dialog
+				open={Boolean(link)}
+				onClose={() => setLink(null)}
+				title={ADMIN.copyInvite}
+				description={ADMIN.setupLinkCopy}
+				placement="center">
 				{link ? <CodeBlock code={link} label={ADMIN.copyInvite} secret wrap /> : null}
 			</Dialog>
 		</>

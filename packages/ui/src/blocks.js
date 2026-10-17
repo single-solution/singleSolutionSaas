@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { cx } from './cx.js';
 import { Button } from './Button.js';
-import { Card } from './display.js';
+import { Card, DOTS } from './display.js';
 import { FieldLayoutContext, ROW_GRID, ROW_LABEL, ROW_LIST, Select, rowControl } from './fields.js';
 import { Icon } from './icons.js';
 
@@ -190,7 +190,7 @@ export function SaveBar({
 			className={cx('pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-3', className)}>
 			<div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-x-6 gap-y-2 rounded-panel border border-line-soft bg-surface py-2 pr-2 pl-4 shadow-bar animate-ss-sheet">
 				<p role="status" className="flex items-center gap-2 text-sm font-medium text-fg">
-					<span aria-hidden="true" className="size-2 rounded-full bg-warning" />
+					<span aria-hidden="true" className="size-2 rounded-full bg-attention-solid" />
 					{message}
 				</p>
 				<div className="ml-auto flex items-center gap-2">
@@ -247,6 +247,9 @@ export function SaveRow({
  * @property {ReactNode} label
  * @property {import('./icons.js').IconName} [icon]
  * @property {ReactNode} [badge] a count or a status shown at the right
+ * @property {import('./display.js').Tone} [status] a status dot before the badge (`attention`: needs setup, `success`:
+ *   on, `danger`: failing), named by `statusLabel`
+ * @property {string} [statusLabel] the words of the status dot (its tooltip and what a screen reader says)
  * @property {string} [group] the group heading the link is listed under (links of one group are listed together)
  * @property {SectionItem[]} [children] sub-items (one level)
  */
@@ -321,9 +324,10 @@ export function useHashSection(ids, initial) {
 const textOf = (label) => (typeof label === 'string' || typeof label === 'number' ? String(label) : '');
 
 /**
- * The inner sidebar: a floating panel of grouped section links with icons and badges, sticky below the header on wide
- * screens; an item with sub-items opens them under it (the one holding the current section is open). A long list gets
- * a search box. On a phone it is one button showing the current section that opens the same list.
+ * The inner sidebar (about 220 px; only on a page that has sub-pages): a floating white panel of grouped section links
+ * with icons and the context of each (a count, a status dot such as "needs setup", a badge), sticky below the header
+ * on wide screens; an item with sub-items opens them under it (the one holding the current section is open). A long list
+ * gets a search box. On a phone it is one button showing the current section that opens the same list.
  * @param {{ items: SectionItem[], active: string, onSelect: (id: string) => void, label?: string, className?: string,
  *   searchFrom?: number, searchLabel?: string }} props `searchFrom`: the search box shows from that many links (10)
  */
@@ -373,6 +377,12 @@ export function SectionNav({ items, active, onSelect, label = 'Sections', classN
 					</span>
 				) : null}
 				<span className="min-w-0 flex-1 truncate">{item.label}</span>
+				{item.status ? (
+					<span title={item.statusLabel} className="flex shrink-0 items-center">
+						<span aria-hidden="true" className={cx('size-1.5 rounded-full', DOTS[item.status])} />
+						{item.statusLabel ? <span className="sr-only">{item.statusLabel}</span> : null}
+					</span>
+				) : null}
 				{item.badge ? (
 					<span className="ml-auto shrink-0 text-micro font-medium text-muted tabular-nums">{item.badge}</span>
 				) : null}
@@ -393,7 +403,7 @@ export function SectionNav({ items, active, onSelect, label = 'Sections', classN
 					placeholder={searchLabel}
 					value={query}
 					onChange={(event) => setQuery(event.target.value)}
-					className="h-8 w-full rounded-control border border-line bg-surface px-2.5 text-label text-fg shadow-card placeholder:text-subtle focus-visible:outline-2 focus-visible:outline-focus"
+					className="h-8 w-full rounded-control border border-line bg-surface px-2.5 text-label text-fg placeholder:text-subtle focus-visible:outline-2 focus-visible:outline-focus"
 				/>
 			) : null}
 			{groupsOf(visible).map(([group, entries], index) => (
@@ -432,7 +442,7 @@ export function SectionNav({ items, active, onSelect, label = 'Sections', classN
 					aria-expanded={open}
 					aria-controls={listId}
 					onClick={() => setOpen((o) => !o)}
-					className="ss-motion ss-press flex h-10 w-full items-center gap-2.5 rounded-control border border-line bg-surface px-3 text-sm font-medium text-fg shadow-card">
+					className="ss-motion ss-press flex h-10 w-full items-center gap-2.5 rounded-control border border-line-soft bg-surface px-3 text-sm font-medium text-fg">
 					{(parent?.icon ?? current?.icon) ? (
 						<span aria-hidden="true" className="text-primary">
 							<Icon name={/** @type {import('./icons.js').IconName} */ (parent?.icon ?? current?.icon)} size={16} />
@@ -507,7 +517,7 @@ export function SectionLayout({ sections, label = 'Sections', initial, className
 	// one view needs no sidebar
 	if (leaves.length === 1) return <div className={cx('grid min-w-0', NO_STRETCH, className)}>{panels}</div>;
 	return (
-		<div className={cx('grid min-w-0 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-6', NO_STRETCH, className)}>
+		<div className={cx('grid min-w-0 gap-4 lg:grid-cols-[13.75rem_minmax(0,1fr)] lg:gap-6', NO_STRETCH, className)}>
 			<SectionNav
 				items={items}
 				active={active}
@@ -539,6 +549,15 @@ export function ViewTitle({ title, description, actions, className }) {
 	);
 }
 
+/** The look of a strip of tabs ({@link PillTabs}, {@link LinkTabs}): a sage track whose current item is raised. */
+const TAB_STRIP = 'ss-scroll flex w-fit max-w-full min-w-0 gap-0.5 rounded-control bg-surface-2 p-0.5';
+/** @param {boolean} on */
+const tabLook = (on) =>
+	cx(
+		'ss-motion inline-flex h-7 shrink-0 items-center rounded-md px-3 text-label font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+		on ? 'bg-surface text-fg shadow-card ring-1 ring-line-soft' : 'text-muted hover:text-fg',
+	);
+
 /**
  * A small tab strip for the parts of one view (the groups of a settings form): one part is shown at a time. The strip
  * scrolls sideways when it is longer than the card.
@@ -550,10 +569,7 @@ export function PillTabs({ tabs, active, onSelect, label, className, idPrefix = 
 		<div
 			role="tablist"
 			aria-label={label}
-			className={cx(
-				'ss-scroll flex w-fit max-w-full min-w-0 gap-0.5 rounded-control bg-surface-2 p-0.5 ring-1 ring-line-soft ring-inset',
-				className,
-			)}>
+			className={cx(TAB_STRIP, className)}>
 			{tabs.map((tab) => {
 				const on = tab.id === active;
 				return (
@@ -565,10 +581,7 @@ export function PillTabs({ tabs, active, onSelect, label, className, idPrefix = 
 						aria-selected={on}
 						aria-controls={`${idPrefix}-panel-${tab.id}`}
 						onClick={() => onSelect(tab.id)}
-						className={cx(
-							'ss-motion h-7 shrink-0 rounded-md px-3 text-label font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
-							on ? 'bg-surface text-fg shadow-card ring-1 ring-line-soft' : 'text-muted hover:text-fg',
-						)}>
+						className={tabLook(on)}>
 						{tab.label}
 					</button>
 				);
@@ -588,19 +601,13 @@ export function LinkTabs({ items, label, linkAs, className }) {
 	return (
 		<nav
 			aria-label={label}
-			className={cx(
-				'ss-scroll flex w-fit max-w-full min-w-0 gap-0.5 rounded-control bg-surface-2 p-0.5 ring-1 ring-line-soft ring-inset',
-				className,
-			)}>
+			className={cx(TAB_STRIP, className)}>
 			{items.map((item) => (
 				<LinkTag
 					key={item.href}
 					href={item.href}
 					aria-current={item.current ? 'page' : undefined}
-					className={cx(
-						'ss-motion inline-flex h-7 shrink-0 items-center rounded-md px-3 text-label font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
-						item.current ? 'bg-surface text-fg shadow-card ring-1 ring-line-soft' : 'text-muted hover:text-fg',
-					)}>
+					className={tabLook(Boolean(item.current))}>
 					{item.label}
 				</LinkTag>
 			))}
@@ -688,7 +695,7 @@ export function Disclosure({ title, description, badge, defaultOpen = false, for
 	const id = useId();
 	const shown = open || forceOpen;
 	return (
-		<section className={cx('min-w-0 rounded-card border border-line-soft bg-surface shadow-card', className)}>
+		<section className={cx('min-w-0 rounded-card border border-line-soft bg-surface', className)}>
 			<button
 				type="button"
 				aria-expanded={shown}

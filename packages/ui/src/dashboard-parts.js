@@ -24,7 +24,7 @@ import { DASHBOARD_TEXTS, dashboardTexts, resealAdvice } from './dashboard-texts
 /**
  * What a dashboard needs of the product's manifest.json: the features (their `description` and `dependsOn` are used
  * when there).
- * @typedef {{ features: Array<{ key: string, name: string, description?: string, dependsOn?: string[] }> }} DashboardManifest
+ * @typedef {{ id?: string, features: Array<{ key: string, name: string, description?: string, dependsOn?: string[] }> }} DashboardManifest
  */
 /**
  * The feature categories of a product, in the order they are listed (the most used first); a feature in none is listed
@@ -176,25 +176,17 @@ export function Loaded({ answer, skeleton, children }) {
 	);
 }
 
+/** No inline lines: every problem is said by the toast. @returns {string[]} */
+const NO_LINES = () => [];
+
 /**
  * The outcome of the last write as a toast at the bottom right (owner 2026-10-17: no Saved banners): Saved, or the
- * problem. Each new result shows once; the component draws nothing in the page.
+ * problem. Each new result shows once; the component draws nothing in the page. It is {@link SaveOutcome} without the
+ * inline list (one implementation of the save outcome for every editor).
  * @param {{ result: Answer | null }} props
  */
 export function Outcome({ result }) {
-	const { texts } = useDashboard();
-	const toast = useToast();
-	const shown = useRef(/** @type {Answer | null} */ (null));
-	useEffect(() => {
-		if (!result || shown.current === result) return;
-		shown.current = result;
-		toast.show(
-			result.ok
-				? { title: texts.saved }
-				: { tone: 'danger', title: texts.saveFailed, description: describeProblem(result.problem) },
-		);
-	}, [result, toast, texts]);
-	return null;
+	return <SaveOutcome result={result} format={NO_LINES} />;
 }
 
 /**

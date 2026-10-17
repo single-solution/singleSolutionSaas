@@ -54,7 +54,6 @@ export {
 } from './dashboard-parts.js';
 export {
 	LookBar,
-	NothingToShow,
 	SettingsBar,
 	TextsCard,
 	featureSections,
@@ -185,16 +184,17 @@ function WebsiteLocale({ websiteId, children }) {
 export function ProductDashboard({ manifest, texts, categories, tabs = {} }) {
 	return (
 		<DashboardProvider manifest={manifest} texts={texts} {...(categories ? { categories } : {})}>
-			<DashboardPage tabs={tabs} />
+			<DashboardPage tabs={tabs} {...(manifest.id ? { product: manifest.id } : {})} />
 		</DashboardProvider>
 	);
 }
 
 /**
- * The page inside the provider: the session, the address, the sidebar and the section shown.
- * @param {{ tabs: Record<string, TabComponent | TabSpec> }} props
+ * The page inside the provider: the session, the address, the sidebar and the section shown. `product` (the manifest's
+ * id) gives the sidebar's mark the product's meaning color.
+ * @param {{ tabs: Record<string, TabComponent | TabSpec>, product?: string }} props
  */
-function DashboardPage({ tabs: own }) {
+function DashboardPage({ tabs: own, product }) {
 	const { texts } = useDashboard();
 	const [query, setQuery] = useState(/** @type {{ websiteId: string | null, view: string | null } | null} */ (null));
 	const [session, setSession] = useState(/** @type {Answer | null} */ (null));
@@ -252,7 +252,7 @@ function DashboardPage({ tabs: own }) {
 	return (
 		<GoContext.Provider value={go}>
 			<AppShell
-				brand={{ name: branding.name, tagline: texts.title }}
+				brand={{ name: branding.name, tagline: texts.title, ...(product ? { product } : {}) }}
 				linkAs={SectionLink}
 				sections={[
 					{
@@ -285,6 +285,7 @@ function DashboardPage({ tabs: own }) {
 								who={who}
 								support={support}
 								portal={portalUrl}
+								brand={branding.name}
 								open={(tab, section) => go(href(tab) + (section ? `#${encodeURIComponent(section)}` : ''))}
 							/>
 						</WebsiteLocale>

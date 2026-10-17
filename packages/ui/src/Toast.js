@@ -93,7 +93,7 @@ function ToastCard({ toast, onDismiss, onGone }) {
 	}, [presence.mounted, onGone, toast.id]);
 	if (!presence.mounted) return null;
 	// a toast sits above the page (its shadow is allowed); the tone colors its icon only
-	const tone = toast.tone === 'danger' ? 'text-danger' : toast.tone === 'info' ? 'text-primary' : 'text-success';
+	const tone = toast.tone === 'danger' ? 'text-danger' : toast.tone === 'info' ? 'text-info' : 'text-success';
 	return (
 		<div
 			ref={presence.ref}

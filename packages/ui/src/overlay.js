@@ -1,8 +1,10 @@
 'use client';
 /**
- * Modal dialog: `role="dialog"` + `aria-modal`, labeled by its title, traps focus (Tab / Shift+Tab cycle inside), close on Escape and on backdrop click, lock page scroll,
- * and restore focus to the element that opened them. The backdrop fades and the dialog scales in (slides up as a sheet
- * on phones), and both animate out when it closes (PLAN 0.6 motion).
+ * Overlays (redesign 2, owner 2026-10-17: editing opens in a RIGHT DRAWER that keeps the page in view; modals only for
+ * short confirmations): `role="dialog"` + `aria-modal`, labeled by its title, traps focus (Tab / Shift+Tab cycle
+ * inside), close on Escape and on backdrop click, lock page scroll, and restore focus to the element that opened them.
+ * A drawer slides in from the right (the whole screen on phones); a centered dialog scales in (a bottom sheet on
+ * phones); both animate out when they close (PLAN 0.6 motion).
  * @module
  */
 import { useEffect, useId, useRef } from 'react';
@@ -84,11 +86,14 @@ export const useFocusTrap = (ref, open, onClose) => {
 
 /**
  * @typedef {{ open: boolean, onClose: () => void, title: ReactNode, description?: ReactNode, children?: ReactNode,
- *   footer?: ReactNode, size?: 'sm' | 'md' | 'lg', closeLabel?: string, dismissible?: boolean }} OverlayProps
+ *   footer?: ReactNode, size?: 'sm' | 'md' | 'lg', closeLabel?: string, dismissible?: boolean,
+ *   placement?: 'right' | 'center' }} OverlayProps
  */
 
 /**
- * Centered modal dialog (bottom sheet on small screens).
+ * An overlay that holds an edit or a short task: a right drawer (`md` 32 rem, `lg` 42 rem wide) or, for `sm` and with
+ * `placement="center"`, a centered dialog (a bottom sheet on phones) for a short confirmation or a link to copy. The
+ * footer (its buttons) stays at the bottom while the content scrolls.
  * @param {OverlayProps} props
  */
 export function Dialog({
@@ -101,6 +106,7 @@ export function Dialog({
 	size = 'md',
 	closeLabel = 'Close',
 	dismissible = true,
+	placement,
 }) {
 	const ref = useRef(/** @type {HTMLDivElement | null} */ (null));
 	const titleId = useId();
@@ -111,13 +117,24 @@ export function Dialog({
 	const presence = usePresence(open);
 	useFocusTrap(ref, open, close);
 	if (!presence.mounted) return null;
-	const width = size === 'sm' ? 'max-w-md' : size === 'lg' ? 'max-w-3xl' : 'max-w-xl';
+	const side = (placement ?? (size === 'sm' ? 'center' : 'right')) === 'right';
+	const width = side
+		? size === 'lg'
+			? 'sm:max-w-[42rem]'
+			: 'sm:max-w-[32rem]'
+		: size === 'sm'
+			? 'max-w-md'
+			: size === 'lg'
+				? 'max-w-3xl'
+				: 'max-w-xl';
 	const panel = (
 		<div
 			ref={presence.ref}
 			data-state={presence.closing ? 'closed' : 'open'}
+			data-placement={side ? 'right' : 'center'}
 			className={cx(
-				'group fixed inset-0 z-50 flex items-end justify-center bg-overlay p-0 sm:items-center sm:p-4',
+				'group fixed inset-0 z-50 flex bg-overlay',
+				side ? 'justify-end p-0 sm:p-3' : 'items-end justify-center p-0 sm:items-center sm:p-4',
 				'animate-ss-fade data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-fade-out',
 			)}
 			onMouseDown={(event) => {
@@ -131,11 +148,16 @@ export function Dialog({
 				aria-describedby={description ? descriptionId : undefined}
 				tabIndex={-1}
 				className={cx(
-					'flex max-h-[92vh] w-full flex-col rounded-t-card border border-line-soft bg-surface text-fg shadow-overlay focus:outline-none sm:rounded-card',
-					'animate-ss-sheet group-data-[state=closed]:animate-ss-sheet-out sm:animate-ss-pop sm:group-data-[state=closed]:animate-ss-pop-out',
+					'flex w-full flex-col border-line-soft bg-surface text-fg shadow-overlay focus:outline-none',
+					side
+						? 'h-full animate-ss-side group-data-[state=closed]:animate-ss-side-out sm:rounded-panel sm:border'
+						: cx(
+								'max-h-[92vh] rounded-t-card border sm:rounded-card',
+								'animate-ss-sheet group-data-[state=closed]:animate-ss-sheet-out sm:animate-ss-pop sm:group-data-[state=closed]:animate-ss-pop-out',
+							),
 					width,
 				)}>
-				<div className="flex items-start justify-between gap-4 px-6 pb-1 pt-6">
+				<div className={cx('flex items-start justify-between gap-4 px-6 pt-6', side ? 'pb-4' : 'pb-1')}>
 					<div className="min-w-0">
 						<h2 id={titleId} className="text-lead font-semibold tracking-[-0.01em] text-fg">
 							{title}
@@ -156,7 +178,7 @@ export function Dialog({
 						</button>
 					) : null}
 				</div>
-				<div className="ss-scroll min-h-0 flex-1 space-y-4 px-6 py-4">
+				<div className={cx('ss-scroll min-h-0 flex-1 space-y-4 px-6', side ? 'pt-1 pb-6' : 'py-4')}>
 					<FieldLayoutContext.Provider value="stack">{children}</FieldLayoutContext.Provider>
 				</div>
 				{footer ? (
@@ -166,6 +188,15 @@ export function Dialog({
 		</div>
 	);
 	return typeof document === 'undefined' ? panel : createPortal(panel, document.body);
+}
+
+/**
+ * The right drawer for editing one thing (an order, a product, a connection, a list item) while the page stays in view:
+ * a {@link Dialog} on the right.
+ * @param {OverlayProps} props
+ */
+export function Drawer(props) {
+	return <Dialog {...props} placement="right" />;
 }
 
 /**

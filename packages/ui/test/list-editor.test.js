@@ -98,7 +98,7 @@ describe('EntryGroup (one entry of an editor the caller lays out)', () => {
 			</EntryGroup>,
 		);
 		expect(plain.container.querySelector('button')).toBeNull();
-		expect(/** @type {HTMLElement} */ (plain.container.firstElementChild).className).toContain('p-3');
+		expect(/** @type {HTMLElement} */ (plain.container.firstElementChild).className).toContain('pt-3');
 		cleanup();
 		const folded = render(
 			<EntryGroup summary="Shopper words">

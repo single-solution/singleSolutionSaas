@@ -46,6 +46,8 @@ export const DASHBOARD_TEXTS = Object.freeze({
 		connect: 'Connect',
 		countOn: '{on} of {total} on',
 		unsaved: 'You changed the features',
+		locked: 'Locked',
+		lockedHelp: 'Ask your {portal} admin to switch it on.',
 	}),
 	settings: Object.freeze({
 		texts: 'Widget texts',

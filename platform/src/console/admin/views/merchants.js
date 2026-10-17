@@ -94,7 +94,12 @@ function MerchantStatus({ merchant, billing = null }) {
  */
 function CopyLinkDialog({ link, onClose }) {
 	return (
-		<Dialog open={Boolean(link)} onClose={onClose} title={ADMIN.copySetupLink} description={ADMIN.setupLinkCopy}>
+		<Dialog
+			open={Boolean(link)}
+			onClose={onClose}
+			title={ADMIN.copySetupLink}
+			description={ADMIN.setupLinkCopy}
+			placement="center">
 			{link ? <CodeBlock code={link} label={ADMIN.copySetupLink} secret wrap /> : null}
 		</Dialog>
 	);

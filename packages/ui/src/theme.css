@@ -6,11 +6,16 @@
  * ratio of at least 4.5:1 (WCAG AA) in both themes; `line-strong` (checkboxes, a hovered control) keeps 3:1 against
  * surfaces. `subtle` text (placeholders, meta that is also said elsewhere) is decorative only.
  *
- * Visual system (owner 2026-10-17, "premium, at the level of Stripe, Linear and Vercel"):
- * - Neutrals on a cool slate scale: a quiet canvas, white panels (#111318 in dark), hairline borders
- *   (rgba(15,23,42,.07)).
- * - ONE accent, the brand indigo: primary actions, the active item, focus rings and links only. Status colors are
- *   emerald, amber and rose as soft pairs (a 50 tint with readable 700 text).
+ * Visual system (owner 2026-10-17, redesign 2: 60-30-10 and colors that carry meaning):
+ * - 60 % base: the off-white canvas #F7F8F5 (dark: the deep navy #0A1C40). 30 % structure: white sidebar and surfaces,
+ *   navy #0A1C40 text (never black), pale sage (`surface-2`) for hover and selected rows, hairlines in navy at 7-12 %.
+ * - 10 % meaning, used sparingly: Integrity blue #2226F7 (`primary`: main buttons, links, the active item, focus),
+ *   Natural green #24D56D (`success`), Excitement red #F72226 (`danger`: errors and destructive actions only),
+ *   Happiness yellow #FFD527 (`warning`, always with dark text), Energetic orange #FE5E20 (`attention`: setup steps,
+ *   alerts, Needs you; never a button), Kindness teal #00D6A3 (`info`: tips, help, empty states) and Originality pink
+ *   #FF3797 (`new`: new, featured, promotions). Each meaning has the brand hue (`-solid`, for dots, bars and fills), a
+ *   50 tint (`-soft`) and an AA text shade (the plain name and `on-*-soft`), darkened where the hue is too light for
+ *   text; dark mode uses lighter shades on navy.
  * - Radii: panels 14, cards 12, controls 8, pills full.
  * - Elevation: level 1 (panels, cards) a hairline and `0 1px 2px`; level 2 (sticky bars) a soft 12px lift; level 3
  *   (menus, dialogs, toasts) a deep 32px shadow. In dark, shadows give way to borders.
@@ -45,6 +50,23 @@
 	--color-on-danger-soft: var(--ss-on-danger-soft);
 	--color-info-soft: var(--ss-info-soft);
 	--color-on-info-soft: var(--ss-on-info-soft);
+	/* the brand hue of each meaning, for dots, bars and fills (text and icons use the AA shade without -solid) */
+	--color-success-solid: var(--ss-success-solid);
+	--color-warning-solid: var(--ss-warning-solid);
+	--color-on-warning: var(--ss-on-warning);
+	/* text and icons on a solid meaning hue (a done step's green, a yellow chip): navy in both themes */
+	--color-on-solid: #0a1c40;
+	--color-danger-solid: var(--ss-danger-solid);
+	--color-attention: var(--ss-attention);
+	--color-attention-solid: var(--ss-attention-solid);
+	--color-attention-soft: var(--ss-attention-soft);
+	--color-on-attention-soft: var(--ss-on-attention-soft);
+	--color-info: var(--ss-info);
+	--color-info-solid: var(--ss-info-solid);
+	--color-new: var(--ss-new);
+	--color-new-solid: var(--ss-new-solid);
+	--color-new-soft: var(--ss-new-soft);
+	--color-on-new-soft: var(--ss-on-new-soft);
 	--color-focus: var(--ss-focus);
 	--color-line-soft: var(--ss-line-soft);
 	--color-surface-3: var(--ss-surface-3);
@@ -98,6 +120,9 @@
 	--animate-ss-sheet-out: ss-sheet-out var(--ss-motion) var(--ss-ease-exit) both;
 	--animate-ss-drawer: ss-drawer var(--ss-motion-slow) var(--ss-ease) both;
 	--animate-ss-drawer-out: ss-drawer-out var(--ss-motion) var(--ss-ease-exit) both;
+	/* the right drawer that holds an edit (an order, a product, a connection) */
+	--animate-ss-side: ss-side var(--ss-motion-slow) var(--ss-ease) both;
+	--animate-ss-side-out: ss-side-out var(--ss-motion) var(--ss-ease-exit) both;
 	--animate-ss-toast: ss-toast var(--ss-motion-slow) var(--ss-ease) both;
 	--animate-ss-toast-out: ss-toast-out var(--ss-motion) var(--ss-ease-exit) both;
 	--animate-ss-shake: ss-shake var(--ss-motion-slow) var(--ss-ease-move) both;
@@ -162,6 +187,13 @@
 	}
 }
 
+@keyframes ss-side {
+	from {
+		opacity: 0;
+		translate: 32px 0;
+	}
+}
+
 @keyframes ss-toast {
 	from {
 		opacity: 0;
@@ -196,6 +228,13 @@
 	to {
 		opacity: 0;
 		translate: -24px 0;
+	}
+}
+
+@keyframes ss-side-out {
+	to {
+		opacity: 0;
+		translate: 32px 0;
 	}
 }
 
@@ -367,134 +406,185 @@
 	}
 }
 
-/* light (the default) */
+/* light (the default): 60 % the off-white canvas, 30 % white surfaces and navy text, 10 % the meaning colors */
 :root {
 	color-scheme: light;
-	--ss-canvas: #f6f7f9;
+	--ss-canvas: #f7f8f5;
 	--ss-surface: #ffffff;
-	--ss-surface-2: #f3f4f6;
-	--ss-surface-3: #e9ebef;
-	--ss-line: rgb(15 23 42 / 0.12);
-	--ss-line-soft: rgb(15 23 42 / 0.07);
-	--ss-line-strong: #8a94a6;
-	--ss-fg: #0f172a;
-	--ss-muted: #617086;
-	--ss-subtle: #94a3b8;
-	--ss-primary: #4f46e5;
-	--ss-primary-hover: #4338ca;
+	/* pale sage: hover and selected rows */
+	--ss-surface-2: #eff1ec;
+	--ss-surface-3: #e5e8e1;
+	--ss-line: rgb(10 28 64 / 0.12);
+	--ss-line-soft: rgb(10 28 64 / 0.07);
+	--ss-line-strong: #8790a3;
+	--ss-fg: #0a1c40;
+	--ss-muted: #566176;
+	--ss-subtle: #98a1b2;
+	/* Integrity blue: main buttons, links, the active item, focus */
+	--ss-primary: #2226f7;
+	--ss-primary-hover: #1b20d0;
 	--ss-on-primary: #ffffff;
-	--ss-primary-soft: #eef2ff;
-	--ss-on-primary-soft: #4338ca;
-	--ss-success: #047857;
-	--ss-success-soft: #ecfdf5;
-	--ss-on-success-soft: #047857;
-	--ss-warning: #b45309;
-	--ss-warning-soft: #fffbeb;
-	--ss-on-warning-soft: #b45309;
-	--ss-danger: #e11d48;
-	--ss-danger-hover: #be123c;
+	--ss-primary-soft: #ebebfe;
+	--ss-on-primary-soft: #1b20d0;
+	/* Natural green: success, paid, active, done */
+	--ss-success: #177a57;
+	--ss-success-solid: #24d56d;
+	--ss-success-soft: #e9fbf0;
+	--ss-on-success-soft: #156a53;
+	/* Happiness yellow: warnings and soft highlights, always with dark text */
+	--ss-warning: #7a5c00;
+	--ss-warning-solid: #ffd527;
+	--ss-on-warning: #0a1c40;
+	--ss-warning-soft: #fff8db;
+	--ss-on-warning-soft: #6b5100;
+	/* Excitement red: errors and destructive actions only (the fill darkened for white text) */
+	--ss-danger: #d1212a;
+	--ss-danger-hover: #b0202e;
+	--ss-danger-solid: #f72226;
 	--ss-on-danger: #ffffff;
-	--ss-danger-soft: #fff1f2;
-	--ss-on-danger-soft: #be123c;
-	--ss-info-soft: #eef2ff;
-	--ss-on-info-soft: #4338ca;
-	--ss-focus: #4f46e5;
-	--ss-overlay: rgb(15 23 42 / 0.4);
-	--ss-shadow-1: 0 1px 2px rgb(15 23 42 / 0.04);
-	--ss-shadow-2: 0 4px 12px -2px rgb(15 23 42 / 0.08);
-	--ss-shadow-3: 0 12px 32px -8px rgb(15 23 42 / 0.18);
-	--ss-glow-primary: 0 4px 12px -4px rgb(79 70 229 / 0.45);
-	--ss-glow-danger: 0 4px 12px -4px rgb(225 29 72 / 0.45);
-	--ss-scrollbar: rgb(15 23 42 / 0.18);
-	--ss-scrollbar-hover: rgb(15 23 42 / 0.32);
-	--ss-selection: rgb(79 70 229 / 0.18);
+	--ss-danger-soft: #fee9e9;
+	--ss-on-danger-soft: #ab202e;
+	/* Energetic orange: needs attention (setup steps, alerts, Needs you); never a button */
+	--ss-attention: #b54a2a;
+	--ss-attention-solid: #fe5e20;
+	--ss-attention-soft: #ffefe9;
+	--ss-on-attention-soft: #95422e;
+	/* Kindness teal: info and help (tips, guidance, empty-state hints) */
+	--ss-info: #057971;
+	--ss-info-solid: #00d6a3;
+	--ss-info-soft: #e6fbf6;
+	--ss-on-info-soft: #066869;
+	/* Originality pink: new, featured, promotions */
+	--ss-new: #bf3080;
+	--ss-new-solid: #ff3797;
+	--ss-new-soft: #ffebf5;
+	--ss-on-new-soft: #9d2c74;
+	--ss-focus: #2226f7;
+	--ss-overlay: rgb(10 28 64 / 0.32);
+	--ss-shadow-1: 0 1px 2px rgb(10 28 64 / 0.04);
+	--ss-shadow-2: 0 6px 16px -4px rgb(10 28 64 / 0.1);
+	--ss-shadow-3: 0 16px 40px -12px rgb(10 28 64 / 0.22);
+	--ss-glow-primary: 0 4px 12px -4px rgb(34 38 247 / 0.45);
+	--ss-glow-danger: 0 4px 12px -4px rgb(209 33 42 / 0.4);
+	--ss-scrollbar: rgb(10 28 64 / 0.18);
+	--ss-scrollbar-hover: rgb(10 28 64 / 0.32);
+	--ss-selection: rgb(34 38 247 / 0.16);
 }
 
-/* dark: from the OS setting unless light was chosen, or chosen (the two blocks hold the same values) */
+/* dark, on the deep navy base: from the OS setting unless light was chosen, or chosen (the two blocks hold the same
+   values); every meaning color takes a lighter shade that keeps 4.5:1 on the navy surfaces */
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme='light']) {
 		color-scheme: dark;
-		--ss-canvas: #0a0b0f;
-		--ss-surface: #111318;
-		--ss-surface-2: #181b21;
-		--ss-surface-3: #20242b;
-		--ss-line: #2c3039;
-		--ss-line-soft: #1f2229;
-		--ss-line-strong: #5e6675;
-		--ss-fg: #edeff3;
-		--ss-muted: #9aa3b2;
-		--ss-subtle: #6b7486;
-		--ss-primary: #818cf8;
-		--ss-primary-hover: #a5b4fc;
-		--ss-on-primary: #0b1120;
-		--ss-primary-soft: #1e1f3b;
-		--ss-on-primary-soft: #c7d2fe;
-		--ss-success: #34d399;
-		--ss-success-soft: #0b2a20;
-		--ss-on-success-soft: #6ee7b7;
-		--ss-warning: #fbbf24;
-		--ss-warning-soft: #2e2109;
-		--ss-on-warning-soft: #fcd34d;
-		--ss-danger: #fb7185;
-		--ss-danger-hover: #fda4af;
-		--ss-on-danger: #1a0508;
-		--ss-danger-soft: #2f0f16;
-		--ss-on-danger-soft: #fda4af;
-		--ss-info-soft: #1e1f3b;
-		--ss-on-info-soft: #c7d2fe;
-		--ss-focus: #a5b4fc;
-		--ss-overlay: rgb(3 4 7 / 0.72);
+		--ss-canvas: #0a1c40;
+		--ss-surface: #132447;
+		--ss-surface-2: #1b2c4d;
+		--ss-surface-3: #253555;
+		--ss-line: #2f3e5d;
+		--ss-line-soft: #243354;
+		--ss-line-strong: #6a7a9e;
+		--ss-fg: #eef1f7;
+		--ss-muted: #a3b0ca;
+		--ss-subtle: #6f7c99;
+		--ss-primary: #8a8dfb;
+		--ss-primary-hover: #a3a5fc;
+		--ss-on-primary: #0a1c40;
+		--ss-primary-soft: #152463;
+		--ss-on-primary-soft: #b9bbfd;
+		--ss-success: #24d56d;
+		--ss-success-solid: #24d56d;
+		--ss-success-soft: #16404d;
+		--ss-on-success-soft: #5fe397;
+		--ss-warning: #ffd527;
+		--ss-warning-solid: #ffd527;
+		--ss-on-warning: #0a1c40;
+		--ss-warning-soft: #394042;
+		--ss-on-warning-soft: #ffe066;
+		--ss-danger: #f96063;
+		--ss-danger-hover: #fb8a8c;
+		--ss-danger-solid: #f72226;
+		--ss-on-danger: #0a1c40;
+		--ss-danger-soft: #372442;
+		--ss-on-danger-soft: #fb8a8c;
+		--ss-attention: #fe6e36;
+		--ss-attention-solid: #fe5e20;
+		--ss-attention-soft: #392d41;
+		--ss-on-attention-soft: #fe9466;
+		--ss-info: #00d6a3;
+		--ss-info-solid: #00d6a3;
+		--ss-info-soft: #104056;
+		--ss-on-info-soft: #4fe3bf;
+		--ss-new: #ff5baa;
+		--ss-new-solid: #ff3797;
+		--ss-new-soft: #392754;
+		--ss-on-new-soft: #ff8cc4;
+		--ss-focus: #a3a5fc;
+		--ss-overlay: rgb(3 10 26 / 0.7);
 		--ss-shadow-1: 0 0 #0000;
 		--ss-shadow-2: 0 0 #0000;
-		--ss-shadow-3: 0 0 0 1px #2c3039;
+		--ss-shadow-3: 0 0 0 1px #2f3e5d, 0 16px 40px -12px rgb(0 0 0 / 0.5);
 		--ss-glow-primary: 0 0 #0000;
 		--ss-glow-danger: 0 0 #0000;
 		--ss-scrollbar: rgb(255 255 255 / 0.16);
 		--ss-scrollbar-hover: rgb(255 255 255 / 0.28);
-		--ss-selection: rgb(129 140 248 / 0.3);
+		--ss-selection: rgb(138 141 251 / 0.3);
 	}
 }
 
 :root[data-theme='dark'] {
 	color-scheme: dark;
-	--ss-canvas: #0a0b0f;
-	--ss-surface: #111318;
-	--ss-surface-2: #181b21;
-	--ss-surface-3: #20242b;
-	--ss-line: #2c3039;
-	--ss-line-soft: #1f2229;
-	--ss-line-strong: #5e6675;
-	--ss-fg: #edeff3;
-	--ss-muted: #9aa3b2;
-	--ss-subtle: #6b7486;
-	--ss-primary: #818cf8;
-	--ss-primary-hover: #a5b4fc;
-	--ss-on-primary: #0b1120;
-	--ss-primary-soft: #1e1f3b;
-	--ss-on-primary-soft: #c7d2fe;
-	--ss-success: #34d399;
-	--ss-success-soft: #0b2a20;
-	--ss-on-success-soft: #6ee7b7;
-	--ss-warning: #fbbf24;
-	--ss-warning-soft: #2e2109;
-	--ss-on-warning-soft: #fcd34d;
-	--ss-danger: #fb7185;
-	--ss-danger-hover: #fda4af;
-	--ss-on-danger: #1a0508;
-	--ss-danger-soft: #2f0f16;
-	--ss-on-danger-soft: #fda4af;
-	--ss-info-soft: #1e1f3b;
-	--ss-on-info-soft: #c7d2fe;
-	--ss-focus: #a5b4fc;
-	--ss-overlay: rgb(3 4 7 / 0.72);
+	--ss-canvas: #0a1c40;
+	--ss-surface: #132447;
+	--ss-surface-2: #1b2c4d;
+	--ss-surface-3: #253555;
+	--ss-line: #2f3e5d;
+	--ss-line-soft: #243354;
+	--ss-line-strong: #6a7a9e;
+	--ss-fg: #eef1f7;
+	--ss-muted: #a3b0ca;
+	--ss-subtle: #6f7c99;
+	--ss-primary: #8a8dfb;
+	--ss-primary-hover: #a3a5fc;
+	--ss-on-primary: #0a1c40;
+	--ss-primary-soft: #152463;
+	--ss-on-primary-soft: #b9bbfd;
+	--ss-success: #24d56d;
+	--ss-success-solid: #24d56d;
+	--ss-success-soft: #16404d;
+	--ss-on-success-soft: #5fe397;
+	--ss-warning: #ffd527;
+	--ss-warning-solid: #ffd527;
+	--ss-on-warning: #0a1c40;
+	--ss-warning-soft: #394042;
+	--ss-on-warning-soft: #ffe066;
+	--ss-danger: #f96063;
+	--ss-danger-hover: #fb8a8c;
+	--ss-danger-solid: #f72226;
+	--ss-on-danger: #0a1c40;
+	--ss-danger-soft: #372442;
+	--ss-on-danger-soft: #fb8a8c;
+	--ss-attention: #fe6e36;
+	--ss-attention-solid: #fe5e20;
+	--ss-attention-soft: #392d41;
+	--ss-on-attention-soft: #fe9466;
+	--ss-info: #00d6a3;
+	--ss-info-solid: #00d6a3;
+	--ss-info-soft: #104056;
+	--ss-on-info-soft: #4fe3bf;
+	--ss-new: #ff5baa;
+	--ss-new-solid: #ff3797;
+	--ss-new-soft: #392754;
+	--ss-on-new-soft: #ff8cc4;
+	--ss-focus: #a3a5fc;
+	--ss-overlay: rgb(3 10 26 / 0.7);
 	--ss-shadow-1: 0 0 #0000;
 	--ss-shadow-2: 0 0 #0000;
-	--ss-shadow-3: 0 0 0 1px #2c3039;
+	--ss-shadow-3: 0 0 0 1px #2f3e5d, 0 16px 40px -12px rgb(0 0 0 / 0.5);
 	--ss-glow-primary: 0 0 #0000;
 	--ss-glow-danger: 0 0 #0000;
 	--ss-scrollbar: rgb(255 255 255 / 0.16);
 	--ss-scrollbar-hover: rgb(255 255 255 / 0.28);
-	--ss-selection: rgb(129 140 248 / 0.3);
+	--ss-selection: rgb(138 141 251 / 0.3);
 }
 
 /*

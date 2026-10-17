@@ -14,7 +14,7 @@
 import { useState } from 'react';
 import { Button } from './Button.js';
 import { CodeBlock } from './CodeBlock.js';
-import { Badge, Callout, Card, StatusPill, TextLink } from './display.js';
+import { Badge, Callout, Card, EmptyState, StatusPill, TextLink } from './display.js';
 import { SaveBar, SectionLayout, SettingList, SettingsCard, ViewTitle } from './blocks.js';
 import { Input, Switch } from './fields.js';
 import { ActionMenu } from './Menu.js';
@@ -28,7 +28,6 @@ import { call, fill, useLoad } from './dashboard-api.js';
 import { Loaded, Outcome, ResealCard, toneOf, useDashboard, withDependents } from './dashboard-parts.js';
 import {
 	LookBar,
-	NothingToShow,
 	SettingsBar,
 	TextsCard,
 	featureSections,
@@ -48,10 +47,10 @@ import {
 /** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
 /**
  * What every tab is given: the picked website (null on the Owner's global tabs) and its domain, the viewer, the
- * support contact, the Portal's address, and `open`, which shows another section (the Overview's buttons), at the
- * section of its inner sidebar when one is given (`open('settings', 'catalog.page-addresses')`).
+ * support contact, the Portal's address and name (`brand`, its Branding), and `open`, which shows another section (the
+ * Overview's buttons), at the section of its inner sidebar when one is given (`open('settings', 'catalog.page-addresses')`).
  * @typedef {{ websiteId: string | null, domain: string, who: Who,
- *   support: { channels: import('./format.js').SupportChannel[] }, portal: string,
+ *   support: { channels: import('./format.js').SupportChannel[] }, portal: string, brand?: string,
  *   open: (tab: string, section?: string) => void }} TabProps
  */
 /** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
@@ -118,7 +117,7 @@ export function OverviewTab(props) {
  * features picked (shown above the list and in the confirmation).
  * @param {TabProps & { warnings?: (on: string[]) => string[] }} props
  */
-export function FeaturesTab({ websiteId, who, support, warnings, open }) {
+export function FeaturesTab({ websiteId, who, support, warnings, open, brand }) {
 	const { texts, namesOf, byCategory } = useDashboard();
 	const locale = useDisplayLocale();
 	const F = texts.features;
@@ -166,12 +165,15 @@ export function FeaturesTab({ websiteId, who, support, warnings, open }) {
 											const broken = links.filter(
 												(link) => link.neededBy.includes(feature.key) && link.status !== 'connected',
 											);
+											// a merchant cannot switch features: an off one shows clearly as locked, with who can
+											const locked = !admin && !feature.on;
 											return (
 												<ListRow
 													key={feature.key}
 													wrap
 													className="py-4"
 													title={feature.name}
+													{...(locked ? { status: <StatusPill status="locked">{F.locked}</StatusPill> } : {})}
 													{...(feature.on && broken.length > 0
 														? {
 																status: (
@@ -188,6 +190,11 @@ export function FeaturesTab({ websiteId, who, support, warnings, open }) {
 													meta={
 														<>
 															<span className="block max-w-[40rem]">{feature.description}</span>
+															{locked ? (
+																<span className="mt-1 block font-medium text-fg/80">
+																	{fill(F.lockedHelp, { portal: brand || 'Single Solution' })}
+																</span>
+															) : null}
 															<span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
 																<span>
 																	{fill(F.price, {
@@ -209,7 +216,9 @@ export function FeaturesTab({ websiteId, who, support, warnings, open }) {
 															hideLabel
 															label={feature.name}
 															checked={on.includes(feature.key)}
-															disabled={!admin || (missing.length > 0 && !on.includes(feature.key))}
+															locked={!admin}
+															lockedLabel={F.locked}
+															disabled={missing.length > 0 && !on.includes(feature.key)}
 															onChange={(next) => toggle(feature, next)}
 														/>
 													}>
@@ -343,7 +352,7 @@ function SettingsPanel({ features, base, reload, sections = [], notice, extras }
 				label={dash.texts.tabs.settings}
 				sections={list}
 				searchLabel={dash.texts.settings.navSearch}
-				empty={<NothingToShow>{dash.texts.settings.nothingOn}</NothingToShow>}
+				empty={<EmptyState icon="sliders" title={dash.texts.settings.nothingOn} />}
 			/>
 			<SettingsBar editor={editor} texts={dash.texts} />
 		</>
@@ -505,7 +514,7 @@ export function ConnectionsTab({ websiteId, form, hint }) {
 							<span
 								role="img"
 								aria-label={String(C[/** @type {'connected'} */ (item.status)])}
-								className={`size-2 rounded-full ${tone === 'success' ? 'bg-success' : tone === 'danger' ? 'bg-danger' : 'bg-warning'}`}
+								className={`size-2 rounded-full ${tone === 'success' ? 'bg-success-solid' : tone === 'danger' ? 'bg-danger-solid' : 'bg-attention-solid'}`}
 							/>
 						),
 						content: (

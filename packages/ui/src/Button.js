@@ -27,12 +27,12 @@ const BASE =
 /** @type {Record<ButtonVariant, string>} */
 const VARIANTS = {
 	primary:
-		'bg-primary text-on-primary shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_1px_2px_rgb(15_23_42/0.12)] hover:bg-primary-hover hover:shadow-glow-primary',
-	secondary: 'border border-line bg-surface text-fg shadow-card hover:bg-surface-2',
+		'bg-primary text-on-primary shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_1px_2px_rgb(10_28_64/0.12)] hover:bg-primary-hover hover:shadow-glow-primary',
+	secondary: 'border border-line bg-surface text-fg hover:bg-surface-2',
 	ghost: 'text-fg/80 hover:bg-surface-2 hover:text-fg',
 	danger:
-		'bg-danger text-on-danger shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_1px_2px_rgb(15_23_42/0.12)] hover:bg-danger-hover hover:shadow-glow-danger',
-	soft: 'bg-primary-soft text-on-primary-soft hover:bg-surface-3',
+		'bg-danger text-on-danger shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_1px_2px_rgb(10_28_64/0.12)] hover:bg-danger-hover hover:shadow-glow-danger',
+	soft: 'bg-primary-soft text-on-primary-soft hover:bg-primary-soft/70',
 };
 
 /** @type {Record<ButtonSize, string>} */

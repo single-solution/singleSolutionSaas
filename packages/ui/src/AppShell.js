@@ -1,14 +1,16 @@
 'use client';
 /**
- * Console frame (owner 2026-10-17: app-like, premium): the window is the frame and the page itself never scrolls. A
- * floating sidebar panel (260 px: brand, an optional switcher, groups of links with icons and a soft accent pill on the
- * current page, help and account at the bottom; it folds to an icon rail), a floating 56 px header (the menu button on
- * phones, the breadcrumbs and page title, an optional context pill, search, actions, Back to Portal, and one account
- * or theme menu) and the main pane, which fills the rest of the window and scrolls on its own (`Pane`). Nothing
- * touches the screen edges: the panels keep 12-16 px from the window and from each other. Below 1024 px (`lg`) the
- * sidebar becomes a floating drawer opened by the menu button; nothing scrolls sideways. The slots `switcher` and
- * `sidebarFooter` may be functions of `{ rail }` so they can draw a compact version. Includes a skip link to the main
- * content. Router links are rendered with `linkAs` (e.g. Next's `Link`).
+ * Console frame (owner 2026-10-17, redesign 2: app-like, premium, 60-30-10): the window is the frame and the page itself
+ * never scrolls. On the off-white canvas sit a floating WHITE sidebar, bottom-weighted (240 px; it folds to a 64 px icon
+ * rail): the logo on top, the main sections in the middle, and at the bottom the website / merchant switcher, help, the
+ * account, the theme and the fold button; a floating 56 px header (the menu button on phones, the breadcrumbs and the
+ * page title with the page's own context — status, key numbers, last saved, a view switcher — and its main actions,
+ * lifted from its `PageHeader` / `HeaderMeta`; an optional context pill, search, Back to Portal); and the main pane,
+ * which fills the rest of the window and scrolls on its own (`Pane`). Nothing touches the screen edges: the panels keep
+ * 12-16 px from the window and from each other. Below 1024 px (`lg`) the sidebar becomes a floating drawer opened by
+ * the menu button, and the header holds the account (or theme) menu; nothing scrolls sideways. The slots `switcher`
+ * and `sidebarFooter` may be functions of `{ rail }` so they can draw a compact version. No command bar, no assistant
+ * dock. Includes a skip link to the main content. Router links are rendered with `linkAs` (e.g. Next's `Link`).
  *
  * Motion (PLAN 0.6): the current item's pill is one marker that slides to the clicked item at once (before its page
  * arrives); items tint on hover and press in when clicked; the rail folds in 180 ms; the phone drawer slides in and
@@ -16,9 +18,10 @@
  * pane returns to its top when the page changes (`scrollKey`).
  * @module
  */
-import { Fragment, createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cx } from './cx.js';
-import { Avatar } from './display.js';
+import { Avatar, IconBadge } from './display.js';
+import { HeaderSlotsContext } from './header.js';
 import { Icon } from './icons.js';
 import { AccountMenu, ThemeMenu } from './Menu.js';
 import { NavigationProgress, usePresence } from './motion.js';
@@ -96,7 +99,7 @@ function Nav({ sections, linkAs, onNavigate, rail = false }) {
 			{sections.map((section, i) => (
 				<div
 					key={section.label ?? i}
-					className={cx(i > 0 && (rail ? 'mt-2 border-t border-line-soft pt-2' : 'mt-6'), 'space-y-0.5')}>
+					className={cx(i > 0 && (rail ? 'mt-3 border-t border-line-soft pt-3' : 'mt-6'), 'space-y-0.5')}>
 					{section.label && !rail ? (
 						<p className="px-2.5 pb-1.5 text-micro font-semibold tracking-[0.06em] text-muted uppercase">
 							{section.label}
@@ -121,7 +124,7 @@ function Nav({ sections, linkAs, onNavigate, rail = false }) {
 											rail ? 'justify-center px-0' : 'px-2.5',
 											on
 												? cx('font-medium text-on-primary-soft', placed ? 'bg-transparent' : 'bg-primary-soft')
-												: 'font-medium text-fg/75 hover:bg-surface-2 hover:text-fg',
+												: 'font-medium text-fg/80 hover:bg-surface-2 hover:text-fg',
 										)}>
 										{item.icon ? (
 											<span
@@ -151,15 +154,20 @@ function Nav({ sections, linkAs, onNavigate, rail = false }) {
 }
 
 /**
- * The product's mark and name; `compact` shows the mark alone (the rail) or the name alone (the phone header).
- * @param {{ name: ReactNode, tagline?: ReactNode, compact?: boolean, markOnly?: boolean }} props
+ * The console's mark and name; `compact` shows the mark alone (the rail) or the name alone (the phone header). In a
+ * product dashboard (`product`, its id) the mark is the product's chip in its meaning color.
+ * @param {{ name: ReactNode, tagline?: ReactNode, product?: string, compact?: boolean, markOnly?: boolean }} props
  */
-function Brand({ name, tagline, compact = false, markOnly = false }) {
+function Brand({ name, tagline, product, compact = false, markOnly = false }) {
 	return (
 		<div className={cx('flex min-w-0 items-center gap-2.5', markOnly && 'justify-center')}>
-			<span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-on-primary shadow-[inset_0_1px_0_rgb(255_255_255/0.18)]">
-				<Icon name="zap" size={15} />
-			</span>
+			{product ? (
+				<IconBadge product={product} size="sm" />
+			) : (
+				<span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-on-primary shadow-[inset_0_1px_0_rgb(255_255_255/0.18)]">
+					<Icon name="zap" size={15} />
+				</span>
+			)}
 			{markOnly ? (
 				<span className="sr-only">{name}</span>
 			) : (
@@ -190,7 +198,7 @@ export function SwitcherSelect({ label, value, options, onChange, placeholder, d
 	return (
 		<div
 			className={cx(
-				'ss-motion relative flex h-10 min-w-0 items-center gap-2.5 rounded-control border border-line bg-surface pr-8 pl-2 shadow-card',
+				'ss-motion relative flex h-10 min-w-0 items-center gap-2.5 rounded-control border border-line-soft bg-surface pr-8 pl-2 hover:bg-surface-2',
 				'hover:border-line-strong has-[select:focus-visible]:border-primary has-[select:focus-visible]:ring-[3px] has-[select:focus-visible]:ring-primary/20',
 				disabled && 'opacity-60',
 				className,
@@ -231,7 +239,7 @@ export function ContextPill({ children, icon = 'eye', className }) {
 	return (
 		<span
 			className={cx(
-				'inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full border border-line-soft bg-surface-2 px-2.5 text-label font-medium text-muted',
+				'inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full bg-surface-2 px-2.5 text-label font-medium text-muted',
 				className,
 			)}>
 			<Icon name={icon} size={13} className="shrink-0" />
@@ -242,16 +250,22 @@ export function ContextPill({ children, icon = 'eye', className }) {
 
 /**
  * The header's breadcrumbs and page title on one line: the steps muted (links where they have an `href`), the title in
- * full color.
+ * full color (left out while the page shows its own title in the header).
  * @param {{ crumbs: Crumb[], title?: ReactNode, linkAs?: import('react').ElementType }} props
  */
 function TitleTrail({ crumbs, title, linkAs }) {
+	if (crumbs.length === 0 && !title) return null;
 	const LinkTag = linkAs ?? 'a';
 	return (
 		<nav aria-label="Breadcrumb" className="min-w-0">
 			<ol className="flex min-w-0 items-center gap-1.5 text-sm">
 				{crumbs.map((crumb, i) => (
 					<Fragment key={i}>
+						{i > 0 ? (
+							<li aria-hidden="true" className="hidden shrink-0 text-subtle sm:block">
+								<Icon name="chevronRight" size={14} />
+							</li>
+						) : null}
 						<li className="hidden min-w-0 shrink truncate text-muted sm:block">
 							{crumb.href ? (
 								<LinkTag href={crumb.href} className="ss-motion rounded hover:text-fg">
@@ -261,15 +275,19 @@ function TitleTrail({ crumbs, title, linkAs }) {
 								crumb.label
 							)}
 						</li>
-						<li aria-hidden="true" className="hidden shrink-0 text-subtle sm:block">
-							<Icon name="chevronRight" size={14} />
-						</li>
 					</Fragment>
 				))}
 				{title ? (
-					<li aria-current="page" className="min-w-0 truncate text-title font-semibold text-fg">
-						{title}
-					</li>
+					<>
+						{crumbs.length > 0 ? (
+							<li aria-hidden="true" className="hidden shrink-0 text-subtle sm:block">
+								<Icon name="chevronRight" size={14} />
+							</li>
+						) : null}
+						<li aria-current="page" className="min-w-0 truncate text-title font-semibold text-fg">
+							{title}
+						</li>
+					</>
 				) : null}
 			</ol>
 		</nav>
@@ -296,7 +314,7 @@ export function ScrollArea({ children, className, label, ref, as = 'div' }) {
 }
 
 /**
- * @param {{ brand?: { name: ReactNode, tagline?: ReactNode }, sections: NavSection[], topbar?: ReactNode,
+ * @param {{ brand?: { name: ReactNode, tagline?: ReactNode, product?: string }, sections: NavSection[], topbar?: ReactNode,
  *   actions?: ReactNode, search?: ReactNode, banner?: ReactNode, children: ReactNode,
  *   linkAs?: import('react').ElementType, switcher?: ReactNode | ((state: { rail: boolean }) => ReactNode),
  *   sidebarFooter?: ReactNode | ((state: { rail: boolean }) => ReactNode), mainId?: string, themeToggle?: boolean,
@@ -332,6 +350,16 @@ export function AppShell({
 }) {
 	const [open, setOpen] = useState(false);
 	const [folded, setFolded] = useState(false);
+	// the header's slots for the page's own title, context and actions (header.js)
+	const [titleSlot, setTitleSlot] = useState(/** @type {HTMLElement | null} */ (null));
+	const [metaSlot, setMetaSlot] = useState(/** @type {HTMLElement | null} */ (null));
+	const [actionsSlot, setActionsSlot] = useState(/** @type {HTMLElement | null} */ (null));
+	const [lifted, setLifted] = useState(0);
+	const lift = useCallback((/** @type {1 | -1} */ step) => setLifted((count) => count + step), []);
+	const slots = useMemo(
+		() => ({ title: titleSlot, meta: metaSlot, actions: actionsSlot, lift }),
+		[titleSlot, metaSlot, actionsSlot, lift],
+	);
 	const rail = collapsible && folded;
 	const panel = useRef(/** @type {HTMLDivElement | null} */ (null));
 	const pane = useRef(/** @type {HTMLDivElement | null} */ (null));
@@ -371,7 +399,10 @@ export function AppShell({
 		return () => media?.removeEventListener?.('change', onChange);
 	}, [open]);
 
-	/** The sidebar's content; the drawer shows it wide, with its own close button. */
+	/**
+	 * The sidebar's content, bottom-weighted: the logo; the main sections; then the switcher, the footer slot (help), the
+	 * account, and the theme with the fold button. The drawer shows it wide, with its own close button.
+	 */
 	const sidebar = (/** @type {boolean} */ narrow, /** @type {boolean} */ inDrawer) => (
 		<ShellContext.Provider value={{ rail: narrow }}>
 			<div className="flex h-full min-h-0 flex-col">
@@ -387,8 +418,7 @@ export function AppShell({
 						</button>
 					) : null}
 				</div>
-				{switcher && !narrow ? <div className="shrink-0 px-3 pb-3">{slotOf(switcher, narrow)}</div> : null}
-				<ScrollArea className="flex-1 overflow-x-hidden px-3 pt-1 pb-3">
+				<ScrollArea className="flex-1 overflow-x-hidden px-3 pt-2 pb-3">
 					<Nav
 						sections={sections}
 						{...(linkAs ? { linkAs } : {})}
@@ -396,23 +426,52 @@ export function AppShell({
 						{...(inDrawer ? { onNavigate: () => setOpen(false) } : {})}
 					/>
 				</ScrollArea>
-				<div className="shrink-0 space-y-1 border-t border-line-soft p-3">
-					{sidebarFooter ? slotOf(sidebarFooter, narrow) : null}
-					{inDrawer && themeToggle ? <ThemeToggle className="w-fit" /> : null}
-					{!inDrawer && collapsible ? (
-						<button
-							type="button"
-							onClick={() => fold(!narrow)}
-							aria-label={narrow ? 'Expand sidebar' : 'Collapse sidebar'}
-							aria-pressed={narrow}
-							title={narrow ? 'Expand sidebar' : 'Collapse sidebar'}
-							className={cx(
-								'ss-motion ss-press flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-label font-medium text-muted hover:bg-surface-2 hover:text-fg',
-								narrow ? 'w-full justify-center px-0' : 'w-full',
-							)}>
-							<Icon name={narrow ? 'chevronRight' : 'panelLeft'} size={16} />
-							{narrow ? null : <span>Collapse</span>}
-						</button>
+				<div className={cx('shrink-0 space-y-1 border-t border-line-soft p-3', narrow && 'flex flex-col items-center')}>
+					{switcher && !narrow ? <div className="pb-2">{slotOf(switcher, narrow)}</div> : null}
+					{sidebarFooter ? <div className="w-full">{slotOf(sidebarFooter, narrow)}</div> : null}
+					{account ? (
+						<div className={cx('w-full', narrow && 'flex justify-center')}>
+							<AccountMenu
+								name={account.name}
+								{...(account.email ? { email: account.email } : {})}
+								items={account.items}
+								{...(account.label ? { label: account.label } : {})}
+								theme={narrow && themeToggle}
+								compact={narrow}
+								placement="up"
+							/>
+						</div>
+					) : null}
+					{narrow ? (
+						<>
+							{themeToggle && !account ? <ThemeMenu placement="up" /> : null}
+							{collapsible && !inDrawer ? (
+								<button
+									type="button"
+									onClick={() => fold(false)}
+									aria-label="Expand sidebar"
+									aria-pressed={true}
+									title="Expand sidebar"
+									className="ss-motion ss-press flex size-9 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-fg">
+									<Icon name="panelLeft" size={16} />
+								</button>
+							) : null}
+						</>
+					) : themeToggle || (collapsible && !inDrawer) ? (
+						<div className="flex items-center justify-between gap-2 pt-1">
+							{themeToggle ? <ThemeToggle /> : <span />}
+							{collapsible && !inDrawer ? (
+								<button
+									type="button"
+									onClick={() => fold(true)}
+									aria-label="Collapse sidebar"
+									aria-pressed={false}
+									title="Collapse sidebar"
+									className="ss-motion ss-press flex size-8 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-fg">
+									<Icon name="panelLeft" size={16} />
+								</button>
+							) : null}
+						</div>
 					) : null}
 				</div>
 			</div>
@@ -421,6 +480,7 @@ export function AppShell({
 
 	return (
 		<NavigationProgress>
+			<HeaderSlotsContext.Provider value={slots}>
 			<div className="flex h-dvh w-full gap-3 overflow-hidden bg-canvas p-3 text-fg lg:gap-4 lg:p-4">
 				<a
 					href={`#${mainId}`}
@@ -430,9 +490,10 @@ export function AppShell({
 				<aside
 					data-rail={rail || undefined}
 					className={cx(
-						'hidden h-full shrink-0 overflow-hidden rounded-panel border border-line-soft bg-surface shadow-panel [view-transition-name:ss-sidebar] lg:block',
+						// visible overflow: the account and theme menus open upward over the page from the rail
+						'relative z-30 hidden h-full shrink-0 rounded-panel border border-line-soft bg-surface shadow-panel [view-transition-name:ss-sidebar] lg:block',
 						'transition-[width] duration-(--ss-motion) ease-ss',
-						rail ? 'w-[4.5rem]' : 'w-[16.25rem]',
+						rail ? 'w-16' : 'w-60',
 					)}>
 					{sidebar(rail, false)}
 				</aside>
@@ -449,7 +510,7 @@ export function AppShell({
 							role="dialog"
 							aria-modal="true"
 							aria-label="Navigation"
-							className="h-full w-[16.25rem] max-w-[85vw] animate-ss-drawer overflow-hidden rounded-panel border border-line-soft bg-surface shadow-overlay group-data-[state=closed]:animate-ss-drawer-out">
+							className="h-full w-60 max-w-[85vw] animate-ss-drawer rounded-panel border border-line-soft bg-surface shadow-overlay group-data-[state=closed]:animate-ss-drawer-out">
 							{sidebar(false, true)}
 						</div>
 					</div>
@@ -464,14 +525,25 @@ export function AppShell({
 							className="ss-motion ss-press shrink-0 rounded-lg p-2 text-fg hover:bg-surface-2 lg:hidden">
 							<Icon name="menu" size={18} />
 						</button>
-						<div className="flex min-w-0 flex-1 items-center gap-3">
+						<div className="flex min-w-0 flex-1 items-center gap-2.5">
 							{pageTitle || trail.length > 0 ? (
-								<TitleTrail crumbs={trail} title={pageTitle} {...(linkAs ? { linkAs } : {})} />
-							) : (
+								<TitleTrail
+									crumbs={trail}
+									{...(lifted > 0 ? {} : { title: pageTitle })}
+									{...(linkAs ? { linkAs } : {})}
+								/>
+							) : lifted > 0 ? null : (
 								<span className="lg:hidden">
 									<Brand {...brand} compact />
 								</span>
 							)}
+							{lifted > 0 && trail.length > 0 ? (
+								<span aria-hidden="true" className="hidden shrink-0 text-subtle sm:block">
+									<Icon name="chevronRight" size={14} />
+								</span>
+							) : null}
+							<div ref={setTitleSlot} className="flex min-w-0 shrink items-center empty:hidden" />
+							<div ref={setMetaSlot} className="hidden min-w-0 items-center gap-2 overflow-hidden empty:hidden md:flex" />
 							{context ? (
 								<span className="hidden min-w-0 md:flex">
 									<ContextPill>{context}</ContextPill>
@@ -480,6 +552,7 @@ export function AppShell({
 							{topbar ? <div className="flex min-w-0 items-center gap-2">{topbar}</div> : null}
 						</div>
 						{search ? <div className="hidden min-w-0 shrink md:block md:w-64 xl:w-80">{search}</div> : null}
+						<div ref={setActionsSlot} className="flex shrink-0 items-center gap-2 empty:hidden" />
 						{actions || back || account || themeToggle ? (
 							<div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
 								{back ? (
@@ -491,17 +564,22 @@ export function AppShell({
 									</a>
 								) : null}
 								{actions}
+								{/* the sidebar holds the account and the theme on wide screens, the header on phones */}
 								{account ? (
-									<AccountMenu
-										name={account.name}
-										{...(account.email ? { email: account.email } : {})}
-										items={account.items}
-										{...(account.label ? { label: account.label } : {})}
-										theme={themeToggle}
-										compact
-									/>
+									<span className="lg:hidden">
+										<AccountMenu
+											name={account.name}
+											{...(account.email ? { email: account.email } : {})}
+											items={account.items}
+											{...(account.label ? { label: account.label } : {})}
+											theme={themeToggle}
+											compact
+										/>
+									</span>
 								) : themeToggle ? (
-									<ThemeMenu />
+									<span className="lg:hidden">
+										<ThemeMenu />
+									</span>
 								) : null}
 							</div>
 						) : null}
@@ -516,6 +594,7 @@ export function AppShell({
 					</ScrollArea>
 				</div>
 			</div>
+			</HeaderSlotsContext.Provider>
 		</NavigationProgress>
 	);
 }

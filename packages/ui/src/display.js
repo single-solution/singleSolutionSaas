@@ -8,11 +8,16 @@ import { humanize } from './format.js';
 import { Icon } from './icons.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
-/** @typedef {'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info'} Tone */
 /**
- * Kind of thing a tile, badge or menu item stands for. It names the thing in the code; every kind takes the one indigo
- * accent (PLAN 0.6 color rule: one accent, neutral surfaces, color for status only), so a `kind` marks an item as
- * accented and its absence leaves it neutral.
+ * What a color means (theme.css): `primary` Integrity blue (the accent), `success` Natural green, `warning` Happiness
+ * yellow, `danger` Excitement red, `attention` Energetic orange (needs you), `info` Kindness teal (help, tips),
+ * `new` Originality pink (new, featured); `neutral` carries no meaning.
+ * @typedef {'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'attention' | 'new'} Tone
+ */
+/**
+ * Kind of thing a tile, badge or menu item stands for. It names the thing in the code; every kind takes the one blue
+ * accent (color rule: one accent, neutral surfaces, the other colors for their meaning only), so a `kind` marks an item
+ * as accented and its absence leaves it neutral.
  * @typedef {'overview' | 'merchant' | 'website' | 'product' | 'feature' | 'credit' | 'price' | 'admin' | 'settings'
  *   | 'default' | 'activity' | 'connection' | 'developer'} Kind
  */
@@ -41,26 +46,61 @@ export function SoftBreaks({ text }) {
 	);
 }
 
-/** The accent tint of icon tiles, chips and empty-state icons. */
-const ACCENT = 'bg-primary-soft text-primary';
-/** Icon tiles without a `kind`: neutral. */
-const NEUTRAL = 'bg-surface-2 text-muted ring-1 ring-inset ring-line-soft';
+/**
+ * The tinted chip of each meaning: a 50 tint behind the icon in the meaning's AA shade (never a large fill).
+ * @type {Record<Tone, string>}
+ */
+export const TINTS = Object.freeze({
+	neutral: 'bg-surface-2 text-muted',
+	primary: 'bg-primary-soft text-primary',
+	success: 'bg-success-soft text-success',
+	warning: 'bg-warning-soft text-warning',
+	danger: 'bg-danger-soft text-danger',
+	info: 'bg-info-soft text-info',
+	attention: 'bg-attention-soft text-attention',
+	new: 'bg-new-soft text-new',
+});
 
 /**
- * Rounded icon badge: in the accent tint with a `kind`, neutral without one.
- * @param {{ icon: import('./icons.js').IconName, kind?: Kind, size?: 'xs' | 'sm' | 'md', className?: string }} props
+ * The look of each product of the Portal (owner 2026-10-17): its meaning color for its small icon chip and its icon.
+ * A product not listed gets the accent and a box.
+ * @type {Readonly<Record<string, { tone: Tone, icon: import('./icons.js').IconName }>>}
  */
-export function IconBadge({ icon, kind, size = 'md', className }) {
+const PRODUCT_LOOKS = Object.freeze({
+	accounts: { tone: 'primary', icon: 'user' },
+	payments: { tone: 'success', icon: 'creditCard' },
+	chat: { tone: 'info', icon: 'message' },
+	growth: { tone: 'attention', icon: 'trendingUp' },
+	notifications: { tone: 'warning', icon: 'bell' },
+	ecommerce: { tone: 'new', icon: 'bag' },
+});
+
+/**
+ * The chip look of a product by its id: its meaning color and icon.
+ * @param {string | null | undefined} productId
+ * @returns {{ tone: Tone, icon: import('./icons.js').IconName }}
+ */
+export const productLook = (productId) => PRODUCT_LOOKS[String(productId ?? '')] ?? { tone: 'primary', icon: 'box' };
+
+/**
+ * Rounded icon chip: a meaning `tone` tint, the accent tint with a `kind`, neutral without either. `product` (a product
+ * id) gives the product's own color and icon.
+ * @param {{ icon?: import('./icons.js').IconName, kind?: Kind, tone?: Tone, product?: string, size?: 'xs' | 'sm' | 'md',
+ *   className?: string }} props
+ */
+export function IconBadge({ icon, kind, tone, product, size = 'md', className }) {
+	const look = product ? productLook(product) : null;
+	const name = look?.icon ?? icon ?? 'box';
 	return (
 		<span
 			aria-hidden="true"
 			className={cx(
 				'inline-flex shrink-0 items-center justify-center',
-				kind ? ACCENT : NEUTRAL,
+				TINTS[tone ?? look?.tone ?? (kind ? 'primary' : 'neutral')],
 				size === 'xs' ? 'size-6 rounded-md' : size === 'sm' ? 'size-8 rounded-lg' : 'size-9 rounded-[10px]',
 				className,
 			)}>
-			<Icon name={icon} size={size === 'xs' ? 13 : size === 'sm' ? 15 : 17} />
+			<Icon name={name} size={size === 'xs' ? 13 : size === 'sm' ? 15 : 17} />
 		</span>
 	);
 }
@@ -94,9 +134,10 @@ export function Avatar({ name, size = 'md', className }) {
 }
 
 /**
- * Surface card (level 1: a hairline edge and a very soft shadow): its header holds the title, a one-line description
- * and up to two actions (the rest in a More menu), with a hairline under it; the body is padded 20 px. Never put grey
- * boxes inside a card: use rows divided by hairlines (`RowList`, setting rows).
+ * Surface card, only where grouping helps (level 1: a white surface with a hairline edge on the off-white canvas): its
+ * header holds the title, a one-line description and up to two actions (the rest in a More menu); whitespace, not a
+ * line, parts it from the body, which is padded 20 px. Never put boxes inside a card: use rows divided by hairlines
+ * (`RowList`, setting rows).
  * @param {{ title?: ReactNode, subtitle?: ReactNode, actions?: ReactNode, children?: ReactNode, className?: string,
  *   bodyClassName?: string, as?: 'section' | 'div' | 'article', id?: string, padded?: boolean, flow?: boolean }} props
  *   `flow`: a small card that takes one column of a `CardFlow` and sits beside the others (anything else in a flow takes
@@ -123,7 +164,7 @@ export function Card({
 			className={cx('min-w-0 rounded-card border border-line-soft bg-surface shadow-card', className)}
 			{...(title && typeof title === 'string' && as === 'section' ? { 'aria-label': title } : {})}>
 			{hasHeader ? (
-				<header className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line-soft px-5 py-3.5">
+				<header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pt-4">
 					<div className="min-w-0 flex-1">
 						{title ? <h2 className="text-title font-semibold tracking-[-0.01em] text-fg">{title}</h2> : null}
 						{subtitle ? <p className="mt-0.5 text-help text-muted">{subtitle}</p> : null}
@@ -131,35 +172,10 @@ export function Card({
 					{actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
 				</header>
 			) : null}
-			<div className={cx(padded && 'p-5', bodyClassName)}>{children}</div>
-		</Tag>
-	);
-}
-
-/**
- * Page title row. `level` 2 makes the title an `h2` (the detail beside a list whose heading is the page's `h1`). The
- * actions sit beside the title while both fit on one line at their natural width; otherwise they move, as one group,
- * onto their own row under the title, so a long title is not squeezed beside them (they wrap inside the group only
- * when even that row is too narrow).
- * @param {{ title: ReactNode, subtitle?: ReactNode, actions?: ReactNode, breadcrumbs?: ReactNode, badge?: ReactNode,
- *   level?: 1 | 2 }} props
- */
-export function PageHeader({ title, subtitle, actions, breadcrumbs, badge, level = 1 }) {
-	const Heading = level === 2 ? 'h2' : 'h1';
-	return (
-		<div className="space-y-2">
-			{breadcrumbs}
-			<div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-				<div className="min-w-0 flex-auto">
-					<Heading className="flex flex-wrap items-center gap-2.5 text-page font-semibold tracking-[-0.015em] text-balance text-fg">
-						<span className="min-w-0 break-words">{title}</span>
-						{badge}
-					</Heading>
-					{subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
-				</div>
-				{actions ? <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div> : null}
+			<div className={cx(padded && (hasHeader ? 'px-5 pt-3 pb-5' : 'p-5'), !padded && hasHeader && 'pt-2', bodyClassName)}>
+				{children}
 			</div>
-		</div>
+		</Tag>
 	);
 }
 
@@ -171,23 +187,32 @@ const TONES = {
 	warning: 'border-transparent bg-warning-soft text-on-warning-soft',
 	danger: 'border-transparent bg-danger-soft text-on-danger-soft',
 	info: 'border-transparent bg-info-soft text-on-info-soft',
-};
-
-/** @type {Record<Tone, string>} */
-const DOTS = {
-	neutral: 'bg-line-strong',
-	primary: 'bg-primary',
-	success: 'bg-success',
-	warning: 'bg-warning',
-	danger: 'bg-danger',
-	info: 'bg-primary',
+	attention: 'border-transparent bg-attention-soft text-on-attention-soft',
+	new: 'border-transparent bg-new-soft text-on-new-soft',
 };
 
 /**
- * Small pill: a status `tone`, or a chip of a `kind` of thing (the accent tint; it wins over `tone`).
- * @param {{ tone?: Tone, kind?: Kind, children: ReactNode, dot?: boolean, className?: string, title?: string }} props
+ * The status dots: the brand hue of each meaning (a dot always sits beside its words).
+ * @type {Record<Tone, string>}
  */
-export function Badge({ tone = 'neutral', kind, children, dot = false, className, title }) {
+export const DOTS = Object.freeze({
+	neutral: 'bg-line-strong',
+	primary: 'bg-primary',
+	success: 'bg-success-solid',
+	warning: 'bg-warning-solid',
+	danger: 'bg-danger-solid',
+	info: 'bg-info-solid',
+	attention: 'bg-attention-solid',
+	new: 'bg-new-solid',
+});
+
+/**
+ * Small pill: a meaning `tone`, or a chip of a `kind` of thing (the accent tint; it wins over `tone`). `icon` leads it
+ * instead of the dot.
+ * @param {{ tone?: Tone, kind?: Kind, children: ReactNode, dot?: boolean, icon?: import('./icons.js').IconName,
+ *   className?: string, title?: string }} props
+ */
+export function Badge({ tone = 'neutral', kind, children, dot = false, icon, className, title }) {
 	const look = kind ? 'primary' : tone;
 	return (
 		<span
@@ -197,7 +222,11 @@ export function Badge({ tone = 'neutral', kind, children, dot = false, className
 				TONES[look],
 				className,
 			)}>
-			{dot ? <span aria-hidden="true" className={cx('size-1.5 rounded-full', DOTS[look])} /> : null}
+			{icon ? (
+				<Icon name={icon} size={12} className="shrink-0" />
+			) : dot ? (
+				<span aria-hidden="true" className={cx('size-1.5 rounded-full', DOTS[look])} />
+			) : null}
 			{children}
 		</span>
 	);
@@ -215,7 +244,7 @@ const STATUS_TONES = /** @type {Record<string, Tone>} */ ({
 	enabled: 'success',
 	pending: 'info',
 	failed: 'danger',
-	missing: 'warning',
+	missing: 'attention',
 	revoked: 'neutral',
 	expired: 'neutral',
 	disabled: 'neutral',
@@ -258,18 +287,32 @@ export function TextLink({ href, as, tone = 'accent', external = false, classNam
 	);
 }
 
-/** @typedef {'active' | 'setup' | 'off' | 'error' | 'info'} PillStatus */
+/** @typedef {'active' | 'setup' | 'off' | 'error' | 'info' | 'warning' | 'new' | 'locked'} PillStatus */
 /** @type {Record<PillStatus, Tone>} */
-const PILL_TONES = { active: 'success', setup: 'warning', off: 'neutral', error: 'danger', info: 'primary' };
+const PILL_TONES = {
+	active: 'success',
+	setup: 'attention',
+	off: 'neutral',
+	error: 'danger',
+	info: 'info',
+	warning: 'warning',
+	new: 'new',
+	locked: 'neutral',
+};
 
 /**
- * The one look of a state across the Portal and the dashboards: a pill with a dot — Active (emerald), Needs setup
- * (amber), Off (neutral), an error (rose) or a note (the accent).
+ * The one look of a state across the Portal and the dashboards: a pill with a dot — Active (green), Needs setup
+ * (orange: it needs you), Off (neutral), an error (red), a warning (yellow), a note (teal), New (pink) or Locked (a lock:
+ * only a Single Solution admin can switch it on).
  * @param {{ status: PillStatus, children: ReactNode, title?: string, className?: string }} props
  */
 export function StatusPill({ status, children, title, className }) {
 	return (
-		<Badge tone={PILL_TONES[status]} dot {...(title ? { title } : {})} {...(className ? { className } : {})}>
+		<Badge
+			tone={PILL_TONES[status]}
+			{...(status === 'locked' ? { icon: 'lock' } : { dot: true })}
+			{...(title ? { title } : {})}
+			{...(className ? { className } : {})}>
 			{children}
 		</Badge>
 	);
@@ -277,25 +320,28 @@ export function StatusPill({ status, children, title, className }) {
 
 /** @type {Record<Tone, { box: string, icon: import('./icons.js').IconName }>} */
 const CALLOUTS = {
-	neutral: { box: 'border-line-soft bg-surface-2 text-fg', icon: 'info' },
-	primary: { box: 'border-primary/15 bg-primary-soft text-on-primary-soft', icon: 'info' },
-	info: { box: 'border-primary/15 bg-info-soft text-on-info-soft', icon: 'info' },
-	success: { box: 'border-success/20 bg-success-soft text-on-success-soft', icon: 'check' },
-	warning: { box: 'border-warning/20 bg-warning-soft text-on-warning-soft', icon: 'alert' },
-	danger: { box: 'border-danger/20 bg-danger-soft text-on-danger-soft', icon: 'alert' },
+	neutral: { box: 'bg-surface-2 text-fg', icon: 'info' },
+	primary: { box: 'bg-primary-soft text-on-primary-soft', icon: 'info' },
+	info: { box: 'bg-info-soft text-on-info-soft', icon: 'info' },
+	success: { box: 'bg-success-soft text-on-success-soft', icon: 'check' },
+	warning: { box: 'bg-warning-soft text-on-warning-soft', icon: 'alert' },
+	danger: { box: 'bg-danger-soft text-on-danger-soft', icon: 'alert' },
+	attention: { box: 'bg-attention-soft text-on-attention-soft', icon: 'alert' },
+	new: { box: 'bg-new-soft text-on-new-soft', icon: 'sparkle' },
 };
 
 /**
- * Inline message box. Danger/warning callouts are announced (`role="alert"`), others are `status`. It fades in when it
- * appears (a Saved confirmation, an error).
+ * Inline message box on its meaning's soft tint (no frame): teal for tips and help, yellow for warnings, red for
+ * errors, orange for what needs the person, pink for news. Danger/warning/attention callouts are announced
+ * (`role="alert"`), others are `status`. It fades in when it appears (a Saved confirmation, an error).
  * @param {{ tone?: Tone, title?: ReactNode, children?: ReactNode, actions?: ReactNode, className?: string,
  *   live?: boolean }} props
  */
 export function Callout({ tone = 'info', title, children, actions, className, live = true }) {
 	const { box, icon } = CALLOUTS[tone];
-	const role = !live ? undefined : tone === 'danger' || tone === 'warning' ? 'alert' : 'status';
+	const role = !live ? undefined : tone === 'danger' || tone === 'warning' || tone === 'attention' ? 'alert' : 'status';
 	return (
-		<div role={role} className={cx('flex animate-ss-enter gap-2.5 rounded-card border px-3.5 py-2.5 text-sm', box, className)}>
+		<div role={role} className={cx('flex animate-ss-enter gap-2.5 rounded-card px-3.5 py-2.5 text-sm', box, className)}>
 			<span className="mt-0.5 shrink-0">
 				<Icon name={icon} size={15} />
 			</span>
@@ -309,22 +355,21 @@ export function Callout({ tone = 'info', title, children, actions, className, li
 }
 
 /**
- * Empty state (nothing here yet) with an optional call to action. The icon is neutral, or in the accent tint with a
- * `kind`.
+ * Empty state (nothing here yet) with an optional call to action: no frame, whitespace around it; its icon in the help
+ * teal (the hint of what to do), the accent tint with a `kind`, or another meaning with `tone` (a product's color).
  * @param {{ title: ReactNode, description?: ReactNode, action?: ReactNode, icon?: import('./icons.js').IconName,
- *   kind?: Kind, className?: string, compact?: boolean }} props
+ *   kind?: Kind, tone?: Tone, className?: string, compact?: boolean }} props
  */
-export function EmptyState({ title, description, action, icon = 'box', kind, className, compact = false }) {
+export function EmptyState({ title, description, action, icon = 'box', kind, tone, className, compact = false }) {
 	return (
 		<div
 			className={cx(
-				// a dashed frame on the page; inside a card (which already frames it) no second frame
-				'flex flex-col items-center justify-center rounded-card border border-dashed border-line text-center in-[.rounded-card]:border-0',
-				compact ? 'gap-2 px-4 py-6' : 'gap-3 px-6 py-10',
+				'flex flex-col items-center justify-center text-center',
+				compact ? 'gap-2 px-4 py-6' : 'gap-3 px-6 py-12',
 				className,
 			)}>
-			<span className={cx('flex size-9 items-center justify-center rounded-[10px]', kind ? ACCENT : NEUTRAL)}>
-				<Icon name={icon} size={17} />
+			<span className={cx('flex size-10 items-center justify-center rounded-xl', TINTS[tone ?? (kind ? 'primary' : 'info')])}>
+				<Icon name={icon} size={18} />
 			</span>
 			<div className="max-w-sm space-y-0.5">
 				<p className="text-sm font-medium text-fg">{title}</p>
@@ -336,19 +381,15 @@ export function EmptyState({ title, description, action, icon = 'box', kind, cla
 }
 
 /**
- * Error state of a page or section.
+ * Error state of a page or section: clean, no frame — the red alert chip, what failed, why, and the way out (Try
+ * again).
  * @param {{ title?: ReactNode, message: ReactNode, action?: ReactNode, className?: string }} props
  */
 export function ErrorState({ title = 'This could not be loaded', message, action, className }) {
 	return (
-		<div
-			role="alert"
-			className={cx(
-				'flex flex-col items-center gap-3 rounded-card border border-line-soft bg-surface px-6 py-10 text-center shadow-card',
-				className,
-			)}>
-			<span className="flex size-9 items-center justify-center rounded-[10px] bg-danger-soft text-on-danger-soft">
-				<Icon name="alert" size={17} />
+		<div role="alert" className={cx('flex flex-col items-center gap-3 px-6 py-12 text-center', className)}>
+			<span className="flex size-10 items-center justify-center rounded-xl bg-danger-soft text-danger">
+				<Icon name="alert" size={18} />
 			</span>
 			<div className="max-w-md space-y-0.5">
 				<p className="text-sm font-medium text-fg">{title}</p>
@@ -379,6 +420,36 @@ export function Skeleton({ className, lines = 1, label = 'Loading' }) {
  */
 export function SkeletonBlock({ className }) {
 	return <div aria-hidden="true" className={cx('ss-shimmer rounded-lg', className)} />;
+}
+
+/**
+ * A feature the person cannot use yet, said clearly (owner 2026-10-17): a lock, what it does, and who can switch it on
+ * (`note`, e.g. "Ask your Single Solution admin to switch it on."); an optional action (contact support). `compact`
+ * draws it as one row inside a list.
+ * @param {{ title: ReactNode, description?: ReactNode, note?: ReactNode, action?: ReactNode, compact?: boolean,
+ *   className?: string }} props
+ */
+export function LockedState({ title, description, note, action, compact = false, className }) {
+	return (
+		<div
+			className={cx(
+				'flex min-w-0',
+				compact ? 'items-start gap-3 py-2 text-left' : 'flex-col items-center gap-3 px-6 py-12 text-center',
+				className,
+			)}>
+			<span
+				aria-hidden="true"
+				className={cx('flex shrink-0 items-center justify-center bg-surface-2 text-muted', compact ? 'size-8 rounded-lg' : 'size-10 rounded-xl')}>
+				<Icon name="lock" size={compact ? 15 : 18} />
+			</span>
+			<div className={cx('min-w-0 space-y-0.5', !compact && 'max-w-md')}>
+				<p className="text-sm font-medium text-fg">{title}</p>
+				{description ? <p className="text-help text-muted">{description}</p> : null}
+				{note ? <p className="pt-0.5 text-help font-medium text-fg/80">{note}</p> : null}
+			</div>
+			{action ? <div className={compact ? 'ml-auto shrink-0' : ''}>{action}</div> : null}
+		</div>
+	);
 }
 
 /**
@@ -414,9 +485,13 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, kind, classNa
 				? 'text-warning'
 				: tone === 'success'
 					? 'text-success'
-					: 'text-muted';
+					: tone === 'attention'
+						? 'text-attention'
+						: tone === 'info'
+							? 'text-info'
+							: 'text-muted';
 	return (
-		<div className={cx('@container min-w-0 rounded-card border border-line-soft bg-surface px-5 py-4 shadow-card', className)}>
+		<div className={cx('@container min-w-0 rounded-card border border-line-soft bg-surface px-5 py-4', className)}>
 			<div className="space-y-2">
 				<div className="flex items-center gap-2">
 					{icon ? (
@@ -425,7 +500,7 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, kind, classNa
 						) : (
 							<span
 								aria-hidden="true"
-								className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-3 text-muted">
+								className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-2 text-muted">
 								<Icon name={icon} size={13} />
 							</span>
 						)
@@ -537,7 +612,7 @@ export function Stepper({ steps, current, className }) {
 						<span
 							className={cx(
 								'flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
-								state === 'done' && 'bg-success-soft text-on-success-soft',
+								state === 'done' && 'bg-success-soft text-success',
 								state === 'current' && 'bg-primary text-on-primary',
 								state === 'todo' && 'bg-surface-2 text-muted',
 							)}>
