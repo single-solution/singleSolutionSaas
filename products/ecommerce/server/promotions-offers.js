@@ -17,6 +17,7 @@ import { bundleView, checkBundleInput } from '../core/bundles.js';
 import { IMAGE_TYPES } from '../core/catalog-content.js';
 import { checkBatchInput, checkCouponInput, couponView, drawCode } from '../core/coupons.js';
 import { checkDealInput, dealView } from '../core/deals.js';
+import { IMAGE_MAX_BYTES } from '../core/limits.js';
 import { dealScore } from '../core/seo-score.js';
 import { COLLECTIONS, ID_PREFIX, isDuplicate } from '../core/model.js';
 import { deleteOffer, getOffer, insertOffers, listOffers, missingRefs, updateOffer } from '../adapters/promotions-store.js';
@@ -273,7 +274,7 @@ export const createOfferRoutes = (service) => {
 
 	/**
 	 * POST …/deals/:id/banner/upload `{ type, size }` → a presigned upload of the deal's banner under its folder
-	 * (`ecommerce/deals/<id>/`): a JPEG, PNG, WebP or AVIF image up to the catalog setting `imageMaxBytes`, as the
+	 * (`ecommerce/deals/<id>/`): a JPEG, PNG, WebP or AVIF image up to `IMAGE_MAX_BYTES`, as the
 	 * catalog's photos; then the deal is edited with `banner: { key, alt, type, size }`.
 	 * @param {any} ctx
 	 */
@@ -283,7 +284,7 @@ export const createOfferRoutes = (service) => {
 		const extension = Object.hasOwn(IMAGE_TYPES, type) ? /** @type {Record<string, string>} */ (IMAGE_TYPES)[type] : '';
 		if (!extension) return invalid('type', 'A banner is a JPEG, PNG, WebP or AVIF image.');
 		const s = await service.site(ctx);
-		const limit = Number((await s.values('catalog')).imageMaxBytes);
+		const limit = IMAGE_MAX_BYTES;
 		if (!Number.isSafeInteger(body.size) || body.size < 1 || body.size > limit)
 			return invalid('size', `A banner has at most ${limit} bytes.`);
 		const found = await getOffer(await s.data(), 'deals', String(ctx.params.id));

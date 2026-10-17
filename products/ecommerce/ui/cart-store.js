@@ -10,8 +10,7 @@ import { MAX_LINES, MAX_MEASURED, MAX_QUANTITY } from '../core/measure.js';
 import { STORAGE_KEYS } from '../core/widgets.js';
 
 /** At most this many lines, this many of one line, and this many thousandths of one measured line (a million units):
- * the system ceilings; the shop's own limits come with the widget settings ({@link createCartStore} `setLimits`) and
- * each line's with its quote. */
+ * the system ceilings; each line's own limits come with its quote. */
 export { MAX_LINES, MAX_MEASURED, MAX_QUANTITY };
 
 /** @typedef {{ productId: string, variantId: string | null, quantity: number, slot?: string, measured?: boolean }} CartLine */
@@ -55,8 +54,6 @@ const same = (a, b) => a.productId === b.productId && a.variantId === b.variantI
 export const createCartStore = ({ storage }) => {
 	/** @type {CartState} */
 	let state = { lines: [], coupon: '' };
-	/** the shop's most lines (the `checkout` setting `maxLines`) */
-	let maxLines = MAX_LINES;
 	try {
 		state = parse(storage?.getItem(STORAGE_KEYS.cart));
 	} catch {
@@ -87,7 +84,7 @@ export const createCartStore = ({ storage }) => {
 				? state.lines.map((entry) =>
 						entry === found ? { ...entry, quantity: Math.min(capOf(entry), entry.quantity + quantity) } : entry,
 					)
-				: [...state.lines, { ...line, quantity }].slice(0, Math.max(state.lines.length, maxLines));
+				: [...state.lines, { ...line, quantity }].slice(0, Math.max(state.lines.length, MAX_LINES));
 			write({ ...state, lines });
 		},
 		/**
@@ -107,13 +104,6 @@ export const createCartStore = ({ storage }) => {
 								return { ...next, quantity: Math.min(capOf(next), quantity) };
 							}),
 			}),
-		/**
-		 * The shop's limits, from the widget settings: a cart takes at most `lines` lines (lines already in it stay).
-		 * @param {{ lines?: number }} limits
-		 */
-		setLimits: ({ lines }) => {
-			maxLines = Math.max(1, Math.min(MAX_LINES, Number(lines) || MAX_LINES));
-		},
 		/** @param {string} coupon */
 		setCoupon: (coupon) => write({ ...state, coupon: coupon.trim().slice(0, 40) }),
 		clear: () => write({ lines: [], coupon: '' }),

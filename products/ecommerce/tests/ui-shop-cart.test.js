@@ -407,7 +407,6 @@ describe('cart', () => {
 				...SETTINGS,
 				checkout: {
 					...SETTINGS.checkout,
-					policyFormat: 'html',
 					// the merchant's own list, in its order, under its own titles (E27)
 					policies: [
 						{

@@ -5,7 +5,7 @@
  * from these server-token routes (PLAN 0.4.10); the docs give the snippets. Only what shoppers may see is listed (PLAN
  * 0.8.10 E1); every link follows the URL templates (E13); slugs answer `moved` for the site's 308 (E13). Product
  * JSON-LD is a ProductGroup with its variants, conditions by grade, shipping and return policy, reviews and FAQs; the
- * sitemap becomes an index of files above `sitemapSize` addresses, with images (E16). Read-only.
+ * sitemap becomes an index of files above `SITEMAP_FILE_SIZE` addresses, with images (E16). Read-only.
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
@@ -22,7 +22,8 @@ import { gradeCondition, gradesFor } from '../core/grades.js';
 import { elementsOf, typeOf, typeTree } from '../core/item-types.js';
 import { absolute } from '../core/links.js';
 import { buildLlmsFull, buildLlmsTxt, MAX_LLMS_CATEGORIES, treeOrder } from '../core/llms.js';
-import { sortDocument, topField } from '../core/catalog-query.js';
+import { sortDocument } from '../core/catalog-query.js';
+import { LLMS_TXT_PRODUCTS, SITEMAP_FILE_SIZE, TOP_FIELD } from '../core/limits.js';
 import { roleTermsOf } from '../core/role-pricing.js';
 import { COLLECTIONS, ID_PREFIX, SORTS } from '../core/model.js';
 import { daysOf } from '../core/durations.js';
@@ -89,11 +90,6 @@ import {
 
 /** At most this many images per product in structured data and sitemaps. */
 const MAX_IMAGES = 10;
-/**
- * The most addresses in one sitemap file: an entry with {@link MAX_IMAGES} photos takes up to about 3 KB, so a file
- * stays under the 50 MB search engines read (Google's sitemap limit).
- */
-const MAX_SITEMAP_FILE = 15_000;
 /** Sitemap text is sent in pieces of about this many characters. */
 const CHUNK = 16_384;
 /** Products are read in batches of this size while writing sitemaps and feeds. */
@@ -744,7 +740,7 @@ export const createSeo = (product, service) => {
 			// the categories with a product to show, in them or below them
 			filled: new Set(listed.map(String).flatMap((id) => [id, ...(paths.get(id) ?? [])])),
 			emptyIndexed: settings.emptyCategories === 'index',
-			size: Math.max(1000, Math.min(MAX_SITEMAP_FILE, Number(settings.sitemapSize) || 10_000)),
+			size: SITEMAP_FILE_SIZE,
 			sitemapUrl: String(settings.sitemapUrl),
 		};
 	};
@@ -867,7 +863,7 @@ export const createSeo = (product, service) => {
 	};
 
 	/**
-	 * GET /v1/seo/sitemap.xml: one sitemap, or an index of files above `sitemapSize` addresses, each dated by its newest
+	 * GET /v1/seo/sitemap.xml: one sitemap, or an index of files above `SITEMAP_FILE_SIZE` addresses, each dated by its newest
 	 * page (E16, G8.4).
 	 * @param {any} ctx
 	 */
@@ -1102,35 +1098,31 @@ export const createSeo = (product, service) => {
 			// the prices shoppers see after the deals that hold all day (read at the AI crawlers' own pace, as feeds are)
 			shownPrices(s, data, { allDay: true }),
 		]);
-		const count = Math.max(0, Math.min(200, Number(settings.products)));
-		const top =
-			count === 0
-				? []
-				: /** @type {ProductRecord[]} */ (
-						await data
-							.collection(COLLECTIONS.products)
-							.find(
-								{ websiteId: data.websiteId, status: 'active', ...visibleMatch(hidden) },
-								{
-									projection: {
-										_id: 0,
-										id: 1,
-										slug: 1,
-										name: 1,
-										summary: 1,
-										price: 1,
-										priceMax: 1,
-										categoryIds: 1,
-										brandId: 1,
-										// what a deal's conditions read of it, while one is live
-										...(prices.deals.length > 0 ? { variants: 1, specs: 1 } : {}),
-									},
-								},
-							)
-							.sort({ [topField((await s.values('catalog')).topBasis)]: -1, publishedAt: -1, id: 1 })
-							.limit(count)
-							.toArray()
-					);
+		const top = /** @type {ProductRecord[]} */ (
+			await data
+				.collection(COLLECTIONS.products)
+				.find(
+					{ websiteId: data.websiteId, status: 'active', ...visibleMatch(hidden) },
+					{
+						projection: {
+							_id: 0,
+							id: 1,
+							slug: 1,
+							name: 1,
+							summary: 1,
+							price: 1,
+							priceMax: 1,
+							categoryIds: 1,
+							brandId: 1,
+							// what a deal's conditions read of it, while one is live
+							...(prices.deals.length > 0 ? { variants: 1, specs: 1 } : {}),
+						},
+					},
+				)
+				.sort({ [TOP_FIELD]: -1, publishedAt: -1, id: 1 })
+				.limit(LLMS_TXT_PRODUCTS)
+				.toArray()
+		);
 		const ordered = (await shownCategories(s, data)).slice(0, MAX_LLMS_CATEGORIES);
 		const policies = settings.policies === false ? null : await policiesOf(s);
 		const text = buildLlmsTxt({
@@ -1156,7 +1148,7 @@ export const createSeo = (product, service) => {
 			policies: policies
 				? policies.policies.map((policy) => ({
 						title: policy.title,
-						text: policies.format === 'html' ? htmlToText(policy.text) : policy.text,
+						text: htmlToText(policy.text),
 					}))
 				: [],
 			headings: LLMS_HEADINGS,
@@ -1264,7 +1256,7 @@ export const createSeo = (product, service) => {
 	};
 
 	/**
-	 * GET /v1/policies and /v1/shop/policies: `{ format, policies: [{ key, title, text }] }`, the merchant's list in its
+	 * GET /v1/policies and /v1/shop/policies: `{ policies: [{ key, title, text }] }`, the merchant's list in its
 	 * order, those without text left out (E3, E27). @param {any} ctx
 	 */
 	const policies = async (ctx) => policiesOf(await service.site(ctx));
@@ -1299,7 +1291,8 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/seo/site',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'catalog',
 				rateLimit: SEO_LIMITS,
 				handler: conditional(siteSeo, service.now),
@@ -1307,7 +1300,8 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/seo/products/:ref',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'catalog',
 				rateLimit: SEO_LIMITS,
 				handler: conditional(productSeo, service.now),
@@ -1315,7 +1309,8 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/seo/categories/:ref',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'catalog',
 				rateLimit: SEO_LIMITS,
 				handler: conditional(categorySeo, service.now),
@@ -1323,7 +1318,8 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/seo/sitemap.xml',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'catalog',
 				rateLimit: SEO_LIMITS,
 				handler: sitemap,
@@ -1331,7 +1327,8 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/seo/sitemaps/:file',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'catalog',
 				rateLimit: SEO_LIMITS,
 				handler: sitemapFile,
@@ -1339,7 +1336,8 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/media',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'catalog',
 				rateLimit: SEO_LIMITS,
 				handler: mediaFile,
@@ -1347,7 +1345,8 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/feeds/products.xml',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'feeds',
 				rateLimit: SEO_LIMITS,
 				handler: googleFeed,
@@ -1355,7 +1354,8 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/feeds/products.csv',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'feeds',
 				rateLimit: SEO_LIMITS,
 				handler: metaFeed,
@@ -1363,7 +1363,8 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/llms.txt',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'llms_txt',
 				rateLimit: SEO_LIMITS,
 				handler: llmsTxt,
@@ -1371,7 +1372,8 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/llms-full.txt',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'llms_txt',
 				rateLimit: SEO_LIMITS,
 				handler: llmsFull,
@@ -1387,7 +1389,8 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/policies',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'checkout',
 				rateLimit: SEO_LIMITS,
 				handler: policies,

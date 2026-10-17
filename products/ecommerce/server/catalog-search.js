@@ -8,8 +8,8 @@
  * @module
  */
 import { brandsOf, categoriesOf } from '../adapters/catalog-store.js';
-import { SEARCH_INDEX } from '../adapters/product.js';
 import { sortDocument } from '../core/catalog-query.js';
+import { SEARCH_INDEX } from '../core/limits.js';
 import { COLLECTIONS } from '../core/model.js';
 import { namesMatching, searchStage } from '../core/search.js';
 
@@ -23,16 +23,15 @@ import { namesMatching, searchStage } from '../core/search.js';
  */
 export const createCatalogSearch = (product) => {
 	/**
-	 * Whether searches of this website go to Atlas Search: the shop's by the `catalog` setting `search`, Chat's by
-	 * `chatSearch` (`same`: as the shop; SF-13).
+	 * Whether searches of this website go to Atlas Search: by the `catalog` setting `search`, for the shop and Chat alike
+	 * (SF-13).
 	 * @param {Site} s
 	 * @param {string} q
-	 * @param {'shop' | 'chat'} [where]
 	 */
-	const useAtlas = async (s, q, where = 'shop') => {
+	const useAtlas = async (s, q) => {
 		if (q.trim() === '') return false;
-		const { search, chatSearch } = await s.values('catalog');
-		return (where === 'chat' && chatSearch && chatSearch !== 'same' ? chatSearch : search) === 'atlas';
+		const { search } = await s.values('catalog');
+		return search === 'atlas';
 	};
 
 	/**
@@ -64,10 +63,9 @@ export const createCatalogSearch = (product) => {
 	 * @returns {Promise<{ ok: true, items: any[], total: number | null, facets: any } | { ok: false }>}
 	 */
 	const run = async (s, data, q, { match, sort, skip, limit, count = false, facets = null, project = { _id: 0 } }) => {
-		const { searchIndex } = await s.values('catalog');
 		const [brands, categories] = await Promise.all([brandsOf(data), categoriesOf(data)]);
 		const stage = searchStage(q, {
-			index: String(searchIndex || SEARCH_INDEX),
+			index: SEARCH_INDEX,
 			websiteId: data.websiteId,
 			brandIds: namesMatching(q, brands),
 			categoryIds: namesMatching(q, categories),

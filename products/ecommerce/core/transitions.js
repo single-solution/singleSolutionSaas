@@ -211,8 +211,7 @@ const stockLines = (order) =>
 const hasUnits = (order) => order.lines.some((line) => (line.serials ?? []).length > 0);
 
 /**
- * An order's units no longer ordered (parity P3-10, `catalog.topBasis: ordered`: the units of orders that hold their
- * stock or were delivered): its held stock went back before delivery (a cancel, a refund before delivery, a package
+ * An order's units no longer ordered (parity P3-10: the units of orders that hold their stock or were delivered): its held stock went back before delivery (a cancel, a refund before delivery, a package
  * back from a dispatch, a delete), so its lines leave the products' `ordered` counts; delivered orders stay counted, as
  * their units sold do.
  * @param {OrderRecord} order

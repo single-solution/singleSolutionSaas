@@ -1,7 +1,7 @@
 /**
  * Landing pages by any field (PLAN 0.8.10 dynamic model phase 6, §6): a landing page names a category, a brand and a
  * facet — a grade or one value of a field shoppers filter by — automatic pages take the field `autoFacet` with
- * `category_brand_facet`, `autoMaxPages` bounds the automatic pages the sitemaps list, `landingUrl` takes `{facet}` and
+ * `category_brand_facet`, `landingUrl` takes `{facet}` and
  * `{value}`, and `GET /v1/seo/listing` reads `attr.<slug>=` as a facet.
  */
 import { createId } from '@ss/contracts';
@@ -160,12 +160,6 @@ describe('landing pages by a field (API)', () => {
 		expect(map).toContain(`${ORIGIN}/categories/${ids.chairs.slug}?brand=${ids.acme.slug}&amp;attr.color=red</loc>`);
 		expect(map).toContain(`${ORIGIN}/categories/${ids.chairs.slug}?brand=${ids.acme.slug}</loc>`);
 		expect(map).not.toContain('attr.color=blue');
-		// at most autoMaxPages automatic pages, the most products in stock first
-		await shop.setting('landing_pages', 'autoMaxPages', 1);
-		const capped = await sitemap();
-		expect(capped).toContain(`?brand=${ids.acme.slug}</loc>`);
-		expect(capped).not.toContain('attr.color=red');
-		await shop.setting('landing_pages', 'autoMaxPages', 2000);
 	});
 
 	it('stores a landing page by a field, refusing a field shoppers do not filter by', async () => {

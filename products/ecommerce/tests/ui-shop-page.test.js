@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /* global window */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { COMPARE_MAX_PRODUCTS } from '../core/limits.js';
 import { mountProductPage } from '../ui/product-page.js';
 import { axesOf, pickVariant } from '../ui/shop-page-parts.js';
 import { compareIds } from '../ui/shop-compare-store.js';
@@ -514,7 +515,7 @@ describe('product page', () => {
 				'POST /v1/shop/alerts': () => alertAnswer,
 			},
 		});
-		const host = await mountPage(fake, 'phone', { compare: { max: 1 } });
+		const host = await mountPage(fake, 'phone');
 		expect(textOf(host)).toContain(text('alerts.signIn'));
 		await click(buttonOf(host, text('page.wishlistSave')));
 		expect(textOf(host)).toContain(text('wishlist.signIn'));
@@ -548,9 +549,9 @@ describe('product page', () => {
 		await flush();
 		expect(compareIds(window)).toEqual(['prd_1']);
 		expect(buttonOf(host, text('page.compare')).getAttribute('aria-pressed')).toBe('true');
-		window.localStorage.setItem('ss-ecommerce-compare', '["prd_9"]');
+		window.localStorage.setItem('ss-ecommerce-compare', '["prd_9","prd_8","prd_7","prd_6"]');
 		await click(buttonOf(host, text('page.compare')));
-		expect(textOf(host)).toContain(text('compare.full', { max: 1 }));
+		expect(textOf(host)).toContain(text('compare.full', { max: COMPARE_MAX_PRODUCTS }));
 	});
 
 	it('finds the variant of chosen options', () => {

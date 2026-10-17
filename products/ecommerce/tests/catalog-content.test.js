@@ -459,24 +459,20 @@ describe('landing pages, search, grades, policies and llms-full', () => {
 					{ key: 'returns', title: 'Returns', text: ' {returnTime} ' },
 					{ key: 'terms', title: 'Terms', text: '' },
 				],
-				'text',
 				{
 					returnTime: { amount: 7, unit: /** @type {const} */ ('days') },
 					warrantyTime: { amount: 60, unit: /** @type {const} */ ('days') },
 					business: 'S',
 				},
 			),
-		).toEqual({
-			format: 'text',
-			policies: [{ key: 'returns', title: 'Returns', text: '7 days' }],
-		});
+		).toEqual({ policies: [{ key: 'returns', title: 'Returns', text: '7 days' }] });
 		expect(
-			fillPolicies([{ key: 'care', title: 'Care', text: '<p>{business}: {warrantyTime}</p><script>x</script>' }], 'html', {
+			fillPolicies([{ key: 'care', title: 'Care', text: '<p>{business}: {warrantyTime}</p><script>x</script>' }], {
 				returnTime: { amount: 7, unit: /** @type {const} */ ('days') },
 				warrantyTime: { amount: 2, unit: /** @type {const} */ ('months') },
 				business: 'S',
 			}),
-		).toEqual({ format: 'html', policies: [{ key: 'care', title: 'Care', text: '<p>S: 2 months</p>' }] });
+		).toEqual({ policies: [{ key: 'care', title: 'Care', text: '<p>S: 2 months</p>' }] });
 		const text = buildLlmsFull({
 			name: 'Shop',
 			description: '',

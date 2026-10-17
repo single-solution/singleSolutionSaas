@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_LINES, MAX_QUANTITY, checkCart, resolveLines } from '../core/checkout.js';
 import { BUILT_IN_TYPES, checkItemTypes, elementsOf } from '../core/item-types.js';
+import { CART_MAX_LINES, CART_MAX_QUANTITY } from '../core/limits.js';
 import { checkQuantityRule, limitsOf, quantityProblem } from '../core/measure.js';
 import checkoutSettings from '../schemas/checkout.settings.json' with { type: 'json' };
 
@@ -47,15 +48,19 @@ const line = (quantity, over = {}) =>
 	)[0];
 
 describe('quantity rules', () => {
-	it('has high system ceilings the settings lower', () => {
+	it('has a high ceiling for an item type’s most, and fixed usual limits (99 pieces, 50 lines)', () => {
 		expect(MAX_QUANTITY).toBe(100_000);
-		expect(MAX_LINES).toBe(500);
+		expect(CART_MAX_QUANTITY).toBe(99);
+		expect(MAX_LINES).toBe(CART_MAX_LINES);
+		expect(CART_MAX_LINES).toBe(50);
+		const cart = (/** @type {number} */ count) => ({
+			lines: Array.from({ length: count }, (_, i) => ({ productId: `prd_${i}` })),
+		});
+		expect(checkCart(cart(50)).ok).toBe(true);
+		expect(checkCart(cart(51))).toMatchObject({ ok: false, field: 'lines' });
+		// no setting offers them
 		const props = /** @type {any} */ (checkoutSettings).properties;
-		expect(props.maxQuantity).toMatchObject({ default: 99, maximum: 100_000 });
-		expect(props.maxLines).toMatchObject({ default: 50, maximum: 500 });
-		expect(checkCart({ lines: Array.from({ length: 120 }, (_, i) => ({ productId: `prd_${i}` })) }, { maxLines: 500 }).ok).toBe(
-			true,
-		);
+		expect([props.maxQuantity, props.maxLines]).toEqual([undefined, undefined]);
 	});
 
 	it('checks a rule in whole pieces', () => {
@@ -71,8 +76,10 @@ describe('quantity rules', () => {
 
 	it('gives the limits of a line', () => {
 		expect(limitsOf(null, null, 99)).toEqual({ step: 1, min: 1, max: 99 });
-		expect(limitsOf(null, CASES, 99)).toEqual({ step: 6, min: 12, max: 99 });
+		// an item type's own most wins, up to the ceiling; without one the usual most applies
+		expect(limitsOf(null, CASES, 99)).toEqual({ step: 6, min: 12, max: 600 });
 		expect(limitsOf(null, CASES, 1000)).toEqual({ step: 6, min: 12, max: 600 });
+		expect(limitsOf(null, { step: 6, min: 12, max: null }, 99)).toEqual({ step: 6, min: 12, max: 99 });
 		expect(limitsOf({ step: 500, min: 1000, max: null }, null, 99)).toEqual({ step: 500, min: 1000, max: 1_000_000_000 });
 		expect(quantityProblem(18, { step: 6, min: 12, max: 600 })).toBeNull();
 		expect(quantityProblem(6, { step: 6, min: 12, max: 600 })).toBe('quantity_min');
@@ -99,13 +106,16 @@ describe('quantity rules', () => {
 
 	it('holds cart lines to the rule and gives their limits', () => {
 		expect(line(18)?.problems).toEqual([]);
-		expect(line(18)?.limits).toEqual({ step: 6, min: 12, max: 99 });
+		expect(line(18)?.limits).toEqual({ step: 6, min: 12, max: 600 });
 		expect(line(6)?.problems.map((p) => p.code)).toEqual(['quantity_min']);
 		expect(line(20)?.problems.map((p) => p.code)).toEqual(['quantity_step']);
 		expect(line(120, { maxQuantity: 1000 })?.problems).toEqual([]);
 		expect(line(606, { maxQuantity: 1000 })?.problems.map((p) => p.code)).toEqual(['quantity_max']);
-		// above the shop's most: too many, not also above the item's most
-		expect(line(102)?.problems.map((p) => p.code)).toEqual(['too_many']);
+		// the item type names 600: 102 is fine; without a most of its own the usual 99 holds, as too many
+		expect(line(102)?.problems).toEqual([]);
+		expect(line(102, { quantityOf: () => ({ step: 6, min: 12, max: null }) })?.problems.map((p) => p.code)).toEqual([
+			'too_many',
+		]);
 		// without a rule: any number of pieces from 1 up to the shop's most
 		expect(line(5_000, { quantityOf: () => null, maxQuantity: 10_000 })?.problems).toEqual([]);
 		expect(line(5_000, { quantityOf: () => null, maxQuantity: 10_000 })?.limits).toEqual({ step: 1, min: 1, max: 10_000 });

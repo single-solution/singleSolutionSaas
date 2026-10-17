@@ -754,7 +754,6 @@ describe('store pickup and the widget settings', () => {
 			pickupLocations: [{ id: 'loc_shop', name: 'Main shop' }],
 			delivery: { cities: ['Springfield'] },
 			policies: [],
-			policyFormat: 'text',
 			address: { required: ['name', 'phone', 'line1', 'city'] },
 		});
 		// only what the widgets read (the features come with the config itself)
@@ -762,11 +761,9 @@ describe('store pickup and the widget settings', () => {
 			'address',
 			'delivery',
 			'guests',
-			'maxLines',
 			'paymentMethods',
 			'pickupLocations',
 			'policies',
-			'policyFormat',
 		]);
 		expect(Object.keys(config.json.settings.checkout.delivery)).toEqual(['cities']);
 	});

@@ -16,6 +16,7 @@ import { BUSINESS_VALUE } from '../server/service.js';
 import { STAFF_ALERT_EVENTS, STAFF_ALERT_LINK, STAFF_ALERT_PHONE, STAFF_ALERT_VALUES } from '../server/staff-alerts.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { GROWTH_EVENTS } from '../core/growth-events.js';
+import { SEARCH_INDEX } from '../core/limits.js';
 import { SEARCH_INDEX_DEFINITION } from '../core/search.js';
 import { SITE_ROUTES, WIDGET_ATTRIBUTES, createSnippets, mediaRoute, proxyRoute, sitemapRoute } from '../core/snippets.js';
 import { ADD_TO_CART_EVENT, WIDGET_GLOBAL } from '../core/widgets.js';
@@ -132,9 +133,10 @@ describe('createSnippets', () => {
 		expect(snippets.listingPage).toContain('SS_SERVER_TOKEN');
 	});
 
-	it('gives policy pages in text or cleaned HTML (E3)', () => {
+	it('gives policy pages in cleaned HTML (E3)', () => {
 		expect(snippets.policies).toContain(`'${BASE}/v1/policies'`);
-		expect(snippets.policies).toContain("found.format === 'html'");
+		expect(snippets.policies).toContain('dangerouslySetInnerHTML');
+		expect(snippets.policies).not.toContain('format');
 		expect(snippets.policies).toContain('warranty');
 	});
 
@@ -235,8 +237,8 @@ describe('renderDocs', () => {
 	it('gives the exact Atlas Search index and where to create it (E14)', () => {
 		const atlas = /** @type {string} */ (/<section id="atlas-search">.*?<\/section>/s.exec(html)?.[0]);
 		expect(atlas).toContain(`<pre><code>${escape(JSON.stringify(SEARCH_INDEX_DEFINITION, null, 2))}</code></pre>`);
-		expect(atlas).toContain('ss_ecommerce_products');
-		expect(atlas).toContain('searchIndex');
+		// the index has a fixed name
+		expect(atlas).toContain(`name the index ${SEARCH_INDEX} and paste`);
 		expect(atlas).toContain('lists the missing index under Needs you');
 	});
 

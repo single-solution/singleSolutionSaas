@@ -5,7 +5,7 @@
  * combination (with `category_brand_facet` also with each value of the field `autoFacet`) with enough products and
  * variants in stock is an automatic landing page without a record, its copy from the patterns `autoTitle` and
  * `autoDescription` (a stored landing page wins), in the listing reads and the sitemaps (judged on read: one aggregation
- * per facet field per read, never stored; the sitemaps list at most `autoMaxPages` of them, the most products in stock
+ * per facet field per read, never stored; the sitemaps list at most `AUTO_LANDING_MAX_PAGES` of them, the most products in stock
  * first); for the merchant's server (`/v1/landings…`, server token)
  * and the catalog admin widget (`/v1/admin/landings…`, ticket with `catalog.edit`), with AI copy suggestions (with
  * `ai_copy`). `GET /v1/seo/listing` answers the heading, title, description, introduction, FAQs, canonical address,
@@ -32,7 +32,6 @@ import {
 	sortDocument,
 	sortOf,
 	storedValues,
-	topField,
 } from '../core/catalog-query.js';
 import { lineageOf, withDescendants } from '../core/catalog-taxonomy.js';
 import {
@@ -52,6 +51,13 @@ import {
 	stockStages,
 } from '../core/landings.js';
 import { absolute, withQuery } from '../core/links.js';
+import {
+	AUTO_LANDING_MAX_PAGES,
+	AUTO_LANDING_MIN_PRODUCTS,
+	LANDING_MIN_PRODUCTS,
+	LANDING_MIN_VARIANTS,
+	TOP_FIELD,
+} from '../core/limits.js';
 import { COLLECTIONS, ID_PREFIX, MAX_PAGE_SIZE, SORTS, TOTAL_CAP, isDuplicate } from '../core/model.js';
 import {
 	asWritten,
@@ -390,25 +396,25 @@ export const createLandings = (product, service, media) => {
 
 	/**
 	 * The `landing_pages` settings that decide indexing (SG-10, E43): stored pages set to Automatic need
-	 * `landingMinProducts` products in stock, automatic ones `autoMinProducts`; while `auto` is on, both also need
-	 * `autoMinInStockVariants` variants in stock (off, stored pages are judged as before); which combinations are
-	 * automatic (`auto`, `autoFacet`) and how many the sitemaps list (`autoMaxPages`).
+	 * `LANDING_MIN_PRODUCTS` products in stock, automatic ones `AUTO_LANDING_MIN_PRODUCTS`; while `auto` is on, both also need
+	 * `LANDING_MIN_VARIANTS` variants in stock (off, stored pages are judged as before); which combinations are
+	 * automatic (`auto`, `autoFacet`) and how many the sitemaps list (`AUTO_LANDING_MAX_PAGES`).
 	 * @param {Site} s
 	 */
 	const rulesOf = async (s) => {
 		const settings = await s.values('landing_pages');
 		const mode = String(settings.auto ?? 'off');
 		const autoFacet = mode === 'category_brand_facet' ? String(settings.autoFacet ?? '') : '';
-		const minVariants = Number(settings.autoMinInStockVariants ?? 3);
+		const minVariants = LANDING_MIN_VARIANTS;
 		return {
 			settings,
 			mode,
 			autoFacet,
-			maxPages: Number(settings.autoMaxPages ?? 2000),
+			maxPages: AUTO_LANDING_MAX_PAGES,
 			/** @param {Combination} combination */
 			automatic: (combination) => isAutomatic({ auto: mode, autoFacet }, combination),
-			stored: { minProducts: Number(settings.landingMinProducts ?? 3), minVariants: mode === 'off' ? 0 : minVariants },
-			auto: { minProducts: Number(settings.autoMinProducts ?? 2), minVariants },
+			stored: { minProducts: LANDING_MIN_PRODUCTS, minVariants: mode === 'off' ? 0 : minVariants },
+			auto: { minProducts: AUTO_LANDING_MIN_PRODUCTS, minVariants },
 		};
 	};
 
@@ -616,7 +622,7 @@ export const createLandings = (product, service, media) => {
 			const sample = await data
 				.collection(COLLECTIONS.products)
 				.find(await filterOf(s, names, landing, false), { projection: { _id: 0, name: 1 } })
-				.sort({ [topField((await s.values('catalog')).topBasis)]: -1, id: 1 })
+				.sort({ [TOP_FIELD]: -1, id: 1 })
 				.limit(20)
 				.toArray();
 			const settings = await s.values('ai_copy');
@@ -732,9 +738,7 @@ export const createLandings = (product, service, media) => {
 		const exact = filters.length === 0 && named && (brand === null || brand.status !== 'hidden');
 		// the grid's order: newest first, or the sort asked for (a sorted list is not indexed, but its items are known)
 		const sortKey = String(ctx.query.sort ?? '');
-		const sorted = Object.hasOwn(SORTS, sortKey)
-			? sortOf(/** @type {keyof typeof SORTS} */ (sortKey), (await s.values('catalog')).topBasis)
-			: null;
+		const sorted = Object.hasOwn(SORTS, sortKey) ? sortOf(/** @type {keyof typeof SORTS} */ (sortKey)) : null;
 		const itemsKnown = named && filters.every((key) => key === 'sort' && sorted !== null);
 		/** @type {Combination} */
 		const combination = { categoryId: category?.id ?? null, brandId: brand?.id ?? null, facet };
@@ -1251,7 +1255,7 @@ export const createLandings = (product, service, media) => {
 				const meets = isIndexable({ indexable: 'auto' }, stock, rules.auto);
 				if (meets || memory.has(key)) candidates.push({ key, combination, stock, meets });
 			}
-			// at most autoMaxPages, the most products (then variants) in stock first, so the read stays bounded
+			// at most AUTO_LANDING_MAX_PAGES, the most products (then variants) in stock first, so the read stays bounded
 			candidates.sort(
 				(a, b) =>
 					b.stock.products - a.stock.products ||
@@ -1486,7 +1490,8 @@ export const createLandings = (product, service, media) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/seo/listing',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'catalog',
 			rateLimit: SEO_LIMITS,
 			handler: conditional(listing, service.now),
@@ -1494,7 +1499,8 @@ export const createLandings = (product, service, media) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/seo/attributes/:slug',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'landing_pages',
 			rateLimit: SEO_LIMITS,
 			handler: conditional(attributeGlossary, service.now),
@@ -1502,7 +1508,8 @@ export const createLandings = (product, service, media) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/seo/attributes/:category/:slug',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'landing_pages',
 			rateLimit: SEO_LIMITS,
 			handler: conditional(attributeGlossary, service.now),
@@ -1510,7 +1517,8 @@ export const createLandings = (product, service, media) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/seo/grades/:key',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'landing_pages',
 			rateLimit: SEO_LIMITS,
 			handler: conditional(gradeGlossary, service.now),
@@ -1518,7 +1526,8 @@ export const createLandings = (product, service, media) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/seo/grades/:category/:key',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'landing_pages',
 			rateLimit: SEO_LIMITS,
 			handler: conditional(gradeGlossary, service.now),

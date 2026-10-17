@@ -25,11 +25,11 @@ export const MAX_MEASURED = 1_000_000_000;
 export const MAX_UNIT_LABEL = 20;
 /** The most decimals a shopper may give of a unit. */
 export const MAX_DECIMALS = 3;
-/** The most pieces of one cart line (the system ceiling: the `checkout` setting `maxQuantity` and an item type's
- * quantity rule lower it, E4). */
+/** The most pieces of one cart line (the system ceiling: shoppers get `CART_MAX_QUANTITY` of limits.js unless an item
+ * type's quantity rule names a most of its own, up to this ceiling, E4). */
 export const MAX_QUANTITY = 100_000;
-/** The most lines of one cart (the system ceiling: the `checkout` setting `maxLines` lowers it, E4). */
-export const MAX_LINES = 500;
+/** The most lines of one cart (E4): `CART_MAX_LINES` of limits.js. */
+export { CART_MAX_LINES as MAX_LINES } from './limits.js';
 
 /**
  * The standard units a merchant may tie a unit to, for shopping feeds and structured data only: the UN/CEFACT common
@@ -264,7 +264,7 @@ export const toThousandths = (value) => {
 /**
  * Check the `quantity` element an item type gives: null (any number of pieces from 1) or `{ step, min, max }` in whole
  * pieces: a step from 1 to {@link MAX_QUANTITY} (default 1), the least a multiple of the step (default one step), the
- * most null (the shop's most of one item) or a multiple of the step from the least to {@link MAX_QUANTITY}.
+ * most null (the usual most of one item, `CART_MAX_QUANTITY`) or a multiple of the step from the least to {@link MAX_QUANTITY}.
  * @param {unknown} raw
  * @returns {{ ok: true, value: QuantityRule | null } | { ok: false, errors: Array<{ path: string, message: string }> }}
  */
@@ -294,8 +294,8 @@ export const checkQuantityRule = (raw) => {
 
 /**
  * The quantities a shopper may buy of an item: a measured item's step, least and most (in thousandths of its unit;
- * no most: {@link MAX_MEASURED}); else in pieces its type's quantity rule (none: from 1 in steps of 1), its most at
- * most `cap` (the shop's most of one item).
+ * no most: {@link MAX_MEASURED}); else in pieces its type's quantity rule (none: from 1 in steps of 1), its most the
+ * rule's own, else `cap` (the usual most of one item).
  * @param {Pick<Measure, 'step' | 'min' | 'max'> | null | undefined} measure
  * @param {QuantityRule | null | undefined} rule
  * @param {number} cap
@@ -304,7 +304,7 @@ export const checkQuantityRule = (raw) => {
 export const limitsOf = (measure, rule, cap) =>
 	measure
 		? { step: measure.step, min: measure.min, max: measure.max ?? MAX_MEASURED }
-		: { step: rule?.step ?? 1, min: rule?.min ?? 1, max: Math.min(cap, rule?.max ?? cap) };
+		: { step: rule?.step ?? 1, min: rule?.min ?? 1, max: rule?.max ?? cap };
 
 /**
  * Why a quantity cannot be bought: `quantity_step` (not a multiple of the step), `quantity_min` (below the least) or

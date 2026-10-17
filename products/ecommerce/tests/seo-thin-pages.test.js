@@ -5,7 +5,9 @@
  * once indexed stays indexed while it has any product (in stock or not), product `lastmod` follows content changes only
  * (never a stock change that leaves it on sale), and the sitemap lists the home page and dates the files of its index.
  */
+import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { SITEMAP_FILE_SIZE } from '../core/limits.js';
 import { COLLECTIONS } from '../core/model.js';
 import { ORIGIN, readyShop, storedAttribute, storedBrand, storedCategory } from './helpers.js';
 
@@ -27,12 +29,27 @@ beforeAll(async () => {
 			storedCategory({ id: 'cat_guide', slug: 'guide', name: 'Guide', content: { summary: LONG_TEXT, bullets: [] } }),
 		]);
 	await data.collection(COLLECTIONS.brands).insertOne(storedBrand({ id: 'brd_acme', slug: 'acme', name: 'Acme' }));
+	/** A variant in stock (an automatic landing page needs three of them, LANDING_MIN_VARIANTS). */
+	const piece = () => ({
+		id: createId('var'),
+		sku: '',
+		options: {},
+		price: 1000,
+		compareAtPrice: null,
+		cost: null,
+		stock: 10,
+		locations: {},
+		grade: null,
+		active: true,
+	});
 	for (const [index, name] of ['Lamp A', 'Lamp B', 'Lamp C'].entries())
 		await shop.seedProduct({
 			slug: name.toLowerCase().replace(' ', '-'),
 			name,
 			categoryIds: ['cat_lamps'],
 			brandId: index < 2 ? 'brd_acme' : null,
+			// Acme has three variants in stock in all: two on Lamp A, one on Lamp B
+			variants: index === 0 ? [piece(), piece()] : [piece()],
 			publishedAt: new Date(Date.UTC(2026, 9, 1 + index)),
 		});
 	await data.collection(COLLECTIONS.attributes).insertMany([
@@ -126,8 +143,6 @@ describe('listing counts and statuses', () => {
 describe('landing pages once indexed', () => {
 	it('stay indexed while they have any product, in stock or not, and leave the index once empty', async () => {
 		await shop.setting('landing_pages', 'auto', 'category_brand');
-		await shop.setting('landing_pages', 'autoMinProducts', 2);
-		await shop.setting('landing_pages', 'autoMinInStockVariants', 2);
 		const page = () => read('/v1/seo/listing?category=lamps&brand=acme').then((answer) => answer.json);
 		expect(await page()).toMatchObject({ robots: 'index, follow', landing: { automatic: true, indexed: true } });
 		const data = await shop.db();
@@ -189,10 +204,10 @@ describe('sitemap dates', () => {
 
 	it('lists the home page, and dates each file of a sitemap index by its newest page', async () => {
 		expect((await locs())[0]).toBe(`${ORIGIN}/`);
-		await shop.setting('seo', 'sitemapSize', 1000);
 		const data = await shop.db();
+		// more addresses than one file holds (SITEMAP_FILE_SIZE)
 		await data.collection(COLLECTIONS.categories).insertMany(
-			Array.from({ length: 1000 }, (_, index) =>
+			Array.from({ length: SITEMAP_FILE_SIZE }, (_, index) =>
 				storedCategory({
 					id: `cat_bulk${String(index).padStart(6, '0')}`,
 					slug: `bulk-${index}`,
@@ -210,11 +225,6 @@ describe('sitemap dates', () => {
 			`<sitemap><loc>${ORIGIN}/sitemap.xml?file=products-1</loc><lastmod>${new Date(shop.now()).toISOString()}</lastmod></sitemap>`,
 		);
 		expect((await read('/v1/seo/sitemaps/categories')).text).toContain(`<url><loc>${ORIGIN}/</loc></url>`);
-		await shop.setting('seo', 'sitemapSize', 10000);
-		// a file holds at most 15,000 addresses: with up to 10 photos each it stays under Google's 50 MB (review L9)
-		await shop.setting('seo', 'sitemapSize', 15000);
-		await expect(shop.setting('seo', 'sitemapSize', 15001)).rejects.toThrow(/422/);
-		await shop.setting('seo', 'sitemapSize', 10000);
 	}, 120_000);
 
 	it('forgets the landing pages indexed before with the catalog', async () => {

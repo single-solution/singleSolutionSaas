@@ -53,6 +53,7 @@ import {
 import { nextPreviousSlugs } from '../core/links.js';
 import { withDescendants } from '../core/catalog-taxonomy.js';
 import { staffProductOf, staffRowOf } from '../core/catalog-views.js';
+import { IMAGE_MAX_BYTES, VIDEO_MAX_BYTES } from '../core/limits.js';
 import { sameMeaning } from '../core/measure.js';
 import { COLLECTIONS, ID_PREFIX, isDuplicate } from '../core/model.js';
 import { productScore } from '../core/seo-score.js';
@@ -217,10 +218,9 @@ export const createCatalogProducts = (product, service, common) => {
 		const photos = [...new Set(fields.variants.flatMap((v) => v.media.map((file) => file.key)))].filter(
 			(key) => !known.has(key),
 		);
-		const { imageMaxBytes, videoMaxBytes } = await s.values('catalog');
 		const facts = await common.fileFacts(s, photos, {
 			types: Object.keys(IMAGE_TYPES),
-			maxBytes: Number(imageMaxBytes),
+			maxBytes: IMAGE_MAX_BYTES,
 			path: '/variants',
 			what: 'A variant photo',
 		});
@@ -233,7 +233,7 @@ export const createCatalogProducts = (product, service, common) => {
 		if (video?.kind === 'file' && !video.type) {
 			const found = await common.fileFacts(s, [video.key], {
 				types: Object.keys(VIDEO_TYPES),
-				maxBytes: Number(videoMaxBytes),
+				maxBytes: VIDEO_MAX_BYTES,
 				path: '/video/key',
 				what: 'The video',
 			});

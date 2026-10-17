@@ -9,6 +9,7 @@
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { comboKey, comboStock, isAutomatic, stockOf } from '../core/landings.js';
+import { COLLECTIONS } from '../core/model.js';
 import { AI, ORIGIN, readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
@@ -150,21 +151,25 @@ describe('automatic landing pages (E43)', () => {
 		expect(map).not.toContain(`brand=${ids.beta.slug}`);
 	});
 
-	it('takes the grades with category_brand_facet on grade and the merchant’s thresholds', async () => {
+	it('takes the grades with category_brand_facet on grade, judged by the fixed numbers (2 products, 3 variants)', async () => {
 		await shop.setting('landing_pages', 'auto', 'category_brand_facet');
 		await shop.setting('landing_pages', 'autoFacet', 'grade');
 		expect((await listing(`category=${ids.dresses.slug}&brand=${ids.alpha.slug}&grade=a`)).robots).toBe('noindex, follow');
-		await shop.setting('landing_pages', 'autoMinProducts', 1);
-		await shop.setting('landing_pages', 'autoMinInStockVariants', 2);
+		// one more Alpha dress with a grade A variant lifts grade A to 2 products and 3 variants in stock
+		const third = await shop.seedProduct({
+			categoryIds: [ids.dresses.id],
+			brandId: ids.alpha.id,
+			name: 'Alpha extra',
+			variants: [variant('a')],
+		});
 		const graded = await listing(`category=${ids.dresses.slug}&brand=${ids.alpha.slug}&grade=a`);
-		expect(graded).toMatchObject({ h1: 'Dresses Alpha Grade A', robots: 'index, follow', landing: { inStockVariants: 2 } });
+		expect(graded).toMatchObject({ h1: 'Dresses Alpha Grade A', robots: 'index, follow', landing: { inStockVariants: 3 } });
 		const map = await sitemap();
 		expect(map).toContain(pageOf(ids.dresses.slug, ids.alpha.slug, 'a'));
-		// grade b has one variant in stock
+		// grade b has one variant in stock; Beta has one product
 		expect(map).not.toContain('grade=b');
-		expect(map).toContain(pageOf(ids.dresses.slug, ids.beta.slug));
-		await shop.setting('landing_pages', 'autoMinProducts', 2);
-		await shop.setting('landing_pages', 'autoMinInStockVariants', 3);
+		expect(map).not.toContain(`brand=${ids.beta.slug}`);
+		await (await shop.db()).collection(COLLECTIONS.products).deleteOne({ websiteId: shop.websiteId, id: third.id });
 		await shop.setting('landing_pages', 'auto', 'category_brand');
 	});
 
@@ -185,14 +190,10 @@ describe('automatic landing pages (E43)', () => {
 		expect(await sitemap()).not.toContain(pageOf(ids.dresses.slug, ids.alpha.slug));
 		// Automatic: enough products and variants in stock
 		await api('PATCH', `/v1/landings/${stored.id}`, { indexable: 'auto' });
-		await shop.setting('landing_pages', 'landingMinProducts', 2);
-		expect((await api('GET', `/v1/landings/${stored.id}`)).indexed).toBe(true);
-		// once indexed, it stays indexed while it has products, below the numbers too (G7.7)
-		await shop.setting('landing_pages', 'autoMinInStockVariants', 4);
+		// the combination was indexed above (as an automatic page), so it stays indexed while it has products, below the
+		// numbers too (G7.7: three products and three variants in stock, and it has two products)
 		expect((await api('GET', `/v1/landings/${stored.id}`)).indexed).toBe(true);
 		expect((await api('GET', '/v1/landings')).items[0]).toMatchObject({ inStock: 2, inStockVariants: 3, indexed: true });
-		await shop.setting('landing_pages', 'autoMinInStockVariants', 3);
-		await shop.setting('landing_pages', 'landingMinProducts', 3);
 		await api('DELETE', `/v1/landings/${stored.id}`);
 	});
 

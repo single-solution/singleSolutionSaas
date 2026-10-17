@@ -123,9 +123,7 @@ export const createShopperLists = (_product, service, cards) => {
 	/** @param {any} ctx */
 	const compare = async (ctx) => {
 		const s = await service.site(ctx);
-		const { maxProducts } = await s.values('compare');
-		const max = Math.min(MAX_COMPARE, Math.max(2, Number(maxProducts) || MAX_COMPARE));
-		const parsed = parseCompareIds(ctx.query.ids, max);
+		const parsed = parseCompareIds(ctx.query.ids, MAX_COMPARE);
 		if (!parsed.ok) throw service.invalid('ids', parsed.message);
 		const products = await cards.activeProducts(s, parsed.ids);
 		const data = await s.data();

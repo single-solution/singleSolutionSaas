@@ -38,7 +38,8 @@ import { cardOf, cardPhotos, cardVariantsOf, pageOf, sizeOf } from '../core/cata
 import { dealProductsFilter, productDeals } from '../core/deals.js';
 import { gradesFor } from '../core/grades.js';
 import { elementsOf, typeOf, typeTree } from '../core/item-types.js';
-import { MAX_QUANTITY, limitsOf } from '../core/measure.js';
+import { CART_MAX_QUANTITY } from '../core/limits.js';
+import { limitsOf } from '../core/measure.js';
 import { COLLECTIONS, ID_PREFIX, MAX_PAGE_SIZE, TOTAL_CAP } from '../core/model.js';
 import { attributeValues } from '../core/promotions.js';
 import { createShownPrices } from './shown-prices.js';
@@ -266,7 +267,7 @@ export const createProductsPage = (product, service, common) => {
 	 *   the query read; `facets`: false leaves the facets out
 	 */
 	return async (s, data, params, { query: fixed = (read) => read, facets: withFacets = true } = {}) => {
-		const { pageSize, topBasis } = await s.values('catalog');
+		const { pageSize } = await s.values('catalog');
 		// pages by cursor like every other list (`nextCursor`, `hasMore`)
 		const page = paginate(
 			{ cursor: params.page ? null : params.cursor, limit: params.limit },
@@ -278,8 +279,8 @@ export const createProductsPage = (product, service, common) => {
 		// variants=1: each card carries its active variants, for websites that draw their own cards (SF-6)
 		const withVariants = params.variants === '1' || params.variants === 'true';
 		const { filter, resolved, brands, attributes, byCategory, lineage } = await listingFilter(s, data, query);
-		// top and sold_asc by the shop's count of top products (P3-10)
-		const sort = sortOf(query.sort, topBasis);
+		// top and sold_asc by the units sold (P3-10)
+		const sort = sortOf(query.sort);
 		const filterable = attributes.filter(
 			(attribute) => (attribute.on === 'product' || attribute.on === 'variant') && attribute.show.filter && attribute.active,
 		);
@@ -475,11 +476,7 @@ export const createCatalogShop = (product, service, common) => {
 			type,
 			slots: elements.slots,
 			measure: elements.measure,
-			limits: limitsOf(
-				elements.measure,
-				elements.quantity,
-				s.has('checkout') ? Number((await s.values('checkout')).maxQuantity) : MAX_QUANTITY,
-			),
+			limits: limitsOf(elements.measure, elements.quantity, CART_MAX_QUANTITY),
 			currency: s.currency,
 			url,
 			media: await Promise.all(item.media.map((file) => common.mediaView(s, file, item.name))),

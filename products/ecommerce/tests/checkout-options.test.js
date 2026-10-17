@@ -3,7 +3,9 @@
  * loyalty options, guest checkout with order keys, payment and delivery options, COD options, bank transfers recorded
  * by staff with the shopper's proof, and whole-unit amounts.
  */
+import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CART_MAX_LINES, CART_MAX_QUANTITY, ORDER_BURST_LIMIT, ORDER_BURST_WINDOW_MINUTES } from '../core/limits.js';
 import { COLLECTIONS } from '../core/model.js';
 import { ACCOUNTS, ORIGIN, PAYMENTS, readyShop } from './helpers.js';
 
@@ -496,28 +498,29 @@ describe('guest checkout and order keys (E21)', () => {
 		await shop.setting('checkout', 'guests', 'off');
 	});
 
-	it('stops a burst of orders at checkout.placeLimit in its window, per customer', async () => {
+	it('stops a burst of orders at ORDER_BURST_LIMIT in ORDER_BURST_WINDOW_MINUTES, per customer', async () => {
 		await shop.setting('checkout', 'guests', 'on');
-		await shop.setting('checkout', 'placeLimit', 2);
 		try {
-			const item = await shop.seedProduct({ price: 1000, stock: 20 });
+			const item = await shop.seedProduct({ price: 1000, stock: 40 });
+			const data = await shop.db();
 			const guest = (/** @type {string} */ phone) =>
 				place({ lines: [{ productId: item.id }], payment: 'cod', address: ADDRESS, customer: { name: 'Bea Burst', phone } });
-			expect((await guest('+15550007101')).status).toBe(201);
-			expect((await guest('+15550007101')).status).toBe(201);
-			const third = await guest('+1 555 000 7101');
-			expect(third.status).toBe(429);
-			expect(codeOf(third)).toBe('too_many_orders');
+			// orders that are no longer waiting do not count towards the cap of waiting orders, only towards the burst
+			const settle = () =>
+				data.collection(COLLECTIONS.orders).updateMany({ websiteId: shop.websiteId }, { $set: { role: 'open' } });
+			for (let i = 0; i < ORDER_BURST_LIMIT; i += 1) {
+				expect((await guest('+15550007101')).status).toBe(201);
+				await settle();
+			}
+			const burst = await guest('+1 555 000 7101');
+			expect(burst.status).toBe(429);
+			expect(codeOf(burst)).toBe('too_many_orders');
 			// another customer is not held up, and the window passes
 			expect((await guest('+15550007102')).status).toBe(201);
-			shop.advance(15 * 60_000 + 1);
+			await settle();
+			shop.advance(ORDER_BURST_WINDOW_MINUTES * 60_000 + 1);
 			expect((await guest('+15550007101')).status).toBe(201);
-			// the window is the merchant's (E39): an hour still counts the orders of 15 minutes ago
-			await shop.setting('checkout', 'placeWindowMinutes', 60);
-			expect((await guest('+15550007101')).status).toBe(429);
 		} finally {
-			await shop.setting('checkout', 'placeWindowMinutes', 15);
-			await shop.setting('checkout', 'placeLimit', 0);
 			await shop.setting('checkout', 'guests', 'off');
 		}
 	});
@@ -767,21 +770,22 @@ describe('payment, delivery and COD options (E22, E23)', () => {
 	});
 
 	it('limits lines and quantities and sends the shopper to the store’s own success page', async () => {
-		await shop.setting('checkout', 'maxQuantity', 3);
 		await shop.setting('checkout', 'successUrl', `${ORIGIN}/thanks/{number}`);
-		const item = await shop.seedProduct({ price: 1000, stock: 10 });
+		const item = await shop.seedProduct({ price: 1000, stock: 200 });
 		const shopper = await newShopper();
+		// 99 of one item (CART_MAX_QUANTITY) and 50 lines (CART_MAX_LINES) at most
 		const tooMany = await place(
-			{ lines: [{ productId: item.id, quantity: 4 }], payment: 'cod', address: ADDRESS },
+			{ lines: [{ productId: item.id, quantity: CART_MAX_QUANTITY + 1 }], payment: 'cod', address: ADDRESS },
 			shopper.token,
 		);
 		expect(tooMany.status).toBe(422);
+		const lines = Array.from({ length: CART_MAX_LINES + 1 }, () => ({ productId: item.id, variantId: createId('var') }));
+		expect((await place({ lines, payment: 'cod', address: ADDRESS }, shopper.token)).status).toBe(422);
 		const placed = await place(
-			{ lines: [{ productId: item.id, quantity: 3 }], payment: 'cod', address: ADDRESS },
+			{ lines: [{ productId: item.id, quantity: CART_MAX_QUANTITY }], payment: 'cod', address: ADDRESS },
 			shopper.token,
 		);
 		expect(placed.json.next).toEqual({ kind: 'done', url: `${ORIGIN}/thanks/${placed.json.order.number}` });
-		await shop.setting('checkout', 'maxQuantity', 99);
 		await shop.setting('checkout', 'successUrl', '');
 	});
 });
@@ -802,6 +806,36 @@ describe('the way back from Payments (E22)', () => {
 		);
 		expect(create.returnUrl).toBe(`${ORIGIN}/?ss_order=${placed.json.order.id}`);
 		expect(create.cancelUrl).toBe(create.returnUrl);
+	});
+
+	it('ends the checkout at Payments when the order’s time to pay ends: one timer (expiresAt)', async () => {
+		/** @param {string} id */
+		const created = async (id) => {
+			const record = await orderRecord(id);
+			const body = shop
+				.callsTo(PAYMENTS)
+				.filter((c) => c.path === '/v1/payments')
+				.map((c) => JSON.parse(String(c.body)))
+				.find((each) => each.metadata?.orderId === id);
+			return { record, body };
+		};
+		const item = await shop.seedProduct({ price: 1000, stock: 10 });
+		const shopper = await newShopper();
+		const placed = await place({ lines: [{ productId: item.id }], payment: 'online', address: ADDRESS }, shopper.token);
+		const { record, body } = await created(placed.json.order.id);
+		// the order's time to pay (60 minutes by default) is the checkout's end
+		expect(record.holdUntil).toBeInstanceOf(Date);
+		expect(body.expiresAt).toBe(record.holdUntil.toISOString());
+		// the default time to pay is 60 minutes, counted from the moment the order was made
+		expect(Math.abs(Date.parse(body.expiresAt) - Date.parse(record.placedAt) - 60 * 60_000)).toBeLessThan(1000);
+		// an order with no time to pay (0 = never canceled) leaves the end to Payments' own setting
+		await shop.setting('checkout', 'paymentWindowMinutes', 0);
+		try {
+			const second = await place({ lines: [{ productId: item.id }], payment: 'online', address: ADDRESS }, shopper.token);
+			expect((await created(second.json.order.id)).body).not.toHaveProperty('expiresAt');
+		} finally {
+			await shop.setting('checkout', 'paymentWindowMinutes', 60);
+		}
 	});
 });
 

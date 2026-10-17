@@ -2,10 +2,10 @@
  * Landing pages (PLAN 0.8.10 E15, dynamic model §6): a category, a brand and a facet — one value of a field shoppers
  * filter by: a grade or a product or variant field by its slug — (at least one of them) with its own heading, title,
  * description, introduction and FAQs, indexed by search engines as `indexable` says (`auto`: while at least
- * `landingMinProducts` of its products and `autoMinInStockVariants` of their variants are in stock, judged on read;
+ * `LANDING_MIN_PRODUCTS` of its products and `LANDING_MIN_VARIANTS` of their variants are in stock, judged on read;
  * SG-10). Automatic landing pages (E43, the `landing_pages` setting `auto`): every category and brand combination (with
- * `category_brand_facet` also with each value of the field `autoFacet`) with at least `autoMinProducts` products and
- * `autoMinInStockVariants` variants in stock is a landing page without a stored record (a stored one wins). Its address
+ * `category_brand_facet` also with each value of the field `autoFacet`) with at least `AUTO_LANDING_MIN_PRODUCTS` products and
+ * `LANDING_MIN_VARIANTS` variants in stock is a landing page without a stored record (a stored one wins). Its address
  * is the `landing_pages` setting `landingUrl` with `{categoryUrl}`, `{category}`, `{brand}`, `{facet}` (the listing
  * parameter: `grade` or `attr.<slug>`) and `{value}`; query pairs with an empty name or value are left out. No I/O.
  * @module
@@ -128,8 +128,8 @@ export const NO_STOCK = Object.freeze({ products: 0, variants: 0, minPrice: null
  * any product (G7.7, the route remembers it).
  * @param {Pick<LandingRecord, 'indexable'>} landing
  * @param {Pick<ComboStock, 'products' | 'variants'>} stock
- * @param {{ minProducts: number, minVariants: number }} minimum the `landingMinProducts` (stored pages) or
- *   `autoMinProducts` (automatic ones) and `autoMinInStockVariants` settings
+ * @param {{ minProducts: number, minVariants: number }} minimum the `LANDING_MIN_PRODUCTS` (stored pages) or
+ *   `AUTO_LANDING_MIN_PRODUCTS` (automatic ones) and `LANDING_MIN_VARIANTS` settings
  */
 export const isIndexable = (landing, stock, { minProducts, minVariants }) =>
 	landing.indexable === 'yes' ||

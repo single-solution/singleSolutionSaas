@@ -10,6 +10,7 @@
 import { DEFAULT_FORMAT, element, formatDate, formatMoney, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
 import { CONTACT_LINK, RICH_DROPPED, RICH_SYNONYMS, RICH_TAGS } from '../core/catalog-content.js';
 import { GUEST_IDENTITIES } from '../core/guests.js';
+import { COMPARE_MAX_PRODUCTS, RETURN_PHOTO_MAX_MB } from '../core/limits.js';
 import { MAX_PAGE_SIZE } from '../core/model.js';
 import { fromDecimal, isCurrency, toDecimal } from '@ss/app-kit/widget';
 import { SHOP_CSS } from './shop-styles.js';
@@ -88,8 +89,6 @@ export const settingsOf = (config) => {
 						)
 					: []
 			),
-			/** policies are HTML (cleaned by the server) or plain text (E3) */
-			policyFormat: checkout.policyFormat === 'html' ? 'html' : 'text',
 			/** how a shopper orders without signing in (E21): the contact guests check out by; null while guests sign in */
 			guests: guestsOf(checkout.guests),
 			address: {
@@ -105,9 +104,9 @@ export const settingsOf = (config) => {
 		},
 		returns: {
 			maxPhotos: Number(raw.returns?.maxPhotos ?? 0),
-			photoMaxMb: Number(raw.returns?.photoMaxMb ?? 5),
+			photoMaxMb: RETURN_PHOTO_MAX_MB,
 		},
-		compare: { max: Number(raw.compare?.max) || 4 },
+		compare: { max: COMPARE_MAX_PRODUCTS },
 		/** reviews per product (the product page's form) or per item bought (the order page's, E34), and the page size */
 		reviews: {
 			per: raw.reviews?.per === 'order_line' ? 'order_line' : 'product',

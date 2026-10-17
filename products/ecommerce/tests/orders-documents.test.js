@@ -7,7 +7,7 @@ import { DEFAULT_FORMAT } from '@ss/contracts/format';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	DEFAULT_COLUMNS,
-	INVOICE_TEXTS,
+	INVOICE_LABELS,
 	documentWordsOf,
 	invoiceColumnsOf,
 	invoiceHtml,
@@ -195,10 +195,10 @@ describe('printable documents', () => {
 		expect((await shop.api('GET', '/v1/orders/ord_missing/packing-slip')).status).toBe(404);
 	});
 
-	it('uses the merchant’s texts', async () => {
+	it('uses the merchant’s titles and footer, and the website’s texts for the labels', async () => {
 		await shop.setting('invoices', 'title', 'Tax invoice');
 		await shop.setting('invoices', 'footer', 'Thank you!\nReturns within 14 days.');
-		await shop.setting('invoices', 'labelBalance', 'Still to pay');
+		await shop.text('invoice.balance', 'Still to pay');
 		try {
 			const order = await seed(orderOf());
 			const html = (await shop.api('GET', `/v1/orders/${order.id}/invoice`)).text;
@@ -208,6 +208,7 @@ describe('printable documents', () => {
 		} finally {
 			await shop.setting('invoices', 'title', 'Invoice');
 			await shop.setting('invoices', 'footer', '');
+			await shop.text('invoice.balance', strings['invoice.balance']);
 		}
 	});
 
@@ -268,7 +269,7 @@ describe('document parts', () => {
 				checkedAt: null,
 			},
 		});
-		const texts = invoiceTexts({ title: '', labelTotal: 'Sum', footer: '', other: 1 });
+		const texts = invoiceTexts({ title: '', footer: '', other: 1 }, { ...strings, 'invoice.total': 'Sum' });
 		expect(texts.title).toBe('Invoice');
 		expect(texts.labelTotal).toBe('Sum');
 		const html = invoiceHtml(order, { business, texts, ...context });
@@ -304,7 +305,9 @@ describe('document parts', () => {
 		expect(formatted).toContain('4 oct. 2026');
 		expect(formatted).toContain('10 $ US');
 		expect(formatted).toContain('−3 $ US');
-		expect(Object.keys(INVOICE_TEXTS)).toContain('labelSerials');
+		expect(Object.keys(INVOICE_LABELS)).toContain('labelSerials');
+		// every label is a text with its words in strings/en.json, the website's to edit in Texts
+		for (const key of Object.values(INVOICE_LABELS)) expect(typeof (/** @type {any} */ (strings)[key])).toBe('string');
 	});
 
 	it('prints the columns the merchant chose, field columns and the seller details with placeholders (E26)', () => {
@@ -337,7 +340,10 @@ describe('document parts', () => {
 			},
 		};
 		expect(context.columns).toEqual(['item', 'field.hs-code', 'sku', 'quantity', 'tax', 'amount']);
-		const texts = invoiceTexts({ sellerDetails: 'VAT GB123 · {business}', footer: 'Order {number}, PO {field.po} {other}' });
+		const texts = invoiceTexts(
+			{ sellerDetails: 'VAT GB123 · {business}', footer: 'Order {number}, PO {field.po} {other}' },
+			strings,
+		);
 		const html = invoiceHtml(order, { business, texts, ...context });
 		expect(html).toContain('<th>Item</th><th>HS code</th><th>SKU</th><th class="num">Qty</th><th class="num">Tax</th>');
 		expect(html).toContain('<td>8517.13</td>');

@@ -248,8 +248,8 @@ describe('E15 landing pages, listing heads and glossary pages', () => {
 			indexed: false,
 		});
 		expect((await shop.api('POST', '/v1/landings', { categoryId: ids.phones.id, brandId: ids.acme.id })).status).toBe(409);
-		await shop.setting('landing_pages', 'landingMinProducts', 1);
-		expect((await api('GET', `/v1/landings/${landing.id}`)).indexed).toBe(true);
+		// automatic needs three products in stock (it has one); the merchant can index it anyway
+		expect((await api('PATCH', `/v1/landings/${landing.id}`, { indexable: 'yes' })).indexed).toBe(true);
 		const graded = await api('POST', '/v1/landings', {
 			facet: { field: 'grade', value: 'mint' },
 			indexable: 'yes',

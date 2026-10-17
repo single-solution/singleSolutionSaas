@@ -5,6 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { cleanHtml, htmlToText } from '../core/catalog-content.js';
+import { SEARCH_INDEX } from '../core/limits.js';
 import { fillPolicies } from '../core/policies.js';
 import { resolveSizeChart } from '../core/size-charts.js';
 import { createCatalogSearch } from '../server/catalog-search.js';
@@ -42,16 +43,15 @@ describe('rich text, policies and size charts (core)', () => {
 					text: '{{returnTime}}, {warrantyTime} at {business}. {email} {phone} {address} {deliveryFee} {freeDeliveryOver} {other} {{other}}',
 				},
 			],
-			'text',
 			values,
 		);
 		expect(text.policies[0]?.text).toBe(
-			'14 days, 6 months at A & B. help@shop.example.com +1 202 555 0143 1 Main St $250 $5,000 {other} {{other}}',
+			'14 days, 6 months at A &#38; B. help@shop.example.com +1 202 555 0143 1 Main St $250 $5,000 {other} {{other}}',
 		);
-		const html = fillPolicies([{ key: 'terms', title: 'T', text: '<h2>{{business}}</h2><p>{phone}</p>' }], 'html', values);
+		const html = fillPolicies([{ key: 'terms', title: 'T', text: '<h2>{{business}}</h2><p>{phone}</p>' }], values);
 		expect(html.policies[0]?.text).toBe('<h2>A &#38; B</h2><p>+1 202 555 0143</p>');
 		expect(
-			fillPolicies([{ key: 'privacy', title: 'P', text: '{email}' }], undefined, {
+			fillPolicies([{ key: 'privacy', title: 'P', text: '{email}' }], {
 				returnTime: { amount: 0, unit: /** @type {const} */ ('days') },
 				warrantyTime: { amount: 0, unit: /** @type {const} */ ('days') },
 				business: 'S',
@@ -97,7 +97,7 @@ describe('Atlas Search that finds nothing (SF-7)', () => {
 						}
 					: empty,
 		});
-		const site = /** @type {any} */ ({ websiteId: 'web_1', values: async () => ({ searchIndex: 'idx' }), ctx: {} });
+		const site = /** @type {any} */ ({ websiteId: 'web_1', values: async () => ({}), ctx: {} });
 		const search = createCatalogSearch(product);
 		/** @param {number} [skip] */
 		const run = (skip = 0) => search.run(site, data, 'lamp', { match: { websiteId: 'web_1' }, sort: null, skip, limit: 10 });
@@ -110,7 +110,7 @@ describe('Atlas Search that finds nothing (SF-7)', () => {
 		expect(states).toEqual([['web_1', true, 'the index found no product (missing, misnamed or still building)']]);
 		expect(pipelines[1]?.[0]).toEqual({
 			$search: {
-				index: 'idx',
+				index: SEARCH_INDEX,
 				compound: {
 					filter: [{ equals: { path: 'websiteId', value: 'web_1' } }, { equals: { path: 'status', value: 'active' } }],
 				},
@@ -190,7 +190,6 @@ describe('storefront reads through the API', () => {
 				rates: [{ key: 'standard', name: 'Standard', price: 25_000, freeOver: 1_000_000 }],
 			},
 		]);
-		await shop.setting('checkout', 'policyFormat', 'html');
 		await shop.list('policies', [
 			{
 				key: 'returns',
@@ -199,7 +198,6 @@ describe('storefront reads through the API', () => {
 			},
 		]);
 		const answer = await api('GET', '/v1/policies');
-		expect(answer.format).toBe('html');
 		expect(answer.policies[0].text).toBe(
 			'<h2>Returns</h2><p>14 days. Delivery USD 250.00, free from USD 10,000.00. <a href="mailto:hello@shop.example.com">Write</a></p>',
 		);

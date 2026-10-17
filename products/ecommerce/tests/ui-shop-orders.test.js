@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /* global window */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { RETURN_PHOTO_MAX_MB } from '../core/limits.js';
 import { mountMyOrders } from '../ui/my-orders.js';
 import {
 	$,
@@ -817,7 +818,7 @@ describe('returns', () => {
 			'POST /v1/shop/returns': () => claimAnswer,
 		});
 		const put = vi.spyOn(window, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
-		const host = await mountOrders(fake, { returns: { maxPhotos: 1, photoMaxMb: 1 } });
+		const host = await mountOrders(fake, { returns: { maxPhotos: 1 } });
 		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
 		await click(buttonOf(host, text('orders.claim')));
 		const form = () => $(host, 'form.box');
@@ -836,7 +837,7 @@ describe('returns', () => {
 		expect(textOf(host)).toContain(text('returns.tooManyPhotos', { max: 1 }));
 		Object.defineProperty(photos, 'files', { configurable: true, value: [gif] });
 		await submit(form());
-		expect(textOf(host)).toContain(text('returns.photoInvalid', { mb: 1 }));
+		expect(textOf(host)).toContain(text('returns.photoInvalid', { mb: RETURN_PHOTO_MAX_MB }));
 		Object.defineProperty(photos, 'files', { configurable: true, value: [png] });
 		await submit(form());
 		expect(textOf(host)).toContain(text('returns.problem.storage_not_connected'));

@@ -2,18 +2,6 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
-		"landingMinProducts": {
-			"type": "integer",
-			"title": "Products in stock to index",
-			"description": "A landing page set to Automatic is indexed by search engines while at least this many of its products are in stock (and, while Automatic landing pages is on, at least In-stock variants to index of their variants).",
-			"default": 3,
-			"minimum": 1,
-			"maximum": 1000,
-			"x-ui": {
-				"group": "Landing pages",
-				"order": 2
-			}
-		},
 		"landingUrl": {
 			"type": "string",
 			"title": "Landing page address",
@@ -45,45 +33,6 @@
 			"x-ui": {
 				"group": "Automatic pages",
 				"order": 12
-			}
-		},
-		"autoMaxPages": {
-			"type": "integer",
-			"title": "Most automatic pages in the sitemaps",
-			"description": "At most this many automatic landing pages are listed in the sitemaps, those with the most products in stock first, so each read stays light on a small database.",
-			"default": 2000,
-			"minimum": 1,
-			"maximum": 2000,
-			"x-ui": {
-				"group": "Automatic pages",
-				"order": 15,
-				"advanced": true
-			}
-		},
-		"autoMinProducts": {
-			"type": "integer",
-			"title": "Products in stock for an automatic page",
-			"description": "An automatic landing page exists while at least this many of its products are in stock. A landing page you create for such a category and brand (and facet value), set to Automatic, is indexed from the lower of this and Products in stock to index.",
-			"default": 2,
-			"minimum": 1,
-			"maximum": 1000,
-			"x-ui": {
-				"group": "Automatic pages",
-				"order": 13,
-				"advanced": true
-			}
-		},
-		"autoMinInStockVariants": {
-			"type": "integer",
-			"title": "In-stock variants to index",
-			"description": "An automatic landing page is indexed only while at least this many variants of its products are in stock; while Automatic landing pages is on, so is a landing page you create set to Automatic.",
-			"default": 3,
-			"minimum": 1,
-			"maximum": 100000,
-			"x-ui": {
-				"group": "Automatic pages",
-				"order": 14,
-				"advanced": true
 			}
 		},
 		"autoCopy": {

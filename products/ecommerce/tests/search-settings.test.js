@@ -1,6 +1,6 @@
 /**
  * Search settings of the re-audit (SF-10, SF-13): the shop's basic search matches every word (default) or the whole
- * phrase; Chat searches as the shop (default), or with its own mode.
+ * phrase; Chat searches as the shop does.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { searchFilter } from '../core/catalog-query.js';
@@ -19,17 +19,13 @@ describe('search modes (core)', () => {
 		expect(searchFilter(' ', 'phrase')).toBeNull();
 	});
 
-	it('sends Chat to Atlas by its own setting, else as the shop (SF-13)', async () => {
+	it('searches the shop and Chat alike: with Atlas when the setting says so and there is something to search (SF-13)', async () => {
 		const search = createCatalogSearch(/** @type {any} */ ({}));
 		/** @param {Record<string, string>} catalog */
 		const site = (catalog) => /** @type {any} */ ({ values: async () => catalog });
-		expect(await search.useAtlas(site({ search: 'atlas', chatSearch: 'same' }), 'lamp', 'chat')).toBe(true);
-		expect(await search.useAtlas(site({ search: 'atlas', chatSearch: 'basic' }), 'lamp', 'chat')).toBe(false);
-		expect(await search.useAtlas(site({ search: 'atlas', chatSearch: 'basic' }), 'lamp')).toBe(true);
-		expect(await search.useAtlas(site({ search: 'basic', chatSearch: 'atlas' }), 'lamp', 'chat')).toBe(true);
-		expect(await search.useAtlas(site({ search: 'basic', chatSearch: 'atlas' }), 'lamp', 'shop')).toBe(false);
-		expect(await search.useAtlas(site({ search: 'atlas' }), 'lamp', 'chat')).toBe(true);
-		expect(await search.useAtlas(site({ search: 'atlas' }), '  ', 'chat')).toBe(false);
+		expect(await search.useAtlas(site({ search: 'atlas' }), 'lamp')).toBe(true);
+		expect(await search.useAtlas(site({ search: 'basic' }), 'lamp')).toBe(false);
+		expect(await search.useAtlas(site({ search: 'atlas' }), '  ')).toBe(false);
 	});
 });
 
@@ -64,14 +60,13 @@ describe('search settings through the API', () => {
 		await shop.setting('catalog', 'searchMatch', 'words');
 	});
 
-	it('shows the index on Overview when only Chat uses Atlas, and Chat answers with the basic search (SF-13)', async () => {
+	it('shows the index on Overview when Atlas is on, and Chat answers with the basic search when it finds nothing (SF-13)', async () => {
 		const owner = await shop.adminSession();
 		const path = `/v1/dashboard/websites/${shop.websiteId}/search-index`;
 		expect((await shop.dashboard(owner, 'GET', path)).json.search).toBe('basic');
-		await shop.setting('catalog', 'chatSearch', 'atlas');
-		expect((await shop.dashboard(owner, 'GET', path)).json.search).toBe('atlas');
-		expect((await shop.visitor('GET', '/v1/shop/products?q=ipad')).json.items).toHaveLength(1);
 		expect(await shop.product.searchState.get(shop.websiteId)).toBeNull();
+		await shop.setting('catalog', 'search', 'atlas');
+		expect((await shop.dashboard(owner, 'GET', path)).json.search).toBe('atlas');
 		const chat = await shop.api('GET', '/v1/chat/products?q=ipad');
 		expect(chat.json.items.map((/** @type {any} */ item) => item.name)).toEqual(['iPad Pro 13-inch']);
 		expect(await shop.product.searchState.get(shop.websiteId)).toMatchObject({ missing: true });

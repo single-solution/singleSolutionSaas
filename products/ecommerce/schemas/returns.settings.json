@@ -94,18 +94,6 @@
 				"order": 23
 			}
 		},
-		"photoMaxMb": {
-			"type": "integer",
-			"title": "Largest photo (MB)",
-			"default": 5,
-			"minimum": 1,
-			"maximum": 20,
-			"x-ui": {
-				"group": "Claims",
-				"order": 24,
-				"advanced": true
-			}
-		},
 		"reasons": {
 			"type": "array",
 			"title": "Reasons",

@@ -7,7 +7,6 @@
  * @module
  */
 import { guestRules } from '../core/guests.js';
-import { MAX_COMPARE } from '../core/model.js';
 import { createAlerts } from './extras-alerts.js';
 import { createCards } from './extras-cards.js';
 import { createReports } from './extras-reports.js';
@@ -55,8 +54,8 @@ export const createExtras = (product, service) => {
 			/** @type {Record<string, unknown>} */
 			const settings = {};
 			if (s.has('returns')) {
-				const { maxPhotos, photoMaxMb } = await s.values('returns');
-				settings.returns = { maxPhotos: Number(maxPhotos), photoMaxMb: Number(photoMaxMb) };
+				const { maxPhotos } = await s.values('returns');
+				settings.returns = { maxPhotos: Number(maxPhotos) };
 			}
 			if (s.has('reviews')) {
 				const { per, pageSize } = await s.values('reviews');
@@ -76,10 +75,6 @@ export const createExtras = (product, service) => {
 				// what a guest gives: the contact guests are known by (checkout.guestIdentity, E15)
 				const contact = guestRules(await s.values('checkout')).identity;
 				settings.alerts = { guests: guests === true, targetPrice: targetPrice === true, contact };
-			}
-			if (s.has('compare')) {
-				const { maxProducts } = await s.values('compare');
-				settings.compare = { max: Math.min(MAX_COMPARE, Math.max(2, Number(maxProducts) || MAX_COMPARE)) };
 			}
 			return settings;
 		},

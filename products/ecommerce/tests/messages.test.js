@@ -11,6 +11,7 @@ import declaration from '../schemas/messages.json' with { type: 'json' };
 import guide from '../docs/guide.json' with { type: 'json' };
 import { STOCK_ALERT_VALUES } from '../server/extras-alerts.js';
 import { RETURN_MESSAGE_VALUES } from '../server/extras-returns.js';
+import { STAFF_ALERT_MAX_RECIPIENTS } from '../core/limits.js';
 import { COLLECTIONS } from '../core/model.js';
 import { ORDER_MESSAGE_VALUES, ORDER_TEMPLATES } from '../server/order-messages.js';
 import { BUSINESS_VALUE } from '../server/service.js';
@@ -255,18 +256,20 @@ describe('Ecommerce’s messages and their defaults (parity P1)', () => {
 				.find({ websiteId: shop.websiteId, template: 'ecommerce.staff_placed' })
 				.toArray();
 			expect(stuck).toEqual([]);
-			// the limit is a setting: the list first
-			await shop.setting('staff_alerts', 'maxRecipients', 2);
+			// the limit is fixed (STAFF_ALERT_MAX_RECIPIENTS people): the list first
+			await shop.setting(
+				'staff_alerts',
+				'recipients',
+				Array.from({ length: STAFF_ALERT_MAX_RECIPIENTS + 5 }, (_, index) => `person${index}@shop.example.com`),
+			);
 			const limited = shop.messages().length;
 			await placeOrder();
 			expect(
 				shop
 					.messages()
 					.slice(limited)
-					.filter((message) => message.template === 'ecommerce.staff_placed')
-					.map((m) => m.channel),
-			).toEqual(['email', 'whatsapp']);
-			await shop.setting('staff_alerts', 'maxRecipients', 100);
+					.filter((message) => message.template === 'ecommerce.staff_placed'),
+			).toHaveLength(STAFF_ALERT_MAX_RECIPIENTS);
 			await shop.setting('staff_alerts', 'staffPush', false);
 			await shop.setting('staff_alerts', 'staffPermission', '');
 			await shop.setting('staff_alerts', 'recipients', ['team@shop.example.com']);

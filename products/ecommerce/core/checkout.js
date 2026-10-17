@@ -18,6 +18,7 @@
 import { normalizePhone } from '@ss/contracts/phone';
 import { addressProblem, countryCodeOf, countryName, tidyPostcode } from '@ss/contracts/address';
 import { ADDRESS_LIMITS, placeKey, regionsFor } from './address.js';
+import { CART_MAX_QUANTITY } from './limits.js';
 import { MAX_LINES, MAX_MEASURED, MAX_QUANTITY, grossFits, limitsOf, lineGross, piecesOf, quantityProblem } from './measure.js';
 import { allocateUnits, roundHalfUp } from './money.js';
 import { isAmount } from '@ss/contracts/format';
@@ -32,10 +33,9 @@ import { taxOf, taxPercent } from './taxes.js';
 /** @typedef {import('./taxes.js').TaxRule} TaxRule */
 /** @typedef {import('./guests.js').PhoneRules} PhoneRules */
 
-/** At most this many lines in a cart, and this many pieces of one line (`core/measure.js`; the `checkout` settings
- * `maxLines` and `maxQuantity` lower them, E4, and the cart widget reads them). A line's quantity keeps to its item
- * type's step, least and most: a measured line's in thousandths of its unit (a measured line is one piece), else its
- * quantity rule's in pieces. */
+/** At most this many lines in a cart (`CART_MAX_LINES`), and this many pieces of one line (`core/measure.js`; E4). A
+ * line's quantity keeps to its item type's step, least and most: a measured line's in thousandths of its unit (a
+ * measured line is one piece), else its quantity rule's in pieces (no most: `CART_MAX_QUANTITY`). */
 export { MAX_LINES, MAX_QUANTITY };
 /** A deal lock's longest text (`adapters/crypto.js`). */
 const MAX_LOCK = 600;
@@ -80,11 +80,10 @@ const text = (value, max) => {
  * item sold in a unit of its own; the most of one item is checked when the lines are read against the catalog
  * ({@link resolveLines}, which knows which items are measured).
  * @param {unknown} body
- * @param {{ maxLines?: number }} [limits] the `checkout` settings (E22)
  * @returns {{ ok: true, value: CartInput } | InputError}
  */
-export const checkCart = (body, { maxLines = MAX_LINES } = {}) => {
-	const lineCap = Math.min(MAX_LINES, Math.max(1, maxLines));
+export const checkCart = (body) => {
+	const lineCap = MAX_LINES;
 	const input = isObject(body) ? /** @type {Record<string, unknown>} */ (body) : {};
 	const lines = input.lines;
 	if (!Array.isArray(lines) || lines.length === 0 || lines.length > lineCap)
@@ -363,7 +362,8 @@ const problemOf = (code) => ({ code, message: PROBLEM_TEXT[code] ?? code });
  *   (its item type's `measure`, whatever the feature: its stock is counted in it); none: in pieces
  * @param {(product: ProductRecord) => import('./measure.js').QuantityRule | null} [context.quantityOf] the quantity
  *   rule of an item counted in pieces (its item type's `quantity`, E4); none: from 1 in steps of 1
- * @param {number} [context.maxQuantity] the most pieces of one item (the `checkout` setting `maxQuantity`, E4)
+ * @param {number} [context.maxQuantity] the most pieces of one item without a quantity rule of its own (default
+ *   `CART_MAX_QUANTITY`, E4)
  * @param {number} [context.unit] whole units (E25): what a measured line comes to rounds to them
  * @returns {ResolvedLine[]}
  */
@@ -380,7 +380,7 @@ export const resolveLines = (
 		booked,
 		measureOf = () => null,
 		quantityOf = () => null,
-		maxQuantity = MAX_QUANTITY,
+		maxQuantity = CART_MAX_QUANTITY,
 		unit = 1,
 	},
 ) => {
@@ -480,7 +480,9 @@ export const resolveLines = (
 	// a line too large to price
 	for (const line of out) {
 		if (!line.priced) continue;
-		const tooMany = piecesOf(line) > pieceCap;
+		// an item whose type names a most of its own is held to that (quantity_max); the others to the usual most
+		const ownMost = line.limits !== undefined && line.limits.max !== pieceCap;
+		const tooMany = !ownMost && piecesOf(line) > pieceCap;
 		if (tooMany) line.problems.push({ code: 'too_many', message: `At most ${pieceCap} of one item.` });
 		const problem = line.limits && !line.booking ? quantityProblem(line.quantity, line.limits) : null;
 		if (problem && !(tooMany && problem === 'quantity_max')) line.problems.push(problemOf(problem));

@@ -36,6 +36,7 @@ import { keyOpens, newOrderKey, orderKeyHash } from '../adapters/crypto.js';
 import { heldStockBefore, placeOrder, swapOrderStock } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { STOCK_PROBLEMS, checkAddress, checkCart, checkOrderExtras } from '../core/checkout.js';
+import { OPEN_ORDER_CAP, ORDER_BURST_LIMIT, ORDER_BURST_WINDOW_MINUTES } from '../core/limits.js';
 import { PAY_LATER_KINDS } from '../core/payment-methods.js';
 import { shipmentLink } from '../core/couriers.js';
 import { PLACED_FACTS, factsGuard } from '../core/facts.js';
@@ -209,6 +210,9 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				metadata: { orderId: order.id },
 				returnUrl: back.success,
 				cancelUrl: back.cancel,
+				// the one timer: the checkout ends when the order's time to pay does (Payments keeps it within its own least
+				// and the gateway's longest); an order with no time to pay leaves it to Payments' own setting
+				...(order.holdUntil ? { expiresAt: new Date(order.holdUntil).toISOString() } : {}),
 				idempotencyKey,
 			});
 			const store = createOrdersStore(await s.data());
@@ -904,7 +908,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const s = await service.site(ctx);
 		const checkout = await s.values('checkout');
 		const { shopper, guest } = await buyerOf(s, ctx, checkout);
-		const cart = checkCart(ctx.body, { maxLines: Number(checkout.maxLines ?? 50) });
+		const cart = checkCart(ctx.body);
 		if (!cart.ok) throw service.invalid(cart.field, cart.message);
 		const extras = checkOrderExtras(ctx.body);
 		if (!extras.ok) throw service.invalid(extras.field, extras.message);
@@ -925,21 +929,18 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const known = shopper ? await store.customer(shopper.id) : (member ?? guestRecord);
 		if (known?.blocked || guestRecord?.blocked)
 			throw problem('customer_blocked', 'Ordering is not possible for this account. Please contact the shop.');
-		// a burst of orders (by mistake or abuse) stops at checkout.placeLimit within checkout.placeWindowMinutes (E39)
-		const burst = Number(checkout.placeLimit);
+		// a burst of orders (by mistake or abuse) stops at ORDER_BURST_LIMIT within ORDER_BURST_WINDOW_MINUTES (E39)
 		if (
-			burst > 0 &&
 			(await store.countPlacedSince(
 				{ userId: shopper?.id ?? null, customerId: known?.id ?? null },
-				new Date(service.now() - Number(checkout.placeWindowMinutes) * 60_000),
-				burst,
-			)) >= burst
+				new Date(service.now() - ORDER_BURST_WINDOW_MINUTES * 60_000),
+				ORDER_BURST_LIMIT,
+			)) >= ORDER_BURST_LIMIT
 		)
 			throw problem('too_many_orders', 'You placed several orders just now. Please wait a few minutes and try again.');
-		const cap = Number(checkout.openOrderCap);
 		if (
-			cap > 0 &&
-			(await store.countWaiting({ userId: shopper?.id ?? null, customerId: known?.id ?? null }, WAITING_ROLES)) >= cap
+			(await store.countWaiting({ userId: shopper?.id ?? null, customerId: known?.id ?? null }, WAITING_ROLES)) >=
+			OPEN_ORDER_CAP
 		)
 			throw problem(
 				'too_many_open_orders',
@@ -1340,8 +1341,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	/** @param {any} ctx */
 	const quoteCart = async (ctx) => {
 		const s = await service.site(ctx);
-		const checkout = await s.values('checkout');
-		const cart = checkCart(ctx.body, { maxLines: Number(checkout.maxLines ?? 50) });
+		const cart = checkCart(ctx.body);
 		if (!cart.ok) throw service.invalid(cart.field, cart.message);
 		return quoting.view(s, await quoting.quote(s, cart.value, await service.shopper(s)));
 	};

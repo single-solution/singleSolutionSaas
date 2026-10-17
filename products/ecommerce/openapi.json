@@ -1255,7 +1255,7 @@
 			},
 			"put": {
 				"summary": "Set a brand's logo (Catalog admin widget)",
-				"description": "Upload the file first: POST /v1/catalog/uploads { for: 'brand', id, type, size }, then PUT the file to the presigned address. The file is checked in your bucket: 422 validation_failed at /key when it is not under ecommerce/brands/<id>/, not uploaded, or not a JPEG, PNG, WebP or AVIF image within the catalog setting imageMaxBytes (such a file is deleted), at /alt, /sizes/<name>, /width, /height or /blur; 404 not_found; 503 storage_not_connected; 502 upstream_error when your storage cannot be reached. The logo it replaces is deleted from your storage when it is in the brand's own folder.",
+				"description": "Upload the file first: POST /v1/catalog/uploads { for: 'brand', id, type, size }, then PUT the file to the presigned address. The file is checked in your bucket: 422 validation_failed at /key when it is not under ecommerce/brands/<id>/, not uploaded, or not a JPEG, PNG, WebP or AVIF image within 5 MB (such a file is deleted), at /alt, /sizes/<name>, /width, /height or /blur; 404 not_found; 503 storage_not_connected; 502 upstream_error when your storage cannot be reached. The logo it replaces is deleted from your storage when it is in the brand's own folder.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -1596,7 +1596,7 @@
 		"/v1/admin/catalog/uploads": {
 			"post": {
 				"summary": "Get a presigned upload for a catalog image or product video (Catalog admin widget)",
-				"description": "Upload the file with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then attach it with key (POST /v1/products/:id/media, PUT /v1/categories/:id/image, PUT /v1/brands/:id/logo, a variant photo or the product video in PATCH /v1/products/:id). Also for the smaller copies of a photo. Images up to the catalog setting imageMaxBytes, product videos up to videoMaxBytes. 422 validation_failed at /for, /type or /size; 404 not_found; 503 storage_not_connected.",
+				"description": "Upload the file with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then attach it with key (POST /v1/products/:id/media, PUT /v1/categories/:id/image, PUT /v1/brands/:id/logo, a variant photo or the product video in PATCH /v1/products/:id). Also for the smaller copies of a photo. Images up to 5 MB, product videos up to 64 MB. 422 validation_failed at /for, /type or /size; 404 not_found; 503 storage_not_connected.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -2083,7 +2083,7 @@
 			},
 			"put": {
 				"summary": "Set a category's image (Catalog admin widget)",
-				"description": "Upload the file first: POST /v1/catalog/uploads { for: 'category', id, type, size }, then PUT the file to the presigned address. The file is checked in your bucket: 422 validation_failed at /key when it is not under ecommerce/categories/<id>/, not uploaded, or not a JPEG, PNG, WebP or AVIF image within the catalog setting imageMaxBytes (such a file is deleted), at /alt, /sizes/<name>, /width, /height or /blur; 404 not_found; 503 storage_not_connected; 502 upstream_error when your storage cannot be reached. The image it replaces is deleted from your storage when it is in the category's own folder.",
+				"description": "Upload the file first: POST /v1/catalog/uploads { for: 'category', id, type, size }, then PUT the file to the presigned address. The file is checked in your bucket: 422 validation_failed at /key when it is not under ecommerce/categories/<id>/, not uploaded, or not a JPEG, PNG, WebP or AVIF image within 5 MB (such a file is deleted), at /alt, /sizes/<name>, /width, /height or /blur; 404 not_found; 503 storage_not_connected; 502 upstream_error when your storage cannot be reached. The image it replaces is deleted from your storage when it is in the category's own folder.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -4333,7 +4333,7 @@
 		"/v1/admin/deals/{id}/banner/upload": {
 			"post": {
 				"summary": "Get a presigned upload for a deal’s banner (Promotions admin widget)",
-				"description": "Upload the image with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then set it with PATCH /v1/admin/deals/:id { banner: { key, alt, type, size } }. The key is under the deal’s folder (ecommerce/deals/<id>/). JPEG, PNG, WebP or AVIF up to the catalog setting imageMaxBytes. 422 validation_failed at /type or /size; 404 not_found; 503 storage_not_connected.",
+				"description": "Upload the image with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then set it with PATCH /v1/admin/deals/:id { banner: { key, alt, type, size } }. The key is under the deal’s folder (ecommerce/deals/<id>/). JPEG, PNG, WebP or AVIF up to 5 MB. 422 validation_failed at /type or /size; 404 not_found; 503 storage_not_connected.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "deals",
 				"x-ss-permission": "deals.edit",
@@ -4375,7 +4375,7 @@
 									"size": {
 										"type": "integer",
 										"minimum": 1,
-										"description": "Bytes, at most the catalog setting imageMaxBytes."
+										"description": "Bytes, at most 5 MB."
 									}
 								}
 							}
@@ -4495,7 +4495,7 @@
 			},
 			"post": {
 				"summary": "Create a landing page (Catalog admin widget)",
-				"description": "A category, brand and facet combination (at least one; a facet is one value of a field shoppers filter by: a grade, or a product or variant field by its slug) with its own heading, title, description, introduction and FAQs; one landing page per combination. 422 validation_failed at /categoryId when none of categoryId, brandId and facet is given or the category does not exist, at /brandId when it does not exist, at /facet when it is not { field, value }, at /facet/value for a grade not in your grades list, at /facet/field for a field shoppers do not filter by, or at a text that is too long; 409 conflict when another landing page has the same combination or when the website has 2,000. url comes from the landing_pages setting landingUrl; indexable auto is indexed while at least landingMinProducts of its products are in stock. Send an Idempotency-Key so a retried request makes one landing page.",
+				"description": "A category, brand and facet combination (at least one; a facet is one value of a field shoppers filter by: a grade, or a product or variant field by its slug) with its own heading, title, description, introduction and FAQs; one landing page per combination. 422 validation_failed at /categoryId when none of categoryId, brandId and facet is given or the category does not exist, at /brandId when it does not exist, at /facet when it is not { field, value }, at /facet/value for a grade not in your grades list, at /facet/field for a field shoppers do not filter by, or at a text that is too long; 409 conflict when another landing page has the same combination or when the website has 2,000. url comes from the landing_pages setting landingUrl; indexable auto is indexed while at least 3 of its products are in stock. Send an Idempotency-Key so a retried request makes one landing page.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "landing_pages",
 				"x-ss-permission": "catalog.edit",
@@ -6032,7 +6032,7 @@
 		"/v1/admin/orders/packing-slips": {
 			"get": {
 				"summary": "The packing slips of several orders, as one document (Orders admin widget)",
-				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts and the website's Format. With the cash to collect and empty slots for serial numbers still to be written (grades_serials). 422 validation_failed for no ids, more than 50 or a malformed id; 404 not_found for an unknown order.",
+				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' titles, your texts' labels and the website's Format. With the cash to collect and empty slots for serial numbers still to be written (grades_serials). 422 validation_failed for no ids, more than 50 or a malformed id; 404 not_found for an unknown order.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "invoices",
 				"x-ss-permission": "orders.read",
@@ -6073,7 +6073,7 @@
 		"/v1/admin/orders/pick-list": {
 			"get": {
 				"summary": "The pick list of several orders: the units per variant (Orders admin widget)",
-				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts and the website's Format. 422 validation_failed for no ids, more than 100 or a malformed id; 404 not_found for an unknown order.",
+				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' titles, your texts' labels and the website's Format. 422 validation_failed for no ids, more than 100 or a malformed id; 404 not_found for an unknown order.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "invoices",
 				"x-ss-permission": "orders.read",
@@ -6946,7 +6946,7 @@
 		"/v1/admin/orders/{id}/invoice": {
 			"get": {
 				"summary": "An order's invoice (Orders admin widget)",
-				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts, columns and seller details, your texts' payment words and the website's Format. 404 not_found.",
+				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' titles, columns and seller details, your texts' labels and payment words and the website's Format. 404 not_found.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "invoices",
 				"x-ss-permission": "orders.read",
@@ -7206,7 +7206,7 @@
 		"/v1/admin/orders/{id}/packing-slip": {
 			"get": {
 				"summary": "An order's packing slip (Orders admin widget)",
-				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts, columns and seller details, your texts' payment words and the website's Format. 404 not_found.",
+				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' titles, columns and seller details, your texts' labels and payment words and the website's Format. 404 not_found.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "invoices",
 				"x-ss-permission": "orders.read",
@@ -10365,7 +10365,7 @@
 			},
 			"post": {
 				"summary": "Attach an uploaded image to a product (Catalog admin widget)",
-				"description": "Added last (the first image is the main one). The file is checked in your storage: a file of another type or larger than imageMaxBytes is deleted and refused. 422 validation_failed at /key (not uploaded for this product), /alt or /sizes; 409 conflict at 20 images; 404 not_found; 502 upstream_error when your storage cannot be reached; 503 storage_not_connected.",
+				"description": "Added last (the first image is the main one). The file is checked in your storage: a file of another type or larger than 5 MB is deleted and refused. 422 validation_failed at /key (not uploaded for this product), /alt or /sizes; 409 conflict at 20 images; 404 not_found; 502 upstream_error when your storage cannot be reached; 503 storage_not_connected.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -14677,7 +14677,7 @@
 			},
 			"put": {
 				"summary": "Set a brand's logo",
-				"description": "Upload the file first: POST /v1/catalog/uploads { for: 'brand', id, type, size }, then PUT the file to the presigned address. The file is checked in your bucket: 422 validation_failed at /key when it is not under ecommerce/brands/<id>/, not uploaded, or not a JPEG, PNG, WebP or AVIF image within the catalog setting imageMaxBytes (such a file is deleted), at /alt, /sizes/<name>, /width, /height or /blur; 404 not_found; 503 storage_not_connected; 502 upstream_error when your storage cannot be reached. The logo it replaces is deleted from your storage when it is in the brand's own folder.",
+				"description": "Upload the file first: POST /v1/catalog/uploads { for: 'brand', id, type, size }, then PUT the file to the presigned address. The file is checked in your bucket: 422 validation_failed at /key when it is not under ecommerce/brands/<id>/, not uploaded, or not a JPEG, PNG, WebP or AVIF image within 5 MB (such a file is deleted), at /alt, /sizes/<name>, /width, /height or /blur; 404 not_found; 503 storage_not_connected; 502 upstream_error when your storage cannot be reached. The logo it replaces is deleted from your storage when it is in the brand's own folder.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -15042,7 +15042,7 @@
 		"/v1/catalog/uploads": {
 			"post": {
 				"summary": "Get a presigned upload for a catalog image or product video",
-				"description": "Upload the file with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then attach it with key (POST /v1/products/:id/media, PUT /v1/categories/:id/image, PUT /v1/brands/:id/logo, a variant photo or the product video in PATCH /v1/products/:id). Also for the smaller copies of a photo. Images up to the catalog setting imageMaxBytes, product videos up to videoMaxBytes. 422 validation_failed at /for, /type or /size; 404 not_found; 503 storage_not_connected.",
+				"description": "Upload the file with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then attach it with key (POST /v1/products/:id/media, PUT /v1/categories/:id/image, PUT /v1/brands/:id/logo, a variant photo or the product video in PATCH /v1/products/:id). Also for the smaller copies of a photo. Images up to 5 MB, product videos up to 64 MB. 422 validation_failed at /for, /type or /size; 404 not_found; 503 storage_not_connected.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -15559,7 +15559,7 @@
 			},
 			"put": {
 				"summary": "Set a category's image",
-				"description": "Upload the file first: POST /v1/catalog/uploads { for: 'category', id, type, size }, then PUT the file to the presigned address. The file is checked in your bucket: 422 validation_failed at /key when it is not under ecommerce/categories/<id>/, not uploaded, or not a JPEG, PNG, WebP or AVIF image within the catalog setting imageMaxBytes (such a file is deleted), at /alt, /sizes/<name>, /width, /height or /blur; 404 not_found; 503 storage_not_connected; 502 upstream_error when your storage cannot be reached. The image it replaces is deleted from your storage when it is in the category's own folder.",
+				"description": "Upload the file first: POST /v1/catalog/uploads { for: 'category', id, type, size }, then PUT the file to the presigned address. The file is checked in your bucket: 422 validation_failed at /key when it is not under ecommerce/categories/<id>/, not uploaded, or not a JPEG, PNG, WebP or AVIF image within 5 MB (such a file is deleted), at /alt, /sizes/<name>, /width, /height or /blur; 404 not_found; 503 storage_not_connected; 502 upstream_error when your storage cannot be reached. The image it replaces is deleted from your storage when it is in the category's own folder.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -16095,7 +16095,7 @@
 		"/v1/chat/products/top": {
 			"get": {
 				"summary": "Best-selling or newest products for Chat",
-				"description": "Top products rank by units sold, or by units ordered with the catalog setting topBasis ordered (P3-10). 422 validation_failed at /kind for another kind.",
+				"description": "Top products rank by units sold (delivered orders; P3-10). 422 validation_failed at /kind for another kind.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"x-ss-access": "runtime",
@@ -19204,7 +19204,7 @@
 		"/v1/deals/{id}/banner/upload": {
 			"post": {
 				"summary": "Get a presigned upload for a deal’s banner",
-				"description": "Upload the image with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then set it with PATCH /v1/deals/:id { banner: { key, alt, type, size } }. The key is under the deal’s folder (ecommerce/deals/<id>/). JPEG, PNG, WebP or AVIF up to the catalog setting imageMaxBytes. 422 validation_failed at /type or /size; 404 not_found; 503 storage_not_connected.",
+				"description": "Upload the image with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then set it with PATCH /v1/deals/:id { banner: { key, alt, type, size } }. The key is under the deal’s folder (ecommerce/deals/<id>/). JPEG, PNG, WebP or AVIF up to 5 MB. 422 validation_failed at /type or /size; 404 not_found; 503 storage_not_connected.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "deals",
 				"x-ss-permission": "deals.edit",
@@ -19250,7 +19250,7 @@
 									"size": {
 										"type": "integer",
 										"minimum": 1,
-										"description": "Bytes, at most the catalog setting imageMaxBytes."
+										"description": "Bytes, at most 5 MB."
 									}
 								}
 							}
@@ -20142,7 +20142,7 @@
 			},
 			"post": {
 				"summary": "Create a landing page",
-				"description": "A category, brand and facet combination (at least one; a facet is one value of a field shoppers filter by: a grade, or a product or variant field by its slug) with its own heading, title, description, introduction and FAQs; one landing page per combination. 422 validation_failed at /categoryId when none of categoryId, brandId and facet is given or the category does not exist, at /brandId when it does not exist, at /facet when it is not { field, value }, at /facet/value for a grade not in your grades list, at /facet/field for a field shoppers do not filter by, or at a text that is too long; 409 conflict when another landing page has the same combination or when the website has 2,000. url comes from the landing_pages setting landingUrl; indexable auto is indexed while at least landingMinProducts of its products are in stock. Send an Idempotency-Key so a retried request makes one landing page.",
+				"description": "A category, brand and facet combination (at least one; a facet is one value of a field shoppers filter by: a grade, or a product or variant field by its slug) with its own heading, title, description, introduction and FAQs; one landing page per combination. 422 validation_failed at /categoryId when none of categoryId, brandId and facet is given or the category does not exist, at /brandId when it does not exist, at /facet when it is not { field, value }, at /facet/value for a grade not in your grades list, at /facet/field for a field shoppers do not filter by, or at a text that is too long; 409 conflict when another landing page has the same combination or when the website has 2,000. url comes from the landing_pages setting landingUrl; indexable auto is indexed while at least 3 of its products are in stock. Send an Idempotency-Key so a retried request makes one landing page.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "landing_pages",
 				"x-ss-permission": "catalog.edit",
@@ -22119,7 +22119,7 @@
 		"/v1/orders/packing-slips": {
 			"get": {
 				"summary": "The packing slips of several orders, as one document",
-				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts and the website's Format. With the cash to collect and empty slots for serial numbers still to be written (grades_serials). 422 validation_failed for no ids, more than 50 or a malformed id; 404 not_found for an unknown order.",
+				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' titles, your texts' labels and the website's Format. With the cash to collect and empty slots for serial numbers still to be written (grades_serials). 422 validation_failed for no ids, more than 50 or a malformed id; 404 not_found for an unknown order.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "invoices",
 				"x-ss-permission": "orders.read",
@@ -22164,7 +22164,7 @@
 		"/v1/orders/pick-list": {
 			"get": {
 				"summary": "The pick list of several orders: the units per variant",
-				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts and the website's Format. 422 validation_failed for no ids, more than 100 or a malformed id; 404 not_found for an unknown order.",
+				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' titles, your texts' labels and the website's Format. 422 validation_failed for no ids, more than 100 or a malformed id; 404 not_found for an unknown order.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "invoices",
 				"x-ss-permission": "orders.read",
@@ -23077,7 +23077,7 @@
 		"/v1/orders/{id}/invoice": {
 			"get": {
 				"summary": "An order's invoice",
-				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts, columns and seller details, your texts' payment words and the website's Format. 404 not_found.",
+				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' titles, columns and seller details, your texts' labels and payment words and the website's Format. 404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "invoices",
 				"x-ss-permission": "orders.read",
@@ -23345,7 +23345,7 @@
 		"/v1/orders/{id}/packing-slip": {
 			"get": {
 				"summary": "An order's packing slip",
-				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts, columns and seller details, your texts' payment words and the website's Format. 404 not_found.",
+				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' titles, columns and seller details, your texts' labels and payment words and the website's Format. 404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "invoices",
 				"x-ss-permission": "orders.read",
@@ -26691,7 +26691,7 @@
 			},
 			"post": {
 				"summary": "Attach an uploaded image to a product",
-				"description": "Added last (the first image is the main one). The file is checked in your storage: a file of another type or larger than imageMaxBytes is deleted and refused. 422 validation_failed at /key (not uploaded for this product), /alt or /sizes; 409 conflict at 20 images; 404 not_found; 502 upstream_error when your storage cannot be reached; 503 storage_not_connected.",
+				"description": "Added last (the first image is the main one). The file is checked in your storage: a file of another type or larger than 5 MB is deleted and refused. 422 validation_failed at /key (not uploaded for this product), /alt or /sizes; 409 conflict at 20 images; 404 not_found; 502 upstream_error when your storage cannot be reached; 503 storage_not_connected.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -30281,7 +30281,7 @@
 		"/v1/seo/listing": {
 			"get": {
 				"summary": "The head of a listing page",
-				"description": "Pass your listing page's query as it is. robots is index (the category's own noindex and nofollow aside) only for a category without other filters (and its pages) and for a landing page that is indexed now and matches the filters exactly — a category, one brand and one facet: one grade, or one value of a field shoppers filter by named by its slug (attr.<slug>=<value>; several values, two facets or a field id count as filters) — (a stored one, or with the landing_pages setting auto an automatic one: a category and a brand, and with category_brand_facet also a value of the field autoFacet, while at least autoMinProducts of its products and autoMinInStockVariants of their variants are in stock; E43); any other filter, a sort, a hidden brand, a category coming soon and a category without products and without 50 words of its own text (the seo setting emptyCategories noindex, the default) give noindex, follow. A landing page set to auto, once indexed, stays indexed while it has any product shoppers may see, in stock or not (G7.7). total, empty and status count the products as the grid does: status 404 for a filter result with no product, a filter that cannot be read or a page past the end. canonical is always the page's own address: pages 2, 3 … add ?page=n (with the seo setting pagedListings noindex they are noindex, follow), and a filtered or sorted list names itself, its query in one order (by name; category, limit and cursor left out). The ItemList holds the products the page shows, in its order (sort, page and limit as the grid takes them; limit defaults to the catalog setting pageSize); a list with other filters has none. A FAQPage only with the seo setting faqMarkup on. Title and description follow the landing page, the category's SEO fields or the seo settings' patterns, titleTemplate and defaultDescription. An earlier category slug answers moved; 404 not_found for an unknown or hidden category. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
+				"description": "Pass your listing page's query as it is. robots is index (the category's own noindex and nofollow aside) only for a category without other filters (and its pages) and for a landing page that is indexed now and matches the filters exactly — a category, one brand and one facet: one grade, or one value of a field shoppers filter by named by its slug (attr.<slug>=<value>; several values, two facets or a field id count as filters) — (a stored one, or with the landing_pages setting auto an automatic one: a category and a brand, and with category_brand_facet also a value of the field autoFacet, while at least 2 of its products and 3 of their variants are in stock; E43); any other filter, a sort, a hidden brand, a category coming soon and a category without products and without 50 words of its own text (the seo setting emptyCategories noindex, the default) give noindex, follow. A landing page set to auto, once indexed, stays indexed while it has any product shoppers may see, in stock or not (G7.7). total, empty and status count the products as the grid does: status 404 for a filter result with no product, a filter that cannot be read or a page past the end. canonical is always the page's own address: pages 2, 3 … add ?page=n (with the seo setting pagedListings noindex they are noindex, follow), and a filtered or sorted list names itself, its query in one order (by name; category, limit and cursor left out). The ItemList holds the products the page shows, in its order (sort, page and limit as the grid takes them; limit defaults to the catalog setting pageSize); a list with other filters has none. A FAQPage only with the seo setting faqMarkup on. Title and description follow the landing page, the category's SEO fields or the seo settings' patterns, titleTemplate and defaultDescription. An earlier category slug answers moved; 404 not_found for an unknown or hidden category. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"x-ss-access": "runtime",
@@ -30523,7 +30523,7 @@
 		"/v1/seo/sitemap.xml": {
 			"get": {
 				"summary": "The sitemap",
-				"description": "Answers application/xml, not JSON: a urlset (with the image extension) of the home page, the categories shoppers see that have a product to show (in them or below them) or 50 words of text of their own (all of them with the seo setting emptyCategories index), the indexed landing pages (stored ones, and with the landing_pages setting auto the automatic ones; once indexed, while they have any product) and glossary pages with text of their own (Landing pages), and the active products shoppers may see with up to 10 images each, leaving out pages marked noindex and pages whose canonicalUrl is another page (a sitemap lists canonical addresses only). lastmod: a product's contentUpdatedAt (the last change of what its page shows, never a stock change that leaves it on sale), a category's last change, a landing page's newest product. Above the seo setting sitemapSize addresses (10,000 by default) it is a sitemapindex instead, each file dated by its newest page, whose files are the seo setting sitemapUrl with ?file=categories (with the home page), ?file=landings, ?file=products-1 … (serve each from GET /v1/seo/sitemaps/:file).",
+				"description": "Answers application/xml, not JSON: a urlset (with the image extension) of the home page, the categories shoppers see that have a product to show (in them or below them) or 50 words of text of their own (all of them with the seo setting emptyCategories index), the indexed landing pages (stored ones, and with the landing_pages setting auto the automatic ones; once indexed, while they have any product) and glossary pages with text of their own (Landing pages), and the active products shoppers may see with up to 10 images each, leaving out pages marked noindex and pages whose canonicalUrl is another page (a sitemap lists canonical addresses only). lastmod: a product's contentUpdatedAt (the last change of what its page shows, never a stock change that leaves it on sale), a category's last change, a landing page's newest product. Above 10,000 addresses it is a sitemapindex instead, each file dated by its newest page, whose files are the seo setting sitemapUrl with ?file=categories (with the home page), ?file=landings, ?file=products-1 … (serve each from GET /v1/seo/sitemaps/:file).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"x-ss-access": "runtime",
@@ -30557,7 +30557,7 @@
 		"/v1/seo/sitemaps/{file}": {
 			"get": {
 				"summary": "One file of the sitemap index",
-				"description": ":file is categories, landings or products-<n> (.xml may follow). Answers application/xml, not JSON: a urlset of that part (products-<n>: the n-th sitemapSize products by id). 404 not_found for a file the index does not have (an empty part has none).",
+				"description": ":file is categories, landings or products-<n> (.xml may follow). Answers application/xml, not JSON: a urlset of that part (products-<n>: the n-th 10,000 products by id). 404 not_found for a file the index does not have (an empty part has none).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"x-ss-access": "runtime",
@@ -31602,7 +31602,7 @@
 		"/v1/shop/cart/quote": {
 			"post": {
 				"summary": "Price a cart",
-				"description": "The cart lives in the browser; the server prices it on each quote and again when the order is placed: active products and variants, stock shortfalls per line (never the exact stock), deals, bundles and the coupon, delivery zones or pickup (delivery_zones), taxes (taxes) and the payment methods in the merchant’s order with their fees (cod), each while its feature is on. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). A signed-in shopper also gets their role price (role_pricing) and loyalty points (loyalty). A line that cannot be ordered is not refused: it lists its problems and ready is false. 422 validation_failed at /lines (1 to checkout.maxLines lines), /lines/<n>/productId, /variantId, /quantity (1 to checkout.maxQuantity), /slot, /dealId, /lock, /coupon, /points, /delivery or /payment.",
+				"description": "The cart lives in the browser; the server prices it on each quote and again when the order is placed: active products and variants, stock shortfalls per line (never the exact stock), deals, bundles and the coupon, delivery zones or pickup (delivery_zones), taxes (taxes) and the payment methods in the merchant’s order with their fees (cod), each while its feature is on. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). A signed-in shopper also gets their role price (role_pricing) and loyalty points (loyalty). A line that cannot be ordered is not refused: it lists its problems and ready is false. 422 validation_failed at /lines (1 to 50 lines), /lines/<n>/productId, /variantId, /quantity (1 to 99, or the item type's most), /slot, /dealId, /lock, /coupon, /points, /delivery or /payment.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -31666,7 +31666,7 @@
 													"minimum": 1,
 													"maximum": 1000000000,
 													"default": 1,
-													"description": "Pieces: in the item's steps from its least to its most (limits in its answers: its item type's quantity rule, at most checkout.maxQuantity ≤ 100,000). For an item sold in a unit of its own (measure in its answers): thousandths of its unit (2.5 m = 2500), a multiple of measure.step from measure.min to measure.max; such a line is one piece."
+													"description": "Pieces: in the item's steps from its least to its most (limits in its answers: its item type's quantity rule, otherwise at most 99; never above 100,000). For an item sold in a unit of its own (measure in its answers): thousandths of its unit (2.5 m = 2500), a multiple of measure.step from measure.min to measure.max; such a line is one piece."
 												},
 												"slot": {
 													"type": [
@@ -31697,7 +31697,7 @@
 										},
 										"minItems": 1,
 										"maxItems": 500,
-										"description": "1 to checkout.maxLines (≤ 500) lines; lines of one product, variant and slot are merged."
+										"description": "1 to 50 lines; lines of one product, variant and slot are merged."
 									},
 									"coupon": {
 										"type": [
@@ -31877,7 +31877,7 @@
 		"/v1/shop/compare": {
 			"get": {
 				"summary": "Compare products side by side",
-				"description": "On their fields shown in the comparison (show.compare), price, brand, grades, rating and image. ids names 1 to the compare setting maxProducts (2–4, default 4) products; repeats are dropped. Too many or none, or an id that is not a product id, answer 422 validation_failed at /ids.",
+				"description": "On their fields shown in the comparison (show.compare), price, brand, grades, rating and image. ids names 1 to 4 products; repeats are dropped. Too many or none, or an id that is not a product id, answer 422 validation_failed at /ids.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "compare",
 				"security": [
@@ -32276,7 +32276,7 @@
 													"minimum": 1,
 													"maximum": 1000000000,
 													"default": 1,
-													"description": "Pieces: in the item's steps from its least to its most (limits in its answers: its item type's quantity rule, at most checkout.maxQuantity ≤ 100,000). For an item sold in a unit of its own (measure in its answers): thousandths of its unit (2.5 m = 2500), a multiple of measure.step from measure.min to measure.max; such a line is one piece."
+													"description": "Pieces: in the item's steps from its least to its most (limits in its answers: its item type's quantity rule, otherwise at most 99; never above 100,000). For an item sold in a unit of its own (measure in its answers): thousandths of its unit (2.5 m = 2500), a multiple of measure.step from measure.min to measure.max; such a line is one piece."
 												},
 												"slot": {
 													"type": [
@@ -32307,7 +32307,7 @@
 										},
 										"minItems": 1,
 										"maxItems": 500,
-										"description": "1 to checkout.maxLines (≤ 500) lines; lines of one product, variant and slot are merged."
+										"description": "1 to 50 lines; lines of one product, variant and slot are merged."
 									},
 									"coupon": {
 										"type": [
@@ -32884,7 +32884,7 @@
 		"/v1/shop/orders/{id}/invoice": {
 			"get": {
 				"summary": "The shopper's invoice of their order",
-				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts and the website's Format. The shopper's copy has no staff names. Opened as the order page is: the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it, and with the invoices setting shopperFrom confirmed, while the order waits or once it is canceled (the order’s invoice field says whether it can be read).",
+				"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' titles, your texts' labels and the website's Format. The shopper's copy has no staff names. Opened as the order page is: the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it, and with the invoices setting shopperFrom confirmed, while the order waits or once it is canceled (the order’s invoice field says whether it can be read).",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "invoices",
 				"security": [
@@ -33581,7 +33581,7 @@
 						"name": "sort",
 						"in": "query",
 						"required": false,
-						"description": "top: the most first, sold_asc: the fewest first, by units sold (delivered orders) or, with the catalog setting topBasis ordered, by units ordered (open and delivered orders; P3-10).",
+						"description": "top: the most first, sold_asc: the fewest first, by units sold (delivered orders; P3-10).",
 						"schema": {
 							"type": "string",
 							"enum": [
@@ -33595,7 +33595,7 @@
 								"updated"
 							],
 							"default": "newest",
-							"description": "top: the most first, sold_asc: the fewest first, by units sold (delivered orders) or, with the catalog setting topBasis ordered, by units ordered (open and delivered orders; P3-10)."
+							"description": "top: the most first, sold_asc: the fewest first, by units sold (delivered orders; P3-10)."
 						}
 					},
 					{
@@ -34034,7 +34034,7 @@
 		"/v1/shop/returns/photos": {
 			"post": {
 				"summary": "Get an upload address for a claim photo",
-				"description": "Send the shopper's Accounts sign-in in the SS-Sign-In header (403 sign_in_required without a valid one). PUT the photo to upload.url with exactly upload.headers within 5 minutes, then name key in photos of the claim. 422 validation_failed at /type (JPEG, PNG or WebP; also when the returns setting maxPhotos is 0) or /size (bytes, at most the photoMaxMb setting); 503 storage_not_connected.",
+				"description": "Send the shopper's Accounts sign-in in the SS-Sign-In header (403 sign_in_required without a valid one). PUT the photo to upload.url with exactly upload.headers within 5 minutes, then name key in photos of the claim. 422 validation_failed at /type (JPEG, PNG or WebP; also when the returns setting maxPhotos is 0) or /size (bytes, at most 5 MB); 503 storage_not_connected.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "returns",
 				"security": [
@@ -34085,7 +34085,7 @@
 									"size": {
 										"type": "integer",
 										"minimum": 1,
-										"description": "Bytes, at most the returns setting photoMaxMb (default 5 MB)."
+										"description": "Bytes, at most 5 MB."
 									}
 								}
 							}
@@ -35135,7 +35135,7 @@
 		"/v1/store-details/uploads": {
 			"post": {
 				"summary": "Get a presigned upload for a picture of the store",
-				"description": "Upload the file with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then keep it with PUT /v1/store-details/<picture> (logo, logoDark, icon, favicon or faviconDark) and the key. Images up to the catalog setting imageMaxBytes (at most 5 MB). 422 validation_failed at /for, /type or /size; 503 storage_not_connected.",
+				"description": "Upload the file with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then keep it with PUT /v1/store-details/<picture> (logo, logoDark, icon, favicon or faviconDark) and the key. Images up to 5 MB. 422 validation_failed at /for, /type or /size; 503 storage_not_connected.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "store_details",
 				"x-ss-permission": "catalog.edit",
@@ -37450,7 +37450,7 @@
 							"quantity_min",
 							"quantity_max"
 						],
-						"description": "too_many: more pieces than checkout.maxQuantity; too_large: the line comes to more than an order can take; quantity_step, quantity_min, quantity_max: a quantity not in the item's steps, below its least or above its most (its limits)."
+						"description": "too_many: more pieces than the item allows (99 unless its item type's quantity rule names a most); too_large: the line comes to more than an order can take; quantity_step, quantity_min, quantity_max: a quantity not in the item's steps, below its least or above its most (its limits)."
 					},
 					"message": {
 						"type": "string",
@@ -43856,7 +43856,7 @@
 							"yes",
 							"no"
 						],
-						"description": "auto: indexed while at least landingMinProducts of its products are in stock (and, while the setting auto is on, autoMinInStockVariants of their variants; SG-10)."
+						"description": "auto: indexed while at least 3 of its products are in stock (and, while the setting auto is on, 3 of their variants; SG-10)."
 					},
 					"createdAt": {
 						"type": "string",
@@ -43968,7 +43968,7 @@
 							"no"
 						],
 						"default": "auto",
-						"description": "auto (default): indexed while at least landingMinProducts of its products are in stock (and, while the setting auto is on, autoMinInStockVariants of their variants)."
+						"description": "auto (default): indexed while at least 3 of its products are in stock (and, while the setting auto is on, 3 of their variants)."
 					}
 				}
 			},
@@ -48558,7 +48558,7 @@
 					"ordered": {
 						"type": "integer",
 						"minimum": 0,
-						"description": "Units of orders that hold their stock or were delivered (open and delivered orders): what ranks top products with the catalog setting topBasis ordered (P3-10)."
+						"description": "Units of orders that hold their stock or were delivered (open and delivered orders): a count kept for reports; top products rank by units sold (P3-10)."
 					},
 					"rating": {
 						"type": "object",
@@ -49222,7 +49222,7 @@
 			},
 			"QuantityLimits": {
 				"type": "object",
-				"description": "The quantities a shopper may buy of an item (E4): a multiple of step from min to max, in pieces (its item type's quantity rule, the most at most checkout.maxQuantity) or, for an item sold in a unit of its own, in thousandths of the unit (its measure).",
+				"description": "The quantities a shopper may buy of an item (E4): a multiple of step from min to max, in pieces (its item type's quantity rule; the usual most is 99) or, for an item sold in a unit of its own, in thousandths of the unit (its measure).",
 				"required": [
 					"step",
 					"min",
@@ -49246,7 +49246,7 @@
 			},
 			"QuantityRule": {
 				"type": "object",
-				"description": "An item type's quantity rule for items counted in pieces (E4): the step a quantity is a multiple of, the least (a multiple of the step) and the most (null: up to checkout.maxQuantity).",
+				"description": "An item type's quantity rule for items counted in pieces (E4): the step a quantity is a multiple of, the least (a multiple of the step) and the most (null: the usual most, 99).",
 				"required": [
 					"step",
 					"min",
@@ -51660,7 +51660,7 @@
 							"object",
 							"null"
 						],
-						"description": "The landing page whose combination matches exactly: a stored one, else an automatic one (E43, the landing_pages setting auto) while the combination has at least autoMinProducts products and autoMinInStockVariants variants in stock; null: none.",
+						"description": "The landing page whose combination matches exactly: a stored one, else an automatic one (E43, the landing_pages setting auto) while the combination has at least 2 products and 3 variants in stock; null: none.",
 						"required": [
 							"id",
 							"url",
@@ -54168,19 +54168,10 @@
 				"type": "object",
 				"description": "The shop's policies (the merchant's list), placeholders filled; policies without text are left out.",
 				"required": [
-					"format",
 					"policies"
 				],
 				"additionalProperties": false,
 				"properties": {
-					"format": {
-						"type": "string",
-						"enum": [
-							"text",
-							"html"
-						],
-						"description": "The checkout setting policyFormat: html texts are cleaned to p, br, strong, em, u, ul, ol, li, h2, h3, h4, blockquote and safe links."
-					},
 					"policies": {
 						"type": "array",
 						"maxItems": 20,

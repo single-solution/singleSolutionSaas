@@ -2,6 +2,7 @@
 /* global document, window */
 import { DEFAULT_FORMAT } from '@ss/app-kit/widget';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { COMPARE_MAX_PRODUCTS } from '../core/limits.js';
 import { STORAGE_KEYS } from '../core/widgets.js';
 import { mountProductGrid, pageNumbers } from '../ui/product-grid.js';
 import {
@@ -604,7 +605,7 @@ describe('product grid', () => {
 				},
 			},
 		});
-		const host = await mountGrid(fake, {}, { compare: { max: 1 } });
+		const host = await mountGrid(fake, {});
 		const wish = (/** @type {string} */ id) => $(host, `[data-wish="${id}"]`);
 		const status = () => $(host, '[role="status"]').textContent;
 		expect(wish('prd_a').getAttribute('aria-label')).toBe(text('grid.saveLabel', { name: 'Phone prd_a' }));
@@ -634,10 +635,12 @@ describe('product grid', () => {
 		await click(compare('prd_a'));
 		expect(compareIds(window)).toEqual(['prd_a']);
 		expect(compare('prd_a').getAttribute('aria-pressed')).toBe('true');
+		// the list holds COMPARE_MAX_PRODUCTS: with the others in it, one more is refused
+		window.localStorage.setItem('ss-ecommerce-compare', JSON.stringify(['prd_a', 'prd_x2', 'prd_x3', 'prd_x4']));
 		await click(compare('prd_b'));
-		expect(status()).toBe(text('compare.full', { max: 1 }));
+		expect(status()).toBe(text('compare.full', { max: COMPARE_MAX_PRODUCTS }));
 		await click(compare('prd_a'));
-		expect(compareIds(window)).toEqual([]);
+		expect(compareIds(window)).toEqual(['prd_x2', 'prd_x3', 'prd_x4']);
 		expect(compare('prd_a').getAttribute('aria-pressed')).toBe('false');
 	});
 });
@@ -807,7 +810,6 @@ describe('shared helpers', () => {
 					lowStockShown: 3,
 					grades: [{ key: 'a', label: 'Like new' }, { key: 'b' }, { label: 'x' }, null],
 				},
-				checkout: { policyFormat: 'html' },
 			}),
 		);
 		expect(settings.catalog).toEqual({
@@ -818,11 +820,9 @@ describe('shared helpers', () => {
 				{ key: 'b', label: 'b' },
 			],
 		});
-		expect(settings.checkout.policyFormat).toBe('html');
 		expect(settingsOf(configOf([], { catalog: { grades: 'a' } })).catalog.grades).toEqual([]);
 		// the server sends a list of grades, never labels by key
 		expect(settingsOf(configOf([], { catalog: { grades: { a: 'Like new' } } })).catalog.grades).toEqual([]);
-		expect(settingsOf(configOf([])).checkout.policyFormat).toBe('text');
 		const t = textsOf(configOf([]));
 		expect(warrantyText(t, null)).toBe('');
 		expect(warrantyText(t, { amount: 0, unit: 'days' })).toBe('');

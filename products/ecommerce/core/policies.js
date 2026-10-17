@@ -1,7 +1,7 @@
 /**
  * The shop's policies (PLAN 0.8.8 Business details; PLAN 0.8.10 E3, SF-1, E27): the merchant's list `policies` — each
  * `{ key, title, text }`, in the order shown, seeded with delivery, returns, privacy, terms and warranty and open to any
- * other the merchant adds — in plain text or cleaned HTML (the `checkout` setting `policyFormat`), with the
+ * other the merchant adds — in rich text (HTML cleaned to paragraphs, lists, headings, emphasis, quotes and links), with the
  * placeholders `{returnTime}`, `{warrantyTime}` (as typed: `30 days`, `1 year`, E14), `{business}`, `{email}`, `{phone}`, `{address}`,
  * `{deliveryFee}` and `{freeDeliveryOver}` filled (also written with double braces, `{{business}}`); other text in
  * braces stays as typed. Policies without text are left out. No I/O.
@@ -78,12 +78,10 @@ const PLACEHOLDER = /\{\{([A-Za-z]+)\}\}|\{([A-Za-z]+)\}/g;
 /**
  * The filled policies, in the list's order, those without text left out.
  * @param {ReadonlyArray<Policy>} list the `policies` list
- * @param {unknown} policyFormat the `checkout` setting `policyFormat`
  * @param {PolicyValues} values
- * @returns {{ format: 'text' | 'html', policies: Policy[] }}
+ * @returns {{ policies: Policy[] }}
  */
-export const fillPolicies = (list, policyFormat, values) => {
-	const format = policyFormat === 'html' ? 'html' : 'text';
+export const fillPolicies = (list, values) => {
 	/** @type {Record<string, string>} */
 	const known = {
 		returnTime: durationText(values.returnTime, values.locale),
@@ -100,13 +98,11 @@ export const fillPolicies = (list, policyFormat, values) => {
 		text.replace(PLACEHOLDER, (whole, double, single) => {
 			const key = String(double ?? single);
 			if (!Object.hasOwn(known, key)) return whole;
-			const value = /** @type {string} */ (known[key]);
-			return format === 'html' ? escapeHtml(value) : value;
+			return escapeHtml(/** @type {string} */ (known[key]));
 		});
 	return {
-		format,
 		policies: list.flatMap(({ key, title, text }) => {
-			const filled = format === 'html' ? cleanHtml(fill(text)) : fill(text).trim();
+			const filled = cleanHtml(fill(text));
 			return filled ? [{ key, title, text: filled }] : [];
 		}),
 	};

@@ -22,6 +22,7 @@
 import { defineRoute } from '@ss/app-kit';
 import { productTypes } from '../adapters/catalog-store.js';
 import { countsForStock, stockEventOf } from '../core/catalog-query.js';
+import { STAFF_ALERT_MAX_RECIPIENTS } from '../core/limits.js';
 import { levelOf } from '../core/measure.js';
 import { notifiesOf, shopperLabelOf, staffAlertOf, statusOf } from '../core/flow.js';
 import { statusLabel } from '../core/orders.js';
@@ -94,7 +95,13 @@ export const createOrderEvents = (product, service) => {
 		const byEvent = /** @type {Readonly<Record<string, string>>} */ (ALL_STAFF_PERMISSIONS);
 		const prepared = await product.staffAlerts.prepare(
 			{ websiteId: s.websiteId },
-			{ feature: 'staff_alerts', event, values, allStaff: byEvent[event] ?? ALL_STAFF_PERMISSIONS.placed },
+			{
+				feature: 'staff_alerts',
+				event,
+				values,
+				allStaff: byEvent[event] ?? ALL_STAFF_PERMISSIONS.placed,
+				maxRecipients: STAFF_ALERT_MAX_RECIPIENTS,
+			},
 		);
 		await service.sendRequired(
 			s,
@@ -312,7 +319,8 @@ export const createOrderEvents = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/events',
-				auth: 'server', permission: 'orders.read',
+				auth: 'server',
+				permission: 'orders.read',
 				feature: 'events',
 				rateLimit: SERVER_LIMITS,
 				handler: (ctx) => product.events.list(ctx),
@@ -320,7 +328,8 @@ export const createOrderEvents = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/events/count',
-				auth: 'server', permission: 'orders.read',
+				auth: 'server',
+				permission: 'orders.read',
 				feature: 'events',
 				rateLimit: SERVER_LIMITS,
 				handler: (ctx) => product.events.count(ctx),
@@ -328,7 +337,8 @@ export const createOrderEvents = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/events/counts',
-				auth: 'server', permission: 'orders.read',
+				auth: 'server',
+				permission: 'orders.read',
 				feature: 'events',
 				rateLimit: SERVER_LIMITS,
 				handler: (ctx) => product.events.counts(ctx),

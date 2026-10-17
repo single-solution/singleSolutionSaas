@@ -616,7 +616,8 @@ export const createService = (product) => {
 		 * @param {Site} s
 		 * @param {{ amount: number, currency: string, gateway?: string | null, description: string, reference: string,
 		 *   customer: { id?: string, name?: string, email?: string, phone?: string }, metadata?: Record<string, string>,
-		 *   returnUrl?: string | null, cancelUrl?: string | null, idempotencyKey: string }} input
+		 *   returnUrl?: string | null, cancelUrl?: string | null, expiresAt?: string, idempotencyKey: string }} input
+		 *   `expiresAt`: when the unpaid checkout ends (the order's time to pay; ISO 8601)
 		 * @returns {Promise<{ id: string, status: string, checkoutUrl: string }>}
 		 */
 		create: async (s, { idempotencyKey, ...input }) => {

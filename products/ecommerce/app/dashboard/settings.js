@@ -19,6 +19,7 @@ import {
 	ReasonsEditor,
 	ReviewQuestionsEditor,
 } from './merchant-lists.js';
+import { SEARCH_INDEX } from '../../core/limits.js';
 import { GradesEditor } from './grades.js';
 import { ItemTypesEditor } from './item-types.js';
 import { OrderFlowEditor } from './flow-editor.js';
@@ -40,14 +41,13 @@ import { TEXTS } from './texts.js';
 /** @typedef {import('@ss/ui/dashboard').FeatureSettings} FeatureSettings */
 
 /**
- * The notice on a feature's settings card: with the `catalog` setting `search` or `chatSearch` at `atlas` (saved or
- * being edited), the index Atlas Search needs and where the docs explain it (E14, SF-13).
+ * The notice on a feature's settings card: with the `catalog` setting `search` at `atlas` (saved or being edited), the index Atlas Search needs and where the docs explain it (E14, SF-13).
  * @param {string} key the feature
  * @param {Record<string, unknown>} values its settings, edits included
  * @returns {import('react').ReactNode}
  */
 export const settingsNotice = (key, values) =>
-	key === 'catalog' && (values.search === 'atlas' || values.chatSearch === 'atlas') ? (
+	key === 'catalog' && values.search === 'atlas' ? (
 		<Callout
 			tone="info"
 			className="mb-4"
@@ -56,7 +56,7 @@ export const settingsNotice = (key, values) =>
 					{TEXTS.settings.atlasDocs}
 				</TextLink>
 			}>
-			{fill(TEXTS.settings.atlasNotice, { index: String(values.searchIndex ?? '') })}
+			{fill(TEXTS.settings.atlasNotice, { index: SEARCH_INDEX })}
 		</Callout>
 	) : null;
 

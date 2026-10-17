@@ -8,6 +8,7 @@ import { feedMoney, feedRows, googleItem, metaLine } from '../core/feeds.js';
 import { gradeCondition } from '../core/grades.js';
 import { listShown } from '../core/promotions.js';
 import { buildLlmsTxt, markdownText, MAX_LLMS_CHARS, treeOrder } from '../core/llms.js';
+import { SITEMAP_FILE_SIZE } from '../core/limits.js';
 import { COLLECTIONS } from '../core/model.js';
 import {
 	clip,
@@ -585,10 +586,9 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		expect(answer.text).toContain(`- [Acme </script> Phone](${ORIGIN}/products/acme-phone): USD 250.00 — A good phone.`);
 		expect(answer.text.indexOf('Acme')).toBeLessThan(answer.text.indexOf('Ebook'));
 		expect(answer.text).toContain('- Returns: Returns within 14 days.');
-		await shop.setting('llms_txt', 'products', 0);
 		await shop.setting('llms_txt', 'policies', false);
 		const bare = (await shop.api('GET', '/v1/llms.txt')).text;
-		expect(bare).not.toContain('## Products');
+		expect(bare).toContain('## Products');
 		expect(bare).not.toContain('## Policies');
 		// a merchant's own llms.txt is served as written (G16)
 		const own = '# Our shop\n\n> Hand-written for assistants.\n';
@@ -618,7 +618,6 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		await shop.setting('returns', 'warrantyTimeUnit', 'months');
 		const server = await shop.api('GET', '/v1/policies');
 		expect(server.json).toEqual({
-			format: 'text',
 			policies: [
 				{ key: 'warranty', title: 'Repairs', text: 'Shop repairs within 3 months.' },
 				{ key: 'shipping', title: 'Shipping', text: 'Ships in 2 days.' },
@@ -633,26 +632,23 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		const visitor = await shop.visitor('GET', '/v1/shop/policies');
 		expect(visitor.json).toEqual(server.json);
 		expect(DOMAIN).toBe(new URL(ORIGIN).host);
-		await shop.setting('checkout', 'policyFormat', 'html');
 		await shop.list('policies', [
 			{ key: 'privacy', title: 'Privacy', text: '<p onclick="x()">We <b>never</b> sell data.</p><script>bad()</script>' },
 		]);
 		const html = (await shop.api('GET', '/v1/policies')).json;
 		expect(html).toEqual({
-			format: 'html',
 			policies: [{ key: 'privacy', title: 'Privacy', text: '<p>We <strong>never</strong> sell data.</p>' }],
 		});
 		const llms = (await shop.api('GET', '/v1/llms.txt')).text;
 		expect(llms).not.toContain('<p>');
-		await shop.setting('checkout', 'policyFormat', 'text');
 	});
 
 	it('splits a large sitemap into files behind an index', async () => {
 		const data = await shop.db();
-		await shop.setting('seo', 'sitemapSize', 1000);
 		// categories without products listed too (the merchant asks for it)
 		await shop.setting('seo', 'emptyCategories', 'index');
-		const docs = Array.from({ length: 1001 }, (_, index) =>
+		// more addresses than one file holds (SITEMAP_FILE_SIZE)
+		const docs = Array.from({ length: SITEMAP_FILE_SIZE + 1 }, (_, index) =>
 			storedCategory({
 				id: `cat_bulk${String(index).padStart(6, '0')}`,
 				slug: `bulk-${index}`,
@@ -672,7 +668,7 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		expect(index.text).toContain(`<loc>${ORIGIN}/sitemap.xml?file=products-1</loc>`);
 		const categories = await shop.api('GET', '/v1/seo/sitemaps/categories');
 		// the home page and every category
-		expect((categories.text.match(/<url>/g) ?? []).length).toBe(1004);
+		expect((categories.text.match(/<url>/g) ?? []).length).toBe(docs.length + 3);
 		const products = await shop.api('GET', '/v1/seo/sitemaps/products-1.xml');
 		expect(products.text).toContain('/products/acme-phone');
 		expect((await shop.api('GET', '/v1/seo/sitemaps/products-2')).status).toBe(404);

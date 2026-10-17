@@ -9,6 +9,7 @@ import { DEFAULT_FORMAT } from '@ss/contracts/format';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { cashToCollect, invoiceHtml, invoiceTexts, packingSlipsHtml, pickListHtml } from '../core/invoice.js';
 import { COLLECTIONS } from '../core/model.js';
+import strings from '../strings/en.json' with { type: 'json' };
 import { ALL, readyShop, storedOrder, UNIT_TYPES } from './helpers.js';
 
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
@@ -192,8 +193,9 @@ describe('the invoice (E35)', () => {
 	});
 
 	it('uses the merchant’s labels, and the role label setting when the role has none', async () => {
-		await shop.setting('invoices', 'labelFee', 'COD charge');
-		await shop.setting('invoices', 'labelCashDue', 'Collect in cash');
+		// the labels are the website's texts (Texts: invoice.*)
+		await shop.text('invoice.fee', 'COD charge');
+		await shop.text('invoice.cashDue', 'Collect in cash');
 		try {
 			const order = await seed(orderOf({ promotions: { ...orderOf().promotions, role: null } }));
 			const html = (await shop.api('GET', `/v1/orders/${order.id}/invoice`)).text;
@@ -201,8 +203,8 @@ describe('the invoice (E35)', () => {
 			expect(html).toContain('Collect in cash');
 			expect(html).toContain('<td>Member discount</td>');
 		} finally {
-			await shop.setting('invoices', 'labelFee', 'Cash handling');
-			await shop.setting('invoices', 'labelCashDue', 'Cash due on delivery');
+			await shop.text('invoice.fee', strings['invoice.fee']);
+			await shop.text('invoice.cashDue', strings['invoice.cashDue']);
 		}
 	});
 
@@ -326,7 +328,7 @@ describe('document parts (E35)', () => {
 	const business = { name: 'B', email: null, phone: null, address: null };
 	const context = {
 		business,
-		texts: invoiceTexts({}),
+		texts: invoiceTexts({}, strings),
 		words: { methods: {}, online: '', states: {} },
 		columns: ['item', 'quantity', 'unitPrice', 'amount'],
 		format: DEFAULT_FORMAT,

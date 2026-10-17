@@ -10,7 +10,14 @@
  * @module
  */
 import { createId } from '@ss/contracts';
-import { apiChecker, createAccountsDouble, createFakePortal, createMemoryStore, createNetwork, staffCaller } from '@ss/app-kit/testing';
+import {
+	apiChecker,
+	createAccountsDouble,
+	createFakePortal,
+	createMemoryStore,
+	createNetwork,
+	staffCaller,
+} from '@ss/app-kit/testing';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
@@ -419,6 +426,14 @@ export const setup = async ({
 		if (response.status !== 204) throw new Error(`setting ${feature}.${name}: ${response.status} ${response.text}`);
 	};
 
+	/** Save a website text (Settings → Texts). @param {string} key @param {string} value */
+	const text = async (key, value) => {
+		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/texts/${key}`, {
+			value,
+		});
+		if (response.status !== 204) throw new Error(`text ${key}: ${response.status} ${response.text}`);
+	};
+
 	/** Save a list setting (order_flow, couriers, delivery_zones, tax_rules, grades, booking_schedules). @param {string} name @param {unknown} value */
 	const list = async (name, value) => {
 		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/lists/${name}`, {
@@ -500,7 +515,11 @@ export const setup = async ({
 		permissions = ALL_PERMISSIONS,
 		user = { id: 'usr_staff0000001', name: 'Sam Staff', email: 'sam@shop.example.com' },
 	) => {
-		const response = await call('POST', '/v1/tickets', { token: server, staff: user, body: { permissions, origin: ADMIN_ORIGIN } });
+		const response = await call('POST', '/v1/tickets', {
+			token: server,
+			staff: user,
+			body: { permissions, origin: ADMIN_ORIGIN },
+		});
 		if (response.status !== 201 && response.status !== 200) throw new Error(`ticket: ${response.status} ${response.text}`);
 		return /** @type {string} */ (response.json.ticket);
 	};
@@ -633,6 +652,7 @@ export const setup = async ({
 		signIn,
 		db,
 		seedProduct,
+		text,
 		/** Mark a fake payment paid (Payments' verify then answers verified). @param {string} id */
 		payPayment: (id) => void paid.add(id),
 		flush,

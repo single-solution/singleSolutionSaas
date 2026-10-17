@@ -14,18 +14,6 @@
 				"order": 1
 			}
 		},
-		"products": {
-			"type": "integer",
-			"title": "Products listed",
-			"description": "How many of your best-selling products are listed, with links and prices.",
-			"default": 50,
-			"minimum": 0,
-			"maximum": 200,
-			"x-ui": {
-				"group": "Shop summary",
-				"order": 2
-			}
-		},
 		"policies": {
 			"type": "boolean",
 			"title": "Include policy summaries",

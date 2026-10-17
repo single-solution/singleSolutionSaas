@@ -6,8 +6,9 @@
  * delete that gives everything back, a flow without a confirmation step, and
  * the settings the flow replaced.
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { givePoints, loyaltyAccount } from '../adapters/ledger.js';
+import { ORDER_BURST_WINDOW_MINUTES } from '../core/limits.js';
 import { ORIGIN, readyShop } from './helpers.js';
 import { orderRecords } from './order-records.js';
 
@@ -314,6 +315,9 @@ describe('the extra moves (E40)', () => {
 });
 
 describe('checkout options of the flow', () => {
+	// the orders the shopper placed in the tests before are out of the burst window (ORDER_BURST_LIMIT)
+	beforeEach(() => shop.advance(ORDER_BURST_WINDOW_MINUTES * 60_000 + 1));
+
 	it('an edit of a waiting order keeps the amounts it was placed with, or prices it again', async () => {
 		const item = await shop.seedProduct({ price: 1000, stock: 10 });
 		const variantId = /** @type {any} */ (item.variants[0]).id;

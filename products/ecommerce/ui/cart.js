@@ -33,7 +33,6 @@ import {
 	h,
 	keepFocus,
 	mountShop,
-	paragraphs,
 	problemText,
 	richText,
 	safeHref,
@@ -120,13 +119,10 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						attemptKey = null;
 					});
 			// the merchant's policies come filled, in their order, and only the ones the shop wrote (E3, E27): each under its
-			// own title, HTML rebuilt from the allowed tags, or paragraphs
+			// own title, HTML rebuilt from the allowed tags
 			const policies = settings.checkout.policies.filter((policy) => policy.text.trim() !== '');
 			/** @param {string} text */
-			const policyBody = (text) =>
-				settings.checkout.policyFormat === 'html'
-					? [h(doc, 'div', { class: 'rich' }, richText(doc, text))]
-					: paragraphs(doc, text);
+			const policyBody = (text) => [h(doc, 'div', { class: 'rich' }, richText(doc, text))];
 			const checkoutBox = h(
 				doc,
 				'div',

@@ -11,6 +11,7 @@
 import { createId } from '@ss/contracts';
 import { defineRoute, problem } from '@ss/app-kit';
 import { IMAGE_TYPES } from '../core/catalog-content.js';
+import { IMAGE_MAX_BYTES } from '../core/limits.js';
 import {
 	STORE_FILES,
 	STORE_FILE_LABELS,
@@ -115,7 +116,7 @@ export const createStoreDetails = (product, service) => {
 		const extension = /** @type {Record<string, string>} */ (IMAGE_TYPES)[type];
 		if (!extension) throw refuse([{ path: '/type', message: 'Images are JPEG, PNG, WebP or AVIF.' }]);
 		const s = await service.site(ctx);
-		const limit = Math.min(Number((await s.values('catalog')).imageMaxBytes), STORE_LIMITS.file);
+		const limit = Math.min(IMAGE_MAX_BYTES, STORE_LIMITS.file);
 		if (!Number.isSafeInteger(body.size) || body.size < 1 || body.size > limit)
 			throw refuse([{ path: '/size', message: `An image has at most ${limit} bytes.` }]);
 		const storage = await service.storage(s);
@@ -168,7 +169,7 @@ export const createStoreDetails = (product, service) => {
 		const type = String(head.contentType ?? '')
 			.replace(/;.*$/, '')
 			.trim();
-		const limit = Math.min(Number((await s.values('catalog')).imageMaxBytes), STORE_LIMITS.file);
+		const limit = Math.min(IMAGE_MAX_BYTES, STORE_LIMITS.file);
 		if (!Object.hasOwn(IMAGE_TYPES, type) || head.size > limit) {
 			await storage.deleteObject({ key }).catch(() => null);
 			throw refuse([{ path: '/key', message: 'The file is not an image of an allowed type and size.' }]);
@@ -214,7 +215,8 @@ export const createStoreDetails = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/store-details/files',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'store_details',
 				rateLimit: SERVER_LIMITS,
 				handler: files,
@@ -223,7 +225,7 @@ export const createStoreDetails = (product, service) => {
 				method: 'POST',
 				path: '/v1/store-details/uploads',
 				auth: 'server',
-			permission: 'catalog.edit',
+				permission: 'catalog.edit',
 				feature: 'store_details',
 				rateLimit: SERVER_LIMITS,
 				handler: upload,
@@ -232,7 +234,7 @@ export const createStoreDetails = (product, service) => {
 				method: 'PUT',
 				path: '/v1/store-details/:file',
 				auth: 'server',
-			permission: 'catalog.edit',
+				permission: 'catalog.edit',
 				feature: 'store_details',
 				rateLimit: SERVER_LIMITS,
 				handler: attach,
@@ -241,7 +243,7 @@ export const createStoreDetails = (product, service) => {
 				method: 'DELETE',
 				path: '/v1/store-details/:file',
 				auth: 'server',
-			permission: 'catalog.edit',
+				permission: 'catalog.edit',
 				feature: 'store_details',
 				rateLimit: SERVER_LIMITS,
 				handler: detach,

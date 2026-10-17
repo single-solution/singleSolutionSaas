@@ -12,19 +12,19 @@ import { windowDefaults } from '../core/returns.js';
 /** @typedef {import('./service.js').Site} Site */
 
 /**
- * The shop's policies, filled (E3, E27): `{ format, policies: [{ key, title, text }] }`, those without text left out.
+ * The shop's policies, filled (E3, E27): `{ policies: [{ key, title, text }] }` (text is cleaned HTML), those without text
+ * left out.
  * @param {Site} s
  */
 export const policiesOf = async (s) => {
-	const [list, checkout, returns, business, { money, format }] = await Promise.all([
+	const [list, returns, business, { money, format }] = await Promise.all([
 		s.list('policies'),
-		s.values('checkout'),
 		s.values('returns'),
 		s.business(),
 		s.format(),
 	]);
 	const rate = s.has('delivery_zones') ? homeRate(await s.list('delivery_zones'), String(business.country ?? '')) : null;
-	return fillPolicies(/** @type {import('../core/policies.js').Policy[]} */ (list), checkout.policyFormat, {
+	return fillPolicies(/** @type {import('../core/policies.js').Policy[]} */ (list), {
 		...windowDefaults(returns),
 		locale: format?.locale,
 		business: business.name,

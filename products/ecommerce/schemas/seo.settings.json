@@ -325,25 +325,12 @@
 		"sitemapUrl": {
 			"type": "string",
 			"title": "Sitemap address",
-			"description": "Where your website serves the sitemap. Above the addresses per sitemap file it becomes an index of files at this address with ?file=categories, ?file=landings, ?file=products-1 …",
+			"description": "Where your website serves the sitemap. Above 10,000 addresses per sitemap file it becomes an index of files at this address with ?file=categories, ?file=landings, ?file=products-1 …",
 			"default": "/sitemap.xml",
 			"maxLength": 200,
 			"x-ui": {
 				"group": "Indexing and sitemap",
 				"order": 33
-			}
-		},
-		"sitemapSize": {
-			"type": "integer",
-			"title": "Addresses per sitemap file",
-			"description": "Above this many addresses the sitemap becomes an index of files (categories, landing pages, products-1, products-2 …). At most 15,000: with up to 10 photos per product a file then stays under the 50 MB search engines read.",
-			"default": 10000,
-			"minimum": 1000,
-			"maximum": 15000,
-			"x-ui": {
-				"group": "Indexing and sitemap",
-				"order": 34,
-				"advanced": true
 			}
 		},
 		"defaultDescription": {

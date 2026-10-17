@@ -377,7 +377,7 @@ describe('Chat lookups', () => {
 			stockLeft: null,
 			stockLeftText: null,
 			measure: null,
-			// Chat's Add to cart adds the least: pieces of 1 up to the shop's most of one item (checkout.maxQuantity)
+			// Chat's Add to cart adds the least: pieces of 1 up to the shop's most of one item (CART_MAX_QUANTITY)
 			limits: { step: 1, min: 1, max: expect.any(Number) },
 			unit: null,
 		});

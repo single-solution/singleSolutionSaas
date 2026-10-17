@@ -98,15 +98,10 @@ export const createCheckout = (product, service) => {
 		const phoneNeeded = checkout.phoneRequired !== false;
 		return {
 			checkout: {
-				// the most lines of a cart; each line's own limits come with its quote
-				maxLines: checkout.maxLines,
 				paymentMethods: methods.map((method) => ({ key: method.key, name: method.name, kind: method.kind })),
 				pickupLocations,
 				delivery: { cities: zoneCities(zones) },
-				...(await (async () => {
-					const filled = await policiesOf(s);
-					return { policies: filled.policies, policyFormat: filled.format };
-				})()),
+				policies: (await policiesOf(s)).policies,
 				// how a shopper orders without signing in (E21): the contact guests check out by and whether a phone is
 				// needed (phase 5); null while guests sign in
 				guests: checkout.guests === 'off' ? null : guestRules(checkout),
@@ -221,7 +216,7 @@ export const createCheckout = (product, service) => {
 				method: 'POST',
 				path: '/v1/products/:id/licenses',
 				auth: 'server',
-			permission: 'catalog.edit',
+				permission: 'catalog.edit',
 				feature: 'digital_goods',
 				rateLimit: SERVER_LIMITS,
 				handler: digital.addLicenses,
@@ -239,7 +234,7 @@ export const createCheckout = (product, service) => {
 				method: 'POST',
 				path: '/v1/products/:id/licenses/remove',
 				auth: 'server',
-			permission: 'catalog.edit',
+				permission: 'catalog.edit',
 				feature: 'digital_goods',
 				rateLimit: SERVER_LIMITS,
 				handler: digital.removeLicenses,
@@ -257,7 +252,7 @@ export const createCheckout = (product, service) => {
 				method: 'DELETE',
 				path: '/v1/products/:id/files/:name',
 				auth: 'server',
-			permission: 'catalog.edit',
+				permission: 'catalog.edit',
 				feature: 'digital_goods',
 				rateLimit: SERVER_LIMITS,
 				handler: digital.removeFile,
@@ -275,7 +270,7 @@ export const createCheckout = (product, service) => {
 				method: 'POST',
 				path: '/v1/products/:id/files',
 				auth: 'server',
-			permission: 'catalog.edit',
+				permission: 'catalog.edit',
 				feature: 'digital_goods',
 				rateLimit: SERVER_LIMITS,
 				handler: digital.addFile,

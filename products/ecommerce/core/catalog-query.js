@@ -7,6 +7,7 @@
  * @module
  */
 import { valueLabel } from './catalog.js';
+import { TOP_FIELD } from './limits.js';
 import { levelOf } from './measure.js';
 import { MAX_PAGE_NUMBER, SORTS, STOCK_STATES } from './model.js';
 import { MAX_AMOUNT } from '@ss/contracts/format';
@@ -21,22 +22,13 @@ import { escapeRegex } from './search.js';
 /** @typedef {keyof typeof SORTS} SortKey */
 
 /**
- * The count top products are ranked by (the `catalog` setting `topBasis`, parity P3-10): units sold (delivered
- * orders), or units ordered (orders that hold their stock or were delivered).
- * @param {unknown} basis
- * @returns {'sold' | 'ordered'}
- */
-export const topField = (basis) => (basis === 'ordered' ? 'ordered' : 'sold');
-
-/**
- * A listing's sort by its key, `top` and `sold_asc` by the shop's {@link topField}.
+ * A listing's sort by its key, `top` and `sold_asc` by the count of units sold (`TOP_FIELD`, parity P3-10).
  * @param {SortKey} key
- * @param {unknown} basis the `catalog` setting `topBasis`
  * @returns {Sort}
  */
-export const sortOf = (key, basis) => {
+export const sortOf = (key) => {
 	const sort = /** @type {Sort} */ (SORTS[key]);
-	return key === 'top' || key === 'sold_asc' ? { ...sort, field: topField(basis) } : sort;
+	return key === 'top' || key === 'sold_asc' ? { ...sort, field: TOP_FIELD } : sort;
 };
 /** @typedef {{ field: string, dir: 1 | -1, then?: ReadonlyArray<{ field: string, dir: 1 | -1 }> }} Sort */
 

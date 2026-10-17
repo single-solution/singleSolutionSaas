@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SEARCH_INDEX } from '../core/limits.js';
 import { createDashboardSearch } from '../server/dashboard-search.js';
 import { setup } from './helpers.js';
 
@@ -38,8 +39,7 @@ describe('GET /v1/dashboard/websites/:websiteId/search-index', () => {
 
 	it('follows the catalog settings and the last Atlas search', async () => {
 		await t.setting('catalog', 'search', 'atlas');
-		await t.setting('catalog', 'searchIndex', 'shop_search');
-		expect((await read(cookie)).json).toEqual({ search: 'atlas', index: 'shop_search', state: null });
+		expect((await read(cookie)).json).toEqual({ search: 'atlas', index: SEARCH_INDEX, state: null });
 
 		await t.product.searchState.set(t.websiteId, true, 'IndexNotFound');
 		const missing = (await read(cookie)).json;
@@ -48,11 +48,6 @@ describe('GET /v1/dashboard/websites/:websiteId/search-index', () => {
 		t.advance(60_000);
 		await t.product.searchState.set(t.websiteId, false);
 		expect((await read(cookie)).json.state).toEqual({ missing: false, at: new Date(t.now()).toISOString(), message: '' });
-	});
-
-	it('falls back to the default index when the setting is emptied', async () => {
-		await t.setting('catalog', 'searchIndex', '');
-		expect((await read(cookie)).json.index).toBe('ss_ecommerce_products_search');
 	});
 
 	it('needs a dashboard session', async () => {

@@ -18,7 +18,7 @@ import { ownerOrders } from '../adapters/fulfillment-store.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { dealsLiveNow, loadOffers } from '../adapters/promotions-store.js';
 import { htmlToText } from '../core/catalog-content.js';
-import { topField } from '../core/catalog-query.js';
+import { CART_MAX_QUANTITY, TOP_FIELD } from '../core/limits.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { stockLeftOf } from '../core/catalog-views.js';
 import { CONTEXT_BASICS, CONTEXT_DEALS, CONTEXT_PRODUCTS, contextText, contextWordsOf } from '../core/chat-context.js';
@@ -248,15 +248,14 @@ export const createChatLookup = (product, service, media) => {
 	 * @param {import('../core/lookup.js').ChatFilters | null} [filters]
 	 */
 	const cards = async (s, data, items, filters = null) => {
-		const [rules, shownOf, measures, types, checkout] = await Promise.all([
+		const [rules, shownOf, measures, types] = await Promise.all([
 			cardRules(s),
 			pricesFor(s, data),
 			measuresOf(s, data, items),
 			s.list('item_types').then((list) => productTypes(data, items, list)),
-			s.has('checkout') ? s.values('checkout') : Promise.resolve(null),
 		]);
 		// the most of one item a cart takes (E4)
-		const cap = checkout ? Number(checkout.maxQuantity) || MAX_QUANTITY : MAX_QUANTITY;
+		const cap = CART_MAX_QUANTITY;
 		return Promise.all(
 			items.map(async (item) => {
 				const shown = await shownOf(item);
@@ -376,7 +375,7 @@ export const createChatLookup = (product, service, media) => {
 		const narrowed = and.length > 0 ? { ...base, $and: and } : base;
 		const q = terms.join(' ');
 		// Atlas Search first when the website uses it, the basic search when it fails (E14)
-		if (q && (await atlas.useAtlas(s, q, 'chat'))) {
+		if (q && (await atlas.useAtlas(s, q))) {
 			const found = await atlas.run(s, data, q, {
 				match: narrowed,
 				sort: null,
@@ -416,7 +415,7 @@ export const createChatLookup = (product, service, media) => {
 			await data
 				.collection(COLLECTIONS.products)
 				.find(all.length > 0 ? { ...base, $and: all } : base, { projection: CARD_FIELDS })
-				.sort({ inStock: -1, [topField((await s.values('catalog')).topBasis)]: -1, id: 1 })
+				.sort({ inStock: -1, [TOP_FIELD]: -1, id: 1 })
 				.limit(filters.limit)
 				.toArray()
 		);
@@ -437,11 +436,7 @@ export const createChatLookup = (product, service, media) => {
 					{ websiteId: data.websiteId, status: 'active', ...visibleMatch(await hiddenFor(s)) },
 					{ projection: CARD_FIELDS },
 				)
-				.sort(
-					kind === 'new'
-						? { publishedAt: -1, id: -1 }
-						: { [topField((await s.values('catalog')).topBasis)]: -1, publishedAt: -1, id: -1 },
-				)
+				.sort(kind === 'new' ? { publishedAt: -1, id: -1 } : { [TOP_FIELD]: -1, publishedAt: -1, id: -1 })
 				.limit(limitOf(ctx.query.limit, 5, 12))
 				.toArray()
 		);
@@ -874,7 +869,7 @@ export const createChatLookup = (product, service, media) => {
 			? filled.policies.map((policy) => ({
 					key: policy.key,
 					title: policy.title,
-					text: filled.format === 'html' ? htmlToText(policy.text) : policy.text,
+					text: htmlToText(policy.text),
 				}))
 			: [];
 		/** @type {{ firstName: string, city: string, points: number | null } | null} */
@@ -947,7 +942,8 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/products',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'catalog',
 				rateLimit: SERVER_LIMITS,
 				handler: search,
@@ -956,7 +952,8 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/products/top',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'catalog',
 				rateLimit: SERVER_LIMITS,
 				handler: top,
@@ -964,7 +961,8 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/products/:id',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'catalog',
 				rateLimit: SERVER_LIMITS,
 				handler: details,
@@ -972,7 +970,8 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/products/:id/quote',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'deals',
 				rateLimit: SERVER_LIMITS,
 				handler: quote,
@@ -980,7 +979,8 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/deals',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'deals',
 				rateLimit: SERVER_LIMITS,
 				handler: deals,
@@ -988,7 +988,8 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/me/orders',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'checkout',
 				rateLimit: SERVER_LIMITS,
 				handler: myOrders,
@@ -996,7 +997,8 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/me/account',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'checkout',
 				rateLimit: SERVER_LIMITS,
 				handler: myAccount,
@@ -1004,7 +1006,8 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/me/shipments',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'checkout',
 				rateLimit: SERVER_LIMITS,
 				handler: myShipments,
@@ -1012,7 +1015,8 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/context',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'catalog',
 				rateLimit: SERVER_LIMITS,
 				handler: context,
@@ -1020,7 +1024,8 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/customers/:userId/orders',
-				auth: 'server', runtime: true,
+				auth: 'server',
+				runtime: true,
 				feature: 'checkout',
 				rateLimit: SERVER_LIMITS,
 				handler: customerOrders,

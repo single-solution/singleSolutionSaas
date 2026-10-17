@@ -18,6 +18,7 @@ import { loyaltyAccount } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { loadOffers } from '../adapters/promotions-store.js';
 import { MAX_SLOT_DAYS, scheduleOf, slotAt, slotsBetween } from '../core/bookings.js';
+import { CART_MAX_QUANTITY } from '../core/limits.js';
 import { MAX_QUANTITY, afterOffers, feeBaseOf, grossOf, priceLines, resolveLines, roleDiscounts } from '../core/checkout.js';
 import { pricesFor, roleTermsOf } from '../core/role-pricing.js';
 import { placeOf } from '../core/address.js';
@@ -201,7 +202,6 @@ export const createQuoting = (product, service) => {
 		// services booked in time slots: their item type's `slots`; items sold in a unit of their own: its `measure`
 		// (dynamic model §1, §4)
 		const typed = await productTypes(data, [...products.values()], await s.list('item_types'));
-		const checkout = await s.values('checkout');
 		/** @param {import('../core/model.js').ProductRecord} item */
 		const slots = (item) => {
 			const type = typed.get(item.id);
@@ -231,7 +231,7 @@ export const createQuoting = (product, service) => {
 			// an item counted in pieces: its type's least, most and step (E4)
 			quantityOf: (item) => typed.get(item.id)?.elements.quantity ?? null,
 			// staff editing an order are held to the most of one item, not the shop's own limit (E29)
-			maxQuantity: edit ? MAX_QUANTITY : Number(checkout.maxQuantity ?? MAX_QUANTITY),
+			maxQuantity: edit ? MAX_QUANTITY : CART_MAX_QUANTITY,
 			unit,
 			licenses,
 			booked,

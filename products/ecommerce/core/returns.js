@@ -19,6 +19,7 @@
  */
 import { endOf, isDuration, settingDuration } from './durations.js';
 import { gradesFor } from './grades.js';
+import { RETURN_PHOTO_MAX_MB } from './limits.js';
 import { boolField, checkNamedList, oneOf } from './named-lists.js';
 import { OTHER_WAY, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
 
@@ -593,10 +594,10 @@ export const isPhotoKey = (key, userId) => {
 /**
  * Check a photo upload request.
  * @param {unknown} body
- * @param {{ photoMaxMb: number }} limits
  * @returns {{ ok: true, type: keyof typeof PHOTO_TYPES, extension: string, size: number } | { ok: false, field: string, message: string }}
  */
-export const checkPhotoInput = (body, { photoMaxMb }) => {
+export const checkPhotoInput = (body) => {
+	const photoMaxMb = RETURN_PHOTO_MAX_MB;
 	const input = typeof body === 'object' && body !== null ? /** @type {Record<string, unknown>} */ (body) : {};
 	const type = typeof input.type === 'string' && Object.hasOwn(PHOTO_TYPES, input.type) ? input.type : null;
 	if (!type) return { ok: false, field: 'type', message: 'Upload a JPEG, PNG or WebP photo.' };

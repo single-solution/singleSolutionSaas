@@ -1,8 +1,8 @@
 /**
  * Invoices, packing slips and pick lists (PLAN 0.8.8: invoices and packing slips with the serial numbers on each line;
  * E35) as printable, self-contained HTML: inline `<style>`, no script, every value HTML-escaped. Everything printed
- * comes from the order snapshot, business.json (name, address, email, phone) and the `invoices` settings, whose texts
- * the merchant edits (`INVOICE_TEXTS` are the English defaults); payment methods are named as the website's
+ * comes from the order snapshot, business.json (name, address, email, phone) and the `invoices` settings (their titles
+ * and footer, `INVOICE_TEXTS` being the English defaults) and the website's texts (the labels, `invoice.*`); payment methods are named as the website's
  * `payment_methods` list names them (E2, E16) and payment states are the website's texts (`orders.payment.*`; decision
  * 10), so each word lives in one place. The invoice's line columns
  * are the merchant's (`columns`, E26): item, SKU, quantity, unit price, discount, tax and amount, and any product or
@@ -133,65 +133,74 @@ export const invoiceColumnsOf = (settings) => {
 export const shopperInvoiceReady = (order, settings) =>
 	settings.shopperFrom !== 'confirmed' || !(WAITING_ROLES.includes(order.role) || order.role === 'canceled');
 
-/** The editable texts (the `invoices` settings) and their defaults. */
+/** The words the merchant edits as settings (the `invoices` settings) and their defaults. */
 export const INVOICE_TEXTS = Object.freeze({
 	title: 'Invoice',
 	packingSlipTitle: 'Packing slip',
 	footer: '',
-	labelNumber: 'Invoice no.',
-	labelDate: 'Date',
-	labelBilledTo: 'Billed to',
-	labelShipTo: 'Ship to',
-	labelItem: 'Item',
-	labelSku: 'SKU',
-	labelGrade: 'Grade',
-	labelSerials: 'Serial numbers',
-	labelWarranty: 'Warranty: {time}',
-	labelQuantity: 'Qty',
-	labelUnitPrice: 'Unit price',
-	labelAmount: 'Amount',
-	labelSubtotal: 'Subtotal',
-	labelDiscount: 'Discount',
-	labelDelivery: 'Delivery',
-	labelTax: 'Tax',
-	labelTaxIncluded: 'Tax included',
-	labelTotal: 'Total',
-	labelPayment: 'Payment',
-	labelPaid: 'Paid',
-	labelRefunded: 'Refunded',
-	labelBalance: 'Balance due',
-	labelPickup: 'Store pickup',
-	labelCourier: 'Courier',
-	labelTracking: 'Tracking number',
-	labelNote: 'Note',
-	labelFee: 'Cash handling',
-	labelRoleDiscount: 'Member discount',
-	labelPoints: 'Points ({points})',
-	labelCashDue: 'Cash due on delivery',
-	labelPayments: 'Payments',
-	labelRefunds: 'Refunds',
 	pickListTitle: 'Pick list',
 	sellerDetails: '',
 });
 
-/** @typedef {Record<keyof typeof INVOICE_TEXTS, string>} InvoiceTexts */
+/**
+ * The labels of the documents are the website's texts (Texts, `strings/en.json`): each label the documents print, with
+ * the text key that holds its words.
+ */
+export const INVOICE_LABELS = Object.freeze({
+	labelNumber: 'invoice.number',
+	labelDate: 'invoice.date',
+	labelBilledTo: 'invoice.billedTo',
+	labelShipTo: 'invoice.shipTo',
+	labelItem: 'invoice.item',
+	labelSku: 'invoice.sku',
+	labelGrade: 'invoice.grade',
+	labelSerials: 'invoice.serials',
+	labelWarranty: 'invoice.warranty',
+	labelQuantity: 'invoice.quantity',
+	labelUnitPrice: 'invoice.unitPrice',
+	labelAmount: 'invoice.amount',
+	labelSubtotal: 'invoice.subtotal',
+	labelDiscount: 'invoice.discount',
+	labelDelivery: 'invoice.delivery',
+	labelTax: 'invoice.tax',
+	labelTaxIncluded: 'invoice.taxIncluded',
+	labelTotal: 'invoice.total',
+	labelPayment: 'invoice.payment',
+	labelPaid: 'invoice.paid',
+	labelRefunded: 'invoice.refunded',
+	labelBalance: 'invoice.balance',
+	labelPickup: 'invoice.pickup',
+	labelCourier: 'invoice.courier',
+	labelTracking: 'invoice.tracking',
+	labelNote: 'invoice.note',
+	labelFee: 'invoice.fee',
+	labelRoleDiscount: 'invoice.roleDiscount',
+	labelPoints: 'invoice.points',
+	labelCashDue: 'invoice.cashDue',
+	labelPayments: 'invoice.payments',
+	labelRefunds: 'invoice.refunds',
+});
+
+/** @typedef {{ [name in keyof typeof INVOICE_TEXTS | keyof typeof INVOICE_LABELS]: string }} InvoiceTexts */
 
 /**
- * The texts to print: the settings, with the defaults for anything missing.
+ * The words to print: the settings, with the defaults for anything missing, and the labels from the website's texts.
  * @param {Record<string, unknown>} settings
+ * @param {Readonly<Record<string, string>>} [texts] the website's texts (`invoice.*` hold the labels)
  * @returns {InvoiceTexts}
  */
-export const invoiceTexts = (settings) =>
-	/** @type {InvoiceTexts} */ (
-		Object.fromEntries(
+export const invoiceTexts = (settings, texts = {}) =>
+	/** @type {InvoiceTexts} */ ({
+		...Object.fromEntries(
 			Object.entries(INVOICE_TEXTS).map(([key, fallback]) => [
 				key,
 				typeof settings[key] === 'string' && (settings[key] !== '' || key === 'footer' || key === 'sellerDetails')
 					? settings[key]
 					: fallback,
 			]),
-		)
-	);
+		),
+		...Object.fromEntries(Object.entries(INVOICE_LABELS).map(([name, key]) => [name, texts[key] ?? ''])),
+	});
 
 /**
  * The day an order was placed, by the Format in the business time zone.

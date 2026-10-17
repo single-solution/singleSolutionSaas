@@ -372,7 +372,7 @@ export const createReturns = (product, service) => {
 		const shopper = await service.requireShopper(s);
 		const settings = await s.values('returns');
 		if (Number(settings.maxPhotos) < 1) throw service.invalid('type', 'Photos are not taken with claims.');
-		const checked = checkPhotoInput(bodyOf(ctx), { photoMaxMb: Number(settings.photoMaxMb) });
+		const checked = checkPhotoInput(bodyOf(ctx));
 		if (!checked.ok) throw service.invalid(checked.field, checked.message);
 		const storage = await service.storage(s);
 		const signed = storage.presignPut({

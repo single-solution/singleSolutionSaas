@@ -101,7 +101,7 @@ export const proxyRoute = (base, { file, route, type }) =>
 	].join('\n');
 
 /**
- * The sitemap's route handler on the merchant's site (E16): the sitemap, or above the `sitemapSize` setting a sitemap
+ * The sitemap's route handler on the merchant's site (E16): the sitemap, or above `SITEMAP_FILE_SIZE` addresses a sitemap
  * index whose files are this same address with `?file=<name>`, each fetched from `/v1/seo/sitemaps/:file`.
  * @param {string} base Ecommerce's address
  */
@@ -418,12 +418,11 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		'    headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
 		"    next: { revalidate: 3600, tags: ['ss-ecommerce'] },",
 		'  });',
-		"  const found = response.ok ? await response.json() : { format: 'text', policies: [] };",
+		'  const found = response.ok ? await response.json() : { policies: [] };',
 		'  const policy = found.policies.find((each) => each.key === name);',
 		"  const text = policy?.text ?? '';",
-		'  // policyFormat html: HTML Ecommerce already cleaned to paragraphs, lists, headings, emphasis, quotes and links',
-		"  if (found.format === 'html') return <article dangerouslySetInnerHTML={{ __html: text }} />;",
-		"  return <article style={{ whiteSpace: 'pre-wrap' }}>{text}</article>;",
+		'  // HTML Ecommerce already cleaned to paragraphs, lists, headings, emphasis, quotes and links',
+		'  return <article dangerouslySetInnerHTML={{ __html: text }} />;',
 		'}',
 	].join('\n');
 	const customerOrders = [

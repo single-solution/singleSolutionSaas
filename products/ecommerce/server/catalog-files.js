@@ -3,7 +3,7 @@
  * upload (the bucket refuses another type or size) for a product image, a category image or a brand logo, then the
  * uploaded file is checked in the bucket and attached to its record; product images are reordered (the first is the
  * main image) and removed (the file is deleted from the bucket). Images are JPEG, PNG, WebP or AVIF up to the
- * `catalog` setting `imageMaxBytes`. New keys are under the record's folder; keys a product already holds (imported
+ * `IMAGE_MAX_BYTES`. New keys are under the record's folder; keys a product already holds (imported
  * ones in their own folders) stay valid when its photos are rearranged, and only files under the record's folder are
  * ever deleted (CA-5).
  * @module
@@ -14,6 +14,7 @@ import { isObject } from '@ss/contracts/util';
 import { NO_KEYS } from '../adapters/catalog-store.js';
 import { LIMITS, cleanText, heldKeys } from '../core/catalog.js';
 import { IMAGE_TYPES, VIDEO_TYPES, mediaExtras } from '../core/catalog-content.js';
+import { IMAGE_MAX_BYTES, VIDEO_MAX_BYTES } from '../core/limits.js';
 import { COLLECTIONS } from '../core/model.js';
 import { refuse } from './catalog-common.js';
 import { SERVER_LIMITS, UPLOAD_SECONDS, bodyOf } from './service.js';
@@ -40,9 +41,6 @@ const OWNERS = Object.freeze({
  * @param {CatalogCommon} common
  */
 export const createCatalogFiles = (product, service, common) => {
-	/** @param {Site} s */
-	const maxBytes = async (s) => Number((await s.values('catalog')).imageMaxBytes);
-
 	/**
 	 * The record an image belongs to, or 404.
 	 * @param {WebsiteData} data @param {Owner} owner @param {string} id
@@ -72,7 +70,7 @@ export const createCatalogFiles = (product, service, common) => {
 		const type = String(head.contentType ?? '')
 			.replace(/;.*$/, '')
 			.trim();
-		if (!Object.hasOwn(IMAGE_TYPES, type) || head.size > (await maxBytes(s))) {
+		if (!Object.hasOwn(IMAGE_TYPES, type) || head.size > IMAGE_MAX_BYTES) {
 			await storage.deleteObject({ key }).catch(() => null);
 			throw refuse([{ path: '/key', message: 'The file is not an image of an allowed type and size.' }]);
 		}
@@ -104,7 +102,7 @@ export const createCatalogFiles = (product, service, common) => {
 
 	/**
 	 * POST …/uploads `{ for, id, type, size }` → a presigned upload: an image (also each smaller copy of a photo, E6),
-	 * or a product video (MP4 or WebM up to `videoMaxBytes`, E4).
+	 * or a product video (MP4 or WebM up to `VIDEO_MAX_BYTES`, E4).
 	 * @param {any} ctx
 	 */
 	const upload = async (ctx) => {
@@ -119,7 +117,7 @@ export const createCatalogFiles = (product, service, common) => {
 		if (!extension)
 			throw refuse([{ path: '/type', message: 'Images are JPEG, PNG, WebP or AVIF; product videos MP4 or WebM.' }]);
 		const { s, data } = await common.open(ctx);
-		const limit = video ? Number((await s.values('catalog')).videoMaxBytes) : await maxBytes(s);
+		const limit = video ? VIDEO_MAX_BYTES : IMAGE_MAX_BYTES;
 		if (!Number.isSafeInteger(body.size) || body.size < 1 || body.size > limit)
 			throw refuse([{ path: '/size', message: `${video ? 'A video' : 'An image'} has at most ${limit} bytes.` }]);
 		const record = await recordOf(data, owner, String(body.id));

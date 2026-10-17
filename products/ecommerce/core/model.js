@@ -25,8 +25,8 @@ export const isDuplicate = (error) => {
 
 /** Products in a wishlist, at most. */
 export const MAX_WISHLIST = 200;
-/** Products compared at once, at most (the `compare` setting `maxProducts` picks 2 to this many, E39). */
-export const MAX_COMPARE = 10;
+/** Products compared at once (E39): `COMPARE_MAX_PRODUCTS` of limits.js. */
+export { COMPARE_MAX_PRODUCTS as MAX_COMPARE } from './limits.js';
 
 /** Most products on one page of a listing (E8): the `limit` of a read and the `pageSize` setting stop here. */
 export const MAX_PAGE_SIZE = 60;
@@ -209,7 +209,7 @@ export const ID_PREFIX = Object.freeze({
  *   grade's, else the setting)
  * @property {number} sold units sold (delivered orders), for top products
  * @property {number} ordered units of orders placed and not given back before delivery (open and delivered orders), for
- *   top products by the `catalog` setting `topBasis: ordered` (parity P3-10)
+ *   a count nothing ranks by now (top products go by units sold, `TOP_FIELD`; parity P3-10)
  * @property {{ average: number, count: number }} rating approved reviews
  * @property {number} price lowest active variant price (listings, sorting)
  * @property {boolean} inStock some active variant can be sold now

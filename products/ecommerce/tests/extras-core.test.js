@@ -7,6 +7,7 @@ import { checkAlertInput, dueConditions, isDue, priceOf } from '../core/alerts.j
 import { compareRows, gradeLabels, parseCompareIds } from '../core/compare.js';
 import { DAY_MS } from '../core/durations.js';
 import { afterFilter, keyOf, sortOf } from '../core/extras-pages.js';
+import { RETURN_PHOTO_MAX_MB } from '../core/limits.js';
 import { parseRange, returnRateRows, stockAgeRows } from '../core/reports.js';
 import {
 	actionsOf,
@@ -146,10 +147,12 @@ describe('claim windows', () => {
 		expect(checkClaimInput({ ...ok, reason: 5 }, { maxPhotos: 2 })).toMatchObject({ field: 'reason' });
 		expect(checkClaimInput({ ...ok, photos: ['a', 'b', 'c'] }, { maxPhotos: 2 })).toMatchObject({ field: 'photos' });
 		expect(checkClaimInput({ ...ok, photos: ['a', 'a'] }, { maxPhotos: 2 })).toMatchObject({ field: 'photos' });
-		expect(checkPhotoInput({ type: 'image/gif', size: 1 }, { photoMaxMb: 1 })).toMatchObject({ field: 'type' });
-		expect(checkPhotoInput(null, { photoMaxMb: 1 })).toMatchObject({ field: 'type' });
-		expect(checkPhotoInput({ type: 'image/png', size: 2_000_000 }, { photoMaxMb: 1 })).toMatchObject({ field: 'size' });
-		expect(checkPhotoInput({ type: 'image/webp', size: 10 }, { photoMaxMb: 1 })).toMatchObject({ ok: true, extension: 'webp' });
+		const most = RETURN_PHOTO_MAX_MB * 1_048_576;
+		expect(checkPhotoInput({ type: 'image/gif', size: 1 })).toMatchObject({ field: 'type' });
+		expect(checkPhotoInput(null)).toMatchObject({ field: 'type' });
+		expect(checkPhotoInput({ type: 'image/png', size: most + 1 })).toMatchObject({ field: 'size' });
+		expect(checkPhotoInput({ type: 'image/png', size: most })).toMatchObject({ ok: true });
+		expect(checkPhotoInput({ type: 'image/webp', size: 10 })).toMatchObject({ ok: true, extension: 'webp' });
 		expect(photoFolder('usr/1 x')).toBe('ecommerce/returns/usr_1_x/');
 		expect(isPhotoKey('ecommerce/returns/usr_1/pho_1.jpg', 'usr_1')).toBe(true);
 		expect(isPhotoKey('ecommerce/returns/usr_2/pho_1.jpg', 'usr_1')).toBe(false);

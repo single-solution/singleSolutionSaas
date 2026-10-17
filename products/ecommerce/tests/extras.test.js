@@ -11,6 +11,7 @@ import { createAlerts } from '../server/extras-alerts.js';
 import { createCards } from '../server/extras-cards.js';
 import { createExtras } from '../server/extras.js';
 import { createService } from '../server/service.js';
+import { COMPARE_MAX_PRODUCTS } from '../core/limits.js';
 import { COLLECTIONS } from '../core/model.js';
 import { DOMAIN, PAYMENTS, readyShop, STORAGE, storedAttribute, storedOrder, storedUnit } from './helpers.js';
 
@@ -757,10 +758,11 @@ describe('wishlist, alerts and compare', () => {
 			expect.objectContaining({ id: b.id, brand: null, grades: [] }),
 		]);
 		expect(compared.json.rows).toEqual([{ attributeId: 'att_ram', name: 'RAM', unit: 'GB', values: [8, 12] }]);
-		// up to 10 at once (E39)
-		await shop.setting('compare', 'maxProducts', 10);
-		await shop.setting('compare', 'maxProducts', 2);
-		expect((await shop.visitor('GET', `/v1/shop/compare?ids=${a.id},${b.id},prd_x`)).status).toBe(422);
+		// up to COMPARE_MAX_PRODUCTS at once (E39)
+		const some = (/** @type {number} */ count) =>
+			[a.id, b.id, 'prd_missing01', 'prd_missing02', 'prd_missing03'].slice(0, count).join(',');
+		expect((await shop.visitor('GET', `/v1/shop/compare?ids=${some(COMPARE_MAX_PRODUCTS)}`)).status).toBe(200);
+		expect((await shop.visitor('GET', `/v1/shop/compare?ids=${some(COMPARE_MAX_PRODUCTS + 1)}`)).status).toBe(422);
 		expect((await shop.visitor('GET', `/v1/shop/compare?ids=${b.id}`)).json.rows).toHaveLength(1);
 	});
 });
@@ -872,9 +874,11 @@ describe('data rights and widget settings', () => {
 	it('gives the visitor widgets their settings', async () => {
 		const config = await shop.visitor('GET', '/v1/widget/config');
 		expect(config.json.settings).toMatchObject({
-			returns: { maxPhotos: 5, photoMaxMb: 5 },
-			compare: { max: 2 },
+			returns: { maxPhotos: 5 },
 		});
+		// the fixed limits are in the widgets' code (photos up to 5 MB, 4 products compared), never in the config
+		expect(config.json.settings.returns).not.toHaveProperty('photoMaxMb');
+		expect(config.json.settings).not.toHaveProperty('compare');
 		// nothing the widgets do not read: no review moderation, no wishlist size
 		expect(config.json.settings.reviews).not.toHaveProperty('moderation');
 		expect(config.json.settings).not.toHaveProperty('wishlist');

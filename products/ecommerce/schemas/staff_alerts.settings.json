@@ -62,19 +62,6 @@
 				"order": 2
 			}
 		},
-		"maxRecipients": {
-			"type": "integer",
-			"title": "People per alert",
-			"default": 100,
-			"minimum": 1,
-			"maximum": 200,
-			"description": "At most this many people get one alert (the list first, then the Accounts staff).",
-			"x-ui": {
-				"group": "Recipients",
-				"order": 13,
-				"advanced": true
-			}
-		},
 		"adminUrl": {
 			"type": "string",
 			"title": "Order page address in your admin",

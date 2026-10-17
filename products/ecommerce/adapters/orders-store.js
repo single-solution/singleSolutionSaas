@@ -291,7 +291,7 @@ export const createOrdersStore = (data) => {
 			});
 		},
 		/**
-		 * Orders a customer placed since a time (`checkout.placeLimit`): a member's by user id, and every order of their
+		 * Orders a customer placed since a time (`ORDER_BURST_LIMIT`): a member's by user id, and every order of their
 		 * customer record (a guest's, or one placed as a guest on a member's phone).
 		 * @param {{ userId: string | null, customerId: string | null }} who @param {Date} since @param {number} limit
 		 */
