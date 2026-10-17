@@ -7,13 +7,15 @@
  *   dashboard: `<dashboard>?websiteId=<id>`, or `<dashboard>?view=defaults` for an admin launch without a website.
  * - Merchants reach only the websites of their launch; admins any website that has this product (not removed).
  * - Rights: features on/off → Owner or Support; prices, global defaults and Re-seal (stored secrets sealed again with
- *   the current `ENCRYPTION_KEY`, `reseal.js`) → Owner; settings, texts, theme, Format and connections → the merchant
- *   (settings of switched-on features only) and Owner or Support.
+ *   the current `ENCRYPTION_KEY`, `reseal.js`) → Owner; settings, texts and connections → the merchant (settings of
+ *   switched-on features only) and Owner or Support. The theme and the Format are the Portal's (Website settings): the
+ *   dashboard only reads the Format (`GET …/format`, for the dates it shows).
  * - Writes are refused unless their Origin is the product's own address; dashboard responses are never framed.
  * @module
  */
 import { canonicalOrigin, isProtocolError, randomToken, sha256Hex, verifyLaunch } from '@ss/protocol';
 import { isObject } from '@ss/contracts/util';
+import { missingWebsiteSettings } from '@ss/contracts/website-settings';
 import { currentFeatures } from './connection.js';
 import { defineRoute } from './http/routes.js';
 import { noContent, problem } from './http/results.js';
@@ -144,8 +146,9 @@ export const createDashboard = (kit) => {
 		const websiteId = merchant ? merchant.websiteId : (admin?.websiteId ?? null);
 		if (websiteId) {
 			ctx.after(async () => {
+				// the settings are fetched when the status says the Portal holds newer ones
 				const found = await kit.status.lookup(websiteId);
-				if (found.ok) await kit.business.refresh(websiteId, found.status.domain);
+				if (found.ok) await kit.website.get(websiteId);
 			});
 		}
 		const dashboard = manifest.endpoints.dashboard;
@@ -269,13 +272,14 @@ export const createDashboard = (kit) => {
 				const id = website(ctx);
 				// the status first (a removed website turns its switches off), then every other read at once
 				const status = await statusOf(ctx);
-				const [{ on }, connections, seen, business, recentChanges] = await Promise.all([
+				const [{ on }, connections, seen, settings, recentChanges] = await Promise.all([
 					kit.reports.switches(id),
 					kit.connections.list(id),
 					store.get('widget', id),
-					kit.business.get(id, status.domain),
+					kit.website.document(id, { after: ctx.after }),
 					kit.recent.list(id),
 				]);
+				const requires = manifest.websiteSettings?.requires ?? [];
 				const needed = connections.filter((c) => c.neededBy.some((key) => on.includes(key)));
 				const visitorWidgets = manifest.widgets.some(
 					(w) => w.kind === 'visitor' && [w.feature].flat().some((key) => on.includes(key)),
@@ -298,7 +302,12 @@ export const createDashboard = (kit) => {
 									lastSeenAt: seen ? new Date(seen.lastSeenAt).toISOString() : null,
 								}
 							: null,
-						business: { found: business.found, fetchedAt: business.fetchedAt },
+						// what the Portal's website settings still lack of what this product needs (version 0: not set yet)
+						website: {
+							version: settings.version,
+							requires: [...requires],
+							missing: missingWebsiteSettings(settings, requires),
+						},
 					},
 					recentChanges,
 				};
@@ -403,43 +412,9 @@ export const createDashboard = (kit) => {
 		),
 		defineRoute({
 			method: 'GET',
-			path: `${W}/theme`,
-			auth: 'dashboard',
-			handler: async (ctx) => kit.settings.themeOf(website(ctx)),
-		}),
-		defineRoute({
-			method: 'PUT',
-			path: `${W}/theme`,
-			auth: 'dashboard',
-			handler: async (ctx) =>
-				changed(
-					ctx,
-					{ what: 'theme' },
-					await kit.settings.setTheme({ websiteId: website(ctx), theme: objectBody(ctx.body), who: whoOf(sessionOf(ctx)) }),
-					() => kit.settings.themeOf(website(ctx)),
-				),
-		}),
-		defineRoute({
-			method: 'GET',
 			path: `${W}/format`,
 			auth: 'dashboard',
 			handler: async (ctx) => kit.settings.formatOf(website(ctx)),
-		}),
-		defineRoute({
-			method: 'PUT',
-			path: `${W}/format`,
-			auth: 'dashboard',
-			handler: async (ctx) =>
-				changed(
-					ctx,
-					{ what: 'format' },
-					await kit.settings.setFormat({
-						websiteId: website(ctx),
-						format: objectBody(ctx.body),
-						who: whoOf(sessionOf(ctx)),
-					}),
-					() => kit.settings.formatOf(website(ctx)),
-				),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -479,9 +454,12 @@ export const createDashboard = (kit) => {
 		}),
 		defineRoute({
 			method: 'POST',
-			path: `${W}/business/refresh`,
+			path: `${W}/website-settings/refresh`,
 			auth: 'dashboard',
-			handler: async (ctx) => kit.business.refresh(website(ctx), (await statusOf(ctx)).domain),
+			handler: async (ctx) => {
+				await kit.business.refresh(website(ctx));
+				return noContent();
+			},
 		}),
 		defineRoute({
 			method: 'GET',
@@ -489,14 +467,12 @@ export const createDashboard = (kit) => {
 			auth: 'dashboard',
 			roles: OWNER,
 			handler: async () => {
-				const [values, texts, theme, format, recentChanges] = await Promise.all([
+				const [values, texts, recentChanges] = await Promise.all([
 					kit.settings.settingsOfFeatures(
 						null,
 						kit.settings.sections.map((f) => f.key),
 					),
 					kit.settings.textsOf(null),
-					kit.settings.themeOf(null),
-					kit.settings.formatOf(null),
 					kit.recent.list(null),
 				]);
 				const features = kit.settings.sections.map((f) => ({
@@ -505,7 +481,7 @@ export const createDashboard = (kit) => {
 					schema: f.settings,
 					values: values[f.key] ?? {},
 				}));
-				return { features, texts, theme, format, recentChanges };
+				return { features, texts, recentChanges };
 			},
 		}),
 		defineRoute({
@@ -519,8 +495,6 @@ export const createDashboard = (kit) => {
 				const value = body.value === null ? undefined : body.value;
 				const who = whoOf(sessionOf(ctx));
 				const key = ctx.params.key ?? '';
-				if (key === 'theme') return outcome(await kit.settings.setTheme({ websiteId: null, theme: body.value, who }));
-				if (key === 'format') return outcome(await kit.settings.setFormat({ websiteId: null, format: body.value, who }));
 				if (key.startsWith('text.'))
 					return outcome(await kit.settings.setText({ websiteId: null, key: key.slice(5), value, who }));
 				return outcome(await kit.settings.setSetting({ websiteId: null, ...splitKey(key), value, who }));

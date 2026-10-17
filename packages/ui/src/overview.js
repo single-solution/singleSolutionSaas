@@ -16,21 +16,12 @@
 import { Fragment, useState } from 'react';
 import { Button, ButtonLink } from './Button.js';
 import { cx } from './cx.js';
-import {
-	Badge,
-	Card,
-	EmptyState,
-	STAT_GRID,
-	SkeletonBlock,
-	Stat,
-	StatGrid,
-	StatusBadge,
-	TextLink,
-} from './display.js';
-import { formatCredits, supportContact } from './format.js';
+import { Badge, Card, EmptyState, STAT_GRID, SkeletonBlock, Stat, StatGrid, StatusBadge, TextLink } from './display.js';
+import { formatCredits, humanize, supportContact } from './format.js';
 import { HeaderFact, PageHeader } from './header.js';
 import { Icon } from './icons.js';
 import { OVERVIEW_TEXTS } from './overview-texts.js';
+import { WEBSITE_SECTION_NAMES, websiteSettingsUrl } from './portal-links.js';
 import { ListRow, RowList } from './rows.js';
 import { LocalTime, useDisplayLocale } from './time.js';
 
@@ -306,13 +297,15 @@ export function RecentChanges({ items, intro, limit }) {
 /**
  * The kit's overview answer (`GET /v1/dashboard/websites/:websiteId/overview`).
  * @typedef {object} DashboardOverview
- * @property {{ domain: string }} website
+ * @property {{ websiteId: string, merchantId: string, domain: string }} website
  * @property {{ status: string, graceEndsAt: string | null }} status the product's status on this website
  * @property {string[]} featuresOn
  * @property {number} todayMillicredits credits charged so far today (UTC)
  * @property {{ connections: Array<{ name: string, label: string, neededBy: string[], status: string,
  *   message?: string }>, widget: { installed: boolean, lastSeenAt: string | null } | null,
- *   business: { found: boolean } }} checklist only what the switched-on features need
+ *   website: { version: number, requires: string[], missing: string[] } }} checklist only what the switched-on features
+ *   need; `website`: the version of the website's settings in the Portal (0: nothing saved yet), the values of them this
+ *   product needs and the ones still empty
  * @property {ReadonlyArray<{ who: { name: string }, detail: string, at: string }>} recentChanges
  */
 
@@ -320,6 +313,45 @@ export function RecentChanges({ items, intro, limit }) {
  * The dashboard sections an Overview's buttons open (and, for a deeper link, the section of its inner sidebar).
  * @typedef {'features' | 'settings' | 'connections' | 'developers'} OverviewTab
  */
+
+/** Values of the website's settings that read better than their path does. */
+const SETTING_WORDS = Object.freeze({
+	'business.name': 'business name',
+	'business.email': 'contact email',
+	'business.phone': 'business phone',
+	'business.whatsapp': 'WhatsApp number',
+	'business.legalName': 'legal name',
+	'region.units.weight': 'weight unit',
+	'region.units.size': 'size unit',
+	'region.address.required': 'required address parts',
+	'region.phone.callingCode': 'calling code',
+	'region.phone.trunkPrefix': 'trunk prefix',
+	'region.phone.countries': 'phone countries',
+	'pages.hosts': 'extra host names',
+	'pages.signIn': 'sign-in page',
+	'pages.privacy': 'privacy page',
+	'team.recipients': 'alert recipients',
+	'team.phoneChannel': 'phone alert channel',
+	'team.staffPush': 'staff push alerts',
+	'team.support.email': 'support email',
+});
+
+/**
+ * A value of the website's settings in words, for the lists of what is missing: `region.timeZone` → "time zone",
+ * `business.address.city` → "address city", `brand.files.icon` → "icon".
+ * @param {string} path
+ */
+const settingName = (path) =>
+	SETTING_WORDS[/** @type {keyof typeof SETTING_WORDS} */ (path)] ??
+	path
+		.split('.')
+		.slice(1)
+		.filter((part) => part !== 'files')
+		.map((part) => humanize(part).toLowerCase())
+		.join(' ');
+
+/** The Portal's name of a section of the Website settings page. @param {string} section */
+const sectionName = (section) => WEBSITE_SECTION_NAMES[/** @type {keyof typeof WEBSITE_SECTION_NAMES} */ (section)] ?? section;
 
 /** @param {Need[]} needs red items first, each tone in its own order */
 const urgentFirst = (needs) => [
@@ -331,9 +363,10 @@ const urgentFirst = (needs) => [
  * A product dashboard's Overview (PLAN 0.6, 0.4.3): the greeting by name with one sentence of what matters now and the
  * product's status; "Needs you" — the status (in grace, stopped, suspended), no feature on, each connection a
  * switched-on feature needs that is missing or failed its test, the product's own `needs`, the widget not seen on the
- * website, business.json not found — red ones first, each with its button (the right section of the dashboard, the
- * Portal or support, Check again); the setup checklist beside it (a feature on, the connections, the product's own
- * `steps`, the widget with its last visit, business.json); the numbers (today's cost, features on, then the product's
+ * website, the Portal's website settings not set yet or lacking what the product needs — red ones first, each with its
+ * button (the right section of the dashboard, the Portal or support, Check again); the setup checklist beside it (a
+ * feature on, the connections, the product's own `steps`, the widget with its last visit, the website settings the
+ * product needs, each with a link to its section in the Portal); the numbers (today's cost, features on, then the product's
  * `numbers` tiles); the product's own sections (`children`); and Recent changes as a timeline. Times are the viewer's
  * local time.
  * @param {{ data: DashboardOverview, who: { kind: 'merchant' | 'admin', name: string }, product: string,
@@ -343,7 +376,7 @@ const urgentFirst = (needs) => [
  *   `product`: the product's name; `support`: the support contact (merchants are told to contact it for credits; the
  *   button opens its first channel);
  *   `portal`: the Portal's address; `namesOf`: feature names of keys, at most `max`; `open`: shows a dashboard section, at a section of its inner sidebar when given;
- *   `recheck`: reads business.json again and reloads the Overview
+ *   `recheck`: fetches the Portal's website settings again and reloads the Overview
  */
 export function ProductOverview({
 	data,
@@ -367,7 +400,26 @@ export function ProductOverview({
 	const status = data.status.status;
 	const merchant = who.kind === 'merchant';
 	const locale = useDisplayLocale();
-	const { widget, business } = data.checklist;
+	const { widget, website } = data.checklist;
+	const unset = website.version === 0;
+	/** The address of a section of this website's settings in the Portal. @param {string} [section] */
+	const settingsAt = (section) =>
+		websiteSettingsUrl({
+			portal,
+			admin: !merchant,
+			websiteId: data.website.websiteId,
+			merchantId: data.website.merchantId,
+			...(section ? { section } : {}),
+		});
+	/** What the product needs of the website's settings, by section of the Portal page. @type {Map<string, { fields: string[], missing: string[] }>} */
+	const bySection = new Map();
+	for (const path of website.requires) {
+		const section = path.split('.')[0] ?? '';
+		const entry = bySection.get(section) ?? { fields: [], missing: [] };
+		entry.fields.push(settingName(path));
+		if (website.missing.includes(path)) entry.missing.push(settingName(path));
+		bySection.set(section, entry);
+	}
 	/** @param {string} label @param {OverviewTab} tab */
 	const go = (label, tab) => (
 		<Button size="sm" variant="secondary" onClick={() => open(tab)}>
@@ -442,18 +494,45 @@ export function ProductOverview({
 			effect: N.widget.effect,
 			action: go(N.widget.action, 'developers'),
 		});
-	if (!business.found)
+	// nothing saved in the Portal yet (version 0), or saved but lacking what this product needs
+	if (unset)
 		last.push({
-			key: 'business',
+			key: 'website-settings',
 			tone: 'warning',
-			title: fillText(N.business.title, { domain }),
-			effect: fillText(N.business.effect, { domain }),
+			title: N.website.title,
+			effect: fillText(N.website.effect, { domain }),
 			action: (
-				<Button size="sm" variant="secondary" onClick={recheck}>
-					{N.business.action}
-				</Button>
+				<span className="flex flex-wrap gap-2">
+					<ButtonLink size="sm" href={settingsAt()}>
+						{N.website.action}
+					</ButtonLink>
+					<Button size="sm" variant="secondary" onClick={recheck}>
+						{N.website.recheck}
+					</Button>
+				</span>
 			),
 		});
+	else
+		for (const [section, entry] of bySection) {
+			if (entry.missing.length === 0) continue;
+			const fields = entry.missing.join(', ');
+			last.push({
+				key: `website-${section}`,
+				tone: 'warning',
+				title: fillText(N.website.missingTitle, { fields }),
+				effect: fillText(N.website.missingEffect, { product, fields, section: sectionName(section) }),
+				action: (
+					<span className="flex flex-wrap gap-2">
+						<ButtonLink size="sm" href={settingsAt(section)}>
+							{N.website.action}
+						</ButtonLink>
+						<Button size="sm" variant="secondary" onClick={recheck}>
+							{N.website.recheck}
+						</Button>
+					</span>
+				),
+			});
+		}
 	const items = urgentFirst([...first, ...needs, ...last]);
 	const top = items[0];
 	const sentence = !top
@@ -500,14 +579,27 @@ export function ProductOverview({
 					},
 				]
 			: []),
-		{
-			key: 'business',
-			label: S.business,
-			why: S.businessWhy,
-			done: business.found,
-			// once found there is nothing to review: the button only checks again while it is missing
-			...(business.found ? {} : { actionLabel: S.businessAction, onSelect: recheck }),
-		},
+		// what the product needs of the website's settings, one step per section of the Portal page (nothing saved yet,
+		// or nothing asked for: one step)
+		...(unset || bySection.size === 0
+			? [
+					{
+						key: 'website-settings',
+						label: unset ? S.website : S.websiteSet,
+						why: S.websiteWhy,
+						done: !unset,
+						href: settingsAt(),
+						...(unset ? { actionLabel: S.websiteAction } : {}),
+					},
+				]
+			: [...bySection].map(([section, entry]) => ({
+					key: `website-${section}`,
+					label: fillText(S.websiteSection, { fields: entry.fields.join(', '), section: sectionName(section) }),
+					why: fillText(S.websiteSectionWhy, { product, fields: entry.fields.join(', ') }),
+					done: entry.missing.length === 0,
+					href: settingsAt(section),
+					actionLabel: S.websiteAction,
+				}))),
 	];
 	const counted = checklist.filter((step) => !step.optional);
 	const done = counted.filter((step) => step.done).length;

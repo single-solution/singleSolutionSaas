@@ -9,7 +9,9 @@
  * `advanced` (the setting sits in the collapsed Advanced block; so does every setting of a group named Advanced),
  * `order` (a whole number: the settings with an `order` come first, ascending), `placeholder`, `labels` (`country`, or each choice's own words: labels are data, fixed-choices
  * audit K3), `suggestions` (values a text or a list of texts offers while the merchant may type their own), `generate`
- * (a text gets a Generate button that fills in a new random key of that many characters), `wide`
+ * (a text gets a Generate button that fills in a new random key of that many characters), `defaultFrom` (the setting
+ * starts from a value of the website's settings in the Portal, `region.language`; the dashboard says so and links to the
+ * Portal while it is in use), `wide`
  * (span the whole row of the field grid; a `textarea` widget and lists are wide anyway). A setting's `description` is
  * its help text.
  * @module
@@ -41,7 +43,8 @@ import { humanize } from './format.js';
  * @property {string} [format]
  * @property {SettingItem} [items] every list setting has them
  * @property {{ widget?: string, group?: string, order?: number, placeholder?: string, wide?: boolean,
- *   advanced?: boolean, labels?: 'country' | Record<string, string>, suggestions?: string[], generate?: number }} [x-ui]
+ *   advanced?: boolean, labels?: 'country' | Record<string, string>, suggestions?: string[], generate?: number,
+ *   defaultFrom?: string }} [x-ui]
  */
 
 /**

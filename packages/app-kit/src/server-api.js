@@ -14,7 +14,8 @@
  * - `GET /v1/settings` → `{ features: [{ key, name, on, schema, values }] }`; `values` (`{ <setting>: { value, source } }`)
  *   only of switched-on features, null for the others. `PUT /v1/settings/<feature>.<key>` with `{ value }` answers
  *   `{ key, value, source }`, 422 `validation_failed` with `errors`, or 403 `feature_off`; `DELETE` resets it.
- * - `GET /v1/texts`, `PUT|DELETE /v1/texts/:key`; `GET|PUT /v1/theme`; `GET|PUT /v1/format` (K7).
+ * - `GET /v1/texts`, `PUT|DELETE /v1/texts/:key`; `GET /v1/theme`; `GET /v1/format` (K7). The theme and the Format are the
+ *   Portal's (Website settings): `PUT /v1/theme` and `PUT /v1/format` answer 409 `managed_by_portal`, naming the Portal.
  * - `GET|PUT /v1/lists/:list` with `{ value }`: the whole list, checked by the product's own list check (422), only
  *   while one of its features is on (403 `feature_off`). Its dashboard twin, `GET|PUT
  *   /v1/dashboard/websites/:websiteId/lists/:list` (dashboard session), follows the same rules, except that Owner and
@@ -25,7 +26,7 @@
  * - `GET /v1/activity?actor=&action=&target=&q=&from=&to=&cursor=&limit=` (newest first) and its counts.
  *
  * Every write is a Recent change by the acting user (the verified staff member, K2; on the dashboard twin: the session's
- * merchant or admin); a setting, text, theme, Format or list save is also an activity-log entry (`settings.changed`) and raises
+ * merchant or admin); a setting, text or list save is also an activity-log entry (`settings.changed`) and raises
  * the `settings.changed` event. At most 60 writes per minute per website (the dashboard's list saves in a window of
  * their own), and 3,000 reads per minute per route per website (the window of SEO reads, SG-31: a storefront rendered
  * on the merchant's server reads its settings on every page).
@@ -309,11 +310,8 @@ export const createServerApi = (kit, lists) => {
 			permission: 'settings.manage',
 			rateLimit: writes,
 			handler: async (ctx) => {
-				await saved(
-					ctx,
-					{ what: 'theme' },
-					await kit.settings.setTheme({ websiteId: website(ctx), theme: objectBody(ctx.body), who: whoOf(ctx) }),
-				);
+				// the theme is the Portal's (Website settings › Brand and look): always 409 `managed_by_portal`
+				await saved(ctx, { what: 'theme' }, kit.settings.refuseTheme());
 				return kit.settings.themeOf(website(ctx));
 			},
 		}),
@@ -324,11 +322,8 @@ export const createServerApi = (kit, lists) => {
 			permission: 'settings.manage',
 			rateLimit: writes,
 			handler: async (ctx) => {
-				await saved(
-					ctx,
-					{ what: 'format' },
-					await kit.settings.setFormat({ websiteId: website(ctx), format: objectBody(ctx.body), who: whoOf(ctx) }),
-				);
+				// the Format is the Portal's (Website settings › Region and format): always 409 `managed_by_portal`
+				await saved(ctx, { what: 'format' }, kit.settings.refuseFormat());
 				return kit.settings.formatOf(website(ctx));
 			},
 		}),

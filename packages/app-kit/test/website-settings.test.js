@@ -1,15 +1,16 @@
 /**
- * Website settings in the kit (settings-ownership design, step 4): a product holds the Portal's copy of its website's
- * settings and uses it instead of business.json and its own theme and Format. The status answer's `settingsVersion`
- * and a `website.settings_changed` notice make it fetch; a request never calls the Portal while it holds a copy; a
- * Portal that is down changes nothing; while the Portal holds nothing the product keeps its own values; and a server
- * token changes none of it.
+ * Website settings in the kit (settings-ownership design, steps 4 and 5): a product holds the Portal's copy of its
+ * website's settings and uses it for the business facts, the theme and the Format; it has no second source. The status
+ * answer's `settingsVersion` and a `website.settings_changed` notice make it fetch; a request never calls the Portal
+ * while it holds a copy; a Portal that is down changes nothing; while the Portal holds nothing (version 0, "not set
+ * yet") the product uses the built-in defaults and the Overview asks for the settings; and nobody can change the
+ * theme or the Format in a product.
  */
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_FORMAT } from '@ss/contracts/format';
 import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { defineRoute } from '../src/index.js';
-import { productRoutes, setup } from './helpers.js';
+import { manifest, productRoutes, setup } from './helpers.js';
 
 const HOUR = 3_600_000;
 const SITE = 'https://shop.example.com';
@@ -42,7 +43,7 @@ const saved = (websiteId, region = {}) => {
 	};
 };
 
-/** A product with a website whose own business.json (served by "the website") says something else. */
+/** A product with a website whose own business.json (served by "the website") says something else: it is never read. */
 const prepare = async () => {
 	/** @type {{ hits: number }} */
 	const file = { hits: 0 };
@@ -89,22 +90,35 @@ const prepare = async () => {
 	return { ...x, file, pulls, save };
 };
 
-describe('while the Portal holds no settings for the website (version 0)', () => {
-	it('the product keeps its own values: business.json and its own theme and Format, and never asks for settings', async () => {
+describe('while the Portal holds no settings for the website (version 0: not set yet)', () => {
+	it('the product uses the built-in defaults, reads nothing from the website and has no second source', async () => {
 		const x = await prepare();
-		// a request to the product reads the website's business.json right after its response, as before
 		await x.call('GET', '/v1/server/notes', { token: x.server.token });
 		await x.settle();
+		// no business.json is read, however old the copy: the name is the domain and the time zone UTC
 		const business = await x.product.business(x.websiteId);
-		expect(business).toMatchObject({ name: 'Own Shop', timeZone: 'Europe/Paris', currency: 'EUR' });
-		expect(x.file.hits).toBe(1);
+		expect(business).toMatchObject({ name: 'shop.example.com', timeZone: 'UTC', currency: null });
+		expect(x.file.hits).toBe(0);
 		expect(x.pulls()).toBe(0);
 		const website = await (await x.call('GET', '/v1/server/website', { token: x.server.token })).json();
 		expect(website).toMatchObject({ version: 0, timeZone: '', name: '' });
-		// its own theme and Format are still saved by the product
+		// the built-in look and Format, and nothing saves them
+		const theme = await (await x.call('GET', '/v1/theme', { token: x.server.token })).json();
+		expect(theme.theme).toMatchObject({ mode: 'auto', radius: 8 });
+		expect(Object.values(theme.sources)).toEqual(['built-in', 'built-in', 'built-in', 'built-in', 'built-in']);
 		const put = await x.call('PUT', '/v1/theme', { token: x.server.token, body: { mode: 'light' } });
-		expect(put.status).toBe(200);
-		expect((await (await x.call('GET', '/v1/theme', { token: x.server.token })).json()).sources.mode).toBe('website');
+		expect([put.status, (await put.json()).type.split('/').pop()]).toEqual([409, 'managed_by_portal']);
+		const format = await (await x.call('PUT', '/v1/format', { token: x.server.token, body: { wholeUnits: true } })).json();
+		expect(format.type.split('/').pop()).toBe('managed_by_portal');
+		expect(await x.store.list('settings', { websiteId: x.websiteId })).toEqual([]);
+	});
+
+	it('the Overview says what to set: the version and every path the manifest asks for', async () => {
+		const x = await prepare();
+		const cookie = await x.session({ kind: 'merchant' });
+		const overview = await (await x.dash(cookie, 'GET', `/v1/dashboard/websites/${x.websiteId}/overview`)).json();
+		expect(overview.checklist.website).toEqual({ version: 0, requires: [], missing: [] });
+		expect(overview.checklist.business).toBeUndefined();
 	});
 });
 
@@ -239,28 +253,36 @@ describe('a server token cannot change them', () => {
 			const signedIn = await x.call('PUT', path, { token: x.server.token, body });
 			expect([signedIn.status, (await signedIn.json()).type.split('/').pop()]).toEqual([409, 'managed_by_portal']);
 		}
-		// the dashboard of the merchant and of an admin: the same
+		// the dashboard has no form for them any more: no route saves either (the Format is only read, for its dates)
 		for (const kind of /** @type {const} */ (['merchant', 'admin'])) {
 			const cookie = await x.session({ kind });
-			const theme = await x.dash(cookie, 'PUT', `/v1/dashboard/websites/${x.websiteId}/theme`, { mode: 'light' });
-			const detail = await theme.json();
-			expect([theme.status, detail.type.split('/').pop()]).toEqual([409, 'managed_by_portal']);
-			expect(detail.portalUrl).toBe(x.portal.url);
-			const format = await x.dash(cookie, 'PUT', `/v1/dashboard/websites/${x.websiteId}/format`, { locale: 'fr-FR' });
-			expect(format.status).toBe(409);
+			for (const [path, body] of /** @type {Array<[string, unknown]>} */ ([
+				['theme', { mode: 'light' }],
+				['format', { locale: 'fr-FR' }],
+			]))
+				expect(
+					(await x.dash(cookie, 'PUT', `/v1/dashboard/websites/${x.websiteId}/${path}`, body)).status,
+				).toBeGreaterThanOrEqual(404);
+			expect((await x.dash(cookie, 'GET', `/v1/dashboard/websites/${x.websiteId}/theme`)).status).toBe(404);
+			expect((await x.dash(cookie, 'GET', `/v1/dashboard/websites/${x.websiteId}/format`)).status).toBe(200);
 		}
+		// the refusal names the Portal and where to change it
+		const refused = await (await x.call('PUT', '/v1/theme', { token: x.server.token, body: { mode: 'light' } })).json();
+		expect(refused).toMatchObject({ portalUrl: x.portal.url, section: 'Brand and look' });
 		// nothing was written
 		const theme = await (await x.call('GET', '/v1/theme', { token: x.server.token })).json();
 		expect(theme.theme.mode).toBe('dark');
 		expect(await x.store.list('settings', { websiteId: x.websiteId })).toEqual([]);
 	});
 
-	it('the Owner’s global defaults (no website) are the product’s own and still saved', async () => {
+	it('the Owner’s global defaults hold no theme and no Format: the answer has none and a save of them is refused', async () => {
 		const x = await prepare();
 		await x.save();
 		const cookie = await x.session({ kind: 'admin', websiteId: null });
-		const res = await x.dash(cookie, 'PUT', '/v1/dashboard/defaults/theme', { value: { mode: 'light' } });
-		expect(res.status).toBeLessThan(300);
+		const defaults = await (await x.dash(cookie, 'GET', '/v1/dashboard/defaults')).json();
+		expect(Object.keys(defaults).sort()).toEqual(['features', 'recentChanges', 'texts']);
+		for (const key of ['theme', 'format'])
+			expect((await x.dash(cookie, 'PUT', `/v1/dashboard/defaults/${key}`, { value: { mode: 'light' } })).status).toBe(404);
 	});
 
 	it('a notice for another type or a forged one changes nothing', async () => {
@@ -275,5 +297,79 @@ describe('a server token cannot change them', () => {
 		);
 		expect(forged.status).toBe(401);
 		expect(x.pulls()).toBe(1);
+	});
+});
+
+describe('a setting that starts from the Portal (x-ui.defaultFrom)', () => {
+	/** The notes feature with three settings that start from the website's settings. */
+	const withInherited = () => {
+		const base = manifest();
+		base.features[0].settings.properties.language = {
+			type: 'string',
+			title: 'Language',
+			default: '',
+			maxLength: 35,
+			'x-ui': { defaultFrom: 'region.language' },
+		};
+		base.features[0].settings.properties.languages = {
+			type: 'array',
+			title: 'Languages',
+			default: [],
+			items: { type: 'string', maxLength: 35 },
+			'x-ui': { defaultFrom: 'region.languages' },
+		};
+		base.features[0].settings.properties.mood = {
+			type: 'string',
+			title: 'Mood',
+			default: 'calm',
+			enum: ['calm', 'loud'],
+			'x-ui': { defaultFrom: 'business.tagline' },
+		};
+		return base;
+	};
+
+	it('takes the Portal’s value until the website saves its own, and says where it came from', async () => {
+		const x = await setup({ manifest: withInherited() });
+		const cookie = await x.session({ kind: 'merchant' });
+		const url = `/v1/dashboard/websites/${x.websiteId}`;
+		const read = async () => {
+			const answer = await (await x.dash(cookie, 'GET', `${url}/settings`)).json();
+			return answer.features.find((/** @type {any} */ f) => f.key === 'notes').values;
+		};
+		await x.switchOn(['notes']);
+		// nothing in the Portal yet: the setting's own default
+		expect((await read()).language).toEqual({ value: '', source: 'built-in' });
+		expect(await x.product.settings.values(x.websiteId, 'notes')).toMatchObject({ language: '', languages: [] });
+		// the Portal holds languages (a business tagline that is not one of the setting's choices is ignored)
+		x.portal.setWebsiteSettings(x.websiteId, {
+			business: { ...emptyWebsiteSettings(x.websiteId).business, tagline: 'Whispers' },
+			region: { ...emptyWebsiteSettings(x.websiteId).region, language: 'fr-CA', languages: ['fr-CA', 'en-CA'] },
+		});
+		await x.portal.sendNotice('notes', { type: 'website.settings_changed', websiteId: x.websiteId, what: 'settings' });
+		await x.settle();
+		const values = await read();
+		expect(values.language).toEqual({ value: 'fr-CA', source: 'portal', from: 'region.language' });
+		expect(values.languages).toEqual({ value: ['fr-CA', 'en-CA'], source: 'portal', from: 'region.languages' });
+		expect(values.mood).toEqual({ value: 'calm', source: 'built-in' });
+		// product code reads the same value, and the Owner's global defaults never take the Portal's (they have no website)
+		expect(await x.product.settings.values(x.websiteId, 'notes')).toMatchObject({ language: 'fr-CA' });
+		const owner = await x.session({ kind: 'admin', role: 'owner', websiteId: null });
+		const defaults = await (await x.dash(owner, 'GET', '/v1/dashboard/defaults')).json();
+		expect(defaults.features[0].values.language).toEqual({ value: '', source: 'built-in' });
+		// the website saves its own: it wins; an empty value means "use the website's" again; a reset gives it back
+		expect((await x.dash(cookie, 'PUT', `${url}/settings/notes.language`, { value: 'de-CH' })).status).toBe(204);
+		expect((await read()).language).toEqual({ value: 'de-CH', source: 'website' });
+		expect((await x.dash(cookie, 'PUT', `${url}/settings/notes.language`, { value: '' })).status).toBe(204);
+		expect((await read()).language).toMatchObject({ value: 'fr-CA', source: 'portal' });
+		expect((await x.dash(cookie, 'DELETE', `${url}/settings/notes.language`)).status).toBe(204);
+		expect((await read()).language).toMatchObject({ value: 'fr-CA', source: 'portal' });
+		// a Portal value that is one of the setting's choices is taken (the one that was not, above, was ignored)
+		x.clock.advance(1000);
+		x.portal.setWebsiteSettings(x.websiteId, {
+			business: { ...emptyWebsiteSettings(x.websiteId).business, tagline: 'loud' },
+		});
+		await x.portal.sendNotice('notes', { type: 'website.settings_changed', websiteId: x.websiteId, what: 'settings' });
+		await x.settle();
+		expect((await read()).mood).toEqual({ value: 'loud', source: 'portal', from: 'business.tagline' });
 	});
 });

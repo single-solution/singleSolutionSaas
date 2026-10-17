@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BASE, DOMAIN, setup } from './helpers.js';
-
-const BUSINESS = { name: 'Example Shop', timeZone: 'Europe/London', country: 'gb' };
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
+import { BASE, DOMAIN, manifest, setup } from './helpers.js';
 
 describe('sso and sessions', () => {
 	it('exchanges a launch once for a host-only session cookie and redirects to the website', async () => {
@@ -256,54 +255,40 @@ describe('settings, texts, theme and defaults', () => {
 		expect((await product.settings.texts(websiteId))['form.count']).toBe('You left {count} notes, {name}');
 	});
 
-	it('stores the theme per field with global defaults', async () => {
-		const { session, dash, websiteId, product } = await setup();
+	it('reads the theme and the Format from the Portal and saves neither; the global defaults hold texts and settings only', async () => {
+		const { session, dash, websiteId, product, portal } = await setup();
 		const merchant = await session({ kind: 'merchant' });
 		const owner = await session();
 		const theme = `/v1/dashboard/websites/${websiteId}/theme`;
-		expect(await (await dash(merchant, 'GET', theme)).json()).toEqual({
-			theme: { colors: {}, fontFamily: 'inherit', radius: 8, mode: 'auto', customCss: '' },
-			sources: { colors: 'built-in', fontFamily: 'built-in', radius: 'built-in', mode: 'built-in', customCss: 'built-in' },
+		// the dashboard has no theme route at all; the Format is read for the dates the dashboard shows
+		expect((await dash(merchant, 'GET', theme)).status).toBe(404);
+		expect((await dash(merchant, 'PUT', theme, { radius: 4 })).status).toBeGreaterThanOrEqual(404);
+		const format = await (await dash(merchant, 'GET', `/v1/dashboard/websites/${websiteId}/format`)).json();
+		expect(format.format).toMatchObject({ locale: '', currencyDisplay: 'code' });
+		expect(Object.values(format.sources)).toEqual(['built-in', 'built-in', 'built-in', 'built-in', 'built-in']);
+		// the Portal's values reach product code
+		const saved = emptyWebsiteSettings(websiteId);
+		portal.setWebsiteSettings(websiteId, {
+			brand: { ...saved.brand, theme: { ...saved.brand.theme, mode: 'dark', radius: 4 } },
 		});
-		for (const bad of [
-			{ radius: 30 },
-			{ colors: { accent: 'red' } },
-			{ mode: 'night' },
-			{ fontFamily: 'x;}' },
-			{ customCss: 'a'.repeat(21_000) },
-			{ other: 1 },
-			{},
-		]) {
-			expect((await dash(merchant, 'PUT', theme, bad)).status).toBe(422);
-		}
-		const saved = await (
-			await dash(merchant, 'PUT', theme, { colors: { accent: '#ff0000' }, radius: 4, fontFamily: 'Inter', customCss: '.x{}' })
-		).json();
-		expect(saved.theme).toMatchObject({ colors: { accent: '#ff0000' }, radius: 4, fontFamily: 'Inter', customCss: '.x{}' });
-		expect((await dash(owner, 'PUT', '/v1/dashboard/defaults/theme', { value: { mode: 'dark' } })).status).toBe(204);
+		await dash(merchant, 'POST', `/v1/dashboard/websites/${websiteId}/website-settings/refresh`);
 		expect(await product.settings.theme(websiteId)).toMatchObject({ mode: 'dark', radius: 4 });
-		expect((await dash(merchant, 'PUT', theme, { radius: null })).status).toBe(200);
-		expect((await product.settings.theme(websiteId)).radius).toBe(8);
 		const defaults = await (await dash(owner, 'GET', '/v1/dashboard/defaults')).json();
-		expect(defaults.theme.theme.mode).toBe('dark');
+		expect(defaults.theme).toBeUndefined();
+		expect(defaults.format).toBeUndefined();
 		expect(defaults.texts).toHaveLength(3);
 		expect(defaults.features[0].values.maxNotes.source).toBe('built-in');
-		expect(defaults.recentChanges[0]).toMatchObject({ what: 'defaults', websiteId: null });
 	});
 });
 
-describe('overview and business.json', () => {
+describe('overview and the website settings', () => {
 	it('shows status, features on, today’s cost, the checklist and Recent changes', async () => {
-		const { session, dash, websiteId, portal, handlers, switchOn, call, browser, settle, clock } = await setup();
-		let served = 0;
-		handlers[`https://${DOMAIN}`] = async () => {
-			served += 1;
-			return new Response(JSON.stringify(BUSINESS), { headers: { 'content-type': 'application/json' } });
-		};
+		const { session, dash, websiteId, portal, switchOn, call, browser, settle, clock } = await setup({
+			manifest: { ...manifest(), websiteSettings: { requires: ['region.currency', 'business.name'] } },
+		});
 		portal.setStatus(websiteId, { status: 'grace', graceEndsAt: '2026-10-02T00:00:00.000Z', todayMillicredits: 4200 });
 		await switchOn(['notes']);
 		const cookie = await session({ kind: 'merchant' });
-		expect(served).toBeGreaterThan(0);
 		const overview = await (await dash(cookie, 'GET', `/v1/dashboard/websites/${websiteId}/overview`)).json();
 		expect(overview).toMatchObject({
 			website: { websiteId, domain: DOMAIN, merchantName: 'Example Shop' },
@@ -313,7 +298,12 @@ describe('overview and business.json', () => {
 			checklist: {
 				connections: [{ name: 'database', status: 'not_connected' }],
 				widget: { installed: false, lastSeenAt: null },
-				business: { found: true },
+				// nothing is set in the Portal yet (version 0): every value the manifest asks for is missing
+				website: {
+					version: 0,
+					requires: ['region.currency', 'business.name'],
+					missing: ['region.currency', 'business.name'],
+				},
 			},
 		});
 		await call('GET', '/v1/notes', { token: browser.token, origin: `https://${DOMAIN}` });
@@ -326,58 +316,77 @@ describe('overview and business.json', () => {
 		expect(old.checklist.widget.installed).toBe(false);
 	});
 
-	it('reads business.json with defaults, keeps the last good copy and refreshes stale copies after a request', async () => {
-		const { session, dash, websiteId, handlers, product, call, server, settle, clock } = await setup();
-		let answer = () => new Response('nope', { status: 404 });
-		handlers[`https://${DOMAIN}`] = async () => answer();
+	it('lists what the Portal still lacks of what the product needs, and the version once it holds settings', async () => {
+		const { session, dash, websiteId, portal, clock } = await setup({
+			manifest: { ...manifest(), websiteSettings: { requires: ['region.currency', 'business.name'] } },
+		});
 		const cookie = await session({ kind: 'merchant' });
-		const refresh = `/v1/dashboard/websites/${websiteId}/business/refresh`;
-		expect(await (await dash(cookie, 'POST', refresh)).json()).toEqual({
-			found: false,
-			business: {
-				name: DOMAIN,
-				logo: null,
-				email: null,
-				phone: null,
-				address: null,
-				country: null,
-				timeZone: 'UTC',
-				currency: null,
-				currencies: [],
-				language: null,
-			},
+		const url = `/v1/dashboard/websites/${websiteId}`;
+		portal.setWebsiteSettings(websiteId, { business: { ...emptyWebsiteSettings(websiteId).business, name: 'Example Shop' } });
+		// "Check again" fetches the Portal's copy at once
+		expect((await dash(cookie, 'POST', `${url}/website-settings/refresh`)).status).toBe(204);
+		const half = await (await dash(cookie, 'GET', `${url}/overview`)).json();
+		expect(half.checklist.website).toEqual({
+			version: 1,
+			requires: ['region.currency', 'business.name'],
+			missing: ['region.currency'],
 		});
-		answer = () => new Response(JSON.stringify(BUSINESS), { status: 200 });
-		expect(await (await dash(cookie, 'POST', refresh)).json()).toMatchObject({
-			found: true,
-			business: { name: 'Example Shop', country: 'GB', timeZone: 'Europe/London' },
-		});
-		answer = () => new Response('{"name":', { status: 200 });
-		expect(await (await dash(cookie, 'POST', refresh)).json()).toMatchObject({
-			found: false,
-			business: { name: 'Example Shop' },
-		});
-		expect(await product.business(websiteId)).toMatchObject({ name: 'Example Shop' });
-		answer = () =>
-			new Response(JSON.stringify({ name: 'Renamed', currency: 'gbp', currencies: ['EUR'], language: 'en-gb' }), {
-				status: 200,
-			});
-		clock.advance(25 * 60 * 60_000);
-		await call('GET', '/v1/server/open', { token: server.token });
-		await settle();
-		expect(await product.business(websiteId)).toEqual({
-			name: 'Renamed',
+		const region = { ...emptyWebsiteSettings(websiteId).region, currency: 'GBP' };
+		portal.setWebsiteSettings(websiteId, { region });
+		clock.advance(1000);
+		expect((await dash(cookie, 'POST', `${url}/website-settings/refresh`)).status).toBe(204);
+		const done = await (await dash(cookie, 'GET', `${url}/overview`)).json();
+		expect(done.checklist.website).toEqual({ version: 2, requires: ['region.currency', 'business.name'], missing: [] });
+	});
+
+	it('knows the business facts only from the Portal: defaults while it holds nothing, then its Business and Region sections, never the website', async () => {
+		const { session, dash, websiteId, handlers, product, portal, clock } = await setup();
+		let asked = 0;
+		handlers[`https://${DOMAIN}`] = async () => {
+			asked += 1;
+			return new Response(JSON.stringify({ name: 'Own Shop' }), { status: 200 });
+		};
+		const cookie = await session({ kind: 'merchant' });
+		const refresh = `/v1/dashboard/websites/${websiteId}/website-settings/refresh`;
+		const defaults = {
+			name: DOMAIN,
 			logo: null,
 			email: null,
 			phone: null,
 			address: null,
 			country: null,
 			timeZone: 'UTC',
-			// the store currency, the currencies it takes and its default language (K5)
+			currency: null,
+			currencies: [],
+			language: null,
+		};
+		expect((await dash(cookie, 'POST', refresh)).status).toBe(204);
+		expect(await product.business(websiteId)).toEqual(defaults);
+		const empty = emptyWebsiteSettings(websiteId);
+		portal.setWebsiteSettings(websiteId, {
+			business: { ...empty.business, name: 'Example Shop', email: 'hi@example.com' },
+			region: {
+				...empty.region,
+				country: 'GB',
+				timeZone: 'Europe/London',
+				currency: 'gbp'.toUpperCase(),
+				currencies: ['GBP', 'EUR'],
+				language: 'en-GB',
+			},
+		});
+		clock.advance(1000);
+		expect((await dash(cookie, 'POST', refresh)).status).toBe(204);
+		expect(await product.business(websiteId)).toMatchObject({
+			name: 'Example Shop',
+			email: 'hi@example.com',
+			country: 'GB',
+			timeZone: 'Europe/London',
 			currency: 'GBP',
 			currencies: ['GBP', 'EUR'],
 			language: 'en-GB',
 		});
+		// nothing was ever read from the website
+		expect(asked).toBe(0);
 		await expect(product.business('web_unknown')).rejects.toMatchObject({ code: 'website_not_found' });
 	});
 });

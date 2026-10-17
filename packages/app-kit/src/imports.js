@@ -45,7 +45,7 @@ import { omit } from './util.js';
  * @property {() => number} now
  * @property {boolean} dryRun
  * @property {import('./data.js').WebsiteData} data the website's merchant database (lookups; the kit writes)
- * @property {() => Promise<import('@ss/contracts').BusinessInfo>} business the website's business.json copy with its
+ * @property {() => Promise<import('@ss/contracts').BusinessInfo>} business the website's business facts (from the Portal's settings) with its
  *   defaults (read once per call, on first use): its `country` gives national phone numbers their calling code
  * @property {unknown} prepared what the collection's `prepare` gave for this call (undefined without one)
  */
@@ -156,7 +156,7 @@ const keyValuesOf = (record, fields) => {
  * @param {{ options: ImportOptions | undefined, now: () => number,
  *   record: (ctx: any, entry: import('./activity.js').ActivityEntry, options?: { copy?: boolean }) => Promise<void>,
  *   business: (websiteId: string) => Promise<import('@ss/contracts').BusinessInfo> }} kit `business`: the kept
- *   business.json copy of a website, with defaults
+ *   business facts of a website (the Portal's settings), with defaults
  */
 export const createImports = ({ options, now, record, business }) => {
 	const collections = options?.collections ?? {};

@@ -50,7 +50,7 @@ The exact API is in [API.md](./API.md).
   undeclared key made per case (for example per status) and a declared `fallbackTemplate` carries the fallback
   message's defaults and long values. WhatsApp never has a default (it sends only templates approved at Meta).
 - **Format and time zone** (K7, K8) — `formatMoney`, `formatDate` and the calendar helpers from `@ss/contracts`, fed by
-  the website's Format and its business.json time zone (`product.format(websiteId)`, the widget config).
+  the website's Format and its business time zone, both from the Portal's website settings (`product.format(websiteId)`, the widget config).
 - **Connections** — the merchant's database, storage, provider keys and pasted tokens, encrypted with a key derived
   from `ENCRYPTION_KEY`, write-only, tested live when saved. `callProduct` calls another product with a pasted token.
 - **Sealing and Re-seal** — every stored secret uses the one format of `@ss/protocol` (`ss2.<keyId>.…`; the key id
@@ -67,9 +67,12 @@ The exact API is in [API.md](./API.md).
   pages, team) are kept once in the Portal: one signed pull (`GET /v1/product/websites/:id/settings?since=`), a
   `settingsVersion` in the status answer and a `website.settings_changed` notice; a copy in the product database and
   60 s in memory, never the Portal on the hot path (`product.website(id)`, `ctx.website()`). The theme and the Format
-  come from it and a save of them is 409 `managed_by_portal`; `product.business(id)` and `product.format(id)` read it.
-  While the Portal holds none for a website the product uses its own values.
-- **business.json** (until the Portal holds the settings), **data rights** (`POST /v1/data-rights/export|delete`), the **activity log** with copies to
+  come from it and a save of them is always 409 `managed_by_portal`; `product.business(id)` and `product.format(id)`
+  read it. There is no second source: while the Portal holds none for a website (`settingsVersion` 0, "not set yet") the
+  product uses the built-in defaults and its Overview says "Needs setup: set your website settings in the Portal"
+  (with what the manifest's `websiteSettings.requires` still lacks, each with a link to its section). A setting marked
+  `x-ui.defaultFrom` (`region.language`) takes the Portal's value until the website saves its own (source `portal`).
+- **Data rights** (`POST /v1/data-rights/export|delete`), the **activity log** with copies to
   Accounts, **Recent changes**.
 - **Product dashboard** — `GET /sso?launch=` sessions, the switcher, roles and the dashboard API every product's
   `app/` pages call.
@@ -88,7 +91,7 @@ The exact API is in [API.md](./API.md).
   holds what every widget builds with: the element builder, JSON calls, the admin widgets' ticket and calls, and the
   admin blocks (badges, dots, value grids, list and detail, the More menu, dialogs with typed confirmation).
 - **Public docs** — `renderDocsPage` writes a product's whole `/docs` page around its own sections: the title, intro
-  and localhost note, the kit's sections for the merchant's server, business.json and the API reference from
+  and localhost note, the kit's sections for the merchant's server, the website settings and the API reference from
   `openapi.json`; `docsFeatureSections` writes one section per feature (its words, what it needs, what the website
   builds, its widgets and routes); `docsParagraph`, `docsBlock`, `docsList` and `docsRouteTable` write the rest.
 - **Start-up** — `createProductBase(options)` builds the store, the outbound policy and `send` as `createProduct` does,

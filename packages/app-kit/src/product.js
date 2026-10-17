@@ -1,8 +1,7 @@
 /**
  * `createProduct` wires the kit for one product: the Portal connection, tokens and tickets, the status cache, notices,
  * price and feature reports, settings, widget texts, theme and Format, encrypted connections, the merchant database,
- * the Portal's website settings (business facts, theme, Format, region, pages, team) and business.json until the Portal
- * holds them, data rights, the activity log and its reads, Recent changes, the product dashboard API, the settings
+ * the Portal's website settings (business facts, theme, Format, region, pages, team), data rights, the activity log and its reads, Recent changes, the product dashboard API, the settings
  * API for the merchant's server, events, staff alerts, imports (PLAN 0.8.10 K1–K10), the default templates of the
  * messages the product sends (parity P1) and the product's part of each website's Setup sheet (`GET /v1/blueprint`,
  * with what the website builds per feature, and the advisor's Switch on). Every side effect is injected (fetch, clock,
@@ -224,8 +223,15 @@ export const createProduct = (options) => {
 		logger,
 	});
 	const recent = createRecentChanges({ store, now, randomBytes });
-	const status = createStatus({ store, client: () => connection.active().client, now, logger });
 	const website = createWebsiteSettings({ store, client: () => connection.active().client, now, logger });
+	const status = createStatus({
+		store,
+		client: () => connection.active().client,
+		now,
+		logger,
+		// a status copy fetched again may show a newer version of the website's settings: they are fetched right after it
+		onRefreshed: (websiteId, copy) => website.followStatus(websiteId, copy),
+	});
 	const reports = createReports({ store, manifest, connection, status, recent, now, logger });
 	const shared = options.sharedSettings ?? {};
 	for (const [key, group] of Object.entries(shared)) {
@@ -302,9 +308,9 @@ export const createProduct = (options) => {
 		...(options.data?.createClient ? { createClient: options.data.createClient } : {}),
 		indexes: [...ACTIVITY_INDEXES, ...(options.events ? EVENT_INDEXES : []), ...(options.data?.indexes ?? [])],
 	});
-	const business = createBusiness({ store, send, now, logger, website });
+	const business = createBusiness({ website });
 	/**
-	 * The normalized business.json copy of a website (defaults: name = domain, time zone UTC).
+	 * The business facts of a website from the Portal's settings (defaults: name = domain, time zone UTC).
 	 * @param {string} websiteId
 	 */
 	const businessOf = async (websiteId) => {

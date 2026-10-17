@@ -52,7 +52,6 @@ const WEBSITE_COLLECTIONS = /** @type {const} */ ([
 	'connections',
 	'changes',
 	'status',
-	'business',
 	'website_settings',
 	'widget',
 ]);

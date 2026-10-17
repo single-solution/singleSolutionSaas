@@ -105,8 +105,6 @@ export {
 	humanize,
 	parseCredits,
 	supportContact,
-	symbolRowsOf,
-	symbolsOf,
 } from './format.js';
 export { describeProblem, fieldErrors, problemCode, problemLines } from './problems.js';
 

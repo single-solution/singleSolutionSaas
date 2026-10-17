@@ -67,9 +67,10 @@ export const effectiveStatus = (status, nowMs) =>
 
 /**
  * @param {{ store: Store, client: () => import('./portal-client.js').PortalClient, now: () => number,
- *   logger: import('./logger.js').Logger }} options
+ *   logger: import('./logger.js').Logger, onRefreshed?: (websiteId: string, status: StatusResponse) => Promise<unknown> }} options
+ *   `onRefreshed`: runs after a status copy fetched again after a response (the settings follow the status copy's version)
  */
-export const createStatus = ({ store, client, now, logger }) => {
+export const createStatus = ({ store, client, now, logger, onRefreshed }) => {
 	/** @type {{ at: number | null, readAt: number } | null} when the revocation list was last fetched, as last read */
 	let synced = null;
 	/** The shared revocation list fetch, if one runs (true when it was fetched). @type {Promise<boolean> | null} */
@@ -209,8 +210,11 @@ export const createStatus = ({ store, client, now, logger }) => {
 		refreshedAt.set(websiteId, t);
 		later(after, async () => {
 			try {
-				await fetchStatus(websiteId);
+				const doc = await fetchStatus(websiteId);
 				await syncLater();
+				await onRefreshed?.(websiteId, doc.status).catch((error) =>
+					logger.warn('work after the status copy failed', { websiteId, error }),
+				);
 			} catch (error) {
 				await unknownWebsite(websiteId, error).catch(() => false);
 			}

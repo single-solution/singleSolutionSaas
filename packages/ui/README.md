@@ -78,8 +78,9 @@ the page is as wide as the window leaves it. Nothing is centered in a narrow col
   (`cards`: title plus `description`; arrow keys), `SegmentedControl` (up to about four short choices), `Input` with
   `prefix` / `suffix` adornments, `Select`, `TextArea`; 36 px high, the accent focus ring, error and disabled states.
 - `ManagedNote` (title, text, `href`): a teal note where a value is shown that the Portal owns (the website's look, Format,
-  business facts): what it is and where it is set, with a link to that place in the Portal. The Theme & format tab shows
-  it instead of its forms while the Portal holds the website's settings (the answers' `sources` are `portal`).
+  business facts): what it is and where it is set, with a link to that place in the Portal. The look and the Format have
+  no form in any product (they are the Portal's Website settings); `websiteSettingsUrl({ portal, admin, websiteId, merchantId, section })`
+  is the address of a section of that page, `WEBSITE_SECTION_NAMES` their names.
 - `SaveBar`: the floating Save changes / Discard bar, shown only while something changed. `AccountMenu`, `Avatar`.
 - Rows and editors (never draw these by hand; flat, with hairlines, never boxes in a card): `RowList` + `ListRow` (a
   name, a pill, one primary action and a More menu; `wrap` for long names), `EntryGroup` (one entry of a list editor: a
@@ -167,8 +168,9 @@ button), a setup checklist, the key numbers and the latest activity as a timelin
   with `linkAs`, a button or plain text) and `Timeline` (initials from `initialsOf`, times with `LocalTime`).
 - `<ProductOverview data who product support portal namesOf open recheck needs? steps? numbers?>` is a product
   dashboard's whole Overview from the kit's overview answer, with the words of `overview-texts.js` (US English): the
-  status, no feature on, each missing or failed connection, the widget not seen and business.json not found are "Needs
-  you" items and setup steps on their own; the product adds its own `needs`, `steps`, `numbers` (`Stat` tiles) and
+  status, no feature on, each missing or failed connection, the widget not seen and the Portal's website settings not set
+  (or lacking what the manifest's `websiteSettings.requires` asks for, one item per section with a link to it in the
+  Portal) are "Needs you" items and setup steps on their own; the product adds its own `needs`, `steps`, `numbers` (`Stat` tiles) and
   sections (`children`). Red items come first; the sentence names the most urgent one. `open(tab)` shows a dashboard
   section (Features, Settings, Connections or Developers); credits send merchants to support and admins to the Portal.
   `OverviewSkeleton` is its loading state; `RecentChanges` is the timeline card also shown under Defaults and Prices.
@@ -183,7 +185,7 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
   to Portal; sections and websites switch inside the page and the address follows (Back and Forward work). `tabs`
   puts a product's own section in a standard tab's place (`{ settings: ChatSettings }`) or adds a tab
   (`{ lists: { component, icon, kind, global? } }`, its label in `texts.tabs`). Each tab gets `TabProps`:
-  `websiteId`, `domain`, `who`, `support`, `portal` and `open(tab)`.
+  `websiteId`, `merchantId`, `domain`, `who`, `support`, `portal` and `open(tab)`. The header has the Docs link.
 - Words: `DASHBOARD_TEXTS` are the shared ones (US English). `dashboardTexts({ title, ...own })` lays the product's
   title and its own words over them group by group (a product may reword one shared text). Both come from `@ss/ui`
   itself, not from the client-only `@ss/ui/dashboard`, because the product's server `app/layout.js` reads its title; `useDashboard()` gives the
@@ -192,10 +194,13 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
   returns the product's `needs`, `steps`, `numbers` and `children`), `FeaturesTab` (`warnings(on)`), `SettingsTab`
   (`sections` first, `notice(key, values, features)` on a feature's card, `featureCards(features)` beside the forms),
   `ConnectionsTab` (`form(item, save)` for a connection's own form, `hint(name)`; Remove sits in the card's ⋯ menu
-  and asks first), `DevelopersTab` (`links`, and the product's sections as children instead of the widget script),
+  and asks first), `DevelopersTab` (the product's `sections` instead of the widget script, `children` under More; the
+  website id and tokens are in the Portal),
   `DefaultsTab` (`notice`) and `PricesTab` (with the Re-seal card).
 - Pieces for a product's own tabs: `Loaded`, `Outcome`, `SaveOutcome`, `SettingsForms`, `TextsForm` (with a box that finds a text),
-  `ThemeForm`, `FormatForm`, `ResealCard`, and `hasSettings`, `toneOf`, `withDependents`.
+  `ResealCard`, and `hasSettings`, `toneOf`, `withDependents`. A setting marked `x-ui.defaultFrom` says "Using your
+  website's language. Change it in the Portal" under its help while it uses the Portal's value (`SchemaForm`'s
+  `inherited`).
 - API: `call(method, path, body?)` answers `{ ok: true, data }` or `{ ok: false, problem }` (a product that does not
   answer is a 503 problem); `useLoad(path | null)` shows a resource's last answer at once and refreshes it, with
   `reload()`; `fill(text, values)` fills `{name}` placeholders.

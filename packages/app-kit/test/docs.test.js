@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
 import {
 	KIT_GUIDE,
 	apiAnchor,
@@ -100,7 +99,7 @@ describe('the feature sections', () => {
 });
 
 describe('the docs page', () => {
-	it('wraps the product sections with the kit sections, business.json and the API reference', () => {
+	it('wraps the product sections with the kit sections, the website settings and the API reference', () => {
 		const html = renderDocsPage({ guide: GUIDE, openapi: OPENAPI, body: '<h2>Own</h2>' });
 		expect(html.startsWith('<!doctype html>\n<html lang="en">')).toBe(true);
 		expect(html).toContain('<title>Notes &#60;docs&#62;</title>');
@@ -108,9 +107,10 @@ describe('the docs page', () => {
 			'<h1>Notes &#60;docs&#62;</h1>\n<p>Hello &#34;you&#34;.</p>\n<p><strong>Local testing.</strong> Use localhost.</p>\n<h2>Own</h2>',
 		);
 		for (const section of KIT_GUIDE) expect(html).toContain(`<h2 id="${section.id}">`);
-		expect(html).toContain(
-			`<h2 id="business">business.json</h2>\n<p>Your business.</p>\n${docsBlock(JSON.stringify(BUSINESS_JSON_TEMPLATE, null, 2))}`,
-		);
+		expect(html).toContain(`<h2 id="business">Your website's settings</h2>\n<p>Your business facts`);
+		expect(html).toContain('PUT on them answers 409 managed_by_portal');
+		expect(html).toContain('\n<p>Your business.</p>\n<h2 id="api">');
+		expect(html).not.toContain('business.json');
 		expect(html).toContain(
 			`<h2 id="api">API reference</h2>\n<p>Every call.</p>\n${docsRouteTable(docsOperations(OPENAPI))}\n${renderApiReference(OPENAPI)}`,
 		);
@@ -121,6 +121,10 @@ describe('the docs page', () => {
 	it("adds the guide's note on the kit routes and renders the reference once per document", () => {
 		const html = renderDocsPage({ guide: { ...GUIDE, kit: 'Our lists: a, b.' }, openapi: OPENAPI, body: '' });
 		expect(html).toContain(`</p>\n<p>Our lists: a, b.</p>\n<h2 id="business">`);
+		// the product's own note in the website settings section is optional
+		expect(renderDocsPage({ guide: { ...GUIDE, business: undefined }, openapi: OPENAPI, body: '' })).not.toContain(
+			'Your business.',
+		);
 		expect(renderDocsPage({ guide: { ...GUIDE, kit: 'Our lists: a, b.' }, openapi: OPENAPI, body: '' })).toBe(html);
 		expect(renderDocsPage({ guide: GUIDE, openapi: null, body: '' })).toContain('<div class="ss-api">\n\n</div>');
 	});

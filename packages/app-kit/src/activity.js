@@ -94,7 +94,7 @@ const boundOf = (value, timeZone, end) => {
  * `from`/`to` (ISO-8601 times, or days in the business time zone; `to` takes its whole day). A query value that does
  * not fit answers which one and why.
  * @param {Record<string, string | undefined>} query the request's query
- * @param {string} timeZone the business.json time zone (days are business days, PLAN 0.8.10 K8)
+ * @param {string} timeZone the business time zone (days are business days, PLAN 0.8.10 K8)
  * @returns {{ ok: true, filter: Record<string, unknown> } | { ok: false, field: string, message: string }}
  */
 export const activityFilter = (query, timeZone) => {

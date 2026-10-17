@@ -59,7 +59,7 @@ export const randomKey = (length) => {
 /**
  * The control of one setting, by its type and widget.
  * @param {{ id: string, label: string, node: SettingNode, widget: string, value: unknown,
- *   onChange: (value: unknown) => void, error: string | undefined, help: string | null, disabled: boolean,
+ *   onChange: (value: unknown) => void, error: string | undefined, help: import('react').ReactNode, disabled: boolean,
  *   placeholder: string | null, aside: import('react').ReactNode, generateText?: string }} props
  */
 function NodeControl({
@@ -287,12 +287,14 @@ function NodeControl({
 /**
  * `overridden` marks settings the website saved itself; with `onReset` they get a Reset link (back to the default).
  * `title` (and `description`) name the feature: with one group it is the card's title, with several it is a heading
- * above the group cards; `before` and `after` are shown above and below the cards. `onSave` shows the Save changes
+ * above the group cards; `inherited` puts a note (a setting that starts from the Portal's website settings, with the
+ * link to change it there) under a setting's help; `before` and `after` are shown above and below the cards. `onSave` shows the Save changes
  * bar while `dirty`. `group` shows only that group's card (`Advanced`: the advanced settings, open); `tabs` (on by
  * default) shows one group at a time from three groups on; `advancedTexts` words the Advanced block.
  * @param {{ schema: SettingsSchema | null | undefined, values: Record<string, unknown>,
  *   onChange: (name: string, value: unknown) => void, errors?: Record<string, string>,
- *   overridden?: Record<string, boolean>, onReset?: (name: string) => void, disabled?: boolean, idPrefix?: string,
+ *   overridden?: Record<string, boolean>, inherited?: Record<string, import('react').ReactNode>,
+ *   onReset?: (name: string) => void, disabled?: boolean, idPrefix?: string,
  *   emptyText?: string, className?: string, title?: import('react').ReactNode, description?: import('react').ReactNode,
  *   before?: import('react').ReactNode, after?: import('react').ReactNode, dirty?: boolean, saving?: boolean,
  *   onSave?: () => unknown, onDiscard?: () => void, group?: string, tabs?: boolean,
@@ -305,6 +307,7 @@ export function SchemaForm({
 	onChange,
 	errors = {},
 	overridden = {},
+	inherited = {},
 	onReset,
 	disabled = false,
 	idPrefix,
@@ -364,7 +367,16 @@ export function SchemaForm({
 					value={values[field.name]}
 					onChange={(next) => onChange(field.name, next)}
 					error={errors[field.name]}
-					help={field.help}
+					help={
+						inherited[field.name] ? (
+							<>
+								{field.help ? `${field.help} ` : null}
+								{inherited[field.name]}
+							</>
+						) : (
+							field.help
+						)
+					}
 					placeholder={field.placeholder}
 					disabled={disabled}
 					aside={aside}

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * `@ss/ui/dashboard`, the product dashboard every product shares: the dashboard API helpers, the product's words over
- * the shared ones, the shared pieces (loading, outcome, settings / texts / theme / Format forms, Re-seal), the standard
+ * the shared ones, the shared pieces (loading, outcome, settings and texts forms, Re-seal), the standard
  * tabs with the product's own parts, and the whole page (session, sidebar for merchants and Owners, website switch).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,9 +11,7 @@ import {
 	DefaultsTab,
 	DevelopersTab,
 	FeaturesTab,
-	FormatForm,
 	Loaded,
-	LookTab,
 	OverviewTab,
 	Outcome,
 	PricesTab,
@@ -23,7 +21,6 @@ import {
 	SettingsTab,
 	TextsForm,
 	TextsTab,
-	ThemeForm,
 	call,
 	fill,
 	hasSettings,
@@ -54,7 +51,7 @@ const MANIFEST = {
 		{ key: 'digest', name: 'Digest', description: 'A daily mail.', dependsOn: ['alerts'] },
 	],
 };
-const TEXTS = dashboardTexts({ title: 'Notes', settings: { looksHelp: 'Our own words' } });
+const TEXTS = dashboardTexts({ title: 'Notes', settings: { navSearch: 'Our own words' } });
 
 /** Every request the fake product answered. @type {Array<{ method: string, path: string, body: any }>} */
 let requests = [];
@@ -120,6 +117,7 @@ const navLinks = (root) => [...root.querySelectorAll('nav[aria-label] a[href^="#
  */
 const tabProps = (websiteId, parts = {}) => ({
 	websiteId,
+	merchantId: 'mer_1',
 	domain: 'shop.example.com',
 	who: { kind: 'admin', id: 'a1', name: 'Alex Morgan', role: 'owner' },
 	support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] },
@@ -225,13 +223,13 @@ describe('dashboard words', () => {
 	it('lays the product title and words over the shared ones, group by group, and again changes nothing', () => {
 		const own = dashboardTexts({
 			title: 'Chat',
-			settings: { formatHelp: 'Chat format' },
+			settings: { navSearch: 'Chat search' },
 			overview: { noBooking: { title: 'No booking URL' } },
 			list: ['a', 'b'],
 		});
 		expect(own.title).toBe('Chat');
-		expect(own.settings.formatHelp).toBe('Chat format');
-		expect(own.settings.theme).toBe(DASHBOARD_TEXTS.settings.theme);
+		expect(own.settings.navSearch).toBe('Chat search');
+		expect(own.settings.advanced).toBe(DASHBOARD_TEXTS.settings.advanced);
 		expect(own.overview.noBooking.title).toBe('No booking URL');
 		expect(own.list).toEqual(['a', 'b']);
 		expect(Object.isFrozen(own.overview.noBooking)).toBe(true);
@@ -417,61 +415,6 @@ describe('shared pieces', () => {
 		expect(reload).toHaveBeenCalledTimes(4);
 	});
 
-	it('ThemeForm and FormatForm save their draft and show the outcome', async () => {
-		const reload = vi.fn();
-		const saveTheme = vi.fn(async () => /** @type {const} */ ({ ok: true, data: null }));
-		const theme = { colors: {}, fontFamily: 'inherit', radius: 8, mode: 'auto', customCss: '' };
-		const { container } = render(inDashboard(<ThemeForm theme={theme} save={saveTheme} reload={reload} />));
-		click(byLabel(container, TEXTS.settings.modes.dark));
-		type(byLabel(container, TEXTS.settings.fontFamily), 'Inter');
-		type(byLabel(container, TEXTS.settings.radius), '12');
-		type(byLabel(container, TEXTS.settings.accent), '#112233');
-		type(byLabel(container, TEXTS.settings.customCss), '.x{}');
-		expect(byLabel(container, TEXTS.settings.accent).value).toBe('#112233');
-		await act(async () => button('Save').click());
-		expect(saveTheme).toHaveBeenCalledWith({
-			colors: { accent: '#112233' },
-			fontFamily: 'Inter',
-			radius: 12,
-			mode: 'dark',
-			customCss: '.x{}',
-		});
-		expect(container.textContent).toContain('Saved');
-		cleanup();
-		const saveFormat = vi.fn(
-			async () => /** @type {const} */ ({ ok: false, problem: { status: 422, code: 'product_rule', title: 'Bad locale' } }),
-		);
-		const format = {
-			locale: '',
-			currencyDisplay: 'code',
-			currencySymbols: { CHF: 'Fr.' },
-			wholeUnits: false,
-			times: 'viewer',
-		};
-		const second = render(inDashboard(<FormatForm format={format} save={saveFormat} reload={reload} />));
-		type(byLabel(second.container, TEXTS.settings.locale), ' fr-FR ');
-		click(byLabel(second.container, TEXTS.settings.currencyDisplays.symbol));
-		// one symbol per currency (K5): add PKR, keep CHF, a row without a symbol is left out
-		await act(async () => button(TEXTS.settings.addSymbol).click());
-		await act(async () => button(TEXTS.settings.addSymbol).click());
-		const rows = second.container.querySelectorAll('li');
-		type(byLabel(/** @type {HTMLElement} */ (rows[1]), TEXTS.settings.currency), 'pkr');
-		type(byLabel(/** @type {HTMLElement} */ (rows[1]), TEXTS.settings.symbol), 'Rs');
-		type(byLabel(/** @type {HTMLElement} */ (rows[2]), TEXTS.settings.currency), 'EUR');
-		click(byLabel(second.container, TEXTS.settings.timesOptions.business));
-		click(byLabel(second.container, TEXTS.settings.wholeUnits));
-		await act(async () => button('Save').click());
-		expect(saveFormat).toHaveBeenCalledWith({
-			locale: 'fr-FR',
-			currencyDisplay: 'symbol',
-			currencySymbols: { CHF: 'Fr.', PKR: 'Rs' },
-			wholeUnits: true,
-			times: 'business',
-		});
-		expect(second.container.textContent).toContain('Bad locale');
-		expect(reload).toHaveBeenCalledTimes(2);
-	});
-
 	it('ResealCard reports what was re-sealed, websites to try again, or the problem', async () => {
 		/** @type {any} */
 		let answer = ok({ resealed: 3, current: 1, unreadable: 0, failedWebsites: [] });
@@ -515,14 +458,14 @@ describe('standard tabs', () => {
 		const base = `/v1/dashboard/websites/${id}`;
 		serve({
 			[`GET ${base}/overview`]: ok({
-				website: { domain: 'shop.example.com' },
+				website: { websiteId: id, merchantId: 'mer_1', domain: 'shop.example.com' },
 				status: { status: 'active', graceEndsAt: null },
 				featuresOn: ['notes'],
 				todayMillicredits: 1000,
-				checklist: { connections: [], widget: null, business: { found: false } },
+				checklist: { connections: [], widget: null, website: { version: 0, requires: [], missing: [] } },
 				recentChanges: [],
 			}),
-			[`POST ${base}/business/refresh`]: ok({}),
+			[`POST ${base}/website-settings/refresh`]: ok({}),
 			[`GET ${base}/extra`]: ok({ count: 0 }),
 		});
 		/** @type {import('../src/dashboard.js').UseOverviewMore} */
@@ -543,7 +486,7 @@ describe('standard tabs', () => {
 		await act(async () => button('Check again').click());
 		await settle();
 		expect(requests.filter((request) => request.method === 'POST')).toEqual([
-			{ method: 'POST', path: `${base}/business/refresh`, body: undefined },
+			{ method: 'POST', path: `${base}/website-settings/refresh`, body: undefined },
 		]);
 		expect(requests.filter((request) => request.path === `${base}/overview`)).toHaveLength(2);
 		// without useMore: the kit Overview alone
@@ -796,6 +739,55 @@ describe('standard tabs', () => {
 		expect(plain.container.textContent).toContain('Keep notes.');
 	});
 
+	it('Settings: a setting that starts from the Portal says so and links to its section, until the website saves its own', async () => {
+		const id = freshSite();
+		const schema = {
+			type: 'object',
+			properties: {
+				language: { type: 'string', title: 'Language', default: '', 'x-ui': { defaultFrom: 'region.language' } },
+				greeting: { type: 'string', title: 'Greeting', default: 'Hi' },
+			},
+		};
+		serve({
+			[`GET /v1/dashboard/websites/${id}/settings`]: ok({
+				features: [
+					{
+						key: 'notes',
+						name: 'Notes',
+						on: true,
+						schema,
+						values: {
+							language: { value: 'fr-CA', source: 'portal', from: 'region.language' },
+							greeting: { value: 'Hi', source: 'built-in' },
+						},
+					},
+				],
+			}),
+		});
+		const { container } = render(inDashboard(<SettingsTab {...tabProps(id)} />));
+		await settle();
+		const notes = [...container.querySelectorAll('[data-inherited]')];
+		expect(notes).toHaveLength(1);
+		expect(notes[0]?.textContent).toBe('Using your website’s language. Change it in the Portal');
+		// an Owner or Support admin opens the merchant's page of the website, a merchant their own
+		expect(notes[0]?.querySelector('a')?.getAttribute('href')).toBe(
+			`https://portal.example.com/admin/merchants/mer_1/websites/${id}/settings#region`,
+		);
+		expect(notes[0]?.querySelector('a')?.getAttribute('target')).toBe('_blank');
+		expect(byLabel(container, 'Language').value).toBe('fr-CA');
+		// typing a value of its own takes the note away (the website then saves its own)
+		type(byLabel(container, 'Language'), 'de-CH');
+		expect(container.querySelector('[data-inherited]')).toBeNull();
+		cleanup();
+		const merchant = render(
+			inDashboard(<SettingsTab {...tabProps(id, { who: { kind: 'merchant', id: 'mer_1', name: 'Acme' } })} />),
+		);
+		await settle();
+		expect(merchant.container.querySelector('[data-inherited] a')?.getAttribute('href')).toBe(
+			`https://portal.example.com/websites/${id}/settings#region`,
+		);
+	});
+
 	it('Settings: says so when no feature with settings is on', async () => {
 		const id = freshSite();
 		serve({
@@ -846,83 +838,6 @@ describe('standard tabs', () => {
 		expect(container.textContent).not.toContain('cart.title');
 		type(/** @type {HTMLInputElement} */ (container.querySelector('input[type="search"]')), 'zzz');
 		expect(container.textContent).toContain(TEXTS.texts.none);
-	});
-
-	it('Theme & format: Colors, Type, Shapes and Formats, one Save changes bar for whatever changed', async () => {
-		const id = freshSite();
-		const base = `/v1/dashboard/websites/${id}`;
-		serve({
-			[`GET ${base}/theme`]: ok({
-				theme: { colors: { accent: '#000000' }, fontFamily: 'inherit', radius: 4, mode: 'auto', customCss: '' },
-			}),
-			[`GET ${base}/format`]: ok({
-				format: { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' },
-			}),
-			[`PUT ${base}/theme`]: ok({}),
-			[`PUT ${base}/format`]: ok({}),
-		});
-		const { container } = render(inDashboard(<LookTab {...tabProps(id)} />));
-		await settle();
-		expect(navLinks(container)).toEqual(['Colors', 'Type', 'Shapes', 'Formats']);
-		expect(container.textContent).not.toContain('You have unsaved changes');
-		type(byLabel(container, TEXTS.settings.accent), '#ff0000');
-		expect(container.textContent).toContain('You have unsaved changes');
-		openSection(container, 'type');
-		type(byLabel(container, TEXTS.settings.fontFamily), 'Georgia');
-		openSection(container, 'shapes');
-		// the custom CSS is under Advanced
-		expect(container.querySelector('textarea')).toBeNull();
-		click(/** @type {HTMLElement} */ (container.querySelector('#section-shapes button[aria-expanded]')));
-		expect(container.querySelector('textarea')).not.toBeNull();
-		openSection(container, 'formats');
-		type(byLabel(container, TEXTS.settings.locale), 'fr-FR');
-		await act(async () => button('Save changes').click());
-		await settle();
-		expect(requests.filter((request) => request.method === 'PUT')).toEqual([
-			{
-				method: 'PUT',
-				path: `${base}/theme`,
-				body: { colors: { accent: '#ff0000' }, fontFamily: 'Georgia', radius: 4, mode: 'auto', customCss: '' },
-			},
-			{
-				method: 'PUT',
-				path: `${base}/format`,
-				body: { locale: 'fr-FR', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' },
-			},
-		]);
-	});
-
-	it('Theme & format while the Portal holds the website’s settings: where each is set, with a link, and no form', async () => {
-		const id = freshSite();
-		const base = `/v1/dashboard/websites/${id}`;
-		const from = (/** @type {string[]} */ fields) => Object.fromEntries(fields.map((field) => [field, 'portal']));
-		serve({
-			[`GET ${base}/theme`]: ok({
-				theme: { colors: {}, fontFamily: 'inherit', radius: 4, mode: 'auto', customCss: '' },
-				sources: from(['colors', 'fontFamily', 'radius', 'mode', 'customCss']),
-			}),
-			[`GET ${base}/format`]: ok({
-				format: { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' },
-				sources: from(['locale', 'currencyDisplay', 'currencySymbols', 'wholeUnits', 'times']),
-			}),
-		});
-		const { container } = render(inDashboard(<LookTab {...tabProps(id)} />));
-		await settle();
-		expect(container.textContent).toContain('Set in the Portal');
-		expect(container.textContent).toContain('Website settings › Brand and look');
-		expect(container.textContent).toContain('Website settings › Region and format');
-		expect(container.querySelector('nav')).toBeNull();
-		expect(container.querySelector('input, textarea, select')).toBeNull();
-		const links = [...container.querySelectorAll('a')].map((a) => [
-			a.textContent?.trim(),
-			a.getAttribute('href'),
-			a.getAttribute('target'),
-		]);
-		expect(links).toEqual([
-			['Open Website settings', `https://portal.example.com/websites/${id}/settings#brand`, '_blank'],
-			['Open Website settings', `https://portal.example.com/websites/${id}/settings#region`, '_blank'],
-		]);
-		expect(requests.filter((request) => request.method === 'PUT')).toEqual([]);
 	});
 
 	it('Connections: saves and tests a value, removes after a confirmation, with the product forms and hints', async () => {
@@ -1032,15 +947,16 @@ describe('standard tabs', () => {
 		expect(container.textContent).toContain(TEXTS.connections.none);
 	});
 
-	it('Developers: start here, the product sections or the widget script, and the searchable docs', async () => {
+	it('Developers: the product sections or the widget script, and the searchable docs; the id and tokens are in the Portal', async () => {
 		const id = freshSite();
 		serve({ [`GET /v1/dashboard/websites/${id}/features`]: ok({ features: FEATURES }) });
 		const { container } = render(inDashboard(<DevelopersTab {...tabProps(id)} />));
 		await settle();
-		expect(navLinks(container)).toEqual(['Start here', 'Widget script', 'Feature docs']);
-		expect(container.textContent).toContain(`This website’s id: ${id}`);
-		expect(container.querySelector('a[href="https://portal.example.com"]')?.textContent).toBe(TEXTS.developers.manageTokens);
-		openSection(container, 'script');
+		expect(navLinks(container)).toEqual(['Widget script', 'Feature docs']);
+		// nothing here repeats what the Portal shows: no website id, no token text, no link to the tokens
+		expect(container.textContent).not.toContain(id);
+		expect(container.textContent).not.toContain('server token');
+		expect(container.querySelector('a[href="https://portal.example.com"]')).toBeNull();
 		expect(container.textContent).toContain(`${window.location.origin}/widget.js`);
 		openSection(container, 'docs');
 		expect(container.textContent).toContain('Alerts (off)');
@@ -1050,63 +966,39 @@ describe('standard tabs', () => {
 			inDashboard(
 				<DevelopersTab
 					{...tabProps(id)}
-					links={<a href="/docs#seo">SEO</a>}
 					sections={[{ id: 'snippets', label: 'Snippets', content: <section>own sections</section> }]}
 				/>,
 			),
 		);
 		await settle();
-		expect(navLinks(own.container)).toEqual(['Start here', 'Snippets', 'Feature docs']);
-		expect(own.container.querySelector('a[href="/docs#seo"]')).not.toBeNull();
-		openSection(own.container, 'snippets');
+		expect(navLinks(own.container)).toEqual(['Snippets', 'Feature docs']);
 		expect(own.container.textContent).toContain('own sections');
 		expect(own.container.textContent).not.toContain('widget.js');
 	});
 
-	it('Defaults: the global settings (reset with PUT null), texts, theme and Format, with the product notice', async () => {
+	it('Defaults: the global settings (reset with PUT null) and texts, with the product notice; no theme or Format', async () => {
 		serve({
 			'GET /v1/dashboard/defaults': ok({
 				features: [{ key: 'notes', name: 'Notes', schema: SCHEMA, values: { greeting: { value: 'Hi', source: 'default' } } }],
 				texts: [{ key: 'hello.title', english: 'Hello', value: 'Hey', source: 'default' }],
-				theme: { theme: { colors: {}, fontFamily: 'inherit', radius: 4, mode: 'auto', customCss: '' } },
-				format: { format: { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' } },
 				recentChanges: [],
 			}),
 			'PUT /v1/dashboard/defaults/notes.greeting': ok({}),
 			'PUT /v1/dashboard/defaults/text.hello.title': ok({}),
-			'PUT /v1/dashboard/defaults/theme': ok({}),
-			'PUT /v1/dashboard/defaults/format': ok({}),
 		});
 		const { container } = render(inDashboard(<DefaultsTab notice={(key) => <p>{`default notice ${key}`}</p>} />));
 		await settle();
 		expect(container.textContent).toContain(TEXTS.defaults.intro);
 		expect(container.textContent).toContain('default notice notes');
-		// the sidebar: every feature, then the texts by screen, the theme and Format, and Recent changes
-		expect(navLinks(container)).toEqual(['Notes', 'Hello1', 'Colors', 'Type', 'Shapes', 'Formats', 'Recent changes']);
+		// the sidebar: every feature, then the texts by screen, and Recent changes (the theme and Format are the Portal's)
+		expect(navLinks(container)).toEqual(['Notes', 'Hello1', 'Recent changes']);
 		await act(async () => byText(container, 'Reset', 'button').click());
 		openSection(container, 'text-hello');
 		await act(async () => button(TEXTS.reset).click());
-		openSection(container, 'colors');
-		type(byLabel(container, TEXTS.settings.accent), '#112233');
-		openSection(container, 'formats');
-		type(byLabel(container, TEXTS.settings.locale), 'fr-FR');
-		await act(async () => button('Save changes').click());
 		await settle();
 		expect(requests.filter((request) => request.method === 'PUT')).toEqual([
 			{ method: 'PUT', path: '/v1/dashboard/defaults/notes.greeting', body: { value: null } },
 			{ method: 'PUT', path: '/v1/dashboard/defaults/text.hello.title', body: { value: null } },
-			{
-				method: 'PUT',
-				path: '/v1/dashboard/defaults/theme',
-				body: { value: { colors: { accent: '#112233' }, fontFamily: 'inherit', radius: 4, mode: 'auto', customCss: '' } },
-			},
-			{
-				method: 'PUT',
-				path: '/v1/dashboard/defaults/format',
-				body: {
-					value: { locale: 'fr-FR', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' },
-				},
-			},
 		]);
 		cleanup();
 		render(inDashboard(<DefaultsTab />));
@@ -1217,7 +1109,7 @@ describe('ProductDashboard', () => {
 		const tabs = { overview: probe('overview'), settings: probe('settings') };
 		render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} tabs={tabs} />);
 		await settle();
-		expect(sidebar()).toEqual(['Overview', 'Features', 'Settings', 'Texts', 'Theme & format', 'Connections', 'Developers']);
+		expect(sidebar()).toEqual(['Overview', 'Features', 'Settings', 'Texts', 'Connections', 'Developers']);
 		expect(document.body.textContent).toContain(TEXTS.pickWebsite);
 		expect(document.body.textContent).toContain('Notes');
 		expect(document.querySelector('a[href="https://portal.example.com"]')?.textContent).toBe(TEXTS.backToPortal);
@@ -1306,7 +1198,6 @@ describe('ProductDashboard', () => {
 			'Features',
 			'Settings',
 			'Texts',
-			'Theme & format',
 			'Connections',
 			'Developers',
 			'Lists',
@@ -1328,7 +1219,7 @@ describe('ProductDashboard', () => {
 		expect(document.body.textContent).toContain('Viewing as admin · Other / other.example.com');
 		expect(document.body.textContent).toContain('tab for p2');
 		// from a website tab, the same tab of the other website
-		click(/** @type {HTMLElement} */ ([...document.querySelectorAll('nav[aria-label="Main"] a')][7]));
+		click(/** @type {HTMLElement} */ ([...document.querySelectorAll('nav[aria-label="Main"] a')][6]));
 		await settle();
 		type(picker, 'p1');
 		await settle();

@@ -1,12 +1,11 @@
 /**
  * The toolkit of a product's public `/docs` page (PLAN 0.4.10): the page itself (head and style, title, intro, the
- * localhost note, the kit's sections for the merchant's server, business.json and the API reference with its route
+ * localhost note, the kit's sections for the merchant's server, the website's settings and the API reference with its route
  * table), one section per feature (its words, what it needs, what the website builds, its widgets and its routes) and
  * the small HTML pieces a product's own sections are written with. A product's `server/docs.js` keeps only its own
  * sections. Plain HTML: every value is escaped (pieces documented as HTML are taken as they are).
  * @module
  */
-import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
 import { escapeHtml } from '@ss/contracts/text';
 import { isObject } from '@ss/contracts/util';
 import { apiAnchor, renderApiReference } from './api-reference.js';
@@ -23,7 +22,7 @@ import { KIT_GUIDE } from './guide.js';
  * @property {string} title the page title
  * @property {string} intro the first paragraph
  * @property {string} localhost the local testing note
- * @property {string} business what the business.json section says
+ * @property {string} [business] the product's own note in the website settings section
  * @property {string} api what the API reference section says
  * @property {string} [kit] the product's own note after the kit's sections (its lists, counts …)
  * @property {Record<string, string[]>} [features] more paragraphs per feature key
@@ -43,6 +42,10 @@ pre { overflow-x: auto; padding: 12px; border: 1px solid GrayText; border-radius
 table { border-collapse: collapse; width: 100%; } th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid GrayText; }
 td code { overflow-wrap: anywhere; }
 .ss-api-op { margin-top: 32px; } .ss-api-op h3 code, .ss-api-schema h4 { overflow-wrap: anywhere; }`;
+
+/** What every product's docs say of the website's settings (Portal › Website settings). */
+const WEBSITE_SETTINGS_NOTE =
+	'Your business facts (name, contact, address, hours), the look of the widgets (colors, font, logo), the region (country, time zone, currencies, languages, units, how money and dates look), your site pages and the people who get alerts are set once, in the Portal under Website settings, and every product of your website uses them. Nothing is read from your website, and nothing is saved twice. GET /v1/theme and GET /v1/format read the look and the Format; PUT on them answers 409 managed_by_portal. While the Portal holds nothing yet, the name is your domain, times use UTC and the look is the built-in one; the dashboard Overview says what to set.';
 
 /** The API reference of each `openapi.json`, rendered once (it is the same for every request). @type {WeakMap<object, string>} */
 const references = new WeakMap();
@@ -145,7 +148,7 @@ export const docsFeatureSections = ({ manifest, rows, guide = {} }) => {
 /**
  * The whole `/docs` page around the product's own sections: head and style, the title, the intro and the localhost
  * note, then `body`, then the kit's sections for the merchant's server (`KIT_GUIDE`, then the guide's `kit` note),
- * business.json (`#business`) and the API reference (`#api`: the route table and every operation from `openapi.json`).
+ * the website's settings in the Portal (`#business`) and the API reference (`#api`: the route table and every operation from `openapi.json`).
  * @param {{ guide: DocsGuide, openapi: unknown, body: string }} input `body`: the product's own sections (HTML, escaped
  *   by the product; `docsFeatureSections` among them)
  * @returns {string}
@@ -174,9 +177,9 @@ ${docsParagraph(guide.intro)}
 ${body}
 ${KIT_GUIDE.map((section) => `<h2 id="${escapeHtml(section.id)}">${escapeHtml(section.title)}</h2>\n${section.paragraphs.map(docsParagraph).join('\n')}`).join('\n')}
 ${guide.kit ? docsParagraph(guide.kit) : ''}
-<h2 id="business">business.json</h2>
-${docsParagraph(guide.business)}
-${docsBlock(JSON.stringify(BUSINESS_JSON_TEMPLATE, null, 2))}
+<h2 id="business">Your website's settings</h2>
+${docsParagraph(WEBSITE_SETTINGS_NOTE)}
+${guide.business ? docsParagraph(guide.business) : ''}
 <h2 id="api">API reference</h2>
 ${docsParagraph(guide.api)}
 ${docsRouteTable(docsOperations(document))}

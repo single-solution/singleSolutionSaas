@@ -1,6 +1,7 @@
 import { validateManifest, validateProductBlueprint } from '@ss/contracts';
 import { describe, expect, it } from 'vitest';
 import { HIDDEN, SECRET_MIN_LENGTH, checkAdditions, hideSecrets, summarizeList, withDependencies } from '../src/blueprint.js';
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { createSigner, generateSigningKey, signPortalCall } from '@ss/protocol';
 import { createProduct } from '../src/index.js';
 import { BASE, DOMAIN, ENCRYPTION_KEY, SECRET, manifest, setup } from './helpers.js';
@@ -71,7 +72,6 @@ describe('GET /v1/blueprint (Portal call)', () => {
 			version: '1.0.0',
 			status: 'active',
 			docs: { guide: `${BASE}/docs`, openapi: null },
-			business: { found: false, fetchedAt: expect.any(String), name: null, country: null, timeZone: null },
 			install: { scriptUrl: `${BASE}/widget.js`, scriptLoading: 'async', installed: false, lastSeenAt: null },
 			shared: [],
 			events: ['notes.settings.changed', 'notes.note.created'],
@@ -153,7 +153,7 @@ describe('GET /v1/blueprint (Portal call)', () => {
 				done: false,
 				text: 'Add the Notes widget script to every page of your website (Install and tokens in the Portal).',
 			},
-			{ key: 'business', done: false, text: `Publish your business basics at https://${DOMAIN}/.well-known/business.json.` },
+			{ key: 'website_settings', done: false, text: 'Set your website settings in the Portal (Website settings).' },
 		]);
 		expect(JSON.stringify(body)).not.toContain('sk_live_0123456789abcdef');
 		expect(JSON.stringify(body)).not.toContain('cdef');
@@ -190,16 +190,15 @@ describe('GET /v1/blueprint (Portal call)', () => {
 		expect(JSON.stringify(body)).not.toContain('sk_live_0123456789abcdef');
 	});
 
-	it('shows the widget ready and installed once the database is connected and a visitor widget was seen; business.json found', async () => {
+	it('shows the widget ready and installed once the database is connected and a visitor widget was seen; the Portal holds the website settings', async () => {
 		const s = await setup();
 		await s.switchOn(['notes']);
 		await s.connectDatabase();
-		s.handlers[`https://${DOMAIN}`] = async () =>
-			new Response(JSON.stringify({ name: 'Example Shop', country: 'us', timeZone: 'America/New_York' }), {
-				headers: { 'content-type': 'application/json' },
-			});
+		s.portal.setWebsiteSettings(s.websiteId, {
+			business: { ...emptyWebsiteSettings(s.websiteId).business, name: 'Example Shop' },
+		});
 		const cookie = await s.session();
-		expect((await s.dash(cookie, 'POST', `/v1/dashboard/websites/${s.websiteId}/business/refresh`)).status).toBe(200);
+		expect((await s.dash(cookie, 'POST', `/v1/dashboard/websites/${s.websiteId}/website-settings/refresh`)).status).toBe(204);
 		expect((await s.call('GET', '/v1/notes', { token: s.browser.token, origin: `https://${DOMAIN}` })).status).toBe(200);
 		await s.settle();
 		const { body } = await blueprintOf(s);
@@ -210,7 +209,7 @@ describe('GET /v1/blueprint (Portal call)', () => {
 			installed: true,
 			lastSeenAt: expect.any(String),
 		});
-		expect(body.business).toMatchObject({ found: true, name: 'Example Shop', country: 'US', timeZone: 'America/New_York' });
+		expect(body.business).toBeUndefined();
 		expect(body.checklist.filter((/** @type {any} */ item) => !item.done)).toEqual([]);
 		expect(body.events).toEqual([]);
 	});

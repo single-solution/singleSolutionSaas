@@ -7,8 +7,9 @@
  * from the shared pieces.
  *
  * Every tab with more than a couple of cards has an inner sidebar and shows ONE view at a time (owner 2026-10-16: no
- * long scrolls): Features by category, Settings by feature (grouped by category), Texts by screen or widget, Theme &
- * format by Colors / Type / Shapes / Formats, Connections one per connection, Developers and Prices by section.
+ * long scrolls): Features by category, Settings by feature (grouped by category), Texts by screen or widget,
+ * Connections one per connection, Developers and Prices by section. The look, the Format and the business facts are not
+ * here: they are the Portal's Website settings, and what a product needs of them shows on its Overview.
  * @module
  */
 import { useState } from 'react';
@@ -27,16 +28,14 @@ import { useDisplayLocale } from './time.js';
 import { call, fill, useLoad } from './dashboard-api.js';
 import { Loaded, Outcome, ResealCard, toneOf, useDashboard, withDependents } from './dashboard-parts.js';
 import {
-	LookBar,
 	SettingsBar,
 	TextsCard,
 	featureSections,
-	lookSections,
 	textSections,
-	useLookEditor,
 	useSettingsEditor,
 	useTextsEditor,
 } from './dashboard-settings.js';
+import { websiteSettingsUrl } from './portal-links.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
 /** @typedef {import('./dashboard-parts.js').FeatureSettings} FeatureSettings */
@@ -46,10 +45,10 @@ import {
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
 /**
- * What every tab is given: the picked website (null on the Owner's global tabs) and its domain, the viewer, the
+ * What every tab is given: the picked website (null on the Owner's global tabs), its merchant and its domain, the viewer, the
  * support contact, the Portal's address and name (`brand`, its Branding), and `open`, which shows another section (the
  * Overview's buttons), at the section of its inner sidebar when one is given (`open('settings', 'catalog.page-addresses')`).
- * @typedef {{ websiteId: string | null, domain: string, who: Who,
+ * @typedef {{ websiteId: string | null, merchantId: string | null, domain: string, who: Who,
  *   support: { channels: import('./format.js').SupportChannel[] }, portal: string, brand?: string,
  *   open: (tab: string, section?: string) => void }} TabProps
  */
@@ -100,7 +99,7 @@ export function OverviewTab(props) {
 					namesOf={namesOf}
 					open={open}
 					recheck={async () => {
-						await call('POST', `${base}/business/refresh`);
+						await call('POST', `${base}/website-settings/refresh`);
 						reload();
 					}}
 					{...more}
@@ -304,7 +303,7 @@ export function FeaturesTab({ websiteId, who, support, warnings, open, brand }) 
  * (not tied to a feature), and a `notice` above a feature's cards.
  * @param {TabProps & { sections?: SectionSpec[], notice?: SettingsNotice, extras?: Record<string, FeatureExtra> }} props
  */
-export function SettingsTab({ websiteId, sections, notice, extras }) {
+export function SettingsTab({ websiteId, merchantId, who, portal, sections, notice, extras }) {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const settings = useLoad(`${base}/settings`);
 	return (
@@ -314,6 +313,9 @@ export function SettingsTab({ websiteId, sections, notice, extras }) {
 					features={data.features}
 					base={base}
 					reload={settings.reload}
+					portalLink={(section) =>
+						websiteSettingsUrl({ portal, admin: who.kind === 'admin', websiteId, merchantId, section })
+					}
 					{...(sections ? { sections } : {})}
 					{...(notice ? { notice } : {})}
 					{...(extras ? { extras } : {})}
@@ -325,9 +327,9 @@ export function SettingsTab({ websiteId, sections, notice, extras }) {
 
 /**
  * @param {{ features: FeatureSettings[], base: string, reload: () => void, sections?: SectionSpec[],
- *   notice?: SettingsNotice, extras?: Record<string, FeatureExtra> }} props
+ *   notice?: SettingsNotice, extras?: Record<string, FeatureExtra>, portalLink: (section: string) => string }} props
  */
-function SettingsPanel({ features, base, reload, sections = [], notice, extras }) {
+function SettingsPanel({ features, base, reload, sections = [], notice, extras, portalLink }) {
 	const dash = useDashboard();
 	const editor = useSettingsEditor({
 		saveUrl: (key) => `${base}/settings/${encodeURIComponent(key)}`,
@@ -341,6 +343,7 @@ function SettingsPanel({ features, base, reload, sections = [], notice, extras }
 			savedSource: 'website',
 			dash,
 			hideOff: true,
+			portalLink,
 			...(notice ? { notice } : {}),
 			...(extras ? { extras } : {}),
 		}),
@@ -426,80 +429,6 @@ function TextsPanel({ items, saveUrl, resetBody, savedSource, reload }) {
 				/>
 			)}
 		</div>
-	);
-}
-
-/**
- * Theme & format: the inner sidebar has Colors, Type, Shapes and Formats; one Save changes bar saves whichever changed.
- * @param {TabProps} props
- */
-export function LookTab({ websiteId, portal }) {
-	const base = `/v1/dashboard/websites/${websiteId}`;
-	const theme = useLoad(`${base}/theme`);
-	const format = useLoad(`${base}/format`);
-	return (
-		<Loaded answer={theme.answer}>
-			{(themeData) => (
-				<Loaded answer={format.answer}>
-					{(formatData) =>
-						// the Portal holds the website's settings: the look and the Format are read there, not edited here
-						isManaged(themeData) && isManaged(formatData) ? (
-							<ManagedLook portal={portal} websiteId={websiteId} />
-						) : (
-							<LookPanel
-								theme={themeData.theme}
-								format={formatData.format}
-								saveTheme={(next) => call('PUT', `${base}/theme`, next)}
-								saveFormat={(next) => call('PUT', `${base}/format`, next)}
-								reload={() => {
-									theme.reload();
-									format.reload();
-								}}
-							/>
-						)
-					}
-				</Loaded>
-			)}
-		</Loaded>
-	);
-}
-
-/** Whether every value of a theme or Format answer comes from the Portal. @param {{ sources?: Record<string, string> }} data */
-const isManaged = (data) => {
-	const sources = Object.values(data?.sources ?? {});
-	return sources.length > 0 && sources.every((source) => source === 'portal');
-};
-
-/**
- * The Theme & format tab while the Portal holds the website's settings: where each is set, with a link.
- * @param {{ portal: string, websiteId: string | null }} props
- */
-function ManagedLook({ portal, websiteId }) {
-	const { texts } = useDashboard();
-	const here = `${String(portal).replace(/\/+$/, '')}/websites/${encodeURIComponent(String(websiteId))}/settings`;
-	return (
-		<div className="space-y-3">
-			<ManagedNote title={texts.managed.title} href={`${here}#brand`} linkLabel={texts.managed.open}>
-				{texts.managed.look}
-			</ManagedNote>
-			<ManagedNote href={`${here}#region`} linkLabel={texts.managed.open}>
-				{texts.managed.format}
-			</ManagedNote>
-		</div>
-	);
-}
-
-/**
- * @param {Parameters<typeof useLookEditor>[0]} props
- */
-function LookPanel(props) {
-	const dash = useDashboard();
-	const editor = useLookEditor(props);
-	return (
-		<>
-			<SectionLayout label={dash.texts.tabs.look} sections={lookSections({ editor, dash })} />
-			<LookBar editor={editor} texts={dash.texts} />
-		</>
 	);
 }
 
@@ -643,12 +572,12 @@ export function ConnectionsTab({ websiteId, form, hint }) {
 }
 
 /**
- * Developers: the inner sidebar has Start here (this website's id, the server token, the Portal's tokens and the
- * product's `links`), the product's own `sections` (by default the widget script), and the docs of every feature (off
- * ones marked, searchable).
- * @param {TabProps & { links?: ReactNode, sections?: SectionSpec[], children?: ReactNode }} props
+ * Developers: the inner sidebar has the product's own `sections` (by default the widget script: the snippets, API calls and
+ * addresses of this product), `children` under More, and the docs of every feature (off ones marked, searchable). The
+ * website's id and the tokens are in the Portal (Install and tokens, the Setup sheet); the docs link is in the header.
+ * @param {TabProps & { sections?: SectionSpec[], children?: ReactNode }} props
  */
-export function DevelopersTab({ websiteId, portal, links, sections, children }) {
+export function DevelopersTab({ websiteId, sections, children }) {
 	const { texts } = useDashboard();
 	const D = texts.developers;
 	const { answer } = useLoad(`/v1/dashboard/websites/${websiteId}/features`);
@@ -676,29 +605,6 @@ export function DevelopersTab({ websiteId, portal, links, sections, children }) 
 					<SectionLayout
 						label={texts.tabs.developers}
 						sections={[
-							{
-								id: 'start',
-								label: D.start,
-								icon: 'home',
-								content: (
-									<>
-										<ViewTitle title={D.start} description={D.intro} />
-										<Card>
-											<p className="text-sm">{fill(D.websiteId, { id: String(websiteId) })}</p>
-											<p className="mt-2 text-sm">{D.server}</p>
-											<p className="mt-3 flex flex-wrap gap-4">
-												<TextLink className="text-sm" href="/docs">
-													{D.openDocs}
-												</TextLink>
-												{links}
-												<TextLink className="text-sm" href={portal}>
-													{D.manageTokens}
-												</TextLink>
-											</p>
-										</Card>
-									</>
-								),
-							},
 							...own,
 							...(children
 								? [{ id: 'more', label: D.more, icon: /** @type {const} */ ('layers'), content: children }]
@@ -748,7 +654,7 @@ export function DevelopersTab({ websiteId, portal, links, sections, children }) 
 
 /**
  * Defaults (Owner): the inner sidebar has the global defaults of every feature's settings (by category, with the
- * product's `notice`), the widget texts by screen, the theme and Format, and Recent changes.
+ * product's `notice`), the widget texts by screen, and Recent changes (the theme and the Format are the Portal's).
  * @param {Partial<TabProps> & { notice?: SettingsNotice }} props
  */
 export function DefaultsTab({ notice }) {
@@ -776,13 +682,6 @@ function DefaultsPanel({ data, reload, notice }) {
 	const saveUrl = (key) => `/v1/dashboard/defaults/${encodeURIComponent(key)}`;
 	const settings = useSettingsEditor({ saveUrl, resetBody: true, reload });
 	const words = useTextsEditor({ saveUrl: (key) => saveUrl(`text.${key}`), resetBody: true, reload });
-	const look = useLookEditor({
-		theme: data.theme.theme,
-		format: data.format.format,
-		saveTheme: (next) => call('PUT', saveUrl('theme'), { value: next }),
-		saveFormat: (next) => call('PUT', saveUrl('format'), { value: next }),
-		reload,
-	});
 	const sections = [
 		...featureSections({
 			features: data.features,
@@ -792,7 +691,6 @@ function DefaultsPanel({ data, reload, notice }) {
 			...(notice ? { notice } : {}),
 		}),
 		...textSections({ items: data.texts, editor: words, savedSource: 'default', dash, group: D.texts }),
-		...lookSections({ editor: look, dash, group: D.look }),
 		{
 			id: 'changes',
 			label: D.changes,
@@ -805,7 +703,6 @@ function DefaultsPanel({ data, reload, notice }) {
 		<>
 			<SectionLayout label={dash.texts.tabs.defaults} sections={sections} searchFrom={12} searchLabel={D.navSearch} />
 			<SettingsBar editor={settings} texts={dash.texts} />
-			<LookBar editor={look} texts={dash.texts} />
 		</>
 	);
 }

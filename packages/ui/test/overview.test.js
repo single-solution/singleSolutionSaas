@@ -45,14 +45,14 @@ const viewerIn = (timeZone) => {
  * @returns {DashboardOverview}
  */
 const answer = (parts = {}) => ({
-	website: { domain: 'shop.example.com' },
+	website: { websiteId: 'web_1', merchantId: 'mer_1', domain: 'shop.example.com' },
 	status: { status: 'active', graceEndsAt: null },
 	featuresOn: ['notes', 'inbox'],
 	todayMillicredits: 1250,
 	checklist: {
 		connections: [{ name: 'database', label: 'Merchant database', neededBy: ['notes'], status: 'connected' }],
 		widget: { installed: true, lastSeenAt: '2026-10-05T23:15:00.000Z' },
-		business: { found: true },
+		website: { version: 3, requires: [], missing: [] },
 	},
 	recentChanges: [{ who: { name: 'Alex Morgan' }, detail: 'Settings: notes', at: '2026-10-06T08:00:00.000Z' }],
 	...parts,
@@ -99,7 +99,7 @@ describe('a product dashboard Overview', () => {
 		expect(byText(container, 'Active').closest('span')?.className).toContain('bg-success-soft');
 		expect(text).toContain('Nothing needs you right now.');
 		expect(text).not.toContain('Each item says what happens if it waits.');
-		// the setup checklist: a feature on, the database, the widget with its last visit, business.json
+		// the setup checklist: a feature on, the database, the widget with its last visit, the website settings
 		expect(text).toContain('4 of 4 done');
 		expect(allByRole(container, 'progressbar')[0]?.getAttribute('aria-valuenow')).toBe('4');
 		expect(text).toContain('Last seen Oct 5, 2026, 7:15 PM EDT');
@@ -132,7 +132,7 @@ describe('a product dashboard Overview', () => {
 					{ name: 'sms', label: 'SMS key', neededBy: ['inbox'], status: 'test_failed' },
 				],
 				widget: { installed: false, lastSeenAt: null },
-				business: { found: false },
+				website: { version: 0, requires: [], missing: [] },
 			},
 			recentChanges: [],
 		});
@@ -147,7 +147,7 @@ describe('a product dashboard Overview', () => {
 			'Merchant database is not connected',
 			'No note form yet',
 			'The widget has not been seen on shop.example.com',
-			'business.json was not found on shop.example.com',
+			'Needs setup: set your website settings in the Portal',
 		]);
 		expect(text).toContain('Mail key failed its last test, and 5 more things need you.');
 		expect(text).toContain('Each item says what happens if it waits.');
@@ -155,7 +155,11 @@ describe('a product dashboard Overview', () => {
 		expect(text).toContain('The key was refused. Needed by inbox: charged, but not working until it passes.');
 		expect(text).toContain('Needed by notes: charged, but not working until it is connected.');
 		expect(text).toContain(
-			'Your business name shows as the domain, and times use UTC, until https://shop.example.com/.well-known/business.json is published.',
+			'Your business facts, look, region and Format are set once for all your products. Until then the business name shows as shop.example.com, times use UTC and the widgets use the built-in look.',
+		);
+		// nothing saved in the Portal yet: a link to its Website settings (a merchant's own page), and Check again
+		expect(byText(container, 'Open Website settings', 'a').getAttribute('href')).toBe(
+			'https://portal.example.com/websites/web_1/settings',
 		);
 		click(byText(container, 'Fix it', 'button'));
 		click(byText(container, 'Connect', 'button'));
@@ -163,11 +167,11 @@ describe('a product dashboard Overview', () => {
 		expect(open.mock.calls).toEqual([['connections'], ['connections'], ['developers']]);
 		click(byText(container, 'Check again', 'button'));
 		expect(recheck).toHaveBeenCalledTimes(1);
-		// the button is busy until business.json was read again
+		// the button is busy until the Portal's settings were fetched again
 		expect(byText(container, 'Check again', 'button').getAttribute('aria-busy')).toBe('true');
 		await act(async () => undefined);
 		expect(byText(container, 'Check again', 'button').getAttribute('aria-busy')).toBeNull();
-		// setup: a feature on is done; the connections, the product's step, the widget and business.json are to do
+		// setup: a feature on is done; the connections, the product's step, the widget and the website settings are to do
 		expect(text).toContain('1 of 7 done');
 		expect(text).toContain('Add a note form');
 		// each step says why in one plain line and has its own button; a connection opens its own view
@@ -180,6 +184,45 @@ describe('a product dashboard Overview', () => {
 		click(byText(widgetRow, 'Get the script', 'button'));
 		expect(open).toHaveBeenLastCalledWith('developers');
 		expect(text).toContain('No changes yet.');
+	});
+
+	it('asks for what the product needs of the website settings: one need and one step per section, linked to it in the Portal', () => {
+		const requires = ['region.currency', 'region.timeZone', 'business.name', 'business.address.city'];
+		const data = answer({
+			checklist: {
+				connections: [],
+				widget: null,
+				website: { version: 2, requires, missing: ['region.currency', 'region.timeZone', 'business.address.city'] },
+			},
+		});
+		const { container, text } = show(data, { who: { kind: 'admin', name: 'Sam Lee' } });
+		expect(needTitles(container)).toEqual([
+			'Needs setup: set currency, time zone in the Portal',
+			'Needs setup: set address city in the Portal',
+		]);
+		expect(text).toContain(
+			'Notes needs currency, time zone. Set them once in Website settings › Region and format, for all your products.',
+		);
+		// an Owner or Support admin opens the merchant's page of the website
+		expect(
+			[...container.querySelectorAll('a')]
+				.filter((a) => a.textContent === 'Open Website settings')
+				.map((a) => a.getAttribute('href')),
+		).toEqual([
+			'https://portal.example.com/admin/merchants/mer_1/websites/web_1/settings#region',
+			'https://portal.example.com/admin/merchants/mer_1/websites/web_1/settings#business',
+		]);
+		// the checklist: a step per section, done when every value of it is set
+		expect(text).toContain('Set currency, time zone in Website settings › Region and format');
+		expect(text).toContain('Set business name, address city in Website settings › Business');
+		expect(text).toContain('1 of 3 done');
+		expect(text).toContain('Notes needs currency, time zone.');
+		cleanup();
+		// everything the product asked for is set: no need, the steps are done
+		const done = show(answer({ checklist: { connections: [], widget: null, website: { version: 2, requires, missing: [] } } }));
+		expect(needTitles(done.container)).toEqual([]);
+		expect(done.text).toContain('3 of 3 done');
+		expect(done.container.querySelector('a[href="https://portal.example.com/websites/web_1/settings#region"]')).not.toBeNull();
 	});
 
 	it('the status comes first: stopped and in grace send merchants to support, admins to the Portal', () => {
@@ -225,7 +268,7 @@ describe('a product dashboard Overview', () => {
 	it('with no feature on, says so and opens Features; the setup starts there', () => {
 		const data = answer({
 			featuresOn: [],
-			checklist: { connections: [], widget: null, business: { found: true } },
+			checklist: { connections: [], widget: null, website: { version: 3, requires: [], missing: [] } },
 		});
 		const { container, text, open } = show(data);
 		expect(text).toContain('No features are on yet.');

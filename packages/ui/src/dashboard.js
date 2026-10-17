@@ -1,8 +1,9 @@
 'use client';
 /**
  * `@ss/ui/dashboard` — the product dashboard (PLAN 0.4.3), one for every product: one page, opened from the Portal
- * (`/sso` → `/dashboard?websiteId=…`), with the left sidebar Overview · Features · Settings · Connections ·
- * Developers, plus Defaults and Prices for Owners. Admins get the website switcher's merchant names and a small
+ * (`/sso` → `/dashboard?websiteId=…`), with the left sidebar Overview · Features · Settings · Texts · Connections ·
+ * Developers, plus Defaults and Prices for Owners. The look, the Format and the business facts are not here: they are the
+ * Portal's Website settings, shown read-only where a value is used (`ManagedNote`) with a link to the place to change it. Admins get the website switcher's merchant names and a small
  * "Viewing as admin" pill in the header; everyone gets Back to Portal (a subtle link in the header). Saved and errors
  * show as toasts at the bottom right. Setup only: it calls the kit's dashboard API and shows no business data.
  *
@@ -17,7 +18,7 @@
  */
 import { createContext, startTransition, useCallback, useContext, useEffect, useState } from 'react';
 import { AppShell, SwitcherSelect } from './AppShell.js';
-import { Callout, EmptyState, Skeleton } from './display.js';
+import { Callout, EmptyState, Skeleton, TextLink } from './display.js';
 import { SwapTransition } from './motion.js';
 import { describeProblem } from './problems.js';
 import { call, fill, useLoad } from './dashboard-api.js';
@@ -28,7 +29,6 @@ import {
 	DefaultsTab,
 	DevelopersTab,
 	FeaturesTab,
-	LookTab,
 	OverviewTab,
 	PricesTab,
 	SettingsTab,
@@ -39,33 +39,29 @@ export { call, fill, useLoad } from './dashboard-api.js';
 export { isFilled, useSetupSteps, wantsSettings } from './dashboard-setup.js';
 export {
 	DashboardProvider,
-	FormatForm,
 	Loaded,
 	Outcome,
 	ResealCard,
 	SaveOutcome,
 	SettingsForms,
 	TextsForm,
-	ThemeForm,
 	hasSettings,
 	toneOf,
 	useDashboard,
 	withDependents,
 } from './dashboard-parts.js';
 export {
-	LookBar,
 	SettingsBar,
 	TextsCard,
 	featureSections,
-	lookSections,
 	settingSectionOf,
 	textGroups,
 	textSections,
-	useLookEditor,
 	useSettingsEditor,
 	useTextsEditor,
 } from './dashboard-settings.js';
-export { ConnectionsTab, DefaultsTab, DevelopersTab, FeaturesTab, LookTab, OverviewTab, PricesTab, SettingsTab, TextsTab };
+export { WEBSITE_SECTION_NAMES, websiteSettingsUrl } from './portal-links.js';
+export { ConnectionsTab, DefaultsTab, DevelopersTab, FeaturesTab, OverviewTab, PricesTab, SettingsTab, TextsTab };
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
 /** @typedef {import('./dashboard-parts.js').DashboardManifest} DashboardManifest */
@@ -99,7 +95,6 @@ const STANDARD_TABS = [
 	['features', { component: FeaturesTab, icon: 'zap', kind: 'feature' }],
 	['settings', { component: SettingsTab, icon: 'sliders', kind: 'settings' }],
 	['texts', { component: TextsTab, icon: 'type', kind: 'settings' }],
-	['look', { component: LookTab, icon: 'palette', kind: 'settings' }],
 	['connections', { component: ConnectionsTab, icon: 'plug', kind: 'connection' }],
 	['developers', { component: DevelopersTab, icon: 'code', kind: 'developer' }],
 	['defaults', { component: DefaultsTab, icon: 'layers', kind: 'default', global: true }],
@@ -220,14 +215,16 @@ function DashboardPage({ tabs: own, product }) {
 			</main>
 		);
 
-	/** @type {{ who: Who, portalUrl: string, branding: { name: string }, support: { channels: import('./format.js').SupportChannel[] }, switcher: Array<{ merchantName: string, websites: Array<{ websiteId: string, domain: string }> }> }} */
+	/** @type {{ who: Who, portalUrl: string, branding: { name: string }, support: { channels: import('./format.js').SupportChannel[] }, switcher: Array<{ merchantId: string, merchantName: string, websites: Array<{ websiteId: string, domain: string }> }> }} */
 	const { who, portalUrl, branding, support, switcher } = session.data;
 	const admin = who.kind === 'admin';
 	const owner = admin && who.role === 'owner';
 	const shown = tabsOf(own).filter(([, tab]) => owner || !tab.global);
 	const keys = shown.map(([key]) => key);
 	const view = query.view && keys.includes(query.view) ? query.view : query.websiteId || !owner ? 'overview' : 'defaults';
-	const sites = switcher.flatMap((group) => group.websites.map((site) => ({ ...site, merchantName: group.merchantName })));
+	const sites = switcher.flatMap((group) =>
+		group.websites.map((site) => ({ ...site, merchantName: group.merchantName, merchantId: group.merchantId })),
+	);
 	const site = sites.find((entry) => entry.websiteId === query.websiteId) ?? null;
 	/** @param {string} tab @param {string | null} [websiteId] */
 	const href = (tab, websiteId = query.websiteId) =>
@@ -267,6 +264,11 @@ function DashboardPage({ tabs: own, product }) {
 				]}
 				switcher={picker}
 				crumbs={[{ label: texts.title }]}
+				actions={
+					<TextLink href="/docs" external>
+						{texts.developers.openDocs}
+					</TextLink>
+				}
 				scrollKey={`${view}|${site ? site.websiteId : ''}`}
 				back={{ href: portalUrl, label: texts.backToPortal }}
 				{...(admin && site ? { context: fill(texts.adminView, { merchant: site.merchantName, domain: site.domain }) } : {})}>
@@ -281,6 +283,7 @@ function DashboardPage({ tabs: own, product }) {
 						<WebsiteLocale websiteId={site ? site.websiteId : null}>
 							<Tab
 								websiteId={site ? site.websiteId : null}
+								merchantId={site ? site.merchantId : null}
 								domain={site ? site.domain : ''}
 								who={who}
 								support={support}

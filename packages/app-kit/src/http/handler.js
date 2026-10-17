@@ -25,7 +25,7 @@
  * route per website instead of the browser one, keeps the per-visitor limits (by that address) and never counts as
  * widget installed.
  *
- * Right after the response (Next.js `after`, through `toNextRoute`): a pending price report, a stale business.json,
+ * Right after the response (Next.js `after`, through `toNextRoute`): a pending price report,
  * unsent activity copies, events and staff alerts, the staff named in a ticket or by a verified sign-in, the widget last-seen time,
  * the route's own work, and last a status copy older than 5 minutes and the revocation list, fetched again (K-19).
  * @module
@@ -286,12 +286,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 	 */
 	const afterWebsiteRequest = async (ctx, r) => {
 		const websiteId = /** @type {string} */ (ctx.websiteId);
-		const status = /** @type {import('@ss/contracts').StatusResponse} */ (ctx.status);
 		const tasks = [
-			async () => {
-				const kept = await kit.business.get(websiteId, status.domain);
-				if (kept.stale) await kit.business.refresh(websiteId, status.domain);
-			},
 			async () => {
 				if (r.database !== false) await kit.activity.retry(websiteId, ctx.merchantId);
 			},

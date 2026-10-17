@@ -2,13 +2,16 @@
  * The settings store (PLAN 0.4.2, 0.4.8, 0.4.10): one value per website × setting in the product database, validated
  * against the feature's settings schema. Reading returns the website's saved value, else the global default (the same
  * store with `websiteId: null`, Owner only), else the schema default. Reset deletes the saved value. Widget texts
- * (English defaults from `strings/en.json`; a text is saved only with the same `{placeholders}`) and the theme
- * (colors, font family, radius, mode, custom CSS) are stored the same way, one value per field, and so is the Format
- * (PLAN 0.8.10 K7: locale, currency display and symbol, whole units, times). Every change writes Recent changes.
+ * (English defaults from `strings/en.json`; a text is saved only with the same `{placeholders}`) are stored the same
+ * way. Every change writes Recent changes.
  *
- * The theme and the Format of a website are the Portal's once it holds the website's settings (`website-settings.js`): they
- * are read from the Portal's copy (source `portal`) and a save is refused with 409 `managed_by_portal`. The Owner's global
- * defaults (no website) stay the product's own.
+ * A setting marked `x-ui.defaultFrom` (a value of the website's settings, `region.language`) starts from the Portal:
+ * while the website has no saved value of its own (or an empty one) and the Portal holds a value there, the setting
+ * takes the Portal's value (source `portal`, `from` names the path); the merchant changes it by saving their own.
+ *
+ * The theme and the Format of a website are the Portal's alone (`website-settings.js`; Website settings › Brand and look
+ * and Region and format): they are read from the Portal's copy (source `portal`; the built-in defaults, source
+ * `built-in`, while the Portal holds nothing yet) and a save is refused with 409 `managed_by_portal`.
  *
  * Settings come in sections: each feature's settings, plus the product's shared settings (PLAN 0.8.10 A2, A11): a
  * group of settings several features use, stored once under the group's key (`<group>.<setting>`) and in use, and
@@ -16,10 +19,14 @@
  * @module
  */
 import { validateSettingValue } from '@ss/contracts';
-import { DEFAULT_FORMAT, FORMAT_FIELDS, formatViolation } from '@ss/contracts/format';
+import { FORMAT_FIELDS } from '@ss/contracts/format';
 import { placeholdersOf } from '@ss/contracts/templates';
-import { isObject } from '@ss/contracts/util';
-import { formatOf as formatFrom, themeOf as themeFrom } from '@ss/contracts/website-settings';
+import {
+	formatOf as formatFrom,
+	isUnsetWebsiteValue,
+	themeOf as themeFrom,
+	websiteSettingAt,
+} from '@ss/contracts/website-settings';
 import { problem } from './http/results.js';
 
 /**
@@ -47,57 +54,10 @@ const samePlaceholders = (a, b) => placeholdersOf(a).sort().join('\n') === place
  * @typedef {{ key: string, name: string, settings: ManifestFeature['settings'], features: string[] }} Section
  */
 
-/** The theme before anyone changes it: product CSS supplies the colors. */
-const DEFAULT_THEME = Object.freeze({
-	colors: Object.freeze({}),
-	fontFamily: 'inherit',
-	radius: 8,
-	mode: 'auto',
-	customCss: '',
-});
-/** Longest custom CSS, in bytes. */
-const MAX_CUSTOM_CSS_BYTES = 20 * 1024;
 /** Longest widget text. */
 const MAX_TEXT_LENGTH = 2000;
+/** The fields of the theme, in the order the Portal's settings give them. */
 const THEME_FIELDS = /** @type {const} */ (['colors', 'fontFamily', 'radius', 'mode', 'customCss']);
-const COLOR_NAME = /^[a-z][a-zA-Z0-9]{0,31}$/;
-const COLOR = /^#[0-9a-fA-F]{6}$/;
-const FONT = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,63}$/;
-
-/**
- * Why a theme field value is invalid, or null.
- * @param {string} field
- * @param {unknown} value
- * @returns {string | null}
- */
-const themeViolation = (field, value) => {
-	switch (field) {
-		case 'colors':
-			return isObject(value) &&
-				Object.keys(value).length <= 24 &&
-				Object.entries(value).every(
-					([name, color]) => COLOR_NAME.test(name) && typeof color === 'string' && COLOR.test(color),
-				)
-				? null
-				: 'colors maps up to 24 names to #rrggbb colors';
-		case 'fontFamily':
-			return value === 'inherit' || (typeof value === 'string' && FONT.test(value))
-				? null
-				: "fontFamily is 'inherit' or a font name";
-		case 'radius':
-			return Number.isInteger(value) && /** @type {number} */ (value) >= 0 && /** @type {number} */ (value) <= 24
-				? null
-				: 'radius is 0–24 px';
-		case 'mode':
-			return value === 'light' || value === 'dark' || value === 'auto' ? null : 'mode is light, dark or auto';
-		case 'customCss':
-			return typeof value === 'string' && Buffer.byteLength(value) <= MAX_CUSTOM_CSS_BYTES
-				? null
-				: 'customCss is at most 20 kB';
-		default:
-			return `unknown theme field ${field}`;
-	}
-};
 
 /**
  * @param {{ store: Store, manifest: Manifest, strings: Record<string, string>, recent: import('./recent.js').RecentChanges,
@@ -192,18 +152,44 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 	const sectionOn = (key, on) => (featureOf(key)?.features ?? []).some((feature) => on.includes(feature));
 
 	/**
+	 * The Portal's settings of a website for the settings that start from them, or null (global defaults, or none yet).
+	 * @param {string | null} websiteId
+	 */
+	const portalOf = async (websiteId) => (websiteId === null ? null : website.get(websiteId));
+
+	/**
+	 * A setting that starts from the Portal (`x-ui.defaultFrom`) takes the Portal's value until the website saves one of its
+	 * own: its saved value wins unless it is empty (left empty means: use the website's). A Portal value that is empty,
+	 * or that the setting would not accept (not one of its choices, too long), changes nothing.
+	 * @param {ManifestFeature['settings']} schema
+	 * @param {string} key
+	 * @param {{ value: any, source: Source }} found what the website, the global defaults and the schema say
+	 * @param {import('@ss/contracts').WebsiteSettings | null} portal
+	 * @returns {{ value: any, source: Source, from?: string }}
+	 */
+	const startsFromPortal = (schema, key, found, portal) => {
+		const from = schema.properties[key]?.['x-ui']?.defaultFrom;
+		if (!from || portal === null) return found;
+		if (found.source === 'website' && !isUnsetWebsiteValue(found.value)) return found;
+		const inherited = websiteSettingAt(portal, from);
+		if (isUnsetWebsiteValue(inherited) || !validateSettingValue(schema, key, inherited).ok) return found;
+		return { value: structuredClone(inherited), source: 'portal', from };
+	};
+
+	/**
 	 * The settings of a feature with their values and sources, from a snapshot.
 	 * @param {string} featureKey
 	 * @param {Awaited<ReturnType<typeof snapshot>>} resolve
-	 * @returns {Record<string, { value: any, source: Source }>}
+	 * @param {import('@ss/contracts').WebsiteSettings | null} portal the website's settings in the Portal (null: none, or the global defaults)
+	 * @returns {Record<string, { value: any, source: Source, from?: string }>}
 	 */
-	const valuesOf = (featureKey, resolve) => {
+	const valuesOf = (featureKey, resolve, portal) => {
 		const feature = featureOf(featureKey);
 		if (!feature) return {};
 		return Object.fromEntries(
 			Object.entries(feature.settings.properties).map(([key, node]) => [
 				key,
-				resolve('setting', `${featureKey}.${key}`, node.default),
+				startsFromPortal(feature.settings, key, resolve('setting', `${featureKey}.${key}`, node.default), portal),
 			]),
 		);
 	};
@@ -214,7 +200,7 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 	 * @param {string} featureKey
 	 * @returns {Promise<Record<string, { value: any, source: Source }>>}
 	 */
-	const settingsOf = async (websiteId, featureKey) => valuesOf(featureKey, await snapshot(websiteId));
+	const settingsOf = async (websiteId, featureKey) => valuesOf(featureKey, await snapshot(websiteId), await portalOf(websiteId));
 
 	/**
 	 * The settings of several features, read once (the dashboard's Settings and Defaults).
@@ -223,8 +209,8 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 	 * @returns {Promise<Record<string, Record<string, { value: any, source: Source }>>>}
 	 */
 	const settingsOfFeatures = async (websiteId, featureKeys) => {
-		const resolve = await snapshot(websiteId);
-		return Object.fromEntries(featureKeys.map((key) => [key, valuesOf(key, resolve)]));
+		const [resolve, portal] = await Promise.all([snapshot(websiteId), portalOf(websiteId)]);
+		return Object.fromEntries(featureKeys.map((key) => [key, valuesOf(key, resolve, portal)]));
 	};
 
 	/**
@@ -286,97 +272,34 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 	};
 
 	/**
-	 * The theme with the source of each field.
-	 * @param {string | null} websiteId
+	 * The theme with the source of each field: the Portal's Brand and look (`portal`), the built-in look while the Portal
+	 * holds nothing for the website yet (`built-in`).
+	 * @param {string} websiteId
 	 * @returns {Promise<{ theme: Theme, sources: Record<keyof Theme, Source> }>}
 	 */
 	const themeOf = async (websiteId) => {
-		const portal = websiteId === null ? null : await website.get(websiteId);
-		if (portal)
-			return {
-				theme: themeFrom(portal),
-				sources: /** @type {Record<keyof Theme, Source>} */ (
-					Object.fromEntries(THEME_FIELDS.map((field) => [field, 'portal']))
-				),
-			};
-		const resolve = await snapshot(websiteId);
-		const entries = THEME_FIELDS.map((field) => /** @type {const} */ ([field, resolve('theme', field, DEFAULT_THEME[field])]));
+		const document = await website.document(websiteId);
+		const source = /** @type {Source} */ (document.version > 0 ? 'portal' : 'built-in');
 		return {
-			theme: /** @type {Theme} */ (Object.fromEntries(entries.map(([field, { value }]) => [field, value]))),
-			sources: /** @type {Record<keyof Theme, Source>} */ (
-				Object.fromEntries(entries.map(([field, { source }]) => [field, source]))
-			),
+			theme: themeFrom(document),
+			sources: /** @type {Record<keyof Theme, Source>} */ (Object.fromEntries(THEME_FIELDS.map((field) => [field, source]))),
 		};
 	};
 
 	/**
-	 * Save theme fields; a field set to `null` is reset.
-	 * @param {{ websiteId: string | null, theme: unknown, who: Who }} input
-	 * @returns {Promise<Change>}
-	 */
-	const setTheme = async ({ websiteId, theme, who }) => {
-		if (websiteId !== null && (await website.get(websiteId))) return managedByPortal('Brand and look');
-		if (!isObject(theme) || Object.keys(theme).length === 0)
-			return { ok: false, problem: problem('validation_failed', 'Send the theme fields to change.') };
-		for (const [field, value] of Object.entries(theme)) {
-			const violation =
-				value === null && THEME_FIELDS.includes(/** @type {any} */ (field)) ? null : themeViolation(field, value);
-			if (violation) return { ok: false, problem: problem('validation_failed', violation) };
-		}
-		for (const [field, value] of Object.entries(theme))
-			await write(websiteId, 'theme', field, value === null ? undefined : value);
-		return log(websiteId, who, 'theme', 'Theme', `${Object.keys(theme).join(', ')} changed`);
-	};
-
-	/**
-	 * The Format with the source of each field (K7).
-	 * @param {string | null} websiteId
+	 * The Format with the source of each field (K7), as the theme.
+	 * @param {string} websiteId
 	 * @returns {Promise<{ format: import('@ss/contracts').Format, sources: Record<keyof import('@ss/contracts').Format, Source> }>}
 	 */
 	const formatOf = async (websiteId) => {
-		const portal = websiteId === null ? null : await website.get(websiteId);
-		if (portal)
-			return {
-				format: formatFrom(portal),
-				sources: /** @type {Record<keyof import('@ss/contracts').Format, Source>} */ (
-					Object.fromEntries(FORMAT_FIELDS.map((field) => [field, 'portal']))
-				),
-			};
-		const resolve = await snapshot(websiteId);
-		const entries = FORMAT_FIELDS.map(
-			(field) => /** @type {const} */ ([field, resolve('format', field, DEFAULT_FORMAT[field])]),
-		);
+		const document = await website.document(websiteId);
+		const source = /** @type {Source} */ (document.version > 0 ? 'portal' : 'built-in');
 		return {
-			format: /** @type {import('@ss/contracts').Format} */ (
-				Object.fromEntries(entries.map(([field, { value }]) => [field, value]))
-			),
+			format: formatFrom(document),
 			sources: /** @type {Record<keyof import('@ss/contracts').Format, Source>} */ (
-				Object.fromEntries(entries.map(([field, { source }]) => [field, source]))
+				Object.fromEntries(FORMAT_FIELDS.map((field) => [field, source]))
 			),
 		};
-	};
-
-	/**
-	 * Save Format fields; a field set to `null` is reset (K7).
-	 * @param {{ websiteId: string | null, format: unknown, who: Who }} input
-	 * @returns {Promise<Change>}
-	 */
-	const setFormat = async ({ websiteId, format, who }) => {
-		if (websiteId !== null && (await website.get(websiteId))) return managedByPortal('Region and format');
-		if (!isObject(format) || Object.keys(format).length === 0)
-			return { ok: false, problem: problem('validation_failed', 'Send the Format fields to change.') };
-		for (const [field, value] of Object.entries(format)) {
-			const violation =
-				value === null && FORMAT_FIELDS.includes(/** @type {any} */ (field)) ? null : formatViolation(field, value);
-			if (violation)
-				return {
-					ok: false,
-					problem: problem('validation_failed', violation, { errors: [{ path: `/${field}`, message: violation }] }),
-				};
-		}
-		for (const [field, value] of Object.entries(format))
-			await write(websiteId, 'format', field, value === null ? undefined : value);
-		return log(websiteId, who, 'format', 'Format', `${Object.keys(format).join(', ')} changed`);
 	};
 
 	return Object.freeze({
@@ -403,9 +326,17 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 		texts: async (websiteId) => Object.fromEntries((await textsOf(websiteId)).map(({ key, value }) => [key, value])),
 		setText,
 		themeOf,
-		setTheme,
 		formatOf,
-		setFormat,
+		/**
+		 * The refusal of a save of the theme (always: it is the Portal's, Website settings › Brand and look).
+		 * @returns {Change}
+		 */
+		refuseTheme: () => managedByPortal('Brand and look'),
+		/**
+		 * The refusal of a save of the Format (always: it is the Portal's, Website settings › Region and format).
+		 * @returns {Change}
+		 */
+		refuseFormat: () => managedByPortal('Region and format'),
 	});
 };
 

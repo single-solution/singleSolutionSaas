@@ -2,21 +2,21 @@
 /**
  * The inner-sidebar views of the settings tabs (owner 2026-10-16: no long scrolls, one view per screen): the section
  * lists of Settings (a view per feature, grouped by category, with its groups as sub-items when it has many), Texts (a
- * view per screen or widget), Theme & format (Colors, Type, Shapes, Formats) and Defaults (all three). Each comes as
+ * view per screen or widget) and Defaults (both). Each comes as
  * an editor hook (the unsaved edits and the saves) and a function that builds the {@link SectionSpec}s from it.
  * @module
  */
 import { useState } from 'react';
 import { Button } from './Button.js';
 import { Disclosure, SaveBar, SettingList, SettingRow, SettingsCard, ViewTitle } from './blocks.js';
-import { Badge, SoftBreaks } from './display.js';
+import { Badge, SoftBreaks, TextLink } from './display.js';
 import { Input, RadioGroup, SegmentedControl, Switch, TextArea } from './fields.js';
 import { ListEditor } from './ListEditor.js';
 import { Paged } from './paged.js';
 import { SchemaForm } from './SchemaForm.js';
 import { call, fill } from './dashboard-api.js';
 import { GROUPS_AS_TABS_FROM, fieldsOf, shapeOf } from './schema.js';
-import { humanize, symbolRowsOf, symbolsOf } from './format.js';
+import { humanize } from './format.js';
 import { Outcome, hasSettings } from './dashboard-parts.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
@@ -25,6 +25,7 @@ import { Outcome, hasSettings } from './dashboard-parts.js';
 /** @typedef {import('./dashboard-parts.js').SettingsNotice} SettingsNotice */
 /** @typedef {import('./dashboard-parts.js').Dashboard} Dashboard */
 /** @typedef {import('react').ReactNode} ReactNode */
+/** The address of a section of the website's settings in the Portal (`region`). @typedef {(section: string) => string} PortalLink */
 /**
  * What a product adds to a feature's view: a node shown under the feature's settings, or `{ items }`, views of their
  * own listed under the feature (a list editor each; with `top` the view is listed beside the feature instead of under
@@ -47,20 +48,6 @@ export const settingSectionOf = (feature, name, advancedTitle) => {
 	const field = fieldsOf(feature.schema).find((entry) => entry.name === name);
 	if (!field || shape.groups.length + (shape.advanced ? 1 : 0) < GROUPS_AS_TABS_FROM) return feature.key;
 	return `${feature.key}.${slug(field.advanced ? advancedTitle : field.group)}`;
-};
-
-/**
- * Whether two plain values hold the same data.
- * @param {unknown} a
- * @param {unknown} b
- * @returns {boolean}
- */
-const same = (a, b) => {
-	if (a === b) return true;
-	if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
-	const left = Object.entries(a);
-	const right = /** @type {Record<string, unknown>} */ (b);
-	return left.length === Object.keys(right).length && left.every(([key, value]) => same(value, right[key]));
 };
 
 /* ------------------------------------------------------------------------------------------------- feature settings */
@@ -138,9 +125,10 @@ export function SettingsBar({ editor, texts }) {
 /**
  * One feature's settings (all its groups, or just `group`) with the edits laid over its saved values.
  * @param {{ feature: FeatureSettings, features: FeatureSettings[], editor: SettingsEditor, savedSource: string,
- *   notice?: SettingsNotice, group?: string, texts: Dashboard['texts'] }} props the `notice` is shown above the cards
+ *   notice?: SettingsNotice, group?: string, texts: Dashboard['texts'], portalLink?: PortalLink }} props the `notice`
+ *   is shown above the cards; `portalLink` makes the link of a value the Portal's website settings give
  */
-function FeatureForm({ feature, features, editor, savedSource, notice, group, texts }) {
+function FeatureForm({ feature, features, editor, savedSource, notice, group, texts, portalLink }) {
 	const changed = editor.edits[feature.key] ?? {};
 	const values = Object.fromEntries(
 		Object.entries(feature.values).map(([name, entry]) => [name, name in changed ? changed[name] : entry.value]),
@@ -148,11 +136,29 @@ function FeatureForm({ feature, features, editor, savedSource, notice, group, te
 	const overridden = Object.fromEntries(
 		Object.entries(feature.values).map(([name, entry]) => [name, entry.source === savedSource]),
 	);
+	// a setting that starts from the Portal's website settings (`x-ui.defaultFrom`) says where its value comes from
+	const inherited = Object.fromEntries(
+		Object.entries(feature.values)
+			.filter(([name, entry]) => entry.source === 'portal' && entry.from && !(name in changed) && portalLink)
+			.map(([name, entry]) => {
+				const from = String(entry.from);
+				return [
+					name,
+					<span key={name} data-inherited={from} className="block">
+						{fill(texts.settings.inherited, { what: humanize(from.split('.').pop() ?? from).toLowerCase() })}{' '}
+						<TextLink href={/** @type {PortalLink} */ (portalLink)(from.split('.')[0] ?? '')} external>
+							{texts.settings.inheritedLink}
+						</TextLink>
+					</span>,
+				];
+			}),
+	);
 	return (
 		<SchemaForm
 			schema={feature.schema}
 			values={values}
 			overridden={overridden}
+			inherited={inherited}
 			tabs={false}
 			{...(group !== undefined ? { group } : {})}
 			advancedTexts={{ title: texts.settings.advanced, description: texts.settings.advancedHelp }}
@@ -178,10 +184,12 @@ const hasItems = (extra) =>
  * when the feature has many groups of settings or lists of its own. A website's page hides the features that are off
  * or whose needs are off (`hideOff`); the Owner's defaults show them all.
  * @param {{ features: FeatureSettings[], editor: SettingsEditor, savedSource: string, dash: Dashboard,
- *   hideOff?: boolean, notice?: SettingsNotice, extras?: Record<string, FeatureExtra> }} options
+ *   hideOff?: boolean, notice?: SettingsNotice, extras?: Record<string, FeatureExtra>, portalLink?: PortalLink }} options
+ *   `portalLink`: the address of a section of the website's Website settings in the Portal; with it a setting that
+ *   starts from them (`x-ui.defaultFrom`) says so and links there (not on the Owner's global defaults)
  * @returns {SectionSpec[]}
  */
-export function featureSections({ features, editor, savedSource, dash, hideOff = false, notice, extras = {} }) {
+export function featureSections({ features, editor, savedSource, dash, hideOff = false, notice, extras = {}, portalLink }) {
 	const { texts } = dash;
 	const S = texts.settings;
 	const on = new Set(features.filter((feature) => feature.on !== false).map((feature) => feature.key));
@@ -205,6 +213,7 @@ export function featureSections({ features, editor, savedSource, dash, hideOff =
 					editor={editor}
 					savedSource={savedSource}
 					texts={texts}
+					{...(portalLink ? { portalLink } : {})}
 					{...(notice && first ? { notice } : {})}
 					{...(group !== undefined ? { group } : {})}
 				/>
@@ -404,236 +413,4 @@ export function textSections({ items, editor, savedSource, dash, group }) {
 			),
 		};
 	});
-}
-
-/* ----------------------------------------------------------------------------------------------- theme and format */
-
-/**
- * The widgets' theme and the Format with their unsaved edits: Save writes the one that changed (or both).
- * @param {{ theme: { colors: Record<string, string>, fontFamily: string, radius: number, mode: string, customCss: string },
- *   format: { locale: string, currencyDisplay: string, currencySymbols: Record<string, string>, wholeUnits: boolean,
- *   times: string }, saveTheme: (theme: Record<string, unknown>) => Promise<Answer>,
- *   saveFormat: (format: Record<string, unknown>) => Promise<Answer>, reload: () => void }} options
- */
-export function useLookEditor({ theme, format, saveTheme, saveFormat, reload }) {
-	const [themeDraft, setThemeDraft] = useState(theme);
-	const [formatDraft, setFormatDraft] = useState(format);
-	const [rows, setRows] = useState(() => symbolRowsOf(format.currencySymbols ?? {}));
-	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
-	const [saving, setSaving] = useState(false);
-	const formatNow = { ...formatDraft, currencySymbols: symbolsOf(rows) };
-	const themeDirty = !same(themeDraft, theme);
-	const formatDirty = !same(formatNow, format);
-	return {
-		themeDraft,
-		setThemeDraft,
-		formatDraft,
-		setFormatDraft,
-		rows,
-		setRows,
-		result,
-		saving,
-		dirty: themeDirty || formatDirty,
-		save: async () => {
-			setSaving(true);
-			/** @type {Answer | null} */
-			let answer = null;
-			if (themeDirty) answer = await saveTheme(themeDraft);
-			if (formatDirty && (answer === null || answer.ok)) answer = await saveFormat(formatNow);
-			setSaving(false);
-			setResult(answer);
-			reload();
-		},
-		discard: () => {
-			setThemeDraft(theme);
-			setFormatDraft(format);
-			setRows(symbolRowsOf(format.currencySymbols ?? {}));
-			setResult(null);
-		},
-	};
-}
-
-/** @typedef {ReturnType<typeof useLookEditor>} LookEditor */
-
-/**
- * The sidebar sections of the theme and the Format: Colors, Type, Shapes (with the custom CSS under Advanced) and
- * Formats.
- * @param {{ editor: LookEditor, dash: Dashboard, group?: string }} options
- * @returns {SectionSpec[]}
- */
-export function lookSections({ editor, dash, group }) {
-	const { texts } = dash;
-	const S = texts.settings;
-	const L = texts.look;
-	const { themeDraft: theme, setThemeDraft: setTheme, formatDraft: format, setFormatDraft: setFormat } = editor;
-	/** @param {string} id @param {string} label @param {'palette' | 'code' | 'sliders' | 'coins'} icon @param {string} help @param {ReactNode} body */
-	const view = (id, label, icon, help, body) => ({
-		id,
-		label,
-		icon,
-		...(group ? { group } : {}),
-		content: (
-			<>
-				<ViewTitle title={label} description={help} />
-				{body}
-				<Outcome result={editor.result} />
-			</>
-		),
-	});
-	return [
-		view(
-			'colors',
-			L.colors,
-			'palette',
-			L.colorsHelp,
-			<SettingsCard wide>
-				<SettingList>
-					<SegmentedControl
-						legend={S.mode}
-						value={theme.mode}
-						options={Object.entries(S.modes).map(([value, label]) => ({ value, label: String(label) }))}
-						onChange={(value) => setTheme({ ...theme, mode: value })}
-					/>
-					<Input
-						label={S.accent}
-						type="color"
-						className="w-20!"
-						value={theme.colors.accent ?? '#4f46e5'}
-						onChange={(event) => setTheme({ ...theme, colors: { ...theme.colors, accent: event.target.value } })}
-					/>
-				</SettingList>
-			</SettingsCard>,
-		),
-		view(
-			'type',
-			L.type,
-			'code',
-			L.typeHelp,
-			<SettingsCard wide>
-				<SettingList>
-					<Input
-						label={S.fontFamily}
-						value={theme.fontFamily}
-						onChange={(event) => setTheme({ ...theme, fontFamily: event.target.value })}
-					/>
-				</SettingList>
-			</SettingsCard>,
-		),
-		view(
-			'shapes',
-			L.shapes,
-			'sliders',
-			L.shapesHelp,
-			<>
-				<SettingsCard wide>
-					<SettingList>
-						<Input
-							label={S.radius}
-							type="number"
-							min={0}
-							max={24}
-							suffix="px"
-							value={String(theme.radius)}
-							onChange={(event) => setTheme({ ...theme, radius: Number(event.target.value) })}
-						/>
-					</SettingList>
-				</SettingsCard>
-				<Disclosure title={L.advanced} description={L.advancedHelp}>
-					<SettingsCard wide>
-						<SettingList>
-							<TextArea
-								label={S.customCss}
-								rows={6}
-								className="font-mono text-xs"
-								value={theme.customCss}
-								onChange={(event) => setTheme({ ...theme, customCss: event.target.value })}
-							/>
-						</SettingList>
-					</SettingsCard>
-				</Disclosure>
-			</>,
-		),
-		view(
-			'formats',
-			L.formats,
-			'coins',
-			L.formatsHelp,
-			<SettingsCard wide>
-				<SettingList>
-					<Input
-						label={S.locale}
-						help={S.localeHelp}
-						placeholder="en-US"
-						value={format.locale}
-						onChange={(event) => setFormat({ ...format, locale: event.target.value.trim() })}
-					/>
-					<RadioGroup
-						legend={S.currencyDisplay}
-						cards
-						value={format.currencyDisplay}
-						options={Object.entries(S.currencyDisplays).map(([value, label]) => ({ value, label: String(label) }))}
-						onChange={(value) => setFormat({ ...format, currencyDisplay: value })}
-					/>
-					<RadioGroup
-						legend={S.times}
-						cards
-						value={format.times}
-						options={Object.entries(S.timesOptions).map(([value, label]) => ({ value, label: String(label) }))}
-						onChange={(value) => setFormat({ ...format, times: value })}
-					/>
-					<Switch
-						label={S.wholeUnits}
-						checked={format.wholeUnits}
-						onChange={(next) => setFormat({ ...format, wholeUnits: next })}
-					/>
-					<ListEditor
-						legend={S.currencySymbols}
-						help={S.currencySymbolsHelp}
-						items={editor.rows}
-						onChange={editor.setRows}
-						max={20}
-						newItem={() => ({ currency: '', symbol: '' })}
-						nameOf={(row, index) => fill(S.symbolRow, { currency: row.currency || String(index + 1) })}
-						texts={{ add: S.addSymbol }}
-						renderItem={(row, _index, update) => (
-							<>
-								<Input
-									label={S.currency}
-									maxLength={3}
-									placeholder="PKR"
-									value={row.currency}
-									onChange={(event) => update({ ...row, currency: event.target.value.toUpperCase() })}
-								/>
-								<Input
-									label={S.symbol}
-									maxLength={8}
-									placeholder="Rs"
-									value={row.symbol}
-									onChange={(event) => update({ ...row, symbol: event.target.value })}
-								/>
-							</>
-						)}
-					/>
-				</SettingList>
-			</SettingsCard>,
-		),
-	];
-}
-
-/**
- * The Save changes bar of the theme and Format editor.
- * @param {{ editor: LookEditor, texts: Dashboard['texts'] }} props
- */
-export function LookBar({ editor, texts }) {
-	return (
-		<SaveBar
-			show={editor.dirty}
-			saving={editor.saving}
-			onSave={editor.save}
-			onDiscard={editor.discard}
-			message={texts.look.unsaved}
-			saveLabel={texts.look.saveChanges}
-			discardLabel={texts.look.discard}
-		/>
-	);
 }

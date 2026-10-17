@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_FORMAT } from '@ss/contracts/format';
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { defineRoute } from '../src/index.js';
 import { SETTINGS_READ_LIMIT, SETTINGS_WRITE_LIMIT } from '../src/server-api.js';
 import { DOMAIN, openDb, productRoutes, setup } from './helpers.js';
@@ -97,8 +98,8 @@ describe('settings API for the merchant’s server (K1)', () => {
 		).toEqual([STAFF, { kind: 'user', id: 'usr_1', name: 'Alex M.', role: 'Owner' }]);
 	});
 
-	it('edits widget texts, the theme and the Format', async () => {
-		const { call, server, product, websiteId } = await setup();
+	it('edits widget texts, and reads the theme and the Format the Portal owns', async () => {
+		const { call, server, product, websiteId, portal, settle } = await setup();
 		const texts = await body(await call('GET', '/v1/texts', { token: server.token }));
 		expect(texts.json.texts[0]).toEqual({
 			key: 'form.title',
@@ -116,26 +117,41 @@ describe('settings API for the merchant’s server (K1)', () => {
 		expect((await call('PUT', '/v1/texts/nope', { token: server.token, body: { value: 'x' } })).status).toBe(404);
 		expect((await body(await call('DELETE', '/v1/texts/form.title', { token: server.token }))).json.source).toBe('built-in');
 
-		const theme = await body(await call('PUT', '/v1/theme', { token: server.token, body: { radius: 12, mode: 'dark' } }));
-		expect(theme.json.theme).toMatchObject({ radius: 12, mode: 'dark' });
-		expect(theme.json.sources).toMatchObject({ radius: 'website', fontFamily: 'built-in' });
-		expect((await call('PUT', '/v1/theme', { token: server.token, body: { radius: 99 } })).status).toBe(422);
-		expect((await body(await call('GET', '/v1/theme', { token: server.token }))).json.theme.radius).toBe(12);
+		// the theme and the Format are the Portal's: read here, never saved here (409 managed_by_portal, naming the Portal)
+		const theme = await body(await call('GET', '/v1/theme', { token: server.token }));
+		expect(theme.json.theme).toMatchObject({ radius: 8, mode: 'auto' });
+		expect(theme.json.sources).toMatchObject({ radius: 'built-in', fontFamily: 'built-in' });
+		const noTheme = await body(await call('PUT', '/v1/theme', { token: server.token, body: { radius: 12, mode: 'dark' } }));
+		expect(noTheme.status).toBe(409);
+		expect(noTheme.json).toMatchObject({ status: 409, section: 'Brand and look', portalUrl: portal.url });
+		expect((await body(await call('GET', '/v1/theme', { token: server.token }))).json.theme.radius).toBe(8);
 
 		expect((await body(await call('GET', '/v1/format', { token: server.token }))).json.format).toEqual(DEFAULT_FORMAT);
-		const format = await body(
-			await call('PUT', '/v1/format', {
-				token: server.token,
-				body: {
+		const noFormat = await body(await call('PUT', '/v1/format', { token: server.token, body: { locale: 'en-GB' } }));
+		expect(noFormat.status).toBe(409);
+		expect(noFormat.json).toMatchObject({ section: 'Region and format', portalUrl: portal.url });
+
+		// once the Portal holds them, product code and the server's reads have them
+		const empty = emptyWebsiteSettings(websiteId);
+		portal.setWebsiteSettings(websiteId, {
+			brand: { ...empty.brand, theme: { ...empty.brand.theme, radius: 12, mode: 'dark' } },
+			region: {
+				...empty.region,
+				format: {
 					locale: 'en-GB',
 					currencyDisplay: 'symbol',
 					currencySymbols: { CHF: 'Fr.' },
 					wholeUnits: true,
 					times: 'business',
 				},
-			}),
-		);
-		expect(format.json).toEqual({
+			},
+		});
+		await portal.sendNotice('notes', { type: 'website.settings_changed', websiteId, what: 'settings' });
+		await settle();
+		const read = await body(await call('GET', '/v1/theme', { token: server.token }));
+		expect(read.json.theme).toMatchObject({ radius: 12, mode: 'dark' });
+		expect(read.json.sources).toMatchObject({ radius: 'portal', fontFamily: 'portal' });
+		expect((await body(await call('GET', '/v1/format', { token: server.token }))).json).toEqual({
 			format: {
 				locale: 'en-GB',
 				currencyDisplay: 'symbol',
@@ -144,24 +160,18 @@ describe('settings API for the merchant’s server (K1)', () => {
 				times: 'business',
 			},
 			sources: {
-				locale: 'website',
-				currencyDisplay: 'website',
-				currencySymbols: 'website',
-				wholeUnits: 'website',
-				times: 'website',
+				locale: 'portal',
+				currencyDisplay: 'portal',
+				currencySymbols: 'portal',
+				wholeUnits: 'portal',
+				times: 'portal',
 			},
 		});
-		const refused = await body(await call('PUT', '/v1/format', { token: server.token, body: { times: 'utc' } }));
-		expect(refused.status).toBe(422);
-		expect(refused.json.errors[0].path).toBe('/times');
-		expect((await call('PUT', '/v1/format', { token: server.token, body: {} })).status).toBe(422);
-		expect((await call('PUT', '/v1/format', { token: server.token, body: { locale: null } })).status).toBe(200);
 		const formatted = await product.format(websiteId);
-		expect(formatted.format.locale).toBe('');
+		expect(formatted.format.locale).toBe('en-GB');
 		expect(formatted.timeZone).toBe('UTC');
 		expect(formatted.money(1_250_050, 'CHF')).toBe('Fr. 12,501');
-		expect(formatted.date('2026-03-12T19:30:00Z', 'date')).toBe('Mar 12, 2026');
-		expect(formatted.date('2026-03-12T19:30:00Z')).toBe('Mar 12, 2026, 7:30 PM');
+		expect(formatted.date('2026-03-12T19:30:00Z', 'date')).toBe('12 Mar 2026');
 	});
 
 	it('reads and saves whole lists with the product’s own check while their feature is on', async () => {
@@ -295,8 +305,6 @@ describe('settings API for the merchant’s server (K1)', () => {
 			['PUT', '/v1/settings/notes.maxNotes', { value: 9 }],
 			['DELETE', '/v1/settings/notes.maxNotes', undefined],
 			['PUT', '/v1/texts/form.title', { value: 'Write to us' }],
-			['PUT', '/v1/theme', { radius: 4, mode: 'dark' }],
-			['PUT', '/v1/format', { wholeUnits: true }],
 			['PUT', '/v1/lists/labels', { value: ['vip'] }],
 		];
 		for (const [method, path, sent] of saves) {
@@ -321,8 +329,6 @@ describe('settings API for the merchant’s server (K1)', () => {
 				'changed',
 			],
 			[user, 'list.labels', 'Labels', 'changed'],
-			[user, 'format', 'Format', 'wholeUnits changed'],
-			[user, 'theme', 'Theme', 'radius, mode changed'],
 			[user, 'texts.form.title', 'Text form.title', 'changed'],
 			[
 				{ kind: 'user', id: 'usr_test_staff', name: 'Test Staff', role: 'owner' },
@@ -350,8 +356,9 @@ describe('settings API for the merchant’s server (K1)', () => {
 		const { call, server, clock } = await setup();
 		expect(SETTINGS_WRITE_LIMIT).toMatchObject({ limit: 60, windowSeconds: 60, per: 'website' });
 		for (let i = 0; i < 30; i += 1) {
-			expect((await call('PUT', '/v1/theme', { token: server.token, body: { radius: i % 20 } })).status).toBe(200);
-			expect((await call('PUT', '/v1/format', { token: server.token, body: { wholeUnits: i % 2 === 0 } })).status).toBe(200);
+			// a refused save (the theme and the Format are the Portal's) counts as a write too
+			expect((await call('PUT', '/v1/theme', { token: server.token, body: { radius: i % 20 } })).status).toBe(409);
+			expect((await call('PUT', '/v1/format', { token: server.token, body: { wholeUnits: i % 2 === 0 } })).status).toBe(409);
 		}
 		expect((await call('DELETE', '/v1/texts/form.title', { token: server.token })).status).toBe(429);
 		expect((await call('GET', '/v1/theme', { token: server.token })).status).toBe(200);
@@ -427,27 +434,30 @@ describe('shared settings (several features use one setting)', () => {
 });
 
 describe('Format in the dashboard and the widgets (K7)', () => {
-	it('is edited per website and as a global default, and reaches the widget config with the time zone', async () => {
-		const { session, dash, websiteId, call, browser, switchOn, connectDatabase } = await setup();
+	it('is the Portal’s: the dashboard reads it for its dates, nothing saves it, and it reaches the widget config with the time zone', async () => {
+		const { session, dash, websiteId, call, browser, switchOn, connectDatabase, portal, settle } = await setup();
 		const cookie = await session({ kind: 'merchant' });
 		const path = `/v1/dashboard/websites/${websiteId}/format`;
 		expect((await (await dash(cookie, 'GET', path)).json()).format).toEqual(DEFAULT_FORMAT);
-		expect((await dash(cookie, 'PUT', path, { currencyDisplay: 'symbol' })).status).toBe(200);
-		expect((await dash(cookie, 'PUT', path, { currencyDisplay: 'name' })).status).toBe(422);
-		const owner = await session({ kind: 'admin', role: 'owner', websiteId: null });
-		expect((await dash(owner, 'PUT', '/v1/dashboard/defaults/format', { value: { wholeUnits: true } })).status).toBe(204);
-		expect((await dash(owner, 'PUT', '/v1/dashboard/defaults/format', { value: { wholeUnits: 'x' } })).status).toBe(422);
-		const defaults = await (await dash(owner, 'GET', '/v1/dashboard/defaults')).json();
-		expect(defaults.format.format.wholeUnits).toBe(true);
-		expect(defaults.format.sources.wholeUnits).toBe('default');
+		expect((await dash(cookie, 'PUT', path, { currencyDisplay: 'symbol' })).status).toBeGreaterThanOrEqual(404);
+		const empty = emptyWebsiteSettings(websiteId);
+		portal.setWebsiteSettings(websiteId, {
+			region: {
+				...empty.region,
+				timeZone: 'Asia/Karachi',
+				format: { ...DEFAULT_FORMAT, currencyDisplay: 'symbol', wholeUnits: true },
+			},
+		});
+		await portal.sendNotice('notes', { type: 'website.settings_changed', websiteId, what: 'settings' });
+		await settle();
 		const merged = await (await dash(cookie, 'GET', path)).json();
 		expect(merged.format).toMatchObject({ currencyDisplay: 'symbol', wholeUnits: true });
-		expect(merged.sources).toMatchObject({ currencyDisplay: 'website', wholeUnits: 'default', times: 'built-in' });
+		expect(merged.sources).toMatchObject({ currencyDisplay: 'portal', wholeUnits: 'portal', times: 'portal' });
 		await switchOn(['notes']);
 		await connectDatabase();
 		const config = await (await call('GET', '/v1/widget/config', { token: browser.token, origin: SITE })).json();
 		expect(config.format).toMatchObject({ currencyDisplay: 'symbol', wholeUnits: true });
-		expect(config.timeZone).toBe('UTC');
+		expect(config.timeZone).toBe('Asia/Karachi');
 	});
 });
 

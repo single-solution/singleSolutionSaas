@@ -1,6 +1,6 @@
 /**
  * The public docs at `/docs` (PLAN 0.4.10): the kit's page (`renderDocsPage`: the intro, the localhost note, the kit's
- * routes for your server, the business.json template and the API reference from `openapi.json`) around this product's
+ * routes for your server, the website settings note and the API reference from `openapi.json`) around this product's
  * own sections: the per-feature guides with their routes, widgets and what the website builds
  * (`docsFeatureSections`), the widget snippets and the ticket server snippet (Node.js fetch and cURL). Plain HTML;
  * every value is escaped.

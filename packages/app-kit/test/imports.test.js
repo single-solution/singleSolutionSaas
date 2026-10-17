@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { IMPORT_LIMITS } from '@ss/contracts';
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { defineRoute } from '../src/index.js';
 import { summaryValues } from '../src/imports.js';
-import { DOMAIN, manifest, openDb, productRoutes, setup } from './helpers.js';
+import { manifest, openDb, productRoutes, setup } from './helpers.js';
 
 /** Notes import: the product's own check in import mode (given ids and past times allowed). */
 const IMPORTS = {
@@ -245,11 +246,13 @@ describe('import routes (K10)', () => {
 	});
 
 	it('find records by the collection’s own key, which the check must keep', async () => {
-		const { send, dbName, call, server, handlers, session, dash, websiteId } = await start();
-		// the checks read the website's business.json copy (its country reads national phone numbers)
-		handlers[`https://${DOMAIN}`] = async () =>
-			new Response(JSON.stringify({ version: 1, name: 'Example Shop', country: 'GB' }), { status: 200 });
-		await dash(await session(), 'POST', `/v1/dashboard/websites/${websiteId}/business/refresh`);
+		const { send, dbName, call, server, portal, session, dash, websiteId } = await start();
+		// the checks read the website's business facts from the Portal's settings (the country reads national phone numbers)
+		portal.setWebsiteSettings(websiteId, {
+			business: { ...emptyWebsiteSettings(websiteId).business, name: 'Example Shop' },
+			region: { ...emptyWebsiteSettings(websiteId).region, country: 'GB' },
+		});
+		await dash(await session(), 'POST', `/v1/dashboard/websites/${websiteId}/website-settings/refresh`);
 		const { client, db } = await openDb(dbName);
 		const days = db.collection('ss_notes_days');
 		const records = [

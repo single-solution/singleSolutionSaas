@@ -13,7 +13,7 @@
  *   address and whether a visitor widget was seen on the website in the last 7 days.
  * - **Staff permissions** (for roles in Accounts and tickets), **events** (`<product>.settings.changed` when the product
  *   publishes events, plus the types its hook names), **docs** (the guide, and `/openapi.json` when the product gives
- *   its OpenAPI document), the product's copy of **business.json**, the Overview **checklist**, the hook's
+ *   its OpenAPI document), the Overview **checklist** (with whether the website's settings in the Portal are set), the hook's
  *   **summaries** and **build**: what the website builds for each feature that is on (the product's `build` texts,
  *   its guide's "What your website builds"), linked to the feature's section of the guide.
  * - **Switch on** (`POST /v1/blueprint/features?websiteId=`, also a Portal call): the Setup sheet's advisor switches
@@ -30,6 +30,7 @@
  * @module
  */
 import { isObject } from '@ss/contracts/util';
+import { missingWebsiteSettings } from '@ss/contracts/website-settings';
 import { WIDGET_SEEN_MS } from './dashboard.js';
 import { defineRoute } from './http/routes.js';
 import { problem } from './http/results.js';
@@ -221,7 +222,7 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 	 */
 	const build = async (ctx, status) => {
 		const websiteId = status.websiteId;
-		const [{ on }, values, connections, seen, business, saved] = await Promise.all([
+		const [{ on }, values, connections, seen, settings, saved] = await Promise.all([
 			kit.reports.switches(websiteId),
 			kit.settings.settingsOfFeatures(
 				websiteId,
@@ -229,13 +230,12 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 			),
 			kit.connections.list(websiteId),
 			store.get('widget', websiteId),
-			kit.business.get(websiteId, status.domain),
+			kit.website.document(websiteId, { after: ctx.after }),
 			Promise.all(Object.keys(kit.connections.definitions).map((name) => kit.connections.value(websiteId, name))),
 		]);
 		const secrets = saved.flatMap(secretsIn);
 		/** @template T @param {T} value @returns {T} */
 		const hide = (value) => /** @type {T} */ (hideSecrets(value, secrets));
-		if (business.stale) ctx.after(() => kit.business.refresh(websiteId, status.domain));
 		/** @type {unknown} */
 		let answer;
 		try {
@@ -271,8 +271,8 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 		const databaseSet = database !== undefined && database.status !== 'not_connected';
 		const visitorOn = manifest.widgets.some((w) => w.kind === 'visitor' && [w.feature].flat().some((key) => on.includes(key)));
 		const installed = visitorOn ? seen !== null && now() - seen.lastSeenAt < WIDGET_SEEN_MS : null;
+		const missingSettings = missingWebsiteSettings(settings, manifest.websiteSettings?.requires ?? []);
 		const neededConnections = connections.filter((c) => c.neededBy.some((key) => on.includes(key)));
-		const businessUrl = `https://${status.domain}/.well-known/business.json`;
 		const sharedOn = kit.settings.sections.filter(
 			(section) => !manifest.features.some((f) => f.key === section.key) && kit.settings.sectionOn(section.key, on),
 		);
@@ -283,13 +283,6 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 			version: manifest.version,
 			status: effective,
 			docs: { guide: absolute(manifest.docsUrl), openapi: openapi ? absolute('/openapi.json') : null },
-			business: {
-				found: business.found,
-				fetchedAt: business.fetchedAt,
-				name: business.found ? hide(business.business.name) : null,
-				country: business.found ? business.business.country : null,
-				timeZone: business.found ? business.business.timeZone : null,
-			},
 			install: {
 				scriptUrl: manifest.widgetScriptUrl === null ? null : absolute(manifest.widgetScriptUrl),
 				scriptLoading: manifest.widgetScriptLoading ?? 'async',
@@ -364,7 +357,14 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 							},
 						]
 					: []),
-				{ key: 'business', done: business.found, text: `Publish your business basics at ${businessUrl}.` },
+				{
+					key: 'website_settings',
+					done: settings.version > 0 && missingSettings.length === 0,
+					text:
+						missingSettings.length > 0
+							? `Set ${missingSettings.join(', ')} in the Portal (Website settings).`
+							: 'Set your website settings in the Portal (Website settings).',
+				},
 			],
 			summaries: hide(additions.summaries),
 			build: manifest.features

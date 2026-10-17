@@ -122,7 +122,7 @@ describe('notes routes', () => {
 			'/v1/tickets',
 			'SS_SERVER_TOKEN',
 			'curl -X POST',
-			'business.json',
+			'managed_by_portal',
 			'localhost',
 			'data-token',
 			'notes.read',

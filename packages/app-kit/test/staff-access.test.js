@@ -36,8 +36,6 @@ const WRITES = [
 	['DELETE', '/v1/settings/notes.maxNotes', undefined],
 	['PUT', '/v1/texts/form.title', { value: 'Write to us' }],
 	['DELETE', '/v1/texts/form.title', undefined],
-	['PUT', '/v1/theme', { radius: 4 }],
-	['PUT', '/v1/format', { wholeUnits: true }],
 	['PUT', '/v1/lists/labels', { value: ['vip'] }],
 	['PUT', '/v1/connections/ai', { value: 'sk-secret-1234' }],
 	['POST', '/v1/connections/ai/test', undefined],
@@ -63,7 +61,7 @@ const prepared = async () => {
 const problemOf = async (response) => ({ status: response.status, ...(await response.json()) });
 
 describe('a stolen server token alone (403 needs_signed_in_staff)', () => {
-	it('changes no configuration: settings, texts, theme, Format, lists, connections', async () => {
+	it('changes no configuration: settings, texts, lists, connections', async () => {
 		const { call, server, store, websiteId } = await prepared();
 		for (const [method, path, body] of WRITES) {
 			const refused = await problemOf(
@@ -130,10 +128,13 @@ describe('a stolen server token alone (403 needs_signed_in_staff)', () => {
 	it('does not work from a browser: a server route refuses any Origin, and the browser token is no server token', async () => {
 		const { call, server, browser } = await prepared();
 		expect(
-			(await call('PUT', '/v1/theme', { token: server.token, bare: true, origin: SITE, body: { radius: 4 } })).status,
+			(await call('PUT', '/v1/texts/form.title', { token: server.token, bare: true, origin: SITE, body: { value: 'Hi' } }))
+				.status,
 		).toBe(401);
-		expect((await call('PUT', '/v1/theme', { token: browser.token, origin: SITE, body: { radius: 4 } })).status).toBe(401);
-		expect((await call('PUT', '/v1/theme', { token: browser.token, body: { radius: 4 } })).status).toBe(401);
+		expect(
+			(await call('PUT', '/v1/texts/form.title', { token: browser.token, origin: SITE, body: { value: 'Hi' } })).status,
+		).toBe(401);
+		expect((await call('PUT', '/v1/texts/form.title', { token: browser.token, body: { value: 'Hi' } })).status).toBe(401);
 	});
 });
 
@@ -232,9 +233,7 @@ describe('a verified staff sign-in with the permission', () => {
 			await call('GET', '/v1/activity?action=settings.changed', { token: server.token, staff: grants })
 		).json();
 		const targets = log.items.map((/** @type {any} */ e) => e.target);
-		expect(targets).toEqual(
-			expect.arrayContaining(['settings.notes.maxNotes', 'texts.form.title', 'theme', 'format', 'list.labels']),
-		);
+		expect(targets).toEqual(expect.arrayContaining(['settings.notes.maxNotes', 'texts.form.title', 'list.labels']));
 		for (const entry of log.items)
 			expect(entry.actor).toMatchObject({ kind: 'user', id: 'usr_9', name: 'Mia Manager', role: 'manager' });
 		// and in Recent changes, with the same person
@@ -257,10 +256,10 @@ describe('a verified staff sign-in with the permission', () => {
 			role: 'manager',
 			permissions: ['notes:settings.manage', 'notes:audit.read'],
 		});
-		const saved = await call('PUT', '/v1/theme', {
+		const saved = await call('PUT', '/v1/texts/form.title', {
 			token: server.token,
 			bare: true,
-			body: { radius: 5 },
+			body: { value: 'Write to us' },
 			headers: { 'ss-sign-in': signIn, 'ss-actor-id': 'usr_boss', 'ss-actor-name': 'The%20Boss' },
 		});
 		expect(saved.status).toBe(200);
@@ -278,7 +277,10 @@ describe('a verified staff sign-in with the permission', () => {
 	it('is keyed by the permission of the right product: the Owner’s `*` does everything', async () => {
 		const { call, server } = await prepared();
 		const owner = { permissions: ['*'] };
-		expect((await call('PUT', '/v1/theme', { token: server.token, staff: owner, body: { radius: 6 } })).status).toBe(200);
+		expect(
+			(await call('PUT', '/v1/texts/form.title', { token: server.token, staff: owner, body: { value: 'Write to us' } }))
+				.status,
+		).toBe(200);
 	});
 
 	it('still reads connections as set or not, never as a value, not even its last characters', async () => {
@@ -308,7 +310,9 @@ describe('a staff sign-in without the permission (403 forbidden)', () => {
 			{ permissions: ['notes:settings'] },
 		];
 		for (const staff of roles) {
-			const refused = await problemOf(await call('PUT', '/v1/theme', { token: server.token, staff, body: { radius: 4 } }));
+			const refused = await problemOf(
+				await call('PUT', '/v1/texts/form.title', { token: server.token, staff, body: { value: 'Write to us' } }),
+			);
 			expect([JSON.stringify(staff), refused.status, refused.type]).toEqual([
 				JSON.stringify(staff),
 				403,
@@ -327,10 +331,10 @@ describe('a staff sign-in without the permission (403 forbidden)', () => {
 		const { call, server, websiteId, accounts } = await prepared();
 		await call('GET', '/v1/features', { token: server.token }); // pastes the Accounts token
 		const plain = await accounts.signIn({ websiteId, sub: 'usr_plain', name: 'Plain' });
-		const refused = await call('PUT', '/v1/theme', {
+		const refused = await call('PUT', '/v1/texts/form.title', {
 			token: server.token,
 			bare: true,
-			body: { radius: 4 },
+			body: { value: 'Write to us' },
 			headers: { 'ss-sign-in': plain },
 		});
 		expect(refused.status).toBe(403);
@@ -341,10 +345,10 @@ describe('a staff sign-in without the permission (403 forbidden)', () => {
 describe('a sign-in that is not valid for this website (401 invalid_sign_in)', () => {
 	/** A call with a sign-in header. @param {Awaited<ReturnType<typeof prepared>>} env @param {string} signIn */
 	const withSignIn = (env, signIn) =>
-		env.call('PUT', '/v1/theme', {
+		env.call('PUT', '/v1/texts/form.title', {
 			token: env.server.token,
 			bare: true,
-			body: { radius: 4 },
+			body: { value: 'Write to us' },
 			headers: { 'ss-sign-in': signIn },
 		});
 
@@ -426,19 +430,21 @@ describe('a sign-in that is not valid for this website (401 invalid_sign_in)', (
 });
 
 describe('dashboard sessions are unchanged (the human’s own change)', () => {
-	it('save settings, texts, theme, Format, lists and connections as before, with no sign-in', async () => {
+	it('save settings, texts, lists and connections as before, with no sign-in', async () => {
 		const { websiteId, session, dash, call } = await prepared();
 		const cookie = await session({ kind: 'merchant' });
 		const w = `/v1/dashboard/websites/${websiteId}`;
 		expect((await dash(cookie, 'PUT', `${w}/settings/notes.greeting`, { value: 'Hi' })).status).toBe(204);
-		expect((await dash(cookie, 'PUT', `${w}/theme`, { radius: 4 })).status).toBe(200);
-		expect((await dash(cookie, 'PUT', `${w}/format`, { wholeUnits: true })).status).toBe(200);
 		expect((await dash(cookie, 'PUT', `${w}/lists/labels`, { value: ['vip'] })).status).toBe(200);
 		expect((await dash(cookie, 'PUT', `${w}/connections/ai`, { value: 'sk-x-1234' })).status).toBe(200);
 		// a write needs the product's own Origin (CSRF): another site's page cannot use the session
-		const crossSite = await call('PUT', `${w}/theme`, { cookie, origin: 'https://evil.example.com', body: { radius: 5 } });
+		const crossSite = await call('PUT', `${w}/settings/notes.greeting`, {
+			cookie,
+			origin: 'https://evil.example.com',
+			body: { value: 'Evil' },
+		});
 		expect(crossSite.status).toBe(403);
-		const noOrigin = await call('PUT', `${w}/theme`, { cookie, body: { radius: 5 } });
+		const noOrigin = await call('PUT', `${w}/settings/notes.greeting`, { cookie, body: { value: 'Evil' } });
 		expect(noOrigin.status).toBe(403);
 	});
 });

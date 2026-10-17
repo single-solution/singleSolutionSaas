@@ -13,7 +13,7 @@
  *   a first use that has no copy at all waits for the Portal (at most {@link WAITED_FETCH_MS}); if that fails the product
  *   keeps its own values and tries again after a response.
  * - While the Portal holds nothing for a website (`settingsVersion` 0) there is no copy: `get` answers null and the
- *   product uses its own saved values and business.json, as before the Portal held them.
+ *   product uses the built-in defaults (the Overview says "Needs setup: set your website settings in the Portal").
  * @module
  */
 import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
@@ -161,9 +161,27 @@ export const createWebsiteSettings = ({ store, client, now, logger }) => {
 		return fetched?.settings ?? null;
 	};
 
+	/**
+	 * A status copy was fetched again after a response (a lost notice is caught here): when it asks for a newer version
+	 * than the one held, fetch the settings (at most every {@link REFRESH_EVERY_MS} per website on this instance).
+	 * @param {string} websiteId
+	 * @param {{ settingsVersion?: number }} status
+	 */
+	const followStatus = async (websiteId, status) => {
+		const needed = Number.isSafeInteger(status.settingsVersion) ? /** @type {number} */ (status.settingsVersion) : 0;
+		const held = /** @type {Held | null} */ (await store.get('website_settings', websiteId));
+		remember(websiteId, held, needed);
+		if (needed === 0 || (held && held.version >= needed)) return;
+		const t = now();
+		if (t - (startedAt.get(websiteId) ?? -Infinity) < REFRESH_EVERY_MS) return;
+		startedAt.set(websiteId, t);
+		await refresh(websiteId);
+	};
+
 	return Object.freeze({
 		get,
 		refresh,
+		followStatus,
 		/**
 		 * The settings for product code: the Portal's document, frozen; an empty one at version 0 while the Portal holds
 		 * none (`version === 0` tells the product to use its own values).

@@ -1,8 +1,8 @@
 'use client';
 /**
  * The pieces every product dashboard's tabs share (PLAN 0.4.3): the product's words and feature names
- * (`DashboardProvider`, `useDashboard`), the loading and outcome states, and the kit's settings, texts, theme and
- * Format forms (a website's values or the global defaults) and the Owner's Re-seal card.
+ * (`DashboardProvider`, `useDashboard`), the loading and outcome states, and the kit's settings and texts forms (a
+ * website's values or the global defaults) and the Owner's Re-seal card.
  * @module
  */
 import { ViewTransition, createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
@@ -15,7 +15,6 @@ import { SchemaForm } from './SchemaForm.js';
 import { describeProblem, problemLines } from './problems.js';
 import { ToastProvider, useToast } from './Toast.js';
 import { call, fill } from './dashboard-api.js';
-import { symbolRowsOf, symbolsOf } from './format.js';
 import { DASHBOARD_TEXTS, dashboardTexts, resealAdvice } from './dashboard-texts.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
@@ -42,7 +41,12 @@ import { DASHBOARD_TEXTS, dashboardTexts, resealAdvice } from './dashboard-texts
  * @property {(keys: string[]) => Array<{ title: string, keys: string[] }>} byCategory the keys grouped by category, the
  *   categories and the features in each in the product's order, the rest under More
  */
-/** @typedef {{ key: string, name: string, on?: boolean, schema: any, values: Record<string, { value: unknown, source: string }> }} FeatureSettings */
+/**
+ * One feature's settings as the dashboard API answers them: each value with where it comes from (`source`: `website`,
+ * `default`, `built-in`, or `portal` for a setting that starts from the website's settings, with `from` the path).
+ * @typedef {{ key: string, name: string, on?: boolean, schema: any,
+ *   values: Record<string, { value: unknown, source: string, from?: string }> }} FeatureSettings
+ */
 /**
  * A callout on a feature's settings card, from its current values (unsaved ones included) and every feature's
  * settings (null: none).
@@ -388,154 +392,6 @@ export function TextsForm({ texts, saveUrl, resetBody, savedSource, reload }) {
 					);
 				})}
 			</SettingList>
-		</SettingsCard>
-	);
-}
-
-/**
- * The widgets' theme (one per website): light or dark, font, corner radius, accent color and custom CSS.
- * @param {{ theme: { colors: Record<string, string>, fontFamily: string, radius: number, mode: string, customCss: string },
- *   save: (theme: Record<string, unknown>) => Promise<Answer>, reload: () => void }} props
- */
-export function ThemeForm({ theme, save, reload }) {
-	const { texts } = useDashboard();
-	const [draft, setDraft] = useState(theme);
-	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
-	return (
-		<SettingsCard
-			title={texts.settings.theme}
-			footer={
-				<Button
-					onClick={async () => {
-						setResult(await save(draft));
-						reload();
-					}}>
-					{texts.save}
-				</Button>
-			}>
-			<SettingList>
-				<SegmentedControl
-					legend={texts.settings.mode}
-					value={draft.mode}
-					options={Object.entries(texts.settings.modes).map(([value, label]) => ({ value, label }))}
-					onChange={(value) => setDraft({ ...draft, mode: value })}
-				/>
-				<Input
-					label={texts.settings.fontFamily}
-					value={draft.fontFamily}
-					onChange={(event) => setDraft({ ...draft, fontFamily: event.target.value })}
-				/>
-				<Input
-					label={texts.settings.radius}
-					type="number"
-					min={0}
-					max={24}
-					suffix="px"
-					value={String(draft.radius)}
-					onChange={(event) => setDraft({ ...draft, radius: Number(event.target.value) })}
-				/>
-				<Input
-					label={texts.settings.accent}
-					type="color"
-					className="w-20!"
-					value={draft.colors.accent ?? '#4f46e5'}
-					onChange={(event) => setDraft({ ...draft, colors: { ...draft.colors, accent: event.target.value } })}
-				/>
-				<TextArea
-					label={texts.settings.customCss}
-					rows={6}
-					className="font-mono text-xs"
-					value={draft.customCss}
-					onChange={(event) => setDraft({ ...draft, customCss: event.target.value })}
-				/>
-			</SettingList>
-			<Outcome result={result} />
-		</SettingsCard>
-	);
-}
-
-/**
- * How money and dates look in the widgets, messages, invoices and hosted pages (one Format per website, PLAN 0.8.10 K7):
- * its own symbol per currency (fixed-choices audit K5) is a merchant list.
- * @param {{ format: { locale: string, currencyDisplay: string, currencySymbols: Record<string, string>,
- *   wholeUnits: boolean, times: string }, save: (format: Record<string, unknown>) => Promise<Answer>,
- *   reload: () => void }} props
- */
-export function FormatForm({ format, save, reload }) {
-	const { texts } = useDashboard();
-	const [draft, setDraft] = useState(format);
-	const [rows, setRows] = useState(() => symbolRowsOf(format.currencySymbols ?? {}));
-	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
-	return (
-		<SettingsCard
-			title={texts.settings.format}
-			description={texts.settings.formatHelp}
-			footer={
-				<Button
-					onClick={async () => {
-						setResult(await save({ ...draft, currencySymbols: symbolsOf(rows) }));
-						reload();
-					}}>
-					{texts.save}
-				</Button>
-			}>
-			<SettingList>
-				<Input
-					label={texts.settings.locale}
-					help={texts.settings.localeHelp}
-					placeholder="en-US"
-					value={draft.locale}
-					onChange={(event) => setDraft({ ...draft, locale: event.target.value.trim() })}
-				/>
-				<RadioGroup
-					legend={texts.settings.currencyDisplay}
-					cards
-					value={draft.currencyDisplay}
-					options={Object.entries(texts.settings.currencyDisplays).map(([value, label]) => ({ value, label }))}
-					onChange={(value) => setDraft({ ...draft, currencyDisplay: value })}
-				/>
-				<RadioGroup
-					legend={texts.settings.times}
-					cards
-					value={draft.times}
-					options={Object.entries(texts.settings.timesOptions).map(([value, label]) => ({ value, label }))}
-					onChange={(value) => setDraft({ ...draft, times: value })}
-				/>
-				<Switch
-					label={texts.settings.wholeUnits}
-					checked={draft.wholeUnits}
-					onChange={(next) => setDraft({ ...draft, wholeUnits: next })}
-				/>
-				<ListEditor
-					legend={texts.settings.currencySymbols}
-					help={texts.settings.currencySymbolsHelp}
-					items={rows}
-					onChange={setRows}
-					max={20}
-					newItem={() => ({ currency: '', symbol: '' })}
-					nameOf={(row, index) => fill(texts.settings.symbolRow, { currency: row.currency || String(index + 1) })}
-					texts={{ add: texts.settings.addSymbol }}
-					renderItem={(row, _index, update) => (
-						<>
-							<Input
-								label={texts.settings.currency}
-								maxLength={3}
-								placeholder="PKR"
-								value={row.currency}
-								onChange={(event) => update({ ...row, currency: event.target.value.toUpperCase() })}
-							/>
-							<Input
-								label={texts.settings.symbol}
-								maxLength={8}
-								placeholder="Rs"
-								value={row.symbol}
-								onChange={(event) => update({ ...row, symbol: event.target.value })}
-							/>
-						</>
-					)}
-				/>
-			</SettingList>
-			<Outcome result={result} />
 		</SettingsCard>
 	);
 }
