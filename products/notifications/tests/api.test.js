@@ -98,7 +98,7 @@ describe('before setup', () => {
 		});
 		env.providers.respond('https://api.twilio.com', () => ({ status: 401, body: '{"message":"bad"}' }));
 		const refused = await env.connect('sms', TWILIO);
-		expect(refused).toMatchObject({ status: 'test_failed', message: 'The provider answered HTTP 401.', last4: '9876' });
+		expect(refused).toMatchObject({ status: 'test_failed', message: 'The provider answered HTTP 401.', set: true });
 		env.providers.reset('https://api.twilio.com');
 		expect((await env.connect('sms', TWILIO)).status).toBe('connected');
 		expect((await env.connect('whatsapp', META)).status).toBe('connected');
@@ -836,30 +836,27 @@ describe('the merchant’s server and the widget config (PLAN 0.8.10)', () => {
 		expect(pushed.json).toMatchObject({ status: 'failed', reason: 'no_subscription' });
 	});
 
-	it('takes the SS-Actor headers on server calls and refuses malformed ones', async () => {
-		const named = await env.call('GET', '/v1/messages/count', {
+	it('names the acting user from the verified sign-in only: actor headers mean nothing', async () => {
+		// staff routes want the sign-in of a staff member; headers that only name a person do not count
+		const forged = await env.call('GET', '/v1/messages/count', {
 			token: env.server,
+			bare: true,
 			headers: { 'ss-actor-id': 'usr_42', 'ss-actor-name': encodeURIComponent('Zoë Admin'), 'ss-actor-role': 'Manager' },
 		});
-		expect(named.status).toBe(200);
-		const malformed = await env.call('GET', '/v1/messages/count', {
-			token: env.server,
-			headers: { 'ss-actor-id': 'usr 42', 'ss-actor-name': 'Zoe' },
-		});
-		expect(malformed.status).toBe(400);
-		expect((await malformed.json()).type).toMatch(/invalid_actor$/);
-		// a settings change from the server shows the acting user in Recent changes
+		expect(forged.status).toBe(403);
+		expect((await forged.json()).type).toMatch(/needs_signed_in_staff$/);
+		// a settings change from the server shows the signed-in staff member in Recent changes
 		const changed = await env.call('PUT', '/v1/settings/send_limits.perDay', {
 			token: env.server,
 			body: { value: 30 },
-			headers: { 'ss-actor-id': 'usr_42', 'ss-actor-name': encodeURIComponent('Zoë Admin') },
+			staff: { id: 'usr_42', name: 'Zoë Admin' },
 		});
 		expect(changed.status).toBe(200);
 		const overview = await (
 			await env.dashboard(await env.adminSession(), 'GET', `/v1/dashboard/websites/${env.websiteId}/overview`)
 		).json();
 		expect(overview.recentChanges).toContainEqual(
-			expect.objectContaining({ who: { kind: 'user', id: 'usr_42', name: 'Zoë Admin' } }),
+			expect.objectContaining({ who: { kind: 'user', id: 'usr_42', name: 'Zoë Admin', role: 'owner' } }),
 		);
 	});
 

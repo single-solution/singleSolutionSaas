@@ -8,7 +8,7 @@
  */
 import { createECDH } from 'node:crypto';
 import { MongoClient } from 'mongodb';
-import { apiChecker, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import { apiChecker, createAccountsDouble, createFakePortal, createMemoryStore, createNetwork, staffCaller } from '@ss/app-kit/testing';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
@@ -133,11 +133,14 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	const now = () => t;
 	const portal = await createFakePortal({ now });
 	const providers = createFakeProviders();
+	// Accounts as the directory lists it (OTHER_PRODUCTS): the keys of the staff's sign-ins
+	const accounts = createAccountsDouble({ url: 'https://accounts.example.dev', now });
 	/** The website's business.json, while a test serves one. @type {unknown} */
 	let business = null;
 	/** @type {Record<string, (request: Request) => Promise<Response>>} */
 	const handlers = {
 		[portal.url]: portal.handle,
+		[accounts.url]: accounts.handle,
 		...providers.handlers,
 		[ORIGIN]: async (request) =>
 			new URL(request.url).pathname === '/.well-known/business.json' && business !== null
@@ -194,9 +197,13 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	 * @param {string} method
 	 * @param {string} path
 	 * @param {{ token?: string, origin?: string, body?: unknown, raw?: string, type?: string, cookie?: string,
-	 *   headers?: Record<string, string>, after?: boolean }} [init]
+	 *   headers?: Record<string, string>, after?: boolean, bare?: boolean, staff?: Record<string, any> }} [init] `bare`: the
+	 *   server token alone; `staff`: who is signed in (the website's server with a staff Owner signed in otherwise)
 	 */
-	const call = async (method, path, { token, origin, body, raw, type, cookie, headers = {}, after = true } = {}) => {
+	const call = async (method, path, { token, origin, body, raw, type, cookie, headers = {}, after = true, bare = false, staff } = {}) => {
+		if (token === server && !bare && headers['ss-sign-in'] === undefined && headers['ss-visitor-ip'] === undefined)
+			// eslint-disable-next-line no-param-reassign -- the harness signs the staff member in
+			headers = await staffHeaders({ headers, staff });
 		const response = await handler(
 			new Request(`${BASE}${path}`, {
 				method,
@@ -224,6 +231,16 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		API.assert({ method, path, status: response.status, body: json });
 		return response;
 	};
+
+	// the website's Accounts token, pasted through the dashboard on first use
+	const staffHeaders = staffCaller({
+		accounts,
+		websiteId,
+		paste: async () => {
+			const token = (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token;
+			await connect('accounts', token);
+		},
+	});
 
 	/** An admin's dashboard session (Owner by default); returns the cookie. @param {'owner' | 'support'} [role] */
 	const adminSession = async (role = 'owner') => {
@@ -303,13 +320,16 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	const ticket = async (permissions = ['log.read', 'templates.edit', 'messages.send', 'push.subscribe']) => {
 		const response = await call('POST', '/v1/tickets', {
 			token: server,
-			body: { user: { id: 'u_1', name: 'Sam Staff', email: 'sam@example.com' }, permissions, origin: ADMIN_ORIGIN },
+			staff: { id: 'u_1', name: 'Sam Staff', email: 'sam@example.com' },
+			body: { permissions, origin: ADMIN_ORIGIN },
 		});
 		return /** @type {{ ticket: string }} */ (await response.json()).ticket;
 	};
 
 	return {
 		portal,
+		accounts,
+		staffHeaders,
 		product,
 		/** The in-process network's origins: a test may add one (for example another product). */
 		handlers,

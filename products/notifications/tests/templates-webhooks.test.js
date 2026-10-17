@@ -205,7 +205,7 @@ describe('templates for the merchant’s server (N4)', () => {
 		expect((await server('DELETE', '/v1/templates/x/fax/default')).status).toBe(404);
 		expect(await recent()).toContainEqual(
 			expect.objectContaining({
-				who: { kind: 'server', id: 'server', name: 'Server' },
+				who: { kind: 'user', id: 'usr_test_staff', name: 'Test Staff', role: 'owner' },
 				detail: 'Template ecommerce.order_canceled (sms, default): deleted',
 			}),
 		);
@@ -224,7 +224,7 @@ describe('templates for the merchant’s server (N4)', () => {
 		);
 		expect(await activity('template.deleted')).toContainEqual(
 			expect.objectContaining({
-				actor: { kind: 'server', id: 'server', name: 'Server' },
+				actor: { kind: 'user', id: 'usr_test_staff', name: 'Test Staff', role: 'owner' },
 				target: 'ecommerce.order_canceled/sms/default',
 			}),
 		);
@@ -265,7 +265,7 @@ describe('webhook URLs per event (N5)', () => {
 		const saves = log.items.filter((/** @type {any} */ e) => e.target === 'list.webhook_urls');
 		expect(saves.map((/** @type {any} */ e) => [e.actor.kind, e.target, e.label, e.detail])).toEqual([
 			['admin', 'list.webhook_urls', 'Webhook URLs', 'changed'],
-			['server', 'list.webhook_urls', 'Webhook URLs', 'changed'],
+			['user', 'list.webhook_urls', 'Webhook URLs', 'changed'],
 		]);
 	});
 

@@ -3,7 +3,7 @@
  * dashboard API with its list twin of `webhook_urls`, the settings API and the activity reads). Every browser-token, server-token and ticket route belongs
  * to one feature; `openapi.json` is generated from these definitions (`ss app assets`), so `method`, `path`, `auth`,
  * `feature` and `permission` stay string literals. Every website route sends due messages and webhook events right
- * after it answers (`drain`). Who acts is the ticket's member of staff, else the `SS-Actor-*` user of a server-token
+ * after it answers (`drain`). Who acts is the ticket's member of staff, else the signed-in staff member of a server-token
  * call, else the server (PLAN 0.8.10 K2).
  * Public entry `./routes` of this package: `product.handler(createRoutes(product))`.
  * @module
@@ -48,7 +48,7 @@ const VISITOR_LIMITS = [
 	{ limit: 20, windowSeconds: 60, per: /** @type {const} */ ('visitor') },
 ];
 
-/** Who acts when neither a ticket nor the `SS-Actor-*` headers name a member of the merchant's staff. */
+/** Who acts when neither a ticket nor the the verified `SS-Sign-In` names a member of the merchant's staff. */
 const SERVER = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
 /** @typedef {{ kind: 'merchant' | 'admin' | 'user' | 'server', id: string, name: string, role?: string }} Who */
 /**
@@ -449,7 +449,7 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/messages/email',
-			auth: 'server',
+			auth: 'server', runtime: true,
 			feature: 'email',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
@@ -458,7 +458,7 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/messages/sms',
-			auth: 'server',
+			auth: 'server', runtime: true,
 			feature: 'sms',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
@@ -467,7 +467,7 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/messages/whatsapp',
-			auth: 'server',
+			auth: 'server', runtime: true,
 			feature: 'whatsapp',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
@@ -476,7 +476,7 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/messages/push',
-			auth: 'server',
+			auth: 'server', runtime: true,
 			feature: 'browser_push',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
@@ -485,7 +485,7 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/messages/staff-push',
-			auth: 'server',
+			auth: 'server', runtime: true,
 			feature: 'staff_push',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
@@ -495,7 +495,7 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/events',
-			auth: 'server',
+			auth: 'server', runtime: true,
 			feature: 'webhooks',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
@@ -507,11 +507,12 @@ export const createRoutes = (product) => {
 			},
 		}),
 		// the delivery log for the merchant's server, and its counts with the same filters
-		defineRoute({ method: 'GET', path: '/v1/messages', auth: 'server', feature: 'send_api', handler: listMessages }),
+		defineRoute({ method: 'GET', path: '/v1/messages', auth: 'server', permission: 'log.read', feature: 'send_api', handler: listMessages }),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/messages/count',
 			auth: 'server',
+			permission: 'log.read',
 			feature: 'send_api',
 			handler: messageCounts.count,
 		}),
@@ -519,13 +520,14 @@ export const createRoutes = (product) => {
 			method: 'GET',
 			path: '/v1/messages/counts',
 			auth: 'server',
+			permission: 'log.read',
 			feature: 'send_api',
 			handler: messageCounts.counts,
 		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/messages/:id',
-			auth: 'server',
+			auth: 'server', permission: 'log.read',
 			feature: 'send_api',
 			handler: async (ctx) => {
 				const message = await (await siteOf(ctx)).store.messages.get(ctx.params.id);
@@ -537,14 +539,14 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/templates',
-			auth: 'server',
+			auth: 'server', permission: 'templates.edit',
 			feature: ['email', 'sms', 'whatsapp', 'browser_push', 'staff_push'],
 			handler: serverTemplates.list,
 		}),
 		defineRoute({
 			method: 'PUT',
 			path: '/v1/templates',
-			auth: 'server',
+			auth: 'server', permission: 'templates.edit',
 			feature: ['email', 'sms', 'whatsapp', 'browser_push', 'staff_push'],
 			rateLimit: TEMPLATE_WRITE_LIMITS,
 			handler: serverTemplates.save,
@@ -552,7 +554,7 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'DELETE',
 			path: '/v1/templates/:key/:channel/:language',
-			auth: 'server',
+			auth: 'server', permission: 'templates.edit',
 			feature: ['email', 'sms', 'whatsapp', 'browser_push', 'staff_push'],
 			rateLimit: TEMPLATE_WRITE_LIMITS,
 			handler: serverTemplates.remove,
