@@ -1,13 +1,22 @@
 /**
  * Test harness: this product on the kit, connected to the kit's fake Portal (`@ss/app-kit/testing`), with one website,
- * its two tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`) and an Accounts
- * double for the sign-ins of the staff: a staff route of the server token needs the sign-in of a signed-in staff member
+ * its two tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`, entered in the Portal
+ * as a merchant does: the product gets it from there) and an Accounts double for the sign-ins of the staff (linked in
+ * the Portal, never pasted): a staff route of the server token needs the sign-in of a signed-in staff member
  * next to the token, so `call()` signs an Owner in for a server-token call unless `bare: true`. Every answer
  * `call()` sees is checked against `schemas/api.json` (and the kit's own routes): a test fails when an answer does not
  * fit its description.
  * @module
  */
-import { apiChecker, createAccountsDouble, createFakePortal, createMemoryStore, createNetwork, staffCaller } from '@ss/app-kit/testing';
+import {
+	apiChecker,
+	createAccountsDouble,
+	createFakePortal,
+	createMemoryStore,
+	createNetwork,
+	portalConnector,
+	staffCaller,
+} from '@ss/app-kit/testing';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
@@ -93,17 +102,12 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		return response;
 	};
 
-	// the website's Accounts token, pasted through the dashboard on first use: the keys of the staff's sign-ins
+	// the Portal's link to Accounts, made on first use: the keys of the staff's sign-ins
 	const staffHeaders = staffCaller({
 		accounts,
 		websiteId,
 		paste: async () => {
-			const token = (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token;
-			const cookie = await adminSession();
-			const response = await dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, {
-				value: token,
-			});
-			if (response.status !== 200) throw new Error(`accounts: ${response.status} ${await response.text()}`);
+			await viaPortal('accounts', null);
 		},
 	});
 
@@ -124,12 +128,20 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		if (response.status !== 200) throw new Error(`features: ${response.status} ${await response.text()}`);
 	};
 
-	/** Connect the merchant database (Connections screen; tested live when saved). */
+	/** What the merchant does in the Portal (the database, the link to Accounts); the product fetches it right after. */
+	const viaPortal = portalConnector({
+		portal,
+		websiteId,
+		manifest,
+		product,
+		drain: async () => {
+			while (tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();
+		},
+	});
+
+	/** Connect the merchant database (entered once in the Portal, Website settings, Data and files). */
 	const connectDatabase = async () => {
-		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/connections/database`, {
-			value: merchantDatabase(),
-		});
-		if (response.status !== 200) throw new Error(`database: ${response.status} ${await response.text()}`);
+		await viaPortal('database', merchantDatabase());
 	};
 
 	/** A ticket for the admin widget. @param {string[]} [permissions] */

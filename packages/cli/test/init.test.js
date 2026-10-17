@@ -86,7 +86,19 @@ describe('ss app init → validate → own tests (integration)', () => {
 
 		const manifest = await json(dir, 'manifest.json');
 		expect(Object.keys(manifest).sort()).toEqual(
-			['docsUrl', 'endpoints', 'features', 'id', 'name', 'permissions', 'version', 'widgetScriptUrl', 'widgets'].sort(),
+			[
+				'docsUrl',
+				'endpoints',
+				'features',
+				'id',
+				'links',
+				'name',
+				'needs',
+				'permissions',
+				'version',
+				'widgetScriptUrl',
+				'widgets',
+			].sort(),
 		);
 		expect(manifest).toMatchObject({
 			id: 'order-notes',
@@ -95,7 +107,15 @@ describe('ss app init → validate → own tests (integration)', () => {
 			widgetScriptUrl: '/widget.js',
 			docsUrl: '/docs',
 			permissions: [{ key: 'notes.read', feature: 'notes' }],
+			// what it needs of the website (entered once in the Portal) and of other products (linked by the Portal)
+			needs: { database: true, storage: 'none' },
+			links: { needs: [{ product: 'accounts', scopes: ['activity.write'], features: [] }] },
 		});
+		expect(manifest.links.offers.map((/** @type {{ scope: string }} */ offer) => offer.scope)).toEqual([
+			'permissions.read',
+			'data_rights.export',
+			'data_rights.erase',
+		]);
 		expect(manifest.widgets.map((/** @type {{ kind: string }} */ widget) => widget.kind)).toEqual(['visitor', 'admin']);
 
 		const pkg = await json(dir, 'package.json');

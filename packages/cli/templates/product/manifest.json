@@ -5,6 +5,27 @@
 	"endpoints": { "base": "{{baseUrl}}", "dashboard": "/dashboard" },
 	"widgetScriptUrl": "/widget.js",
 	"docsUrl": "/docs",
+	"needs": { "database": true, "storage": "none" },
+	"links": {
+		"offers": [
+			{
+				"scope": "permissions.read",
+				"name": "Read permissions",
+				"description": "Other products list this product's permissions, for the roles of the website's staff."
+			},
+			{
+				"scope": "data_rights.export",
+				"name": "Export a person's data",
+				"description": "Other products ask this product for everything it keeps about one person."
+			},
+			{
+				"scope": "data_rights.erase",
+				"name": "Erase a person's data",
+				"description": "Other products ask this product to erase or anonymize one person's data."
+			}
+		],
+		"needs": [{ "product": "accounts", "scopes": ["activity.write"], "features": [] }]
+	},
 	"features": [
 		{
 			"key": "notes",
