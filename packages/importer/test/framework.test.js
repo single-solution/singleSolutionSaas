@@ -290,7 +290,6 @@ describe('send: settings, prune and the final pass', () => {
 		expect(dry.ok).toBe(false);
 		expect(dry.settings).toEqual({
 			changes: [
-				{ product: 'ecommerce', kind: 'format', key: 'currency', from: 'USD', to: 'EUR', source: 'default' },
 				// read from the store, over its product default: written explicitly (RT-15)
 				{
 					product: 'ecommerce',
@@ -302,8 +301,15 @@ describe('send: settings, prune and the final pass', () => {
 				},
 				{ product: 'ecommerce', kind: 'list', key: 'couriers', from: [], to: [{ key: 'post' }], source: null },
 			],
-			unchanged: 2,
+			unchanged: 1,
 			refused: [
+				// the Format is the Portal's: a plan that carries one is listed, never sent
+				{
+					product: 'ecommerce',
+					kind: 'format',
+					key: 'currency, locale',
+					message: 'The Format is set once in the Portal (Website settings › Region and format), not in a product.',
+				},
 				{ product: 'ecommerce', kind: 'setting', key: 'alerts.channels', message: 'The feature alerts is off.' },
 				{ product: 'ecommerce', kind: 'setting', key: 'checkout.nope', message: 'No such setting.' },
 				{ product: 'ecommerce', kind: 'setting', key: 'nodot', message: 'No such setting.' },
@@ -320,10 +326,13 @@ describe('send: settings, prune and the final pass', () => {
 			sleep,
 		});
 		expect(slept).toEqual([2000]);
-		expect(product.format).toMatchObject({ currency: 'EUR' });
+		// no call of any kind touched the Format
+		expect(product.calls.filter((call) => call.path === '/v1/format')).toEqual([]);
+		expect(product.format).toEqual({ currency: 'USD', locale: 'en' });
 		expect(product.lists.couriers).toEqual([{ key: 'post' }]);
 		expect(product.features.checkout?.values.channels).toEqual({ value: ['whatsapp'], source: 'website' });
 		expect(real.settings.refused).toEqual([
+			{ product: 'ecommerce', kind: 'format', key: 'currency, locale', message: expect.stringContaining('Portal') },
 			{ product: 'ecommerce', kind: 'setting', key: 'checkout.guests', message: 'The value is not valid. is not a list' },
 			{ product: 'ecommerce', kind: 'list', key: 'missing', message: 'No such list.' },
 		]);

@@ -73,7 +73,8 @@ settings written before their PLAN item is built (E39): until then the products 
 **Entered by hand** (the per-store table, `send --settings <file>`): the feature switches (`FEATURES`, and `import`);
 the website's settings in the Portal (Website settings: business facts, brand, region and format, pages, alert team; set once
 for every product, so the plan writes none of them: `PORTAL_BY_HAND` lists SB's values, such as country PK, currency PKR,
-calling code +92, `timeZone: Asia/Karachi` and the alert team); every secret; and, when SB has no saved row for them
+calling code +92, `timeZone: Asia/Karachi`, the Format and the alert team); the website's database and storage in the Portal
+(Website settings › Data and files; `PORTAL_CONNECTIONS_BY_HAND`: one string and one bucket for every product); every secret; and, when SB has no saved row for them
 (`BY_HAND`), the values only its deployment holds: `catalog.mediaBaseUrl` (`AWS_S3_PUBLIC_URL_BASE`),
 `staff_alerts.adminUrl` (`ADMIN_SITE_URL`), and the public site address for `staff_links.setupPageUrl` and
 `robots_verification.sitemaps`. After E47 is built: `loyalty.memberFlag: first_order`

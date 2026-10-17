@@ -33,8 +33,8 @@ Usage:
         settings.json and manifest.json in <dir>
   ss-import send --dir <dir> --product <id>=<url> [--product …] [--dry-run] [--prune] [--only <id>.<collection> …]
                  [--settings <file>] [--json]
-        write the settings (settings.json, then the per-store table <file>) through PUT <url>/v1/settings, /v1/format
-        and /v1/lists, post the files to POST <url>/v1/import/<collection> (?dryRun=1), with --prune remove what the
+        write the settings (settings.json, then the per-store table <file>) through PUT <url>/v1/settings
+        and /v1/lists (the Format is the Portal's: none is sent), post the files to POST <url>/v1/import/<collection> (?dryRun=1), with --prune remove what the
         source no longer has (POST …/prune; the final pass), and after each product's last file POST
         /v1/import/finish (again with ?after=<next> while it answers more; not on a dry run); a dry run lists every
         refused record and setting and the settings that would change; the server token of each product comes from

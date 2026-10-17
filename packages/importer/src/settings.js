@@ -1,7 +1,9 @@
 /**
  * The website's settings and lists (PLAN 0.8.10 Migration, order step 2): written through each product's settings API
  * for the merchant's server (K1) before the records, from the settings `read` took from the store (`settings.json`)
- * and the per-store settings table entered by hand. Every value is written explicitly, so a later change of a product
+ * and the per-store settings table entered by hand. The **Format** is not sent: it is the website's, set once in the
+ * Portal (Website settings › Region and format), and a product answers `PUT /v1/format` with 409 `managed_by_portal`; a plan
+ * that still carries one is listed as refused, never lost silently. Every value is written explicitly, so a later change of a product
  * default never changes a moved website (RT-15): a setting counts as unchanged only when the website already holds
  * this exact value itself. A dry run writes nothing and lists the differences with the product's current values
  * (`from`, and where they come from: `website`, `default` or `built-in`) and what would be refused (unknown settings,
@@ -25,6 +27,8 @@ import { requestProduct } from './http.js';
  * @property {string | null} source where the current value comes from (null for lists)
  */
 /** @typedef {{ product: string, kind: 'format' | 'setting' | 'list', key: string, message: string }} SettingsRefusal */
+/** What a refused Format says: it belongs to the Portal. */
+const FORMAT_IN_PORTAL = 'The Format is set once in the Portal (Website settings › Region and format), not in a product.';
 /** @typedef {{ changes: SettingsChange[], unchanged: number, refused: SettingsRefusal[] }} SettingsReport */
 
 /** Tries of one write the settings API asks to wait for. */
@@ -89,24 +93,9 @@ export const applySettings = async ({ plan, products, dryRun, fetch, sleep }) =>
 		/** @param {SettingsRefusal['kind']} kind @param {string} key @param {string} message */
 		const refuse = (kind, key, message) => report.refused.push({ product, kind, key, message });
 
-		if (part.format && Object.keys(part.format).length > 0) {
-			const current = (await requestProduct(fetch, target, 'GET', '/v1/format')).json ?? {};
-			/** @type {Record<string, unknown>} */
-			const fields = {};
-			for (const [field, value] of Object.entries(part.format)) {
-				const from = current.format?.[field];
-				const source = current.sources?.[field] ?? null;
-				if (source === 'website' && isDeepStrictEqual(from, value)) report.unchanged += 1;
-				else {
-					fields[field] = value;
-					changed({ product, kind: 'format', key: field, from: from ?? null, to: value, source });
-				}
-			}
-			if (!dryRun && Object.keys(fields).length > 0) {
-				const refused = await write(target, '/v1/format', fields);
-				if (refused) refuse('format', Object.keys(fields).join(', '), refused);
-			}
-		}
+		// the Format is the Portal's: nothing is sent to the product, and a plan that carries one says so
+		if (part.format && Object.keys(part.format).length > 0)
+			refuse('format', Object.keys(part.format).join(', '), FORMAT_IN_PORTAL);
 
 		if (part.settings && Object.keys(part.settings).length > 0) {
 			const answer = await requestProduct(fetch, target, 'GET', '/v1/settings');

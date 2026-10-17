@@ -104,12 +104,14 @@ export const fakeProduct = ({
 			return json(200, { key: `${feature}.${key}`, value, source: 'website' });
 		}
 		if (url.pathname === '/v1/format') {
+			// the Format is the Portal's: a product answers a write with 409 managed_by_portal; the importer sends none
+			calls.push({ method: write ? 'PUT' : 'GET', path: url.pathname, dryRun: false, records: 0, body: undefined });
 			if (!write) return json(200, { format, sources: formatSources });
-			const body = await request.json();
-			Object.assign(format, body);
-			for (const field of Object.keys(body)) formatSources[field] = 'website';
-			calls.push({ method: 'PUT', path: url.pathname, dryRun: false, records: 0, body });
-			return json(200, { format, sources: formatSources });
+			return json(409, {
+				type: 'https://shop.test/problems/managed_by_portal',
+				status: 409,
+				detail: 'This is set in the Portal: Website settings › Region and format.',
+			});
 		}
 		const list = /^\/v1\/lists\/([a-z_]+)$/.exec(url.pathname);
 		if (list) {

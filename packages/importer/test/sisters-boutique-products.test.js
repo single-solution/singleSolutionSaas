@@ -9,7 +9,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { formatViolation, validateSettingValue } from '@ss/contracts';
+import { validateSettingValue } from '@ss/contracts';
 import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FEATURES, PENDING } from '../src/mappings/sisters-boutique/index.js';
@@ -108,10 +108,8 @@ describe('the Sisters Boutique mapping through the products’ checks', () => {
 				for (const key of Object.keys(sections.get(section)?.properties ?? {}))
 					if (!Object.hasOwn(part.settings ?? {}, `${section}.${key}`))
 						problems.push(`${product} ${section}.${key}: not written`);
-			for (const [field, value] of Object.entries(part.format ?? {})) {
-				const why = formatViolation(/** @type {any} */ (field), value);
-				if (why) problems.push(`${product} format ${field}: ${why}`);
-			}
+			// the Format is the website's, entered in the Portal: no product is sent one
+			if (part.format !== undefined) problems.push(`${product}: the plan carries a Format`);
 		}
 		expect(problems).toEqual([]);
 		const lists = /** @type {Record<string, unknown>} */ (settings.ecommerce?.lists);

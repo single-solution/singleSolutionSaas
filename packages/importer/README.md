@@ -9,7 +9,7 @@ deployed**, that moves a store's records into the products:
    the record they joined), `settings.json` (the website's settings, when the mapping reads them) and `manifest.json`
    (what was read, in import order, with the verification sums).
 2. `ss-import send` first writes the settings and lists (`settings.json`, then the per-store settings table given with
-   `--settings <file>`) through each product's settings API (K1: `PUT /v1/format`, `/v1/settings/<feature>.<key>`,
+   `--settings <file>`) through each product's settings API (K1: `/v1/settings/<feature>.<key>`,
    `/v1/lists/<list>`; every value explicitly, RT-15; a 429 waits and tries again), then posts the files to each
    product's import routes with the website's server token (`POST /v1/import/<collection>`, `?dryRun=1` first), cut
    into calls of at most 1,000 records and 4 MB (`@ss/contracts` `IMPORT_LIMITS`). In a real run each product's
@@ -62,8 +62,10 @@ one source collection into one product's import collection (a target); several s
 | `countPath`  | optional: a count route of the product that `verify` also compares                                                       |
 
 `ctx.id(prefix, sourceId)` gives a deterministic id, `ctx.ref(source, sourceId)` the key an earlier step gave a
-document (merges followed). A mapping may also read the website's settings (`settings(db)` → `{ <product>: { format,
-settings: { '<feature>.<key>': value }, lists } }`).
+document (merges followed). A mapping may also read the website's settings (`settings(db)` → `{ <product>: {
+settings: { '<feature>.<key>': value }, lists } }`). The Format is not one of them: it is the website's, set once in the Portal
+(a product answers `PUT /v1/format` with 409), so `send` sends none and lists a plan that carries one as refused; the same for the
+database and the storage, which are entered once in the Portal (Website settings › Data and files).
 
 Store names appear only in mappings (PLAN 0.13). Each store's mapping comes with its cut-over, when the owner says so,
 and lives in its own folder, `src/mappings/<store>/`, with its README (what it reads, how each kind comes in, what is

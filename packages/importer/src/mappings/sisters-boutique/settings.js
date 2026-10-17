@@ -122,11 +122,27 @@ export const PORTAL_BY_HAND = Object.freeze({
 	'region.currency': 'PKR (whole rupees)',
 	'region.phone': 'calling code +92, trunk prefix 0, numbers of PK (`packages/shared/src/phone.ts`:21, :56)',
 	'region.units': 'weight g, size mm (mechanical defaults; SB types no package weights or sizes)',
+	// prices are whole rupees ("Rs 12,500", `packages/shared/src/formatters.ts`) and times are the shop's (SF-14, K8): the
+	// Format is the website's, so it is entered here once and no product is sent one
+	'region.format': 'whole units on, symbol display with PKR as Rs, locale en, times in the business time zone',
 	'region.address.required': 'ecommerce checkout: line1; accounts profile: name, phone, city (`customerAddresses.ts`:4, :55-80)',
 	'business.name': "the SEO row storeName, else store.siteName (SB's own site name)",
 	'brand.files.shareImage': 'store.brandLogoLight, else brandLogoDark, else the SEO ogImageDefault, else storeLogo',
-	'team.recipients': 'integration.staffNotifyEmail, else STAFF_NOTIFY_EMAIL, the support address and the active staff whose role does not read orders (product and marketing managers); at most 20 (`packages/db/src/staffNotifyContacts.ts`:10-39)',
+	'team.recipients':
+		'integration.staffNotifyEmail, else STAFF_NOTIFY_EMAIL, the support address and the active staff whose role does not read orders (product and marketing managers); at most 20 (`packages/db/src/staffNotifyContacts.ts`:10-39)',
 	'team.phoneChannel': 'whatsapp',
+});
+
+/**
+ * What SB's database and storage are in the Portal (Website settings › Data and files): ONE connection string and ONE
+ * bucket for every product, entered once by a signed-in person. Each product gets its own database in the connection
+ * (`ss_<product>`); an Owner may name another for a product when SB's data must stay in the one database its string names.
+ */
+export const PORTAL_CONNECTIONS_BY_HAND = Object.freeze({
+	database:
+		"SB's MongoDB connection string (every product has its own database in it; name SB's existing one for a product with the Owner-only names field)",
+	storage:
+		"SB's S3 bucket: endpoint, region, bucket, access key and secret, and the prefix if SB keeps one (`integration.awsS3*`, `AWS_S3_*`)",
 });
 
 /** SB's robots defaults: the fallback disallow list and `/api/`, always (`apps/web/src/app/robots.ts`:16-17). */
@@ -160,17 +176,8 @@ export const settingsPlan = (values) => {
 	const admin = address(integration.adminSiteUrl);
 	const media = origin(integration.awsS3PublicUrlBase);
 	const disallow = [...new Set([...(seo.robotsDisallow ?? ROBOTS_FALLBACK), ROBOTS_ALWAYS])];
-	// prices are whole rupees ("Rs 12,500", `packages/shared/src/formatters.ts`) and times are the shop's (SF-14, K8)
-	const format = {
-		wholeUnits: true,
-		currencyDisplay: 'symbol',
-		currencySymbols: { PKR: 'Rs' },
-		locale: 'en',
-		times: 'business',
-	};
 	return {
 		accounts: {
-			format,
 			settings: {
 				// phone codes: the SaaS defaults (SB sends none: Forgot password is its WhatsApp chat); mechanical, to review
 				'phone.channel': 'sms',
@@ -215,7 +222,6 @@ export const settingsPlan = (values) => {
 			},
 		},
 		ecommerce: {
-			format,
 			settings: {
 				// `apps/web/src/app/[category]/[slug]`, `[category]`; variant links carry the attributes
 				// (`packages/shared/src/seo/merchantFeed.ts` `buildVariantPdpPath`)
@@ -471,14 +477,12 @@ export const settingsPlan = (values) => {
 			},
 		},
 		notifications: {
-			format,
 			// the SaaS default waits (store mapping to review)
 			settings: {
 				'delivery_log.retentionDays': 0,
 			},
 		},
 		payments: {
-			format,
 			lists: {
 				// Payments' manual payment method bank_transfer (paid first) with SB's one account as label/value rows: SB's
 				// account title is the account holder's name; the proof comes on WhatsApp, not as an upload
@@ -507,7 +511,6 @@ export const settingsPlan = (values) => {
 			},
 		},
 		growth: {
-			format,
 			settings: {
 				'meta_pixel.pixelId': store.metaPixelId,
 				'google_tags.ga4Id': store.googleAnalyticsId,

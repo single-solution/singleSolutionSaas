@@ -55,8 +55,9 @@ import { DEFAULT_KEY, KEY_FIELD } from './keys.js';
  */
 
 /**
- * The website's settings in one product, written through its settings API (K1): Format fields, settings by
- * `<feature>.<setting>`, and whole lists.
+ * The website's settings in one product, written through its settings API (K1): settings by `<feature>.<setting>`, and
+ * whole lists. `format` is not sent: the Format is the website's, set once in the Portal; a plan that carries one is
+ * listed as refused.
  * @typedef {{ format?: Record<string, unknown>, settings?: Record<string, unknown>, lists?: Record<string, unknown> }} ProductSettings
  */
 /** @typedef {Record<string, ProductSettings>} SettingsPlan by product id */

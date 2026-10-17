@@ -1,3 +1,4 @@
+import { WEBSITE_SETTINGS_PATHS } from '@ss/contracts';
 import { ObjectId } from 'mongodb';
 import { afterEach, describe, expect, it } from 'vitest';
 import { send, verify } from '../src/index.js';
@@ -6,6 +7,7 @@ import { SB_IDS, sbHex } from '../src/mappings/sisters-boutique/fixture.js';
 import {
 	BY_HAND,
 	PORTAL_BY_HAND,
+	PORTAL_CONNECTIONS_BY_HAND,
 	DEAL_HOURS_SHIFT_MINUTES,
 	DEFAULT_CHART_ID,
 	FEATURES,
@@ -546,14 +548,8 @@ describe('the Sisters Boutique mapping', () => {
 			label: 'Account number',
 			value: '0000-0000000000',
 		});
-		// every product gets SB's Format; a secret row is never read
-		expect(settings.ecommerce?.format).toEqual({
-			wholeUnits: true,
-			currencyDisplay: 'symbol',
-			currencySymbols: { PKR: 'Rs' },
-			locale: 'en',
-			times: 'business',
-		});
+		// no product is sent SB's Format (it is the website's, entered in the Portal); a secret row is never read
+		for (const part of Object.values(settings)) expect(part.format).toBeUndefined();
 		expect(JSON.stringify(settings)).not.toContain('not-a-real-secret');
 	});
 
@@ -568,9 +564,16 @@ describe('the Sisters Boutique mapping', () => {
 		);
 		for (const key of Object.keys(BY_HAND)) expect(keys).not.toContain(key);
 		// the website's own facts are entered in the Portal: the plan writes none of the settings the Portal owns now
-		for (const gone of ['catalog.currency', 'checkout.addressRequired', 'staff_alerts.recipients', 'seo.brandName', 'phone.trunkPrefix'])
+		for (const gone of [
+			'catalog.currency',
+			'checkout.addressRequired',
+			'staff_alerts.recipients',
+			'seo.brandName',
+			'phone.trunkPrefix',
+		])
 			expect(keys.filter((key) => key.endsWith(gone))).toEqual([]);
 		expect(Object.keys(PORTAL_BY_HAND)).toContain('region.currency');
+		expect(PORTAL_BY_HAND['region.format']).toContain('Rs');
 		expect(plan.ecommerce?.lists?.payment_methods).toMatchObject([
 			{ key: 'bank_transfer', instructions: 'Transfer online — send payment screenshot on WhatsApp' },
 			{ key: 'cod', note: 'Pay when you receive your order' },
@@ -1005,5 +1008,30 @@ describe('the Sisters Boutique mapping', () => {
 		const checked = await verify({ dir, products, fetch });
 		expect(checked.ok).toBe(true);
 		expect(checked.steps.find((step) => step.collection === 'orders')).toMatchObject({ expected: 7, imported: 7, counted: 7 });
+	});
+});
+
+describe('what is entered by hand in the Portal stays accurate', () => {
+	it('names only values the website settings really hold (a value or a group of them), once', () => {
+		for (const key of Object.keys(PORTAL_BY_HAND))
+			expect(
+				WEBSITE_SETTINGS_PATHS.some((path) => path === key || path.startsWith(`${key}.`)),
+				`${key} is not a value of the website settings`,
+			).toBe(true);
+		for (const text of Object.values(PORTAL_BY_HAND)) expect(text.length).toBeGreaterThan(0);
+	});
+
+	it('is not also written by the plan: no setting of the Portal, no Format, in any product', async () => {
+		const { db } = await readSisters({ cleanups });
+		const plan = settingsPlan(await readValues(/** @type {any} */ (db)));
+		for (const [product, part] of Object.entries(plan)) {
+			expect(part.format, `${product} carries a Format`).toBeUndefined();
+			for (const key of Object.keys(part.settings ?? {}))
+				expect(['team.recipients', 'region.currency', 'business.name'], `${product} ${key}`).not.toContain(key);
+		}
+	});
+
+	it('lists the database and the storage, one of each for every product', () => {
+		expect(Object.keys(PORTAL_CONNECTIONS_BY_HAND)).toEqual(['database', 'storage']);
 	});
 });
