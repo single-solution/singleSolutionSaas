@@ -208,11 +208,11 @@ export const DOTS = Object.freeze({
 
 /**
  * Small pill: a meaning `tone`, or a chip of a `kind` of thing (the accent tint; it wins over `tone`). `icon` leads it
- * instead of the dot.
+ * instead of the dot; `onRemove` ends it with a small remove button named `removeLabel` (a tag in a list of values).
  * @param {{ tone?: Tone, kind?: Kind, children: ReactNode, dot?: boolean, icon?: import('./icons.js').IconName,
- *   className?: string, title?: string }} props
+ *   className?: string, title?: string, onRemove?: () => void, removeLabel?: string }} props
  */
-export function Badge({ tone = 'neutral', kind, children, dot = false, icon, className, title }) {
+export function Badge({ tone = 'neutral', kind, children, dot = false, icon, className, title, onRemove, removeLabel }) {
 	const look = kind ? 'primary' : tone;
 	return (
 		<span
@@ -228,6 +228,15 @@ export function Badge({ tone = 'neutral', kind, children, dot = false, icon, cla
 				<span aria-hidden="true" className={cx('size-1.5 rounded-full', DOTS[look])} />
 			) : null}
 			{children}
+			{onRemove ? (
+				<button
+					type="button"
+					aria-label={removeLabel ?? 'Remove'}
+					onClick={onRemove}
+					className="ss-motion ss-press -mr-1 rounded-full p-0.5 opacity-70 hover:bg-surface-3 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-focus">
+					<Icon name="close" size={11} />
+				</button>
+			) : null}
 		</span>
 	);
 }

@@ -8,6 +8,7 @@
  */
 import { useState } from 'react';
 import {
+	Badge,
 	Button,
 	Card,
 	EntryGroup,
@@ -109,17 +110,12 @@ export function IdTags({ label, help, values, max, none, onChange }) {
 			{values.length > 0 ? (
 				<ul className="flex flex-wrap gap-2">
 					{values.map((id) => (
-						<li
-							key={id}
-							className="inline-flex items-center gap-1 rounded-md border border-line-soft bg-surface-2 py-0.5 pl-2 pr-1 text-xs">
-							<code className="break-all">{id}</code>
-							<button
-								type="button"
-								aria-label={fill(L.removeId, { id })}
-								onClick={() => onChange(values.filter((value) => value !== id))}
-								className="ss-motion ss-press rounded-md p-1 text-muted hover:bg-surface-3 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
-								<Icon name="close" size={12} />
-							</button>
+						<li key={id}>
+							<Badge
+								removeLabel={fill(L.removeId, { id })}
+								onRemove={() => onChange(values.filter((value) => value !== id))}>
+								<code>{id}</code>
+							</Badge>
 						</li>
 					))}
 				</ul>

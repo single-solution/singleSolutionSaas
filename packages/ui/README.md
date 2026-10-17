@@ -14,31 +14,55 @@ Tailwind scans `node_modules/@ss/ui/src` (`@source` in the app's CSS).
 | `@ss/ui/theme.css`   | the design tokens                                                                                                          |
 | `@ss/ui/testing`     | DOM test helpers on `react-dom/client` + jsdom (`render`, `cleanup`, `click`, `type`, `byLabel`, …) for other units' tests |
 
-## Color rule
+## Color rule (redesign 2, owner 2026-10-17: 60-30-10, colors carry meaning)
 
-One accent (PLAN.md 0.6): indigo (`primary`) is used for primary buttons, links, the active item, icon tiles and
-badges; surfaces are neutral; green, amber and red mean status only (`tone` `success`, `warning`, `danger`). `IconBadge`,
-`Stat`, `Badge`, `EmptyState` and `AppShell` menu items take a `kind` (`overview`, `merchant`, `website`, `product`,
-`feature`, `credit`, `price`, `admin`, `settings`, `default`, `activity`, `connection`, `developer`) that names the thing;
-every kind takes the same indigo tint (`primary-soft`), and leaving `kind` out keeps the item neutral. No screen names a
-color for meaning. The `hero` card is solid indigo.
+60 % the off-white canvas (`canvas` #F7F8F5; dark: navy #0A1C40), 30 % white surfaces and navy text (`fg` #0A1C40),
+pale sage (`surface-2`) for hover and selected rows; 10 % meaning, used sparingly — one `tone` per meaning:
+
+| Tone        | Hue                       | Means                                                       |
+| ----------- | ------------------------- | ----------------------------------------------------------- |
+| `primary`   | Integrity blue #2226F7    | main buttons, links, the active item, focus                 |
+| `success`   | Natural green #24D56D     | success, paid, active, done steps                           |
+| `danger`    | Excitement red #F72226    | errors and destructive actions only                         |
+| `warning`   | Happiness yellow #FFD527  | warnings, soft highlights (always with dark text)           |
+| `attention` | Energetic orange #FE5E20  | needs the person: setup steps, alerts, Needs you; no button |
+| `info`      | Kindness teal #00D6A3     | tips, help, empty-state hints                               |
+| `new`       | Originality pink #FF3797  | new, featured, promotions                                   |
+
+Every meaning has the brand hue for dots, bars and fills (`bg-success-solid`, `DOTS`), a 50 tint for backgrounds
+(`-soft`, `TINTS`) and an AA text shade (`text-success`, `on-success-soft`), darkened where the hue is too light for
+text. `IconBadge`, `Stat`, `Badge`, `EmptyState` and `AppShell` menu items take a `kind` (`overview`, `merchant`,
+`website`, `product`, …) that names the thing: every kind takes the blue tint, and leaving `kind` out keeps the item
+neutral. Each product's chip has its own meaning color, tinted only (`IconBadge product="chat"`, `ListRow product`,
+`productLook`): Accounts blue, Payments green, Chat teal, Growth orange, Notifications yellow, Ecommerce pink.
 
 ## The premium frame and blocks (owner 2026-10-16)
 
 Panels float on a quiet canvas with 12-16 px of space around them and between them (hairline edge, very soft shadow);
 the page is as wide as the window leaves it. Nothing is centered in a narrow column except long reading text.
 
-- `AppShell`: a floating sidebar (brand, optional `switcher`, groups of links with icons and a soft pill on the current
-  page, help and account in `sidebarFooter`; it folds to an icon rail, remembered in `localStorage`), a sticky header panel
-  (`topbar`, `search`, theme switch, `actions`) and a phone drawer. `switcher` and `sidebarFooter` may be functions of
-  `{ rail }` (also `useShell()`).
+- `AppShell`: a floating WHITE sidebar, bottom-weighted (240 px, folding to a 64 px icon rail remembered in
+  `localStorage`): the logo, the main sections, then at the bottom the `switcher`, `sidebarFooter` (help), the `account`
+  menu and the theme with the fold button; a header panel (breadcrumbs and title, `context`, `topbar`, `search`,
+  `actions`, `back`) and a phone drawer (the header then holds the account or theme menu). No command bar, no assistant
+  dock. `switcher` and `sidebarFooter` may be functions of `{ rail }` (also `useShell()`).
+- `PageHeader` (a page's title, `badge`, `meta`, `actions` and `subtitle`): inside an `AppShell` on wide screens the
+  title, its status, its context and its main actions sit in the header and the subtitle opens the page; `level={2}`
+  (a detail beside a list) stays in the page. `HeaderMeta` puts context in the header without a title, and
+  `HeaderFact` is one fact there (`3 websites`, a status dot with its words, Saved 2 min ago).
+- `Dialog` / `Drawer`: editing opens in a RIGHT drawer that keeps the page in view (`Dialog` `md` / `lg`, or `Drawer`);
+  `size="sm"` and `placement="center"` are centered modals, only for short confirmations (`ConfirmDialog`,
+  `TypedConfirmDialog`, `PasswordConfirmDialog`) and a link to copy.
+- `LockedState` and `StatusPill status="locked"`: a feature the person cannot use yet, said clearly (what it does; ask
+  the admin to switch it on).
 - `Grid` / `Col span lg xl`: the page's 12 columns (one column on a phone).
 - `SettingsCard` (title, one-line description, actions, `footer`) with setting rows: label and muted help on the left,
   the control on the right, hairlines between, stacked in a narrow card. Fields inside a card (and a `Form` inside one)
   become rows by themselves (`FieldLayoutContext`); `SettingRow` is a row for any other control; `Dialog` and `ListEditor`
   items stack again. `layout="stack" | "row"` on a field overrides.
-- `SectionLayout` / `SectionNav` / `useHashSection`: the inner sidebar for pages with sections (grouped links, badges,
-  sticky, a search box from 10 links, a button that opens the list on phones). ONE section is shown at a time; a section
+- `SectionLayout` / `SectionNav` / `useHashSection`: the inner sidebar (about 220 px) ONLY for pages with sub-pages
+  (grouped links with their context: counts, `badge`, a `status` dot such as needs setup; sticky, a search box from 10
+  links, a button that opens the list on phones); a page without sub-pages uses the full width. ONE section is shown at a time; a section
   mounts when first opened and then stays; the choice is in the hash with a history entry per choice (Back works). A
   section with `children` lists them as sub-items, each its own view. A page with one section has no sidebar. Use it
   (not a long column) for every page with more than about two cards.
@@ -54,13 +78,17 @@ the page is as wide as the window leaves it. Nothing is centered in a narrow col
   (`cards`: title plus `description`; arrow keys), `SegmentedControl` (up to about four short choices), `Input` with
   `prefix` / `suffix` adornments, `Select`, `TextArea`; 36 px high, the accent focus ring, error and disabled states.
 - `SaveBar`: the floating Save changes / Discard bar, shown only while something changed. `AccountMenu`, `Avatar`.
-- Rows and editors (never draw these by hand): `RowList` + `ListRow` (a name, a pill, one primary action and a More menu;
-  `wrap` for long names), `EntryGroup` (one entry of a list editor: a hairline group with its name and Move up, Move down
-  and Remove, or collapsed under a `summary`), `SaveRow` (Save and Cancel under a list saved whole), `TextLink` (the one
+- Rows and editors (never draw these by hand; flat, with hairlines, never boxes in a card): `RowList` + `ListRow` (a
+  name, a pill, one primary action and a More menu; `wrap` for long names), `EntryGroup` (one entry of a list editor: a
+  flat group under a hairline with its name and Move up, Move down and Remove, or collapsed under a `summary`), `SaveRow`
+  (Save and Cancel under a list saved whole), `Badge onRemove` (a removable tag), `TextLink` (the one
   link in text, a table, a header or a footer; `as` for a router link, `external`, `tone="plain"`), and `Input
 type="file"` for a file field.
 - `SaveOutcome` (`@ss/ui/dashboard`): the outcome of a save in an editor. Saved and a refused save are toasts; the errors
-  that name a row or a field stay inline under the editor (`problemLines` words a 422 answer).
+  that name a row or a field stay inline under the editor (`problemLines` words a 422 answer). `Outcome` is the same
+  without the inline list (toasts only).
+- Empty and error states are frameless (whitespace, a tinted icon, what to do); loading shows skeletons shaped like the
+  content (`Skeleton`, `SkeletonBlock`, `OverviewSkeleton`).
 - The setup checklist (`SetupChecklist`, `useSetupSteps` in `@ss/ui/dashboard`): a product declares a short list of
   requirements (a setting, a list or "one of these features on", for the features that are on, with a plain label, a
   one-line why and a button); each is ticked from the saved state and its button opens the exact section
@@ -78,7 +106,8 @@ it is the menu button.
 - `<StatGrid label?>` (classes in `STAT_GRID`) holds the tiles: one column, two from 28rem (an odd last tile spans the
   row), three tiles in a row from 42rem and four from 56rem.
 - `KeyValueList`, `Masonry` and the field grid also follow their own width.
-- `PageHeader` keeps its actions beside the title while both fit on one line, else moves them together under it.
+- `PageHeader` in the page (no frame, a detail, a phone) keeps its actions beside the title while both fit on one line,
+  else moves them together under it.
 - `Table` cells keep one line (a column with `wrap` wraps on whole words within 10rem); a table wider than its card
   scrolls inside it (a labeled region the keyboard can focus and scroll). With no rows it shows only its empty message.
 - Type sizes beside Tailwind's scale are named in `theme.css`: `text-micro` (11px), `text-label` (13px), `text-lead` (15px),
@@ -162,7 +191,7 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
   `ConnectionsTab` (`form(item, save)` for a connection's own form, `hint(name)`; Remove sits in the card's ⋯ menu
   and asks first), `DevelopersTab` (`links`, and the product's sections as children instead of the widget script),
   `DefaultsTab` (`notice`) and `PricesTab` (with the Re-seal card).
-- Pieces for a product's own tabs: `Loaded`, `Outcome`, `SettingsForms`, `TextsForm` (with a box that finds a text),
+- Pieces for a product's own tabs: `Loaded`, `Outcome`, `SaveOutcome`, `SettingsForms`, `TextsForm` (with a box that finds a text),
   `ThemeForm`, `FormatForm`, `ResealCard`, and `hasSettings`, `toneOf`, `withDependents`.
 - API: `call(method, path, body?)` answers `{ ok: true, data }` or `{ ok: false, problem }` (a product that does not
   answer is a 503 problem); `useLoad(path | null)` shows a resource's last answer at once and refreshes it, with
@@ -196,8 +225,10 @@ down and Remove on each row (named with the row, `Move up: Email`), Add at the e
 
 ## StatusBadge
 
-`<StatusBadge status label? />` colors the statuses of PLAN.md 0.5.5: `active` green, `low_balance` and `grace` amber,
-`stopped` and `suspended` red, `removed` gray; any other status is gray unless listed in `display.js`.
+`<StatusBadge status label? />` colors the statuses of PLAN.md 0.5.5: `active` green, `low_balance` and `grace` yellow,
+`stopped` and `suspended` red, `missing` orange (needs setup), `pending` teal, `removed` gray; any other status is gray
+unless listed in `display.js`. `StatusPill` is the one look of a state: `active`, `setup` (orange), `off`, `error`,
+`warning`, `info`, `new` (pink) and `locked`.
 
 ## Dates and credits
 
