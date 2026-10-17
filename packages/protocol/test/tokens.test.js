@@ -84,7 +84,7 @@ describe('tokens', () => {
 		});
 		expect(decodeSegment(token, 0)).toEqual({ alg: 'EdDSA', kid: 'portal-1', typ: 'ss-token+jws' });
 		expect(decodeSegment(token, 1)).toEqual(claims);
-		expect(TOKEN_KINDS).toEqual(['browser', 'server']);
+		expect(TOKEN_KINDS).toEqual(['browser', 'server', 'link']);
 	});
 
 	it('verifies offline, years later, with or without an expected kind', async () => {
@@ -190,6 +190,60 @@ describe('tokens', () => {
 		await expectCode(verify(clock, token, { productId: 'x' }), 'invalid_argument');
 		await expectCode(verify(clock, token, { kind: 'pk' }), 'invalid_argument');
 		await expectCode(verify(clock, token, { keyResolver: null }), 'invalid_argument');
+	});
+
+	describe('link tokens (one product calling another)', () => {
+		const link = (/** @type {ReturnType<typeof createClock>} */ clock, overrides = {}) =>
+			issue(clock, { kind: 'link', caller: 'ecommerce', productId: 'payments', ...overrides });
+		const check = (/** @type {ReturnType<typeof createClock>} */ clock, /** @type {string} */ token, overrides = {}) =>
+			verify(clock, token, { productId: 'payments', kind: 'link', ...overrides });
+
+		it('carry the calling product, the callee as productId and still no scopes', async () => {
+			const clock = createClock();
+			const { token, claims } = await link(clock);
+			expect(Object.keys(claims).sort()).toEqual(['caller', 'domain', 'iat', 'iss', 'jti', 'kind', 'productId', 'websiteId']);
+			expect(claims).toMatchObject({ kind: 'link', caller: 'ecommerce', productId: 'payments' });
+			expect(await check(clock, token)).toEqual(claims);
+			expect(await check(clock, token, { caller: 'ecommerce' })).toEqual(claims);
+		});
+
+		it('are refused for another caller, another callee, a revoked id and a missing kind', async () => {
+			const clock = createClock();
+			const { token, claims } = await link(clock);
+			for (const run of [
+				() => check(clock, token, { caller: 'chat' }),
+				() => check(clock, token, { productId: 'growth' }),
+				() => check(clock, token, { isRevoked: (/** @type {string} */ jti) => jti === claims.jti }),
+				// a verification that names no kind (or another kind) never takes a link token
+				() => verify(clock, token, { productId: 'payments' }),
+				() => verify(clock, token, { productId: 'payments', kind: 'server' }),
+				() => verify(clock, token, { productId: 'payments', kind: 'browser' }),
+			])
+				await expect(run()).rejects.toMatchObject({ name: 'ProtocolError', code: 'invalid_token' });
+		});
+
+		it('are not taken as a server or browser token, and a server token is not taken as a link', async () => {
+			const clock = createClock();
+			const server = await issue(clock, { kind: 'server', productId: 'payments' });
+			await expectCode(check(clock, server.token), 'invalid_token');
+			await expectCode(check(clock, await signRaw({ ...server.claims, kind: 'link' })), 'invalid_token');
+			// a caller claim on a server token, a link without one, or a link that names the callee as the caller
+			await expectCode(verify(clock, await signRaw({ ...server.claims, caller: 'chat' }), { productId: 'payments' }), 'invalid_token');
+			const { claims } = await link(clock);
+			await expectCode(check(clock, await signRaw({ ...claims, caller: undefined })), 'invalid_token');
+			await expectCode(check(clock, await signRaw({ ...claims, caller: 'payments' })), 'invalid_token');
+			await expectCode(check(clock, await signRaw({ ...claims, caller: 'Chat' })), 'invalid_token');
+		});
+
+		it('validate their arguments', async () => {
+			const clock = createClock();
+			await expectCode(issue(clock, { kind: 'link', productId: 'payments' }), 'invalid_argument');
+			await expectCode(issue(clock, { kind: 'link', productId: 'payments', caller: 'payments' }), 'invalid_argument');
+			await expectCode(issue(clock, { kind: 'server', caller: 'chat' }), 'invalid_argument');
+			const { token } = await link(clock);
+			await expectCode(check(clock, token, { kind: 'server', caller: 'ecommerce' }), 'invalid_argument');
+			await expectCode(check(clock, token, { caller: 'Bad' }), 'invalid_argument');
+		});
 	});
 
 	it('checks product ids', () => {
