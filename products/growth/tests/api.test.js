@@ -696,9 +696,14 @@ describe('store conversion kit (PLAN 0.8.10 K2–K9)', () => {
 	});
 
 	it('names the acting user and the widgets’ Format (K2, K7, K9)', async () => {
-		const bad = await kit.call('GET', '/v1/analytics', { token: kit.server, headers: { 'ss-actor-id': 'u 1' } });
-		expect(bad.status).toBe(400);
-		expect(await codeOf(bad)).toBe('invalid_actor');
+		// headers that only name a person are no staff member: the staff routes want the verified sign-in
+		const forged = await kit.call('GET', '/v1/analytics', {
+			token: kit.server,
+			bare: true,
+			headers: { 'ss-actor-id': 'u_7', 'ss-actor-name': 'Alex%20Morgan' },
+		});
+		expect(forged.status).toBe(403);
+		expect(await codeOf(forged)).toBe('needs_signed_in_staff');
 		const format = await kit.call('PUT', '/v1/format', {
 			token: kit.server,
 			body: {

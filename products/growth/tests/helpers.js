@@ -9,7 +9,7 @@
  */
 import { MongoClient } from 'mongodb';
 import { validateValue } from '@ss/app-kit/api';
-import { apiChecker, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import { apiChecker, createAccountsDouble, createFakePortal, createMemoryStore, createNetwork, staffCaller } from '@ss/app-kit/testing';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { keyOf } from '../adapters/store.js';
@@ -162,8 +162,9 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	const now = () => t;
 	const portal = await createFakePortal({ now });
 	const web = createFakeWeb();
+	const accounts = createAccountsDouble({ now });
 	/** @type {Record<string, (request: Request) => Promise<Response>>} */
-	const handlers = { [portal.url]: portal.handle, ...web.handlers };
+	const handlers = { [portal.url]: portal.handle, [accounts.url]: accounts.handle, ...web.handlers };
 	const network = createNetwork(handlers);
 	/** @type {Array<{ commandName: string, command: Record<string, any> }>} the merchant database's commands */
 	const commands = [];
@@ -189,15 +190,21 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	handlers[BASE] = handler;
 	await portal.connect({ handler, baseUrl: BASE, secret: SECRET });
 	const websiteId = portal.addWebsite({ domain: DOMAIN });
+	portal.addProduct({ productId: 'accounts', baseUrl: accounts.url });
 	const browser = (await portal.issueToken({ websiteId, productId: manifest.id, kind: 'browser' })).token;
 	const server = (await portal.issueToken({ websiteId, productId: manifest.id, kind: 'server' })).token;
 
 	/**
 	 * @param {string} method
 	 * @param {string} path
-	 * @param {{ token?: string, origin?: string, body?: unknown, cookie?: string, headers?: Record<string, string> }} [init]
+	 * @param {{ token?: string, origin?: string, body?: unknown, cookie?: string, headers?: Record<string, string>,
+	 *   bare?: boolean, staff?: Record<string, any> }} [init] `bare`: the server token alone; `staff`: who is signed in
+	 *   (the website's server with a staff Owner signed in otherwise)
 	 */
-	const call = async (method, path, { token, origin, body, cookie, headers = {} } = {}) => {
+	const call = async (method, path, { token, origin, body, cookie, headers = {}, bare = false, staff } = {}) => {
+		if (token === server && !bare && headers['ss-sign-in'] === undefined && headers['ss-visitor-ip'] === undefined)
+			// eslint-disable-next-line no-param-reassign -- the harness signs the staff member in
+			headers = await staffHeaders({ headers, staff });
 		const response = await handler(
 			new Request(`${BASE}${path}`, {
 				method,
@@ -215,6 +222,24 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		await checkAnswer(method, path, response);
 		return response;
 	};
+
+	// the website's Accounts token, pasted through the dashboard on first use
+	const staffHeaders = staffCaller({
+		accounts,
+		websiteId,
+		paste: async () => {
+			const token = (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token;
+			const launch = await portal.issueLaunch({ productId: manifest.id, kind: 'admin', role: 'owner', websiteId });
+			const sso = await call('GET', `/sso?launch=${launch}`);
+			const cookie = (sso.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+			const response = await call('PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, {
+				cookie,
+				origin: BASE,
+				body: { value: token },
+			});
+			if (response.status !== 200) throw new Error(`accounts token: ${response.status} ${await response.text()}`);
+		},
+	});
 
 	/** An admin's dashboard session (Owner by default); returns the cookie. @param {'owner' | 'support'} [role] */
 	const adminSession = async (role = 'owner') => {
@@ -248,7 +273,8 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	const ticket = async (permissions = ['analytics.read', 'seo.check', 'indexnow.submit', 'redirects.edit']) => {
 		const response = await call('POST', '/v1/tickets', {
 			token: server,
-			body: { user: { id: 'u_1', name: 'Sam Staff', email: 'sam@example.com' }, permissions, origin: ADMIN_ORIGIN },
+			staff: { id: 'u_1', name: 'Sam Staff', email: 'sam@example.com' },
+			body: { permissions, origin: ADMIN_ORIGIN },
 		});
 		return /** @type {{ ticket: string }} */ (await response.json()).ticket;
 	};
@@ -264,6 +290,8 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 
 	return {
 		portal,
+		accounts,
+		staffHeaders,
 		product,
 		web,
 		websiteId,

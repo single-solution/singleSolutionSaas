@@ -418,7 +418,7 @@ export const seoCheckRoutes = (product, { log }) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/seo/checks',
-			auth: 'server',
+			auth: 'server', permission: 'seo.check',
 			feature: 'seo_checklist',
 			rateLimit: RUN_LIMITS,
 			handler: async (ctx) => {
@@ -426,7 +426,7 @@ export const seoCheckRoutes = (product, { log }) => {
 				return checked.ok ? checked.report : checked.problem;
 			},
 		}),
-		defineRoute({ method: 'GET', path: '/v1/seo/report', auth: 'server', feature: 'seo_checklist', handler: keptReport }),
+		defineRoute({ method: 'GET', path: '/v1/seo/report', auth: 'server', permission: 'seo.check', feature: 'seo_checklist', handler: keptReport }),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/admin/seo/checks',

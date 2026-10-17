@@ -68,7 +68,7 @@ describe('rules', () => {
 			target: made.json.id,
 			label: '/Old-Page',
 			detail: 'To /new-page?ref=old, 301, exact.',
-			actor: { kind: 'server' },
+			actor: { kind: 'user', id: 'usr_test_staff' },
 		});
 		expect(await version()).toMatch(/^rdv_/);
 	});
