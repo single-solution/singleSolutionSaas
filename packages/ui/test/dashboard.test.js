@@ -572,7 +572,9 @@ describe('standard tabs', () => {
 		expect(container.textContent).toContain('Price: 1 credits/h');
 		expect(container.textContent).toContain('Needs: Notes');
 		// a feature whose connection fails shows an amber Needs setup pill (the reason as its tooltip) and Connect
-		const pill = /** @type {HTMLElement} */ ([...container.querySelectorAll('span[title]')].find((el) => el.textContent === 'Needs setup'));
+		const pill = /** @type {HTMLElement} */ (
+			[...container.querySelectorAll('span[title]')].find((el) => el.textContent === 'Needs setup')
+		);
 		expect(pill.getAttribute('title')).toBe('Not working: connect Database');
 		expect(pill.className).toContain('bg-attention-soft');
 		expect(container.querySelector('.text-danger')).toBeNull();

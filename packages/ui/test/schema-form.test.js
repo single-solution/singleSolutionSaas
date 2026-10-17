@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
-import { SchemaForm } from '../src/SchemaForm.js';
+import { SchemaForm, randomKey } from '../src/SchemaForm.js';
 import { fieldsOf, groupFields, isWide, shapeOf, widgetOf } from '../src/schema.js';
 import { allByRole, byLabel, byText, cleanup, click, render, type } from '../src/testing.js';
 
@@ -270,6 +270,28 @@ describe('SchemaForm', () => {
 		expect(onChange).toHaveBeenLastCalledWith('sizes', ['S', 'M', 'XXL']);
 		type(search, 'xxl');
 		expect(container.textContent).not.toContain('Add “xxl”');
+	});
+
+	it('gives a text with `generate` a Generate button that fills in a new random key (not while disabled)', () => {
+		const schema = /** @type {import('../src/schema.js').SettingsSchema} */ ({
+			type: 'object',
+			properties: { key: { type: 'string', title: 'Site key', default: '', maxLength: 128, 'x-ui': { generate: 32 } } },
+		});
+		const onChange = vi.fn();
+		const { container, rerender } = render(<Harness schema={schema} initial={defaults(schema)} onChange={onChange} />);
+		click(byText(container, 'Generate', 'button'));
+		const first = String(onChange.mock.calls.at(-1)?.[1]);
+		expect(first).toMatch(/^[0-9a-f]{32}$/);
+		click(byText(container, 'Generate', 'button'));
+		expect(String(onChange.mock.calls.at(-1)?.[1])).not.toBe(first);
+		expect(randomKey(8)).toMatch(/^[0-9a-f]{8}$/);
+		expect(randomKey(33)).toHaveLength(33);
+		// the dashboard words the button
+		rerender(<SchemaForm schema={schema} values={defaults(schema)} onChange={onChange} generateText="Make one" />);
+		expect(byText(container, 'Make one', 'button')).toBeTruthy();
+		// a form that is disabled offers none
+		rerender(<SchemaForm schema={schema} values={defaults(schema)} onChange={onChange} disabled />);
+		expect(container.textContent).not.toContain('Generate');
 	});
 
 	it('edits tag lists and lists of on/off values (JSON)', () => {

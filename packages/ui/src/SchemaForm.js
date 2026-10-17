@@ -3,8 +3,9 @@
  * SchemaForm renders a feature's settings form from its settings schema, with the `x-ui` hints: `widget`, `group`
  * (one titled card per group; settings without a group share one card, titled with the feature's `title`), `order`
  * (the settings with one come first, ascending), `placeholder` (for a list of choices: the text shown while none is chosen), `wide`,
- * `labels` (`country`: ISO country codes shown by name; or each choice's own words) and `suggestions` (a text offers
- * them and takes the merchant's own; a list of texts is a picker of them that adds what is typed); a setting's
+ * `labels` (`country`: ISO country codes shown by name; or each choice's own words), `suggestions` (a text offers
+ * them and takes the merchant's own; a list of texts is a picker of them that adds what is typed) and `generate` (a
+ * text gets a Generate button that fills in a new random key of that many characters); a setting's
  * `description` is its help text. A list of more than 12 choices (or `widget: 'tags'`) is a searchable picker; a
  * shorter one a group of checkboxes; a list without choices is typed one item per line (a list of on/off values as
  * JSON). Each card lists its settings as rows (PLAN 0.6, owner 2026-10-16): the label and the muted help on the left,
@@ -23,6 +24,7 @@
  * @module
  */
 import { useId, useState } from 'react';
+import { Button } from './Button.js';
 import { CARD_FLOW, Disclosure, PillTabs, SaveBar, SettingList, SettingsCard } from './blocks.js';
 import {
 	CheckboxGroup,
@@ -43,12 +45,37 @@ import { ADVANCED_GROUP, GROUPS_AS_TABS_FROM, fieldsOf, groupFields, optionLabel
 /** @typedef {import('./schema.js').FieldDescriptor} FieldDescriptor */
 
 /**
+ * A new random key of `length` hex characters (the browser's own random source).
+ * @param {number} length
+ */
+export const randomKey = (length) => {
+	const bytes = new Uint8Array(Math.ceil(length / 2));
+	globalThis.crypto.getRandomValues(bytes);
+	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'))
+		.join('')
+		.slice(0, length);
+};
+
+/**
  * The control of one setting, by its type and widget.
  * @param {{ id: string, label: string, node: SettingNode, widget: string, value: unknown,
  *   onChange: (value: unknown) => void, error: string | undefined, help: string | null, disabled: boolean,
- *   placeholder: string | null, aside: import('react').ReactNode }} props
+ *   placeholder: string | null, aside: import('react').ReactNode, generateText?: string }} props
  */
-function NodeControl({ id, label, node, widget, value, onChange, error, help, disabled, placeholder, aside }) {
+function NodeControl({
+	id,
+	label,
+	node,
+	widget,
+	value,
+	onChange,
+	error,
+	help,
+	disabled,
+	placeholder,
+	aside,
+	generateText = 'Generate',
+}) {
 	const [jsonText, setJsonText] = useState(() => (value === undefined ? '' : JSON.stringify(value, null, 2)));
 	const [jsonError, setJsonError] = useState(/** @type {string | null} */ (null));
 	const common = { id, error, help, aside, disabled };
@@ -147,9 +174,22 @@ function NodeControl({ id, label, node, widget, value, onChange, error, help, di
 					aside={aside ?? (node.maxLength ? `${text.length}/${node.maxLength}` : undefined)}
 				/>
 			);
+		const generate = node['x-ui']?.generate;
 		return (
 			<Input
 				{...common}
+				{...(generate && !disabled
+					? {
+							aside: (
+								<span className="inline-flex items-center gap-3">
+									{aside}
+									<Button type="button" size="sm" variant="secondary" onClick={() => onChange(randomKey(generate))}>
+										{generateText}
+									</Button>
+								</span>
+							),
+						}
+					: {})}
 				label={label}
 				type={widget === 'url' || widget === 'email' ? widget : 'text'}
 				value={text}
@@ -257,7 +297,7 @@ function NodeControl({ id, label, node, widget, value, onChange, error, help, di
  *   before?: import('react').ReactNode, after?: import('react').ReactNode, dirty?: boolean, saving?: boolean,
  *   onSave?: () => unknown, onDiscard?: () => void, group?: string, tabs?: boolean,
  *   advancedTexts?: { title?: string, description?: string, errors?: string, groups?: string },
- *   saveTexts?: { message?: string, save?: string, discard?: string } }} props
+ *   saveTexts?: { message?: string, save?: string, discard?: string }, generateText?: string }} props
  */
 export function SchemaForm({
 	schema,
@@ -282,6 +322,7 @@ export function SchemaForm({
 	tabs = true,
 	advancedTexts = {},
 	saveTexts = {},
+	generateText,
 }) {
 	const auto = useId();
 	const prefix = idPrefix ?? `sf${auto.replace(/[^a-zA-Z0-9_-]/g, '')}`;
@@ -327,6 +368,7 @@ export function SchemaForm({
 					placeholder={field.placeholder}
 					disabled={disabled}
 					aside={aside}
+					{...(generateText ? { generateText } : {})}
 				/>
 			</div>
 		);

@@ -101,9 +101,7 @@ function Nav({ sections, linkAs, onNavigate, rail = false }) {
 					key={section.label ?? i}
 					className={cx(i > 0 && (rail ? 'mt-3 border-t border-line-soft pt-3' : 'mt-6'), 'space-y-0.5')}>
 					{section.label && !rail ? (
-						<p className="px-2.5 pb-1.5 text-micro font-semibold tracking-[0.06em] text-muted uppercase">
-							{section.label}
-						</p>
+						<p className="px-2.5 pb-1.5 text-micro font-semibold tracking-[0.06em] text-muted uppercase">{section.label}</p>
 					) : null}
 					<ul className="space-y-0.5">
 						{section.items.map((item) => {
@@ -204,7 +202,9 @@ export function SwitcherSelect({ label, value, options, onChange, placeholder, d
 				className,
 			)}>
 			<Avatar name={picked?.label || placeholder || label} size="sm" className="rounded-md" />
-			<span aria-hidden="true" className={cx('min-w-0 flex-1 truncate text-sm font-medium', picked ? 'text-fg' : 'text-muted')}>
+			<span
+				aria-hidden="true"
+				className={cx('min-w-0 flex-1 truncate text-sm font-medium', picked ? 'text-fg' : 'text-muted')}>
 				{picked?.label ?? placeholder ?? ''}
 			</span>
 			<span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-muted">
@@ -584,7 +584,9 @@ export function AppShell({
 							</div>
 						) : null}
 					</header>
-					<ScrollArea ref={pane} className="-mx-1 flex-1 px-1 [--ss-pane-h:calc(100dvh-6rem)] lg:[--ss-pane-h:calc(100dvh-6.5rem)]">
+					<ScrollArea
+						ref={pane}
+						className="-mx-1 flex-1 px-1 [--ss-pane-h:calc(100dvh-6rem)] lg:[--ss-pane-h:calc(100dvh-6.5rem)]">
 						<div className="flex w-full min-w-0 flex-col gap-6 pb-6">
 							{banner}
 							<main id={mainId} tabIndex={-1} className="min-w-0 space-y-6 focus:outline-none">

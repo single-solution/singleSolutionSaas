@@ -87,6 +87,7 @@ export const DASHBOARD_TEXTS = Object.freeze({
 		settingsView: 'Settings',
 		advanced: 'Advanced',
 		advancedHelp: 'Settings most people never change',
+		generate: 'Generate',
 		groups: 'Groups',
 		needsAttention: 'Needs attention',
 		unsaved: 'You have unsaved changes',

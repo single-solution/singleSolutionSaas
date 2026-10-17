@@ -156,6 +156,7 @@ function FeatureForm({ feature, features, editor, savedSource, notice, group, te
 			tabs={false}
 			{...(group !== undefined ? { group } : {})}
 			advancedTexts={{ title: texts.settings.advanced, description: texts.settings.advancedHelp }}
+			generateText={texts.settings.generate}
 			onReset={(name) => void editor.reset(feature.key, name)}
 			onChange={(name, value) => editor.change(feature.key, name, value)}
 			before={notice ? notice(feature.key, values, features) : null}

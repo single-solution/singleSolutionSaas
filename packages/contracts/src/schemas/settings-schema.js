@@ -101,6 +101,8 @@ export const settingsMetaSchema = deepFreeze({
 							uniqueItems: true,
 							items: { type: 'string', minLength: 1, maxLength: 200 },
 						},
+						// a text that gets a Generate button: it fills in a new random key of this many characters
+						generate: { type: 'integer', minimum: 8, maximum: 128 },
 						// spans the whole row of the form's field grid (`false` keeps a list or long text in one cell)
 						wide: { type: 'boolean' },
 						// shown inside the collapsed Advanced block (for settings most merchants never change)

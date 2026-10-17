@@ -44,9 +44,10 @@
  * @property {unknown[]} [enum]
  * @property {string} [format]
  * @property {SettingItem} [items]
- * @property {{ widget?: string, group?: string, order?: number, placeholder?: string, labels?: 'country', wide?: boolean, advanced?: boolean }} [x-ui]
+ * @property {{ widget?: string, group?: string, order?: number, placeholder?: string, labels?: 'country', wide?: boolean, advanced?: boolean, generate?: number }} [x-ui]
  *   `labels: 'country'` shows ISO country codes by their names; `wide` sets whether it spans the whole row; `advanced`
- *   puts it in the collapsed Advanced block
+ *   puts it in the collapsed Advanced block; `generate` gives a text a Generate button that fills in a random key of
+ *   that many characters
  */
 
 /**

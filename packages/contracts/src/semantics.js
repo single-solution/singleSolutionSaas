@@ -358,7 +358,7 @@ const checkNode = (node, path, out) => {
 /**
  * The choice hints of a setting (fixed-choices audit K3): a `labels` map names only its choices (`enum`, or the items'
  * `enum` of a list); `suggestions` fit a text or a list of texts without choices (the merchant takes one or types
- * their own).
+ * their own); `generate` fits a text without choices.
  * @param {Record<string, any>} node
  * @param {Array<string | number>} path
  * @param {ValidationProblem[]} out
@@ -374,6 +374,10 @@ const checkHints = (node, path, out) => {
 				if (!choices.some((choice) => String(choice) === value))
 					out.push(at([...path, 'x-ui', 'labels', value], RULES.settingLabels, `'${value}' is not one of the choices`));
 	}
+	if (ui.generate !== undefined && (node.type !== 'string' || Array.isArray(choices)))
+		out.push(
+			at([...path, 'x-ui', 'generate'], RULES.settingLabels, 'generate fits a text without choices (a random key to fill in)'),
+		);
 	if (ui.suggestions !== undefined) {
 		const texts = node.type === 'string' || (node.type === 'array' && node.items?.type === 'string');
 		if (!texts || Array.isArray(choices))

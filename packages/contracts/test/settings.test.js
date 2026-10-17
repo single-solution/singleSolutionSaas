@@ -56,6 +56,13 @@ describe('checkSettingsSchema', () => {
 		data.properties.greeting['x-ui'] = { suggestions: ['Hi', 'Hello', 'Welcome'] };
 		data.properties.pages['x-ui'] = { suggestions: ['/', '/cart'] };
 		expect(checkSettingsSchema(data)).toEqual([]);
+		// a text may get a Generate button that makes a random key of 8 to 128 characters
+		const key = schema();
+		key.properties.greeting['x-ui'] = { generate: 32 };
+		expect(checkSettingsSchema(key)).toEqual([]);
+		expect(checkSettingsRules(key)).toEqual([]);
+		key.properties.greeting['x-ui'] = { generate: 4 };
+		expect(checkSettingsSchema(key)).not.toEqual([]);
 		for (const wide of [true, false]) {
 			const value = schema();
 			value.properties.pages['x-ui'] = { wide };
@@ -209,6 +216,18 @@ describe('checkSettingsSchema', () => {
 			'suggestions on a setting with choices',
 			(s) => (s.properties.tone['x-ui'] = { suggestions: ['friendly'] }),
 			'/properties/tone/x-ui/suggestions',
+			RULES.settingLabels,
+		],
+		[
+			'generate on a setting with choices',
+			(s) => (s.properties.tone['x-ui'] = { generate: 32 }),
+			'/properties/tone/x-ui/generate',
+			RULES.settingLabels,
+		],
+		[
+			'generate on a number',
+			(s) => (s.properties.ratio['x-ui'] = { generate: 32 }),
+			'/properties/ratio/x-ui/generate',
 			RULES.settingLabels,
 		],
 		[
