@@ -1,6 +1,6 @@
 /**
  * The AI's instructions (pure), in layers and neutral (no store-, country- or language-specific text): the built-in
- * rules, the business name and contact from business.json, the language lock, what the visitor is viewing and who they
+ * rules, the business name and contact from the Portal's website settings, the language lock, what the visitor is viewing and who they
  * are, knowledge passages from switched-on features, and the merchant's own instructions (AI instructions on). The
  * model can only reveal what the server put here or a tool returned. Answers use the markdown subset (C2) and may be
  * split into a few messages with `---` lines; the store context (C1) comes from Ecommerce; with "never disclose" (C1)

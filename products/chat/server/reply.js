@@ -373,8 +373,10 @@ export const createReply = (product, service) => {
 	const languageOf = async (s, text) => {
 		if (!s.on.includes('language_lock') || !text) return null;
 		const lock = await s.values('language_lock');
+		// the answer's language when a message shows none: the website's (set once in the Portal), else the first allowed
+		const { region } = await s.ctx.website();
 		return detectLanguage(text, {
-			fallback: String(lock.defaultLanguage || lock.allowedLanguages[0] || 'en'),
+			fallback: String(region.language || lock.allowedLanguages[0] || 'en'),
 			allowed: lock.allowedLanguages,
 			markers: markerSetsOf(lock.markerWords),
 		}).language;

@@ -71,7 +71,6 @@ export const TEXTS = dashboardTexts({
 		aiLabelWarning:
 			'AI replies are not labeled. Laws in some places (for example the EU AI Act and California’s bot disclosure law) require telling visitors they are talking to a bot. You are responsible for following the law where you operate.',
 		transcriptsNote: 'Transcripts are emailed through Notifications: paste its server token in Connections.',
-		formatHelp: 'How money and dates look in the widgets, messages, chat answers and pages.',
 	},
 	lists: {
 		add: 'Add',
@@ -272,7 +271,7 @@ export const TEXTS = dashboardTexts({
 		},
 		officeHours: {
 			title: 'Office hours',
-			help: 'When your staff answer, in your business time zone (business.json); no windows = always open. A window whose closing time is not after its opening runs past midnight; 24:00 is the end of the day.',
+			help: 'When your staff answer, in your business time zone (set in the Portal); no windows = always open. A window whose closing time is not after its opening runs past midnight; 24:00 is the end of the day.',
 			item: 'Window',
 			day: 'Day',
 			start: 'Opens',

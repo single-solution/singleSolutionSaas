@@ -123,7 +123,7 @@ export const invalid = (errors) =>
 	problem('validation_failed', errors[0] ?? 'Not valid.', { errors: errors.map((message) => ({ path: '', message })) });
 
 /**
- * The website's default calling code for phones typed without one: its business.json country's (`+44`), else ''
+ * The website's default calling code for phones typed without one: its business country's (`+44`), else ''
  * (such phones are then refused).
  * @param {Site} s
  */
@@ -665,7 +665,7 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * A staff alert through the kit's staff alerts (K6; the recipients setting with email addresses and phones, Accounts
+	 * A staff alert through the kit's staff alerts (K6; the website's alert team in the Portal with email addresses and phones, Accounts
 	 * staff with the permission setting, and the assigned person: their email, and their phone from Accounts, CH-12):
 	 * `new_message` on a visitor message — with frequency `first_unanswered` at most once until staff reply or open it,
 	 * with `every_message` every time — and `needs_you` on handoff. Besides the short `preview`, the values carry the

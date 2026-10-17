@@ -13,20 +13,6 @@
 				"order": 21
 			}
 		},
-		"recipients": {
-			"type": "array",
-			"title": "Who gets staff alerts",
-			"default": [],
-			"items": {
-				"type": "string",
-				"maxLength": 254
-			},
-			"description": "Email addresses and phone numbers with a country code (+44 …). Start an entry with sms:, whatsapp:, email: or push: to pick the channel for one person (push: takes an Accounts user ID). The person a chat is assigned to is added.",
-			"x-ui": {
-				"group": "Recipients",
-				"order": 1
-			}
-		},
 		"frequency": {
 			"type": "string",
 			"title": "New message alerts",
@@ -43,31 +29,10 @@
 			"title": "Also alert Accounts staff who can",
 			"default": "",
 			"enum": ["", "inbox.reply", "all_staff"],
-			"description": "Also alert Accounts staff whose role may reply in the inbox (inbox.reply), or all_staff for everyone who may see it. Needs the Accounts connection. Empty: only the people listed above.",
+			"description": "Also alert Accounts staff whose role may reply in the inbox (inbox.reply), or all_staff for everyone who may see it. Needs the Accounts connection. Empty: only the alert people set in the Portal (Website settings › Team and alerts).",
 			"x-ui": {
 				"group": "Recipients",
 				"order": 2
-			}
-		},
-		"phoneChannel": {
-			"type": "string",
-			"title": "Phones get",
-			"default": "sms",
-			"enum": ["sms", "whatsapp"],
-			"description": "SMS goes out with Chat's default words; WhatsApp needs your own template approved at Meta (Notifications, Settings → Templates).",
-			"x-ui": {
-				"group": "Alerts",
-				"order": 12
-			}
-		},
-		"staffPush": {
-			"type": "boolean",
-			"title": "Staff push too",
-			"default": false,
-			"description": "Accounts staff (and the assigned person) also get a push in their browser (Notifications: Staff push, with your push keys).",
-			"x-ui": {
-				"group": "Alerts",
-				"order": 13
 			}
 		},
 		"includePhone": {

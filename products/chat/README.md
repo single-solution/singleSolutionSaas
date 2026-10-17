@@ -9,7 +9,7 @@ Besides Chat's own routes, the merchant's server gets the kit's routes (PLAN.md 
 lists (`GET|PUT /v1/lists/tools|flows|custom_fields|page_rules|fallback_answers|redaction_patterns|teams|office_hours|office_exceptions|page_types|upload_types|booking_questions|booking_services|tags|topics|priorities`), the `SS-Actor-*` headers (replies, changes and
 knowledge edits then carry that member of staff instead of no name, which the widget shows as the text `chat.staff`), visitor routes with the server token and
 `SS-Visitor-IP`, conversation counts (`GET /v1/conversations/count` and `/counts?by=status|waiting|guest|unread`, ticket
-twins under `/v1/admin/`), the activity log (`GET /v1/activity`) and the Format (`GET|PUT /v1/format`).
+twins under `/v1/admin/`), the activity log (`GET /v1/activity`) and the Format (`GET /v1/format`; the Format, the theme, the business facts, the sign-in page and the alert people are the Portal's Website settings).
 
 ## Import
 

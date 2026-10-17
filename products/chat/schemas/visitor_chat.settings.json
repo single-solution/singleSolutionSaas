@@ -7,10 +7,11 @@
 			"title": "Avatar image address",
 			"default": "",
 			"maxLength": 500,
-			"description": "The web address (https) of the picture shown for your bot. Empty: the first letter of the bot's name.",
+			"description": "The web address (https) of the picture shown for your bot. Empty: your website's icon (set in the Portal under Website settings › Brand and look), else the first letter of the bot's name.",
 			"x-ui": {
 				"group": "Window",
-				"order": 13
+				"order": 13,
+				"defaultFrom": "brand.files.icon"
 			}
 		},
 		"launcherPosition": {

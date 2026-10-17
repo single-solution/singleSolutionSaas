@@ -10,7 +10,7 @@
  *   replaces the whole answer (never a partial burst).
  * - **Link policy**: markdown links keep their label when the target is not allowed; bare disallowed URLs are removed.
  * - **Blocked terms** (the merchant's own list in any language): masked or rejected.
- * - **The website's own contact** (PLAN 0.8.10 C15, always): the business.json email and phone are never redacted.
+ * - **The website's own contact** (PLAN 0.8.10 C15, always): the business email and phone (Website settings) are never redacted.
  *
  * Without the Moderation feature, AI answers still go through the credential check (never switchable).
  * @module
@@ -160,7 +160,7 @@ const samePhone = (a, b) => {
  * @param {string} text
  * @param {readonly string[]} kinds
  * @param {Record<string, string>} labels replacement per kind (from the string catalog)
- * @param {OwnContact} [own] the business.json contact, never redacted
+ * @param {OwnContact} [own] the business contact, never redacted
  * @param {CompiledPattern[]} [patterns] the merchant's own patterns, run first (C14)
  * @returns {{ text: string, found: Record<string, number> }}
  */

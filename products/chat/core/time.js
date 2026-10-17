@@ -2,7 +2,7 @@
  * Time in a zone (pure): office hours as weekly windows by ISO 8601 weekday number (1 = Monday … 7 = Sunday; overnight
  * windows belong to their start day, `24:00` = end of day) with dated exceptions that replace a day's hours (C9), the
  * next opening, and the calendar day and month keys (token caps, reports) and the start of a local day, all in the
- * business.json time zone (PLAN 0.8.10 K8) with `@ss/contracts`' zone helpers. No weekday names: screens name days in
+ * business time zone (PLAN 0.8.10 K8) with `@ss/contracts`' zone helpers. No weekday names: screens name days in
  * the viewer's language with `Intl`.
  * @module
  */

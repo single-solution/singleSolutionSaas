@@ -4,6 +4,7 @@
  * from the server with `SS-Visitor-IP`, conversation counts equal to the list's lengths, activity labels and details,
  * and the website's Format and business time zone in the widget config and in text the server makes.
  */
+import { portalSectionsOf } from '@ss/app-kit/testing';
 import { afterAll, describe, expect, it } from 'vitest';
 import { AI_REPLIES_PER_NETWORK_PER_DAY } from '../core/limits.js';
 import { AI_KEY, ORIGIN, ready } from './helpers.js';
@@ -293,14 +294,16 @@ describe('Format and business time zone (K7, K8)', () => {
 	it('reach the widget config and the text the server makes', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'handoff', 'transcripts']);
 		await sys.paste('notifications');
-		sys.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
-			status: 200,
-			body: { version: 1, name: 'Shop', timeZone: 'Asia/Tokyo' },
-		}));
-		const cookie = await sys.adminSession();
-		await sys.dashboard(cookie, 'POST', `/v1/dashboard/websites/${sys.websiteId}/business/refresh`);
-		const saved = await server(sys, 'PUT', '/v1/format', { body: { locale: 'en-GB' }, headers: ZOE });
-		expect(saved.json.format).toMatchObject({ locale: 'en-GB', times: 'viewer' });
+		// the Format and the time zone are the Portal's (Website settings): a server cannot save them there
+		const refused = await server(sys, 'PUT', '/v1/format', { body: { locale: 'en-GB' }, headers: ZOE });
+		expect(refused.status).toBe(409);
+		const business = portalSectionsOf(sys.websiteId, { name: 'Shop', timeZone: 'Asia/Tokyo' });
+		await sys.setWebsite({
+			...business,
+			region: { ...business.region, format: { ...business.region.format, locale: 'en-GB' } },
+		});
+		const read = await server(sys, 'GET', '/v1/format');
+		expect(read.json.format).toMatchObject({ locale: 'en-GB', times: 'viewer' });
 		const config = await sys.call('GET', '/v1/widget/config', { token: sys.browser, origin: ORIGIN });
 		expect(config.json).toMatchObject({ format: { locale: 'en-GB' }, timeZone: 'Asia/Tokyo' });
 		const ticket = await sys.ticket(['inbox.read']);

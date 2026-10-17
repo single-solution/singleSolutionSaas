@@ -2,7 +2,7 @@
  * Handoff (pure, PLAN 0.8.3 Handoff): the visitor asks (button or phrases), a keyword matches, the AI escalates, or N
  * AI failures happen in a row. Office hours (C9) are the merchant's weekly windows by ISO weekday number (1 = Monday …
  * 7 = Sunday, `HH:MM` with minutes) and dated exceptions (holidays closed all day, or a day's own hours), both lists
- * in the business.json time zone; outside them the visitor is told when staff are back (in the website's Format).
+ * in the business time zone; outside them the visitor is told when staff are back (in the website's Format).
  * @module
  */
 import { containsPhrase } from './text.js';

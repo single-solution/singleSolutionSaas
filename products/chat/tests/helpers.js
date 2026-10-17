@@ -3,7 +3,7 @@
  * tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`) and fakes for every outside
  * service: the AI provider (OpenAI-compatible answers queued by the test), Notifications (records what Chat sends), the
  * Accounts double (sign-ins and public keys; other Accounts answers set per test with `responders`), Ecommerce (answers set per test with `responders`), S3 storage, the merchant's tool and booking endpoints, and the website
- * (business.json and pages). No real network call is ever made. Every answer `call()` sees is checked against
+ * (pages) and the website's settings in the Portal (saved by a test). No real network call is ever made. Every answer `call()` sees is checked against
  * `schemas/api.json` and the kit's own routes: a test fails when an answer does not fit its description.
  * @module
  */
@@ -13,8 +13,10 @@ import {
 	createFakePortal,
 	createMemoryStore,
 	createNetwork,
+	portalSectionsOf,
 	staffCaller,
 } from '@ss/app-kit/testing';
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
@@ -108,10 +110,6 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 			? { status: 201, body: { id: `msg_${calls.length}`, status: 'queued' } }
 			: { status: 200, body: {} },
 	);
-	responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
-		status: 200,
-		body: { version: 1, name: 'Shop', email: 'hello@shop.example.com', country: 'GB', timeZone: 'UTC' },
-	}));
 	responders.set(AI, (call) => {
 		if (call.method === 'GET') return { status: 200, body: { data: [] } };
 		const next = aiAnswers.shift() ?? { text: 'Hello from the AI.' };
@@ -153,6 +151,14 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 	handlers[BASE] = handler;
 	await portal.connect({ handler, baseUrl: BASE, secret: SECRET });
 	const websiteId = portal.addWebsite({ domain: DOMAIN });
+	// what the merchant saved in the Portal's Website settings: the business, the pages and the alert team of the shop
+	const empty = emptyWebsiteSettings(websiteId);
+	const site = {
+		...portalSectionsOf(websiteId, { name: 'Shop', email: 'hello@shop.example.com', country: 'GB', timeZone: 'UTC' }),
+		pages: empty.pages,
+		team: empty.team,
+	};
+	portal.setWebsiteSettings(websiteId, site);
 	portal.addProduct({ productId: 'notifications', baseUrl: NOTIFY });
 	portal.addProduct({ productId: 'accounts', baseUrl: ACCOUNTS });
 	portal.addProduct({ productId: 'ecommerce', baseUrl: ECOMMERCE });
@@ -280,8 +286,44 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 	// the website's Accounts token, pasted on first use: the keys of the staff's sign-ins
 	const staffHeaders = staffCaller({ accounts, websiteId, paste: () => paste('accounts') });
 
+	/**
+	 * The merchant saves website settings in the Portal (Website settings): the product is told and fetches them.
+	 * @param {Partial<Pick<import('@ss/contracts').WebsiteSettings, 'business' | 'brand' | 'region' | 'pages' | 'team'>>} sections
+	 */
+	const setWebsite = async (sections) => {
+		Object.assign(site, sections);
+		t += 1000; // a second notice at the same second would read as a replay
+		await portal.saveWebsiteSettings(websiteId, site);
+		await flush();
+	};
+
+	/** The business facts in the Portal. @param {Parameters<typeof portalSectionsOf>[1]} info */
+	const setBusiness = (info) => setWebsite(portalSectionsOf(websiteId, info));
+
+	/**
+	 * What used to be a Chat setting and is now the website's in the Portal: the alert team (people, phone channel, staff
+	 * push), the sign-in page and the default language.
+	 * @type {Record<string, (value: any) => Parameters<typeof setWebsite>[0]>}
+	 */
+	const PORTAL_SETTINGS = {
+		'staff_alerts.recipients': (value) => ({
+			team: {
+				...site.team,
+				recipients: /** @type {string[]} */ (value).map((entry) =>
+					entry.includes('@') ? { name: '', email: entry, phone: '' } : { name: '', email: '', phone: entry },
+				),
+			},
+		}),
+		'staff_alerts.phoneChannel': (value) => ({ team: { ...site.team, phoneChannel: value } }),
+		'staff_alerts.staffPush': (value) => ({ team: { ...site.team, staffPush: value } }),
+		'signed_in_chat.signInUrl': (value) => ({ pages: { ...site.pages, signIn: value } }),
+		'language_lock.defaultLanguage': (value) => ({ region: { ...site.region, language: value } }),
+	};
+
 	/** @param {string} feature @param {string} name @param {unknown} value */
 	const setting = async (feature, name, value) => {
+		const portalSetting = PORTAL_SETTINGS[`${feature}.${name}`];
+		if (portalSetting) return setWebsite(portalSetting(value));
 		const response = await dashboard(
 			await adminSession(),
 			'PUT',
@@ -364,6 +406,8 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 		connect,
 		paste,
 		setting,
+		setWebsite,
+		setBusiness,
 		text,
 		list,
 		ticket,

@@ -8,7 +8,7 @@
 			"default": 0,
 			"minimum": 0,
 			"maximum": 1000000000,
-			"description": "0 = no daily cap. Counted in the time zone of business.json."
+			"description": "0 = no daily cap. Counted in the business time zone."
 		},
 		"monthlyTokens": {
 			"type": "integer",

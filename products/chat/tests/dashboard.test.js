@@ -41,7 +41,7 @@ const overview = (featuresOn) => ({
 	checklist: {
 		connections: [],
 		widget: { installed: true, lastSeenAt: '2026-10-05T23:15:00.000Z' },
-		business: { found: true, fetchedAt: null },
+		website: { version: 1, requires: [], missing: [] },
 	},
 	recentChanges: [
 		{

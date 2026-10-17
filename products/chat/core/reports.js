@@ -1,5 +1,5 @@
 /**
- * Reports (pure, PLAN 0.8.3): for a date range in the business.json time zone (default the last 30 days):
+ * Reports (pure, PLAN 0.8.3): for a date range in the business time zone (default the last 30 days):
  * conversations per day, visitor messages, conversations answered only by the AI vs handed to a person, the median
  * first staff reply time, resolved conversations, the average rating and number of ratings, leads and AI tokens. The
  * numbers are read from the merchant database; there is no topic grouping.

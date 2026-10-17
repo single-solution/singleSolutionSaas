@@ -4,8 +4,6 @@
  * provider, Storage and the tokens of the other products come from the manifest's `neededBy`, so none is listed here.
  * @module
  */
-import { isFilled } from '@ss/ui/dashboard';
-
 /** @typedef {import('@ss/ui/dashboard').SetupRequirement} SetupRequirement */
 
 /** @type {ReadonlyArray<SetupRequirement>} */
@@ -25,24 +23,6 @@ export const SETUP = Object.freeze([
 		label: 'Set the booking address',
 		why: 'The AI cannot offer or book times until it knows the address on your server that gives free times.',
 		action: 'Set address',
-	},
-	{
-		key: 'sign-in-page',
-		when: ['signed_in_chat'],
-		setting: 'signed_in_chat.signInUrl',
-		label: 'Set the sign-in page address',
-		why: 'Visitors who must sign in to continue are sent to this page of your website.',
-		action: 'Set address',
-	},
-	{
-		key: 'alert-people',
-		when: ['staff_alerts'],
-		setting: 'staff_alerts.recipients',
-		done: (/** @type {unknown} */ value, /** @type {{ values: Record<string, unknown> }} */ { values }) =>
-			isFilled(value) || isFilled(values.staffPermission),
-		label: 'Choose who gets staff alerts',
-		why: 'Alerts about new chats reach nobody until you list people, or let your staff with a role receive them.',
-		action: 'Add people',
 	},
 	{
 		key: 'alert-page',

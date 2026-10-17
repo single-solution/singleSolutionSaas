@@ -128,7 +128,7 @@ describe('AI replies', () => {
 		await v('POST', '/v1/chat/messages', { text: 'Book me a slot' });
 		const bodies = sys.calls.filter((c) => c.url === `${TOOLS}/booking`).map((c) => JSON.parse(c.body));
 		expect(bodies[0]).toEqual({ action: 'list_slots', from: '2026-10-05', to: '2026-10-19', timeZone: 'UTC' });
-		// a phone that cannot be one is asked for again; one typed nationally goes with the business.json country's code
+		// a phone that cannot be one is asked for again; one typed nationally goes with the business country's code
 		expect(bodies).toHaveLength(2);
 		expect(bodies[1]).toEqual({
 			action: 'book',

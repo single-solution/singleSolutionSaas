@@ -18,7 +18,7 @@ import { changesOf, checkConversation, checkGuest, checkMessage, checkStaff, fin
  * @typedef {object} ImportDeps
  * @property {(websiteId: string, name: 'custom_fields' | 'tags' | 'topics' | 'priorities') => Promise<any[]>} list a list
  *   setting
- * @property {(websiteId: string) => Promise<{ country?: string | null }>} business the business.json copy
+ * @property {(websiteId: string) => Promise<{ country?: string | null }>} business the business facts (the Portal's settings)
  */
 
 /** Conversations one `finish` call takes (call again with `?after=<next>` while `more`). */

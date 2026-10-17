@@ -232,7 +232,7 @@ export const createVisitorApi = (product, service, reply) => {
 			if (guestLimitReached(c, await service.guestLimit(s.websiteId, await s.values('guest_chat')))) {
 				const next = limitNext({
 					signedInChat: s.on.includes('signed_in_chat'),
-					signInUrl: String((await s.values('signed_in_chat')).signInUrl),
+					signInUrl: (await s.ctx.website()).pages.signIn,
 					leads: s.on.includes('leads_flows'),
 				});
 				throw problem('guest_limit_reached', 'The guest message limit is reached.', { extensions: { next } });

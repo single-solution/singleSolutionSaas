@@ -128,9 +128,9 @@ describe('a staff sign-in', () => {
 
 	it('the dashboard session’s settings are unchanged', async () => {
 		const sys = await start(ON);
-		const saved = await sys.dashboard(await sys.adminSession(), 'PUT', `/v1/dashboard/websites/${sys.websiteId}/theme`, {
-			radius: 5,
+		const saved = await sys.dashboard(await sys.adminSession(), 'PUT', `/v1/dashboard/websites/${sys.websiteId}/texts/chat.title`, {
+			value: 'Talk to us',
 		});
-		expect(saved.status).toBe(200);
+		expect(saved.status).toBe(204);
 	});
 });

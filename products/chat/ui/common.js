@@ -63,7 +63,7 @@ import { attachmentKind } from '../core/widgets.js';
  * @property {import('@ss/app-kit/widget').WidgetTheme} theme
  * @property {string} customCss
  * @property {Partial<import('@ss/contracts/format').Format>} [format] how money and dates look (K7)
- * @property {string} [timeZone] the business.json time zone (UTC when missing)
+ * @property {string} [timeZone] the business time zone (UTC when missing)
  * @property {string[]} features the switched-on features
  * @property {string[]} widgets the keys of the widgets whose feature is on
  * @property {ChatSettings} settings

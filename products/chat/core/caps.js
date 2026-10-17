@@ -1,6 +1,6 @@
 /**
  * AI token caps and cost alerts (pure, PLAN 0.8.3 AI): AI tokens (input + output as the provider reports them; main and
- * backup together) per website, with daily and monthly windows in the business.json time zone. At a cap AI replies stop
+ * backup together) per website, with daily and monthly windows in the business time zone. At a cap AI replies stop
  * until the window resets. One cost alert per monthly window when the month crosses the alert share of the monthly cap.
  * @module
  */

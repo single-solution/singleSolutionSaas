@@ -48,7 +48,7 @@ import { websiteSettingsUrl } from './portal-links.js';
  * What every tab is given: the picked website (null on the Owner's global tabs), its merchant and its domain, the viewer, the
  * support contact, the Portal's address and name (`brand`, its Branding), and `open`, which shows another section (the
  * Overview's buttons), at the section of its inner sidebar when one is given (`open('settings', 'catalog.page-addresses')`).
- * @typedef {{ websiteId: string | null, merchantId: string | null, domain: string, who: Who,
+ * @typedef {{ websiteId: string | null, merchantId?: string | null, domain: string, who: Who,
  *   support: { channels: import('./format.js').SupportChannel[] }, portal: string, brand?: string,
  *   open: (tab: string, section?: string) => void }} TabProps
  */

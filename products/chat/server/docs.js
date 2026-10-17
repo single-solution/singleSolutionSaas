@@ -1,7 +1,7 @@
 /**
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.3), on the kit's docs toolkit (`renderDocsPage`, which adds the title,
  * the intro and localhost note, the kit's sections for the merchant's server with Chat's lists and counts after them,
- * business.json and the API reference from `openapi.json`). Chat's own sections: the widget snippet, the visitor API
+ * the website settings note and the API reference from `openapi.json`). Chat's own sections: the widget snippet, the visitor API
  * with guests and signed-in visitors, AI, knowledge, webhook tools and their signature check, the booking endpoint's
  * two requests, handoff, flows, the Notifications messages and their values (`schemas/messages.json`), attachments and
  * the bucket's CORS rule, data rights and the activity log, the shop tools with the Ecommerce routes they call, product

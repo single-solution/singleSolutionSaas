@@ -2,13 +2,6 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
-		"signInUrl": {
-			"type": "string",
-			"title": "Sign-in page address",
-			"default": "",
-			"maxLength": 500,
-			"description": "The page of your website (https) where visitors are sent when they must sign in to continue; they come back to the chat afterward."
-		},
 		"claimByPhone": {
 			"type": "boolean",
 			"title": "Move guest chats by phone",

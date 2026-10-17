@@ -2,6 +2,7 @@
  * Chat on the kit: statuses and notices, tokens and origins, the widget settings, the dashboard's lists and tool
  * signing secret, data rights, the AI connection test, the public docs and widget script.
  */
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { afterAll, describe, expect, it } from 'vitest';
 import { ADMIN_ORIGIN, AI, AI_KEY, BASE, ORIGIN, STORAGE_KEY, ready, setup } from './helpers.js';
 
@@ -73,6 +74,28 @@ describe('statuses, tokens and notices', () => {
 });
 
 describe('widgets and docs', () => {
+	it('starts the bot’s avatar from the website’s icon and the allowed languages from the website’s languages, until the merchant sets their own', async () => {
+		const sys = await start(['visitor_chat', 'ai_replies', 'language_lock']);
+		const empty = emptyWebsiteSettings(sys.websiteId);
+		await sys.setWebsite({
+			brand: { ...empty.brand, files: { ...empty.brand.files, icon: 'https://cdn.example.com/icon.png' } },
+			region: { ...empty.region, country: 'GB', timeZone: 'UTC', language: 'en-GB', languages: ['en-GB', 'fr'] },
+		});
+		const look = async () =>
+			(await sys.call('GET', '/v1/widget/config', { token: sys.browser, origin: ORIGIN })).json.settings.look.avatarUrl;
+		expect(await look()).toBe('https://cdn.example.com/icon.png');
+		const allowed = async () =>
+			(await sys.serverCall('GET', '/v1/settings')).json.features
+				.find((/** @type {any} */ f) => f.key === 'language_lock')
+				.values.allowedLanguages;
+		expect(await allowed()).toEqual({ value: ['en-GB', 'fr'], source: 'portal', from: 'region.languages' });
+		// the merchant's own value wins; the dashboard names the Portal while the website's is in use
+		await sys.setting('visitor_chat', 'avatarUrl', 'https://cdn.example.com/bot.png');
+		await sys.setting('language_lock', 'allowedLanguages', ['de']);
+		expect(await look()).toBe('https://cdn.example.com/bot.png');
+		expect((await allowed()).value).toEqual(['de']);
+	});
+
 	it('answers the widget settings with lists and no secrets', async () => {
 		const sys = await start([
 			'visitor_chat',

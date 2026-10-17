@@ -10,21 +10,11 @@
 				"type": "string",
 				"maxLength": 20
 			},
-			"description": "Language codes such as en, fr, ar or pt-BR. Empty = any language.",
+			"description": "Language codes such as en, fr, ar or pt-BR. Empty: the languages of your website (set in the Portal under Website settings › Region and format), or any language when none are set there.",
 			"x-ui": {
 				"group": "Languages",
-				"order": 1
-			}
-		},
-		"defaultLanguage": {
-			"type": "string",
-			"title": "Default language",
-			"default": "",
-			"maxLength": 20,
-			"description": "The language of answers when a message shows none, for example en. Empty = the first allowed language, else English.",
-			"x-ui": {
-				"group": "Languages",
-				"order": 2
+				"order": 1,
+				"defaultFrom": "region.languages"
 			}
 		},
 		"markerWords": {

@@ -685,11 +685,7 @@ describe('the language check, the current page and the website’s own contact (
 		expect(sys.aiCalls().at(-1).messages[0].content).toContain('Lamp B');
 		// the website's own email and phone are never hidden; others are
 		await sys.setting('moderation', 'redact', ['email', 'phone']);
-		sys.responders.set('https://shop.example.com/.well-known/business.json', () => ({
-			status: 200,
-			body: { version: 1, name: 'Shop', email: 'hello@shop.example.com', phone: '+44 20 7946 0123', timeZone: 'UTC' },
-		}));
-		await sys.dashboard(await sys.adminSession(), 'POST', `/v1/dashboard/websites/${sys.websiteId}/business/refresh`);
+		await sys.setBusiness({ name: 'Shop', email: 'hello@shop.example.com', phone: '+44 20 7946 0123', timeZone: 'UTC' });
 		const sent = await v('POST', '/v1/chat/messages', {
 			text: 'I wrote to hello@shop.example.com and 020 7946 0123, also me@x.com and +1 415 555 0100',
 		});

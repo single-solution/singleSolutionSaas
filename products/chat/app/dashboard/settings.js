@@ -3,8 +3,8 @@
  * Settings tab (PLAN 0.8.3 Chat dashboard): the kit's settings of the switched-on features, listed by category in the
  * inner sidebar, with Chat's list editors under the feature they belong to (fallback answers under the Assistant,
  * tools and the signing secret, booking questions and services, page types and page rules, flows, custom fields,
- * office hours, tags, topics and priorities, teams, upload types and redaction patterns). The widget texts, theme and
- * Format are the Texts and Theme & format tabs.
+ * office hours, tags, topics and priorities, teams, upload types and redaction patterns). The widget texts are the Texts
+ * tab; the theme, the Format and the alert people are the Portal's Website settings.
  * @module
  */
 import { Callout } from '@ss/ui';

@@ -195,7 +195,8 @@ export const createAdmin = (product, service) => {
 				messageLimit: on.includes('guest_chat') ? await service.guestLimit(websiteId, guests) : guests.messageLimit,
 				contactCapture: guests.contactCapture,
 			},
-			signInUrl: on.includes('signed_in_chat') ? (await values('signed_in_chat')).signInUrl : '',
+			// the sign-in page is the website's, set once in the Portal (Website settings › Domains, pages and legal)
+			signInUrl: on.includes('signed_in_chat') ? (await product.website(websiteId)).pages.signIn : '',
 			// "never disclose" hides the AI label (C1)
 			ai: { showLabel: aiLabelShown(ai) },
 			handoff: { showButton: (await values('handoff')).showButton },
