@@ -12,7 +12,8 @@ import {
 	publicStoreDetails,
 	whatsappLink,
 } from '../core/store-details.js';
-import { STORAGE, readyShop } from './helpers.js';
+import { LIST_WORDS } from '../core/setup-sheet.js';
+import { DOMAIN, STORAGE, readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -60,6 +61,40 @@ describe('checkStoreDetails', () => {
 
 	it('accepts nothing at all: every field is optional', () => {
 		expect(checkStoreDetails({})).toEqual({ ok: true, value: defaultStoreDetails() });
+	});
+
+	it('keeps the contact phones in order, each with its name (a landline next to the mobile)', () => {
+		const checked = checkStoreDetails({
+			...record(),
+			phones: [
+				{ label: ' Landline ', number: ' (021) 111-222-333 ' },
+				{ label: '', number: '+1 555 0111' },
+			],
+		});
+		expect(/** @type {any} */ (checked).value.phones).toEqual([
+			{ label: 'Landline', number: '(021) 111-222-333' },
+			{ label: '', number: '+1 555 0111' },
+		]);
+		expect(/** @type {any} */ (checkStoreDetails(record())).value.phones).toEqual([]);
+		expect(defaultStoreDetails()).toMatchObject({ phones: [], logoDark: null, favicon: null, faviconDark: null });
+	});
+
+	it('refuses a bad phone list or a bad extra file', () => {
+		/** @param {Record<string, unknown>} patch */
+		const errors = (patch) => /** @type {any} */ (checkStoreDetails({ ...record(), ...patch })).errors ?? [];
+		expect(errors({ phones: 'call' }).join(' ')).toContain('at most 10');
+		expect(errors({ phones: Array.from({ length: 11 }, () => ({ label: 'x', number: '555 0100' })) }).join(' ')).toContain(
+			'at most 10',
+		);
+		expect(errors({ phones: [{ label: 'Landline', number: 'call me' }] }).join(' ')).toContain('Phone 1');
+		expect(errors({ phones: [{ label: 'x'.repeat(41), number: '555 0100' }] }).join(' ')).toContain('Phone 1');
+		expect(errors({ phones: [{ label: 'Landline' }] }).join(' ')).toContain('Phone 1');
+		const bad = { key: 'elsewhere/x.png', type: 'image/png', size: 5, alt: '' };
+		expect(errors({ logoDark: bad }).join(' ')).toContain('The dark logo');
+		expect(errors({ favicon: bad }).join(' ')).toContain('The favicon');
+		expect(errors({ faviconDark: bad }).join(' ')).toContain('The dark favicon');
+		const good = { key: 'ecommerce/store/favicon-abcdefghij.png', type: 'image/png', size: 5, alt: 'Icon' };
+		expect(/** @type {any} */ (checkStoreDetails({ ...record(), favicon: good })).value.favicon).toEqual(good);
 	});
 
 	it('refuses what cannot be right, listing each problem', () => {
@@ -124,7 +159,58 @@ describe('what a website reads', () => {
 		expect(publicStoreDetails(defaultStoreDetails(), { logoUrl: null, iconUrl: null, businessName: 'Fallback' }).name).toBe(
 			'Fallback',
 		);
+		expect(publicStoreDetails(details, { logoUrl: null, iconUrl: null, siteUrl: 'https://shop.example.com' }).siteUrl).toBe(
+			'https://shop.example.com',
+		);
+		expect(view.siteUrl).toBe('');
 		expect(whatsappLink('12')).toBe('');
+	});
+
+	it('shows the dark logo, the favicons and the phone list to the website', () => {
+		const file = (/** @type {string} */ name) => ({
+			key: `ecommerce/store/${name}-abcdefghij.png`,
+			type: 'image/png',
+			size: 9,
+			alt: name,
+		});
+		const withFiles = /** @type {any} */ (
+			checkStoreDetails({
+				...record(),
+				logoDark: file('logoDark'),
+				favicon: file('favicon'),
+				faviconDark: file('faviconDark'),
+				phones: [{ label: 'Landline', number: '021 111 222' }],
+			})
+		).value;
+		const view = publicStoreDetails(withFiles, {
+			logoUrl: null,
+			iconUrl: null,
+			logoDarkUrl: 'https://cdn.example.com/dark.png',
+			faviconUrl: 'https://cdn.example.com/fav.png',
+			faviconDarkUrl: 'https://cdn.example.com/fav-dark.png',
+		});
+		expect(view).toMatchObject({
+			logo: null,
+			logoDark: { url: 'https://cdn.example.com/dark.png', alt: 'logoDark', type: 'image/png' },
+			favicon: { url: 'https://cdn.example.com/fav.png', alt: 'favicon' },
+			faviconDark: { url: 'https://cdn.example.com/fav-dark.png', alt: 'faviconDark' },
+			contact: { phone: '+1 555 0100', phones: [{ label: 'Landline', number: '021 111 222' }] },
+		});
+		expect(view).not.toHaveProperty('logoDark.key');
+		// without an address the file shows as not set
+		expect(publicStoreDetails(withFiles, { logoUrl: null, iconUrl: null })).toMatchObject({
+			logoDark: null,
+			favicon: null,
+			faviconDark: null,
+		});
+	});
+
+	it('makes the business.json: the main phone, else the first listed one (it has no place for the dark files)', () => {
+		const landline = { label: 'Landline', number: '021 111 222' };
+		const only = /** @type {any} */ (checkStoreDetails({ name: 'Shop', phones: [landline] })).value;
+		expect(businessJsonOf(only, {})).toEqual({ ok: true, value: { name: 'Shop', phone: '021 111 222' } });
+		const both = /** @type {any} */ (checkStoreDetails({ name: 'Shop', phone: '+1 555 0100', phones: [landline] })).value;
+		expect(/** @type {any} */ (businessJsonOf(both, {})).value.phone).toBe('+1 555 0100');
 	});
 
 	it('makes the business.json: the name, contacts, address text, country, time zone, currency and language', () => {
@@ -161,6 +247,31 @@ describe('what a website reads', () => {
 	});
 });
 
+describe('the setup sheet line', () => {
+	it('names the pictures and phones that are set', () => {
+		const file = (/** @type {string} */ name) => ({
+			key: `ecommerce/store/${name}-abcdefghij.png`,
+			type: 'image/png',
+			size: 9,
+			alt: '',
+		});
+		const details = /** @type {any} */ (
+			checkStoreDetails({
+				name: 'Example Store',
+				logo: file('logo'),
+				logoDark: file('logoDark'),
+				favicon: file('favicon'),
+				phone: '+1 555 0100',
+				phones: [{ label: 'Landline', number: '021 111 222' }],
+			})
+		).value;
+		expect(LIST_WORDS.store_details(details)).toBe('Example Store, with a logo, a dark logo, a favicon, 2 phone numbers.');
+		expect(LIST_WORDS.store_details(/** @type {any} */ (checkStoreDetails({ name: 'Shop', phone: '1 555 0100' })).value)).toBe(
+			'Shop, with a phone number.',
+		);
+	});
+});
+
 describe('the store details through the API', () => {
 	it('is saved as one record through the lists API, with an unsaved record empty', async () => {
 		const before = await shop.api('GET', '/v1/lists/store_details');
@@ -189,6 +300,8 @@ describe('the store details through the API', () => {
 		const fromServer = await shop.api('GET', '/v1/shop/store');
 		expect(fromServer.json).toEqual(fromBrowser.json);
 		expect(fromBrowser.headers.get('etag')).toBeTruthy();
+		// the site address is the website's own domain (not a setting)
+		expect(fromBrowser.json.siteUrl).toBe(`https://${DOMAIN}`);
 	});
 
 	it('serves the business.json for /.well-known/business.json', async () => {
@@ -247,6 +360,73 @@ describe('the store details through the API', () => {
 		const removed = await shop.api('DELETE', '/v1/store-details/logo');
 		expect(removed.json).toEqual({ logo: null });
 		expect((await shop.visitor('GET', '/v1/shop/store')).json.logo).toBeNull();
+	});
+
+	it('lists the contact phones in the shop read, and the business.json takes the first one while no main phone is set', async () => {
+		const phones = [
+			{ label: 'Landline', number: '021 111 222' },
+			{ label: 'Sales', number: '+1 555 0123' },
+		];
+		const saved = await shop.api('PUT', '/v1/lists/store_details', { value: { ...record(), phones } });
+		expect(saved.status).toBe(200);
+		const read = await shop.visitor('GET', '/v1/shop/store');
+		expect(read.json.contact).toMatchObject({ phone: '+1 555 0100', phones });
+		expect((await shop.visitor('GET', '/v1/shop/store/business-json')).json.phone).toBe('+1 555 0100');
+		const noMain = await shop.api('PUT', '/v1/lists/store_details', { value: { ...record(), phone: '', phones } });
+		expect(noMain.status).toBe(200);
+		expect((await shop.visitor('GET', '/v1/shop/store/business-json')).json.phone).toBe('021 111 222');
+		expect(
+			(await shop.api('PUT', '/v1/lists/store_details', { value: { ...record(), phones: [{ label: 'x', number: 'no' }] } }))
+				.status,
+		).toBe(422);
+	});
+
+	it('keeps the dark logo, the favicon and the dark favicon in the merchant’s storage like the logo', async () => {
+		await shop.api('PUT', '/v1/lists/store_details', { value: record() });
+		shop.responders.set(STORAGE, (call) =>
+			call.method === 'HEAD'
+				? { status: 200, headers: { 'content-length': '2000', 'content-type': 'image/png' } }
+				: { status: 204 },
+		);
+		/** @param {string} slot */
+		const upload = (slot) => shop.api('POST', '/v1/store-details/uploads', { for: slot, type: 'image/png', size: 2000 });
+		const keys = /** @type {Record<string, string>} */ ({});
+		for (const slot of ['logo', 'logoDark', 'icon', 'favicon', 'faviconDark']) {
+			const made = await upload(slot);
+			expect(made.status).toBe(200);
+			expect(made.json.key).toMatch(new RegExp(`^ecommerce/store/${slot}-[a-z0-9]{10}\\.png$`));
+			keys[slot] = made.json.key;
+		}
+		// a file belongs to the slot it was uploaded for (the logo's key is no dark logo)
+		expect((await shop.api('PUT', '/v1/store-details/logoDark', { key: keys.logo })).status).toBe(422);
+		expect((await shop.api('PUT', '/v1/store-details/logo', { key: keys.logoDark })).status).toBe(422);
+		expect((await shop.api('PUT', '/v1/store-details/favicon', { key: keys.faviconDark })).status).toBe(422);
+		for (const slot of ['logoDark', 'favicon', 'faviconDark']) {
+			const set = await shop.api('PUT', `/v1/store-details/${slot}`, { key: keys[slot], alt: `${slot} alt` });
+			expect(set.status).toBe(200);
+			expect(set.json[slot]).toMatchObject({ key: keys[slot], type: 'image/png', size: 2000, alt: `${slot} alt` });
+		}
+		const read = (await shop.visitor('GET', '/v1/shop/store')).json;
+		expect(read.logo).toBeNull();
+		for (const slot of ['logoDark', 'favicon', 'faviconDark']) {
+			expect(read[slot]).toMatchObject({ alt: `${slot} alt`, type: 'image/png' });
+			expect(read[slot].url).toContain(`/${keys[slot]}`);
+		}
+		expect(JSON.stringify(read)).not.toContain('"key"');
+		const files = (await shop.api('GET', '/v1/store-details/files')).json;
+		expect(Object.keys(files).sort()).toEqual(['favicon', 'faviconDark', 'icon', 'logo', 'logoDark']);
+		expect(files.faviconDark.key).toBe(keys.faviconDark);
+		// the business.json has one logo: the light one, never the dark one
+		expect((await shop.visitor('GET', '/v1/shop/store/business-json')).json).not.toHaveProperty('logo');
+		expect((await shop.api('GET', '/v1/lists/store_details')).json.value).toMatchObject({
+			logoDark: { key: keys.logoDark },
+			favicon: { key: keys.favicon },
+			faviconDark: { key: keys.faviconDark },
+		});
+		const removed = await shop.api('DELETE', '/v1/store-details/logoDark');
+		expect(removed.json).toEqual({ logoDark: null });
+		expect((await shop.visitor('GET', '/v1/shop/store')).json.logoDark).toBeNull();
+		expect((await shop.api('PUT', '/v1/store-details/banner', { key: keys.logo })).status).toBe(404);
 	});
 
 	it('is a feature: off, the shop read is refused', async () => {

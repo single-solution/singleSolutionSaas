@@ -712,11 +712,16 @@ export const TEXTS = dashboardTexts({
 		},
 		storeDetails: {
 			title: 'Store details',
-			help: 'Who your store is, as your customers see it: name, logo, contacts, address, opening hours and social links. Your website reads them for its header, footer and contact page, and serves its business.json from them.',
+			help: 'Who your store is, as your customers see it: name, logos, contacts, address, opening hours and social links. Your website reads them for its header, footer and contact page, and serves its business.json from them.',
 			name: 'Store name',
 			tagline: 'Tagline',
-			logo: 'Logo',
-			icon: 'Icon',
+			files: {
+				logo: { title: 'Logo', help: 'For light backgrounds.' },
+				logoDark: { title: 'Dark logo', help: 'For dark mode and dark backgrounds.' },
+				icon: { title: 'Icon', help: 'Your square mark, for apps and social cards.' },
+				favicon: { title: 'Favicon', help: 'The small picture on a browser tab.' },
+				faviconDark: { title: 'Dark favicon', help: 'The browser-tab picture for dark mode.' },
+			},
 			alt: 'Alternative text',
 			noFile: 'Nothing uploaded yet.',
 			uploadFailed:
@@ -724,6 +729,8 @@ export const TEXTS = dashboardTexts({
 			contact: 'Contact',
 			email: 'Email address',
 			phone: 'Phone number',
+			phones: 'More phone numbers (one per line)',
+			phonesHelp: 'A name, then | and the number: Landline | (555) 010-0100. The name is optional. At most 10.',
 			whatsapp: 'WhatsApp number',
 			address: 'Address',
 			country: 'Country',

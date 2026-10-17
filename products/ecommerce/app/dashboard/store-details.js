@@ -1,23 +1,24 @@
 'use client';
 /**
- * The Store details editor (Settings → Store details, the `store_details` list): name and tagline, logo and icon (kept
- * in the merchant's own storage; uploaded here straight to the bucket), contacts, address, opening hours with dated
- * exceptions (the booking schedules' shape), social links, time zone and language. The record is read with
- * `GET /v1/dashboard/websites/:websiteId/lists/store_details` and saved whole with `PUT … { value }`; a 422 lists the
- * server's check errors under the editor. The two files have their own routes (`./store-details/files`, `uploads`,
- * `logo`, `icon`) and change at once, not with Save.
+ * The Store details editor (Settings → Store details, the `store_details` list): name and tagline, the pictures (logo,
+ * dark logo, icon, favicon, dark favicon: kept in the merchant's own storage; uploaded here straight to the bucket),
+ * contacts with more phone numbers, address, opening hours with dated exceptions (the booking schedules' shape), social
+ * links, time zone and language. The record is read with `GET /v1/dashboard/websites/:websiteId/lists/store_details`
+ * and saved whole with `PUT … { value }`; a 422 lists the server's check errors under the editor. The pictures have
+ * their own routes (`./store-details/files`, `uploads`, and one per picture) and change at once, not with Save.
  * @module
  */
 import { useState } from 'react';
 import { Button, Callout, Card, FieldGrid, Input, Select, TextArea } from '@ss/ui';
 import { Loaded, call, fill, useLoad } from '@ss/ui/dashboard';
 import { countryChoices } from '../../core/address.js';
-import { STORE_LIMITS } from '../../core/store-details.js';
+import { STORE_FILES, STORE_LIMITS } from '../../core/store-details.js';
 import { ListOutcome, SaveRow, useList } from './lists.js';
 import { cleanLines } from './drafts.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {Record<string, any>} Item */
+/** @typedef {import('../../core/store-details.js').StoreFileName} StoreFileName */
 
 const S = TEXTS.lists.storeDetails;
 const BLANK_WINDOW = Object.freeze({ day: 1, start: '09:00', end: '17:00' });
@@ -31,7 +32,8 @@ const rangeOfLine = (line) => {
 };
 
 /**
- * The saved record as the draft the editor changes: the hours' exceptions and the social links as lines of text.
+ * The saved record as the draft the editor changes: the hours' exceptions, the phones and the social links as lines of
+ * text.
  * @param {Item} saved
  */
 export const draftOf = (saved) => ({
@@ -39,6 +41,10 @@ export const draftOf = (saved) => ({
 	tagline: saved.tagline ?? '',
 	email: saved.email ?? '',
 	phone: saved.phone ?? '',
+	// one more phone per line: `Name | number` (the name is optional: a line with a number only has none)
+	phones: (Array.isArray(saved.phones) ? saved.phones : [])
+		.map((/** @type {Item} */ entry) => (entry.label ? `${entry.label} | ${entry.number}` : String(entry.number)))
+		.join('\n'),
 	whatsapp: saved.whatsapp ?? '',
 	address: {
 		line1: '',
@@ -68,16 +74,19 @@ export const draftOf = (saved) => ({
 });
 
 /**
- * The record to save from the draft; the logo and icon stay as they are saved (they change through their own routes).
+ * The record to save from the draft; the pictures stay as they are saved (they change through their own routes).
  * @param {Item} draft @param {Item} saved
  */
 export const valueOf = (draft, saved) => ({
 	name: String(draft.name).trim(),
 	tagline: String(draft.tagline).trim(),
-	logo: saved.logo ?? null,
-	icon: saved.icon ?? null,
+	...Object.fromEntries(STORE_FILES.map((name) => [name, saved[name] ?? null])),
 	email: String(draft.email).trim(),
 	phone: String(draft.phone).trim(),
+	phones: cleanLines(String(draft.phones).split('\n')).map((line) => {
+		const at = line.indexOf('|');
+		return { label: (at < 0 ? '' : line.slice(0, at)).trim(), number: (at < 0 ? line : line.slice(at + 1)).trim() };
+	}),
 	whatsapp: String(draft.whatsapp).trim(),
 	address: Object.fromEntries(Object.entries(draft.address).map(([part, text]) => [part, String(text ?? '').trim()])),
 	hours: {
@@ -101,8 +110,8 @@ export const valueOf = (draft, saved) => ({
 });
 
 /**
- * One of the two files: its picture, an upload and a remove button. A change is made at once.
- * @param {{ websiteId: string, name: 'logo' | 'icon', file: Item | null, onChanged: () => void }} props
+ * One of the pictures: what it is for, its image, an upload and a remove button. A change is made at once.
+ * @param {{ websiteId: string, name: StoreFileName, file: Item | null, onChanged: () => void }} props
  */
 function FileField({ websiteId, name, file, onChanged }) {
 	const base = `/v1/dashboard/websites/${websiteId}/store-details`;
@@ -134,7 +143,8 @@ function FileField({ websiteId, name, file, onChanged }) {
 	};
 	return (
 		<div data-file={name} className="space-y-2 rounded-xl bg-surface-2 p-4">
-			<p className="text-sm font-bold">{S[name]}</p>
+			<p className="text-sm font-bold">{S.files[name].title}</p>
+			<p className="text-sm text-muted">{S.files[name].help}</p>
 			{file?.url ? (
 				<img src={file.url} alt={file.alt ?? ''} className="h-16 w-auto max-w-full rounded-lg bg-surface-3 object-contain" />
 			) : (
@@ -143,7 +153,7 @@ function FileField({ websiteId, name, file, onChanged }) {
 			<Input label={S.alt} value={alt} maxLength={STORE_LIMITS.alt} onChange={(event) => setAlt(event.target.value)} />
 			<div className="flex flex-wrap items-center gap-2">
 				<label className="text-sm">
-					<span className="sr-only">{S[name]}</span>
+					<span className="sr-only">{S.files[name].title}</span>
 					<input
 						type="file"
 						accept="image/jpeg,image/png,image/webp,image/avif"
@@ -196,7 +206,7 @@ export function StoreDetailsEditor({ websiteId, off }) {
 								at === index ? { ...entry, ...patch } : entry,
 							),
 						});
-					const fileViews = files.answer?.ok ? files.answer.data : { logo: null, icon: null };
+					const fileViews = /** @type {Record<StoreFileName, Item | null>} */ (files.answer?.ok ? files.answer.data : {});
 					return (
 						<div className="space-y-4">
 							<FieldGrid>
@@ -213,9 +223,16 @@ export function StoreDetailsEditor({ websiteId, off }) {
 									onChange={(event) => set({ tagline: event.target.value })}
 								/>
 							</FieldGrid>
-							<div className="grid gap-3 sm:grid-cols-2">
-								<FileField websiteId={websiteId} name="logo" file={fileViews.logo} onChanged={files.reload} />
-								<FileField websiteId={websiteId} name="icon" file={fileViews.icon} onChanged={files.reload} />
+							<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+								{STORE_FILES.map((name) => (
+									<FileField
+										key={name}
+										websiteId={websiteId}
+										name={name}
+										file={fileViews[name] ?? null}
+										onChanged={files.reload}
+									/>
+								))}
 							</div>
 							<p className="text-sm font-bold">{S.contact}</p>
 							<FieldGrid>
@@ -241,6 +258,13 @@ export function StoreDetailsEditor({ websiteId, off }) {
 									onChange={(event) => set({ whatsapp: event.target.value })}
 								/>
 							</FieldGrid>
+							<TextArea
+								label={S.phones}
+								help={S.phonesHelp}
+								rows={2}
+								value={draft.phones}
+								onChange={(event) => set({ phones: event.target.value })}
+							/>
 							<p className="text-sm font-bold">{S.address}</p>
 							<FieldGrid>
 								<Select

@@ -138,16 +138,20 @@ const named = (one, many, name) => (items) =>
 	items.length === 0 ? `No ${many} yet.` : listed(counted(items.length, one, many), items.map(name));
 
 /**
- * The store details in a line: the name, and what else is set (tagline, logo, icon, contacts, address, hours, social links).
+ * The store details in a line: the name, and what else is set (tagline, logos, icons, contacts, address, hours, social links).
  * @param {import('./store-details.js').StoreDetails} details
  */
 const storeDetailsWords = (details) => {
+	const phoneCount = (details.phone ? 1 : 0) + (details.phones ?? []).length;
 	const set = [
 		details.tagline ? 'a tagline' : '',
 		details.logo ? 'a logo' : '',
+		details.logoDark ? 'a dark logo' : '',
 		details.icon ? 'an icon' : '',
+		details.favicon ? 'a favicon' : '',
+		details.faviconDark ? 'a dark favicon' : '',
 		details.email ? 'an email address' : '',
-		details.phone ? 'a phone number' : '',
+		phoneCount > 0 ? (phoneCount === 1 ? 'a phone number' : counted(phoneCount, 'phone number', 'phone numbers')) : '',
 		details.whatsapp ? 'a WhatsApp number' : '',
 		details.address.line1 || details.address.city ? 'an address' : '',
 		details.hours.weekly.length > 0 || details.hours.exceptions.length > 0 ? 'opening hours' : '',

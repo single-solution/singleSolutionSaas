@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * The Store details editor in the browser (jsdom) on a faked dashboard API: it shows the saved record, its logo, and
- * saves every field with one PUT (the logo and icon stay as they are saved), with the hours and links as the lines the
- * merchant types.
+ * saves every field with one PUT (the five pictures stay as they are saved), with the hours, phones and links as the
+ * lines the merchant types.
  */
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +14,8 @@ import { inDashboard } from './dashboard-provider.js';
 const WEBSITE = 'web_1';
 const BASE = `/v1/dashboard/websites/${WEBSITE}`;
 const LOGO = { key: 'ecommerce/store/logo-abcdefghij.png', type: 'image/png', size: 900, alt: 'Logo' };
+const DARK = { key: 'ecommerce/store/logoDark-abcdefghij.png', type: 'image/png', size: 900, alt: 'Dark logo' };
+const FAVICON = { key: 'ecommerce/store/favicon-abcdefghij.png', type: 'image/png', size: 90, alt: 'Favicon' };
 
 /** The records the editor saved. @type {any[]} */
 let saved = [];
@@ -24,6 +26,8 @@ const serve = () => {
 	let record = checkStoreDetails({
 		name: 'Example Store',
 		logo: LOGO,
+		favicon: FAVICON,
+		phones: [{ label: 'Landline', number: '021 111 222' }],
 		hours: {
 			weekly: [{ day: 1, start: '09:00', end: '17:00' }],
 			exceptions: [
@@ -38,9 +42,16 @@ const serve = () => {
 		'fetch',
 		vi.fn(async (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) => {
 			if (path === `${BASE}/store-details/files`)
-				return new Response(JSON.stringify({ logo: { ...LOGO, url: 'https://cdn.example.com/logo.png' }, icon: null }), {
-					status: 200,
-				});
+				return new Response(
+					JSON.stringify({
+						logo: { ...LOGO, url: 'https://cdn.example.com/logo.png' },
+						logoDark: null,
+						icon: null,
+						favicon: { ...FAVICON, url: 'https://cdn.example.com/favicon.png' },
+						faviconDark: null,
+					}),
+					{ status: 200 },
+				);
 			if (path !== `${BASE}/lists/store_details`) return new Response(JSON.stringify({ status: 404 }), { status: 404 });
 			if (init.method === 'PUT') {
 				const { value } = JSON.parse(String(init.body));
@@ -64,11 +75,16 @@ afterEach(() => {
 });
 
 describe('the store details drafts', () => {
-	it('turn the hours exceptions and social links into lines and back, keeping the files', () => {
+	it('turn the hours exceptions, phones and social links into lines and back, keeping the files', () => {
 		const record = /** @type {any} */ (
 			checkStoreDetails({
 				name: 'Shop',
 				logo: LOGO,
+				logoDark: DARK,
+				phones: [
+					{ label: 'Landline', number: '021 111 222' },
+					{ label: '', number: '+1 555 0100' },
+				],
 				hours: { weekly: [], exceptions: [{ date: '2026-12-24', name: 'Eve', hours: [{ start: '09:00', end: '12:00' }] }] },
 				social: [{ label: 'X', url: 'https://x.com/shop' }],
 			})
@@ -76,9 +92,17 @@ describe('the store details drafts', () => {
 		const draft = draftOf(record);
 		expect(draft.exceptions).toBe('2026-12-24 Eve | 09:00-12:00');
 		expect(draft.social).toBe('X | https://x.com/shop');
+		expect(draft.phones).toBe('Landline | 021 111 222\n+1 555 0100');
 		expect(valueOf(draft, record)).toMatchObject({
 			logo: LOGO,
+			logoDark: DARK,
 			icon: null,
+			favicon: null,
+			faviconDark: null,
+			phones: [
+				{ label: 'Landline', number: '021 111 222' },
+				{ label: '', number: '+1 555 0100' },
+			],
 			hours: { exceptions: [{ date: '2026-12-24', name: 'Eve', hours: [{ start: '09:00', end: '12:00' }] }] },
 			social: [{ label: 'X', url: 'https://x.com/shop' }],
 		});
@@ -94,7 +118,23 @@ describe('the store details editor', () => {
 		expect(/** @type {HTMLImageElement} */ (container.querySelector('[data-file="logo"] img')).src).toBe(
 			'https://cdn.example.com/logo.png',
 		);
+		expect(/** @type {HTMLImageElement} */ (container.querySelector('[data-file="favicon"] img')).src).toBe(
+			'https://cdn.example.com/favicon.png',
+		);
+		// every picture has its own slot
+		expect([...container.querySelectorAll('[data-file]')].map((slot) => slot.getAttribute('data-file'))).toEqual([
+			'logo',
+			'logoDark',
+			'icon',
+			'favicon',
+			'faviconDark',
+		]);
+		expect(
+			/** @type {HTMLTextAreaElement} */ (/** @type {unknown} */ (byLabel(container, 'More phone numbers (one per line)')))
+				.value,
+		).toBe('Landline | 021 111 222');
 		expect(container.querySelectorAll('[data-window]')).toHaveLength(1);
+		type(byLabel(container, 'More phone numbers (one per line)'), 'Landline | 021 111 222\nSales | +1 555 0123');
 		type(byLabel(container, 'Tagline'), 'Everything for the home');
 		type(byLabel(container, 'WhatsApp number'), '+1 555 0199');
 		type(byLabel(container, 'City'), 'Springfield');
@@ -110,6 +150,11 @@ describe('the store details editor', () => {
 			whatsapp: '+1 555 0199',
 			address: { city: 'Springfield' },
 			logo: LOGO,
+			favicon: FAVICON,
+			phones: [
+				{ label: 'Landline', number: '021 111 222' },
+				{ label: 'Sales', number: '+1 555 0123' },
+			],
 			hours: {
 				weekly: [
 					{ day: 1, start: '09:00', end: '17:00' },

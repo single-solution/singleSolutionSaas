@@ -12,7 +12,7 @@
 		{
 			"key": "store_details",
 			"name": "Store details",
-			"description": "Who your store is: its name and tagline, logo and icon (kept in your own storage), contact email, phone and WhatsApp, address, opening hours with dated exceptions and social links, shown by the shop read GET /v1/shop/store and made into your business.json (GET /v1/shop/store/business-json) for a headless website to serve.",
+			"description": "Who your store is: its name and tagline, logo, dark logo, icon, favicon and dark favicon (kept in your own storage), contact email, phones (the main one and more, each with a name) and WhatsApp, address, opening hours with dated exceptions and social links, shown by the shop read GET /v1/shop/store and made into your business.json (GET /v1/shop/store/business-json) for a headless website to serve.",
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/store_details.settings.json"

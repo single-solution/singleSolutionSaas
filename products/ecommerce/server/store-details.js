@@ -1,16 +1,25 @@
 /**
  * Store details (the `store_details` feature): the public read for a website's header, footer and contact page
  * (`GET /v1/shop/store`), the business.json a headless website serves at `/.well-known/business.json`
- * (`GET /v1/shop/store/business-json`), and the logo and icon in the merchant's own storage, uploaded like product
- * images (a short presigned upload, then the file is checked in the bucket and kept in the record). The record is the
- * `store_details` list: the kit's `GET|PUT /v1/lists/store_details` and the dashboard's list routes read and save all
- * of it; the routes here only add the two files, which the dashboard editor uses too (setup only: no business data).
+ * (`GET /v1/shop/store/business-json`), and the store's pictures (logo, dark logo, icon, favicon, dark favicon) in the
+ * merchant's own storage, uploaded like product images (a short presigned upload, then the file is checked in the
+ * bucket and kept in the record). The record is the `store_details` list: the kit's `GET|PUT /v1/lists/store_details`
+ * and the dashboard's list routes read and save all of it; the routes here only add the files, which the dashboard
+ * editor uses too (setup only: no business data).
  * @module
  */
 import { createId } from '@ss/contracts';
 import { defineRoute, problem } from '@ss/app-kit';
 import { IMAGE_TYPES } from '../core/catalog-content.js';
-import { STORE_FILES, STORE_FOLDER, STORE_LIMITS, businessJsonOf, publicStoreDetails } from '../core/store-details.js';
+import {
+	STORE_FILES,
+	STORE_FILE_LABELS,
+	STORE_FOLDER,
+	STORE_LIMITS,
+	businessJsonOf,
+	defaultStoreDetails,
+	publicStoreDetails,
+} from '../core/store-details.js';
 import { refuse } from './catalog-common.js';
 import { createMedia } from './catalog-media.js';
 import { conditional } from './http-cache.js';
@@ -20,6 +29,7 @@ import { SERVER_LIMITS, UPLOAD_SECONDS, VISITOR_LIMITS, bodyOf } from './service
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('../core/store-details.js').StoreDetails} StoreDetails */
+/** @typedef {import('../core/store-details.js').StoreFileName} StoreFileName */
 
 /**
  * @param {Product} product
@@ -29,8 +39,11 @@ import { SERVER_LIMITS, UPLOAD_SECONDS, VISITOR_LIMITS, bodyOf } from './service
 export const createStoreDetails = (product, service) => {
 	const media = createMedia(product);
 
-	/** @param {Site} s @returns {Promise<StoreDetails>} */
-	const detailsOf = async (s) => /** @type {StoreDetails} */ (/** @type {unknown} */ (await s.list('store_details')));
+	/** The record; a record saved before a field existed has it empty. @param {Site} s @returns {Promise<StoreDetails>} */
+	const detailsOf = async (s) => ({
+		...defaultStoreDetails(),
+		.../** @type {Partial<StoreDetails>} */ (await s.list('store_details')),
+	});
 
 	/** The public address of a stored file that never changes (a search engine or a shopping catalog keeps it). @param {Site} s @param {{ key: string } | null} file */
 	const urlOf = async (s, file) => (file ? await media.stableUrl(s, file.key) : null);
@@ -39,10 +52,17 @@ export const createStoreDetails = (product, service) => {
 	const read = async (ctx) => {
 		const s = await service.site(ctx);
 		const [details, business] = await Promise.all([detailsOf(s), s.business()]);
+		const urls = /** @type {Record<StoreFileName, string | null>} */ (
+			Object.fromEntries(await Promise.all(STORE_FILES.map(async (name) => [name, await urlOf(s, details[name])])))
+		);
 		return publicStoreDetails(details, {
-			logoUrl: await urlOf(s, details.logo),
-			iconUrl: await urlOf(s, details.icon),
+			logoUrl: urls.logo,
+			logoDarkUrl: urls.logoDark,
+			iconUrl: urls.icon,
+			faviconUrl: urls.favicon,
+			faviconDarkUrl: urls.faviconDark,
 			businessName: String(business.name ?? ''),
+			siteUrl: s.domain ? `https://${s.domain}` : '',
 		});
 	};
 
@@ -63,29 +83,34 @@ export const createStoreDetails = (product, service) => {
 		return made.value;
 	};
 
-	/** The two files with their addresses. @param {Site} s */
+	/** The pictures with their addresses. @param {Site} s */
 	const filesOf = async (s) => {
 		const details = await detailsOf(s);
 		/** @param {StoreDetails['logo']} file */
 		const view = async (file) =>
 			file ? { key: file.key, type: file.type, size: file.size, alt: file.alt, url: await media.mediaUrl(s, file.key) } : null;
-		return { logo: await view(details.logo), icon: await view(details.icon) };
+		const views = await Promise.all(STORE_FILES.map((name) => view(details[name])));
+		return /** @type {Record<StoreFileName, Awaited<ReturnType<typeof view>>>} */ (
+			Object.fromEntries(STORE_FILES.map((name, at) => [name, views[at]]))
+		);
 	};
 
 	/**
-	 * The file named in the path (`logo` or `icon`), or 404.
-	 * @param {any} ctx @returns {'logo' | 'icon'}
+	 * The file named in the path (`logo`, `logoDark`, `icon`, `favicon` or `faviconDark`), or 404.
+	 * @param {any} ctx @returns {StoreFileName}
 	 */
 	const fileName = (ctx) => {
 		const name = String(ctx.params.file);
-		if (!STORE_FILES.includes(name)) throw problem('not_found', 'The store has a logo and an icon.');
-		return /** @type {'logo' | 'icon'} */ (name);
+		if (!STORE_FILES.includes(/** @type {StoreFileName} */ (name)))
+			throw problem('not_found', `The store has these pictures: ${STORE_FILES.join(', ')}.`);
+		return /** @type {StoreFileName} */ (name);
 	};
 
-	/** POST …/uploads `{ for: 'logo' | 'icon', type, size }` → a presigned upload (JPEG, PNG, WebP or AVIF). @param {any} ctx */
+	/** POST …/uploads `{ for: 'logo' | 'logoDark' | 'icon' | 'favicon' | 'faviconDark', type, size }` → a presigned upload (JPEG, PNG, WebP or AVIF). @param {any} ctx */
 	const upload = async (ctx) => {
 		const body = bodyOf(ctx);
-		if (!STORE_FILES.includes(String(body.for))) throw refuse([{ path: '/for', message: 'Upload the logo or the icon.' }]);
+		if (!STORE_FILES.includes(/** @type {StoreFileName} */ (String(body.for))))
+			throw refuse([{ path: '/for', message: `Upload one of: ${STORE_FILES.join(', ')}.` }]);
 		const type = String(body.type);
 		const extension = /** @type {Record<string, string>} */ (IMAGE_TYPES)[type];
 		if (!extension) throw refuse([{ path: '/type', message: 'Images are JPEG, PNG, WebP or AVIF.' }]);
@@ -99,6 +124,12 @@ export const createStoreDetails = (product, service) => {
 		return { key, upload: { method: signed.method, url: signed.url, headers: signed.headers, expiresAt: signed.expiresAt } };
 	};
 
+	/** A picture's name in an activity action (lower-case words joined by _): logoDark → logo_dark. @param {StoreFileName} name */
+	const snake = (name) => name.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+
+	/** A picture's name for the activity log. @param {StoreFileName} name */
+	const labelOf = (name) => STORE_FILE_LABELS[name].replace(/^./, (first) => first.toUpperCase());
+
 	/** Delete a file of the store from the bucket (only one under the store's folder). @param {Site} s @param {string} key */
 	const deleteFile = async (s, key) => {
 		if (!key.startsWith(STORE_FOLDER)) return;
@@ -106,7 +137,7 @@ export const createStoreDetails = (product, service) => {
 		if (storage) await storage.deleteObject({ key }).catch(() => null);
 	};
 
-	/** Save the details with a file set or removed, through the list's own check and save. @param {any} ctx @param {'logo' | 'icon'} name @param {StoreDetails['logo']} file */
+	/** Save the details with a file set or removed, through the list's own check and save. @param {any} ctx @param {StoreFileName} name @param {StoreDetails['logo']} file */
 	const keep = async (ctx, name, file) => {
 		const s = await service.site(ctx);
 		const details = await detailsOf(s);
@@ -118,7 +149,7 @@ export const createStoreDetails = (product, service) => {
 		return { s, before: details[name] };
 	};
 
-	/** PUT …/logo and …/icon `{ key, alt }`: the uploaded file is checked in the bucket and kept. @param {any} ctx */
+	/** PUT …/<picture> `{ key, alt }`: the uploaded file is checked in the bucket and kept. @param {any} ctx */
 	const attach = async (ctx) => {
 		const name = fileName(ctx);
 		const body = bodyOf(ctx);
@@ -144,22 +175,22 @@ export const createStoreDetails = (product, service) => {
 		}
 		const { before } = await keep(ctx, name, { key, type, size: head.size, alt });
 		if (before && before.key !== key) await deleteFile(s, before.key);
-		await service.log(ctx, `store_details.${name}_set`, name, { label: name === 'logo' ? 'Logo' : 'Icon' });
+		await service.log(ctx, `store_details.${snake(name)}_set`, name, { label: labelOf(name) });
 		return { [name]: (await filesOf(s))[name] };
 	};
 
-	/** DELETE …/logo and …/icon. @param {any} ctx */
+	/** DELETE …/<picture>. @param {any} ctx */
 	const detach = async (ctx) => {
 		const name = fileName(ctx);
 		const { s, before } = await keep(ctx, name, null);
 		if (before) {
 			await deleteFile(s, before.key);
-			await service.log(ctx, `store_details.${name}_removed`, name, { label: name === 'logo' ? 'Logo' : 'Icon' });
+			await service.log(ctx, `store_details.${snake(name)}_removed`, name, { label: labelOf(name) });
 		}
 		return { [name]: null };
 	};
 
-	/** GET …/files: the logo and icon with their addresses (the dashboard editor shows them). @param {any} ctx */
+	/** GET …/files: the pictures with their addresses (the dashboard editor shows them). @param {any} ctx */
 	const files = async (ctx) => filesOf(await service.site(ctx));
 
 	return {

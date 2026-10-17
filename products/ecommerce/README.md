@@ -60,8 +60,9 @@ settings API (features, settings, texts, theme, Format, connections, and the lis
 `review_questions`, `claim_kinds` and `claim_statuses` at `/v1/lists/:list`), the activity log
 (`/v1/activity`) and counts of the main lists (`/v1/orders`, `/v1/products`, `/v1/customers`, `/v1/reviews` and
 `/v1/returns`, each with `/count` and `/counts?by=`, and ticket twins under `/v1/admin/`). Store details (Settings → Store
-details, or `PUT /v1/lists/store_details`: name, tagline, logo and icon in the merchant's storage, contacts, address, opening
-hours, social links) are read in public form at `GET /v1/shop/store`, and `GET /v1/shop/store/business-json` gives the
+details, or `PUT /v1/lists/store_details`: name, tagline, logo, dark logo, icon, favicon and dark favicon in the merchant's
+storage, contacts with more phone numbers, address, opening hours, social links) are read in public form at
+`GET /v1/shop/store` (with the website's own address, `siteUrl`), and `GET /v1/shop/store/business-json` gives the
 business.json a headless website serves at `/.well-known/business.json`. Server-token calls may name
 the acting staff member with the `SS-Actor-*` headers, and the shopper routes (`/v1/shop/…`: cart, checkout, my orders,
 cancel, loyalty, wishlist) also take the server token with `SS-Sign-In` and `SS-Visitor-IP`, so a headless website acts
