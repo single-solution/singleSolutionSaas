@@ -15,7 +15,7 @@ import * as admin from '../../src/console/admin/loaders.js';
 import { MerchantsView } from '../../src/console/admin/views/merchants.js';
 import * as loaders from '../../src/console/loaders.js';
 import { WebsitesView } from '../../src/console/views/websites.js';
-import { InstallBlock, WebsiteCard } from '../../src/console/views/website.js';
+import { InstallBlock, WebsiteCard, twoStepOnOf } from '../../src/console/views/website.js';
 import { startMongo } from '../helpers.js';
 import {
 	button,
@@ -596,5 +596,15 @@ describe('website cards (jsdom)', () => {
 		await pressDialog('Show token');
 		await until(() => assign.mock.calls.length === 1);
 		expect(assign).toHaveBeenCalledWith('/login?next=%2Fwebsites&expired=1');
+	});
+
+	it('knows from the signed-in person’s answer whether two-step is on', () => {
+		const ok = (/** @type {object} */ data) => ({ ok: /** @type {const} */ (true), status: 200, data });
+		expect(twoStepOnOf(ok({ kind: 'admin', admin: { twoStep: { enabled: true } } }))).toBe(true);
+		expect(twoStepOnOf(ok({ kind: 'merchant', merchant: { twoStep: { enabled: true } } }))).toBe(true);
+		expect(twoStepOnOf(ok({ kind: 'merchant', merchant: { twoStep: { enabled: false } } }))).toBe(false);
+		expect(twoStepOnOf(ok({ kind: 'admin', admin: {} }))).toBe(false);
+		expect(twoStepOnOf(null)).toBe(false);
+		expect(twoStepOnOf({ ok: false, status: 401, problem: { status: 401 } })).toBe(false);
 	});
 });

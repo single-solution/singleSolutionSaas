@@ -459,6 +459,12 @@ const useOnce = (path) => {
 };
 
 /**
+ * Whether the signed-in person has two-step on, from `GET /v1/me` (`{ kind, <kind>: { twoStep }, … }`).
+ * @param {import('./common.js').ApiResult | null} me
+ */
+export const twoStepOnOf = (me) => me?.ok === true && me.data?.[me.data?.kind]?.twoStep?.enabled === true;
+
+/**
  * Install and tokens of a website, as a dialog: one install block per product.
  * @param {{ merchantId: string, website: any, onClose: () => void }} props
  */
@@ -466,8 +472,7 @@ function TokensDialog({ merchantId, website, onClose }) {
 	const websiteId = String(website.websiteId);
 	const result = useOnce(api.tokens(merchantId, websiteId));
 	// two-step on: the confirmation of a server token asks for the code at once
-	const me = useOnce('/v1/me');
-	const twoStepOn = me?.ok === true && me.data?.twoStep?.enabled === true;
+	const twoStepOn = twoStepOnOf(useOnce('/v1/me'));
 	const tokens = /** @type {TokenEntry[]} */ (result?.ok ? (result.data?.items ?? []) : []);
 	return (
 		<Dialog open onClose={onClose} size="lg" title={WEBSITE.tokensOf(website.domain)}>
