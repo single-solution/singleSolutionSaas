@@ -10,7 +10,7 @@ setup advisor recommends features from the website's short business profile (wha
 delivery, sign-in, chat, messages, marketing, offers, each with the merchant's own answers where the options cannot list
 everything; moving, tax at checkout, countries, languages) by the `recommendFor` tags of each product's features (only
 what the profile asks for), points out features that are on but not called for, and lets Owner and Support switch a
-recommended feature on with one click. It holds control-plane records only; business data lives in each merchant's own database, inside the
+recommended feature on with one click. Each website also has **Website settings** (merchant: own websites; Owner and Support: any; never Finance): the facts every product of the website shares — business, brand and theme, region and Format, domains, pages and legal texts, team and alerts — set once and delivered to every product on the website (a version in the status answer, a `website.settings_changed` notice, a pull at `GET /v1/product/websites/:websiteId/settings`), each change an Activity entry. It holds control-plane records only; business data lives in each merchant's own database, inside the
 products. Next.js 16, React 19, MongoDB. The modules and their services are described in `src/modules/README.md` and
 `src/modules/INTERFACES.md`.
 

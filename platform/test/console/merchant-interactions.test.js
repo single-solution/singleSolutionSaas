@@ -347,7 +347,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		expect(shows('beta.example.com') && shows('1 product')).toBe(true);
 		// Setup, Install and tokens and Usage are in the card's More menu
 		await press('Actions for beta.example.com');
-		expect(menuItems()).toEqual(['Setup', 'Install and tokens', 'Usage', 'Visit website', 'Copy domain']);
+		expect(menuItems()).toEqual(['Website settings', 'Setup', 'Install and tokens', 'Usage', 'Visit website', 'Copy domain']);
 		cleanup();
 		const open = vi.fn();
 		vi.stubGlobal('open', open);

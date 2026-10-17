@@ -94,13 +94,18 @@ export const createWebsiteService = (ctx) => {
 	 */
 	const readinessOf = async (document) => {
 		const onSite = /** @type {Array<{ productId: string }>} */ (await commerce().productsOnWebsite(document.websiteId));
-		return Promise.all(
+		const found = await Promise.all(
 			onSite.map(async ({ productId }) => {
-				const product = await catalog().getProduct(productId);
+				// a product that cannot be read is left out: the readiness line never fails a read or a save
+				const product = await catalog()
+					.getProduct(productId)
+					.catch(() => null);
+				if (!product) return null;
 				const requires = /** @type {string[]} */ ([...(product.websiteSettingsRequires ?? [])]);
 				return { productId, name: String(product.name), requires, missing: missingWebsiteSettings(document, requires) };
 			}),
 		);
+		return found.filter((item) => item !== null);
 	};
 
 	/**
@@ -108,13 +113,18 @@ export const createWebsiteService = (ctx) => {
 	 * @param {string} websiteId
 	 */
 	const tellProducts = async (websiteId) => {
-		const onSite = /** @type {Array<{ productId: string }>} */ (await commerce().productsOnWebsite(websiteId));
-		for (const { productId } of onSite) {
-			try {
-				await catalog().notify(productId, { type: 'website.settings_changed', websiteId, what: 'settings' });
-			} catch (error) {
-				ctx.logger.warn('website.settings_changed not queued', { productId, websiteId, error });
+		try {
+			const onSite = /** @type {Array<{ productId: string }>} */ (await commerce().productsOnWebsite(websiteId));
+			for (const { productId } of onSite) {
+				try {
+					await catalog().notify(productId, { type: 'website.settings_changed', websiteId, what: 'settings' });
+				} catch (error) {
+					ctx.logger.warn('website.settings_changed not queued', { productId, websiteId, error });
+				}
 			}
+		} catch (error) {
+			// the change is saved: products still catch up from the next status (its `settingsVersion`)
+			ctx.logger.warn('website.settings_changed not sent', { websiteId, error });
 		}
 	};
 
