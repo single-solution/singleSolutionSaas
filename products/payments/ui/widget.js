@@ -27,7 +27,7 @@ export const ADMIN_CONFIG_PATH = '/v1/widget/admin/config';
  * @property {string} customCss
  * @property {Parameters<typeof import('@ss/app-kit/widget').formatMoney>[2]} format how money and dates look (Settings →
  *   Format, PLAN 0.8.10 K7)
- * @property {string} timeZone the business.json time zone (UTC when missing)
+ * @property {string} timeZone the business time zone (UTC when missing)
  * @property {string[]} features the switched-on features
  * @property {string[]} widgets the keys of the widgets whose feature is on
  */

@@ -2403,7 +2403,7 @@
 		"/v1/format": {
 			"get": {
 				"summary": "The Format of money and dates",
-				"description": "From the Portal (sources `portal`) once it holds the website's settings; the product's own saved Format before that.",
+				"description": "The website's Format from the Portal (sources `portal`: Website settings › Region and format); the built-in Format (sources `built-in`) while the Portal holds no settings yet.",
 				"x-ss-auth": "server",
 				"x-ss-access": "runtime",
 				"security": [
@@ -2440,8 +2440,8 @@
 				}
 			},
 			"put": {
-				"summary": "Save Format fields (null resets one)",
-				"description": "Answers 409 managed_by_portal once the Portal holds the website's settings: the Format is set in the Portal (Website settings › Region and format).",
+				"summary": "The Format is set in the Portal",
+				"description": "Always answers 409 managed_by_portal: the Format is set once for every product, in the Portal (Website settings › Region and format).",
 				"x-ss-auth": "server",
 				"x-ss-permission": "settings.manage",
 				"x-ss-access": "staff",
@@ -4611,7 +4611,7 @@
 		"/v1/theme": {
 			"get": {
 				"summary": "The widgets' theme",
-				"description": "From the Portal (sources `portal`) once it holds the website's settings; the product's own saved theme before that.",
+				"description": "The website's theme from the Portal (sources `portal`: Website settings › Brand and look); the built-in look (sources `built-in`) while the Portal holds no settings yet.",
 				"x-ss-auth": "server",
 				"x-ss-access": "runtime",
 				"security": [
@@ -4648,8 +4648,8 @@
 				}
 			},
 			"put": {
-				"summary": "Save theme fields (null resets one)",
-				"description": "Answers 409 managed_by_portal once the Portal holds the website's settings: the theme is set in the Portal (Website settings › Brand and look).",
+				"summary": "The theme is set in the Portal",
+				"description": "Always answers 409 managed_by_portal: the theme is set once for every product, in the Portal (Website settings › Brand and look).",
 				"x-ss-auth": "server",
 				"x-ss-permission": "settings.manage",
 				"x-ss-access": "staff",
@@ -5511,12 +5511,10 @@
 			"LookSource": {
 				"type": "string",
 				"enum": [
-					"website",
-					"default",
 					"built-in",
 					"portal"
 				],
-				"description": "Where a theme or Format value comes from: saved for this website, the global default, built in, or the website's settings in the Portal (then a save is refused with 409 managed_by_portal)."
+				"description": "Where a theme or Format value comes from: the website's settings in the Portal, or built in while the Portal holds none yet. It cannot be saved in a product (409 managed_by_portal)."
 			},
 			"ManualMethod": {
 				"type": "object",
@@ -6680,7 +6678,7 @@
 					},
 					"timeZone": {
 						"type": "string",
-						"description": "The business time zone (business.json), default UTC."
+						"description": "The business time zone (the website's settings in the Portal), default UTC."
 					},
 					"features": {
 						"type": "array",

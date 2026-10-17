@@ -1,6 +1,6 @@
 /**
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.7): the kit's page (`renderDocsPage`: title, intro, the localhost note,
- * the kit's routes for your server, business.json and the API reference from `openapi.json`) around Payments' own
+ * the kit's routes for your server, the website settings note and the API reference from `openapi.json`) around Payments' own
  * sections: the payment API, confirming a payment for its exact amount, payment events through Notifications and the
  * webhook signature check, each gateway's setup with the addresses its adapter says to register (P12), currencies,
  * manual payment methods, links,

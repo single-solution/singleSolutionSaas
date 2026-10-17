@@ -64,7 +64,7 @@ Routes are listed in `/docs` and `openapi.json` (generated from `server/routes.j
 subscription and pay-button routes, Payments serves `GET /v1/manual-methods` (the manual methods as payers see them), `GET /v1/payments/count` and `/v1/payments/counts?by=state|gateway`
 (and their ticket twins under `/v1/admin/payments/`), and the payment events on the kit's mechanism: `GET /v1/events`,
 `/v1/events/count` and `/v1/events/counts` (PLAN.md 0.8.10 K4, K5). The kit adds its own routes for the merchant's
-server (settings, texts, theme, Format, connections, activity log; the staff member's signed-in `SS-Sign-In` is needed and names them).
+server (settings, texts, connections, activity log; the staff member's signed-in `SS-Sign-In` is needed and names them). The look and the Format are the Portal's (Website settings): the kit reads them and refuses a save (409 `managed_by_portal`).
 
 ## Scripts
 

@@ -271,7 +271,7 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 		return found;
 	};
 
-	return Object.freeze({
+	const fakePortal = Object.freeze({
 		url,
 		jwks,
 		/** The Portal's request handler (for `createNetwork`). */
@@ -388,6 +388,20 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 			if (!checked.ok) throw new Error(`invalid website settings: ${JSON.stringify(checked.problems)}`);
 			found.settings = next;
 			return next.version;
+		},
+		/**
+		 * The merchant saves website settings in the Portal and every connected product is told (`website.settings_changed`),
+		 * as `setWebsiteSettings` and the notice the Portal queues after a save; the products fetch them right after.
+		 * @param {string} websiteId
+		 * @param {Parameters<typeof fakePortal.setWebsiteSettings>[1]} sections
+		 * @returns {Promise<number>} the new version
+		 */
+		saveWebsiteSettings: async (websiteId, sections) => {
+			const version = fakePortal.setWebsiteSettings(websiteId, sections);
+			for (const productId of products.keys())
+				if (products.get(productId)?.handler)
+					await fakePortal.sendNotice(productId, { type: 'website.settings_changed', websiteId, what: 'settings' });
+			return version;
 		},
 		/**
 		 * Add a removed product to a website again, as the Portal does (PLAN 0.4.12 row 4): active, every feature off and
@@ -545,6 +559,7 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 		/** @param {string} productId */
 		prices: (productId) => products.get(productId)?.prices ?? null,
 	});
+	return fakePortal;
 };
 
 /**

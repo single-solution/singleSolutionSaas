@@ -1,6 +1,6 @@
 /**
  * The hosted pages (PLAN 0.8.7), served by Payments with the website's widget texts (every word editable in Settings →
- * Texts), theme, custom CSS and Format (money as Settings → Format says, PLAN 0.8.10 K7): the payment-link page (`/l/<websiteId>/<linkId>`), the pay page of one payment
+ * Texts), theme, custom CSS and Format (money as the website's Format in the Portal says, PLAN 0.8.10 K7): the payment-link page (`/l/<websiteId>/<linkId>`), the pay page of one payment
  * (`/pay/<websiteId>/<paymentId>`: pick a gateway or a manual payment method, go on to the gateway, or the manual
  * method's details, accounts and instructions with the proof upload) and the
  * result page. Card details are never asked here: every gateway takes them on its own page. Plain HTML; every value is

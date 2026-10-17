@@ -67,11 +67,7 @@ export const TEXTS = dashboardTexts({
 		cancel: 'Cancel changes',
 	},
 	settings: {
-		looksHelp:
-			'Every word of the pay button, the admin widgets and the hosted payment pages, their theme, and how money and dates look.',
 		textsHelp: 'Every word the widgets and hosted pages show. A text must keep the same {placeholders} as the English text.',
-		formatHelp: 'How money and dates look in the pay button, the admin widgets and the hosted payment pages.',
-		localeHelp: "A tag such as en-US or fr-FR; empty uses each visitor's browser (en-US on the hosted pages).",
 	},
 	connections: {
 		fields: {

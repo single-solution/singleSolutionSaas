@@ -234,6 +234,17 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		if (response.status !== 200) throw new Error(`methods: ${response.status} ${response.text}`);
 	};
 
+	/**
+	 * The merchant saves website settings in the Portal (the business facts, the Format, the time zone …): the product
+	 * is told and fetches them.
+	 * @param {Parameters<typeof portal.setWebsiteSettings>[1]} sections
+	 */
+	const setWebsite = async (sections) => {
+		t += 1000; // a second notice at the same second would read as a replay
+		await portal.saveWebsiteSettings(websiteId, sections);
+		await flush();
+	};
+
 	/** Server-token call. @param {string} method @param {string} path @param {unknown} [body] @param {Record<string, string>} [headers] */
 	const api = (method, path, body, headers) => call(method, path, { token: server, body, ...(headers ? { headers } : {}) });
 
@@ -267,6 +278,7 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		connect,
 		methods,
 		setting,
+		setWebsite,
 		ticket,
 		connectDatabase: () => connect('database', merchantDatabase()),
 		flush,
