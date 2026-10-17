@@ -99,6 +99,9 @@ describe('RadioGroup', () => {
 		const onChange = vi.fn();
 		const { container } = render(<Group onChange={onChange} />);
 		expect(container.querySelector('fieldset legend')?.textContent).toBe('Letter');
+		// the legend is a floated block, so a hairline on the fieldset (a row list's divider) is not drawn through it
+		expect(container.querySelector('fieldset legend')?.className).toContain('float-left');
+		expect(container.querySelector('fieldset')?.className).toContain('[&>legend+*]:clear-both');
 		const radios = /** @type {HTMLInputElement[]} */ ([...container.querySelectorAll('input[type="radio"]')]);
 		expect(radios.map((r) => r.checked)).toEqual([true, false, false]);
 		expect(radios[1]?.disabled).toBe(true);

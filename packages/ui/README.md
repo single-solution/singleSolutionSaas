@@ -226,6 +226,10 @@ channels, claim kinds, units…). `renderItem(item, index, update)` draws a row'
 down and Remove on each row (named with the row, `Move up: Email`), Add at the end until `max`, and the empty text.
 `moveItem(list, from, to)` is its pure reorder.
 
+Every fieldset of the kit (`RadioGroup`, `CheckboxGroup`, `ChoicePicker`, `ListEditor`) floats its legend full width
+(`LEGEND_FLOW`) and clears what follows it (`LEGEND_CLEAR`): a browser draws a plain legend IN the fieldset's top border,
+so the hairline between two rows of a `SettingList` ran through the legend. A new fieldset uses the same two classes.
+
 ## StatusBadge
 
 `<StatusBadge status label? />` colors the statuses of PLAN.md 0.5.5: `active` green, `low_balance` and `grace` yellow,

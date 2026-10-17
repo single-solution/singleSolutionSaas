@@ -8,7 +8,7 @@
  */
 import { Button, IconButton } from './Button.js';
 import { cx } from './cx.js';
-import { FieldLayoutContext } from './fields.js';
+import { FieldLayoutContext, LEGEND_CLEAR, LEGEND_FLOW } from './fields.js';
 import { Icon } from './icons.js';
 
 /**
@@ -69,8 +69,12 @@ export function ListEditor({
 	const T = { ...LIST_EDITOR_TEXTS, ...texts };
 	const full = max !== undefined && items.length >= max;
 	return (
-		<fieldset data-cell="" data-wide="" className={cx('col-span-full min-w-0 space-y-3', className)} disabled={disabled}>
-			<legend className="mb-2 block text-label font-medium text-fg">
+		<fieldset
+			data-cell=""
+			data-wide=""
+			className={cx('col-span-full min-w-0 space-y-3', LEGEND_CLEAR, className)}
+			disabled={disabled}>
+			<legend className={cx('mb-2 block text-label font-medium text-fg', LEGEND_FLOW)}>
 				{legend}
 				{items.length > 0 ? <span className="ml-1.5 font-normal text-muted">{items.length}</span> : null}
 			</legend>

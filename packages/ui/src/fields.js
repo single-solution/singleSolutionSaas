@@ -18,6 +18,16 @@ import { Icon } from './icons.js';
 const LABEL_CLASS = 'block text-label font-medium text-fg';
 
 /**
+ * A fieldset's legend as an ordinary block. The browser draws a fieldset's own legend IN its top border, so a hairline
+ * on the fieldset (the divider of a {@link ROW_LIST}) would run through the legend. A floated legend is no longer the
+ * "rendered legend": the border stays a straight line above it and the legend sits inside the padding like any label.
+ * The element after the legend clears it (`LEGEND_CLEAR` on the fieldset).
+ */
+export const LEGEND_FLOW = 'float-left w-full';
+/** On a fieldset whose legend uses {@link LEGEND_FLOW}: what follows the legend starts below it. */
+export const LEGEND_CLEAR = '[&>legend+*]:clear-both';
+
+/**
  * A setting row (owner 2026-10-17, like Stripe's settings): the label and help in a left column of about 280 px, the
  * control in the right column at most 560 px wide (640 for long text), stacked when the card is narrower than 42rem.
  * No control stretches across the whole card.
@@ -630,10 +640,10 @@ function ChoiceGroup({ legend, ids, help, error, disabled, wide, layout, classNa
 		<fieldset
 			{...cell(wide)}
 			onKeyDown={onKeyDown}
-			className={cx('min-w-0 space-y-2', className)}
+			className={cx('min-w-0 space-y-2', LEGEND_CLEAR, className)}
 			aria-describedby={describedBy({ help, error }, ids)}
 			disabled={disabled}>
-			<legend className={cx(LABEL_CLASS, 'mb-2')}>{legend}</legend>
+			<legend className={cx(LABEL_CLASS, LEGEND_FLOW, 'mb-2')}>{legend}</legend>
 			{children}
 			<FieldMessages ids={ids} help={help} error={error} />
 		</fieldset>
@@ -838,10 +848,10 @@ export function CheckboxGroup({ legend, options, value, onChange, help, error, d
 	return (
 		<fieldset
 			{...cell(wide)}
-			className={cx('min-w-0 space-y-2', className)}
+			className={cx('min-w-0 space-y-2', LEGEND_CLEAR, className)}
 			aria-describedby={describedBy({ help, error }, ids)}
 			disabled={disabled}>
-			<legend className={cx(LABEL_CLASS, 'mb-2')}>{legend}</legend>
+			<legend className={cx(LABEL_CLASS, LEGEND_FLOW, 'mb-2')}>{legend}</legend>
 			<div className="flex flex-wrap gap-x-6 gap-y-2.5">
 				{options.map((o) => {
 					const optionId = `${ids.id}-${o.value}`;
@@ -946,10 +956,10 @@ export function ChoicePicker({
 	return (
 		<fieldset
 			{...cell(wide)}
-			className={cx('min-w-0 space-y-2.5', className)}
+			className={cx('min-w-0 space-y-2.5', LEGEND_CLEAR, className)}
 			aria-describedby={describedBy({ help, error }, ids)}
 			disabled={disabled}>
-			<legend className={cx(LABEL_CLASS, 'mb-2')}>
+			<legend className={cx(LABEL_CLASS, LEGEND_FLOW, 'mb-2')}>
 				{legend}
 				{value.length > 0 ? <span className="ml-1.5 font-normal text-muted">{value.length}</span> : null}
 			</legend>
