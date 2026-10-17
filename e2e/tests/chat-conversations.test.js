@@ -41,7 +41,7 @@ import {
 	strings as notifyStrings,
 } from '@ss/product-notifications/product';
 import { createRoutes as notifyRoutes } from '@ss/product-notifications/routes';
-import { DAY, startSystem } from './helpers.js';
+import { DAY, savePortalSettings, splitPortal, startSystem } from './helpers.js';
 
 const CHAT = 'https://chat-conversations.test';
 const ACCOUNTS = 'https://accounts.test';
@@ -111,6 +111,8 @@ const openai = async (request) => {
 let sys;
 let websiteId = '';
 let merchantId = '';
+/** The merchant, who saves the website's settings (the alert team …) in the Portal. @type {Awaited<ReturnType<import('./helpers.js').System['merchant']>> | null} */
+let merchant = null;
 /** The sign-in of a staff Owner of the website's Accounts (a real user of it), made on first use. @type {(() => Promise<string>) | null} */
 let accountsStaff = null;
 /** @type {Record<string, { browser: string, server: string }>} */
@@ -196,7 +198,11 @@ const shipping = async (text) => {
 
 /** Save settings through a product's settings API (K1). @param {string} productKey @param {Record<string, unknown>} values */
 const configure = async (productKey, values) => {
-	for (const [key, value] of Object.entries(values)) {
+	// the alert team and its phone channel are the website's, set once in the Portal (Team and alerts)
+	const { portal, own } = splitPortal(values);
+	if (Object.keys(portal).length > 0 && merchant)
+		await savePortalSettings(merchant, `/v1/merchants/${merchantId}/websites/${websiteId}/settings`, portal);
+	for (const [key, value] of Object.entries(own)) {
 		const saved = await server(productKey, 'PUT', `/v1/settings/${key}`, { value });
 		expect(saved.status, `${productKey} ${key}: ${JSON.stringify(saved.json)}`).toBe(200);
 	}
@@ -249,6 +255,7 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		const m = await sys.merchant('lamps@shop.test', [DOMAIN]);
 		websiteId = m.websiteIds[0] ?? '';
 		merchantId = m.merchantId;
+		merchant = m;
 		for (const id of ['chat', 'accounts', 'notifications', 'ecommerce']) {
 			await sys.addProduct(m.merchantId, websiteId, id);
 			tokens[id] = await sys.tokens(m.merchantId, websiteId, id);

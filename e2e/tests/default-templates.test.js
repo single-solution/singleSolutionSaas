@@ -27,7 +27,7 @@ import {
 	strings as notifyStrings,
 } from '@ss/product-notifications/product';
 import { createRoutes as notifyRoutes } from '@ss/product-notifications/routes';
-import { startSystem } from './helpers.js';
+import { savePortalSettings, startSystem } from './helpers.js';
 
 const CHAT = 'https://chat-defaults.test';
 const ACCOUNTS = 'https://accounts-defaults.test';
@@ -50,6 +50,14 @@ const resend = async (request) => {
 let sys;
 let websiteId = '';
 let merchantId = '';
+/** The merchant, who saves the website's alert team in the Portal. @type {Awaited<ReturnType<import('./helpers.js').System['merchant']>> | null} */
+let merchant = null;
+/** The alert team is the website's, set once in the Portal (Team and alerts). @param {string[]} recipients */
+const alertTeam = async (recipients) =>
+	merchant &&
+	savePortalSettings(merchant, `/v1/merchants/${merchantId}/websites/${websiteId}/settings`, {
+		'staff_alerts.recipients': recipients,
+	});
 /** @type {Record<string, { browser: string, server: string }>} */
 const tokens = {};
 /** @type {Record<string, string>} */
@@ -99,6 +107,7 @@ describe('default templates: no template written, messages still go (parity P1)'
 		const m = await sys.merchant('defaults@shop.test', [DOMAIN]);
 		websiteId = m.websiteIds[0] ?? '';
 		merchantId = m.merchantId;
+		merchant = m;
 		for (const id of ['chat', 'accounts', 'notifications']) {
 			await sys.addProduct(m.merchantId, websiteId, id);
 			tokens[id] = await sys.tokens(m.merchantId, websiteId, id);
@@ -125,9 +134,7 @@ describe('default templates: no template written, messages still go (parity P1)'
 			expect(
 				(await dash(id, 'PUT', '/connections/notifications', { value: tokens.notifications?.server })).json,
 			).toMatchObject({ status: 'connected' });
-		expect(
-			(await dash('chat', 'PUT', '/settings/staff_alerts.recipients', { value: ['ops@defaults.example.com'] })).status,
-		).toBe(204);
+		await alertTeam(['ops@defaults.example.com']);
 		const saved = await dash('notifications', 'GET', '/templates');
 		expect(saved.json.items).toEqual([]);
 	});
@@ -179,9 +186,7 @@ describe('default templates: no template written, messages still go (parity P1)'
 			expect((await dash('ecommerce', 'PUT', `/connections/${id}`, { value: tokens[id]?.server })).json).toMatchObject({
 				status: 'connected',
 			});
-		expect(
-			(await dash('ecommerce', 'PUT', '/settings/staff_alerts.recipients', { value: ['ops@defaults.example.com'] })).status,
-		).toBe(204);
+		await alertTeam(['ops@defaults.example.com']);
 		/** @param {string} method @param {string} path @param {unknown} [body] */
 		const server = (method, path, body) =>
 			sys.call(method, path, { base: SHOP, token: tokens.ecommerce?.server, ...(body === undefined ? {} : { body }) });

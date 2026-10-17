@@ -13,7 +13,7 @@ import { createProductInstance, manifest, strings } from '@ss/product-accounts/p
 import { createRoutes } from '@ss/product-accounts/routes';
 import { staffSignIns } from '@ss/product-accounts/testing';
 import { startWidget } from '@ss/product-accounts/widget';
-import { codeOf, startSystem } from './helpers.js';
+import { codeOf, savePortalSettings, startSystem } from './helpers.js';
 
 const ACCOUNTS = 'https://accounts.test';
 const DOMAIN = 'members.example.com';
@@ -141,14 +141,13 @@ beforeAll(async () => {
 		domain: DOMAIN,
 		base: ACCOUNTS,
 	});
-	for (const [key, value] of /** @type {const} */ ([
-		['phone.defaultCallingCode', '+44'],
-		['phone.trunkPrefix', '0'],
-		['role_requests.requestableRoles', ['member']],
-	])) {
-		const saved = await server.call('PUT', `/v1/settings/${key}`, { value });
-		expect(saved.status, key).toBe(200);
-	}
+	// the phone rules are the website's, set once in the Portal (Region and format)
+	await savePortalSettings(m, `/v1/merchants/${m.merchantId}/websites/${websiteId}/settings`, {
+		'phone.defaultCallingCode': '+44',
+		'phone.trunkPrefix': '0',
+	});
+	const saved = await server.call('PUT', '/v1/settings/role_requests.requestableRoles', { value: ['member'] });
+	expect(saved.status).toBe(200);
 	await server.call('PUT', '/v1/roles/member', { name: 'Member', permissions: ['site:discount'] });
 });
 afterAll(async () => {

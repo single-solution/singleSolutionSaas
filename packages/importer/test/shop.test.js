@@ -180,7 +180,6 @@ describe('the example shop (fixture)', () => {
 		expect(plan.ecommerce.settings).toEqual({
 			'checkout.numberPattern': '{prefix}{year}-{number}',
 			'checkout.numberPrefix': 'EX-',
-			'catalog.currency': 'USD',
 			'catalog.mediaBaseUrl': 'https://cdn.example.com',
 		});
 		expect(plan.ecommerce.lists.order_flow.statuses).toEqual([

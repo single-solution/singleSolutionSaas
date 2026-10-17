@@ -141,7 +141,7 @@ describe('the merchant sets the time zone once, in the Portal', () => {
 		expect((await serverTimeZones('ecommerce'))[0]).toBe('Europe/Paris');
 	});
 
-	it('Ecommerce’s Store details are the Portal’s once it holds them: read only, and the website’s server reads the same facts', async () => {
+	it('Ecommerce’s Store details are the Portal’s: the shop reads the same facts, and keeps no record or form of its own', async () => {
 		const business = {
 			name: 'Portal Store',
 			otherNames: [],
@@ -159,13 +159,20 @@ describe('the merchant sets the time zone once, in the Portal', () => {
 		};
 		const version = (await m.client.get(settingsUrl)).json.settings.version;
 		expect((await m.client.put(`${settingsUrl}/business`, { version, value: business })).status).toBe(200);
-		const list = await sys.call('GET', '/v1/lists/store_details', { token: tokens.ecommerce?.server });
-		expect(list.json.value).toMatchObject({
-			portal: true,
+		const shop = await sys.call('GET', '/v1/shop/store', { token: tokens.ecommerce?.browser, origin: ORIGIN });
+		expect(shop.json).toMatchObject({
 			name: 'Portal Store',
 			timeZone: 'Europe/Paris',
-			address: { city: 'Lahore' },
+			address: { city: 'Lahore', country: 'PK' },
+			contact: { email: 'hello@store.example.com' },
 		});
+		// the website's server reads the same, and Ecommerce has no list of its own for them any more
+		const fromServer = await sys.call('GET', '/v1/shop/store', {
+			token: tokens.ecommerce?.server,
+			headers: { 'ss-visitor-ip': '203.0.113.7' },
+		});
+		expect(fromServer.json).toEqual(shop.json);
+		expect((await sys.call('GET', '/v1/lists/store_details', { token: tokens.ecommerce?.server })).status).toBe(404);
 	});
 });
 
@@ -205,13 +212,16 @@ describe('nothing but a signed-in person changes website settings', () => {
 			const chatStaff = await sys.call('PUT', path, { token: tokens.chat?.server, base: CHAT, body: change });
 			expect([chatStaff.status, codeOf(chatStaff)]).toEqual([409, 'managed_by_portal']);
 		}
+		// Ecommerce keeps no copy of the Portal's facts to change: there is no such list, and no such setting
 		const store = await sys.call('PUT', '/v1/lists/store_details', { token: server, body: { value: { name: 'Mine' } } });
-		expect([store.status, codeOf(store)]).toEqual([409, 'managed_by_portal']);
+		expect([store.status, codeOf(store)]).toEqual([404, 'not_found']);
+		const currency = await sys.call('PUT', '/v1/settings/catalog.currency', { token: server, body: { value: 'EUR' } });
+		expect([currency.status, codeOf(currency)]).toEqual([404, 'not_found']);
 
-		// the same through the dashboards: an admin session cannot change what the Portal owns either
+		// the same through the dashboards: they have no route to change what the Portal owns
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);
 		const theme = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/theme`, { mode: 'light' });
-		expect([theme.status, codeOf(theme)]).toEqual([409, 'managed_by_portal']);
+		expect([theme.status, codeOf(theme)]).toEqual([404, 'not_found']);
 
 		// another merchant’s session cannot write them
 		const other = await sys.merchant('other@shop.test', ['other.example.com']);

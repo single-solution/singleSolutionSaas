@@ -95,15 +95,18 @@ describe('the Portal-issued server token alone', () => {
 });
 
 describe('a signed-in staff member with the permission', () => {
-	it('changes the theme, and the change is theirs in Recent changes', async () => {
+	it('changes a setting, and the change is theirs in Recent changes; the theme is the Portal’s, theirs too is refused', async () => {
 		const staff = { id: 'usr_sam', name: 'Sam Staff', permissions: ['notes:settings.manage'] };
-		const saved = await sys.call('PUT', '/v1/theme', { token: tokens.server, staff, body: { radius: 7 } });
+		const saved = await sys.call('PUT', '/v1/settings/notes.maxLength', { token: tokens.server, staff, body: { value: 70 } });
 		expect(saved.status).toBe(200);
 		const overview = await sys.dashboard(cookie, 'GET', `/v1/dashboard/websites/${websiteId}/overview`);
 		expect(overview.json.recentChanges[0]).toMatchObject({
-			what: 'theme',
+			what: 'settings',
 			who: { kind: 'user', id: 'usr_sam', name: 'Sam Staff' },
 		});
+		// the theme is the website's, set once in the Portal: a signed-in staff member cannot change it here either
+		const theme = await sys.call('PUT', '/v1/theme', { token: tokens.server, staff, body: { radius: 7 } });
+		expect([theme.status, codeOf(theme)]).toEqual([409, 'managed_by_portal']);
 		// and not the connections, which are their own permission
 		const refused = await sys.call('PUT', '/v1/connections/database', {
 			token: tokens.server,
@@ -116,9 +119,9 @@ describe('a signed-in staff member with the permission', () => {
 
 describe('the dashboard session', () => {
 	it('still changes what it changed, with no sign-in, from the product’s own address only', async () => {
-		const path = `/v1/dashboard/websites/${websiteId}/theme`;
-		expect((await sys.dashboard(cookie, 'PUT', path, { radius: 5 })).status).toBe(200);
-		const foreign = await sys.call('PUT', path, { cookie, origin: ORIGIN, body: { radius: 6 } });
+		const path = `/v1/dashboard/websites/${websiteId}/settings/notes.maxLength`;
+		expect((await sys.dashboard(cookie, 'PUT', path, { value: 50 })).status).toBe(204);
+		const foreign = await sys.call('PUT', path, { cookie, origin: ORIGIN, body: { value: 60 } });
 		expect(foreign.status).toBe(403);
 	});
 });

@@ -948,7 +948,6 @@ export const SHOP_MAPPING = defineMapping({
 					// the old shop numbered orders per year: <prefix><year>-<number>
 					'checkout.numberPattern': '{prefix}{year}-{number}',
 					'checkout.numberPrefix': doc.orderPrefix,
-					'catalog.currency': doc.currency,
 					'catalog.mediaBaseUrl': doc.imageBase,
 				},
 				// its own statuses and moves are the website's order flow (written before the orders)

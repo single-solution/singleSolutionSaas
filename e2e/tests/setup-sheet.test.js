@@ -29,7 +29,7 @@ import * as payments from '@ss/product-payments/product';
 import { createRoutes as paymentsRoutes } from '@ss/product-payments/routes';
 import { createProductInstance, manifest, strings } from '../fixtures/notes/adapters/product.js';
 import { createRoutes } from '../fixtures/notes/server/routes.js';
-import { PRODUCT_URL, codeOf, startSystem } from './helpers.js';
+import { PRODUCT_URL, codeOf, savePortalSettings, startSystem } from './helpers.js';
 
 const NOTIFY = 'https://notifications-setup.test';
 /** The other real products, each at its own address. */
@@ -264,6 +264,12 @@ describe('Setup sheet (end to end)', () => {
 	});
 
 	it('recommends features from the merchant’s business profile, and the admin switches one on through the product', async () => {
+		// the countries the website serves are its settings in the Portal (Region and format), not a profile answer
+		const refusedCountries = await merchant.client.put(`${sheetPath()}/profile`, { sells: ['physical'], countries: ['US'] });
+		expect([refusedCountries.status, codeOf(refusedCountries)]).toEqual([422, 'validation_failed']);
+		await savePortalSettings(merchant, `/v1/merchants/${merchantId}/websites/${websiteId}/settings`, {
+			'region.countriesServed': ['US'],
+		});
 		const saved = await merchant.client.put(`${sheetPath()}/profile`, {
 			sells: ['physical'],
 			pays: ['online'],
@@ -271,9 +277,10 @@ describe('Setup sheet (end to end)', () => {
 			chat: ['people'],
 			messages: ['sms'],
 			moving: true,
-			countries: ['US'],
 		});
 		expect(saved.status).toBe(200);
+		expect(saved.json.website.profile).toMatchObject({ sells: ['physical'], moving: true, countries: ['US'] });
+		expect(saved.json.website.business).toEqual({ found: true, name: null, country: null, timeZone: null });
 		const checked = validateBlueprint(saved.json);
 		expect(checked.ok, JSON.stringify(checked.ok ? [] : checked.problems.slice(0, 5))).toBe(true);
 		/** @param {any} sheet @param {string} id */

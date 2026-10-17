@@ -3,9 +3,11 @@
  * with the Portal-issued server token and an acting user (`SS-Actor-*`), reads the features and settings, saves a
  * setting of a switched-on feature, sees it in the product dashboard and in Recent changes under the acting user's
  * name, resets it, is refused a setting of a switched-off feature, and edits a widget text, the theme, the Format, a
- * list (Chat, Ecommerce) and reads the connections.
+ * list (Chat, Ecommerce) and reads the connections. The theme and the Format are the website's in the Portal: read here,
+ * refused when written here, and what the merchant sets there is what the product reads.
  */
 import { afterAll, describe, expect, it } from 'vitest';
+import { savePortalSettings } from './helpers.js';
 import * as accounts from '@ss/product-accounts/product';
 import * as accountsRoutes from '@ss/product-accounts/routes';
 import * as chat from '@ss/product-chat/product';
@@ -40,9 +42,9 @@ const CASES = [
 		id: 'accounts',
 		product: accounts,
 		routes: accountsRoutes,
-		on: ['phone_code', 'roles'],
-		setting: 'phone_code.countries',
-		value: ['GB'],
+		on: ['email_code', 'roles'],
+		setting: 'email_code.websitePerHour',
+		value: 5,
 		list: null,
 	},
 	{
@@ -211,13 +213,23 @@ describe.each(CASES)('settings API of $id (K1)', ({ id, product, routes, on, set
 			source: 'website',
 		});
 		expect((await api('DELETE', `/v1/texts/${text.key}`)).json).toMatchObject({ value: text.english, source: 'built-in' });
-		expect((await api('PUT', '/v1/theme', { radius: 4 })).json.theme.radius).toBe(4);
-		const format = await api('PUT', '/v1/format', {
-			locale: 'en-GB',
-			currencyDisplay: 'symbol',
-			wholeUnits: true,
-			times: 'business',
+		// the theme and the Format are the Portal's (Website settings): read here, never written here
+		expect((await api('GET', '/v1/theme')).json.sources.radius).toBe('built-in');
+		for (const [path, change] of /** @type {Array<[string, unknown]>} */ ([
+			['/v1/theme', { radius: 4 }],
+			['/v1/format', { wholeUnits: true }],
+		])) {
+			const refused = await api('PUT', path, change);
+			expect([refused.status, codeOf(refused)]).toEqual([409, 'managed_by_portal']);
+		}
+		// what the merchant sets once in the Portal is what this product reads
+		await savePortalSettings(m, `/v1/merchants/${m.merchantId}/websites/${websiteId}/settings`, {
+			'region.format.locale': 'en-GB',
+			'region.format.currencyDisplay': 'symbol',
+			'region.format.wholeUnits': true,
+			'region.format.times': 'business',
 		});
+		const format = await api('GET', '/v1/format');
 		expect(format.json.format).toEqual({
 			locale: 'en-GB',
 			currencyDisplay: 'symbol',
@@ -225,7 +237,7 @@ describe.each(CASES)('settings API of $id (K1)', ({ id, product, routes, on, set
 			wholeUnits: true,
 			times: 'business',
 		});
-		expect((await api('GET', '/v1/format')).json.sources.wholeUnits).toBe('website');
+		expect(format.json.sources.wholeUnits).toBe('portal');
 
 		// lists: the whole list, checked by the product
 		if (list) {

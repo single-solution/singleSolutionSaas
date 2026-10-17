@@ -67,6 +67,79 @@ export const codeOf = (res) =>
 		.split('/')
 		.pop() ?? '';
 
+/**
+ * Settings the products used to keep, now the website's in the Portal (Website settings): each key (as the product named
+ * it) with the paths of the document it sets. Tests that configure a product call {@link splitPortal} on their values
+ * and {@link savePortalSettings} for what is the Portal's.
+ * @type {Readonly<Record<string, (value: any) => Record<string, unknown>>>}
+ */
+const PORTAL_OWNED = Object.freeze({
+	'phone.defaultCallingCode': (v) => ({ 'region.phone.callingCode': v }),
+	'checkout.defaultCallingCode': (v) => ({ 'region.phone.callingCode': v }),
+	'phone.trunkPrefix': (v) => ({ 'region.phone.trunkPrefix': v }),
+	'checkout.trunkPrefix': (v) => ({ 'region.phone.trunkPrefix': v }),
+	'checkout.countries': (v) => ({ 'region.phone.countries': v }),
+	'catalog.currency': (v) => ({ 'region.currency': v, 'region.currencies': [v] }),
+	'catalog.weightUnit': (v) => ({ 'region.units.weight': v }),
+	'catalog.sizeUnit': (v) => ({ 'region.units.size': v }),
+	'checkout.addressRequired': (v) => ({ 'region.address.required': v }),
+	'staff_alerts.recipients': (v) => ({
+		'team.recipients': v.map((/** @type {string} */ entry) =>
+			entry.includes('@') ? { name: '', email: entry, phone: '' } : { name: '', email: '', phone: entry },
+		),
+	}),
+	'staff_alerts.phoneChannel': (v) => ({ 'team.phoneChannel': v }),
+	'staff_alerts.staffPush': (v) => ({ 'team.staffPush': v }),
+	'seo.brandName': (v) => ({ 'business.name': v }),
+});
+
+/** A path into the website settings (`region.timeZone`). @param {string} key */
+const isDocumentPath = (key) => /^(business|brand|region|pages|team)\./.test(key);
+
+/** A key of a product's setting that the Portal owns, or a path into the website settings. @param {string} key */
+const isPortalKey = (key) => key in PORTAL_OWNED || isDocumentPath(key);
+
+/**
+ * Split the values a test wants to configure into the Portal's (website settings) and the product's own.
+ * @param {Record<string, unknown>} values
+ */
+export const splitPortal = (values) => ({
+	portal: Object.fromEntries(Object.entries(values).filter(([key]) => isPortalKey(key))),
+	own: Object.fromEntries(Object.entries(values).filter(([key]) => !isPortalKey(key))),
+});
+
+/**
+ * Save website settings in the Portal as the signed-in merchant does: the current document, the changes made to it,
+ * each changed section saved with the version it read. The products are told in process and fetch the document.
+ * @param {{ client: { get: (path: string) => Promise<Answer>, put: (path: string, body?: unknown) => Promise<Answer> } }} who
+ * @param {string} settingsUrl `/v1/merchants/<merchant>/websites/<website>/settings`
+ * @param {Record<string, unknown>} values keys of the products' settings that the Portal owns, or paths into the
+ *   document (`region.timeZone`, `region.format.wholeUnits`, `business.name`)
+ */
+export const savePortalSettings = async (who, settingsUrl, values) => {
+	const document = (await who.client.get(settingsUrl)).json.settings;
+	/** @type {Set<string>} */
+	const touched = new Set();
+	for (const [key, value] of Object.entries(values)) {
+		const paths = isDocumentPath(key) ? { [key]: value } : PORTAL_OWNED[key]?.(value);
+		if (!paths) throw new Error(`${key} is not a website setting`);
+		for (const [path, member] of Object.entries(paths)) {
+			const [section = '', ...steps] = path.split('.');
+			const last = steps.pop() ?? '';
+			let target = document[section];
+			for (const step of steps) target = target[step];
+			target[last] = member;
+			touched.add(section);
+		}
+	}
+	let version = document.version;
+	for (const section of touched) {
+		const saved = await who.client.put(`${settingsUrl}/${section}`, { version, value: document[section] });
+		if (saved.status !== 200) throw new Error(`website settings ${section}: ${saved.status} ${JSON.stringify(saved.json)}`);
+		version = saved.json.settings.version;
+	}
+};
+
 /** @typedef {(message: string, fields?: Record<string, unknown>) => void} Log */
 /** @typedef {{ debug: Log, info: Log, warn: Log, error: Log, child: (fields: Record<string, unknown>) => Logger }} Logger */
 

@@ -5,12 +5,13 @@
  * with the shopper's proof upload and staff-recorded payments) and whole-unit totals (Format `wholeUnits` with GBP),
  * deal rules and locks, role pricing (an Accounts role on the sign-in), the loyalty options, the extra moves (refunded
  * before delivery only when paid; a customer return after delivery with and without restock), the payments log, an
- * order numbered `SO-2026-0043` (prefix, digits and the counter, in the business year of business.json's time zone),
+ * order numbered `SO-2026-0043` (prefix, digits and the counter, in the business year of the website's time zone),
  * events, staff alerts (listed recipients and Accounts staff whose role grants the permission) and per-status
  * messages (the mails the real Notifications sends), claims, invoices, the reports summary, and the shop's own order and
  * unit fields (a gift message asked at checkout, a box size needed before packing, a dual-SIM phone's IMEIs). Ecommerce runs on the
  * REAL Portal with the real Accounts, Payments and Notifications next to it; the email provider (Resend), the
- * merchant's S3 bucket and the shop's own site (its business.json) are fakes in this process.
+ * merchant's S3 bucket are fakes in this process. The business facts, region and Format are the website's settings in the
+ * Portal, saved there once for every product.
  */
 import { staffSignIns } from '@ss/product-accounts/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -34,7 +35,7 @@ import {
 	strings as payStrings,
 } from '@ss/product-payments/product';
 import { createRoutes as payRoutes } from '@ss/product-payments/routes';
-import { codeOf, startSystem } from './helpers.js';
+import { codeOf, savePortalSettings, splitPortal, startSystem } from './helpers.js';
 
 const SHOP = 'https://ecommerce-orders.test';
 const ACCOUNTS = 'https://accounts-orders.test';
@@ -131,19 +132,12 @@ const bucket = async (request) => {
 	});
 };
 
-/**
- * The shop's own site: its business.json names the business time zone (PLAN 0.8.10 K8).
- * @param {Request} request
- */
-const storeSite = async (request) =>
-	new URL(request.url).pathname === '/.well-known/business.json'
-		? Response.json({ version: 1, name: 'Example Shop', email: 'hello@shop.example.com', timeZone: 'Europe/London' })
-		: new Response('not found', { status: 404 });
-
 /** @type {import('./helpers.js').System} */
 let sys;
 let websiteId = '';
 let merchantId = '';
+/** The merchant, who saves the website's settings in the Portal. @type {Awaited<ReturnType<import('./helpers.js').System['merchant']>> | null} */
+let merchant = null;
 /** The sign-in of a staff Owner of the website's Accounts (a real user of it), made on first use. @type {(() => Promise<string>) | null} */
 let accountsStaff = null;
 /** The headers of a call to Accounts' staff routes: a real staff user of its own signed in. */
@@ -214,7 +208,11 @@ const write = async (method, path, body) => {
  * @param {string} base @param {string} productId @param {Record<string, unknown>} values
  */
 const configureOn = async (base, productId, values) => {
-	for (const [key, value] of Object.entries(values)) {
+	// what the Portal owns (phone rules, currency, alert team …) is saved there, once for every product
+	const { portal, own } = splitPortal(values);
+	if (Object.keys(portal).length > 0 && merchant)
+		await savePortalSettings(merchant, `/v1/merchants/${merchantId}/websites/${websiteId}/settings`, portal);
+	for (const [key, value] of Object.entries(own)) {
 		const path = key.startsWith('list.') ? `/v1/lists/${key.slice(5)}` : `/v1/settings/${key}`;
 		const saved = await sys.call('PUT', path, {
 			base,
@@ -319,7 +317,7 @@ beforeAll(async () => {
 	sys = await startSystem({
 		unit: {
 			...unit(createProductInstance, createRoutes, manifest, strings, SHOP),
-			handlers: { 'https://api.resend.com': resend, [BUCKET]: bucket, [ORIGIN]: storeSite },
+			handlers: { 'https://api.resend.com': resend, [BUCKET]: bucket },
 		},
 		extras: [
 			unit(createAccounts, accountsRoutes, accountsManifest, accountsStrings, ACCOUNTS),
@@ -332,6 +330,7 @@ beforeAll(async () => {
 	const m = await sys.merchant('owner@shop.test', [DOMAIN]);
 	websiteId = m.websiteIds[0] ?? '';
 	merchantId = m.merchantId;
+	merchant = m;
 	for (const id of ['ecommerce', 'accounts', 'payments', 'notifications']) {
 		await sys.addProduct(m.merchantId, websiteId, id);
 		tokens[id] = await sys.tokens(m.merchantId, websiteId, id);
@@ -440,8 +439,13 @@ beforeAll(async () => {
 		const pasted = await dashboardOf(SHOP, 'ecommerce', `/connections/${id}`, { value: tokens[id]?.server });
 		expect(pasted).toMatchObject({ status: 'connected' });
 	}
-	expect((await write('PUT', '/v1/format', { wholeUnits: true })).format).toMatchObject({ wholeUnits: true });
 	await configure({
+		// the website's facts, region and Format (Website settings in the Portal)
+		'business.name': 'Example Shop',
+		'business.email': 'hello@shop.example.com',
+		'region.country': 'GB',
+		'region.timeZone': 'Europe/London',
+		'region.format.wholeUnits': true,
 		'catalog.currency': 'GBP',
 		'checkout.numberPattern': '{prefix}{year}-{number}',
 		'checkout.numberPrefix': 'SO-',
@@ -1138,7 +1142,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 	it('reports the summary by business day in the business time zone, as the order list adds up (E36)', async () => {
 		const summary = await server('GET', '/v1/reports/summary?from=2026-10-01&to=2026-10-01&series=day');
 		expect(summary.status, JSON.stringify(summary.json)).toBe(200);
-		// business.json's Europe/London (summer time in October): the day starts at 23:00 UTC the day before
+		// the website's Europe/London (summer time in October): the day starts at 23:00 UTC the day before
 		expect(summary.json).toMatchObject({
 			from: '2026-09-30T23:00:00.000Z',
 			to: '2026-10-01T23:00:00.000Z',

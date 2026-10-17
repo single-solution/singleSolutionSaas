@@ -39,7 +39,7 @@ import * as ecommerceRoutes from '@ss/product-ecommerce/routes';
 import * as growth from '@ss/product-growth/product';
 import * as growthRoutes from '@ss/product-growth/routes';
 import { staffSignIns } from '@ss/product-accounts/testing';
-import { PRODUCT_URL, codeOf, startSystem } from './helpers.js';
+import { PRODUCT_URL, codeOf, savePortalSettings, startSystem } from './helpers.js';
 
 /**
  * The importer's fetch, routed to the products in process (the same requests a real `ss-import` sends over https).
@@ -229,15 +229,6 @@ const FEATURES = {
 	growth: ['visitor_analytics', 'import'],
 };
 
-/**
- * The website itself: its business.json says it is a US shop, so national phone numbers take +1 (K12).
- * @param {Request} request
- */
-const website = async (request) =>
-	new URL(request.url).pathname === '/.well-known/business.json'
-		? Response.json({ version: 1, name: 'Example Shop', country: 'US', timeZone: 'UTC' })
-		: new Response('Not found', { status: 404 });
-
 /** @param {string} prefix @param {string} hex */
 const idOf = (prefix, hex) => `${prefix}_${hex}`;
 
@@ -339,7 +330,7 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 			url,
 		});
 		sys = await startSystem({
-			unit: { ...unit(accounts, accountsRoutes, BASES.accounts), handlers: { [ORIGIN]: website } },
+			unit: unit(accounts, accountsRoutes, BASES.accounts),
 			extras: [
 				unit(ecommerce, ecommerceRoutes, BASES.ecommerce),
 				unit(chat, chatRoutes, BASES.chat),
@@ -355,8 +346,14 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 			tokens[key] = await sys.tokens(m.merchantId, websiteId, key);
 		}
 		await sys.addCredits(m.merchantId, 100);
+		// the website is a US shop (set once in the Portal's Website settings), so national phone numbers take +1 (K12)
+		await savePortalSettings(m, `/v1/merchants/${m.merchantId}/websites/${websiteId}/settings`, {
+			'business.name': 'Example Shop',
+			'region.country': 'US',
+			'region.timeZone': 'UTC',
+			'catalog.currency': 'USD',
+		});
 		for (const key of /** @type {ProductKey[]} */ (Object.keys(BASES))) {
-			// opening the dashboard also reads the website's business.json
 			const cookie = await sys.adminSession(await sys.owner(), websiteId, key);
 			const saved = await sys.dashboard(
 				cookie,
@@ -395,18 +392,16 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 		expect(dry.settings.changes.map((change) => [change.key, change.source])).toEqual([
 			['checkout.numberPattern', 'built-in'],
 			['checkout.numberPrefix', 'built-in'],
-			['catalog.currency', 'built-in'],
 			['catalog.mediaBaseUrl', 'built-in'],
 			['order_flow', null],
 		]);
-		expect(dry.settings.changes.slice(0, 4).map((change) => [change.from, change.to])).toEqual([
+		expect(dry.settings.changes.slice(0, 3).map((change) => [change.from, change.to])).toEqual([
 			['{prefix}{number}', '{prefix}{year}-{number}'],
 			['', 'EX-'],
-			['USD', 'USD'],
 			['', 'https://cdn.example.com'],
 		]);
 		// the old shop's own statuses replace the default flow (K9): orders keep them
-		const flow = /** @type {any} */ (dry.settings.changes[4]);
+		const flow = /** @type {any} */ (dry.settings.changes[3]);
 		expect(flow.from.statuses.map((/** @type {{ key: string }} */ status) => status.key)).toContain('dispatched');
 		expect(flow.to.statuses.map((/** @type {{ key: string }} */ status) => status.key)).toEqual([
 			'awaiting_payment',

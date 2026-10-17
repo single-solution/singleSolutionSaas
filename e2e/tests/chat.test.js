@@ -22,7 +22,7 @@ import {
 	strings as notifyStrings,
 } from '@ss/product-notifications/product';
 import { createRoutes as notifyRoutes } from '@ss/product-notifications/routes';
-import { HOUR, startSystem } from './helpers.js';
+import { HOUR, savePortalSettings, startSystem } from './helpers.js';
 
 const CHAT = 'https://chat.test';
 const ACCOUNTS = 'https://accounts.test';
@@ -283,15 +283,10 @@ describe('Chat on the real Portal', () => {
 			value: notifyTokens.server,
 		});
 		expect(pasted.json).toMatchObject({ status: 'connected' });
-		const recipients = await sys.dashboard(
-			cookie,
-			'PUT',
-			`/v1/dashboard/websites/${websiteId}/settings/staff_alerts.recipients`,
-			{
-				value: ['team@talk.example.com'],
-			},
-		);
-		expect(recipients.status).toBe(204);
+		// the alert team is the website's, set once in the Portal (Team and alerts)
+		await savePortalSettings(m, `/v1/merchants/${m.merchantId}/websites/${websiteId}/settings`, {
+			'staff_alerts.recipients': ['team@talk.example.com'],
+		});
 		await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/staff_alerts.adminUrl`, {
 			value: `${ADMIN_ORIGIN}/inbox?conversation={conversationId}`,
 		});
