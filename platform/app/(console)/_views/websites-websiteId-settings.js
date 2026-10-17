@@ -19,6 +19,7 @@ export default async function WebsiteSettingsPage({ params }) {
 		<WebsiteSettingsView
 			data={loaded.data}
 			changes={loaded.changes}
+			connections={loaded.connections}
 			merchantId={merchantId}
 			websiteId={websiteId}
 			domain={loaded.domain}

@@ -92,6 +92,17 @@ export const websiteRoutes = (service, identity) => {
 			body,
 			meta: { requestId: c.requestId, ip: c.ip },
 		});
+	/**
+	 * The connections of the website as the console shows them (never a value), with whether this person may change them.
+	 * @param {RequestContext} c
+	 */
+	const viewFor = async (c) => {
+		const where = websiteOf(c);
+		return {
+			...(await service.connectionsView(where)),
+			can: { write: can(/** @type {Actor} */ (c.actor), P.connectionsWrite, where) },
+		};
+	};
 	/** @param {RequestContext} c */
 	const audited = (c) => ({ actor: /** @type {Actor} */ (c.actor), requestId: c.requestId, ip: c.ip });
 	return [
@@ -146,13 +157,7 @@ export const websiteRoutes = (service, identity) => {
 			auth: ['merchant', 'admin'],
 			permission: P.connectionsRead,
 			rateLimit: { limit: 120, windowMs: 60_000 },
-			handler: async (c) => {
-				const where = websiteOf(c);
-				return ok({
-					...(await service.connectionsView(where)),
-					can: { write: can(/** @type {Actor} */ (c.actor), P.connectionsWrite, where) },
-				});
-			},
+			handler: async (c) => ok(await viewFor(c)),
 		}),
 		defineRoute({
 			method: 'PUT',
@@ -176,7 +181,7 @@ export const websiteRoutes = (service, identity) => {
 					...('names' in body ? { names: body.names } : {}),
 					...audited(c),
 				});
-				return ok(await service.connectionsView(websiteOf(c)));
+				return ok(await viewFor(c));
 			},
 		}),
 		defineRoute({
@@ -190,7 +195,7 @@ export const websiteRoutes = (service, identity) => {
 			handler: async (c) => {
 				await confirm(c, objectBody(c.body, SAVE_CONNECTION_KEYS));
 				await service.removeConnection({ ...websiteOf(c), name: /** @type {string} */ (c.params.name), ...audited(c) });
-				return ok(await service.connectionsView(websiteOf(c)));
+				return ok(await viewFor(c));
 			},
 		}),
 		defineRoute({
@@ -209,7 +214,7 @@ export const websiteRoutes = (service, identity) => {
 					caller: /** @type {string} */ (c.params.caller),
 					...audited(c),
 				});
-				return ok(await service.connectionsView(websiteOf(c)));
+				return ok(await viewFor(c));
 			},
 		}),
 		defineRoute({
@@ -234,7 +239,7 @@ export const websiteRoutes = (service, identity) => {
 					on: body.on,
 					...audited(c),
 				});
-				return ok(await service.connectionsView(websiteOf(c)));
+				return ok(await viewFor(c));
 			},
 		}),
 		defineRoute({

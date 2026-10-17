@@ -262,10 +262,11 @@ const testModules = (/** @type {{ mailer: any }} */ { mailer }) => [
 
 /**
  * A product manifest for a fake product (the shared test manifest under another id and name).
- * @param {{ id?: string, name?: string, widgets?: boolean, requires?: string[] }} [options] `widgets: false` drops the
- *   widget script; `requires` is the manifest's `websiteSettings.requires`
+ * @param {{ id?: string, name?: string, widgets?: boolean, requires?: string[], links?: Record<string, unknown>,
+ *   needs?: Record<string, unknown> }} [options] `widgets: false` drops the widget script; `requires` is the manifest's
+ *   `websiteSettings.requires`; `links` and `needs` its links to other products and what it needs of the connections
  */
-export const productManifest = ({ id = 'notes', name = 'Notes', widgets = true, requires } = {}) => {
+export const productManifest = ({ id = 'notes', name = 'Notes', widgets = true, requires, links, needs } = {}) => {
 	const base = /** @type {Record<string, any>} */ (manifest());
 	const { widgetScriptUrl, widgets: list, ...rest } = base;
 	return {
@@ -275,6 +276,8 @@ export const productManifest = ({ id = 'notes', name = 'Notes', widgets = true, 
 		widgetScriptUrl: widgets ? widgetScriptUrl : null,
 		widgets: widgets ? list : [],
 		...(requires ? { websiteSettings: { requires } } : {}),
+		...(links ? { links } : {}),
+		...(needs ? { needs } : {}),
 	};
 };
 

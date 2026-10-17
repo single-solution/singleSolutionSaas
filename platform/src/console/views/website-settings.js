@@ -26,6 +26,7 @@ import { WEBSITE_SETTINGS as T } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { api } from '../paths.js';
+import { ConnectionsSection, LinksSection } from './website-connections.js';
 import { BrandSection, BusinessSection, PagesSection, RegionSection, TeamSection } from './website-settings-sections.js';
 
 /** @typedef {import('@ss/contracts').WebsiteSettings} WebsiteSettings */
@@ -35,6 +36,7 @@ import { BrandSection, BusinessSection, PagesSection, RegionSection, TeamSection
  * @typedef {object} WebsiteSettingsPageProps
  * @property {{ settings: WebsiteSettings, readiness: Readiness[], can: { write: boolean } }} data
  * @property {Change[]} changes newest first
+ * @property {import('./website-connections.js').ConnectionsView | null} connections what is set under Data and files (never a value)
  * @property {string} merchantId
  * @property {string} websiteId
  * @property {string} domain
@@ -91,18 +93,28 @@ function ChangesSection({ changes }) {
  * The page.
  * @param {WebsiteSettingsPageProps} props
  */
-export function WebsiteSettingsView({ data, changes: initialChanges, merchantId, websiteId, domain, back }) {
+export function WebsiteSettingsView({
+	data,
+	changes: initialChanges,
+	connections: initialConnections,
+	merchantId,
+	websiteId,
+	domain,
+	back,
+}) {
 	const toast = useToast();
 	const manage = { merchantId, websiteId };
 	const [settings, setSettings] = useState(data.settings);
 	const [readiness, setReadiness] = useState(data.readiness);
 	const [changes, setChanges] = useState(initialChanges);
+	const [connections, setConnections] = useState(initialConnections);
 	const [stale, setStale] = useState(false);
 	useEffect(() => {
 		setSettings(data.settings);
 		setReadiness(data.readiness);
 	}, [data]);
 	useEffect(() => setChanges(initialChanges), [initialChanges]);
+	useEffect(() => setConnections(initialConnections), [initialConnections]);
 
 	const loadChanges = async () => {
 		const result = await apiFetch(api.websiteSettingsChanges(merchantId, websiteId));
@@ -214,6 +226,39 @@ export function WebsiteSettingsView({ data, changes: initialChanges, merchantId,
 						...contextOf('team'),
 						content: <TeamSection {...common} />,
 					},
+					...(connections
+						? [
+								{
+									id: 'connections',
+									label: T.sections.connections,
+									icon: /** @type {const} */ ('database'),
+									group: T.groups.connect,
+									content: (
+										<ConnectionsSection
+											view={connections}
+											manage={manage}
+											canWrite={connections.can.write}
+											onChanged={(view) => setConnections(view)}
+										/>
+									),
+								},
+								{
+									id: 'links',
+									label: T.sections.links,
+									icon: /** @type {const} */ ('link'),
+									group: T.groups.connect,
+									...(connections.links.length > 0 ? { badge: String(connections.links.length) } : {}),
+									content: (
+										<LinksSection
+											view={connections}
+											manage={manage}
+											canWrite={connections.can.write}
+											onChanged={(view) => setConnections(view)}
+										/>
+									),
+								},
+							]
+						: []),
 					{
 						id: 'changes',
 						label: T.sections.changes,

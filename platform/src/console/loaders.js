@@ -213,9 +213,10 @@ export const loadSetup = async (api, merchantId, websiteId) => {
  * @param {string} websiteId
  */
 export const loadWebsiteSettings = async (api, merchantId, websiteId) => {
-	const [settings, changes] = await Promise.all([
+	const [settings, changes, connections] = await Promise.all([
 		api.get(paths.websiteSettings(merchantId, websiteId)),
 		api.get(paths.websiteSettingsChanges(merchantId, websiteId)),
+		api.get(paths.websiteConnections(merchantId, websiteId)),
 	]);
 	const failed = firstFailure(settings);
 	if (failed) return failed;
@@ -223,6 +224,8 @@ export const loadWebsiteSettings = async (api, merchantId, websiteId) => {
 		ok: /** @type {const} */ (true),
 		data: settings.ok ? settings.data : null,
 		changes: itemsOf(changes),
+		// what is set in Data and files, never a value (null: this person may not see it)
+		connections: connections.ok ? connections.data : null,
 		domain: settings.ok ? String(settings.data?.website?.domain ?? '') : '',
 	};
 };

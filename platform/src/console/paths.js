@@ -91,6 +91,26 @@ export const api = Object.freeze({
 	/** Recent changes of the settings (`GET` → `{ items }`) */
 	websiteSettingsChanges: (/** @type {string} */ m, /** @type {string} */ w) =>
 		`/v1/merchants/${e(m)}/websites/${e(w)}/settings/changes`,
+	/** the website's connections (`GET` → what is set, never a value; the products' databases; the links) */
+	websiteConnections: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/connections`,
+	/** `PUT { value, password, code? }` saves the database or the storage; `POST …/remove { password }` removes it */
+	websiteConnection: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ name) =>
+		`/v1/merchants/${e(m)}/websites/${e(w)}/connections/${e(name)}`,
+	websiteConnectionRemove: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ name) =>
+		`/v1/merchants/${e(m)}/websites/${e(w)}/connections/${e(name)}/remove`,
+	/** `POST { password }` makes a link's key again; `POST …/switch { on, password }` switches it on or off */
+	websiteLinkRegenerate: (
+		/** @type {string} */ m,
+		/** @type {string} */ w,
+		/** @type {string} */ callee,
+		/** @type {string} */ caller,
+	) => `/v1/merchants/${e(m)}/websites/${e(w)}/links/${e(callee)}/${e(caller)}/regenerate`,
+	websiteLinkSwitch: (
+		/** @type {string} */ m,
+		/** @type {string} */ w,
+		/** @type {string} */ callee,
+		/** @type {string} */ caller,
+	) => `/v1/merchants/${e(m)}/websites/${e(w)}/links/${e(callee)}/${e(caller)}/switch`,
 	billing: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/billing`,
 	usage: (
 		/** @type {string} */ m,

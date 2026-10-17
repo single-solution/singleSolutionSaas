@@ -78,6 +78,7 @@ const openPage = async ({ b, merchantId, websiteId }) => {
 		<WebsiteSettingsView
 			data={loaded.data}
 			changes={loaded.changes}
+			connections={loaded.connections}
 			merchantId={merchantId}
 			websiteId={websiteId}
 			domain={loaded.domain}
@@ -117,6 +118,8 @@ describe('Website settings (jsdom)', () => {
 				'Region and formatNeeded by Notes',
 				'Domains, pages and legal',
 				'Team and alerts',
+				'Data and files',
+				'Between your products',
 				'Recent changes',
 			]);
 			expect(

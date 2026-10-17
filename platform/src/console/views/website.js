@@ -538,7 +538,7 @@ function UsageDialog({ merchantId, website, onClose }) {
  * @param {Problem | null} problem
  * @returns {{ password?: string, code?: string, form?: string }}
  */
-const confirmationErrors = (problem) => {
+export const confirmationErrors = (problem) => {
 	if (!problem) return {};
 	const fields = fieldErrors(problem);
 	if (fields.code || fields.recoveryCode) return { code: WEBSITE.needsCode };
