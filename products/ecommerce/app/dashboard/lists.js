@@ -18,6 +18,7 @@ import {
 	ItemSwitcher,
 	Select,
 	TextArea,
+	ToastOnce,
 	describeProblem,
 } from '@ss/ui';
 import { COURIER_CONNECTIONS } from '../../core/couriers.js';
@@ -98,7 +99,7 @@ export const decimalOf = (amount, currency) =>
 export function EntryHead({ label, index, count, onMove, onRemove }) {
 	return (
 		<div className="flex flex-wrap items-center gap-1">
-			<span className="mr-auto text-sm font-bold">{`${label} ${index + 1}`}</span>
+			<span className="mr-auto text-sm font-semibold">{`${label} ${index + 1}`}</span>
 			<IconButton label={L.up} disabled={index === 0} onClick={() => onMove(-1)}>
 				<Icon name="arrowUp" size={14} />
 			</IconButton>
@@ -151,7 +152,7 @@ export function IdTags({ label, help, values, max, none, onChange }) {
 			{values.length > 0 ? (
 				<ul className="flex flex-wrap gap-2">
 					{values.map((id) => (
-						<li key={id} className="inline-flex items-center gap-1 rounded-lg bg-surface-2 py-0.5 pl-2.5 pr-1 text-xs">
+						<li key={id} className="inline-flex items-center gap-1 rounded-md border border-line-soft bg-surface-2 py-0.5 pl-2 pr-1 text-xs">
 							<code className="break-all">{id}</code>
 							<button
 								type="button"
@@ -185,7 +186,7 @@ export function ListOutcome({ result, local }) {
 			</Callout>
 		);
 	if (result && !result.ok) return <Callout tone="danger">{describeProblem(result.problem)}</Callout>;
-	return result ? <Callout tone="success">{TEXTS.saved}</Callout> : null;
+	return result ? <ToastOnce title={TEXTS.saved} trigger={result} /> : null;
 }
 
 /**
@@ -291,7 +292,7 @@ export function ListEditor({
 								onAdd={() => setItems([...items, blank()])}
 								emptyText={L.none}
 								renderItem={(item, index) => (
-									<div key={index} data-entry="" className="space-y-3 rounded-xl bg-surface-2 p-4">
+									<div key={index} data-entry="" className="space-y-3 rounded-card border border-line-soft p-4">
 										<EntryHead
 											label={itemLabel}
 											index={index}
@@ -661,7 +662,7 @@ function RatesPart({ rates, currency, step, onChange }) {
 	const set = (index, patch) => onChange(rates.map((rate, at) => (at === index ? { ...rate, ...patch } : rate)));
 	return (
 		<div className="space-y-3">
-			<p className="text-sm font-bold">{Z.rates}</p>
+			<p className="text-sm font-semibold">{Z.rates}</p>
 			<p className="text-sm text-muted">{Z.ratesHelp}</p>
 			{rates.map((rate, index) => (
 				<div key={index} data-rate="" className="space-y-3 rounded-lg border border-line p-3">
@@ -862,7 +863,7 @@ export function BookingSchedulesEditor({ websiteId, off }) {
 							onChange={(event) => set({ key: event.target.value })}
 						/>
 					</FieldGrid>
-					<p className="text-sm font-bold">{B.weekly}</p>
+					<p className="text-sm font-semibold">{B.weekly}</p>
 					{schedule.weekly.map((/** @type {Item} */ window, /** @type {number} */ index) => {
 						/** @param {Item} patch */
 						const change = (patch) =>

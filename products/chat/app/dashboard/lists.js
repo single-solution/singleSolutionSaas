@@ -21,6 +21,7 @@ import {
 	ItemSwitcher,
 	Select,
 	TextArea,
+	ToastOnce,
 	describeProblem,
 } from '@ss/ui';
 import { FALLBACK_LIMITS, PLACEHOLDERS, fallbackProblems, placeholdersOf } from '../../core/fallback.js';
@@ -87,7 +88,7 @@ const errorLines = (problem) =>
 function EntryHead({ label, index, count, onMove, onRemove }) {
 	return (
 		<div className="flex flex-wrap items-center gap-1">
-			<span className="mr-auto text-sm font-bold">{`${label} ${index + 1}`}</span>
+			<span className="mr-auto text-sm font-semibold">{`${label} ${index + 1}`}</span>
 			<IconButton label={L.up} disabled={index === 0} onClick={() => onMove(-1)}>
 				<Icon name="arrowUp" size={14} />
 			</IconButton>
@@ -135,7 +136,7 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 								onAdd={() => setDraft([...items, blank()])}
 								emptyText={L.none}
 								renderItem={(item, index) => (
-									<div key={index} className="space-y-3 rounded-xl bg-surface-2 p-4">
+									<div key={index} className="space-y-3 rounded-card border border-line-soft p-4">
 										<EntryHead
 											label={itemLabel}
 											index={index}
@@ -178,7 +179,7 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 							) : result && !result.ok ? (
 								<Callout tone="danger">{describeProblem(result.problem)}</Callout>
 							) : result ? (
-								<Callout tone="success">{TEXTS.saved}</Callout>
+								<ToastOnce title={TEXTS.saved} trigger={result} />
 							) : null}
 						</div>
 					);
@@ -242,7 +243,7 @@ export function ToolsEditor({ websiteId, off }) {
 						/>
 						<p className="text-sm font-semibold">{T.parameters}</p>
 						{parameters.map((parameter, index) => (
-							<div key={index} className="space-y-3 rounded-xl bg-surface p-3">
+							<div key={index} className="space-y-3 rounded-control border border-line-soft p-3">
 								<EntryHead
 									label={T.parameter}
 									index={index}
@@ -629,7 +630,7 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 						)}
 						<p className="text-sm font-semibold">{F.steps}</p>
 						{steps.map((step, index) => (
-							<div key={index} className="space-y-3 rounded-xl bg-surface p-3">
+							<div key={index} className="space-y-3 rounded-control border border-line-soft p-3">
 								<EntryHead
 									label={F.step}
 									index={index}

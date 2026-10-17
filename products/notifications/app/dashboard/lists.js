@@ -6,7 +6,18 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, Checkbox, Input, Select, Skeleton, TextArea, describeProblem } from '@ss/ui';
+import {
+	Button,
+	Callout,
+	Card,
+	Checkbox,
+	Input,
+	Select,
+	Skeleton,
+	TextArea,
+	ToastOnce,
+	describeProblem,
+} from '@ss/ui';
 import { CHANNELS, FALLBACK_CHANNELS } from '../../core/channels.js';
 import { call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
@@ -60,7 +71,7 @@ function ListCard({ websiteId, name, title, help, off, blank, render, rows: toRo
 			<div className="space-y-4">
 				{rows.length === 0 ? <p className="text-sm text-muted">{L.none}</p> : null}
 				{rows.map((row, at) => (
-					<div key={at} className="space-y-3 rounded-xl bg-surface-2 p-4">
+					<div key={at} className="space-y-3 rounded-card border border-line-soft p-4">
 						{render(row, (patch) => set(at, patch), at)}
 						<div className="flex flex-wrap gap-2">
 							<Button size="sm" variant="ghost" disabled={at === 0} onClick={() => move(at, at - 1)}>
@@ -95,7 +106,7 @@ function ListCard({ websiteId, name, title, help, off, blank, render, rows: toRo
 				</div>
 				{result ? (
 					result.ok ? (
-						<Callout tone="success">{TEXTS.saved}</Callout>
+						<ToastOnce title={TEXTS.saved} trigger={result} />
 					) : (
 						<Callout tone="danger">
 							{errors.length > 0

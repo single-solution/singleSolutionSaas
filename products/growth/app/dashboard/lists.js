@@ -20,6 +20,7 @@ import {
 	ItemSwitcher,
 	Select,
 	TextArea,
+	ToastOnce,
 	describeProblem,
 } from '@ss/ui';
 import { call, useLoad } from '@ss/ui/dashboard';
@@ -166,7 +167,7 @@ function FieldInput({ name, field, value, error, onChange }) {
 function EntryHead({ label, index, count, onMove, onRemove }) {
 	return (
 		<div className="flex flex-wrap items-center gap-1">
-			<span className="mr-auto text-sm font-bold">{label}</span>
+			<span className="mr-auto text-sm font-semibold">{label}</span>
 			<IconButton label={L.up} disabled={index === 0} onClick={() => onMove(-1)}>
 				<Icon name="arrowUp" size={14} />
 			</IconButton>
@@ -308,7 +309,7 @@ export function ListCard({ websiteId, name }) {
 					</Button>
 					{result ? (
 						result.ok ? (
-							<Callout tone="success">{L.saved}</Callout>
+							<ToastOnce title={L.saved} trigger={result} />
 						) : (
 							<Callout tone="danger">
 								{describeProblem(result.problem)}

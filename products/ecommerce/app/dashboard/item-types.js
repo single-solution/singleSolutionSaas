@@ -89,7 +89,7 @@ function TypeFields({ draft, set, problems, tried }) {
 				/>
 			</FieldGrid>
 			<fieldset className="min-w-0 space-y-3">
-				<legend className="mb-1 text-sm font-bold text-fg">{T.parts}</legend>
+				<legend className="mb-1 text-sm font-semibold text-fg">{T.parts}</legend>
 				<p className="text-xs text-muted">{T.partsHelp}</p>
 				<FieldGrid>
 					{PARTS.filter((part) => elementFor(part, draft.kind)).map((part) => (
@@ -105,7 +105,7 @@ function TypeFields({ draft, set, problems, tried }) {
 			</fieldset>
 			{physical ? (
 				<fieldset className="min-w-0 space-y-3">
-					<legend className="mb-1 text-sm font-bold text-fg">{T.measure}</legend>
+					<legend className="mb-1 text-sm font-semibold text-fg">{T.measure}</legend>
 					<Checkbox
 						label={T.measureOn}
 						help={T.measureHelp}
@@ -181,7 +181,7 @@ function TypeFields({ draft, set, problems, tried }) {
 			) : null}
 			{measure.on && physical ? null : (
 				<fieldset className="min-w-0 space-y-3">
-					<legend className="mb-1 text-sm font-bold text-fg">{T.quantity}</legend>
+					<legend className="mb-1 text-sm font-semibold text-fg">{T.quantity}</legend>
 					<p className="text-xs text-muted">{T.quantityHelp}</p>
 					<FieldGrid>
 						<Input
@@ -211,7 +211,7 @@ function TypeFields({ draft, set, problems, tried }) {
 			)}
 			{physical && !measure.on ? (
 				<fieldset className="min-w-0 space-y-3">
-					<legend className="mb-1 text-sm font-bold text-fg">{T.units}</legend>
+					<legend className="mb-1 text-sm font-semibold text-fg">{T.units}</legend>
 					<Checkbox
 						label={T.unitsOn}
 						help={T.unitsHelp}
@@ -265,7 +265,7 @@ function TypeFields({ draft, set, problems, tried }) {
 				</fieldset>
 			) : null}
 			<fieldset className="min-w-0 space-y-3">
-				<legend className="mb-1 text-sm font-bold text-fg">{T.fields}</legend>
+				<legend className="mb-1 text-sm font-semibold text-fg">{T.fields}</legend>
 				<Checkbox
 					label={T.fieldsNamed}
 					help={T.fieldsNamedHelp}

@@ -202,8 +202,8 @@ function TriggersAndStarts({ flow, onChange }) {
 	/** @param {keyof OrderFlow['starts']} name @param {string} value */
 	const setStart = (name, value) => onChange({ ...flow, starts: { ...flow.starts, [name]: value } });
 	return (
-		<div className="space-y-4 rounded-xl bg-surface-2 p-4">
-			<p className="text-sm font-bold">{F.triggers}</p>
+		<div className="space-y-4 rounded-card border border-line-soft p-4">
+			<p className="text-sm font-semibold">{F.triggers}</p>
 			<FieldGrid>
 				<Select
 					label={F.triggerFields.paid}
@@ -224,7 +224,7 @@ function TriggersAndStarts({ flow, onChange }) {
 					onChange={(event) => setTrigger('refundsCover', event.target.value)}
 				/>
 			</FieldGrid>
-			<p className="text-sm font-bold">{F.starts}</p>
+			<p className="text-sm font-semibold">{F.starts}</p>
 			<FieldGrid>
 				<Select
 					label={F.startFields.on_delivery}
@@ -302,7 +302,7 @@ export function OrderFlowEditor({ websiteId, off }) {
 								const targets = possibleTargets(flow, status.key);
 								const ticked = flow.moves.filter((move) => move.from === status.key);
 								return (
-									<div key={index} className="space-y-3 rounded-xl bg-surface-2 p-4">
+									<div key={index} className="space-y-3 rounded-card border border-line-soft p-4">
 										<EntryHead
 											label={F.status}
 											index={index}

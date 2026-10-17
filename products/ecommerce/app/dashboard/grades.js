@@ -153,9 +153,9 @@ function FaqsField({ faqs, onChange }) {
 				</span>
 			</p>
 			{faqs.map((faq, index) => (
-				<div key={index} className="space-y-3 rounded-xl bg-surface-2 p-4">
+				<div key={index} className="space-y-3 rounded-card border border-line-soft p-4">
 					<div className="flex items-center gap-2">
-						<span className="mr-auto text-sm font-bold">{fill(G.faq, { number: index + 1 })}</span>
+						<span className="mr-auto text-sm font-semibold">{fill(G.faq, { number: index + 1 })}</span>
 						<IconButton
 							label={fill(G.removeFaq, { number: index + 1 })}
 							onClick={() => onChange(faqs.filter((_, at) => at !== index))}>
@@ -362,7 +362,7 @@ function GradeFields({ draft, set, problems, tried, preview }) {
 				/>
 			</FieldGrid>
 			<fieldset className="min-w-0 space-y-4">
-				<legend className="mb-3 text-sm font-bold text-fg">{G.content}</legend>
+				<legend className="mb-3 text-sm font-semibold text-fg">{G.content}</legend>
 				<FieldGrid>
 					<TextArea
 						label={G.summary}
@@ -379,7 +379,7 @@ function GradeFields({ draft, set, problems, tried, preview }) {
 				/>
 			</fieldset>
 			<fieldset className="min-w-0 space-y-4">
-				<legend className="mb-1 text-sm font-bold text-fg">{G.seo}</legend>
+				<legend className="mb-1 text-sm font-semibold text-fg">{G.seo}</legend>
 				<p className="text-xs text-muted">{G.seoHelp}</p>
 				<FieldGrid>
 					<Input

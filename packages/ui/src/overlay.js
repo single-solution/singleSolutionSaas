@@ -131,13 +131,13 @@ export function Dialog({
 				aria-describedby={description ? descriptionId : undefined}
 				tabIndex={-1}
 				className={cx(
-					'flex max-h-[92vh] w-full flex-col rounded-t-card bg-surface text-fg shadow-overlay focus:outline-none sm:rounded-card',
+					'flex max-h-[92vh] w-full flex-col rounded-t-card border border-line-soft bg-surface text-fg shadow-overlay focus:outline-none sm:rounded-card',
 					'animate-ss-sheet group-data-[state=closed]:animate-ss-sheet-out sm:animate-ss-pop sm:group-data-[state=closed]:animate-ss-pop-out',
 					width,
 				)}>
 				<div className="flex items-start justify-between gap-4 px-6 pb-1 pt-6">
 					<div className="min-w-0">
-						<h2 id={titleId} className="text-heading leading-snug font-semibold tracking-tight text-fg">
+						<h2 id={titleId} className="text-lead font-semibold tracking-[-0.01em] text-fg">
 							{title}
 						</h2>
 						{description ? (
@@ -156,10 +156,12 @@ export function Dialog({
 						</button>
 					) : null}
 				</div>
-				<div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+				<div className="ss-scroll min-h-0 flex-1 space-y-4 px-6 py-4">
 					<FieldLayoutContext.Provider value="stack">{children}</FieldLayoutContext.Provider>
 				</div>
-				{footer ? <div className="flex flex-wrap items-center justify-end gap-2 px-6 pb-6 pt-2">{footer}</div> : null}
+				{footer ? (
+					<div className="flex flex-wrap items-center justify-end gap-2 border-t border-line-soft px-6 py-4">{footer}</div>
+				) : null}
 			</div>
 		</div>
 	);

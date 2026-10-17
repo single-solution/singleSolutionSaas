@@ -25,6 +25,7 @@ import {
 	Select,
 	Skeleton,
 	TextArea,
+	ToastOnce,
 	describeProblem,
 } from '@ss/ui';
 import { LONG_VALUE_LIMIT, VALUE_LIMIT, isTitled } from '@ss/contracts/templates';
@@ -71,7 +72,7 @@ function ButtonsEditor({ buttons, onChange }) {
 				<p className="text-sm text-muted">{T.buttonsHelp}</p>
 			</div>
 			{buttons.map((button, at) => (
-				<div key={at} className="space-y-3 rounded-xl bg-surface-2 p-4">
+				<div key={at} className="space-y-3 rounded-card border border-line-soft p-4">
 					<FieldGrid>
 						<Input
 							label={T.buttonIndex}
@@ -131,7 +132,7 @@ function TemplatePreview({ template, longValues }) {
 		unsubscribeUrl: T.sampleUnsubscribe,
 	};
 	return (
-		<div className="space-y-3 rounded-xl bg-surface-2 p-4">
+		<div className="space-y-3 rounded-card border border-line-soft p-4">
 			<div>
 				<p className="text-sm font-semibold text-fg">{T.preview}</p>
 				<p className="text-sm text-muted">{names.length > 0 ? T.previewHelp : T.previewNoValues}</p>
@@ -159,7 +160,7 @@ function TemplatePreview({ template, longValues }) {
 					)}
 				</FieldGrid>
 			) : null}
-			<div className="space-y-2 rounded-xl bg-surface p-3 text-sm text-fg" aria-live="polite">
+			<div className="space-y-2 rounded-control border border-line-soft p-3 text-sm text-fg" aria-live="polite">
 				{titled ? <p className="font-semibold break-words">{fillText(template.subject, values)}</p> : null}
 				<p className="whitespace-pre-wrap break-words">{fillText(template.text, values)}</p>
 				{buttons.map((button) => (
@@ -469,7 +470,7 @@ export function TemplatesSection({ websiteId }) {
 			) : null}
 			{result ? (
 				result.ok ? (
-					<Callout tone="success">{TEXTS.saved}</Callout>
+					<ToastOnce title={TEXTS.saved} trigger={result} />
 				) : (
 					<Callout tone="danger">{describeProblem(result.problem)}</Callout>
 				)

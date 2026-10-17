@@ -8,7 +8,19 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, Checkbox, FieldGrid, Input, ItemSwitcher, Select, TextArea, describeProblem } from '@ss/ui';
+import {
+	Button,
+	Callout,
+	Card,
+	Checkbox,
+	FieldGrid,
+	Input,
+	ItemSwitcher,
+	Select,
+	TextArea,
+	ToastOnce,
+	describeProblem,
+} from '@ss/ui';
 import { BANK_ROW_LABELS, METHOD_KINDS, METHOD_LIMITS, methodReady } from '../../core/methods.js';
 import { call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
@@ -293,7 +305,7 @@ export function MethodsEditor({ websiteId }) {
 			</div>
 			{result ? (
 				result.ok ? (
-					<Callout tone="success" title={TEXTS.saved} />
+					<ToastOnce title={TEXTS.saved} trigger={result} />
 				) : (
 					<Callout tone="danger" title={describeProblem(result.problem)}>
 						{Array.isArray(result.problem?.errors) ? (

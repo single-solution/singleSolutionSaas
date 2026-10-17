@@ -54,7 +54,7 @@ export { Dialog, ConfirmDialog } from './overlay.js';
 export { ActionMenu, AccountMenu, ThemeMenu } from './Menu.js';
 export { RowList, ListRow, Toolbar } from './rows.js';
 export { TypedConfirmDialog } from './TypedConfirm.js';
-export { ToastProvider, useToast } from './Toast.js';
+export { ToastOnce, ToastProvider, useToast } from './Toast.js';
 export { CodeBlock, copyText } from './CodeBlock.js';
 export { AppShell, ContextPill, ScrollArea, SwitcherSelect, useShell } from './AppShell.js';
 export {

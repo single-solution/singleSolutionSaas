@@ -142,8 +142,8 @@ function FileField({ websiteId, name, file, onChanged }) {
 		onChanged();
 	};
 	return (
-		<div data-file={name} className="space-y-2 rounded-xl bg-surface-2 p-4">
-			<p className="text-sm font-bold">{S.files[name].title}</p>
+		<div data-file={name} className="space-y-2 rounded-card border border-line-soft p-4">
+			<p className="text-sm font-semibold">{S.files[name].title}</p>
 			<p className="text-sm text-muted">{S.files[name].help}</p>
 			{file?.url ? (
 				<img src={file.url} alt={file.alt ?? ''} className="h-16 w-auto max-w-full rounded-lg bg-surface-3 object-contain" />
@@ -234,7 +234,7 @@ export function StoreDetailsEditor({ websiteId, off }) {
 									/>
 								))}
 							</div>
-							<p className="text-sm font-bold">{S.contact}</p>
+							<p className="text-sm font-semibold">{S.contact}</p>
 							<FieldGrid>
 								<Input
 									label={S.email}
@@ -265,7 +265,7 @@ export function StoreDetailsEditor({ websiteId, off }) {
 								value={draft.phones}
 								onChange={(event) => set({ phones: event.target.value })}
 							/>
-							<p className="text-sm font-bold">{S.address}</p>
+							<p className="text-sm font-semibold">{S.address}</p>
 							<FieldGrid>
 								<Select
 									label={S.country}
@@ -282,7 +282,7 @@ export function StoreDetailsEditor({ websiteId, off }) {
 									/>
 								))}
 							</FieldGrid>
-							<p className="text-sm font-bold">{S.hours}</p>
+							<p className="text-sm font-semibold">{S.hours}</p>
 							<FieldGrid>
 								<Input
 									label={S.timeZone}

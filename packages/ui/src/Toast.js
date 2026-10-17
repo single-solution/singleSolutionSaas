@@ -121,3 +121,19 @@ function ToastCard({ toast, onDismiss, onGone }) {
 		</div>
 	);
 }
+
+/**
+ * Shows one toast when it appears, and again whenever `trigger` changes (a new save result); it draws nothing in the
+ * page. For "Saved" after a write (owner 2026-10-17: no Saved banners).
+ * @param {{ title: string, description?: string, tone?: 'success' | 'danger' | 'info', trigger?: unknown }} props
+ */
+export function ToastOnce({ title, description, tone = 'success', trigger }) {
+	const toast = useToast();
+	const shown = useRef(/** @type {{ value: unknown } | null} */ (null));
+	useEffect(() => {
+		if (shown.current && shown.current.value === trigger) return;
+		shown.current = { value: trigger };
+		toast.show({ title, tone, ...(description ? { description } : {}) });
+	}, [trigger, title, description, tone, toast]);
+	return null;
+}
