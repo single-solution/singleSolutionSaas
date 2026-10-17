@@ -348,7 +348,7 @@ export function FinanceView(props) {
 						id: 'billing-attention',
 						label: S.attention.title,
 						icon: 'alert',
-						...(attention.length > 0 ? { badge: <Badge tone="warning">{attention.length}</Badge> } : {}),
+						...(attention.length > 0 ? { badge: <Badge tone="attention">{attention.length}</Badge> } : {}),
 						content: (
 							<>
 								<Toolbar note={S.attention.help} />

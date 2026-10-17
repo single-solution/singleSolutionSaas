@@ -43,9 +43,9 @@ button.link { color: var(--ss-kit-focus); padding: 4px 0; margin-top: 4px; }
 .quad img { width: 100%; height: 100%; aspect-ratio: auto; object-fit: cover; border-radius: 0; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .badge { display: inline-block; font-size: 0.8em; padding: 2px 10px; border-radius: 999px; background: var(--ss-kit-soft); }
-.badge.accent { background: var(--ss-color-accent, #4f46e5); color: var(--ss-color-onAccent, #ffffff); }
+.badge.accent { background: var(--ss-color-accent, #2226f7); color: var(--ss-color-onAccent, #ffffff); }
 .badge.danger { color: var(--ss-color-danger, #b91c1c); }
-.icon[aria-pressed='true'] { background: var(--ss-color-accent, #4f46e5); color: var(--ss-color-onAccent, #ffffff); }
+.icon[aria-pressed='true'] { background: var(--ss-color-accent, #2226f7); color: var(--ss-color-onAccent, #ffffff); }
 .icon[aria-pressed='false'] { background: transparent; color: inherit; box-shadow: inset 0 0 0 1px var(--ss-kit-line); }
 .more { display: block; margin: 16px auto 0; }
 .foot { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin-top: 16px; }
@@ -53,7 +53,7 @@ button.link { color: var(--ss-kit-focus); padding: 4px 0; margin-top: 4px; }
 .foot .meta:empty { display: none; }
 .pages { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .pages button { margin: 0; padding: 4px 10px; min-width: 36px; }
-.pages button[aria-current='page'] { background: var(--ss-color-accent, #4f46e5); color: var(--ss-color-onAccent, #ffffff); border-color: transparent; }
+.pages button[aria-current='page'] { background: var(--ss-color-accent, #2226f7); color: var(--ss-color-onAccent, #ffffff); border-color: transparent; }
 .pages .gap { padding: 0 4px; opacity: 0.6; }
 .page-frame { container-type: inline-size; }
 .page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
@@ -64,7 +64,7 @@ img.blur { background-size: cover; background-position: center; background-repea
 .gallery .nav { display: flex; justify-content: space-between; gap: 8px; }
 .gallery .thumbs { display: flex; gap: 6px; overflow-x: auto; margin-top: 8px; }
 .gallery .thumbs button { margin: 0; padding: 0; border: 2px solid transparent; background: none; width: 64px; height: 64px; flex: 0 0 auto; }
-.gallery .thumbs button[aria-current='true'] { border-color: var(--ss-color-accent, #4f46e5); }
+.gallery .thumbs button[aria-current='true'] { border-color: var(--ss-color-accent, #2226f7); }
 .gallery .thumbs img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--ss-radius, 8px); }
 .big { font-size: 1.4em; }
 .save { color: var(--ss-color-success, #15803d); font-weight: 600; }

@@ -146,7 +146,7 @@ export function OverviewView(props) {
 			id: 'needs',
 			label: ADMIN.needs.title,
 			icon: /** @type {const} */ ('bell'),
-			...(needCount > 0 ? { badge: <Badge tone="warning">{needCount}</Badge> } : {}),
+			...(needCount > 0 ? { badge: <Badge tone="attention">{needCount}</Badge> } : {}),
 			content: (
 				<>
 					<Card

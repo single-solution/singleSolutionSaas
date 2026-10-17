@@ -83,7 +83,7 @@ function MerchantStatus({ merchant, billing = null }) {
 	return (
 		<span className="inline-flex flex-wrap items-center gap-1">
 			<MerchantStatusBadge status={status} />
-			{merchant.setupPending ? <Badge tone="neutral">{ADMIN.setupPending}</Badge> : null}
+			{merchant.setupPending ? <Badge tone="attention">{ADMIN.setupPending}</Badge> : null}
 		</span>
 	);
 }

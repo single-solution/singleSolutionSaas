@@ -14,7 +14,7 @@ label { display: block; font-size: 0.9em; margin: 8px 0 4px; }
 textarea, input { width: 100%; box-sizing: border-box; font: inherit; color: inherit; background: transparent; padding: 8px;
   border: 1px solid var(--ss-color-border, #d1d5db); border-radius: var(--ss-radius, 8px); }
 button { margin-top: 12px; font: inherit; padding: 8px 16px; border: 0; border-radius: var(--ss-radius, 8px);
-  background: var(--ss-color-accent, #4f46e5); color: var(--ss-color-onAccent, #ffffff); cursor: pointer; }
+  background: var(--ss-color-accent, #2226f7); color: var(--ss-color-onAccent, #ffffff); cursor: pointer; }
 button[disabled] { opacity: 0.6; cursor: default; }
 .status { margin: 8px 0 0; font-size: 0.9em; }
 ul { list-style: none; margin: 0; padding: 0; }

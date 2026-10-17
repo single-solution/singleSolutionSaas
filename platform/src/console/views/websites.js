@@ -170,7 +170,7 @@ export function OverviewView(props) {
 			id: 'needs',
 			label: MERCHANT.needs.title,
 			icon: /** @type {const} */ ('bell'),
-			...(needs.length > 0 ? { badge: <Badge tone="warning">{needs.length}</Badge> } : {}),
+			...(needs.length > 0 ? { badge: <Badge tone="attention">{needs.length}</Badge> } : {}),
 			content: (
 				<Card title={MERCHANT.needs.title} subtitle={needs.length > 0 ? MERCHANT.needs.intro : undefined}>
 					<NeedsList items={needs} none={MERCHANT.needs.none} />
