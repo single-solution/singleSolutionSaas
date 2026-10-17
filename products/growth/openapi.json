@@ -4512,6 +4512,10 @@
 																"value": {},
 																"source": {
 																	"$ref": "#/components/schemas/ValueSource"
+																},
+																"from": {
+																	"type": "string",
+																	"description": "With source `portal`: the value of the website's settings it comes from, for example region.language."
 																}
 															}
 														}
@@ -4580,6 +4584,10 @@
 										"value": {},
 										"source": {
 											"$ref": "#/components/schemas/ValueSource"
+										},
+										"from": {
+											"type": "string",
+											"description": "With source `portal`: the value of the website's settings it comes from."
 										}
 									}
 								}
@@ -4659,6 +4667,10 @@
 										"value": {},
 										"source": {
 											"$ref": "#/components/schemas/ValueSource"
+										},
+										"from": {
+											"type": "string",
+											"description": "With source `portal`: the value of the website's settings it comes from."
 										}
 									}
 								}
@@ -8090,9 +8102,10 @@
 				"enum": [
 					"website",
 					"default",
-					"built-in"
+					"built-in",
+					"portal"
 				],
-				"description": "Where a value comes from: saved for this website, the global default, or built in."
+				"description": "Where a value comes from: saved for this website, the global default, built in, or the website's settings in the Portal (`portal`: a setting that starts from them, x-ui.defaultFrom, until this website saves its own value)."
 			},
 			"VitalData": {
 				"type": "object",
