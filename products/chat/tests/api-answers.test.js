@@ -112,10 +112,36 @@ describe('instructions, never disclose and rich answers (C1, C2)', () => {
 		sys.ai({ text: 'I am a bot.' }, { text: 'I am a chatbot, sorry.' });
 		await v('POST', '/v1/chat/messages', { text: 'Are you real?' });
 		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['system', 'Sorry, I cannot answer right now.']);
-		// the phrases that give a bot away are fixed (BOT_PHRASES, whole words, any case): such an answer is asked again
+		// the phrases that give a bot away are Chat's own (bot-phrases.js, whole words, any case): such an answer is asked again
 		sys.ai({ text: 'As an AI I ship in two days.' }, { text: 'We ship in two days.' });
 		await v('POST', '/v1/chat/messages', { text: 'Shipping?' });
 		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'We ship in two days.']);
+	});
+
+	it('never says it is a bot in any language: the built-in phrases of many languages and the merchant’s own wording', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies']);
+		await sys.setting('ai_replies', 'neverDisclose', true);
+		await sys.setting('ai_replies', 'extraBotPhrases', ['Lumi, your automated helper']);
+		await sys.setting('guest_chat', 'messageLimit', 0);
+		const v = sys.visitor();
+		/** @param {string} confession @param {string} answer */
+		const asked = async (confession, answer) => {
+			sys.ai({ text: confession }, { text: answer });
+			await v('POST', '/v1/chat/messages', { text: 'Shipping?' });
+			expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', answer]);
+			expect(sys.aiCalls().at(-1).messages.at(-1).content).toContain('without saying that');
+		};
+		await asked('Je suis une IA, je livre en deux jours.', 'Nous livrons en deux jours.');
+		await asked('Soy un asistente virtual, envío en dos días.', 'Enviamos en dos días.');
+		await asked('私はAIアシスタントです。2日で発送します。', '2日で発送します。');
+		await asked('أنا ذكاء اصطناعي، نشحن خلال يومين.', 'نشحن خلال يومين.');
+		// the wording the merchant added (any language Chat does not cover, or the assistant's own)
+		await asked('Hi, Lumi, your automated helper here: we ship in two days.', 'We ship in two days.');
+		// the same answers pass while "Never say it is a bot" is off
+		await sys.setting('ai_replies', 'neverDisclose', false);
+		sys.ai({ text: 'Je suis une IA, je livre en deux jours.' });
+		await v('POST', '/v1/chat/messages', { text: 'Et la livraison ?' });
+		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Je suis une IA, je livre en deux jours.']);
 	});
 
 	it('answers in markdown, split into bubbles, with links only on the website or as moderation allows', async () => {

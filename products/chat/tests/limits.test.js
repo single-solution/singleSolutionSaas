@@ -10,7 +10,6 @@ import {
 	AI_REPLIES_PER_NETWORK_PER_DAY,
 	AI_REPLIES_PER_VISITOR_PER_DAY,
 	AI_TEMPERATURE,
-	BOT_PHRASES,
 	CONTEXT_PANEL_ORDERS,
 	GUEST_REMEMBER_DAYS,
 	LANGUAGE_MIN_MARKERS,
@@ -27,7 +26,6 @@ import {
 	STAFF_ATTACHMENT_TYPES,
 	VISITOR_ALERT_AWAY_SECONDS,
 } from '../core/limits.js';
-import { disclosesBot } from '../core/prompt.js';
 import { CHECKS } from '../core/widgets.js';
 
 describe('fixed limits', () => {
@@ -49,12 +47,6 @@ describe('fixed limits', () => {
 		// new guests per network were not limited, and the wait before the AI reassures was off (0)
 		expect(NEW_GUESTS_PER_NETWORK).toBeGreaterThanOrEqual(60);
 		expect(REASSURE_AFTER_MINUTES).toBeGreaterThan(0);
-	});
-
-	it('an answer saying the AI is a bot is found by the fixed phrases, whole words in any case', () => {
-		expect(disclosesBot('As an AI I ship in two days.', BOT_PHRASES)).toBe(true);
-		expect(disclosesBot("I'M A BOT, sorry.", BOT_PHRASES)).toBe(true);
-		expect(disclosesBot('We ship in two days.', BOT_PHRASES)).toBe(false);
 	});
 
 	it('no settings schema offers a removed limit', () => {

@@ -56,6 +56,21 @@
 				"order": 11
 			}
 		},
+		"extraBotPhrases": {
+			"type": "array",
+			"title": "More phrases that say it is a bot",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 100
+			},
+			"description": "With Never say it is a bot, an answer holding one of these (whole words, case and accents aside) is asked again once, besides the phrases Chat knows in many languages. Add the wording of a language Chat does not cover, or your assistant's own, for example “I am Lumi, your automated helper”.",
+			"x-ui": {
+				"group": "AI disclosure",
+				"order": 12,
+				"advanced": true
+			}
+		},
 		"bubbles": {
 			"type": "integer",
 			"title": "Most messages per answer",

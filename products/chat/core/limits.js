@@ -17,29 +17,6 @@ export const AI_MAX_OUTPUT_TOKENS = 500;
 export const AI_REPLIES_PER_VISITOR_PER_DAY = 40;
 /** AI replies the guests of one network address get per day. */
 export const AI_REPLIES_PER_NETWORK_PER_DAY = 60;
-/** Phrases that tell the AI said it is a bot or an AI; such an answer is not sent (matched in any case). */
-export const BOT_PHRASES = Object.freeze([
-	'I am an AI',
-	"I'm an AI",
-	'as an AI',
-	'an A.I.',
-	'being an AI',
-	'I am a bot',
-	"I'm a bot",
-	'as a bot',
-	'chatbot',
-	'chat bot',
-	'language model',
-	'artificial intelligence',
-	'virtual assistant',
-	'automated assistant',
-	'automated system',
-	'not a human',
-	'not a real human',
-	'not a person',
-	'not a real person',
-]);
-
 /**
  * How many marker words of one language pick it when a message in Latin letters is told apart (a message of up to
  * three words needs only one). The language lock checks an AI answer as a whole, never part by part, and asks for no

@@ -17,6 +17,7 @@
  */
 import { formatText, problem } from '@ss/app-kit';
 import { runAssistant } from '../core/assistant.js';
+import { botPhrases } from '../core/bot-phrases.js';
 import { checkAiConnection } from '../core/models.js';
 import { advance, keywordFlow } from '../core/flows.js';
 import {
@@ -75,7 +76,6 @@ import {
 	AI_REPLIES_PER_NETWORK_PER_DAY,
 	AI_REPLIES_PER_VISITOR_PER_DAY,
 	AI_TEMPERATURE,
-	BOT_PHRASES,
 	REASSURE_AFTER_MINUTES,
 	SHOP_SEARCH_MAX_RESULTS,
 } from '../core/limits.js';
@@ -931,7 +931,7 @@ export const createReply = (product, service) => {
 						settings.neverDisclose === true
 							? [
 									{
-										ok: (text) => !disclosesBot(text, BOT_PHRASES),
+										ok: (text) => !disclosesBot(text, botPhrases(settings.extraBotPhrases)),
 										retry: DISCLOSE_RETRY,
 										failure: 'disclosed',
 									},
