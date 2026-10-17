@@ -5,6 +5,7 @@
  * the limits of webhook URLs and templates as settings. The lists are served by the kit (`/v1/lists/<name>`).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { MAX_TEMPLATES, MAX_WEBHOOK_URLS } from '../core/limits.js';
 import { ADMIN_ORIGIN, HOOK_URL, PUSH_ORIGIN, browserSubscription, pushKeys, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
@@ -91,41 +92,38 @@ describe('the lists (kit routes)', () => {
 });
 
 describe('retries (N8)', () => {
-	it('custom waits are kept by the message it was sent with', async () => {
-		await env.setting('whatsapp', 'retryPlan', 'custom');
-		await env.setting('whatsapp', 'retryWaits', [2, 10]);
+	it('a failed message is tried again after the fixed waits: now, then 1 and 5 minutes', async () => {
 		env.providers.respond('https://graph.facebook.com', () => ({ status: 503 }));
 		const first = await env.send('whatsapp', { template: 'promo', to: { phone: '+15550100001' }, values: { pct: '5' } });
-		expect(first.json).toMatchObject({ status: 'retrying', dueAt: new Date(env.now() + 2 * MIN).toISOString() });
-		// a later change of the setting does not change a waiting message
-		await env.setting('whatsapp', 'retryPlan', 'short');
-		env.advance(2 * MIN + 1000);
+		expect(first.json).toMatchObject({ status: 'retrying', dueAt: new Date(env.now() + MIN).toISOString() });
+		env.advance(MIN + 1000);
 		await use();
 		const second = await messageOf(first.json.id);
-		expect(second).toMatchObject({ status: 'retrying', dueAt: new Date(env.now() + 10 * MIN).toISOString() });
-		env.advance(10 * MIN + 1000);
+		expect(second).toMatchObject({ status: 'retrying', dueAt: new Date(env.now() + 5 * MIN).toISOString() });
+		env.advance(5 * MIN + 1000);
 		await use();
 		expect((await messageOf(first.json.id)).status).toBe('failed');
 		expect((await messageOf(first.json.id)).attempts).toHaveLength(3);
 		env.providers.reset('https://graph.facebook.com');
 	});
 
-	it('webhook events retry by their own setting (standard by default)', async () => {
+	it('webhook events are tried again on their own, longer waits: 1, 5 and 30 minutes and 2 hours', async () => {
 		await saveList('webhook_urls', [{ url: HOOK_URL, events: ['message.sent'] }]);
 		env.providers.respond('https://hooks.example.org', () => ({ status: 500 }));
-		await env.setting('webhooks', 'retryPlan', 'custom');
-		await env.setting('webhooks', 'retryWaits', [3]);
 		await env.send('email', { template: 'news', to: { email: 'hook@example.com' } });
 		const events = await env.merchantCollection('webhook_events');
 		const event = await events.findOne({ websiteId: env.websiteId, status: 'pending' });
 		expect(event?.attempts).toBe(1);
-		expect(event?.dueAt.getTime()).toBe(Math.floor(env.now()) + 3 * MIN);
-		env.advance(3 * MIN + 1000);
-		await use();
-		expect((await events.findOne({ websiteId: env.websiteId, id: event?.id }))?.status).toBe('failed');
+		expect(event?.dueAt.getTime()).toBe(Math.floor(env.now()) + MIN);
+		for (const wait of [MIN, 5 * MIN, 30 * MIN, 120 * MIN]) {
+			env.advance(wait + 1000);
+			await use();
+		}
+		// the long waits let the website's database connection go idle: open it again
+		const done = await (await env.merchantCollection('webhook_events')).findOne({ websiteId: env.websiteId, id: event?.id });
+		expect([done?.status, done?.attempts]).toEqual(['failed', 5]);
 		env.providers.reset('https://hooks.example.org');
 		await saveList('webhook_urls', []);
-		await env.setting('webhooks', 'retryPlan', 'standard');
 	});
 });
 
@@ -300,37 +298,41 @@ describe('staff one-off messages (N9)', () => {
 	});
 });
 
-describe('limits as settings (N12)', () => {
-	it('webhook URLs and templates follow their settings, within the system caps', async () => {
-		await env.setting('webhooks', 'maxUrls', 1);
-		const two = [
-			{ url: 'https://hooks.example.org/a', events: [] },
-			{ url: 'https://hooks.example.org/b', events: [] },
-		];
-		const refused = await saveList('webhook_urls', two);
+describe('fixed limits (N12)', () => {
+	it('a website has at most MAX_WEBHOOK_URLS webhook URLs', async () => {
+		const urls = (/** @type {number} */ count) =>
+			Array.from({ length: count }, (_, i) => ({ url: `https://hooks.example.org/${i}`, events: [] }));
+		const refused = await saveList('webhook_urls', urls(MAX_WEBHOOK_URLS + 1));
 		expect(refused.status).toBe(422);
-		expect(refused.json.detail).toBe('Add at most 1 URLs.');
-		await env.setting('webhooks', 'maxUrls', 2);
-		expect((await saveList('webhook_urls', two)).status).toBe(200);
+		expect(refused.json.detail).toBe(`Add at most ${MAX_WEBHOOK_URLS} URLs.`);
+		expect((await saveList('webhook_urls', urls(MAX_WEBHOOK_URLS))).status).toBe(200);
 		await saveList('webhook_urls', []);
-		// the schema's maximum is the system cap
-		const cookie = await env.adminSession();
-		const tooMany = await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/settings/webhooks.maxUrls`, {
-			value: 21,
-		});
-		expect(tooMany.status).toBe(422);
-		const count = (await (await env.call('GET', '/v1/templates', { token: env.server })).json()).items.length;
-		await env.setting('templates', 'maxTemplates', count);
-		const full = await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/templates`, {
-			key: 'one_more',
+	});
+
+	it('a website has at most MAX_TEMPLATES templates; replacing a saved one still works at the limit', async () => {
+		const templates = await env.merchantCollection('templates');
+		const count = await templates.countDocuments({ websiteId: env.websiteId });
+		const filler = Array.from({ length: MAX_TEMPLATES - count }, (_, i) => ({
+			websiteId: env.websiteId,
+			key: `filler_${i}`,
 			channel: 'sms',
+			language: 'en',
 			text: 'Hi',
-		});
-		expect(full.status).toBe(422);
-		expect((await full.json()).detail).toBe(`A website can have at most ${count} templates (Settings → Templates).`);
-		// replacing a saved template still works at the limit
-		await env.template({ key: 'news', channel: 'email', subject: 'News', text: 'Our latest news' });
-		await env.setting('templates', 'maxTemplates', 1000);
+		}));
+		await templates.insertMany(filler);
+		try {
+			const cookie = await env.adminSession();
+			const full = await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/templates`, {
+				key: 'one_more',
+				channel: 'sms',
+				text: 'Hi',
+			});
+			expect(full.status).toBe(422);
+			expect((await full.json()).detail).toBe(`A website can have at most ${MAX_TEMPLATES} templates.`);
+			await env.template({ key: 'news', channel: 'email', subject: 'News', text: 'Our latest news' });
+		} finally {
+			await templates.deleteMany({ websiteId: env.websiteId, key: /^filler_/ });
+		}
 	});
 });
 

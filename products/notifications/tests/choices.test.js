@@ -1,5 +1,5 @@
 /**
- * The merchant's own choices (fixed-choices N2, N5–N8): retry presets and custom waits, quiet hours per weekday and
+ * The merchant's own choices (fixed-choices N2, N5–N8): the fixed retry waits, quiet hours per weekday and
  * channel, unsubscribe topics, template settings and fallback channels — the pure checks and rules.
  */
 import { describe, expect, it } from 'vitest';
@@ -11,7 +11,8 @@ import {
 	fallbackChainOf,
 	topicIdOf,
 } from '../core/choices.js';
-import { DEFAULT_QUIET_HOURS, RETRY_PRESETS, nextAttemptAt, quietUntil, retryDelaysOf } from '../core/timing.js';
+import { RETRY_WAITS, WEBHOOK_RETRY_WAITS } from '../core/limits.js';
+import { DEFAULT_QUIET_HOURS, nextAttemptAt, quietUntil } from '../core/timing.js';
 
 const MIN = 60_000;
 const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
@@ -19,29 +20,15 @@ const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
 const quiet = (windows) => /** @type {any} */ (windows);
 
 describe('retries (N8)', () => {
-	it('presets keep today’s timings; custom takes the merchant’s own minutes', () => {
-		expect(retryDelaysOf('short', [])).toEqual([MIN, 5 * MIN]);
-		expect(retryDelaysOf('long', [])).toEqual([5 * MIN, 15 * MIN, 60 * MIN, 180 * MIN, 360 * MIN]);
-		expect(retryDelaysOf('standard', [])).toEqual([MIN, 5 * MIN, 30 * MIN, 120 * MIN]);
-		expect(retryDelaysOf('custom', [2, 10, 60])).toEqual([2 * MIN, 10 * MIN, 60 * MIN]);
-		// custom without valid waits, or an unknown plan: the preset named as otherwise
-		expect(retryDelaysOf('custom', [])).toEqual([...RETRY_PRESETS.short]);
-		expect(retryDelaysOf('custom', [0])).toEqual([...RETRY_PRESETS.short]);
-		// at most ten waits count (a system cap)
-		expect(
-			retryDelaysOf(
-				'custom',
-				Array.from({ length: 12 }, () => 1),
-			),
-		).toHaveLength(10);
-		expect(retryDelaysOf('weekly', [], 'standard')).toEqual([...RETRY_PRESETS.standard]);
+	it('keep today’s timings: 3 attempts on a channel (now, 1 and 5 minutes), 5 on a webhook', () => {
+		expect(RETRY_WAITS).toEqual([MIN, 5 * MIN]);
+		expect(WEBHOOK_RETRY_WAITS).toEqual([MIN, 5 * MIN, 30 * MIN, 120 * MIN]);
 	});
 
 	it('the attempts are one more than the waits', () => {
-		const waits = retryDelaysOf('custom', [3, 7]);
-		expect(nextAttemptAt(1, 0, waits)).toBe(3 * MIN);
-		expect(nextAttemptAt(2, 0, waits)).toBe(7 * MIN);
-		expect(nextAttemptAt(3, 0, waits)).toBeNull();
+		expect(nextAttemptAt(1, 0, RETRY_WAITS)).toBe(MIN);
+		expect(nextAttemptAt(2, 0, RETRY_WAITS)).toBe(5 * MIN);
+		expect(nextAttemptAt(3, 0, RETRY_WAITS)).toBeNull();
 		expect(nextAttemptAt(1, 0, [])).toBeNull();
 	});
 });

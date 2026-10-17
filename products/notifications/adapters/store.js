@@ -17,6 +17,7 @@
  */
 import { createId } from '@ss/contracts';
 import { randomToken } from '@ss/protocol';
+import { MAX_TEMPLATES } from '../core/limits.js';
 import { LEASE_MS } from '../core/timing.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -121,8 +122,6 @@ export const INDEXES = [
 /** What delivery-log reads return of a message: never the sealed real words, nor the product's defaults it keeps. */
 const LOG_PROJECTION = { _id: 0, sealed: 0, defaults: 0 };
 
-/** Most templates a website keeps (the system cap of the setting `templates.maxTemplates`). */
-const MAX_TEMPLATES = 5000;
 const TEMPLATE_PROJECTION = {
 	_id: 0,
 	key: 1,
@@ -185,17 +184,16 @@ export const createStore = (data, { now }) => {
 			/**
 			 * Save a template (one with the same key, channel and language is replaced).
 			 * @param {Template} template
-			 * @param {{ max: number }} limits the setting `templates.maxTemplates`
-			 * @returns {Promise<(Template & { updatedAt: Date }) | 'full'>} the template as saved, or `full` at `max` templates
+			 * @returns {Promise<(Template & { updatedAt: Date }) | 'full'>} the template as saved, or `full` at `MAX_TEMPLATES`
 			 */
-			save: async (template, { max }) => {
+			save: async (template) => {
 				const existing = await templates.countDocuments({
 					websiteId,
 					key: template.key,
 					channel: template.channel,
 					language: template.language,
 				});
-				if (existing === 0 && (await templates.countDocuments({ websiteId })) >= Math.min(max, MAX_TEMPLATES)) return 'full';
+				if (existing === 0 && (await templates.countDocuments({ websiteId })) >= MAX_TEMPLATES) return 'full';
 				await templates.updateOne(
 					{ websiteId, key: template.key, channel: template.channel, language: template.language },
 					{ $set: { ...template }, $setOnInsert: { createdAt: at() } },

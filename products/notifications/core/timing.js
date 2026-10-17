@@ -1,5 +1,5 @@
 /**
- * Timing (PLAN 0.8.5): retries on the next uses (presets or the merchant's own waits, PLAN 0.8.10 N3), quiet hours per
+ * Timing (PLAN 0.8.5): retries on the next uses (the waits are fixed, `core/limits.js`; PLAN 0.8.10 N3), quiet hours per
  * weekday and channel, send limits and delayed send. Nothing runs on a timer:
  * a waiting message gets a due time and is sent on the first use of the website after it. Quiet hours are a wall-clock
  * rule in the recipient's time zone, else the business.json time zone (UTC when missing; PLAN 0.8.10 K8); send limits
@@ -9,44 +9,9 @@
 import { zonedParts } from '@ss/contracts/format';
 
 /** @typedef {import('./channels.js').Channel} Channel */
-/** @typedef {'short' | 'standard' | 'long' | 'custom'} RetryPlan */
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
-/**
- * Retry presets (PLAN 0.8.10 N3, fixed-choices N8): the waits before attempts 2, 3, …, each judged on the next use after
- * it; the attempts are one more than the waits. Short: now, then 1 and 5 minutes later. Standard: now, then 1, 5 and 30
- * minutes and 2 hours later. Long: now, then 5 and 15 minutes and 1, 3 and 6 hours later. `custom` takes the merchant's
- * own waits in minutes.
- */
-export const RETRY_PRESETS = Object.freeze({
-	short: Object.freeze([MINUTE, 5 * MINUTE]),
-	standard: Object.freeze([MINUTE, 5 * MINUTE, 30 * MINUTE, 2 * HOUR]),
-	long: Object.freeze([5 * MINUTE, 15 * MINUTE, HOUR, 3 * HOUR, 6 * HOUR]),
-});
-/** Most custom waits (a system cap: retries are judged on the next uses of the website). */
-const MAX_RETRY_WAITS = 10;
-/** Longest custom wait, in minutes (7 days). */
-const MAX_RETRY_WAIT_MINUTES = 10_080;
-
-/**
- * The waits (ms) a retry setting names: a preset's, or with `custom` the merchant's own minutes (whole numbers from 1 to
- * 10,080; the first ten count; none: the preset `otherwise`). Any other plan name is `otherwise` too.
- * @param {unknown} plan the setting `retryPlan`
- * @param {unknown} customMinutes the setting `retryWaits`
- * @param {Exclude<RetryPlan, 'custom'>} [otherwise]
- * @returns {number[]}
- */
-export const retryDelaysOf = (plan, customMinutes, otherwise = 'short') => {
-	if (plan === 'custom') {
-		const waits = (Array.isArray(customMinutes) ? customMinutes : [])
-			.filter((wait) => Number.isInteger(wait) && wait >= 1 && wait <= MAX_RETRY_WAIT_MINUTES)
-			.slice(0, MAX_RETRY_WAITS);
-		if (waits.length > 0) return waits.map((wait) => wait * MINUTE);
-	}
-	const preset = typeof plan === 'string' && Object.hasOwn(RETRY_PRESETS, plan) ? plan : otherwise;
-	return [...RETRY_PRESETS[/** @type {keyof typeof RETRY_PRESETS} */ (preset)]];
-};
 
 /** A claimed message stays claimed this long (a crashed request releases it after that). */
 export const LEASE_MS = 60_000;

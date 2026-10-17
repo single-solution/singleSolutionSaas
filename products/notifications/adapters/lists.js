@@ -51,10 +51,9 @@ const DEFAULTS = Object.freeze({
 });
 
 /**
- * @param {{ store: import('@ss/app-kit').Store, now: () => number,
- *   maxWebhookUrls: (websiteId: string) => Promise<number> }} options `maxWebhookUrls`: the setting `webhooks.maxUrls`
+ * @param {{ store: import('@ss/app-kit').Store, now: () => number }} options
  */
-export const createLists = ({ store, now, maxWebhookUrls }) => {
+export const createLists = ({ store, now }) => {
 	/** @param {string} websiteId @param {ListName} name */
 	const idOf = (websiteId, name) => `${websiteId}|notifications|list.${name}`;
 
@@ -84,7 +83,7 @@ export const createLists = ({ store, now, maxWebhookUrls }) => {
 	 * @type {{ [name in ListName]: (websiteId: string, value: unknown) => Promise<Saved> }}
 	 */
 	const checks = {
-		webhook_urls: async (websiteId, value) => checkWebhookUrls(value, { max: await maxWebhookUrls(websiteId) }),
+		webhook_urls: async (_websiteId, value) => checkWebhookUrls(value),
 		topics: async (_websiteId, value) => checkTopics(value),
 		template_settings: async (websiteId, value) =>
 			checkTemplateSettings(

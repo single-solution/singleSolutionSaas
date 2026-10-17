@@ -43,7 +43,8 @@ import {
 	pickVersion,
 	renderTemplate,
 } from '../core/templates.js';
-import { DRAIN_BATCH, LEASE_MS, nextAttemptAt, quietUntil, retryDelaysOf, withinLimits } from '../core/timing.js';
+import { RETRY_WAITS, WEBHOOK_RETRY_WAITS } from '../core/limits.js';
+import { DRAIN_BATCH, LEASE_MS, nextAttemptAt, quietUntil, withinLimits } from '../core/timing.js';
 import { SIGNATURE_HEADER, urlsFor } from '../core/webhooks.js';
 import { messageAadOf } from '../adapters/crypto.js';
 import { createStore } from '../adapters/store.js';
@@ -281,18 +282,6 @@ export const createSending = (product) => {
 		if (message.hidden.length === 0) return message;
 		const opened = product.sealer.open(message.sealed, aadOf(s, message.channel, message.address));
 		return opened === null ? null : { ...message, ...JSON.parse(opened) };
-	};
-
-	/**
-	 * The retry waits of a channel's settings `retryPlan` and `retryWaits` (fixed-choices N8: a preset or the merchant's
-	 * own minutes). A message keeps the waits it was accepted with (PLAN 0.8.10 N3).
-	 * @param {Site} s
-	 * @param {Channel} channel
-	 * @returns {Promise<number[]>}
-	 */
-	const retryDelaysFor = async (s, channel) => {
-		const { retryPlan, retryWaits } = await product.settings.values(s.websiteId, CHANNEL_FEATURES[channel]);
-		return retryDelaysOf(retryPlan, retryWaits, 'short');
 	};
 
 	/**
@@ -568,7 +557,7 @@ export const createSending = (product) => {
 				...fallback,
 				attempts,
 				channelAttempts: 0,
-				retryDelays: await retryDelaysFor(s, fallback.channel),
+				retryDelays: [...RETRY_WAITS],
 				fellBack: true,
 				defaults: null,
 				status: 'queued',
@@ -723,7 +712,7 @@ export const createSending = (product) => {
 			reasonValues: null,
 			attempts: [],
 			channelAttempts: 0,
-			retryDelays: await retryDelaysFor(s, input.channel),
+			retryDelays: [...RETRY_WAITS],
 			fellBack: false,
 			// its fallback channels, kept: its template's own, else the website's for its channel (fixed-choices N7)
 			fallbackChain: fallbackChainOf(
@@ -828,9 +817,8 @@ export const createSending = (product) => {
 				expireAt: await expiryOf(s),
 			});
 		const attempts = event.attempts + 1;
-		// the webhooks' retry setting when it is retried (fixed-choices N8; standard by default)
-		const { retryPlan, retryWaits } = await product.settings.values(s.websiteId, 'webhooks');
-		const next = nextAttemptAt(attempts, now(), retryDelaysOf(retryPlan, retryWaits, 'standard'));
+		// an event is tried again on the webhooks' own, longer waits
+		const next = nextAttemptAt(attempts, now(), WEBHOOK_RETRY_WAITS);
 		return s.store.events.update(event.id, {
 			attempts,
 			lastError: error,

@@ -1,12 +1,13 @@
 'use client';
 /**
- * Settings → Webhook URLs (PLAN 0.8.10 N5): up to `webhooks.maxUrls` https URLs (five by default), each with the events it takes (none: every event),
+ * Settings → Webhook URLs (PLAN 0.8.10 N5): up to `MAX_WEBHOOK_URLS` https URLs (five), each with the events it takes (none: every event),
  * saved whole with `PUT /v1/dashboard/websites/:websiteId/lists/webhook_urls { value }` (a 422 lists its `errors`).
  * @module
  */
 import { useState } from 'react';
 import { Button, Callout, Card, EntryGroup, Input, Skeleton, TextArea, describeProblem, SaveRow } from '@ss/ui';
 import { SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
+import { MAX_WEBHOOK_URLS } from '../../core/limits.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {{ url: string, events: string }} Row events as typed: one type per line */
@@ -39,10 +40,9 @@ const valueOf = (rows) =>
 
 /**
  * The website's webhook URLs and the events each one takes.
- * @param {{ websiteId: string, off: boolean, max: number }} props `off`: the Outgoing webhooks feature is off (admins
- *   prepare it); `max`: the setting `webhooks.maxUrls`
+ * @param {{ websiteId: string, off: boolean }} props `off`: the Outgoing webhooks feature is off (admins prepare it)
  */
-export function WebhookUrlsCard({ websiteId, off, max }) {
+export function WebhookUrlsCard({ websiteId, off }) {
 	const path = `/v1/dashboard/websites/${websiteId}/lists/webhook_urls`;
 	const { answer, reload } = useLoad(path);
 	const [draft, setDraft] = useState(/** @type {Row[] | null} */ (null));
@@ -53,7 +53,7 @@ export function WebhookUrlsCard({ websiteId, off, max }) {
 	/** @param {number} at @param {Partial<Row>} patch */
 	const set = (at, patch) => setDraft(rows.map((row, i) => (i === at ? { ...row, ...patch } : row)));
 	return (
-		<Card title={W.title} subtitle={off ? TEXTS.settings.off : fill(W.help, { max })}>
+		<Card title={W.title} subtitle={off ? TEXTS.settings.off : fill(W.help, { max: MAX_WEBHOOK_URLS })}>
 			<div className="space-y-4">
 				{rows.length === 0 ? <p className="text-sm text-muted">{W.none}</p> : null}
 				{rows.map((row, at) => (
@@ -91,7 +91,7 @@ export function WebhookUrlsCard({ websiteId, off, max }) {
 					<Button
 						size="sm"
 						variant="secondary"
-						disabled={rows.length >= max}
+						disabled={rows.length >= MAX_WEBHOOK_URLS}
 						onClick={() => setDraft([...rows, { url: '', events: '' }])}>
 						{W.add}
 					</Button>

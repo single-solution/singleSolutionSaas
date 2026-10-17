@@ -30,7 +30,6 @@ import sendApi from '../schemas/send_api.settings.json' with { type: 'json' };
 import sendLimits from '../schemas/send_limits.settings.json' with { type: 'json' };
 import sms from '../schemas/sms.settings.json' with { type: 'json' };
 import staffPush from '../schemas/staff_push.settings.json' with { type: 'json' };
-import templateLimits from '../schemas/templates.shared.json' with { type: 'json' };
 import webhooks from '../schemas/webhooks.settings.json' with { type: 'json' };
 import whatsapp from '../schemas/whatsapp.settings.json' with { type: 'json' };
 import { normalizePhone } from '../core/channels.js';
@@ -60,8 +59,7 @@ const SETTINGS = {
 
 /**
  * Settings several features use (PLAN 0.8.10 D11): how long the delivery log of every channel and the outgoing webhook
- * events are kept (`delivery_log.retentionDays`; 0, the default, keeps them forever), and how many templates the website
- * keeps (`templates.maxTemplates`).
+ * events are kept (`delivery_log.retentionDays`; 0, the default, keeps them forever).
  * @type {Record<string, { name: string, features: string[], settings: any }>}
  */
 const SHARED_SETTINGS = {
@@ -69,12 +67,6 @@ const SHARED_SETTINGS = {
 		name: 'Delivery log',
 		features: ['whatsapp', 'email', 'sms', 'browser_push', 'staff_push', 'webhooks'],
 		settings: deliveryLog,
-	},
-	// how many templates the website keeps (fixed-choices N12; the schema's maximum is the system cap)
-	templates: {
-		name: 'Templates',
-		features: ['whatsapp', 'email', 'sms', 'browser_push', 'staff_push', 'send_api'],
-		settings: templateLimits,
 	},
 };
 
@@ -173,12 +165,7 @@ export const createProductInstance = (options) => {
 	// Notifications keeps its list settings in the product database too, and sends to providers and push services on
 	// the policy the kit uses for addresses merchants enter: the kit's start-up pieces, shared with the kit
 	const { store, policy, send } = createProductBase(kitOptions);
-	const lists = createLists({
-		store,
-		now,
-		// the setting webhooks.maxUrls (fixed-choices N12), read when the list is saved
-		maxWebhookUrls: async (websiteId) => Number((await product.settings.values(websiteId, 'webhooks')).maxUrls),
-	});
+	const lists = createLists({ store, now });
 	const providers = createProviders({ send, policy, now, ...(createTransport ? { createTransport } : {}) });
 	const webpush = createWebPush({ send, now });
 	const keys = (options.problems ?? []).length === 0 ? options.config : undefined;

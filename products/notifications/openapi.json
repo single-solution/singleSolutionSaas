@@ -2039,7 +2039,7 @@
 									"sendAt": {
 										"type": "string",
 										"format": "date-time",
-										"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now. accounts. templates always go at once."
+										"description": "Delayed send: at most 30 days ahead; a past time sends now. accounts. templates always go at once."
 									},
 									"defaults": {
 										"$ref": "#/components/schemas/Defaults"
@@ -2157,7 +2157,7 @@
 									"sendAt": {
 										"type": "string",
 										"format": "date-time",
-										"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now."
+										"description": "Delayed send: at most 30 days ahead; a past time sends now."
 									},
 									"defaults": {
 										"$ref": "#/components/schemas/Defaults"
@@ -2275,7 +2275,7 @@
 									"sendAt": {
 										"type": "string",
 										"format": "date-time",
-										"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now. accounts. templates always go at once."
+										"description": "Delayed send: at most 30 days ahead; a past time sends now. accounts. templates always go at once."
 									},
 									"defaults": {
 										"$ref": "#/components/schemas/Defaults"
@@ -2393,7 +2393,7 @@
 									"sendAt": {
 										"type": "string",
 										"format": "date-time",
-										"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now."
+										"description": "Delayed send: at most 30 days ahead; a past time sends now."
 									},
 									"defaults": {
 										"$ref": "#/components/schemas/Defaults"
@@ -2511,7 +2511,7 @@
 									"sendAt": {
 										"type": "string",
 										"format": "date-time",
-										"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now. accounts. templates always go at once."
+										"description": "Delayed send: at most 30 days ahead; a past time sends now. accounts. templates always go at once."
 									},
 									"defaults": {
 										"$ref": "#/components/schemas/Defaults"

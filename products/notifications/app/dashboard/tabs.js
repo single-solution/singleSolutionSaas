@@ -71,15 +71,11 @@ function NotificationsOverview(props) {
 }
 
 /**
- * The webhook URLs under Outgoing webhooks, at most as many as its setting allows.
+ * The webhook URLs under Outgoing webhooks.
  * @param {{ websiteId: string }} props
  */
 function WebhookUrls({ websiteId }) {
-	const settings = useLoad(`/v1/dashboard/websites/${websiteId}/settings`);
-	/** @type {Array<{ key: string, values?: Record<string, { value: unknown }> }>} */
-	const features = settings.answer?.ok ? settings.answer.data.features : [];
-	const max = Number(features.find((feature) => feature.key === 'webhooks')?.values?.maxUrls?.value ?? 5);
-	return <WebhookUrlsCard websiteId={websiteId} off={false} max={max} />;
+	return <WebhookUrlsCard websiteId={websiteId} off={false} />;
 }
 
 /**

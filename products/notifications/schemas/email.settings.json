@@ -8,30 +8,6 @@
 			"description": "Replies to emails go here. Empty: to the sender address.",
 			"default": "",
 			"maxLength": 254
-		},
-		"retryPlan": {
-			"type": "string",
-			"title": "Retries",
-			"description": "How a failed message is tried again: Short, Standard, Long, or Custom with your own waits.",
-			"default": "short",
-			"enum": ["short", "standard", "long", "custom"],
-			"x-ui": {
-				"advanced": true
-			}
-		},
-		"retryWaits": {
-			"type": "array",
-			"title": "Custom waits (minutes)",
-			"description": "With Custom: the minutes to wait before each retry, for example 2, 10, 60.",
-			"default": [1, 5],
-			"items": {
-				"type": "integer",
-				"minimum": 1,
-				"maximum": 10080
-			},
-			"x-ui": {
-				"advanced": true
-			}
 		}
 	}
 }

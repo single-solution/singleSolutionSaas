@@ -27,6 +27,7 @@ import {
 	languageOfSegment,
 	templateView,
 } from '../core/templates.js';
+import { MAX_DELAY_DAYS, MAX_TEMPLATES } from '../core/limits.js';
 import { checkSendAt } from '../core/timing.js';
 import { checkForwardedEvent } from '../core/webhooks.js';
 import { strings } from '../adapters/product.js';
@@ -168,9 +169,8 @@ export const createRoutes = (product) => {
 		let sendAt = null;
 		if (body.sendAt !== undefined) {
 			if (!s.on.includes('delayed_send')) return problem('feature_off', 'A later send time needs the Delayed send feature.');
-			const { maxDelayDays } = await product.settings.values(ctx.websiteId, 'delayed_send');
-			const checked = checkSendAt(body.sendAt, now(), Number(maxDelayDays));
-			if (!checked.ok) return invalid('sendAt', `sendAt must be an ISO-8601 time at most ${maxDelayDays} days ahead.`);
+			const checked = checkSendAt(body.sendAt, now(), MAX_DELAY_DAYS);
+			if (!checked.ok) return invalid('sendAt', `sendAt must be an ISO-8601 time at most ${MAX_DELAY_DAYS} days ahead.`);
 			sendAt = checked.at;
 		}
 		const result = await sending.accept(s, {
@@ -295,11 +295,8 @@ export const createRoutes = (product) => {
 				const checked = checkTemplate(ctx.body, await longValuesOf(key));
 				if (!checked.ok) return invalid(checked.field, checked.message);
 				if (!(await channelOn(ctx, checked.value.channel))) return channelOff(checked.value.channel);
-				// the setting templates.maxTemplates (fixed-choices N12)
-				const max = Number((await product.settings.values(ctx.websiteId, 'templates')).maxTemplates);
-				const saved = await (await storeOf(ctx)).templates.save(checked.value, { max });
-				if (saved === 'full')
-					return problem('validation_failed', `A website can have at most ${max} templates (Settings → Templates).`);
+				const saved = await (await storeOf(ctx)).templates.save(checked.value);
+				if (saved === 'full') return problem('validation_failed', `A website can have at most ${MAX_TEMPLATES} templates.`);
 				const t = checked.value;
 				await record(ctx, {
 					change: 'saved',
@@ -449,7 +446,8 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/messages/email',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'email',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
@@ -458,7 +456,8 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/messages/sms',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'sms',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
@@ -467,7 +466,8 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/messages/whatsapp',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'whatsapp',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
@@ -476,7 +476,8 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/messages/push',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'browser_push',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
@@ -485,7 +486,8 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/messages/staff-push',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'staff_push',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
@@ -495,7 +497,8 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/events',
-			auth: 'server', runtime: true,
+			auth: 'server',
+			runtime: true,
 			feature: 'webhooks',
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
@@ -507,7 +510,14 @@ export const createRoutes = (product) => {
 			},
 		}),
 		// the delivery log for the merchant's server, and its counts with the same filters
-		defineRoute({ method: 'GET', path: '/v1/messages', auth: 'server', permission: 'log.read', feature: 'send_api', handler: listMessages }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/messages',
+			auth: 'server',
+			permission: 'log.read',
+			feature: 'send_api',
+			handler: listMessages,
+		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/messages/count',
@@ -527,7 +537,8 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/messages/:id',
-			auth: 'server', permission: 'log.read',
+			auth: 'server',
+			permission: 'log.read',
 			feature: 'send_api',
 			handler: async (ctx) => {
 				const message = await (await siteOf(ctx)).store.messages.get(ctx.params.id);
@@ -539,14 +550,16 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/templates',
-			auth: 'server', permission: 'templates.edit',
+			auth: 'server',
+			permission: 'templates.edit',
 			feature: ['email', 'sms', 'whatsapp', 'browser_push', 'staff_push'],
 			handler: serverTemplates.list,
 		}),
 		defineRoute({
 			method: 'PUT',
 			path: '/v1/templates',
-			auth: 'server', permission: 'templates.edit',
+			auth: 'server',
+			permission: 'templates.edit',
 			feature: ['email', 'sms', 'whatsapp', 'browser_push', 'staff_push'],
 			rateLimit: TEMPLATE_WRITE_LIMITS,
 			handler: serverTemplates.save,
@@ -554,7 +567,8 @@ export const createRoutes = (product) => {
 		defineRoute({
 			method: 'DELETE',
 			path: '/v1/templates/:key/:channel/:language',
-			auth: 'server', permission: 'templates.edit',
+			auth: 'server',
+			permission: 'templates.edit',
 			feature: ['email', 'sms', 'whatsapp', 'browser_push', 'staff_push'],
 			rateLimit: TEMPLATE_WRITE_LIMITS,
 			handler: serverTemplates.remove,
