@@ -76,7 +76,7 @@ describe('staff and guests', () => {
 				expireAt: '2030-01-01T00:00:00Z',
 				createdAt: '2020-01-01T00:00:00Z',
 			},
-			{ now: Date.UTC(2026, 0, 1), rememberDays: 90 },
+			{ now: Date.UTC(2026, 0, 1) },
 		);
 		expect(checked).toEqual({
 			ok: true,

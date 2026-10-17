@@ -14,6 +14,7 @@ import {
 	webAddress,
 	whenOf,
 } from '../ui/common.js';
+import { GUEST_REMEMBER_DAYS } from '../core/limits.js';
 import { deviceText } from '../ui/inbox-parts.js';
 import { createMemory, idleOnce, idleText, isDesktop, isPhone, pageFlow, startProactive } from '../ui/proactive.js';
 import { createChecks, createUnreadChecks } from '../ui/transport.js';
@@ -93,21 +94,6 @@ describe('createChecks', () => {
 		checks.stop();
 	});
 
-	it('checks as often as the website set, half as often after 5 idle minutes (C19)', async () => {
-		const time = clock();
-		const check = vi.fn(async () => {});
-		const checks = createChecks({ win: window, ...time, check, activeMs: 30_000 });
-		checks.start();
-		expect(time.pending()).toEqual([30_000]);
-		await time.advance(CHECKS.idleAfterMs);
-		expect(check).toHaveBeenCalledTimes(10);
-		expect(time.pending()).toEqual([60_000]);
-		// a reply on its way is still checked every 3 s
-		checks.expectReply();
-		expect(time.pending()).toEqual([CHECKS.replyMs]);
-		checks.stop();
-	});
-
 	it('skips a check while one is running', async () => {
 		const time = clock();
 		/** @type {() => void} */
@@ -150,29 +136,6 @@ describe('createUnreadChecks', () => {
 		expect(time.pending()).toEqual([]);
 	});
 
-	it('checks as often as the website set; on focus at most that often (C19)', async () => {
-		const time = clock();
-		const check = vi.fn(async () => {});
-		const unread = createUnreadChecks({ win: window, ...time, check, everyMs: 20_000 });
-		unread.start();
-		expect(time.pending()).toEqual([20_000]);
-		await time.advance(60_000);
-		expect(check).toHaveBeenCalledTimes(4);
-		await time.advance(5_000);
-		window.dispatchEvent(new window.Event('focus'));
-		expect(check).toHaveBeenCalledTimes(4);
-		await time.advance(15_000);
-		expect(check).toHaveBeenCalledTimes(5);
-		await time.advance(19_000);
-		window.dispatchEvent(new window.Event('focus'));
-		expect(check).toHaveBeenCalledTimes(5);
-		setHiddenTab(true);
-		await time.advance(30_000);
-		setHiddenTab(false);
-		expect(check).toHaveBeenCalledTimes(6);
-		unread.stop();
-	});
-
 	it('only plans when started without an immediate check', () => {
 		const time = clock();
 		const check = vi.fn(async () => {});
@@ -191,11 +154,10 @@ describe('createVisitor', () => {
 		const visitor = createVisitor({ win: window, base: BASE, token: 'bt', now: time.now });
 		expect(visitor.known()).toBe(false);
 		visitor.keepGuest('');
-		visitor.rememberFor(1);
 		visitor.keepGuest('g1');
 		expect(JSON.parse(String(window.localStorage.getItem(GUEST_STORAGE_KEY)))).toEqual({
 			key: 'g1',
-			expiresAt: START + 86_400_000,
+			expiresAt: START + GUEST_REMEMBER_DAYS * 86_400_000,
 		});
 		visitor.identify('sig');
 		expect(visitor.signedIn()).toBe(true);
@@ -206,7 +168,7 @@ describe('createVisitor', () => {
 			[GUEST_HEADER]: 'g1',
 		});
 		visitor.identify(null);
-		time.time += 86_400_001;
+		time.time += GUEST_REMEMBER_DAYS * 86_400_000 + 1;
 		expect(visitor.guestKey()).toBeNull();
 		expect(window.localStorage.getItem(GUEST_STORAGE_KEY)).toBeNull();
 		await visitor.call('GET', '/v1/chat');
@@ -226,7 +188,7 @@ describe('createVisitor', () => {
 		expect(visitor.guestKey()).toBeNull();
 		const memory = createMemory({ win: window, now: time.now });
 		memory.shown('idle');
-		memory.dismiss(7);
+		memory.dismiss();
 		expect(memory.allowed('idle')).toBe(true);
 	});
 });
@@ -239,7 +201,6 @@ describe('common', () => {
 		expect(settings.look.avatarUrl).toBe('https://cdn.test/a.png');
 		expect(settings.look.launcherPosition).toBe('bottom-right');
 		expect(settings.signInUrl).toBe('/in');
-		expect(settings.guests.rememberDays).toBe(90);
 		expect(settingsOf({}).flows).toEqual([]);
 	});
 
@@ -523,7 +484,7 @@ describe('proactive', () => {
 		memory.shown('idle');
 		expect(memory.allowed('idle')).toBe(false);
 		expect(memory.allowed('exit')).toBe(true);
-		memory.dismiss(7);
+		memory.dismiss();
 		expect(memory.allowed('exit')).toBe(false);
 		time.time += 7 * 86_400_000 + 1;
 		expect(memory.allowed('exit')).toBe(true);

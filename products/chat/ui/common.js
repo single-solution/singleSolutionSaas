@@ -14,7 +14,7 @@ import {
 	toggle,
 	viewerOf,
 } from '@ss/app-kit/widget';
-import { CHECKS, attachmentKind } from '../core/widgets.js';
+import { attachmentKind } from '../core/widgets.js';
 
 /** @typedef {(key: string) => string} Texts */
 
@@ -34,11 +34,11 @@ import { CHECKS, attachmentKind } from '../core/widgets.js';
  * @property {{ avatarUrl: string, launcherPosition: string, launcherStyle: string, windowStyle: string,
  *   fullScreenOnMobile: boolean, hideOnPages: string[], showTimes: boolean }} look `showTimes`: each message's time and
  *   a divider for each day (C8)
- * @property {{ messageLimit: number, rememberDays: number, contactCapture: string }} guests
+ * @property {{ messageLimit: number, contactCapture: string }} guests
  * @property {string} signInUrl
  * @property {{ showLabel: boolean }} ai
  * @property {{ showButton: boolean }} handoff whether the window offers Talk to a person (C4)
- * @property {{ idleMinutes: number, dismissDays: number, pageRules: Array<{ path: string, delay: number, message: string }>,
+ * @property {{ idleMinutes: number, pageRules: Array<{ path: string, delay: number, message: string }>,
  *   oncePer: 'session' | 'product', hideOnMobile: boolean }} proactive whether the idle nudge shows once per session or
  *   once per product, and whether phones get none (C14)
  * @property {{ tags: Label[], topics: Label[], priorities: Label[] }} labels the inbox's tags, topics and priorities
@@ -49,13 +49,11 @@ import { CHECKS, attachmentKind } from '../core/widgets.js';
  * @property {Array<{ id: string, name: string, start: { kind: string, path: string, delay: number } }>} flows
  * @property {{ fields: string[], customFields: string[], consentText: string }} leads
  * @property {CustomField[]} customFields
- * @property {{ visitors: string, types: string[], limits?: Record<string, number>, maxBytes: number, staffTypes: string[],
- *   staffMaxBytes: number, storage: boolean }} attachments what visitors may send (`types`, each type's cap in
- *   `limits`, C11, the largest in `maxBytes`) and staff (`staffTypes`, `staffMaxBytes`), as the server checks it
+ * @property {{ visitors: string, types: string[], limits?: Record<string, number>, maxBytes: number, storage: boolean
+ *   }} attachments what visitors may send (`types`, each type's cap in `limits`, C11, the largest in `maxBytes`), as the
+ *   server checks it
  * @property {{ kind: 'csat' | 'nps', labels: string[], askWhen: string, comment: boolean }} ratings csat: the
  *   merchant's labels, lowest first; nps: 0 to 10 (C13)
- * @property {{ focusedSeconds: number, backgroundSeconds: number }} checks how often the widget checks for new messages
- *   while the chat window is open, and for unread replies while it is closed (C19)
  */
 
 /**
@@ -82,13 +80,12 @@ const DEFAULTS = {
 		hideOnPages: [],
 		showTimes: false,
 	},
-	guests: { messageLimit: 0, rememberDays: 90, contactCapture: 'never' },
+	guests: { messageLimit: 0, contactCapture: 'never' },
 	signInUrl: '',
 	ai: { showLabel: true },
 	handoff: { showButton: true },
 	proactive: {
 		idleMinutes: 7,
-		dismissDays: 7,
 		pageRules: [],
 		oncePer: 'session',
 		hideOnMobile: false,
@@ -98,9 +95,8 @@ const DEFAULTS = {
 	flows: [],
 	leads: { fields: ['name', 'email'], customFields: [], consentText: '' },
 	customFields: [],
-	attachments: { visitors: 'off', types: [], limits: {}, maxBytes: 0, staffTypes: [], staffMaxBytes: 0, storage: false },
+	attachments: { visitors: 'off', types: [], limits: {}, maxBytes: 0, storage: false },
 	ratings: { kind: 'csat', labels: ['1', '2', '3', '4', '5'], askWhen: 'on_resolve', comment: false },
-	checks: { focusedSeconds: CHECKS.activeMs / 1000, backgroundSeconds: CHECKS.closedEveryMs / 1000 },
 };
 
 /**

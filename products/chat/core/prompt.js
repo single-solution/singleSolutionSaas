@@ -129,10 +129,10 @@ export const DISCLOSE_RETRY =
 	'Your last answer said or suggested that you are a bot or an AI. Write the same answer again without saying that.';
 
 /**
- * Whether an answer says that it comes from a bot or an AI: it holds one of the merchant's phrases (setting Phrases
- * that say it is a bot, in each language the AI answers in, C17), as whole words, case and accents aside.
+ * Whether an answer says that it comes from a bot or an AI: it holds one of the phrases (`BOT_PHRASES` of limits.js,
+ * C17), as whole words, case and accents aside.
  * @param {string} text
- * @param {string[]} phrases
+ * @param {readonly string[]} phrases
  */
 export const disclosesBot = (text, phrases) =>
 	phrases.some((phrase) => typeof phrase === 'string' && containsPhrase(String(text ?? ''), phrase));

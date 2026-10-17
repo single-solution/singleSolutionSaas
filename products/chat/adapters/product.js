@@ -341,7 +341,6 @@ export const createProductInstance = (options) => {
 		// staff, guests, conversations and messages moved in from another system with ss-import (feature `import`,
 		// PLAN 0.8.10 K10)
 		imports: createImportOptions({
-			settings: (websiteId, feature) => product.settings.values(websiteId, feature),
 			list: (websiteId, name) => lists.get(websiteId, name),
 			business: (websiteId) => product.business(websiteId),
 		}),

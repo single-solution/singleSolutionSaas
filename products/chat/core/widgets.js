@@ -38,11 +38,11 @@ export const ADD_TO_CART_EVENT = 'ss-ecommerce:add-to-cart';
 export const PHONE_MEDIA = '(max-width: 480px)';
 
 /**
- * Back-off checking (PLAN 0.8.3 Live updates): code constants; the two intervals are the defaults of the Visitor chat
- * settings `pollFocusedSeconds` and `pollBackgroundSeconds` (C19), which each website may change.
+ * Back-off checking (PLAN 0.8.3 Live updates): code constants, the same for every website (a wrong value would hide
+ * messages or burn the free plan).
  */
 export const CHECKS = Object.freeze({
-	/** window open and tab visible (the default of `pollFocusedSeconds`) */
+	/** window open and tab visible */
 	activeMs: 10_000,
 	/** after 5 minutes without activity, checks come this many times less often */
 	idleAfterMs: 5 * 60_000,
@@ -52,10 +52,7 @@ export const CHECKS = Object.freeze({
 	/** while an AI reply is pending after a send */
 	replyMs: 3_000,
 	replyWindowMs: 45_000,
-	/**
-	 * window closed: unread on load, on focus (at most once a minute) and every 5 minutes while visible (the default of
-	 * `pollBackgroundSeconds`)
-	 */
+	/** window closed: unread on load, on focus (at most once a minute) and every 5 minutes while visible */
 	closedFocusMinMs: 60_000,
 	closedEveryMs: 5 * 60_000,
 });

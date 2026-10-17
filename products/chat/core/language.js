@@ -3,11 +3,12 @@
  * detected from each message and an AI answer in another language is retried once or replaced. Nothing is regional:
  * non-Latin scripts are recognized from Unicode script data, and the languages that share a script are told apart by
  * the letters only some of them use plus the merchant's marker words; Latin-script languages (including romanized ones)
- * are told apart by the marker words, with thresholds the merchant sets (PLAN 0.8.10, the re-audit's CH-16, CH-17). A
- * reply is checked as a whole or part by part (`checkMode`, CH-18), and a language may be accepted in its own script or
- * in Latin letters (`acceptLatinFor`, CH-16).
+ * are told apart by the marker words, with fixed thresholds (`limits.js`; PLAN 0.8.10, the re-audit's CH-16, CH-17). A
+ * reply is checked as a whole, and a language may be accepted in its own script or in Latin letters (`acceptLatinFor`,
+ * CH-16).
  * @module
  */
+import { LANGUAGE_MIN_MARKERS } from './limits.js';
 import { tokenize } from './text.js';
 
 /** Unicode script of the languages written in a non-Latin script (Unicode data, not a market assumption). */
@@ -110,9 +111,6 @@ const LANGUAGE_LETTERS = Object.freeze({
 	yi: 'ײװױ',
 });
 
-/** The lines of a markdown answer that split it into messages (C2). */
-const SEPARATOR = /^[ \t]*-{3,}[ \t]*$/m;
-
 /**
  * @typedef {object} MarkerSet
  * @property {string} language a language tag (`<language>-Latn` for a language written in Latin letters)
@@ -124,20 +122,11 @@ const SEPARATOR = /^[ \t]*-{3,}[ \t]*$/m;
  * @property {string} fallback the language when the message shows none (the default language)
  * @property {readonly string[]} [allowed] allowed languages (empty = any)
  * @property {readonly MarkerSet[]} [markers]
- * @property {number} [minMarkers] marker words that pick a language (default 2)
- * @property {number} [markerShare] or this share of the message's words, from `minWordsForShare` words (default 0 =
- *   off: then one marker word picks a language in a message of up to 3 words)
- * @property {number} [minWordsForShare] (default 4)
  */
 /**
  * @typedef {object} CheckOptions
  * @property {readonly MarkerSet[]} [markers]
- * @property {boolean} [strict] whole answers: a Latin-script language with marker words needs its share of them (C14)
- * @property {'whole' | 'presence'} [mode] `whole` (default): the whole answer; `presence`: each part (split on `---`
- *   lines) needs one marker word of the language, or a letter of its script (CH-18)
  * @property {readonly string[]} [latinFor] languages accepted in their own script or in Latin letters (CH-16)
- * @property {number} [minMarkers] `presence`: marker words of another language that make a part that language
- *   (default 2)
  */
 
 /**
@@ -348,10 +337,7 @@ const pickInScript = (text, script, { candidates, preferred, markers }) => {
  * @param {LanguageOptions} options
  * @returns {{ language: string, script: string, confident: boolean }}
  */
-export const detectLanguage = (
-	message,
-	{ fallback, allowed = [], markers = [], minMarkers = 2, markerShare = 0, minWordsForShare = 4 },
-) => {
+export const detectLanguage = (message, { fallback, allowed = [], markers = [] }) => {
 	const text = String(message ?? '').trim();
 	const script = dominantScript(text);
 	if (script) {
@@ -370,10 +356,7 @@ export const detectLanguage = (
 	const latinMarkers = markers.filter((set) => scriptOf(set.language) === 'Latin' && isAllowed(set.language, allowed));
 	const [best, second] = markerScores(text, latinMarkers);
 	const words = Math.max(1, tokenize(text, { minLength: 1 }).length);
-	const enough =
-		best !== undefined &&
-		(best.hits >= minMarkers ||
-			(markerShare > 0 ? words >= minWordsForShare && best.hits / words >= markerShare : words <= 3 && best.hits >= 1));
+	const enough = best !== undefined && (best.hits >= LANGUAGE_MIN_MARKERS || (words <= 3 && best.hits >= 1));
 	if (best && enough && best.hits > (second?.hits ?? 0)) return { language: best.language, script: 'Latin', confident: true };
 	return { language: fallback, script: scriptOf(fallback), confident: false };
 };
@@ -390,9 +373,6 @@ export const isLanguageNeutral = (text) => {
 	return lines.length > 0 && lines.every((line) => /^\|.+\|$/.test(line) || /^[-:| ]+$/.test(line));
 };
 
-/** The least share of a reply's words that must be marker words of its language in a strict check. */
-const STRICT_SHARE = 0.1;
-
 /**
  * The forms a reply may take: the language itself, and with `latinFor` also its other script (its own script for
  * `<language>-Latn`, Latin letters for a language written in another script).
@@ -408,13 +388,12 @@ export const languageForms = (required, latinFor) => {
 
 /**
  * The whole answer (C14): non-Latin languages need their script to dominate; Latin-script languages must not be
- * dominated by another script nor clearly by another configured Latin language. With `strict`, a Latin-script language
- * that has marker words must also have its share of them: at least one, and at least `STRICT_SHARE` of the words.
+ * dominated by another script nor clearly by another configured Latin language.
  * @param {string} text
  * @param {string} required
  * @param {CheckOptions} options
  */
-const wholeMatches = (text, required, { markers = [], strict = false }) => {
+const wholeMatches = (text, required, { markers = [] }) => {
 	if (isLanguageNeutral(text)) return true;
 	const target = scriptOf(required);
 	const { latin, scripts, letters } = scriptCounts(text);
@@ -430,38 +409,13 @@ const wholeMatches = (text, required, { markers = [], strict = false }) => {
 	);
 	const mine = scores.find((s) => primary(s.language) === primary(required))?.hits ?? 0;
 	const other = scores.find((s) => primary(s.language) !== primary(required));
-	if (strict && markers.some((set) => primary(set.language) === primary(required))) {
-		const words = tokenize(text, { minLength: 1 }).length;
-		if (mine === 0 || mine / Math.max(1, words) < STRICT_SHARE || (other !== undefined && other.hits > mine)) return false;
-	}
 	if (!other) return true;
 	return !(other.hits >= 3 && other.hits >= 2 * Math.max(1, mine) && mine < 2);
 };
 
 /**
- * One part of an answer by presence (CH-18): a non-Latin language needs a letter of its script; a Latin-script
- * language with marker words needs one of them; one without needs no letters of another script and fewer than
- * `minMarkers` marker words of each other language.
- * @param {string} part
- * @param {string} required
- * @param {CheckOptions} options
- */
-const presenceMatches = (part, required, { markers = [], minMarkers = 2 }) => {
-	if (isLanguageNeutral(part)) return true;
-	const target = scriptOf(required);
-	const { latin, scripts, letters } = scriptCounts(part);
-	if (letters === 0) return true;
-	if (target !== 'Latin') return (scripts[target] ?? 0) + (target === 'Japanese' ? (scripts.Han ?? 0) : 0) > 0;
-	const latinSets = markers.filter((set) => scriptOf(set.language) === 'Latin');
-	const scores = markerScores(part, latinSets);
-	if (latinSets.some((set) => primary(set.language) === primary(required)))
-		return scores.some((s) => primary(s.language) === primary(required) && s.hits >= 1);
-	return latin === letters && scores.every((s) => s.hits < minMarkers);
-};
-
-/**
- * Does an answer match the required language? `whole` (default) checks the whole answer; `presence` each part between
- * `---` lines (CH-18). With `latinFor`, the language may also be written in its other script (CH-16).
+ * Does an answer match the required language? The whole answer is checked. With `latinFor`, the language may also be
+ * written in its other script (CH-16).
  * @param {string} reply
  * @param {string} required
  * @param {CheckOptions} [options]
@@ -470,12 +424,7 @@ export const replyMatchesLanguage = (reply, required, options = {}) => {
 	const text = String(reply ?? '').trim();
 	if (!text) return false;
 	const forms = languageForms(required, options.latinFor ?? []);
-	if (options.mode !== 'presence') return forms.some((form) => wholeMatches(text, form, options));
-	const parts = text
-		.split(new RegExp(SEPARATOR.source, 'gm'))
-		.map((part) => part.trim())
-		.filter(Boolean);
-	return parts.length > 0 && parts.every((part) => forms.some((form) => presenceMatches(part, form, options)));
+	return forms.some((form) => wholeMatches(text, form, options));
 };
 
 /**

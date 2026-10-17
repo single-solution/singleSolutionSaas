@@ -12,66 +12,6 @@
 				"group": "Who can send",
 				"order": 1
 			}
-		},
-		"staffTypes": {
-			"type": "array",
-			"title": "Types staff may send",
-			"default": ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"],
-			"items": {
-				"type": "string",
-				"enum": [
-					"image/jpeg",
-					"image/png",
-					"image/webp",
-					"image/gif",
-					"image/avif",
-					"image/heic",
-					"image/heif",
-					"application/pdf",
-					"video/mp4",
-					"video/webm",
-					"video/quicktime",
-					"audio/mpeg",
-					"audio/mp4",
-					"audio/x-m4a",
-					"audio/aac",
-					"audio/ogg",
-					"audio/webm",
-					"audio/wav",
-					"application/msword",
-					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-					"application/vnd.ms-excel",
-					"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-					"text/plain"
-				]
-			},
-			"description": "Videos and audio play in the chat; HEIC and HEIF photos, Word, Excel and text files are offered as downloads.",
-			"x-ui": {
-				"group": "Who can send",
-				"order": 2
-			}
-		},
-		"staffMaxSizeMb": {
-			"type": "integer",
-			"title": "Largest staff file (MB)",
-			"default": 10,
-			"minimum": 1,
-			"maximum": 100,
-			"x-ui": {
-				"group": "Files",
-				"order": 11
-			}
-		},
-		"pdfInline": {
-			"type": "boolean",
-			"title": "Open PDFs in the browser",
-			"default": false,
-			"description": "Off: PDFs are downloads. On: they open in a new tab. HEIC photos, Word, Excel and text files are always downloads.",
-			"x-ui": {
-				"group": "Files",
-				"order": 12,
-				"advanced": true
-			}
 		}
 	}
 }

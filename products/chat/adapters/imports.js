@@ -16,7 +16,6 @@ import { changesOf, checkConversation, checkGuest, checkMessage, checkStaff, fin
 /**
  * What the import checks read of the website (built in `product.js` on the kit's product).
  * @typedef {object} ImportDeps
- * @property {(websiteId: string, feature: string) => Promise<Record<string, unknown>>} settings a feature's settings
  * @property {(websiteId: string, name: 'custom_fields' | 'tags' | 'topics' | 'priorities') => Promise<any[]>} list a list
  *   setting
  * @property {(websiteId: string) => Promise<{ country?: string | null }>} business the business.json copy
@@ -37,9 +36,7 @@ export const createImportOptions = (deps) => ({
 		staff: { check: (record) => checkStaff(record) },
 		guests: {
 			key: ['keyHash'],
-			prepare: async (ctx) => ({ rememberDays: Number((await deps.settings(ctx.websiteId, 'guest_chat')).rememberDays) }),
-			check: (record, ctx) =>
-				checkGuest(record, { now: ctx.now(), rememberDays: /** @type {any} */ (ctx.prepared).rememberDays }),
+			check: (record, ctx) => checkGuest(record, { now: ctx.now() }),
 		},
 		conversations: {
 			prepare: async (ctx) => ({

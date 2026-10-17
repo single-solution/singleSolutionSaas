@@ -2,32 +2,6 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
-		"temperature": {
-			"type": "number",
-			"title": "Creativity",
-			"description": "From 0 (careful, predictable answers) to 1 (more varied answers).",
-			"default": 0.4,
-			"minimum": 0,
-			"maximum": 1,
-			"x-ui": {
-				"group": "Limits",
-				"order": 20,
-				"advanced": true
-			}
-		},
-		"maxOutputTokens": {
-			"type": "integer",
-			"title": "Longest answer (AI tokens)",
-			"description": "The most the AI writes in one answer, counted in AI tokens (about four letters each): 500 is roughly 350 words.",
-			"default": 500,
-			"minimum": 50,
-			"maximum": 4000,
-			"x-ui": {
-				"group": "Limits",
-				"order": 21,
-				"advanced": true
-			}
-		},
 		"showAiLabel": {
 			"type": "boolean",
 			"title": "Label AI replies",
@@ -72,30 +46,6 @@
 				"order": 2
 			}
 		},
-		"repliesPerVisitorPerDay": {
-			"type": "integer",
-			"title": "AI replies per visitor per day",
-			"default": 40,
-			"minimum": 0,
-			"maximum": 10000,
-			"description": "0 = no limit.",
-			"x-ui": {
-				"group": "Limits",
-				"order": 22
-			}
-		},
-		"repliesPerNetworkPerDay": {
-			"type": "integer",
-			"title": "AI replies per network (IP) per day",
-			"default": 60,
-			"minimum": 0,
-			"maximum": 100000,
-			"description": "0 = no limit.",
-			"x-ui": {
-				"group": "Limits",
-				"order": 23
-			}
-		},
 		"neverDisclose": {
 			"type": "boolean",
 			"title": "Never say it is a bot",
@@ -104,41 +54,6 @@
 			"x-ui": {
 				"group": "AI disclosure",
 				"order": 11
-			}
-		},
-		"botPhrases": {
-			"type": "array",
-			"title": "Phrases that say it is a bot",
-			"default": [
-				"I am an AI",
-				"I'm an AI",
-				"as an AI",
-				"an A.I.",
-				"being an AI",
-				"I am a bot",
-				"I'm a bot",
-				"as a bot",
-				"chatbot",
-				"chat bot",
-				"language model",
-				"artificial intelligence",
-				"virtual assistant",
-				"automated assistant",
-				"automated system",
-				"not a human",
-				"not a real human",
-				"not a person",
-				"not a real person"
-			],
-			"items": {
-				"type": "string",
-				"maxLength": 100
-			},
-			"description": "With Never say it is a bot, an answer holding one of these (whole words, case and accents aside) is asked again once. Add the phrases of each language your AI answers in.",
-			"x-ui": {
-				"group": "AI disclosure",
-				"order": 12,
-				"advanced": true
 			}
 		},
 		"bubbles": {

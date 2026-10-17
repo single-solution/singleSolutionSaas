@@ -71,19 +71,6 @@
 				"group": "Triggers",
 				"order": 2
 			}
-		},
-		"reassureAfterMinutes": {
-			"type": "integer",
-			"title": "Reassure after (minutes)",
-			"default": 0,
-			"minimum": 0,
-			"maximum": 1440,
-			"description": "From this many minutes after the handoff, the AI answers the visitor’s next messages with reassurance only, until staff reply. 0 = off.",
-			"x-ui": {
-				"group": "After the handoff",
-				"order": 13,
-				"advanced": true
-			}
 		}
 	}
 }

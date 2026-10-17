@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * Chat's feature settings in the dashboard (premium layout 2026-10-16): the kit's grouped settings cards on Chat's own
- * schema. AI replies declares `x-ui.group` and `x-ui.order`, so its twelve settings are three titled cards in the order
- * the schema asks for, on/off settings are toggles, and one sticky Save changes bar (with Discard) appears only while
+ * schema. AI replies declares `x-ui.group` and `x-ui.order`, so its settings are two titled cards in the order
+ * the schema asks for (the tuning knobs of the AI are fixed limits in `core/limits.js` and have no form), on/off settings are toggles, and one sticky Save changes bar (with Discard) appears only while
  * something is edited.
  */
 import { act } from 'react';
@@ -54,22 +54,15 @@ describe('Chat settings in the dashboard', () => {
 		);
 		// the feature is the heading; its groups are one view each under a tab strip, in `x-ui.order`, Advanced last
 		expect(container.querySelector('h3')?.textContent).toBe('AI replies');
-		const tabs = () => [...container.querySelectorAll('[role="tab"]')];
-		expect(tabs().map((tab) => tab.textContent)).toEqual(['Answers', 'AI disclosure', 'Limits', 'Advanced']);
+		// two groups are two titled cards; the tab strip starts at three groups
+		expect(container.querySelectorAll('[role="tab"]')).toHaveLength(0);
 		const fields = () => [...container.querySelectorAll('[data-field]')].map((f) => f.getAttribute('data-field'));
-		expect(fields()).toEqual(['style', 'dontKnow', 'onFailure', 'bubbles', 'tableBubble']);
+		expect(fields()).toEqual(['style', 'dontKnow', 'onFailure', 'bubbles', 'tableBubble', 'showAiLabel', 'neverDisclose']);
 		// on/off settings are toggles, not checkboxes
-		expect(container.querySelectorAll('[role="switch"]')).toHaveLength(1);
+		expect(container.querySelectorAll('[role="switch"]')).toHaveLength(3);
 		expect(container.querySelector('input[type="checkbox"]')).toBeNull();
 		// three choices with long words are a radio list
 		expect(container.querySelectorAll('[role="radiogroup"] input[type="radio"]')).toHaveLength(3);
-		click(/** @type {HTMLElement} */ (tabs()[1]));
-		expect(fields()).toEqual(['showAiLabel', 'neverDisclose']);
-		click(/** @type {HTMLElement} */ (tabs()[2]));
-		expect(fields()).toEqual(['repliesPerVisitorPerDay', 'repliesPerNetworkPerDay']);
-		// the settings most people never change are the last tab
-		click(/** @type {HTMLElement} */ (tabs()[3]));
-		expect(fields().sort()).toEqual(['botPhrases', 'maxOutputTokens', 'temperature']);
 		// nothing is edited: no bar
 		expect(container.textContent).not.toContain('Save changes');
 	});

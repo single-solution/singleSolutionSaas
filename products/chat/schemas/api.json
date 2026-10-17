@@ -50,7 +50,7 @@
 				},
 				"inline": {
 					"type": "boolean",
-					"description": "Opens in the browser: the images browsers show, video and audio (they play in the chat), and PDFs with the setting Open PDFs in the browser; anything else (HEIC photos, office files) is a download."
+					"description": "Opens in the browser: the images browsers show, video and audio (they play in the chat), anything else (PDFs, HEIC photos, office files) is a download."
 				}
 			}
 		},
@@ -139,7 +139,7 @@
 				"guestMessagesLeft": {
 					"type": ["integer", "null"],
 					"minimum": 0,
-					"description": "The messages a guest may still send (Guest chat with a limit; 0 = the limit is reached); null for signed-in visitors and when there is no limit, also while it is lifted because the Customer role's sign-in is paused at Accounts (setting No limit while customer sign-in is paused)."
+					"description": "The messages a guest may still send (Guest chat with a limit; 0 = the limit is reached); null for signed-in visitors and when there is no limit, also while it is lifted because the Customer role's sign-in is paused at Accounts."
 				},
 				"leadOffered": {
 					"type": "boolean",
@@ -1119,7 +1119,7 @@
 					},
 					"minItems": 1,
 					"maxItems": 12,
-					"description": "While Product cards is on: the products the shop tools found, up to the setting Products per search (default 5, at most 12)."
+					"description": "While Product cards is on: the products the shop tools found, up to 5."
 				},
 				"createdAt": {
 					"type": "string",
@@ -1647,7 +1647,7 @@
 					},
 					"minItems": 1,
 					"maxItems": 12,
-					"description": "While Product cards is on: the products the shop tools found, up to the setting Products per search (default 5, at most 12)."
+					"description": "While Product cards is on: the products the shop tools found, up to 5."
 				},
 				"createdAt": {
 					"type": "string",
@@ -1853,7 +1853,7 @@
 				"guestMessagesLeft": {
 					"type": ["integer", "null"],
 					"minimum": 0,
-					"description": "The messages a guest may still send (Guest chat with a limit; 0 = the limit is reached); null for signed-in visitors and when there is no limit, also while it is lifted because the Customer role's sign-in is paused at Accounts (setting No limit while customer sign-in is paused)."
+					"description": "The messages a guest may still send (Guest chat with a limit; 0 = the limit is reached); null for signed-in visitors and when there is no limit, also while it is lifted because the Customer role's sign-in is paused at Accounts."
 				},
 				"leadOffered": {
 					"type": "boolean",

@@ -21,7 +21,8 @@ import { checkFieldValue, checkLead } from '../core/fields.js';
 import { answerStep, pageFlowMatches } from '../core/flows.js';
 import { moderateInbound } from '../core/moderation.js';
 import { uploadLimits } from '../core/uploads.js';
-import { EXTENSIONS, MAX_ATTACHMENT_BYTES, MAX_STAFF_ATTACHMENT_BYTES, PAGE_MAX, STAFF_TYPES } from '../core/widgets.js';
+import { STAFF_ATTACHMENT_MAX_BYTES, STAFF_ATTACHMENT_TYPES } from '../core/limits.js';
+import { EXTENSIONS, MAX_ATTACHMENT_BYTES, PAGE_MAX } from '../core/widgets.js';
 import { labelsOf } from './reply.js';
 import { bodyOf, invalid, phoneCodeOf } from './service.js';
 
@@ -494,15 +495,15 @@ export const createVisitorApi = (product, service, reply) => {
 
 /**
  * What a file may be: the visitor rules (C11: the merchant's upload types, each with its own cap, at most 100 MB), or
- * the staff rules (C12: the staff types and size, at most 100 MB).
+ * the staff rules (C12: the fixed staff types and size).
  * @param {Record<string, any>} settings the attachment settings, with the list `uploadTypes` for visitors
  * @param {'visitor' | 'staff'} who
  * @returns {{ types: string[], max: number, limits: Record<string, number> }}
  */
 export const uploadRules = (settings, who) => {
 	if (who === 'staff') {
-		const types = STAFF_TYPES.filter((type) => settings.staffTypes.includes(type));
-		const max = Math.min(Number(settings.staffMaxSizeMb) * 1024 * 1024, MAX_STAFF_ATTACHMENT_BYTES);
+		const types = [...STAFF_ATTACHMENT_TYPES];
+		const max = STAFF_ATTACHMENT_MAX_BYTES;
 		return { types, max, limits: Object.fromEntries(types.map((type) => [type, max])) };
 	}
 	const rules = uploadLimits(Array.isArray(settings.uploadTypes) ? settings.uploadTypes : []);

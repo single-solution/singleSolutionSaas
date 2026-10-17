@@ -14,28 +14,6 @@
 				"order": 1
 			}
 		},
-		"noLimitWithoutSignIn": {
-			"type": "boolean",
-			"title": "No limit while customer sign-in is paused",
-			"default": false,
-			"description": "On: guests have no message limit while the Customer role's sign-in is paused in Accounts (Roles and permissions), as on a website that does not use sign-in. Needs the Accounts token in Connections; a change in Accounts applies within a minute.",
-			"x-ui": {
-				"group": "Limits",
-				"order": 2,
-				"advanced": true
-			}
-		},
-		"rememberDays": {
-			"type": "integer",
-			"title": "Remember guests on their device (days)",
-			"default": 90,
-			"minimum": 1,
-			"maximum": 365,
-			"x-ui": {
-				"group": "Guests",
-				"order": 12
-			}
-		},
 		"contactCapture": {
 			"type": "string",
 			"title": "Ask guests for contact details",
@@ -45,19 +23,6 @@
 			"x-ui": {
 				"group": "Guests",
 				"order": 11
-			}
-		},
-		"newGuestsPerNetwork": {
-			"type": "integer",
-			"title": "New guests per network (IP) per 15 minutes",
-			"default": 0,
-			"minimum": 0,
-			"maximum": 1000,
-			"description": "A device that sends no guest key starts a new guest; more new guests than this from one network address in 15 minutes are refused for a while (too many requests). 0 = no limit (many shoppers can share one mobile network address).",
-			"x-ui": {
-				"group": "Limits",
-				"order": 3,
-				"advanced": true
 			}
 		}
 	}

@@ -5,6 +5,7 @@
  * CH-9); options from the settings draft (CH-13, CH-21, RW-8); attachment links that never expire (CH-8).
  */
 import { afterAll, describe, expect, it } from 'vitest';
+import { AI_REPLIES_PER_NETWORK_PER_DAY, NEW_GUESTS_PER_NETWORK, REASSURE_AFTER_MINUTES } from '../core/limits.js';
 import { AI, AI_KEY, ORIGIN, STORAGE_KEY, ready } from './helpers.js';
 
 /** @type {Array<Awaited<ReturnType<typeof ready>>>} */
@@ -142,17 +143,17 @@ describe('the language lock (CH-2, CH-16 to CH-19, CH-38)', () => {
 
 	it('a reply still in the wrong language gets the unavailable message in the visitor’s language, no handoff', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'language_lock', 'inbox', 'handoff']);
-		await sys.setting('language_lock', 'markerWords', ['tl: po ba ito magkano opo salamat']);
-		await sys.setting('language_lock', 'checkMode', 'presence');
+		await sys.setting('language_lock', 'markerWords', ['tl: po ba ito magkano opo salamat', 'es: es la el precio cuesta']);
 		await sys.setting('language_lock', 'unavailableTexts', ['tl: Paumanhin po, hindi ako makasagot ngayon.']);
-		sys.ai({ text: 'It costs $45.' }, { text: 'The price is $45.' });
+		// both answers are clearly in another configured language (the whole answer is checked)
+		sys.ai({ text: 'Es la lámpara y el precio cuesta $45.' }, { text: 'Cuesta $45, es la lámpara y el precio.' });
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'magkano po ito' });
 		let state = (await v('GET', '/v1/chat')).json;
 		expect(texts(state).at(-1)).toEqual(['system', 'Paumanhin po, hindi ako makasagot ngayon.']);
 		expect(state.conversation.waiting).toBe(false);
 		// two failures in a row (the handoff setting) still hand off
-		sys.ai({ text: 'It costs $45.' }, { text: '$45, in stock.' });
+		sys.ai({ text: 'Es la lámpara y el precio cuesta $45.' }, { text: 'Cuesta $45, es la lámpara y el precio.' });
 		await v('POST', '/v1/chat/messages', { text: 'meron po ba ito' });
 		state = (await v('GET', '/v1/chat')).json;
 		expect(state.conversation.waiting).toBe(true);
@@ -163,9 +164,11 @@ describe('shared networks and guests without their key (CH-14, CH-15)', () => {
 	it('the network limit counts guests only; a signed-in visitor keeps answers on a busy network', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'ai_replies']);
 		await sys.paste('accounts');
-		await sys.setting('ai_replies', 'repliesPerNetworkPerDay', 1);
 		await sys.setting('ai_replies', 'onFailure', 'message');
 		const network = '198.51.100.7';
+		// the network has one AI reply left of its day's AI_REPLIES_PER_NETWORK_PER_DAY
+		for (let i = 1; i < AI_REPLIES_PER_NETWORK_PER_DAY; i += 1)
+			await sys.product.counters.hit(`chat-ai|${sys.websiteId}|network|${network}`, 86_400_000, sys.now());
 		sys.ai({ text: 'Hello guest.' }, { text: 'Hello Ann.' });
 		await sys.visitor({ network })('POST', '/v1/chat/messages', { text: 'hi' });
 		const other = sys.visitor({ network });
@@ -177,16 +180,15 @@ describe('shared networks and guests without their key (CH-14, CH-15)', () => {
 		expect(texts((await ann('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Hello Ann.']);
 	});
 
-	it('no limit by default; with 5, at most 5 new guests per network address in 15 minutes; 0 lifts it', async () => {
+	it('at most NEW_GUESTS_PER_NETWORK new guests per network address in 15 minutes', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat']);
 		const network = '198.51.100.8';
-		for (let i = 0; i < 6; i += 1)
-			expect((await sys.visitor({ network: '198.51.100.7' })('POST', '/v1/chat/messages', { text: 'hi' })).status).toBe(201);
-		await sys.setting('guest_chat', 'newGuestsPerNetwork', 5);
+		// the address has started all but one of its new guests
+		for (let i = 1; i < NEW_GUESTS_PER_NETWORK; i += 1)
+			await sys.product.counters.hit(`chat-guest|${sys.websiteId}|${network}`, 15 * 60_000, sys.now());
 		const send = () => sys.visitor({ network })('POST', '/v1/chat/messages', { text: 'hi' });
 		const kept = sys.visitor({ network });
 		expect((await kept('POST', '/v1/chat/messages', { text: 'hi' })).status).toBe(201);
-		for (let i = 0; i < 4; i += 1) expect((await send()).status).toBe(201);
 		const refused = await send();
 		expect(refused.status).toBe(429);
 		expect(refused.json.type).toMatch(/rate_limited$/);
@@ -195,15 +197,12 @@ describe('shared networks and guests without their key (CH-14, CH-15)', () => {
 		expect((await sys.visitor({ network: '198.51.100.9' })('POST', '/v1/chat/messages', { text: 'hi' })).status).toBe(201);
 		sys.advance(15 * 60_000);
 		expect((await send()).status).toBe(201);
-		await sys.setting('guest_chat', 'newGuestsPerNetwork', 0);
-		for (let i = 0; i < 6; i += 1) expect((await send()).status).toBe(201);
 	});
 });
 
 describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-6, CH-7, CH-9)', () => {
 	it('resuming the AI hands a waiting chat back; a later handoff waits its own grace', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'inbox', 'handoff']);
-		await sys.setting('handoff', 'reassureAfterMinutes', 3);
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'talk to someone' });
 		const first = (await v('GET', '/v1/chat')).json.conversation;
@@ -215,13 +214,13 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Happy to help.']);
 		const activity = (await sys.serverCall('GET', '/v1/activity?action=conversation.ai_paused_changed')).json.items;
 		expect(activity.map((/** @type {any} */ e) => e.detail)).toEqual(['AI resumed (handed back from waiting for a person)']);
-		// a second handoff 10 minutes after the first: quiet for 3 minutes again, then reassurance
+		// a second handoff 10 minutes after the first: quiet for REASSURE_AFTER_MINUTES again, then reassurance
 		sys.advance(10 * 60_000);
 		await v('POST', '/v1/chat/messages', { text: 'talk to someone again' });
 		const calls = sys.aiCalls().length;
 		await v('POST', '/v1/chat/messages', { text: 'hello?' });
 		expect(sys.aiCalls()).toHaveLength(calls);
-		sys.advance(3 * 60_000);
+		sys.advance(REASSURE_AFTER_MINUTES * 60_000);
 		sys.ai({ text: 'A person will reply here soon.' });
 		await v('POST', '/v1/chat/messages', { text: 'anyone?' });
 		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'A person will reply here soon.']);
@@ -392,7 +391,7 @@ describe('options from the settings draft (CH-13, CH-21, RW-8)', () => {
 });
 
 describe('attachment links (CH-8)', () => {
-	it('never expire: each use signs a fresh storage link; PDFs open in the browser with pdfInline', async () => {
+	it('never expire: each use signs a fresh storage link; PDFs are downloads, images open in the browser', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'attachments']);
 		await sys.connect('storage', STORAGE_KEY);
 		await sys.setting('attachments', 'visitorUploads', 'everyone');
@@ -412,9 +411,6 @@ describe('attachment links (CH-8)', () => {
 		expect(first.location).toContain('X-Amz-Expires=600');
 		expect(first.location).not.toContain('response-content-disposition');
 		expect((await sys.open(doc.url)).location).toContain('response-content-disposition');
-		await sys.setting('attachments', 'pdfInline', true);
-		expect((await sys.open(doc.url)).location).not.toContain('response-content-disposition');
-		expect((await v('GET', '/v1/chat')).json.messages[1].attachment.inline).toBe(true);
 		// not Chat's link, or attachments off: not found
 		expect((await sys.open(`${doc.url.slice(0, -4)}AAAA`)).status).toBe(404);
 		expect((await sys.open('https://chat.example.dev/v1/files/not-a-link')).status).toBe(404);

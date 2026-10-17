@@ -252,12 +252,12 @@ const iso = (date) => (date ? new Date(date).toISOString() : null);
 /**
  * A message as the visitor sees it (never internal notes: callers filter them out). Product cards only while that
  * feature is on. An attachment says whether it opens in the browser (`inline`: the images browsers show, video and
- * audio, C11, and PDFs with `pdfInline`, CH-8) or is a download.
+ * audio, C11) or is a download (PDFs, HEIC photos and office files download, CH-8).
  * @param {MessageRecord} m
  * @param {(attachment: Attachment) => string | null} urlOf
- * @param {{ cards?: boolean, pdfInline?: boolean }} [options]
+ * @param {{ cards?: boolean }} [options]
  */
-export const visitorMessageView = (m, urlOf, { cards = false, pdfInline = false } = {}) => ({
+export const visitorMessageView = (m, urlOf, { cards = false } = {}) => ({
 	id: m.id,
 	seq: m.seq,
 	author: m.author,
@@ -272,7 +272,7 @@ export const visitorMessageView = (m, urlOf, { cards = false, pdfInline = false 
 					type: m.attachment.type,
 					size: m.attachment.size,
 					url: urlOf(m.attachment),
-					inline: attachmentKind(m.attachment.type) !== 'file' || (pdfInline && m.attachment.type === 'application/pdf'),
+					inline: attachmentKind(m.attachment.type) !== 'file',
 				},
 			}
 		: {}),
@@ -285,7 +285,7 @@ export const visitorMessageView = (m, urlOf, { cards = false, pdfInline = false 
  * of a server call, or `server` for the team).
  * @param {MessageRecord} m
  * @param {(attachment: Attachment) => string | null} urlOf
- * @param {{ cards?: boolean, pdfInline?: boolean }} [options]
+ * @param {{ cards?: boolean }} [options]
  */
 export const staffMessageView = (m, urlOf, options = {}) => ({
 	...visitorMessageView(m, urlOf, options),

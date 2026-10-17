@@ -1,7 +1,15 @@
 // @vitest-environment jsdom
 /* global document, window */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { GUEST_HEADER, GUEST_STORAGE_KEY, PROACTIVE_STORAGE_KEY, SIGN_IN_HEADER, WIDGET_GLOBAL } from '../core/widgets.js';
+import { PROACTIVE_DISMISS_DAYS } from '../core/limits.js';
+import {
+	CHECKS,
+	GUEST_HEADER,
+	GUEST_STORAGE_KEY,
+	PROACTIVE_STORAGE_KEY,
+	SIGN_IN_HEADER,
+	WIDGET_GLOBAL,
+} from '../core/widgets.js';
 import { startWidget } from '../ui/widget.js';
 import {
 	BASE,
@@ -270,24 +278,23 @@ describe('talking', () => {
 		await api.close();
 	});
 
-	it('checks as often as the website set: while open and while closed (C19)', async () => {
+	it('checks at the fixed intervals: every 5 minutes while closed, every 10 seconds while open (C19)', async () => {
 		keepGuest();
 		const { $, server, time } = await start({
-			settings: { checks: { focusedSeconds: 4, backgroundSeconds: 30 } },
 			routes: {
 				'GET /v1/chat/unread': () => answer(200, { unread: 0 }),
 				'GET /v1/chat': () => answer(200, { ...view(), messages: [msg(1, 'visitor', 'Hi')] }),
 				'POST /v1/chat/read': () => answer(204),
 			},
 		});
-		// closed: on load, then every 30 s
+		// closed: on load, then every 5 minutes
 		expect(server.all('GET /v1/chat/unread')).toHaveLength(1);
-		await time.advance(60_000);
+		await time.advance(CHECKS.closedEveryMs * 2);
 		expect(server.all('GET /v1/chat/unread')).toHaveLength(3);
-		// open: every 4 s
+		// open: every 10 s
 		await click($('.launcher'));
 		const opened = server.all('GET /v1/chat').length;
-		await time.advance(12_000);
+		await time.advance(CHECKS.activeMs * 3);
 		expect(server.all('GET /v1/chat').length - opened).toBe(3);
 		expect(server.all('GET /v1/chat/unread')).toHaveLength(3);
 	});
@@ -936,7 +943,6 @@ describe('proactive', () => {
 			settings: {
 				proactive: {
 					idleMinutes: 1,
-					dismissDays: 3,
 					pageRules: [{ path: '/products/**', delay: 120, message: 'Rule text' }],
 				},
 			},
@@ -951,7 +957,7 @@ describe('proactive', () => {
 		await click(/** @type {HTMLElement} */ ($('.nudge .dismiss')));
 		expect($('.nudge').hidden).toBe(true);
 		expect(JSON.parse(String(window.localStorage.getItem(PROACTIVE_STORAGE_KEY))).dismissedUntil).toBe(
-			time.time + 3 * 86_400_000,
+			time.time + PROACTIVE_DISMISS_DAYS * 86_400_000,
 		);
 		await time.advance(120_000);
 		expect($('.nudge').hidden).toBe(true);

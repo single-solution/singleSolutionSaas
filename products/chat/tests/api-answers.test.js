@@ -112,15 +112,10 @@ describe('instructions, never disclose and rich answers (C1, C2)', () => {
 		sys.ai({ text: 'I am a bot.' }, { text: 'I am a chatbot, sorry.' });
 		await v('POST', '/v1/chat/messages', { text: 'Are you real?' });
 		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['system', 'Sorry, I cannot answer right now.']);
-		// the phrases that give a bot away are the merchant's, in each language the AI answers in (C17)
-		await sys.setting('ai_replies', 'botPhrases', ['je suis une IA', 'robot']);
-		sys.ai({ text: 'Je suis une IA, désolé.' }, { text: 'Nous livrons en deux jours.' });
-		await v('POST', '/v1/chat/messages', { text: 'Vous livrez quand ?' });
-		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Nous livrons en deux jours.']);
-		// English phrases the list no longer has pass
-		sys.ai({ text: 'As an AI I ship in two days.' });
+		// the phrases that give a bot away are fixed (BOT_PHRASES, whole words, any case): such an answer is asked again
+		sys.ai({ text: 'As an AI I ship in two days.' }, { text: 'We ship in two days.' });
 		await v('POST', '/v1/chat/messages', { text: 'Shipping?' });
-		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'As an AI I ship in two days.']);
+		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'We ship in two days.']);
 	});
 
 	it('answers in markdown, split into bubbles, with links only on the website or as moderation allows', async () => {
@@ -398,7 +393,6 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 	it('passes filters, the search size and quote options; answers grades, variants, stock, warranty and payment methods', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'shop_search', 'shop_deals']);
 		await sys.paste('ecommerce');
-		await sys.setting('shop_search', 'maxResults', 8);
 		/** A variant as Ecommerce answers it (ChatVariant). */
 		const variant = {
 			id: 'var_black',
@@ -522,7 +516,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		await sys.visitor()('POST', '/v1/chat/messages', { text: 'a new desk lamp under 1500' });
 		const paths = sys.shopCalls().map((c) => new URL(c.url).pathname + new URL(c.url).search);
 		expect(paths).toContain(
-			'/v1/chat/products?q=lamp&category=desk-lamps&grade=new%2Clike_new&minPrice=2000&maxPrice=150000&inStock=1&limit=8',
+			'/v1/chat/products?q=lamp&category=desk-lamps&grade=new%2Clike_new&minPrice=2000&maxPrice=150000&inStock=1&limit=5',
 		);
 		// any quantity, a decimal amount of an item's own unit too: Ecommerce checks its steps (C3)
 		expect(paths).toContain('/v1/chat/products/prd_lamp/quote?variantId=var_black&quantity=2.5&paymentMethod=cod&city=Leeds');
@@ -632,31 +626,31 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				.filter((c) => c.url.includes('/v1/chat/context'))
 				.at(-1)?.url,
 		).toMatch(/\/v1\/chat\/context$/);
-		// the longest store information the AI gets is a setting (C22)
-		await sys.setting('shop_context', 'maxCharacters', 500);
+		// the store information the AI gets is cut to 6,000 characters (C22)
 		sys.responders.set(`${ECOMMERCE}/v1/chat/context`, () => ({
 			status: 200,
-			body: { text: `Policies: ${'x'.repeat(900)}`, currency: 'USD' },
+			body: { text: `Policies: ${'x'.repeat(7000)}`, currency: 'USD' },
 		}));
 		sys.advance(61_000);
 		await v('POST', '/v1/chat/messages', { text: 'one more' });
 		const prompt = String(sys.aiCalls().at(-1).messages[0].content);
-		expect(prompt.slice(prompt.indexOf('Policies:')).split('\n')[0]).toHaveLength(500);
+		expect(prompt.slice(prompt.indexOf('Policies:')).split('\n')[0]).toHaveLength(6000);
 	});
 });
 
-describe('the strict language check, the current page and the website’s own contact (C14, C15)', () => {
-	it('a strict check wants the visitor’s marker words; later messages update the page', async () => {
+describe('the language check, the current page and the website’s own contact (C14, C15)', () => {
+	it('the language check follows the visitor’s marker words; later messages update the page', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'language_lock', 'moderation']);
 		await sys.setting('language_lock', 'markerWords', ['es: hola sí tienen está esta hay precio gracias disponible']);
-		await sys.setting('language_lock', 'strict', true);
-		sys.ai({ text: 'Yes, it is available.' }, { text: 'Sí, está disponible.' });
+		// an answer is checked as a whole, not by its share of marker words: this one is accepted at once
+		sys.ai({ text: 'Yes, it is available.' });
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', {
 			text: '¿Tienen esta lámpara disponible?',
 			page: { url: 'https://shop.example.com/lamps/a', kind: 'product', productName: 'Lamp A' },
 		});
-		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Sí, está disponible.']);
+		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Yes, it is available.']);
+		expect(sys.aiCalls()).toHaveLength(1);
 		sys.ai({ text: 'Sí.' });
 		await v('POST', '/v1/chat/messages', {
 			text: 'y esta, ¿hay precio?',

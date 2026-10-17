@@ -4,11 +4,11 @@
  * setting `answerFirst`, PLAN 0.8.10 C4); otherwise the AI answers right after the response (`after()`, the widget
  * checks every 3 s meanwhile; or within the request with `?wait=1`, C10, which waits up to 20 s and lets a slower
  * answer finish after the response, CH-1; a reply that went stale starts again once, RT-6) unless the chat waits for a
- * person (from `reassureAfterMinutes` after the handoff the AI then only reassures, C4), staff paused the AI, or a
+ * person (from `REASSURE_AFTER_MINUTES` after the handoff the AI then only reassures, C4), staff paused the AI, or a
  * limit or cap is reached. The AI uses the website's own provider (backup on failure, when on), knowledge from
  * switched-on features, the store context from Ecommerce (C1), the merchant's webhook tools, the booking endpoint and
  * the shop tools (Ecommerce, pasted token; the products they return become product cards on the answer), the language
- * lock (strict, C14; its options after the re-audit, CH-16 to CH-19, CH-38), "never disclose" (C1) and moderation.
+ * lock (C14; its options after the re-audit, CH-16 to CH-19, CH-38), "never disclose" (C1) and moderation.
  * Answers are markdown, split on `---` lines (and around tables with `tableBubble`, CH-21) into at most `bubbles`
  * messages (C2). When the AI fails, a cap is reached or the answer is refused, the first matching fallback answer
  * replies (C3), else the on-failure setting applies; N failures in a row hand off (an answer only in the wrong language
@@ -59,7 +59,6 @@ import {
 	webhookSchema,
 } from '../core/tools.js';
 import {
-	SHOP_LIMIT,
 	SHOP_UNAVAILABLE,
 	cardOf,
 	compareFactsOf,
@@ -71,6 +70,15 @@ import {
 	shopSchemas,
 } from '../core/shop.js';
 import { pendingStale } from '../core/conversation.js';
+import {
+	AI_MAX_OUTPUT_TOKENS,
+	AI_REPLIES_PER_NETWORK_PER_DAY,
+	AI_REPLIES_PER_VISITOR_PER_DAY,
+	AI_TEMPERATURE,
+	BOT_PHRASES,
+	REASSURE_AFTER_MINUTES,
+	SHOP_SEARCH_MAX_RESULTS,
+} from '../core/limits.js';
 import { isHttpsUrl } from '../core/text.js';
 import { dayKey } from '../core/time.js';
 import { SIGN_IN_HEADER, WAIT_MS } from '../core/widgets.js';
@@ -153,23 +161,6 @@ export const createReply = (product, service) => {
 		return serving.ok ? String(/** @type {any} */ (serving.status).domain ?? '') : '';
 	};
 
-	/**
-	 * How many each shop list asks Ecommerce for: products per search (setting `maxResults` of `shop_search`, C13),
-	 * top products, deals and orders (`count` of `shop_top`, `shop_deals` and `shop_my_orders`, C22).
-	 * @param {Site} s
-	 */
-	const shopCounts = async (s) => {
-		/** The setting while its feature is on, else the default. @param {string} feature @param {string} name */
-		const count = async (feature, name) =>
-			s.on.includes(feature) ? Number(/** @type {any} */ (await s.values(feature))[name]) : undefined;
-		return {
-			limit: await count('shop_search', 'maxResults'),
-			top: await count('shop_top', 'count'),
-			deals: await count('shop_deals', 'count'),
-			orders: await count('shop_my_orders', 'count'),
-		};
-	};
-
 	/** Keep the shop's currency from an Ecommerce answer. @param {Site} s @param {unknown} body */
 	const rememberCurrency = (s, body) => {
 		const b = /** @type {any} */ (body);
@@ -197,8 +188,8 @@ export const createReply = (product, service) => {
 
 	/**
 	 * The store context of an AI reply (store context on, C1): Ecommerce's `GET /v1/chat/context` for the product the
-	 * visitor is viewing, with the verified sign-in forwarded; cached 60 s per website, sign-in and product; cut to the
-	 * setting Longest store information (C22).
+	 * visitor is viewing, with the verified sign-in forwarded; cached 60 s per website, sign-in and product; cut to
+	 * `SHOP_CONTEXT_MAX_CHARACTERS` (C22).
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 * @param {string | null} signIn
@@ -208,9 +199,8 @@ export const createReply = (product, service) => {
 		const path = contextPath((c.currentPage ?? c.page)?.productId);
 		const who = signIn ? (c.visitor.kind === 'user' ? c.visitor.id : '') : '';
 		const key = `${s.websiteId}|${who}|${path}`;
-		const longest = Number((await s.values('shop_context')).maxCharacters);
 		const cached = contexts.get(key);
-		if (cached) return cached.value && contextText({ text: cached.value }, longest);
+		if (cached) return cached.value && contextText({ text: cached.value });
 		const answer = await product.callProduct(
 			s.websiteId,
 			'ecommerce',
@@ -222,7 +212,7 @@ export const createReply = (product, service) => {
 			contexts.set(key, text);
 			rememberCurrency(s, answer.body);
 		}
-		return text && contextText({ text }, longest);
+		return text && contextText({ text });
 	};
 
 	/**
@@ -301,16 +291,15 @@ export const createReply = (product, service) => {
 	};
 
 	/**
-	 * Whether the AI reassures a visitor waiting for a person (C4): from `reassureAfterMinutes` after this handoff (each
-	 * handoff waits again, CH-5), while the office is open.
+	 * Whether the AI reassures a visitor waiting for a person (C4): from `REASSURE_AFTER_MINUTES` after this handoff
+	 * (each handoff waits again, CH-5), while the office is open.
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 */
 	const reassureDue = async (s, c) => {
 		const since = c.waitingSince ?? c.handedOffAt;
 		if (!c.waiting || !since || !s.on.includes('handoff')) return false;
-		const minutes = Number((await s.values('handoff')).reassureAfterMinutes);
-		if (minutes <= 0 || now() - new Date(since).getTime() < minutes * 60_000) return false;
+		if (now() - new Date(since).getTime() < REASSURE_AFTER_MINUTES * 60_000) return false;
 		const hours = await service.officeHours(s);
 		return !hours || hours.open;
 	};
@@ -388,9 +377,6 @@ export const createReply = (product, service) => {
 			fallback: String(lock.defaultLanguage || lock.allowedLanguages[0] || 'en'),
 			allowed: lock.allowedLanguages,
 			markers: markerSetsOf(lock.markerWords),
-			minMarkers: Number(lock.minMarkers),
-			markerShare: Number(lock.markerShare),
-			minWordsForShare: Number(lock.minWordsForShare),
 		}).language;
 	};
 
@@ -468,14 +454,13 @@ export const createReply = (product, service) => {
 	 * @param {{ messages: ChatMessage[], tools: import('../core/providers.js').ToolSchema[] }} request
 	 */
 	const complete = async (s, connections, request) => {
-		const { temperature, maxOutputTokens } = await s.values('ai_replies');
 		/** @type {{ ok: false, code: string } | { ok: true, value: import('../core/providers.js').ChatResult }} */
 		let result = { ok: false, code: 'not_connected' };
 		for (const connection of connections) {
 			result = await product.ai.chat(connection, {
 				...request,
-				temperature: Number(temperature),
-				maxTokens: Number(maxOutputTokens),
+				temperature: AI_TEMPERATURE,
+				maxTokens: AI_MAX_OUTPUT_TOKENS,
 			});
 			if (result.ok) return result;
 		}
@@ -573,7 +558,6 @@ export const createReply = (product, service) => {
 		];
 		const signedIn = visitor?.kind === 'user' ? { id: visitor.id, email: visitor.email } : null;
 		const withCards = s.on.includes('product_cards');
-		const counts = await shopCounts(s);
 		/** @type {import('../core/shop.js').ProductCard[]} */
 		const cards = [];
 		/**
@@ -583,7 +567,6 @@ export const createReply = (product, service) => {
 		 */
 		const shopCall = async (call) => {
 			const request = shopRequest(call.name, call.arguments, {
-				...counts,
 				...(needsCurrency(call.name, call.arguments) ? { minor: await minorUnits(s) } : {}),
 			});
 			if (!request.ok) return { ok: false, content: request.content };
@@ -599,7 +582,7 @@ export const createReply = (product, service) => {
 			const found = shopAnswer(call.name, answer.body, await s.format());
 			if (withCards)
 				for (const item of found.products)
-					if (cards.length < (counts.limit ?? SHOP_LIMIT) && !cards.some((card) => card.productId === item.id))
+					if (cards.length < SHOP_SEARCH_MAX_RESULTS && !cards.some((card) => card.productId === item.id))
 						cards.push(cardOf(item));
 			return { ok: true, content: toolOutput(found.content) };
 		};
@@ -658,22 +641,20 @@ export const createReply = (product, service) => {
 	};
 
 	/**
-	 * Whether this visitor or network may have another AI reply today (code-constant windows, settings limits). The
+	 * Whether this visitor or network may have another AI reply today (code-constant windows and limits). The
 	 * network limit counts guests only: a signed-in visitor is known by their account and has the visitor limit, so the
 	 * guests on a shared network address never use up their replies (CH-14).
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 */
 	const withinReplyLimits = async (s, c) => {
-		const { repliesPerVisitorPerDay, repliesPerNetworkPerDay } = await s.values('ai_replies');
 		// the visitor's address: SS-Visitor-IP on a visitor call from the merchant's server (K3), else the network's
 		const ip = String(s.ctx.clientIp ?? 'unknown');
 		const checks = /** @type {Array<[string, number]>} */ ([
-			[`chat-ai|${s.websiteId}|visitor|${c.visitor.kind}:${c.visitor.id}`, Number(repliesPerVisitorPerDay)],
-			...(c.visitor.kind === 'guest' ? [[`chat-ai|${s.websiteId}|network|${ip}`, Number(repliesPerNetworkPerDay)]] : []),
+			[`chat-ai|${s.websiteId}|visitor|${c.visitor.kind}:${c.visitor.id}`, AI_REPLIES_PER_VISITOR_PER_DAY],
+			...(c.visitor.kind === 'guest' ? [[`chat-ai|${s.websiteId}|network|${ip}`, AI_REPLIES_PER_NETWORK_PER_DAY]] : []),
 		]);
 		for (const [key, limit] of checks) {
-			if (limit <= 0) continue;
 			const { count } = await product.counters.hit(key, DAY_MS, now());
 			if (count > limit) return false;
 		}
@@ -689,7 +670,6 @@ export const createReply = (product, service) => {
 	 */
 	const shopBody = async (s, tool, args, signIn) => {
 		const request = shopRequest(tool, args, {
-			...(await shopCounts(s)),
 			...(needsCurrency(tool, args) ? { minor: await minorUnits(s) } : {}),
 		});
 		if (!request.ok || (request.signIn && !signIn)) return null;
@@ -899,10 +879,7 @@ export const createReply = (product, service) => {
 		/** @type {import('../core/language.js').CheckOptions} */
 		const check = {
 			markers,
-			strict: lock?.strict === true,
-			mode: lock?.checkMode === 'presence' ? 'presence' : 'whole',
 			latinFor: lock?.acceptLatinFor ?? [],
-			minMarkers: Number(lock?.minMarkers ?? 2),
 		};
 		// the shop's sign-in tools only for the user whose sign-in Chat verified on this request
 		const signIn = await s.signIn();
@@ -954,7 +931,7 @@ export const createReply = (product, service) => {
 						settings.neverDisclose === true
 							? [
 									{
-										ok: (text) => !disclosesBot(text, /** @type {string[]} */ (settings.botPhrases)),
+										ok: (text) => !disclosesBot(text, BOT_PHRASES),
 										retry: DISCLOSE_RETRY,
 										failure: 'disclosed',
 									},

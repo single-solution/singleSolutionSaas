@@ -4,6 +4,7 @@
  * transcripts, read receipts and attachments.
  */
 import { afterAll, describe, expect, it } from 'vitest';
+import { AI_COST_ALERT_PERCENT, AI_REPLIES_PER_VISITOR_PER_DAY } from '../core/limits.js';
 import { ACCOUNTS, AI_KEY, ORIGIN, ready } from './helpers.js';
 
 /** Monday to Friday (ISO weekday numbers). */
@@ -67,7 +68,7 @@ describe('guests and AI replies', () => {
 		expect(state.json).not.toHaveProperty('guestLimit');
 	});
 
-	it('lifts the guest limit while the Customer role’s sign-in is paused at Accounts, with the setting (C17)', async () => {
+	it('lifts the guest limit while the Customer role’s sign-in is paused at Accounts (C17)', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat']);
 		await sys.setting('guest_chat', 'messageLimit', 1);
 		await sys.paste('accounts');
@@ -89,10 +90,7 @@ describe('guests and AI replies', () => {
 		const config = async () =>
 			(await sys.call('GET', '/v1/widget/config', { token: sys.browser, origin: ORIGIN })).json.settings.guests;
 		expect(await send('one')).toBe(201);
-		// the setting off (the default): the limit applies and Accounts is never asked
-		expect(await send('two')).toBe(403);
-		expect(reads()).toHaveLength(0);
-		await sys.setting('guest_chat', 'noLimitWithoutSignIn', true);
+		// sign-in is paused: nobody could sign in for more, so the limit is lifted
 		expect(await send('two')).toBe(201);
 		expect(await send('three')).toBe(201);
 		const state = await v('GET', '/v1/chat');
@@ -311,7 +309,6 @@ describe('handoff, office hours and failures', () => {
 		await sys.paste('notifications');
 		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
 		await sys.setting('ai_caps', 'monthlyTokens', 200);
-		await sys.setting('ai_cost_alerts', 'alertPercent', 50);
 		await sys.setting('ai_replies', 'onFailure', 'message');
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'one' });
@@ -323,18 +320,23 @@ describe('handoff, office hours and failures', () => {
 		expect(sys.messages().filter((m) => m.template === 'chat.staff_cost_alert')).toEqual([
 			expect.objectContaining({
 				to: { email: 'boss@shop.example.com' },
-				values: expect.objectContaining({ cap: 200, percent: 50 }),
+				values: expect.objectContaining({ cap: 200, percent: AI_COST_ALERT_PERCENT }),
 			}),
 		]);
 	});
 
-	it('limits AI replies per visitor per day', async () => {
+	it('limits AI replies per visitor per day (AI_REPLIES_PER_VISITOR_PER_DAY)', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies']);
 		await sys.connect('ai', AI_KEY);
-		await sys.setting('ai_replies', 'repliesPerVisitorPerDay', 1);
+		await sys.setting('guest_chat', 'messageLimit', 0);
 		const v = sys.visitor();
-		await v('POST', '/v1/chat/messages', { text: 'one' });
-		await v('POST', '/v1/chat/messages', { text: 'two' });
-		expect(sys.aiCalls()).toHaveLength(1);
+		for (let i = 1; i <= AI_REPLIES_PER_VISITOR_PER_DAY; i += 1) await v('POST', '/v1/chat/messages', { text: `message ${i}` });
+		expect(sys.aiCalls()).toHaveLength(AI_REPLIES_PER_VISITOR_PER_DAY);
+		await v('POST', '/v1/chat/messages', { text: 'one more' });
+		expect(sys.aiCalls()).toHaveLength(AI_REPLIES_PER_VISITOR_PER_DAY);
+		// the next day the counter starts again
+		sys.advance(24 * 60 * 60_000);
+		await v('POST', '/v1/chat/messages', { text: 'a new day' });
+		expect(sys.aiCalls()).toHaveLength(AI_REPLIES_PER_VISITOR_PER_DAY + 1);
 	});
 });

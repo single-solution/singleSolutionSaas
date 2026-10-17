@@ -1,13 +1,14 @@
 /**
  * Proactive messages of the visitor chat (PLAN 0.8.3 Proactive): the idle nudge, page rules, exit intent (desktop
  * only) and page-started flows after their delay. Each kind shows at most once per visitor session (sessionStorage),
- * never while the window is open, and none shows for `dismissDays` days after the visitor dismisses one
+ * never while the window is open, and none shows for `PROACTIVE_DISMISS_DAYS` days after the visitor dismisses one
  * (localStorage, both under PROACTIVE_STORAGE_KEY). The idle nudge (PLAN 0.8.10 C14) says the merchant's text for the
  * kind of page `SSChat.setPage()` named, may show once per product instead of once per session, and may stay away
  * from phones.
  * @module
  */
 import { formatText } from '@ss/app-kit/widget';
+import { PROACTIVE_DISMISS_DAYS } from '../core/limits.js';
 import { pageTypeOf } from '../core/pages.js';
 import { pathMatches } from '../core/text.js';
 import { PHONE_MEDIA, PROACTIVE_STORAGE_KEY } from '../core/widgets.js';
@@ -53,8 +54,7 @@ export const createMemory = ({ win, now }) => {
 		allowed: (once) => !has('shown', once) && !(Number(read('localStorage').dismissedUntil) > now()),
 		/** @param {string} once */
 		shown: (once) => add('shown', once),
-		/** @param {number} days */
-		dismiss: (days) => write('localStorage', { dismissedUntil: now() + days * DAY_MS }),
+		dismiss: () => write('localStorage', { dismissedUntil: now() + PROACTIVE_DISMISS_DAYS * DAY_MS }),
 		/** @param {string} id */
 		flowStarted: (id) => has('flows', id),
 		/** @param {string} id */

@@ -1,14 +1,5 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {
-		"orders": {
-			"type": "integer",
-			"title": "Orders shown",
-			"default": 5,
-			"minimum": 1,
-			"maximum": 20,
-			"description": "A signed-in visitor's latest orders in the inbox's context panel (with the Ecommerce token)."
-		}
-	}
+	"properties": {}
 }

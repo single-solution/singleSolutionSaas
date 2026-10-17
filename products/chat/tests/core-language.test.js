@@ -11,6 +11,7 @@ import { createMemoryStore } from '@ss/app-kit';
 import { createFileSigner, createSealer } from '../adapters/crypto.js';
 import { createLists } from '../adapters/lists.js';
 import { detectLanguage, markerSetsOf, replyMatchesLanguage, translationOf } from '../core/language.js';
+import { LANGUAGE_MIN_MARKERS } from '../core/limits.js';
 import { splitBubbles } from '../core/markdown.js';
 import { buildSystemPrompt } from '../core/prompt.js';
 
@@ -34,17 +35,16 @@ describe('the language of a message (CH-16, CH-17, CH-38, CH-39)', () => {
 		expect(detectLanguage('Привет', { fallback: 'en', allowed: ['en'] })).toMatchObject({ language: 'en', confident: false });
 	});
 
-	it('takes the merchant’s thresholds for Latin-script languages; quoted words count together', () => {
+	it('tells Latin-script languages apart by marker words (fixed: two, or one in a message of up to three words)', () => {
 		const today = { fallback: 'en', markers: ROMAN };
+		expect(LANGUAGE_MIN_MARKERS).toBe(2);
+		// one marker word is enough in a short message, not in a longer one
 		expect(detectLanguage('stock hai?', today).language).toBe('ur-Latn');
 		expect(detectLanguage('is this lamp available hai', today).language).toBe('en');
-		const shared = { ...today, markerShare: 0.15, minWordsForShare: 4 };
-		expect(detectLanguage('stock hai?', shared).language).toBe('en');
-		expect(detectLanguage('is this lamp available hai', shared).language).toBe('ur-Latn');
-		expect(detectLanguage('price batao', shared).language).toBe('ur-Latn');
-		expect(detectLanguage('bhai price', { ...today, minMarkers: 3, markerShare: 0.9 }).language).toBe('en');
-		expect(detectLanguage('in stock?', shared).language).toBe('en');
-		expect(detectLanguage('is it in stock mein?', shared).language).toBe('ur-Latn');
+		// two marker words pick the language in a message of any length
+		expect(detectLanguage('is this lamp available hai kya', today).language).toBe('ur-Latn');
+		expect(detectLanguage('price batao', today).language).toBe('ur-Latn');
+		expect(detectLanguage('in stock?', today).language).toBe('en');
 		expect(detectLanguage('Is this lamp in stock?', { ...today, allowed: ['ur', 'en'] }).language).toBe('en');
 	});
 
@@ -73,21 +73,13 @@ describe('the language of a reply (CH-16, CH-18, CH-19)', () => {
 		expect(replyMatchesLanguage('Hola amigo', 'es', { latinFor: ['es'] })).toBe(true);
 	});
 
-	it('checks each part by presence: one marker word, or no other language', () => {
-		const presence = { markers: ROMAN, mode: /** @type {const} */ ('presence') };
-		expect(replyMatchesLanguage('Yes, it is in stock.', 'ur-Latn', presence)).toBe(false);
-		expect(replyMatchesLanguage('Ji haan, the lamp is in stock.', 'ur-Latn', presence)).toBe(true);
-		expect(replyMatchesLanguage('Yes, it is in stock.', 'ur', { ...presence, latinFor: ['ur'] })).toBe(false);
-		expect(replyMatchesLanguage('Ji, ye stock mein hai.', 'ur', { ...presence, latinFor: ['ur'] })).toBe(true);
-		expect(replyMatchesLanguage('Ji haan, ye hai.\n---\nThe warranty is one year.', 'ur-Latn', presence)).toBe(false);
-		expect(replyMatchesLanguage('Ji haan, ye hai.\n---\n| Lamp | $45 |\n|---|---|', 'ur-Latn', presence)).toBe(true);
-		expect(replyMatchesLanguage('Yes, the lamp is in stock.', 'en', presence)).toBe(true);
-		expect(replyMatchesLanguage('Ji haan, the lamp is in stock.', 'en', presence)).toBe(false);
-		expect(replyMatchesLanguage('Ji, the lamp is in stock.', 'en', presence)).toBe(true);
-		expect(replyMatchesLanguage('The lamp یہ is in stock.', 'en', presence)).toBe(false);
-		expect(replyMatchesLanguage('یہ ہے', 'ur', presence)).toBe(true);
-		expect(replyMatchesLanguage('45 ✓', 'ur', presence)).toBe(true);
-		expect(replyMatchesLanguage('\n---\n', 'en', presence)).toBe(false);
+	it('checks the whole answer, never part by part: a part in another language does not fail an answer in the right one', () => {
+		const whole = { markers: ROMAN };
+		expect(replyMatchesLanguage('Yes, the lamp is in stock.', 'en', whole)).toBe(true);
+		expect(replyMatchesLanguage('Ji haan, ye hai.\n---\nThe warranty is one year.', 'ur-Latn', whole)).toBe(true);
+		expect(replyMatchesLanguage('Ji haan, ye hai.\n---\n| Lamp | $45 |\n|---|---|', 'ur-Latn', whole)).toBe(true);
+		expect(replyMatchesLanguage('یہ ہے', 'ur', whole)).toBe(true);
+		expect(replyMatchesLanguage('45 ✓', 'ur', whole)).toBe(true);
 	});
 
 	it('finds the unavailable message in the visitor’s language; the prompt names the other script', () => {

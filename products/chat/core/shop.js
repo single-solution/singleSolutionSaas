@@ -18,6 +18,14 @@
  */
 import { formatDate, formatMoney, isAmount, isCurrency, normalizeFormat } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
+import {
+	CONTEXT_PANEL_ORDERS,
+	SHOP_CONTEXT_MAX_CHARACTERS,
+	SHOP_DEALS_COUNT,
+	SHOP_MY_ORDERS_COUNT,
+	SHOP_SEARCH_MAX_RESULTS,
+	SHOP_TOP_COUNT,
+} from './limits.js';
 import { isHttpsUrl } from './text.js';
 
 /** The shop tool names. */
@@ -32,41 +40,20 @@ const SHOP_TOOLS = Object.freeze({
 	track: 'track_shipment',
 });
 
-/**
- * The default of a search and of a top list (settings `maxResults` of `shop_search` and `count` of `shop_top`), and of
- * the orders one answer and the context panel read (`count` of `shop_my_orders`, `orders` of `context_panel`, C22).
- */
-export const SHOP_LIMIT = 5;
-
 /** Most products one search or top list asks for, and most cards under one answer (C13): Ecommerce's most. */
 const SHOP_MAX = 12;
 
 /** The largest quantity a quote asks for: Ecommerce holds it to the item's own steps, least and most (C3). */
 const MAX_QUOTE_QUANTITY = 1_000_000;
 
-/** The longest store context given to the AI (characters, C1): Ecommerce's, and the default of `shop_context`. */
-const CONTEXT_MAX = 6000;
-
-/** Deals one list asks for by default (setting `count` of `shop_deals`, C22), and at most (Ecommerce's most). */
-const DEALS_LIMIT = 10;
+/** The most deals an answer keeps (Ecommerce's most); one list asks for `SHOP_DEALS_COUNT` (limits.js). */
 const DEALS_MAX = 20;
 
-/** Orders one answer reads at most (Ecommerce's most). */
+/** Orders an answer keeps at most (Ecommerce's most); one list asks for `SHOP_MY_ORDERS_COUNT` (limits.js). */
 const ORDERS_MAX = 10;
 
-/** Orders the context panel shows at most (setting `orders` of `context_panel`, C22). */
+/** Orders the context panel shows at most; it shows `CONTEXT_PANEL_ORDERS` (limits.js). */
 const CONTEXT_ORDERS_MAX = 20;
-
-/**
- * A count within 1–`max`, else the default.
- * @param {unknown} value
- * @param {number} fallback
- * @param {number} max
- */
-const countIn = (value, fallback, max) => {
-	const n = Math.floor(Number(value));
-	return Number.isFinite(n) && n >= 1 ? Math.min(max, n) : fallback;
-};
 
 /** The tool answer when Ecommerce cannot be asked (not connected, token refused, stopped, unreachable). */
 export const SHOP_UNAVAILABLE =
@@ -517,21 +504,11 @@ export const needsCurrency = (name, args) =>
  * become minor units with `minor` (the shop's currency).
  * @param {string} name
  * @param {Record<string, unknown>} args
- * @param {{ limit?: number, top?: number, deals?: number, orders?: number, minor?: (amount: number) => number }}
- *   [options] `limit`: products per search (1–12); `top`, `deals`, `orders`: what one list asks for (C22)
+ * @param {{ minor?: (amount: number) => number }} [options] what one list asks for is fixed: `SHOP_SEARCH_MAX_RESULTS`,
+ *   `SHOP_TOP_COUNT`, `SHOP_DEALS_COUNT` and `SHOP_MY_ORDERS_COUNT` (limits.js, C22)
  * @returns {{ ok: true, path: string, signIn: boolean } | { ok: false, content: string }}
  */
-export const shopRequest = (
-	name,
-	args,
-	{
-		limit = SHOP_LIMIT,
-		top = SHOP_LIMIT,
-		deals = DEALS_LIMIT,
-		orders = SHOP_LIMIT,
-		minor = (amount) => Math.round(amount * 100),
-	} = {},
-) => {
+export const shopRequest = (name, args, { minor = (amount) => Math.round(amount * 100) } = {}) => {
 	const row = SHOP_ENDPOINTS.find((r) => r.tool === name);
 	if (!row) return { ok: false, content: 'No such tool.' };
 	if (name === SHOP_TOOLS.search) {
@@ -551,7 +528,7 @@ export const shopRequest = (
 		if (max !== null) query.set('maxPrice', String(minor(max)));
 		if (args.inStock === true || args.inStock === 'true') query.set('inStock', '1');
 		if ([...query.keys()].length === 0) return { ok: false, content: 'Say what to search for, or give a filter.' };
-		query.set('limit', String(Math.max(1, Math.min(SHOP_MAX, Math.floor(limit) || SHOP_LIMIT))));
+		query.set('limit', String(SHOP_SEARCH_MAX_RESULTS));
 		return { ok: true, signIn: false, path: `/v1/chat/products?${query.toString()}` };
 	}
 	if (name === SHOP_TOOLS.details || name === SHOP_TOOLS.quote) {
@@ -581,16 +558,14 @@ export const shopRequest = (
 		const search = query.toString();
 		return { ok: true, signIn: false, path: `${path}/quote${search ? `?${search}` : ''}` };
 	}
-	if (name === SHOP_TOOLS.deals)
-		return { ok: true, signIn: false, path: `/v1/chat/deals?limit=${countIn(deals, DEALS_LIMIT, DEALS_MAX)}` };
+	if (name === SHOP_TOOLS.deals) return { ok: true, signIn: false, path: `/v1/chat/deals?limit=${SHOP_DEALS_COUNT}` };
 	if (name === SHOP_TOOLS.top)
 		return {
 			ok: true,
 			signIn: false,
-			path: `/v1/chat/products/top?kind=${args.kind === 'new' ? 'new' : 'top'}&limit=${countIn(top, SHOP_LIMIT, SHOP_MAX)}`,
+			path: `/v1/chat/products/top?kind=${args.kind === 'new' ? 'new' : 'top'}&limit=${SHOP_TOP_COUNT}`,
 		};
-	if (name === SHOP_TOOLS.orders)
-		return { ok: true, signIn: true, path: `/v1/chat/me/orders?limit=${countIn(orders, SHOP_LIMIT, ORDERS_MAX)}` };
+	if (name === SHOP_TOOLS.orders) return { ok: true, signIn: true, path: `/v1/chat/me/orders?limit=${SHOP_MY_ORDERS_COUNT}` };
 	if (name === SHOP_TOOLS.account) return { ok: true, signIn: true, path: '/v1/chat/me/account' };
 	return { ok: true, signIn: true, path: '/v1/chat/me/shipments' };
 };
@@ -605,16 +580,15 @@ export const contextPath = (viewing) => {
 };
 
 /**
- * The store context the AI gets (C1): Ecommerce's `text`, at most `max` characters (setting `maxCharacters` of
- * `shop_context`, 6,000 by default and at most, C22); null when it has none.
+ * The store context the AI gets (C1): Ecommerce's `text`, at most `SHOP_CONTEXT_MAX_CHARACTERS` characters (C22); null
+ * when it has none.
  * @param {unknown} body
- * @param {number} [max]
  * @returns {string | null}
  */
-export const contextText = (body, max = CONTEXT_MAX) => {
+export const contextText = (body) => {
 	const trimmed = isObject(body) && typeof body.text === 'string' ? body.text.trim() : '';
 	if (trimmed === '') return null;
-	const most = countIn(max, CONTEXT_MAX, CONTEXT_MAX);
+	const most = SHOP_CONTEXT_MAX_CHARACTERS;
 	return trimmed.length > most ? `${trimmed.slice(0, most - 1)}…` : trimmed;
 };
 
@@ -1081,10 +1055,7 @@ export const shopInfoOf = (body, look = {}) => {
 };
 
 /**
- * The context panel's request for a signed-in visitor: their latest orders, as many as the setting `orders` of
- * `context_panel` asks (C22).
+ * The context panel's request for a signed-in visitor: their latest orders, `CONTEXT_PANEL_ORDERS` of them (C22).
  * @param {string} userId
- * @param {number} [orders]
  */
-export const customerOrdersPath = (userId, orders = SHOP_LIMIT) =>
-	`/v1/customers/${encodeURIComponent(userId)}/orders?limit=${countIn(orders, SHOP_LIMIT, CONTEXT_ORDERS_MAX)}`;
+export const customerOrdersPath = (userId) => `/v1/customers/${encodeURIComponent(userId)}/orders?limit=${CONTEXT_PANEL_ORDERS}`;

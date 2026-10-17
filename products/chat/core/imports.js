@@ -18,6 +18,7 @@ import { isObject } from '@ss/contracts/util';
 import { PRESENCES, STATUSES, USER_ID, messageText, previewOf } from './conversation.js';
 import { LABEL_LIMITS } from './labels.js';
 import { checkFieldValue } from './fields.js';
+import { GUEST_REMEMBER_DAYS } from './limits.js';
 import { plainOf } from './markdown.js';
 import { OTHER_PAGE, PAGE_TYPE_KEY } from './pages.js';
 import { MAX_MESSAGE_LENGTH, MAX_STAFF_ATTACHMENT_BYTES, STAFF_TYPES } from './widgets.js';
@@ -264,12 +265,12 @@ export const checkStaff = (record) => {
 /**
  * A guest's device key: `{ keyHash, id, expireAt?, createdAt? }`. `keyHash` is the SHA-256 (hex) of the old guest
  * cookie value, which must be a guest key Chat takes (16–128 of `A–Z a–z 0–9 - _`); `id` the guest id the guest's
- * conversations name. Without `expireAt` the device is remembered for the `guest_chat` setting's days from now.
+ * conversations name. Without `expireAt` the device is remembered for `GUEST_REMEMBER_DAYS` days from now.
  * @param {Record<string, unknown>} record
- * @param {{ now: number, rememberDays: number }} rules
+ * @param {{ now: number }} rules
  * @returns {Checked}
  */
-export const checkGuest = (record, { now, rememberDays }) => {
+export const checkGuest = (record, { now }) => {
 	const read = reader(record, IMPORT_FIELDS.guests);
 	if (typeof record.keyHash !== 'string' || !KEY_HASH.test(record.keyHash))
 		read.fail('/keyHash', 'The SHA-256 of the guest cookie value: 64 lower-case hex digits.');
@@ -280,7 +281,7 @@ export const checkGuest = (record, { now, rememberDays }) => {
 	return answer(read.errors, () => ({
 		keyHash: record.keyHash,
 		id: record.id,
-		expireAt: given ?? new Date(now + rememberDays * DAY_MS),
+		expireAt: given ?? new Date(now + GUEST_REMEMBER_DAYS * DAY_MS),
 		...(createdAt ? { createdAt } : {}),
 	}));
 };

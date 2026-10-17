@@ -193,7 +193,6 @@ export const createAdmin = (product, service) => {
 			// the limit that applies now: none while the Customer role's sign-in is paused, with the setting (C17)
 			guests: {
 				messageLimit: on.includes('guest_chat') ? await service.guestLimit(websiteId, guests) : guests.messageLimit,
-				rememberDays: guests.rememberDays,
 				contactCapture: guests.contactCapture,
 			},
 			signInUrl: on.includes('signed_in_chat') ? (await values('signed_in_chat')).signInUrl : '',
@@ -202,7 +201,6 @@ export const createAdmin = (product, service) => {
 			handoff: { showButton: (await values('handoff')).showButton },
 			proactive: {
 				idleMinutes: idle.idleMinutes,
-				dismissDays: look.proactiveDismissDays,
 				pageRules: on.includes('proactive_pages') ? await product.lists.get(websiteId, 'page_rules') : [],
 				oncePer: idle.oncePer,
 				hideOnMobile: idle.hideOnMobile,
@@ -228,8 +226,6 @@ export const createAdmin = (product, service) => {
 				types: visitorRules.types,
 				limits: visitorRules.limits,
 				maxBytes: visitorRules.max,
-				staffTypes: uploadRules(attachments, 'staff').types,
-				staffMaxBytes: uploadRules(attachments, 'staff').max,
 				storage: on.includes('attachments') && (await product.connections.storage(websiteId)) !== null,
 			},
 			ratings: {
@@ -238,8 +234,6 @@ export const createAdmin = (product, service) => {
 				askWhen: ratings.askWhen,
 				comment: ratings.askComment,
 			},
-			// how often the widget checks for messages (C19)
-			checks: { focusedSeconds: look.pollFocusedSeconds, backgroundSeconds: look.pollBackgroundSeconds },
 		};
 	};
 

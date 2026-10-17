@@ -79,7 +79,6 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 	/** The cap of a file type (C11: each type its own, as the server checks it). @param {string} type */
 	const maxBytesOf = (type) =>
 		Math.min(s.attachments.limits?.[type] ?? s.attachments.maxBytes ?? MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_BYTES);
-	visitor.rememberFor(s.guests.rememberDays);
 
 	/** @type {any} the Chat view of the API */
 	let chat = NO_CHAT;
@@ -342,14 +341,8 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		setUnread(0);
 		await call('POST', '/v1/chat/read');
 	};
-	// how often, as the website set it (C19)
-	const checks = createChecks({
-		win,
-		...clock,
-		activeMs: s.checks.focusedSeconds * 1000,
-		check: async () => void (await poll()),
-	});
-	const closedChecks = createUnreadChecks({ win, ...clock, everyMs: s.checks.backgroundSeconds * 1000, check: loadUnread });
+	const checks = createChecks({ win, ...clock, check: async () => void (await poll()) });
+	const closedChecks = createUnreadChecks({ win, ...clock, check: loadUnread });
 
 	/** @param {string} text */
 	const say = (text) => {
@@ -646,7 +639,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 	});
 	nudgeText.addEventListener('click', () => void open());
 	nudgeClose.addEventListener('click', () => {
-		memory.dismiss(s.proactive.dismissDays);
+		memory.dismiss();
 		hideNudge();
 	});
 	olderButton.addEventListener('click', () => void showEarlier());

@@ -4,7 +4,7 @@
  * - `site(ctx)`: the website of a request (merchant database store, switched-on features, settings and texts read
  *   once per request).
  * - `guestLimit(websiteId, settings)`: a guest's message limit, lifted while the Customer role's sign-in is paused at
- *   Accounts and the Guest chat setting says so (C17).
+ *   Accounts (C17).
  * - `staffOfAccounts(websiteId)`: the Accounts users who may answer chats, kept 5 minutes (CH-6, CH-12).
  * - `visitorOf(site)`: who is chatting — the Accounts user of a sign-in verified on this request (signed-in chat on),
  *   else the guest of the device's guest key (any key of 16–128 characters, so imported store cookies work); a device
@@ -24,6 +24,13 @@ import { callingCodeOf } from '@ss/contracts/phone';
 import { LONG_VALUE_LIMIT } from '@ss/contracts/templates';
 import { randomToken, sha256Hex } from '@ss/protocol';
 import { capReached, windowKeys, alertCrossed } from '../core/caps.js';
+import {
+	AI_COST_ALERT_PERCENT,
+	GUEST_REMEMBER_DAYS,
+	NEW_GUESTS_PER_NETWORK,
+	STAFF_ALERT_MAX_RECIPIENTS,
+	VISITOR_ALERT_AWAY_SECONDS,
+} from '../core/limits.js';
 import { customerOrdersPath, shopInfoOf } from '../core/shop.js';
 import {
 	USER_ID,
@@ -211,13 +218,13 @@ export const createService = (product) => {
 
 	/**
 	 * A guest's message limit per conversation (Guest chat): the setting `messageLimit` (0 = none), and none while the
-	 * setting `noLimitWithoutSignIn` is on and the Customer role's sign-in is paused at Accounts (C17).
+	 * Customer role's sign-in is paused at Accounts (C17): a website without sign-in has nobody to sign in for more.
 	 * @param {string} websiteId
 	 * @param {Record<string, any>} settings the Guest chat settings
 	 */
 	const guestLimit = async (websiteId, settings) => {
 		const limit = Number(settings.messageLimit);
-		if (limit <= 0 || settings.noLimitWithoutSignIn !== true) return limit;
+		if (limit <= 0) return limit;
 		return (await customerSignInPaused(websiteId)) ? 0 : limit;
 	};
 
@@ -310,21 +317,20 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * A new guest for this device: the key is answered once and kept only as a hash. At most `newGuestsPerNetwork` new
+	 * A new guest for this device: the key is answered once and kept only as a hash. At most `NEW_GUESTS_PER_NETWORK` new
 	 * guests per network address in 15 minutes, so a client that drops its key cannot start a new guest, conversation
 	 * and AI reply with every message (CH-15).
 	 * @param {Site} s
 	 */
 	const newGuest = async (s) => {
-		const { rememberDays, newGuestsPerNetwork } = await s.values('guest_chat');
-		const limit = Number(newGuestsPerNetwork ?? 0);
+		const limit = NEW_GUESTS_PER_NETWORK;
 		const ip = String(s.ctx.clientIp ?? 'unknown');
-		if (limit > 0 && ip !== 'unknown') {
+		if (ip !== 'unknown') {
 			const { count } = await product.counters.hit(`chat-guest|${s.websiteId}|${ip}`, NEW_GUESTS_WINDOW_MS, now());
 			if (count > limit) throw problem('rate_limited', 'Too many new chats from this network. Try again in a few minutes.');
 		}
 		const key = `g_${randomToken(24)}`;
-		const { id } = await s.store.guests.create(sha256Hex(key), new Date(now() + Number(rememberDays) * 86_400_000));
+		const { id } = await s.store.guests.create(sha256Hex(key), new Date(now() + GUEST_REMEMBER_DAYS * 86_400_000));
 		return { key, visitor: /** @type {Visitor} */ ({ kind: 'guest', id, name: null, email: null, phone: null }) };
 	};
 
@@ -400,13 +406,11 @@ export const createService = (product) => {
 	// ------------------------------------------------------------------------------------------------- views
 
 	/**
-	 * Whether a file opens in the browser: the images browsers show, video and audio (C11), and PDFs with the attachment
-	 * setting `pdfInline` (CH-8); everything else (HEIC photos, office files) is a download.
+	 * Whether a file opens in the browser: the images browsers show, video and audio (C11); everything else (PDFs,
+	 * HEIC photos, office files) is a download (CH-8).
 	 * @param {string} type
-	 * @param {Record<string, any>} settings the attachment settings
 	 */
-	const opensInline = (type, settings) =>
-		attachmentKind(type) !== 'file' || (type === 'application/pdf' && settings.pdfInline === true);
+	const opensInline = (type) => attachmentKind(type) !== 'file';
 
 	/**
 	 * The link of an attachment, or null without storage: Chat's own stable link, which signs a fresh 10-minute storage
@@ -416,7 +420,6 @@ export const createService = (product) => {
 	 */
 	const linker = async (s) => {
 		const storage = s.on.includes('attachments') ? await product.connections.storage(s.websiteId) : null;
-		const settings = storage ? await s.values('attachments') : {};
 		const base = product.address();
 		return (/** @type {import('../core/conversation.js').Attachment} */ attachment) => {
 			if (!storage) return null;
@@ -425,14 +428,14 @@ export const createService = (product) => {
 			return storage.presignGet({
 				key: attachment.key,
 				expiresIn: LINK_SECONDS,
-				...(opensInline(attachment.type, settings) ? {} : { downloadName: attachment.name }),
+				...(opensInline(attachment.type) ? {} : { downloadName: attachment.name }),
 			}).url;
 		};
 	};
 
 	/**
 	 * `GET /v1/files/:token` (no token header: the link itself is signed): a redirect to a fresh 10-minute link in the
-	 * website's storage, opening in the browser or downloading as the settings say now (CH-8). Not found when the link
+	 * website's storage, opening in the browser or downloading by its type (CH-8). Not found when the link
 	 * is not Chat's, the website is not served, attachments are off or no storage is connected.
 	 * @param {any} ctx
 	 */
@@ -442,11 +445,10 @@ export const createService = (product) => {
 		const on = file && serving?.ok ? await product.featuresOn(file.w) : [];
 		const storage = file && on.includes('attachments') ? await product.connections.storage(file.w) : null;
 		if (!file || !storage || !file.k.startsWith('chat/')) throw problem('not_found', 'No such file.');
-		const settings = await product.settings.values(file.w, 'attachments');
 		const url = storage.presignGet({
 			key: file.k,
 			expiresIn: LINK_SECONDS,
-			...(opensInline(file.t, settings) ? {} : { downloadName: file.n }),
+			...(opensInline(file.t) ? {} : { downloadName: file.n }),
 		}).url;
 		return new Response(null, { status: 302, headers: { location: url, 'cache-control': 'private, max-age=60' } });
 	};
@@ -547,8 +549,7 @@ export const createService = (product) => {
 	const visitorMessages = async (s, messages) => {
 		const urlOf = await linker(s);
 		const cards = s.on.includes('product_cards');
-		const pdfInline = s.on.includes('attachments') && (await s.values('attachments')).pdfInline === true;
-		return messages.map((m) => visitorMessageView(m, urlOf, { cards, pdfInline }));
+		return messages.map((m) => visitorMessageView(m, urlOf, { cards }));
 	};
 
 	/**
@@ -622,8 +623,7 @@ export const createService = (product) => {
 	 */
 	const shopInfo = async (s, c) => {
 		if (c.visitor.kind !== 'user') return null;
-		const { orders } = await s.values('context_panel');
-		const answer = await product.callProduct(s.websiteId, 'ecommerce', customerOrdersPath(c.visitor.id, Number(orders)));
+		const answer = await product.callProduct(s.websiteId, 'ecommerce', customerOrdersPath(c.visitor.id));
 		return answer.ok ? shopInfoOf(answer.body, await s.format()) : null;
 	};
 
@@ -635,8 +635,7 @@ export const createService = (product) => {
 	const staffMessages = async (s, messages) => {
 		const urlOf = await linker(s);
 		const cards = s.on.includes('product_cards');
-		const pdfInline = s.on.includes('attachments') && (await s.values('attachments')).pdfInline === true;
-		return messages.map((m) => staffMessageView(m, urlOf, { cards, pdfInline }));
+		return messages.map((m) => staffMessageView(m, urlOf, { cards }));
 	};
 
 	// ------------------------------------------------------------------------------------------ notifications
@@ -704,12 +703,13 @@ export const createService = (product) => {
 			assignee:
 				assigned || account ? { email: assigned?.email ?? account?.email ?? null, phone: account?.phone ?? null } : null,
 			allStaff: ALL_STAFF_PERMISSION,
+			maxRecipients: STAFF_ALERT_MAX_RECIPIENTS,
 		});
 	};
 
 	/**
 	 * A reply alert to the visitor (C6, reply alerts on): when staff reply to a visitor who has not checked the
-	 * conversation for the away time, `chat.staff_reply` goes by the setting "Channels, in order" (none picked: email,
+	 * conversation for `VISITOR_ALERT_AWAY_SECONDS`, `chat.staff_reply` goes by the setting "Channels, in order" (none picked: email,
 	 * SMS, then WhatsApp, C23): the first channel the visitor has an address for that Notifications takes; one it does not take
 	 * passes to the next. With the setting How often `once` (the default) one alert until the visitor checks again;
 	 * with `every_reply` each staff reply while they are away (C16). Sent after the answer.
@@ -720,11 +720,11 @@ export const createService = (product) => {
 	 */
 	const visitorAlert = async (s, c, reply) => {
 		if (!s.on.includes('visitor_alerts') || (!c.phone && !c.email)) return;
-		const { awaySeconds, frequency, channels } = await s.values('visitor_alerts');
+		const { frequency, channels } = await s.values('visitor_alerts');
 		const routes = alertRoutes(channels, c);
 		if (routes.length === 0) return;
 		const checked = c.visitorCheckedAt ? new Date(c.visitorCheckedAt).getTime() : 0;
-		if (now() - checked < Number(awaySeconds) * 1000) return;
+		if (now() - checked < VISITOR_ALERT_AWAY_SECONDS * 1000) return;
 		if (frequency === 'every_reply') await s.store.conversations.update(c.id, { set: { visitorAlertedAt: new Date(now()) } });
 		else {
 			if (c.visitorAlertedAt && new Date(c.visitorAlertedAt).getTime() >= checked) return;
@@ -825,13 +825,12 @@ export const createService = (product) => {
 		const before = await s.store.usage.add([keys.day, keys.month], tokens);
 		if (!s.on.includes('ai_cost_alerts') || !s.on.includes('ai_caps')) return;
 		const { monthlyTokens } = await s.values('ai_caps');
-		const { alertPercent } = await s.values('ai_cost_alerts');
 		const month = Number(before[keys.month]);
 		const crossed = alertCrossed({
 			before: month,
 			after: month + tokens,
 			monthlyTokens: Number(monthlyTokens),
-			percent: Number(alertPercent),
+			percent: AI_COST_ALERT_PERCENT,
 		});
 		if (!crossed || !(await s.store.usage.markAlerted(keys.month))) return;
 		await product.staffAlerts.send(s.ctx, {
@@ -840,10 +839,11 @@ export const createService = (product) => {
 			values: {
 				used: month + tokens,
 				cap: Number(monthlyTokens),
-				percent: Number(alertPercent),
+				percent: AI_COST_ALERT_PERCENT,
 				business: (await s.business()).name,
 			},
 			allStaff: ALL_STAFF_PERMISSION,
+			maxRecipients: STAFF_ALERT_MAX_RECIPIENTS,
 		});
 	};
 

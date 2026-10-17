@@ -293,9 +293,7 @@ describe('shop tools', () => {
 		]);
 		expect(sys.shopCalls().every((c) => c.headers.authorization === `Bearer ${sys.ecommerceToken}`)).toBe(true);
 		expect(sys.shopCalls().every((c) => !c.headers['ss-sign-in'])).toBe(true);
-		// how many deals and top products a list asks for are settings (C22), within what Ecommerce answers
-		await sys.setting('shop_deals', 'count', 3);
-		await sys.setting('shop_top', 'count', 12);
+		// how many deals and top products a list asks for are fixed (C22): 10 deals, 5 products
 		sys.ai(
 			{
 				tools: [
@@ -313,7 +311,7 @@ describe('shop tools', () => {
 				.slice(before)
 				.map((c) => c.url.replace(ECOMMERCE, ''))
 				.sort(),
-		).toEqual(['/v1/chat/deals?limit=3', '/v1/chat/products/top?kind=top&limit=12']);
+		).toEqual(['/v1/chat/deals?limit=10', '/v1/chat/products/top?kind=top&limit=5']);
 		const [search, details, quote, deals, top] = toolAnswers(sys.aiCalls()[1]).map((/** @type {string} */ text) =>
 			JSON.parse(text),
 		);
@@ -384,11 +382,6 @@ describe('shop tools', () => {
 			'/v1/chat/me/shipments',
 		]);
 		expect(calls.every((c) => c.headers['ss-sign-in'] === signIn)).toBe(true);
-		// the orders one answer reads are a setting (C22)
-		await sys.setting('shop_my_orders', 'count', 2);
-		sys.ai({ tools: [{ name: 'get_my_orders', arguments: {} }] }, { text: 'Two orders.' });
-		await v('POST', '/v1/chat/messages', { text: 'My last orders?' });
-		expect(sys.shopCalls().at(-1)?.url).toBe(`${ECOMMERCE}/v1/chat/me/orders?limit=2`);
 		const answers = toolAnswers(sys.aiCalls()[1]);
 		expect(JSON.parse(String(answers[0]))).toEqual({
 			name: 'Rea Der',
@@ -554,10 +547,6 @@ describe('context panel shop info', () => {
 		const byKind = Object.fromEntries(list.json.items.map((/** @type {any} */ c) => [c.visitor.kind, c.id]));
 		const user = await sys.admin(ticket, 'GET', `/v1/admin/conversations/${byKind.user}`);
 		expect(sys.shopCalls().at(-1)?.url).toBe(`${ECOMMERCE}/v1/customers/usr_1/orders?limit=5`);
-		// how many orders the panel shows is a setting (C22)
-		await sys.setting('context_panel', 'orders', 8);
-		await sys.admin(ticket, 'GET', `/v1/admin/conversations/${byKind.user}`);
-		expect(sys.shopCalls().at(-1)?.url).toBe(`${ECOMMERCE}/v1/customers/usr_1/orders?limit=8`);
 		expect(user.json.conversation.context.shop).toEqual({
 			loyaltyPoints: 120,
 			orders: [

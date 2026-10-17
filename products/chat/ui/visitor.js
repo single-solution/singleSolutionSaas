@@ -4,6 +4,7 @@
  * @module
  */
 import { requestJson } from '@ss/app-kit/widget';
+import { GUEST_REMEMBER_DAYS } from '../core/limits.js';
 import { GUEST_HEADER, GUEST_STORAGE_KEY, SIGN_IN_HEADER } from '../core/widgets.js';
 
 const DAY_MS = 86_400_000;
@@ -14,7 +15,6 @@ const DAY_MS = 86_400_000;
 export const createVisitor = ({ win, base, token, now }) => {
 	/** @type {string | null} */
 	let signIn = null;
-	let rememberDays = 90;
 
 	/** The guest key, while it has not expired. @returns {string | null} */
 	const guestKey = () => {
@@ -37,15 +37,11 @@ export const createVisitor = ({ win, base, token, now }) => {
 		guestKey,
 		/** Is there anyone to ask the API about? */
 		known: () => signIn !== null || guestKey() !== null,
-		/** @param {number} days how long a new guest key is kept */
-		rememberFor: (days) => {
-			rememberDays = days;
-		},
 		/** @param {unknown} key a guest key from an answer */
 		keepGuest: (key) => {
 			if (typeof key !== 'string' || key === '') return;
 			try {
-				win.localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify({ key, expiresAt: now() + rememberDays * DAY_MS }));
+				win.localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify({ key, expiresAt: now() + GUEST_REMEMBER_DAYS * DAY_MS }));
 			} catch {
 				// storage blocked: the guest is new on each page
 			}

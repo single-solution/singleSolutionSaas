@@ -409,15 +409,8 @@ describe('inbox', () => {
 		let put = () => answer(500);
 		const { server, hosts } = await startAdmin({
 			features: ['inbox', 'attachments'],
-			// staff send what the staff rules allow (C12), whatever visitors may send
-			settings: {
-				attachments: {
-					types: ['image/png'],
-					maxBytes: 4096,
-					staffTypes: ['application/pdf', 'text/plain'],
-					staffMaxBytes: 1024,
-				},
-			},
+			// staff send the fixed staff types and size (C12), whatever visitors may send
+			settings: { attachments: { types: ['image/png'], maxBytes: 4096 } },
 			routes: {
 				'GET /v1/admin/conversations': () => answer(200, { items: [item()], hasMore: false, unread: 0 }),
 				'GET /v1/admin/conversations/c1': () =>
@@ -441,17 +434,17 @@ describe('inbox', () => {
 		const root = shadow(hosts.inbox);
 		await click(buttonIn(root, 'Ana'));
 		const file = /** @type {HTMLInputElement} */ (root.querySelector('input[type="file"]'));
-		expect(file.getAttribute('accept')).toBe('application/pdf,text/plain');
+		expect(file.getAttribute('accept')).toBe('image/jpeg,image/png,image/webp,image/gif,application/pdf');
 		const clicked = vi.spyOn(file, 'click').mockImplementation(() => {});
 		await click(buttonIn(root, TEXTS['inbox.attach']));
 		expect(clicked).toHaveBeenCalled();
 		await choose(file, null);
-		await choose(file, new File(['x'], 'a.png', { type: 'image/png' }));
+		await choose(file, new File(['x'], 'notes.txt', { type: 'text/plain' }));
 		expect(root.textContent).toContain(TEXTS['inbox.fileType']);
 		const big = new File(['x'], 'b.pdf', { type: 'application/pdf' });
-		Object.defineProperty(big, 'size', { value: 2048 });
+		Object.defineProperty(big, 'size', { value: 11 * 1024 * 1024 });
 		await choose(file, big);
-		expect(root.textContent).toContain('The file is too big (at most 1 MB).');
+		expect(root.textContent).toContain('The file is too big (at most 10 MB).');
 		const pdf = new File(['abc'], 'a.pdf', { type: 'application/pdf' });
 		await choose(file, pdf);
 		expect(root.textContent).toContain(TEXTS['inbox.uploadFailed']);
@@ -463,9 +456,9 @@ describe('inbox', () => {
 		});
 		expect(root.querySelector('.log a.file')?.textContent).toBe('a.pdf');
 		expect(shows(root, TEXTS['inbox.addNote'])).toBe(false);
-		// a text file is a staff type: it goes up too
-		await choose(file, new File(['notes'], 'notes.txt', { type: 'text/plain' }));
-		expect(server.last('POST /v1/admin/uploads')?.body).toEqual({ name: 'notes.txt', type: 'text/plain', size: 5 });
+		// an image is a staff type: it goes up too
+		await choose(file, new File(['image'], 'a.png', { type: 'image/png' }));
+		expect(server.last('POST /v1/admin/uploads')?.body).toEqual({ name: 'a.png', type: 'image/png', size: 5 });
 	});
 
 	it('pauses the AI with why, resumes it, hands a waiting chat back; a 403 hides only these (C11, CH-3)', async () => {

@@ -2,13 +2,12 @@
  * The one small checking adapter (PLAN 0.8.3 Live updates): back-off checks from the browser with the `CHECKS`
  * constants, no websockets. Another transport only has to offer the same two factories.
  *
- * - `createChecks` (open chat window, inbox): every `activeMs` (10 s by default; the chat window takes the website's
- *   `pollFocusedSeconds`, C19) while the tab is visible, half as often after 5 minutes without activity, stopped after
- *   15 minutes without activity; nothing while the tab is hidden; an immediate check when the tab becomes visible again
- *   or on input after a stop; every 3 s for 45 s while a reply is expected.
- * - `createUnreadChecks` (closed chat window): on start, on focus (at most once a minute, or once per `everyMs` when
- *   shorter) and every `everyMs` (5 minutes by default; the website's `pollBackgroundSeconds`, C19) while the tab is
- *   visible.
+ * - `createChecks` (open chat window, inbox): every `CHECKS.activeMs` (10 s) while the tab is visible, half as often
+ *   after 5 minutes without activity, stopped after 15 minutes without activity; nothing while the tab is hidden; an
+ *   immediate check when the tab becomes visible again or on input after a stop; every 3 s for 45 s while a reply is
+ *   expected.
+ * - `createUnreadChecks` (closed chat window): on start, on focus (at most once a minute) and every
+ *   `CHECKS.closedEveryMs` (5 minutes) while the tab is visible.
  * @module
  */
 import { CHECKS } from '../core/widgets.js';
@@ -26,10 +25,10 @@ const INPUT_EVENTS = Object.freeze(['pointerdown', 'keydown']);
 
 /**
  * Back-off checks while a chat window or the inbox is open.
- * @param {Clock & { check: () => Promise<void>, activeMs?: number }} input `check` never throws; `activeMs`: how often
- *   while active
+ * @param {Clock & { check: () => Promise<void> }} input `check` never throws
  */
-export const createChecks = ({ win, schedule, cancel, now, check, activeMs = CHECKS.activeMs }) => {
+export const createChecks = ({ win, schedule, cancel, now, check }) => {
+	const activeMs = CHECKS.activeMs;
 	const doc = win.document;
 	let running = false;
 	let parked = false;
@@ -117,9 +116,10 @@ export const createChecks = ({ win, schedule, cancel, now, check, activeMs = CHE
 
 /**
  * Unread checks while the chat window is closed.
- * @param {Clock & { check: () => Promise<void>, everyMs?: number }} input `everyMs`: how often while the tab is visible
+ * @param {Clock & { check: () => Promise<void> }} input
  */
-export const createUnreadChecks = ({ win, schedule, cancel, now, check, everyMs = CHECKS.closedEveryMs }) => {
+export const createUnreadChecks = ({ win, schedule, cancel, now, check }) => {
+	const everyMs = CHECKS.closedEveryMs;
 	const doc = win.document;
 	let running = false;
 	let last = -Infinity;

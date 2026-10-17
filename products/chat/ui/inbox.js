@@ -15,7 +15,8 @@
  * @module
  */
 import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
-import { MAX_MESSAGE_LENGTH, MAX_STAFF_ATTACHMENT_BYTES, PAGE_MAX, STAFF_TYPES } from '../core/widgets.js';
+import { STAFF_ATTACHMENT_MAX_BYTES, STAFF_ATTACHMENT_TYPES } from '../core/limits.js';
+import { MAX_MESSAGE_LENGTH, PAGE_MAX } from '../core/widgets.js';
 import {
 	attachmentNode,
 	buttonOf,
@@ -336,10 +337,10 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 			const addNote = buttonOf(doc, t('inbox.addNote'), { class: 'secondary' });
 			const file = /** @type {HTMLInputElement} */ (element(doc, 'input', { type: 'file', hidden: '' }));
 			const attach = buttonOf(doc, t('inbox.attach'), { class: 'secondary' });
-			// what staff may send, as the server's widget config says (the staff types and size, C12): none, no Attach
-			const types = s.attachments.staffTypes.filter((type) => STAFF_TYPES.includes(type));
+			// what staff may send: the fixed types and size (C12)
+			const types = STAFF_ATTACHMENT_TYPES;
 			file.setAttribute('accept', types.join(','));
-			const maxBytes = Math.min(s.attachments.staffMaxBytes, MAX_STAFF_ATTACHMENT_BYTES);
+			const maxBytes = STAFF_ATTACHMENT_MAX_BYTES;
 			replyForm.append(
 				...(on('saved_replies') ? [saved.picker(reply)] : []),
 				reply,

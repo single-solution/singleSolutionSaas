@@ -420,19 +420,16 @@ describe('never disclose, strict language and the own contact (C1, C14, C15)', (
 		expect(summaryPrompt('')).toBe('Do not add anything that is not in the chat.');
 	});
 
-	it('checks marker words strictly; keeps the website’s own contact; allows website links in an allow-list', () => {
+	it('checks the whole answer by its marker words; keeps the website’s own contact; allows website links in an allow-list', () => {
 		const markers = [
 			{ language: 'ur-Latn', words: ['hai', 'kya', 'yeh', 'ji', 'haan'] },
 			{ language: 'tl', words: ['po', 'ako', 'salamat'] },
 		];
+		// an answer is not held to a share of marker words: only clearly another configured language fails
 		expect(replyMatchesLanguage('Yes, it is in stock.', 'ur-Latn', { markers })).toBe(true);
-		expect(replyMatchesLanguage('Yes, it is in stock.', 'ur-Latn', { markers, strict: true })).toBe(false);
-		expect(replyMatchesLanguage('Ji haan, yeh stock mein hai.', 'ur-Latn', { markers, strict: true })).toBe(true);
-		expect(replyMatchesLanguage('Ji po ako salamat po', 'ur-Latn', { markers, strict: true })).toBe(false);
-		expect(replyMatchesLanguage('Hello there', 'en', { markers, strict: true })).toBe(true);
-		const spanish = [...markers, { language: 'es', words: ['sí', 'está', 'hay', 'tienen'] }];
-		expect(replyMatchesLanguage('Sí, está en stock.', 'es', { markers: spanish, strict: true })).toBe(true);
-		expect(replyMatchesLanguage('Yes, it is in stock.', 'es', { markers: spanish, strict: true })).toBe(false);
+		expect(replyMatchesLanguage('Ji haan, yeh stock mein hai.', 'ur-Latn', { markers })).toBe(true);
+		expect(replyMatchesLanguage('Ji po ako salamat po', 'ur-Latn', { markers })).toBe(false);
+		expect(replyMatchesLanguage('Hello there', 'en', { markers })).toBe(true);
 		const own = { email: 'Hello@Shop.example.com', phone: '+44 20 7946 0123' };
 		expect(redact('hello@shop.example.com 020 7946 0123 a@b.co +1 415 555 0100', ['email', 'phone'], {}, own).text).toBe(
 			'hello@shop.example.com 020 7946 0123 [email] [phone]',
@@ -481,10 +478,10 @@ describe('never disclose, strict language and the own contact (C1, C14, C15)', (
 
 describe('fuller shop tools and the store context (C13, C1)', () => {
 	it('builds requests with filters, sizes and quote options', () => {
-		expect(shopRequest('search_catalog', { query: '  ', inStock: 'true' }, { limit: 20 })).toEqual({
+		expect(shopRequest('search_catalog', { query: '  ', inStock: 'true' })).toEqual({
 			ok: true,
 			signIn: false,
-			path: '/v1/chat/products?inStock=1&limit=12',
+			path: '/v1/chat/products?inStock=1&limit=5',
 		});
 		expect(shopRequest('search_catalog', { minPrice: 'abc', maxPrice: -1 })).toEqual({
 			ok: false,
@@ -532,8 +529,6 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		expect(contextPath('prd.1')).toBe('/v1/chat/context');
 		expect(contextPath('prd_1')).toBe('/v1/chat/context?productId=prd_1');
 		expect(contextText({ text: 'x'.repeat(7000) })?.length).toBe(6000);
-		// the longest store information is a setting (C22)
-		expect(contextText({ text: 'x'.repeat(7000) }, 1500)?.length).toBe(1500);
 		expect(contextText({ text: ' ok ' })).toBe('ok');
 		// only Ecommerce's text becomes the context, never the rest of its answer
 		expect(contextText({ text: ' ', policies: [{ key: 'returns', text: 'a' }] })).toBeNull();

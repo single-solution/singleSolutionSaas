@@ -5,6 +5,7 @@
  * and the website's Format and business time zone in the widget config and in text the server makes.
  */
 import { afterAll, describe, expect, it } from 'vitest';
+import { AI_REPLIES_PER_NETWORK_PER_DAY } from '../core/limits.js';
 import { AI_KEY, ORIGIN, ready } from './helpers.js';
 
 /** Monday to Friday (ISO weekday numbers). */
@@ -158,7 +159,9 @@ describe('visitor calls from the merchant’s server (K3)', () => {
 	it('act for one visitor with SS-Guest and SS-Visitor-IP; AI limits per network count by that address', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies']);
 		await sys.connect('ai', AI_KEY);
-		await sys.setting('ai_replies', 'repliesPerNetworkPerDay', 1);
+		// the network of 198.51.100.7 has one AI reply left of its day's AI_REPLIES_PER_NETWORK_PER_DAY
+		for (let i = 1; i < AI_REPLIES_PER_NETWORK_PER_DAY; i += 1)
+			await sys.product.counters.hit(`chat-ai|${sys.websiteId}|network|198.51.100.7`, 86_400_000, sys.now());
 		/** @param {string} method @param {string} path @param {{ body?: unknown, ip?: string, guest?: string }} [init] */
 		const visit = (method, path, { body, ip, guest } = {}) =>
 			server(sys, method, path, {

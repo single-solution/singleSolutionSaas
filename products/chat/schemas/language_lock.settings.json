@@ -42,66 +42,6 @@
 				"advanced": true
 			}
 		},
-		"minMarkers": {
-			"type": "integer",
-			"title": "Marker words that pick a language",
-			"default": 2,
-			"minimum": 1,
-			"maximum": 10,
-			"x-ui": {
-				"group": "Detection",
-				"order": 12,
-				"advanced": true
-			}
-		},
-		"markerShare": {
-			"type": "number",
-			"title": "Or this share of the message's words",
-			"default": 0,
-			"minimum": 0,
-			"maximum": 1,
-			"description": "For example 0.15, counted from the number of words below. 0 = off: then one marker word is enough in a message of up to 3 words.",
-			"x-ui": {
-				"group": "Detection",
-				"order": 13,
-				"advanced": true
-			}
-		},
-		"minWordsForShare": {
-			"type": "integer",
-			"title": "Words a message needs for the share",
-			"default": 4,
-			"minimum": 1,
-			"maximum": 50,
-			"x-ui": {
-				"group": "Detection",
-				"order": 14,
-				"advanced": true
-			}
-		},
-		"strict": {
-			"type": "boolean",
-			"title": "Strict check",
-			"default": false,
-			"description": "With the Whole check: a reply must also match the visitor’s language by its share of marker words.",
-			"x-ui": {
-				"group": "Reply check",
-				"order": 22,
-				"advanced": true
-			}
-		},
-		"checkMode": {
-			"type": "string",
-			"title": "How replies are checked",
-			"default": "whole",
-			"enum": ["whole", "presence"],
-			"description": "Whole: the whole answer must be in the visitor's language. Presence: each part of the answer needs one marker word of the language (or a letter of its script); a language without marker words fails with as many marker words of another language as pick it, or with letters of another script.",
-			"x-ui": {
-				"group": "Reply check",
-				"order": 21,
-				"advanced": true
-			}
-		},
 		"acceptLatinFor": {
 			"type": "array",
 			"title": "Also accept in Latin letters",

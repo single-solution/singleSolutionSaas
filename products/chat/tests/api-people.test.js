@@ -5,6 +5,7 @@
  */
 import { afterAll, describe, expect, it } from 'vitest';
 import { sha256Hex } from '@ss/protocol';
+import { REASSURE_AFTER_MINUTES, STAFF_ATTACHMENT_MAX_BYTES } from '../core/limits.js';
 import { AI_KEY, STORAGE_KEY, ready } from './helpers.js';
 
 /** @type {Array<Awaited<ReturnType<typeof ready>>>} */
@@ -28,7 +29,6 @@ describe('handoff options (C4)', () => {
 		await sys.setting('handoff', 'answerFirst', true);
 		await sys.setting('handoff', 'showNotice', false);
 		await sys.setting('handoff', 'showButton', false);
-		await sys.setting('handoff', 'reassureAfterMinutes', 3);
 		sys.ai({ text: 'Our lamps come with a year of warranty.' });
 		const v = sys.visitor();
 		const sent = await v('POST', '/v1/chat/messages', { text: 'warranty? I want to talk to someone' });
@@ -42,10 +42,10 @@ describe('handoff options (C4)', () => {
 		expect(state.json.conversation.waiting).toBe(true);
 		const config = await sys.call('GET', '/v1/widget/config', { token: sys.browser, origin: 'https://shop.example.com' });
 		expect(config.json.settings.handoff.showButton).toBe(false);
-		// quiet until 3 minutes after the handoff, then reassurance only
+		// quiet until REASSURE_AFTER_MINUTES after the handoff, then reassurance only
 		await v('POST', '/v1/chat/messages', { text: 'hello?' });
 		expect(sys.aiCalls()).toHaveLength(1);
-		sys.advance(3 * 60_000);
+		sys.advance(REASSURE_AFTER_MINUTES * 60_000);
 		sys.ai({ text: 'A person will reply here soon.' });
 		await v('POST', '/v1/chat/messages', { text: 'anyone?' });
 		state = await v('GET', '/v1/chat');
@@ -435,36 +435,37 @@ describe('inbox options (C11)', () => {
 });
 
 describe('staff attachments (C12)', () => {
-	it('staff send Word, Excel and text files up to the staff size; visitors keep 10 MB and their types', async () => {
+	it('staff send images and PDFs up to 10 MB (fixed); Word and text files are refused; visitors keep their own types', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'attachments']);
 		await sys.connect('storage', STORAGE_KEY);
 		const docx = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 		const ticket = await sys.ticket();
-		const refused = await sys.admin(ticket, 'POST', '/v1/admin/uploads', { name: 'a.docx', type: docx, size: 1000 });
-		expect(refused.status).toBe(422);
-		await sys.setting('attachments', 'staffTypes', ['application/pdf', docx, 'text/plain']);
-		await sys.setting('attachments', 'staffMaxSizeMb', 64);
-		const big = await sys.admin(ticket, 'POST', '/v1/admin/uploads', { name: 'spec.docx', type: docx, size: 60 * 1024 * 1024 });
-		expect(big.status, big.text).toBe(200);
-		expect(big.json.attachment.key).toMatch(/^chat\/staff\/.+\.docx$/);
-		expect(
-			(await sys.admin(ticket, 'POST', '/v1/admin/uploads', { name: 'x.txt', type: 'text/plain', size: 65 * 1024 * 1024 }))
-				.status,
-		).toBe(422);
-		const server = await sys.serverCall('POST', '/v1/uploads', { name: 'notes.txt', type: 'text/plain', size: 10 });
-		expect(server.json.attachment.key).toMatch(/\.txt$/);
+		/** @param {string} name @param {string} type @param {number} size */
+		const upload = (name, type, size) => sys.admin(ticket, 'POST', '/v1/admin/uploads', { name, type, size });
+		expect((await upload('a.docx', docx, 1000)).status).toBe(422);
+		expect((await upload('x.txt', 'text/plain', 10)).status).toBe(422);
+		const pdf = await upload('spec.pdf', 'application/pdf', STAFF_ATTACHMENT_MAX_BYTES);
+		expect(pdf.status, pdf.text).toBe(200);
+		expect(pdf.json.attachment.key).toMatch(/^chat\/staff\/.+\.pdf$/);
+		expect((await upload('big.pdf', 'application/pdf', STAFF_ATTACHMENT_MAX_BYTES + 1)).status).toBe(422);
+		const image = await upload('photo.png', 'image/png', 1000);
+		expect(image.status, image.text).toBe(200);
+		const server = await sys.serverCall('POST', '/v1/uploads', { name: 'shot.webp', type: 'image/webp', size: 10 });
+		expect(server.json.attachment.key).toMatch(/\.webp$/);
+		expect((await sys.serverCall('POST', '/v1/uploads', { name: 'notes.txt', type: 'text/plain', size: 10 })).status).toBe(422);
 		const v = sys.visitor();
 		const sent = await v('POST', '/v1/chat/messages', { text: 'hi' });
-		const reply = await sys.admin(ticket, 'POST', `/v1/admin/conversations/${sent.json.chat.conversation.id}/messages`, {
-			attachment: big.json.attachment,
-		});
-		expect((await sys.open(reply.json.message.attachment.url)).location).toContain('response-content-disposition');
+		const reply = (/** @type {any} */ attachment) =>
+			sys.admin(ticket, 'POST', `/v1/admin/conversations/${sent.json.chat.conversation.id}/messages`, { attachment });
+		// a PDF is a download; an image opens in the browser
+		expect((await sys.open((await reply(pdf.json.attachment)).json.message.attachment.url)).location).toContain(
+			'response-content-disposition',
+		);
+		expect((await sys.open((await reply(image.json.attachment)).json.message.attachment.url)).location).not.toContain(
+			'response-content-disposition',
+		);
+		// visitors send the types of their own list, not the staff's
 		await sys.setting('attachments', 'visitorUploads', 'everyone');
 		expect((await v('POST', '/v1/chat/uploads', { name: 'a.docx', type: docx, size: 10 })).status).toBe(422);
-		const config = await sys.call('GET', '/v1/widget/config', { token: sys.browser, origin: 'https://shop.example.com' });
-		expect(config.json.settings.attachments).toMatchObject({
-			staffTypes: ['application/pdf', docx, 'text/plain'],
-			staffMaxBytes: 64 * 1024 * 1024,
-		});
 	});
 });

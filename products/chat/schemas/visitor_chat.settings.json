@@ -71,19 +71,6 @@
 				"order": 12
 			}
 		},
-		"proactiveDismissDays": {
-			"type": "integer",
-			"title": "Proactive messages: quiet days after a dismissal",
-			"default": 7,
-			"minimum": 0,
-			"maximum": 365,
-			"description": "After a visitor dismisses a proactive message, none shows again for this many days.",
-			"x-ui": {
-				"group": "Messages",
-				"order": 21,
-				"advanced": true
-			}
-		},
 		"showTimes": {
 			"type": "boolean",
 			"title": "Show times and day dividers",
@@ -102,32 +89,6 @@
 			"x-ui": {
 				"group": "Window",
 				"order": 15
-			}
-		},
-		"pollFocusedSeconds": {
-			"type": "integer",
-			"title": "Check for new messages while the chat is open (seconds)",
-			"default": 10,
-			"minimum": 3,
-			"maximum": 60,
-			"description": "While the chat window is open and the page is in view. After 5 minutes without activity the widget checks half as often, after 15 minutes it stops until the visitor is back; while an AI reply is on its way it checks every 3 seconds. Shorter shows replies sooner and makes more requests.",
-			"x-ui": {
-				"group": "Messages",
-				"order": 22,
-				"advanced": true
-			}
-		},
-		"pollBackgroundSeconds": {
-			"type": "integer",
-			"title": "Check for replies while the chat is closed (seconds)",
-			"default": 300,
-			"minimum": 10,
-			"maximum": 300,
-			"description": "While the chat window is closed and the page is in view, the launcher checks for replies the visitor has not seen this often (and when the page opens or the visitor comes back to it). Shorter shows staff replies on the launcher sooner and makes more requests.",
-			"x-ui": {
-				"group": "Messages",
-				"order": 23,
-				"advanced": true
 			}
 		}
 	}
