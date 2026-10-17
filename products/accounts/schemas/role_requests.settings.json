@@ -36,17 +36,6 @@
 				"group": "After a request",
 				"order": 11
 			}
-		},
-		"revealStatus": {
-			"type": "boolean",
-			"title": "Tell a repeat ask what is already there",
-			"description": "Off: every request gets the same answer, so nobody can learn who already has an account. On: a repeat ask says what is already there.",
-			"default": false,
-			"x-ui": {
-				"group": "After a request",
-				"order": 12,
-				"advanced": true
-			}
 		}
 	}
 }

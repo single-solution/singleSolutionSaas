@@ -7,15 +7,14 @@
  */
 import { ownConsents } from './consents.js';
 import { PLACE_PARTS, addressProblem, countryCodeOf, countryName, tidyPostcode } from '@ss/contracts/address';
+import { MAX_CHOICES } from './limits.js';
 import { ADDRESS_LIMITS } from './widgets.js';
 
 /**
- * System ceilings (A12): the website's settings choose the caps below them (Profile `maxAddresses`, Custom fields
- * `maxFields` and `maxChoices`).
+ * Most addresses a user can have, the ceiling an import may reach; a website's own live cap is `ADDRESSES_PER_USER`
+ * (limits.js).
  */
 export const MAX_ADDRESSES = 50;
-export const MAX_CUSTOM_FIELDS = 100;
-export const MAX_CHOICES = 200;
 /** Most tags one user has (A5). */
 const MAX_TAGS = 20;
 /** Longest tag. */
@@ -90,11 +89,10 @@ export const checkName = (value) => text(value, 120);
  * Check a custom field definition as the merchant saves it (the key comes from the path).
  * @param {string} key
  * @param {unknown} input
- * @param {{ maxChoices?: number }} [limits] the website's Custom fields setting (at most `MAX_CHOICES`)
  * @returns {{ ok: true, value: CustomField } | { ok: false, field: string, message: string }}
  */
-export const checkFieldDefinition = (key, input, { maxChoices = 50 } = {}) => {
-	const most = Math.min(maxChoices, MAX_CHOICES);
+export const checkFieldDefinition = (key, input) => {
+	const most = MAX_CHOICES;
 	const body = typeof input === 'object' && input !== null ? /** @type {Record<string, unknown>} */ (input) : {};
 	if (!FIELD_KEY.test(key)) return { ok: false, field: 'key', message: 'Use 1–40 lower-case letters, digits or _.' };
 	const label = text(body.label, 80);

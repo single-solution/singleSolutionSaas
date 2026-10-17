@@ -4,6 +4,7 @@
 import { pbkdf2Sync, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CODE_LENGTH, CODE_MINUTES, PASSWORD_MAX_LENGTH } from '../core/limits.js';
 import { NOTIFY, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
@@ -256,17 +257,12 @@ describe('A2: phone + password', () => {
 		const save = async (key, value) =>
 			(await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/settings/${key}`, { value })).status;
 		expect(await save('phone_code.newUserName', 'Customer {last4}')).toBe(403);
-		for (const [key, value] of /** @type {const} */ ([
-			['phone.channel', 'whatsapp'],
-			['phone.codeLength', 8],
-			['phone.codeMinutes', 15],
-		]))
-			expect(await save(key, value)).toBe(204);
+		expect(await save('phone.channel', 'whatsapp')).toBe(204);
 		env.advance(31_000);
 		expect((await env.visitor('POST', '/v1/password/phone/forgot', { phone: '+447700900000' })).status).toBe(202);
 		const sent = env.messages().at(-1);
-		expect(sent).toMatchObject({ channel: 'whatsapp', template: 'accounts.phone_code', values: { minutes: 15 } });
-		expect(String(sent.values.code)).toMatch(/^\d{8}$/);
+		expect(sent).toMatchObject({ channel: 'whatsapp', template: 'accounts.phone_code', values: { minutes: CODE_MINUTES } });
+		expect(String(sent.values.code)).toMatch(new RegExp(`^\\d{${CODE_LENGTH}}$`));
 		// staff invite someone by phone on the same channel
 		// (a staff member's authority is the permissions of their role: Roles and permissions is on for staff routes)
 		await env.switchOn(['email_password', 'phone_password', 'approval', 'roles']);
@@ -276,8 +272,6 @@ describe('A2: phone + password', () => {
 		expect(env.messages().at(-1)).toMatchObject({ channel: 'whatsapp', template: 'accounts.invite' });
 		await env.switchOn(['email_password', 'phone_password']);
 		expect(await save('phone.channel', 'sms')).toBe(204);
-		expect(await save('phone.codeLength', 6)).toBe(204);
-		expect(await save('phone.codeMinutes', 10)).toBe(204);
 	});
 
 	it('with Forgot password off, the reset routes refuse and the widget config names the page', async () => {
@@ -346,37 +340,12 @@ describe('Forgot password by email: only a proven address or the one the account
 });
 
 describe('A9: password and lock options', () => {
-	it('a growing lock: free failures, then 1, 2, 4 … up to 60 minutes; a good password resets it', async () => {
-		await env.setting('passwords', 'lockMode', 'growing');
-		await env.setting('email_password', 'maxAttempts', 4);
-		await env.visitor('POST', '/v1/sign-up/password', { email: 'grow@example.com', password: 'growing password 1' });
-		for (let i = 0; i < 4; i += 1) expect(code(await signIn('grow@example.com', 'bad'))).toBe('sign_in_failed');
-		expect(code(await signIn('grow@example.com', 'bad'))).toBe('sign_in_failed');
-		const locked = await signIn('grow@example.com', 'growing password 1');
-		expect(code(locked)).toBe('locked');
-		expect(Date.parse(locked.json.lockedUntil) - env.now()).toBe(60_000);
-		env.advance(60_000);
-		expect(code(await signIn('grow@example.com', 'bad'))).toBe('sign_in_failed');
-		expect(Date.parse((await signIn('grow@example.com', 'x')).json.lockedUntil) - env.now()).toBe(120_000);
-		for (let level = 3; level <= 8; level += 1) {
-			env.advance(3_600_000);
-			await signIn('grow@example.com', 'bad');
-		}
-		expect(Date.parse((await signIn('grow@example.com', 'x')).json.lockedUntil) - env.now()).toBe(3_600_000);
-		env.advance(3_600_000);
-		expect((await signIn('grow@example.com', 'growing password 1')).json.status).toBe('signed_in');
-		expect(code(await signIn('grow@example.com', 'bad'))).toBe('sign_in_failed');
-		expect((await signIn('grow@example.com', 'growing password 1')).json.status).toBe('signed_in');
-		await env.setting('passwords', 'lockMode', 'fixed');
-	});
-
 	it('wrong passwords are forgotten after a quiet day: only recent ones lead to a lock (K-27)', async () => {
 		const HOUR = 3_600_000;
 		const DAY = 24 * HOUR;
-		await env.setting('email_password', 'maxAttempts', 5);
 		for (const name of ['steady', 'quiet', 'slow'])
 			await env.visitor('POST', '/v1/sign-up/password', { email: `${name}@example.com`, password: `${name} password 1` });
-		// just inside the day the earlier wrong passwords still count: the 5th locks (maxAttempts 5)
+		// just inside the day the earlier wrong passwords still count: the 5th locks
 		for (let i = 0; i < 4; i += 1) expect(code(await signIn('steady@example.com', 'bad'))).toBe('sign_in_failed');
 		env.advance(DAY - 1);
 		expect(code(await signIn('steady@example.com', 'bad'))).toBe('sign_in_failed');
@@ -393,35 +362,7 @@ describe('A9: password and lock options', () => {
 		}
 		expect(code(await signIn('slow@example.com', 'bad'))).toBe('sign_in_failed');
 		expect(code(await signIn('slow@example.com', 'slow password 1'))).toBe('locked');
-		// a growing lock grows again from its free failures after a quiet day
-		await env.setting('passwords', 'lockMode', 'growing');
-		await env.setting('email_password', 'maxAttempts', 3);
-		await env.visitor('POST', '/v1/sign-up/password', { email: 'regrow@example.com', password: 'regrow password 1' });
-		for (let i = 0; i < 5; i += 1) {
-			expect(code(await signIn('regrow@example.com', 'bad'))).toBe('sign_in_failed');
-			env.advance(HOUR);
-		}
-		env.advance(DAY);
-		for (let i = 0; i < 3; i += 1) expect(code(await signIn('regrow@example.com', 'bad'))).toBe('sign_in_failed');
-		expect((await signIn('regrow@example.com', 'regrow password 1')).json.status).toBe('signed_in');
-		await env.setting('passwords', 'lockMode', 'fixed');
-		await env.setting('email_password', 'maxAttempts', 5);
-	});
-
-	it('the quiet period is a setting of each password method, from 1 to 720 hours (K-27)', async () => {
-		const HOUR = 3_600_000;
-		await env.setting('phone_password', 'maxAttempts', 5);
-		for (const value of [0, 721, 1.5])
-			await expect(env.setting('email_password', 'forgetHours', value)).rejects.toThrow(/setting: 4\d\d/);
-		await expect(env.setting('phone_password', 'forgetHours', 0)).rejects.toThrow(/setting: 4\d\d/);
-		await env.setting('email_password', 'forgetHours', 1);
-		await env.setting('phone_password', 'forgetHours', 2);
-		await env.visitor('POST', '/v1/sign-up/password', { email: 'hourly@example.com', password: 'hourly password 1' });
-		for (let i = 0; i < 4; i += 1) expect(code(await signIn('hourly@example.com', 'bad'))).toBe('sign_in_failed');
-		env.advance(HOUR);
-		for (let i = 0; i < 4; i += 1) expect(code(await signIn('hourly@example.com', 'bad'))).toBe('sign_in_failed');
-		expect((await signIn('hourly@example.com', 'hourly password 1')).json.status).toBe('signed_in');
-		// Phone + password keeps its own: an hour is not its two
+		// Phone + password keeps the same day and the same five
 		/** @param {string} phone @param {string} password */
 		const phoneSignIn = (phone, password) => env.visitor('POST', '/v1/sign-in/phone-password', { phone, password });
 		for (const phone of ['+447700900331', '+447700900332'])
@@ -430,26 +371,25 @@ describe('A9: password and lock options', () => {
 					.status,
 			).toBe('signed_in');
 		for (let i = 0; i < 4; i += 1) expect(code(await phoneSignIn('+447700900331', 'bad'))).toBe('sign_in_failed');
-		env.advance(HOUR);
+		env.advance(DAY - 1);
 		expect(code(await phoneSignIn('+447700900331', 'bad'))).toBe('sign_in_failed');
 		expect(code(await phoneSignIn('+447700900331', 'phone pass 331'))).toBe('locked');
 		for (let i = 0; i < 4; i += 1) expect(code(await phoneSignIn('+447700900332', 'bad'))).toBe('sign_in_failed');
-		env.advance(2 * HOUR);
+		env.advance(DAY);
 		for (let i = 0; i < 4; i += 1) expect(code(await phoneSignIn('+447700900332', 'bad'))).toBe('sign_in_failed');
 		expect((await phoneSignIn('+447700900332', 'phone pass 332')).json.status).toBe('signed_in');
-		await env.setting('email_password', 'forgetHours', 24);
-		await env.setting('phone_password', 'forgetHours', 24);
 	});
 
-	it('letter and digit and a maximum length, for email + password and phone + password (ST-26)', async () => {
+	it('letter and digit, and the longest password (256), for email + password and phone + password (ST-26)', async () => {
 		/** @param {string} email @param {string} password */
 		const tryUp = (email, password) => env.visitor('POST', '/v1/sign-up/password', { email, password });
-		// by default: letters only and up to 256 characters, as before
+		// by default: letters only and up to 256 characters
 		expect((await tryUp('letters@example.com', 'onlyletters')).json.status).toBe('signed_in');
 		expect((await tryUp('long@example.com', 'a1'.repeat(128))).json.status).toBe('signed_in');
-		expect((await tryUp('longer@example.com', `${'a1'.repeat(128)}x`)).json.detail).toBe('Use at most 256 characters.');
+		const tooLong = await tryUp('longer@example.com', `${'a1'.repeat(128)}x`);
+		expect([code(tooLong), tooLong.json.detail]).toEqual(['weak_password', `Use at most ${PASSWORD_MAX_LENGTH} characters.`]);
+		expect(tooLong.json).toMatchObject({ rule: 'too_long', maxLength: PASSWORD_MAX_LENGTH });
 		await env.setting('email_password', 'letterAndDigit', true);
-		await env.setting('email_password', 'maxLength', 128);
 		for (const password of ['onlyletters', '1234567890']) {
 			const refused = await tryUp('rules@example.com', password);
 			expect([code(refused), refused.json.detail, refused.json.rule]).toEqual([
@@ -458,9 +398,6 @@ describe('A9: password and lock options', () => {
 				'letter_and_digit',
 			]);
 		}
-		const tooLong = await tryUp('rules@example.com', `${'a1'.repeat(64)}x`);
-		expect([code(tooLong), tooLong.json.detail]).toEqual(['weak_password', 'Use at most 128 characters.']);
-		expect(tooLong.json).toMatchObject({ rule: 'too_long', maxLength: 128 });
 		expect((await tryUp('rules@example.com', 'a1'.repeat(64))).json.status).toBe('signed_in');
 		// the same rules for a reset and in My account
 		const signedIn = await signIn('rules@example.com', 'a1'.repeat(64));
@@ -469,50 +406,16 @@ describe('A9: password and lock options', () => {
 				await env.visitor('PUT', '/v1/me/password', { current: 'a1'.repeat(64), password: 'nodigits' }, signedIn.json.signIn),
 			),
 		).toBe('weak_password');
-		// the maximum is 128 to 256 characters
-		const cookie = await env.adminSession();
-		for (const value of [127, 257]) {
-			const refused = await env.dashboard(
-				cookie,
-				'PUT',
-				`/v1/dashboard/websites/${env.websiteId}/settings/email_password.maxLength`,
-				{ value },
-			);
-			expect(refused.status).toBe(422);
-		}
-		// Phone + password keeps its own maximum
-		await env.setting('phone_password', 'maxLength', 128);
+		// Phone + password has the same longest password
 		const phoneLong = await env.visitor('POST', '/v1/sign-up/phone-password', {
 			phone: '+447700900003',
-			password: `${'a1'.repeat(64)}x`,
+			password: `${'a1'.repeat(128)}x`,
 		});
-		expect(phoneLong.json.detail).toBe('Use at most 128 characters.');
-		await env.setting('phone_password', 'maxLength', 256);
-		await env.setting('email_password', 'maxLength', 256);
+		expect(phoneLong.json.detail).toBe(`Use at most ${PASSWORD_MAX_LENGTH} characters.`);
 		await env.setting('email_password', 'letterAndDigit', false);
 	});
 
-	it('a network limit per address, minimum lengths up to 128 and the personal check', async () => {
-		await env.setting('passwords', 'networkLimit', 3);
-		env.setNetwork('198.51.100.7');
-		for (let i = 0; i < 3; i += 1) expect(code(await signIn('limit@example.com', 'x'))).toBe('sign_in_failed');
-		expect(code(await signIn('limit@example.com', 'x'))).toBe('rate_limited');
-		// another address from the same network still gets its tries
-		expect(code(await signIn('other@example.com', 'x'))).toBe('sign_in_failed');
-		env.advance(15 * 60_000);
-		expect(code(await signIn('limit@example.com', 'x'))).toBe('sign_in_failed');
-		// the right password clears the network's tries for the address (SA-13, ST-11): a person who signs in is not
-		// held back, and mistakes after it get their tries again
-		await env.visitor('POST', '/v1/sign-up/password', { email: 'often@example.com', password: 'often password 1' });
-		env.advance(15 * 60_000);
-		expect(code(await signIn('often@example.com', 'x'))).toBe('sign_in_failed');
-		expect(code(await signIn('often@example.com', 'x'))).toBe('sign_in_failed');
-		for (let i = 0; i < 4; i += 1)
-			expect((await signIn('often@example.com', 'often password 1')).json.status).toBe('signed_in');
-		for (let i = 0; i < 3; i += 1) expect(code(await signIn('often@example.com', 'x'))).toBe('sign_in_failed');
-		expect(code(await signIn('often@example.com', 'often password 1'))).toBe('rate_limited');
-		env.setNetwork(null);
-		await env.setting('passwords', 'networkLimit', 0);
+	it('minimum lengths up to 128 and the personal check', async () => {
 		await env.setting('email_password', 'minLength', 128);
 		await env.setting('email_password', 'minLength', 12);
 		await env.setting('passwords', 'personalCheck', true);
@@ -528,7 +431,7 @@ describe('A9: password and lock options', () => {
 		await env.setting('email_password', 'minLength', 8);
 	});
 
-	it('the lock mode, the network limit and the personal check are shared by both methods, also with Phone + password alone', async () => {
+	it('the personal check is shared by both methods, also with Phone + password alone', async () => {
 		await env.switchOn(['phone_password']);
 		// the widgets get the rules of the methods that are on: no Email + password minimum, Phone + password's own
 		const config = (await env.visitor('GET', '/v1/widget/config')).json.settings;
@@ -541,8 +444,6 @@ describe('A9: password and lock options', () => {
 			(await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/settings/${key}`, { value })).status;
 		expect(await save('email_password.minLength', 10)).toBe(403);
 		expect(await save('passwords.personalCheck', true)).toBe(204);
-		expect(await save('passwords.networkLimit', 2)).toBe(204);
-		expect(await save('passwords.lockMode', 'growing')).toBe(204);
 		/** @param {Record<string, unknown>} body */
 		const phoneUp = (body) => env.visitor('POST', '/v1/sign-up/phone-password', body);
 		const personal = await phoneUp({ phone: '+447700900341', name: 'Morgan Lee', password: 'morgan secret 1' });
@@ -550,22 +451,7 @@ describe('A9: password and lock options', () => {
 		expect((await phoneUp({ phone: '+447700900341', name: 'Morgan Lee', password: 'quiet river 77' })).json.status).toBe(
 			'signed_in',
 		);
-		/** @param {string} password */
-		const phoneIn = (password) => env.visitor('POST', '/v1/sign-in/phone-password', { phone: '+447700900341', password });
-		env.setNetwork('198.51.100.9');
-		for (let i = 0; i < 2; i += 1) expect(code(await phoneIn('bad'))).toBe('sign_in_failed');
-		expect(code(await phoneIn('bad'))).toBe('rate_limited');
-		env.setNetwork(null);
-		// growing: after the 5 free failures (Phone + password's maxAttempts), a 1-minute lock
-		await env.setting('passwords', 'networkLimit', 0);
-		for (let i = 0; i < 4; i += 1) expect(code(await phoneIn('bad'))).toBe('sign_in_failed');
-		expect(Date.parse((await phoneIn('quiet river 77')).json.lockedUntil) - env.now()).toBe(60_000);
-		for (const [name, value] of /** @type {const} */ ([
-			['personalCheck', false],
-			['lockMode', 'fixed'],
-		]))
-			await env.setting('passwords', name, value);
-		env.advance(60_000);
+		await env.setting('passwords', 'personalCheck', false);
 		await env.switchOn(['email_password', 'phone_password']);
 	});
 });

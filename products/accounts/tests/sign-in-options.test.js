@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { totpCode } from '../adapters/crypto.js';
+import { ADDRESSES_PER_USER, CODE_ATTEMPTS, CODE_COOLDOWN_SECONDS, CODE_MINUTES, CODES_PER_HOUR } from '../core/limits.js';
 import { ALL, ORIGIN, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
@@ -28,6 +29,9 @@ const askCode = (phone) => env.visitor('POST', '/v1/sign-in/phone/code', { phone
 const userOf = async (id) => (await env.serverCall('GET', `/v1/users/${id}`)).json;
 /** Accounts' own activity log. @param {string} query */
 const activity = async (query) => (await env.serverCall('GET', `/v1/activity?${query}`)).json.items;
+/** The hourly caps count in fixed windows: start a series at the start of one. */
+const HOUR = 3_600_000;
+const newHour = () => env.advance(HOUR - (env.now() % HOUR));
 
 beforeAll(async () => {
 	env = await setup();
@@ -41,19 +45,21 @@ afterAll(async () => {
 
 describe('A7: phone-code options', () => {
 	it('waits between codes, caps codes per number and per website, and keeps to the allowed countries', async () => {
-		await env.setting('phone', 'cooldownSeconds', 60);
+		const wait = CODE_COOLDOWN_SECONDS * 1000;
+		newHour();
 		expect((await askCode('+447700900001')).status).toBe(202);
-		env.advance(30_000);
+		env.advance(wait / 2);
 		const soon = await askCode('+447700900001');
 		expect(code(soon)).toBe('code_cooldown');
-		expect(Date.parse(soon.json.retryAt) - env.now()).toBe(30_000);
-		env.advance(30_000);
-		expect((await askCode('+447700900001')).status).toBe(202);
-		await env.setting('phone', 'perHour', 2);
-		env.advance(60_000);
+		expect(Date.parse(soon.json.retryAt) - env.now()).toBe(wait / 2);
+		for (let i = 1; i < CODES_PER_HOUR; i += 1) {
+			env.advance(wait);
+			expect((await askCode('+447700900001')).status).toBe(202);
+		}
+		env.advance(wait);
 		expect(code(await askCode('+447700900001'))).toBe('code_limit');
 		await env.setting('phone', 'websitePerHour', 3);
-		env.advance(3_600_000);
+		newHour();
 		expect((await askCode('+447700900002')).status).toBe(202);
 		expect((await askCode('+447700900003')).status).toBe(202);
 		expect((await askCode('+447700900004')).status).toBe(202);
@@ -65,18 +71,16 @@ describe('A7: phone-code options', () => {
 		await env.setting('phone_code', 'countries', []);
 	});
 
-	it('a code lasts the website’s codeMinutes, and the message says so', async () => {
-		await env.setting('phone', 'codeMinutes', 5);
+	it('a code lasts CODE_MINUTES, and the message says so', async () => {
 		env.advance(3_600_000);
 		const asked = await askCode('+447700900007');
-		expect(Date.parse(asked.json.expiresAt) - env.now()).toBe(5 * 60_000);
+		expect(Date.parse(asked.json.expiresAt) - env.now()).toBe(CODE_MINUTES * 60_000);
 		const sent = env.messages().at(-1);
-		expect(sent.values.minutes).toBe(5);
-		env.advance(5 * 60_000 + 1000);
+		expect(sent.values.minutes).toBe(CODE_MINUTES);
+		env.advance(CODE_MINUTES * 60_000 + 1000);
 		expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900007', code: sent.values.code }))).toBe(
 			'code_invalid',
 		);
-		await env.setting('phone', 'codeMinutes', 10);
 	});
 
 	it('names new phone-code users with the website’s template', async () => {
@@ -119,57 +123,53 @@ describe('A7: phone-code options', () => {
 	});
 });
 
-describe('A9: email code limits are settings, like the phone ones', () => {
+describe('A9: email code limits are fixed, like the phone ones', () => {
 	it('waits between codes, caps codes per address and per website, and spends a code after its tries', async () => {
 		/** @param {string} email */
 		const ask = (email) => env.visitor('POST', '/v1/sign-in/email/code', { email });
-		env.advance(3_600_000);
-		await env.setting('email_code', 'cooldownSeconds', 60);
+		const wait = CODE_COOLDOWN_SECONDS * 1000;
+		newHour();
 		expect((await ask('limits@example.com')).status).toBe(202);
-		env.advance(30_000);
+		env.advance(wait / 2);
 		const soon = await ask('limits@example.com');
 		expect(code(soon)).toBe('code_cooldown');
-		expect(Date.parse(soon.json.retryAt) - env.now()).toBe(30_000);
-		env.advance(30_000);
-		expect((await ask('limits@example.com')).status).toBe(202);
-		await env.setting('email_code', 'perHour', 2);
-		env.advance(60_000);
+		expect(Date.parse(soon.json.retryAt) - env.now()).toBe(wait / 2);
+		for (let i = 1; i < CODES_PER_HOUR; i += 1) {
+			env.advance(wait);
+			expect((await ask('limits@example.com')).status).toBe(202);
+		}
+		env.advance(wait);
 		expect(code(await ask('limits@example.com'))).toBe('code_limit');
 		await env.setting('email_code', 'websitePerHour', 2);
-		env.advance(3_600_000);
+		newHour();
 		expect((await ask('one@example.com')).status).toBe(202);
 		expect((await ask('two@example.com')).status).toBe(202);
 		expect(code(await ask('three@example.com'))).toBe('code_limit');
 		await env.setting('email_code', 'websitePerHour', 0);
-		await env.setting('email_code', 'codeTries', 3);
 		env.advance(3_600_000);
 		expect((await ask('tries@example.com')).status).toBe(202);
 		const sent = String(env.messages().at(-1).values.code);
 		const wrong = sent === '000000' ? '111111' : '000000';
-		for (let i = 0; i < 3; i += 1)
+		for (let i = 0; i < CODE_ATTEMPTS; i += 1)
 			expect(code(await env.visitor('POST', '/v1/sign-in/email', { email: 'tries@example.com', code: wrong }))).toBe(
 				'code_invalid',
 			);
-		// the third wrong try spent the code
+		// the last wrong try spent the code
 		expect(code(await env.visitor('POST', '/v1/sign-in/email', { email: 'tries@example.com', code: sent }))).toBe(
 			'code_invalid',
 		);
-		for (const [key, value] of Object.entries({ cooldownSeconds: 30, perHour: 6, codeTries: 5 }))
-			await env.setting('email_code', key, value);
 	});
 
-	it('phone codes take their tries from the phone settings', async () => {
-		await env.setting('phone', 'codeTries', 3);
+	it('a phone code is spent after the same wrong tries', async () => {
 		env.advance(3_600_000);
 		expect((await askCode('+447700900888')).status).toBe(202);
 		const sent = String(env.messages().at(-1).values.code);
 		const wrong = sent === '000000' ? '111111' : '000000';
-		for (let i = 0; i < 3; i += 1)
+		for (let i = 0; i < CODE_ATTEMPTS; i += 1)
 			expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900888', code: wrong }))).toBe(
 				'code_invalid',
 			);
 		expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900888', code: sent }))).toBe('code_invalid');
-		await env.setting('phone', 'codeTries', 5);
 	});
 });
 
@@ -503,20 +503,15 @@ describe('A11: profile options', () => {
 		expect(code(await save([{ line1: 'No city' }]))).toBe('validation_failed');
 		await env.setting('profile', 'addressRequired', ['line1', 'area']);
 		expect((await save([{ line1: 'No city', area: 'DHA' }])).status).toBe(200);
-		await env.setting('profile', 'maxAddresses', 1);
-		expect(
-			code(
-				await save([
-					{ line1: 'a', area: 'b' },
-					{ line1: 'c', area: 'd' },
-				]),
-			),
-		).toBe('validation_failed');
+		const places = (/** @type {number} */ count) =>
+			Array.from({ length: count }, (_, i) => ({ line1: `${i} Road`, area: 'b' }));
+		expect((await save(places(ADDRESSES_PER_USER))).status).toBe(200);
+		expect(code(await save(places(ADDRESSES_PER_USER + 1)))).toBe('validation_failed');
 		await env.setting('profile', 'keepOneAddress', true);
 		expect(code(await save([]))).toBe('validation_failed');
 		const config = (await env.visitor('GET', '/v1/widget/config')).json.settings.profile;
 		expect(config).toEqual({
-			maxAddresses: 1,
+			maxAddresses: ADDRESSES_PER_USER,
 			keepOneAddress: true,
 			addressRequired: ['line1', 'area'],
 			country: expect.any(String),

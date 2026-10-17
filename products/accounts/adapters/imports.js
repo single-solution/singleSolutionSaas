@@ -18,8 +18,8 @@ import {
 	checkImportedRole,
 	checkImportedUser,
 } from '../core/imports.js';
-import { MAX_CUSTOM_FIELDS } from '../core/profile.js';
-import { MAX_ROLES, OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core/roles.js';
+import { MAX_CUSTOM_FIELDS, MAX_ROLES } from '../core/limits.js';
+import { OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core/roles.js';
 import { isPasswordHash } from './crypto.js';
 import { createStore, phoneReversedOf } from './store.js';
 
@@ -185,20 +185,15 @@ export const createImportOptions = (deps) => ({
 	collections: {
 		roles: keyedCollection({
 			keysOf: roleKeysOf,
-			limitsOf: async (websiteId) => ({
-				max: Math.min(Number((await deps.settings(websiteId, 'roles')).maxRoles), MAX_ROLES),
-			}),
+			limitsOf: async () => ({ max: MAX_ROLES }),
 			what: 'roles',
 			check: checkImportedRole,
 		}),
 		fields: keyedCollection({
 			keysOf: fieldKeysOf,
-			limitsOf: async (websiteId) => {
-				const { maxFields, maxChoices } = await deps.settings(websiteId, 'custom_fields');
-				return { max: Math.min(Number(maxFields), MAX_CUSTOM_FIELDS), maxChoices: Number(maxChoices) };
-			},
+			limitsOf: async () => ({ max: MAX_CUSTOM_FIELDS }),
 			what: 'custom fields',
-			check: (record, limits) => checkImportedField(record, { maxChoices: Number(limits.maxChoices) }),
+			check: (record) => checkImportedField(record),
 		}),
 		users: {
 			prepare: async (ctx) => ({

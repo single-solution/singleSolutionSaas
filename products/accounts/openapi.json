@@ -2012,7 +2012,7 @@
 			},
 			"put": {
 				"summary": "Save a role (Roles admin widget)",
-				"description": "Creates the role or replaces it; the key is the path’s (2–40 lower-case letters, digits or _). Owner keeps every permission and rank 100. 422 validation_failed for the field, or for a role past the website’s Roles setting maxRoles (default 100).",
+				"description": "Creates the role or replaces it; the key is the path’s (2–40 lower-case letters, digits or _). Owner keeps every permission and rank 100. 422 validation_failed for the field, or for a role past the website’s limit of 100 roles.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "roles",
 				"x-ss-permission": "roles.manage",
@@ -3558,7 +3558,7 @@
 		"/v1/admin/users/{id}/sign-in-code": {
 			"post": {
 				"summary": "A one-time sign-in code for a user (Users admin widget)",
-				"description": "6 digits for your staff to give the user (never sent), valid codeMinutes (Staff sign-in codes and setup links, default 15), single use; typed into the phone code, email code or phone + password screen. A new one cancels the old. 403 blocked; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+				"description": "6 digits for your staff to give the user (never sent), valid 15 minutes, single use; typed into the phone code, email code or phone + password screen. A new one cancels the old. 403 blocked; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "staff_links",
 				"x-ss-permission": "users.manage",
@@ -5205,7 +5205,7 @@
 										"items": {
 											"$ref": "#/components/schemas/AddressInput"
 										},
-										"description": "The whole list (maxAddresses, default 10; keepOneAddress refuses an empty list once the user has one); the first is the default unless one is marked."
+										"description": "The whole list (at most 10; keepOneAddress refuses an empty list once the user has one); the first is the default unless one is marked."
 									}
 								}
 							}
@@ -6040,7 +6040,7 @@
 		"/v1/password/forgot": {
 			"post": {
 				"summary": "Send a password reset link by email",
-				"description": "Answers 202 at once, the same for every address. The link (resetMinutes, default 60) opens returnTo with #ss_accounts_reset=<token>, and goes only to an account with a password whose address was proven or is the one it was made with; a link Notifications cannot send now is sent again on later requests while it is valid. 422 validation_failed for email or returnTo; 429 rate_limited after resetLimit requests (default 3) for the address in 15 minutes.",
+				"description": "Answers 202 at once, the same for every address. The link (valid 60 minutes) opens returnTo with #ss_accounts_reset=<token>, and goes only to an account with a password whose address was proven or is the one it was made with; a link Notifications cannot send now is sent again on later requests while it is valid. 422 validation_failed for email or returnTo; 429 rate_limited after 3 requests for the address in 15 minutes.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "email_password",
 				"security": [
@@ -6445,7 +6445,7 @@
 			},
 			"post": {
 				"summary": "Ask for a role (no account needed)",
-				"description": "Only the roles listed in Role requests → requestableRoles. 422 validation_failed for role, name, phone, email or note (requireNote). A repeat ask changes nothing. With Role requests → revealStatus off (the default, private) every ask answers the same { outcome: requested }, with the same work and so about the same time, whether the request is new, already there or the person is already a member: nobody who types a phone number or email address learns anything about it. With revealStatus on, a repeat ask answers what is already there, for your own words: outcome already_member (the user holding this phone number, else this email address, proven, has the role), already_requested (a request of this role with this phone number, else email address, waits for your staff), already_invited (your staff invited it and its setup link still works) or invite_expired (its setup link ran out: your staff give a new one), and a new request answers outcome requested with its id. The answer is 201 either way.",
+				"description": "Only the roles listed in Role requests → requestableRoles. 422 validation_failed for role, name, phone, email or note (requireNote). A repeat ask changes nothing. Every ask answers the same { outcome: requested }, with the same work and so about the same time, whether the request is new, already there or the person is already a member: nobody who types a phone number or email address learns anything about it. The answer is 201 either way.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "role_requests",
 				"security": [
@@ -6507,30 +6507,14 @@
 							"application/json": {
 								"schema": {
 									"type": "object",
-									"description": "revealStatus off: always { outcome: requested }, nothing else. On: a new request waiting for your staff, or what a repeat ask found.",
+									"description": "Always { outcome: requested }, nothing else.",
 									"required": [
 										"outcome"
 									],
 									"additionalProperties": false,
 									"properties": {
 										"outcome": {
-											"type": "string",
-											"enum": [
-												"requested",
-												"already_requested",
-												"already_invited",
-												"invite_expired",
-												"already_member"
-											]
-										},
-										"id": {
-											"type": "string",
-											"pattern": "^rrq_[0-9a-z]{10,64}$",
-											"description": "A new request with revealStatus on only."
-										},
-										"status": {
-											"const": "pending",
-											"description": "A new request with revealStatus on only."
+											"const": "requested"
 										}
 									}
 								}
@@ -7240,7 +7224,7 @@
 			},
 			"put": {
 				"summary": "Save a role",
-				"description": "Creates the role or replaces it; the key is the path’s (2–40 lower-case letters, digits or _). Owner keeps every permission and rank 100. 422 validation_failed for the field, or for a role past the website’s Roles setting maxRoles (default 100).",
+				"description": "Creates the role or replaces it; the key is the path’s (2–40 lower-case letters, digits or _). Owner keeps every permission and rank 100. 422 validation_failed for the field, or for a role past the website’s limit of 100 roles.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
 				"x-ss-permission": "roles.manage",
@@ -8055,7 +8039,7 @@
 		"/v1/sign-in/email/code": {
 			"post": {
 				"summary": "Send a sign-in code (and magic link) by email",
-				"description": "Through Notifications (template accounts.email_code); with returnTo the message also holds a link to returnTo#ss_accounts_link=<link>. Within Email code’s limits: cooldownSeconds between codes (429 code_cooldown with retryAt), perHour per address and websitePerHour for the website (429 code_limit); a code takes codeTries wrong tries. 403 sign_in_paused or method_refused; 422 validation_failed; 503 notifications_not_connected; 502 not_sent.",
+				"description": "Through Notifications (template accounts.email_code); with returnTo the message also holds a link to returnTo#ss_accounts_link=<link>. Within the code limits: 30 seconds between codes (429 code_cooldown with retryAt), 6 per address per hour and Email code’s websitePerHour for the website (429 code_limit); a code takes 5 wrong tries. 403 sign_in_paused or method_refused; 422 validation_failed; 503 notifications_not_connected; 502 not_sent.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "email_code",
 				"security": [
@@ -8389,7 +8373,7 @@
 		"/v1/sign-in/password": {
 			"post": {
 				"summary": "Sign in with an email address and a password",
-				"description": "401 sign_in_failed for a wrong address or password (the same answer for both); 423 locked (with lockedUntil) after too many wrong passwords; 429 rate_limited when networkLimit tries from this network ran out. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents.",
+				"description": "401 sign_in_failed for a wrong address or password (the same answer for both); 423 locked (with lockedUntil) after too many wrong passwords; 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "email_password",
 				"security": [
@@ -8578,7 +8562,7 @@
 		"/v1/sign-in/phone-password": {
 			"post": {
 				"summary": "Sign in with a phone number and a password",
-				"description": "password also takes a sign-in code your staff made (Staff sign-in codes and setup links). 401 sign_in_failed for a wrong number or password; 423 locked (with lockedUntil); 429 rate_limited (networkLimit). 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents.",
+				"description": "password also takes a sign-in code your staff made (Staff sign-in codes and setup links). 401 sign_in_failed for a wrong number or password; 423 locked (with lockedUntil). 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "phone_password",
 				"security": [
@@ -8667,7 +8651,7 @@
 		"/v1/sign-in/phone/code": {
 			"post": {
 				"summary": "Send a sign-in code by SMS or WhatsApp",
-				"description": "The code (codeLength digits, default 6) lasts codeMinutes (default 10) and goes through Notifications (template accounts.phone_code). 429 code_cooldown (with retryAt) or code_limit; 422 country_not_allowed or validation_failed; 403 sign_in_paused or method_refused (the number’s role); 503 notifications_not_connected; 502 not_sent.",
+				"description": "The code (6 digits) lasts 10 minutes and goes through Notifications (template accounts.phone_code). 429 code_cooldown (with retryAt) or code_limit; 422 country_not_allowed or validation_failed; 403 sign_in_paused or method_refused (the number’s role); 503 notifications_not_connected; 502 not_sent.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "phone_code",
 				"security": [
@@ -10959,7 +10943,7 @@
 		"/v1/users/{id}/sign-in-code": {
 			"post": {
 				"summary": "A one-time sign-in code for a user",
-				"description": "6 digits for your staff to give the user (never sent), valid codeMinutes (Staff sign-in codes and setup links, default 15), single use; typed into the phone code, email code or phone + password screen. A new one cancels the old. 403 blocked; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+				"description": "6 digits for your staff to give the user (never sent), valid 15 minutes, single use; typed into the phone code, email code or phone + password screen. A new one cancels the old. 403 blocked; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "staff_links",
 				"x-ss-permission": "users.manage",
@@ -11741,7 +11725,7 @@
 							"type": "string",
 							"maxLength": 80
 						},
-						"description": "The options of a choice or multi_choice field (your Custom fields setting maxChoices)."
+						"description": "The options of a choice or multi_choice field (at most 50)."
 					},
 					"required": {
 						"type": "boolean",

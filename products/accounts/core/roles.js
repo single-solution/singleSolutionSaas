@@ -36,8 +36,6 @@ const PERMISSION = /^(?:[a-z][a-z0-9-]{1,30}:[a-z][a-z0-9_.]{0,63}|\*)$/;
 const OWN_PERMISSION_KEY = /^[a-z][a-z0-9_.]{0,63}$/;
 /** The source of the merchant's own permission names. */
 const OWN_SOURCE = 'site';
-/** Hard maximums (code constants); the website's Roles setting `maxRoles` chooses its cap below `MAX_ROLES` (A12). */
-export const MAX_ROLES = 200;
 const MAX_ROLE_PERMISSIONS = 500;
 const MAX_OWN_PERMISSIONS = 200;
 const MAX_SESSION_HOURS = 720;

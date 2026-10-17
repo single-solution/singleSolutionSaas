@@ -53,8 +53,8 @@ const ERROR_PARAM = LINK_PARAMS.error;
  * @property {boolean} [signInPaused] the role sign-ups get has its sign-in paused (A6)
  * @property {{ maxAddresses: number, keepOneAddress: boolean, addressRequired: string[], country: string }} profile (A11;
  *   `country`: the business.json country, of an address without one)
- * @property {{ roles: Array<{ key: string, name: string }>, requireNote: boolean, revealStatus?: boolean } | null} [roleRequests]
- *   (A5; revealStatus: a repeat ask's answer says what is there, else one private text for every ask)
+ * @property {{ roles: Array<{ key: string, name: string }>, requireNote: boolean } | null} [roleRequests]
+ *   (A5; every ask gets one private text)
  */
 
 /**

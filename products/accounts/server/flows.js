@@ -13,6 +13,16 @@ import { checkCustomValues, checkName, identityOfMethod, resetsByEmail, selfView
 import { sessionEnd } from '../core/roles.js';
 import {
 	CODE_ATTEMPTS,
+	CODE_COOLDOWN_SECONDS,
+	CODE_LENGTH,
+	CODE_MINUTES,
+	CODES_PER_HOUR,
+	PASSWORD_FORGET_HOURS,
+	PASSWORD_MAX_LENGTH,
+	RESET_LIMIT,
+	RESET_MINUTES,
+} from '../core/limits.js';
+import {
 	emailRefused,
 	endedByPassword,
 	generateCode,
@@ -40,8 +50,7 @@ import { bodyOf, parseSecret } from './service.js';
 /** @typedef {import('../core/profile.js').UserRecord} UserRecord */
 /** @typedef {import('../adapters/store.js').SessionRecord} SessionRecord */
 
-/** Fixed windows of the network limit (A9), of the reset emails per address (ST-12) and of the hourly code caps (A7). */
-const NETWORK_WINDOW_MS = 15 * 60_000;
+/** Fixed windows of the reset emails per address (ST-12) and of the hourly code caps (A7). */
 const RESET_WINDOW_MS = 15 * 60_000;
 const HOUR_MS = 3_600_000;
 /** Digits of a sign-in code staff make (A3). */
@@ -211,9 +220,10 @@ export const createFlows = (product, service) => {
 
 	/**
 	 * The password rules of a method (A2, A9, ST-26, K-27): each of Email + password and Phone + password has its own
-	 * lengths, letter-and-digit, breached-password and lock settings (how many failures, how long, and after how many
-	 * quiet hours they are forgotten); the lock mode, the network limit and the personal check are the shared Passwords
-	 * settings, set while either method is on.
+	 * minimum length and letter-and-digit setting; the personal check is the shared Passwords setting, set while
+	 * either method is on. The longest password, the breached-password check and the login limits (how many failures,
+	 * how long a lock, after how many quiet hours failures are forgotten, the network limit) are fixed in the product
+	 * (`core/limits.js`).
 	 * @param {Site} s @param {string} method
 	 */
 	const passwordRules = async (s, method) => {
@@ -221,14 +231,9 @@ export const createFlows = (product, service) => {
 		const shared = await service.settings(s, 'passwords');
 		return {
 			minLength: Number(own.minLength),
-			maxLength: Number(own.maxLength),
+			maxLength: PASSWORD_MAX_LENGTH,
 			letterAndDigit: own.letterAndDigit === true,
-			breachedCheck: own.breachedCheck === true,
-			maxAttempts: Number(own.maxAttempts),
-			lockMinutes: Number(own.lockMinutes),
-			forgetMs: Number(own.forgetHours) * HOUR_MS,
-			lockMode: String(shared.lockMode),
-			networkLimit: Number(shared.networkLimit),
+			forgetMs: PASSWORD_FORGET_HOURS * HOUR_MS,
 			personalCheck: shared.personalCheck === true,
 		};
 	};
@@ -241,7 +246,7 @@ export const createFlows = (product, service) => {
 	const countFailure = async (s, user, method) => {
 		const rules = await passwordRules(s, method);
 		const failures = await s.store.users.failedLogin(user.id, rules.forgetMs);
-		await s.store.users.update(user.id, { ...lockAfter({ ...rules, failures, now: now() }) });
+		await s.store.users.update(user.id, { ...lockAfter({ failures, now: now() }) });
 	};
 
 	/**
@@ -264,19 +269,18 @@ export const createFlows = (product, service) => {
 		if (rule === 'too_long') throw weak(`Use at most ${rules.maxLength} characters.`, { rule, maxLength: rules.maxLength });
 		if (rule === 'letter_and_digit') throw weak('Use at least one letter and one digit.', { rule });
 		if (rule === 'personal') throw weak('Do not use your name, your email address or runs like 1234 or qwer.', { rule });
-		if (rules.breachedCheck && (await providers.breached(/** @type {string} */ (password))))
+		if (await providers.breached(/** @type {string} */ (password)))
 			throw weak('This password appeared in a data breach. Choose another one.', { rule: 'breached' });
 		return hashPassword(/** @type {string} */ (password));
 	};
 
 	/**
-	 * A password sign-in (email or phone, A2, A9): the network limit, the lock, the password (or, with Phone +
-	 * password, a sign-in code from staff, A3), the lock after a failure and the sign-in log (A10). The right password
-	 * clears the network's tries for the address: the limit holds back guessing, not a person who signs in.
+	 * A password sign-in (email or phone, A2, A9): the lock, the password (or, with Phone + password, a sign-in code
+	 * from staff, A3), the lock after a failure and the sign-in log (A10).
 	 * @param {Site} s @param {any} ctx
-	 * @param {{ method: 'email_password' | 'phone_password', identifier: string | null, user: UserRecord | null }} who
+	 * @param {{ method: 'email_password' | 'phone_password', user: UserRecord | null }} who
 	 */
-	const passwordSignInOf = async (s, ctx, { method, identifier, user }) => {
+	const passwordSignInOf = async (s, ctx, { method, user }) => {
 		const body = bodyOf(ctx.body);
 		const rules = await passwordRules(s, method);
 		const failed = () =>
@@ -284,9 +288,6 @@ export const createFlows = (product, service) => {
 				'sign_in_failed',
 				method === 'phone_password' ? 'The phone number or password is wrong.' : 'The email address or password is wrong.',
 			);
-		const tries = identifier && rules.networkLimit > 0 ? `tries|${sha256Hex(`${s.ip}|${identifier}`)}` : null;
-		if (tries && !(await s.store.counters.take(tries, NETWORK_WINDOW_MS, rules.networkLimit)))
-			throw problem('rate_limited', 'Too many tries from this network. Try again later.');
 		if (!user || typeof body.password !== 'string' || body.password.length > 1024) {
 			await dummyPasswordCheck();
 			throw failed();
@@ -300,11 +301,10 @@ export const createFlows = (product, service) => {
 		const staffCode = !passwordOk && method === 'phone_password' ? await staffCodeOf(s, user, body.password) : null;
 		if (!passwordOk && !staffCode) {
 			const failures = await s.store.users.failedLogin(user.id, rules.forgetMs);
-			await s.store.users.update(user.id, { ...lockAfter({ ...rules, failures, now: now() }) });
+			await s.store.users.update(user.id, { ...lockAfter({ failures, now: now() }) });
 			await service.logSignIn(s, user, 'user.sign_in_failed', { reason: 'wrong_password' });
 			throw failed();
 		}
-		if (tries) await s.store.counters.clear(tries, NETWORK_WINDOW_MS);
 		const answer = await service.finish(s, user, { method, ...service.howOf(ctx), consents: body.consents });
 		if (staffCode) await s.store.codes.consume(staffCode);
 		return answer;
@@ -323,36 +323,36 @@ export const createFlows = (product, service) => {
 	};
 
 	/**
-	 * The settings that limit codes sent to an address (A7, A9): the wait between codes, the hourly caps per address and
-	 * for the website, and the wrong tries per code; Email code's for email codes, the shared phone settings for codes
-	 * by SMS or WhatsApp (sign-in and reset codes alike).
+	 * The cap on codes sent to the whole website per hour (A7): Email code's for email codes, the shared phone setting
+	 * for codes by SMS or WhatsApp (sign-in and reset codes alike), 0 for none. The other limits of a code (the wait
+	 * between codes, the hourly cap per address, the wrong tries) are fixed in the product (`core/limits.js`).
 	 * @param {Site} s @param {'phone' | 'email' | 'phone_reset'} kind
-	 * @returns {Promise<{ cooldownSeconds: number, perHour: number, websitePerHour: number, codeTries: number }>}
+	 * @returns {Promise<number>}
 	 */
-	const codeLimits = async (s, kind) =>
-		/** @type {any} */ (await service.settings(s, kind === 'email' ? 'email_code' : 'phone'));
+	const websiteCodeCap = async (s, kind) =>
+		Number((await service.settings(s, kind === 'email' ? 'email_code' : 'phone')).websitePerHour);
 
 	/**
-	 * A one-time code for an address, sent through Notifications, within the website's code limits (`codeLimits`).
+	 * A one-time code for an address, sent through Notifications, within the code limits.
 	 * @param {Site} s @param {'phone' | 'email' | 'phone_reset'} kind @param {string} target
-	 * @param {{ length: number, minutes: number, linkTo?: string | null }} shape
+	 * @param {{ linkTo?: string | null }} shape
 	 * @param {(code: string, link: string | null, expireAt: Date) => Promise<void>} deliver
 	 */
-	const sendCode = async (s, kind, target, { length, minutes, linkTo }, deliver) => {
+	const sendCode = async (s, kind, target, { linkTo }, deliver) => {
 		const latest = await s.store.codes.latest(kind, target);
-		const { cooldownSeconds, perHour, websitePerHour } = await codeLimits(s, kind);
-		if (latest && now() - latest.createdAt.getTime() < cooldownSeconds * 1000)
-			throw problem('code_cooldown', `Wait ${cooldownSeconds} seconds before asking for another code.`, {
-				extensions: { retryAt: new Date(latest.createdAt.getTime() + cooldownSeconds * 1000).toISOString() },
+		const websitePerHour = await websiteCodeCap(s, kind);
+		if (latest && now() - latest.createdAt.getTime() < CODE_COOLDOWN_SECONDS * 1000)
+			throw problem('code_cooldown', `Wait ${CODE_COOLDOWN_SECONDS} seconds before asking for another code.`, {
+				extensions: { retryAt: new Date(latest.createdAt.getTime() + CODE_COOLDOWN_SECONDS * 1000).toISOString() },
 			});
 		const channel = kind === 'email' ? 'email' : 'phone';
-		if (!(await s.store.counters.take(`codes|${target}`, HOUR_MS, perHour)))
+		if (!(await s.store.counters.take(`codes|${target}`, HOUR_MS, CODES_PER_HOUR)))
 			throw problem('code_limit', 'Too many codes were asked for this address. Try again later.');
 		if (websitePerHour > 0 && !(await s.store.counters.take(`codes|website|${channel}`, HOUR_MS, websitePerHour)))
 			throw problem('code_limit', 'Too many codes were asked for. Try again later.');
-		const code = generateCode({ length, randomBytes });
+		const code = generateCode({ length: CODE_LENGTH, randomBytes });
 		const linkSecret = linkTo ? randomToken(32) : null;
-		const expireAt = new Date(now() + minutes * 60_000);
+		const expireAt = new Date(now() + CODE_MINUTES * 60_000);
 		const id = createId('cod');
 		await s.store.codes.add({
 			id,
@@ -360,7 +360,7 @@ export const createFlows = (product, service) => {
 			target,
 			hash: sha256Hex(`${id}:${code}`),
 			expireAt,
-			data: { length, ...(linkSecret ? { linkHash: sha256Hex(linkSecret) } : {}) },
+			data: { length: CODE_LENGTH, ...(linkSecret ? { linkHash: sha256Hex(linkSecret) } : {}) },
 		});
 		const link = linkTo && linkSecret ? `${linkTo}#${LINK_PARAMS.magic}=${id}.${linkSecret}` : null;
 		try {
@@ -391,10 +391,8 @@ export const createFlows = (product, service) => {
 			if (record && code !== null && constantTimeEqual(record.hash, sha256Hex(`${record.id}:${code}`)))
 				return { id: record.id, staff: record === staff };
 		}
-		const { codeTries } = await codeLimits(s, kind);
 		for (const record of [sent, staff])
-			if (record && (await s.store.codes.attempt(record.id)) >= (record === sent ? codeTries : CODE_ATTEMPTS))
-				await s.store.codes.consume(record.id);
+			if (record && (await s.store.codes.attempt(record.id)) >= CODE_ATTEMPTS) await s.store.codes.consume(record.id);
 		throw problem('code_invalid', 'The code is not valid or has expired.');
 	};
 
@@ -471,7 +469,7 @@ export const createFlows = (product, service) => {
 		const s = await service.site(ctx);
 		const email = normalizeEmail(bodyOf(ctx.body).email);
 		const user = email ? await s.store.users.byEmail(email) : null;
-		return passwordSignInOf(s, ctx, { method: 'email_password', identifier: email, user });
+		return passwordSignInOf(s, ctx, { method: 'email_password', user });
 	};
 
 	// ----------------------------------------------------------------------------------------- phone + password
@@ -503,7 +501,7 @@ export const createFlows = (product, service) => {
 		const s = await service.site(ctx);
 		const phone = await service.phoneOf(s, bodyOf(ctx.body).phone);
 		const user = phone ? await s.store.users.byPhone(phone) : null;
-		return passwordSignInOf(s, ctx, { method: 'phone_password', identifier: phone, user });
+		return passwordSignInOf(s, ctx, { method: 'phone_password', user });
 	};
 
 	/**
@@ -521,9 +519,9 @@ export const createFlows = (product, service) => {
 		afterAnswer(ctx, async () => {
 			const user = await s.store.users.byPhone(phone);
 			if (!user?.passwordHash || user.blocked) return;
-			const { channel, codeLength, codeMinutes } = await service.settings(s, 'phone');
-			await sendCode(s, 'phone_reset', phone, { length: codeLength, minutes: codeMinutes }, (code, _link, expireAt) =>
-				service.deliver(s, channel, 'accounts.phone_code', { phone }, { code, minutes: codeMinutes }, expireAt),
+			const { channel } = await service.settings(s, 'phone');
+			await sendCode(s, 'phone_reset', phone, {}, (code, _link, expireAt) =>
+				service.deliver(s, channel, 'accounts.phone_code', { phone }, { code, minutes: CODE_MINUTES }, expireAt),
 			);
 		});
 		return new Response(null, { status: 202 });
@@ -560,7 +558,7 @@ export const createFlows = (product, service) => {
 	 * is sent again on later requests while it is valid. It goes only to a proven address or to the address the account
 	 * was made with: an address typed but never proven on an account that signs in another way (a phone + password
 	 * member's) gets nothing, as an unknown one, so its owner cannot take that account over. Requests per address are
-	 * limited (`resetLimit` per 15 minutes, ST-12), counted for every address, known or not, so the refusal tells
+	 * limited (`RESET_LIMIT` per 15 minutes, ST-12), counted for every address, known or not, so the refusal tells
 	 * nothing either.
 	 * @param {any} ctx
 	 */
@@ -569,7 +567,7 @@ export const createFlows = (product, service) => {
 		const body = bodyOf(ctx.body);
 		const email = normalizeEmail(body.email);
 		if (!email) throw invalid('email', 'Enter a valid email address.');
-		const { resetMinutes, resetLimit, resetHosts } = await service.settings(s, 'email_password');
+		const { resetHosts } = await service.settings(s, 'email_password');
 		// a page of the website, or of a host of the merchant's listed for reset links (an admin on its own host, K-27)
 		const returnTo = returnAddress(body.returnTo, s.domain, /** @type {unknown[]} */ (resetHosts));
 		if (!returnTo)
@@ -577,20 +575,20 @@ export const createFlows = (product, service) => {
 				'returnTo',
 				'returnTo must be a page of your website or of a host listed for reset links (or a local page while testing).',
 			);
-		if (!(await s.store.counters.take(`resets|${sha256Hex(email)}`, RESET_WINDOW_MS, Number(resetLimit))))
+		if (!(await s.store.counters.take(`resets|${sha256Hex(email)}`, RESET_WINDOW_MS, RESET_LIMIT)))
 			throw problem('rate_limited', 'Too many reset requests for this address. Try again later.');
 		afterAnswer(ctx, async () => {
 			const user = await s.store.users.byEmail(email);
 			if (!user?.passwordHash || user.blocked || !resetsByEmail(user)) return;
 			const secret = randomToken(32);
-			const expireAt = new Date(now() + resetMinutes * 60_000);
+			const expireAt = new Date(now() + RESET_MINUTES * 60_000);
 			const id = await s.store.codes.add({ kind: 'reset', target: user.id, hash: sha256Hex(secret), expireAt, replace: true });
 			await service.deliver(
 				s,
 				'email',
 				'accounts.password_reset',
 				{ email },
-				{ link: `${returnTo}#${LINK_PARAMS.reset}=${id}.${secret}`, minutes: resetMinutes },
+				{ link: `${returnTo}#${LINK_PARAMS.reset}=${id}.${secret}`, minutes: RESET_MINUTES },
 				expireAt,
 			);
 		});
@@ -629,12 +627,12 @@ export const createFlows = (product, service) => {
 		const phone = await service.phoneOf(s, bodyOf(ctx.body).phone);
 		if (!phone) throw invalid('phone', 'Enter the phone number with its country code.');
 		const { countries } = await service.settings(s, 'phone_code');
-		const { channel, codeLength, codeMinutes } = await service.settings(s, 'phone');
+		const { channel } = await service.settings(s, 'phone');
 		if (!phoneInCountries(phone, countries))
 			throw problem('country_not_allowed', 'Codes go only to numbers of the countries this website serves.');
 		await service.allowCode(s, await s.store.users.byPhone(phone), 'phone_code');
-		const sent = await sendCode(s, 'phone', phone, { length: codeLength, minutes: codeMinutes }, (code) =>
-			service.notify(s, channel, 'accounts.phone_code', { phone }, { code, minutes: codeMinutes }),
+		const sent = await sendCode(s, 'phone', phone, {}, (code) =>
+			service.notify(s, channel, 'accounts.phone_code', { phone }, { code, minutes: CODE_MINUTES }),
 		);
 		return new Response(JSON.stringify(sent), { status: 202, headers: { 'content-type': 'application/json' } });
 	};
@@ -659,16 +657,10 @@ export const createFlows = (product, service) => {
 		const returnTo = body.returnTo === undefined ? null : returnAddress(body.returnTo, s.domain);
 		if (body.returnTo !== undefined && !returnTo)
 			throw invalid('returnTo', 'returnTo must be a page of your website (or a local page while testing).');
-		const { codeLength, codeMinutes } = await service.settings(s, 'email_code');
 		// an address typed on an account but never proven counts as unknown here too: that account's role never shows
 		await service.allowCode(s, await provenHolderOf(s, email), 'email_code');
-		const sent = await sendCode(
-			s,
-			'email',
-			email,
-			{ length: codeLength, minutes: codeMinutes, linkTo: returnTo },
-			(code, link) =>
-				service.notify(s, 'email', 'accounts.email_code', { email }, { code, link: link ?? '', minutes: codeMinutes }),
+		const sent = await sendCode(s, 'email', email, { linkTo: returnTo }, (code, link) =>
+			service.notify(s, 'email', 'accounts.email_code', { email }, { code, link: link ?? '', minutes: CODE_MINUTES }),
 		);
 		return new Response(JSON.stringify(sent), { status: 202, headers: { 'content-type': 'application/json' } });
 	};

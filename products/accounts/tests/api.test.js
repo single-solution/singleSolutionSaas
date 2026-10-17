@@ -1,6 +1,7 @@
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sha1Upper, totpCode } from '../adapters/crypto.js';
+import { ADDRESSES_PER_USER, MAX_CHOICES, MAX_CUSTOM_FIELDS, MAX_ROLES } from '../core/limits.js';
 import { ADMIN_ORIGIN, ALL, CHAT, NOTIFY, ORIGIN, SHOP, appleKey, idToken, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
@@ -281,11 +282,6 @@ describe('email + password', () => {
 		env.advance(15 * 60_000);
 		expect((await forgot('bo@example.com')).status).toBe(202);
 		expect(sent('bo@example.com')).toBe(before + 4);
-		// the merchant may allow more
-		await env.setting('email_password', 'resetLimit', 5);
-		for (let i = 0; i < 4; i += 1) expect((await forgot('bo@example.com')).status).toBe(202);
-		expect(code(await forgot('bo@example.com'))).toBe('rate_limited');
-		await env.setting('email_password', 'resetLimit', 3);
 	});
 });
 
@@ -964,37 +960,39 @@ describe('roles, two-step, consents, approval and risk checks', () => {
 		await env.setting('approval', 'requiredFields', []);
 	});
 
-	it('A12: the caps are settings: custom fields, choices per field, roles and addresses per user', async () => {
+	it('A12: the caps are fixed: custom fields, choices per field, roles and addresses per user', async () => {
 		const cookie = await env.adminSession();
 		const base = `/v1/dashboard/websites/${env.websiteId}/fields`;
-		await env.setting('custom_fields', 'maxChoices', 3);
-		const four = { label: 'Four', type: 'choice', options: ['a', 'b', 'c', 'd'] };
-		expect(code(await env.dashboard(cookie, 'PUT', `${base}/four`, four))).toBe('validation_failed');
-		await env.setting('custom_fields', 'maxChoices', 60);
-		const many = { label: 'Many', type: 'choice', options: Array.from({ length: 60 }, (_, i) => `o${i}`) };
+		const choices = (/** @type {number} */ count) => Array.from({ length: count }, (_, i) => `o${i}`);
+		const tooMany = { label: 'Too many', type: 'choice', options: choices(MAX_CHOICES + 1) };
+		expect(code(await env.dashboard(cookie, 'PUT', `${base}/too_many`, tooMany))).toBe('validation_failed');
+		const many = { label: 'Many', type: 'choice', options: choices(MAX_CHOICES) };
 		expect((await env.dashboard(cookie, 'PUT', `${base}/many`, many)).status).toBe(200);
 		const count = (await env.dashboard(cookie, 'GET', base)).json.items.length;
-		await env.setting('custom_fields', 'maxFields', count);
+		const filler = Array.from({ length: MAX_CUSTOM_FIELDS - count }, (_, i) => `filler_${i}`);
+		for (const key of filler)
+			expect((await env.dashboard(cookie, 'PUT', `${base}/${key}`, { label: key, type: 'text' })).status).toBe(200);
 		expect(code(await env.dashboard(cookie, 'PUT', `${base}/one_more`, { label: 'One more', type: 'text' }))).toBe(
 			'validation_failed',
 		);
 		// a field already there can still change
 		expect((await env.dashboard(cookie, 'PUT', `${base}/many`, { ...many, label: 'Many choices' })).status).toBe(200);
-		expect((await env.dashboard(cookie, 'DELETE', `${base}/many`)).status).toBe(204);
-		await env.setting('custom_fields', 'maxFields', 50);
-		await env.setting('custom_fields', 'maxChoices', 50);
+		for (const key of [...filler, 'many']) expect((await env.dashboard(cookie, 'DELETE', `${base}/${key}`)).status).toBe(204);
 		const roles = (await env.serverCall('GET', '/v1/roles')).json.items.length;
-		await env.setting('roles', 'maxRoles', roles);
+		const roleKeys = Array.from({ length: MAX_ROLES - roles }, (_, i) => `filler_role_${i}`);
+		for (const key of roleKeys) expect((await env.serverCall('PUT', `/v1/roles/${key}`, { name: key })).status).toBe(200);
 		expect(code(await env.serverCall('PUT', '/v1/roles/one_more', { name: 'One more' }))).toBe('validation_failed');
-		await env.setting('roles', 'maxRoles', 100);
-		// addresses: up to 50 per user when the merchant allows it (was at most 10)
-		await env.setting('profile', 'maxAddresses', 20);
+		for (const key of roleKeys) expect((await env.serverCall('DELETE', `/v1/roles/${key}`)).status).toBe(204);
+		// addresses: at most ADDRESSES_PER_USER per user
 		const user = (await env.serverCall('GET', '/v1/users?q=ana@')).json.items[0];
-		const addresses = Array.from({ length: 12 }, (_, i) => ({ label: `A${i}`, line1: `${i} Main St`, city: 'Springfield' }));
-		const saved = await env.serverCall('PATCH', `/v1/users/${user.id}`, { addresses });
-		expect(saved.json.addresses).toHaveLength(12);
+		const addresses = (/** @type {number} */ count) =>
+			Array.from({ length: count }, (_, i) => ({ label: `A${i}`, line1: `${i} Main St`, city: 'Springfield' }));
+		const saved = await env.serverCall('PATCH', `/v1/users/${user.id}`, { addresses: addresses(ADDRESSES_PER_USER) });
+		expect(saved.json.addresses).toHaveLength(ADDRESSES_PER_USER);
+		expect(code(await env.serverCall('PATCH', `/v1/users/${user.id}`, { addresses: addresses(ADDRESSES_PER_USER + 1) }))).toBe(
+			'validation_failed',
+		);
 		await env.serverCall('PATCH', `/v1/users/${user.id}`, { addresses: [] });
-		await env.setting('profile', 'maxAddresses', 10);
 	});
 
 	it('custom fields: set in the dashboard, required at sign-up, edited in My account', async () => {

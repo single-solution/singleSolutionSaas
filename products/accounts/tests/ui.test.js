@@ -26,7 +26,7 @@ import {
 	textsOf,
 	webAddress,
 } from '../ui/common.js';
-import { PRIVATE_OUTCOME, REQUEST_OUTCOMES } from '../ui/role-request.js';
+import { PRIVATE_OUTCOME } from '../ui/role-request.js';
 import { RENEW_BEFORE_MS, RETRY_MS, createSession } from '../ui/session.js';
 import { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } from '../ui/widget.js';
 
@@ -2798,20 +2798,18 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 			phone: '07700 900222',
 			note: 'Shop owner',
 		});
-		// private by default: the one text that fits a new request, a repeat and a member alike
+		// the one text that fits a new request, a repeat and a member alike
 		expect(root.textContent).toContain(strings[PRIVATE_OUTCOME]);
 	});
 
-	it('the role request widget shows one text for every ask while revealStatus is off', async () => {
-		for (const outcome of Object.keys(REQUEST_OUTCOMES)) {
+	it('the role request widget shows one text for every ask', async () => {
+		for (const outcome of ['requested', 'already_requested', 'already_member']) {
 			const host = place('role_request');
 			await start(
 				{ 'POST /v1/role-requests': () => answer(201, { outcome }) },
 				{
 					features: ['role_requests'],
-					settings: {
-						roleRequests: { roles: [{ key: 'member', name: 'Member' }], requireNote: false, revealStatus: false },
-					},
+					settings: { roleRequests: { roles: [{ key: 'member', name: 'Member' }], requireNote: false } },
 				},
 			);
 			const root = shadow(host);
@@ -2819,53 +2817,10 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 			fieldIn(root, strings['fields.phone']).value = '07700 900222';
 			await submit(buttonIn(root, strings['request.submit']));
 			expect(root.textContent).toContain(strings[PRIVATE_OUTCOME]);
-			// never the words of what a repeat found
-			for (const key of Object.values(REQUEST_OUTCOMES).filter((each) => each !== 'request.sent'))
-				expect(root.textContent).not.toContain(strings[key]);
 			host.remove();
 			vi.restoreAllMocks();
 		}
 		expect(PRIVATE_OUTCOME).toBe('request.received');
-	});
-
-	it('the role request widget words what a repeat ask found with revealStatus on (P4)', async () => {
-		for (const [outcome, key] of Object.entries(REQUEST_OUTCOMES)) {
-			const host = place('role_request');
-			await start(
-				{ 'POST /v1/role-requests': () => answer(201, { outcome }) },
-				{
-					features: ['role_requests'],
-					settings: { roleRequests: { roles: [{ key: 'member', name: 'Member' }], requireNote: false, revealStatus: true } },
-				},
-			);
-			const root = shadow(host);
-			fieldIn(root, strings['fields.name']).value = 'Nia';
-			fieldIn(root, strings['fields.phone']).value = '07700 900222';
-			await submit(buttonIn(root, strings['request.submit']));
-			expect(root.textContent).toContain(strings[key]);
-			host.remove();
-			vi.restoreAllMocks();
-		}
-		expect(Object.keys(REQUEST_OUTCOMES)).toEqual([
-			'requested',
-			'already_requested',
-			'already_invited',
-			'invite_expired',
-			'already_member',
-		]);
-		// an answer the widget does not know reads as a new request
-		const host = place('role_request');
-		await start(
-			{ 'POST /v1/role-requests': () => answer(201, { outcome: 'constructor' }) },
-			{
-				features: ['role_requests'],
-				settings: { roleRequests: { roles: [{ key: 'member', name: 'Member' }], requireNote: false, revealStatus: true } },
-			},
-		);
-		fieldIn(shadow(host), strings['fields.name']).value = 'Nia';
-		fieldIn(shadow(host), strings['fields.phone']).value = '07700 900222';
-		await submit(buttonIn(shadow(host), strings['request.submit']));
-		expect(shadow(host).textContent).toContain(strings['request.sent']);
 	});
 
 	it('My account: area, the default address, the Profile limits, Member since and a phone user’s password', async () => {
@@ -2947,7 +2902,7 @@ describe('helpers', () => {
 			...['active', 'pending', 'invited', 'blocked'].map((status) => `status.${status}`),
 			...['pending', 'invited', 'completed', 'declined', 'expired'].map((status) => `requests.${status}`),
 			...['expired', 'used', 'canceled', 'invalid'].map((status) => `setup.${status}`),
-			...Object.values(REQUEST_OUTCOMES),
+			PRIVATE_OUTCOME,
 			// the area, city, region and postal code are named by their country's label kind (A1)
 			...Object.keys(ADDRESS_LIMITS)
 				.filter((field) => !(field in LABEL_KINDS))

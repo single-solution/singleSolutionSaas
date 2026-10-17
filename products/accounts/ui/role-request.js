@@ -1,24 +1,13 @@
 /**
  * The visitor widget `role_request` (Role requests, PLAN 0.8.10 A5): a visitor without an account asks for a role the
  * merchant offers (for example membership) with their name, phone number or email address and a note; staff answer
- * in the Users admin widget. By default (Role requests → revealStatus off) every ask reads the same text, which fits a new
- * request, a repeat and a member alike, so the widget tells nobody what is already there; with revealStatus on, a
- * repeat ask says what is there (already asked, already invited, the invite's link expired, already joined) in the
- * website's own words.
+ * in the Users admin widget. Every ask reads the same text, which fits a new request, a repeat and a member alike, so
+ * the widget tells nobody what is already there.
  * @module
  */
 
-/** The one text of every answer while revealStatus is off (the private default). */
+/** The one text of every answer. */
 export const PRIVATE_OUTCOME = 'request.received';
-
-/** The text of each answer's outcome with revealStatus on (a new request, or what a repeat ask found). */
-export const REQUEST_OUTCOMES = Object.freeze({
-	requested: 'request.sent',
-	already_requested: 'request.alreadyRequested',
-	already_invited: 'request.alreadyInvited',
-	invite_expired: 'request.inviteExpired',
-	already_member: 'request.alreadyMember',
-});
 import { element, mountWidget } from '@ss/app-kit/widget';
 import { datesOf, errorText, fieldMaker, say, textsOf } from './common.js';
 import { WIDGET_CSS } from './styles.js';
@@ -76,13 +65,7 @@ export const mountRoleRequest = ({ host, win, config, call }) => {
 					note: note.input.value.trim(),
 				});
 				submit.removeAttribute('disabled');
-				const outcome = String(answer.data?.outcome ?? '');
-				const text = !offer?.revealStatus
-					? PRIVATE_OUTCOME
-					: Object.hasOwn(REQUEST_OUTCOMES, outcome)
-						? REQUEST_OUTCOMES[/** @type {keyof typeof REQUEST_OUTCOMES} */ (outcome)]
-						: 'request.sent';
-				if (answer.ok) form.replaceChildren(element(doc, 'p', { class: 'wide' }, t(text)));
+				if (answer.ok) form.replaceChildren(element(doc, 'p', { class: 'wide' }, t(PRIVATE_OUTCOME)));
 				else say(status, errorText(t, answer, when));
 			});
 		},

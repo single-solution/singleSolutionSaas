@@ -27,9 +27,9 @@
 import { createId } from '@ss/contracts';
 import { nationalNumberOf } from '@ss/contracts/phone';
 import { CONSENT_TEMPLATES, MAX_CONSENTS } from '../core/consents.js';
-import { MAX_CUSTOM_FIELDS } from '../core/profile.js';
+import { MAX_CUSTOM_FIELDS, MAX_ROLES } from '../core/limits.js';
 import { MAX_VIEWS } from '../core/views.js';
-import { MAX_ROLES, OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core/roles.js';
+import { OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core/roles.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/profile.js').UserRecord} UserRecord */
@@ -881,10 +881,6 @@ export const createStore = (data, { now }) => {
 					doc = await bump();
 				}
 				return Number(doc?.n ?? 0) <= limit;
-			},
-			/** Forget the uses of the current window (a good sign-in clears its network's tries, A9). @param {string} key @param {number} windowMs */
-			clear: async (key, windowMs) => {
-				await counters.deleteOne({ websiteId, key: `${key}|${Math.floor(now() / windowMs)}` });
 			},
 		}),
 

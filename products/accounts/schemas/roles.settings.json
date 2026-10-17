@@ -1,17 +1,5 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {
-		"maxRoles": {
-			"type": "integer",
-			"title": "Roles",
-			"description": "How many roles the website can have (Owner and the role for new sign-ups count too).",
-			"default": 100,
-			"minimum": 2,
-			"maximum": 200,
-			"x-ui": {
-				"advanced": true
-			}
-		}
-	}
+	"properties": {}
 }

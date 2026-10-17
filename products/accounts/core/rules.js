@@ -3,15 +3,11 @@
  * sign-up rules.
  * @module
  */
+import { PASSWORD_LOCK_MINUTES, PASSWORD_MAX_ATTEMPTS } from './limits.js';
 import { emailDomain } from './identifiers.js';
 
 // ------------------------------------------------------------------------------------------------- one-time codes
 
-/**
- * Wrong tries a two-step step or a staff sign-in code allows before it is spent (code constant). Codes sent by email
- * or phone take theirs from the website's settings (`codeTries`, A9).
- */
-export const CODE_ATTEMPTS = 5;
 /** Days the trace of a setup link is kept after the link's end, so a setup page can still tell why it no longer works. */
 export const SETUP_TRACE_DAYS = 30;
 
@@ -64,7 +60,7 @@ export const normalizeCode = (input, length) => {
 
 // ----------------------------------------------------------------------------------------------------- passwords
 
-/** Longest password accepted (the `maxLength` settings may lower it, down to 128; ST-26). */
+/** Longest password the rules accept when none is named (`PASSWORD_MAX_LENGTH` of limits.js is the live one; ST-26). */
 const PASSWORD_MAX = 256;
 /** Personal words shorter than this are not refused (PLAN 0.8.10 A9). */
 const MIN_PERSONAL_WORD = 4;
@@ -189,32 +185,16 @@ export const passwordProblem = (password, { minLength, maxLength = PASSWORD_MAX,
 	return null;
 };
 
-/** The longest growing lock, in minutes (A9). */
-const GROWING_LOCK_MAX_MINUTES = 60;
-
 /**
- * The lock state after a wrong password (A9). `fixed`: once `maxAttempts` failures add up, a lock of `lockMinutes`, and
- * the count starts again. `growing`: `maxAttempts` failures pass, then each further failure locks for twice as long as
- * the one before, from 1 minute up to 60.
- * @param {{ failures: number, maxAttempts: number, lockMinutes: number, lockMode: string, now: number }} input
- *   `failures`: the failures so far, this one included
+ * The lock state after a wrong password (A9): once `PASSWORD_MAX_ATTEMPTS` failures add up, a lock of
+ * `PASSWORD_LOCK_MINUTES`, and the count starts again.
+ * @param {{ failures: number, now: number }} input `failures`: the failures so far, this one included
  * @returns {{ failedLogins: number, lockedUntil: Date | null, lockLevel: number }}
  */
-export const lockAfter = ({ failures, maxAttempts, lockMinutes, lockMode, now }) => {
-	if (lockMode === 'growing') {
-		const level = failures - maxAttempts;
-		return level > 0
-			? {
-					failedLogins: failures,
-					lockLevel: level,
-					lockedUntil: new Date(now + Math.min(GROWING_LOCK_MAX_MINUTES, 2 ** (level - 1)) * 60_000),
-				}
-			: { failedLogins: failures, lockLevel: 0, lockedUntil: null };
-	}
-	return failures >= maxAttempts
-		? { failedLogins: 0, lockLevel: 0, lockedUntil: new Date(now + lockMinutes * 60_000) }
+export const lockAfter = ({ failures, now }) =>
+	failures >= PASSWORD_MAX_ATTEMPTS
+		? { failedLogins: 0, lockLevel: 0, lockedUntil: new Date(now + PASSWORD_LOCK_MINUTES * 60_000) }
 		: { failedLogins: failures, lockLevel: 0, lockedUntil: null };
-};
 
 // ---------------------------------------------------------------------------------------------- new phone users
 

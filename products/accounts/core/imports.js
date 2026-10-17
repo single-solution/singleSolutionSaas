@@ -287,10 +287,9 @@ export const checkImportedRole = (record) => {
 /**
  * A custom field (`fields`, found by `key`); `createdAt` keeps the order of the fields list.
  * @param {Record<string, unknown>} record
- * @param {{ maxChoices?: number }} [limits] the website's Custom fields setting (A12)
  * @returns {ImportChecked<CustomField & { createdAt?: Date }>}
  */
-export const checkImportedField = (record, limits = {}) => {
+export const checkImportedField = (record) => {
 	const errors = [
 		...unknownFields(record, IMPORT_FIELDS.fields, 'a custom field'),
 		...wrongTypes(record, {
@@ -306,7 +305,7 @@ export const checkImportedField = (record, limits = {}) => {
 		errors.push({ path: '/options', message: 'Only a choice field has options.' });
 	const createdAt = optionalTime(record, 'createdAt', errors);
 	if (errors.length > 0) return { ok: false, errors };
-	const checked = checkFieldDefinition(String(record.key), record, limits);
+	const checked = checkFieldDefinition(String(record.key), record);
 	if (!checked.ok) return { ok: false, errors: [{ path: `/${checked.field}`, message: checked.message }] };
 	return { ok: true, value: { ...checked.value, ...(createdAt ? { createdAt } : {}) } };
 };

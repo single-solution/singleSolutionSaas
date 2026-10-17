@@ -7,7 +7,7 @@
 import { problem } from '@ss/app-kit';
 import { constantTimeEqual, randomToken, sha256Hex } from '@ss/protocol';
 import { checkCustomValues, checkName, selfView } from '../core/profile.js';
-import { CODE_ATTEMPTS } from '../core/rules.js';
+import { CODE_ATTEMPTS } from '../core/limits.js';
 import { generateRecoveryCodes, generateTotpSecret, matchRecoveryCode, totpUri, verifyTotp } from '../adapters/crypto.js';
 import { invalid } from './flows.js';
 import { bodyOf, parseSecret } from './service.js';

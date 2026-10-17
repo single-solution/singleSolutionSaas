@@ -19,6 +19,7 @@ import { constantTimeEqual, randomToken, sha256Hex } from '@ss/protocol';
 import { labelOf, valuesOf } from '../core/activity.js';
 import { ROLE_TEMPLATES, SIGN_UP_TEMPLATE, remembered, sessionEnd, signInRefusal } from '../core/roles.js';
 import { answerConsents, consentsToAsk } from '../core/consents.js';
+import { ADDRESSES_PER_USER } from '../core/limits.js';
 import { checkAddresses, selfView } from '../core/profile.js';
 import { OPEN_SIGN_UP, deviceIdOf, deviceOf, endedByPassword } from '../core/rules.js';
 import { OTHER_PRODUCTS, SIGN_IN_HEADER, SIGN_IN_METHODS, SIGN_IN_SECONDS } from '../core/widgets.js';
@@ -462,7 +463,14 @@ export const createService = (product) => {
 		if (typeof sid !== 'string') return { ok: false, code: 'malformed' };
 		const session = await s.store.sessions.get(sid);
 		const user = await s.store.users.get(checked.identity.subject);
-		if (!session || session.revokedAt || session.expiresAt.getTime() <= now() || !user || user.blocked || endedByPassword(session, user))
+		if (
+			!session ||
+			session.revokedAt ||
+			session.expiresAt.getTime() <= now() ||
+			!user ||
+			user.blocked ||
+			endedByPassword(session, user)
+		)
 			return { ok: false, code: 'expired' };
 		const role = s.on.includes('roles') ? await roleOf(s, user) : null;
 		return {
@@ -513,9 +521,9 @@ export const createService = (product) => {
 	 * @param {Site} s @param {unknown} input @param {Pick<UserRecord, 'addresses'> | null} user null for a new user
 	 */
 	const addressesOf = async (s, input, user) => {
-		const { maxAddresses, keepOneAddress, addressRequired } = await settings(s, 'profile');
+		const { keepOneAddress, addressRequired } = await settings(s, 'profile');
 		const checked = checkAddresses(input, () => createId('adr'), {
-			max: Number(maxAddresses),
+			max: ADDRESSES_PER_USER,
 			required: /** @type {string[]} */ (addressRequired),
 			keepOne: keepOneAddress === true,
 			before: user?.addresses.length ?? 0,

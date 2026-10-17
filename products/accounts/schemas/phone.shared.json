@@ -23,35 +23,6 @@
 			"default": "sms",
 			"enum": ["sms", "whatsapp"]
 		},
-		"codeLength": {
-			"type": "integer",
-			"title": "Code length",
-			"default": 6,
-			"minimum": 4,
-			"maximum": 8
-		},
-		"codeMinutes": {
-			"type": "integer",
-			"title": "Code valid for (minutes)",
-			"default": 10,
-			"minimum": 1,
-			"maximum": 30
-		},
-		"cooldownSeconds": {
-			"type": "integer",
-			"title": "Wait before a new code (seconds)",
-			"description": "How long a phone number waits before it can get another code.",
-			"default": 30,
-			"minimum": 30,
-			"maximum": 300
-		},
-		"perHour": {
-			"type": "integer",
-			"title": "Codes per phone number per hour",
-			"default": 6,
-			"minimum": 1,
-			"maximum": 20
-		},
 		"websitePerHour": {
 			"type": "integer",
 			"title": "Codes per hour for the whole website",
@@ -59,14 +30,6 @@
 			"default": 0,
 			"minimum": 0,
 			"maximum": 10000
-		},
-		"codeTries": {
-			"type": "integer",
-			"title": "Wrong tries per code",
-			"description": "Wrong codes typed before the code is used up and a new one is needed.",
-			"default": 5,
-			"minimum": 3,
-			"maximum": 10
 		}
 	}
 }

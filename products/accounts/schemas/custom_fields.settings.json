@@ -1,28 +1,5 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {
-		"maxFields": {
-			"type": "integer",
-			"title": "Custom fields",
-			"description": "How many custom fields the website can have.",
-			"default": 50,
-			"minimum": 1,
-			"maximum": 100,
-			"x-ui": {
-				"advanced": true
-			}
-		},
-		"maxChoices": {
-			"type": "integer",
-			"title": "Choices per field",
-			"description": "How many choices a choice field can have.",
-			"default": 50,
-			"minimum": 2,
-			"maximum": 200,
-			"x-ui": {
-				"advanced": true
-			}
-		}
-	}
+	"properties": {}
 }

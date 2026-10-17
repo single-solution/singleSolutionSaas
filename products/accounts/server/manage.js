@@ -15,10 +15,10 @@ import { nationalNumberOf } from '@ss/contracts/phone';
 import { randomToken, sha256Hex } from '@ss/protocol';
 import { labelOf, valuesOf } from '../core/activity.js';
 import { MAX_CONSENTS, checkConsent } from '../core/consents.js';
-import { MAX_CUSTOM_FIELDS, checkCustomValues, checkFieldDefinition, checkName, checkTags, staffView } from '../core/profile.js';
+import { MAX_CUSTOM_FIELDS, MAX_ROLES, STAFF_CODE_MINUTES } from '../core/limits.js';
+import { checkCustomValues, checkFieldDefinition, checkName, checkTags, staffView } from '../core/profile.js';
 import { MAX_VIEWS, checkView } from '../core/views.js';
 import {
-	MAX_ROLES,
 	OWNER_ROLE,
 	ROLE_KEY,
 	checkOwnPermissions,
@@ -51,10 +51,6 @@ const PRODUCT_ID = /^[a-z][a-z0-9-]{1,30}$/;
 const PERMISSION_FILTER = /^[a-z][a-z0-9-]{1,30}:[a-z][a-z0-9_.]{0,63}$/;
 /** Role requests' statuses (`expired`: invited, and the setup link has expired; judged on read, A5). */
 const REQUEST_STATUSES = Object.freeze(['pending', 'invited', 'completed', 'declined', 'expired']);
-/** What a repeat ask found, by the status of the open request of that role and contact (A5, revealStatus on). */
-const REPEAT_OUTCOMES = /** @type {Record<string, string>} */ (
-	Object.freeze({ pending: 'already_requested', invited: 'already_invited', expired: 'invite_expired' })
-);
 /** The window of the counter a private repeat ask writes in place of a new request (removed by TTL after it). */
 const REPEATS_WINDOW_MS = 3_600_000;
 
@@ -359,9 +355,8 @@ export const createManage = (product, service, flows) => {
 		const user = await userOr404(s, ctx.params.id);
 		await guard(ctx, s, user);
 		if (user.blocked) throw problem('blocked', 'This account is blocked.');
-		const { codeMinutes } = await service.settings(s, 'staff_links');
 		const code = generateCode({ length: STAFF_CODE_LENGTH, randomBytes });
-		const expireAt = new Date(now() + Number(codeMinutes) * 60_000);
+		const expireAt = new Date(now() + STAFF_CODE_MINUTES * 60_000);
 		const id = createCodeId();
 		await s.store.codes.add({
 			id,
@@ -374,7 +369,7 @@ export const createManage = (product, service, flows) => {
 		});
 		await log(ctx, 'user.sign_in_code_issued', user.id, {
 			label: labelOf(user.name),
-			values: { minutes: Number(codeMinutes) },
+			values: { minutes: STAFF_CODE_MINUTES },
 		});
 		return { code, expiresAt: expireAt.toISOString() };
 	};
@@ -703,19 +698,15 @@ export const createManage = (product, service, flows) => {
 
 	/**
 	 * A visitor asks for a role (A5): `{ role, name, phone | email, note }`, no account needed. A repeat ask changes
-	 * nothing. With Role requests → revealStatus off (the private default) every ask answers `{ outcome: 'requested' }`,
-	 * a new request or not, so nobody who types a phone number or email address learns whether it belongs to a member or
-	 * has a request or invite. With it on, the `outcome` says what happened, for the website's own words: `requested` (a
-	 * new request, with its id), or for a repeat ask: `already_member` (the user holding this proven phone number, else
-	 * email address, has the role), `already_requested` (a request of the same role and phone number, else email
-	 * address, waits for staff), `already_invited` (staff invited it and its setup link still works) or `invite_expired`
-	 * (its setup link ran out).
+	 * nothing. Every ask answers `{ outcome: 'requested' }`, a new request or not, so nobody who types a phone number
+	 * or email address learns whether it belongs to a member or has a request or invite (a privacy guard that is
+	 * always on).
 	 * @param {any} ctx
 	 */
 	const requestRole = async (ctx) => {
 		const s = await service.site(ctx);
 		const body = bodyOf(ctx.body);
-		const { requestableRoles, requireNote, revealStatus } = await service.settings(s, 'role_requests');
+		const { requestableRoles, requireNote } = await service.settings(s, 'role_requests');
 		if (typeof body.role !== 'string' || !(/** @type {string[]} */ (requestableRoles).includes(body.role)))
 			throw invalid('role', 'This role cannot be asked for.');
 		const name = checkName(body.name);
@@ -732,8 +723,7 @@ export const createManage = (product, service, flows) => {
 		/** @param {Record<string, unknown>} answer */
 		const created = (answer) =>
 			new Response(JSON.stringify(answer), { status: 201, headers: { 'content-type': 'application/json' } });
-		// The same database work whatever the person's state, so with revealStatus off the time of the answer tells as
-		// little as its words: both user lookups and the open-request lookup always, then one write and one read (the new
+		// The same database work whatever the person's state, so the time of the answer tells as little as its words: both user lookups and the open-request lookup always, then one write and one read (the new
 		// request, or in its place a short counter and a read that change nothing).
 		const [byPhone, byEmail, [open]] = await Promise.all([
 			phone ? s.store.users.byPhone(phone) : null,
@@ -747,14 +737,12 @@ export const createManage = (product, service, flows) => {
 		// the person already has the role: the user an invite would give it to (phone first), with that contact proven
 		const holder = byPhone ?? byEmail;
 		const member = holder && holder.role === body.role && (byPhone ? holder.phoneVerified : holder.emailVerified);
-		const found = member ? 'already_member' : open ? REPEAT_OUTCOMES[requestView(open, now()).status] : null;
-		if (found) {
-			if (revealStatus) return created({ outcome: found });
+		if (member || open) {
 			await s.store.counters.take('role_requests|repeats', REPEATS_WINDOW_MS, Number.MAX_SAFE_INTEGER);
 			await s.store.requests.get(open?.id ?? '');
 			return created({ outcome: 'requested' });
 		}
-		const request = await s.store.requests.create({
+		await s.store.requests.create({
 			role: body.role,
 			name,
 			phone,
@@ -767,7 +755,7 @@ export const createManage = (product, service, flows) => {
 			setupExpiresAt: null,
 			completedAt: null,
 		});
-		return created(revealStatus ? { outcome: 'requested', id: request.id, status: request.status } : { outcome: 'requested' });
+		return created({ outcome: 'requested' });
 	};
 
 	/** `?status=&role=&cursor=&limit=`, newest first. @param {any} ctx */
@@ -1027,9 +1015,8 @@ export const createManage = (product, service, flows) => {
 		const checked = checkRole(ctx.params.key, ctx.body);
 		if (!checked.ok) throw invalid(checked.field, checked.message);
 		const existing = await s.store.roles.get(checked.value.key);
-		const most = Math.min(Number((await service.settings(s, 'roles')).maxRoles), MAX_ROLES);
-		if (!existing && (await s.store.roles.count()) >= most)
-			throw problem('validation_failed', `A website can have at most ${most} roles.`);
+		if (!existing && (await s.store.roles.count()) >= MAX_ROLES)
+			throw problem('validation_failed', `A website can have at most ${MAX_ROLES} roles.`);
 		const given = bodyOf(ctx.body).signUp;
 		const signUp = given === undefined ? existing?.signUp === true : checked.value.signUp;
 		if (existing?.signUp && !signUp)
@@ -1347,14 +1334,12 @@ export const createManage = (product, service, flows) => {
 	/** @param {any} ctx */
 	const saveField = async (ctx) => {
 		await editable(ctx);
-		const { maxFields, maxChoices } = await product.settings.values(ctx.websiteId, 'custom_fields');
-		const checked = checkFieldDefinition(ctx.params.key, ctx.body, { maxChoices: Number(maxChoices) });
+		const checked = checkFieldDefinition(ctx.params.key, ctx.body);
 		if (!checked.ok) throw invalid(checked.field, checked.message);
 		const store = await fieldsStore(ctx);
 		const existing = (await store.fields.list()).some((f) => f.key === checked.value.key);
-		const most = Math.min(Number(maxFields), MAX_CUSTOM_FIELDS);
-		if (!existing && (await store.fields.count()) >= most)
-			throw problem('validation_failed', `A website can have at most ${most} custom fields.`);
+		if (!existing && (await store.fields.count()) >= MAX_CUSTOM_FIELDS)
+			throw problem('validation_failed', `A website can have at most ${MAX_CUSTOM_FIELDS} custom fields.`);
 		await store.fields.save(checked.value);
 		await recordChange(ctx, `Field ${checked.value.key}: saved`);
 		return checked.value;

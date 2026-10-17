@@ -2,16 +2,6 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
-		"codeMinutes": {
-			"type": "integer",
-			"title": "Sign-in codes valid for (minutes)",
-			"default": 15,
-			"minimum": 5,
-			"maximum": 60,
-			"x-ui": {
-				"advanced": true
-			}
-		},
 		"setupDays": {
 			"type": "integer",
 			"title": "Setup links valid for (days)",

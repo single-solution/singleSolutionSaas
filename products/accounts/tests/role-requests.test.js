@@ -1,8 +1,7 @@
 /**
  * Role requests and setup links for stores that onboard with their membership flow (P4 of audit/parity-plan.md; PLAN
- * 0.8.10 A3, A5): by default (revealStatus off) every ask answers the same, in the same work, so nobody learns whether
- * a phone number or email address belongs to a member or has a request or invite; with revealStatus on a repeat ask
- * answers what is already there; a repeat changes nothing either way; staff give an invited request a new
+ * 0.8.10 A3, A5): every ask answers the same, in the same work, so nobody learns whether a phone number or email
+ * address belongs to a member or has a request or invite; a repeat changes nothing; staff give an invited request a new
  * link or decline it (the link stops working and what the invite did is undone); `giveRoleAt` gives the role when the
  * setup link is completed instead of at the invite (default unchanged); and the setup-link lookup a setup page reads
  * before the password, which tells only the holder of the whole code anything.
@@ -33,6 +32,20 @@ const server = (method, path, body, as = null) =>
 	});
 /** A visitor asks for the member role. @param {Record<string, unknown>} body */
 const ask = (body) => env.visitor('POST', '/v1/role-requests', { role: 'member', ...body });
+/**
+ * A visitor asks. The answer never names the request, so its id is read from the staff list (the one new in it).
+ * @param {Record<string, unknown>} body
+ */
+const askTracked = async (body) => {
+	/** @param {any} item */
+	const idOf = (item) => item.id;
+	const before = new Set((await server('GET', '/v1/role-requests?limit=100')).json.items.map(idOf));
+	const answer = await ask(body);
+	const made = (await server('GET', '/v1/role-requests?limit=100')).json.items.find(
+		(/** @type {any} */ item) => !before.has(item.id),
+	);
+	return { status: answer.status, json: { ...answer.json, ...(made ? { id: made.id } : {}) } };
+};
 /** The code of a setup link. @param {string} url */
 const codeOf = (url) => String(new URL(url).searchParams.get('ss_setup'));
 /** @param {unknown} linkCode */
@@ -58,21 +71,19 @@ beforeAll(async () => {
 	await server('PUT', '/v1/roles/member', { name: 'Member', permissions: ['site:discount'] });
 	await server('PUT', '/v1/roles/wholesale', { name: 'Wholesale', permissions: [] });
 	await env.setting('role_requests', 'requestableRoles', ['member', 'wholesale']);
-	// these tests read the new request's id and what a repeat ask found; the private default is tested at the end
-	await env.setting('role_requests', 'revealStatus', true);
 });
 afterAll(async () => {
 	await env.product.close();
 });
 
-describe('a repeat ask answers what is there', () => {
-	it('already requested, invited, invite expired or already a member; nothing is made or overwritten', async () => {
-		const first = await ask({ name: 'Ada Lane', phone: '07700 900500', note: 'First' });
+describe('a repeat ask changes nothing', () => {
+	it('already requested, invited, invite expired or already a member: the same answer, nothing made or overwritten', async () => {
+		const first = await askTracked({ name: 'Ada Lane', phone: '07700 900500', note: 'First' });
 		expect(first.status).toBe(201);
-		expect(first.json).toEqual({ outcome: 'requested', id: expect.stringMatching(/^rrq_/), status: 'pending' });
+		expect(first.json).toEqual({ outcome: 'requested', id: expect.stringMatching(/^rrq_/) });
 		// someone else typing the same number changes nothing (no name or note is overwritten)
-		const repeat = await ask({ name: 'Somebody Else', phone: '+447700900500', note: 'Overwrite' });
-		expect([repeat.status, repeat.json]).toEqual([201, { outcome: 'already_requested' }]);
+		const repeat = await askTracked({ name: 'Somebody Else', phone: '+447700900500', note: 'Overwrite' });
+		expect([repeat.status, repeat.json]).toEqual([201, { outcome: 'requested' }]);
 		const mine = (await server('GET', '/v1/role-requests?status=pending')).json.items.filter(
 			(/** @type {any} */ r) => r.phone === '+447700900500',
 		);
@@ -86,14 +97,14 @@ describe('a repeat ask answers what is there', () => {
 		expect((await ask({ role: 'wholesale', name: 'Ada Lane', phone: '07700900500' })).json.outcome).toBe('requested');
 		// by email when no phone is given (the address as normalized)
 		expect((await ask({ name: 'Bo Hart', email: 'bo@example.com' })).json.outcome).toBe('requested');
-		expect((await ask({ name: 'Bo Hart', email: 'BO@example.com' })).json).toEqual({ outcome: 'already_requested' });
+		expect((await ask({ name: 'Bo Hart', email: 'BO@example.com' })).json).toEqual({ outcome: 'requested' });
 
 		// invited: its link works, then runs out
 		const invited = await server('POST', `/v1/role-requests/${first.json.id}/invite`);
 		expect(invited.json.request.status).toBe('invited');
-		expect((await ask({ name: 'Ada Lane', phone: '07700900500' })).json).toEqual({ outcome: 'already_invited' });
+		expect((await ask({ name: 'Ada Lane', phone: '07700900500' })).json).toEqual({ outcome: 'requested' });
 		env.advance(8 * DAY);
-		expect((await ask({ name: 'Ada Lane', phone: '07700900500' })).json).toEqual({ outcome: 'invite_expired' });
+		expect((await ask({ name: 'Ada Lane', phone: '07700900500' })).json).toEqual({ outcome: 'requested' });
 		expect((await requestOf(first.json.id)).status).toBe('expired');
 
 		// a member: the user holding the proven number has the role
@@ -102,10 +113,10 @@ describe('a repeat ask answers what is there', () => {
 			role: 'member',
 			phoneVerified: true,
 		});
-		expect((await ask({ name: 'Ada Lane', phone: '07700900500' })).json).toEqual({ outcome: 'already_member' });
+		expect((await ask({ name: 'Ada Lane', phone: '07700900500' })).json).toEqual({ outcome: 'requested' });
 		// by email: a proven address
 		const cleo = await server('POST', '/v1/users', { name: 'Cleo Park', email: 'cleo@example.com', role: 'member' });
-		expect((await ask({ name: 'Cleo Park', email: 'cleo@example.com' })).json).toEqual({ outcome: 'already_member' });
+		expect((await ask({ name: 'Cleo Park', email: 'cleo@example.com' })).json).toEqual({ outcome: 'requested' });
 		expect(cleo.json.emailVerified).toBe(true);
 		// a number someone typed but never proved is no member: a request is made, and staff check before an invite
 		const squatter = await env.visitor('POST', '/v1/sign-up/phone-password', {
@@ -114,7 +125,7 @@ describe('a repeat ask answers what is there', () => {
 			name: 'Not Cy',
 		});
 		await server('PATCH', `/v1/users/${squatter.json.user.id}`, { role: 'member' });
-		const cy = await ask({ name: 'Cy Moss', phone: '07700 900510' });
+		const cy = await askTracked({ name: 'Cy Moss', phone: '07700 900510' });
 		expect(cy.json.outcome).toBe('requested');
 		expect(code(await server('POST', `/v1/role-requests/${cy.json.id}/invite`))).toBe('contact_unverified');
 	});
@@ -122,7 +133,7 @@ describe('a repeat ask answers what is there', () => {
 
 describe('reading one request', () => {
 	it('is read by its id with the server token and by staff, with the permission of the list', async () => {
-		const asked = await ask({ name: 'Ola Reed', phone: '07700 900777', note: 'Hello' });
+		const asked = await askTracked({ name: 'Ola Reed', phone: '07700 900777', note: 'Hello' });
 		const one = await server('GET', `/v1/role-requests/${asked.json.id}`);
 		expect(one.status).toBe(200);
 		// the row the list gives, nothing more
@@ -146,7 +157,7 @@ describe('reading one request', () => {
 
 describe('staff: a new link or a decline for an invited request', () => {
 	it('a new link replaces the old one, also once it ran out; a user with a password completes at once', async () => {
-		const asked = await ask({ name: 'Nel Ford', phone: '07700 900560' });
+		const asked = await askTracked({ name: 'Nel Ford', phone: '07700 900560' });
 		expect(code(await server('POST', `/v1/role-requests/${asked.json.id}/setup-link`))).toBe('conflict');
 		const invited = await server('POST', `/v1/role-requests/${asked.json.id}/invite`);
 		const old = codeOf(invited.json.setupLink.url);
@@ -172,21 +183,21 @@ describe('staff: a new link or a decline for an invited request', () => {
 		expect(logged.json.items[0]).toMatchObject({ target: asked.json.id, label: 'Nel Ford' });
 
 		// the user has a password by now: the request is completed at once
-		const pia = await ask({ name: 'Pia Vale', phone: '07700 900561' });
+		const pia = await askTracked({ name: 'Pia Vale', phone: '07700 900561' });
 		const piaInvite = await server('POST', `/v1/role-requests/${pia.json.id}/invite`);
 		await server('PATCH', `/v1/users/${piaInvite.json.user.id}`, { password: 'pia pass 1234' });
 		const completed = await server('POST', `/v1/role-requests/${pia.json.id}/setup-link`);
 		expect(completed.json).toMatchObject({ request: { status: 'completed' }, setupLink: null, user: { role: 'member' } });
 
 		// the user is gone: decline it, open it again and invite
-		const quin = await ask({ name: 'Quin Hale', phone: '07700 900562' });
+		const quin = await askTracked({ name: 'Quin Hale', phone: '07700 900562' });
 		const quinInvite = await server('POST', `/v1/role-requests/${quin.json.id}/invite`);
 		await server('DELETE', `/v1/users/${quinInvite.json.user.id}?scope=accounts`, { reason: 'Test' });
 		expect(code(await server('POST', `/v1/role-requests/${quin.json.id}/setup-link`))).toBe('conflict');
 		expect(code(await server('POST', '/v1/role-requests/rrq_00000000000000000000000000/setup-link'))).toBe('not_found');
 
 		// a setup link from the Users screen replaces the request's link: the request ends with the new one
-		const rio = await ask({ name: 'Rio Dunn', phone: '07700 900563' });
+		const rio = await askTracked({ name: 'Rio Dunn', phone: '07700 900563' });
 		const rioInvite = await server('POST', `/v1/role-requests/${rio.json.id}/invite`);
 		env.advance(2 * DAY);
 		const usersLink = await server('POST', `/v1/users/${rioInvite.json.user.id}/setup-link`);
@@ -196,7 +207,7 @@ describe('staff: a new link or a decline for an invited request', () => {
 
 	it('a decline cancels the link and undoes the invite: a user it made is removed, a role it gave goes back', async () => {
 		// the invite made the user, who never signed in: removed
-		const dee = await ask({ name: 'Dee Park', phone: '07700 900520' });
+		const dee = await askTracked({ name: 'Dee Park', phone: '07700 900520' });
 		const deeInvite = await server('POST', `/v1/role-requests/${dee.json.id}/invite`);
 		const deeLink = codeOf(deeInvite.json.setupLink.url);
 		expect((await lookup(deeLink)).json.status).toBe('valid');
@@ -215,7 +226,7 @@ describe('staff: a new link or a decline for an invited request', () => {
 
 		// an existing user the invite gave the role to: their role from before comes back, the account stays
 		const kim = await server('POST', '/v1/users', { name: 'Kim Rae', phone: '07700 900530' });
-		const kimAsk = await ask({ name: 'Kim Rae', phone: '07700900530' });
+		const kimAsk = await askTracked({ name: 'Kim Rae', phone: '07700900530' });
 		const kimInvite = await server('POST', `/v1/role-requests/${kimAsk.json.id}/invite`);
 		expect(kimInvite.json.user).toMatchObject({ id: kim.json.id, role: 'member' });
 		const kimDeclined = await server('POST', `/v1/role-requests/${kimAsk.json.id}/decline`);
@@ -224,7 +235,7 @@ describe('staff: a new link or a decline for an invited request', () => {
 		expect((await lookup(codeOf(kimInvite.json.setupLink.url))).json).toEqual({ status: 'canceled' });
 
 		// a user the invite made who signed in another way (a phone code) keeps the account, without the role
-		const lu = await ask({ name: 'Lu Chen', phone: '07700 900540' });
+		const lu = await askTracked({ name: 'Lu Chen', phone: '07700 900540' });
 		const luInvite = await server('POST', `/v1/role-requests/${lu.json.id}/invite`);
 		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+447700900540' });
 		const sent = String(env.messages().at(-1).values.code);
@@ -234,14 +245,14 @@ describe('staff: a new link or a decline for an invited request', () => {
 		expect((await userOf(luInvite.json.user.id)).json).toMatchObject({ role: 'customer', phoneVerified: true });
 
 		// an expired request is declined too; its link stays expired
-		const mo = await ask({ name: 'Mo Tran', phone: '07700 900541' });
+		const mo = await askTracked({ name: 'Mo Tran', phone: '07700 900541' });
 		const moInvite = await server('POST', `/v1/role-requests/${mo.json.id}/invite`);
 		env.advance(8 * DAY);
 		expect((await server('POST', `/v1/role-requests/${mo.json.id}/decline`)).json.status).toBe('declined');
 		expect(code(await userOf(moInvite.json.user.id))).toBe('not_found');
 
 		// a completed request cannot be declined
-		const ned = await ask({ name: 'Ned Cole', phone: '07700 900542' });
+		const ned = await askTracked({ name: 'Ned Cole', phone: '07700 900542' });
 		const nedInvite = await server('POST', `/v1/role-requests/${ned.json.id}/invite`);
 		await accept(codeOf(nedInvite.json.setupLink.url), 'ned pass 1234');
 		expect(code(await server('POST', `/v1/role-requests/${ned.json.id}/decline`))).toBe('conflict');
@@ -249,7 +260,7 @@ describe('staff: a new link or a decline for an invited request', () => {
 	});
 
 	it('the guards apply to a decline before anything changes', async () => {
-		const max = await ask({ name: 'Max Bell', phone: '07700 900550' });
+		const max = await askTracked({ name: 'Max Bell', phone: '07700 900550' });
 		const invite = await server('POST', `/v1/role-requests/${max.json.id}/invite`);
 		// an acting user whose role ranks below the member role
 		const low = await server('POST', '/v1/users', { name: 'Low Rank', email: 'low@example.com' });
@@ -266,10 +277,10 @@ describe('staff: a new link or a decline for an invited request', () => {
 describe('giveRoleAt: the role when the setup link is completed', () => {
 	it('a new user starts as a customer, an existing one keeps their role; the completed setup gives it', async () => {
 		// by default the invite gives the role (today's behavior)
-		const byDefault = await ask({ name: 'Ola Byrne', phone: '07700 900569' });
+		const byDefault = await askTracked({ name: 'Ola Byrne', phone: '07700 900569' });
 		expect((await server('POST', `/v1/role-requests/${byDefault.json.id}/invite`)).json.user.role).toBe('member');
 		await env.setting('role_requests', 'giveRoleAt', 'completion');
-		const oli = await ask({ name: 'Oli Grant', phone: '07700 900570' });
+		const oli = await askTracked({ name: 'Oli Grant', phone: '07700 900570' });
 		const invited = await server('POST', `/v1/role-requests/${oli.json.id}/invite`);
 		expect(invited.json.user.role).toBe('customer');
 		expect(invited.json.request.status).toBe('invited');
@@ -280,7 +291,7 @@ describe('giveRoleAt: the role when the setup link is completed', () => {
 
 		// an existing user keeps their role until the setup is completed
 		const pat = await server('POST', '/v1/users', { name: 'Pat Webb', phone: '07700 900571', role: 'wholesale' });
-		const patAsk = await ask({ name: 'Pat Webb', phone: '07700900571' });
+		const patAsk = await askTracked({ name: 'Pat Webb', phone: '07700900571' });
 		const patInvite = await server('POST', `/v1/role-requests/${patAsk.json.id}/invite`);
 		expect(patInvite.json.user).toMatchObject({ id: pat.json.id, role: 'wholesale' });
 		// a decline before then changes no role
@@ -289,23 +300,23 @@ describe('giveRoleAt: the role when the setup link is completed', () => {
 
 		// a user with a password: completed at once, the role given now
 		const sol = await server('POST', '/v1/users', { name: 'Sol Park', phone: '07700 900572', password: 'sol pass 1234' });
-		const solAsk = await ask({ name: 'Sol Park', phone: '07700900572' });
+		const solAsk = await askTracked({ name: 'Sol Park', phone: '07700900572' });
 		const solInvite = await server('POST', `/v1/role-requests/${solAsk.json.id}/invite`);
 		expect(solInvite.json).toMatchObject({ request: { status: 'completed' }, setupLink: null, user: { role: 'member' } });
 		expect((await userOf(sol.json.id)).json.role).toBe('member');
 
 		// a user the invite made, declined before completing: removed
-		const tia = await ask({ name: 'Tia Ross', phone: '07700 900573' });
+		const tia = await askTracked({ name: 'Tia Ross', phone: '07700 900573' });
 		const tiaInvite = await server('POST', `/v1/role-requests/${tia.json.id}/invite`);
 		await server('POST', `/v1/role-requests/${tia.json.id}/decline`);
 		expect(code(await userOf(tiaInvite.json.user.id))).toBe('not_found');
 
 		// each request keeps what its invite said, whatever the setting is later
-		const uma = await ask({ name: 'Uma Bright', phone: '07700 900574' });
+		const uma = await askTracked({ name: 'Uma Bright', phone: '07700 900574' });
 		const umaInvite = await server('POST', `/v1/role-requests/${uma.json.id}/invite`);
 		await env.setting('role_requests', 'giveRoleAt', 'invite');
 		expect((await accept(codeOf(umaInvite.json.setupLink.url), 'uma pass 1234')).json.user.role).toBe('member');
-		const vic = await ask({ name: 'Vic Lowe', phone: '07700 900575' });
+		const vic = await askTracked({ name: 'Vic Lowe', phone: '07700 900575' });
 		const vicInvite = await server('POST', `/v1/role-requests/${vic.json.id}/invite`);
 		expect(vicInvite.json.user.role).toBe('member');
 		await env.setting('role_requests', 'giveRoleAt', 'completion');
@@ -316,7 +327,7 @@ describe('giveRoleAt: the role when the setup link is completed', () => {
 		// opened again after its link ran out and invited anew under completion: the role the first invite gave stays
 		// given, so a decline still takes it back
 		await env.setting('role_requests', 'giveRoleAt', 'invite');
-		const wes = await ask({ name: 'Wes Kerr', phone: '07700 900576' });
+		const wes = await askTracked({ name: 'Wes Kerr', phone: '07700 900576' });
 		const wesFirst = await server('POST', `/v1/role-requests/${wes.json.id}/invite`);
 		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+447700900576' });
 		const sent = String(env.messages().at(-1).values.code);
@@ -339,7 +350,7 @@ describe('a request never lowers a role (one user, one role; K-27, ST-9)', () =>
 		const staff = await server('POST', '/v1/users', { name: 'Quinn Shaw', phone: '07700 900610', role: 'support_staff' });
 		for (const giveRoleAt of ['invite', 'completion']) {
 			await env.setting('role_requests', 'giveRoleAt', giveRoleAt);
-			const asked = await ask({ name: 'Quinn Shaw', phone: '07700900610' });
+			const asked = await askTracked({ name: 'Quinn Shaw', phone: '07700900610' });
 			const refused = await server('POST', `/v1/role-requests/${asked.json.id}/invite`);
 			expect([refused.status, code(refused)]).toEqual([409, 'conflict']);
 			expect(refused.json.detail).toBe(
@@ -356,12 +367,12 @@ describe('a request never lowers a role (one user, one role; K-27, ST-9)', () =>
 			email: 'rae.hunt@example.com',
 			role: 'marketing_manager',
 		});
-		const byEmail = await ask({ name: 'Rae Hunt', email: 'rae.hunt@example.com', role: 'wholesale' });
+		const byEmail = await askTracked({ name: 'Rae Hunt', email: 'rae.hunt@example.com', role: 'wholesale' });
 		expect(code(await server('POST', `/v1/role-requests/${byEmail.json.id}/invite`))).toBe('conflict');
 		expect((await userOf(manager.json.id)).json.role).toBe('marketing_manager');
 		// a customer asking for a role that ranks higher gets it, as before
 		const shopper = await server('POST', '/v1/users', { name: 'Sky Moss', phone: '07700 900611' });
-		const upgrade = await ask({ name: 'Sky Moss', phone: '07700900611' });
+		const upgrade = await askTracked({ name: 'Sky Moss', phone: '07700900611' });
 		expect((await server('POST', `/v1/role-requests/${upgrade.json.id}/invite`)).json.user).toMatchObject({
 			id: shopper.json.id,
 			role: 'member',
@@ -453,7 +464,7 @@ describe('the setup-link lookup', () => {
 	});
 });
 
-describe('revealStatus off (the private default): an ask tells nobody what is there', () => {
+describe('an ask tells nobody what is there', () => {
 	/** The database calls of each kind while `run` goes (MongoDB driver calls, whatever the collection). */
 	const READS = ['find', 'findOne', 'countDocuments', 'aggregate'];
 	const WRITES = [
@@ -484,15 +495,12 @@ describe('revealStatus off (the private default): an ask tells nobody what is th
 	const requestsOf = async (phone) =>
 		(await server('GET', '/v1/role-requests?limit=100')).json.items.filter((/** @type {any} */ r) => r.phone === phone);
 
-	beforeAll(async () => {
-		await env.setting('role_requests', 'revealStatus', false);
-	});
 	afterEach(() => {
 		vi.restoreAllMocks();
 	});
 
-	it('is the default', () => {
-		expect(roleRequestSettings.properties.revealStatus).toMatchObject({ type: 'boolean', default: false });
+	it('is no setting: there is nothing to switch on', () => {
+		expect(roleRequestSettings.properties).not.toHaveProperty('revealStatus');
 	});
 
 	it('every state answers the same 201 { outcome: requested } with the same work; nothing changes for what is there', async () => {
@@ -559,14 +567,8 @@ describe('revealStatus off (the private default): an ask tells nobody what is th
 		expect(emails).not.toContain('dot@example.com');
 	});
 
-	it('the widget config says so; switched on, the detailed outcomes come back', async () => {
-		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.roleRequests.revealStatus).toBe(false);
-		await env.setting('role_requests', 'revealStatus', true);
-		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.roleRequests.revealStatus).toBe(true);
-		expect((await ask({ name: 'Ava Reed', phone: '07700900601' })).json).toEqual({ outcome: 'already_member' });
-		const fresh = await ask({ name: 'Fin Cole', phone: '07700 900602' });
-		expect(fresh.json).toEqual({ outcome: 'requested', id: expect.stringMatching(/^rrq_/), status: 'pending' });
-		expect((await ask({ name: 'Fin Cole', phone: '07700 900602' })).json).toEqual({ outcome: 'already_requested' });
-		await env.setting('role_requests', 'revealStatus', false);
+	it('the widget config offers the roles and the note rule, and no switch for the outcomes', async () => {
+		const offer = (await env.visitor('GET', '/v1/widget/config')).json.settings.roleRequests;
+		expect(Object.keys(offer).sort()).toEqual(['requireNote', 'roles']);
 	});
 });

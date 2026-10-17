@@ -24,6 +24,19 @@ const server = (method, path, body, as = null) =>
 		...(body === undefined ? {} : { body }),
 		headers: as ? { 'ss-actor-id': as.id, 'ss-actor-name': encodeURIComponent(as.name) } : {},
 	});
+/**
+ * A visitor asks for a role. The answer never names the request, so its id is read from the staff list (the one new
+ * in it).
+ * @param {Record<string, unknown>} body
+ */
+const askRole = async (body) => {
+	/** @returns {Promise<any[]>} */
+	const listed = async () => (await server('GET', '/v1/role-requests?limit=100')).json.items;
+	const before = new Set((await listed()).map((item) => item.id));
+	const answer = await env.visitor('POST', '/v1/role-requests', body);
+	const made = (await listed()).find((item) => !before.has(item.id));
+	return { status: answer.status, json: { ...answer.json, ...(made ? { id: made.id } : {}) } };
+};
 /** @param {Record<string, unknown>} body */
 const create = async (body) => (await server('POST', '/v1/users', body)).json;
 /** @param {string} id */
@@ -353,33 +366,31 @@ describe('A5: role requests', () => {
 		);
 		await env.setting('role_requests', 'requestableRoles', ['member']);
 		await env.setting('role_requests', 'requireNote', true);
-		// private by default (every ask answers the same, role-requests.test.js); these tests read ids and outcomes
-		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.roleRequests.revealStatus).toBe(false);
-		await env.setting('role_requests', 'revealStatus', true);
+		// every ask answers the same (role-requests.test.js); these tests read the ids from the staff list
 		expect(code(await env.visitor('POST', '/v1/role-requests', { role: 'member', name: 'Nia', phone: '+447700900100' }))).toBe(
 			'validation_failed',
 		);
 		expect(code(await env.visitor('POST', '/v1/role-requests', { role: 'member', name: 'Nia', note: 'Hi' }))).toBe(
 			'validation_failed',
 		);
-		const asked = await env.visitor('POST', '/v1/role-requests', {
+		const asked = await askRole({
 			role: 'member',
 			name: 'Nia',
 			phone: '07700 900100',
 			note: 'Hi',
 		});
 		expect(asked.status).toBe(201);
-		expect(asked.json).toMatchObject({ outcome: 'requested', status: 'pending' });
-		// a repeat ask makes no second request: it answers what is there
-		const again = await env.visitor('POST', '/v1/role-requests', {
+		expect(asked.json).toMatchObject({ outcome: 'requested', id: expect.stringMatching(/^rrq_/) });
+		// a repeat ask makes no second request
+		const again = await askRole({
 			role: 'member',
 			name: 'Nia',
 			phone: '+447700900100',
 			note: 'Hi',
 		});
-		expect([again.status, again.json]).toEqual([201, { outcome: 'already_requested' }]);
+		expect([again.status, again.json]).toEqual([201, { outcome: 'requested' }]);
 		const config = (await env.visitor('GET', '/v1/widget/config')).json.settings.roleRequests;
-		expect(config).toEqual({ roles: [{ key: 'member', name: 'Member' }], requireNote: true, revealStatus: true });
+		expect(config).toEqual({ roles: [{ key: 'member', name: 'Member' }], requireNote: true });
 
 		const ticket = await env.ticket();
 		const listed = await env.admin(ticket, 'GET', '/v1/admin/role-requests?status=pending');
@@ -400,7 +411,7 @@ describe('A5: role requests', () => {
 
 		// an existing user with a password gets the role at once
 		const cal = await server('POST', '/v1/users', { name: 'Cal Moss', phone: '07700 900077', password: 'cal pass 1234' });
-		const calAsk = await env.visitor('POST', '/v1/role-requests', {
+		const calAsk = await askRole({
 			role: 'member',
 			name: 'Cal',
 			phone: '07700900077',
@@ -413,7 +424,7 @@ describe('A5: role requests', () => {
 			user: { id: cal.json.id, role: 'member' },
 		});
 		// one user, one role: staff asking with their own phone number are never moved down to it (ST-9)
-		const sue = await env.visitor('POST', '/v1/role-requests', {
+		const sue = await askRole({
 			role: 'member',
 			name: 'Sue',
 			phone: '07700900001',
@@ -424,7 +435,7 @@ describe('A5: role requests', () => {
 		await server('POST', `/v1/role-requests/${sue.json.id}/decline`);
 
 		// decline and reopen; an invite whose setup link runs out is expired (judged on read)
-		const dee = await env.visitor('POST', '/v1/role-requests', {
+		const dee = await askRole({
 			role: 'member',
 			name: 'Dee',
 			email: 'dee@example.com',
@@ -449,8 +460,7 @@ describe('A5: role requests', () => {
 
 	it('an invite gives nothing to a user who never proved the number; staff check first; an untouched user is invited again', async () => {
 		/** @param {string} name @param {string} phone */
-		const ask = async (name, phone) =>
-			(await env.visitor('POST', '/v1/role-requests', { role: 'member', name, phone, note: 'Hi' })).json.id;
+		const ask = async (name, phone) => (await askRole({ role: 'member', name, phone, note: 'Hi' })).json.id;
 		// someone signs up first with Rae's number and a password: the number is not proven
 		const squatter = await env.visitor('POST', '/v1/sign-up/phone-password', {
 			phone: '+447700900300',
@@ -546,7 +556,7 @@ describe('the Users widget’s actions', () => {
 
 		const pending = async () => (await server('GET', '/v1/role-requests/count?status=pending&role=member')).json;
 		const before = (await pending()).count;
-		const asked = await env.visitor('POST', '/v1/role-requests', {
+		const asked = await askRole({
 			role: 'member',
 			name: 'Ira',
 			email: 'ira@example.com',

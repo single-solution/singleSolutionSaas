@@ -41,6 +41,7 @@ import riskChecks from '../schemas/risk_checks.settings.json' with { type: 'json
 import roles from '../schemas/roles.settings.json' with { type: 'json' };
 import consents from '../schemas/consents.settings.json' with { type: 'json' };
 import twoStep from '../schemas/two_step.settings.json' with { type: 'json' };
+import { ADDRESSES_PER_USER } from '../core/limits.js';
 import { selfView } from '../core/profile.js';
 import { OPEN_SIGN_UP } from '../core/rules.js';
 import { SIGN_IN_METHODS } from '../core/widgets.js';
@@ -312,7 +313,7 @@ export const createProductInstance = (options) => {
 					remember: signUpRole?.remember ?? 'ask',
 					signInPaused: signUpRole?.signIn === 'paused',
 					profile: {
-						maxAddresses: profile.maxAddresses,
+						maxAddresses: ADDRESSES_PER_USER,
 						keepOneAddress: profile.keepOneAddress,
 						addressRequired: profile.addressRequired,
 						// the country of an address without one, whose format the address form follows (A1)
@@ -324,7 +325,6 @@ export const createProductInstance = (options) => {
 									.filter((role) => /** @type {string[]} */ (requests.requestableRoles).includes(role.key))
 									.map((role) => ({ key: role.key, name: role.name })),
 								requireNote: requests.requireNote,
-								revealStatus: requests.revealStatus,
 							}
 						: null,
 				};

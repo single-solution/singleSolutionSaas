@@ -2,51 +2,6 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
-		"codeLength": {
-			"type": "integer",
-			"title": "Code length",
-			"default": 6,
-			"minimum": 4,
-			"maximum": 8,
-			"x-ui": {
-				"group": "Code",
-				"order": 2
-			}
-		},
-		"codeMinutes": {
-			"type": "integer",
-			"title": "Code and link valid for (minutes)",
-			"default": 10,
-			"minimum": 1,
-			"maximum": 30,
-			"x-ui": {
-				"group": "Code",
-				"order": 1
-			}
-		},
-		"cooldownSeconds": {
-			"type": "integer",
-			"title": "Wait before a new code (seconds)",
-			"description": "How long an email address waits before it can get another code.",
-			"default": 30,
-			"minimum": 30,
-			"maximum": 300,
-			"x-ui": {
-				"group": "Limits",
-				"order": 11
-			}
-		},
-		"perHour": {
-			"type": "integer",
-			"title": "Codes per email address per hour",
-			"default": 6,
-			"minimum": 1,
-			"maximum": 20,
-			"x-ui": {
-				"group": "Limits",
-				"order": 12
-			}
-		},
 		"websitePerHour": {
 			"type": "integer",
 			"title": "Codes per hour for the whole website",
@@ -57,19 +12,6 @@
 			"x-ui": {
 				"group": "Limits",
 				"order": 13,
-				"advanced": true
-			}
-		},
-		"codeTries": {
-			"type": "integer",
-			"title": "Wrong tries per code",
-			"description": "Wrong codes typed before the code is used up and a new one is needed.",
-			"default": 5,
-			"minimum": 3,
-			"maximum": 10,
-			"x-ui": {
-				"group": "Code",
-				"order": 3,
 				"advanced": true
 			}
 		}
