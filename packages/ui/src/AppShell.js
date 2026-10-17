@@ -472,7 +472,11 @@ export function AppShell({
 									<Brand {...brand} compact />
 								</span>
 							)}
-							{context ? <ContextPill className="hidden md:inline-flex">{context}</ContextPill> : null}
+							{context ? (
+								<span className="hidden min-w-0 md:flex">
+									<ContextPill>{context}</ContextPill>
+								</span>
+							) : null}
 							{topbar ? <div className="flex min-w-0 items-center gap-2">{topbar}</div> : null}
 						</div>
 						{search ? <div className="hidden min-w-0 shrink md:block md:w-64 xl:w-80">{search}</div> : null}
@@ -481,9 +485,9 @@ export function AppShell({
 								{back ? (
 									<a
 										href={back.href}
-										className="ss-motion hidden h-8 items-center gap-1 rounded-control px-2 text-label font-medium text-muted hover:bg-surface-2 hover:text-fg sm:inline-flex">
+										className="ss-motion inline-flex h-8 items-center gap-1 rounded-control px-2 text-label font-medium text-muted hover:bg-surface-2 hover:text-fg">
 										<Icon name="chevronLeft" size={14} />
-										{back.label}
+										<span className="sr-only sm:not-sr-only">{back.label}</span>
 									</a>
 								) : null}
 								{actions}

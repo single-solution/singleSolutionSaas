@@ -55,12 +55,12 @@ function CardSkeleton({ lines = 3, className }) {
 /** A list pane's placeholder: the title, the search box and rows. */
 function ListSkeleton() {
 	return (
-		<div className="space-y-3 rounded-card border border-line-soft bg-surface p-3 shadow-card sm:p-4">
-			<SkeletonBlock className="mx-1 mt-1 h-7 w-32" />
-			<SkeletonBlock className="mx-1 h-10 rounded-xl" />
+		<div className="space-y-3 rounded-panel border border-line-soft bg-surface p-3 shadow-panel">
+			<SkeletonBlock className="mx-1 mt-1 h-6 w-32" />
+			<SkeletonBlock className="h-9 rounded-control" />
 			<div className="space-y-2 pt-1">
 				{[0, 1, 2, 3, 4, 5].map((i) => (
-					<SkeletonBlock key={i} className="h-12 rounded-xl" />
+					<SkeletonBlock key={i} className="h-11 rounded-lg" />
 				))}
 			</div>
 		</div>
@@ -72,10 +72,10 @@ function DetailSkeleton() {
 	return (
 		<>
 			<div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-				<SkeletonBlock className={cx('h-8 w-56 max-w-full', ON_CANVAS)} />
+				<SkeletonBlock className={cx('h-7 w-56 max-w-full', ON_CANVAS)} />
 				<div className="flex gap-2">
-					<SkeletonBlock className={cx('h-10 w-28 rounded-xl', ON_CANVAS)} />
-					<SkeletonBlock className={cx('h-10 w-10 rounded-xl', ON_CANVAS)} />
+					<SkeletonBlock className={cx('h-9 w-28 rounded-control', ON_CANVAS)} />
+					<SkeletonBlock className={cx('h-9 w-9 rounded-control', ON_CANVAS)} />
 				</div>
 			</div>
 			<div className="@container">
@@ -110,7 +110,7 @@ function PageSkeleton() {
 function AuthSkeleton() {
 	return (
 		<div className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 px-4">
-			<SkeletonBlock className={cx('mx-auto h-10 w-10 rounded-xl', ON_CANVAS)} />
+			<SkeletonBlock className={cx('mx-auto h-9 w-9 rounded-lg', ON_CANVAS)} />
 			<CardSkeleton lines={4} />
 		</div>
 	);

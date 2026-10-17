@@ -188,7 +188,7 @@ export function SaveBar({
 			role="region"
 			aria-label={saveLabel}
 			className={cx('pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-3', className)}>
-			<div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-x-6 gap-y-2 rounded-panel border border-line-soft bg-surface py-2 pr-2 pl-4 shadow-overlay animate-ss-sheet">
+			<div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-x-6 gap-y-2 rounded-panel border border-line-soft bg-surface py-2 pr-2 pl-4 shadow-bar animate-ss-sheet">
 				<p role="status" className="flex items-center gap-2 text-sm font-medium text-fg">
 					<span aria-hidden="true" className="size-2 rounded-full bg-warning" />
 					{message}

@@ -57,6 +57,8 @@ export { TypedConfirmDialog } from './TypedConfirm.js';
 export { ToastOnce, ToastProvider, useToast } from './Toast.js';
 export { CodeBlock, copyText } from './CodeBlock.js';
 export { AppShell, ContextPill, ScrollArea, SwitcherSelect, useShell } from './AppShell.js';
+// the frame and its scrolling panes by the names of the design spec (owner 2026-10-17)
+export { AppShell as AppFrame, ScrollArea as Pane } from './AppShell.js';
 export {
 	Grid,
 	Col,
