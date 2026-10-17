@@ -95,6 +95,10 @@ import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
  *   server-token visitor call, else the first `X-Forwarded-For` address (`unknown` when there is none)
  * @property {import('../dashboard.js').Session | null} session dashboard session
  * @property {(task: () => Promise<unknown>) => void} after run work right after the response
+ * @property {() => Promise<import('@ss/contracts').WebsiteSettings>} website the website's settings from the Portal
+ *   (business facts, brand and theme, region and Format, pages, team), frozen; an empty document at version 0 while the
+ *   Portal holds none (then the product uses its own values). Memory, then the product database: never the Portal on the
+ *   hot path. Needs a website request
  * @property {() => Promise<import('../data.js').WebsiteData>} data the website's merchant database (tenant guard)
  * @property {import('../logger.js').Logger} log
  */
@@ -458,6 +462,10 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				session: null,
 				after: (task) => {
 					afterTasks.push(task);
+				},
+				website: () => {
+					if (!ctx.websiteId) throw problem('bad_request', 'This request names no website.');
+					return kit.website.document(ctx.websiteId, { after: ctx.after });
 				},
 				data: () => {
 					if (!ctx.websiteId) throw problem('bad_request', 'This request names no website.');

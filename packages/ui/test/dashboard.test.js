@@ -572,7 +572,9 @@ describe('standard tabs', () => {
 		expect(container.textContent).toContain('Price: 1 credits/h');
 		expect(container.textContent).toContain('Needs: Notes');
 		// a feature whose connection fails shows an amber Needs setup pill (the reason as its tooltip) and Connect
-		const pill = /** @type {HTMLElement} */ ([...container.querySelectorAll('span[title]')].find((el) => el.textContent === 'Needs setup'));
+		const pill = /** @type {HTMLElement} */ (
+			[...container.querySelectorAll('span[title]')].find((el) => el.textContent === 'Needs setup')
+		);
 		expect(pill.getAttribute('title')).toBe('Not working: connect Database');
 		expect(pill.className).toContain('bg-attention-soft');
 		expect(container.querySelector('.text-danger')).toBeNull();
@@ -888,6 +890,39 @@ describe('standard tabs', () => {
 				body: { locale: 'fr-FR', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' },
 			},
 		]);
+	});
+
+	it('Theme & format while the Portal holds the website’s settings: where each is set, with a link, and no form', async () => {
+		const id = freshSite();
+		const base = `/v1/dashboard/websites/${id}`;
+		const from = (/** @type {string[]} */ fields) => Object.fromEntries(fields.map((field) => [field, 'portal']));
+		serve({
+			[`GET ${base}/theme`]: ok({
+				theme: { colors: {}, fontFamily: 'inherit', radius: 4, mode: 'auto', customCss: '' },
+				sources: from(['colors', 'fontFamily', 'radius', 'mode', 'customCss']),
+			}),
+			[`GET ${base}/format`]: ok({
+				format: { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' },
+				sources: from(['locale', 'currencyDisplay', 'currencySymbols', 'wholeUnits', 'times']),
+			}),
+		});
+		const { container } = render(inDashboard(<LookTab {...tabProps(id)} />));
+		await settle();
+		expect(container.textContent).toContain('Set in the Portal');
+		expect(container.textContent).toContain('Website settings › Brand and look');
+		expect(container.textContent).toContain('Website settings › Region and format');
+		expect(container.querySelector('nav')).toBeNull();
+		expect(container.querySelector('input, textarea, select')).toBeNull();
+		const links = [...container.querySelectorAll('a')].map((a) => [
+			a.textContent?.trim(),
+			a.getAttribute('href'),
+			a.getAttribute('target'),
+		]);
+		expect(links).toEqual([
+			['Open Website settings', `https://portal.example.com/websites/${id}/settings#brand`, '_blank'],
+			['Open Website settings', `https://portal.example.com/websites/${id}/settings#region`, '_blank'],
+		]);
+		expect(requests.filter((request) => request.method === 'PUT')).toEqual([]);
 	});
 
 	it('Connections: saves and tests a value, removes after a confirmation, with the product forms and hints', async () => {

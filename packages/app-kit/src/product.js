@@ -1,7 +1,8 @@
 /**
  * `createProduct` wires the kit for one product: the Portal connection, tokens and tickets, the status cache, notices,
  * price and feature reports, settings, widget texts, theme and Format, encrypted connections, the merchant database,
- * business.json, data rights, the activity log and its reads, Recent changes, the product dashboard API, the settings
+ * the Portal's website settings (business facts, theme, Format, region, pages, team) and business.json until the Portal
+ * holds them, data rights, the activity log and its reads, Recent changes, the product dashboard API, the settings
  * API for the merchant's server, events, staff alerts, imports (PLAN 0.8.10 K1–K10), the default templates of the
  * messages the product sends (parity P1) and the product's part of each website's Setup sheet (`GET /v1/blueprint`,
  * with what the website builds per feature, and the advisor's Switch on). Every side effect is injected (fetch, clock,
@@ -36,6 +37,7 @@ import { createServerApi } from './server-api.js';
 import { createSettings } from './settings.js';
 import { createStaffAlerts } from './staff-alerts.js';
 import { createStatus } from './status.js';
+import { createWebsiteSettings } from './website-settings.js';
 import { createMemoryStore } from './stores/memory.js';
 import { createMongoStore } from './stores/mongo.js';
 import { createTickets } from './tickets.js';
@@ -115,6 +117,7 @@ import { verifyToken } from '@ss/protocol';
  * @property {import('./connections.js').Connections} connections
  * @property {import('./data.js').Data} data
  * @property {import('./business.js').Business} business
+ * @property {import('./website-settings.js').WebsiteSettingsCache} website the Portal's copy of each website's settings
  * @property {import('./activity.js').Activity} activity
  * @property {import('./events.js').Events} events
  * @property {(ctx: { websiteId: string | null, merchantId: string | null, after: (task: () => Promise<unknown>) => void },
@@ -137,6 +140,7 @@ const KIT_PROBLEM_CODES = Object.freeze({
 	visitor_ip_required: Object.freeze({ status: 400, title: "The visitor's IP address is required" }),
 	count_timeout: Object.freeze({ status: 503, title: 'Counting took too long' }),
 	database_unavailable: Object.freeze({ status: 503, title: 'Database unavailable' }),
+	managed_by_portal: Object.freeze({ status: 409, title: 'Managed in the Portal' }),
 });
 
 /**
@@ -221,6 +225,7 @@ export const createProduct = (options) => {
 	});
 	const recent = createRecentChanges({ store, now, randomBytes });
 	const status = createStatus({ store, client: () => connection.active().client, now, logger });
+	const website = createWebsiteSettings({ store, client: () => connection.active().client, now, logger });
 	const reports = createReports({ store, manifest, connection, status, recent, now, logger });
 	const shared = options.sharedSettings ?? {};
 	for (const [key, group] of Object.entries(shared)) {
@@ -241,7 +246,16 @@ export const createProduct = (options) => {
 				`shared settings ${key} are not a valid settings schema: ${problems.map((p) => `${p.path || '/'} ${p.message}`).join('; ')}`,
 			);
 	}
-	const settings = createSettings({ store, manifest, strings, recent, now, shared });
+	const settings = createSettings({
+		store,
+		manifest,
+		strings,
+		recent,
+		now,
+		shared,
+		website,
+		portalUrl: () => (connection.connected() ? connection.active().portalUrl : null),
+	});
 	const messages = createMessages({ productId: manifest.id, declaration: options.messages });
 	/** @type {ReturnType<typeof createData> | null} */
 	let data = null;
@@ -288,7 +302,7 @@ export const createProduct = (options) => {
 		...(options.data?.createClient ? { createClient: options.data.createClient } : {}),
 		indexes: [...ACTIVITY_INDEXES, ...(options.events ? EVENT_INDEXES : []), ...(options.data?.indexes ?? [])],
 	});
-	const business = createBusiness({ store, send, now, logger });
+	const business = createBusiness({ store, send, now, logger, website });
 	/**
 	 * The normalized business.json copy of a website (defaults: name = domain, time zone UTC).
 	 * @param {string} websiteId
@@ -377,6 +391,7 @@ export const createProduct = (options) => {
 		connections,
 		data,
 		business,
+		website,
 		activity,
 		events,
 		settingsChanged,
@@ -486,6 +501,12 @@ export const createProduct = (options) => {
 		products: connections.products,
 		data: Object.freeze({ forWebsite: data.forWebsite }),
 		business: businessOf,
+		/**
+		 * The website's settings from the Portal (business, brand, region, pages, team), frozen; an empty document at version 0
+		 * while the Portal holds none. Memory, then the product database: it never calls the Portal on the hot path.
+		 * @param {string} websiteId
+		 */
+		website: (websiteId) => website.document(websiteId),
 		format: formatOf,
 		activity: Object.freeze({ record: activity.record }),
 		/**

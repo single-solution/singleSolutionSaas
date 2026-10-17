@@ -24,11 +24,12 @@ const COLLECTIONS = Object.freeze([
 	'status',
 	'revoked',
 	'business',
+	'website_settings',
 	'widget',
 	'sessions',
 	'idempotency',
 ]);
-const PER_WEBSITE = Object.freeze(['switches', 'settings', 'connections', 'status', 'business', 'widget']);
+const PER_WEBSITE = Object.freeze(['switches', 'settings', 'connections', 'status', 'business', 'website_settings', 'widget']);
 
 /**
  * @param {unknown} error

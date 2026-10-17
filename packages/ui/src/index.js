@@ -52,6 +52,7 @@ export {
 	KeyValueList,
 	Masonry,
 	TextLink,
+	ManagedNote,
 } from './display.js';
 export { PageHeader, HeaderMeta, HeaderFact } from './header.js';
 export { Table } from './Table.js';

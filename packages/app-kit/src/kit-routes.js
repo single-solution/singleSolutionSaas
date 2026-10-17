@@ -3,7 +3,8 @@
  *
  * - `POST /.well-known/ss-connect` (none): the connect handshake (PLAN 0.4.12 row 1);
  * - `POST /.well-known/ss-events` (none, signed by the Portal): notices (0.4.12); `status.changed` drops the cached
- *   status and fetches it again right after the answer;
+ *   status and fetches it again right after the answer; `website.settings_changed` fetches the Portal's website
+ *   settings again right after the answer;
  * - `POST /v1/tickets` (server token and the verified sign-in of a staff member): tickets for admin widgets (0.4.5). The
  *   ticket is for the person that sign-in names and carries only the permissions their role grants out of those asked;
  * - `POST /v1/data-rights/export` and `POST /v1/data-rights/delete` (server token, merchant database required, no
@@ -52,6 +53,7 @@ const WEBSITE_COLLECTIONS = /** @type {const} */ ([
 	'changes',
 	'status',
 	'business',
+	'website_settings',
 	'widget',
 ]);
 
@@ -91,6 +93,14 @@ export const createKitRoutes = (kit, hooks) => {
 				await kit.status.lookup(websiteId, { fresh: true });
 			});
 		}
+		if (body.type === 'website.settings_changed') {
+			const websiteId = body.websiteId;
+			// the next use reads the database; the new settings are fetched right after answering
+			kit.website.forget(websiteId);
+			ctx.after(async () => {
+				await kit.website.refresh(websiteId);
+			});
+		}
 		if (body.type === 'token.revoked') {
 			try {
 				await kit.status.syncRevocations();
@@ -101,6 +111,7 @@ export const createKitRoutes = (kit, hooks) => {
 		if (body.type === 'sessions.revoked') await kit.dashboard.endSessions(body.subject);
 		if (body.type === 'website.deleted') {
 			const websiteId = body.websiteId;
+			kit.website.forget(websiteId);
 			await Promise.all(WEBSITE_COLLECTIONS.map((collection) => store.deleteWhere(collection, { websiteId })));
 			await kit.dashboard.endWebsiteSessions(websiteId);
 		}
@@ -194,7 +205,7 @@ export const createKitRoutes = (kit, hooks) => {
 			kit.settings.texts(websiteId),
 			kit.settings.themeOf(websiteId),
 			kit.settings.formatOf(websiteId),
-			kit.business.get(websiteId, status.domain),
+			kit.business.get(websiteId, status.domain, { after: ctx.after }),
 			kit.reports.switches(websiteId),
 			hooks.widgetConfig ? hooks.widgetConfig(ctx) : {},
 		]);

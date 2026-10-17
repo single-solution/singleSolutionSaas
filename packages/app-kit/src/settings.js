@@ -6,6 +6,10 @@
  * (colors, font family, radius, mode, custom CSS) are stored the same way, one value per field, and so is the Format
  * (PLAN 0.8.10 K7: locale, currency display and symbol, whole units, times). Every change writes Recent changes.
  *
+ * The theme and the Format of a website are the Portal's once it holds the website's settings (`website-settings.js`): they
+ * are read from the Portal's copy (source `portal`) and a save is refused with 409 `managed_by_portal`. The Owner's global
+ * defaults (no website) stay the product's own.
+ *
  * Settings come in sections: each feature's settings, plus the product's shared settings (PLAN 0.8.10 A2, A11): a
  * group of settings several features use, stored once under the group's key (`<group>.<setting>`) and in use, and
  * shown to merchants, while any of its features is on.
@@ -15,6 +19,7 @@ import { validateSettingValue } from '@ss/contracts';
 import { DEFAULT_FORMAT, FORMAT_FIELDS, formatViolation } from '@ss/contracts/format';
 import { placeholdersOf } from '@ss/contracts/templates';
 import { isObject } from '@ss/contracts/util';
+import { formatOf as formatFrom, themeOf as themeFrom } from '@ss/contracts/website-settings';
 import { problem } from './http/results.js';
 
 /**
@@ -29,7 +34,7 @@ const samePlaceholders = (a, b) => placeholdersOf(a).sort().join('\n') === place
 /** @typedef {import('./stores/types.js').Store} Store */
 /** @typedef {import('./recent.js').Who} Who */
 /** @typedef {import('./http/results.js').ProblemResult} ProblemResult */
-/** @typedef {'website' | 'default' | 'built-in'} Source where a value comes from */
+/** @typedef {'website' | 'default' | 'built-in' | 'portal'} Source where a value comes from (`portal`: the website's settings in the Portal) */
 /** @typedef {{ colors: Record<string, string>, fontFamily: string, radius: number, mode: 'light' | 'dark' | 'auto', customCss: string }} Theme */
 /**
  * A save's outcome: what changed in words (`label`, for example `Notes › Greeting`, and `detail`, for example `changed`),
@@ -96,9 +101,11 @@ const themeViolation = (field, value) => {
 
 /**
  * @param {{ store: Store, manifest: Manifest, strings: Record<string, string>, recent: import('./recent.js').RecentChanges,
- *   now: () => number, shared?: Record<string, SharedSettings> }} options
+ *   now: () => number, shared?: Record<string, SharedSettings>, website: import('./website-settings.js').WebsiteSettingsCache,
+ *   portalUrl: () => string | null }} options `website`: the Portal's copy of the website's settings; `portalUrl`: the
+ *   pinned Portal address, named in the answer of a refused save
  */
-export const createSettings = ({ store, manifest, strings, recent, now, shared = {} }) => {
+export const createSettings = ({ store, manifest, strings, recent, now, shared = {}, website, portalUrl }) => {
 	/** Every settings section: the features', then the shared ones. @type {ReadonlyArray<Section>} */
 	const sections = Object.freeze([
 		...manifest.features.map((feature) => ({
@@ -161,6 +168,18 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 		await recent.record({ websiteId, who, what: websiteId === null ? 'defaults' : what, detail: `${label}: ${detail}` });
 		return { ok: true, label, detail };
 	};
+
+	/**
+	 * The refusal of a save the Portal owns: 409 `managed_by_portal`, naming the Portal and where to change it.
+	 * @param {string} where the section of Website settings
+	 * @returns {Change}
+	 */
+	const managedByPortal = (where) => ({
+		ok: false,
+		problem: problem('managed_by_portal', `This is set in the Portal: Website settings › ${where}.`, {
+			extensions: { portalUrl: portalUrl(), section: where },
+		}),
+	});
 
 	/** A feature's settings or shared settings, by key. @param {string} key @returns {Section | undefined} */
 	const featureOf = (key) => sections.find((section) => section.key === key);
@@ -272,6 +291,14 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 	 * @returns {Promise<{ theme: Theme, sources: Record<keyof Theme, Source> }>}
 	 */
 	const themeOf = async (websiteId) => {
+		const portal = websiteId === null ? null : await website.get(websiteId);
+		if (portal)
+			return {
+				theme: themeFrom(portal),
+				sources: /** @type {Record<keyof Theme, Source>} */ (
+					Object.fromEntries(THEME_FIELDS.map((field) => [field, 'portal']))
+				),
+			};
 		const resolve = await snapshot(websiteId);
 		const entries = THEME_FIELDS.map((field) => /** @type {const} */ ([field, resolve('theme', field, DEFAULT_THEME[field])]));
 		return {
@@ -288,6 +315,7 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 	 * @returns {Promise<Change>}
 	 */
 	const setTheme = async ({ websiteId, theme, who }) => {
+		if (websiteId !== null && (await website.get(websiteId))) return managedByPortal('Brand and look');
 		if (!isObject(theme) || Object.keys(theme).length === 0)
 			return { ok: false, problem: problem('validation_failed', 'Send the theme fields to change.') };
 		for (const [field, value] of Object.entries(theme)) {
@@ -306,6 +334,14 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 	 * @returns {Promise<{ format: import('@ss/contracts').Format, sources: Record<keyof import('@ss/contracts').Format, Source> }>}
 	 */
 	const formatOf = async (websiteId) => {
+		const portal = websiteId === null ? null : await website.get(websiteId);
+		if (portal)
+			return {
+				format: formatFrom(portal),
+				sources: /** @type {Record<keyof import('@ss/contracts').Format, Source>} */ (
+					Object.fromEntries(FORMAT_FIELDS.map((field) => [field, 'portal']))
+				),
+			};
 		const resolve = await snapshot(websiteId);
 		const entries = FORMAT_FIELDS.map(
 			(field) => /** @type {const} */ ([field, resolve('format', field, DEFAULT_FORMAT[field])]),
@@ -326,6 +362,7 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 	 * @returns {Promise<Change>}
 	 */
 	const setFormat = async ({ websiteId, format, who }) => {
+		if (websiteId !== null && (await website.get(websiteId))) return managedByPortal('Region and format');
 		if (!isObject(format) || Object.keys(format).length === 0)
 			return { ok: false, problem: problem('validation_failed', 'Send the Format fields to change.') };
 		for (const [field, value] of Object.entries(format)) {

@@ -11,6 +11,7 @@ import {
 	validateDirectoryList,
 	validateRevocations,
 	validateStatusResponse,
+	validateWebsiteSettings,
 	validateWebsitesPage,
 } from '@ss/contracts';
 import { signAssertion } from '@ss/protocol';
@@ -22,6 +23,7 @@ import { kitError } from './util.js';
 /** @typedef {import('@ss/contracts').StatusResponse} StatusResponse */
 /** @typedef {import('@ss/contracts').WebsitesPage} WebsitesPage */
 /** @typedef {import('@ss/contracts').Revocations} Revocations */
+/** @typedef {import('@ss/contracts').WebsiteSettings} WebsiteSettings */
 
 /** Deadline of one Portal call (a call may ask for a shorter one). */
 const PORTAL_TIMEOUT_MS = 10_000;
@@ -125,6 +127,27 @@ export const createPortalClient = ({ portalUrl, productId, signer, fetch = globa
 				),
 				'status',
 			),
+		/**
+		 * The website's settings when the Portal holds a version newer than `since` (else `settings` is null). Checked: the
+		 * document must be valid, be this website's and carry the version the answer names.
+		 * @param {string} websiteId
+		 * @param {{ since?: number, timeoutMs?: number }} [options]
+		 * @returns {Promise<{ version: number, settings: WebsiteSettings | null }>}
+		 */
+		websiteSettings: async (websiteId, { since = 0, timeoutMs } = {}) => {
+			const json = await call(
+				'GET',
+				`/v1/product/websites/${encodeURIComponent(websiteId)}/settings${since > 0 ? `?since=${since}` : ''}`,
+				timeoutMs ? { timeoutMs } : {},
+			);
+			const version = versionOf(json, 'website settings');
+			const settings = isObject(json) ? json.settings : null;
+			if (settings === null || settings === undefined) return { version, settings: null };
+			const document = checked(validateWebsiteSettings(settings), 'website settings');
+			if (document.websiteId !== websiteId || document.version !== version)
+				throw kitError('portal_unreachable', 'Portal website settings answer names another website or version');
+			return { version, settings: document };
+		},
 		/** @param {string | null} [cursor] @returns {Promise<WebsitesPage>} */
 		websites: async (cursor) =>
 			checked(

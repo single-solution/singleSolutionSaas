@@ -21,6 +21,13 @@ export const DASHBOARD_TEXTS = Object.freeze({
 	cancel: 'Cancel',
 	andMore: '{names} and {count} more',
 	categories: Object.freeze({ more: 'More' }),
+	managed: Object.freeze({
+		title: 'Set in the Portal',
+		look: 'The look of your widgets is set once for all your products, in the Portal under Website settings › Brand and look.',
+		format:
+			'Dates, numbers and money are set once for all your products, in the Portal under Website settings › Region and format.',
+		open: 'Open Website settings',
+	}),
 	tabs: Object.freeze({
 		overview: 'Overview',
 		features: 'Features',

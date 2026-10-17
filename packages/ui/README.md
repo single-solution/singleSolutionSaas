@@ -77,6 +77,9 @@ the page is as wide as the window leaves it. Nothing is centered in a narrow col
 - Controls on native inputs: `Switch` (`role="switch"`), `Checkbox` / `CheckboxInput` (`indeterminate`), `RadioGroup`
   (`cards`: title plus `description`; arrow keys), `SegmentedControl` (up to about four short choices), `Input` with
   `prefix` / `suffix` adornments, `Select`, `TextArea`; 36 px high, the accent focus ring, error and disabled states.
+- `ManagedNote` (title, text, `href`): a teal note where a value is shown that the Portal owns (the website's look, Format,
+  business facts): what it is and where it is set, with a link to that place in the Portal. The Theme & format tab shows
+  it instead of its forms while the Portal holds the website's settings (the answers' `sources` are `portal`).
 - `SaveBar`: the floating Save changes / Discard bar, shown only while something changed. `AccountMenu`, `Avatar`.
 - Rows and editors (never draw these by hand; flat, with hairlines, never boxes in a card): `RowList` + `ListRow` (a
   name, a pill, one primary action and a More menu; `wrap` for long names), `EntryGroup` (one entry of a list editor: a

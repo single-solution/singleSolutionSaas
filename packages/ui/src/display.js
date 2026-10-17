@@ -296,6 +296,33 @@ export function TextLink({ href, as, tone = 'accent', external = false, classNam
 	);
 }
 
+/**
+ * A note where a value is shown that the Portal owns (the website's look, Format, business facts): what it is, where it
+ * is set (`Portal › Website settings › Region and format`) and a link to that place. Teal, the color of help: it tells
+ * the person where to go, it does not warn. Used on every place that shows a Portal value instead of a form.
+ * @param {{ title?: ReactNode, children?: ReactNode, href?: string, linkLabel?: ReactNode, className?: string }} props
+ *   `href`: the place in the Portal (an address built from the pinned Portal URL), opened in a new tab
+ */
+export function ManagedNote({ title, children, href, linkLabel, className }) {
+	return (
+		<Callout
+			tone="info"
+			{...(title ? { title } : {})}
+			{...(className ? { className } : {})}
+			{...(href
+				? {
+						actions: (
+							<TextLink href={href} external>
+								{linkLabel ?? 'Open in the Portal'}
+							</TextLink>
+						),
+					}
+				: {})}>
+			{children}
+		</Callout>
+	);
+}
+
 /** @typedef {'active' | 'setup' | 'off' | 'error' | 'info' | 'warning' | 'new' | 'locked'} PillStatus */
 /** @type {Record<PillStatus, Tone>} */
 const PILL_TONES = {
@@ -448,7 +475,10 @@ export function LockedState({ title, description, note, action, compact = false,
 			)}>
 			<span
 				aria-hidden="true"
-				className={cx('flex shrink-0 items-center justify-center bg-surface-2 text-muted', compact ? 'size-8 rounded-lg' : 'size-10 rounded-xl')}>
+				className={cx(
+					'flex shrink-0 items-center justify-center bg-surface-2 text-muted',
+					compact ? 'size-8 rounded-lg' : 'size-10 rounded-xl',
+				)}>
 				<Icon name="lock" size={compact ? 15 : 18} />
 			</span>
 			<div className={cx('min-w-0 space-y-0.5', !compact && 'max-w-md')}>

@@ -63,7 +63,13 @@ The exact API is in [API.md](./API.md).
   with `websiteId` and `merchantId`; Atlas Search only as a first `$search` whose compound filter pins the website) to
   collections `ss_<product id>_<name>`; the product's declared indexes are the truth (a changed or retired index of a
   collection it declares indexes for is replaced on a database's first use per instance, no record is changed).
-- **business.json**, **data rights** (`POST /v1/data-rights/export|delete`), the **activity log** with copies to
+- **Website settings** — the facts every product of a website shares (business, brand and theme, region and Format,
+  pages, team) are kept once in the Portal: one signed pull (`GET /v1/product/websites/:id/settings?since=`), a
+  `settingsVersion` in the status answer and a `website.settings_changed` notice; a copy in the product database and
+  60 s in memory, never the Portal on the hot path (`product.website(id)`, `ctx.website()`). The theme and the Format
+  come from it and a save of them is 409 `managed_by_portal`; `product.business(id)` and `product.format(id)` read it.
+  While the Portal holds none for a website the product uses its own values.
+- **business.json** (until the Portal holds the settings), **data rights** (`POST /v1/data-rights/export|delete`), the **activity log** with copies to
   Accounts, **Recent changes**.
 - **Product dashboard** — `GET /sso?launch=` sessions, the switcher, roles and the dashboard API every product's
   `app/` pages call.

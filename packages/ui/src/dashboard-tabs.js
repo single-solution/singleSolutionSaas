@@ -14,7 +14,7 @@
 import { useState } from 'react';
 import { Button } from './Button.js';
 import { CodeBlock } from './CodeBlock.js';
-import { Badge, Callout, Card, EmptyState, StatusPill, TextLink } from './display.js';
+import { Badge, Callout, Card, EmptyState, ManagedNote, StatusPill, TextLink } from './display.js';
 import { SaveBar, SectionLayout, SettingList, SettingsCard, ViewTitle } from './blocks.js';
 import { Input, Switch } from './fields.js';
 import { ActionMenu } from './Menu.js';
@@ -433,7 +433,7 @@ function TextsPanel({ items, saveUrl, resetBody, savedSource, reload }) {
  * Theme & format: the inner sidebar has Colors, Type, Shapes and Formats; one Save changes bar saves whichever changed.
  * @param {TabProps} props
  */
-export function LookTab({ websiteId }) {
+export function LookTab({ websiteId, portal }) {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const theme = useLoad(`${base}/theme`);
 	const format = useLoad(`${base}/format`);
@@ -441,21 +441,51 @@ export function LookTab({ websiteId }) {
 		<Loaded answer={theme.answer}>
 			{(themeData) => (
 				<Loaded answer={format.answer}>
-					{(formatData) => (
-						<LookPanel
-							theme={themeData.theme}
-							format={formatData.format}
-							saveTheme={(next) => call('PUT', `${base}/theme`, next)}
-							saveFormat={(next) => call('PUT', `${base}/format`, next)}
-							reload={() => {
-								theme.reload();
-								format.reload();
-							}}
-						/>
-					)}
+					{(formatData) =>
+						// the Portal holds the website's settings: the look and the Format are read there, not edited here
+						isManaged(themeData) && isManaged(formatData) ? (
+							<ManagedLook portal={portal} websiteId={websiteId} />
+						) : (
+							<LookPanel
+								theme={themeData.theme}
+								format={formatData.format}
+								saveTheme={(next) => call('PUT', `${base}/theme`, next)}
+								saveFormat={(next) => call('PUT', `${base}/format`, next)}
+								reload={() => {
+									theme.reload();
+									format.reload();
+								}}
+							/>
+						)
+					}
 				</Loaded>
 			)}
 		</Loaded>
+	);
+}
+
+/** Whether every value of a theme or Format answer comes from the Portal. @param {{ sources?: Record<string, string> }} data */
+const isManaged = (data) => {
+	const sources = Object.values(data?.sources ?? {});
+	return sources.length > 0 && sources.every((source) => source === 'portal');
+};
+
+/**
+ * The Theme & format tab while the Portal holds the website's settings: where each is set, with a link.
+ * @param {{ portal: string, websiteId: string | null }} props
+ */
+function ManagedLook({ portal, websiteId }) {
+	const { texts } = useDashboard();
+	const here = `${String(portal).replace(/\/+$/, '')}/websites/${encodeURIComponent(String(websiteId))}/settings`;
+	return (
+		<div className="space-y-3">
+			<ManagedNote title={texts.managed.title} href={`${here}#brand`} linkLabel={texts.managed.open}>
+				{texts.managed.look}
+			</ManagedNote>
+			<ManagedNote href={`${here}#region`} linkLabel={texts.managed.open}>
+				{texts.managed.format}
+			</ManagedNote>
+		</div>
 	);
 }
 

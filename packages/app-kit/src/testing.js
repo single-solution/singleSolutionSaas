@@ -2,7 +2,8 @@
  * `@ss/app-kit/testing` — test doubles for products built on the kit:
  *
  * - `createFakePortal()`: the Portal side of the Product ↔ Portal contract (PLAN 0.4.12): connect, price and feature
- *   reports, status (settable), websites, revocations, directory and launch consume, plus helpers that sign tokens,
+ *   reports, status (settable), a website's settings (`setWebsiteSettings`, served at `GET /v1/product/websites/:id/settings`),
+ *   websites, revocations, directory and launch consume, plus helpers that sign tokens,
  *   launches, notices and Portal calls (`signCall`, `callAsPortal`: `GET /v1/blueprint`, `POST /v1/blueprint/features`);
  * - `createAccountsDouble()`: Accounts as products see it: it receives activity copies, serves sign-in keys and the
  *   users with a permission (staff alerts), and calls a product's data-rights routes with a pasted server token;
@@ -15,7 +16,8 @@
  * @module
  */
 import { createPrivateKey, sign as cryptoSign } from 'node:crypto';
-import { validateActivityCopy, validateFeatureReport, validatePriceReport } from '@ss/contracts';
+import { validateActivityCopy, validateFeatureReport, validatePriceReport, validateWebsiteSettings } from '@ss/contracts';
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { netError } from '@ss/net';
 import {
 	NOTICE_PATH,
@@ -64,6 +66,7 @@ export const productKeyOf = async ({ store, encryptionKey }) => {
  * @property {string | null} graceEndsAt
  * @property {number} todayMillicredits
  * @property {Record<string, { version: number, on: string[] }>} features by product id
+ * @property {import('@ss/contracts').WebsiteSettings | null} settings the website settings the Portal holds (null: none saved)
  */
 
 /**
@@ -177,6 +180,7 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 		graceEndsAt: site.status === 'grace' ? site.graceEndsAt : null,
 		todayMillicredits: site.todayMillicredits,
 		featuresVersion: site.features[productId]?.version ?? 0,
+		settingsVersion: site.settings?.version ?? 0,
 		validUntil: new Date(now() + 5 * 60_000).toISOString(),
 	});
 
@@ -203,6 +207,11 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 			const site = websites.get(parts[3]);
 			if (!site) return fail(url, 'website_not_found', 404);
 			if (method === 'GET' && parts[4] === 'status') return json(200, statusOf(site, productId));
+			if (method === 'GET' && parts[4] === 'settings') {
+				const since = Number(searchParams.get('since') ?? '0');
+				const version = site.settings?.version ?? 0;
+				return json(200, { version, settings: site.settings && version > since ? site.settings : null });
+			}
 			if (method === 'PUT' && parts[4] === 'features') {
 				const checked = validateFeatureReport(body);
 				if (!checked.ok) return fail(url, 'validation_failed', 422);
@@ -351,12 +360,34 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 				graceEndsAt,
 				todayMillicredits,
 				features: {},
+				settings: null,
 			});
 			return id;
 		},
 		/** @param {string} websiteId @param {Partial<Pick<FakeWebsite, 'status' | 'graceEndsAt' | 'todayMillicredits'>>} patch */
 		setStatus: (websiteId, patch) => {
 			Object.assign(site(websiteId), patch);
+		},
+		/**
+		 * Save website settings as the Portal does: the sections given replace the held ones, the version rises by one
+		 * and the whole document must be valid. Products learn it from the status (`settingsVersion`) and a notice.
+		 * @param {string} websiteId
+		 * @param {Partial<Pick<import('@ss/contracts').WebsiteSettings, 'business' | 'brand' | 'region' | 'pages' | 'team'>>} sections
+		 * @returns {number} the new version
+		 */
+		setWebsiteSettings: (websiteId, sections) => {
+			const found = site(websiteId);
+			const current = found.settings ?? emptyWebsiteSettings(websiteId);
+			const next = {
+				...current,
+				...sections,
+				version: current.version + 1,
+				updatedAt: new Date(now()).toISOString(),
+			};
+			const checked = validateWebsiteSettings(next);
+			if (!checked.ok) throw new Error(`invalid website settings: ${JSON.stringify(checked.problems)}`);
+			found.settings = next;
+			return next.version;
 		},
 		/**
 		 * Add a removed product to a website again, as the Portal does (PLAN 0.4.12 row 4): active, every feature off and
@@ -440,7 +471,7 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 		},
 		/**
 		 * Sign a notice body.
-		 * @param {{ type: string, websiteId?: string, subject?: string }} notice
+		 * @param {{ type: string, websiteId?: string, subject?: string, what?: string }} notice
 		 * @returns {Promise<{ headers: Record<string, string>, body: string }>}
 		 */
 		signNotice: async (notice) => {
@@ -456,7 +487,7 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 		/**
 		 * Sign and deliver a notice to a connected product.
 		 * @param {string} productId
-		 * @param {{ type: string, websiteId?: string, subject?: string }} notice
+		 * @param {{ type: string, websiteId?: string, subject?: string, what?: string }} notice
 		 * @returns {Promise<Response>}
 		 */
 		sendNotice: async (productId, notice) => {

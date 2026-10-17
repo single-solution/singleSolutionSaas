@@ -45,6 +45,11 @@
 			"enum": ["website", "default", "built-in"],
 			"description": "Where a value comes from: saved for this website, the global default, or built in."
 		},
+		"LookSource": {
+			"type": "string",
+			"enum": ["website", "default", "built-in", "portal"],
+			"description": "Where a theme or Format value comes from: saved for this website, the global default, built in, or the website's settings in the Portal (then a save is refused with 409 managed_by_portal)."
+		},
 		"Text": {
 			"type": "object",
 			"required": ["key", "english", "value", "source"],
@@ -111,19 +116,19 @@
 					"additionalProperties": false,
 					"properties": {
 						"colors": {
-							"$ref": "#/components/schemas/ValueSource"
+							"$ref": "#/components/schemas/LookSource"
 						},
 						"fontFamily": {
-							"$ref": "#/components/schemas/ValueSource"
+							"$ref": "#/components/schemas/LookSource"
 						},
 						"radius": {
-							"$ref": "#/components/schemas/ValueSource"
+							"$ref": "#/components/schemas/LookSource"
 						},
 						"mode": {
-							"$ref": "#/components/schemas/ValueSource"
+							"$ref": "#/components/schemas/LookSource"
 						},
 						"customCss": {
-							"$ref": "#/components/schemas/ValueSource"
+							"$ref": "#/components/schemas/LookSource"
 						}
 					}
 				}
@@ -177,19 +182,19 @@
 					"additionalProperties": false,
 					"properties": {
 						"locale": {
-							"$ref": "#/components/schemas/ValueSource"
+							"$ref": "#/components/schemas/LookSource"
 						},
 						"currencyDisplay": {
-							"$ref": "#/components/schemas/ValueSource"
+							"$ref": "#/components/schemas/LookSource"
 						},
 						"currencySymbols": {
-							"$ref": "#/components/schemas/ValueSource"
+							"$ref": "#/components/schemas/LookSource"
 						},
 						"wholeUnits": {
-							"$ref": "#/components/schemas/ValueSource"
+							"$ref": "#/components/schemas/LookSource"
 						},
 						"times": {
-							"$ref": "#/components/schemas/ValueSource"
+							"$ref": "#/components/schemas/LookSource"
 						}
 					}
 				}
@@ -750,12 +755,14 @@
 	},
 	"GET /v1/theme": {
 		"summary": "The widgets' theme",
+		"description": "From the Portal (sources `portal`) once it holds the website's settings; the product's own saved theme before that.",
 		"response": {
 			"$ref": "#/components/schemas/Theme"
 		}
 	},
 	"PUT /v1/theme": {
 		"summary": "Save theme fields (null resets one)",
+		"description": "Answers 409 managed_by_portal once the Portal holds the website's settings: the theme is set in the Portal (Website settings › Brand and look).",
 		"body": {
 			"type": "object",
 			"additionalProperties": false,
@@ -787,12 +794,14 @@
 	},
 	"GET /v1/format": {
 		"summary": "The Format of money and dates",
+		"description": "From the Portal (sources `portal`) once it holds the website's settings; the product's own saved Format before that.",
 		"response": {
 			"$ref": "#/components/schemas/Format"
 		}
 	},
 	"PUT /v1/format": {
 		"summary": "Save Format fields (null resets one)",
+		"description": "Answers 409 managed_by_portal once the Portal holds the website's settings: the Format is set in the Portal (Website settings › Region and format).",
 		"body": {
 			"type": "object",
 			"additionalProperties": false,
