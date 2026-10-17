@@ -485,10 +485,12 @@ describe('Chat lookups', () => {
 			],
 		});
 		for (const path of ['/v1/chat/me/orders', '/v1/chat/me/account', '/v1/chat/me/shipments']) {
-			const none = await shop.api('GET', path);
+			const none = await shop.call('GET', path, { token: shop.server, bare: true });
 			expect(none.status).toBe(403);
 			expect(none.json.type).toMatch(/sign_in_required$/);
-			expect((await shop.api('GET', path, undefined, { 'ss-sign-in': 'not-a-sign-in' })).status).toBe(403);
+			expect(
+				(await shop.call('GET', path, { token: shop.server, bare: true, headers: { 'ss-sign-in': 'not-a-sign-in' } })).status,
+			).toBe(403);
 		}
 	});
 

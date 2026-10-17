@@ -947,7 +947,7 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/products',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'catalog',
 				rateLimit: SERVER_LIMITS,
 				handler: search,
@@ -956,7 +956,7 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/products/top',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'catalog',
 				rateLimit: SERVER_LIMITS,
 				handler: top,
@@ -964,7 +964,7 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/products/:id',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'catalog',
 				rateLimit: SERVER_LIMITS,
 				handler: details,
@@ -972,7 +972,7 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/products/:id/quote',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'deals',
 				rateLimit: SERVER_LIMITS,
 				handler: quote,
@@ -980,7 +980,7 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/deals',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'deals',
 				rateLimit: SERVER_LIMITS,
 				handler: deals,
@@ -988,7 +988,7 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/me/orders',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'checkout',
 				rateLimit: SERVER_LIMITS,
 				handler: myOrders,
@@ -996,7 +996,7 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/me/account',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'checkout',
 				rateLimit: SERVER_LIMITS,
 				handler: myAccount,
@@ -1004,7 +1004,7 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/me/shipments',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'checkout',
 				rateLimit: SERVER_LIMITS,
 				handler: myShipments,
@@ -1012,7 +1012,7 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/chat/context',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'catalog',
 				rateLimit: SERVER_LIMITS,
 				handler: context,
@@ -1020,7 +1020,7 @@ export const createChatLookup = (product, service, media) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/customers/:userId/orders',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'checkout',
 				rateLimit: SERVER_LIMITS,
 				handler: customerOrders,

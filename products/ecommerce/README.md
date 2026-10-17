@@ -63,8 +63,8 @@ settings API (features, settings, texts, theme, Format, connections, and the lis
 details, or `PUT /v1/lists/store_details`: name, tagline, logo, dark logo, icon, favicon and dark favicon in the merchant's
 storage, contacts with more phone numbers, address, opening hours, social links) are read in public form at
 `GET /v1/shop/store` (with the website's own address, `siteUrl`), and `GET /v1/shop/store/business-json` gives the
-business.json a headless website serves at `/.well-known/business.json`. Server-token calls may name
-the acting staff member with the `SS-Actor-*` headers, and the shopper routes (`/v1/shop/…`: cart, checkout, my orders,
+business.json a headless website serves at `/.well-known/business.json`. Staff work with the server token needs
+the verified `SS-Sign-In` of a signed-in staff member with the permission (the token alone is 403), and the shopper routes (`/v1/shop/…`: cart, checkout, my orders,
 cancel, loyalty, wishlist) also take the server token with `SS-Sign-In` and `SS-Visitor-IP`, so a headless website acts
 as the shopper who signed in through Accounts: the kit checks that sign-in for the website of the token and refuses a
 wrong, expired, foreign or forged one with 401 `invalid_sign_in`; a user id alone is never taken.

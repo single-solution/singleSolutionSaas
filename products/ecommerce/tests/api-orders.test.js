@@ -88,7 +88,7 @@ describe('the shop events (GET /v1/events)', () => {
 			from: 'awaiting_confirmation',
 			to: 'confirmed',
 			reason: null,
-			by: 'Server',
+			by: 'Test Staff',
 		});
 		expect(find('ecommerce.order.payment_recorded', paid.id)[0]?.data).toMatchObject({
 			method: 'cod',

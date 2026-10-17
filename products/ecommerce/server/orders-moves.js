@@ -30,7 +30,7 @@
  * needs. A staff refund (`refund`) goes through the order's refund lock (`server/transitions.js` `lockedRefund`).
  *
  * Every move is written to the order's history with the name of the staff member who made it (a ticket's user, or the
- * one a server-token call names in its `SS-Actor-*` headers, else `Server`; PLAN 0.8.10 K2) and its kind, the activity
+ * one a server-token call carries as its verified `SS-Sign-In`, else `Server`; PLAN 0.8.10 K2) and its kind, the activity
  * log (with the order number and the move), the `order.moved` hook and the shopper's message. Notes the server writes
  * itself and the warnings staff get carry a code and values besides their English (PLAN 0.4.10).
  * @module

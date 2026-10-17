@@ -67,29 +67,18 @@ export const UPLOAD_SECONDS = 900;
 /** The server token as an actor, when a call names no member of the staff (PLAN 0.8.10 K2). */
 const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
 
-/** What the `SS-Actor-*` headers take (the kit's rules), so a refund asked of Payments names its staff member. */
-const ACTOR_ID = /^[A-Za-z0-9_.:@-]{1,64}$/;
-const MAX_ACTOR_NAME = 120;
-const MAX_ACTOR_ROLE = 40;
-
-/** @param {string} text */
-const plainText = (text) => [...text].every((ch) => ch.charCodeAt(0) >= 0x20 && ch.charCodeAt(0) !== 0x7f);
-
 /**
- * The `SS-Actor-*` headers naming a member of the staff on a call to another product (K2), or none for the server or
- * a name the headers cannot carry.
- * @param {{ kind: string, id: string, name?: string, role?: string }} who
- * @returns {Record<string, string>}
+ * The sign-in of the staff member who asked, to send with a call to another product that only a verified staff member may
+ * make (a refund through Payments): the server token alone could not do it there either. It is the sign-in this request
+ * carried (`SS-Sign-In`, which the widget sends next to its ticket), verified here, and only when it names the same person
+ * as `by`. Nothing is sent for the server itself or when the request carried none: the other product then refuses.
+ * @param {{ ctx: any }} s
+ * @param {{ kind: string, id: string }} by
+ * @returns {Promise<Record<string, string>>}
  */
-export const actorHeaders = (who) => {
-	const name = who.name ?? '';
-	if (who.kind === 'server' || !ACTOR_ID.test(who.id) || !name || name.length > MAX_ACTOR_NAME || !plainText(name)) return {};
-	const role = who.role && who.role.length <= MAX_ACTOR_ROLE && plainText(who.role) ? who.role : '';
-	return {
-		'ss-actor-id': who.id,
-		'ss-actor-name': encodeURIComponent(name),
-		...(role ? { 'ss-actor-role': encodeURIComponent(role) } : {}),
-	};
+export const staffSignInHeaders = async (s, by) => {
+	const found = await s.ctx?.staffSignIn?.();
+	return found?.ok && found.user.id === by.id ? { 'ss-sign-in': found.token } : {};
 };
 
 /**
@@ -417,7 +406,7 @@ export const createService = (product) => {
 
 	/**
 	 * Who acts (PLAN 0.8.10 K2): the member of the merchant's staff in the ticket, else the one a server-token call names
-	 * in its `SS-Actor-*` headers (with their role), else the server.
+	 * in its verified `SS-Sign-In` (with their role), else the server.
 	 * @param {any} ctx
 	 * @returns {{ kind: string, id: string, name: string, role?: string, email?: string }}
 	 */
@@ -680,7 +669,7 @@ export const createService = (product) => {
 			return { outcome: 'unreachable' };
 		},
 		/**
-		 * Refund (all or part) of a payment through Payments, naming the member of the staff who asked (K2): 502
+		 * Refund (all or part) of a payment through Payments, with the verified sign-in of the member of the staff who asked (K2): 502
 		 * `payments_refused` when Payments says no (not done), 503 `payments_unavailable` when it cannot be reached (it may
 		 * have been done: the same Idempotency-Key gets its answer).
 		 * @param {Site} s @param {string} paymentId
@@ -695,7 +684,7 @@ export const createService = (product) => {
 				'POST',
 				`/v1/payments/${encodeURIComponent(paymentId)}/refunds`,
 				{ amount, reason },
-				{ 'idempotency-key': idempotencyKey, ...actorHeaders(by) },
+				{ 'idempotency-key': idempotencyKey, ...(await staffSignInHeaders(s, by)) },
 				{ refusals: true },
 			);
 			const refunds = Array.isArray(body.refunds) ? body.refunds : [];

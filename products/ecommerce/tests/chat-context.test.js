@@ -865,7 +865,8 @@ describe('Chat lookups (E37)', () => {
 
 	it('serves the store context with policies, newest products, deals, the viewed product and the visitor', async () => {
 		await shop.methods({ cod: { note: 'Have cash ready.' } });
-		const guest = await shop.api('GET', '/v1/chat/context?productId=iphone-13');
+		// (Chat's lookup: the server token alone, the visitor's own sign-in only when Chat forwards one)
+		const guest = await shop.call('GET', '/v1/chat/context?productId=iphone-13', { token: shop.server, bare: true });
 		expect(guest.status).toBe(200);
 		expect(guest.json).toMatchObject({
 			business: 'Shop',

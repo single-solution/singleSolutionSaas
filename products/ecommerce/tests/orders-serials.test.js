@@ -203,7 +203,7 @@ describe('E11 serial capture', () => {
 				},
 			],
 		});
-		expect(typed.history.at(-1)).toMatchObject({ note: 'Serial numbers typed', code: 'serials_typed', byKind: 'server' });
+		expect(typed.history.at(-1)).toMatchObject({ note: 'Serial numbers typed', code: 'serials_typed', byKind: 'user' });
 		const data = await shop.db();
 		const recorded = await data
 			.collection(COLLECTIONS.serials)

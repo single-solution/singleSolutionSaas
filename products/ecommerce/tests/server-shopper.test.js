@@ -118,17 +118,20 @@ describe('shopper routes called from the website’s server', () => {
 		expect((await asShopper('POST', `/v1/shop/orders/${id}/cancel`, sara, {})).status).toBe(200);
 	});
 
-	it('leave the staff acting rules as they were: SS-Actor headers still name the member, a half-set is refused', async () => {
-		const staff = await shop.api('GET', '/v1/orders', undefined, {
-			'ss-actor-id': 'usr_ali0001',
-			'ss-actor-name': 'Ali',
+	it('keep the staff rules: only a verified staff sign-in names the member; actor headers mean nothing', async () => {
+		const forged = await shop.call('GET', '/v1/orders', {
+			token: shop.server,
+			bare: true,
+			headers: { 'ss-actor-id': 'usr_ali0001', 'ss-actor-name': 'Ali' },
 		});
+		expect([forged.status, codeOf(forged)]).toEqual([403, 'needs_signed_in_staff']);
+		const staff = await shop.api('GET', '/v1/orders', undefined, { 'ss-actor-id': 'usr_ali0001', 'ss-actor-name': 'Ali' });
 		expect(staff.status).toBe(200);
-		const half = await shop.api('GET', '/v1/orders', undefined, { 'ss-actor-id': 'usr_ali0001' });
-		expect([half.status, codeOf(half)]).toEqual([400, 'invalid_actor']);
-		// a staff call is not changed by a sign-in header
+		// a shopper's sign-in is no staff: the staff routes refuse it, whatever else is sent
 		const sara = await shop.signIn({ id: 'usr_serversara003', name: 'Sara Server' });
-		expect((await shop.api('GET', '/v1/orders', undefined, { 'ss-sign-in': sara })).status).toBe(200);
-		expect((await shop.api('GET', '/v1/orders', undefined, { 'ss-sign-in': 'junk' })).status).toBe(200);
+		const asShopper = await shop.call('GET', '/v1/orders', { token: shop.server, bare: true, headers: { 'ss-sign-in': sara } });
+		expect([asShopper.status, codeOf(asShopper)]).toEqual([403, 'forbidden']);
+		const junk = await shop.call('GET', '/v1/orders', { token: shop.server, bare: true, headers: { 'ss-sign-in': 'junk' } });
+		expect(junk.status).toBe(401);
 	});
 });

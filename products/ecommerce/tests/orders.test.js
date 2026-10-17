@@ -282,8 +282,8 @@ describe('moving orders', () => {
 		expect((await move(order.id, 'confirmed', { note: 5 })).status).toBe(422);
 		const viaServer = await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'canceled' });
 		expect(viaServer.status).toBe(200);
-		// the server token keeps its kind, so the widgets tell it from a member of the staff named Server (PLAN 0.4.10)
-		expect(viaServer.json.history.at(-1)).toMatchObject({ by: 'Server', byKind: 'server' });
+		// a move through the server token is the signed-in staff member's, as the widgets show it (PLAN 0.4.10)
+		expect(viaServer.json.history.at(-1)).toMatchObject({ by: 'Test Staff', byKind: 'user' });
 		expect(
 			(await shop.admin(await shop.ticket(['orders.read']), 'POST', `/v1/admin/orders/${order.id}/move`, { to: 'x' })).status,
 		).toBe(403);

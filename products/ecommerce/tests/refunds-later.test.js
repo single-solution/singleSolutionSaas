@@ -83,7 +83,7 @@ describe('a staff refund Payments finishes later', () => {
 				from: 'delivered',
 				to: 'refunded',
 				code: 'refunds_cover_payments',
-				by: 'Server',
+				by: 'Test Staff',
 			});
 			// sent again with the same key, never twice
 			expect(new Set(records.refundCalls(paymentId).map((call) => call.headers['idempotency-key'])).size).toBe(1);

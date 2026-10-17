@@ -1299,7 +1299,7 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/seo/site',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'catalog',
 				rateLimit: SEO_LIMITS,
 				handler: conditional(siteSeo, service.now),
@@ -1307,7 +1307,7 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/seo/products/:ref',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'catalog',
 				rateLimit: SEO_LIMITS,
 				handler: conditional(productSeo, service.now),
@@ -1315,7 +1315,7 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/seo/categories/:ref',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'catalog',
 				rateLimit: SEO_LIMITS,
 				handler: conditional(categorySeo, service.now),
@@ -1323,7 +1323,7 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/seo/sitemap.xml',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'catalog',
 				rateLimit: SEO_LIMITS,
 				handler: sitemap,
@@ -1331,7 +1331,7 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/seo/sitemaps/:file',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'catalog',
 				rateLimit: SEO_LIMITS,
 				handler: sitemapFile,
@@ -1339,7 +1339,7 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/media',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'catalog',
 				rateLimit: SEO_LIMITS,
 				handler: mediaFile,
@@ -1347,7 +1347,7 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/feeds/products.xml',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'feeds',
 				rateLimit: SEO_LIMITS,
 				handler: googleFeed,
@@ -1355,7 +1355,7 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/feeds/products.csv',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'feeds',
 				rateLimit: SEO_LIMITS,
 				handler: metaFeed,
@@ -1363,7 +1363,7 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/llms.txt',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'llms_txt',
 				rateLimit: SEO_LIMITS,
 				handler: llmsTxt,
@@ -1371,7 +1371,7 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/llms-full.txt',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'llms_txt',
 				rateLimit: SEO_LIMITS,
 				handler: llmsFull,
@@ -1387,7 +1387,7 @@ export const createSeo = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/policies',
-				auth: 'server',
+				auth: 'server', runtime: true,
 				feature: 'checkout',
 				rateLimit: SEO_LIMITS,
 				handler: policies,

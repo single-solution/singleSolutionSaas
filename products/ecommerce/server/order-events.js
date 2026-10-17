@@ -312,7 +312,7 @@ export const createOrderEvents = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/events',
-				auth: 'server',
+				auth: 'server', permission: 'orders.read',
 				feature: 'events',
 				rateLimit: SERVER_LIMITS,
 				handler: (ctx) => product.events.list(ctx),
@@ -320,7 +320,7 @@ export const createOrderEvents = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/events/count',
-				auth: 'server',
+				auth: 'server', permission: 'orders.read',
 				feature: 'events',
 				rateLimit: SERVER_LIMITS,
 				handler: (ctx) => product.events.count(ctx),
@@ -328,7 +328,7 @@ export const createOrderEvents = (product, service) => {
 			defineRoute({
 				method: 'GET',
 				path: '/v1/events/counts',
-				auth: 'server',
+				auth: 'server', permission: 'orders.read',
 				feature: 'events',
 				rateLimit: SERVER_LIMITS,
 				handler: (ctx) => product.events.counts(ctx),

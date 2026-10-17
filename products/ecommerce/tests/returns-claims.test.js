@@ -322,10 +322,10 @@ describe('claim outcomes and notes', () => {
 		expect((await shop.api('POST', '/v1/returns/ret_missing/notes', { text: 'Hi' })).status).toBe(404);
 		const noted = await shop.api('POST', `/v1/returns/${id}/notes`, { text: 'Called the shopper' });
 		expect(noted.status).toBe(201);
-		expect(noted.json.notes).toEqual([{ at: expect.any(String), by: 'Server', text: 'Called the shopper' }]);
+		expect(noted.json.notes).toEqual([{ at: expect.any(String), by: 'Test Staff', text: 'Called the shopper' }]);
 		const twice = await shop.admin(ticket, 'POST', `/v1/admin/returns/${id}/notes`, { text: 'Courier booked' });
 		expect(twice.json.notes.map((/** @type {any} */ n) => [n.by, n.text])).toEqual([
-			['Server', 'Called the shopper'],
+			['Test Staff', 'Called the shopper'],
 			['Sam Staff', 'Courier booked'],
 		]);
 		expect(twice.json.status).toBe('replaced');

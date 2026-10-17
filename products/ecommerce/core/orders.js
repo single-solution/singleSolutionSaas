@@ -126,7 +126,7 @@ export const serverNote = (code, note, values) => ({ note, code, ...(values ? { 
 
 /**
  * Who made a history entry, as the entry keeps it: the actor's name and kind (`staff`: a ticket's user; `user`: the
- * member of the staff a server call names in its `SS-Actor-*` headers; `server`: the server token, named `Server`), so
+ * member of the staff a server call carries as its verified `SS-Sign-In`; `server`: the server token, named `Server`), so
  * the widgets tell the server from a member of the staff of the same name.
  * @param {{ kind: string, name?: string }} actor
  */

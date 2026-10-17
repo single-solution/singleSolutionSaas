@@ -10,7 +10,7 @@ import { dayBounds } from '../core/calendar.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import { parseRange } from '../core/reports.js';
-import { actorHeaders } from '../server/service.js';
+import { staffSignInHeaders } from '../server/service.js';
 import { ALL, ORIGIN, PAYMENTS, readyShop, storedOrder } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
@@ -223,17 +223,23 @@ describe('K2 and K9: the acting staff member and labeled activity', () => {
 
 		const plain = await seedOrder();
 		const byServer = await shop.api('POST', `/v1/orders/${plain.id}/move`, { to: 'confirmed' });
-		expect(byServer.json.history.at(-1).by).toBe('Server');
-		expect((await activityOf(plain.id))[0].actor).toEqual({ kind: 'server', id: 'server', name: 'Server' });
+		expect(byServer.json.history.at(-1).by).toBe('Test Staff');
+		expect((await activityOf(plain.id))[0].actor).toEqual({ kind: 'user', id: 'usr_test_staff', name: 'Test Staff', role: 'owner' });
 
 		const staff = await seedOrder();
 		const byTicket = await shop.admin(ticket, 'POST', `/v1/admin/orders/${staff.id}/move`, { to: 'confirmed' });
 		expect(byTicket.json.history.at(-1).by).toBe('Sam Staff');
 		expect((await activityOf(staff.id))[0].actor).toMatchObject({ kind: 'staff', name: 'Sam Staff' });
 
-		const malformed = await shop.api('POST', `/v1/orders/${plain.id}/move`, { to: 'packed' }, { 'ss-actor-id': 'usr_x' });
-		expect(malformed.status).toBe(400);
-		expect(codeOf(malformed)).toBe('invalid_actor');
+		// headers that only name a person are no staff member, alone or half set
+		const forged = await shop.call('POST', `/v1/orders/${plain.id}/move`, {
+			token: shop.server,
+			bare: true,
+			body: { to: 'packed' },
+			headers: { 'ss-actor-id': 'usr_x', 'ss-actor-name': 'X' },
+		});
+		expect(forged.status).toBe(403);
+		expect(codeOf(forged)).toBe('needs_signed_in_staff');
 	});
 
 	it('names the staff member on bulk moves, notes and refunds, and tells Payments who refunded', async () => {
@@ -274,17 +280,19 @@ describe('K2 and K9: the acting staff member and labeled activity', () => {
 		const call = /** @type {import('./helpers.js').Call} */ (
 			shop.callsTo(PAYMENTS).findLast((c) => c.path === '/v1/payments/pay_kitrefund/refunds')
 		);
-		expect(call.headers).toMatchObject({
-			'ss-actor-id': 'usr_ali0001',
-			'ss-actor-name': encodeURIComponent('Ali Khān'),
-			'ss-actor-role': encodeURIComponent('Store manager'),
-		});
+		// Payments takes the staff member from their verified sign-in, never from headers that name them
+		const claims = JSON.parse(Buffer.from(String(call.headers['ss-sign-in']).split('.')[1] ?? '', 'base64url').toString());
+		expect(claims).toMatchObject({ sub: 'usr_ali0001', name: 'Ali Khān' });
+		expect(call.headers['ss-actor-id']).toBeUndefined();
 		expect((await activityOf(paid.id))[0]).toMatchObject({ action: 'order.refunded', detail: 'Refunded USD 2.50' });
 		await shop.api('POST', `/v1/orders/${paid.id}/refunds`, { amount: 100, reason: 'Again' });
 		const plainCall = /** @type {import('./helpers.js').Call} */ (
 			shop.callsTo(PAYMENTS).findLast((c) => c.path === '/v1/payments/pay_kitrefund/refunds')
 		);
 		expect(plainCall.headers['ss-actor-id']).toBeUndefined();
+		expect(JSON.parse(Buffer.from(String(plainCall.headers['ss-sign-in']).split('.')[1] ?? '', 'base64url').toString())).toMatchObject({
+			sub: 'usr_test_staff',
+		});
 	});
 
 	it('names the staff member on return claims and catalog edits', async () => {
@@ -335,7 +343,11 @@ describe('K2 and K9: the acting staff member and labeled activity', () => {
 		const call = /** @type {import('./helpers.js').Call} */ (
 			shop.callsTo(PAYMENTS).findLast((c) => c.path === '/v1/payments/pay_kitclaim/refunds')
 		);
-		expect(call.headers['ss-actor-name']).toBe(encodeURIComponent('Ali Khān'));
+		expect(call.headers['ss-actor-name']).toBeUndefined();
+		expect(JSON.parse(Buffer.from(String(call.headers['ss-sign-in']).split('.')[1] ?? '', 'base64url').toString())).toMatchObject({
+			sub: 'usr_ali0001',
+			name: 'Ali Khān',
+		});
 
 		const created = await shop.api('POST', '/v1/products', { name: 'Kit Charger', price: 1500, sku: 'KIT-CH' }, ACTOR);
 		expect(created.status).toBe(201);
@@ -368,16 +380,15 @@ describe('K2 and K9: the acting staff member and labeled activity', () => {
 		expect((await activityOf(created.json.id))[0]).toMatchObject({ action: 'product.updated', detail: 'draft → active' });
 	});
 
-	it('only names a staff member Payments can take', () => {
-		expect(actorHeaders({ kind: 'server', id: 'server', name: 'Server' })).toEqual({});
-		expect(actorHeaders({ kind: 'staff', id: 'has space', name: 'Sam' })).toEqual({});
-		expect(actorHeaders({ kind: 'staff', id: 'usr_1', name: '' })).toEqual({});
-		expect(actorHeaders({ kind: 'staff', id: 'usr_1', name: 'x'.repeat(121) })).toEqual({});
-		expect(actorHeaders({ kind: 'staff', id: 'usr_1', name: 'Bad\nName' })).toEqual({});
-		expect(actorHeaders({ kind: 'user', id: 'usr_1', name: 'Sam', role: 'r'.repeat(41) })).toEqual({
-			'ss-actor-id': 'usr_1',
-			'ss-actor-name': 'Sam',
-		});
+	it('sends Payments the verified sign-in of the staff member who asked, and only theirs', async () => {
+		const ctx = (/** @type {any} */ found) => ({ ctx: { staffSignIn: async () => found } });
+		const found = { ok: true, token: 'a.sign.in', user: { id: 'usr_1' } };
+		expect(await staffSignInHeaders(ctx(found), { kind: 'user', id: 'usr_1' })).toEqual({ 'ss-sign-in': 'a.sign.in' });
+		// another person, no sign-in, a refused one, the server itself: nothing is sent, Payments refuses
+		expect(await staffSignInHeaders(ctx(found), { kind: 'staff', id: 'usr_2' })).toEqual({});
+		expect(await staffSignInHeaders(ctx(null), { kind: 'user', id: 'usr_1' })).toEqual({});
+		expect(await staffSignInHeaders(ctx({ ok: false, code: 'expired' }), { kind: 'user', id: 'usr_1' })).toEqual({});
+		expect(await staffSignInHeaders({ ctx: {} }, { kind: 'server', id: 'server' })).toEqual({});
 	});
 });
 
