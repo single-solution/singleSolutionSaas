@@ -43,7 +43,6 @@ describe('identifiers', () => {
 	it('the domain of an address', () => {
 		expect(emailDomain('a@shop.example.com')).toBe('shop.example.com');
 	});
-
 });
 
 describe('profile', () => {
