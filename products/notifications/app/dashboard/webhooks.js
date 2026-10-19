@@ -5,7 +5,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, EntryGroup, Input, Skeleton, TextArea, describeProblem, SaveBar } from '@ss/ui';
+import { Button, Callout, Card, EntryGroup, Input, SettingsCardSkeleton, TextArea, describeProblem, SaveBar } from '@ss/ui';
 import { SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { MAX_WEBHOOK_URLS } from '../../core/limits.js';
 import { TEXTS } from './texts.js';
@@ -47,7 +47,7 @@ export function WebhookUrlsCard({ websiteId, off }) {
 	const { answer, reload } = useLoad(path);
 	const [draft, setDraft] = useState(/** @type {Row[] | null} */ (null));
 	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
-	if (!answer) return <Skeleton lines={2} label={TEXTS.loading} />;
+	if (!answer) return <SettingsCardSkeleton rows={2} />;
 	if (!answer.ok) return <Callout tone="danger">{describeProblem(answer.problem)}</Callout>;
 	const rows = draft ?? rowsOf(answer.data.value);
 	/** @param {number} at @param {Partial<Row>} patch */

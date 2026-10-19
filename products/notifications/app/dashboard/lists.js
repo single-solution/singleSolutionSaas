@@ -6,7 +6,19 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, Checkbox, EntryGroup, Input, Select, Skeleton, TextArea, describeProblem, SaveBar } from '@ss/ui';
+import {
+	Button,
+	Callout,
+	Card,
+	Checkbox,
+	EntryGroup,
+	Input,
+	Select,
+	SettingsCardSkeleton,
+	TextArea,
+	describeProblem,
+	SaveBar,
+} from '@ss/ui';
 import { CHANNELS, FALLBACK_CHANNELS } from '../../core/channels.js';
 import { SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
@@ -53,7 +65,7 @@ function ListCard({ websiteId, name, title, help, off, blank, render, rows: toRo
 	const { answer, reload } = useLoad(path);
 	const [draft, setDraft] = useState(/** @type {T[] | null} */ (null));
 	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
-	if (!answer) return <Skeleton lines={2} label={TEXTS.loading} />;
+	if (!answer) return <SettingsCardSkeleton rows={2} />;
 	if (!answer.ok) return <Callout tone="danger">{describeProblem(answer.problem)}</Callout>;
 	const saved = /** @type {any[]} */ (answer.data.value);
 	const rows = draft ?? (toRows ? toRows(saved) : /** @type {T[]} */ (saved));
