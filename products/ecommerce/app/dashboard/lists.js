@@ -11,12 +11,14 @@ import {
 	Badge,
 	Button,
 	Card,
+	DataTable,
+	DataTableSkeleton,
+	Drawer,
 	EntryGroup,
 	FieldGrid,
 	Icon,
 	IconButton,
 	Input,
-	ItemSwitcher,
 	Select,
 	TextArea,
 	SaveBar,
@@ -30,7 +32,7 @@ import { TEXTS } from './texts.js';
 
 /** @typedef {Record<string, any>} Item */
 /** @typedef {import('../../core/model.js').OrderFlow} OrderFlow */
-/** @typedef {{ websiteId: string, off?: boolean }} EditorProps */
+/** @typedef {{ websiteId: string, off?: boolean, bare?: boolean }} EditorProps the editor of a page of its own: `bare` leaves out the card title */
 
 const L = TEXTS.lists;
 
@@ -173,11 +175,26 @@ export const useList = (websiteId, list) => {
 };
 
 /**
- * A list of records, edited as a whole and saved with one PUT. `load` turns a saved record into its draft (amounts as
- * decimals), `clean` a draft back into the record to save, `check` finds draft problems before anything is sent.
+ * @typedef {object} ListColumn a column of a list editor's table beside the name
+ * @property {string} key
+ * @property {string} header
+ * @property {(item: Item, index: number) => import('react').ReactNode} render the cell, from the draft of the record
+ * @property {'text' | 'number'} [kind]
+ * @property {boolean} [low] hidden on narrow widths
+ * @property {string} [className]
+ */
+
+/**
+ * A list of records, edited as a whole and saved with one PUT (the frame's Save bar). The records are a table (the name
+ * and `columns`; the row menu moves a record up or down or removes it); a click on a row opens the record's fields in a
+ * drawer that edits the draft only (Done closes it). `load` turns a saved record into its draft (amounts as decimals),
+ * `clean` a draft back into the record to save, `check` finds draft problems before anything is sent.
  * @param {{ websiteId: string, list: string, title: string, help: string, itemLabel: string, max: number,
  *   blank: () => Item, load?: (item: Item) => Item, clean: (item: Item) => Item, check?: (items: Item[]) => string[],
- *   off?: boolean, render: (item: Item, set: (patch: Item) => void) => import('react').ReactNode }} props
+ *   off?: boolean, bare?: boolean, size?: 'md' | 'lg', columns?: ListColumn[], nameOf?: (item: Item) => string,
+ *   render: (item: Item, set: (patch: Item) => void) => import('react').ReactNode }} props `bare`: the page already
+ *   says the title, so the card has none; `size`: `lg` for a record with many fields; `nameOf`: the name of a record
+ *   (its name, label or title by default)
  */
 export function ListEditor({
 	websiteId,
@@ -191,59 +208,107 @@ export function ListEditor({
 	clean,
 	check,
 	off,
+	bare = false,
+	size = 'md',
+	columns = [],
+	nameOf = (item) => String(item.name ?? item.label ?? item.title ?? ''),
 	render,
 }) {
 	const state = useList(websiteId, list);
+	const [opened, setOpened] = useState(/** @type {number | null} */ (null));
+	const data = state.answer?.ok ? state.answer.data : null;
+	/** @type {Item[]} */
+	const items = state.draft ?? (Array.isArray(data?.value) ? data.value : []).map(load);
+	/** @param {Item[]} next */
+	const setItems = (next) => state.setDraft(next);
+	/** @param {number} index @param {Item} patch */
+	const set = (index, patch) => setItems(items.map((item, at) => (at === index ? { ...item, ...patch } : item)));
+	/** @param {Item} item @param {number} index */
+	const nameFor = (item, index) => nameOf(item) || `${itemLabel} ${index + 1}`;
+	const current = opened === null ? undefined : items[opened];
+	/** @type {Array<{ key: string, header: string, kind?: 'text' | 'number', low?: boolean, className?: string,
+	 *   render: (row: { item: Item, index: number }) => import('react').ReactNode }>} */
+	const tableColumns = [
+		{ key: 'name', header: L.columns.name, render: (row) => nameFor(row.item, row.index) },
+		...columns.map((column) => ({
+			key: column.key,
+			header: column.header,
+			...(column.kind ? { kind: column.kind } : {}),
+			...(column.low ? { low: true } : {}),
+			...(column.className ? { className: column.className } : {}),
+			render: (/** @type {{ item: Item, index: number }} */ row) => column.render(row.item, row.index),
+		})),
+	];
 	return (
-		<Card title={title} subtitle={off ? TEXTS.settings.off : `${help} ${fill(L.max, { max })}`}>
-			<Loaded answer={state.answer}>
-				{(data) => {
-					/** @type {Item[]} */
-					const items = state.draft ?? (Array.isArray(data.value) ? data.value : []).map(load);
-					/** @param {Item[]} next */
-					const setItems = (next) => state.setDraft(next);
-					/** @param {number} index @param {Item} patch */
-					const set = (index, patch) => setItems(items.map((item, at) => (at === index ? { ...item, ...patch } : item)));
-					return (
-						<div className="space-y-4">
-							<ItemSwitcher
-								items={items}
-								legend={title}
-								nameOf={(item, index) =>
-									String(item.name ?? item.label ?? item.title ?? '') || `${itemLabel} ${index + 1}`
-								}
-								addLabel={L.add}
-								addDisabled={items.length >= max}
-								onAdd={() => setItems([...items, blank()])}
-								emptyText={L.none}
-								renderItem={(item, index) => (
-									<EntryGroup
-										key={index}
-										data-entry=""
-										title={`${itemLabel} ${index + 1}`}
-										first={index === 0}
-										last={index === items.length - 1}
-										texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
-										onMove={(step) => setItems(moved(items, index, step))}
-										onRemove={() => setItems(items.filter((_, at) => at !== index))}>
-										{render(item, (patch) => set(index, patch))}
-									</EntryGroup>
-								)}
-							/>
-							<ListActions
-								dirty={state.draft !== null}
-								onCancel={() => state.setDraft(null)}
-								onSave={async () => {
-									const problems = check ? check(items) : [];
-									if (problems.length > 0) return state.refuse(problems);
-									await state.save(items.map(clean));
-								}}
-							/>
-							<ListOutcome result={state.result} local={state.local} />
-						</div>
-					);
-				}}
-			</Loaded>
+		<Card
+			{...(bare ? {} : { title })}
+			subtitle={off ? TEXTS.settings.off : `${help} ${fill(L.max, { max })}`}
+			actions={
+				<Button
+					size="sm"
+					disabled={!data || items.length >= max}
+					onClick={() => {
+						setItems([...items, blank()]);
+						setOpened(items.length);
+					}}>
+					<Icon name="plus" size={14} />
+					{L.add}
+				</Button>
+			}>
+			<div className="space-y-4">
+				<Loaded answer={state.answer} skeleton={<DataTableSkeleton columns={tableColumns.length} rows={4} menu />}>
+					{() => (
+						<DataTable
+							caption={title}
+							columns={tableColumns}
+							rows={items.map((item, index) => ({ item, index }))}
+							rowKey={(row) => String(row.index)}
+							rowLabel={(row) => nameFor(row.item, row.index)}
+							onRowClick={(row) => setOpened(row.index)}
+							rowMenu={(row) => [
+								{ label: L.up, disabled: row.index === 0, onSelect: () => setItems(moved(items, row.index, -1)) },
+								{
+									label: L.down,
+									disabled: row.index === items.length - 1,
+									onSelect: () => setItems(moved(items, row.index, 1)),
+								},
+								{
+									label: L.remove,
+									danger: true,
+									onSelect: () => setItems(items.filter((_, at) => at !== row.index)),
+								},
+							]}
+							empty={L.none}
+						/>
+					)}
+				</Loaded>
+				<ListActions
+					dirty={state.draft !== null}
+					onCancel={() => {
+						state.setDraft(null);
+						setOpened(null);
+					}}
+					onSave={async () => {
+						const problems = check ? check(items) : [];
+						if (problems.length > 0) return state.refuse(problems);
+						setOpened(null);
+						await state.save(items.map(clean));
+					}}
+				/>
+				<ListOutcome result={state.result} local={state.local} />
+			</div>
+			<Drawer
+				open={current !== undefined}
+				onClose={() => setOpened(null)}
+				title={current && opened !== null ? nameFor(current, opened) : ''}
+				size={size}
+				footer={<Button onClick={() => setOpened(null)}>{L.done}</Button>}>
+				{current && opened !== null ? (
+					<div data-entry="" className="space-y-4">
+						{render(current, (patch) => set(opened, patch))}
+					</div>
+				) : null}
+			</Drawer>
 		</Card>
 	);
 }
@@ -255,7 +320,7 @@ const C = L.couriers;
  * through (`courier_1` … `courier_5`, or none; E25) (`couriers`, feature checkout).
  * @param {EditorProps} props
  */
-export function CouriersEditor({ websiteId, off }) {
+export function CouriersEditor({ websiteId, off, bare = false }) {
 	return (
 		<ListEditor
 			websiteId={websiteId}
@@ -265,6 +330,22 @@ export function CouriersEditor({ websiteId, off }) {
 			itemLabel={C.item}
 			max={30}
 			off={off}
+			bare={bare}
+			columns={[
+				{
+					key: 'trackingUrl',
+					header: L.columns.trackingLink,
+					low: true,
+					className: 'max-w-xs truncate',
+					render: (courier) => courier.trackingUrl,
+				},
+				{
+					key: 'connection',
+					header: L.columns.booking,
+					render: (courier) =>
+						courier.connection ? fill(C.keys, { n: COURIER_CONNECTIONS.indexOf(courier.connection) + 1 }) : C.byHand,
+				},
+			]}
 			blank={() => ({ key: '', name: '', trackingUrl: 'https://', connection: '' })}
 			clean={(courier) => ({
 				key: keyOf(courier.key, courier.name),
@@ -310,7 +391,7 @@ const US = L.unitStates;
  * fixed.
  * @param {EditorProps} props
  */
-export function UnitStatesEditor({ websiteId, off }) {
+export function UnitStatesEditor({ websiteId, off, bare = false }) {
 	return (
 		<ListEditor
 			websiteId={websiteId}
@@ -320,6 +401,8 @@ export function UnitStatesEditor({ websiteId, off }) {
 			itemLabel={US.item}
 			max={UNIT_STATE_LIMITS.states}
 			off={off}
+			bare={bare}
+			columns={[{ key: 'key', header: L.columns.key, render: (state) => <code>{state.key}</code> }]}
 			blank={() => ({ key: '', label: '' })}
 			clean={(state) => ({ key: keyOf(state.key, state.label), label: String(state.label ?? '').trim() })}
 			render={(state, set) => (
@@ -350,7 +433,7 @@ const P = L.policies;
  * placeholders the server fills; the merchant adds, renames, reorders and removes them.
  * @param {EditorProps} props
  */
-export function PoliciesEditor({ websiteId, off }) {
+export function PoliciesEditor({ websiteId, off, bare = false }) {
 	return (
 		<ListEditor
 			websiteId={websiteId}
@@ -360,6 +443,8 @@ export function PoliciesEditor({ websiteId, off }) {
 			itemLabel={P.item}
 			max={20}
 			off={off}
+			bare={bare}
+			columns={[{ key: 'key', header: L.columns.key, render: (policy) => <code>{policy.key}</code> }]}
 			blank={() => ({ key: '', title: '', text: '' })}
 			clean={(policy) => ({
 				key: keyOf(policy.key, policy.title),
@@ -449,6 +534,16 @@ export function ZonesEditor({ websiteId, off, currency }) {
 			itemLabel={Z.item}
 			max={100}
 			off={off}
+			size="lg"
+			columns={[
+				{
+					key: 'places',
+					header: L.columns.places,
+					kind: 'number',
+					render: (zone) => PLACE_KINDS.reduce((total, kind) => total + cleanLines(zone[kind]).length, 0),
+				},
+				{ key: 'rates', header: L.columns.rates, kind: 'number', render: (zone) => (zone.rates ?? []).length },
+			]}
 			blank={() => ({
 				key: '',
 				name: '',
@@ -702,6 +797,16 @@ export function BookingSchedulesEditor({ websiteId, off }) {
 			itemLabel={B.item}
 			max={20}
 			off={off}
+			size="lg"
+			columns={[
+				{ key: 'windows', header: L.columns.windows, kind: 'number', render: (schedule) => schedule.weekly.length },
+				{
+					key: 'exceptions',
+					header: L.columns.exceptions,
+					kind: 'number',
+					render: (schedule) => cleanLines(String(schedule.exceptions ?? '').split('\n')).length,
+				},
+			]}
 			blank={() => ({ key: '', name: '', weekly: [{ day: 1, start: '09:00', end: '17:00' }], exceptions: '' })}
 			load={(schedule) => ({
 				key: schedule.key ?? '',
@@ -832,6 +937,28 @@ export function TaxRulesEditor({ websiteId, off }) {
 			itemLabel={X.item}
 			max={50}
 			off={off}
+			columns={[
+				{
+					key: 'percent',
+					header: L.columns.percent,
+					kind: 'number',
+					render: (rule) => `${String(rule.percent).trim()}%`,
+				},
+				{
+					key: 'categories',
+					header: L.columns.categories,
+					kind: 'number',
+					low: true,
+					render: (rule) => cleanLines(rule.categoryIds).length || L.columns.everywhere,
+				},
+				{
+					key: 'regions',
+					header: L.columns.regions,
+					kind: 'number',
+					low: true,
+					render: (rule) => cleanLines(rule.regions).length || L.columns.everywhere,
+				},
+			]}
 			blank={() => ({ name: '', percent: '', categoryIds: [], regions: [] })}
 			load={(rule) => ({
 				name: rule.name ?? '',
@@ -914,6 +1041,19 @@ export function RolePricesEditor({ websiteId, off, currency }) {
 			itemLabel={R.item}
 			max={20}
 			off={off}
+			size="lg"
+			nameOf={(entry) => String(entry.role ?? '')}
+			columns={[
+				{
+					key: 'discount',
+					header: L.columns.discount,
+					render: (entry) =>
+						entry.kind === 'prices'
+							? fill(L.columns.prices, { count: entry.prices.length })
+							: fill(L.columns.percentOff, { percent: String(entry.percent).trim() }),
+				},
+				{ key: 'label', header: L.columns.label, low: true, render: (entry) => entry.label },
+			]}
 			blank={() => ({ role: '', kind: 'percent', percent: '', prices: [], label: '' })}
 			load={(entry) => ({
 				role: entry.role ?? '',
@@ -1117,7 +1257,7 @@ const ruleOf = (draft, currency) => {
  * fields. A website starts with today's three (loyalty, active, guest). The customers widget lists each segment.
  * @param {EditorProps & { currency: string }} props
  */
-export function SegmentsEditor({ websiteId, off, currency }) {
+export function SegmentsEditor({ websiteId, off, bare = false, currency }) {
 	const step = currencyDigits(currency) === 0 ? '1' : String(10 ** -currencyDigits(currency));
 	return (
 		<ListEditor
@@ -1128,6 +1268,16 @@ export function SegmentsEditor({ websiteId, off, currency }) {
 			itemLabel={S.item}
 			max={30}
 			off={off}
+			bare={bare}
+			size="lg"
+			columns={[
+				{
+					key: 'match',
+					header: L.columns.match,
+					render: (segment) => (segment.match === 'any' ? S.matchAny : S.matchAll),
+				},
+				{ key: 'rules', header: L.columns.rules, kind: 'number', render: (segment) => segment.rules.length },
+			]}
 			blank={() => ({ key: '', name: '', match: 'all', rules: [{ field: 'tag', fieldId: '', op: 'is', value: '' }] })}
 			load={(segment) => ({
 				key: segment.key ?? '',

@@ -8,7 +8,7 @@
  * whole with the shared list editor (`./lists.js`).
  * @module
  */
-import { Checkbox, CheckboxGroup, FieldGrid, Input, Select, TextArea } from '@ss/ui';
+import { Checkbox, CheckboxGroup, FieldGrid, Input, Select, StatusPill, TextArea } from '@ss/ui';
 import { ATTACHMENT_LIMITS, ATTACHMENT_TYPES } from '../../core/attachments.js';
 import { REASON_LIMIT } from '../../core/order-reasons.js';
 import { QUESTION_LIMITS, QUESTION_TYPES } from '../../core/reviews.js';
@@ -19,8 +19,15 @@ import { TEXTS } from './texts.js';
 
 /** @typedef {import('./lists.js').EditorProps} EditorProps */
 
+const L = TEXTS.lists;
 const K = TEXTS.lists.claimKinds;
 const S = TEXTS.lists.claimStatuses;
+
+/** A word of a table cell from a map of words (the key itself when there is none). @param {Record<string, string>} words @param {string} key */
+const word = (words, key) => words[key] ?? key;
+
+/** Yes or No for a column. @param {boolean} on */
+const yesNo = (on) => (on ? L.columns.yes : L.columns.no);
 
 /** Claim kinds (`claim_kinds`). @param {EditorProps} props */
 export function ClaimKindsEditor({ websiteId, off }) {
@@ -33,6 +40,10 @@ export function ClaimKindsEditor({ websiteId, off }) {
 			itemLabel={K.item}
 			max={CLAIM_LIST_LIMITS.kinds}
 			off={off}
+			columns={[
+				{ key: 'window', header: L.columns.window, render: (kind) => word(K.windows, kind.window ?? 'return') },
+				{ key: 'shoppers', header: L.columns.shoppers, render: (kind) => yesNo(kind.shoppers !== false) },
+			]}
 			blank={() => ({ key: '', label: '', window: 'return', outcomes: ['refund'], shoppers: true })}
 			clean={(kind) => ({
 				key: keyOf(kind.key, kind.label),
@@ -92,6 +103,7 @@ export function ClaimStatusesEditor({ websiteId, off }) {
 			itemLabel={S.item}
 			max={CLAIM_LIST_LIMITS.statuses}
 			off={off}
+			columns={[{ key: 'role', header: L.columns.role, render: (status) => word(S.roles, status.role ?? 'approved') }]}
 			blank={() => ({ key: '', label: '', role: 'approved' })}
 			clean={(status) => ({
 				key: keyOf(status.key, status.label),
@@ -143,6 +155,14 @@ export function ReasonsEditor({ websiteId, off, list }) {
 			itemLabel={R.item}
 			max={REASON_LIMIT}
 			off={off}
+			columns={[
+				{
+					key: 'countsAgainst',
+					header: L.columns.countsAgainst,
+					render: (reason) =>
+						reason.countsAgainst === true ? <StatusPill status="warning">{L.columns.yes}</StatusPill> : null,
+				},
+			]}
 			blank={() => ({ key: '', label: '', countsAgainst: false })}
 			clean={(reason) => ({
 				key: keyOf(reason.key, reason.label),
@@ -190,6 +210,11 @@ export function AttachmentKindsEditor({ websiteId, off }) {
 			itemLabel={A.item}
 			max={ATTACHMENT_LIMITS.kinds}
 			off={off}
+			columns={[
+				{ key: 'type', header: L.columns.type, render: (kind) => word(A.types, kind.type ?? 'photo') },
+				{ key: 'requiredAt', header: L.columns.requiredAt, low: true, render: (kind) => kind.requiredAt },
+				{ key: 'shoppers', header: L.columns.shoppers, render: (kind) => yesNo(kind.shoppers === true) },
+			]}
 			blank={() => ({ key: '', label: '', type: 'photo', requiredAt: '', shoppers: false })}
 			clean={(kind) => ({
 				key: keyOf(kind.key, kind.label),
@@ -253,6 +278,10 @@ export function ReviewQuestionsEditor({ websiteId, off }) {
 			itemLabel={Q.item}
 			max={QUESTION_LIMITS.questions}
 			off={off}
+			columns={[
+				{ key: 'type', header: L.columns.type, render: (question) => word(Q.types, question.type ?? 'rating') },
+				{ key: 'required', header: L.columns.required, render: (question) => yesNo(question.required === true) },
+			]}
 			blank={() => ({ key: '', label: '', type: 'rating', choices: '', required: false })}
 			load={(question) => ({ ...question, choices: (question.choices ?? []).join('\n') })}
 			clean={(question) => ({

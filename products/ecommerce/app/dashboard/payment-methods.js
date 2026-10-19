@@ -9,7 +9,7 @@
  * (`core/payment-methods.js` `checkPaymentMethods`).
  * @module
  */
-import { Button, Checkbox, EntryGroup, FieldGrid, Input, Select, TextArea } from '@ss/ui';
+import { Button, Checkbox, EntryGroup, FieldGrid, Input, Select, StatusPill, TextArea } from '@ss/ui';
 import { currencyDigits } from '@ss/contracts/format';
 import { PAYMENT_KINDS, PAY_LATER_KINDS, newAccount, paidByHand } from '../../core/payment-methods.js';
 import { fill } from '@ss/ui/dashboard';
@@ -17,7 +17,8 @@ import { keyOf } from './drafts.js';
 import { ListEditor, amountOf, decimalOf } from './lists.js';
 import { TEXTS } from './texts.js';
 
-const P = TEXTS.lists.paymentMethods;
+const L = TEXTS.lists;
+const P = L.paymentMethods;
 
 /** @typedef {Record<string, any>} Draft */
 
@@ -42,9 +43,9 @@ const rowsOf = (text) =>
 		});
 
 /**
- * @param {{ websiteId: string, off?: boolean, currency: string }} props
+ * @param {{ websiteId: string, off?: boolean, bare?: boolean, currency: string }} props
  */
-export function PaymentMethodsEditor({ websiteId, off, currency }) {
+export function PaymentMethodsEditor({ websiteId, off, bare = false, currency }) {
 	const step = currencyDigits(currency) === 0 ? '1' : String(10 ** -currencyDigits(currency));
 	/** @param {string} label @param {unknown} value @param {(text: string) => void} set */
 	const money = (label, value, set) => (
@@ -79,6 +80,32 @@ export function PaymentMethodsEditor({ websiteId, off, currency }) {
 			itemLabel={P.item}
 			max={20}
 			off={off}
+			bare={bare}
+			size="lg"
+			columns={[
+				{
+					key: 'kind',
+					header: L.columns.kind,
+					render: (method) => P.kinds[/** @type {keyof typeof P.kinds} */ (method.kind)] ?? method.kind,
+				},
+				{
+					key: 'fee',
+					header: L.columns.fee,
+					kind: 'number',
+					low: true,
+					render: (method) => `${String(method.feePercent ?? 0)}%`,
+				},
+				{
+					key: 'active',
+					header: L.columns.active,
+					render: (method) =>
+						method.active !== false ? (
+							<StatusPill status="active">{L.columns.activeOn}</StatusPill>
+						) : (
+							<StatusPill status="off">{L.columns.activeOff}</StatusPill>
+						),
+				},
+			]}
 			blank={() => ({
 				key: '',
 				name: '',

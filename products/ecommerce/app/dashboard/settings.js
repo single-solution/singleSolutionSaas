@@ -102,11 +102,13 @@ function Grades({ websiteId }) {
 
 /**
  * An editor that needs the shop's currency.
- * @param {{ websiteId: string, editor: (props: { websiteId: string, off: boolean, currency: string }) => import('react').ReactNode }} props
+ * @param {{ websiteId: string, bare?: boolean,
+ *   editor: (props: { websiteId: string, off: boolean, bare: boolean, currency: string }) => import('react').ReactNode }} props
+ *   `bare`: the editor is the whole page, so its card has no title
  */
-function WithCurrency({ websiteId, editor }) {
+function WithCurrency({ websiteId, bare = false, editor }) {
 	const { currency } = useShop(websiteId);
-	return editor({ websiteId, off: false, currency });
+	return editor({ websiteId, off: false, bare, currency });
 }
 
 /**
@@ -136,7 +138,11 @@ const extrasOf = (props) => {
 		grades_serials: {
 			items: [
 				{ id: 'grades', label: L.grades.title, content: <Grades websiteId={websiteId} /> },
-				{ id: 'unit-states', label: L.unitStates.title, content: <UnitStatesEditor websiteId={websiteId} off={false} /> },
+				{
+					id: 'unit-states',
+					label: L.unitStates.title,
+					content: <UnitStatesEditor websiteId={websiteId} off={false} bare />,
+				},
 			],
 		},
 		checkout: {
@@ -145,7 +151,7 @@ const extrasOf = (props) => {
 					id: 'payment-methods',
 					label: L.paymentMethods.title,
 					top: true,
-					content: <WithCurrency websiteId={websiteId} editor={(props) => <PaymentMethodsEditor {...props} />} />,
+					content: <WithCurrency websiteId={websiteId} bare editor={(props) => <PaymentMethodsEditor {...props} />} />,
 				},
 				{
 					id: 'order-flow',
@@ -165,13 +171,23 @@ const extrasOf = (props) => {
 						</>
 					),
 				},
-				{ id: 'couriers', label: L.couriers.title, top: true, content: <CouriersEditor websiteId={websiteId} off={false} /> },
-				{ id: 'policies', label: L.policies.title, top: true, content: <PoliciesEditor websiteId={websiteId} off={false} /> },
+				{
+					id: 'couriers',
+					label: L.couriers.title,
+					top: true,
+					content: <CouriersEditor websiteId={websiteId} off={false} bare />,
+				},
+				{
+					id: 'policies',
+					label: L.policies.title,
+					top: true,
+					content: <PoliciesEditor websiteId={websiteId} off={false} bare />,
+				},
 				{
 					id: 'segments',
 					label: L.segments.title,
 					top: true,
-					content: <WithCurrency websiteId={websiteId} editor={(props) => <SegmentsEditor {...props} />} />,
+					content: <WithCurrency websiteId={websiteId} bare editor={(props) => <SegmentsEditor {...props} />} />,
 				},
 			],
 		},
