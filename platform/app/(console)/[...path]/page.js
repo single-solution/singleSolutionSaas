@@ -2,8 +2,8 @@
  * The merchant console and the public account pages (the one sign-in page for admins and merchants): one page (one
  * server function) renders the view of every path; any other path is a 404. The console frame is the layout above
  * (it stays on screen across navigations; the public pages stay unframed) and `loading.js` the skeleton shown at once
- * while a page is on the way. Pages fade and slide in (`PageTransition`); the Websites screen keeps its list in place
- * and animates the detail only. Each view exports its `metadata`.
+ * while a page is on the way. Pages fade and slide in (`PageTransition`); a `Page` screen animates its body only. Each
+ * view exports its `metadata`.
  */
 import { notFound } from 'next/navigation';
 import { PageTransition } from '@ss/ui';
@@ -25,7 +25,8 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Path patterns under / (`:name` captures a segment into `params`), views, metadata and the kind of view: a console
- * `page`, a list-and-detail `screen` (it animates its detail itself) or a `public` account page.
+ * `page` (wrapped in the page transition), a `screen` (a `Page` of `@ss/ui`: it fades its own body in and keeps its header
+ * and inner navigation in place) or a `public` account page.
  * @typedef {'page' | 'screen' | 'public'} ViewKind
  */
 const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Metadata, ViewKind]>} */ ([

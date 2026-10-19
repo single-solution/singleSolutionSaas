@@ -343,8 +343,14 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		await world.connect();
 		await world.addProduct(beta.merchantId, site.websiteId, 'notes');
 		render(<WebsitesView {...await loaders.loadWebsites(e.api, beta.merchantId)} branding={BRANDING} />);
-		// the first website opens by default beside the list (wide screens)
-		expect(shows('beta.example.com') && shows('1 product')).toBe(true);
+		// the list is a table; a row is a link to the website's page
+		expect(shows('beta.example.com')).toBe(true);
+		expect(document.querySelector(`a[href="/websites/${site.websiteId}"]`)).not.toBeNull();
+		cleanup();
+		render(
+			<WebsitesView {...await loaders.loadWebsites(e.api, beta.merchantId, String(site.websiteId))} branding={BRANDING} />,
+		);
+		expect(document.querySelector('h1')?.textContent).toBe('beta.example.com');
 		// Setup, Install and tokens and Usage are in the card's More menu
 		await press('Actions for beta.example.com');
 		expect(menuItems()).toEqual(['Website settings', 'Setup', 'Install and tokens', 'Usage', 'Visit website', 'Copy domain']);

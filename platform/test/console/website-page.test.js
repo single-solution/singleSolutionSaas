@@ -23,7 +23,6 @@ import {
 	clickEl,
 	createWorld,
 	dialog,
-	fill,
 	fillDialog,
 	press,
 	pressDialog,
@@ -328,7 +327,8 @@ describe('website cards (jsdom)', () => {
 			// the merchant: the selected website's card; Install and tokens; no admin actions
 			merchant.use();
 			withToasts(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId, websiteId)} />);
-			expect(document.querySelector('a[aria-current="page"]')?.textContent).toContain('shop.example.com');
+			expect(document.querySelector('h1')?.textContent).toBe('shop.example.com');
+			expect(document.querySelector('nav[aria-label="Breadcrumb"] a')?.getAttribute('href')).toBe('/websites');
 			await pressMenu('Actions for shop.example.com', 'Install and tokens');
 			await until(() => buttons('Reveal').length === 1);
 			await press('Reveal');
@@ -355,8 +355,15 @@ describe('website cards (jsdom)', () => {
 				(st) => st === 200,
 			);
 			expect(open).toHaveBeenLastCalledWith(mine.body.url, '_blank', 'noopener,noreferrer');
+			cleanup();
 			// the list filters by domain
-			fill('Search domains', 'nothing');
+			withToasts(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId)} />);
+			expect(document.querySelector(`a[href="/websites/${websiteId}"]`)?.textContent).toBe('shop.example.com');
+			const search = /** @type {HTMLInputElement} */ (document.querySelector('input[aria-label="Search domains"]'));
+			await act(async () => {
+				type(search, 'nothing');
+				search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+			});
 			expect(shows('No websites yet.')).toBe(true);
 			cleanup();
 

@@ -108,19 +108,23 @@ describe('merchant console smoke', () => {
 			expect(overviewText).toContain('Open');
 			expect(overviewText).toContain('Your admin adds products to this website.'); // the second website
 
-			// Websites with nothing in the URL: the list (domain, status dot, daily cost) and the first website's card,
-			// which wide screens open by default (its row marked there only; phones show the list)
+			// Websites with nothing in the URL: the table (domain, status, products, daily cost), each row a link to the
+			// website's own page
 			const websitesRaw = ssr(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId)} branding={BRANDING} />);
 			const websitesText = text(websitesRaw);
 			expect(websitesText).toContain('www.shop.example.com');
-			expect(websitesText).toContain('2 products');
-			expect(websitesRaw).toMatch(/aria-label="Actions for [^"]+"/); // Setup, Install and tokens, Usage
-			expect(websitesRaw).not.toContain('aria-current="page"');
-			expect(websitesRaw).toContain('lg:text-on-primary-soft');
+			expect(websitesRaw).toContain('data-ss-page');
+			expect(websitesRaw).toContain(`href="/websites/${site.websiteId}"`);
+			expect(websitesRaw).not.toContain('role="tab"');
+			expect(websitesText).not.toContain('Install and tokens'); // the card is on the website's page
 
-			// a website selected: its card (products with Open; tokens and usage as dialogs; no admin actions)
+			// a website selected: its page, Websites › domain around the card (products with Open; tokens and usage as
+			// dialogs; no admin actions)
 			const selected = await loaders.loadWebsites(merchant.api, merchantId, String(site.websiteId));
-			const selectedText = text(ssr(<WebsitesView {...selected} branding={BRANDING} />));
+			const selectedRaw = ssr(<WebsitesView {...selected} branding={BRANDING} />);
+			const selectedText = text(selectedRaw);
+			expect(selectedRaw).toContain('aria-label="Breadcrumb"');
+			expect(selectedRaw).toContain('href="/websites"');
 			expect(selectedText).toContain('Notes');
 			expect(selectedText).toContain('Chatty');
 			expect(selectedText).toContain('No features on');

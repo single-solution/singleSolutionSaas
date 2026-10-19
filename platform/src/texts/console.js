@@ -144,6 +144,18 @@ export const MERCHANT_FIELDS = Object.freeze({
 export const MERCHANT = Object.freeze({
 	menu: Object.freeze({ overview: 'Overview', websites: 'Websites', usage: 'Usage and credits', account: 'Account' }),
 	websitesTitle: 'Websites',
+	/** the description of the Websites page, behind its (i) */
+	websitesInfo:
+		'Your websites and the products on them. Open a website for its products, its tokens and its spend; your admin adds websites and products.',
+	/** the columns of the Websites table */
+	websiteColumns: Object.freeze({ website: 'Website', status: 'Status', products: 'Products', dailyCost: 'Daily cost' }),
+	/** the status of a website in the table: the worst status of its products */
+	websiteStatus: Object.freeze({
+		success: 'Active',
+		warning: 'In grace',
+		danger: 'Stopped',
+		neutral: 'No features on',
+	}),
 	overviewTitle: 'Overview',
 	creditsSection: 'Credits',
 	latestSection: 'Latest',
