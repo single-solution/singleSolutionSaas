@@ -92,7 +92,10 @@ describe('the dashboard', () => {
 		const { container } = render(<Dashboard />);
 		await settle();
 		expect(container.textContent).toContain(TEXTS.title);
-		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Acme');
+		// the page is titled by its section; the greeting is the (i)'s text
+		expect(container.querySelector('h1')?.textContent).toBe('Overview');
+		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="About this page"]')));
+		expect(container.textContent).toContain('Welcome back, Acme');
 		const needs = [...container.querySelectorAll('section[aria-label="Needs you"] li p:first-child')].map((p) => p.textContent);
 		expect(needs).toEqual([
 			`${TEXTS.title} is in grace until Oct 4, 2026, 10:30 AM EDT`,
