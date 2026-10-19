@@ -7,7 +7,7 @@
  * verification, widget and ticket snippets, social sign-in return addresses and the message templates).
  * @module
  */
-import { Badge, Button, CodeBlock, DataTable, Section, Stat } from '@ss/ui';
+import { Badge, Button, Card, CodeBlock, DataTable, Section, Stat } from '@ss/ui';
 import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import messages from '../../schemas/messages.json' with { type: 'json' };
@@ -179,27 +179,29 @@ function AccountsDevelopers(props) {
 					icon: 'mail',
 					content: (
 						<Section title={D.templates} description={D.templatesHelp}>
-							<DataTable
-								caption={D.templates}
-								columns={[
-									{ key: 'key', header: D.templateColumns.key, render: (message) => <code>{message.key}</code> },
-									{
-										key: 'values',
-										header: D.templateColumns.values,
-										wrap: true,
-										render: (message) => (
-											<span className="flex flex-wrap gap-1">
-												{message.values.map((name) => (
-													<Badge key={name} tone="info">{`{${name}}`}</Badge>
-												))}
-											</span>
-										),
-									},
-								]}
-								rows={messages.messages}
-								rowKey={(message) => message.key}
-								rowLabel={(message) => message.key}
-							/>
+							<Card padded={false} className="overflow-hidden">
+								<DataTable
+									caption={D.templates}
+									columns={[
+										{ key: 'key', header: D.templateColumns.key, render: (message) => <code>{message.key}</code> },
+										{
+											key: 'values',
+											header: D.templateColumns.values,
+											wrap: true,
+											render: (message) => (
+												<span className="flex flex-wrap gap-1">
+													{message.values.map((name) => (
+														<Badge key={name} tone="info">{`{${name}}`}</Badge>
+													))}
+												</span>
+											),
+										},
+									]}
+									rows={messages.messages}
+									rowKey={(message) => message.key}
+									rowLabel={(message) => message.key}
+								/>
+							</Card>
 						</Section>
 					),
 				},

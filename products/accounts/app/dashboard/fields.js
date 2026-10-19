@@ -11,6 +11,7 @@ import { useId, useState } from 'react';
 import {
 	Button,
 	Callout,
+	Card,
 	Checkbox,
 	DataTable,
 	DataTableSkeleton,
@@ -134,32 +135,34 @@ export function FieldsSection({ websiteId }) {
 					{answer.problem?.type?.endsWith('database_not_connected') ? T.needsDatabase : describeProblem(answer.problem)}
 				</Callout>
 			) : (
-				<DataTable
-					caption={TEXTS.settings.fieldsTitle}
-					columns={COLUMNS}
-					rows={/** @type {CustomField[]} */ (answer.data.items)}
-					rowKey={(item) => item.key}
-					rowLabel={(item) => item.label}
-					onRowClick={(item) => open({ ...item, options: item.options.join('\n'), isNew: false })}
-					rowMenu={(item) => {
-						/** @type {CustomField[]} */
-						const items = answer.data.items;
-						const index = items.indexOf(item);
-						return [
-							{ label: T.up, disabled: index === 0, onSelect: () => move(items, index, -1) },
-							{ label: T.down, disabled: index === items.length - 1, onSelect: () => move(items, index, 1) },
-							{
-								label: T.delete,
-								danger: true,
-								onSelect: async () => {
-									setResult(await call('DELETE', `${base}/${encodeURIComponent(item.key)}`));
-									reload();
+				<Card padded={false} className="overflow-hidden">
+					<DataTable
+						caption={TEXTS.settings.fieldsTitle}
+						columns={COLUMNS}
+						rows={/** @type {CustomField[]} */ (answer.data.items)}
+						rowKey={(item) => item.key}
+						rowLabel={(item) => item.label}
+						onRowClick={(item) => open({ ...item, options: item.options.join('\n'), isNew: false })}
+						rowMenu={(item) => {
+							/** @type {CustomField[]} */
+							const items = answer.data.items;
+							const index = items.indexOf(item);
+							return [
+								{ label: T.up, disabled: index === 0, onSelect: () => move(items, index, -1) },
+								{ label: T.down, disabled: index === items.length - 1, onSelect: () => move(items, index, 1) },
+								{
+									label: T.delete,
+									danger: true,
+									onSelect: async () => {
+										setResult(await call('DELETE', `${base}/${encodeURIComponent(item.key)}`));
+										reload();
+									},
 								},
-							},
-						];
-					}}
-					empty={T.none}
-				/>
+							];
+						}}
+						empty={T.none}
+					/>
+				</Card>
 			)}
 			<Outcome result={result} />
 			<Drawer
