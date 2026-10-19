@@ -104,6 +104,16 @@ describe('what a person may enter', () => {
 			value: { ...STORAGE, forcePathStyle: true },
 		});
 		expect(checkStorageValue({ bucket: 'b', region: 'r', accessKeyId: 'a', secretAccessKey: 's' }, policy).ok).toBe(true);
+		// the public address: trimmed, trailing slashes cut, empty means none
+		expect(checkStorageValue({ ...STORAGE, publicBaseUrl: ' https://cdn.example.com/files// ' }, policy)).toEqual({
+			ok: true,
+			value: { ...STORAGE, publicBaseUrl: 'https://cdn.example.com/files' },
+		});
+		expect(checkStorageValue({ ...STORAGE, publicBaseUrl: '  ' }, policy)).toEqual({ ok: true, value: STORAGE });
+		expect(checkStorageValue({ ...STORAGE, publicBaseUrl: 'ftp://x' }, policy)).toMatchObject({
+			ok: false,
+			field: 'publicBaseUrl',
+		});
 		for (const bad of [
 			null,
 			[],
@@ -114,6 +124,12 @@ describe('what a person may enter', () => {
 			{ ...STORAGE, endpoint: 'https://127.0.0.1' },
 			{ ...STORAGE, endpoint: 'https://169.254.169.254' },
 			{ ...STORAGE, forcePathStyle: 'yes' },
+			{ ...STORAGE, publicBaseUrl: 'http://cdn.example.com' },
+			{ ...STORAGE, publicBaseUrl: 'https://127.0.0.1' },
+			{ ...STORAGE, publicBaseUrl: 'https://cdn.example.com/?x=1' },
+			{ ...STORAGE, publicBaseUrl: 'https://cdn.example.com/#top' },
+			{ ...STORAGE, publicBaseUrl: 'https://u:p@cdn.example.com' },
+			{ ...STORAGE, publicBaseUrl: `https://cdn.example.com/${'a'.repeat(2048)}` },
 			{ ...STORAGE, prefix: '/abs/' },
 			{ ...STORAGE, prefix: '../up/' },
 			{ ...STORAGE, prefix: 'no-slash' },
@@ -241,6 +257,28 @@ describe('Data and files: the merchant enters the database once', () => {
 			},
 			{ productId: 'plain', name: 'Plain', database: null, storage: null },
 		]);
+	});
+
+	it('the public address of the files is delivered inside the storage and shown in the console (it is not a secret); a replacement without it drops it', async () => {
+		const { m, chat, site, fetchAs } = await setUp('conn_public');
+		const PUBLIC = 'https://cdn.example.com/files';
+		await m.client.put(`${site()}/connections/storage`, { value: { ...STORAGE, publicBaseUrl: `${PUBLIC}/` }, ...CONFIRM });
+		const delivered = await fetchAs(chat);
+		expect(validateWebsiteConnections(delivered.json).ok).toBe(true);
+		expect(delivered.json.storage).toEqual({ ...STORAGE, publicBaseUrl: PUBLIC });
+		const view = (await m.client.get(`${site()}/connections`)).json;
+		expect(view.storage).toMatchObject({ set: true, publicBaseUrl: PUBLIC });
+		expect(JSON.stringify(view)).not.toContain('sTorAgeSecret');
+		// replaced without one: nothing is kept of the old address
+		await m.client.put(`${site()}/connections/storage`, { value: STORAGE, ...CONFIRM });
+		expect((await m.client.get(`${site()}/connections`)).json.storage).not.toHaveProperty('publicBaseUrl');
+		expect((await fetchAs(chat)).json.storage).toEqual(STORAGE);
+		const refused = await m.client.put(`${site()}/connections/storage`, {
+			value: { ...STORAGE, publicBaseUrl: 'http://cdn.example.com' },
+			...CONFIRM,
+		});
+		expect(codeOf(refused)).toEqual([422, 'validation_failed']);
+		expect(refused.json.errors[0].path).toBe('/value/publicBaseUrl');
 	});
 
 	it('answers a product only for a website that has it, and only to that product', async () => {

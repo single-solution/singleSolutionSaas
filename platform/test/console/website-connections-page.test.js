@@ -171,6 +171,8 @@ describe('Data and files (jsdom)', () => {
 			type(field('Bucket'), 'shop-media');
 			type(field('Access key ID'), 'AKIAEXAMPLE');
 			type(field('Secret access key'), 'sTorAgeSecret');
+			expect(shows('Leave empty to show images through your website’s /media route.')).toBe(true);
+			type(field('Public address of your files (optional)'), ' https://cdn.example.com/files/ ');
 			// (the first Save button is the database's, the second the storage's)
 			await pressNth('Save', 1);
 			fillDialog('Your password', 'correct horse battery');
@@ -178,8 +180,14 @@ describe('Data and files (jsdom)', () => {
 			await until(() => !document.querySelector('[role="dialog"]'));
 			x.b.use();
 			const stored = await x.b.api.get(`/v1/merchants/${x.merchantId}/websites/${x.websiteId}/connections`);
-			expect(stored.ok && /** @type {any} */ (stored).data.storage.set).toBe(true);
+			expect(stored.ok && /** @type {any} */ (stored).data.storage).toMatchObject({
+				set: true,
+				publicBaseUrl: 'https://cdn.example.com/files',
+			});
 			expect(document.body.textContent).not.toContain('sTorAgeSecret');
+			// the public address is not a secret: the field shows what was saved, the secrets are empty again
+			expect(field('Public address of your files (optional)').value).toBe('https://cdn.example.com/files');
+			expect(field('Secret access key').value).toBe('');
 			// Remove asks for the password too (the database is not set: the storage's Remove is the only one)
 			await pressNth('Remove');
 			fillDialog('Your password', 'correct horse battery');

@@ -67,7 +67,8 @@ export const checkDatabaseValue = (value, policy) => {
 
 /**
  * Check a storage connection entered by a person: `{ bucket, region, accessKeyId, secretAccessKey }` and optionally
- * `endpoint`, `forcePathStyle`, `prefix`. Nothing else is kept.
+ * `endpoint`, `forcePathStyle`, `prefix` and `publicBaseUrl` (the public https address of the bucket's root, such as a CDN in
+ * front of it; not a secret). Nothing else is kept.
  * @param {unknown} value
  * @param {import('@ss/net').OutboundPolicy} policy
  * @returns {{ ok: true, value: Record<string, string | boolean> } | { ok: false, message: string, field?: string }}
@@ -90,7 +91,18 @@ export const checkStorageValue = (value, policy) => {
 		out[field] = text;
 	}
 	for (const key of Object.keys(input))
-		if (!['bucket', 'region', 'accessKeyId', 'secretAccessKey', 'endpoint', 'forcePathStyle', 'prefix'].includes(key))
+		if (
+			![
+				'bucket',
+				'region',
+				'accessKeyId',
+				'secretAccessKey',
+				'endpoint',
+				'forcePathStyle',
+				'prefix',
+				'publicBaseUrl',
+			].includes(key)
+		)
 			return { ok: false, message: `${key} is not a storage setting.`, field: key };
 	const endpoint = typeof input.endpoint === 'string' ? input.endpoint.trim() : '';
 	if (endpoint !== '') {
@@ -98,6 +110,17 @@ export const checkStorageValue = (value, policy) => {
 		if (!checked.ok || !endpoint.startsWith('https://') || endpoint.length > 2048)
 			return { ok: false, message: 'The endpoint must be a public https address.', field: 'endpoint' };
 		out.endpoint = endpoint.replace(/\/+$/, '');
+	}
+	const publicBaseUrl = typeof input.publicBaseUrl === 'string' ? input.publicBaseUrl.trim() : '';
+	if (publicBaseUrl !== '') {
+		const checked = checkUrl(publicBaseUrl, policy);
+		if (!checked.ok || !publicBaseUrl.startsWith('https://') || publicBaseUrl.length > 2048 || /[?#]/.test(publicBaseUrl))
+			return {
+				ok: false,
+				message: 'The public address must be a public https address without a ? or a #.',
+				field: 'publicBaseUrl',
+			};
+		out.publicBaseUrl = publicBaseUrl.replace(/\/+$/, '');
 	}
 	if (input.forcePathStyle !== undefined) {
 		if (typeof input.forcePathStyle !== 'boolean')
@@ -322,7 +345,10 @@ export const createConnections = (ctx, { notifyProducts }) => {
 			return {
 				version: Number(record?.version ?? 0),
 				database: whenSet(record?.database),
-				storage: whenSet(record?.storage),
+				storage: {
+					...whenSet(record?.storage),
+					...(record?.storage?.publicBaseUrl ? { publicBaseUrl: String(record.storage.publicBaseUrl) } : {}),
+				},
 				products: await productRows(websiteId, record),
 			};
 		},
@@ -349,6 +375,8 @@ export const createConnections = (ctx, { notifyProducts }) => {
 					],
 				});
 			const plain = which === 'database' ? /** @type {string} */ (checked.value) : JSON.stringify(checked.value);
+			const publicBaseUrl =
+				which === 'storage' ? /** @type {Record<string, string | boolean>} */ (checked.value).publicBaseUrl : undefined;
 			const before = await ownerOps(merchantId).findOne({ merchantId, _id: websiteId });
 			const v = Number(before?.[which]?.v ?? 0) + 1;
 			const at = new Date(ctx.now());
@@ -360,6 +388,8 @@ export const createConnections = (ctx, { notifyProducts }) => {
 						atVersion: next,
 						setAt: at,
 						setBy: { type: actor.type, id: actor.id },
+						// not a secret: kept in plain beside the sealed value so the console can show it
+						...(publicBaseUrl ? { publicBaseUrl } : {}),
 					},
 					...(dbNames ? { dbNames } : {}),
 				},

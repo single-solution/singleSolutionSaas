@@ -39,7 +39,7 @@ import { factorOf } from './common.js';
  * @typedef {object} ConnectionsView
  * @property {number} version
  * @property {{ set: boolean, setAt: string | null }} database
- * @property {{ set: boolean, setAt: string | null }} storage
+ * @property {{ set: boolean, setAt: string | null, publicBaseUrl?: string }} storage the public address is not a secret: shown
  * @property {Array<{ productId: string, name: string, database: { name: string, overridden: boolean, state: string, message?: string } | null,
  *   storage: { folder: string, required: boolean, state: string, message?: string } | null }>} products
  * @property {Array<{ caller: string, callerName: string, callee: string, calleeName: string, state: 'on' | 'off' | 'idle',
@@ -252,11 +252,12 @@ export function ConnectionsSection({ view, manage, canWrite, onChanged }) {
 		['accessKeyId', true],
 		['secretAccessKey', true],
 		['prefix', false],
+		['publicBaseUrl', false],
 	];
+	/** What a field shows: the secrets start empty; the public address starts as it was saved (it is not a secret). @param {string} key */
+	const shown = (key) => bucket[key] ?? (key === 'publicBaseUrl' ? (view.storage.publicBaseUrl ?? '') : '');
 	const valueOfBucket = () => ({
-		...Object.fromEntries(
-			parts.filter(([key]) => (bucket[key] ?? '').trim() !== '').map(([key]) => [key, (bucket[key] ?? '').trim()]),
-		),
+		...Object.fromEntries(parts.filter(([key]) => shown(key).trim() !== '').map(([key]) => [key, shown(key).trim()])),
 		...(pathStyle ? { forcePathStyle: true } : {}),
 	});
 	return (
@@ -311,7 +312,8 @@ export function ConnectionsSection({ view, manage, canWrite, onChanged }) {
 								type={key === 'secretAccessKey' || key === 'accessKeyId' ? 'password' : 'text'}
 								autoComplete="off"
 								label={S[key]}
-								value={bucket[key] ?? ''}
+								{...(key === 'publicBaseUrl' ? { help: T.data.storage.publicBaseUrlHelp, placeholder: 'https://' } : {})}
+								value={shown(key)}
 								onChange={(event) => setBucket({ ...bucket, [key]: event.target.value })}
 							/>
 						))}

@@ -1323,7 +1323,10 @@ export const WEBSITE_SETTINGS = Object.freeze({
 				accessKeyId: 'Access key ID',
 				secretAccessKey: 'Secret access key',
 				prefix: 'Folder prefix (optional, ending with a slash)',
+				publicBaseUrl: 'Public address of your files (optional)',
 			}),
+			publicBaseUrlHelp:
+				'The public address of your files, such as a CDN in front of the bucket. Leave empty to show images through your website’s /media route.',
 			pathStyle: 'Use path-style addresses',
 		}),
 		productsTitle: 'What each product gets',
