@@ -898,7 +898,7 @@ describe('AppShell without the optional parts', () => {
 		}
 		const { container } = render(
 			<AppShell
-				sections={[{ items: [{ href: '/home', label: 'Home', badge: <b>3</b> }] }]}
+				sections={[{ items: [{ href: '/home', label: 'Home', badge: { count: 3 } }] }]}
 				linkAs={RouterLink}
 				themeToggle={false}
 				mainId="content">

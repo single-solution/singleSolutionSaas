@@ -20,7 +20,7 @@
  */
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cx } from './cx.js';
-import { Avatar, IconBadge } from './display.js';
+import { Avatar, DOTS, IconBadge, TINTS } from './display.js';
 import { HeaderSlotsContext } from './header.js';
 import { Icon } from './icons.js';
 import { AccountMenu, ThemeMenu } from './Menu.js';
@@ -33,16 +33,88 @@ export { useShell } from './shell-state.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {import('./display.js').Kind} Kind */
+/** @typedef {import('./display.js').Tone} Tone */
 /**
- * A menu link; its icon sits before the label (the rail shows only the icon, with the label as its tooltip).
- * @typedef {{ href: string, label: ReactNode, icon?: import('./icons.js').IconName, kind?: Kind, current?: boolean, badge?: ReactNode }} NavItem
+ * A count at the right of a menu item (99+ above 99, nothing for 0), tinted by its `tone` (neutral by default); `label`
+ * says what it counts, for screen readers and the tooltip ("4 orders to ship").
+ * @typedef {{ count: number, tone?: Tone, label?: string }} NavBadge
+ */
+/**
+ * A menu link; its icon sits before the label (the rail shows only the icon, with the label as its tooltip). `badge`
+ * is a count and `dot` an attention dot (`true` = the attention tone; `dotLabel` names it for screen readers); the
+ * rail folds either into a small mark on the icon.
+ * @typedef {{ href: string, label: ReactNode, icon?: import('./icons.js').IconName, kind?: Kind, current?: boolean,
+ *   badge?: NavBadge, dot?: Tone | true, dotLabel?: string }} NavItem
  */
 /** @typedef {{ label?: string, items: NavItem[] }} NavSection */
 /** A step of the header's breadcrumbs (a link with `href`). @typedef {{ label: ReactNode, href?: string }} Crumb */
 /**
  * The header's account menu (with the theme choice in it).
- * @typedef {{ name: string, email?: string, label?: string, items: import('./Menu.js').MenuItem[] }} ShellAccount
+ * `role` is a small chip beside the name ("Owner"); the narrow rail leaves it out.
+ * @typedef {{ name: string, email?: string, label?: string, items: import('./Menu.js').MenuItem[], role?: ReactNode }} ShellAccount
  */
+
+/** The words the frame itself says (for screen readers). */
+export const SHELL_TEXTS = Object.freeze({ attention: 'Needs attention' });
+
+/** The biggest count shown as a number. */
+const MAX_COUNT = 99;
+
+/**
+ * What an item says about itself besides its name: a count and an attention dot at the right, or - in the icon rail - one
+ * small mark on the icon (the count is still spoken).
+ * @param {{ item: NavItem, rail: boolean }} props
+ */
+function NavMarks({ item, rail }) {
+	const badge = item.badge && item.badge.count > 0 ? item.badge : null;
+	const dotTone = item.dot === true ? 'attention' : item.dot;
+	const dotLabel = item.dotLabel ?? SHELL_TEXTS.attention;
+	if (rail) {
+		const tone = dotTone ?? (badge ? (badge.tone ?? 'primary') : null);
+		return (
+			<>
+				{tone ? (
+					<span
+						data-ss-mark=""
+						aria-hidden="true"
+						className={cx('absolute top-1 right-2 size-2 rounded-full ring-2 ring-surface', DOTS[tone])}
+					/>
+				) : null}
+				{badge ? <span className="sr-only">{badge.label ?? badge.count}</span> : null}
+				{dotTone ? <span className="sr-only">{dotLabel}</span> : null}
+			</>
+		);
+	}
+	const shown = badge ? (badge.count > MAX_COUNT ? `${MAX_COUNT}+` : String(badge.count)) : '';
+	return (
+		<>
+			{badge ? (
+				<span
+					data-ss-badge=""
+					{...(badge.label ? { title: badge.label } : {})}
+					className={cx(
+						'ss-motion inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-micro leading-none font-semibold tabular-nums',
+						TINTS[badge.tone ?? 'neutral'],
+					)}>
+					{badge.label ? (
+						<>
+							<span aria-hidden="true">{shown}</span>
+							<span className="sr-only">{badge.label}</span>
+						</>
+					) : (
+						shown
+					)}
+				</span>
+			) : null}
+			{dotTone ? (
+				<span data-ss-dot="" title={dotLabel} className="flex shrink-0 items-center">
+					<span aria-hidden="true" className={cx('size-2 rounded-full', DOTS[dotTone])} />
+					<span className="sr-only">{dotLabel}</span>
+				</span>
+			) : null}
+		</>
+	);
+}
 
 /** Where the folded state of the sidebar is kept (this browser only). */
 const RAIL_KEY = 'ss-nav-rail';
@@ -114,7 +186,7 @@ function Nav({ sections, linkAs, onNavigate, rail = false }) {
 										aria-current={item.current ? 'page' : undefined}
 										{...(rail && typeof item.label === 'string' ? { title: item.label } : {})}
 										className={cx(
-											'ss-motion ss-press flex h-9 items-center gap-2.5 rounded-lg text-sm',
+											'ss-motion ss-press relative flex h-9 items-center gap-2.5 rounded-lg text-sm',
 											'focus-visible:outline-2 focus-visible:outline-focus',
 											rail ? 'justify-center px-0' : 'px-2.5',
 											on
@@ -136,7 +208,7 @@ function Nav({ sections, linkAs, onNavigate, rail = false }) {
 											</span>
 										) : null}
 										<span className={cx(rail ? 'sr-only' : 'min-w-0 flex-1 truncate')}>{item.label}</span>
-										{rail ? null : item.badge}
+										<NavMarks item={item} rail={rail} />
 									</LinkTag>
 								</li>
 							);
@@ -425,7 +497,9 @@ export function AppShell({
 						{...(inDrawer ? { onNavigate: () => setOpen(false) } : {})}
 					/>
 				</ScrollArea>
-				<div className={cx('shrink-0 space-y-1 border-t border-line-soft p-3', narrow && 'flex flex-col items-center')}>
+				<div
+					data-ss-part="sidebar-bottom"
+					className={cx('shrink-0 space-y-1 border-t border-line-soft p-3', narrow && 'flex flex-col items-center')}>
 					{switcher && !narrow ? <div className="pb-2">{slotOf(switcher, narrow)}</div> : null}
 					{sidebarFooter ? <div className="w-full">{slotOf(sidebarFooter, narrow)}</div> : null}
 					{account ? (
@@ -435,6 +509,7 @@ export function AppShell({
 								{...(account.email ? { email: account.email } : {})}
 								items={account.items}
 								{...(account.label ? { label: account.label } : {})}
+								{...(account.role && !narrow ? { role: account.role } : {})}
 								theme={narrow && themeToggle}
 								compact={narrow}
 								placement="up"

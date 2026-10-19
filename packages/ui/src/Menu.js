@@ -266,9 +266,10 @@ const withTheme = (items, theme) => [...items.filter((item) => !item.danger), ..
 /**
  * The account menu: the person's avatar (initials), and - unless `compact` - their name and email, opening a menu of
  * actions (My account, Sign out …) with the name and email at its head. In the sidebar footer it opens upward. With
- * `theme` it also holds the System / Light / Dark choice (the header's one menu, owner 2026-10-17).
+ * `theme` it also holds the System / Light / Dark choice (the header's one menu, owner 2026-10-17). `role` is a small
+ * chip beside the name ("Owner", layout contract item 1).
  * @param {{ name: string, email?: string, items: MenuItem[], label?: string, compact?: boolean,
- *   placement?: 'down' | 'up', className?: string, theme?: boolean }} props
+ *   placement?: 'down' | 'up', className?: string, theme?: boolean, role?: import('react').ReactNode }} props
  */
 export function AccountMenu({
 	name,
@@ -279,6 +280,7 @@ export function AccountMenu({
 	placement = 'down',
 	className,
 	theme = false,
+	role,
 }) {
 	const [choice, pick] = useThemeChoice();
 	return (
@@ -291,6 +293,7 @@ export function AccountMenu({
 				<>
 					<p className="truncate text-sm font-semibold text-fg">{name}</p>
 					{email ? <p className="truncate text-xs text-muted">{email}</p> : null}
+					{role ? <div className="pt-1.5">{role}</div> : null}
 				</>
 			}
 			trigger={
@@ -298,7 +301,10 @@ export function AccountMenu({
 					<Avatar name={name} />
 					{compact ? null : (
 						<span className="min-w-0 flex-1">
-							<span className="block truncate text-label leading-4 font-semibold text-fg">{name}</span>
+							<span className="flex min-w-0 items-center gap-1.5">
+								<span className="block min-w-0 truncate text-label leading-4 font-semibold text-fg">{name}</span>
+								{role ? <span className="-my-1 shrink-0">{role}</span> : null}
+							</span>
 							{email ? <span className="block truncate text-xs leading-4 text-muted">{email}</span> : null}
 						</span>
 					)}

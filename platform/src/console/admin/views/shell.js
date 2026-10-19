@@ -125,9 +125,14 @@ export function AdminShell({ admin, twoStepRequired = false, branding, children 
 					brand={{ name: branding.name, tagline: ADMIN.consoleTagline }}
 					linkAs={NavLink}
 					sections={twoStepRequired ? [] : adminSections(admin, pathname)}
-					topbar={<RoleBadge role={admin?.role} />}
 					scrollKey={pathname}
-					account={{ name, ...(admin?.email ? { email: admin.email } : {}), items: accountItems, label: ADMIN.accountMenu }}>
+					account={{
+						name,
+						...(admin?.email ? { email: admin.email } : {}),
+						items: accountItems,
+						label: ADMIN.accountMenu,
+						...(admin?.role ? { role: <RoleBadge role={admin.role} /> } : {}),
+					}}>
 					{twoStepRequired ? (
 						<div className="mx-auto max-w-2xl space-y-6">
 							<PageHeader title={TWO_STEP.requiredTitle} />
