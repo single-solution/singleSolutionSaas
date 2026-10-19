@@ -231,10 +231,25 @@ describe('DataTable rows', () => {
 	});
 
 	it('names a row for the menu and the check with rowLabel', () => {
-		const { container } = render(table({ rowLabel: (/** @type {Row} */ row) => `merchant ${row.id}`, rowMenu: () => [] }));
+		const { container } = render(
+			table({
+				rowLabel: (/** @type {Row} */ row) => `merchant ${row.id}`,
+				rowMenu: () => [{ label: 'Edit', onSelect: () => {} }],
+			}),
+		);
 		expect(container.querySelector('tbody button[aria-haspopup="menu"]')?.getAttribute('aria-label')).toBe(
 			'Actions for merchant a',
 		);
+	});
+
+	it('shows no menu button on a row whose menu has no actions, and keeps the cell', () => {
+		const { container } = render(
+			table({ rowMenu: (/** @type {Row} */ row) => (row.id === 'a' ? [] : [{ label: 'Edit', onSelect: () => {} }]) }),
+		);
+		const rows = [...container.querySelectorAll('tbody tr')];
+		expect(rows[0]?.querySelector('button[aria-haspopup="menu"]')).toBeNull();
+		expect(rows[0]?.querySelector('td[data-ss-menu]')).not.toBeNull();
+		expect(rows[1]?.querySelector('button[aria-haspopup="menu"]')).not.toBeNull();
 	});
 });
 

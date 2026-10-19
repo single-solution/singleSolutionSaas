@@ -145,6 +145,11 @@ const cell = (row, key) => /** @type {Record<string, unknown>} */ (row)[key];
 /** The value to sort by, as something comparable. @param {unknown} value */
 const comparable = (value) => (value instanceof Date ? value.getTime() : value);
 
+/** A row's menu button; a row with no actions shows none. @param {{ label: string, items: import('./Menu.js').MenuItem[] }} props */
+function RowMenu({ label, items }) {
+	return items.length > 0 ? <ActionMenu floating label={label} items={items} /> : null;
+}
+
 /** Anything in a row that has its own click: a click on it is not a click on the row. */
 const OWN_CLICK = 'a, button, input, select, textarea, [role="menu"]';
 
@@ -384,7 +389,7 @@ export function DataTable({
 								})}
 								{rowMenu ? (
 									<td data-ss-menu="" className={cx(TABLE.td, TABLE.menu)}>
-										{selecting ? null : <ActionMenu floating label={words.rowActions(label)} items={rowMenu(row)} />}
+										{selecting ? null : <RowMenu label={words.rowActions(label)} items={rowMenu(row)} />}
 									</td>
 								) : null}
 							</tr>
