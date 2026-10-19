@@ -388,7 +388,7 @@ describe('admin console interactions (jsdom)', () => {
 		// ---------------------------------------------------------------- credits and billing
 		render(
 			<ToastProvider>
-				<FinanceView {...await admin.loadBilling(ownerBrowser.api, { merchantId })} admin={me} />
+				<FinanceView {...await admin.loadBilling(ownerBrowser.api, { merchantId })} admin={me} part="attention" />
 			</ToastProvider>,
 		);
 		expect(shows('No merchant is low, in grace or stopped.')).toBe(true);

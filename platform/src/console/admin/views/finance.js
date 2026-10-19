@@ -1,44 +1,43 @@
 'use client';
 /**
- * Credits and billing (PLAN 0.5.8, 0.8.2): the receipt form with its confirm step (Owner and Finance), all receipts,
- * charges by day, merchant or product, the merchants that need attention, and a merchant's Credits section. Credits are
- * whole numbers on screen and integer millicredits on the wire; receipts are never edited or reversed.
- * Layout: an inner sidebar shows one view at a time — Needs attention, Receipts, Charges.
+ * Credits and billing (PLAN 0.5.8, 0.8.2; layout contract 2026-10-17): the receipt form with its confirm step (Owner
+ * and Finance, in a drawer), all receipts, charges by day, merchant or product, the merchants that need attention, and a
+ * merchant's Credits section. Credits are whole numbers on screen and integer millicredits on the wire; receipts are
+ * never edited or reversed. The page has three sub-pages, each its own address: Needs attention (`/admin/finance`),
+ * Receipts (`/admin/finance/receipts`) and Charges (`/admin/finance/charges`); the filters are in the query.
  * @module
  */
 import { useMemo, useState } from 'react';
 import {
-	Badge,
 	BarChart,
 	Button,
-	ButtonLink,
 	Card,
-	Dialog,
+	DataTable,
+	Drawer,
 	EmptyState,
 	Form,
 	FormError,
 	Icon,
 	Input,
-	LinkTabs,
-	PageHeader,
-	SectionLayout,
+	Page,
+	Pagination,
 	Select,
-	Stat,
-	StatGrid,
-	Table,
+	StatusPill,
 	Toolbar,
+	ButtonLink,
 	describeProblem,
 	fieldErrors,
 	formatCredits,
 	isEmptySeries,
 	useToast,
+	usePaged,
 	TextLink,
 } from '@ss/ui';
 import { BILLING, MORE } from '../../../texts/console.js';
-import { FilterForm } from '../../navigation.js';
 import { Link } from '../../link.js';
-import { BillingStats, DaysLeft, MerchantStatusBadge, ReceiptsTable, formatChartCredits } from '../../views/billing.js';
-import { RangeSelect } from '../../views/range.js';
+import { useNavigation } from '../../navigation.js';
+import { BillingStats, DaysLeft, formatChartCredits, merchantPill, receiptColumns } from '../../views/billing.js';
+import { DateFields, periodFilter } from '../../views/range.js';
 import { apiFetch } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
@@ -110,7 +109,7 @@ export function AddCreditsDialog({ merchant, balance, onClose, onAdded }) {
 		onClose();
 	};
 	return (
-		<Dialog
+		<Drawer
 			open
 			onClose={onClose}
 			title={reviewing ? F.confirmTitle : `${BILLING.addCredits} · ${merchant.name}`}
@@ -154,7 +153,7 @@ export function AddCreditsDialog({ merchant, balance, onClose, onAdded }) {
 				</Form>
 			)}
 			<FormError problem={problem} />
-		</Dialog>
+		</Drawer>
 	);
 }
 
@@ -167,27 +166,38 @@ export function MerchantCredits({ billing, receipts, dayCharges }) {
 		<div className="space-y-6">
 			{billing ? <BillingStats summary={billing} /> : null}
 			<Card title={BILLING.receiptsTitle} subtitle={BILLING.receiptsIntro} padded={false}>
-				<ReceiptsTable receipts={receipts} />
+				<DataTable
+					className="max-h-[26rem]"
+					caption={BILLING.receiptsTitle}
+					rows={receipts}
+					rowKey={(r) => r.receiptId}
+					defaultSort={{ key: 'at', dir: 'desc' }}
+					empty={<EmptyState compact icon="receipt" kind="credit" title={BILLING.noReceipts} />}
+					columns={receiptColumns({ receipts })}
+				/>
 			</Card>
 			<Card title={BILLING.dayChargesTitle} subtitle={BILLING.chargesNote} padded={false}>
-				<Table
+				<DataTable
+					className="max-h-[26rem]"
 					caption={BILLING.dayChargesTitle}
 					rows={dayCharges}
 					rowKey={(d) => `${d.day}:${d.websiteId}:${d.productId}`}
+					defaultSort={{ key: 'day', dir: 'desc' }}
 					empty={<EmptyState compact icon="coins" kind="credit" title={BILLING.noUsage} />}
 					columns={[
-						{ key: 'day', header: BILLING.usageColumns.day, rowHeader: true, sortable: true },
+						{ key: 'day', header: BILLING.usageColumns.day, kind: 'date', sortable: true },
 						{ key: 'domain', header: BILLING.usageColumns.website, sortable: true },
-						{ key: 'product', header: BILLING.usageColumns.product, sortable: true },
+						{ key: 'product', header: BILLING.usageColumns.product, sortable: true, low: true },
 						{
 							key: 'lines',
 							header: BILLING.usageColumns.feature,
+							low: true,
 							render: (d) => d.lines.map((/** @type {any} */ l) => `${l.feature} ${l.hours} h`).join(', '),
 						},
 						{
 							key: 'credits',
 							header: BILLING.usageColumns.credits,
-							align: 'right',
+							kind: 'money',
 							sortable: true,
 							render: (d) => formatCredits(d.credits),
 						},
@@ -195,51 +205,6 @@ export function MerchantCredits({ billing, receipts, dayCharges }) {
 				/>
 			</Card>
 		</div>
-	);
-}
-
-/**
- * The merchants that need attention (low, in grace or stopped; checked now), each linked to its Credits section, with
- * Add credits for those who may add them.
- * @param {{ rows: any[], onAdd?: ((merchant: any) => void) | null }} props
- */
-function AttentionTable({ rows, onAdd = null }) {
-	return (
-		<Table
-			caption={BILLING.billingSections.attention.title}
-			rows={rows}
-			rowKey={(m) => m.merchantId}
-			empty={<EmptyState compact icon="check" kind="merchant" title={BILLING.noAttention} />}
-			columns={[
-				{
-					key: 'merchantName',
-					header: BILLING.receiptColumns.merchant,
-					rowHeader: true,
-					render: (m) => (
-						<TextLink as={Link} href={`${adminRoutes.merchant(m.merchantId)}#merchant-credits`}>
-							{m.merchantName ?? m.merchantId}
-						</TextLink>
-					),
-				},
-				{ key: 'status', header: 'Status', render: (m) => <MerchantStatusBadge status={m.status} /> },
-				{ key: 'balance', header: BILLING.balance, align: 'right', render: (m) => formatCredits(m.balance) },
-				{ key: 'daysLeft', header: BILLING.daysLeft, render: (m) => <DaysLeft summary={m} /> },
-				...(onAdd
-					? [
-							{
-								key: 'add',
-								header: '',
-								align: /** @type {const} */ ('right'),
-								render: (/** @type {any} */ m) => (
-									<Button size="sm" variant="secondary" onClick={() => onAdd(m)}>
-										{BILLING.addCredits}
-									</Button>
-								),
-							},
-						]
-					: []),
-			]}
-		/>
 	);
 }
 
@@ -266,7 +231,7 @@ function PickMerchantDialog({ merchants, initial = null, onClose, onPicked }) {
 		onPicked({ merchantId, merchantName: name, balance: result.data?.balance ?? null });
 	};
 	return (
-		<Dialog
+		<Drawer
 			open
 			onClose={onClose}
 			title={BILLING.addCredits}
@@ -283,211 +248,96 @@ function PickMerchantDialog({ merchants, initial = null, onClose, onPicked }) {
 				options={merchants}
 			/>
 			{problem ? <p className="mt-3 text-sm text-danger">{describeProblem(problem)}</p> : null}
-		</Dialog>
+		</Drawer>
 	);
 }
 
 /** @param {readonly any[]} rows @param {(row: any) => number} amount */
 const sumOf = (rows, amount) => rows.reduce((n, r) => n + (Number(amount(r)) || 0), 0);
 
+/** The sub-pages of the page, in the order of the inner navigation. */
+export const FINANCE_PARTS = /** @type {const} */ (['attention', 'receipts', 'charges']);
+
 /**
- * Credits and billing page (Owner and Finance; Support read-only): one page, no tabs — the merchants that need
- * attention, the receipts with their filter, and the charges by day, merchant or product.
- * @param {any} props loader result of `loadBilling` plus `admin`
+ * The page around the three parts: the header (title, the two sums of the period, Add credits), the navigation and the
+ * part's toolbar, body and footer.
+ * @param {{ props: any, part: 'attention' | 'receipts' | 'charges', toolbar?: import('react').ReactNode,
+ *   footer?: import('react').ReactNode, children: import('react').ReactNode }} input
  */
-export function FinanceView(props) {
+function FinanceFrame({ props, part, toolbar, footer, children }) {
 	const [adding, setAdding] = useState(/** @type {any} */ (null));
 	const [picking, setPicking] = useState(false);
-	if (props.ok !== true) return <AdminProblem problem={props.problem} />;
 	const canAdd = adminCan(props.admin, 'credits.add');
-	const productsLinked = adminCan(props.admin, 'products.manage');
 	const { filter, receipts, charges, attention } = props;
 	const merchants = /** @type {Array<{ value: string, label: string }>} */ (props.merchants ?? []);
 	const S = BILLING.billingSections;
-	const reload = () => window.location.reload();
 	const chargeRows = /** @type {any[]} */ (charges?.rows ?? []);
-	const methods = [...new Set(/** @type {any[]} */ (receipts).map((r) => String(r.method ?? '')).filter(Boolean))].sort();
-	const dayBars =
-		filter.by === 'day'
-			? chargeRows.map((r) => ({ label: String(r.label).slice(5), value: r.credits / 1000, hint: r.label }))
-			: [];
 	const range = charges?.from && charges?.to ? MORE.rangeLine(charges.from, charges.to) : undefined;
 	return (
-		<div className="space-y-6">
-			<PageHeader
-				title={BILLING.billingTitle}
-				subtitle={BILLING.billingIntro}
-				actions={
-					canAdd && merchants.length > 0 ? (
-						<Button onClick={() => setPicking(true)} icon={<Icon name="plus" size={14} />}>
-							{BILLING.addCredits}
-						</Button>
-					) : null
-				}
-			/>
-			<StatGrid>
-				<Stat
-					label={MORE.creditsAddedRange}
-					value={formatCredits(sumOf(receipts, (r) => r.credits))}
-					hint={range}
-					icon="wallet"
-					kind="credit"
-				/>
-				<Stat
-					label={MORE.chargedRange}
-					value={formatCredits(sumOf(chargeRows, (r) => r.credits))}
-					hint={range}
-					icon="trendingUp"
-					kind="credit"
-				/>
-			</StatGrid>
-			<SectionLayout
-				label={BILLING.billingTitle}
-				sections={[
+		<>
+			<Page
+				linkAs={Link}
+				flush
+				bodyKey={part}
+				crumbs={[{ label: BILLING.billingTitle }]}
+				info={BILLING.billingIntro}
+				facts={[
 					{
-						id: 'billing-attention',
-						label: S.attention.title,
-						icon: 'alert',
-						...(attention.length > 0 ? { badge: <Badge tone="attention">{attention.length}</Badge> } : {}),
-						content: (
-							<>
-								<Toolbar className="!px-0">
-									<p className="min-w-0 truncate text-sm text-muted">{S.attention.help}</p>
-								</Toolbar>
-								<AttentionTable rows={attention} onAdd={canAdd ? setAdding : null} />
-							</>
-						),
+						label: MORE.creditsAddedRange,
+						value: formatCredits(sumOf(receipts, (r) => r.credits)),
+						...(range ? { title: range } : {}),
 					},
 					{
-						id: 'billing-receipts',
-						label: S.receipts.title,
-						icon: 'receipt',
-						content: (
-							<>
-								<Card>
-									<FilterForm label={BILLING.filters.apply} className="flex flex-wrap items-end gap-3">
-										<input type="hidden" name="by" value={filter.by} />
-										<Select
-											label={BILLING.receiptColumns.merchant}
-											name="merchantId"
-											defaultValue={filter.merchantId ?? ''}
-											fieldClassName="min-w-48 flex-1"
-											options={[{ value: '', label: MORE.allMerchants }, ...merchants]}
-										/>
-										<RangeSelect
-											from={filter.from}
-											to={filter.to}
-											emptyLabel={MORE.range.last30}
-											omit="last30"
-											hrefFor={(r) => adminRoutes.finance({ ...filter, ...r })}
-										/>
-										<Input
-											label={BILLING.filters.from}
-											name="from"
-											type="date"
-											defaultValue={filter.from ?? ''}
-											fieldClassName="min-w-40"
-										/>
-										<Input
-											label={BILLING.filters.to}
-											name="to"
-											type="date"
-											defaultValue={filter.to ?? ''}
-											fieldClassName="min-w-40"
-										/>
-										<Input
-											label={BILLING.receiptColumns.method}
-											name="method"
-											list="billing-methods"
-											placeholder={MORE.allMethods}
-											defaultValue={filter.method ?? ''}
-											fieldClassName="min-w-40 flex-1"
-										/>
-										<datalist id="billing-methods">
-											{methods.map((m) => (
-												<option key={m} value={m} />
-											))}
-										</datalist>
-										<Button type="submit" variant="secondary">
-											{BILLING.filters.apply}
-										</Button>
-										{filter.merchantId || filter.from || filter.to || filter.method ? (
-											<ButtonLink as={Link} href={adminRoutes.finance({ by: filter.by })} variant="ghost">
-												{MORE.clearFilters}
-											</ButtonLink>
-										) : null}
-									</FilterForm>
-								</Card>
-								<ReceiptsTable receipts={receipts} showMerchant />
-							</>
-						),
-					},
-					{
-						id: 'billing-charges',
-						label: S.charges.title,
-						icon: 'trendingUp',
-						content: (
-							<>
-								<Toolbar
-									className="!px-0"
-									end={
-										<LinkTabs
-											label={S.charges.title}
-											linkAs={Link}
-											items={
-												/** @type {const} */ (['day', 'merchant', 'product']).map((by) => ({
-													href: `${adminRoutes.finance({ ...filter, by })}#billing-charges`,
-													label: BILLING.chargesBy[by],
-													current: filter.by === by,
-												}))
-											}
-										/>
-									}>
-									<p className="min-w-0 truncate text-sm text-muted">{S.charges.help}</p>
-								</Toolbar>
-								{isEmptySeries(dayBars) ? null : (
-									<Card title={MORE.chargesChart} subtitle={range}>
-										<BarChart label={MORE.chargesChart} data={dayBars} format={formatChartCredits} height={120} />
-									</Card>
-								)}
-								<Table
-									caption={S.charges.title}
-									rows={chargeRows}
-									rowKey={(r) => r.key}
-									empty={<EmptyState compact icon="coins" kind="credit" title={BILLING.noUsage} />}
-									columns={[
-										{
-											key: 'label',
-											header: BILLING.chargesBy[/** @type {'day'} */ (filter.by)],
-											rowHeader: true,
-											sortable: true,
-											render: (r) =>
-												filter.by === 'merchant' ? (
-													<TextLink as={Link} tone="plain" href={`${adminRoutes.merchant(r.key)}#merchant-credits`}>
-														{r.label}
-													</TextLink>
-												) : filter.by === 'product' && productsLinked ? (
-													<TextLink as={Link} tone="plain" href={adminRoutes.product(r.key)}>
-														{r.label}
-													</TextLink>
-												) : (
-													r.label
-												),
-										},
-										{
-											key: 'credits',
-											header: BILLING.usageColumns.credits,
-											align: 'right',
-											sortable: true,
-											render: (r) => formatCredits(r.credits),
-										},
-									]}
-								/>
-							</>
-						),
+						label: MORE.chargedRange,
+						value: formatCredits(sumOf(chargeRows, (r) => r.credits)),
+						...(range ? { title: range } : {}),
 					},
 				]}
-			/>
+				{...(canAdd && merchants.length > 0
+					? {
+							actions: {
+								primary: {
+									label: BILLING.addCredits,
+									icon: /** @type {const} */ ('plus'),
+									onClick: () => setPicking(true),
+								},
+							},
+						}
+					: {})}
+				nav={{
+					value: part,
+					label: BILLING.billingTitle,
+					items: [
+						{
+							id: 'attention',
+							label: S.attention.title,
+							icon: 'alert',
+							...(attention.length > 0 ? { count: attention.length, dot: 'attention', dotLabel: S.attention.title } : {}),
+							href: adminRoutes.financePart('attention'),
+						},
+						{
+							id: 'receipts',
+							label: S.receipts.title,
+							icon: 'receipt',
+							href: adminRoutes.financePart('receipts', {
+								merchantId: filter.merchantId,
+								from: filter.from,
+								to: filter.to,
+								method: filter.method,
+							}),
+						},
+						{
+							id: 'charges',
+							label: S.charges.title,
+							icon: 'trendingUp',
+							href: adminRoutes.financePart('charges', { by: filter.by, from: filter.from, to: filter.to }),
+						},
+					],
+				}}
+				{...(toolbar ? { toolbar } : {})}
+				{...(footer ? { footer } : {})}>
+				{children}
+			</Page>
 			{picking ? (
 				<PickMerchantDialog
 					merchants={merchants}
@@ -504,9 +354,287 @@ export function FinanceView(props) {
 					merchant={{ merchantId: adding.merchantId, name: adding.merchantName ?? adding.merchantId }}
 					balance={adding.balance}
 					onClose={() => setAdding(null)}
-					onAdded={reload}
+					onAdded={() => window.location.reload()}
 				/>
 			) : null}
-		</div>
+		</>
+	);
+}
+
+/**
+ * Needs attention: the merchants that are low, in grace or stopped (checked now); a row opens the merchant's Credits.
+ * @param {any} props loader result of `loadBilling` plus `admin`
+ */
+function AttentionPart(props) {
+	const nav = useNavigation();
+	const [adding, setAdding] = useState(/** @type {any} */ (null));
+	const canAdd = adminCan(props.admin, 'credits.add');
+	const rows = /** @type {any[]} */ (props.attention);
+	return (
+		<>
+			<FinanceFrame props={props} part="attention">
+				<DataTable
+					caption={BILLING.billingSections.attention.title}
+					rows={rows}
+					rowKey={(m) => m.merchantId}
+					rowLabel={(m) => String(m.merchantName ?? m.merchantId)}
+					onRowClick={(m) => nav.go(adminRoutes.merchantPart(m.merchantId, 'credits'))}
+					{...(canAdd
+						? {
+								rowMenu: (/** @type {any} */ m) => [{ label: BILLING.addCredits, onSelect: () => setAdding(m) }],
+							}
+						: {})}
+					empty={<EmptyState compact icon="check" kind="merchant" title={BILLING.noAttention} />}
+					columns={[
+						{
+							key: 'merchantName',
+							header: BILLING.receiptColumns.merchant,
+							rowHeader: true,
+							render: (m) => (
+								<TextLink as={Link} href={adminRoutes.merchantPart(m.merchantId, 'credits')}>
+									{m.merchantName ?? m.merchantId}
+								</TextLink>
+							),
+						},
+						{
+							key: 'status',
+							header: BILLING.statusColumn,
+							kind: 'status',
+							render: (m) => <MerchantPillCell status={m.status} />,
+						},
+						{
+							key: 'balance',
+							header: BILLING.balance,
+							kind: 'money',
+							render: (m) => formatCredits(m.balance),
+						},
+						{ key: 'daysLeft', header: BILLING.daysLeft, low: true, render: (m) => <DaysLeft summary={m} /> },
+					]}
+				/>
+			</FinanceFrame>
+			{adding ? (
+				<AddCreditsDialog
+					merchant={{ merchantId: adding.merchantId, name: adding.merchantName ?? adding.merchantId }}
+					balance={adding.balance}
+					onClose={() => setAdding(null)}
+					onAdded={() => window.location.reload()}
+				/>
+			) : null}
+		</>
+	);
+}
+
+/** @param {{ status: string }} props */
+function MerchantPillCell({ status }) {
+	const pill = merchantPill(status);
+	return <StatusPill status={pill.status}>{pill.label}</StatusPill>;
+}
+
+/**
+ * Receipts: every credit receipt of the filter, newest first.
+ * @param {any} props loader result of `loadBilling` plus `admin`
+ */
+function ReceiptsPart(props) {
+	const nav = useNavigation();
+	const { filter } = props;
+	const receipts = /** @type {any[]} */ (props.receipts);
+	const merchants = /** @type {Array<{ value: string, label: string }>} */ (props.merchants ?? []);
+	const methods = [
+		...new Set([...receipts.map((r) => String(r.method ?? '')), String(filter.method ?? '')].filter(Boolean)),
+	].sort();
+	const paged = usePaged(receipts, {
+		pageSize: 50,
+		text: (r) => `${r.merchantName ?? ''} ${r.method ?? ''} ${r.reference ?? ''} ${r.credits}`,
+	});
+	/** @param {Record<string, string | null>} next */
+	const hrefFor = (next) => adminRoutes.financePart('receipts', { ...filter, ...next });
+	const filtered = Boolean(filter.merchantId || filter.from || filter.to || filter.method);
+	return (
+		<FinanceFrame
+			props={props}
+			part="receipts"
+			toolbar={
+				<Toolbar
+					label={BILLING.receiptsTitle}
+					search={{
+						value: paged.query,
+						label: BILLING.searchReceipts,
+						placeholder: BILLING.searchReceipts,
+						onSearch: paged.setQuery,
+					}}
+					filters={[
+						{
+							id: 'merchant',
+							label: BILLING.receiptColumns.merchant,
+							allLabel: MORE.allMerchants,
+							value: filter.merchantId ?? '',
+							options: merchants,
+							onChange: (merchantId) => nav.go(hrefFor({ merchantId: merchantId || null })),
+						},
+						{
+							id: 'method',
+							label: BILLING.receiptColumns.method,
+							allLabel: MORE.allMethods,
+							value: filter.method ?? '',
+							options: methods.map((m) => ({ value: m, label: m })),
+							onChange: (method) => nav.go(hrefFor({ method: method || null })),
+						},
+						periodFilter({
+							from: filter.from,
+							to: filter.to,
+							emptyLabel: MORE.range.last30,
+							omit: 'last30',
+							hrefFor: (range) => hrefFor(range),
+							go: nav.go,
+						}),
+					]}
+					end={
+						filtered ? (
+							<ButtonLink
+								as={Link}
+								href={adminRoutes.financePart('receipts', { by: filter.by })}
+								variant="ghost"
+								size="sm">
+								{MORE.clearFilters}
+							</ButtonLink>
+						) : null
+					}>
+					<DateFields
+						from={filter.from}
+						to={filter.to}
+						fromLabel={BILLING.filters.from}
+						toLabel={BILLING.filters.to}
+						hrefFor={(range) => hrefFor(range)}
+						go={nav.go}
+					/>
+				</Toolbar>
+			}
+			{...(paged.found.length > 0 ? { footer: <Pagination {...paged.pagination} /> } : {})}>
+			<DataTable
+				caption={BILLING.receiptsTitle}
+				rows={paged.rows}
+				rowKey={(r) => r.receiptId}
+				defaultSort={{ key: 'at', dir: 'desc' }}
+				empty={<EmptyState compact icon="receipt" kind="credit" title={BILLING.noReceipts} />}
+				columns={receiptColumns({ receipts, showMerchant: true })}
+			/>
+		</FinanceFrame>
+	);
+}
+
+/**
+ * Charges by day, merchant or product: the chart of the days and the rows.
+ * @param {any} props loader result of `loadBilling` plus `admin`
+ */
+function ChargesPart(props) {
+	const nav = useNavigation();
+	const { filter, charges } = props;
+	const productsLinked = adminCan(props.admin, 'products.manage');
+	const rows = /** @type {any[]} */ (charges?.rows ?? []);
+	const paged = usePaged(rows, { pageSize: 50, text: (r) => String(r.label) });
+	const dayBars =
+		filter.by === 'day' ? rows.map((r) => ({ label: String(r.label).slice(5), value: r.credits / 1000, hint: r.label })) : [];
+	const range = charges?.from && charges?.to ? MORE.rangeLine(charges.from, charges.to) : undefined;
+	/** @param {Record<string, string | null>} next */
+	const hrefFor = (next) => adminRoutes.financePart('charges', { by: filter.by, from: filter.from, to: filter.to, ...next });
+	return (
+		<FinanceFrame
+			props={props}
+			part="charges"
+			toolbar={
+				<Toolbar
+					label={BILLING.billingSections.charges.title}
+					search={{
+						value: paged.query,
+						label: BILLING.searchCharges,
+						placeholder: BILLING.searchCharges,
+						onSearch: paged.setQuery,
+					}}
+					view={{
+						label: BILLING.chargesGroup,
+						value: filter.by,
+						onChange: (by) => nav.go(hrefFor({ by })),
+						options: /** @type {const} */ (['day', 'merchant', 'product']).map((by) => ({
+							value: by,
+							label: BILLING.chargesBy[by],
+						})),
+					}}
+					filters={[
+						periodFilter({
+							from: filter.from,
+							to: filter.to,
+							emptyLabel: MORE.range.last30,
+							omit: 'last30',
+							hrefFor: (r) => hrefFor(r),
+							go: nav.go,
+						}),
+					]}>
+					<DateFields
+						from={filter.from}
+						to={filter.to}
+						fromLabel={BILLING.filters.from}
+						toLabel={BILLING.filters.to}
+						hrefFor={(r) => hrefFor(r)}
+						go={nav.go}
+					/>
+				</Toolbar>
+			}
+			{...(paged.found.length > 0 ? { footer: <Pagination {...paged.pagination} /> } : {})}>
+			{isEmptySeries(dayBars) ? null : (
+				<div className="shrink-0 border-b border-line-soft px-4 py-3">
+					{range ? <p className="mb-2 text-label text-muted">{MORE.chargesChart + ' · ' + range}</p> : null}
+					<BarChart label={MORE.chargesChart} data={dayBars} format={formatChartCredits} height={120} />
+				</div>
+			)}
+			<DataTable
+				caption={BILLING.billingSections.charges.title}
+				rows={paged.rows}
+				rowKey={(r) => r.key}
+				empty={<EmptyState compact icon="coins" kind="credit" title={BILLING.noUsage} />}
+				columns={[
+					{
+						key: 'label',
+						header: BILLING.chargesBy[/** @type {'day'} */ (filter.by)],
+						rowHeader: true,
+						sortable: true,
+						render: (r) =>
+							filter.by === 'merchant' ? (
+								<TextLink as={Link} tone="plain" href={adminRoutes.merchantPart(r.key, 'credits')}>
+									{r.label}
+								</TextLink>
+							) : filter.by === 'product' && productsLinked ? (
+								<TextLink as={Link} tone="plain" href={adminRoutes.product(r.key)}>
+									{r.label}
+								</TextLink>
+							) : (
+								r.label
+							),
+					},
+					{
+						key: 'credits',
+						header: BILLING.usageColumns.credits,
+						kind: 'money',
+						sortable: true,
+						render: (r) => formatCredits(r.credits),
+					},
+				]}
+			/>
+		</FinanceFrame>
+	);
+}
+
+/**
+ * Credits and billing page (Owner and Finance; Support read-only): needs attention, receipts with their filters, and
+ * the charges by day, merchant or product, each its own address.
+ * @param {any} props loader result of `loadBilling` plus `admin` and the `part` of the address
+ */
+export function FinanceView(props) {
+	if (props.ok !== true) return <AdminProblem problem={props.problem} />;
+	return props.part === 'receipts' ? (
+		<ReceiptsPart {...props} />
+	) : props.part === 'charges' ? (
+		<ChargesPart {...props} />
+	) : (
+		<AttentionPart {...props} />
 	);
 }

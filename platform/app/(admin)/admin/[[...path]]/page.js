@@ -12,6 +12,7 @@ import AccountPart, { metadata as AccountPartMeta } from '../_views/account-part
 import Activity, { metadata as ActivityMeta } from '../_views/activity.js';
 import Admins, { metadata as AdminsMeta } from '../_views/admins.js';
 import Finance, { metadata as FinanceMeta } from '../_views/finance.js';
+import FinancePart, { metadata as FinancePartMeta } from '../_views/finance-part.js';
 import Login, { metadata as LoginMeta } from '../_views/login.js';
 import Merchants, { metadata as MerchantsMeta } from '../_views/merchants.js';
 import Products, { metadata as ProductsMeta } from '../_views/products.js';
@@ -36,9 +37,10 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[[], Home, HomeMeta, 'page'],
 	[['account'], Account, AccountMeta, 'screen'],
 	[['account', ':part'], AccountPart, AccountPartMeta, 'screen'],
-	[['activity'], Activity, ActivityMeta, 'page'],
+	[['activity'], Activity, ActivityMeta, 'screen'],
 	[['admins'], Admins, AdminsMeta, 'screen'],
-	[['finance'], Finance, FinanceMeta, 'page'],
+	[['finance'], Finance, FinanceMeta, 'screen'],
+	[['finance', ':part'], FinancePart, FinancePartMeta, 'screen'],
 	[['login'], Login, LoginMeta, 'public'],
 	[['merchants'], Merchants, MerchantsMeta, 'screen'],
 	[['products'], Products, ProductsMeta, 'screen'],

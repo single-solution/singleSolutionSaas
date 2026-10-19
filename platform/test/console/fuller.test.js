@@ -236,19 +236,26 @@ describe('fuller Portal screens (jsdom)', () => {
 			const billing = await admin.loadBilling(ownerBrowser.api, {});
 			if (!billing.ok) throw new Error('billing');
 			expect(billing.merchants.map((m) => m.label)).toEqual(['Pending Ltd', 'Shop & Co']);
-			withToasts(<FinanceView {...billing} admin={owner} />);
-			for (const text of ['Credits added', 'Receipts', 'Credits charged', 'Needs attention']) expect(shows(text)).toBe(true);
+			withToasts(<FinanceView {...billing} admin={owner} part="attention" />);
+			for (const text of ['Credits added', 'Credits charged', 'Receipts', 'Charges', 'Needs attention'])
+				expect(shows(text)).toBe(true);
+			// the parts are links with their own addresses (the filters stay in the query)
+			expect(document.querySelector('nav a[href^="/admin/finance/receipts"]')).not.toBeNull();
+			expect(document.querySelector('nav a[href^="/admin/finance/charges"]')).not.toBeNull();
 			await clickEl(/** @type {Element} */ (buttons('Add credits')[0]));
 			await until(() => shows('Choose the merchant who paid'));
 			await type(byLabel(dialog(), 'Merchant'), merchantId);
 			await pressDialog('Next');
 			await until(() => shows('Add credits · Shop & Co'));
 			keydown(document, 'Escape');
-			await openSection('Receipts');
-			await pick('Period', 'last7');
-			expect(pushed('/admin/finance?') && pushed('from=')).toBe(true);
-			await openSection('Charges');
-			expect(shows('By merchant')).toBe(true);
+			cleanup();
+			withToasts(<FinanceView {...billing} admin={owner} part="receipts" />);
+			await pressMenu('Period', 'Last 7 days');
+			expect(pushed('/admin/finance/receipts?') && pushed('from=')).toBe(true);
+			cleanup();
+			withToasts(<FinanceView {...billing} admin={owner} part="charges" />);
+			await press('By merchant');
+			expect(pushed('/admin/finance/charges?by=merchant')).toBe(true);
 			cleanup();
 
 			// ---------------------------------------------------------------- Activity

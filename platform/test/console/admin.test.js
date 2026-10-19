@@ -291,10 +291,11 @@ describe('admin console smoke', () => {
 			expect(text(ssr(<MyAccountView {...await admin.loadMyAccount(ownerBrowser.api)} />))).toContain('Two-step sign-in');
 			const finance = await admin.loadBilling(ownerBrowser.api, { merchantId, by: 'merchant', method: 'Bank transfer' });
 			expect(finance).toMatchObject({ ok: true, filter: { merchantId, by: 'merchant' } });
-			const financeRaw = ssr(<FinanceView {...finance} admin={owner} />);
-			// an inner sidebar: needs attention first, then receipts and charges (opened from the sidebar)
+			const financeRaw = ssr(<FinanceView {...finance} admin={owner} part="receipts" />);
+			// an inner navigation: needs attention first, then receipts and charges, each its own address
 			for (const word of ['Credits and billing', 'Needs attention', 'Receipts', 'Charges'])
 				expect(text(financeRaw)).toContain(word);
+			expect(financeRaw).toContain('href="/admin/finance/charges?');
 			const creditsHtml = text(
 				ssr(
 					<MerchantCredits

@@ -9,7 +9,7 @@
  * card), Credits, Details and Activity (paged). Rights follow the role (PLAN 0.2); the API checks them again.
  * @module
  */
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import {
 	Button,
 	Callout,
@@ -18,6 +18,7 @@ import {
 	ConfirmDialog,
 	DataTable,
 	Dialog,
+	Drawer,
 	EmptyState,
 	Form,
 	FormError,
@@ -114,9 +115,23 @@ export function AddMerchantDialog({ open, onClose, onCreated }) {
 		onCreated(result.data?.merchant);
 	};
 	const errors = fieldErrors(problem);
+	const formId = useId();
 	return (
-		<Dialog open={open} onClose={onClose} title={ADMIN.addMerchant} size="lg">
-			<Form onSubmit={submit} busy={busy} aria-label={ADMIN.addMerchant}>
+		<Drawer
+			open={open}
+			onClose={onClose}
+			title={ADMIN.addMerchant}
+			footer={
+				<>
+					<Button variant="secondary" onClick={onClose}>
+						{MORE.cancel}
+					</Button>
+					<Button type="submit" form={formId} loading={busy}>
+						{ADMIN.addMerchant}
+					</Button>
+				</>
+			}>
+			<Form id={formId} onSubmit={submit} busy={busy} aria-label={ADMIN.addMerchant}>
 				<Input
 					label={MERCHANT_FIELDS.name}
 					value={form.name}
@@ -165,11 +180,8 @@ export function AddMerchantDialog({ open, onClose, onCreated }) {
 					wide
 				/>
 				<FormError problem={problem} fields={['name', 'ownerName', 'email', 'phone', 'address', 'country']} />
-				<Button type="submit" loading={busy}>
-					{ADMIN.addMerchant}
-				</Button>
 			</Form>
-		</Dialog>
+		</Drawer>
 	);
 }
 
@@ -785,7 +797,7 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 		<>
 			{page}
 
-			<Dialog open={dialog === 'edit'} onClose={() => setDialog(null)} title={ADMIN.editMerchant} size="lg">
+			<Drawer open={dialog === 'edit'} onClose={() => setDialog(null)} title={ADMIN.editMerchant}>
 				<MerchantFieldsForm
 					merchant={merchant}
 					path={adminApi.merchant(merchantId)}
@@ -797,7 +809,7 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 						setDialog(null);
 					}}
 				/>
-			</Dialog>
+			</Drawer>
 			<ConfirmDialog
 				open={dialog === 'suspend' || dialog === 'resume'}
 				onClose={() => setDialog(null)}

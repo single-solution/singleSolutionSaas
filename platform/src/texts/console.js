@@ -989,6 +989,9 @@ export const BILLING = Object.freeze({
 	usageIntro: 'Your balance, spend per product and website, and the credits added.',
 	searchUsage: 'Search usage',
 	searchReceipts: 'Search receipts',
+	searchCharges: 'Search charges',
+	chargesGroup: 'Group charges',
+	statusColumn: 'Status',
 	parts: 'Usage and credits sections',
 	billingIntro: 'Receipts, charges and the merchants that need attention.',
 	usageChartIntro: (/** @type {string} */ range, /** @type {string} */ total) => `${range} · ${total} in total`,
@@ -1050,6 +1053,7 @@ export const BILLING = Object.freeze({
 
 /** Screen details, quick actions, filters and recent activity drawn from the Portal API. */
 export const MORE = Object.freeze({
+	cancel: 'Cancel',
 	/** Readable names of activity entries whose code does not read well on its own (others are shown from the code). */
 	actions: Object.freeze({
 		'login.signed_in': 'Signed in',

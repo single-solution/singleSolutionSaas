@@ -31,6 +31,11 @@ export const adminRoutes = Object.freeze({
 	finance: (
 		/** @type {{ merchantId?: string | null, from?: string | null, to?: string | null, method?: string | null, by?: string | null }} */ q = {},
 	) => `/admin/finance${query(q)}`,
+	/** a part of Credits and billing: attention (the page's own address), receipts or charges; the filters in the query */
+	financePart: (
+		/** @type {string} */ part,
+		/** @type {{ merchantId?: string | null, from?: string | null, to?: string | null, method?: string | null, by?: string | null }} */ q = {},
+	) => (part === 'attention' ? `/admin/finance${query(q)}` : `/admin/finance/${e(part)}${query(q)}`),
 	activity: (
 		/** @type {{ merchantId?: string | null, adminId?: string | null, from?: string | null, to?: string | null }} */ q = {},
 	) => `/admin/activity${query(q)}`,
