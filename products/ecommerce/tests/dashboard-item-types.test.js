@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The item types editor in the browser (jsdom) on a faked dashboard API (PLAN 0.8.10 dynamic model §1): it lists the
- * saved types with their kind and parts, adds a type in its dialog (name, kind, parts of its kind, numbered units with
+ * saved types with their kind and parts in a table, adds a type in its drawer (name, kind, parts of its kind, numbered units with
  * their unit fields, the step they are needed before, the fields it names) and edits one, and saves the whole list
  * with one PUT that the server's check takes.
  */
@@ -11,7 +11,7 @@ import { byLabel, byText, cleanup, click, keydown, render, type } from '@ss/ui/t
 import { ItemTypesEditor } from '../app/dashboard/item-types.js';
 import { blankType, cleanType, loadType, typeProblems } from '../app/dashboard/drafts.js';
 import { checkItemTypes } from '../core/item-types.js';
-import { inDashboard } from './dashboard-provider.js';
+import { drawerOf, inDashboard, openRow, rowMenu, rowNames } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 const PATH = `/v1/dashboard/websites/${WEBSITE}/lists/item_types`;
@@ -181,11 +181,12 @@ describe('item type drafts', () => {
 });
 
 describe('the item types editor', () => {
-	it('lists the types, adds one in its dialog and saves the list the server takes', async () => {
+	it('lists the types, adds one in its drawer and saves the list the server takes', async () => {
 		serve();
 		const { container } = render(inDashboard(<ItemTypesEditor websiteId={WEBSITE} />));
 		await settle();
-		expect(container.textContent).toContain('E-book');
+		expect(rowNames(container)).toEqual(['E-book']);
+		expect(container.textContent).toContain('Digital goods');
 		expect(container.textContent).toContain('Not offered');
 		expect(container.textContent).toContain('Downloads');
 		await act(async () => click(byText(container, 'Add item type', 'button')));
@@ -210,7 +211,7 @@ describe('the item types editor', () => {
 		type(byLabel(dialog, 'Product and variant fields'), 'att_battery, att_color,');
 		await act(async () => click(byText(dialog, 'Done', 'button')));
 		expect(container.textContent).toContain('Used phone');
-		expect(container.textContent).toContain('Changes not saved yet');
+		expect(container.textContent).toContain('You have unsaved changes');
 		await act(async () => click(byText(container, 'Save list', 'button')));
 		await settle();
 		expect(saved).toHaveLength(1);
@@ -235,6 +236,45 @@ describe('the item types editor', () => {
 			fieldIds: ['att_battery', 'att_color'],
 		});
 		expect(checkItemTypes(saved[0]).ok).toBe(true);
-		expect(container.textContent).not.toContain('Changes not saved yet');
+		expect(container.textContent).not.toContain('You have unsaved changes');
+	});
+
+	it('edits a type from its row and moves or removes types from the row menu', async () => {
+		serve();
+		const { container } = render(inDashboard(<ItemTypesEditor websiteId={WEBSITE} />));
+		await settle();
+		expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+		const drawer = await openRow(container, 'E-book');
+		expect(drawer.querySelector('h2')?.textContent).toBe('Edit E-book');
+		type(byLabel(drawer, 'Name'), 'E-book and PDF');
+		await act(async () => click(byText(drawer, 'Done', 'button')));
+		expect(drawerOf()).toBeNull();
+		expect(rowNames(container)).toEqual(['E-book and PDF']);
+		// a second type, then the order changes and one goes
+		await act(async () => click(byText(container, 'Add item type', 'button')));
+		type(byLabel(drawerOf(), 'Name'), 'Course');
+		await act(async () => click(byText(drawerOf(), 'Done', 'button')));
+		expect(rowNames(container)).toEqual(['E-book and PDF', 'Course']);
+		await rowMenu(container, 'Course', 'Move up');
+		expect(rowNames(container)).toEqual(['Course', 'E-book and PDF']);
+		await rowMenu(container, 'E-book and PDF', 'Remove');
+		expect(rowNames(container)).toEqual(['Course']);
+		await act(async () => click(byText(container, 'Save list', 'button')));
+		await settle();
+		expect(saved).toHaveLength(1);
+		expect(saved[0].map((/** @type {{ key: string }} */ type) => type.key)).toEqual(['course']);
+	});
+
+	it('leaves the card title out when the page says it already', async () => {
+		serve();
+		const titled = render(inDashboard(<ItemTypesEditor websiteId={WEBSITE} />));
+		await settle();
+		expect(titled.container.querySelector('h2')?.textContent).toBe('Item types');
+		cleanup();
+		serve();
+		const bare = render(inDashboard(<ItemTypesEditor websiteId={WEBSITE} bare />));
+		await settle();
+		expect(bare.container.querySelector('h2')).toBeNull();
+		expect(byText(bare.container, 'Add item type', 'button')).toBeTruthy();
 	});
 });

@@ -1,8 +1,8 @@
 'use client';
 /**
- * Settings → Catalog: the item types editor (`item_types` list of `catalog`, PLAN 0.8.10 dynamic model §1). The list
- * shows each type's name, key, kind and parts, with Edit and a More menu (move, remove); a type's every field is edited
- * in a dialog (PLAN 0.6: secondary forms in dialogs): name and key, kind (physical goods, digital goods or a service),
+ * Settings → Catalog: the item types editor (`item_types` list of `catalog`, PLAN 0.8.10 dynamic model §1). The table
+ * shows each type's name, key, kind and parts, with a row menu (move, remove); a click on a row opens the type, and every
+ * field is edited in a drawer: name and key, kind (physical goods, digital goods or a service),
  * whether it is offered, the parts its items have (only those of its kind; each works while its feature is on),
  * numbered units (the unit fields their numbers take, picked from stock or typed, and the step they are needed before),
  * selling in a unit of its own (the unit, and the step, least and most a shopper buys, typed as numbers of the
@@ -15,7 +15,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Badge, Button, Card, Checkbox, Dialog, FieldGrid, Input, Paged, Select, ListRow, RowList } from '@ss/ui';
+import { Button, Card, Checkbox, DataTable, DataTableSkeleton, Drawer, FieldGrid, Icon, Input, Select, StatusPill } from '@ss/ui';
 import { FIELD_LIMITS } from '../../core/fields.js';
 import { ELEMENTS, ITEM_KINDS, TYPE_LIMITS, UNIT_CAPTURES, elementFor } from '../../core/item-types.js';
 import { MAX_DECIMALS, MAX_UNIT_LABEL, STANDARD_UNITS } from '../../core/measure.js';
@@ -290,160 +290,147 @@ function TypeFields({ draft, set, problems, tried }) {
 }
 
 /**
- * A type's line in the list: name and key, kind and parts, and its actions.
- * @param {{ type: TypeDraft, index: number, count: number, onEdit: () => void, onMove: (step: number) => void,
- *   onRemove: () => void }} props
+ * The parts a type has, in words: the parts it switches on, selling by a unit of its own or numbered units, and a
+ * quantity rule that is not one at a time.
+ * @param {TypeDraft} type
  */
-function TypeRow({ type, index, count, onEdit, onMove, onRemove }) {
-	const name = type.name.trim() || T.unnamed;
-	const parts = [
-		...PARTS.filter((part) => elementFor(part, type.kind) && type.elements[part]).map((part) => T.elements[part]),
-		...(type.measure.on && elementFor('measure', type.kind)
-			? [T.soldBy.replace('{unit}', type.measure.unit.trim())]
-			: type.units.on && elementFor('units', type.kind)
-				? [T.unitsOn]
-				: []),
-		...(type.measure.on && elementFor('measure', type.kind)
-			? []
-			: type.quantity.step.trim() !== '1' || type.quantity.min.trim() !== '1'
-				? [fill(T.quantityRule, { step: type.quantity.step.trim(), min: type.quantity.min.trim() })]
-				: []),
-	];
-	return (
-		<ListRow
-			wrap
-			title={name}
-			status={
-				<>
-					<code className="text-xs text-muted">{keyOf(type.key, type.name)}</code>
-					<Badge kind="product">{T.kinds[type.kind]}</Badge>
-					{type.active ? null : <Badge>{T.notOffered}</Badge>}
-				</>
-			}
-			meta={parts.length > 0 ? parts.join(' · ') : T.noParts}
-			action={
-				<Button size="sm" variant="secondary" onClick={onEdit}>
-					{T.edit}
-				</Button>
-			}
-			moreLabel={fill(T.more, { type: name })}
-			more={[
-				{ label: L.up, disabled: index === 0, onSelect: () => onMove(-1) },
-				{ label: L.down, disabled: index === count - 1, onSelect: () => onMove(1) },
-				{ label: L.remove, danger: true, onSelect: onRemove },
-			]}
-		/>
-	);
-}
+const partsOf = (type) => [
+	...PARTS.filter((part) => elementFor(part, type.kind) && type.elements[part]).map((part) => T.elements[part]),
+	...(type.measure.on && elementFor('measure', type.kind)
+		? [T.soldBy.replace('{unit}', type.measure.unit.trim())]
+		: type.units.on && elementFor('units', type.kind)
+			? [T.unitsOn]
+			: []),
+	...(type.measure.on && elementFor('measure', type.kind)
+		? []
+		: type.quantity.step.trim() !== '1' || type.quantity.min.trim() !== '1'
+			? [fill(T.quantityRule, { step: type.quantity.step.trim(), min: type.quantity.min.trim() })]
+			: []),
+];
 
-/** What the dialog edits: which type (null = a new one), the working copy, whether Done was pressed. */
+/**
+ * The columns of the types table: name, key, kind, parts, and a pill for a type that is not offered.
+ * @type {Array<{ key: string, header: string, low?: boolean, render: (row: { type: TypeDraft, index: number }) => import('react').ReactNode }>}
+ */
+const COLUMNS = [
+	{ key: 'name', header: L.columns.name, render: ({ type }) => type.name.trim() || T.unnamed },
+	{ key: 'key', header: L.columns.key, render: ({ type }) => <code>{keyOf(type.key, type.name)}</code> },
+	{ key: 'kind', header: L.columns.kind, render: ({ type }) => T.kinds[type.kind] },
+	{
+		key: 'parts',
+		header: L.columns.parts,
+		low: true,
+		render: ({ type }) => {
+			const parts = partsOf(type);
+			return parts.length > 0 ? parts.join(' · ') : T.noParts;
+		},
+	},
+	{
+		key: 'status',
+		header: L.columns.active,
+		render: ({ type }) => (type.active ? null : <StatusPill status="off">{T.notOffered}</StatusPill>),
+	},
+];
+
+/** What the drawer edits: which type (null = a new one), the working copy, whether Done was pressed. */
 /** @typedef {{ open: boolean, index: number | null, draft: TypeDraft, tried: boolean }} Editing */
 
 /**
- * Item types (`item_types`, feature catalog): the list, and each type's fields in a dialog.
- * @param {{ websiteId: string, off?: boolean }} props
+ * Item types (`item_types`, feature catalog): the table, and each type's fields in a drawer.
+ * @param {{ websiteId: string, off?: boolean, bare?: boolean }} props `bare`: the page already says the title, so the
+ *   card has none
  */
-export function ItemTypesEditor({ websiteId, off }) {
+export function ItemTypesEditor({ websiteId, off, bare = false }) {
 	const state = useList(websiteId, 'item_types');
 	const [editing, setEditing] = useState(
 		/** @type {Editing} */ ({ open: false, index: null, draft: blankType(), tried: false }),
 	);
+	const data = state.answer?.ok ? state.answer.data : null;
+	/** @type {TypeDraft[]} */
+	const items = state.draft ?? (Array.isArray(data?.value) ? data.value : []).map(loadType);
+	/** @param {TypeDraft[]} next */
+	const setItems = (next) => state.setDraft(next);
+	const otherKeys = items.filter((_, at) => at !== editing.index).map((type) => keyOf(type.key, type.name));
+	const problems = typeProblems(editing.draft, otherKeys);
+	/** @param {number | null} index @param {TypeDraft} draft */
+	const open = (index, draft) => setEditing({ open: true, index, draft, tried: false });
+	const close = () => setEditing({ ...editing, open: false });
+	const done = () => {
+		if (Object.keys(problems).length > 0) return setEditing({ ...editing, tried: true });
+		setItems(
+			editing.index === null
+				? [...items, editing.draft]
+				: items.map((type, at) => (at === editing.index ? editing.draft : type)),
+		);
+		close();
+	};
 	return (
-		<Card title={T.title} subtitle={off ? TEXTS.settings.off : `${T.help} ${fill(L.max, { max: TYPE_LIMITS.types })}`}>
-			<Loaded answer={state.answer}>
-				{(data) => {
-					/** @type {TypeDraft[]} */
-					const items = state.draft ?? (Array.isArray(data.value) ? data.value : []).map(loadType);
-					/** @param {TypeDraft[]} next */
-					const setItems = (next) => state.setDraft(next);
-					const otherKeys = items.filter((_, at) => at !== editing.index).map((type) => keyOf(type.key, type.name));
-					const problems = typeProblems(editing.draft, otherKeys);
-					/** @param {number | null} index @param {TypeDraft} draft */
-					const open = (index, draft) => setEditing({ open: true, index, draft, tried: false });
-					const close = () => setEditing({ ...editing, open: false });
-					const done = () => {
-						if (Object.keys(problems).length > 0) return setEditing({ ...editing, tried: true });
-						setItems(
-							editing.index === null
-								? [...items, editing.draft]
-								: items.map((type, at) => (at === editing.index ? editing.draft : type)),
-						);
-						close();
-					};
-					return (
-						<div className="space-y-4">
-							{items.length === 0 ? (
-								<p className="text-sm text-muted">{T.none}</p>
-							) : (
-								<Paged
-									items={items.map((type, index) => ({ type, index }))}
-									pageSize={8}
-									text={(entry) => entry.type.name}>
-									{(page) => (
-										<RowList>
-											{page.map(({ type, index }) => (
-												<TypeRow
-													key={index}
-													type={type}
-													index={index}
-													count={items.length}
-													onEdit={() => open(index, type)}
-													onMove={(step) => setItems(moved(items, index, step))}
-													onRemove={() => setItems(items.filter((_, at) => at !== index))}
-												/>
-											))}
-										</RowList>
-									)}
-								</Paged>
-							)}
-							<ListActions
-								dirty={state.draft !== null}
-								onCancel={() => state.setDraft(null)}
-								onSave={() => state.save(items.map(cleanType))}>
-								<Button
-									size="sm"
-									variant="secondary"
-									disabled={items.length >= TYPE_LIMITS.types}
-									onClick={() => open(null, blankType())}>
-									{T.add}
-								</Button>
-								{state.draft !== null ? (
-									<Badge tone="warning" dot className="self-center">
-										{T.unsaved}
-									</Badge>
-								) : null}
-							</ListActions>
-							<ListOutcome result={state.result} local={state.local} />
-							<Dialog
-								open={editing.open}
-								onClose={close}
-								size="lg"
-								title={
-									editing.index === null
-										? T.newTitle
-										: fill(T.editTitle, { type: editing.draft.name.trim() || T.unnamed })
-								}
-								description={T.dialogHelp}
-								closeLabel={TEXTS.cancel}
-								footer={
-									<>
-										<Button variant="secondary" onClick={close}>
-											{TEXTS.cancel}
-										</Button>
-										<Button onClick={done}>{T.done}</Button>
-									</>
-								}>
-								<TypeFields
-									draft={editing.draft}
-									tried={editing.tried}
-									problems={problems}
-									set={(patch) => setEditing((now) => ({ ...now, draft: { ...now.draft, ...patch } }))}
-								/>
-							</Dialog>
-						</div>
-					);
-				}}
-			</Loaded>
+		<Card
+			{...(bare ? {} : { title: T.title })}
+			subtitle={off ? TEXTS.settings.off : `${T.help} ${fill(L.max, { max: TYPE_LIMITS.types })}`}
+			actions={
+				<Button size="sm" disabled={!data || items.length >= TYPE_LIMITS.types} onClick={() => open(null, blankType())}>
+					<Icon name="plus" size={14} />
+					{T.add}
+				</Button>
+			}>
+			<div className="space-y-4">
+				<Loaded answer={state.answer} skeleton={<DataTableSkeleton columns={COLUMNS.length} rows={4} menu />}>
+					{() => (
+						<DataTable
+							caption={T.title}
+							className="max-h-[36rem]"
+							columns={COLUMNS}
+							rows={items.map((type, index) => ({ type, index }))}
+							rowKey={(row) => String(row.index)}
+							rowLabel={(row) => row.type.name.trim() || T.unnamed}
+							onRowClick={(row) => open(row.index, row.type)}
+							rowMenu={(row) => [
+								{ label: L.up, disabled: row.index === 0, onSelect: () => setItems(moved(items, row.index, -1)) },
+								{
+									label: L.down,
+									disabled: row.index === items.length - 1,
+									onSelect: () => setItems(moved(items, row.index, 1)),
+								},
+								{
+									label: L.remove,
+									danger: true,
+									onSelect: () => setItems(items.filter((_, at) => at !== row.index)),
+								},
+							]}
+							empty={T.none}
+						/>
+					)}
+				</Loaded>
+				<ListActions
+					dirty={state.draft !== null}
+					onCancel={() => state.setDraft(null)}
+					onSave={() => state.save(items.map(cleanType))}
+				/>
+				<ListOutcome result={state.result} local={state.local} />
+			</div>
+			<Drawer
+				open={editing.open}
+				onClose={close}
+				size="lg"
+				title={editing.index === null ? T.newTitle : fill(T.editTitle, { type: editing.draft.name.trim() || T.unnamed })}
+				description={T.dialogHelp}
+				closeLabel={TEXTS.cancel}
+				footer={
+					<>
+						<Button variant="secondary" onClick={close}>
+							{TEXTS.cancel}
+						</Button>
+						<Button onClick={done}>{T.done}</Button>
+					</>
+				}>
+				<TypeFields
+					draft={editing.draft}
+					tried={editing.tried}
+					problems={problems}
+					set={(patch) => setEditing((now) => ({ ...now, draft: { ...now.draft, ...patch } }))}
+				/>
+			</Drawer>
 		</Card>
 	);
 }

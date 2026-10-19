@@ -132,7 +132,9 @@ const extrasOf = (props) => {
 			/>
 		),
 		catalog: {
-			items: [{ id: 'item-types', label: L.itemTypes.title, content: <ItemTypesEditor websiteId={websiteId} off={false} /> }],
+			items: [
+				{ id: 'item-types', label: L.itemTypes.title, content: <ItemTypesEditor websiteId={websiteId} off={false} bare /> },
+			],
 		},
 		bookings: <BookingSchedulesEditor websiteId={websiteId} off={false} />,
 		grades_serials: {
