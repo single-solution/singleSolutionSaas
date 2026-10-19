@@ -17,8 +17,11 @@ export const adminRoutes = Object.freeze({
 	/** the Merchants screen with a merchant selected (the list keeps its filter) */
 	merchant: (/** @type {string} */ id, /** @type {{ status?: string | null, q?: string | null }} */ q = {}) =>
 		`/admin/merchants/${e(id)}${query(q)}`,
-	/** a website card on its merchant's page */
-	website: (/** @type {string} */ m, /** @type {string} */ w) => `/admin/merchants/${e(m)}#website-${e(w)}`,
+	/** a part of a merchant's page: websites (the merchant's own address), credits, details or activity */
+	merchantPart: (/** @type {string} */ id, /** @type {string} */ part) =>
+		part === 'websites' ? `/admin/merchants/${e(id)}` : `/admin/merchants/${e(id)}/${e(part)}`,
+	/** a website of a merchant: its own page */
+	website: (/** @type {string} */ m, /** @type {string} */ w) => `/admin/merchants/${e(m)}/websites/${e(w)}`,
 	/** the Setup sheet of a website */
 	websiteSetup: (/** @type {string} */ m, /** @type {string} */ w) => `/admin/merchants/${e(m)}/websites/${e(w)}/setup`,
 	/** the Website settings of a website */

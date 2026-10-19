@@ -33,6 +33,7 @@ import {
 	shows,
 	until,
 } from './merchant-harness.js';
+import { testRouter } from './router.js';
 
 vi.mock('next/navigation.js', async (importOriginal) => {
 	const { testRouter } = await import('./router.js');
@@ -119,10 +120,9 @@ describe('website cards (jsdom)', () => {
 			vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
 			ownerBrowser.use();
 			const owner = world.owner;
-			const list = await admin.loadMerchants(ownerBrowser.api, {});
 			const detail = await admin.loadMerchant(ownerBrowser.api, merchantId, owner);
 			if (!detail.ok) throw new Error('merchant');
-			withToasts(<MerchantsView {...list} detail={detail} selectedId={merchantId} admin={owner} />);
+			withToasts(<MerchantsView detail={detail} websiteId={websiteId} admin={owner} />);
 			const card = /** @type {HTMLElement} */ (document.getElementById(`website-${websiteId}`));
 			expect(card.textContent).toContain('shop.example.com');
 			expect(card.textContent).toContain('No features on');
@@ -295,12 +295,12 @@ describe('website cards (jsdom)', () => {
 			const removed = await ownerBrowser.waitCall('DELETE', `/v1/merchants/${merchantId}/websites/${websiteId}`);
 			expect(removed.status).toBe(200);
 			await until(() => shows('shop.example.com removed.') && document.getElementById(`website-${websiteId}`) === null);
-			expect(shows('No websites yet.')).toBe(true);
+			expect(testRouter.push).toHaveBeenLastCalledWith(`/admin/merchants/${merchantId}`); // back to the merchant's page
 			cleanup();
 
 			// a refused removal (the website is gone) shows the problem in the dialog
 			const stale = { ...detail, rows: detail.rows.map((r) => ({ ...r, cards: [] })) };
-			withToasts(<MerchantsView {...list} detail={stale} selectedId={merchantId} admin={owner} />);
+			withToasts(<MerchantsView detail={stale} websiteId={websiteId} admin={owner} />);
 			await menu('Actions for shop.example.com');
 			await clickEl(menuItem('Remove website'));
 			type(confirmInput(), 'shop.example.com');
@@ -365,9 +365,8 @@ describe('website cards (jsdom)', () => {
 			supportBrowser.use();
 			withToasts(
 				<MerchantsView
-					{...await admin.loadMerchants(supportBrowser.api, {})}
 					detail={await admin.loadMerchant(supportBrowser.api, merchantId, support)}
-					selectedId={merchantId}
+					websiteId={websiteId}
 					admin={support}
 				/>,
 			);
@@ -385,9 +384,8 @@ describe('website cards (jsdom)', () => {
 			financeBrowser.use();
 			withToasts(
 				<MerchantsView
-					{...await admin.loadMerchants(financeBrowser.api, {})}
 					detail={await admin.loadMerchant(financeBrowser.api, merchantId, finance)}
-					selectedId={merchantId}
+					websiteId={websiteId}
 					admin={finance}
 				/>,
 			);

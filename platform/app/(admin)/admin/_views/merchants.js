@@ -1,4 +1,4 @@
-import { loadMerchantsScreen } from '../../../../src/console/admin/loaders.js';
+import { loadMerchants } from '../../../../src/console/admin/loaders.js';
 import { MerchantsView } from '../../../../src/console/admin/views/merchants.js';
 import { adminContext, one } from '../../_lib/server.js';
 
@@ -9,9 +9,6 @@ export default async function MerchantsPage({ searchParams }) {
 	const q = await searchParams;
 	const { api, admin } = await adminContext('/admin/merchants');
 	return (
-		<MerchantsView
-			{...await loadMerchantsScreen(api, { status: one(q.status), q: one(q.q), cursor: one(q.cursor) }, admin)}
-			admin={admin}
-		/>
+		<MerchantsView {...await loadMerchants(api, { status: one(q.status), q: one(q.q), cursor: one(q.cursor) })} admin={admin} />
 	);
 }

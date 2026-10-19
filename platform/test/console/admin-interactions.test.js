@@ -10,13 +10,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { Blob as NodeBlob } from 'node:buffer';
 import { totpCode } from '../../src/infra/auth.js';
 import { closeMongoClients } from '../../src/testing.js';
-import { browserOf, openSection, openTab, settle, until } from './merchant-harness.js';
+import { browserOf, openSection, settle, until } from './merchant-harness.js';
 import { createSystemStore } from '../../src/infra/system.js';
 import { createPortal } from '../../src/portal.js';
 import { modules as defaultModules } from '../../src/modules/index.js';
 import { createIdentityModule } from '../../src/modules/identity/index.js';
 import * as admin from '../../src/console/admin/loaders.js';
-import { adminApi } from '../../src/console/admin/paths.js';
+import { adminApi, adminRoutes } from '../../src/console/admin/paths.js';
 import { apiFetch, signInAgain, useResource } from '../../src/console/client.js';
 import { AdminShell } from '../../src/console/admin/views/shell.js';
 import { MyAccountView } from '../../src/console/admin/views/account.js';
@@ -27,6 +27,7 @@ import { MerchantsView } from '../../src/console/admin/views/merchants.js';
 import { AddCreditsDialog, FinanceView } from '../../src/console/admin/views/finance.js';
 import { SettingsView } from '../../src/console/admin/views/settings.js';
 import { ToastProvider } from '@ss/ui';
+import { testRouter } from './router.js';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { ENCRYPTION_KEY, createTestLogger, startMongo, testConfig } from '../helpers.js';
 
@@ -118,7 +119,7 @@ const saveIn = async (title) => {
 const choose = async (label) => {
 	await act(async () => {
 		/** @type {HTMLButtonElement} */ (
-			document.querySelector('button[aria-haspopup="menu"][aria-label^="More actions for"]')
+			document.querySelector('button[aria-haspopup="menu"][aria-label^="More actions"]')
 		).click();
 	});
 	await press(label);
@@ -230,8 +231,14 @@ describe('admin console interactions (jsdom)', () => {
 			</ToastProvider>,
 		);
 		expect(shows('Else Ltd') && shows('Shop & Co')).toBe(true);
-		fill('Search name, email or domain', 'else');
-		await press('Filter');
+		const search = /** @type {HTMLInputElement} */ (document.querySelector('input[aria-label="Search name, email or domain"]'));
+		await act(async () => {
+			type(search, 'else');
+		});
+		await act(async () => {
+			search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		});
+		expect(String(testRouter.push.mock.calls.at(-1)?.[0])).toContain('q=else');
 		cleanup();
 		render(
 			<ToastProvider>
@@ -239,7 +246,7 @@ describe('admin console interactions (jsdom)', () => {
 			</ToastProvider>,
 		);
 		await act(async () => {
-			/** @type {HTMLInputElement} */ (document.querySelector('input[aria-label="Select Else Ltd"]')).click();
+			/** @type {HTMLButtonElement} */ (document.querySelector('button[aria-label="Select Else Ltd"]')).click();
 		});
 		await press('Suspend');
 		fillDialog('Reason', 'chargeback');
@@ -247,7 +254,7 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.bulk() && c.status === 200));
 		await until(() => shows('1 done.'));
 		await act(async () => {
-			/** @type {HTMLInputElement} */ (document.querySelector('input[aria-label="Select Else Ltd"]')).click();
+			/** @type {HTMLButtonElement} */ (document.querySelector('button[aria-label="Select Else Ltd"]')).click();
 		});
 		await press('Resume');
 		await pressInDialog('Resume');
@@ -271,20 +278,18 @@ describe('admin console interactions (jsdom)', () => {
 		const madeId = String(made.merchant.merchantId);
 		cleanup();
 
-		// ---------------------------------------------------------------- a merchant selected: one page, actions as dialogs
+		// ---------------------------------------------------------------- a merchant's page: actions as dialogs, parts as addresses
+		/** @param {string} id @param {string} [section] */
+		const renderMerchant = async (id, section = 'websites') =>
+			render(
+				<ToastProvider>
+					<MerchantsView detail={await admin.loadMerchant(ownerBrowser.api, id, me)} section={section} admin={me} />
+				</ToastProvider>,
+			);
 		const writeText = vi.fn(async () => undefined);
 		vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
 		ownerBrowser.use();
-		render(
-			<ToastProvider>
-				<MerchantsView
-					{...await admin.loadMerchants(ownerBrowser.api, {})}
-					detail={await admin.loadMerchant(ownerBrowser.api, madeId, me)}
-					selectedId={madeId}
-					admin={me}
-				/>
-			</ToastProvider>,
-		);
+		await renderMerchant(madeId);
 		await until(() => shows('Setup pending'));
 		await choose('Copy setup link');
 		await until(() => shows('Copy this link now.'));
@@ -322,8 +327,9 @@ describe('admin console interactions (jsdom)', () => {
 					)?.body.website.websiteId,
 			),
 		);
-		await until(() => document.getElementById(`website-${madeSite}`)?.textContent?.includes('made.example.com'));
-		expect(document.querySelector(`button[aria-label="Add product to made.example.com"]`)).not.toBeNull();
+		await until(() =>
+			document.querySelector(`a[href="${adminRoutes.website(madeId, madeSite)}"]`)?.textContent?.includes('made.example.com'),
+		);
 		// Edit merchant: the fields in a dialog, the login email until the password is set
 		await press('Edit merchant');
 		fillDialog('Address', 'Industrial area');
@@ -332,15 +338,22 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() =>
 			ownerBrowser.calls.some((c) => c.method === 'PATCH' && c.path === adminApi.merchant(madeId) && c.status === 200),
 		);
-		await until(() => !document.querySelector('[role="dialog"]') && shows('olga@made.test'));
-		// credits and activity are tabs of the same page
-		await openTab('Credits');
+		await until(() => !document.querySelector('[role="dialog"]'));
+		cleanup();
+		// details, credits and activity are parts of the merchant's page, each with its own address
+		await renderMerchant(madeId, 'details');
+		await until(() => shows('olga@made.test'));
+		cleanup();
+		await renderMerchant(madeId, 'credits');
 		expect(shows('Credit receipts')).toBe(true);
-		await openTab('Activity');
+		cleanup();
+		await renderMerchant(madeId, 'activity');
 		await until(() => shows('Merchant created'));
+		cleanup();
+		await renderMerchant(madeId);
 		// a merchant with a website cannot be deleted: Delete is last in the More menu, disabled, with the reason
 		await act(async () => {
-			/** @type {HTMLButtonElement} */ (document.querySelector('button[aria-label^="More actions for"]')).click();
+			/** @type {HTMLButtonElement} */ (document.querySelector('button[aria-label^="More actions"]')).click();
 		});
 		const items = [...document.querySelectorAll('[role="menuitem"]')];
 		expect(items.at(-1)?.textContent).toBe('Delete');
@@ -348,16 +361,7 @@ describe('admin console interactions (jsdom)', () => {
 		expect(shows('Remove the websites of this merchant first.')).toBe(true);
 		await ownerBrowser.api.request('DELETE', `/v1/merchants/${madeId}/websites/${madeSite}`, { confirm: 'made.example.com' });
 		cleanup();
-		render(
-			<ToastProvider>
-				<MerchantsView
-					{...await admin.loadMerchants(ownerBrowser.api, {})}
-					detail={await admin.loadMerchant(ownerBrowser.api, madeId, me)}
-					selectedId={madeId}
-					admin={me}
-				/>
-			</ToastProvider>,
-		);
+		await renderMerchant(madeId);
 		// delete the merchant (no websites left): typed business name
 		await choose('Delete');
 		type(confirmInput(), 'Ops Made Ltd');
@@ -371,16 +375,7 @@ describe('admin console interactions (jsdom)', () => {
 		await other.b.api.post('/v1/auth/sign-in', { email: 'other@else.test', password: 'correct horse battery' });
 		const started = await other.b.api.post('/v1/me/two-step/start');
 		await other.b.api.post('/v1/me/two-step/confirm', { code: totpCode(started.ok ? started.data.secret : '', Date.now()) });
-		render(
-			<ToastProvider>
-				<MerchantsView
-					{...await admin.loadMerchants(ownerBrowser.api, {})}
-					detail={await admin.loadMerchant(ownerBrowser.api, other.merchantId, me)}
-					selectedId={other.merchantId}
-					admin={me}
-				/>
-			</ToastProvider>,
-		);
+		await renderMerchant(other.merchantId);
 		await choose('Turn off two-step');
 		await pressInDialog('Turn off two-step');
 		await until(() =>

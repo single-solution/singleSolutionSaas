@@ -719,6 +719,23 @@ export const ADMIN = Object.freeze({
 	}),
 	setupPending: 'Setup pending',
 	columns: Object.freeze({ status: 'Status', lastSignIn: 'Last sign-in' }),
+	/** the columns of the Merchants table and of a merchant's Websites table */
+	merchantColumns: Object.freeze({
+		name: 'Merchant',
+		email: 'Email',
+		balance: 'Balance',
+		dailyCost: 'Daily cost',
+		added: 'Added',
+		website: 'Website',
+		products: 'Products',
+	}),
+	/** the description of the Merchants page, behind its (i) */
+	merchantsInfo:
+		'Every merchant of the platform. Search by business name, owner email or website domain, filter by status, and open a merchant for its websites, credits, details and activity.',
+	noFeaturesOn: 'No features on',
+	noSuchWebsite: 'No such website.',
+	showing: (/** @type {number} */ from, /** @type {number} */ to, /** @type {boolean} */ more) =>
+		`Showing ${from}–${to}${more ? '+' : ''}`,
 	bulk: Object.freeze({
 		selected: (/** @type {number} */ n) => `${n} selected`,
 		suspend: 'Suspend',

@@ -187,21 +187,27 @@ describe('fuller Portal screens (jsdom)', () => {
 			// ---------------------------------------------------------------- Merchants: Setup pending, the merchant page
 			const pendingOnly = await admin.loadMerchants(ownerBrowser.api, { status: 'setup_pending' });
 			expect(pendingOnly.ok && pendingOnly.page.items.map((m) => m.name)).toEqual(['Pending Ltd']);
-			const list = await admin.loadMerchants(ownerBrowser.api, {});
 			const detail = await admin.loadMerchant(ownerBrowser.api, merchantId, owner);
-			withToasts(<MerchantsView {...list} detail={detail} selectedId={merchantId} admin={owner} />);
-			// the merchant's parts are tabs: Websites first, then Credits, Details, Activity
+			/** @param {string} section */
+			const showMerchant = (section) => {
+				cleanup();
+				withToasts(<MerchantsView detail={detail} section={section} admin={owner} />);
+			};
+			showMerchant('websites');
+			// the merchant's parts are addresses: Websites first, then Credits, Details, Activity
 			expect(shows('Low balance: about')).toBe(true);
-			await openTab('Credits');
+			showMerchant('credits');
 			expect(shows('Credit receipts')).toBe(true);
-			await openTab('Details');
+			showMerchant('details');
 			expect(shows('Last sign-in')).toBe(true);
-			expect(shows('Products on websites')).toBe(false); // the Websites tab shows the count
-			await openTab('Activity');
+			expect(shows('Products on websites')).toBe(false); // the Websites part shows the count
+			showMerchant('activity');
 			expect(shows('Changes')).toBe(true);
-			await press('Open in Activity');
+			await menu('More actions');
+			await clickEl(menuItem('Open in Activity'));
 			expect(pushed(`/admin/activity?merchantId=${merchantId}`)).toBe(true);
-			await choose('Shop & Co', 'Usage, all websites');
+			await menu('More actions');
+			await clickEl(menuItem('Usage, all websites'));
 			await until(() => shows('Usage · Shop & Co') && !dialog().querySelector('[aria-busy="true"]'));
 			keydown(document, 'Escape');
 			cleanup();

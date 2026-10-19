@@ -295,10 +295,9 @@ describe('Website settings (jsdom)', () => {
 			// the admin's merchant page: the same item for the Owner, and for Support; Finance has no such item
 			const owner = x.w.owner;
 			x.w.ownerBrowser.use();
-			const list = await admin.loadMerchants(x.w.ownerBrowser.api, {});
 			const detail = await admin.loadMerchant(x.w.ownerBrowser.api, x.merchantId, owner);
 			if (!detail.ok) throw new Error('merchant');
-			withToasts(<MerchantsView {...list} detail={detail} selectedId={x.merchantId} admin={owner} />);
+			withToasts(<MerchantsView detail={detail} websiteId={x.websiteId} admin={owner} />);
 			await press('Actions for shop.example.com');
 			expect(menuItems()).toContain('Website settings');
 			cleanup();
@@ -306,14 +305,7 @@ describe('Website settings (jsdom)', () => {
 			financeBrowser.use();
 			const financeDetail = await admin.loadMerchant(financeBrowser.api, x.merchantId, finance);
 			if (!financeDetail.ok) throw new Error('merchant');
-			withToasts(
-				<MerchantsView
-					{...await admin.loadMerchants(financeBrowser.api, {})}
-					detail={financeDetail}
-					selectedId={x.merchantId}
-					admin={finance}
-				/>,
-			);
+			withToasts(<MerchantsView detail={financeDetail} websiteId={x.websiteId} admin={finance} />);
 			await press('Actions for shop.example.com');
 			expect(menuItems()).not.toContain('Website settings');
 		} finally {

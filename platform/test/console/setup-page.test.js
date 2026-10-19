@@ -219,10 +219,9 @@ describe('Setup page (jsdom)', () => {
 		try {
 			const { ownerBrowser, owner } = w;
 			ownerBrowser.use();
-			const list = await admin.loadMerchants(ownerBrowser.api, {});
 			const detail = await admin.loadMerchant(ownerBrowser.api, merchantId, owner);
 			if (!detail.ok) throw new Error('merchant');
-			withToasts(<MerchantsView {...list} detail={detail} selectedId={merchantId} admin={owner} />);
+			withToasts(<MerchantsView detail={detail} websiteId={websiteId} admin={owner} />);
 			// Setup sits in the website card's More menu and opens the admin's Setup page
 			await pressMenu('Actions for shop.example.com', 'Setup');
 			expect(testRouter.push).toHaveBeenCalledWith(`/admin/merchants/${merchantId}/websites/${websiteId}/setup`);
@@ -250,14 +249,7 @@ describe('Setup page (jsdom)', () => {
 			finance.b.use();
 			const financeDetail = await admin.loadMerchant(finance.b.api, merchantId, finance.admin);
 			if (!financeDetail.ok) throw new Error('merchant');
-			withToasts(
-				<MerchantsView
-					{...await admin.loadMerchants(finance.b.api, {})}
-					detail={financeDetail}
-					selectedId={merchantId}
-					admin={finance.admin}
-				/>,
-			);
+			withToasts(<MerchantsView detail={financeDetail} websiteId={websiteId} admin={finance.admin} />);
 			await press('Actions for shop.example.com');
 			expect(menuItems()).not.toContain('Setup');
 			expect(menuItems()).not.toContain('Install and tokens');

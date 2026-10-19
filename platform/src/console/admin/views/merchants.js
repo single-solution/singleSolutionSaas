@@ -1,25 +1,22 @@
 'use client';
 /**
- * Admin Merchants (PLAN 0.8.2, 0.6): one list-and-detail screen. The list (search by business name, owner email or
- * domain; status filter; paged at 50; per row the name, a status dot and the balance; bulk Suspend / Resume with one
- * reason and Resend setup link) sits beside the selected merchant — on wide screens the first one until another is
- * picked. The merchant: a header (name, status, balance; Add credits and Edit merchant as buttons, and Suspend /
- * Resume, Resend or Copy setup link, Turn off two-step and Delete in its More menu, all as dialogs; the menu also opens
- * the usage of all its websites, its receipts in Credits and billing and its Activity), a low-balance / grace / stopped
- * warning with Add credits, its details (contact, sign-in, two-step, websites), a masonry of website cards (products
- * with Add product, tokens and usage in dialogs; Add website) and the Credits and Activity (paged) sections. Rights follow the role (PLAN 0.2); the API checks them again.
- * Layout: the merchant's parts are tabs (Websites, Credits, Details, Activity), one at a time, kept in the address hash.
+ * Admin Merchants (PLAN 0.8.2, 0.6; layout contract 2026-10-17): the Merchants page is a table (search by business name,
+ * owner email or domain; a status filter; paged at 50; Select starts the bulk bar: Suspend, Resume, Resend setup link;
+ * Add merchant in a drawer) whose row opens the merchant's page. The merchant's page: a header (name, status pill,
+ * balance, daily cost and websites as numbers; Add credits, Edit merchant and a More menu with Suspend / Resume, Resend
+ * or Copy setup link, Turn off two-step, Delete and the usage of all its websites, all as dialogs) and its parts in the
+ * inner navigation, each its own address: Websites (a table; a row opens the website's own page, with the website
+ * card), Credits, Details and Activity (paged). Rights follow the role (PLAN 0.2); the API checks them again.
  * @module
  */
 import { useState } from 'react';
 import {
-	Badge,
 	Button,
 	Callout,
 	Card,
-	CheckboxInput,
 	CodeBlock,
 	ConfirmDialog,
+	DataTable,
 	Dialog,
 	EmptyState,
 	Form,
@@ -28,7 +25,8 @@ import {
 	Input,
 	KeyValueList,
 	LocalTime,
-	PageHeader,
+	Page,
+	Pagination,
 	Select,
 	TextArea,
 	Toolbar,
@@ -36,16 +34,17 @@ import {
 	describeProblem,
 	fieldErrors,
 	formatCredits,
+	useRowSelection,
 	useToast,
 } from '@ss/ui';
 import { ADMIN, BILLING, MERCHANT_FIELDS, MORE, TWO_STEP, WEBSITE } from '../../../texts/console.js';
 import { api, withCursor } from '../../paths.js';
-import { DaysLeft, MerchantStatusBadge } from '../../views/billing.js';
+import { DaysLeft } from '../../views/billing.js';
 import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
 import { COUNTRY_NAMES } from '../../../modules/identity/core/countries.js';
-import { DetailTabs, HeaderActions, ListDetail, ListPane, PaneRow, ListSearch } from '../../views/common.js';
+import { Link } from '../../link.js';
 import { ActivityTable } from '../../views/login-settings.js';
-import { AddWebsiteDialog, MerchantUsageDialog, WebsiteCard } from '../../views/website.js';
+import { AddWebsiteDialog, MerchantUsageDialog, WebsiteCard, dailyCostOf, websiteDot } from '../../views/website.js';
 import { useNavigation } from '../../navigation.js';
 import { apiFetch, usePagedList } from '../../client.js';
 import { adminApi, adminRoutes, merchantFilter } from '../paths.js';
@@ -53,15 +52,6 @@ import { AdminProblem, adminCan } from './common.js';
 import { AddCreditsDialog, MerchantCredits } from './finance.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
-
-/** Status dot of a merchant in the list (PLAN 0.6 status colors). */
-const STATUS_DOTS = /** @type {Record<string, 'success' | 'warning' | 'danger'>} */ ({
-	active: 'success',
-	low_balance: 'warning',
-	grace: 'warning',
-	stopped: 'danger',
-	suspended: 'danger',
-});
 
 /**
  * The merchant's status: suspended first, else the billing status from the check (PLAN 0.5.5).
@@ -73,20 +63,6 @@ const statusOf = (merchant, billing) => (merchant.status === 'suspended' ? 'susp
 
 /** @param {string} status */
 const statusLabel = (status) => ADMIN.status[/** @type {'active'} */ (status)] ?? status;
-
-/**
- * Status badge of a merchant, plus Setup pending (a separate gray badge, PLAN 0.6).
- * @param {{ merchant: any, billing?: any }} props
- */
-function MerchantStatus({ merchant, billing = null }) {
-	const status = statusOf(merchant, billing);
-	return (
-		<span className="inline-flex flex-wrap items-center gap-1">
-			<MerchantStatusBadge status={status} />
-			{merchant.setupPending ? <Badge tone="attention">{ADMIN.setupPending}</Badge> : null}
-		</span>
-	);
-}
 
 /**
  * The setup link shown once to copy (PLAN 0.2: shown once, only to that admin, logged).
@@ -196,52 +172,70 @@ export function AddMerchantDialog({ open, onClose, onCreated }) {
 	);
 }
 
+/** How the status of a merchant looks as a pill. */
+const STATUS_PILLS = /** @type {Record<string, 'active' | 'warning' | 'error' | 'setup'>} */ ({
+	active: 'active',
+	low_balance: 'warning',
+	grace: 'warning',
+	stopped: 'error',
+	suspended: 'error',
+	setup: 'setup',
+});
+
+/** Merchants per page of the table. */
+const PAGE_SIZE = 50;
+
 /**
- * The Merchants list pane. `selectedId` is the merchant the URL picks; `autoId` the one opened by default.
- * @param {{ props: any, admin: any, selectedId: string | null, autoId?: string | null }} input
+ * The pill of a merchant: Setup pending until the password is set, else the status.
+ * @param {any} merchant
+ * @param {any} billing
+ * @returns {{ status: 'active' | 'warning' | 'error' | 'setup', label: string }}
  */
-function MerchantList({ props, admin, selectedId, autoId = null }) {
+const pillOf = (merchant, billing) => {
+	const status = statusOf(merchant, billing);
+	return merchant.setupPending && status === 'active'
+		? { status: 'setup', label: ADMIN.setupPending }
+		: { status: STATUS_PILLS[status] ?? 'active', label: statusLabel(status) };
+};
+
+/**
+ * The Merchants page: a table (search by name, owner email or domain; a status filter; paged at 50) whose row opens the
+ * merchant's page. Select starts the bulk bar (Suspend, Resume, Resend setup link) for the rights that allow it.
+ * @param {{ props: any, admin: any }} input
+ */
+function MerchantsPage({ props, admin }) {
 	const toast = useToast();
-	const filter = props.filter;
-	/** @param {string} id @returns {any} */
-	const billingOf = (id) => props.billing?.[id] ?? null;
-	const [q, setQ] = useState(filter.q ?? '');
-	const [status, setStatus] = useState(filter.status ?? '');
+	const nav = useNavigation();
+	const filter = props.filter ?? {};
 	const list = usePagedList(
-		(cursor) => adminApi.merchants({ ...merchantFilter(filter.status), q: filter.q, cursor, limit: 50 }),
+		(cursor) => adminApi.merchants({ ...merchantFilter(filter.status), q: filter.q, cursor, limit: PAGE_SIZE }),
 		props.page,
 	);
-	const [selected, setSelected] = useState(/** @type {Set<string>} */ (new Set()));
+	const [pageNo, setPageNo] = useState(0);
 	const [adding, setAdding] = useState(false);
 	const [bulk, setBulk] = useState(/** @type {null | 'suspend' | 'resume' | 'resend_setup_link'} */ (null));
 	const [reason, setReason] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const canWrite = adminCan(admin, 'merchants.write');
 	const canSuspend = adminCan(admin, 'merchants.suspend');
 	const canLink = adminCan(admin, 'merchants.setup_link');
 	const canBulk = canSuspend || canLink;
-	const keep = { q: filter.q, status: filter.status };
-	const nav = useNavigation();
-	const search = () => {
-		const next = { q: q.trim() || null, status: status || null };
-		nav.go(selectedId ? adminRoutes.merchant(selectedId, next) : adminRoutes.merchants(next));
-	};
-	/** @param {string} id */
-	const toggle = (id) =>
-		setSelected((s) => {
-			const next = new Set(s);
-			if (next.has(id)) next.delete(id);
-			else next.add(id);
-			return next;
-		});
+	const start = pageNo * PAGE_SIZE;
+	// the balances were checked for the first page only (later pages show none)
+	const rows = list.items.slice(start, start + PAGE_SIZE).map((m) => {
+		const billing = props.billing?.[m.merchantId] ?? null;
+		return { ...m, billing, pill: pillOf(m, billing) };
+	});
+	const selection = useRowSelection(rows, (m) => String(m.merchantId));
+	/** @param {{ q?: string | null, status?: string | null }} next */
+	const refine = (next) => nav.go(adminRoutes.merchants({ q: filter.q ?? null, status: filter.status ?? null, ...next }));
 	const runBulk = async () => {
 		if (!bulk) return;
 		setBusy(true);
 		setProblem(null);
 		const result = await apiFetch(adminApi.bulk(), {
 			method: 'POST',
-			body: { action: bulk, merchantIds: [...selected], ...(bulk === 'suspend' ? { reason: reason.trim() } : {}) },
+			body: { action: bulk, merchantIds: selection.keys, ...(bulk === 'suspend' ? { reason: reason.trim() } : {}) },
 		});
 		setBusy(false);
 		if (!result.ok) {
@@ -252,122 +246,145 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 		toast.show({ title: ADMIN.bulk.done(results.filter((r) => r.ok).length, results.filter((r) => !r.ok).length) });
 		setBulk(null);
 		setReason('');
-		setSelected(new Set());
+		selection.done();
 		await list.reload();
 	};
-	/** @param {any} m balance of the merchants checked on load (later pages show none) */
-	const balanceOf = (m) => {
-		const b = billingOf(m.merchantId);
-		return b ? formatCredits(b.balance) : undefined;
-	};
+	const filtered = Boolean(filter.q || filter.status);
+	const end = start + rows.length;
+	const more = pageNo * PAGE_SIZE + PAGE_SIZE < list.items.length || list.cursor !== null;
 	return (
 		<>
-			<ListPane
-				title={ADMIN.merchantsTitle}
-				count={MORE.count(list.items.length, Boolean(list.cursor))}
-				action={
-					canWrite ? (
-						<Button size="sm" onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
-							{ADMIN.addMerchant}
-						</Button>
-					) : null
-				}
-				tools={
-					<ListSearch label={ADMIN.searchMerchants} value={q} onChange={setQ} onSearch={search}>
-						<Select
-							label={ADMIN.columns.status}
-							hideLabel
-							value={status}
-							fieldClassName="min-w-0 flex-1"
-							onChange={(e) => setStatus(e.currentTarget.value)}
-							options={[
-								{ value: '', label: ADMIN.allStatuses },
-								{ value: 'active', label: ADMIN.status.active },
-								{ value: 'suspended', label: ADMIN.status.suspended },
-								{ value: 'setup_pending', label: ADMIN.setupPending },
-							]}
-						/>
-						<Button type="submit" variant="secondary" loading={nav.pending}>
-							{ADMIN.filters.apply}
-						</Button>
-					</ListSearch>
-				}
-				footer={
-					<>
-						{list.problem ? <Callout tone="danger">{describeProblem(list.problem)}</Callout> : null}
-						{list.cursor ? (
-							<Button variant="ghost" size="sm" loading={list.loading} onClick={() => void list.more()}>
-								{ADMIN.loadMore}
-							</Button>
-						) : null}
-						{canBulk && selected.size > 0 ? (
-							<Toolbar
-								className="rounded-card !px-3"
-								texts={{ selected: ADMIN.bulk.selected }}
-								bulk={{
-									count: selected.size,
-									onDone: () => setSelected(new Set()),
-									actions: (
-										<>
-											{canSuspend ? (
-												<>
-													<Button size="sm" variant="secondary" onClick={() => setBulk('suspend')}>
-														{ADMIN.bulk.suspend}
-													</Button>
-													<Button size="sm" variant="secondary" onClick={() => setBulk('resume')}>
-														{ADMIN.bulk.resume}
-													</Button>
-												</>
-											) : null}
-											{canLink ? (
-												<Button size="sm" variant="secondary" onClick={() => setBulk('resend_setup_link')}>
-													{ADMIN.bulk.resend}
+			<Page
+				flush
+				crumbs={[{ label: ADMIN.merchantsTitle }]}
+				info={ADMIN.merchantsInfo}
+				linkAs={Link}
+				{...(adminCan(admin, 'merchants.write')
+					? {
+							actions: {
+								primary: { label: ADMIN.addMerchant, icon: 'plus', onClick: () => setAdding(true) },
+							},
+						}
+					: {})}
+				toolbar={
+					<Toolbar
+						label={ADMIN.merchantsTitle}
+						search={{
+							value: filter.q ?? '',
+							label: ADMIN.searchMerchants,
+							placeholder: ADMIN.searchMerchants,
+							onSearch: (text) => refine({ q: text.trim() || null }),
+						}}
+						filters={[
+							{
+								id: 'status',
+								label: ADMIN.columns.status,
+								allLabel: ADMIN.allStatuses,
+								value: filter.status ?? '',
+								onChange: (status) => refine({ status: status || null }),
+								options: [
+									{ value: 'active', label: ADMIN.status.active },
+									{ value: 'suspended', label: ADMIN.status.suspended },
+									{ value: 'setup_pending', label: ADMIN.setupPending },
+								],
+							},
+						]}
+						range={MORE.count(list.items.length, list.cursor !== null)}
+						texts={{ selected: ADMIN.bulk.selected }}
+						{...(canBulk
+							? selection.toolbar(
+									<>
+										{canSuspend ? (
+											<>
+												<Button size="sm" variant="secondary" onClick={() => setBulk('suspend')}>
+													{ADMIN.bulk.suspend}
 												</Button>
-											) : null}
-										</>
-									),
-								}}
-							/>
-						) : null}
-					</>
-				}>
-				{list.items.length === 0 ? (
-					<li>
-						<EmptyState compact icon="users" kind="merchant" title={ADMIN.noMerchants} />
-					</li>
-				) : (
-					list.items.map((m) => {
-						const status = statusOf(m, billingOf(m.merchantId));
-						return (
-							<PaneRow
-								key={m.merchantId}
-								href={adminRoutes.merchant(m.merchantId, keep)}
-								current={m.merchantId === selectedId ? true : m.merchantId === autoId ? 'wide' : false}
-								label={m.name}
-								sublabel={m.email}
-								dot={STATUS_DOTS[status] ?? 'neutral'}
-								dotLabel={statusLabel(status)}
-								meta={balanceOf(m)}
-								leading={
-									canBulk ? (
-										<CheckboxInput
-											aria-label={ADMIN.selectMerchant(m.name)}
-											checked={selected.has(m.merchantId)}
-											onChange={() => toggle(m.merchantId)}
-										/>
-									) : undefined
-								}
-							/>
-						);
-					})
-				)}
-			</ListPane>
+												<Button size="sm" variant="secondary" onClick={() => setBulk('resume')}>
+													{ADMIN.bulk.resume}
+												</Button>
+											</>
+										) : null}
+										{canLink ? (
+											<Button size="sm" variant="secondary" onClick={() => setBulk('resend_setup_link')}>
+												{ADMIN.bulk.resend}
+											</Button>
+										) : null}
+									</>,
+								)
+							: {})}
+					/>
+				}
+				{...(rows.length > 0
+					? {
+							footer: (
+								<Pagination
+									range={ADMIN.showing(start + 1, end, list.cursor !== null)}
+									hasPrevious={pageNo > 0}
+									hasNext={more}
+									onPrevious={() => setPageNo((n) => Math.max(0, n - 1))}
+									onNext={async () => {
+										if (start + PAGE_SIZE >= list.items.length) await list.more();
+										setPageNo((n) => n + 1);
+									}}
+								/>
+							),
+						}
+					: {})}>
+				{list.problem ? <Callout tone="danger">{describeProblem(list.problem)}</Callout> : null}
+				<DataTable
+					caption={ADMIN.merchantsTitle}
+					rows={rows}
+					rowKey={(m) => String(m.merchantId)}
+					rowLabel={(m) => m.name}
+					selection={canBulk ? selection : undefined}
+					onRowClick={(m) => nav.go(adminRoutes.merchant(m.merchantId))}
+					empty={
+						<EmptyState
+							icon="users"
+							kind="merchant"
+							title={filtered ? ADMIN.noMerchants : ADMIN.noMerchantsYet}
+							description={filtered ? undefined : ADMIN.noMerchantsYetHelp}
+						/>
+					}
+					columns={[
+						{
+							key: 'name',
+							header: ADMIN.merchantColumns.name,
+							sortable: true,
+							render: (m) => (
+								<Link href={adminRoutes.merchant(m.merchantId)} className="font-medium text-fg hover:underline">
+									{m.name}
+								</Link>
+							),
+						},
+						{ key: 'email', header: ADMIN.merchantColumns.email, low: true },
+						{ key: 'status', header: ADMIN.columns.status, kind: 'status', pill: (m) => m.pill },
+						{
+							key: 'balance',
+							header: ADMIN.merchantColumns.balance,
+							kind: 'money',
+							sortValue: (m) => m.billing?.balance,
+							render: (m) => (m.billing ? formatCredits(m.billing.balance) : '—'),
+						},
+						{
+							key: 'dailyCost',
+							header: ADMIN.merchantColumns.dailyCost,
+							kind: 'money',
+							low: true,
+							sortValue: (m) => m.billing?.dailySpend,
+							render: (m) =>
+								typeof m.billing?.dailySpend === 'number' ? WEBSITE.perDay(formatCredits(m.billing.dailySpend)) : '—',
+						},
+						{ key: 'createdAt', header: ADMIN.merchantColumns.added, kind: 'date', low: true, sortable: true },
+					]}
+				/>
+			</Page>
 			<AddMerchantDialog
 				open={adding}
 				onClose={() => setAdding(false)}
 				onCreated={(merchant) => {
 					setAdding(false);
-					if (merchant?.merchantId) nav.go(adminRoutes.merchant(merchant.merchantId, keep));
+					if (merchant?.merchantId) nav.go(adminRoutes.merchant(merchant.merchantId));
 				}}
 			/>
 			<ConfirmDialog
@@ -377,7 +394,7 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 				busy={busy}
 				danger={bulk === 'suspend'}
 				confirmLabel={bulk === 'suspend' ? ADMIN.bulk.suspend : bulk === 'resume' ? ADMIN.bulk.resume : ADMIN.bulk.resend}
-				title={ADMIN.bulk.selected(selected.size)}
+				title={ADMIN.bulk.selected(selection.count)}
 				error={problem ? describeProblem(problem) : null}>
 				{bulk === 'suspend' ? (
 					<div className="space-y-3">
@@ -402,10 +419,12 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 const countryName = (code) => (code ? (COUNTRY_NAMES[code] ?? code) : '—');
 
 /**
- * The merchant's details: what the header (owner, email, balance) and the tab labels (websites) do not already show.
+ * The merchant's details: what the page header (status, balance, daily cost) does not already show.
  * @param {any} merchant
  */
 const detailItems = (merchant) => [
+	{ label: MERCHANT_FIELDS.ownerName, value: merchant.ownerName ?? '—' },
+	{ label: MERCHANT_FIELDS.email, value: merchant.email },
 	{ label: MORE.fields.phone, value: merchant.phone ?? '—' },
 	{ label: MORE.fields.country, value: <span suppressHydrationWarning>{countryName(merchant.country)}</span> },
 	{ label: MORE.fields.address, value: merchant.address ?? '—' },
@@ -422,10 +441,11 @@ const detailItems = (merchant) => [
 ];
 
 /**
- * The selected merchant: header with the actions, website cards, credits and activity.
- * @param {{ detail: any, admin: any, back: string }} props `back`: the list's URL (after a delete)
+ * A merchant's page: the header (status, balance, daily cost, the actions) and one part of it at a time, each part its
+ * own address (Websites, Credits, Details, Activity); with a `websiteId`, the page of one of its websites.
+ * @param {{ detail: any, admin: any, section?: string, websiteId?: string | null }} props
  */
-function MerchantDetail({ detail, admin, back }) {
+function MerchantPage({ detail, admin, section = 'websites', websiteId = null }) {
 	const toast = useToast();
 	const [merchant, setMerchant] = useState(detail.merchant);
 	const [rows, setRows] = useState(/** @type {Array<{ website: any, cards: any[] }>} */ (detail.rows));
@@ -435,6 +455,8 @@ function MerchantDetail({ detail, admin, back }) {
 	const [reason, setReason] = useState('');
 	const [link, setLink] = useState(/** @type {string | null} */ (null));
 	const [busy, setBusy] = useState(false);
+	// the website of this page was removed: the page waits (as a skeleton) for the merchant's page to open
+	const [gone, setGone] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const merchantId = merchant.merchantId;
 	const can = (/** @type {string} */ p) => adminCan(admin, p);
@@ -489,7 +511,7 @@ function MerchantDetail({ detail, admin, back }) {
 	};
 	const remove = async () => {
 		const result = await act(adminApi.merchant(merchantId), { confirm: merchant.name }, 'DELETE');
-		if (result.ok) nav.go(back);
+		if (result.ok) nav.go(adminRoutes.merchants());
 	};
 
 	const websiteRights = {
@@ -530,45 +552,43 @@ function MerchantDetail({ detail, admin, back }) {
 				]
 			: []),
 	];
-	const actions = (
-		<HeaderActions label={ADMIN.moreActions(merchant.name)} more={more}>
-			{can('credits.add') ? (
-				<Button onClick={() => openDialog('credits')} icon={<Icon name="plus" size={14} />}>
-					{BILLING.addCredits}
-				</Button>
-			) : null}
-			{can('merchants.write') ? (
-				<Button variant="secondary" onClick={() => openDialog('edit')}>
-					{ADMIN.editMerchant}
-				</Button>
-			) : null}
-		</HeaderActions>
-	);
 
-	return (
+	const id = String(merchantId);
+	const pill = pillOf(merchant, billing);
+	const merchantsCrumb = { label: ADMIN.merchantsTitle, href: adminRoutes.merchants() };
+	const attention = billing && ['low_balance', 'grace', 'stopped'].includes(billing.status);
+	const tone = /** @type {'danger' | 'warning' | undefined} */ (
+		billing?.status === 'stopped' ? 'danger' : attention ? 'warning' : undefined
+	);
+	const sectionIds = ['websites', 'credits', 'details', 'activity'];
+	const part = sectionIds.includes(section) ? section : 'websites';
+	/** @param {any} row one website with its product cards */
+	const cardOf = (row) => (
+		<WebsiteCard
+			headline
+			website={row.website}
+			cards={row.cards}
+			can={websiteRights}
+			setupHref={adminRoutes.websiteSetup(id, String(row.website.websiteId))}
+			{...(can('website_settings.read')
+				? { settingsHref: adminRoutes.websiteSettings(id, String(row.website.websiteId)) }
+				: {})}
+			addable={detail.addable}
+			launch={(productId) => ({ path: api.adminLaunch(productId), body: { websiteId: String(row.website.websiteId) } })}
+			onCardsChange={(cards) =>
+				setRows((list) => list.map((r) => (r.website.websiteId === row.website.websiteId ? { ...r, cards } : r)))
+			}
+			onRemoved={() => {
+				setGone(true);
+				setRows((list) => list.filter((r) => r.website.websiteId !== row.website.websiteId));
+				nav.go(adminRoutes.merchant(id));
+			}}
+		/>
+	);
+	const notices = (
 		<>
-			<PageHeader
-				level={2}
-				title={merchant.name}
-				badge={<MerchantStatus merchant={merchant} billing={billing} />}
-				subtitle={
-					<span className="flex flex-wrap gap-x-4 gap-y-1">
-						<span>
-							{merchant.ownerName ? `${merchant.ownerName} · ` : ''}
-							{merchant.email}
-						</span>
-						{typeof balance === 'number' ? (
-							<span>
-								{BILLING.balance}: <strong className="tabular-nums text-fg">{formatCredits(balance)}</strong>
-								{typeof billing?.dailySpend === 'number' ? ` · ${WEBSITE.perDay(formatCredits(billing.dailySpend))}` : ''}
-							</span>
-						) : null}
-					</span>
-				}
-				actions={actions}
-			/>
 			{merchant.suspension ? <Callout tone="danger">{ADMIN.suspendedBecause(merchant.suspension.reason)}</Callout> : null}
-			{!merchant.suspension && billing && ['low_balance', 'grace', 'stopped'].includes(billing.status) ? (
+			{!merchant.suspension && billing && attention ? (
 				<Callout
 					tone={billing.status === 'stopped' ? 'danger' : 'warning'}
 					actions={
@@ -589,118 +609,177 @@ function MerchantDetail({ detail, admin, back }) {
 					)}
 				</Callout>
 			) : null}
-			<DetailTabs
-				label={ADMIN.merchantParts}
-				idPrefix="merchant"
-				tabs={[
+		</>
+	);
+	const shownSite = websiteId ? rows.find((r) => String(r.website.websiteId) === websiteId) : null;
+	/** the websites as table rows */
+	const sites = rows.map((r) => ({
+		id: String(r.website.websiteId),
+		domain: String(r.website.domain),
+		products: r.cards.length,
+		cost: dailyCostOf(r.cards),
+		dot: websiteDot(r.cards),
+	}));
+	const sitePills = /** @type {const} */ ({
+		success: { status: 'active', label: ADMIN.status.active },
+		warning: { status: 'warning', label: ADMIN.status.grace },
+		danger: { status: 'error', label: ADMIN.status.stopped },
+		neutral: { status: 'off', label: ADMIN.noFeaturesOn },
+	});
+	const addWebsite = can('websites.write') ? (
+		<Button onClick={() => openDialog('addWebsite')} icon={<Icon name="plus" size={14} />}>
+			{WEBSITE.addWebsite}
+		</Button>
+	) : null;
+	const bodies = {
+		websites: (
+			<>
+				{merchant.suspension || (billing && attention) ? <div className="space-y-3 p-4 pb-0">{notices}</div> : null}
+				<DataTable
+					caption={ADMIN.websitesTitle}
+					rows={sites}
+					rowKey={(s) => s.id}
+					rowLabel={(s) => s.domain}
+					onRowClick={(s) => nav.go(adminRoutes.website(id, s.id))}
+					rowMenu={(s) => [
+						{ label: WEBSITE.open, onSelect: () => nav.go(adminRoutes.website(id, s.id)) },
+						...(can('website_settings.read')
+							? [{ label: WEBSITE.websiteSettings, onSelect: () => nav.go(adminRoutes.websiteSettings(id, s.id)) }]
+							: []),
+						...(websiteRights.tokens
+							? [{ label: WEBSITE.setup, onSelect: () => nav.go(adminRoutes.websiteSetup(id, s.id)) }]
+							: []),
+					]}
+					empty={
+						<EmptyState
+							icon="globe"
+							kind="website"
+							title={WEBSITE.none}
+							description={can('websites.write') ? ADMIN.noWebsitesHelp : undefined}
+							action={addWebsite}
+						/>
+					}
+					columns={[
+						{
+							key: 'domain',
+							header: ADMIN.merchantColumns.website,
+							sortable: true,
+							render: (s) => (
+								<Link href={adminRoutes.website(id, s.id)} className="font-medium text-fg hover:underline">
+									{s.domain}
+								</Link>
+							),
+						},
+						{ key: 'status', header: ADMIN.columns.status, kind: 'status', pill: (s) => sitePills[s.dot] },
+						{ key: 'products', header: ADMIN.merchantColumns.products, kind: 'number', sortable: true },
+						{
+							key: 'cost',
+							header: ADMIN.merchantColumns.dailyCost,
+							kind: 'money',
+							sortable: true,
+							render: (s) => WEBSITE.perDay(formatCredits(s.cost)),
+						},
+					]}
+				/>
+			</>
+		),
+		credits: (
+			<div className="space-y-4">
+				{notices}
+				<MerchantCredits billing={billing} receipts={detail.receipts ?? []} dayCharges={detail.dayCharges ?? []} />
+			</div>
+		),
+		details: (
+			<div className="space-y-4">
+				{notices}
+				<Card title={MORE.detailsTitle}>
+					<KeyValueList columns={3} items={detailItems(merchant)} />
+				</Card>
+			</div>
+		),
+		activity: (
+			<div className="space-y-4">
+				{notices}
+				{activity.problem ? <Callout tone="danger">{describeProblem(activity.problem)}</Callout> : null}
+				<ActivityTable
+					items={activity.items}
+					empty={MORE.noActivity}
+					details
+					filterHref={(q) => adminRoutes.activity(q)}
+					hasMore={activity.cursor !== null}
+					loadingMore={activity.loading}
+					onLoadMore={() => void activity.more()}
+				/>
+			</div>
+		),
+	};
+	const page = websiteId ? (
+		<Page
+			linkAs={Link}
+			crumbs={[
+				merchantsCrumb,
+				{ label: merchant.name, href: adminRoutes.merchant(id) },
+				{ label: shownSite?.website.domain ?? websiteId },
+			]}
+			loading={gone}
+			{...(shownSite ? {} : { error: ADMIN.noSuchWebsite })}>
+			{shownSite ? cardOf(shownSite) : null}
+		</Page>
+	) : (
+		<Page
+			linkAs={Link}
+			flush={part === 'websites'}
+			bodyKey={part}
+			crumbs={[merchantsCrumb, { label: merchant.name }]}
+			status={[{ ...pill, ...(merchant.suspension ? { title: merchant.suspension.reason } : {}) }]}
+			facts={[
+				...(typeof balance === 'number'
+					? [{ label: BILLING.balance, value: formatCredits(balance), ...(tone ? { tone } : {}) }]
+					: []),
+				...(typeof billing?.dailySpend === 'number'
+					? [{ label: ADMIN.merchantColumns.dailyCost, value: WEBSITE.perDay(formatCredits(billing.dailySpend)) }]
+					: []),
+				{ label: ADMIN.websitesTitle, value: rows.length, href: adminRoutes.merchantPart(id, 'websites') },
+			]}
+			actions={{
+				...(can('credits.add')
+					? { primary: { label: BILLING.addCredits, icon: 'plus', onClick: () => openDialog('credits') } }
+					: {}),
+				secondary: [
+					...(can('merchants.write') ? [{ label: ADMIN.editMerchant, onClick: () => openDialog('edit') }] : []),
+					...(part === 'websites' && can('websites.write')
+						? [{ label: WEBSITE.addWebsite, icon: /** @type {const} */ ('plus'), onClick: () => openDialog('addWebsite') }]
+						: []),
+				],
+				more: [
+					...more,
+					...(part === 'activity'
+						? [{ label: MORE.openInActivity, onSelect: () => nav.go(adminRoutes.activity({ merchantId })) }]
+						: []),
+				],
+			}}
+			nav={{
+				value: part,
+				label: ADMIN.merchantParts,
+				items: /** @type {import('@ss/ui').InnerNavItem[]} */ ([
+					{ id: 'websites', label: ADMIN.websitesTitle, icon: 'globe', count: rows.length },
 					{
-						id: 'merchant-websites',
-						label: `${ADMIN.websitesTitle} · ${rows.length}`,
-						content: (
-							<>
-								<Toolbar
-									className="!px-0"
-									end={
-										can('websites.write') && rows.length > 0 ? (
-											<Button
-												variant="secondary"
-												onClick={() => openDialog('addWebsite')}
-												icon={<Icon name="plus" size={14} />}>
-												{WEBSITE.addWebsite}
-											</Button>
-										) : null
-									}>
-									<p className="min-w-0 truncate text-sm text-muted">{ADMIN.websitesIntro}</p>
-								</Toolbar>
-								{rows.length === 0 ? (
-									<EmptyState
-										compact
-										icon="globe"
-										kind="website"
-										title={WEBSITE.none}
-										description={can('websites.write') ? ADMIN.noWebsitesHelp : undefined}
-										action={
-											can('websites.write') ? (
-												<Button onClick={() => openDialog('addWebsite')} icon={<Icon name="plus" size={14} />}>
-													{WEBSITE.addWebsite}
-												</Button>
-											) : null
-										}
-									/>
-								) : (
-									rows.map((row) => (
-										<WebsiteCard
-											key={row.website.websiteId}
-											website={row.website}
-											cards={row.cards}
-											can={websiteRights}
-											setupHref={adminRoutes.websiteSetup(merchantId, String(row.website.websiteId))}
-											{...(can('website_settings.read')
-												? { settingsHref: adminRoutes.websiteSettings(merchantId, String(row.website.websiteId)) }
-												: {})}
-											addable={detail.addable}
-											launch={(productId) => ({
-												path: api.adminLaunch(productId),
-												body: { websiteId: String(row.website.websiteId) },
-											})}
-											onCardsChange={(cards) =>
-												setRows((list) =>
-													list.map((r) => (r.website.websiteId === row.website.websiteId ? { ...r, cards } : r)),
-												)
-											}
-											onRemoved={() =>
-												setRows((list) => list.filter((r) => r.website.websiteId !== row.website.websiteId))
-											}
-										/>
-									))
-								)}
-							</>
-						),
-					},
-					{
-						id: 'merchant-credits',
+						id: 'credits',
 						label: ADMIN.creditsTitle,
-						content: (
-							<MerchantCredits billing={billing} receipts={detail.receipts ?? []} dayCharges={detail.dayCharges ?? []} />
-						),
+						...(tone && billing ? { dot: tone, dotLabel: statusLabel(billing.status) } : {}),
 					},
-					{
-						id: 'merchant-details',
-						label: MORE.detailsTitle,
-						content: (
-							<Card title={MORE.detailsTitle}>
-								<KeyValueList columns={3} items={detailItems(merchant)} />
-							</Card>
-						),
-					},
-					{
-						id: 'merchant-activity',
-						label: ADMIN.activityTitle,
-						content: (
-							<>
-								<Toolbar
-									className="!px-0"
-									end={
-										<Button variant="secondary" size="sm" onClick={() => nav.go(adminRoutes.activity({ merchantId }))}>
-											{MORE.openInActivity}
-										</Button>
-									}
-								/>
-								{activity.problem ? <Callout tone="danger">{describeProblem(activity.problem)}</Callout> : null}
-								<ActivityTable
-									items={activity.items}
-									empty={MORE.noActivity}
-									details
-									filterHref={(q) => adminRoutes.activity(q)}
-									hasMore={activity.cursor !== null}
-									loadingMore={activity.loading}
-									onLoadMore={() => void activity.more()}
-								/>
-							</>
-						),
-					},
-				]}
-			/>
+					{ id: 'details', label: MORE.detailsTitle },
+					{ id: 'activity', label: ADMIN.activityTitle },
+				]).map((item) => ({ ...item, href: adminRoutes.merchantPart(id, item.id) })),
+			}}>
+			{bodies[/** @type {keyof typeof bodies} */ (part)]}
+		</Page>
+	);
+
+	return (
+		<>
+			{page}
+
 			<Dialog open={dialog === 'edit'} onClose={() => setDialog(null)} title={ADMIN.editMerchant} size="lg">
 				<MerchantFieldsForm
 					merchant={merchant}
@@ -791,48 +870,24 @@ function MerchantDetail({ detail, admin, back }) {
 }
 
 /**
- * The Merchants screen: the list beside the selected merchant — the one the URL picks or, with `auto`, the first of
- * the list (shown on wide screens only) — or a short empty state when the list is empty.
- * @param {any} props loader result of `loadMerchants` plus `admin` and, with a merchant shown, `detail` (the result of
- *   `loadMerchant`), `selectedId` and `auto`
+ * The Merchants screens. Without a `detail` the list (a table); with the `detail` of `loadMerchant` a merchant's page,
+ * on the part `section` (websites, credits, details, activity) or, with a `websiteId`, on one of its websites.
+ * @param {any} props loader result of `loadMerchants` (the list) or `{ detail, admin, section, websiteId }`
  */
 export function MerchantsView(props) {
-	if (!props.ok) return <AdminProblem problem={props.problem} />;
-	const admin = props.admin;
 	const detail = props.detail ?? null;
-	const auto = props.auto === true;
-	const shownId = detail ? (detail.ok ? String(detail.merchant.merchantId) : (props.selectedId ?? null)) : null;
-	const back = adminRoutes.merchants({ q: props.filter.q, status: props.filter.status });
-	return (
-		<ListDetail
-			section="admin/merchants"
-			label={ADMIN.merchantsTitle}
-			auto={auto}
-			back={{ href: back, label: ADMIN.merchantsTitle }}
-			list={
-				<MerchantList
-					key={`${props.filter.q ?? ''}|${props.filter.status ?? ''}`}
-					props={props}
-					admin={admin}
-					selectedId={auto ? null : shownId}
-					autoId={auto ? shownId : null}
-				/>
-			}
-			empty={
-				<EmptyState
-					icon="users"
-					kind="merchant"
-					title={props.filter.q || props.filter.status ? ADMIN.noMerchants : ADMIN.noMerchantsYet}
-					description={props.filter.q || props.filter.status ? undefined : ADMIN.noMerchantsYetHelp}
-				/>
-			}
-			detail={
-				detail === null ? null : detail.ok ? (
-					<MerchantDetail key={shownId} detail={detail} admin={admin} back={back} />
-				) : (
-					<AdminProblem problem={detail.problem} back={{ href: back, label: ADMIN.merchantsTitle }} />
-				)
-			}
-		/>
-	);
+	if (detail) {
+		if (!detail.ok) return <AdminProblem problem={detail.problem} />;
+		return (
+			<MerchantPage
+				key={String(detail.merchant.merchantId)}
+				detail={detail}
+				admin={props.admin}
+				section={props.section}
+				websiteId={props.websiteId ?? null}
+			/>
+		);
+	}
+	if (!props.ok) return <AdminProblem problem={props.problem} />;
+	return <MerchantsPage key={`${props.filter.q ?? ''}|${props.filter.status ?? ''}`} props={props} admin={props.admin} />;
 }

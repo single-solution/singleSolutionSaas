@@ -141,18 +141,17 @@ describe('admin console smoke', () => {
 
 			// ------------------------------------------------------------------ Merchants: the list, then a merchant selected
 			const list = await admin.loadMerchants(ownerBrowser.api, {});
-			// nothing in the URL: the first merchant opens by default (wide screens only; its row marked there, not current)
-			const screen = await admin.loadMerchantsScreen(ownerBrowser.api, {}, owner);
-			expect(screen).toMatchObject({ ok: true, auto: true, detail: { ok: true, merchant: { merchantId } } });
-			const listRaw = ssr(<MerchantsView {...screen} admin={owner} />);
+			// the list is a table page: the name opens the merchant, the balance of the first page is on the row
+			const listRaw = ssr(<MerchantsView {...list} admin={owner} />);
 			const listHtml = text(listRaw);
+			expect(listHtml).toContain('Merchants');
 			expect(listHtml).toContain('Shop & Co');
 			expect(listHtml).toContain('250 credits'); // the balance on the row
-			expect(listHtml).toContain('Add website'); // the merchant's page beside the list
-			expect(listRaw).toContain('lg:text-on-primary-soft');
-			expect(listRaw).not.toContain('aria-current="page"');
-			expect(listRaw).not.toContain('rotate-180'); // no Back link: phones show the list until a merchant is chosen
-			const none = await admin.loadMerchantsScreen(ownerBrowser.api, { q: 'nobody-here' }, owner);
+			expect(listHtml).toContain('Add merchant');
+			expect(listRaw).toContain(`href="/admin/merchants/${merchantId}"`);
+			expect(listRaw).toContain('data-ss-page');
+			expect(listRaw).not.toContain('role="tab"');
+			const none = await admin.loadMerchants(ownerBrowser.api, { q: 'nobody-here' });
 			expect(none).toMatchObject({ ok: true, page: { items: [] } });
 			expect(none).not.toHaveProperty('detail');
 			expect(text(ssr(<MerchantsView {...none} admin={owner} />))).toContain('No merchants found.');
@@ -167,41 +166,46 @@ describe('admin console smoke', () => {
 			if (!detail.ok) throw new Error('merchant');
 			// Add product lists only active connected products
 			expect(detail.addable).toEqual([{ productId: 'notes', name: 'Notes' }]);
-			const raw = ssr(<MerchantsView {...list} detail={detail} selectedId={merchantId} admin={owner} />);
+			const raw = ssr(<MerchantsView detail={detail} admin={owner} />);
 			const detailHtml = text(raw);
-			// the header with the actions, then one part at a time as tabs: Websites first (the others are tabs)
-			expect(raw).toContain('role="tab"');
+			// the header with the actions; the parts are the inner navigation, each its own address, Websites first
+			expect(raw).not.toContain('role="tab"');
 			for (const word of [
+				'Merchants',
+				'Shop & Co',
 				'shop.example.com',
-				'Notes',
 				'Active',
 				'250 credits',
 				'Add website',
 				'Add credits',
 				'Edit merchant',
-				'Websites · 1',
+				'Websites',
 				'Credits',
 				'Details',
 				'Activity',
 			])
 				expect(detailHtml).toContain(word);
-			// Setup, Install and tokens and Usage sit in the website card's More menu (beside Add product)
+			expect(raw).toContain(`href="/admin/merchants/${merchantId}/credits"`);
+			expect(raw).toContain(`href="/admin/merchants/${merchantId}/details"`);
+			expect(raw).toContain(`href="/admin/merchants/${merchantId}/activity"`);
 			expect(detailHtml).not.toContain('Credit receipts');
 			// the other actions (Suspend, setup link, two-step off, Delete) sit in the header's More menu
-			expect(raw).toContain('aria-label="More actions for Shop &amp; Co"');
+			expect(raw).toContain('aria-label="More actions"');
 			expect(raw).not.toMatch(/>Suspend<\/button>/);
-			expect(raw).toContain('aria-label="Add product to shop.example.com"');
 			expect(raw).toContain('aria-label="Actions for shop.example.com"');
-			expect(raw).toContain('aria-label="Actions for Notes"');
-			expect(raw).toContain('aria-current="page"'); // the selected row
+			// a website is its own page: crumbs back to the merchant, then the website card with its products
+			const siteId = String(detail.rows[0]?.website.websiteId);
+			expect(raw).toContain(`href="/admin/merchants/${merchantId}/websites/${siteId}"`);
+			const siteRaw = ssr(<MerchantsView detail={detail} websiteId={siteId} admin={owner} />);
+			expect(text(siteRaw)).toContain('Notes');
+			expect(siteRaw).toContain(`href="/admin/merchants/${merchantId}"`);
+			expect(siteRaw).toContain('aria-label="Add product to shop.example.com"');
+			expect(siteRaw).toContain('aria-label="Actions for Notes"');
+			expect(text(ssr(<MerchantsView detail={detail} websiteId="web_none" admin={owner} />))).toContain('No such website.');
+			// the other parts
+			expect(text(ssr(<MerchantsView detail={detail} section="details" admin={owner} />))).toContain('Two-step sign-in');
 			const missingMerchant = await admin.loadMerchant(ownerBrowser.api, 'mer_0000000000000000000000000z', owner);
-			expect(
-				text(
-					ssr(
-						<MerchantsView {...list} detail={missingMerchant} selectedId="mer_0000000000000000000000000z" admin={owner} />,
-					),
-				),
-			).toContain('Not found');
+			expect(text(ssr(<MerchantsView detail={missingMerchant} admin={owner} />))).toContain('Not found');
 
 			// ------------------------------------------------------------------ Products: the list, then a product selected
 			const products = await admin.loadProducts(ownerBrowser.api, { status: 'bogus' });
@@ -243,7 +247,7 @@ describe('admin console smoke', () => {
 			expect(productHtml).toContain('No credits earned in the last 30 UTC days.');
 			expect(productHtml).not.toContain('Credits earned per UTC day (last 30 days)');
 			expect(productRaw).toContain('title="shop.example.com"');
-			expect(productRaw).toContain(`href="/admin/merchants/${merchantId}#website-${websiteId}"`);
+			expect(productRaw).toContain(`href="/admin/merchants/${merchantId}/websites/${websiteId}"`);
 			const chatty = await admin.loadProduct(ownerBrowser.api, 'chatty');
 			const chattyHtml = text(ssr(<ProductsView {...products} detail={chatty} selectedId="chatty" admin={owner} />));
 			expect(chattyHtml).toContain('Set active');
@@ -361,18 +365,14 @@ describe('admin console smoke', () => {
 			).toBe('Products');
 
 			// Support: the website cards with every admin action and Install and tokens; Products read-only
-			const supportList = await admin.loadMerchants(supportBrowser.api, {});
 			const supportDetail = await admin.loadMerchant(supportBrowser.api, merchantId, support);
 			expect(supportDetail.ok && supportDetail.addable).toEqual([{ productId: 'notes', name: 'Notes' }]);
-			const supportHtml = ssr(
-				<MerchantsView {...supportList} detail={supportDetail} selectedId={merchantId} admin={support} />,
-			);
-			for (const word of [
-				'Add product to shop.example.com',
-				'aria-label="Actions for shop.example.com"',
-				'Open Notes',
-				'Add website',
-			])
+			if (!supportDetail.ok) throw new Error('support merchant');
+			const supportSite = String(supportDetail.rows[0]?.website.websiteId);
+			// the merchant's page has Add website; the website's own page has the card with its actions
+			expect(ssr(<MerchantsView detail={supportDetail} admin={support} />)).toContain('Add website');
+			const supportHtml = ssr(<MerchantsView detail={supportDetail} websiteId={supportSite} admin={support} />);
+			for (const word of ['Add product to shop.example.com', 'aria-label="Actions for shop.example.com"', 'Open Notes'])
 				expect(supportHtml).toContain(word);
 			expect(supportHtml).not.toContain('Add credits');
 			const supportProducts = await admin.loadProducts(supportBrowser.api);
@@ -396,17 +396,11 @@ describe('admin console smoke', () => {
 			const financeDetail = await admin.loadMerchant(financeBrowser.api, merchantId, finance);
 			if (!financeDetail.ok) throw new Error('finance merchant');
 			expect(financeDetail.addable).toBeNull();
-			const financeHtml = ssr(
-				<MerchantsView
-					{...await admin.loadMerchants(financeBrowser.api, {})}
-					detail={financeDetail}
-					selectedId={merchantId}
-					admin={finance}
-				/>,
-			);
+			const financeSite = String(financeDetail.rows[0]?.website.websiteId);
+			const financeHtml = ssr(<MerchantsView detail={financeDetail} websiteId={financeSite} admin={finance} />);
 			expect(financeHtml).toContain('Notes');
 			expect(financeHtml).toContain('aria-label="Actions for shop.example.com"'); // Usage is in its menu
-			expect(financeHtml).toContain('Add credits');
+			expect(ssr(<MerchantsView detail={financeDetail} admin={finance} />)).toContain('Add credits');
 			for (const word of ['Install and tokens', 'Add product', 'Open Notes', 'Add website', 'Edit merchant'])
 				expect(financeHtml).not.toContain(word);
 			// Activity filters: Support has no list of admins, so no Admin field to type an id into; the Owner picks a name
@@ -438,7 +432,9 @@ describe('admin console smoke', () => {
 		expect(adminRoutes.login('/admin/x')).toBe('/login?next=%2Fadmin%2Fx');
 		expect(adminRoutes.merchant('mer_1', { q: 'shop', status: null })).toBe('/admin/merchants/mer_1?q=shop');
 		expect(adminRoutes.merchant('mer_1')).toBe('/admin/merchants/mer_1');
-		expect(adminRoutes.website('mer_1', 'web_1')).toBe('/admin/merchants/mer_1#website-web_1');
+		expect(adminRoutes.website('mer_1', 'web_1')).toBe('/admin/merchants/mer_1/websites/web_1');
+		expect(adminRoutes.merchantPart('mer_1', 'websites')).toBe('/admin/merchants/mer_1');
+		expect(adminRoutes.merchantPart('mer_1', 'credits')).toBe('/admin/merchants/mer_1/credits');
 		expect(adminRoutes.product('notes', { status: 'active' })).toBe('/admin/products/notes?status=active');
 		expect(adminRoutes.product('notes')).toBe('/admin/products/notes');
 		expect(adminRoutes.admin('adm_1')).toBe('/admin/admins/adm_1');

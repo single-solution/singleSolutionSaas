@@ -184,7 +184,7 @@ describe('admin Products (jsdom)', () => {
 			// Websites using it (on the same page): merchant, domain, status, features on, daily cost; the domain opens its
 			// website card on the merchant's page
 			expect(shows('shop.example.com') && shows('Shop & Co') && shows('Notes')).toBe(true);
-			expect(document.querySelector(`a[href="/admin/merchants/${merchantId}#website-${site.websiteId}"]`)).not.toBeNull();
+			expect(document.querySelector(`a[href="/admin/merchants/${merchantId}/websites/${site.websiteId}"]`)).not.toBeNull();
 			cleanup();
 
 			// the next page of websites, and failures (a stubbed Portal)

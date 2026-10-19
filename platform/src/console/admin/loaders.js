@@ -163,25 +163,6 @@ export const loadMerchant = async (api, merchantId, admin) => {
 	};
 };
 
-/**
- * The Merchants screen with no merchant in the URL: the list and, when it has merchants, the first one, which wide
- * screens open by default (PLAN 0.6 list-and-detail screens).
- * @param {ConsoleApi} api
- * @param {{ status?: string, q?: string, cursor?: string }} filter
- * @param {any} admin the signed-in admin
- */
-export const loadMerchantsScreen = async (api, filter, admin) => {
-	const list = await merchantPage(api, filter);
-	if (!list.ok) return list;
-	const first = list.page.items[0];
-	// the balances of the list and the first merchant load together
-	const [merchants, detail] = await Promise.all([
-		withBilling(api, list),
-		first ? loadMerchant(api, String(first.merchantId), admin) : null,
-	]);
-	return detail ? { ...merchants, detail, auto: true } : merchants;
-};
-
 /** How many merchants the Overview lists. */
 const OVERVIEW_MERCHANTS = 5;
 
