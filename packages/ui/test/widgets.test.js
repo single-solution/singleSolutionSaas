@@ -28,7 +28,6 @@ import {
 	Input,
 	KeyValueList,
 	Masonry,
-	PageHeader,
 	RadioGroup,
 	Section,
 	Select,
@@ -161,12 +160,7 @@ describe('display', () => {
 	it('renders cards, headers, badges, callouts, states, stats and lists', () => {
 		const { container } = render(
 			<div>
-				<PageHeader
-					title="Websites"
-					subtitle="All of them"
-					actions={<Button>Add</Button>}
-					badge={<StatusBadge status="active" />}
-				/>
+				<h1>Websites</h1>
 				<Card title="Card" subtitle="Sub" actions={<span>act</span>}>
 					body
 				</Card>
@@ -197,7 +191,6 @@ describe('display', () => {
 	it('Stat tiles stay neutral and a kind takes the one accent; Section labels its content; a chart with nothing to draw is a line of text', () => {
 		const { container } = render(
 			<div>
-				<PageHeader title="Detail" level={2} />
 				<Stat label="Websites" value={3} icon="globe" kind="website" />
 				<IconBadge icon="users" kind="merchant" size="sm" />
 				<IconBadge icon="box" size="xs" className="plain-badge" />
@@ -237,7 +230,6 @@ describe('display', () => {
 		expect(byText(container, 'Owner').className).toContain('bg-primary-soft');
 		expect(byText(container, 'No websites').closest('.rounded-card')?.querySelector('.bg-primary-soft')).not.toBeNull();
 		expect(container.querySelector('section[aria-labelledby="s1"] h2')?.textContent).toBe('Websites');
-		expect([...container.querySelectorAll('h2')].some((heading) => heading.textContent === 'Detail')).toBe(true);
 		expect(container.querySelector('svg[aria-label^="Spend"]')).not.toBeNull();
 		expect(container.textContent).toContain('No data for this period.');
 		// only zeros: the empty text, not a row of empty tracks that reads like full bars
@@ -526,19 +518,17 @@ describe('widths follow the container', () => {
 		expect(renderToStaticMarkup(<SoftBreaks text="a.b" />)).toBe('a.<wbr/>b');
 	});
 
-	it('KeyValueList and PageHeader follow their own width', () => {
+	it('KeyValueList follows its own width', () => {
 		const { container } = render(
 			<div>
 				<KeyValueList columns={3} items={[{ label: 'A', value: '1' }]} />
 				<KeyValueList columns={1} items={[{ label: 'B', value: '2' }]} />
-				<PageHeader title="Title" actions={<button type="button">Act</button>} />
 			</div>,
 		);
 		const [three, one] = [...container.querySelectorAll('dl')];
 		expect(three?.parentElement?.className).toContain('@container');
 		expect(three?.className).toContain('@2xl:grid-cols-3');
 		expect(one?.className).not.toContain('grid-cols-2');
-		expect(container.querySelector('h1')?.closest('.flex-auto')).not.toBeNull();
 	});
 });
 
@@ -909,8 +899,8 @@ describe('AppShell without the optional parts', () => {
 		expect(container.textContent).toContain('Console');
 		expect(container.querySelector('a[href="#content"]')).not.toBeNull();
 		expect(container.querySelector('a[data-router="yes"]')?.textContent).toBe('Home3');
-		// the menu button, the title row and the slot for the page's own actions (empty, so hidden)
-		expect(container.querySelector('header')?.children).toHaveLength(3);
+		// the menu button and the title row (no actions, account or theme menu)
+		expect(container.querySelector('header')?.children).toHaveLength(2);
 		const menu = /** @type {HTMLElement} */ (container.querySelector('button[aria-label="Open navigation"]'));
 		const panel = () => container.querySelector('[role="dialog"][aria-label="Navigation"]');
 		click(menu);
@@ -1012,17 +1002,15 @@ describe('theme', () => {
 			<AppShell
 				sections={[{ items: [{ href: '/a', label: 'A', current: true }] }]}
 				crumbs={[{ label: 'Acme' }]}
-				context="Viewing as admin"
 				back={{ href: '/portal', label: 'Back to Portal' }}
 				account={{ name: 'Sam Lee', email: 'sam@x.test', items: [{ label: 'Sign out', onSelect: out, danger: true }] }}>
 				<p>Body</p>
 			</AppShell>,
 		);
 		const header = /** @type {HTMLElement} */ (container.querySelector('header'));
-		// never empty: the breadcrumbs and the page title, the context pill, Back to Portal and the account menu
+		// never empty: the breadcrumbs and the page title, Back to Portal and the account menu
 		expect(header.querySelector('[aria-current="page"]')?.textContent).toBe('A');
 		expect(header.textContent).toContain('Acme');
-		expect(header.textContent).toContain('Viewing as admin');
 		expect(header.querySelector('a[href="/portal"]')?.textContent).toBe('Back to Portal');
 		click(/** @type {HTMLElement} */ (header.querySelector('button[aria-haspopup="menu"]')));
 		const items = [...container.querySelectorAll('[role="menu"] button')].map((b) => b.textContent);

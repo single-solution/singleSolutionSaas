@@ -61,13 +61,9 @@ the page is as wide as the window leaves it. Nothing is centered in a narrow col
 
 - `AppShell`: a floating WHITE sidebar, bottom-weighted (240 px, folding to a 64 px icon rail remembered in
   `localStorage`): the logo, the main sections, then at the bottom the `switcher`, `sidebarFooter` (help), the `account`
-  menu and the theme with the fold button; a header panel (breadcrumbs and title, `context`, `topbar`, `search`,
-  `actions`, `back`) and a phone drawer (the header then holds the account or theme menu). No command bar, no assistant
+  menu and the theme with the fold button; a header panel (breadcrumbs and title, `topbar`, `search`,
+  `actions`, `back`; it hides while a page is drawn with `Page`, which has its own header) and a phone drawer (the header then holds the account or theme menu). No command bar, no assistant
   dock. `switcher` and `sidebarFooter` may be functions of `{ rail }` (also `useShell()`).
-- `PageHeader` (a page's title, `badge`, `meta`, `actions` and `subtitle`): inside an `AppShell` on wide screens the
-  title, its status, its context and its main actions sit in the header and the subtitle opens the page; `level={2}`
-  (a detail beside a list) stays in the page. `HeaderMeta` puts context in the header without a title, and
-  `HeaderFact` is one fact there (`3 websites`, a status dot with its words, Saved 2 min ago).
 - `Dialog` / `Drawer`: editing opens in a RIGHT drawer that keeps the page in view (`Dialog` `md` / `lg`, or `Drawer`);
   `size="sm"` and `placement="center"` are centered modals, only for short confirmations (`ConfirmDialog`,
   `TypedConfirmDialog`, `PasswordConfirmDialog`) and a link to copy.
@@ -123,8 +119,6 @@ it is the menu button.
 - `<StatGrid label?>` (classes in `STAT_GRID`) holds the tiles: one column, two from 28rem (an odd last tile spans the
   row), three tiles in a row from 42rem and four from 56rem.
 - `KeyValueList`, `Masonry` and the field grid also follow their own width.
-- `PageHeader` in the page (no frame, a detail, a phone) keeps its actions beside the title while both fit on one line,
-  else moves them together under it.
 - `Table` cells keep one line (a column with `wrap` wraps on whole words within 10rem); a table wider than its card
   scrolls inside it (a labeled region the keyboard can focus and scroll). With no rows it shows only its empty message.
 - Type sizes beside Tailwind's scale are named in `theme.css`: `text-micro` (11px), `text-label` (13px), `text-lead` (15px),

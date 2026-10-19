@@ -54,7 +54,6 @@ export {
 	TextLink,
 	ManagedNote,
 } from './display.js';
-export { PageHeader, HeaderMeta, HeaderFact } from './header.js';
 export { Table } from './Table.js';
 export { Dialog, Drawer, ConfirmDialog } from './overlay.js';
 export { ActionMenu, AccountMenu, ThemeMenu } from './Menu.js';
@@ -78,7 +77,7 @@ export { TypedConfirmDialog } from './TypedConfirm.js';
 export { PasswordConfirmDialog, PASSWORD_CONFIRM_TEXTS } from './PasswordConfirm.js';
 export { ToastOnce, ToastProvider, useToast } from './Toast.js';
 export { CodeBlock, copyText } from './CodeBlock.js';
-export { AppShell, ContextPill, ScrollArea, SwitcherSelect, useShell } from './AppShell.js';
+export { AppShell, ScrollArea, SwitcherSelect, useShell } from './AppShell.js';
 // the frame and its scrolling panes by the names of the design spec (owner 2026-10-17)
 export { AppShell as AppFrame, ScrollArea as Pane } from './AppShell.js';
 export {

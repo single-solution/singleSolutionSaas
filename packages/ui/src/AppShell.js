@@ -4,9 +4,8 @@
  * never scrolls. On the off-white canvas sit a floating WHITE sidebar, bottom-weighted (240 px; it folds to a 64 px icon
  * rail): the logo on top, the main sections in the middle, and at the bottom the website / merchant switcher, help, the
  * account, the theme and the fold button; a floating 56 px header (the menu button on phones, the breadcrumbs and the
- * page title with the page's own context — status, key numbers, last saved, a view switcher — and its main actions,
- * lifted from its `PageHeader` / `HeaderMeta`; an optional context pill, search, Back to Portal); and the main pane,
- * which fills the rest of the window and scrolls on its own (`Pane`). Nothing touches the screen edges: the panels keep
+ * page title, optional search and actions, Back to Portal; a page drawn with `Page` has its own header and this one hides);
+ * and the main pane, which fills the rest of the window and scrolls on its own (`Pane`). Nothing touches the screen edges: the panels keep
  * 12-16 px from the window and from each other. Below 1024 px (`lg`) the sidebar becomes a floating drawer opened by
  * the menu button, and the header holds the account (or theme) menu; nothing scrolls sideways. The slots `switcher`
  * and `sidebarFooter` may be functions of `{ rail }` so they can draw a compact version. No command bar, no assistant
@@ -18,10 +17,9 @@
  * pane returns to its top when the page changes (`scrollKey`).
  * @module
  */
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cx } from './cx.js';
 import { Avatar, DOTS, IconBadge, TINTS } from './display.js';
-import { HeaderSlotsContext } from './header.js';
 import { Icon } from './icons.js';
 import { AccountMenu, ThemeMenu } from './Menu.js';
 import { NavigationProgress, usePresence } from './motion.js';
@@ -301,25 +299,8 @@ export function SwitcherSelect({ label, value, options, onChange, placeholder, d
 }
 
 /**
- * The context of what the page shows, as a small subtle pill in the header ("Viewing as admin · shop / site").
- * @param {{ children: ReactNode, icon?: import('./icons.js').IconName, className?: string }} props
- */
-export function ContextPill({ children, icon = 'eye', className }) {
-	return (
-		<span
-			className={cx(
-				'inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full bg-surface-2 px-2.5 text-label font-medium text-muted',
-				className,
-			)}>
-			<Icon name={icon} size={13} className="shrink-0" />
-			<span className="min-w-0 truncate">{children}</span>
-		</span>
-	);
-}
-
-/**
  * The header's breadcrumbs and page title on one line: the steps muted (links where they have an `href`), the title in
- * full color (left out while the page shows its own title in the header).
+ * full color.
  * @param {{ crumbs: Crumb[], title?: ReactNode, linkAs?: import('react').ElementType }} props
  */
 function TitleTrail({ crumbs, title, linkAs }) {
@@ -387,10 +368,10 @@ export function ScrollArea({ children, className, label, ref, as = 'div' }) {
  *   actions?: ReactNode, search?: ReactNode, banner?: ReactNode, children: ReactNode,
  *   linkAs?: import('react').ElementType, switcher?: ReactNode | ((state: { rail: boolean }) => ReactNode),
  *   sidebarFooter?: ReactNode | ((state: { rail: boolean }) => ReactNode), mainId?: string, themeToggle?: boolean,
- *   collapsible?: boolean, title?: ReactNode, crumbs?: Crumb[], context?: ReactNode, account?: ShellAccount,
+ *   collapsible?: boolean, title?: ReactNode, crumbs?: Crumb[], account?: ShellAccount,
  *   back?: { href: string, label: ReactNode }, scrollKey?: string }} props `switcher`: the website / merchant switcher
  *   under the brand; `search`: the header's search box; `title`: the page title in the header (the current menu
- *   item's label by default) after the `crumbs` (its menu group by default); `context`: a small pill beside it;
+ *   item's label by default) after the `crumbs` (its menu group by default);
  *   `account`: the header's account menu (it holds the theme choice); `themeToggle`: offer the theme choice (default
  *   true; without an `account` it is a small theme menu); `back`: a subtle text link (Back to Portal); `collapsible`:
  *   the sidebar folds to an icon rail (default true); `scrollKey`: the main pane goes back to its top when it changes
@@ -412,23 +393,12 @@ export function AppShell({
 	collapsible = true,
 	title,
 	crumbs,
-	context,
 	account,
 	back,
 	scrollKey,
 }) {
 	const [open, setOpen] = useState(false);
 	const [folded, setFolded] = useState(false);
-	// the header's slots for the page's own title, context and actions (header.js)
-	const [titleSlot, setTitleSlot] = useState(/** @type {HTMLElement | null} */ (null));
-	const [metaSlot, setMetaSlot] = useState(/** @type {HTMLElement | null} */ (null));
-	const [actionsSlot, setActionsSlot] = useState(/** @type {HTMLElement | null} */ (null));
-	const [lifted, setLifted] = useState(0);
-	const lift = useCallback((/** @type {1 | -1} */ step) => setLifted((count) => count + step), []);
-	const slots = useMemo(
-		() => ({ title: titleSlot, meta: metaSlot, actions: actionsSlot, lift }),
-		[titleSlot, metaSlot, actionsSlot, lift],
-	);
 	const rail = collapsible && folded;
 	// what the pages inside read (shell-state.js): the folded state, the router link, the phone menu button
 	const shell = useMemo(() => ({ rail, ...(linkAs ? { linkAs } : {}), openNav: () => setOpen(true) }), [rail, linkAs]);
@@ -555,135 +525,113 @@ export function AppShell({
 	return (
 		<NavigationProgress>
 			<ShellContext.Provider value={shell}>
-				<HeaderSlotsContext.Provider value={slots}>
-					<div
+				<div
+					className={cx(
+						'flex h-dvh w-full gap-3 overflow-hidden bg-canvas p-3 text-fg lg:gap-4 lg:p-4',
+						// where the page area starts and ends in the window: the floating save bar centres on it
+						'[--ss-pane-left:0.75rem] [--ss-pane-right:0.75rem] lg:[--ss-pane-right:1rem]',
+						rail ? 'lg:[--ss-pane-left:6rem]' : 'lg:[--ss-pane-left:17rem]',
+					)}>
+					<a
+						href={`#${mainId}`}
+						className="sr-only z-[70] rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
+						Skip to content
+					</a>
+					<aside
+						data-rail={rail || undefined}
 						className={cx(
-							'flex h-dvh w-full gap-3 overflow-hidden bg-canvas p-3 text-fg lg:gap-4 lg:p-4',
-							// where the page area starts and ends in the window: the floating save bar centres on it
-							'[--ss-pane-left:0.75rem] [--ss-pane-right:0.75rem] lg:[--ss-pane-right:1rem]',
-							rail ? 'lg:[--ss-pane-left:6rem]' : 'lg:[--ss-pane-left:17rem]',
+							// visible overflow: the account and theme menus open upward over the page from the rail
+							'relative z-30 hidden h-full shrink-0 rounded-panel border border-line-soft bg-surface shadow-panel [view-transition-name:ss-sidebar] lg:block',
+							'transition-[width] duration-(--ss-motion) ease-ss',
+							rail ? 'w-16' : 'w-60',
 						)}>
-						<a
-							href={`#${mainId}`}
-							className="sr-only z-[70] rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
-							Skip to content
-						</a>
-						<aside
-							data-rail={rail || undefined}
-							className={cx(
-								// visible overflow: the account and theme menus open upward over the page from the rail
-								'relative z-30 hidden h-full shrink-0 rounded-panel border border-line-soft bg-surface shadow-panel [view-transition-name:ss-sidebar] lg:block',
-								'transition-[width] duration-(--ss-motion) ease-ss',
-								rail ? 'w-16' : 'w-60',
-							)}>
-							{sidebar(rail, false)}
-						</aside>
-						{drawer.mounted ? (
+						{sidebar(rail, false)}
+					</aside>
+					{drawer.mounted ? (
+						<div
+							ref={drawer.ref}
+							data-state={drawer.closing ? 'closed' : 'open'}
+							className="group fixed inset-0 z-50 animate-ss-fade bg-overlay p-3 data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-fade-out lg:hidden"
+							onMouseDown={(event) => {
+								if (event.target === event.currentTarget) setOpen(false);
+							}}>
 							<div
-								ref={drawer.ref}
-								data-state={drawer.closing ? 'closed' : 'open'}
-								className="group fixed inset-0 z-50 animate-ss-fade bg-overlay p-3 data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-fade-out lg:hidden"
-								onMouseDown={(event) => {
-									if (event.target === event.currentTarget) setOpen(false);
-								}}>
-								<div
-									ref={panel}
-									role="dialog"
-									aria-modal="true"
-									aria-label="Navigation"
-									className="h-full w-60 max-w-[85vw] animate-ss-drawer rounded-panel border border-line-soft bg-surface shadow-overlay group-data-[state=closed]:animate-ss-drawer-out">
-									{sidebar(false, true)}
-								</div>
+								ref={panel}
+								role="dialog"
+								aria-modal="true"
+								aria-label="Navigation"
+								className="h-full w-60 max-w-[85vw] animate-ss-drawer rounded-panel border border-line-soft bg-surface shadow-overlay group-data-[state=closed]:animate-ss-drawer-out">
+								{sidebar(false, true)}
 							</div>
-						) : null}
-						<div className="group/main flex h-full min-w-0 flex-1 flex-col gap-3 lg:gap-4">
-							<header className="flex h-14 shrink-0 items-center gap-2 group-has-[[data-ss-page]]/main:hidden rounded-panel border border-line-soft bg-surface px-2 shadow-panel [view-transition-name:ss-topbar] sm:gap-3 sm:px-4">
-								<button
-									type="button"
-									onClick={() => setOpen(true)}
-									aria-label="Open navigation"
-									aria-expanded={open}
-									className="ss-motion ss-press shrink-0 rounded-lg p-2 text-fg hover:bg-surface-2 lg:hidden">
-									<Icon name="menu" size={18} />
-								</button>
-								<div className="flex min-w-0 flex-1 items-center gap-2.5">
-									{pageTitle || trail.length > 0 ? (
-										<TitleTrail
-											crumbs={trail}
-											{...(lifted > 0 ? {} : { title: pageTitle })}
-											{...(linkAs ? { linkAs } : {})}
-										/>
-									) : lifted > 0 ? null : (
-										<span className="lg:hidden">
-											<Brand {...brand} compact />
-										</span>
-									)}
-									{lifted > 0 && trail.length > 0 ? (
-										<span aria-hidden="true" className="hidden shrink-0 text-subtle sm:block">
-											<Icon name="chevronRight" size={14} />
-										</span>
-									) : null}
-									<div ref={setTitleSlot} className="flex min-w-0 shrink items-center empty:hidden" />
-									<div
-										ref={setMetaSlot}
-										className="hidden min-w-0 items-center gap-2 overflow-hidden empty:hidden md:flex"
-									/>
-									{context ? (
-										<span className="hidden min-w-0 md:flex">
-											<ContextPill>{context}</ContextPill>
-										</span>
-									) : null}
-									{topbar ? <div className="flex min-w-0 items-center gap-2">{topbar}</div> : null}
-								</div>
-								{search ? <div className="hidden min-w-0 shrink md:block md:w-64 xl:w-80">{search}</div> : null}
-								<div ref={setActionsSlot} className="flex shrink-0 items-center gap-2 empty:hidden" />
-								{actions || back || account || themeToggle ? (
-									<div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-										{back ? (
-											<a
-												href={back.href}
-												className="ss-motion inline-flex h-8 items-center gap-1 rounded-control px-2 text-label font-medium text-muted hover:bg-surface-2 hover:text-fg">
-												<Icon name="chevronLeft" size={14} />
-												<span className="sr-only sm:not-sr-only">{back.label}</span>
-											</a>
-										) : null}
-										{actions}
-										{/* the sidebar holds the account and the theme on wide screens, the header on phones */}
-										{account ? (
-											<span className="lg:hidden">
-												<AccountMenu
-													name={account.name}
-													{...(account.email ? { email: account.email } : {})}
-													items={account.items}
-													{...(account.label ? { label: account.label } : {})}
-													theme={themeToggle}
-													compact
-												/>
-											</span>
-										) : themeToggle ? (
-											<span className="lg:hidden">
-												<ThemeMenu />
-											</span>
-										) : null}
-									</div>
-								) : null}
-							</header>
-							<ScrollArea
-								ref={pane}
-								className="-mx-1 flex-1 px-1 [--ss-pane-h:calc(100dvh-6rem)] lg:[--ss-pane-h:calc(100dvh-6.5rem)] has-[[data-ss-page]]:overflow-hidden has-[[data-ss-page]]:pb-1">
-								<div className="flex w-full min-w-0 flex-col gap-6 pb-6 has-[[data-ss-page]]:h-full has-[[data-ss-page]]:gap-3 has-[[data-ss-page]]:pb-0 lg:has-[[data-ss-page]]:gap-4">
-									{banner}
-									<main
-										id={mainId}
-										tabIndex={-1}
-										className="min-w-0 space-y-6 focus:outline-none has-[[data-ss-page]]:flex has-[[data-ss-page]]:min-h-0 has-[[data-ss-page]]:flex-1 has-[[data-ss-page]]:flex-col">
-										{children}
-									</main>
-								</div>
-							</ScrollArea>
 						</div>
+					) : null}
+					<div className="group/main flex h-full min-w-0 flex-1 flex-col gap-3 lg:gap-4">
+						<header className="flex h-14 shrink-0 items-center gap-2 group-has-[[data-ss-page]]/main:hidden rounded-panel border border-line-soft bg-surface px-2 shadow-panel [view-transition-name:ss-topbar] sm:gap-3 sm:px-4">
+							<button
+								type="button"
+								onClick={() => setOpen(true)}
+								aria-label="Open navigation"
+								aria-expanded={open}
+								className="ss-motion ss-press shrink-0 rounded-lg p-2 text-fg hover:bg-surface-2 lg:hidden">
+								<Icon name="menu" size={18} />
+							</button>
+							<div className="flex min-w-0 flex-1 items-center gap-2.5">
+								{pageTitle || trail.length > 0 ? (
+									<TitleTrail crumbs={trail} title={pageTitle} {...(linkAs ? { linkAs } : {})} />
+								) : (
+									<span className="lg:hidden">
+										<Brand {...brand} compact />
+									</span>
+								)}
+								{topbar ? <div className="flex min-w-0 items-center gap-2">{topbar}</div> : null}
+							</div>
+							{search ? <div className="hidden min-w-0 shrink md:block md:w-64 xl:w-80">{search}</div> : null}
+							{actions || back || account || themeToggle ? (
+								<div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+									{back ? (
+										<a
+											href={back.href}
+											className="ss-motion inline-flex h-8 items-center gap-1 rounded-control px-2 text-label font-medium text-muted hover:bg-surface-2 hover:text-fg">
+											<Icon name="chevronLeft" size={14} />
+											<span className="sr-only sm:not-sr-only">{back.label}</span>
+										</a>
+									) : null}
+									{actions}
+									{/* the sidebar holds the account and the theme on wide screens, the header on phones */}
+									{account ? (
+										<span className="lg:hidden">
+											<AccountMenu
+												name={account.name}
+												{...(account.email ? { email: account.email } : {})}
+												items={account.items}
+												{...(account.label ? { label: account.label } : {})}
+												theme={themeToggle}
+												compact
+											/>
+										</span>
+									) : themeToggle ? (
+										<span className="lg:hidden">
+											<ThemeMenu />
+										</span>
+									) : null}
+								</div>
+							) : null}
+						</header>
+						<ScrollArea
+							ref={pane}
+							className="-mx-1 flex-1 px-1 [--ss-pane-h:calc(100dvh-6rem)] lg:[--ss-pane-h:calc(100dvh-6.5rem)] has-[[data-ss-page]]:overflow-hidden has-[[data-ss-page]]:pb-1">
+							<div className="flex w-full min-w-0 flex-col gap-6 pb-6 has-[[data-ss-page]]:h-full has-[[data-ss-page]]:gap-3 has-[[data-ss-page]]:pb-0 lg:has-[[data-ss-page]]:gap-4">
+								{banner}
+								<main
+									id={mainId}
+									tabIndex={-1}
+									className="min-w-0 space-y-6 focus:outline-none has-[[data-ss-page]]:flex has-[[data-ss-page]]:min-h-0 has-[[data-ss-page]]:flex-1 has-[[data-ss-page]]:flex-col">
+									{children}
+								</main>
+							</div>
+						</ScrollArea>
 					</div>
-				</HeaderSlotsContext.Provider>
+				</div>
 			</ShellContext.Provider>
 		</NavigationProgress>
 	);
