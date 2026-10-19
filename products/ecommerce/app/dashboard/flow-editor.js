@@ -10,7 +10,19 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, Checkbox, CheckboxGroup, EntryGroup, FieldGrid, Input, Select } from '@ss/ui';
+import {
+	Button,
+	Callout,
+	Card,
+	Checkbox,
+	CheckboxGroup,
+	EntryGroup,
+	FieldGrid,
+	Icon,
+	Input,
+	Select,
+	SettingsCardSkeleton,
+} from '@ss/ui';
 import {
 	DEFAULT_FLOW,
 	MOVE_NEEDS,
@@ -252,52 +264,91 @@ function TriggersAndStarts({ flow, onChange }) {
 
 /**
  * The order flow editor.
- * @param {{ websiteId: string, off?: boolean }} props
+ * @param {{ websiteId: string, off?: boolean, bare?: boolean }} props `bare`: the page already says the title, so the
+ *   card has none
  */
-export function OrderFlowEditor({ websiteId, off }) {
+export function OrderFlowEditor({ websiteId, off, bare = false }) {
 	const state = useList(websiteId, 'order_flow');
 	const listed = useLoad(`/v1/dashboard/websites/${websiteId}/lists/payment_methods`).answer;
 	/** @type {Methods} */
 	const methods = listed?.ok && Array.isArray(listed.data?.value) ? listed.data.value : [];
 	const [resetShown, setResetShown] = useState(false);
 	return (
-		<Card title={F.title} subtitle={off ? TEXTS.settings.off : F.help}>
-			<Loaded answer={state.answer}>
-				{(data) => {
-					/** @type {OrderFlow} */
-					const saved = data.value;
-					/** @type {OrderFlow} */
-					const flow = state.draft ?? saved;
-					/** @param {OrderFlow} next */
-					const setFlow = (next) => state.setDraft(next);
-					/** @param {number} index @param {Partial<OrderFlow['statuses'][number]>} patch */
-					const setStatus = (index, patch) => {
-						const old = flow.statuses[index]?.key ?? '';
-						const renamed = patch.key === undefined || patch.key === old ? flow : renameFlowStatus(flow, old, patch.key);
-						setFlow({
-							...renamed,
-							statuses: renamed.statuses.map((status, at) => (at === index ? { ...status, ...patch } : status)),
-						});
-					};
-					/** @param {number} index */
-					const removeStatus = (index) => {
-						const next = removeFlowStatus(flow, flow.statuses[index]?.key ?? '');
-						// a trigger or start that named it takes today's choice of the flow left
-						const fallback = readOrderFlow({ statuses: next.statuses, moves: next.moves });
-						setFlow({
-							statuses: next.statuses,
-							moves: next.moves,
-							triggers: { ...fallback.triggers, ...next.triggers },
-							starts: { ...fallback.starts, ...next.starts },
-						});
-					};
-					/** @param {OrderMove} move */
-					const setMove = (move) =>
-						setFlow({
-							...flow,
-							moves: flow.moves.map((entry) => (entry.from === move.from && entry.to === move.to ? move : entry)),
-						});
-					return (
+		<Loaded answer={state.answer} skeleton={<SettingsCardSkeleton rows={4} title={!bare} />}>
+			{(data) => {
+				/** @type {OrderFlow} */
+				const saved = data.value;
+				/** @type {OrderFlow} */
+				const flow = state.draft ?? saved;
+				/** @param {OrderFlow} next */
+				const setFlow = (next) => state.setDraft(next);
+				/** @param {number} index @param {Partial<OrderFlow['statuses'][number]>} patch */
+				const setStatus = (index, patch) => {
+					const old = flow.statuses[index]?.key ?? '';
+					const renamed = patch.key === undefined || patch.key === old ? flow : renameFlowStatus(flow, old, patch.key);
+					setFlow({
+						...renamed,
+						statuses: renamed.statuses.map((status, at) => (at === index ? { ...status, ...patch } : status)),
+					});
+				};
+				/** @param {number} index */
+				const removeStatus = (index) => {
+					const next = removeFlowStatus(flow, flow.statuses[index]?.key ?? '');
+					// a trigger or start that named it takes today's choice of the flow left
+					const fallback = readOrderFlow({ statuses: next.statuses, moves: next.moves });
+					setFlow({
+						statuses: next.statuses,
+						moves: next.moves,
+						triggers: { ...fallback.triggers, ...next.triggers },
+						starts: { ...fallback.starts, ...next.starts },
+					});
+				};
+				/** @param {OrderMove} move */
+				const setMove = (move) =>
+					setFlow({
+						...flow,
+						moves: flow.moves.map((entry) => (entry.from === move.from && entry.to === move.to ? move : entry)),
+					});
+				return (
+					<Card
+						{...(bare ? {} : { title: F.title })}
+						subtitle={off ? TEXTS.settings.off : F.help}
+						actions={
+							<div className="flex flex-wrap items-center gap-2">
+								<Button
+									size="sm"
+									variant="ghost"
+									onClick={() => {
+										setFlow(structuredClone(DEFAULT_FLOW));
+										setResetShown(true);
+									}}>
+									{F.resetFlow}
+								</Button>
+								<Button
+									size="sm"
+									disabled={flow.statuses.length >= 30}
+									onClick={() =>
+										setFlow({
+											...flow,
+											statuses: [
+												...flow.statuses,
+												{
+													key: '',
+													label: '',
+													role: /** @type {const} */ ('open'),
+													shopperLabel: '',
+													shopperText: {},
+													notify: false,
+													staffAlert: false,
+												},
+											],
+										})
+									}>
+									<Icon name="plus" size={14} />
+									{L.add}
+								</Button>
+							</div>
+						}>
 						<div className="space-y-4">
 							{flow.statuses.map((status, index) => {
 								const targets = possibleTargets(flow, status.key);
@@ -379,45 +430,13 @@ export function OrderFlowEditor({ websiteId, off }) {
 								onSave={async () => {
 									await state.save(flowToSave(flow, allowed));
 									setResetShown(false);
-								}}>
-								<Button
-									size="sm"
-									variant="secondary"
-									disabled={flow.statuses.length >= 30}
-									onClick={() =>
-										setFlow({
-											...flow,
-											statuses: [
-												...flow.statuses,
-												{
-													key: '',
-													label: '',
-													role: /** @type {const} */ ('open'),
-													shopperLabel: '',
-													shopperText: {},
-													notify: false,
-													staffAlert: false,
-												},
-											],
-										})
-									}>
-									{L.add}
-								</Button>
-								<Button
-									size="sm"
-									variant="ghost"
-									onClick={() => {
-										setFlow(structuredClone(DEFAULT_FLOW));
-										setResetShown(true);
-									}}>
-									{F.resetFlow}
-								</Button>
-							</ListActions>
+								}}
+							/>
 							<ListOutcome result={state.result} local={state.local} />
 						</div>
-					);
-				}}
-			</Loaded>
-		</Card>
+					</Card>
+				);
+			}}
+		</Loaded>
 	);
 }

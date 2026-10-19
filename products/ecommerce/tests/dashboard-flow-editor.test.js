@@ -110,4 +110,21 @@ describe('the order flow editor', () => {
 		await settle();
 		expect(saved[0].statuses[added]).toMatchObject({ key: 'on_hold', label: 'On hold', role: 'open' });
 	});
+
+	it('leaves the card title out when the page says it already, and keeps Add and Reset in the card header', async () => {
+		serve();
+		const titled = render(inDashboard(<OrderFlowEditor websiteId={WEBSITE} />));
+		await settle();
+		expect(titled.container.querySelector('h2')?.textContent).toBe('Order steps');
+		cleanup();
+		serve();
+		const bare = render(inDashboard(<OrderFlowEditor websiteId={WEBSITE} bare />));
+		await settle();
+		expect(bare.container.querySelector('h2')).toBeNull();
+		// the card header still holds the help line, Reset and Add
+		const header = bare.container.querySelector('header') ?? bare.container;
+		expect(header.textContent).toContain('The steps an order goes through');
+		expect(byText(bare.container, 'Add', 'button')).toBeTruthy();
+		expect(byText(bare.container, 'Reset to the default flow', 'button')).toBeTruthy();
+	});
 });

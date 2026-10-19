@@ -159,7 +159,7 @@ const extrasOf = (props) => {
 					id: 'order-flow',
 					label: L.orderFlow.title,
 					top: true,
-					content: <OrderFlowEditor websiteId={websiteId} off={false} />,
+					content: <OrderFlowEditor websiteId={websiteId} off={false} bare />,
 				},
 				{
 					id: 'reasons',
