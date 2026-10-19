@@ -1,8 +1,10 @@
 /**
  * S3-compatible storage of the merchant's own bucket (PLAN 0.4.3 Connections → Storage), from the website's `storage`
- * connection `{ endpoint?, region, bucket, accessKeyId, secretAccessKey, sessionToken?, forcePathStyle?, prefix? }`.
+ * connection `{ endpoint?, region, bucket, accessKeyId, secretAccessKey, sessionToken?, forcePathStyle?, prefix?, publicBaseUrl? }`.
  * Objects are namespaced `<prefix><product id>/<websiteId>/<key>` so a product reaches only its own area of the bucket.
- * Callers pass and receive **relative** keys. Browser uploads use a short presigned PUT that fixes the type and size (`@ss/net` SigV4); server-side calls go through the outbound `send`
+ * Callers pass and receive **relative** keys. A file is public only through `publicBaseUrl` (the public address of the bucket's
+ * root, such as a CDN in front of it): `publicUrl(key)` is `<publicBaseUrl>/<absolute key>`, or null when there is none.
+ * Browser uploads use a short presigned PUT that fixes the type and size (`@ss/net` SigV4); server-side calls go through the outbound `send`
  * (`@ss/net` `safeFetch` under the product's outbound policy), so a connection cannot point the product at an internal
  * address.
  * @module
@@ -22,6 +24,7 @@ import { kitError } from '../util.js';
  * @property {string} [endpoint] e.g. `https://<account>.r2.cloudflarestorage.com`; default AWS S3 for `region`
  * @property {boolean} [forcePathStyle] default true with a custom endpoint, false for AWS
  * @property {string} [prefix] merchant-chosen key prefix
+ * @property {string} [publicBaseUrl] public https address of the bucket's root (a CDN or the provider's public bucket address)
  */
 
 /** A media type without parameters spanning lines (`type/subtype[; params]`). */
@@ -58,6 +61,12 @@ const checkDescriptor = (descriptor, policy) => {
 		const checked = checkUrl(String(descriptor.endpoint), policy);
 		if (!checked.ok) throw kitError('connection_invalid', `storage endpoint refused (${checked.reason})`);
 	}
+	if (descriptor.publicBaseUrl !== undefined) {
+		const text = String(descriptor.publicBaseUrl);
+		const checked = checkUrl(text, policy);
+		if (!checked.ok || !text.startsWith('https://') || /[?#]/.test(text))
+			throw kitError('connection_invalid', 'storage publicBaseUrl must be a public https address without a ? or a #');
+	}
 	return /** @type {StorageDescriptor} */ (/** @type {unknown} */ (descriptor));
 };
 
@@ -90,6 +99,8 @@ export const createS3Storage = ({ descriptor, websiteId, slug, send, now, policy
 		if (checkKey(key).startsWith(base)) throw kitError('invalid_key', 'pass the relative object key, not the full key');
 		return `${base}${key}`;
 	};
+	/** The public address of the bucket's root without a trailing slash, or null when files are not public. */
+	const publicBase = d.publicBaseUrl ? d.publicBaseUrl.replace(/\/+$/, '') : null;
 	/** @param {string} key relative key */
 	const urlFor = (key) => objectUrl(store, fullKey(key));
 
@@ -121,6 +132,14 @@ export const createS3Storage = ({ descriptor, websiteId, slug, send, now, policy
 		kind: 'storage',
 		provider: 's3',
 		bucket: d.bucket,
+		/**
+		 * The public address of a file: `<publicBaseUrl>/<absolute key>` with each path part URL-encoded, or null when the
+		 * connection has no public address (the product then serves the file itself).
+		 * @param {string} key relative key
+		 * @returns {string | null}
+		 */
+		publicUrl: (key) =>
+			publicBase === null ? null : `${publicBase}/${fullKey(key).split('/').map(encodeURIComponent).join('/')}`,
 		/**
 		 * Presigned PUT for a direct browser upload. `content-type` and `content-length` (when given) are signed headers:
 		 * the client must send exactly the returned `headers`, so the bucket refuses another type or size.

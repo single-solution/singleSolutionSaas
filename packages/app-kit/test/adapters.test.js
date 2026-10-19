@@ -45,6 +45,28 @@ describe('S3 storage adapter', () => {
 		expect(() => storage.presignGet({ key: 'a', expiresIn: 10 ** 7 })).toThrow();
 	});
 
+	it('gives a file its public address from publicBaseUrl and the absolute key, or null without one', () => {
+		const make = (/** @type {Record<string, unknown>} */ extra, slug = 'shop') =>
+			createS3Storage({ descriptor: { ...descriptor, ...extra }, websiteId: WEBSITE, slug, send: noSend, now: () => AWS_NOW });
+		// no public address: the product serves the file itself
+		expect(make({}).publicUrl('img/a.png')).toBeNull();
+		const cdn = make({ publicBaseUrl: 'https://cdn.example.com' });
+		expect(cdn.publicUrl('img/a.png')).toBe(`https://cdn.example.com/site/shop/${WEBSITE}/img/a.png`);
+		// a trailing slash and a path in the address are kept sensibly; every path part is URL-encoded
+		const deep = make({ publicBaseUrl: 'https://files.example.com/public//', prefix: 'my shop/' });
+		expect(deep.publicUrl('img/a b#1.png')).toBe(
+			`https://files.example.com/public/my%20shop/shop/${WEBSITE}/img/a%20b%231.png`,
+		);
+		expect(make({ publicBaseUrl: 'https://cdn.example.com', prefix: undefined }).publicUrl('x.png')).toBe(
+			`https://cdn.example.com/shop/${WEBSITE}/x.png`,
+		);
+		// the same key rules as everywhere: relative, no dot segments, not handed back absolute
+		for (const key of ['', '/abs', 'a/../b', `site/shop/${WEBSITE}/img/a.png`]) expect(() => cdn.publicUrl(key)).toThrow();
+		// a public address that is not a public https address refuses the connection
+		for (const publicBaseUrl of ['http://cdn.example.com', 'https://127.0.0.1', 'https://cdn.example.com/?x=1', 'nope'])
+			expect(() => make({ publicBaseUrl }), publicBaseUrl).toThrow(/publicBaseUrl/);
+	});
+
 	it('signs content-length (and content-type) into presigned PUTs', () => {
 		const storage = createS3Storage({ descriptor, websiteId: WEBSITE, slug: 'reviews', send: noSend, now: () => AWS_NOW });
 		const put = storage.presignPut({ key: 'photos/p1', contentType: 'image/jpeg', contentLength: 48_211 });
