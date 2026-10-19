@@ -118,7 +118,10 @@ describe("Accounts's dashboard Overview", () => {
 		const tab = props();
 		const { container } = render(overviewOf(tab));
 		await settle();
-		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Merchant');
+		// the page is titled by its section; the greeting is the (i)'s text
+		expect(container.querySelector('h1')?.textContent).toBe('Overview');
+		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="About this page"]')));
+		expect(container.textContent).toContain('Welcome back, Merchant');
 		expect(needs(container)).toContain('Custom fields is on, but no field is set up yet');
 		click(byText(container, 'Add a field', 'button'));
 		// the setup step says why and has its own button to the same section

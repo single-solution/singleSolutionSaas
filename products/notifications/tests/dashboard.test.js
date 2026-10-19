@@ -293,7 +293,10 @@ describe('Overview (PLAN 0.6 "Overviews talk")', () => {
 		const tab = props();
 		const { container } = render(overviewOf(tab));
 		await settle();
-		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Merchant');
+		// the page is titled by its section; the greeting is the (i)'s text
+		expect(container.querySelector('h1')?.textContent).toBe('Overview');
+		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="About this page"]')));
+		expect(container.textContent).toContain('Welcome back, Merchant');
 		expect(needs(container)).toContain('Outgoing webhooks is on, but no address is added yet');
 		click(byText(container, 'Add an address', 'button'));
 		expect(container.textContent).toContain(

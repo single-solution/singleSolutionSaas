@@ -8,7 +8,7 @@
  */
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render } from '@ss/ui/testing';
+import { cleanup, click, render } from '@ss/ui/testing';
 import { TABS } from '../app/dashboard/tabs.js';
 import { defaultPaymentMethods, newAccount } from '../core/payment-methods.js';
 import { inDashboard } from './dashboard-provider.js';
@@ -108,6 +108,8 @@ describe('Ecommerce’s Overview', () => {
 		const Overview = TABS.overview;
 		const { container } = render(inDashboard(<Overview {...props} />));
 		await settle();
+		// the greeting is the text behind the page's (i)
+		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="About this page"]')));
 		const text = container.textContent ?? '';
 		expect(text).toContain('Welcome back, Sam');
 		expect(text).toContain('Needs setup: set currency, country in the Portal');

@@ -115,7 +115,10 @@ describe("Chat's dashboard Overview", () => {
 		const tab = props();
 		const { container } = render(inDashboard(<Overview {...tab} />));
 		await settle();
-		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Merchant');
+		// the page is titled by its section; the greeting is the (i)'s text
+		expect(container.querySelector('h1')?.textContent).toBe('Overview');
+		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="About this page"]')));
+		expect(container.textContent).toContain('Welcome back, Merchant');
 		expect(needs(container)).toContain('The Book-a-slot tool is on, but no booking address is set');
 		click(byText(container, 'Set the address', 'button'));
 		// the setup step says why and has its own button
