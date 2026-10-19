@@ -25,7 +25,7 @@ import {
 	SignInView,
 } from '../../src/console/views/sign-in.js';
 import { ConsoleShell } from '../../src/console/views/shell.js';
-import { OverviewView, WebsitesView } from '../../src/console/views/websites.js';
+import { OverviewView, WebsiteView, WebsitesView } from '../../src/console/views/websites.js';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { startMongo } from '../helpers.js';
 import {
@@ -350,13 +350,13 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		expect(shows('beta.example.com')).toBe(true);
 		expect(document.querySelector(`a[href="/websites/${site.websiteId}"]`)).not.toBeNull();
 		cleanup();
-		render(
-			<WebsitesView {...await loaders.loadWebsites(e.api, beta.merchantId, String(site.websiteId))} branding={BRANDING} />,
-		);
+		render(<WebsiteView {...await loaders.loadWebsitePage(e.api, beta.merchantId, String(site.websiteId), '')} />);
 		expect(document.querySelector('h1')?.textContent).toBe('beta.example.com');
-		// Setup, Install and tokens and Usage are in the card's More menu
-		await press('Actions for beta.example.com');
-		expect(menuItems()).toEqual(['Website settings', 'Setup', 'Install and tokens', 'Usage', 'Visit website', 'Copy domain']);
+		// the parts are the inner navigation (each its own address); the More menu has only Visit and Copy for a merchant
+		for (const part of ['', 'products/notes', 'settings/business', 'install', 'setup', 'usage', 'changes'])
+			expect(document.querySelector(`a[href="/websites/${site.websiteId}${part ? `/${part}` : ''}"]`)).not.toBeNull();
+		await press('More actions');
+		expect(menuItems()).toEqual(['Visit website', 'Copy domain']);
 		cleanup();
 		const open = vi.fn();
 		vi.stubGlobal('open', open);

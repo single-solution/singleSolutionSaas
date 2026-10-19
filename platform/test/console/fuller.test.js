@@ -25,7 +25,7 @@ import { OverviewView } from '../../src/console/admin/views/overview.js';
 import { ProductsView } from '../../src/console/admin/views/products.js';
 import { CreditsView } from '../../src/console/views/credits.js';
 import { presetOf, rangePresets } from '../../src/console/views/range.js';
-import { OverviewView as MerchantOverview, WebsitesView } from '../../src/console/views/websites.js';
+import { OverviewView as MerchantOverview, WebsiteView } from '../../src/console/views/websites.js';
 import { PORTAL_URL, startMongo } from '../helpers.js';
 import { buttons, clickEl, createWorld, dialog, press, pressDialog, pressMenu, quiet, shows, until } from './merchant-harness.js';
 import { testRouter } from './router.js';
@@ -306,7 +306,7 @@ describe('fuller Portal screens (jsdom)', () => {
 			withToasts(<MerchantOverview {...await loaders.loadOverview(shop.b.api, merchantId)} />);
 			for (const text of ['Recent activity', 'Latest credits added', 'seed-1']) expect(shows(text)).toBe(true);
 			cleanup();
-			withToasts(<WebsitesView {...await loaders.loadWebsites(shop.b.api, merchantId, websiteId)} />);
+			withToasts(<WebsiteView {...await loaders.loadWebsitePage(shop.b.api, merchantId, websiteId, '')} />);
 			await until(() =>
 				shop.b.calls.some((c) => c.path.startsWith(`/v1/merchants/${merchantId}/usage?websiteId=`) && c.status === 200),
 			);

@@ -15,7 +15,7 @@ import { BillingBanner, DaysLeft, ProductStatusBadge, productStatusLabel, produc
 import { LocalTime } from '@ss/ui';
 import { ConsoleShell, merchantSections } from '../../src/console/views/shell.js';
 import { contactLine, homeOf } from '../../src/console/views/sign-in.js';
-import { OverviewView, WebsitesView } from '../../src/console/views/websites.js';
+import { OverviewView, WebsiteView, WebsitesView } from '../../src/console/views/websites.js';
 import { dailyCostOf, websiteDot } from '../../src/console/views/website.js';
 import { startMongo } from '../helpers.js';
 import { createWorld } from './merchant-harness.js';
@@ -117,23 +117,34 @@ describe('merchant console smoke', () => {
 			expect(websitesRaw).not.toContain('role="tab"');
 			expect(websitesText).not.toContain('Install and tokens'); // the card is on the website's page
 
-			// a website selected: its page, Websites › domain around the card (products with Open; tokens and usage as
-			// dialogs; no admin actions)
-			const selected = await loaders.loadWebsites(merchant.api, merchantId, String(site.websiteId));
-			const selectedRaw = ssr(<WebsitesView {...selected} branding={BRANDING} />);
+			// a website: its own page, Websites › domain, the products as a table, the parts as inner navigation, no admin
+			// actions
+			const selected = await loaders.loadWebsitePage(merchant.api, merchantId, String(site.websiteId), '');
+			const selectedRaw = ssr(<WebsiteView {...selected} />);
 			const selectedText = text(selectedRaw);
 			expect(selectedRaw).toContain('aria-label="Breadcrumb"');
 			expect(selectedRaw).toContain('href="/websites"');
 			expect(selectedText).toContain('Notes');
 			expect(selectedText).toContain('Chatty');
 			expect(selectedText).toContain('No features on');
+			for (const word of ['Overview', 'Website settings', 'Install and tokens', 'Setup sheet', 'Usage', 'Recent changes'])
+				expect(selectedText).toContain(word);
+			expect(selectedRaw).toContain(`href="/websites/${site.websiteId}/products/notes"`);
+			expect(selectedRaw).toContain(`href="/websites/${site.websiteId}/settings/brand"`);
+			expect(selectedRaw).toContain(`href="/websites/${site.websiteId}/install"`);
+			expect(selectedRaw).not.toContain('role="tab"');
 			expect(selectedText).not.toContain('Add product');
 			expect(selectedText).not.toContain('Remove website');
+			// a part is its own address; one that does not exist says so
+			const brand = await loaders.loadWebsitePage(merchant.api, merchantId, String(site.websiteId), 'settings/brand');
+			expect(text(ssr(<WebsiteView {...brand} />))).toContain('Brand and look');
+			const nonsense = await loaders.loadWebsitePage(merchant.api, merchantId, String(site.websiteId), 'nonsense/deeper');
+			expect(text(ssr(<WebsiteView {...nonsense} />))).toContain('This page does not exist.');
 
 			// another merchant's website is not found
 			const other = await world.signup('else@else.test', 'Else Ltd');
-			const foreign = await loaders.loadWebsites(other.b.api, other.merchantId, String(site.websiteId));
-			expect(text(ssr(<WebsitesView {...foreign} branding={BRANDING} />))).toContain(
+			const foreign = await loaders.loadWebsitePage(other.b.api, other.merchantId, String(site.websiteId), '');
+			expect(text(ssr(<WebsiteView {...foreign} />))).toContain(
 				'This website does not exist or was removed.',
 			);
 
