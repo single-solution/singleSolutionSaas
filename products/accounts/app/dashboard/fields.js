@@ -7,24 +7,21 @@
  * connected, and merchants edit them only while the Custom fields feature is on.
  * @module
  */
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import {
-	Badge,
 	Button,
 	Callout,
-	Card,
 	Checkbox,
-	Dialog,
-	EmptyState,
+	DataTable,
+	DataTableSkeleton,
+	Drawer,
 	Form,
 	Input,
 	Section,
 	Select,
-	Skeleton,
+	StatusPill,
 	TextArea,
 	describeProblem,
-	ListRow,
-	RowList,
 } from '@ss/ui';
 import { Outcome, SaveOutcome, call, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
@@ -52,11 +49,36 @@ const splitOptions = (text) =>
 		.map((option) => option.trim())
 		.filter((option) => option !== '');
 
+/**
+ * The columns of the fields table: label, key, type, who sees it, and a pill for a required field.
+ * @type {Array<{ key: string, header: string, low?: boolean, render: (item: CustomField) => import('react').ReactNode }>}
+ */
+const COLUMNS = [
+	{ key: 'label', header: T.columns.label, render: (item) => item.label },
+	{ key: 'key', header: T.columns.key, low: true, render: (item) => <code className="break-all">{item.key}</code> },
+	{ key: 'type', header: T.columns.type, render: (item) => TEXTS.settings.fieldTypes[item.type] },
+	{
+		key: 'visibility',
+		header: T.columns.visibility,
+		low: true,
+		render: (item) => TEXTS.settings.fieldVisibility[item.visibility],
+	},
+	{
+		key: 'required',
+		header: T.columns.required,
+		render: (item) => (item.required ? <StatusPill status="info">{T.required_badge}</StatusPill> : null),
+	},
+];
+
 /** @param {{ websiteId: string }} props */
 export function FieldsSection({ websiteId }) {
 	const base = `/v1/dashboard/websites/${websiteId}/fields`;
 	const { answer, reload } = useLoad(base);
+	const formId = useId();
+	// the field in the drawer stays while the drawer closes; `shown` says whether the drawer is open
 	const [draft, setDraft] = useState(/** @type {Draft | null} */ (null));
+	const [shown, setShown] = useState(false);
+	const [saving, setSaving] = useState(false);
 	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
 	const [problem, setProblem] = useState(/** @type {any} */ (null));
 	/** @param {Partial<Draft>} patch */
@@ -65,9 +87,12 @@ export function FieldsSection({ websiteId }) {
 	const open = (next) => {
 		setProblem(null);
 		setDraft(next);
+		setShown(true);
 	};
+	const close = () => setShown(false);
 	const save = async () => {
 		if (!draft) return;
+		setSaving(true);
 		const next = await call('PUT', `${base}/${encodeURIComponent(draft.key)}`, {
 			label: draft.label.trim(),
 			type: draft.type,
@@ -76,9 +101,10 @@ export function FieldsSection({ websiteId }) {
 			visibility: draft.visibility,
 			help: draft.help.trim(),
 		});
+		setSaving(false);
 		if (!next.ok) return setProblem(next);
 		setResult(next);
-		setDraft(null);
+		close();
 		reload();
 	};
 	/**
@@ -102,61 +128,61 @@ export function FieldsSection({ websiteId }) {
 				</Button>
 			}>
 			{!answer ? (
-				<Skeleton lines={2} label={TEXTS.loading} />
+				<DataTableSkeleton columns={COLUMNS.length} rows={3} menu label={TEXTS.loading} />
 			) : !answer.ok ? (
 				<Callout tone="info">
 					{answer.problem?.type?.endsWith('database_not_connected') ? T.needsDatabase : describeProblem(answer.problem)}
 				</Callout>
-			) : answer.data.items.length === 0 ? (
-				<EmptyState compact icon="user" kind="settings" title={T.none} />
 			) : (
-				<Card>
-					<RowList>
-						{answer.data.items.map(
-							(/** @type {CustomField} */ item, /** @type {number} */ index, /** @type {CustomField[]} */ items) => (
-								<ListRow
-									key={item.key}
-									wrap
-									title={item.label}
-									status={
-										<>
-											<Badge kind="settings">{TEXTS.settings.fieldTypes[item.type]}</Badge>
-											<Badge>{TEXTS.settings.fieldVisibility[item.visibility]}</Badge>
-											{item.required ? <Badge>{T.required_badge}</Badge> : null}
-										</>
-									}
-									meta={<code className="break-all">{item.key}</code>}
-									action={
-										<Button
-											size="sm"
-											variant="secondary"
-											onClick={() => open({ ...item, options: item.options.join('\n'), isNew: false })}>
-											{T.edit}
-										</Button>
-									}
-									moreLabel={`${T.more}: ${item.label}`}
-									more={[
-										{ label: T.up, disabled: index === 0, onSelect: () => move(items, index, -1) },
-										{ label: T.down, disabled: index === items.length - 1, onSelect: () => move(items, index, 1) },
-										{
-											label: T.delete,
-											danger: true,
-											onSelect: async () => {
-												setResult(await call('DELETE', `${base}/${encodeURIComponent(item.key)}`));
-												reload();
-											},
-										},
-									]}
-								/>
-							),
-						)}
-					</RowList>
-				</Card>
+				<DataTable
+					caption={TEXTS.settings.fieldsTitle}
+					columns={COLUMNS}
+					rows={/** @type {CustomField[]} */ (answer.data.items)}
+					rowKey={(item) => item.key}
+					rowLabel={(item) => item.label}
+					onRowClick={(item) => open({ ...item, options: item.options.join('\n'), isNew: false })}
+					rowMenu={(item) => {
+						/** @type {CustomField[]} */
+						const items = answer.data.items;
+						const index = items.indexOf(item);
+						return [
+							{ label: T.up, disabled: index === 0, onSelect: () => move(items, index, -1) },
+							{ label: T.down, disabled: index === items.length - 1, onSelect: () => move(items, index, 1) },
+							{
+								label: T.delete,
+								danger: true,
+								onSelect: async () => {
+									setResult(await call('DELETE', `${base}/${encodeURIComponent(item.key)}`));
+									reload();
+								},
+							},
+						];
+					}}
+					empty={T.none}
+				/>
 			)}
 			<Outcome result={result} />
-			<Dialog open={draft !== null} onClose={() => setDraft(null)} title={draft?.isNew === false ? T.editTitle : T.add}>
+			<Drawer
+				open={shown}
+				onClose={close}
+				title={draft?.isNew === false ? T.editTitle : T.add}
+				closeLabel={TEXTS.cancel}
+				footer={
+					<>
+						<Button variant="secondary" onClick={close}>
+							{TEXTS.cancel}
+						</Button>
+						<Button
+							type="submit"
+							form={formId}
+							loading={saving}
+							disabled={!draft || draft.key === '' || draft.label.trim() === ''}>
+							{TEXTS.save}
+						</Button>
+					</>
+				}>
 				{draft ? (
-					<Form onSubmit={save} aria-label={draft.isNew ? T.add : T.editTitle}>
+					<Form id={formId} onSubmit={save} aria-label={draft.isNew ? T.add : T.editTitle}>
 						<Input
 							label={T.key}
 							value={draft.key}
@@ -203,17 +229,9 @@ export function FieldsSection({ websiteId }) {
 							/>
 						) : null}
 						<SaveOutcome result={problem} />
-						<div className="flex flex-wrap gap-2">
-							<Button type="submit" disabled={draft.key === '' || draft.label.trim() === ''}>
-								{TEXTS.save}
-							</Button>
-							<Button variant="ghost" onClick={() => setDraft(null)}>
-								{TEXTS.cancel}
-							</Button>
-						</div>
 					</Form>
 				) : null}
-			</Dialog>
+			</Drawer>
 		</Section>
 	);
 }

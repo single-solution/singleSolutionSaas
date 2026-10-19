@@ -7,7 +7,7 @@
  * verification, widget and ticket snippets, social sign-in return addresses and the message templates).
  * @module
  */
-import { Badge, Button, Card, CodeBlock, Section, Stat, ListRow, RowList } from '@ss/ui';
+import { Badge, Button, CodeBlock, DataTable, Section, Stat } from '@ss/ui';
 import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import messages from '../../schemas/messages.json' with { type: 'json' };
@@ -179,20 +179,27 @@ function AccountsDevelopers(props) {
 					icon: 'mail',
 					content: (
 						<Section title={D.templates} description={D.templatesHelp}>
-							<Card>
-								<RowList>
-									{messages.messages.map((message) => (
-										<ListRow
-											key={message.key}
-											wrap
-											title={<code>{message.key}</code>}
-											status={message.values.map((name) => (
-												<Badge key={name} tone="info">{`{${name}}`}</Badge>
-											))}
-										/>
-									))}
-								</RowList>
-							</Card>
+							<DataTable
+								caption={D.templates}
+								columns={[
+									{ key: 'key', header: D.templateColumns.key, render: (message) => <code>{message.key}</code> },
+									{
+										key: 'values',
+										header: D.templateColumns.values,
+										wrap: true,
+										render: (message) => (
+											<span className="flex flex-wrap gap-1">
+												{message.values.map((name) => (
+													<Badge key={name} tone="info">{`{${name}}`}</Badge>
+												))}
+											</span>
+										),
+									},
+								]}
+								rows={messages.messages}
+								rowKey={(message) => message.key}
+								rowLabel={(message) => message.key}
+							/>
 						</Section>
 					),
 				},

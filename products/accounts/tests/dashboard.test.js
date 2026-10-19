@@ -9,10 +9,11 @@ import { act } from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DashboardProvider } from '@ss/ui/dashboard';
-import { byText, cleanup, click, render } from '@ss/ui/testing';
+import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import manifest from '../manifest.json' with { type: 'json' };
 import { TABS } from '../app/dashboard/tabs.js';
 import { TEXTS } from '../app/dashboard/texts.js';
+import { drawerButton, drawerOf, openRow, openRowMenu, rowMenu, rowNames, rowOf } from './dashboard-table.js';
 
 /** The dashboard keeps each answer it loaded for the page: each test opens its own website. */
 let website = 0;
@@ -197,82 +198,271 @@ describe("Accounts's dashboard Overview", () => {
 	});
 });
 
-/** An item of the open More menu. @param {string} label */
-const menuItem = (label) =>
-	/** @type {HTMLButtonElement} */ (
-		[...document.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent === label)
+/** @param {HTMLElement} row the texts of a table row's cells */
+const cellsOf = (row) => [...row.querySelectorAll('th, td')].slice(0, -1).map((cell) => cell.textContent);
+
+/**
+ * The record lists of Settings: a faked list that answers every write with an empty list.
+ * @param {string} name `fields` or `consents`
+ * @param {unknown[]} items
+ */
+const serveList = (name, items) =>
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async (/** @type {string} */ path, /** @type {RequestInit | undefined} */ init) =>
+			path.endsWith(`/${name}`) && init?.method !== 'PUT'
+				? new Response(JSON.stringify({ items }), { status: 200 })
+				: new Response(JSON.stringify({ items: [] }), { status: 200 }),
+		),
 	);
 
+/** @returns {Array<[string, RequestInit | undefined]>} the writes the page sent */
+const writes = () =>
+	vi
+		.mocked(fetch)
+		.mock.calls.filter(([, init]) => init?.method === 'PUT' || init?.method === 'DELETE')
+		.map(([path, init]) => [String(path), init]);
+
 describe('Settings → Custom fields (A6)', () => {
-	it('lists the fields with their type and who sees them, and saves a new order', async () => {
+	const F = TEXTS.settings.field;
+	const field = (/** @type {string} */ key, /** @type {string} */ visibility, extra = {}) => ({
+		key,
+		label: key.toUpperCase(),
+		type: 'boolean',
+		options: [],
+		required: false,
+		visibility,
+		help: '',
+		...extra,
+	});
+	/** The section on a faked list of fields. @param {unknown[]} items */
+	const open = async (items) => {
 		const { FieldsSection } = await import('../app/dashboard/fields.js');
-		const field = (/** @type {string} */ key, /** @type {string} */ visibility) => ({
-			key,
-			label: key.toUpperCase(),
-			type: 'boolean',
-			options: [],
-			required: false,
-			visibility,
-			help: '',
-		});
-		serve({ featuresOn: ['custom_fields'], fields: [field('first', 'edit'), field('second', 'staff')] });
-		const { container } = render(
+		serveList('fields', items);
+		const view = render(
+			<DashboardProvider manifest={manifest} texts={TEXTS}>
+				<FieldsSection websiteId={`web_${(website += 1)}`} />
+			</DashboardProvider>,
+		);
+		return view;
+	};
+
+	it('shows a table skeleton while the fields load', async () => {
+		const view = await open([]);
+		expect(view.container.querySelector('[role="status"] table')).not.toBeNull();
+		await settle();
+		expect(view.container.querySelector('[role="status"] table')).toBeNull();
+		expect(view.container.textContent).toContain(TEXTS.settings.field.none);
+	});
+
+	it('lists the fields as a table with their type, who sees them and a Required pill', async () => {
+		const { container } = await open([field('first', 'edit', { required: true }), field('second', 'staff')]);
+		await settle();
+		expect(rowNames(container)).toEqual(['FIRST', 'SECOND']);
+		expect(cellsOf(rowOf(container, 'FIRST'))).toEqual([
+			'FIRST',
+			'first',
+			TEXTS.settings.fieldTypes.boolean,
+			TEXTS.settings.fieldVisibility.edit,
+			F.required_badge,
+		]);
+		expect(cellsOf(rowOf(container, 'SECOND'))[3]).toBe(TEXTS.settings.fieldVisibility.staff);
+		expect(cellsOf(rowOf(container, 'SECOND'))[4]).toBe('');
+	});
+
+	it("says there are no fields yet, and an unconnected database's way out", async () => {
+		const { container } = await open([]);
+		await settle();
+		expect(container.textContent).toContain(F.none);
+		cleanup();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () =>
+					new Response(JSON.stringify({ status: 409, type: 'urn:problem:database_not_connected' }), { status: 409 }),
+			),
+		);
+		const { FieldsSection } = await import('../app/dashboard/fields.js');
+		const closed = render(
 			<DashboardProvider manifest={manifest} texts={TEXTS}>
 				<FieldsSection websiteId={`web_${(website += 1)}`} />
 			</DashboardProvider>,
 		);
 		await settle();
-		expect(container.textContent).toContain(TEXTS.settings.fieldTypes.boolean);
-		expect(container.textContent).toContain(TEXTS.settings.fieldVisibility.staff);
-		// the row's own actions are in its More menu: the first field cannot go up
-		click(
-			/** @type {HTMLButtonElement} */ (container.querySelector(`button[aria-label="${TEXTS.settings.field.more}: FIRST"]`)),
-		);
-		expect(menuItem(TEXTS.settings.field.up).disabled).toBe(true);
-		click(menuItem(TEXTS.settings.field.down));
+		expect(closed.container.textContent).toContain(F.needsDatabase);
+	});
+
+	it("moves a field in the row's menu: the first cannot go up, and the new order is saved", async () => {
+		const { container } = await open([field('first', 'edit'), field('second', 'staff')]);
 		await settle();
-		const put = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === 'PUT');
-		expect(String(put?.[0])).toMatch(/\/fields$/);
+		const items = await openRowMenu(container, 'FIRST');
+		expect(items.map((item) => item.textContent)).toEqual([F.up, F.down, F.delete]);
+		expect(items[0]?.disabled).toBe(true);
+		await act(async () => click(/** @type {HTMLElement} */ (items[1])));
+		await settle();
+		const [put] = writes();
+		expect(put?.[0]).toMatch(/\/fields$/);
+		expect(put?.[1]?.method).toBe('PUT');
 		expect(JSON.parse(String(put?.[1]?.body))).toEqual({ order: ['second', 'first'] });
+	});
+
+	it("deletes a field with the row's menu", async () => {
+		const { container } = await open([field('first', 'edit'), field('second', 'staff')]);
+		await settle();
+		await rowMenu(container, 'SECOND', F.delete);
+		await settle();
+		expect(writes().map(([path, init]) => [init?.method, path.replace(/^.*\/fields/, '/fields')])).toEqual([
+			['DELETE', '/fields/second'],
+		]);
+	});
+
+	it('opens a field in a drawer on a click on its row, saves it by itself and closes', async () => {
+		const { container } = await open([field('first', 'edit', { help: 'Old help' })]);
+		await settle();
+		const drawer = await openRow(container, 'FIRST');
+		expect(drawer.textContent).toContain(F.editTitle);
+		// the key of a saved field cannot change
+		expect(byLabel(drawer, F.key).disabled).toBe(true);
+		expect(byLabel(drawer, F.key).value).toBe('first');
+		await type(byLabel(drawer, F.label), '  Company  ');
+		await type(byLabel(drawer, F.help), 'New help');
+		await click(drawerButton(TEXTS.save));
+		await settle();
+		const [put] = writes();
+		expect(put?.[0]).toMatch(/\/fields\/first$/);
+		expect(JSON.parse(String(put?.[1]?.body))).toEqual({
+			label: 'Company',
+			type: 'boolean',
+			options: [],
+			required: false,
+			visibility: 'edit',
+			help: 'New help',
+		});
+		expect(drawerOf()).toBeNull();
+	});
+
+	it('Cancel closes the drawer and nothing is sent', async () => {
+		const { container } = await open([field('first', 'edit')]);
+		await settle();
+		await openRow(container, 'FIRST');
+		await click(drawerButton(TEXTS.cancel));
+		await settle();
+		expect(drawerOf()).toBeNull();
+		expect(writes()).toEqual([]);
+	});
+
+	it('adds a new field in the drawer: Save waits for a key and a label, and choices take their options', async () => {
+		const { container } = await open([]);
+		await settle();
+		await click(byText(container, F.add, 'button'));
+		const drawer = drawerOf();
+		expect(drawerButton(TEXTS.save).disabled).toBe(true);
+		await type(byLabel(drawer, F.key), 'size');
+		await type(byLabel(drawer, F.label), 'Size');
+		expect(drawerButton(TEXTS.save).disabled).toBe(false);
+		await type(byLabel(drawer, F.type), 'choice');
+		await type(byLabel(drawer, F.options), 'S, M\nL');
+		await click(drawerButton(TEXTS.save));
+		await settle();
+		const [put] = writes();
+		expect(put?.[0]).toMatch(/\/fields\/size$/);
+		expect(JSON.parse(String(put?.[1]?.body))).toMatchObject({ label: 'Size', type: 'choice', options: ['S', 'M', 'L'] });
 	});
 });
 
 describe('Settings → Consents (A2)', () => {
-	it('lists the consents with their purpose, and saves a new order', async () => {
+	const C = TEXTS.settings.consent;
+	const consent = (/** @type {string} */ key, /** @type {'agreement' | 'marketing'} */ purpose) => ({
+		key,
+		label: key.toUpperCase(),
+		url: '',
+		version: '1',
+		required: purpose === 'agreement',
+		purpose,
+	});
+	/** The section on a faked list of consents. @param {unknown[]} items */
+	const open = async (items) => {
 		const { ConsentsSection } = await import('../app/dashboard/consents.js');
-		const consent = (/** @type {string} */ key, /** @type {'agreement' | 'marketing'} */ purpose) => ({
-			key,
-			label: key.toUpperCase(),
-			url: '',
-			version: '1',
-			required: purpose === 'agreement',
-			purpose,
-		});
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async (/** @type {string} */ path, /** @type {RequestInit | undefined} */ init) =>
-				path.endsWith('/consents') && init?.method !== 'PUT'
-					? new Response(JSON.stringify({ items: [consent('terms', 'agreement'), consent('news', 'marketing')] }), {
-							status: 200,
-						})
-					: new Response(JSON.stringify({ items: [] }), { status: 200 }),
-			),
-		);
-		const { container } = render(
+		serveList('consents', items);
+		return render(
 			<DashboardProvider manifest={manifest} texts={TEXTS}>
 				<ConsentsSection websiteId={`web_${(website += 1)}`} />
 			</DashboardProvider>,
 		);
+	};
+
+	it('lists the consents as a table with their purpose and a Required pill', async () => {
+		const { container } = await open([consent('terms', 'agreement'), consent('news', 'marketing')]);
+		expect(container.querySelector('[role="status"] table')).not.toBeNull();
 		await settle();
-		expect(container.textContent).toContain(TEXTS.settings.consentPurposes.marketing);
-		expect(container.textContent).toContain(TEXTS.settings.consent.required_badge);
-		click(
-			/** @type {HTMLButtonElement} */ (container.querySelector(`button[aria-label="${TEXTS.settings.consent.more}: TERMS"]`)),
-		);
-		click(menuItem(TEXTS.settings.consent.down));
+		expect(rowNames(container)).toEqual(['TERMS', 'NEWS']);
+		expect(cellsOf(rowOf(container, 'TERMS'))).toEqual([
+			'TERMS',
+			'terms',
+			'1',
+			TEXTS.settings.consentPurposes.agreement,
+			C.required_badge,
+		]);
+		expect(cellsOf(rowOf(container, 'NEWS'))).toEqual(['NEWS', 'news', '1', TEXTS.settings.consentPurposes.marketing, '']);
+	});
+
+	it("moves a consent in the row's menu and saves the new order", async () => {
+		const { container } = await open([consent('terms', 'agreement'), consent('news', 'marketing')]);
 		await settle();
-		const put = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === 'PUT');
-		expect(String(put?.[0])).toMatch(/\/consents$/);
+		await rowMenu(container, 'TERMS', C.down);
+		await settle();
+		const [put] = writes();
+		expect(put?.[0]).toMatch(/\/consents$/);
 		expect(JSON.parse(String(put?.[1]?.body))).toEqual({ order: ['news', 'terms'] });
+	});
+
+	it("deletes a consent with the row's menu", async () => {
+		const { container } = await open([consent('terms', 'agreement')]);
+		await settle();
+		await rowMenu(container, 'TERMS', C.delete);
+		await settle();
+		const [call] = writes();
+		expect(call?.[1]?.method).toBe('DELETE');
+		expect(call?.[0]).toMatch(/\/consents\/terms$/);
+	});
+
+	it('opens a consent in a drawer, and a marketing one is never required', async () => {
+		const { container } = await open([consent('terms', 'agreement')]);
+		await settle();
+		const drawer = await openRow(container, 'TERMS');
+		expect(drawer.textContent).toContain(C.editTitle);
+		expect(byLabel(drawer, C.key).disabled).toBe(true);
+		expect(byLabel(drawer, C.required).checked).toBe(true);
+		await type(byLabel(drawer, C.url), 'https://shop.example.com/terms');
+		await type(byLabel(drawer, C.purpose), 'marketing');
+		// a marketing consent has no Required box, and is saved as not required
+		expect(() => byLabel(drawer, C.required)).toThrow();
+		await click(drawerButton(TEXTS.save));
+		await settle();
+		const [put] = writes();
+		expect(put?.[0]).toMatch(/\/consents\/terms$/);
+		expect(JSON.parse(String(put?.[1]?.body))).toEqual({
+			label: 'TERMS',
+			url: 'https://shop.example.com/terms',
+			version: '1',
+			required: false,
+			purpose: 'marketing',
+		});
+		expect(drawerOf()).toBeNull();
+	});
+
+	it('Cancel closes the drawer and nothing is sent; a new consent needs a key, words and a version', async () => {
+		const { container } = await open([consent('terms', 'agreement')]);
+		await settle();
+		await openRow(container, 'TERMS');
+		await click(drawerButton(TEXTS.cancel));
+		await settle();
+		expect(drawerOf()).toBeNull();
+		expect(writes()).toEqual([]);
+		await click(byText(container, C.add, 'button'));
+		expect(drawerButton(TEXTS.save).disabled).toBe(true);
+		await type(byLabel(drawerOf(), C.key), 'privacy');
+		await type(byLabel(drawerOf(), C.label), 'Privacy policy');
+		expect(drawerButton(TEXTS.save).disabled).toBe(false);
 	});
 });
