@@ -50,6 +50,8 @@ export const routes = Object.freeze({
 	/** the receipts sub-page of Usage and credits */
 	creditsReceipts: () => '/credits/receipts',
 	account: () => '/account',
+	/** a part of the Account page: details (the page's own address), sign-in, two-step or activity */
+	accountPart: (/** @type {string} */ part) => (part === 'details' ? '/account' : `/account/${e(part)}`),
 });
 
 /** Portal API paths used by the consoles. */

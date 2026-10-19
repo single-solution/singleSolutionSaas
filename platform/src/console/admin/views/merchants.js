@@ -44,6 +44,7 @@ import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
 import { COUNTRY_NAMES } from '../../../modules/identity/core/countries.js';
 import { Link } from '../../link.js';
 import { ActivityTable } from '../../views/login-settings.js';
+import { useListPages } from '../../views/paging.js';
 import { AddWebsiteDialog, MerchantUsageDialog, WebsiteCard, dailyCostOf, websiteDot } from '../../views/website.js';
 import { useNavigation } from '../../navigation.js';
 import { apiFetch, usePagedList } from '../../client.js';
@@ -464,6 +465,7 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 	const balance = billing?.balance;
 	const nav = useNavigation();
 	const activity = usePagedList((cursor) => withCursor(adminApi.merchantActivity(merchantId), cursor), detail.activity);
+	const activityPages = useListPages(activity);
 
 	/**
 	 * @param {string} path
@@ -698,19 +700,21 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 			</div>
 		),
 		activity: (
-			<div className="space-y-4">
-				{notices}
-				{activity.problem ? <Callout tone="danger">{describeProblem(activity.problem)}</Callout> : null}
+			<>
+				{merchant.suspension || (billing && attention) ? <div className="space-y-3 p-4 pb-0">{notices}</div> : null}
+				{activity.problem ? (
+					<div className="p-4">
+						<Callout tone="danger">{describeProblem(activity.problem)}</Callout>
+					</div>
+				) : null}
 				<ActivityTable
-					items={activity.items}
+					items={activityPages.rows}
+					caption={ADMIN.activityTitle}
 					empty={MORE.noActivity}
 					details
 					filterHref={(q) => adminRoutes.activity(q)}
-					hasMore={activity.cursor !== null}
-					loadingMore={activity.loading}
-					onLoadMore={() => void activity.more()}
 				/>
-			</div>
+			</>
 		),
 	};
 	const page = websiteId ? (
@@ -728,7 +732,7 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 	) : (
 		<Page
 			linkAs={Link}
-			flush={part === 'websites'}
+			flush={part === 'websites' || part === 'activity'}
 			bodyKey={part}
 			crumbs={[merchantsCrumb, { label: merchant.name }]}
 			status={[{ ...pill, ...(merchant.suspension ? { title: merchant.suspension.reason } : {}) }]}
@@ -771,7 +775,8 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 					{ id: 'details', label: MORE.detailsTitle },
 					{ id: 'activity', label: ADMIN.activityTitle },
 				]).map((item) => ({ ...item, href: adminRoutes.merchantPart(id, item.id) })),
-			}}>
+			}}
+			{...(part === 'activity' && activityPages.pagination ? { footer: <Pagination {...activityPages.pagination} /> } : {})}>
 			{bodies[/** @type {keyof typeof bodies} */ (part)]}
 		</Page>
 	);

@@ -1,17 +1,18 @@
 'use client';
 /**
  * The pages of a list that the server hands out by cursor (`usePagedList`): the rows of the current page, the count for
- * the toolbar and the props of the footer's `Pagination`. Going on loads the next batch when the page needs it.
+ * the toolbar and the props of the footer's `Pagination`. The server's batches are smaller than a page (or not as many
+ * as it): whenever the current page is not full and there is more on the server, the next batch is loaded.
  * @module
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MORE } from '../../texts/console.js';
 
 /** Rows per page of the tables fed by the server. */
 export const PAGE_SIZE = 50;
 
 /**
- * @param {{ items: any[], cursor: string | null, more: () => Promise<unknown> }} list what `usePagedList` returns
+ * @param {{ items: any[], cursor: string | null, loading: boolean, problem: unknown, more: () => Promise<unknown> }} list what `usePagedList` returns
  * @param {number} [size] rows per page
  */
 export function useListPages(list, size = PAGE_SIZE) {
@@ -19,6 +20,13 @@ export function useListPages(list, size = PAGE_SIZE) {
 	const start = pageNo * size;
 	const rows = list.items.slice(start, start + size);
 	const hasMore = list.cursor !== null;
+	const { loading, problem, cursor, more } = list;
+	const have = list.items.length;
+	useEffect(() => {
+		if (loading || problem || cursor === null || have >= start + size) return;
+		void more();
+		// `more` is new on every render; the batch to fetch is decided by these values
+	}, [loading, problem, cursor, have, start, size]);
 	return {
 		rows,
 		start,
@@ -35,10 +43,7 @@ export function useListPages(list, size = PAGE_SIZE) {
 						hasPrevious: pageNo > 0,
 						hasNext: start + size < list.items.length || hasMore,
 						onPrevious: () => setPageNo((n) => Math.max(0, n - 1)),
-						onNext: async () => {
-							if (start + size >= list.items.length) await list.more();
-							setPageNo((n) => n + 1);
-						},
+						onNext: () => setPageNo((n) => n + 1),
 					},
 	};
 }

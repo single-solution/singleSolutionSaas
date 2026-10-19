@@ -1,15 +1,17 @@
 'use client';
 /**
- * My account (PLAN 0.8.2; every admin, from the user menu): name, sign-in email, password, two-step (on/off,
- * recovery codes) and the admin's own activity.
+ * My account (PLAN 0.8.2; every admin, from the user menu), one page whose parts are addresses of their own: Profile
+ * (the name; `/admin/account`), Sign-in (email and password), Two-step (on/off, recovery codes) and the admin's own
+ * Activity as a table.
  * @module
  */
 import { useState } from 'react';
-import { Badge, Button, Form, FormError, Input, PageHeader, SectionLayout, SettingsCard, fieldErrors, useToast } from '@ss/ui';
+import { Button, Form, FormError, Input, SettingsCard, fieldErrors, useToast } from '@ss/ui';
 import { ADMIN, LOGIN, TWO_STEP } from '../../../texts/console.js';
 import { apiFetch, useResource } from '../../client.js';
-import { EmailPanel, OwnActivity, PasswordPanel, TwoStepPanel } from '../../views/login-settings.js';
-import { adminApi } from '../paths.js';
+import { AccountPage } from '../../views/account-page.js';
+import { EmailPanel, PasswordPanel, TwoStepPanel } from '../../views/login-settings.js';
+import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, RoleBadge } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
@@ -52,60 +54,60 @@ function NameCard({ admin, onSaved }) {
 	);
 }
 
+/** The parts of My account that have their own address (Profile is the page's address itself). */
+export const MY_ACCOUNT_PARTS = ['profile', 'sign-in', 'two-step', 'activity'];
+
 /**
- * @param {any} props loader result of `loadMyAccount`
+ * @param {any} props loader result of `loadMyAccount` plus the `part` of the address
  */
 export function MyAccountView(props) {
 	const { data, reload } = useResource(props.ok ? adminApi.me() : null, props.me ?? null);
 	if (!props.ok || !data) return <AdminProblem problem={props.problem} />;
 	const admin = data.admin;
 	const A = ADMIN.accountSections;
+	const twoStepOn = Boolean(admin.twoStep.enabled);
 	return (
-		<div className="space-y-6">
-			<PageHeader title={ADMIN.myAccountTitle} subtitle={ADMIN.myAccountIntro} />
-			<SectionLayout
-				label={ADMIN.myAccountTitle}
-				sections={[
-					{
-						id: 'profile',
-						label: A.profile,
-						icon: 'user',
-						group: A.account,
-						content: <NameCard admin={admin} onSaved={() => void reload()} />,
-					},
-					{
-						id: 'sign-in',
-						label: A.signIn,
-						icon: 'key',
-						group: A.security,
-						content: (
-							<>
-								<EmailPanel email={admin.email} twoStepOn={admin.twoStep.enabled} />
-								<PasswordPanel twoStepOn={admin.twoStep.enabled} />
-							</>
-						),
-					},
-					{
-						id: 'two-step',
-						label: TWO_STEP.title,
-						icon: 'shield',
-						group: A.security,
-						badge: (
-							<Badge tone={admin.twoStep.enabled ? 'success' : 'neutral'}>
-								{admin.twoStep.enabled ? TWO_STEP.on : TWO_STEP.off}
-							</Badge>
-						),
-						content: <TwoStepPanel twoStep={admin.twoStep} onChange={() => void reload()} />,
-					},
-					{
-						id: 'activity',
-						label: LOGIN.activityTitle,
-						icon: 'activity',
-						group: A.history,
-						content: <OwnActivity path={adminApi.myActivity()} initial={props.activity} />,
-					},
-				]}
-			/>
-		</div>
+		<AccountPage
+			title={ADMIN.myAccountTitle}
+			info={ADMIN.myAccountIntro}
+			part={props.part ?? 'profile'}
+			facts={[
+				{
+					label: TWO_STEP.title,
+					value: twoStepOn ? TWO_STEP.on : TWO_STEP.off,
+					...(twoStepOn ? { tone: /** @type {const} */ ('success') } : {}),
+					href: adminRoutes.accountPart('two-step'),
+				},
+			]}
+			parts={[
+				{
+					id: 'profile',
+					label: A.profile,
+					icon: 'user',
+					href: adminRoutes.accountPart('profile'),
+					body: <NameCard admin={admin} onSaved={() => void reload()} />,
+				},
+				{
+					id: 'sign-in',
+					label: A.signIn,
+					icon: 'key',
+					href: adminRoutes.accountPart('sign-in'),
+					body: (
+						<>
+							<EmailPanel email={admin.email} twoStepOn={twoStepOn} />
+							<PasswordPanel twoStepOn={twoStepOn} />
+						</>
+					),
+				},
+				{
+					id: 'two-step',
+					label: TWO_STEP.title,
+					icon: 'shield',
+					href: adminRoutes.accountPart('two-step'),
+					body: <TwoStepPanel twoStep={admin.twoStep} onChange={() => void reload()} />,
+				},
+			]}
+			activity={{ path: adminApi.myActivity(), href: adminRoutes.accountPart('activity'), initial: props.activity }}
+		/>
 	);
 }

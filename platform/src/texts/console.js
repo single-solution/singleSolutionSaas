@@ -1150,6 +1150,10 @@ export const MORE = Object.freeze({
 	rangeLine: (/** @type {string} */ from, /** @type {string} */ to) => `${from} – ${to} (UTC)`,
 	// Activity
 	changes: 'Changes',
+	activityColumns: Object.freeze({ when: 'When', who: 'Who', what: 'What', merchant: 'Merchant', deleted: 'Deleted' }),
+	entryTitle: 'Activity entry',
+	reasonLabel: 'Reason',
+	noChanges: 'This entry has no recorded changes.',
 	onlyThis: (/** @type {string} */ name) => `Show only ${name}`,
 	// Admins
 	allRoles: 'All roles',

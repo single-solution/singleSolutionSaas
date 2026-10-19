@@ -8,6 +8,7 @@
 import { notFound } from 'next/navigation';
 import { PageTransition } from '@ss/ui';
 import Account, { metadata as AccountMeta } from '../_views/account.js';
+import AccountPart, { metadata as AccountPartMeta } from '../_views/account-part.js';
 import Credits, { metadata as CreditsMeta } from '../_views/credits.js';
 import CreditsReceipts, { metadata as CreditsReceiptsMeta } from '../_views/credits-receipts.js';
 import ForgotPassword, { metadata as ForgotPasswordMeta } from '../_views/forgot-password.js';
@@ -31,7 +32,8 @@ export const dynamic = 'force-dynamic';
  * @typedef {'page' | 'screen' | 'public'} ViewKind
  */
 const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Metadata, ViewKind]>} */ ([
-	[['account'], Account, AccountMeta, 'page'],
+	[['account'], Account, AccountMeta, 'screen'],
+	[['account', ':part'], AccountPart, AccountPartMeta, 'screen'],
 	[['credits'], Credits, CreditsMeta, 'screen'],
 	[['credits', 'receipts'], CreditsReceipts, CreditsReceiptsMeta, 'screen'],
 	[['forgot-password'], ForgotPassword, ForgotPasswordMeta, 'public'],

@@ -11,18 +11,20 @@ import {
 	Badge,
 	Button,
 	Callout,
-	Card,
 	Checkbox,
 	CodeBlock,
+	DataTable,
+	Drawer,
 	EmptyState,
 	FieldLayoutContext,
 	Form,
 	FormError,
 	Input,
+	KeyValueList,
 	LocalTime,
+	Pagination,
 	SettingsCard,
 	Stepper,
-	Table,
 	Timeline,
 	describeProblem,
 	fieldErrors,
@@ -35,6 +37,7 @@ import { apiConfirm, apiFetch, usePagedList } from '../client.js';
 import { Link } from '../link.js';
 import { withCursor } from '../paths.js';
 import { factorOf } from './common.js';
+import { useListPages } from './paging.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
@@ -467,11 +470,11 @@ function Changes({ entry }) {
 	const before = entry.before && typeof entry.before === 'object' ? entry.before : {};
 	const after = entry.after && typeof entry.after === 'object' ? entry.after : {};
 	const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])];
-	if (keys.length === 0) return null;
+	if (keys.length === 0) return <p className="text-sm text-muted">{MORE.noChanges}</p>;
 	return (
-		<details className="text-xs text-muted">
-			<summary className="cursor-pointer font-semibold text-primary">{MORE.changes}</summary>
-			<ul className="mt-1 space-y-0.5">
+		<div className="space-y-1.5">
+			<h3 className="text-label font-semibold text-fg">{MORE.changes}</h3>
+			<ul className="space-y-1 text-sm text-muted">
 				{keys.map((key) => (
 					<li key={key} className="break-words">
 						<span className="font-semibold text-fg">{key}</span>: {key in before ? `${shortValue(before[key])} → ` : ''}
@@ -479,7 +482,7 @@ function Changes({ entry }) {
 					</li>
 				))}
 			</ul>
-		</details>
+		</div>
 	);
 }
 
@@ -509,110 +512,131 @@ export function ActivityTimeline({ items, empty, showMerchant = true }) {
 }
 
 /**
- * Activity entries (newest first, paged). `filterHref` turns the admin and merchant names into links that filter the
- * Activity page by them; `details` shows what each entry changed (admin views).
- * @param {{ items: any[], title?: string, empty: string, hasMore?: boolean, loadingMore?: boolean,
- *   onLoadMore?: () => void, showMerchant?: boolean, details?: boolean,
+ * Activity entries (newest first) as a table: when, who, what (the reason after it) and, with `showMerchant`, for which
+ * merchant. `filterHref` turns the admin and merchant names into links that filter the Activity page by them; `details`
+ * makes a row open a drawer with what the entry changed (admin views). The caller pages the rows (`useListPages`).
+ * @param {{ items: any[], caption?: string, empty: string, showMerchant?: boolean, details?: boolean,
  *   filterHref?: (q: { merchantId?: string, adminId?: string }) => string }} props
  */
 export function ActivityTable({
 	items,
-	title = 'Activity',
+	caption = MORE.activityColumns.what,
 	empty,
-	hasMore = false,
-	loadingMore = false,
-	onLoadMore,
 	showMerchant = false,
 	details = false,
 	filterHref,
 }) {
+	const [open, setOpen] = useState(/** @type {any} */ (null));
 	/** @param {string} name @param {string} href */
 	const filterLink = (name, href) => (
 		<TextLink as={Link} tone="plain" href={href} title={MORE.onlyThis(name)}>
 			{name}
 		</TextLink>
 	);
+	const C = MORE.activityColumns;
 	return (
-		<Table
-			caption={title}
-			rows={items}
-			rowKey={(e) => e.activityId}
-			empty={<EmptyState compact icon="activity" kind="activity" title={empty} />}
-			hasMore={hasMore}
-			loadingMore={loadingMore}
-			{...(onLoadMore ? { onLoadMore } : {})}
-			columns={[
-				{ key: 'at', header: 'When', render: (e) => <LocalTime value={e.at} /> },
-				{
-					key: 'who',
-					header: 'Who',
-					rowHeader: true,
-					render: (e) => {
-						const name = actorName(e);
-						if (!filterHref || !e.actor?.id) return name;
-						return e.actor.type === 'admin'
-							? filterLink(name, filterHref({ adminId: e.actor.id }))
-							: e.actor.type === 'merchant'
-								? filterLink(name, filterHref({ merchantId: e.actor.id }))
-								: name;
+		<>
+			<DataTable
+				caption={caption}
+				rows={items}
+				rowKey={(e) => e.activityId}
+				rowLabel={(e) => `${actorName(e)} · ${actionLabel(e.action)}`}
+				{...(details ? { onRowClick: (/** @type {any} */ e) => setOpen(e) } : {})}
+				empty={<EmptyState compact icon="activity" kind="activity" title={empty} />}
+				columns={[
+					{ key: 'at', header: C.when, kind: 'date', render: (e) => <LocalTime value={e.at} /> },
+					{
+						key: 'who',
+						header: C.who,
+						rowHeader: true,
+						render: (e) => {
+							const name = actorName(e);
+							if (!filterHref || !e.actor?.id) return name;
+							return e.actor.type === 'admin'
+								? filterLink(name, filterHref({ adminId: e.actor.id }))
+								: e.actor.type === 'merchant'
+									? filterLink(name, filterHref({ merchantId: e.actor.id }))
+									: name;
+						},
 					},
-				},
-				{
-					key: 'what',
-					header: 'What',
-					wrap: true,
-					render: (e) => (
-						<span className="space-y-0.5">
-							<span className="block">{actionLabel(e.action)}</span>
-							{e.reason ? <span className="block text-xs text-muted">{e.reason}</span> : null}
-							{details ? <Changes entry={e} /> : null}
-						</span>
-					),
-				},
-				...(showMerchant
-					? [
-							{
-								key: 'merchant',
-								header: 'Merchant',
-								render: (/** @type {any} */ e) =>
-									e.merchantName ? (
-										<span>
-											{filterHref && e.merchantId
-												? filterLink(e.merchantName, filterHref({ merchantId: e.merchantId }))
-												: e.merchantName}
-											{e.merchantDeleted ? (
-												<Badge tone="neutral" className="ml-1">
-													Deleted
-												</Badge>
-											) : null}
-										</span>
-									) : (
-										'—'
-									),
-							},
-						]
-					: []),
-			]}
-		/>
+					{
+						key: 'what',
+						header: C.what,
+						render: (e) => (
+							<span className="block truncate">
+								{actionLabel(e.action)}
+								{e.reason ? <span className="text-muted"> · {e.reason}</span> : null}
+							</span>
+						),
+					},
+					...(showMerchant
+						? [
+								{
+									key: 'merchant',
+									header: C.merchant,
+									render: (/** @type {any} */ e) =>
+										e.merchantName ? (
+											<span>
+												{filterHref && e.merchantId
+													? filterLink(e.merchantName, filterHref({ merchantId: e.merchantId }))
+													: e.merchantName}
+												{e.merchantDeleted ? (
+													<Badge tone="neutral" className="ml-1">
+														{C.deleted}
+													</Badge>
+												) : null}
+											</span>
+										) : (
+											'—'
+										),
+								},
+							]
+						: []),
+				]}
+			/>
+			{details ? (
+				<Drawer open={Boolean(open)} onClose={() => setOpen(null)} title={MORE.entryTitle}>
+					{open ? (
+						<div className="space-y-4">
+							<KeyValueList
+								items={[
+									{ label: C.when, value: <LocalTime value={open.at} /> },
+									{ label: C.who, value: actorName(open) },
+									{ label: C.what, value: actionLabel(open.action) },
+									...(open.merchantName ? [{ label: C.merchant, value: open.merchantName }] : []),
+									...(open.reason ? [{ label: MORE.reasonLabel, value: open.reason }] : []),
+								]}
+							/>
+							<Changes entry={open} />
+						</div>
+					) : null}
+				</Drawer>
+			) : null}
+		</>
 	);
 }
 
 /**
- * The person's own activity, loaded from `path` (`{ items, nextCursor }`), with Load more.
- * @param {{ path: string, initial?: { items: any[], nextCursor?: string | null } }} props
+ * The person's own activity as the parts of a page: the pages (`useListPages`), the table for the body and the
+ * pagination for the footer. The newest entries come with the page; going on loads older ones from `path`.
+ * @param {string} path the activity API path (`{ items, nextCursor }`)
+ * @param {{ items: any[], nextCursor?: string | null } | undefined} initial
  */
-export function OwnActivity({ path, initial = { items: [], nextCursor: null } }) {
-	const pages = usePagedList((cursor) => withCursor(path, cursor), initial);
-	return (
-		<Card title={LOGIN.activityTitle}>
-			{pages.problem ? <Callout tone="danger">{describeProblem(pages.problem)}</Callout> : null}
-			<ActivityTable
-				items={pages.items}
-				empty={MORE.noActivity}
-				hasMore={pages.cursor !== null}
-				loadingMore={pages.loading}
-				onLoadMore={() => void pages.more()}
-			/>
-		</Card>
-	);
+export function useOwnActivity(path, initial = { items: [], nextCursor: null }) {
+	const list = usePagedList((cursor) => withCursor(path, cursor), initial);
+	const pages = useListPages(list);
+	return {
+		problem: list.problem,
+		body: (
+			<>
+				{list.problem ? (
+					<div className="p-4">
+						<Callout tone="danger">{describeProblem(list.problem)}</Callout>
+					</div>
+				) : null}
+				<ActivityTable items={pages.rows} caption={LOGIN.activityTitle} empty={MORE.noActivity} />
+			</>
+		),
+		footer: pages.pagination ? <Pagination {...pages.pagination} /> : null,
+	};
 }

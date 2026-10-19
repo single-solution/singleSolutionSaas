@@ -1,16 +1,16 @@
 'use client';
 /**
- * Activity (PLAN 0.5.12, 0.8.2): every entry, newest first, filterable by merchant, admin and date (UTC days). The
- * merchant and admin filters are dropdowns of their names (admins for Owners, who see the admin list); a period picks
- * common date ranges; the names in the entries filter by them; each entry shows what it changed.
+ * Activity (PLAN 0.5.12, 0.8.2): every entry, newest first, as a table that fills the page, filterable by merchant,
+ * admin (Owners, who see the admin list) and date (UTC days) from the toolbar: dropdowns of their names, a period menu
+ * and two date fields. The names in the entries filter by them; a row opens a drawer with what the entry changed.
  * @module
  */
-import { useState } from 'react';
-import { Button, ButtonLink, Callout, Card, Form, Input, PageHeader, Select, describeProblem } from '@ss/ui';
+import { ButtonLink, Callout, Page, Pagination, Toolbar, describeProblem } from '@ss/ui';
 import { ADMIN, MORE } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { ActivityTable } from '../../views/login-settings.js';
-import { RangeSelect } from '../../views/range.js';
+import { useListPages } from '../../views/paging.js';
+import { DateFields, periodFilter } from '../../views/range.js';
 import { useNavigation } from '../../navigation.js';
 import { usePagedList } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
@@ -22,94 +22,82 @@ import { AdminProblem } from './common.js';
 export function ActivityView(props) {
 	const ok = props.ok === true;
 	const f = ok ? props.filter : {};
-	const [form, setForm] = useState({
-		merchantId: f.merchantId ?? '',
-		adminId: f.adminId ?? '',
-		from: f.from ?? '',
-		to: f.to ?? '',
-	});
 	const list = usePagedList((cursor) => (ok ? adminApi.activity({ ...f, cursor }) : null), ok ? props.page : null);
+	const pages = useListPages(list);
 	const nav = useNavigation();
 	if (!ok) return <AdminProblem problem={props.problem} />;
 	const filtered = Boolean(f.merchantId || f.adminId || f.from || f.to);
-	/** @param {keyof typeof form} key @param {string} value */
-	const set = (key, value) => setForm((x) => ({ ...x, [key]: value }));
-	const apply = () =>
-		nav.go(
-			adminRoutes.activity({
-				merchantId: form.merchantId.trim() || null,
-				adminId: form.adminId.trim() || null,
-				from: form.from || null,
-				to: form.to || null,
-			}),
-		);
+	/** @param {Record<string, string | null>} next */
+	const hrefFor = (next) => adminRoutes.activity({ ...f, ...next });
 	return (
-		<div className="space-y-6">
-			<PageHeader title={ADMIN.activityTitle} subtitle={ADMIN.activityIntro} />
-			<Card>
-				<Form onSubmit={apply} busy={nav.pending} aria-label={ADMIN.filters.apply}>
-					<div className="flex flex-wrap items-end gap-3">
-						<Select
-							label={MORE.pickMerchant}
-							value={form.merchantId}
-							fieldClassName="min-w-48 flex-1"
-							onChange={(e) => set('merchantId', e.currentTarget.value)}
-							options={[{ value: '', label: MORE.allMerchants }, ...(props.merchants ?? [])]}
-						/>
-						{props.admins ? (
-							<Select
-								label={MORE.adminFilter}
-								value={form.adminId}
-								fieldClassName="min-w-48 flex-1"
-								onChange={(e) => set('adminId', e.currentTarget.value)}
-								options={[{ value: '', label: MORE.allAdmins }, ...props.admins]}
-							/>
-						) : null}
-						<RangeSelect
-							from={f.from}
-							to={f.to}
-							emptyLabel={MORE.range.allTime}
-							hrefFor={(range) => adminRoutes.activity({ ...f, ...range })}
-							fieldClassName="min-w-44"
-						/>
-						<Input
-							label={ADMIN.filters.from}
-							type="date"
-							fieldClassName="min-w-40"
-							value={form.from}
-							onChange={(e) => set('from', e.currentTarget.value)}
-						/>
-						<Input
-							label={ADMIN.filters.to}
-							type="date"
-							fieldClassName="min-w-40"
-							value={form.to}
-							onChange={(e) => set('to', e.currentTarget.value)}
-						/>
-						<div className="flex flex-wrap items-center gap-2">
-							<Button type="submit" variant="secondary" loading={nav.pending}>
-								{ADMIN.filters.apply}
-							</Button>
-							{filtered ? (
-								<ButtonLink as={Link} href={adminRoutes.activity()} variant="ghost">
-									{MORE.clearFilters}
-								</ButtonLink>
-							) : null}
-						</div>
-					</div>
-				</Form>
-			</Card>
-			{list.problem ? <Callout tone="danger">{describeProblem(list.problem)}</Callout> : null}
+		<Page
+			linkAs={Link}
+			flush
+			crumbs={[{ label: ADMIN.activityTitle }]}
+			info={ADMIN.activityIntro}
+			toolbar={
+				<Toolbar
+					label={ADMIN.activityTitle}
+					filters={[
+						{
+							id: 'merchant',
+							label: MORE.pickMerchant,
+							allLabel: MORE.allMerchants,
+							value: f.merchantId ?? '',
+							options: props.merchants ?? [],
+							onChange: (merchantId) => nav.go(hrefFor({ merchantId: merchantId || null })),
+						},
+						...(props.admins
+							? [
+									{
+										id: 'admin',
+										label: MORE.adminFilter,
+										allLabel: MORE.allAdmins,
+										value: f.adminId ?? '',
+										options: props.admins,
+										onChange: (/** @type {string} */ adminId) => nav.go(hrefFor({ adminId: adminId || null })),
+									},
+								]
+							: []),
+						periodFilter({
+							from: f.from,
+							to: f.to,
+							emptyLabel: MORE.range.allTime,
+							hrefFor: (range) => hrefFor(range),
+							go: nav.go,
+						}),
+					]}
+					end={
+						filtered ? (
+							<ButtonLink as={Link} href={adminRoutes.activity()} variant="ghost" size="sm">
+								{MORE.clearFilters}
+							</ButtonLink>
+						) : null
+					}>
+					<DateFields
+						from={f.from}
+						to={f.to}
+						fromLabel={ADMIN.filters.from}
+						toLabel={ADMIN.filters.to}
+						hrefFor={(range) => hrefFor(range)}
+						go={nav.go}
+					/>
+				</Toolbar>
+			}
+			{...(pages.pagination ? { footer: <Pagination {...pages.pagination} /> } : {})}>
+			{list.problem ? (
+				<div className="p-4">
+					<Callout tone="danger">{describeProblem(list.problem)}</Callout>
+				</div>
+			) : null}
 			<ActivityTable
-				items={list.items}
+				items={pages.rows}
+				caption={ADMIN.activityTitle}
 				empty={MORE.noActivity}
 				showMerchant
 				details
 				filterHref={(q) => adminRoutes.activity({ ...f, ...q })}
-				hasMore={Boolean(list.cursor)}
-				loadingMore={list.loading}
-				onLoadMore={() => void list.more()}
 			/>
-		</div>
+		</Page>
 	);
 }

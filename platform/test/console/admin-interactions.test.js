@@ -10,7 +10,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { Blob as NodeBlob } from 'node:buffer';
 import { totpCode } from '../../src/infra/auth.js';
 import { closeMongoClients } from '../../src/testing.js';
-import { browserOf, openSection, settle, until } from './merchant-harness.js';
+import { browserOf, openSection, pressMenu, settle, until } from './merchant-harness.js';
 import { createSystemStore } from '../../src/infra/system.js';
 import { createPortal } from '../../src/portal.js';
 import { modules as defaultModules } from '../../src/modules/index.js';
@@ -422,11 +422,13 @@ describe('admin console interactions (jsdom)', () => {
 		cleanup();
 
 		// ---------------------------------------------------------------- Activity: filters
-		render(<ActivityView {...await admin.loadActivity(ownerBrowser.api, { merchantId }, me)} />);
+		const activity = /** @type {any} */ (await admin.loadActivity(ownerBrowser.api, { merchantId }, me));
+		render(<ActivityView {...activity} />);
 		await until(() => shows('Merchant created'));
-		fill('Admin', me.adminId);
-		fill('From (UTC day)', '2026-01-01');
-		await press('Filter');
+		await pressMenu('Admin', activity.admins[0].label);
+		// the dates are fields without a visible label; a pick opens the page with that day
+		type(/** @type {HTMLInputElement} */ (document.querySelector('input[aria-label="From (UTC day)"]')), '2026-01-01');
+		await settle(1);
 		cleanup();
 
 		// ---------------------------------------------------------------- Settings: email sending, branding, support, security, key

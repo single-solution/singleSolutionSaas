@@ -34,7 +34,6 @@ import {
 	clickEl,
 	createWorld,
 	fill,
-	openSection,
 	menuItems,
 	press,
 	quiet,
@@ -154,16 +153,20 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		}
 
 		// ---------------------------------------------------------------- Account: details, email, password, two-step
-		withToasts(<AccountView {...await loaders.loadAccount(a.api, merchantId)} />);
-		expect(shows('Business details') && shows('Your activity')).toBe(true);
+		withToasts(<AccountView part="details" {...await loaders.loadAccount(a.api, merchantId)} />);
+		// the sub-pages are in the inner navigation, each with its own address
+		expect(
+			shows('Business details') && shows('Email and password') && shows('Two-step sign-in') && shows('Your activity'),
+		).toBe(true);
 		fill('Phone', '+1 212 555 0187');
 		type(byLabel(document, 'Country'), 'US');
 		fill('Address', '5th Avenue, New York');
 		await press('Save');
 		await a.waitCall('PATCH', '/v1/me', (st) => st === 200);
 		await until(() => shows('Business details saved.'));
+		cleanup();
 		// the sign-in email: a wrong password, then the confirmation link
-		await openSection('Email and password');
+		withToasts(<AccountView part="sign-in" {...await loaders.loadAccount(a.api, merchantId)} />);
 		fill('New email', 'owner2@shop.test');
 		fill('Current password', 'wrong password!!');
 		await press('Change email');
@@ -180,8 +183,9 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		fill('New password', 'a brand new passphrase');
 		await press('Change password');
 		await until(() => shows('Password changed.'));
+		cleanup();
 		// two-step: set up with the QR code, then save the recovery codes
-		await openSection('Two-step sign-in');
+		withToasts(<AccountView part="two-step" {...await loaders.loadAccount(a.api, merchantId)} />);
 		await press('Set up two-step sign-in');
 		await press('Set up two-step sign-in');
 		const started = await a.waitCall('POST', '/v1/me/two-step/start', (st) => st === 200);
@@ -199,8 +203,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		await press('Done');
 		cleanup();
 		resetHash();
-		withToasts(<AccountView {...await loaders.loadAccount(a.api, merchantId)} />);
-		await openSection('Two-step sign-in');
+		withToasts(<AccountView part="two-step" {...await loaders.loadAccount(a.api, merchantId)} />);
 		expect(shows('10 recovery codes left')).toBe(true);
 		await press('Make new recovery codes');
 		const codesForm = /** @type {HTMLElement} */ (document.querySelector('form[aria-label="Make new recovery codes"]'));

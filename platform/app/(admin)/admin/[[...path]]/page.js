@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation';
 import { PageTransition } from '@ss/ui';
 import Home, { metadata as HomeMeta } from '../_views/home.js';
 import Account, { metadata as AccountMeta } from '../_views/account.js';
+import AccountPart, { metadata as AccountPartMeta } from '../_views/account-part.js';
 import Activity, { metadata as ActivityMeta } from '../_views/activity.js';
 import Admins, { metadata as AdminsMeta } from '../_views/admins.js';
 import Finance, { metadata as FinanceMeta } from '../_views/finance.js';
@@ -33,7 +34,8 @@ export const dynamic = 'force-dynamic';
  */
 const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Metadata, ViewKind]>} */ ([
 	[[], Home, HomeMeta, 'page'],
-	[['account'], Account, AccountMeta, 'page'],
+	[['account'], Account, AccountMeta, 'screen'],
+	[['account', ':part'], AccountPart, AccountPartMeta, 'screen'],
 	[['activity'], Activity, ActivityMeta, 'page'],
 	[['admins'], Admins, AdminsMeta, 'screen'],
 	[['finance'], Finance, FinanceMeta, 'page'],

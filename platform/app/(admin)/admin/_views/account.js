@@ -6,5 +6,5 @@ export const metadata = { title: 'My account' };
 
 export default async function MyAccountPage() {
 	const { api } = await adminContext('/admin/account');
-	return <MyAccountView {...await loadMyAccount(api)} />;
+	return <MyAccountView {...await loadMyAccount(api)} part="profile" />;
 }

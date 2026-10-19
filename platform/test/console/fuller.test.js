@@ -16,6 +16,7 @@ import { closeMongoClients } from '../../src/testing.js';
 import * as admin from '../../src/console/admin/loaders.js';
 import * as loaders from '../../src/console/loaders.js';
 import { adminApi } from '../../src/console/admin/paths.js';
+import { MyAccountView } from '../../src/console/admin/views/account.js';
 import { ActivityView } from '../../src/console/admin/views/activity.js';
 import { AdminsView } from '../../src/console/admin/views/admins.js';
 import { FinanceView } from '../../src/console/admin/views/finance.js';
@@ -23,7 +24,6 @@ import { MerchantsView } from '../../src/console/admin/views/merchants.js';
 import { OverviewView } from '../../src/console/admin/views/overview.js';
 import { ProductsView } from '../../src/console/admin/views/products.js';
 import { CreditsView } from '../../src/console/views/credits.js';
-import { OwnActivity } from '../../src/console/views/login-settings.js';
 import { presetOf, rangePresets } from '../../src/console/views/range.js';
 import { OverviewView as MerchantOverview, WebsitesView } from '../../src/console/views/websites.js';
 import { PORTAL_URL, startMongo } from '../helpers.js';
@@ -203,7 +203,10 @@ describe('fuller Portal screens (jsdom)', () => {
 			expect(shows('Last sign-in')).toBe(true);
 			expect(shows('Products on websites')).toBe(false); // the Websites part shows the count
 			showMerchant('activity');
-			expect(shows('Changes')).toBe(true);
+			expect(shows('Activity')).toBe(true);
+			await clickEl(/** @type {HTMLElement} */ (document.querySelector('tbody tr')));
+			expect(shows('Activity entry') && shows('Changes')).toBe(true);
+			await press('Close');
 			await menu('More actions');
 			await clickEl(menuItem('Open in Activity'));
 			expect(pushed(`/admin/activity?merchantId=${merchantId}`)).toBe(true);
@@ -253,13 +256,15 @@ describe('fuller Portal screens (jsdom)', () => {
 			if (!activity.ok) throw new Error('activity');
 			expect(activity.admins?.map((a) => a.value)).toEqual([owner.adminId]);
 			render(<ActivityView {...activity} />);
-			expect(shows('Changes')).toBe(true);
+			// a row opens a drawer with what the entry changed
+			await clickEl(/** @type {HTMLElement} */ (document.querySelector('tbody tr')));
+			expect(shows('Activity entry') && shows('Changes')).toBe(true);
+			await press('Close');
 			const only = /** @type {HTMLAnchorElement} */ (document.querySelector('a[title="Show only Shop & Co"]'));
 			expect(only.getAttribute('href')).toBe(`/admin/activity?merchantId=${merchantId}`);
-			await pick('Admin', owner.adminId);
-			await press('Filter');
+			await pressMenu('Admin', String(activity.admins?.[0]?.label));
 			expect(pushed(`adminId=${owner.adminId}`)).toBe(true);
-			await pick('Period', 'thisMonth');
+			await pressMenu('Period', 'This month (UTC)');
 			expect(pushed('from=')).toBe(true);
 			cleanup();
 			const filtered = await admin.loadActivity(ownerBrowser.api, { merchantId }, owner);
@@ -270,8 +275,9 @@ describe('fuller Portal screens (jsdom)', () => {
 			// ---------------------------------------------------------------- own activity pages
 			const first = await ownerBrowser.api.get(`${adminApi.myActivity()}?limit=1`);
 			if (!first.ok) throw new Error('my activity');
-			withToasts(<OwnActivity path={adminApi.myActivity()} initial={first.data} />);
-			await press('Load more');
+			const mine = await admin.loadMyAccount(ownerBrowser.api);
+			withToasts(<MyAccountView {...mine} activity={first.data} part="activity" />);
+			// the page is not full and there is more: the next batch comes by itself
 			await until(() => document.querySelectorAll('tbody tr').length > 1);
 			cleanup();
 

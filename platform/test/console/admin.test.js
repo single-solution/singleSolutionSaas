@@ -403,14 +403,13 @@ describe('admin console smoke', () => {
 			expect(ssr(<MerchantsView detail={financeDetail} admin={finance} />)).toContain('Add credits');
 			for (const word of ['Install and tokens', 'Add product', 'Open Notes', 'Add website', 'Edit merchant'])
 				expect(financeHtml).not.toContain(word);
-			// Activity filters: Support has no list of admins, so no Admin field to type an id into; the Owner picks a name
+			// Activity filters: Support has no list of admins, so no Admin filter; the Owner picks a name
 			const supportActivity = await admin.loadActivity(supportBrowser.api, {}, support);
-			const supportActivityHtml = text(ssr(<ActivityView {...supportActivity} />));
-			expect(supportActivityHtml).toContain('Merchant');
-			expect(supportActivityHtml).not.toContain('Admin id');
-			expect(ssr(<ActivityView {...supportActivity} />)).not.toContain('name="adminId"');
+			const supportActivityHtml = ssr(<ActivityView {...supportActivity} />);
+			expect(supportActivityHtml).toContain('aria-label="Merchant"');
+			expect(supportActivityHtml).not.toContain('aria-label="Admin"');
 			const ownerActivity = await admin.loadActivity(world.ownerBrowser.api, {}, world.owner);
-			expect(text(ssr(<ActivityView {...ownerActivity} />))).toContain('All admins');
+			expect(ssr(<ActivityView {...ownerActivity} />)).toContain('aria-label="Admin"');
 			// the API refuses what the screens hide
 			expect((await financeBrowser.api.get(`/v1/merchants/${merchantId}/websites/${websiteId}/tokens`)).status).toBe(403);
 			expect((await financeBrowser.api.post('/v1/admin/products/notes/launch', { websiteId })).status).toBe(403);

@@ -6,5 +6,5 @@ export const metadata = { title: 'Account' };
 
 export default async function AccountPage() {
 	const { api, merchantId } = await merchantContext('/account');
-	return <AccountView {...await loadAccount(api, merchantId)} />;
+	return <AccountView {...await loadAccount(api, merchantId)} part="details" />;
 }
