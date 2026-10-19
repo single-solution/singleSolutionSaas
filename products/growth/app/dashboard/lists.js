@@ -1,28 +1,30 @@
 'use client';
 /**
  * Growth's merchant lists in Settings (`core/lists.js`; the kit's `GET|PUT /v1/dashboard/websites/:websiteId/lists/:list`):
- * one card per list of a switched-on feature, each entry with its fields, up, down and remove, Add, and Save for the
- * whole list (a 422 lists the server's errors under the card). The editor is drawn from the list's fields, so every list
- * gets add, rename, reorder and remove the same way. Also the robots.txt online store preset (G12), applied in one click.
+ * one page per list of a switched-on feature: the entries are a table (the row menu moves one up or down or removes it),
+ * a click on a row opens the entry's fields in a drawer that edits the draft only, Add, and the frame's Save bar saves
+ * the whole list (a 422 lists the server's errors under the table). The editor is drawn from the list's fields, so every
+ * list gets add, rename, reorder and remove the same way. Also the robots.txt online store preset (G12), one click.
  * @module
  */
 import { useState } from 'react';
 import {
 	Button,
-	Callout,
 	Card,
 	Checkbox,
 	CheckboxGroup,
+	DataTable,
+	DataTableSkeleton,
+	Drawer,
 	EntryGroup,
 	FieldGrid,
+	Icon,
 	Input,
-	ItemSwitcher,
 	Select,
 	TextArea,
-	describeProblem,
 	SaveBar,
 } from '@ss/ui';
-import { SaveOutcome, call, useLoad } from '@ss/ui/dashboard';
+import { Loaded, SaveOutcome, call, useLoad } from '@ss/ui/dashboard';
 import { LISTS } from '../../core/lists.js';
 import { ONLINE_STORE_PRESET } from '../../core/seo.js';
 import { TEXTS } from './texts.js';
@@ -160,137 +162,253 @@ function FieldInput({ name, field, value, error, onChange }) {
 }
 
 /**
- * The entries of a list (or of an entry's rows), each with its fields. With `one` (a list, not an entry's rows) only
- * the picked entry is shown, from a strip of tabs (a select when there are many), so a long list is not a long page.
- * @param {{ fields: Record<string, Field>, entries: Entry[], at: string, errors: Record<string, string>, max: number,
- *   label: (entry: Entry, index: number) => string, onChange: (entries: Entry[]) => void, one?: boolean }} props
- *   `at`: the path of the entries in the server's errors (`/value`, `/value/0/steps`)
+ * The fields of one entry (or of one of its rows), in a grid; an entry's `rows` field is a stack of rows of its own.
+ * @param {{ fields: Record<string, Field>, entry: Entry, at: string, errors: Record<string, string>,
+ *   onChange: (entry: Entry) => void }} props `at`: the path of the entry in the server's errors (`/value/0`)
  */
-function Entries({ fields, entries, at, errors, max, label, onChange, one = false }) {
-	/** @param {Entry} entry @param {number} index */
-	const entryView = (entry, index) => (
-		<EntryGroup
-			key={index}
-			compact
-			title={label(entry, index)}
-			first={index === 0}
-			last={index === entries.length - 1}
-			texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
-			onMove={(step) => onChange(moved(entries, index, step))}
-			onRemove={() => onChange(entries.filter((_, other) => other !== index))}>
-			<FieldGrid>
-				{Object.entries(fields).map(([name, field]) =>
-					field.type === 'rows' ? (
-						<div key={name} data-cell="" data-wide="" className="min-w-0 space-y-2">
-							<p className="text-sm font-semibold">{wordsOf(name).label}</p>
-							<Entries
-								fields={field.fields}
-								entries={entry[name] ?? []}
-								at={`${at}/${index}/${name}`}
-								errors={errors}
-								max={field.max}
-								label={(row, rowIndex) => `${rowIndex + 1}. ${row.name || L.untitled}`}
-								onChange={(rows) =>
-									onChange(entries.map((other, i) => (i === index ? { ...other, [name]: rows } : other)))
-								}
-							/>
-						</div>
-					) : (
-						<FieldInput
-							key={name}
-							name={name}
-							field={field}
-							value={entry[name]}
-							{...(errors[`${at}/${index}/${name}`] ? { error: errors[`${at}/${index}/${name}`] } : {})}
-							onChange={(value) =>
-								onChange(entries.map((other, i) => (i === index ? { ...other, [name]: value } : other)))
-							}
+function EntryFields({ fields, entry, at, errors, onChange }) {
+	/** @param {string} name @param {any} value */
+	const set = (name, value) => onChange({ ...entry, [name]: value });
+	return (
+		<FieldGrid>
+			{Object.entries(fields).map(([name, field]) =>
+				field.type === 'rows' ? (
+					<div key={name} data-cell="" data-wide="" className="min-w-0 space-y-2">
+						<p className="text-sm font-semibold">{wordsOf(name).label}</p>
+						<RowStack
+							fields={field.fields}
+							rows={entry[name] ?? []}
+							at={`${at}/${name}`}
+							errors={errors}
+							max={field.max}
+							onChange={(rows) => set(name, rows)}
 						/>
-					),
-				)}
-			</FieldGrid>
-		</EntryGroup>
+					</div>
+				) : (
+					<FieldInput
+						key={name}
+						name={name}
+						field={field}
+						value={entry[name]}
+						{...(errors[`${at}/${name}`] ? { error: errors[`${at}/${name}`] } : {})}
+						onChange={(value) => set(name, value)}
+					/>
+				),
+			)}
+		</FieldGrid>
 	);
-	const add = () => onChange([...entries, blankEntry(fields, entries)]);
-	if (one)
-		return (
-			<ItemSwitcher
-				items={entries}
-				legend={L.entries}
-				nameOf={label}
-				addLabel={L.add}
-				addDisabled={entries.length >= max}
-				onAdd={add}
-				renderItem={entryView}
-			/>
-		);
+}
+
+/**
+ * The rows of an entry (a funnel's steps), each with its fields, up, down and remove, and Add.
+ * @param {{ fields: Record<string, Field>, rows: Entry[], at: string, errors: Record<string, string>, max: number,
+ *   onChange: (rows: Entry[]) => void }} props `at`: the path of the rows in the server's errors (`/value/0/steps`)
+ */
+function RowStack({ fields, rows, at, errors, max, onChange }) {
 	return (
 		<div className="space-y-3">
-			{entries.map(entryView)}
-			<Button size="sm" variant="secondary" disabled={entries.length >= max} onClick={add}>
+			{rows.map((row, index) => (
+				<EntryGroup
+					key={index}
+					compact
+					title={`${index + 1}. ${row.name || L.untitled}`}
+					first={index === 0}
+					last={index === rows.length - 1}
+					texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
+					onMove={(step) => onChange(moved(rows, index, step))}
+					onRemove={() => onChange(rows.filter((_, other) => other !== index))}>
+					<EntryFields
+						fields={fields}
+						entry={row}
+						at={`${at}/${index}`}
+						errors={errors}
+						onChange={(next) => onChange(rows.map((other, i) => (i === index ? next : other)))}
+					/>
+				</EntryGroup>
+			))}
+			<Button
+				size="sm"
+				variant="secondary"
+				disabled={rows.length >= max}
+				onClick={() => onChange([...rows, blankEntry(fields, rows)])}>
 				{L.add}
 			</Button>
 		</div>
 	);
 }
 
-/** The words that name an entry in its head. @param {Entry} entry @param {number} index */
-const entryLabel = (entry, index) =>
-	`${index + 1}. ${String(entry.name ?? entry.event ?? entry.text ?? entry.check ?? '') || L.untitled}`;
+/** The field that names an entry, first found in a list (a goal's name, a conversion action's event, a check). */
+const NAME_FIELDS = ['name', 'event', 'text', 'check'];
+
+/** @param {Record<string, Field>} fields @returns {string} */
+const nameField = (fields) => NAME_FIELDS.find((name) => name in fields) ?? 'name';
 
 /**
- * One list's card: its entries, Save for the whole list, and what the server said.
- * @param {{ websiteId: string, name: ListName }} props
+ * The columns of a list's table beside the name (headers: `TEXTS.lists.columns.<key>`).
+ * @typedef {{ key: string, render: (entry: Entry) => import('react').ReactNode, kind?: 'number', low?: boolean }} Column
  */
-export function ListCard({ websiteId, name }) {
+
+/** @param {string} field @returns {(entry: Entry) => string} */
+const plain = (field) => (entry) => String(entry[field] ?? '');
+
+/** A time of the editor (`2026-12-01T09:00`) as the table shows it. @param {string} field @returns {(entry: Entry) => string} */
+const when = (field) => (entry) => String(entry[field] ?? '').replace('T', ' ');
+
+/** @type {Record<ListName, Column[]>} */
+const COLUMNS = {
+	goals: [
+		{ key: 'key', low: true, render: plain('key') },
+		{ key: 'kind', render: (entry) => choiceLabel(String(entry.kind)) },
+		{ key: 'match', render: plain('match') },
+	],
+	funnels: [
+		{ key: 'key', low: true, render: plain('key') },
+		{ key: 'steps', kind: 'number', render: (entry) => (Array.isArray(entry.steps) ? entry.steps.length : 0) },
+	],
+	consent_categories: [
+		{ key: 'key', low: true, render: plain('key') },
+		{ key: 'mode', render: (entry) => choiceLabel(String(entry.mode)) },
+	],
+	announcements: [
+		{ key: 'key', low: true, render: plain('key') },
+		{ key: 'from', render: when('startsAt') },
+		{ key: 'until', render: when('endsAt') },
+	],
+	conversion_actions: [
+		{ key: 'meta', render: plain('meta') },
+		{ key: 'google', low: true, render: plain('google') },
+		{ key: 'tiktok', low: true, render: plain('tiktok') },
+	],
+	verification_tags: [{ key: 'content', render: plain('content') }],
+	seo_ignored: [{ key: 'page', render: (entry) => String(entry.page ?? '') || L.columns.everyPage }],
+};
+
+/**
+ * One list's page: its entries as a table, the drawer of the picked entry, the frame's Save bar for the whole list,
+ * and what the server said.
+ * @param {{ websiteId: string, name: ListName, bare?: boolean }} props `bare`: the page already says the title, so the
+ *   card has none
+ */
+export function ListCard({ websiteId, name, bare = false }) {
 	const spec = LISTS[name];
 	const path = `/v1/dashboard/websites/${websiteId}/lists/${name}`;
 	const { answer, reload } = useLoad(path);
 	const [draft, setDraft] = useState(/** @type {Entry[] | null} */ (null));
+	const [opened, setOpened] = useState(/** @type {number | null} */ (null));
 	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
 	const words = /** @type {{ title: string, help: string }} */ (/** @type {Record<string, unknown>} */ (L)[name]);
 	const saved = answer?.ok ? /** @type {Entry[]} */ (answer.data.value) : null;
-	const entries = draft ?? saved;
+	const entries = draft ?? saved ?? [];
+	const nameKey = nameField(spec.fields);
+	const columns = COLUMNS[name];
+	/** @param {Entry} entry */
+	const nameOf = (entry) => String(entry[nameKey] ?? '').trim() || L.untitled;
 	/** @type {Record<string, string>} */
 	const errors = {};
 	if (result && !result.ok)
 		for (const error of /** @type {Array<{ path?: string, message?: string }>} */ (result.problem?.errors ?? []))
 			if (error.path) errors[error.path] = String(error.message ?? '');
+	/** The server's errors as lines: an entry's are said with its name, since the drawer is closed after a save. */
+	const lines = () =>
+		Object.entries(errors).map(([at, message]) => {
+			const [, index, field] = /^\/value\/(\d+)(?:\/([^/]+))?/.exec(at) ?? [];
+			const entry = index === undefined ? undefined : entries[Number(index)];
+			if (!entry) return message;
+			return `${nameOf(entry)}${field ? `, ${wordsOf(field).label}` : ''}: ${message}`;
+		});
+	const current = opened === null ? undefined : entries[opened];
+	// many fields, or rows of their own: a large drawer
+	const wide = Object.keys(spec.fields).length > 5 || Object.values(spec.fields).some((field) => field.type === 'rows');
 	return (
-		<Card title={words.title} subtitle={words.help}>
-			{entries === null ? (
-				answer && !answer.ok ? (
-					<Callout tone="danger">{describeProblem(answer.problem)}</Callout>
-				) : null
-			) : (
-				<div className="space-y-3">
-					<Entries
-						fields={spec.fields}
-						entries={entries}
-						at="/value"
-						errors={errors}
-						max={spec.max}
-						label={entryLabel}
-						onChange={setDraft}
-						one
-					/>
-					<SaveBar
-						show={draft !== null}
-						saveLabel={L.save}
-						discardLabel={TEXTS.cancel}
-						onDiscard={() => setDraft(null)}
-						onSave={async () => {
-							const next = await call('PUT', path, { value: draft });
-							setResult(next);
-							if (next.ok) {
-								setDraft(null);
-								reload();
-							}
-						}}
-					/>
-					<SaveOutcome result={result} format={() => (errors['/value'] ? [errors['/value']] : [])} />
-				</div>
-			)}
+		<Card
+			{...(bare ? {} : { title: words.title })}
+			subtitle={words.help}
+			actions={
+				<Button
+					size="sm"
+					disabled={!answer?.ok || entries.length >= spec.max}
+					onClick={() => {
+						setDraft([...entries, blankEntry(spec.fields, entries)]);
+						setOpened(entries.length);
+					}}>
+					<Icon name="plus" size={14} />
+					{L.add}
+				</Button>
+			}>
+			<div className="space-y-4">
+				<Loaded answer={answer} skeleton={<DataTableSkeleton columns={columns.length + 1} rows={4} menu />}>
+					{() => (
+						<DataTable
+							caption={words.title}
+							columns={[
+								{ key: 'name', header: wordsOf(nameKey).label, render: (row) => nameOf(row.entry) },
+								...columns.map((column) => ({
+									key: column.key,
+									header: /** @type {Record<string, string>} */ (L.columns)[column.key] ?? column.key,
+									...(column.kind ? { kind: column.kind } : {}),
+									...(column.low ? { low: true } : {}),
+									render: (/** @type {{ entry: Entry }} */ row) => column.render(row.entry),
+								})),
+							]}
+							rows={entries.map((entry, index) => ({ entry, index }))}
+							rowKey={(row) => String(row.index)}
+							rowLabel={(row) => nameOf(row.entry)}
+							onRowClick={(row) => setOpened(row.index)}
+							rowMenu={(row) => [
+								{ label: L.up, disabled: row.index === 0, onSelect: () => setDraft(moved(entries, row.index, -1)) },
+								{
+									label: L.down,
+									disabled: row.index === entries.length - 1,
+									onSelect: () => setDraft(moved(entries, row.index, 1)),
+								},
+								{
+									label: L.remove,
+									danger: true,
+									onSelect: () => setDraft(entries.filter((_, at) => at !== row.index)),
+								},
+							]}
+							empty={L.none}
+						/>
+					)}
+				</Loaded>
+				<SaveBar
+					show={draft !== null}
+					saveLabel={L.save}
+					discardLabel={TEXTS.cancel}
+					onDiscard={() => {
+						setDraft(null);
+						setOpened(null);
+					}}
+					onSave={async () => {
+						setOpened(null);
+						const next = await call('PUT', path, { value: draft });
+						setResult(next);
+						if (next.ok) {
+							setDraft(null);
+							reload();
+						}
+					}}
+				/>
+				<SaveOutcome result={result} format={lines} />
+			</div>
+			<Drawer
+				open={current !== undefined}
+				onClose={() => setOpened(null)}
+				title={current ? nameOf(current) : ''}
+				size={wide ? 'lg' : 'md'}
+				footer={<Button onClick={() => setOpened(null)}>{L.done}</Button>}>
+				{current && opened !== null ? (
+					<div data-entry="" className="space-y-4">
+						<EntryFields
+							fields={spec.fields}
+							entry={current}
+							at={`/value/${opened}`}
+							errors={errors}
+							onChange={(next) => setDraft(entries.map((other, i) => (i === opened ? next : other)))}
+						/>
+					</div>
+				) : null}
+			</Drawer>
 		</Card>
 	);
 }
@@ -303,7 +421,7 @@ export function ListCard({ websiteId, name }) {
 function StorePresetCard({ websiteId }) {
 	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
 	return (
-		<Card title={L.preset.title} subtitle={L.preset.help}>
+		<Card subtitle={L.preset.help}>
 			<Button
 				variant="secondary"
 				onClick={async () => {
@@ -355,7 +473,7 @@ export const listExtras = (websiteId) => {
 		put(HOME[name], {
 			id: name,
 			label: /** @type {{ title: string }} */ (/** @type {Record<string, unknown>} */ (L)[name]).title,
-			content: <ListCard websiteId={websiteId} name={name} />,
+			content: <ListCard websiteId={websiteId} name={name} bare />,
 		});
 	put('robots_verification', { id: 'preset', label: L.preset.title, content: <StorePresetCard websiteId={websiteId} /> });
 	return out;

@@ -16,6 +16,7 @@ import { manifest, SHARED_SETTINGS } from '../adapters/product.js';
 import { TABS } from '../app/dashboard/tabs.js';
 import { TEXTS } from '../app/dashboard/texts.js';
 import { LISTS } from '../core/lists.js';
+import { closeDrawer, drawerOf, openRow, rowMenu, rowNames } from './dashboard-provider.js';
 import { type } from '@ss/ui/testing';
 
 const WEBSITE = 'web_1';
@@ -210,23 +211,28 @@ describe('the dashboard (setup only)', () => {
 		openSection(container, 'conversion_funnel.goals');
 		await settle();
 		const card = /** @type {HTMLElement} */ (container.querySelector('[id="section-conversion_funnel.goals"]'));
-		// one entry at a time, from a strip of tabs
-		expect([...card.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual(['1. Purchase', '2. Contact']);
-		await click(byText(card, TEXTS.lists.add, 'button'));
-		// the new entry's key, name and event (the kind is a select)
-		const fresh = [...card.querySelectorAll('.rounded-card input')];
+		// a table of the goals; the page says the title, so the card has none
+		expect(rowNames(card)).toEqual(['Purchase', 'Contact']);
+		expect(card.querySelector('h2')).toBeNull();
+		// a new goal opens in a drawer: its name and event (the kind is a select)
+		await act(async () => click(byText(card, TEXTS.lists.add, 'button')));
+		const fresh = [...drawerOf().querySelectorAll('input')];
 		await type(/** @type {HTMLInputElement} */ (fresh[1]), 'Booked a demo');
 		await type(/** @type {HTMLInputElement} */ (fresh[2]), 'book_demo');
-		// move the new goal up, rename Purchase, remove Contact
-		await click(/** @type {HTMLElement} */ (card.querySelector(`button[aria-label="${TEXTS.lists.up}"]`)));
-		await click(/** @type {HTMLElement} */ (card.querySelectorAll('[role="tab"]')[0]));
+		await closeDrawer();
+		// nothing is saved until the Save bar; move the new goal up, rename Purchase, remove Contact
+		expect(sent).toEqual([]);
+		await rowMenu(card, 'Booked a demo', TEXTS.lists.up);
+		expect(rowNames(card)).toEqual(['Purchase', 'Booked a demo', 'Contact']);
+		const purchase = await openRow(card, 'Purchase');
 		await type(
-			/** @type {HTMLInputElement} */ ([...card.querySelectorAll('input')].find((input) => input.value === 'Purchase')),
+			/** @type {HTMLInputElement} */ ([...purchase.querySelectorAll('input')].find((input) => input.value === 'Purchase')),
 			'Order',
 		);
-		await click(/** @type {HTMLElement} */ (card.querySelectorAll('[role="tab"]')[2]));
-		await click(byText(card, TEXTS.lists.remove, 'button'));
-		await click(byText(card, TEXTS.lists.save, 'button'));
+		await closeDrawer();
+		await rowMenu(card, 'Contact', TEXTS.lists.remove);
+		expect(rowNames(card)).toEqual(['Order', 'Booked a demo']);
+		await act(async () => click(byText(document.body, TEXTS.lists.save, 'button')));
 		await settle();
 		expect(sent.at(-1)).toEqual({
 			path: `/v1/dashboard/websites/${WEBSITE}/lists/goals`,
