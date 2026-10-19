@@ -209,11 +209,17 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
   title and its own words over them group by group (a product may reword one shared text). Both come from `@ss/ui`
   itself, not from the client-only `@ss/ui/dashboard`, because the product's server `app/layout.js` reads its title; `useDashboard()` gives the
   merged words and `namesOf(keys, max?)` (feature names from the manifest) inside the page or a `DashboardProvider`.
+- Every standard tab draws through `Page` (layout contract 2026-10-17): crumbs `Product > Section > sub-page`, the old
+  description behind the (i), the actions in the header, and a section with parts shows them in the `InnerNav`
+  (`SectionsPage` in `dashboard-page.js`, each sub-page its own `#hash`, counts and status dots in the sidebar).
+  Lists are `DataTable` pages (the Texts, Defaults, Changes and Developers docs tables) and a record edit opens in a
+  `Drawer`; the loading states are the matching skeletons (`OverviewSkeleton` is built from `StatGridSkeleton` and
+  `SettingsCardSkeleton`).
 - Standard tabs, each taking the product's parts as props: `OverviewTab` (`useMore(overview, props)`, a hook that
   returns the product's `needs`, `steps`, `numbers` and `children`), `FeaturesTab` (`warnings(on)`), `SettingsTab`
   (`sections` first, `notice(key, values, features)` on a feature's card, `featureCards(features)` beside the forms),
-  `ConnectionsTab` (`form(item, save)` for a connection's own form, `hint(name)`; Remove sits in the card's ⋯ menu
-  and asks first), `DevelopersTab` (the product's `sections` instead of the widget script, `children` under More; the
+  `ConnectionsTab` (`form(item, save)` for a connection's own form, `hint(name)`; each connection is a sub-page with
+  its status dot, Test sits in the header and Remove in the header's More menu, which asks first), `DevelopersTab` (the product's `sections` instead of the widget script, `children` under More; the
   website id and tokens are in the Portal),
   `DefaultsTab` (`notice`) and `PricesTab` (with the Re-seal card).
 - Pieces for a product's own tabs: `Loaded`, `Outcome`, `SaveOutcome`, `SettingsForms`, `TextsForm` (with a box that finds a text),
