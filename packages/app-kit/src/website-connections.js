@@ -1,6 +1,7 @@
 /**
- * The Portal's connections in the product (settings-ownership design 8.3 and 8.4): the website's database and storage
- * (entered once in the Portal) and the links to other products (made by the Portal) arrive here over one signed fetch.
+ * The Portal's connections in the product (settings-ownership design 8.3 and 8.4): the website's database, storage and AI
+ * provider key (entered once in the Portal) and the links to other products (made by the Portal) arrive here over one
+ * signed fetch.
  *
  * - **A version in the status answer, a notice to hurry it.** The status answer carries `connectionsVersion`; a copy older
  *   than it is fetched again (`GET /v1/product/websites/:id/connections`) after the response. A
@@ -8,7 +9,7 @@
  *   notice is caught by the next status (at most 5 minutes). A product added to a website later has held nothing, so its
  *   first status already shows a newer version and it fetches.
  * - **Sealed on arrival, tested, reported.** `connections.adopt` seals each value with this product's own `ENCRYPTION_KEY`,
- *   tests the database and the storage with the existing tests and keeps the result; the result goes back to the Portal
+ *   tests the database, the storage and the AI key with the existing tests and keeps the result; the result goes back to the Portal
  *   (`PUT …/connections/:name/health`), which never opens the merchant's database or bucket.
  * - **Light on free plans.** What a request needs sits in the product database and, for the grants, in this instance's
  *   memory for {@link MEMORY_MS}. A request never calls the Portal while it holds a copy. A Portal outage changes nothing:
@@ -17,6 +18,7 @@
  *   (`scope`) lets a call in only when the caller holds that scope (`allows`).
  * @module
  */
+import { deliveredFor, portalNameOf } from './connections.js';
 import { WAITED_FETCH_MS } from './status.js';
 
 /** @typedef {import('./stores/types.js').Store} Store */
@@ -93,14 +95,15 @@ export const createPortalConnections = ({ store, client, connections, now, logge
 					remember(websiteId, doc, doc.version);
 					// the Portal learns how each delivered value worked (best effort: it shows "waiting" until it does)
 					const reported = new Map(results.map((each) => [each.name, each]));
-					for (const name of /** @type {const} */ (['database', 'storage'])) {
-						if (!(name === 'database' ? bundle.database : bundle.storage) || !connections.definitions[name]) continue;
+					for (const [name, def] of Object.entries(connections.definitions)) {
+						const portalName = portalNameOf(def);
+						if (!portalName || !deliveredFor(def, bundle)) continue;
 						const view = (await connections.list(websiteId)).find((each) => each.name === name);
 						const result =
 							reported.get(name) ?? (view && view.set ? { ok: view.status === 'connected', message: view.message } : null);
 						if (!result) continue;
 						await client()
-							.reportHealth(websiteId, name, {
+							.reportHealth(websiteId, portalName, {
 								version: bundle.version,
 								ok: result.ok,
 								...(result.ok || !result.message ? {} : { message: result.message }),
@@ -209,7 +212,7 @@ export const createPortalConnections = ({ store, client, connections, now, logge
 		/**
 		 * A person pressed Test in the product on a delivered value: the result goes to the Portal too (at the version held).
 		 * @param {string} websiteId
-		 * @param {'database' | 'storage'} name
+		 * @param {'database' | 'storage' | 'ai'} name
 		 * @param {{ ok: boolean, message?: string }} result
 		 */
 		reportTest: async (websiteId, name, result) => {

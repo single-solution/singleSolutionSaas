@@ -74,7 +74,7 @@ export const productKeyOf = async ({ store, encryptionKey }) => {
  * @property {number} todayMillicredits
  * @property {Record<string, { version: number, on: string[] }>} features by product id
  * @property {import('@ss/contracts').WebsiteSettings | null} settings the website settings the Portal holds (null: none saved)
- * @property {{ version: number, database: string | null, storage: Record<string, unknown> | null, dbNames: Record<string, string>,
+ * @property {{ version: number, database: string | null, storage: Record<string, unknown> | null, ai: Record<string, unknown> | null, dbNames: Record<string, string>,
  *   links: Array<{ caller: string, callee: string, scopes: string[], token: string, jti: string, on: boolean }> }} connections what
  *   the Portal holds of the website's connections and links (the one counter `version`)
  * @property {Record<string, Record<string, { version: number, ok: boolean, message?: string }>>} health what each product
@@ -270,6 +270,7 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 							? { uri: held.database, dbName: held.dbNames[productId] ?? databaseNameFor(productId) }
 							: null,
 					storage: held.storage && needs.storage !== 'none' ? held.storage : null,
+					shared: { ai: held.ai && /** @type {{ ai?: boolean }} */ (needs).ai === true ? held.ai : null },
 					links: {
 						out: held.links
 							.filter((link) => link.caller === productId && link.on && link.scopes.length > 0)
@@ -282,7 +283,8 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 			}
 			if (method === 'PUT' && parts[4] === 'connections' && parts[6] === 'health') {
 				const checked = validateConnectionHealth(body);
-				if (!checked.ok || (parts[5] !== 'database' && parts[5] !== 'storage')) return fail(url, 'validation_failed', 422);
+				if (!checked.ok || (parts[5] !== 'database' && parts[5] !== 'storage' && parts[5] !== 'ai'))
+					return fail(url, 'validation_failed', 422);
 				site.health[productId] = { ...site.health[productId], [parts[5]]: checked.value };
 				return json(200, { accepted: true });
 			}
@@ -435,7 +437,7 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 				todayMillicredits,
 				features: {},
 				settings: null,
-				connections: { version: 0, database: null, storage: null, dbNames: {}, links: [] },
+				connections: { version: 0, database: null, storage: null, ai: null, dbNames: {}, links: [] },
 				health: {},
 			});
 			return id;
@@ -480,18 +482,19 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 			return version;
 		},
 		/**
-		 * The merchant enters the website's connections once in the Portal (the database and the storage, as the Portal keeps
-		 * them) and every connected product is told (`website.settings_changed`, `what: connections`); the products fetch
+		 * The merchant enters the website's connections once in the Portal (the database, the storage and the AI key, as the
+		 * Portal keeps them) and every connected product is told (`website.settings_changed`, `what: connections`); the products fetch
 		 * them right after. `undefined` leaves a connection as it is, `null` removes it.
 		 * @param {string} websiteId
-		 * @param {{ database?: string | null, storage?: Record<string, unknown> | null, dbNames?: Record<string, string> }} change
+		 * @param {{ database?: string | null, storage?: Record<string, unknown> | null, ai?: Record<string, unknown> | null, dbNames?: Record<string, string> }} change
 		 * @param {{ notify?: boolean }} [options] `notify: false` tells no product (a lost notice: the status catches up)
 		 * @returns {Promise<number>} the new version
 		 */
-		saveConnections: async (websiteId, { database, storage, dbNames }, { notify = true } = {}) => {
+		saveConnections: async (websiteId, { database, storage, ai, dbNames }, { notify = true } = {}) => {
 			const held = site(websiteId).connections;
 			if (database !== undefined) held.database = database;
 			if (storage !== undefined) held.storage = storage;
+			if (ai !== undefined) held.ai = ai;
 			if (dbNames !== undefined) held.dbNames = { ...dbNames };
 			held.version += 1;
 			if (notify) await fakePortal.tell(websiteId, 'connections');
@@ -547,7 +550,7 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 				if (products.get(productId)?.handler)
 					await fakePortal.sendNotice(productId, { type: 'website.settings_changed', websiteId, what });
 		},
-		/** What a product reported for a delivered connection. @param {string} websiteId @param {string} productId @param {'database' | 'storage'} name */
+		/** What a product reported for a delivered connection. @param {string} websiteId @param {string} productId @param {'database' | 'storage' | 'ai'} name */
 		health: (websiteId, productId, name) => site(websiteId).health[productId]?.[name] ?? null,
 		/**
 		 * Add a removed product to a website again, as the Portal does (PLAN 0.4.12 row 4): active, every feature off and
@@ -918,10 +921,11 @@ export const staffCaller = ({ accounts, websiteId, paste }) => {
 
 /**
  * What a merchant does in the Portal for a test product, as the product then gets it: the one database of the website
- * (the product's own database is the one the connection string names, so a test can read it), the storage, and the link
+ * (the product's own database is the one the connection string names, so a test can read it), the storage, the website's
+ * AI provider key (when the manifest says `needs.ai`), and the link
  * to another product (with every scope the product's manifest needs of it). The Portal tells the product, which fetches
- * it right after answering; this waits until it holds the value. Anything else (a provider key) is the product's own and
- * is left to the caller (`null`).
+ * it right after answering; this waits until it holds the value. Anything else (a provider key of the product's own) is
+ * left to the caller (`null`).
  * @param {{ portal: Awaited<ReturnType<typeof createFakePortal>>, websiteId: string, manifest: Record<string, any>,
  *   product: { connections: { value: (websiteId: string, name: string) => Promise<unknown> } },
  *   drain?: () => Promise<unknown>, view?: (name: string) => Promise<unknown> }} input `drain`: runs the work the product did
@@ -957,6 +961,9 @@ export const portalConnector = ({ portal, websiteId, manifest, product, drain, v
 		} else if (name === 'storage') {
 			await portal.saveConnections(websiteId, { storage: /** @type {Record<string, unknown>} */ (value) });
 			await until(async () => JSON.stringify(await product.connections.value(websiteId, 'storage')) === JSON.stringify(value));
+		} else if (name === 'ai' && manifest.needs?.ai === true) {
+			await portal.saveConnections(websiteId, { ai: /** @type {Record<string, unknown>} */ (value) });
+			await until(async () => JSON.stringify(await product.connections.value(websiteId, 'ai')) === JSON.stringify(value));
 		} else if (scopes.has(name)) {
 			const { token } = await portal.link(websiteId, manifest.id, name, /** @type {string[]} */ (scopes.get(name)));
 			tokens.set(name, token);
@@ -972,6 +979,9 @@ export const portalConnector = ({ portal, websiteId, manifest, product, drain, v
 			if (name === 'storage') {
 				await portal.saveConnections(websiteId, { storage: null });
 				await until(async () => (await product.connections.value(websiteId, 'storage')) === null);
+			} else if (name === 'ai' && manifest.needs?.ai === true) {
+				await portal.saveConnections(websiteId, { ai: null });
+				await until(async () => (await product.connections.value(websiteId, 'ai')) === null);
 			} else if (scopes.has(name)) {
 				await portal.unlink(websiteId, manifest.id, name);
 				tokens.delete(name);

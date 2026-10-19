@@ -172,7 +172,7 @@ export const createPortalClient = ({ portalUrl, productId, signer, fetch = globa
 		/**
 		 * Tell the Portal how a delivered connection worked (the Portal never opens the merchant's database or bucket).
 		 * @param {string} websiteId
-		 * @param {'database' | 'storage'} name
+		 * @param {'database' | 'storage' | 'ai'} name
 		 * @param {{ version: number, ok: boolean, message?: string }} report
 		 * @returns {Promise<void>}
 		 */

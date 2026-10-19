@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createProduct, defineRoute } from '../src/index.js';
 import { createSealer } from '../src/sealing.js';
+import { portalConnector } from '../src/testing.js';
 import {
 	BASE,
 	ENCRYPTION_KEY,
@@ -287,6 +288,110 @@ describe('storage', () => {
 		const upload = storage?.presignPut({ key: 'a/b.png', contentType: 'image/png', contentLength: 10 });
 		expect(upload?.url).toContain('X-Amz-Signature=');
 		expect(await product.connections.storage(websiteId, 'ai')).toBeNull();
+	});
+});
+
+describe('the website’s AI provider key (SO-5b)', () => {
+	const AI = { provider: 'openai', apiKey: 'sk-live-abcdef1234', model: 'gpt-4o-mini' };
+	/** @type {Record<string, import('../src/index.js').ConnectionDefinition>} */
+	const DEFINITIONS = {
+		ai: {
+			label: 'AI provider key',
+			kind: 'secret',
+			portal: 'ai',
+			neededBy: ['notes'],
+			test: async (/** @type {any} */ value) =>
+				value.apiKey === 'sk-bad-key-0000' ? { ok: false, message: 'Key refused' } : { ok: true },
+		},
+	};
+	const withAi = () => ({ ...manifest(), needs: { database: true, storage: 'optional', ai: true } });
+
+	it('is the Portal’s: adopted sealed, tested, reported, and refused for save and remove', async () => {
+		const { session, dash, websiteId, portal, store, settle, product, clock } = await setup({
+			connections: DEFINITIONS,
+			manifest: withAi(),
+		});
+		const cookie = await session({ kind: 'merchant' });
+		const path = `/v1/dashboard/websites/${websiteId}/connections`;
+		const row = async () =>
+			(await (await dash(cookie, 'GET', path)).json()).connections.find(
+				(/** @type {{ name: string }} */ c) => c.name === 'ai',
+			);
+		expect(await row()).toMatchObject({ kind: 'secret', managed: true, set: false, status: 'not_connected' });
+		await portal.saveConnections(websiteId, { ai: AI });
+		await settle();
+		expect(await row()).toMatchObject({ managed: true, set: true, status: 'connected' });
+		expect(JSON.stringify(await row())).not.toContain('1234');
+		expect(JSON.stringify(await store.list('connections', { websiteId }))).not.toContain('sk-live');
+		expect(await product.connections.value(websiteId, 'ai')).toEqual(AI);
+		expect(portal.health(websiteId, 'notes', 'ai')).toMatchObject({ version: 1, ok: true });
+		// the Portal's: nothing is saved or removed in the product
+		const put = await dash(cookie, 'PUT', `${path}/ai`, { value: { ...AI, apiKey: 'sk-other-1234567' } });
+		expect(put.status).toBe(409);
+		expect((await put.json()).type).toMatch(/managed_by_portal$/);
+		expect((await dash(cookie, 'DELETE', `${path}/ai`)).status).toBe(409);
+		// a refused key is stored as failing and the Portal is told why; testing it again reports it too
+		clock.advance(1000);
+		await portal.saveConnections(websiteId, { ai: { ...AI, apiKey: 'sk-bad-key-0000' } });
+		await settle();
+		expect(await row()).toMatchObject({ status: 'test_failed', message: 'Key refused', set: true });
+		expect(portal.health(websiteId, 'notes', 'ai')).toMatchObject({ version: 2, ok: false, message: 'Key refused' });
+		clock.advance(1000);
+		await portal.saveConnections(websiteId, { ai: AI });
+		await settle();
+		expect(portal.health(websiteId, 'notes', 'ai')).toMatchObject({ version: 3, ok: true });
+		expect(await (await dash(cookie, 'POST', `${path}/ai/test`)).json()).toMatchObject({ status: 'connected' });
+		await settle();
+		expect(portal.health(websiteId, 'notes', 'ai')).toMatchObject({ version: 3, ok: true });
+		// removed in the Portal: forgotten here
+		await portal.saveConnections(websiteId, { ai: null });
+		await settle();
+		expect(await row()).toMatchObject({ managed: true, set: false });
+		expect(await product.connections.value(websiteId, 'ai')).toBeNull();
+		expect(portal.health(websiteId, 'notes', 'ai')).toMatchObject({ version: 3 });
+	});
+
+	it('is not delivered to a product whose manifest does not say needs.ai', async () => {
+		const { websiteId, portal, settle, product } = await setup({ connections: DEFINITIONS });
+		await portal.saveConnections(websiteId, { ai: AI });
+		await settle();
+		expect(await product.connections.value(websiteId, 'ai')).toBeNull();
+		expect(portal.health(websiteId, 'notes', 'ai')).toBeNull();
+	});
+
+	it('is connected through the test helper the way the Portal does it', async () => {
+		const { websiteId, portal, settle, product, session, dash } = await setup({ connections: DEFINITIONS, manifest: withAi() });
+		const connect = portalConnector({
+			portal,
+			websiteId,
+			manifest: withAi(),
+			product,
+			drain: settle,
+			view: async (name) => {
+				const cookie = await session({ kind: 'merchant' });
+				const list = await (await dash(cookie, 'GET', `/v1/dashboard/websites/${websiteId}/connections`)).json();
+				return list.connections.find((/** @type {{ name: string }} */ c) => c.name === name);
+			},
+		});
+		expect(await connect('ai', AI)).toMatchObject({ name: 'ai', set: true, managed: true });
+		expect(await product.connections.value(websiteId, 'ai')).toEqual(AI);
+		await connect.disconnect('ai');
+		expect(await product.connections.value(websiteId, 'ai')).toBeNull();
+		// a product that does not say needs.ai leaves the name to the caller
+		const plain = portalConnector({ portal, websiteId, manifest: manifest(), product });
+		expect(await plain('ai', AI)).toBeNull();
+	});
+
+	it('refuses a portal value on anything but a secret, or one the Portal does not deliver', () => {
+		const make = (/** @type {any} */ connections) =>
+			createProduct({
+				manifest: manifest(),
+				config: { mongodbUri: '', connectSecret: SECRET, encryptionKey: ENCRYPTION_KEY },
+				connections,
+			});
+		expect(() => make({ ai: { label: 'x', kind: 'secret', portal: 'nope', neededBy: [] } })).toThrow(/portal/);
+		expect(() => make({ storage: { label: 'x', kind: 'storage', portal: 'ai', neededBy: [] } })).toThrow(/portal/);
+		expect(() => make(DEFINITIONS)).not.toThrow();
 	});
 });
 

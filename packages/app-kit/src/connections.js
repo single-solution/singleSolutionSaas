@@ -1,12 +1,14 @@
 /**
  * Connections (PLAN 0.4.3, 0.4.6, 0.4.8; settings-ownership design 8.3 and 8.4): the website's database and storage,
- * the product's provider keys, and the links to other products, per website, in the product database.
+ * the website's AI provider key, the product's own provider keys, and the links to other products, per website, in the
+ * product database.
  *
- * - **The Portal owns three kinds.** The database and the storage are entered once per website in the Portal (Website
- *   settings › Data and files) and arrive here with the product's own database name; the links to other products are
- *   created by the Portal from the manifests and arrive as keys with the scopes granted. They are *managed*: `save` and
- *   `remove` refuse them (409 `managed_by_portal`), and only `adopt` (a signed fetch from the Portal) writes them. The
- *   product's own provider keys (`secret`) are still entered in the product.
+ * - **The Portal owns four kinds.** The database and the storage are entered once per website in the Portal (Website
+ *   settings › Data and files) and arrive here with the product's own database name; the website's AI provider key is
+ *   entered there too and arrives, when the manifest says `needs.ai`, in a `secret` definition that says `portal: 'ai'`; the
+ *   links to other products are created by the Portal from the manifests and arrive as keys with the scopes granted. They
+ *   are *managed*: `save` and `remove` refuse them (409 `managed_by_portal`), and only `adopt` (a signed fetch from the
+ *   Portal) writes them. The product's own provider keys (`secret` with no `portal`) are still entered in the product.
  * - Values are encrypted (`sealing.js`: with `ENCRYPTION_KEY`, or `ENCRYPTION_KEY_PREVIOUS` while the key changes)
  *   and write-only: screens get only `{ name, label, kind, neededBy, managed, set, status, message?, testedAt }`: whether a
  *   value is stored (`set`) and how its last test went, never the value and not even its last characters. A value
@@ -42,12 +44,13 @@ import { omit } from './util.js';
  * @property {string[]} neededBy feature keys
  * @property {Exclude<ConnectionKind, 'link'>} kind
  * @property {string} [secretField] object values: the member whose last 4 characters are shown (default `apiKey`)
+ * @property {'ai'} [portal] only for a `secret`: the value is the Portal's (the website's AI provider key, `bundle.shared.ai`): managed
  * @property {(value: ConnectionValue, ctx: { websiteId: string, send: OutboundSend }) => Promise<{ ok: boolean, message?: string }>} [test]
  */
 /**
  * @typedef {{ name: string, label: string, kind: ConnectionKind, neededBy: string[], managed: boolean,
  *   status: 'connected' | 'not_connected' | 'test_failed', set: boolean, message?: string, testedAt: string | null }} ConnectionView
- *   `managed`: the Portal owns it (database, storage and links): it cannot be saved or removed here
+ *   `managed`: the Portal owns it (database, storage, the AI key and links): it cannot be saved or removed here
  */
 /** The Portal's bundle for a product (`GET /v1/product/websites/:id/connections`). @typedef {import('@ss/contracts').WebsiteConnections} Bundle */
 /** @typedef {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} OutboundSend */
@@ -61,6 +64,31 @@ const NAME = /^[a-z][a-z0-9_]{0,39}$/;
 const KINDS = Object.freeze(['database', 'storage', 'secret']);
 /** The kinds the Portal owns. */
 const MANAGED_KINDS = Object.freeze(['database', 'storage']);
+/** The shared values of the Portal's bundle a `secret` definition may take (`portal`). */
+const SHARED = Object.freeze(['ai']);
+
+/**
+ * Whether the Portal owns the definition's value: a database, a storage or a secret that says `portal`.
+ * @param {ConnectionDefinition | undefined} def
+ */
+const isManaged = (def) => def !== undefined && (MANAGED_KINDS.includes(def.kind) || def.portal !== undefined);
+
+/**
+ * The name the Portal knows a managed definition by (`database`, `storage`, `ai`), or null for a value of the product's own.
+ * @param {ConnectionDefinition} def
+ * @returns {'database' | 'storage' | 'ai' | null}
+ */
+export const portalNameOf = (def) => (def.kind === 'database' || def.kind === 'storage' ? def.kind : (def.portal ?? null));
+
+/**
+ * What the Portal delivered for a managed definition, or null when it holds none.
+ * @param {ConnectionDefinition} def
+ * @param {Bundle} bundle
+ */
+export const deliveredFor = (def, bundle) => {
+	const name = portalNameOf(def);
+	return name === 'database' ? bundle.database : name === 'storage' ? bundle.storage : name === 'ai' ? bundle.shared.ai : null;
+};
 /** Who changed a connection that arrived from the Portal. @type {Who} */
 const PORTAL = Object.freeze({ kind: 'portal', id: 'portal', name: 'Portal' });
 /** The name a link to another product is stored under. @param {string} productId */
@@ -92,6 +120,8 @@ export const checkConnectionDefinitions = (definitions = {}, manifest) => {
 			throw new TypeError(`connection ${name}: neededBy must list features of the manifest`);
 		if (def.kind === 'database' && name !== 'database') throw new TypeError('the database connection is named database');
 		if (def.kind === 'storage' && name !== 'storage') throw new TypeError('the storage connection is named storage');
+		if (def.portal !== undefined && (def.kind !== 'secret' || !SHARED.includes(def.portal)))
+			throw new TypeError(`connection ${name}: portal must be one of ${SHARED.join(', ')} and only a secret takes it`);
 		out[name] = def;
 	}
 	out.database ??= { label: 'Database (MongoDB)', kind: 'database', neededBy: [...keys] };
@@ -238,7 +268,7 @@ export const createConnections = ({
 					label: def.label,
 					kind: def.kind,
 					neededBy: [...def.neededBy],
-					managed: MANAGED_KINDS.includes(def.kind),
+					managed: isManaged(def),
 				};
 				if (!found) return { ...base, set: false, status: /** @type {const} */ ('not_connected'), testedAt: null };
 				return {
@@ -301,7 +331,7 @@ export const createConnections = ({
 		if (link) return managed(link.label, 'links');
 		const def = definitions[name];
 		if (!def) return { ok: false, problem: problem('not_found', 'No such connection.') };
-		if (MANAGED_KINDS.includes(def.kind)) return managed(def.label, 'connections');
+		if (isManaged(def)) return managed(def.label, 'connections');
 		const violation = valueViolation(def.kind, value);
 		if (violation) return { ok: false, problem: problem('validation_failed', violation) };
 		const checked = /** @type {ConnectionValue} */ (value);
@@ -322,9 +352,9 @@ export const createConnections = ({
 	};
 
 	/**
-	 * Test the saved value again (the database and the storage too: the result goes to the Portal, which shows it).
+	 * Test the saved value again (the Portal's values too: the result goes to the Portal, which shows it).
 	 * @param {{ websiteId: string, name: string }} input
-	 * @returns {Promise<{ ok: true, connection: ConnectionView, tested?: { name: 'database' | 'storage', ok: boolean, message?: string } } | { ok: false, problem: ProblemResult }>}
+	 * @returns {Promise<{ ok: true, connection: ConnectionView, tested?: { name: 'database' | 'storage' | 'ai', ok: boolean, message?: string } } | { ok: false, problem: ProblemResult }>}
 	 */
 	const test = async ({ websiteId, name }) => {
 		const def = definitions[name];
@@ -342,7 +372,9 @@ export const createConnections = ({
 		return {
 			ok: true,
 			connection,
-			...(def.kind === 'database' || def.kind === 'storage' ? { tested: { name: def.kind, ...result } } : {}),
+			...(portalNameOf(def)
+				? { tested: { name: /** @type {'database' | 'storage' | 'ai'} */ (portalNameOf(def)), ...result } }
+				: {}),
 		};
 	};
 
@@ -355,7 +387,7 @@ export const createConnections = ({
 		if (link) return managed(link.label, 'links');
 		const def = definitions[name];
 		if (!def) return { ok: false, problem: problem('not_found', 'No such connection.') };
-		if (MANAGED_KINDS.includes(def.kind)) return managed(def.label, 'connections');
+		if (isManaged(def)) return managed(def.label, 'connections');
 		await store.delete('connections', idOf(websiteId, name));
 		await recent.record({ websiteId, who, what: 'connections', detail: `${def.label}: removed` });
 		return { ok: true };
@@ -449,7 +481,7 @@ export const createConnections = ({
 	};
 
 	/**
-	 * Take what the Portal delivered for this product: the database and the storage (sealed, tested), the links' keys
+	 * Take what the Portal delivered for this product: the database, the storage and the AI key (sealed, tested), the links' keys
 	 * (sealed), and forget what the Portal no longer delivers (a removed connection, a revoked or switched-off link, and the
 	 * token connections of older versions). Returns the test results to report.
 	 * @param {string} websiteId
@@ -460,8 +492,8 @@ export const createConnections = ({
 		/** @type {Array<{ name: string, ok: boolean, message?: string }>} */
 		const results = [];
 		for (const [name, def] of Object.entries(definitions)) {
-			if (!MANAGED_KINDS.includes(def.kind)) continue;
-			const incoming = def.kind === 'database' ? bundle.database : bundle.storage;
+			if (!isManaged(def)) continue;
+			const incoming = deliveredFor(def, bundle);
 			if (!incoming) {
 				if (await store.get('connections', idOf(websiteId, name))) {
 					await store.delete('connections', idOf(websiteId, name));
@@ -656,7 +688,7 @@ export const createConnections = ({
 		products,
 		reseal,
 		/**
-		 * The values the Portal delivers (the database, the storage, the links' keys) that are stored for the website but no
+		 * The values the Portal delivers (the database, the storage, the AI key, the links' keys) that are stored for the website but no
 		 * longer open (the key changed without the previous one): the product fetches them again.
 		 * @param {string} websiteId
 		 * @returns {Promise<string[]>}
@@ -666,7 +698,7 @@ export const createConnections = ({
 			const names = [];
 			for (const doc of await store.list('connections', { websiteId }, { limit: 200 })) {
 				const name = String(doc.name);
-				const delivered = MANAGED_KINDS.includes(definitions[name]?.kind ?? '') || linkByName.has(name);
+				const delivered = isManaged(definitions[name]) || linkByName.has(name);
 				if (delivered && sealer.open(doc.sealed, aad(websiteId, name)) === null) names.push(name);
 			}
 			return names;
