@@ -405,7 +405,7 @@ export function WebsitePageView({
 								rowKey={(card) => card.productId}
 								rowLabel={(card) => card.name}
 								onRowClick={(card) => nav.go(hrefOf(`products/${card.productId}`))}
-								rowMenu={productMenu}
+								{...(can.open || can.manage ? { rowMenu: productMenu } : {})}
 								columns={[
 									{
 										key: 'name',

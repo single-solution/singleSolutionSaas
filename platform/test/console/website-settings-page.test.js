@@ -1,32 +1,29 @@
 // @vitest-environment jsdom
 /**
- * Website settings in the browser (jsdom) against a live in-process Portal with a fake product: the page of a website
- * (the inner sidebar with what a product still needs, one section at a time), a save through the floating Save bar that
- * changes the Portal's document and clears what was missing, a value the Portal refuses shown under its field, the
- * address and the hours in right drawers, a save made from an older version (Reload), Recent changes, the website
- * card's menu and the admin's page.
+ * Website settings in the browser (jsdom) against a live in-process Portal with a fake product: the website page's
+ * Website settings parts (the inner nav with what a product still needs, one section per address), a save through the
+ * floating Save bar that changes the Portal's document and clears what was missing, a value the Portal refuses shown
+ * under its field, the address and the hours in right drawers, a save made from an older version (Reload), Recent
+ * changes, and which people get the settings in the Portal and in the Admin Console.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '@ss/ui';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { closeMongoClients } from '../../src/testing.js';
-import { MerchantsView } from '../../src/console/admin/views/merchants.js';
+import { AdminWebsiteView } from '../../src/console/admin/views/website.js';
 import * as admin from '../../src/console/admin/loaders.js';
 import * as loaders from '../../src/console/loaders.js';
-import { WebsiteSettingsView, readinessLines } from '../../src/console/views/website-settings.js';
+import { readinessLines } from '../../src/console/views/website-settings.js';
 import { hoursSummary } from '../../src/console/views/website-settings-sections.js';
-import { WebsiteCard } from '../../src/console/views/website.js';
+import { WebsiteView } from '../../src/console/views/websites.js';
 import { startMongo } from '../helpers.js';
 import {
 	buttons,
 	createWorld,
 	dialog,
-	menuItems,
-	openSection,
 	press,
 	pressDialog,
 	quiet,
-	resetHash,
 	settle,
 	shows,
 	until,
@@ -50,7 +47,6 @@ afterAll(async () => {
 });
 afterEach(() => {
 	cleanup();
-	resetHash();
 	vi.unstubAllGlobals();
 });
 
@@ -69,24 +65,21 @@ const world = async (name) => {
 	return { w, b, merchantId, websiteId, notes, settingsUrl };
 };
 
-/** Render the page as the server component of the merchant console does. @param {Awaited<ReturnType<typeof world>>} x */
-const openPage = async ({ b, merchantId, websiteId }) => {
+/**
+ * Show a part of the website page as the server component of the Portal does (the settings part by default); showing
+ * another part is following its link: a fresh render with what the Portal answers for it.
+ * @param {Awaited<ReturnType<typeof world>>} x
+ * @param {string} [part]
+ */
+const openPage = async ({ b, merchantId, websiteId }, part = 'settings/business') => {
+	cleanup();
 	b.use();
-	const loaded = await loaders.loadWebsiteSettings(b.api, merchantId, websiteId);
-	if (!loaded.ok) throw new Error('settings');
-	withToasts(
-		<WebsiteSettingsView
-			data={loaded.data}
-			changes={loaded.changes}
-			connections={loaded.connections}
-			merchantId={merchantId}
-			websiteId={websiteId}
-			domain={loaded.domain}
-			back={{ href: `/websites/${websiteId}`, label: 'Back to the website' }}
-		/>,
-	);
+	withToasts(<WebsiteView {...await loaders.loadWebsitePage(b.api, merchantId, websiteId, part)} />);
 	await settle(2);
 };
+
+/** Whether the header says the settings are at this version. @param {number} n */
+const version = (n) => new RegExp(`Settings version\\s*${n}(?!\\d)`).test(document.body.textContent ?? '');
 
 /** The label's input or select. @param {string} label @param {ParentNode} [root] @returns {any} */
 const field = (label, root = document) => byLabel(root, label);
@@ -100,19 +93,21 @@ const choose = async (select, value) => {
 };
 
 describe('Website settings (jsdom)', () => {
-	it('says what a product still needs, one section at a time, and the sections of the inner sidebar', async () => {
+	it('says what a product still needs, one section at a time, and the settings items of the inner nav', async () => {
 		const restore = quiet();
 		try {
 			const x = await world('wsp_open');
 			await openPage(x);
-			expect(shows('Website settings · shop.example.com')).toBe(true);
-			expect(shows('Version 0')).toBe(true);
+			expect(document.querySelector('h1')?.textContent).toBe('shop.example.com');
+			expect(shows('Settings version')).toBe(true);
 			expect(shows('Not saved yet')).toBe(true);
 			// what Notes needs, on the page and as a dot on the section that holds it
 			expect(shows('Notes needs: currency, country.')).toBe(true);
-			const nav = /** @type {HTMLElement} */ (document.querySelector('nav'));
+			const nav = /** @type {HTMLElement} */ (document.querySelector('nav[aria-label="Website pages"]'));
 			const links = [...nav.querySelectorAll('a')].map((a) => a.textContent?.replace(/\s+/g, ' ').trim());
 			expect(links).toEqual([
+				'Overview',
+				'NotesNo features on',
 				'Business',
 				'Brand and look',
 				'Region and formatNeeded by Notes',
@@ -120,17 +115,25 @@ describe('Website settings (jsdom)', () => {
 				'Team and alerts',
 				'Data and files',
 				'Between your products',
+				'Install and tokens',
+				'Setup sheet',
+				'Usage',
 				'Recent changes',
 			]);
-			expect(
-				nav.querySelector('a[href="#region"] [title="Needed by Notes"], a[href="#region"] [aria-label="Needed by Notes"]'),
-			).not.toBeNull();
+			const region = `a[href="/websites/${x.websiteId}/settings/region"]`;
+			expect(nav.querySelector(`${region} [title="Needed by Notes"], ${region} [aria-label="Needed by Notes"]`)).not.toBeNull();
 			// one section at a time: only Business is on the page
 			expect(shows('Business name')).toBe(true);
 			expect(shows('Store currency')).toBe(false);
-			await openSection('Region and format');
+			await openPage(x, 'settings/region');
 			expect(shows('Store currency')).toBe(true);
+			expect(shows('Business name')).toBe(false);
 			expect(readinessLines([{ productId: 'a', name: 'A', requires: ['x'], missing: [] }])).toEqual([]);
+			// the bare settings address is the first section; a section that does not exist is no page
+			await openPage(x, 'settings');
+			expect(shows('Business name')).toBe(true);
+			await openPage(x, 'settings/nonsense');
+			expect(shows('This page does not exist.')).toBe(true);
 		} finally {
 			restore();
 		}
@@ -141,7 +144,7 @@ describe('Website settings (jsdom)', () => {
 		try {
 			const x = await world('wsp_save');
 			await openPage(x);
-			await openSection('Region and format');
+			await openPage(x, 'settings/region');
 			expect(buttons('Save changes')).toHaveLength(0);
 			await choose(/** @type {HTMLSelectElement} */ (field('Country')), 'US');
 			// the country filled what was empty: the calling code and the units
@@ -166,15 +169,15 @@ describe('Website settings (jsdom)', () => {
 				},
 			});
 			expect(shows('Notes needs')).toBe(false);
-			expect(shows('Version 1')).toBe(true);
+			expect(version(1)).toBe(true);
 			expect(buttons('Save changes')).toHaveLength(0);
 			// Recent changes names the section and the fields
-			await openSection('Recent changes');
+			await openPage(x, 'changes');
 			await until(() => shows('Region and format · version 1'));
 			expect(shows('currency')).toBe(true);
 			expect(shows('by Shop & Co')).toBe(true);
 			// the preview of the Format follows the currency
-			await openSection('Region and format');
+			await openPage(x, 'settings/region');
 			expect(document.querySelector('[data-preview="money"]')?.textContent).toContain('USD');
 		} finally {
 			restore();
@@ -186,7 +189,7 @@ describe('Website settings (jsdom)', () => {
 		try {
 			const x = await world('wsp_refuse');
 			await openPage(x);
-			await openSection('Region and format');
+			await openPage(x, 'settings/region');
 			await type(field('Time zone'), 'Mars/Base');
 			await press('Save changes');
 			await x.b.waitCall('PUT', `${x.settingsUrl}/region`, (status) => status === 422);
@@ -264,50 +267,46 @@ describe('Website settings (jsdom)', () => {
 			await x.b.waitCall('PUT', `${x.settingsUrl}/business`, (status) => status === 409);
 			await until(() => shows('These settings were saved by someone else meanwhile.'));
 			await press('Reload');
-			await until(() => shows('Version 1'));
-			await openSection('Domains, pages and legal');
+			await until(() => version(1));
+			await openPage(x, 'settings/pages');
 			expect(field('Host name').value).toBe('www.shop.example.com');
 		} finally {
 			restore();
 		}
 	});
 
-	it('is in the website card’s More menu, and in the admin console for Owner and Support', async () => {
+	it('is in the inner nav of the Portal and of the Admin Console for Owner and Support, not for Finance', async () => {
 		const restore = quiet();
 		try {
 			const x = await world('wsp_menu');
-			x.b.use();
-			const websites = await loaders.loadWebsiteRows(x.b.api, x.merchantId);
-			const row = websites.rows[0];
-			if (!row) throw new Error('no website');
-			withToasts(
-				<WebsiteCard
-					website={row.website}
-					cards={row.cards}
-					can={{ manage: false, removeWebsite: false, tokens: true, open: true }}
-					settingsHref={`/websites/${x.websiteId}/settings`}
-					launch={() => ({ path: '/x' })}
-				/>,
-			);
-			await press('Actions for shop.example.com');
-			expect(menuItems()[0]).toBe('Website settings');
+			await openPage(x, '');
+			expect(document.querySelector(`a[href="/websites/${x.websiteId}/settings/business"]`)).not.toBeNull();
 			cleanup();
-			// the admin's merchant page: the same item for the Owner, and for Support; Finance has no such item
+			// the admin's website page: the same items for the Owner; Finance has no Website settings and no such page
+			const base = `/admin/merchants/${x.merchantId}/websites/${x.websiteId}`;
 			const owner = x.w.owner;
 			x.w.ownerBrowser.use();
-			const detail = await admin.loadMerchant(x.w.ownerBrowser.api, x.merchantId, owner);
-			if (!detail.ok) throw new Error('merchant');
-			withToasts(<MerchantsView detail={detail} websiteId={x.websiteId} admin={owner} />);
-			await press('Actions for shop.example.com');
-			expect(menuItems()).toContain('Website settings');
+			const detail = await admin.loadAdminWebsite(x.w.ownerBrowser.api, x.merchantId, x.websiteId, '', owner);
+			withToasts(<AdminWebsiteView detail={detail} admin={owner} />);
+			expect(document.querySelector(`a[href="${base}/settings/business"]`)).not.toBeNull();
+			expect(document.querySelector(`a[href="${base}/changes"]`)).not.toBeNull();
 			cleanup();
 			const { admin: finance, b: financeBrowser } = await x.w.adminOf('finance');
 			financeBrowser.use();
-			const financeDetail = await admin.loadMerchant(financeBrowser.api, x.merchantId, finance);
-			if (!financeDetail.ok) throw new Error('merchant');
-			withToasts(<MerchantsView detail={financeDetail} websiteId={x.websiteId} admin={finance} />);
-			await press('Actions for shop.example.com');
-			expect(menuItems()).not.toContain('Website settings');
+			const financeDetail = await admin.loadAdminWebsite(financeBrowser.api, x.merchantId, x.websiteId, '', finance);
+			withToasts(<AdminWebsiteView detail={financeDetail} admin={finance} />);
+			expect(document.querySelector(`a[href="${base}/settings/business"]`)).toBeNull();
+			expect(document.querySelector(`a[href="${base}/changes"]`)).toBeNull();
+			cleanup();
+			const settingsAddress = await admin.loadAdminWebsite(
+				financeBrowser.api,
+				x.merchantId,
+				x.websiteId,
+				'settings/business',
+				finance,
+			);
+			withToasts(<AdminWebsiteView detail={settingsAddress} admin={finance} />);
+			expect(shows('This page does not exist.')).toBe(true);
 		} finally {
 			restore();
 		}
