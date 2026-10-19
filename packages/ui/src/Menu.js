@@ -28,14 +28,23 @@ import { themeMenuItems, useThemeChoice } from './theme.js';
  * @property {boolean} [divider] a hairline above the item (a new group without a heading)
  */
 
+/** Where a floating menu grows from: its vertical side and the button edge it is aligned to. */
+const ORIGINS = {
+	'top-end': 'origin-top-right',
+	'top-start': 'origin-top-left',
+	'bottom-end': 'origin-bottom-right',
+	'bottom-start': 'origin-bottom-left',
+};
+
 /**
  * @param {{ label: string, items: MenuItem[], icon?: import('./icons.js').IconName, size?: 'sm' | 'md',
  *   className?: string, trigger?: import('react').ReactNode, header?: import('react').ReactNode,
- *   placement?: 'down' | 'up', align?: 'end' | 'start', triggerClassName?: string }} props `label`: the button's
+ *   placement?: 'down' | 'up', align?: 'end' | 'start', triggerClassName?: string, floating?: boolean }} props `label`: the button's
  *   accessible name and the menu's label; `trigger` replaces the icon button with a ghost button around it (its look
  *   is `triggerClassName`, e.g. a filter chip); `header` is shown above the actions; `placement` `up` opens the menu
  *   above its button (a button at the bottom of the sidebar); `align` `start` opens it from the button's left edge
- *   (a button on the left of a bar)
+ *   (a button on the left of a bar); `floating` draws the menu fixed to the screen from the button's place, so a
+ *   scrolling pane around the button (a table row) never clips it; it closes when the page scrolls or resizes
  */
 export function ActionMenu({
 	label,
@@ -48,12 +57,31 @@ export function ActionMenu({
 	placement = 'down',
 	align = 'end',
 	triggerClassName,
+	floating = false,
 }) {
 	const [open, setOpen] = useState(false);
+	const [anchor, setAnchor] = useState(/** @type {{ style: Record<string, number>, up: boolean } | null} */ (null));
 	const root = useRef(/** @type {HTMLDivElement | null} */ (null));
 	const button = useRef(/** @type {HTMLButtonElement | null} */ (null));
 	const id = useId();
 	const presence = usePresence(open);
+
+	/** Open or close; a floating menu first measures where its button is. */
+	const toggle = () => {
+		if (!open && floating && button.current) {
+			const rect = button.current.getBoundingClientRect();
+			const height = items.length * 34 + 16 + (header ? 64 : 0);
+			const up = rect.bottom + 8 + height > window.innerHeight && rect.top > height + 8;
+			setAnchor({
+				up,
+				style: {
+					...(up ? { bottom: window.innerHeight - rect.top + 8 } : { top: rect.bottom + 8 }),
+					...(align === 'start' ? { left: Math.max(8, rect.left) } : { right: Math.max(8, window.innerWidth - rect.right) }),
+				},
+			});
+		}
+		setOpen((o) => !o);
+	};
 
 	/** The enabled menu items, in order. */
 	const enabled = () =>
@@ -74,13 +102,20 @@ export function ActionMenu({
 			setOpen(false);
 			button.current?.focus();
 		};
+		const close = () => setOpen(false);
 		document.addEventListener('mousedown', outside);
 		document.addEventListener('keydown', escape);
+		if (floating) {
+			document.addEventListener('scroll', close, true);
+			window.addEventListener('resize', close);
+		}
 		return () => {
 			document.removeEventListener('mousedown', outside);
 			document.removeEventListener('keydown', escape);
+			document.removeEventListener('scroll', close, true);
+			window.removeEventListener('resize', close);
 		};
-	}, [open]);
+	}, [open, floating]);
 
 	/** @param {import('react').KeyboardEvent<HTMLDivElement>} event */
 	const onKeyDown = (event) => {
@@ -113,7 +148,7 @@ export function ActionMenu({
 					aria-haspopup="menu"
 					aria-expanded={open}
 					aria-controls={open ? id : undefined}
-					onClick={() => setOpen((o) => !o)}
+					onClick={toggle}
 					className={
 						triggerClassName ??
 						'ss-motion ss-press flex w-full min-w-0 items-center gap-2.5 rounded-lg p-1 text-left hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus aria-expanded:bg-surface-2'
@@ -134,7 +169,7 @@ export function ActionMenu({
 					aria-haspopup="menu"
 					aria-expanded={open}
 					aria-controls={open ? id : undefined}
-					onClick={() => setOpen((o) => !o)}>
+					onClick={toggle}>
 					<Icon name={icon} size={16} />
 				</Button>
 			)}
@@ -145,13 +180,16 @@ export function ActionMenu({
 					role="menu"
 					aria-label={label}
 					data-state={presence.closing ? 'closed' : 'open'}
+					{...(floating && anchor ? { style: anchor.style } : {})}
 					className={cx(
-						'absolute z-40 max-w-[calc(100vw-2rem)] rounded-card border border-line-soft bg-surface p-1 shadow-overlay',
-						placement === 'up'
-							? 'bottom-full left-0 mb-2 w-60 origin-bottom-left'
-							: align === 'start'
-								? 'left-0 mt-2 w-60 origin-top-left'
-								: 'right-0 mt-2 w-60 origin-top-right',
+						'z-40 max-w-[calc(100vw-2rem)] rounded-card border border-line-soft bg-surface p-1 shadow-overlay',
+						floating && anchor
+							? cx('fixed w-60', ORIGINS[`${anchor.up ? 'bottom' : 'top'}-${align}`])
+							: placement === 'up'
+								? 'absolute bottom-full left-0 mb-2 w-60 origin-bottom-left'
+								: align === 'start'
+									? 'absolute left-0 mt-2 w-60 origin-top-left'
+									: 'absolute right-0 mt-2 w-60 origin-top-right',
 						'animate-ss-pop data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-pop-out',
 					)}>
 					{header ? <div className="mb-1 border-b border-line-soft px-2.5 pt-1.5 pb-2.5">{header}</div> : null}
