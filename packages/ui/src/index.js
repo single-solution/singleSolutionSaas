@@ -60,8 +60,10 @@ export { Dialog, Drawer, ConfirmDialog } from './overlay.js';
 export { ActionMenu, AccountMenu, ThemeMenu } from './Menu.js';
 export { RowList, ListRow } from './rows.js';
 export { Toolbar, TOOLBAR_TEXTS } from './Toolbar.js';
+export { DataTable, DATA_TABLE_TEXTS, useRowSelection } from './DataTable.js';
+export { Pagination, PaginationSkeleton } from './Pagination.js';
 export { InnerNav, INNER_NAV_TEXTS } from './InnerNav.js';
-export { InnerNavSkeleton, ToolbarSkeleton } from './skeletons.js';
+export { InnerNavSkeleton, ToolbarSkeleton, DataTableSkeleton } from './skeletons.js';
 export { METRICS } from './layout-metrics.js';
 export { TypedConfirmDialog } from './TypedConfirm.js';
 export { PasswordConfirmDialog, PASSWORD_CONFIRM_TEXTS } from './PasswordConfirm.js';
@@ -90,7 +92,7 @@ export {
 	CardFlow,
 	useHashSection,
 } from './blocks.js';
-export { Paged, PAGED_TEXTS } from './paged.js';
+export { Paged, PAGED_TEXTS, usePaged } from './paged.js';
 export { ThemeScript } from './theme-script.js';
 export { ThemeToggle, useThemeChoice } from './theme.js';
 export { DisplayLocale, LocalTime, useDisplayLocale, useViewerTimeZone } from './time.js';
@@ -117,6 +119,8 @@ export { describeProblem, fieldErrors, problemCode, problemLines } from './probl
 /** @typedef {import('./blocks.js').SectionSpec} SectionSpec */
 /** @typedef {import('./InnerNav.js').InnerNavItem} InnerNavItem */
 /** @typedef {import('./InnerNav.js').InnerNavGroup} InnerNavGroup */
+/** @typedef {import('./DataTable.js').RowSelection} RowSelection */
+/** @typedef {import('./layout-metrics.js').ColumnKind} ColumnKind */
 /** @typedef {import('./Toolbar.js').ToolbarFilter} ToolbarFilter */
 /** @typedef {import('./Toolbar.js').ToolbarSearch} ToolbarSearch */
 /** @typedef {import('./Toolbar.js').ToolbarBulk} ToolbarBulk */

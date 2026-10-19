@@ -4,6 +4,8 @@
  * @module
  */
 
+import { cx } from './cx.js';
+
 /** Class names of the fixed parts. Heights are fixed on purpose: bars never grow, lists scroll inside their pane. */
 export const METRICS = Object.freeze({
 	/** the one-line page header */
@@ -40,3 +42,46 @@ export const STAGGER = Object.freeze({ rows: 10, step: 15 });
 
 /** The fixed bar above a list (toolbar, bulk bar): one line, the pane's gutters. */
 export const BAR = `flex min-w-0 shrink-0 items-center gap-2 ${METRICS.toolbar} ${METRICS.gutter}`;
+
+/**
+ * What a table column holds. `number` and `money` are right-aligned with equal-width digits, `date` and `status` stay
+ * on one line, `text` is the default.
+ * @typedef {'text' | 'number' | 'money' | 'date' | 'status'} ColumnKind
+ */
+
+/** The parts of a data table, shared by the real table and its skeleton (same rows, same cells, same sizes). */
+export const TABLE = Object.freeze({
+	/** the one box that scrolls (both ways); a container for the width-based column hiding */
+	scroller: 'ss-scroll @container min-h-0 flex-1 overflow-auto',
+	/** separate borders, so the hairlines stay with the sticky header row */
+	table: 'w-full min-w-[32rem] border-separate border-spacing-0 text-sm',
+	/** a header cell: sticky, opaque */
+	th: `sticky top-0 z-10 border-b border-line-soft bg-surface text-xs font-medium whitespace-nowrap text-muted ${METRICS.thead}`,
+	/** a body cell: one fixed-height row with a hairline under it */
+	td: `border-b border-line-soft align-middle text-fg ${METRICS.row}`,
+	/** room at the left of the first cell for the corner check (tables with selection) */
+	gutter: 'pl-11 @3xl:pl-11',
+	/** the last column with the row menu */
+	menu: 'w-12 !px-2 text-right',
+	/** low-priority columns hide below this container width */
+	low: 'hidden @3xl:table-cell',
+});
+
+/** @type {Record<'left' | 'right' | 'center', string>} */
+const ALIGN = { left: 'text-left', right: 'text-right', center: 'text-center' };
+
+/**
+ * The classes every cell of a column shares (its header, its cells and its skeleton cells).
+ * @param {{ kind?: ColumnKind, align?: 'left' | 'right' | 'center', low?: boolean, wrap?: boolean, className?: string }} column
+ * @param {boolean} [first] the first column of a table with a corner check
+ */
+export const columnClass = ({ kind = 'text', align, low, wrap, className }, first = false) =>
+	cx(
+		'px-4 @3xl:px-5',
+		ALIGN[align ?? (kind === 'number' || kind === 'money' ? 'right' : 'left')],
+		(kind === 'number' || kind === 'money') && 'tabular-nums',
+		wrap ? 'text-pretty' : 'whitespace-nowrap',
+		low && TABLE.low,
+		first && TABLE.gutter,
+		className,
+	);
