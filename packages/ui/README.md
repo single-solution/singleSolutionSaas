@@ -36,6 +36,26 @@ text. `IconBadge`, `Stat`, `Badge`, `EmptyState` and `AppShell` menu items take 
 neutral. Each product's chip has its own meaning color, tinted only (`IconBadge product="chat"`, `ListRow product`,
 `productLook`): Accounts blue, Payments green, Chat teal, Growth orange, Notifications yellow, Ecommerce pink.
 
+## The layout system (contract 2026-10-17)
+
+One component per job. The window never scrolls; every pane has its own thin scrollbar. Motion uses the tokens
+`--dur-fast` 120 ms, `--dur` 160 ms, `--dur-slow` 220 ms and one easing; with `prefers-reduced-motion` only opacity moves.
+
+- `Page`: the only page wrapper. `crumbs` (every crumb a link, the last is the title), `status`, `facts` (up to 4),
+  `actions` ({ primary, secondary up to 2, more }), `info` (behind an (i)), `nav` (an `InnerNav` config), `toolbar`,
+  `footer`, `loading` (draws `PageSkeleton` at the same size), `error`, `flush`. The body is the only thing that scrolls.
+- `InnerNav`: the only sub-page navigation (groups, items with count, dot, locked, `href` or `onSelect`; search above
+  10 items; a dropdown on phones). `Toolbar`: search (debounced), filters, sort, view switch, count; it becomes the
+  bulk bar in select mode. `DataTable` (+ `useRowSelection`): the only list of records (sticky header, sort, column
+  kinds, row menu, whole-row selection, skeleton rows, empty state). `Pagination`: the Page footer.
+- `Drawer` (`size="md"` about 480 px, `"lg"` about 760 px, full screen on phones; `Dialog` on the right is the same
+  drawer), `SaveBar` (the only save control), `AppShell` nav items with `badge: { count, tone }` and `dot`, and the
+  account with its `role`.
+- Skeletons at the real sizes: `PageSkeleton`, `InnerNavSkeleton`, `ToolbarSkeleton`, `DataTableSkeleton`,
+  `PaginationSkeleton`, `SettingsCardSkeleton`, `StatGridSkeleton`, `DrawerSkeleton`, `DrawerBodySkeleton`. The older
+  pieces (`SectionNav`, `SectionLayout`, `PillTabs`, `LinkTabs`, `ItemSwitcher`, `RowList`, `PageHeader`) still work
+  until the pages have moved.
+
 ## The premium frame and blocks (owner 2026-10-16)
 
 Panels float on a quiet canvas with 12-16 px of space around them and between them (hairline edge, very soft shadow);
