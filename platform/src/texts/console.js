@@ -197,6 +197,7 @@ export const MERCHANT = Object.freeze({
 /** The websites list and the website page (PLAN 0.6 Website page, 0.8.2, 0.4.4, 0.5.9), in both consoles. */
 export const WEBSITE = Object.freeze({
 	none: 'No websites yet.',
+	productColumn: 'Product',
 	search: 'Search domains',
 	gone: 'This website does not exist or was removed.',
 	productsCount: (/** @type {number} */ n) => `${n} ${n === 1 ? 'product' : 'products'}`,
@@ -272,6 +273,21 @@ export const WEBSITE = Object.freeze({
 	setup: 'Setup',
 	setupOf: (/** @type {string} */ domain) => `Setup of ${domain}`,
 	websiteSettings: 'Website settings',
+	// the website's own page: its header facts, its inner navigation and its parts
+	pageInfo:
+		'The products on this website and what they cost, its settings, the install code and tokens, the setup sheet, usage and recent changes.',
+	navLabel: 'Website pages',
+	overview: 'Overview',
+	productsTitle: 'Products',
+	setupSheet: 'Setup sheet',
+	recentChanges: 'Recent changes',
+	dailyCost: 'Daily cost',
+	settingsVersion: 'Settings version',
+	statusColumn: 'Status',
+	featuresColumn: 'Features on',
+	noFeaturesOn: 'No features on',
+	noSuchPage: 'This page does not exist.',
+	noSuchProduct: 'This product is not on this website.',
 });
 
 /** The Setup sheet of a website and its share links (`ss.blueprint/1`). */
@@ -284,6 +300,10 @@ export const SETUP = Object.freeze({
 	back: 'Back to the website',
 	made: 'Made',
 	refresh: 'Refresh',
+	linkShows: 'Made by and shows',
+	featureColumn: 'Feature',
+	whyColumn: 'Why',
+	linkOpens: 'Opened',
 	refreshed: 'Setup gathered again.',
 	download: 'Download JSON',
 	copy: 'Copy JSON',
@@ -1284,6 +1304,9 @@ export const WEBSITE_SETTINGS = Object.freeze({
 	path: (/** @type {string} */ path) => path,
 	// Data and files (the database and the storage, entered once, write-only) and Between your products
 	data: Object.freeze({
+		productColumn: 'Product',
+		databaseColumn: 'Database',
+		storageColumn: 'Files',
 		intro: 'Enter your database and your storage once. Every product on this website gets them, each with its own database and its own folder. After you save, a value is never shown again: you can only replace or remove it.',
 		saved: 'Saved. Your products pick it up within moments.',
 		removed: 'Removed.',
@@ -1336,6 +1359,7 @@ export const WEBSITE_SETTINGS = Object.freeze({
 		renamed: 'Named by the Owner',
 	}),
 	links: Object.freeze({
+		stateColumn: 'State',
 		intro: 'When two of your products are on this website, the Portal links them by itself. Nothing is pasted anywhere. Each link lets one product do only what it needs in another, on this website, and ends when either product leaves.',
 		title: 'Links',
 		empty: 'No product here needs another one yet.',
@@ -1344,6 +1368,7 @@ export const WEBSITE_SETTINGS = Object.freeze({
 		delivered: 'The product has its key',
 		waiting: 'Waiting for the product',
 		allows: 'It may:',
+		allowsColumn: 'May use',
 		regenerate: 'Regenerate the key',
 		switchOff: 'Switch off',
 		switchOn: 'Switch on',
@@ -1558,6 +1583,7 @@ export const WEBSITE_SETTINGS = Object.freeze({
 		addTerms: 'Add terms',
 		documentDrawer: 'Document',
 		documentKey: 'Key',
+		documentSize: 'Size',
 		documentKeyHelp: 'Lower-case letters, digits, - and _. Products find a document by it.',
 		documentTitle: 'Title',
 		documentText: 'Text',
@@ -1595,6 +1621,9 @@ export const WEBSITE_SETTINGS = Object.freeze({
 		title: 'Recent changes',
 		intro: 'Who changed these settings and when. Values are not shown here.',
 		empty: 'Nothing has been changed yet.',
+		sectionColumn: 'Section',
+		fieldsColumn: 'What changed',
+		byColumn: 'Who',
 		by: (/** @type {string | null} */ name) => (name ? `by ${name}` : 'by the system'),
 		fields: (/** @type {string[]} */ names) => (names.length === 0 ? 'No fields' : names.join(', ')),
 		row: (/** @type {string} */ section, /** @type {number} */ version) => `${section} · version ${version}`,

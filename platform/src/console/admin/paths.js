@@ -22,10 +22,18 @@ export const adminRoutes = Object.freeze({
 		part === 'websites' ? `/admin/merchants/${e(id)}` : `/admin/merchants/${e(id)}/${e(part)}`,
 	/** a website of a merchant: its own page */
 	website: (/** @type {string} */ m, /** @type {string} */ w) => `/admin/merchants/${e(m)}/websites/${e(w)}`,
+	/** a part of a website's page: `products/:productId`, `settings/brand`, `install`, `setup`, `usage`, `changes`; none = Overview */
+	websitePart: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ part = '') =>
+		part
+			? `/admin/merchants/${e(m)}/websites/${e(w)}/${part.split('/').map(e).join('/')}`
+			: `/admin/merchants/${e(m)}/websites/${e(w)}`,
 	/** the Setup sheet of a website */
 	websiteSetup: (/** @type {string} */ m, /** @type {string} */ w) => `/admin/merchants/${e(m)}/websites/${e(w)}/setup`,
-	/** the Website settings of a website */
-	websiteSettings: (/** @type {string} */ m, /** @type {string} */ w) => `/admin/merchants/${e(m)}/websites/${e(w)}/settings`,
+	/** the Website settings of a website (a part: `business`, `brand`, `connections`, …) */
+	websiteSettings: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ section = '') =>
+		section
+			? `/admin/merchants/${e(m)}/websites/${e(w)}/settings/${e(section)}`
+			: `/admin/merchants/${e(m)}/websites/${e(w)}/settings`,
 	products: (/** @type {{ status?: string | null }} */ q = {}) => `/admin/products${query(q)}`,
 	product: (/** @type {string} */ id, /** @type {{ status?: string | null }} */ q = {}) => `/admin/products/${e(id)}${query(q)}`,
 	/** a part of a product's page: websites (the product's own address), features or connection */

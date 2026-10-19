@@ -25,8 +25,6 @@ import ProductsProductId, { metadata as ProductsProductIdMeta } from '../_views/
 import ProductsProductIdPart, { metadata as ProductsProductIdPartMeta } from '../_views/products-productId-part.js';
 import MerchantsMerchantIdPart, { metadata as MerchantsMerchantIdPartMeta } from '../_views/merchants-merchantId-part.js';
 import MerchantWebsite, { metadata as MerchantWebsiteMeta } from '../_views/merchants-merchantId-websites-websiteId.js';
-import WebsiteSetup, { metadata as WebsiteSetupMeta } from '../_views/merchants-merchantId-websites-websiteId-setup.js';
-import WebsiteSettings, { metadata as WebsiteSettingsMeta } from '../_views/merchants-merchantId-websites-websiteId-settings.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,8 +54,8 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[['products', ':productId', ':part'], ProductsProductIdPart, ProductsProductIdPartMeta, 'screen'],
 	[['merchants', ':merchantId', ':part'], MerchantsMerchantIdPart, MerchantsMerchantIdPartMeta, 'screen'],
 	[['merchants', ':merchantId', 'websites', ':websiteId'], MerchantWebsite, MerchantWebsiteMeta, 'screen'],
-	[['merchants', ':merchantId', 'websites', ':websiteId', 'setup'], WebsiteSetup, WebsiteSetupMeta, 'page'],
-	[['merchants', ':merchantId', 'websites', ':websiteId', 'settings'], WebsiteSettings, WebsiteSettingsMeta, 'page'],
+	[['merchants', ':merchantId', 'websites', ':websiteId', ':part'], MerchantWebsite, MerchantWebsiteMeta, 'screen'],
+	[['merchants', ':merchantId', 'websites', ':websiteId', ':part', ':sub'], MerchantWebsite, MerchantWebsiteMeta, 'screen'],
 ]);
 
 /**

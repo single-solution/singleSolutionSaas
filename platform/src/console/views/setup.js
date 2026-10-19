@@ -16,12 +16,12 @@ import { OTHER_MAX, PROFILE_CHOICES, PROFILE_NONE, PROFILE_OTHER } from '@ss/con
 import {
 	Badge,
 	Button,
-	ButtonLink,
 	Callout,
 	Card,
 	CheckboxGroup,
 	CodeBlock,
-	Dialog,
+	DataTable,
+	Drawer,
 	EmptyState,
 	ErrorState,
 	FieldGrid,
@@ -30,22 +30,19 @@ import {
 	IconBadge,
 	Input,
 	KeyValueList,
-	ListRow,
 	LocalTime,
 	PageHeader,
-	RowList,
-	SectionLayout,
 	SegmentedControl,
 	Section,
 	Skeleton,
 	StatusBadge,
 	Switch,
+	TextLink,
 	ToastProvider,
 	copyText,
 	cx,
 	describeProblem,
 	useToast,
-	TextLink,
 } from '@ss/ui';
 import { COUNTRY_NAMES } from '../../modules/identity/core/countries.js';
 import { PROFILE, SETUP } from '../../texts/console.js';
@@ -68,10 +65,6 @@ import { api } from '../paths.js';
 /**
  * The website the page is about, and the console's API client.
  * @typedef {{ merchantId: string, websiteId: string }} Manage
- */
-/**
- * @typedef {{ sheet: Blueprint, links: ShareLink[], merchantId: string, websiteId: string,
- *   back: { href: string, label: string }, settingsHref: string }} SetupPageProps `settingsHref`: the website's settings page
  */
 /**
  * What the consoles can do on the sheet: edit the business profile, and (admins) switch a recommended feature on.
@@ -456,7 +449,7 @@ function ProfileCard({ profile, actions }) {
 				{actions ? (
 					<p className="text-xs text-muted">
 						{PROFILE.fromSettings}{' '}
-						<TextLink as={Link} href={`${actions.settingsHref}#region`}>
+						<TextLink as={Link} href={`${actions.settingsHref}/region`}>
 							{SETUP.openSettings}
 						</TextLink>
 					</p>
@@ -489,40 +482,65 @@ function Recommendations({ sheet, actions }) {
 					<p className="text-sm text-fg">{off.length === 0 ? SETUP.allRecommendedOn : SETUP.recommendedOn(onCount)}</p>
 					{off.length > 0 ? (
 						<Part title={SETUP.recommendedOff}>
-							<RowList>
-								{off.map(({ product, entry }) => {
-									const title = titleOf(product, entry.feature);
-									const needed = neededOff(product, entry.feature);
-									const id = `${product.productId}:${entry.feature}`;
-									return (
-										<ListRow
-											key={id}
-											title={title}
-											status={<Badge>{product.name}</Badge>}
-											meta={
+							<DataTable
+								caption={SETUP.recommendedOff}
+								rows={off}
+								rowKey={({ product, entry }) => `${product.productId}:${entry.feature}`}
+								rowLabel={({ product, entry }) => titleOf(product, entry.feature)}
+								columns={[
+									{
+										key: 'feature',
+										header: SETUP.featureColumn,
+										wrap: true,
+										render: ({ product, entry }) => (
+											<span className="flex flex-wrap items-center gap-2">
+												<span className="font-medium text-fg">{titleOf(product, entry.feature)}</span>
+												<Badge>{product.name}</Badge>
+											</span>
+										),
+									},
+									{
+										key: 'why',
+										header: SETUP.whyColumn,
+										low: true,
+										wrap: true,
+										render: ({ product, entry }) => {
+											const needed = neededOff(product, entry.feature);
+											return (
 												<>
 													<span className="block">{entry.why}</span>
 													{needed.length > 0 ? (
 														<span className="block">{SETUP.alsoSwitches(needed.join(', '))}</span>
 													) : null}
 												</>
-											}
-											action={
-												actions?.switchOn ? (
-													<Button
-														size="sm"
-														aria-label={SETUP.switchOnLabel(title, product.name)}
-														loading={actions.switching === id}
-														disabled={actions.switching !== null && actions.switching !== id}
-														onClick={() => actions.switchOn?.(product, entry.feature)}>
-														{SETUP.switchOn}
-													</Button>
-												) : null
-											}
-										/>
-									);
-								})}
-							</RowList>
+											);
+										},
+									},
+									...(actions?.switchOn
+										? [
+												{
+													key: 'switchOn',
+													header: SETUP.switchOn,
+													align: /** @type {const} */ ('right'),
+													render: (/** @type {(typeof off)[number]} */ { product, entry }) => {
+														const title = titleOf(product, entry.feature);
+														const id = `${product.productId}:${entry.feature}`;
+														return (
+															<Button
+																size="sm"
+																aria-label={SETUP.switchOnLabel(title, product.name)}
+																loading={actions.switching === id}
+																disabled={actions.switching !== null && actions.switching !== id}
+																onClick={() => actions.switchOn?.(product, entry.feature)}>
+																{SETUP.switchOn}
+															</Button>
+														);
+													},
+												},
+											]
+										: []),
+								]}
+							/>
 							{actions ? (
 								<p className="text-xs text-muted">{actions.switchOn ? SETUP.billedNote : SETUP.recommendedOffAsk}</p>
 							) : null}
@@ -608,7 +626,7 @@ function ProfileDialog({ manage, profile, settingsHref, onClose, onSaved }) {
 		onSaved(result.data);
 	};
 	return (
-		<Dialog open onClose={onClose} title={PROFILE.title} description={PROFILE.intro} size="lg">
+		<Drawer open onClose={onClose} title={PROFILE.title} description={PROFILE.intro} size="lg">
 			<div className="space-y-5">
 				<FieldGrid>
 					{CHOICES.map((question) => (
@@ -653,7 +671,7 @@ function ProfileDialog({ manage, profile, settingsHref, onClose, onSaved }) {
 				</FieldGrid>
 				<p className="text-sm text-muted">
 					{PROFILE.fromSettings}{' '}
-					<TextLink as={Link} href={`${settingsHref}#region`}>
+					<TextLink as={Link} href={`${settingsHref}/region`}>
 						{SETUP.openSettings}
 					</TextLink>
 				</p>
@@ -662,7 +680,7 @@ function ProfileDialog({ manage, profile, settingsHref, onClose, onSaved }) {
 					{PROFILE.save}
 				</Button>
 			</div>
-		</Dialog>
+		</Drawer>
 	);
 }
 
@@ -839,7 +857,7 @@ function CreateLinkDialog({ manage, onClose, onCreated }) {
 		onCreated(result.data.link);
 	};
 	return (
-		<Dialog
+		<Drawer
 			open
 			onClose={onClose}
 			title={url ? SETUP.linkReady : SETUP.createLink}
@@ -872,7 +890,7 @@ function CreateLinkDialog({ manage, onClose, onCreated }) {
 					</Button>
 				</div>
 			)}
-		</Dialog>
+		</Drawer>
 	);
 }
 
@@ -914,20 +932,37 @@ function ShareLinks({ manage, initial }) {
 			{links.length === 0 ? (
 				<EmptyState compact icon="link" title={SETUP.noLinks} />
 			) : (
-				<RowList label={SETUP.linksTitle}>
-					{links.map((link) => (
-						<ListRow
-							key={link.linkId}
-							icon="link"
-							title={
+				<DataTable
+					caption={SETUP.linksTitle}
+					rows={links}
+					rowKey={(link) => link.linkId}
+					rowLabel={(link) => `${SETUP.expires} ${link.expiresAt}`}
+					columns={[
+						{
+							key: 'expiresAt',
+							header: SETUP.expires,
+							kind: 'date',
+							render: (link) => <LocalTime value={link.expiresAt} />,
+						},
+						{
+							key: 'status',
+							header: SETUP.websiteStatus,
+							render: (link) => <StatusBadge status={link.status} label={SETUP.linkStatus[link.status]} />,
+						},
+						{
+							key: 'shows',
+							header: SETUP.linkShows,
+							low: true,
+							wrap: true,
+							render: (link) => `${SETUP.createdBy[link.createdBy]} · ${SETUP.shows(link.values, link.install)}`,
+						},
+						{
+							key: 'opens',
+							header: SETUP.linkOpens,
+							low: true,
+							wrap: true,
+							render: (link) => (
 								<>
-									{SETUP.expires} <LocalTime value={link.expiresAt} />
-								</>
-							}
-							status={<StatusBadge status={link.status} label={SETUP.linkStatus[link.status]} />}
-							meta={
-								<>
-									{SETUP.createdBy[link.createdBy]} · {SETUP.shows(link.values, link.install)} ·{' '}
 									{SETUP.opens(link.opens)}
 									{link.openedAt ? (
 										<>
@@ -936,17 +971,21 @@ function ShareLinks({ manage, initial }) {
 										</>
 									) : null}
 								</>
-							}
-							action={
+							),
+						},
+						{
+							key: 'revoke',
+							header: SETUP.revoke,
+							align: 'right',
+							render: (link) =>
 								link.status === 'active' ? (
 									<Button variant="secondary" size="sm" loading={busy === link.linkId} onClick={() => void revoke(link)}>
 										{SETUP.revoke}
 									</Button>
-								) : null
-							}
-						/>
-					))}
-				</RowList>
+								) : null,
+						},
+					]}
+				/>
 			)}
 			{creating ? (
 				<CreateLinkDialog
@@ -960,26 +999,54 @@ function ShareLinks({ manage, initial }) {
 }
 
 /**
- * The Setup page of a website in the merchant console (no Switch on: features are switched by Owner or Support).
- * @param {SetupPageProps} props
+ * The Setup sheet a website page keeps for its header: the sheet (null until the Setup sub-page has loaded it), gathering
+ * it again, copying it and downloading it as JSON, so the header can carry those three actions (layout contract R6).
+ * @param {{ sheet: Blueprint | null, manage: Manage }} props
  */
-export function MerchantSetupView({ merchantId, websiteId, ...props }) {
-	return <SetupView {...props} manage={{ merchantId, websiteId }} canSwitch={false} />;
-}
-
-/**
- * The Setup page of a website in a console (each console passes its API client).
- * @param {{ sheet: Blueprint, links: ShareLink[], manage: Manage, back: { href: string, label: string },
- *   canSwitch: boolean, settingsHref: string }} props `canSwitch`: the admin console (Owner and Support) switches recommended
- *   features on; `settingsHref`: the website's settings page, where its business facts, countries and languages are set
- */
-export function SetupView({ sheet: initial, links, manage, back, canSwitch, settingsHref }) {
+export function useSetupSheet({ sheet: initial, manage }) {
 	const toast = useToast();
 	const [sheet, setSheet] = useState(initial);
 	const [refreshing, setRefreshing] = useState(false);
+	useEffect(() => setSheet(initial), [initial]);
+	const refresh = async () => {
+		setRefreshing(true);
+		const result = await apiFetch(api.setup(manage.merchantId, manage.websiteId, { fresh: true }));
+		setRefreshing(false);
+		if (!result.ok) {
+			toast.show({ tone: 'danger', title: describeProblem(result.problem) });
+			return;
+		}
+		setSheet(result.data);
+		toast.show({ title: SETUP.refreshed });
+	};
+	const copy = async () => {
+		const ok = await copyText(JSON.stringify(sheet, null, 2));
+		toast.show(ok ? { title: SETUP.copied } : { tone: 'danger', title: SETUP.copyFailed });
+	};
+	const download = () => {
+		const link = document.createElement('a');
+		link.href = api.setup(manage.merchantId, manage.websiteId, { download: true });
+		link.download = '';
+		document.body.append(link);
+		link.click();
+		link.remove();
+	};
+	return { sheet, setSheet, refreshing, refresh: () => void refresh(), copy: () => void copy(), download };
+}
+
+/**
+ * The Setup sheet sub-page of a website in a console (each console passes its API client): the sheet's cards and the
+ * share links. Refresh, Copy and Download sit in the website page's header (`useSetupSheet`).
+ * @param {{ state: ReturnType<typeof useSetupSheet>, links: ShareLink[], manage: Manage,
+ *   canSwitch: boolean, settingsHref: string }} props `canSwitch`: the admin console (Owner and Support) switches recommended
+ *   features on; `settingsHref`: the website's settings page, where its business facts, countries and languages are set
+ */
+export function SetupView({ state, links, manage, canSwitch, settingsHref }) {
+	const toast = useToast();
+	const { sheet, setSheet } = state;
 	const [editing, setEditing] = useState(false);
 	const [switching, setSwitching] = useState(/** @type {string | null} */ (null));
-	useEffect(() => setSheet(initial), [initial]);
+	if (!sheet) return null;
 	/** @param {ReachableProduct} product @param {string} feature */
 	const switchOn = async (product, feature) => {
 		setSwitching(`${product.productId}:${feature}`);
@@ -1005,56 +1072,10 @@ export function SetupView({ sheet: initial, links, manage, back, canSwitch, sett
 		switching,
 		settingsHref,
 	};
-	const refresh = async () => {
-		setRefreshing(true);
-		const result = await apiFetch(api.setup(manage.merchantId, manage.websiteId, { fresh: true }));
-		setRefreshing(false);
-		if (!result.ok) {
-			toast.show({ tone: 'danger', title: describeProblem(result.problem) });
-			return;
-		}
-		setSheet(result.data);
-		toast.show({ title: SETUP.refreshed });
-	};
-	const copy = async () => {
-		const ok = await copyText(JSON.stringify(sheet, null, 2));
-		toast.show(ok ? { title: SETUP.copied } : { tone: 'danger', title: SETUP.copyFailed });
-	};
 	return (
-		<div className="space-y-8">
-			<PageHeader
-				breadcrumbs={
-					<TextLink as={Link} href={back.href} className="inline-flex items-center gap-1 text-sm">
-						{back.label}
-					</TextLink>
-				}
-				title={SETUP.title(sheet.website.domain)}
-				subtitle={SETUP.intro}
-				actions={
-					<>
-						<Button variant="secondary" loading={refreshing} onClick={() => void refresh()}>
-							{SETUP.refresh}
-						</Button>
-						<Button variant="secondary" onClick={() => void copy()} icon={<Icon name="copy" size={14} />}>
-							{SETUP.copy}
-						</Button>
-						<ButtonLink
-							href={api.setup(manage.merchantId, manage.websiteId, { download: true })}
-							download
-							variant="primary"
-							icon={<Icon name="arrowDown" size={14} />}>
-							{SETUP.download}
-						</ButtonLink>
-					</>
-				}
-			/>
-			<SectionLayout
-				label={SETUP.title(sheet.website.domain)}
-				sections={[
-					...sheetSections(sheet, actions),
-					{ id: 'share', label: SETUP.linksTitle, icon: 'link', content: <ShareLinks manage={manage} initial={links} /> },
-				]}
-			/>
+		<div className="space-y-6">
+			<SheetBody sheet={sheet} actions={actions} />
+			<ShareLinks manage={manage} initial={links} />
 			{editing ? (
 				<ProfileDialog
 					manage={manage}

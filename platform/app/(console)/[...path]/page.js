@@ -19,8 +19,6 @@ import ConfirmEmail, { metadata as ConfirmEmailMeta } from '../_views/confirm-em
 import Overview, { metadata as OverviewMeta } from '../_views/overview.js';
 import Websites, { metadata as WebsitesMeta } from '../_views/websites.js';
 import WebsitesWebsiteId, { metadata as WebsitesWebsiteIdMeta } from '../_views/websites-websiteId.js';
-import WebsitesWebsiteIdSetup, { metadata as WebsitesWebsiteIdSetupMeta } from '../_views/websites-websiteId-setup.js';
-import WebsitesWebsiteIdSettings, { metadata as WebsitesWebsiteIdSettingsMeta } from '../_views/websites-websiteId-settings.js';
 import SharedSetup, { metadata as SharedSetupMeta } from '../_views/shared-setup.js';
 
 export const dynamic = 'force-dynamic';
@@ -44,8 +42,8 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[['overview'], Overview, OverviewMeta, 'page'],
 	[['websites'], Websites, WebsitesMeta, 'screen'],
 	[['websites', ':websiteId'], WebsitesWebsiteId, WebsitesWebsiteIdMeta, 'screen'],
-	[['websites', ':websiteId', 'setup'], WebsitesWebsiteIdSetup, WebsitesWebsiteIdSetupMeta, 'page'],
-	[['websites', ':websiteId', 'settings'], WebsitesWebsiteIdSettings, WebsitesWebsiteIdSettingsMeta, 'page'],
+	[['websites', ':websiteId', ':part'], WebsitesWebsiteId, WebsitesWebsiteIdMeta, 'screen'],
+	[['websites', ':websiteId', ':part', ':sub'], WebsitesWebsiteId, WebsitesWebsiteIdMeta, 'screen'],
 	[['shared-setup'], SharedSetup, SharedSetupMeta, 'public'],
 ]);
 

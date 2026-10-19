@@ -16,6 +16,7 @@ import {
 	Button,
 	CheckboxGroup,
 	ChoicePicker,
+	DataTable,
 	Disclosure,
 	Drawer,
 	EmptyState,
@@ -23,8 +24,6 @@ import {
 	IconButton,
 	Input,
 	ListEditor,
-	ListRow,
-	RowList,
 	SegmentedControl,
 	Select,
 	SettingList,
@@ -1015,32 +1014,34 @@ export function PagesSection(props) {
 					{d.documents.length === 0 ? (
 						<EmptyState compact icon="list" title={P.noDocuments} />
 					) : (
-						<RowList label={P.legalTitle}>
-							{d.documents.map((document, index) => (
-								<ListRow
-									key={index}
-									icon="list"
-									title={document.title || document.key || String(index + 1)}
-									meta={`${document.key} · ${P.documentSummary(document.text.length)}`}
-									action={
-										<Button size="sm" variant="secondary" onClick={() => setEditing(index)}>
-											{T.edit}
-										</Button>
-									}
-									more={[
-										{
-											label: P.remove,
-											danger: true,
-											onSelect: () =>
-												form.change(
-													['documents'],
-													d.documents.filter((_document, at) => at !== index),
-												),
-										},
-									]}
-								/>
-							))}
-						</RowList>
+						<DataTable
+							caption={P.legalTitle}
+							rows={d.documents.map((document, index) => ({ document, index }))}
+							rowKey={(row) => String(row.index)}
+							rowLabel={(row) => row.document.title || row.document.key || String(row.index + 1)}
+							onRowClick={(row) => setEditing(row.index)}
+							columns={[
+								{
+									key: 'title',
+									header: P.documentTitle,
+									render: (row) => row.document.title || row.document.key || String(row.index + 1),
+								},
+								{ key: 'key', header: P.documentKey, low: true, render: (row) => row.document.key },
+								{ key: 'size', header: P.documentSize, low: true, render: (row) => P.documentSummary(row.document.text.length) },
+							]}
+							rowMenu={(row) => [
+								{ label: T.edit, onSelect: () => setEditing(row.index) },
+								{
+									label: P.remove,
+									danger: true,
+									onSelect: () =>
+										form.change(
+											['documents'],
+											d.documents.filter((_document, at) => at !== row.index),
+										),
+								},
+							]}
+						/>
 					)}
 					{form.error(['documents']) ? (
 						<p role="alert" className="text-help text-danger">
@@ -1117,32 +1118,34 @@ export function TeamSection(props) {
 					{d.recipients.length === 0 ? (
 						<EmptyState compact icon="users" title={M.noPeople} />
 					) : (
-						<RowList label={M.peopleTitle}>
-							{d.recipients.map((entry, index) => (
-								<ListRow
-									key={index}
-									avatar={entry.name || entry.email || entry.phone || String(index + 1)}
-									title={entry.name || entry.email || entry.phone}
-									meta={[entry.email, entry.phone].filter(Boolean).join(' · ')}
-									action={
-										<Button size="sm" variant="secondary" onClick={() => setEditing(index)}>
-											{T.edit}
-										</Button>
-									}
-									more={[
-										{
-											label: T.pages.remove,
-											danger: true,
-											onSelect: () =>
-												form.change(
-													['recipients'],
-													d.recipients.filter((_entry, at) => at !== index),
-												),
-										},
-									]}
-								/>
-							))}
-						</RowList>
+						<DataTable
+							caption={M.peopleTitle}
+							rows={d.recipients.map((entry, index) => ({ entry, index }))}
+							rowKey={(row) => String(row.index)}
+							rowLabel={(row) => row.entry.name || row.entry.email || row.entry.phone || String(row.index + 1)}
+							onRowClick={(row) => setEditing(row.index)}
+							columns={[
+								{
+									key: 'name',
+									header: M.name,
+									render: (row) => row.entry.name || row.entry.email || row.entry.phone || String(row.index + 1),
+								},
+								{ key: 'email', header: M.email, low: true, render: (row) => row.entry.email },
+								{ key: 'phone', header: M.phone, low: true, render: (row) => row.entry.phone },
+							]}
+							rowMenu={(row) => [
+								{ label: T.edit, onSelect: () => setEditing(row.index) },
+								{
+									label: T.pages.remove,
+									danger: true,
+									onSelect: () =>
+										form.change(
+											['recipients'],
+											d.recipients.filter((_entry, at) => at !== row.index),
+										),
+								},
+							]}
+						/>
 					)}
 					{Object.keys(form.errors).some((key) => key.startsWith('recipients')) ? (
 						<p role="alert" className="text-help text-danger">

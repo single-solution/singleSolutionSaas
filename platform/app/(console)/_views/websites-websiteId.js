@@ -1,16 +1,16 @@
-import { loadWebsites } from '../../../src/console/loaders.js';
-import { WebsitesView } from '../../../src/console/views/websites.js';
-import { consoleBranding, merchantContext } from '../_lib/server.js';
+import { loadWebsitePage } from '../../../src/console/loaders.js';
+import { routes } from '../../../src/console/paths.js';
+import { WebsiteView } from '../../../src/console/views/websites.js';
+import { websitePartOf } from '../../../src/console/website-parts.js';
+import { merchantContext } from '../_lib/server.js';
 
-export const metadata = { title: 'Websites' };
+export const metadata = { title: 'Website' };
 
-/** The Websites screen with a website selected. */
-/** @param {{ params: Promise<{ websiteId: string }> }} props */
+/** One website's own page: the Overview, or the part named by the next one or two segments of the address. */
+/** @param {{ params: Promise<{ websiteId: string, part?: string, sub?: string }> }} props */
 export default async function WebsitePage({ params }) {
-	const { websiteId } = await params;
-	const { api, merchantId } = await merchantContext(`/websites/${websiteId}`);
-	const websites = await loadWebsites(api, merchantId, websiteId);
-	// the support contact shows only in the welcome of a merchant with no websites yet
-	const welcome = websites.ok && websites.rows.length === 0;
-	return <WebsitesView {...websites} branding={welcome ? await consoleBranding() : undefined} />;
+	const { websiteId, part, sub } = await params;
+	const path = websitePartOf(part, sub);
+	const { api, merchantId } = await merchantContext(routes.websitePart(websiteId, path));
+	return <WebsiteView {...await loadWebsitePage(api, merchantId, websiteId, path)} />;
 }

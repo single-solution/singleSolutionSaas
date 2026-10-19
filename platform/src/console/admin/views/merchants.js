@@ -39,18 +39,19 @@ import {
 	useToast,
 } from '@ss/ui';
 import { ADMIN, BILLING, MERCHANT_FIELDS, MORE, TWO_STEP, WEBSITE } from '../../../texts/console.js';
-import { api, withCursor } from '../../paths.js';
+import { withCursor } from '../../paths.js';
 import { DaysLeft } from '../../views/billing.js';
 import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
 import { COUNTRY_NAMES } from '../../../modules/identity/core/countries.js';
 import { Link } from '../../link.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { useListPages } from '../../views/paging.js';
-import { AddWebsiteDialog, MerchantUsageDialog, WebsiteCard, dailyCostOf, websiteDot } from '../../views/website.js';
+import { AddWebsiteDialog, MerchantUsageDialog, dailyCostOf, websiteDot } from '../../views/website.js';
 import { useNavigation } from '../../navigation.js';
 import { apiFetch, usePagedList } from '../../client.js';
 import { adminApi, adminRoutes, merchantFilter } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
+import { SITE_PILLS } from './website.js';
 import { AddCreditsDialog, MerchantCredits } from './finance.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
@@ -455,10 +456,10 @@ const detailItems = (merchant) => [
 
 /**
  * A merchant's page: the header (status, balance, daily cost, the actions) and one part of it at a time, each part its
- * own address (Websites, Credits, Details, Activity); with a `websiteId`, the page of one of its websites.
- * @param {{ detail: any, admin: any, section?: string, websiteId?: string | null }} props
+ * own address (Websites, Credits, Details, Activity); a website of it has its own page (`website.js`).
+ * @param {{ detail: any, admin: any, section?: string }} props
  */
-function MerchantPage({ detail, admin, section = 'websites', websiteId = null }) {
+function MerchantPage({ detail, admin, section = 'websites' }) {
 	const toast = useToast();
 	const [merchant, setMerchant] = useState(detail.merchant);
 	const [rows, setRows] = useState(/** @type {Array<{ website: any, cards: any[] }>} */ (detail.rows));
@@ -468,8 +469,6 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 	const [reason, setReason] = useState('');
 	const [link, setLink] = useState(/** @type {string | null} */ (null));
 	const [busy, setBusy] = useState(false);
-	// the website of this page was removed: the page waits (as a skeleton) for the merchant's page to open
-	const [gone, setGone] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const merchantId = merchant.merchantId;
 	const can = (/** @type {string} */ p) => adminCan(admin, p);
@@ -528,13 +527,6 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 		if (result.ok) nav.go(adminRoutes.merchants());
 	};
 
-	const websiteRights = {
-		manage: can('products_on_websites.write'),
-		removeWebsite: can('websites.write'),
-		tokens: can('tokens.manage'),
-		open: can('dashboards.open'),
-	};
-
 	/** @type {import('@ss/ui').MenuItem[]} */
 	const more = [
 		{ label: MORE.usageAll, onSelect: () => openDialog('usage') },
@@ -576,29 +568,6 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 	);
 	const sectionIds = ['websites', 'credits', 'details', 'activity'];
 	const part = sectionIds.includes(section) ? section : 'websites';
-	/** @param {any} row one website with its product cards */
-	const cardOf = (row) => (
-		<WebsiteCard
-			headline
-			website={row.website}
-			cards={row.cards}
-			can={websiteRights}
-			setupHref={adminRoutes.websiteSetup(id, String(row.website.websiteId))}
-			{...(can('website_settings.read')
-				? { settingsHref: adminRoutes.websiteSettings(id, String(row.website.websiteId)) }
-				: {})}
-			addable={detail.addable}
-			launch={(productId) => ({ path: api.adminLaunch(productId), body: { websiteId: String(row.website.websiteId) } })}
-			onCardsChange={(cards) =>
-				setRows((list) => list.map((r) => (r.website.websiteId === row.website.websiteId ? { ...r, cards } : r)))
-			}
-			onRemoved={() => {
-				setGone(true);
-				setRows((list) => list.filter((r) => r.website.websiteId !== row.website.websiteId));
-				nav.go(adminRoutes.merchant(id));
-			}}
-		/>
-	);
 	const notices = (
 		<>
 			{merchant.suspension ? <Callout tone="danger">{ADMIN.suspendedBecause(merchant.suspension.reason)}</Callout> : null}
@@ -625,7 +594,6 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 			) : null}
 		</>
 	);
-	const shownSite = websiteId ? rows.find((r) => String(r.website.websiteId) === websiteId) : null;
 	/** the websites as table rows */
 	const sites = rows.map((r) => ({
 		id: String(r.website.websiteId),
@@ -634,12 +602,6 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 		cost: dailyCostOf(r.cards),
 		dot: websiteDot(r.cards),
 	}));
-	const sitePills = /** @type {const} */ ({
-		success: { status: 'active', label: ADMIN.status.active },
-		warning: { status: 'warning', label: ADMIN.status.grace },
-		danger: { status: 'error', label: ADMIN.status.stopped },
-		neutral: { status: 'off', label: ADMIN.noFeaturesOn },
-	});
 	const addWebsite = can('websites.write') ? (
 		<Button onClick={() => openDialog('addWebsite')} icon={<Icon name="plus" size={14} />}>
 			{WEBSITE.addWebsite}
@@ -660,7 +622,7 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 						...(can('website_settings.read')
 							? [{ label: WEBSITE.websiteSettings, onSelect: () => nav.go(adminRoutes.websiteSettings(id, s.id)) }]
 							: []),
-						...(websiteRights.tokens
+						...(can('tokens.manage')
 							? [{ label: WEBSITE.setup, onSelect: () => nav.go(adminRoutes.websiteSetup(id, s.id)) }]
 							: []),
 					]}
@@ -684,7 +646,7 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 								</Link>
 							),
 						},
-						{ key: 'status', header: ADMIN.columns.status, kind: 'status', pill: (s) => sitePills[s.dot] },
+						{ key: 'status', header: ADMIN.columns.status, kind: 'status', pill: (s) => SITE_PILLS[s.dot] },
 						{ key: 'products', header: ADMIN.merchantColumns.products, kind: 'number', sortable: true },
 						{
 							key: 'cost',
@@ -729,19 +691,7 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 			</>
 		),
 	};
-	const page = websiteId ? (
-		<Page
-			linkAs={Link}
-			crumbs={[
-				merchantsCrumb,
-				{ label: merchant.name, href: adminRoutes.merchant(id) },
-				{ label: shownSite?.website.domain ?? websiteId },
-			]}
-			loading={gone}
-			{...(shownSite ? {} : { error: ADMIN.noSuchWebsite })}>
-			{shownSite ? cardOf(shownSite) : null}
-		</Page>
-	) : (
+	const page = (
 		<Page
 			linkAs={Link}
 			flush={part === 'websites' || part === 'activity'}
@@ -888,8 +838,8 @@ function MerchantPage({ detail, admin, section = 'websites', websiteId = null })
 
 /**
  * The Merchants screens. Without a `detail` the list (a table); with the `detail` of `loadMerchant` a merchant's page,
- * on the part `section` (websites, credits, details, activity) or, with a `websiteId`, on one of its websites.
- * @param {any} props loader result of `loadMerchants` (the list) or `{ detail, admin, section, websiteId }`
+ * on the part `section` (websites, credits, details, activity).
+ * @param {any} props loader result of `loadMerchants` (the list) or `{ detail, admin, section }`
  */
 export function MerchantsView(props) {
 	const detail = props.detail ?? null;
@@ -901,7 +851,6 @@ export function MerchantsView(props) {
 				detail={detail}
 				admin={props.admin}
 				section={props.section}
-				websiteId={props.websiteId ?? null}
 			/>
 		);
 	}

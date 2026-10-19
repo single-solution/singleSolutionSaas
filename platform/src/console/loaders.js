@@ -118,20 +118,18 @@ export const loadOverview = async (api, merchantId) => {
 };
 
 /**
- * Websites (PLAN 0.8.2 Merchant): the list-and-detail screen — every website with its products (cards), and the
- * selected one (`websiteId`, when given and the merchant's); the billing summary (checked) for the frame.
+ * Websites (PLAN 0.8.2 Merchant): the table of the merchant's websites, each with its products (cards); the billing
+ * summary (checked) for the frame.
  * @param {ConsoleApi} api
  * @param {string} merchantId
- * @param {string | null} [websiteId]
  */
-export const loadWebsites = async (api, merchantId, websiteId = null) => {
+export const loadWebsites = async (api, merchantId) => {
 	const [websites, billing] = await Promise.all([loadWebsiteRows(api, merchantId), api.get(paths.billing(merchantId))]);
 	if (websites.failed) return websites.failed;
 	return {
 		ok: /** @type {const} */ (true),
 		merchantId,
 		rows: websites.rows,
-		selectedId: websiteId,
 		billing: /** @type {any} */ (orElse(billing, null)),
 	};
 };
@@ -230,5 +228,35 @@ export const loadWebsiteSettings = async (api, merchantId, websiteId) => {
 		// what is set in Data and files, never a value (null: this person may not see it)
 		connections: connections.ok ? connections.data : null,
 		domain: settings.ok ? String(settings.data?.website?.domain ?? '') : '',
+	};
+};
+
+/**
+ * A website's own page (merchant console): every website with its products (the page needs only its own, the rest
+ * tells whether the website exists), the billing summary (checked) for the frame, the Website settings (the header's
+ * facts, the navigation's marks and Recent changes) and, on the Setup sheet part only, the sheet with its share links.
+ * The settings and the sheet degrade to a failure the page shows in its body.
+ * @param {ConsoleApi} api
+ * @param {string} merchantId
+ * @param {string} websiteId
+ * @param {string} part the part of the address (`website-parts.js`)
+ */
+export const loadWebsitePage = async (api, merchantId, websiteId, part) => {
+	const [websites, billing, settings, setup] = await Promise.all([
+		loadWebsiteRows(api, merchantId),
+		api.get(paths.billing(merchantId)),
+		loadWebsiteSettings(api, merchantId, websiteId),
+		part === 'setup' ? loadSetup(api, merchantId, websiteId) : null,
+	]);
+	if (websites.failed) return websites.failed;
+	return {
+		ok: /** @type {const} */ (true),
+		merchantId,
+		websiteId,
+		part,
+		rows: websites.rows,
+		billing: /** @type {any} */ (orElse(billing, null)),
+		settings,
+		setup,
 	};
 };

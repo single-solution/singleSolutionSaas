@@ -2,18 +2,16 @@
 /**
  * Merchant Overview and Websites (PLAN 0.8.2 Merchant): the balance and days left at the current spend, the 30-day
  * spend chart and the websites with product chips and Open buttons; the Websites page — a table of the websites
- * (domain, status, products, daily cost) whose row opens the website's own page (`Websites › domain` around its card:
- * its products with Open, and Install and tokens and Usage as dialogs; no admin actions). With no websites yet, the
- * welcome with the support contact (PLAN 0.8.2 Sign-in).
+ * (domain, status, products, daily cost) whose row opens the website's own page (`website-page.js`; no admin actions).
+ * With no websites yet, the welcome with the support contact (PLAN 0.8.2 Sign-in).
  * Layout: the Overview is one page (the greeting behind the (i), the key numbers in the header, then its cards).
  * @module
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
 	BarChart,
 	Button,
 	ButtonLink,
-	Callout,
 	Card,
 	DataTable,
 	EmptyState,
@@ -25,12 +23,10 @@ import {
 	Toolbar,
 	describeProblem,
 	formatCredits,
-	isEmptySeries,
 	useToast,
 	TextLink,
 } from '@ss/ui';
 import { AUTH, BILLING, MERCHANT, MORE, WEBSITE } from '../../texts/console.js';
-import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { useNavigation } from '../navigation.js';
 import { api, routes } from '../paths.js';
@@ -39,7 +35,8 @@ import { FrameBilling } from './frame-billing.js';
 import { PageProblem, openDashboard } from './common.js';
 import { ActivityTimeline } from './login-settings.js';
 import { contactLine } from './sign-in.js';
-import { WebsiteCard, dailyCostOf, websiteDot } from './website.js';
+import { dailyCostOf, websiteDot } from './website.js';
+import { WebsitePageView } from './website-page.js';
 
 /** @typedef {import('./website.js').ProductCard} ProductCard */
 /** @typedef {{ support?: { channels: import('@ss/contracts/text').SupportChannel[] } | null }} BrandingSupport */
@@ -275,36 +272,6 @@ export function OverviewView(props) {
 	);
 }
 
-/**
- * The spend on one website over the last 30 UTC days (all its products).
- * @param {{ merchantId: string, website: any }} props
- */
-function WebsiteSpend({ merchantId, website }) {
-	const [result, setResult] = useState(/** @type {import('../client.js').ApiResult<any> | null} */ (null));
-	const websiteId = String(website.websiteId);
-	useEffect(() => {
-		let live = true;
-		void apiFetch(api.usage(merchantId, { websiteId })).then((r) => {
-			if (live) setResult(r);
-		});
-		return () => {
-			live = false;
-		};
-	}, [merchantId, websiteId]);
-	const usage = result?.ok ? result.data : null;
-	const bars = creditDayBars(usage?.days);
-	return (
-		<>
-			{result && !result.ok ? <Callout tone="danger">{describeProblem(result.problem)}</Callout> : null}
-			{usage && !isEmptySeries(bars) ? (
-				<Card title={MORE.websiteSpend} subtitle={formatCredits(usage.total ?? 0)}>
-					<BarChart label={MORE.websiteSpend} data={bars} format={formatChartCredits} height={120} />
-				</Card>
-			) : null}
-		</>
-	);
-}
-
 /** How a website's worst product status reads in the table. */
 const SITE_PILLS = /** @type {const} */ ({
 	success: { status: 'active', label: MERCHANT.websiteStatus.success },
@@ -386,49 +353,51 @@ function WebsitesPage({ rows, branding }) {
 }
 
 /**
- * The merchant's Websites screens: the table of websites, or with a `selectedId` one website's page (the breadcrumbs
- * Websites › domain around the website's card and its 30-day spend; the merchant cannot add or remove products here,
- * the admin does, PLAN 0.2).
+ * The merchant's Websites screen: the table of websites (or the welcome with none yet).
  * @param {any} props loader result of `loadWebsites` plus `branding`
  */
 export function WebsitesView(props) {
 	if (!props.ok) return <PageProblem problem={props.problem} />;
-	const rows = /** @type {Array<{ website: any, cards: ProductCard[] }>} */ (props.rows);
-	const selectedId = typeof props.selectedId === 'string' ? props.selectedId : null;
-	if (selectedId === null)
-		return (
-			<>
-				<FrameBilling billing={props.billing} />
-				<WebsitesPage rows={rows} branding={props.branding} />
-			</>
-		);
-	const selected = rows.find((r) => String(r.website.websiteId) === selectedId) ?? null;
 	return (
 		<>
 			<FrameBilling billing={props.billing} />
-			<Page
-				linkAs={Link}
-				crumbs={[
-					{ label: MERCHANT.websitesTitle, href: routes.websites() },
-					{ label: selected ? String(selected.website.domain) : selectedId },
-				]}
-				{...(selected ? {} : { error: WEBSITE.gone })}>
-				{selected ? (
-					<div className="space-y-4">
-						<WebsiteCard
-							key={selectedId}
-							headline
-							website={selected.website}
-							cards={selected.cards}
-							can={{ manage: false, removeWebsite: false, tokens: true, open: true }}
-							setupHref={routes.websiteSetup(selectedId)}
-							settingsHref={routes.websiteSettings(selectedId)}
-							launch={(productId) => ({ path: api.launch(props.merchantId, selectedId, productId) })}
-						/>
-						<WebsiteSpend key={`spend-${selectedId}`} merchantId={props.merchantId} website={selected.website} />
-					</div>
-				) : null}
-			</Page>
+			<WebsitesPage rows={props.rows} branding={props.branding} />
+		</>
+	);
+}
+
+/**
+ * One website's own page in the merchant console (`Websites › domain`, its parts as inner navigation): the merchant
+ * cannot add or remove products here, the admin does (PLAN 0.2).
+ * @param {any} props loader result of `loadWebsitePage`
+ */
+export function WebsiteView(props) {
+	if (!props.ok) return <PageProblem problem={props.problem} />;
+	const rows = /** @type {Array<{ website: any, cards: ProductCard[] }>} */ (props.rows);
+	const websiteId = String(props.websiteId);
+	const selected = rows.find((r) => String(r.website.websiteId) === websiteId) ?? null;
+	const crumbs = [{ label: MERCHANT.websitesTitle, href: routes.websites() }];
+	return (
+		<>
+			<FrameBilling billing={props.billing} />
+			{selected ? (
+				<WebsitePageView
+					key={websiteId}
+					website={selected.website}
+					cards={selected.cards}
+					part={props.part}
+					crumbs={crumbs}
+					hrefOf={(part) => routes.websitePart(websiteId, part)}
+					can={{ manage: false, removeWebsite: false, tokens: true, open: true, settings: true }}
+					pills={SITE_PILLS}
+					launch={(productId) => ({ path: api.launch(props.merchantId, websiteId, productId) })}
+					afterRemoved={routes.websites()}
+					settings={props.settings}
+					setup={props.setup}
+				/>
+			) : (
+				<Page linkAs={Link} crumbs={[...crumbs, { label: websiteId }]} error={WEBSITE.gone} />
+			)}
 		</>
 	);
 }

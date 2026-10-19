@@ -1,30 +1,18 @@
 'use client';
 /**
  * Website settings: the facts every product of a website shares, kept once in the Portal (settings-ownership design,
- * section 8.1). One page per website, in both consoles, on the premium frame: the sections in the inner sidebar (Business,
- * Brand and look, Region and format, Domains, pages and legal, Team and alerts, Recent changes) with the context of
- * each (a product still needs something from it, how many changes), one section at a time, forms on the shared
- * components, nested things in right drawers and the floating Save bar. A save names the version the person read; if
- * someone saved meanwhile the page offers a reload. The Portal checks every right and value again.
+ * section 8.1). They are sub-pages of the website's own page (`website-page.js`): Business, Brand and look, Region and
+ * format, Domains, pages and legal, Team and alerts, Data and files, Between your products - one section at a time, forms
+ * on the shared components, nested things in right drawers and the floating Save bar - and Recent changes (a table).
+ * This module holds the state they share (the saved document, what the products still need from it, the changes, what
+ * is set under Data and files) and draws one section. A save names the version the person read; if someone saved
+ * meanwhile the page offers a reload. The Portal checks every right and value again.
  * @module
  */
 import { useEffect, useState } from 'react';
-import {
-	Callout,
-	EmptyState,
-	HeaderFact,
-	ListRow,
-	LocalTime,
-	PageHeader,
-	RowList,
-	SectionLayout,
-	TextLink,
-	describeProblem,
-	useToast,
-} from '@ss/ui';
+import { CardFlow, DataTable, EmptyState, LocalTime, describeProblem, useToast } from '@ss/ui';
 import { WEBSITE_SETTINGS as T } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
-import { Link } from '../link.js';
 import { api } from '../paths.js';
 import { ConnectionsSection, LinksSection } from './website-connections.js';
 import { BrandSection, BusinessSection, PagesSection, RegionSection, TeamSection } from './website-settings-sections.js';
@@ -32,16 +20,9 @@ import { BrandSection, BusinessSection, PagesSection, RegionSection, TeamSection
 /** @typedef {import('@ss/contracts').WebsiteSettings} WebsiteSettings */
 /** @typedef {{ productId: string, name: string, requires: string[], missing: string[] }} Readiness */
 /** @typedef {{ at: string, section: string, version: number, changed: string[], who: { type: string, name: string | null } }} Change */
-/**
- * @typedef {object} WebsiteSettingsPageProps
- * @property {{ settings: WebsiteSettings, readiness: Readiness[], can: { write: boolean } }} data
- * @property {Change[]} changes newest first
- * @property {import('./website-connections.js').ConnectionsView | null} connections what is set under Data and files (never a value)
- * @property {string} merchantId
- * @property {string} websiteId
- * @property {string} domain
- * @property {{ href: string, label: string }} back
- */
+
+/** The sections that are the settings document (the rest is Data and files, and the links). */
+const DOCUMENT_SECTIONS = ['business', 'brand', 'region', 'pages', 'team'];
 
 /** The section a missing value belongs to: `region.currency` is in `region`. @param {string} path */
 const sectionOfPath = (path) => path.split('.')[0] ?? '';
@@ -59,59 +40,56 @@ const needs = (paths) => paths.map((path) => /** @type {Record<string, string>} 
 export const readinessLines = (readiness) =>
 	readiness.filter((item) => item.missing.length > 0).map((item) => T.readyMissing(item.name, needs(item.missing)));
 
-/** The Recent changes section: who changed what, when. @param {{ changes: Change[] }} props */
-function ChangesSection({ changes }) {
+/**
+ * What the products still need from a section, as a dot for its link in the inner navigation and who needs it.
+ * @param {Readiness[]} readiness
+ * @param {string} section
+ */
+export const contextOf = (readiness, section) => {
+	const waiting = readiness.filter((item) => item.missing.some((path) => sectionOfPath(path) === section));
+	return waiting.length === 0
+		? {}
+		: { dot: /** @type {const} */ ('warning'), dotLabel: T.needsSetup(waiting.map((item) => item.name).join(', ')) };
+};
+
+/** The Recent changes table: who changed what, when. @param {{ changes: Change[] }} props */
+export function ChangesTable({ changes }) {
 	return (
-		<div className="col-span-full min-w-0 space-y-4">
-			<p className="text-sm text-muted">{T.changes.intro}</p>
-			{changes.length === 0 ? (
-				<EmptyState compact icon="clock" title={T.changes.empty} />
-			) : (
-				<RowList label={T.changes.title}>
-					{changes.map((change) => (
-						<ListRow
-							key={`${change.version}-${change.at}`}
-							icon="clock"
-							title={T.changes.row(
-								/** @type {Record<string, string>} */ (T.sections)[change.section] ?? change.section,
-								change.version,
-							)}
-							meta={
-								<>
-									{T.changes.fields(change.changed)} · {T.changes.by(change.who.name)} · <LocalTime value={change.at} />
-								</>
-							}
-						/>
-					))}
-				</RowList>
-			)}
-		</div>
+		<DataTable
+			caption={T.changes.title}
+			rows={changes}
+			rowKey={(change) => `${change.version}-${change.at}`}
+			empty={<EmptyState compact icon="clock" title={T.changes.empty} />}
+			columns={[
+				{ key: 'at', header: T.savedAt, kind: 'date', render: (change) => <LocalTime value={change.at} /> },
+				{
+					key: 'section',
+					header: T.changes.sectionColumn,
+					render: (change) =>
+						T.changes.row(/** @type {Record<string, string>} */ (T.sections)[change.section] ?? change.section, change.version),
+				},
+				{ key: 'changed', header: T.changes.fieldsColumn, low: true, wrap: true, render: (change) => T.changes.fields(change.changed) },
+				{ key: 'who', header: T.changes.byColumn, low: true, render: (change) => T.changes.by(change.who.name) },
+			]}
+		/>
 	);
 }
 
 /**
- * The page.
- * @param {WebsiteSettingsPageProps} props
+ * The state the settings sub-pages share, kept by the website page so its header and navigation show it too.
+ * @param {{ data: { settings: WebsiteSettings, readiness: Readiness[], can: { write: boolean } } | null, changes: Change[],
+ *   connections: import('./website-connections.js').ConnectionsView | null, merchantId: string, websiteId: string }} props
  */
-export function WebsiteSettingsView({
-	data,
-	changes: initialChanges,
-	connections: initialConnections,
-	merchantId,
-	websiteId,
-	domain,
-	back,
-}) {
+export function useWebsiteSettings({ data, changes: initialChanges, connections: initialConnections, merchantId, websiteId }) {
 	const toast = useToast();
-	const manage = { merchantId, websiteId };
-	const [settings, setSettings] = useState(data.settings);
-	const [readiness, setReadiness] = useState(data.readiness);
+	const [settings, setSettings] = useState(data?.settings ?? null);
+	const [readiness, setReadiness] = useState(data?.readiness ?? []);
 	const [changes, setChanges] = useState(initialChanges);
 	const [connections, setConnections] = useState(initialConnections);
 	const [stale, setStale] = useState(false);
 	useEffect(() => {
-		setSettings(data.settings);
-		setReadiness(data.readiness);
+		setSettings(data?.settings ?? null);
+		setReadiness(data?.readiness ?? []);
 	}, [data]);
 	useEffect(() => setChanges(initialChanges), [initialChanges]);
 	useEffect(() => setConnections(initialConnections), [initialConnections]);
@@ -136,139 +114,60 @@ export function WebsiteSettingsView({
 		saved(result.data);
 		toast.show({ title: T.reloaded });
 	};
-
-	const canWrite = data.can.write;
-	const common = {
+	return {
 		settings,
+		readiness,
+		changes,
+		connections,
+		setConnections,
+		stale,
+		canWrite: data?.can.write ?? false,
+		manage: { merchantId, websiteId },
+		saved,
+		markStale: () => setStale(true),
+		reload: () => void reload(),
+	};
+}
+
+/**
+ * One section of the settings.
+ * @param {{ section: string, state: ReturnType<typeof useWebsiteSettings> }} props
+ */
+export function SettingsSectionBody({ section, state }) {
+	const { settings, manage, canWrite, stale, saved, markStale, reload, connections, setConnections } = state;
+	if (DOCUMENT_SECTIONS.includes(section) && !settings) return null;
+	const common = {
+		settings: /** @type {WebsiteSettings} */ (settings),
 		manage,
 		canWrite,
 		stale,
 		onSaved: saved,
-		onStale: () => setStale(true),
-		onReload: () => void reload(),
+		onStale: markStale,
+		onReload: reload,
 	};
-	/** What the products still need from a section: a dot on its link and who needs it. @param {string} section */
-	const contextOf = (section) => {
-		const waiting = readiness.filter((item) => item.missing.some((path) => sectionOfPath(path) === section));
-		return waiting.length === 0
-			? {}
-			: { status: /** @type {const} */ ('attention'), statusLabel: T.needsSetup(waiting.map((item) => item.name).join(', ')) };
-	};
-	const lines = readinessLines(readiness);
 	return (
-		<div className="space-y-6">
-			<PageHeader
-				breadcrumbs={
-					<TextLink as={Link} href={back.href} className="inline-flex items-center gap-1 text-sm">
-						{back.label}
-					</TextLink>
-				}
-				title={T.title(domain)}
-				subtitle={T.intro}
-				meta={
-					<>
-						<HeaderFact>{T.version(settings.version)}</HeaderFact>
-						<HeaderFact label={T.savedAt}>
-							{settings.updatedAt ? <LocalTime value={settings.updatedAt} /> : T.neverSaved}
-						</HeaderFact>
-					</>
-				}
-			/>
-			{lines.length > 0 ? (
-				<Callout tone="attention" title={T.readyTitle}>
-					<ul className="list-disc space-y-0.5 pl-5">
-						{lines.map((line) => (
-							<li key={line}>{line}</li>
-						))}
-					</ul>
-				</Callout>
+		<CardFlow>
+			{section === 'business' ? <BusinessSection {...common} /> : null}
+			{section === 'brand' ? <BrandSection {...common} /> : null}
+			{section === 'region' ? <RegionSection {...common} /> : null}
+			{section === 'pages' ? <PagesSection {...common} /> : null}
+			{section === 'team' ? <TeamSection {...common} /> : null}
+			{section === 'connections' ? (
+				<ConnectionsSection
+					view={connections}
+					manage={manage}
+					canWrite={connections?.can.write ?? false}
+					onChanged={(view) => setConnections(view)}
+				/>
 			) : null}
-			<SectionLayout
-				label={T.sectionsLabel}
-				sections={[
-					{
-						id: 'business',
-						label: T.sections.business,
-						icon: 'home',
-						group: T.groups.facts,
-						...contextOf('business'),
-						content: <BusinessSection {...common} />,
-					},
-					{
-						id: 'brand',
-						label: T.sections.brand,
-						icon: 'palette',
-						group: T.groups.facts,
-						...contextOf('brand'),
-						content: <BrandSection {...common} />,
-					},
-					{
-						id: 'region',
-						label: T.sections.region,
-						icon: 'globe',
-						group: T.groups.facts,
-						...contextOf('region'),
-						content: <RegionSection {...common} />,
-					},
-					{
-						id: 'pages',
-						label: T.sections.pages,
-						icon: 'link',
-						group: T.groups.facts,
-						...contextOf('pages'),
-						content: <PagesSection {...common} />,
-					},
-					{
-						id: 'team',
-						label: T.sections.team,
-						icon: 'users',
-						group: T.groups.facts,
-						...contextOf('team'),
-						content: <TeamSection {...common} />,
-					},
-					...(connections
-						? [
-								{
-									id: 'connections',
-									label: T.sections.connections,
-									icon: /** @type {const} */ ('database'),
-									group: T.groups.connect,
-									content: (
-										<ConnectionsSection
-											view={connections}
-											manage={manage}
-											canWrite={connections.can.write}
-											onChanged={(view) => setConnections(view)}
-										/>
-									),
-								},
-								{
-									id: 'links',
-									label: T.sections.links,
-									icon: /** @type {const} */ ('link'),
-									group: T.groups.connect,
-									...(connections.links.length > 0 ? { badge: String(connections.links.length) } : {}),
-									content: (
-										<LinksSection
-											view={connections}
-											manage={manage}
-											canWrite={connections.can.write}
-											onChanged={(view) => setConnections(view)}
-										/>
-									),
-								},
-							]
-						: []),
-					{
-						id: 'changes',
-						label: T.sections.changes,
-						icon: 'clock',
-						group: T.groups.activity,
-						...(changes.length > 0 ? { badge: String(changes.length) } : {}),
-						content: <ChangesSection changes={changes} />,
-					},
-				]}
-			/>
-		</div>
+			{section === 'links' ? (
+				<LinksSection
+					view={connections}
+					manage={manage}
+					canWrite={connections?.can.write ?? false}
+					onChanged={(view) => setConnections(view)}
+				/>
+			) : null}
+		</CardFlow>
 	);
 }

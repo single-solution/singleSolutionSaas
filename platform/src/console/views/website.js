@@ -1,50 +1,38 @@
 'use client';
 /**
- * Websites in both consoles (PLAN 0.6, 0.8.2): the website card — its domain and daily cost, its products (status,
- * features on, daily cost, Open) and, launched from the card as dialogs: **Add product** and **Remove** a product
- * (Owner, Support), **Setup** (the website's Setup page; never for Finance), **Install and tokens** (one block per
- * product: widget script tag, browser token, server token reveal / copy / regenerate, docs; never for Finance), **Usage** (30-day chart and the table by product and feature),
- * and in the card's menu **Visit website**, **Copy domain** and **Remove website** (Remove: Owner, Support). The admin's merchant page shows one card per website; the merchant console shows the
- * selected website's card as the detail of its Websites screen. The consoles pass the rights, the API client and the
- * Open route; the Portal checks every right again.
+ * Pieces of a website in both consoles (PLAN 0.6, 0.8.2) that the website page (`website-page.js`) and the merchant
+ * pages use: the daily cost and status dot of a website, **Add website** and **Add product** (drawers), the usage of
+ * all a merchant's websites (a drawer), and the **install block** of a product (widget script tag, browser token,
+ * server token reveal / copy / regenerate, docs; never for Finance). The Portal checks every right again.
  * @module
  */
 import { useEffect, useState } from 'react';
 import {
-	ActionMenu,
 	Button,
 	Callout,
 	Card,
 	CodeBlock,
-	Dialog,
-	EmptyState,
+	DataTable,
+	Drawer,
 	Form,
 	FormError,
-	Icon,
 	IconBadge,
 	Input,
-	ListRow,
-	RowList,
+	PasswordConfirmDialog,
 	Skeleton,
-	SoftBreaks,
-	TypedConfirmDialog,
+	TextLink,
 	copyText,
-	cx,
 	describeProblem,
 	fieldErrors,
-	formatCredits,
 	problemCode,
 	useToast,
-	TextLink,
-	PasswordConfirmDialog,
 } from '@ss/ui';
 import { widgetScriptTag } from '@ss/contracts/text';
-import { BILLING, MORE, WEBSITE } from '../../texts/console.js';
+import { BILLING, WEBSITE } from '../../texts/console.js';
 import { apiConfirm, apiFetch } from '../client.js';
-import { useNavigation } from '../navigation.js';
 import { api } from '../paths.js';
-import { productTone, ProductStatusBadge, UsageView } from './billing.js';
-import { factorOf, openDashboard } from './common.js';
+import { productTone, UsageView } from './billing.js';
+import { factorOf } from './common.js';
 
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
 /**
@@ -58,7 +46,7 @@ import { factorOf, openDashboard } from './common.js';
 export function MerchantUsageDialog({ merchantId, title, onClose }) {
 	const result = useOnce(api.usage(merchantId));
 	return (
-		<Dialog open onClose={onClose} size="lg" title={title}>
+		<Drawer open onClose={onClose} size="lg" title={title}>
 			{!result ? (
 				<Skeleton lines={4} />
 			) : !result.ok ? (
@@ -66,7 +54,7 @@ export function MerchantUsageDialog({ merchantId, title, onClose }) {
 			) : (
 				<UsageView usage={result.data} chartTitle={BILLING.usageChart} />
 			)}
-		</Dialog>
+		</Drawer>
 	);
 }
 
@@ -126,7 +114,7 @@ export function AddWebsiteDialog({ open, merchantId, onClose, onAdded }) {
 		onAdded(result.data.website);
 	};
 	return (
-		<Dialog open={open} onClose={onClose} title={WEBSITE.addWebsite} description={WEBSITE.domainHelp}>
+		<Drawer open={open} onClose={onClose} title={WEBSITE.addWebsite} description={WEBSITE.domainHelp}>
 			<Form onSubmit={submit} busy={busy} aria-label={WEBSITE.addWebsite}>
 				<Input
 					label={WEBSITE.domain}
@@ -144,268 +132,16 @@ export function AddWebsiteDialog({ open, merchantId, onClose, onAdded }) {
 					{WEBSITE.addWebsite}
 				</Button>
 			</Form>
-		</Dialog>
+		</Drawer>
 	);
 }
 
 /**
- * @typedef {object} WebsiteCardProps
- * @property {any} website
- * @property {ProductCard[]} cards
- * @property {WebsiteRights} can
- * @property {(productId: string) => { path: string, body?: unknown }} launch the Open route of a product
- * @property {Array<{ productId: string, name: string }> | null} [addable] active connected products (Add product)
- * @property {(cards: ProductCard[]) => void} [onCardsChange] after a product was added or removed
- * @property {() => void} [onRemoved] after the website was removed
- * @property {boolean} [headline] the card is the page's detail (larger heading, products as tiles)
- * @property {string} [setupHref] the website's Setup page (shown to those who see Install and tokens)
- * @property {string} [settingsHref] the website's Website settings page (shown to those who may see it)
+ * Add product (PLAN 0.5.9), in a drawer: the active connected products not yet on the website, a table with Add.
+ * @param {{ open: boolean, merchantId: string, website: { websiteId: string, domain: string },
+ *   products: Array<{ productId: string, name: string }>, onClose: () => void, onAdded: (card: ProductCard) => void }} props
  */
-
-/**
- * A website card: domain, daily cost, products, and the dialogs launched from it.
- * @param {WebsiteCardProps} props
- */
-export function WebsiteCard({
-	website,
-	cards: initial,
-	can,
-	launch,
-	addable,
-	onCardsChange,
-	onRemoved,
-	headline,
-	setupHref,
-	settingsHref,
-}) {
-	const toast = useToast();
-	const nav = useNavigation();
-	const merchantId = String(website.merchantId);
-	const websiteId = String(website.websiteId);
-	const [cards, setCardsState] = useState(initial);
-	const [dialog, setDialog] = useState(/** @type {null | 'add' | 'tokens' | 'usage' | 'removeWebsite'} */ (null));
-	const [removing, setRemoving] = useState(/** @type {ProductCard | null} */ (null));
-	const [busy, setBusy] = useState(false);
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const [opening, setOpening] = useState(/** @type {string | null} */ (null));
-	useEffect(() => setCardsState(initial), [initial]);
-
-	/** @param {ProductCard[]} next */
-	const setCards = (next) => {
-		setCardsState(next);
-		onCardsChange?.(next);
-	};
-	/** @param {ProductCard} card */
-	const open = async (card) => {
-		setOpening(card.productId);
-		const { path, body } = launch(card.productId);
-		const result = await openDashboard(path, body);
-		setOpening(null);
-		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
-	};
-	const removeProduct = async () => {
-		if (!removing) return;
-		setBusy(true);
-		setProblem(null);
-		const result = await apiFetch(api.websiteProduct(merchantId, websiteId, removing.productId), { method: 'DELETE' });
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
-		}
-		setCards(cards.filter((c) => c.productId !== removing.productId));
-		toast.show({ title: WEBSITE.productRemoved(removing.name) });
-		setRemoving(null);
-	};
-	const removeWebsite = async () => {
-		setBusy(true);
-		setProblem(null);
-		const result = await apiFetch(api.website(merchantId, websiteId), { method: 'DELETE', body: { confirm: website.domain } });
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
-		}
-		setDialog(null);
-		toast.show({ title: WEBSITE.websiteRemoved(website.domain) });
-		onRemoved?.();
-	};
-
-	const copyDomain = async () => {
-		const copied = await copyText(website.domain);
-		toast.show(copied ? { title: MORE.copied } : { tone: 'danger', title: website.domain });
-	};
-	// the header keeps Add product; the More menu holds Website settings, Setup, Install and tokens and Usage, then
-	// Visit and Copy domain, and Remove website last (danger) for those who remove websites
-	/** @type {import('@ss/ui').MenuItem[]} */
-	const more = [
-		...(settingsHref
-			? [{ label: WEBSITE.websiteSettings, icon: /** @type {const} */ ('sliders'), onSelect: () => nav.go(settingsHref) }]
-			: []),
-		...(can.tokens && setupHref
-			? [{ label: WEBSITE.setup, icon: /** @type {const} */ ('layers'), onSelect: () => nav.go(setupHref) }]
-			: []),
-		...(can.tokens ? [{ label: WEBSITE.tokens, icon: /** @type {const} */ ('key'), onSelect: () => setDialog('tokens') }] : []),
-		{ label: WEBSITE.usage, icon: 'trendingUp', onSelect: () => setDialog('usage') },
-		{
-			label: MORE.visitWebsite,
-			icon: 'external',
-			divider: true,
-			onSelect: () => void window.open(`https://${website.domain}`, '_blank', 'noopener,noreferrer'),
-		},
-		{ label: MORE.copyDomain, icon: 'copy', onSelect: () => void copyDomain() },
-		...(can.removeWebsite
-			? [
-					{
-						label: WEBSITE.removeWebsite,
-						danger: true,
-						disabled: cards.length > 0,
-						...(cards.length > 0 ? { hint: WEBSITE.removeProductsFirst } : {}),
-						onSelect: () => {
-							setProblem(null);
-							setDialog('removeWebsite');
-						},
-					},
-				]
-			: []),
-	];
-
-	const DomainHeading = headline ? 'h2' : 'h3';
-	return (
-		<Card
-			as="article"
-			flow={!headline}
-			padded={false}
-			id={`website-${websiteId}`}
-			className="@container scroll-mt-6"
-			title={
-				<span className="flex min-w-0 items-center gap-3">
-					<IconBadge icon="globe" kind="website" size="sm" />
-					<span className="min-w-0">
-						<DomainHeading
-							title={website.domain}
-							className={cx('line-clamp-2 break-words text-title font-semibold text-fg', headline && '@md:text-lead')}>
-							<SoftBreaks text={website.domain} />
-						</DomainHeading>
-						<span className="block text-help font-normal text-muted">
-							{WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}
-						</span>
-					</span>
-				</span>
-			}
-			actions={
-				<>
-					{can.manage ? (
-						<Button
-							size="sm"
-							onClick={() => setDialog('add')}
-							aria-label={WEBSITE.addProductTo(website.domain)}
-							icon={<Icon name="plus" size={14} />}>
-							{WEBSITE.addProduct}
-						</Button>
-					) : null}
-					<ActionMenu label={WEBSITE.websiteActionsOf(website.domain)} items={more} />
-				</>
-			}>
-			{cards.length === 0 ? (
-				<EmptyState compact icon="box" title={can.manage ? WEBSITE.noProducts : WEBSITE.noProductsMerchant} />
-			) : (
-				<RowList inset label={WEBSITE.productsOf(website.domain)}>
-					{cards.map((card) => (
-						<ListRow
-							key={card.productId}
-							product={card.productId}
-							title={card.name}
-							status={<ProductStatusBadge status={card.status} featuresOn={card.featuresOn} />}
-							meta={
-								<>
-									{card.featuresOn.length > 0 ? `${WEBSITE.featuresOn(card.featuresOn.length)} · ` : ''}
-									{BILLING.dailyCost}:{' '}
-									<span className="font-medium tabular-nums text-fg">{formatCredits(card.dailyCost)}</span>
-								</>
-							}
-							action={
-								can.open ? (
-									<Button
-										variant="secondary"
-										size="sm"
-										loading={opening === card.productId}
-										aria-label={WEBSITE.openLabel(card.name)}
-										title={WEBSITE.openHelp}
-										onClick={() => void open(card)}
-										icon={<Icon name="external" size={14} />}>
-										{WEBSITE.open}
-									</Button>
-								) : null
-							}
-							moreLabel={WEBSITE.productActions(card.name)}
-							{...(can.manage
-								? {
-										more: [
-											{
-												label: WEBSITE.remove,
-												danger: true,
-												onSelect: () => {
-													setProblem(null);
-													setRemoving(card);
-												},
-											},
-										],
-									}
-								: {})}
-						/>
-					))}
-				</RowList>
-			)}
-			{dialog === 'add' ? (
-				<AddProductDialog
-					merchantId={merchantId}
-					website={website}
-					products={(addable ?? []).filter((p) => !cards.some((c) => c.productId === p.productId))}
-					onClose={() => setDialog(null)}
-					onAdded={(card) => {
-						setCards([...cards, card].sort((a, b) => a.productId.localeCompare(b.productId)));
-						setDialog(null);
-						toast.show({ title: WEBSITE.productAdded(card.name) });
-					}}
-				/>
-			) : null}
-			{dialog === 'tokens' ? <TokensDialog merchantId={merchantId} website={website} onClose={() => setDialog(null)} /> : null}
-			{dialog === 'usage' ? <UsageDialog merchantId={merchantId} website={website} onClose={() => setDialog(null)} /> : null}
-			<TypedConfirmDialog
-				open={Boolean(removing)}
-				onClose={() => setRemoving(null)}
-				onConfirm={() => void removeProduct()}
-				expected={removing?.name ?? ''}
-				busy={busy}
-				danger
-				confirmLabel={WEBSITE.remove}
-				title={WEBSITE.removeTitle(removing?.name ?? '')}
-				error={problem ? describeProblem(problem) : null}>
-				<p className="text-sm text-muted">{WEBSITE.removeHelp}</p>
-			</TypedConfirmDialog>
-			<TypedConfirmDialog
-				open={dialog === 'removeWebsite'}
-				onClose={() => setDialog(null)}
-				onConfirm={() => void removeWebsite()}
-				expected={website.domain}
-				busy={busy}
-				danger
-				confirmLabel={WEBSITE.removeWebsite}
-				title={WEBSITE.removeWebsiteTitle(website.domain)}
-				error={problem ? describeProblem(problem) : null}>
-				<p className="text-sm text-muted">{WEBSITE.removeWebsiteHelp}</p>
-			</TypedConfirmDialog>
-		</Card>
-	);
-}
-
-/**
- * Add product (PLAN 0.5.9): the active connected products not yet on the website.
- * @param {{ merchantId: string, website: any, products: Array<{ productId: string, name: string }>,
- *   onClose: () => void, onAdded: (card: ProductCard) => void }} props
- */
-function AddProductDialog({ merchantId, website, products, onClose, onAdded }) {
+export function AddProductDrawer({ open, merchantId, website, products, onClose, onAdded }) {
 	const [busy, setBusy] = useState(/** @type {string | null} */ (null));
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	/** @param {string} productId */
@@ -424,17 +160,21 @@ function AddProductDialog({ merchantId, website, products, onClose, onAdded }) {
 		onAdded(result.data.product);
 	};
 	return (
-		<Dialog open onClose={onClose} title={WEBSITE.addProductTo(website.domain)} description={WEBSITE.addProductHelp}>
+		<Drawer open={open} onClose={onClose} title={WEBSITE.addProductTo(website.domain)} description={WEBSITE.addProductHelp}>
 			{products.length === 0 ? (
 				<p className="text-sm text-muted">{WEBSITE.noneToAdd}</p>
 			) : (
-				<RowList>
-					{products.map((p) => (
-						<ListRow
-							key={p.productId}
-							product={p.productId}
-							title={p.name}
-							action={
+				<DataTable
+					caption={WEBSITE.addProduct}
+					rows={products}
+					rowKey={(p) => p.productId}
+					columns={[
+						{ key: 'name', header: WEBSITE.productColumn, render: (p) => p.name },
+						{
+							key: 'add',
+							header: WEBSITE.add,
+							align: 'right',
+							render: (p) => (
 								<Button
 									size="sm"
 									loading={busy === p.productId}
@@ -443,13 +183,13 @@ function AddProductDialog({ merchantId, website, products, onClose, onAdded }) {
 									onClick={() => void add(p.productId)}>
 									{WEBSITE.add}
 								</Button>
-							}
-						/>
-					))}
-				</RowList>
+							),
+						},
+					]}
+				/>
 			)}
 			<FormError problem={problem} />
-		</Dialog>
+		</Drawer>
 	);
 }
 
@@ -457,7 +197,7 @@ function AddProductDialog({ merchantId, website, products, onClose, onAdded }) {
  * Loads a website's resource once when its dialog opens.
  * @param {string} path
  */
-const useOnce = (path) => {
+export const useOnce = (path) => {
 	const [result, setResult] = useState(/** @type {import('./common.js').ApiResult | null} */ (null));
 	useEffect(() => {
 		let live = true;
@@ -476,61 +216,6 @@ const useOnce = (path) => {
  * @param {import('./common.js').ApiResult | null} me
  */
 export const twoStepOnOf = (me) => me?.ok === true && me.data?.[me.data?.kind]?.twoStep?.enabled === true;
-
-/**
- * Install and tokens of a website, as a dialog: one install block per product.
- * @param {{ merchantId: string, website: any, onClose: () => void }} props
- */
-function TokensDialog({ merchantId, website, onClose }) {
-	const websiteId = String(website.websiteId);
-	const result = useOnce(api.tokens(merchantId, websiteId));
-	// two-step on: the confirmation of a server token asks for the code at once
-	const twoStepOn = twoStepOnOf(useOnce('/v1/me'));
-	const tokens = /** @type {TokenEntry[]} */ (result?.ok ? (result.data?.items ?? []) : []);
-	return (
-		<Dialog open onClose={onClose} size="lg" title={WEBSITE.tokensOf(website.domain)}>
-			{!result ? (
-				<Skeleton lines={4} />
-			) : !result.ok ? (
-				<Callout tone="danger">{describeProblem(result.problem)}</Callout>
-			) : tokens.length === 0 ? (
-				<EmptyState compact icon="key" kind="developer" title={WEBSITE.noTokens} />
-			) : (
-				<div className="space-y-4">
-					{tokens.map((entry) => (
-						<InstallBlock
-							key={entry.productId}
-							entry={entry}
-							domain={website.domain}
-							merchantId={merchantId}
-							websiteId={websiteId}
-							twoStepOn={twoStepOn}
-						/>
-					))}
-				</div>
-			)}
-		</Dialog>
-	);
-}
-
-/**
- * Usage of a website, as a dialog: the last 30 UTC days by product and feature.
- * @param {{ merchantId: string, website: any, onClose: () => void }} props
- */
-function UsageDialog({ merchantId, website, onClose }) {
-	const result = useOnce(api.usage(merchantId, { websiteId: String(website.websiteId) }));
-	return (
-		<Dialog open onClose={onClose} size="lg" title={WEBSITE.usageOf(website.domain)}>
-			{!result ? (
-				<Skeleton lines={4} />
-			) : !result.ok ? (
-				<Callout tone="danger">{describeProblem(result.problem)}</Callout>
-			) : (
-				<UsageView usage={result.data} showWebsite={false} chartTitle={BILLING.usageChart} />
-			)}
-		</Dialog>
-	);
-}
 
 /**
  * What the Portal said to a refused confirmation, as words for the field it belongs to: a wrong password under the

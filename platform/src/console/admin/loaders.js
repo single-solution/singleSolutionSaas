@@ -6,7 +6,7 @@
  * @module
  */
 import { isId } from '@ss/contracts';
-import { firstFailure, itemsOf, loadWebsiteRows, orElse } from '../loaders.js';
+import { firstFailure, itemsOf, loadSetup, loadWebsiteRows, loadWebsiteSettings, orElse } from '../loaders.js';
 import { adminApi as paths, merchantFilter } from './paths.js';
 import { adminCan } from './rights.js';
 
@@ -160,6 +160,39 @@ export const loadMerchant = async (api, merchantId, admin) => {
 		dayCharges: itemsOf(dayCharges),
 		activity: pageOf(activity),
 		addable: active ? itemsOf(active).map((p) => ({ productId: String(p.productId), name: String(p.name) })) : null,
+	};
+};
+
+/**
+ * A merchant's website page: the merchant (name for the breadcrumbs), its websites with their products, the active
+ * connected products that Add product offers (only for admins who add products), the Website settings (only for
+ * admins who read them) and, on the Setup sheet part only, the sheet with its share links (only for admins who manage
+ * tokens). The settings and the sheet degrade to a failure the page shows in its body.
+ * @param {ConsoleApi} api
+ * @param {string} merchantId
+ * @param {string} websiteId
+ * @param {string} part the part of the address (`website-parts.js`)
+ * @param {any} admin the signed-in admin
+ */
+export const loadAdminWebsite = async (api, merchantId, websiteId, part, admin) => {
+	const [merchant, websites, active, settings, setup] = await Promise.all([
+		api.get(paths.merchant(merchantId)),
+		loadWebsiteRows(api, merchantId),
+		adminCan(admin, 'products_on_websites.write') ? api.get(paths.products({ status: 'active' })) : null,
+		adminCan(admin, 'website_settings.read') ? loadWebsiteSettings(api, merchantId, websiteId) : null,
+		part === 'setup' && adminCan(admin, 'tokens.manage') ? loadSetup(api, merchantId, websiteId) : null,
+	]);
+	const failed = firstFailure(merchant) ?? websites.failed;
+	if (failed) return failed;
+	return {
+		ok: /** @type {const} */ (true),
+		merchant: /** @type {any} */ (merchant.ok ? merchant.data : {}),
+		websiteId,
+		part,
+		rows: websites.rows,
+		addable: active ? itemsOf(active).map((p) => ({ productId: String(p.productId), name: String(p.name) })) : null,
+		settings,
+		setup,
 	};
 };
 

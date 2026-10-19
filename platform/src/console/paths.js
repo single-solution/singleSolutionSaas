@@ -42,10 +42,14 @@ export const routes = Object.freeze({
 	websites: () => '/websites',
 	/** the Websites screen with a website selected */
 	website: (/** @type {string} */ id) => `/websites/${e(id)}`,
+	/** a part of a website's page: `products/:productId`, `settings/brand`, `install`, `setup`, `usage`, `changes`; none = Overview */
+	websitePart: (/** @type {string} */ id, /** @type {string} */ part = '') =>
+		part ? `/websites/${e(id)}/${part.split('/').map(e).join('/')}` : `/websites/${e(id)}`,
 	/** the Setup sheet of a website */
 	websiteSetup: (/** @type {string} */ id) => `/websites/${e(id)}/setup`,
-	/** the Website settings of a website */
-	websiteSettings: (/** @type {string} */ id) => `/websites/${e(id)}/settings`,
+	/** the Website settings of a website (a part: `business`, `brand`, `connections`, …) */
+	websiteSettings: (/** @type {string} */ id, /** @type {string} */ section = '') =>
+		section ? `/websites/${e(id)}/settings/${e(section)}` : `/websites/${e(id)}/settings`,
 	credits: () => '/credits',
 	/** the receipts sub-page of Usage and credits */
 	creditsReceipts: () => '/credits/receipts',
