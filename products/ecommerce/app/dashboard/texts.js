@@ -739,7 +739,6 @@ export const TEXTS = dashboardTexts({
 			managed:
 				'Your store’s name, contacts, address, hours, social links and pictures are set once for all your products, in the Portal under Website settings › Business and Brand and look. Your website reads them from here.',
 			managedOpen: 'Open Website settings',
-			title: 'Store details',
 			help: 'Who your store is, as your customers see it. Your website reads them for its header, footer and contact page, and serves its business.json from them.',
 			name: 'Store name',
 			email: 'Email address',

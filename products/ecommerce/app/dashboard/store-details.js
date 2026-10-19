@@ -6,7 +6,7 @@
  * website reads the same facts at `GET /v1/shop/store` and `GET /v1/shop/store/business-json`.
  * @module
  */
-import { Card, KeyValueList, ManagedNote } from '@ss/ui';
+import { Card, KeyValueList, ManagedNote, SettingsCardSkeleton } from '@ss/ui';
 import { Loaded, fill, useLoad, websiteSettingsUrl } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
@@ -36,10 +36,11 @@ export function StoreDetailsView({ websiteId, off, portal, admin = false, mercha
 	const website = useLoad(`/v1/dashboard/websites/${websiteId}/website-settings`);
 	const href = portal ? websiteSettingsUrl({ portal, admin, websiteId, merchantId, section: 'business' }) : undefined;
 	return (
-		<Card title={S.title} subtitle={off ? TEXTS.settings.off : S.help}>
-			<Loaded answer={website.answer}>
-				{(data) => (
+		<Loaded answer={website.answer} skeleton={<SettingsCardSkeleton rows={5} title={false} />}>
+			{(data) => (
+				<Card>
 					<div className="space-y-4">
+						<p className="text-sm text-muted">{off ? TEXTS.settings.off : S.help}</p>
 						<ManagedNote title={S.managedTitle} {...(href ? { href } : {})} linkLabel={S.managedOpen}>
 							{S.managed}
 						</ManagedNote>
@@ -48,8 +49,8 @@ export function StoreDetailsView({ websiteId, off, portal, admin = false, mercha
 							{fill(S.siteHelp, { read: '/v1/shop/store', json: '/v1/shop/store/business-json' })}
 						</p>
 					</div>
-				)}
-			</Loaded>
-		</Card>
+				</Card>
+			)}
+		</Loaded>
 	);
 }

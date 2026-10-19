@@ -75,6 +75,8 @@ describe('the Store details view', () => {
 		const { container } = render(
 			inDashboard(<StoreDetailsView websiteId={WEBSITE} portal="https://portal.example.com" merchantId="mer_1" />),
 		);
+		// the page already says “Store details”: the card has no title of its own, only the help line
+		expect(container.querySelector('h2')).toBeNull();
 		await settle();
 		const text = container.textContent ?? '';
 		for (const words of ['Set in the Portal', 'Example Store', 'hello@example-store.test', '1 Main Street, Springfield, US'])
