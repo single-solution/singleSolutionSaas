@@ -1,6 +1,7 @@
 /**
- * Step 6 of the settings ownership design: ONE database connection and ONE storage connection per website, entered once
- * in the Portal, sealed, write-only, and delivered to every product on the website with its own database name.
+ * Step 6 of the settings ownership design: ONE database connection, ONE storage connection and ONE AI provider key per
+ * website, entered once in the Portal, sealed, write-only, and delivered to every product on the website that needs them
+ * (the database with the product's own name; the AI key only to a product whose manifest says `needs.ai`).
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { validateWebsiteConnections } from '@ss/contracts';
@@ -9,7 +10,12 @@ import { createSecretBox } from '../../../src/infra/crypto.js';
 import { closeMongoClients } from '../../../src/testing.js';
 import { startMongo } from '../../helpers.js';
 import { PASSWORD, bootPortal, codeOf } from '../catalog/boot.js';
-import { FETCHES_PER_HOUR, checkDatabaseValue, checkStorageValue } from '../../../src/modules/website/connections.js';
+import {
+	FETCHES_PER_HOUR,
+	checkAiValue,
+	checkDatabaseValue,
+	checkStorageValue,
+} from '../../../src/modules/website/connections.js';
 import { createOutboundPolicy } from '@ss/net';
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 180_000 });
@@ -32,6 +38,7 @@ afterAll(async () => {
 const CONFIRM = { password: PASSWORD };
 const DB = 'mongodb+srv://app:Sup3rSecret@cluster0.example.net/?retryWrites=true&w=majority';
 const DB_NEW = 'mongodb+srv://app2:An0therSecret@cluster9.example.net/?retryWrites=true';
+const AI = { provider: 'openai', apiKey: 'sk-test-AiSecret0123456789', model: 'gpt-4.1-mini' };
 const STORAGE = {
 	bucket: 'shop-media',
 	region: 'auto',
@@ -139,13 +146,66 @@ describe('what a person may enter', () => {
 	});
 });
 
+describe('what a person may enter as the AI key', () => {
+	const policy = createOutboundPolicy({ allowHosts: [] });
+	it('takes a provider, a key and a model, and for a compatible service its https base URL; nothing more', () => {
+		expect(checkAiValue(AI, policy)).toEqual({ ok: true, value: AI });
+		expect(checkAiValue({ provider: ' anthropic'.trim(), apiKey: `  ${AI.apiKey}  `, model: ` ${AI.model} ` }, policy)).toEqual(
+			{
+				ok: true,
+				value: { ...AI, provider: 'anthropic' },
+			},
+		);
+		expect(checkAiValue({ ...AI, provider: 'compatible', baseUrl: ' https://llm.example.com/v1// ' }, policy)).toEqual({
+			ok: true,
+			value: { ...AI, provider: 'compatible', baseUrl: 'https://llm.example.com/v1' },
+		});
+		// an empty base URL means none
+		expect(checkAiValue({ ...AI, baseUrl: '  ' }, policy)).toEqual({ ok: true, value: AI });
+		/** @type {Array<[unknown, string]>} */
+		const bad = [
+			[null, ''],
+			[[], ''],
+			['x', ''],
+			[{ ...AI, provider: 'other' }, 'provider'],
+			[{ ...AI, provider: undefined }, 'provider'],
+			[{ ...AI, apiKey: 'short' }, 'apiKey'],
+			[{ ...AI, apiKey: 5 }, 'apiKey'],
+			[{ ...AI, apiKey: 'k'.repeat(513) }, 'apiKey'],
+			[{ ...AI, model: '' }, 'model'],
+			[{ ...AI, model: 'has space' }, 'model'],
+			[{ ...AI, model: 'm'.repeat(121) }, 'model'],
+			[{ ...AI, baseUrl: 5 }, 'baseUrl'],
+			[{ ...AI, baseUrl: 'https://llm.example.com' }, 'baseUrl'],
+			[{ ...AI, provider: 'compatible' }, 'baseUrl'],
+			[{ ...AI, provider: 'compatible', baseUrl: 'http://llm.example.com/v1' }, 'baseUrl'],
+			[{ ...AI, provider: 'compatible', baseUrl: 'https://127.0.0.1/v1' }, 'baseUrl'],
+			[{ ...AI, provider: 'compatible', baseUrl: 'https://llm.example.com/v1?key=1' }, 'baseUrl'],
+			[{ ...AI, provider: 'compatible', baseUrl: `https://llm.example.com/${'a'.repeat(2048)}` }, 'baseUrl'],
+			[{ ...AI, temperature: 1 }, 'temperature'],
+		];
+		for (const [value, field] of bad) {
+			const checked = checkAiValue(value, policy);
+			expect(checked.ok, JSON.stringify(value)).toBe(false);
+			expect('field' in checked ? (checked.field ?? '') : '', JSON.stringify(value)).toBe(field);
+			expect(JSON.stringify(checked)).not.toContain(AI.apiKey);
+		}
+	});
+});
+
 describe('Data and files: the merchant enters the database once', () => {
 	it('is sealed at rest, never returned, and asks for the password again', async () => {
 		const { h, m, w1, site } = await setUp('conn_seal');
 		// nothing set yet
 		const empty = await m.client.get(`${site()}/connections`);
 		expect(empty.status).toBe(200);
-		expect(empty.json).toMatchObject({ version: 0, database: { set: false }, storage: { set: false }, can: { write: true } });
+		expect(empty.json).toMatchObject({
+			version: 0,
+			database: { set: false },
+			storage: { set: false },
+			ai: { set: false },
+			can: { write: true },
+		});
 		// a session alone (a stolen cookie) changes nothing
 		for (const body of [{ value: DB }, { value: DB, password: 'not the password' }, { value: DB, password: 5 }]) {
 			const refused = await m.client.put(`${site()}/connections/database`, body);
@@ -235,7 +295,14 @@ describe('Data and files: the merchant enters the database once', () => {
 		expect(validateWebsiteConnections(forChat.json).ok).toBe(true);
 		expect(forNotes.json).toMatchObject({ version: 2, database: { uri: DB, dbName: 'ss_notes' }, storage: null });
 		expect(forChat.json).toMatchObject({ version: 2, database: { uri: DB, dbName: 'ss_chat' }, storage: STORAGE });
-		expect(forPlain.json).toEqual({ version: 2, database: null, storage: null, links: { out: [], in: [] } });
+		expect(forPlain.json).toEqual({
+			version: 2,
+			database: null,
+			storage: null,
+			shared: { ai: null },
+			links: { out: [], in: [] },
+		});
+		expect(forNotes.json.shared).toEqual({ ai: null });
 		// both products were told
 		expect(notes.notices).toEqual([changed(w1), changed(w1)]);
 		expect(chat.notices).toEqual([changed(w1), changed(w1)]);
@@ -248,14 +315,16 @@ describe('Data and files: the merchant enters the database once', () => {
 				name: 'Chat',
 				database: { name: 'ss_chat', overridden: false, state: 'waiting' },
 				storage: { folder: `chat/${w1}/`, required: false, state: 'waiting' },
+				ai: null,
 			},
 			{
 				productId: 'notes',
 				name: 'Notes',
 				database: { name: 'ss_notes', overridden: false, state: 'waiting' },
 				storage: null,
+				ai: null,
 			},
-			{ productId: 'plain', name: 'Plain', database: null, storage: null },
+			{ productId: 'plain', name: 'Plain', database: null, storage: null, ai: null },
 		]);
 	});
 
@@ -453,6 +522,96 @@ describe('Data and files: the merchant enters the database once', () => {
 		expect(w1).toBeTruthy();
 	});
 
+	it('the AI key is sealed and write-only, shown by provider and model, and delivered only to a product that needs it', async () => {
+		const { h, m, owner, notes, w1, site, fetchAs } = await setUp('conn_ai');
+		const ask = await h.connect({
+			...notesManifest(),
+			id: 'ask',
+			name: 'Ask',
+			needs: { database: true, storage: 'none', ai: true },
+		});
+		await owner.post(`${site()}/products`, { productId: 'ask' });
+		h.clock.advance(1000);
+		ask.notices.splice(0);
+		notes.notices.splice(0);
+		// a session alone changes nothing; a value that is not a key is refused with its field named
+		expect(codeOf(await m.client.put(`${site()}/connections/ai`, { value: AI }))[0]).toBeGreaterThanOrEqual(400);
+		const refused = await m.client.put(`${site()}/connections/ai`, { value: { ...AI, apiKey: 'short' }, ...CONFIRM });
+		expect(codeOf(refused)).toEqual([422, 'validation_failed']);
+		expect(refused.json.errors[0].path).toBe('/value/apiKey');
+		const saved = await m.client.put(`${site()}/connections/ai`, { value: AI, ...CONFIRM });
+		expect(saved.status).toBe(200);
+		expect(saved.json).toMatchObject({ version: 1, ai: { set: true, provider: 'openai', model: 'gpt-4.1-mini' } });
+		expect(JSON.stringify(saved.json)).not.toContain(AI.apiKey);
+		// the console shows who needs it: only the product whose manifest says so
+		const rows = Object.fromEntries(saved.json.products.map((/** @type {any} */ p) => [p.productId, p.ai]));
+		expect(rows).toMatchObject({ ask: { state: 'waiting' }, notes: null, chat: null, plain: null });
+		// sealed at rest: the key is nowhere in plain, the provider and model are
+		const record = /** @type {Record<string, any>} */ (
+			await h.db.collection('website_connections').findOne(/** @type {any} */ ({ _id: w1 }))
+		);
+		expect(record.ai.sealed).toMatch(/^ss2\./);
+		expect(JSON.stringify(record)).not.toContain(AI.apiKey);
+		for (const collection of ['platform_audit', 'catalog_notices']) {
+			expect(JSON.stringify(await h.db.collection(collection).find({}).toArray()), collection).not.toContain(AI.apiKey);
+		}
+		// every product on the website was told; only Ask is given the key (the others get null)
+		expect(ask.notices).toEqual([changed(w1)]);
+		expect(notes.notices).toEqual([changed(w1)]);
+		const forAsk = await fetchAs(ask);
+		expect(validateWebsiteConnections(forAsk.json).ok).toBe(true);
+		expect(forAsk.json.shared).toEqual({ ai: AI });
+		expect((await fetchAs(notes)).json.shared).toEqual({ ai: null });
+		const entries = await h.activity('website.connections_delivered');
+		expect(entries.map((e) => [e.after.productId, e.after.parts])).toEqual([['ask', ['ai']]]);
+		// the product reports how it worked; a new key makes the old report mean nothing
+		const health = (/** @type {unknown} */ body) =>
+			h.productCall(ask, 'PUT', `/v1/product/websites/${w1}/connections/ai/health`, body);
+		expect((await health({ version: 1, ok: false, message: 'The provider refused the key.' })).status).toBe(200);
+		const state = async () =>
+			(await m.client.get(`${site()}/connections`)).json.products.find((/** @type {any} */ p) => p.productId === 'ask').ai;
+		expect(await state()).toMatchObject({ state: 'test_failed', message: 'The provider refused the key.' });
+		await m.client.put(`${site()}/connections/ai`, {
+			value: { ...AI, provider: 'compatible', baseUrl: 'https://llm.example.com/v1' },
+			...CONFIRM,
+		});
+		expect(await state()).toMatchObject({ state: 'waiting' });
+		expect((await m.client.get(`${site()}/connections`)).json.ai).toMatchObject({
+			provider: 'compatible',
+			baseUrl: 'https://llm.example.com/v1',
+		});
+		expect((await health({ version: 2, ok: true })).status).toBe(200);
+		expect(await state()).toMatchObject({ state: 'connected' });
+		// the merchant is e-mailed with no key
+		const mails = h.mailer.sent.filter((mail) => mail.template === 'connection_changed');
+		expect(mails.map((mail) => mail.data.what)).toEqual([
+			'The AI provider key was saved or replaced',
+			'The AI provider key was saved or replaced',
+		]);
+		expect(JSON.stringify(mails)).not.toContain(AI.apiKey);
+		// removed: no longer delivered, version raised, the others are unchanged
+		h.clock.advance(1000);
+		const removed = await m.client.post(`${site()}/connections/ai/remove`, CONFIRM);
+		expect(removed.json).toMatchObject({ version: 3, ai: { set: false } });
+		expect(removed.json.ai).not.toHaveProperty('provider');
+		expect((await fetchAs(ask)).json).toMatchObject({ version: 3, shared: { ai: null } });
+		expect(codeOf(await m.client.post(`${site()}/connections/ai/remove`, CONFIRM))[0]).toBe(404);
+	});
+
+	it('a key that no longer opens (its sealing key is gone) is delivered as not set', async () => {
+		const { h, owner, m, w1, site, fetchAs } = await setUp('conn_ai_lost');
+		const ask = await h.connect({
+			...notesManifest(),
+			id: 'ask',
+			name: 'Ask',
+			needs: { database: true, storage: 'none', ai: true },
+		});
+		await owner.post(`${site()}/products`, { productId: 'ask' });
+		await m.client.put(`${site()}/connections/ai`, { value: AI, ...CONFIRM });
+		await h.db.collection('website_connections').updateOne(/** @type {any} */ ({ _id: w1 }), { $set: { 'ai.v': 99 } });
+		expect((await fetchAs(ask)).json).toMatchObject({ database: null, shared: { ai: null } });
+	});
+
 	it('the website removed: its connections are gone', async () => {
 		const { h, m, owner, w2, site } = await setUp('conn_forget');
 		await m.client.put(`${site(w2)}/connections/database`, { value: DB, ...CONFIRM });
@@ -469,6 +628,7 @@ describe('the Owner re-seals the connections with a new key', () => {
 		const { h, m, w1, site } = await setUp('conn_rekey');
 		await m.client.put(`${site()}/connections/database`, { value: DB, ...CONFIRM });
 		await m.client.put(`${site()}/connections/storage`, { value: STORAGE, ...CONFIRM });
+		await m.client.put(`${site()}/connections/ai`, { value: AI, ...CONFIRM });
 		cleanups.push(h.close);
 		const NEW_KEY = 'new-encryption-key-0123456789abcdef-portal';
 		const changing = await bootPortal({
@@ -479,7 +639,7 @@ describe('the Owner re-seals the connections with a new key', () => {
 		const owner2 = await changing.owner();
 		const first = await owner2.post('/v1/admin/settings/reseal');
 		expect(first.json.unreadable).toBe(0);
-		// the two connections (with the keys that are re-sealed anyway)
+		// the three connections (with the keys that are re-sealed anyway)
 		const second = await owner2.post('/v1/admin/settings/reseal');
 		expect(second.json).toMatchObject({ resealed: 0, unreadable: 0 });
 		expect(first.json.resealed - second.json.current).toBeLessThan(0);
@@ -495,6 +655,11 @@ describe('the Owner re-seals the connections with a new key', () => {
 				aad: { websiteId: w1, name: 'database', v: String(record.database.v), purpose: 'website_connection' },
 			}),
 		).toBe(DB);
+		expect(
+			box.openText(record.ai.sealed, {
+				aad: { websiteId: w1, name: 'ai', v: String(record.ai.v), purpose: 'website_connection' },
+			}),
+		).toBe(JSON.stringify(AI));
 		// a wrong previous key opens nothing: the parts are named with what to do
 		const wrong = await bootPortal({
 			db: mongo.db('conn_rekey'),
@@ -514,6 +679,6 @@ describe('the Owner re-seals the connections with a new key', () => {
 			cookie,
 			idempotencyKey: 'conn-rekey-wrong-reseal',
 		});
-		expect(lost.json.unreadableIn.websiteConnections).toBe(2);
+		expect(lost.json.unreadableIn.websiteConnections).toBe(3);
 	});
 });

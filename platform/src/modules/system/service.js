@@ -106,7 +106,7 @@ export const createSystemService = (ctx) => {
 		/**
 		 * Settings → Encryption key → Re-seal (PLAN 0.4.8, 0.11; RT-14): after the owner changes `ENCRYPTION_KEY` (the old
 		 * key set as `ENCRYPTION_KEY_PREVIOUS`), every stored secret is sealed again with the current key — the signing
-		 * keys, the SMTP password, server tokens, two-step secrets, the websites' database and storage connections and the link tokens. Values already on it stay; values neither key opens are counted
+		 * keys, the SMTP password, server tokens, two-step secrets, the websites' database, storage and AI key connections and the link tokens. Values already on it stay; values neither key opens are counted
 		 * and left alone, and `unreadableIn` names the parts they are in (`signingKeys`, `mailPassword`, `serverTokens`,
 		 * `twoStep`, `websiteConnections`, `linkTokens`) with how many, so the Owner knows what to type or make again. Pressing again is safe. Written to
 		 * Activity.

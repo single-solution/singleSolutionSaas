@@ -23,7 +23,7 @@ export const collections = Object.freeze([
 		module: 'website',
 		name: CONNECTIONS,
 		description:
-			"The website's connections, entered once in the Portal (`_id` = websiteId): the change counter `version` (raised by every change of a connection and of a link, and the `connectionsVersion` of the status answer), the database connection string and the storage connection, each SEALED with `ENCRYPTION_KEY` (AAD: website, name and the value's own counter) and write-only (nothing returns them to a person; a product fetches them over its signed channel), the Owner's per-product database names, the health each product reported for each value, when each product last fetched and the secret fetches in the current hour. Removed with the website.",
+			"The website's connections, entered once in the Portal (`_id` = websiteId): the change counter `version` (raised by every change of a connection and of a link, and the `connectionsVersion` of the status answer), the database connection string, the storage connection and the AI provider key (provider, key, model), each SEALED with `ENCRYPTION_KEY` (AAD: website, name and the value's own counter) and write-only (nothing returns them to a person; a product fetches them over its signed channel), the Owner's per-product database names, the health each product reported for each value, when each product last fetched and the secret fetches in the current hour. Removed with the website.",
 		tenant: 'merchant',
 		timestamps: false,
 		indexes: [{ keys: { merchantId: 1, _id: 1 } }],

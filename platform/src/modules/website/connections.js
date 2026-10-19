@@ -1,7 +1,7 @@
 /**
- * The website's connections (settings-ownership design 8.4): ONE MongoDB database connection and ONE S3-compatible storage
- * connection per website, entered once in the Portal (Website settings › Data and files) and delivered to every product on
- * the website that needs them.
+ * The website's connections (settings-ownership design 8.4): ONE MongoDB database connection, ONE S3-compatible storage
+ * connection and ONE AI provider key per website, entered once in the Portal (Website settings › Data and files) and
+ * delivered to every product on the website that needs them (the AI key only to a product whose manifest says `needs.ai`).
  *
  * - **Who changes them**: only a signed-in merchant (own website), Owner or Support (`connections.write`), after a fresh
  *   confirmation of their password (and a code while two-step is on), through the console routes. No `/v1/product/*` route
@@ -23,7 +23,7 @@
  *   value), raises the website's `connectionsVersion`, tells the products on the website and e-mails the merchant.
  * @module
  */
-import { WEBSITE_CONNECTIONS, databaseNameFor, isDatabaseName, storageFolderFor } from '@ss/contracts';
+import { AI_PROVIDERS, WEBSITE_CONNECTIONS, databaseNameFor, isDatabaseName, storageFolderFor } from '@ss/contracts';
 import { checkUrl, createOutboundPolicy, isSafeMongoUri } from '@ss/net';
 import { resealEach } from '../../infra/crypto.js';
 import { problem } from '../../infra/http.js';
@@ -44,6 +44,17 @@ const URI_MAX = 4096;
 const MESSAGE_MAX = 300;
 /** A bucket prefix: letters, digits and `-_./`, no leading slash, ending with a slash when set. */
 const PREFIX = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*\/)*$/;
+/** An AI model name: letters, digits and `_.:/@-`. */
+const AI_MODEL = /^[\w./:@-]{1,120}$/;
+/** The shortest and the longest AI key. */
+const AI_KEY_MIN = 8;
+const AI_KEY_MAX = 512;
+/** What the merchant is told changed, per connection. @type {Record<WebsiteConnectionName, string>} */
+const CHANGED = {
+	database: 'The database connection',
+	storage: 'The storage connection',
+	ai: 'The AI provider key',
+};
 
 /** @param {WebsiteConnectionName} name @param {string} websiteId @param {number} v */
 const sealAad = (name, websiteId, v) => ({ websiteId, name, v: String(v), purpose: 'website_connection' });
@@ -141,6 +152,41 @@ export const checkStorageValue = (value, policy) => {
 };
 
 /**
+ * Check the website's AI provider key entered by a person: `{ provider, apiKey, model }` and, for a `compatible` service,
+ * its https `baseUrl`. Nothing else is kept. The message never repeats the key.
+ * @param {unknown} value
+ * @param {import('@ss/net').OutboundPolicy} policy
+ * @returns {{ ok: true, value: Record<string, string> } | { ok: false, message: string, field?: string }}
+ */
+export const checkAiValue = (value, policy) => {
+	if (typeof value !== 'object' || value === null || Array.isArray(value))
+		return { ok: false, message: 'Enter the AI provider key.' };
+	const input = /** @type {Record<string, unknown>} */ (value);
+	for (const key of Object.keys(input))
+		if (!['provider', 'apiKey', 'model', 'baseUrl'].includes(key))
+			return { ok: false, message: `${key} is not an AI provider setting.`, field: key };
+	const provider = input.provider;
+	if (typeof provider !== 'string' || !(/** @type {readonly string[]} */ (AI_PROVIDERS).includes(provider)))
+		return { ok: false, message: 'Pick a provider.', field: 'provider' };
+	const apiKey = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
+	if (apiKey.length < AI_KEY_MIN) return { ok: false, message: 'Enter the API key.', field: 'apiKey' };
+	if (apiKey.length > AI_KEY_MAX) return { ok: false, message: 'The API key is too long.', field: 'apiKey' };
+	const model = typeof input.model === 'string' ? input.model.trim() : '';
+	if (!AI_MODEL.test(model)) return { ok: false, message: 'Enter the model.', field: 'model' };
+	const baseUrl = typeof input.baseUrl === 'string' ? input.baseUrl.trim() : '';
+	if (input.baseUrl !== undefined && typeof input.baseUrl !== 'string')
+		return { ok: false, message: 'The base URL is an https address.', field: 'baseUrl' };
+	if (provider !== 'compatible') {
+		if (baseUrl !== '') return { ok: false, message: 'Only a compatible service has a base URL.', field: 'baseUrl' };
+		return { ok: true, value: { provider, apiKey, model } };
+	}
+	const checked = checkUrl(baseUrl, policy);
+	if (!checked.ok || !baseUrl.startsWith('https://') || baseUrl.length > 2048 || /[?#]/.test(baseUrl))
+		return { ok: false, message: 'Enter the public https base URL of the service.', field: 'baseUrl' };
+	return { ok: true, value: { provider, apiKey, model, baseUrl: baseUrl.replace(/\/+$/, '') } };
+};
+
+/**
  * @param {ModuleContext} ctx
  * @param {{ notifyProducts: (websiteId: string, what: 'connections' | 'links') => Promise<void> }} hooks
  */
@@ -210,7 +256,7 @@ export const createConnections = (ctx, { notifyProducts }) => {
 	/**
 	 * The products on the website now, with what each needs of the connections.
 	 * @param {string} websiteId
-	 * @returns {Promise<Array<{ productId: string, name: string, needs: { database: boolean, storage: 'none' | 'optional' | 'required' } }>>}
+	 * @returns {Promise<Array<{ productId: string, name: string, needs: { database: boolean, storage: 'none' | 'optional' | 'required', ai?: boolean } }>>}
 	 */
 	const productsNeeding = async (websiteId) => {
 		const onSite = /** @type {Array<{ productId: string }>} */ (await commerce().productsOnWebsite(websiteId));
@@ -275,6 +321,7 @@ export const createConnections = (ctx, { notifyProducts }) => {
 							required: needs.storage === 'required',
 							...stateOf(record, 'storage', productId),
 						},
+			ai: needs.ai ? stateOf(record, 'ai', productId) : null,
 		}));
 
 	/**
@@ -292,7 +339,7 @@ export const createConnections = (ctx, { notifyProducts }) => {
 					brand,
 					website: domain,
 					who,
-					what: `${name === 'database' ? 'The database connection' : 'The storage connection'} was ${what === 'saved' ? 'saved or replaced' : 'removed'}`,
+					what: `${CHANGED[name]} was ${what === 'saved' ? 'saved or replaced' : 'removed'}`,
 					websiteId,
 				},
 			});
@@ -349,6 +396,12 @@ export const createConnections = (ctx, { notifyProducts }) => {
 					...whenSet(record?.storage),
 					...(record?.storage?.publicBaseUrl ? { publicBaseUrl: String(record.storage.publicBaseUrl) } : {}),
 				},
+				ai: {
+					...whenSet(record?.ai),
+					// not secrets: shown so the merchant sees which provider and model the key is for
+					...(record?.ai?.provider ? { provider: String(record.ai.provider), model: String(record.ai.model) } : {}),
+					...(record?.ai?.baseUrl ? { baseUrl: String(record.ai.baseUrl) } : {}),
+				},
 				products: await productRows(websiteId, record),
 			};
 		},
@@ -367,7 +420,12 @@ export const createConnections = (ctx, { notifyProducts }) => {
 			if (names !== undefined && (which !== 'database' || actor.type !== 'admin' || actor.role !== 'owner'))
 				throw problem('forbidden', 'Only an Owner names the databases of the products.');
 			const dbNames = names === undefined ? undefined : checkNames(names);
-			const checked = which === 'database' ? checkDatabaseValue(value, policy) : checkStorageValue(value, policy);
+			const checked =
+				which === 'database'
+					? checkDatabaseValue(value, policy)
+					: which === 'ai'
+						? checkAiValue(value, policy)
+						: checkStorageValue(value, policy);
 			if (!checked.ok)
 				throw problem('validation_failed', checked.message, {
 					errors: [
@@ -377,6 +435,7 @@ export const createConnections = (ctx, { notifyProducts }) => {
 			const plain = which === 'database' ? /** @type {string} */ (checked.value) : JSON.stringify(checked.value);
 			const publicBaseUrl =
 				which === 'storage' ? /** @type {Record<string, string | boolean>} */ (checked.value).publicBaseUrl : undefined;
+			const aiShown = which === 'ai' ? /** @type {Record<string, string>} */ (checked.value) : null;
 			const before = await ownerOps(merchantId).findOne({ merchantId, _id: websiteId });
 			const v = Number(before?.[which]?.v ?? 0) + 1;
 			const at = new Date(ctx.now());
@@ -390,6 +449,13 @@ export const createConnections = (ctx, { notifyProducts }) => {
 						setBy: { type: actor.type, id: actor.id },
 						// not a secret: kept in plain beside the sealed value so the console can show it
 						...(publicBaseUrl ? { publicBaseUrl } : {}),
+						...(aiShown
+							? {
+									provider: aiShown.provider,
+									model: aiShown.model,
+									...(aiShown.baseUrl ? { baseUrl: aiShown.baseUrl } : {}),
+								}
+							: {}),
 					},
 					...(dbNames ? { dbNames } : {}),
 				},
@@ -442,7 +508,8 @@ export const createConnections = (ctx, { notifyProducts }) => {
 
 		/**
 		 * What a product gets (`GET /v1/product/websites/:websiteId/connections`): the connections the product needs, with
-		 * its own database name, and its links (`links` is the website links service's part). The website must be active
+		 * its own database name, the website's AI key under `shared` (only when its manifest says `needs.ai`; else null) and its
+		 * links (`links` is the website links service's part). The website must be active
 		 * and have the product (404 `website_not_found`). A fetch with secrets is counted: more than
 		 * {@link FETCHES_PER_HOUR} an hour is 429.
 		 * @param {{ productId: string, websiteId: string, links: (merchantId: string) => Promise<{ out: any[], in: any[] }> }} input
@@ -468,18 +535,22 @@ export const createConnections = (ctx, { notifyProducts }) => {
 			let uri = null;
 			/** @type {Record<string, unknown> | null} */
 			let bucket = null;
+			/** @type {Record<string, unknown> | null} */
+			let ai = null;
 			try {
 				if (product.needs.database && record?.database) uri = open('database');
 				if (product.needs.storage !== 'none' && record?.storage) bucket = JSON.parse(open('storage'));
+				if (product.needs.ai === true && record?.ai) ai = JSON.parse(open('ai'));
 			} catch {
 				// sealed under a key that is gone: delivered as not set (the Owner's Re-seal reports it)
 				ctx.logger.warn('website connection cannot be opened', { websiteId });
 				uri = null;
 				bucket = null;
+				ai = null;
 			}
 			const ownLinks = await links(merchantId);
 			const version = Number(record?.version ?? 0);
-			const secrets = uri !== null || bucket !== null || ownLinks.out.length > 0;
+			const secrets = uri !== null || bucket !== null || ai !== null || ownLinks.out.length > 0;
 			if (secrets) {
 				const now = ctx.now();
 				const slot = record?.deliveries?.[productId];
@@ -502,6 +573,7 @@ export const createConnections = (ctx, { notifyProducts }) => {
 						parts: [
 							uri !== null ? 'database' : null,
 							bucket !== null ? 'storage' : null,
+							ai !== null ? 'ai' : null,
 							ownLinks.out.length > 0 ? 'links' : null,
 						].filter(Boolean),
 					},
@@ -516,13 +588,14 @@ export const createConnections = (ctx, { notifyProducts }) => {
 				version,
 				database: uri === null ? null : { uri, dbName: dbNameOf(record, productId) },
 				storage: bucket,
+				shared: { ai },
 				links: ownLinks,
 			};
 		},
 
 		/**
 		 * A product reports how a delivered connection worked (`PUT …/connections/:name/health`). Only for a website that
-		 * has the product; only the two connection names; the message is cut and never trusted as markup.
+		 * has the product; only the connection names; the message is cut and never trusted as markup.
 		 * @param {{ productId: string, websiteId: string, name: string, version: unknown, ok: unknown, message?: unknown }} input
 		 */
 		reportHealth: async ({ productId, websiteId, name, version, ok, message }) => {
@@ -575,7 +648,7 @@ export const createConnections = (ctx, { notifyProducts }) => {
 		 */
 		reseal: async () => {
 			const docs = await all()
-				.find({}, { projection: { database: 1, storage: 1 } })
+				.find({}, { projection: { database: 1, storage: 1, ai: 1 } })
 				.toArray();
 			/** @type {Array<{ sealed: unknown, aad: Record<string, string>, save: (next: string) => Promise<unknown> }>} */
 			const items = [];

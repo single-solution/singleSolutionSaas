@@ -77,7 +77,7 @@ export const PERMISSIONS = Object.freeze({
 	/** A website's settings (business facts, brand, region, pages, team): see them; change them (Finance: none) */
 	websiteSettingsRead: 'website_settings.read',
 	websiteSettingsWrite: 'website_settings.write',
-	/** A website's connections (database, storage) and the links between its products: see how they stand; change them
+	/** A website's connections (database, storage, AI key) and the links between its products: see how they stand; change them
 	 * (after a fresh confirmation; Finance: none). Nothing returns a secret to anyone. */
 	connectionsRead: 'connections.read',
 	connectionsWrite: 'connections.write',

@@ -950,7 +950,7 @@ export const ADMIN = Object.freeze({
 					? `${count(unreadableIn.twoStep, 'two-step sign-in', 'two-step sign-ins')}: an Owner turns that person’s two-step off, and they set it up again`
 					: null,
 				unreadableIn.websiteConnections
-					? `${count(unreadableIn.websiteConnections, 'database or storage connection', 'database and storage connections')}: enter ${unreadableIn.websiteConnections === 1 ? 'it' : 'them'} again under Website settings, Data and files`
+					? `${count(unreadableIn.websiteConnections, 'database, storage or AI key connection', 'database, storage and AI key connections')}: enter ${unreadableIn.websiteConnections === 1 ? 'it' : 'them'} again under Website settings, Data and files`
 					: null,
 				unreadableIn.linkTokens
 					? `${count(unreadableIn.linkTokens, 'link between products', 'links between products')}: press Regenerate on ${unreadableIn.linkTokens === 1 ? 'it' : 'each'} under Website settings, Between your products`
@@ -1234,7 +1234,7 @@ export const MORE = Object.freeze({
  * section 8.1).
  */
 export const WEBSITE_SETTINGS = Object.freeze({
-	intro: 'Set these once. Every product on this website uses them, so none of them asks you again. The business facts are not secret; the database and the storage are write-only: you can replace them, never read them back.',
+	intro: 'Set these once. Every product on this website uses them, so none of them asks you again. The business facts are not secret; the database, the storage and the AI key are write-only: you can replace them, never read them back.',
 	saved: 'Saved. Your products pick it up within moments.',
 	savedAt: 'Saved',
 	neverSaved: 'Not saved yet',
@@ -1283,12 +1283,13 @@ export const WEBSITE_SETTINGS = Object.freeze({
 		'pages.privacy': 'privacy page',
 		'team.recipients': 'people who get staff alerts',
 	}),
-	// Data and files (the database and the storage, entered once, write-only) and Between your products
+	// Data and files (the database, the storage and the AI key, entered once, write-only) and Between your products
 	data: Object.freeze({
 		productColumn: 'Product',
 		databaseColumn: 'Database',
 		storageColumn: 'Files',
-		intro: 'Enter your database and your storage once. Every product on this website gets them, each with its own database and its own folder. After you save, a value is never shown again: you can only replace or remove it.',
+		aiColumn: 'AI key',
+		intro: 'Enter your database, your storage and your AI provider key once. Every product on this website that needs them gets them, each database with its own name and each storage with its own folder. After you save, a value is never shown again: you can only replace or remove it.',
 		saved: 'Saved. Your products pick it up within moments.',
 		removed: 'Removed.',
 		confirmSave: (/** @type {string} */ what) => `Save ${what}`,
@@ -1328,6 +1329,26 @@ export const WEBSITE_SETTINGS = Object.freeze({
 			publicBaseUrlHelp:
 				'The public address of your files, such as a CDN in front of the bucket. Leave empty to show images through your website’s /media route.',
 			pathStyle: 'Use path-style addresses',
+		}),
+		ai: Object.freeze({
+			title: 'AI provider key',
+			help: 'One key for every product on this website that writes with AI (such as replies in a chat or product copy). Each product tests it and tells the Portal how it went. The provider is billed to you, not to us.',
+			fields: Object.freeze({
+				provider: 'Provider',
+				apiKey: 'API key',
+				model: 'Model',
+				baseUrl: 'Service address',
+			}),
+			providers: Object.freeze({
+				openai: 'OpenAI',
+				anthropic: 'Anthropic',
+				google: 'Google Gemini',
+				compatible: 'Another OpenAI-compatible service',
+			}),
+			apiKeyHelp: 'It stays secret: it is not shown again after you save.',
+			apiKeyPlaceholder: 'sk-…',
+			modelHelp: 'The name of the model to use, as your provider writes it, such as gpt-4.1-mini.',
+			baseUrlHelp: 'The https address of the service’s API, such as https://llm.example.com/v1.',
 		}),
 		productsTitle: 'What each product gets',
 		productsHelp: 'Each product tests what it received and tells the Portal how it went.',

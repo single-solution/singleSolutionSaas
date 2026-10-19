@@ -62,7 +62,7 @@ const world = async (name) => {
 		name: 'Ecommerce',
 		widgets: false,
 		links: { needs: [{ product: 'payments', scopes: ['payments.create', 'payments.refund'], features: [] }] },
-		needs: { database: true, storage: 'none' },
+		needs: { database: true, storage: 'none', ai: true },
 	});
 	await w.addProduct(merchantId, websiteId, 'ecommerce');
 	await w.addProduct(merchantId, websiteId, 'payments');
@@ -195,6 +195,90 @@ describe('Data and files (jsdom)', () => {
 			await until(() => !document.querySelector('[role="dialog"]'));
 			const gone = await x.b.api.get(`/v1/merchants/${x.merchantId}/websites/${x.websiteId}/connections`);
 			expect(gone.ok && /** @type {any} */ (gone).data.storage.set).toBe(false);
+		} finally {
+			restore();
+		}
+	});
+});
+
+describe('the AI provider key (jsdom)', () => {
+	it('is entered once with its provider and model, never shown again (the provider and model are), and a refused key is shown under the form', async () => {
+		const restore = quiet();
+		try {
+			const x = await world('dcp_ai');
+			await openPage(x, 'settings/connections');
+			expect(shows('AI provider key')).toBe(true);
+			// the AI key column is there because Ecommerce asks for the key; the database and the storage come first
+			expect(shows('AI key')).toBe(true);
+			// not enough to save: the key and the model are needed (the AI card's Save is the third)
+			expect(/** @type {HTMLButtonElement} */ (buttons('Save', document.body)[2]).disabled).toBe(true);
+			// a key the Portal refuses is shown under the form after the password was right
+			type(field('API key'), 'short');
+			type(field('Model'), 'gpt-4.1-mini');
+			await pressNth('Save', 2);
+			fillDialog('Your password', 'correct horse battery');
+			await pressDialog('Save');
+			await until(() => !document.querySelector('[role="dialog"]'));
+			await until(() => shows('Enter the API key.'));
+			// saved: the key is nowhere on the page again; the provider and the model stay
+			type(field('API key'), 'sk-test-AiSecret0123456789');
+			await pressNth('Save', 2);
+			fillDialog('Your password', 'correct horse battery');
+			await pressDialog('Save');
+			await until(() => !document.querySelector('[role="dialog"]'));
+			await until(() => shows('Saved. Your products pick it up within moments.'));
+			x.b.use();
+			const stored = await x.b.api.get(`/v1/merchants/${x.merchantId}/websites/${x.websiteId}/connections`);
+			expect(stored.ok && /** @type {any} */ (stored).data.ai).toMatchObject({
+				set: true,
+				provider: 'openai',
+				model: 'gpt-4.1-mini',
+			});
+			expect(document.body.textContent).not.toContain('AiSecret');
+			expect(field('API key').value).toBe('');
+			expect(field('Model').value).toBe('gpt-4.1-mini');
+			expect(field('Provider').value).toBe('openai');
+			// Ecommerce is waiting for its own test of the key
+			expect(shows('Waiting for the product')).toBe(true);
+			// another OpenAI-compatible service needs its https address
+			expect(shows('Service address')).toBe(false);
+			type(field('Provider'), 'compatible');
+			await settle(1);
+			expect(shows('Service address')).toBe(true);
+			type(field('API key'), 'sk-test-AiSecret0123456789');
+			expect(/** @type {HTMLButtonElement} */ (buttons('Replace', document.body)[0]).disabled).toBe(true);
+			type(field('Service address'), 'https://llm.example.com/v1/');
+			await pressNth('Replace');
+			fillDialog('Your password', 'correct horse battery');
+			await pressDialog('Save');
+			await until(() => !document.querySelector('[role="dialog"]'));
+			await until(async () => {
+				const next = await x.b.api.get(`/v1/merchants/${x.merchantId}/websites/${x.websiteId}/connections`);
+				return next.ok && /** @type {any} */ (next).data.ai.baseUrl === 'https://llm.example.com/v1';
+			});
+			// Remove asks for the password too
+			await pressNth('Remove');
+			fillDialog('Your password', 'correct horse battery');
+			await pressDialog('Remove');
+			await until(() => !document.querySelector('[role="dialog"]'));
+			const gone = await x.b.api.get(`/v1/merchants/${x.merchantId}/websites/${x.websiteId}/connections`);
+			expect(gone.ok && /** @type {any} */ (gone).data.ai.set).toBe(false);
+		} finally {
+			restore();
+		}
+	});
+
+	it('shows no AI key column while no product here asks for the key', async () => {
+		const restore = quiet();
+		try {
+			const w = await createWorld({ db: mongo.db('dcp_noai') });
+			const { b, merchantId } = await w.signup('owner@shop.test', 'Shop & Co');
+			const site = await w.addWebsite(merchantId, 'shop.example.com');
+			await w.connect({ widgets: false, needs: { database: true, storage: 'none' } });
+			await w.addProduct(merchantId, String(site.websiteId), 'notes');
+			await openPage({ w, b, merchantId, websiteId: String(site.websiteId) }, 'settings/connections');
+			expect(shows('AI provider key')).toBe(true);
+			expect(shows('AI key')).toBe(false);
 		} finally {
 			restore();
 		}
