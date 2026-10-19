@@ -88,8 +88,8 @@ const extrasOf = (websiteId) => ({
 	fallback_answers: <FallbackAnswers websiteId={websiteId} />,
 	webhook_tools: {
 		items: [
-			{ id: 'tools', label: TEXTS.lists.tools.title, content: <ToolsEditor websiteId={websiteId} off={false} /> },
-			{ id: 'secret', label: TEXTS.secret.title, content: <ToolSecret websiteId={websiteId} /> },
+			{ id: 'tools', label: TEXTS.lists.tools.title, content: <ToolsEditor websiteId={websiteId} off={false} bare /> },
+			{ id: 'secret', label: TEXTS.secret.title, content: <ToolSecret websiteId={websiteId} bare /> },
 		],
 	},
 	book_slot: {
@@ -97,30 +97,38 @@ const extrasOf = (websiteId) => ({
 			{
 				id: 'questions',
 				label: TEXTS.lists.bookingQuestions.title,
-				content: <BookingQuestionsEditor websiteId={websiteId} off={false} />,
+				content: <BookingQuestionsEditor websiteId={websiteId} off={false} bare />,
 			},
 			{
 				id: 'services',
 				label: TEXTS.lists.bookingServices.title,
-				content: <BookingServicesEditor websiteId={websiteId} off={false} />,
+				content: <BookingServicesEditor websiteId={websiteId} off={false} bare />,
 			},
 		],
 	},
 	visitor_chat: {
 		items: [
-			{ id: 'page-types', label: TEXTS.lists.pageTypes.title, content: <PageTypesEditor websiteId={websiteId} off={false} /> },
+			{
+				id: 'page-types',
+				label: TEXTS.lists.pageTypes.title,
+				content: <PageTypesEditor websiteId={websiteId} off={false} bare />,
+			},
 		],
 	},
-	proactive_pages: <PageRulesEditor websiteId={websiteId} off={false} />,
+	proactive_pages: <PageRulesEditor websiteId={websiteId} off={false} bare />,
 	leads_flows: <Flows websiteId={websiteId} />,
-	custom_fields: <CustomFieldsEditor websiteId={websiteId} off={false} />,
+	custom_fields: <CustomFieldsEditor websiteId={websiteId} off={false} bare />,
 	handoff: {
 		items: [
-			{ id: 'hours', label: TEXTS.lists.officeHours.title, content: <OfficeHoursEditor websiteId={websiteId} off={false} /> },
+			{
+				id: 'hours',
+				label: TEXTS.lists.officeHours.title,
+				content: <OfficeHoursEditor websiteId={websiteId} off={false} bare />,
+			},
 			{
 				id: 'exceptions',
 				label: TEXTS.lists.officeExceptions.title,
-				content: <OfficeExceptionsEditor websiteId={websiteId} off={false} />,
+				content: <OfficeExceptionsEditor websiteId={websiteId} off={false} bare />,
 			},
 		],
 	},
@@ -128,7 +136,7 @@ const extrasOf = (websiteId) => ({
 		items: LABEL_LISTS.map((list) => ({
 			id: list,
 			label: TEXTS.lists.labels[list].title,
-			content: <LabelsEditor websiteId={websiteId} list={list} off={false} />,
+			content: <LabelsEditor websiteId={websiteId} list={list} off={false} bare />,
 		})),
 	},
 	assignment: <TeamsEditor websiteId={websiteId} off={false} />,

@@ -14,10 +14,13 @@ import {
 	Checkbox,
 	CodeBlock,
 	ConfirmDialog,
+	DataTable,
+	DataTableSkeleton,
+	Drawer,
 	EntryGroup,
 	FieldGrid,
+	Icon,
 	Input,
-	ItemSwitcher,
 	Select,
 	TextArea,
 	SaveBar,
@@ -38,6 +41,7 @@ import { TEXTS } from './texts.js';
 /** @typedef {Record<string, any>} Item */
 
 const L = TEXTS.lists;
+const K = L.columns;
 
 /**
  * Lines typed in a text area (kept as typed while editing).
@@ -68,80 +72,156 @@ const moved = (items, index, step) => {
 };
 
 /**
- * One list, edited as a whole and saved with one PUT.
- * @param {{ websiteId: string, list: string, title: string, help: string, itemLabel: string, max: number,
- *   blank: () => Item, clean: (item: Item) => Item, off?: boolean, invalid?: (item: Item) => boolean,
- *   render: (item: Item, set: (patch: Item) => void) => import('react').ReactNode }} props `invalid`: an entry the
- *   server would refuse (its fields say why): the list is not saved while one is
+ * @typedef {object} ListColumn a column of a list editor's table beside the name
+ * @property {string} key
+ * @property {string} header
+ * @property {(item: Item, index: number) => import('react').ReactNode} render the cell, from the draft of the record
+ * @property {'text' | 'number'} [kind]
+ * @property {boolean} [low] hidden on narrow widths
+ * @property {string} [className]
  */
-function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean, off, invalid, render }) {
+
+/**
+ * One list, edited as a whole and saved with one PUT (the frame's Save bar). The entries are a table (the name and
+ * `columns`; the row menu moves an entry up or down or removes it); a click on a row opens the entry's fields in a
+ * drawer that edits the draft only (Done closes it).
+ * @param {{ websiteId: string, list: string, title: string, help: string, itemLabel: string, max: number,
+ *   blank: () => Item, clean: (item: Item) => Item, off?: boolean, bare?: boolean, size?: 'md' | 'lg',
+ *   invalid?: (item: Item) => boolean, columns?: ListColumn[], nameOf?: (item: Item) => string,
+ *   render: (item: Item, set: (patch: Item) => void) => import('react').ReactNode }} props `invalid`: an entry the
+ *   server would refuse (its fields say why): the list is not saved while one is; `bare`: the page already says the
+ *   title, so the card has none; `size`: `lg` for an entry with many fields; `nameOf`: the name of an entry (its name,
+ *   label or title by default)
+ */
+function ListEditor({
+	websiteId,
+	list,
+	title,
+	help,
+	itemLabel,
+	max,
+	blank,
+	clean,
+	off,
+	bare = false,
+	size = 'md',
+	invalid,
+	columns = [],
+	nameOf = (item) => String(item.name ?? item.label ?? item.title ?? ''),
+	render,
+}) {
 	const path = `/v1/dashboard/websites/${websiteId}/lists/${list}`;
 	const { answer, reload } = useLoad(path);
 	const [draft, setDraft] = useState(/** @type {Item[] | null} */ (null));
+	const [opened, setOpened] = useState(/** @type {number | null} */ (null));
 	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
+	const data = answer?.ok ? answer.data : null;
+	/** @type {Item[]} */
+	const items = draft ?? (Array.isArray(data?.value) ? data.value : []);
+	/** @param {number} index @param {Item} patch */
+	const set = (index, patch) => setDraft(items.map((item, at) => (at === index ? { ...item, ...patch } : item)));
+	/** @param {Item} item @param {number} index */
+	const nameFor = (item, index) => nameOf(item).trim() || `${itemLabel} ${index + 1}`;
+	const current = opened === null ? undefined : items[opened];
+	/** @type {Array<{ key: string, header: string, kind?: 'text' | 'number', low?: boolean, className?: string,
+	 *   render: (row: { item: Item, index: number }) => import('react').ReactNode }>} */
+	const tableColumns = [
+		{ key: 'name', header: L.columns.name, render: (row) => nameFor(row.item, row.index) },
+		...columns.map((column) => ({
+			key: column.key,
+			header: column.header,
+			...(column.kind ? { kind: column.kind } : {}),
+			...(column.low ? { low: true } : {}),
+			...(column.className ? { className: column.className } : {}),
+			render: (/** @type {{ item: Item, index: number }} */ row) => column.render(row.item, row.index),
+		})),
+	];
 	return (
-		<Card title={title} subtitle={off ? TEXTS.settings.off : `${help} ${fill(L.max, { max })}`}>
-			<Loaded answer={answer}>
-				{(data) => {
-					/** @type {Item[]} */
-					const items = draft ?? data.value;
-					/** @param {number} index @param {Item} patch */
-					const set = (index, patch) => setDraft(items.map((item, at) => (at === index ? { ...item, ...patch } : item)));
-					return (
-						<div className="space-y-4">
-							<ItemSwitcher
-								items={items}
-								legend={title}
-								nameOf={(item, index) =>
-									String(item.name ?? item.label ?? item.title ?? '') || `${itemLabel} ${index + 1}`
-								}
-								addLabel={L.add}
-								addDisabled={items.length >= max}
-								onAdd={() => setDraft([...items, blank()])}
-								emptyText={L.none}
-								renderItem={(item, index) => (
-									<EntryGroup
-										key={index}
-										title={`${itemLabel} ${index + 1}`}
-										first={index === 0}
-										last={index === items.length - 1}
-										texts={{ moveUp: L.up, moveDown: L.down, remove: L.remove }}
-										onMove={(step) => setDraft(moved(items, index, step))}
-										onRemove={() => setDraft(items.filter((_, at) => at !== index))}>
-										{render(item, (patch) => set(index, patch))}
-									</EntryGroup>
-								)}
-							/>
-							<SaveBar
-								show={draft !== null}
-								disabled={invalid !== undefined && items.some((item) => invalid(clean(item)))}
-								saveLabel={L.saveList}
-								discardLabel={TEXTS.cancel}
-								onDiscard={() => setDraft(null)}
-								onSave={async () => {
-									const next = await call('PUT', path, { value: items.map(clean) });
-									setResult(next);
-									if (next.ok) {
-										setDraft(null);
-										reload();
-									}
-								}}
-							/>
-							<SaveOutcome result={result} title={L.errors} />
-						</div>
-					);
-				}}
-			</Loaded>
+		<Card
+			{...(bare ? {} : { title })}
+			subtitle={off ? TEXTS.settings.off : `${help} ${fill(L.max, { max })}`}
+			actions={
+				<Button
+					size="sm"
+					disabled={!data || items.length >= max}
+					onClick={() => {
+						setDraft([...items, blank()]);
+						setOpened(items.length);
+					}}>
+					<Icon name="plus" size={14} />
+					{L.add}
+				</Button>
+			}>
+			<div className="space-y-4">
+				<Loaded answer={answer} skeleton={<DataTableSkeleton columns={tableColumns.length} rows={4} menu />}>
+					{() => (
+						<DataTable
+							caption={title}
+							columns={tableColumns}
+							rows={items.map((item, index) => ({ item, index }))}
+							rowKey={(row) => String(row.index)}
+							rowLabel={(row) => nameFor(row.item, row.index)}
+							onRowClick={(row) => setOpened(row.index)}
+							rowMenu={(row) => [
+								{ label: L.up, disabled: row.index === 0, onSelect: () => setDraft(moved(items, row.index, -1)) },
+								{
+									label: L.down,
+									disabled: row.index === items.length - 1,
+									onSelect: () => setDraft(moved(items, row.index, 1)),
+								},
+								{
+									label: L.remove,
+									danger: true,
+									onSelect: () => setDraft(items.filter((_, at) => at !== row.index)),
+								},
+							]}
+							empty={L.none}
+						/>
+					)}
+				</Loaded>
+				<SaveBar
+					show={draft !== null}
+					disabled={invalid !== undefined && items.some((item) => invalid(clean(item)))}
+					saveLabel={L.saveList}
+					discardLabel={TEXTS.cancel}
+					onDiscard={() => {
+						setDraft(null);
+						setOpened(null);
+					}}
+					onSave={async () => {
+						setOpened(null);
+						const next = await call('PUT', path, { value: items.map(clean) });
+						setResult(next);
+						if (next.ok) {
+							setDraft(null);
+							reload();
+						}
+					}}
+				/>
+				<SaveOutcome result={result} title={L.errors} />
+			</div>
+			<Drawer
+				open={current !== undefined}
+				onClose={() => setOpened(null)}
+				title={current && opened !== null ? nameFor(current, opened) : ''}
+				size={size}
+				footer={<Button onClick={() => setOpened(null)}>{L.done}</Button>}>
+				{current && opened !== null ? (
+					<div data-entry="" className="space-y-4">
+						{render(current, (patch) => set(opened, patch))}
+					</div>
+				) : null}
+			</Drawer>
 		</Card>
 	);
 }
 
-/** @typedef {{ websiteId: string, off?: boolean }} EditorProps */
+/** @typedef {{ websiteId: string, off?: boolean, bare?: boolean }} EditorProps the editor of a page of its own: `bare` leaves out the card title */
 
 const T = L.tools;
 
 /** @param {EditorProps} props */
-export function ToolsEditor({ websiteId, off }) {
+export function ToolsEditor({ websiteId, off, bare = false }) {
 	return (
 		<ListEditor
 			websiteId={websiteId}
@@ -151,6 +231,12 @@ export function ToolsEditor({ websiteId, off }) {
 			itemLabel={T.item}
 			max={20}
 			off={off}
+			bare={bare}
+			size="lg"
+			columns={[
+				{ key: 'url', header: K.address, low: true, className: 'max-w-xs truncate', render: (tool) => tool.url },
+				{ key: 'parameters', header: K.parameters, kind: 'number', render: (tool) => (tool.parameters ?? []).length },
+			]}
 			blank={() => ({ name: '', description: '', url: 'https://', parameters: [], includeVisitor: false })}
 			clean={(tool) => ({
 				name: String(tool.name).trim(),
@@ -244,7 +330,7 @@ export function ToolsEditor({ websiteId, off }) {
 const P = L.pageRules;
 
 /** @param {EditorProps} props */
-export function PageRulesEditor({ websiteId, off }) {
+export function PageRulesEditor({ websiteId, off, bare = false }) {
 	return (
 		<ListEditor
 			websiteId={websiteId}
@@ -254,6 +340,12 @@ export function PageRulesEditor({ websiteId, off }) {
 			itemLabel={P.item}
 			max={20}
 			off={off}
+			bare={bare}
+			nameOf={(rule) => String(rule.path ?? '')}
+			columns={[
+				{ key: 'delay', header: K.delay, kind: 'number', render: (rule) => rule.delay },
+				{ key: 'message', header: K.message, low: true, className: 'max-w-xs truncate', render: (rule) => rule.message },
+			]}
 			blank={() => ({ path: '/', delay: 10, message: '' })}
 			clean={(rule) => ({
 				path: String(rule.path).trim(),
@@ -291,7 +383,7 @@ const TM = L.teams;
  * Settings → Inbox: the merchant's teams for routing (C12), each checked as the server checks it.
  * @param {EditorProps} props
  */
-export function TeamsEditor({ websiteId, off }) {
+export function TeamsEditor({ websiteId, off, bare = false }) {
 	/** @param {Item} team */
 	const clean = (team) => ({
 		name: String(team.name ?? '').trim(),
@@ -313,6 +405,18 @@ export function TeamsEditor({ websiteId, off }) {
 			itemLabel={TM.item}
 			max={20}
 			off={off}
+			bare={bare}
+			columns={[
+				{ key: 'members', header: K.members, kind: 'number', render: (team) => (team.members ?? []).length },
+				{ key: 'languages', header: K.languages, low: true, render: (team) => (team.languages ?? []).join(', ') },
+				{
+					key: 'pages',
+					header: K.pages,
+					low: true,
+					className: 'max-w-xs truncate',
+					render: (team) => (team.pages ?? []).join(', '),
+				},
+			]}
 			blank={() => ({ name: '', members: [], languages: [], pages: [] })}
 			clean={clean}
 			invalid={(team) => problemsOf(team).length > 0}
@@ -359,7 +463,7 @@ const R = L.redactionPatterns;
  * Settings → Moderation: the merchant's own redaction patterns (C14), each checked as the server checks it.
  * @param {EditorProps} props
  */
-export function RedactionPatternsEditor({ websiteId, off }) {
+export function RedactionPatternsEditor({ websiteId, off, bare = false }) {
 	/** @param {Item} pattern */
 	const clean = (pattern) => ({
 		name: String(pattern.name ?? '').trim(),
@@ -380,6 +484,17 @@ export function RedactionPatternsEditor({ websiteId, off }) {
 			itemLabel={R.item}
 			max={30}
 			off={off}
+			bare={bare}
+			columns={[
+				{
+					key: 'pattern',
+					header: K.pattern,
+					low: true,
+					className: 'max-w-xs truncate font-mono',
+					render: (pattern) => pattern.pattern,
+				},
+				{ key: 'replacement', header: K.replacement, render: (pattern) => pattern.replacement },
+			]}
 			blank={() => ({ name: '', pattern: '', replacement: '' })}
 			clean={clean}
 			invalid={(pattern) => problemsOf(pattern).length > 0}
@@ -412,7 +527,7 @@ export function RedactionPatternsEditor({ websiteId, off }) {
 const C = L.customFields;
 
 /** @param {EditorProps} props */
-export function CustomFieldsEditor({ websiteId, off }) {
+export function CustomFieldsEditor({ websiteId, off, bare = false }) {
 	return (
 		<ListEditor
 			websiteId={websiteId}
@@ -422,6 +537,15 @@ export function CustomFieldsEditor({ websiteId, off }) {
 			itemLabel={C.item}
 			max={30}
 			off={off}
+			bare={bare}
+			columns={[
+				{ key: 'key', header: K.key, low: true, render: (field) => field.key },
+				{
+					key: 'type',
+					header: K.type,
+					render: (field) => /** @type {Record<string, string>} */ (C.types)[field.type] ?? field.type,
+				},
+			]}
 			blank={() => ({ key: '', label: '', type: 'text', options: [] })}
 			clean={(field) => ({
 				key: String(field.key).trim(),
@@ -490,7 +614,7 @@ const cleanStep = (step) => {
 };
 
 /** @param {EditorProps & { customFields: boolean }} props `customFields`: offer the custom fields to collect */
-export function FlowsEditor({ websiteId, off, customFields }) {
+export function FlowsEditor({ websiteId, off, bare = false, customFields }) {
 	const custom = useLoad(customFields ? `/v1/dashboard/websites/${websiteId}/lists/custom_fields` : null);
 	/** @type {Array<{ key: string, label: string }>} */
 	const extra = custom.answer?.ok ? custom.answer.data.value : [];
@@ -507,6 +631,20 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 			itemLabel={F.item}
 			max={20}
 			off={off}
+			bare={bare}
+			size="lg"
+			columns={[
+				{
+					key: 'start',
+					header: K.startsOn,
+					className: 'max-w-xs truncate',
+					render: (flow) =>
+						flow.start?.kind === 'keyword'
+							? `${F.starts.keyword}: ${(flow.start.keywords ?? []).join(', ')}`
+							: `${F.starts.page}: ${flow.start?.path ?? ''}`,
+				},
+				{ key: 'steps', header: K.steps, kind: 'number', render: (flow) => (flow.steps ?? []).length },
+			]}
 			blank={() => ({ id: '', name: '', start: { kind: 'page', path: '/', delay: 5 }, steps: [stepOf('message')] })}
 			clean={(flow) => ({
 				id: String(flow.id).trim(),
@@ -673,7 +811,7 @@ const cleanAnswer = (answer) => ({
  * @param {EditorProps & { languages: string[], on: (feature: string) => boolean }} props `languages`: Language lock's
  *   languages; `on`: whether a feature is on (an answer whose placeholder needs an off shop tool is skipped)
  */
-export function FallbackAnswersEditor({ websiteId, off, languages, on }) {
+export function FallbackAnswersEditor({ websiteId, off, bare = false, languages, on }) {
 	const limits = { max: FALLBACK_LIMITS.keywords, length: FALLBACK_LIMITS.keywordLength };
 	return (
 		<ListEditor
@@ -684,6 +822,22 @@ export function FallbackAnswersEditor({ websiteId, off, languages, on }) {
 			itemLabel={A.item}
 			max={FALLBACK_LIMITS.answers}
 			off={off}
+			bare={bare}
+			columns={[
+				{
+					key: 'language',
+					header: K.language,
+					render: (answer) => (answer.language ? languageLabel(answer.language) : A.anyLanguage),
+				},
+				{
+					key: 'keywords',
+					header: K.keywords,
+					low: true,
+					className: 'max-w-xs truncate',
+					render: (answer) => (answer.keywords ?? []).join(', '),
+				},
+				{ key: 'text', header: K.answer, low: true, className: 'max-w-xs truncate', render: (answer) => answer.text },
+			]}
 			blank={() => ({ language: '', keywords: [], text: '' })}
 			clean={cleanAnswer}
 			invalid={(answer) => fallbackProblems(answer).length > 0}
@@ -739,7 +893,7 @@ export function FallbackAnswersEditor({ websiteId, off, languages, on }) {
 const T6 = L.pageTypes;
 
 /** @param {EditorProps} props */
-export function PageTypesEditor({ websiteId, off }) {
+export function PageTypesEditor({ websiteId, off, bare = false }) {
 	return (
 		<ListEditor
 			websiteId={websiteId}
@@ -749,6 +903,11 @@ export function PageTypesEditor({ websiteId, off }) {
 			itemLabel={T6.item}
 			max={30}
 			off={off}
+			bare={bare}
+			columns={[
+				{ key: 'key', header: K.key, low: true, render: (type) => type.key },
+				{ key: 'path', header: K.path, className: 'max-w-xs truncate', render: (type) => type.path },
+			]}
 			blank={() => ({ key: '', name: '', path: '', nudge: '' })}
 			clean={(type) => ({
 				key: String(type.key).trim(),
@@ -798,7 +957,7 @@ const LB = L.labels;
  * Tags, topics or priorities (C7): a key, a name and when it fits.
  * @param {EditorProps & { list: 'tags' | 'topics' | 'priorities' }} props
  */
-export function LabelsEditor({ websiteId, off, list }) {
+export function LabelsEditor({ websiteId, off, bare = false, list }) {
 	const words = LB[list];
 	return (
 		<ListEditor
@@ -809,6 +968,17 @@ export function LabelsEditor({ websiteId, off, list }) {
 			itemLabel={words.item}
 			max={list === 'priorities' ? LABEL_LIMITS.priorities : LABEL_LIMITS.entries}
 			off={off}
+			bare={bare}
+			columns={[
+				{ key: 'key', header: K.key, low: true, render: (entry) => entry.key },
+				{
+					key: 'description',
+					header: K.description,
+					low: true,
+					className: 'max-w-xs truncate',
+					render: (entry) => entry.description,
+				},
+			]}
 			blank={() => ({ key: '', name: '', description: '' })}
 			clean={(entry) => ({
 				key: String(entry.key).trim(),
@@ -847,7 +1017,7 @@ export function LabelsEditor({ websiteId, off, list }) {
 const BQ = L.bookingQuestions;
 
 /** @param {EditorProps} props */
-export function BookingQuestionsEditor({ websiteId, off }) {
+export function BookingQuestionsEditor({ websiteId, off, bare = false }) {
 	return (
 		<ListEditor
 			websiteId={websiteId}
@@ -857,6 +1027,12 @@ export function BookingQuestionsEditor({ websiteId, off }) {
 			itemLabel={BQ.item}
 			max={20}
 			off={off}
+			bare={bare}
+			columns={[
+				{ key: 'key', header: K.key, low: true, render: (q) => q.key },
+				{ key: 'type', header: K.type, render: (q) => /** @type {Record<string, string>} */ (BQ.types)[q.type] ?? q.type },
+				{ key: 'required', header: K.required, render: (q) => (q.required === true ? L.yes : '') },
+			]}
 			blank={() => ({ key: '', label: '', type: 'text', required: false, options: [] })}
 			clean={(q) => ({
 				key: String(q.key).trim(),
@@ -910,7 +1086,7 @@ export function BookingQuestionsEditor({ websiteId, off }) {
 const BS = L.bookingServices;
 
 /** @param {EditorProps} props */
-export function BookingServicesEditor({ websiteId, off }) {
+export function BookingServicesEditor({ websiteId, off, bare = false }) {
 	return (
 		<ListEditor
 			websiteId={websiteId}
@@ -920,6 +1096,17 @@ export function BookingServicesEditor({ websiteId, off }) {
 			itemLabel={BS.item}
 			max={50}
 			off={off}
+			bare={bare}
+			columns={[
+				{ key: 'key', header: K.key, low: true, render: (service) => service.key },
+				{
+					key: 'description',
+					header: K.description,
+					low: true,
+					className: 'max-w-xs truncate',
+					render: (service) => service.description,
+				},
+			]}
 			blank={() => ({ key: '', name: '', description: '' })}
 			clean={(service) => ({
 				key: String(service.key).trim(),
@@ -965,7 +1152,7 @@ const UPLOAD_OPTIONS = ATTACHMENT_TYPES.map((value) => ({
 }));
 
 /** @param {EditorProps} props */
-export function UploadTypesEditor({ websiteId, off }) {
+export function UploadTypesEditor({ websiteId, off, bare = false }) {
 	return (
 		<ListEditor
 			websiteId={websiteId}
@@ -975,6 +1162,9 @@ export function UploadTypesEditor({ websiteId, off }) {
 			itemLabel={U.item}
 			max={ATTACHMENT_TYPES.length}
 			off={off}
+			bare={bare}
+			nameOf={(entry) => UPLOAD_OPTIONS.find((option) => option.value === entry.type)?.label ?? String(entry.type ?? '')}
+			columns={[{ key: 'maxMb', header: K.maxMb, kind: 'number', render: (entry) => entry.maxMb }]}
 			blank={() => ({ type: 'video/mp4', maxMb: 20 })}
 			clean={(entry) => ({ type: String(entry.type), maxMb: Number(entry.maxMb) })}
 			render={(entry, set) => (
@@ -1030,7 +1220,7 @@ function TimeRange({ range, set }) {
 }
 
 /** @param {EditorProps} props */
-export function OfficeHoursEditor({ websiteId, off }) {
+export function OfficeHoursEditor({ websiteId, off, bare = false }) {
 	return (
 		<ListEditor
 			websiteId={websiteId}
@@ -1040,6 +1230,12 @@ export function OfficeHoursEditor({ websiteId, off }) {
 			itemLabel={H.item}
 			max={50}
 			off={off}
+			bare={bare}
+			nameOf={(slot) => WEEKDAYS.find((day) => day.value === String(slot.day))?.label ?? ''}
+			columns={[
+				{ key: 'start', header: K.opens, render: (slot) => slot.start },
+				{ key: 'end', header: K.closes, render: (slot) => slot.end },
+			]}
 			blank={() => ({ day: 1, start: '09:00', end: '17:00' })}
 			clean={(slot) => ({ day: Number(slot.day), start: String(slot.start).trim(), end: String(slot.end).trim() })}
 			render={(slot, set) => (
@@ -1058,7 +1254,7 @@ export function OfficeHoursEditor({ websiteId, off }) {
 }
 
 /** @param {EditorProps} props */
-export function OfficeExceptionsEditor({ websiteId, off }) {
+export function OfficeExceptionsEditor({ websiteId, off, bare = false }) {
 	return (
 		<ListEditor
 			websiteId={websiteId}
@@ -1068,6 +1264,19 @@ export function OfficeExceptionsEditor({ websiteId, off }) {
 			itemLabel={X.item}
 			max={200}
 			off={off}
+			bare={bare}
+			nameOf={(entry) => String(entry.name || entry.date || '')}
+			columns={[
+				{ key: 'date', header: K.date, render: (entry) => entry.date },
+				{
+					key: 'hours',
+					header: K.hours,
+					render: (entry) =>
+						(entry.hours ?? []).length === 0
+							? X.closed
+							: (entry.hours ?? []).map((/** @type {Item} */ range) => `${range.start}–${range.end}`).join(', '),
+				},
+			]}
 			blank={() => ({ date: '', name: '', hours: [] })}
 			clean={(entry) => ({
 				date: String(entry.date).trim(),
@@ -1124,8 +1333,8 @@ export function OfficeExceptionsEditor({ websiteId, off }) {
 
 const S = TEXTS.secret;
 
-/** @param {{ websiteId: string }} props */
-export function ToolSecret({ websiteId }) {
+/** @param {{ websiteId: string, bare?: boolean }} props `bare`: the page already says the title, so the card has none */
+export function ToolSecret({ websiteId, bare = false }) {
 	const path = `/v1/dashboard/websites/${websiteId}/tool-secret`;
 	const [secret, setSecret] = useState(/** @type {string | null} */ (null));
 	const [confirming, setConfirming] = useState(false);
@@ -1140,7 +1349,7 @@ export function ToolSecret({ websiteId }) {
 		if (next.ok) setSecret(next.data.secret);
 	};
 	return (
-		<Card title={S.title} subtitle={S.help}>
+		<Card {...(bare ? {} : { title: S.title })} subtitle={S.help}>
 			{secret ? <CodeBlock code={secret} secret /> : null}
 			<div className="mt-3 flex flex-wrap gap-2">
 				<Button
