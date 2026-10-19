@@ -151,6 +151,9 @@ const button = (label) => byText(document.body, label, 'button');
  */
 const buttonsOf = (root, label) => [...root.querySelectorAll('button')].filter((el) => el.textContent?.trim() === label);
 
+/** The More button of the page header (null when there is none). @param {HTMLElement} root */
+const moreOf = (root) => root.querySelector('[data-ss-part="header"] button[aria-haspopup="menu"]');
+
 const SCHEMA = { type: 'object', properties: { greeting: { type: 'string', title: 'Greeting' } } };
 
 describe('dashboard API', () => {
@@ -1094,7 +1097,8 @@ describe('standard tabs', () => {
 		expect(crumbsOf(container)).toEqual(['Notes', 'Connections', 'Mail']);
 		expect(aboutOf(container)).toContain('Optional');
 		expect(header().textContent).toContain('Not connected');
-		expect(container.querySelector('button[aria-label="More actions"]')).toBeNull();
+		// More holds only the folded Test and shows only where the header is narrow (below 48rem)
+		expect(moreOf(container)?.closest('.relative')?.className ?? '@3xl:hidden').toContain('@3xl:hidden');
 		const token = byLabel(
 			/** @type {HTMLElement} */ (container.querySelector('#section-connection-mail')),
 			TEXTS.connections.value,
@@ -1125,14 +1129,15 @@ describe('standard tabs', () => {
 		const menu = /** @type {HTMLElement} */ (header().querySelector('button[aria-haspopup="menu"]'));
 		expect(menu.getAttribute('aria-label')).toBe('More actions');
 		click(menu);
-		click(/** @type {HTMLElement} */ (allByRole(container, 'menuitem')[0]));
+		// the folded Test is a row of the menu too (hidden where its button shows); Remove is the last row
+		click(/** @type {HTMLElement} */ (allByRole(container, 'menuitem').at(-1)));
 		const dialog = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
 		expect(dialog.textContent).toContain('Remove Database?');
 		click(byText(dialog, 'Cancel', 'button'));
 		await settle();
 		expect(requests.some((request) => request.method === 'DELETE')).toBe(false);
 		click(menu);
-		click(/** @type {HTMLElement} */ (allByRole(container, 'menuitem')[0]));
+		click(/** @type {HTMLElement} */ (allByRole(container, 'menuitem').at(-1)));
 		await act(async () =>
 			byText(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Remove', 'button').click(),
 		);
@@ -1181,7 +1186,7 @@ describe('standard tabs', () => {
 				`https://portal.example.com/admin/merchants/mer_1/websites/${id}/settings#${name === 'link_accounts' ? 'links' : 'connections'}`,
 			);
 			expect(section.querySelector('input')).toBeNull();
-			expect(container.querySelector('[data-ss-part="header"] button[aria-haspopup="menu"]')).toBeNull();
+			expect(moreOf(container)?.closest('.relative')?.className ?? '@3xl:hidden').toContain('@3xl:hidden');
 			expect(buttonsOf(section, TEXTS.connections.save)).toHaveLength(0);
 		}
 		// the database and the storage can be tested here; a link cannot

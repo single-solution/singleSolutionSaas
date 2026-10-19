@@ -7,8 +7,14 @@
  * scrolls) and a fixed footer (pagination). The window never scrolls (R1); the title lives only in the header (R2).
  * `loading` draws the page's own skeleton in the same sizes, `error` an error in the body.
  *
- * On phones (R9) the frame's menu button leads the header, only the title of the breadcrumbs shows, the numbers hide,
- * the secondary actions move into More, and the inner navigation is a dropdown above the panel.
+ * The header is a size container (Tailwind `@container`), so its parts give way by its own width, not the window's, and the
+ * title always wins (it keeps its place, cuts its own text with an ellipsis and has the full text as a tooltip). From
+ * wide to narrow (the width inside the header's padding): below 72rem the third and fourth number hide; below 60rem all
+ * numbers; below 48rem the secondary actions move into More (R9); below 40rem only the title of the breadcrumbs shows;
+ * below 32rem a status pill shows only its dot (its label is the tooltip and the screen-reader text); below 28rem the
+ * primary action shows only its icon (its label is the `aria-label`). Numbers and button labels cut their own text, so
+ * nothing overlaps. On phones the frame's menu button leads the header and the inner navigation is a dropdown above the
+ * panel.
  *
  * Inside an `AppShell` the frame's own header hides itself while a page draws this one (`:has([data-ss-page])`), so old
  * pages keep working until they move onto this component.
@@ -93,30 +99,39 @@ export function Page({
 		<div data-ss-page="" className={cx(PAGE.root, className)}>
 			<header data-ss-part="header" className={PAGE.header}>
 				<ShellMenuButton texts={words} />
-				<div className="flex min-w-0 shrink items-center gap-1">
+				<div className="flex min-w-0 shrink items-center gap-1 @max-[60rem]:min-w-[10.5rem]">
 					<Crumbs crumbs={crumbs} titleId={titleId} texts={words} {...(link ? { linkAs: link } : {})} />
 					{info ? <InfoButton label={words.info}>{info}</InfoButton> : null}
+					{status && status.length > 0 ? (
+						<div className="ml-1 flex shrink-0 items-center gap-1.5">
+							{status.map((pill, i) => {
+								const tip = pill.title ?? (typeof pill.label === 'string' ? pill.label : undefined);
+								return (
+									<StatusPill
+										key={i}
+										status={pill.status}
+										className="@max-[32rem]:gap-0 @max-[32rem]:text-[0px]"
+										{...(tip ? { title: tip } : {})}>
+										{pill.label}
+									</StatusPill>
+								);
+							})}
+						</div>
+					) : null}
 				</div>
-				{status && status.length > 0 ? (
-					<div className="flex min-w-0 shrink-0 items-center gap-1.5">
-						{status.map((pill, i) => (
-							<StatusPill key={i} status={pill.status} {...(pill.title ? { title: pill.title } : {})}>
-								{pill.label}
-							</StatusPill>
-						))}
-					</div>
-				) : null}
 				{facts && facts.length > 0 ? (
-					<ul aria-label={words.facts} className="hidden min-w-0 items-center gap-1.5 md:flex">
+					<ul
+						aria-label={words.facts}
+						className="-m-0.5 hidden min-w-0 shrink-[8] items-center gap-1.5 overflow-hidden p-0.5 @[60rem]:flex">
 						{facts.slice(0, 4).map((fact, i) => (
-							<li key={i} className={cx(i >= 2 && 'hidden xl:block')}>
+							<li key={i} className={cx('min-w-0', i >= 2 ? 'hidden @[72rem]:flex' : 'flex')}>
 								<Fact fact={fact} {...(link ? { linkAs: link } : {})} />
 							</li>
 						))}
 					</ul>
 				) : null}
 				<div className="ml-auto flex shrink-0 items-center">
-					{actions ? <HeaderActions actions={actions} narrow={narrow} texts={words} /> : null}
+					{actions ? <HeaderActions actions={actions} narrow={narrow} texts={words} byWidth /> : null}
 				</div>
 			</header>
 			<div className={PAGE.area}>

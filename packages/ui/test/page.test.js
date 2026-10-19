@@ -116,7 +116,8 @@ describe('Page header', () => {
 		expect(/** @type {HTMLButtonElement} */ (byText(header, 'Export').closest('button')).disabled).toBe(true);
 		expect(header.textContent).not.toContain('Third');
 		click(/** @type {HTMLElement} */ (header.querySelector(`button[aria-label="${PAGE_TEXTS.more}"]`)));
-		expect(allByRole(document.body, 'menuitem').map((el) => el.textContent)).toEqual(['Delete']);
+		// the secondary actions are also rows of More, hidden by the header's width where their buttons show (below)
+		expect(allByRole(document.body, 'menuitem').map((el) => el.textContent)).toEqual(['Edit', 'Export', 'Delete']);
 	});
 
 	it('has no More menu when there is nothing in it', () => {
@@ -436,5 +437,187 @@ describe('Page in the console frame', () => {
 	it('does not need a frame', () => {
 		const { container } = render(<Page crumbs={[{ label: 'Alone' }]}>x</Page>);
 		expect(container.querySelector('button[aria-label="Open navigation"]')).toBeNull();
+	});
+});
+
+describe('Page header by its own width', () => {
+	const crumbs3 = [{ label: 'Merchants', href: '/m' }, { label: 'Acme', href: '/m/acme' }, { label: 'Credits' }];
+
+	it('is a size container above the toolbar menus, and the skeleton shares it', () => {
+		const { container } = render(<Page crumbs={crumbs3}>x</Page>);
+		expect(part(container, 'header').className).toContain('@container');
+		expect(PAGE.header).toContain('@container');
+		expect(PAGE.header).toContain('z-[25]');
+	});
+
+	it('keeps the title: it cuts its own text, has the full text as a tooltip and is the last to shrink', () => {
+		const { container } = render(<Page crumbs={crumbs3}>x</Page>);
+		const title = /** @type {HTMLElement} */ (container.querySelector('h1'));
+		expect(title.getAttribute('title')).toBe('Credits');
+		expect(title.className).toContain('truncate');
+		expect(title.closest('li')?.className).toContain('shrink-0');
+		// the cluster of title, (i) and status keeps a floor of about 10rem where the header is narrow
+		expect(title.closest('div')?.className).toContain('@max-[60rem]:min-w-[10.5rem]');
+	});
+
+	it('shows the earlier crumbs only where the header is 40rem wide and cuts them before the title', () => {
+		const { container } = render(<Page crumbs={crumbs3}>x</Page>);
+		const links = [...container.querySelectorAll('nav[aria-label="Breadcrumb"] a')];
+		expect(links).toHaveLength(2);
+		for (const link of links) {
+			const item = /** @type {HTMLElement} */ (link.closest('li'));
+			expect(item.className).toContain('hidden');
+			expect(item.className).toContain('@[40rem]:block');
+			expect(item.className).toContain('truncate');
+			expect(item.className).toContain('shrink');
+			expect(item.className).not.toContain('shrink-0');
+		}
+		expect(links[0]?.getAttribute('title')).toBe('Merchants');
+	});
+
+	it('gives way in steps: the third and fourth number at 72rem, all numbers at 60rem, each cutting its own text', () => {
+		const { container } = render(
+			<Page
+				crumbs={[{ label: 'Orders' }]}
+				facts={[
+					{ label: 'Open', value: 12 },
+					{ label: 'Balance', value: '1,250', href: '/b' },
+					{ label: 'Websites', value: 3 },
+					{ label: 'Cost', value: <b>4/day</b>, title: 'Cost per day' },
+				]}>
+				x
+			</Page>,
+		);
+		const list = /** @type {HTMLElement} */ (part(container, 'header').querySelector('ul'));
+		expect(list.className).toContain('hidden');
+		expect(list.className).toContain('@[60rem]:flex');
+		expect(list.className).toContain('overflow-hidden');
+		const rows = [...list.querySelectorAll(':scope > li')];
+		expect(rows.map((li) => li.className.includes('@[72rem]:flex'))).toEqual([false, false, true, true]);
+		for (const li of rows) expect(li.className).toContain('min-w-0');
+		const chips = [...container.querySelectorAll('[data-ss-fact]')];
+		for (const chip of chips) {
+			expect(chip.className).toContain('shrink');
+			expect(chip.className).not.toContain('shrink-0');
+			expect(chip.className).toContain('max-w-full');
+			expect(chip.querySelectorAll('span.truncate').length).toBeGreaterThanOrEqual(2);
+		}
+		// a cut number keeps its full text as a tooltip; one that has its own title keeps that
+		expect(chips[0]?.getAttribute('title')).toBe('Open 12');
+		expect(chips[1]?.getAttribute('title')).toBe('Balance 1,250');
+		expect(chips[3]?.getAttribute('title')).toBe('Cost per day');
+	});
+
+	it('shows a status pill as its dot below 32rem, the label staying as tooltip and text', () => {
+		const { container } = render(
+			<Page
+				crumbs={[{ label: 'Merchants' }]}
+				status={[
+					{ status: 'active', label: 'Live' },
+					{ status: 'warning', label: 'Review', title: 'Waiting for the bank' },
+				]}>
+				x
+			</Page>,
+		);
+		const live = /** @type {HTMLElement} */ (byText(container, 'Live').closest('[title]'));
+		// the text stays in the page (read aloud, no display: none); only its size goes to zero where the header is narrow
+		expect(live.className).toContain('@max-[32rem]:text-[0px]');
+		expect(live.className).toContain('@max-[32rem]:gap-0');
+		expect(live.getAttribute('title')).toBe('Live');
+		expect(/** @type {HTMLElement} */ (byText(container, 'Review').closest('[title]')).getAttribute('title')).toBe(
+			'Waiting for the bank',
+		);
+		expect(part(container, 'header').textContent).toContain('Live');
+	});
+
+	it('hides the secondary buttons below 48rem and shows the same actions as rows of More there', () => {
+		const { container } = render(
+			<Page
+				crumbs={[{ label: 'Merchants' }]}
+				actions={{
+					primary: { label: 'Add credits', onClick: () => {}, icon: 'plus' },
+					secondary: [
+						{ label: 'Edit', onClick: () => {} },
+						{ label: 'Export', onClick: () => {} },
+					],
+					more: [{ label: 'Delete', onSelect: () => {}, danger: true }],
+				}}>
+				x
+			</Page>,
+		);
+		const header = part(container, 'header');
+		for (const name of ['Edit', 'Export']) {
+			const button = /** @type {HTMLElement} */ (byText(header, name).closest('button'));
+			expect(button.className).toContain('@max-3xl:hidden');
+		}
+		expect(/** @type {HTMLElement} */ (byText(header, 'Add credits').closest('button')).className).not.toContain('hidden');
+		const more = /** @type {HTMLElement} */ (header.querySelector(`button[aria-label="${PAGE_TEXTS.more}"]`));
+		expect(more.closest('.relative')?.className).not.toContain('@3xl:hidden');
+		click(more);
+		const rows = allByRole(document.body, 'menuitem');
+		expect(rows.map((el) => el.textContent)).toEqual(['Edit', 'Export', 'Delete']);
+		expect(rows.map((el) => el.parentElement?.className.includes('@3xl:hidden'))).toEqual([true, true, false]);
+	});
+
+	it('shows More only below 48rem when it holds nothing but the secondary actions', () => {
+		const { container } = render(
+			<Page crumbs={[{ label: 'Merchants' }]} actions={{ secondary: [{ label: 'Edit', onClick: () => {} }] }}>
+				x
+			</Page>,
+		);
+		const more = /** @type {HTMLElement} */ (
+			part(container, 'header').querySelector(`button[aria-label="${PAGE_TEXTS.more}"]`)
+		);
+		expect(more.closest('.relative')?.className).toContain('@3xl:hidden');
+	});
+
+	it('puts every secondary action in More, without a hide class, when the window is a phone', () => {
+		phone(true);
+		const { container } = render(
+			<Page
+				crumbs={[{ label: 'Merchants' }]}
+				actions={{
+					secondary: [{ label: 'Edit', onClick: () => {} }],
+					more: [{ label: 'Delete', onSelect: () => {} }],
+				}}>
+				x
+			</Page>,
+		);
+		const more = /** @type {HTMLElement} */ (
+			part(container, 'header').querySelector(`button[aria-label="${PAGE_TEXTS.more}"]`)
+		);
+		expect(more.closest('.relative')?.className).not.toContain('@3xl:hidden');
+		click(more);
+		const rows = allByRole(document.body, 'menuitem');
+		expect(rows.map((el) => el.textContent)).toEqual(['Edit', 'Delete']);
+		expect(rows.map((el) => el.parentElement?.className.includes('hidden'))).toEqual([false, false]);
+	});
+
+	it('shows the primary action as its icon below 28rem, the label staying as aria-label and tooltip', () => {
+		const { container } = render(
+			<Page crumbs={[{ label: 'Merchants' }]} actions={{ primary: { label: 'Add credits', onClick: () => {}, icon: 'plus' } }}>
+				x
+			</Page>,
+		);
+		const button = /** @type {HTMLElement} */ (byText(part(container, 'header'), 'Add credits').closest('button'));
+		expect(button.getAttribute('aria-label')).toBe('Add credits');
+		expect(button.getAttribute('title')).toBe('Add credits');
+		expect(button.className).toContain('@max-md:w-9');
+		expect(button.className).toContain('@max-md:px-0');
+		expect(byText(button, 'Add credits').className).toContain('@max-md:sr-only');
+		expect(byText(button, 'Add credits').className).toContain('truncate');
+		expect(button.className).toContain('max-w-[14rem]');
+	});
+
+	it('keeps the label of a primary action that has no icon', () => {
+		const { container } = render(
+			<Page crumbs={[{ label: 'Merchants' }]} actions={{ primary: { label: 'Save', onClick: () => {} } }}>
+				x
+			</Page>,
+		);
+		const button = /** @type {HTMLElement} */ (byText(part(container, 'header'), 'Save').closest('button'));
+		expect(button.getAttribute('aria-label')).toBeNull();
+		expect(button.className).not.toContain('@max-md');
+		expect(byText(button, 'Save').className).not.toContain('sr-only');
 	});
 });

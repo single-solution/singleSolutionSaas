@@ -105,7 +105,9 @@ export const columnClass = ({ kind = 'text', align, low, wrap, className }, firs
  */
 export const PAGE = Object.freeze({
 	root: 'flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:gap-4',
-	header: `flex ${METRICS.header} min-w-0 shrink-0 items-center gap-2 rounded-panel border border-line-soft bg-surface px-2 shadow-panel sm:gap-3 sm:px-4`,
+	// a size container: the parts of the header decide by its own width (see `Page`); z-25 keeps its menus over the toolbar
+	// (z-20) and under the sidebar (z-30) now that the container is a stacking context of its own
+	header: `@container z-[25] flex ${METRICS.header} min-w-0 shrink-0 items-center gap-2 rounded-panel border border-line-soft bg-surface px-2 shadow-panel sm:gap-3 sm:px-4`,
 	area: 'flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:gap-4',
 	main: 'relative flex min-h-0 min-w-0 flex-1 flex-col rounded-panel border border-line-soft bg-surface shadow-panel',
 	// above the body, so the menus of its filters open over the list

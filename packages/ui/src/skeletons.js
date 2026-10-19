@@ -207,7 +207,7 @@ export function PageSkeleton({
 						<SkeletonBlock className="h-5 w-48 max-w-full" />
 					)}
 				</div>
-				<SkeletonBlock className="hidden h-7 w-28 rounded-full md:block" />
+				<SkeletonBlock className="hidden h-7 w-28 rounded-full @[60rem]:block" />
 				<SkeletonBlock className="h-9 w-24" />
 			</header>
 			<div className={PAGE.area}>

@@ -95,8 +95,9 @@ export function ShellMenuButton({ texts }) {
 }
 
 /**
- * The breadcrumbs, every step a link, and the page title (the last step) as the page's one heading. On phones only the
- * title shows.
+ * The breadcrumbs, every step a link, and the page title (the last step) as the page's one heading. The title never
+ * shrinks (it cuts its own text with an ellipsis and keeps the full text as a tooltip); the earlier steps show only
+ * where the header (a size container) is at least 40rem wide, and cut their own text before the title does.
  * @param {{ crumbs: PageCrumb[], linkAs?: import('react').ElementType, titleId?: string, texts?: Partial<PageTexts> }} props
  */
 export function Crumbs({ crumbs, linkAs, titleId, texts }) {
@@ -107,23 +108,30 @@ export function Crumbs({ crumbs, linkAs, titleId, texts }) {
 			<ol className="flex min-w-0 items-center gap-1.5 text-sm">
 				{crumbs.map((crumb, i) =>
 					i === last ? (
-						<li key={i} className="min-w-0 truncate">
-							<h1 id={titleId} aria-current="page" className="truncate text-title font-semibold text-fg">
+						<li key={i} className="max-w-full shrink-0 truncate">
+							<h1
+								id={titleId}
+								aria-current="page"
+								{...(typeof crumb.label === 'string' ? { title: crumb.label } : {})}
+								className="truncate text-title font-semibold text-fg">
 								{crumb.label}
 							</h1>
 						</li>
 					) : (
 						<Fragment key={i}>
-							<li className="hidden min-w-0 shrink truncate text-muted sm:block">
+							<li className="hidden max-w-[10rem] min-w-8 shrink truncate text-muted @[40rem]:block">
 								{crumb.href ? (
-									<LinkTag href={crumb.href} className="ss-motion rounded hover:text-fg">
+									<LinkTag
+										href={crumb.href}
+										{...(typeof crumb.label === 'string' ? { title: crumb.label } : {})}
+										className="ss-motion rounded hover:text-fg">
 										{crumb.label}
 									</LinkTag>
 								) : (
 									crumb.label
 								)}
 							</li>
-							<li aria-hidden="true" className="hidden shrink-0 text-subtle sm:block">
+							<li aria-hidden="true" className="hidden shrink-0 text-subtle @[40rem]:block">
 								<Icon name="chevronRight" size={14} />
 							</li>
 						</Fragment>
@@ -134,9 +142,9 @@ export function Crumbs({ crumbs, linkAs, titleId, texts }) {
 	);
 }
 
-/** The look of every fact: a small rounded chip with a muted label and the value in full color. */
+/** The look of every fact: a small rounded chip with a muted label and the value in full color; it cuts its own text. */
 const FACT =
-	'inline-flex h-7 min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-surface-2 px-2.5 text-label text-muted';
+	'inline-flex h-7 max-w-full min-w-0 shrink items-center gap-1.5 whitespace-nowrap rounded-full bg-surface-2 px-2.5 text-label text-muted';
 
 /**
  * One fact of the header.
@@ -147,11 +155,17 @@ export function Fact({ fact, linkAs }) {
 	const body = (
 		<>
 			{fact.tone ? <span aria-hidden="true" className={cx('size-1.5 shrink-0 rounded-full', DOTS[fact.tone])} /> : null}
-			<span>{fact.label}</span>
-			<span className="font-medium text-fg tabular-nums">{fact.value}</span>
+			<span className="min-w-0 truncate">{fact.label}</span>
+			<span className="min-w-0 truncate font-medium text-fg tabular-nums">{fact.value}</span>
 		</>
 	);
-	const common = { 'data-ss-fact': '', ...(fact.title ? { title: fact.title } : {}) };
+	// a fact that was cut keeps its full text as a tooltip
+	const tip =
+		fact.title ??
+		([fact.label, fact.value].every((part) => typeof part === 'string' || typeof part === 'number')
+			? `${fact.label} ${fact.value}`
+			: undefined);
+	const common = { 'data-ss-fact': '', ...(tip ? { title: tip } : {}) };
 	if (fact.onClick)
 		return (
 			<button
@@ -228,47 +242,79 @@ export function InfoButton({ label, children }) {
 }
 
 /**
- * A page action as a menu item (for phones).
+ * A page action as a menu item (for narrow headers); `className` is the container-query class that hides the row where
+ * the action is a button.
  * @param {PageAction} action
+ * @param {string} [className]
  * @returns {MenuItem}
  */
-const asItem = (action) => ({
+const asItem = (action, className) => ({
 	label: action.label,
 	onSelect: () => {
 		void action.onClick();
 	},
 	...(action.icon ? { icon: action.icon } : {}),
 	...(action.disabled ? { disabled: true } : {}),
+	...(className ? { className } : {}),
 });
 
 /**
  * The actions at the right of the header: the primary button, up to two secondary ones, then More. On phones the
- * secondary ones are the first items of More.
- * @param {{ actions: PageActions, narrow: boolean, texts?: Partial<PageTexts> }} props
+ * secondary ones are the first items of More. With `byWidth` (the {@link Page} header, a size container) the width of
+ * the header decides, not the window: below 48rem the secondary buttons hide and their rows show in More (More itself
+ * shows below 48rem even when it holds nothing else); below 28rem a primary action that has an icon shows the icon only
+ * (its label is the `aria-label` and the tooltip). Button labels cut their own text at 14rem.
+ * @param {{ actions: PageActions, narrow: boolean, texts?: Partial<PageTexts>, byWidth?: boolean }} props
  */
-export function HeaderActions({ actions, narrow, texts }) {
+export function HeaderActions({ actions, narrow, texts, byWidth = false }) {
 	const secondary = (actions.secondary ?? []).slice(0, 2);
-	const items = [...(narrow ? secondary.map(asItem) : []), ...(actions.more ?? [])];
+	const more = actions.more ?? [];
+	const folded = byWidth && !narrow;
+	const items = [
+		...(narrow || byWidth ? secondary.map((action) => asItem(action, folded ? '@3xl:hidden' : undefined)) : []),
+		...more,
+	];
 	/** @param {PageAction} action @param {'primary' | 'secondary'} variant */
-	const button = (action, variant) => (
-		<Button
-			key={action.label}
-			variant={variant}
-			// before the page is in the browser (no phone check yet) the secondary buttons already stay away on phones
-			{...(variant === 'secondary' ? { className: 'max-sm:hidden' } : {})}
-			onClick={action.onClick}
-			{...(action.disabled ? { disabled: true } : {})}
-			{...(action.loading ? { loading: true } : {})}
-			{...(action.title ? { title: action.title } : {})}
-			{...(action.icon ? { icon: <Icon name={action.icon} size={15} /> } : {})}>
-			{action.label}
-		</Button>
-	);
+	const button = (action, variant) => {
+		const iconOnly = byWidth && variant === 'primary' && Boolean(action.icon);
+		return (
+			<Button
+				key={action.label}
+				variant={variant}
+				className={cx(
+					byWidth
+						? 'max-w-[14rem]'
+						: // before the page is in the browser (no phone check yet) the secondary buttons already stay away on phones
+							variant === 'secondary' && 'max-sm:hidden',
+					byWidth && variant === 'secondary' && '@max-3xl:hidden',
+					iconOnly && '@max-md:w-9 @max-md:px-0',
+				)}
+				onClick={action.onClick}
+				{...(action.disabled ? { disabled: true } : {})}
+				{...(action.loading ? { loading: true } : {})}
+				{...(action.title || iconOnly ? { title: action.title ?? action.label } : {})}
+				{...(iconOnly ? { 'aria-label': action.label } : {})}
+				{...(action.icon ? { icon: <Icon name={action.icon} size={15} /> } : {})}>
+				{byWidth ? (
+					<span className={cx('min-w-0 truncate', iconOnly && '@max-md:sr-only')}>{action.label}</span>
+				) : (
+					action.label
+				)}
+			</Button>
+		);
+	};
 	return (
 		<div className="flex shrink-0 items-center gap-2">
 			{actions.primary ? button(actions.primary, 'primary') : null}
 			{narrow ? null : secondary.map((action) => button(action, 'secondary'))}
-			{items.length > 0 ? <ActionMenu label={texts?.more ?? PAGE_TEXTS.more} items={items} size="md" /> : null}
+			{items.length > 0 ? (
+				<ActionMenu
+					label={texts?.more ?? PAGE_TEXTS.more}
+					items={items}
+					size="md"
+					{...(folded && more.length === 0 ? { className: '@3xl:hidden' } : {})}
+				/>
+			) : null}
 		</div>
 	);
 }

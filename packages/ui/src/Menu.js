@@ -26,6 +26,8 @@ import { themeMenuItems, useThemeChoice } from './theme.js';
  * @property {boolean} [checked] one choice of a group (`menuitemradio`; a check mark shows the chosen one)
  * @property {string} [section] a small heading shown above the first item of each section (Theme …)
  * @property {boolean} [divider] a hairline above the item (a new group without a heading)
+ * @property {string} [className] classes of the item's row, for example a container-query `hidden` where the same action
+ *   is also a button (a header folds its secondary actions into More by its own width)
  */
 
 /** Where a floating menu grows from: its vertical side and the button edge it is aligned to. */
@@ -83,11 +85,11 @@ export function ActionMenu({
 		setOpen((o) => !o);
 	};
 
-	/** The enabled menu items, in order. */
+	/** The enabled menu items that show, in order (a row a container query hides is skipped). */
 	const enabled = () =>
 		/** @type {HTMLButtonElement[]} */ ([
 			...(root.current?.querySelectorAll('[role="menuitem"], [role="menuitemradio"]') ?? []),
-		]).filter((el) => !el.disabled);
+		]).filter((el) => !el.disabled && (!el.parentElement || getComputedStyle(el.parentElement).display !== 'none'));
 
 	useEffect(() => {
 		if (!open) return undefined;
@@ -204,9 +206,16 @@ export function ActionMenu({
 								(item.section ?? '') !== (before?.section ?? '') ||
 								(item.danger && !before?.danger));
 						const radio = item.checked !== undefined;
+						// when every row above is hidden by the same class, the hairline would lead the menu: it hides with them
+						const hiddenAbove =
+							before?.className && items.slice(0, index).every((other) => other.className === before.className)
+								? before.className
+								: undefined;
 						return (
-							<div key={`${item.section ?? ''}:${item.label}`}>
-								{divided ? <div aria-hidden="true" className="-mx-1 my-1 border-t border-line-soft" /> : null}
+							<div key={`${item.section ?? ''}:${item.label}`} className={item.className}>
+								{divided ? (
+									<div aria-hidden="true" className={cx('-mx-1 my-1 border-t border-line-soft', hiddenAbove)} />
+								) : null}
 								{heading ? (
 									<p
 										aria-hidden="true"

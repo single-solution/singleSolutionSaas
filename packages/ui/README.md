@@ -44,6 +44,11 @@ One component per job. The window never scrolls; every pane has its own thin scr
 - `Page`: the only page wrapper. `crumbs` (every crumb a link, the last is the title), `status`, `facts` (up to 4),
   `actions` ({ primary, secondary up to 2, more }), `info` (behind an (i)), `nav` (an `InnerNav` config), `toolbar`,
   `footer`, `loading` (draws `PageSkeleton` at the same size), `error`, `flush`. The body is the only thing that scrolls.
+  The header is a size container: it gives way by its own width, not the window's, and the title always wins (it cuts
+  its text with an ellipsis and has the full text as a tooltip). From wide to narrow: below 72rem the 3rd and 4th number
+  hide, below 60rem all numbers, below 48rem the secondary actions move into More, below 40rem only the title of the
+  crumbs shows, below 32rem a status pill is its dot (label as tooltip), below 28rem the primary action is its icon
+  (label as `aria-label`). Numbers and button labels cut their own text, so nothing overlaps.
 - `InnerNav`: the only sub-page navigation (groups, items with count, dot, locked, `href` or `onSelect`; search above
   10 items; a dropdown on phones). `Toolbar`: search (debounced), filters, sort, view switch, count; it becomes the
   bulk bar in select mode. `DataTable` (+ `useRowSelection`): the only list of records (sticky header, sort, column
@@ -135,7 +140,8 @@ product dashboards' card lists use it.
 
 `<ActionMenu label items icon? size? />` is the compact ⋯ menu of a detail header or a card: the main one or two actions
 stay buttons, the rest go in the menu, a destructive one last with `danger: true`. Arrow keys, Home and End move between
-the items; Escape, Tab and a click outside close it. There are no tabs: pages show their sections one under another
+the items (rows a container query hides are skipped); Escape, Tab and a click outside close it. An item's `className`
+styles its row: the `Page` header uses it to show a folded secondary action only where its button is hidden. There are no tabs: pages show their sections one under another
 (PLAN 0.6).
 
 ## Field grid
