@@ -129,28 +129,22 @@
 }
 
 /*
- * Motion (one system for the Portal and every product dashboard): three durations and three curves, used by every
+ * Motion (one system for the Portal and every product dashboard): three durations and ONE easing, used by every
  * transition and animation. Only `transform` (`translate` / `scale`) and `opacity` move; colors change with the same
- * timing. With `prefers-reduced-motion` the durations are zero and the base layer below turns every animation off.
+ * timing. With `prefers-reduced-motion` only opacity moves: the keyframes below drop their offsets and scales.
  */
 :root {
-	--ss-motion-fast: 120ms;
-	--ss-motion: 180ms;
-	--ss-motion-slow: 240ms;
-	/* entering and hover: quick start, soft landing */
-	--ss-ease: cubic-bezier(0.2, 0, 0, 1);
-	/* moving between two places (the menu indicator) */
-	--ss-ease-move: cubic-bezier(0.4, 0, 0.2, 1);
-	/* leaving: gentle start, quick end */
-	--ss-ease-exit: cubic-bezier(0.4, 0, 1, 1);
-}
-
-@media (prefers-reduced-motion: reduce) {
-	:root {
-		--ss-motion-fast: 0ms;
-		--ss-motion: 0ms;
-		--ss-motion-slow: 0ms;
-	}
+	--dur-fast: 120ms;
+	--dur: 160ms;
+	--dur-slow: 220ms;
+	--ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+	/* the older names stay and follow the tokens above (one curve for entering, moving and leaving) */
+	--ss-motion-fast: var(--dur-fast);
+	--ss-motion: var(--dur);
+	--ss-motion-slow: var(--dur-slow);
+	--ss-ease: var(--ease);
+	--ss-ease-move: var(--ease);
+	--ss-ease-exit: var(--ease);
 }
 
 @keyframes ss-fade {
@@ -162,14 +156,14 @@
 @keyframes ss-enter {
 	from {
 		opacity: 0;
-		translate: 0 6px;
+		translate: 0 4px;
 	}
 }
 
 @keyframes ss-pop {
 	from {
 		opacity: 0;
-		scale: 0.96;
+		scale: 0.98;
 	}
 }
 
@@ -213,7 +207,7 @@
 @keyframes ss-pop-out {
 	to {
 		opacity: 0;
-		scale: 0.96;
+		scale: 0.98;
 	}
 }
 
@@ -284,6 +278,75 @@
 	}
 }
 
+/* reduced motion: the same names, but nothing moves, grows or shrinks (the browser takes the last definition) */
+@media (prefers-reduced-motion: reduce) {
+	@keyframes ss-enter {
+		from {
+			opacity: 0;
+		}
+	}
+	@keyframes ss-pop {
+		from {
+			opacity: 0;
+		}
+	}
+	@keyframes ss-sheet {
+		from {
+			opacity: 0;
+		}
+	}
+	@keyframes ss-drawer {
+		from {
+			opacity: 0;
+		}
+	}
+	@keyframes ss-side {
+		from {
+			opacity: 0;
+		}
+	}
+	@keyframes ss-toast {
+		from {
+			opacity: 0;
+		}
+	}
+	@keyframes ss-pop-out {
+		to {
+			opacity: 0;
+		}
+	}
+	@keyframes ss-sheet-out {
+		to {
+			opacity: 0;
+		}
+	}
+	@keyframes ss-drawer-out {
+		to {
+			opacity: 0;
+		}
+	}
+	@keyframes ss-side-out {
+		to {
+			opacity: 0;
+		}
+	}
+	@keyframes ss-toast-out {
+		to {
+			opacity: 0;
+		}
+	}
+	@keyframes ss-shake {
+		from {
+			opacity: 0;
+		}
+	}
+	.ss-press:active:not(:disabled, [aria-disabled='true']),
+	.ss-lift:hover {
+		scale: none;
+		translate: none;
+	}
+}
+
 /* interactive elements: colors, opacity and transforms change together, quickly */
 @utility ss-motion {
 	transition-property: color, background-color, border-color, box-shadow, opacity, transform, translate, scale;
@@ -296,6 +359,22 @@
 	&:active:not(:disabled, [aria-disabled='true']) {
 		scale: 0.98;
 	}
+}
+
+/* a clickable card or row rises 1px on hover */
+@utility ss-lift {
+	transition-property: translate, box-shadow, background-color, border-color;
+	transition-duration: var(--dur-fast);
+	transition-timing-function: var(--ease);
+	&:hover {
+		translate: 0 -1px;
+	}
+}
+
+/* the first load of a table: rows come in one after the other (`--ss-i` is the row number, at most 10 steps of 15ms) */
+@utility ss-stagger {
+	animation: ss-enter var(--dur-slow) var(--ease) both;
+	animation-delay: calc(min(var(--ss-i, 0), 10) * 15ms);
 }
 
 /* loading blocks: a soft light sweeps across the placeholder (`--ss-skeleton` sets its color, e.g. on the canvas) */
@@ -393,9 +472,7 @@
 	animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-	::view-transition-group(*),
-	::view-transition-old(*),
-	::view-transition-new(*) {
+	::view-transition-group(*) {
 		animation: none !important;
 	}
 }
@@ -755,16 +832,19 @@
 		opacity: 0.7;
 		transition: opacity var(--ss-motion) var(--ss-ease);
 	}
-	/* reduced motion: nothing moves (one instant iteration, so loops such as spinners and shimmers stand still) */
+	/* reduced motion: only opacity and colors change (the keyframes above carry no offsets); loops stand still */
 	@media (prefers-reduced-motion: reduce) {
 		*,
 		*::before,
 		*::after {
-			animation-duration: 0.01ms !important;
-			animation-delay: 0ms !important;
 			animation-iteration-count: 1 !important;
-			transition-duration: 0.01ms !important;
-			transition-delay: 0ms !important;
+			transition-property:
+				opacity, color, background-color, border-color, box-shadow, text-decoration-color, fill, stroke !important;
+		}
+		.animate-spin,
+		.ss-shimmer::after,
+		.ss-progress > span {
+			animation-duration: 0.01ms !important;
 		}
 	}
 }
