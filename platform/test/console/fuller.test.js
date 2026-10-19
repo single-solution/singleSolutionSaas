@@ -162,20 +162,25 @@ describe('fuller Portal screens (jsdom)', () => {
 			expect(overview.merchants.map((m) => m.name)).toContain('Shop & Co');
 			expect(typeof overview.billing[merchantId]?.balance).toBe('number');
 			withToasts(<OverviewView {...overview} admin={owner} />);
-			// an inner sidebar, one view at a time: what needs the admin (with what happens if it waits) and the setup
-			// checklist first; the month's numbers, the first merchants, the products and the timeline are links
-			for (const text of ['Welcome back', 'Needs you', 'Credits are running low', 'Email sending is not set up'])
+			// one page: what needs the admin (with what happens if it waits), the month's numbers, the first merchants and
+			// the products as tables, the timeline; the greeting is behind the (i)
+			for (const text of [
+				'Needs you',
+				'Credits are running low',
+				'Email sending is not set up',
+				'Credits added this month (UTC)',
+				'Shop & Co',
+				'View all',
+			])
 				expect(shows(text)).toBe(true);
+			expect(shows('Welcome back')).toBe(false);
+			await press('About this page');
+			expect(shows('Welcome back')).toBe(true);
 			expect(shows('Getting the platform ready')).toBe(false); // a product, a merchant and a website exist: nothing left to set up
-			await openSection('Credits');
-			expect(shows('Credits added this month (UTC)')).toBe(true);
-			await openSection('Merchants');
-			expect(shows('Shop & Co') && shows('View all')).toBe(true);
-			await openSection('Products');
-			await menu('Notes actions');
+			await menu('Actions for Notes');
 			await clickEl(menuItem('View product'));
 			expect(pushed('/admin/products/notes')).toBe(true);
-			await menu('Notes actions');
+			await menu('Actions for Notes');
 			await clickEl(menuItem('Open as admin'));
 			await until(() => open.mock.calls.length > 0);
 			await press('Add credits');

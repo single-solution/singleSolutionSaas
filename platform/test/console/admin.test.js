@@ -128,12 +128,12 @@ describe('admin console smoke', () => {
 			// ------------------------------------------------------------------ Overview: per-product numbers
 			const overview = await admin.loadOverview(ownerBrowser.api);
 			const overviewHtml = text(ssr(<OverviewView {...overview} admin={owner} />));
-			// an inner sidebar with one view at a time: the first (Needs you) is on the page, the others are links
+			// one page: what needs the admin first, then the month's numbers, the merchants and products as tables, activity
 			expect(overviewHtml).toContain('Email sending is not set up');
-			expect(overviewHtml).toContain('1 merchant and 1 website');
+			expect(overviewHtml).toContain('Merchants 1 Websites 1'); // the numbers in the header; the sentence is behind the (i)
 			for (const section of ['Needs you', 'Credits', 'Merchants', 'Products', 'Recent activity'])
 				expect(overviewHtml).toContain(section);
-			expect(overviewHtml).not.toContain('earned this month (UTC)');
+			expect(overviewHtml).toContain('Earned this month (UTC)'); // the products table
 			// nothing repeated: the setup checklist asks for the first product, and no second "No product" need says it again
 			const bare = text(ssr(<OverviewView ok overview={{ products: [] }} admin={owner} />));
 			expect(bare).toContain('Connect a product');

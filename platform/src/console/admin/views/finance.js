@@ -22,7 +22,6 @@ import {
 	Page,
 	Pagination,
 	Select,
-	StatusPill,
 	Toolbar,
 	ButtonLink,
 	describeProblem,
@@ -400,7 +399,7 @@ function AttentionPart(props) {
 							key: 'status',
 							header: BILLING.statusColumn,
 							kind: 'status',
-							render: (m) => <MerchantPillCell status={m.status} />,
+							pill: (m) => merchantPill(m.status),
 						},
 						{
 							key: 'balance',
@@ -422,12 +421,6 @@ function AttentionPart(props) {
 			) : null}
 		</>
 	);
-}
-
-/** @param {{ status: string }} props */
-function MerchantPillCell({ status }) {
-	const pill = merchantPill(status);
-	return <StatusPill status={pill.status}>{pill.label}</StatusPill>;
 }
 
 /**

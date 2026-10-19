@@ -732,6 +732,12 @@ export const ADMIN = Object.freeze({
 	setupPending: 'Setup pending',
 	columns: Object.freeze({ status: 'Status', lastSignIn: 'Last sign-in' }),
 	/** the columns of the Merchants table and of a merchant's Websites table */
+	websitesLabel: 'Websites',
+	productColumns: Object.freeze({
+		product: 'Product',
+		websites: 'Websites',
+		earned: 'Earned this month (UTC)',
+	}),
 	merchantColumns: Object.freeze({
 		name: 'Merchant',
 		email: 'Email',

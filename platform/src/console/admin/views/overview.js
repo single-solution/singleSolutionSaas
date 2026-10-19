@@ -1,30 +1,25 @@
 'use client';
 /**
- * Admin Overview (PLAN 0.8.2): a greeting with one sentence of what matters now;
- * "Needs you" — each item says what happens if it waits and carries its button (email sending not set up, no product
- * connected or active, merchants low on credits, in grace or stopped, with Add credits); the setup checklist while
- * the platform is new; the month's numbers; credits spent per UTC day; the first merchants with their balance; the
- * per-product numbers (websites using it, credits earned this month, 30-day chart, a More menu to view it or open it
- * as admin); and the latest activity as a timeline. Add merchant sits in the header.
- * Layout (owner 2026-10-16): an inner sidebar shows one view at a time — Needs you (with the setup checklist), Credits (the
- * month's numbers and the chart), Merchants, Products, Recent activity.
+ * Admin Overview (PLAN 0.8.2; layout contract 2026-10-17): one Page. The header carries the title with the greeting and
+ * the one sentence of what matters now behind its (i), the numbers (merchants, websites, what needs you) and Add
+ * merchant. The body: "Needs you" — each item says what happens if it waits and carries its button (email sending not
+ * set up, no product connected or active, merchants low on credits, in grace or stopped, with Add credits); the setup
+ * checklist while the platform is new; the month's numbers and credits spent per UTC day; the first merchants and the
+ * connected products as tables; and the latest activity as a timeline.
  * @module
  */
 import { useState } from 'react';
 import {
-	ActionMenu,
-	Badge,
 	BarChart,
 	Button,
 	ButtonLink,
 	Card,
+	DataTable,
 	EmptyState,
 	Icon,
-	HeaderFact,
 	IconBadge,
 	NeedsList,
-	PageHeader,
-	SectionLayout,
+	Page,
 	SetupChecklist,
 	Stat,
 	StatGrid,
@@ -32,12 +27,11 @@ import {
 	formatCredits,
 	useToast,
 	TextLink,
-	Avatar,
 } from '@ss/ui';
 import { ADMIN, BILLING, MORE, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
-import { DaysLeft, MerchantStatusBadge, creditDayBars, formatChartCredits } from '../../views/billing.js';
+import { DaysLeft, creditDayBars, formatChartCredits, merchantPill } from '../../views/billing.js';
 import { openDashboard } from '../../views/common.js';
 import { ActivityTimeline } from '../../views/login-settings.js';
 import { adminApi, adminRoutes } from '../paths.js';
@@ -142,55 +136,63 @@ export function OverviewView(props) {
 	const stepsDone = steps.filter((s) => s.done).length;
 	const settingUp = stepsDone < steps.length;
 
-	const sections = [
-		{
-			id: 'needs',
-			label: ADMIN.needs.title,
-			icon: /** @type {const} */ ('bell'),
-			...(needCount > 0 ? { badge: <Badge tone="attention">{needCount}</Badge> } : {}),
-			content: (
-				<>
-					<Card
-						flow
-						id="overview-needs"
-						title={ADMIN.needs.title}
-						subtitle={needs.length > 0 ? ADMIN.needs.intro : undefined}>
+	const needsMore = attention.length > NEEDS_MERCHANTS;
+	const website = o.websites ?? 0;
+
+	return (
+		<>
+			<Page
+				linkAs={Link}
+				crumbs={[{ label: ADMIN.menu.overview }]}
+				info={
+					<>
+						<span className="block font-medium text-fg">{ADMIN.welcome(props.admin?.name ?? '')}</span>
+						{ADMIN.summary({ merchants: o.merchants ?? 0, websites: website, needs: needCount })}
+					</>
+				}
+				facts={[
+					...(needCount > 0 ? [{ label: ADMIN.needs.title, value: needCount, tone: /** @type {const} */ ('warning') }] : []),
+					{ label: ADMIN.merchantsTitle, value: o.merchants ?? 0, href: adminRoutes.merchants() },
+					{ label: ADMIN.websitesLabel, value: website },
+				]}
+				{...(canAddMerchant
+					? {
+							actions: {
+								primary: {
+									label: ADMIN.addMerchant,
+									icon: /** @type {const} */ ('plus'),
+									onClick: () => setAdding(true),
+								},
+							},
+						}
+					: {})}>
+				<div className="space-y-4">
+					<Card title={ADMIN.needs.title} subtitle={needs.length > 0 ? ADMIN.needs.intro : undefined}>
 						<div className="space-y-3">
 							<NeedsList items={needs} none={ADMIN.needs.none} />
-							{attention.length > NEEDS_MERCHANTS ? (
-								<ButtonLink as={Link} href={`${adminRoutes.finance()}#billing-attention`} variant="ghost" size="sm">
+							{needsMore ? (
+								<ButtonLink as={Link} href={adminRoutes.financePart('attention')} variant="ghost" size="sm">
 									{BILLING.billingTitle}
 								</ButtonLink>
 							) : null}
 						</div>
 					</Card>
 					{settingUp ? (
-						<div data-flow="card">
-							<SetupChecklist
-								id="overview-ready"
-								title={ADMIN.ready.title}
-								progress={ADMIN.ready.progress(stepsDone, steps.length)}
-								labels={{ done: ADMIN.ready.done, todo: ADMIN.ready.todo }}
-								linkAs={Link}
-								steps={steps.map((step) => ({
-									key: step.key,
-									label: ADMIN.ready.steps[/** @type {'product'} */ (step.key)],
-									done: step.done,
-									...(step.href ? { href: step.href } : {}),
-									...(step.onClick ? { onSelect: step.onClick } : {}),
-								}))}
-							/>
-						</div>
+						<SetupChecklist
+							id="overview-ready"
+							title={ADMIN.ready.title}
+							progress={ADMIN.ready.progress(stepsDone, steps.length)}
+							labels={{ done: ADMIN.ready.done, todo: ADMIN.ready.todo }}
+							linkAs={Link}
+							steps={steps.map((step) => ({
+								key: step.key,
+								label: ADMIN.ready.steps[/** @type {'product'} */ (step.key)],
+								done: step.done,
+								...(step.href ? { href: step.href } : {}),
+								...(step.onClick ? { onSelect: step.onClick } : {}),
+							}))}
+						/>
 					) : null}
-				</>
-			),
-		},
-		{
-			id: 'credits',
-			label: ADMIN.creditsSection,
-			icon: /** @type {const} */ ('coins'),
-			content: (
-				<>
 					<StatGrid>
 						<Stat label={ADMIN.creditsThisMonth} value={formatCredits(earned)} icon="coins" kind="credit" />
 						<Stat
@@ -208,174 +210,164 @@ export function OverviewView(props) {
 							height={132}
 						/>
 					</Card>
-				</>
-			),
-		},
-		{
-			id: 'merchants',
-			label: ADMIN.merchantsTitle,
-			icon: /** @type {const} */ ('users'),
-			content: (
-				<Card
-					title={ADMIN.merchantsTitle}
-					subtitle={merchants.length > 0 ? ADMIN.merchantsIntro : undefined}
-					actions={
-						merchants.length > 0 ? (
-							<ButtonLink as={Link} href={adminRoutes.merchants()} variant="secondary" size="sm">
-								{ADMIN.viewMerchants}
-							</ButtonLink>
-						) : null
-					}>
-					{merchants.length === 0 ? (
-						<EmptyState
-							compact
-							icon="users"
-							kind="merchant"
-							title={ADMIN.noMerchants}
-							description={ADMIN.noMerchantsYetHelp}
-							action={
-								canAddMerchant ? (
-									<Button size="sm" onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
-										{ADMIN.addMerchant}
-									</Button>
-								) : null
-							}
-						/>
-					) : (
-						<ul className="-my-2 divide-y divide-line-soft">
-							{merchants.map((m) => {
-								const b = billing[m.merchantId] ?? null;
-								return (
-									<li key={m.merchantId}>
-										<Link
-											href={adminRoutes.merchant(m.merchantId)}
-											className="ss-motion -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-surface-2">
-											<Avatar name={m.name} />
-											<span className="min-w-0 flex-1">
-												<span className="block truncate text-sm font-semibold text-fg">{m.name}</span>
-												<span className="block truncate text-xs text-muted">{m.email}</span>
-											</span>
-											<span className="shrink-0 text-right">
-												<span className="block text-sm font-medium text-fg tabular-nums">
-													{b ? formatCredits(b.balance) : '—'}
-												</span>
-												{b ? <MerchantStatusBadge status={b.status ?? m.status} /> : null}
-											</span>
-										</Link>
-									</li>
-								);
-							})}
-						</ul>
-					)}
-				</Card>
-			),
-		},
-		{
-			id: 'products',
-			label: ADMIN.productsTitle,
-			icon: /** @type {const} */ ('box'),
-			content:
-				products.length === 0 ? (
-					<EmptyState
-						compact
-						icon="box"
-						kind="product"
-						title={ADMIN.noProducts}
-						action={
-							linked ? (
-								<ButtonLink as={Link} href={adminRoutes.products()} variant="secondary" size="sm">
-									{ADMIN.connectProduct}
+					<Card
+						padded={false}
+						title={ADMIN.merchantsTitle}
+						subtitle={merchants.length > 0 ? ADMIN.merchantsIntro : undefined}
+						actions={
+							merchants.length > 0 ? (
+								<ButtonLink as={Link} href={adminRoutes.merchants()} variant="secondary" size="sm">
+									{ADMIN.viewMerchants}
 								</ButtonLink>
 							) : null
-						}
-					/>
-				) : (
-					products.map((p) => (
-						<Card
-							flow
-							key={p.productId}
-							title={
-								<span className="flex items-center gap-3">
-									<IconBadge product={p.productId} size="sm" />
-									{linked ? (
-										<TextLink as={Link} tone="plain" href={adminRoutes.product(p.productId)}>
-											{p.name}
-										</TextLink>
-									) : (
-										p.name
-									)}
-								</span>
+						}>
+						<DataTable
+							caption={ADMIN.merchantsTitle}
+							rows={merchants}
+							rowKey={(m) => m.merchantId}
+							rowLabel={(m) => String(m.name)}
+							onRowClick={(m) => nav.go(adminRoutes.merchant(m.merchantId))}
+							empty={
+								<EmptyState
+									compact
+									icon="users"
+									kind="merchant"
+									title={ADMIN.noMerchants}
+									description={ADMIN.noMerchantsYetHelp}
+									action={
+										canAddMerchant ? (
+											<Button size="sm" onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
+												{ADMIN.addMerchant}
+											</Button>
+										) : null
+									}
+								/>
 							}
-							subtitle={`${ADMIN.productWebsites(p.websites ?? 0)} · ${ADMIN.productEarned(formatCredits(p.earnedThisMonth ?? 0))}`}
-							actions={
-								<span className="flex items-center gap-1">
-									<Badge tone={p.status === 'active' ? 'success' : 'neutral'} dot>
-										{PRODUCTS.status[/** @type {'active'} */ (p.status)] ?? p.status}
-									</Badge>
-									{linked ? (
-										<ActionMenu
-											label={MORE.productMenu(p.name)}
-											items={[
-												{
-													label: MORE.viewProduct,
-													onSelect: () => nav.go(adminRoutes.product(p.productId)),
-												},
-												{ label: PRODUCTS.openAsAdmin, onSelect: () => void openAsAdmin(p) },
-											]}
-										/>
-									) : null}
-								</span>
-							}>
-							<BarChart
-								label={PRODUCTS.earnedChart}
-								data={creditDayBars(p.days)}
-								format={formatChartCredits}
-								height={96}
-							/>
-						</Card>
-					))
-				),
-		},
-		{
-			id: 'activity',
-			label: ADMIN.recentActivity,
-			icon: /** @type {const} */ ('activity'),
-			content: (
-				<Card
-					title={ADMIN.recentActivity}
-					subtitle={ADMIN.recentActivityIntro}
-					actions={
-						<ButtonLink as={Link} href={adminRoutes.activity()} variant="secondary" size="sm">
-							{MORE.viewAll}
-						</ButtonLink>
-					}>
-					<ActivityTimeline items={o.recentActivity ?? []} empty={MORE.noActivity} />
-				</Card>
-			),
-		},
-	];
-
-	return (
-		<div className="space-y-6">
-			<PageHeader
-				title={ADMIN.welcome(props.admin?.name ?? '')}
-				subtitle={ADMIN.summary({ merchants: o.merchants ?? 0, websites: o.websites ?? 0, needs: needCount })}
-				meta={
-					needCount > 0 ? (
-						<HeaderFact tone="attention" label={ADMIN.needs.title}>
-							{needCount}
-						</HeaderFact>
-					) : null
-				}
-				actions={
-					canAddMerchant ? (
-						<Button onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
-							{ADMIN.addMerchant}
-						</Button>
-					) : null
-				}
-			/>
-			<SectionLayout label={ADMIN.menu.overview} sections={sections} />
+							columns={[
+								{
+									key: 'name',
+									header: ADMIN.merchantColumns.name,
+									rowHeader: true,
+									render: (m) => (
+										<TextLink as={Link} tone="plain" href={adminRoutes.merchant(m.merchantId)}>
+											{m.name}
+										</TextLink>
+									),
+								},
+								{ key: 'email', header: ADMIN.merchantColumns.email, low: true },
+								{
+									key: 'balance',
+									header: ADMIN.merchantColumns.balance,
+									kind: 'money',
+									render: (m) => {
+										const b = billing[m.merchantId] ?? null;
+										return b ? formatCredits(b.balance) : '—';
+									},
+								},
+								{
+									key: 'status',
+									header: ADMIN.columns.status,
+									kind: 'status',
+									pill: (m) => merchantPill(billing[m.merchantId]?.status ?? m.status),
+								},
+							]}
+						/>
+					</Card>
+					<Card
+						padded={false}
+						title={ADMIN.productsTitle}
+						subtitle={products.length > 0 ? ADMIN.productsIntro : undefined}
+						actions={
+							linked && products.length > 0 ? (
+								<ButtonLink as={Link} href={adminRoutes.products()} variant="secondary" size="sm">
+									{ADMIN.viewMerchants}
+								</ButtonLink>
+							) : null
+						}>
+						<DataTable
+							caption={ADMIN.productsTitle}
+							rows={products}
+							rowKey={(p) => p.productId}
+							rowLabel={(p) => String(p.name)}
+							{...(linked
+								? {
+										onRowClick: (/** @type {any} */ p) => nav.go(adminRoutes.product(p.productId)),
+										rowMenu: (/** @type {any} */ p) => [
+											{ label: MORE.viewProduct, onSelect: () => nav.go(adminRoutes.product(p.productId)) },
+											{ label: PRODUCTS.openAsAdmin, onSelect: () => void openAsAdmin(p) },
+										],
+									}
+								: {})}
+							empty={
+								<EmptyState
+									compact
+									icon="box"
+									kind="product"
+									title={ADMIN.noProducts}
+									action={
+										linked ? (
+											<ButtonLink as={Link} href={adminRoutes.products()} variant="secondary" size="sm">
+												{ADMIN.connectProduct}
+											</ButtonLink>
+										) : null
+									}
+								/>
+							}
+							columns={[
+								{
+									key: 'name',
+									header: ADMIN.productColumns.product,
+									rowHeader: true,
+									render: (p) => (
+										<span className="flex min-w-0 items-center gap-2.5">
+											<IconBadge product={p.productId} size="sm" />
+											{linked ? (
+												<TextLink as={Link} tone="plain" href={adminRoutes.product(p.productId)}>
+													{p.name}
+												</TextLink>
+											) : (
+												p.name
+											)}
+										</span>
+									),
+								},
+								{
+									key: 'websites',
+									header: ADMIN.productColumns.websites,
+									kind: 'number',
+									render: (p) => p.websites ?? 0,
+								},
+								{
+									key: 'earned',
+									header: ADMIN.productColumns.earned,
+									kind: 'money',
+									render: (p) => formatCredits(p.earnedThisMonth ?? 0),
+								},
+								{
+									key: 'status',
+									header: ADMIN.columns.status,
+									kind: 'status',
+									pill: (p) => ({
+										status: p.status === 'active' ? 'active' : 'off',
+										label: PRODUCTS.status[/** @type {'active'} */ (p.status)] ?? p.status,
+									}),
+								},
+							]}
+						/>
+					</Card>
+					<Card
+						flow
+						title={ADMIN.recentActivity}
+						subtitle={ADMIN.recentActivityIntro}
+						actions={
+							<ButtonLink as={Link} href={adminRoutes.activity()} variant="secondary" size="sm">
+								{MORE.viewAll}
+							</ButtonLink>
+						}>
+						<ActivityTimeline items={o.recentActivity ?? []} empty={MORE.noActivity} />
+					</Card>
+				</div>
+			</Page>
 			<AddMerchantDialog
 				open={adding}
 				onClose={() => setAdding(false)}
@@ -392,6 +384,6 @@ export function OverviewView(props) {
 					onAdded={() => window.location.reload()}
 				/>
 			) : null}
-		</div>
+		</>
 	);
 }

@@ -34,7 +34,7 @@ export const dynamic = 'force-dynamic';
  * @typedef {'page' | 'screen' | 'public'} ViewKind
  */
 const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Metadata, ViewKind]>} */ ([
-	[[], Home, HomeMeta, 'page'],
+	[[], Home, HomeMeta, 'screen'],
 	[['account'], Account, AccountMeta, 'screen'],
 	[['account', ':part'], AccountPart, AccountPartMeta, 'screen'],
 	[['activity'], Activity, ActivityMeta, 'screen'],
