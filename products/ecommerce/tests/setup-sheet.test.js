@@ -207,10 +207,7 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 				'4 payment methods: Online payment (gateway), Bank transfer (pay_first), Cash on delivery (on_delivery), Pay at pickup (at_pickup).',
 			],
 			['couriers', '1 courier: FastShip.'],
-			[
-				'policies',
-				'3 policies: Delivery policy (no text), Returns policy (no text), Warranty policy (no text).',
-			],
+			['policies', '3 policies: Delivery policy (no text), Returns policy (no text), Warranty policy (no text).'],
 			['customer_segments', '3 customer segments: Loyalty members, Active customers, Guests.'],
 			['cancel_reasons', '3 cancel reasons: The customer asked to cancel, Items not available, The customer did not confirm.'],
 			['delivery_failure_reasons', '2 failed delivery reasons: Could not be delivered (counts), Sent back by the customer.'],
@@ -288,10 +285,7 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 			['order_flow', expect.stringMatching(/^9 statuses: /)],
 			['payment_methods', expect.stringMatching(/^4 payment methods: /)],
 			['couriers', 'Not available right now'],
-			[
-				'policies',
-				'3 policies: Delivery policy (no text), Returns policy (no text), Warranty policy (no text).',
-			],
+			['policies', '3 policies: Delivery policy (no text), Returns policy (no text), Warranty policy (no text).'],
 			['customer_segments', expect.stringMatching(/^3 customer segments: /)],
 			['cancel_reasons', '3 cancel reasons: The customer asked to cancel, Items not available, The customer did not confirm.'],
 			['delivery_failure_reasons', '2 failed delivery reasons: Could not be delivered (counts), Sent back by the customer.'],

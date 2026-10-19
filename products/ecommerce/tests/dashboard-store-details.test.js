@@ -96,7 +96,9 @@ describe('the Store details view', () => {
 		);
 		await settle();
 		const link = [...container.querySelectorAll('a')].find((node) => node.textContent === 'Open Website settings');
-		expect(link?.getAttribute('href')).toBe('https://portal.example.com/admin/merchants/mer_1/websites/web_1/settings#business');
+		expect(link?.getAttribute('href')).toBe(
+			'https://portal.example.com/admin/merchants/mer_1/websites/web_1/settings#business',
+		);
 	});
 
 	it('says the feature is off when it is, and shows dashes while the Portal holds nothing yet', async () => {

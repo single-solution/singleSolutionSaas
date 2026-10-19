@@ -28,7 +28,9 @@ export const policiesOf = async (s) => {
 	]);
 	const documents = website.pages.documents.map(({ key, title, text }) => ({ key, title, text }));
 	const list = [
-		.../** @type {import('../core/policies.js').Policy[]} */ (own).filter((policy) => !documents.some((d) => d.key === policy.key)),
+		.../** @type {import('../core/policies.js').Policy[]} */ (own).filter(
+			(policy) => !documents.some((d) => d.key === policy.key),
+		),
 		...documents,
 	];
 	const rate = s.has('delivery_zones') ? homeRate(await s.list('delivery_zones'), String(business.country ?? '')) : null;

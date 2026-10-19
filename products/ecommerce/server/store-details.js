@@ -51,7 +51,10 @@ export const createStoreDetails = (product, service) => {
 			country: String(business.country ?? ''),
 		});
 		if (!made.ok)
-			throw problem('conflict', 'Give the business a name (Portal › Website settings › Business) before its business.json can be made.');
+			throw problem(
+				'conflict',
+				'Give the business a name (Portal › Website settings › Business) before its business.json can be made.',
+			);
 		return made.value;
 	};
 

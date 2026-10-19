@@ -275,7 +275,7 @@ export const renderOpenapi = ({ manifest, routes, api = {} }) => {
 					in: 'header',
 					required: true,
 					description:
-						"The Accounts sign-in of the signed-in staff member whose role has the permission this call needs, checked for this website. The server token alone changes nothing: without it the call is 403 needs_signed_in_staff, with a role that lacks the permission 403 forbidden, with a sign-in of another website or an expired or forged one 401 invalid_sign_in. The person it names is who the activity log and the histories record.",
+						'The Accounts sign-in of the signed-in staff member whose role has the permission this call needs, checked for this website. The server token alone changes nothing: without it the call is 403 needs_signed_in_staff, with a role that lacks the permission 403 forbidden, with a sign-in of another website or an expired or forged one 401 invalid_sign_in. The person it names is who the activity log and the histories record.',
 					schema: { type: 'string', maxLength: 8192 },
 				},
 			},

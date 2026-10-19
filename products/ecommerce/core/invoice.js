@@ -190,10 +190,7 @@ export const INVOICE_LABELS = Object.freeze({
  * @returns {string}
  */
 export const sellerDetailsOf = (business, texts = {}) =>
-	[
-		business.legalName,
-		business.taxNumber ? `${texts['invoice.taxNumber'] || 'Tax number'}: ${business.taxNumber}` : '',
-	]
+	[business.legalName, business.taxNumber ? `${texts['invoice.taxNumber'] || 'Tax number'}: ${business.taxNumber}` : '']
 		.filter(Boolean)
 		.join('\n');
 

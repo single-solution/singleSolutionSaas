@@ -259,7 +259,9 @@ describe('Ecommerce’s messages and their defaults (parity P1)', () => {
 				email: `person${index}@shop.example.com`,
 				phone: `+4477009${String(index).padStart(5, '0')}`,
 			}));
-			await shop.setWebsite({ team: { recipients: team, phoneChannel: 'sms', staffPush: false, support: { email: '', phone: '' } } });
+			await shop.setWebsite({
+				team: { recipients: team, phoneChannel: 'sms', staffPush: false, support: { email: '', phone: '' } },
+			});
 			await shop.setting('staff_alerts', 'staffPermission', 'orders.manage');
 			const limited = shop.messages().length;
 			await placeOrder();

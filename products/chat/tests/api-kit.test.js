@@ -85,8 +85,7 @@ describe('widgets and docs', () => {
 			(await sys.call('GET', '/v1/widget/config', { token: sys.browser, origin: ORIGIN })).json.settings.look.avatarUrl;
 		expect(await look()).toBe('https://cdn.example.com/icon.png');
 		const allowed = async () =>
-			(await sys.serverCall('GET', '/v1/settings')).json.features
-				.find((/** @type {any} */ f) => f.key === 'language_lock')
+			(await sys.serverCall('GET', '/v1/settings')).json.features.find((/** @type {any} */ f) => f.key === 'language_lock')
 				.values.allowedLanguages;
 		expect(await allowed()).toEqual({ value: ['en-GB', 'fr'], source: 'portal', from: 'region.languages' });
 		// the merchant's own value wins; the dashboard names the Portal while the website's is in use

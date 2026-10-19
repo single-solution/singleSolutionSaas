@@ -215,7 +215,12 @@ describe('K2 and K9: the acting staff member and labeled activity', () => {
 		const plain = await seedOrder();
 		const byServer = await shop.api('POST', `/v1/orders/${plain.id}/move`, { to: 'confirmed' });
 		expect(byServer.json.history.at(-1).by).toBe('Test Staff');
-		expect((await activityOf(plain.id))[0].actor).toEqual({ kind: 'user', id: 'usr_test_staff', name: 'Test Staff', role: 'owner' });
+		expect((await activityOf(plain.id))[0].actor).toEqual({
+			kind: 'user',
+			id: 'usr_test_staff',
+			name: 'Test Staff',
+			role: 'owner',
+		});
 
 		const staff = await seedOrder();
 		const byTicket = await shop.admin(ticket, 'POST', `/v1/admin/orders/${staff.id}/move`, { to: 'confirmed' });
@@ -281,7 +286,9 @@ describe('K2 and K9: the acting staff member and labeled activity', () => {
 			shop.callsTo(PAYMENTS).findLast((c) => c.path === '/v1/payments/pay_kitrefund/refunds')
 		);
 		expect(plainCall.headers['ss-actor-id']).toBeUndefined();
-		expect(JSON.parse(Buffer.from(String(plainCall.headers['ss-sign-in']).split('.')[1] ?? '', 'base64url').toString())).toMatchObject({
+		expect(
+			JSON.parse(Buffer.from(String(plainCall.headers['ss-sign-in']).split('.')[1] ?? '', 'base64url').toString()),
+		).toMatchObject({
 			sub: 'usr_test_staff',
 		});
 	});
@@ -335,7 +342,9 @@ describe('K2 and K9: the acting staff member and labeled activity', () => {
 			shop.callsTo(PAYMENTS).findLast((c) => c.path === '/v1/payments/pay_kitclaim/refunds')
 		);
 		expect(call.headers['ss-actor-name']).toBeUndefined();
-		expect(JSON.parse(Buffer.from(String(call.headers['ss-sign-in']).split('.')[1] ?? '', 'base64url').toString())).toMatchObject({
+		expect(
+			JSON.parse(Buffer.from(String(call.headers['ss-sign-in']).split('.')[1] ?? '', 'base64url').toString()),
+		).toMatchObject({
 			sub: 'usr_ali0001',
 			name: 'Ali Khān',
 		});

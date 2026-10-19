@@ -103,7 +103,10 @@ describe('the dashboard', () => {
 		expect(byText(container, 'Contact support', 'a').getAttribute('href')).toBe('mailto:help@example.com');
 		click(byText(container, 'Check again', 'button'));
 		await settle();
-		expect(vi.mocked(fetch)).toHaveBeenCalledWith(`${BASE}/website-settings/refresh`, expect.objectContaining({ method: 'POST' }));
+		expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+			`${BASE}/website-settings/refresh`,
+			expect.objectContaining({ method: 'POST' }),
+		);
 		// the setup and Recent changes, in the viewer's time
 		expect(container.textContent).toContain('1 of 4 done');
 		expect(container.textContent).toContain('Ada Admin · Features: notes on');

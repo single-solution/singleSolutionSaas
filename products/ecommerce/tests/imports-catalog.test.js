@@ -843,6 +843,6 @@ describe('the README examples', () => {
 		expect(readme).not.toContain('catalog: { categories');
 		expect(readme).toContain('a product with none keeps the given numbers');
 		expect(readme).toContain('keeps the given numbers where there is nothing to derive');
-		expect(readme).toContain('the calling code in the Portal\'s Region and format, else the business country');
+		expect(readme).toContain("the calling code in the Portal's Region and format, else the business country");
 	});
 });

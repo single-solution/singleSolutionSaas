@@ -109,7 +109,9 @@ describe('heads', () => {
 	it('takes the share picture of the website’s Brand and look (the Portal) for a page without its own', async () => {
 		await shop.setting('seo', 'defaultImage', 'https://cdn.example.com/images/default.jpg');
 		expect((await api('GET', `/v1/seo/products/${ids.phone.slug}`)).image).toBe('https://cdn.example.com/images/default.jpg');
-		expect((await api('GET', `/v1/seo/categories/${ids.phones.slug}`)).image).toBe('https://cdn.example.com/images/default.jpg');
+		expect((await api('GET', `/v1/seo/categories/${ids.phones.slug}`)).image).toBe(
+			'https://cdn.example.com/images/default.jpg',
+		);
 		await shop.setting('seo', 'defaultImage', '');
 		expect((await api('GET', `/v1/seo/products/${ids.phone.slug}`)).image).toBeNull();
 	});

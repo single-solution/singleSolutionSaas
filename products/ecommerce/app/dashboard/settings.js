@@ -121,7 +121,13 @@ const extrasOf = (props) => {
 	const L = TEXTS.lists;
 	return {
 		store_details: (
-			<StoreDetailsView websiteId={websiteId} off={false} portal={portal} admin={who.kind === 'admin'} merchantId={merchantId ?? null} />
+			<StoreDetailsView
+				websiteId={websiteId}
+				off={false}
+				portal={portal}
+				admin={who.kind === 'admin'}
+				merchantId={merchantId ?? null}
+			/>
 		),
 		catalog: {
 			items: [{ id: 'item-types', label: L.itemTypes.title, content: <ItemTypesEditor websiteId={websiteId} off={false} /> }],
