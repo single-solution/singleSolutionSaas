@@ -106,7 +106,6 @@ export const PENDING = Object.freeze(/** @type {Record<string, string>} */ ({}))
  * (`ss-import send --settings <file>`), from SB's environment.
  */
 export const BY_HAND = Object.freeze({
-	'ecommerce catalog.mediaBaseUrl': 'integration.awsS3PublicUrlBase, else AWS_S3_PUBLIC_URL_BASE',
 	'ecommerce staff_alerts.adminUrl': 'integration.adminSiteUrl, else ADMIN_SITE_URL (+ /orders?order={number})',
 	'accounts staff_links.setupPageUrl': 'store.publicSiteUrl, else the storefront *_SITE_URL (+ /account/setup/{code})',
 	'growth robots_verification.sitemaps': 'store.publicSiteUrl, else the storefront *_SITE_URL (+ /sitemap.xml)',
@@ -142,7 +141,7 @@ export const PORTAL_CONNECTIONS_BY_HAND = Object.freeze({
 	database:
 		"SB's MongoDB connection string (every product has its own database in it; name SB's existing one for a product with the Owner-only names field)",
 	storage:
-		"SB's S3 bucket: endpoint, region, bucket, access key and secret, and the prefix if SB keeps one (`integration.awsS3*`, `AWS_S3_*`)",
+		"SB's S3 bucket: endpoint, region, bucket, access key and secret, and the prefix if SB keeps one (`integration.awsS3*`, `AWS_S3_*`); its optional `publicBaseUrl` is the public address of the bucket (`integration.awsS3PublicUrlBase`, else `AWS_S3_PUBLIC_URL_BASE`)",
 });
 
 /** SB's robots defaults: the fallback disallow list and `/api/`, always (`apps/web/src/app/robots.ts`:16-17). */
@@ -153,19 +152,6 @@ const ROBOTS_ALWAYS = '/api/';
 const address = (value) => (/^https:\/\/[^\s/]+/i.test(value) ? value.replace(/\/+$/, '') : '');
 
 /**
- * The scheme and host of an https address, or '': photo keys are the whole path of SB's addresses (`mediaKey`), so the
- * base Ecommerce adds them to is the bare host.
- * @param {string} value
- */
-const origin = (value) => {
-	try {
-		return address(value) ? new URL(value).origin : '';
-	} catch {
-		return '';
-	}
-};
-
-/**
  * The settings plan from SB's effective values.
  * @param {SourceValues} values
  * @returns {SettingsPlan}
@@ -174,7 +160,6 @@ export const settingsPlan = (values) => {
 	const { store, seo, integration } = values;
 	const site = address(store.publicSiteUrl);
 	const admin = address(integration.adminSiteUrl);
-	const media = origin(integration.awsS3PublicUrlBase);
 	const disallow = [...new Set([...(seo.robotsDisallow ?? ROBOTS_FALLBACK), ROBOTS_ALWAYS])];
 	return {
 		accounts: {
@@ -229,8 +214,6 @@ export const settingsPlan = (values) => {
 				'catalog.categoryUrl': '/{slug}',
 				'catalog.variantQuery': '{attributes}',
 				'catalog.retiredUrl': 'none',
-				...(media ? { 'catalog.mediaBaseUrl': media } : {}),
-				'catalog.mediaPath': '/media',
 				'catalog.pageSize': 24, // `apps/web/src/lib/core/queries.ts`:153
 				'catalog.lowStock': store.lowStockThreshold,
 				'catalog.showStock': 'always',

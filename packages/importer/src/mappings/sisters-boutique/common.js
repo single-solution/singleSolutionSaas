@@ -105,7 +105,7 @@ const decoded = (segment) => {
 
 /**
  * The storage key of a file SB keeps as a full https address: its path, each part decoded (Ecommerce builds the address
- * again from `catalog.mediaBaseUrl` and the key, so it stays the same; Migration "image URLs do not change").
+ * again from the storage connection's public address and the key, so it stays the same; Migration "image URLs do not change").
  * @param {unknown} value
  */
 export const mediaKey = (value) => {

@@ -392,16 +392,14 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 		expect(dry.settings.changes.map((change) => [change.key, change.source])).toEqual([
 			['checkout.numberPattern', 'built-in'],
 			['checkout.numberPrefix', 'built-in'],
-			['catalog.mediaBaseUrl', 'built-in'],
 			['order_flow', null],
 		]);
-		expect(dry.settings.changes.slice(0, 3).map((change) => [change.from, change.to])).toEqual([
+		expect(dry.settings.changes.slice(0, 2).map((change) => [change.from, change.to])).toEqual([
 			['{prefix}{number}', '{prefix}{year}-{number}'],
 			['', 'EX-'],
-			['', 'https://cdn.example.com'],
 		]);
 		// the old shop's own statuses replace the default flow (K9): orders keep them
-		const flow = /** @type {any} */ (dry.settings.changes[3]);
+		const flow = /** @type {any} */ (dry.settings.changes[2]);
 		expect(flow.from.statuses.map((/** @type {{ key: string }} */ status) => status.key)).toContain('dispatched');
 		expect(flow.to.statuses.map((/** @type {{ key: string }} */ status) => status.key)).toEqual([
 			'awaiting_payment',

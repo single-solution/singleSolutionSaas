@@ -477,7 +477,6 @@ describe('the Sisters Boutique mapping', () => {
 			'delivery_zones.pickupAddress': '1 Sample Road, Sample City',
 			// a row of the wrong type falls back to the code default
 			'catalog.lowStock': STORE_DEFAULTS.lowStockThreshold,
-			'catalog.mediaBaseUrl': 'https://media.example.com',
 			'size_charts.defaultChartId': DEFAULT_CHART_ID,
 			'deals.rounding': 'total_half_up',
 			'deals.lineChoice': 'first',

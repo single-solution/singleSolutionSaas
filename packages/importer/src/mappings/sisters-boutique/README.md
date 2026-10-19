@@ -74,8 +74,8 @@ settings written before their PLAN item is built (E39): until then the products 
 the website's settings in the Portal (Website settings: business facts, brand, region and format, pages, alert team; set once
 for every product, so the plan writes none of them: `PORTAL_BY_HAND` lists SB's values, such as country PK, currency PKR,
 calling code +92, `timeZone: Asia/Karachi`, the Format and the alert team); the website's database and storage in the Portal
-(Website settings › Data and files; `PORTAL_CONNECTIONS_BY_HAND`: one string and one bucket for every product); every secret; and, when SB has no saved row for them
-(`BY_HAND`), the values only its deployment holds: `catalog.mediaBaseUrl` (`AWS_S3_PUBLIC_URL_BASE`),
+(Website settings › Data and files; `PORTAL_CONNECTIONS_BY_HAND`: one string and one bucket for every product, and the bucket's public address `AWS_S3_PUBLIC_URL_BASE`); every secret; and, when SB has no saved row for them
+(`BY_HAND`), the values only its deployment holds:
 `staff_alerts.adminUrl` (`ADMIN_SITE_URL`), and the public site address for `staff_links.setupPageUrl` and
 `robots_verification.sitemaps`. After E47 is built: `loyalty.memberFlag: first_order`
 together with each customer's flag from SB's `isLoyaltyMember` (left out until both exist, so no customer loses their
@@ -89,7 +89,7 @@ points). After E46: guests' saved addresses (SB keeps them on the customer; unti
   over 40, deal SEO titles over 120, activity labels over 200.
 - A member phone two SB customers share in different forms: Ecommerce merges them; Accounts keeps one user per phone and
   refuses the second member.
-- Photo addresses: keys are their paths, shown from `catalog.mediaBaseUrl`; photos on another host (Vercel Blob,
+- Photo addresses: keys are their paths, shown from the storage connection's public address (`publicBaseUrl` in the Portal); photos on another host (Vercel Blob,
   Unsplash, Pexels) need copying into the bucket first (Migration step 4, not built): check the hosts on the live copy.
 - An order whose customer is gone, a courier order without an address, totals that do not add up.
 

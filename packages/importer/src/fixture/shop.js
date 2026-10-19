@@ -63,7 +63,6 @@ export const shopSource = () => ({
 			_id: oid(35),
 			orderPrefix: 'EX-',
 			currency: 'USD',
-			imageBase: 'https://cdn.example.com',
 			// the old shop's own order statuses (each with the stage it stands for) and the moves it allowed
 			orderStatuses: [
 				{ key: 'awaiting_payment', name: 'Awaiting payment', stage: 'unpaid' },
@@ -948,7 +947,6 @@ export const SHOP_MAPPING = defineMapping({
 					// the old shop numbered orders per year: <prefix><year>-<number>
 					'checkout.numberPattern': '{prefix}{year}-{number}',
 					'checkout.numberPrefix': doc.orderPrefix,
-					'catalog.mediaBaseUrl': doc.imageBase,
 				},
 				// its own statuses and moves are the website's order flow (written before the orders)
 				...(Array.isArray(doc.orderStatuses)
