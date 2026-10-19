@@ -50,7 +50,9 @@ describe('S3 storage adapter', () => {
 			createS3Storage({ descriptor: { ...descriptor, ...extra }, websiteId: WEBSITE, slug, send: noSend, now: () => AWS_NOW });
 		// no public address: the product serves the file itself
 		expect(make({}).publicUrl('img/a.png')).toBeNull();
+		expect(make({}).hasPublicUrl).toBe(false);
 		const cdn = make({ publicBaseUrl: 'https://cdn.example.com' });
+		expect(cdn.hasPublicUrl).toBe(true);
 		expect(cdn.publicUrl('img/a.png')).toBe(`https://cdn.example.com/site/shop/${WEBSITE}/img/a.png`);
 		// a trailing slash and a path in the address are kept sensibly; every path part is URL-encoded
 		const deep = make({ publicBaseUrl: 'https://files.example.com/public//', prefix: 'my shop/' });

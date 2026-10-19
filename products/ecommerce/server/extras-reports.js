@@ -569,7 +569,7 @@ export const createReports = (product, service) => {
 			taxonomyOf(s, data),
 		]);
 		// images go out on signed links that last an hour while the storage connection has no public address (G1)
-		const shortLived = storage ? storage.publicUrl('ss-connection-test') === null : null;
+		const shortLived = storage ? !storage.hasPublicUrl : null;
 		return healthOf({
 			facets,
 			taxonomy: taxonomyHealth({

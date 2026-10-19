@@ -287,7 +287,7 @@ export const createProductInstance = (options) => {
 				landing,
 				alerts,
 				llms,
-				publicMedia: Boolean(storage?.publicUrl('ss-connection-test')),
+				publicMedia: Boolean(storage?.hasPublicUrl),
 			}),
 		};
 	};

@@ -132,6 +132,8 @@ export const createS3Storage = ({ descriptor, websiteId, slug, send, now, policy
 		kind: 'storage',
 		provider: 's3',
 		bucket: d.bucket,
+		/** Whether the connection has a public address (`publicBaseUrl`); without one the product serves files itself. */
+		hasPublicUrl: publicBase !== null,
 		/**
 		 * The public address of a file: `<publicBaseUrl>/<absolute key>` with each path part URL-encoded, or null when the
 		 * connection has no public address (the product then serves the file itself).
