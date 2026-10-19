@@ -641,6 +641,14 @@ export const PRODUCTS = Object.freeze({
 	}),
 	noWebsites: 'No website has this product yet.',
 	noFeatures: 'None',
+	info: 'The products connected to this Portal. Add one with the address it is deployed at and its connect secret. New products start inactive; only active products are offered in Add product.',
+	pageInfo:
+		'A connected product. The numbers count UTC days. Set it inactive to stop offering it in Add product: websites that have it keep working and paying.',
+	listColumns: Object.freeze({ name: 'Product', websites: 'Websites', earned: 'Earned this month' }),
+	earnedShort: 'Earned this month',
+	websitesShort: 'Websites',
+	partFeatures: 'Features and prices',
+	partConnection: 'Connection',
 });
 
 /** Admin console (PLAN 0.6 Admin menu, 0.8.2 Admin). */
@@ -1137,6 +1145,9 @@ export const MORE = Object.freeze({
 	noFeatures: 'This product reports no features.',
 	connectionTitle: 'Connection',
 	connection: Object.freeze({
+		address: 'Address',
+		connected: 'Connected',
+		reconnected: 'Reconnected',
 		productId: 'Product id',
 		version: 'Product version',
 		priceList: 'Price list',

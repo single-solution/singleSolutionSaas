@@ -28,6 +28,9 @@ export const adminRoutes = Object.freeze({
 	websiteSettings: (/** @type {string} */ m, /** @type {string} */ w) => `/admin/merchants/${e(m)}/websites/${e(w)}/settings`,
 	products: (/** @type {{ status?: string | null }} */ q = {}) => `/admin/products${query(q)}`,
 	product: (/** @type {string} */ id, /** @type {{ status?: string | null }} */ q = {}) => `/admin/products/${e(id)}${query(q)}`,
+	/** a part of a product's page: websites (the product's own address), features or connection */
+	productPart: (/** @type {string} */ id, /** @type {string} */ part) =>
+		part === 'websites' ? `/admin/products/${e(id)}` : `/admin/products/${e(id)}/${e(part)}`,
 	finance: (
 		/** @type {{ merchantId?: string | null, from?: string | null, to?: string | null, method?: string | null, by?: string | null }} */ q = {},
 	) => `/admin/finance${query(q)}`,

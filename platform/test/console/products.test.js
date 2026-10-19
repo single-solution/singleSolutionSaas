@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 /**
  * Admin Products in the browser (jsdom) against a live in-process Portal with fake products (PLAN 0.8.2 Products): the
- * list with its search and Add product (missing fields, a refused secret, an unreachable address, an id already
- * connected → "use Reconnect", a new product connected inactive), and the product page (Open as admin on Defaults with
- * no website, Set active / inactive, Reconnect, the numbers and the paged websites of a selected product).
+ * table with its search and Add product in a drawer (missing fields, a refused secret, an unreachable address, an id
+ * already connected → "use Reconnect", a new product connected inactive), and the product page (Open as admin on
+ * Defaults with no website, Set active / inactive, Reconnect, the numbers and the paged websites).
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '@ss/ui';
-import { cleanup, render } from '@ss/ui/testing';
+import { act, cleanup, render, type } from '@ss/ui/testing';
 import { closeMongoClients } from '../../src/testing.js';
 import * as admin from '../../src/console/admin/loaders.js';
 import { ProductsView } from '../../src/console/admin/views/products.js';
@@ -19,10 +19,10 @@ import {
 	buttons,
 	createWorld,
 	dialog,
-	fill,
 	fillDialog,
 	press,
 	pressDialog,
+	pressMenu,
 	productManifest,
 	quiet,
 	shows,
@@ -74,9 +74,16 @@ describe('admin Products (jsdom)', () => {
 			ownerBrowser.use();
 			withToasts(<ProductsView {...await admin.loadProducts(ownerBrowser.api, {})} admin={owner} />);
 			expect(shows('Notes') && shows('Chatty') && shows('Inactive')).toBe(true);
-			fill('Search products', 'chat');
-			expect(shows('Notes')).toBe(false);
-			fill('Search products', '');
+			const search = /** @type {HTMLInputElement} */ (document.querySelector('input[aria-label="Search products"]'));
+			await act(async () => {
+				type(search, 'chat');
+			});
+			await until(() => !shows('Notes'));
+			expect(shows('Chatty')).toBe(true);
+			await act(async () => {
+				type(search, '');
+			});
+			await until(() => shows('Notes'));
 
 			await press('Add product');
 			expect(shows('New products start inactive.')).toBe(true);
@@ -138,16 +145,14 @@ describe('admin Products (jsdom)', () => {
 			const open = vi.fn();
 			vi.stubGlobal('open', open);
 			ownerBrowser.use();
-			const list = await admin.loadProducts(ownerBrowser.api, {});
 			const loaded = await admin.loadProduct(ownerBrowser.api, 'notes');
-			/** @param {Record<string, unknown>} [over] the selected product's loader result, changed */
-			const screen = (over = {}) => (
-				<ProductsView {...list} detail={{ ...loaded, ...over }} selectedId="notes" admin={owner} />
-			);
+			/** @param {Record<string, unknown>} [over] the product's loader result, changed */
+			const screen = (over = {}) => <ProductsView detail={{ ...loaded, ...over }} admin={owner} />;
 			withToasts(screen());
-			expect(document.querySelector('a[aria-current="page"]')?.textContent).toContain('Notes');
-			expect(shows('Credits earned this month (UTC)') && shows('Websites using it')).toBe(true);
-			expect(shows(notes.url)).toBe(true);
+			expect(document.querySelector('nav[aria-label="Product sections"] a[aria-current="page"]')?.textContent).toContain(
+				'Websites using it',
+			);
+			expect(shows('Earned this month') && shows('Websites')).toBe(true);
 
 			// Open as admin: Defaults, no website picked
 			await press('Open as admin');
@@ -167,8 +172,7 @@ describe('admin Products (jsdom)', () => {
 			await until(() => shows('The product is active'));
 
 			// Reconnect (in the header's More menu): the secret is required; a wrong one is refused; the same id reconnects
-			await press('More actions for Notes');
-			await press('Reconnect');
+			await pressMenu('More actions', 'Reconnect');
 			expect(shows('New product URL (optional)')).toBe(true);
 			await pressDialog('Reconnect');
 			expect(shows('Enter the connect secret.')).toBe(true);
@@ -181,10 +185,14 @@ describe('admin Products (jsdom)', () => {
 			await until(() => shows('Reconnected.'));
 			expect(shows('Reconnected')).toBe(true);
 
-			// Websites using it (on the same page): merchant, domain, status, features on, daily cost; the domain opens its
-			// website card on the merchant's page
+			// Websites using it (the page's first part): domain with its merchant, status, features on, daily cost; the
+			// domain opens its website card on the merchant's page
 			expect(shows('shop.example.com') && shows('Shop & Co') && shows('Notes')).toBe(true);
 			expect(document.querySelector(`a[href="/admin/merchants/${merchantId}/websites/${site.websiteId}"]`)).not.toBeNull();
+			cleanup();
+			// the connection part has the address
+			withToasts(<ProductsView detail={loaded} section="connection" admin={owner} />);
+			expect(shows(notes.url)).toBe(true);
 			cleanup();
 
 			// the next page of websites, and failures (a stubbed Portal)
@@ -206,17 +214,15 @@ describe('admin Products (jsdom)', () => {
 				return new Response(JSON.stringify({ items: [more], cursor: null }), { status: 200 });
 			});
 			if (!loaded.ok) throw new Error('product');
+			// a short page with more on the server loads the next batch by itself
 			withToasts(screen({ websites: { items: loaded.websites.items, cursor: 'next-page' } }));
-			await press('Load more');
 			await until(() => shows('more.example.com'));
 			expect(asked.at(-1)).toEqual({ url: '/v1/admin/products/notes/websites?cursor=next-page', method: 'GET' });
-			expect(buttons('Load more')).toHaveLength(0);
 			cleanup();
 			failing = true;
 			withToasts(screen({ websites: { items: [], cursor: 'next-page' } }));
-			expect(shows('No website has this product yet.')).toBe(true);
-			await press('Load more');
 			await until(() => shows('Something went wrong on our side.'));
+			expect(shows('No website has this product yet.')).toBe(true);
 			await press('Open as admin');
 			await until(() => buttons('Open as admin').length === 1 && !button('Open as admin').disabled);
 			expect(open).toHaveBeenCalledTimes(1);

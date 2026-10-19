@@ -66,6 +66,24 @@ export const productStatusLabel = ({ status, featuresOn = [] }) =>
 		: (BILLING.productStatus[/** @type {'active' | 'grace' | 'stopped' | 'suspended'} */ (status)] ?? status);
 
 /**
+ * The pill of a product-on-website status (Active green, In grace amber, Stopped and Suspended red, gray when no
+ * feature is on).
+ * @param {{ status: string, featuresOn?: readonly string[] }} card
+ * @returns {{ status: 'active' | 'warning' | 'error' | 'off', label: string }}
+ */
+export const productPill = (card) => ({
+	status: {
+		success: /** @type {const} */ ('active'),
+		warning: /** @type {const} */ ('warning'),
+		danger: /** @type {const} */ ('error'),
+		neutral: /** @type {const} */ ('off'),
+		primary: /** @type {const} */ ('active'),
+		info: /** @type {const} */ ('active'),
+	}[productTone(card)],
+	label: productStatusLabel(card),
+});
+
+/**
  * Product-on-website status badge.
  * @param {{ status: string, featuresOn?: readonly string[] }} props
  */

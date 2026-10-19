@@ -32,7 +32,6 @@ import {
 	clickEl,
 	createWorld,
 	dialog,
-	openSection,
 	openTab,
 	press,
 	pressDialog,
@@ -73,12 +72,6 @@ const menu = (label) => clickEl(/** @type {Element} */ (document.querySelector(`
 /** @param {string} label */
 const menuItem = (label) =>
 	/** @type {HTMLButtonElement} */ ([...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === label));
-
-/** Open the header's More menu (⋯) and choose an action. @param {string} name @param {string} label */
-const choose = async (name, label) => {
-	await menu(`More actions for ${name}`);
-	await clickEl(menuItem(label));
-};
 
 /** @param {string} label @param {string} value */
 const pick = (label, value) => type(byLabel(document, label), value);
@@ -221,18 +214,24 @@ describe('fuller Portal screens (jsdom)', () => {
 			keydown(document, 'Escape');
 			cleanup();
 
-			// ---------------------------------------------------------------- Products: features, connection, sort, menu
-			const products = await admin.loadProductsScreen(ownerBrowser.api, {});
-			if (!products.ok || !('detail' in products) || !products.detail.ok) throw new Error('products');
-			const baseUrl = String(products.detail.product.baseUrl);
+			// ---------------------------------------------------------------- Products: sort, features, connection, menu
+			const products = await admin.loadProducts(ownerBrowser.api, {});
+			if (!products.ok) throw new Error('products');
 			withToasts(<ProductsView {...products} admin={owner} />);
-			await openTab('Features and prices');
+			await pressMenu('Sort', 'Credits this month');
+			await pressMenu('Sort', 'Websites');
+			cleanup();
+			const oneProduct = await admin.loadProduct(ownerBrowser.api, String(products.items[0]?.productId));
+			if (!oneProduct.ok) throw new Error('product');
+			const baseUrl = String(oneProduct.product.baseUrl);
+			withToasts(<ProductsView detail={oneProduct} section="features" admin={owner} />);
 			expect(shows('Notes inbox')).toBe(true);
-			await openTab('Connection');
+			expect(document.querySelector(`a[href$="/connection"]`)).not.toBeNull();
+			cleanup();
+			withToasts(<ProductsView detail={oneProduct} section="connection" admin={owner} />);
 			expect(shows('Version 5') && shows(`${baseUrl}/docs`)).toBe(true);
-			await pick('Sort', 'earned');
-			await pick('Sort', 'websites');
-			await choose('Notes', 'Copy address');
+			await menu('More actions');
+			await clickEl(menuItem('Copy address'));
 			await until(() => shows('Copied.'));
 			expect(writeText).toHaveBeenCalledWith(baseUrl);
 			cleanup();

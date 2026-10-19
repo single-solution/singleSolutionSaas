@@ -210,20 +210,7 @@ export const loadProducts = async (api, filter = {}) => {
 };
 
 /**
- * The Products screen with no product in the URL: the list (by name) and, when it has products, the first one, which
- * wide screens open by default.
- * @param {ConsoleApi} api
- * @param {{ status?: string }} filter
- */
-export const loadProductsScreen = async (api, filter) => {
-	const list = await loadProducts(api, filter);
-	const first = list.ok ? list.items[0] : undefined;
-	if (!list.ok || !first) return list;
-	return { ...list, detail: await loadProduct(api, String(first.productId)), auto: true };
-};
-
-/**
- * The selected product of the Products screen: the product (address, connected date, features with prices, numbers)
+ * A product's page: the product (address, connected date, features with prices, numbers)
  * and the first page of its websites.
  * @param {ConsoleApi} api
  * @param {string} productId

@@ -207,24 +207,22 @@ describe('admin console smoke', () => {
 			const missingMerchant = await admin.loadMerchant(ownerBrowser.api, 'mer_0000000000000000000000000z', owner);
 			expect(text(ssr(<MerchantsView detail={missingMerchant} admin={owner} />))).toContain('Not found');
 
-			// ------------------------------------------------------------------ Products: the list, then a product selected
+			// ------------------------------------------------------------------ Products: the list, then a product's page
 			const products = await admin.loadProducts(ownerBrowser.api, { status: 'bogus' });
 			expect(products.ok && products.filter).toEqual({ status: null });
-			const productsHtml = text(ssr(<ProductsView {...products} admin={owner} />));
-			expect(productsHtml).toContain('Add product');
-			expect(productsHtml).toContain('Notes');
-			expect(productsHtml).toContain('Chatty');
-			expect(productsHtml).toContain('1 website');
-			expect(productsHtml).toContain('No products connected yet.'); // no product in the props: the empty side
-			const productsScreen = await admin.loadProductsScreen(ownerBrowser.api, {});
-			// by name: Chatty opens by default
-			expect(productsScreen).toMatchObject({ ok: true, auto: true, detail: { ok: true, product: { productId: 'chatty' } } });
+			const productsRaw = ssr(<ProductsView {...products} admin={owner} />);
+			const productsHtml = text(productsRaw);
+			for (const word of ['Add product', 'Notes', 'Chatty', 'Earned this month', 'Websites'])
+				expect(productsHtml).toContain(word);
+			// a table: the rows open the product's page; by name: Chatty comes first
+			expect(productsRaw).toContain('href="/admin/products/notes"');
+			expect(productsHtml.indexOf('Chatty')).toBeLessThan(productsHtml.indexOf('Notes'));
 			expect(products.ok && products.items.map((p) => p.name)).toEqual(['Chatty', 'Notes']);
-			const screenRaw = ssr(<ProductsView {...productsScreen} admin={owner} />);
-			expect(text(screenRaw)).toContain('Set active');
-			expect(screenRaw).not.toContain('aria-current="page"');
-			const noProducts = await admin.loadProductsScreen(ownerBrowser.api, { status: 'bogus' });
-			expect(noProducts).toHaveProperty('ok', true);
+			// nothing connected yet, and nothing found with a filter
+			expect(text(ssr(<ProductsView {...products} items={[]} admin={owner} />))).toContain('No products connected yet.');
+			expect(text(ssr(<ProductsView {...products} items={[]} filter={{ status: 'active' }} admin={owner} />))).toContain(
+				'No products found.',
+			);
 			const active = await admin.loadProducts(ownerBrowser.api, { status: 'active' });
 			expect(active.ok && active.items.map((p) => p.productId)).toEqual(['notes']);
 			const product = await admin.loadProduct(ownerBrowser.api, 'notes');
@@ -232,31 +230,37 @@ describe('admin console smoke', () => {
 			expect(product.websites.items).toMatchObject([
 				{ domain: 'shop.example.com', merchantName: 'Shop & Co', featuresOn: ['notes'] },
 			]);
-			const productRaw = ssr(<ProductsView {...products} detail={product} selectedId="notes" admin={owner} />);
+			const productRaw = ssr(<ProductsView detail={product} admin={owner} />);
 			const productHtml = text(productRaw);
-			for (const word of ['Open as admin', 'Set inactive', 'Connected', 'Websites using it', 'Shop & Co'])
+			for (const word of ['Open as admin', 'Set inactive', 'Websites using it', 'Shop & Co', 'Earned this month'])
 				expect(productHtml).toContain(word);
-			// the product's parts are tabs; the first (websites) is on the page
-			expect(productRaw).toContain('role="tab"');
-			// two actions as buttons; Reconnect in the header's More menu (PLAN 0.6 header actions)
-			expect(productRaw).toContain('aria-label="More actions for Notes"');
-			// the address once (the subtitle; the Connection tab is not open), and one line instead of an empty 30-day chart
-			expect(productHtml.split(String(product.product.baseUrl)).length - 1).toBe(1);
+			// the product's parts are in the inner navigation, each its own address
+			expect(productRaw).toContain('aria-label="Product sections"');
+			expect(productRaw).toContain('href="/admin/products/notes/features"');
+			expect(productRaw).toContain('href="/admin/products/notes/connection"');
+			// two actions as buttons; Copy address and Reconnect in the header's More menu (PLAN 0.6 header actions)
+			expect(productRaw).toContain('aria-label="More actions"');
+			// the address only on the Connection part; no empty 30-day chart, the fact says why
+			expect(productHtml).not.toContain(String(product.product.baseUrl));
 			for (const word of ['Features and prices', 'Connection']) expect(productHtml).toContain(word);
 			expect(productHtml).not.toContain('Product version');
-			expect(productHtml).toContain('No credits earned in the last 30 UTC days.');
+			expect(productRaw).toContain('title="No credits earned in the last 30 UTC days."');
 			expect(productHtml).not.toContain('Credits earned per UTC day (last 30 days)');
 			expect(productRaw).toContain('title="shop.example.com"');
 			expect(productRaw).toContain(`href="/admin/merchants/${merchantId}/websites/${websiteId}"`);
+			const featuresHtml = text(ssr(<ProductsView detail={product} section="features" admin={owner} />));
+			expect(featuresHtml).toContain('Per hour');
+			expect(featuresHtml).not.toContain('Shop & Co');
+			const connectionHtml = text(ssr(<ProductsView detail={product} section="connection" admin={owner} />));
+			for (const word of ['Product version', 'Price list', String(product.product.baseUrl)])
+				expect(connectionHtml).toContain(word);
 			const chatty = await admin.loadProduct(ownerBrowser.api, 'chatty');
-			const chattyHtml = text(ssr(<ProductsView {...products} detail={chatty} selectedId="chatty" admin={owner} />));
+			const chattyHtml = text(ssr(<ProductsView detail={chatty} admin={owner} />));
 			expect(chattyHtml).toContain('Set active');
-			expect(chattyHtml).toContain('Credits earned this month (UTC)');
+			expect(chattyHtml).toContain('Inactive');
 			const unknown = await admin.loadProduct(ownerBrowser.api, 'nothing-here');
 			expect(unknown.ok).toBe(false);
-			expect(text(ssr(<ProductsView {...products} detail={unknown} selectedId="nothing-here" admin={owner} />))).toContain(
-				'Not found',
-			);
+			expect(text(ssr(<ProductsView detail={unknown} admin={owner} />))).toContain('Not found');
 
 			// ------------------------------------------------------------------ the other pages
 			const activity = await admin.loadActivity(ownerBrowser.api, { merchantId, adminId: '<bad>', from: 'x' });
@@ -381,17 +385,12 @@ describe('admin console smoke', () => {
 			expect(supportProductsHtml).toContain('Notes');
 			expect(supportProductsHtml).not.toContain('Add product');
 			const supportProductRaw = ssr(
-				<ProductsView
-					{...supportProducts}
-					detail={await admin.loadProduct(supportBrowser.api, 'notes')}
-					selectedId="notes"
-					admin={support}
-				/>,
+				<ProductsView detail={await admin.loadProduct(supportBrowser.api, 'notes')} admin={support} />,
 			);
 			const supportProduct = text(supportProductRaw);
 			expect(supportProduct).toContain('Websites using it');
 			for (const word of ['Open as admin', 'Set inactive']) expect(supportProduct).not.toContain(word);
-			expect(supportProductRaw).not.toContain('More actions for'); // no Reconnect
+			expect(supportProductRaw).not.toContain('More actions'); // no Reconnect
 
 			// Finance: products and usage only; no Install and tokens, no Open, no admin actions
 			const financeDetail = await admin.loadMerchant(financeBrowser.api, merchantId, finance);
@@ -437,6 +436,8 @@ describe('admin console smoke', () => {
 		expect(adminRoutes.merchantPart('mer_1', 'credits')).toBe('/admin/merchants/mer_1/credits');
 		expect(adminRoutes.product('notes', { status: 'active' })).toBe('/admin/products/notes?status=active');
 		expect(adminRoutes.product('notes')).toBe('/admin/products/notes');
+		expect(adminRoutes.productPart('notes', 'websites')).toBe('/admin/products/notes');
+		expect(adminRoutes.productPart('notes', 'features')).toBe('/admin/products/notes/features');
 		expect(adminRoutes.admin('adm_1')).toBe('/admin/admins/adm_1');
 		expect(adminRoutes.products({ status: 'active' })).toBe('/admin/products?status=active');
 		expect(adminApi.productWebsites('notes', 'abc')).toBe('/v1/admin/products/notes/websites?cursor=abc');

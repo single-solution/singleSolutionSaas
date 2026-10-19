@@ -1,17 +1,13 @@
-import { loadProduct, loadProducts } from '../../../../src/console/admin/loaders.js';
+import { loadProduct } from '../../../../src/console/admin/loaders.js';
 import { ProductsView } from '../../../../src/console/admin/views/products.js';
-import { adminContext, one } from '../../_lib/server.js';
+import { adminContext } from '../../_lib/server.js';
 
-export const metadata = { title: 'Products' };
+export const metadata = { title: 'Product' };
 
-/** The Products screen with a product selected. */
-/**
- * @param {{ params: Promise<{ productId: string }>, searchParams: Promise<Record<string, string | string[] | undefined>> }} props
- */
-export default async function ProductPage({ params, searchParams }) {
+/** A product's page, on its Websites part (the product's own address). */
+/** @param {{ params: Promise<{ productId: string }> }} props */
+export default async function ProductPage({ params }) {
 	const { productId } = await params;
-	const q = await searchParams;
 	const { api, admin } = await adminContext(`/admin/products/${productId}`);
-	const [list, detail] = await Promise.all([loadProducts(api, { status: one(q.status) }), loadProduct(api, productId)]);
-	return <ProductsView {...list} detail={detail} selectedId={productId} admin={admin} />;
+	return <ProductsView detail={await loadProduct(api, productId)} section="websites" admin={admin} />;
 }
