@@ -22,7 +22,9 @@ import {
 	Button,
 	Card,
 	Checkbox,
-	Dialog,
+	DataTable,
+	DataTableSkeleton,
+	Drawer,
 	EntryGroup,
 	FieldGrid,
 	Icon,
@@ -30,11 +32,9 @@ import {
 	Input,
 	SeoPreview,
 	Select,
+	StatusPill,
 	TextArea,
 	cx,
-	Paged,
-	ListRow,
-	RowList,
 } from '@ss/ui';
 import { DURATION_MAX, DURATION_UNITS } from '../../core/durations.js';
 import { asWritten, fillTitle, metaDescription, patternText } from '../../core/seo-text.js';
@@ -426,166 +426,158 @@ function GradeFields({ draft, set, problems, tried, preview }) {
 }
 
 /**
- * A grade's line in the list: swatch, name and key, condition, days and categories, and its actions.
- * @param {{ grade: GradeDraft, index: number, count: number, onEdit: () => void, onMove: (step: number) => void,
- *   onRemove: () => void }} props
+ * The columns of the grades table: swatch and name, key, condition, return and warranty times, what it is for, and a pill
+ * for a grade that is not offered.
+ * @type {Array<{ key: string, header: string, low?: boolean, render: (row: { grade: GradeDraft, index: number }) => import('react').ReactNode }>}
  */
-function GradeRow({ grade, index, count, onEdit, onMove, onRemove }) {
-	const name = grade.label.trim() || G.unnamed;
-	/** @param {string} days */
-	/** @param {string} amount @param {GradeDraft['returnUnit']} unit */
-	const daysText = (amount, unit) =>
-		amount.trim() === '' ? G.daysSetting : fill(G.daysCount, { amount: amount.trim(), unit: G.units[unit] });
-	const facts = [
-		...(grade.categoryId.trim() ? [fill(G.categoryIdFor, { id: grade.categoryId.trim() })] : []),
-		G.conditions[grade.condition],
-		fill(G.days, {
-			returns: daysText(grade.returnTime, grade.returnUnit),
-			warranty: daysText(grade.warrantyTime, grade.warrantyUnit),
-		}),
-		grade.categoryIds.length === 0 ? G.categoriesAll : fill(G.categoriesSome, { count: grade.categoryIds.length }),
-		grade.typeKeys.length === 0 ? G.typesAll : grade.typeKeys.join(', '),
-	];
-	return (
-		<ListRow
-			wrap
-			media={<Swatch color={grade.color.trim()} label={grade.color.trim() || G.colorNone} />}
-			title={name}
-			status={
-				<>
-					<code className="text-xs text-muted">{keyOf(grade.key, grade.label)}</code>
-					{grade.active ? null : <Badge>{G.notOffered}</Badge>}
-				</>
-			}
-			meta={facts.join(' · ')}
-			action={
-				<Button size="sm" variant="secondary" onClick={onEdit}>
-					{G.edit}
-				</Button>
-			}
-			moreLabel={fill(G.more, { grade: name })}
-			more={[
-				{ label: L.up, disabled: index === 0, onSelect: () => onMove(-1) },
-				{ label: L.down, disabled: index === count - 1, onSelect: () => onMove(1) },
-				{ label: L.remove, danger: true, onSelect: onRemove },
-			]}
-		/>
-	);
-}
+const COLUMNS = [
+	{
+		key: 'name',
+		header: L.columns.name,
+		render: ({ grade }) => (
+			<span className="flex items-center gap-2">
+				<Swatch size="sm" color={grade.color.trim()} label={grade.color.trim() || G.colorNone} />
+				{grade.label.trim() || G.unnamed}
+			</span>
+		),
+	},
+	{ key: 'key', header: L.columns.key, render: ({ grade }) => <code>{keyOf(grade.key, grade.label)}</code> },
+	{ key: 'condition', header: L.columns.condition, render: ({ grade }) => G.conditions[grade.condition] },
+	{
+		key: 'terms',
+		header: L.columns.terms,
+		low: true,
+		render: ({ grade }) => {
+			/** @param {string} amount @param {GradeDraft['returnUnit']} unit */
+			const daysText = (amount, unit) =>
+				amount.trim() === '' ? G.daysSetting : fill(G.daysCount, { amount: amount.trim(), unit: G.units[unit] });
+			return fill(G.days, {
+				returns: daysText(grade.returnTime, grade.returnUnit),
+				warranty: daysText(grade.warrantyTime, grade.warrantyUnit),
+			});
+		},
+	},
+	{
+		key: 'appliesTo',
+		header: L.columns.appliesTo,
+		low: true,
+		render: ({ grade }) =>
+			[
+				...(grade.categoryId.trim() ? [fill(G.categoryIdFor, { id: grade.categoryId.trim() })] : []),
+				grade.categoryIds.length === 0 ? G.categoriesAll : fill(G.categoriesSome, { count: grade.categoryIds.length }),
+				grade.typeKeys.length === 0 ? G.typesAll : grade.typeKeys.join(', '),
+			].join(' · '),
+	},
+	{
+		key: 'status',
+		header: L.columns.active,
+		render: ({ grade }) => (grade.active ? null : <StatusPill status="off">{G.notOffered}</StatusPill>),
+	},
+];
 
-/** What the dialog edits: which grade (null = a new one), the working copy, whether Done was pressed. */
+/** What the drawer edits: which grade (null = a new one), the working copy, whether Done was pressed. */
 /** @typedef {{ open: boolean, index: number | null, draft: GradeDraft, tried: boolean }} Editing */
 
 /**
- * Condition grades (`grades`, feature grades_serials): the list, and each grade's fields in a dialog.
- * @param {{ websiteId: string, off?: boolean, preview?: GradePreview }} props `preview`: the settings of the glossary
- *   page preview
+ * Condition grades (`grades`, feature grades_serials): the table, and each grade's fields in a drawer.
+ * @param {{ websiteId: string, off?: boolean, bare?: boolean, preview?: GradePreview }} props `preview`: the settings of
+ *   the glossary page preview; `bare`: the page already says the title, so the card has none
  */
-export function GradesEditor({ websiteId, off, preview }) {
+export function GradesEditor({ websiteId, off, bare = false, preview }) {
 	const state = useList(websiteId, 'grades');
 	const [editing, setEditing] = useState(
 		/** @type {Editing} */ ({ open: false, index: null, draft: blankGrade(), tried: false }),
 	);
+	const data = state.answer?.ok ? state.answer.data : null;
+	/** @type {GradeDraft[]} */
+	const items = state.draft ?? (Array.isArray(data?.value) ? data.value : []).map(loadGrade);
+	/** @param {GradeDraft[]} next */
+	const setItems = (next) => state.setDraft(next);
+	// a key is taken by another grade for the same category, or for every category (E45)
+	const otherKeys = items
+		.filter((grade, at) => at !== editing.index && grade.categoryId.trim() === editing.draft.categoryId.trim())
+		.map((grade) => keyOf(grade.key, grade.label));
+	const problems = gradeProblems(editing.draft, otherKeys);
+	/** @param {number | null} index @param {GradeDraft} draft */
+	const open = (index, draft) => setEditing({ open: true, index, draft, tried: false });
+	const close = () => setEditing({ ...editing, open: false });
+	const done = () => {
+		if (Object.keys(problems).length > 0) return setEditing({ ...editing, tried: true });
+		setItems(
+			editing.index === null
+				? [...items, editing.draft]
+				: items.map((grade, at) => (at === editing.index ? editing.draft : grade)),
+		);
+		close();
+	};
 	return (
-		<Card title={G.title} subtitle={off ? TEXTS.settings.off : `${G.help} ${fill(L.max, { max: GRADE_LIMITS.grades })}`}>
-			<Loaded answer={state.answer}>
-				{(data) => {
-					/** @type {GradeDraft[]} */
-					const items = state.draft ?? (Array.isArray(data.value) ? data.value : []).map(loadGrade);
-					/** @param {GradeDraft[]} next */
-					const setItems = (next) => state.setDraft(next);
-					// a key is taken by another grade for the same category, or for every category (E45)
-					const otherKeys = items
-						.filter((grade, at) => at !== editing.index && grade.categoryId.trim() === editing.draft.categoryId.trim())
-						.map((grade) => keyOf(grade.key, grade.label));
-					const problems = gradeProblems(editing.draft, otherKeys);
-					/** @param {number | null} index @param {GradeDraft} draft */
-					const open = (index, draft) => setEditing({ open: true, index, draft, tried: false });
-					const close = () => setEditing({ ...editing, open: false });
-					const done = () => {
-						if (Object.keys(problems).length > 0) return setEditing({ ...editing, tried: true });
-						setItems(
-							editing.index === null
-								? [...items, editing.draft]
-								: items.map((grade, at) => (at === editing.index ? editing.draft : grade)),
-						);
-						close();
-					};
-					return (
-						<div className="space-y-4">
-							{items.length === 0 ? (
-								<p className="text-sm text-muted">{L.none}</p>
-							) : (
-								<Paged
-									items={items.map((grade, index) => ({ grade, index }))}
-									pageSize={8}
-									text={(entry) => entry.grade.label}>
-									{(page) => (
-										<RowList>
-											{page.map(({ grade, index }) => (
-												<GradeRow
-													key={index}
-													grade={grade}
-													index={index}
-													count={items.length}
-													onEdit={() => open(index, grade)}
-													onMove={(step) => setItems(moved(items, index, step))}
-													onRemove={() => setItems(items.filter((_, at) => at !== index))}
-												/>
-											))}
-										</RowList>
-									)}
-								</Paged>
-							)}
-							<ListActions
-								dirty={state.draft !== null}
-								onCancel={() => state.setDraft(null)}
-								onSave={() => state.save(items.map(cleanGrade))}>
-								<Button
-									size="sm"
-									variant="secondary"
-									disabled={items.length >= GRADE_LIMITS.grades}
-									onClick={() => open(null, blankGrade())}>
-									{G.add}
-								</Button>
-								{state.draft !== null ? (
-									<Badge tone="warning" dot className="self-center">
-										{G.unsaved}
-									</Badge>
-								) : null}
-							</ListActions>
-							<ListOutcome result={state.result} local={state.local} />
-							<Dialog
-								open={editing.open}
-								onClose={close}
-								size="lg"
-								title={
-									editing.index === null
-										? G.newTitle
-										: fill(G.editTitle, { grade: editing.draft.label.trim() || G.unnamed })
-								}
-								description={G.dialogHelp}
-								closeLabel={TEXTS.cancel}
-								footer={
-									<>
-										<Button variant="secondary" onClick={close}>
-											{TEXTS.cancel}
-										</Button>
-										<Button onClick={done}>{G.done}</Button>
-									</>
-								}>
-								<GradeFields
-									draft={editing.draft}
-									tried={editing.tried}
-									problems={problems}
-									preview={preview}
-									set={(patch) => setEditing((now) => ({ ...now, draft: { ...now.draft, ...patch } }))}
-								/>
-							</Dialog>
-						</div>
-					);
-				}}
-			</Loaded>
+		<Card
+			{...(bare ? {} : { title: G.title })}
+			subtitle={off ? TEXTS.settings.off : `${G.help} ${fill(L.max, { max: GRADE_LIMITS.grades })}`}
+			actions={
+				<Button size="sm" disabled={!data || items.length >= GRADE_LIMITS.grades} onClick={() => open(null, blankGrade())}>
+					<Icon name="plus" size={14} />
+					{G.add}
+				</Button>
+			}>
+			<div className="space-y-4">
+				<Loaded answer={state.answer} skeleton={<DataTableSkeleton columns={COLUMNS.length} rows={4} menu />}>
+					{() => (
+						<DataTable
+							caption={G.title}
+							className="max-h-[36rem]"
+							columns={COLUMNS}
+							rows={items.map((grade, index) => ({ grade, index }))}
+							rowKey={(row) => String(row.index)}
+							rowLabel={(row) => row.grade.label.trim() || G.unnamed}
+							onRowClick={(row) => open(row.index, row.grade)}
+							rowMenu={(row) => [
+								{ label: L.up, disabled: row.index === 0, onSelect: () => setItems(moved(items, row.index, -1)) },
+								{
+									label: L.down,
+									disabled: row.index === items.length - 1,
+									onSelect: () => setItems(moved(items, row.index, 1)),
+								},
+								{
+									label: L.remove,
+									danger: true,
+									onSelect: () => setItems(items.filter((_, at) => at !== row.index)),
+								},
+							]}
+							empty={L.none}
+						/>
+					)}
+				</Loaded>
+				<ListActions
+					dirty={state.draft !== null}
+					onCancel={() => state.setDraft(null)}
+					onSave={() => state.save(items.map(cleanGrade))}
+				/>
+				<ListOutcome result={state.result} local={state.local} />
+			</div>
+			<Drawer
+				open={editing.open}
+				onClose={close}
+				size="lg"
+				title={editing.index === null ? G.newTitle : fill(G.editTitle, { grade: editing.draft.label.trim() || G.unnamed })}
+				description={G.dialogHelp}
+				closeLabel={TEXTS.cancel}
+				footer={
+					<>
+						<Button variant="secondary" onClick={close}>
+							{TEXTS.cancel}
+						</Button>
+						<Button onClick={done}>{G.done}</Button>
+					</>
+				}>
+				<GradeFields
+					draft={editing.draft}
+					tried={editing.tried}
+					problems={problems}
+					preview={preview}
+					set={(patch) => setEditing((now) => ({ ...now, draft: { ...now.draft, ...patch } }))}
+				/>
+			</Drawer>
 		</Card>
 	);
 }

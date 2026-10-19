@@ -97,7 +97,7 @@ const useShop = (websiteId) => {
 /** The grades, with a preview of the glossary page they make. @param {{ websiteId: string }} props */
 function Grades({ websiteId }) {
 	const { features, website } = useShop(websiteId);
-	return <GradesEditor websiteId={websiteId} off={false} preview={gradePreview(features, website)} />;
+	return <GradesEditor websiteId={websiteId} off={false} bare preview={gradePreview(features, website)} />;
 }
 
 /**

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The condition grade dialog shows the grade's glossary page as a search result and a share card (R7 #105), with the
+ * The condition grade drawer shows the grade's glossary page as a search result and a share card (R7 #105), with the
  * title pattern, the grade patterns and the fallbacks the server uses, redrawn as the merchant types.
  */
 import { act } from 'react';
