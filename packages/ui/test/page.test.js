@@ -185,6 +185,21 @@ describe('Page header', () => {
 		expect(container.textContent).not.toContain('Everyone who pays');
 	});
 
+	it('stays open for another key and for a click inside it', () => {
+		const { container } = render(
+			<Page crumbs={[{ label: 'Merchants' }]} info={<span data-testid="note">Everyone who pays for a website.</span>}>
+				x
+			</Page>,
+		);
+		click(/** @type {HTMLElement} */ (container.querySelector(`button[aria-label="${PAGE_TEXTS.info}"]`)));
+		keydown(document, 'Tab');
+		expect(container.textContent).toContain('Everyone who pays');
+		act(() => {
+			container.querySelector('[data-testid="note"]')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+		});
+		expect(container.textContent).toContain('Everyone who pays');
+	});
+
 	it('has no (i) without info', () => {
 		const { container } = render(<Page crumbs={[{ label: 'Merchants' }]}>x</Page>);
 		expect(container.querySelector(`button[aria-label="${PAGE_TEXTS.info}"]`)).toBeNull();
