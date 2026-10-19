@@ -8,6 +8,7 @@
 import { deepFreeze } from '../util.js';
 import { SCHEMA_IDS } from './schema-ids.js';
 import { commonRef as ref } from './common.js';
+import { AI_PROVIDERS } from '../connections.js';
 
 const draft = 'https://json-schema.org/draft/2020-12/schema';
 
@@ -170,15 +171,16 @@ export const directoryListSchema = deepFreeze({
 const MONGODB_URI = '^mongodb(?:\\+srv)?://\\S+$';
 
 /**
- * `GET /v1/product/websites/:websiteId/connections` answer (never cached): the website's database and storage and the
- * product's links. A value that is not set is null.
+ * `GET /v1/product/websites/:websiteId/connections` answer (never cached): the website's database and storage, what is
+ * shared (the AI provider key, only for a product whose manifest says `needs.ai`) and the product's links. A value that is
+ * not set is null.
  */
 export const websiteConnectionsSchema = deepFreeze({
 	$schema: draft,
 	$id: SCHEMA_IDS.websiteConnections,
 	title: 'Website connections',
 	type: 'object',
-	required: ['version', 'database', 'storage', 'links'],
+	required: ['version', 'database', 'storage', 'shared', 'links'],
 	additionalProperties: false,
 	properties: {
 		version: ref('count'),
@@ -212,6 +214,29 @@ export const websiteConnectionsSchema = deepFreeze({
 					},
 				},
 			],
+		},
+		shared: {
+			type: 'object',
+			required: ['ai'],
+			additionalProperties: false,
+			properties: {
+				ai: {
+					anyOf: [
+						{ type: 'null' },
+						{
+							type: 'object',
+							required: ['provider', 'apiKey', 'model'],
+							additionalProperties: false,
+							properties: {
+								provider: { enum: [...AI_PROVIDERS] },
+								apiKey: { type: 'string', minLength: 1, maxLength: 512 },
+								model: { type: 'string', minLength: 1, maxLength: 120 },
+								baseUrl: ref('url'),
+							},
+						},
+					],
+				},
+			},
 		},
 		links: {
 			type: 'object',

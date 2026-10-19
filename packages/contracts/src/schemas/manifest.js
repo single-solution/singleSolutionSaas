@@ -46,13 +46,13 @@ export const manifestSchema = deepFreeze({
 			additionalProperties: false,
 			properties: { requires: { type: 'array', maxItems: 20, items: { type: 'string', maxLength: 64 } } },
 		},
-		// what the product needs of the website's connections (Portal › Website settings › Data and files): a database and a
-		// bucket. A product that says nothing needs a database and no storage
+		// what the product needs of the website's connections (Portal › Website settings › Data and files): a database, a
+		// bucket and the website's AI provider key. A product that says nothing needs a database, no storage and no AI key
 		needs: {
 			type: 'object',
 			required: ['database', 'storage'],
 			additionalProperties: false,
-			properties: { database: { type: 'boolean' }, storage: { enum: [...STORAGE_NEEDS] } },
+			properties: { database: { type: 'boolean' }, storage: { enum: [...STORAGE_NEEDS] }, ai: { type: 'boolean' } },
 		},
 		// the links to other products on the website: what this product offers them and what it needs from them
 		links: {

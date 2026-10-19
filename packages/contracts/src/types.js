@@ -98,8 +98,8 @@
  * @property {ManifestWidget[]} widgets
  * @property {{ requires: string[] }} [websiteSettings] what the product needs the website's settings (Portal) to say, as
  *   dotted paths into the document (`region.currency`, `business.address.city`)
- * @property {{ database: boolean, storage: 'none' | 'optional' | 'required' }} [needs] what the product needs of the
- *   website's connections (default: a database, no storage)
+ * @property {{ database: boolean, storage: 'none' | 'optional' | 'required', ai?: boolean }} [needs] what the product
+ *   needs of the website's connections (default: a database, no storage, no AI key)
  * @property {{ offers?: ManifestLinkOffer[], needs?: ManifestLinkNeed[] }} [links] the links to other products
  */
 
@@ -148,12 +148,14 @@
  * What a product fetches from `GET /v1/product/websites/:id/connections`: the website's database (the same connection
  * string for every product, with the product's own `dbName`), its storage, and the product's links (`out`: keys to call
  * other products with and what each may do; `in`: who may call this product and with which scopes). Secrets: sealed by
- * the product on arrival, never served back.
+ * the product on arrival, never served back. `shared` holds what is one value for every product that needs it: `ai`, the
+ * website's AI provider key, is given only to a product whose manifest says `needs.ai` (null to the others and when none is set).
  * @typedef {object} WebsiteConnections
  * @property {number} version
  * @property {{ uri: string, dbName: string } | null} database
  * @property {{ bucket: string, region: string, accessKeyId: string, secretAccessKey: string, endpoint?: string,
  *   forcePathStyle?: boolean, prefix?: string, publicBaseUrl?: string } | null} storage
+ * @property {{ ai: { provider: import('./connections.js').AiProvider, apiKey: string, model: string, baseUrl?: string } | null }} shared
  * @property {{ out: Array<{ to: string, token: string, scopes: string[] }>, in: Array<{ from: string, scopes: string[] }> }} links
  */
 /** A product's report of how a delivered connection worked: `PUT …/connections/:name/health`. @typedef {{ version: number, ok: boolean, message?: string }} ConnectionHealth */

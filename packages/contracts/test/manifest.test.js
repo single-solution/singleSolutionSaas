@@ -142,6 +142,16 @@ describe('validateManifest', () => {
 			expect(validateManifest(value).ok).toBe(true);
 		});
 
+		it('lets a product say it needs the AI key of the website (absent means it does not)', () => {
+			const value = manifest();
+			value.needs = { database: true, storage: 'none', ai: true };
+			expect(validateManifest(value).ok).toBe(true);
+			value.needs = { database: true, storage: 'none', ai: false };
+			expect(validateManifest(value).ok).toBe(true);
+			/** @type {any} */ (value).needs = { database: true, storage: 'none', ai: 'yes' };
+			expectProblem(validateManifest(value), '/needs/ai', 'type');
+		});
+
 		it('lets a product be named by several needs, each with the features that use its scopes', () => {
 			const value = manifest();
 			value.links = {

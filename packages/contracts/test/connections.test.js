@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { WEBSITE_CONNECTIONS, databaseNameFor, isDatabaseName, isLinkScope, storageFolderFor } from '../src/index.js';
+import {
+	AI_PROVIDERS,
+	WEBSITE_CONNECTIONS,
+	databaseNameFor,
+	isDatabaseName,
+	isLinkScope,
+	storageFolderFor,
+} from '../src/index.js';
 
 describe('the names of connections and links', () => {
-	it('holds two connections per website', () => {
-		expect(WEBSITE_CONNECTIONS).toEqual(['database', 'storage']);
+	it('holds three connections per website', () => {
+		expect(WEBSITE_CONNECTIONS).toEqual(['database', 'storage', 'ai']);
+	});
+	it('names the providers of the AI key', () => {
+		expect(AI_PROVIDERS).toEqual(['openai', 'anthropic', 'google', 'compatible']);
 	});
 	it('gives each product its own database and folder', () => {
 		expect(databaseNameFor('ecommerce')).toBe('ss_ecommerce');

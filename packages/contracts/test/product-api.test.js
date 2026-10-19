@@ -40,6 +40,14 @@ describe('connections of a website', () => {
 			prefix: 'shop/',
 			publicBaseUrl: 'https://cdn.example.com',
 		},
+		shared: {
+			ai: {
+				provider: 'compatible',
+				apiKey: 'sk-test-0123456789',
+				model: 'gpt-4.1-mini',
+				baseUrl: 'https://llm.example.com/v1',
+			},
+		},
 		links: {
 			out: [{ to: 'payments', token: 'a.b.c', scopes: ['payments.create', 'payments.read'] }],
 			in: [{ from: 'chat', scopes: ['orders.read.customer'] }],
@@ -47,7 +55,15 @@ describe('connections of a website', () => {
 	});
 	it('accepts a full answer and one with nothing set', () => {
 		expect(validateWebsiteConnections(connections()).ok).toBe(true);
-		expect(validateWebsiteConnections({ version: 0, database: null, storage: null, links: { out: [], in: [] } }).ok).toBe(true);
+		expect(
+			validateWebsiteConnections({
+				version: 0,
+				database: null,
+				storage: null,
+				shared: { ai: null },
+				links: { out: [], in: [] },
+			}).ok,
+		).toBe(true);
 	});
 	/** @type {Array<[string, (c: any) => unknown, string, string]>} */
 	const refused = [
@@ -66,7 +82,20 @@ describe('connections of a website', () => {
 			'/links/out/0/grantVersion',
 			'additionalProperties',
 		],
-		['a member the contract does not know', (c) => (c.shared = {}), '/shared', 'additionalProperties'],
+		['an answer without the shared part', (c) => delete c.shared, '/shared', 'required'],
+		['a shared part without the AI key', (c) => (c.shared = {}), '/shared/ai', 'required'],
+		['a shared member the contract does not know', (c) => (c.shared.search = null), '/shared/search', 'additionalProperties'],
+		['an AI provider that is not known', (c) => (c.shared.ai.provider = 'other'), '/shared/ai/provider', 'enum'],
+		['an AI key that is empty', (c) => (c.shared.ai.apiKey = ''), '/shared/ai/apiKey', 'minLength'],
+		['an AI key that is too long', (c) => (c.shared.ai.apiKey = 'k'.repeat(513)), '/shared/ai/apiKey', 'maxLength'],
+		['an AI key without its model', (c) => delete c.shared.ai.model, '/shared/ai/model', 'required'],
+		[
+			'an AI value with an unknown member',
+			(c) => (c.shared.ai.temperature = 1),
+			'/shared/ai/temperature',
+			'additionalProperties',
+		],
+		['a member the contract does not know', (c) => (c.cache = {}), '/cache', 'additionalProperties'],
 	];
 	it.each(refused)('refuses %s', (_name, mutate, path, keyword) => {
 		const value = connections();

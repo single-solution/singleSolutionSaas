@@ -33,6 +33,7 @@ export {
 } from './validate.js';
 export { manifestPriceList } from './semantics.js';
 export {
+	AI_PROVIDERS,
 	DATABASE_NAME_PATTERN,
 	LINK_SCOPE_PATTERN,
 	WEBSITE_CONNECTIONS,
@@ -85,4 +86,5 @@ export { createId, isId, normalizeDomain } from './ids.js';
 /** @typedef {import('./profile.js').BusinessProfile} BusinessProfile */
 /** @typedef {import('./website-settings.js').WebsiteSection} WebsiteSection */
 /** @typedef {import('./connections.js').WebsiteConnectionName} WebsiteConnectionName */
+/** @typedef {import('./connections.js').AiProvider} AiProvider */
 /** @typedef {import('./profile.js').FeatureFit} FeatureFit */

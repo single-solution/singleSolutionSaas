@@ -2,18 +2,24 @@
  * The website's connections and the links between its products (settings-ownership design 8.3 and 8.4): the names the
  * Portal and the products share, and the pure rules that make a product's database name and storage folder. Browser-safe.
  *
- * - **Connections** are entered once per website in the Portal: one MongoDB database connection and one S3-compatible
- *   storage connection. Each product gets the same connection string with its own database name (`ss_<productId>`) and
- *   keeps its own folder in the bucket (`<prefix><productId>/<websiteId>/`).
+ * - **Connections** are entered once per website in the Portal: one MongoDB database connection, one S3-compatible
+ *   storage connection and one AI provider key. Each product gets the same connection string with its own database name
+ *   (`ss_<productId>`) and keeps its own folder in the bucket (`<prefix><productId>/<websiteId>/`); the AI key goes to
+ *   the products whose manifest says `needs.ai`.
  * - **Links** are one-way keys between two products of the website (`ecommerce → payments`); a link carries scopes
  *   (`payments.create`) that the Portal decides from the products' manifests and the callee enforces.
  * @module
  */
 
 /** The connections the Portal holds for a website. */
-export const WEBSITE_CONNECTIONS = Object.freeze(/** @type {const} */ (['database', 'storage']));
+export const WEBSITE_CONNECTIONS = Object.freeze(/** @type {const} */ (['database', 'storage', 'ai']));
 
 /** @typedef {typeof WEBSITE_CONNECTIONS[number]} WebsiteConnectionName */
+
+/** The AI providers the website's AI key may name; `compatible` is any OpenAI-compatible service (it gives its own `baseUrl`). */
+export const AI_PROVIDERS = Object.freeze(/** @type {const} */ (['openai', 'anthropic', 'google', 'compatible']));
+
+/** @typedef {typeof AI_PROVIDERS[number]} AiProvider */
 
 /** What a link scope looks like: dotted lower-case words, `payments.create`, `orders.read.customer`. */
 export const LINK_SCOPE_PATTERN = '^[a-z][a-z0-9_]{0,31}(?:\\.[a-z][a-z0-9_]{0,31}){0,3}$';
