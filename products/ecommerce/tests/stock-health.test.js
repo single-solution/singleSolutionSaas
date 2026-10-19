@@ -234,8 +234,13 @@ describe('shop health (E41)', () => {
 		// Growth's token is not pasted: its tag ids are not read
 		expect(byKey.pixel_ids).toEqual({ key: 'pixel_ids', status: 'skipped', count: 0, link: null });
 		expect(shop.callsTo(GROWTH)).toHaveLength(0);
-		// storage is connected without a public address of the images (G1)
-		expect(byKey.images_short_lived).toEqual({ key: 'images_short_lived', status: 'attention', count: 1, link: null });
+		// storage is connected without a public address on its connection (G1): the link opens the Portal's Data and files
+		expect(byKey.images_short_lived).toEqual({
+			key: 'images_short_lived',
+			status: 'attention',
+			count: 1,
+			link: `${shop.portal.url}/websites/${shop.websiteId}/settings#connections`,
+		});
 		// no description and no brand or GTIN on the four active products, no phone, and staff alerts to nobody and nowhere
 		expect(byKey.short_descriptions).toMatchObject({ status: 'attention', count: 4 });
 		expect(byKey.missing_identifiers).toMatchObject({ status: 'attention', count: 4 });

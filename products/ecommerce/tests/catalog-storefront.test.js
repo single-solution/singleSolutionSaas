@@ -46,7 +46,7 @@ beforeAll(async () => {
 		},
 		{ key: 'b', label: 'B', description: 'Light marks', categoryIds: [] },
 	]);
-	await shop.setting('catalog', 'mediaBaseUrl', 'https://cdn.shop.example.com');
+	await shop.connectStorage({ publicBaseUrl: 'https://cdn.shop.example.com' });
 	await shop.setting('catalog', 'productUrl', '/{category}/{slug}');
 	await shop.setting('catalog', 'categoryUrl', '/{path}');
 	ids.clothes = await api('POST', '/v1/categories', { name: 'Clothes', icon: 'shirt' });

@@ -1,8 +1,8 @@
 /**
  * Stable image addresses for search engines and shopping catalogs (SEO audit G1, phase S3): no SEO answer, sitemap or
- * feed ever carries a signed link (they last an hour); without a public address of the images they point at the
- * website's own media route (`mediaPath`, /media by default) with a signature that never changes, and the route the
- * guide gives fetches the file through `GET /v1/media`. Shop health says while images go out on short-lived links.
+ * feed ever carries a signed link (they last an hour); while the storage connection has no public address they point at
+ * the website's own media route (always `/media`) with a signature that never changes, and the route the guide gives
+ * fetches the file through `GET /v1/media`. Shop health says while images go out on short-lived links.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ORIGIN, STORAGE, readyShop, storedCategory } from './helpers.js';
@@ -106,24 +106,18 @@ describe('image addresses in SEO answers, sitemaps and feeds', () => {
 		expect(card.media[0].url).toMatch(SIGNED);
 	});
 
-	it('follow the media path setting', async () => {
-		await shop.setting('catalog', 'mediaPath', 'images/');
-		expect((await shop.api('GET', '/v1/seo/products/cup')).json.image).toMatch(
-			/^https:\/\/shop\.example\.com\/images\/[^/]{16}\/ecommerce\//,
-		);
-		await shop.setting('catalog', 'mediaPath', '/media');
-	});
-
 	it('are the public address once it is set', async () => {
-		await shop.setting('catalog', 'mediaBaseUrl', 'https://cdn.example.com/shop/');
+		// the storage connection's public address, then <prefix><product>/<website>/<key>
+		await shop.connectStorage({ publicBaseUrl: 'https://cdn.example.com/shop/' });
+		const folder = `https://cdn.example.com/shop/ecommerce/${shop.websiteId}`;
 		const text = await everything();
 		expect(text).not.toMatch(SIGNED);
 		expect((await shop.api('GET', '/v1/seo/products/cup')).json.image).toBe(
-			'https://cdn.example.com/shop/ecommerce/products/prd_cup/img_cup%20one.jpg',
+			`${folder}/ecommerce/products/prd_cup/img_cup%20one.jpg`,
 		);
-		expect(text).toContain('https://cdn.example.com/shop/ecommerce/categories/cat_cups/img_cups.jpg');
+		expect(text).toContain(`${folder}/ecommerce/categories/cat_cups/img_cups.jpg`);
 		expect(text).not.toContain(`${ORIGIN}/media/`);
-		await shop.setting('catalog', 'mediaBaseUrl', '');
+		await shop.connectStorage();
 	});
 });
 
@@ -193,9 +187,15 @@ describe('shop health', () => {
 			(await shop.api('GET', '/v1/reports/health')).json.checks.find(
 				(/** @type {any} */ found) => found.key === 'images_short_lived',
 			);
-		expect(await check()).toEqual({ key: 'images_short_lived', status: 'attention', count: 1, link: null });
-		await shop.setting('catalog', 'mediaBaseUrl', 'https://cdn.example.com');
+		// the link opens the Portal's Data and files, where the storage connection's public address is entered
+		expect(await check()).toEqual({
+			key: 'images_short_lived',
+			status: 'attention',
+			count: 1,
+			link: `${shop.portal.url}/websites/${shop.websiteId}/settings#connections`,
+		});
+		await shop.connectStorage({ publicBaseUrl: 'https://cdn.example.com' });
 		expect(await check()).toMatchObject({ status: 'ok', count: 0 });
-		await shop.setting('catalog', 'mediaBaseUrl', '');
+		await shop.connectStorage();
 	});
 });

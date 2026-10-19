@@ -125,7 +125,7 @@ export const sitemapRoute = (base) =>
 
 /**
  * The media route on the merchant's site (G1): the stable image addresses search engines, sitemaps and feeds get while
- * the `catalog` setting `mediaBaseUrl` is empty (`<mediaPath>/<signature>/<key>`, /media by default); it asks
+ * the storage connection has no public address (`/media/<signature>/<key>`, always at /media); it asks
  * `GET /v1/media` for a short-lived link to the file and serves the file with a long cache (an address never changes
  * for the same file).
  * @param {string} base Ecommerce's address
@@ -133,7 +133,7 @@ export const sitemapRoute = (base) =>
 export const mediaRoute = (base) =>
 	[
 		'// app/media/[...key]/route.js (Next.js App Router): your images at addresses that never change, for search engines',
-		'// and shopping catalogs (the catalog setting mediaPath, /media by default)',
+		'// and shopping catalogs (at /media, while your storage has no public address)',
 		'export async function GET(request, { params }) {',
 		"  const [signature = '', ...parts] = (await params).key;",
 		"  const query = new URLSearchParams({ key: parts.join('/'), signature });",

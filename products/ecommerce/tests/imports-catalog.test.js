@@ -317,7 +317,7 @@ beforeAll(async () => {
 	shop = await readyShop({ features: ALL.filter((feature) => feature !== 'multi_location') });
 	await shop.list('grades', [{ key: 'a-plus', label: 'A+', description: 'Like new' }]);
 	await shop.list('item_types', UNIT_TYPES);
-	await shop.setting('catalog', 'mediaBaseUrl', 'https://cdn.shop.example.com');
+	await shop.connectStorage({ publicBaseUrl: 'https://cdn.shop.example.com' });
 	// IndexNow on save would call Growth: an import never does
 	await shop.paste('growth');
 	await shop.setting('seo', 'indexNowOnSave', true);
@@ -617,8 +617,8 @@ describe('reads', () => {
 			sizeChart: { id: ID.chart, columns: [{ key: 'chest-width' }, { key: 'length' }] },
 		});
 		expect(page.json.media[0]).toMatchObject({
-			url: `https://cdn.shop.example.com/${KEY.photo}`,
-			sizes: { thumb: `https://cdn.shop.example.com/${KEY.thumb}` },
+			url: `https://cdn.shop.example.com/ecommerce/${shop.websiteId}/${KEY.photo}`,
+			sizes: { thumb: `https://cdn.shop.example.com/ecommerce/${shop.websiteId}/${KEY.thumb}` },
 		});
 		const moved = await shop.visitor('GET', '/v1/shop/products/linen-frock');
 		expect(moved.json.moved).toMatchObject({ kind: 'product', slug: 'linen-dress' });

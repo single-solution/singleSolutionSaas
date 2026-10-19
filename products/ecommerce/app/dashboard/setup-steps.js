@@ -5,16 +5,12 @@
  * here, and no store value is written into the code: a step is ticked from what the merchant saved.
  *
  * `when`: the features that make a step apply; `section`: the inner-sidebar section its button opens (a setting opens
- * the section of its own group). The image address is ticked the same way (its warning stays in `tabs.js`); Payments,
- * Notifications and the Atlas Search index have steps of their own there. What the Portal's website settings must say
+ * the section of its own group). Payments, Notifications and the Atlas Search index have steps of their own in `tabs.js`.
+ * The public address of the images is part of the storage connection in the Portal (Shop health names it). What the Portal's website settings must say
  * (the currency, the country) is the manifest's `websiteSettings.requires`: the Overview lists it with a link.
  * @module
  */
-import { TEXTS } from './texts.js';
-
 /** @typedef {import('@ss/ui/dashboard').SetupRequirement} SetupRequirement */
-
-const O = TEXTS.overview;
 
 /** @param {unknown} value */
 const list = (value) => (Array.isArray(value) ? value : []);
@@ -48,16 +44,6 @@ export const SETUP = Object.freeze([
 		optional: true,
 		label: 'Set the attribute page address',
 		why: 'Where the page of one attribute, such as a color or a size, lives on your website. Empty: no attribute pages.',
-		action: 'Set address',
-		detail: (/** @type {unknown} */ value) => String(value ?? ''),
-	},
-	{
-		key: 'media',
-		when: ['catalog'],
-		after: 'storage',
-		setting: 'catalog.mediaBaseUrl',
-		label: O.media.step,
-		why: 'Where your storage serves your images from, for example a CDN address. Images then load fast and keep their address.',
 		action: 'Set address',
 		detail: (/** @type {unknown} */ value) => String(value ?? ''),
 	},

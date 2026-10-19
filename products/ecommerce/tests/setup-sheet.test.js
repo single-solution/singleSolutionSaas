@@ -252,9 +252,9 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 			docs: `${BASE}/docs#feature-seo`,
 		});
 
-		// with a public media address, images need no route of the website; SEO comes with the catalog (baseline SEO),
-		// its titles following the defaults while SEO is off (a saved pattern counts once SEO is on)
-		await env.setting('catalog', 'mediaBaseUrl', 'https://cdn.shop.example.com');
+		// with a public address on the storage connection, images need no route of the website; SEO comes with the catalog
+		// (baseline SEO), its titles following the defaults while SEO is off (a saved pattern counts once SEO is on)
+		await env.connectStorage({ publicBaseUrl: 'https://cdn.shop.example.com' });
 		await env.setting('seo', 'titleTemplate', '{name} · {business}');
 		await env.switchOn(['catalog', 'variants']);
 		const few = await partOf(env);
@@ -323,6 +323,8 @@ describe('Ecommerce’s Setup sheet words', () => {
 	});
 
 	it('has nothing to summarize while Catalog is off', () => {
-		expect(setupSummaries({ on: [], catalog: null, seo: null, landing: null, alerts: null, llms: null })).toEqual([]);
+		expect(
+			setupSummaries({ on: [], catalog: null, seo: null, landing: null, alerts: null, llms: null, publicMedia: false }),
+		).toEqual([]);
 	});
 });

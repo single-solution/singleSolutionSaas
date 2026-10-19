@@ -66,8 +66,8 @@ const settingOf = (answer, feature, key) => {
 /**
  * Ecommerce's part of the Overview (PLAN 0.6 "Overviews talk"), judged from setup only (no business data): with
  * checkout, Payments (recommended) and Notifications (optional, when no feature needs it), payment methods paid by hand
- * with no instructions or account details for shoppers; with the catalog, the Atlas Search index while the shop or Chat searches with Atlas and the
- * public address of the images once storage is connected; with Staff alerts, someone to alert and the admin page they
+ * with no instructions or account details for shoppers; with the catalog, the Atlas Search index while the shop or Chat searches with Atlas;
+ * with Staff alerts, someone to alert and the admin page they
  * link to; and how many of the connections the features need are ready. `/connections` is read only with checkout or
  * Staff alerts, `/search-index` and `/settings` only with the catalog.
  * @type {import('@ss/ui/dashboard').UseOverviewMore}
@@ -178,20 +178,6 @@ const useShopOverview = (overview, { websiteId, open }) => {
 				: say(state.missing ? O.search.missing : O.search.ready, { time: <LocalTime value={state.at} /> }),
 			href: '/docs#atlas-search',
 		};
-	}
-	// the public address of the images, once storage is connected (SEO audit G1)
-	const media =
-		catalog && connection('storage')?.status === 'connected' ? settingOf(settings.answer, 'catalog', 'mediaBaseUrl') : null;
-	if (media) {
-		const address = String(media.value ?? '');
-		if (!address)
-			needs.push({
-				key: 'media',
-				tone: 'warning',
-				title: O.media.title,
-				effect: O.media.effect,
-				action: go(O.media.action, 'settings', sectionOf('catalog', 'mediaBaseUrl')),
-			});
 	}
 	// someone to alert, and the admin page alerts link to (shop health P5-18, setup part)
 	if (alertsOn && settings.answer?.ok) {

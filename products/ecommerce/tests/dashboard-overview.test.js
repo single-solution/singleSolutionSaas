@@ -103,7 +103,7 @@ describe('Ecommerce’s Overview', () => {
 		const loads = serve({
 			on: ['catalog'],
 			missing: ['region.currency', 'region.country'],
-			settings: { catalog: { currency: value('USD', 'portal'), mediaBaseUrl: value('') } },
+			settings: { catalog: { currency: value('USD', 'portal') } },
 		});
 		const Overview = TABS.overview;
 		const { container } = render(inDashboard(<Overview {...props} />));
@@ -120,7 +120,7 @@ describe('Ecommerce’s Overview', () => {
 		// no checkout or staff alerts: no connections read
 		expect(loads()).not.toContain('/connections');
 		cleanup();
-		serve({ on: ['catalog'], settings: { catalog: { currency: value('EUR', 'portal'), mediaBaseUrl: value('') } } });
+		serve({ on: ['catalog'], settings: { catalog: { currency: value('EUR', 'portal') } } });
 		const set = render(inDashboard(<Overview {...props} />));
 		await settle();
 		expect(set.container.textContent).not.toContain('Needs setup');
@@ -218,7 +218,6 @@ describe('Ecommerce’s Overview', () => {
 					currency: value('USD', 'website'),
 					productUrl: value('/products/{slug}', 'built-in'),
 					categoryUrl: value('/categories/{slug}', 'website'),
-					mediaBaseUrl: value(''),
 				},
 				checkout: { guests: value('off', 'built-in') },
 			},

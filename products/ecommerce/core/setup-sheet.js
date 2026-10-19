@@ -197,9 +197,11 @@ export const LIST_WORDS = Object.freeze({
 
 /**
  * What the summaries read: each feature's settings while it is on (null while off); `seo`: the `seo` settings the
- * pages follow while Catalog is on (the defaults while SEO is off).
+ * pages follow while Catalog is on (the defaults while SEO is off); `publicMedia`: the storage connection has a public
+ * address (images need no route of the website).
  * @typedef {{ on: string[], catalog: Record<string, any> | null, seo: Record<string, any> | null,
- *   landing: Record<string, any> | null, alerts: Record<string, any> | null, llms: Record<string, any> | null }} SetupFacts
+ *   landing: Record<string, any> | null, alerts: Record<string, any> | null, llms: Record<string, any> | null,
+ *   publicMedia: boolean }} SetupFacts
  */
 
 /** @param {unknown} value */
@@ -228,22 +230,22 @@ const pagesText = ({ on, catalog, landing, alerts }) => {
 
 /**
  * What the website serves from its own domain, fetched by its server with the server token: the media route while
- * there is no public media address, the sitemap, feeds and llms.txt of the features on, and the policy pages.
+ * the storage has no public address, the sitemap, feeds and llms.txt of the features on, and the policy pages.
  * @param {SetupFacts & { catalog: Record<string, any> }} facts
  * @returns {string | null}
  */
-const servedText = ({ on, catalog, seo, llms }) => {
+const servedText = ({ on, seo, llms, publicMedia }) => {
 	const served = SITE_ROUTES.filter(
 		(entry) =>
 			on.includes(entry.feature) &&
-			(entry.name !== 'media' || !given(catalog.mediaBaseUrl)) &&
+			(entry.name !== 'media' || !publicMedia) &&
 			(entry.name !== 'llmsFull' || llms?.full === true),
 	).map((entry) => {
 		const path =
 			entry.name === 'sitemap'
 				? String(seo?.sitemapUrl)
 				: entry.name === 'media'
-					? `${catalog.mediaPath}/<signature>/<file>`
+					? '/media/<signature>/<file>'
 					: entry.file.replace(/^app/, '').replace(/\/route\.js$/, '');
 		return `${path} (GET ${entry.route})`;
 	});

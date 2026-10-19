@@ -429,14 +429,19 @@ export const setup = async ({
 	// the website's Accounts token, pasted on first use: the keys of the staff's sign-ins
 	const staffHeaders = staffCaller({ accounts, websiteId, paste: () => paste('accounts') });
 
-	/** Connect the fake bucket. */
-	const connectStorage = () =>
+	/**
+	 * Connect the fake bucket through the Portal; `publicBaseUrl` is the connection's public address (the bucket's or a
+	 * CDN's), saved again without it when a test needs none.
+	 * @param {{ publicBaseUrl?: string }} [more]
+	 */
+	const connectStorage = (more = {}) =>
 		connect('storage', {
 			endpoint: STORAGE,
 			region: 'auto',
 			bucket: 'shop',
 			accessKeyId: 'AKIAEXAMPLE',
 			secretAccessKey: 'secret-access-key-0123456789',
+			...more,
 		});
 
 	/**

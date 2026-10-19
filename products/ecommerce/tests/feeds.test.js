@@ -189,6 +189,8 @@ describe('feed routes', () => {
 	let shop;
 	/** @type {Record<string, any>} */
 	const ids = {};
+	/** The public address of the shop's files: the storage connection's, then the product's folder of the website. */
+	let CDN = '';
 
 	/** @param {string} method @param {string} path @param {unknown} [body] */
 	const api = async (method, path, body) => {
@@ -204,7 +206,8 @@ describe('feed routes', () => {
 
 	beforeAll(async () => {
 		shop = await readyShop({ features: ALL.filter((feature) => feature !== 'multi_location'), business: { country: 'US' } });
-		await shop.setting('catalog', 'mediaBaseUrl', 'https://cdn.example.com');
+		await shop.connectStorage({ publicBaseUrl: 'https://cdn.example.com' });
+		CDN = `https://cdn.example.com/ecommerce/${shop.websiteId}`;
 		await shop.setting('feeds', 'items', 'all');
 		await shop.list('grades', [{ key: 'a', label: 'Like new', condition: 'used' }]);
 		ids.clothing = await api('POST', '/v1/categories', { name: 'Clothing', googleCategory: '1604' });
@@ -262,17 +265,15 @@ describe('feed routes', () => {
 		// a field shoppers never see stays out of the feed
 		expect(item).toContain('<title>Oxford shirt Like new Cotton</title>');
 		expect(item).toContain('<description>Oxford shirt: Cotton.</description>');
-		expect(item).toContain('<g:image_link>https://cdn.example.com/ecommerce/products/x/1.jpg</g:image_link>');
+		expect(item).toContain(`<g:image_link>${CDN}/ecommerce/products/x/1.jpg</g:image_link>`);
 		expect(item).toContain(
-			'<g:additional_image_link>https://cdn.example.com/ecommerce/products/x/2.jpg</g:additional_image_link>' +
-				'<g:additional_image_link>https://cdn.example.com/ecommerce/products/x/3.jpg</g:additional_image_link>',
+			`<g:additional_image_link>${CDN}/ecommerce/products/x/2.jpg</g:additional_image_link>` +
+				`<g:additional_image_link>${CDN}/ecommerce/products/x/3.jpg</g:additional_image_link>`,
 		);
 		expect(item).toContain('<g:gender>male</g:gender>');
 		expect(item).toContain('<g:product_highlight>Easy iron</g:product_highlight>');
 		const csv = (await shop.api('GET', '/v1/feeds/products.csv')).text;
-		expect(csv).toContain(
-			'"https://cdn.example.com/ecommerce/products/x/2.jpg,https://cdn.example.com/ecommerce/products/x/3.jpg"',
-		);
+		expect(csv).toContain(`"${CDN}/ecommerce/products/x/2.jpg,${CDN}/ecommerce/products/x/3.jpg"`);
 	});
 
 	it('sends delivery days with shipping, and nothing of shipping when switched off', async () => {

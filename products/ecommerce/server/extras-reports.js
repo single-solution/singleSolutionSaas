@@ -541,7 +541,7 @@ export const createReports = (product, service) => {
 	const health = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
-		const { lowStock, mediaBaseUrl } = await s.values('catalog');
+		const { lowStock } = await s.values('catalog');
 		const portalLink = product.portalUrl()?.replace(/\/+$/, '') ?? null;
 		const zones = s.has('delivery_zones') ? await s.values('delivery_zones') : null;
 		const feeds = s.has('feeds') ? await s.values('feeds') : null;
@@ -568,8 +568,8 @@ export const createReports = (product, service) => {
 			glossaryGaps(s, data),
 			taxonomyOf(s, data),
 		]);
-		// images go out on signed links that last an hour while the public address of the images is empty (G1)
-		const shortLived = storage ? !/^https:\/\//.test(String(mediaBaseUrl ?? '')) : null;
+		// images go out on signed links that last an hour while the storage connection has no public address (G1)
+		const shortLived = storage ? storage.publicUrl('ss-connection-test') === null : null;
 		return healthOf({
 			facets,
 			taxonomy: taxonomyHealth({
@@ -583,6 +583,8 @@ export const createReports = (product, service) => {
 			domain: s.domain,
 			// where the merchant sets the business facts: the Portal's Website settings › Business
 			businessLink: portalLink ? `${portalLink}/websites/${encodeURIComponent(s.websiteId)}/settings#business` : null,
+			// where the public address of the images is set: the Portal's Website settings › Data and files
+			connectionsLink: portalLink ? `${portalLink}/websites/${encodeURIComponent(s.websiteId)}/settings#connections` : null,
 			paymentMethods: methods,
 			badTags: tags,
 			shortLived,

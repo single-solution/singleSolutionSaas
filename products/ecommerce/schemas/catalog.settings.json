@@ -48,29 +48,6 @@
 				"advanced": true
 			}
 		},
-		"mediaBaseUrl": {
-			"type": "string",
-			"title": "Public address of your images",
-			"description": "The public web address your storage or CDN serves your files from, for example https://cdn.shop.example.com. Set it right after you connect storage; empty, images load through short-lived links.",
-			"default": "",
-			"maxLength": 300,
-			"x-ui": {
-				"group": "Page addresses",
-				"order": 15
-			}
-		},
-		"mediaPath": {
-			"type": "string",
-			"title": "Media path",
-			"description": "While the public address is empty, the path on your website that serves your images to search engines and shopping catalogs: their addresses are https://<your domain><path>/<signature>/<file>, and they never change. Serve the path with the media route in the docs (it fetches each file through GET /v1/media).",
-			"default": "/media",
-			"maxLength": 100,
-			"x-ui": {
-				"group": "Page addresses",
-				"order": 16,
-				"advanced": true
-			}
-		},
 		"pageSize": {
 			"type": "integer",
 			"title": "Products per page",

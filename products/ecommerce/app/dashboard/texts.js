@@ -35,13 +35,6 @@ export const TEXTS = dashboardTexts({
 			why: 'Until the index exists, searches in the shop and in Chat use basic search.',
 			docs: 'How to create it',
 		},
-		media: {
-			title: 'The public address of your images is not set',
-			effect:
-				'Until it is set, shoppers get image links that last an hour and search engines your website’s media route. Set it in Settings → Catalog: a public bucket, or a CDN in front of it.',
-			step: 'Set the public address of your images',
-			action: 'Set it',
-		},
 		alerts: {
 			title: 'No one gets staff alerts',
 			effect:

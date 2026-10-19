@@ -267,18 +267,28 @@ export const createProductInstance = (options) => {
 		);
 		/** @param {string} feature */
 		const valuesOf = (feature) => (on.includes(feature) ? product.settings.values(websiteId, feature) : null);
-		const [catalog, seo, landing, alerts, llms] = await Promise.all([
+		const [catalog, seo, landing, alerts, llms, storage] = await Promise.all([
 			valuesOf('catalog'),
 			// the seo settings the pages follow while Catalog is on: the merchant's while SEO is on, else the defaults
 			on.includes('catalog') && !on.includes('seo') ? SEO_DEFAULTS : valuesOf('seo'),
 			valuesOf('landing_pages'),
 			valuesOf('alerts'),
 			valuesOf('llms_txt'),
+			on.includes('catalog') ? product.connections.storage(websiteId) : null,
 		]);
 		return {
 			events: on.includes('events') ? EVENT_TYPES.map((type) => `${manifest.id}.${type}`) : [],
 			lists: Object.fromEntries(worded.filter((entry) => entry !== null)),
-			summaries: setupSummaries({ on, catalog, seo, landing, alerts, llms }),
+			// images need no route of the website when the storage connection has a public address
+			summaries: setupSummaries({
+				on,
+				catalog,
+				seo,
+				landing,
+				alerts,
+				llms,
+				publicMedia: Boolean(storage?.publicUrl('ss-connection-test')),
+			}),
 		};
 	};
 

@@ -27,7 +27,7 @@ beforeAll(async () => {
 		{ key: 'new', label: 'New', description: 'Sealed box', condition: 'new' },
 		{ key: 'used', label: 'Used', description: 'Light marks' },
 	]);
-	await shop.setting('catalog', 'mediaBaseUrl', 'https://cdn.shop.example.com/');
+	await shop.connectStorage({ publicBaseUrl: 'https://cdn.shop.example.com/' });
 	const phones = await api('POST', '/v1/categories', { name: 'Phones', description: 'Phones text' });
 	const android = await api('POST', '/v1/categories', { name: 'Android', parentId: phones.id });
 	const cases = await api('POST', '/v1/categories', { name: 'Cases', sort: 5 });
@@ -200,7 +200,9 @@ describe('the product grid', () => {
 				{ $set: { media: [{ key: `ecommerce/products/${ids.case.id}/a b.png`, type: 'image/png', size: 1, alt: '' }] } },
 			);
 		const answer = await get('/v1/shop/products?q=case');
-		expect(answer.json.items[0].image).toBe(`https://cdn.shop.example.com/ecommerce/products/${ids.case.id}/a%20b.png`);
+		expect(answer.json.items[0].image).toBe(
+			`https://cdn.shop.example.com/ecommerce/${shop.websiteId}/ecommerce/products/${ids.case.id}/a%20b.png`,
+		);
 		expect((await get('/v1/shop/products')).json.items).toHaveLength(2);
 		const config = await shop.visitor('GET', '/v1/widget/config');
 		expect(config.json.settings.catalog).toMatchObject({
@@ -302,7 +304,10 @@ describe('categories and brands', () => {
 		await data.collection('categories').updateOne({ websiteId: shop.websiteId, id: ids.cases.id }, { $set: { image } });
 		await data.collection('brands').updateOne({ websiteId: shop.websiteId, id: ids.acme.id }, { $set: { logo: image } });
 		const cases = (await get('/v1/shop/categories')).json.items[1];
-		expect(cases.image).toEqual({ url: 'https://cdn.shop.example.com/ecommerce/categories/x/a.png', alt: 'Alt' });
+		expect(cases.image).toEqual({
+			url: `https://cdn.shop.example.com/ecommerce/${shop.websiteId}/ecommerce/categories/x/a.png`,
+			alt: 'Alt',
+		});
 		expect((await get('/v1/shop/brands')).json.items[0].logo.alt).toBe('Alt');
 		// without its own text, the image is named by its category or brand (G14)
 		await data

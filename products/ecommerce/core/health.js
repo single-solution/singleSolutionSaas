@@ -318,11 +318,13 @@ export const paymentMethodsOn = ({ methods, paymentsConnected, pickup }) =>
  * @param {string} input.domain the website's address
  * @param {string | null} [input.businessLink] where the merchant sets the business facts (the Portal's Website settings ›
  *   Business), the link of the business checks; null: none
+ * @param {string | null} [input.connectionsLink] where the storage's public address is set (the Portal's Website settings ›
+ *   Data and files), the link of the short-lived images check; null: none
  * @param {string[]} input.paymentMethods {@link paymentMethodsOn}
  * @param {string[] | null} input.badTags {@link badTagIds}, or null when Growth is not linked or Growth did not
  *   answer (the check is skipped)
  * @param {boolean | null} input.shortLived whether images go out on short-lived signed links (storage connected, no
- *   public address of the images); null without storage (the check is skipped)
+ *   public address on the storage connection); null without storage (the check is skipped)
  * @param {boolean | null} input.deliveryDays whether both delivery day settings are set; null while Delivery zones is off
  *   (the check is skipped)
  * @param {SetupFacts} input.setup
@@ -334,6 +336,7 @@ export const healthOf = ({
 	business,
 	domain,
 	businessLink = null,
+	connectionsLink = null,
 	paymentMethods,
 	badTags,
 	shortLived,
@@ -355,7 +358,7 @@ export const healthOf = ({
 		variants_priced_zero: { count: counted('pricedZero'), link: null },
 		images_without_alt: { count: counted('noAlt'), link: null },
 		images_too_small: { count: counted('smallPhotos'), link: null },
-		images_short_lived: { count: shortLived === null ? null : shortLived ? 1 : 0, link: null },
+		images_short_lived: { count: shortLived === null ? null : shortLived ? 1 : 0, link: connectionsLink },
 		short_descriptions: { count: counted('shortText'), link: null },
 		duplicate_names: { count: counted('sameNames'), link: null },
 		duplicate_titles: { count: counted('sameTitles') + taxonomy.sameTitles, link: null },
