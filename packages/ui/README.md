@@ -19,15 +19,15 @@ Tailwind scans `node_modules/@ss/ui/src` (`@source` in the app's CSS).
 60 % the off-white canvas (`canvas` #F7F8F5; dark: navy #0A1C40), 30 % white surfaces and navy text (`fg` #0A1C40),
 pale sage (`surface-2`) for hover and selected rows; 10 % meaning, used sparingly — one `tone` per meaning:
 
-| Tone        | Hue                       | Means                                                       |
-| ----------- | ------------------------- | ----------------------------------------------------------- |
-| `primary`   | Integrity blue #2226F7    | main buttons, links, the active item, focus                 |
-| `success`   | Natural green #24D56D     | success, paid, active, done steps                           |
-| `danger`    | Excitement red #F72226    | errors and destructive actions only                         |
-| `warning`   | Happiness yellow #FFD527  | warnings, soft highlights (always with dark text)           |
-| `attention` | Energetic orange #FE5E20  | needs the person: setup steps, alerts, Needs you; no button |
-| `info`      | Kindness teal #00D6A3     | tips, help, empty-state hints                               |
-| `new`       | Originality pink #FF3797  | new, featured, promotions                                   |
+| Tone        | Hue                      | Means                                                       |
+| ----------- | ------------------------ | ----------------------------------------------------------- |
+| `primary`   | Integrity blue #2226F7   | main buttons, links, the active item, focus                 |
+| `success`   | Natural green #24D56D    | success, paid, active, done steps                           |
+| `danger`    | Excitement red #F72226   | errors and destructive actions only                         |
+| `warning`   | Happiness yellow #FFD527 | warnings, soft highlights (always with dark text)           |
+| `attention` | Energetic orange #FE5E20 | needs the person: setup steps, alerts, Needs you; no button |
+| `info`      | Kindness teal #00D6A3    | tips, help, empty-state hints                               |
+| `new`       | Originality pink #FF3797 | new, featured, promotions                                   |
 
 Every meaning has the brand hue for dots, bars and fills (`bg-success-solid`, `DOTS`), a 50 tint for backgrounds
 (`-soft`, `TINTS`) and an AA text shade (`text-success`, `on-success-soft`), darkened where the hue is too light for

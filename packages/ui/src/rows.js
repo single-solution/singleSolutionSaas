@@ -104,8 +104,7 @@ export function Toolbar({ children, note, end, className, label, variant = 'plai
 			{...(label ? { role: 'group', 'aria-label': label } : {})}
 			className={cx(
 				'flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2',
-				variant === 'selection' &&
-					'animate-ss-enter rounded-card bg-primary-soft px-3 py-2 text-sm text-on-primary-soft',
+				variant === 'selection' && 'animate-ss-enter rounded-card bg-primary-soft px-3 py-2 text-sm text-on-primary-soft',
 				className,
 			)}>
 			{note ? <p className="min-w-0 flex-1 basis-60 text-sm text-muted">{note}</p> : null}

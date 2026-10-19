@@ -566,10 +566,7 @@ const tabLook = (on) =>
  */
 export function PillTabs({ tabs, active, onSelect, label, className, idPrefix = 'pt' }) {
 	return (
-		<div
-			role="tablist"
-			aria-label={label}
-			className={cx(TAB_STRIP, className)}>
+		<div role="tablist" aria-label={label} className={cx(TAB_STRIP, className)}>
 			{tabs.map((tab) => {
 				const on = tab.id === active;
 				return (
@@ -599,9 +596,7 @@ export function PillTabs({ tabs, active, onSelect, label, className, idPrefix = 
 export function LinkTabs({ items, label, linkAs, className }) {
 	const LinkTag = linkAs ?? 'a';
 	return (
-		<nav
-			aria-label={label}
-			className={cx(TAB_STRIP, className)}>
+		<nav aria-label={label} className={cx(TAB_STRIP, className)}>
 			{items.map((item) => (
 				<LinkTag
 					key={item.href}

@@ -46,9 +46,7 @@ export function ActionMenu({ label, items, icon = 'more', size = 'sm', className
 	const enabled = () =>
 		/** @type {HTMLButtonElement[]} */ ([
 			...(root.current?.querySelectorAll('[role="menuitem"], [role="menuitemradio"]') ?? []),
-		]).filter(
-			(el) => !el.disabled,
-		);
+		]).filter((el) => !el.disabled);
 
 	useEffect(() => {
 		if (!open) return undefined;
@@ -113,7 +111,10 @@ export function ActionMenu({ label, items, icon = 'more', size = 'sm', className
 					size={size}
 					aria-label={label}
 					title={label}
-					className={cx('!px-0 text-muted hover:text-fg aria-expanded:bg-surface-2 aria-expanded:text-fg', size === 'md' ? 'w-9' : 'w-8')}
+					className={cx(
+						'!px-0 text-muted hover:text-fg aria-expanded:bg-surface-2 aria-expanded:text-fg',
+						size === 'md' ? 'w-9' : 'w-8',
+					)}
 					aria-haspopup="menu"
 					aria-expanded={open}
 					aria-controls={open ? id : undefined}
@@ -130,9 +131,7 @@ export function ActionMenu({ label, items, icon = 'more', size = 'sm', className
 					data-state={presence.closing ? 'closed' : 'open'}
 					className={cx(
 						'absolute z-40 max-w-[calc(100vw-2rem)] rounded-card border border-line-soft bg-surface p-1 shadow-overlay',
-						placement === 'up'
-							? 'bottom-full left-0 mb-2 w-60 origin-bottom-left'
-							: 'right-0 mt-2 w-60 origin-top-right',
+						placement === 'up' ? 'bottom-full left-0 mb-2 w-60 origin-bottom-left' : 'right-0 mt-2 w-60 origin-top-right',
 						'animate-ss-pop data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-pop-out',
 					)}>
 					{header ? <div className="mb-1 border-b border-line-soft px-2.5 pt-1.5 pb-2.5">{header}</div> : null}
@@ -142,13 +141,18 @@ export function ActionMenu({ label, items, icon = 'more', size = 'sm', className
 						// a divider before a new section and before the first destructive action
 						const divided =
 							index > 0 &&
-							(item.divider || heading || (item.section ?? '') !== (before?.section ?? '') || (item.danger && !before?.danger));
+							(item.divider ||
+								heading ||
+								(item.section ?? '') !== (before?.section ?? '') ||
+								(item.danger && !before?.danger));
 						const radio = item.checked !== undefined;
 						return (
 							<div key={`${item.section ?? ''}:${item.label}`}>
 								{divided ? <div aria-hidden="true" className="-mx-1 my-1 border-t border-line-soft" /> : null}
 								{heading ? (
-									<p aria-hidden="true" className="px-2.5 pt-1 pb-1 text-micro font-semibold tracking-[0.06em] text-muted uppercase">
+									<p
+										aria-hidden="true"
+										className="px-2.5 pt-1 pb-1 text-micro font-semibold tracking-[0.06em] text-muted uppercase">
 										{heading}
 									</p>
 								) : null}

@@ -133,7 +133,9 @@ export function HeaderMeta({ children }) {
  */
 export function HeaderFact({ label, children, tone, title }) {
 	return (
-		<span title={title} className="inline-flex h-7 min-w-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-surface-2 px-2.5 text-label text-muted">
+		<span
+			title={title}
+			className="inline-flex h-7 min-w-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-surface-2 px-2.5 text-label text-muted">
 			{tone ? <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${DOTS[tone]}`} /> : null}
 			{label ? <span>{label}</span> : null}
 			<span className="font-medium text-fg tabular-nums">{children}</span>
