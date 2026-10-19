@@ -58,7 +58,11 @@ export { PageHeader, HeaderMeta, HeaderFact } from './header.js';
 export { Table } from './Table.js';
 export { Dialog, Drawer, ConfirmDialog } from './overlay.js';
 export { ActionMenu, AccountMenu, ThemeMenu } from './Menu.js';
-export { RowList, ListRow, Toolbar } from './rows.js';
+export { RowList, ListRow } from './rows.js';
+export { Toolbar, TOOLBAR_TEXTS } from './Toolbar.js';
+export { InnerNav, INNER_NAV_TEXTS } from './InnerNav.js';
+export { InnerNavSkeleton, ToolbarSkeleton } from './skeletons.js';
+export { METRICS } from './layout-metrics.js';
 export { TypedConfirmDialog } from './TypedConfirm.js';
 export { PasswordConfirmDialog, PASSWORD_CONFIRM_TEXTS } from './PasswordConfirm.js';
 export { ToastOnce, ToastProvider, useToast } from './Toast.js';
@@ -111,6 +115,11 @@ export { describeProblem, fieldErrors, problemCode, problemLines } from './probl
 /** @typedef {import('./AppShell.js').NavSection} NavSection */
 /** @typedef {import('./blocks.js').SectionItem} SectionItem */
 /** @typedef {import('./blocks.js').SectionSpec} SectionSpec */
+/** @typedef {import('./InnerNav.js').InnerNavItem} InnerNavItem */
+/** @typedef {import('./InnerNav.js').InnerNavGroup} InnerNavGroup */
+/** @typedef {import('./Toolbar.js').ToolbarFilter} ToolbarFilter */
+/** @typedef {import('./Toolbar.js').ToolbarSearch} ToolbarSearch */
+/** @typedef {import('./Toolbar.js').ToolbarBulk} ToolbarBulk */
 /** @typedef {import('./icons.js').IconName} IconName */
 /** @typedef {import('./display.js').Kind} Kind */
 /** @typedef {import('./Menu.js').MenuItem} MenuItem */

@@ -351,7 +351,9 @@ export function FinanceView(props) {
 						...(attention.length > 0 ? { badge: <Badge tone="attention">{attention.length}</Badge> } : {}),
 						content: (
 							<>
-								<Toolbar note={S.attention.help} />
+								<Toolbar className="!px-0">
+									<p className="min-w-0 truncate text-sm text-muted">{S.attention.help}</p>
+								</Toolbar>
 								<AttentionTable rows={attention} onAdd={canAdd ? setAdding : null} />
 							</>
 						),
@@ -427,7 +429,7 @@ export function FinanceView(props) {
 						content: (
 							<>
 								<Toolbar
-									note={S.charges.help}
+									className="!px-0"
 									end={
 										<LinkTabs
 											label={S.charges.title}
@@ -440,8 +442,9 @@ export function FinanceView(props) {
 												}))
 											}
 										/>
-									}
-								/>
+									}>
+									<p className="min-w-0 truncate text-sm text-muted">{S.charges.help}</p>
+								</Toolbar>
 								{isEmptySeries(dayBars) ? null : (
 									<Card title={MORE.chargesChart} subtitle={range}>
 										<BarChart label={MORE.chargesChart} data={dayBars} format={formatChartCredits} height={120} />

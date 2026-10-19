@@ -301,24 +301,33 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 							</Button>
 						) : null}
 						{canBulk && selected.size > 0 ? (
-							<Toolbar variant="selection">
-								<span className="font-medium">{ADMIN.bulk.selected(selected.size)}</span>
-								{canSuspend ? (
-									<>
-										<Button size="sm" variant="secondary" onClick={() => setBulk('suspend')}>
-											{ADMIN.bulk.suspend}
-										</Button>
-										<Button size="sm" variant="secondary" onClick={() => setBulk('resume')}>
-											{ADMIN.bulk.resume}
-										</Button>
-									</>
-								) : null}
-								{canLink ? (
-									<Button size="sm" variant="secondary" onClick={() => setBulk('resend_setup_link')}>
-										{ADMIN.bulk.resend}
-									</Button>
-								) : null}
-							</Toolbar>
+							<Toolbar
+								className="rounded-card !px-3"
+								texts={{ selected: ADMIN.bulk.selected }}
+								bulk={{
+									count: selected.size,
+									onDone: () => setSelected(new Set()),
+									actions: (
+										<>
+											{canSuspend ? (
+												<>
+													<Button size="sm" variant="secondary" onClick={() => setBulk('suspend')}>
+														{ADMIN.bulk.suspend}
+													</Button>
+													<Button size="sm" variant="secondary" onClick={() => setBulk('resume')}>
+														{ADMIN.bulk.resume}
+													</Button>
+												</>
+											) : null}
+											{canLink ? (
+												<Button size="sm" variant="secondary" onClick={() => setBulk('resend_setup_link')}>
+													{ADMIN.bulk.resend}
+												</Button>
+											) : null}
+										</>
+									),
+								}}
+							/>
 						) : null}
 					</>
 				}>
@@ -590,7 +599,7 @@ function MerchantDetail({ detail, admin, back }) {
 						content: (
 							<>
 								<Toolbar
-									note={ADMIN.websitesIntro}
+									className="!px-0"
 									end={
 										can('websites.write') && rows.length > 0 ? (
 											<Button
@@ -600,8 +609,9 @@ function MerchantDetail({ detail, admin, back }) {
 												{WEBSITE.addWebsite}
 											</Button>
 										) : null
-									}
-								/>
+									}>
+									<p className="min-w-0 truncate text-sm text-muted">{ADMIN.websitesIntro}</p>
+								</Toolbar>
 								{rows.length === 0 ? (
 									<EmptyState
 										compact
@@ -669,6 +679,7 @@ function MerchantDetail({ detail, admin, back }) {
 						content: (
 							<>
 								<Toolbar
+									className="!px-0"
 									end={
 										<Button variant="secondary" size="sm" onClick={() => nav.go(adminRoutes.activity({ merchantId }))}>
 											{MORE.openInActivity}

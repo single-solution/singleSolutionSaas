@@ -31,11 +31,24 @@ import { themeMenuItems, useThemeChoice } from './theme.js';
 /**
  * @param {{ label: string, items: MenuItem[], icon?: import('./icons.js').IconName, size?: 'sm' | 'md',
  *   className?: string, trigger?: import('react').ReactNode, header?: import('react').ReactNode,
- *   placement?: 'down' | 'up' }} props `label`: the button's accessible name and the menu's label; `trigger` replaces
- *   the icon button with a ghost button around it; `header` is shown above the actions; `placement` `up` opens the
- *   menu above its button (a button at the bottom of the sidebar)
+ *   placement?: 'down' | 'up', align?: 'end' | 'start', triggerClassName?: string }} props `label`: the button's
+ *   accessible name and the menu's label; `trigger` replaces the icon button with a ghost button around it (its look
+ *   is `triggerClassName`, e.g. a filter chip); `header` is shown above the actions; `placement` `up` opens the menu
+ *   above its button (a button at the bottom of the sidebar); `align` `start` opens it from the button's left edge
+ *   (a button on the left of a bar)
  */
-export function ActionMenu({ label, items, icon = 'more', size = 'sm', className, trigger, header, placement = 'down' }) {
+export function ActionMenu({
+	label,
+	items,
+	icon = 'more',
+	size = 'sm',
+	className,
+	trigger,
+	header,
+	placement = 'down',
+	align = 'end',
+	triggerClassName,
+}) {
 	const [open, setOpen] = useState(false);
 	const root = useRef(/** @type {HTMLDivElement | null} */ (null));
 	const button = useRef(/** @type {HTMLButtonElement | null} */ (null));
@@ -101,7 +114,10 @@ export function ActionMenu({ label, items, icon = 'more', size = 'sm', className
 					aria-expanded={open}
 					aria-controls={open ? id : undefined}
 					onClick={() => setOpen((o) => !o)}
-					className="ss-motion ss-press flex w-full min-w-0 items-center gap-2.5 rounded-lg p-1 text-left hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus aria-expanded:bg-surface-2">
+					className={
+						triggerClassName ??
+						'ss-motion ss-press flex w-full min-w-0 items-center gap-2.5 rounded-lg p-1 text-left hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus aria-expanded:bg-surface-2'
+					}>
 					{trigger}
 				</button>
 			) : (
@@ -131,7 +147,11 @@ export function ActionMenu({ label, items, icon = 'more', size = 'sm', className
 					data-state={presence.closing ? 'closed' : 'open'}
 					className={cx(
 						'absolute z-40 max-w-[calc(100vw-2rem)] rounded-card border border-line-soft bg-surface p-1 shadow-overlay',
-						placement === 'up' ? 'bottom-full left-0 mb-2 w-60 origin-bottom-left' : 'right-0 mt-2 w-60 origin-top-right',
+						placement === 'up'
+							? 'bottom-full left-0 mb-2 w-60 origin-bottom-left'
+							: align === 'start'
+								? 'left-0 mt-2 w-60 origin-top-left'
+								: 'right-0 mt-2 w-60 origin-top-right',
 						'animate-ss-pop data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-pop-out',
 					)}>
 					{header ? <div className="mb-1 border-b border-line-soft px-2.5 pt-1.5 pb-2.5">{header}</div> : null}

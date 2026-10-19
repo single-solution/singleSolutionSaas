@@ -6,7 +6,7 @@
  */
 import { cx } from './cx.js';
 import { SkeletonBlock } from './display.js';
-import { METRICS, NAV_PANEL } from './layout-metrics.js';
+import { BAR, METRICS, NAV_PANEL } from './layout-metrics.js';
 
 /** Widths of the placeholder lines, repeated so a list does not look like a ruler. */
 const WIDTHS = ['w-3/4', 'w-1/2', 'w-2/3', 'w-5/6', 'w-2/5'];
@@ -32,5 +32,20 @@ export function InnerNavSkeleton({ items = 6, label = 'Loading', className }) {
 				</div>
 			</div>
 		</>
+	);
+}
+
+/**
+ * The toolbar while it loads: the same fixed bar, a search box and two chips on the left, the range on the right.
+ * @param {{ label?: string, className?: string }} props
+ */
+export function ToolbarSkeleton({ label = 'Loading', className }) {
+	return (
+		<div role="status" aria-label={label} aria-busy="true" className={cx(BAR, 'animate-ss-fade', className)}>
+			<SkeletonBlock className="h-8 w-48 max-w-full" />
+			<SkeletonBlock className="hidden h-8 w-20 rounded-full sm:block" />
+			<SkeletonBlock className="hidden h-8 w-24 rounded-full sm:block" />
+			<SkeletonBlock className="ml-auto hidden h-4 w-24 md:block" />
+		</div>
 	);
 }

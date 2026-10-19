@@ -36,7 +36,9 @@ import { InnerNavSkeleton } from './skeletons.js';
  */
 /** @typedef {{ label?: string, items: InnerNavItem[] }} InnerNavGroup */
 
-/** The words the navigation says itself (replace them to translate). */
+/** @typedef {{ search: string, none: string, locked: string }} InnerNavTexts */
+
+/** The words the navigation says itself (replace them to translate). @type {Readonly<InnerNavTexts>} */
 export const INNER_NAV_TEXTS = Object.freeze({ search: 'Search', none: 'No match', locked: 'Locked' });
 
 /** The plain text of a label, for searching. @param {ReactNode} label */
@@ -45,7 +47,7 @@ const textOf = (label) => (typeof label === 'string' || typeof label === 'number
 /**
  * @param {{ groups?: InnerNavGroup[], items?: InnerNavItem[], value: string,
  *   onSelect?: (id: string, item: InnerNavItem) => void, label?: string, footer?: ReactNode,
- *   linkAs?: import('react').ElementType, searchFrom?: number, texts?: Partial<typeof INNER_NAV_TEXTS>,
+ *   linkAs?: import('react').ElementType, searchFrom?: number, texts?: Partial<InnerNavTexts>,
  *   loading?: boolean, className?: string }} props `items` is one group without a label; `value` the id of the current
  *   item; `searchFrom` the number of items from which the search box shows (more than 10 by default)
  */

@@ -73,13 +73,14 @@ function AdminActivity({ adminId }) {
 	return (
 		<>
 			<Toolbar
-				note={MORE.adminActivityIntro}
+				className="!px-0"
 				end={
 					<Button variant="secondary" size="sm" onClick={() => nav.go(adminRoutes.activity({ adminId }))}>
 						{MORE.openInActivity}
 					</Button>
-				}
-			/>
+				}>
+				<p className="min-w-0 truncate text-sm text-muted">{MORE.adminActivityIntro}</p>
+			</Toolbar>
 			{result && !result.ok ? <Callout tone="danger">{describeProblem(result.problem)}</Callout> : null}
 			<ActivityTable
 				items={result?.ok ? (result.data?.items ?? []) : []}

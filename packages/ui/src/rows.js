@@ -90,26 +90,3 @@ export function ListRow({
 		</li>
 	);
 }
-
-/**
- * The bar above a list or table: a muted one-line `note` or filters and search on the left, actions on the right
- * (wrapping on a phone). `selection` is the soft accent bar of a bulk selection (how many are picked, what to do with
- * them).
- * @param {{ children?: ReactNode, note?: ReactNode, end?: ReactNode, className?: string, label?: string,
- *   variant?: 'plain' | 'selection' }} props
- */
-export function Toolbar({ children, note, end, className, label, variant = 'plain' }) {
-	return (
-		<div
-			{...(label ? { role: 'group', 'aria-label': label } : {})}
-			className={cx(
-				'flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2',
-				variant === 'selection' && 'animate-ss-enter rounded-card bg-primary-soft px-3 py-2 text-sm text-on-primary-soft',
-				className,
-			)}>
-			{note ? <p className="min-w-0 flex-1 basis-60 text-sm text-muted">{note}</p> : null}
-			{children ? <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{children}</div> : null}
-			{end ? <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">{end}</div> : null}
-		</div>
-	);
-}

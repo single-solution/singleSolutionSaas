@@ -37,3 +37,6 @@ export const DRAWER_WIDTH = Object.freeze({
 
 /** How many table rows come in one after the other on first load, and the gap between them (ms). */
 export const STAGGER = Object.freeze({ rows: 10, step: 15 });
+
+/** The fixed bar above a list (toolbar, bulk bar): one line, the pane's gutters. */
+export const BAR = `flex min-w-0 shrink-0 items-center gap-2 ${METRICS.toolbar} ${METRICS.gutter}`;
