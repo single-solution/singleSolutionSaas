@@ -4,9 +4,9 @@
  * every tab draws, and `SectionsPage`, the one page with an inner navigation (the sub-pages are `InnerNav` items, each
  * its own `#address`, with counts and dots).
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DashboardProvider } from '../src/dashboard-parts.js';
-import { FrameContext, SectionsPage, navGroupsOf, useCrumbs } from '../src/dashboard-page.js';
+import { FrameContext, LoadedPage, SectionsPage, navGroupsOf, useCrumbs } from '../src/dashboard-page.js';
 import { dashboardTexts } from '../src/dashboard-texts.js';
 import { act, byText, cleanup, click, render } from '../src/testing.js';
 
@@ -194,5 +194,49 @@ describe('SectionsPage', () => {
 		);
 		expect(byText(container, 'search results')).toBeTruthy();
 		expect(panel('one')?.hidden ?? true).toBe(true);
+	});
+});
+
+describe('LoadedPage', () => {
+	it("draws the page skeleton with the crumbs and the tab's own skeleton while the answer is not there", () => {
+		const { container } = render(
+			inDashboard(
+				<LoadedPage answer={null} tab="features" skeleton={<p>my skeleton</p>}>
+					{() => <p>never</p>}
+				</LoadedPage>,
+			),
+		);
+		expect(container.querySelector('[data-ss-page][aria-busy="true"]')).not.toBeNull();
+		expect(crumbsOf(container)).toEqual(['Notes', 'Features']);
+		expect(byText(container, 'my skeleton')).toBeTruthy();
+		expect(container.textContent).not.toContain('never');
+	});
+
+	it('says what went wrong in the page, with Try again when it can be fetched again', () => {
+		const retry = vi.fn();
+		const answer = { ok: false, problem: { status: 500, code: 'internal_error' }, retry };
+		const { container } = render(
+			inDashboard(
+				<LoadedPage answer={/** @type {any} */ (answer)} tab="features">
+					{() => <p>never</p>}
+				</LoadedPage>,
+			),
+		);
+		expect(crumbsOf(container)).toEqual(['Notes', 'Features']);
+		expect(container.textContent).toContain(TEXTS.failed);
+		click(byText(container, TEXTS.tryAgain, 'button'));
+		expect(retry).toHaveBeenCalledTimes(1);
+	});
+
+	it('hands the data to the tab, which draws its own page', () => {
+		const answer = { ok: true, data: { name: 'Ready' } };
+		const { container } = render(
+			inDashboard(
+				<LoadedPage answer={/** @type {any} */ (answer)} tab="features">
+					{(/** @type {{ name: string }} */ data) => <p>{data.name}</p>}
+				</LoadedPage>,
+			),
+		);
+		expect(byText(container, 'Ready')).toBeTruthy();
 	});
 });

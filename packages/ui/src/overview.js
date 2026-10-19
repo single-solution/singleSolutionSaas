@@ -7,22 +7,24 @@
  *
  * - The pieces take their words from the caller: `NeedsList` (each item a `NeedItem`, or the calm `NothingNeeded` line
  *   when the list is empty), `SetupChecklist`, `Timeline` and `initialsOf` (the Portal's Overviews use them).
- * - `ProductOverview` is a product dashboard's whole Overview, built from the kit's overview answer
- *   (`GET /v1/dashboard/websites/:websiteId/overview`) with the words of `overview-texts.js`, plus the product's own
- *   items, setup steps, number tiles and sections. `OverviewSkeleton` is its loading state and `RecentChanges` the
- *   timeline card the dashboards also show under Defaults and Prices.
+ * - `ProductOverview` is a product dashboard's whole Overview, a {@link Page}: Product › Overview in the header with
+ *   the status pill and the setup progress, the greeting behind the (i), the blocks in the body. It is built from the
+ *   kit's overview answer (`GET /v1/dashboard/websites/:websiteId/overview`) with the words of `overview-texts.js`, plus
+ *   the product's own items, setup steps, number tiles and sections. `OverviewSkeleton` is its loading state (the
+ *   body's, for a `Page` that is loading) and `RecentChanges` the timeline card the dashboards also show under
+ *   Defaults and Prices.
  * @module
  */
 import { Fragment, useState } from 'react';
 import { Button, ButtonLink } from './Button.js';
 import { cx } from './cx.js';
-import { Badge, Card, EmptyState, STAT_GRID, SkeletonBlock, Stat, StatGrid, StatusBadge, TextLink } from './display.js';
+import { Badge, Card, EmptyState, Stat, StatGrid, TextLink } from './display.js';
 import { formatCredits, humanize, supportContact } from './format.js';
-import { HeaderFact, PageHeader } from './header.js';
 import { Icon } from './icons.js';
+import { Page } from './Page.js';
 import { OVERVIEW_TEXTS } from './overview-texts.js';
 import { WEBSITE_SECTION_NAMES, websiteSettingsUrl } from './portal-links.js';
-import { ListRow, RowList } from './rows.js';
+import { SettingsCardSkeleton, StatGridSkeleton } from './skeletons.js';
 import { LocalTime, useDisplayLocale } from './time.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
@@ -158,34 +160,35 @@ function SetupRow({ step, labels, LinkTag }) {
 				: null
 			: { variant: /** @type {const} */ ('secondary'), text: step.actionLabel }
 		: null;
+	const lines = words || step.detail;
 	return (
-		<ListRow
-			wrap
-			media={
-				<span
-					className={cx(
-						'flex size-5 shrink-0 items-center justify-center rounded-full',
-						step.done ? 'bg-success-solid text-on-solid' : 'border-[1.5px] border-dashed border-attention-solid',
-					)}>
-					{step.done ? <Icon name="check" size={12} /> : null}
-					<span className="sr-only">{step.done ? labels.done : labels.todo}</span>
-				</span>
-			}
-			title={title}
-			{...(step.optional && labels.optional ? { status: <Badge tone="neutral">{labels.optional}</Badge> } : {})}
-			{...(words || step.detail
-				? {
-						meta: (
-							<>
+		<li className="ss-motion min-w-0 py-3 first:pt-0 last:pb-0">
+			<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+				<div className="flex min-w-0 flex-1 basis-56 items-center gap-3">
+					<span
+						className={cx(
+							'flex size-5 shrink-0 items-center justify-center rounded-full',
+							step.done ? 'bg-success-solid text-on-solid' : 'border-[1.5px] border-dashed border-attention-solid',
+						)}>
+						{step.done ? <Icon name="check" size={12} /> : null}
+						<span className="sr-only">{step.done ? labels.done : labels.todo}</span>
+					</span>
+					<div className="min-w-0 flex-1">
+						<div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+							<span className="min-w-0 text-sm font-medium break-words text-fg">{title}</span>
+							{step.optional && labels.optional ? <Badge tone="neutral">{labels.optional}</Badge> : null}
+						</div>
+						{lines ? (
+							<div className="mt-0.5 text-help break-words text-muted">
 								{words}
 								{step.detail ? <span className={words ? 'mt-0.5 block' : 'block'}>{step.detail}</span> : null}
-							</>
-						),
-					}
-				: {})}
-			{...(button
-				? {
-						action: step.href ? (
+							</div>
+						) : null}
+					</div>
+				</div>
+				{button ? (
+					<div className="ml-auto flex shrink-0 items-center gap-1.5">
+						{step.href ? (
 							<ButtonLink as={LinkTag} href={step.href} size="sm" variant={button.variant}>
 								{button.text}
 							</ButtonLink>
@@ -193,10 +196,11 @@ function SetupRow({ step, labels, LinkTag }) {
 							<Button size="sm" variant={button.variant} onClick={step.onSelect}>
 								{button.text}
 							</Button>
-						),
-					}
-				: {})}
-		/>
+						)}
+					</div>
+				) : null}
+			</div>
+		</li>
 	);
 }
 
@@ -230,11 +234,11 @@ export function SetupChecklist({ title, progress, steps, labels, linkAs, id, cla
 					style={{ width: `${counted.length === 0 ? 100 : Math.round((done / counted.length) * 100)}%` }}
 				/>
 			</div>
-			<RowList>
+			<ul className="min-w-0 divide-y divide-line-soft">
 				{steps.map((step) => (
 					<SetupRow key={step.key} step={step} labels={labels} LinkTag={LinkTag} />
 				))}
-			</RowList>
+			</ul>
 		</Card>
 	);
 }
@@ -353,6 +357,9 @@ const settingName = (path) =>
 /** The Portal's name of a section of the Website settings page. @param {string} section */
 const sectionName = (section) => WEBSITE_SECTION_NAMES[/** @type {keyof typeof WEBSITE_SECTION_NAMES} */ (section)] ?? section;
 
+/** The pill of the product's status on the page header. @type {Record<string, import('./display.js').PillStatus>} */
+const PILLS = Object.freeze({ active: 'active', grace: 'warning', stopped: 'error', suspended: 'error', removed: 'off' });
+
 /** @param {Need[]} needs red items first, each tone in its own order */
 const urgentFirst = (needs) => [
 	...needs.filter((need) => need.tone === 'danger'),
@@ -372,8 +379,8 @@ const urgentFirst = (needs) => [
  * @param {{ data: DashboardOverview, who: { kind: 'merchant' | 'admin', name: string }, product: string,
  *   support: { channels: import('./format.js').SupportChannel[] }, portal: string, namesOf: (keys: string[], max?: number) => string,
  *   open: (tab: OverviewTab, section?: string) => void, recheck: () => Promise<unknown>, needs?: Need[], steps?: SetupStep[],
- *   numbers?: ReactNode, children?: ReactNode }} props
- *   `product`: the product's name; `support`: the support contact (merchants are told to contact it for credits; the
+ *   numbers?: ReactNode, crumbs?: import('./page-parts.js').PageCrumb[], children?: ReactNode }} props
+ *   `product`: the product's name; `crumbs`: the page's breadcrumbs (Product › Overview by default); `support`: the support contact (merchants are told to contact it for credits; the
  *   button opens its first channel);
  *   `portal`: the Portal's address; `namesOf`: feature names of keys, at most `max`; `open`: shows a dashboard section, at a section of its inner sidebar when given;
  *   `recheck`: fetches the Portal's website settings again and reloads the Overview
@@ -390,6 +397,7 @@ export function ProductOverview({
 	needs = [],
 	steps = [],
 	numbers,
+	crumbs,
 	children,
 }) {
 	const T = OVERVIEW_TEXTS;
@@ -618,17 +626,18 @@ export function ProductOverview({
 	const done = counted.filter((step) => step.done).length;
 
 	return (
-		<div className="space-y-5">
-			<PageHeader
-				title={fillText(T.welcome, { name: who.name })}
-				subtitle={sentence}
-				badge={<StatusBadge status={status} label={T.status[/** @type {'active'} */ (status)] ?? status} />}
-				meta={
-					<HeaderFact tone={done === counted.length ? 'success' : 'attention'}>
-						{fillText(S.progress, { done, total: counted.length })}
-					</HeaderFact>
-				}
-			/>
+		<Page
+			crumbs={crumbs ?? [{ label: product }, { label: T.title }]}
+			status={[{ status: PILLS[status] ?? 'off', label: T.status[/** @type {'active'} */ (status)] ?? status }]}
+			facts={[
+				{
+					label: S.title,
+					value: fillText(S.progress, { done, total: counted.length }),
+					tone: done === counted.length ? 'success' : 'attention',
+				},
+			]}
+			info={fillText(T.welcome, { name: who.name })}>
+			<p className="text-sm text-pretty text-muted">{sentence}</p>
 			<div className="@container">
 				<div className="grid items-start gap-5 @4xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
 					<div className="min-w-0 space-y-5">
@@ -665,35 +674,26 @@ export function ProductOverview({
 				</div>
 			</div>
 			{children}
-		</div>
+		</Page>
 	);
 }
 
 /**
- * The loading state of a product dashboard's Overview, shaped like it: the greeting, "Needs you" beside the setup
- * checklist, the number tiles and Recent changes.
+ * The loading state of a product dashboard's Overview, the body of a loading {@link Page} (the page announces it): the
+ * same two columns as the real thing, drawn from the same skeletons — "Needs you" over the number tiles beside the
+ * setup checklist over Recent changes.
  */
 export function OverviewSkeleton() {
 	return (
-		<div role="status" aria-label={OVERVIEW_TEXTS.loading} aria-busy="true" className="animate-ss-fade space-y-5">
-			<div className="space-y-2">
-				<SkeletonBlock className="h-8 w-72 max-w-full" />
-				<SkeletonBlock className="h-4 w-96 max-w-full" />
-			</div>
-			<div className="@container">
-				<div className="grid items-start gap-5 @4xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-					<div className="space-y-5">
-						<SkeletonBlock className="h-44 rounded-card" />
-						<div className={STAT_GRID}>
-							<SkeletonBlock className="h-28 rounded-card" />
-							<SkeletonBlock className="h-28 rounded-card" />
-							<SkeletonBlock className="h-28 rounded-card" />
-						</div>
-					</div>
-					<div className="space-y-5">
-						<SkeletonBlock className="h-44 rounded-card" />
-						<SkeletonBlock className="h-40 rounded-card" />
-					</div>
+		<div className="@container animate-ss-fade">
+			<div className="grid items-start gap-5 @4xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+				<div className="min-w-0 space-y-5">
+					<SettingsCardSkeleton rows={3} />
+					<StatGridSkeleton tiles={3} />
+				</div>
+				<div className="min-w-0 space-y-5">
+					<SettingsCardSkeleton rows={4} />
+					<SettingsCardSkeleton rows={3} />
 				</div>
 			</div>
 		</div>

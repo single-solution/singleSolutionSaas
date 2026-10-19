@@ -26,6 +26,7 @@ import { ListRow, RowList } from './rows.js';
 import { formatCreditsPerHour, parseCredits, supportContact } from './format.js';
 import { useDisplayLocale } from './time.js';
 import { call, fill, useLoad } from './dashboard-api.js';
+import { LoadedPage, SectionsPage, useCrumbs } from './dashboard-page.js';
 import { Loaded, Outcome, ResealCard, toneOf, useDashboard, withDependents } from './dashboard-parts.js';
 import {
 	SettingsBar,
@@ -84,16 +85,18 @@ const slug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 export function OverviewTab(props) {
 	const { websiteId, who, support, portal, open, useMore = useNothingMore } = props;
 	const { texts, namesOf } = useDashboard();
+	const crumbs = useCrumbs();
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const { answer, reload } = useLoad(`${base}/overview`);
 	const more = useMore(answer, props);
 	return (
-		<Loaded answer={answer} skeleton={<OverviewSkeleton />}>
+		<LoadedPage answer={answer} tab="overview" skeleton={<OverviewSkeleton />}>
 			{(data) => (
 				<ProductOverview
 					data={data}
 					who={who}
 					product={texts.title}
+					crumbs={crumbs('overview')}
 					support={support}
 					portal={portal}
 					namesOf={namesOf}
@@ -105,7 +108,7 @@ export function OverviewTab(props) {
 					{...more}
 				/>
 			)}
-		</Loaded>
+		</LoadedPage>
 	);
 }
 

@@ -94,6 +94,31 @@ export function pageState(answer, words) {
 	};
 }
 
+/**
+ * A tab whose page is made from an answer (the kit's overview, the features...): its page skeleton (`skeleton` is the
+ * body's, `withNav` draws the inner navigation's too) until the answer is there, the problem in the page (with Try again
+ * when it can be fetched again) when it failed, and else whatever `children(data)` draws, which is the tab's own
+ * {@link Page} or {@link SectionsPage}.
+ * @param {{ answer: Answer | null, tab: string, sub?: PageCrumb[], skeleton?: ReactNode, withNav?: boolean,
+ *   children: (data: any) => ReactNode }} props `tab`: the key of the tab (its crumb); `sub`: the crumbs after it
+ */
+export function LoadedPage({ answer, tab, sub = [], skeleton, withNav = false, children }) {
+	const crumbs = useCrumbs();
+	const { texts } = useDashboard();
+	const state = pageState(answer, texts);
+	if (state.loading || state.error)
+		return (
+			<Page
+				crumbs={crumbs(tab, ...sub)}
+				{...(state.loading
+					? { loading: true, ...(withNav ? { nav: { groups: [], value: '' } } : {}), ...(skeleton ? { skeleton } : {}) }
+					: {})}
+				{...(state.error ? { error: state.error } : {})}
+			/>
+		);
+	return children(answer?.ok ? answer.data : null);
+}
+
 /** The address of a sub-page: its own `#id`. @param {string} id */
 const hashOf = (id) => `#${encodeURIComponent(id)}`;
 

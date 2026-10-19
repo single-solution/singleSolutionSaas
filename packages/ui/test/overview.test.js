@@ -9,10 +9,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	NeedsList,
 	OverviewSkeleton,
+	Page,
 	ProductOverview,
 	RecentChanges,
+	SettingsCardSkeleton,
 	SetupChecklist,
 	Stat,
+	StatGridSkeleton,
 	Timeline,
 	initialsOf,
 } from '../src/index.js';
@@ -86,6 +89,10 @@ const show = (data, props = {}) => {
 	return { ...view, open, recheck, text: view.container.textContent ?? '' };
 };
 
+/** @param {ParentNode} root the breadcrumbs of the page's header */
+const crumbsOf = (root) =>
+	[...root.querySelectorAll('nav[aria-label="Breadcrumb"] li')].map((li) => li.textContent).filter(Boolean);
+
 /** @param {HTMLElement} container the titles of the "Needs you" items, in order */
 const needTitles = (container) =>
 	[...container.querySelectorAll('section[aria-label="Needs you"] li p:first-child')].map((p) => p.textContent);
@@ -94,9 +101,19 @@ describe('a product dashboard Overview', () => {
 	it('greets by name, says nothing needs the viewer, and shows the setup done, the numbers and the changes', () => {
 		viewerIn('America/New_York');
 		const { container, text } = show(answer());
-		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Acme Store');
+		// the page is a Page: the title is the crumb, the status and the setup progress sit in the header, the greeting
+		// behind the (i); no heading of its own in the body
+		expect(container.querySelector('[data-ss-page]')).not.toBeNull();
+		expect(container.querySelector('h1')?.textContent).toBe('Overview');
+		expect(crumbsOf(container)).toEqual(['Notes', 'Overview']);
+		expect(container.textContent).not.toContain('Welcome back');
+		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="About this page"]')));
+		expect(container.textContent).toContain('Welcome back, Acme Store');
+		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="About this page"]')));
+		const header = /** @type {HTMLElement} */ (container.querySelector('[data-ss-part="header"]'));
+		expect(byText(header, 'Active').closest('span')?.className).toContain('bg-success-soft');
+		expect(header.querySelector('[aria-label="Key numbers"]')?.textContent).toContain('4 of 4 done');
 		expect(text).toContain('Everything on shop.example.com is ready, and nothing needs you right now.');
-		expect(byText(container, 'Active').closest('span')?.className).toContain('bg-success-soft');
 		expect(text).toContain('Nothing needs you right now.');
 		expect(text).not.toContain('Each item says what happens if it waits.');
 		// the setup checklist: a feature on, the database, the widget with its last visit, the website settings
@@ -252,7 +269,9 @@ describe('a product dashboard Overview', () => {
 			who: { kind: 'admin', name: 'Sam Lee' },
 			needs: [{ key: 'own', tone: 'warning', title: 'One more', effect: '.' }],
 		});
-		expect(grace.container.querySelector('h1')?.textContent).toBe('Welcome back, Sam Lee');
+		click(/** @type {HTMLElement} */ (grace.container.querySelector('button[aria-label="About this page"]')));
+		expect(grace.text).not.toContain('Welcome back, Sam Lee');
+		expect(grace.container.textContent).toContain('Welcome back, Sam Lee');
 		expect(grace.text).toContain('Notes is in grace until Oct 4, 2026, 10:30 AM EDT, and one more thing needs you.');
 		expect(grace.text).toContain('Add credits in the Portal.');
 		expect(byText(grace.container, 'Open the Portal', 'a').getAttribute('href')).toBe('https://portal.example.com');
@@ -431,10 +450,21 @@ describe('the shared pieces', () => {
 		expect(initialsOf(null)).toBe('·');
 	});
 
-	it('the loading skeleton is shaped like the Overview and announced', () => {
+	it('the loading skeleton is made of the stat grid and settings card skeletons, and the page announces it', () => {
 		const { container } = render(<OverviewSkeleton />);
-		const status = allByRole(container, 'status')[0];
-		expect([status?.getAttribute('aria-label'), status?.getAttribute('aria-busy')]).toEqual(['Loading…', 'true']);
-		expect(container.querySelectorAll('.ss-shimmer').length).toBe(8);
+		const html = container.innerHTML;
+		// the same boxes the real blocks are drawn in: one tile row and the cards of the two columns
+		expect(html).toContain(render(<StatGridSkeleton tiles={3} />).container.innerHTML);
+		cleanup();
+		const shown = render(<OverviewSkeleton />).container.innerHTML;
+		expect(shown).toContain(render(<SettingsCardSkeleton rows={4} />).container.innerHTML);
+		cleanup();
+		// the page's own skeleton says "Loading" once; the body adds no second announcement and no old blocks
+		const inPage = render(
+			<Page crumbs={[{ label: 'Notes' }, { label: 'Overview' }]} loading skeleton={<OverviewSkeleton />} />,
+		);
+		expect(allByRole(inPage.container, 'status')).toHaveLength(1);
+		expect(inPage.container.querySelector('[data-ss-page][aria-busy="true"]')).not.toBeNull();
+		expect(inPage.container.innerHTML).not.toContain('h-28');
 	});
 });

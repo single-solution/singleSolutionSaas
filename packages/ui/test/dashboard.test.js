@@ -481,7 +481,9 @@ describe('standard tabs', () => {
 		};
 		const { container } = render(inDashboard(<OverviewTab {...tabProps(id)} useMore={useMore} />));
 		await settle();
-		expect(container.textContent).toContain('Welcome back, Alex Morgan');
+		// a page: Notes > Overview in the header, the greeting behind the (i)
+		expect(container.querySelector('h1')?.textContent).toBe('Overview');
+		expect(container.querySelector('button[aria-label="About this page"]')).not.toBeNull();
 		expect(container.textContent).toContain('No widgets yet');
 		expect(container.textContent).toContain('own part');
 		await act(async () => button('Check again').click());

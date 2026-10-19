@@ -6,6 +6,7 @@
  * @module
  */
 export const OVERVIEW_TEXTS = Object.freeze({
+	title: 'Overview',
 	welcome: 'Welcome back, {name}',
 	/** The one sentence under the greeting: nothing needs the viewer, or the most urgent item and how many more. */
 	allSet: 'Everything on {domain} is ready, and nothing needs you right now.',
