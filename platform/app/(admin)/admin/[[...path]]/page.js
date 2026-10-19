@@ -19,6 +19,7 @@ import Products, { metadata as ProductsMeta } from '../_views/products.js';
 import Settings, { metadata as SettingsMeta } from '../_views/settings.js';
 import MerchantsMerchantId, { metadata as MerchantsMerchantIdMeta } from '../_views/merchants-merchantId.js';
 import AdminsAdminId, { metadata as AdminsAdminIdMeta } from '../_views/admins-adminId.js';
+import AdminsAdminIdPart, { metadata as AdminsAdminIdPartMeta } from '../_views/admins-adminId-part.js';
 import ProductsProductId, { metadata as ProductsProductIdMeta } from '../_views/products-productId.js';
 import ProductsProductIdPart, { metadata as ProductsProductIdPartMeta } from '../_views/products-productId-part.js';
 import MerchantsMerchantIdPart, { metadata as MerchantsMerchantIdPartMeta } from '../_views/merchants-merchantId-part.js';
@@ -48,6 +49,7 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[['settings'], Settings, SettingsMeta, 'page'],
 	[['merchants', ':merchantId'], MerchantsMerchantId, MerchantsMerchantIdMeta, 'screen'],
 	[['admins', ':adminId'], AdminsAdminId, AdminsAdminIdMeta, 'screen'],
+	[['admins', ':adminId', ':part'], AdminsAdminIdPart, AdminsAdminIdPartMeta, 'screen'],
 	[['products', ':productId'], ProductsProductId, ProductsProductIdMeta, 'screen'],
 	[['products', ':productId', ':part'], ProductsProductIdPart, ProductsProductIdPartMeta, 'screen'],
 	[['merchants', ':merchantId', ':part'], MerchantsMerchantIdPart, MerchantsMerchantIdPartMeta, 'screen'],

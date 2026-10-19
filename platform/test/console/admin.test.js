@@ -269,19 +269,25 @@ describe('admin console smoke', () => {
 			const admins = await admin.loadAdmins(ownerBrowser.api, owner);
 			const adminsHtml = text(ssr(<AdminsView {...admins} />));
 			expect(adminsHtml).toContain('help@ss.test');
-			// the first admin opens by default on wide screens
 			expect(adminsHtml).toContain('Two-step');
 			const invited = admins.ok ? admins.items.find((a) => a.email === 'help@ss.test') : null;
-			const invitedRaw = ssr(<AdminsView {...admins} selectedId={invited?.adminId} />);
+			const invitedId = String(invited?.adminId);
+			const invitedRaw = ssr(
+				<AdminsView {...await admin.loadAdmin(ownerBrowser.api, owner, invitedId)} selectedId={invitedId} />,
+			);
 			const invitedHtml = text(invitedRaw);
 			for (const word of ['Invited', 'Resend invite', 'Copy invite link']) expect(invitedHtml).toContain(word);
 			// Correct invite email, Change role and Remove sit in the More menu
-			expect(invitedRaw).toContain('aria-label="More actions for help@ss.test"');
+			expect(invitedRaw).toContain('aria-label="More actions"');
 			expect(invitedHtml).not.toContain('Change role');
-			const meHtml = text(ssr(<AdminsView {...admins} selectedId={owner.adminId} />));
+			expect(invitedRaw).toContain(`href="/admin/admins/${invitedId}/activity"`);
+			const meHtml = text(
+				ssr(<AdminsView {...await admin.loadAdmin(ownerBrowser.api, owner, owner.adminId)} selectedId={owner.adminId} />),
+			);
 			expect(meHtml).toContain('you');
 			expect(meHtml).not.toContain('Change role');
-			expect(text(ssr(<AdminsView {...admins} selectedId="adm_00000000000000000000z" />))).toContain(
+			const gone = 'adm_00000000000000000000z';
+			expect(text(ssr(<AdminsView {...await admin.loadAdmin(ownerBrowser.api, owner, gone)} selectedId={gone} />))).toContain(
 				'This admin does not exist or was removed.',
 			);
 			// Settings: an inner sidebar with one section at a time (Branding first), each card with its own Save

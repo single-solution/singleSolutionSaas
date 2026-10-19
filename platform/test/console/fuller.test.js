@@ -27,19 +27,7 @@ import { CreditsView } from '../../src/console/views/credits.js';
 import { presetOf, rangePresets } from '../../src/console/views/range.js';
 import { OverviewView as MerchantOverview, WebsitesView } from '../../src/console/views/websites.js';
 import { PORTAL_URL, startMongo } from '../helpers.js';
-import {
-	buttons,
-	clickEl,
-	createWorld,
-	dialog,
-	openTab,
-	press,
-	pressDialog,
-	pressMenu,
-	quiet,
-	shows,
-	until,
-} from './merchant-harness.js';
+import { buttons, clickEl, createWorld, dialog, press, pressDialog, pressMenu, quiet, shows, until } from './merchant-harness.js';
 import { testRouter } from './router.js';
 
 vi.mock('next/navigation.js', async (importOriginal) => {
@@ -72,9 +60,6 @@ const menu = (label) => clickEl(/** @type {Element} */ (document.querySelector(`
 /** @param {string} label */
 const menuItem = (label) =>
 	/** @type {HTMLButtonElement} */ ([...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === label));
-
-/** @param {string} label @param {string} value */
-const pick = (label, value) => type(byLabel(document, label), value);
 
 /** @param {string} snippet the last router push contains it */
 const pushed = (snippet) => String(testRouter.push.mock.calls.at(-1)?.[0] ?? '').includes(snippet);
@@ -296,14 +281,23 @@ describe('fuller Portal screens (jsdom)', () => {
 			await world.adminOf('support');
 			const admins = await admin.loadAdmins(ownerBrowser.api, owner);
 			withToasts(<AdminsView {...admins} />);
-			expect(shows('What this role can do') && shows('Everything in the Portal')).toBe(true);
-			await openTab('Recent activity');
-			await until(() =>
-				ownerBrowser.calls.some((c) => c.path === `/v1/admin/activity?adminId=${owner.adminId}&limit=10` && c.status === 200),
-			);
-			await pick('Role', 'support');
+			// the list is a table; the role filter keeps one role
 			expect(shows('support admin')).toBe(true);
-			await press('Open in Activity');
+			await pressMenu('Role', 'Owner');
+			expect(shows('support admin')).toBe(false);
+			await pressMenu('Role', 'Support');
+			expect(shows('support admin')).toBe(true);
+			cleanup();
+			// one admin's page: the details and what the role can do, then the Activity part
+			const own = await admin.loadAdmin(ownerBrowser.api, owner, owner.adminId);
+			withToasts(<AdminsView {...own} selectedId={owner.adminId} />);
+			expect(shows('What this role can do') && shows('Everything in the Portal')).toBe(true);
+			expect(document.querySelector(`nav a[href="/admin/admins/${owner.adminId}/activity"]`)).not.toBeNull();
+			cleanup();
+			const ownActivity = await admin.loadAdmin(ownerBrowser.api, owner, owner.adminId, 'activity');
+			withToasts(<AdminsView {...ownActivity} selectedId={owner.adminId} section="activity" />);
+			expect(document.querySelectorAll('tbody tr').length).toBeGreaterThan(0);
+			await pressMenu('More actions', 'Open in Activity');
 			expect(pushed(`/admin/activity?adminId=${owner.adminId}`)).toBe(true);
 			cleanup();
 

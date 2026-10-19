@@ -44,6 +44,9 @@ export const adminRoutes = Object.freeze({
 	) => `/admin/activity${query(q)}`,
 	admins: () => '/admin/admins',
 	admin: (/** @type {string} */ id) => `/admin/admins/${e(id)}`,
+	/** a part of an admin's page: details (the admin's own address) or activity */
+	adminPart: (/** @type {string} */ id, /** @type {string} */ part) =>
+		part === 'details' ? `/admin/admins/${e(id)}` : `/admin/admins/${e(id)}/${e(part)}`,
 	settings: () => '/admin/settings',
 	account: () => '/admin/account',
 	/** a part of My account: profile (the page's own address), sign-in, two-step or activity */

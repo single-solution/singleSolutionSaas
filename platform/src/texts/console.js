@@ -807,6 +807,12 @@ export const ADMIN = Object.freeze({
 	searchAdmins: 'Search name or email',
 	noAdmins: 'No admins found.',
 	adminGone: 'This admin does not exist or was removed.',
+	adminTitle: 'Admin',
+	adminsInfo:
+		'Everyone who can sign in to this Portal. Invite sends a link by email (or you copy it); the role says what an admin may do. The last Owner cannot be removed or demoted, and no one removes themselves.',
+	adminInfo:
+		'Who this admin is, what their role allows and the latest entries they made. The invite can be sent again or copied until it is accepted.',
+	adminColumns: Object.freeze({ name: 'Name', email: 'Email', role: 'Role' }),
 	suspendedBecause: (/** @type {string} */ reason) => `Suspended: ${reason}`,
 	emailLocked: 'The login email can be corrected only until the merchant sets a password.',
 	adminsTitle: 'Admins',

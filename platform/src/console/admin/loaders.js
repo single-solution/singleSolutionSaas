@@ -309,6 +309,22 @@ export const loadAdmins = async (api, admin) => {
 };
 
 /**
+ * One admin's page: the Admins list (it holds the admin) and, on the Activity part, the first page of the entries this
+ * admin made.
+ * @param {ConsoleApi} api
+ * @param {any} admin the signed-in admin
+ * @param {string} adminId the admin of the page
+ * @param {string} [part] 'details' or 'activity'
+ */
+export const loadAdmin = async (api, admin, adminId, part = 'details') => {
+	const [base, activity] = await Promise.all([
+		loadAdmins(api, admin),
+		part === 'activity' ? api.get(paths.activity({ adminId })) : Promise.resolve(null),
+	]);
+	return base.ok && activity ? { ...base, activity: pageOf(activity) } : base;
+};
+
+/**
  * My account: the admin and their own activity.
  * @param {ConsoleApi} api
  */

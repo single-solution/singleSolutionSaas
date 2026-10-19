@@ -548,7 +548,10 @@ describe('admin console interactions (jsdom)', () => {
 		// the invited admin selected: the actions sit on its detail
 		render(
 			<ToastProvider>
-				<AdminsView {...await admin.loadAdmins(ownerBrowser.api, me)} selectedId={invited.admin.adminId} />
+				<AdminsView
+					{...await admin.loadAdmin(ownerBrowser.api, me, invited.admin.adminId)}
+					selectedId={invited.admin.adminId}
+				/>
 			</ToastProvider>,
 		);
 		await press('Copy invite link');

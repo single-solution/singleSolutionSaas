@@ -1,23 +1,25 @@
 'use client';
 /**
- * Admins (PLAN 0.8.2; Owner only): one list-and-detail screen. The list (count; search; role filter; per row the name,
- * email, a status dot — invited gray — and the role) with **Invite** (email + role) sits beside the selected admin — on
- * wide screens the first one until another is picked: its details (status, role, two-step with recovery codes left,
- * last sign-in, added), what its role can do and its recent activity, with the actions Resend invite or
- * Copy invite link and Correct invite email (until accepted), Change role, Turn off two-step and Remove, as dialogs —
- * the first two as buttons, the rest in the header's More menu with Remove last. The last Owner cannot be removed or
- * demoted and no one removes themselves (the API refuses; the screen explains).
+ * Admins (PLAN 0.8.2; Owner only; layout contract 2026-10-17): the Admins page is a table of the admins (search, a
+ * role filter; per row the name, email, role, a status pill — Invited gray —, two-step and the last sign-in) with
+ * **Invite** (email + role in a drawer; the invite is emailed or its link copied). A row opens the admin's page: a
+ * header (name, Active / Invited, the role; Resend invite and Copy invite link until the invite is accepted, Change
+ * role and Turn off two-step, Correct invite email and Remove in the More menu) and its parts in the inner navigation,
+ * each its own address: Details (the details and what the role can do) and Recent activity (the entries this admin
+ * made, paged). The last Owner cannot be removed or demoted and no one removes themselves (the API refuses; the page
+ * explains).
  * @module
  */
-import { useEffect, useState } from 'react';
+import { useId, useState } from 'react';
 import {
-	Badge,
 	Button,
 	Callout,
 	Card,
 	CodeBlock,
 	ConfirmDialog,
+	DataTable,
 	Dialog,
+	Drawer,
 	EmptyState,
 	Form,
 	FormError,
@@ -25,23 +27,28 @@ import {
 	Input,
 	KeyValueList,
 	LocalTime,
+	Page,
+	Pagination,
 	RadioGroup,
-	PageHeader,
-	Select,
 	Toolbar,
 	describeProblem,
 	fieldErrors,
+	usePaged,
 	useToast,
 } from '@ss/ui';
 import { ADMIN, MORE, TWO_STEP } from '../../../texts/console.js';
+import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
-import { apiFetch, useResource } from '../../client.js';
-import { DetailTabs, HeaderActions, ListDetail, ListPane, PaneRow, ListSearch } from '../../views/common.js';
+import { apiFetch, usePagedList, useResource } from '../../client.js';
 import { ActivityTable } from '../../views/login-settings.js';
+import { useListPages } from '../../views/paging.js';
 import { adminApi, adminRoutes } from '../paths.js';
-import { AdminProblem, RoleBadge } from './common.js';
+import { AdminProblem } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
+
+/** The parts of an admin's page, each its own address (Details is the admin's own address). */
+export const ADMIN_PARTS = ['details', 'activity'];
 
 const ROLE_OPTIONS = Object.freeze([
 	{ value: 'owner', label: ADMIN.roles.owner },
@@ -55,65 +62,220 @@ const ROLE_CARDS = Object.freeze(
 );
 
 /**
- * The latest entries an admin made (the Activity page filtered by them), with a link to all of them.
- * @param {{ adminId: string }} props
+ * The pill of an admin's status.
+ * @param {{ status?: string }} admin
+ * @returns {{ status: 'active' | 'off', label: string }}
  */
-function AdminActivity({ adminId }) {
+const statusPill = (admin) =>
+	admin.status === 'invited' ? { status: 'off', label: ADMIN.invited } : { status: 'active', label: ADMIN.status.active };
+
+/** @param {string} role */
+const roleName = (role) => ADMIN.roles[/** @type {'owner'} */ (role)] ?? role;
+
+/**
+ * The invite link, shown once.
+ * @param {{ link: string | null, onClose: () => void }} props
+ */
+function InviteLink({ link, onClose }) {
+	return (
+		<Dialog
+			open={Boolean(link)}
+			onClose={onClose}
+			title={ADMIN.copyInvite}
+			description={ADMIN.setupLinkCopy}
+			placement="center">
+			{link ? <CodeBlock code={link} label={ADMIN.copyInvite} secret wrap /> : null}
+		</Dialog>
+	);
+}
+
+/**
+ * Invite an admin, in a drawer: the email and the role; Invite sends the invite, Copy invite link hands the link over.
+ * @param {{ open: boolean, onClose: () => void, onInvited: (invite: any, copy: boolean) => void }} props
+ */
+function InviteDrawer({ open, onClose, onInvited }) {
+	const [email, setEmail] = useState('');
+	const [role, setRole] = useState('support');
+	const [busy, setBusy] = useState(false);
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	const formId = useId();
+	/** @param {boolean} copy */
+	const invite = async (copy) => {
+		setBusy(true);
+		setProblem(null);
+		const result = await apiFetch(adminApi.admins(), { method: 'POST', body: { email: email.trim(), role, copy } });
+		setBusy(false);
+		if (!result.ok) {
+			setProblem(result.problem);
+			return;
+		}
+		setEmail('');
+		setRole('support');
+		onInvited(result.data?.invite, copy);
+	};
+	return (
+		<Drawer
+			open={open}
+			onClose={onClose}
+			title={ADMIN.inviteTitle}
+			footer={
+				<>
+					<Button variant="secondary" onClick={() => void invite(true)} loading={busy}>
+						{ADMIN.copyInvite}
+					</Button>
+					<Button type="submit" form={formId} loading={busy}>
+						{ADMIN.invite}
+					</Button>
+				</>
+			}>
+			<Form id={formId} onSubmit={() => invite(false)} busy={busy} aria-label={ADMIN.inviteTitle}>
+				<Input
+					label="Email"
+					type="email"
+					value={email}
+					onChange={(e) => setEmail(e.currentTarget.value)}
+					error={fieldErrors(problem).email}
+					required
+				/>
+				<RadioGroup legend={ADMIN.role} cards value={role} onChange={setRole} options={[...ROLE_CARDS]} />
+				<FormError problem={problem} fields={['email', 'role']} />
+			</Form>
+		</Drawer>
+	);
+}
+
+/**
+ * The Admins list: a table with search and a role filter; Invite opens the invite drawer.
+ * @param {{ props: any }} input
+ */
+function AdminsPage({ props }) {
+	const toast = useToast();
 	const nav = useNavigation();
-	const [result, setResult] = useState(/** @type {import('../../api.js').ApiResult<any> | null} */ (null));
-	useEffect(() => {
-		let live = true;
-		void apiFetch(`${adminApi.activity({ adminId })}&limit=10`).then((r) => {
-			if (live) setResult(r);
-		});
-		return () => {
-			live = false;
-		};
-	}, [adminId]);
+	const { data, reload } = useResource(adminApi.admins(), { items: props.items });
+	const [inviting, setInviting] = useState(false);
+	const [link, setLink] = useState(/** @type {string | null} */ (null));
+	const [role, setRole] = useState('');
+	const me = props.me;
+	const items = /** @type {any[]} */ (data.items ?? []);
+	const paged = usePaged(role ? items.filter((a) => a.role === role) : items, {
+		pageSize: 50,
+		text: (a) => `${a.name ?? ''} ${a.email}`,
+	});
+	/** @param {any} invite @param {boolean} copy */
+	const invited = async (invite, copy) => {
+		setInviting(false);
+		if (copy) setLink(invite?.link ?? null);
+		else toast.show({ title: invite?.mailed ? ADMIN.inviteMailed : ADMIN.inviteNotMailed });
+		await reload();
+	};
 	return (
 		<>
-			<Toolbar
-				className="!px-0"
-				end={
-					<Button variant="secondary" size="sm" onClick={() => nav.go(adminRoutes.activity({ adminId }))}>
-						{MORE.openInActivity}
-					</Button>
-				}>
-				<p className="min-w-0 truncate text-sm text-muted">{MORE.adminActivityIntro}</p>
-			</Toolbar>
-			{result && !result.ok ? <Callout tone="danger">{describeProblem(result.problem)}</Callout> : null}
-			<ActivityTable
-				items={result?.ok ? (result.data?.items ?? []) : []}
-				empty={MORE.noActivity}
-				showMerchant
-				filterHref={(q) => adminRoutes.activity(q)}
+			<Page
+				flush
+				linkAs={Link}
+				crumbs={[{ label: ADMIN.adminsTitle }]}
+				info={ADMIN.adminsInfo}
+				actions={{ primary: { label: ADMIN.invite, icon: 'plus', onClick: () => setInviting(true) } }}
+				toolbar={
+					<Toolbar
+						label={ADMIN.adminsTitle}
+						search={{
+							value: paged.query,
+							label: ADMIN.searchAdmins,
+							placeholder: ADMIN.searchAdmins,
+							onSearch: paged.setQuery,
+						}}
+						filters={[
+							{
+								id: 'role',
+								label: ADMIN.role,
+								allLabel: MORE.allRoles,
+								value: role,
+								onChange: setRole,
+								options: [...ROLE_OPTIONS],
+							},
+						]}
+						range={MORE.count(paged.found.length)}
+					/>
+				}
+				{...(paged.found.length > 0 ? { footer: <Pagination {...paged.pagination} /> } : {})}>
+				<DataTable
+					caption={ADMIN.adminsTitle}
+					rows={paged.rows}
+					rowKey={(a) => String(a.adminId)}
+					rowLabel={(a) => a.name ?? a.email}
+					onRowClick={(a) => nav.go(adminRoutes.admin(a.adminId))}
+					empty={<EmptyState compact icon="shield" kind="admin" title={ADMIN.noAdmins} />}
+					columns={[
+						{
+							key: 'name',
+							header: ADMIN.adminColumns.name,
+							rowHeader: true,
+							render: (a) => (
+								<Link href={adminRoutes.admin(a.adminId)} className="font-medium text-fg hover:underline">
+									{a.adminId === me?.adminId ? `${a.name ?? a.email} (${ADMIN.you})` : (a.name ?? a.email)}
+								</Link>
+							),
+						},
+						{ key: 'email', header: ADMIN.adminColumns.email, render: (a) => a.email },
+						{ key: 'role', header: ADMIN.adminColumns.role, render: (a) => roleName(a.role) },
+						{ key: 'status', header: ADMIN.columns.status, kind: 'status', pill: (a) => statusPill(a) },
+						{
+							key: 'twoStep',
+							header: ADMIN.twoStepColumn,
+							low: true,
+							render: (a) => (a.twoStep?.enabled ? MORE.twoStepOn(a.twoStep.recoveryCodesLeft ?? 0) : TWO_STEP.off),
+						},
+						{
+							key: 'lastSignIn',
+							header: ADMIN.columns.lastSignIn,
+							kind: 'date',
+							low: true,
+							render: (a) => (a.lastSignInAt ? <LocalTime value={a.lastSignInAt} /> : MORE.never),
+						},
+					]}
+				/>
+			</Page>
+			<InviteDrawer
+				open={inviting}
+				onClose={() => setInviting(false)}
+				onInvited={(invite, copy) => void invited(invite, copy)}
 			/>
+			<InviteLink link={link} onClose={() => setLink(null)} />
 		</>
 	);
 }
 
 /**
- * @param {any} props loader result of `loadAdmins` plus `selectedId` (an admin selected)
+ * An admin's page: the header and one part of it at a time, each part its own address.
+ * @param {{ props: any, adminId: string, section: string }} input
  */
-export function AdminsView(props) {
+function AdminPage({ props, adminId, section }) {
 	const toast = useToast();
-	const ok = props.ok === true;
-	const { data, reload } = useResource(ok ? adminApi.admins() : null, { items: ok ? props.items : [] });
-	const [dialog, setDialog] = useState(
-		/** @type {null | { kind: 'invite' | 'email' | 'role' | 'twoStep' | 'remove', admin?: any }} */ (null),
-	);
+	const nav = useNavigation();
+	const { data, reload } = useResource(adminApi.admins(), { items: props.items });
+	const [dialog, setDialog] = useState(/** @type {null | 'email' | 'role' | 'twoStep' | 'remove'} */ (null));
 	const [email, setEmail] = useState('');
 	const [role, setRole] = useState('support');
 	const [link, setLink] = useState(/** @type {string | null} */ (null));
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const nav = useNavigation();
-	const [q, setQ] = useState('');
-	const [roleFilter, setRoleFilter] = useState('');
-	if (!ok) return <AdminProblem problem={props.problem} />;
-	const selectedId = typeof props.selectedId === 'string' ? props.selectedId : null;
+	const emailForm = useId();
+	const roleForm = useId();
+	const activity = usePagedList((cursor) => adminApi.activity({ adminId, cursor }), props.activity);
+	const activityPages = useListPages(activity);
 	const me = props.me;
 	const items = /** @type {any[]} */ (data.items ?? []);
+	const current = items.find((a) => a.adminId === adminId) ?? null;
+	const part = ADMIN_PARTS.includes(section) ? section : 'details';
+	const adminsCrumb = { label: ADMIN.adminsTitle, href: adminRoutes.admins() };
+	if (!current)
+		return (
+			<Page linkAs={Link} crumbs={[adminsCrumb, { label: ADMIN.adminTitle }]} error={ADMIN.adminGone}>
+				{null}
+			</Page>
+		);
+	const title = current.name ?? current.email;
 
 	/**
 	 * @param {string} path
@@ -129,18 +291,8 @@ export function AdminsView(props) {
 		return result;
 	};
 	/** @param {boolean} copy */
-	const invite = async (copy) => {
-		const result = await call(adminApi.admins(), 'POST', { email: email.trim(), role, copy });
-		if (!result.ok) return;
-		setDialog(null);
-		setEmail('');
-		if (copy) setLink(result.data?.invite?.link ?? null);
-		else toast.show({ title: result.data?.invite?.mailed ? ADMIN.inviteMailed : ADMIN.inviteNotMailed });
-		await reload();
-	};
-	/** @param {any} admin @param {boolean} copy */
-	const resend = async (admin, copy) => {
-		const result = await call(adminApi.adminInvite(admin.adminId), 'POST', { copy });
+	const resend = async (copy) => {
+		const result = await call(adminApi.adminInvite(adminId), 'POST', { copy });
 		if (!result.ok) {
 			toast.show({ tone: 'danger', title: describeProblem(result.problem) });
 			return;
@@ -149,188 +301,141 @@ export function AdminsView(props) {
 		else toast.show({ title: result.data?.mailed ? ADMIN.inviteMailed : ADMIN.inviteNotMailed });
 	};
 	const save = async () => {
-		if (!dialog?.admin) return;
-		const id = dialog.admin.adminId;
+		if (!dialog) return;
 		const result =
-			dialog.kind === 'email'
-				? await call(adminApi.admin(id), 'PATCH', { email: email.trim() })
-				: dialog.kind === 'role'
-					? await call(adminApi.admin(id), 'PATCH', { role })
-					: dialog.kind === 'twoStep'
-						? await call(adminApi.adminTwoStepOff(id), 'POST', {})
-						: await call(adminApi.admin(id), 'DELETE');
+			dialog === 'email'
+				? await call(adminApi.admin(adminId), 'PATCH', { email: email.trim() })
+				: dialog === 'role'
+					? await call(adminApi.admin(adminId), 'PATCH', { role })
+					: dialog === 'twoStep'
+						? await call(adminApi.adminTwoStepOff(adminId), 'POST', {})
+						: await call(adminApi.admin(adminId), 'DELETE');
 		if (!result.ok) return;
+		const removed = dialog === 'remove';
 		setDialog(null);
-		await reload();
-		if (dialog.kind === 'remove') nav.go(adminRoutes.admins());
+		if (removed) nav.go(adminRoutes.admins());
+		else await reload();
 	};
-	/** @param {'invite' | 'email' | 'role' | 'twoStep' | 'remove'} kind @param {any} [admin] */
-	const open = (kind, admin) => {
+	/** @param {'email' | 'role' | 'twoStep' | 'remove'} kind */
+	const open = (kind) => {
 		setProblem(null);
-		setEmail(kind === 'email' ? (admin?.email ?? '') : '');
-		setRole(admin?.role ?? 'support');
-		setDialog({ kind, ...(admin ? { admin } : {}) });
+		setEmail(kind === 'email' ? (current.email ?? '') : '');
+		setRole(current.role ?? 'support');
+		setDialog(kind);
 	};
 
-	const needle = q.trim().toLowerCase();
-	const shown = items.filter(
-		(a) => (!needle || `${a.name ?? ''} ${a.email}`.toLowerCase().includes(needle)) && (!roleFilter || a.role === roleFilter),
-	);
-	const auto = selectedId === null;
-	const current = auto ? (items[0] ?? null) : (items.find((a) => a.adminId === selectedId) ?? null);
+	const self = adminId === me?.adminId;
 	/** @type {Array<{ label: string, onSelect: () => void, danger?: boolean }>} */
-	const actionList = current
-		? [
-				...(current.status === 'invited'
-					? [
-							{ label: ADMIN.resendInvite, onSelect: () => void resend(current, false) },
-							{ label: ADMIN.copyInvite, onSelect: () => void resend(current, true) },
-							{ label: ADMIN.correctEmail, onSelect: () => open('email', current) },
-						]
-					: []),
-				...(current.adminId !== me?.adminId
-					? [
-							{ label: ADMIN.changeRole, onSelect: () => open('role', current) },
-							...(current.twoStep?.enabled
-								? [{ label: ADMIN.turnOffTwoStep, onSelect: () => open('twoStep', current) }]
-								: []),
-							{ label: ADMIN.remove, onSelect: () => open('remove', current), danger: true },
-						]
-					: []),
-			]
-		: [];
+	const actionList = [
+		...(current.status === 'invited'
+			? [
+					{ label: ADMIN.resendInvite, onSelect: () => void resend(false) },
+					{ label: ADMIN.copyInvite, onSelect: () => void resend(true) },
+					{ label: ADMIN.correctEmail, onSelect: () => open('email') },
+				]
+			: []),
+		...(self
+			? []
+			: [
+					{ label: ADMIN.changeRole, onSelect: () => open('role') },
+					...(current.twoStep?.enabled ? [{ label: ADMIN.turnOffTwoStep, onSelect: () => open('twoStep') }] : []),
+					{ label: ADMIN.remove, onSelect: () => open('remove'), danger: true },
+				]),
+	];
 	// the first two actions are buttons; the rest (Remove always) sit in the More menu
-	const shownActions = actionList.filter((a) => !a.danger).slice(0, 2);
-	const actions = current ? (
-		<HeaderActions
-			label={ADMIN.moreActions(current.name ?? current.email)}
-			more={actionList.filter((a) => !shownActions.includes(a))}>
-			{shownActions.map((a) => (
-				<Button key={a.label} variant="secondary" onClick={a.onSelect}>
-					{a.label}
-				</Button>
-			))}
-		</HeaderActions>
-	) : null;
-
+	const buttons = actionList.filter((a) => !a.danger).slice(0, 2);
+	const more = actionList.filter((a) => !buttons.includes(a));
+	const bodies = {
+		details: (
+			<div className="space-y-4">
+				<Card title={MORE.detailsTitle}>
+					<KeyValueList
+						columns={3}
+						items={[
+							{ label: ADMIN.adminColumns.email, value: self ? `${current.email} · ${ADMIN.you}` : current.email },
+							{ label: ADMIN.adminColumns.role, value: roleName(current.role) },
+							{
+								label: ADMIN.twoStepColumn,
+								value: current.twoStep?.enabled ? MORE.twoStepOn(current.twoStep.recoveryCodesLeft ?? 0) : TWO_STEP.off,
+							},
+							{
+								label: ADMIN.columns.lastSignIn,
+								value: current.lastSignInAt ? <LocalTime value={current.lastSignInAt} /> : MORE.never,
+							},
+							{ label: MORE.added, value: <LocalTime value={current.createdAt} /> },
+						]}
+					/>
+				</Card>
+				<Card title={MORE.rightsTitle} subtitle={roleName(current.role)}>
+					<ul className="list-disc space-y-1.5 pl-5 text-sm text-fg marker:text-primary">
+						{(MORE.rights[/** @type {'owner'} */ (current.role)] ?? []).map((line) => (
+							<li key={line}>{line}</li>
+						))}
+					</ul>
+				</Card>
+			</div>
+		),
+		activity: (
+			<>
+				{activity.problem ? (
+					<div className="p-4">
+						<Callout tone="danger">{describeProblem(activity.problem)}</Callout>
+					</div>
+				) : null}
+				<ActivityTable
+					items={activityPages.rows}
+					caption={ADMIN.activityTitle}
+					empty={MORE.noActivity}
+					showMerchant
+					details
+					filterHref={(q) => adminRoutes.activity(q)}
+				/>
+			</>
+		),
+	};
 	return (
 		<>
-			<ListDetail
-				section="admin/admins"
-				label={ADMIN.adminsTitle}
-				back={{ href: adminRoutes.admins(), label: ADMIN.adminsTitle }}
-				list={
-					<ListPane
-						title={ADMIN.adminsTitle}
-						count={MORE.count(items.length)}
-						action={
-							<Button size="sm" onClick={() => open('invite')} icon={<Icon name="plus" size={14} />}>
-								{ADMIN.invite}
-							</Button>
-						}
-						tools={
-							<ListSearch label={ADMIN.searchAdmins} value={q} onChange={setQ}>
-								<Select
-									label={ADMIN.role}
-									hideLabel
-									fieldClassName="min-w-0 flex-1"
-									value={roleFilter}
-									onChange={(e) => setRoleFilter(e.currentTarget.value)}
-									options={[{ value: '', label: MORE.allRoles }, ...ROLE_OPTIONS]}
-								/>
-							</ListSearch>
-						}>
-						{shown.length === 0 ? (
-							<li>
-								<EmptyState compact icon="shield" kind="admin" title={ADMIN.noAdmins} />
-							</li>
-						) : null}
-						{shown.map((a) => (
-							<PaneRow
-								key={a.adminId}
-								href={adminRoutes.admin(a.adminId)}
-								current={a.adminId === current?.adminId ? (auto ? 'wide' : true) : false}
-								label={a.adminId === me?.adminId ? `${a.name ?? a.email} (${ADMIN.you})` : (a.name ?? a.email)}
-								sublabel={a.email}
-								dot={a.status === 'invited' ? 'neutral' : 'success'}
-								dotLabel={a.status === 'invited' ? ADMIN.invited : ADMIN.status.active}
-								meta={ADMIN.roles[/** @type {'owner'} */ (a.role)] ?? a.role}
-							/>
-						))}
-					</ListPane>
-				}
-				auto={auto}
-				empty={<EmptyState icon="shield" kind="admin" title={ADMIN.noAdmins} />}
-				detail={
-					current ? (
-						<>
-							<PageHeader
-								level={2}
-								title={current.name ?? current.email}
-								badge={
-									<span className="inline-flex flex-wrap gap-1">
-										<RoleBadge role={current.role} />
-										{current.status === 'invited' ? <Badge tone="neutral">{ADMIN.invited}</Badge> : null}
-									</span>
-								}
-								subtitle={current.adminId === me?.adminId ? `${current.email} · ${ADMIN.you}` : current.email}
-								actions={actions}
-							/>
-							<DetailTabs
-								label={ADMIN.adminParts}
-								idPrefix="admin"
-								tabs={[
-									{
-										id: 'admin-details',
-										label: MORE.detailsTitle,
-										content: (
-											<>
-												<Card title={MORE.detailsTitle}>
-													<KeyValueList
-														items={[
-															{
-																label: ADMIN.twoStepColumn,
-																value: current.twoStep?.enabled
-																	? MORE.twoStepOn(current.twoStep.recoveryCodesLeft ?? 0)
-																	: TWO_STEP.off,
-															},
-															{
-																label: ADMIN.columns.lastSignIn,
-																value: current.lastSignInAt ? (
-																	<LocalTime value={current.lastSignInAt} />
-																) : (
-																	MORE.never
-																),
-															},
-															{ label: MORE.added, value: <LocalTime value={current.createdAt} /> },
-														]}
-													/>
-												</Card>
-												<Card title={MORE.rightsTitle} subtitle={ADMIN.roles[/** @type {'owner'} */ (current.role)]}>
-													<ul className="list-disc space-y-1.5 pl-5 text-sm text-fg marker:text-primary">
-														{(MORE.rights[/** @type {'owner'} */ (current.role)] ?? []).map((line) => (
-															<li key={line}>{line}</li>
-														))}
-													</ul>
-												</Card>
-											</>
-										),
-									},
-									{
-										id: 'admin-activity',
-										label: ADMIN.recentActivity,
-										content: <AdminActivity key={current.adminId} adminId={current.adminId} />,
-									},
-								]}
-							/>
-						</>
-					) : auto ? null : (
-						<EmptyState icon="shield" kind="admin" title={ADMIN.adminGone} />
-					)
-				}
-			/>
-			<Dialog open={dialog?.kind === 'invite'} onClose={() => setDialog(null)} title={ADMIN.inviteTitle}>
-				<Form onSubmit={() => invite(false)} busy={busy} aria-label={ADMIN.inviteTitle}>
+			<Page
+				linkAs={Link}
+				flush={part === 'activity'}
+				bodyKey={part}
+				crumbs={[adminsCrumb, { label: title }]}
+				status={[statusPill(current)]}
+				facts={[{ label: ADMIN.adminColumns.role, value: roleName(current.role) }]}
+				info={ADMIN.adminInfo}
+				actions={{
+					...(buttons.length > 0 ? { secondary: buttons.map((a) => ({ label: a.label, onClick: a.onSelect })) } : {}),
+					more: [
+						...more,
+						...(part === 'activity'
+							? [{ label: MORE.openInActivity, onSelect: () => nav.go(adminRoutes.activity({ adminId })) }]
+							: []),
+					],
+				}}
+				nav={{
+					value: part,
+					label: ADMIN.adminParts,
+					items: [
+						{ id: 'details', label: MORE.detailsTitle },
+						{ id: 'activity', label: ADMIN.recentActivity },
+					].map((item) => ({ ...item, href: adminRoutes.adminPart(adminId, item.id) })),
+				}}
+				{...(part === 'activity' && activityPages.pagination
+					? { footer: <Pagination {...activityPages.pagination} /> }
+					: {})}>
+				{bodies[/** @type {keyof typeof bodies} */ (part)]}
+			</Page>
+			<Drawer
+				open={dialog === 'email'}
+				onClose={() => setDialog(null)}
+				title={ADMIN.correctEmail}
+				description={title}
+				footer={
+					<Button type="submit" form={emailForm} loading={busy}>
+						{ADMIN.correctEmail}
+					</Button>
+				}>
+				<Form id={emailForm} onSubmit={save} busy={busy} aria-label={ADMIN.correctEmail}>
 					<Input
 						label="Email"
 						type="email"
@@ -339,56 +444,48 @@ export function AdminsView(props) {
 						error={fieldErrors(problem).email}
 						required
 					/>
-					<RadioGroup legend={ADMIN.role} cards value={role} onChange={setRole} options={[...ROLE_CARDS]} />
-					<FormError problem={problem} fields={['email', 'role']} />
-					<div className="flex flex-wrap gap-2">
-						<Button type="submit" loading={busy}>
-							{ADMIN.invite}
-						</Button>
-						<Button variant="secondary" onClick={() => void invite(true)} loading={busy}>
-							{ADMIN.copyInvite}
-						</Button>
-					</div>
+					<FormError problem={problem} fields={['email']} />
 				</Form>
-			</Dialog>
+			</Drawer>
+			<Drawer
+				open={dialog === 'role'}
+				onClose={() => setDialog(null)}
+				title={ADMIN.changeRole}
+				description={ADMIN.roleChangeHelp}
+				footer={
+					<Button type="submit" form={roleForm} loading={busy}>
+						{ADMIN.changeRole}
+					</Button>
+				}>
+				<Form id={roleForm} onSubmit={save} busy={busy} aria-label={ADMIN.changeRole}>
+					<RadioGroup legend={ADMIN.role} cards value={role} onChange={setRole} options={[...ROLE_CARDS]} />
+					<FormError problem={problem} fields={['role']} />
+				</Form>
+			</Drawer>
 			<ConfirmDialog
-				open={dialog !== null && dialog.kind !== 'invite'}
+				open={dialog === 'twoStep' || dialog === 'remove'}
 				onClose={() => setDialog(null)}
 				onConfirm={() => void save()}
 				busy={busy}
-				danger={dialog?.kind === 'remove' || dialog?.kind === 'twoStep'}
-				confirmLabel={
-					dialog?.kind === 'email'
-						? ADMIN.correctEmail
-						: dialog?.kind === 'role'
-							? ADMIN.changeRole
-							: dialog?.kind === 'twoStep'
-								? ADMIN.turnOffTwoStep
-								: ADMIN.remove
-				}
-				title={`${dialog?.admin?.name ?? dialog?.admin?.email ?? ''}`}
+				danger
+				confirmLabel={dialog === 'twoStep' ? ADMIN.turnOffTwoStep : ADMIN.remove}
+				title={title}
 				error={problem ? describeProblem(problem) : null}>
-				{dialog?.kind === 'email' ? (
-					<Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} required />
-				) : dialog?.kind === 'role' ? (
-					<div className="space-y-3">
-						<p className="text-sm text-muted">{ADMIN.roleChangeHelp}</p>
-						<RadioGroup legend={ADMIN.role} cards value={role} onChange={setRole} options={[...ROLE_CARDS]} />
-					</div>
-				) : dialog?.kind === 'twoStep' ? (
-					<p className="text-sm text-muted">{ADMIN.turnOffTwoStepHelp}</p>
-				) : (
-					<p className="text-sm text-muted">{ADMIN.removeAdminHelp}</p>
-				)}
+				<p className="text-sm text-muted">{dialog === 'twoStep' ? ADMIN.turnOffTwoStepHelp : ADMIN.removeAdminHelp}</p>
 			</ConfirmDialog>
-			<Dialog
-				open={Boolean(link)}
-				onClose={() => setLink(null)}
-				title={ADMIN.copyInvite}
-				description={ADMIN.setupLinkCopy}
-				placement="center">
-				{link ? <CodeBlock code={link} label={ADMIN.copyInvite} secret wrap /> : null}
-			</Dialog>
+			<InviteLink link={link} onClose={() => setLink(null)} />
 		</>
 	);
+}
+
+/**
+ * The Admins pages: the list, or (with `selectedId`) one admin's page and its `section`.
+ * @param {any} props loader result of `loadAdmins` (the list) or `loadAdmin` (an admin's page, with `activity` on the
+ *   Activity part) plus `selectedId` and `section`
+ */
+export function AdminsView(props) {
+	if (props.ok !== true) return <AdminProblem problem={props.problem} />;
+	const selectedId = typeof props.selectedId === 'string' ? props.selectedId : null;
+	if (selectedId) return <AdminPage key={selectedId} props={props} adminId={selectedId} section={props.section ?? 'details'} />;
+	return <AdminsPage props={props} />;
 }
