@@ -101,8 +101,7 @@ export const identityRoutes = (ctx, service) => {
 	 * @param {RequestContext} c
 	 * @param {{ password: string, code?: string, recoveryCode?: string }} confirmation
 	 */
-	const confirmed = (c, confirmation) =>
-		accounts.confirm(kindOf(c), { ...confirmation, id: sessionOf(c).subject }, metaOf(c));
+	const confirmed = (c, confirmation) => accounts.confirm(kindOf(c), { ...confirmation, id: sessionOf(c).subject }, metaOf(c));
 
 	/** @type {RouteDefinition[]} */
 	const routes = [

@@ -361,7 +361,9 @@ describe('Setup page (jsdom)', () => {
 			expect(/** @type {HTMLInputElement} */ (byLabel(dialog(), 'Nothing (information only)')).checked).toBe(false);
 			await pick('No');
 			// the countries and languages are the website's settings: a note with a link, no field
-			expect(dialog().textContent).toContain('The countries and languages come from the website’s settings (Region and format)');
+			expect(dialog().textContent).toContain(
+				'The countries and languages come from the website’s settings (Region and format)',
+			);
 			expect(dialog().querySelector('a')?.getAttribute('href')).toBe(`/websites/${websiteId}/settings#region`);
 			expect(() => byLabel(dialog(), 'Languages of the website')).toThrow();
 			// own answers where the options cannot list everything, typed once each

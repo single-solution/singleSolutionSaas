@@ -160,7 +160,10 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 		const browser = await owner.post(`${site}/tokens/notes/regenerate`, { kind: 'browser', ...CONFIRM });
 		expect(browser.json.token).not.toBe(before.browserToken);
 		expect((await m.client.get(`${site}/tokens`)).json.items[0].browserToken).toBe(browser.json.token);
-		expect(codeOf(await owner.post(`${site}/tokens/notes/regenerate`, { kind: 'both', ...CONFIRM }))).toEqual([422, 'validation_failed']);
+		expect(codeOf(await owner.post(`${site}/tokens/notes/regenerate`, { kind: 'both', ...CONFIRM }))).toEqual([
+			422,
+			'validation_failed',
+		]);
 		const oldBrowser = await check(h, before.browserToken, 'browser');
 		const revocations = await h.productCall(product, 'GET', '/v1/product/revocations');
 		expect(revocations.json.tokenIds.sort()).toEqual([oldServer.jti, oldBrowser.jti].sort());

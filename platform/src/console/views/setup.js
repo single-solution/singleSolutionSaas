@@ -558,7 +558,9 @@ function ProfileDialog({ manage, profile, settingsHref, onClose, onSaved }) {
 	// the countries and languages are the website's settings, not answered here
 	const [answers, setAnswers] = useState(
 		/** @type {BusinessProfile} */ (
-			Object.fromEntries(Object.entries(profile ?? {}).filter(([question]) => question !== 'countries' && question !== 'languages'))
+			Object.fromEntries(
+				Object.entries(profile ?? {}).filter(([question]) => question !== 'countries' && question !== 'languages'),
+			)
 		),
 	);
 	const [own, setOwn] = useState(

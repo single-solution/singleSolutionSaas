@@ -483,13 +483,7 @@ export const createAccounts = (deps) => {
 		 */
 		confirm: async (kind, { id, password, code, recoveryCode }, meta) => {
 			const doc = await loadLogin(kind, id);
-			await proveLogin(
-				kind,
-				doc,
-				password,
-				{ ...(code ? { code } : {}), ...(recoveryCode ? { recoveryCode } : {}) },
-				meta,
-			);
+			await proveLogin(kind, doc, password, { ...(code ? { code } : {}), ...(recoveryCode ? { recoveryCode } : {}) }, meta);
 		},
 
 		/**

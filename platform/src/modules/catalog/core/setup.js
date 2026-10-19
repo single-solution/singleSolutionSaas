@@ -103,7 +103,15 @@ export const profileWithSettings = (stored, settings) => {
  *   the profile's countries and languages (none saved: an empty document)
  * @returns {Blueprint}
  */
-export const assembleSheet = ({ websiteId, domain, status, products, profile, settings = emptyWebsiteSettings(websiteId), now }) => {
+export const assembleSheet = ({
+	websiteId,
+	domain,
+	status,
+	products,
+	profile,
+	settings = emptyWebsiteSettings(websiteId),
+	now,
+}) => {
 	const whole = profileWithSettings(profile, settings);
 	return {
 		schema: BLUEPRINT_SCHEMA,
