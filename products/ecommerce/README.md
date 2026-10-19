@@ -49,6 +49,9 @@ does: only public https addresses and TLS databases.
 3. For each website, the merchant enters the database and the storage once in the Portal (Website settings › Data and
    files) and adds the other products to the website: the Portal links Ecommerce to Accounts, Payments and
    Notifications by itself. The storage's CORS must allow `PUT` (and `GET`) from the website's and the admin page's origins.
+   If the bucket has a public address (a CDN in front of it, or the provider's public bucket address), the merchant enters it
+   as the storage's public address in the Portal: images are then shown from it; without it they are shown through links
+   that last an hour, and search engines, sitemaps and feeds get the website's own `/media` route.
 4. The merchant's site serves the sitemap, feeds, llms.txt and policies from the server-token routes (snippets in
    `/docs`).
 

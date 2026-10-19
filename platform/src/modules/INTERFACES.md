@@ -172,12 +172,13 @@ One MongoDB connection and one S3-compatible storage connection per website, ent
 Data and files), and the keys between the website's products (Between your products). The sealed values never leave in
 a console answer: a person sees only `set` and how each product's own test of it went.
 
-- `connectionsView({ merchantId, websiteId })` → `{ version, database: { set, setAt }, storage: { set, setAt }, products:
+- `connectionsView({ merchantId, websiteId })` → `{ version, database: { set, setAt }, storage: { set, setAt, publicBaseUrl? }, products:
 [{ productId, name, database: { name, overridden, state } | null, storage: { folder, required, state } | null }],
 links: [{ caller, callee, state: on|idle|off, scopes: [{ scope, name, description }], delivered }] }` (`state` of a
   connection: `not_set`, `waiting`, `connected`, `test_failed`). The routes add `can: { write }`.
 - `saveConnection({ merchantId, websiteId, name, value, names?, actor, requestId, ip })`, `removeConnection(…)`:
-  `name` is `database` or `storage`; the value is checked (a MongoDB string; a bucket with its region and keys), sealed
+  `name` is `database` or `storage`; the value is checked (a MongoDB string; a bucket with its region and keys, and optionally the bucket's public https address `publicBaseUrl`, kept
+  as a plain copy next to the sealed value and delivered inside `storage`), sealed
   with `ctx.secretBox` (AAD website, name and the value's own counter) and kept; the version rises by one; Activity
   `website.connection_saved` / `website.connection_removed` (never a value); every product on the website that needs it
   gets a `website.settings_changed` notice (`what: 'connections'`) and the merchant an e-mail (`connection_changed`). `names`

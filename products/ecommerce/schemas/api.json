@@ -10090,7 +10090,7 @@
 				},
 				"url": {
 					"type": ["string", "null"],
-					"description": "Its address (the media address, or a link signed for an hour); null without storage."
+					"description": "Its address (the public address of the storage, or a link signed for an hour); null without storage."
 				}
 			},
 			"description": "A photo of a product or variant, as staff get it."
@@ -30103,7 +30103,7 @@
 				},
 				"signature": {
 					"type": "string",
-					"description": "The address's part after the media path."
+					"description": "The address's part after /media."
 				}
 			}
 		},
