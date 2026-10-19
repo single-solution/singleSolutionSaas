@@ -150,7 +150,7 @@ const PaymentsSettings = (props) => (
 	<SettingsTab
 		{...props}
 		extras={{
-			manual_payments: props.websiteId ? <MethodsEditor websiteId={String(props.websiteId)} /> : null,
+			manual_payments: props.websiteId ? <MethodsEditor websiteId={String(props.websiteId)} bare /> : null,
 		}}
 	/>
 );

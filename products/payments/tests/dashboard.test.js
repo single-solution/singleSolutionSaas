@@ -7,11 +7,12 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DashboardProvider } from '@ss/ui/dashboard';
-import { allByRole, byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
+import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import manifest from '../manifest.json' with { type: 'json' };
 import { MethodsEditor } from '../app/dashboard/methods.js';
 import { TABS } from '../app/dashboard/tabs.js';
 import { TEXTS } from '../app/dashboard/texts.js';
+import { closeDrawer, drawerOf, openRow, rowMenu, rowNames } from './dashboard-provider.js';
 
 /** The dashboard keeps each answer it loaded for the page: each render opens its own website. */
 let website = 0;
@@ -211,25 +212,41 @@ describe('the manual payment methods editor (P1, P2)', () => {
 		</DashboardProvider>
 	);
 
+	/** The Save bar's Save button, or null while there is nothing to save. */
+	const saveButton = () => [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Save') ?? null;
+
 	it('adds a method paid on delivery and an account row, reorders, and saves the whole list', async () => {
 		const saved = serveList([transfer([['Account holder', 'Shop Ltd']])]);
 		const { container } = render(Editor(`web_${(website += 1)}`));
 		await settle();
-		expect(byLabel(container, 'Name payers see').value).toBe('Bank transfer');
-		// one method at a time: the new one is picked after Add method
-		click(byText(container, 'Add method', 'button'));
-		expect(
-			[...container.querySelectorAll('label')].filter((label) => label.textContent?.startsWith('Name payers see')),
-		).toHaveLength(1);
-		type(byLabel(container, 'Name payers see'), 'Cash on delivery');
-		type(/** @type {HTMLSelectElement} */ (container.querySelector('select')), 'on_delivery');
+		// the title and Add method are there; a row is a method with its kind, key, accounts and status
+		expect(container.querySelector('h2')?.textContent).toBe('Manual payment methods');
+		expect(rowNames(container)).toEqual(['Bank transfer']);
+		const cells = container.querySelector('tbody')?.textContent ?? '';
+		expect(cells).toContain('Paid first');
+		expect(cells).toContain('bank_transfer');
+		expect(cells).toContain('Shown to payers');
+		// no Save bar until something changed
+		expect(saveButton()).toBeNull();
+		const first = await openRow(container, 'Bank transfer');
+		expect(first.querySelector('h2')?.textContent).toBe('Bank transfer');
+		expect(byLabel(first, 'Name payers see').value).toBe('Bank transfer');
 		// a row more on the bank account of the first method
-		click(/** @type {HTMLElement} */ (allByRole(container, 'tab')[0]));
-		click(byText(container, 'Add row', 'button'));
-		// the new method first
-		click(/** @type {HTMLElement} */ (allByRole(container, 'tab')[1]));
-		click(byText(container, 'Move up', 'button'));
-		click(byText(container, 'Save', 'button'));
+		await act(async () => click(byText(first, 'Add row', 'button')));
+		await closeDrawer();
+		// a new method opens in the drawer
+		await act(async () => click(byText(container, 'Add method', 'button')));
+		const added = drawerOf();
+		expect(added.querySelector('h2')?.textContent).toBe('Method 2');
+		type(byLabel(added, 'Name payers see'), 'Cash on delivery');
+		type(/** @type {HTMLSelectElement} */ (added.querySelector('select')), 'on_delivery');
+		await closeDrawer();
+		// Done saves nothing
+		expect(saved).toHaveLength(0);
+		// the new method first, from its row menu
+		await rowMenu(container, 'Cash on delivery', 'Move up');
+		expect(rowNames(container)).toEqual(['Cash on delivery', 'Bank transfer']);
+		await act(async () => click(/** @type {HTMLElement} */ (saveButton())));
 		await settle();
 		expect(saved).toHaveLength(1);
 		const value = /** @type {{ value: any[] }} */ (saved[0]).value;
@@ -242,6 +259,31 @@ describe('the manual payment methods editor (P1, P2)', () => {
 			{ label: '', value: '' },
 		]);
 		expect(container.textContent).toContain('Saved');
+		expect(saveButton()).toBeNull();
+	});
+
+	it('removes a method from its row menu, stops Add at the limit and leaves the title out on a page of its own', async () => {
+		serveList([transfer([['IBAN', 'DE89']]), { ...transfer([]), key: 'cash', name: 'Cash on delivery', kind: 'on_delivery' }]);
+		const { container } = render(
+			<DashboardProvider manifest={manifest} texts={TEXTS}>
+				<MethodsEditor websiteId={`web_${(website += 1)}`} bare />
+			</DashboardProvider>,
+		);
+		await settle();
+		expect(container.querySelector('h2')).toBeNull();
+		await rowMenu(container, 'Bank transfer', 'Remove');
+		expect(rowNames(container)).toEqual(['Cash on delivery']);
+		cleanup();
+		serveList(Array.from({ length: 20 }, (_, index) => ({ ...transfer([]), key: `m${index}`, name: `Method ${index}` })));
+		const full = render(Editor(`web_${(website += 1)}`));
+		await settle();
+		expect(rowNames(full.container)).toHaveLength(20);
+		expect(/** @type {HTMLButtonElement} */ (byText(full.container, 'Add method', 'button')).disabled).toBe(true);
+		cleanup();
+		serveList([]);
+		const empty = render(Editor(`web_${(website += 1)}`));
+		await settle();
+		expect(empty.container.textContent).toContain('No manual payment methods yet.');
 	});
 
 	it('shows the server’s errors with their paths, and warns about Storage only for a method with proofs', async () => {
@@ -252,13 +294,28 @@ describe('the manual payment methods editor (P1, P2)', () => {
 		serveList([transfer([['IBAN', 'DE89']], true)], reply);
 		const { container } = render(Editor(`web_${(website += 1)}`));
 		await settle();
-		expect(container.textContent).toContain('Storage is not connected: payers do not see the proof upload');
-		type(byLabel(container, 'Instructions'), 'Quote your order number.');
-		click(byText(container, 'Save', 'button'));
+		const drawer = await openRow(container, 'Bank transfer');
+		expect(drawer.textContent).toContain('Storage is not connected: payers do not see the proof upload');
+		type(byLabel(drawer, 'Instructions'), 'Quote your order number.');
+		await closeDrawer();
+		await act(async () => click(/** @type {HTMLElement} */ (saveButton())));
 		await settle();
 		expect(container.textContent).toContain('/value/0/key: The key is used twice.');
-		click(byText(container, 'Proof upload', 'label'));
-		expect(container.textContent).not.toContain('Storage is not connected');
+		const again = await openRow(container, 'Bank transfer');
+		click(byText(again, 'Proof upload', 'label'));
+		expect(again.textContent).not.toContain('Storage is not connected');
+	});
+
+	it('says which methods payers do not see yet', async () => {
+		serveList([transfer([]), { ...transfer([]), key: 'cash', name: 'Cash', kind: 'on_delivery' }]);
+		const { container } = render(Editor(`web_${(website += 1)}`));
+		await settle();
+		const rows = [...container.querySelectorAll('tbody tr')];
+		// a paid-first method with no account or instructions is not shown yet; the one paid on delivery is
+		expect(rows[0]?.textContent).toContain('Not shown yet');
+		expect(rows[1]?.textContent).toContain('Shown to payers');
+		const drawer = await openRow(container, 'Bank transfer');
+		expect(drawer.textContent).toContain('not shown to payers yet');
 	});
 });
 

@@ -4,7 +4,7 @@
  * add, rename, reorder and remove methods; each with its kind (pay first, on delivery, at pickup), details, instructions,
  * proof upload and accounts (label/value rows with an optional currency). The list is read with
  * `GET /v1/dashboard/websites/:websiteId/lists/manual_methods` and saved whole with `PUT … { value }`; a 422 lists the
- * server's check errors under the editor.
+ * server's check errors under the editor. The methods are a table with a row menu; a method opens in a drawer.
  * @module
  */
 import { useState } from 'react';
@@ -13,17 +13,20 @@ import {
 	Callout,
 	Card,
 	Checkbox,
+	DataTable,
+	DataTableSkeleton,
+	Drawer,
 	EntryGroup,
 	FieldGrid,
+	Icon,
 	Input,
-	ItemSwitcher,
 	Select,
+	StatusPill,
 	TextArea,
-	describeProblem,
 	SaveBar,
 } from '@ss/ui';
 import { BANK_ROW_LABELS, METHOD_KINDS, METHOD_LIMITS, methodReady } from '../../core/methods.js';
-import { SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
+import { Loaded, SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
 const M = TEXTS.methods;
@@ -131,106 +134,94 @@ function AccountEditor({ account, index, count, onChange, onMove, onRemove }) {
 }
 
 /**
- * One method: name, key, kind, words, proof and accounts.
- * @param {{ method: ManualMethod, index: number, count: number, noStorage: boolean, onChange: (next: ManualMethod) => void,
- *   onMove: (step: number) => void, onRemove: () => void }} props `noStorage`: Storage is not connected (proofs need it)
+ * One method's fields: name, key, kind, words, proof and accounts (the drawer's body).
+ * @param {{ method: ManualMethod, noStorage: boolean, onChange: (next: ManualMethod) => void }} props `noStorage`:
+ *   Storage is not connected (proofs need it)
  */
-function MethodEditor({ method, index, count, noStorage, onChange, onMove, onRemove }) {
+function MethodFields({ method, noStorage, onChange }) {
 	const ready = methodReady(method, null);
 	return (
-		<Card
-			title={method.name || fill(M.untitled, { n: index + 1 })}
-			subtitle={ready.ready ? M.kinds[method.kind] : `${M.kinds[method.kind]} · ${M.notReady}`}>
-			<div className="space-y-4">
-				<FieldGrid>
-					<Input
-						label={M.name}
-						required
-						maxLength={METHOD_LIMITS.name}
-						value={method.name}
-						onChange={(event) => onChange({ ...method, name: event.target.value })}
-					/>
-					<Input
-						label={M.key}
-						help={M.keyHelp}
-						maxLength={40}
-						value={method.key}
-						onChange={(event) => onChange({ ...method, key: event.target.value.trim().toLowerCase() })}
-					/>
-					<Select
-						label={M.kind}
-						help={M.kindHelp}
-						value={method.kind}
-						options={METHOD_KINDS.map((kind) => ({ value: kind, label: M.kinds[kind] }))}
-						onChange={(event) => onChange({ ...method, kind: /** @type {ManualMethod['kind']} */ (event.target.value) })}
-					/>
-					<Checkbox
-						label={M.proof}
-						help={method.proof && noStorage ? M.noStorage : M.proofHelp}
-						checked={method.proof}
-						onChange={(event) => onChange({ ...method, proof: event.target.checked })}
-					/>
-				</FieldGrid>
-				<TextArea
-					label={M.details}
-					help={M.detailsHelp}
-					rows={2}
-					maxLength={METHOD_LIMITS.details}
-					value={method.details}
-					onChange={(event) => onChange({ ...method, details: event.target.value })}
+		<div className="space-y-4">
+			{ready.ready ? null : <Callout tone="warning">{M.notReady}</Callout>}
+			<FieldGrid>
+				<Input
+					label={M.name}
+					required
+					maxLength={METHOD_LIMITS.name}
+					value={method.name}
+					onChange={(event) => onChange({ ...method, name: event.target.value })}
 				/>
-				<TextArea
-					label={M.instructions}
-					help={M.instructionsHelp}
-					rows={3}
-					maxLength={METHOD_LIMITS.instructions}
-					value={method.instructions}
-					onChange={(event) => onChange({ ...method, instructions: event.target.value })}
+				<Input
+					label={M.key}
+					help={M.keyHelp}
+					maxLength={40}
+					value={method.key}
+					onChange={(event) => onChange({ ...method, key: event.target.value.trim().toLowerCase() })}
 				/>
-				<div className="space-y-3">
-					<p className="text-sm text-muted">{M.accountsHelp}</p>
-					{method.accounts.map((account, at) => (
-						<AccountEditor
-							key={at}
-							account={account}
-							index={at}
-							count={method.accounts.length}
-							onChange={(next) =>
-								onChange({ ...method, accounts: method.accounts.map((item, i) => (i === at ? next : item)) })
-							}
-							onMove={(step) => onChange({ ...method, accounts: moved(method.accounts, at, step) })}
-							onRemove={() => onChange({ ...method, accounts: method.accounts.filter((_, i) => i !== at) })}
-						/>
-					))}
-					<Button
-						size="sm"
-						variant="secondary"
-						disabled={method.accounts.length >= METHOD_LIMITS.accounts}
-						onClick={() => onChange({ ...method, accounts: [...method.accounts, newAccount()] })}>
-						{M.addAccount}
-					</Button>
-				</div>
-				<div className="flex flex-wrap gap-2">
-					<Button size="sm" variant="ghost" disabled={index === 0} onClick={() => onMove(-1)}>
-						{M.up}
-					</Button>
-					<Button size="sm" variant="ghost" disabled={index === count - 1} onClick={() => onMove(1)}>
-						{M.down}
-					</Button>
-					<Button size="sm" variant="ghost" onClick={onRemove}>
-						{M.removeMethod}
-					</Button>
-				</div>
+				<Select
+					label={M.kind}
+					help={M.kindHelp}
+					value={method.kind}
+					options={METHOD_KINDS.map((kind) => ({ value: kind, label: M.kinds[kind] }))}
+					onChange={(event) => onChange({ ...method, kind: /** @type {ManualMethod['kind']} */ (event.target.value) })}
+				/>
+				<Checkbox
+					label={M.proof}
+					help={method.proof && noStorage ? M.noStorage : M.proofHelp}
+					checked={method.proof}
+					onChange={(event) => onChange({ ...method, proof: event.target.checked })}
+				/>
+			</FieldGrid>
+			<TextArea
+				label={M.details}
+				help={M.detailsHelp}
+				rows={2}
+				maxLength={METHOD_LIMITS.details}
+				value={method.details}
+				onChange={(event) => onChange({ ...method, details: event.target.value })}
+			/>
+			<TextArea
+				label={M.instructions}
+				help={M.instructionsHelp}
+				rows={3}
+				maxLength={METHOD_LIMITS.instructions}
+				value={method.instructions}
+				onChange={(event) => onChange({ ...method, instructions: event.target.value })}
+			/>
+			<div className="space-y-3">
+				<p className="text-sm text-muted">{M.accountsHelp}</p>
+				{method.accounts.map((account, at) => (
+					<AccountEditor
+						key={at}
+						account={account}
+						index={at}
+						count={method.accounts.length}
+						onChange={(next) =>
+							onChange({ ...method, accounts: method.accounts.map((item, i) => (i === at ? next : item)) })
+						}
+						onMove={(step) => onChange({ ...method, accounts: moved(method.accounts, at, step) })}
+						onRemove={() => onChange({ ...method, accounts: method.accounts.filter((_, i) => i !== at) })}
+					/>
+				))}
+				<Button
+					size="sm"
+					variant="secondary"
+					disabled={method.accounts.length >= METHOD_LIMITS.accounts}
+					onClick={() => onChange({ ...method, accounts: [...method.accounts, newAccount()] })}>
+					{M.addAccount}
+				</Button>
 			</div>
-		</Card>
+		</div>
 	);
 }
 
 /**
- * The editor: the saved list (or today's bank transfer before one is saved), edited locally and saved whole.
- * @param {{ websiteId: string }} props
+ * The editor: the saved list (or today's bank transfer before one is saved), edited locally and saved whole with the
+ * frame's Save bar. The methods are a table (the row menu moves a method up or down or removes it); a click on a row
+ * opens the method's fields in a drawer that edits the draft only (Done closes it).
+ * @param {{ websiteId: string, bare?: boolean }} props `bare`: the page already says the title, so the card has none
  */
-export function MethodsEditor({ websiteId }) {
+export function MethodsEditor({ websiteId, bare = false }) {
 	const path = `/v1/dashboard/websites/${websiteId}/lists/manual_methods`;
 	const { answer, reload } = useLoad(path);
 	const connections = useLoad(`/v1/dashboard/websites/${websiteId}/connections`);
@@ -240,65 +231,119 @@ export function MethodsEditor({ websiteId }) {
 			(/** @type {{ name: string, status: string }} */ item) => item.name === 'storage' && item.status === 'connected',
 		);
 	const [draft, setDraft] = useState(/** @type {ManualMethod[] | null} */ (null));
+	const [opened, setOpened] = useState(/** @type {number | null} */ (null));
 	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
-	if (!answer) return null;
-	if (!answer.ok)
-		return (
-			<Callout tone="danger" title={M.loadFailed}>
-				{describeProblem(answer.problem)}
-			</Callout>
-		);
 	/** @type {ManualMethod[]} */
-	const saved = answer.data.value;
+	const saved = answer?.ok ? answer.data.value : [];
 	const methods = draft ?? saved;
 	/** @param {ManualMethod[]} next */
 	const change = (next) => {
 		setDraft(next);
 		setResult(null);
 	};
+	/** @param {ManualMethod} method @param {number} index */
+	const nameFor = (method, index) => method.name.trim() || fill(M.untitled, { n: index + 1 });
+	const current = opened === null ? undefined : methods[opened];
 	return (
-		<section className="space-y-4" aria-labelledby="manual-methods-title">
-			<div>
-				<h3 id="manual-methods-title" className="text-base font-semibold">
-					{M.title}
-				</h3>
-				<p className="text-sm text-muted">{M.help}</p>
+		<Card
+			{...(bare ? {} : { title: M.title })}
+			subtitle={`${M.help} ${fill(M.max, { max: METHOD_LIMITS.methods })}`}
+			actions={
+				<Button
+					size="sm"
+					disabled={!answer?.ok || methods.length >= METHOD_LIMITS.methods}
+					onClick={() => {
+						change([...methods, newMethod(methods)]);
+						setOpened(methods.length);
+					}}>
+					<Icon name="plus" size={14} />
+					{M.addMethod}
+				</Button>
+			}>
+			<div className="space-y-4">
+				<Loaded answer={answer} skeleton={<DataTableSkeleton columns={4} rows={3} menu />}>
+					{() => (
+						<DataTable
+							caption={M.title}
+							columns={[
+								{ key: 'name', header: M.columns.name, render: (row) => nameFor(row.method, row.index) },
+								{ key: 'kind', header: M.columns.kind, render: (row) => M.kinds[row.method.kind] },
+								{ key: 'key', header: M.columns.key, low: true, render: (row) => row.method.key },
+								{
+									key: 'accounts',
+									header: M.columns.accounts,
+									kind: 'number',
+									low: true,
+									render: (row) => row.method.accounts.length,
+								},
+								{
+									key: 'status',
+									header: M.columns.status,
+									render: (row) =>
+										methodReady(row.method, null).ready ? (
+											<StatusPill status="active">{M.columns.ready}</StatusPill>
+										) : (
+											<StatusPill status="setup" title={M.notReady}>
+												{M.columns.notReady}
+											</StatusPill>
+										),
+								},
+							]}
+							rows={methods.map((method, index) => ({ method, index }))}
+							rowKey={(row) => String(row.index)}
+							rowLabel={(row) => nameFor(row.method, row.index)}
+							onRowClick={(row) => setOpened(row.index)}
+							rowMenu={(row) => [
+								{ label: M.up, disabled: row.index === 0, onSelect: () => change(moved(methods, row.index, -1)) },
+								{
+									label: M.down,
+									disabled: row.index === methods.length - 1,
+									onSelect: () => change(moved(methods, row.index, 1)),
+								},
+								{
+									label: M.remove,
+									danger: true,
+									onSelect: () => change(methods.filter((_, at) => at !== row.index)),
+								},
+							]}
+							empty={M.none}
+						/>
+					)}
+				</Loaded>
+				<SaveBar
+					show={draft !== null}
+					saveLabel={TEXTS.save}
+					discardLabel={M.cancel}
+					onDiscard={() => {
+						change(saved);
+						setOpened(null);
+					}}
+					onSave={async () => {
+						setOpened(null);
+						const next = await call('PUT', path, { value: methods });
+						setResult(next);
+						if (next.ok) {
+							setDraft(null);
+							reload();
+						}
+					}}
+				/>
+				<SaveOutcome result={result} />
 			</div>
-			<ItemSwitcher
-				items={methods}
-				legend={M.title}
-				nameOf={(method) => method.name}
-				addLabel={M.addMethod}
-				addDisabled={methods.length >= METHOD_LIMITS.methods}
-				onAdd={() => change([...methods, newMethod(methods)])}
-				renderItem={(method, index) => (
-					<MethodEditor
-						key={index}
-						method={method}
-						index={index}
-						count={methods.length}
+			<Drawer
+				open={current !== undefined}
+				onClose={() => setOpened(null)}
+				title={current && opened !== null ? nameFor(current, opened) : ''}
+				size="lg"
+				footer={<Button onClick={() => setOpened(null)}>{M.done}</Button>}>
+				{current && opened !== null ? (
+					<MethodFields
+						method={current}
 						noStorage={noStorage}
-						onChange={(next) => change(methods.map((item, i) => (i === index ? next : item)))}
-						onMove={(step) => change(moved(methods, index, step))}
-						onRemove={() => change(methods.filter((_, i) => i !== index))}
+						onChange={(next) => change(methods.map((item, i) => (i === opened ? next : item)))}
 					/>
-				)}
-			/>
-			<SaveBar
-				show={draft !== null}
-				saveLabel={TEXTS.save}
-				discardLabel={M.cancel}
-				onDiscard={() => change(saved)}
-				onSave={async () => {
-					const next = await call('PUT', path, { value: methods });
-					setResult(next);
-					if (next.ok) {
-						setDraft(null);
-						reload();
-					}
-				}}
-			/>
-			<SaveOutcome result={result} />
-		</section>
+				) : null}
+			</Drawer>
+		</Card>
 	);
 }
