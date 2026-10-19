@@ -17,17 +17,7 @@ import { readinessLines } from '../../src/console/views/website-settings.js';
 import { hoursSummary } from '../../src/console/views/website-settings-sections.js';
 import { WebsiteView } from '../../src/console/views/websites.js';
 import { startMongo } from '../helpers.js';
-import {
-	buttons,
-	createWorld,
-	dialog,
-	press,
-	pressDialog,
-	quiet,
-	settle,
-	shows,
-	until,
-} from './merchant-harness.js';
+import { buttons, createWorld, dialog, press, pressDialog, quiet, settle, shows, until } from './merchant-harness.js';
 
 vi.mock('next/navigation.js', async (importOriginal) => {
 	const { testRouter } = await import('./router.js');
@@ -121,7 +111,9 @@ describe('Website settings (jsdom)', () => {
 				'Recent changes',
 			]);
 			const region = `a[href="/websites/${x.websiteId}/settings/region"]`;
-			expect(nav.querySelector(`${region} [title="Needed by Notes"], ${region} [aria-label="Needed by Notes"]`)).not.toBeNull();
+			expect(
+				nav.querySelector(`${region} [title="Needed by Notes"], ${region} [aria-label="Needed by Notes"]`),
+			).not.toBeNull();
 			// one section at a time: only Business is on the page
 			expect(shows('Business name')).toBe(true);
 			expect(shows('Store currency')).toBe(false);
@@ -246,6 +238,52 @@ describe('Website settings (jsdom)', () => {
 					exceptions: [{ date: '2026-12-25', name: '', hours: [] }],
 				}),
 			).toBe('Mon–Tue 09:00–17:00 · 1 date differs');
+		} finally {
+			restore();
+		}
+	});
+
+	it('edits the brand, the pages with a document and the team with a person, each section saved on its own address', async () => {
+		const restore = quiet();
+		try {
+			const x = await world('wsp_sections');
+			// brand and look: the pictures, the look and a color
+			await openPage(x, 'settings/brand');
+			await type(field('Logo'), 'https://cdn.example.com/logo.png');
+			await type(field('Font'), 'Georgia');
+			await type(field('Corner radius'), '8');
+			await press('Save changes');
+			await x.b.waitCall('PUT', `${x.settingsUrl}/brand`, (status) => status === 200);
+			// domains, pages and legal: a sign-in page, another host name and a privacy policy in a drawer
+			await openPage(x, 'settings/pages');
+			await type(field('Sign-in page'), '/sign-in');
+			await press('Add privacy policy');
+			expect(dialog().textContent).toContain('Document');
+			await type(field('Text', dialog()), 'We keep what {business} needs.');
+			await pressDialog('Done');
+			await until(() => shows('Privacy policy'));
+			await press('Save changes');
+			await x.b.waitCall('PUT', `${x.settingsUrl}/pages`, (status) => status === 200);
+			// team and alerts: a person in a drawer, listed in a table
+			await openPage(x, 'settings/team');
+			expect(shows('No one yet.')).toBe(true);
+			await press('Add a person');
+			await type(field('Name', dialog()), 'Sam');
+			await type(field('Email', dialog()), 'sam@shop.test');
+			await pressDialog('Done');
+			await until(() => shows('sam@shop.test'));
+			await press('Save changes');
+			await x.b.waitCall('PUT', `${x.settingsUrl}/team`, (status) => status === 200);
+			const kept = await x.b.api.get(x.settingsUrl);
+			expect(kept.ok && kept.data.settings).toMatchObject({
+				version: 3,
+				brand: { files: { logo: 'https://cdn.example.com/logo.png' }, theme: { fontFamily: 'Georgia', radius: 8 } },
+				pages: { signIn: '/sign-in', documents: [{ key: 'privacy', text: 'We keep what {business} needs.' }] },
+				team: { recipients: [{ name: 'Sam', email: 'sam@shop.test' }] },
+			});
+			// the saved values come back on the next visit
+			await openPage(x, 'settings/team');
+			expect(shows('sam@shop.test')).toBe(true);
 		} finally {
 			restore();
 		}

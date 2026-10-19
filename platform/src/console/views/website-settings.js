@@ -66,9 +66,18 @@ export function ChangesTable({ changes }) {
 					key: 'section',
 					header: T.changes.sectionColumn,
 					render: (change) =>
-						T.changes.row(/** @type {Record<string, string>} */ (T.sections)[change.section] ?? change.section, change.version),
+						T.changes.row(
+							/** @type {Record<string, string>} */ (T.sections)[change.section] ?? change.section,
+							change.version,
+						),
 				},
-				{ key: 'changed', header: T.changes.fieldsColumn, low: true, wrap: true, render: (change) => T.changes.fields(change.changed) },
+				{
+					key: 'changed',
+					header: T.changes.fieldsColumn,
+					low: true,
+					wrap: true,
+					render: (change) => T.changes.fields(change.changed),
+				},
 				{ key: 'who', header: T.changes.byColumn, low: true, render: (change) => T.changes.by(change.who.name) },
 			]}
 		/>

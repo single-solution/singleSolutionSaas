@@ -39,18 +39,19 @@ import { Link } from '../link.js';
 import { useNavigation } from '../navigation.js';
 import { api } from '../paths.js';
 import { parseWebsitePart, SETTINGS_SECTIONS } from '../website-parts.js';
-import { ProductStatusBadge, UsageView, creditDayBars, formatChartCredits, productPill, productStatusLabel, productTone } from './billing.js';
+import {
+	ProductStatusBadge,
+	UsageView,
+	creditDayBars,
+	formatChartCredits,
+	productPill,
+	productStatusLabel,
+	productTone,
+} from './billing.js';
 import { openDashboard } from './common.js';
 import { SetupView, useSetupSheet } from './setup.js';
 import { ChangesTable, SettingsSectionBody, contextOf, readinessLines, useWebsiteSettings } from './website-settings.js';
-import {
-	AddProductDrawer,
-	InstallBlock,
-	dailyCostOf,
-	twoStepOnOf,
-	useOnce,
-	websiteDot,
-} from './website.js';
+import { AddProductDrawer, InstallBlock, dailyCostOf, twoStepOnOf, useOnce, websiteDot } from './website.js';
 
 /** @typedef {import('./website.js').ProductCard} ProductCard */
 /**
@@ -135,8 +136,8 @@ function UsagePart({ merchantId, websiteId }) {
  * @property {Array<{ productId: string, name: string }> | null} [addable] active connected products (Add product)
  * @property {(productId: string) => { path: string, body?: unknown }} launch the Open route of a product
  * @property {string} afterRemoved where to go once the website was removed
- * @property {any} settings the loaded Website settings (`loadWebsiteSettings`), a failure, or null when not asked
- * @property {any} setup the loaded Setup sheet (`loadSetup`), a failure, or null when not asked
+ * @property {any} [settings] the loaded Website settings (`loadWebsiteSettings`), a failure, or null when not asked
+ * @property {any} [setup] the loaded Setup sheet (`loadSetup`), a failure, or null when not asked
  * @property {boolean} [canSwitch] the admin console switches recommended features on
  */
 
@@ -155,8 +156,8 @@ export function WebsitePageView({
 	addable = null,
 	launch,
 	afterRemoved,
-	settings,
-	setup,
+	settings = null,
+	setup = null,
 	canSwitch = false,
 }) {
 	const toast = useToast();
@@ -363,7 +364,9 @@ export function WebsitePageView({
 
 	/** @param {ProductCard} card */
 	const productMenu = (card) => [
-		...(can.open ? [{ label: WEBSITE.openLabel(card.name), icon: /** @type {const} */ ('external'), onSelect: () => void open(card) }] : []),
+		...(can.open
+			? [{ label: WEBSITE.openLabel(card.name), icon: /** @type {const} */ ('external'), onSelect: () => void open(card) }]
+			: []),
 		...(can.manage
 			? [
 					{
@@ -386,7 +389,11 @@ export function WebsitePageView({
 	else if (parsed.kind === 'settings' || parsed.kind === 'changes')
 		error = !can.settings ? WEBSITE.noSuchPage : settings && !settings.ok ? describeProblem(settings.problem) : null;
 	else if (parsed.kind === 'install' || parsed.kind === 'setup') {
-		error = !can.tokens ? WEBSITE.noSuchPage : parsed.kind === 'setup' && setup && !setup.ok ? describeProblem(setup.problem) : null;
+		error = !can.tokens
+			? WEBSITE.noSuchPage
+			: parsed.kind === 'setup' && setup && !setup.ok
+				? describeProblem(setup.problem)
+				: null;
 	}
 
 	/** @type {import('react').ReactNode} */
@@ -412,7 +419,9 @@ export function WebsitePageView({
 										header: WEBSITE.productColumn,
 										sortable: true,
 										render: (card) => (
-											<Link href={hrefOf(`products/${card.productId}`)} className="font-medium text-fg hover:underline">
+											<Link
+												href={hrefOf(`products/${card.productId}`)}
+												className="font-medium text-fg hover:underline">
 												{card.name}
 											</Link>
 										),
@@ -476,7 +485,10 @@ export function WebsitePageView({
 						}>
 						<KeyValueList
 							items={[
-								{ label: WEBSITE.statusColumn, value: <ProductStatusBadge status={shown.status} featuresOn={shown.featuresOn} /> },
+								{
+									label: WEBSITE.statusColumn,
+									value: <ProductStatusBadge status={shown.status} featuresOn={shown.featuresOn} />,
+								},
 								{ label: BILLING.dailyCost, value: WEBSITE.perDay(formatCredits(shown.dailyCost)) },
 								{
 									label: WEBSITE.featuresColumn,

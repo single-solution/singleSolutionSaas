@@ -1027,7 +1027,12 @@ export function PagesSection(props) {
 									render: (row) => row.document.title || row.document.key || String(row.index + 1),
 								},
 								{ key: 'key', header: P.documentKey, low: true, render: (row) => row.document.key },
-								{ key: 'size', header: P.documentSize, low: true, render: (row) => P.documentSummary(row.document.text.length) },
+								{
+									key: 'size',
+									header: P.documentSize,
+									low: true,
+									render: (row) => P.documentSummary(row.document.text.length),
+								},
 							]}
 							rowMenu={(row) => [
 								{ label: T.edit, onSelect: () => setEditing(row.index) },

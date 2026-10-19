@@ -226,7 +226,6 @@ export const WEBSITE = Object.freeze({
 	removeHelp:
 		'Its status becomes removed: it stops, nothing is charged from the next hour and its tokens are refused. Its settings and connections are kept; adding it again restores them and the same tokens, with all features off.',
 	productRemoved: (/** @type {string} */ name) => `${name} removed.`,
-	websiteActionsOf: (/** @type {string} */ domain) => `Actions for ${domain}`,
 	websiteRemoved: (/** @type {string} */ domain) => `${domain} removed.`,
 	removeWebsite: 'Remove website',
 	removeWebsiteTitle: (/** @type {string} */ domain) => `Remove ${domain}`,
@@ -256,7 +255,6 @@ export const WEBSITE = Object.freeze({
 	showTitle: (/** @type {string} */ name) => `Show the server token of ${name}`,
 	showHelp: 'A server token opens your data, so we ask for your password again. This stops a stolen session from reading it.',
 	showConfirm: 'Show token',
-	regenerateConfirmHelp: 'Enter your password to confirm it is you.',
 	password: 'Your password',
 	passwordHelp: 'The password you sign in with.',
 	code: 'Two-step or recovery code',
@@ -267,11 +265,8 @@ export const WEBSITE = Object.freeze({
 	docs: 'Docs',
 	noTokens: 'Tokens appear here once a product is on this website.',
 	tokens: 'Install and tokens',
-	tokensOf: (/** @type {string} */ domain) => `Install and tokens of ${domain}`,
 	usage: 'Usage',
-	usageOf: (/** @type {string} */ domain) => `Usage of ${domain}`,
 	setup: 'Setup',
-	setupOf: (/** @type {string} */ domain) => `Setup of ${domain}`,
 	websiteSettings: 'Website settings',
 	// the website's own page: its header facts, its inner navigation and its parts
 	pageInfo:
@@ -292,12 +287,9 @@ export const WEBSITE = Object.freeze({
 
 /** The Setup sheet of a website and its share links (`ss.blueprint/1`). */
 export const SETUP = Object.freeze({
-	title: (/** @type {string} */ domain) => `Setup · ${domain}`,
-	intro: 'Everything this website runs on: each product with its features, settings, connections, widgets, staff permissions and events, and what is left to do. Secrets are never shown here.',
 	sharedTitle: (/** @type {string} */ domain) => `Setup of ${domain}`,
 	sharedIntro:
 		'A read-only copy of this website’s Setup: each product with its features, settings, connections, widgets, staff permissions and events. It holds no secrets.',
-	back: 'Back to the website',
 	made: 'Made',
 	refresh: 'Refresh',
 	linkShows: 'Made by and shows',
@@ -1242,15 +1234,10 @@ export const MORE = Object.freeze({
  * section 8.1).
  */
 export const WEBSITE_SETTINGS = Object.freeze({
-	title: (/** @type {string} */ domain) => `Website settings · ${domain}`,
 	intro: 'Set these once. Every product on this website uses them, so none of them asks you again. The business facts are not secret; the database and the storage are write-only: you can replace them, never read them back.',
-	back: 'Back to the website',
-	sectionsLabel: 'Website settings sections',
 	saved: 'Saved. Your products pick it up within moments.',
-	savedNothing: 'Nothing changed.',
 	savedAt: 'Saved',
 	neverSaved: 'Not saved yet',
-	version: (/** @type {number} */ n) => `Version ${n}`,
 	stale: 'These settings were saved by someone else meanwhile. Reload them, then save again.',
 	reload: 'Reload',
 	reloaded: 'Reloaded the latest settings.',
@@ -1259,7 +1246,6 @@ export const WEBSITE_SETTINGS = Object.freeze({
 	discard: 'Discard',
 	done: 'Done',
 	edit: 'Edit',
-	add: 'Add',
 	none: 'Not set',
 	readOnly: 'You can see these settings but not change them.',
 	// the sections
@@ -1273,13 +1259,10 @@ export const WEBSITE_SETTINGS = Object.freeze({
 		links: 'Between your products',
 		changes: 'Recent changes',
 	}),
-	groups: Object.freeze({ facts: 'Your website', connect: 'Connections', activity: 'Activity' }),
 	needsSetup: (/** @type {string} */ products) => `Needed by ${products}`,
 	// readiness
 	readyTitle: 'What your products need',
-	readyAll: 'Every product has what it needs.',
 	readyMissing: (/** @type {string} */ product, /** @type {string} */ what) => `${product} needs: ${what}.`,
-	readyNothing: (/** @type {string} */ product) => `${product} needs nothing from here.`,
 	paths: Object.freeze({
 		'business.name': 'business name',
 		'business.email': 'contact email',
@@ -1300,7 +1283,6 @@ export const WEBSITE_SETTINGS = Object.freeze({
 		'pages.privacy': 'privacy page',
 		'team.recipients': 'people who get staff alerts',
 	}),
-	path: (/** @type {string} */ path) => path,
 	// Data and files (the database and the storage, entered once, write-only) and Between your products
 	data: Object.freeze({
 		productColumn: 'Product',
@@ -1366,7 +1348,6 @@ export const WEBSITE_SETTINGS = Object.freeze({
 		state: Object.freeze({ on: 'On', off: 'Switched off', idle: 'Not used now' }),
 		delivered: 'The product has its key',
 		waiting: 'Waiting for the product',
-		allows: 'It may:',
 		allowsColumn: 'May use',
 		regenerate: 'Regenerate the key',
 		switchOff: 'Switch off',

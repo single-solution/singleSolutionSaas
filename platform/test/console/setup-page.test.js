@@ -18,7 +18,6 @@ import * as loaders from '../../src/console/loaders.js';
 import { SharedSetupView, neededOff, profileLines, valueText } from '../../src/console/views/setup.js';
 import { WebsiteView } from '../../src/console/views/websites.js';
 import { startMongo } from '../helpers.js';
-import { testRouter } from './router.js';
 import {
 	browserOf,
 	buttons,
@@ -175,9 +174,11 @@ describe('Setup page (jsdom)', () => {
 			expect(shows('Add the note form widget to the pages where visitors leave notes.')).toBe(true);
 			// Download JSON, Copy JSON and Refresh are in the header
 			const clicked = /** @type {string[]} */ ([]);
-			vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function () {
-				clicked.push(String(/** @type {HTMLAnchorElement} */ (this).getAttribute('href')));
-			});
+			vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(
+				/** @this {HTMLAnchorElement} */ function () {
+					clicked.push(String(this.getAttribute('href')));
+				},
+			);
 			await press('Download JSON');
 			expect(clicked).toEqual([`/v1/merchants/${merchantId}/websites/${websiteId}/setup?download=1`]);
 

@@ -434,7 +434,12 @@ export function LinksSection({ view, manage, canWrite, onChanged }) {
 						? {
 								rowMenu: (/** @type {ConnectionsView['links'][number]} */ link) => [
 									...(link.state === 'off'
-										? [{ label: T.links.switchOn, onSelect: () => setAsking({ link, action: /** @type {const} */ ('on') }) }]
+										? [
+												{
+													label: T.links.switchOn,
+													onSelect: () => setAsking({ link, action: /** @type {const} */ ('on') }),
+												},
+											]
 										: [
 												...(link.state === 'on'
 													? [

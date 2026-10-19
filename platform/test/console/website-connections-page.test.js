@@ -12,17 +12,7 @@ import { closeMongoClients } from '../../src/testing.js';
 import * as loaders from '../../src/console/loaders.js';
 import { WebsiteView } from '../../src/console/views/websites.js';
 import { startMongo } from '../helpers.js';
-import {
-	buttons,
-	createWorld,
-	dialog,
-	fillDialog,
-	pressDialog,
-	quiet,
-	settle,
-	shows,
-	until,
-} from './merchant-harness.js';
+import { buttons, createWorld, dialog, fillDialog, pressDialog, quiet, settle, shows, until } from './merchant-harness.js';
 
 vi.mock('next/navigation.js', async (importOriginal) => {
 	const { testRouter } = await import('./router.js');
@@ -217,7 +207,9 @@ describe('Between your products (jsdom)', () => {
 			/** @param {string} item */
 			const menuAction = async (item) => {
 				await act(async () => {
-					/** @type {HTMLButtonElement} */ (document.querySelector('button[aria-label="Actions for Ecommerce may use Payments"]')).click();
+					/** @type {HTMLButtonElement} */ (
+						document.querySelector('button[aria-label="Actions for Ecommerce may use Payments"]')
+					).click();
 				});
 				await settle(1);
 				const items = /** @type {HTMLElement[]} */ ([...document.querySelectorAll('[role="menu"] [role^="menuitem"]')]);

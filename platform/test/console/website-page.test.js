@@ -132,6 +132,25 @@ describe('website page (jsdom)', () => {
 			expect(open).toHaveBeenCalledWith(launched.body.url, '_blank', 'noopener,noreferrer');
 			expect(claimsOf(launched.body.url)).toMatchObject({ kind: 'admin', admin: { role: 'owner', websiteId } });
 
+			// ---------------------------------------------------------------- a row opens the product's page; its page has Open and Remove
+			const row = /** @type {HTMLElement} */ (
+				[...document.querySelectorAll('tbody tr')].find((tr) => tr.textContent?.includes('Notes'))
+			);
+			await clickEl(row);
+			expect(testRouter.push).toHaveBeenLastCalledWith(`/admin/merchants/${merchantId}/websites/${websiteId}/products/notes`);
+			cleanup();
+			const notesPage = await admin.loadAdminWebsite(ownerBrowser.api, merchantId, websiteId, 'products/notes', owner);
+			if (!notesPage.ok) throw new Error('product page');
+			withToasts(<AdminWebsiteView detail={notesPage} admin={owner} />);
+			open.mockClear();
+			await press('Open Notes');
+			await until(() => open.mock.calls.length === 1);
+			await pressMenu('Actions for Notes', 'Remove');
+			expect(shows('Remove Notes')).toBe(true);
+			await closeDialog();
+			cleanup();
+			withToasts(<AdminWebsiteView detail={detail} admin={owner} />);
+
 			// ---------------------------------------------------------------- Remove website is disabled while products remain
 			await menu('More actions');
 			expect(menuItem('Remove website').disabled).toBe(true);

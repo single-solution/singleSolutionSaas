@@ -144,9 +144,7 @@ describe('merchant console smoke', () => {
 			// another merchant's website is not found
 			const other = await world.signup('else@else.test', 'Else Ltd');
 			const foreign = await loaders.loadWebsitePage(other.b.api, other.merchantId, String(site.websiteId), '');
-			expect(text(ssr(<WebsiteView {...foreign} />))).toContain(
-				'This website does not exist or was removed.',
-			);
+			expect(text(ssr(<WebsiteView {...foreign} />))).toContain('This website does not exist or was removed.');
 
 			// Usage and credits, Account
 			const credits = await loaders.loadCredits(merchant.api, merchantId, { from: '2026-01-01', websiteId: site.websiteId });

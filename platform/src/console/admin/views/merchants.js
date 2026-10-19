@@ -846,12 +846,7 @@ export function MerchantsView(props) {
 	if (detail) {
 		if (!detail.ok) return <AdminProblem problem={detail.problem} />;
 		return (
-			<MerchantPage
-				key={String(detail.merchant.merchantId)}
-				detail={detail}
-				admin={props.admin}
-				section={props.section}
-			/>
+			<MerchantPage key={String(detail.merchant.merchantId)} detail={detail} admin={props.admin} section={props.section} />
 		);
 	}
 	if (!props.ok) return <AdminProblem problem={props.problem} />;

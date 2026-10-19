@@ -201,7 +201,15 @@ describe('admin console smoke', () => {
 			const siteRaw = ssr(<AdminWebsiteView detail={siteDetail} admin={owner} />);
 			expect(text(siteRaw)).toContain('Notes');
 			expect(siteRaw).toContain(`href="/admin/merchants/${merchantId}"`);
-			for (const word of ['Add product', 'Overview', 'Website settings', 'Install and tokens', 'Setup sheet', 'Usage', 'Recent changes'])
+			for (const word of [
+				'Add product',
+				'Overview',
+				'Website settings',
+				'Install and tokens',
+				'Setup sheet',
+				'Usage',
+				'Recent changes',
+			])
 				expect(text(siteRaw)).toContain(word);
 			expect(siteRaw).toContain(`href="/admin/merchants/${merchantId}/websites/${siteId}/products/notes"`);
 			expect(siteRaw).toContain(`href="/admin/merchants/${merchantId}/websites/${siteId}/settings/brand"`);
@@ -411,7 +419,13 @@ describe('admin console smoke', () => {
 			expect(ssr(<MerchantsView detail={supportDetail} admin={support} />)).toContain('Add website');
 			const supportSiteDetail = await admin.loadAdminWebsite(supportBrowser.api, merchantId, supportSite, '', support);
 			const supportHtml = ssr(<AdminWebsiteView detail={supportSiteDetail} admin={support} />);
-			for (const word of ['Add product', 'aria-label="Actions for Notes"', 'Install and tokens', 'Setup sheet', 'Website settings'])
+			for (const word of [
+				'Add product',
+				'aria-label="Actions for Notes"',
+				'Install and tokens',
+				'Setup sheet',
+				'Website settings',
+			])
 				expect(supportHtml).toContain(word);
 			expect(supportHtml).not.toContain('Add credits');
 			const supportProducts = await admin.loadProducts(supportBrowser.api);
@@ -436,7 +450,14 @@ describe('admin console smoke', () => {
 			expect(financeHtml).toContain('Notes');
 			expect(financeHtml).toContain('Usage'); // Usage stays
 			expect(ssr(<MerchantsView detail={financeDetail} admin={finance} />)).toContain('Add credits');
-			for (const word of ['Install and tokens', 'Setup sheet', 'Website settings', 'Add product', 'Add website', 'Edit merchant'])
+			for (const word of [
+				'Install and tokens',
+				'Setup sheet',
+				'Website settings',
+				'Add product',
+				'Add website',
+				'Edit merchant',
+			])
 				expect(financeHtml).not.toContain(word);
 			// Activity filters: Support has no list of admins, so no Admin filter; the Owner picks a name
 			const supportActivity = await admin.loadActivity(supportBrowser.api, {}, support);
