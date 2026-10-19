@@ -23,3 +23,6 @@ import-out/
 /CLAUDE.md
 /HANDOFF.md
 /audit/
+
+# Trail (code map tool) local cache
+graft/.cache/

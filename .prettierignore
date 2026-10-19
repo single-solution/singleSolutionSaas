@@ -8,3 +8,6 @@ pnpm-lock.yaml
 audit
 HANDOFF.md
 .claude
+
+# Trail (code map tool) local data
+graft
