@@ -11,13 +11,10 @@ import {
 	Col,
 	Disclosure,
 	Grid,
-	ItemSwitcher,
 	Input,
 	Masonry,
 	RadioGroup,
 	SaveBar,
-	SectionLayout,
-	SectionNav,
 	SegmentedControl,
 	Select,
 	SettingList,
@@ -27,7 +24,7 @@ import {
 	TextArea,
 } from '../src/index.js';
 import { Form } from '../src/Form.js';
-import { act, allByRole, byLabel, cleanup, click, keydown, render, type } from '../src/testing.js';
+import { allByRole, byLabel, cleanup, click, keydown, render, type } from '../src/testing.js';
 
 afterEach(cleanup);
 
@@ -325,7 +322,7 @@ describe('SaveBar', () => {
 });
 
 describe('cards keep their own height', () => {
-	it('aligns the cells of the grid, the sidebar layout and masonry to the start so no card stretches', () => {
+	it('aligns the cells of the grid and masonry to the start so no card stretches', () => {
 		const grid = render(
 			<Grid>
 				<Col span={8}>a</Col>
@@ -334,8 +331,6 @@ describe('cards keep their own height', () => {
 		);
 		expect(grid.container.firstElementChild?.className).toContain('items-start');
 		expect(grid.container.firstElementChild?.className).not.toContain('items-stretch');
-		const layout = render(<SectionLayout sections={[{ id: 'a', label: 'A', content: <p>x</p> }]} />);
-		expect(layout.container.firstElementChild?.className).toContain('items-start');
 		const masonry = render(
 			<Masonry>
 				<div>one</div>
@@ -392,134 +387,6 @@ describe('Disclosure', () => {
 			</Disclosure>,
 		);
 		expect(forced.container.textContent).toContain('Forced open');
-	});
-});
-
-describe('SectionLayout', () => {
-	const sections = [
-		{ id: 'mail', label: 'Email', icon: /** @type {const} */ ('mail'), group: 'Site', content: <p>Mail form</p> },
-		{
-			id: 'security',
-			label: 'Security',
-			icon: /** @type {const} */ ('shield'),
-			group: 'Site',
-			badge: <b>2</b>,
-			content: <p>Security form</p>,
-		},
-		{ id: 'keys', label: 'Keys', content: <p>Keys form</p> },
-	];
-
-	afterEach(() => window.history.replaceState(null, '', window.location.pathname));
-
-	it('shows one section at a time and mounts a section when it is first opened; the choice is in the address hash', () => {
-		const { container } = render(<SectionLayout sections={sections} label="Settings sections" />);
-		const nav = /** @type {HTMLElement} */ (container.querySelector('nav[aria-label="Settings sections"]'));
-		expect(nav.textContent).toContain('Site');
-		expect(nav.querySelector('[aria-current="true"]')?.textContent).toBe('Email');
-		const panel = (/** @type {string} */ id) => /** @type {HTMLElement | null} */ (container.querySelector(`#section-${id}`));
-		expect(panel('mail')?.hidden).toBe(false);
-		// a section nobody opened is not on the page
-		expect(panel('security')).toBeNull();
-		expect(container.textContent).not.toContain('Security form');
-		click(/** @type {HTMLElement} */ (nav.querySelector('a[href="#security"]')));
-		expect(panel('mail')?.hidden).toBe(true);
-		expect(panel('security')?.hidden).toBe(false);
-		expect(nav.querySelector('[aria-current="true"]')?.textContent).toBe('Security2');
-		expect(window.location.hash).toBe('#security');
-		// an opened section stays mounted (an edit in it survives opening another)
-		expect(container.textContent).toContain('Mail form');
-		expect(panel('keys')).toBeNull();
-	});
-
-	it('adds a history entry per section so Back returns to the one before', async () => {
-		const before = window.history.length;
-		const { container } = render(<SectionLayout sections={sections} />);
-		const nav = /** @type {HTMLElement} */ (container.querySelector('nav'));
-		click(/** @type {HTMLElement} */ (nav.querySelector('a[href="#security"]')));
-		click(/** @type {HTMLElement} */ (nav.querySelector('a[href="#keys"]')));
-		expect(window.history.length).toBe(before + 2);
-		// Back is asynchronous (jsdom queues the move in two timer ticks, a browser in its own task) and the section it
-		// opens renders after the event: wait for the popstate itself, inside act so React has drawn the section when it
-		// ends. A fixed wait is a race, lost whenever the machine stalls for longer than it.
-		await act(async () => {
-			const popped = new Promise((resolve) => window.addEventListener('popstate', resolve, { once: true }));
-			window.history.back();
-			await popped;
-		});
-		expect(window.location.hash).toBe('#security');
-		expect(/** @type {HTMLElement} */ (container.querySelector('#section-security')).hidden).toBe(false);
-		expect(/** @type {HTMLElement} */ (container.querySelector('#section-keys')).hidden).toBe(true);
-		expect(nav.querySelector('[aria-current="true"]')?.textContent).toBe('Security2');
-	});
-
-	it('lists sub-sections under their heading, opens the first one, and shows one at a time', () => {
-		const nested = [
-			{
-				id: 'checkout',
-				label: 'Checkout',
-				content: null,
-				children: [
-					{ id: 'checkout.basics', label: 'Basics', content: <p>Basics cards</p> },
-					{ id: 'checkout.limits', label: 'Limits', content: <p>Limits cards</p> },
-				],
-			},
-			{ id: 'seo', label: 'Search', content: <p>Search cards</p> },
-		];
-		const { container } = render(<SectionLayout sections={nested} />);
-		const nav = /** @type {HTMLElement} */ (container.querySelector('nav'));
-		expect(container.textContent).toContain('Basics cards');
-		expect(nav.querySelector('li li a[href="#checkout.basics"]')?.getAttribute('aria-current')).toBe('true');
-		expect(nav.textContent).toContain('Limits');
-		click(/** @type {HTMLElement} */ (nav.querySelector('li li a[href="#checkout.limits"]')));
-		expect(/** @type {HTMLElement} */ (container.querySelector('[id="section-checkout.limits"]')).hidden).toBe(false);
-		expect(/** @type {HTMLElement} */ (container.querySelector('[id="section-checkout.basics"]')).hidden).toBe(true);
-		// another heading's sub-items stay closed until it is open
-		click(/** @type {HTMLElement} */ (nav.querySelector('a[href="#seo"]')));
-		expect(nav.querySelector('a[href="#checkout.limits"]')).toBeNull();
-	});
-
-	it('filters a long list of sections with a search box', () => {
-		const many = Array.from({ length: 12 }, (_, i) => ({
-			id: `s${i}`,
-			label: i === 7 ? 'Shipping rates' : `Section ${i}`,
-			content: <p>{i}</p>,
-		}));
-		const { container } = render(<SectionLayout sections={many} />);
-		const search = /** @type {HTMLInputElement} */ (container.querySelector('nav input[type="search"]'));
-		type(search, 'ship');
-		const links = [...container.querySelectorAll('nav a')].map((a) => a.textContent);
-		expect(links).toEqual(['Shipping rates']);
-	});
-
-	it('opens the section named by the hash and follows hash changes', () => {
-		window.history.replaceState(null, '', '#keys');
-		const { container } = render(<SectionLayout sections={sections} />);
-		expect(/** @type {HTMLElement} */ (container.querySelector('#section-keys')).hidden).toBe(false);
-		window.history.replaceState(null, '', '#mail');
-		act(() => {
-			window.dispatchEvent(new HashChangeEvent('hashchange'));
-		});
-		expect(/** @type {HTMLElement} */ (container.querySelector('#section-mail')).hidden).toBe(false);
-		// an unknown hash leaves the choice alone
-		window.history.replaceState(null, '', '#nothing');
-		act(() => {
-			window.dispatchEvent(new HashChangeEvent('hashchange'));
-		});
-		expect(/** @type {HTMLElement} */ (container.querySelector('#section-mail')).hidden).toBe(false);
-	});
-
-	it('on a phone the nav is one button showing the section that opens the list', () => {
-		const picked = vi.fn();
-		const { container } = render(<SectionNav items={sections} active="mail" onSelect={picked} />);
-		const trigger = /** @type {HTMLButtonElement} */ (container.querySelector('button[aria-expanded]'));
-		expect(trigger.textContent).toBe('Email');
-		expect(trigger.getAttribute('aria-expanded')).toBe('false');
-		click(trigger);
-		expect(trigger.getAttribute('aria-expanded')).toBe('true');
-		const list = /** @type {HTMLElement} */ (container.querySelector(`#${trigger.getAttribute('aria-controls')}`));
-		click(/** @type {HTMLElement} */ (list.querySelector('a[href="#keys"]')));
-		expect(picked).toHaveBeenCalledWith('keys');
-		expect(container.querySelector(`#${trigger.getAttribute('aria-controls')}`)).toBeNull();
 	});
 });
 
@@ -584,38 +451,5 @@ describe('card flow', () => {
 		expect(small?.getAttribute('data-flow')).toBe('card');
 		expect(wide?.getAttribute('data-flow')).toBeNull();
 		expect(other?.getAttribute('data-flow')).toBeNull();
-	});
-
-	it('is what a section and a settings form lay their cards out in', () => {
-		const layout = render(<SectionLayout sections={[{ id: 'a', label: 'A', content: <p>x</p> }]} />);
-		expect(layout.container.querySelector('#section-a')?.className).toContain('auto-fill');
-	});
-});
-
-describe('ItemSwitcher', () => {
-	it('shows one item at a time under a strip of tabs, and moves to the item just added', () => {
-		/** @param {{ items: string[] }} props */
-		function Harness({ items: start }) {
-			const [items, setItems] = useState(start);
-			return (
-				<ItemSwitcher
-					items={items}
-					legend="Methods"
-					nameOf={(item) => item}
-					addLabel="Add method"
-					onAdd={() => setItems([...items, `New ${items.length + 1}`])}
-					renderItem={(item) => <p>{`editing ${item}`}</p>}
-				/>
-			);
-		}
-		const { container } = render(<Harness items={['Bank', 'Cash']} />);
-		expect(allByRole(container, 'tab').map((tab) => tab.textContent)).toEqual(['Bank', 'Cash']);
-		expect(container.textContent).toContain('editing Bank');
-		expect(container.textContent).not.toContain('editing Cash');
-		click(/** @type {HTMLElement} */ (allByRole(container, 'tab')[1]));
-		expect(container.textContent).toContain('editing Cash');
-		click(/** @type {HTMLElement} */ (button(container, 'Add method')));
-		expect(container.textContent).toContain('editing New 3');
-		expect(container.textContent).not.toContain('editing Cash');
 	});
 });

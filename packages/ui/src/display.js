@@ -138,7 +138,7 @@ export function Avatar({ name, size = 'md', className }) {
  * Surface card, only where grouping helps (level 1: a white surface with a hairline edge on the off-white canvas): its
  * header holds the title, a one-line description and up to two actions (the rest in a More menu); whitespace, not a
  * line, parts it from the body, which is padded 20 px. Never put boxes inside a card: use rows divided by hairlines
- * (`RowList`, setting rows).
+ * (setting rows, a table).
  * @param {{ title?: ReactNode, subtitle?: ReactNode, actions?: ReactNode, children?: ReactNode, className?: string,
  *   bodyClassName?: string, as?: 'section' | 'div' | 'article', id?: string, padded?: boolean, flow?: boolean }} props
  *   `flow`: a small card that takes one column of a `CardFlow` and sits beside the others (anything else in a flow takes

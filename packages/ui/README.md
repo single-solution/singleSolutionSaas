@@ -33,7 +33,7 @@ Every meaning has the brand hue for dots, bars and fills (`bg-success-solid`, `D
 (`-soft`, `TINTS`) and an AA text shade (`text-success`, `on-success-soft`), darkened where the hue is too light for
 text. `IconBadge`, `Stat`, `Badge`, `EmptyState` and `AppShell` menu items take a `kind` (`overview`, `merchant`,
 `website`, `product`, …) that names the thing: every kind takes the blue tint, and leaving `kind` out keeps the item
-neutral. Each product's chip has its own meaning color, tinted only (`IconBadge product="chat"`, `ListRow product`,
+neutral. Each product's chip has its own meaning color, tinted only (`IconBadge product="chat"`,
 `productLook`): Accounts blue, Payments green, Chat teal, Growth orange, Notifications yellow, Ecommerce pink.
 
 ## The layout system (contract 2026-10-17)
@@ -52,9 +52,7 @@ One component per job. The window never scrolls; every pane has its own thin scr
   drawer), `SaveBar` (the only save control), `AppShell` nav items with `badge: { count, tone }` and `dot`, and the
   account with its `role`.
 - Skeletons at the real sizes: `PageSkeleton`, `InnerNavSkeleton`, `ToolbarSkeleton`, `DataTableSkeleton`,
-  `PaginationSkeleton`, `SettingsCardSkeleton`, `StatGridSkeleton`, `DrawerSkeleton`, `DrawerBodySkeleton`. The older
-  pieces (`SectionNav`, `SectionLayout`, `PillTabs`, `LinkTabs`, `ItemSwitcher`, `RowList`, `PageHeader`) still work
-  until the pages have moved.
+  `PaginationSkeleton`, `SettingsCardSkeleton`, `StatGridSkeleton`, `DrawerSkeleton`, `DrawerBodySkeleton`.
 
 ## The premium frame and blocks (owner 2026-10-16)
 
@@ -80,18 +78,15 @@ the page is as wide as the window leaves it. Nothing is centered in a narrow col
   the control on the right, hairlines between, stacked in a narrow card. Fields inside a card (and a `Form` inside one)
   become rows by themselves (`FieldLayoutContext`); `SettingRow` is a row for any other control; `Dialog` and `ListEditor`
   items stack again. `layout="stack" | "row"` on a field overrides.
-- `SectionLayout` / `SectionNav` / `useHashSection`: the inner sidebar (about 220 px) ONLY for pages with sub-pages
-  (grouped links with their context: counts, `badge`, a `status` dot such as needs setup; sticky, a search box from 10
-  links, a button that opens the list on phones); a page without sub-pages uses the full width. ONE section is shown at a time; a section
-  mounts when first opened and then stays; the choice is in the hash with a history entry per choice (Back works). A
-  section with `children` lists them as sub-items, each its own view. A page with one section has no sidebar. Use it
-  (not a long column) for every page with more than about two cards.
-- `CardFlow` / `CARD_FLOW` (also what `SectionLayout` panels and `SchemaForm` use): cards in auto-fill columns of at least
+- `useHashSection`: the section shown on a page with sub-pages, kept in the address hash with a history entry per choice
+  (Back works); a hash that names a feature with several views opens its first view. The inner sidebar itself is
+  `InnerNav`; the dashboard's `SectionsPage` joins the two.
+- `CardFlow` / `CARD_FLOW` (also what `SchemaForm` uses): cards in auto-fill columns of at least
   24 rem, always at their natural height (`NO_STRETCH` = `items-start`; never equal heights). A `SettingsCard` or
   `<Card flow>` takes one column; anything else in the flow (table, editor, callout) takes the whole row. A lone card
   takes the whole row (`SettingsCard wide`).
-- `Disclosure` (collapsed by default; `forceOpen`), `PillTabs`, `ItemSwitcher` (a list editor's entries one at a time),
-  `Paged` (search from 8 items and Previous / Next pages), `ViewTitle`.
+- `Disclosure` (collapsed by default; `forceOpen`), `PillTabs` (a form control, never navigation),
+  `Paged` (search from 8 items and Previous / Next pages).
 - `SchemaForm`: settings with `x-ui.advanced` (or in a group named Advanced) are in a collapsed Advanced block; from three
   groups on only one group shows, under a tab strip (`tabs={false}` lists the cards; `group="Name"` shows one group).
 - Controls on native inputs: `Switch` (`role="switch"`), `Checkbox` / `CheckboxInput` (`indeterminate`), `RadioGroup`
@@ -102,8 +97,7 @@ the page is as wide as the window leaves it. Nothing is centered in a narrow col
   no form in any product (they are the Portal's Website settings); `websiteSettingsUrl({ portal, admin, websiteId, merchantId, section })`
   is the address of a section of that page, `WEBSITE_SECTION_NAMES` their names.
 - `SaveBar`: the only save control. It floats at the bottom centre of the page area (centred next to the sidebar), shown only while something changed. `disabled` keeps Save off for an entry the server would refuse; a save that returns a promise shows the spinner until it settles. It replaced `SaveRow`: put an Add button in its own row beside the editor. `AccountMenu`, `Avatar`.
-- Rows and editors (never draw these by hand; flat, with hairlines, never boxes in a card): `RowList` + `ListRow` (a
-  name, a pill, one primary action and a More menu; `wrap` for long names), `EntryGroup` (one entry of a list editor: a
+- Rows and editors (never draw these by hand; flat, with hairlines, never boxes in a card): `EntryGroup` (one entry of a list editor: a
   flat group under a hairline with its name and Move up, Move down and Remove, or collapsed under a `summary`), `Badge onRemove` (a removable tag), `TextLink` (the one
   link in text, a table, a header or a footer; `as` for a router link, `external`, `tone="plain"`), and `Input
 type="file"` for a file field.

@@ -58,7 +58,6 @@ export { PageHeader, HeaderMeta, HeaderFact } from './header.js';
 export { Table } from './Table.js';
 export { Dialog, Drawer, ConfirmDialog } from './overlay.js';
 export { ActionMenu, AccountMenu, ThemeMenu } from './Menu.js';
-export { RowList, ListRow } from './rows.js';
 export { Toolbar, TOOLBAR_TEXTS } from './Toolbar.js';
 export { DataTable, DATA_TABLE_TEXTS, useRowSelection } from './DataTable.js';
 export { Pagination, PaginationSkeleton } from './Pagination.js';
@@ -89,13 +88,8 @@ export {
 	SettingsCard,
 	SettingRow,
 	SaveBar,
-	SectionNav,
-	SectionLayout,
 	PillTabs,
-	LinkTabs,
-	ViewTitle,
 	Disclosure,
-	ItemSwitcher,
 	NO_STRETCH,
 	CARD_FLOW,
 	CardFlow,

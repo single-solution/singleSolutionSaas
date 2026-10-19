@@ -2,18 +2,18 @@
 /**
  * The page-building blocks of the premium layout (owner 2026-10-16): the 12-column `Grid` / `Col`, the
  * {@link SettingsCard} with its setting rows (label and muted help on the left, the control on the right, rows divided
- * by hairlines, stacked on phones), the sticky {@link SaveBar} that appears only when something changed, and the inner
- * sidebar ({@link SectionNav}, {@link SectionLayout}: one section at a time, kept in the address) for pages that have
- * sections, and {@link Disclosure}, the collapsed Advanced block.
+ * by hairlines, stacked on phones), the sticky {@link SaveBar} that appears only when something changed, the section
+ * choice kept in the address ({@link useHashSection}, used by the dashboard pages with an inner navigation), the
+ * {@link PillTabs} form control, and {@link Disclosure}, the collapsed Advanced block.
  *
  * Nothing here stretches a card to the height of its neighbor: the grids align their cells to the start ({@link NO_STRETCH}).
  * @module
  */
-import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { cx } from './cx.js';
 import { Button } from './Button.js';
-import { Card, DOTS } from './display.js';
-import { FieldLayoutContext, ROW_GRID, ROW_LABEL, ROW_LIST, Select, rowControl } from './fields.js';
+import { Card } from './display.js';
+import { FieldLayoutContext, ROW_GRID, ROW_LABEL, ROW_LIST, rowControl } from './fields.js';
 import { Icon } from './icons.js';
 import { SAVE_BAR } from './layout-metrics.js';
 import { usePresence } from './motion.js';
@@ -242,28 +242,9 @@ export function SaveBar({
  */
 
 /**
- * A section of {@link SectionLayout}: a link with its content, or a link with sub-sections.
+ * A section of a dashboard page (see `dashboard-page.js`): a link with its content, or a link with sub-sections.
  * @typedef {Omit<SectionItem, 'children'> & { content?: ReactNode, children?: SectionSpec[] }} SectionSpec
  */
-
-/**
- * Groups of the items, in the order the groups first appear.
- * @param {SectionItem[]} items
- */
-const groupsOf = (items) => {
-	/** @type {Map<string, SectionItem[]>} */
-	const groups = new Map();
-	for (const item of items) groups.set(item.group ?? '', [...(groups.get(item.group ?? '') ?? []), item]);
-	return [...groups];
-};
-
-/**
- * The items that open a view (sub-items instead of their parent).
- * @template {{ id: string, children?: T[] }} T
- * @param {T[]} items
- * @returns {T[]}
- */
-const leavesOf = (items) => items.flatMap((item) => (item.children?.length ? leavesOf(item.children) : [item]));
 
 /** The address of a section: `#id`. @param {string} id */
 const hashOf = (id) => `#${encodeURIComponent(id)}`;
@@ -307,236 +288,7 @@ export function useHashSection(ids, initial) {
 	return [ids.includes(active) ? active : (ids[0] ?? ''), choose];
 }
 
-/** The plain text of a label, for searching. @param {ReactNode} label */
-const textOf = (label) => (typeof label === 'string' || typeof label === 'number' ? String(label) : '');
-
-/**
- * The inner sidebar (about 220 px; only on a page that has sub-pages): a floating white panel of grouped section links
- * with icons and the context of each (a count, a status dot such as "needs setup", a badge), sticky below the header
- * on wide screens; an item with sub-items opens them under it (the one holding the current section is open). A long list
- * gets a search box. On a phone it is one button showing the current section that opens the same list.
- * @param {{ items: SectionItem[], active: string, onSelect: (id: string) => void, label?: string, className?: string,
- *   searchFrom?: number, searchLabel?: string }} props `searchFrom`: the search box shows from that many links (10)
- */
-export function SectionNav({ items, active, onSelect, label = 'Sections', className, searchFrom = 10, searchLabel = 'Search' }) {
-	const [open, setOpen] = useState(false);
-	const [query, setQuery] = useState('');
-	const listId = useId();
-	const leaves = leavesOf(items);
-	const current = leaves.find((item) => item.id === active) ?? leaves[0];
-	const parent = items.find((item) => item.children?.some((child) => child.id === current?.id));
-	const needle = query.trim().toLowerCase();
-	const matches = (/** @type {SectionItem} */ item) => !needle || textOf(item.label).toLowerCase().includes(needle);
-	const visible = needle
-		? items.flatMap((item) => {
-				if (!item.children?.length) return matches(item) ? [item] : [];
-				const kept = item.children.filter(matches);
-				return matches(item) ? [item] : kept.length > 0 ? [{ ...item, children: kept }] : [];
-			})
-		: items;
-	/** @param {SectionItem} item @param {boolean} phone @param {boolean} child */
-	const link = (item, phone, child) => {
-		const target = item.children?.length ? (leavesOf([item])[0]?.id ?? item.id) : item.id;
-		const on = child ? item.id === active : item.id === active && !item.children?.length;
-		const holds = !child && item.children?.some((entry) => entry.id === active);
-		return (
-			<a
-				href={hashOf(target)}
-				aria-current={on ? 'true' : undefined}
-				{...(item.children?.length ? { 'aria-expanded': holds || needle !== '' } : {})}
-				onClick={(event) => {
-					event.preventDefault();
-					onSelect(target);
-					if (phone && !item.children?.length) setOpen(false);
-				}}
-				className={cx(
-					'ss-motion ss-press flex h-8 items-center gap-2 rounded-md text-label focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
-					child ? 'pr-2 pl-3' : 'px-2',
-					on
-						? 'bg-primary-soft font-medium text-on-primary-soft'
-						: holds
-							? 'font-medium text-fg'
-							: 'font-medium text-fg/75 hover:bg-surface-2 hover:text-fg',
-				)}>
-				{!child && item.icon ? (
-					<span aria-hidden="true" className={on || holds ? 'text-primary' : 'text-muted'}>
-						<Icon name={item.icon} size={15} />
-					</span>
-				) : null}
-				<span className="min-w-0 flex-1 truncate">{item.label}</span>
-				{item.status ? (
-					<span title={item.statusLabel} className="flex shrink-0 items-center">
-						<span aria-hidden="true" className={cx('size-1.5 rounded-full', DOTS[item.status])} />
-						{item.statusLabel ? <span className="sr-only">{item.statusLabel}</span> : null}
-					</span>
-				) : null}
-				{item.badge ? (
-					<span className="ml-auto shrink-0 text-micro font-medium text-muted tabular-nums">{item.badge}</span>
-				) : null}
-				{!child && item.children?.length ? (
-					<span aria-hidden="true" className={cx('ss-motion text-subtle', (holds || needle !== '') && 'rotate-180')}>
-						<Icon name="chevronDown" size={13} />
-					</span>
-				) : null}
-			</a>
-		);
-	};
-	const list = (/** @type {boolean} */ phone) => (
-		<nav aria-label={label} className="space-y-4">
-			{leaves.length >= searchFrom ? (
-				<input
-					type="search"
-					aria-label={searchLabel}
-					placeholder={searchLabel}
-					value={query}
-					onChange={(event) => setQuery(event.target.value)}
-					className="h-8 w-full rounded-control border border-line bg-surface px-2.5 text-label text-fg placeholder:text-subtle focus-visible:outline-2 focus-visible:outline-focus"
-				/>
-			) : null}
-			{groupsOf(visible).map(([group, entries], index) => (
-				<div key={group || index} className="space-y-0.5">
-					{group ? (
-						<p className="px-2 pb-1 text-micro font-semibold tracking-[0.06em] text-muted uppercase">{group}</p>
-					) : null}
-					<ul className="space-y-px">
-						{entries.map((item) => {
-							const expanded =
-								item.children?.length && (needle !== '' || item.children.some((child) => child.id === active));
-							return (
-								<li key={item.id}>
-									{link(item, phone, false)}
-									{expanded ? (
-										<ul className="mt-px mb-1 ml-[1.0625rem] space-y-px border-l border-line pl-1.5">
-											{item.children?.map((child) => (
-												<li key={child.id}>{link(child, phone, true)}</li>
-											))}
-										</ul>
-									) : null}
-								</li>
-							);
-						})}
-					</ul>
-				</div>
-			))}
-			{needle && visible.length === 0 ? <p className="px-2.5 py-1 text-sm text-muted">No match</p> : null}
-		</nav>
-	);
-	return (
-		<div className={cx('min-w-0', className)}>
-			<div className="lg:hidden">
-				<button
-					type="button"
-					aria-expanded={open}
-					aria-controls={listId}
-					onClick={() => setOpen((o) => !o)}
-					className="ss-motion ss-press flex h-10 w-full items-center gap-2.5 rounded-control border border-line-soft bg-surface px-3 text-sm font-medium text-fg">
-					{(parent?.icon ?? current?.icon) ? (
-						<span aria-hidden="true" className="text-primary">
-							<Icon name={/** @type {import('./icons.js').IconName} */ (parent?.icon ?? current?.icon)} size={16} />
-						</span>
-					) : null}
-					<span className="min-w-0 flex-1 truncate text-left">
-						{parent ? (
-							<>
-								<span className="font-medium text-muted">{parent.label} · </span>
-								{current?.label}
-							</>
-						) : (
-							current?.label
-						)}
-					</span>
-					<span aria-hidden="true" className={cx('ss-motion text-muted', open && 'rotate-180')}>
-						<Icon name="chevronDown" size={16} />
-					</span>
-				</button>
-				{open ? (
-					<div
-						id={listId}
-						className="ss-scroll mt-2 max-h-[60vh] animate-ss-pop rounded-card border border-line-soft bg-surface p-2 shadow-overlay">
-						{list(true)}
-					</div>
-				) : null}
-			</div>
-			<div className="ss-scroll hidden max-h-[calc(100dvh-8rem)] rounded-panel border border-line-soft bg-surface p-2 shadow-panel lg:block lg:max-h-(--ss-pane-h)">
-				{list(false)}
-			</div>
-		</div>
-	);
-}
-
-/**
- * A page with an inner sidebar and ONE view at a time: the section links on the left (a floating panel, sticky under the
- * header), the chosen section on the right. A section with `children` lists them as sub-items, each its own view (so
- * a long section is several short ones, never one long column). The choice is in the address hash (`#security`), so a
- * link opens it and Back returns to the one before. A section is mounted when first opened and then kept (an edit in
- * it is not lost when another is opened); the others are not on the page at all.
- * @param {{ sections: SectionSpec[], label?: string, initial?: string, className?: string, empty?: ReactNode,
- *   searchFrom?: number, searchLabel?: string }} props
- */
-export function SectionLayout({ sections, label = 'Sections', initial, className, empty, searchFrom, searchLabel }) {
-	const leaves = leavesOf(sections);
-	const [active, choose] = useHashSection(
-		leaves.map((section) => section.id),
-		initial,
-	);
-	const [seen, setSeen] = useState(() => new Set([active]));
-	if (active && !seen.has(active)) setSeen(new Set([...seen, active]));
-	const items = useMemo(() => {
-		/** @param {SectionSpec} section @returns {SectionItem} */
-		const strip = ({ content: _content, children, ...item }) => ({
-			...item,
-			...(children?.length ? { children: children.map(strip) } : {}),
-		});
-		return sections.map(strip);
-	}, [sections]);
-	if (leaves.length === 0) return <>{empty ?? null}</>;
-	const panels = (
-		<div className="min-w-0">
-			{leaves
-				.filter((section) => section.id === active || seen.has(section.id))
-				.map((section) => (
-					<div key={section.id} id={`section-${section.id}`} hidden={section.id !== active} className={CARD_FLOW}>
-						{section.content}
-					</div>
-				))}
-		</div>
-	);
-	// one view needs no sidebar
-	if (leaves.length === 1) return <div className={cx('grid min-w-0', NO_STRETCH, className)}>{panels}</div>;
-	return (
-		<div className={cx('grid min-w-0 gap-4 lg:grid-cols-[13.75rem_minmax(0,1fr)] lg:gap-6', NO_STRETCH, className)}>
-			<SectionNav
-				items={items}
-				active={active}
-				onSelect={choose}
-				label={label}
-				{...(searchFrom ? { searchFrom } : {})}
-				{...(searchLabel ? { searchLabel } : {})}
-				className="lg:sticky lg:top-0"
-			/>
-			{panels}
-		</div>
-	);
-}
-
-/**
- * The heading of one view of a page with an inner sidebar: its title, a one-line description and optional actions. In a
- * {@link CardFlow} it takes the whole row.
- * @param {{ title: ReactNode, description?: ReactNode, actions?: ReactNode, className?: string }} props
- */
-export function ViewTitle({ title, description, actions, className }) {
-	return (
-		<header className={cx('flex min-w-0 flex-wrap items-center justify-between gap-3 pb-1', className)}>
-			<div className="min-w-0">
-				<h2 className="text-page font-semibold tracking-[-0.015em] text-fg">{title}</h2>
-				{description ? <p className="mt-0.5 text-sm text-muted">{description}</p> : null}
-			</div>
-			{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
-		</header>
-	);
-}
-
-/** The look of a strip of tabs ({@link PillTabs}, {@link LinkTabs}): a sage track whose current item is raised. */
+/** The look of a strip of tabs ({@link PillTabs}): a sage track whose current item is raised. */
 const TAB_STRIP = 'ss-scroll flex w-fit max-w-full min-w-0 gap-0.5 rounded-control bg-surface-2 p-0.5';
 /** @param {boolean} on */
 const tabLook = (on) =>
@@ -570,98 +322,6 @@ export function PillTabs({ tabs, active, onSelect, label, className, idPrefix = 
 					</button>
 				);
 			})}
-		</div>
-	);
-}
-
-/**
- * The look of {@link PillTabs} for links (a view of the same list by day, by merchant …): a segmented strip whose
- * current link is raised. `linkAs` renders router links.
- * @param {{ items: Array<{ href: string, label: ReactNode, current?: boolean }>, label: string,
- *   linkAs?: import('react').ElementType, className?: string }} props
- */
-export function LinkTabs({ items, label, linkAs, className }) {
-	const LinkTag = linkAs ?? 'a';
-	return (
-		<nav aria-label={label} className={cx(TAB_STRIP, className)}>
-			{items.map((item) => (
-				<LinkTag
-					key={item.href}
-					href={item.href}
-					aria-current={item.current ? 'page' : undefined}
-					className={tabLook(Boolean(item.current))}>
-					{item.label}
-				</LinkTag>
-			))}
-		</nav>
-	);
-}
-
-/** A list with more items than this is picked from a select, not a strip of tabs. */
-const SWITCHER_TABS_UP_TO = 8;
-
-/**
- * The items of a list editor one at a time (owner 2026-10-16: no long stacks of item cards): a strip with one tab per
- * item (named by `nameOf`; a select from nine items on) and an Add button; `renderItem` draws the picked item only. The picked item moves to the
- * one just added.
- * @template T
- * @param {{ items: T[], legend: string, nameOf: (item: T, index: number) => string,
- *   renderItem: (item: T, index: number) => ReactNode, onAdd?: () => void, addLabel?: string, addDisabled?: boolean,
- *   emptyText?: ReactNode, className?: string }} props
- */
-export function ItemSwitcher({
-	items,
-	legend,
-	nameOf,
-	renderItem,
-	onAdd,
-	addLabel = 'Add',
-	addDisabled = false,
-	emptyText,
-	className,
-}) {
-	const [picked, setPicked] = useState(0);
-	const at = Math.max(0, Math.min(picked, items.length - 1));
-	const item = items[at];
-	return (
-		<div className={cx('min-w-0 space-y-3', className)}>
-			<div className="flex min-w-0 flex-wrap items-center gap-2">
-				{items.length > SWITCHER_TABS_UP_TO ? (
-					<Select
-						hideLabel
-						label={legend}
-						fieldClassName="min-w-0 max-w-full flex-1"
-						value={String(at)}
-						onChange={(event) => setPicked(Number(event.target.value))}
-						options={items.map((entry, index) => ({
-							value: String(index),
-							label: nameOf(entry, index) || `#${index + 1}`,
-						}))}
-					/>
-				) : items.length > 0 ? (
-					<PillTabs
-						className="min-w-0 flex-1"
-						label={legend}
-						idPrefix={`is${at}`}
-						active={String(at)}
-						onSelect={(id) => setPicked(Number(id))}
-						tabs={items.map((entry, index) => ({ id: String(index), label: nameOf(entry, index) || `#${index + 1}` }))}
-					/>
-				) : null}
-				{onAdd ? (
-					<Button
-						size="sm"
-						variant="secondary"
-						disabled={addDisabled}
-						onClick={() => {
-							onAdd();
-							setPicked(items.length);
-						}}>
-						{addLabel}
-					</Button>
-				) : null}
-			</div>
-			{item !== undefined ? renderItem(item, at) : emptyText ? <p className="text-sm text-muted">{emptyText}</p> : null}
 		</div>
 	);
 }

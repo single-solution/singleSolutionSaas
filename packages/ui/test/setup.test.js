@@ -6,7 +6,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DashboardProvider, settingSectionOf, useSetupSteps, wantsSettings } from '../src/dashboard.js';
-import { SectionLayout } from '../src/index.js';
+import { useHashSection } from '../src/blocks.js';
 import { act, cleanup, render } from '../src/testing.js';
 
 const MANIFEST = {
@@ -59,21 +59,14 @@ describe('settingSectionOf', () => {
 describe('a link names a section with the name of the feature', () => {
 	it('opens the first view of a feature that has several', () => {
 		window.history.replaceState(null, '', '/#catalog');
-		const sections = [
-			{ id: 'seo', label: 'Search', content: <p>Search cards</p> },
-			{
-				id: 'catalog',
-				label: 'Catalog',
-				content: null,
-				children: [
-					{ id: 'catalog.basics', label: 'Basics', content: <p>Basics cards</p> },
-					{ id: 'catalog.page-addresses', label: 'Page addresses', content: <p>Address cards</p> },
-				],
-			},
-		];
-		const { container } = render(<SectionLayout sections={sections} />);
-		expect(/** @type {HTMLElement} */ (container.querySelector('[id="section-catalog.basics"]')).hidden).toBe(false);
-		expect(/** @type {HTMLElement} */ (container.querySelector('[id="section-seo"]')).hidden).toBe(true);
+		const ids = ['seo', 'catalog.basics', 'catalog.page-addresses'];
+		/** @param {{ ids: string[] }} props */
+		function Harness({ ids: all }) {
+			const [active] = useHashSection(all);
+			return <p>{active}</p>;
+		}
+		const { container } = render(<Harness ids={ids} />);
+		expect(container.textContent).toBe('catalog.basics');
 	});
 });
 
