@@ -1,7 +1,7 @@
 'use client';
 /**
  * Credits and billing pieces shared by the merchant and admin consoles (PLAN 0.5, 0.6): status badges with their
- * colors, days left, the billing banners, the usage chart and table, and the receipts table. Days, months and charts
+ * colors, days left, the billing banners, the usage chart and table, and the columns of the usage and receipt tables. Days, months and charts
  * are UTC and labeled so; single timestamps show in the viewer's local time.
  * @module
  */
@@ -215,36 +215,6 @@ export function UsageView({ usage, showWebsite = true, chartTitle = BILLING.usag
 				]}
 			/>
 		</div>
-	);
-}
-
-/**
- * Credit receipts; the amount paid is shown to admins only (present only in admin responses).
- * @param {{ receipts: any[], showMerchant?: boolean }} props
- */
-export function ReceiptsTable({ receipts, showMerchant = false }) {
-	const admin = receipts.some((r) => 'amountPaid' in r);
-	return (
-		<Table
-			caption={BILLING.receiptsTitle}
-			rows={receipts}
-			rowKey={(r) => r.receiptId}
-			empty={<EmptyState compact icon="receipt" kind="credit" title={BILLING.noReceipts} />}
-			columns={[
-				{ key: 'at', header: BILLING.receiptColumns.date, rowHeader: true, render: (r) => <LocalTime value={r.at} /> },
-				...(showMerchant ? [{ key: 'merchantName', header: BILLING.receiptColumns.merchant, sortable: true }] : []),
-				{
-					key: 'credits',
-					header: BILLING.receiptColumns.credits,
-					align: /** @type {const} */ ('right'),
-					sortable: true,
-					render: (/** @type {any} */ r) => formatCredits(r.credits),
-				},
-				...(admin ? [{ key: 'amountPaid', header: BILLING.receiptColumns.amountPaid }] : []),
-				{ key: 'method', header: BILLING.receiptColumns.method, sortable: true },
-				{ key: 'reference', header: BILLING.receiptColumns.reference, render: (/** @type {any} */ r) => r.reference ?? '—' },
-			]}
-		/>
 	);
 }
 
