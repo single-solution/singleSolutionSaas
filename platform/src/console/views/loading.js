@@ -1,117 +1,84 @@
 'use client';
 /**
  * The loading skeleton of both consoles (each console's `loading.js`): shown at once when a link is clicked, while the
- * next page is on the way, with the progress bar on top. It takes the shape of the page to come: a list-and-detail
- * screen keeps its list in place (the picked row marked) and shows a skeleton for the detail only; other pages show a
- * page skeleton; the public account pages a sign-in card.
+ * next page is on the way, with the progress bar on top. It is the `@ss/ui` skeleton of the layout the page will have
+ * (layout contract 2026-10-17): the same header, inner navigation, toolbar, body and footer areas at the same sizes, so
+ * nothing jumps when the page arrives. A list is a toolbar over a table with a footer; a page with parts has its
+ * inner navigation; the Overview is tiles and cards; the public account pages are a sign-in card. A page that is
+ * one of the menu's own entries shows its title already.
  * @module
  */
 import { usePathname } from 'next/navigation.js';
-import { useEffect } from 'react';
-import { RouteProgress, STAT_GRID, SkeletonBlock, cx } from '@ss/ui';
+import {
+	DataTableSkeleton,
+	PageSkeleton,
+	RouteProgress,
+	SettingsCardSkeleton,
+	SkeletonBlock,
+	StatGridSkeleton,
+	cx,
+} from '@ss/ui';
 import { ADMIN, CONSOLE, MERCHANT } from '../../texts/console.js';
 import { PUBLIC_PATHS } from '../paths.js';
-import { ListDetail } from './common.js';
-import { listWasPlaceholder, useRememberedList } from './screen-memory.js';
+import { Link } from '../link.js';
 
 /** @typedef {'admin' | 'merchant'} Area */
 
-/** The list-and-detail screens of each console: the section name, its path and its title. */
-const SCREENS = /** @type {Record<Area, Array<{ section: string, base: string, title: string }>>} */ ({
-	admin: [
-		{ section: 'admin/merchants', base: '/admin/merchants', title: ADMIN.merchantsTitle },
-		{ section: 'admin/products', base: '/admin/products', title: ADMIN.productsTitle },
-		{ section: 'admin/admins', base: '/admin/admins', title: ADMIN.adminsTitle },
-	],
-	merchant: [{ section: 'websites', base: '/websites', title: MERCHANT.websitesTitle }],
-});
+/**
+ * The layout of a page, as far as its skeleton needs it.
+ * @typedef {object} Shape
+ * @property {'table' | 'cards' | 'overview'} body what the body holds
+ * @property {boolean} [nav] the page has an inner navigation
+ * @property {boolean} [list] a toolbar above the body and a pagination below it (the body is a table)
+ * @property {number} [columns] the table's columns
+ * @property {string} [title] the title, for a page that is a menu entry of its own
+ */
 
 /**
- * The list-and-detail screen a path opens, if any.
+ * The shape of the page a path opens.
  * @param {Area} area
  * @param {string} pathname
+ * @returns {Shape}
  */
-export const screenOf = (area, pathname) =>
-	SCREENS[area].find((screen) => pathname === screen.base || pathname.startsWith(`${screen.base}/`)) ?? null;
-
-/** Placeholder blocks that sit on the page canvas (titles, buttons) take the stronger tint. */
-const ON_CANVAS = '[--ss-skeleton:var(--ss-surface-3)]';
-
-/**
- * A card with placeholder lines.
- * @param {{ lines?: number, className?: string }} props
- */
-function CardSkeleton({ lines = 3, className }) {
-	return (
-		<div className={cx('space-y-3 rounded-card border border-line-soft bg-surface p-5 shadow-card', className)}>
-			<SkeletonBlock className="h-5 w-40" />
-			{Array.from({ length: lines }, (_, i) => (
-				<SkeletonBlock key={i} className={cx('h-4', i === lines - 1 ? 'w-2/3' : 'w-full')} />
-			))}
-		</div>
-	);
-}
-
-/** A list pane's placeholder: the title, the search box and rows. */
-function ListSkeleton() {
-	return (
-		<div className="space-y-3 rounded-panel border border-line-soft bg-surface p-3 shadow-panel">
-			<SkeletonBlock className="mx-1 mt-1 h-6 w-32" />
-			<SkeletonBlock className="h-9 rounded-control" />
-			<div className="space-y-2 pt-1">
-				{[0, 1, 2, 3, 4, 5].map((i) => (
-					<SkeletonBlock key={i} className="h-11 rounded-lg" />
-				))}
-			</div>
-		</div>
-	);
-}
-
-/** A detail's placeholder: the header with its actions and cards. */
-function DetailSkeleton() {
-	return (
-		<>
-			<div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-				<SkeletonBlock className={cx('h-7 w-56 max-w-full', ON_CANVAS)} />
-				<div className="flex gap-2">
-					<SkeletonBlock className={cx('h-9 w-28 rounded-control', ON_CANVAS)} />
-					<SkeletonBlock className={cx('h-9 w-9 rounded-control', ON_CANVAS)} />
-				</div>
-			</div>
-			<div className="@container">
-				<div className="grid gap-5 @md:grid-cols-2">
-					<CardSkeleton lines={2} />
-					<CardSkeleton lines={2} />
-				</div>
-			</div>
-			<CardSkeleton lines={4} />
-		</>
-	);
-}
-
-/** A page's placeholder: the title, three tiles and a section. */
-function PageSkeleton() {
-	return (
-		<div className="space-y-6">
-			<SkeletonBlock className={cx('h-8 w-48', ON_CANVAS)} />
-			<div className="@container">
-				<div className={STAT_GRID}>
-					{[0, 1, 2].map((i) => (
-						<CardSkeleton key={i} lines={1} />
-					))}
-				</div>
-			</div>
-			<CardSkeleton lines={5} />
-		</div>
-	);
-}
+export const shapeOf = (area, pathname) => {
+	const [first, second, third, fourth] = pathname
+		.split('/')
+		.filter(Boolean)
+		.slice(area === 'admin' ? 1 : 0);
+	if (area === 'admin') {
+		if (!first) return { body: 'overview', title: ADMIN.menu.overview };
+		const menu = /** @type {Record<string, string>} */ (ADMIN.menu);
+		if (first === 'merchants' && !second) return { body: 'table', list: true, columns: 7, title: menu.merchants ?? '' };
+		if (first === 'merchants')
+			// the bare address of a merchant is its Websites table, a website is a page with parts
+			return third === 'websites' && fourth
+				? { body: 'cards', nav: true }
+				: { body: 'table', nav: true, list: true, columns: 5 };
+		if (first === 'products' && !second) return { body: 'table', list: true, columns: 5, title: menu.products ?? '' };
+		if (first === 'products') return { body: 'table', nav: true, list: true, columns: 4 };
+		if (first === 'admins' && !second) return { body: 'table', list: true, columns: 6, title: menu.admins ?? '' };
+		if (first === 'activity') return { body: 'table', list: true, columns: 5, title: menu.activity ?? '' };
+		if (first === 'finance') return { body: 'table', nav: true, list: true, columns: 6, title: menu.billing ?? '' };
+		if (first === 'settings') return { body: 'cards', nav: true, title: menu.settings ?? '' };
+		return { body: 'cards', nav: true };
+	}
+	if (first === 'overview') return { body: 'overview', title: MERCHANT.menu.overview };
+	if (first === 'websites' && !second) return { body: 'table', list: true, columns: 5, title: MERCHANT.menu.websites };
+	if (first === 'credits' && second === 'receipts') return { body: 'table', nav: true, list: true, columns: 5 };
+	return { body: 'cards', nav: true };
+};
 
 /** The sign-in card's placeholder. */
 function AuthSkeleton() {
 	return (
 		<div className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 px-4">
-			<SkeletonBlock className={cx('mx-auto h-9 w-9 rounded-lg', ON_CANVAS)} />
-			<CardSkeleton lines={4} />
+			<SkeletonBlock className="mx-auto h-9 w-9 rounded-lg [--ss-skeleton:var(--ss-surface-3)]" />
+			<div className={cx('space-y-3 rounded-card border border-line-soft bg-surface p-5 shadow-card')}>
+				<SkeletonBlock className="h-5 w-40" />
+				<SkeletonBlock className="h-4 w-full" />
+				<SkeletonBlock className="h-4 w-full" />
+				<SkeletonBlock className="h-4 w-2/3" />
+			</div>
 		</div>
 	);
 }
@@ -121,38 +88,38 @@ function AuthSkeleton() {
  */
 export function ConsoleLoading({ area }) {
 	const pathname = usePathname() ?? '';
-	const screen = screenOf(area, pathname);
-	const kept = useRememberedList(screen?.section ?? null);
-	const section = screen?.section ?? null;
-	useEffect(() => {
-		if (section) listWasPlaceholder(section, kept === null);
-	}, [section, kept]);
-	/** @type {import('react').ReactNode} */
-	let body;
-	if (area === 'merchant' && PUBLIC_PATHS.includes(pathname)) body = <AuthSkeleton />;
-	else if (screen) {
-		const selected = pathname !== screen.base;
-		body = (
-			<ListDetail
-				label={screen.title}
-				section={screen.section}
-				remember={false}
-				going={pathname}
-				auto={!selected}
-				back={{ href: screen.base, label: screen.title }}
-				list={kept ? kept.list : <ListSkeleton />}
-				detail={<DetailSkeleton />}
-				empty={null}
-			/>
+	if (area === 'merchant' && PUBLIC_PATHS.includes(pathname))
+		return (
+			<div aria-busy="true">
+				<span role="status" className="sr-only">
+					{CONSOLE.loading}
+				</span>
+				<RouteProgress />
+				<AuthSkeleton />
+			</div>
 		);
-	} else body = <PageSkeleton />;
+	const shape = shapeOf(area, pathname);
+	const table = shape.body === 'table';
 	return (
-		<div aria-busy="true">
-			<span role="status" className="sr-only">
-				{CONSOLE.loading}
-			</span>
+		<>
 			<RouteProgress />
-			{body}
-		</div>
+			<PageSkeleton
+				linkAs={Link}
+				label={CONSOLE.loading}
+				{...(shape.title ? { crumbs: [{ label: shape.title }] } : {})}
+				nav={Boolean(shape.nav)}
+				toolbar={Boolean(shape.list)}
+				footer={Boolean(shape.list)}
+				flush={table}>
+				{table ? (
+					<DataTableSkeleton columns={shape.columns ?? 5} menu />
+				) : shape.body === 'overview' ? (
+					<>
+						<StatGridSkeleton />
+						<SettingsCardSkeleton rows={4} />
+					</>
+				) : undefined}
+			</PageSkeleton>
+		</>
 	);
 }

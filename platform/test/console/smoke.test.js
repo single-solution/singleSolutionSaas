@@ -159,12 +159,7 @@ describe('merchant console smoke', () => {
 			const frame = await loaders.loadFrame(merchant.api, merchantId);
 			const shell = text(
 				ssr(
-					<ConsoleShell
-						me={me}
-						merchantId={merchantId}
-						websites={frame.websites}
-						billing={frame.billing}
-						branding={BRANDING}>
+					<ConsoleShell me={me} websites={frame.websites} billing={frame.billing} branding={BRANDING}>
 						<p>child</p>
 					</ConsoleShell>,
 				),

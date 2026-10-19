@@ -228,6 +228,14 @@ export const loadProduct = async (api, productId) => {
 	};
 };
 
+/**
+ * How many merchants need attention (low, in grace or stopped), for the badge on the "Credits and billing" menu entry.
+ * Only a number: a failed read shows no badge (the menu never waits on or breaks for it).
+ * @param {ConsoleApi} api
+ * @returns {Promise<number>}
+ */
+export const loadAttentionCount = async (api) => itemsOf(await api.get(paths.attention())).length;
+
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /**

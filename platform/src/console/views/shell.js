@@ -2,18 +2,19 @@
 /**
  * The signed-in merchant console frame (PLAN 0.6, redesign 2 2026-10-17): the menu Overview · Websites · Usage and
  * credits · Account; at the bottom of the sidebar (and its phone drawer) the website switcher, help and the account menu
- * (My account, the theme, Sign out); the merchant, page title and balance chip in the header; and the billing banner,
- * with the Branding. The frame is the console's
- * layout, so it stays across navigations: pages hand it their fresh billing summary (frame-billing.js). The public
- * account pages render without it.
+ * (My account, the theme, Sign out) and the credit balance (a link to Usage and credits); the billing banner on top;
+ * and a mark on the Usage and credits entry while the balance is low, in grace or stopped, with the Branding. The page
+ * title and its breadcrumbs are the page's own header (layout contract R2). The frame is the console's layout, so it
+ * stays across navigations: pages hand it their fresh billing summary (frame-billing.js). The public account pages
+ * render without it.
  * @module
  */
 import { usePathname, useRouter } from 'next/navigation.js';
 import { useEffect, useState, useTransition } from 'react';
-import { AppShell, Icon, SwitcherSelect, ToastProvider, formatCredits, useNavigationProgress } from '@ss/ui';
-import { MERCHANT } from '../../texts/console.js';
+import { AppShell, SwitcherSelect, ToastProvider, useNavigationProgress } from '@ss/ui';
+import { BILLING, MERCHANT } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
-import { Link, NavLink } from '../link.js';
+import { NavLink } from '../link.js';
 import { PUBLIC_PATHS, api, routes } from '../paths.js';
 import { BillingBanner } from './billing.js';
 import { accentStyle } from './brand.js';
@@ -22,11 +23,26 @@ import { FrameFooter } from './frame-footer.js';
 import { contactLine } from './sign-in.js';
 
 /**
- * The merchant menu with the current entry marked.
+ * The attention mark of Usage and credits for a billing summary: red when the websites are stopped, amber while the
+ * balance is low or in grace; nothing otherwise.
+ * @param {any} billing
+ * @returns {{ dot: 'danger' | 'attention', dotLabel: string } | null}
+ */
+const creditsMark = (billing) => {
+	if (billing?.status === 'stopped') return { dot: 'danger', dotLabel: BILLING.banner.stopped };
+	if (billing?.status === 'grace') return { dot: 'attention', dotLabel: BILLING.banner.grace };
+	if (billing?.status === 'low_balance') return { dot: 'attention', dotLabel: BILLING.banner.low };
+	return null;
+};
+
+/**
+ * The merchant menu with the current entry marked; `billing` (the billing summary) puts a mark on Usage and credits
+ * while the balance needs attention.
  * @param {string} pathname
+ * @param {any} [billing]
  * @returns {import('@ss/ui').NavSection[]}
  */
-export const merchantSections = (pathname) => {
+export const merchantSections = (pathname, billing = null) => {
 	/** @param {string} href */
 	const is = (href) => pathname === href || pathname.startsWith(`${href}/`);
 	return [
@@ -47,7 +63,14 @@ export const merchantSections = (pathname) => {
 					icon: 'globe',
 					current: is(routes.websites()),
 				},
-				{ href: routes.credits(), label: MERCHANT.menu.usage, kind: 'credit', icon: 'wallet', current: is(routes.credits()) },
+				{
+					href: routes.credits(),
+					label: MERCHANT.menu.usage,
+					kind: 'credit',
+					icon: 'wallet',
+					current: is(routes.credits()),
+					...creditsMark(billing),
+				},
 				{
 					href: routes.account(),
 					label: MERCHANT.menu.account,
@@ -77,10 +100,10 @@ function WebsiteSwitcher({ websites, current, disabled, onPick }) {
 }
 
 /**
- * @param {{ me: any, merchantId: string | null, websites: any[], billing: any, children: import('react').ReactNode,
+ * @param {{ me: any, websites: any[], billing: any, children: import('react').ReactNode,
  *   branding: { name: string, accent: string, support?: any } }} props
  */
-export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, children, branding }) {
+export function ConsoleShell({ me, websites, billing: frameBilling, children, branding }) {
 	const pathname = usePathname() ?? '';
 	const router = useRouter();
 	const [switching, startSwitch] = useTransition();
@@ -111,7 +134,7 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 					<AppShell
 						brand={{ name: branding.name }}
 						linkAs={NavLink}
-						sections={merchantSections(pathname)}
+						sections={merchantSections(pathname, billing)}
 						banner={<BillingBanner summary={billing} contact={contactLine(branding.support)} />}
 						switcher={
 							websites.length > 0 ? (
@@ -123,7 +146,6 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 								/>
 							) : null
 						}
-						crumbs={[{ label: merchant?.name ?? merchantId ?? '' }]}
 						scrollKey={pathname}
 						account={{
 							name: accountName,
@@ -131,19 +153,12 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 							items: accountItems,
 							label: MERCHANT.accountMenu,
 						}}
-						actions={
-							billing && typeof billing.balance === 'number' ? (
-								<Link
-									href={routes.credits()}
-									className="ss-motion hidden h-8 items-center gap-1.5 rounded-full bg-surface-2 px-3 text-label font-medium text-fg hover:bg-surface-3 sm:inline-flex"
-									title={MERCHANT.balanceLink}>
-									<Icon name="wallet" size={14} className="text-muted" />
-									<span className="tabular-nums">{formatCredits(billing.balance)}</span>
-								</Link>
-							) : null
-						}
 						sidebarFooter={({ rail }) => (
-							<FrameFooter rail={rail} help={helpChannel ? { label: MERCHANT.help, url: helpChannel.url } : null} />
+							<FrameFooter
+								rail={rail}
+								balance={billing && typeof billing.balance === 'number' ? billing.balance : null}
+								help={helpChannel ? { label: MERCHANT.help, url: helpChannel.url } : null}
+							/>
 						)}>
 						{children}
 					</AppShell>

@@ -664,6 +664,8 @@ export const ADMIN = Object.freeze({
 		myAccount: 'My account',
 	}),
 	menuGroups: Object.freeze({ operate: 'Operate', money: 'Money', portal: 'Portal' }),
+	/** the accessible label of the badge on the Credits and billing menu entry */
+	menuAttention: (/** @type {number} */ n) => (n === 1 ? '1 merchant needs attention' : `${n} merchants need attention`),
 	advanced: 'Advanced',
 	connectProduct: 'Connect a product',
 	accountMenu: 'Account menu',

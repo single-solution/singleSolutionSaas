@@ -392,7 +392,6 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 			<PathnameContext.Provider value={`/websites/${site.websiteId}`}>
 				<ConsoleShell
 					me={beta.me}
-					merchantId={beta.merchantId}
 					websites={frame.websites}
 					billing={low}
 					branding={{
@@ -405,6 +404,11 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 			</PathnameContext.Provider>,
 		);
 		expect(shows('child') && shows('Credits are running low') && shows('help@ss.test') && shows('Acme')).toBe(true);
+		// the balance is a link at the bottom of the sidebar, and Usage and credits carries an attention dot while it is low
+		expect(document.querySelector('a[title="Credit balance"]')?.getAttribute('href')).toBe('/credits');
+		expect(document.querySelector('nav a[href="/credits"] [data-ss-dot]')?.getAttribute('title')).toBe(
+			'Credits are running low',
+		);
 		const [siteSelect] = /** @type {HTMLSelectElement[]} */ ([...document.querySelectorAll('select')]);
 		expect(siteSelect?.value).toBe(site.websiteId);
 		type(/** @type {HTMLSelectElement} */ (siteSelect), '');
@@ -423,7 +427,6 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 			<PathnameContext.Provider value="/overview">
 				<ConsoleShell
 					me={beta.me}
-					merchantId={beta.merchantId}
 					websites={[]}
 					billing={{ status: 'stopped', balance: -1000, dailySpend: 24_000, stoppedAt: '2026-10-04T11:00:00.000Z' }}
 					branding={BRANDING}>

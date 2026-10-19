@@ -1,3 +1,6 @@
+import { loadAttentionCount } from '../../../src/console/admin/loaders.js';
+import { adminCan } from '../../../src/console/admin/rights.js';
+import { portalApi } from '../../_lib/server.js';
 import { AdminShell } from '../../../src/console/admin/views/shell.js';
 import { adminBranding, adminSession } from './server.js';
 
@@ -10,8 +13,13 @@ import { adminBranding, adminSession } from './server.js';
 export async function AdminFrame({ children }) {
 	const [session, branding] = await Promise.all([adminSession(), adminBranding()]);
 	if (!session.ok) return children;
+	// the number on the "Credits and billing" menu entry; the menu never waits on a failure of it
+	const attention =
+		!session.twoStepRequired && adminCan(session.admin, 'billing.read')
+			? await loadAttentionCount(await portalApi()).catch(() => 0)
+			: 0;
 	return (
-		<AdminShell admin={session.admin} twoStepRequired={session.twoStepRequired} branding={branding}>
+		<AdminShell admin={session.admin} twoStepRequired={session.twoStepRequired} branding={branding} attention={attention}>
 			{children}
 		</AdminShell>
 	);

@@ -14,12 +14,7 @@ export async function ConsoleFrame({ children }) {
 	if (!session.ok) return children;
 	const frame = await loadFrame(await consoleApi(), session.merchantId);
 	return (
-		<ConsoleShell
-			me={session.me}
-			merchantId={session.merchantId}
-			websites={frame.websites}
-			billing={frame.billing}
-			branding={branding}>
+		<ConsoleShell me={session.me} websites={frame.websites} billing={frame.billing} branding={branding}>
 			{children}
 		</ConsoleShell>
 	);

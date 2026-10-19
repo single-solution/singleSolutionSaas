@@ -3,15 +3,15 @@
  * The signed-in admin console frame (PLAN 0.6, premium layout 2026-10-16): the admin menu (Overview · Merchants ·
  * Products · Credits and billing · Admins · Settings · Activity, in three groups) filtered by the admin's role, the
  * account menu (My account, the theme, Sign out) at the bottom of the sidebar (in the header on phones), with the
- * Branding. While
- * Settings → Security → Require two-step for admins applies to this admin, the frame shows only the two-step setup.
+ * Branding. The menu entry Credits and billing carries the number of merchants that need attention. While Settings →
+ * Security → Require two-step for admins applies to this admin, the frame shows only the two-step setup (as a Page).
  * @module
  */
 import { usePathname } from 'next/navigation.js';
-import { AppShell, Callout, Card, PageHeader, ToastProvider } from '@ss/ui';
+import { AppShell, Callout, Card, Page, ToastProvider } from '@ss/ui';
 import { useRouter } from 'next/navigation.js';
 import { ADMIN, TWO_STEP } from '../../../texts/console.js';
-import { NavLink } from '../../link.js';
+import { Link, NavLink } from '../../link.js';
 import { accentStyle } from '../../views/brand.js';
 import { TwoStepSetup } from '../../views/login-settings.js';
 import { apiFetch } from '../../client.js';
@@ -83,12 +83,14 @@ const ADMIN_NAV = Object.freeze([
 ]);
 
 /**
- * The menu entries the admin may use, with the current entry marked.
+ * The menu entries the admin may use, with the current entry marked. `attention` is the number of merchants that need
+ * attention: it shows as a badge on Credits and billing (R7: a count where it helps).
  * @param {any} admin
  * @param {string} pathname
+ * @param {number} [attention]
  * @returns {import('@ss/ui').NavSection[]}
  */
-export const adminSections = (admin, pathname) =>
+export const adminSections = (admin, pathname, attention = 0) =>
 	/** @type {const} */ (['operate', 'money', 'portal'])
 		.map((group) => ({
 			label: ADMIN.menuGroups[group],
@@ -98,14 +100,18 @@ export const adminSections = (admin, pathname) =>
 				icon: item.icon,
 				kind: item.kind,
 				current: item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`),
+				...(item.href === adminRoutes.finance() && attention > 0
+					? { badge: { count: attention, tone: /** @type {const} */ ('attention'), label: ADMIN.menuAttention(attention) } }
+					: {}),
 			})),
 		}))
 		.filter((section) => section.items.length > 0);
 
 /**
- * @param {{ admin: any, twoStepRequired?: boolean, branding: { name: string, accent: string }, children: import('react').ReactNode }} props
+ * @param {{ admin: any, twoStepRequired?: boolean, attention?: number, branding: { name: string, accent: string },
+ *   children: import('react').ReactNode }} props
  */
-export function AdminShell({ admin, twoStepRequired = false, branding, children }) {
+export function AdminShell({ admin, twoStepRequired = false, attention = 0, branding, children }) {
 	const pathname = usePathname() ?? '';
 	const router = useRouter();
 	const signOut = async () => {
@@ -124,7 +130,7 @@ export function AdminShell({ admin, twoStepRequired = false, branding, children 
 				<AppShell
 					brand={{ name: branding.name, tagline: ADMIN.consoleTagline }}
 					linkAs={NavLink}
-					sections={twoStepRequired ? [] : adminSections(admin, pathname)}
+					sections={twoStepRequired ? [] : adminSections(admin, pathname, attention)}
 					scrollKey={pathname}
 					account={{
 						name,
@@ -134,13 +140,14 @@ export function AdminShell({ admin, twoStepRequired = false, branding, children 
 						...(admin?.role ? { role: <RoleBadge role={admin.role} /> } : {}),
 					}}>
 					{twoStepRequired ? (
-						<div className="mx-auto max-w-2xl space-y-6">
-							<PageHeader title={TWO_STEP.requiredTitle} />
-							<Callout tone="warning">{TWO_STEP.requiredHelp}</Callout>
-							<Card>
-								<TwoStepSetup onDone={() => window.location.assign(adminRoutes.overview())} />
-							</Card>
-						</div>
+						<Page linkAs={Link} crumbs={[{ label: TWO_STEP.requiredTitle }]}>
+							<div className="mx-auto max-w-2xl space-y-6">
+								<Callout tone="warning">{TWO_STEP.requiredHelp}</Callout>
+								<Card>
+									<TwoStepSetup onDone={() => window.location.assign(adminRoutes.overview())} />
+								</Card>
+							</div>
+						</Page>
 					) : (
 						children
 					)}

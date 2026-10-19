@@ -379,6 +379,19 @@ describe('admin console smoke', () => {
 					.flatMap((s) => s.items)
 					.find((i) => i.current)?.label,
 			).toBe('Products');
+			// Credits and billing carries the number of merchants that need attention, and only then
+			const billingItem = (/** @type {number | undefined} */ attention) =>
+				adminSections(world.owner, '/admin', attention)
+					.flatMap((s) => s.items)
+					.find((i) => i.label === 'Credits and billing');
+			expect(billingItem(2)?.badge).toEqual({ count: 2, tone: 'attention', label: '2 merchants need attention' });
+			expect(billingItem(1)?.badge?.label).toBe('1 merchant needs attention');
+			expect(billingItem(0)?.badge).toBeUndefined();
+			expect(billingItem(undefined)?.badge).toBeUndefined();
+			// the count comes from the same check as the Needs attention list
+			expect(await admin.loadAttentionCount(world.ownerBrowser.api)).toBe(
+				/** @type {any} */ (await admin.loadBilling(world.ownerBrowser.api)).attention.length,
+			);
 
 			// Support: the website cards with every admin action and Install and tokens; Products read-only
 			const supportDetail = await admin.loadMerchant(supportBrowser.api, merchantId, support);
