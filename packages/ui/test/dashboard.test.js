@@ -17,6 +17,7 @@ import {
 	PricesTab,
 	ProductDashboard,
 	ResealCard,
+	SectionsPage,
 	SettingsForms,
 	SettingsTab,
 	TextsForm,
@@ -1143,7 +1144,9 @@ describe('ProductDashboard', () => {
 	it('shows the loading state, then the sign-in hint or the problem when there is no session', async () => {
 		serve({ 'GET /v1/dashboard/session': { status: 401, body: { status: 401 } } });
 		const { container } = render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} />);
-		expect(container.querySelector('[role="status"]')?.getAttribute('aria-label')).toBe(TEXTS.loading);
+		// the page's own skeleton: the same header and panes as the page that is coming
+		expect(container.querySelector('[role="status"]')?.textContent).toBe(TEXTS.loading);
+		expect(container.querySelector('[data-ss-page][aria-busy="true"]')).not.toBeNull();
 		await settle();
 		expect(container.textContent).toContain(TEXTS.signedOut);
 		cleanup();
@@ -1176,7 +1179,11 @@ describe('ProductDashboard', () => {
 		expect(sidebar()).toEqual(['Overview', 'Features', 'Settings', 'Texts', 'Connections', 'Developers']);
 		expect(document.body.textContent).toContain(TEXTS.pickWebsite);
 		expect(document.body.textContent).toContain('Notes');
-		expect(document.querySelector('a[href="https://portal.example.com"]')?.textContent).toBe(TEXTS.backToPortal);
+		// Back to Portal and the docs sit at the bottom of the sidebar, not in a header that pages replace
+		const portal = document.querySelector('[data-ss-part="sidebar-bottom"] a[href="https://portal.example.com"]');
+		expect(portal?.textContent).toBe(TEXTS.backToPortal);
+		const docs = document.querySelector('[data-ss-part="sidebar-bottom"] a[href="/docs"]');
+		expect(docs?.textContent).toBe(TEXTS.developers.openDocs);
 		const picker = /** @type {HTMLSelectElement} */ (document.querySelector('select'));
 		expect([...picker.options].map((option) => option.textContent)).toEqual([
 			TEXTS.pickWebsite,
@@ -1293,6 +1300,63 @@ describe('ProductDashboard', () => {
 		await act(async () => window.dispatchEvent(new PopStateEvent('popstate')));
 		await settle();
 		expect(document.body.textContent).toContain(TEXTS.pickWebsite);
+	});
+
+	it('opens a sub-page of the tab it is on from a link, with one history entry and no page reload', async () => {
+		const Parts = () => (
+			<SectionsPage
+				tab="features"
+				sections={[
+					{ id: 'one', label: 'One', content: <p>first part</p> },
+					{ id: 'two', label: 'Two', content: <p>second part</p> },
+				]}
+			/>
+		);
+		serve({ 'GET /v1/dashboard/session': session(MERCHANT) });
+		window.history.replaceState(null, '', '?websiteId=p1&view=features');
+		render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} tabs={{ features: Parts }} />);
+		await settle();
+		const before = window.history.length;
+		click(/** @type {HTMLElement} */ ([...document.querySelectorAll('a[href="#two"]')].at(-1)));
+		await settle();
+		expect(window.location.search).toBe('?websiteId=p1&view=features');
+		expect(window.location.hash).toBe('#two');
+		expect(window.history.length).toBe(before + 1);
+		expect(document.querySelector('h1')?.textContent).toBe('Two');
+		// the tab's crumb leads back to its first sub-page
+		click(
+			/** @type {HTMLElement} */ (
+				document.querySelector('nav[aria-label="Breadcrumb"] a[href="?websiteId=p1&view=features"]')
+			),
+		);
+		await settle();
+		expect(window.location.hash).toBe('');
+		expect(document.querySelector('h1')?.textContent).toBe('One');
+	});
+
+	it('moves to a sub-page of the tab it is already on when another tab asks to open it', async () => {
+		/** @type {TabProps['open'] | null} */
+		let open = null;
+		/** @param {TabProps} props */
+		const Parts = (props) => {
+			open = props.open;
+			return (
+				<SectionsPage
+					tab="connections"
+					sections={[
+						{ id: 'one', label: 'One', content: <p>first part</p> },
+						{ id: 'two', label: 'Two', content: <p>second part</p> },
+					]}
+				/>
+			);
+		};
+		serve({ 'GET /v1/dashboard/session': session(MERCHANT) });
+		window.history.replaceState(null, '', '?websiteId=p1&view=connections');
+		render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} tabs={{ connections: Parts }} />);
+		await settle();
+		await act(async () => /** @type {NonNullable<typeof open>} */ (open)('connections', 'two'));
+		await settle();
+		expect(document.querySelector('h1')?.textContent).toBe('Two');
 	});
 
 	it('refuses a new tab without its icon and kind', async () => {

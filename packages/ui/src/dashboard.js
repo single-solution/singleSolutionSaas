@@ -3,9 +3,12 @@
  * `@ss/ui/dashboard` — the product dashboard (PLAN 0.4.3), one for every product: one page, opened from the Portal
  * (`/sso` → `/dashboard?websiteId=…`), with the left sidebar Overview · Features · Settings · Texts · Connections ·
  * Developers, plus Defaults and Prices for Owners. The look, the Format and the business facts are not here: they are the
- * Portal's Website settings, shown read-only where a value is used (`ManagedNote`) with a link to the place to change it. Admins get the website switcher's merchant names and a small
- * "Viewing as admin" pill in the header; everyone gets Back to Portal (a subtle link in the header). Saved and errors
- * show as toasts at the bottom right. Setup only: it calls the kit's dashboard API and shows no business data.
+ * Portal's Website settings, shown read-only where a value is used (`ManagedNote`) with a link to the place to change it.
+ * Every tab draws a `Page` (layout contract 2026-10-17: the breadcrumbs `Product › Section › sub-page` are its title, the
+ * old descriptions sit behind its (i)); a tab with sub-pages uses `SectionsPage` (an inner navigation, each sub-page its
+ * own `#address`). Admins get the website switcher's merchant names and a small "Viewing as admin" note; everyone gets
+ * the docs and Back to Portal; all three sit at the bottom of the sidebar. Saved and errors show as toasts at the bottom
+ * right. Setup only: it calls the kit's dashboard API and shows no business data.
  *
  * Sections and websites switch inside the page (the address follows; Back and Forward work): the session is loaded
  * once, the menu marks the new section at once, and its content cross-fades in, showing its last answer at once
@@ -18,12 +21,16 @@
  */
 import { createContext, startTransition, useCallback, useContext, useEffect, useState } from 'react';
 import { AppShell, SwitcherSelect } from './AppShell.js';
-import { Callout, EmptyState, Skeleton, TextLink } from './display.js';
+import { cx } from './cx.js';
+import { Callout, EmptyState } from './display.js';
+import { Icon } from './icons.js';
 import { SwapTransition } from './motion.js';
+import { PageSkeleton } from './skeletons.js';
 import { describeProblem } from './problems.js';
 import { call, fill, useLoad } from './dashboard-api.js';
 import { DisplayLocale } from './time.js';
 import { DashboardProvider, useDashboard } from './dashboard-parts.js';
+import { FrameContext } from './dashboard-page.js';
 import {
 	ConnectionsTab,
 	DefaultsTab,
@@ -60,6 +67,7 @@ export {
 	useSettingsEditor,
 	useTextsEditor,
 } from './dashboard-settings.js';
+export { FrameContext, SectionsPage, navGroupsOf, pageState, useCrumbs } from './dashboard-page.js';
 export { WEBSITE_SECTION_NAMES, websiteSettingsUrl } from './portal-links.js';
 export { ConnectionsTab, DefaultsTab, DevelopersTab, FeaturesTab, OverviewTab, PricesTab, SettingsTab, TextsTab };
 
@@ -138,7 +146,8 @@ const queryOf = (search) => {
 const GoContext = createContext(/** @type {(href: string) => void} */ (() => undefined));
 
 /**
- * A menu link that switches the section inside the page; a new tab or window still opens its address.
+ * A menu link that switches the section inside the page; a new tab or window still opens its address. A click on a link
+ * to a sub-page (`#address`) is handled by the page that owns it.
  * @param {{ href: string, onClick?: (event: import('react').MouseEvent<HTMLAnchorElement>) => void,
  *   children?: import('react').ReactNode, [prop: string]: unknown }} props
  */
@@ -153,10 +162,41 @@ function SectionLink({ href, onClick, children, ...rest }) {
 				if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
 					return;
 				event.preventDefault();
-				go(href);
+				// a sub-page is opened by the page that owns it (the address is its hash); nothing else to do here
+				if (!href.startsWith('#')) go(href);
 			}}>
 			{children}
 		</a>
+	);
+}
+
+/**
+ * The bottom of the sidebar: a note when an admin looks at a merchant's website, then the links the old header held (the
+ * docs, Back to Portal). On the icon rail the note hides and each link is its icon.
+ * @param {{ rail: boolean, note?: string, links: Array<{ href: string, label: string, icon: import('./icons.js').IconName,
+ *   external?: boolean }> }} props
+ */
+function FrameFooter({ rail, note, links }) {
+	return (
+		<div className="space-y-1">
+			{note && !rail ? <p className="rounded-lg bg-surface-2 px-2.5 py-1.5 text-label text-muted">{note}</p> : null}
+			{links.map((link) => (
+				<a
+					key={link.href}
+					href={link.href}
+					title={link.label}
+					{...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+					className={cx(
+						'ss-motion ss-press flex h-9 items-center gap-2.5 rounded-lg text-sm font-medium text-fg/80 hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus',
+						rail ? 'justify-center' : 'px-2.5',
+					)}>
+					<span aria-hidden="true" className="text-muted">
+						<Icon name={link.icon} size={17} />
+					</span>
+					<span className={rail ? 'sr-only' : 'min-w-0 flex-1 truncate'}>{link.label}</span>
+				</a>
+			))}
+		</div>
 	);
 }
 
@@ -205,11 +245,19 @@ function DashboardPage({ tabs: own, product }) {
 		return () => window.removeEventListener('popstate', moved);
 	}, []);
 	const go = useCallback((/** @type {string} */ href) => {
+		const hash = window.location.hash;
 		window.history.pushState(null, '', href);
 		startTransition(() => setQuery(queryOf(window.location.search)));
+		// the page of a tab that is already open follows the sub-page in the new address
+		if (window.location.hash !== hash) window.dispatchEvent(new HashChangeEvent('hashchange'));
 	}, []);
 
-	if (!query || !session) return <Skeleton className="m-8" lines={4} label={texts.loading} />;
+	if (!query || !session)
+		return (
+			<div className="flex h-dvh min-h-0 flex-col p-3 lg:p-4">
+				<PageSkeleton label={texts.loading} />
+			</div>
+		);
 	if (!session.ok)
 		return (
 			<main className="mx-auto max-w-xl p-8">
@@ -250,55 +298,65 @@ function DashboardPage({ tabs: own, product }) {
 		/>
 	);
 
+	/** The frame around the tab: its addresses keep the picked website. */
+	const frame = { hrefOf: (/** @type {string} */ tab) => href(tab), home: href(site || !owner ? 'overview' : 'defaults') };
+
 	return (
 		<GoContext.Provider value={go}>
-			<AppShell
-				brand={{ name: branding.name, tagline: texts.title, ...(product ? { product } : {}) }}
-				linkAs={SectionLink}
-				sections={[
-					{
-						items: shown.map(([key, tab]) => ({
-							href: href(key),
-							label: /** @type {Record<string, string>} */ (texts.tabs)[key] ?? key,
-							icon: tab.icon,
-							kind: tab.kind,
-							current: key === view,
-						})),
-					},
-				]}
-				switcher={picker}
-				crumbs={[{ label: texts.title }]}
-				actions={
-					<TextLink href="/docs" external>
-						{texts.developers.openDocs}
-					</TextLink>
-				}
-				scrollKey={`${view}|${site ? site.websiteId : ''}`}
-				back={{ href: portalUrl, label: texts.backToPortal }}
-				{...(admin && site ? { context: fill(texts.adminView, { merchant: site.merchantName, domain: site.domain }) } : {})}>
-				<SwapTransition id={`${view}|${site ? site.websiteId : ''}`}>
-					{needsWebsite && !site ? (
-						<EmptyState
-							icon="globe"
-							title={texts.pickWebsite}
-							action={<div className="w-64 max-w-full text-left">{picker}</div>}
+			<FrameContext.Provider value={frame}>
+				<AppShell
+					brand={{ name: branding.name, tagline: texts.title, ...(product ? { product } : {}) }}
+					linkAs={SectionLink}
+					sections={[
+						{
+							items: shown.map(([key, tab]) => ({
+								href: href(key),
+								label: /** @type {Record<string, string>} */ (texts.tabs)[key] ?? key,
+								icon: tab.icon,
+								kind: tab.kind,
+								current: key === view,
+							})),
+						},
+					]}
+					switcher={picker}
+					crumbs={[{ label: texts.title }]}
+					sidebarFooter={({ rail }) => (
+						<FrameFooter
+							rail={rail}
+							links={[
+								{ href: '/docs', label: texts.developers.openDocs, icon: 'help', external: true },
+								{ href: portalUrl, label: texts.backToPortal, icon: 'chevronLeft' },
+							]}
+							{...(admin && site
+								? { note: fill(texts.adminView, { merchant: site.merchantName, domain: site.domain }) }
+								: {})}
 						/>
-					) : (
-						<WebsiteLocale websiteId={site ? site.websiteId : null}>
-							<Tab
-								websiteId={site ? site.websiteId : null}
-								merchantId={site ? site.merchantId : null}
-								domain={site ? site.domain : ''}
-								who={who}
-								support={support}
-								portal={portalUrl}
-								brand={branding.name}
-								open={(tab, section) => go(href(tab) + (section ? `#${encodeURIComponent(section)}` : ''))}
-							/>
-						</WebsiteLocale>
 					)}
-				</SwapTransition>
-			</AppShell>
+					scrollKey={`${view}|${site ? site.websiteId : ''}`}>
+					<SwapTransition id={`${view}|${site ? site.websiteId : ''}`}>
+						{needsWebsite && !site ? (
+							<EmptyState
+								icon="globe"
+								title={texts.pickWebsite}
+								action={<div className="w-64 max-w-full text-left">{picker}</div>}
+							/>
+						) : (
+							<WebsiteLocale websiteId={site ? site.websiteId : null}>
+								<Tab
+									websiteId={site ? site.websiteId : null}
+									merchantId={site ? site.merchantId : null}
+									domain={site ? site.domain : ''}
+									who={who}
+									support={support}
+									portal={portalUrl}
+									brand={branding.name}
+									open={(tab, section) => go(href(tab) + (section ? `#${encodeURIComponent(section)}` : ''))}
+								/>
+							</WebsiteLocale>
+						)}
+					</SwapTransition>
+				</AppShell>
+			</FrameContext.Provider>
 		</GoContext.Provider>
 	);
 }
