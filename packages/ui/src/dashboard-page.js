@@ -126,11 +126,12 @@ const hashOf = (id) => `#${encodeURIComponent(id)}`;
 /**
  * One section as an item of the inner navigation: its badge is the count, its status the dot.
  * @param {Section} spec
+ * @param {ReactNode} [label] the words of the link when they are not the section's own
  * @returns {InnerNavItem}
  */
-const itemOf = (spec) => ({
+const itemOf = (spec, label = spec.label) => ({
 	id: spec.id,
-	label: spec.label,
+	label,
 	href: hashOf(spec.id),
 	...(spec.icon ? { icon: spec.icon } : {}),
 	...(spec.badge !== undefined && spec.badge !== null ? { count: /** @type {string | number} */ (spec.badge) } : {}),
@@ -141,7 +142,8 @@ const itemOf = (spec) => ({
 
 /**
  * The groups of the inner navigation of some sections: sections of one `group` are listed together under its heading,
- * a section with parts is a group of its own, headed by its label.
+ * the parts of a section in a group among them, named `Section › Part`; a section with parts and no group is a group of
+ * its own, headed by its label.
  * @param {Section[]} specs
  * @returns {InnerNavGroup[]}
  */
@@ -151,8 +153,11 @@ export function navGroupsOf(specs) {
 	/** @type {Map<string, InnerNavGroup>} */
 	const named = new Map();
 	for (const spec of specs) {
-		if (spec.children?.length) {
-			groups.push({ ...(typeof spec.label === 'string' ? { label: spec.label } : {}), items: spec.children.map(itemOf) });
+		if (spec.children?.length && !spec.group) {
+			groups.push({
+				...(typeof spec.label === 'string' ? { label: spec.label } : {}),
+				items: spec.children.map((part) => itemOf(part)),
+			});
 			continue;
 		}
 		const name = spec.group ?? '';
@@ -162,7 +167,15 @@ export function navGroupsOf(specs) {
 			named.set(name, group);
 			groups.push(group);
 		}
-		group.items.push(itemOf(spec));
+		if (spec.children?.length)
+			for (const part of spec.children)
+				group.items.push(
+					itemOf(
+						part,
+						typeof spec.label === 'string' && typeof part.label === 'string' ? `${spec.label} › ${part.label}` : part.label,
+					),
+				);
+		else group.items.push(itemOf(spec));
 	}
 	return groups;
 }
@@ -179,12 +192,13 @@ const leavesOf = (specs) => specs.flatMap((spec) => (spec.children?.length ? spe
  * open section as the body. One section needs no navigation. A sub-page is mounted when it is first opened and then
  * kept, hidden, so an edit in it is not lost.
  * @param {{ tab: string, sections: Section[], label?: string, initial?: string, searchFrom?: number,
- *   searchLabel?: string, flushChildren?: boolean, status?: PageStatus[], facts?: PageFact[], actions?: PageActions, info?: ReactNode, toolbar?: ReactNode,
+ *   searchLabel?: string, flushChildren?: boolean, resultLabel?: string, status?: PageStatus[], facts?: PageFact[], actions?: PageActions, info?: ReactNode, toolbar?: ReactNode,
  *   footer?: ReactNode, navFooter?: ReactNode, loading?: boolean, error?: import('react').ComponentProps<typeof Page>['error'],
  *   withNav?: boolean, empty?: ReactNode, children?: ReactNode }} props `tab`: the key of the tab (its crumb);
- *   `status`, `facts`, `actions` and `info` are the page's, used where the open sub-page names none of its own;
+ *   `status`, `facts` and `actions` are the page's, used where the open sub-page names none of its own, and `info` is
+ *   said after the open sub-page's;
  *   `children` take the place of the sub-pages (a search result) while the navigation stays (`flushChildren`: they are
- *   a table, which uses all of the body); `searchLabel`: the words of the navigation's search box; `withNav`: draw
+ *   a table, which uses all of the body, and `resultLabel` ends the crumbs); `searchLabel`: the words of the navigation's search box; `withNav`: draw
  *   the navigation's skeleton too while `loading`
  */
 export function SectionsPage({
@@ -195,6 +209,7 @@ export function SectionsPage({
 	searchFrom,
 	searchLabel,
 	flushChildren = false,
+	resultLabel,
 	status,
 	facts,
 	actions,
@@ -220,7 +235,10 @@ export function SectionsPage({
 	const leaf = leaves.find((section) => section.id === active);
 	const parent = sections.find((section) => section.children?.some((part) => part.id === active));
 	const several = leaves.length > 1;
-	const trail = crumbs(tab, ...(several && leaf ? [...(parent ? [{ label: parent.label }] : []), { label: leaf.label }] : []));
+	const trail =
+		children && resultLabel
+			? crumbs(tab, { label: resultLabel })
+			: crumbs(tab, ...(several && leaf ? [...(parent ? [{ label: parent.label }] : []), { label: leaf.label }] : []));
 	const tabLabel = /** @type {Record<string, string>} */ (texts.tabs)[tab] ?? tab;
 	const nav =
 		several || (loading && withNav)
@@ -235,10 +253,21 @@ export function SectionsPage({
 				}
 			: undefined;
 	const flush = children ? flushChildren : Boolean(leaf?.flush);
-	const pills = leaf?.pills ?? status;
-	const numbers = leaf?.facts ?? facts;
-	const buttons = leaf?.actions ?? actions;
-	const about = leaf?.info ?? info;
+	// a result in place of the sub-pages is not the open sub-page: the page's own header parts, not the sub-page's
+	const own = children ? undefined : leaf;
+	const pills = own?.pills ?? status;
+	const numbers = own?.facts ?? facts;
+	const buttons = own?.actions ?? actions;
+	// what the sub-page says of itself comes first, then what the whole page is for
+	const about =
+		own?.info && info ? (
+			<>
+				<div>{own.info}</div>
+				<div className="mt-2">{info}</div>
+			</>
+		) : (
+			(own?.info ?? info)
+		);
 	return (
 		<Page
 			crumbs={trail}

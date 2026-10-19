@@ -21,8 +21,10 @@ import { SaveBar, SectionLayout, SettingList, SettingsCard, ViewTitle } from './
 import { Input, Switch } from './fields.js';
 import { ActionMenu } from './Menu.js';
 import { ConfirmDialog } from './overlay.js';
-import { OverviewSkeleton, ProductOverview, RecentChanges } from './overview.js';
-import { Paged } from './paged.js';
+import { ChangesTable, OverviewSkeleton, ProductOverview, RecentChanges } from './overview.js';
+import { Paged, usePaged } from './paged.js';
+import { Pagination } from './Pagination.js';
+import { Toolbar } from './Toolbar.js';
 import { ListRow, RowList } from './rows.js';
 import { formatCreditsPerHour, parseCredits, supportContact } from './format.js';
 import { useDisplayLocale } from './time.js';
@@ -31,7 +33,7 @@ import { LoadedPage, SectionsPage, useCrumbs } from './dashboard-page.js';
 import { Loaded, Outcome, ResealCard, toneOf, useDashboard, withDependents } from './dashboard-parts.js';
 import {
 	SettingsBar,
-	TextsCard,
+	TextsTable,
 	featureSections,
 	textSections,
 	useSettingsEditor,
@@ -356,7 +358,7 @@ export function SettingsTab({ websiteId, merchantId, who, portal, sections, noti
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const settings = useLoad(`${base}/settings`);
 	return (
-		<Loaded answer={settings.answer}>
+		<LoadedPage answer={settings.answer} tab="settings" withNav>
 			{(data) => (
 				<SettingsPanel
 					features={data.features}
@@ -370,7 +372,7 @@ export function SettingsTab({ websiteId, merchantId, who, portal, sections, noti
 					{...(extras ? { extras } : {})}
 				/>
 			)}
-		</Loaded>
+		</LoadedPage>
 	);
 }
 
@@ -400,7 +402,8 @@ function SettingsPanel({ features, base, reload, sections = [], notice, extras, 
 	];
 	return (
 		<>
-			<SectionLayout
+			<SectionsPage
+				tab="settings"
 				label={dash.texts.tabs.settings}
 				sections={list}
 				searchLabel={dash.texts.settings.navSearch}
@@ -413,14 +416,15 @@ function SettingsPanel({ features, base, reload, sections = [], notice, extras, 
 
 /**
  * Texts: every word the widgets show. The inner sidebar lists the screens and widgets (a text's key starts with its
- * screen), a search box above finds a text by its words in all of them. Each text saves on its own.
+ * screen), each a table of its texts; the search above finds a text by its words in all of them and shows the matches
+ * in place of the screen (the sidebar stays). A text is changed in a drawer and saves on its own.
  * @param {TabProps} props
  */
 export function TextsTab({ websiteId }) {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const texts = useLoad(`${base}/texts`);
 	return (
-		<Loaded answer={texts.answer}>
+		<LoadedPage answer={texts.answer} tab="texts" withNav>
 			{(data) => (
 				<TextsPanel
 					items={data.texts}
@@ -430,12 +434,12 @@ export function TextsTab({ websiteId }) {
 					reload={texts.reload}
 				/>
 			)}
-		</Loaded>
+		</LoadedPage>
 	);
 }
 
 /**
- * The texts' search and sidebar (a website's or the global defaults).
+ * The texts' pages and search (a website's or the global defaults).
  * @param {{ items: Array<{ key: string, english: string, value: string, source: string }>, saveUrl: (key: string) => string,
  *   resetBody: boolean, savedSource: string, reload: () => void }} props
  */
@@ -443,41 +447,44 @@ function TextsPanel({ items, saveUrl, resetBody, savedSource, reload }) {
 	const dash = useDashboard();
 	const T = dash.texts.texts;
 	const editor = useTextsEditor({ saveUrl, resetBody, reload });
-	const [query, setQuery] = useState('');
-	const needle = query.trim().toLowerCase();
-	const found = needle
-		? items.filter((text) => `${text.key} ${text.english} ${text.value}`.toLowerCase().includes(needle))
-		: items;
+	const paged = usePaged(items, { text: (text) => `${text.key} ${text.english} ${text.value}`, pageSize: 50 });
+	const searching = paged.query.trim() !== '';
 	return (
-		<div className="space-y-4">
-			<Input
-				fieldClassName="max-w-sm"
-				label={T.search}
-				hideLabel
-				placeholder={T.search}
-				type="search"
-				value={query}
-				onChange={(event) => setQuery(event.target.value)}
-				layout="stack"
-			/>
-			{needle ? (
-				<TextsCard
-					items={found}
+		<SectionsPage
+			tab="texts"
+			label={dash.texts.tabs.texts}
+			sections={textSections({ items, editor, savedSource, dash })}
+			searchFrom={6}
+			searchLabel={T.navSearch}
+			{...(items.length > 0
+				? {
+						toolbar: (
+							<Toolbar
+								search={{
+									onSearch: paged.setQuery,
+									value: paged.query,
+									label: T.search,
+									placeholder: T.search,
+									delay: 0,
+								}}
+							/>
+						),
+					}
+				: {})}
+			{...(searching
+				? { footer: <Pagination {...paged.pagination} />, flushChildren: true, resultLabel: T.results, info: T.help }
+				: {})}>
+			{searching ? (
+				<TextsTable
+					items={paged.rows}
 					editor={editor}
 					savedSource={savedSource}
 					texts={dash.texts}
-					title={T.results}
-					searchable={false}
+					caption={T.results}
+					empty={T.none}
 				/>
-			) : (
-				<SectionLayout
-					label={dash.texts.tabs.texts}
-					searchFrom={6}
-					searchLabel={T.navSearch}
-					sections={textSections({ items, editor, savedSource, dash })}
-				/>
-			)}
-		</div>
+			) : null}
+		</SectionsPage>
 	);
 }
 
@@ -728,17 +735,11 @@ export function DevelopersTab({ websiteId, sections, children }) {
  * @param {Partial<TabProps> & { notice?: SettingsNotice }} props
  */
 export function DefaultsTab({ notice }) {
-	const { texts } = useDashboard();
 	const { answer, reload } = useLoad('/v1/dashboard/defaults');
 	return (
-		<Loaded answer={answer}>
-			{(data) => (
-				<div className="space-y-4">
-					<Callout tone="info">{texts.defaults.intro}</Callout>
-					<DefaultsPanel data={data} reload={reload} {...(notice ? { notice } : {})} />
-				</div>
-			)}
-		</Loaded>
+		<LoadedPage answer={answer} tab="defaults" withNav>
+			{(data) => <DefaultsPanel data={data} reload={reload} {...(notice ? { notice } : {})} />}
+		</LoadedPage>
 	);
 }
 
@@ -766,12 +767,20 @@ function DefaultsPanel({ data, reload, notice }) {
 			label: D.changes,
 			icon: /** @type {const} */ ('clock'),
 			group: D.changes,
-			content: <RecentChanges items={data.recentChanges} />,
+			flush: true,
+			content: <ChangesTable items={data.recentChanges} />,
 		},
 	];
 	return (
 		<>
-			<SectionLayout label={dash.texts.tabs.defaults} sections={sections} searchFrom={12} searchLabel={D.navSearch} />
+			<SectionsPage
+				tab="defaults"
+				label={dash.texts.tabs.defaults}
+				sections={sections}
+				searchFrom={12}
+				searchLabel={D.navSearch}
+				info={D.intro}
+			/>
 			<SettingsBar editor={settings} texts={dash.texts} />
 		</>
 	);

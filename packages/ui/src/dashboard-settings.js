@@ -2,17 +2,18 @@
 /**
  * The inner-sidebar views of the settings tabs (owner 2026-10-16: no long scrolls, one view per screen): the section
  * lists of Settings (a view per feature, grouped by category, with its groups as sub-items when it has many), Texts (a
- * view per screen or widget) and Defaults (both). Each comes as
- * an editor hook (the unsaved edits and the saves) and a function that builds the {@link SectionSpec}s from it.
+ * view per screen or widget, each a table whose text opens in a drawer) and Defaults (both). Each comes as an editor
+ * hook (the unsaved edits and the saves) and a function that builds the sections of a {@link SectionsPage} from it; a
+ * view says what it is for in the (i) of its page, not in a heading of its own (layout contract R2).
  * @module
  */
 import { useState } from 'react';
 import { Button } from './Button.js';
-import { Disclosure, SaveBar, SettingList, SettingRow, SettingsCard, ViewTitle } from './blocks.js';
-import { Badge, SoftBreaks, TextLink } from './display.js';
-import { Input, RadioGroup, SegmentedControl, Switch, TextArea } from './fields.js';
-import { ListEditor } from './ListEditor.js';
-import { Paged } from './paged.js';
+import { SaveBar } from './blocks.js';
+import { DataTable } from './DataTable.js';
+import { SoftBreaks, StatusPill, TextLink } from './display.js';
+import { Input } from './fields.js';
+import { Drawer } from './overlay.js';
 import { SchemaForm } from './SchemaForm.js';
 import { call, fill } from './dashboard-api.js';
 import { GROUPS_AS_TABS_FROM, fieldsOf, shapeOf } from './schema.js';
@@ -20,7 +21,7 @@ import { humanize } from './format.js';
 import { Outcome, hasSettings } from './dashboard-parts.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
-/** @typedef {import('./blocks.js').SectionSpec} SectionSpec */
+/** @typedef {import('./dashboard-page.js').Section} Section */
 /** @typedef {import('./dashboard-parts.js').FeatureSettings} FeatureSettings */
 /** @typedef {import('./dashboard-parts.js').SettingsNotice} SettingsNotice */
 /** @typedef {import('./dashboard-parts.js').Dashboard} Dashboard */
@@ -187,7 +188,7 @@ const hasItems = (extra) =>
  *   hideOff?: boolean, notice?: SettingsNotice, extras?: Record<string, FeatureExtra>, portalLink?: PortalLink }} options
  *   `portalLink`: the address of a section of the website's Website settings in the Portal; with it a setting that
  *   starts from them (`x-ui.defaultFrom`) says so and links there (not on the Owner's global defaults)
- * @returns {SectionSpec[]}
+ * @returns {Section[]}
  */
 export function featureSections({ features, editor, savedSource, dash, hideOff = false, notice, extras = {}, portalLink }) {
 	const { texts } = dash;
@@ -219,7 +220,7 @@ export function featureSections({ features, editor, savedSource, dash, hideOff =
 				/>
 			);
 			const description = dash.describe(key);
-			/** @type {SectionSpec[]} */
+			/** @type {Section[]} */
 			const views = [];
 			if (hasSettings(feature)) {
 				if (split)
@@ -228,9 +229,9 @@ export function featureSections({ features, editor, savedSource, dash, hideOff =
 						views.push({
 							id: `${key}.${slug(name)}`,
 							label: name,
+							info: description,
 							content: (
 								<>
-									<ViewTitle title={feature.name} description={name} />
 									{form(advanced ? 'Advanced' : name, index === 0)}
 									{index === names.length - 1 && extra !== undefined && !hasItems(extra) ? extra : null}
 								</>
@@ -241,17 +242,17 @@ export function featureSections({ features, editor, savedSource, dash, hideOff =
 					views.push({
 						id: `${key}.${slug(S.settingsView)}`,
 						label: S.settingsView,
+						info: description,
 						content: (
 							<>
-								<ViewTitle title={feature.name} description={description} />
 								{form(undefined)}
 								{extra !== undefined && !hasItems(extra) ? extra : null}
 							</>
 						),
 					});
 			} else if (extra !== undefined && !hasItems(extra))
-				views.push({ id: `${key}.${slug(S.settingsView)}`, label: S.settingsView, content: extra });
-			/** @type {SectionSpec[]} */
+				views.push({ id: `${key}.${slug(S.settingsView)}`, label: S.settingsView, info: description, content: extra });
+			/** @type {Section[]} */
 			const beside = [];
 			if (hasItems(extra))
 				for (const item of extra.items)
@@ -278,6 +279,9 @@ export function featureSections({ features, editor, savedSource, dash, hideOff =
 
 /* ---------------------------------------------------------------------------------------------------------- texts */
 
+/** The edits without one text. @param {Record<string, string>} all @param {string} key */
+const without = (all, key) => Object.fromEntries(Object.entries(all).filter(([name]) => name !== key));
+
 /**
  * The widget texts' unsaved edits and their saves: each text saves on its own; one saved here gets a Reset.
  * @param {{ saveUrl: (key: string) => string, resetBody: boolean, reload: () => void }} options
@@ -290,20 +294,26 @@ export function useTextsEditor({ saveUrl, resetBody, reload }) {
 		result,
 		/** @param {string} key @param {string} value */
 		change: (key, value) => setEdits((all) => ({ ...all, [key]: value })),
-		/** @param {string} key */
+		/** Saves the edited words of a text; whether it worked. @param {string} key */
 		save: async (key) => {
 			const answer = await call('PUT', saveUrl(key), { value: edits[key] });
 			setResult({ key, answer });
-			if (answer.ok) setEdits((all) => Object.fromEntries(Object.entries(all).filter(([name]) => name !== key)));
+			if (answer.ok) setEdits((all) => without(all, key));
 			reload();
+			return answer.ok;
 		},
-		/** @param {string} key */
+		/** Sets a text back to the default; whether it worked. @param {string} key */
 		reset: async (key) => {
-			setResult({
-				key,
-				answer: resetBody ? await call('PUT', saveUrl(key), { value: null }) : await call('DELETE', saveUrl(key)),
-			});
+			const answer = resetBody ? await call('PUT', saveUrl(key), { value: null }) : await call('DELETE', saveUrl(key));
+			setResult({ key, answer });
+			if (answer.ok) setEdits((all) => without(all, key));
 			reload();
+			return answer.ok;
+		},
+		/** Forgets the unsaved words of a text and its last outcome. @param {string} key */
+		discard: (key) => {
+			setEdits((all) => without(all, key));
+			setResult((last) => (last?.key === key ? null : last));
 		},
 	};
 }
@@ -312,63 +322,81 @@ export function useTextsEditor({ saveUrl, resetBody, reload }) {
 /** @typedef {{ key: string, english: string, value: string, source: string }} WidgetText */
 
 /**
- * The text rows of a list of widget texts: the key and the English words on the left, the box to change them and Save
- * (and Reset when the text was changed here) on the right.
- * @param {{ items: WidgetText[], editor: TextsEditor, savedSource: string, texts: Dashboard['texts'] }} props
+ * A table of widget texts (layout contract R5: a list is a table, a record is edited in a drawer): the key, the English
+ * words, what is shown now and whether it was changed here. A click on a row opens the text in a drawer with a box for
+ * the words and Save (Reset to default when the text was changed here, Cancel); a text that saved closes the drawer, a
+ * refused one stays open with what was typed. Drawn in a flush page body.
+ * @param {{ items: WidgetText[], editor: TextsEditor, savedSource: string, texts: Dashboard['texts'], caption: string,
+ *   empty?: string }} props `caption`: what the table lists, for screen readers; `empty`: what it says with no rows
  */
-function TextRows({ items, editor, savedSource, texts }) {
+export function TextsTable({ items, editor, savedSource, texts, caption, empty }) {
+	const T = texts.texts;
+	const [opened, setOpened] = useState(/** @type {WidgetText | null} */ (null));
+	const key = opened?.key ?? '';
+	const edited = opened ? editor.edits[key] : undefined;
+	const close = () => {
+		if (opened) editor.discard(opened.key);
+		setOpened(null);
+	};
+	/** Runs a write on the open text and closes the drawer when it worked. @param {(key: string) => Promise<boolean>} run */
+	const finish = async (run) => {
+		if (await run(key)) close();
+	};
+	/** @type {import('./DataTable.js').DataColumn<WidgetText>[]} */
+	const columns = [
+		{ key: 'key', header: T.columns.key, sortable: true, render: (text) => <SoftBreaks text={text.key} /> },
+		{ key: 'english', header: T.columns.english, low: true, wrap: true, className: 'min-w-48 max-w-sm text-muted' },
+		{ key: 'value', header: T.columns.shown, wrap: true, className: 'min-w-48 max-w-sm' },
+		{
+			key: 'status',
+			header: T.columns.status,
+			kind: 'status',
+			render: (text) => (text.source === savedSource ? <StatusPill status="info">{T.edited}</StatusPill> : null),
+		},
+	];
 	return (
-		<SettingList>
-			{items.map((text) => {
-				const englishId = `text-${text.key.replace(/[^\w-]/g, '-')}-english`;
-				return (
-					<SettingRow
-						key={text.key}
-						label={<SoftBreaks text={text.key} />}
-						description={<span id={englishId}>{text.english}</span>}>
-						<Input
-							hideLabel
-							label={<SoftBreaks text={text.key} />}
-							aria-describedby={englishId}
-							value={editor.edits[text.key] ?? text.value}
-							onChange={(event) => editor.change(text.key, event.target.value)}
-						/>
-						<div className="flex flex-wrap items-center gap-2">
-							<Button size="sm" disabled={editor.edits[text.key] === undefined} onClick={() => editor.save(text.key)}>
-								{texts.save}
+		<>
+			<DataTable
+				caption={caption}
+				columns={columns}
+				rows={items}
+				rowKey={(text) => text.key}
+				rowLabel={(text) => text.key}
+				onRowClick={setOpened}
+				{...(empty ? { empty } : {})}
+			/>
+			<Drawer
+				open={opened !== null}
+				onClose={close}
+				title={opened ? <SoftBreaks text={opened.key} /> : ''}
+				{...(opened ? { description: fill(T.englishWas, { english: opened.english }) } : {})}
+				footer={
+					<>
+						{opened?.source === savedSource ? (
+							<Button variant="ghost" onClick={() => finish(editor.reset)}>
+								{texts.reset}
 							</Button>
-							{text.source === savedSource ? (
-								<Button size="sm" variant="ghost" onClick={() => editor.reset(text.key)}>
-									{texts.reset}
-								</Button>
-							) : null}
-						</div>
-						{editor.result?.key === text.key ? <Outcome result={editor.result.answer} /> : null}
-					</SettingRow>
-				);
-			})}
-		</SettingList>
-	);
-}
-
-/**
- * A paged, searchable list of widget texts in one card.
- * @param {{ items: WidgetText[], editor: TextsEditor, savedSource: string, texts: Dashboard['texts'], title?: ReactNode,
- *   description?: ReactNode, searchable?: boolean }} props
- */
-export function TextsCard({ items, editor, savedSource, texts, title, description, searchable = true }) {
-	return (
-		<SettingsCard wide {...(title ? { title } : {})} {...(description ? { description } : {})}>
-			<Paged
-				items={items}
-				pageSize={8}
-				searchFrom={searchable ? 9 : Infinity}
-				label={texts.texts.search}
-				texts={{ none: texts.texts.none }}
-				text={(text) => `${text.key} ${text.english} ${text.value}`}>
-				{(page) => <TextRows items={page} editor={editor} savedSource={savedSource} texts={texts} />}
-			</Paged>
-		</SettingsCard>
+						) : null}
+						<Button variant="secondary" onClick={close}>
+							{texts.cancel}
+						</Button>
+						<Button disabled={edited === undefined} onClick={() => finish(editor.save)}>
+							{texts.save}
+						</Button>
+					</>
+				}>
+				{opened ? (
+					<>
+						<Input
+							label={T.yours}
+							value={edited ?? opened.value}
+							onChange={(event) => editor.change(opened.key, event.target.value)}
+						/>
+						{editor.result?.key === opened.key ? <Outcome result={editor.result.answer} /> : null}
+					</>
+				) : null}
+			</Drawer>
+		</>
 	);
 }
 
@@ -388,28 +416,36 @@ export const textGroups = (items) => {
 };
 
 /**
- * The sidebar sections of the widget texts: a view per screen or widget, with how many of its texts were changed.
+ * The sidebar sections of the widget texts: a page per screen or widget, a table of its texts, with how many of them
+ * were changed as the count in the sidebar and how many there are behind the (i).
  * @param {{ items: WidgetText[], editor: TextsEditor, savedSource: string, dash: Dashboard, group?: string }} options
- * @returns {SectionSpec[]}
+ * @returns {Section[]}
  */
 export function textSections({ items, editor, savedSource, dash, group }) {
 	const { texts } = dash;
+	const T = texts.texts;
 	return textGroups(items).map((entry) => {
 		const changed = entry.items.filter((text) => text.source === savedSource).length;
 		return {
 			id: `text-${entry.id || 'other'}`,
 			label: entry.label,
 			...(group ? { group } : {}),
-			...(changed > 0
-				? {
-						badge: <Badge tone="primary">{changed}</Badge>,
-					}
-				: {}),
-			content: (
+			...(changed > 0 ? { badge: changed } : {}),
+			flush: true,
+			info: (
 				<>
-					<ViewTitle title={entry.label} description={fill(texts.texts.count, { count: entry.items.length })} />
-					<TextsCard items={entry.items} editor={editor} savedSource={savedSource} texts={texts} />
+					<p>{fill(T.count, { count: entry.items.length })}</p>
+					<p>{T.help}</p>
 				</>
+			),
+			content: (
+				<TextsTable
+					items={entry.items}
+					editor={editor}
+					savedSource={savedSource}
+					texts={texts}
+					caption={fill(T.caption, { screen: entry.label })}
+				/>
 			),
 		};
 	});

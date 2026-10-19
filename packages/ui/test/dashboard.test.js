@@ -107,6 +107,16 @@ const openSection = (root, id) => {
 	click(/** @type {HTMLElement} */ (links.at(-1)));
 };
 
+/** What the page's (i) says: opens it and gives the page's text. @param {ParentNode} root */
+const aboutOf = (root) => {
+	click(/** @type {HTMLElement} */ (root.querySelector('button[aria-label="About this page"]')));
+	return root.textContent;
+};
+
+/** The breadcrumbs of the open page. @param {ParentNode} root */
+const crumbsOf = (root) =>
+	[...root.querySelectorAll('nav[aria-label="Breadcrumb"] li')].map((li) => li.textContent).filter(Boolean);
+
 /** The links of the inner sidebar. @param {ParentNode} root */
 const navLinks = (root) => [...root.querySelectorAll('nav[aria-label] a[href^="#"]')].map((link) => link.textContent);
 
@@ -746,15 +756,30 @@ describe('standard tabs', () => {
 		await settle();
 		// the sidebar lists the features that are on whose needs are on, under their category (Alerts is off, Digest needs it)
 		const nav = /** @type {HTMLElement} */ (container.querySelector('nav[aria-label="Settings"]'));
-		expect(navLinks(container)).toEqual(['Notes', 'Inbox', 'Beside', 'Own section']);
+		const ALL = [
+			'Notes',
+			'Inbox › Basics',
+			'Inbox › Messages',
+			'Inbox › Limits',
+			'Inbox › Advanced',
+			'Inbox › Rules',
+			'Beside',
+			'Own section',
+		];
+		expect(navLinks(container)).toEqual(ALL);
 		expect(nav.textContent).toContain('Writing');
 		expect(nav.textContent).toContain('Reading');
 		expect(nav.textContent).not.toContain('Alerts');
 		expect(nav.textContent).not.toContain('Digest');
 		// one view: Notes, with the notice and its extra; Inbox is not on the page yet
+		expect(crumbsOf(container)).toEqual(['Notes', 'Settings', 'Notes']);
+		expect(container.querySelector('h1')?.textContent).toBe('Notes');
 		expect(container.textContent).toContain('notice for notes');
 		expect(container.textContent).toContain('notes extra');
-		expect(container.textContent).toContain('Keep notes.');
+		// the old description is behind the (i), not in a heading of the body
+		expect(container.querySelector('#section-notes h2, #section-notes h3')).toBeNull();
+		expect(container.textContent).not.toContain('Keep notes.');
+		expect(aboutOf(container)).toContain('Keep notes.');
 		expect(container.textContent).not.toContain('Daily limit');
 		type(/** @type {HTMLInputElement} */ (container.querySelector('[data-field="greeting"] input')), 'Hey');
 		await act(async () => byText(container, 'Save changes', 'button').click());
@@ -762,22 +787,16 @@ describe('standard tabs', () => {
 		expect(requests.filter((request) => request.method === 'PUT')).toEqual([
 			{ method: 'PUT', path: `${base}/settings/notes.greeting`, body: { value: 'Hey' } },
 		]);
-		// Inbox has three groups and Advanced settings: they are sub-items, each one view; its list editor is one too
+		// Inbox has three groups and Advanced settings: each is a page in the navigation, named after the feature; its list editor is one too
 		openSection(container, 'inbox.basics');
 		// a view marked `top` is listed beside the feature, not under it
-		expect(navLinks(container)).toEqual([
-			'Notes',
-			'Inbox',
-			'Basics',
-			'Messages',
-			'Limits',
-			'Advanced',
-			'Rules',
-			'Beside',
-			'Own section',
-		]);
+		expect(navLinks(container)).toEqual(ALL);
 		expect(container.querySelector('[data-field="subject"]')).not.toBeNull();
 		expect(container.querySelector('[data-field="sender"]')).toBeNull();
+		// the crumbs name the feature and the group; its address is its own
+		expect(crumbsOf(container)).toEqual(['Notes', 'Settings', 'Inbox', 'Basics']);
+		expect(container.querySelector('h1')?.textContent).toBe('Basics');
+		expect(window.location.hash).toBe('#inbox.basics');
 		openSection(container, 'inbox.limits');
 		expect(/** @type {HTMLElement} */ (container.querySelector('[data-field="limit"]')).closest('[hidden]')).toBeNull();
 		openSection(container, 'inbox.advanced');
@@ -794,7 +813,7 @@ describe('standard tabs', () => {
 		const plain = render(inDashboard(<SettingsTab {...tabProps(id)} />));
 		await settle();
 		expect(plain.container.textContent).not.toContain('notice for');
-		expect(plain.container.textContent).toContain('Keep notes.');
+		expect(aboutOf(plain.container)).toContain('Keep notes.');
 	});
 
 	it('Settings: a setting that starts from the Portal says so and links to its section, until the website saves its own', async () => {
@@ -856,10 +875,22 @@ describe('standard tabs', () => {
 		const { container } = render(inDashboard(<SettingsTab {...tabProps(id)} />));
 		await settle();
 		expect(container.textContent).toContain(TEXTS.settings.nothingOn);
-		expect(container.querySelector('nav')).toBeNull();
+		expect(container.querySelector('nav[aria-label="Settings"]')).toBeNull();
+		expect(container.querySelector('h1')?.textContent).toBe('Settings');
 	});
 
-	it('Texts: a sidebar of screens and widgets, a search across all of them, each text saved on its own', async () => {
+	it('Settings: shows the page skeleton while it loads and the problem in the page, with Try again, when it fails', async () => {
+		const id = freshSite();
+		serve({ [`GET /v1/dashboard/websites/${id}/settings`]: { status: 500, body: { status: 500, code: 'internal_error' } } });
+		const { container } = render(inDashboard(<SettingsTab {...tabProps(id)} />));
+		expect(container.querySelector('[data-ss-page][aria-busy="true"]')).not.toBeNull();
+		expect(container.querySelector('h1')?.textContent).toBe('Settings');
+		await settle();
+		expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+		expect(container.textContent).toContain('Try again');
+	});
+
+	it('Texts: a sidebar of screens and widgets with how many were changed, each screen a table, a text edited in a drawer', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}`;
 		serve({
@@ -870,32 +901,127 @@ describe('standard tabs', () => {
 					{ key: 'signIn.title', english: 'Sign in', value: 'Welcome back', source: 'website' },
 				],
 			}),
-			[`PUT ${base}/texts/cart.title`]: ok({}),
+			[`PUT ${base}/texts/cart.title`]: (body) => (body.value === 'bad' ? { status: 400, body: { status: 400 } } : ok({})),
+			[`DELETE ${base}/texts/signIn.title`]: { status: 204 },
 		});
 		const { container } = render(inDashboard(<TextsTab {...tabProps(id)} />));
 		await settle();
 		expect(navLinks(container)).toEqual(['Cart', 'Sign in1']);
-		// the screen with a changed text says how many
+		expect(crumbsOf(container)).toEqual(['Notes', 'Texts', 'Cart']);
+		expect(container.querySelector('h1')?.textContent).toBe('Cart');
+		expect(aboutOf(container)).toContain('2 texts');
+		// the screen with a changed text says how many; only the open screen is drawn
 		expect(container.querySelector('nav a[href="#text-signIn"]')?.textContent).toBe('Sign in1');
-		expect(container.querySelector('#section-text-cart')?.textContent).toContain('Your cart');
 		expect(container.querySelector('#section-text-signIn')).toBeNull();
-		type(
-			/** @type {HTMLInputElement} */ (container.querySelector('input[aria-describedby="text-cart-title-english"]')),
-			'My cart',
-		);
-		await act(async () => buttonsOf(container, 'Save')[0]?.click());
-		await settle();
-		expect(requests.filter((request) => request.method === 'PUT')).toEqual([
-			{ method: 'PUT', path: `${base}/texts/cart.title`, body: { value: 'My cart' } },
+		const table = /** @type {HTMLElement} */ (container.querySelector('#section-text-cart table'));
+		expect([...table.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
+			'Text',
+			'English',
+			'Shown now',
+			'Status',
 		]);
-		// a search finds a text by its words in every screen
-		type(/** @type {HTMLInputElement} */ (container.querySelector('input[type="search"]')), 'welcome');
-		expect(container.querySelector('nav')).toBeNull();
-		expect(container.textContent).toContain(TEXTS.texts.results);
-		expect(container.textContent).toContain('signIn.title');
-		expect(container.textContent).not.toContain('cart.title');
-		type(/** @type {HTMLInputElement} */ (container.querySelector('input[type="search"]')), 'zzz');
+		expect(table.querySelectorAll('tbody tr')).toHaveLength(2);
+		expect(container.querySelector('[data-ss-part="body"]')?.getAttribute('role')).toBeNull();
+		// no box on the page: a text is changed in the drawer
+		expect(container.querySelector('#section-text-cart input')).toBeNull();
+		const row = (/** @type {string} */ key) =>
+			/** @type {HTMLElement} */ ([...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent?.includes(key)));
+		click(row('cart.title'));
+		const drawer = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
+		expect(drawer.textContent).toContain('cart.title');
+		expect(drawer.textContent).toContain('Your cart');
+		const box = /** @type {HTMLInputElement} */ (drawer.querySelector('input'));
+		// the box starts from what is shown now; Save waits for a change
+		expect(box.value).toBe('Your cart');
+		expect(/** @type {HTMLButtonElement} */ (byText(drawer, 'Save', 'button')).disabled).toBe(true);
+		// a refused save keeps the drawer and the words (the problem is the toast's)
+		type(box, 'bad');
+		await act(async () => byText(drawer, 'Save', 'button').click());
+		await settle();
+		expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+		expect(/** @type {HTMLInputElement} */ (document.querySelector('[role="dialog"] input')).value).toBe('bad');
+		type(/** @type {HTMLInputElement} */ (document.querySelector('[role="dialog"] input')), 'My cart');
+		await act(async () => byText(document.body, 'Save', 'button').click());
+		await settle();
+		expect(requests.filter((request) => request.method === 'PUT').map((request) => request.body)).toEqual([
+			{ value: 'bad' },
+			{ value: 'My cart' },
+		]);
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		// Cancel forgets what was typed
+		click(row('cart.empty'));
+		type(/** @type {HTMLInputElement} */ (document.querySelector('[role="dialog"] input')), 'Nada');
+		click(byText(document.body, 'Cancel', 'button'));
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		click(row('cart.empty'));
+		expect(/** @type {HTMLInputElement} */ (document.querySelector('[role="dialog"] input')).value).toBe('Nothing here');
+		click(byText(document.body, 'Cancel', 'button'));
+		// a changed text can be reset to the default, which closes the drawer
+		openSection(container, 'text-signIn');
+		expect(window.location.hash).toBe('#text-signIn');
+		expect(container.querySelector('h1')?.textContent).toBe('Sign in');
+		expect(container.querySelector('#section-text-signIn')?.textContent).toContain('Changed');
+		click(row('signIn.title'));
+		await act(async () => byText(document.body, 'Reset to default', 'button').click());
+		await settle();
+		expect(requests.filter((request) => request.method === 'DELETE').map((request) => request.path)).toEqual([
+			`${base}/texts/signIn.title`,
+		]);
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+	});
+
+	it('Texts: a search across all the screens keeps the sidebar and shows the matches as a table, paged', async () => {
+		const id = freshSite();
+		const base = `/v1/dashboard/websites/${id}`;
+		serve({
+			[`GET ${base}/texts`]: ok({
+				texts: [
+					{ key: 'cart.title', english: 'Your cart', value: 'Your cart', source: 'built-in' },
+					{ key: 'cart.empty', english: 'Nothing here', value: 'Nothing here', source: 'built-in' },
+					{ key: 'signIn.title', english: 'Sign in', value: 'Welcome back', source: 'website' },
+				],
+			}),
+		});
+		const { container } = render(inDashboard(<TextsTab {...tabProps(id)} />));
+		await settle();
+		const search = () =>
+			/** @type {HTMLInputElement} */ (container.querySelector('input[type="search"][aria-label="Find a text by its words"]'));
+		type(search(), 'welcome');
+		await settle();
+		// the sidebar stays; the crumbs say these are results; the matches are one table that uses all of the body
+		expect(container.querySelector('nav[aria-label="Texts"]')).not.toBeNull();
+		expect(crumbsOf(container)).toEqual(['Notes', 'Texts', TEXTS.texts.results]);
+		const shown = [...container.querySelectorAll('table')]
+			.filter((table) => table.closest('[hidden]') === null)
+			.map((table) => table.textContent)
+			.join(' ');
+		expect(shown).toContain('signIn.title');
+		expect(shown).not.toContain('cart.title');
+		expect(container.querySelector('[data-ss-part="body"]')?.getAttribute('role')).toBeNull();
+		expect(container.querySelector('[data-ss-part="footer"]')?.textContent).toContain('1');
+		type(search(), 'zzz');
+		await settle();
 		expect(container.textContent).toContain(TEXTS.texts.none);
+		// clearing the search brings the screen back
+		type(search(), '');
+		await settle();
+		expect(crumbsOf(container)).toEqual(['Notes', 'Texts', 'Cart']);
+		expect(container.querySelector('#section-text-cart table')).not.toBeNull();
+		// a result opens the same drawer
+		type(search(), 'welcome');
+		await settle();
+		click(/** @type {HTMLElement} */ (container.querySelector('tbody tr')));
+		expect(document.querySelector('[role="dialog"]')?.textContent).toContain('signIn.title');
+	});
+
+	it('Texts: shows the page skeleton with the sidebar while it loads', async () => {
+		const id = freshSite();
+		serve({ [`GET /v1/dashboard/websites/${id}/texts`]: ok({ texts: [] }) });
+		const { container } = render(inDashboard(<TextsTab {...tabProps(id)} />));
+		expect(container.querySelector('[data-ss-page][aria-busy="true"]')).not.toBeNull();
+		expect(container.querySelector('h1')?.textContent).toBe('Texts');
+		await settle();
+		expect(container.querySelector('[aria-busy="true"]')).toBeNull();
 	});
 
 	it('Connections: saves and tests a value, removes after a confirmation, with the product forms and hints', async () => {
@@ -1103,25 +1229,43 @@ describe('standard tabs', () => {
 			'GET /v1/dashboard/defaults': ok({
 				features: [{ key: 'notes', name: 'Notes', schema: SCHEMA, values: { greeting: { value: 'Hi', source: 'default' } } }],
 				texts: [{ key: 'hello.title', english: 'Hello', value: 'Hey', source: 'default' }],
-				recentChanges: [],
+				recentChanges: [{ who: { name: 'Alex' }, detail: 'Changed the default greeting', at: '2026-10-04T14:30:00.000Z' }],
 			}),
 			'PUT /v1/dashboard/defaults/notes.greeting': ok({}),
 			'PUT /v1/dashboard/defaults/text.hello.title': ok({}),
 		});
 		const { container } = render(inDashboard(<DefaultsTab notice={(key) => <p>{`default notice ${key}`}</p>} />));
 		await settle();
-		expect(container.textContent).toContain(TEXTS.defaults.intro);
+		// a page with the intro behind the (i), the first feature open
+		expect(crumbsOf(container)).toEqual(['Notes', 'Defaults', 'Notes']);
+		expect(container.textContent).not.toContain(TEXTS.defaults.intro);
+		expect(aboutOf(container)).toContain(TEXTS.defaults.intro);
 		expect(container.textContent).toContain('default notice notes');
+		expect(container.querySelector('[data-ss-page] h2, #section-notes h3')).toBeNull();
 		// the sidebar: every feature, then the texts by screen, and Recent changes (the theme and Format are the Portal's)
 		expect(navLinks(container)).toEqual(['Notes', 'Hello1', 'Recent changes']);
 		await act(async () => byText(container, 'Reset', 'button').click());
 		openSection(container, 'text-hello');
-		await act(async () => button(TEXTS.reset).click());
+		expect(crumbsOf(container)).toEqual(['Notes', 'Defaults', 'Hello']);
+		// a text is reset in its drawer
+		click(
+			/** @type {HTMLElement} */ (
+				[...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent?.includes('hello.title'))
+			),
+		);
+		await act(async () => byText(document.body, TEXTS.reset, 'button').click());
 		await settle();
 		expect(requests.filter((request) => request.method === 'PUT')).toEqual([
 			{ method: 'PUT', path: '/v1/dashboard/defaults/notes.greeting', body: { value: null } },
 			{ method: 'PUT', path: '/v1/dashboard/defaults/text.hello.title', body: { value: null } },
 		]);
+		// Recent changes is a table of its own, without a card or a list
+		openSection(container, 'changes');
+		expect(crumbsOf(container)).toEqual(['Notes', 'Defaults', 'Recent changes']);
+		const changes = /** @type {HTMLElement} */ (container.querySelector('#section-changes table'));
+		expect(changes.textContent).toContain('Alex');
+		expect(changes.textContent).toContain('Changed the default greeting');
+		expect(container.querySelector('#section-changes ol, #section-changes ul')).toBeNull();
 		cleanup();
 		render(inDashboard(<DefaultsTab />));
 		await settle();

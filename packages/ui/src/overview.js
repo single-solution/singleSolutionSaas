@@ -11,13 +11,14 @@
  *   the status pill and the setup progress, the greeting behind the (i), the blocks in the body. It is built from the
  *   kit's overview answer (`GET /v1/dashboard/websites/:websiteId/overview`) with the words of `overview-texts.js`, plus
  *   the product's own items, setup steps, number tiles and sections. `OverviewSkeleton` is its loading state (the
- *   body's, for a `Page` that is loading) and `RecentChanges` the timeline card the dashboards also show under
- *   Defaults and Prices.
+ *   body's, for a `Page` that is loading) and `RecentChanges` the timeline card of it and `ChangesTable` the table the
+ *   dashboards show under Defaults and Prices.
  * @module
  */
 import { Fragment, useState } from 'react';
 import { Button, ButtonLink } from './Button.js';
 import { cx } from './cx.js';
+import { DataTable } from './DataTable.js';
 import { Badge, Card, EmptyState, Stat, StatGrid, TextLink } from './display.js';
 import { formatCredits, humanize, supportContact } from './format.js';
 import { Icon } from './icons.js';
@@ -295,6 +296,29 @@ export function RecentChanges({ items, intro, limit }) {
 				</Button>
 			) : null}
 		</Card>
+	);
+}
+
+/**
+ * A dashboard's Recent changes (newest first) as a page of their own: one table of who, what and when (in the viewer's
+ * local time) that uses the whole body (a flush {@link Page} body), as under Defaults and Prices.
+ * @param {{ items: ReadonlyArray<{ who: { name: string }, detail: string, at: string }> }} props
+ */
+export function ChangesTable({ items }) {
+	/** @type {import('./DataTable.js').DataColumn<{ key: string, who: string, what: string, at: string }>[]} */
+	const columns = [
+		{ key: 'who', header: OVERVIEW_TEXTS.changeWho },
+		{ key: 'what', header: OVERVIEW_TEXTS.changeWhat, wrap: true },
+		{ key: 'at', header: OVERVIEW_TEXTS.changeWhen, kind: 'date', render: (row) => <LocalTime value={row.at} /> },
+	];
+	return (
+		<DataTable
+			caption={OVERVIEW_TEXTS.changes}
+			columns={columns}
+			rows={items.map((item, i) => ({ key: `${item.at}-${i}`, who: item.who.name, what: item.detail, at: item.at }))}
+			rowKey={(row) => row.key}
+			empty={OVERVIEW_TEXTS.noChanges}
+		/>
 	);
 }
 

@@ -7,6 +7,7 @@
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+	ChangesTable,
 	NeedsList,
 	OverviewSkeleton,
 	Page,
@@ -440,6 +441,27 @@ describe('the shared pieces', () => {
 		expect(container.textContent).toContain('All good.');
 		expect(container.textContent).toContain('Nothing yet.');
 		expect(container.textContent).toContain('No changes yet.');
+	});
+
+	it('ChangesTable lists the changes as a table of who, what and when in the viewer’s time, or says there are none', () => {
+		viewerIn('America/New_York');
+		const items = [
+			{ who: { name: 'Alex Morgan' }, detail: 'Turned on Notes', at: '2026-10-04T14:30:00.000Z' },
+			{ who: { name: 'Sam' }, detail: 'Changed the price of Inbox', at: '2026-10-03T09:00:00.000Z' },
+		];
+		const { container } = render(<ChangesTable items={items} />);
+		const table = container.querySelector('table');
+		expect(table?.querySelector('caption')?.textContent).toBe('Recent changes');
+		expect([...(table?.querySelectorAll('thead th') ?? [])].map((cell) => cell.textContent)).toEqual(['Who', 'What', 'When']);
+		const rows = [...(table?.querySelectorAll('tbody tr') ?? [])].map((row) => row.textContent ?? '');
+		expect(rows).toHaveLength(2);
+		expect(rows[0]).toContain('Alex Morgan');
+		expect(rows[0]).toContain('Turned on Notes');
+		expect(rows[0]).toContain('10:30');
+		cleanup();
+		expect(render(<ChangesTable items={[]} />).container.textContent).toContain('No changes yet.');
+		// no list of rows and no heading of its own: the page's title is the header's
+		expect(container.querySelector('h1, h2, h3, ul, ol')).toBeNull();
 	});
 
 	it('initials of a name, an email address or nothing', () => {

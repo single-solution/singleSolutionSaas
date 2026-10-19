@@ -86,11 +86,28 @@ describe('the crumbs of a tab', () => {
 });
 
 describe('navGroupsOf', () => {
-	it('groups the sections by their group, and a section with parts is a group of its own', () => {
+	it('groups the sections by their group; the parts of a section in a group join it, named after their section', () => {
 		const groups = navGroupsOf(SPECS());
-		expect(groups.map((g) => g.label)).toEqual(['First', 'Multi']);
+		expect(groups.map((g) => g.label)).toEqual(['First', 'Second']);
 		expect(groups[0]?.items.map((item) => item.id)).toEqual(['one', 'two']);
 		expect(groups[1]?.items.map((item) => item.id)).toEqual(['multi.a', 'multi.b']);
+		expect(groups[1]?.items.map((item) => item.label)).toEqual(['Multi › Part A', 'Multi › Part B']);
+	});
+
+	it('makes a section with parts and no group a group of its own, headed by its label, its parts named as they are', () => {
+		const groups = navGroupsOf([
+			{ id: 'a', label: 'A', content: null },
+			{
+				id: 'multi',
+				label: 'Multi',
+				children: [
+					{ id: 'multi.a', label: 'Part A' },
+					{ id: 'multi.b', label: 'Part B' },
+				],
+			},
+		]);
+		expect(groups.map((g) => g.label)).toEqual([undefined, 'Multi']);
+		expect(groups[1]?.items.map((item) => item.label)).toEqual(['Part A', 'Part B']);
 	});
 
 	it('turns the badge into the count and the status into the dot, every item its own #address', () => {
@@ -125,7 +142,7 @@ describe('SectionsPage', () => {
 		expect(container.querySelector('[data-ss-page]')).not.toBeNull();
 		expect(crumbsOf(container)).toEqual(['Notes', 'Settings', 'One']);
 		expect(container.querySelector('h1')?.textContent).toBe('One');
-		expect(navLinks(container)).toEqual(expect.arrayContaining(['One3', 'TwoNeeds setup', 'Part A', 'Part B']));
+		expect(navLinks(container)).toEqual(expect.arrayContaining(['One3', 'TwoNeeds setup', 'Multi › Part A', 'Multi › Part B']));
 		expect(container.querySelectorAll('h2')).toHaveLength(0);
 	});
 
@@ -177,6 +194,22 @@ describe('SectionsPage', () => {
 		expect(container.querySelector('[aria-label="Key numbers"]')?.textContent).toContain('2');
 		click(/** @type {HTMLElement} */ ([...container.querySelectorAll('a[href="#b"]')].at(-1)));
 		expect(container.querySelector('button[aria-label="About this page"]')).toBeNull();
+	});
+
+	it('says what the page is for after what the open sub-page says about itself, both behind the (i)', () => {
+		const sections = [
+			{ id: 'a', label: 'A', info: 'About A', content: <p>a</p> },
+			{ id: 'b', label: 'B', content: <p>b</p> },
+		];
+		const { container } = render(inDashboard(<SectionsPage tab="defaults" sections={sections} info="For every website" />));
+		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="About this page"]')));
+		const text = container.textContent ?? '';
+		expect(text.indexOf('About A')).toBeGreaterThan(-1);
+		expect(text.indexOf('For every website')).toBeGreaterThan(text.indexOf('About A'));
+		// a sub-page with nothing of its own says only what the page is for
+		click(/** @type {HTMLElement} */ ([...container.querySelectorAll('a[href="#b"]')].at(-1)));
+		expect(container.textContent).not.toContain('About A');
+		expect(container.textContent).toContain('For every website');
 	});
 
 	it('draws the empty state when there is no section, and a message when it failed', () => {
@@ -234,6 +267,20 @@ describe('SectionsPage', () => {
 		);
 		expect(byText(container, 'search results')).toBeTruthy();
 		expect(panel('one')?.hidden ?? true).toBe(true);
+	});
+
+	it('ends the crumbs in the name of the result when the tab gives one', () => {
+		const { container } = render(
+			inDashboard(
+				<SectionsPage tab="texts" sections={SPECS()} resultLabel="Search results">
+					<p>search results</p>
+				</SectionsPage>,
+			),
+		);
+		expect(crumbsOf(container)).toEqual(['Notes', 'Texts', 'Search results']);
+		expect(container.querySelector('h1')?.textContent).toBe('Search results');
+		// the navigation stays
+		expect(container.querySelector('nav[aria-label="Texts"]')).not.toBeNull();
 	});
 });
 

@@ -59,7 +59,7 @@ export {
 } from './dashboard-parts.js';
 export {
 	SettingsBar,
-	TextsCard,
+	TextsTable,
 	featureSections,
 	settingSectionOf,
 	textGroups,

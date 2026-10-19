@@ -92,6 +92,10 @@ export const DASHBOARD_TEXTS = Object.freeze({
 		screens: 'Screens and widgets',
 		navSearch: 'Search screens',
 		count: '{count} texts',
+		caption: '{screen} texts',
+		columns: Object.freeze({ key: 'Text', english: 'English', shown: 'Shown now', status: 'Status' }),
+		yours: 'Your words',
+		englishWas: 'English: {english}',
 	}),
 	connections: Object.freeze({
 		neededBy: 'Needed by: {features}',
