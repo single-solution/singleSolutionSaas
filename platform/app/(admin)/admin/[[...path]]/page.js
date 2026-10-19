@@ -17,6 +17,7 @@ import Login, { metadata as LoginMeta } from '../_views/login.js';
 import Merchants, { metadata as MerchantsMeta } from '../_views/merchants.js';
 import Products, { metadata as ProductsMeta } from '../_views/products.js';
 import Settings, { metadata as SettingsMeta } from '../_views/settings.js';
+import SettingsPart, { metadata as SettingsPartMeta } from '../_views/settings-part.js';
 import MerchantsMerchantId, { metadata as MerchantsMerchantIdMeta } from '../_views/merchants-merchantId.js';
 import AdminsAdminId, { metadata as AdminsAdminIdMeta } from '../_views/admins-adminId.js';
 import AdminsAdminIdPart, { metadata as AdminsAdminIdPartMeta } from '../_views/admins-adminId-part.js';
@@ -46,7 +47,8 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[['login'], Login, LoginMeta, 'public'],
 	[['merchants'], Merchants, MerchantsMeta, 'screen'],
 	[['products'], Products, ProductsMeta, 'screen'],
-	[['settings'], Settings, SettingsMeta, 'page'],
+	[['settings'], Settings, SettingsMeta, 'screen'],
+	[['settings', ':part'], SettingsPart, SettingsPartMeta, 'screen'],
 	[['merchants', ':merchantId'], MerchantsMerchantId, MerchantsMerchantIdMeta, 'screen'],
 	[['admins', ':adminId'], AdminsAdminId, AdminsAdminIdMeta, 'screen'],
 	[['admins', ':adminId', ':part'], AdminsAdminIdPart, AdminsAdminIdPartMeta, 'screen'],

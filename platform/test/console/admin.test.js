@@ -290,13 +290,18 @@ describe('admin console smoke', () => {
 			expect(text(ssr(<AdminsView {...await admin.loadAdmin(ownerBrowser.api, owner, gone)} selectedId={gone} />))).toContain(
 				'This admin does not exist or was removed.',
 			);
-			// Settings: an inner sidebar with one section at a time (Branding first), each card with its own Save
-			const settingsRaw = ssr(<SettingsView {...await admin.loadSettings(ownerBrowser.api)} />);
+			// Settings: one Page, its sections in the inner navigation, each its own address (Branding first); the
+			// save bar is hidden until something changes
+			const settingsRaw = ssr(<SettingsView {...await admin.loadSettings(ownerBrowser.api)} part="branding" />);
 			expect(settingsRaw).toContain('aria-label="Branding"');
+			expect(settingsRaw).toContain('href="/admin/settings/mail"');
 			for (const title of ['Email sending', 'Branding', 'Support contact', 'Security', 'Billing rules'])
 				expect(text(settingsRaw)).toContain(title);
 			expect(text(settingsRaw)).not.toContain('Encryption key'); // under Advanced on Security
-			expect(text(settingsRaw).match(/ Save /g)).toHaveLength(1);
+			expect(text(settingsRaw)).not.toContain('Save changes');
+			const mailRaw = ssr(<SettingsView {...await admin.loadSettings(ownerBrowser.api)} part="mail" />);
+			expect(text(mailRaw)).toContain('SMTP host');
+			expect(text(mailRaw)).not.toContain('Accent color');
 			// My account: an inner sidebar (Your name first); the two-step section is a link
 			expect(text(ssr(<MyAccountView {...await admin.loadMyAccount(ownerBrowser.api)} />))).toContain('Two-step sign-in');
 			const finance = await admin.loadBilling(ownerBrowser.api, { merchantId, by: 'merchant', method: 'Bank transfer' });

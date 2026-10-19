@@ -10,7 +10,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { Blob as NodeBlob } from 'node:buffer';
 import { totpCode } from '../../src/infra/auth.js';
 import { closeMongoClients } from '../../src/testing.js';
-import { browserOf, openSection, pressMenu, settle, until } from './merchant-harness.js';
+import { browserOf, pressMenu, settle, until } from './merchant-harness.js';
 import { createSystemStore } from '../../src/infra/system.js';
 import { createPortal } from '../../src/portal.js';
 import { modules as defaultModules } from '../../src/modules/index.js';
@@ -85,30 +85,18 @@ const pressInDialog = async (label) => {
 	});
 };
 
-/**
- * Open the Advanced block of a section of the inner sidebar.
- * @param {string} sectionId
- */
-const openAdvanced = async (sectionId) => {
-	const bar = [...document.querySelectorAll(`#section-${sectionId} button[aria-expanded]`)].find((b) =>
-		b.textContent?.startsWith('Advanced'),
-	);
-	if (!bar) throw new Error(`no Advanced block in ${sectionId}`);
+/** Open the Advanced block of the page. */
+const openAdvanced = async () => {
+	const bar = [...document.querySelectorAll('button[aria-expanded]')].find((b) => b.textContent?.startsWith('Advanced'));
+	if (!bar) throw new Error('no Advanced block on the page');
 	await act(async () => {
 		/** @type {HTMLButtonElement} */ (bar).click();
 	});
 };
 
-/**
- * Press the Save button of one settings card.
- * @param {string} title the card's title
- */
-const saveIn = async (title) => {
-	await act(async () => {
-		/** @type {HTMLButtonElement} */ (
-			[...document.querySelectorAll(`section[aria-label="${title}"] button`)].find((b) => b.textContent === 'Save')
-		).click();
-	});
+/** Press Save changes of the floating save bar (it shows once a section has changes). */
+const saveChanges = async () => {
+	await press('Save changes');
 	await settle(1);
 };
 
@@ -432,12 +420,17 @@ describe('admin console interactions (jsdom)', () => {
 		cleanup();
 
 		// ---------------------------------------------------------------- Settings: email sending, branding, support, security, key
-		render(
-			<ToastProvider>
-				<SettingsView {...await admin.loadSettings(ownerBrowser.api)} />
-			</ToastProvider>,
-		);
-		await openSection('Email sending');
+		// each part of the page is its own address: a visit loads the settings again
+		/** @param {string} part */
+		const visitSettings = async (part) => {
+			cleanup();
+			render(
+				<ToastProvider>
+					<SettingsView {...await admin.loadSettings(ownerBrowser.api)} part={part} />
+				</ToastProvider>,
+			);
+		};
+		await visitSettings('mail');
 		fill('SMTP host', 'smtp.example.com');
 		fill('Port', '587');
 		fill('User', 'mailer');
@@ -446,20 +439,20 @@ describe('admin console interactions (jsdom)', () => {
 		fill('Sender address', 'no-reply@example.com');
 		// the secure-connection switch is under Advanced
 		expect(document.querySelector('[role="switch"]')).toBeNull();
-		await openAdvanced('mail');
+		await openAdvanced();
 		await act(async () => {
 			/** @type {HTMLInputElement} */ (byLabel(document, 'Secure connection from the start (SSL/TLS)')).click();
 		});
-		await saveIn('Email sending');
+		await saveChanges();
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsMail() && c.status === 200));
 		await until(() => shows('Send test email'));
 		await press('Send test email');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsMailTest()));
 		await press('Turn email sending off');
 		await until(() => ownerBrowser.calls.filter((c) => c.path === adminApi.settingsMail() && c.status === 200).length >= 2);
-		await openSection('Branding');
+		await visitSettings('branding');
 		fill('Name', 'Acme Portal');
-		await saveIn('Branding');
+		await saveChanges();
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsBranding() && c.status === 200));
 		const logo = /** @type {HTMLInputElement} */ (document.querySelector('input[type="file"]'));
 		const svg = Object.assign(new NodeBlob(['<svg/>'], { type: 'image/svg+xml' }), { name: 'logo.svg' });
@@ -481,7 +474,7 @@ describe('admin console interactions (jsdom)', () => {
 		await press('Remove logo');
 		await until(() => ownerBrowser.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.settingsLogo()));
 		// the support contact: a list of channels, each with its kind, label and address
-		await openSection('Support contact');
+		await visitSettings('support');
 		await press('Add channel');
 		const supportCard = /** @type {HTMLElement} */ (document.querySelector('section[aria-label="Support contact"]'));
 		type(byLabel(supportCard, 'Label'), 'Email');
@@ -494,7 +487,7 @@ describe('admin console interactions (jsdom)', () => {
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (supportCard.querySelector('button[aria-label="Move up: WhatsApp"]')).click();
 		});
-		await saveIn('Support contact');
+		await saveChanges();
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSupport() && c.status === 200));
 		const sent = ownerBrowser.calls.find((c) => c.path === adminApi.settingsSupport() && c.status === 200);
 		expect(sent?.body.support).toEqual({
@@ -503,21 +496,29 @@ describe('admin console interactions (jsdom)', () => {
 				{ type: 'email', label: 'Email', url: 'mailto:help@acme.test' },
 			],
 		});
-		await openSection('Security');
+		await visitSettings('security');
 		fill('Session length (hours)', '0');
-		await saveIn('Security');
+		await saveChanges();
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 422));
 		fill('Session length (hours)', '24');
 		await act(async () => {
-			/** @type {HTMLElement} */ (document.querySelector('#section-security [role="switch"]')).click();
+			/** @type {HTMLElement} */ (document.querySelector('[role="switch"]')).click();
 		});
-		await saveIn('Security');
+		await saveChanges();
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 200));
 		// Encryption key: Re-seal after a key change (RT-14), under Advanced on Security
-		await openAdvanced('security');
+		await openAdvanced();
 		await press('Re-seal stored secrets');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsReseal() && c.status === 200));
 		await until(() => shows('ENCRYPTION_KEY_PREVIOUS can be removed'));
+		// the save bar only shows what is changed, and Discard puts the saved value back
+		await visitSettings('billing');
+		expect(shows('You have unsaved changes')).toBe(false);
+		fill('Grace period (days)', '9');
+		await until(() => shows('You have unsaved changes'));
+		await press('Discard');
+		await until(() => !shows('You have unsaved changes'));
+		expect(/** @type {HTMLInputElement} */ (byLabel(document, 'Grace period (days)')).value).not.toBe('9');
 		cleanup();
 		render(<SettingsView ok={false} problem={{ status: 403, title: 'Forbidden' }} />);
 		expect(shows('Not permitted')).toBe(true);

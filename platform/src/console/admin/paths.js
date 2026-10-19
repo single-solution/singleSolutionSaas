@@ -48,6 +48,8 @@ export const adminRoutes = Object.freeze({
 	adminPart: (/** @type {string} */ id, /** @type {string} */ part) =>
 		part === 'details' ? `/admin/admins/${e(id)}` : `/admin/admins/${e(id)}/${e(part)}`,
 	settings: () => '/admin/settings',
+	/** a part of Settings: branding (the page's own address), support, mail, security or billing */
+	settingsPart: (/** @type {string} */ part) => (part === 'branding' ? '/admin/settings' : `/admin/settings/${e(part)}`),
 	account: () => '/admin/account',
 	/** a part of My account: profile (the page's own address), sign-in, two-step or activity */
 	accountPart: (/** @type {string} */ part) => (part === 'profile' ? '/admin/account' : `/admin/account/${e(part)}`),
