@@ -556,7 +556,13 @@ export function AppShell({
 		<NavigationProgress>
 			<ShellContext.Provider value={shell}>
 				<HeaderSlotsContext.Provider value={slots}>
-					<div className="flex h-dvh w-full gap-3 overflow-hidden bg-canvas p-3 text-fg lg:gap-4 lg:p-4">
+					<div
+						className={cx(
+							'flex h-dvh w-full gap-3 overflow-hidden bg-canvas p-3 text-fg lg:gap-4 lg:p-4',
+							// where the page area starts and ends in the window: the floating save bar centres on it
+							'[--ss-pane-left:0.75rem] [--ss-pane-right:0.75rem] lg:[--ss-pane-right:1rem]',
+							rail ? 'lg:[--ss-pane-left:6rem]' : 'lg:[--ss-pane-left:17rem]',
+						)}>
 						<a
 							href={`#${mainId}`}
 							className="sr-only z-[70] rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4">

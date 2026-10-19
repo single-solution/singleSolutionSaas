@@ -89,7 +89,6 @@ export {
 	SettingsCard,
 	SettingRow,
 	SaveBar,
-	SaveRow,
 	SectionNav,
 	SectionLayout,
 	PillTabs,

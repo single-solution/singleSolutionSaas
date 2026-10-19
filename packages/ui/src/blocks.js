@@ -15,6 +15,8 @@ import { Button } from './Button.js';
 import { Card, DOTS } from './display.js';
 import { FieldLayoutContext, ROW_GRID, ROW_LABEL, ROW_LIST, Select, rowControl } from './fields.js';
 import { Icon } from './icons.js';
+import { SAVE_BAR } from './layout-metrics.js';
+import { usePresence } from './motion.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 
@@ -167,74 +169,59 @@ export function SettingRow({ label, description, htmlFor, children, stacked = fa
 }
 
 /**
- * The bar that offers Save and Discard once something changed: it floats at the bottom of the window (inset from the
- * edges, above the page) and is not on screen otherwise. It can be placed anywhere in the settings.
- * @param {{ show: boolean, onSave: () => unknown, onDiscard: () => void, saving?: boolean, message?: ReactNode,
- *   saveLabel?: string, discardLabel?: string, className?: string }} props
+ * The only save control: a bar that floats at the bottom centre of the page area and offers Save and Discard once
+ * something changed (and is not on screen otherwise). It also does the job of a list editor's Save and Cancel
+ * buttons: `disabled` keeps Save off for an entry the server would refuse, and a save that returns a promise shows
+ * the spinner (and locks Discard) until it settles, without the caller tracking it. A save that failed leaves the bar
+ * on screen so the person can try again. Place it anywhere in the page; it is fixed to the window.
+ * @param {{ show: boolean, onSave: () => unknown, onDiscard: () => void, saving?: boolean, disabled?: boolean,
+ *   message?: ReactNode, saveLabel?: string, discardLabel?: string, className?: string }} props `saving`: the caller
+ *   knows the save is running; `disabled`: Save is off although something changed
  */
 export function SaveBar({
 	show,
 	onSave,
 	onDiscard,
 	saving = false,
+	disabled = false,
 	message = 'You have unsaved changes',
 	saveLabel = 'Save changes',
 	discardLabel = 'Discard',
 	className,
 }) {
-	if (!show) return null;
+	const { mounted, closing, ref } = usePresence(show);
+	const [running, setRunning] = useState(false);
+	const busy = saving || running;
+	const save = () => {
+		const result = onSave();
+		if (result && typeof (/** @type {Promise<unknown>} */ (result).then) === 'function') {
+			setRunning(true);
+			const done = () => setRunning(false);
+			/** @type {Promise<unknown>} */ (result).then(done, done);
+		}
+	};
+	if (!mounted) return null;
 	return (
 		<div
+			ref={ref}
 			role="region"
 			aria-label={saveLabel}
-			className={cx('pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-3', className)}>
-			<div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-x-6 gap-y-2 rounded-panel border border-line-soft bg-surface py-2 pr-2 pl-4 shadow-bar animate-ss-sheet">
+			data-state={closing ? 'closed' : 'open'}
+			className={cx(SAVE_BAR.strip, className)}>
+			<div className={cx(SAVE_BAR.bar, closing ? 'animate-ss-sheet-out' : 'animate-ss-sheet')}>
 				<p role="status" className="flex items-center gap-2 text-sm font-medium text-fg">
 					<span aria-hidden="true" className="size-2 rounded-full bg-attention-solid" />
 					{message}
 				</p>
 				<div className="ml-auto flex items-center gap-2">
-					<Button variant="ghost" size="sm" onClick={onDiscard} disabled={saving}>
+					<Button variant="ghost" size="sm" onClick={onDiscard} disabled={busy || closing}>
 						{discardLabel}
 					</Button>
-					<Button size="sm" loading={saving} onClick={onSave}>
+					<Button size="sm" loading={busy} disabled={disabled || closing} onClick={save}>
 						{saveLabel}
 					</Button>
 				</div>
 			</div>
-		</div>
-	);
-}
-
-/**
- * Save and Cancel under a list or form that is saved whole (a merchant list editor): Save is on while something changed,
- * Cancel appears with it, and `children` (an Add button, a note) come first. A save that takes time shows the spinner
- * on the button. For the settings of a page use {@link SaveBar}.
- * @param {{ dirty: boolean, onSave: () => unknown, onCancel: () => void, disabled?: boolean, saveLabel?: string,
- *   cancelLabel?: string, children?: ReactNode, className?: string }} props `disabled`: save is off even though
- *   something changed (an entry the server would refuse)
- */
-export function SaveRow({
-	dirty,
-	onSave,
-	onCancel,
-	disabled = false,
-	saveLabel = 'Save',
-	cancelLabel = 'Cancel',
-	children,
-	className,
-}) {
-	return (
-		<div className={cx('flex flex-wrap items-center gap-2', className)}>
-			{children}
-			<Button size="sm" disabled={!dirty || disabled} onClick={onSave}>
-				{saveLabel}
-			</Button>
-			{dirty ? (
-				<Button size="sm" variant="ghost" onClick={onCancel}>
-					{cancelLabel}
-				</Button>
-			) : null}
 		</div>
 	);
 }

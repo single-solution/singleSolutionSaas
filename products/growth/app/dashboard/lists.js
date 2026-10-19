@@ -20,7 +20,7 @@ import {
 	Select,
 	TextArea,
 	describeProblem,
-	SaveRow,
+	SaveBar,
 } from '@ss/ui';
 import { SaveOutcome, call, useLoad } from '@ss/ui/dashboard';
 import { LISTS } from '../../core/lists.js';
@@ -274,11 +274,11 @@ export function ListCard({ websiteId, name }) {
 						onChange={setDraft}
 						one
 					/>
-					<SaveRow
-						dirty={draft !== null}
+					<SaveBar
+						show={draft !== null}
 						saveLabel={L.save}
-						cancelLabel={TEXTS.cancel}
-						onCancel={() => setDraft(null)}
+						discardLabel={TEXTS.cancel}
+						onDiscard={() => setDraft(null)}
 						onSave={async () => {
 							const next = await call('PUT', path, { value: draft });
 							setResult(next);

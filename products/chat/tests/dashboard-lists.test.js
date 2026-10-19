@@ -102,7 +102,8 @@ describe('the fallback answers editor (C3)', () => {
 		expect(field(container, 'Answer').value).toBe(DEALS.text);
 		expect(optionsOf(field(container, 'Language'))).toEqual(['Any language', 'English (en)', 'French (fr)']);
 		expect(container.textContent).not.toContain('Skipped while these are off');
-		expect(/** @type {HTMLButtonElement} */ (button(container, 'Save list')).disabled).toBe(true);
+		// nothing changed: the floating Save bar is not on screen
+		expect(container.querySelector('[role="region"]')).toBeNull();
 
 		// a new answer: nothing written yet, so the list is not saved
 		click(button(container, 'Add'));
@@ -128,7 +129,8 @@ describe('the fallback answers editor (C3)', () => {
 			[DEALS, { language: 'fr', keywords: ['best', 'bestseller'], text: 'Popular this week:\n{top_products}' }],
 		]);
 		expect(container.textContent).toContain('Saved');
-		expect(/** @type {HTMLButtonElement} */ (button(container, 'Save list')).disabled).toBe(true);
+		// saved: the floating Save bar goes away
+		expect(container.querySelector('[role="region"]')).toBeNull();
 	});
 
 	it('a comparison answer needs the words between the two products (C18)', async () => {

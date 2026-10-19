@@ -5,7 +5,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, EntryGroup, Input, Skeleton, TextArea, describeProblem, SaveRow } from '@ss/ui';
+import { Button, Callout, Card, EntryGroup, Input, Skeleton, TextArea, describeProblem, SaveBar } from '@ss/ui';
 import { SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { MAX_WEBHOOK_URLS } from '../../core/limits.js';
 import { TEXTS } from './texts.js';
@@ -75,19 +75,7 @@ export function WebhookUrlsCard({ websiteId, off }) {
 						/>
 					</EntryGroup>
 				))}
-				<SaveRow
-					dirty={draft !== null}
-					saveLabel={TEXTS.save}
-					cancelLabel={TEXTS.cancel}
-					onCancel={() => setDraft(null)}
-					onSave={async () => {
-						const next = await call('PUT', path, { value: valueOf(rows) });
-						setResult(next);
-						if (next.ok) {
-							setDraft(null);
-							reload();
-						}
-					}}>
+				<div className="flex flex-wrap items-center gap-2">
 					<Button
 						size="sm"
 						variant="secondary"
@@ -95,7 +83,21 @@ export function WebhookUrlsCard({ websiteId, off }) {
 						onClick={() => setDraft([...rows, { url: '', events: '' }])}>
 						{W.add}
 					</Button>
-				</SaveRow>
+				</div>
+				<SaveBar
+					show={draft !== null}
+					saveLabel={TEXTS.save}
+					discardLabel={TEXTS.cancel}
+					onDiscard={() => setDraft(null)}
+					onSave={async () => {
+						const next = await call('PUT', path, { value: valueOf(rows) });
+						setResult(next);
+						if (next.ok) {
+							setDraft(null);
+							reload();
+						}
+					}}
+				/>
 				<SaveOutcome result={result} format={rowErrors} />
 			</div>
 		</Card>

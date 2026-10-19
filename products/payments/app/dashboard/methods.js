@@ -20,7 +20,7 @@ import {
 	Select,
 	TextArea,
 	describeProblem,
-	SaveRow,
+	SaveBar,
 } from '@ss/ui';
 import { BANK_ROW_LABELS, METHOD_KINDS, METHOD_LIMITS, methodReady } from '../../core/methods.js';
 import { SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
@@ -284,11 +284,11 @@ export function MethodsEditor({ websiteId }) {
 					/>
 				)}
 			/>
-			<SaveRow
-				dirty={draft !== null}
+			<SaveBar
+				show={draft !== null}
 				saveLabel={TEXTS.save}
-				cancelLabel={M.cancel}
-				onCancel={() => change(saved)}
+				discardLabel={M.cancel}
+				onDiscard={() => change(saved)}
 				onSave={async () => {
 					const next = await call('PUT', path, { value: methods });
 					setResult(next);

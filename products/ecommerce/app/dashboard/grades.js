@@ -40,7 +40,7 @@ import { DURATION_MAX, DURATION_UNITS } from '../../core/durations.js';
 import { asWritten, fillTitle, metaDescription, patternText } from '../../core/seo-text.js';
 import { Loaded, fill } from '@ss/ui/dashboard';
 import { GRADE_CONDITIONS, GRADE_LIMITS, blankGrade, cleanGrade, gradeProblems, keyOf, loadGrade, videoOf } from './drafts.js';
-import { IdTags, ListOutcome, SaveRow, moved, useList } from './lists.js';
+import { IdTags, ListOutcome, ListActions, moved, useList } from './lists.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('./drafts.js').GradeDraft} GradeDraft */
@@ -537,7 +537,7 @@ export function GradesEditor({ websiteId, off, preview }) {
 									)}
 								</Paged>
 							)}
-							<SaveRow
+							<ListActions
 								dirty={state.draft !== null}
 								onCancel={() => state.setDraft(null)}
 								onSave={() => state.save(items.map(cleanGrade))}>
@@ -553,7 +553,7 @@ export function GradesEditor({ websiteId, off, preview }) {
 										{G.unsaved}
 									</Badge>
 								) : null}
-							</SaveRow>
+							</ListActions>
 							<ListOutcome result={state.result} local={state.local} />
 							<Dialog
 								open={editing.open}

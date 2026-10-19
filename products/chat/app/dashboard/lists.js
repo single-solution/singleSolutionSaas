@@ -20,7 +20,7 @@ import {
 	ItemSwitcher,
 	Select,
 	TextArea,
-	SaveRow,
+	SaveBar,
 } from '@ss/ui';
 import { FALLBACK_LIMITS, PLACEHOLDERS, fallbackProblems, placeholdersOf } from '../../core/fallback.js';
 import { FIELD_TYPES } from '../../core/fields.js';
@@ -112,12 +112,12 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 									</EntryGroup>
 								)}
 							/>
-							<SaveRow
-								dirty={draft !== null}
+							<SaveBar
+								show={draft !== null}
 								disabled={invalid !== undefined && items.some((item) => invalid(clean(item)))}
 								saveLabel={L.saveList}
-								cancelLabel={TEXTS.cancel}
-								onCancel={() => setDraft(null)}
+								discardLabel={TEXTS.cancel}
+								onDiscard={() => setDraft(null)}
 								onSave={async () => {
 									const next = await call('PUT', path, { value: items.map(clean) });
 									setResult(next);

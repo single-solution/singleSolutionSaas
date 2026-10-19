@@ -19,7 +19,7 @@ import {
 	ItemSwitcher,
 	Select,
 	TextArea,
-	SaveRow as SharedSaveRow,
+	SaveBar,
 } from '@ss/ui';
 import { COURIER_CONNECTIONS } from '../../core/couriers.js';
 import { currencyDigits, fromDecimal, toDecimal } from '@ss/contracts/format';
@@ -132,13 +132,15 @@ export function IdTags({ label, help, values, max, none, onChange }) {
 export const ListOutcome = ({ result, local }) => <SaveOutcome result={result} local={local} title={L.errors} />;
 
 /**
- * Save and Cancel under an editor.
+ * The buttons under an editor (`children`: an Add button, a note) and the floating Save bar that shows while the list
+ * has unsaved changes.
  * @param {{ dirty: boolean, onSave: () => Promise<void>, onCancel: () => void, children?: import('react').ReactNode }} props
  */
-export const SaveRow = ({ dirty, onSave, onCancel, children }) => (
-	<SharedSaveRow dirty={dirty} onSave={onSave} onCancel={onCancel} saveLabel={L.saveList} cancelLabel={TEXTS.cancel}>
-		{children}
-	</SharedSaveRow>
+export const ListActions = ({ dirty, onSave, onCancel, children }) => (
+	<>
+		{children ? <div className="flex flex-wrap items-center gap-2">{children}</div> : null}
+		<SaveBar show={dirty} onSave={onSave} onDiscard={onCancel} saveLabel={L.saveList} discardLabel={TEXTS.cancel} />
+	</>
 );
 
 /**
@@ -228,7 +230,7 @@ export function ListEditor({
 									</EntryGroup>
 								)}
 							/>
-							<SaveRow
+							<ListActions
 								dirty={state.draft !== null}
 								onCancel={() => state.setDraft(null)}
 								onSave={async () => {

@@ -3,10 +3,10 @@
  * `SaveOutcome`, the outcome of saving a list or form for every product's editors: Saved and a refused save are toasts;
  * the errors that name a row or a field stay inline under the editor.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { DashboardProvider, SaveOutcome } from '../src/dashboard.js';
-import { SaveRow, TextLink, problemLines } from '../src/index.js';
-import { act, cleanup, click, render } from '../src/testing.js';
+import { TextLink, problemLines } from '../src/index.js';
+import { act, cleanup, render } from '../src/testing.js';
 
 afterEach(() => cleanup());
 
@@ -97,29 +97,6 @@ describe('problemLines', () => {
 		expect(problemLines({ errors: { key: 'Taken.' } })).toEqual(['key: Taken.']);
 		expect(problemLines({})).toEqual([]);
 		expect(problemLines(null)).toEqual([]);
-	});
-});
-
-describe('SaveRow', () => {
-	it('keeps Save off until something changed, offers Cancel with it, and puts the caller’s buttons first', () => {
-		const onSave = vi.fn();
-		const onCancel = vi.fn();
-		const { container, rerender } = render(
-			<SaveRow dirty={false} onSave={onSave} onCancel={onCancel}>
-				<button type="button">Add</button>
-			</SaveRow>,
-		);
-		const labels = () => [...container.querySelectorAll('button')].map((b) => b.textContent);
-		expect(labels()).toEqual(['Add', 'Save']);
-		expect(/** @type {HTMLButtonElement} */ (container.querySelectorAll('button')[1]).disabled).toBe(true);
-		rerender(<SaveRow dirty onSave={onSave} onCancel={onCancel} saveLabel="Save list" cancelLabel="Discard" />);
-		expect(labels()).toEqual(['Save list', 'Discard']);
-		click(/** @type {HTMLButtonElement} */ (container.querySelectorAll('button')[0]));
-		click(/** @type {HTMLButtonElement} */ (container.querySelectorAll('button')[1]));
-		expect([onSave.mock.calls.length, onCancel.mock.calls.length]).toEqual([1, 1]);
-		// an entry the server would refuse keeps Save off even though something changed
-		rerender(<SaveRow dirty disabled onSave={onSave} onCancel={onCancel} />);
-		expect(/** @type {HTMLButtonElement} */ (container.querySelectorAll('button')[0]).disabled).toBe(true);
 	});
 });
 

@@ -6,7 +6,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, Checkbox, EntryGroup, Input, Select, Skeleton, TextArea, describeProblem, SaveRow } from '@ss/ui';
+import { Button, Callout, Card, Checkbox, EntryGroup, Input, Select, Skeleton, TextArea, describeProblem, SaveBar } from '@ss/ui';
 import { CHANNELS, FALLBACK_CHANNELS } from '../../core/channels.js';
 import { SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
@@ -81,11 +81,16 @@ function ListCard({ websiteId, name, title, help, off, blank, render, rows: toRo
 						{render(row, (patch) => set(at, patch), at)}
 					</EntryGroup>
 				))}
-				<SaveRow
-					dirty={draft !== null}
+				<div className="flex flex-wrap items-center gap-2">
+					<Button size="sm" variant="secondary" disabled={rows.length >= max} onClick={() => setDraft([...rows, blank()])}>
+						{L.add}
+					</Button>
+				</div>
+				<SaveBar
+					show={draft !== null}
 					saveLabel={TEXTS.save}
-					cancelLabel={TEXTS.cancel}
-					onCancel={() => setDraft(null)}
+					discardLabel={TEXTS.cancel}
+					onDiscard={() => setDraft(null)}
 					onSave={async () => {
 						const next = await call('PUT', path, { value: toValue ? toValue(rows) : rows });
 						setResult(next);
@@ -93,11 +98,8 @@ function ListCard({ websiteId, name, title, help, off, blank, render, rows: toRo
 							setDraft(null);
 							reload();
 						}
-					}}>
-					<Button size="sm" variant="secondary" disabled={rows.length >= max} onClick={() => setDraft([...rows, blank()])}>
-						{L.add}
-					</Button>
-				</SaveRow>
+					}}
+				/>
 				<SaveOutcome result={result} format={rowErrors} />
 			</div>
 		</Card>

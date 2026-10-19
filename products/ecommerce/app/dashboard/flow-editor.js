@@ -24,7 +24,7 @@ import {
 import { STATUS_ROLES } from '../../core/model.js';
 import { Loaded, fill, useLoad } from '@ss/ui/dashboard';
 import { flowToSave, removeFlowStatus, renameFlowStatus } from './drafts.js';
-import { ListOutcome, SaveRow, moved, useList } from './lists.js';
+import { ListOutcome, ListActions, moved, useList } from './lists.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('../../core/model.js').OrderFlow} OrderFlow */
@@ -370,7 +370,7 @@ export function OrderFlowEditor({ websiteId, off }) {
 							})}
 							<TriggersAndStarts flow={flow} onChange={setFlow} />
 							{resetShown && state.draft !== null ? <Callout tone="info">{F.resetNote}</Callout> : null}
-							<SaveRow
+							<ListActions
 								dirty={state.draft !== null}
 								onCancel={() => {
 									state.setDraft(null);
@@ -412,7 +412,7 @@ export function OrderFlowEditor({ websiteId, off }) {
 									}}>
 									{F.resetFlow}
 								</Button>
-							</SaveRow>
+							</ListActions>
 							<ListOutcome result={state.result} local={state.local} />
 						</div>
 					);

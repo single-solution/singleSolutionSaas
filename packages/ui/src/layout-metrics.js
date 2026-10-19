@@ -132,3 +132,13 @@ export const CARD = Object.freeze({
 	bodyWithHeader: 'px-5 pt-3 pb-5',
 	tile: '@container min-w-0 rounded-card border border-line-soft bg-surface px-5 py-4',
 });
+
+/**
+ * The floating save bar: a strip across the page area (the space right of the sidebar, set by `AppShell` as
+ * `--ss-pane-left` / `--ss-pane-right`; the whole window without a shell) that lets clicks through, with the bar
+ * centred at the bottom.
+ */
+export const SAVE_BAR = {
+	strip: 'pointer-events-none fixed bottom-4 left-[var(--ss-pane-left,0px)] right-[var(--ss-pane-right,0px)] z-40 flex justify-center px-3 transition-[left,right] duration-(--ss-motion) ease-ss',
+	bar: 'pointer-events-auto flex max-w-full flex-wrap items-center gap-x-6 gap-y-2 rounded-panel border border-line-soft bg-surface py-2 pr-2 pl-4 shadow-bar',
+};

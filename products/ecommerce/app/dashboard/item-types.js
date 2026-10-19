@@ -21,7 +21,7 @@ import { ELEMENTS, ITEM_KINDS, TYPE_LIMITS, UNIT_CAPTURES, elementFor } from '..
 import { MAX_DECIMALS, MAX_UNIT_LABEL, STANDARD_UNITS } from '../../core/measure.js';
 import { Loaded, fill } from '@ss/ui/dashboard';
 import { blankType, cleanType, keyOf, loadType, typeProblems } from './drafts.js';
-import { IdTags, ListOutcome, SaveRow, moved, useList } from './lists.js';
+import { IdTags, ListOutcome, ListActions, moved, useList } from './lists.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('./drafts.js').TypeDraft} TypeDraft */
@@ -396,7 +396,7 @@ export function ItemTypesEditor({ websiteId, off }) {
 									)}
 								</Paged>
 							)}
-							<SaveRow
+							<ListActions
 								dirty={state.draft !== null}
 								onCancel={() => state.setDraft(null)}
 								onSave={() => state.save(items.map(cleanType))}>
@@ -412,7 +412,7 @@ export function ItemTypesEditor({ websiteId, off }) {
 										{T.unsaved}
 									</Badge>
 								) : null}
-							</SaveRow>
+							</ListActions>
 							<ListOutcome result={state.result} local={state.local} />
 							<Dialog
 								open={editing.open}

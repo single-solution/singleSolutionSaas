@@ -81,11 +81,10 @@ the page is as wide as the window leaves it. Nothing is centered in a narrow col
   business facts): what it is and where it is set, with a link to that place in the Portal. The look and the Format have
   no form in any product (they are the Portal's Website settings); `websiteSettingsUrl({ portal, admin, websiteId, merchantId, section })`
   is the address of a section of that page, `WEBSITE_SECTION_NAMES` their names.
-- `SaveBar`: the floating Save changes / Discard bar, shown only while something changed. `AccountMenu`, `Avatar`.
+- `SaveBar`: the only save control. It floats at the bottom centre of the page area (centred next to the sidebar), shown only while something changed. `disabled` keeps Save off for an entry the server would refuse; a save that returns a promise shows the spinner until it settles. It replaced `SaveRow`: put an Add button in its own row beside the editor. `AccountMenu`, `Avatar`.
 - Rows and editors (never draw these by hand; flat, with hairlines, never boxes in a card): `RowList` + `ListRow` (a
   name, a pill, one primary action and a More menu; `wrap` for long names), `EntryGroup` (one entry of a list editor: a
-  flat group under a hairline with its name and Move up, Move down and Remove, or collapsed under a `summary`), `SaveRow`
-  (Save and Cancel under a list saved whole), `Badge onRemove` (a removable tag), `TextLink` (the one
+  flat group under a hairline with its name and Move up, Move down and Remove, or collapsed under a `summary`), `Badge onRemove` (a removable tag), `TextLink` (the one
   link in text, a table, a header or a footer; `as` for a router link, `external`, `tone="plain"`), and `Input
 type="file"` for a file field.
 - `SaveOutcome` (`@ss/ui/dashboard`): the outcome of a save in an editor. Saved and a refused save are toasts; the errors
