@@ -403,7 +403,7 @@ export const SETUP = Object.freeze({
 	sharedUntil: 'This copy works until',
 	sharedMissing: 'This share link does not work',
 	sharedMissingHelp: 'It may have expired or been revoked. Ask the person who shared it for a new link.',
-	sharedLoading: 'Loading the shared Setup',
+	sharedHeading: 'Shared Setup',
 	// the advisor
 	recommendations: 'Recommendations',
 	recommendationsIntro: 'What the business profile calls for, product by product.',

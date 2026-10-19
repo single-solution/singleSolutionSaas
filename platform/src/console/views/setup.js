@@ -23,7 +23,6 @@ import {
 	DataTable,
 	Drawer,
 	EmptyState,
-	ErrorState,
 	FieldGrid,
 	FormError,
 	Icon,
@@ -31,10 +30,9 @@ import {
 	Input,
 	KeyValueList,
 	LocalTime,
-	PageHeader,
+	Page,
 	SegmentedControl,
 	Section,
-	Skeleton,
 	StatusBadge,
 	Switch,
 	TextLink,
@@ -1138,51 +1136,55 @@ function SharedSetup({ brand }) {
 			setState(result.ok ? { phase: 'ready', sheet: result.data } : { phase: 'missing', problem: result.problem });
 		});
 	}, []);
+	const ready = state.phase === 'ready' ? state.sheet : null;
+	const title = ready ? SETUP.sharedTitle(ready.website.domain) : SETUP.sharedHeading;
 	return (
-		<main className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6 sm:py-12">
-			<p className="text-sm font-semibold text-muted">{brand}</p>
-			{state.phase === 'loading' ? (
-				<Skeleton lines={6} label={SETUP.sharedLoading} />
-			) : state.phase === 'missing' ? (
-				<ErrorState
-					title={SETUP.sharedMissing}
-					message={state.problem && state.problem.status !== 404 ? describeProblem(state.problem) : SETUP.sharedMissingHelp}
-				/>
-			) : (
-				<>
-					<PageHeader
-						title={SETUP.sharedTitle(state.sheet.website.domain)}
-						subtitle={
-							<>
-								{SETUP.sharedIntro}{' '}
-								{state.sheet.share ? (
-									<>
-										{SETUP.sharedUntil} <LocalTime value={state.sheet.share.expiresAt} />.
-									</>
-								) : null}
-							</>
+		<main className="mx-auto flex h-dvh min-h-0 max-w-6xl flex-col p-3 sm:p-4 lg:p-6">
+			<Page
+				crumbs={[{ label: brand }, { label: title }]}
+				loading={state.phase === 'loading'}
+				{...(state.phase === 'missing'
+					? {
+							error: {
+								title: SETUP.sharedMissing,
+								message:
+									state.problem && state.problem.status !== 404
+										? describeProblem(state.problem)
+										: SETUP.sharedMissingHelp,
+							},
 						}
-						actions={
-							<>
-								<Button
-									variant="secondary"
-									onClick={() =>
-										void copyText(JSON.stringify(state.sheet, null, 2)).then((ok) =>
-											toast.show(ok ? { title: SETUP.copied } : { tone: 'danger', title: SETUP.copyFailed }),
-										)
-									}
-									icon={<Icon name="copy" size={14} />}>
-									{SETUP.copy}
-								</Button>
-								<Button onClick={() => saveJson(state.sheet)} icon={<Icon name="arrowDown" size={14} />}>
-									{SETUP.download}
-								</Button>
-							</>
+					: {})}
+				{...(ready
+					? {
+							actions: {
+								primary: { label: SETUP.download, icon: 'arrowDown', onClick: () => saveJson(ready) },
+								secondary: [
+									{
+										label: SETUP.copy,
+										icon: 'copy',
+										onClick: () =>
+											void copyText(JSON.stringify(ready, null, 2)).then((ok) =>
+												toast.show(ok ? { title: SETUP.copied } : { tone: 'danger', title: SETUP.copyFailed }),
+											),
+									},
+								],
+							},
 						}
-					/>
-					<SheetBody sheet={state.sheet} />
-				</>
-			)}
+					: {})}>
+				{ready ? (
+					<>
+						<p className="max-w-3xl text-sm text-muted">
+							{SETUP.sharedIntro}{' '}
+							{ready.share ? (
+								<>
+									{SETUP.sharedUntil} <LocalTime value={ready.share.expiresAt} />.
+								</>
+							) : null}
+						</p>
+						<SheetBody sheet={ready} />
+					</>
+				) : null}
+			</Page>
 		</main>
 	);
 }
