@@ -146,7 +146,9 @@ describe('the media route', () => {
 		expect(ok.json.url).toContain(STORAGE);
 		expect(Date.parse(ok.json.expiresAt)).toBeGreaterThan(shop.now());
 		expect((await shop.api('GET', query('ecommerce/digital/prd_cup/book.pdf', signature))).status).toBe(404);
-		expect((await shop.api('GET', query(key, `${signature.slice(0, -1)}x`))).status).toBe(404);
+		// The first character always changes the signature (the last one carries spare bits and can already be the swap).
+		const tampered = `${signature[0] === 'A' ? 'B' : 'A'}${signature.slice(1)}`;
+		expect((await shop.api('GET', query(key, tampered))).status).toBe(404);
 		expect((await shop.api('GET', query(key, ''))).status).toBe(404);
 		expect((await shop.api('GET', '/v1/media')).status).toBe(404);
 	});
