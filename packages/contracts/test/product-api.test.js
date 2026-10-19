@@ -38,6 +38,7 @@ describe('connections of a website', () => {
 			endpoint: 'https://acct.r2.cloudflarestorage.com',
 			forcePathStyle: true,
 			prefix: 'shop/',
+			publicBaseUrl: 'https://cdn.example.com',
 		},
 		links: {
 			out: [{ to: 'payments', token: 'a.b.c', scopes: ['payments.create', 'payments.read'] }],
@@ -55,6 +56,8 @@ describe('connections of a website', () => {
 		['a database without its name', (c) => delete c.database.dbName, '/database/dbName', 'required'],
 		['a storage without a secret', (c) => delete c.storage.secretAccessKey, '/storage/secretAccessKey', 'required'],
 		['an unknown storage member', (c) => (c.storage.publicUrl = 'x'), '/storage/publicUrl', 'additionalProperties'],
+		['a public address that is not text', (c) => (c.storage.publicBaseUrl = 5), '/storage/publicBaseUrl', 'type'],
+		['a public address that is empty', (c) => (c.storage.publicBaseUrl = ''), '/storage/publicBaseUrl', 'minLength'],
 		['a link scope in capitals', (c) => (c.links.in[0].scopes = ['Orders']), '/links/in/0/scopes/0', 'pattern'],
 		['a link token that is empty', (c) => (c.links.out[0].token = ''), '/links/out/0/token', 'minLength'],
 		[

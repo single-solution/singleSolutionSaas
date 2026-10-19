@@ -153,7 +153,7 @@
  * @property {number} version
  * @property {{ uri: string, dbName: string } | null} database
  * @property {{ bucket: string, region: string, accessKeyId: string, secretAccessKey: string, endpoint?: string,
- *   forcePathStyle?: boolean, prefix?: string } | null} storage
+ *   forcePathStyle?: boolean, prefix?: string, publicBaseUrl?: string } | null} storage
  * @property {{ out: Array<{ to: string, token: string, scopes: string[] }>, in: Array<{ from: string, scopes: string[] }> }} links
  */
 /** A product's report of how a delivered connection worked: `PUT …/connections/:name/health`. @typedef {{ version: number, ok: boolean, message?: string }} ConnectionHealth */

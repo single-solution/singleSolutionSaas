@@ -208,6 +208,7 @@ export const websiteConnectionsSchema = deepFreeze({
 						endpoint: ref('url'),
 						forcePathStyle: { type: 'boolean' },
 						prefix: { type: 'string', maxLength: 200 },
+						publicBaseUrl: ref('url'),
 					},
 				},
 			],
