@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { Button, ButtonLink } from './Button.js';
 import { CodeBlock } from './CodeBlock.js';
 import { Badge, Callout, Card, EmptyState, ManagedNote, StatusPill, TextLink } from './display.js';
+import { DataTable } from './DataTable.js';
 import { SaveBar, SectionLayout, SettingList, SettingsCard, ViewTitle } from './blocks.js';
 import { Input, Switch } from './fields.js';
 import { ActionMenu } from './Menu.js';
@@ -113,10 +114,11 @@ export function OverviewTab(props) {
 }
 
 /**
- * Features: the inner sidebar lists the categories (most used first, with how many are on), the view is one category's
- * features as rows with their price, what each needs and its switch; admins switch them (switching one off switches
- * off the features that need it) and confirm the new hourly cost. `warnings` gives the product's warnings for the
- * features picked (shown above the list and in the confirmation).
+ * Features: a page whose inner navigation lists the categories (most used first, each with how many are on, a dot when
+ * a feature that is on needs a connection, a lock when a merchant has none on); the sub-page is one category's features
+ * as a table with their price, what each needs and its switch; admins switch them (switching one off switches off the
+ * features that need it) and confirm the new hourly cost. `warnings` gives the product's warnings for the features
+ * picked (shown above the table and in the confirmation).
  * @param {TabProps & { warnings?: (on: string[]) => string[] }} props
  */
 export function FeaturesTab({ websiteId, merchantId, who, portal, support, warnings, open, brand }) {
@@ -132,7 +134,7 @@ export function FeaturesTab({ websiteId, merchantId, who, portal, support, warni
 	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
 	const admin = who.kind === 'admin';
 	return (
-		<Loaded answer={answer}>
+		<LoadedPage answer={answer} tab="features" withNav>
 			{(data) => {
 				/** @type {Feature[]} */
 				const features = data.features;
@@ -145,137 +147,163 @@ export function FeaturesTab({ websiteId, merchantId, who, portal, support, warni
 				const links = connections.answer?.ok ? connections.answer.data.connections : [];
 				const warned = warnings ? warnings(on) : [];
 				const byKey = new Map(features.map((feature) => [feature.key, feature]));
+				/** @param {Feature} feature */
+				const brokenOf = (feature) =>
+					feature.on ? links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected') : [];
 				/** @param {Feature} feature @param {boolean} checked */
 				const toggle = (feature, checked) => {
 					const off = withDependents(features, on, feature.key);
 					setPicked(checked ? [...on, feature.key] : on.filter((key) => !off.has(key)));
 				};
+				const helpOf = fill(F.lockedHelp, { portal: brand || 'Single Solution' });
+				/** @type {import('./DataTable.js').DataColumn<Feature>[]} */
+				const columns = [
+					{ key: 'name', header: F.columns.feature, sortable: true },
+					{
+						key: 'description',
+						header: F.columns.description,
+						low: true,
+						wrap: true,
+						className: 'min-w-64 max-w-md text-muted',
+					},
+					{ key: 'needs', header: F.columns.needs, low: true, render: (feature) => namesOf(feature.dependsOn) },
+					{
+						key: 'millicreditsPerHour',
+						header: F.columns.price,
+						kind: 'money',
+						sortable: true,
+						render: (feature) => formatCreditsPerHour(feature.millicreditsPerHour, { locale }),
+					},
+					{
+						key: 'docs',
+						header: F.docs,
+						low: true,
+						render: (feature) => <TextLink href={`/docs#feature-${feature.key}`}>{F.docs}</TextLink>,
+					},
+					{
+						key: 'status',
+						header: F.columns.status,
+						kind: 'status',
+						render: (feature) => {
+							// a merchant cannot switch features: an off one shows clearly as locked, with who can
+							if (!admin && !feature.on)
+								return (
+									<StatusPill status="locked" title={helpOf}>
+										{F.locked}
+									</StatusPill>
+								);
+							const broken = brokenOf(feature);
+							if (broken.length === 0) return null;
+							return (
+								<span className="flex items-center gap-2">
+									<StatusPill
+										status="setup"
+										title={broken.map((link) => fill(F.notWorking, { connection: link.label })).join(' · ')}>
+										{F.needsSetup}
+									</StatusPill>
+									{broken.map((link) =>
+										link.managed ? (
+											// the database, the storage and the links are set in the Portal
+											<ButtonLink
+												key={link.name}
+												size="sm"
+												variant="secondary"
+												title={fill(F.notWorking, { connection: link.label })}
+												href={websiteSettingsUrl({
+													portal,
+													admin,
+													websiteId,
+													merchantId,
+													section: link.kind === 'link' ? 'links' : 'connections',
+												})}>
+												{`${F.connect} ${link.label}`}
+											</ButtonLink>
+										) : (
+											<Button
+												key={link.name}
+												size="sm"
+												variant="secondary"
+												title={fill(F.notWorking, { connection: link.label })}
+												// the Connections tab opens on this connection
+												onClick={() => open?.('connections', `connection-${link.name}`)}>
+												{`${F.connect} ${link.label}`}
+											</Button>
+										),
+									)}
+								</span>
+							);
+						},
+					},
+					{
+						key: 'on',
+						header: F.on,
+						kind: 'status',
+						align: 'right',
+						render: (feature) => {
+							const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
+							return (
+								<Switch
+									size="sm"
+									hideLabel
+									label={feature.name}
+									checked={on.includes(feature.key)}
+									locked={!admin}
+									lockedLabel={F.locked}
+									disabled={missing.length > 0 && !on.includes(feature.key)}
+									onChange={(next) => toggle(feature, next)}
+								/>
+							);
+						},
+					},
+				];
+				const notices =
+					admin && warned.length === 0 && !result ? null : (
+						<div className="shrink-0 space-y-3 p-4 sm:p-6 sm:pb-3">
+							{admin ? null : <Callout tone="info">{fill(F.contact, { contact: supportContact(support) })}</Callout>}
+							{warned.map((warning) => (
+								<Callout key={warning} tone="warning">
+									{warning}
+								</Callout>
+							))}
+							<Outcome result={result} />
+						</div>
+					);
 				const sections = byCategory(features.map((feature) => feature.key)).map((category) => {
 					const list = category.keys.map((key) => /** @type {Feature} */ (byKey.get(key)));
 					const count = list.filter((feature) => on.includes(feature.key)).length;
+					const numbers = `${count}/${list.length}`;
 					return {
 						id: `category-${slug(category.title)}`,
 						label: category.title,
-						badge: <Badge>{`${count}/${list.length}`}</Badge>,
+						badge: numbers,
+						...(list.some((feature) => brokenOf(feature).length > 0)
+							? { status: /** @type {const} */ ('attention'), statusLabel: F.needsSetup }
+							: {}),
+						// a merchant with none of a category on: its features are locked
+						...(!admin && count === 0 ? { locked: true } : {}),
+						flush: true,
+						info: fill(F.countOn, { on: count, total: list.length }),
+						facts: [
+							{ label: F.on, value: numbers },
+							{ label: F.cost, value: formatCreditsPerHour(cost, { locale }) },
+						],
 						content: (
 							<>
-								<ViewTitle title={category.title} description={fill(F.countOn, { on: count, total: list.length })} />
-								<Card padded={false}>
-									<RowList inset>
-										{list.map((feature) => {
-											const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
-											const broken = links.filter(
-												(link) => link.neededBy.includes(feature.key) && link.status !== 'connected',
-											);
-											// a merchant cannot switch features: an off one shows clearly as locked, with who can
-											const locked = !admin && !feature.on;
-											return (
-												<ListRow
-													key={feature.key}
-													wrap
-													className="py-4"
-													title={feature.name}
-													{...(locked ? { status: <StatusPill status="locked">{F.locked}</StatusPill> } : {})}
-													{...(feature.on && broken.length > 0
-														? {
-																status: (
-																	<StatusPill
-																		status="setup"
-																		title={broken
-																			.map((link) => fill(F.notWorking, { connection: link.label }))
-																			.join(' · ')}>
-																		{F.needsSetup}
-																	</StatusPill>
-																),
-															}
-														: {})}
-													meta={
-														<>
-															<span className="block max-w-[40rem]">{feature.description}</span>
-															{locked ? (
-																<span className="mt-1 block font-medium text-fg/80">
-																	{fill(F.lockedHelp, { portal: brand || 'Single Solution' })}
-																</span>
-															) : null}
-															<span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-																<span>
-																	{fill(F.price, {
-																		price: formatCreditsPerHour(feature.millicreditsPerHour, { locale }),
-																	})}
-																</span>
-																{feature.dependsOn.length > 0 ? (
-																	<span>{fill(F.needs, { features: namesOf(feature.dependsOn) })}</span>
-																) : null}
-																<TextLink className="font-medium" href={`/docs#feature-${feature.key}`}>
-																	{F.docs}
-																</TextLink>
-															</span>
-														</>
-													}
-													action={
-														<Switch
-															size="sm"
-															hideLabel
-															label={feature.name}
-															checked={on.includes(feature.key)}
-															locked={!admin}
-															lockedLabel={F.locked}
-															disabled={missing.length > 0 && !on.includes(feature.key)}
-															onChange={(next) => toggle(feature, next)}
-														/>
-													}>
-													{feature.on && broken.length > 0 ? (
-														<div className="flex flex-wrap gap-2">
-															{broken.map((link) =>
-																link.managed ? (
-																	// the database, the storage and the links are set in the Portal
-																	<ButtonLink
-																		key={link.name}
-																		size="sm"
-																		variant="secondary"
-																		title={fill(F.notWorking, { connection: link.label })}
-																		href={websiteSettingsUrl({
-																			portal,
-																			admin,
-																			websiteId,
-																			merchantId,
-																			section: link.kind === 'link' ? 'links' : 'connections',
-																		})}>
-																		{`${F.connect} ${link.label}`}
-																	</ButtonLink>
-																) : (
-																	<Button
-																		key={link.name}
-																		size="sm"
-																		variant="secondary"
-																		title={fill(F.notWorking, { connection: link.label })}
-																		// the Connections tab opens on this connection
-																		onClick={() => open?.('connections', `connection-${link.name}`)}>
-																		{`${F.connect} ${link.label}`}
-																	</Button>
-																),
-															)}
-														</div>
-													) : null}
-												</ListRow>
-											);
-										})}
-									</RowList>
-								</Card>
+								{notices}
+								<DataTable
+									caption={fill(F.caption, { category: category.title })}
+									columns={columns}
+									rows={list}
+									rowKey={(feature) => feature.key}
+									rowLabel={(feature) => feature.name}
+								/>
 							</>
 						),
 					};
 				});
 				return (
-					<div className="space-y-4">
-						{admin ? null : <Callout tone="info">{fill(F.contact, { contact: supportContact(support) })}</Callout>}
-						{warned.map((warning) => (
-							<Callout key={warning} tone="warning">
-								{warning}
-							</Callout>
-						))}
-						<Outcome result={result} />
-						<SectionLayout label={texts.tabs.features} sections={sections} />
+					<>
+						<SectionsPage tab="features" sections={sections} label={texts.tabs.features} />
 						{admin ? (
 							<SaveBar
 								show={changed}
@@ -309,10 +337,10 @@ export function FeaturesTab({ websiteId, merchantId, who, portal, support, warni
 								<p key={warning}>{warning}</p>
 							))}
 						</ConfirmDialog>
-					</div>
+					</>
 				);
 			}}
-		</Loaded>
+		</LoadedPage>
 	);
 }
 

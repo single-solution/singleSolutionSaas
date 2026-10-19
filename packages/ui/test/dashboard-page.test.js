@@ -99,6 +99,15 @@ describe('navGroupsOf', () => {
 		expect(first?.items[1]).toMatchObject({ id: 'two', dot: 'attention', dotLabel: 'Needs setup', href: '#two' });
 	});
 
+	it('marks a locked section, which is still opened', () => {
+		const [group] = navGroupsOf([
+			{ id: 'a', label: 'A', locked: true },
+			{ id: 'b', label: 'B' },
+		]);
+		expect(group?.items[0]).toMatchObject({ id: 'a', locked: true });
+		expect(group?.items[1]).not.toHaveProperty('locked');
+	});
+
 	it('leaves the label out of a group of sections that have none', () => {
 		const groups = navGroupsOf([
 			{ id: 'a', label: 'A' },

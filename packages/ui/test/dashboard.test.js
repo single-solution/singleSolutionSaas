@@ -499,7 +499,7 @@ describe('standard tabs', () => {
 		expect(plain.container.textContent).not.toContain('own part');
 	});
 
-	it('Features: admins switch a feature off with the ones that need it, see warnings and confirm the cost', async () => {
+	it('Features: a Page with a table of features; admins switch a feature off with the ones that need it, see warnings and confirm the cost', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}`;
 		serve({
@@ -514,9 +514,26 @@ describe('standard tabs', () => {
 				<FeaturesTab {...tabProps(id)} warnings={(on) => (on.includes('notes') ? [] : ['Nothing starts a note.'])} />,
 			),
 		);
+		// the page skeleton first, with the crumbs
+		expect(container.querySelector('[data-ss-page][aria-busy="true"]')).not.toBeNull();
 		await settle();
-		expect(container.textContent).toContain('Price: 1 credits/h');
-		expect(container.textContent).toContain('Needs: Notes');
+		// a page: Notes > Features, the title only in the header, the key numbers beside it, no heading in the body
+		expect(container.querySelector('[data-ss-page]')).not.toBeNull();
+		expect(container.querySelector('h1')?.textContent).toBe('Features');
+		expect(container.querySelectorAll('h2, h3')).toHaveLength(0);
+		const facts = container.querySelector('[aria-label="Key numbers"]')?.textContent ?? '';
+		expect(facts).toContain('2/3');
+		expect(facts).toContain('1.5 credits/h');
+		// the features are a table
+		const table = /** @type {HTMLTableElement} */ (container.querySelector('table'));
+		expect([...table.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual(
+			expect.arrayContaining(['Feature', 'Needs', 'Price', 'Status', 'On']),
+		);
+		const rows = [...table.querySelectorAll('tbody tr')];
+		expect(rows).toHaveLength(3);
+		expect(rows[1]?.textContent).toContain('0.5 credits/h');
+		expect(rows[1]?.textContent).toContain('Notes');
+		expect(rows[1]?.querySelector('a[href="/docs#feature-inbox"]')).not.toBeNull();
 		// a feature whose connection fails shows an amber Needs setup pill (the reason as its tooltip) and Connect
 		const pill = /** @type {HTMLElement} */ (
 			[...container.querySelectorAll('span[title]')].find((el) => el.textContent === 'Needs setup')
@@ -535,6 +552,8 @@ describe('standard tabs', () => {
 		click(/** @type {HTMLElement} */ (boxes[0]));
 		expect(checks()).toEqual([false, false, false]);
 		expect(container.textContent).toContain('Nothing starts a note.');
+		// the numbers follow the picks
+		expect(container.querySelector('[aria-label="Key numbers"]')?.textContent).toContain('0/3');
 		click(button('Save'));
 		const dialog = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
 		expect(dialog.textContent).toContain('New hourly cost: 0 credits/h');
@@ -548,7 +567,7 @@ describe('standard tabs', () => {
 			body: { on: [] },
 		});
 		expect(container.textContent).toContain('Saved');
-		// merchants read them only, and are told whom to contact
+		// merchants read them only, and are told whom to contact; an off feature is Locked
 		cleanup();
 		const merchant = render(
 			inDashboard(<FeaturesTab {...tabProps(id, { who: { kind: 'merchant', id: 'm1', name: 'Sam' } })} />),
@@ -560,33 +579,58 @@ describe('standard tabs', () => {
 				(box) => /** @type {HTMLButtonElement} */ (box).disabled,
 			),
 		).toBe(true);
+		const help = 'span[title="Ask your Single Solution admin to switch it on."]';
+		expect(merchant.container.querySelectorAll(help)).toHaveLength(1);
+		expect(merchant.container.querySelector(`tbody tr:nth-child(3) ${help}`)?.textContent).toBe('Locked');
 		expect(merchant.container.textContent).not.toContain('Save');
 	});
 
-	it('Features: a sidebar of categories with how many are on, one category at a time', async () => {
+	it('Features: the categories are the inner navigation with how many are on, a dot for a broken connection and a lock; one category at a time, each its own address', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}`;
-		serve({ [`GET ${base}/features`]: ok({ features: FEATURES }), [`GET ${base}/connections`]: ok({ connections: [] }) });
-		const { container } = render(
-			inDashboard(<FeaturesTab {...tabProps(id)} />, [
-				{ title: 'Writing', features: ['notes'] },
-				{ title: 'Reading', features: ['inbox', 'alerts'] },
-			]),
-		);
+		serve({
+			[`GET ${base}/features`]: ok({ features: FEATURES }),
+			[`GET ${base}/connections`]: ok({
+				connections: [{ name: 'database', label: 'Database', neededBy: ['inbox'], status: 'test_failed' }],
+			}),
+		});
+		const categories = [
+			{ title: 'Writing', features: ['notes'] },
+			{ title: 'Reading', features: ['inbox'] },
+			{ title: 'Telling', features: ['alerts'] },
+		];
+		const { container } = render(inDashboard(<FeaturesTab {...tabProps(id)} />, categories));
 		await settle();
-		expect(navLinks(container)).toEqual(['Writing1/1', 'Reading1/2']);
-		expect(container.textContent).toContain('1 of 1 on');
+		const link = (/** @type {string} */ name) =>
+			/** @type {HTMLElement} */ (container.querySelector(`nav a[href="#category-${name}"]`));
+		expect(navLinks(container)).toEqual(['Writing1/1', 'ReadingNeeds setup1/1', 'Telling0/1']);
+		// the crumbs end in the open category, whose own numbers are in the header
+		expect(
+			[...container.querySelectorAll('nav[aria-label="Breadcrumb"] li')].map((li) => li.textContent).filter(Boolean),
+		).toEqual(['Notes', 'Features', 'Writing']);
+		expect(container.querySelector('h1')?.textContent).toBe('Writing');
+		expect(container.querySelector('[aria-label="Key numbers"]')?.textContent).toContain('1/1');
+		expect(container.querySelectorAll('table')).toHaveLength(1);
 		expect(container.textContent).not.toContain('Read them.');
 		openSection(container, 'category-reading');
+		expect(window.location.hash).toBe('#category-reading');
 		expect(container.textContent).toContain('Read them.');
-		expect(container.textContent).toContain('1 of 2 on');
-		// the rows are short: name, price and docs on one line, the description under it, then the switch
-		expect(container.querySelectorAll('#section-category-reading [role="switch"]')).toHaveLength(2);
+		expect(container.querySelector('h1')?.textContent).toBe('Reading');
+		expect(container.querySelectorAll('#section-category-reading [role="switch"]')).toHaveLength(1);
+		expect(link('reading').textContent).toContain('Needs setup');
+		// a merchant's category with nothing on is locked
+		cleanup();
+		const merchant = render(
+			inDashboard(<FeaturesTab {...tabProps(id, { who: { kind: 'merchant', id: 'm1', name: 'Sam' } })} />, categories),
+		);
+		await settle();
+		expect(merchant.container.querySelector('nav a[href="#category-telling"]')?.textContent).toContain('Locked');
+		expect(merchant.container.querySelector('nav a[href="#category-writing"]')?.textContent).not.toContain('Locked');
 		// features in no category are listed under More
 		cleanup();
 		const rest = render(inDashboard(<FeaturesTab {...tabProps(id)} />, [{ title: 'Writing', features: ['notes'] }]));
 		await settle();
-		expect(navLinks(rest.container)).toEqual(['Writing1/1', 'More1/2']);
+		expect(navLinks(rest.container)).toEqual(['Writing1/1', 'MoreNeeds setup1/2']);
 	});
 
 	it('Features: a failed save keeps the picks and shows the problem; Cancel closes', async () => {
@@ -614,6 +658,17 @@ describe('standard tabs', () => {
 		await settle();
 		expect(container.textContent).toContain('No credits');
 		expect(boxes[0]?.getAttribute('aria-checked')).toBe('true');
+	});
+
+	it('Features: says what went wrong in the page, with Try again', async () => {
+		const id = freshSite();
+		const base = `/v1/dashboard/websites/${id}`;
+		serve({ [`GET ${base}/features`]: { status: 500, body: { status: 500, code: 'internal_error' } } });
+		const { container } = render(inDashboard(<FeaturesTab {...tabProps(id)} />));
+		await settle();
+		expect(container.querySelector('h1')?.textContent).toBe('Features');
+		expect(container.textContent).toContain('Try again');
+		expect(container.querySelector('table')).toBeNull();
 	});
 
 	it('Settings: the features that are on, by category, one view at a time with the notice, the extras and the groups as sub-items', async () => {

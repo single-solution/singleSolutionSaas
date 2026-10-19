@@ -51,6 +51,15 @@ export const DASHBOARD_TEXTS = Object.freeze({
 		unsaved: 'You changed the features',
 		locked: 'Locked',
 		lockedHelp: 'Ask your {portal} admin to switch it on.',
+		cost: 'Cost',
+		caption: '{category} features',
+		columns: Object.freeze({
+			feature: 'Feature',
+			description: 'Description',
+			needs: 'Needs',
+			price: 'Price',
+			status: 'Status',
+		}),
 	}),
 	settings: Object.freeze({
 		texts: 'Widget texts',

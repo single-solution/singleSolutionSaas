@@ -34,9 +34,10 @@ import { describeProblem } from './problems.js';
 /**
  * A section of {@link SectionsPage}: a link of the inner navigation with its content, or with parts of its own. What
  * the open sub-page says about itself goes in the page's header: `info` (the old description, behind the (i)), `facts`,
- * `pills` and `actions`; `flush` gives its body no padding (a table uses all of it).
+ * `pills` and `actions`; `flush` gives its body no padding (a table uses all of it); `locked` shows a lock in the
+ * navigation (the page is still opened: it explains what the feature does).
  * @typedef {Omit<BaseSpec, 'children'> & { info?: ReactNode, facts?: PageFact[], pills?: PageStatus[],
- *   actions?: PageActions, flush?: boolean, children?: Section[] }} Section
+ *   actions?: PageActions, flush?: boolean, locked?: boolean, children?: Section[] }} Section
  */
 
 /** The frame of the dashboard around a tab; none when a tab is drawn on its own. */
@@ -135,6 +136,7 @@ const itemOf = (spec) => ({
 	...(spec.badge !== undefined && spec.badge !== null ? { count: /** @type {string | number} */ (spec.badge) } : {}),
 	...(spec.status ? { dot: spec.status } : {}),
 	...(spec.statusLabel ? { dotLabel: spec.statusLabel } : {}),
+	...(spec.locked ? { locked: true } : {}),
 });
 
 /**
