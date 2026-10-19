@@ -425,7 +425,6 @@ export const SETUP = Object.freeze({
 		n === 0 ? 'No feature the profile calls for is on yet.' : `${n} recommended ${n === 1 ? 'feature is' : 'features are'} on.`,
 	noAdvice: 'Fill out the business profile to see which features this website should use.',
 	switchOn: 'Switch on',
-	switchOnLabel: (/** @type {string} */ feature, /** @type {string} */ product) => `Switch on ${feature} in ${product}`,
 	alsoSwitches: (/** @type {string} */ list) => `Also switches on ${list}, which it needs.`,
 	switchedOn: (/** @type {string} */ list) => `Switched on: ${list}.`,
 	billedNote: 'Features are billed by the hour while they are on.',

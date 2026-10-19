@@ -10,17 +10,15 @@ import { ToastProvider } from '@ss/ui';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { closeMongoClients } from '../../src/testing.js';
 import * as loaders from '../../src/console/loaders.js';
-import { WebsiteSettingsView } from '../../src/console/views/website-settings.js';
+import { WebsiteView } from '../../src/console/views/websites.js';
 import { startMongo } from '../helpers.js';
 import {
 	buttons,
 	createWorld,
 	dialog,
 	fillDialog,
-	openSection,
 	pressDialog,
 	quiet,
-	resetHash,
 	settle,
 	shows,
 	until,
@@ -44,7 +42,6 @@ afterAll(async () => {
 });
 afterEach(() => {
 	cleanup();
-	resetHash();
 	vi.unstubAllGlobals();
 });
 
@@ -85,22 +82,16 @@ const world = async (name) => {
 /** @param {import('react').ReactNode} node */
 const withToasts = (node) => render(<ToastProvider durationMs={600_000}>{node}</ToastProvider>);
 
-/** Render the page as the server component of the merchant console does. @param {Awaited<ReturnType<typeof world>>} x */
-const openPage = async ({ b, merchantId, websiteId }) => {
+/**
+ * Show a part of the website page as the server component of the Portal does (Data and files is `settings/connections`,
+ * Between your products `settings/links`).
+ * @param {Awaited<ReturnType<typeof world>>} x
+ * @param {string} part
+ */
+const openPage = async ({ b, merchantId, websiteId }, part) => {
+	cleanup();
 	b.use();
-	const loaded = await loaders.loadWebsiteSettings(b.api, merchantId, websiteId);
-	if (!loaded.ok) throw new Error('settings');
-	withToasts(
-		<WebsiteSettingsView
-			data={loaded.data}
-			changes={loaded.changes}
-			connections={loaded.connections}
-			merchantId={merchantId}
-			websiteId={websiteId}
-			domain={loaded.domain}
-			back={{ href: `/websites/${websiteId}`, label: 'Back to the website' }}
-		/>,
-	);
+	withToasts(<WebsiteView {...await loaders.loadWebsitePage(b.api, merchantId, websiteId, part)} />);
 	await settle(2);
 };
 
@@ -124,8 +115,7 @@ describe('Data and files (jsdom)', () => {
 		const restore = quiet();
 		try {
 			const x = await world('dcp_db');
-			await openPage(x);
-			await openSection('Data and files');
+			await openPage(x, 'settings/connections');
 			expect(shows('Database (MongoDB)')).toBe(true);
 			expect(shows('Not set')).toBe(true);
 			// each product on the website has its own database and folder
@@ -167,8 +157,7 @@ describe('Data and files (jsdom)', () => {
 		const restore = quiet();
 		try {
 			const x = await world('dcp_bad');
-			await openPage(x);
-			await openSection('Data and files');
+			await openPage(x, 'settings/connections');
 			type(field('Connection string'), 'postgres://nope');
 			await pressNth('Save');
 			fillDialog('Your password', 'correct horse battery');
@@ -185,8 +174,7 @@ describe('Data and files (jsdom)', () => {
 		const restore = quiet();
 		try {
 			const x = await world('dcp_storage');
-			await openPage(x);
-			await openSection('Data and files');
+			await openPage(x, 'settings/connections');
 			// not enough to save
 			expect(/** @type {HTMLButtonElement} */ (buttons('Save', document.body)[1]).disabled).toBe(true);
 			type(field('Region'), 'auto');
@@ -220,17 +208,16 @@ describe('Between your products (jsdom)', () => {
 		const restore = quiet();
 		try {
 			const x = await world('dcp_links');
-			await openPage(x);
-			await openSection('Between your products');
+			await openPage(x, 'settings/links');
 			expect(shows('Ecommerce may use Payments')).toBe(true);
-			expect(shows('It may: Create payments, Refund payments')).toBe(true);
+			expect(shows('Create payments, Refund payments')).toBe(true);
 			expect(shows('On')).toBe(true);
 			// the page never holds a key
 			expect(document.body.textContent).not.toMatch(/eyJ[A-Za-z0-9_-]{10,}/);
 			/** @param {string} item */
 			const menuAction = async (item) => {
 				await act(async () => {
-					/** @type {HTMLButtonElement} */ (document.querySelector('button[aria-haspopup="menu"]')).click();
+					/** @type {HTMLButtonElement} */ (document.querySelector('button[aria-label="Actions for Ecommerce may use Payments"]')).click();
 				});
 				await settle(1);
 				const items = /** @type {HTMLElement[]} */ ([...document.querySelectorAll('[role="menu"] [role^="menuitem"]')]);
@@ -249,13 +236,13 @@ describe('Between your products (jsdom)', () => {
 			await pressDialog('Switch off');
 			await until(() => !document.querySelector('[role="dialog"]'));
 			await until(() => shows('Switched off'));
-			expect(shows('It may:')).toBe(false);
+			expect(shows('Create payments')).toBe(false);
 			// and on again
 			await menuAction('Switch on');
 			fillDialog('Your password', 'correct horse battery');
 			await pressDialog('Switch on');
 			await until(() => !document.querySelector('[role="dialog"]'));
-			await until(() => shows('It may: Create payments'));
+			await until(() => shows('Create payments'));
 			// a new key
 			await menuAction('Regenerate the key');
 			fillDialog('Your password', 'correct horse battery');
@@ -279,8 +266,7 @@ describe('Between your products (jsdom)', () => {
 			const site = await w.addWebsite(merchantId, 'shop.example.com');
 			await w.connect({ widgets: false, needs: { database: true, storage: 'none' } });
 			await w.addProduct(merchantId, String(site.websiteId), 'notes');
-			await openPage({ w, b, merchantId, websiteId: String(site.websiteId) });
-			await openSection('Between your products');
+			await openPage({ w, b, merchantId, websiteId: String(site.websiteId) }, 'settings/links');
 			expect(shows('No product here needs another one yet.')).toBe(true);
 		} finally {
 			restore();

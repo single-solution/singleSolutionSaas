@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 /**
- * The Setup page in the browser (jsdom) against a live in-process Portal with fake products (owner request
- * 2026-10-14): the merchant's sheet (the website's facts, a product's panel, a product that did not answer), Refresh,
- * Copy and Download JSON, share links (create once-shown, list, revoke), the admin's page, the Setup button on website
- * cards, the public shared page (key from the address fragment; without values; a link that does not work), and the
- * advisor: the business profile filled out by the merchant, recommendations with why, Switch on for the admin.
+ * The Setup sheet part of the website page in the browser (jsdom) against a live in-process Portal with fake products
+ * (owner request 2026-10-14): the merchant's sheet (the website's facts, a product's panel, a product that did not
+ * answer), Refresh, Copy and Download JSON in the header, share links (create once-shown, list, revoke), the admin's
+ * page and who gets it, the public shared page (key from the address fragment; without values; a link that does not
+ * work), and the advisor: the business profile filled out by the merchant, recommendations with why, Switch on for the
+ * admin.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '@ss/ui';
@@ -12,10 +13,10 @@ import { productBlueprint } from '@ss/contracts/testing';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { closeMongoClients } from '../../src/testing.js';
 import * as admin from '../../src/console/admin/loaders.js';
-import { MerchantsView } from '../../src/console/admin/views/merchants.js';
-import { AdminSetupView } from '../../src/console/admin/views/setup.js';
+import { AdminWebsiteView } from '../../src/console/admin/views/website.js';
 import * as loaders from '../../src/console/loaders.js';
-import { MerchantSetupView, SharedSetupView, neededOff, profileLines, valueText } from '../../src/console/views/setup.js';
+import { SharedSetupView, neededOff, profileLines, valueText } from '../../src/console/views/setup.js';
+import { WebsiteView } from '../../src/console/views/websites.js';
 import { startMongo } from '../helpers.js';
 import { testRouter } from './router.js';
 import {
@@ -24,8 +25,6 @@ import {
 	clickEl,
 	createWorld,
 	dialog,
-	menuItems,
-	openSection,
 	press,
 	pressDialog,
 	pressMenu,
@@ -59,6 +58,9 @@ afterEach(() => {
 /** @param {import('react').ReactNode} node */
 const withToasts = (node) => render(<ToastProvider durationMs={600_000}>{node}</ToastProvider>);
 
+/** Close the open drawer or dialog. */
+const closeDialog = () => clickEl(/** @type {Element} */ (dialog().querySelector('button[aria-label="Close"]')));
+
 /** A merchant with one website that has Notes (answers) and Chatty (refuses with 500). @param {string} name */
 const world = async (name) => {
 	const w = await createWorld({ db: mongo.db(name) });
@@ -71,6 +73,17 @@ const world = async (name) => {
 	await w.addProduct(merchantId, websiteId, 'notes');
 	await w.addProduct(merchantId, websiteId, 'chatty');
 	return { w, b, merchantId, websiteId, notes };
+};
+
+/**
+ * Show the Setup sheet part of the website page as the Portal's server component does.
+ * @param {Awaited<ReturnType<typeof world>>} x
+ */
+const openSetup = async ({ b, merchantId, websiteId }) => {
+	b.use();
+	const page = await loaders.loadWebsitePage(b.api, merchantId, websiteId, 'setup');
+	withToasts(<WebsiteView {...page} />);
+	return page;
 };
 
 /** The Region and format section as the console sends it. @param {Record<string, unknown>} [over] */
@@ -129,33 +142,20 @@ describe('Setup page (jsdom)', () => {
 					social: [],
 				},
 			});
-			const setup = await loaders.loadSetup(b.api, merchantId, websiteId);
-			if (!setup.ok) throw new Error('setup');
-			expect(setup.sheet.website.business).toEqual({
+			const page = await openSetup({ w, b, merchantId, websiteId, notes });
+			if (!page.ok || !page.setup?.ok) throw new Error('setup');
+			expect(page.setup.sheet.website.business).toEqual({
 				found: true,
 				name: 'Example Shop',
 				country: 'US',
 				timeZone: 'America/New_York',
 			});
-			withToasts(
-				<MerchantSetupView
-					sheet={setup.sheet}
-					links={setup.links}
-					merchantId={merchantId}
-					websiteId={websiteId}
-					back={{ href: `/websites/${websiteId}`, label: 'Back to the website' }}
-					settingsHref={`/websites/${websiteId}/settings`}
-				/>,
-			);
-			expect(shows('Setup · shop.example.com')).toBe(true);
+			expect(document.querySelector('h1')?.textContent).toBe('shop.example.com');
 			expect(shows('Set: Example Shop')).toBe(true);
 			expect(shows('https://shop.example.com')).toBe(true);
-			// a product on its own view: the one that did not answer says so, the one that did has its panel
-			await openSection('Products');
-			await openSection('Chatty');
+			// the product that did not answer says so, the one that did has its panel
 			expect(shows('Chatty did not answer')).toBe(true);
 			expect(shows('It could not be reached. Try Refresh in a moment.')).toBe(true);
-			await openSection('Notes');
 			// the product's panel: what is left to do, a feature on with its settings, one off, connections, install, events
 			expect(shows('Add the widget script to every page of your website.')).toBe(true);
 			expect(shows('Notes per visitor per daySet (holds a secret, not shown)')).toBe(true);
@@ -168,15 +168,18 @@ describe('Setup page (jsdom)', () => {
 			// the status of the website's products and each product's API address
 			expect(shows('StatusActive')).toBe(true);
 			expect(shows('API address: http')).toBe(true);
-			// labels in sentence case, never all caps (PLAN 0.6)
-			expect(document.querySelector('.uppercase')).toBeNull();
+			// labels in sentence case, never all caps (PLAN 0.6); the inner nav's group titles are the frame's own
+			expect([...document.querySelectorAll('.uppercase')].filter((el) => !el.closest('nav'))).toEqual([]);
 			// what the website builds for each feature that is on, with its docs
 			expect(shows('What your website builds')).toBe(true);
 			expect(shows('Add the note form widget to the pages where visitors leave notes.')).toBe(true);
-			const download = /** @type {HTMLAnchorElement} */ (
-				[...document.querySelectorAll('a')].find((a) => a.textContent === 'Download JSON')
-			);
-			expect(download.getAttribute('href')).toBe(`/v1/merchants/${merchantId}/websites/${websiteId}/setup?download=1`);
+			// Download JSON, Copy JSON and Refresh are in the header
+			const clicked = /** @type {string[]} */ ([]);
+			vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function () {
+				clicked.push(String(/** @type {HTMLAnchorElement} */ (this).getAttribute('href')));
+			});
+			await press('Download JSON');
+			expect(clicked).toEqual([`/v1/merchants/${merchantId}/websites/${websiteId}/setup?download=1`]);
 
 			await press('Copy JSON');
 			await until(() => shows('The JSON is in your clipboard.'));
@@ -186,7 +189,6 @@ describe('Setup page (jsdom)', () => {
 			await until(() => shows('Setup gathered again.'));
 
 			// share links: refused days, then a link without values, shown once and listed
-			await openSection('Share links');
 			expect(shows('No share links yet.')).toBe(true);
 			await press('Create share link');
 			const days = /** @type {HTMLInputElement} */ (dialog().querySelector('input[type="number"]'));
@@ -202,8 +204,10 @@ describe('Setup page (jsdom)', () => {
 			expect(made.body.link).toMatchObject({ values: false, install: true });
 			await until(() => dialog().textContent?.includes('Share link created'));
 			expect(dialog().textContent).toContain(made.body.url);
-			expect(shows('Made by the merchant · Without settings values · Not opened yet')).toBe(true);
-			await press('Revoke');
+			await closeDialog();
+			expect(shows('Made by the merchant · Without settings values')).toBe(true);
+			await press(`Actions for Expires ${made.body.link.expiresAt}`);
+			await press('Revoke', /** @type {ParentNode} */ (document.querySelector('[role="menu"]')));
 			await b.waitCall('DELETE', `/v1/merchants/${merchantId}/websites/${websiteId}/setup/links/${made.body.link.linkId}`);
 			await until(() => shows('Share link revoked. It stops working at once.'));
 			expect(shows('Revoked')).toBe(true);
@@ -213,46 +217,47 @@ describe('Setup page (jsdom)', () => {
 		}
 	});
 
-	it('shows the admin the same page with the admin client, and a Setup button on the website card', async () => {
+	it('shows the admin the same sheet with the admin client; Finance has no Setup sheet', async () => {
 		const restore = quiet();
 		const { w, merchantId, websiteId } = await world('setup_page_admin');
 		try {
 			const { ownerBrowser, owner } = w;
+			const base = `/admin/merchants/${merchantId}/websites/${websiteId}`;
 			ownerBrowser.use();
-			const detail = await admin.loadMerchant(ownerBrowser.api, merchantId, owner);
-			if (!detail.ok) throw new Error('merchant');
-			withToasts(<MerchantsView detail={detail} websiteId={websiteId} admin={owner} />);
-			// Setup sits in the website card's More menu and opens the admin's Setup page
-			await pressMenu('Actions for shop.example.com', 'Setup');
-			expect(testRouter.push).toHaveBeenCalledWith(`/admin/merchants/${merchantId}/websites/${websiteId}/setup`);
-			cleanup();
-			const setup = await loaders.loadSetup(ownerBrowser.api, merchantId, websiteId);
-			if (!setup.ok) throw new Error('setup');
+			// the Setup sheet is an item of the website page's inner nav
 			withToasts(
-				<AdminSetupView
-					sheet={setup.sheet}
-					links={setup.links}
-					merchantId={merchantId}
-					websiteId={websiteId}
-					back={{ href: '/admin', label: 'Back to the website' }}
-					settingsHref={`/admin/merchants/${merchantId}/websites/${websiteId}/settings`}
+				<AdminWebsiteView
+					detail={await admin.loadAdminWebsite(ownerBrowser.api, merchantId, websiteId, '', owner)}
+					admin={owner}
 				/>,
 			);
-			await openSection('Share links');
+			expect(document.querySelector(`a[href="${base}/setup"]`)?.textContent).toContain('Setup sheet');
+			cleanup();
+			withToasts(
+				<AdminWebsiteView
+					detail={await admin.loadAdminWebsite(ownerBrowser.api, merchantId, websiteId, 'setup', owner)}
+					admin={owner}
+				/>,
+			);
 			await press('Create share link');
 			await pressDialog('Create link');
 			await ownerBrowser.waitCall('POST', `/v1/merchants/${merchantId}/websites/${websiteId}/setup/links`, (s) => s === 201);
+			await until(() => dialog().textContent?.includes('Share link created'));
+			await closeDialog();
 			await until(() => shows('Made by an admin · Shows everything'));
-			// Finance sees no Setup button (no Install and tokens either)
+			// Finance sees no Setup sheet (no Install and tokens either): not in the nav, no page, no request for it
 			cleanup();
 			const finance = await w.adminOf('finance');
 			finance.b.use();
-			const financeDetail = await admin.loadMerchant(finance.b.api, merchantId, finance.admin);
-			if (!financeDetail.ok) throw new Error('merchant');
-			withToasts(<MerchantsView detail={financeDetail} websiteId={websiteId} admin={finance.admin} />);
-			await press('Actions for shop.example.com');
-			expect(menuItems()).not.toContain('Setup');
-			expect(menuItems()).not.toContain('Install and tokens');
+			const financeDetail = await admin.loadAdminWebsite(finance.b.api, merchantId, websiteId, '', finance.admin);
+			withToasts(<AdminWebsiteView detail={financeDetail} admin={finance.admin} />);
+			expect(document.querySelector(`a[href="${base}/setup"]`)).toBeNull();
+			expect(document.querySelector(`a[href="${base}/install"]`)).toBeNull();
+			cleanup();
+			const financeSetup = await admin.loadAdminWebsite(finance.b.api, merchantId, websiteId, 'setup', finance.admin);
+			withToasts(<AdminWebsiteView detail={financeSetup} admin={finance.admin} />);
+			expect(shows('This page does not exist.')).toBe(true);
+			expect(finance.b.calls.some((c) => c.path.includes('/setup'))).toBe(false);
 		} finally {
 			restore();
 			await w.close();
@@ -320,25 +325,12 @@ describe('Setup page (jsdom)', () => {
 			return part;
 		});
 		try {
-			b.use();
-			const setup = await loaders.loadSetup(b.api, merchantId, websiteId);
-			if (!setup.ok) throw new Error('setup');
-			withToasts(
-				<MerchantSetupView
-					sheet={setup.sheet}
-					links={setup.links}
-					merchantId={merchantId}
-					websiteId={websiteId}
-					back={{ href: `/websites/${websiteId}`, label: 'Back to the website' }}
-					settingsHref={`/websites/${websiteId}/settings`}
-				/>,
-			);
+			await openSetup({ w, b, merchantId, websiteId, notes });
 			// the header takes the website's facts from its settings in the Portal: nothing saved there yet
 			expect(shows('Not set yet')).toBe(true);
 			expect(
 				[...document.querySelectorAll('a')].find((a) => a.textContent === 'Open Website settings')?.getAttribute('href'),
 			).toBe(`/websites/${websiteId}/settings`);
-			await openSection('Business profile');
 			expect(shows('Not filled out yet.')).toBe(true);
 			expect(shows('Fill out the business profile to see which features this website should use.')).toBe(true);
 			await press('Fill out the profile');
@@ -356,7 +348,7 @@ describe('Setup page (jsdom)', () => {
 			expect(dialog().textContent).toContain(
 				'The countries and languages come from the website’s settings (Region and format)',
 			);
-			expect(dialog().querySelector('a')?.getAttribute('href')).toBe(`/websites/${websiteId}/settings#region`);
+			expect(dialog().querySelector('a')?.getAttribute('href')).toBe(`/websites/${websiteId}/settings/region`);
 			expect(() => byLabel(dialog(), 'Languages of the website')).toThrow();
 			// own answers where the options cannot list everything, typed once each
 			const ownPays = /** @type {HTMLInputElement} */ (
@@ -419,20 +411,14 @@ describe('Setup page (jsdom)', () => {
 			await b.api.request('PUT', `/v1/merchants/${merchantId}/websites/${websiteId}/setup/profile`, { chat: ['people'] });
 			const { ownerBrowser } = w;
 			ownerBrowser.use();
-			const adminSetup = await loaders.loadSetup(ownerBrowser.api, merchantId, websiteId);
-			if (!adminSetup.ok) throw new Error('setup');
 			withToasts(
-				<AdminSetupView
-					sheet={adminSetup.sheet}
-					links={adminSetup.links}
-					merchantId={merchantId}
-					websiteId={websiteId}
-					back={{ href: '/admin', label: 'Back to the website' }}
-					settingsHref={`/admin/merchants/${merchantId}/websites/${websiteId}/settings`}
+				<AdminWebsiteView
+					detail={await admin.loadAdminWebsite(ownerBrowser.api, merchantId, websiteId, 'setup', w.owner)}
+					admin={w.owner}
 				/>,
 			);
 			expect(shows('Features are billed by the hour while they are on.')).toBe(true);
-			await press('Switch on Notes inbox in Notes');
+			await pressMenu('Actions for Notes inbox', 'Switch on');
 			const switched = await ownerBrowser.waitCall(
 				'POST',
 				`/v1/merchants/${merchantId}/websites/${websiteId}/setup/features`,
@@ -443,7 +429,7 @@ describe('Setup page (jsdom)', () => {
 			expect(notes.switchCalls.map((call) => call.body.features)).toEqual([['inbox']]);
 			// the product refuses: said in a toast
 			notes.tamper.switchOn = 'refuse';
-			await press('Switch on Notes inbox in Notes');
+			await pressMenu('Actions for Notes inbox', 'Switch on');
 			await until(() => shows('The Portal refused the change (forbidden). Nothing was changed.'));
 			await settle();
 		} finally {

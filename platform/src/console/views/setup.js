@@ -487,6 +487,17 @@ function Recommendations({ sheet, actions }) {
 								rows={off}
 								rowKey={({ product, entry }) => `${product.productId}:${entry.feature}`}
 								rowLabel={({ product, entry }) => titleOf(product, entry.feature)}
+								{...(actions?.switchOn
+									? {
+											rowMenu: (/** @type {(typeof off)[number]} */ { product, entry }) => [
+												{
+													label: SETUP.switchOn,
+													disabled: actions.switching !== null,
+													onSelect: () => actions.switchOn?.(product, entry.feature),
+												},
+											],
+										}
+									: {})}
 								columns={[
 									{
 										key: 'feature',
@@ -516,29 +527,6 @@ function Recommendations({ sheet, actions }) {
 											);
 										},
 									},
-									...(actions?.switchOn
-										? [
-												{
-													key: 'switchOn',
-													header: SETUP.switchOn,
-													align: /** @type {const} */ ('right'),
-													render: (/** @type {(typeof off)[number]} */ { product, entry }) => {
-														const title = titleOf(product, entry.feature);
-														const id = `${product.productId}:${entry.feature}`;
-														return (
-															<Button
-																size="sm"
-																aria-label={SETUP.switchOnLabel(title, product.name)}
-																loading={actions.switching === id}
-																disabled={actions.switching !== null && actions.switching !== id}
-																onClick={() => actions.switchOn?.(product, entry.feature)}>
-																{SETUP.switchOn}
-															</Button>
-														);
-													},
-												},
-											]
-										: []),
 								]}
 							/>
 							{actions ? (
@@ -937,6 +925,14 @@ function ShareLinks({ manage, initial }) {
 					rows={links}
 					rowKey={(link) => link.linkId}
 					rowLabel={(link) => `${SETUP.expires} ${link.expiresAt}`}
+					rowMenu={(link) => [
+						{
+							label: SETUP.revoke,
+							danger: true,
+							disabled: link.status !== 'active' || busy !== null,
+							onSelect: () => void revoke(link),
+						},
+					]}
 					columns={[
 						{
 							key: 'expiresAt',
@@ -972,17 +968,6 @@ function ShareLinks({ manage, initial }) {
 									) : null}
 								</>
 							),
-						},
-						{
-							key: 'revoke',
-							header: SETUP.revoke,
-							align: 'right',
-							render: (link) =>
-								link.status === 'active' ? (
-									<Button variant="secondary" size="sm" loading={busy === link.linkId} onClick={() => void revoke(link)}>
-										{SETUP.revoke}
-									</Button>
-								) : null,
 						},
 					]}
 				/>
