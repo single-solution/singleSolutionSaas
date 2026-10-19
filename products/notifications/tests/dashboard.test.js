@@ -11,11 +11,13 @@ import { act } from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DashboardProvider } from '@ss/ui/dashboard';
-import { byText, cleanup, click, render } from '@ss/ui/testing';
+import { fill } from '@ss/ui/dashboard';
+import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import manifest from '../manifest.json' with { type: 'json' };
 import { TABS } from '../app/dashboard/tabs.js';
 import { TemplatesSection } from '../app/dashboard/templates.js';
 import { TEXTS } from '../app/dashboard/texts.js';
+import { drawerButton, drawerOf, openRow, rowMenu, rowNames } from './dashboard-table.js';
 
 const WEBSITE = 'web_1';
 const BASE = `/v1/dashboard/websites/${WEBSITE}`;
@@ -114,36 +116,65 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
+/** @param {HTMLElement} row the texts of a table row's cells (the row menu's cell left out) */
+const cellsOf = (row) => [...row.querySelectorAll('th, td')].slice(0, -1).map((cell) => cell.textContent ?? '');
+
+/** The writes the page sent. */
+const writes = () => calls.filter((call) => call.method !== 'GET');
+
 describe('Settings → Templates: the products’ messages (parity P1)', () => {
+	it('shows a table skeleton while the templates load', async () => {
+		serve();
+		const { container } = render(<TemplatesSection websiteId={WEBSITE} />);
+		expect(container.querySelector('[role="status"] table')).not.toBeNull();
+		await settle();
+		expect(container.querySelector('[role="status"] table')).toBeNull();
+		expect(container.querySelector('table')).not.toBeNull();
+	});
+
 	it('lists each message by channel with its state, then the other templates', async () => {
 		serve();
 		const { container } = render(<TemplatesSection websiteId={WEBSITE} />);
 		await settle();
-		const rows = [...container.querySelectorAll('li')].map((li) => li.textContent ?? '');
-		expect(rows).toHaveLength(5);
-		expect(rows[0]).toContain('Password reset link');
-		expect(rows[0]).toContain('accounts.password_reset · Reset your password for {business}');
-		expect(rows[0]).toContain(T.states.default);
-		expect(rows[1]).toContain('New chat message');
-		expect(rows[1]).toContain('Chat: {visitor}');
-		expect(rows[1]).toContain(T.states.edited);
-		expect(rows[2]).toContain(T.states.off);
-		expect(rows[3]).toContain(T.states.not_set_up);
-		expect(rows[3]).toContain(T.setUp);
-		expect(rows[4]).toContain('welcome');
-		// each product by the name the directory gives
-		expect(rows[0]).toContain('Accounts');
+		expect(rowNames(container)).toEqual([
+			'Password reset link',
+			'New chat message',
+			'New chat message',
+			'New chat message',
+			'welcome',
+		]);
+		const rows = [...container.querySelectorAll('tbody tr')].map((row) => cellsOf(/** @type {HTMLElement} */ (row)));
+		// name, channel, product (by the name the directory gives), state, language, words, flags
+		expect(rows[0]).toEqual([
+			'Password reset link',
+			'Email',
+			'Accounts',
+			T.states.default,
+			T.default,
+			'accounts.password_reset · Reset your password for {business}',
+			`${T.required_badge}${T.urgent_badge}${T.sensitive_badge}`,
+		]);
+		expect(rows[1]).toEqual([
+			'New chat message',
+			'Email',
+			'Chat',
+			T.states.edited,
+			T.default,
+			'chat.staff_new_message · Chat: {visitor}',
+			T.required_badge,
+		]);
+		expect(rows[2]?.[3]).toBe(T.states.off);
+		expect(rows[3]?.[3]).toBe(T.states.not_set_up);
+		expect(rows[3]?.[5]).toContain(T.notSetUpHelp);
+		expect(rows[4]).toEqual(['welcome', 'SMS', T.own, '', T.default, 'Welcome!', '']);
 		expect(container.textContent).toContain(T.unavailable.replace('{products}', 'Bookings, Ecommerce'));
 	});
 
-	it('Edit starts from the default words; the key and channel of a product’s message stay fixed', async () => {
+	it('a click on a row opens it in a drawer, from the default words; the key and channel of a product’s message stay fixed', async () => {
 		serve();
 		const { container } = render(<TemplatesSection websiteId={WEBSITE} />);
 		await settle();
-		const first = /** @type {HTMLElement} */ (container.querySelector('li'));
-		await click(byText(first, T.edit, 'button'));
-		await settle();
-		const dialog = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
+		const dialog = await openRow(container, 'Password reset link');
 		expect(dialog.textContent).toContain('Password reset link');
 		expect(dialog.textContent).toContain('Template accounts.password_reset by Email, in the default language.');
 		expect(dialog.textContent).toContain('Values it can use: {link}, {minutes}, {business}.');
@@ -169,9 +200,7 @@ describe('Settings → Templates: the products’ messages (parity P1)', () => {
 		});
 		const { container } = render(<TemplatesSection websiteId={WEBSITE} />);
 		await settle();
-		await click(byText(/** @type {HTMLElement} */ (container.querySelector('li')), T.edit, 'button'));
-		await settle();
-		const dialog = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
+		const dialog = await openRow(container, 'Chat transcript');
 		expect(dialog.textContent).toContain(T.longValuesHelp.replace('{values}', '{transcript}'));
 		// the long value's sample is a text box of up to 50,000 characters; the others stay one line of 1,000
 		const sample = /** @type {HTMLTextAreaElement} */ (
@@ -184,28 +213,121 @@ describe('Settings → Templates: the products’ messages (parity P1)', () => {
 		expect(date.maxLength).toBe(1000);
 	});
 
-	it('More: Reset to default for an edited message, Switch off and on again, nothing to switch for Accounts', async () => {
+	it('the row menu: Edit first, then what the row can do; nothing more for Accounts’ sign-in messages', async () => {
 		serve();
 		const { container } = render(<TemplatesSection websiteId={WEBSITE} />);
 		await settle();
-		const items = [...container.querySelectorAll('li')];
-		// Accounts' reset link has no More menu: it cannot be switched off and has no edited version
-		expect(items[0]?.querySelector('[aria-haspopup]')).toBeNull();
-		const openMenu = async (/** @type {Element | undefined} */ item) => {
-			await click(/** @type {Element} */ (item?.querySelector('[aria-haspopup]')));
-			await settle();
+		/** The labels of the open menu of the row at `at`, which stays open. @param {number} at */
+		const menuAt = async (at) => {
+			const row = /** @type {HTMLElement} */ ([...container.querySelectorAll('tbody tr')][at]);
+			await act(async () => click(/** @type {HTMLElement} */ (row.querySelector('button[aria-haspopup]'))));
+			return /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('[role="menuitem"]')]);
 		};
-		await openMenu(items[1]);
-		expect(document.body.textContent).toContain(T.reset);
-		await click(byText(document.body, T.switchOff, '[role="menuitem"]'));
+		const labels = (/** @type {HTMLButtonElement[]} */ items) => items.map((item) => item.textContent);
+		// Accounts' reset link can neither be switched off nor has an edited version: only Edit
+		expect(labels(await menuAt(0))).toEqual([T.edit]);
+		await act(async () => click(/** @type {HTMLElement} */ (container.querySelector('tbody tr button[aria-haspopup]'))));
+		// an edited message: Reset to default and Switch off
+		const edited = await menuAt(1);
+		expect(labels(edited)).toEqual([T.edit, T.reset, T.switchOff]);
+		await act(async () => click(/** @type {HTMLElement} */ (edited[2])));
 		await settle();
 		expect(calls.find((call) => call.method === 'PUT')).toEqual({
 			path: `${BASE}/messages/chat.staff_new_message/email`,
 			method: 'PUT',
 			body: { off: true },
 		});
-		await openMenu([...container.querySelectorAll('li')][2]);
-		expect(document.body.textContent).toContain(T.switchOn);
+	});
+
+	it('the menu of a switched-off message offers Switch on again, a not set up one Set up, and a template of your own Duplicate and Delete', async () => {
+		serve();
+		const { container } = render(<TemplatesSection websiteId={WEBSITE} />);
+		await settle();
+		/** @param {number} at */
+		const menuAt = async (at) => {
+			const row = /** @type {HTMLElement} */ ([...container.querySelectorAll('tbody tr')][at]);
+			await act(async () => click(/** @type {HTMLElement} */ (row.querySelector('button[aria-haspopup]'))));
+			const labels = [...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
+			await act(async () => click(/** @type {HTMLElement} */ (row.querySelector('button[aria-haspopup]'))));
+			return labels;
+		};
+		expect(await menuAt(2)).toEqual([T.edit, T.switchOn]);
+		expect(await menuAt(3)).toEqual([T.setUp, T.switchOff]);
+		expect(await menuAt(4)).toEqual([T.edit, T.duplicate, T.delete]);
+	});
+
+	it('saves a template of your own from the drawer, which closes; Cancel sends nothing', async () => {
+		serve();
+		const { container } = render(<TemplatesSection websiteId={WEBSITE} />);
+		await settle();
+		const dialog = await openRow(container, 'welcome');
+		expect(byLabel(dialog, T.key).value).toBe('welcome');
+		await type(byLabel(dialog, T.text), 'Welcome aboard!');
+		await click(drawerButton(TEXTS.cancel));
+		await settle();
+		expect(drawerOf()).toBeNull();
+		expect(writes()).toEqual([]);
+		await openRow(container, 'welcome');
+		await type(byLabel(drawerOf(), T.text), 'Welcome aboard!');
+		await click(drawerButton(TEXTS.save));
+		await settle();
+		expect(writes()).toEqual([
+			{
+				path: `${BASE}/templates`,
+				method: 'PUT',
+				body: {
+					key: 'welcome',
+					channel: 'sms',
+					language: 'default',
+					subject: '',
+					text: 'Welcome aboard!',
+					required: false,
+					urgent: false,
+					sensitive: false,
+					providerTemplate: '',
+					buttons: [],
+				},
+			},
+		]);
+		expect(drawerOf()).toBeNull();
+	});
+
+	it('Delete asks first in a small dialog, then removes the template', async () => {
+		serve();
+		const { container } = render(<TemplatesSection websiteId={WEBSITE} />);
+		await settle();
+		await rowMenu(container, 'welcome', T.delete);
+		await settle();
+		expect(document.body.textContent).toContain(T.deleteTitle);
+		expect(writes()).toEqual([]);
+		await click(byText(document.body, T.delete, '[role="dialog"] button'));
+		await settle();
+		expect(writes().map((call) => [call.method, call.path])).toEqual([['DELETE', `${BASE}/templates/welcome/sms/default`]]);
+	});
+
+	it('the search and the Channel and Product filters narrow the table', async () => {
+		serve();
+		const { container } = render(<TemplatesSection websiteId={WEBSITE} />);
+		await settle();
+		await type(/** @type {HTMLInputElement} */ (container.querySelector('input[type="search"], input')), 'welcome');
+		await settle();
+		expect(rowNames(container)).toEqual(['welcome']);
+		await type(/** @type {HTMLInputElement} */ (container.querySelector('input[type="search"], input')), 'zzz');
+		await settle();
+		expect(container.textContent).toContain(T.noMatch);
+		await type(/** @type {HTMLInputElement} */ (container.querySelector('input[type="search"], input')), '');
+		await settle();
+		// the Channel filter: SMS has two rows
+		const chooseFilter = async (/** @type {string} */ filter, /** @type {string} */ option) => {
+			const trigger = /** @type {HTMLElement} */ (container.querySelector(`button[aria-label="${filter}"]`));
+			await act(async () => click(trigger));
+			const entry = [...document.querySelectorAll('[role^="menuitem"]')].find((one) => one.textContent === option);
+			await act(async () => click(/** @type {HTMLElement} */ (entry)));
+		};
+		await chooseFilter(T.channel, fill(T.channelCount, { channel: 'SMS', count: 2 }));
+		expect(rowNames(container)).toEqual(['New chat message', 'welcome']);
+		await chooseFilter(T.columns.product, T.own);
+		expect(rowNames(container)).toEqual(['welcome']);
 	});
 });
 

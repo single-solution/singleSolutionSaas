@@ -7,7 +7,7 @@
  * merchant edits it, resets it to the default or switches it off on a channel (Accounts' messages are always sent).
  * @module
  */
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import {
 	Badge,
 	Button,
@@ -15,7 +15,9 @@ import {
 	Card,
 	Checkbox,
 	ConfirmDialog,
-	Dialog,
+	DataTable,
+	DataTableSkeleton,
+	Drawer,
 	EmptyState,
 	EntryGroup,
 	FieldGrid,
@@ -23,11 +25,10 @@ import {
 	Input,
 	Section,
 	Select,
-	Skeleton,
+	StatusPill,
 	TextArea,
+	Toolbar,
 	describeProblem,
-	ListRow,
-	RowList,
 } from '@ss/ui';
 import { LONG_VALUE_LIMIT, VALUE_LIMIT, isTitled } from '@ss/contracts/templates';
 import { CHANNELS } from '../../core/channels.js';
@@ -57,7 +58,7 @@ const EMPTY = {
 const T = TEXTS.settings.template;
 
 /**
- * The buttons of a WhatsApp template at Meta that take a value, edited in the template's dialog.
+ * The buttons of a WhatsApp template at Meta that take a value, edited in the template's drawer.
  * @param {{ buttons: TemplateButton[], onChange: (buttons: TemplateButton[]) => void }} props
  */
 function ButtonsEditor({ buttons, onChange }) {
@@ -173,13 +174,16 @@ function TemplatePreview({ template, longValues }) {
 }
 
 /**
- * A draft in the template dialog: `fixed` for a product's message (its key, channel and default language are set),
+ * A draft in the template drawer: `fixed` for a product's message (its key, channel and default language are set),
  * with its name, values and long values; `isNew` until the merchant's version exists.
  * @typedef {Template & { isNew: boolean, fixed: boolean, name?: string, values?: string[], longValues?: string[] }} Draft
  */
 
-/** Badge tone of each state of a product's message. */
-const STATE_TONES = Object.freeze({ default: 'neutral', edited: 'info', off: 'neutral', not_set_up: 'warning' });
+/** The status pill of each state of a product's message. */
+const STATE_PILLS = Object.freeze(/** @type {const} */ ({ default: 'active', edited: 'info', off: 'off', not_set_up: 'setup' }));
+
+/** The filter value of the merchant's own templates (a product's id is the others). */
+const OWN = '_own';
 
 /**
  * The words of a row as a list shows them: the merchant's version, else the product's default.
@@ -193,11 +197,16 @@ export function TemplatesSection({ websiteId }) {
 	const messagesBase = `/v1/dashboard/websites/${websiteId}/messages`;
 	const { answer, reload } = useLoad(base);
 	const { answer: catalog, reload: reloadCatalog } = useLoad(messagesBase);
+	const formId = useId();
+	// the template in the drawer stays while the drawer closes; `shown` says whether the drawer is open
 	const [draft, setDraft] = useState(/** @type {Draft | null} */ (null));
+	const [shown, setShown] = useState(false);
+	const [saving, setSaving] = useState(false);
 	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
 	const [problem, setProblem] = useState(/** @type {any} */ (null));
 	const [search, setSearch] = useState('');
 	const [channel, setChannel] = useState('');
+	const [product, setProduct] = useState('');
 	const [deleting, setDeleting] = useState(
 		/** @type {{ key: string, channel: string, language: string, reset: boolean } | null} */ (null),
 	);
@@ -222,7 +231,9 @@ export function TemplatesSection({ websiteId }) {
 	const open = (next) => {
 		setProblem(null);
 		setDraft(next);
+		setShown(true);
 	};
+	const close = () => setShown(false);
 	/**
 	 * Open a product's message: the merchant's version, else the product's default words to start from (WhatsApp: an
 	 * empty template to set up with its name at Meta).
@@ -252,10 +263,12 @@ export function TemplatesSection({ websiteId }) {
 		if (!draft) return;
 		const { isNew: _isNew, fixed: _fixed, name: _name, values: _values, longValues: _longValues, ...template } = draft;
 		const atMeta = template.channel === 'whatsapp' && template.providerTemplate.trim() !== '';
+		setSaving(true);
 		const next = await call('PUT', base, { ...template, buttons: atMeta ? template.buttons : [] });
+		setSaving(false);
 		if (!next.ok) return setProblem(next);
 		setResult(next);
-		setDraft(null);
+		close();
 		refresh();
 	};
 	const title = draft?.fixed ? (draft.name ?? draft.key) : draft?.isNew === false ? T.editTitle : T.add;
@@ -276,6 +289,130 @@ export function TemplatesSection({ websiteId }) {
 	/** @param {string} id */
 	const productName = (id) => names.get(id) ?? id;
 	const unavailable = catalog?.ok ? /** @type {string[]} */ (catalog.data.unavailable) : [];
+	/** @param {import('../../core/templates.js').TemplateRow} row */
+	const editRow = (row) =>
+		row.message
+			? openRow(row)
+			: row.template && open({ ...row.template, buttons: row.template.buttons ?? [], isNew: false, fixed: false });
+	/** The row's menu: Edit first (so that every row has one), then what the row can do. @param {import('../../core/templates.js').TemplateRow} row */
+	const menuOf = (row) => {
+		const edit = { label: row.state === 'not_set_up' ? T.setUp : T.edit, onSelect: () => editRow(row) };
+		/** @type {Array<{ label: string, onSelect: () => void, danger?: boolean }>} */
+		const more = row.message
+			? [
+					...(row.template && row.defaults
+						? [
+								{
+									label: T.reset,
+									onSelect: () => setDeleting({ key: row.key, channel: row.channel, language: 'default', reset: true }),
+								},
+							]
+						: []),
+					...(row.template && !row.defaults
+						? [
+								{
+									label: T.delete,
+									danger: true,
+									onSelect: () => setDeleting({ key: row.key, channel: row.channel, language: 'default', reset: false }),
+								},
+							]
+						: []),
+					...(row.switchable
+						? [
+								row.state === 'off'
+									? { label: T.switchOn, onSelect: () => void switchRow(row, false) }
+									: { label: T.switchOff, onSelect: () => void switchRow(row, true) },
+							]
+						: []),
+				]
+			: [
+					{
+						label: T.duplicate,
+						onSelect: () =>
+							row.template &&
+							open({
+								...row.template,
+								buttons: row.template.buttons ?? [],
+								language: 'default',
+								isNew: true,
+								fixed: false,
+							}),
+					},
+					{
+						label: T.delete,
+						danger: true,
+						onSelect: () => setDeleting({ key: row.key, channel: row.channel, language: row.language, reset: false }),
+					},
+				];
+		return [edit, ...more];
+	};
+	/** @type {Array<{ key: string, header: string, low?: boolean, wrap?: boolean, render: (row: import('../../core/templates.js').TemplateRow) => import('react').ReactNode }>} */
+	const columns = [
+		{ key: 'name', header: T.columns.name, render: (row) => (row.message ? row.message.name : row.key) },
+		{
+			key: 'channel',
+			header: T.columns.channel,
+			render: (row) => TEXTS.settings.channels[/** @type {typeof CHANNELS[number]} */ (row.channel)],
+		},
+		{
+			key: 'product',
+			header: T.columns.product,
+			low: true,
+			render: (row) => (row.message ? productName(row.message.productId) : T.own),
+		},
+		{
+			key: 'state',
+			header: T.columns.state,
+			render: (row) =>
+				row.message ? (
+					<StatusPill status={STATE_PILLS[/** @type {keyof typeof STATE_PILLS} */ (row.state)]}>
+						{T.states[/** @type {keyof typeof T.states} */ (row.state)]}
+					</StatusPill>
+				) : null,
+		},
+		{
+			key: 'language',
+			header: T.columns.language,
+			low: true,
+			render: (row) => (row.language === 'default' ? T.default : row.language),
+		},
+		{
+			key: 'words',
+			header: T.columns.words,
+			low: true,
+			render: (row) => {
+				const words = wordsOf(row);
+				const preview = words ? words.subject || words.text : T.notSetUpHelp;
+				return <span title={words?.text ?? ''}>{row.message ? `${row.key} · ${preview}` : preview}</span>;
+			},
+		},
+		{
+			key: 'flags',
+			header: T.columns.flags,
+			low: true,
+			wrap: true,
+			render: (row) => {
+				const words = wordsOf(row);
+				return (
+					<span className="flex flex-wrap gap-1">
+						{words?.required ? <Badge>{T.required_badge}</Badge> : null}
+						{words?.urgent ? <Badge>{T.urgent_badge}</Badge> : null}
+						{words?.sensitive ? <Badge>{T.sensitive_badge}</Badge> : null}
+						{words?.providerTemplate ? <Badge>{fill(T.atMeta, { name: words.providerTemplate })}</Badge> : null}
+						{words?.buttons?.length ? <Badge>{fill(T.buttonsCount, { count: words.buttons.length })}</Badge> : null}
+					</span>
+				);
+			},
+		},
+	];
+	const term = search.trim().toLowerCase();
+	const shownRows = rows.filter(
+		(row) =>
+			(channel === '' || row.channel === channel) &&
+			(product === '' || (row.message ? row.message.productId === product : product === OWN)) &&
+			(row.key.toLowerCase().includes(term) || (row.message?.name ?? '').toLowerCase().includes(term)),
+	);
+	const productIds = [...new Set(rows.flatMap((row) => (row.message ? [row.message.productId] : [])))];
 	return (
 		<Section
 			title={TEXTS.settings.templatesTitle}
@@ -286,7 +423,7 @@ export function TemplatesSection({ websiteId }) {
 				</Button>
 			}>
 			{!answer ? (
-				<Skeleton lines={2} label={TEXTS.loading} />
+				<DataTableSkeleton columns={columns.length} rows={4} menu label={TEXTS.loading} />
 			) : !answer.ok ? (
 				<Callout tone="info">
 					{answer.problem?.type?.endsWith('database_not_connected') ? T.needsDatabase : describeProblem(answer.problem)}
@@ -294,163 +431,47 @@ export function TemplatesSection({ websiteId }) {
 			) : rows.length === 0 ? (
 				<EmptyState compact icon="mail" kind="settings" title={T.none} />
 			) : (
-				<Card>
-					<FieldGrid className="mb-4">
-						<Input label={T.search} type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
-						<Select
-							label={T.channel}
-							value={channel}
-							options={[
-								{ value: '', label: fill(T.allChannels, { count: rows.length }) },
-								...CHANNELS.map((value) => ({
+				<Card padded={false} className="overflow-hidden">
+					<Toolbar
+						search={{ onSearch: setSearch, value: search, label: T.search, placeholder: T.search, delay: 0 }}
+						filters={[
+							{
+								id: 'channel',
+								label: T.channel,
+								allLabel: fill(T.allChannels, { count: rows.length }),
+								value: channel,
+								onChange: setChannel,
+								options: CHANNELS.map((value) => ({
 									value,
 									label: fill(T.channelCount, {
 										channel: TEXTS.settings.channels[value],
 										count: rows.filter((row) => row.channel === value).length,
 									}),
 								})),
-							]}
-							onChange={(event) => setChannel(event.target.value)}
-						/>
-					</FieldGrid>
-					{(() => {
-						const term = search.trim().toLowerCase();
-						const shown = rows.filter(
-							(row) =>
-								(channel === '' || row.channel === channel) &&
-								(row.key.toLowerCase().includes(term) || (row.message?.name ?? '').toLowerCase().includes(term)),
-						);
-						return shown.length === 0 ? (
-							<p className="text-sm text-muted">{T.noMatch}</p>
-						) : (
-							<RowList>
-								{shown.map((row) => {
-									const words = wordsOf(row);
-									const preview = words ? words.subject || words.text : T.notSetUpHelp;
-									const product = row.message;
-									/** @type {Array<{ label: string, onSelect: () => void, danger?: boolean }>} */
-									const more = product
-										? [
-												...(row.template && row.defaults
-													? [
-															{
-																label: T.reset,
-																onSelect: () =>
-																	setDeleting({
-																		key: row.key,
-																		channel: row.channel,
-																		language: 'default',
-																		reset: true,
-																	}),
-															},
-														]
-													: []),
-												...(row.template && !row.defaults
-													? [
-															{
-																label: T.delete,
-																danger: true,
-																onSelect: () =>
-																	setDeleting({
-																		key: row.key,
-																		channel: row.channel,
-																		language: 'default',
-																		reset: false,
-																	}),
-															},
-														]
-													: []),
-												...(row.switchable
-													? [
-															row.state === 'off'
-																? { label: T.switchOn, onSelect: () => void switchRow(row, false) }
-																: { label: T.switchOff, onSelect: () => void switchRow(row, true) },
-														]
-													: []),
-											]
-										: [
-												{
-													label: T.duplicate,
-													onSelect: () =>
-														row.template &&
-														open({
-															...row.template,
-															buttons: row.template.buttons ?? [],
-															language: 'default',
-															isNew: true,
-															fixed: false,
-														}),
-												},
-												{
-													label: T.delete,
-													danger: true,
-													onSelect: () =>
-														setDeleting({
-															key: row.key,
-															channel: row.channel,
-															language: row.language,
-															reset: false,
-														}),
-												},
-											];
-									return (
-										<ListRow
-											key={`${row.key}|${row.channel}|${row.language}`}
-											wrap
-											title={product ? product.name : row.key}
-											status={
-												<>
-													<Badge kind="settings">
-														{TEXTS.settings.channels[/** @type {typeof CHANNELS[number]} */ (row.channel)]}
-													</Badge>
-													{product ? (
-														<>
-															<Badge>{productName(product.productId)}</Badge>
-															<Badge tone={STATE_TONES[/** @type {keyof typeof STATE_TONES} */ (row.state)]}>
-																{T.states[/** @type {keyof typeof T.states} */ (row.state)]}
-															</Badge>
-														</>
-													) : (
-														<Badge>{row.language === 'default' ? T.default : row.language}</Badge>
-													)}
-													{words?.required ? <Badge>{T.required_badge}</Badge> : null}
-													{words?.urgent ? <Badge>{T.urgent_badge}</Badge> : null}
-													{words?.sensitive ? <Badge>{T.sensitive_badge}</Badge> : null}
-													{words?.providerTemplate ? (
-														<Badge>{fill(T.atMeta, { name: words.providerTemplate })}</Badge>
-													) : null}
-													{words?.buttons?.length ? (
-														<Badge>{fill(T.buttonsCount, { count: words.buttons.length })}</Badge>
-													) : null}
-												</>
-											}
-											meta={<span title={words?.text ?? ''}>{product ? `${row.key} · ${preview}` : preview}</span>}
-											action={
-												<Button
-													size="sm"
-													variant="secondary"
-													onClick={() =>
-														product
-															? openRow(row)
-															: row.template &&
-																open({
-																	...row.template,
-																	buttons: row.template.buttons ?? [],
-																	isNew: false,
-																	fixed: false,
-																})
-													}>
-													{row.state === 'not_set_up' ? T.setUp : T.edit}
-												</Button>
-											}
-											moreLabel={fill(T.more, { key: row.key })}
-											more={more}
-										/>
-									);
-								})}
-							</RowList>
-						);
-					})()}
+							},
+							{
+								id: 'product',
+								label: T.columns.product,
+								value: product,
+								onChange: setProduct,
+								options: [
+									...productIds.map((value) => ({ value, label: productName(value) })),
+									...(rows.some((row) => !row.message) ? [{ value: OWN, label: T.own }] : []),
+								],
+							},
+						]}
+					/>
+					<DataTable
+						caption={TEXTS.settings.templatesTitle}
+						className="max-h-[36rem]"
+						columns={columns}
+						rows={shownRows}
+						rowKey={(row) => `${row.key}|${row.channel}|${row.language}`}
+						rowLabel={(row) => (row.message ? row.message.name : row.key)}
+						onRowClick={editRow}
+						rowMenu={menuOf}
+						empty={T.noMatch}
+					/>
 				</Card>
 			)}
 			{unavailable.length > 0 ? (
@@ -475,9 +496,24 @@ export function TemplatesSection({ websiteId }) {
 						})
 					: null}
 			</ConfirmDialog>
-			<Dialog open={draft !== null} onClose={() => setDraft(null)} title={title} size="lg">
+			<Drawer
+				open={shown}
+				onClose={close}
+				size="lg"
+				title={title}
+				closeLabel={TEXTS.cancel}
+				footer={
+					<>
+						<Button variant="secondary" onClick={close}>
+							{TEXTS.cancel}
+						</Button>
+						<Button type="submit" form={formId} loading={saving} disabled={!draft}>
+							{TEXTS.save}
+						</Button>
+					</>
+				}>
 				{draft ? (
-					<Form onSubmit={save} aria-label={title}>
+					<Form id={formId} onSubmit={save} aria-label={title}>
 						{draft.fixed ? (
 							<p className="text-sm text-muted">
 								{fill(T.fixed, {
@@ -553,15 +589,9 @@ export function TemplatesSection({ websiteId }) {
 						/>
 						<TemplatePreview template={draft} longValues={draft.longValues ?? []} />
 						<SaveOutcome result={problem} />
-						<div className="flex flex-wrap gap-2">
-							<Button type="submit">{TEXTS.save}</Button>
-							<Button variant="ghost" onClick={() => setDraft(null)}>
-								{TEXTS.cancel}
-							</Button>
-						</div>
 					</Form>
 				) : null}
-			</Dialog>
+			</Drawer>
 		</Section>
 	);
 }
