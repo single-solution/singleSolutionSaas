@@ -18,7 +18,7 @@
  * pane returns to its top when the page changes (`scrollKey`).
  * @module
  */
-import { Fragment, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cx } from './cx.js';
 import { Avatar, IconBadge } from './display.js';
 import { HeaderSlotsContext } from './header.js';
@@ -26,7 +26,10 @@ import { Icon } from './icons.js';
 import { AccountMenu, ThemeMenu } from './Menu.js';
 import { NavigationProgress, usePresence } from './motion.js';
 import { useFocusTrap } from './overlay.js';
+import { ShellContext } from './shell-state.js';
 import { ThemeToggle } from './theme.js';
+
+export { useShell } from './shell-state.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {import('./display.js').Kind} Kind */
@@ -40,12 +43,6 @@ import { ThemeToggle } from './theme.js';
  * The header's account menu (with the theme choice in it).
  * @typedef {{ name: string, email?: string, label?: string, items: import('./Menu.js').MenuItem[] }} ShellAccount
  */
-
-/** The frame state the slots can read: `rail` is true while the sidebar is folded to icons. */
-const ShellContext = createContext({ rail: false });
-
-/** @returns {{ rail: boolean }} whether the sidebar is folded to its icon rail */
-export const useShell = () => useContext(ShellContext);
 
 /** Where the folded state of the sidebar is kept (this browser only). */
 const RAIL_KEY = 'ss-nav-rail';
@@ -361,6 +358,8 @@ export function AppShell({
 		[titleSlot, metaSlot, actionsSlot, lift],
 	);
 	const rail = collapsible && folded;
+	// what the pages inside read (shell-state.js): the folded state, the router link, the phone menu button
+	const shell = useMemo(() => ({ rail, ...(linkAs ? { linkAs } : {}), openNav: () => setOpen(true) }), [rail, linkAs]);
 	const panel = useRef(/** @type {HTMLDivElement | null} */ (null));
 	const pane = useRef(/** @type {HTMLDivElement | null} */ (null));
 	const drawer = usePresence(open);
@@ -404,7 +403,7 @@ export function AppShell({
 	 * account, and the theme with the fold button. The drawer shows it wide, with its own close button.
 	 */
 	const sidebar = (/** @type {boolean} */ narrow, /** @type {boolean} */ inDrawer) => (
-		<ShellContext.Provider value={{ rail: narrow }}>
+		<ShellContext.Provider value={{ ...shell, rail: narrow }}>
 			<div className="flex h-full min-h-0 flex-col">
 				<div className={cx('flex h-16 shrink-0 items-center gap-2 px-4', narrow ? 'justify-center px-0' : 'justify-between')}>
 					<Brand {...brand} markOnly={narrow} />
@@ -480,126 +479,131 @@ export function AppShell({
 
 	return (
 		<NavigationProgress>
-			<HeaderSlotsContext.Provider value={slots}>
-				<div className="flex h-dvh w-full gap-3 overflow-hidden bg-canvas p-3 text-fg lg:gap-4 lg:p-4">
-					<a
-						href={`#${mainId}`}
-						className="sr-only z-[70] rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
-						Skip to content
-					</a>
-					<aside
-						data-rail={rail || undefined}
-						className={cx(
-							// visible overflow: the account and theme menus open upward over the page from the rail
-							'relative z-30 hidden h-full shrink-0 rounded-panel border border-line-soft bg-surface shadow-panel [view-transition-name:ss-sidebar] lg:block',
-							'transition-[width] duration-(--ss-motion) ease-ss',
-							rail ? 'w-16' : 'w-60',
-						)}>
-						{sidebar(rail, false)}
-					</aside>
-					{drawer.mounted ? (
-						<div
-							ref={drawer.ref}
-							data-state={drawer.closing ? 'closed' : 'open'}
-							className="group fixed inset-0 z-50 animate-ss-fade bg-overlay p-3 data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-fade-out lg:hidden"
-							onMouseDown={(event) => {
-								if (event.target === event.currentTarget) setOpen(false);
-							}}>
+			<ShellContext.Provider value={shell}>
+				<HeaderSlotsContext.Provider value={slots}>
+					<div className="flex h-dvh w-full gap-3 overflow-hidden bg-canvas p-3 text-fg lg:gap-4 lg:p-4">
+						<a
+							href={`#${mainId}`}
+							className="sr-only z-[70] rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
+							Skip to content
+						</a>
+						<aside
+							data-rail={rail || undefined}
+							className={cx(
+								// visible overflow: the account and theme menus open upward over the page from the rail
+								'relative z-30 hidden h-full shrink-0 rounded-panel border border-line-soft bg-surface shadow-panel [view-transition-name:ss-sidebar] lg:block',
+								'transition-[width] duration-(--ss-motion) ease-ss',
+								rail ? 'w-16' : 'w-60',
+							)}>
+							{sidebar(rail, false)}
+						</aside>
+						{drawer.mounted ? (
 							<div
-								ref={panel}
-								role="dialog"
-								aria-modal="true"
-								aria-label="Navigation"
-								className="h-full w-60 max-w-[85vw] animate-ss-drawer rounded-panel border border-line-soft bg-surface shadow-overlay group-data-[state=closed]:animate-ss-drawer-out">
-								{sidebar(false, true)}
-							</div>
-						</div>
-					) : null}
-					<div className="flex h-full min-w-0 flex-1 flex-col gap-3 lg:gap-4">
-						<header className="flex h-14 shrink-0 items-center gap-2 rounded-panel border border-line-soft bg-surface px-2 shadow-panel [view-transition-name:ss-topbar] sm:gap-3 sm:px-4">
-							<button
-								type="button"
-								onClick={() => setOpen(true)}
-								aria-label="Open navigation"
-								aria-expanded={open}
-								className="ss-motion ss-press shrink-0 rounded-lg p-2 text-fg hover:bg-surface-2 lg:hidden">
-								<Icon name="menu" size={18} />
-							</button>
-							<div className="flex min-w-0 flex-1 items-center gap-2.5">
-								{pageTitle || trail.length > 0 ? (
-									<TitleTrail
-										crumbs={trail}
-										{...(lifted > 0 ? {} : { title: pageTitle })}
-										{...(linkAs ? { linkAs } : {})}
-									/>
-								) : lifted > 0 ? null : (
-									<span className="lg:hidden">
-										<Brand {...brand} compact />
-									</span>
-								)}
-								{lifted > 0 && trail.length > 0 ? (
-									<span aria-hidden="true" className="hidden shrink-0 text-subtle sm:block">
-										<Icon name="chevronRight" size={14} />
-									</span>
-								) : null}
-								<div ref={setTitleSlot} className="flex min-w-0 shrink items-center empty:hidden" />
+								ref={drawer.ref}
+								data-state={drawer.closing ? 'closed' : 'open'}
+								className="group fixed inset-0 z-50 animate-ss-fade bg-overlay p-3 data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-fade-out lg:hidden"
+								onMouseDown={(event) => {
+									if (event.target === event.currentTarget) setOpen(false);
+								}}>
 								<div
-									ref={setMetaSlot}
-									className="hidden min-w-0 items-center gap-2 overflow-hidden empty:hidden md:flex"
-								/>
-								{context ? (
-									<span className="hidden min-w-0 md:flex">
-										<ContextPill>{context}</ContextPill>
-									</span>
-								) : null}
-								{topbar ? <div className="flex min-w-0 items-center gap-2">{topbar}</div> : null}
-							</div>
-							{search ? <div className="hidden min-w-0 shrink md:block md:w-64 xl:w-80">{search}</div> : null}
-							<div ref={setActionsSlot} className="flex shrink-0 items-center gap-2 empty:hidden" />
-							{actions || back || account || themeToggle ? (
-								<div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-									{back ? (
-										<a
-											href={back.href}
-											className="ss-motion inline-flex h-8 items-center gap-1 rounded-control px-2 text-label font-medium text-muted hover:bg-surface-2 hover:text-fg">
-											<Icon name="chevronLeft" size={14} />
-											<span className="sr-only sm:not-sr-only">{back.label}</span>
-										</a>
-									) : null}
-									{actions}
-									{/* the sidebar holds the account and the theme on wide screens, the header on phones */}
-									{account ? (
-										<span className="lg:hidden">
-											<AccountMenu
-												name={account.name}
-												{...(account.email ? { email: account.email } : {})}
-												items={account.items}
-												{...(account.label ? { label: account.label } : {})}
-												theme={themeToggle}
-												compact
-											/>
-										</span>
-									) : themeToggle ? (
-										<span className="lg:hidden">
-											<ThemeMenu />
-										</span>
-									) : null}
+									ref={panel}
+									role="dialog"
+									aria-modal="true"
+									aria-label="Navigation"
+									className="h-full w-60 max-w-[85vw] animate-ss-drawer rounded-panel border border-line-soft bg-surface shadow-overlay group-data-[state=closed]:animate-ss-drawer-out">
+									{sidebar(false, true)}
 								</div>
-							) : null}
-						</header>
-						<ScrollArea
-							ref={pane}
-							className="-mx-1 flex-1 px-1 [--ss-pane-h:calc(100dvh-6rem)] lg:[--ss-pane-h:calc(100dvh-6.5rem)]">
-							<div className="flex w-full min-w-0 flex-col gap-6 pb-6">
-								{banner}
-								<main id={mainId} tabIndex={-1} className="min-w-0 space-y-6 focus:outline-none">
-									{children}
-								</main>
 							</div>
-						</ScrollArea>
+						) : null}
+						<div className="group/main flex h-full min-w-0 flex-1 flex-col gap-3 lg:gap-4">
+							<header className="flex h-14 shrink-0 items-center gap-2 group-has-[[data-ss-page]]/main:hidden rounded-panel border border-line-soft bg-surface px-2 shadow-panel [view-transition-name:ss-topbar] sm:gap-3 sm:px-4">
+								<button
+									type="button"
+									onClick={() => setOpen(true)}
+									aria-label="Open navigation"
+									aria-expanded={open}
+									className="ss-motion ss-press shrink-0 rounded-lg p-2 text-fg hover:bg-surface-2 lg:hidden">
+									<Icon name="menu" size={18} />
+								</button>
+								<div className="flex min-w-0 flex-1 items-center gap-2.5">
+									{pageTitle || trail.length > 0 ? (
+										<TitleTrail
+											crumbs={trail}
+											{...(lifted > 0 ? {} : { title: pageTitle })}
+											{...(linkAs ? { linkAs } : {})}
+										/>
+									) : lifted > 0 ? null : (
+										<span className="lg:hidden">
+											<Brand {...brand} compact />
+										</span>
+									)}
+									{lifted > 0 && trail.length > 0 ? (
+										<span aria-hidden="true" className="hidden shrink-0 text-subtle sm:block">
+											<Icon name="chevronRight" size={14} />
+										</span>
+									) : null}
+									<div ref={setTitleSlot} className="flex min-w-0 shrink items-center empty:hidden" />
+									<div
+										ref={setMetaSlot}
+										className="hidden min-w-0 items-center gap-2 overflow-hidden empty:hidden md:flex"
+									/>
+									{context ? (
+										<span className="hidden min-w-0 md:flex">
+											<ContextPill>{context}</ContextPill>
+										</span>
+									) : null}
+									{topbar ? <div className="flex min-w-0 items-center gap-2">{topbar}</div> : null}
+								</div>
+								{search ? <div className="hidden min-w-0 shrink md:block md:w-64 xl:w-80">{search}</div> : null}
+								<div ref={setActionsSlot} className="flex shrink-0 items-center gap-2 empty:hidden" />
+								{actions || back || account || themeToggle ? (
+									<div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+										{back ? (
+											<a
+												href={back.href}
+												className="ss-motion inline-flex h-8 items-center gap-1 rounded-control px-2 text-label font-medium text-muted hover:bg-surface-2 hover:text-fg">
+												<Icon name="chevronLeft" size={14} />
+												<span className="sr-only sm:not-sr-only">{back.label}</span>
+											</a>
+										) : null}
+										{actions}
+										{/* the sidebar holds the account and the theme on wide screens, the header on phones */}
+										{account ? (
+											<span className="lg:hidden">
+												<AccountMenu
+													name={account.name}
+													{...(account.email ? { email: account.email } : {})}
+													items={account.items}
+													{...(account.label ? { label: account.label } : {})}
+													theme={themeToggle}
+													compact
+												/>
+											</span>
+										) : themeToggle ? (
+											<span className="lg:hidden">
+												<ThemeMenu />
+											</span>
+										) : null}
+									</div>
+								) : null}
+							</header>
+							<ScrollArea
+								ref={pane}
+								className="-mx-1 flex-1 px-1 [--ss-pane-h:calc(100dvh-6rem)] lg:[--ss-pane-h:calc(100dvh-6.5rem)] has-[[data-ss-page]]:overflow-hidden has-[[data-ss-page]]:pb-1">
+								<div className="flex w-full min-w-0 flex-col gap-6 pb-6 has-[[data-ss-page]]:h-full has-[[data-ss-page]]:gap-3 has-[[data-ss-page]]:pb-0 lg:has-[[data-ss-page]]:gap-4">
+									{banner}
+									<main
+										id={mainId}
+										tabIndex={-1}
+										className="min-w-0 space-y-6 focus:outline-none has-[[data-ss-page]]:flex has-[[data-ss-page]]:min-h-0 has-[[data-ss-page]]:flex-1 has-[[data-ss-page]]:flex-col">
+										{children}
+									</main>
+								</div>
+							</ScrollArea>
+						</div>
 					</div>
-				</div>
-			</HeaderSlotsContext.Provider>
+				</HeaderSlotsContext.Provider>
+			</ShellContext.Provider>
 		</NavigationProgress>
 	);
 }

@@ -63,7 +63,15 @@ export { Toolbar, TOOLBAR_TEXTS } from './Toolbar.js';
 export { DataTable, DATA_TABLE_TEXTS, useRowSelection } from './DataTable.js';
 export { Pagination, PaginationSkeleton } from './Pagination.js';
 export { InnerNav, INNER_NAV_TEXTS } from './InnerNav.js';
-export { InnerNavSkeleton, ToolbarSkeleton, DataTableSkeleton } from './skeletons.js';
+export { Page, PAGE_TEXTS } from './Page.js';
+export {
+	InnerNavSkeleton,
+	ToolbarSkeleton,
+	DataTableSkeleton,
+	PageSkeleton,
+	SettingsCardSkeleton,
+	StatGridSkeleton,
+} from './skeletons.js';
 export { METRICS } from './layout-metrics.js';
 export { TypedConfirmDialog } from './TypedConfirm.js';
 export { PasswordConfirmDialog, PASSWORD_CONFIRM_TEXTS } from './PasswordConfirm.js';
@@ -121,6 +129,11 @@ export { describeProblem, fieldErrors, problemCode, problemLines } from './probl
 /** @typedef {import('./InnerNav.js').InnerNavGroup} InnerNavGroup */
 /** @typedef {import('./DataTable.js').RowSelection} RowSelection */
 /** @typedef {import('./layout-metrics.js').ColumnKind} ColumnKind */
+/** @typedef {import('./page-parts.js').PageCrumb} PageCrumb */
+/** @typedef {import('./page-parts.js').PageFact} PageFact */
+/** @typedef {import('./page-parts.js').PageAction} PageAction */
+/** @typedef {import('./page-parts.js').PageActions} PageActions */
+/** @typedef {import('./page-parts.js').PageStatus} PageStatus */
 /** @typedef {import('./Toolbar.js').ToolbarFilter} ToolbarFilter */
 /** @typedef {import('./Toolbar.js').ToolbarSearch} ToolbarSearch */
 /** @typedef {import('./Toolbar.js').ToolbarBulk} ToolbarBulk */

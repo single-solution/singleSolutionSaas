@@ -855,3 +855,11 @@
 	overscroll-behavior: contain;
 	scrollbar-gutter: stable;
 }
+
+/* a wrapper around a `Page` (the page transition) passes the pane's height on, so the page fills the frame */
+[data-ss-transition]:has([data-ss-page]) {
+	display: flex;
+	min-height: 0;
+	flex: 1 1 0%;
+	flex-direction: column;
+}

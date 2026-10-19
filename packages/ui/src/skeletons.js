@@ -5,8 +5,11 @@
  * @module
  */
 import { cx } from './cx.js';
-import { SkeletonBlock } from './display.js';
-import { BAR, columnClass, METRICS, NAV_PANEL, TABLE } from './layout-metrics.js';
+import { SkeletonBlock, STAT_GRID } from './display.js';
+import { ROW_GRID, ROW_LABEL, ROW_LIST } from './fields.js';
+import { BAR, CARD, columnClass, METRICS, NAV_PANEL, PAGE, pageBody, TABLE } from './layout-metrics.js';
+import { Crumbs, ShellMenuButton } from './page-parts.js';
+import { PaginationSkeleton } from './Pagination.js';
 
 /** Widths of the placeholder lines, repeated so a list does not look like a ruler. */
 const WIDTHS = ['w-3/4', 'w-1/2', 'w-2/3', 'w-5/6', 'w-2/5'];
@@ -110,6 +113,128 @@ export function DataTableSkeleton({ columns, rows = 8, selectable = false, menu 
 					))}
 				</tbody>
 			</table>
+		</div>
+	);
+}
+
+/**
+ * A settings card while it loads: the same box and header, and rows with the label on the left and the control on the
+ * right (they stack when the card is narrow, like the real rows).
+ * @param {{ rows?: number, title?: boolean, className?: string }} props `title`: draw the title and description lines
+ */
+export function SettingsCardSkeleton({ rows = 3, title = true, className }) {
+	return (
+		<div aria-hidden="true" className={cx(CARD.box, 'animate-ss-fade', className)}>
+			{title ? (
+				<div className={CARD.header}>
+					<div className="min-w-0 flex-1 space-y-2">
+						<SkeletonBlock className="h-5 w-40" />
+						<SkeletonBlock className="h-3 w-64 max-w-full" />
+					</div>
+				</div>
+			) : null}
+			<div className={cx(title ? CARD.bodyWithHeader : CARD.body, '@container')}>
+				<div className={ROW_LIST}>
+					{Array.from({ length: rows }, (_, i) => (
+						<div key={i} className={ROW_GRID}>
+							<div className={ROW_LABEL}>
+								<SkeletonBlock className={cx('h-4', i % 2 ? 'w-28' : 'w-36')} />
+								<SkeletonBlock className="h-3 w-48 max-w-full" />
+							</div>
+							<SkeletonBlock className="h-9 w-full" />
+						</div>
+					))}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+/**
+ * A row of summary tiles while it loads (the real tiles are `Stat` in a `StatGrid`): the same grid, tile boxes and
+ * padding, a label, a value and a hint.
+ * @param {{ tiles?: number, className?: string }} props
+ */
+export function StatGridSkeleton({ tiles = 4, className }) {
+	return (
+		<div aria-hidden="true" className={cx('@container min-w-0 animate-ss-fade', className)}>
+			<div className={STAT_GRID}>
+				{Array.from({ length: tiles }, (_, i) => (
+					<div key={i} className={CARD.tile}>
+						<div className="space-y-2">
+							<SkeletonBlock className="h-4 w-24" />
+							<SkeletonBlock className="h-8 w-20" />
+							<SkeletonBlock className="h-3 w-32" />
+						</div>
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
+
+/**
+ * A page while it loads (for a route's `loading.js`, and what {@link Page} draws for `loading`): the same one-line
+ * header (the breadcrumbs when they are known, blocks for the numbers and the actions), the same inner navigation, toolbar,
+ * body and footer areas as the page, the same sizes. `children` is the body's own skeleton (a `DataTableSkeleton`, an
+ * `OverviewSkeleton`); a few settings cards by default.
+ * @param {{ crumbs?: import('./page-parts.js').PageCrumb[], linkAs?: import('react').ElementType, nav?: boolean,
+ *   toolbar?: boolean, footer?: boolean, flush?: boolean, label?: string, children?: import('react').ReactNode,
+ *   className?: string }} props
+ */
+export function PageSkeleton({
+	crumbs,
+	linkAs,
+	nav = false,
+	toolbar = false,
+	footer = false,
+	flush = false,
+	label = 'Loading',
+	children,
+	className,
+}) {
+	return (
+		<div data-ss-page="" aria-busy="true" className={cx(PAGE.root, className)}>
+			<span role="status" className="sr-only">
+				{label}
+			</span>
+			<header data-ss-part="header" className={PAGE.header}>
+				<ShellMenuButton />
+				<div className="min-w-0 flex-1">
+					{crumbs && crumbs.length > 0 ? (
+						<Crumbs crumbs={crumbs} {...(linkAs ? { linkAs } : {})} />
+					) : (
+						<SkeletonBlock className="h-5 w-48 max-w-full" />
+					)}
+				</div>
+				<SkeletonBlock className="hidden h-7 w-28 rounded-full md:block" />
+				<SkeletonBlock className="h-9 w-24" />
+			</header>
+			<div className={PAGE.area}>
+				{nav ? <InnerNavSkeleton /> : null}
+				<section className={PAGE.main}>
+					{toolbar ? (
+						<div data-ss-part="toolbar" className={PAGE.toolbar}>
+							<ToolbarSkeleton />
+						</div>
+					) : null}
+					<div data-ss-part="body" className={pageBody({ toolbar, footer })}>
+						<div className={flush ? PAGE.flush : PAGE.padded}>
+							{children ?? (
+								<>
+									<SettingsCardSkeleton />
+									<SettingsCardSkeleton />
+								</>
+							)}
+						</div>
+					</div>
+					{footer ? (
+						<div data-ss-part="footer" className={PAGE.footer}>
+							<PaginationSkeleton />
+						</div>
+					) : null}
+				</section>
+			</div>
 		</div>
 	);
 }

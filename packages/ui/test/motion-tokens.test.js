@@ -35,3 +35,9 @@ describe('motion tokens (layout contract item 12)', () => {
 		expect(reduced).toMatch(/ss-press/);
 	});
 });
+
+describe('the Page fills the pane', () => {
+	it('lets a wrapper around a page (the page transition) pass the pane height on', () => {
+		expect(css).toMatch(/\[data-ss-transition\]:has\(\[data-ss-page\]\)/);
+	});
+});

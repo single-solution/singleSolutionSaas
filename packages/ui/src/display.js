@@ -6,6 +6,7 @@ import { Fragment } from 'react';
 import { cx } from './cx.js';
 import { humanize } from './format.js';
 import { Icon } from './icons.js';
+import { CARD } from './layout-metrics.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 /**
@@ -161,10 +162,10 @@ export function Card({
 		<Tag
 			id={id}
 			{...(flow ? { 'data-flow': 'card' } : {})}
-			className={cx('min-w-0 rounded-card border border-line-soft bg-surface shadow-card', className)}
+			className={cx(CARD.box, className)}
 			{...(title && typeof title === 'string' && as === 'section' ? { 'aria-label': title } : {})}>
 			{hasHeader ? (
-				<header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pt-4">
+				<header className={CARD.header}>
 					<div className="min-w-0 flex-1">
 						{title ? <h2 className="text-title font-semibold tracking-[-0.01em] text-fg">{title}</h2> : null}
 						{subtitle ? <p className="mt-0.5 text-help text-muted">{subtitle}</p> : null}
@@ -172,7 +173,12 @@ export function Card({
 					{actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
 				</header>
 			) : null}
-			<div className={cx(padded && (hasHeader ? 'px-5 pt-3 pb-5' : 'p-5'), !padded && hasHeader && 'pt-2', bodyClassName)}>
+			<div
+				className={cx(
+					padded && (hasHeader ? CARD.bodyWithHeader : CARD.body),
+					!padded && hasHeader && 'pt-2',
+					bodyClassName,
+				)}>
 				{children}
 			</div>
 		</Tag>
@@ -530,7 +536,7 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, kind, classNa
 							? 'text-info'
 							: 'text-muted';
 	return (
-		<div className={cx('@container min-w-0 rounded-card border border-line-soft bg-surface px-5 py-4', className)}>
+		<div className={cx(CARD.tile, className)}>
 			<div className="space-y-2">
 				<div className="flex items-center gap-2">
 					{icon ? (

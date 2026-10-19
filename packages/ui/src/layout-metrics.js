@@ -85,3 +85,37 @@ export const columnClass = ({ kind = 'text', align, low, wrap, className }, firs
 		first && TABLE.gutter,
 		className,
 	);
+
+/**
+ * The parts of a page (`Page` and `PageSkeleton` share them): the one-line header panel, the area under it (the inner
+ * navigation beside the main panel), and in the main panel the fixed toolbar, the one scrolling body and the fixed footer.
+ */
+export const PAGE = Object.freeze({
+	root: 'flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:gap-4',
+	header: `flex ${METRICS.header} min-w-0 shrink-0 items-center gap-2 rounded-panel border border-line-soft bg-surface px-2 shadow-panel sm:gap-3 sm:px-4`,
+	area: 'flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:gap-4',
+	main: 'relative flex min-h-0 min-w-0 flex-1 flex-col rounded-panel border border-line-soft bg-surface shadow-panel',
+	// above the body, so the menus of its filters open over the list
+	toolbar: 'relative z-20 shrink-0 rounded-t-panel border-b border-line-soft',
+	footer: `relative z-10 flex shrink-0 items-center rounded-b-panel border-t border-line-soft ${METRICS.footer} ${METRICS.gutter}`,
+	/** the padding of a body that is not a list */
+	padded: 'flex flex-col gap-6 p-4 sm:p-6',
+	/** the body of a list: the table uses all of it */
+	flush: 'flex min-h-0 flex-1 flex-col',
+});
+
+/**
+ * The one scrolling box of a page. Its corners follow the panel when no toolbar or footer sits above or below it.
+ * @param {{ toolbar?: boolean, footer?: boolean }} has
+ */
+export const pageBody = ({ toolbar = false, footer = false }) =>
+	cx('ss-scroll flex min-h-0 flex-1 flex-col', !toolbar && 'rounded-t-panel', !footer && 'rounded-b-panel');
+
+/** The card and the summary tile, shared by the real ones (`Card`, `Stat`) and their skeletons. */
+export const CARD = Object.freeze({
+	box: 'min-w-0 rounded-card border border-line-soft bg-surface shadow-card',
+	header: 'flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pt-4',
+	body: 'p-5',
+	bodyWithHeader: 'px-5 pt-3 pb-5',
+	tile: '@container min-w-0 rounded-card border border-line-soft bg-surface px-5 py-4',
+});
