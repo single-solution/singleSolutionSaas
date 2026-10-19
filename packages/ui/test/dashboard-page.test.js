@@ -193,6 +193,37 @@ describe('SectionsPage', () => {
 		expect(container.textContent).not.toContain('first body');
 	});
 
+	it("words the navigation's search box with the tab's own label", () => {
+		const { container } = render(
+			inDashboard(<SectionsPage tab="settings" sections={SPECS()} searchFrom={2} searchLabel="Search our settings" />),
+		);
+		expect(container.querySelector('input[type="search"][aria-label="Search our settings"]')).not.toBeNull();
+	});
+
+	it('gives a result that is a table all of the body (no padding), as a sub-page that is a table does', () => {
+		const sections = [
+			{ id: 'a', label: 'A', content: <p>a</p> },
+			{ id: 'b', label: 'B', content: <p>b</p> },
+		];
+		const padded = render(
+			inDashboard(
+				<SectionsPage tab="texts" sections={sections}>
+					<p>results</p>
+				</SectionsPage>,
+			),
+		);
+		expect(padded.container.querySelector('[data-ss-part="body"]')?.getAttribute('role')).toBe('region');
+		cleanup();
+		const flush = render(
+			inDashboard(
+				<SectionsPage tab="texts" sections={sections} flushChildren>
+					<p>results</p>
+				</SectionsPage>,
+			),
+		);
+		expect(flush.container.querySelector('[data-ss-part="body"]')?.getAttribute('role')).toBeNull();
+	});
+
 	it('lets the tab put its own content in place of the sub-pages (a search result)', () => {
 		const { container } = render(
 			inDashboard(

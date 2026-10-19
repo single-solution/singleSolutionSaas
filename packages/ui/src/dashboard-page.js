@@ -179,12 +179,13 @@ const leavesOf = (specs) => specs.flatMap((spec) => (spec.children?.length ? spe
  * open section as the body. One section needs no navigation. A sub-page is mounted when it is first opened and then
  * kept, hidden, so an edit in it is not lost.
  * @param {{ tab: string, sections: Section[], label?: string, initial?: string, searchFrom?: number,
- *   status?: PageStatus[], facts?: PageFact[], actions?: PageActions, info?: ReactNode, toolbar?: ReactNode,
+ *   searchLabel?: string, flushChildren?: boolean, status?: PageStatus[], facts?: PageFact[], actions?: PageActions, info?: ReactNode, toolbar?: ReactNode,
  *   footer?: ReactNode, navFooter?: ReactNode, loading?: boolean, error?: import('react').ComponentProps<typeof Page>['error'],
  *   withNav?: boolean, empty?: ReactNode, children?: ReactNode }} props `tab`: the key of the tab (its crumb);
  *   `status`, `facts`, `actions` and `info` are the page's, used where the open sub-page names none of its own;
- *   `children` take the place of the sub-pages (a search result) while the navigation stays; `withNav`: draw the
- *   navigation's skeleton too while `loading`
+ *   `children` take the place of the sub-pages (a search result) while the navigation stays (`flushChildren`: they are
+ *   a table, which uses all of the body); `searchLabel`: the words of the navigation's search box; `withNav`: draw
+ *   the navigation's skeleton too while `loading`
  */
 export function SectionsPage({
 	tab,
@@ -192,6 +193,8 @@ export function SectionsPage({
 	label,
 	initial,
 	searchFrom,
+	searchLabel,
+	flushChildren = false,
 	status,
 	facts,
 	actions,
@@ -227,10 +230,11 @@ export function SectionsPage({
 					onSelect: choose,
 					label: label ?? tabLabel,
 					...(searchFrom ? { searchFrom } : {}),
+					...(searchLabel ? { texts: { search: searchLabel } } : {}),
 					...(navFooter ? { footer: navFooter } : {}),
 				}
 			: undefined;
-	const flush = Boolean(leaf?.flush) && !children;
+	const flush = children ? flushChildren : Boolean(leaf?.flush);
 	const pills = leaf?.pills ?? status;
 	const numbers = leaf?.facts ?? facts;
 	const buttons = leaf?.actions ?? actions;
