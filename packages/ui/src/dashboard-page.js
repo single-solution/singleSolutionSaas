@@ -35,9 +35,11 @@ import { describeProblem } from './problems.js';
  * A section of {@link SectionsPage}: a link of the inner navigation with its content, or with parts of its own. What
  * the open sub-page says about itself goes in the page's header: `info` (the old description, behind the (i)), `facts`,
  * `pills` and `actions`; `flush` gives its body no padding (a table uses all of it); `locked` shows a lock in the
- * navigation (the page is still opened: it explains what the feature does).
+ * navigation (the page is still opened: it explains what the feature does); `toolbar` and `footer` are the ones of
+ * this sub-page (a search above its table, the pages below it), shown while it is open.
  * @typedef {Omit<BaseSpec, 'children'> & { info?: ReactNode, facts?: PageFact[], pills?: PageStatus[],
- *   actions?: PageActions, flush?: boolean, locked?: boolean, children?: Section[] }} Section
+ *   actions?: PageActions, toolbar?: ReactNode, footer?: ReactNode, flush?: boolean, locked?: boolean,
+ *   children?: Section[] }} Section
  */
 
 /** The frame of the dashboard around a tab; none when a tab is drawn on its own. */
@@ -258,6 +260,8 @@ export function SectionsPage({
 	const pills = own?.pills ?? status;
 	const numbers = own?.facts ?? facts;
 	const buttons = own?.actions ?? actions;
+	const tools = own?.toolbar ?? toolbar;
+	const pages = own?.footer ?? footer;
 	// what the sub-page says of itself comes first, then what the whole page is for
 	const about =
 		own?.info && info ? (
@@ -276,8 +280,8 @@ export function SectionsPage({
 			{...(buttons ? { actions: buttons } : {})}
 			{...(about ? { info: about } : {})}
 			{...(nav ? { nav } : {})}
-			{...(toolbar ? { toolbar } : {})}
-			{...(footer ? { footer } : {})}
+			{...(tools ? { toolbar: tools } : {})}
+			{...(pages ? { footer: pages } : {})}
 			loading={loading}
 			{...(error ? { error } : {})}
 			flush={flush}>

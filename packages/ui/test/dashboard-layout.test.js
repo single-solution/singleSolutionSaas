@@ -7,7 +7,15 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /** The files of the shared dashboard. */
-const FILES = ['overview.js'];
+const FILES = [
+	'overview.js',
+	'dashboard.js',
+	'dashboard-page.js',
+	'dashboard-tabs.js',
+	'dashboard-settings.js',
+	'dashboard-parts.js',
+	'dashboard-setup.js',
+];
 
 /** The old pieces (LY-4 deletes them): none of these words may appear in a dashboard file. */
 const OLD = [

@@ -9,8 +9,7 @@ import { ViewTransition, createContext, useContext, useEffect, useMemo, useRef, 
 import { Button } from './Button.js';
 import { SaveBar, SettingList, SettingRow, SettingsCard } from './blocks.js';
 import { Callout, Card, ErrorState, Skeleton, SoftBreaks } from './display.js';
-import { Input, RadioGroup, SegmentedControl, Switch, TextArea } from './fields.js';
-import { ListEditor } from './ListEditor.js';
+import { Input } from './fields.js';
 import { SchemaForm } from './SchemaForm.js';
 import { describeProblem, problemLines } from './problems.js';
 import { ToastProvider, useToast } from './Toast.js';
@@ -406,7 +405,7 @@ export function ResealCard() {
 	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
 	const done = result?.ok ? result.data : null;
 	return (
-		<Card title={texts.reseal.title} subtitle={texts.reseal.intro}>
+		<Card>
 			<div className="space-y-4">
 				<Button
 					disabled={busy}

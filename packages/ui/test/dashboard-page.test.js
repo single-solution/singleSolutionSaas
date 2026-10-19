@@ -212,6 +212,19 @@ describe('SectionsPage', () => {
 		expect(container.textContent).toContain('For every website');
 	});
 
+	it('shows the toolbar and footer of the open sub-page only while it is open', () => {
+		const sections = [
+			{ id: 'a', label: 'A', toolbar: <p>tools of a</p>, footer: <p>pages of a</p>, content: <p>a</p> },
+			{ id: 'b', label: 'B', content: <p>b</p> },
+		];
+		const { container } = render(inDashboard(<SectionsPage tab="features" sections={sections} />));
+		expect(container.querySelector('[data-ss-part="toolbar"]')?.textContent).toBe('tools of a');
+		expect(container.querySelector('[data-ss-part="footer"]')?.textContent).toBe('pages of a');
+		click(/** @type {HTMLElement} */ ([...container.querySelectorAll('a[href="#b"]')].at(-1)));
+		expect(container.querySelector('[data-ss-part="toolbar"]')).toBeNull();
+		expect(container.querySelector('[data-ss-part="footer"]')).toBeNull();
+	});
+
 	it('draws the empty state when there is no section, and a message when it failed', () => {
 		const { container } = render(inDashboard(<SectionsPage tab="settings" sections={[]} empty={<p>nothing at all</p>} />));
 		expect(byText(container, 'nothing at all')).toBeTruthy();

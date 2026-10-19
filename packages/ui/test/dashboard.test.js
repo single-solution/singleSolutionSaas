@@ -109,7 +109,10 @@ const openSection = (root, id) => {
 
 /** What the page's (i) says: opens it and gives the page's text. @param {ParentNode} root */
 const aboutOf = (root) => {
-	click(/** @type {HTMLElement} */ (root.querySelector('button[aria-label="About this page"]')));
+	const about = /** @type {HTMLElement} */ (root.querySelector('button[aria-label="About this page"]'));
+	// a click elsewhere closes it in a browser; here it is closed and opened again
+	if (about.getAttribute('aria-expanded') === 'true') click(about);
+	click(about);
 	return root.textContent;
 };
 
@@ -431,6 +434,8 @@ describe('shared pieces', () => {
 		let answer = ok({ resealed: 3, current: 1, unreadable: 0, failedWebsites: [] });
 		serve({ 'POST /v1/dashboard/reseal': () => answer });
 		const { container } = render(inDashboard(<ResealCard />));
+		// the page's title is the header's: the card holds the button and its answer only
+		expect(container.querySelector('h1, h2, h3')).toBeNull();
 		await act(async () => button(TEXTS.reseal.button).click());
 		expect(container.textContent).toContain('3 re-sealed, 1 already on the current key, 0 could not');
 		expect(container.textContent).toContain(TEXTS.reseal.finished);
@@ -1063,20 +1068,33 @@ describe('standard tabs', () => {
 			),
 		);
 		await settle();
-		// one connection per sidebar link, with its state
-		expect(navLinks(container)).toEqual(['Database', 'Mail', 'Storage']);
-		expect(container.textContent).toContain('Needed by: Notes, Inbox');
+		// one connection per sidebar link, with its state as a dot
+		expect(navLinks(container)).toEqual(['DatabaseConnected', 'MailNot connected', 'StorageTest failed']);
+		expect(crumbsOf(container)).toEqual(['Notes', 'Connections', 'Database']);
+		const header = () => /** @type {HTMLElement} */ (container.querySelector('[data-ss-part="header"]'));
+		expect(header().textContent).toContain('Connected');
+		// no heading in the body: who needs it is behind the (i)
+		expect(container.querySelector('#section-connection-database h2, #section-connection-database h3')).toBeNull();
+		expect(container.textContent).not.toContain('Needed by: Notes, Inbox');
+		expect(aboutOf(container)).toContain('Needed by: Notes, Inbox');
 		expect(container.textContent).toContain('••••abcd');
 		expect(container.textContent).toContain('Fine');
 		expect(container.textContent).toContain('Your MongoDB address.');
 		expect(container.textContent).not.toContain('Optional');
+		// Test is a button of the header, not of the body
+		expect(buttonsOf(header(), TEXTS.connections.test)).toHaveLength(1);
+		expect(
+			buttonsOf(/** @type {HTMLElement} */ (container.querySelector('#section-connection-database')), 'Test'),
+		).toHaveLength(0);
 		await act(async () => buttonsOf(container, TEXTS.connections.test)[0]?.click());
 		await settle();
 		expect(container.textContent).toContain('Cannot reach it');
 		// Mail: a value field, Save and test sends it trimmed, and the field empties; nothing saved yet, so no Remove menu
 		openSection(container, 'connection-mail');
-		expect(container.textContent).toContain('Optional');
-		expect(container.querySelector('#section-connection-mail button[aria-haspopup="menu"]')).toBeNull();
+		expect(crumbsOf(container)).toEqual(['Notes', 'Connections', 'Mail']);
+		expect(aboutOf(container)).toContain('Optional');
+		expect(header().textContent).toContain('Not connected');
+		expect(container.querySelector('button[aria-label="More actions"]')).toBeNull();
 		const token = byLabel(
 			/** @type {HTMLElement} */ (container.querySelector('#section-connection-mail')),
 			TEXTS.connections.value,
@@ -1094,7 +1112,7 @@ describe('standard tabs', () => {
 		expect(token.value).toBe('');
 		// Storage: the product's own form, and its state
 		openSection(container, 'connection-storage');
-		expect(container.querySelector('#section-connection-storage')?.textContent).toContain('Test failed');
+		expect(header().textContent).toContain('Test failed');
 		await act(async () => button('Save storage').click());
 		await settle();
 		expect(requests.filter((request) => request.method === 'PUT').at(-1)).toEqual({
@@ -1104,10 +1122,8 @@ describe('standard tabs', () => {
 		});
 		// Remove sits in the menu of what is saved, after a confirmation
 		openSection(container, 'connection-database');
-		const menu = /** @type {HTMLElement} */ (
-			container.querySelector('#section-connection-database button[aria-haspopup="menu"]')
-		);
-		expect(menu.getAttribute('aria-label')).toBe('More actions for Database');
+		const menu = /** @type {HTMLElement} */ (header().querySelector('button[aria-haspopup="menu"]'));
+		expect(menu.getAttribute('aria-label')).toBe('More actions');
 		click(menu);
 		click(/** @type {HTMLElement} */ (allByRole(container, 'menuitem')[0]));
 		const dialog = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
@@ -1156,6 +1172,7 @@ describe('standard tabs', () => {
 		])) {
 			openSection(container, `connection-${name}`);
 			const section = /** @type {HTMLElement} */ (container.querySelector(`#section-connection-${name}`));
+			expect(section.querySelector('h2, h3')).toBeNull();
 			expect(section.textContent).toContain(TEXTS.managed.title);
 			expect(section.textContent).toContain(words);
 			// the way to change it is the Portal, at the section that holds it; nothing is typed or removed here
@@ -1164,19 +1181,15 @@ describe('standard tabs', () => {
 				`https://portal.example.com/admin/merchants/mer_1/websites/${id}/settings#${name === 'link_accounts' ? 'links' : 'connections'}`,
 			);
 			expect(section.querySelector('input')).toBeNull();
-			expect(section.querySelector('button[aria-haspopup="menu"]')).toBeNull();
+			expect(container.querySelector('[data-ss-part="header"] button[aria-haspopup="menu"]')).toBeNull();
 			expect(buttonsOf(section, TEXTS.connections.save)).toHaveLength(0);
 		}
 		// the database and the storage can be tested here; a link cannot
-		expect(
-			buttonsOf(/** @type {HTMLElement} */ (container.querySelector('#section-connection-database')), TEXTS.connections.test),
-		).toHaveLength(1);
-		expect(
-			buttonsOf(
-				/** @type {HTMLElement} */ (container.querySelector('#section-connection-link_accounts')),
-				TEXTS.connections.test,
-			),
-		).toHaveLength(0);
+		openSection(container, 'connection-database');
+		expect(buttonsOf(container, TEXTS.connections.test)).toHaveLength(1);
+		openSection(container, 'connection-link_accounts');
+		expect(buttonsOf(container, TEXTS.connections.test)).toHaveLength(0);
+		openSection(container, 'connection-database');
 		await act(async () => buttonsOf(container, TEXTS.connections.test)[0]?.click());
 		await settle();
 		expect(requests.some((request) => request.method === 'POST' && request.path === `${base}/database/test`)).toBe(true);
@@ -1192,23 +1205,60 @@ describe('standard tabs', () => {
 		serve({ [`GET /v1/dashboard/websites/${id}/connections`]: ok({ connections: [] }) });
 		const { container } = render(inDashboard(<ConnectionsTab {...tabProps(id)} />));
 		await settle();
+		expect(crumbsOf(container)).toEqual(['Notes', 'Connections']);
 		expect(container.textContent).toContain(TEXTS.connections.none);
 	});
 
-	it('Developers: the product sections or the widget script, and the searchable docs; the id and tokens are in the Portal', async () => {
+	it('Connections: shows the page skeleton while loading and the problem in the page when it failed', async () => {
+		const id = freshSite();
+		serve({ [`GET /v1/dashboard/websites/${id}/connections`]: { status: 500, body: { status: 500, title: 'Down' } } });
+		const { container } = render(inDashboard(<ConnectionsTab {...tabProps(id)} />));
+		expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+		expect(crumbsOf(container)).toEqual(['Notes', 'Connections']);
+		await settle();
+		expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+		expect(container.textContent).toContain(TEXTS.failed);
+		expect(byText(container, TEXTS.tryAgain, 'button')).toBeTruthy();
+	});
+
+	it('Developers: the product sections or the widget script, and the searchable docs table; the id and tokens are in the Portal', async () => {
 		const id = freshSite();
 		serve({ [`GET /v1/dashboard/websites/${id}/features`]: ok({ features: FEATURES }) });
 		const { container } = render(inDashboard(<DevelopersTab {...tabProps(id)} />));
 		await settle();
 		expect(navLinks(container)).toEqual(['Widget script', 'Feature docs']);
+		expect(crumbsOf(container)).toEqual(['Notes', 'Developers', 'Widget script']);
+		// no heading in the body: what the script is for is behind the (i)
+		expect(container.querySelector('#section-script h2, #section-script h3')).toBeNull();
+		expect(container.textContent).not.toContain(TEXTS.developers.scriptHelp);
+		expect(aboutOf(container)).toContain(TEXTS.developers.scriptHelp);
 		// nothing here repeats what the Portal shows: no website id, no token text, no link to the tokens
 		expect(container.textContent).not.toContain(id);
 		expect(container.textContent).not.toContain('server token');
 		expect(container.querySelector('a[href="https://portal.example.com"]')).toBeNull();
 		expect(container.textContent).toContain(`${window.location.origin}/widget.js`);
+		// the docs are a table of the features, the ones that are off marked, with a search above it
 		openSection(container, 'docs');
-		expect(container.textContent).toContain('Alerts (off)');
+		expect(crumbsOf(container)).toEqual(['Notes', 'Developers', 'Feature docs']);
+		expect(container.querySelector('#section-docs ul, #section-docs ol')).toBeNull();
+		const table = /** @type {HTMLElement} */ (container.querySelector('#section-docs table'));
+		expect([...table.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual(['Feature', 'Status']);
+		const rows = [...table.querySelectorAll('tbody tr')].map((row) => row.textContent);
+		expect(rows).toEqual(['NotesOn', 'InboxOn', 'AlertsOff']);
 		expect(container.querySelector('a[href="/docs#feature-notes"]')).not.toBeNull();
+		expect(container.querySelector('[data-ss-part="body"]')?.getAttribute('role')).toBeNull();
+		const search = /** @type {HTMLInputElement} */ (
+			container.querySelector('input[type="search"][aria-label="Find a feature"]')
+		);
+		type(search, 'inb');
+		await settle();
+		expect([...container.querySelectorAll('#section-docs tbody tr')].map((row) => row.textContent)).toEqual(['InboxOn']);
+		type(search, 'zzz');
+		await settle();
+		expect(container.textContent).toContain(TEXTS.developers.none);
+		// the search belongs to the docs: the script page has none
+		openSection(container, 'script');
+		expect(container.querySelector('input[type="search"][aria-label="Find a feature"]')).toBeNull();
 		cleanup();
 		const own = render(
 			inDashboard(
@@ -1276,7 +1326,10 @@ describe('standard tabs', () => {
 		/** @type {any} */
 		let saved = ok({});
 		serve({
-			'GET /v1/dashboard/prices': ok({ features: FEATURES, recentChanges: [] }),
+			'GET /v1/dashboard/prices': ok({
+				features: FEATURES,
+				recentChanges: [{ who: { name: 'Alex' }, detail: 'Changed the price of Notes', at: '2026-10-04T14:30:00.000Z' }],
+			}),
 			'PUT /v1/dashboard/prices': () => saved,
 		});
 		const { container } = render(
@@ -1287,11 +1340,20 @@ describe('standard tabs', () => {
 		);
 		await settle();
 		expect(navLinks(container)).toEqual(['Writing', 'Reading', TEXTS.reseal.title, 'Recent changes']);
+		expect(crumbsOf(container)).toEqual(['Notes', 'Prices', 'Writing']);
+		expect(container.querySelector('h1')?.textContent).toBe('Writing');
+		// no heading and no description in the body: what the prices are is behind the (i)
+		expect(container.querySelector('#section-prices-writing h2, #section-prices-writing h3')).toBeNull();
+		expect(container.textContent).not.toContain(TEXTS.prices.intro);
+		expect(aboutOf(container)).toContain(TEXTS.prices.intro);
 		expect(byLabel(container, 'Notes').value).toBe('1');
 		expect(container.textContent).not.toContain('You have unsaved prices');
 		type(byLabel(container, 'Notes'), '1.5');
 		expect(container.textContent).toContain('You have unsaved prices');
+		// the category with a price not saved yet says how many in the sidebar
+		expect(navLinks(container)).toEqual(['Writing1', 'Reading', TEXTS.reseal.title, 'Recent changes']);
 		openSection(container, 'prices-reading');
+		expect(crumbsOf(container)).toEqual(['Notes', 'Prices', 'Reading']);
 		type(byLabel(container, 'Inbox'), 'lots');
 		await act(async () => button('Save').click());
 		await settle();
@@ -1311,7 +1373,15 @@ describe('standard tabs', () => {
 		expect(container.textContent).toContain('Owners only');
 		expect(byLabel(container, 'Inbox').value).toBe('3');
 		openSection(container, 'security');
-		expect(container.textContent).toContain(TEXTS.reseal.title);
+		expect(crumbsOf(container)).toEqual(['Notes', 'Prices', TEXTS.reseal.title]);
+		expect(container.querySelector('#section-security h2, #section-security h3')).toBeNull();
+		expect(container.querySelector('#section-security')?.textContent).not.toContain(TEXTS.reseal.intro);
+		expect(aboutOf(container)).toContain(TEXTS.reseal.intro);
+		expect(button(TEXTS.reseal.button)).toBeTruthy();
+		// Recent changes is a table of its own
+		openSection(container, 'changes');
+		expect(crumbsOf(container)).toEqual(['Notes', 'Prices', 'Recent changes']);
+		expect(container.querySelector('#section-changes table')).not.toBeNull();
 	});
 });
 

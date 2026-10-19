@@ -130,6 +130,8 @@ export const DASHBOARD_TEXTS = Object.freeze({
 		script: 'Widget script',
 		scriptHelp: 'Add it to the pages that show the widgets; your browser token is in the Portal.',
 		off: 'off',
+		none: 'No feature matches.',
+		columns: Object.freeze({ feature: 'Feature', status: 'Status', on: 'On', off: 'Off' }),
 	}),
 	defaults: Object.freeze({
 		intro: 'Global defaults apply to every website that has not saved its own value.',

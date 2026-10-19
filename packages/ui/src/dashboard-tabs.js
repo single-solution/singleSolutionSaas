@@ -15,22 +15,20 @@
 import { useState } from 'react';
 import { Button, ButtonLink } from './Button.js';
 import { CodeBlock } from './CodeBlock.js';
-import { Badge, Callout, Card, EmptyState, ManagedNote, StatusPill, TextLink } from './display.js';
+import { Callout, Card, EmptyState, ManagedNote, StatusPill, TextLink } from './display.js';
 import { DataTable } from './DataTable.js';
-import { SaveBar, SectionLayout, SettingList, SettingsCard, ViewTitle } from './blocks.js';
+import { SaveBar, SettingList, SettingsCard } from './blocks.js';
 import { Input, Switch } from './fields.js';
-import { ActionMenu } from './Menu.js';
 import { ConfirmDialog } from './overlay.js';
-import { ChangesTable, OverviewSkeleton, ProductOverview, RecentChanges } from './overview.js';
-import { Paged, usePaged } from './paged.js';
+import { ChangesTable, OverviewSkeleton, ProductOverview } from './overview.js';
+import { usePaged } from './paged.js';
 import { Pagination } from './Pagination.js';
 import { Toolbar } from './Toolbar.js';
-import { ListRow, RowList } from './rows.js';
 import { formatCreditsPerHour, parseCredits, supportContact } from './format.js';
 import { useDisplayLocale } from './time.js';
 import { call, fill, useLoad } from './dashboard-api.js';
 import { LoadedPage, SectionsPage, useCrumbs } from './dashboard-page.js';
-import { Loaded, Outcome, ResealCard, toneOf, useDashboard, withDependents } from './dashboard-parts.js';
+import { Outcome, ResealCard, toneOf, useDashboard, withDependents } from './dashboard-parts.js';
 import {
 	SettingsBar,
 	TextsTable,
@@ -46,6 +44,7 @@ import { websiteSettingsUrl } from './portal-links.js';
 /** @typedef {import('./dashboard-parts.js').SettingsNotice} SettingsNotice */
 /** @typedef {import('./dashboard-settings.js').FeatureExtra} FeatureExtra */
 /** @typedef {import('./blocks.js').SectionSpec} SectionSpec */
+/** @typedef {import('./dashboard-page.js').Section} Section */
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
 /**
@@ -489,11 +488,13 @@ function TextsPanel({ items, saveUrl, resetBody, savedSource, reload }) {
 }
 
 /**
- * Connections: the inner sidebar lists the connections with their state; the view is one connection with its status, a
- * value to save (and test), Test, and Remove in its ⋯ menu once something is saved (after a confirmation). `form`
- * gives the product's own form for a connection (null: the one value field); `hint` its help line under the status.
- * A connection the Portal owns (`managed`: the database, the storage and the links to other products) has no form and no
- * Remove here: a note says where it is set, with a link to the Portal; the database and the storage can be tested.
+ * Connections: the inner sidebar lists the connections, each with a dot for its state; the page is one connection:
+ * its state is a pill in the header beside Test (and Remove in the More menu once something is saved, after a
+ * confirmation), who needs it is behind the (i), and the body holds a value to save (Save and test) or the product's own
+ * form. `form` gives the product's own form for a connection (null: the one value field); `hint` its help line under the
+ * status. A connection the Portal owns (`managed`: the database, the storage and the links to other products) has no
+ * form and no Remove here: a note says where it is set, with a link to the Portal; the database and the storage can be
+ * tested.
  * @param {TabProps & { form?: (item: Connection, save: (value: unknown) => Promise<void>) => ReactNode,
  *   hint?: (name: string) => ReactNode }} props
  */
@@ -511,7 +512,7 @@ export function ConnectionsTab({ websiteId, merchantId, who, portal, form, hint 
 		reload();
 	};
 	return (
-		<Loaded answer={answer}>
+		<LoadedPage answer={answer} tab="connections" withNav>
 			{(data) => {
 				/** @type {Connection[]} */
 				const connections = data.connections;
@@ -522,110 +523,105 @@ export function ConnectionsTab({ websiteId, merchantId, who, portal, form, hint 
 					const own = form && !managed ? form(item, save) : null;
 					const help = hint ? hint(item.name) : null;
 					const tone = toneOf(item.status);
+					const state = String(C[/** @type {'connected'} */ (item.status)]);
+					/** @type {import('./display.js').PillStatus} */
+					const pill = tone === 'success' ? 'active' : tone === 'danger' ? 'error' : 'setup';
+					const details = item.last4 || item.message || (help && !managed);
 					return {
 						id: `connection-${item.name}`,
 						label: item.label,
 						icon: /** @type {const} */ ('plug'),
-						badge: (
-							<span
-								role="img"
-								aria-label={String(C[/** @type {'connected'} */ (item.status)])}
-								className={`size-2 rounded-full ${tone === 'success' ? 'bg-success-solid' : tone === 'danger' ? 'bg-danger-solid' : 'bg-attention-solid'}`}
-							/>
-						),
+						status: tone,
+						statusLabel: state,
+						info: item.neededBy.length > 0 ? fill(C.neededBy, { features: namesOf(item.neededBy, 4) }) : C.neededByNone,
+						pills: [
+							{
+								status: pill,
+								label: state,
+							},
+						],
+						actions: {
+							...(item.kind === 'link'
+								? {}
+								: {
+										secondary: [{ label: C.test, onClick: () => act(call('POST', `${base}/${item.name}/test`)) }],
+									}),
+							...(item.status === 'not_connected' || managed
+								? {}
+								: {
+										more: [
+											{
+												label: C.remove,
+												danger: true,
+												onSelect: () => setRemoving({ name: item.name, label: item.label }),
+											},
+										],
+									}),
+						},
 						content: (
 							<>
-								<ViewTitle
-									title={item.label}
-									description={
-										item.neededBy.length > 0
-											? fill(C.neededBy, { features: namesOf(item.neededBy, 4) })
-											: C.neededByNone
-									}
-								/>
-								<Card>
-									<p className="flex flex-wrap items-center gap-2 text-sm">
-										<Badge tone={tone} dot>
-											{C[/** @type {'connected'} */ (item.status)]}
-										</Badge>
-										{item.last4 ? <code>••••{item.last4}</code> : null}
-										{item.message ? <span className="text-muted">{item.message}</span> : null}
-									</p>
-									{managed ? (
-										<ManagedNote
-											className="mt-3"
-											title={texts.managed.title}
-											href={websiteSettingsUrl({
-												portal,
-												admin: who.kind === 'admin',
-												websiteId,
-												merchantId,
-												section: item.kind === 'link' ? 'links' : 'connections',
-											})}
-											linkLabel={C.managed.open}>
-											{C.managed[/** @type {'database'} */ (item.kind ?? 'database')] ?? C.managed.link}
-										</ManagedNote>
-									) : help ? (
-										<p className="mt-2 text-help text-muted">{help}</p>
-									) : null}
-									{managed
-										? null
-										: (own ?? (
-												<div className="mt-3 flex flex-wrap items-end gap-2">
-													<Input
-														fieldClassName="min-w-0 flex-1 basis-64"
-														label={C.value}
-														type="password"
-														autoComplete="off"
-														value={values[item.name] ?? ''}
-														onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
-													/>
-													<Button
-														size="sm"
-														disabled={!values[item.name]?.trim()}
-														onClick={() => {
-															const done = save(values[item.name]?.trim());
-															setValues({ ...values, [item.name]: '' });
-															return done;
-														}}>
-														{C.save}
-													</Button>
-												</div>
-											))}
-									<div className="mt-3 flex flex-wrap gap-2">
-										{item.kind === 'link' ? null : (
+								{details ? (
+									<Card>
+										<p className="flex flex-wrap items-center gap-2 text-sm">
+											{item.last4 ? <code>••••{item.last4}</code> : null}
+											{item.message ? <span className="text-muted">{item.message}</span> : null}
+											{help && !managed ? <span className="text-help text-muted">{help}</span> : null}
+										</p>
+									</Card>
+								) : null}
+								{managed ? (
+									<ManagedNote
+										title={texts.managed.title}
+										href={websiteSettingsUrl({
+											portal,
+											admin: who.kind === 'admin',
+											websiteId,
+											merchantId,
+											section: item.kind === 'link' ? 'links' : 'connections',
+										})}
+										linkLabel={C.managed.open}>
+										{C.managed[/** @type {'database'} */ (item.kind ?? 'database')] ?? C.managed.link}
+									</ManagedNote>
+								) : own ? (
+									<Card>{own}</Card>
+								) : (
+									<SettingsCard
+										wide
+										footer={
 											<Button
 												size="sm"
-												variant="secondary"
-												onClick={() => act(call('POST', `${base}/${item.name}/test`))}>
-												{C.test}
+												disabled={!values[item.name]?.trim()}
+												onClick={() => {
+													const done = save(values[item.name]?.trim());
+													setValues({ ...values, [item.name]: '' });
+													return done;
+												}}>
+												{C.save}
 											</Button>
-										)}
-										{item.status === 'not_connected' || managed ? null : (
-											<ActionMenu
-												label={fill(C.more, { name: item.label })}
-												items={[
-													{
-														label: C.remove,
-														danger: true,
-														onSelect: () => setRemoving({ name: item.name, label: item.label }),
-													},
-												]}
+										}>
+										<SettingList>
+											<Input
+												label={C.value}
+												type="password"
+												autoComplete="off"
+												value={values[item.name] ?? ''}
+												onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
 											/>
-										)}
-									</div>
-								</Card>
+										</SettingList>
+									</SettingsCard>
+								)}
 							</>
 						),
 					};
 				});
 				return (
-					<div className="space-y-4">
+					<>
 						<Outcome result={result} />
-						<SectionLayout
+						<SectionsPage
+							tab="connections"
 							label={texts.tabs.connections}
 							sections={sections}
-							empty={<p className="text-sm text-muted">{C.none}</p>}
+							empty={<EmptyState icon="plug" title={C.none} />}
 						/>
 						<ConfirmDialog
 							open={removing !== null}
@@ -641,91 +637,106 @@ export function ConnectionsTab({ websiteId, merchantId, who, portal, form, hint 
 							}}>
 							<p>{C.removeHelp}</p>
 						</ConfirmDialog>
-					</div>
+					</>
 				);
 			}}
-		</Loaded>
+		</LoadedPage>
 	);
 }
 
 /**
  * Developers: the inner sidebar has the product's own `sections` (by default the widget script: the snippets, API calls and
- * addresses of this product), `children` under More, and the docs of every feature (off ones marked, searchable). The
- * website's id and the tokens are in the Portal (Install and tokens, the Setup sheet); the docs link is in the header.
+ * addresses of this product), `children` under More, and the docs of every feature, a table with a search (off ones
+ * marked). What each page is for is behind its (i). The website's id and the tokens are in the Portal (Install and
+ * tokens, the Setup sheet); the docs link is in the header.
  * @param {TabProps & { sections?: SectionSpec[], children?: ReactNode }} props
  */
 export function DevelopersTab({ websiteId, sections, children }) {
+	const { answer } = useLoad(`/v1/dashboard/websites/${websiteId}/features`);
+	return (
+		<LoadedPage answer={answer} tab="developers" withNav>
+			{(data) => (
+				<DevelopersPanel features={data.features} {...(sections ? { sections } : {})}>
+					{children}
+				</DevelopersPanel>
+			)}
+		</LoadedPage>
+	);
+}
+
+/**
+ * @param {{ features: Feature[], sections?: SectionSpec[], children?: ReactNode }} props
+ */
+function DevelopersPanel({ features, sections, children }) {
 	const { texts } = useDashboard();
 	const D = texts.developers;
-	const { answer } = useLoad(`/v1/dashboard/websites/${websiteId}/features`);
 	const origin = typeof window === 'undefined' ? '' : window.location.origin;
+	const paged = usePaged(features, { text: (feature) => `${feature.name} ${feature.key}`, pageSize: 25 });
+	/** @type {import('./DataTable.js').DataColumn<Feature>[]} */
+	const columns = [
+		{
+			key: 'name',
+			header: D.columns.feature,
+			sortable: true,
+			render: (feature) => <TextLink href={`/docs#feature-${feature.key}`}>{feature.name}</TextLink>,
+		},
+		{
+			key: 'on',
+			header: D.columns.status,
+			kind: 'status',
+			pill: (feature) => ({
+				status: feature.on ? 'active' : 'off',
+				label: feature.on ? D.columns.on : D.columns.off,
+			}),
+		},
+	];
+	/** @type {Section[]} */
+	const own = sections ?? [
+		{
+			id: 'script',
+			label: D.script,
+			icon: 'code',
+			info: D.scriptHelp,
+			content: <CodeBlock code={`<script src="${origin}/widget.js" data-token="YOUR_BROWSER_TOKEN" async></script>`} />,
+		},
+	];
 	return (
-		<Loaded answer={answer}>
-			{(data) => {
-				/** @type {Feature[]} */
-				const features = data.features;
-				/** @type {SectionSpec[]} */
-				const own = sections ?? [
-					{
-						id: 'script',
-						label: D.script,
-						icon: 'code',
-						content: (
-							<>
-								<ViewTitle title={D.script} description={D.scriptHelp} />
-								<CodeBlock code={`<script src="${origin}/widget.js" data-token="YOUR_BROWSER_TOKEN" async></script>`} />
-							</>
-						),
-					},
-				];
-				return (
-					<SectionLayout
-						label={texts.tabs.developers}
-						sections={[
-							...own,
-							...(children
-								? [{ id: 'more', label: D.more, icon: /** @type {const} */ ('layers'), content: children }]
-								: []),
-							{
-								id: 'docs',
-								label: D.docs,
-								icon: 'external',
-								content: (
-									<>
-										<ViewTitle title={D.docs} description={D.docsHelp} />
-										<Card>
-											<Paged
-												items={features}
-												pageSize={10}
-												label={D.search}
-												text={(feature) => `${feature.name} ${feature.key}`}>
-												{(page) => (
-													<RowList>
-														{page.map((feature) => (
-															<ListRow
-																key={feature.key}
-																wrap
-																className="py-2"
-																title={
-																	<>
-																		<TextLink href={`/docs#feature-${feature.key}`}>{feature.name}</TextLink>
-																		{feature.on ? '' : ` (${D.off})`}
-																	</>
-																}
-															/>
-														))}
-													</RowList>
-												)}
-											</Paged>
-										</Card>
-									</>
-								),
-							},
-						]}
-					/>
-				);
-			}}
-		</Loaded>
+		<SectionsPage
+			tab="developers"
+			label={texts.tabs.developers}
+			sections={[
+				...own,
+				...(children ? [{ id: 'more', label: D.more, icon: /** @type {const} */ ('layers'), content: children }] : []),
+				{
+					id: 'docs',
+					label: D.docs,
+					icon: 'external',
+					flush: true,
+					info: D.docsHelp,
+					toolbar: (
+						<Toolbar
+							search={{
+								onSearch: paged.setQuery,
+								value: paged.query,
+								label: D.search,
+								placeholder: D.search,
+								delay: 0,
+							}}
+						/>
+					),
+					footer: <Pagination {...paged.pagination} />,
+					content: (
+						<DataTable
+							caption={D.docs}
+							columns={columns}
+							rows={paged.rows}
+							rowKey={(feature) => feature.key}
+							empty={D.none}
+						/>
+					),
+				},
+			]}
+		/>
 	);
 }
 
@@ -788,7 +799,8 @@ function DefaultsPanel({ data, reload, notice }) {
 
 /**
  * Prices (Owner): the inner sidebar has the hourly prices by category (one price per feature, in credits, for every
- * merchant and website), the encryption key's Re-seal, and Recent changes.
+ * merchant and website; a category says how many prices are changed and not saved yet), the encryption key's Re-seal,
+ * and Recent changes. What the prices are is behind the (i) of the page.
  */
 export function PricesTab() {
 	const { texts, byCategory } = useDashboard();
@@ -796,7 +808,7 @@ export function PricesTab() {
 	const [draft, setDraft] = useState(/** @type {Record<string, string>} */ ({}));
 	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
 	return (
-		<Loaded answer={answer}>
+		<LoadedPage answer={answer} tab="prices" withNav>
 			{(data) => {
 				/** @type {Feature[]} */
 				const features = data.features;
@@ -807,13 +819,14 @@ export function PricesTab() {
 				const byKey = new Map(parsed.map((entry) => [entry.feature.key, entry]));
 				const dirty = Object.keys(draft).length > 0;
 				const sections = [
-					...byCategory(features.map((feature) => feature.key)).map((category) => ({
-						id: `prices-${slug(category.title)}`,
-						label: category.title,
-						group: texts.prices.hourly,
-						content: (
-							<>
-								<ViewTitle title={category.title} description={texts.prices.perHour} />
+					...byCategory(features.map((feature) => feature.key)).map((category) => {
+						const changed = category.keys.filter((key) => Object.hasOwn(draft, key)).length;
+						return {
+							id: `prices-${slug(category.title)}`,
+							label: category.title,
+							group: texts.prices.hourly,
+							...(changed > 0 ? { badge: changed } : {}),
+							content: (
 								<SettingsCard wide>
 									<SettingList>
 										{category.keys.map((key) => {
@@ -832,15 +845,15 @@ export function PricesTab() {
 										})}
 									</SettingList>
 								</SettingsCard>
-								<Outcome result={result} />
-							</>
-						),
-					})),
+							),
+						};
+					}),
 					{
 						id: 'security',
 						label: texts.reseal.title,
 						icon: /** @type {const} */ ('key'),
 						group: texts.prices.security,
+						info: texts.reseal.intro,
 						content: <ResealCard />,
 					},
 					{
@@ -848,13 +861,14 @@ export function PricesTab() {
 						label: texts.prices.changes,
 						icon: /** @type {const} */ ('clock'),
 						group: texts.prices.changes,
-						content: <RecentChanges items={data.recentChanges} />,
+						flush: true,
+						content: <ChangesTable items={data.recentChanges} />,
 					},
 				];
 				return (
-					<div className="space-y-4">
-						<Callout tone="info">{texts.prices.intro}</Callout>
-						<SectionLayout label={texts.tabs.prices} sections={sections} />
+					<>
+						<SectionsPage tab="prices" label={texts.tabs.prices} sections={sections} info={texts.prices.intro} />
+						<Outcome result={result} />
 						<SaveBar
 							show={dirty}
 							message={texts.prices.unsaved}
@@ -875,9 +889,9 @@ export function PricesTab() {
 								reload();
 							}}
 						/>
-					</div>
+					</>
 				);
 			}}
-		</Loaded>
+		</LoadedPage>
 	);
 }
