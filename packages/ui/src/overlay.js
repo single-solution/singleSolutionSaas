@@ -12,8 +12,12 @@ import { createPortal } from 'react-dom';
 import { Button } from './Button.js';
 import { cx } from './cx.js';
 import { FieldLayoutContext } from './fields.js';
+import { StatusPill } from './display.js';
 import { Icon } from './icons.js';
+import { DRAWER, DRAWER_WIDTH } from './layout-metrics.js';
 import { usePresence } from './motion.js';
+import { HeaderActions, useNarrow } from './page-parts.js';
+import { DrawerBodySkeleton } from './skeletons.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 
@@ -91,12 +95,22 @@ export const useFocusTrap = (ref, open, onClose) => {
  */
 
 /**
- * An overlay that holds an edit or a short task: a right drawer (`md` 32 rem, `lg` 42 rem wide) or, for `sm` and with
- * `placement="center"`, a centered dialog (a bottom sheet on phones) for a short confirmation or a link to copy. The
- * footer (its buttons) stays at the bottom while the content scrolls.
- * @param {OverlayProps} props
+ * @typedef {{ open: boolean, onClose: () => void, title: ReactNode, description?: ReactNode, children?: ReactNode,
+ *   footer?: ReactNode, size?: 'md' | 'lg', status?: import('./page-parts.js').PageStatus[],
+ *   actions?: import('./page-parts.js').PageActions, loading?: boolean, skeleton?: ReactNode, closeLabel?: string,
+ *   dismissible?: boolean }} DrawerProps
  */
-export function Dialog({
+
+/**
+ * The right drawer for editing or reading one record while the page stays in view (layout contract item 8): about 480 px
+ * wide (`md`) or 760 px (`lg`, for a big record such as an order), the whole screen on phones. It has its own one-line
+ * header (the title, status pills, the actions - a primary button, up to two secondary ones and a More menu, folded on
+ * phones - and the close button), a body that is the only part that scrolls, and a fixed footer (Save / Cancel).
+ * `loading` keeps the header and footer and draws a skeleton body (`skeleton` replaces it); `description` is a muted
+ * line at the top of the body.
+ * @param {DrawerProps} props
+ */
+export function Drawer({
 	open,
 	onClose,
 	title,
@@ -104,10 +118,103 @@ export function Dialog({
 	children,
 	footer,
 	size = 'md',
+	status,
+	actions,
+	loading = false,
+	skeleton,
 	closeLabel = 'Close',
 	dismissible = true,
-	placement,
 }) {
+	const ref = useRef(/** @type {HTMLDivElement | null} */ (null));
+	const titleId = useId();
+	const descriptionId = useId();
+	const narrow = useNarrow();
+	const close = () => {
+		if (dismissible) onClose();
+	};
+	const presence = usePresence(open);
+	useFocusTrap(ref, open, close);
+	if (!presence.mounted) return null;
+	const panel = (
+		<div
+			ref={presence.ref}
+			data-state={presence.closing ? 'closed' : 'open'}
+			data-placement="right"
+			className={cx(
+				'group fixed inset-0 z-50 flex bg-overlay',
+				DRAWER.layer,
+				'animate-ss-fade data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-fade-out',
+			)}
+			onMouseDown={(event) => {
+				if (event.target === event.currentTarget) close();
+			}}>
+			<div
+				ref={ref}
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby={titleId}
+				aria-describedby={description ? descriptionId : undefined}
+				aria-busy={loading || undefined}
+				tabIndex={-1}
+				className={cx(
+					DRAWER.panel,
+					DRAWER_WIDTH[size],
+					'animate-ss-side group-data-[state=closed]:animate-ss-side-out focus:outline-none',
+				)}>
+				<div data-ss-part="header" className={DRAWER.header}>
+					<h2 id={titleId} className="min-w-0 truncate text-lead font-semibold tracking-[-0.01em] text-fg">
+						{title}
+					</h2>
+					{status && status.length > 0 ? (
+						<div className="flex shrink-0 items-center gap-1.5">
+							{status.map((pill, i) => (
+								<StatusPill key={i} status={pill.status} {...(pill.title ? { title: pill.title } : {})}>
+									{pill.label}
+								</StatusPill>
+							))}
+						</div>
+					) : null}
+					<div className="ml-auto flex shrink-0 items-center gap-2">
+						{actions ? <HeaderActions actions={actions} narrow={narrow} /> : null}
+						{dismissible ? (
+							<button
+								type="button"
+								onClick={onClose}
+								aria-label={closeLabel}
+								className="ss-motion ss-press rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
+								<Icon name="close" size={16} />
+							</button>
+						) : null}
+					</div>
+				</div>
+				<div data-ss-part="body" className={DRAWER.body}>
+					{description ? (
+						<p id={descriptionId} className="text-sm text-muted">
+							{description}
+						</p>
+					) : null}
+					{loading ? (
+						(skeleton ?? <DrawerBodySkeleton />)
+					) : (
+						<FieldLayoutContext.Provider value="stack">{children}</FieldLayoutContext.Provider>
+					)}
+				</div>
+				{footer ? (
+					<div data-ss-part="footer" className={DRAWER.footer}>
+						{footer}
+					</div>
+				) : null}
+			</div>
+		</div>
+	);
+	return typeof document === 'undefined' ? panel : createPortal(panel, document.body);
+}
+
+/**
+ * A short centered dialog (a bottom sheet on phones): a confirmation or a link to copy.
+ * @param {Omit<OverlayProps, 'placement'>} props
+ */
+function CenterDialog({ open, onClose, title, description, children, footer, size, closeLabel = 'Close', dismissible = true }) {
 	const ref = useRef(/** @type {HTMLDivElement | null} */ (null));
 	const titleId = useId();
 	const descriptionId = useId();
@@ -117,24 +224,13 @@ export function Dialog({
 	const presence = usePresence(open);
 	useFocusTrap(ref, open, close);
 	if (!presence.mounted) return null;
-	const side = (placement ?? (size === 'sm' ? 'center' : 'right')) === 'right';
-	const width = side
-		? size === 'lg'
-			? 'sm:max-w-[42rem]'
-			: 'sm:max-w-[32rem]'
-		: size === 'sm'
-			? 'max-w-md'
-			: size === 'lg'
-				? 'max-w-3xl'
-				: 'max-w-xl';
 	const panel = (
 		<div
 			ref={presence.ref}
 			data-state={presence.closing ? 'closed' : 'open'}
-			data-placement={side ? 'right' : 'center'}
+			data-placement="center"
 			className={cx(
-				'group fixed inset-0 z-50 flex bg-overlay',
-				side ? 'justify-end p-0 sm:p-3' : 'items-end justify-center p-0 sm:items-center sm:p-4',
+				'group fixed inset-0 z-50 flex items-end justify-center bg-overlay p-0 sm:items-center sm:p-4',
 				'animate-ss-fade data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-fade-out',
 			)}
 			onMouseDown={(event) => {
@@ -148,16 +244,11 @@ export function Dialog({
 				aria-describedby={description ? descriptionId : undefined}
 				tabIndex={-1}
 				className={cx(
-					'flex w-full flex-col border-line-soft bg-surface text-fg shadow-overlay focus:outline-none',
-					side
-						? 'h-full animate-ss-side group-data-[state=closed]:animate-ss-side-out sm:rounded-panel sm:border'
-						: cx(
-								'max-h-[92vh] rounded-t-card border sm:rounded-card',
-								'animate-ss-sheet group-data-[state=closed]:animate-ss-sheet-out sm:animate-ss-pop sm:group-data-[state=closed]:animate-ss-pop-out',
-							),
-					width,
+					'flex max-h-[92vh] w-full flex-col rounded-t-card border border-line-soft bg-surface text-fg shadow-overlay focus:outline-none sm:rounded-card',
+					'animate-ss-sheet group-data-[state=closed]:animate-ss-sheet-out sm:animate-ss-pop sm:group-data-[state=closed]:animate-ss-pop-out',
+					size === 'sm' ? 'max-w-md' : size === 'lg' ? 'max-w-3xl' : 'max-w-xl',
 				)}>
-				<div className={cx('flex items-start justify-between gap-4 px-6 pt-6', side ? 'pb-4' : 'pb-1')}>
+				<div className="flex items-start justify-between gap-4 px-6 pt-6 pb-1">
 					<div className="min-w-0">
 						<h2 id={titleId} className="text-lead font-semibold tracking-[-0.01em] text-fg">
 							{title}
@@ -178,7 +269,7 @@ export function Dialog({
 						</button>
 					) : null}
 				</div>
-				<div className={cx('ss-scroll min-h-0 flex-1 space-y-4 px-6', side ? 'pt-1 pb-6' : 'py-4')}>
+				<div className="ss-scroll min-h-0 flex-1 space-y-4 px-6 py-4">
 					<FieldLayoutContext.Provider value="stack">{children}</FieldLayoutContext.Provider>
 				</div>
 				{footer ? (
@@ -191,12 +282,16 @@ export function Dialog({
 }
 
 /**
- * The right drawer for editing one thing (an order, a product, a connection, a list item) while the page stays in view:
- * a {@link Dialog} on the right.
+ * An overlay that holds a short task. For `sm` (or `placement="center"`) it is a centered dialog (a bottom sheet on
+ * phones) for a short confirmation or a link to copy; otherwise it is a {@link Drawer} on the right (`md`, `lg`), so
+ * every edit panel of the products is the one drawer.
  * @param {OverlayProps} props
  */
-export function Drawer(props) {
-	return <Dialog {...props} placement="right" />;
+export function Dialog({ placement, size = 'md', ...rest }) {
+	if ((placement ?? (size === 'sm' ? 'center' : 'right')) === 'right') {
+		return <Drawer {...rest} size={size === 'lg' ? 'lg' : 'md'} />;
+	}
+	return <CenterDialog {...rest} size={size} />;
 }
 
 /**

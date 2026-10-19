@@ -7,7 +7,7 @@
 import { cx } from './cx.js';
 import { SkeletonBlock, STAT_GRID } from './display.js';
 import { ROW_GRID, ROW_LABEL, ROW_LIST } from './fields.js';
-import { BAR, CARD, columnClass, METRICS, NAV_PANEL, PAGE, pageBody, TABLE } from './layout-metrics.js';
+import { BAR, CARD, columnClass, DRAWER, DRAWER_WIDTH, METRICS, NAV_PANEL, PAGE, pageBody, TABLE } from './layout-metrics.js';
 import { Crumbs, ShellMenuButton } from './page-parts.js';
 import { PaginationSkeleton } from './Pagination.js';
 
@@ -235,6 +235,44 @@ export function PageSkeleton({
 					) : null}
 				</section>
 			</div>
+		</div>
+	);
+}
+
+/**
+ * The body of a drawer while its record loads: a few settings cards, drawn at the size of the real ones.
+ * @param {{ label?: string, className?: string }} props
+ */
+export function DrawerBodySkeleton({ label = 'Loading', className }) {
+	return (
+		<div role="status" aria-label={label} className={cx('space-y-4', className)}>
+			<SettingsCardSkeleton rows={3} />
+			<SettingsCardSkeleton rows={2} />
+		</div>
+	);
+}
+
+/**
+ * A whole drawer while it loads: the same panel width, one-line header (a title block and the close button), scrolling
+ * body and fixed footer (two buttons) as the real {@link Drawer}.
+ * @param {{ size?: 'md' | 'lg', footer?: boolean, label?: string, className?: string }} props
+ */
+export function DrawerSkeleton({ size = 'md', footer = true, label = 'Loading', className }) {
+	return (
+		<div aria-busy="true" className={cx(DRAWER.panel, DRAWER_WIDTH[size], 'animate-ss-fade', className)}>
+			<div data-ss-part="header" className={DRAWER.header}>
+				<SkeletonBlock className="h-5 w-48 max-w-full" />
+				<SkeletonBlock className="ml-auto size-8 shrink-0 rounded-lg" />
+			</div>
+			<div data-ss-part="body" className={DRAWER.body}>
+				<DrawerBodySkeleton label={label} />
+			</div>
+			{footer ? (
+				<div data-ss-part="footer" className={DRAWER.footer}>
+					<SkeletonBlock className="h-9 w-20" />
+					<SkeletonBlock className="h-9 w-24" />
+				</div>
+			) : null}
 		</div>
 	);
 }

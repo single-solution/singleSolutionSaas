@@ -37,6 +37,19 @@ export const DRAWER_WIDTH = Object.freeze({
 	lg: 'sm:max-w-[47.5rem]',
 });
 
+/**
+ * The parts of a drawer, shared by the real drawer and its skeleton: the dim layer (the panel floats at the right with a
+ * 12 px gap, and fills the screen on phones), the panel, its one-line header, the body (the only part that scrolls) and
+ * the fixed footer.
+ */
+export const DRAWER = Object.freeze({
+	layer: 'justify-end p-0 sm:p-3',
+	panel: 'flex h-full w-full flex-col border-line-soft bg-surface text-fg shadow-overlay sm:rounded-panel sm:border',
+	header: `relative z-10 flex ${METRICS.drawerHeader} shrink-0 items-center gap-3 border-b border-line-soft px-4 sm:px-6`,
+	body: 'ss-scroll min-h-0 flex-1 space-y-4 px-4 py-4 sm:px-6 sm:py-5',
+	footer: `flex ${METRICS.drawerFooter} shrink-0 items-center justify-end gap-2 border-t border-line-soft px-4 sm:px-6`,
+});
+
 /** How many table rows come in one after the other on first load, and the gap between them (ms). */
 export const STAGGER = Object.freeze({ rows: 10, step: 15 });
 

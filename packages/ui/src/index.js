@@ -71,6 +71,8 @@ export {
 	PageSkeleton,
 	SettingsCardSkeleton,
 	StatGridSkeleton,
+	DrawerSkeleton,
+	DrawerBodySkeleton,
 } from './skeletons.js';
 export { METRICS } from './layout-metrics.js';
 export { TypedConfirmDialog } from './TypedConfirm.js';
@@ -129,6 +131,7 @@ export { describeProblem, fieldErrors, problemCode, problemLines } from './probl
 /** @typedef {import('./InnerNav.js').InnerNavGroup} InnerNavGroup */
 /** @typedef {import('./DataTable.js').RowSelection} RowSelection */
 /** @typedef {import('./layout-metrics.js').ColumnKind} ColumnKind */
+/** @typedef {import('./overlay.js').DrawerProps} DrawerProps */
 /** @typedef {import('./page-parts.js').PageCrumb} PageCrumb */
 /** @typedef {import('./page-parts.js').PageFact} PageFact */
 /** @typedef {import('./page-parts.js').PageAction} PageAction */
