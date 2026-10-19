@@ -142,27 +142,30 @@ export const loadWebsites = async (api, merchantId, websiteId = null) => {
  * @param {ConsoleApi} api
  * @param {string} merchantId
  * @param {{ from?: string, to?: string, websiteId?: string }} [filter]
+ * @param {'usage' | 'receipts'} [part] the sub-page: Receipts needs no usage, so it does not ask for it
  */
-export const loadCredits = async (api, merchantId, filter = {}) => {
+export const loadCredits = async (api, merchantId, filter = {}, part = 'usage') => {
 	const from = isoDay(filter.from);
 	const to = isoDay(filter.to);
 	const websiteId = isId(filter.websiteId, 'web') ? filter.websiteId : null;
+	const usageToo = part !== 'receipts';
 	const [billing, usage, receipts, websites] = await Promise.all([
 		api.get(paths.billing(merchantId)),
-		api.get(paths.usage(merchantId, { from, to, websiteId })),
+		usageToo ? api.get(paths.usage(merchantId, { from, to, websiteId })) : null,
 		api.get(paths.receipts(merchantId)),
-		api.get(paths.websites(merchantId)),
+		usageToo ? api.get(paths.websites(merchantId)) : null,
 	]);
 	const failed = firstFailure(billing);
 	if (failed) return failed;
 	return {
 		ok: /** @type {const} */ (true),
+		part: /** @type {'usage' | 'receipts'} */ (usageToo ? 'usage' : 'receipts'),
 		merchantId,
 		billing: /** @type {any} */ (billing.ok ? billing.data : null),
-		usage: /** @type {any} */ (orElse(usage, null)),
-		usageProblem: usage.ok ? null : usage.problem,
+		usage: /** @type {any} */ (usage ? orElse(usage, null) : null),
+		usageProblem: !usage || usage.ok ? null : usage.problem,
 		receipts: itemsOf(receipts),
-		websites: itemsOf(websites),
+		websites: websites ? itemsOf(websites) : [],
 		filter: { from, to, websiteId },
 	};
 };

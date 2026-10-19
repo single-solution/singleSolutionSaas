@@ -73,3 +73,61 @@ export function RangeSelect({ from = null, to = null, hrefFor, emptyLabel, omit,
 		/>
 	);
 }
+
+/**
+ * The Period menu of a {@link Toolbar} (a filter with the same choices as {@link RangeSelect}): picking a period opens
+ * the page with its `from` and `to`.
+ * @param {{ from?: string | null, to?: string | null, hrefFor: (range: { from: string | null, to: string | null }) => string,
+ *   emptyLabel: string, omit?: Preset, go: (href: string) => void }} input `go`: the console's client-side navigation
+ * @returns {import('@ss/ui').ToolbarFilter}
+ */
+export const periodFilter = ({ from = null, to = null, hrefFor, emptyLabel, omit, go }) => {
+	const presets = rangePresets().filter((p) => p.value !== omit);
+	const current = presetOf(from, to);
+	const value = current === omit ? '' : current;
+	return {
+		id: 'period',
+		label: MORE.range.label,
+		allLabel: emptyLabel,
+		value,
+		options: [
+			...presets.map((p) => ({ value: p.value, label: MORE.range[p.value] })),
+			...(value === 'custom' ? [{ value: 'custom', label: MORE.range.custom }] : []),
+		],
+		onChange: (picked) => {
+			if (picked === 'custom') return;
+			const preset = presets.find((p) => p.value === picked);
+			go(hrefFor(preset ? { from: preset.from, to: preset.to } : { from: null, to: null }));
+		},
+	};
+};
+
+/** The look of a date field in the toolbar: as high as the search box beside it. */
+const DATE_FIELD =
+	'ss-motion h-8 rounded-control border border-line bg-surface px-2 text-label text-fg focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-focus';
+
+/**
+ * The two date fields (From and To, UTC days) of a toolbar: a pick opens the page with that day.
+ * @param {{ from?: string | null, to?: string | null, hrefFor: (range: { from: string | null, to: string | null }) => string,
+ *   fromLabel: string, toLabel: string, go: (href: string) => void }} props
+ */
+export function DateFields({ from = null, to = null, hrefFor, fromLabel, toLabel, go }) {
+	return (
+		<div className="hidden items-center gap-2 md:flex">
+			<input
+				type="date"
+				aria-label={fromLabel}
+				value={from ?? ''}
+				className={DATE_FIELD}
+				onChange={(e) => go(hrefFor({ from: e.currentTarget.value || null, to }))}
+			/>
+			<input
+				type="date"
+				aria-label={toLabel}
+				value={to ?? ''}
+				className={DATE_FIELD}
+				onChange={(e) => go(hrefFor({ from, to: e.currentTarget.value || null }))}
+			/>
+		</div>
+	);
+}

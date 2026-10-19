@@ -1,93 +1,221 @@
 'use client';
 /**
- * Usage and credits (PLAN 0.8.2 Merchant): balance and days left at the current spend, the spend per product ×
- * website × UTC day × feature, and the credit receipts (the amount paid is shown to admins only). Credits are added by
- * an admin; the page shows the support contact instead of a payment form.
+ * Usage and credits (PLAN 0.8.2 Merchant), a page of its own with two sub-pages as addresses: Usage (`/credits`: the
+ * spend per UTC day as a chart above one row per product × website × day × feature, filtered by period, dates and
+ * website) and Receipts (`/credits/receipts`: every credit receipt; the amount paid is shown to admins only). The balance,
+ * the days left and the spend are the header's numbers. Credits are added by an admin; the page shows the support
+ * contact in the frame's banner instead of a payment form.
  * @module
  */
-import { Button, Callout, Card, Input, PageHeader, SectionLayout, Select, describeProblem } from '@ss/ui';
+import {
+	BarChart,
+	Callout,
+	DataTable,
+	EmptyState,
+	Page,
+	Pagination,
+	Toolbar,
+	describeProblem,
+	formatCredits,
+	usePaged,
+} from '@ss/ui';
 import { BILLING, MORE } from '../../texts/console.js';
-import { FilterForm } from '../navigation.js';
+import { Link } from '../link.js';
+import { useNavigation } from '../navigation.js';
 import { query, routes } from '../paths.js';
-import { BillingStats, ReceiptsTable, UsageView } from './billing.js';
+import { DaysLeft, creditDayBars, formatChartCredits, merchantPill, receiptColumns, usageColumns } from './billing.js';
 import { PageProblem } from './common.js';
 import { FrameBilling } from './frame-billing.js';
-import { RangeSelect } from './range.js';
+import { DateFields, periodFilter } from './range.js';
 
 /**
- * A GET form for a range of UTC days (or a Period preset) and a website.
- * @param {{ range: { from: string | null, to: string | null }, websites: any[], websiteId: string | null }} props
+ * The page around both parts: the header (title, status, the money numbers), the sub-page navigation and the part's
+ * toolbar, body and footer.
+ * @param {{ props: any, part: 'usage' | 'receipts', toolbar: import('react').ReactNode, footer?: import('react').ReactNode,
+ *   flush?: boolean, children: import('react').ReactNode }} input
  */
-function RangeForm({ range, websites, websiteId }) {
+function CreditsFrame({ props, part, toolbar, footer, flush = true, children }) {
+	const billing = props.billing;
 	return (
-		<FilterForm label={BILLING.filters.apply} className="flex flex-wrap items-end gap-3">
-			<RangeSelect
-				from={range.from}
-				to={range.to}
-				emptyLabel={MORE.range.last30}
-				omit="last30"
-				hrefFor={(r) => `${routes.credits()}${query({ ...r, websiteId })}`}
-			/>
-			<Input label={BILLING.filters.from} name="from" type="date" defaultValue={range.from ?? ''} />
-			<Input label={BILLING.filters.to} name="to" type="date" defaultValue={range.to ?? ''} />
-			<Select
-				label={BILLING.filters.website}
-				name="websiteId"
-				defaultValue={websiteId ?? ''}
-				options={[
-					{ value: '', label: BILLING.filters.all },
-					...websites.map((w) => ({ value: String(w.websiteId), label: String(w.domain) })),
-				]}
-			/>
-			<Button type="submit" variant="secondary">
-				{BILLING.filters.apply}
-			</Button>
-		</FilterForm>
+		<>
+			<FrameBilling billing={billing} />
+			<Page
+				linkAs={Link}
+				flush={flush}
+				bodyKey={part}
+				crumbs={[{ label: BILLING.usageTitle }]}
+				info={BILLING.usageIntro}
+				{...(billing ? { status: [merchantPill(billing.status)] } : {})}
+				{...(billing
+					? {
+							facts: [
+								{
+									label: BILLING.balance,
+									value: formatCredits(billing.balance),
+									tone: billing.balance <= 0 ? 'danger' : billing.lowBalance ? 'warning' : 'success',
+								},
+								{ label: BILLING.daysLeft, value: <DaysLeft summary={billing} /> },
+								{ label: BILLING.dailySpend, value: formatCredits(billing.dailySpend) },
+								{ label: BILLING.spentThisMonth, value: formatCredits(billing.spentThisMonth) },
+							],
+						}
+					: {})}
+				nav={{
+					value: part,
+					label: BILLING.parts,
+					items: [
+						{ id: 'usage', label: BILLING.usageSection, icon: 'trendingUp', href: routes.credits() },
+						{
+							id: 'receipts',
+							label: BILLING.receiptsTitle,
+							icon: 'receipt',
+							count: props.receipts.length,
+							href: routes.creditsReceipts(),
+						},
+					],
+				}}
+				toolbar={toolbar}
+				{...(footer ? { footer } : {})}>
+				{children}
+			</Page>
+		</>
 	);
 }
 
 /**
+ * Usage: the chart of the period and its rows.
  * @param {any} props loader result of `loadCredits`
+ */
+function UsagePage(props) {
+	const nav = useNavigation();
+	const filter = props.filter;
+	const usage = props.usage;
+	const rows = /** @type {any[]} */ (usage?.rows ?? []);
+	const paged = usePaged(rows, {
+		pageSize: 50,
+		text: (r) => `${r.day} ${r.domain} ${r.product} ${r.featureName}`,
+	});
+	/** @param {{ from?: string | null, to?: string | null, websiteId?: string | null }} next */
+	const hrefFor = (next) =>
+		`${routes.credits()}${query({ from: filter.from, to: filter.to, websiteId: filter.websiteId, ...next })}`;
+	return (
+		<CreditsFrame
+			props={props}
+			part="usage"
+			toolbar={
+				<Toolbar
+					label={BILLING.usageSection}
+					search={{
+						value: paged.query,
+						label: BILLING.searchUsage,
+						placeholder: BILLING.searchUsage,
+						onSearch: paged.setQuery,
+					}}
+					filters={[
+						periodFilter({
+							from: filter.from,
+							to: filter.to,
+							emptyLabel: MORE.range.last30,
+							omit: 'last30',
+							hrefFor: (range) => hrefFor(range),
+							go: nav.go,
+						}),
+						{
+							id: 'website',
+							label: BILLING.filters.website,
+							allLabel: BILLING.filters.all,
+							value: filter.websiteId ?? '',
+							onChange: (websiteId) => nav.go(hrefFor({ websiteId: websiteId || null })),
+							options: props.websites.map((/** @type {any} */ w) => ({
+								value: String(w.websiteId),
+								label: String(w.domain),
+							})),
+						},
+					]}>
+					<DateFields
+						from={filter.from}
+						to={filter.to}
+						fromLabel={BILLING.filters.from}
+						toLabel={BILLING.filters.to}
+						hrefFor={(range) => hrefFor(range)}
+						go={nav.go}
+					/>
+				</Toolbar>
+			}
+			{...(paged.found.length > 0 ? { footer: <Pagination {...paged.pagination} /> } : {})}>
+			{props.usageProblem ? (
+				<div className="p-4">
+					<Callout tone="danger">{describeProblem(props.usageProblem)}</Callout>
+				</div>
+			) : (
+				<>
+					<div className="shrink-0 border-b border-line-soft px-4 py-3">
+						<p className="mb-2 text-label text-muted">
+							{BILLING.usageChartIntro(`${usage?.from ?? ''} – ${usage?.to ?? ''}`, formatCredits(usage?.total ?? 0))}
+						</p>
+						<BarChart
+							label={BILLING.usageChart}
+							data={creditDayBars(usage?.days)}
+							format={formatChartCredits}
+							height={132}
+						/>
+					</div>
+					<DataTable
+						caption={BILLING.usageTitle}
+						rows={paged.rows}
+						rowKey={(r) => `${r.day}:${r.websiteId}:${r.productId}:${r.feature}`}
+						defaultSort={{ key: 'day', dir: 'desc' }}
+						empty={<EmptyState compact icon="trendingUp" kind="credit" title={BILLING.noUsage} />}
+						columns={usageColumns()}
+					/>
+				</>
+			)}
+		</CreditsFrame>
+	);
+}
+
+/**
+ * Receipts: every credit receipt, newest first.
+ * @param {any} props loader result of `loadCredits`
+ */
+function ReceiptsPage(props) {
+	const receipts = /** @type {any[]} */ (props.receipts);
+	const paged = usePaged(receipts, {
+		pageSize: 50,
+		text: (r) => `${r.method ?? ''} ${r.reference ?? ''} ${r.credits}`,
+	});
+	return (
+		<CreditsFrame
+			props={props}
+			part="receipts"
+			toolbar={
+				<Toolbar
+					label={BILLING.receiptsTitle}
+					search={{
+						value: paged.query,
+						label: BILLING.searchReceipts,
+						placeholder: BILLING.searchReceipts,
+						onSearch: paged.setQuery,
+					}}
+				/>
+			}
+			{...(paged.found.length > 0 ? { footer: <Pagination {...paged.pagination} /> } : {})}>
+			<DataTable
+				caption={BILLING.receiptsTitle}
+				rows={paged.rows}
+				rowKey={(r) => r.receiptId}
+				defaultSort={{ key: 'at', dir: 'desc' }}
+				empty={<EmptyState compact icon="receipt" kind="credit" title={BILLING.noReceipts} />}
+				columns={receiptColumns({ receipts })}
+			/>
+		</CreditsFrame>
+	);
+}
+
+/**
+ * @param {any} props loader result of `loadCredits` plus the `part` of the address
  */
 export function CreditsView(props) {
 	if (!props.ok) return <PageProblem problem={props.problem} />;
-	return (
-		<div className="space-y-6">
-			<FrameBilling billing={props.billing} />
-			<PageHeader title={BILLING.usageTitle} subtitle={BILLING.usageIntro} />
-			<BillingStats summary={props.billing} />
-			<SectionLayout
-				label={BILLING.usageTitle}
-				sections={[
-					{
-						id: 'usage',
-						label: BILLING.usageSection,
-						icon: 'trendingUp',
-						content: (
-							<>
-								<Card>
-									<RangeForm range={props.filter} websites={props.websites} websiteId={props.filter.websiteId} />
-								</Card>
-								{props.usageProblem ? (
-									<Callout tone="danger">{describeProblem(props.usageProblem)}</Callout>
-								) : (
-									<UsageView usage={props.usage} />
-								)}
-							</>
-						),
-					},
-					{
-						id: 'receipts',
-						label: BILLING.receiptsTitle,
-						icon: 'receipt',
-						content: (
-							<Card title={BILLING.receiptsTitle} subtitle={BILLING.receiptsIntro} padded={false}>
-								<ReceiptsTable receipts={props.receipts} />
-							</Card>
-						),
-					},
-				]}
-			/>
-		</div>
-	);
+	return props.part === 'receipts' ? <ReceiptsPage {...props} /> : <UsagePage {...props} />;
 }

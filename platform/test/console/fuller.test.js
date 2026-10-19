@@ -36,6 +36,7 @@ import {
 	openTab,
 	press,
 	pressDialog,
+	pressMenu,
 	quiet,
 	shows,
 	until,
@@ -292,7 +293,6 @@ describe('fuller Portal screens (jsdom)', () => {
 			// ---------------------------------------------------------------- merchant console
 			shop.b.use();
 			withToasts(<MerchantOverview {...await loaders.loadOverview(shop.b.api, merchantId)} />);
-			await openSection('Latest');
 			for (const text of ['Recent activity', 'Latest credits added', 'seed-1']) expect(shows(text)).toBe(true);
 			cleanup();
 			withToasts(<WebsitesView {...await loaders.loadWebsites(shop.b.api, merchantId, websiteId)} />);
@@ -301,7 +301,7 @@ describe('fuller Portal screens (jsdom)', () => {
 			);
 			cleanup();
 			withToasts(<CreditsView {...await loaders.loadCredits(shop.b.api, merchantId, {})} />);
-			await pick('Period', 'lastMonth');
+			await pressMenu('Period', 'Last month (UTC)');
 			expect(pushed('/credits?from=')).toBe(true);
 		} finally {
 			await world.close();

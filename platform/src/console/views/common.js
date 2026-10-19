@@ -19,7 +19,7 @@ import {
 	ButtonLink,
 	CARD_FLOW,
 	DOTS,
-	ErrorState,
+	Page,
 	Icon,
 	Input,
 	PageTransition,
@@ -43,37 +43,39 @@ import { ScreenContext, listScroll, listWasPlaceholder, rememberList, stripOpen,
  */
 
 /**
- * Page-level error: a friendly message, and a way forward (sign in again, go back).
+ * Page-level error, drawn as a page: the heading in the header (with the `back` page as its parent crumb, a link), the
+ * problem in the body and, when the person has to sign in again, the button for it.
  * @param {{ problem: Problem | null | undefined, title?: string, back?: { href: string, label: string }, admin?: boolean }} props
  *   `admin`: an Admin Console page (a refusal says the role does not include the area)
  */
 export function PageProblem({ problem, title, back, admin = false }) {
 	const code = problemCode(problem);
 	const forbidden = code === 'forbidden';
-	const action =
-		code === 'unauthorized' ? (
-			<ButtonLink as={Link} href={routes.login()} variant="primary">
-				{CONSOLE.signIn}
-			</ButtonLink>
-		) : (
-			<ButtonLink as={Link} href={back?.href ?? routes.websites()} variant="secondary">
-				{back?.label ?? CONSOLE.backToWebsites}
-			</ButtonLink>
-		);
+	const heading =
+		title ??
+		(code === 'not_found'
+			? CONSOLE.notFound
+			: forbidden
+				? admin
+					? CONSOLE.notPermitted
+					: CONSOLE.noAccess
+				: CONSOLE.loadFailed);
 	return (
-		<ErrorState
-			title={
-				title ??
-				(code === 'not_found'
-					? CONSOLE.notFound
-					: forbidden
-						? admin
-							? CONSOLE.notPermitted
-							: CONSOLE.noAccess
-						: CONSOLE.loadFailed)
-			}
-			message={forbidden && admin ? CONSOLE.forbiddenHint(describeProblem(problem)) : describeProblem(problem)}
-			action={action}
+		<Page
+			linkAs={Link}
+			crumbs={[...(back ? [{ label: back.label, href: back.href }] : []), { label: heading }]}
+			error={{
+				message: forbidden && admin ? CONSOLE.forbiddenHint(describeProblem(problem)) : describeProblem(problem),
+				...(code === 'unauthorized'
+					? {
+							action: (
+								<ButtonLink as={Link} href={routes.login()} variant="primary">
+									{CONSOLE.signIn}
+								</ButtonLink>
+							),
+						}
+					: {}),
+			}}
 		/>
 	);
 }

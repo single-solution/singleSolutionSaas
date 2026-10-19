@@ -358,9 +358,8 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		const open = vi.fn();
 		vi.stubGlobal('open', open);
 		withToasts(<OverviewView {...await loaders.loadOverview(e.api, beta.merchantId)} branding={BRANDING} />);
-		// the websites first; the spend chart is in Credits
+		// one page: the websites table and the spend chart together
 		expect(shows('No features on')).toBe(true);
-		await openSection('Credits');
 		expect(shows('Spend per UTC day (last 30 days)')).toBe(true);
 		await press('Open Notes · beta.example.com');
 		const launched = await e.waitCall(

@@ -98,9 +98,8 @@ describe('merchant console smoke', () => {
 			// Overview: balance, the spend chart, websites with product chips and Open buttons
 			const overview = await loaders.loadOverview(merchant.api, merchantId);
 			const overviewText = text(ssr(<OverviewView {...overview} branding={BRANDING} />));
-			// an inner sidebar with one view at a time: the websites first, the others are links
-			for (const section of ['Needs you', 'Credits', 'Latest']) expect(overviewText).toContain(section);
-			expect(overviewText).not.toContain('Spend per UTC day (last 30 days)');
+			// one page: the key numbers in the header, then the cards
+			for (const section of ['Websites', 'Balance', 'Latest credits added']) expect(overviewText).toContain(section);
 			expect(overviewText).toContain('shop.example.com');
 			expect(overviewText).toContain('Notes');
 			expect(overviewText).toContain('Chatty');
@@ -140,9 +139,18 @@ describe('merchant console smoke', () => {
 
 			// Usage and credits, Account
 			const credits = await loaders.loadCredits(merchant.api, merchantId, { from: '2026-01-01', websiteId: site.websiteId });
-			const creditsText = text(ssr(<CreditsView {...credits} />));
+			const creditsRaw = ssr(<CreditsView {...credits} />);
+			const creditsText = text(creditsRaw);
+			// the page: Usage and credits with the money numbers in the header, Usage and Receipts as addresses
+			expect(creditsRaw).toContain('aria-label="Breadcrumb"');
+			expect(creditsRaw).toContain('href="/credits/receipts"');
 			expect(creditsText).toContain('Credit receipts');
+			expect(creditsText).toContain('credits in total');
 			expect(creditsText).not.toContain('Amount paid'); // admins only
+			const receipts = text(ssr(<CreditsView {...await loaders.loadCredits(merchant.api, merchantId, {}, 'receipts')} />));
+			expect(receipts).toContain('bank-1');
+			expect(receipts).not.toContain('Amount paid'); // admins only
+			expect(receipts).not.toContain('credits in total');
 			expect(text(ssr(<AccountView {...await loaders.loadAccount(merchant.api, merchantId)} />))).toContain(
 				'Business details',
 			);

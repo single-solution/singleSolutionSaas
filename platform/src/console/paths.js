@@ -47,6 +47,8 @@ export const routes = Object.freeze({
 	/** the Website settings of a website */
 	websiteSettings: (/** @type {string} */ id) => `/websites/${e(id)}/settings`,
 	credits: () => '/credits',
+	/** the receipts sub-page of Usage and credits */
+	creditsReceipts: () => '/credits/receipts',
 	account: () => '/account',
 });
 

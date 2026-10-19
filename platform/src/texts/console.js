@@ -987,6 +987,9 @@ export const BILLING = Object.freeze({
 	usageSection: 'Usage',
 	usageTitle: 'Usage and credits',
 	usageIntro: 'Your balance, spend per product and website, and the credits added.',
+	searchUsage: 'Search usage',
+	searchReceipts: 'Search receipts',
+	parts: 'Usage and credits sections',
 	billingIntro: 'Receipts, charges and the merchants that need attention.',
 	usageChartIntro: (/** @type {string} */ range, /** @type {string} */ total) => `${range} · ${total} in total`,
 	receiptsIntro: 'Every credit receipt on this account.',
@@ -1072,6 +1075,9 @@ export const MORE = Object.freeze({
 	}),
 	noActivity: 'No activity yet.',
 	count: (/** @type {number} */ n, /** @type {boolean} */ more = false) => (more ? `${n}+` : String(n)),
+	/** the range in a list's footer, when the total is not known: "Showing 1–50+" */
+	showing: (/** @type {number} */ from, /** @type {number} */ to, /** @type {boolean} */ more) =>
+		`Showing ${from}–${to}${more ? '+' : ''}`,
 	viewAll: 'View all',
 	openInActivity: 'Open in Activity',
 	clearFilters: 'Clear filters',

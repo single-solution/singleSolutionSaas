@@ -5,12 +5,11 @@
  * (domain, status, products, daily cost) whose row opens the website's own page (`Websites › domain` around its card:
  * its products with Open, and Install and tokens and Usage as dialogs; no admin actions). With no websites yet, the
  * welcome with the support contact (PLAN 0.8.2 Sign-in).
- * Layout: the Overview has an inner sidebar (Websites, Needs you, Credits, Latest), one view at a time.
+ * Layout: the Overview is one page (the greeting behind the (i), the key numbers in the header, then its cards).
  * @module
  */
 import { useEffect, useState } from 'react';
 import {
-	Badge,
 	BarChart,
 	Button,
 	ButtonLink,
@@ -19,16 +18,8 @@ import {
 	DataTable,
 	EmptyState,
 	Icon,
-	HeaderFact,
-	IconBadge,
-	ListRow,
-	LocalTime,
 	NeedsList,
 	Page,
-	PageHeader,
-	RowList,
-	SectionLayout,
-	SoftBreaks,
 	Stat,
 	StatGrid,
 	Toolbar,
@@ -43,7 +34,7 @@ import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { useNavigation } from '../navigation.js';
 import { api, routes } from '../paths.js';
-import { DaysLeft, ProductStatusBadge, ReceiptsTable, creditDayBars, formatChartCredits } from './billing.js';
+import { DaysLeft, ProductStatusBadge, creditDayBars, formatChartCredits, receiptColumns } from './billing.js';
 import { FrameBilling } from './frame-billing.js';
 import { PageProblem, openDashboard } from './common.js';
 import { ActivityTimeline } from './login-settings.js';
@@ -129,158 +120,158 @@ export function OverviewView(props) {
 	}
 	const name = props.me?.merchant?.ownerName || props.me?.merchant?.name || '';
 
-	const sections = [
-		{
-			id: 'websites',
-			label: MERCHANT.websitesTitle,
-			icon: /** @type {const} */ ('globe'),
-			content: rows.map(({ website, cards }) => (
-				<Card
-					flow
-					padded={false}
-					key={website.websiteId}
-					title={
-						<span className="flex min-w-0 items-center gap-3">
-							<IconBadge icon="globe" kind="website" size="sm" />
-							<TextLink
-								as={Link}
-								tone="plain"
-								href={routes.website(website.websiteId)}
-								title={website.domain}
-								className="line-clamp-2 min-w-0 break-words">
-								<SoftBreaks text={website.domain} />
-							</TextLink>
-						</span>
-					}
-					subtitle={WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}>
-					{cards.length === 0 ? (
-						<EmptyState compact icon="box" title={WEBSITE.noProductsMerchant} />
-					) : (
-						<RowList inset label={WEBSITE.productsOf(website.domain)}>
-							{cards.map((card) => (
-								<ListRow
-									key={card.productId}
-									product={card.productId}
-									title={card.name}
-									status={<ProductStatusBadge status={card.status} featuresOn={card.featuresOn} />}
-									action={openButton(website, card)}
-								/>
-							))}
-						</RowList>
-					)}
-				</Card>
-			)),
-		},
-		{
-			id: 'needs',
-			label: MERCHANT.needs.title,
-			icon: /** @type {const} */ ('bell'),
-			...(needs.length > 0 ? { badge: <Badge tone="attention">{needs.length}</Badge> } : {}),
-			content: (
-				<Card title={MERCHANT.needs.title} subtitle={needs.length > 0 ? MERCHANT.needs.intro : undefined}>
-					<NeedsList items={needs} none={MERCHANT.needs.none} />
-				</Card>
-			),
-		},
-		{
-			id: 'credits',
-			label: MERCHANT.creditsSection,
-			icon: /** @type {const} */ ('coins'),
-			content: (
-				<>
-					<StatGrid>
-						{billing ? (
-							<>
-								<Stat label={BILLING.balance} value={formatCredits(billing.balance)} icon="wallet" kind="credit" />
-								<Stat label={BILLING.daysLeft} value={<DaysLeft summary={billing} />} icon="clock" kind="credit" />
-								<Stat
-									label={BILLING.dailySpend}
-									value={formatCredits(billing.dailySpend)}
-									icon="trendingUp"
-									kind="credit"
-								/>
-								<Stat
-									label={BILLING.spentThisMonth}
-									value={formatCredits(billing.spentThisMonth)}
-									icon="calendar"
-									kind="credit"
-								/>
-							</>
-						) : (
-							<>
-								<Stat label={MERCHANT.tiles.websites} value={rows.length} icon="globe" kind="website" />
-								<Stat label={MERCHANT.tiles.products} value={productCount} icon="box" kind="product" />
-							</>
-						)}
-					</StatGrid>
-					<Card title={MERCHANT.spendChart} subtitle={props.usage ? formatCredits(props.usage.total ?? 0) : undefined}>
-						<BarChart
-							label={MERCHANT.spendChart}
-							data={creditDayBars(props.usage?.days)}
-							format={formatChartCredits}
-							height={132}
-						/>
-					</Card>
-				</>
-			),
-		},
-		{
-			id: 'latest',
-			label: MERCHANT.latestSection,
-			icon: /** @type {const} */ ('activity'),
-			content: (
-				<>
-					<Card
-						flow
-						title={MORE.recentActivity}
-						subtitle={MORE.recentActivityIntro}
-						actions={
-							<ButtonLink as={Link} href={routes.account()} variant="secondary" size="sm">
-								{MORE.viewAll}
-							</ButtonLink>
-						}>
-						<ActivityTimeline items={props.activity ?? []} empty={MORE.noActivity} showMerchant={false} />
-					</Card>
-					<Card
-						flow
-						title={MORE.latestReceipts}
-						subtitle={MORE.latestReceiptsIntro}
-						padded={false}
-						actions={
-							<ButtonLink as={Link} href={routes.credits()} variant="secondary" size="sm">
-								{MORE.viewAll}
-							</ButtonLink>
-						}>
-						<ReceiptsTable receipts={props.receipts ?? []} />
-					</Card>
-				</>
-			),
-		},
-	];
+	/** One row per product on a website; a website with none has one row that says so. */
+	/** @type {Array<{ key: string, website: any, card: ProductCard | null }>} */
+	const productRows = [];
+	for (const { website, cards } of rows) {
+		if (cards.length === 0) productRows.push({ key: `${website.websiteId}:-`, website, card: null });
+		for (const card of cards) productRows.push({ key: `${website.websiteId}:${card.productId}`, website, card });
+	}
 
 	return (
-		<div className="space-y-6">
+		<>
 			<FrameBilling billing={billing} />
-			<PageHeader
-				title={MERCHANT.welcome(name)}
-				subtitle={MERCHANT.summary({ websites: rows.length, products: productCount, needs: needs.length })}
-				meta={
+			<Page
+				linkAs={Link}
+				crumbs={[{ label: MERCHANT.overviewTitle }]}
+				info={
 					<>
-						<HeaderFact label={MERCHANT.tiles.websites}>{rows.length}</HeaderFact>
-						{needs.length > 0 ? (
-							<HeaderFact tone="attention" label={MERCHANT.needs.title}>
-								{needs.length}
-							</HeaderFact>
-						) : null}
+						<span className="block font-medium text-fg">{MERCHANT.welcome(name)}</span>
+						{MERCHANT.summary({ websites: rows.length, products: productCount, needs: needs.length })}
 					</>
 				}
-			/>
-			{rows.length === 0 ? (
-				<Welcome branding={props.branding} />
-			) : (
-				<SectionLayout label={MERCHANT.overviewTitle} sections={sections} />
-			)}
-		</div>
+				facts={[
+					{ label: MERCHANT.tiles.websites, value: rows.length, href: routes.websites() },
+					...(needs.length > 0
+						? [{ label: MERCHANT.needs.title, value: needs.length, tone: /** @type {const} */ ('warning') }]
+						: []),
+					...(billing
+						? [
+								{ label: BILLING.balance, value: formatCredits(billing.balance), href: routes.credits() },
+								{ label: BILLING.daysLeft, value: <DaysLeft summary={billing} />, href: routes.credits() },
+							]
+						: []),
+				]}>
+				{rows.length === 0 ? (
+					<Welcome branding={props.branding} />
+				) : (
+					<div className="space-y-4">
+						<Card title={MERCHANT.needs.title} subtitle={needs.length > 0 ? MERCHANT.needs.intro : undefined}>
+							<NeedsList items={needs} none={MERCHANT.needs.none} />
+						</Card>
+						<StatGrid>
+							{billing ? (
+								<>
+									<Stat label={BILLING.balance} value={formatCredits(billing.balance)} icon="wallet" kind="credit" />
+									<Stat label={BILLING.daysLeft} value={<DaysLeft summary={billing} />} icon="clock" kind="credit" />
+									<Stat
+										label={BILLING.dailySpend}
+										value={formatCredits(billing.dailySpend)}
+										icon="trendingUp"
+										kind="credit"
+									/>
+									<Stat
+										label={BILLING.spentThisMonth}
+										value={formatCredits(billing.spentThisMonth)}
+										icon="calendar"
+										kind="credit"
+									/>
+								</>
+							) : (
+								<>
+									<Stat label={MERCHANT.tiles.websites} value={rows.length} icon="globe" kind="website" />
+									<Stat label={MERCHANT.tiles.products} value={productCount} icon="box" kind="product" />
+								</>
+							)}
+						</StatGrid>
+						<Card title={MERCHANT.spendChart} subtitle={props.usage ? formatCredits(props.usage.total ?? 0) : undefined}>
+							<BarChart
+								label={MERCHANT.spendChart}
+								data={creditDayBars(props.usage?.days)}
+								format={formatChartCredits}
+								height={132}
+							/>
+						</Card>
+						<Card
+							padded={false}
+							title={MERCHANT.websitesTitle}
+							actions={
+								<ButtonLink as={Link} href={routes.websites()} variant="secondary" size="sm">
+									{MORE.viewAll}
+								</ButtonLink>
+							}>
+							<DataTable
+								caption={MERCHANT.websitesTitle}
+								rows={productRows}
+								rowKey={(r) => r.key}
+								empty={WEBSITE.noProductsMerchant}
+								columns={[
+									{
+										key: 'domain',
+										header: MERCHANT.websiteColumns.website,
+										render: (r) => (
+											<TextLink
+												as={Link}
+												tone="plain"
+												href={routes.website(r.website.websiteId)}
+												title={r.website.domain}>
+												{r.website.domain}
+											</TextLink>
+										),
+									},
+									{
+										key: 'product',
+										header: MERCHANT.websiteColumns.products,
+										wrap: true,
+										render: (r) => r.card?.name ?? <span className="text-muted">{WEBSITE.noProductsMerchant}</span>,
+									},
+									{
+										key: 'status',
+										header: MERCHANT.websiteColumns.status,
+										kind: 'status',
+										render: (r) =>
+											r.card ? <ProductStatusBadge status={r.card.status} featuresOn={r.card.featuresOn} /> : null,
+									},
+									{
+										key: 'open',
+										header: WEBSITE.open,
+										align: 'right',
+										render: (r) => (r.card ? openButton(r.website, r.card) : null),
+									},
+								]}
+							/>
+						</Card>
+						<Card
+							flow
+							title={MORE.recentActivity}
+							actions={
+								<ButtonLink as={Link} href={routes.account()} variant="secondary" size="sm">
+									{MORE.viewAll}
+								</ButtonLink>
+							}>
+							<ActivityTimeline items={props.activity ?? []} empty={MORE.noActivity} showMerchant={false} />
+						</Card>
+						<Card
+							flow
+							padded={false}
+							title={MORE.latestReceipts}
+							actions={
+								<ButtonLink as={Link} href={routes.creditsReceipts()} variant="secondary" size="sm">
+									{MORE.viewAll}
+								</ButtonLink>
+							}>
+							<DataTable
+								caption={MORE.latestReceipts}
+								rows={props.receipts ?? []}
+								rowKey={(r) => r.receiptId}
+								empty={<EmptyState compact icon="receipt" kind="credit" title={BILLING.noReceipts} />}
+								columns={receiptColumns({ receipts: props.receipts ?? [] })}
+							/>
+						</Card>
+					</div>
+				)}
+			</Page>
+		</>
 	);
 }
 

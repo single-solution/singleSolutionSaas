@@ -8,11 +8,31 @@
 import { Badge, BarChart, Callout, Card, EmptyState, LocalTime, Stat, StatGrid, Table, formatCredits } from '@ss/ui';
 import { BILLING } from '../../texts/console.js';
 
+/** @typedef {Array<{ key: string, header: string, kind?: 'number' | 'money' | 'date' | 'status', sortable?: boolean, low?: boolean, render?: (row: any) => import('react').ReactNode }>} Columns */
 /** @typedef {'active' | 'low_balance' | 'grace' | 'stopped' | 'suspended'} MerchantStatus */
 /** @typedef {'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info'} Tone */
 
 /** @type {Record<string, Tone>} */
 const MERCHANT_TONES = { active: 'success', low_balance: 'warning', grace: 'warning', stopped: 'danger', suspended: 'danger' };
+
+/** How a merchant's status looks as a pill in the header of a page. */
+const MERCHANT_PILLS = /** @type {Record<string, 'active' | 'warning' | 'error'>} */ ({
+	active: 'active',
+	low_balance: 'warning',
+	grace: 'warning',
+	stopped: 'error',
+	suspended: 'error',
+});
+
+/**
+ * The pill of a merchant status (Active green, Low balance and In grace amber, Stopped and Suspended red).
+ * @param {string} status
+ * @returns {{ status: 'active' | 'warning' | 'error', label: string }}
+ */
+export const merchantPill = (status) => ({
+	status: MERCHANT_PILLS[status] ?? 'active',
+	label: BILLING.merchantStatus[/** @type {MerchantStatus} */ (status)] ?? status,
+});
 
 /**
  * Merchant status (Active green, Low balance and In grace amber, Stopped and Suspended red).
@@ -209,3 +229,51 @@ export function ReceiptsTable({ receipts, showMerchant = false }) {
 		/>
 	);
 }
+
+/**
+ * The columns of the usage table: one row per product × website × UTC day × feature.
+ * @param {boolean} [showWebsite] false on a website's own page
+ * @returns {Columns}
+ */
+export const usageColumns = (showWebsite = true) => [
+	{ key: 'day', header: BILLING.usageColumns.day, sortable: true },
+	...(showWebsite ? [{ key: 'domain', header: BILLING.usageColumns.website, sortable: true }] : []),
+	{ key: 'product', header: BILLING.usageColumns.product, sortable: true },
+	{ key: 'featureName', header: BILLING.usageColumns.feature, sortable: true, low: true },
+	{ key: 'hours', header: BILLING.usageColumns.hours, kind: /** @type {const} */ ('number'), sortable: true, low: true },
+	{
+		key: 'amount',
+		header: BILLING.usageColumns.credits,
+		kind: /** @type {const} */ ('money'),
+		sortable: true,
+		render: (r) => formatCredits(r.amount),
+	},
+];
+
+/**
+ * The columns of the receipts table; the amount paid shows to admins only (present only in admin responses).
+ * @param {{ receipts: any[], showMerchant?: boolean }} input
+ * @returns {Columns}
+ */
+export const receiptColumns = ({ receipts, showMerchant = false }) => [
+	{
+		key: 'at',
+		header: BILLING.receiptColumns.date,
+		kind: /** @type {const} */ ('date'),
+		sortable: true,
+		render: (r) => <LocalTime value={r.at} />,
+	},
+	...(showMerchant ? [{ key: 'merchantName', header: BILLING.receiptColumns.merchant, sortable: true }] : []),
+	{
+		key: 'credits',
+		header: BILLING.receiptColumns.credits,
+		kind: /** @type {const} */ ('money'),
+		sortable: true,
+		render: (r) => formatCredits(r.credits),
+	},
+	...(receipts.some((r) => 'amountPaid' in r)
+		? [{ key: 'amountPaid', header: BILLING.receiptColumns.amountPaid, low: true }]
+		: []),
+	{ key: 'method', header: BILLING.receiptColumns.method, sortable: true, low: true },
+	{ key: 'reference', header: BILLING.receiptColumns.reference, low: true, render: (r) => r.reference ?? '—' },
+];
