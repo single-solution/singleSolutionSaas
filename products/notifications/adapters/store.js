@@ -108,6 +108,7 @@ export const INDEXES = [
 	{ collection: MESSAGES, keys: { websiteId: 1, createdAt: -1, id: -1 }, name: 'newest' },
 	{ collection: MESSAGES, keys: { websiteId: 1, status: 1, dueAt: 1 }, name: 'due' },
 	{ collection: MESSAGES, keys: { websiteId: 1, address: 1, sentAt: -1 }, name: 'by_address' },
+	{ collection: MESSAGES, keys: { websiteId: 1, address: 1, createdAt: -1 }, name: 'by_address_created' },
 	{ collection: OPTOUTS, keys: { websiteId: 1, address: 1 }, name: 'by_address', unique: true },
 	{ collection: TOPIC_OPTOUTS, keys: { websiteId: 1, address: 1, topic: 1 }, name: 'by_address_topic', unique: true },
 	{ collection: RECIPIENTS, keys: { websiteId: 1, address: 1 }, name: 'by_address', unique: true },
@@ -291,6 +292,25 @@ export const createStore = (data, { now }) => {
 			 */
 			sentSince: (address, since) =>
 				messages.countDocuments({ websiteId, address, capped: true, sentAt: { $gte: new Date(since) } }),
+			/**
+			 * Messages that cost something (not skipped) made for an address since a time, counted up to `limit` (the hard
+			 * ceilings, SR-7-2: counting stops at the ceiling).
+			 * @param {string} address @param {number} since @param {number} limit
+			 */
+			madeSince: (address, since, limit) =>
+				messages.countDocuments(
+					{ websiteId, address, status: { $ne: 'skipped' }, createdAt: { $gte: new Date(since) } },
+					{ limit },
+				),
+			/**
+			 * The same for a channel, every address (the per-minute ceilings of texts and WhatsApp).
+			 * @param {Channel} channel @param {number} since @param {number} limit
+			 */
+			madeOnChannelSince: (channel, since, limit) =>
+				messages.countDocuments(
+					{ websiteId, channel, status: { $ne: 'skipped' }, createdAt: { $gte: new Date(since) } },
+					{ limit },
+				),
 			/**
 			 * Newest first, keyset-paged by `[createdAt, id]`; optional filters.
 			 * @param {LogFilters & { after: unknown, limit: number }} page

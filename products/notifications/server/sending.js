@@ -43,7 +43,13 @@ import {
 	pickVersion,
 	renderTemplate,
 } from '../core/templates.js';
-import { RETRY_WAITS, WEBHOOK_RETRY_WAITS } from '../core/limits.js';
+import {
+	ACCOUNT_CEILINGS,
+	CHANNEL_MINUTE_CEILINGS,
+	RECIPIENT_CEILINGS,
+	RETRY_WAITS,
+	WEBHOOK_RETRY_WAITS,
+} from '../core/limits.js';
 import { DRAIN_BATCH, LEASE_MS, nextAttemptAt, quietUntil, withinLimits } from '../core/timing.js';
 import { SIGNATURE_HEADER, urlsFor } from '../core/webhooks.js';
 import { messageAadOf } from '../adapters/crypto.js';
@@ -433,6 +439,48 @@ export const createSending = (product) => {
 	};
 
 	/**
+	 * The hard cost ceiling (`core/limits.js`, SR-7-2) a message to an address on a channel would cross now, if any: the
+	 * address's messages of the last hour, then of the last day (Accounts' sign-in codes have their own higher ceiling),
+	 * then the website's texts or WhatsApp messages of the last minute. Required messages are counted and held too.
+	 * Skipped messages are not counted. A refusal is logged, never with the address.
+	 * @param {Site} s
+	 * @param {{ channel: Channel, address: string, template: string | null }} message
+	 * @returns {Promise<{ code: 'recipient_limit' | 'channel_limit', detail: string } | null>}
+	 */
+	const ceilingHit = async (s, { channel, address, template }) => {
+		const t = now();
+		const account = template !== null && isAccountKey(template);
+		const own = (account ? ACCOUNT_CEILINGS : RECIPIENT_CEILINGS)[channel];
+		for (const [window, span, limit, words] of /** @type {const} */ ([
+			['hour', 3_600_000, own.perHour, 'an hour'],
+			['day', 86_400_000, own.perDay, 'a day'],
+		]))
+			if ((await s.store.messages.madeSince(address, t - span, limit)) >= limit) {
+				product.logger.warn('message refused: the recipient ceiling is reached', {
+					websiteId: s.websiteId,
+					channel,
+					window,
+					limit,
+					account,
+				});
+				return {
+					code: 'recipient_limit',
+					detail: `Too many ${channel} messages to this recipient: at most ${limit} ${words}.`,
+				};
+			}
+		const perMinute = channel === 'sms' || channel === 'whatsapp' ? CHANNEL_MINUTE_CEILINGS[channel] : undefined;
+		if (perMinute !== undefined && (await s.store.messages.madeOnChannelSince(channel, t - 60_000, perMinute)) >= perMinute) {
+			product.logger.warn('message refused: the channel ceiling is reached', {
+				websiteId: s.websiteId,
+				channel,
+				limit: perMinute,
+			});
+			return { code: 'channel_limit', detail: `Too many ${channel} messages in a minute: at most ${perMinute} a minute.` };
+		}
+		return null;
+	};
+
+	/**
 	 * Where a failed message goes next (fixed-choices N7): the first of its fallback channels (kept from when it was
 	 * accepted: its template's own, else the website's for its channel) that is on, where the recipient has an address and
 	 * has not unsubscribed (a required message goes anyway), where the message is not switched off and a template exists
@@ -450,6 +498,8 @@ export const createSending = (product) => {
 			const address = addressFor(target, message.to);
 			if (!address) continue;
 			if (!message.required && (await optedOut(s, address, message.topic))) continue;
+			// the fallback is a send too: a channel at its ceiling is left out (logged), the next one is tried
+			if (await ceilingHit(s, { channel: target, address, template: message.template })) continue;
 			if (message.template !== null && (await switchedOff(s, message.template, message.fallbackTemplate, target))) continue;
 			if (message.template === null) {
 				if (isTitled(target) && message.subject === '') continue;
@@ -760,6 +810,13 @@ export const createSending = (product) => {
 					}),
 				};
 		}
+		// the hard ceilings: whatever the merchant's limits say, required messages too (SR-7-2)
+		const hit = await ceilingHit(s, { channel: input.channel, address, template: input.template });
+		if (hit)
+			return {
+				ok: false,
+				problem: problem('rate_limited', hit.detail, { errors: [{ path: '/to', message: hit.detail, code: hit.code }] }),
+			};
 		if (notSetUp) {
 			const message = await s.store.messages.add({ ...base, leaseUntil: new Date(t + LEASE_MS) });
 			return {

@@ -5,10 +5,13 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+	ACCOUNT_CEILINGS,
+	CHANNEL_MINUTE_CEILINGS,
 	MAX_DELAY_DAYS,
 	MAX_TEMPLATES,
 	MAX_VISITOR_SUBSCRIPTIONS,
 	MAX_WEBHOOK_URLS,
+	RECIPIENT_CEILINGS,
 	RETRY_WAITS,
 	VISITOR_SUBSCRIPTION_DAYS,
 	WEBHOOK_RETRY_WAITS,
@@ -30,6 +33,25 @@ describe('fixed limits', () => {
 	it('hold safety ceilings that real use does not reach (SR-7-1)', () => {
 		expect(MAX_VISITOR_SUBSCRIPTIONS).toBe(50_000);
 		expect(VISITOR_SUBSCRIPTION_DAYS).toBe(365);
+	});
+
+	it('hold cost ceilings per recipient and per minute, Accounts’ higher and texts lower (SR-7-2)', () => {
+		expect(RECIPIENT_CEILINGS).toEqual({
+			email: { perHour: 100, perDay: 1000 },
+			sms: { perHour: 30, perDay: 200 },
+			whatsapp: { perHour: 30, perDay: 200 },
+			push: { perHour: 100, perDay: 1000 },
+			staff_push: { perHour: 100, perDay: 1000 },
+		});
+		for (const [channel, own] of Object.entries(RECIPIENT_CEILINGS)) {
+			const account = ACCOUNT_CEILINGS[/** @type {keyof typeof ACCOUNT_CEILINGS} */ (channel)];
+			expect(account.perHour).toBeGreaterThan(own.perHour);
+			expect(account.perDay).toBeGreaterThan(own.perDay);
+		}
+		// the merchant's own send limits go up to 100 an hour and 1000 a day: no hard ceiling of email or push is below them
+		expect(RECIPIENT_CEILINGS.email.perHour).toBeGreaterThanOrEqual(100);
+		expect(RECIPIENT_CEILINGS.email.perDay).toBeGreaterThanOrEqual(1000);
+		expect(CHANNEL_MINUTE_CEILINGS).toEqual({ sms: 100, whatsapp: 100 });
 	});
 
 	it('no settings schema offers a removed limit', () => {

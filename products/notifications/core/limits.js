@@ -34,3 +34,37 @@ export const MAX_VISITOR_SUBSCRIPTIONS = 50_000;
  * browser accepted both refresh it, then the database's expiry index removes it (SR-7-1).
  */
 export const VISITOR_SUBSCRIPTION_DAYS = 365;
+
+/**
+ * The most messages one address or number gets in the last hour and in the last day, whatever the merchant's own send
+ * limits say and required messages included (SR-7-2): a flaw in a product that calls Notifications can never cost the
+ * merchant more than this on one recipient. A text costs far more than an email, so those are lower. Messages that
+ * were skipped cost nothing and are not counted.
+ * @type {Readonly<Record<import('./channels.js').Channel, Readonly<{ perHour: number, perDay: number }>>>}
+ */
+export const RECIPIENT_CEILINGS = Object.freeze({
+	email: Object.freeze({ perHour: 100, perDay: 1000 }),
+	sms: Object.freeze({ perHour: 30, perDay: 200 }),
+	whatsapp: Object.freeze({ perHour: 30, perDay: 200 }),
+	push: Object.freeze({ perHour: 100, perDay: 1000 }),
+	staff_push: Object.freeze({ perHour: 100, perDay: 1000 }),
+});
+
+/**
+ * The same ceilings for Accounts' messages (sign-in codes and links): twice as high, so a person who asks for a code
+ * again and again is not shut out while the other messages of the address are.
+ * @type {typeof RECIPIENT_CEILINGS}
+ */
+export const ACCOUNT_CEILINGS = Object.freeze({
+	email: Object.freeze({ perHour: 200, perDay: 2000 }),
+	sms: Object.freeze({ perHour: 60, perDay: 400 }),
+	whatsapp: Object.freeze({ perHour: 60, perDay: 400 }),
+	push: Object.freeze({ perHour: 200, perDay: 2000 }),
+	staff_push: Object.freeze({ perHour: 200, perDay: 2000 }),
+});
+
+/**
+ * The most texts (SMS) and WhatsApp messages a website sends to anyone in a minute: lower than the 600 a minute every
+ * send route allows, because each of these is billed (SR-7-2).
+ */
+export const CHANNEL_MINUTE_CEILINGS = Object.freeze({ sms: 100, whatsapp: 100 });
