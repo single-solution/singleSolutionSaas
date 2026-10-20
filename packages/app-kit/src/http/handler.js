@@ -724,10 +724,17 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				// a server call for a verified shopper counts by who they are, so a retry with a renewed sign-in is the same request
 				const verified = ctx.visitor.server ? await ctx.signIn() : null;
 				const signedIn = verified?.ok ? `user:${verified.user.id}` : (request.headers.get('ss-sign-in') ?? '');
-				// an anonymous visitor (no ticket, staff member, session or sign-in) is named by the address too, so two of them
-				// who send the same key and body never share a stored answer (SR-1-8); a trusted server or the Portal is not
+				// an anonymous visitor (no ticket, staff member, session, sign-in or visitor key of its own) is named by the address
+				// too, so two of them who send the same key and body never share a stored answer (SR-1-8); a trusted server or the
+				// Portal is not, and a visitor key keeps a retry from a new address (a phone changing networks) a replay
 				const anonymous =
-					(r.auth === 'browser' || r.auth === 'none') && !ctx.ticket && !ctx.actor && !ctx.session && signedIn === '';
+					(r.auth === 'browser' || r.auth === 'none') &&
+					!ctx.ticket &&
+					!ctx.actor &&
+					!ctx.session &&
+					signedIn === '' &&
+					!request.headers.get('ss-guest') &&
+					!request.headers.get('ss-order-key');
 				fingerprint = sha256Hex(
 					[
 						method,

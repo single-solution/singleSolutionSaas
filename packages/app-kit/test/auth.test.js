@@ -349,10 +349,10 @@ describe('repeated requests (K-14)', () => {
 				token: browser.token,
 				origin: SITE,
 				body: { text: 'x' },
-				headers: { 'idempotency-key': 'order-1', 'x-forwarded-for': ip, 'ss-guest': 'guest-1', ...more },
+				headers: { 'idempotency-key': 'order-1', 'x-forwarded-for': ip, ...more },
 			});
 		expect((await post('198.51.100.1')).status).toBe(200);
-		// a guessable key, the same guest key and body, but another address: not the first visitor's stored answer
+		// a guessable key and the same body, no visitor key, but another address: not the first visitor's stored answer
 		const other = await post('198.51.100.2');
 		expect(other.status).toBe(409);
 		expect(await other.json()).toMatchObject({ type: 'https://notes.example.dev/problems/duplicate_request' });
@@ -364,6 +364,11 @@ describe('repeated requests (K-14)', () => {
 		expect((await post('198.51.100.1', { 'idempotency-key': 'order-2', 'ss-sign-in': 'shopper-a' })).status).toBe(200);
 		const moved = await post('198.51.100.9', { 'idempotency-key': 'order-2', 'ss-sign-in': 'shopper-a' });
 		expect([moved.status, moved.headers.get('idempotent-replayed')]).toEqual([200, 'true']);
+		// a visitor with a key of its own is named by it, so a phone that changed networks still gets its replay
+		clock.advance(61_000);
+		expect((await post('198.51.100.1', { 'idempotency-key': 'order-3', 'ss-guest': 'guest-1' })).status).toBe(200);
+		const roamed = await post('198.51.100.7', { 'idempotency-key': 'order-3', 'ss-guest': 'guest-1' });
+		expect([roamed.status, roamed.headers.get('idempotent-replayed')]).toEqual([200, 'true']);
 	});
 });
 
