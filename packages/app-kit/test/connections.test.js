@@ -769,10 +769,11 @@ describe('merchant database connection', () => {
 			(await (await dash(cookie, 'GET', path)).json()).connections.find(
 				(/** @type {{ name: string }} */ c) => c.name === 'database',
 			);
-		// a refused address is stored as failing, and the Portal is told why
+		// a refused address is not stored (nothing opens it), and the Portal is told why
 		await portal.saveConnections(websiteId, { database: 'mongodb://10.0.0.1:27017/shop' });
 		await settle();
-		expect(await row()).toMatchObject({ status: 'test_failed', message: expect.stringMatching(/not allowed/), set: true });
+		expect(await row()).toMatchObject({ status: 'not_connected', set: false });
+		expect(await store.get('connections', `${websiteId}|database`)).toBeNull();
 		expect(portal.health(websiteId, 'notes', 'database')).toMatchObject({ version: 1, ok: false });
 		expect(portal.health(websiteId, 'notes', 'database')?.message).toMatch(/not allowed/);
 		// a good one connects; the product's database is the one the Portal named: ss_notes unless the Owner named another

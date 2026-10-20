@@ -454,6 +454,12 @@ export const createData = ({
 		const key = sha256Hex(uri);
 		let entry = pools.get(key);
 		if (!entry) {
+			// checked again before a pool opens, whatever stored the address: a refused one never connects
+			const safe = isSafeMongoUri(uri, policy);
+			if (!safe.ok) {
+				logger.warn('merchant database address refused', { reason: safe.reason });
+				throw kitError('database_unreachable', 'the merchant database address is not allowed');
+			}
 			const options = {
 				...databaseClientOptions({ maxPoolSize: CLIENT_DB_POOL_SIZE, appName: `ss-${productId}` }),
 				lookup: /** @type {any} */ (lookup),

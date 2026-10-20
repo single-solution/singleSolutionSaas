@@ -639,7 +639,14 @@ export const createConnections = (ctx, { notifyProducts }) => {
 			/** @type {Record<string, unknown> | null} */
 			let ai = null;
 			try {
-				if (product.needs.database && record?.database) uri = open('database');
+				if (product.needs.database && record?.database) {
+					uri = open('database');
+					// checked again on delivery: an address refused now (a stricter policy, a value stored another way) goes out as not set
+					if (!isSafeMongoUri(uri, policy).ok) {
+						ctx.logger.warn('website database address refused', { websiteId });
+						uri = null;
+					}
+				}
 				if (product.needs.storage !== 'none' && record?.storage) bucket = JSON.parse(open('storage'));
 				if (product.needs.ai === true && record?.ai) ai = JSON.parse(open('ai'));
 			} catch {

@@ -26,7 +26,7 @@
  *   cannot answer), so a product can serve the others without naming them in its code.
  * @module
  */
-import { isNetError } from '@ss/net';
+import { isNetError, isSafeMongoUri } from '@ss/net';
 import { isObject } from '@ss/contracts/util';
 import { problem } from './http/results.js';
 import { createS3Storage } from './adapters/storage.js';
@@ -458,6 +458,20 @@ export const createConnections = ({
 			held.doc.status !== undefined
 		)
 			return null;
+		// the Portal checks an address when it is saved, but this product checks it again: a refused address is not kept
+		// and never opens a connection (the message names the reason, never the address)
+		if (def.kind === 'database') {
+			const safe = isSafeMongoUri(incoming, policy);
+			if (!safe.ok) {
+				await recent.record({
+					websiteId,
+					who: PORTAL,
+					what: 'connections',
+					detail: `${def.label}: the address from the Portal was refused (${safe.reason})`,
+				});
+				return { name, ok: false, message: `This address is not allowed (${safe.reason}).` };
+			}
+		}
 		const result = await runTests(websiteId, def, incoming);
 		const t = now();
 		await store.put('connections', idOf(websiteId, name), {

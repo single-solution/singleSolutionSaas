@@ -37,6 +37,27 @@ describe('the website’s database, entered once in the Portal', () => {
 		await client.close();
 	});
 
+	it('is checked again when it arrives: an address the outbound policy refuses is not stored, nothing opens, and the Portal is told why (SR-1-12)', async () => {
+		const { portal, websiteId, settle, store, product, clock } = await setup();
+		await portal.saveConnections(websiteId, {
+			database: 'mongodb://user:topsecret@10.0.0.5:27017/x?tls=true',
+			dbNames: { notes: freshDb('refused') },
+		});
+		await settle();
+		expect(await store.list('connections', { websiteId })).toEqual([]);
+		expect(await product.connections.value(websiteId, 'database')).toBeNull();
+		const health = portal.health(websiteId, 'notes', 'database');
+		expect(health).toMatchObject({ version: 1, ok: false, message: expect.stringMatching(/not allowed.*private_address/) });
+		expect(JSON.stringify(health)).not.toContain('topsecret');
+		// a good address delivered later is taken
+		clock.advance(1000);
+		const name = freshDb('allowed');
+		await portal.saveConnections(websiteId, { database: mongoUri(name), dbNames: { notes: name } });
+		await settle();
+		expect(portal.health(websiteId, 'notes', 'database')).toMatchObject({ version: 2, ok: true });
+		expect(await product.connections.value(websiteId, 'database')).toEqual(expect.stringContaining('mongodb'));
+	});
+
 	it('is fetched by a product that lost the notice, at the next status fetch (the status shows the Portal is ahead)', async () => {
 		const { portal, websiteId, settle, call, server, clock, product } = await setup();
 		await call('GET', '/v1/server/open', { token: server.token, bare: true });

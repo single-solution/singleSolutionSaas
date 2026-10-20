@@ -455,6 +455,39 @@ describe('merchant database (MongoDB)', () => {
 		await data.closeAll();
 	});
 
+	it('checks the address again before a new pool opens, so a value that got in some other way never connects (SR-1-12)', async () => {
+		const { logger, entries } = createTestLogger();
+		/** @type {string[]} */
+		const opened = [];
+		const refused = [
+			'mongodb://user:topsecret@10.0.0.5:27017/x?tls=true',
+			'mongodb://user:topsecret@127.0.0.1:27017/x?authMechanism=MONGODB-AWS',
+			'mongodb://user:topsecret@db.example.com:27017/x?tls=false',
+			'postgres://user:topsecret@db.example.com/x',
+		];
+		for (const uri of refused) {
+			const data = createData({
+				productId: 's',
+				uriOf: async () => uri,
+				logger,
+				policy: createOutboundPolicy({ allowHosts: ['127.0.0.1'] }),
+				createClient: (address, options) => {
+					opened.push(address);
+					return new MongoClient(address, options);
+				},
+			});
+			await expect(data.forWebsite(WEBSITE), uri).rejects.toMatchObject({
+				code: 'database_unreachable',
+				message: expect.stringMatching(/not allowed/),
+			});
+			// it is tried again next time (nothing stays in the pool), and is still refused
+			await expect(data.forWebsite(WEBSITE), uri).rejects.toMatchObject({ code: 'database_unreachable' });
+			await data.closeAll();
+		}
+		expect(opened).toEqual([]);
+		expect(JSON.stringify(entries)).not.toContain('topsecret');
+	});
+
 	it('reports unreachable databases without leaking the URI and tests connection strings', async () => {
 		const { logger, entries } = createTestLogger();
 		const policy = createOutboundPolicy({ allowHosts: ['127.0.0.1'] });

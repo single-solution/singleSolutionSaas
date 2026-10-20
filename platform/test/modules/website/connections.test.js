@@ -8,7 +8,7 @@ import { validateWebsiteConnections } from '@ss/contracts';
 import { manifest as notesManifest } from '@ss/contracts/testing';
 import { createSecretBox } from '../../../src/infra/crypto.js';
 import { closeMongoClients } from '../../../src/testing.js';
-import { startMongo } from '../../helpers.js';
+import { ENCRYPTION_KEY, startMongo } from '../../helpers.js';
 import { PASSWORD, bootPortal, codeOf } from '../catalog/boot.js';
 import {
 	FETCHES_PER_HOUR,
@@ -661,6 +661,30 @@ describe('Data and files: the merchant enters the database once', () => {
 		await m.client.put(`${site()}/connections/ai`, { value: AI, ...CONFIRM });
 		await h.db.collection('website_connections').updateOne(/** @type {any} */ ({ _id: w1 }), { $set: { 'ai.v': 99 } });
 		expect((await fetchAs(ask)).json).toMatchObject({ database: null, shared: { ai: null } });
+	});
+
+	it('checks the database address again when it is delivered: one that is refused now goes out as not set, and the log names no address (SR-2-8)', async () => {
+		const { h, m, w1, site, fetchAs, notes } = await setUp('conn_redeliver');
+		await m.client.put(`${site()}/connections/database`, { value: DB, ...CONFIRM });
+		expect((await fetchAs(notes)).json.database).toMatchObject({ uri: DB });
+		// a value that got into the store another way than the save check (here: written straight into it)
+		const records = h.db.collection('website_connections');
+		const record = /** @type {Record<string, any>} */ (await records.findOne(/** @type {any} */ ({ _id: w1 })));
+		const box = createSecretBox({ encryptionKey: ENCRYPTION_KEY });
+		for (const bad of [
+			'mongodb://u:topsecret@169.254.169.254:27017/x',
+			'mongodb+srv://u:topsecret@x.example.net/?tlsInsecure=true',
+			'mongodb://u:topsecret@db.example.net:27017/x?tls=false',
+		]) {
+			const aad = { websiteId: w1, name: 'database', v: String(record.database.v), purpose: 'website_connection' };
+			await records.updateOne(/** @type {any} */ ({ _id: w1 }), { $set: { 'database.sealed': box.seal(bad, { aad }) } });
+			const answer = await fetchAs(notes);
+			expect(answer.status).toBe(200);
+			expect(answer.json.database, bad).toBeNull();
+			expect(JSON.stringify(answer.json)).not.toContain('topsecret');
+		}
+		expect(h.entries.some((e) => /address refused/.test(e.msg))).toBe(true);
+		expect(JSON.stringify(h.entries)).not.toContain('topsecret');
 	});
 
 	it('the website removed: its connections are gone', async () => {
