@@ -105,6 +105,55 @@ describe('what a person may enter', () => {
 			expect(JSON.stringify(checked)).not.toContain('topsecret');
 		}
 	});
+	it('takes only the characters real bucket and region names use, so a value cannot change the host or path of a signed link (SR-2-7)', async () => {
+		const bucketsOk = ['abc', 'my.bucket-1', 'a'.repeat(63), '0a0'];
+		for (const bucket of bucketsOk)
+			expect(checkStorageValue({ ...STORAGE, bucket }, policy), bucket).toMatchObject({ ok: true });
+		const bucketsBad = [
+			'evil.example/x?',
+			'bucket/../x',
+			'a?x=1',
+			'a#b',
+			'a@b',
+			'a:80',
+			'bu cket',
+			'a_b_c',
+			'Bucket',
+			'ab',
+			'a',
+			'-abc',
+			'abc-',
+			'.abc',
+			'abc.',
+			'a'.repeat(64),
+			'caf\u00e9bucket',
+			'a\nb',
+		];
+		for (const bucket of bucketsBad)
+			expect(checkStorageValue({ ...STORAGE, bucket }, policy), JSON.stringify(bucket)).toEqual({
+				ok: false,
+				message:
+					'The bucket name is 3 to 63 lowercase letters, digits, dots or dashes, starting and ending with a letter or digit.',
+				field: 'bucket',
+			});
+		for (const region of ['auto', 'eu-central-1', 'us-east-1', 'a', 'a'.repeat(32), '1'])
+			expect(checkStorageValue({ ...STORAGE, region }, policy), region).toMatchObject({ ok: true });
+		const regionsBad = ['eu/west', 'EU-West', 'us east', 'a.b', 'x?', 'a_b', '..', 'a'.repeat(33), 'a#b', 'a@b', 'a:1'];
+		for (const region of regionsBad)
+			expect(checkStorageValue({ ...STORAGE, region }, policy), JSON.stringify(region)).toEqual({
+				ok: false,
+				message: 'The region is up to 32 lowercase letters, digits or dashes.',
+				field: 'region',
+			});
+		// and the Portal refuses to save it
+		const { m, site } = await setUp('conn_storage_format');
+		for (const bad of [{ bucket: 'evil.example/x?' }, { region: 'eu/west' }]) {
+			const res = await m.client.put(`${site()}/connections/storage`, { value: { ...STORAGE, ...bad }, ...CONFIRM });
+			expect(codeOf(res), JSON.stringify(bad)).toEqual([422, 'validation_failed']);
+		}
+		const status = await m.client.get(`${site()}/connections`);
+		expect(JSON.stringify(status.json)).not.toContain('evil.example');
+	});
 	it('takes a storage connection with the four required parts and the optional ones, nothing more', () => {
 		const ok = checkStorageValue({ ...STORAGE, forcePathStyle: true, ignored: undefined }, policy);
 		expect(ok).toEqual({ ok: false, message: 'ignored is not a storage setting.', field: 'ignored' });
@@ -112,7 +161,7 @@ describe('what a person may enter', () => {
 			ok: true,
 			value: { ...STORAGE, forcePathStyle: true },
 		});
-		expect(checkStorageValue({ bucket: 'b', region: 'r', accessKeyId: 'a', secretAccessKey: 's' }, policy).ok).toBe(true);
+		expect(checkStorageValue({ bucket: 'abc', region: 'r', accessKeyId: 'a', secretAccessKey: 's' }, policy).ok).toBe(true);
 		// the public address: trimmed, trailing slashes cut, empty means none
 		expect(checkStorageValue({ ...STORAGE, publicBaseUrl: ' https://cdn.example.com/files// ' }, policy)).toEqual({
 			ok: true,

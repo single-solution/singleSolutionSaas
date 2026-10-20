@@ -48,6 +48,10 @@ const HOUR_MS = 3_600_000;
 const URI_MAX = 4096;
 /** Health messages are cut here. */
 const MESSAGE_MAX = 300;
+/** A bucket name as real providers allow it: 3 to 63 lowercase letters, digits, dots and dashes, a letter or digit at both ends. */
+const BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+/** A storage region as real providers name it: lowercase letters, digits and dashes, such as `eu-central-1` or `auto`. */
+const REGION = /^[a-z0-9-]{1,32}$/;
 /** A bucket prefix: letters, digits and `-_./`, no leading slash, ending with a slash when set. */
 const PREFIX = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*\/)*$/;
 /** An AI model name: letters, digits and `_.:/@-`. */
@@ -105,6 +109,16 @@ export const checkStorageValue = (value, policy) => {
 		const text = typeof input[field] === 'string' ? input[field].trim() : '';
 		if (text === '') return { ok: false, message: `Enter the ${field}.`, field };
 		if (text.length > max) return { ok: false, message: `The ${field} is too long.`, field };
+		// the bucket and region become part of the host and path of the links a product signs: only real names pass
+		if (field === 'bucket' && !BUCKET.test(text))
+			return {
+				ok: false,
+				message:
+					'The bucket name is 3 to 63 lowercase letters, digits, dots or dashes, starting and ending with a letter or digit.',
+				field,
+			};
+		if (field === 'region' && !REGION.test(text))
+			return { ok: false, message: 'The region is up to 32 lowercase letters, digits or dashes.', field };
 		out[field] = text;
 	}
 	for (const key of Object.keys(input))

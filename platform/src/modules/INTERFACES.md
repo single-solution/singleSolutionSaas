@@ -177,7 +177,7 @@ a console answer: a person sees only `set` and how each product's own test of it
 links: [{ caller, callee, state: on|idle|off, scopes: [{ scope, name, description }], delivered }] }` (`state` of a
   connection: `not_set`, `waiting`, `connected`, `test_failed`). The routes add `can: { write }`.
 - `saveConnection({ merchantId, websiteId, name, value, names?, actor, requestId, ip })`, `removeConnection(…)`:
-  `name` is `database` or `storage`; the value is checked (a MongoDB string; a bucket with its region and keys, and optionally the bucket's public https address `publicBaseUrl`, kept
+  `name` is `database` or `storage`; the value is checked (a MongoDB string; a bucket and region that are real names (lowercase letters, digits, dashes and, for the bucket, dots) with the keys, and optionally the bucket's public https address `publicBaseUrl`, kept
   as a plain copy next to the sealed value and delivered inside `storage`), sealed
   with `ctx.secretBox` (AAD website, name and the value's own counter) and kept; the version rises by one; Activity
   `website.connection_saved` / `website.connection_removed` (never a value); every product on the website that needs it

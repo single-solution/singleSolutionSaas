@@ -156,6 +156,50 @@ describe('S3 storage adapter', () => {
 		).toThrow(/region/);
 	});
 
+	it('refuses a bucket or region that is not a real name, so a delivered value cannot change the host or path of a link (SR-1-13)', () => {
+		const make = (/** @type {Record<string, unknown>} */ change) =>
+			createS3Storage({ descriptor: { ...descriptor, ...change }, websiteId: WEBSITE, slug: 's', send: noSend, now: () => 0 });
+		/** @param {Record<string, unknown>} change */
+		const refused = (change) => {
+			try {
+				make(change);
+			} catch (error) {
+				return /** @type {{ code: string, message: string }} */ (error);
+			}
+			return null;
+		};
+		for (const bucket of ['abc', 'my.bucket-1', 'a'.repeat(63)]) expect(make({ bucket }).bucket).toBe(bucket);
+		for (const region of ['auto', 'eu-central-1', 'a', 'a'.repeat(32)]) expect(make({ region }).bucket).toBe('merchant-bucket');
+		const buckets = [
+			'evil.example/x?',
+			'a?x=1',
+			'a#b',
+			'a@b',
+			'a:80',
+			'bu cket',
+			'a_b_c',
+			'Bucket',
+			'ab',
+			'-abc',
+			'abc-',
+			'a'.repeat(64),
+			'a\nb',
+		];
+		for (const bucket of buckets) {
+			expect(refused({ bucket }), bucket).toMatchObject({
+				code: 'connection_invalid',
+				message: expect.stringMatching(/bucket name/),
+			});
+		}
+		const regions = ['eu/west', 'EU-West', 'us east', 'a.b', 'x?', 'a_b', 'a'.repeat(33), 'r\n'];
+		for (const region of regions) {
+			expect(refused({ region }), region).toMatchObject({
+				code: 'connection_invalid',
+				message: expect.stringMatching(/region name/),
+			});
+		}
+	});
+
 	it('heads and deletes objects with signed requests', async () => {
 		/** @type {Array<{ url: string, init: any }>} */
 		const seen = [];

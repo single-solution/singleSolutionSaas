@@ -30,6 +30,11 @@ import { kitError } from '../util.js';
 /** A media type without parameters spanning lines (`type/subtype[; params]`). */
 const CONTENT_TYPE = /^[A-Za-z0-9!#$&^_.+-]{1,127}\/[A-Za-z0-9!#$&^_.+-]{1,127}(?:\s*;[\x20-\x7e]{0,256})?$/;
 
+/** A bucket name as real providers allow it: 3 to 63 lowercase letters, digits, dots and dashes, a letter or digit at both ends. */
+const BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+/** A storage region as real providers name it: lowercase letters, digits and dashes, such as `eu-central-1` or `auto`. */
+const REGION = /^[a-z0-9-]{1,32}$/;
+
 /**
  * @param {unknown} key
  * @returns {string}
@@ -57,6 +62,11 @@ const checkDescriptor = (descriptor, policy) => {
 		if (typeof descriptor[name] !== 'string' || descriptor[name] === '')
 			throw kitError('connection_invalid', `storage connection needs ${name}`);
 	}
+	// the bucket and region become part of the host and path of the links this signs: only real names pass
+	if (!BUCKET.test(/** @type {string} */ (descriptor.bucket)))
+		throw kitError('connection_invalid', 'storage bucket name must be 3 to 63 lowercase letters, digits, dots or dashes');
+	if (!REGION.test(/** @type {string} */ (descriptor.region)))
+		throw kitError('connection_invalid', 'storage region name must be up to 32 lowercase letters, digits or dashes');
 	if (descriptor.endpoint !== undefined) {
 		const checked = checkUrl(String(descriptor.endpoint), policy);
 		if (!checked.ok) throw kitError('connection_invalid', `storage endpoint refused (${checked.reason})`);
