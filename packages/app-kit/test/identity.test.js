@@ -1,6 +1,6 @@
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { IDENTITY_MAX_AGE_MS, verifyIdentityToken } from '../src/identity.js';
+import { IDENTITY_MAX_AGE_MS, IDENTITY_MAX_LIFE_SECONDS, verifyIdentityToken } from '../src/identity.js';
 import { T0, setup } from './helpers.js';
 
 const NOW_S = Math.floor(T0 / 1000);
@@ -100,6 +100,32 @@ describe('verifyIdentityToken', () => {
 		expect(verifyIdentityToken(kidless, issuer.section, { now })).toMatchObject({ ok: true, identity: { subject: '42' } });
 		// a corrupted signature never throws
 		expect(verifyIdentityToken(`${h}.${p}.AAAA`, issuer.section, { now })).toEqual({ ok: false, code: 'signature' });
+	});
+});
+
+describe('verifyIdentityToken: the life of a sign-in', () => {
+	it('refuses a token that lives longer than the 15 minutes Accounts issues, so a removed role cannot be used for a day', () => {
+		const issuer = createIssuer();
+		expect(IDENTITY_MAX_LIFE_SECONDS).toBe(900);
+		const life = (/** @type {number} */ seconds) => issuer.sign(claims({ exp: NOW_S + seconds }));
+		expect(verifyIdentityToken(life(900), issuer.section, { now }).ok).toBe(true);
+		expect(verifyIdentityToken(life(1), issuer.section, { now }).ok).toBe(true);
+		expect(verifyIdentityToken(life(901), issuer.section, { now })).toEqual({ ok: false, code: 'too_long' });
+		expect(verifyIdentityToken(life(24 * 60 * 60), issuer.section, { now })).toEqual({ ok: false, code: 'too_long' });
+		// the life counts from `iat`, not from now: a token issued 10 minutes ago for 30 minutes is refused too
+		const earlier = issuer.sign(claims({ iat: NOW_S - 600, exp: NOW_S + 1200 }));
+		expect(verifyIdentityToken(earlier, issuer.section, { now })).toEqual({ ok: false, code: 'too_long' });
+		const fine = issuer.sign(claims({ iat: NOW_S - 600, exp: NOW_S + 300 }));
+		expect(verifyIdentityToken(fine, issuer.section, { now }).ok).toBe(true);
+	});
+
+	it('a staff route of a product refuses a long-lived sign-in too', async () => {
+		const { product, websiteId, accounts, link } = await setup();
+		await link('accounts');
+		const token = await accounts.signIn({ websiteId, sub: 'usr_1', role: 'owner', ttlSeconds: 24 * 60 * 60 });
+		expect(await product.accounts.verify({ websiteId, token })).toEqual({ ok: false, code: 'too_long' });
+		const ok = await accounts.signIn({ websiteId, sub: 'usr_1', role: 'owner' });
+		expect((await product.accounts.verify({ websiteId, token: ok })).ok).toBe(true);
 	});
 });
 

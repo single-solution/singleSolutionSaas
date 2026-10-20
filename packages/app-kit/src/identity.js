@@ -5,7 +5,8 @@
  * A token is a compact JWS with `alg` EdDSA, ES256 or RS256 matching the key type (`none`, HMAC, header-borne keys and
  * `crit` refused), signed by a key of the issuer (by `kid`, or the only compatible key), with `iss` = issuer, `aud`
  * containing the website, `exp` (required) in the future, `nbf` reached and `iat` (required) not in the future and at
- * most 24 hours old (60 s skew). A sign-in says who the person is and, for staff, the permissions of their role
+ * most 24 hours old (60 s skew); `exp - iat` is at most 15 minutes, the longest life Accounts issues a sign-in with, so
+ * a removed or demoted staff member keeps access for 15 minutes at most. A sign-in says who the person is and, for staff, the permissions of their role
  * (`staff.js`): a staff route of the server token needs it, the server token alone changes nothing.
  * @module
  */
@@ -16,6 +17,8 @@ import { deepFreeze, isObject } from '@ss/contracts/util';
 
 /** Tokens older than this (`now - iat`) are refused. */
 export const IDENTITY_MAX_AGE_MS = 24 * 60 * 60_000;
+/** The longest `exp - iat` accepted, seconds: the life Accounts gives every sign-in (`SIGN_IN_SECONDS`, 15 minutes). */
+export const IDENTITY_MAX_LIFE_SECONDS = 900;
 const IDENTITY_SKEW_MS = 60_000;
 const MAX_TOKEN_LENGTH = 8192;
 
@@ -31,7 +34,7 @@ const SEGMENT = /^[A-Za-z0-9_-]*$/;
 /**
  * @typedef {{ subject: string, email?: string, phone?: string, issuer: string, claims: Readonly<Record<string, unknown>> }} SignIn
  * @typedef {'identity_missing' | 'malformed' | 'algorithm' | 'unknown_key' | 'signature'
- *   | 'issuer' | 'audience' | 'expired' | 'not_yet_valid' | 'too_old' | 'subject'} IdentityFailure
+ *   | 'issuer' | 'audience' | 'expired' | 'not_yet_valid' | 'too_old' | 'too_long' | 'subject'} IdentityFailure
  * @typedef {{ ok: true, identity: SignIn } | { ok: false, code: IdentityFailure }} IdentityResult
  */
 
@@ -116,6 +119,7 @@ export const verifyIdentityToken = (token, section, { now = Date.now } = {}) => 
 	if (claims.nbf !== undefined && (nbf === null || at + IDENTITY_SKEW_MS < nbf)) return { ok: false, code: 'not_yet_valid' };
 	if (iat === null || at + IDENTITY_SKEW_MS < iat) return { ok: false, code: 'not_yet_valid' };
 	if (at - iat > IDENTITY_MAX_AGE_MS) return { ok: false, code: 'too_old' };
+	if (exp - iat > IDENTITY_MAX_LIFE_SECONDS * 1000) return { ok: false, code: 'too_long' };
 	const subject = claimOf(claims, 'sub');
 	if (subject === undefined || subject.length > 255) return { ok: false, code: 'subject' };
 	const email = claimOf(claims, 'email');

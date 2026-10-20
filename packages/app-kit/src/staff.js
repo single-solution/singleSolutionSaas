@@ -82,6 +82,7 @@ export const SIGN_IN_DETAIL = Object.freeze({
 	audience: 'The sign-in was made for another website.',
 	expired: 'The sign-in has expired. Renew it at Accounts and send the new one.',
 	too_old: 'The sign-in is too old. Renew it at Accounts and send the new one.',
+	too_long: 'The sign-in lasts longer than Accounts issues them for. Get a new one from Accounts.',
 	not_yet_valid: 'The sign-in is not valid yet.',
 	signature: 'The sign-in is not signed by the keys of this website’s Accounts.',
 	unknown_key: 'The sign-in is signed by a key this website’s Accounts does not have.',
