@@ -560,6 +560,7 @@ describe('the tool permissions do not open the data they work on (SR-5b-5)', () 
 	const SEVERAL = () => [ids.phone.id];
 
 	it('a file of orders, customers or products needs orders.read, customers.manage or catalog.edit as well', async () => {
+		/** @type {[string, string][]} */
 		const files = [
 			['/v1/csv/orders', 'orders.read'],
 			['/v1/csv/customers', 'customers.manage'],
