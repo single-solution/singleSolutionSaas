@@ -217,10 +217,18 @@ export const createFlows = (product, service) => {
 	};
 
 	/**
-	 * The answer to a sign-up waiting for approval, else the sign-in.
-	 * @param {Site} s @param {UserRecord} user @param {{ method: string, remember: boolean, device: { browser: string, system: string }, consents?: unknown }} how
+	 * The answer to a sign-up waiting for approval, else the sign-in. A single-use code or link (`how.claim`) is used up
+	 * here for a sign-up waiting for approval (it never reaches `finish`, which uses it up for the others): only the
+	 * call that used it up goes on.
+	 * @param {Site} s @param {UserRecord} user
+	 * @param {{ method: string, remember: boolean, device: { browser: string, system: string }, consents?: unknown,
+	 *   claim?: () => Promise<boolean> }} how
 	 */
-	const afterSignUp = async (s, user, how) => (user.status === 'pending' ? { status: 'pending' } : service.finish(s, user, how));
+	const afterSignUp = async (s, user, how) => {
+		if (user.status !== 'pending') return service.finish(s, user, how);
+		if (how.claim && !(await how.claim())) throw problem('code_invalid', 'The code is not valid or has expired.');
+		return { status: 'pending' };
+	};
 
 	/**
 	 * The password rules of a method (A2, A9, ST-26, K-27): each of Email + password and Phone + password has its own
@@ -309,9 +317,14 @@ export const createFlows = (product, service) => {
 			await service.logSignIn(s, user, 'user.sign_in_failed', { reason: 'wrong_password' });
 			throw failed();
 		}
-		const answer = await service.finish(s, user, { method, ...service.howOf(ctx), consents: body.consents });
-		if (staffCode) await s.store.codes.consume(staffCode);
-		return answer;
+		// a sign-in code from staff is used up inside `finish`, once its refusals a retry can fix (consents) are passed: of
+		// two calls with it at the same moment, only the one that used it up signs in
+		return service.finish(s, user, {
+			method,
+			...service.howOf(ctx),
+			consents: body.consents,
+			...(staffCode ? { claim: () => s.store.codes.consume(staffCode) } : {}),
+		});
 	};
 
 	/**
@@ -378,8 +391,8 @@ export const createFlows = (product, service) => {
 
 	/**
 	 * Check a code the user typed against the newest one sent to the address (used up after too many wrong tries);
-	 * the right one is used up by `codeSignIn` once the sign-in passed its checks, so a consent or profile step can be
-	 * retried with the same code.
+	 * the right one is used up by the sign-in itself (`codeSignIn`, the phone + password sign-up) once its checks passed
+	 * and before the session is issued, so a consent or profile step can be retried with the same code.
 	 * @param {Site} s @param {'phone' | 'email' | 'phone_reset'} kind @param {string} target @param {unknown} typed
 	 * @returns {Promise<{ id: string, staff: boolean }>} the code record's id; `staff`: it is a sign-in code staff made
 	 *   for the address's user (A3), which says who the user is but does not prove the address
@@ -445,8 +458,10 @@ export const createFlows = (product, service) => {
 	};
 
 	/**
-	 * Sign in (or up) the owner of a proven address, then use up the code or link. A sign-in code staff made (A3) opens
-	 * the account it was made for, but proves no email address.
+	 * Sign in (or up) the owner of a proven address. The code or link is used up before the session is issued (inside
+	 * `finish`, or `afterSignUp` for a sign-up waiting for approval), after the refusals a retry can fix (a consent or
+	 * profile step): of two calls with it at the same moment, only the one that used it up signs in. A sign-in code staff
+	 * made (A3) opens the account it was made for, but proves no email address.
 	 * @param {Site} s @param {any} ctx @param {'phone' | 'email'} kind @param {string} target
 	 * @param {{ id: string, staff: boolean }} record the code or link used
 	 */
@@ -456,6 +471,7 @@ export const createFlows = (product, service) => {
 			method: kind === 'phone' ? 'phone_code' : 'email_code',
 			...service.howOf(ctx),
 			consents: body.consents,
+			claim: () => s.store.codes.consume(recordId),
 		};
 		const verified = kind === 'phone' ? 'phoneVerified' : 'emailVerified';
 		const existing =
@@ -466,27 +482,21 @@ export const createFlows = (product, service) => {
 				: staff
 					? await s.store.users.byEmail(target)
 					: await provenHolderOf(s, target);
-		/** @type {Record<string, unknown>} */
-		let answer;
 		if (existing) {
 			const user =
 				existing[verified] || (staff && kind === 'email')
 					? existing
 					: ((await s.store.users.update(existing.id, { [verified]: true })) ?? existing);
-			answer = await service.finish(s, user, how);
-		} else {
-			const profile = await signUpProfile(s, body, kind === 'phone' ? { phone: target } : { email: target });
-			if (kind === 'phone' && !profile.name) {
-				// a new phone-code user without a name gets the website's name for them (A7)
-				const { newUserName } = await service.settings(s, 'phone_code');
-				profile.name = newUserNameOf(String(newUserName), target);
-			}
-			if (kind === 'phone') await claimPhone(s, target);
-			answer = await afterSignUp(s, await createUser(s, profile, { [verified]: true }, service.howOf(ctx), how.method), how);
+			return service.finish(s, user, how);
 		}
-		// used up only now: a consent or profile step can be retried with the same code or link
-		if (!(await s.store.codes.consume(recordId))) throw problem('code_invalid', 'The code is not valid or has expired.');
-		return answer;
+		const profile = await signUpProfile(s, body, kind === 'phone' ? { phone: target } : { email: target });
+		if (kind === 'phone' && !profile.name) {
+			// a new phone-code user without a name gets the website's name for them (A7)
+			const { newUserName } = await service.settings(s, 'phone_code');
+			profile.name = newUserNameOf(String(newUserName), target);
+		}
+		if (kind === 'phone') await claimPhone(s, target);
+		return afterSignUp(s, await createUser(s, profile, { [verified]: true }, service.howOf(ctx), how.method), how);
 	};
 
 	// ----------------------------------------------------------------------------------------- email + password
@@ -538,10 +548,14 @@ export const createFlows = (product, service) => {
 		if (proof.staff) throw problem('code_invalid', 'The code is not valid or has expired.');
 		await claimPhone(s, phone);
 		const user = await createUser(s, profile, { passwordHash, phoneVerified: true }, how, 'phone_password');
-		const answer = await afterSignUp(s, user, { method: 'phone_password', ...how, consents: body.consents });
-		// used up only now: a refused password or profile can be retried with the same code
-		if (!(await s.store.codes.consume(proof.id))) throw problem('code_invalid', 'The code is not valid or has expired.');
-		return answer;
+		// the code is used up before the session is issued (a refused password or profile, which come first, can be retried
+		// with the same code): of two sign-ups with it at the same moment, only the one that used it up signs in
+		return afterSignUp(s, user, {
+			method: 'phone_password',
+			...how,
+			consents: body.consents,
+			claim: () => s.store.codes.consume(proof.id),
+		});
 	};
 
 	/** Sign in with a phone number and a password, or a sign-in code from staff (A2, A3). @param {any} ctx */
