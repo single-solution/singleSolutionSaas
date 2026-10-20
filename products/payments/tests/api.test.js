@@ -676,7 +676,9 @@ describe('the other gateways', () => {
 			}).toString();
 		const state = async () => (await env.api('GET', `/v1/payments/${payment.id}`)).json;
 		// a lower amount, another currency or no amount at all is not paid, on the notice and on the return; it is logged
-		for (const extra of [{ transaction_amount: '1' }, { transaction_amount: '2500', transaction_currency: 'USD' }, {}]) {
+		/** @type {Record<string, string>[]} */
+		const wrong = [{ transaction_amount: '1' }, { transaction_amount: '2500', transaction_currency: 'USD' }, {}];
+		for (const extra of wrong) {
 			await env.call('GET', `/v1/gateways/payfast_pk/${env.websiteId}?${answer(extra)}`);
 			await page(`/return/payfast_pk/${env.websiteId}/${payment.id}?${answer(extra)}`);
 			expect((await state()).status).toBe('pending');

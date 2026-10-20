@@ -41,6 +41,7 @@ const tokenKey = (keys) => `${apiOf(keys)}|${keys.clientId}|${sha256Hex(String(k
  * A new access token for the merchant's app (client credentials, always asked of PayPal): `expiresIn` seconds.
  * @param {Record<string, any>} keys
  * @param {GatewayContext} ctx
+ * @returns {Promise<{ ok: true, token: string, expiresIn: number } | { ok: false, status: number }>}
  */
 const signIn = async (keys, ctx) => {
 	const answer = await call(ctx, `${apiOf(keys)}/v1/oauth2/token`, {
