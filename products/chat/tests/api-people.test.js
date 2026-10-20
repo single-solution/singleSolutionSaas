@@ -3,6 +3,7 @@
  * reply alerts to visitors (C6), guests and sign-ins with imported keys, merges by time and claims by phone (C7),
  * older messages (C8), typing, Seen and the paused notice (C9), the inbox options (C11) and staff attachments (C12).
  */
+import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { afterAll, describe, expect, it } from 'vitest';
 import { sha256Hex } from '@ss/protocol';
 import { REASSURE_AFTER_MINUTES, STAFF_ATTACHMENT_MAX_BYTES } from '../core/limits.js';
@@ -114,14 +115,13 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	});
 
 	it('a staff reply alerts a visitor who left, once until they check again', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts']);
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'visitor_alerts']);
 		await sys.paste('notifications');
-		const v = sys.visitor();
+		const v = await verifiedVisitor(sys, { phone: '+447700900123' });
 		const sent = await v('POST', '/v1/chat/messages', {
 			text: 'call me',
-			page: { url: 'https://shop.example.com/lamps/a', kind: 'product' },
+			page: { url: 'https://shop.example.com/lamps/a?utm=x#top', kind: 'product' },
 		});
-		await v('POST', '/v1/chat/contact', { name: 'Ann', phone: '+447700900123' });
 		const ticket = await sys.ticket();
 		const path = `/v1/admin/conversations/${sent.json.chat.conversation.id}/messages`;
 		// still here: no alert
@@ -166,12 +166,11 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	});
 
 	it('with How often every_reply each staff reply alerts a visitor who is away (C16)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts']);
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'visitor_alerts']);
 		await sys.paste('notifications');
 		await sys.setting('visitor_alerts', 'frequency', 'every_reply');
-		const v = sys.visitor();
+		const v = await verifiedVisitor(sys, { email: 'ann@example.com' });
 		const sent = await v('POST', '/v1/chat/messages', { text: 'call me' });
-		await v('POST', '/v1/chat/contact', { name: 'Ann', email: 'ann@example.com' });
 		const ticket = await sys.ticket();
 		const path = `/v1/admin/conversations/${sent.json.chat.conversation.id}/messages`;
 		// still here: no alert, whatever the frequency
@@ -197,16 +196,63 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 		expect(sys.messages()).toHaveLength(3);
 	});
 
+	it('a reply alert goes only to an address Accounts verified, with a link on the website’s own address (SR-6-3)', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'visitor_alerts']);
+		await sys.paste('notifications');
+		const ticket = await sys.ticket();
+		/**
+		 * Staff reply to this visitor's chat, who left a minute ago; the alerts that went out.
+		 * @param {(...args: any[]) => Promise<any>} v @param {unknown} page
+		 */
+		const replyTo = async (v, page) => {
+			const sent = await v('POST', '/v1/chat/messages', { text: 'hello', page });
+			// whatever the visitor types as their contact details stays on the chat for the staff
+			await v('POST', '/v1/chat/contact', { name: 'Eve', email: 'victim@example.com', phone: '+447700900999' });
+			sys.advance(61_000);
+			const before = sys.messages().length;
+			await sys.admin(ticket, 'POST', `/v1/admin/conversations/${sent.json.chat.conversation.id}/messages`, { text: 'Hi' });
+			return sys.messages().slice(before);
+		};
+		const evil = { url: 'https://evil.example/login', kind: 'other' };
+		// a guest who typed an email and a phone: nothing to send to
+		expect(await replyTo(sys.visitor(), evil)).toEqual([]);
+		// a signed-in visitor whose email the sign-in does not call verified: nothing either
+		const unverified = await sys.accounts.signIn({
+			websiteId: sys.websiteId,
+			sub: 'usr_bea',
+			email: 'bea@example.com',
+			email_verified: false,
+		});
+		expect(await replyTo(sys.visitor({ signIn: unverified }), evil)).toEqual([]);
+		// a verified email: the alert goes there, not to the typed address, and links to the website, not the evil page
+		const ann = await verifiedVisitor(sys, { email: 'ann@example.com' });
+		expect((await replyTo(ann, evil)).map((m) => [m.to, m.values.link, m.linkValues])).toEqual([
+			[{ email: 'ann@example.com' }, 'https://shop.example.com/', ['link']],
+		]);
+		// a page of the website itself keeps its path, not its query or fragment
+		const cy = await verifiedVisitor(sys, { sub: 'usr_cy', email: 'cy@example.com' });
+		const own = { url: 'https://shop.example.com/lamps/b?next=https://evil.example#x', kind: 'product' };
+		expect((await replyTo(cy, own)).map((m) => m.values.link)).toEqual(['https://shop.example.com/lamps/b']);
+		// a host the merchant listed in the Portal (Website settings, pages) is the website's too; one not listed is not
+		const dee = await verifiedVisitor(sys, { sub: 'usr_dee', email: 'dee@example.com' });
+		const listed = { url: 'https://www.shop.example.com/lamps/c', kind: 'product' };
+		expect((await replyTo(dee, listed)).map((m) => m.values.link)).toEqual(['https://shop.example.com/']);
+		await sys.setWebsite({ pages: { ...emptyWebsiteSettings(sys.websiteId).pages, hosts: ['www.shop.example.com'] } });
+		const eli = await verifiedVisitor(sys, { sub: 'usr_eli', email: 'eli@example.com' });
+		expect((await replyTo(eli, listed)).map((m) => m.values.link)).toEqual(['https://www.shop.example.com/lamps/c']);
+	});
+
+	let visitors = 0;
+
 	/**
-	 * A visitor with these contacts who left the chat, and a staff reply to them: the reply alert's calls to
+	 * A signed-in visitor whose sign-in verified these contacts, who left the chat, and a staff reply to them: the reply alert's calls to
 	 * Notifications as [channel, to].
 	 * @param {Awaited<ReturnType<typeof start>>} sys
-	 * @param {{ email?: string, phone?: string }} contact
+	 * @param {{ email?: string, phone?: string }} contact verified by Accounts
 	 */
 	const alertOf = async (sys, contact) => {
-		const v = sys.visitor();
+		const v = await verifiedVisitor(sys, { sub: `usr_${(visitors += 1)}`, ...contact });
 		const sent = await v('POST', '/v1/chat/messages', { text: 'hello' });
-		await v('POST', '/v1/chat/contact', { name: 'Ann', ...contact });
 		sys.advance(61_000);
 		const before = sys.messages().length;
 		const path = `/v1/admin/conversations/${sent.json.chat.conversation.id}/messages`;
@@ -219,7 +265,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	const both = { email: 'ann@example.com', phone: '+447700900123' };
 
 	it('a reply alert goes by the channels in the order set: the first the visitor has an address for', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts']);
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'visitor_alerts']);
 		await sys.paste('notifications');
 		// the default (none chosen): the channels Notifications takes, email, then SMS, then WhatsApp (C23)
 		expect(await alertOf(sys, both)).toEqual([['email', { email: 'ann@example.com' }]]);
@@ -235,7 +281,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	});
 
 	it('by default the alert goes by the channels switched on in Notifications (C23)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts']);
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'visitor_alerts']);
 		await sys.paste('notifications');
 		const off = () => ({
 			status: 403,
@@ -252,7 +298,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	});
 
 	it('a channel Notifications does not take passes the alert to the next one', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts']);
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'visitor_alerts']);
 		await sys.paste('notifications');
 		await sys.setting('visitor_alerts', 'channels', ['whatsapp', 'email']);
 		const whatsapp = 'https://notifications.example.dev/v1/messages/whatsapp';

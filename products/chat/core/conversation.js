@@ -46,6 +46,9 @@ export const USER_ID = /^[A-Za-z0-9_.:@-]{1,64}$/;
  * @property {string | null} name
  * @property {string | null} email
  * @property {string | null} phone
+ * @property {string | null} [verifiedEmail] the email of the visitor's verified sign-in at their latest message
+ *   (SR-6-3: reply alerts and transcripts go only to it, never to the typed `email`)
+ * @property {string | null} [verifiedPhone] the phone of the verified sign-in, the same
  * @property {Status} status
  * @property {boolean} waiting waiting for a person (after handoff)
  * @property {Date | null} waitingSince
@@ -193,6 +196,29 @@ export const verifiedIdentity = (signIn) => {
 		...(user.email && claims.email_verified === true ? { email: user.email } : {}),
 		...(user.phone && claims.phone_verified === true ? { phone: user.phone } : {}),
 	};
+};
+
+/**
+ * The link of a reply alert, built from the website's own address, never from the page the visitor named: the page the
+ * chat is on when its address is https on the website's domain or one of its other hosts (the address and path only,
+ * no query or fragment), else the website's front page. Nothing when the website has no domain yet.
+ * @param {unknown} page the page address the visitor's browser sent
+ * @param {{ domain: string, hosts: ReadonlyArray<unknown> }} own the website's domain and the other hosts listed for it
+ * @returns {string}
+ */
+export const ownPageLink = (page, { domain, hosts }) => {
+	const lower = (/** @type {unknown} */ host) => String(host).toLowerCase().replace(/\.$/, '');
+	const front = domain ? `https://${lower(domain)}/` : '';
+	if (typeof page !== 'string' || !front) return front;
+	try {
+		const url = new URL(page);
+		const own = [domain, ...hosts].map(lower);
+		if (url.protocol === 'https:' && url.port === '' && !url.username && !url.password && own.includes(url.hostname))
+			return `${url.origin}${url.pathname}`;
+	} catch {
+		// not an address: the front page
+	}
+	return front;
 };
 
 /**

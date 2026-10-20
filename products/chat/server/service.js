@@ -37,12 +37,13 @@ import {
 	alertRoutes,
 	excerptOf,
 	iso,
+	ownPageLink,
 	pendingStale,
 	previewOf,
 	staffMessageView,
 	transcriptText,
-	visitorMessageView,
 	verifiedIdentity,
+	visitorMessageView,
 } from '../core/conversation.js';
 import { waitingView } from '../core/flows.js';
 import { officeState } from '../core/handoff.js';
@@ -653,13 +654,15 @@ export const createService = (product) => {
 	 * @param {'email' | 'sms' | 'whatsapp'} channel
 	 * @param {{ email: string } | { phone: string }} to an email address for email, a phone for SMS and WhatsApp
 	 * @param {Record<string, string | number>} values
+	 * @param {string[]} [linkValues] the values that hold a link: Notifications takes only an https address on the
+	 *   website's own hosts (SR-7-3)
 	 * @returns {Promise<'sent' | 'not_taken' | 'not_connected' | 'failed'>}
 	 */
-	const notify = async (s, template, channel, to, values) => {
+	const notify = async (s, template, channel, to, values, linkValues = []) => {
 		const business = (await s.business()).name;
 		const answer = await product.callProduct(s.websiteId, 'notifications', `/v1/messages/${channel}`, {
 			method: 'POST',
-			body: { template, to, values: { ...values, business } },
+			body: { template, to, values: { ...values, business }, ...(linkValues.length > 0 ? { linkValues } : {}) },
 		});
 		if (!answer.ok)
 			return answer.reason === 'not_connected' ? 'not_connected' : answer.reason === 'failed' ? 'not_taken' : 'failed';
@@ -722,9 +725,10 @@ export const createService = (product) => {
 	 *   `chat.staff`, C24)
 	 */
 	const visitorAlert = async (s, c, reply) => {
-		if (!s.on.includes('visitor_alerts') || (!c.phone && !c.email)) return;
+		// only to an email or phone Accounts verified for the signed-in visitor, never to what a visitor typed (SR-6-3)
+		if (!s.on.includes('visitor_alerts') || (!c.verifiedPhone && !c.verifiedEmail)) return;
 		const { frequency, channels } = await s.values('visitor_alerts');
-		const routes = alertRoutes(channels, c);
+		const routes = alertRoutes(channels, { email: c.verifiedEmail, phone: c.verifiedPhone });
 		if (routes.length === 0) return;
 		const checked = c.visitorCheckedAt ? new Date(c.visitorCheckedAt).getTime() : 0;
 		if (now() - checked < VISITOR_ALERT_AWAY_SECONDS * 1000) return;
@@ -737,15 +741,20 @@ export const createService = (product) => {
 			});
 			if (!claimed) return;
 		}
+		const serving = await product.serving(s.websiteId, { after: s.ctx.after });
 		const values = {
 			name: c.name ?? '',
 			staff: reply.staff ?? String((await s.texts())['chat.staff']),
 			preview: previewOf(plainOf(reply.text)),
-			link: c.currentPage?.url || c.page?.url || '',
+			// the website's own address; a page on another host is dropped
+			link: ownPageLink(c.currentPage?.url || c.page?.url, {
+				domain: serving.ok ? String(/** @type {any} */ (serving.status).domain ?? '') : '',
+				hosts: (await s.ctx.website()).pages.hosts,
+			}),
 		};
 		s.ctx.after(async () => {
 			for (const { channel, to } of routes)
-				if ((await notify(s, 'chat.staff_reply', channel, to, values)) !== 'not_taken') return;
+				if ((await notify(s, 'chat.staff_reply', channel, to, values, ['link'])) !== 'not_taken') return;
 		});
 	};
 

@@ -249,6 +249,8 @@ export const createVisitorApi = (product, service, reply) => {
 			text = moderated.text;
 		}
 		const page = body.page ? pageContext(body.page, await s.list('page_types')) : null;
+		// what the sign-in vouches for, kept apart from the typed contact details: alerts go only to it (SR-6-3)
+		const verified = visitor.kind === 'user' ? verifiedIdentity(await s.signIn()) : null;
 		const firstPage = c.visitorMessages === 0 && page ? { page } : {};
 		const appended = await service.append(
 			s,
@@ -262,7 +264,13 @@ export const createVisitorApi = (product, service, reply) => {
 					visitorCheckedAt: new Date(now()),
 					...(c.firstVisitorAt ? {} : { firstVisitorAt: new Date(now()) }),
 					...(visitor.kind === 'user'
-						? { name: c.name ?? visitor.name, email: c.email ?? visitor.email, phone: c.phone ?? visitor.phone }
+						? {
+								name: c.name ?? visitor.name,
+								email: c.email ?? visitor.email,
+								phone: c.phone ?? visitor.phone,
+								verifiedEmail: verified?.email ?? null,
+								verifiedPhone: verified?.phone ?? null,
+							}
 						: {}),
 				},
 			},
