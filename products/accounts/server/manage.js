@@ -582,6 +582,7 @@ export const createManage = (product, service, flows) => {
 	const signOutUser = async (ctx) => {
 		const s = await service.site(ctx);
 		const user = await userOr404(s, ctx.params.id);
+		await guard(ctx, s, user);
 		const signedOut = await s.store.sessions.revokeAll(user.id);
 		await log(ctx, 'user.signed_out', user.id, {
 			label: labelOf(user.name),
@@ -671,6 +672,7 @@ export const createManage = (product, service, flows) => {
 		const s = await service.site(ctx);
 		const user = await userOr404(s, ctx.params.id);
 		if (user.status !== 'pending') throw problem('conflict', 'This user is not waiting for approval.');
+		await guard(ctx, s, user);
 		const updated = await s.store.users.update(user.id, { status: 'active' });
 		await log(ctx, 'user.approved', user.id, { label: labelOf(user.name), values: { role: user.role } });
 		return staffView(updated ?? user);

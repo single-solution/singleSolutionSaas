@@ -18,7 +18,7 @@ import { normalizePhone, websiteCallingCode } from '@ss/contracts/phone';
 import { addressRequiredOf } from '@ss/contracts/website-settings';
 import { constantTimeEqual, randomToken, sha256Hex } from '@ss/protocol';
 import { labelOf, valuesOf } from '../core/activity.js';
-import { ROLE_TEMPLATES, SIGN_UP_TEMPLATE, remembered, sessionEnd, signInRefusal } from '../core/roles.js';
+import { OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE, remembered, sessionEnd, signInRefusal } from '../core/roles.js';
 import { answerConsents, consentsToAsk } from '../core/consents.js';
 import { ADDRESSES_PER_USER } from '../core/limits.js';
 import { checkAddresses, selfView } from '../core/profile.js';
@@ -687,12 +687,44 @@ export const createService = (product) => {
 	};
 
 	/**
+	 * Whether a user is the last unblocked Owner (A4: the website keeps one; SR-4-11).
+	 * @param {Site} s @param {UserRecord} user
+	 */
+	const isLastOwner = async (s, user) =>
+		user.role === OWNER_ROLE && !user.blocked && (await s.store.users.unblockedOf(OWNER_ROLE)) <= 1;
+
+	/**
+	 * A deletion that is due but must not run on its own (the last Owner): it waits for staff like one without a due
+	 * day, and the activity log says why (once: the request no longer comes up as due).
+	 * @param {Site} s @param {UserRecord} user
+	 */
+	const holdDeletion = async (s, user) => {
+		await s.store.users.update(user.id, {
+			deletion: { requestedAt: user.deletion?.requestedAt ?? new Date(now()), dueAt: null },
+		});
+		if (s.after)
+			await product.activity.record(
+				{ websiteId: s.websiteId, merchantId: s.merchantId, after: s.after },
+				{
+					actor: DELETION_DUE,
+					action: 'user.deletion_held',
+					target: user.id,
+					label: labelOf(user.name),
+					values: valuesOf({ reason: 'last_owner' }),
+				},
+			);
+	};
+
+	/**
 	 * Right after a request: due erasures, then erasures some products have not confirmed, then kept messages.
 	 * @param {Site} s
 	 */
 	const afterWork = async (s) => {
 		if (s.on.includes('data_rights'))
-			for (const user of await s.store.users.deletionsDue(ERASURES_PER_REQUEST)) await erase(s, user, DELETION_DUE);
+			for (const user of await s.store.users.deletionsDue(ERASURES_PER_REQUEST)) {
+				if (await isLastOwner(s, user)) await holdDeletion(s, user);
+				else await erase(s, user, DELETION_DUE);
+			}
 		for (const entry of await s.store.deletions.pending(ERASURES_PER_REQUEST)) {
 			const still = await fanOutDelete(s, { id: entry.userId, email: entry.email, phone: entry.phone }, entry.pending);
 			await s.store.deletions.update(entry.userId, still);
