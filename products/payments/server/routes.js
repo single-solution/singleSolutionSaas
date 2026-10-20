@@ -64,6 +64,11 @@ const VISITOR_LIMITS = [
 ];
 /** Rate limits of the gateways' notices. */
 const NOTICE_LIMITS = [{ limit: 600, windowSeconds: 60, per: /** @type {const} */ ('visitor') }];
+/**
+ * Rate limits of the PayPal notice: each notice that passes the header check costs the merchant PayPal calls, so one
+ * website may send only so many a minute whoever sends them (SR-3-2).
+ */
+const PAYPAL_NOTICE_LIMITS = [...NOTICE_LIMITS, { limit: 120, windowSeconds: 60, per: /** @type {const} */ ('website') }];
 /** A presigned proof upload or download lasts this long. */
 const PROOF_SECONDS = 300;
 
@@ -1296,7 +1301,7 @@ export const createRoutes = (product) => {
 			path: '/v1/gateways/paypal/:websiteId',
 			auth: 'none',
 			rawBody: true,
-			rateLimit: NOTICE_LIMITS,
+			rateLimit: PAYPAL_NOTICE_LIMITS,
 			handler: notice('paypal'),
 		}),
 		defineRoute({

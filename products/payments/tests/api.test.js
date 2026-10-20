@@ -516,6 +516,19 @@ describe('the other gateways', () => {
 		expect(env.gateways.callsTo('https://api-m.paypal.com').at(-1)?.path).toBe('/v2/payments/captures/CAP1/refund');
 	});
 
+	it('PayPal notices: refused before any PayPal call without the signature headers, and limited for each website (SR-3-2)', async () => {
+		env.advance(61_000);
+		const before = env.gateways.callsTo('https://api-m.paypal.com').length;
+		const post = () => env.call('POST', `/v1/gateways/paypal/${env.websiteId}`, { body: '{"event_type":"X"}' });
+		for (let i = 0; i < 120; i += 1) expect((await post()).status).toBe(401);
+		expect((await post()).status).toBe(429);
+		expect(env.gateways.callsTo('https://api-m.paypal.com')).toHaveLength(before);
+		// a minute later the website may send again
+		env.advance(61_000);
+		expect((await post()).status).toBe(401);
+		env.advance(61_000);
+	});
+
 	it('PayFast: signed form, ITN checked with PayFast', async () => {
 		env.gateways.respond('https://www.payfast.co.za', () => ({ status: 200, body: 'VALID' }));
 		const payment = await createPayment({ amount: 10000, currency: 'ZAR', gateway: 'payfast' });

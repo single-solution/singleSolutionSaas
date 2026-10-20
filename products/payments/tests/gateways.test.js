@@ -4,6 +4,7 @@ import { createOutboundPolicy } from '@ss/net';
 import { signWebhook, verifyWebhook } from '@ss/protocol';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createAdapters, genericCurrencies } from '../adapters/gateways/index.js';
+import { forgetTokens } from '../adapters/gateways/paypal.js';
 import { apiSignature, formSignature } from '../adapters/gateways/payfast.js';
 import { pakistanTime, secureHash, shortRef } from '../adapters/gateways/jazzcash.js';
 import { hashedRequest } from '../adapters/gateways/easypaisa.js';
@@ -22,6 +23,7 @@ let fake;
 /** @type {{ send: any, now: () => number }} */
 let ctx;
 beforeEach(() => {
+	forgetTokens();
 	fake = createFakeGateways();
 	ctx = { send: createNetwork(fake.handlers).send, now: () => NOW };
 });
@@ -307,6 +309,14 @@ describe('Stripe', () => {
 });
 
 describe('PayPal', () => {
+	/** The five headers PayPal signs a notice with. */
+	const PAYPAL_HEADERS = {
+		'paypal-auth-algo': 'SHA256withRSA',
+		'paypal-cert-url': 'https://api.sandbox.paypal.com/v1/notifications/certs/CERT-1',
+		'paypal-transmission-id': 't1',
+		'paypal-transmission-sig': 'c2ln',
+		'paypal-transmission-time': '2026-10-01T10:00:00Z',
+	};
 	const keys = { clientId: 'client', secret: 'secret', webhookId: 'WH-1', sandbox: true };
 	const paypal = adapters.paypal;
 	const API = 'https://api-m.sandbox.paypal.com';
@@ -394,7 +404,7 @@ describe('PayPal', () => {
 	});
 	it('verifies webhooks with PayPal and reads captures and subscriptions', async () => {
 		/** @param {object} event */
-		const hook = (event) => incoming({ 'paypal-transmission-id': 't1' }, JSON.stringify(event));
+		const hook = (event) => incoming(PAYPAL_HEADERS, JSON.stringify(event));
 		paypalAnswers((c) => ({
 			status: 200,
 			body: { verification_status: JSON.parse(c.body).transmission_id === 't1' ? 'SUCCESS' : 'FAILURE' },
@@ -443,8 +453,90 @@ describe('PayPal', () => {
 			news: [{ subscriptionId: null, ref: '', status: null }],
 		});
 		expect(await paypal.notice?.(hook({ event_type: 'CUSTOMER.DISPUTE.CREATED' }), keys, ctx)).toEqual({ ok: true, news: [] });
-		expect(await paypal.notice?.(incoming({ 'paypal-transmission-id': 'forged' }, '{}'), keys, ctx)).toEqual({ ok: false });
-		expect(await paypal.notice?.(incoming({}, 'not json'), keys, ctx)).toEqual({ ok: false });
+		expect(await paypal.notice?.(incoming({ ...PAYPAL_HEADERS, 'paypal-transmission-id': 'forged' }, '{}'), keys, ctx)).toEqual(
+			{ ok: false },
+		);
+		expect(await paypal.notice?.(incoming(PAYPAL_HEADERS, 'not json'), keys, ctx)).toEqual({ ok: false });
+	});
+	it('refuses a notice before any PayPal call unless all five headers are there and the certificate is on paypal.com (SR-3-2)', async () => {
+		paypalAnswers(() => ({ status: 200, body: { verification_status: 'SUCCESS' } }));
+		/** @param {Record<string, string>} headers */
+		const refused = async (headers) => {
+			const before = fake.calls.length;
+			expect(await paypal.notice?.(incoming(headers, '{"event_type":"X"}'), keys, ctx)).toEqual({ ok: false });
+			expect(fake.calls.length).toBe(before);
+		};
+		for (const name of Object.keys(PAYPAL_HEADERS)) {
+			await refused(Object.fromEntries(Object.entries(PAYPAL_HEADERS).filter(([key]) => key !== name)));
+			await refused({ ...PAYPAL_HEADERS, [name]: '' });
+		}
+		for (const url of [
+			'https://evil.example/v1/notifications/certs/C1',
+			'http://api.paypal.com/v1/notifications/certs/C1',
+			'https://paypal.com.evil.example/certs/C1',
+			'https://evilpaypal.com/certs/C1',
+			'https://user@evil.example/@api.paypal.com/certs/C1',
+			'https://api.paypal.com@evil.example/certs/C1',
+			'not a url',
+		])
+			await refused({ ...PAYPAL_HEADERS, 'paypal-cert-url': url });
+		// PayPal's own certificate addresses, live and sandbox, go on to PayPal
+		for (const url of [
+			'https://api.paypal.com/v1/notifications/certs/C1',
+			'https://api.sandbox.paypal.com/v1/notifications/certs/C1',
+		]) {
+			expect(
+				await paypal.notice?.(incoming({ ...PAYPAL_HEADERS, 'paypal-cert-url': url }, '{"event_type":"X"}'), keys, ctx),
+			).toEqual({
+				ok: true,
+				news: [],
+			});
+		}
+	});
+	it('keeps PayPal’s sign-in token until shortly before it expires, per key, and signs in again when PayPal refuses it (SR-3-2)', async () => {
+		let at = NOW;
+		const timed = { send: ctx.send, now: () => at };
+		let signIns = 0;
+		let token = 'tok-1';
+		let refuse = false;
+		fake.respond(API, (c) => {
+			if (c.path === '/v1/oauth2/token') {
+				signIns += 1;
+				return { status: 200, body: { access_token: token, expires_in: 3600 } };
+			}
+			if (refuse && c.headers.authorization === 'Bearer tok-1') return { status: 401 };
+			return { status: 200, body: { verification_status: 'SUCCESS' } };
+		});
+		const notice = (/** @type {typeof keys} */ withKeys = keys) =>
+			paypal.notice?.(incoming(PAYPAL_HEADERS, '{"event_type":"X"}'), withKeys, timed);
+		expect(await notice()).toEqual({ ok: true, news: [] });
+		expect(await notice()).toEqual({ ok: true, news: [] });
+		expect(signIns).toBe(1);
+		// other keys sign in on their own; the first keys keep theirs
+		await notice({ ...keys, clientId: 'other' });
+		expect(signIns).toBe(2);
+		await notice();
+		expect(signIns).toBe(2);
+		// shortly before it expires (an hour, less a minute) a new one is asked
+		at += 3_539_000;
+		await notice();
+		expect(signIns).toBe(2);
+		at += 2_000;
+		token = 'tok-2';
+		await notice();
+		expect(signIns).toBe(3);
+		// a token PayPal refuses before that is dropped, and one new sign-in is made
+		refuse = true;
+		token = 'tok-1';
+		at += 3_700_000;
+		await notice();
+		expect(signIns).toBe(4);
+		token = 'tok-3';
+		expect(await notice()).toEqual({ ok: true, news: [] });
+		expect(signIns).toBe(5);
+		refuse = false;
+		await notice();
+		expect(signIns).toBe(5);
 	});
 	it('refunds captures and manages subscriptions', async () => {
 		const withCapture = { ...PAYMENT, currency: 'USD', captureRef: 'CAP1' };

@@ -10,6 +10,7 @@
  */
 import { fromDecimal, toDecimal } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
+import { sha256Hex } from '@ss/protocol';
 import { formBody } from '../util.js';
 import { call, failure, ok2xx } from './types.js';
 
@@ -23,12 +24,25 @@ const PAYPAL_SANDBOX = 'https://api-m.sandbox.paypal.com';
 /** @param {Record<string, any>} keys */
 const apiOf = (keys) => (keys.sandbox === true ? PAYPAL_SANDBOX : PAYPAL_LIVE);
 
+/** PayPal's sign-in tokens, kept in memory until shortly before they expire (SR-3-2): by PayPal host, client id and secret. */
+const tokens = new Map();
+/** A kept token is dropped this long before PayPal says it ends. */
+const TOKEN_MARGIN_MS = 60_000;
+/** At most this many tokens are kept (one per connected app); the oldest goes first. */
+const TOKENS_MAX = 500;
+
+/** Forget every kept token (tests). */
+export const forgetTokens = () => tokens.clear();
+
+/** @param {Record<string, any>} keys */
+const tokenKey = (keys) => `${apiOf(keys)}|${keys.clientId}|${sha256Hex(String(keys.secret))}`;
+
 /**
- * An access token for the merchant's app (client credentials), or null.
+ * A new access token for the merchant's app (client credentials, always asked of PayPal): `expiresIn` seconds.
  * @param {Record<string, any>} keys
  * @param {GatewayContext} ctx
  */
-const tokenOf = async (keys, ctx) => {
+const signIn = async (keys, ctx) => {
 	const answer = await call(ctx, `${apiOf(keys)}/v1/oauth2/token`, {
 		method: 'POST',
 		headers: {
@@ -38,12 +52,34 @@ const tokenOf = async (keys, ctx) => {
 		body: formBody({ grant_type: 'client_credentials' }),
 	});
 	return ok2xx(answer.status) && typeof answer.json?.access_token === 'string'
-		? { ok: true, token: /** @type {string} */ (answer.json.access_token) }
+		? { ok: true, token: /** @type {string} */ (answer.json.access_token), expiresIn: Number(answer.json.expires_in) }
 		: { ok: false, status: answer.status };
 };
 
 /**
- * A JSON call with a fresh access token.
+ * An access token for the merchant's app, or not ok. One is kept for each app until shortly before it expires, so a
+ * flood of notices does not become a flood of sign-ins at PayPal (SR-3-2); `fresh` asks PayPal again.
+ * @param {Record<string, any>} keys
+ * @param {GatewayContext} ctx
+ * @param {boolean} [fresh]
+ * @returns {Promise<{ ok: true, token: string, kept: boolean } | { ok: false, status: number }>}
+ */
+const tokenOf = async (keys, ctx, fresh = false) => {
+	const key = tokenKey(keys);
+	const kept = tokens.get(key);
+	if (!fresh && kept && ctx.now() < kept.until) return { ok: true, token: kept.token, kept: true };
+	tokens.delete(key);
+	const made = await signIn(keys, ctx);
+	if (!made.ok) return made;
+	if (Number.isFinite(made.expiresIn) && made.expiresIn * 1000 > TOKEN_MARGIN_MS) {
+		if (tokens.size >= TOKENS_MAX) tokens.delete(tokens.keys().next().value);
+		tokens.set(key, { token: made.token, until: ctx.now() + made.expiresIn * 1000 - TOKEN_MARGIN_MS });
+	}
+	return { ok: true, token: made.token, kept: false };
+};
+
+/**
+ * A JSON call with an access token (a kept one; when PayPal refuses it, one new sign-in and one more try).
  * @param {Record<string, any>} keys
  * @param {GatewayContext} ctx
  * @param {string} method
@@ -52,17 +88,23 @@ const tokenOf = async (keys, ctx) => {
  * @param {string} [requestId] PayPal-Request-Id (idempotency)
  */
 const api = async (keys, ctx, method, path, body, requestId) => {
+	/** @param {string} token */
+	const send = (token) =>
+		call(ctx, `${apiOf(keys)}${path}`, {
+			method,
+			headers: {
+				authorization: `Bearer ${token}`,
+				'content-type': 'application/json',
+				...(requestId ? { 'paypal-request-id': requestId } : {}),
+			},
+			...(body === undefined ? {} : { body: JSON.stringify(body) }),
+		});
 	const token = await tokenOf(keys, ctx);
-	if (!token.ok) return { status: /** @type {number} */ (token.status), json: null, text: '' };
-	return call(ctx, `${apiOf(keys)}${path}`, {
-		method,
-		headers: {
-			authorization: `Bearer ${token.token}`,
-			'content-type': 'application/json',
-			...(requestId ? { 'paypal-request-id': requestId } : {}),
-		},
-		...(body === undefined ? {} : { body: JSON.stringify(body) }),
-	});
+	if (!token.ok) return { status: token.status, json: null, text: '' };
+	const answer = await send(token.token);
+	if (answer.status !== 401 || !token.kept) return answer;
+	const again = await tokenOf(keys, ctx, true);
+	return again.ok ? send(again.token) : answer;
 };
 
 /** @param {any} links @param {string[]} rels */
@@ -99,6 +141,34 @@ const orderNews = (order, paymentId) => {
 	};
 };
 
+/** The headers PayPal signs a notice with. */
+const NOTICE_HEADERS = [
+	'paypal-auth-algo',
+	'paypal-cert-url',
+	'paypal-transmission-id',
+	'paypal-transmission-sig',
+	'paypal-transmission-time',
+];
+
+/**
+ * Whether a notice's certificate address is https on PayPal's own `paypal.com` hosts, without a sign-in part or a port.
+ * @param {string} text
+ */
+const paypalCertUrl = (text) => {
+	try {
+		const url = new URL(text);
+		return (
+			url.protocol === 'https:' &&
+			url.username === '' &&
+			url.password === '' &&
+			url.port === '' &&
+			(url.hostname === 'paypal.com' || url.hostname.endsWith('.paypal.com'))
+		);
+	} catch {
+		return false;
+	}
+};
+
 /** @type {GatewayAdapter} */
 export const paypal = {
 	id: 'paypal',
@@ -110,8 +180,9 @@ export const paypal = {
 		if (keys.sandbox !== undefined && typeof keys.sandbox !== 'boolean') return 'sandbox is true or false.';
 		return null;
 	},
+	// the keys are tested with a new sign-in, never a kept token
 	test: async (keys, ctx) => {
-		const token = await tokenOf(keys, ctx);
+		const token = await signIn(keys, ctx);
 		return token.ok ? { ok: true } : { ok: false, message: failure('PayPal', Number(token.status)) };
 	},
 	start: async ({ payment, urls, keys }, ctx) => {
@@ -160,6 +231,10 @@ export const paypal = {
 		return ok2xx(captured.status) ? orderNews(captured.json, payment.id) : null;
 	},
 	notice: async (incoming, keys, ctx) => {
+		const header = (/** @type {string} */ name) => (incoming.headers.get(name) ?? '').trim();
+		// nothing reaches PayPal (and spends the merchant's PayPal calls) unless the notice carries all five signature
+		// headers and names a certificate on PayPal's own host (SR-3-2)
+		if (NOTICE_HEADERS.some((name) => header(name) === '') || !paypalCertUrl(header('paypal-cert-url'))) return { ok: false };
 		/** @type {any} */
 		let event;
 		try {
@@ -167,7 +242,6 @@ export const paypal = {
 		} catch {
 			return { ok: false };
 		}
-		const header = (/** @type {string} */ name) => incoming.headers.get(name) ?? '';
 		const verified = await api(keys, ctx, 'POST', '/v1/notifications/verify-webhook-signature', {
 			auth_algo: header('paypal-auth-algo'),
 			cert_url: header('paypal-cert-url'),
