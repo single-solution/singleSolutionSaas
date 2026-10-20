@@ -1,8 +1,8 @@
 'use client';
 /**
  * Ecommerce's parts of the dashboard tabs (PLAN 0.4.3, 0.8.8), on the shared tabs of `@ss/ui/dashboard`: the Overview's
- * own items, its settings sections (Settings and Defaults), the storage, AI and courier connection forms with each
- * connection's hint, and the developer snippets with the catalog and SEO guide.
+ * own items, its settings sections (Settings and Defaults), the courier connection form with its hint (the
+ * database, the storage and the AI provider key are the Portal's), and the developer snippets with the catalog and SEO guide.
  * @module
  */
 import { Fragment } from 'react';
@@ -245,7 +245,8 @@ const connectionHint = (name) =>
 	TEXTS.connections.hints[/** @type {keyof typeof TEXTS.connections.hints} */ (formOf(name) ?? name)] ?? null;
 
 /**
- * The structured value of the storage, the AI provider and each courier API (the other connections take one value).
+ * The structured value of each courier API (the other connections take one value; the database, the storage and the AI
+ * provider key are the Portal's).
  * @param {Connection} item
  * @param {(value: unknown) => Promise<void>} save
  */

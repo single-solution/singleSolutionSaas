@@ -760,8 +760,6 @@ export const TEXTS = dashboardTexts({
 	connections: {
 		fields: {
 			apiKey: 'API key',
-			model: 'Model',
-			baseUrl: 'Base URL (https, OpenAI-compatible)',
 			bookUrl: 'Booking address (https)',
 			trackUrl: 'Tracking address (https, with {tracking})',
 			headers: 'Extra headers (optional JSON object of text values; may hold {apiKey})',
@@ -773,7 +771,6 @@ export const TEXTS = dashboardTexts({
 		hints: {
 			courier:
 				"Your courier's API: where to book and track, your key, extra headers, the booking body and where the answers hold the tracking number and status. See the docs.",
-			ai: 'Your own OpenAI-compatible AI service: base URL, key and model. AI copy suggests product texts with it.',
 		},
 	},
 	developers: {

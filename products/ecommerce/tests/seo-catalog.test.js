@@ -360,7 +360,7 @@ describe('E15 landing pages, listing heads and glossary pages', () => {
 	});
 
 	it('suggests landing copy with the AI key', async () => {
-		await shop.connect('ai', { baseUrl: AI, apiKey: 'sk-test-123456', model: 'm' });
+		await shop.connect('ai', { provider: 'compatible', baseUrl: AI, apiKey: 'sk-test-123456', model: 'm' });
 		shop.responders.set(AI, () => ({
 			status: 200,
 			body: {

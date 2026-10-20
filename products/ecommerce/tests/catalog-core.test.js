@@ -1,10 +1,10 @@
 /**
  * The catalog's pure rules (PLAN 0.8.8 Catalog): product checks, categories and the tree, listings and facets, views,
- * CSV files, grades, AI copy, plus the AI provider adapter and the change notice with doubles.
+ * CSV files, grades, AI copy, plus what Ecommerce asks the AI through the kit’s client and the change notice with doubles.
  */
 import { csvRecords, parseCsv } from '@ss/contracts/csv';
 import { describe, expect, it } from 'vitest';
-import { checkAiConnection, createAi } from '../adapters/ai.js';
+import { createAi } from '../adapters/ai.js';
 import { createCatalogCommon } from '../server/catalog-common.js';
 import {
 	changedPrice,
@@ -933,7 +933,7 @@ describe('AI copy', () => {
 		expect(readSuggestions(`{"seoTitle": "${'x'.repeat(100)}"}`, ['seoTitle'])?.seoTitle).toHaveLength(70);
 	});
 
-	it('talks to an OpenAI-compatible provider', async () => {
+	it('writes through the kit’s AI client with the shared key shape, for any provider', async () => {
 		/** @type {any[]} */
 		const calls = [];
 		/** @type {any} */
@@ -945,30 +945,51 @@ describe('AI copy', () => {
 				return { status: reply.status, headers: {}, body: Buffer.from(reply.body), url };
 			},
 		});
-		const value = { baseUrl: 'https://ai.example.org/v1/', apiKey: 'sk-12345678', model: 'gpt' };
-		expect(checkAiConnection(null).ok).toBe(false);
-		expect(checkAiConnection({ baseUrl: 'http://x' }).ok).toBe(false);
-		expect(checkAiConnection({ baseUrl: 'https://x', apiKey: 'short' }).ok).toBe(false);
-		expect(checkAiConnection({ baseUrl: 'https://x', apiKey: 'long-enough', model: 'bad model' }).ok).toBe(false);
-		expect(await ai.test(null)).toMatchObject({ ok: false });
-		expect(await ai.test(value)).toEqual({ ok: true });
-		expect(calls[0].url).toBe('https://ai.example.org/v1/models');
-		reply = { status: 401, body: '' };
-		expect(await ai.test(value)).toEqual({ ok: false, message: 'The provider refused the key.' });
-		reply = { status: 500, body: '' };
-		expect(await ai.test(value)).toEqual({ ok: false, message: 'The provider answered 500.' });
-		reply = 'throw';
-		expect(await ai.test(value)).toEqual({ ok: false, message: 'The provider cannot be reached.' });
 		const request = { system: 's', prompt: 'p', maxTokens: 10 };
-		expect(await ai.write(null, request)).toEqual({ ok: false, code: 'not_connected' });
-		expect(await ai.write(value, request)).toEqual({ ok: false, code: 'provider_error' });
+		const compatible = { provider: 'compatible', baseUrl: 'https://ai.example.org/v1/', apiKey: 'sk-12345678', model: 'gpt' };
+		// not a key the Portal would hold: not connected, and nothing is sent
+		for (const bad of [null, {}, { baseUrl: 'https://ai.example.org/v1', apiKey: 'sk-12345678', model: 'gpt' }])
+			expect(await ai.write(bad, request)).toEqual({ ok: false, code: 'not_connected' });
+		expect(calls).toHaveLength(0);
+		// an OpenAI-compatible service at its own address
+		reply = { status: 200, body: '{"choices":[{"message":{"content":"  Hi  "}}]}' };
+		expect(await ai.write(compatible, request)).toEqual({ ok: true, text: 'Hi' });
+		expect(calls[0].url).toBe('https://ai.example.org/v1/chat/completions');
+		expect(JSON.parse(calls[0].init.body)).toMatchObject({
+			model: 'gpt',
+			max_tokens: 10,
+			temperature: 0.7,
+			messages: [
+				{ role: 'system', content: 's' },
+				{ role: 'user', content: 'p' },
+			],
+		});
+		// the built-in providers speak their own wire format
+		reply = { status: 200, body: '{"content":[{"type":"text","text":"From Claude"}]}' };
+		expect(await ai.write({ provider: 'anthropic', apiKey: 'sk-12345678', model: 'claude-haiku-4-5' }, request)).toEqual({
+			ok: true,
+			text: 'From Claude',
+		});
+		expect(calls.at(-1).url).toBe('https://api.anthropic.com/v1/messages');
+		reply = { status: 200, body: '{"candidates":[{"content":{"parts":[{"text":"From Gemini"}]}}]}' };
+		expect(await ai.write({ provider: 'google', apiKey: 'sk-12345678', model: 'gemini-2.5-flash' }, request)).toEqual({
+			ok: true,
+			text: 'From Gemini',
+		});
+		// a busy provider, a failing one, no usable text and a call that fails
+		reply = { status: 429, body: '' };
+		expect(await ai.write(compatible, request)).toEqual({ ok: false, code: 'rate_limited' });
+		reply = { status: 500, body: '' };
+		expect(await ai.write(compatible, request)).toEqual({ ok: false, code: 'provider_error' });
 		reply = { status: 200, body: '{"choices":[{"message":{"content":"  "}}]}' };
-		expect(await ai.write(value, request)).toEqual({ ok: false, code: 'provider_error' });
-		reply = { status: 200, body: '' };
-		expect(await ai.write(value, request)).toEqual({ ok: false, code: 'provider_error' });
-		reply = { status: 200, body: '{"choices":[{"message":{"content":"Hi"}}]}' };
-		expect(await ai.write(value, request)).toEqual({ ok: true, text: 'Hi' });
-		expect(JSON.parse(calls.at(-1).init.body)).toMatchObject({ model: 'gpt', max_tokens: 10 });
+		expect(await ai.write(compatible, request)).toEqual({ ok: false, code: 'provider_error' });
+		reply = 'throw';
+		expect(await ai.write(compatible, request)).toEqual({ ok: false, code: 'provider_error' });
+		// the connection test is the kit’s (the model list, read only)
+		reply = { status: 200, body: '{}' };
+		expect(await ai.test(compatible)).toEqual({ ok: true });
+		expect(calls.at(-1).url).toBe('https://ai.example.org/v1/models');
+		expect(await ai.test(null)).toMatchObject({ ok: false });
 	});
 });
 

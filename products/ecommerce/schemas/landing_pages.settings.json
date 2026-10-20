@@ -38,7 +38,7 @@
 		"autoCopy": {
 			"type": "string",
 			"title": "Copy of automatic pages",
-			"description": "Formula: the automatic page title and description patterns below, from the category, brand and facet names and what is in stock. AI: when staff save a product, Ecommerce writes one of its automatic pages with your AI provider (AI copy on and its key in Connections) and keeps it as a landing page you can edit; until then, and when the provider does not answer, the formula.",
+			"description": "Formula: the automatic page title and description patterns below, from the category, brand and facet names and what is in stock. AI: when staff save a product, Ecommerce writes one of its automatic pages with your AI provider (AI copy on and the website's AI key set in the Portal) and keeps it as a landing page you can edit; until then, and when the provider does not answer, the formula.",
 			"default": "formula",
 			"enum": ["formula", "ai"],
 			"x-ui": {

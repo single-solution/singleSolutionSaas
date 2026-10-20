@@ -565,7 +565,7 @@
 	"problem.unavailable": "This is not available right now. Try again in a moment.",
 	"problem.upstream_error": "A connected service could not be reached. Try again in a moment.",
 	"problem.storage_not_connected": "Connect the storage first (Connections in the product dashboard).",
-	"problem.ai_not_connected": "Connect an AI provider first, or complete its connection (Connections in the product dashboard).",
+	"problem.ai_not_connected": "Enter your AI provider key in the Portal first (Website settings › Data and files).",
 	"problem.ai_failed": "The AI provider gave no usable text. Try again.",
 	"problem.payments_unavailable": "Payments cannot be reached right now. Try again in a moment.",
 	"problem.payments_refused": "Payments refused this. Check the payment in Payments.",

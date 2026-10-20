@@ -163,7 +163,7 @@
 		"autoSeo": {
 			"type": "string",
 			"title": "SEO copy when saving",
-			"description": "On save: when staff save a product or an attribute whose SEO title, description or questions are empty, your AI provider writes them (AI copy on and its key in Connections), kept as AI copy. Without AI nothing is stored: the title and description patterns fill your pages on every read, so they never go stale. Off: nothing is written.",
+			"description": "On save: when staff save a product or an attribute whose SEO title, description or questions are empty, your AI provider writes them (AI copy on and the website's AI key set in the Portal), kept as AI copy. Without AI nothing is stored: the title and description patterns fill your pages on every read, so they never go stale. Off: nothing is written.",
 			"default": "off",
 			"enum": ["off", "on_save"],
 			"x-ui": {

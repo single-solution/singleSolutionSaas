@@ -87,7 +87,7 @@ describe('landing pages', () => {
 			(await shop.admin(ticket, 'PATCH', `/v1/admin/landings/${landing.id}`, { categoryId: null, brandId: null })).status,
 		).toBe(422);
 
-		await shop.connect('ai', { baseUrl: AI, apiKey: 'sk-test-123456', model: 'm' });
+		await shop.connect('ai', { provider: 'compatible', baseUrl: AI, apiKey: 'sk-test-123456', model: 'm' });
 		shop.responders.set(AI, () => ({
 			status: 200,
 			body: { choices: [{ message: { content: '{"title":"Acme phones for less","description":"Every Acme phone."}' } }] },

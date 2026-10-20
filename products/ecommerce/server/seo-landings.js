@@ -617,7 +617,11 @@ export const createLandings = (product, service, media) => {
 			if (!s.has('landing_pages')) throw problem('feature_off', 'Landing pages are switched off.');
 			const landing = await landingOf(data, String(ctx.params.id));
 			const connection = await product.connections.value(s.websiteId, 'ai');
-			if (!connection) throw problem('ai_not_connected', 'Connect your AI provider first (Connections).');
+			if (!connection)
+				throw problem(
+					'ai_not_connected',
+					'Enter your AI provider key in the Portal first (Website settings › Data and files).',
+				);
 			const names = await namesOf(s, data);
 			const sample = await data
 				.collection(COLLECTIONS.products)

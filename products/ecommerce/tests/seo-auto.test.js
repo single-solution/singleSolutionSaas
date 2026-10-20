@@ -236,7 +236,7 @@ describe('SEO copy when saving (E43)', () => {
 	});
 
 	it('asks the merchant’s AI when AI copy is on and keeps its copy marked as AI copy; nothing when it fails', async () => {
-		await shop.connect('ai', { baseUrl: AI, apiKey: 'sk-test-123456', model: 'm' });
+		await shop.connect('ai', { provider: 'compatible', baseUrl: AI, apiKey: 'sk-test-123456', model: 'm' });
 		/** @type {any[]} */
 		const asked = [];
 		shop.responders.set(AI, (call) => {

@@ -1,7 +1,7 @@
 /**
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Ecommerce's
  * manifest (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (storage, the
- * Accounts, Payments, Notifications and Growth tokens, courier keys and the AI key), the merchant database indexes of every
+ * Accounts, Payments, Notifications and Growth tokens, courier keys and the Portal's AI key), the merchant database indexes of every
  * part, the data-rights and widget-config hooks (filled in by `server/routes.js`), the Owner's Re-seal of the deal-lock
  * secrets (sealed with `ENCRYPTION_KEY`, RT-14), the messages it sends through Notifications with their US-English
  * default words (`schemas/messages.json`, parity P1) and its part of the website Setup sheet (the OpenAPI document, the
@@ -193,7 +193,7 @@ const UNCONFIGURED_KEY = 'unconfigured-ecommerce-encryption-key-00000';
 
 /**
  * The product (kit routes, status, settings, connections, merchant database …) plus the list settings, the courier
- * APIs and the AI provider.
+ * APIs and the AI provider (the Portal's AI key, called through the kit's AI client).
  * @param {InstanceOptions} options at least `config` and `problems` from `configFromEnv()`
  */
 export const createProductInstance = (options) => {
@@ -201,9 +201,9 @@ export const createProductInstance = (options) => {
 	const healthy = (options.problems ?? []).length === 0;
 	// the kit's store and outbound send: Ecommerce keeps its list settings in the product database too, so the kit and the
 	// product share one store
-	const { store, send } = createProductBase(options);
+	const { store, policy, send } = createProductBase(options);
 	const couriers = createCouriers({ send });
-	const ai = createAi({ send });
+	const ai = createAi({ send, policy });
 	/** The kit's product, once made (the order flow's guard reads the merchant database through it). @type {ReturnType<typeof createProduct> | null} */
 	let kitProduct = null;
 	const lists = createLists({
@@ -321,12 +321,15 @@ export const createProductInstance = (options) => {
 					},
 				]),
 			),
+			// the website's AI key is the Portal's (Website settings › Data and files): managed here, delivered when the manifest
+			// says `needs.ai`
 			ai: {
 				label: 'AI provider key (AI copy)',
 				kind: 'secret',
+				portal: 'ai',
 				neededBy: ['ai_copy'],
 				secretField: 'apiKey',
-				test: (value) => ai.test(value),
+				test: ai.test,
 			},
 		},
 		// api/routes.js fills these in (they need every part of the shop)

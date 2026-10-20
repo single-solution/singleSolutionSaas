@@ -1,9 +1,10 @@
 'use client';
 /**
- * Connections → structured values (PLAN 0.8.8): the OpenAI-compatible `ai` key (base URL,
- * key, model) and each courier API connection's generic adapter (booking and tracking addresses, key, extra headers as JSON object
- * text, booking body template, where the answers hold the tracking number and status). A value is saved as one
- * connection (tested live, encrypted, write-only), so each form starts empty and saving replaces the whole value.
+ * Connections → structured values (PLAN 0.8.8): each courier API connection's generic adapter (booking and tracking
+ * addresses, key, extra headers as JSON object text, booking body template, where the answers hold the tracking number
+ * and status). A value is saved as one connection (tested live, encrypted, write-only), so the form starts empty and
+ * saving replaces the whole value. The database, the storage and the AI provider key are the Portal's (one for every
+ * product, entered once), so they have no form here.
  * @module
  */
 import { useState } from 'react';
@@ -18,7 +19,6 @@ const N = TEXTS.connections.fields;
 
 /** Connections with their own form, and their fields. @type {Readonly<Record<string, ReadonlyArray<FieldSpec>>>} */
 const FORMS = Object.freeze({
-	ai: [{ name: 'baseUrl', type: 'url' }, { name: 'model' }, { name: 'apiKey', secret: true }],
 	courier: [
 		{ name: 'bookUrl', type: 'url' },
 		{ name: 'trackUrl', type: 'url' },

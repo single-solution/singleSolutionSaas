@@ -843,7 +843,8 @@ export const createCatalogTools = (product, service, common) => {
 		);
 		if (!item) throw problem('not_found', 'There is no such product.');
 		const connection = await product.connections.value(s.websiteId, 'ai');
-		if (!connection) throw problem('ai_not_connected', 'Connect your AI provider first (Connections).');
+		if (!connection)
+			throw problem('ai_not_connected', 'Enter your AI provider key in the Portal first (Website settings › Data and files).');
 		const settings = await s.values('ai_copy');
 		const [categories, attributes] = await Promise.all([categoriesOf(data), attributesOf(data)]);
 		const brand = item.brandId
@@ -870,7 +871,7 @@ export const createCatalogTools = (product, service, common) => {
 		const answer = await product.ai.write(connection, { system, prompt, maxTokens: 1500 });
 		if (!answer.ok) {
 			if (answer.code === 'not_connected')
-				throw problem('ai_not_connected', 'The AI connection is incomplete: check Connections.');
+				throw problem('ai_not_connected', 'The AI key in the Portal is incomplete: check Website settings › Data and files.');
 			throw problem(
 				'ai_failed',
 				answer.code === 'rate_limited' ? 'The AI provider is busy: try again soon.' : 'The AI provider did not answer.',

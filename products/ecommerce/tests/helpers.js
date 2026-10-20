@@ -395,7 +395,7 @@ export const setup = async ({
 		if (response.status !== 200) throw new Error(`features: ${response.status} ${response.text}`);
 	};
 
-	/** What the merchant does in the Portal (the database, the storage, the links to other products). */
+	/** What the merchant does in the Portal (the database, the storage, the AI key, the links to other products). */
 	const viaPortal = portalConnector({
 		portal,
 		websiteId,
@@ -409,8 +409,8 @@ export const setup = async ({
 	});
 
 	/**
-	 * Save a connection: the database, the storage and the links through the Portal (the product fetches them), a provider key
-	 * on the Connections screen (tested live when saved).
+	 * Save a connection: the database, the storage, the AI key and the links through the Portal (the product fetches them), a
+	 * courier key on the Connections screen (tested live when saved).
 	 * @param {string} name @param {unknown} [value]
 	 */
 	const connect = async (name, value) => {

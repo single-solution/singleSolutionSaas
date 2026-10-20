@@ -449,7 +449,7 @@ describe('AI copy', () => {
 		});
 		const path = `/v1/admin/products/${item.id}/ai-copy`;
 		expect((await shop.admin(staff, 'POST', path, { fields: ['description'] })).status).toBe(503);
-		await shop.connect('ai', { baseUrl: AI, apiKey: 'sk-test-123456', model: 'm' });
+		await shop.connect('ai', { provider: 'compatible', baseUrl: AI, apiKey: 'sk-test-123456', model: 'm' });
 		expect((await shop.admin(staff, 'POST', path, { fields: ['price'] })).status).toBe(422);
 		expect((await shop.admin(staff, 'POST', path, { fields: ['summary'], tone: 'x'.repeat(200) })).status).toBe(422);
 		expect((await shop.admin(staff, 'POST', path, { fields: ['summary'], language: 'x'.repeat(50) })).status).toBe(422);
@@ -484,6 +484,31 @@ describe('AI copy', () => {
 		expect((await api('POST', `/v1/products/${item.id}/ai-copy`, { fields: ['summary'] })).status).toBe(502);
 		const data = await shop.db();
 		expect(data.websiteId).toBe(shop.websiteId);
+	});
+
+	it('the AI key is the Portal’s: delivered and tested here, never saved or removed in Ecommerce', async () => {
+		const small = await setup();
+		await small.switchOn(['catalog', 'ai_copy']);
+		const owner = await small.adminSession();
+		const base = `/v1/dashboard/websites/${small.websiteId}/connections`;
+		const item = async () =>
+			(await small.dashboard(owner, 'GET', base)).json.connections.find(
+				(/** @type {{ name: string }} */ c) => c.name === 'ai',
+			);
+		expect(await item()).toMatchObject({ managed: true, set: false, status: 'not_connected', neededBy: ['ai_copy'] });
+		for (const [method, body] of /** @type {const} */ ([
+			['PUT', { value: { provider: 'compatible', baseUrl: AI, apiKey: 'sk-test-123456', model: 'm' } }],
+			['DELETE', undefined],
+		])) {
+			const attempt = await small.dashboard(owner, method, `${base}/ai`, body);
+			expect([method, attempt.status, String(attempt.json.type).split('/').pop()]).toEqual([method, 409, 'managed_by_portal']);
+		}
+		await small.connect('ai', { provider: 'compatible', baseUrl: AI, apiKey: 'sk-test-123456', model: 'm' });
+		expect(await item()).toMatchObject({ managed: true, set: true, status: 'connected' });
+		// a key the provider refuses is kept and reported, not hidden
+		small.responders.set(`${AI}/models`, () => ({ status: 401, body: {} }));
+		await small.connect('ai', { provider: 'compatible', baseUrl: AI, apiKey: 'sk-test-refused-0123', model: 'm' });
+		expect(await item()).toMatchObject({ managed: true, status: 'test_failed', message: 'The provider refused the key.' });
 	});
 });
 

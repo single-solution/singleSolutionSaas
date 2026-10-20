@@ -2,7 +2,7 @@
 /**
  * Connections on the shared dashboard tab with Ecommerce's forms and hints: each courier API connection (`courier_1` …
  * `courier_5`, E25) takes the courier form (booking and tracking addresses, key, headers, body) and the courier hint;
- * storage and the AI key their own forms; a token connection the one value field.
+ * the database, the storage, the AI key and the links to other products are the Portal's: a note, no form.
  */
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -31,11 +31,12 @@ afterEach(() => {
 });
 
 describe('Ecommerce’s connection forms', () => {
-	it('a courier API connection takes the courier form and hint; the storage and a link are the Portal’s: a note, no form', async () => {
+	it('a courier API connection takes the courier form and hint; the storage, the AI key and a link are the Portal’s: a note, no form', async () => {
 		const answer = {
 			connections: [
 				connection('courier_2', 'secret'),
 				{ ...connection('storage', 'storage'), managed: true },
+				{ ...connection('ai', 'secret'), managed: true },
 				{ ...connection('link_accounts', 'link'), managed: true },
 			],
 		};
@@ -50,7 +51,7 @@ describe('Ecommerce’s connection forms', () => {
 		};
 		await settle();
 		// one connection per view of the sidebar: open each
-		for (const name of ['courier_2', 'storage', 'link_accounts']) {
+		for (const name of ['courier_2', 'storage', 'ai', 'link_accounts']) {
 			click(/** @type {HTMLElement} */ (container.querySelector(`nav a[href="#connection-${name}"]`)));
 			await settle();
 		}
@@ -58,10 +59,11 @@ describe('Ecommerce’s connection forms', () => {
 		expect(courier).toContain(TEXTS.connections.fields.bookUrl);
 		expect(courier).toContain(TEXTS.connections.fields.trackingPath);
 		expect(courier).toContain(TEXTS.connections.hints.courier);
-		// the storage and the links to other products are set in the Portal: a note and a link, no field to type in
-		for (const name of ['storage', 'link_accounts']) {
+		// the storage, the AI key and the links to other products are set in the Portal: a note and a link, no field to type in
+		for (const name of ['storage', 'ai', 'link_accounts']) {
 			const section = container.querySelector(`[id="section-connection-${name}"]`);
 			expect(section?.textContent).not.toContain('Bucket');
+			expect(section?.textContent).not.toContain('Model');
 			expect(section?.querySelector('input')).toBeNull();
 			expect(section?.querySelector('a[href*="/settings#"]')).not.toBeNull();
 		}

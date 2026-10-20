@@ -1,7 +1,7 @@
 /**
  * SEO copy written when staff save (PLAN 0.8.10 E43, SEO audit G6). With the `seo` setting `autoSeo` at `on_save`,
- * saving a product (or, with Landing pages on, an attribute) asks the merchant's AI provider (AI copy on and its key in
- * Connections) for its empty SEO title, description and questions, and keeps what it gives as AI copy (`seo.source`
+ * saving a product (or, with Landing pages on, an attribute) asks the merchant's AI provider (AI copy on and the website's
+ * AI key, set in the Portal) for its empty SEO title, description and questions, and keeps what it gives as AI copy (`seo.source`
  * `ai`). Formula copy is never stored: without AI, or when the provider gives nothing usable, nothing is written and
  * the patterns fill the pages on every read (so they never go stale). With the `landing_pages` setting `autoCopy` at
  * `ai`, saving a product also writes the AI copy of one of its automatic landing pages that has no record yet. Nothing
