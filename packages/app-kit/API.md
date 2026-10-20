@@ -1,8 +1,8 @@
 # @ss/app-kit API
 
-Five entries: `@ss/app-kit` (server), `@ss/app-kit/widget` (browser, no Node.js imports), `@ss/app-kit/headers`
-(`next.config.js`), `@ss/app-kit/testing` and `@ss/app-kit/api` (API descriptions, for `ss` and tests; never loaded in
-production).
+Six entries: `@ss/app-kit` (server), `@ss/app-kit/widget` (browser, no Node.js imports), `@ss/app-kit/ai` (the pure part of
+the AI client: browser or server), `@ss/app-kit/headers` (`next.config.js`), `@ss/app-kit/testing` and `@ss/app-kit/api`
+(API descriptions, for `ss` and tests; never loaded in production).
 
 ## `@ss/app-kit`
 
@@ -36,6 +36,16 @@ production).
 | `docsOperations(openapi) → [[METHOD, path, operation]]`, `operationFeatures(operation)`, `docsRouteTable(rows)`    | the operations of `openapi.json`, an operation's features, and the route table linked to the API reference (empty without rows)                                                                                                                                                                                                                                                                                                                              |
 | `docsParagraph(text)`, `docsBlock(code)`, `docsList(items)`                                                        | a paragraph and a code block of plain text (escaped), and a list of HTML items (empty without items), for the product's own sections; escape anything else with `@ss/contracts/text` `escapeHtml`                                                                                                                                                                                                                                                            |
 | `PRODUCT_DATABASE_OPTIONS`                                                                                         | the product database client's options (`new MongoClient(uri, PRODUCT_DATABASE_OPTIONS)`): `@ss/net` `databaseClientOptions()`, with the deadlines of every database call (K-16); `createProductBase` opens the store with them                                                                                                                                                                                                                               |
+
+### The AI client
+
+`createAiClient({ send, policy? })` is the one AI client of the products (`send` and `policy` from `createProductBase`).
+`chat(connection, { messages, tools?, temperature, maxTokens })` calls OpenAI, Anthropic, Google Gemini or any
+OpenAI-compatible service and answers `{ ok: true, value: { text, toolCalls, usage, finish } }` or
+`{ ok: false, code: 'rate_limited' | 'provider_error' }`; `test(value)` is the connection test of an AI key definition
+(`test: ai.test`). `checkAiConnection(value, isPublic?)` accepts exactly what the Portal accepts for the website's AI
+key (`{ provider, apiKey, model, baseUrl? }`); `AI_PROVIDERS`, `MODEL_SUGGESTIONS`, `checkAiConnection` and
+`estimateTokens(messages, output)` are also in `@ss/app-kit/ai`, which a browser form can import.
 
 ### `createProduct(options)`
 

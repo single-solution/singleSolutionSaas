@@ -31,6 +31,8 @@ export {
 	renderDocsPage,
 } from './docs.js';
 export { PRODUCT_DATABASE_OPTIONS } from './data.js';
+export { AI_PROVIDERS, MODEL_SUGGESTIONS, checkAiConnection, estimateTokens } from './ai/index.js';
+export { createAiClient } from './ai/client.js';
 
 /** @typedef {import('./product.js').ProductOptions} ProductOptions */
 /** @typedef {import('./http/routes.js').RouteDefinition} RouteDefinition */
@@ -51,4 +53,11 @@ export { PRODUCT_DATABASE_OPTIONS } from './data.js';
 /** @typedef {import('./identity.js').IdentityResult} IdentityResult */
 /** @typedef {import('./docs.js').DocsGuide} DocsGuide */
 /** @typedef {import('./docs.js').DocsRow} DocsRow */
+/** @typedef {import('./ai/index.js').AiConnection} AiConnection */
+/** @typedef {import('./ai/index.js').AiProvider} AiProvider */
+/** @typedef {import('./ai/index.js').AiMessage} AiMessage */
+/** @typedef {import('./ai/index.js').AiToolSchema} AiToolSchema */
+/** @typedef {import('./ai/index.js').AiToolCall} AiToolCall */
+/** @typedef {import('./ai/index.js').AiResult} AiResult */
+/** @typedef {import('./ai/client.js').AiClient} AiClient */
 /** @typedef {import('@ss/contracts').Format} Format */

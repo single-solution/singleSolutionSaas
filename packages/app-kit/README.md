@@ -104,6 +104,10 @@ The exact API is in [API.md](./API.md).
   builds, its widgets and routes); `docsParagraph`, `docsBlock`, `docsList` and `docsRouteTable` write the rest.
 - **Start-up** — `createProductBase(options)` builds the store, the outbound policy and `send` as `createProduct` does,
   for the product's own adapters (list settings, AI, gateways, providers) before it calls `createProduct`.
+- **AI client** — `createAiClient({ send, policy })` is the one AI client of the products: it speaks OpenAI, Anthropic, Google
+  Gemini and any OpenAI-compatible service through the product's outbound `send` with the website's AI key (a definition
+  that says `portal: 'ai'`, or a product's own key of the same shape); `checkAiConnection`, `AI_PROVIDERS`,
+  `MODEL_SUGGESTIONS` and `estimateTokens` are also in `@ss/app-kit/ai`, which a browser form can import.
 - **Shared helpers** — Format helpers come from `@ss/contracts/format` in `core/`, `server/` and `adapters/`, and
   from `@ss/app-kit/widget` in `ui/` (the package widget code imports, besides `@ss/ui/seo-preview`, the search result and share preview); HTML escaping from `@ss/contracts/text`
   `escapeHtml`; `verifyIdentityToken` checks a sign-in token offline.

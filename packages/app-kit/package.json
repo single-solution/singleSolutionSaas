@@ -7,6 +7,7 @@
 	"exports": {
 		".": "./src/index.js",
 		"./testing": "./src/testing.js",
+		"./ai": "./src/ai/index.js",
 		"./api": "./src/api.js",
 		"./widget": "./src/widget.js",
 		"./headers": "./src/http/headers.js",
@@ -30,6 +31,10 @@
 			"./testing": {
 				"types": "./types/src/testing.d.ts",
 				"default": "./src/testing.js"
+			},
+			"./ai": {
+				"types": "./types/src/ai/index.d.ts",
+				"default": "./src/ai/index.js"
 			},
 			"./api": {
 				"types": "./types/src/api.d.ts",
