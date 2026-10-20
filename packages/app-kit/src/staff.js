@@ -48,6 +48,26 @@ export const grants = (user, productId, permission) => {
 };
 
 /**
+ * Whether the caller of a request may do what a permission stands for, read the same way on every kind of route (a
+ * guard inside a handler, for example "a move that gives money back needs `orders.refund`"):
+ *
+ * - a dashboard ticket call: the permissions the ticket carries;
+ * - a server call with a verified staff sign-in (`checkStaff`): what that person's role grants of this product;
+ * - a server call with the server token alone and no staff sign-in (the merchant's own server, or work the product starts
+ *   itself): allowed, as the merchant's server is trusted with what it asks for.
+ *
+ * A guard that only looks at the ticket would skip every server call, so use this one.
+ * @param {{ ticket?: { permissions: readonly string[] } | null, staff?: { can: (permission: string) => boolean } | null }} ctx
+ * @param {string} permission the product's own key (`orders.refund`), without the product prefix
+ * @returns {boolean}
+ */
+export const allows = (ctx, permission) => {
+	if (ctx.ticket) return ctx.ticket.permissions.includes(permission);
+	if (ctx.staff) return ctx.staff.can(permission);
+	return true;
+};
+
+/**
  * The permission keys of this product a verified user holds, out of some asked for.
  * @param {{ permissions?: readonly string[] } | null | undefined} user
  * @param {string} productId
@@ -74,9 +94,10 @@ export const SIGN_IN_DETAIL = Object.freeze({
 /**
  * The gate of a staff route of the server token: the verified Accounts sign-in of a staff member, whose role grants
  * `permission` when one is asked for (any staff role otherwise). Answers the problem that refuses the call, else null with
- * `ctx.actor` set to the verified person. Used by the request handler for every route that says `permission` or `staff`,
+ * `ctx.actor` set to the verified person and `ctx.staff` able to say what their role grants (`allows`). Used by the request handler for every route that says `permission` or `staff`,
  * and by a route that is a runtime route for some calls only (`requireStaff`).
- * @param {{ staffSignIn: () => Promise<import('./identity.js').RequestSignIn | null>, actor: import('./actor.js').ActingUser | null }} ctx
+ * @param {{ staffSignIn: () => Promise<import('./identity.js').RequestSignIn | null>, actor: import('./actor.js').ActingUser | null,
+ *   staff?: { can: (permission: string) => boolean } | null }} ctx
  * @param {{ productId: string, permission?: string, headers?: Record<string, string> }} route `headers`: answer headers to add
  * @returns {Promise<import('./http/results.js').ProblemResult | null>}
  */
@@ -113,5 +134,7 @@ export const checkStaff = async (ctx, { productId, permission, headers }) => {
 		...(user.role ? { role: user.role } : {}),
 		...(user.email ? { email: user.email } : {}),
 	};
+	// eslint-disable-next-line no-param-reassign -- what the verified role grants, for the guards inside handlers (`allows`)
+	ctx.staff = { can: (key) => grants(user, productId, key) };
 	return null;
 };

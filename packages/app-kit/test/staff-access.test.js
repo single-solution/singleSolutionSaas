@@ -5,6 +5,8 @@
  * website, headers that only claim a person.
  */
 import { describe, expect, it } from 'vitest';
+import { defineRoute } from '../src/index.js';
+import { allows } from '../src/staff.js';
 import { createAccountsDouble } from '../src/testing.js';
 import { DOMAIN, productRoutes, setup } from './helpers.js';
 
@@ -476,5 +478,68 @@ describe('an ordinary server route is told apart by what it says it is', () => {
 		expect((await call('GET', '/v1/server/open', { token: server.token, bare: true })).status).toBe(200);
 		const bare = await call('GET', '/v1/inbox/open', { token: server.token, bare: true });
 		expect(bare.status).toBe(403);
+	});
+});
+
+describe('`allows`: one way to read a permission inside a handler, for tickets and server calls alike', () => {
+	/** A staff route (`notes.read`) that asks for another permission inside, as a move asks for a refund permission. */
+	const askingRoutes = () => [
+		...productRoutes(),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/inbox/asks',
+			auth: 'server',
+			permission: 'notes.read',
+			database: false,
+			handler: (ctx) => ({ allowed: allows(ctx, 'audit.read') }),
+		}),
+		// a runtime route: the server token alone, no staff member
+		defineRoute({
+			method: 'GET',
+			path: '/v1/server/asks',
+			auth: 'server',
+			runtime: true,
+			database: false,
+			handler: (ctx) => ({ allowed: allows(ctx, 'audit.read') }),
+		}),
+	];
+
+	it('reads a ticket by the permissions it carries', () => {
+		const ticket = { permissions: ['notes.read'] };
+		expect(allows({ ticket }, 'notes.read')).toBe(true);
+		expect(allows({ ticket }, 'audit.read')).toBe(false);
+		// the ticket decides even if a staff member were also on the context
+		expect(allows({ ticket, staff: { can: () => true } }, 'audit.read')).toBe(false);
+	});
+
+	it('reads a server call by what the verified staff sign-in grants, `*` for all, never another product', async () => {
+		const { call, server, switchOn } = await setup({ routes: askingRoutes() });
+		await switchOn(['notes', 'inbox']);
+		/** @param {string[]} permissions */
+		const asked = async (permissions) => {
+			const response = await call('GET', '/v1/inbox/asks', { token: server.token, staff: { permissions } });
+			return { status: response.status, body: await response.json() };
+		};
+		expect(await asked(['notes:notes.read'])).toEqual({ status: 200, body: { allowed: false } });
+		expect(await asked(['notes:notes.read', 'ecommerce:audit.read'])).toEqual({ status: 200, body: { allowed: false } });
+		expect(await asked(['notes:notes.read', 'notes:audit'])).toEqual({ status: 200, body: { allowed: false } });
+		expect(await asked(['notes:notes.read', 'notes:audit.read'])).toEqual({ status: 200, body: { allowed: true } });
+		expect(await asked(['*'])).toEqual({ status: 200, body: { allowed: true } });
+	});
+
+	it('trusts the server token alone on a route that needs no staff member (the merchant’s own server)', async () => {
+		const { call, server } = await setup({ routes: askingRoutes() });
+		const response = await call('GET', '/v1/server/asks', { token: server.token, bare: true });
+		expect(await response.json()).toEqual({ allowed: true });
+	});
+
+	it('does not trust a signed-in shopper or a header: only a verified staff route sets a staff member', async () => {
+		const { call, server } = await setup({ routes: askingRoutes() });
+		const response = await call('GET', '/v1/server/asks', {
+			token: server.token,
+			bare: true,
+			headers: { 'ss-actor-id': 'usr_x', 'ss-actor-role': 'owner' },
+		});
+		expect(await response.json()).toEqual({ allowed: true });
 	});
 });

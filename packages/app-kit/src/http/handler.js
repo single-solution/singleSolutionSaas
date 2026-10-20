@@ -79,6 +79,9 @@ import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
  * @property {import('@ss/protocol').TicketClaims | null} ticket
  * @property {import('../actor.js').ActingUser | null} actor the member of the merchant's staff whose verified
  *   `SS-Sign-In` a staff route of the server token was called with (never a header the caller wrote), else null
+ * @property {{ can: (permission: string) => boolean } | null} staff the verified staff member of a staff route of the
+ *   server token: `can(key)` says whether their role grants the product's permission `key`; null on any other call. Guards
+ *   inside handlers ask `allows(ctx, key)` (staff.js), which reads the ticket's permissions or this
  * @property {() => Promise<import('../identity.js').RequestSignIn | null>} signIn the visitor's Accounts sign-in from
  *   `SS-Sign-In`, verified once per request for the website of the request's own token (`{ ok: true, token, user, claims }`,
  *   `{ ok: false, code }`, or null without the header). On a browser route the merchant's server called for a visitor
@@ -486,6 +489,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				token: null,
 				ticket: null,
 				actor: null,
+				staff: null,
 				visitor: { server: false, ip: null },
 				signIn: async () => null,
 				staffSignIn: async () => null,
