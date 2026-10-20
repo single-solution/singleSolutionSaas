@@ -2,7 +2,9 @@
  * The request handler: `(Request) → Promise<Response>` (WHATWG Fetch API). Pipeline per request:
  *
  *   configuration problems (503) → request id → CORS preflight → route match (404/405) → Portal connection (503 before
- *   connect, except `none` routes) → body with a byte cap (413) → auth → status of the product on the website (403
+ *   connect, except `none` routes) → body with a byte cap (413) → auth (for the `browser`, `server` and `ticket` routes the
+ *   token is checked first and the body read after it, so a call with no or a bad token never has its body read) → status
+ *   of the product on the website (403
  *   `product_unavailable`, 503 `portal_unreachable`) → feature (403 `feature_off`) → merchant database (403
  *   `database_not_connected`) → JSON (415/400) → rate limits (429) → `Idempotency-Key` (the first answer again, or 409)
  *   → handler → RFC 9457 problems for every error.
@@ -513,11 +515,21 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				log,
 			};
 
-			if (BODY_METHODS.has(method)) {
+			// a token route is read after its token is checked: a call with no or a bad token never has its body read (SR-1-3);
+			// a Portal call is signed over its body, so that body is read first
+			const tokenRoute = r.auth === 'browser' || r.auth === 'server' || r.auth === 'ticket';
+			/** @returns {Promise<ProblemResult | null>} */
+			const readRouteBody = async () => {
+				if (!BODY_METHODS.has(method)) return null;
 				const max = r.maxBodyBytes ?? 1024 * 1024;
 				const text = await readBody(request, max);
-				if (text === null) return fail(problem('payload_too_large', `The body exceeds ${max} bytes.`));
+				if (text === null) return problem('payload_too_large', `The body exceeds ${max} bytes.`);
 				ctx.rawBody = text;
+				return null;
+			};
+			if (!tokenRoute) {
+				const refused = await readRouteBody();
+				if (refused) return fail(refused);
 			}
 
 			// auth
@@ -587,6 +599,10 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 					merchantId: allowed.merchantId,
 					status: allowed.status,
 				});
+			}
+			if (tokenRoute) {
+				const refused = await readRouteBody();
+				if (refused) return fail(refused);
 			}
 			websiteId = ctx.websiteId;
 			ctx.signIn = requestSignIn({ accounts: kit.accounts, websiteId: ctx.websiteId, headers: request.headers });

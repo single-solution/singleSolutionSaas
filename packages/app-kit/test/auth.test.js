@@ -340,6 +340,100 @@ describe('repeated requests (K-14)', () => {
 	});
 });
 
+describe('request bodies (SR-1-3)', () => {
+	const routes = [
+		...productRoutes(),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/body/browser',
+			auth: 'browser',
+			database: false,
+			handler: (ctx) => ({ got: ctx.body }),
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/body/server',
+			auth: 'server',
+			runtime: true,
+			database: false,
+			handler: (ctx) => ({ got: ctx.body }),
+		}),
+		defineRoute({ method: 'POST', path: '/v1/body/ticket', auth: 'ticket', permission: 'notes.read', handler: () => ({}) }),
+		defineRoute({ method: 'POST', path: '/v1/body/none', auth: 'none', handler: (ctx) => ({ got: ctx.body }) }),
+	];
+	/**
+	 * A POST whose body is a stream that counts how often it was pulled (nothing is pulled until someone reads it).
+	 * @param {(request: Request) => Promise<Response>} handler
+	 * @param {string} path
+	 * @param {Record<string, string>} headers
+	 */
+	const post = async (handler, path, headers) => {
+		const chunk = new TextEncoder().encode(JSON.stringify({ a: 1 }));
+		let pulls = 0;
+		const body = new ReadableStream(
+			{
+				pull: (controller) => {
+					pulls += 1;
+					controller.enqueue(chunk);
+					controller.close();
+				},
+			},
+			{ highWaterMark: 0 },
+		);
+		const response = await handler(
+			new Request(`${BASE}${path}`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', ...headers },
+				body,
+				duplex: 'half',
+			}),
+		);
+		return { response, pulls: () => pulls };
+	};
+
+	it('are never read for a call with no or a bad token: the token is checked first', async () => {
+		const { handler, browser } = await setup({ routes });
+		const path = ['/v1/body/browser', '/v1/body/server', '/v1/body/ticket'];
+		for (const route of path) {
+			for (const headers of [{}, { authorization: 'Bearer nonsense' }, { authorization: `Bearer ${browser.token}x` }]) {
+				const refused = await post(handler, route, { origin: SITE, ...headers });
+				expect([route, refused.response.status, refused.pulls()]).toEqual([route, 401, 0]);
+			}
+		}
+		// a token of the wrong kind for the route is refused before the body as well
+		const wrongKind = await post(handler, '/v1/body/server', { authorization: `Bearer ${browser.token}` });
+		expect([wrongKind.response.status, wrongKind.pulls()]).toEqual([401, 0]);
+		// an oversize declared body with a bad token is a 401 too, not a 413
+		const big = await post(handler, '/v1/body/browser', {
+			origin: SITE,
+			authorization: 'Bearer nonsense',
+			'content-length': '99999999',
+		});
+		expect([big.response.status, big.pulls()]).toEqual([401, 0]);
+	});
+
+	it('are still read, capped and parsed after a good token, and for routes without a token', async () => {
+		const { handler, browser, server } = await setup({ routes });
+		const browserCall = await post(handler, '/v1/body/browser', { origin: SITE, authorization: `Bearer ${browser.token}` });
+		expect([browserCall.response.status, await browserCall.response.json(), browserCall.pulls()]).toEqual([
+			200,
+			{ got: { a: 1 } },
+			1,
+		]);
+		const serverCall = await post(handler, '/v1/body/server', { authorization: `Bearer ${server.token}` });
+		expect([serverCall.response.status, await serverCall.response.json()]).toEqual([200, { got: { a: 1 } }]);
+		const tooBig = await post(handler, '/v1/body/browser', {
+			origin: SITE,
+			authorization: `Bearer ${browser.token}`,
+			'content-length': '99999999',
+		});
+		expect([tooBig.response.status, tooBig.pulls()]).toEqual([413, 0]);
+		// a route with no token reads its (small) body as before
+		const open = await post(handler, '/v1/body/none', {});
+		expect([open.response.status, await open.response.json(), open.pulls()]).toEqual([200, { got: { a: 1 } }, 1]);
+	});
+});
+
 describe('rate limits (SE-2)', () => {
 	it('one address flooding a route cannot lock out other visitors: the website window counts only what passed', async () => {
 		const routes = [
