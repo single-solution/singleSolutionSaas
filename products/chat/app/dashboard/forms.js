@@ -1,19 +1,20 @@
 'use client';
 /**
- * Connections → structured values (PLAN 0.8.3): the AI providers (`ai`, `ai_backup`: provider, key, model, base URL
- * for an OpenAI-compatible service). A value is saved as one connection (tested live, encrypted, write-only), so each
- * form starts empty and saving replaces the whole value. The storage is the Portal's (one bucket for every product).
+ * Connections → structured values (PLAN 0.8.3): the backup AI provider (`ai_backup`: provider, key, model, base URL for an
+ * OpenAI-compatible service). A value is saved as one connection (tested live, encrypted, write-only), so the form
+ * starts empty and saving replaces the whole value. The database, the storage and the main AI key are the Portal's (one
+ * for every product, entered once), so they have no form here.
  * @module
  */
 import { useId, useState } from 'react';
 import { Button, Callout, FieldGrid, Input, Select } from '@ss/ui';
-import { AI_PROVIDERS, MODEL_SUGGESTIONS, checkAiConnection } from '../../core/models.js';
+import { AI_PROVIDERS, MODEL_SUGGESTIONS, checkAiConnection } from '@ss/app-kit/ai';
 import { TEXTS } from './texts.js';
 
 const N = TEXTS.connections.fields;
 
 /** Connections with their own form. */
-export const FORMS = Object.freeze(['ai', 'ai_backup']);
+export const FORMS = Object.freeze(['ai_backup']);
 
 /** @param {{ onSave: (value: object) => Promise<void> }} props */
 export function AiForm({ onSave }) {
@@ -22,7 +23,7 @@ export function AiForm({ onSave }) {
 	const [error, setError] = useState(/** @type {string | null} */ (null));
 	/** @param {string} key @param {string} value */
 	const set = (key, value) => setValues({ ...values, [key]: value });
-	const provider = /** @type {import('../../core/models.js').AiProvider} */ (values.provider);
+	const provider = /** @type {import('@ss/app-kit/ai').AiProvider} */ (values.provider);
 	return (
 		<div className="mt-3 space-y-3">
 			<FieldGrid>

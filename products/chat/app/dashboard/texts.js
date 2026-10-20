@@ -341,8 +341,7 @@ export const TEXTS = dashboardTexts({
 			compatible: 'OpenAI-compatible service',
 		},
 		hints: {
-			ai: 'Your own AI provider key. The model is free text; suggestions are shown as you type.',
-			ai_backup: 'Answers when the main provider fails.',
+			ai_backup: 'Answers when the main provider fails. The model is free text; suggestions are shown as you type.',
 		},
 	},
 	developers: {

@@ -7,23 +7,23 @@
  * PLAN 0.8.10 C1).
  * @module
  */
-import { estimateTokens } from './providers.js';
+import { estimateTokens } from '@ss/app-kit/ai';
 
-/** @typedef {import('./providers.js').ChatMessage} ChatMessage */
-/** @typedef {import('./providers.js').ChatResult} ChatResult */
-/** @typedef {import('./providers.js').ToolCall} ToolCall */
-/** @typedef {import('./providers.js').ToolSchema} ToolSchema */
+/** @typedef {import('@ss/app-kit').AiMessage} AiMessage */
+/** @typedef {import('@ss/app-kit').AiResult} AiResult */
+/** @typedef {import('@ss/app-kit').AiToolCall} AiToolCall */
+/** @typedef {import('@ss/app-kit').AiToolSchema} AiToolSchema */
 /**
  * @typedef {object} AssistantDeps
- * @property {(request: { messages: ChatMessage[], tools: ToolSchema[] }) => Promise<{ ok: true, value: ChatResult } | { ok: false, code: string }>} call
- * @property {(call: ToolCall) => Promise<{ content: string, escalate?: { reason: string } | null, ok?: boolean }>} execute
+ * @property {(request: { messages: AiMessage[], tools: AiToolSchema[] }) => Promise<{ ok: true, value: AiResult } | { ok: false, code: string }>} call
+ * @property {(call: AiToolCall) => Promise<{ content: string, escalate?: { reason: string } | null, ok?: boolean }>} execute
  * @property {(usage: { input: number, output: number }) => Promise<void> | void} spend
  * @property {() => boolean} expired the shared deadline passed
  */
 /**
  * @typedef {object} AssistantInput
- * @property {ChatMessage[]} messages system + history + the customer's message
- * @property {ToolSchema[]} tools
+ * @property {AiMessage[]} messages system + history + the customer's message
+ * @property {AiToolSchema[]} tools
  * @property {number} maxRounds
  * @property {((text: string) => boolean) | null} [languageOk]
  * @property {string} [retryInstruction]
@@ -53,7 +53,7 @@ export const runAssistant = async (
 	/** @param {string | null} failure @param {string} [text] @param {boolean} [retried] @returns {AssistantResult} */
 	const done = (failure, text = '', retried = false) => ({ text, failure, escalation, retried });
 
-	/** @param {ToolSchema[]} offered */
+	/** @param {AiToolSchema[]} offered */
 	const ask = async (offered) => {
 		if (deps.expired()) return /** @type {const} */ ({ ok: false, code: 'timeout' });
 		const result = await deps.call({ messages: conversation, tools: offered });

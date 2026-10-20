@@ -15,10 +15,9 @@
  * never hands off by itself, CH-19). Staff alerts go out as the features say.
  * @module
  */
-import { formatText, problem } from '@ss/app-kit';
+import { checkAiConnection, formatText, problem } from '@ss/app-kit';
 import { runAssistant } from '../core/assistant.js';
 import { botPhrases } from '../core/bot-phrases.js';
-import { checkAiConnection } from '../core/models.js';
 import { advance, keywordFlow } from '../core/flows.js';
 import {
 	PLACEHOLDERS as PLACEHOLDER_FEATURES,
@@ -93,7 +92,7 @@ import { labelListsOf, phoneCodeOf } from './service.js';
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('./service.js').Visitor} Visitor */
 /** @typedef {import('../core/conversation.js').ConversationRecord} ConversationRecord */
-/** @typedef {import('../core/providers.js').ChatMessage} ChatMessage */
+/** @typedef {import('@ss/app-kit').AiMessage} AiMessage */
 
 const DAY_MS = 86_400_000;
 /** One answer's deadline over every provider and tool call (ms). */
@@ -452,11 +451,11 @@ export const createReply = (product, service) => {
 	/**
 	 * One completion with the main provider, else the backup.
 	 * @param {Site} s
-	 * @param {import('../core/models.js').AiConnection[]} connections
-	 * @param {{ messages: ChatMessage[], tools: import('../core/providers.js').ToolSchema[] }} request
+	 * @param {import('@ss/app-kit').AiConnection[]} connections
+	 * @param {{ messages: AiMessage[], tools: import('@ss/app-kit').AiToolSchema[] }} request
 	 */
 	const complete = async (s, connections, request) => {
-		/** @type {{ ok: false, code: string } | { ok: true, value: import('../core/providers.js').ChatResult }} */
+		/** @type {{ ok: false, code: string } | { ok: true, value: import('@ss/app-kit').AiResult }} */
 		let result = { ok: false, code: 'not_connected' };
 		for (const connection of connections) {
 			result = await product.ai.chat(connection, {
@@ -565,7 +564,7 @@ export const createReply = (product, service) => {
 		/**
 		 * A shop tool: one read from Ecommerce through the Portal's link (the sign-in tools forward the verified sign-in;
 		 * the model's arguments never name the user). A failed call answers that it cannot be looked up now.
-		 * @param {import('../core/providers.js').ToolCall} call
+		 * @param {import('@ss/app-kit').AiToolCall} call
 		 */
 		const shopCall = async (call) => {
 			const request = shopRequest(call.name, call.arguments, {
@@ -588,7 +587,7 @@ export const createReply = (product, service) => {
 						cards.push(cardOf(item));
 			return { ok: true, content: toolOutput(found.content) };
 		};
-		/** @param {import('../core/providers.js').ToolCall} call */
+		/** @param {import('@ss/app-kit').AiToolCall} call */
 		const execute = async (call) => {
 			if (call.name === BUILTIN.escalate)
 				return {
@@ -914,11 +913,11 @@ export const createReply = (product, service) => {
 				context: reassure ? null : await storeContext(s, c, verified),
 				reassure,
 			});
-			/** @type {ChatMessage[]} */
+			/** @type {AiMessage[]} */
 			const messages = [
 				{ role: 'system', content: system },
 				...history.map(
-					(m) => /** @type {ChatMessage} */ ({ role: m.author === 'visitor' ? 'user' : 'assistant', content: m.text }),
+					(m) => /** @type {AiMessage} */ ({ role: m.author === 'visitor' ? 'user' : 'assistant', content: m.text }),
 				),
 			];
 			const deadline = now() + ANSWER_DEADLINE_MS;

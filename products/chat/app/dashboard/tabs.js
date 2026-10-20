@@ -2,7 +2,7 @@
 /**
  * Chat's parts of the dashboard tabs (PLAN 0.4.3, 0.8.3 Chat dashboard), on the shared tabs of `@ss/ui/dashboard`: the
  * Overview's setup steps and its booking address while the Book-a-slot tool is on, the rules between features, Chat's settings sections, the
- * AI and storage connection forms with each connection's hint, the developer snippets, and the AI label warning in
+ * backup AI provider form with its hint (the database, the storage and the main AI key are the Portal's), the developer snippets, and the AI label warning in
  * Defaults.
  * @module
  */
@@ -81,7 +81,8 @@ const ruleWarnings = (on) =>
 const connectionHint = (name) => TEXTS.connections.hints[/** @type {keyof typeof TEXTS.connections.hints} */ (name)] ?? null;
 
 /**
- * The structured value of the AI providers (the other connections take one value; the storage is the Portal's).
+ * The structured value of the backup AI provider (the other connections take one value; the database, the storage and the
+ * main AI key are the Portal's).
  * @param {import('@ss/ui/dashboard').Connection} item
  * @param {(value: unknown) => Promise<void>} save
  */

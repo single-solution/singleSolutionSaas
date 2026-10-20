@@ -4,7 +4,7 @@
  * Overview with Chat's own part while the Book-a-slot tool is on (its booking address asked for while missing; the
  * settings are read only then), and its times computed in UTC and shown in the viewer's local time (owner
  * 2026-10-14): UTC on the server and in the first render, then the viewer's zone, with UTC on hover. Also the AI label
- * warning of Settings.
+ * warning of Settings and the Connections tab (the main AI key is the Portal's, the backup provider has Chat's form).
  */
 import { act } from 'react';
 import { renderToString } from 'react-dom/server';
@@ -196,5 +196,48 @@ describe('the AI label warning (PLAN 0.8.3 AI, C1)', () => {
 		// never disclose hides the label even while Show the AI label is on
 		expect(shown({ showAiLabel: true, neverDisclose: true })).toContain('EU AI Act');
 		expect(aiLabelNotice('ai_caps', { showAiLabel: false })).toBeNull();
+	});
+});
+
+describe('Connections: the AI providers', () => {
+	it('the main AI key is a note and a link to the Portal; the backup provider has the form', async () => {
+		const connections = [
+			{ name: 'ai', label: 'AI provider', kind: 'secret', neededBy: ['ai_replies'], status: 'connected', managed: true },
+			{
+				name: 'ai_backup',
+				label: 'Backup AI provider',
+				kind: 'secret',
+				neededBy: ['ai_backup'],
+				status: 'not_connected',
+				managed: false,
+			},
+		];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (/** @type {string} */ path) =>
+				path.endsWith('/connections')
+					? new Response(JSON.stringify({ connections }), { status: 200 })
+					: new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 }),
+			),
+		);
+		const Connections = TABS.connections;
+		const own = props();
+		const { container } = render(inDashboard(<Connections {...own} />));
+		await settle();
+		/** @param {string} name */
+		const open = (name) => {
+			click(/** @type {HTMLElement} */ ([...container.querySelectorAll(`nav a[href="#connection-${name}"]`)].at(-1)));
+			return /** @type {HTMLElement} */ (container.querySelector(`#section-connection-${name}`));
+		};
+		const main = open('ai');
+		expect(main.textContent).toContain(TEXTS.managed.title);
+		expect(main.textContent).toContain(TEXTS.connections.managed.secret);
+		expect(main.querySelector('a[href^="https://portal.example.com"]')?.getAttribute('href')).toContain('#connections');
+		expect(main.querySelector('input, select')).toBeNull();
+		const backup = open('ai_backup');
+		expect(backup.textContent).toContain(TEXTS.connections.hints.ai_backup);
+		expect(backup.textContent).not.toContain(TEXTS.managed.title);
+		expect([...backup.querySelectorAll('input, select')].length).toBeGreaterThanOrEqual(3);
+		expect(byText(backup, TEXTS.connections.save, 'button')).toBeTruthy();
 	});
 });

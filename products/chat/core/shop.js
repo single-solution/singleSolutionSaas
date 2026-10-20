@@ -141,7 +141,7 @@ const DAY_MS = 86_400_000;
 /** Tool names the merchant's webhook tools may not take. */
 export const SHOP_TOOL_NAMES = Object.freeze(Object.values(SHOP_TOOLS));
 
-/** @typedef {import('./providers.js').ToolSchema} ToolSchema */
+/** @typedef {import('@ss/app-kit').AiToolSchema} AiToolSchema */
 /**
  * The deal in a shown price, with what it takes off one unit (Ecommerce's `deal`).
  * @typedef {{ name: string, savings: number, savingsText: string | null }} ShopDeal
@@ -365,7 +365,7 @@ export const cardsOf = (raw) =>
 		.filter((product) => product !== null)
 		.map(cardOf);
 
-/** @param {string} name @param {string} description @param {Record<string, unknown>} [properties] @param {string[]} [required] @returns {ToolSchema} */
+/** @param {string} name @param {string} description @param {Record<string, unknown>} [properties] @param {string[]} [required] @returns {AiToolSchema} */
 const schema = (name, description, properties = {}, required = []) => ({
 	name,
 	description,
@@ -378,7 +378,7 @@ const PRODUCT_ID = { type: 'string', description: 'The product id from search_ca
 const PRICE_FIELDS =
 	'price is what the product page charges now, after any live deal (lowest to highest when the variants differ); wasPrice, when given, is the old price the page shows struck through beside it (mention it as "was …", never as the price to pay); deal, when given, is the deal in the price and what it saves on one unit';
 
-/** @type {Record<string, ToolSchema>} */
+/** @type {Record<string, AiToolSchema>} */
 const SCHEMAS = {
 	[SHOP_TOOLS.search]: schema(
 		SHOP_TOOLS.search,
@@ -457,11 +457,11 @@ const SCHEMAS = {
  * The shop tools offered for a turn: those whose feature is on; the sign-in tools only for a verified sign-in.
  * @param {string[]} on switched-on features
  * @param {{ signedIn: boolean }} visitor
- * @returns {ToolSchema[]}
+ * @returns {AiToolSchema[]}
  */
 export const shopSchemas = (on, { signedIn }) =>
 	SHOP_ENDPOINTS.filter((row) => on.includes(row.feature) && (signedIn || !row.signIn)).map(
-		(row) => /** @type {ToolSchema} */ (SCHEMAS[row.tool]),
+		(row) => /** @type {AiToolSchema} */ (SCHEMAS[row.tool]),
 	);
 
 /** A product id or slug as Ecommerce takes it, else null. @param {unknown} value */

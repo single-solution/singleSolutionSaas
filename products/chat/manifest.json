@@ -10,7 +10,8 @@
 	"docsUrl": "/docs",
 	"needs": {
 		"database": true,
-		"storage": "optional"
+		"storage": "optional",
+		"ai": true
 	},
 	"links": {
 		"offers": [

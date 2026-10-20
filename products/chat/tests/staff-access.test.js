@@ -47,7 +47,7 @@ describe('Chat with the server token alone', () => {
 			['PUT', '/v1/settings/inbox.pauseNeeds', { value: 'reply' }],
 			['PUT', '/v1/texts/chat.staff', { value: 'Team' }],
 			['PUT', '/v1/lists/tools', { value: [] }],
-			['PUT', '/v1/connections/ai', { value: 'sk-x' }],
+			['PUT', '/v1/connections/ai_backup', { value: 'sk-x' }],
 			['GET', '/v1/activity', undefined],
 		])) {
 			const refused = await sys.call(method, path, { token: sys.server, bare: true, ...(body === undefined ? {} : { body }) });

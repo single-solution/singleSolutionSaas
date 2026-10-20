@@ -1,6 +1,7 @@
 /**
  * Chat on the kit: statuses and notices, tokens and origins, the widget settings, the dashboard's lists and tool
- * signing secret, data rights, the AI connection test, the public docs and widget script.
+ * signing secret, data rights, the AI connections (the backup provider's test, the Portal's main key), the public docs
+ * and widget script.
  */
 import { emptyWebsiteSettings } from '@ss/contracts/website-settings';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -254,10 +255,10 @@ describe('dashboard', () => {
 		expect((await sys.dashboard(merchant, 'GET', path)).status).toBe(403);
 	});
 
-	it('tests the AI connection when it is saved', async () => {
-		const sys = await start(['visitor_chat', 'ai_replies']);
+	it('tests the backup AI provider when it is saved', async () => {
+		const sys = await start(['visitor_chat', 'ai_replies', 'ai_backup']);
 		const owner = await sys.adminSession();
-		const path = `/v1/dashboard/websites/${sys.websiteId}/connections/ai`;
+		const path = `/v1/dashboard/websites/${sys.websiteId}/connections/ai_backup`;
 		const shape = await sys.dashboard(owner, 'PUT', path, { value: { provider: 'openai', apiKey: 'short', model: 'x' } });
 		expect(shape.json).toMatchObject({ status: 'test_failed', message: 'Enter the API key.' });
 		sys.responders.set(`${AI}/v1/models`, () => ({ status: 401, body: {} }));
@@ -268,6 +269,28 @@ describe('dashboard', () => {
 			status: 'connected',
 			set: true,
 		});
+	});
+
+	it('the main AI key is the Portal’s: delivered and tested here, never saved or removed in Chat', async () => {
+		const sys = await start(['visitor_chat', 'ai_replies']);
+		const owner = await sys.adminSession();
+		const base = `/v1/dashboard/websites/${sys.websiteId}/connections`;
+		const item = async () =>
+			(await sys.dashboard(owner, 'GET', base)).json.connections.find((/** @type {{ name: string }} */ c) => c.name === 'ai');
+		expect(await item()).toMatchObject({ managed: true, set: false, status: 'not_connected', neededBy: ['ai_replies'] });
+		for (const [method, body] of /** @type {const} */ ([
+			['PUT', { value: AI_KEY }],
+			['DELETE', undefined],
+		])) {
+			const attempt = await sys.dashboard(owner, method, `${base}/ai`, body);
+			expect([method, attempt.status, attempt.json.type.split('/').pop()]).toEqual([method, 409, 'managed_by_portal']);
+		}
+		await sys.connect('ai', AI_KEY);
+		expect(await item()).toMatchObject({ managed: true, set: true, status: 'connected' });
+		// a key the provider refuses is kept and reported, not hidden
+		sys.responders.set(`${AI}/v1/models`, () => ({ status: 401, body: {} }));
+		await sys.connect('ai', { ...AI_KEY, apiKey: 'sk-test-refused-0123' });
+		expect(await item()).toMatchObject({ managed: true, status: 'test_failed', message: 'The provider refused the key.' });
 	});
 });
 

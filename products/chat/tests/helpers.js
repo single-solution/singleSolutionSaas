@@ -271,7 +271,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 		if (response.status !== 200) throw new Error(`features: ${response.status} ${response.text}`);
 	};
 
-	/** What the merchant does in the Portal (the database, the storage, the links to other products). */
+	/** What the merchant does in the Portal (the database, the storage, the AI key, the links to other products). */
 	const viaPortal = portalConnector({
 		portal,
 		websiteId,
@@ -285,8 +285,8 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 	});
 
 	/**
-	 * Save a connection: the database, the storage and the links through the Portal (the product fetches them), a provider key
-	 * on the Connections screen (tested live when saved).
+	 * Save a connection: the database, the storage, the main AI key and the links through the Portal (the product fetches
+	 * them), the backup provider key on the Connections screen (tested live when saved).
 	 * @param {string} name @param {unknown} [value]
 	 */
 	const connect = async (name, value) => {

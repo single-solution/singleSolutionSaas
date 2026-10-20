@@ -9,7 +9,7 @@
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
-import { createProduct, createProductBase } from '@ss/app-kit';
+import { createAiClient, createProduct, createProductBase } from '@ss/app-kit';
 import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -59,7 +59,6 @@ import visitorChat from '../schemas/visitor_chat.settings.json' with { type: 'js
 import webhookTools from '../schemas/webhook_tools.settings.json' with { type: 'json' };
 import importSettings from '../schemas/import.settings.json' with { type: 'json' };
 import messages from '../schemas/messages.json' with { type: 'json' };
-import { createAi } from './ai.js';
 import { createFileSigner, createSealer } from './crypto.js';
 import { createImportOptions } from './imports.js';
 import { LISTS, createLists } from './lists.js';
@@ -269,11 +268,11 @@ export const createProductInstance = (options) => {
 	const now = options.now ?? Date.now;
 	const healthy = (options.problems ?? []).length === 0;
 	// Chat keeps its list settings and visitor counters in the product database too: the kit's store, shared with it
-	const { store, send } = createProductBase(options);
+	const { store, policy, send } = createProductBase(options);
 	const keys = healthy ? options.config : undefined;
 	const sealer = createSealer(keys?.encryptionKey ?? UNCONFIGURED_KEY, keys?.previousEncryptionKey ?? null);
 	const files = createFileSigner(keys?.encryptionKey ?? UNCONFIGURED_KEY, keys?.previousEncryptionKey ?? null);
-	const ai = createAi({ send });
+	const ai = createAiClient({ send, policy });
 	const lists = createLists({ store, sealer, now });
 	/** @type {NonNullable<import('@ss/app-kit').ProductOptions['hooks']>} */
 	const hooks = {};
@@ -289,7 +288,16 @@ export const createProductInstance = (options) => {
 		messages,
 		connections: {
 			storage: { label: 'Storage (S3-compatible)', kind: 'storage', neededBy: ['attachments'] },
-			ai: { label: 'AI provider', kind: 'secret', neededBy: ['ai_replies'], secretField: 'apiKey', test: ai.test },
+			// the website's AI key is the Portal's (Website settings › Data and files): managed here, delivered when the manifest
+			// says `needs.ai`; the backup provider is Chat's own, of the same shape
+			ai: {
+				label: 'AI provider',
+				kind: 'secret',
+				portal: 'ai',
+				neededBy: ['ai_replies'],
+				secretField: 'apiKey',
+				test: ai.test,
+			},
 			ai_backup: {
 				label: 'Backup AI provider',
 				kind: 'secret',

@@ -55,7 +55,7 @@ export const PARAMETER_TYPES = Object.freeze(/** @type {const} */ (['string', 'n
  * @property {ToolParameter[]} parameters
  * @property {boolean} includeVisitor send the signed-in visitor's id and email with each call
  */
-/** @typedef {import('./providers.js').ToolSchema} ToolSchema */
+/** @typedef {import('@ss/app-kit').AiToolSchema} AiToolSchema */
 
 /** @param {unknown} value @param {number} max */
 const text = (value, max) => (typeof value === 'string' && value.trim().length > 0 && value.length <= max ? value.trim() : null);
@@ -125,7 +125,7 @@ export const checkTools = (items) => {
 /**
  * The JSON schema the AI sees for a webhook tool.
  * @param {WebhookTool} tool
- * @returns {ToolSchema}
+ * @returns {AiToolSchema}
  */
 export const webhookSchema = (tool) => ({
 	name: tool.name,
@@ -144,7 +144,7 @@ export const webhookSchema = (tool) => ({
  * parameters, and the service when there are services).
  * @param {{ handoff: boolean, booking: { questions: readonly import('./booking.js').BookingQuestion[],
  *   services: readonly import('./booking.js').BookingService[] } | null }} on
- * @returns {ToolSchema[]}
+ * @returns {AiToolSchema[]}
  */
 export const builtinSchemas = ({ handoff, booking }) => [
 	...(handoff

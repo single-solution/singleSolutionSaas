@@ -1,6 +1,6 @@
 /**
- * Pure logic: AI wire formats, the answer loop, flows, fields and leads, tools, handoff and office hours, caps,
- * reports, moderation, language, knowledge, prompt and AI connection checks.
+ * Pure logic: the answer loop, flows, fields and leads, tools, handoff and office hours, caps, reports, moderation,
+ * language, knowledge and prompt. (The AI wire formats and the AI key check are the kit's, tested there.)
  */
 import { describe, expect, it } from 'vitest';
 import { runAssistant } from '../core/assistant.js';
@@ -11,7 +11,6 @@ import { advance, answerStep, checkFlows, waitingView } from '../core/flows.js';
 import { handoffReason } from '../core/handoff.js';
 import { checkEntry, chunkText, htmlToText } from '../core/knowledge.js';
 import { detectLanguage, isLanguageNeutral, replyMatchesLanguage } from '../core/language.js';
-import { checkAiConnection } from '../core/models.js';
 import {
 	applyLinkPolicy,
 	checkRedactionPatterns,
@@ -23,15 +22,13 @@ import {
 	redact,
 } from '../core/moderation.js';
 import { buildSystemPrompt } from '../core/prompt.js';
-import { WIRE, estimateTokens, parseArguments } from '../core/providers.js';
 import { reportRange, summarize } from '../core/reports.js';
 import { cardsOf, shopAnswer, shopInfoOf, shopRequest } from '../core/shop.js';
 import { truncate } from '../core/text.js';
 import { dayKey, dayStart, monthKey, zoneOr } from '../core/time.js';
 import { checkArguments, checkTools, slotRange, toolOutput } from '../core/tools.js';
-import { endpointOf } from '../adapters/ai.js';
 
-const MESSAGES = /** @type {import('../core/providers.js').ChatMessage[]} */ ([
+const MESSAGES = /** @type {import('@ss/app-kit').AiMessage[]} */ ([
 	{ role: 'system', content: 'Rules' },
 	{ role: 'user', content: 'Hi' },
 	{ role: 'assistant', content: 'Let me check', toolCalls: [{ id: 'c1', name: 'stock', arguments: { sku: 'A' } }] },
@@ -39,66 +36,9 @@ const MESSAGES = /** @type {import('../core/providers.js').ChatMessage[]} */ ([
 	{ role: 'tool', toolCallId: 'c2', toolName: 'price', content: '9' },
 	{ role: 'assistant', content: '' },
 ]);
-const TOOLS = [
-	{ name: 'stock', description: 'Stock', parameters: { type: 'object', properties: { sku: { type: 'string' } } } },
-	{ name: 'ping', description: 'Ping', parameters: { type: 'object', properties: {} } },
-];
-
-describe('AI wire formats', () => {
-	it('builds and parses Anthropic and Gemini requests with tools', () => {
-		const anthropic = WIRE.anthropic.build({ model: 'm', messages: MESSAGES, tools: TOOLS, temperature: 0.2, maxTokens: 50 });
-		expect(anthropic.body).toMatchObject({ system: 'Rules', max_tokens: 50 });
-		expect(/** @type {any} */ (anthropic.body).messages.map((/** @type {any} */ m) => m.role)).toEqual([
-			'user',
-			'assistant',
-			'user',
-			'assistant',
-		]);
-		expect(
-			WIRE.anthropic.parse({
-				content: [
-					{ type: 'text', text: 'Hi ' },
-					{ type: 'tool_use', id: 't', name: 'stock', input: { sku: 'A' } },
-				],
-				usage: { input_tokens: 5, output_tokens: 2 },
-				stop_reason: 'tool_use',
-			}),
-		).toEqual({
-			text: 'Hi',
-			toolCalls: [{ id: 't', name: 'stock', arguments: { sku: 'A' } }],
-			usage: { input: 5, output: 2 },
-			finish: 'tool_use',
-		});
-		expect(WIRE.anthropic.parse(null)).toMatchObject({ text: '', toolCalls: [], finish: null });
-		const google = WIRE.google.build({ model: 'gemini', messages: MESSAGES, tools: TOOLS, temperature: 0, maxTokens: 9 });
-		expect(google.path).toBe('/models/gemini:generateContent');
-		const declarations = /** @type {any} */ (google.body).tools[0].functionDeclarations;
-		expect(declarations[1]).toEqual({ name: 'ping', description: 'Ping' });
-		expect(
-			WIRE.google.parse({
-				candidates: [
-					{
-						content: { parts: [{ text: 'ok' }, { functionCall: { name: 'stock', args: '{"sku":"B"}' } }] },
-						finishReason: 'STOP',
-					},
-				],
-				usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 1 },
-			}),
-		).toEqual({
-			text: 'ok',
-			toolCalls: [{ id: 'stock-1', name: 'stock', arguments: { sku: 'B' } }],
-			usage: { input: 3, output: 1 },
-			finish: 'STOP',
-		});
-		expect(WIRE.google.parse({})).toMatchObject({ text: '', finish: null });
-		expect(WIRE.openai.parse({})).toMatchObject({ text: '', toolCalls: [] });
-		expect(parseArguments('not json')).toEqual({});
-		expect(parseArguments('[1]')).toEqual({});
-		expect(estimateTokens(MESSAGES, 'abcd').output).toBe(1);
-	});
-
+describe('the answer loop', () => {
 	it('the answer loop: deadline, budget, provider errors, empty and language failures', async () => {
-		/** @param {string} text @returns {{ ok: true, value: import('../core/providers.js').ChatResult }} */
+		/** @param {string} text @returns {{ ok: true, value: import('@ss/app-kit').AiResult }} */
 		const ok = (text) => ({ ok: true, value: { text, toolCalls: [], usage: { input: 0, output: 0 }, finish: null } });
 		/** @type {import('../core/assistant.js').AssistantDeps} */
 		const deps = {
@@ -129,31 +69,6 @@ describe('AI wire formats', () => {
 			deps,
 		);
 		expect(retried).toMatchObject({ failure: 'language', retried: true });
-	});
-
-	it('provider endpoints and AI connection checks', () => {
-		expect(endpointOf({ provider: 'anthropic', apiKey: 'k', model: 'm' }).headers).toHaveProperty('x-api-key', 'k');
-		expect(endpointOf({ provider: 'google', apiKey: 'k', model: 'm' }).headers).toEqual({ 'x-goog-api-key': 'k' });
-		expect(endpointOf({ provider: 'compatible', apiKey: 'k', model: 'm', baseUrl: 'https://ai.example.com/v1' }).base).toBe(
-			'https://ai.example.com/v1',
-		);
-		expect(checkAiConnection(null)).toMatchObject({ ok: false });
-		expect(checkAiConnection({ provider: 'x' })).toMatchObject({ ok: false });
-		expect(checkAiConnection({ provider: 'openai', apiKey: '0123456789', model: '' })).toMatchObject({ ok: false });
-		expect(
-			checkAiConnection({ provider: 'compatible', apiKey: '0123456789', model: 'llama', baseUrl: 'http://x' }),
-		).toMatchObject({ ok: false });
-		expect(
-			checkAiConnection({
-				provider: 'compatible',
-				apiKey: '0123456789',
-				model: 'llama',
-				baseUrl: 'https://ai.example.com/v1/',
-			}),
-		).toEqual({
-			ok: true,
-			value: { provider: 'compatible', apiKey: '0123456789', model: 'llama', baseUrl: 'https://ai.example.com/v1' },
-		});
 	});
 });
 
