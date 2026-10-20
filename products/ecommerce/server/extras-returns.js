@@ -1280,7 +1280,7 @@ export const createReturns = (product, service) => {
 			method: 'POST',
 			path: '/v1/returns/:id/status',
 			auth: 'server',
-			permission: 'orders.manage',
+			permission: 'returns.manage',
 			feature: 'returns',
 			rateLimit: SERVER_LIMITS,
 			handler: restatus,

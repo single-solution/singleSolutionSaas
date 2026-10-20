@@ -23768,7 +23768,7 @@
 				"description": "Every status, with exact stock (the /v1/shop routes are for shoppers), newest first; while the seo feature is on each row carries seoScore, and sort=seo_score and seoBelow order and filter by it (E42). Answers a Link header to the next page. 400 bad_request for an invalid cursor or limit; 422 validation_failed at /sort or /seoBelow. Filter by any active product or variant field marked filterable (show.filter, E24) with attr.<slug or id>=value[,value], as the shop's listing does: by id that field, by slug every product or variant field with that slug; a product's own value or any of its variants'. A field not marked filterable matches nothing.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
-				"x-ss-permission": "reviews.moderate",
+				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
 					{
@@ -25404,7 +25404,7 @@
 				"description": "Its serials and the files under its storage folder are deleted too. 409 conflict when the product is in orders: archive it instead (status archived). 404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
-				"x-ss-permission": "reviews.moderate",
+				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
 					{
@@ -28988,7 +28988,7 @@
 				"description": "Statuses of one role are the merchant's steps inside it (approved → label sent, received → inspecting …). 422 validation_failed at /status (not another status of the claim's role) or /note; 404 not_found; 409 move_not_allowed when the claim changed meanwhile. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "returns",
-				"x-ss-permission": "orders.manage",
+				"x-ss-permission": "returns.manage",
 				"x-ss-access": "staff",
 				"security": [
 					{
@@ -34702,7 +34702,7 @@
 				"description": "Needs Size charts (403 feature_off otherwise).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "size_charts",
-				"x-ss-permission": "reviews.moderate",
+				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
 					{
@@ -34902,7 +34902,7 @@
 				"description": "Needs Size charts (403 feature_off otherwise). 409 conflict while products, brands or categories name it, or while it is the default chart (size_charts setting defaultChartId); 404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "size_charts",
-				"x-ss-permission": "reviews.moderate",
+				"x-ss-permission": "catalog.edit",
 				"x-ss-access": "staff",
 				"security": [
 					{
