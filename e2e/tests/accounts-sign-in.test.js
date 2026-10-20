@@ -255,8 +255,7 @@ describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 		field(root, strings['fields.password']).value = 'nora pass 1';
 		// the number is proven first: the code goes to the phone, and comes back with the sign-up
 		await submit(win, button(root, strings['code.send']));
-		await until(() => texts.length > 0);
-		await settle();
+		await until(() => [...root.querySelectorAll('button')].some((b) => b.textContent === strings['signUp.submit']));
 		expect(lastCode()).toMatch(/^\d{6}$/);
 		expect(widget.user()).toBeNull();
 		field(root, strings['code.code']).value = lastCode();
