@@ -4,7 +4,8 @@
  * server token, a shopper signed in through the real Accounts, a priced cart, a cash-on-delivery order, an order paid
  * online through the real Payments (Stripe faked in process) and marked paid only after Payments confirms it, a status
  * move by the merchant's staff with a ticket, a partial return refunded through Payments and restocked exactly once,
- * a Chat shop lookup answered from the real Ecommerce with a product card, and the hourly charge. The email provider,
+ * a Chat shop lookup answered from the real Ecommerce with a product card, AI copy written with the website's one AI
+ * key (the Portal's), and the hourly charge. The email provider,
  * Stripe and the AI provider are fakes in this process; no real network call is made.
  */
 import { createHmac } from 'node:crypto';
@@ -507,6 +508,30 @@ describe('Ecommerce on the real Portal', () => {
 		expect(answer.cards).toEqual([
 			expect.objectContaining({ productId, name: 'Phone X', url: `${ORIGIN}/products/phone-x`, inStock: true }),
 		]);
+	});
+
+	it('AI copy writes with the website’s one AI key, entered once in the Portal: Ecommerce shows it as managed and refuses a pasted copy', async () => {
+		const support = await sys.admin('support');
+		const on = ['ai_copy', 'catalog', 'checkout', 'returns'];
+		expect([...(await sys.switchFeatures(await sys.adminSession(support.client, websiteId), websiteId, on)).on].sort()).toEqual(
+			on,
+		);
+		await sys.connectAi(websiteId, { provider: 'openai', apiKey: 'sk-merchant-000789', model: 'gpt-4.1-mini' });
+		const cookie = await sys.adminSession(await sys.owner(), websiteId);
+		const base = `/v1/dashboard/websites/${websiteId}/connections`;
+		const shown = await sys.dashboard(cookie, 'GET', base);
+		expect(shown.json.connections.find((/** @type {{ name: string }} */ each) => each.name === 'ai')).toMatchObject({
+			set: true,
+			managed: true,
+			neededBy: ['ai_copy'],
+		});
+		const pasted = await sys.dashboard(cookie, 'PUT', `${base}/ai`, {
+			value: { provider: 'openai', apiKey: 'sk-pasted-in-shop', model: 'gpt-4.1-mini' },
+		});
+		expect([pasted.status, codeOf(pasted)]).toEqual([409, 'managed_by_portal']);
+		aiAnswers.push({ text: '{"summary":"A fast phone with a great screen."}' });
+		const copy = await merchantServer('POST', `/v1/products/${productId}/ai-copy`, { fields: ['summary'] });
+		expect(copy.json).toEqual({ suggestions: { summary: 'A fast phone with a great screen.' } });
 	});
 
 	it('the Portal charges the switched-on features every clock hour', async () => {
