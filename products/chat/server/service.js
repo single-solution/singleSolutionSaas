@@ -42,6 +42,7 @@ import {
 	staffMessageView,
 	transcriptText,
 	visitorMessageView,
+	verifiedIdentity,
 } from '../core/conversation.js';
 import { waitingView } from '../core/flows.js';
 import { officeState } from '../core/handoff.js';
@@ -73,7 +74,9 @@ import { createStore } from '../adapters/store.js';
  * @property {() => Promise<SignIn | null>} signIn the visitor's Accounts sign-in, verified on this request (signed-in chat on)
  */
 /**
- * @typedef {{ token: string, user: { id: string, name?: string, email?: string, phone?: string } }} SignIn
+ * @typedef {{ token: string, user: { id: string, name?: string, email?: string, phone?: string },
+ *   claims: Readonly<Record<string, unknown>> }} SignIn `claims`: what Accounts signed, among them `email_verified` and
+ *   `phone_verified`
  */
 /** @typedef {Awaited<ReturnType<Product['format']>>} Look */
 /**
@@ -263,7 +266,7 @@ export const createService = (product) => {
 				once('signIn', async () => {
 					if (!on.includes('signed_in_chat')) return null;
 					const verified = await ctx.signIn();
-					return verified?.ok ? { token: verified.token, user: verified.user } : null;
+					return verified?.ok ? { token: verified.token, user: verified.user, claims: verified.claims } : null;
 				}),
 		};
 	};

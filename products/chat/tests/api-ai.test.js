@@ -106,6 +106,72 @@ describe('AI replies', () => {
 		expect((await v('GET', '/v1/chat')).json.messages[1].text).toBe('Three left.');
 	});
 
+	it('tells a webhook tool and the booking endpoint only the verified sign-in, never what the visitor typed (SR-6-1)', async () => {
+		const sys = await start([
+			'visitor_chat',
+			'guest_chat',
+			'signed_in_chat',
+			'ai_replies',
+			'webhook_tools',
+			'book_slot',
+		]);
+		await sys.paste('accounts');
+		await sys.setting('book_slot', 'bookingUrl', `${TOOLS}/booking`);
+		await sys.setting('book_slot', 'needsContact', false);
+		await sys.list('booking_questions', [
+			{ key: 'name', label: 'Name', type: 'text', required: true },
+			{ key: 'email', label: 'Email', type: 'email', required: true },
+		]);
+		await sys.list('tools', [
+			{ name: 'lookup', description: 'Looks up my data.', url: `${TOOLS}/lookup`, parameters: [], includeVisitor: true },
+		]);
+		sys.responders.set(`${TOOLS}/lookup`, () => ({ status: 200, body: { ok: true } }));
+		sys.responders.set(`${TOOLS}/booking`, () => ({ status: 200, body: { booked: true } }));
+		/** @param {string} sub @param {Record<string, unknown>} claims */
+		const turn = async (sub, claims) => {
+			const signIn = await sys.accounts.signIn({ websiteId: sys.websiteId, sub, name: 'Ann', ...claims });
+			const user = sys.visitor({ signIn });
+			// the visitor types somebody else's details; Chat keeps them on the conversation, as the staff see them
+			const saved = await user('POST', '/v1/chat/contact', {
+				email: 'victim@example.com',
+				phone: '+447700900123',
+				name: 'Victim',
+			});
+			expect(saved.status).toBeLessThan(300);
+			sys.calls.length = 0;
+			sys.ai(
+				{ tools: [{ name: 'lookup', arguments: {} }] },
+				{ tools: [{ name: 'book_slot', arguments: { slotId: 's1', name: 'Ann' } }] },
+				{ text: 'Done.' },
+			);
+			await user('POST', '/v1/chat/messages', { text: 'look me up and book me' });
+			const lookup = sys.calls.find((c) => c.url === `${TOOLS}/lookup`);
+			const booking = sys.calls.find((c) => c.url === `${TOOLS}/booking`);
+			return { lookup: JSON.parse(String(lookup?.body)), booking: booking ? JSON.parse(String(booking.body)) : null };
+		};
+		// the sign-in says the email and the phone are verified: those, not the typed ones
+		const verified = await turn('usr_a', {
+			email: 'ann@example.com',
+			email_verified: true,
+			phone: '+447700900999',
+			phone_verified: true,
+		});
+		expect(verified.lookup.visitor).toEqual({
+			id: 'usr_a',
+			name: 'Ann',
+			email: 'ann@example.com',
+			phone: '+447700900999',
+		});
+		expect(verified.booking.answers).toEqual({ name: 'Ann', email: 'ann@example.com' });
+		// the sign-in does not say they are verified: the id only, and the booking asks for the email
+		const unverified = await turn('usr_b', { email: 'bea@example.com', email_verified: false });
+		expect(unverified.lookup.visitor).toEqual({ id: 'usr_b', name: 'Ann' });
+		expect(unverified.booking).toBeNull();
+		// nothing the visitor typed went to the merchant's endpoints
+		for (const sent of [verified.lookup, verified.booking, unverified.lookup])
+			expect(JSON.stringify(sent)).not.toMatch(/victim|900123/);
+	});
+
 	it('lists free slots and books one through the booking endpoint; the escalate tool hands off', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'book_slot', 'inbox', 'handoff']);
 		await sys.setting('book_slot', 'bookingUrl', `${TOOLS}/booking`);

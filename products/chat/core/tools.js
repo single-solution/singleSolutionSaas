@@ -53,7 +53,7 @@ export const PARAMETER_TYPES = Object.freeze(/** @type {const} */ (['string', 'n
  * @property {string} description
  * @property {string} url https
  * @property {ToolParameter[]} parameters
- * @property {boolean} includeVisitor send the signed-in visitor's id and email with each call
+ * @property {boolean} includeVisitor send the signed-in visitor with each call: the id and name of the verified sign-in, its email and phone only when Accounts verified them (never what the visitor typed in the chat)
  */
 /** @typedef {import('@ss/app-kit').AiToolSchema} AiToolSchema */
 

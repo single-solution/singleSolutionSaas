@@ -178,6 +178,24 @@ export const alertRoutes = (channels, { email, phone }) => {
 };
 
 /**
+ * What the visitor's verified Accounts sign-in vouches for: their id, the name on the account, and the email and phone
+ * only when the sign-in says Accounts verified them (`email_verified`, `phone_verified`). Nothing the visitor typed in
+ * the chat is in it, so a merchant's endpoint can trust it and an alert may go to it (SR-6-1, SR-6-3).
+ * @param {{ user: { id: string, name?: string, email?: string, phone?: string }, claims?: Readonly<Record<string, unknown>> } | null} signIn
+ * @returns {{ id: string, name?: string, email?: string, phone?: string } | null}
+ */
+export const verifiedIdentity = (signIn) => {
+	if (!signIn) return null;
+	const { user, claims = {} } = signIn;
+	return {
+		id: user.id,
+		...(user.name ? { name: user.name } : {}),
+		...(user.email && claims.email_verified === true ? { email: user.email } : {}),
+		...(user.phone && claims.phone_verified === true ? { phone: user.phone } : {}),
+	};
+};
+
+/**
  * What a guest at the limit is offered: sign in (signed-in chat on and a sign-in page), leave contact (lead capture
  * on), else nothing.
  * @param {{ signedInChat: boolean, signInUrl: string, leads: boolean }} input

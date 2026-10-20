@@ -118,7 +118,7 @@ export const TEXTS = dashboardTexts({
 			name: 'Name (lower-case letters, digits or _)',
 			description: 'What it does (the AI reads this)',
 			url: 'Address (https)',
-			includeVisitor: 'Send the signed-in visitor (id, email) with each call',
+			includeVisitor: 'Send the signed-in visitor (id, name, and email or phone only when verified) with each call',
 			parameters: 'Parameters',
 			addParameter: 'Add parameter',
 			parameter: 'Parameter name',

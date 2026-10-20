@@ -69,7 +69,7 @@ import {
 	shopRequest,
 	shopSchemas,
 } from '../core/shop.js';
-import { pendingStale } from '../core/conversation.js';
+import { pendingStale, verifiedIdentity } from '../core/conversation.js';
 import {
 	AI_MAX_OUTPUT_TOKENS,
 	AI_REPLIES_PER_NETWORK_PER_DAY,
@@ -540,10 +540,11 @@ export const createReply = (product, service) => {
 	 * The tools of a turn and how to run them, and the product cards the shop tools found.
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
-	 * @param {Visitor | null} visitor
+	 * @param {{ id: string, name?: string, email?: string, phone?: string } | null} identity what the verified sign-in
+	 *   vouches for (`verifiedIdentity`): never the contact details the visitor typed in the chat (SR-6-1)
 	 * @param {string | null} signIn the visitor's Accounts sign-in, verified on this request for this conversation's user
 	 */
-	const toolsOf = async (s, c, visitor, signIn) => {
+	const toolsOf = async (s, c, identity, signIn) => {
 		const booking = s.on.includes('book_slot') ? await s.values('book_slot') : null;
 		const bookingUrl = booking && isHttpsUrl(booking.bookingUrl) ? String(booking.bookingUrl) : null;
 		// the merchant's own questions and services (C10)
@@ -557,7 +558,6 @@ export const createReply = (product, service) => {
 			...shop,
 			...webhooks.map(webhookSchema),
 		];
-		const signedIn = visitor?.kind === 'user' ? { id: visitor.id, email: visitor.email } : null;
 		const withCards = s.on.includes('product_cards');
 		/** @type {import('../core/shop.js').ProductCard[]} */
 		const cards = [];
@@ -614,7 +614,7 @@ export const createReply = (product, service) => {
 				const checked = bookingAnswers(a, {
 					...asks,
 					needsContact: booking?.needsContact !== false,
-					signedInEmail: signedIn?.email ?? null,
+					signedInEmail: identity?.email ?? null,
 					callingCode: await phoneCodeOf(s),
 				});
 				if (!checked.ok) return { ok: false, content: askFor(checked.ask) };
@@ -635,7 +635,7 @@ export const createReply = (product, service) => {
 				tool: tool.name,
 				arguments: args.value,
 				conversationId: c.id,
-				...(tool.includeVisitor && signedIn ? { visitor: signedIn } : {}),
+				...(tool.includeVisitor && identity ? { visitor: identity } : {}),
 			});
 		};
 		return { schemas, execute, cards: () => [...cards], shop: shop.length > 0 };
@@ -882,9 +882,11 @@ export const createReply = (product, service) => {
 			markers,
 			latinFor: lock?.acceptLatinFor ?? [],
 		};
-		// the shop's sign-in tools only for the user whose sign-in Chat verified on this request
+		// the shop's sign-in tools, and who a merchant's tool or the booking endpoint is told the visitor is, only for the
+		// user whose sign-in Chat verified on this request (never the name, email or phone typed in the chat, SR-6-1)
 		const signIn = await s.signIn();
-		const verified = signIn && visitor && signIn.user.id === visitor.id ? signIn.token : null;
+		const ownSignIn = signIn && visitor && signIn.user.id === visitor.id ? signIn : null;
+		const verified = ownSignIn ? ownSignIn.token : null;
 		const settings = await s.values('ai_replies');
 		/** @type {{ text: string, failure: string | null, escalation: { reason: string } | null }} */
 		let result = { text: '', failure: 'unavailable', escalation: null };
@@ -892,7 +894,7 @@ export const createReply = (product, service) => {
 		let cards = [];
 		if (allowed && last) {
 			const botName = (await s.texts())['chat.botName'];
-			const tools = reassure ? null : await toolsOf(s, c, visitor, verified);
+			const tools = reassure ? null : await toolsOf(s, c, verifiedIdentity(ownSignIn), verified);
 			const system = buildSystemPrompt({
 				botName: String(botName),
 				business: await s.business(),
