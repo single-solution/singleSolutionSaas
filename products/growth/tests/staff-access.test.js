@@ -180,6 +180,25 @@ describe('custom scripts need their own permission, scripts.manage (SR-7-10)', (
 		expect(await readCategories()).toEqual(saved);
 	});
 
+	it('moving a script from one consent category to another (into an always-on one) is refused too', async () => {
+		const before = await readCategories();
+		const tracked = before.map((/** @type {any} */ c) =>
+			c.key === 'analytics' ? { ...c, scripts: '<script>track()</script>' } : c,
+		);
+		expect((await putCategories(scripter, tracked)).status).toBe(200);
+		const saved = await readCategories();
+		const moved = saved.map((/** @type {any} */ c) => {
+			if (c.key === 'analytics') return { ...c, scripts: '' };
+			return c.key === 'necessary' ? { ...c, scripts: '<script>track()</script>' } : c;
+		});
+		const refused = await putCategories(settingsOnly, moved);
+		expect([refused.status, await typeOf(refused)]).toEqual([403, 'forbidden']);
+		expect(await readCategories()).toEqual(saved);
+		// the same save from who holds the permission, and a rename or reorder without it, go through
+		expect((await putCategories(settingsOnly, [...saved].reverse())).status).toBe(200);
+		expect((await putCategories(scripter, moved)).status).toBe(200);
+	});
+
 	it('the dashboard of a Support admin cannot change them and is told the field is locked; the Owner can', async () => {
 		const path = `/v1/dashboard/websites/${env.websiteId}/lists/consent_categories`;
 		const support = await env.adminSession('support');

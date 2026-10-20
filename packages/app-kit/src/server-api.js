@@ -57,6 +57,8 @@ import { noContent, ok, paginate, problem } from './http/results.js';
  *   free) without it is 403 `forbidden` and nothing is saved; it is read like `allows` for a ticket and a verified staff
  *   sign-in, a dashboard session of the merchant or of an Owner admin has it, a Support admin has not. The list's read on
  *   the dashboard says `locked` (the fields the caller may not change), and the activity log names the changed fields.
+ * @property {string} [unique] the field no two entries share; with `fieldPermissions`, a value of a guarded field is kept by
+ *   the entry it is in, so moving it to another entry is a change too (the entries' order and other fields stay free)
  */
 
 /** Settings writes of the merchant's server per website (code constant). */
@@ -85,13 +87,21 @@ const SERVER = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
 
 /**
  * The values an entry field holds across a list, trimmed, empty ones left out, in a fixed order (so only an added, edited
- * or removed value is a change).
+ * or removed value is a change). With the list's `unique` field each value is kept by the entry it is in
+ * (`<unique value>\n<value>`), so moving a value to another entry is a change too.
  * @param {unknown} list
  * @param {string} field
+ * @param {string} [unique] the field no two entries share
  */
-const valuesOf = (list, field) =>
+const valuesOf = (list, field, unique) =>
 	(Array.isArray(list) ? list : [])
-		.map((entry) => (isObject(entry) && typeof entry[field] === 'string' ? entry[field].trim() : ''))
+		.map((entry) => {
+			if (!isObject(entry) || typeof entry[field] !== 'string') return '';
+			const value = entry[field].trim();
+			if (value === '' || !unique) return value;
+			const owner = typeof entry[unique] === 'string' ? entry[unique].trim() : '';
+			return `${owner}\n${value}`;
+		})
 		.filter((text) => text !== '')
 		.sort();
 
@@ -235,7 +245,9 @@ export const createServerApi = (kit, lists) => {
 		if (guarded.length === 0) return [];
 		const before = await definition.get(website(ctx));
 		const changed = guarded.filter(
-			([field]) => JSON.stringify(valuesOf(before, field)) !== JSON.stringify(valuesOf(sent, field)),
+			([field]) =>
+				JSON.stringify(valuesOf(before, field, definition.unique)) !==
+				JSON.stringify(valuesOf(sent, field, definition.unique)),
 		);
 		const refused = changed.find(([, permission]) => !mayChange(ctx, permission));
 		if (refused)

@@ -36,8 +36,11 @@ const memoryLists = () => {
 	};
 };
 
-/** A list whose `code` field needs one more permission (a field that runs code), kept in memory. */
-const guardedLists = () => {
+/**
+ * A list whose `code` field needs one more permission (a field that runs code), kept in memory.
+ * @param {string} [unique] the field no two entries share (a value of `code` is then kept by the entry it is in)
+ */
+const guardedLists = (unique) => {
 	/** @type {Map<string, unknown>} */
 	const saved = new Map();
 	return {
@@ -45,6 +48,7 @@ const guardedLists = () => {
 			feature: 'inbox',
 			title: 'Rules',
 			fieldPermissions: { code: 'code.manage' },
+			...(unique ? { unique } : {}),
 			get: async (/** @type {string} */ websiteId) => saved.get(websiteId) ?? [],
 			save: async (/** @type {string} */ websiteId, /** @type {unknown} */ value) => {
 				if (!Array.isArray(value)) return { ok: /** @type {const} */ (false), errors: ['The list is an array.'] };
@@ -353,6 +357,78 @@ describe('settings API for the merchant’s server (K1)', () => {
 			['user', 'Rule Maker', 'changed'],
 			['user', 'Rule Maker', 'changed (code)'],
 			['user', 'Rule Maker', 'changed'],
+		]);
+	});
+
+	it('moving a piece of code to another entry is a change of the code when the list names its unique field (SR-7-10)', async () => {
+		const { call, server, switchOn, connectDatabase, clock } = await setup({ lists: guardedLists('key') });
+		await switchOn(['notes', 'inbox']);
+		await connectDatabase();
+		const put = (/** @type {string[]} */ permissions, /** @type {unknown} */ value) =>
+			call('PUT', '/v1/lists/rules', {
+				token: server.token,
+				staff: { id: 'usr_rule', name: 'Rule Maker', permissions },
+				body: { value },
+			});
+		const settingsOnly = ['notes:settings.manage'];
+		const both = ['notes:settings.manage', 'notes:code.manage'];
+		clock.advance(1000);
+		const x = '<script>x()</script>';
+		const y = '<script>y()</script>';
+		expect(
+			(
+				await put(both, [
+					{ key: 'a', name: 'A', code: x },
+					{ key: 'b', name: 'B' },
+				])
+			).status,
+		).toBe(200);
+		// the same code in another entry, or two codes swapped, is not the same save: refused, nothing changes
+		clock.advance(1000);
+		for (const value of [
+			[
+				{ key: 'a', name: 'A' },
+				{ key: 'b', name: 'B', code: x },
+			],
+			[
+				{ key: 'a', name: 'A' },
+				{ key: 'b', name: 'B', code: x },
+				{ key: 'c', name: 'C' },
+			],
+		]) {
+			const moved = await put(settingsOnly, value);
+			expect([JSON.stringify(value), moved.status]).toEqual([JSON.stringify(value), 403]);
+		}
+		expect(
+			(
+				await put(both, [
+					{ key: 'a', name: 'A', code: x },
+					{ key: 'b', name: 'B', code: y },
+				])
+			).status,
+		).toBe(200);
+		const swapped = await put(settingsOnly, [
+			{ key: 'a', name: 'A', code: y },
+			{ key: 'b', name: 'B', code: x },
+		]);
+		expect(swapped.status).toBe(403);
+		// renaming and reordering the entries stays free
+		expect(
+			(
+				await put(settingsOnly, [
+					{ key: 'b', name: 'Bee', code: y },
+					{ key: 'a', name: 'Aye', code: x },
+				])
+			).status,
+		).toBe(200);
+		expect(
+			(await body(await call('GET', '/v1/lists/rules', { token: server.token }))).json.value.map((/** @type {any} */ e) => [
+				e.key,
+				e.code,
+			]),
+		).toEqual([
+			['b', y],
+			['a', x],
 		]);
 	});
 
