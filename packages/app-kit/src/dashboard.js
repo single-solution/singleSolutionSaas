@@ -2,8 +2,9 @@
  * The product dashboard (PLAN 0.4.3): sessions from Portal launches, the website switcher, rights per role and the
  * dashboard API every product's `app/` pages call.
  *
- * - `GET /sso?launch=` verifies the launch (single use here and at the Portal), creates the `ss_session` cookie
- *   (HttpOnly, Secure, SameSite=Lax, host-only) ending at the launch's `sessionExpiresAt`, and redirects to the
+ * - `GET /sso?launch=` verifies the launch (single use here and at the Portal), creates the `__Host-ss_session` cookie
+ *   (HttpOnly, Secure, SameSite=Lax, Path=/, host-only; the `__Host-` prefix makes a browser refuse one set any other
+ *   way, so a sibling subdomain cannot plant it) ending at the launch's `sessionExpiresAt`, and redirects to the
  *   dashboard: `<dashboard>?websiteId=<id>`, or `<dashboard>?view=defaults` for an admin launch without a website.
  * - Merchants reach only the websites of their launch; admins any website that has this product (not removed).
  * - Rights: features on/off → Owner or Support; prices, global defaults and Re-seal (stored secrets sealed again with
@@ -36,8 +37,8 @@ import { effectiveStatus } from './status.js';
  * @property {number} expiresAt epoch ms
  */
 
-/** Name of the dashboard session cookie. */
-const SESSION_COOKIE = 'ss_session';
+/** Name of the dashboard session cookie (the `__Host-` prefix: Secure, Path=/ and no Domain, or a browser drops it). */
+const SESSION_COOKIE = '__Host-ss_session';
 /** A widget counts as installed when it was seen within this time. */
 export const WIDGET_SEEN_MS = 7 * 24 * 60 * 60_000;
 const SWITCHER_PAGES = 50;
