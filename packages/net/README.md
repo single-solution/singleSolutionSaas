@@ -179,6 +179,12 @@ The caller's IP address as the hosting layer saw it, for per-visitor limits and 
 hosting platform sets it itself), else the LAST `X-Forwarded-For` hop (the one our own proxy appended; the first values
 are whatever the caller wrote), else `null`. A value that is not an IP address is never used.
 
+### `createLocalWindows({ maxEntries = 10000 }?) → { hit(key, windowMs, now) → { count, resetAt } }`
+
+Fixed-window rate-limit counters in this instance's memory, the same windows the shared stores keep. The Portal and the
+kit count with them while their shared limit store fails, so a limit never switches off with the store (it only becomes
+per instance). At most `maxEntries` counters are kept: expired ones go first, then the least recently hit.
+
 ### `signV4(params) → headers` / `presignV4(params) → url`
 
 ```js

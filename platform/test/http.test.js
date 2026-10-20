@@ -399,14 +399,22 @@ describe('request pipeline', () => {
 		expect(real).toEqual([200, 200, 429]);
 	});
 
-	it('allows requests when the rate-limit store fails', async () => {
-		const { call, entries } = build(
+	it('keeps the limit when the rate-limit store fails: it counts on the instance itself instead of letting requests through (SR-2-9)', async () => {
+		const { call, entries, clock } = build(
 			[{ method: 'GET', path: '/v1/x', auth: 'public', rateLimit: { limit: 1, windowMs: 1000 }, handler: () => ({}) }],
 			{
 				rateLimits: { hit: async () => Promise.reject(new Error('down')) },
 			},
 		);
-		expect((await call('GET', '/v1/x')).status).toBe(200);
+		const mine = { 'x-forwarded-for': '198.51.100.1' };
+		expect((await call('GET', '/v1/x', { headers: mine })).status).toBe(200);
+		const refused = await call('GET', '/v1/x', { headers: mine });
+		expect(refused.status).toBe(429);
+		expect(Number(refused.headers.get('retry-after'))).toBeGreaterThan(0);
+		// another address has its own count; the next window counts afresh
+		expect((await call('GET', '/v1/x', { headers: { 'x-forwarded-for': '198.51.100.2' } })).status).toBe(200);
+		clock.advance(1000);
+		expect((await call('GET', '/v1/x', { headers: mine })).status).toBe(200);
 		expect(entries.some((e) => e.level === 'warn')).toBe(true);
 	});
 

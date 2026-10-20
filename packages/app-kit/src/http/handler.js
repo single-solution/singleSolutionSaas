@@ -41,7 +41,7 @@ import {
 	verifyToken,
 } from '@ss/protocol';
 import { createId } from '@ss/contracts';
-import { clientIpOf } from '@ss/net';
+import { clientIpOf, createLocalWindows } from '@ss/net';
 import { KIT_PERMISSIONS, SIGN_IN_DETAIL, checkStaff } from '../staff.js';
 import { isDatabaseUnavailable } from '../data.js';
 import { requestSignIn, requestStaffSignIn } from '../identity.js';
@@ -233,6 +233,8 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 
 	/** @type {Map<string, number>} */
 	const lastWrites = new Map();
+	// the limits' counters of this instance, used only while the shared rate store fails (SR-1-2)
+	const localWindows = createLocalWindows();
 
 	/**
 	 * The website's database, asking the Portal for it once when this product holds none yet (a website just connected, or
@@ -649,15 +651,20 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 			for (const limit of ordered) {
 				const per = perOf(limit);
 				const subject = per === 'website' && ctx.websiteId ? `w:${ctx.websiteId}` : `ip:${ctx.clientIp}`;
+				const windowMs = limit.windowSeconds * 1000;
+				const key = `${limit.bucket ?? r.id}|${per}|${subject}`;
+				/** @type {{ count: number, resetAt: number }} */
+				let window;
 				try {
-					const windowMs = limit.windowSeconds * 1000;
-					const { count, resetAt } = await store.hit(`${limit.bucket ?? r.id}|${per}|${subject}`, windowMs, now());
-					if (count > limit.limit) {
-						extra['retry-after'] = String(Math.max(1, Math.ceil((resetAt - now()) / 1000)));
-						return fail(problem('rate_limited', 'Too many requests.'));
-					}
+					window = await store.hit(key, windowMs, now());
 				} catch (error) {
-					log.warn('rate limit store failed; allowing the request', { error });
+					// never allow without counting: the same limit, counted by this instance alone
+					log.warn('rate limit store failed; counting on this instance', { error });
+					window = localWindows.hit(key, windowMs, now());
+				}
+				if (window.count > limit.limit) {
+					extra['retry-after'] = String(Math.max(1, Math.ceil((window.resetAt - now()) / 1000)));
+					return fail(problem('rate_limited', 'Too many requests.'));
 				}
 			}
 

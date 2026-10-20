@@ -20,7 +20,7 @@
  */
 import { createId } from '@ss/contracts';
 import { checkCsrf } from './auth.js';
-import { clientIpOf, isDatabaseUnavailable } from '@ss/net';
+import { clientIpOf, createLocalWindows, isDatabaseUnavailable } from '@ss/net';
 import { runInRequestScope } from './request-scope.js';
 import { isObject } from '@ss/contracts/util';
 import { hmacSha256Hex, sha256Hex } from '@ss/protocol';
@@ -463,6 +463,8 @@ export const createApiHandler = ({
 		throw new TypeError('idempotencySecret (at least 32 bytes) is required for request fingerprints');
 	const fingerprintKey = Buffer.from(idempotencySecret);
 	const compiled = compileRoutes(routes);
+	// the limits' counters of this instance, used only while the shared rate store fails (SR-2-9)
+	const localWindows = createLocalWindows();
 	for (const route of compiled) {
 		for (const mode of route.modes) {
 			if (mode !== 'public' && !authenticators[mode]) throw new TypeError(`no authenticator for ${mode} (${route.id})`);
@@ -654,18 +656,23 @@ export const createApiHandler = ({
 			// rate limit
 			if (route.rateLimit) {
 				const subject = actor ? `${actor.type}:${actor.id}` : `ip:${ip ?? 'unknown'}`;
+				const key = `${route.id}|${subject}`;
+				/** @type {{ count: number, resetAt: number }} */
+				let window;
 				try {
-					const { count, resetAt } = await rateLimits.hit(`${route.id}|${subject}`, route.rateLimit.windowMs, now());
-					const reset = Math.max(0, Math.ceil((resetAt - now()) / 1000));
-					extra['ratelimit-limit'] = String(route.rateLimit.limit);
-					extra['ratelimit-remaining'] = String(Math.max(0, route.rateLimit.limit - count));
-					extra['ratelimit-reset'] = String(reset);
-					if (count > route.rateLimit.limit) {
-						extra['retry-after'] = String(Math.max(1, reset));
-						return fail(problem('rate_limited', 'Too many requests.'));
-					}
+					window = await rateLimits.hit(key, route.rateLimit.windowMs, now());
 				} catch (error) {
-					log.warn('rate limit store failed; allowing request', { error });
+					// never allow without counting: the same limit, counted by this instance alone
+					log.warn('rate limit store failed; counting on this instance', { error });
+					window = localWindows.hit(key, route.rateLimit.windowMs, now());
+				}
+				const reset = Math.max(0, Math.ceil((window.resetAt - now()) / 1000));
+				extra['ratelimit-limit'] = String(route.rateLimit.limit);
+				extra['ratelimit-remaining'] = String(Math.max(0, route.rateLimit.limit - window.count));
+				extra['ratelimit-reset'] = String(reset);
+				if (window.count > route.rateLimit.limit) {
+					extra['retry-after'] = String(Math.max(1, reset));
+					return fail(problem('rate_limited', 'Too many requests.'));
 				}
 			}
 

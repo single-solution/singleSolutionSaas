@@ -12,6 +12,7 @@ export { DATABASE_DEADLINES, connectBeforeUse, databaseClientOptions, isDatabase
 export { createLogger, noopLogger, redact } from './logger.js';
 export { staticSecurityHeaders } from './headers.js';
 export { clientIpOf } from './client-ip.js';
+export { createLocalWindows } from './windows.js';
 export { objectUrl, presignV4, signV4 } from './sigv4.js';
 
 /** @typedef {import('./policy.js').OutboundPolicy} OutboundPolicy */

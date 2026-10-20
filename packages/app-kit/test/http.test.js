@@ -274,19 +274,46 @@ describe('handler results and the Next.js adapter', () => {
 		expect(statusCalls()).toBe(before + 1);
 	});
 
-	it('runs after-response work detached without a scheduler and fails open when the rate store fails', async () => {
+	it('runs after-response work detached without a scheduler', async () => {
 		const ctx = await setup();
-		const broken = { ...createMemoryStore(), hit: async () => Promise.reject(new Error('down')) };
 		const plain = ctx.product.handler([
 			defineRoute({ method: 'GET', path: '/x', auth: 'none', rateLimit: { limit: 1, windowSeconds: 60 }, handler }),
 		]);
 		expect((await plain(new Request(`${BASE}/x`))).status).toBe(200);
+	});
+
+	it('keeps every limit when the rate store fails: it counts on the instance itself instead of letting requests through (SR-1-2)', async () => {
+		const broken = { ...createMemoryStore(), hit: async () => Promise.reject(new Error('down')) };
 		const other = await setup({
 			store: broken,
-			routes: [defineRoute({ method: 'GET', path: '/x', auth: 'none', rateLimit: { limit: 1, windowSeconds: 60 }, handler })],
+			routes: [
+				defineRoute({ method: 'GET', path: '/x', auth: 'none', rateLimit: { limit: 2, windowSeconds: 60 }, handler }),
+				defineRoute({
+					method: 'GET',
+					path: '/y',
+					auth: 'none',
+					rateLimit: [
+						{ limit: 1, windowSeconds: 60, per: 'visitor' },
+						{ limit: 3, windowSeconds: 60, per: 'visitor', bucket: 'y-more' },
+					],
+					handler,
+				}),
+			],
 		});
-		expect((await other.call('GET', '/x')).status).toBe(200);
-		expect((await other.call('GET', '/x')).status).toBe(200);
+		/** @param {string} path @param {string} ip */
+		const get = async (path, ip) => (await other.call('GET', path, { headers: { 'x-forwarded-for': ip } })).status;
+		expect([await get('/x', '198.51.100.1'), await get('/x', '198.51.100.1'), await get('/x', '198.51.100.1')]).toEqual([
+			200, 200, 429,
+		]);
+		const limited = await other.call('GET', '/x', { headers: { 'x-forwarded-for': '198.51.100.1' } });
+		expect(Number(limited.headers.get('retry-after'))).toBeGreaterThan(0);
+		// the same limits, per visitor: another address has its own count
+		expect(await get('/x', '198.51.100.2')).toBe(200);
+		expect([await get('/y', '198.51.100.3'), await get('/y', '198.51.100.3')]).toEqual([200, 429]);
+		expect(other.entries.some((entry) => entry.level === 'warn' && /rate limit store failed/.test(entry.msg))).toBe(true);
+		// a new window counts afresh
+		other.clock.advance(61_000);
+		expect(await get('/x', '198.51.100.1')).toBe(200);
 	});
 });
 
