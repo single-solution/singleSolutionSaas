@@ -148,7 +148,8 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 	});
 	/** @type {Array<() => Promise<unknown>>} */
 	const tasks = [];
-	const handler = product.handler(createRoutes(product), { after: (task) => tasks.push(task) });
+	const routes = createRoutes(product);
+	const handler = product.handler(routes, { after: (task) => tasks.push(task) });
 	handlers[BASE] = handler;
 	await portal.connect({ handler, baseUrl: BASE, secret: SECRET });
 	const websiteId = portal.addWebsite({ domain: DOMAIN });
@@ -408,6 +409,8 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 	return {
 		portal,
 		accounts,
+		/** The product's routes (to look at what each one declares). */
+		routes,
 		staffHeaders,
 		product,
 		calls,
