@@ -48,21 +48,21 @@ describe('a claim refund that covers the payments (H1)', () => {
 			const returnsOnly = await shop.ticket(['returns.manage', 'orders.read']);
 			/** @param {string} ticket @param {Record<string, unknown>} body */
 			const refund = (ticket, body) => shop.admin(ticket, 'POST', `/v1/admin/returns/${claimId}/refund`, body);
-			// the whole payment would move the order to refunded: refused before Payments is asked
+			// money back needs the refund permission, a part or the whole (SR-5b-6): refused before Payments is asked
 			const refused = await refund(returnsOnly, { amount: 1000 });
 			expect(refused.status).toBe(403);
+			expect((await refund(returnsOnly, { amount: 400 })).status).toBe(403);
 			expect(records.refundCalls(paymentId)).toHaveLength(0);
 			expect(await records.recordOf(order.id)).toMatchObject({ status: 'delivered', payment: { refunded: 0 }, refunds: [] });
 			expect(await records.claimOf(claimId)).toMatchObject({ status: 'approved', refundAmount: 0 });
 			expect(await balanceOf()).toBe(start);
-			// a part that leaves the order where it is needs only the claims permission
-			const part = await refund(returnsOnly, { amount: 400 });
+			// staff who may refund: a part that leaves the order where it is, then the rest, which moves the order to refunded
+			// (the move into it needs the refund permission too), its points taken back once
+			const refunder = await shop.ticket(['returns.manage', 'orders.read', 'orders.refund']);
+			const part = await refund(refunder, { amount: 400 });
 			expect(part.status).toBe(200);
 			expect(part.json).toMatchObject({ status: 'refunded', refundAmount: 400 });
 			expect(await balanceOf()).toBe(start - 20);
-			expect((await refund(returnsOnly, { amount: 600 })).status).toBe(403);
-			// the rest, by staff who may also refund orders: the order moves to refunded, its points taken back once
-			const refunder = await shop.ticket(['returns.manage', 'orders.read', 'orders.refund']);
 			const rest = await refund(refunder, { amount: 600 });
 			expect(rest.status).toBe(200);
 			expect(rest.json).toMatchObject({ status: 'refunded', refundAmount: 1000 });
@@ -208,5 +208,43 @@ describe('the same rules on the server routes (SR-5b-1)', () => {
 			to: 'packed',
 		});
 		expect(allowed.json.moved).toBe(1);
+	});
+});
+
+describe('a refund on a return needs orders.refund as well (SR-5b-6)', () => {
+	/** @param {string[]} keys @param {string} claimId @param {unknown} body */
+	const asStaff = (keys, claimId, body) =>
+		shop.call('POST', `/v1/returns/${claimId}/refund`, {
+			token: shop.server,
+			staff: { permissions: keys.map((key) => `ecommerce:${key}`) },
+			body,
+		});
+
+	it('a returns agent without it is refused before any money moves, by sign-in and by ticket', async () => {
+		const { order, paymentId, claimId } = await records.seedClaimed();
+		const start = await balanceOf();
+		expect((await asStaff(['returns.manage', 'orders.read'], claimId, { amount: 400 })).status).toBe(403);
+		const agent = await shop.ticket(['returns.manage', 'orders.read']);
+		expect((await shop.admin(agent, 'POST', `/v1/admin/returns/${claimId}/refund`, { amount: 400 })).status).toBe(403);
+		expect(records.refundCalls(paymentId)).toHaveLength(0);
+		expect(await records.recordOf(order.id)).toMatchObject({ payment: { refunded: 0 }, refunds: [] });
+		expect(await records.claimOf(claimId)).toMatchObject({ status: 'approved', refundAmount: 0 });
+		expect(await balanceOf()).toBe(start);
+		// with the refund permission the money goes back
+		const done = await asStaff(['returns.manage', 'orders.refund'], claimId, { amount: 400 });
+		expect(done.status).toBe(200);
+		expect(done.json).toMatchObject({ status: 'refunded', refundAmount: 400 });
+		expect(records.refundCalls(paymentId)).toHaveLength(1);
+	});
+
+	it('a part that leaves the order where it is still needs the refund permission, and a covering one the move’s too', async () => {
+		await withFlow(covered, async () => {
+			const { order, paymentId, claimId } = await records.seedClaimed();
+			const refunder = ['returns.manage', 'orders.refund'];
+			expect((await asStaff(refunder, claimId, { amount: 400 })).status).toBe(200);
+			expect((await asStaff(refunder, claimId, { amount: 600 })).status).toBe(200);
+			expect(await records.recordOf(order.id)).toMatchObject({ status: 'refunded', payment: { refunded: 1000 } });
+			expect(records.refundCalls(paymentId)).toHaveLength(2);
+		});
 	});
 });

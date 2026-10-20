@@ -832,6 +832,29 @@ describe('merchant claim kinds and statuses (E18)', () => {
 		expect(mine.json.items.find((/** @type {any} */ c) => c.id === id)).toMatchObject({ creditAmount: 2000 });
 	});
 
+	it('store credit also needs orders.refund: a returns agent without it is refused, by ticket or sign-in (SR-5b-6)', async () => {
+		await shop.list('claim_kinds', [
+			{ key: 'return', label: 'Return', window: 'return', outcomes: ['refund', 'store_credit'], shoppers: true },
+		]);
+		const item = await shop.seedProduct({ name: 'Kettle', price: 2000 });
+		const placed = await order({ lines: [{ product: item }] });
+		const made = await claim(placed, {});
+		await shop.api('POST', `/v1/returns/${made.json.id}/approve`, {});
+		const path = `/v1/returns/${made.json.id}/credit`;
+		/** @param {string[]} keys */
+		const as = (keys) =>
+			shop.call('POST', path, {
+				token: shop.server,
+				staff: { permissions: keys.map((key) => `ecommerce:${key}`) },
+				body: { amount: 100 },
+			});
+		expect((await as(['returns.manage'])).status).toBe(403);
+		const agent = await shop.ticket(['returns.manage', 'orders.read']);
+		expect((await shop.admin(agent, 'POST', `/v1/admin${path.slice(3)}`, { amount: 100 })).status).toBe(403);
+		expect((await orderOf(placed.id)).lines[0].returnedQuantity ?? 0).toBe(0);
+		expect((await as(['returns.manage', 'orders.refund'])).status).toBe(200);
+	});
+
 	it('refuses store credit while Coupons is off', async () => {
 		await shop.list('claim_kinds', [
 			{ key: 'return', label: 'Return', window: 'return', outcomes: ['store_credit'], shoppers: true },

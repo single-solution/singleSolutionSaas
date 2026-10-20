@@ -21,7 +21,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { createId } from '@ss/contracts';
-import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
+import { allows as staffAllows, countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
 import { categoriesOf } from '../adapters/catalog-store.js';
 import { applyTransition, isPointsChanged, restockClaimLines } from '../adapters/ledger.js';
 import { userIdsOf } from '../adapters/extras-store.js';
@@ -103,6 +103,16 @@ const NOT_RETURNABLE = Object.freeze({
 	quantity: 'More units than can still be claimed.',
 	step: 'This item is sold in a unit of its own: claim it in the steps it was sold in.',
 });
+
+/**
+ * Money going back on a claim (a refund, store credit) also needs the refund permission of the orders, as the order's own
+ * refund does: `returns.manage` alone handles claims, not money (SR-5b-6). A ticket and a staff sign-in are read alike.
+ * @param {any} ctx @param {string} what what is refused without it
+ */
+const givesMoneyBack = (ctx, what) => {
+	if (!staffAllows(ctx, 'orders.refund'))
+		throw problem('forbidden', `${what} gives money back, so it also needs the refund permission.`);
+};
 
 /** @param {Date | null | undefined} at */
 const iso = (at) => (at ? new Date(at).toISOString() : null);
@@ -756,6 +766,7 @@ export const createReturns = (product, service) => {
 	 * @param {any} ctx
 	 */
 	const refund = async (ctx) => {
+		givesMoneyBack(ctx, 'Refunding a return');
 		const s = await service.site(ctx);
 		const data = await s.data();
 		const claim = await claimOf(data, ctx.params.id);
@@ -942,6 +953,7 @@ export const createReturns = (product, service) => {
 	 * @param {any} ctx
 	 */
 	const credit = async (ctx) => {
+		givesMoneyBack(ctx, 'Giving store credit on a return');
 		const s = await service.site(ctx);
 		const data = await s.data();
 		const claim = await claimOf(data, ctx.params.id);
