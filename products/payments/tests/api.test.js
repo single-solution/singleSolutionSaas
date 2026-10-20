@@ -689,6 +689,82 @@ describe('the other gateways', () => {
 		expect(await state()).toMatchObject({ status: 'paid', amount: 250000, currency: 'PKR' });
 	});
 
+	it('a second paid notice for a payment that is already paid is recorded, flagged and told, never ignored (SR-3-4)', async () => {
+		stripeAnswers();
+		const duplicateEvents = () => events.filter((e) => e.type === 'payments.payment.duplicate');
+		const read = async (/** @type {string} */ id) => (await env.api('GET', `/v1/payments/${id}`)).json;
+		const marks = (/** @type {any} */ payment) =>
+			payment.history.filter((/** @type {any} */ e) => e.event === 'duplicate_payment');
+		const payment = await createPayment({ gateway: 'stripe' });
+		await page(`/pay/${env.websiteId}/${payment.id}`);
+		await stripePaid(payment.id, 250000);
+		const first = await read(payment.id);
+		expect(first).toMatchObject({ status: 'paid', duplicatePayment: false });
+		// the same payment told again (Stripe sends notices twice) is not a second payment
+		await stripePaid(payment.id, 250000);
+		expect(await read(payment.id)).toMatchObject({ duplicatePayment: false });
+		expect(duplicateEvents()).toHaveLength(0);
+		// money for the same payment from another capture is: history entry, flag and event; the payment stays paid
+		const another = () =>
+			stripeHook({
+				type: 'checkout.session.completed',
+				data: {
+					object: {
+						id: `cs2_${payment.id}`,
+						client_reference_id: payment.id,
+						payment_status: 'paid',
+						amount_total: 250000,
+						currency: 'usd',
+						payment_intent: `pi2_${payment.id}`,
+					},
+				},
+			});
+		await another();
+		const second = await read(payment.id);
+		expect(second).toMatchObject({ status: 'paid', duplicatePayment: true, paidAt: first.paidAt, refundDue: false });
+		expect(marks(second)).toEqual([expect.objectContaining({ detail: `stripe pi2_${payment.id}` })]);
+		expect(duplicateEvents()).toHaveLength(1);
+		expect(duplicateEvents()[0]).toMatchObject({ data: { payment: { id: payment.id, duplicatePayment: true } } });
+		expect((await env.api('GET', '/v1/events?types=payments.payment.duplicate')).json.items).toHaveLength(1);
+		// the same second payment told again is recorded once
+		await another();
+		expect(marks(await read(payment.id))).toHaveLength(1);
+		expect(duplicateEvents()).toHaveLength(1);
+	});
+
+	it('money that arrives through another gateway after a payment was paid is a duplicate too (SR-3-4)', async () => {
+		env.gateways.respond('https://ipg1.apps.net.pk', (c) =>
+			c.path === '/Ecommerce/api/Transaction/GetAccessToken' ? { status: 200, body: { ACCESS_TOKEN: 'tok' } } : undefined,
+		);
+		stripeAnswers();
+		await env.connect('payfast_pk', PAYFAST_PK);
+		const payment = await createPayment({ gateway: 'payfast_pk', currency: 'PKR' });
+		await page(`/pay/${env.websiteId}/${payment.id}`);
+		/** PayFast's signed answer. @param {string} code */
+		const signed = (code) =>
+			new URLSearchParams({
+				basket_id: payment.id,
+				err_code: code,
+				transaction_id: 'T-9',
+				transaction_amount: '2500',
+				validation_hash: validationHash(payment.id, code, PAYFAST_PK),
+			}).toString();
+		// the payer leaves PayFast, tries Stripe and pays there
+		await page(`/return/payfast_pk/${env.websiteId}/${payment.id}?${signed('002')}`);
+		await env.call('POST', `/pay/${env.websiteId}/${payment.id}`, { form: { retry: '1' } });
+		await env.call('POST', `/pay/${env.websiteId}/${payment.id}`, { form: { gateway: 'stripe' } });
+		await stripePaid(payment.id, 250000, 'pkr');
+		const paid = (await env.api('GET', `/v1/payments/${payment.id}`)).json;
+		expect(paid).toMatchObject({ status: 'paid', gateway: 'stripe', duplicatePayment: false });
+		// ... and had also paid on PayFast
+		await env.call('GET', `/v1/gateways/payfast_pk/${env.websiteId}?${signed('000')}`);
+		const after = (await env.api('GET', `/v1/payments/${payment.id}`)).json;
+		expect(after).toMatchObject({ status: 'paid', gateway: 'stripe', duplicatePayment: true, paidAt: paid.paidAt });
+		expect(after.history.find((/** @type {any} */ e) => e.event === 'duplicate_payment')).toMatchObject({
+			detail: 'payfast_pk T-9',
+		});
+	});
+
 	it('Rapid Gateway: payment created at Rapid, redirect, confirmed by the signed webhook only', async () => {
 		env.gateways.respond('https://api.rapidgateway.pk', (c) => {
 			const sent = JSON.parse(c.body);

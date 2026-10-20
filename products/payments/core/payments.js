@@ -35,6 +35,7 @@ export const EVENT_TYPES = Object.freeze(
 		'payment.failed',
 		'payment.refunded',
 		'payment.proof_uploaded',
+		'payment.duplicate',
 		'subscription.updated',
 	]),
 );
@@ -382,6 +383,13 @@ export const isRefundDue = (payment) =>
 	Boolean(payment.voidedAt) && (payment.status === 'paid' || payment.status === 'partially_refunded');
 
 /**
+ * Whether money arrived a second time for a payment that was already paid (through another gateway or capture,
+ * SR-3-4): the payment's history says so, and the extra money is to be refunded.
+ * @param {{ history: Array<{ event: string }> }} payment
+ */
+export const isDuplicatePaid = (payment) => payment.history.some((entry) => entry.event === 'duplicate_payment');
+
+/**
  * Whether a payment is confirmed for the exact amount and currency (PLAN 0.3: Ecommerce marks an order paid only for
  * the same website and the order's exact amount). A payment refunded in full no longer confirms (SR-3-9), and one
  * refunded in part still does: the verify answer carries `refunded`, so the caller decides what part is acceptable. One
@@ -408,6 +416,7 @@ export const paymentView = (payment, checkoutUrl) => ({
 	id: payment.id,
 	status: payment.status,
 	refundDue: isRefundDue(payment),
+	duplicatePayment: isDuplicatePaid(payment),
 	amount: payment.amount,
 	currency: payment.currency,
 	amountText: toDecimal(payment.amount, payment.currency),

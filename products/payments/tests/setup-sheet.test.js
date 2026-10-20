@@ -47,6 +47,7 @@ describe('the website Setup sheet', () => {
 			'payments.payment.failed',
 			'payments.payment.refunded',
 			'payments.payment.proof_uploaded',
+			'payments.payment.duplicate',
 			'payments.subscription.updated',
 		]);
 		expect(off.summaries).toEqual([

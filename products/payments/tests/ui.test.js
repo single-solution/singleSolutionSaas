@@ -593,6 +593,28 @@ describe('Payments admin widget', () => {
 		expect(button(host, strings['admin.refund'])).toBeTruthy();
 	});
 
+	it('flags a payment that was paid twice, in its heading and in the list (SR-3-4)', async () => {
+		const host = place('payments_admin');
+		const twice = { ...PAYMENT, id: 'pay_8', status: 'paid', duplicatePayment: true };
+		const client = adminApi({
+			'GET /v1/admin/payments': () => answer(200, { items: [twice], nextCursor: null, hasMore: false }),
+			'GET /v1/admin/payments/pay_8': () => answer(200, twice),
+		});
+		mountPaymentsAdmin({
+			host,
+			api: client,
+			config: configOf(['payment_api', 'refunds', 'manual_payments']),
+			save: vi.fn(),
+			open: vi.fn(),
+		});
+		await flush();
+		expect([...(host.shadowRoot?.querySelectorAll('.detail-pane .badge') ?? [])].map((b) => b.textContent)).toEqual([
+			strings['status.paid'],
+			strings['admin.duplicatePayment'],
+		]);
+		expect(rows(host)[0]?.textContent).toContain(strings['admin.duplicatePayment']);
+	});
+
 	it('says when confirming fails, the list is empty or cannot load, and when signed out', async () => {
 		const pending = { ...PAYMENT, id: 'pay_6', status: 'pending', proof: null };
 		const host = place('payments_admin');

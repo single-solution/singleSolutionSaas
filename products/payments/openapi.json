@@ -5767,6 +5767,7 @@
 					"id",
 					"status",
 					"refundDue",
+					"duplicatePayment",
 					"amount",
 					"currency",
 					"amountText",
@@ -5814,6 +5815,10 @@
 					"refundDue": {
 						"type": "boolean",
 						"description": "Money arrived after you canceled it: refund it."
+					},
+					"duplicatePayment": {
+						"type": "boolean",
+						"description": "Money arrived a second time for this payment, through another gateway or capture: refund the extra money. The history says which (event duplicate_payment); payments.payment.duplicate tells it once."
 					},
 					"amount": {
 						"type": "integer",
@@ -6031,6 +6036,7 @@
 										"stopped",
 										"not_stopped",
 										"refund_due",
+										"duplicate_payment",
 										"refunded",
 										"proof"
 									]
@@ -6176,6 +6182,7 @@
 							"payments.payment.failed",
 							"payments.payment.refunded",
 							"payments.payment.proof_uploaded",
+							"payments.payment.duplicate",
 							"payments.subscription.updated",
 							"payments.settings.changed"
 						],

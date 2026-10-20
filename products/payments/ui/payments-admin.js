@@ -262,6 +262,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 				const heading = element(doc, 'h3', {}, money(payment.amount, payment.currency));
 				heading.append(badge(doc, t(`status.${payment.status}`), TONES[payment.status]));
 				if (payment.refundDue) heading.append(badge(doc, t('admin.refundDue'), 'danger'));
+				if (payment.duplicatePayment) heading.append(badge(doc, t('admin.duplicatePayment'), 'danger'));
 				const top = element(doc, 'div', { class: 'head' });
 				top.append(heading, actions);
 				const customer = payment.customer ?? {};
@@ -351,6 +352,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 					[
 						t(`status.${payment.status}`),
 						payment.refundDue ? t('admin.refundDue') : '',
+						payment.duplicatePayment ? t('admin.duplicatePayment') : '',
 						date(payment.createdAt),
 						gatewayName(payment.gateway, payment.methodName),
 						payment.customer?.email ?? '',

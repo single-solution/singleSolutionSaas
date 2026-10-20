@@ -93,6 +93,7 @@
 	"admin.refunds": "Refunds",
 	"admin.manual": "recorded; returned outside the gateway",
 	"admin.refundDue": "Refund due: paid after you canceled it",
+	"admin.duplicatePayment": "Duplicate payment: refund due",
 	"admin.field.gateway": "Gateway",
 	"admin.field.reference": "Reference",
 	"admin.field.description": "Description",

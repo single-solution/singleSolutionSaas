@@ -343,6 +343,33 @@ export const createService = (product) => {
 	};
 
 	/**
+	 * A paid confirmation found the payment not open for payment. When it is already paid, and this money came through
+	 * another gateway or capture than the one that paid it (the same notice told again is no second payment), it is
+	 * recorded once: a history entry (the payment answers `duplicatePayment: true`: refund the extra money) and the
+	 * `payment.duplicate` event (SR-3-4). Nothing else changes.
+	 * @param {Site} s @param {string} paymentId @param {string} gateway
+	 * @param {import('../adapters/gateways/types.js').PaymentNews} news
+	 * @returns {Promise<PaymentRecord | null>} the payment as it is now
+	 */
+	const noteDuplicate = async (s, paymentId, gateway, news) => {
+		const current = await s.store.payments.get(paymentId);
+		if (!current || !['paid', 'partially_refunded', 'refunded'].includes(current.status)) return current;
+		const sameCapture = !news.capture || !current.captureRef || news.capture === current.captureRef;
+		if (current.gateway === gateway && sameCapture) return current;
+		const detail = `${gateway}${news.capture ? ` ${news.capture}` : ''}`;
+		if (current.history.some((entry) => entry.event === 'duplicate_payment' && entry.detail === detail)) return current;
+		const noted = await s.store.payments.change(
+			current.id,
+			['paid', 'partially_refunded', 'refunded'],
+			{},
+			{ event: 'duplicate_payment', detail },
+		);
+		if (!noted) return current;
+		await emit(s, 'payment.duplicate', paymentEventData(view(s, noted)));
+		return noted;
+	};
+
+	/**
 	 * Apply what a gateway confirmed about a payment of this website. A payment becomes paid only for its own amount and
 	 * currency (a mismatch is recorded and changes nothing); a confirmation that arrives twice changes nothing. Money for
 	 * a payment the merchant canceled is recorded too (the payer paid), with a history entry saying it is to be refunded:
@@ -379,7 +406,7 @@ export const createService = (product) => {
 				},
 				{ event: 'paid', detail: via },
 			);
-			return paid ? settle(s, paid) : payment;
+			return paid ? settle(s, paid) : ((await noteDuplicate(s, payment.id, gateway, news)) ?? payment);
 		}
 		if (news.outcome === 'failed' || news.outcome === 'canceled') {
 			const changed = await s.store.payments.change(

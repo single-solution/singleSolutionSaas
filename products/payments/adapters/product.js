@@ -241,7 +241,7 @@ export const createProductInstance = (options) => {
 		// the website Setup sheet: the API document and what the merchant's website builds per feature
 		openapi,
 		build: guide.build,
-		// payment events (`payment.paid`, `payment.failed`, `payment.refunded`, `payment.proof_uploaded`,
+		// payment events (`payment.paid`, `payment.failed`, `payment.refunded`, `payment.proof_uploaded`, `payment.duplicate`,
 		// `subscription.updated`) on the kit's mechanism: stored in `ss_payments_events`, listed by GET /v1/events,
 		// forwarded through Notifications
 		events: true,
