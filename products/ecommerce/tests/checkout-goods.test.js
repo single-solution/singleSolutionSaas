@@ -298,6 +298,36 @@ describe('digital goods', () => {
 		const paid = await visit('GET', `/v1/shop/orders/${next.json.order.id}`, { signIn: second });
 		expect(paid.json.lines[0].licenseKeys).toEqual(['ONLY-1']);
 		expect(await keys()).toEqual(['assigned']);
+		// given all its keys, the order says nothing
+		const given = /** @type {any} */ (
+			await (await shop.db()).collection(COLLECTIONS.orders).findOne({ websiteId: shop.websiteId, id: next.json.order.id })
+		);
+		expect(given.history.some((/** @type {any} */ entry) => entry.code === 'licenses_short')).toBe(false);
+	});
+
+	it('gives what keys are left and says so in the order history when keys are gone by the time it is paid (SR-5a-2)', async () => {
+		const item = await shop.seedProduct({
+			kind: 'digital',
+			trackStock: false,
+			price: 900,
+			digital: { files: [], retired: [], licenseKeys: true, downloadLimit: 0 },
+		});
+		await shop.api('POST', `/v1/products/${item.id}/licenses`, { keys: ['SHORT-1', 'SHORT-2'] });
+		const shopper = await newShopper();
+		const placed = await place(shopper, { lines: [{ productId: item.id, quantity: 2 }], payment: 'online' });
+		expect(placed.status).toBe(201);
+		const id = placed.json.order.id;
+		// a key is lost after the hold (taken out of the database by hand, for example)
+		const data = await shop.db();
+		await data.collection(COLLECTIONS.licenses).deleteOne({ websiteId: shop.websiteId, productId: item.id, key: 'SHORT-2' });
+		shop.payPayment(await paymentOf(id));
+		shop.advance(31_000);
+		const paid = await visit('GET', `/v1/shop/orders/${id}`, { signIn: shopper });
+		expect(paid.json.payment.state).toBe('paid');
+		expect(paid.json.lines[0].licenseKeys).toEqual(['SHORT-1']);
+		const record = /** @type {any} */ (await data.collection(COLLECTIONS.orders).findOne({ websiteId: shop.websiteId, id }));
+		expect(record.history.at(-1)).toMatchObject({ code: 'licenses_short', by: 'system', kind: 'payment' });
+		expect(record.lines[0].licenses).toHaveLength(1);
 	});
 });
 

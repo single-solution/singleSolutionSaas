@@ -8,7 +8,9 @@ import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { countsForStock, staffFilter, stockEventOf, variantStockCounts } from '../core/catalog-query.js';
 import { HEALTH_CHECKS, badTagIds, healthOf, isPublicAddress, paymentMethodsOn } from '../core/health.js';
+import { COLLECTIONS } from '../core/model.js';
 import { GROWTH, readyShop } from './helpers.js';
+import { orderRecords } from './order-records.js';
 import { defaultPaymentMethods } from '../core/payment-methods.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
@@ -170,6 +172,7 @@ describe('shop health (E41)', () => {
 			archived_featured: 'attention 1',
 			variants_out_of_stock: 'ok 0',
 			variants_low_stock: 'attention 4',
+			licenses_short: 'skipped 0',
 			business_name: 'attention 1',
 			business_country: 'attention 1',
 			business_logo: 'ok 0',
@@ -274,5 +277,51 @@ describe('shop health (E41)', () => {
 		shop.responders.set(`${GROWTH}/v1/settings`, () => ({ status: 503, body: {} }));
 		expect((await byKey()).pixel_ids.status).toBe('skipped');
 		await shop.methods({ online: { active: true }, bank_transfer: { active: true }, cod: { active: true } });
+	});
+
+	it('counts paid orders given fewer license keys than they bought, until they have them or are refunded (SR-5a-2)', async () => {
+		const item = await shop.seedProduct({
+			name: 'Keyed',
+			kind: 'digital',
+			trackStock: false,
+			digital: { files: [], retired: [], licenseKeys: true, downloadLimit: 0 },
+		});
+		const data = await shop.db();
+		const check = async () =>
+			(await shop.api('GET', '/v1/reports/health')).json.checks.find((/** @type {any} */ one) => one.key === 'licenses_short');
+		expect(await check()).toEqual({ key: 'licenses_short', status: 'ok', count: 0, link: null });
+		const { order } = await orderRecords(shop).seedOrder({ patch: { stockHeld: false } });
+		const orders = data.collection(COLLECTIONS.orders);
+		/** @param {string[]} licenses @param {Record<string, unknown>} [more] */
+		const set = (licenses, more = {}) =>
+			orders.updateOne(
+				{ websiteId: shop.websiteId, id: order.id },
+				{
+					$set: {
+						'lines.0.kind': 'digital',
+						'lines.0.productId': item.id,
+						'lines.0.quantity': 2,
+						'lines.0.licenses': licenses,
+						...more,
+					},
+				},
+			);
+		// paid with one key of two: it needs attention
+		await set(['lic_1']);
+		expect(await check()).toEqual({ key: 'licenses_short', status: 'attention', count: 1, link: null });
+		// a download-only product has no keys to be short of
+		await data
+			.collection(COLLECTIONS.products)
+			.updateOne({ websiteId: shop.websiteId, id: item.id }, { $set: { 'digital.licenseKeys': false } });
+		expect((await check()).status).toBe('ok');
+		await data
+			.collection(COLLECTIONS.products)
+			.updateOne({ websiteId: shop.websiteId, id: item.id }, { $set: { 'digital.licenseKeys': true } });
+		expect((await check()).count).toBe(1);
+		// refunded: not counted; given both keys: not counted
+		await set(['lic_1'], { 'payment.state': 'refunded' });
+		expect((await check()).status).toBe('ok');
+		await set(['lic_1', 'lic_2'], { 'payment.state': 'paid' });
+		expect((await check()).status).toBe('ok');
 	});
 });

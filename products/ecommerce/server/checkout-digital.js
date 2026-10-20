@@ -24,6 +24,7 @@ import {
 } from '../core/digital.js';
 import { elementsOf } from '../core/item-types.js';
 import { ID_PREFIX } from '../core/model.js';
+import { serverNote } from '../core/orders.js';
 import { UPLOAD_SECONDS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -156,7 +157,10 @@ export const createDigital = (product, service) => {
 	};
 
 	/**
-	 * Give the digital lines of a paid order their license keys (lines that still miss some). Runs on `order.paid`.
+	 * Give the digital lines of a paid order their license keys (lines that still miss some): the keys held for them
+	 * when the order was placed, else any free ones. Runs on `order.paid`. When keys are still missing (the hold ended
+	 * before payment and the keys were taken meanwhile), the order says so in its history and shop health counts it
+	 * (`licenses_short`, Needs attention) until staff add keys or refund it.
 	 * @param {Site} s
 	 * @param {OrderRecord} order
 	 */
@@ -165,16 +169,25 @@ export const createDigital = (product, service) => {
 		if (lines.length === 0) return;
 		const store = createOrdersStore(await s.data());
 		const products = await store.products(lines.map((line) => line.productId));
+		let short = false;
 		for (const line of lines) {
 			if (!products.get(line.productId)?.digital?.licenseKeys) continue;
+			const count = line.quantity - line.licenses.length;
 			const ids = await store.assignLicenses({
 				productId: line.productId,
 				orderId: order.id,
 				lineId: line.id,
-				count: line.quantity - line.licenses.length,
+				count,
 			});
 			await store.addLineLicenses(order.id, line.id, ids);
+			if (ids.length < count) short = true;
 		}
+		if (short)
+			await store.noteHistory(
+				order,
+				new Date(product.now()),
+				serverNote('licenses_short', 'Paid, but not enough license keys were free: add keys or refund the order'),
+			);
 	};
 
 	/**

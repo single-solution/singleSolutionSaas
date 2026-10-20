@@ -511,6 +511,17 @@ export const createOrdersStore = (data) => {
 			}
 			return ids;
 		},
+		/**
+		 * Add a server note to an order's history without moving it (a note staff should see, such as keys that ran out).
+		 * @param {OrderRecord} order as read @param {Date} at
+		 * @param {ReturnType<typeof import('../core/orders.js').serverNote>} note
+		 */
+		noteHistory: async (order, at, note) => {
+			await orders.updateOne(
+				{ websiteId, id: order.id },
+				{ $push: { history: { at, from: order.status, to: order.status, by: 'system', ...note, kind: 'payment' } } },
+			);
+		},
 		/** Record licenses given to an order line. @param {string} orderId @param {string} lineId @param {string[]} ids */
 		addLineLicenses: async (orderId, lineId, ids) => {
 			if (ids.length === 0) return;

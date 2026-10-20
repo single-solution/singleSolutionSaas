@@ -41,6 +41,7 @@ export const HEALTH_CHECKS = Object.freeze(
 		'archived_featured',
 		'variants_out_of_stock',
 		'variants_low_stock',
+		'licenses_short',
 		'business_name',
 		'business_country',
 		'business_logo',
@@ -292,6 +293,38 @@ export const paymentMethodsOn = ({ methods, paymentsConnected, pickup }) =>
 		.map((method) => method.key);
 
 /**
+ * The pipeline that counts the paid orders given fewer license keys than they bought: an order whose payment is paid
+ * (or partly refunded) with a digital line of a product that has license keys and fewer keys on the line than its
+ * quantity (the keys ran out between placing and paying, or staff changed the keys). Refunding the order or giving it
+ * its keys clears it.
+ * @param {string} websiteId
+ * @param {string[]} productIds the products that have license keys
+ */
+export const licensesShortPipeline = (websiteId, productIds) => [
+	{ $match: { websiteId, 'payment.state': { $in: ['paid', 'partially_refunded'] }, 'lines.productId': { $in: productIds } } },
+	{
+		$match: {
+			$expr: {
+				$anyElementTrue: {
+					$map: {
+						input: '$lines',
+						as: 'line',
+						in: {
+							$and: [
+								{ $eq: ['$$line.kind', 'digital'] },
+								{ $in: ['$$line.productId', productIds] },
+								{ $lt: [{ $size: { $ifNull: ['$$line.licenses', []] } }, '$$line.quantity'] },
+							],
+						},
+					},
+				},
+			},
+		},
+	},
+	{ $count: 'n' },
+];
+
+/**
  * What the setup checks read; null where a check does not apply (it is skipped).
  * @typedef {object} SetupFacts
  * @property {boolean} storage the Storage connection is set (photos are uploaded to it)
@@ -327,6 +360,8 @@ export const paymentMethodsOn = ({ methods, paymentsConnected, pickup }) =>
  *   public address on the storage connection); null without storage (the check is skipped)
  * @param {boolean | null} input.deliveryDays whether both delivery day settings are set; null while Delivery zones is off
  *   (the check is skipped)
+ * @param {number | null} [input.licensesShort] {@link licensesShortPipeline}'s count: paid orders given fewer license keys than
+ *   they bought; null while Digital goods is off (the check is skipped)
  * @param {SetupFacts} input.setup
  * @returns {{ checks: HealthCheck[], attention: number }}
  */
@@ -341,6 +376,7 @@ export const healthOf = ({
 	badTags,
 	shortLived,
 	deliveryDays,
+	licensesShort = null,
 	setup,
 }) => {
 	/** @param {string} name */
@@ -375,6 +411,7 @@ export const healthOf = ({
 		archived_featured: { count: counted('archivedFeatured'), link: '/v1/products?status=archived&featured=1' },
 		variants_out_of_stock: { count: variants.out, link: '/v1/products?stockState=out,partial' },
 		variants_low_stock: { count: variants.low, link: '/v1/products?lowStock=1' },
+		licenses_short: { count: licensesShort, link: null },
 		business_name: { count: name === '' || name.toLowerCase() === domain.toLowerCase() ? 1 : 0, link: file },
 		business_country: { count: business.country ? 0 : 1, link: file },
 		business_logo: { count: business.logo ? 0 : 1, link: file },

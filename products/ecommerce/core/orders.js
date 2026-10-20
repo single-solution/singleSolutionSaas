@@ -67,7 +67,8 @@ export const TRACK_EVERY_MS = 30 * 60_000;
  * `payment_recorded` (`amount`) and `payment_recorded_reference` (`amount`, `reference`): staff recorded a payment;
  * `confirmed_on_payment`: the move to the confirmed status that follows; `restatus`: staff moved every order of a
  * status to another status of the same kind (`POST /v1/orders/restatus`); `attachment_added` and
- * `attachment_removed`: staff added or removed attachments on the order (E20).
+ * `attachment_removed`: staff added or removed attachments on the order (E20); `licenses_short`: the paid order was
+ * given fewer license keys than it bought (none were free), so staff add keys or refund it.
  */
 export const HISTORY_NOTES = Object.freeze(
 	/** @type {const} */ ([
@@ -91,6 +92,7 @@ export const HISTORY_NOTES = Object.freeze(
 		'restatus',
 		'attachment_added',
 		'attachment_removed',
+		'licenses_short',
 	]),
 );
 /** @typedef {typeof HISTORY_NOTES[number]} HistoryNote */

@@ -39,7 +39,7 @@ import {
 	summaryPipeline,
 	totalsPipeline,
 } from '../core/reports.js';
-import { badTagIds, healthOf, healthPipeline, paymentMethodsOn, taxonomyHealth } from '../core/health.js';
+import { badTagIds, healthOf, healthPipeline, licensesShortPipeline, paymentMethodsOn, taxonomyHealth } from '../core/health.js';
 import { paidByHand } from '../core/payment-methods.js';
 import { daysRange } from '../core/seo.js';
 import { homeRate } from '../core/delivery.js';
@@ -514,6 +514,31 @@ export const createReports = (product, service) => {
 	};
 
 	/**
+	 * How many paid orders were given fewer license keys than they bought (the keys ran out after they were placed);
+	 * null while Digital goods is off.
+	 * @param {Site} s @param {WebsiteData} data
+	 */
+	const licensesShort = async (s, data) => {
+		if (!s.has('digital_goods')) return null;
+		const keyed = await data
+			.collection(COLLECTIONS.products)
+			.find({ websiteId: data.websiteId, kind: 'digital', 'digital.licenseKeys': true }, { projection: { _id: 0, id: 1 } })
+			.limit(MAX_TAXONOMY)
+			.toArray();
+		if (keyed.length === 0) return 0;
+		const [found] = await data
+			.collection(COLLECTIONS.orders)
+			.aggregate(
+				licensesShortPipeline(
+					data.websiteId,
+					keyed.map((item) => String(item.id)),
+				),
+			)
+			.toArray();
+		return Number(found?.n ?? 0);
+	};
+
+	/**
 	 * The categories shoppers see and the brands, for their SEO checks and empty categories.
 	 * @param {Site} s @param {WebsiteData} data
 	 */
@@ -547,7 +572,7 @@ export const createReports = (product, service) => {
 		const feeds = s.has('feeds') ? await s.values('feeds') : null;
 		const skuAs = feeds?.skuAs === 'gtin' || feeds?.skuAs === 'mpn' ? feeds.skuAs : 'none';
 		const { brandIds: hiddenBrandIds } = await hiddenFor(s);
-		const [[facets], business, methods, tags, storage, unready, alerts, glossary, taxonomy] = await Promise.all([
+		const [[facets], business, methods, tags, storage, unready, alerts, glossary, taxonomy, short] = await Promise.all([
 			data
 				.collection(COLLECTIONS.products)
 				.aggregate(
@@ -567,6 +592,7 @@ export const createReports = (product, service) => {
 			staffAlertSetup(s),
 			glossaryGaps(s, data),
 			taxonomyOf(s, data),
+			licensesShort(s, data),
 		]);
 		// images go out on signed links that last an hour while the storage connection has no public address (G1)
 		const shortLived = storage ? !storage.hasPublicUrl : null;
@@ -588,6 +614,7 @@ export const createReports = (product, service) => {
 			paymentMethods: methods,
 			badTags: tags,
 			shortLived,
+			licensesShort: short,
 			// the delivery days structured data needs (G5.4), while Delivery zones is on: the handling days and the days of the
 			// business country's first plain delivery rate (E5)
 			deliveryDays: zones
