@@ -123,14 +123,32 @@ describe('deletes (E31)', () => {
 		expect((await shop.api('GET', `/v1/orders/${order.id}`)).status).toBe(404);
 	});
 
-	it('deletes every order of the website only with the domain typed', async () => {
+	it('deletes every order of the website only with the words DELETE orders typed, not the public domain', async () => {
 		const { item } = await placeOrder({ stock: 4 });
-		expect(codeOf(await shop.api('POST', '/v1/data/delete-all', { scope: 'orders', confirm: 'nope' }))).toBe(
-			'validation_failed',
-		);
-		const done = await shop.api('POST', '/v1/data/delete-all', { scope: 'orders', confirm: DOMAIN });
+		for (const confirm of ['nope', DOMAIN, 'delete orders', 'DELETE catalog', 'DELETE'])
+			expect(codeOf(await shop.api('POST', '/v1/data/delete-all', { scope: 'orders', confirm }))).toBe('validation_failed');
+		expect((await shop.api('GET', '/v1/orders')).json.items).not.toEqual([]);
+		const done = await shop.api('POST', '/v1/data/delete-all', { scope: 'orders', confirm: 'DELETE orders' });
 		expect(done.json.scope).toBe('orders');
 		expect((await shop.api('GET', '/v1/orders')).json.items).toEqual([]);
 		expect(await stockOf(item.id)).toBe(4);
+	});
+
+	it('needs its own permission: a bulk operator, a catalog editor and an order deleter cannot (SR-5b-2)', async () => {
+		await placeOrder({ stock: 4 });
+		/** @param {string[]} keys @param {string} scope */
+		const asStaff = (keys, scope) =>
+			shop.call('POST', '/v1/data/delete-all', {
+				token: shop.server,
+				staff: { permissions: keys.map((key) => (key === '*' ? key : `ecommerce:${key}`)) },
+				body: { scope, confirm: `DELETE ${scope}` },
+			});
+		const others = ['bulk.run', 'orders.delete', 'orders.manage', 'customers.manage', 'catalog.edit', 'csv.run'];
+		for (const scope of ['orders', 'customers', 'catalog']) expect((await asStaff(others, scope)).status).toBe(403);
+		expect((await shop.api('GET', '/v1/orders')).json.items).not.toEqual([]);
+		// the permission alone is enough, and the Owner's `*` has it
+		expect((await asStaff(['data.delete_all'], 'customers')).status).toBe(200);
+		expect((await asStaff(['*'], 'orders')).status).toBe(200);
+		expect((await shop.api('GET', '/v1/orders')).json.items).toEqual([]);
 	});
 });

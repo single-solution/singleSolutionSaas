@@ -402,8 +402,9 @@ export const createOrders = (product, service, { ordering }) => {
 
 	/**
 	 * POST /v1/data/delete-all `{ scope, confirm }` (server token, E31): every record of a scope goes, after held stock
-	 * is given back (and, for orders, their open Payments payments are canceled); `confirm` repeats the website's
-	 * domain.
+	 * is given back (and, for orders, their open Payments payments are canceled). It needs its own permission
+	 * (`data.delete_all`, held by the Owner role alone unless the merchant gives it to another), and `confirm` is the
+	 * words `DELETE <scope>` the person types (the website's domain is public, so it confirmed nothing; SR-5b-2).
 	 * @param {any} ctx
 	 */
 	const deleteAll = async (ctx) => {
@@ -412,7 +413,7 @@ export const createOrders = (product, service, { ordering }) => {
 		if (scope !== 'catalog' && scope !== 'orders' && scope !== 'customers')
 			throw service.invalid('scope', 'scope is catalog, orders or customers.');
 		const s = await service.site(ctx);
-		if (body.confirm !== s.domain) throw service.invalid('confirm', `Type the website's domain (${s.domain}) to confirm.`);
+		if (body.confirm !== `DELETE ${scope}`) throw service.invalid('confirm', `Type DELETE ${scope} to confirm.`);
 		const data = await s.data();
 		/** @type {Record<string, number>} */
 		const deleted = {};
@@ -924,7 +925,7 @@ export const createOrders = (product, service, { ordering }) => {
 				method: 'POST',
 				path: '/v1/data/delete-all',
 				auth: 'server',
-				permission: 'bulk.run',
+				permission: 'data.delete_all',
 				feature: 'bulk_actions',
 				rateLimit: SERVER_LIMITS,
 				handler: deleteAll,

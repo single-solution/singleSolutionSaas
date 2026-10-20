@@ -26483,7 +26483,7 @@
 	},
 	"POST /v1/data/delete-all": {
 		"summary": "Delete every record of a scope",
-		"description": "catalog: products, categories, brands, attributes, serial numbers, size charts, landing pages and the landing pages remembered as indexed; orders: orders, booked slots, coupon uses and return claims (held stock is given back and every open Payments payment canceled first: 503 payments_unavailable, with nothing deleted, while Payments cannot be reached); customers: customer records and loyalty accounts. confirm repeats the website's domain (422 at /confirm). Needs bulk_actions.",
+		"description": "catalog: products, categories, brands, attributes, serial numbers, size charts, landing pages and the landing pages remembered as indexed; orders: orders, booked slots, coupon uses and return claims (held stock is given back and every open Payments payment canceled first: 503 payments_unavailable, with nothing deleted, while Payments cannot be reached); customers: customer records and loyalty accounts. confirm is the words DELETE and the scope, for example DELETE orders (422 at /confirm). Needs the data.delete_all permission (the Owner role has it; give it to no other role lightly) and bulk_actions.",
 		"body": {
 			"type": "object",
 			"required": ["scope", "confirm"],
@@ -26494,7 +26494,7 @@
 				},
 				"confirm": {
 					"type": "string",
-					"description": "The website's domain, for example shop.example.com."
+					"description": "The words DELETE and the scope, typed by the person: DELETE orders, DELETE customers or DELETE catalog."
 				}
 			}
 		},

@@ -228,7 +228,7 @@ describe('sitemap dates', () => {
 	}, 120_000);
 
 	it('forgets the landing pages indexed before with the catalog', async () => {
-		const done = await shop.api('POST', '/v1/data/delete-all', { scope: 'catalog', confirm: new URL(ORIGIN).host });
+		const done = await shop.api('POST', '/v1/data/delete-all', { scope: 'catalog', confirm: 'DELETE catalog' });
 		expect(done.json.deleted).toMatchObject({ landings: 0, landing_index: 1 });
 		expect(await (await shop.db()).collection(COLLECTIONS.landingIndex).countDocuments({ websiteId: shop.websiteId })).toBe(0);
 	});

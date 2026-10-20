@@ -499,6 +499,11 @@
 			"key": "bulk.run",
 			"name": "Run bulk actions",
 			"feature": "bulk_actions"
+		},
+		{
+			"key": "data.delete_all",
+			"name": "Delete all orders, customers or the catalog",
+			"feature": "bulk_actions"
 		}
 	],
 	"widgets": [

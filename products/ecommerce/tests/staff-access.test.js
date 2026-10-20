@@ -37,7 +37,7 @@ describe('Ecommerce with the server token alone', () => {
 			['POST', '/v1/deals', { name: 'x' }],
 			['GET', '/v1/events', undefined],
 			['GET', '/v1/csv/orders', undefined],
-			['POST', '/v1/data/delete-all', { scope: 'orders', confirm: 'shop.example.com' }],
+			['POST', '/v1/data/delete-all', { scope: 'orders', confirm: 'DELETE orders' }],
 			['PUT', '/v1/format', { wholeUnits: true }],
 			['PUT', '/v1/theme', { radius: 3 }],
 			['PUT', '/v1/lists/order_flow', { value: {} }],

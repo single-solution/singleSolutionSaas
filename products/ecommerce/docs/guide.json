@@ -383,7 +383,7 @@
 			"Import and export products and stock (with an update mode for prices and stock), and export orders and customers, as CSV in the customers admin widget, with a column for each of your fields."
 		],
 		"bulk_actions": [
-			"Change prices, stock, status, category, brand, tags, item type, compare-at price or any of your fields for many products at once, and move many orders at once, in the admin widgets; POST /v1/data/delete-all deletes all orders, customers or the catalog."
+			"Change prices, stock, status, category, brand, tags, item type, compare-at price or any of your fields for many products at once, and move many orders at once, in the admin widgets; POST /v1/data/delete-all deletes all orders, customers or the catalog: it needs the data.delete_all permission (the Owner role has it) and the words DELETE <scope> typed by the person, for example DELETE orders."
 		],
 		"reports": [
 			"A summary by day, week or month, sales grouped by product, category, brand, tag, place, zone, courier, payment method, period or any of your fields, sell-through, oldest stock, stock age, return rate and margin, each also as CSV, and shop health (what to fix in the catalog, your SEO copy and your setup), in the customers admin widget."

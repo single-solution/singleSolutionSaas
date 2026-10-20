@@ -376,11 +376,11 @@ describe('money staff take, deletes and two "pay" at once (CK-21)', () => {
 		const first = await placeOrder();
 		const second = await placeOrder({ payment: 'bank_transfer' });
 		const restore = cancelAnswers({ status: 503, body: {} });
-		const refused = await shop.api('POST', '/v1/data/delete-all', { scope: 'orders', confirm: DOMAIN });
+		const refused = await shop.api('POST', '/v1/data/delete-all', { scope: 'orders', confirm: 'DELETE orders' });
 		restore();
 		expect(codeOf(refused)).toBe('payments_unavailable');
 		expect(await orderRecord(first.order.id)).not.toBeNull();
-		const done = await shop.api('POST', '/v1/data/delete-all', { scope: 'orders', confirm: DOMAIN });
+		const done = await shop.api('POST', '/v1/data/delete-all', { scope: 'orders', confirm: 'DELETE orders' });
 		expect(done.status).toBe(200);
 		for (const { paymentId } of [first, second])
 			expect(cancelsOf(paymentId).map((call) => JSON.parse(call.body))).toContainEqual({ reason: 'Order deleted' });
