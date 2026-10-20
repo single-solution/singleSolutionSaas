@@ -100,6 +100,7 @@ export const TEXTS = dashboardTexts({
 			scripts: {
 				label: 'Scripts',
 				help: 'Your own <script> tags (or plain JavaScript), added once this category is granted.',
+				locked: 'Only the Owner, or a role given the permission to add and change custom scripts, can change this.',
 			},
 			text: { label: 'Text' },
 			linkText: { label: 'Link text' },

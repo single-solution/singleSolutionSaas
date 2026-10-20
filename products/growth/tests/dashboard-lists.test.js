@@ -19,8 +19,9 @@ let sent = {};
  * The dashboard API: the lists it holds, a save that is kept, or refused with the given errors.
  * @param {Record<string, any[]>} lists
  * @param {Array<{ path: string, message: string }>} [errors] refuse a save with these
+ * @param {string[]} [locked] fields the reader may not change (the server says so with the list)
  */
-const serve = (lists, errors) => {
+const serve = (lists, errors, locked) => {
 	sent = {};
 	vi.stubGlobal(
 		'fetch',
@@ -33,7 +34,7 @@ const serve = (lists, errors) => {
 				(sent[name] ??= []).push(value);
 				lists[name] = value;
 			}
-			return new Response(JSON.stringify({ value: lists[name] }), { status: 200 });
+			return new Response(JSON.stringify({ value: lists[name], ...(locked ? { locked } : {}) }), { status: 200 });
 		}),
 	);
 };
@@ -118,5 +119,31 @@ describe('a Growth list', () => {
 		await act(async () => click(byText(document.body, 'Save the list', 'button')));
 		await settle();
 		expect(container.textContent).toContain('Store funnel, Steps: An event name is lower-case.');
+	});
+
+	it('shows a field the reader may not change as read-only, with the reason, and the rest stays editable (SR-7-10)', async () => {
+		const category = {
+			key: 'marketing',
+			name: 'Marketing',
+			description: '',
+			mode: 'opt_in',
+			signals: [],
+			scripts: '<script>a()</script>',
+		};
+		serve({ consent_categories: [category] }, undefined, ['scripts']);
+		const { container } = render(inDashboard(<ListCard websiteId={WEBSITE} name="consent_categories" bare />));
+		await settle();
+		const drawer = await openRow(container, 'Marketing');
+		const scripts = /** @type {HTMLInputElement} */ (byLabel(drawer, 'Scripts'));
+		expect(scripts.disabled).toBe(true);
+		expect(scripts.value).toBe('<script>a()</script>');
+		expect(drawer.textContent).toContain('Only the Owner');
+		expect(/** @type {HTMLInputElement} */ (byLabel(drawer, 'Name')).disabled).toBe(false);
+		cleanup();
+		serve({ consent_categories: [category] }, undefined, []);
+		const open = render(inDashboard(<ListCard websiteId={WEBSITE} name="consent_categories" bare />));
+		await settle();
+		const editable = await openRow(open.container, 'Marketing');
+		expect(/** @type {HTMLInputElement} */ (byLabel(editable, 'Scripts')).disabled).toBe(false);
 	});
 });

@@ -38,6 +38,7 @@ import { activityFilter, activityPage, activityView } from './activity.js';
 import { countHandlers } from './counts.js';
 import { defineRoute } from './http/routes.js';
 import { KIT_LINK_SCOPES } from './link-scopes.js';
+import { allows } from './staff.js';
 import { noContent, ok, paginate, problem } from './http/results.js';
 
 /** @typedef {import('./http/handler.js').RequestContext} RequestContext */
@@ -50,6 +51,12 @@ import { noContent, ok, paginate, problem } from './http/results.js';
  * @property {(websiteId: string) => Promise<unknown>} get the saved list, else its default
  * @property {(websiteId: string, value: unknown) => Promise<{ ok: true, value: unknown } | { ok: false, errors: Array<string | { path?: string, message: string, code?: string }> }>} save
  *   checks and saves the whole list; an error may carry a `code` the dashboard acts on (it is answered as given)
+ * @property {Record<string, string>} [fieldPermissions] a field of the list's entries that needs one more permission (the
+ *   product's own key) to change, on top of `settings.manage`, for a field that runs code: `{ scripts: 'scripts.manage' }`.
+ *   A save that adds, edits or removes a value of the field (their order, case of the entries and every other field are
+ *   free) without it is 403 `forbidden` and nothing is saved; it is read like `allows` for a ticket and a verified staff
+ *   sign-in, a dashboard session of the merchant or of an Owner admin has it, a Support admin has not. The list's read on
+ *   the dashboard says `locked` (the fields the caller may not change), and the activity log names the changed fields.
  */
 
 /** Settings writes of the merchant's server per website (code constant). */
@@ -75,6 +82,28 @@ const withPage = (filter, keyset) =>
 
 /** The merchant's server as the one who changed something. @type {Who} */
 const SERVER = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
+
+/**
+ * The values an entry field holds across a list, trimmed, empty ones left out, in a fixed order (so only an added, edited
+ * or removed value is a change).
+ * @param {unknown} list
+ * @param {string} field
+ */
+const valuesOf = (list, field) =>
+	(Array.isArray(list) ? list : [])
+		.map((entry) => (isObject(entry) && typeof entry[field] === 'string' ? entry[field].trim() : ''))
+		.filter((text) => text !== '')
+		.sort();
+
+/**
+ * Whether the caller may change a field that needs one more permission: a ticket or a verified staff sign-in by what the
+ * role grants (`allows`); a dashboard session of the merchant or an Owner admin always (they own the website or the
+ * platform), a Support admin never.
+ * @param {RequestContext} ctx
+ * @param {string} permission
+ */
+const mayChange = (ctx, permission) =>
+	ctx.session ? ctx.session.kind === 'merchant' || ctx.session.role === 'owner' : allows(ctx, permission);
 
 /** The dashboard twin of `/v1/lists/:list`. */
 const DASHBOARD_LIST_PATH = '/v1/dashboard/websites/:websiteId/lists/:list';
@@ -178,8 +207,41 @@ export const createServerApi = (kit, lists) => {
 		return { name, definition };
 	};
 
-	/** A list, whole (`{ value }`). @param {RequestContext} ctx */
-	const readList = async (ctx) => ({ value: await listOf(ctx).definition.get(website(ctx)) });
+	/**
+	 * A list, whole (`{ value }`); on the dashboard, with fields that need one more permission, also the `locked` ones: those
+	 * the caller may not change.
+	 * @param {RequestContext} ctx
+	 */
+	const readList = async (ctx) => {
+		const { definition } = listOf(ctx);
+		const value = await definition.get(website(ctx));
+		if (!ctx.session || !definition.fieldPermissions) return { value };
+		const locked = Object.entries(definition.fieldPermissions)
+			.filter(([, permission]) => !mayChange(ctx, permission))
+			.map(([field]) => field);
+		return { value, locked };
+	};
+
+	/**
+	 * The guarded fields (`fieldPermissions`) a save changes; one the caller may not change is 403 `forbidden`, before
+	 * anything is saved.
+	 * @param {RequestContext} ctx
+	 * @param {ListDefinition} definition
+	 * @param {unknown} sent the list as sent
+	 * @returns {Promise<string[]>}
+	 */
+	const guardedChanges = async (ctx, definition, sent) => {
+		const guarded = Object.entries(definition.fieldPermissions ?? {});
+		if (guarded.length === 0) return [];
+		const before = await definition.get(website(ctx));
+		const changed = guarded.filter(
+			([field]) => JSON.stringify(valuesOf(before, field)) !== JSON.stringify(valuesOf(sent, field)),
+		);
+		const refused = changed.find(([, permission]) => !mayChange(ctx, permission));
+		if (refused)
+			throw problem('forbidden', `Changing ${refused[0]} in ${definition.title} needs the permission ${refused[1]}.`);
+		return changed.map(([field]) => field);
+	};
 
 	/**
 	 * Save a list whole: only while one of its features is on (Owner and Support on the dashboard may prepare it), checked
@@ -194,7 +256,9 @@ export const createServerApi = (kit, lists) => {
 		const { on } = await kit.reports.switches(website(ctx));
 		if (!preparing && !features.some((key) => on.includes(key)))
 			throw problem('feature_off', `The feature ${features.join(' or ')} is off: its lists cannot be changed.`);
-		const list = await definition.save(website(ctx), valueOf(ctx));
+		const sent = valueOf(ctx);
+		const changedFields = await guardedChanges(ctx, definition, sent);
+		const list = await definition.save(website(ctx), sent);
 		if (!list.ok) {
 			const errors = list.errors.map((error) =>
 				typeof error === 'string'
@@ -204,8 +268,9 @@ export const createServerApi = (kit, lists) => {
 			throw problem('validation_failed', errors[0]?.message ?? 'The list is not valid.', { errors });
 		}
 		const who = whoOf(ctx);
-		await kit.recent.record({ websiteId: website(ctx), who, what: 'settings', detail: `${definition.title}: changed` });
-		await kit.settingsChanged(ctx, { what: 'list', key: name, who, label: definition.title, detail: 'changed' });
+		const detail = changedFields.length > 0 ? `changed (${changedFields.join(', ')})` : 'changed';
+		await kit.recent.record({ websiteId: website(ctx), who, what: 'settings', detail: `${definition.title}: ${detail}` });
+		await kit.settingsChanged(ctx, { what: 'list', key: name, who, label: definition.title, detail });
 		return { value: list.value };
 	};
 

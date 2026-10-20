@@ -89,6 +89,7 @@ export const kitLists = (lists) =>
 			{
 				feature: LISTS[name].feature,
 				title: LISTS[name].title,
+				...(LISTS[name].fieldPermissions ? { fieldPermissions: LISTS[name].fieldPermissions } : {}),
 				get: (/** @type {string} */ websiteId) => lists.get(websiteId, name),
 				save: (/** @type {string} */ websiteId, /** @type {unknown} */ value) => lists.save(websiteId, name, value),
 			},

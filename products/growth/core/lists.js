@@ -49,9 +49,14 @@ import { CONSENT_SIGNALS } from './widgets.js';
  * @property {number} max most entries
  * @property {Record<string, Field>} fields
  * @property {string} [unique] a field no two entries share
+ * @property {Record<string, string>} [fieldPermissions] a field that needs one more permission to change (the kit refuses a
+ *   save that changes it without it): `{ scripts: 'scripts.manage' }`, for the field that runs code on the shop's pages
  * @property {(entry: Record<string, any>) => Array<[string, string]>} [rules] more rules of one entry: `[field, message]`
  * @property {() => any[]} defaults its value before it is saved
  */
+
+/** The permission to add or change custom scripts (they run on every page of the shop), held by the Owner alone unless the merchant gives it to another. */
+export const SCRIPTS_PERMISSION = 'scripts.manage';
 
 /** A key: lower-case letters, digits and `_`, from a letter, at most 40. */
 export const KEY = /^[a-z][a-z0-9_]{0,39}$/;
@@ -231,6 +236,7 @@ const SPECS = /** @satisfies {Record<string, ListSpec>} */ ({
 		title: 'Consent categories',
 		max: 10,
 		unique: 'key',
+		fieldPermissions: { scripts: SCRIPTS_PERMISSION },
 		fields: {
 			key: { type: 'text', max: 40, pattern: KEY, required: true, lower: true },
 			name: { type: 'text', max: 60, required: true },

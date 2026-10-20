@@ -128,3 +128,69 @@ describe('Growth’s writes with the server token', () => {
 		expect(saved.status).toBe(204);
 	});
 });
+
+describe('custom scripts need their own permission, scripts.manage (SR-7-10)', () => {
+	const EVIL = '<script src="https://evil.example/x.js"></script>';
+	const settingsOnly = { id: 'usr_theme', name: 'Tess Theme', permissions: ['growth:settings.manage'] };
+	const scripter = { id: 'usr_owner', name: 'Olga Owner', permissions: ['growth:settings.manage', 'growth:scripts.manage'] };
+	const putCategories = (/** @type {Record<string, any>} */ staff, /** @type {unknown} */ value) =>
+		env.call('PUT', '/v1/lists/consent_categories', { token: env.server, staff, body: { value } });
+	const readCategories = async () =>
+		(await (await env.call('GET', '/v1/lists/consent_categories', { token: env.server })).json()).value;
+
+	it('a staff member with only settings.manage cannot put a script in, change one or remove one: 403, nothing saved', async () => {
+		const before = await readCategories();
+		const added = before.map((/** @type {any} */ c) => (c.key === 'marketing' ? { ...c, scripts: EVIL } : c));
+		const refused = await putCategories(settingsOnly, added);
+		expect([refused.status, await typeOf(refused)]).toEqual([403, 'forbidden']);
+		expect(await readCategories()).toEqual(before);
+		// the same for the people who can only name things: a ticket without it
+		expect((await putCategories({ id: 'usr_none', permissions: [] }, added)).status).toBe(403);
+	});
+
+	it('still changes everything else of the categories (names, modes, signals, order)', async () => {
+		const before = await readCategories();
+		const renamed = before.map((/** @type {any} */ c) => (c.key === 'marketing' ? { ...c, name: 'Promotions' } : c));
+		expect((await putCategories(settingsOnly, renamed)).status).toBe(200);
+		expect((await readCategories()).find((/** @type {any} */ c) => c.key === 'marketing').name).toBe('Promotions');
+	});
+
+	it('with scripts.manage: saved, and the activity log names who changed the scripts', async () => {
+		const before = await readCategories();
+		const added = before.map((/** @type {any} */ c) =>
+			c.key === 'analytics' ? { ...c, scripts: '<script>track()</script>' } : c,
+		);
+		expect((await putCategories(scripter, added)).status).toBe(200);
+		const saved = await readCategories();
+		expect(saved.find((/** @type {any} */ c) => c.key === 'analytics').scripts).toBe('<script>track()</script>');
+		const logged = await (
+			await env.merchantDb()
+		)
+			.collection('ss_growth_activity')
+			.find({ action: 'settings.changed' })
+			.toArray();
+		expect(logged.at(-1)).toMatchObject({
+			actor: { kind: 'user', id: 'usr_owner', name: 'Olga Owner' },
+			target: 'list.consent_categories',
+			detail: 'changed (scripts)',
+		});
+		// the scripts it saved cannot be removed or edited by who lacks it
+		const wiped = saved.map((/** @type {any} */ c) => ({ ...c, scripts: '' }));
+		expect((await putCategories(settingsOnly, wiped)).status).toBe(403);
+		expect(await readCategories()).toEqual(saved);
+	});
+
+	it('the dashboard of a Support admin cannot change them and is told the field is locked; the Owner can', async () => {
+		const path = `/v1/dashboard/websites/${env.websiteId}/lists/consent_categories`;
+		const support = await env.adminSession('support');
+		const read = await (await env.dashboard(support, 'GET', path)).json();
+		expect(read.locked).toEqual(['scripts']);
+		const refused = await env.dashboard(support, 'PUT', path, {
+			value: read.value.map((/** @type {any} */ c) => (c.key === 'necessary' ? { ...c, scripts: EVIL } : c)),
+		});
+		expect(refused.status).toBe(403);
+		const owner = await env.adminSession('owner');
+		expect((await (await env.dashboard(owner, 'GET', path)).json()).locked).toEqual([]);
+		expect((await env.dashboard(owner, 'PUT', path, { value: read.value })).status).toBe(200);
+	});
+});

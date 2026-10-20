@@ -88,11 +88,13 @@ const LONG = new Set(['scripts', 'description', 'text']);
 
 /**
  * One field of an entry.
- * @param {{ name: string, field: Field, value: any, error?: string, onChange: (value: any) => void }} props
+ * @param {{ name: string, field: Field, value: any, error?: string, locked?: boolean, onChange: (value: any) => void }} props
+ *   `locked`: the reader may not change it (it needs a permission they lack): shown read-only, with the reason
  */
-function FieldInput({ name, field, value, error, onChange }) {
+function FieldInput({ name, field, value, error, locked = false, onChange }) {
 	const words = wordsOf(name);
-	const common = { label: words.label, ...(words.help ? { help: words.help } : {}), ...(error ? { error } : {}) };
+	const help = locked ? /** @type {{ locked?: string }} */ (words).locked : words.help;
+	const common = { label: words.label, ...(help ? { help } : {}), ...(error ? { error } : {}) };
 	switch (field.type) {
 		case 'choice':
 			return (
@@ -150,6 +152,7 @@ function FieldInput({ name, field, value, error, onChange }) {
 				<TextArea
 					{...common}
 					rows={name === 'scripts' ? 4 : 2}
+					disabled={locked}
 					value={String(value ?? '')}
 					onChange={(event) => onChange(event.target.value)}
 				/>
@@ -163,10 +166,11 @@ function FieldInput({ name, field, value, error, onChange }) {
 
 /**
  * The fields of one entry (or of one of its rows), in a grid; an entry's `rows` field is a stack of rows of its own.
- * @param {{ fields: Record<string, Field>, entry: Entry, at: string, errors: Record<string, string>,
- *   onChange: (entry: Entry) => void }} props `at`: the path of the entry in the server's errors (`/value/0`)
+ * @param {{ fields: Record<string, Field>, entry: Entry, at: string, errors: Record<string, string>, locked?: string[],
+ *   onChange: (entry: Entry) => void }} props `at`: the path of the entry in the server's errors (`/value/0`); `locked`:
+ *   the fields the reader may not change
  */
-function EntryFields({ fields, entry, at, errors, onChange }) {
+function EntryFields({ fields, entry, at, errors, locked = [], onChange }) {
 	/** @param {string} name @param {any} value */
 	const set = (name, value) => onChange({ ...entry, [name]: value });
 	return (
@@ -190,6 +194,7 @@ function EntryFields({ fields, entry, at, errors, onChange }) {
 						name={name}
 						field={field}
 						value={entry[name]}
+						locked={locked.includes(name)}
 						{...(errors[`${at}/${name}`] ? { error: errors[`${at}/${name}`] } : {})}
 						onChange={(value) => set(name, value)}
 					/>
@@ -298,6 +303,8 @@ export function ListCard({ websiteId, name, bare = false }) {
 	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
 	const words = /** @type {{ title: string, help: string }} */ (/** @type {Record<string, unknown>} */ (L)[name]);
 	const saved = answer?.ok ? /** @type {Entry[]} */ (answer.data.value) : null;
+	/** The fields the server says this reader may not change (they need a permission the reader lacks). */
+	const locked = answer?.ok && Array.isArray(answer.data.locked) ? /** @type {string[]} */ (answer.data.locked) : [];
 	const entries = draft ?? saved ?? [];
 	const nameKey = nameField(spec.fields);
 	const columns = COLUMNS[name];
@@ -404,6 +411,7 @@ export function ListCard({ websiteId, name, bare = false }) {
 							entry={current}
 							at={`/value/${opened}`}
 							errors={errors}
+							locked={locked}
 							onChange={(next) => setDraft(entries.map((other, i) => (i === opened ? next : other)))}
 						/>
 					</div>

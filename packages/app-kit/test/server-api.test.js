@@ -36,6 +36,25 @@ const memoryLists = () => {
 	};
 };
 
+/** A list whose `code` field needs one more permission (a field that runs code), kept in memory. */
+const guardedLists = () => {
+	/** @type {Map<string, unknown>} */
+	const saved = new Map();
+	return {
+		rules: {
+			feature: 'inbox',
+			title: 'Rules',
+			fieldPermissions: { code: 'code.manage' },
+			get: async (/** @type {string} */ websiteId) => saved.get(websiteId) ?? [],
+			save: async (/** @type {string} */ websiteId, /** @type {unknown} */ value) => {
+				if (!Array.isArray(value)) return { ok: /** @type {const} */ (false), errors: ['The list is an array.'] };
+				saved.set(websiteId, value);
+				return { ok: /** @type {const} */ (true), value };
+			},
+		},
+	};
+};
+
 /** @param {Response} response */
 const body = async (response) => ({ status: response.status, json: await response.json() });
 
@@ -239,6 +258,101 @@ describe('settings API for the merchant’s server (K1)', () => {
 		expect(overview.recentChanges.slice(0, 2)).toMatchObject([
 			{ what: 'settings', detail: 'Labels: changed', who: { kind: 'merchant' } },
 			{ what: 'settings', detail: 'Labels: changed', who: { kind: 'admin', role: 'owner' } },
+		]);
+	});
+
+	it('a field that needs one more permission (SR-7-10) is changed only by who holds it, on every kind of call', async () => {
+		const { call, server, switchOn, connectDatabase, session, dash, websiteId, clock, settle } = await setup({
+			lists: guardedLists(),
+		});
+		await switchOn(['notes', 'inbox']);
+		await connectDatabase();
+		const put = (/** @type {string[]} */ permissions, /** @type {unknown} */ value) =>
+			call('PUT', '/v1/lists/rules', {
+				token: server.token,
+				staff: { id: 'usr_rule', name: 'Rule Maker', permissions },
+				body: { value },
+			});
+		const settingsOnly = ['notes:settings.manage'];
+		const both = ['notes:settings.manage', 'notes:code.manage'];
+		clock.advance(1000);
+		// without the permission: a first piece of code, a changed one, a removed one are all refused and nothing is saved
+		const refused = await body(
+			await put(settingsOnly, [{ key: 'a', name: 'A', code: '<script src="https://evil.example/x.js"></script>' }]),
+		);
+		expect(refused.status).toBe(403);
+		expect(refused.json.type.split('/').pop()).toBe('forbidden');
+		expect(refused.json.detail).toContain('code.manage');
+		expect((await body(await call('GET', '/v1/lists/rules', { token: server.token }))).json).toEqual({ value: [] });
+		// entries with no code, and everything else of the entry, stay free
+		expect(
+			(
+				await put(settingsOnly, [
+					{ key: 'a', name: 'A', code: '' },
+					{ key: 'b', name: 'B' },
+				])
+			).status,
+		).toBe(200);
+		// with it: saved, and the activity log names the person and the field
+		clock.advance(1000);
+		const code = '<script>track()</script>';
+		expect(
+			(
+				await put(both, [
+					{ key: 'a', name: 'A', code },
+					{ key: 'b', name: 'B' },
+				])
+			).status,
+		).toBe(200);
+		// the same code with other names and another order is not a change of the code
+		clock.advance(1000);
+		expect(
+			(
+				await put(settingsOnly, [
+					{ key: 'b', name: 'Bee' },
+					{ key: 'a', name: 'Aye', code },
+				])
+			).status,
+		).toBe(200);
+		// but a changed or removed code is
+		for (const value of [
+			[{ key: 'a', name: 'A', code: '<script>other()</script>' }],
+			[{ key: 'a', name: 'A', code: '' }],
+			[{ key: 'b', name: 'B' }],
+			[
+				{ key: 'a', name: 'A', code },
+				{ key: 'c', name: 'C', code: '<script>more()</script>' },
+			],
+		]) {
+			const refusedChange = await put(settingsOnly, value);
+			expect([JSON.stringify(value), refusedChange.status]).toEqual([JSON.stringify(value), 403]);
+		}
+		expect(
+			(await body(await call('GET', '/v1/lists/rules', { token: server.token }))).json.value.map(
+				(/** @type {any} */ e) => e.code,
+			),
+		).toEqual([undefined, code]);
+		// the dashboard: the merchant and an Owner admin may, a Support admin may not and is told which fields are locked
+		const path = `/v1/dashboard/websites/${websiteId}/lists/rules`;
+		const merchant = await session({ kind: 'merchant' });
+		const owner = await session({ kind: 'admin', role: 'owner' });
+		const support = await session({ kind: 'admin', role: 'support' });
+		expect((await body(await dash(merchant, 'GET', path))).json.locked).toEqual([]);
+		expect((await body(await dash(support, 'GET', path))).json.locked).toEqual(['code']);
+		const changed = [{ key: 'a', name: 'A', code: '<script>mine()</script>' }];
+		expect((await dash(support, 'PUT', path, { value: changed })).status).toBe(403);
+		expect((await dash(owner, 'PUT', path, { value: changed })).status).toBe(200);
+		expect((await dash(merchant, 'PUT', path, { value: [...changed, { key: 'z', name: 'Z' }] })).status).toBe(200);
+		await settle();
+		const log = (await body(await call('GET', '/v1/activity?action=settings.changed', { token: server.token }))).json;
+		expect(
+			log.items.map((/** @type {any} */ e) => [e.actor.kind, e.actor.id === 'usr_rule' ? 'Rule Maker' : '', e.detail]),
+		).toEqual([
+			['merchant', '', 'changed'],
+			['admin', '', 'changed (code)'],
+			['user', 'Rule Maker', 'changed'],
+			['user', 'Rule Maker', 'changed (code)'],
+			['user', 'Rule Maker', 'changed'],
 		]);
 	});
 

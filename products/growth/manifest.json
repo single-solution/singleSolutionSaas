@@ -226,6 +226,11 @@
 			"key": "redirects.edit",
 			"name": "See and edit redirects",
 			"feature": "redirects"
+		},
+		{
+			"key": "scripts.manage",
+			"name": "Add and change custom scripts (they run on every page)",
+			"feature": "custom_scripts"
 		}
 	],
 	"widgets": [
