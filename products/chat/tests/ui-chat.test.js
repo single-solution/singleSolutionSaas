@@ -646,11 +646,11 @@ describe('conversation tools', () => {
 
 	it('offers no transcript to a guest, who has no verified email to send it to (SR-6-2)', async () => {
 		keepGuest();
-		const { root } = await start({
+		const { $, root } = await start({
 			features: ['visitor_chat', 'guest_chat', 'transcripts'],
 			routes: { 'GET /v1/chat': () => answer(200, { ...view({ conversation: conv() }), messages: [] }) },
 		});
-		await click(root.querySelector('.launcher'));
+		await click($('.launcher'));
 		expect(shows(root, TEXTS['chat.transcript'])).toBe(false);
 	});
 

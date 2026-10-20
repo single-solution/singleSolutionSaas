@@ -42,7 +42,6 @@ import {
 	previewOf,
 	staffMessageView,
 	transcriptText,
-	verifiedIdentity,
 	visitorMessageView,
 } from '../core/conversation.js';
 import { waitingView } from '../core/flows.js';

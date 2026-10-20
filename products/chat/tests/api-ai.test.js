@@ -107,14 +107,7 @@ describe('AI replies', () => {
 	});
 
 	it('tells a webhook tool and the booking endpoint only the verified sign-in, never what the visitor typed (SR-6-1)', async () => {
-		const sys = await start([
-			'visitor_chat',
-			'guest_chat',
-			'signed_in_chat',
-			'ai_replies',
-			'webhook_tools',
-			'book_slot',
-		]);
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'ai_replies', 'webhook_tools', 'book_slot']);
 		await sys.paste('accounts');
 		await sys.setting('book_slot', 'bookingUrl', `${TOOLS}/booking`);
 		await sys.setting('book_slot', 'needsContact', false);
