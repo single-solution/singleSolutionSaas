@@ -13,7 +13,7 @@ describe('sso and sessions', () => {
 		// the __Host- prefix: only a Secure, Path=/ cookie without a Domain is ever accepted, so a sibling subdomain cannot plant one
 		expect(cookie).toMatch(/^__Host-ss_session=[\w-]{43}; Path=\/; HttpOnly; Secure; SameSite=Lax; Expires=/);
 		expect(cookie).not.toMatch(/Domain=/i);
-		const pair = cookie.split(';')[0];
+		const pair = /** @type {string} */ (cookie.split(';')[0]);
 		expect((await call('GET', '/v1/dashboard/session', { cookie: pair })).status).toBe(200);
 		// a cookie of the old, unprefixed name opens nothing
 		expect((await call('GET', '/v1/dashboard/session', { cookie: pair.replace('__Host-', '') })).status).toBe(401);

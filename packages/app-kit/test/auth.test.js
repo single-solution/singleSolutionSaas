@@ -408,21 +408,25 @@ describe('request bodies (SR-1-3)', () => {
 			{ highWaterMark: 0 },
 		);
 		const response = await handler(
-			new Request(`${BASE}${path}`, {
-				method: 'POST',
-				headers: { 'content-type': 'application/json', ...headers },
-				body,
-				duplex: 'half',
-			}),
+			new Request(
+				`${BASE}${path}`,
+				/** @type {RequestInit} */ ({
+					method: 'POST',
+					headers: { 'content-type': 'application/json', ...headers },
+					body,
+					duplex: 'half',
+				}),
+			),
 		);
 		return { response, pulls: () => pulls };
 	};
 
 	it('are never read for a call with no or a bad token: the token is checked first', async () => {
 		const { handler, browser } = await setup({ routes });
-		const path = ['/v1/body/browser', '/v1/body/server', '/v1/body/ticket'];
-		for (const route of path) {
-			for (const headers of [{}, { authorization: 'Bearer nonsense' }, { authorization: `Bearer ${browser.token}x` }]) {
+		/** @type {Array<Record<string, string>>} */
+		const bad = [{}, { authorization: 'Bearer nonsense' }, { authorization: `Bearer ${browser.token}x` }];
+		for (const route of ['/v1/body/browser', '/v1/body/server', '/v1/body/ticket']) {
+			for (const headers of bad) {
 				const refused = await post(handler, route, { origin: SITE, ...headers });
 				expect([route, refused.response.status, refused.pulls()]).toEqual([route, 401, 0]);
 			}
