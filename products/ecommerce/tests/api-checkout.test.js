@@ -61,7 +61,7 @@ describe('digital files with the server token', () => {
 		expect(added.json.file).toEqual({ name: 'Manual-v2.pdf', type: 'application/pdf', size: 4096 });
 		expect(added.json.upload).toMatchObject({ method: 'PUT', headers: { 'content-type': 'application/pdf' } });
 		expect(added.json.upload.url.startsWith(STORAGE)).toBe(true);
-		expect(Date.parse(added.json.upload.expiresAt) - shop.now()).toBe(900_000);
+		expect(Date.parse(added.json.upload.expiresAt) - shop.now()).toBe(600_000);
 		// the same name again replaces the file
 		const again = await shop.api('POST', `/v1/products/${item.id}/files`, {
 			name: 'Manual v2.pdf',

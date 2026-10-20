@@ -75,7 +75,7 @@ import { createTransitions, rulesOf } from './transitions.js';
 const ORDER_KEY_HEADER = 'ss-order-key';
 /** Who ends a waiting order whose window passed (the activity log). */
 const SYSTEM_ACTOR = Object.freeze({ kind: 'system', id: 'checkout', name: 'System' });
-const PROOF_SECONDS = 900;
+const PROOF_SECONDS = 600;
 
 /** @param {string} url @param {string} name @param {string} value */
 const withParam = (url, name, value) => {

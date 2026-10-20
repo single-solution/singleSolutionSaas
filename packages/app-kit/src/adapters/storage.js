@@ -27,6 +27,11 @@ import { kitError } from '../util.js';
  * @property {string} [publicBaseUrl] public https address of the bucket's root (a CDN or the provider's public bucket address)
  */
 
+/** The longest an upload link lives (seconds): a few minutes, enough to start the upload, not to keep a link around. */
+export const MAX_UPLOAD_SECONDS = 600;
+/** The longest a download link lives (seconds): 7 days, the most S3 allows. */
+const MAX_DOWNLOAD_SECONDS = 7 * 24 * 3600;
+
 /** A media type without parameters spanning lines (`type/subtype[; params]`). */
 const CONTENT_TYPE = /^[A-Za-z0-9!#$&^_.+-]{1,127}\/[A-Za-z0-9!#$&^_.+-]{1,127}(?:\s*;[\x20-\x7e]{0,256})?$/;
 
@@ -130,11 +135,11 @@ export const createS3Storage = ({ descriptor, websiteId, slug, send, now, policy
 		}
 	};
 
-	/** @param {number | undefined} expiresIn */
-	const ttl = (expiresIn) => {
+	/** @param {number | undefined} expiresIn @param {number} max */
+	const ttl = (expiresIn, max) => {
 		const value = expiresIn ?? 300;
-		if (!Number.isInteger(value) || value < 1 || value > 7 * 24 * 3600)
-			throw kitError('invalid_argument', 'expiresIn must be 1..604800 seconds');
+		if (!Number.isInteger(value) || value < 1 || value > max)
+			throw kitError('invalid_argument', `expiresIn must be 1..${max} seconds`);
 		return value;
 	};
 
@@ -153,26 +158,20 @@ export const createS3Storage = ({ descriptor, websiteId, slug, send, now, policy
 		publicUrl: (key) =>
 			publicBase === null ? null : `${publicBase}/${fullKey(key).split('/').map(encodeURIComponent).join('/')}`,
 		/**
-		 * Presigned PUT for a direct browser upload. `content-type` and `content-length` (when given) are signed headers:
-		 * the client must send exactly the returned `headers`, so the bucket refuses another type or size.
-		 * @param {{ key: string, contentType?: string, contentLength?: number, expiresIn?: number }} input `key` relative
+		 * Presigned PUT for a direct browser upload. `content-type` and `content-length` are both required and signed
+		 * headers: the client must send exactly the returned `headers`, so the bucket refuses another type or size. The link
+		 * lives 5 minutes by default and at most `MAX_UPLOAD_SECONDS`.
+		 * @param {{ key: string, contentType: string, contentLength: number, expiresIn?: number }} input `key` relative
 		 * @returns {{ method: 'PUT', url: string, headers: Record<string, string>, key: string, expiresAt: string }}
 		 */
 		presignPut: ({ key, contentType, contentLength, expiresIn }) => {
 			checkKey(key);
-			const seconds = ttl(expiresIn);
-			/** @type {Record<string, string>} */
-			const headers = {};
-			if (contentType !== undefined) {
-				if (typeof contentType !== 'string' || !CONTENT_TYPE.test(contentType))
-					throw kitError('invalid_argument', 'contentType must be a media type');
-				headers['content-type'] = contentType;
-			}
-			if (contentLength !== undefined) {
-				if (!Number.isSafeInteger(contentLength) || contentLength < 1)
-					throw kitError('invalid_argument', 'contentLength must be a positive integer');
-				headers['content-length'] = String(contentLength);
-			}
+			const seconds = ttl(expiresIn, MAX_UPLOAD_SECONDS);
+			if (typeof contentType !== 'string' || !CONTENT_TYPE.test(contentType))
+				throw kitError('invalid_argument', 'contentType must be a media type');
+			if (!Number.isSafeInteger(contentLength) || contentLength < 1)
+				throw kitError('invalid_argument', 'contentLength must be a positive integer');
+			const headers = { 'content-type': contentType, 'content-length': String(contentLength) };
 			const url = presignV4({
 				method: 'PUT',
 				url: urlFor(key),
@@ -191,7 +190,7 @@ export const createS3Storage = ({ descriptor, websiteId, slug, send, now, policy
 		 */
 		presignGet: ({ key, expiresIn, downloadName }) => {
 			checkKey(key);
-			const seconds = ttl(expiresIn);
+			const seconds = ttl(expiresIn, MAX_DOWNLOAD_SECONDS);
 			/** @type {Record<string, string>} */
 			const query = downloadName
 				? { 'response-content-disposition': `attachment; filename="${downloadName.replace(/["\\\r\n]/g, '_')}"` }

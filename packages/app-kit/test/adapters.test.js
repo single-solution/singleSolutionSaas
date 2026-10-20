@@ -1,6 +1,6 @@
 import { createOutboundPolicy, netError } from '@ss/net';
 import { describe, expect, it } from 'vitest';
-import { createS3Storage } from '../src/adapters/storage.js';
+import { MAX_UPLOAD_SECONDS, createS3Storage } from '../src/adapters/storage.js';
 
 const WEBSITE = 'web_0123456789abcdefghjkmnpq';
 
@@ -24,14 +24,14 @@ describe('S3 storage adapter', () => {
 
 	it('scopes keys to <prefix><slug>/<websiteId>/ and presigns PUT/GET', () => {
 		const storage = createS3Storage({ descriptor, websiteId: WEBSITE, slug: 'coupon-box', send: noSend, now: () => AWS_NOW });
-		const put = storage.presignPut({ key: 'img/a b.png', contentType: 'image/png', expiresIn: 120 });
+		const put = storage.presignPut({ key: 'img/a b.png', contentType: 'image/png', contentLength: 10, expiresIn: 120 });
 		expect(put.key).toBe('img/a b.png');
 
 		expect(
 			put.url.startsWith(`https://merchant-bucket.s3.eu-central-1.amazonaws.com/site/coupon-box/${WEBSITE}/img/a%20b.png?`),
 		).toBe(true);
-		expect(new URL(put.url).searchParams.get('X-Amz-SignedHeaders')).toBe('content-type;host');
-		expect(put.headers).toEqual({ 'content-type': 'image/png' });
+		expect(new URL(put.url).searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;content-type;host');
+		expect(put.headers).toEqual({ 'content-type': 'image/png', 'content-length': '10' });
 		expect(put.expiresAt).toBe('2013-05-24T00:02:00.000Z');
 		const get = storage.presignGet({ key: 'img/a.png', downloadName: 'a"b.png' });
 		expect(get.key).toBe('img/a.png');
@@ -83,17 +83,34 @@ describe('S3 storage adapter', () => {
 		// the signature binds the size: another length signs differently
 		const other = storage.presignPut({ key: 'photos/p1', contentType: 'image/jpeg', contentLength: 48_212 });
 		expect(new URL(other.url).searchParams.get('X-Amz-Signature')).not.toBe(url.searchParams.get('X-Amz-Signature'));
-		const sizeOnly = storage.presignPut({ key: 'photos/p2', contentLength: 1 });
-		expect(sizeOnly.headers).toEqual({ 'content-length': '1' });
-		expect(new URL(sizeOnly.url).searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;host');
 		for (const contentLength of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '10']) {
-			expect(() => storage.presignPut({ key: 'k', contentLength: /** @type {any} */ (contentLength) })).toThrow(
-				/contentLength/,
-			);
+			expect(() =>
+				storage.presignPut({ key: 'k', contentType: 'image/png', contentLength: /** @type {any} */ (contentLength) }),
+			).toThrow(/contentLength/);
 		}
 		for (const contentType of ['', 'image', 'text/plain\r\nx-evil: 1', 42]) {
-			expect(() => storage.presignPut({ key: 'k', contentType: /** @type {any} */ (contentType) })).toThrow(/contentType/);
+			expect(() => storage.presignPut({ key: 'k', contentType: /** @type {any} */ (contentType), contentLength: 1 })).toThrow(
+				/contentType/,
+			);
 		}
+	});
+
+	it('a presigned PUT always fixes the type and the size, and lives only a few minutes', () => {
+		const storage = createS3Storage({ descriptor, websiteId: WEBSITE, slug: 'reviews', send: noSend, now: () => AWS_NOW });
+		// a caller that forgets the type or the size gets an error, never a link that takes any type or size
+		expect(() => storage.presignPut({ key: 'k', contentLength: 1 })).toThrow(/contentType/);
+		expect(() => storage.presignPut({ key: 'k', contentType: 'image/png' })).toThrow(/contentLength/);
+		expect(() => storage.presignPut(/** @type {any} */ ({ key: 'k' }))).toThrow(/contentType/);
+		const link = (/** @type {number | undefined} */ expiresIn) =>
+			storage.presignPut({ key: 'k', contentType: 'image/png', contentLength: 1, expiresIn });
+		expect(new URL(link(undefined).url).searchParams.get('X-Amz-Expires')).toBe('300');
+		expect(new URL(link(MAX_UPLOAD_SECONDS).url).searchParams.get('X-Amz-Expires')).toBe(String(MAX_UPLOAD_SECONDS));
+		expect(MAX_UPLOAD_SECONDS).toBe(600);
+		for (const expiresIn of [MAX_UPLOAD_SECONDS + 1, 3600, 7 * 24 * 3600, 0, 1.5]) {
+			expect(() => link(expiresIn), String(expiresIn)).toThrow(/expiresIn/);
+		}
+		// a download link may still live longer: only uploads are capped
+		expect(new URL(storage.presignGet({ key: 'k', expiresIn: 3600 }).url).searchParams.get('X-Amz-Expires')).toBe('3600');
 	});
 
 	it('supports custom endpoints (path and virtual-hosted style)', () => {

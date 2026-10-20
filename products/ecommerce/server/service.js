@@ -62,8 +62,8 @@ export const invalid = (field, message, code = 'invalid') =>
  */
 export const bodyOf = (ctx) => (isObject(ctx.body) ? ctx.body : {});
 
-/** How long a signed upload link lasts (seconds). */
-export const UPLOAD_SECONDS = 900;
+/** How long a signed upload link lasts (seconds): 10 minutes, the most the kit allows (`MAX_UPLOAD_SECONDS`). */
+export const UPLOAD_SECONDS = 600;
 
 /** The server token as an actor, when a call names no member of the staff (PLAN 0.8.10 K2). */
 const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
