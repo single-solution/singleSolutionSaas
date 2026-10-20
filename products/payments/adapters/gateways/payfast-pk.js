@@ -5,9 +5,12 @@
  * the payment form with that token to PayFast's own page (`PostTransaction`). PayFast sends the payer back to the return
  * address (success and failure alike) and calls the notice address (`CHECKOUT_URL`) server to server. Both carry
  * `validation_hash`: SHA-256 in hex of `basket_id|secured_key|merchant_id|err_code`. Payments trusts only an answer
- * whose hash matches and whose basket id is the payment's id; `000` (or `00`) is paid for the `transaction_amount`
- * PayFast reports, `001` is pending, any other code failed. PayFast's hosted checkout has no refund call, so refunds are
- * recorded by hand (the merchant returns the money in the PayFast merchant portal).
+ * whose hash matches and whose basket id is the payment's id; `000` (or `00`) is paid, `001` is pending, any other code
+ * failed. The hash does not cover the amount or the currency (SR-3-1): the `transaction_amount` and
+ * `transaction_currency` an answer carries are unsigned, so they are never taken as what was paid. The payment is paid
+ * for its stored amount and currency (the ones its access token was made for) only when the answer's unsigned values
+ * equal them; any other value, or none, is a mismatch Payments records and does not pay. PayFast's hosted checkout has
+ * no refund call, so refunds are recorded by hand (the merchant returns the money in the PayFast merchant portal).
  *
  * Connection `payfast_pk`: `{ merchantId, securedKey, merchantName, sandbox? }`.
  * @module
@@ -104,6 +107,9 @@ const confirmation = (data, keys) => {
 	const code = data.err_code ?? '';
 	const given = (data.validation_hash ?? '').toLowerCase();
 	if (!basket || !given || !constantTimeEqual(given, validationHash(basket, code, keys))) return null;
+	// The amount and the currency below are NOT signed: they only let the caller refuse an answer that differs from the
+	// stored payment (applyPayment records a mismatch and does not pay). They prove nothing about what PayFast took, so a
+	// server-to-server inquiry should replace this once PayFast Pakistan's inquiry endpoint is confirmed (SR-3-1).
 	const currency = !data.transaction_currency || data.transaction_currency === '586' ? 'PKR' : data.transaction_currency;
 	const amount = fromDecimal(data.transaction_amount, currency);
 	return {

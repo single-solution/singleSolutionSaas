@@ -593,6 +593,37 @@ describe('the other gateways', () => {
 		expect(refund.json.refunds[0]).toMatchObject({ manual: true, amount: 1000 });
 	});
 
+	it('PayFast (Pakistan): the amount and currency it reports are not signed, so only the stored ones can be paid (SR-3-1)', async () => {
+		env.gateways.respond('https://ipg1.apps.net.pk', (c) =>
+			c.path === '/Ecommerce/api/Transaction/GetAccessToken' ? { status: 200, body: { ACCESS_TOKEN: 'tok' } } : undefined,
+		);
+		await env.connect('payfast_pk', PAYFAST_PK);
+		const payment = await createPayment({ gateway: 'payfast_pk', currency: 'PKR' });
+		await page(`/pay/${env.websiteId}/${payment.id}`);
+		/** A signed answer: the hash covers the basket and the code only, never these amounts. @param {Record<string, string>} extra */
+		const answer = (extra) =>
+			new URLSearchParams({
+				basket_id: payment.id,
+				err_code: '000',
+				transaction_id: 'T-2',
+				validation_hash: validationHash(payment.id, '000', PAYFAST_PK),
+				...extra,
+			}).toString();
+		const state = async () => (await env.api('GET', `/v1/payments/${payment.id}`)).json;
+		// a lower amount, another currency or no amount at all is not paid, on the notice and on the return; it is logged
+		for (const extra of [{ transaction_amount: '1' }, { transaction_amount: '2500', transaction_currency: 'USD' }, {}]) {
+			await env.call('GET', `/v1/gateways/payfast_pk/${env.websiteId}?${answer(extra)}`);
+			await page(`/return/payfast_pk/${env.websiteId}/${payment.id}?${answer(extra)}`);
+			expect((await state()).status).toBe('pending');
+		}
+		expect((await state()).history.filter((/** @type {any} */ e) => e.event === 'mismatch')).toHaveLength(6);
+		// the stored amount and currency (the numeric code 586 is PKR) is paid
+		await page(
+			`/return/payfast_pk/${env.websiteId}/${payment.id}?${answer({ transaction_amount: '2500', transaction_currency: '586' })}`,
+		);
+		expect(await state()).toMatchObject({ status: 'paid', amount: 250000, currency: 'PKR' });
+	});
+
 	it('Rapid Gateway: payment created at Rapid, redirect, confirmed by the signed webhook only', async () => {
 		env.gateways.respond('https://api.rapidgateway.pk', (c) => {
 			const sent = JSON.parse(c.body);
