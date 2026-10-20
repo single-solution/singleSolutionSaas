@@ -138,7 +138,13 @@ describe('My account is the shopper’s own: /v1/me with their sign-in, from the
 	let signIn;
 
 	beforeAll(async () => {
-		const up = await fromServer('POST', '/v1/sign-up/phone-password', { phone: '+447700900555', password: 'shopper pass 1' });
+		// the number is proven first: the code goes to it, and comes back with the sign-up
+		expect((await fromServer('POST', '/v1/sign-in/phone/code', { phone: '+447700900555' })).status).toBe(202);
+		const up = await fromServer('POST', '/v1/sign-up/phone-password', {
+			phone: '+447700900555',
+			password: 'shopper pass 1',
+			code: env.messages().at(-1)?.values.code,
+		});
 		expect(up.status).toBe(200);
 		signIn = up.json.signIn;
 	});

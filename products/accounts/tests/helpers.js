@@ -386,6 +386,34 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		return /** @type {string} */ (response.json.ticket);
 	};
 
+	/**
+	 * A phone + password sign-up as a person does it: the code goes to the number (read here from the message Notifications
+	 * got), then comes back with the sign-up. Whatever the code request refuses is the answer.
+	 * @param {Record<string, any>} body
+	 */
+	const phoneSignUp = async (body) => {
+		let asked = await visitor('POST', '/v1/sign-in/phone/code', { phone: body.phone });
+		if (asked.json?.type?.endsWith('/code_cooldown')) {
+			t += 61_000;
+			asked = await visitor('POST', '/v1/sign-in/phone/code', { phone: body.phone });
+		}
+		if (asked.status !== 202) return asked;
+		return visitor('POST', '/v1/sign-up/phone-password', { ...body, code: messages().at(-1)?.values.code });
+	};
+
+	/**
+	 * An account that holds a number it never proved: an email sign-up that typed the phone number (no code goes to it).
+	 * @param {{ phone: string, name: string, password: string }} who
+	 */
+	const typedPhoneSignUp = ({ phone, name, password }) =>
+		visitor('POST', '/v1/sign-up/password', {
+			email: `${name.toLowerCase().replace(/\W+/g, '.')}@example.com`,
+			password,
+			name,
+			phone,
+			consents: { terms: true },
+		});
+
 	/** An admin widget request. @param {string} ticketValue @param {string} method @param {string} path @param {unknown} [body] */
 	const admin = (ticketValue, method, path, body) =>
 		call(method, path, { token: ticketValue, origin: ADMIN_ORIGIN, ...(body === undefined ? {} : { body }) });
@@ -418,6 +446,8 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		setting,
 		ticket,
 		admin,
+		phoneSignUp,
+		typedPhoneSignUp,
 		messages,
 		setWebsite,
 		setBusiness,

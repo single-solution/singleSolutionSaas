@@ -2558,6 +2558,8 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 				'POST /v1/sign-in/phone-password': ({ body }) =>
 					body.password === 'wrong' ? problem(401, 'sign_in_failed') : answer(200, signedIn()),
 				'POST /v1/sign-up/phone-password': () => answer(200, { status: 'pending' }),
+				'POST /v1/sign-in/phone/code': ({ body }) =>
+					body.phone === '+447700900000' ? problem(429, 'code_cooldown') : answer(202),
 				'POST /v1/password/phone/forgot': ({ body }) => (body.phone === 'x' ? problem(429, 'code_cooldown') : answer(202)),
 				'POST /v1/password/phone/reset': ({ body }) => (body.code === '1' ? problem(422, 'code_invalid') : answer(204)),
 			},
@@ -2584,8 +2586,26 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		fieldIn(root, strings['fields.name']).value = 'Robin';
 		fieldIn(root, strings['fields.phone']).value = '+447700900567';
 		fieldIn(root, strings['fields.password']).value = 'abc123';
+		// the number is proven first: the code goes to it, and comes back with the sign-up
+		expect(fieldIn(root, strings['code.code']).closest('[hidden]')).not.toBeNull();
+		fieldIn(root, strings['fields.phone']).value = '+447700900000';
+		await submit(buttonIn(root, strings['code.send']));
+		expect(statusIn(root)).toBe(strings['error.code_cooldown']);
+		expect(server.last('POST /v1/sign-up/phone-password')).toBeUndefined();
+		fieldIn(root, strings['fields.phone']).value = '+447700900567';
+		await submit(buttonIn(root, strings['code.send']));
+		expect(server.last('POST /v1/sign-in/phone/code')?.body).toEqual({ phone: '+447700900567' });
+		expect(fieldIn(root, strings['code.code']).closest('[hidden]')).toBeNull();
+		expect(statusIn(root)).toBe(strings['code.sentPhone'].replace('{to}', '+447700900567'));
+		await click(buttonIn(root, strings['code.again']));
+		expect(statusIn(root)).toBe(strings['code.sentPhone'].replace('{to}', '+447700900567'));
+		fieldIn(root, strings['code.code']).value = '123456';
 		await submit(buttonIn(root, strings['signUp.submit']));
-		expect(server.last('POST /v1/sign-up/phone-password')?.body).toMatchObject({ name: 'Robin', phone: '+447700900567' });
+		expect(server.last('POST /v1/sign-up/phone-password')?.body).toMatchObject({
+			name: 'Robin',
+			phone: '+447700900567',
+			code: '123456',
+		});
 		expect(heading(host)).toBe(strings['pending.title']);
 		await click(buttonIn(root, strings['signIn.back']));
 		await click(buttonIn(root, strings['signUp.toSignIn']));

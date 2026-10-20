@@ -111,9 +111,7 @@ describe('A2: phone + password', () => {
 	const phoneSignIn = (body) => env.visitor('POST', '/v1/sign-in/phone-password', body);
 
 	it('signs up and in with a phone number and a password in the website’s phone format', async () => {
-		expect(code(await env.visitor('POST', '/v1/sign-up/phone-password', { phone: '+447700900000', password: 'x' }))).toBe(
-			'feature_off',
-		);
+		expect(code(await env.phoneSignUp({ phone: '+447700900000', password: 'x' }))).toBe('feature_off');
 		await env.switchOn(['email_password', 'phone_password']);
 		// the phone format is shared by Phone code and Phone + password, and shown while either is on
 		const cookie = await env.merchantSession();
@@ -124,10 +122,8 @@ describe('A2: phone + password', () => {
 		expect(listed.json.features.map((/** @type {{ key: string }} */ f) => f.key)).not.toContain('phone_code');
 		await env.setting('phone', 'defaultCallingCode', '+44');
 		await env.setting('phone', 'trunkPrefix', '0');
-		expect(code(await env.visitor('POST', '/v1/sign-up/phone-password', { phone: 'nope', password: 'abc12345' }))).toBe(
-			'validation_failed',
-		);
-		const up = await env.visitor('POST', '/v1/sign-up/phone-password', {
+		expect(code(await env.phoneSignUp({ phone: 'nope', password: 'abc12345' }))).toBe('validation_failed');
+		const up = await env.phoneSignUp({
 			phone: '07700 900000',
 			password: 'abc12345',
 			name: 'Robin',
@@ -135,11 +131,9 @@ describe('A2: phone + password', () => {
 		});
 		expect(up.json).toMatchObject({
 			status: 'signed_in',
-			user: { phone: '+447700900000', phoneVerified: false, name: 'Robin' },
+			user: { phone: '+447700900000', phoneVerified: true, name: 'Robin' },
 		});
-		expect(
-			code(await env.visitor('POST', '/v1/sign-up/phone-password', { phone: '+447700900000', password: 'abc12345' })),
-		).toBe('already_exists');
+		expect(code(await env.phoneSignUp({ phone: '+447700900000', password: 'abc12345' }))).toBe('already_exists');
 		const sessions = await env.visitor('GET', '/v1/me/sessions', undefined, up.json.signIn);
 		expect(sessions.json.items[0].method).toBe('phone_password');
 		expect(code(await phoneSignIn({ phone: '07700900000', password: 'wrong one' }))).toBe('sign_in_failed');
@@ -150,16 +144,14 @@ describe('A2: phone + password', () => {
 	it('uses its own password rules: length 6 to 128 and a letter with a digit', async () => {
 		await env.setting('phone_password', 'minLength', 6);
 		await env.setting('phone_password', 'letterAndDigit', true);
-		const refused = await env.visitor('POST', '/v1/sign-up/phone-password', {
+		const refused = await env.phoneSignUp({
 			phone: '+447700900001',
 			password: 'onlyletters',
 		});
 		expect(code(refused)).toBe('weak_password');
 		expect(refused.json.detail).toMatch(/letter and one digit/);
-		expect(code(await env.visitor('POST', '/v1/sign-up/phone-password', { phone: '+447700900001', password: 'a1b2' }))).toBe(
-			'weak_password',
-		);
-		const ok = await env.visitor('POST', '/v1/sign-up/phone-password', { phone: '+447700900001', password: 'a1b2c3' });
+		expect(code(await env.phoneSignUp({ phone: '+447700900001', password: 'a1b2' }))).toBe('weak_password');
+		const ok = await env.phoneSignUp({ phone: '+447700900001', password: 'a1b2c3' });
 		expect(ok.json.status).toBe('signed_in');
 		// My account changes the password of a phone user with the same rules
 		expect(code(await env.visitor('PUT', '/v1/me/password', { current: 'a1b2c3', password: 'zzzzzz' }, ok.json.signIn))).toBe(
@@ -174,9 +166,7 @@ describe('A2: phone + password', () => {
 	it('with sign-up off, only the shop gives passwords: sign-up is closed, sign-in still works', async () => {
 		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.phonePassword.signUp).toBe(true);
 		await env.setting('phone_password', 'signUp', false);
-		expect(
-			code(await env.visitor('POST', '/v1/sign-up/phone-password', { phone: '+447700900002', password: 'a1b2c3d4' })),
-		).toBe('sign_up_closed');
+		expect(code(await env.phoneSignUp({ phone: '+447700900002', password: 'a1b2c3d4' }))).toBe('sign_up_closed');
 		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.phonePassword.signUp).toBe(false);
 		expect((await phoneSignIn({ phone: '+447700900001', password: 'new1pass' })).json.status).toBe('signed_in');
 		await env.setting('phone_password', 'signUp', true);
@@ -294,7 +284,7 @@ describe('Forgot password by email: only a proven address or the one the account
 	const forgot = (email) => env.visitor('POST', '/v1/password/forgot', { email, returnTo: 'https://shop.example.com/reset' });
 
 	it('a phone + password member’s unproven email address gets nothing, so its owner cannot take the account', async () => {
-		const member = await env.visitor('POST', '/v1/sign-up/phone-password', {
+		const member = await env.phoneSignUp({
 			phone: '+447700900233',
 			password: 'member pass 1',
 			email: 'someone@example.com',
@@ -366,10 +356,7 @@ describe('A9: password and lock options', () => {
 		/** @param {string} phone @param {string} password */
 		const phoneSignIn = (phone, password) => env.visitor('POST', '/v1/sign-in/phone-password', { phone, password });
 		for (const phone of ['+447700900331', '+447700900332'])
-			expect(
-				(await env.visitor('POST', '/v1/sign-up/phone-password', { phone, password: `phone pass ${phone.slice(-3)}` })).json
-					.status,
-			).toBe('signed_in');
+			expect((await env.phoneSignUp({ phone, password: `phone pass ${phone.slice(-3)}` })).json.status).toBe('signed_in');
 		for (let i = 0; i < 4; i += 1) expect(code(await phoneSignIn('+447700900331', 'bad'))).toBe('sign_in_failed');
 		env.advance(DAY - 1);
 		expect(code(await phoneSignIn('+447700900331', 'bad'))).toBe('sign_in_failed');
@@ -407,7 +394,7 @@ describe('A9: password and lock options', () => {
 			),
 		).toBe('weak_password');
 		// Phone + password has the same longest password
-		const phoneLong = await env.visitor('POST', '/v1/sign-up/phone-password', {
+		const phoneLong = await env.phoneSignUp({
 			phone: '+447700900003',
 			password: `${'a1'.repeat(128)}x`,
 		});
@@ -445,7 +432,7 @@ describe('A9: password and lock options', () => {
 		expect(await save('email_password.minLength', 10)).toBe(403);
 		expect(await save('passwords.personalCheck', true)).toBe(204);
 		/** @param {Record<string, unknown>} body */
-		const phoneUp = (body) => env.visitor('POST', '/v1/sign-up/phone-password', body);
+		const phoneUp = (body) => env.phoneSignUp(body);
 		const personal = await phoneUp({ phone: '+447700900341', name: 'Morgan Lee', password: 'morgan secret 1' });
 		expect([code(personal), personal.json.rule]).toEqual(['weak_password', 'personal']);
 		expect((await phoneUp({ phone: '+447700900341', name: 'Morgan Lee', password: 'quiet river 77' })).json.status).toBe(

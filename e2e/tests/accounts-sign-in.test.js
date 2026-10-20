@@ -1,6 +1,7 @@
 /**
  * Accounts' sign-in methods, staff and roles on the REAL Portal (PLAN 0.8.10): imported bcrypt and PBKDF2 hashes sign
- * in and are re-hashed; phone + password, staff sign-in codes and setup links, role requests (repeat asks, a new link,
+ * in and are re-hashed; phone + password (a sign-up proves the number first, with the SMS code Notifications sends
+ * through the merchant's own provider), staff sign-in codes and setup links, role requests (repeat asks, a new link,
  * a decline, the role given at completion, the setup-link lookup), the guards, paused roles and the remember options
  * (`never` too) work through the widget (Accounts' real `widget.js` code in a browser window, jsdom) and through the
  * merchant's server (server token, `SS-Visitor-IP`, `SS-Actor-*`); an old recovery code works once.
@@ -11,15 +12,32 @@ import { JSDOM } from 'jsdom';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createProductInstance, manifest, strings } from '@ss/product-accounts/product';
 import { createRoutes } from '@ss/product-accounts/routes';
+import {
+	createProductInstance as createNotifications,
+	manifest as notifyManifest,
+	strings as notifyStrings,
+} from '@ss/product-notifications/product';
+import { createRoutes as notifyRoutes } from '@ss/product-notifications/routes';
 import { staffSignIns } from '@ss/product-accounts/testing';
 import { startWidget } from '@ss/product-accounts/widget';
 import { codeOf, savePortalSettings, startSystem } from './helpers.js';
 
 const ACCOUNTS = 'https://accounts.test';
+const NOTIFY = 'https://notifications.test';
 const DOMAIN = 'members.example.com';
 const ORIGIN = `https://${DOMAIN}`;
 const ADMIN_ORIGIN = 'https://admin.members.example.com';
 const VISITOR = { 'ss-visitor-ip': '198.51.100.9' };
+
+/** The texts the merchant's SMS provider (Twilio) received. @type {string[]} */
+const texts = [];
+/** @param {Request} request */
+const twilio = async (request) => {
+	if (request.method === 'POST') texts.push(String(new URLSearchParams(await request.text()).get('Body')));
+	return Response.json({ sid: `SM${texts.length}` });
+};
+/** The 6 digits of the last text the provider got: the code a visitor reads on their phone. */
+const lastCode = () => /\b(\d{6})\b/.exec(texts.at(-1) ?? '')?.[1] ?? '';
 
 /** @type {import('./helpers.js').System} */
 let sys;
@@ -118,11 +136,31 @@ const server = {
 const users = async () => (await sys.product.data.forWebsite(websiteId)).collection('users');
 
 beforeAll(async () => {
-	sys = await startSystem({ unit: { createProductInstance, createRoutes, manifest, strings, url: ACCOUNTS } });
+	sys = await startSystem({
+		unit: {
+			createProductInstance,
+			createRoutes,
+			manifest,
+			strings,
+			url: ACCOUNTS,
+			handlers: { 'https://api.twilio.com': twilio },
+		},
+		extras: [
+			{
+				createProductInstance: createNotifications,
+				createRoutes: notifyRoutes,
+				manifest: notifyManifest,
+				strings: notifyStrings,
+				url: NOTIFY,
+			},
+		],
+	});
 	await sys.connect();
+	await sys.connect({ base: NOTIFY });
 	const m = await sys.merchant('members@shop.test', [DOMAIN]);
 	websiteId = m.websiteIds[0] ?? '';
 	await sys.addProduct(m.merchantId, websiteId, 'accounts');
+	await sys.addProduct(m.merchantId, websiteId, 'notifications');
 	await sys.addCredits(m.merchantId, 100);
 	tokens = await sys.tokens(m.merchantId, websiteId, 'accounts');
 	const cookie = await sys.adminSession(await sys.owner(), websiteId);
@@ -135,6 +173,19 @@ beforeAll(async () => {
 		'role_requests',
 	]);
 	await sys.connectDatabase(websiteId);
+	// the codes go by SMS through the merchant's own provider, in Notifications
+	const notifyCookie = await sys.adminSession(await sys.owner(), websiteId, 'notifications');
+	const notifyDashboard = `/v1/dashboard/websites/${websiteId}`;
+	expect((await sys.dashboard(notifyCookie, 'PUT', `${notifyDashboard}/features`, { on: ['sms'] }, NOTIFY)).status).toBe(200);
+	await sys.connectDatabase(websiteId, NOTIFY);
+	const sms = await sys.dashboard(
+		notifyCookie,
+		'PUT',
+		`${notifyDashboard}/connections/sms`,
+		{ value: { provider: 'twilio', accountSid: `AC${'a'.repeat(32)}`, secret: 'twilio-token-9876', from: '+15550001111' } },
+		NOTIFY,
+	);
+	expect(sms.json).toMatchObject({ status: 'connected' });
 	staffSignIn = staffSignIns(/** @type {any} */ (sys.product), {
 		websiteId,
 		merchantId: m.merchantId,
@@ -202,9 +253,16 @@ describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 		field(root, strings['fields.name']).value = 'Nora';
 		field(root, strings['fields.phone']).value = '07700 900321';
 		field(root, strings['fields.password']).value = 'nora pass 1';
+		// the number is proven first: the code goes to the phone, and comes back with the sign-up
+		await submit(win, button(root, strings['code.send']));
+		await until(() => texts.length > 0);
+		await settle();
+		expect(lastCode()).toMatch(/^\d{6}$/);
+		expect(widget.user()).toBeNull();
+		field(root, strings['code.code']).value = lastCode();
 		await submit(win, button(root, strings['signUp.submit']));
 		await until(() => widget.user() !== null);
-		expect(widget.user()?.phone).toBe('+447700900321');
+		expect(widget.user()).toMatchObject({ phone: '+447700900321', phoneVerified: true });
 		const fromServer = await server.call(
 			'POST',
 			'/v1/sign-in/phone-password',

@@ -330,7 +330,8 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 
 			/**
 			 * Phone + password (A2): sign in (a code from staff works as the password, A3) or sign up, while its own sign-up
-			 * is on (SA-2).
+			 * is on (SA-2). A sign-up proves the number first: the form asks for the code sent to it, then sends it with the
+			 * sign-up.
 			 * @param {HTMLElement} area @param {HTMLElement} note
 			 */
 			const phonePasswordForm = (area, note) => {
@@ -352,10 +353,31 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 				});
 				const consents = consentBoxes(doc, t, settings.consents);
 				setHidden(consents.wrap, !(creating && consents.any()));
-				const submit = element(doc, 'button', { type: 'submit' }, t(creating ? 'signUp.submit' : 'signIn.submit'));
+				const submit = element(doc, 'button', { type: 'submit' }, t(creating ? 'code.send' : 'signIn.submit'));
+				// the code step of a sign-up: shown once the code was sent, and gone again when the number changes
+				const code = make.field('input', t('code.code'), {
+					inputmode: 'numeric',
+					autocomplete: 'one-time-code',
+					maxlength: '12',
+				});
+				const again = button(t('code.again'), { class: 'link' });
+				const step = element(doc, 'div', { hidden: '' });
+				step.append(code.wrap, again);
+				let codeSent = false;
+				/** @param {boolean} sent */
+				const showStep = (sent) => {
+					codeSent = sent;
+					setHidden(step, !sent);
+					if (sent) code.input.setAttribute('required', '');
+					else code.input.removeAttribute('required');
+					submit.textContent = t(sent ? 'signUp.submit' : 'code.send');
+				};
 				/** @type {() => Record<string, unknown>} */
 				let profile = () => ({});
 				if (creating) {
+					phone.input.addEventListener('input', () => {
+						if (codeSent) showStep(false);
+					});
 					const name = make.field('input', t('fields.name'), {
 						autocomplete: 'name',
 						maxlength: '120',
@@ -373,7 +395,19 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 						...custom.nodes,
 						password.wrap,
 						consents.wrap,
+						step,
 						submit,
+					);
+					again.addEventListener('click', () =>
+						run(again, note, async () => {
+							const answer = await requestCode('phone', phone.input.value.trim());
+							say(
+								note,
+								answer.ok
+									? formatText(t('code.sentPhone'), { to: phone.input.value.trim() })
+									: errorText(t, answer, when),
+							);
+						}),
 					);
 					profile = () => {
 						const values = custom.read();
@@ -403,19 +437,27 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 				}
 				form.addEventListener('submit', (event) => {
 					event.preventDefault();
-					void run(submit, note, async () =>
-						handle(
+					void run(submit, note, async () => {
+						if (creating && !codeSent) {
+							const to = phone.input.value.trim();
+							const answer = await requestCode('phone', to);
+							if (!answer.ok) return say(note, errorText(t, answer, when));
+							showStep(true);
+							return say(note, formatText(t('code.sentPhone'), { to }));
+						}
+						return handle(
 							await session.call('POST', creating ? '/v1/sign-up/phone-password' : '/v1/sign-in/phone-password', {
 								phone: phone.input.value.trim(),
 								password: password.input.value,
+								...(creating ? { code: code.input.value.trim() } : {}),
 								...profile(),
 								consents: consents.read(),
 								...extras(),
 							}),
 							note,
 							consents,
-						),
-					);
+						);
+					});
 				});
 				const nodes = [form];
 				if (open) {

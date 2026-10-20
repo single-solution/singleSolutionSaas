@@ -9,6 +9,7 @@ import { createId } from '@ss/contracts';
 import { phoneInCountries } from '@ss/contracts/phone';
 import { normalizeEmail } from '@ss/contracts/email';
 import { constantTimeEqual, randomToken, sha256Hex } from '@ss/protocol';
+import { labelOf, valuesOf } from '../core/activity.js';
 import { checkCustomValues, checkName, identityOfMethod, resetsByEmail, selfView } from '../core/profile.js';
 import { sessionEnd } from '../core/roles.js';
 import {
@@ -60,6 +61,9 @@ export const STAFF_CODE_LENGTH = 6;
  * the merchant's server renews from parallel requests, or retries a renew (RW-1; code constant).
  */
 const REFRESH_GRACE_MS = 30_000;
+
+/** Who the activity log names when a code that proves a phone number takes it off an account that never proved it. */
+const PHONE_PROOF = Object.freeze({ kind: 'system', id: 'phone-proof', name: 'Phone proof' });
 
 /** Refusals of a code (cooldown, caps) that a Forgot password request never shows (ST-3). */
 const QUIET_REFUSALS = Object.freeze(['code_cooldown', 'code_limit']);
@@ -408,6 +412,39 @@ export const createFlows = (product, service) => {
 	};
 
 	/**
+	 * The account a phone code or a phone password reset may open: only one whose number was proven before. A number
+	 * typed but never proven (at an email sign-up, an import without proof) is no way in, like an unproven address: it
+	 * counts as unknown (SR-4-1).
+	 * @param {Site} s @param {string} phone
+	 */
+	const provenPhoneHolderOf = async (s, phone) => {
+		const holder = await s.store.users.byPhone(phone);
+		return holder?.phoneVerified ? holder : null;
+	};
+
+	/**
+	 * A code just proved the number, so it is the prover's: an account that holds it unproven gives it up (it keeps
+	 * everything else), and the activity log records it for that account (SR-4-1).
+	 * @param {Site} s @param {string} phone
+	 */
+	const claimPhone = async (s, phone) => {
+		const holder = await s.store.users.byPhone(phone);
+		if (!holder || holder.phoneVerified) return;
+		await s.store.users.update(holder.id, { phone: null, phoneVerified: false });
+		if (s.after)
+			await product.activity.record(
+				{ websiteId: s.websiteId, merchantId: s.merchantId, after: s.after },
+				{
+					actor: PHONE_PROOF,
+					action: 'user.phone_removed',
+					target: holder.id,
+					label: labelOf(holder.name || holder.email),
+					values: valuesOf({ reason: 'proven_by_another' }),
+				},
+			);
+	};
+
+	/**
 	 * Sign in (or up) the owner of a proven address, then use up the code or link. A sign-in code staff made (A3) opens
 	 * the account it was made for, but proves no email address.
 	 * @param {Site} s @param {any} ctx @param {'phone' | 'email'} kind @param {string} target
@@ -423,7 +460,9 @@ export const createFlows = (product, service) => {
 		const verified = kind === 'phone' ? 'phoneVerified' : 'emailVerified';
 		const existing =
 			kind === 'phone'
-				? await s.store.users.byPhone(target)
+				? staff
+					? await s.store.users.byPhone(target)
+					: await provenPhoneHolderOf(s, target)
 				: staff
 					? await s.store.users.byEmail(target)
 					: await provenHolderOf(s, target);
@@ -442,6 +481,7 @@ export const createFlows = (product, service) => {
 				const { newUserName } = await service.settings(s, 'phone_code');
 				profile.name = newUserNameOf(String(newUserName), target);
 			}
+			if (kind === 'phone') await claimPhone(s, target);
 			answer = await afterSignUp(s, await createUser(s, profile, { [verified]: true }, service.howOf(ctx), how.method), how);
 		}
 		// used up only now: a consent or profile step can be retried with the same code or link
@@ -475,8 +515,9 @@ export const createFlows = (product, service) => {
 	// ----------------------------------------------------------------------------------------- phone + password
 
 	/**
-	 * Sign up with a phone number and a password (A2; the number is not verified), while the website lets visitors
-	 * sign up this way (SA-2: off, only staff give passwords).
+	 * Sign up with a phone number and a password (A2), while the website lets visitors sign up this way (SA-2: off,
+	 * only staff give passwords). The number is proven first with the code sent to it (`POST /v1/sign-in/phone/code`):
+	 * no account is made with a number nobody proved (SR-4-1), and an account that holds the number unproven gives it up.
 	 * @param {any} ctx
 	 */
 	const phonePasswordSignUp = async (ctx) => {
@@ -492,8 +533,15 @@ export const createFlows = (product, service) => {
 			who: { name: profile.name, email: profile.email },
 		});
 		const how = service.howOf(ctx);
-		const user = await createUser(s, profile, { passwordHash }, how, 'phone_password');
-		return afterSignUp(s, user, { method: 'phone_password', ...how, consents: body.consents });
+		const proof = await checkCode(s, 'phone', phone, body.code);
+		// a sign-in code from staff says who the user is, not that this person holds the number
+		if (proof.staff) throw problem('code_invalid', 'The code is not valid or has expired.');
+		await claimPhone(s, phone);
+		const user = await createUser(s, profile, { passwordHash, phoneVerified: true }, how, 'phone_password');
+		const answer = await afterSignUp(s, user, { method: 'phone_password', ...how, consents: body.consents });
+		// used up only now: a refused password or profile can be retried with the same code
+		if (!(await s.store.codes.consume(proof.id))) throw problem('code_invalid', 'The code is not valid or has expired.');
+		return answer;
 	};
 
 	/** Sign in with a phone number and a password, or a sign-in code from staff (A2, A3). @param {any} ctx */
@@ -517,7 +565,8 @@ export const createFlows = (product, service) => {
 		const phone = await service.phoneOf(s, bodyOf(ctx.body).phone);
 		if (!phone) throw invalid('phone', 'Enter the phone number with its country code.');
 		afterAnswer(ctx, async () => {
-			const user = await s.store.users.byPhone(phone);
+			// a number typed but never proven counts as unknown, like an address (SR-4-1)
+			const user = await provenPhoneHolderOf(s, phone);
 			if (!user?.passwordHash || user.blocked) return;
 			const { channel } = await service.settings(s, 'phone');
 			await sendCode(s, 'phone_reset', phone, {}, (code, _link, expireAt) =>
@@ -534,7 +583,7 @@ export const createFlows = (product, service) => {
 		const { selfReset } = await service.settings(s, 'phone_password');
 		if (selfReset !== 'code') throw problem('self_reset_off', 'Passwords are not reset here: ask the business.');
 		const phone = await service.phoneOf(s, body.phone);
-		const user = phone ? await s.store.users.byPhone(phone) : null;
+		const user = phone ? await provenPhoneHolderOf(s, phone) : null;
 		if (!phone || !user) throw problem('code_invalid', 'The code is not valid or has expired.');
 		const { id: recordId } = await checkCode(s, 'phone_reset', phone, body.code);
 		const passwordHash = await newPassword(s, body.password, { method: 'phone_password', who: user });
@@ -630,7 +679,12 @@ export const createFlows = (product, service) => {
 		// the countries phone numbers are accepted from are the website's (Portal › Region and format › Phone rules)
 		if (!phoneInCountries(phone, (await product.website(s.websiteId)).region.phone.countries))
 			throw problem('country_not_allowed', 'Codes go only to numbers of the countries this website serves.');
-		await service.allowCode(s, await s.store.users.byPhone(phone), 'phone_code');
+		// (the code also proves the number at a phone + password sign-up: it is the method when Phone code is off)
+		await service.allowCode(
+			s,
+			await provenPhoneHolderOf(s, phone),
+			s.on.includes('phone_code') ? 'phone_code' : 'phone_password',
+		);
 		const sent = await sendCode(s, 'phone', phone, {}, (code) =>
 			service.notify(s, channel, 'accounts.phone_code', { phone }, { code, minutes: CODE_MINUTES }),
 		);

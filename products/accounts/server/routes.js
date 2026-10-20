@@ -195,7 +195,7 @@ export const createRoutes = (product) => {
 			method: 'POST',
 			path: '/v1/sign-in/phone/code',
 			auth: 'browser',
-			feature: 'phone_code',
+			feature: ['phone_code', 'phone_password'],
 			rateLimit: SENSITIVE_LIMITS,
 			handler: flows.phoneCodeRequest,
 		}),

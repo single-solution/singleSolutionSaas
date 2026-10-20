@@ -119,7 +119,7 @@ describe('a repeat ask changes nothing', () => {
 		expect((await ask({ name: 'Cleo Park', email: 'cleo@example.com' })).json).toEqual({ outcome: 'requested' });
 		expect(cleo.json.emailVerified).toBe(true);
 		// a number someone typed but never proved is no member: a request is made, and staff check before an invite
-		const squatter = await env.visitor('POST', '/v1/sign-up/phone-password', {
+		const squatter = await env.typedPhoneSignUp({
 			phone: '+447700900510',
 			password: 'squat pass 12',
 			name: 'Not Cy',
@@ -237,6 +237,8 @@ describe('staff: a new link or a decline for an invited request', () => {
 		// a user the invite made who signed in another way (a phone code) keeps the account, without the role
 		const lu = await askTracked({ name: 'Lu Chen', phone: '07700 900540' });
 		const luInvite = await server('POST', `/v1/role-requests/${lu.json.id}/invite`);
+		// (staff confirmed the number: a number nobody proved is no way in)
+		await server('PATCH', `/v1/users/${luInvite.json.user.id}`, { phone: '+447700900540' });
 		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+447700900540' });
 		const sent = String(env.messages().at(-1).values.code);
 		const signedIn = await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900540', code: sent });
@@ -329,6 +331,7 @@ describe('giveRoleAt: the role when the setup link is completed', () => {
 		await env.setting('role_requests', 'giveRoleAt', 'invite');
 		const wes = await askTracked({ name: 'Wes Kerr', phone: '07700 900576' });
 		const wesFirst = await server('POST', `/v1/role-requests/${wes.json.id}/invite`);
+		await server('PATCH', `/v1/users/${wesFirst.json.user.id}`, { phone: '+447700900576' });
 		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+447700900576' });
 		const sent = String(env.messages().at(-1).values.code);
 		expect((await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900576', code: sent })).json.user.role).toBe(

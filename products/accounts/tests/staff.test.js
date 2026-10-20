@@ -391,7 +391,7 @@ describe('A3: staff-issued sign-in codes and setup links', () => {
 	});
 
 	it('a sign-in code from staff opens its user in the email code screen, but proves no address', async () => {
-		const up = await env.visitor('POST', '/v1/sign-up/phone-password', {
+		const up = await env.phoneSignUp({
 			phone: '07700 900390',
 			password: 'own pass 12',
 			name: 'Pat',
@@ -438,7 +438,7 @@ describe('A3: staff-issued sign-in codes and setup links', () => {
 	});
 
 	it('a used setup link proves the phone number and signs the other devices out', async () => {
-		const up = await env.visitor('POST', '/v1/sign-up/phone-password', {
+		const up = await env.typedPhoneSignUp({
 			phone: '07700 900200',
 			password: 'own pass 12',
 			name: 'Pia',
@@ -574,7 +574,7 @@ describe('A5: role requests', () => {
 		/** @param {string} name @param {string} phone */
 		const ask = async (name, phone) => (await askRole({ role: 'member', name, phone, note: 'Hi' })).json.id;
 		// someone signs up first with Rae's number and a password: the number is not proven
-		const squatter = await env.visitor('POST', '/v1/sign-up/phone-password', {
+		const squatter = await env.typedPhoneSignUp({
 			phone: '+447700900300',
 			password: 'taken pass 1',
 			name: 'Not Rae',
@@ -599,7 +599,7 @@ describe('A5: role requests', () => {
 		expect(again.json.setupLink.url).toMatch(/ss_setup=cod_/);
 
 		// the account is Sol's own: staff confirm the number on the user, and the role is given at once
-		const sol = await env.visitor('POST', '/v1/sign-up/phone-password', {
+		const sol = await env.typedPhoneSignUp({
 			phone: '+447700900301',
 			password: 'sols pass 12',
 			name: 'Sol',

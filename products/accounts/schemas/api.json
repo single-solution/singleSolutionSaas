@@ -1833,10 +1833,10 @@
 	},
 	"POST /v1/sign-up/phone-password": {
 		"summary": "Sign up with a phone number and a password",
-		"description": "Only while the Phone + password signUp setting is on (else 403 sign_up_closed). The number is not proven by this. Makes the account (with the role for new sign-ups) and signs it in, or answers status pending while sign-ups wait for approval. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), consent_required (with the consents still asked), risk_refused, sign_in_paused or method_refused (the role for new sign-ups); 409 already_exists.",
+		"description": "Only while the Phone + password signUp setting is on (else 403 sign_up_closed). Proves the number first: ask the code with POST /v1/sign-in/phone/code { phone } (it works while only Phone + password is on), then send it as code; it is used up once the account is made, the account holds the number proven, and an account that held the number unproven loses it. 422 code_invalid for a missing, wrong or used code (a sign-in code from staff proves nothing here). Makes the account (with the role for new sign-ups) and signs it in, or answers status pending while sign-ups wait for approval. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), consent_required (with the consents still asked), risk_refused, sign_in_paused or method_refused (the role for new sign-ups); 409 already_exists.",
 		"body": {
 			"type": "object",
-			"required": ["phone", "password"],
+			"required": ["phone", "password", "code"],
 			"properties": {
 				"phone": {
 					"type": "string",
@@ -1845,6 +1845,10 @@
 				"password": {
 					"type": "string",
 					"description": "Phone + password’s rules."
+				},
+				"code": {
+					"type": "string",
+					"description": "The digits sent to the number by POST /v1/sign-in/phone/code."
 				},
 				"email": {
 					"type": "string",
@@ -1925,7 +1929,7 @@
 	},
 	"POST /v1/password/phone/forgot": {
 		"summary": "Send a password reset code by SMS or WhatsApp",
-		"description": "Answers 202 at once, the same for every number; a code goes only to an account with a password, on the phone channel (template accounts.phone_code), within the phone code limits (Settings → Phone numbers and codes; a cooldown or cap sends nothing). 403 self_reset_off while Forgot password is off; 422 validation_failed for phone.",
+		"description": "Answers 202 at once, the same for every number; a code goes only to an account with a password whose number was proven (a number only typed counts as unknown), on the phone channel (template accounts.phone_code), within the phone code limits (Settings → Phone numbers and codes; a cooldown or cap sends nothing). 403 self_reset_off while Forgot password is off; 422 validation_failed for phone.",
 		"body": {
 			"type": "object",
 			"required": ["phone"],
@@ -2082,7 +2086,7 @@
 	},
 	"POST /v1/sign-in/phone/code": {
 		"summary": "Send a sign-in code by SMS or WhatsApp",
-		"description": "The code (6 digits) lasts 10 minutes and goes through Notifications (template accounts.phone_code). 429 code_cooldown (with retryAt) or code_limit; 422 country_not_allowed or validation_failed; 403 sign_in_paused or method_refused (the number’s role); 503 notifications_not_connected; 502 not_sent.",
+		"description": "Works while Phone code or Phone + password is on. The code (6 digits) lasts 10 minutes and goes through Notifications (template accounts.phone_code). 429 code_cooldown (with retryAt) or code_limit; 422 country_not_allowed or validation_failed; 403 sign_in_paused or method_refused (the number’s role); 503 notifications_not_connected; 502 not_sent.",
 		"body": {
 			"type": "object",
 			"required": ["phone"],
@@ -2108,7 +2112,7 @@
 	},
 	"POST /v1/sign-in/phone": {
 		"summary": "Sign in (or up) with the phone code",
-		"description": "Proves the number. A number without an account signs up with the sign-up members (a new user without a name gets your newUserName). 422 code_invalid (5 wrong codes use the code up). The right code is used up once the sign-in passed, so a consent or profile step can be retried with it. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents. A sign-up: 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), consent_required (with the consents still asked), risk_refused, sign_in_paused or method_refused (the role for new sign-ups); 409 already_exists.",
+		"description": "Proves the number. It opens only an account whose number was proven (an account that holds the number unproven loses it to this proof, and the sign-in goes on as for a number without an account; a sign-in code from staff still opens its own user). A number without an account signs up with the sign-up members (a new user without a name gets your newUserName). 422 code_invalid (5 wrong codes use the code up). The right code is used up once the sign-in passed, so a consent or profile step can be retried with it. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents. A sign-up: 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), consent_required (with the consents still asked), risk_refused, sign_in_paused or method_refused (the role for new sign-ups); 409 already_exists.",
 		"body": {
 			"type": "object",
 			"required": ["phone", "code"],
