@@ -25,3 +25,12 @@ export const MAX_TEMPLATES = 1000;
 
 /** Webhook URLs a website sends events to. */
 export const MAX_WEBHOOK_URLS = 5;
+
+/** Browser push subscriptions of visitors a website keeps (the merchant's staff are not counted; SR-7-1). */
+export const MAX_VISITOR_SUBSCRIPTIONS = 50_000;
+
+/**
+ * Days a visitor's browser push subscription is kept without being seen: a new subscribe from the browser and a push the
+ * browser accepted both refresh it, then the database's expiry index removes it (SR-7-1).
+ */
+export const VISITOR_SUBSCRIPTION_DAYS = 365;

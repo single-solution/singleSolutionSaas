@@ -15,6 +15,7 @@
 import { normalizeEmail } from '@ss/contracts/email';
 import { isObject } from '@ss/contracts/util';
 import { createProduct, createProductBase } from '@ss/app-kit';
+import { noopLogger } from '@ss/net';
 import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -271,7 +272,17 @@ export const createProductInstance = (options) => {
 		now,
 		...(options.logger ? { logger: options.logger } : {}),
 	});
-	return Object.freeze({ ...product, providers, webpush, lists, sealer, now, send, defaults });
+	return Object.freeze({
+		...product,
+		providers,
+		webpush,
+		lists,
+		sealer,
+		now,
+		send,
+		defaults,
+		logger: options.logger ?? noopLogger,
+	});
 };
 
 /** @typedef {ReturnType<typeof createProductInstance>} Product */

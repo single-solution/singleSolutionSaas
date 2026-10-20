@@ -165,7 +165,18 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 			return memory.get(collection, id);
 		},
 	});
+	/** @type {Array<{ level: string, message: string, fields: Record<string, any> }>} what the product logged */
+	const logs = [];
+	/** @type {import('@ss/net').Logger} */
+	const logger = Object.freeze({
+		debug: () => {},
+		info: (message, fields = {}) => void logs.push({ level: 'info', message, fields }),
+		warn: (message, fields = {}) => void logs.push({ level: 'warn', message, fields }),
+		error: (message, fields = {}) => void logs.push({ level: 'error', message, fields }),
+		child: () => logger,
+	});
 	const product = createProductInstance({
+		logger,
 		config: { mongodbUri: '', connectSecret: SECRET, encryptionKey: ENCRYPTION_KEY },
 		store,
 		fetch: portal.fetch,
@@ -362,6 +373,7 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		store,
 		providers,
 		mails,
+		logs,
 		websiteId,
 		browser,
 		server,

@@ -4,7 +4,15 @@
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { MAX_DELAY_DAYS, MAX_TEMPLATES, MAX_WEBHOOK_URLS, RETRY_WAITS, WEBHOOK_RETRY_WAITS } from '../core/limits.js';
+import {
+	MAX_DELAY_DAYS,
+	MAX_TEMPLATES,
+	MAX_VISITOR_SUBSCRIPTIONS,
+	MAX_WEBHOOK_URLS,
+	RETRY_WAITS,
+	VISITOR_SUBSCRIPTION_DAYS,
+	WEBHOOK_RETRY_WAITS,
+} from '../core/limits.js';
 
 const MIN = 60_000;
 
@@ -17,6 +25,11 @@ describe('fixed limits', () => {
 		expect(MAX_DELAY_DAYS).toBe(30); // delayed_send.maxDelayDays
 		expect(MAX_TEMPLATES).toBe(1000); // templates.maxTemplates
 		expect(MAX_WEBHOOK_URLS).toBe(5); // webhooks.maxUrls
+	});
+
+	it('hold safety ceilings that real use does not reach (SR-7-1)', () => {
+		expect(MAX_VISITOR_SUBSCRIPTIONS).toBe(50_000);
+		expect(VISITOR_SUBSCRIPTION_DAYS).toBe(365);
 	});
 
 	it('no settings schema offers a removed limit', () => {

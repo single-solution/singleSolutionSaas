@@ -28,7 +28,7 @@ import {
 	languageOfSegment,
 	templateView,
 } from '../core/templates.js';
-import { MAX_DELAY_DAYS, MAX_TEMPLATES } from '../core/limits.js';
+import { MAX_DELAY_DAYS, MAX_TEMPLATES, MAX_VISITOR_SUBSCRIPTIONS } from '../core/limits.js';
 import { checkSendAt } from '../core/timing.js';
 import { checkForwardedEvent } from '../core/webhooks.js';
 import { strings } from '../adapters/product.js';
@@ -631,6 +631,17 @@ export const createRoutes = (product) => {
 				if (!subscription) return invalid('subscription', 'Send the browser push subscription (PushSubscription.toJSON()).');
 				const s = await siteOf(ctx);
 				const subscriberId = await s.store.subscriptions.save({ kind: 'visitor', staffId: null, ...subscription });
+				if (subscriberId === 'full') {
+					product.logger.warn('browser push subscription refused: the website holds the most it may', {
+						websiteId: ctx.websiteId,
+						limit: MAX_VISITOR_SUBSCRIPTIONS,
+					});
+					return invalid(
+						'subscription',
+						`This website has reached its limit of ${MAX_VISITOR_SUBSCRIPTIONS} browser push subscriptions.`,
+						'limit_reached',
+					);
+				}
 				return created({ subscriberId });
 			},
 		}),

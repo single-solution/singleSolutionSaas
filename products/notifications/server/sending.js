@@ -405,6 +405,7 @@ export const createSending = (product) => {
 		for (const subscription of /** @type {import('../adapters/store.js').SubscriptionRecord[]} */ (subscriptions)) {
 			const result = await product.webpush.push(value, subscription, payload);
 			if (!result.ok && result.gone) await s.store.subscriptions.remove(subscription.id);
+			if (result.ok && subscription.kind === 'visitor') await s.store.subscriptions.seen(subscription.id);
 			results.push(result);
 		}
 		const failure = results.find((result) => !result.ok);

@@ -17,7 +17,7 @@
  */
 import { createId } from '@ss/contracts';
 import { randomToken } from '@ss/protocol';
-import { MAX_TEMPLATES } from '../core/limits.js';
+import { MAX_TEMPLATES, MAX_VISITOR_SUBSCRIPTIONS, VISITOR_SUBSCRIPTION_DAYS } from '../core/limits.js';
 import { LEASE_MS } from '../core/timing.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -114,9 +114,13 @@ export const INDEXES = [
 	{ collection: RECIPIENTS, keys: { websiteId: 1, code: 1 }, name: 'by_code', unique: true },
 	{ collection: SUBSCRIPTIONS, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: SUBSCRIPTIONS, keys: { websiteId: 1, staffId: 1 }, name: 'by_staff' },
+	{ collection: SUBSCRIPTIONS, keys: { websiteId: 1, endpoint: 1 }, name: 'by_endpoint', unique: true },
+	{ collection: SUBSCRIPTIONS, keys: { websiteId: 1, kind: 1 }, name: 'by_kind' },
 	{ collection: WEBHOOK_EVENTS, keys: { websiteId: 1, status: 1, dueAt: 1 }, name: 'due' },
 	{ collection: MESSAGES, keys: { expireAt: 1 }, name: 'expire', expireAfterSeconds: 0 },
 	{ collection: WEBHOOK_EVENTS, keys: { expireAt: 1 }, name: 'expire', expireAfterSeconds: 0 },
+	// a visitor's subscription not seen for a long time (`seenAt`; the merchant's staff have none, so theirs never expire)
+	{ collection: SUBSCRIPTIONS, keys: { seenAt: 1 }, name: 'expire', expireAfterSeconds: VISITOR_SUBSCRIPTION_DAYS * 86_400 },
 ];
 
 /** What delivery-log reads return of a message: never the sealed real words, nor the product's defaults it keeps. */
@@ -447,19 +451,35 @@ export const createStore = (data, { now }) => {
 
 		subscriptions: Object.freeze({
 			/**
-			 * Save a browser's subscription (the same endpoint keeps its id).
+			 * Save a browser's subscription (the same endpoint keeps its id). A visitor's carries the time it was seen (a new
+			 * subscribe refreshes it) and expires with it; a staff member's has none.
 			 * @param {{ kind: 'visitor' | 'staff', staffId: string | null, endpoint: string, keys: { p256dh: string, auth: string } }} input
-			 * @returns {Promise<string>} the subscriber id
+			 * @returns {Promise<string>} the subscriber id, or `full` for a new visitor at `MAX_VISITOR_SUBSCRIPTIONS`
 			 */
 			save: async ({ kind, staffId, endpoint, keys }) => {
 				const found = as(await subscriptions.findOne({ websiteId, endpoint }, { projection: { _id: 0, id: 1 } }));
+				if (
+					!found &&
+					kind === 'visitor' &&
+					(await subscriptions.countDocuments({ websiteId, kind }, { limit: MAX_VISITOR_SUBSCRIPTIONS })) >=
+						MAX_VISITOR_SUBSCRIPTIONS
+				)
+					return 'full';
 				const id = found?.id ?? createId('sub');
 				await subscriptions.updateOne(
 					{ websiteId, endpoint },
-					{ $set: { kind, staffId, keys }, $setOnInsert: { id, createdAt: at() } },
+					{
+						$set: { kind, staffId, keys, ...(kind === 'visitor' ? { seenAt: at() } : {}) },
+						...(kind === 'visitor' ? {} : { $unset: { seenAt: '' } }),
+						$setOnInsert: { id, createdAt: at() },
+					},
 					{ upsert: true },
 				);
 				return id;
+			},
+			/** A browser accepted a push: its visitor subscription is alive. @param {string} id */
+			seen: async (id) => {
+				await subscriptions.updateOne({ websiteId, id, kind: 'visitor' }, { $set: { seenAt: at() } });
 			},
 			/** @param {string} id @returns {Promise<SubscriptionRecord | null>} */
 			get: async (id) => as(await subscriptions.findOne({ websiteId, id, kind: 'visitor' }, { projection: { _id: 0 } })),
