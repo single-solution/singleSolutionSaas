@@ -13,7 +13,7 @@
  * never message contents.
  * @module
  */
-import { actorOf as kitActorOf, countHandlers, created, noContent, paginate, problem } from '@ss/app-kit';
+import { actorOf as kitActorOf, allows, countHandlers, created, noContent, paginate, problem } from '@ss/app-kit';
 import { PRESENCES, STATUSES, USER_ID, messageText, statusAfter } from '../core/conversation.js';
 import { checkFieldValue } from '../core/fields.js';
 import { LABEL_KEY, checkLabeled, labeledDetail } from '../core/labels.js';
@@ -279,12 +279,12 @@ export const createInbox = (product, service, reply) => {
 	/**
 	 * `PUT …/ai` `{ paused, reason? }`: pause or resume the AI in a conversation, keeping who, when and why (C11); a
 	 * resume also hands a chat waiting for a person back to the AI (CH-3). It needs reply rights, or manage rights when
-	 * the inbox setting `pauseNeeds` says so.
+	 * the inbox setting `pauseNeeds` says so (the ticket's permissions, or the staff sign-in's role on a server route).
 	 * @param {any} ctx
 	 */
 	const setAi = async (ctx) => {
 		const { s, c, actor } = await found(ctx);
-		if (ctx.ticket && (await s.values('inbox')).pauseNeeds !== 'reply' && !ctx.ticket.permissions.includes('inbox.manage'))
+		if ((await s.values('inbox')).pauseNeeds !== 'reply' && !allows(ctx, 'inbox.manage'))
 			throw problem('forbidden', 'Pausing the AI needs the inbox.manage permission here.');
 		const body = bodyOf(ctx.body);
 		if (typeof body.paused !== 'boolean') throw invalid(['paused is true or false.']);

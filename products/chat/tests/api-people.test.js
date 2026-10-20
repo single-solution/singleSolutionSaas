@@ -395,7 +395,15 @@ describe('inbox options (C11)', () => {
 		});
 		const pause = { paused: true, reason: 'Checking stock' };
 		expect((await sys.admin(replier, 'PUT', `/v1/admin/conversations/${u}/ai`, pause)).status).toBe(403);
+		// the same rule through the merchant's server with the staff member's sign-in (SR-6-4)
+		const replierSignIn = { id: 'usr_rae', name: 'Rae', permissions: ['chat:inbox.read', 'chat:inbox.reply'] };
+		const managerSignIn = { id: 'usr_mia', name: 'Mia', permissions: ['chat:inbox.reply', 'chat:inbox.manage'] };
+		const aiPath = `/v1/conversations/${u}/ai`;
+		expect((await sys.serverCall('PUT', aiPath, pause, replierSignIn)).status).toBe(403);
+		expect((await sys.serverCall('GET', `/v1/conversations/${u}`)).json.conversation.aiPaused).toBeFalsy();
+		expect((await sys.serverCall('PUT', aiPath, { paused: false }, managerSignIn)).status).toBe(200);
 		await sys.setting('inbox', 'pauseNeeds', 'reply');
+		expect((await sys.serverCall('PUT', aiPath, { paused: false }, replierSignIn)).status).toBe(200);
 		const paused = await sys.admin(replier, 'PUT', `/v1/admin/conversations/${u}/ai`, pause);
 		expect(paused.json.conversation).toMatchObject({
 			aiPaused: true,
