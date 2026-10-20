@@ -338,6 +338,33 @@ describe('repeated requests (K-14)', () => {
 		const same = await post('shopper-a');
 		expect([same.status, same.headers.get('idempotent-replayed')]).toEqual([200, 'true']);
 	});
+
+	it('never replays one anonymous visitor’s answer to another address that sends the same Idempotency-Key and body (SR-1-8)', async () => {
+		const { call, browser, switchOn, connectDatabase, clock } = await setup();
+		await switchOn(['notes']);
+		await connectDatabase();
+		/** @param {string} ip @param {Record<string, string>} [more] */
+		const post = (ip, more = {}) =>
+			call('POST', '/v1/notes', {
+				token: browser.token,
+				origin: SITE,
+				body: { text: 'x' },
+				headers: { 'idempotency-key': 'order-1', 'x-forwarded-for': ip, 'ss-guest': 'guest-1', ...more },
+			});
+		expect((await post('198.51.100.1')).status).toBe(200);
+		// a guessable key, the same guest key and body, but another address: not the first visitor's stored answer
+		const other = await post('198.51.100.2');
+		expect(other.status).toBe(409);
+		expect(await other.json()).toMatchObject({ type: 'https://notes.example.dev/problems/duplicate_request' });
+		// the first visitor's own repeat still gets the first answer
+		const same = await post('198.51.100.1');
+		expect([same.status, same.headers.get('idempotent-replayed')]).toEqual([200, 'true']);
+		// a signed-in shopper is named by the sign-in, so a changed network is still the same request
+		clock.advance(61_000);
+		expect((await post('198.51.100.1', { 'idempotency-key': 'order-2', 'ss-sign-in': 'shopper-a' })).status).toBe(200);
+		const moved = await post('198.51.100.9', { 'idempotency-key': 'order-2', 'ss-sign-in': 'shopper-a' });
+		expect([moved.status, moved.headers.get('idempotent-replayed')]).toEqual([200, 'true']);
+	});
 });
 
 describe('request bodies (SR-1-3)', () => {

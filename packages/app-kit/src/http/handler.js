@@ -723,6 +723,11 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				duplicateKey = `idem:${sha256Hex(`${principal}\n${r.id}\n${ctx.idempotencyKey}`)}`;
 				// a server call for a verified shopper counts by who they are, so a retry with a renewed sign-in is the same request
 				const verified = ctx.visitor.server ? await ctx.signIn() : null;
+				const signedIn = verified?.ok ? `user:${verified.user.id}` : (request.headers.get('ss-sign-in') ?? '');
+				// an anonymous visitor (no ticket, staff member, session or sign-in) is named by the address too, so two of them
+				// who send the same key and body never share a stored answer (SR-1-8); a trusted server or the Portal is not
+				const anonymous =
+					(r.auth === 'browser' || r.auth === 'none') && !ctx.ticket && !ctx.actor && !ctx.session && signedIn === '';
 				fingerprint = sha256Hex(
 					[
 						method,
@@ -731,7 +736,8 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 						ctx.actor?.id ?? '',
 						request.headers.get('ss-guest') ?? '',
 						request.headers.get('ss-order-key') ?? '',
-						verified?.ok ? `user:${verified.user.id}` : (request.headers.get('ss-sign-in') ?? ''),
+						signedIn,
+						anonymous ? `ip:${ctx.clientIp}` : '',
 						ctx.rawBody,
 					].join('\n'),
 				);

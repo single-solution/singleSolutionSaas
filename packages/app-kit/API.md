@@ -136,7 +136,10 @@ user, claims }`, `{ ok: false, code }` or null without the header or when the pr
   saved.
 - `idempotent`: a repeated `Idempotency-Key` for the same website and route within 24 hours gets the first answer
   again (status, headers and body, plus `Idempotent-Replayed: true`) when it is the same request (method, address,
-  body, ticket user or acting user, `SS-Guest`, `SS-Order-Key`); another request under the key answers 409
+  body, ticket user or acting user, `SS-Guest`, `SS-Order-Key`, and for an anonymous visitor, one with no ticket, staff
+  member, session or sign-in, the visitor's IP address, so two anonymous visitors who send the same key and body never
+  share a stored answer; keys must be random, for example a UUID, never a counter, a timestamp or a fixed text, because a
+  guessable key is the only thing two visitors behind one address could share); another request under the key answers 409
   `duplicate_request`, and a repeat while the first still runs 409 `in_progress` with `Retry-After: 1`. A 5xx answer
   frees the key; answers larger than 64 kB are not kept (a repeat answers 409 `duplicate_request`).
 - `scope` (server): a link scope this product offers in its manifest (`links.offers`). The route then also takes a link key (`kind: link`) of another product, only if the Portal granted that caller the scope on the website (else 403 `scope_denied`); a route without a `scope` takes the website's server token alone, and the route's `permission` or `staff` rule still applies.
