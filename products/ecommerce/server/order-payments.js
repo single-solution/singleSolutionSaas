@@ -262,7 +262,10 @@ export const createOrderPayments = (product, service) => {
 		}
 		let verified = false;
 		try {
-			verified = (await service.payments.verify(s, paymentId, expectedOf(order))).verified;
+			// confirmed only while the money is all still there: a payment Payments says was refunded (in part or in
+			// full) does not unlock goods, licenses or downloads (SR-5a-1)
+			const answer = await service.payments.verify(s, paymentId, expectedOf(order));
+			verified = answer.verified && answer.status === 'paid' && answer.refunded === 0;
 		} catch {
 			return { order, reached: false };
 		}

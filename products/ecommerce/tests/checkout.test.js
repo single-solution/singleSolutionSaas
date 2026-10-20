@@ -511,6 +511,43 @@ describe('paying online and by bank transfer', () => {
 		expect(codeOf(await visit('POST', `/v1/shop/orders/${id}/pay`, { signIn: shopper.token }))).toBe('nothing_to_pay');
 	});
 
+	it('does not confirm an order whose payment was refunded: only a paid payment with nothing refunded confirms (SR-5a-1)', async () => {
+		const item = await shop.seedProduct({ price: 4000 });
+		const shopper = await newShopper();
+		const placed = await place(shopper.token, { lines: [{ productId: item.id }], payment: 'online', address: ADDRESS });
+		expect(placed.status).toBe(201);
+		const id = placed.json.order.id;
+		const paymentId = (await orderRecord(id)).payment.paymentId;
+		shop.payPayment(paymentId);
+		const normal = /** @type {any} */ (shop.responders.get(PAYMENTS));
+		/** Payments answers "verified" but with the status and the refunded amount it has. @param {string} status @param {number} refunded */
+		const answerWith = (status, refunded) =>
+			shop.responders.set(PAYMENTS, (/** @type {any} */ call) => {
+				const answer = normal(call);
+				return call.path.endsWith('/verify')
+					? { ...answer, body: { ...answer.body, verified: true, payment: { ...answer.body.payment, status, refunded } } }
+					: answer;
+			});
+		try {
+			for (const [status, refunded] of /** @type {const} */ ([
+				['refunded', 4300],
+				['partially_refunded', 1000],
+				['paid', 1],
+			])) {
+				answerWith(status, refunded);
+				shop.advance(31_000);
+				const read = await visit('GET', `/v1/shop/orders/${id}`, { signIn: shopper.token });
+				expect(read.json).toMatchObject({ status: 'pending_payment', payment: { state: 'pending' } });
+				expect((await orderRecord(id)).history.some((/** @type {any} */ h) => h.code === 'payment_confirmed')).toBe(false);
+			}
+		} finally {
+			shop.responders.set(PAYMENTS, normal);
+		}
+		shop.advance(31_000);
+		const paid = await visit('GET', `/v1/shop/orders/${id}`, { signIn: shopper.token });
+		expect(paid.json).toMatchObject({ status: 'confirmed', payment: { state: 'paid', paid: 4300 } });
+	});
+
 	it('sends bank transfers to the bank_transfer gateway and lets the shopper retry when Payments is down', async () => {
 		const item = await shop.seedProduct({ price: 1000 });
 		const shopper = await newShopper();
