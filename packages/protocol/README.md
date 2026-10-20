@@ -33,18 +33,18 @@ What `@ss/protocol` exports, by module:
 Every signed object has its own JOSE `typ`, and each verifier accepts only its own, so one kind can never be replayed
 as another (a ticket as a token, a launch as an assertion, …).
 
-| Object           | Signed by          | `typ` / label            | Lifetime                    | Replay protection                    |
-| ---------------- | ------------------ | ------------------------ | --------------------------- | ------------------------------------ |
-| Browser token    | Portal             | `ss-token+jws`           | no expiry; revoked by `jti` | n/a (bearer credential)              |
-| Server token     | Portal             | `ss-token+jws`           | no expiry; revoked by `jti` | n/a (bearer credential)              |
-| Ticket           | product (own key)  | `ss-ticket+jws`          | exactly 15 min              | bound to origin; ends with its `tid` |
-| Launch           | Portal             | `ss-launch+jwt`          | 60 s default, ≤ 300 s       | `consume(jti)`: single use           |
-| Client assertion | product (its key)  | `ss-assertion+jwt`       | ≤ 300 s                     | replay store on `iss\|jti`           |
-| Notice           | Portal             | detached, `ss-notice.v1` | `SS-Timestamp` ± 300 s      | replay store on `timestamp\|sha256`  |
-| Portal call      | Portal             | detached, `ss-call.v1`   | `SS-Timestamp` ± 300 s      | replay store on `SS-Nonce`           |
-| Connect request  | HMAC               | `ss-connect.v1`          | timestamp ± 5 min           | nonce record (product)               |
-| Connect answer   | HMAC               | `ss-connected.v1`        | timestamp ± 5 min           | echoes the Portal's request nonce    |
-| Webhook          | shared secret HMAC | `t=…,v1=…` header        | `t` ± 300 s                 | none (the receiver dedupes by id)    |
+| Object           | Signed by          | `typ` / label            | Lifetime                    | Replay protection                        |
+| ---------------- | ------------------ | ------------------------ | --------------------------- | ---------------------------------------- |
+| Browser token    | Portal             | `ss-token+jws`           | no expiry; revoked by `jti` | n/a (bearer credential)                  |
+| Server token     | Portal             | `ss-token+jws`           | no expiry; revoked by `jti` | n/a (bearer credential)                  |
+| Ticket           | product (own key)  | `ss-ticket+jws`          | exactly 15 min              | bound to origin; ends with its `tid`     |
+| Launch           | Portal             | `ss-launch+jwt`          | 60 s default, ≤ 300 s       | `consume(jti)`: single use               |
+| Client assertion | product (its key)  | `ss-assertion+jwt`       | ≤ 300 s                     | replay store on `iss\|jti`               |
+| Notice           | Portal             | detached, `ss-notice.v1` | `SS-Timestamp` ± 300 s      | replay store on `aud\|timestamp\|sha256` |
+| Portal call      | Portal             | detached, `ss-call.v1`   | `SS-Timestamp` ± 300 s      | replay store on `SS-Nonce`               |
+| Connect request  | HMAC               | `ss-connect.v1`          | timestamp ± 5 min           | nonce record (product)                   |
+| Connect answer   | HMAC               | `ss-connected.v1`        | timestamp ± 5 min           | echoes the Portal's request nonce        |
+| Webhook          | shared secret HMAC | `t=…,v1=…` header        | `t` ± 300 s                 | none (the receiver dedupes by id)        |
 
 Common JWS rules (`jws.js`): the header must be `alg: EdDSA` with a `kid` and the expected `typ`; `jwk`, `jku`, `x5u`,
 `x5c`, `x5t`, `crit`, `b64`, `zip` are refused, so a token can never tell the verifier where to find its key; the
@@ -94,7 +94,8 @@ consumes the `jti` once.
 
 Portal → product at `POST <base>/.well-known/ss-events`, with `SS-Timestamp`, `SS-Signature`
 (`v1;kid=<kid>;sig=<base64url>`, up to four entries for dual-signing) and the hint `SS-Key-Id`. The signed message is
-`ss-notice.v1.<timestamp>.<hex sha256(raw body)>`. `verifyNotice` checks the timestamp (± 300 s), the signature, the
+`ss-notice.v1`, the timestamp, the product id the notice is for and `<hex sha256(raw body)>`, joined by newlines, so a
+notice for one product is refused by another. `verifyNotice` checks the timestamp (± 300 s), the signature, the
 replay store, then the body: `status.changed`, `token.revoked` and `website.deleted` need `websiteId`;
 `sessions.revoked` needs `subject`; nothing else is allowed. It returns the checked body.
 

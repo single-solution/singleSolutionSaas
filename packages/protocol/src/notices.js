@@ -6,12 +6,14 @@
  *   SS-Signature: v1;kid=<kid>;sig=<base64url Ed25519 signature>[, v1;kid=<kid2>;sig=<...>]
  *   SS-Key-Id:    <kid of the first signature>   (a hint only; never trusted for verification)
  *
- * Signed message (UTF-8): `ss-notice.v1.${timestamp}.${hex(sha256(rawBody))}`. The prefix separates notice signatures
- * from JWS signing inputs made with the same Portal key. Several signatures let the Portal dual-sign while rotating
- * keys; the product accepts the notice if any signature verifies under a key it trusts.
+ * Signed message (UTF-8, lines joined by `\n`): `ss-notice.v1`, the timestamp, the product id the notice is for (its
+ * audience) and the hex SHA-256 of the raw body. The prefix separates notice signatures from JWS signing inputs and
+ * from calls made with the same Portal key; the audience keeps a notice for one product from being replayed to
+ * another; a newline cannot appear in any field. Several signatures let the Portal dual-sign while rotating keys; the
+ * product accepts the notice if any signature verifies under a key it trusts.
  *
- * Verification: timestamp within ±toleranceSec, signature, replay check on `timestamp + body hash` (recorded until the
- * tolerance window closes), then the body: `{ type, websiteId?, subject?, what? }` where `status.changed`, `token.revoked`,
+ * Verification: timestamp within ±toleranceSec, signature, replay check on `audience + timestamp + body hash`
+ * (recorded until the tolerance window closes), then the body: `{ type, websiteId?, subject?, what? }` where `status.changed`, `token.revoked`,
  * `website.deleted` and `website.settings_changed` need `websiteId`, `sessions.revoked` needs `subject`, and only
  * `website.settings_changed` may carry `what` (`settings`, `connections` or `links`: which of the website's shared
  * values changed; none means all of them).
@@ -20,6 +22,7 @@ import { createProtocolError } from './errors.js';
 import { fromUtf8, sha256Hex, utf8 } from './encoding.js';
 import { assertBody, checkSigningInputs, readTimestamp, signDetached, verifyDetached } from './detached.js';
 import { isObject } from './jws.js';
+import { isProductId } from './tokens.js';
 
 /** @import { KeyResolver, Signer } from './keys.js' */
 /** @typedef {import('./assertion.js').ReplayStore} ReplayStore */
@@ -51,10 +54,17 @@ const MAX_ID_LENGTH = 256;
 
 /**
  * @param {number} timestamp
+ * @param {string} audience
  * @param {string | Uint8Array} body
  * @returns {Uint8Array}
  */
-const signedMessage = (timestamp, body) => utf8(`ss-notice.v1.${timestamp}.${sha256Hex(body)}`);
+const signedMessage = (timestamp, audience, body) =>
+	utf8(['ss-notice.v1', String(timestamp), audience, sha256Hex(body)].join('\n'));
+
+/** @param {unknown} audience */
+const assertAudience = (audience) => {
+	if (!isProductId(audience)) throw createProtocolError('invalid_argument', 'audience must be a product id');
+};
 
 /**
  * @param {unknown} value
@@ -96,33 +106,38 @@ export const parseNotice = (rawBody) => {
 
 /**
  * Sign a notice body (Portal side).
- * @param {{ signer?: Signer, signers?: Signer[], body: string | Uint8Array, timestamp: number }} params `timestamp` in
- *   unix seconds (from the injected clock). Pass `signers` to dual-sign while rotating keys.
+ * @param {{ signer?: Signer, signers?: Signer[], audience: string, body: string | Uint8Array, timestamp: number }} params
+ *   `audience`: the product id the notice is for; `timestamp` in unix seconds (from the injected clock). Pass `signers`
+ *   to dual-sign while rotating keys.
  * @returns {Promise<NoticeHeaders>}
  */
-export const signNotice = async ({ signer, signers, body, timestamp }) => {
+export const signNotice = async ({ signer, signers, audience, body, timestamp }) => {
 	const all = checkSigningInputs({ signer, signers, timestamp });
+	assertAudience(audience);
 	assertBody(body);
 	parseNotice(body);
-	return signDetached(all, timestamp, signedMessage(timestamp, body));
+	return signDetached(all, timestamp, signedMessage(timestamp, audience, body));
 };
 
 /**
  * Verify a notice (product side) and return its checked body.
  * @param {{
- *   headers: Record<string, string | string[] | undefined> | Headers, rawBody: string | Uint8Array, keyResolver: KeyResolver,
- *   replayStore: ReplayStore, now?: () => number, toleranceSec?: number,
- * }} params `rawBody` must be the exact bytes received; `keyResolver` is over the pinned Portal keys.
+ *   headers: Record<string, string | string[] | undefined> | Headers, audience: string, rawBody: string | Uint8Array,
+ *   keyResolver: KeyResolver, replayStore: ReplayStore, now?: () => number, toleranceSec?: number,
+ * }} params `audience`: this product's own id; `rawBody` must be the exact bytes received; `keyResolver` is over the
+ *   pinned Portal keys.
  * @returns {Promise<Notice>}
  */
 export const verifyNotice = async ({
 	headers,
+	audience,
 	rawBody,
 	keyResolver,
 	replayStore,
 	now = Date.now,
 	toleranceSec = NOTICE_TOLERANCE_SECONDS,
 }) => {
+	assertAudience(audience);
 	if (!replayStore || typeof replayStore.seen !== 'function') {
 		throw createProtocolError('invalid_argument', 'replayStore is required');
 	}
@@ -130,9 +145,9 @@ export const verifyNotice = async ({
 		throw createProtocolError('invalid_argument', 'rawBody is required');
 	}
 	const timestamp = readTimestamp(headers, now, toleranceSec);
-	await verifyDetached(headers, signedMessage(timestamp, rawBody), keyResolver);
+	await verifyDetached(headers, signedMessage(timestamp, audience, rawBody), keyResolver);
 	const notice = parseNotice(rawBody);
-	if (await replayStore.seen(`notice|${timestamp}|${sha256Hex(rawBody)}`, (timestamp + toleranceSec) * 1000)) {
+	if (await replayStore.seen(`notice|${audience}|${timestamp}|${sha256Hex(rawBody)}`, (timestamp + toleranceSec) * 1000)) {
 		throw createProtocolError('replay', 'notice was already delivered');
 	}
 	return notice;

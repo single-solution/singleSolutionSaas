@@ -102,7 +102,7 @@ describe('Portal calls', () => {
 	it('is never taken for a notice, nor a notice for a call', async () => {
 		const clock = createClock();
 		const body = JSON.stringify({ type: 'status.changed', websiteId: 'web_1' });
-		const notice = await signNotice({ signer: portal.signer, body, timestamp: ts(clock) });
+		const notice = await signNotice({ audience: 'shop', signer: portal.signer, body, timestamp: ts(clock) });
 		await expectCode(verify(clock, { ...notice, 'SS-Nonce': 'A'.repeat(22) }, { method: 'POST', rawBody: body }), 'signature');
 	});
 

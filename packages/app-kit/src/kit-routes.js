@@ -85,6 +85,7 @@ export const createKitRoutes = (kit, hooks) => {
 		try {
 			body = await verifyNotice({
 				headers: ctx.headers,
+				audience: manifest.id,
 				rawBody: ctx.rawBody,
 				keyResolver: kit.connection.active().portalKeys,
 				replayStore: { seen: store.seen },

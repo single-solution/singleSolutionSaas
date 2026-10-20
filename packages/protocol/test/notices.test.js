@@ -17,6 +17,8 @@ beforeAll(async () => {
 });
 
 const body = JSON.stringify({ type: 'status.changed', websiteId: 'web_1' });
+/** The product the notices are for. */
+const audience = 'notes';
 
 /** @param {ReturnType<typeof createClock>} clock */
 const ts = (clock) => Math.floor(clock.now() / 1000);
@@ -29,6 +31,7 @@ const ts = (clock) => Math.floor(clock.now() / 1000);
 const verify = (clock, headers, overrides = {}) =>
 	verifyNotice({
 		headers,
+		audience,
 		rawBody: body,
 		keyResolver: staticResolver([portal.publicJwk, next.publicJwk]),
 		replayStore: createMemoryReplayStore({ now: clock.now }),
@@ -51,7 +54,7 @@ describe('notices', () => {
 
 	it('signs and verifies, returning the checked body (plain object, lower-case and Headers inputs)', async () => {
 		const clock = createClock();
-		const headers = await signNotice({ signer: portal.signer, body, timestamp: ts(clock) });
+		const headers = await signNotice({ audience, signer: portal.signer, body, timestamp: ts(clock) });
 		expect(headers['SS-Key-Id']).toBe('portal-1');
 		expect(headers['SS-Signature']).toMatch(/^v1;kid=portal-1;sig=[A-Za-z0-9_-]{86}$/);
 		expect(await verify(clock, headers)).toEqual({ type: 'status.changed', websiteId: 'web_1' });
@@ -72,7 +75,7 @@ describe('notices', () => {
 	])('accepts %j', async (notice) => {
 		const clock = createClock();
 		const raw = JSON.stringify(notice);
-		const headers = await signNotice({ signer: portal.signer, body: raw, timestamp: ts(clock) });
+		const headers = await signNotice({ audience, signer: portal.signer, body: raw, timestamp: ts(clock) });
 		expect(await verify(clock, headers, { rawBody: raw })).toEqual(notice);
 	});
 
@@ -96,7 +99,7 @@ describe('notices', () => {
 		],
 	])('refuses a body with %s', async (_name, raw) => {
 		expectThrowCode(() => parseNotice(raw), 'malformed');
-		await expectCode(signNotice({ signer: portal.signer, body: raw, timestamp: 1 }), 'malformed');
+		await expectCode(signNotice({ audience, signer: portal.signer, body: raw, timestamp: 1 }), 'malformed');
 	});
 
 	it('refuses a correctly signed bad body', async () => {
@@ -107,7 +110,7 @@ describe('notices', () => {
 		const headers = await signDetached(
 			[portal.signer],
 			ts(clock),
-			new TextEncoder().encode(`ss-notice.v1.${ts(clock)}.${sha256Hex(raw)}`),
+			new TextEncoder().encode(['ss-notice.v1', ts(clock), audience, sha256Hex(raw)].join('\n')),
 		);
 		await expectCode(verify(clock, headers, { rawBody: raw }), 'malformed');
 		expectThrowCode(() => parseNotice(new Uint8Array([0xff, 0xfe])), 'malformed');
@@ -116,30 +119,71 @@ describe('notices', () => {
 	it('rejects replays within the window', async () => {
 		const clock = createClock();
 		const replayStore = createMemoryReplayStore({ now: clock.now });
-		const headers = await signNotice({ signer: portal.signer, body, timestamp: ts(clock) });
+		const headers = await signNotice({ audience, signer: portal.signer, body, timestamp: ts(clock) });
 		await verify(clock, headers, { replayStore });
 		await expectCode(verify(clock, headers, { replayStore }), 'replay');
 	});
 
+	it('a notice names the product it is for: one signed for product A is refused by product B', async () => {
+		const clock = createClock();
+		const headers = await signNotice({ audience: 'notes', signer: portal.signer, body, timestamp: ts(clock) });
+		await verify(clock, headers, { audience: 'notes' });
+		await expectCode(verify(clock, headers, { audience: 'other' }), 'signature');
+		const forOther = await signNotice({ audience: 'other', signer: portal.signer, body, timestamp: ts(clock) });
+		await expectCode(verify(clock, forOther, { audience: 'notes' }), 'signature');
+		await verify(clock, forOther, { audience: 'other' });
+	});
+
+	it("records the replay under the product too, so one product never uses up another product's delivery", async () => {
+		const clock = createClock();
+		const headers = await signNotice({ audience: 'notes', signer: portal.signer, body, timestamp: ts(clock) });
+		/** @type {string[]} */
+		const keys = [];
+		await verify(clock, headers, {
+			replayStore: {
+				seen: async (/** @type {string} */ key) => {
+					keys.push(key);
+					return false;
+				},
+			},
+		});
+		expect(keys).toHaveLength(1);
+		expect(keys[0]).toContain('notes');
+	});
+
+	it('refuses an audience that is not a product id', async () => {
+		const clock = createClock();
+		for (const bad of [undefined, '', 'Not A Product', 'a\nb', 42]) {
+			await expectCode(
+				signNotice({ audience: /** @type {any} */ (bad), signer: portal.signer, body, timestamp: ts(clock) }),
+				'invalid_argument',
+			);
+		}
+		const headers = await signNotice({ audience, signer: portal.signer, body, timestamp: ts(clock) });
+		for (const bad of [undefined, '', 'Not A Product', 42]) {
+			await expectCode(verify(clock, headers, { audience: bad }), 'invalid_argument');
+		}
+	});
+
 	it('rejects old and future timestamps', async () => {
 		const clock = createClock();
-		const old = await signNotice({ signer: portal.signer, body, timestamp: ts(clock) - 301 });
+		const old = await signNotice({ audience, signer: portal.signer, body, timestamp: ts(clock) - 301 });
 		await expectCode(verify(clock, old), 'expired');
-		const future = await signNotice({ signer: portal.signer, body, timestamp: ts(clock) + 301 });
+		const future = await signNotice({ audience, signer: portal.signer, body, timestamp: ts(clock) + 301 });
 		await expectCode(verify(clock, future), 'not_yet_valid');
-		const edge = await signNotice({ signer: portal.signer, body, timestamp: ts(clock) - 300 });
+		const edge = await signNotice({ audience, signer: portal.signer, body, timestamp: ts(clock) - 300 });
 		await verify(clock, edge);
 	});
 
 	it('rejects tampered body, timestamp, signature and forged keys', async () => {
 		const clock = createClock();
-		const headers = await signNotice({ signer: portal.signer, body, timestamp: ts(clock) });
+		const headers = await signNotice({ audience, signer: portal.signer, body, timestamp: ts(clock) });
 		await expectCode(verify(clock, headers, { rawBody: body.replace('web_1', 'web_2') }), 'signature');
 		await expectCode(verify(clock, { ...headers, 'SS-Timestamp': String(ts(clock) - 1) }), 'signature');
 		const sig = headers['SS-Signature'];
 		const flipped = sig.replace(/sig=(.)/, (_m, c) => `sig=${c === 'A' ? 'B' : 'A'}`);
 		await expectCode(verify(clock, { ...headers, 'SS-Signature': flipped }), 'signature');
-		const forged = await signNotice({ signer: attacker.signer, body, timestamp: ts(clock) });
+		const forged = await signNotice({ audience, signer: attacker.signer, body, timestamp: ts(clock) });
 		await expectCode(verify(clock, forged), 'signature');
 		// SS-Key-Id is only a hint: pointing it elsewhere changes nothing
 		await verify(clock, { ...headers, 'SS-Key-Id': 'portal-2' });
@@ -147,13 +191,13 @@ describe('notices', () => {
 
 	it('rejects unknown kids', async () => {
 		const clock = createClock();
-		const headers = await signNotice({ signer: portal.signer, body, timestamp: ts(clock) });
+		const headers = await signNotice({ audience, signer: portal.signer, body, timestamp: ts(clock) });
 		await expectCode(verify(clock, headers, { keyResolver: staticResolver([next.publicJwk]) }), 'unknown_kid');
 	});
 
 	it('supports dual-signing during rotation', async () => {
 		const clock = createClock();
-		const headers = await signNotice({ signers: [portal.signer, next.signer], body, timestamp: ts(clock) });
+		const headers = await signNotice({ audience, signers: [portal.signer, next.signer], body, timestamp: ts(clock) });
 		expect(headers['SS-Signature'].split(', ')).toHaveLength(2);
 		expect(await verify(clock, headers, { keyResolver: staticResolver([next.publicJwk]) })).toMatchObject({
 			type: 'status.changed',
@@ -179,16 +223,19 @@ describe('notices', () => {
 		['duplicated header array', { 'SS-Signature': ['a', 'b'] }],
 	])('rejects %s as malformed', async (_name, patch) => {
 		const clock = createClock();
-		const headers = await signNotice({ signer: portal.signer, body, timestamp: ts(clock) });
+		const headers = await signNotice({ audience, signer: portal.signer, body, timestamp: ts(clock) });
 		await expectCode(verify(clock, { ...headers, ...patch }), 'malformed');
 	});
 
 	it('validates arguments', async () => {
 		const clock = createClock();
-		await expectCode(signNotice({ body, timestamp: ts(clock) }), 'invalid_argument');
-		await expectCode(signNotice({ signer: portal.signer, body, timestamp: 1.5 }), 'invalid_argument');
-		await expectCode(signNotice({ signer: portal.signer, body: /** @type {any} */ ({}), timestamp: 1 }), 'invalid_argument');
-		const headers = await signNotice({ signer: portal.signer, body, timestamp: ts(clock) });
+		await expectCode(signNotice({ audience, body, timestamp: ts(clock) }), 'invalid_argument');
+		await expectCode(signNotice({ audience, signer: portal.signer, body, timestamp: 1.5 }), 'invalid_argument');
+		await expectCode(
+			signNotice({ audience, signer: portal.signer, body: /** @type {any} */ ({}), timestamp: 1 }),
+			'invalid_argument',
+		);
+		const headers = await signNotice({ audience, signer: portal.signer, body, timestamp: ts(clock) });
 		await expectCode(verify(clock, headers, { replayStore: undefined }), 'invalid_argument');
 		await expectCode(verify(clock, headers, { rawBody: undefined }), 'invalid_argument');
 		await expectCode(verify(clock, /** @type {any} */ (null)), 'malformed');

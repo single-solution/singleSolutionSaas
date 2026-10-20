@@ -633,15 +633,16 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 			return (await issueLaunch({ ...common, merchant })).token;
 		},
 		/**
-		 * Sign a notice body.
+		 * Sign a notice body for one product (a notice names the product it is for).
 		 * @param {{ type: string, websiteId?: string, subject?: string, what?: string }} notice
+		 * @param {string} productId the product it is for
 		 * @returns {Promise<{ headers: Record<string, string>, body: string }>}
 		 */
-		signNotice: async (notice) => {
+		signNotice: async (notice, productId) => {
 			const body = JSON.stringify(notice);
 			return {
 				headers: {
-					...(await signNotice({ signer, body, timestamp: Math.floor(now() / 1000) })),
+					...(await signNotice({ audience: productId, signer, body, timestamp: Math.floor(now() / 1000) })),
 					'content-type': 'application/json',
 				},
 				body,
@@ -661,7 +662,7 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 			const stamp = Math.max(Math.floor(now() / 1000), (noticeStamps.get(`${productId}|${body}`) ?? 0) + 1);
 			noticeStamps.set(`${productId}|${body}`, stamp);
 			const headers = {
-				...(await signNotice({ signer, body, timestamp: stamp })),
+				...(await signNotice({ audience: productId, signer, body, timestamp: stamp })),
 				'content-type': 'application/json',
 			};
 			return product.handler(new Request(`${product.baseUrl}${NOTICE_PATH}`, { method: 'POST', headers, body }));

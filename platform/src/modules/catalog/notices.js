@@ -47,7 +47,12 @@ export const createNotices = ({ ctx, policy, fetch = netFetch }) => {
 			/** @type {string | null} */
 			let failure = null;
 			try {
-				const headers = await signNotice({ signer: ctx.keys.signer, body, timestamp: Math.floor(ctx.now() / 1000) });
+				const headers = await signNotice({
+					audience: productId,
+					signer: ctx.keys.signer,
+					body,
+					timestamp: Math.floor(ctx.now() / 1000),
+				});
 				const res = await fetch(
 					`${product.baseUrl}${NOTICE_PATH}`,
 					{

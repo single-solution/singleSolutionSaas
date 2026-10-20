@@ -189,7 +189,7 @@ describe('notices', () => {
 	it('refuses unsigned and replayed notices', async () => {
 		const { call, portal, websiteId, handler } = await setup();
 		expect((await call('POST', '/.well-known/ss-events', { body: { type: 'status.changed', websiteId } })).status).toBe(401);
-		const signed = await portal.signNotice({ type: 'status.changed', websiteId });
+		const signed = await portal.signNotice({ type: 'status.changed', websiteId }, 'notes');
 		const send = () =>
 			handler(
 				new Request('https://notes.example.dev/.well-known/ss-events', {
@@ -200,5 +200,30 @@ describe('notices', () => {
 			);
 		expect((await send()).status).toBe(204);
 		expect((await send()).status).toBe(401);
+	});
+
+	it('refuses a notice that was signed for another product', async () => {
+		const { portal, websiteId, handler } = await setup();
+		const signed = await portal.signNotice({ type: 'status.changed', websiteId }, 'other');
+		const res = await handler(
+			new Request('https://notes.example.dev/.well-known/ss-events', {
+				method: 'POST',
+				headers: signed.headers,
+				body: signed.body,
+			}),
+		);
+		expect(res.status).toBe(401);
+		const right = await portal.signNotice({ type: 'status.changed', websiteId }, 'notes');
+		expect(
+			(
+				await handler(
+					new Request('https://notes.example.dev/.well-known/ss-events', {
+						method: 'POST',
+						headers: right.headers,
+						body: right.body,
+					}),
+				)
+			).status,
+		).toBe(204);
 	});
 });

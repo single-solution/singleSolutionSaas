@@ -306,7 +306,7 @@ merchantName?, status?, graceEndsAt?, todayMillicredits? })`, `setStatus(website
 productId)` (a re-add: active, every feature off, `featuresVersion` one higher), `deleteWebsite(websiteId)`,
 `features(websiteId, productId)`, `addAdmin({ id, name, role })`, `issueToken({ websiteId, productId, kind })`,
 `revoke(jti)`, `issueLaunch({ productId, kind, websiteId?, role?, adminId?, adminName?, sessionExpiresAt? })`,
-`signNotice(body)`, `sendNotice(productId, body)`, `signCall(productId, method, target, body?)` (signed Portal-call
+`signNotice(body, productId)` (the notice names the product it is for), `sendNotice(productId, body)`, `signCall(productId, method, target, body?)` (signed Portal-call
 headers), `callAsPortal(productId, method, target)`, `prices(productId)`, `priceReports`, `featureReports`, `calls`.
 
 Accounts double (`createAccountsDouble({ url?, now? })`) members: `url`, `handle(request)` (activity copies, `GET /v1/websites/:websiteId/keys`, `GET /v1/users?permission=&blocked=`), `copies`, `signIn({ websiteId, sub, ttlSeconds?, …claims })`, `setFailing(bool)`, `setUsers(list)`, `userReads`, `exportUser({ handler, baseUrl, token,

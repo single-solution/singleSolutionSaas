@@ -116,6 +116,7 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 					if (!portalKeys) throw new Error('not connected');
 					const notice = await verifyNotice({
 						headers: /** @type {any} */ (req.headers),
+						audience: current.id,
 						rawBody: body,
 						keyResolver: portalKeys,
 						replayStore,
