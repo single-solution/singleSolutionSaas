@@ -868,18 +868,19 @@ export const createFlows = (product, service) => {
 		const record = await service.takeSecret(s, body.code, 'handoff', { keep: true });
 		const user = record ? await s.store.users.get(record.target) : null;
 		if (!record || !user) throw problem('code_invalid', 'This sign-in has expired. Start again.');
+		const claim = () => s.store.codes.consume(record.id);
 		if (user.status === 'pending') {
-			await s.store.codes.consume(record.id);
+			if (!(await claim())) throw problem('code_invalid', 'This sign-in has expired. Start again.');
 			return { status: 'pending' };
 		}
-		const answer = await service.finish(s, user, {
+		// used up inside `finish`, once its refusals a retry can fix (consents) are passed: the call that used it up signs in
+		return service.finish(s, user, {
 			method: String(record.data.method),
 			remember: record.data.remember === true,
 			device: service.howOf(ctx).device,
 			consents: body.consents,
+			claim,
 		});
-		await s.store.codes.consume(record.id);
-		return answer;
 	};
 
 	// ------------------------------------------------------------------------------------------------- two-step

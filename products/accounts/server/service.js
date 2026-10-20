@@ -292,8 +292,11 @@ export const createService = (product) => {
 
 	/**
 	 * After the first step of any method: blocked, waiting for approval, consents, then two-step; else the session.
+	 * A single-use hand-over (`how.claim`) is used up after the refusals a retry can fix and before anything is issued:
+	 * only the call that used it up goes on.
 	 * @param {Site} s @param {UserRecord} user
-	 * @param {{ method: string, remember: boolean, device: { browser: string, system: string }, consents?: unknown }} how
+	 * @param {{ method: string, remember: boolean, device: { browser: string, system: string }, consents?: unknown,
+	 *   claim?: () => Promise<boolean> }} how
 	 */
 	const finish = async (s, user, how) => {
 		if (user.blocked) throw problem('blocked', 'This account is blocked.');
@@ -306,6 +309,7 @@ export const createService = (product) => {
 			if (JSON.stringify(next) !== JSON.stringify(given))
 				current = (await s.store.users.update(current.id, { consents: next })) ?? current;
 		}
+		if (how.claim && !(await how.claim())) throw problem('code_invalid', 'This sign-in has expired. Start again.');
 		if (s.on.includes('two_step')) {
 			const role = await roleOf(s, current);
 			const data = { userId: current.id, method: how.method, remember: how.remember, device: how.device };
