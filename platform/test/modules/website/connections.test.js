@@ -12,6 +12,8 @@ import { startMongo } from '../../helpers.js';
 import { PASSWORD, bootPortal, codeOf } from '../catalog/boot.js';
 import {
 	FETCHES_PER_HOUR,
+	PRODUCT_FETCHES_PER_HOUR,
+	PRODUCT_FETCH_WARNING,
 	checkAiValue,
 	checkDatabaseValue,
 	checkStorageValue,
@@ -680,5 +682,93 @@ describe('the Owner re-seals the connections with a new key', () => {
 			idempotencyKey: 'conn-rekey-wrong-reseal',
 		});
 		expect(lost.json.unreadableIn.websiteConnections).toBe(3);
+	});
+});
+
+describe('one product key cannot read the secrets of every website (SR-2-2)', () => {
+	/** Both websites hold a database connection; `notes` is on both. @param {string} name */
+	const withSecrets = async (name) => {
+		const set = await setUp(name);
+		for (const website of [set.w1, set.w2])
+			await set.m.client.put(`${set.site(website)}/connections/database`, { value: DB, ...CONFIRM });
+		const counter = set.h.db.collection('website_product_fetches');
+		/** @param {number} count */
+		const seed = (count) =>
+			counter.updateOne(
+				{ _id: /** @type {any} */ ('notes') },
+				{ $set: { start: set.h.clock.now(), count, warned: false, capped: false } },
+				{ upsert: true },
+			);
+		const alerts = () => set.h.mailer.sent.filter((message) => message.template === 'connection_fetch_alert');
+		return { ...set, counter, seed, alerts };
+	};
+
+	it('has a total per product and hour across all websites: the next fetch is refused, on every website', async () => {
+		const { fetchAs, notes, w1, w2, seed } = await withSecrets('conn_total');
+		await seed(PRODUCT_FETCHES_PER_HOUR - 2);
+		expect((await fetchAs(notes, w1)).status).toBe(200);
+		expect((await fetchAs(notes, w2)).status).toBe(200);
+		expect(codeOf(await fetchAs(notes, w1))).toEqual([429, 'rate_limited']);
+		expect(codeOf(await fetchAs(notes, w2))).toEqual([429, 'rate_limited']);
+	});
+
+	it('a fetch the website limit refuses does not use the product total, and one with nothing to deliver does not either', async () => {
+		const { fetchAs, notes, w1, counter, seed } = await withSecrets('conn_total_free');
+		await seed(0);
+		for (let i = 0; i < FETCHES_PER_HOUR; i += 1) expect((await fetchAs(notes, w1)).status).toBe(200);
+		expect((await fetchAs(notes, w1)).status).toBe(429);
+		expect((await counter.findOne({ _id: /** @type {any} */ ('notes') }))?.count).toBe(FETCHES_PER_HOUR);
+	});
+
+	it('the total starts again an hour later', async () => {
+		const { h, fetchAs, notes, w1, seed } = await withSecrets('conn_total_hour');
+		await seed(PRODUCT_FETCHES_PER_HOUR);
+		expect((await fetchAs(notes, w1)).status).toBe(429);
+		h.clock.advance(3_600_001);
+		expect((await fetchAs(notes, w1)).status).toBe(200);
+	});
+
+	it('the Owners are told once an hour when a product passes the warning line, and once when it hits the cap', async () => {
+		const { h, fetchAs, notes, w1, w2, seed, alerts } = await withSecrets('conn_alert');
+		const second = await h.admin('owner');
+		await h.admin('support');
+		// the warning line is passed on the way up: one mail per Owner, none for Support
+		await seed(PRODUCT_FETCH_WARNING - 1);
+		expect((await fetchAs(notes, w1)).status).toBe(200);
+		expect(
+			alerts()
+				.map((message) => message.to)
+				.sort(),
+		).toEqual(['owner@portal.test', second.email].sort());
+		expect(alerts()[0]?.data).toMatchObject({ product: 'Notes', kind: 'warning' });
+		expect((await fetchAs(notes, w2)).status).toBe(200);
+		expect((await fetchAs(notes, w1)).status).toBe(200);
+		expect(alerts()).toHaveLength(2);
+		// the cap: refused, one more mail per Owner, not repeated
+		await h.db
+			.collection('website_product_fetches')
+			.updateOne({ _id: /** @type {any} */ ('notes') }, { $set: { count: PRODUCT_FETCHES_PER_HOUR } });
+		expect((await fetchAs(notes, w1)).status).toBe(429);
+		expect((await fetchAs(notes, w2)).status).toBe(429);
+		expect(alerts()).toHaveLength(4);
+		expect(alerts().filter((message) => message.data.kind === 'cap')).toHaveLength(2);
+		// a new hour: told again
+		h.clock.advance(3_600_001);
+		await seed(PRODUCT_FETCH_WARNING - 1);
+		expect((await fetchAs(notes, w2)).status).toBe(200);
+		expect(alerts()).toHaveLength(6);
+		// the alert is in the activity, with no secret in it
+		const entries = await h.activity('website.connections_alert');
+		expect(entries.length).toBe(3);
+		expect(JSON.stringify(entries)).not.toContain('Sup3rSecret');
+	});
+
+	it('a Portal that cannot send e-mail still refuses at the cap and records the alert', async () => {
+		const { h, fetchAs, notes, w1, seed, alerts } = await withSecrets('conn_alert_nomail');
+		h.mailer.setAvailable(false);
+		await seed(PRODUCT_FETCHES_PER_HOUR);
+		expect((await fetchAs(notes, w1)).status).toBe(429);
+		expect(alerts()).toHaveLength(0);
+		expect((await h.activity('website.connections_alert')).length).toBe(1);
 	});
 });

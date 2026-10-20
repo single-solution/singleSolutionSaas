@@ -152,6 +152,27 @@ export const createIdentityService = (ctx, options = {}) => {
 			await mailer.send({ to: String(merchant.email), template, data });
 			return true;
 		},
+		/**
+		 * Send every active Owner an e-mail (an alert about the Portal itself); false when nothing can be sent (no e-mail
+		 * sending set up). A failure to send to one Owner is thrown after the others were tried.
+		 * @param {{ template: import('../../infra/mailer.js').MailTemplate, data: Record<string, string> }} input
+		 * @returns {Promise<boolean>}
+		 */
+		mailOwners: async ({ template, data }) => {
+			if (!mailer.available) return false;
+			const owners = await repo.admins.find({ role: 'owner', status: 'active' }).project({ email: 1 }).toArray();
+			/** @type {unknown} */
+			let failure = null;
+			for (const owner of owners) {
+				try {
+					await mailer.send({ to: String(owner.email), template, data });
+				} catch (error) {
+					failure ??= error;
+				}
+			}
+			if (failure) throw failure;
+			return true;
+		},
 		/** Totals of admin Overview: merchants (not deleted) and websites (not removed). */
 		counts: async () => ({
 			merchants: await repo.merchants.countDocuments({ status: { $ne: 'deleted' } }),

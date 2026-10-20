@@ -8,6 +8,7 @@ import { defineCollection } from '../../infra/db.js';
 export const SETTINGS = 'website_settings';
 export const CONNECTIONS = 'website_connections';
 export const LINKS = 'website_links';
+export const PRODUCT_FETCHES = 'website_product_fetches';
 
 export const collections = Object.freeze([
 	defineCollection({
@@ -27,6 +28,13 @@ export const collections = Object.freeze([
 		tenant: 'merchant',
 		timestamps: false,
 		indexes: [{ keys: { merchantId: 1, _id: 1 } }],
+	}),
+	defineCollection({
+		module: 'website',
+		name: PRODUCT_FETCHES,
+		description:
+			'The secret fetches of a product across all websites in the current hour (`_id` = productId): when the hour started, how many fetches with secrets, and whether the Owners were already told at the warning line and at the cap (once each per hour). Counts only; no secret and no website.',
+		timestamps: false,
 	}),
 	defineCollection({
 		module: 'website',

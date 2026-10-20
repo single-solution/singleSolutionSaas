@@ -31,6 +31,11 @@ import { dayOf, floorDay, floorMonth, productStatusOf } from '../core/money.js';
 
 /** A status response may be cached this long at most (PLAN 0.4.7). */
 const STATUS_TTL_MS = 5 * 60_000;
+/**
+ * The highest hourly price of one feature a product may report, in millicredits (1000 credits an hour): the contract
+ * allows any safe integer, and a price in the quadrillions would charge every merchant with the feature on.
+ */
+export const MAX_PRICE_MILLICREDITS_PER_HOUR = 1_000_000;
 /** Websites per page of the websites list (row 5). */
 const WEBSITES_PAGE = 100;
 const DAYS_IN_SERIES = 30;
@@ -232,6 +237,16 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 	const acceptPrices = async ({ productId, prices, requestId = null, ip = null }) => {
 		const checked = validatePriceReport(prices);
 		if (!checked.ok) throw refused(checked.problems, 'The price report is invalid.');
+		/** @type {{ path: string, message: string }[]} */
+		const dear = [];
+		checked.value.features.forEach((feature, index) => {
+			if (!(feature.millicreditsPerHour <= MAX_PRICE_MILLICREDITS_PER_HOUR))
+				dear.push({
+					path: `/features/${index}/millicreditsPerHour`,
+					message: `must be at most ${MAX_PRICE_MILLICREDITS_PER_HOUR} (${MAX_PRICE_MILLICREDITS_PER_HOUR / 1000} credits an hour)`,
+				});
+		});
+		if (dear.length > 0) throw refused(dear, 'The price report is invalid.');
 		const accepted = await billing.recordPriceList({ productId, prices: checked.value });
 		if (accepted.previous) {
 			/** @type {Map<string, number>} */

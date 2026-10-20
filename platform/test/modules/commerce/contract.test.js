@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { validateStatusResponse, validateWebsitesPage } from '@ss/contracts';
 import { closeMongoClients } from '../../../src/testing.js';
+import { MAX_PRICE_MILLICREDITS_PER_HOUR } from '../../../src/modules/commerce/services/products.js';
 import { T0, createClock, startMongo } from '../../helpers.js';
 import {
 	FINANCE_ADMIN,
@@ -87,6 +88,55 @@ describe('price reports (PLAN 0.4.12 row 2)', () => {
 			changes: [{ key: 'extra', before: null, after: 0 }],
 			dropped: ['box'],
 		});
+	});
+
+	it('caps the size and the values of price and feature reports (SR-2-2)', async () => {
+		const { h, product, features } = await setUp('cc_report_caps');
+		const refused = [422, 'validation_failed'];
+		// a price in the quintillions would charge every merchant with the feature on; the top of the range is still fine
+		expect(codeOf(await product('PUT', '/v1/product/prices', priceList(2, { codes: 9_000_000_000_000_000 })))).toEqual(refused);
+		expect(
+			codeOf(await product('PUT', '/v1/product/prices', priceList(2, { codes: MAX_PRICE_MILLICREDITS_PER_HOUR + 1 }))),
+		).toEqual(refused);
+		expect(codeOf(await product('PUT', '/v1/product/prices', priceList(2, { codes: Number.MAX_SAFE_INTEGER })))).toEqual(
+			refused,
+		);
+		expect(await h.service.priceListVersion(PRODUCT)).toBe(1);
+		// too many features, too long names and texts, too many dependencies
+		const many = Object.fromEntries(Array.from({ length: 101 }, (_, i) => [`f${i}`, 1]));
+		expect(codeOf(await product('PUT', '/v1/product/prices', priceList(2, many)))).toEqual(refused);
+		const base = priceList(2, { codes: 1 });
+		const withFeature = (/** @type {Record<string, unknown>} */ change) => ({
+			...base,
+			features: [{ ...base.features[0], ...change }],
+		});
+		expect(codeOf(await product('PUT', '/v1/product/prices', withFeature({ name: 'n'.repeat(121) })))).toEqual(refused);
+		expect(codeOf(await product('PUT', '/v1/product/prices', withFeature({ description: 'd'.repeat(501) })))).toEqual(refused);
+		expect(codeOf(await product('PUT', '/v1/product/prices', withFeature({ key: 'k'.repeat(41) })))).toEqual(refused);
+		expect(
+			codeOf(
+				await product(
+					'PUT',
+					'/v1/product/prices',
+					withFeature({ dependsOn: Array.from({ length: 101 }, (_, i) => `d${i}`) }),
+				),
+			),
+		).toEqual(refused);
+		expect(codeOf(await product('PUT', '/v1/product/prices', withFeature({ millicreditsPerHour: Number.NaN })))).toEqual(
+			refused,
+		);
+		expect(await h.service.priceListVersion(PRODUCT)).toBe(1);
+		// the largest allowed price is accepted
+		expect(await product('PUT', '/v1/product/prices', priceList(2, { codes: MAX_PRICE_MILLICREDITS_PER_HOUR }))).toMatchObject({
+			status: 200,
+			json: { version: 2 },
+		});
+		// feature reports: too many keys, a name that is too long
+		const keys = Array.from({ length: 101 }, (_, i) => `f${i}`);
+		expect(codeOf(await features(W1, { version: 1, on: keys, adminId: OWNER_ADMIN, adminName: 'Olivia' }))).toEqual(refused);
+		expect(codeOf(await features(W1, { version: 1, on: ['codes'], adminId: OWNER_ADMIN, adminName: 'x'.repeat(121) }))).toEqual(
+			refused,
+		);
 	});
 
 	it('refuses the whole report: bad shape or price (422), version not higher (409), no product (401)', async () => {

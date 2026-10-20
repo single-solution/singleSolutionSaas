@@ -70,6 +70,21 @@ export const MAIL_TEXTS = Object.freeze({
 		action: null,
 		footer: 'If this was not you, sign in to the Portal and replace the connection, and change your password.',
 	},
+	connection_fetch_alert: {
+		subject: (d) =>
+			d.kind === 'cap'
+				? `${d.brand}: ${d.product} hit the hourly limit for website connections`
+				: `${d.brand}: ${d.product} is fetching website connections unusually often`,
+		lines: (d) => [
+			`${d.product} fetched the connections (database, storage, AI key) of websites ${d.count} times in the last hour. The warning line is ${d.warning} and the hourly limit is ${d.cap}.`,
+			d.kind === 'cap'
+				? 'The Portal now refuses further fetches from this product until the hour is over.'
+				: 'Nothing is refused yet. The Portal stops further fetches from this product at the hourly limit.',
+			'A stolen product key would look like this. If the product is not doing something unusual, renew its key in the Portal.',
+		],
+		action: null,
+		footer: 'This alert is sent once an hour per product and kind.',
+	},
 	low_balance: {
 		subject: (d) => `${d.brand}: credits are running low`,
 		lines: (d) => [

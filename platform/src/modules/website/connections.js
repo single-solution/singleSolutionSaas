@@ -16,7 +16,9 @@
  * - **Delivery**: a product fetches `GET /v1/product/websites/:websiteId/connections` over its signed channel when the
  *   status answer's `connectionsVersion` is ahead of the one it holds, or a notice tells it. A product on the website gets
  *   it once added (so a product added later is connected without anyone entering anything). At most
- *   {@link FETCHES_PER_HOUR} fetches with secrets per product and website per hour; every one is logged.
+ *   {@link FETCHES_PER_HOUR} fetches with secrets per product and website per hour, and {@link PRODUCT_FETCHES_PER_HOUR}
+ *   per product across all websites (a stolen product key reads at most that much); every one is logged. The Owners get
+ *   an e-mail once an hour per product when it passes {@link PRODUCT_FETCH_WARNING} and again when it hits the cap.
  * - **Health**: the product tests the value when it adopts it and reports the result
  *   (`PUT …/connections/:name/health`); the Portal never opens a connection to the merchant's database or bucket.
  * - **Every change** is logged (`website.connection_saved`, `website.connection_removed`: who, which connection, never a
@@ -28,7 +30,7 @@ import { checkUrl, createOutboundPolicy, isSafeMongoUri } from '@ss/net';
 import { resealEach } from '../../infra/crypto.js';
 import { problem } from '../../infra/http.js';
 import { isDuplicateKey } from '../../infra/util.js';
-import { CONNECTIONS } from './schema.js';
+import { CONNECTIONS, PRODUCT_FETCHES } from './schema.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
@@ -37,6 +39,10 @@ import { CONNECTIONS } from './schema.js';
 
 /** A product may fetch the secrets of one website this many times in an hour. */
 export const FETCHES_PER_HOUR = 6;
+/** A product may fetch secrets this many times in an hour across all its websites; further fetches are refused. */
+export const PRODUCT_FETCHES_PER_HOUR = 1200;
+/** The Owners are told when a product passes this many secret fetches in an hour. */
+export const PRODUCT_FETCH_WARNING = 600;
 const HOUR_MS = 3_600_000;
 /** The longest connection string. */
 const URI_MAX = 4096;
@@ -195,6 +201,7 @@ export const createConnections = (ctx, { notifyProducts }) => {
 	/** @param {string} merchantId */
 	const ownerOps = (merchantId) => /** @type {import('../../infra/db.js').MutableOps} */ (store.forMerchant(merchantId));
 	const all = () => /** @type {import('../../infra/db.js').MutableOps} */ (store.acrossMerchants());
+	const fetches = () => /** @type {import('../../infra/db.js').MutableOps} */ (ctx.collection(PRODUCT_FETCHES));
 	const identity = () => ctx.service('identity');
 	const commerce = () => ctx.service('commerce');
 	const catalog = () => ctx.service('catalog');
@@ -269,6 +276,85 @@ export const createConnections = (ctx, { notifyProducts }) => {
 			}),
 		);
 		return found.filter((item) => item !== null);
+	};
+
+	/**
+	 * Tell the Owners that a product passed the warning line or hit the cap, once per product, kind and hour: the first
+	 * caller to set the hour's flag sends (the flag is set in one conditional update). Recorded in the activity log even
+	 * when e-mail cannot be sent; never fails the fetch.
+	 * @param {{ productId: string, productName: string, kind: 'warning' | 'cap', count: number }} input
+	 */
+	const alertOwners = async ({ productId, productName, kind, count }) => {
+		try {
+			const flag = kind === 'cap' ? 'capped' : 'warned';
+			const claimed = await fetches().updateOne(
+				{ _id: productId, start: { $gt: ctx.now() - HOUR_MS }, [flag]: { $ne: true } },
+				{ $set: { [flag]: true } },
+			);
+			if (claimed.modifiedCount !== 1) return;
+			ctx.logger.warn('a product fetched website connections more than usual', { productId, kind, count });
+			await ctx.audit.record({
+				actor: { type: 'system', id: 'connections' },
+				action: 'website.connections_alert',
+				target: { type: 'product', id: productId },
+				after: { kind, count, warning: PRODUCT_FETCH_WARNING, cap: PRODUCT_FETCHES_PER_HOUR },
+			});
+			await identity().mailOwners({
+				template: 'connection_fetch_alert',
+				data: {
+					product: productName,
+					kind,
+					count: String(count),
+					warning: String(PRODUCT_FETCH_WARNING),
+					cap: String(PRODUCT_FETCHES_PER_HOUR),
+				},
+			});
+		} catch (error) {
+			ctx.logger.warn('connection fetch alert not sent', { productId, error });
+		}
+	};
+
+	/**
+	 * Count one secret fetch of a product against its total for the hour, across all websites. Atomic: the count only
+	 * goes up while it is below the cap, and an old hour is replaced only if it is still the one that was read.
+	 * @param {string} productId @param {string} productName
+	 * @returns {Promise<boolean>} false when the product is at its cap for this hour
+	 */
+	const takeProductFetch = async (productId, productName) => {
+		const ops = fetches();
+		const fresh = { warned: false, capped: false };
+		for (let attempt = 0; attempt < 5; attempt += 1) {
+			const now = ctx.now();
+			const counted = await ops.findOneAndUpdate(
+				{ _id: productId, start: { $gt: now - HOUR_MS }, count: { $lt: PRODUCT_FETCHES_PER_HOUR } },
+				{ $inc: { count: 1 } },
+			);
+			if (counted) {
+				if (Number(counted.count) >= PRODUCT_FETCH_WARNING)
+					await alertOwners({ productId, productName, kind: 'warning', count: Number(counted.count) });
+				return true;
+			}
+			const slot = await ops.findOne({ _id: productId });
+			if (slot && Number(slot.start) > now - HOUR_MS) {
+				await alertOwners({ productId, productName, kind: 'cap', count: Number(slot.count) });
+				return false;
+			}
+			if (slot) {
+				const started = await ops.updateOne(
+					{ _id: productId, start: slot.start },
+					{ $set: { start: now, count: 1, ...fresh } },
+				);
+				if (started.modifiedCount === 1) return true;
+			} else {
+				try {
+					await ops.insertOne({ _id: productId, start: now, count: 1, ...fresh });
+					return true;
+				} catch (error) {
+					if (!isDuplicateKey(error)) throw error;
+				}
+			}
+		}
+		throw conflict();
 	};
 
 	/**
@@ -511,7 +597,8 @@ export const createConnections = (ctx, { notifyProducts }) => {
 		 * its own database name, the website's AI key under `shared` (only when its manifest says `needs.ai`; else null) and its
 		 * links (`links` is the website links service's part). The website must be active
 		 * and have the product (404 `website_not_found`). A fetch with secrets is counted: more than
-		 * {@link FETCHES_PER_HOUR} an hour is 429.
+		 * {@link FETCHES_PER_HOUR} an hour for the website, or {@link PRODUCT_FETCHES_PER_HOUR} for the product across all
+		 * websites, is 429.
 		 * @param {{ productId: string, websiteId: string, links: (merchantId: string) => Promise<{ out: any[], in: any[] }> }} input
 		 */
 		forProduct: async ({ productId, websiteId, links }) => {
@@ -556,6 +643,8 @@ export const createConnections = (ctx, { notifyProducts }) => {
 				const slot = record?.deliveries?.[productId];
 				const fresh = !slot || now - Number(slot.start) >= HOUR_MS;
 				if (!fresh && Number(slot.count) >= FETCHES_PER_HOUR)
+					throw problem('rate_limited', 'This product fetched the connections too often. Try again later.');
+				if (!(await takeProductFetch(productId, String(product.name))))
 					throw problem('rate_limited', 'This product fetched the connections too often. Try again later.');
 				await ownerOps(merchantId).updateOne(
 					{ merchantId, _id: websiteId },
