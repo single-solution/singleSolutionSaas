@@ -120,10 +120,18 @@ describe('flows and leads', () => {
 
 describe('ratings, transcripts and attachments', () => {
 	it('ends a chat, asks for a rating and takes it; sends a transcript through Notifications', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'ratings', 'transcripts']);
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'ratings', 'transcripts']);
+		await sys.paste('accounts');
 		// one label per point, the merchant's words (C13)
 		await sys.setting('ratings', 'labels', ['Bad', 'Good']);
-		const v = sys.visitor();
+		const v = sys.visitor({
+			signIn: await sys.accounts.signIn({
+				websiteId: sys.websiteId,
+				sub: 'usr_me',
+				email: 'me@example.com',
+				email_verified: true,
+			}),
+		});
 		await v('POST', '/v1/chat/messages', { text: 'thanks, bye' });
 		const ended = await v('POST', '/v1/chat/end');
 		expect(ended.json.chat.conversation).toMatchObject({ status: 'resolved', ratingRequested: true });
@@ -149,6 +157,38 @@ describe('ratings, transcripts and attachments', () => {
 		]);
 		// a message reopens a resolved chat
 		expect((await v('POST', '/v1/chat/messages', { text: 'one more thing' })).json.chat.conversation.status).toBe('open');
+	});
+
+	it('emails the transcript only to the verified email of the signed-in visitor (SR-6-2)', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'transcripts']);
+		await sys.paste('accounts');
+		await sys.paste('notifications');
+		// an anonymous guest cannot make Chat mail the chat, with their own lines in it, to somebody else
+		const guest = sys.visitor();
+		await guest('POST', '/v1/chat/messages', { text: 'Your account is locked, open https://evil.example' });
+		const refused = await guest('POST', '/v1/chat/transcript', { email: 'victim@example.com' });
+		expect(refused.status).toBe(403);
+		expect(refused.json.type).toMatch(/sign_in_required$/);
+		// nor can a signed-in visitor, whatever address they type
+		/** @param {string} sub @param {Record<string, unknown>} claims */
+		const member = async (sub, claims) =>
+			sys.visitor({ signIn: await sys.accounts.signIn({ websiteId: sys.websiteId, sub, ...claims }) });
+		const ann = await member('usr_ann', { email: 'ann@example.com', email_verified: true });
+		await ann('POST', '/v1/chat/messages', { text: 'Hello' });
+		expect((await ann('POST', '/v1/chat/transcript', { email: 'victim@example.com' })).status).toBe(422);
+		// an email the sign-in does not call verified is no address to send to
+		const bea = await member('usr_bea', { email: 'bea@example.com', email_verified: false });
+		await bea('POST', '/v1/chat/messages', { text: 'Hello' });
+		expect((await bea('POST', '/v1/chat/transcript', { email: 'bea@example.com' })).status).toBe(403);
+		expect((await bea('POST', '/v1/chat/transcript', {})).status).toBe(403);
+		expect(sys.messages()).toEqual([]);
+		// the verified email, typed or not (any case), is where it goes
+		expect((await ann('POST', '/v1/chat/transcript', { email: 'ANN@example.com' })).status).toBe(202);
+		expect((await ann('POST', '/v1/chat/transcript', {})).status).toBe(202);
+		expect(sys.messages().map((m) => [m.template, m.to])).toEqual([
+			['chat.transcript', { email: 'ann@example.com' }],
+			['chat.transcript', { email: 'ann@example.com' }],
+		]);
 	});
 
 	it('visitors attach files as the setting allows, straight to the merchant’s storage', async () => {

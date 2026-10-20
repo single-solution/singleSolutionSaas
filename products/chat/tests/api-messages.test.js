@@ -8,7 +8,7 @@ import { validateMessageDefaults } from '@ss/contracts';
 import { afterAll, describe, expect, it } from 'vitest';
 import declaration from '../schemas/messages.json' with { type: 'json' };
 import { ALL_STAFF_PERMISSION } from '../server/service.js';
-import { ready } from './helpers.js';
+import { ready, verifiedVisitor } from './helpers.js';
 
 /** @type {Array<Awaited<ReturnType<typeof ready>>>} */
 const systems = [];
@@ -55,7 +55,7 @@ describe('Chat’s messages and their defaults (parity P1)', () => {
 	});
 
 	it('all_staff alerts every unblocked Accounts user who may see the inbox, and every alert carries its defaults', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'staff_alerts', 'transcripts']);
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'staff_alerts', 'transcripts']);
 		await sys.paste('notifications');
 		await sys.paste('accounts');
 		sys.accounts.setUsers([
@@ -81,8 +81,10 @@ describe('Chat’s messages and their defaults (parity P1)', () => {
 			required: true,
 			defaults: defaultsOf('chat.staff_new_message'),
 		});
-		// the transcript too, naming its long value
-		expect((await v('POST', '/v1/chat/transcript', { email: 'me@example.com' })).status).toBe(202);
+		// the transcript too, naming its long value (to the visitor's verified email)
+		const member = await verifiedVisitor(sys, { email: 'me@example.com' });
+		await member('POST', '/v1/chat/messages', { text: 'Hello' });
+		expect((await member('POST', '/v1/chat/transcript', { email: 'me@example.com' })).status).toBe(202);
 		expect(sys.messages().at(-1)).toMatchObject({
 			template: 'chat.transcript',
 			defaults: defaultsOf('chat.transcript'),
@@ -93,10 +95,9 @@ describe('Chat’s messages and their defaults (parity P1)', () => {
 
 describe('transcripts as one long value', () => {
 	it('send the whole chat within Notifications’ long value limit; a longer chat sends its latest messages and says so', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'transcripts']);
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'transcripts']);
 		await sys.paste('notifications');
-		await sys.setting('guest_chat', 'messageLimit', 0);
-		const v = sys.visitor();
+		const v = await verifiedVisitor(sys, { email: 'me@example.com' });
 		const texts = Array.from({ length: 13 }, (_, i) => `${String.fromCharCode(65 + i)}${'x'.repeat(3999)}`);
 		for (const text of texts.slice(0, 12)) await v('POST', '/v1/chat/messages', { text });
 		/** The transcript of the last send, with what Notifications got. */

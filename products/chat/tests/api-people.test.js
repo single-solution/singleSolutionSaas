@@ -6,7 +6,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { sha256Hex } from '@ss/protocol';
 import { REASSURE_AFTER_MINUTES, STAFF_ATTACHMENT_MAX_BYTES } from '../core/limits.js';
-import { AI_KEY, STORAGE_KEY, ready } from './helpers.js';
+import { AI_KEY, STORAGE_KEY, ready, verifiedVisitor } from './helpers.js';
 
 /** @type {Array<Awaited<ReturnType<typeof ready>>>} */
 const systems = [];
@@ -151,12 +151,11 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	});
 
 	it('a reply from the merchant’s server alerts with the staff name of the widget texts (C24)', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts', 'transcripts']);
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'visitor_alerts', 'transcripts']);
 		await sys.paste('notifications');
 		await sys.text('chat.staff', 'Équipe');
-		const v = sys.visitor();
+		const v = await verifiedVisitor(sys, { email: 'ann@example.com' });
 		const sent = await v('POST', '/v1/chat/messages', { text: 'call me' });
-		await v('POST', '/v1/chat/contact', { name: 'Ann', email: 'ann@example.com' });
 		sys.advance(61_000);
 		await sys.serverCall('POST', `/v1/conversations/${sent.json.chat.conversation.id}/messages`, { text: 'Bonjour' });
 		// (the reply is by the signed-in staff member, so their name is the one the alert and the transcript give)

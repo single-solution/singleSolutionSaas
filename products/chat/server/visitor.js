@@ -16,6 +16,7 @@ import {
 	pageContext,
 	ratingScale,
 	statusAfter,
+	verifiedIdentity,
 } from '../core/conversation.js';
 import { checkFieldValue, checkLead } from '../core/fields.js';
 import { answerStep, pageFlowMatches } from '../core/flows.js';
@@ -453,10 +454,20 @@ export const createVisitorApi = (product, service, reply) => {
 
 	/** @param {any} ctx */
 	const transcript = async (ctx) => {
-		const { s, c } = await existing(ctx);
-		const checked = checkFieldValue({ key: 'email', label: 'email', type: 'email', options: [] }, bodyOf(ctx.body).email);
-		if (!checked.ok) throw invalid(['Enter an email address.']);
-		await service.sendTranscript(s, c, String(checked.value));
+		const { s, visitor, c } = await existing(ctx);
+		// only to the email Accounts verified for the signed-in visitor: an address typed in the chat proves nothing, and
+		// there is no step that confirms one (SR-6-2)
+		if (visitor.kind !== 'user') throw problem('sign_in_required', 'Sign in to get the transcript by email.');
+		const email = verifiedIdentity(await s.signIn())?.email;
+		if (!email) throw problem('forbidden', 'The transcript goes only to an email address your account has verified.');
+		const typed = bodyOf(ctx.body).email;
+		if (typed !== undefined && typed !== '') {
+			const checked = checkFieldValue({ key: 'email', label: 'email', type: 'email', options: [] }, typed);
+			if (!checked.ok) throw invalid(['Enter an email address.']);
+			if (String(checked.value).toLowerCase() !== email.toLowerCase())
+				throw invalid(['The transcript goes only to the email address of your account.']);
+		}
+		await service.sendTranscript(s, c, email);
 		return new Response(JSON.stringify({ sent: true }), { status: 202, headers: { 'content-type': 'application/json' } });
 	};
 

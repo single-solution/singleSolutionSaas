@@ -463,3 +463,20 @@ export const ready = async (on) => {
 	await sys.connectDatabase();
 	return sys;
 };
+
+/**
+ * A signed-in visitor whose email and phone Accounts verified (needs the `signed_in_chat` feature on).
+ * @param {Awaited<ReturnType<typeof ready>>} sys
+ * @param {{ sub?: string, name?: string, email?: string, phone?: string, guestKey?: string }} [who]
+ */
+export const verifiedVisitor = async (sys, { sub = 'usr_ann', name = 'Ann', email, phone, guestKey } = {}) => {
+	await sys.paste('accounts');
+	const signIn = await sys.accounts.signIn({
+		websiteId: sys.websiteId,
+		sub,
+		name,
+		...(email ? { email, email_verified: true } : {}),
+		...(phone ? { phone, phone_verified: true } : {}),
+	});
+	return sys.visitor({ signIn, ...(guestKey ? { guestKey } : {}) });
+};

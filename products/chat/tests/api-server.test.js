@@ -7,7 +7,7 @@
 import { portalSectionsOf } from '@ss/app-kit/testing';
 import { afterAll, describe, expect, it } from 'vitest';
 import { AI_REPLIES_PER_NETWORK_PER_DAY } from '../core/limits.js';
-import { AI_KEY, ORIGIN, ready } from './helpers.js';
+import { AI_KEY, ORIGIN, ready, verifiedVisitor } from './helpers.js';
 
 /** Monday to Friday (ISO weekday numbers). */
 const WEEKDAYS = [1, 2, 3, 4, 5];
@@ -292,7 +292,7 @@ describe('activity labels (K9)', () => {
 
 describe('Format and business time zone (K7, K8)', () => {
 	it('reach the widget config and the text the server makes', async () => {
-		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'handoff', 'transcripts']);
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'handoff', 'transcripts']);
 		await sys.paste('notifications');
 		// the Format and the time zone are the Portal's (Website settings): a server cannot save them there
 		const refused = await server(sys, 'PUT', '/v1/format', { body: { locale: 'en-GB' }, headers: ZOE });
@@ -315,7 +315,7 @@ describe('Format and business time zone (K7, K8)', () => {
 			'office_hours',
 			WEEKDAYS.map((day) => ({ day, start: '09:00', end: '10:00' })),
 		);
-		const v = sys.visitor();
+		const v = await verifiedVisitor(sys, { email: 'ann@example.com' });
 		await v('POST', '/v1/chat/messages', { text: 'hi' });
 		const asked = await v('POST', '/v1/chat/handoff');
 		expect(asked.json.chat.conversation.officeHours).toEqual({ open: false, backAt: '2026-10-06T00:00:00.000Z' });
