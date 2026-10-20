@@ -68,10 +68,10 @@ import { OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core/roles.js';
 /**
  * The filters of the users list (and its counts): text in the name, email or phone; roles (one or several); a status
  * (`active`, `pending`, `invited`, or `blocked` for blocked users); blocked or not; users who asked to be deleted; an
- * exact phone, the end of a national number (digits, A7), users who gave a consent now (A2), users with any of some
+ * exact email address, an exact phone, the end of a national number (digits, A7), users who gave a consent now (A2), users with any of some
  * tags (A5), and users made after a time (PLAN 0.8.10 A4).
- * @typedef {{ q?: string, roles?: string[], status?: string, blocked?: boolean, deletion?: boolean, phone?: string,
- *   phoneEnd?: string, consent?: string, tags?: string[], createdAfter?: Date }} UserQuery
+ * @typedef {{ q?: string, roles?: string[], status?: string, blocked?: boolean, deletion?: boolean, email?: string,
+ *   phone?: string, phoneEnd?: string, consent?: string, tags?: string[], createdAfter?: Date }} UserQuery
  */
 
 /**
@@ -241,7 +241,19 @@ export const createStore = (data, { now }) => {
 	 * The filter of the users list and of its counts (one builder, so a count always equals the list).
 	 * @param {UserQuery} query
 	 */
-	const usersFilter = ({ q, roles: anyRole, status, blocked, deletion, phone, phoneEnd, consent, tags, createdAfter }) => {
+	const usersFilter = ({
+		q,
+		roles: anyRole,
+		status,
+		blocked,
+		deletion,
+		email,
+		phone,
+		phoneEnd,
+		consent,
+		tags,
+		createdAfter,
+	}) => {
 		/** @type {Record<string, unknown>} */
 		const filter = {};
 		/** @type {Record<string, unknown>[]} */
@@ -256,6 +268,7 @@ export const createStore = (data, { now }) => {
 		if (blocked === true) and.push({ blocked: { $ne: null } });
 		if (blocked === false) and.push({ blocked: null });
 		if (deletion) filter.deletion = { $ne: null };
+		if (email) filter.email = email;
 		if (phone) filter.phone = phone;
 		if (phoneEnd) filter.phoneReversed = { $regex: `^${[...phoneEnd].reverse().join('')}` };
 		if (consent) filter[`consents.${consent}.given`] = true;

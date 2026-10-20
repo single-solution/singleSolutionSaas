@@ -390,6 +390,23 @@ export const selfView = (user, fields) => ({
 });
 
 /**
+ * What another product sees of a user (SR-4-2): the narrow lookups it makes with the server token alone (who holds a
+ * permission, is this address a member, one user by id) read only the name, the contacts, whether a password is set, when
+ * the user joined and whether the user is blocked. Never notes, tags, the blocked reason, lock times, recovery codes,
+ * consents or addresses: those are the signed-in staff member's (`staffView`).
+ * @param {UserRecord} user
+ */
+export const narrowView = (user) => ({
+	id: user.id,
+	name: user.name,
+	email: user.email,
+	phone: user.phone,
+	hasPassword: Boolean(user.passwordHash),
+	blocked: Boolean(user.blocked),
+	createdAt: user.createdAt.toISOString(),
+});
+
+/**
  * What the merchant's server and staff see (Users admin): the profile, notes, blocked flag, status and role.
  * @param {UserRecord} user
  */

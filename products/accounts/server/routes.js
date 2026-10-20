@@ -39,21 +39,27 @@ export const createRoutes = (product) => {
 
 	/**
 	 * The user lookups the other products make through the Portal's link to Accounts (staff alerts and Chat's picker ask who has
-	 * a permission, Ecommerce asks whether an email address or phone number is a member): a call with the server token
-	 * alone may ask for a narrow answer only: a permission, an exact phone or email address, a search of at least 6
-	 * characters with at most 10 results. Listing or browsing users is the signed-in staff member's (`users.read`).
-	 * @param {(ctx: any) => unknown} handler
+	 * a permission, Ecommerce asks whether an email address or phone number is a member and reads one user): a call with the
+	 * server token alone may ask for a narrow answer only: a permission, an exact phone or email address, a search of at
+	 * least 6 characters with at most 10 results, or one user by id. It gets the small view of at most 10 users and no cursor
+	 * (SR-4-2). Listing or browsing users, and the whole view of a user (notes, tags, lock times), is the signed-in staff
+	 * member's (`users.read`).
+	 * @param {(ctx: any) => unknown} staffHandler @param {(ctx: any) => unknown} narrowHandler
+	 * @param {boolean} [byId] every call may be narrow (one user by id)
 	 */
-	const narrowOrStaff = (handler) => async (/** @type {any} */ ctx) => {
-		const { permission, phone, email, q, limit } = ctx.query;
-		const narrow =
-			Boolean(permission || phone || email) || (typeof q === 'string' && q.length >= 6 && Number(limit ?? Infinity) <= 10);
-		if (!narrow) {
+	const narrowOrStaff =
+		(staffHandler, narrowHandler, byId = false) =>
+		async (/** @type {any} */ ctx) => {
 			const refused = await checkStaff(ctx, { productId: 'accounts', permission: 'users.read' });
-			if (refused) throw refused;
-		}
-		return handler(ctx);
-	};
+			if (!refused) return staffHandler(ctx);
+			const { permission, phone, email, q, limit } = ctx.query;
+			const narrow =
+				byId ||
+				Boolean(permission || phone || email) ||
+				(typeof q === 'string' && q.length >= 6 && Number(limit ?? Infinity) <= 10);
+			if (!narrow) throw refused;
+			return narrowHandler(ctx);
+		};
 
 	/** The website's public keys for verifying sign-ins (no token: the merchant's server and products fetch them). @param {any} ctx */
 	const keys = async (ctx) => {
@@ -459,7 +465,7 @@ export const createRoutes = (product) => {
 			scope: 'users.read',
 			runtime: true,
 			feature: 'roles',
-			handler: narrowOrStaff(manage.listUsers),
+			handler: narrowOrStaff(manage.listUsers, manage.listUsersNarrow),
 		}),
 		// counts with the list's filters (PLAN 0.8.10 K4)
 		defineRoute({
@@ -535,7 +541,7 @@ export const createRoutes = (product) => {
 			scope: 'users.read',
 			runtime: true,
 			feature: 'roles',
-			handler: manage.getUser,
+			handler: narrowOrStaff(manage.getUser, manage.getUserNarrow, true),
 		}),
 		defineRoute({
 			method: 'PATCH',

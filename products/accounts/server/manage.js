@@ -16,7 +16,7 @@ import { randomToken, sha256Hex } from '@ss/protocol';
 import { labelOf, valuesOf } from '../core/activity.js';
 import { MAX_CONSENTS, checkConsent } from '../core/consents.js';
 import { MAX_CUSTOM_FIELDS, MAX_ROLES, STAFF_CODE_MINUTES } from '../core/limits.js';
-import { checkCustomValues, checkFieldDefinition, checkName, checkTags, staffView } from '../core/profile.js';
+import { checkCustomValues, checkFieldDefinition, checkName, checkTags, narrowView, staffView } from '../core/profile.js';
 import { MAX_VIEWS, checkView } from '../core/views.js';
 import {
 	OWNER_ROLE,
@@ -44,6 +44,8 @@ import { bodyOf } from './service.js';
 const PERMISSIONS_TTL_MS = 5 * 60_000;
 /** The fewest digits the users list's search by the end of a number takes (A7). */
 const MIN_PHONE_END = 4;
+/** The most users a narrow lookup of another product gets (SR-4-2). */
+const NARROW_USERS = 10;
 /** The users list's statuses (`blocked`: blocked users, whatever their status). */
 const USER_STATUSES = Object.freeze(['active', 'pending', 'invited', 'blocked']);
 /** A product id, as the activity copies' `productId` filter takes it. */
@@ -134,7 +136,7 @@ export const createManage = (product, service, flows) => {
 	/**
 	 * The filters of the users list and its counts: `q`, `role` and `roles` (a comma list; users of any of them),
 	 * `permission` (`<product>:<key>`: users whose role grants it, K6), `status` (active, pending, invited, blocked),
-	 * `blocked` (true or false), `deletion=1`, `phone` (exact, as typed in the website's phone format), `phoneDigits`
+	 * `blocked` (true or false), `deletion=1`, `email` (exact, any case), `phone` (exact, as typed in the website's phone format), `phoneDigits`
 	 * (the end of a national number, A7: a whole number typed any usual way counts by its national number, so its trunk
 	 * prefix or calling code does not matter; else at least 4 digits the number ends with) and `createdAfter`
 	 * (ISO-8601), `tags` (a comma list: users with any of them, A5), and `consent` (the key of a consent the user gives
@@ -149,7 +151,7 @@ export const createManage = (product, service, flows) => {
 			const whole = await service.phoneOf(site, typed);
 			return (whole && nationalNumberOf(whole)) ?? typed.replace(/\D/g, '');
 		};
-		const { q, role, roles, status, deletion, blocked, phone, phoneDigits, permission, consent, tags, createdAfter } =
+		const { q, role, roles, status, deletion, blocked, email, phone, phoneDigits, permission, consent, tags, createdAfter } =
 			ctx.query;
 		const named = [role, ...(typeof roles === 'string' ? roles.split(',') : [])]
 			.filter((key) => typeof key === 'string')
@@ -162,6 +164,8 @@ export const createManage = (product, service, flows) => {
 			const granting = (await s.store.roles.list()).filter((each) => grants(each, permission)).map((each) => each.key);
 			anyRole = anyRole ? anyRole.filter((key) => granting.includes(key)) : granting;
 		}
+		const address = typeof email === 'string' && email !== '' ? normalizeEmail(email) : null;
+		if (typeof email === 'string' && email !== '' && !address) throw invalid('email', 'Enter a valid email address.');
 		const exact = typeof phone === 'string' && phone !== '' ? await service.phoneOf(s, phone) : null;
 		if (typeof phone === 'string' && phone !== '' && !exact)
 			throw invalid('phone', 'Enter the phone number with its country code.');
@@ -179,6 +183,7 @@ export const createManage = (product, service, flows) => {
 			...(anyRole ? { roles: anyRole } : {}),
 			...(USER_STATUSES.includes(status) ? { status } : {}),
 			...(blocked === 'true' || blocked === 'false' ? { blocked: blocked === 'true' } : {}),
+			...(address ? { email: address } : {}),
 			...(exact ? { phone: exact } : {}),
 			...(end ? { phoneEnd: end } : {}),
 			...(typeof consent === 'string' && consent !== '' ? { consent } : {}),
@@ -201,6 +206,30 @@ export const createManage = (product, service, flows) => {
 			...(await userQuery(ctx, s)),
 		});
 		return page.respond(rows.map(staffView), (user) => [user.createdAt, user.id]);
+	};
+
+	/**
+	 * The narrow lookups other products make with the server token alone (SR-4-2): the same filters, the small view
+	 * (`narrowView`), and nothing to page through: at most 10 users, `cursor` ignored, no next page. Who holds a permission
+	 * (the staff lists of Chat and the alerts) pages as before, in the small view: only the roles that grant the
+	 * permission are listed, and the sign-up role holds none.
+	 * @param {any} ctx
+	 */
+	const listUsersNarrow = async (ctx) => {
+		const s = await service.site(ctx);
+		const query = await userQuery(ctx, s);
+		if (typeof ctx.query.permission === 'string' && ctx.query.permission !== '') {
+			const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
+			const rows = await s.store.users.list({
+				after: /** @type {[string, string] | null} */ (page.after),
+				limit: page.fetchLimit,
+				...query,
+			});
+			return page.respond(rows.map(narrowView), (user) => [user.createdAt, user.id]);
+		}
+		const asked = paginate({ limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: NARROW_USERS }).limit;
+		const rows = await s.store.users.list({ after: null, limit: Math.min(asked, NARROW_USERS), ...query });
+		return { items: rows.map(narrowView), nextCursor: null, hasMore: false };
 	};
 
 	/**
@@ -460,6 +489,9 @@ export const createManage = (product, service, flows) => {
 
 	/** @param {any} ctx */
 	const getUser = async (ctx) => staffView(await userOr404(await service.site(ctx), ctx.params.id));
+
+	/** One user for another product (SR-4-2): the small view. @param {any} ctx */
+	const getUserNarrow = async (ctx) => narrowView(await userOr404(await service.site(ctx), ctx.params.id));
 
 	/**
 	 * Role, notes, blocked (with a reason), name, custom fields and (A4) email, phone, password and addresses; behind
@@ -1392,6 +1424,7 @@ export const createManage = (product, service, flows) => {
 
 	return Object.freeze({
 		listUsers,
+		listUsersNarrow,
 		listTags,
 		listViews,
 		saveView,
@@ -1408,6 +1441,7 @@ export const createManage = (product, service, flows) => {
 		countUsers: userCounts.count,
 		countUsersBy: userCounts.counts,
 		getUser,
+		getUserNarrow,
 		createUser,
 		deleteUser,
 		signInCode,

@@ -2182,6 +2182,16 @@
 						}
 					},
 					{
+						"name": "email",
+						"in": "query",
+						"required": false,
+						"description": "Exactly this email address, in any case (422 when it is not an address).",
+						"schema": {
+							"type": "string",
+							"description": "Exactly this email address, in any case (422 when it is not an address)."
+						}
+					},
+					{
 						"name": "phone",
 						"in": "query",
 						"required": false,
@@ -2456,6 +2466,16 @@
 						}
 					},
 					{
+						"name": "email",
+						"in": "query",
+						"required": false,
+						"description": "Exactly this email address, in any case (422 when it is not an address).",
+						"schema": {
+							"type": "string",
+							"description": "Exactly this email address, in any case (422 when it is not an address)."
+						}
+					},
+					{
 						"name": "phone",
 						"in": "query",
 						"required": false,
@@ -2635,6 +2655,16 @@
 								"1"
 							],
 							"description": "Only users who asked to delete their account."
+						}
+					},
+					{
+						"name": "email",
+						"in": "query",
+						"required": false,
+						"description": "Exactly this email address, in any case (422 when it is not an address).",
+						"schema": {
+							"type": "string",
+							"description": "Exactly this email address, in any case (422 when it is not an address)."
 						}
 					},
 					{
@@ -9453,7 +9483,7 @@
 		"/v1/users": {
 			"get": {
 				"summary": "The users, newest first",
-				"description": "Customers and staff in one list; filters combine.",
+				"description": "Customers and staff in one list; filters combine. A call with the server token alone (another product) may only ask a narrow question (permission, email, phone, or a search of 6 or more characters with limit 10 or less) and gets the small view of at most 10 users and no cursor; who holds a permission pages as before. The whole view is the signed-in staff member’s (users.read).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
 				"x-ss-access": "runtime",
@@ -9567,6 +9597,16 @@
 						}
 					},
 					{
+						"name": "email",
+						"in": "query",
+						"required": false,
+						"description": "Exactly this email address, in any case (422 when it is not an address).",
+						"schema": {
+							"type": "string",
+							"description": "Exactly this email address, in any case (422 when it is not an address)."
+						}
+					},
+					{
 						"name": "phone",
 						"in": "query",
 						"required": false,
@@ -9626,7 +9666,14 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/UserPage"
+									"anyOf": [
+										{
+											"$ref": "#/components/schemas/UserPage"
+										},
+										{
+											"$ref": "#/components/schemas/NarrowUserPage"
+										}
+									]
 								}
 							}
 						}
@@ -9849,6 +9896,16 @@
 						}
 					},
 					{
+						"name": "email",
+						"in": "query",
+						"required": false,
+						"description": "Exactly this email address, in any case (422 when it is not an address).",
+						"schema": {
+							"type": "string",
+							"description": "Exactly this email address, in any case (422 when it is not an address)."
+						}
+					},
+					{
 						"name": "phone",
 						"in": "query",
 						"required": false,
@@ -10032,6 +10089,16 @@
 								"1"
 							],
 							"description": "Only users who asked to delete their account."
+						}
+					},
+					{
+						"name": "email",
+						"in": "query",
+						"required": false,
+						"description": "Exactly this email address, in any case (422 when it is not an address).",
+						"schema": {
+							"type": "string",
+							"description": "Exactly this email address, in any case (422 when it is not an address)."
 						}
 					},
 					{
@@ -10601,7 +10668,7 @@
 			},
 			"get": {
 				"summary": "Read a user",
-				"description": "404 not_found.",
+				"description": "404 not_found. With the server token alone (another product) the small view; the signed-in staff member (users.read) gets the whole view.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
 				"x-ss-access": "runtime",
@@ -10629,7 +10696,14 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/StaffUser"
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/StaffUser"
+										},
+										{
+											"$ref": "#/components/schemas/NarrowUser"
+										}
+									]
 								}
 							}
 						}
@@ -12527,6 +12601,85 @@
 					"membership": {
 						"type": "boolean",
 						"description": "The role shows as a membership (“Member since” with roleSince); false while Roles and permissions is off."
+					}
+				}
+			},
+			"NarrowUser": {
+				"type": "object",
+				"description": "A user as another product sees them when it asks with the server token alone (no signed-in staff member): the name, contacts, whether a password is set, when the user joined and whether the user is blocked. Never notes, tags, the blocked reason, lock times, recovery codes, consents or addresses.",
+				"required": [
+					"id",
+					"name",
+					"email",
+					"phone",
+					"hasPassword",
+					"blocked",
+					"createdAt"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^usr_[0-9a-z]{10,64}$"
+					},
+					"name": {
+						"type": "string",
+						"maxLength": 120,
+						"description": "Empty when not given."
+					},
+					"email": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "email",
+						"description": "Lower case; null when the user has none."
+					},
+					"phone": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^\\+[1-9]\\d{6,14}$",
+						"description": "E.164; null when the user has none."
+					},
+					"hasPassword": {
+						"type": "boolean"
+					},
+					"blocked": {
+						"type": "boolean"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"NarrowUserPage": {
+				"type": "object",
+				"description": "The answer of a narrow lookup: at most 10 users, never a next page (who holds a permission pages as the list does).",
+				"required": [
+					"items",
+					"nextCursor",
+					"hasMore"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/NarrowUser"
+						}
+					},
+					"nextCursor": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Pass it as cursor for the next page (null: the last page)."
+					},
+					"hasMore": {
+						"type": "boolean"
 					}
 				}
 			},
