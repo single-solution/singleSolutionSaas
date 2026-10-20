@@ -101,7 +101,7 @@ describe('importing a store into a product (K10, ss-import)', () => {
 				name: 'Ira Importer',
 				role: 'owner',
 				permissions: ['*'],
-				ttlSeconds: 86_400,
+				ttlSeconds: 900,
 			}),
 		},
 	});
@@ -277,7 +277,7 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 							name: 'Ira Importer',
 							role: 'owner',
 							permissions: ['*'],
-							ttlSeconds: 86_400,
+							ttlSeconds: 900,
 						});
 		}
 	};
