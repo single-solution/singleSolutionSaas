@@ -603,11 +603,22 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 	});
 
 	it('C6: a staff reply sends `chat.staff_reply` by WhatsApp to a visitor who left, once until they check again', async () => {
-		const guest = device();
+		// a reply alert goes only to a phone Accounts verified for the visitor's sign-in (SR-6-3), not to a typed one
+		const created = await server('accounts', 'POST', '/v1/users', {
+			name: 'Wes West',
+			email: 'wes@example.com',
+			phone: '+12025550199',
+			password: PASSWORD,
+		});
+		expect(created.status, JSON.stringify(created.json)).toBe(201);
+		// the visitor has a verified email too: this website sends reply alerts by WhatsApp only
+		await configure('chat', { 'visitor_alerts.channels': ['whatsapp'] });
+		const typed = device();
+		await typed('POST', '/v1/chat/messages', { text: 'call me too', page: { url: PAGE_URL } });
+		await typed('POST', '/v1/chat/contact', { name: 'Ann', phone: '+12025550123' });
+		const guest = device({ signIn: await signIn('wes@example.com') });
 		const sent = await guest('POST', '/v1/chat/messages', { text: 'call me about Lamp Max', page: { url: PAGE_URL } });
-		expect((await guest('POST', '/v1/chat/contact', { name: 'Ann', phone: '+12025550199' })).status, 'contact').toBeLessThan(
-			300,
-		);
+		expect(sent.status, JSON.stringify(sent.json)).toBe(201);
 		const path = `/v1/conversations/${sent.json.chat.conversation.id}/messages`;
 		/** WhatsApp messages to the visitor. */
 		const toVisitor = () => whatsapp.filter((message) => message.to === '12025550199');
@@ -623,6 +634,13 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		sys.clock.advance(61_000);
 		await server('chat', 'POST', path, { text: 'Back?' }, STAFF);
 		expect(toVisitor()).toHaveLength(2);
+		// the link is the website's own address: a page of another site the visitor named gives the front page
+		await guest('POST', '/v1/chat/messages', { text: 'again', page: { url: 'https://evil.example/login' } });
+		sys.clock.advance(61_000);
+		await server('chat', 'POST', path, { text: 'Still here' }, STAFF);
+		expect(toVisitor().at(-1)?.text?.body).toBe(`Alex Morgan: Still here ${ORIGIN}/`);
+		// nothing went to the phone typed in the chat
+		expect(whatsapp.filter((message) => message.to === '12025550123')).toHaveLength(0);
 	});
 
 	it('C7: an imported guest cookie works; a guest chat merges by time into the account’s; claims by phone', async () => {
@@ -740,15 +758,27 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 
 	it('transcripts go whole through the real Notifications; merchants delete one lead or every lead', async () => {
 		await configure('chat', { 'guest_chat.messageLimit': 0, 'staff_alerts.recipients': [] });
-		const guest = device();
+		// a transcript goes only to the verified email of a signed-in visitor (SR-6-2)
+		const created = await server('accounts', 'POST', '/v1/users', {
+			name: 'Tess Tran',
+			email: 'tess@example.com',
+			password: PASSWORD,
+		});
+		expect(created.status, JSON.stringify(created.json)).toBe(201);
+		const guest = device({ signIn: await signIn('tess@example.com') });
 		const texts = 'ABCDEFGHIJKL'.split('').map((letter) => `${letter}${'x'.repeat(3999)}`);
 		for (const text of texts) await guest('POST', '/v1/chat/messages', { text });
 		const before = mails.length;
-		expect((await guest('POST', '/v1/chat/transcript', { email: 'copy@example.com' })).status).toBe(202);
+		const stranger = device();
+		await stranger('POST', '/v1/chat/messages', { text: 'hello' });
+		expect((await stranger('POST', '/v1/chat/transcript', { email: 'copy@example.com' })).status).toBe(403);
+		expect((await guest('POST', '/v1/chat/transcript', { email: 'copy@example.com' })).status).toBe(422);
+		expect(mails.length).toBe(before);
+		expect((await guest('POST', '/v1/chat/transcript', {})).status).toBe(202);
 		const [copy] = mails.slice(before);
 		// Chat's default words: the whole chat (over 48,000 characters, past the 45,000 of the old parts) as one long
 		// value in one email, never cut
-		expect(copy).toMatchObject({ to: ['copy@example.com'], subject: expect.stringContaining('Your chat with') });
+		expect(copy).toMatchObject({ to: ['tess@example.com'], subject: expect.stringContaining('Your chat with') });
 		for (const text of texts) expect(copy.text).toContain(`You: ${text}`);
 		expect(copy.text.length).toBeGreaterThan(48_000);
 		expect(copy.text).not.toContain('earlier ones are left out');
