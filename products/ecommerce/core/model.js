@@ -635,8 +635,9 @@ export const STATUS_ROLES = Object.freeze([
  * @typedef {{ id: string, productId: string, start: Date, end: Date, orderId: string, lineId: string }} SlotRecord
  */
 /**
- * A license key of a digital product: `available` until an order is paid, then `assigned` to it.
- * @typedef {{ id: string, productId: string, key: string, status: 'available' | 'assigned', orderId: string | null,
+ * A license key of a digital product: `available` until an order is placed, `held` for it (and its line) until it is
+ * paid or ends, then `assigned` to it.
+ * @typedef {{ id: string, productId: string, key: string, status: 'available' | 'held' | 'assigned', orderId: string | null,
  *   lineId: string | null }} LicenseRecord
  */
 

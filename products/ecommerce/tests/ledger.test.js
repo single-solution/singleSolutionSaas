@@ -17,6 +17,7 @@ import {
 	swapOrderStock,
 	takePoints,
 } from '../adapters/ledger.js';
+import { createOrdersStore } from '../adapters/orders-store.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import { planTransition } from '../core/transitions.js';
@@ -479,6 +480,118 @@ describe('placing an order', () => {
 			await data.collection(COLLECTIONS.returns).findOne({ websiteId: data.websiteId, id: claimId })
 		);
 		expect(claim.restockedAt).toBeInstanceOf(Date);
+	});
+});
+
+describe('license keys held by an order', () => {
+	/**
+	 * A digital product with license keys, and the keys free for it.
+	 * @param {string[]} keys
+	 */
+	const licensed = async (keys) => {
+		const product = await shop.seedProduct({
+			kind: 'digital',
+			trackStock: false,
+			digital: { files: [], retired: [], licenseKeys: true, downloadLimit: 0 },
+		});
+		await createOrdersStore(data).addLicenses(
+			product.id,
+			keys.map((key) => ({ id: createId('lic'), key })),
+		);
+		return { product, variantId: /** @type {string} */ (product.variants[0]?.id) };
+	};
+
+	/** @param {string} productId */
+	const keysOf = async (productId) =>
+		/** @type {any[]} */ (
+			await data.collection(COLLECTIONS.licenses).find({ websiteId: data.websiteId, productId }).sort({ key: 1 }).toArray()
+		).map((license) => ({ key: license.key, status: license.status, orderId: license.orderId }));
+
+	it('accepts only one of two orders placed at the same time for the last key', async () => {
+		const { product, variantId } = await licensed(['LAST-1']);
+		const lines = [{ productId: product.id, variantId, quantity: 1, kind: /** @type {const} */ ('digital') }];
+		const [first, second] = await Promise.all([
+			placeOrder(data, { order: orderOf(lines), numberPrefix: '' }, { now: shop.now() }),
+			placeOrder(data, { order: orderOf(lines), numberPrefix: '' }, { now: shop.now() }),
+		]);
+		expect([first.ok, second.ok].sort()).toEqual([false, true]);
+		const refused = first.ok ? second : first;
+		expect(refused).toEqual({ ok: false, code: 'out_of_stock', productId: product.id, variantId });
+		const won = /** @type {any} */ (first.ok ? first : second);
+		expect(await keysOf(product.id)).toEqual([{ key: 'LAST-1', status: 'held', orderId: won.order.id }]);
+		expect(await createOrdersStore(data).countLicenses(product.id)).toBe(0);
+		// a refused order holds nothing: more units than keys leaves every key free
+		const { product: other, variantId: otherVariant } = await licensed(['A', 'B']);
+		const many = orderOf([{ productId: other.id, variantId: otherVariant, quantity: 3, kind: 'digital' }]);
+		expect(await placeOrder(data, { order: many, numberPrefix: '' }, { now: shop.now() })).toMatchObject({
+			ok: false,
+			code: 'out_of_stock',
+		});
+		expect((await keysOf(other.id)).map((entry) => entry.status)).toEqual(['available', 'available']);
+	});
+
+	it('gives the held keys to the line when it is paid, and takes none from other orders', async () => {
+		const { product, variantId } = await licensed(['K-1', 'K-2', 'K-3']);
+		const order = orderOf([{ productId: product.id, variantId, quantity: 2, kind: 'digital' }]);
+		const placed = await placeOrder(data, { order, numberPrefix: '' }, { now: shop.now() });
+		if (!placed.ok) throw new Error('not placed');
+		const held = (await keysOf(product.id)).filter((entry) => entry.status === 'held');
+		expect(held).toHaveLength(2);
+		const store = createOrdersStore(data);
+		// another order's line gets only the free key, never a key this order holds
+		expect(
+			await store.assignLicenses({ productId: product.id, orderId: 'ord_other', lineId: 'oln_other', count: 3 }),
+		).toHaveLength(1);
+		const [line] = placed.order.lines;
+		const given = await store.assignLicenses({
+			productId: product.id,
+			orderId: placed.order.id,
+			lineId: /** @type {string} */ (line?.id),
+			count: 2,
+		});
+		expect(given).toHaveLength(2);
+		expect([...(await store.licenseKeys(given)).values()].sort()).toEqual(held.map((entry) => entry.key));
+		// keys an order holds or was given are not removed
+		expect(await store.removeLicenses(product.id, ['K-1', 'K-2', 'K-3'])).toEqual({ removed: 0, given: 3 });
+	});
+
+	it('gives the held keys back when the order is canceled, once, and the keys it was given stay', async () => {
+		const { product, variantId } = await licensed(['C-1', 'C-2']);
+		const placed = await placeOrder(
+			data,
+			{ order: orderOf([{ productId: product.id, variantId, quantity: 2, kind: 'digital' }]), numberPrefix: '' },
+			{ now: shop.now() },
+		);
+		if (!placed.ok) throw new Error('not placed');
+		expect((await keysOf(product.id)).map((entry) => entry.status)).toEqual(['held', 'held']);
+		const stored = /** @type {any} */ (
+			await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id: placed.order.id })
+		);
+		expect(await transition(stored, 'canceled')).toBe(true);
+		expect(await transition(stored, 'canceled')).toBe(false);
+		expect(await keysOf(product.id)).toEqual([
+			{ key: 'C-1', status: 'available', orderId: null },
+			{ key: 'C-2', status: 'available', orderId: null },
+		]);
+		// the keys of another order that was given its keys stay with it when it is canceled
+		const paid = await placeOrder(
+			data,
+			{ order: orderOf([{ productId: product.id, variantId, quantity: 1, kind: 'digital' }]), numberPrefix: '' },
+			{ now: shop.now() },
+		);
+		if (!paid.ok) throw new Error('not placed');
+		const store = createOrdersStore(data);
+		await store.assignLicenses({
+			productId: product.id,
+			orderId: paid.order.id,
+			lineId: /** @type {string} */ (paid.order.lines[0]?.id),
+			count: 1,
+		});
+		const kept = /** @type {any} */ (
+			await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id: paid.order.id })
+		);
+		expect(await transition(kept, 'canceled')).toBe(true);
+		expect((await keysOf(product.id)).map((entry) => entry.status).sort()).toEqual(['assigned', 'available']);
 	});
 });
 

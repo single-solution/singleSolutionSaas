@@ -256,6 +256,49 @@ describe('digital goods', () => {
 		expect((await visit('GET', `/v1/shop/orders/${id}/downloads/${lineId}/other.pdf`, { signIn: shopper })).status).toBe(404);
 		expect(shop.callsTo(PAYMENTS).length).toBeGreaterThan(0);
 	});
+
+	it('holds a license key per unit while an order waits, so the last key is sold once (SR-5a-2)', async () => {
+		const item = await shop.seedProduct({
+			kind: 'digital',
+			trackStock: false,
+			price: 900,
+			digital: { files: [], retired: [], licenseKeys: true, downloadLimit: 0 },
+		});
+		await shop.api('POST', `/v1/products/${item.id}/licenses`, { keys: ['ONLY-1'] });
+		const first = await newShopper();
+		const second = await newShopper();
+		const placed = await place(first, { lines: [{ productId: item.id }], payment: 'online' });
+		expect(placed.status).toBe(201);
+		// the key is held: a second shopper's cart is refused at the cart check and at placing
+		const quote = await visit('POST', '/v1/shop/cart/quote', { body: { lines: [{ productId: item.id }] } });
+		expect(quote.json.lines[0].problems[0].code).toBe('out_of_stock');
+		const refused = await place(second, { lines: [{ productId: item.id }], payment: 'online' });
+		expect([refused.status, codeOf(refused)]).toEqual([409, 'out_of_stock']);
+		const keys = async () =>
+			/** @type {any[]} */ (
+				await (
+					await shop.db()
+				)
+					.collection(COLLECTIONS.licenses)
+					.find({ websiteId: shop.websiteId, productId: item.id })
+					.toArray()
+			).map((license) => license.status);
+		expect(await keys()).toEqual(['held']);
+		// a staff removal does not take the held key away
+		const removed = await shop.api('POST', `/v1/products/${item.id}/licenses/remove`, { keys: ['ONLY-1'] });
+		expect(removed.json).toMatchObject({ removed: 0, given: 1, available: 0 });
+
+		// the order is canceled: the key is free for the next shopper, who then pays and is given it
+		await visit('POST', `/v1/shop/orders/${placed.json.order.id}/cancel`, { signIn: first });
+		expect(await keys()).toEqual(['available']);
+		const next = await place(second, { lines: [{ productId: item.id }], payment: 'online' });
+		expect(next.status).toBe(201);
+		shop.payPayment(await paymentOf(next.json.order.id));
+		shop.advance(31_000);
+		const paid = await visit('GET', `/v1/shop/orders/${next.json.order.id}`, { signIn: second });
+		expect(paid.json.lines[0].licenseKeys).toEqual(['ONLY-1']);
+		expect(await keys()).toEqual(['assigned']);
+	});
 });
 
 describe('removing digital files and license keys', () => {

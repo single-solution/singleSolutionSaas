@@ -238,6 +238,56 @@ const releaseStock = async (data, lines, session) => {
 };
 
 /**
+ * Hold license keys for an order's digital lines (placement): one free key of the product per unit, one at a time, each
+ * flipped from `available` to `held` for the order and the line, so a key is held by one order only and the free keys
+ * a cart check counts are the ones nobody holds. A product without license keys is not touched. Paying the order gives
+ * its held keys to the line (`assignLicenses`); the stock effects of a cancel or an ended window give them back
+ * ({@link releaseLicenses}).
+ * @param {WebsiteData} data
+ * @param {string} orderId
+ * @param {Array<{ id: string, productId: string, variantId: string, quantity: number }>} lines the order's digital lines
+ * @param {Session} [session]
+ * @returns {Promise<{ ok: true } | { ok: false, productId: string, variantId: string }>}
+ */
+const holdLicenses = async (data, orderId, lines, session) => {
+	const products = data.collection(COLLECTIONS.products);
+	const licenses = data.collection(COLLECTIONS.licenses);
+	for (const line of lines) {
+		const product = /** @type {any} */ (
+			await products.findOne(
+				{ websiteId: data.websiteId, id: line.productId },
+				{ session, projection: { _id: 0, 'digital.licenseKeys': 1 } },
+			)
+		);
+		if (product?.digital?.licenseKeys !== true) continue;
+		for (let unit = 0; unit < line.quantity; unit += 1) {
+			const held = await licenses.findOneAndUpdate(
+				{ websiteId: data.websiteId, productId: line.productId, status: 'available' },
+				{ $set: { status: 'held', orderId, lineId: line.id } },
+				{ session, projection: { _id: 0, id: 1 } },
+			);
+			if (!held) return { ok: false, productId: line.productId, variantId: line.variantId };
+		}
+	}
+	return { ok: true };
+};
+
+/**
+ * Give back the license keys an order holds and has not been given (cancel, payment window ended, a return): they are
+ * free again for other orders. Keys already given to a line stay with it.
+ * @param {WebsiteData} data @param {string} orderId @param {Session} session
+ */
+const releaseLicenses = async (data, orderId, session) => {
+	await data
+		.collection(COLLECTIONS.licenses)
+		.updateMany(
+			{ websiteId: data.websiteId, orderId, status: 'held' },
+			{ $set: { status: 'available', orderId: null, lineId: null } },
+			{ session },
+		);
+};
+
+/**
  * Count one use of each offer an order applied (the coupon, deals and bundles), within their limits; a coupon's
  * per-customer limit is held by a unique use record.
  * @param {WebsiteData} data
@@ -655,8 +705,8 @@ const tracked = (taken) =>
 const refused = (result) => Object.assign(new Error(result.code), { refused: result });
 
 /**
- * Place an order in one transaction: number it, hold its stock, count its offer uses, spend its points, hold its
- * booked slots and insert it. Nothing is written when any part fails. A number used already
+ * Place an order in one transaction: number it, hold its stock and its license keys, count its offer uses, spend its
+ * points, hold its booked slots and insert it. Nothing is written when any part fails. A number used already
  * (its counter fell behind the numbers of its form) moves the counter past the highest and places it again, once.
  * @param {WebsiteData} data
  * @param {Placement} placement
@@ -698,6 +748,14 @@ export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => 
 				);
 				if (!stock.ok)
 					throw refused({ ok: false, code: 'out_of_stock', productId: stock.productId, variantId: stock.variantId });
+				const keys = await holdLicenses(
+					data,
+					order.id,
+					order.lines.filter((line) => line.kind === 'digital'),
+					session,
+				);
+				if (!keys.ok)
+					throw refused({ ok: false, code: 'out_of_stock', productId: keys.productId, variantId: keys.variantId });
 				const where = new Map(stock.taken.map((line) => [`${line.productId}|${line.variantId}`, line.locationId]));
 				const { promotions } = order;
 				const offers = await useOffers(
@@ -1013,6 +1071,7 @@ const applyEffect = async (data, orderId, effect, { now, session }) => {
 	switch (effect.kind) {
 		case 'release_stock':
 			await releaseStock(data, effect.lines, session);
+			await releaseLicenses(data, orderId, session);
 			return;
 		case 'release_slots':
 			await releaseSlots(data, orderId, session);
@@ -1046,6 +1105,8 @@ const applyEffect = async (data, orderId, effect, { now, session }) => {
 			return;
 		}
 		case 'restock_return': {
+			// keys it still holds (unpaid) go back too
+			await releaseLicenses(data, orderId, session);
 			// units a return claim already put back are not put back again (OR-10)
 			const back = await restockedByClaims(data, orderId, session);
 			await releaseStock(

@@ -461,7 +461,8 @@ export const createOrdersStore = (data) => {
 			}
 		},
 		/**
-		 * Remove license keys of a product that no order was given (keys given to an order stay with it).
+		 * Remove license keys of a product that no order holds or was given (keys an order holds or was given stay with
+		 * it).
 		 * @param {string} productId @param {string[]} keys
 		 * @returns {Promise<{ removed: number, given: number }>} given: how many of them an order has
 		 */
@@ -469,7 +470,12 @@ export const createOrdersStore = (data) => {
 			const licenses = data.collection(COLLECTIONS.licenses);
 			const removed = (await licenses.deleteMany({ websiteId, productId, key: { $in: keys }, status: 'available' }))
 				.deletedCount;
-			const given = await licenses.countDocuments({ websiteId, productId, key: { $in: keys }, status: 'assigned' });
+			const given = await licenses.countDocuments({
+				websiteId,
+				productId,
+				key: { $in: keys },
+				status: { $in: ['held', 'assigned'] },
+			});
 			return { removed: Number(removed ?? 0), given };
 		},
 		/**
@@ -482,23 +488,26 @@ export const createOrdersStore = (data) => {
 		countLicenses: (productId) =>
 			data.collection(COLLECTIONS.licenses).countDocuments({ websiteId, productId, status: 'available' }),
 		/**
-		 * Give an order line up to `count` available license keys of a product (each to one line only).
+		 * Give an order line up to `count` license keys of a product (each to one line only): the keys held for the line
+		 * when the order was placed first, then any free ones (an order that held none: imported, or paid after its hold
+		 * ended).
 		 * @param {{ productId: string, orderId: string, lineId: string, count: number }} give
 		 * @returns {Promise<string[]>} the license ids given
 		 */
 		assignLicenses: async ({ productId, orderId, lineId, count }) => {
+			const licenses = data.collection(COLLECTIONS.licenses);
 			/** @type {string[]} */
 			const ids = [];
-			for (let n = 0; n < count; n += 1) {
-				const taken = await data
-					.collection(COLLECTIONS.licenses)
-					.findOneAndUpdate(
-						{ websiteId, productId, status: 'available' },
+			for (const source of [{ status: 'held', orderId, lineId }, { status: 'available' }]) {
+				while (ids.length < count) {
+					const taken = await licenses.findOneAndUpdate(
+						{ websiteId, productId, ...source },
 						{ $set: { status: 'assigned', orderId, lineId } },
 						{ returnDocument: 'after', projection: { _id: 0, id: 1 } },
 					);
-				if (!taken) break;
-				ids.push(String(taken.id));
+					if (!taken) break;
+					ids.push(String(taken.id));
+				}
 			}
 			return ids;
 		},
