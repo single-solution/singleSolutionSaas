@@ -71,7 +71,7 @@ export const INFRA_COLLECTIONS = Object.freeze([
 	defineCollection({
 		module: 'platform',
 		name: COLLECTIONS.locks,
-		description: 'Lease locks (ledger appends).',
+		description: 'Lease locks (ledger appends, creating the first admin).',
 		timestamps: false,
 		ttl: { field: 'expireAt', afterSeconds: 3600 },
 	}),

@@ -39,6 +39,9 @@ import { checkSecondFactor, failAttempt, insertUnique, openTotpSecret, sendLater
 const BAD_LOGIN = 'The email or password is incorrect.';
 const BAD_CODE = 'The code is incorrect.';
 const LINK_INVALID = 'This link is invalid or has expired.';
+/** The lease lock around creating the first admin (a fixed id), and how long a crashed holder blocks it. */
+const FIRST_ADMIN_LOCK = 'identity.first_admin';
+const FIRST_ADMIN_LOCK_MS = 30_000;
 
 /** @param {Kind} kind @param {string} email */
 const throttleKey = (kind, email) => `${kind}:${email}`;
@@ -268,32 +271,42 @@ export const createAccounts = (deps) => {
 		firstAdminAvailable: async () => (await repo.admins.countDocuments({})) === 0,
 
 		/**
-		 * Create the first admin (an Owner) and sign it in: only while no admin exists. Atomic: the `firstAdmin` unique
-		 * index admits one, whatever the timing.
+		 * Create the first admin (an Owner) and sign it in: only while no admin exists. One at a time: a lease lock with
+		 * a fixed id (unique `_id`, so it needs no index) makes the check and the insert one step, and the `firstAdmin`
+		 * unique index is the second guard. A caller that does not get the lock, or finds an admin, is refused with
+		 * `conflict`.
 		 * @param {{ name: string, email: string, password: string }} input
 		 * @param {Meta} meta
 		 */
 		createFirstAdmin: async ({ name, email, password }, meta) => {
-			if ((await repo.admins.countDocuments({})) > 0) throw problem('conflict', 'An admin already exists. Sign in.');
-			const doc = {
-				_id: repo.id('adm'),
-				firstAdmin: true,
-				email,
-				name,
-				role: 'owner',
-				status: 'active',
-				passwordHash: await hash(password),
-				totp: null,
-				pendingTotp: null,
-				recoveryHashes: [],
-				lastSignInAt: null,
-			};
-			await insertUnique(() => repo.admins.insertOne(doc), 'conflict', 'An admin already exists. Sign in.');
+			const lock = await ctx.locks.acquire(FIRST_ADMIN_LOCK, { ttlMs: FIRST_ADMIN_LOCK_MS, owner: 'identity.first_admin' });
+			if (!lock) throw problem('conflict', 'The first admin is being created. Try again in a moment.');
+			/** @type {Record<string, any>} */
+			let doc;
 			try {
-				await repo.claimLogin(email, 'admin', doc._id);
-			} catch (error) {
-				await repo.admins.deleteOne({ _id: doc._id });
-				throw error;
+				if ((await repo.admins.countDocuments({})) > 0) throw problem('conflict', 'An admin already exists. Sign in.');
+				doc = {
+					_id: repo.id('adm'),
+					firstAdmin: true,
+					email,
+					name,
+					role: 'owner',
+					status: 'active',
+					passwordHash: await hash(password),
+					totp: null,
+					pendingTotp: null,
+					recoveryHashes: [],
+					lastSignInAt: null,
+				};
+				await insertUnique(() => repo.admins.insertOne(doc), 'conflict', 'An admin already exists. Sign in.');
+				try {
+					await repo.claimLogin(email, 'admin', doc._id);
+				} catch (error) {
+					await repo.admins.deleteOne({ _id: doc._id });
+					throw error;
+				}
+			} finally {
+				await lock.release();
 			}
 			await audit(
 				{ type: 'system', id: 'first_admin' },

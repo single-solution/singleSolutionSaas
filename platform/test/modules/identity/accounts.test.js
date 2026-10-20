@@ -76,6 +76,37 @@ describe('the one sign-in page (PLAN 0.2, 0.8.2)', () => {
 		).toBe(422);
 	});
 
+	it('Create admin stays one-at-a-time even without the unique index (SR-2-1): a lock makes the check and the insert one step', async () => {
+		const h = await boot();
+		// as if the deploy never applied the index: only the lock stands between the callers
+		await h.db.collection(C.admins).dropIndex('first_admin');
+		const body = (/** @type {string} */ email) => ({ name: 'Ada', email, password: PASSWORD });
+		const results = await Promise.all(
+			['a', 'b', 'c', 'd', 'e', 'f'].map((n) => h.client().post('/v1/auth/first-admin', body(`${n}@portal.test`))),
+		);
+		expect(results.filter((r) => r.status === 201)).toHaveLength(1);
+		expect(results.filter((r) => r.status === 409)).toHaveLength(5);
+		expect(await h.db.collection(C.admins).countDocuments({})).toBe(1);
+		expect(await h.db.collection(C.logins).countDocuments({})).toBe(1);
+		// the lock is released: nothing is left behind, and the Portal is claimed
+		expect(await h.db.collection('platform_locks').countDocuments({ _id: /first-admin/ })).toBe(0);
+		expect((await h.call('GET', '/v1/auth/first-admin')).json).toEqual({ available: false });
+	});
+
+	it('Create admin that fails (the email is another login) leaves the Portal unclaimed and the lock free', async () => {
+		const h = await boot();
+		await h.db
+			.collection(C.logins)
+			.insertOne(/** @type {any} */ ({ _id: 'taken@portal.test', kind: 'merchant', subject: 'mer_x' }));
+		const refused = await h
+			.client()
+			.post('/v1/auth/first-admin', { name: 'Ada', email: 'taken@portal.test', password: PASSWORD });
+		expect(refused.status).toBe(409);
+		expect(await h.db.collection(C.admins).countDocuments({})).toBe(0);
+		const ok = await h.client().post('/v1/auth/first-admin', { name: 'Ada', email: 'ada@portal.test', password: PASSWORD });
+		expect(ok.status).toBe(201);
+	});
+
 	it('signs out: that session ends', async () => {
 		const h = await boot();
 		const { client } = await h.owner();
