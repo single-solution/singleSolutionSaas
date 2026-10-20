@@ -76,6 +76,24 @@ describe('staff guards on sign-out, approve and decline', () => {
 		// the server token without an acting user, and an Owner, keep full power
 		expect((await env.serverCall('POST', `/v1/users/${boss.id}/approve`)).json.status).toBe('active');
 	});
+
+	it('a manager answers a deletion request of a user below them, never one of a user whose role ranks above theirs', async () => {
+		const mo = await create({ name: 'Max Manager', email: 'max@example.com', role: 'business_manager' });
+		const moAs = { id: mo.id, name: 'Max Manager' };
+		const boss = await create({ name: 'Ora Owner', email: 'ora@example.com', role: 'owner' });
+		const cal = await create({ name: 'Dan Customer', email: 'dan@example.com', password: 'dan password 123' });
+		const store = await env.store();
+		const asked = { deletion: { requestedAt: new Date(env.now()), dueAt: null } };
+		await store.users.update(boss.id, asked);
+		await store.users.update(cal.id, asked);
+		// reject: not for an Owner's request (the attack), but a customer's is fine; approve already refused the same
+		expect(code(await asStaff('POST', `/v1/users/${boss.id}/deletion/reject`, moAs))).toBe('forbidden');
+		expect(code(await asStaff('POST', `/v1/users/${boss.id}/deletion/approve`, moAs))).toBe('forbidden');
+		expect((await store.users.get(boss.id))?.deletion).not.toBeNull();
+		expect((await asStaff('POST', `/v1/users/${cal.id}/deletion/reject`, moAs)).json.deletion).toBeNull();
+		// the server token without an acting user keeps full power
+		expect((await env.serverCall('POST', `/v1/users/${boss.id}/deletion/reject`)).json.deletion).toBeNull();
+	});
 });
 
 describe('a deletion that runs on its own', () => {

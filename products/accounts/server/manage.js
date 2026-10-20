@@ -704,6 +704,7 @@ export const createManage = (product, service, flows) => {
 		const s = await service.site(ctx);
 		const user = await userOr404(s, ctx.params.id);
 		if (!user.deletion) throw problem('conflict', 'This user did not ask to be deleted.');
+		await guard(ctx, s, user);
 		const updated = await s.store.users.update(user.id, { deletion: null });
 		await log(ctx, 'user.deletion_rejected', user.id, { label: labelOf(user.name) });
 		return staffView(updated ?? user);
