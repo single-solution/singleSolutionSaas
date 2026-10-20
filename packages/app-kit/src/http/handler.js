@@ -41,6 +41,7 @@ import {
 	verifyToken,
 } from '@ss/protocol';
 import { createId } from '@ss/contracts';
+import { clientIpOf } from '@ss/net';
 import { KIT_PERMISSIONS, SIGN_IN_DETAIL, checkStaff } from '../staff.js';
 import { isDatabaseUnavailable } from '../data.js';
 import { requestSignIn, requestStaffSignIn } from '../identity.js';
@@ -95,7 +96,8 @@ import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
  * @property {{ server: boolean, ip: string | null }} visitor on browser routes: `server` when the merchant's server
  *   called with the server token for one visitor (K3), `ip` that visitor's `SS-Visitor-IP` (null when not sent)
  * @property {string} clientIp the visitor's address for per-visitor limits and risk checks: `SS-Visitor-IP` on a
- *   server-token visitor call, else the first `X-Forwarded-For` address (`unknown` when there is none)
+ *   server-token visitor call, else the address the hosting layer saw (`X-Real-IP`, else the last `X-Forwarded-For` hop;
+ *   `unknown` when there is none)
  * @property {import('../dashboard.js').Session | null} session dashboard session
  * @property {(task: () => Promise<unknown>) => void} after run work right after the response
  * @property {() => Promise<import('@ss/contracts').WebsiteSettings>} website the website's settings from the Portal
@@ -493,7 +495,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				visitor: { server: false, ip: null },
 				signIn: async () => null,
 				staffSignIn: async () => null,
-				clientIp: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
+				clientIp: clientIpOf(request.headers) ?? 'unknown',
 				session: null,
 				after: (task) => {
 					afterTasks.push(task);

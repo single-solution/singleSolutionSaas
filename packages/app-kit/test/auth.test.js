@@ -368,6 +368,35 @@ describe('rate limits (SE-2)', () => {
 		expect(await get('203.0.113.11')).toBe(200);
 		expect(await get('203.0.113.12')).toBe(429);
 	});
+
+	it('the visitor is the address the hosting layer saw: a first X-Forwarded-For value the caller writes does not change the bucket (SR-1-1)', async () => {
+		const routes = [
+			...productRoutes(),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/catalog',
+				auth: 'browser',
+				database: false,
+				rateLimit: { limit: 2, windowSeconds: 60, per: 'visitor' },
+				handler: () => ({ items: [] }),
+			}),
+		];
+		const { call, browser } = await setup({ routes });
+		/** @param {Record<string, string>} headers */
+		const get = async (headers) => (await call('GET', '/v1/catalog', { token: browser.token, origin: SITE, headers })).status;
+		// the proxy appended the real address; the caller wrote a new first value on every request
+		const statuses = [];
+		for (let i = 0; i < 5; i += 1) statuses.push(await get({ 'x-forwarded-for': `10.250.0.${i}, 198.51.100.7` }));
+		expect(statuses).toEqual([200, 200, 429, 429, 429]);
+		// the hosting platform's own header wins over anything written in X-Forwarded-For
+		const real = [];
+		for (let i = 0; i < 4; i += 1) real.push(await get({ 'x-real-ip': '203.0.113.50', 'x-forwarded-for': `10.251.0.${i}` }));
+		expect(real).toEqual([200, 200, 429, 429]);
+		// another address is another bucket
+		expect(await get({ 'x-real-ip': '203.0.113.51' })).toBe(200);
+		// nothing present: one shared bucket
+		expect([await get({}), await get({}), await get({})]).toEqual([200, 200, 429]);
+	});
 });
 
 describe('idempotent routes (K-14)', () => {

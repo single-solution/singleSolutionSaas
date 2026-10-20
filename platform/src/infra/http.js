@@ -20,7 +20,7 @@
  */
 import { createId } from '@ss/contracts';
 import { checkCsrf } from './auth.js';
-import { isDatabaseUnavailable } from '@ss/net';
+import { clientIpOf, isDatabaseUnavailable } from '@ss/net';
 import { runInRequestScope } from './request-scope.js';
 import { isObject } from '@ss/contracts/util';
 import { hmacSha256Hex, sha256Hex } from '@ss/protocol';
@@ -523,8 +523,8 @@ export const createApiHandler = ({
 		let pathname = url.pathname;
 		if (basePath && (pathname === basePath || pathname.startsWith(`${basePath}/`)))
 			pathname = pathname.slice(basePath.length) || '/';
-		// the client IP as the first hop (the proxy in front of us) saw it: the last X-Forwarded-For entry
-		const ip = request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() || null;
+		// the client IP as the hosting layer saw it: its own header, else the last X-Forwarded-For hop (never the caller's)
+		const ip = clientIpOf(request.headers);
 		/** @type {Record<string, string>} */
 		const extra = { 'x-request-id': requestId };
 		/** @type {Actor | null} */

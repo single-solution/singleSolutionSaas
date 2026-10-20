@@ -36,10 +36,11 @@ const parse = (text) => {
  * first call), and the reads share one in-request memo with the Portal (the session is looked up and each merchant
  * checked once per render, PLAN 0.5.7).
  * @param {{ handle: (request: Request, options?: { memo?: Map<string, unknown> }) => Promise<Response>, baseUrl: string,
- *   cookie?: string | null, forwardedFor?: string | null }} options `cookie`: the request's Cookie header
+ *   cookie?: string | null, forwardedFor?: string | null, realIp?: string | null }} options `cookie`: the request's Cookie
+ * header; `forwardedFor`, `realIp`: the request's address headers, so the Portal sees the same visitor
  * @returns {ConsoleApi}
  */
-export const createConsoleApi = ({ handle, baseUrl, cookie = null, forwardedFor = null }) => {
+export const createConsoleApi = ({ handle, baseUrl, cookie = null, forwardedFor = null, realIp = null }) => {
 	const origin = new URL(baseUrl).origin;
 	/** @type {Map<string, Promise<{ status: number, statusText: string, text: string } | { error: unknown }>>} */
 	const reads = new Map();
@@ -52,6 +53,7 @@ export const createConsoleApi = ({ handle, baseUrl, cookie = null, forwardedFor 
 		const headers = { accept: 'application/json' };
 		if (cookie) headers.cookie = cookie;
 		if (forwardedFor) headers['x-forwarded-for'] = forwardedFor;
+		if (realIp) headers['x-real-ip'] = realIp;
 		try {
 			const response = await handle(new Request(new URL(path, origin), { headers }), { memo });
 			return { status: response.status, statusText: response.statusText, text: await response.text() };

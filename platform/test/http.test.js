@@ -380,6 +380,25 @@ describe('request pipeline', () => {
 		expect((await call('GET', '/v1/limited', { headers: ip })).status).toBe(200);
 	});
 
+	it('counts a caller by the address the hosting layer saw: the platform header first, else the last hop, never the first value (SR-2-9)', async () => {
+		const { call } = build([
+			{ method: 'GET', path: '/v1/limited', auth: 'public', rateLimit: { limit: 2, windowMs: 60_000 }, handler: () => ({}) },
+		]);
+		// the proxy appended the real address after the caller's own value, and the caller varies its value on every request
+		const statuses = [];
+		for (let i = 0; i < 4; i += 1)
+			statuses.push((await call('GET', '/v1/limited', { headers: { 'x-forwarded-for': `10.250.0.${i}, 192.0.2.4` } })).status);
+		expect(statuses).toEqual([200, 200, 429, 429]);
+		// the platform's own header wins over anything written in X-Forwarded-For
+		const real = [];
+		for (let i = 0; i < 3; i += 1)
+			real.push(
+				(await call('GET', '/v1/limited', { headers: { 'x-real-ip': '203.0.113.50', 'x-forwarded-for': `10.251.0.${i}` } }))
+					.status,
+			);
+		expect(real).toEqual([200, 200, 429]);
+	});
+
 	it('allows requests when the rate-limit store fails', async () => {
 		const { call, entries } = build(
 			[{ method: 'GET', path: '/v1/x', auth: 'public', rateLimit: { limit: 1, windowMs: 1000 }, handler: () => ({}) }],

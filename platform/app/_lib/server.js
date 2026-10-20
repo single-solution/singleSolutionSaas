@@ -15,6 +15,7 @@ export const portalApi = cache(async () => {
 		baseUrl: portal.config.portalUrl, // PORTAL_URL, never the request's headers (PLAN 0.8.1)
 		cookie: h.get('cookie'),
 		forwardedFor: h.get('x-forwarded-for'),
+		realIp: h.get('x-real-ip'),
 	});
 });
 

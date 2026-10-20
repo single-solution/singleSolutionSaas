@@ -173,6 +173,12 @@ The static headers of every page, as `next.config.js` `headers()` takes them (a 
 `Permissions-Policy` (no powerful features), `Cross-Origin-Opener-Policy: same-origin`, `X-DNS-Prefetch-Control: off`
 and `X-Permitted-Cross-Domain-Policies: none`. Each side adds its own Content-Security-Policy.
 
+### `clientIpOf(headers) → string | null`
+
+The caller's IP address as the hosting layer saw it, for per-visitor limits and stored answers: `X-Real-IP` first (the
+hosting platform sets it itself), else the LAST `X-Forwarded-For` hop (the one our own proxy appended; the first values
+are whatever the caller wrote), else `null`. A value that is not an IP address is never used.
+
 ### `signV4(params) → headers` / `presignV4(params) → url`
 
 ```js

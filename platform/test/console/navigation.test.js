@@ -169,6 +169,24 @@ describe('the console API of one page render', () => {
 		expect(calls.at(-1)?.memo).not.toBe(memo);
 	});
 
+	it('passes the address headers of the request on, so the Portal counts the same visitor', async () => {
+		/** @type {Headers[]} */
+		const seen = [];
+		const handle = async (/** @type {Request} */ request) => {
+			seen.push(request.headers);
+			return Response.json({});
+		};
+		await createConsoleApi({
+			handle,
+			baseUrl: 'https://portal.test',
+			forwardedFor: '10.0.0.1, 192.0.2.4',
+			realIp: '192.0.2.4',
+		}).get('/v1/things');
+		expect([seen[0]?.get('x-forwarded-for'), seen[0]?.get('x-real-ip')]).toEqual(['10.0.0.1, 192.0.2.4', '192.0.2.4']);
+		await createConsoleApi({ handle, baseUrl: 'https://portal.test' }).get('/v1/things');
+		expect([seen[1]?.get('x-forwarded-for'), seen[1]?.get('x-real-ip')]).toEqual([null, null]);
+	});
+
 	it('memoize shares a value inside a page render only', async () => {
 		let n = 0;
 		const compute = () => (n += 1);
