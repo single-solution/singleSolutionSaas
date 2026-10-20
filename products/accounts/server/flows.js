@@ -897,6 +897,8 @@ export const createFlows = (product, service) => {
 		const record = await service.takeSecret(s, body.challenge, 'step', { keep: true });
 		const user = record ? await s.store.users.get(record.target) : null;
 		if (!record || !user) throw problem('code_invalid', 'This step has expired. Sign in again.');
+		// only the step of a sign-in: My account's two-step setup challenge opens no session (SR-4-5)
+		if (record.data.purpose !== 'sign_in') throw problem('code_invalid', 'This step has expired. Sign in again.');
 		if (user.lockedUntil && user.lockedUntil.getTime() > now())
 			throw problem('locked', 'Too many wrong tries. Try again later.', {
 				extensions: { lockedUntil: user.lockedUntil.toISOString() },
@@ -1156,6 +1158,8 @@ export const createFlows = (product, service) => {
 		acceptInvite,
 		newPassword,
 		countFailure,
+		sendCode,
+		checkCode,
 		blankUser,
 		createUser,
 	});

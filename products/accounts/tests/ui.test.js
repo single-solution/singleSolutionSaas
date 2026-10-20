@@ -1284,7 +1284,10 @@ describe('My account', () => {
 		expect(statusIn(password)).toBe(strings['account.passwordSaved']);
 
 		const twoStep = part(host, strings['account.twoStep']);
+		// turning it on asks for the current password first
+		fieldIn(twoStep, strings['account.currentPassword']).value = 'old-pass';
 		await click(buttonIn(twoStep, strings['account.twoStepTurnOn']));
+		expect(server.last('POST /v1/me/two-step/setup')?.body).toEqual({ current: 'old-pass' });
 		expect([...twoStep.querySelectorAll('.code')].map((p) => p.textContent)).toEqual(['Key: SECRET', 'otpauth://totp/x']);
 		await click(buttonIn(twoStep, strings['account.cancel']));
 		await click(buttonIn(twoStep, strings['account.twoStepTurnOn']));
@@ -1306,9 +1309,10 @@ describe('My account', () => {
 		expect(statusIn(twoStep)).toBe(strings['account.recoveryRenewed']);
 		expect([...twoStep.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['n-1', 'n-2']);
 		await click(buttonIn(twoStep, strings['recovery.done']));
+		fieldIn(twoStep, strings['account.currentPassword']).value = 'old-pass';
 		fieldIn(twoStep, strings['twoStep.code']).value = '654321';
 		await click(buttonIn(twoStep, strings['account.twoStepTurnOff']));
-		expect(server.last('POST /v1/me/two-step/disable')?.body).toEqual({ code: '654321' });
+		expect(server.last('POST /v1/me/two-step/disable')?.body).toEqual({ current: 'old-pass', code: '654321' });
 		expect(statusIn(twoStep)).toBe(strings['account.twoStepTurnedOff']);
 		expect(hasButton(twoStep, strings['account.twoStepTurnOn'])).toBe(true);
 	});
@@ -1497,6 +1501,7 @@ describe('My account', () => {
 		const { host, server } = await open(
 			{
 				'PUT /v1/me/password': () => answer(204),
+				'POST /v1/me/confirm-code': () => answer(202, { expiresAt: at(10 * 60_000), via: 'email' }),
 				'POST /v1/me/two-step/setup': () => problem(409, 'conflict'),
 				'POST /v1/me/two-step/disable': () => problem(400, 'code_invalid'),
 				'POST /v1/me/two-step/recovery-codes': () => answer(200, {}),
@@ -1508,10 +1513,16 @@ describe('My account', () => {
 			{ ...ME, hasPassword: false, twoStep: true },
 		);
 		const password = part(host, strings['account.password']);
+		// no password yet: a code sent to the proven address stands in for the current password (SR-4-5)
 		expect(() => fieldIn(password, strings['account.currentPassword'])).toThrow();
+		await click(buttonIn(password, strings['account.confirmCodeSend']));
+		expect(statusIn(password)).toBe(strings['account.confirmCodeSent']);
+		fieldIn(password, strings['account.confirmCodeLabel']).value = ' 123456 ';
 		fieldIn(password, strings['account.newPassword']).value = 'first-password';
 		await submit(buttonIn(password, strings['account.passwordSet']));
-		expect(server.last('PUT /v1/me/password')?.body).toEqual({ password: 'first-password' });
+		expect(server.last('PUT /v1/me/password')?.body).toEqual({ confirmCode: '123456', password: 'first-password' });
+		// the page is drawn again (the next change asks for the password) and keeps the saved line
+		expect(statusIn(part(host, strings['account.password']))).toBe(strings['account.passwordSaved']);
 		const twoStep = part(host, strings['account.twoStep']);
 		await click(buttonIn(twoStep, strings['account.twoStepTurnOff']));
 		expect(statusIn(twoStep)).toBe(strings['error.code_invalid']);
@@ -2909,7 +2920,7 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		expect(fieldIn(password, strings['account.newPassword']).getAttribute('minlength')).toBe('6');
 		fieldIn(password, strings['account.newPassword']).value = 'phone pass 1';
 		await submit(buttonIn(password, strings['account.passwordSet']));
-		expect(server.last('PUT /v1/me/password')?.body).toEqual({ password: 'phone pass 1' });
+		expect(server.last('PUT /v1/me/password')?.body).toMatchObject({ password: 'phone pass 1' });
 	});
 });
 

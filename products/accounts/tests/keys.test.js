@@ -99,7 +99,12 @@ describe('two-step whose secret no longer opens (ST-18)', () => {
 		});
 		const first = await signIn('zed@example.com');
 		expect(first.json.status).toBe('signed_in');
-		const setupAnswer = await env.visitor('POST', '/v1/me/two-step/setup', {}, first.json.signIn);
+		const setupAnswer = await env.visitor(
+			'POST',
+			'/v1/me/two-step/setup',
+			{ current: 'correct horse battery' },
+			first.json.signIn,
+		);
 		const enabled = await env.visitor(
 			'POST',
 			'/v1/me/two-step/enable',
@@ -123,7 +128,12 @@ describe('two-step whose secret no longer opens (ST-18)', () => {
 		});
 		expect(recovered.json.status).toBe('signed_in');
 		// set up again (refused while the secret opened)
-		const again = await env.visitor('POST', '/v1/me/two-step/setup', {}, recovered.json.signIn);
+		const again = await env.visitor(
+			'POST',
+			'/v1/me/two-step/setup',
+			{ current: 'correct horse battery' },
+			recovered.json.signIn,
+		);
 		expect(again.status).toBe(200);
 		const reenabled = await env.visitor(
 			'POST',

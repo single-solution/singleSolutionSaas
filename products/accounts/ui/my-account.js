@@ -56,6 +56,8 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 			const box = element(doc, 'section', { class: 'box' });
 			root.append(box);
 			let generation = 0;
+			/** The line shown in the password part when the page is drawn again after a first password. */
+			let passwordNotice = '';
 
 			/** @param {string} text @param {Record<string, string>} [attributes] */
 			const button = (text, attributes = {}) => element(doc, 'button', { type: 'button', ...attributes }, text);
@@ -65,7 +67,15 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 			const part = (title) => {
 				const section = element(doc, 'section', { class: 'part' });
 				section.append(element(doc, 'h3', {}, title));
-				return { section, note: element(doc, 'p', { class: 'status', role: 'status' }) };
+				const note = element(doc, 'p', { class: 'status', role: 'status' });
+				return {
+					section,
+					note,
+					/** @param {string} text */
+					say: (text) => {
+						note.textContent = text;
+					},
+				};
 			};
 			/** Run a call while its button is disabled. @param {Element} trigger @param {() => Promise<void>} task */
 			const run = async (trigger, task) => {
@@ -97,6 +107,34 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 			/** The two-step code field. */
 			const codeField = () =>
 				make.field('input', t('twoStep.code'), { inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6' });
+			/**
+			 * What the password and two-step changes ask first (SR-4-5): the current password; a user without a password
+			 * asks for a code sent to their proven email address or phone number and types it.
+			 * @param {Record<string, any>} user @param {(text: string) => void} say writes the part's status line
+			 * @returns {{ nodes: Element[], read: () => Record<string, string> }}
+			 */
+			const proofFields = (user, say) => {
+				if (user.hasPassword) {
+					const field = passwordField(t('account.currentPassword'), 'current-password', user);
+					return { nodes: [field.wrap], read: () => ({ current: field.input.value }) };
+				}
+				const field = make.field('input', t('account.confirmCodeLabel'), {
+					inputmode: 'numeric',
+					autocomplete: 'one-time-code',
+					maxlength: '6',
+				});
+				const send = button(t('account.confirmCodeSend'), { class: 'secondary' });
+				send.addEventListener('click', () =>
+					run(send, async () => {
+						const answer = await session.me('POST', '/v1/me/confirm-code');
+						say(answer.ok ? t('account.confirmCodeSent') : errorText(t, answer, when));
+					}),
+				);
+				return {
+					nodes: [para(t('account.confirmCodeHelp')), send, field.wrap],
+					read: () => ({ confirmCode: field.input.value.trim() }),
+				};
+			};
 
 			// ------------------------------------------------------------------------------------------- parts
 
@@ -292,9 +330,11 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 
 			/** @param {Record<string, any>} user */
 			const passwordPart = (user) => {
-				const { section, note } = part(t('account.password'));
+				const { section, note, say } = part(t('account.password'));
+				note.textContent = passwordNotice;
+				passwordNotice = '';
 				const form = element(doc, 'form');
-				const current = user.hasPassword ? passwordField(t('account.currentPassword'), 'current-password', user) : null;
+				const proof = proofFields(user, say);
 				const next = passwordField(t('account.newPassword'), 'new-password', user);
 				next.input.setAttribute('required', '');
 				const submit = element(
@@ -303,17 +343,20 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 					{ type: 'submit' },
 					t(user.hasPassword ? 'account.passwordChange' : 'account.passwordSet'),
 				);
-				form.append(...(current ? [current.wrap] : []), next.wrap, submit);
+				form.append(...proof.nodes, next.wrap, submit);
 				section.append(form, note);
 				form.addEventListener('submit', (event) => {
 					event.preventDefault();
 					void run(submit, async () => {
-						const answer = await session.me('PUT', '/v1/me/password', {
-							...(current ? { current: current.input.value } : {}),
-							password: next.input.value,
-						});
+						const answer = await session.me('PUT', '/v1/me/password', { ...proof.read(), password: next.input.value });
 						note.textContent = answer.ok ? t('account.passwordSaved') : errorText(t, answer, when);
-						if (answer.ok) /** @type {HTMLFormElement} */ (form).reset();
+						if (!answer.ok) return;
+						/** @type {HTMLFormElement} */ (form).reset();
+						// a first password changes what the page asks next (the current password): draw it again
+						if (!user.hasPassword) {
+							passwordNotice = t('account.passwordSaved');
+							void draw();
+						}
 					});
 				});
 				return section;
@@ -321,7 +364,7 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 
 			/** @param {Record<string, any>} user */
 			const twoStepPart = (user) => {
-				const { section, note } = part(t('account.twoStep'));
+				const { section, note, say } = part(t('account.twoStep'));
 				const area = element(doc, 'div');
 				section.append(area, note);
 				let enabled = user.twoStep === true;
@@ -343,10 +386,14 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 						code.input.setAttribute('maxlength', '20');
 						const off = button(t('account.twoStepTurnOff'), { class: 'secondary' });
 						const renew = button(t('account.recoveryRenew'), { class: 'secondary' });
-						area.replaceChildren(para(t('account.twoStepIsOn')), code.wrap, off, renew);
+						const proof = proofFields(user, say);
+						area.replaceChildren(para(t('account.twoStepIsOn')), ...proof.nodes, code.wrap, off, renew);
 						off.addEventListener('click', () =>
 							run(off, async () => {
-								const answer = await session.me('POST', '/v1/me/two-step/disable', { code: code.input.value.trim() });
+								const answer = await session.me('POST', '/v1/me/two-step/disable', {
+									...proof.read(),
+									code: code.input.value.trim(),
+								});
 								if (answer.ok) {
 									enabled = false;
 									paint();
@@ -369,10 +416,11 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 						return;
 					}
 					const turnOn = button(t('account.twoStepTurnOn'));
-					area.replaceChildren(para(t('account.twoStepIsOff')), turnOn);
+					const proof = proofFields(user, say);
+					area.replaceChildren(para(t('account.twoStepIsOff')), ...proof.nodes, turnOn);
 					turnOn.addEventListener('click', () =>
 						run(turnOn, async () => {
-							const answer = await session.me('POST', '/v1/me/two-step/setup');
+							const answer = await session.me('POST', '/v1/me/two-step/setup', proof.read());
 							note.textContent = answer.ok ? '' : errorText(t, answer, when);
 							if (answer.ok) setup(answer.data);
 						}),

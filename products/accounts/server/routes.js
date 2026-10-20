@@ -375,6 +375,15 @@ export const createRoutes = (product) => {
 			rateLimit: VISITOR_LIMITS,
 			handler: account.signOutEverywhere,
 		}),
+		// a fresh code for the user without a password: it proves the person for the password and two-step changes (SR-4-5)
+		defineRoute({
+			method: 'POST',
+			path: '/v1/me/confirm-code',
+			auth: 'browser',
+			feature: ['email_password', 'phone_password', 'two_step'],
+			rateLimit: SENSITIVE_LIMITS,
+			handler: account.confirmCode,
+		}),
 		defineRoute({
 			method: 'PUT',
 			path: '/v1/me/password',

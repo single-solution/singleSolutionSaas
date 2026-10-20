@@ -7,7 +7,7 @@
 import { problem } from '@ss/app-kit';
 import { constantTimeEqual, randomToken, sha256Hex } from '@ss/protocol';
 import { checkCustomValues, checkName, selfView } from '../core/profile.js';
-import { CODE_ATTEMPTS } from '../core/limits.js';
+import { CODE_ATTEMPTS, CODE_MINUTES } from '../core/limits.js';
 import { generateRecoveryCodes, generateTotpSecret, matchRecoveryCode, totpUri, verifyTotp } from '../adapters/crypto.js';
 import { invalid } from './flows.js';
 import { bodyOf, parseSecret } from './service.js';
@@ -99,8 +99,83 @@ export const createAccount = (product, service, flows) => {
 	};
 
 	/**
-	 * Set or change the password (the current one is asked when there is one): users with an email address while Email
-	 * + password is on, and users with a phone number while Phone + password is on (A2), each with that method's rules.
+	 * Where a fresh code goes for a user without a password: the email address or the phone number, whichever was
+	 * proven (the address first); null when neither was.
+	 * @param {import('../core/profile.js').UserRecord} user
+	 * @returns {{ kind: 'email' | 'phone', target: string } | null}
+	 */
+	const proofTarget = (user) => {
+		if (user.email && user.emailVerified) return { kind: 'email', target: user.email };
+		if (user.phone && user.phoneVerified) return { kind: 'phone', target: user.phone };
+		return null;
+	};
+
+	/**
+	 * The step-up of the changes that give lasting access (SR-4-5): a stolen sign-in token (15 minutes) cannot set the
+	 * password or turn two-step on or off. A user with a password types it (`current`); a user without one types a fresh
+	 * code sent to the proven email address or phone number (`confirmCode`, asked with `POST /v1/me/confirm-code`), used up here. Wrong
+	 * passwords count toward the lock like wrong sign-in passwords, and the lock refuses the change while it lasts.
+	 * @param {import('./service.js').Site} s @param {import('../core/profile.js').UserRecord} user
+	 * @param {Record<string, any>} body
+	 */
+	const stepUp = async (s, user, body) => {
+		if (user.lockedUntil && user.lockedUntil.getTime() > now())
+			throw problem('locked', 'Too many wrong tries. Try again later.', {
+				extensions: { lockedUntil: user.lockedUntil.toISOString() },
+			});
+		if (user.passwordHash) {
+			if (typeof body.current !== 'string') throw problem('sign_in_failed', 'Type your current password.');
+			if (body.current.length <= 1024 && (await service.checkPassword(s, user, body.current))) return;
+			await flows.countFailure(s, user, service.passwordMethodOf(s, user) ?? 'email_password');
+			await service.logSignIn(s, user, 'user.sign_in_failed', { reason: 'wrong_password' });
+			throw problem('sign_in_failed', 'The current password is wrong.');
+		}
+		const via = proofTarget(user);
+		if (!via || typeof body.confirmCode !== 'string') throw problem('code_invalid', 'Ask for a code and type it.');
+		const record = await flows.checkCode(s, via.kind, via.target, body.confirmCode);
+		if (!(await s.store.codes.consume(record.id))) throw problem('code_invalid', 'The code is not valid or has expired.');
+	};
+
+	/**
+	 * A fresh code for a user without a password, sent to the proven email address (else the proven phone number): it
+	 * proves the person for the password or two-step change (`stepUp`). A user with a password types the password.
+	 * @param {any} ctx
+	 */
+	const confirmCode = async (ctx) => {
+		const { s, user } = await service.signedIn(ctx);
+		if (user.passwordHash) throw problem('conflict', 'Type your current password instead.');
+		const via = proofTarget(user);
+		if (!via) throw problem('conflict', 'Confirm your email address or phone number first.');
+		const sent =
+			via.kind === 'email'
+				? await flows.sendCode(s, 'email', via.target, {}, (code) =>
+						service.notify(
+							s,
+							'email',
+							'accounts.email_code',
+							{ email: via.target },
+							{ code, link: '', minutes: CODE_MINUTES },
+						),
+					)
+				: await flows.sendCode(s, 'phone', via.target, {}, async (code) =>
+						service.notify(
+							s,
+							(await service.settings(s, 'phone')).channel,
+							'accounts.phone_code',
+							{ phone: via.target },
+							{ code, minutes: CODE_MINUTES },
+						),
+					);
+		return new Response(JSON.stringify({ ...sent, via: via.kind }), {
+			status: 202,
+			headers: { 'content-type': 'application/json' },
+		});
+	};
+
+	/**
+	 * Set or change the password (the current one is asked when there is one, else a fresh code, `stepUp`): users with an
+	 * email address while Email + password is on, and users with a phone number while Phone + password is on (A2), each
+	 * with that method's rules.
 	 * @param {any} ctx
 	 */
 	const changePassword = async (ctx) => {
@@ -108,8 +183,7 @@ export const createAccount = (product, service, flows) => {
 		const body = bodyOf(ctx.body);
 		const method = service.passwordMethodOf(s, user);
 		if (!method) throw problem('validation_failed', 'Passwords go with an email address or a phone number.');
-		if (user.passwordHash && (typeof body.current !== 'string' || !(await service.checkPassword(s, user, body.current))))
-			throw problem('sign_in_failed', 'The current password is wrong.');
+		await stepUp(s, user, body);
 		const passwordHash = await flows.newPassword(s, body.password, { method, who: user });
 		const changedAt = new Date(now());
 		await s.store.users.update(user.id, { passwordHash, passwordChangedAt: changedAt });
@@ -130,6 +204,7 @@ export const createAccount = (product, service, flows) => {
 		const { s, user } = await service.signedIn(ctx);
 		if (user.twoStep?.enabledAt && sealer.open(user.twoStep.sealed, service.totpAad(s.websiteId, user.id)) !== null)
 			throw problem('conflict', 'Two-step sign-in is already on.');
+		await stepUp(s, user, bodyOf(ctx.body));
 		const secret = generateTotpSecret();
 		const challenge = randomToken(32);
 		const id = await s.store.codes.add({
@@ -137,7 +212,7 @@ export const createAccount = (product, service, flows) => {
 			target: user.id,
 			hash: sha256Hex(challenge),
 			expireAt: new Date(now() + 10 * 60_000),
-			data: { setup: sealer.seal(secret, service.totpAad(s.websiteId, user.id)), userId: user.id, enable: true },
+			data: { setup: sealer.seal(secret, service.totpAad(s.websiteId, user.id)), userId: user.id, purpose: 'enable' },
 			replace: true,
 		});
 		const business = (await product.business(s.websiteId)).name;
@@ -158,6 +233,7 @@ export const createAccount = (product, service, flows) => {
 			!parsed ||
 			!record ||
 			record.kind !== 'step' ||
+			record.data.purpose !== 'enable' ||
 			record.target !== user.id ||
 			!constantTimeEqual(record.hash, sha256Hex(parsed.secret))
 		)
@@ -188,6 +264,7 @@ export const createAccount = (product, service, flows) => {
 		if (!state?.enabledAt) return undefined;
 		if ((await service.roleOf(s, user)).twoStep === 'required')
 			throw problem('two_step_required', 'Your role requires two-step sign-in.');
+		await stepUp(s, user, bodyOf(ctx.body));
 		const secret = sealer.open(state.sealed, service.totpAad(s.websiteId, user.id));
 		const checked = secret
 			? verifyTotp(secret, bodyOf(ctx.body).code, { now: now(), lastStep: state.lastStep })
@@ -323,6 +400,7 @@ export const createAccount = (product, service, flows) => {
 		sessions,
 		signOutDevice,
 		signOutEverywhere,
+		confirmCode,
 		changePassword,
 		twoStepSetup,
 		twoStepEnable,

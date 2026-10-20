@@ -806,13 +806,23 @@ describe('roles, two-step, consents, approval and risk checks', () => {
 		expect(code(await env.visitor('POST', '/v1/me/two-step/disable', { code: '1' }, ok.json.signIn))).toBe('two_step_required');
 		await env.serverCall('PATCH', `/v1/users/${ana.id}`, { role: 'customer' });
 		env.advance(60_000);
-		expect(code(await env.visitor('POST', '/v1/me/two-step/disable', { code: '000000' }, ok.json.signIn))).toBe('code_invalid');
+		// turning it off asks for the current password as well as the code
+		const current = 'another long one';
+		expect(code(await env.visitor('POST', '/v1/me/two-step/disable', { code: '000000', current }, ok.json.signIn))).toBe(
+			'code_invalid',
+		);
 		expect(
-			(await env.visitor('POST', '/v1/me/two-step/disable', { code: totpCode(first.json.secret, env.now()) }, ok.json.signIn))
-				.status,
+			(
+				await env.visitor(
+					'POST',
+					'/v1/me/two-step/disable',
+					{ code: totpCode(first.json.secret, env.now()), current },
+					ok.json.signIn,
+				)
+			).status,
 		).toBe(204);
 		// optional two-step from My account
-		const setupAnswer = await env.visitor('POST', '/v1/me/two-step/setup', {}, ok.json.signIn);
+		const setupAnswer = await env.visitor('POST', '/v1/me/two-step/setup', { current }, ok.json.signIn);
 		expect(
 			code(
 				await env.visitor(
@@ -835,7 +845,7 @@ describe('roles, two-step, consents, approval and risk checks', () => {
 		await env.visitor(
 			'POST',
 			'/v1/me/two-step/disable',
-			{ code: totpCode(setupAnswer.json.secret, env.now()) },
+			{ code: totpCode(setupAnswer.json.secret, env.now()), current },
 			ok.json.signIn,
 		);
 		expect((await signIn('ana@example.com', 'another long one')).json.status).toBe('signed_in');
@@ -1307,7 +1317,12 @@ describe('edges', () => {
 		});
 		const t = pat.json.signIn;
 		// a phone user sets a password while Phone + password is on (PLAN 0.8.10 A2)
-		expect((await env.visitor('PUT', '/v1/me/password', { password: 'a long new password' }, t)).status).toBe(204);
+		env.advance(31_000);
+		expect((await env.visitor('POST', '/v1/me/confirm-code', {}, t)).status).toBe(202);
+		const proof = lastMessage().values.code;
+		expect(
+			(await env.visitor('PUT', '/v1/me/password', { password: 'a long new password', confirmCode: proof }, t)).status,
+		).toBe(204);
 		expect((await env.visitor('POST', '/v1/me/two-step/disable', { code: '1' }, t)).status).toBe(204);
 		expect(code(await env.visitor('POST', '/v1/me/two-step/enable', { challenge: 'x', code: '1' }, t))).toBe('code_invalid');
 		const cookie = await env.adminSession();

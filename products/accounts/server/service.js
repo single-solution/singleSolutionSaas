@@ -383,13 +383,21 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * A two-step step (10 minutes): the challenge the widget sends back with the code.
+	 * A two-step step (10 minutes): the challenge the widget sends back with the code. It is a sign-in challenge
+	 * (`purpose: 'sign_in'`): the public two-step route takes only these, My account's setup challenge is another kind
+	 * (SR-4-5).
 	 * @param {Site} s @param {string} userId @param {Record<string, unknown>} data
 	 */
 	const step = async (s, userId, data) => {
 		const secret = randomToken(32);
 		const expireAt = new Date(now() + STEP_MS);
-		const id = await s.store.codes.add({ kind: 'step', target: userId, hash: sha256Hex(secret), expireAt, data });
+		const id = await s.store.codes.add({
+			kind: 'step',
+			target: userId,
+			hash: sha256Hex(secret),
+			expireAt,
+			data: { ...data, purpose: 'sign_in' },
+		});
 		return { challenge: `${id}.${secret}`, expiresAt: expireAt.toISOString() };
 	};
 

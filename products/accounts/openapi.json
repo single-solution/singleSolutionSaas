@@ -5317,6 +5317,75 @@
 				}
 			}
 		},
+		"/v1/me/confirm-code": {
+			"post": {
+				"summary": "Send a fresh code to prove the person (users without a password)",
+				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). For a user without a password: a 6-digit code goes to the proven email address (else the proven phone number), and the password and two-step changes take it as confirmCode. The usual code limits apply (429 code_cooldown with retryAt, or code_limit). 409 conflict when the user has a password (type it instead) or neither address nor number was proven.",
+				"x-ss-auth": "browser",
+				"x-ss-feature": [
+					"email_password",
+					"phone_password",
+					"two_step"
+				],
+				"security": [
+					{
+						"browserToken": []
+					},
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSVisitorIp"
+					},
+					{
+						"$ref": "#/components/parameters/SSSignIn"
+					}
+				],
+				"responses": {
+					"202": {
+						"description": "Accepted",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"expiresAt",
+										"via"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"expiresAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"via": {
+											"type": "string",
+											"enum": [
+												"email",
+												"phone"
+											],
+											"description": "Where the code was sent."
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/me/consents": {
 			"post": {
 				"summary": "Give or withdraw consents",
@@ -5595,7 +5664,7 @@
 		"/v1/me/password": {
 			"put": {
 				"summary": "Set or change the signed-in user’s password",
-				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). Users with an email address while Email + password is on, else users with a phone number while Phone + password is on (422 validation_failed otherwise), with that method’s rules (422 weak_password). Every other device signs in again. 401 sign_in_failed when current is wrong.",
+				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). Users with an email address while Email + password is on, else users with a phone number while Phone + password is on (422 validation_failed otherwise), with that method’s rules (422 weak_password). Every other device signs in again. 401 sign_in_failed when current is wrong. Without a password, the change needs a fresh code (confirmCode); 422 code_invalid for a missing, wrong or used code. 423 locked while wrong passwords hold the account.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": [
 					"email_password",
@@ -5632,7 +5701,11 @@
 									},
 									"current": {
 										"type": "string",
-										"description": "The current password; required when the user has one."
+										"description": "The current password; required when the user has one (a wrong one counts toward the lock like a wrong sign-in password)."
+									},
+									"confirmCode": {
+										"type": "string",
+										"description": "Instead, for a user without a password: a fresh code from POST /v1/me/confirm-code, used up by this call."
 									}
 								}
 							}
@@ -5828,7 +5901,7 @@
 		"/v1/me/two-step/disable": {
 			"post": {
 				"summary": "Turn two-step sign-in off",
-				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). Answers 204 when it is off already. 403 two_step_required when the user’s role requires it; 422 code_invalid.",
+				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). Answers 204 when it is off already. 403 two_step_required when the user’s role requires it; 422 code_invalid. Needs the current password or a fresh code (confirmCode) as well as the code from the app (401 sign_in_failed, 422 code_invalid).",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "two_step",
 				"security": [
@@ -5857,6 +5930,14 @@
 									"code"
 								],
 								"properties": {
+									"current": {
+										"type": "string",
+										"description": "The current password; required when the user has one (a wrong one counts toward the lock like a wrong sign-in password)."
+									},
+									"confirmCode": {
+										"type": "string",
+										"description": "Instead, for a user without a password: a fresh code from POST /v1/me/confirm-code, used up by this call."
+									},
 									"code": {
 										"type": "string",
 										"description": "6 digits from the app."
@@ -6054,7 +6135,7 @@
 		"/v1/me/two-step/setup": {
 			"post": {
 				"summary": "Start setting up two-step sign-in",
-				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). The secret waits 10 minutes for POST /v1/me/two-step/enable. 409 conflict while two-step sign-in is on (and its secret still opens).",
+				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). The secret waits 10 minutes for POST /v1/me/two-step/enable. 409 conflict while two-step sign-in is on (and its secret still opens). Needs the current password, or for a user without one a fresh code (confirmCode), as the password change does (401 sign_in_failed, 422 code_invalid). The challenge is for POST /v1/me/two-step/enable only: POST /v1/sign-in/two-step refuses it.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "two_step",
 				"security": [
@@ -6073,6 +6154,26 @@
 						"$ref": "#/components/parameters/SSSignIn"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"current": {
+										"type": "string",
+										"description": "The current password; required when the user has one (a wrong one counts toward the lock like a wrong sign-in password)."
+									},
+									"confirmCode": {
+										"type": "string",
+										"description": "Instead, for a user without a password: a fresh code from POST /v1/me/confirm-code, used up by this call."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
 					"200": {
 						"description": "Success",
