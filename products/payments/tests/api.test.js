@@ -353,6 +353,12 @@ describe('the payment API and Stripe', () => {
 		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('This payment was refunded');
 	});
 
+	it('does not verify a payment that was refunded in full (SR-3-9), and still says what was refunded', async () => {
+		const [payment] = (await env.api('GET', '/v1/payments?status=refunded&q=order-1042')).json.items;
+		const answer = await env.api('POST', `/v1/payments/${payment.id}/verify`, { amount: 250000, currency: 'USD' });
+		expect(answer.json).toMatchObject({ verified: false, payment: { status: 'refunded', refunded: 250000 } });
+	});
+
 	it('lists payments and events', async () => {
 		const first = await env.api('GET', '/v1/payments?limit=2');
 		expect(first.json.items).toHaveLength(2);

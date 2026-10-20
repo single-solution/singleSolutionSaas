@@ -399,7 +399,9 @@ describe('payments', () => {
 	it('confirms a payment only for its exact amount and currency', () => {
 		const payment = { status: 'paid', amount: 1000, currency: 'EUR' };
 		expect(isConfirmedFor(payment, { amount: 1000, currency: 'EUR' })).toBe(true);
-		expect(isConfirmedFor({ ...payment, status: 'refunded' }, { amount: 1000, currency: 'EUR' })).toBe(true);
+		// money paid back in full no longer confirms (SR-3-9); part of it still does, the caller reads `refunded`
+		expect(isConfirmedFor({ ...payment, status: 'refunded' }, { amount: 1000, currency: 'EUR' })).toBe(false);
+		expect(isConfirmedFor({ ...payment, status: 'partially_refunded' }, { amount: 1000, currency: 'EUR' })).toBe(true);
 		expect(isConfirmedFor(payment, { amount: 999, currency: 'EUR' })).toBe(false);
 		expect(isConfirmedFor(payment, { amount: 1000, currency: 'USD' })).toBe(false);
 		expect(isConfirmedFor({ ...payment, status: 'pending' }, { amount: 1000, currency: 'EUR' })).toBe(false);

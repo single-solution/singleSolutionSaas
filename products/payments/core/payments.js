@@ -383,14 +383,15 @@ export const isRefundDue = (payment) =>
 
 /**
  * Whether a payment is confirmed for the exact amount and currency (PLAN 0.3: Ecommerce marks an order paid only for
- * the same website and the order's exact amount). A payment refunded later was still paid; one the merchant canceled
- * never confirms, even when money arrived after (it is to be refunded).
+ * the same website and the order's exact amount). A payment refunded in full no longer confirms (SR-3-9), and one
+ * refunded in part still does: the verify answer carries `refunded`, so the caller decides what part is acceptable. One
+ * the merchant canceled never confirms, even when money arrived after (it is to be refunded).
  * @param {{ status: string, amount: number, currency: string, voidedAt?: Date | string | null }} payment
  * @param {{ amount: unknown, currency: unknown }} expected
  */
 export const isConfirmedFor = (payment, expected) =>
 	!payment.voidedAt &&
-	['paid', 'partially_refunded', 'refunded'].includes(payment.status) &&
+	['paid', 'partially_refunded'].includes(payment.status) &&
 	payment.amount === expected.amount &&
 	payment.currency === expected.currency;
 
