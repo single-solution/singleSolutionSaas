@@ -2308,15 +2308,20 @@
 	},
 	"POST /v1/sign-in/google/start": {
 		"summary": "Start a Google sign-in",
-		"description": "Open url in the browser. Google sends the person back to Accounts, which returns them to returnTo with #ss_accounts_code=<code> (or #ss_accounts_error=<code>); exchange the code with POST /v1/sign-in/exchange within 5 minutes. 502 provider_failed while the Google keys are not connected; 422 validation_failed for returnTo.",
+		"description": "Open url in the browser. Google sends the person back to Accounts, which returns them to returnTo with #ss_accounts_code=<code> (or #ss_accounts_error=<code>); exchange the code with POST /v1/sign-in/exchange within 5 minutes. 502 provider_failed while the Google keys are not connected; 422 validation_failed for returnTo or binding.",
 		"body": {
 			"type": "object",
-			"required": ["returnTo"],
+			"required": ["returnTo", "binding"],
 			"properties": {
 				"returnTo": {
 					"type": "string",
 					"maxLength": 2048,
 					"description": "Your page: https on your website’s domain (a local page while testing)."
+				},
+				"binding": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{32,128}$",
+					"description": "A random value of 32 to 128 letters, digits, - and _ that the browser keeps (the widget: sessionStorage) and sends again to POST /v1/sign-in/exchange. Only its hash is kept; a hand-over code finished by another browser is refused."
 				},
 				"remember": {
 					"type": "boolean",
@@ -2344,15 +2349,20 @@
 	},
 	"POST /v1/sign-in/apple/start": {
 		"summary": "Start an Apple sign-in",
-		"description": "Open url in the browser. Apple sends the person back to Accounts, which returns them to returnTo with #ss_accounts_code=<code> (or #ss_accounts_error=<code>); exchange the code with POST /v1/sign-in/exchange within 5 minutes. 502 provider_failed while the Apple keys are not connected; 422 validation_failed for returnTo.",
+		"description": "Open url in the browser. Apple sends the person back to Accounts, which returns them to returnTo with #ss_accounts_code=<code> (or #ss_accounts_error=<code>); exchange the code with POST /v1/sign-in/exchange within 5 minutes. 502 provider_failed while the Apple keys are not connected; 422 validation_failed for returnTo or binding.",
 		"body": {
 			"type": "object",
-			"required": ["returnTo"],
+			"required": ["returnTo", "binding"],
 			"properties": {
 				"returnTo": {
 					"type": "string",
 					"maxLength": 2048,
 					"description": "Your page: https on your website’s domain (a local page while testing)."
+				},
+				"binding": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{32,128}$",
+					"description": "A random value of 32 to 128 letters, digits, - and _ that the browser keeps (the widget: sessionStorage) and sends again to POST /v1/sign-in/exchange. Only its hash is kept; a hand-over code finished by another browser is refused."
 				},
 				"remember": {
 					"type": "boolean",
@@ -2380,15 +2390,20 @@
 	},
 	"POST /v1/sign-in/facebook/start": {
 		"summary": "Start a Facebook sign-in",
-		"description": "Open url in the browser. Facebook sends the person back to Accounts, which returns them to returnTo with #ss_accounts_code=<code> (or #ss_accounts_error=<code>); exchange the code with POST /v1/sign-in/exchange within 5 minutes. 502 provider_failed while the Facebook keys are not connected; 422 validation_failed for returnTo.",
+		"description": "Open url in the browser. Facebook sends the person back to Accounts, which returns them to returnTo with #ss_accounts_code=<code> (or #ss_accounts_error=<code>); exchange the code with POST /v1/sign-in/exchange within 5 minutes. 502 provider_failed while the Facebook keys are not connected; 422 validation_failed for returnTo or binding.",
 		"body": {
 			"type": "object",
-			"required": ["returnTo"],
+			"required": ["returnTo", "binding"],
 			"properties": {
 				"returnTo": {
 					"type": "string",
 					"maxLength": 2048,
 					"description": "Your page: https on your website’s domain (a local page while testing)."
+				},
+				"binding": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{32,128}$",
+					"description": "A random value of 32 to 128 letters, digits, - and _ that the browser keeps (the widget: sessionStorage) and sends again to POST /v1/sign-in/exchange. Only its hash is kept; a hand-over code finished by another browser is refused."
 				},
 				"remember": {
 					"type": "boolean",
@@ -2419,12 +2434,17 @@
 		"description": "The provider proved the address: a known provider account, or an account whose address was proven before, is opened; else an account is made. 422 code_invalid when the code is not valid, used or older than 5 minutes. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents.",
 		"body": {
 			"type": "object",
-			"required": ["code"],
+			"required": ["code", "binding"],
 			"properties": {
 				"code": {
 					"type": "string",
 					"pattern": "^[a-z]{3}_[0-9a-z]{26}\\.[A-Za-z0-9_-]{32,}$",
 					"description": "The ss_accounts_code value of the address fragment."
+				},
+				"binding": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{32,128}$",
+					"description": "The same value the sign-in was started with (binding). 422 code_invalid when it differs: the code stays valid for the browser that started the sign-in."
 				},
 				"consents": {
 					"type": "object",

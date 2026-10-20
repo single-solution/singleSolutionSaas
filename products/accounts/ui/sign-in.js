@@ -223,8 +223,15 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 					const trigger = /** @type {HTMLElement} */ (socials[index]);
 					trigger.addEventListener('click', () =>
 						run(trigger, note, async () => {
+							// the sign-in is tied to this browser: the value stays here and comes back at the exchange (SR-4-4)
+							const binding = session.startBinding();
+							if (!binding) {
+								say(note, t('error.provider_failed'));
+								return;
+							}
 							const answer = await session.call('POST', `/v1/sign-in/${provider}/start`, {
 								returnTo: returnTo(),
+								binding,
 								...extras(),
 							});
 							const url = answer.ok ? webAddress(answer.data?.url) : null;
@@ -839,12 +846,20 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 				const given = answers ? { consents: answers } : {};
 				const answer =
 					kind === 'handoff'
-						? await session.call('POST', '/v1/sign-in/exchange', { code: value, ...given })
+						? await session.call('POST', '/v1/sign-in/exchange', {
+								code: value,
+								binding: session.binding() ?? '',
+								...given,
+							})
 						: await session.call('POST', '/v1/sign-in/email', { link: value, ...given, ...extras() });
 				if (!answer.ok && problemCode(answer.data) === 'consent_required')
 					consentStep(answer.data, (next) => void linkSignIn(kind, value, next));
-				else if (!answer.ok) start(errorText(t, answer, when));
-				else handle(answer, note, null);
+				else {
+					// the value has done its work (the consent step above keeps it for the retry)
+					if (kind === 'handoff') session.endBinding();
+					if (!answer.ok) start(errorText(t, answer, when));
+					else handle(answer, note, null);
+				}
 			};
 
 			/**

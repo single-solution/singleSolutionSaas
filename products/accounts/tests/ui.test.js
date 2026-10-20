@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import manifest from '../manifest.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import {
+	BINDING_STORAGE_KEY,
 	DEVICE_STORAGE_KEY,
 	REFRESH_STORAGE_KEY,
 	SIGNED_IN_EVENT,
@@ -787,15 +788,30 @@ describe('social sign-in and links', () => {
 		await click(buttonIn(root, strings['social.google']));
 		expect(statusIn(root)).toBe(strings['error.provider_failed']);
 		await click(buttonIn(root, strings['social.google']));
-		expect(server.last('POST /v1/sign-in/google/start')?.body).toMatchObject({
-			returnTo: `${window.location.origin}${PAGE}`,
-			remember: true,
-		});
+		const started = server.last('POST /v1/sign-in/google/start')?.body;
+		expect(started).toMatchObject({ returnTo: `${window.location.origin}${PAGE}`, remember: true });
+		// the sign-in is tied to this browser (SR-4-4): a random value is kept in the tab and sent to the start
+		expect(started.binding).toMatch(/^[A-Za-z0-9_-]{32}$/);
+		expect(window.sessionStorage.getItem(BINDING_STORAGE_KEY)).toBe(started.binding);
 		expect(window.location.hash).toBe('#at-provider');
+	});
+
+	it('a social sign-in does not start when the browser cannot keep its value', async () => {
+		const host = place('sign_in');
+		const { server } = await start({}, { features: ['google'] });
+		const root = shadow(host);
+		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+			throw new Error('storage is full');
+		});
+		await click(buttonIn(root, strings['social.google']));
+		expect(statusIn(root)).toBe(strings['error.provider_failed']);
+		expect(server.last('POST /v1/sign-in/google/start')).toBeUndefined();
 	});
 
 	it('exchanges a hand-over code from the address, removes it, and asks for the consents first when needed', async () => {
 		const host = place('sign_in');
+		const BINDING = 'Zk3-_a9QpLm0Xv7TcRw2Ys4HdUe6NfBj1GiOqAtK5Mx';
+		window.sessionStorage.setItem(BINDING_STORAGE_KEY, BINDING);
 		const outcomes = [
 			problem(403, 'consent_required', {
 				consents: [{ key: 'terms', label: 'I accept the terms', url: 'https://example.com/terms', version: 'v1' }],
@@ -808,7 +824,9 @@ describe('social sign-in and links', () => {
 		);
 		expect(window.location.hash).toBe('');
 		expect(`${window.location.pathname}${window.location.search}`).toBe(PAGE);
-		expect(server.last('POST /v1/sign-in/exchange')?.body).toEqual({ code: 'hand.over' });
+		// the value kept at the start comes back with the code, and stays for the consent retry
+		expect(server.last('POST /v1/sign-in/exchange')?.body).toEqual({ code: 'hand.over', binding: BINDING });
+		expect(window.sessionStorage.getItem(BINDING_STORAGE_KEY)).toBe(BINDING);
 		const root = shadow(host);
 		expect(heading(host)).toBe(strings['consent.title']);
 		expect(root.querySelector('a')?.getAttribute('href')).toBe('https://example.com/terms');
@@ -816,7 +834,13 @@ describe('social sign-in and links', () => {
 		expect(statusIn(root)).toBe(strings['consent.tick']);
 		checkIn(root, 'I accept the terms').checked = true;
 		await click(buttonIn(root, strings['consent.continue']));
-		expect(server.last('POST /v1/sign-in/exchange')?.body).toEqual({ code: 'hand.over', consents: { terms: true } });
+		expect(server.last('POST /v1/sign-in/exchange')?.body).toEqual({
+			code: 'hand.over',
+			binding: BINDING,
+			consents: { terms: true },
+		});
+		// used: the value is forgotten
+		expect(window.sessionStorage.getItem(BINDING_STORAGE_KEY)).toBeNull();
 		expect(events.in).toHaveLength(1);
 		expect(heading(host)).toBe(strings['signedIn.title']);
 	});
@@ -851,11 +875,14 @@ describe('social sign-in and links', () => {
 		expect(server.last('POST /v1/sign-in/email')?.body).toMatchObject({ link: 'magic.link' });
 		expect(widget.user()).toEqual(USER);
 		vi.restoreAllMocks();
+		window.sessionStorage.setItem(BINDING_STORAGE_KEY, 'k'.repeat(32));
 		const next = await start(
 			{ 'POST /v1/sign-in/exchange': () => answer(200, signedIn({ signIn: 'sig-x' })) },
 			{ features: ['google'], hash: 'ss_accounts_code=c' },
 		);
 		expect(await next.widget.getSignIn()).toBe('sig-x');
+		expect(next.server.last('POST /v1/sign-in/exchange')?.body).toEqual({ code: 'c', binding: 'k'.repeat(32) });
+		expect(window.sessionStorage.getItem(BINDING_STORAGE_KEY)).toBeNull();
 	});
 
 	it('a magic link through the widget signs in', async () => {

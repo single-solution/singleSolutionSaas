@@ -12,6 +12,8 @@ const code = (res) =>
 	String(res.json?.type ?? '')
 		.split('/')
 		.pop();
+/** The random value the browser keeps for its social sign-in (SR-4-4). */
+const BROWSER = 'Zk3-_a9QpLm0Xv7TcRw2Ys4HdUe6NfBj1GiOqAtK5Mx';
 /** The last message Accounts sent through Notifications. */
 const lastMessage = () => env.messages().at(-1);
 
@@ -527,7 +529,7 @@ describe('phone code and email code', () => {
 describe('Google, Apple and Facebook', () => {
 	/** @param {string} provider @param {string} [returnTo] */
 	const start = async (provider, returnTo = `${ORIGIN}/account`) => {
-		const res = await env.visitor('POST', `/v1/sign-in/${provider}/start`, { returnTo, remember: true });
+		const res = await env.visitor('POST', `/v1/sign-in/${provider}/start`, { returnTo, binding: BROWSER, remember: true });
 		return { res, url: res.json?.url ? new URL(res.json.url) : null };
 	};
 
@@ -566,13 +568,13 @@ describe('Google, Apple and Facebook', () => {
 		const handoff = location.split('#ss_accounts_code=')[1];
 		// the state works once
 		expect((await env.call('GET', `/oauth/google/callback?state=${params.get('state')}&code=abc`)).status).toBe(400);
-		const done = await env.visitor('POST', '/v1/sign-in/exchange', { code: handoff });
+		const done = await env.visitor('POST', '/v1/sign-in/exchange', { code: handoff, binding: BROWSER });
 		expect(done.json).toMatchObject({
 			status: 'signed_in',
 			remember: true,
 			user: { email: 'gina@example.com', providers: ['google'] },
 		});
-		expect(code(await env.visitor('POST', '/v1/sign-in/exchange', { code: handoff }))).toBe('code_invalid');
+		expect(code(await env.visitor('POST', '/v1/sign-in/exchange', { code: handoff, binding: BROWSER }))).toBe('code_invalid');
 		// the next Google sign-in finds the same user
 		const second = await start('google');
 		const p2 = /** @type {URL} */ (second.url).searchParams;
@@ -590,6 +592,7 @@ describe('Google, Apple and Facebook', () => {
 		}));
 		const back2 = await env.call('GET', `/oauth/google/callback?state=${p2.get('state')}&code=abc`);
 		const done2 = await env.visitor('POST', '/v1/sign-in/exchange', {
+			binding: BROWSER,
 			code: String(back2.headers.get('location')).split('#ss_accounts_code=')[1],
 		});
 		expect(done2.json.user.id).toBe(done.json.user.id);
@@ -638,6 +641,7 @@ describe('Google, Apple and Facebook', () => {
 		}).toString();
 		const back = await env.call('POST', '/oauth/apple/callback', { raw });
 		const done = await env.visitor('POST', '/v1/sign-in/exchange', {
+			binding: BROWSER,
 			code: String(back.headers.get('location')).split('#ss_accounts_code=')[1],
 		});
 		expect(done.json.user).toMatchObject({ name: 'Al Apple', email: 'al@privaterelay.appleid.com' });
@@ -657,6 +661,7 @@ describe('Google, Apple and Facebook', () => {
 		});
 		const back = await env.call('GET', `/oauth/facebook/callback?state=${params.get('state')}&code=fb`);
 		const done = await env.visitor('POST', '/v1/sign-in/exchange', {
+			binding: BROWSER,
 			code: String(back.headers.get('location')).split('#ss_accounts_code=')[1],
 		});
 		expect(done.json.user).toMatchObject({ name: 'Fay', email: 'fay@example.com', providers: ['facebook'] });
@@ -668,6 +673,7 @@ describe('Google, Apple and Facebook', () => {
 		}));
 		const back2 = await env.call('GET', `/oauth/facebook/callback?state=${u2?.searchParams.get('state')}&code=fb`);
 		const done2 = await env.visitor('POST', '/v1/sign-in/exchange', {
+			binding: BROWSER,
 			code: String(back2.headers.get('location')).split('#ss_accounts_code=')[1],
 		});
 		expect(done2.json.user).toMatchObject({ email: 'ana@example.com', providers: ['facebook'] });
@@ -1329,7 +1335,9 @@ describe('edges', () => {
 		await env.disconnect('ecommerce');
 		await env.dashboard(cookie, 'DELETE', `/v1/dashboard/websites/${env.websiteId}/connections/google`);
 		expect(code(await env.visitor('GET', '/v1/me/orders', undefined, t))).toBe('product_not_connected');
-		expect(code(await env.visitor('POST', '/v1/sign-in/google/start', { returnTo: ORIGIN }))).toBe('provider_failed');
+		expect(code(await env.visitor('POST', '/v1/sign-in/google/start', { returnTo: ORIGIN, binding: BROWSER }))).toBe(
+			'provider_failed',
+		);
 		expect(code(await env.serverCall('PATCH', '/v1/users/usr_nope', { notes: 'x' }))).toBe('not_found');
 		expect(code(await env.serverCall('POST', '/v1/users/usr_nope/sign-out', {}))).toBe('not_found');
 		expect(code(await env.serverCall('POST', `/v1/users/${pat.json.user.id}/approve`, {}))).toBe('conflict');

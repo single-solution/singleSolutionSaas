@@ -735,6 +735,13 @@ export const createFlows = (product, service) => {
 
 	// ------------------------------------------------------------------------------------------- social sign-in
 
+	/**
+	 * The random value the browser that starts a social sign-in keeps (the widget: sessionStorage) and sends again at the
+	 * exchange (SR-4-4); the server keeps only its hash. Null when the shape is wrong.
+	 * @param {unknown} value
+	 */
+	const bindingOf = (value) => (typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value) ? value : null);
+
 	/** @param {'google' | 'apple' | 'facebook'} provider */
 	const callbackUrl = (/** @type {Site} */ s, provider) => `${s.base}/oauth/${provider}/callback`;
 
@@ -747,6 +754,9 @@ export const createFlows = (product, service) => {
 		const body = bodyOf(ctx.body);
 		const returnTo = returnAddress(body.returnTo, s.domain);
 		if (!returnTo) throw invalid('returnTo', 'returnTo must be a page of your website (or a local page while testing).');
+		const binding = bindingOf(body.binding);
+		if (!binding)
+			throw invalid('binding', 'binding must be a random value of 32 to 128 letters, digits, - and _ that the browser keeps.');
 		const key = await product.connections.value(s.websiteId, provider);
 		if (typeof key !== 'object' || key === null)
 			throw problem('provider_failed', `Connect the ${provider} keys in the product dashboard first.`);
@@ -757,7 +767,14 @@ export const createFlows = (product, service) => {
 		await s.store.oauth.add({
 			state,
 			provider,
-			data: { returnTo, nonce, verifier, remember: how.remember ? '1' : '', deviceId: how.deviceId ?? '' },
+			data: {
+				returnTo,
+				nonce,
+				verifier,
+				binding: sha256Hex(binding),
+				remember: how.remember ? '1' : '',
+				deviceId: how.deviceId ?? '',
+			},
 			expireAt: new Date(now() + 10 * 60_000),
 		});
 		return { url: providers.authorizeUrl(provider, key, { redirectUri: callbackUrl(s, provider), state, nonce, verifier }) };
@@ -856,7 +873,7 @@ export const createFlows = (product, service) => {
 			target: user.id,
 			hash: sha256Hex(secret),
 			expireAt: new Date(now() + 5 * 60_000),
-			data: { method: provider, remember: pending.data.remember === '1' },
+			data: { method: provider, remember: pending.data.remember === '1', binding: pending.data.binding },
 		});
 		return back(`${LINK_PARAMS.handoff}=${id}.${secret}`);
 	};
@@ -868,6 +885,11 @@ export const createFlows = (product, service) => {
 		const record = await service.takeSecret(s, body.code, 'handoff', { keep: true });
 		const user = record ? await s.store.users.get(record.target) : null;
 		if (!record || !user) throw problem('code_invalid', 'This sign-in has expired. Start again.');
+		// tied to the browser that started it: a link finished by another browser signs nobody in, and its refusal leaves
+		// the code for the right browser (SR-4-4)
+		const binding = bindingOf(body.binding);
+		if (!binding || !constantTimeEqual(String(record.data.binding), sha256Hex(binding)))
+			throw problem('code_invalid', 'This sign-in was started in another browser. Start again.');
 		const claim = () => s.store.codes.consume(record.id);
 		if (user.status === 'pending') {
 			if (!(await claim())) throw problem('code_invalid', 'This sign-in has expired. Start again.');

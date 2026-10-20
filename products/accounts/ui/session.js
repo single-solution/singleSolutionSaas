@@ -6,7 +6,14 @@
  * @module
  */
 import { requestJson } from '@ss/app-kit/widget';
-import { DEVICE_STORAGE_KEY, REFRESH_STORAGE_KEY, SIGNED_IN_EVENT, SIGNED_OUT_EVENT, SIGN_IN_HEADER } from '../core/widgets.js';
+import {
+	BINDING_STORAGE_KEY,
+	DEVICE_STORAGE_KEY,
+	REFRESH_STORAGE_KEY,
+	SIGNED_IN_EVENT,
+	SIGNED_OUT_EVENT,
+	SIGN_IN_HEADER,
+} from '../core/widgets.js';
 
 /** A new sign-in is asked for this long before the current one expires. */
 export const RENEW_BEFORE_MS = 60_000;
@@ -228,6 +235,20 @@ export const createSession = ({ win, base, token, schedule, cancel, now }) => {
 			}
 			return device;
 		},
+		/**
+		 * A new random value for a social sign-in about to start, kept in this tab's sessionStorage until the hand-over
+		 * code is exchanged (SR-4-4); null when the browser cannot keep it (the sign-in would never finish).
+		 */
+		startBinding: () => {
+			const bytes = win.crypto.getRandomValues(new Uint8Array(32));
+			const value = [...bytes].map((byte) => ALPHABET[byte % 64]).join('');
+			write(tab, BINDING_STORAGE_KEY, value);
+			return read(tab, BINDING_STORAGE_KEY) === value ? value : null;
+		},
+		/** The value this tab kept for its social sign-in, or null (a hand-over link opened in another browser). */
+		binding: () => read(tab, BINDING_STORAGE_KEY),
+		/** Forget the value: the sign-in is over. */
+		endBinding: () => write(tab, BINDING_STORAGE_KEY, null),
 		/** @param {(change: SessionChange) => void} listener */
 		onChange: (listener) => {
 			listeners.add(listener);

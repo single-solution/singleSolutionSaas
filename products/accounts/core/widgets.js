@@ -61,6 +61,8 @@ export const SETUP_PARAM = 'ss_setup';
 export const REFRESH_STORAGE_KEY = 'ss-accounts-session';
 /** The browser's device id for risk checks (localStorage). */
 export const DEVICE_STORAGE_KEY = 'ss-accounts-device';
+/** The random value a social sign-in is tied to while the person is at the provider (sessionStorage, SR-4-4). */
+export const BINDING_STORAGE_KEY = 'ss-accounts-binding';
 
 /** DOM events on `window`: `ss-accounts:signed-in` (`detail: { user }`) and `ss-accounts:signed-out`. */
 export const SIGNED_IN_EVENT = 'ss-accounts:signed-in';

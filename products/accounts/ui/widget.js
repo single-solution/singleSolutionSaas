@@ -141,8 +141,9 @@ export const startWidget = ({
 			// no sign-in widget on this page: finish a social sign-in or a magic link without one
 			const answer =
 				link.kind === 'handoff'
-					? await current.call('POST', '/v1/sign-in/exchange', { code: link.value })
+					? await current.call('POST', '/v1/sign-in/exchange', { code: link.value, binding: current.binding() ?? '' })
 					: await current.call('POST', '/v1/sign-in/email', { link: link.value, deviceId: current.deviceId() });
+			if (link.kind === 'handoff') current.endBinding();
 			if (answer.ok && answer.data?.status === 'signed_in') current.accept(answer.data);
 		}
 	})();
