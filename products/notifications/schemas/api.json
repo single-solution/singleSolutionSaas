@@ -562,6 +562,15 @@
 					},
 					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
 				},
+				"linkValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "Names of values that hold a link, for example [\"link\"]. A link goes into the message only as an https address on one of your website's own hosts (its domain, a host listed for it in the Portal, or the sending product's host), with no port, credentials or spaces; anything else refuses the send with 422 validation_failed, code link_not_allowed at /values/<name>. An empty value is no link."
+				},
 				"longValues": {
 					"type": "array",
 					"maxItems": 50,
@@ -626,6 +635,15 @@
 						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
 					},
 					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
+				},
+				"linkValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "Names of values that hold a link, for example [\"link\"]. A link goes into the message only as an https address on one of your website's own hosts (its domain, a host listed for it in the Portal, or the sending product's host), with no port, credentials or spaces; anything else refuses the send with 422 validation_failed, code link_not_allowed at /values/<name>. An empty value is no link."
 				},
 				"longValues": {
 					"type": "array",
@@ -692,6 +710,15 @@
 					},
 					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
 				},
+				"linkValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "Names of values that hold a link, for example [\"link\"]. A link goes into the message only as an https address on one of your website's own hosts (its domain, a host listed for it in the Portal, or the sending product's host), with no port, credentials or spaces; anything else refuses the send with 422 validation_failed, code link_not_allowed at /values/<name>. An empty value is no link."
+				},
 				"longValues": {
 					"type": "array",
 					"maxItems": 50,
@@ -757,6 +784,15 @@
 					},
 					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
 				},
+				"linkValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "Names of values that hold a link, for example [\"link\"]. A link goes into the message only as an https address on one of your website's own hosts (its domain, a host listed for it in the Portal, or the sending product's host), with no port, credentials or spaces; anything else refuses the send with 422 validation_failed, code link_not_allowed at /values/<name>. An empty value is no link."
+				},
 				"longValues": {
 					"type": "array",
 					"maxItems": 50,
@@ -821,6 +857,15 @@
 						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
 					},
 					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
+				},
+				"linkValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "Names of values that hold a link, for example [\"link\"]. A link goes into the message only as an https address on one of your website's own hosts (its domain, a host listed for it in the Portal, or the sending product's host), with no port, credentials or spaces; anything else refuses the send with 422 validation_failed, code link_not_allowed at /values/<name>. An empty value is no link."
 				},
 				"longValues": {
 					"type": "array",

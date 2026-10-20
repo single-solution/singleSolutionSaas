@@ -15,6 +15,7 @@ import { TEMPLATE_KEY, TEXT_LIMITS } from '@ss/contracts/templates';
 import { actorOf, countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
 import { CHANNELS, CHANNEL_FEATURES, checkRecipient, normalizePhone } from '../core/channels.js';
 import { gatewayRepliesOf, isOptOut, repliesOf } from '../core/inbound.js';
+import { isOwnLink } from '../core/links.js';
 import { logFilters } from '../core/log.js';
 import { verifyMeta, verifyTwilio } from '../adapters/signatures.js';
 import {
@@ -124,6 +125,30 @@ export const createRoutes = (product) => {
 	};
 
 	/**
+	 * The host names that count as the website's own for a message link: its domain, the other hosts the merchant listed
+	 * for it in the Portal, and the host of the product the message belongs to.
+	 * @param {any} ctx
+	 * @param {string} websiteId
+	 * @param {string | null} owner the product the template key belongs to, null for the merchant's own keys
+	 * @returns {Promise<string[]>}
+	 */
+	const ownHostsOf = async (ctx, websiteId, owner) => {
+		const serving = await product.serving(websiteId, { after: ctx.after });
+		/** @type {string[]} */
+		const hosts = [
+			...(serving.ok ? [String(/** @type {any} */ (serving.status).domain ?? '')] : []),
+			...(await product.website(websiteId)).pages.hosts,
+		];
+		if (owner !== null)
+			try {
+				hosts.push(new URL(await product.addressOf(owner)).hostname);
+			} catch {
+				// the product's address is not known now: only the website's own hosts count
+			}
+		return hosts;
+	};
+
+	/**
 	 * `POST /v1/messages/<channel>`: send a template to a recipient (server token: products and the merchant's server).
 	 * @param {Channel} channel
 	 */
@@ -144,6 +169,9 @@ export const createRoutes = (product) => {
 			);
 		const secretValues = checkValueNames(body.secretValues);
 		if (!secretValues.ok) return invalid('secretValues', 'secretValues lists up to 50 value names.');
+		// the values that hold a link: only an https address on the website's own hosts goes in (SR-7-3)
+		const linkValues = checkValueNames(body.linkValues);
+		if (!linkValues.ok) return invalid('linkValues', 'linkValues lists up to 50 value names.');
 		if (body.required !== undefined && typeof body.required !== 'boolean')
 			return invalid('required', 'required is true or false.');
 		if (body.language !== undefined && languageOfSegment(body.language) === null)
@@ -165,6 +193,17 @@ export const createRoutes = (product) => {
 			return invalid('longValues', 'Only the messages of products have long values.');
 		if (!s.on.includes('send_api') && owner === null)
 			return problem('feature_off', 'Your own template keys need the Merchant send API feature (send_api).');
+		const named = linkValues.value.filter((name) => (values.value[name] ?? '') !== '');
+		if (named.length > 0) {
+			const hosts = await ownHostsOf(ctx, s.websiteId, owner);
+			const foreign = named.find((name) => !isOwnLink(values.value[name] ?? '', hosts));
+			if (foreign !== undefined)
+				return invalid(
+					`values/${foreign}`,
+					`${foreign} must be an https link on this website’s own address (its domain or a host listed in the Portal).`,
+					'link_not_allowed',
+				);
+		}
 		/** @type {number | null} */
 		let sendAt = null;
 		if (body.sendAt !== undefined) {
