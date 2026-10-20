@@ -188,6 +188,9 @@ export const ROLE_TEMPLATES = Object.freeze([
 	),
 ]);
 
+/** Why the role for new sign-ups holds no permission (SR-4-3): anyone can become a user of it. */
+export const SIGN_UP_NO_PERMISSIONS = 'The role for new sign-ups holds no permissions: anyone can sign up to it.';
+
 /**
  * Check a role as the merchant saves it (the key comes from the path).
  * @param {string} key
@@ -228,6 +231,7 @@ export const checkRole = (key, input) => {
 	if (signIn !== 'on' && signIn !== 'paused') return { ok: false, field: 'signIn', message: 'Sign-in is on or paused.' };
 	const signUp = body.signUp === true;
 	if (owner && signUp) return { ok: false, field: 'signUp', message: 'New sign-ups never get the Owner role.' };
+	if (signUp && permissions.length > 0) return { ok: false, field: 'permissions', message: SIGN_UP_NO_PERMISSIONS };
 	return {
 		ok: true,
 		value: {

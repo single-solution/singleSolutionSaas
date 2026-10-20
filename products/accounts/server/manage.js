@@ -21,6 +21,7 @@ import { MAX_VIEWS, checkView } from '../core/views.js';
 import {
 	OWNER_ROLE,
 	ROLE_KEY,
+	SIGN_UP_NO_PERMISSIONS,
 	checkOwnPermissions,
 	checkRole,
 	grants,
@@ -216,6 +217,19 @@ export const createManage = (product, service, flows) => {
 	});
 
 	/**
+	 * The role of the staff member acting in a call: a ticket's user, or the acting user of a server-token call (K2). Null
+	 * without one (the server token stays all-powerful), and for an acting user who is not a user of Accounts.
+	 * @param {any} ctx @param {import('./service.js').Site} s
+	 * @param {import('../core/profile.js').UserRecord} [self] the user the call is about, when it may be the actor
+	 */
+	const actingRoleOf = async (ctx, s, self) => {
+		const actorId = ctx.ticket ? String(ctx.ticket.user.id) : (ctx.actor?.id ?? null);
+		if (!actorId) return null;
+		const acting = self && actorId === self.id ? self : await s.store.users.get(actorId);
+		return acting ? service.roleOf(s, acting) : null;
+	};
+
+	/**
 	 * Accounts' self-protection (A4, always), for a change made by a staff member: a ticket's user, or the acting user
 	 * of a server-token call (K2). Nobody changes their own role, blocks or deletes themselves; nobody edits, blocks or
 	 * deletes a user whose role ranks above theirs, or gives a role ranking above theirs; the last unblocked Owner is
@@ -233,12 +247,29 @@ export const createManage = (product, service, flows) => {
 		if (target.role === OWNER_ROLE && !target.blocked && (change.remove || change.block || newRole))
 			if ((await s.store.users.unblockedOf(OWNER_ROLE)) <= 1)
 				throw problem('forbidden', 'The last Owner cannot be demoted, blocked or deleted.');
-		const acting = actorId === target.id ? target : await s.store.users.get(actorId);
-		if (!acting) return;
-		const mine = await service.roleOf(s, acting);
+		const mine = await actingRoleOf(ctx, s, target);
+		if (!mine) return;
 		if ((await service.roleOf(s, target)).rank < mine.rank) throw problem('forbidden', 'This user’s role ranks above yours.');
 		const next = newRole ? await s.store.roles.get(newRole) : null;
 		if (next && next.rank < mine.rank) throw problem('forbidden', 'This role ranks above yours.');
+	};
+
+	/**
+	 * The ceiling of role changes (SR-4-3), for a change made by a staff member (as `guard`): they edit or delete only
+	 * roles ranking below their own, give no role a rank at or above their own and no permission they do not hold (what a
+	 * role already holds may stay). Owner keeps full power; the server token without an acting user stays all-powerful.
+	 * @param {any} ctx @param {import('./service.js').Site} s @param {import('../core/roles.js').Role | null} existing
+	 * @param {import('../core/roles.js').Role | null} [next] the role as it would be saved (null: deleted)
+	 */
+	const ceiling = async (ctx, s, existing, next = null) => {
+		const mine = await actingRoleOf(ctx, s);
+		if (!mine || mine.key === OWNER_ROLE) return;
+		if (existing && existing.rank <= mine.rank) throw problem('forbidden', 'This role ranks at or above yours.');
+		if (!next) return;
+		if (next.rank <= mine.rank) throw problem('forbidden', 'A role cannot rank at or above yours.');
+		const held = new Set(existing?.permissions ?? []);
+		if (next.permissions.some((permission) => !held.has(permission) && !grants(mine, permission)))
+			throw problem('forbidden', 'A role cannot get a permission you do not hold yourself.');
 	};
 
 	/**
@@ -1015,12 +1046,14 @@ export const createManage = (product, service, flows) => {
 		const checked = checkRole(ctx.params.key, ctx.body);
 		if (!checked.ok) throw invalid(checked.field, checked.message);
 		const existing = await s.store.roles.get(checked.value.key);
+		await ceiling(ctx, s, existing, checked.value);
 		if (!existing && (await s.store.roles.count()) >= MAX_ROLES)
 			throw problem('validation_failed', `A website can have at most ${MAX_ROLES} roles.`);
 		const given = bodyOf(ctx.body).signUp;
 		const signUp = given === undefined ? existing?.signUp === true : checked.value.signUp;
 		if (existing?.signUp && !signUp)
 			throw invalid('signUp', 'New sign-ups need a role: choose another role for new sign-ups instead.');
+		if (signUp && checked.value.permissions.length > 0) throw invalid('permissions', SIGN_UP_NO_PERMISSIONS);
 		const role = await s.store.roles.save({ ...checked.value, signUp });
 		await log(ctx, 'role.saved', role.key, {
 			label: labelOf(role.name) ?? role.key,
@@ -1044,6 +1077,7 @@ export const createManage = (product, service, flows) => {
 		const s = await service.site(ctx);
 		const role = await s.store.roles.get(ctx.params.key);
 		if (!role) throw problem('not_found', 'No such role.');
+		await ceiling(ctx, s, role);
 		if (isSystemRole(role))
 			throw problem('conflict', 'Owner and the role for new sign-ups stay: choose another role for new sign-ups first.');
 		if (!(await s.store.roles.remove(role.key))) throw problem('not_found', 'No such role.');

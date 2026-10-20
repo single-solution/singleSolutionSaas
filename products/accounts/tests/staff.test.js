@@ -242,6 +242,118 @@ describe('A4: staff and customer management', () => {
 	});
 });
 
+describe('SR-4-3: roles have a ceiling', () => {
+	/** @param {string} key @param {Record<string, unknown>} [more] */
+	const roleBody = (key, more = {}) => ({ name: key, rank: 700, permissions: [], ...more });
+	/** @type {{ id: string, name: string }} */
+	let boss;
+
+	it('a role manager cannot lift their own role, grant what they lack, rank above themselves or touch higher roles', async () => {
+		expect(
+			(
+				await server(
+					'PUT',
+					'/v1/roles/role_admin',
+					roleBody('Role admin', { rank: 250, permissions: ['accounts:roles.manage', 'accounts:users.read'] }),
+				)
+			).status,
+		).toBe(200);
+		const admin = await create({ name: 'Rae Roles', email: 'rae@example.com', role: 'role_admin' });
+		boss = asUser(admin.id, 'Rae Roles');
+		// the attack of SR-4-3: save my own role as everything, rank 101
+		const attack = roleBody('Role admin', { rank: 101, permissions: ['*'] });
+		expect(code(await server('PUT', '/v1/roles/role_admin', attack, boss))).toBe('forbidden');
+		// the own role (same rank) is not theirs to edit at all, and nothing above it
+		expect(code(await server('PUT', '/v1/roles/role_admin', roleBody('Role admin', { rank: 250 }), boss))).toBe('forbidden');
+		expect(code(await server('PUT', '/v1/roles/business_manager', roleBody('Business manager', { rank: 200 }), boss))).toBe(
+			'forbidden',
+		);
+		expect(code(await server('PUT', '/v1/roles/owner', { name: 'Owner', permissions: ['*'] }, boss))).toBe('forbidden');
+		// a role below: no permission they lack, no rank at or above their own, `*` only with `*`
+		expect(
+			code(await server('PUT', '/v1/roles/clerk', roleBody('Clerk', { permissions: ['accounts:users.manage'] }), boss)),
+		).toBe('forbidden');
+		expect(code(await server('PUT', '/v1/roles/clerk', roleBody('Clerk', { permissions: ['*'] }), boss))).toBe('forbidden');
+		expect(code(await server('PUT', '/v1/roles/clerk', roleBody('Clerk', { rank: 250 }), boss))).toBe('forbidden');
+		expect(code(await server('PUT', '/v1/roles/clerk', roleBody('Clerk', { rank: 150 }), boss))).toBe('forbidden');
+		const clerk = await server('PUT', '/v1/roles/clerk', roleBody('Clerk', { permissions: ['accounts:users.read'] }), boss);
+		expect(clerk.status).toBe(200);
+		// editing a lower role keeps what it already holds, and moving it lower is fine
+		expect(
+			(
+				await server(
+					'PUT',
+					'/v1/roles/support_staff',
+					roleBody('Support staff', { rank: 500, permissions: ['accounts:users.read', 'chat:inbox.read'] }),
+					boss,
+				)
+			).status,
+		).toBe(200);
+		expect((await server('PUT', '/v1/roles/clerk', roleBody('Clerk', { rank: 800, permissions: [] }), boss)).status).toBe(200);
+		// deleting: only roles below
+		expect(code(await server('DELETE', '/v1/roles/business_manager', undefined, boss))).toBe('forbidden');
+		expect(code(await server('DELETE', '/v1/roles/role_admin', undefined, boss))).toBe('forbidden');
+		expect((await server('DELETE', '/v1/roles/clerk', undefined, boss)).status).toBe(204);
+		// the same through an admin widget's ticket
+		const ticket = await env.call('POST', '/v1/tickets', {
+			token: env.server,
+			staff: { id: admin.id, name: 'Rae Roles', email: 'rae@example.com' },
+			body: { permissions: ['roles.manage'], origin: ADMIN_ORIGIN },
+		});
+		expect(code(await env.admin(ticket.json.ticket, 'PUT', '/v1/admin/roles/role_admin', attack))).toBe('forbidden');
+		// the role was not changed
+		const roles = (await server('GET', '/v1/roles')).json.items;
+		expect(roles.find((/** @type {any} */ r) => r.key === 'role_admin')).toMatchObject({
+			rank: 250,
+			permissions: ['accounts:roles.manage', 'accounts:users.read'],
+		});
+	});
+
+	it('an Owner, and the server token without an acting user, keep full power', async () => {
+		const olga = asUser(people.owner.id, 'Olga Owner');
+		expect((await server('PUT', '/v1/roles/clerk', roleBody('Clerk', { rank: 150, permissions: ['*'] }), olga)).status).toBe(
+			200,
+		);
+		expect((await server('PUT', '/v1/roles/owner', { name: 'Owner', permissions: ['*'], sessionHours: 12 }, olga)).status).toBe(
+			200,
+		);
+		expect((await server('PUT', '/v1/roles/owner', { name: 'Owner', permissions: ['*'] }, olga)).status).toBe(200);
+		expect((await server('DELETE', '/v1/roles/clerk', undefined, olga)).status).toBe(204);
+	});
+
+	it('the role for new sign-ups never holds a permission', async () => {
+		expect(
+			code(
+				await server('PUT', '/v1/roles/customer', roleBody('Customer', { rank: 900, permissions: ['accounts:users.read'] })),
+			),
+		).toBe('validation_failed');
+		// a role with permissions cannot become the sign-up role, with or without the flag in the body
+		expect(
+			code(
+				await server('PUT', '/v1/roles/support_staff', {
+					...roleBody('Support staff', { rank: 500, permissions: ['accounts:users.read'] }),
+					signUp: true,
+				}),
+			),
+		).toBe('validation_failed');
+		// the sign-up role as it is still saves (no permissions)
+		expect((await server('PUT', '/v1/roles/customer', roleBody('Customer', { rank: 900 }))).status).toBe(200);
+		// a role without permissions can become the sign-up role, and then cannot be given permissions
+		expect(
+			(await server('PUT', '/v1/roles/member_free', { ...roleBody('Member free', { rank: 800 }), signUp: true })).status,
+		).toBe(200);
+		expect(
+			code(
+				await server('PUT', '/v1/roles/member_free', roleBody('Member free', { rank: 800, permissions: ['site:vip.view'] })),
+			),
+		).toBe('validation_failed');
+		expect((await server('PUT', '/v1/roles/customer', { ...roleBody('Customer', { rank: 900 }), signUp: true })).status).toBe(
+			200,
+		);
+		expect((await server('DELETE', '/v1/roles/member_free')).status).toBe(204);
+	});
+});
+
 describe('A3: staff-issued sign-in codes and setup links', () => {
 	it('a sign-in code is shown to staff, never sent, works once in the phone-code and phone + password screens', async () => {
 		const before = env.messages().length;
