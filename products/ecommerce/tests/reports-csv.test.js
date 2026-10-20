@@ -437,7 +437,7 @@ describe('CSV', () => {
 		expect(searched.slice(1).map((line) => line.split(',')[0])).toEqual(['R-A']);
 		expect((await shop.api('GET', '/v1/csv/orders?per=week')).status).toBe(422);
 		expect((await shop.api('GET', '/v1/csv/orders?paymentMethod=Check!')).status).toBe(422);
-		const staff = await shop.ticket(['csv.run']);
+		const staff = await shop.ticket(['csv.run', 'orders.read']);
 		const twin = await shop.admin(staff, 'GET', '/v1/admin/csv/orders?per=order&status=delivered');
 		expect(
 			linesOf(twin)
@@ -496,7 +496,7 @@ describe('CSV', () => {
 			"usr_ann,,Ann,ann@example.com,'+15550001,Tokyo,false,2,15.00,USD,false,,1,,2026-10-04T20:30:00.000Z,vip|wholesale",
 			",cus_zed,Zed,zed@example.com,,,true,1,7.00,USD,true,Fake orders,0,'=1+1,,",
 		]);
-		const staff = await shop.ticket(['csv.run']);
+		const staff = await shop.ticket(['csv.run', 'customers.manage']);
 		expect(linesOf(await shop.admin(staff, 'GET', '/v1/admin/csv/customers'))).toHaveLength(3);
 		expect((await shop.admin(await shop.ticket(['orders.read']), 'GET', '/v1/admin/csv/customers')).status).toBe(403);
 	});
@@ -584,7 +584,7 @@ describe('CSV', () => {
 		const untouched = await data.collection(COLLECTIONS.products).findOne({ websiteId: shop.websiteId, id: phone.id });
 		expect(untouched?.variants.map((/** @type {any} */ v) => v.price)).toEqual([1000, 2000]);
 
-		const staff = await shop.ticket(['csv.run']);
+		const staff = await shop.ticket(['csv.run', 'catalog.edit']);
 		const done = await shop.admin(staff, 'POST', '/v1/admin/csv/products?mode=update', { csv, dryRun: false });
 		expect(done.json).toEqual({ dryRun: false, mode: 'update', rows: 5, updated: 2, failed });
 		const after = await data.collection(COLLECTIONS.products).findOne({ websiteId: shop.websiteId, id: phone.id });

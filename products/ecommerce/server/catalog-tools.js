@@ -4,12 +4,13 @@
  * run lists every row's problems first) and price and stock updates by CSV (E36 `mode=update`: stale rows fail, the
  * rest are changed), bulk actions on many products, and AI copy (suggestions written with the merchant's own AI key,
  * never saved by themselves). Each route exists for the merchant's server and for the admin widgets (ticket:
- * `csv.run`, `bulk.run`, `catalog.edit`).
+ * `csv.run`, `bulk.run`, `catalog.edit`). A file or a change also needs the permission of the data it touches (orders.read,
+ * customers.manage, catalog.edit), for a ticket and for a server call with a staff sign-in alike.
  * @module
  */
 import { createId } from '@ss/contracts';
 import { csvRecords, parseCsv, toCsv } from '@ss/contracts/csv';
-import { defineRoute, problem } from '@ss/app-kit';
+import { allows, defineRoute, problem } from '@ss/app-kit';
 import {
 	NO_KEYS,
 	attributesOf,
@@ -68,6 +69,16 @@ import { SERVER_LIMITS, bodyOf } from './service.js';
 /** @typedef {import('../core/catalog-csv.js').UpdateRow} UpdateRow */
 /** @typedef {{ stale: UpdateRow[], next: ReturnType<typeof updatedVariants> }} UpdateOutcome */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
+
+/**
+ * The tool permissions (`csv.run`, `bulk.run`) open the tools, not the data they work on: a file or a change also needs the
+ * permission of what it touches, for a dashboard ticket and for a server call with a staff sign-in alike (SR-5b-5).
+ * @param {any} ctx @param {string} permission the object's permission @param {string} what what is refused without it
+ */
+const touching = (ctx, permission, what) => {
+	if (!allows(ctx, permission))
+		throw problem('forbidden', `${what} also needs the permission ${permission}, as the screens of that data do.`);
+};
 
 /** Most products of an export, of orders and of customers. */
 const MAX_EXPORT_PRODUCTS = 20_000;
@@ -131,6 +142,7 @@ export const createCatalogTools = (product, service, common) => {
 
 	/** GET …/csv/products. @param {any} ctx */
 	const exportProducts = async (ctx) => {
+		touching(ctx, 'catalog.edit', 'Exporting the products');
 		const { s, data } = await common.open(ctx);
 		const products = /** @type {ProductRecord[]} */ (
 			await data
@@ -170,6 +182,7 @@ export const createCatalogTools = (product, service, common) => {
 	 * @param {any} ctx
 	 */
 	const exportOrders = async (ctx) => {
+		touching(ctx, 'orders.read', 'Exporting the orders');
 		const per = ctx.query.per ?? '';
 		if (!['', 'line', 'order'].includes(per)) throw refuse([{ path: '/per', message: 'Per is line or order.' }]);
 		const filters = orderFilters(ctx.query);
@@ -195,6 +208,7 @@ export const createCatalogTools = (product, service, common) => {
 
 	/** GET …/csv/customers (E36): every customer record, A to Z, with their orders and what they spent. @param {any} ctx */
 	const exportCustomers = async (ctx) => {
+		touching(ctx, 'customers.manage', 'Exporting the customers');
 		const { s, data } = await common.open(ctx);
 		const customers = /** @type {import('../core/model.js').CustomerRecord[]} */ (
 			await data
@@ -490,6 +504,7 @@ export const createCatalogTools = (product, service, common) => {
 
 	/** POST …/csv/products `{ csv, dryRun }` (`?mode=update`: price and stock updates, E36). @param {any} ctx */
 	const importProducts = async (ctx) => {
+		touching(ctx, 'catalog.edit', 'Importing products');
 		const mode = ctx.query.mode ?? '';
 		if (!['', 'import', 'update'].includes(mode)) throw refuse([{ path: '/mode', message: 'The mode is import or update.' }]);
 		const body = bodyOf(ctx);
@@ -705,6 +720,7 @@ export const createCatalogTools = (product, service, common) => {
 	 * @param {any} ctx
 	 */
 	const bulk = async (ctx) => {
+		touching(ctx, 'catalog.edit', 'Changing products in bulk');
 		const body = bodyOf(ctx);
 		const ids = Array.isArray(body.ids) ? [...new Set(body.ids.filter((id) => typeof id === 'string'))] : [];
 		if (ids.length === 0 || ids.length > MAX_BULK || ids.length !== body.ids.length)

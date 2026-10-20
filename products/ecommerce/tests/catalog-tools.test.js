@@ -104,7 +104,7 @@ describe('CSV', () => {
 	});
 
 	it('imports products after a dry run that lists every problem', async () => {
-		const staff = await shop.ticket(['csv.run']);
+		const staff = await shop.ticket(['csv.run', 'catalog.edit']);
 		const head = `name,slug,status,categories,brand,tags,description,sku,option1_name,option1_value,price,compare_at_price,stock@${ids.shopFloor.id},active`;
 		const bad = [
 			head,
@@ -248,7 +248,7 @@ describe('CSV', () => {
 		// the file takes the filters it documents: the list's polling filters are not among them
 		const polled = await shop.api('GET', '/v1/csv/orders?createdAfter=2099-01-01T00:00:00Z&unseen=1');
 		expect(polled.text.trim().split('\r\n')).toHaveLength(5);
-		const staff = await shop.ticket(['csv.run']);
+		const staff = await shop.ticket(['csv.run', 'orders.read']);
 		expect((await shop.admin(staff, 'GET', '/v1/admin/csv/orders')).text.trim().split('\r\n')).toHaveLength(5);
 		await data.collection(COLLECTIONS.orders).insertMany(
 			Array.from({ length: 10_000 }, (_, n) => ({
@@ -265,7 +265,7 @@ describe('CSV', () => {
 
 describe('bulk actions', () => {
 	it('changes status, prices, stock and categories of many products', async () => {
-		const staff = await shop.ticket(['bulk.run']);
+		const staff = await shop.ticket(['bulk.run', 'catalog.edit']);
 		const a = await ok('POST', '/v1/products', { name: 'Bulk A', price: 1000, locations: { [ids.store.id]: 1 } });
 		const b = await ok('POST', '/v1/products', {
 			name: 'Bulk B',
@@ -320,7 +320,7 @@ describe('bulk actions', () => {
 
 describe('bulk edit any field (E23)', () => {
 	it('sets the brand, tags, item type, compare-at price and any field of many products', async () => {
-		const staff = await shop.ticket(['bulk.run']);
+		const staff = await shop.ticket(['bulk.run', 'catalog.edit']);
 		const material = await ok('POST', '/v1/attributes', { name: 'Material', slug: 'material' });
 		const finish = await ok('POST', '/v1/attributes', {
 			name: 'Finish',
@@ -546,5 +546,55 @@ describe('feature switches and connections', () => {
 		expect((await small.api('POST', `/v1/products/${item.json.id}/media`, { key: 'x' })).status).toBe(503);
 		expect((await small.visitor('GET', '/v1/shop/products/a')).status).toBe(404);
 		await small.product.close();
+	});
+});
+
+describe('the tool permissions do not open the data they work on (SR-5b-5)', () => {
+	/** A server call with a staff sign-in that holds some permissions of this product. @param {string[]} keys @param {string} method @param {string} path @param {unknown} [body] */
+	const asStaff = (keys, method, path, body) =>
+		shop.call(method, path, {
+			token: shop.server,
+			staff: { permissions: keys.map((key) => `ecommerce:${key}`) },
+			...(body === undefined ? {} : { body }),
+		});
+	const SEVERAL = () => [ids.phone.id];
+
+	it('a file of orders, customers or products needs orders.read, customers.manage or catalog.edit as well', async () => {
+		const files = [
+			['/v1/csv/orders', 'orders.read'],
+			['/v1/csv/customers', 'customers.manage'],
+			['/v1/csv/products', 'catalog.edit'],
+		];
+		for (const [path, needed] of files) {
+			expect([path, (await asStaff(['csv.run'], 'GET', path)).status]).toEqual([path, 403]);
+			// another object's permission does not help
+			const other = files.find(([, key]) => key !== needed)?.[1] ?? '';
+			expect([path, (await asStaff(['csv.run', other], 'GET', path)).status]).toEqual([path, 403]);
+			expect([path, (await asStaff(['csv.run', needed], 'GET', path)).status]).toEqual([path, 200]);
+		}
+		// a ticket reads the same way
+		const accountant = await shop.ticket(['csv.run']);
+		for (const [path] of files)
+			expect((await shop.admin(accountant, 'GET', path.replace('/v1/', '/v1/admin/'))).status).toBe(403);
+	});
+
+	it('an import of products needs catalog.edit as well, for a dry run too', async () => {
+		const csv = 'name,price\nBlocked,1';
+		expect((await asStaff(['csv.run'], 'POST', '/v1/csv/products', { csv })).status).toBe(403);
+		expect((await asStaff(['csv.run'], 'POST', '/v1/csv/products', { csv, dryRun: false })).status).toBe(403);
+		expect(
+			(await shop.admin(await shop.ticket(['csv.run']), 'POST', '/v1/admin/csv/products', { csv, dryRun: false })).status,
+		).toBe(403);
+		expect((await asStaff(['csv.run', 'catalog.edit'], 'POST', '/v1/csv/products', { csv })).status).toBe(200);
+	});
+
+	it('a bulk action needs catalog.edit as well', async () => {
+		const body = { ids: SEVERAL(), action: 'status', status: 'draft' };
+		const refused = await asStaff(['bulk.run'], 'POST', '/v1/products/bulk', body);
+		expect(refused.status).toBe(403);
+		expect((await shop.admin(await shop.ticket(['bulk.run']), 'POST', '/v1/admin/products/bulk', body)).status).toBe(403);
+		const allowed = await asStaff(['bulk.run', 'catalog.edit'], 'POST', '/v1/products/bulk', body);
+		expect(allowed.status).toBe(200);
+		await asStaff(['bulk.run', 'catalog.edit'], 'POST', '/v1/products/bulk', { ...body, status: 'active' });
 	});
 });
