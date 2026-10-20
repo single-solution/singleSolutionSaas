@@ -152,3 +152,61 @@ describe('a move that gives money back (H2)', () => {
 		);
 	});
 });
+
+describe('the same rules on the server routes (SR-5b-1)', () => {
+	/** The server token with the sign-in of a staff member whose role holds some permissions of this product. @param {string[]} keys */
+	const staffWith = (keys) => ({ permissions: keys.map((key) => `ecommerce:${key}`) });
+	/** @param {string[]} keys @param {string} path @param {unknown} body */
+	const asStaff = (keys, path, body) => shop.call('POST', path, { token: shop.server, staff: staffWith(keys), body });
+	/** A delivered order paid online (1000). */
+	const delivered = () => records.seedOrder({ status: 'delivered', role: 'delivered', patch: records.delivered() });
+
+	it('a move that gives money back needs orders.refund: one move, one bulk move, from a role that may only manage', async () => {
+		await withFlow(
+			(flow) => ({ ...flow, moves: [...flow.moves, { from: 'delivered', to: 'canceled' }] }),
+			async () => {
+				const manager = ['orders.read', 'orders.manage', 'bulk.run'];
+				const one = await delivered();
+				const refused = await asStaff(manager, `/v1/orders/${one.order.id}/move`, { to: 'canceled' });
+				expect(refused.status).toBe(403);
+				const toRefunded = await asStaff(manager, `/v1/orders/${one.order.id}/move`, { to: 'refunded' });
+				expect(toRefunded.status).toBe(403);
+				const many = await delivered();
+				const bulk = await asStaff(manager, '/v1/orders/bulk-move', { ids: [one.order.id, many.order.id], to: 'canceled' });
+				expect(bulk.status).toBe(200);
+				expect(bulk.json.moved).toBe(0);
+				expect(bulk.json.results.map((/** @type {any} */ result) => result.code)).toEqual(['forbidden', 'forbidden']);
+				expect(records.refundCalls(one.paymentId)).toHaveLength(0);
+				expect(records.refundCalls(many.paymentId)).toHaveLength(0);
+				expect(await records.recordOf(one.order.id)).toMatchObject({ status: 'delivered', payment: { refunded: 0 } });
+				// a role that may refund: the money goes back
+				const refunder = [...manager, 'orders.refund'];
+				const moved = await asStaff(refunder, `/v1/orders/${one.order.id}/move`, { to: 'canceled' });
+				expect(moved.status).toBe(200);
+				expect(moved.json).toMatchObject({ status: 'canceled', payment: { refunded: 1000 } });
+				expect(records.refundCalls(one.paymentId)).toHaveLength(1);
+				// the Owner's `*` and the merchant's own server (no staff member) are not held back
+				const owner = await shop.call('POST', `/v1/orders/${many.order.id}/move`, {
+					token: shop.server,
+					staff: { permissions: ['*'] },
+					body: { to: 'canceled' },
+				});
+				expect(owner.status).toBe(200);
+			},
+		);
+	});
+
+	it('a move that names another permission needs it too: a bulk operator without orders.manage moves nothing', async () => {
+		const placed = await records.seedOrder();
+		const bulk = await asStaff(['bulk.run'], '/v1/orders/bulk-move', { ids: [placed.order.id], to: 'packed' });
+		expect(bulk.status).toBe(200);
+		expect(bulk.json.moved).toBe(0);
+		expect(bulk.json.results[0]).toMatchObject({ ok: false, code: 'forbidden' });
+		expect((await records.recordOf(placed.order.id)).status).toBe('confirmed');
+		const allowed = await asStaff(['bulk.run', 'orders.manage'], '/v1/orders/bulk-move', {
+			ids: [placed.order.id],
+			to: 'packed',
+		});
+		expect(allowed.json.moved).toBe(1);
+	});
+});

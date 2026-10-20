@@ -1,6 +1,6 @@
 /**
  * Moving an order through the merchant's flow, and refunds (PLAN 0.8.8). A move is allowed only when the flow lists it
- * for staff (`core/flow.js` `moveOf`, with the role rules), the staff ticket has the move's permission, staff give what
+ * for staff (`core/flow.js` `moveOf`, with the role rules), the staff member (ticket or sign-in) has the move's permission, staff give what
  * it needs (a note, a note for the shopper, the answer to whether the items go back in stock), the order's role is
  * still the flow's role of its status (`flow_changed`) and the order did not change since it was read (`updatedAt`).
  * The move's options (PLAN 0.8.10 dynamic model phase 2) say what it records and asks. Every move is planned by the order
@@ -35,7 +35,7 @@
  * itself and the warnings staff get carry a code and values besides their English (PLAN 0.4.10).
  * @module
  */
-import { problem } from '@ss/app-kit';
+import { allows, problem } from '@ss/app-kit';
 import { fieldsOn, productTypes, unitRulesOf } from '../adapters/catalog-store.js';
 import { heldStockBefore } from '../adapters/ledger.js';
 import { checkUnit, missingOrderFields, sharedKeys, unitKeys } from '../core/fields.js';
@@ -366,8 +366,9 @@ export const createMoves = (product, service) => {
 		if (!checked.ok) throw problem(checked.code, checked.message);
 		const target = checked.target;
 		const rules = /** @type {NonNullable<typeof checked.move>} */ (checked.move);
-		// the permission the move needs of a staff ticket (into a refunded status always the refund permission, E27)
-		if (ctx.ticket && !ctx.ticket.permissions.includes(rules.permission))
+		// the permission the move needs of the staff member, by ticket or by sign-in on a server route (into a refunded status
+		// always the refund permission, E27)
+		if (!allows(ctx, rules.permission))
 			throw problem(
 				'forbidden',
 				rules.permission === 'orders.refund'
@@ -433,7 +434,7 @@ export const createMoves = (product, service) => {
 		};
 		// a move that gives money back needs the refund permission, whatever permission it names (a cancel that refunds
 		// what was paid, before delivery or after it, E40): planned with the order as read, before anything is called
-		if (ctx.ticket && !ctx.ticket.permissions.includes('orders.refund')) {
+		if (!allows(ctx, 'orders.refund')) {
 			const planned = planTransition({ order, flow, to: input.to, input: asked, rules: settings, now });
 			if (planned.ok && (planned.plan.external.length > 0 || planned.plan.refunded > 0))
 				throw problem('forbidden', 'This move gives money back, so it needs the refund permission.');
@@ -734,7 +735,7 @@ export const createMoves = (product, service) => {
 		// for a refund that would then be refused)
 		const to = coverStatus(flow, order, order.payment.refunded + input.amount);
 		const permission = to ? moveOf(flow, order.status, to)?.permission : undefined;
-		if (to && permission && ctx.ticket && !ctx.ticket.permissions.includes(permission))
+		if (to && permission && !allows(ctx, permission))
 			throw problem(
 				'forbidden',
 				`This refund covers what was paid, so the order moves to ${statusOf(flow, to)?.label ?? to}: that needs the ${
