@@ -486,9 +486,7 @@ describe('Ecommerce on the real Portal', () => {
 		const on = ['ai_replies', 'guest_chat', 'product_cards', 'shop_search', 'visitor_chat'];
 		expect((await setUp(CHAT, 'chat', '/features', { on })).status).toBe(200);
 		await sys.connectDatabase(websiteId, CHAT);
-		await setUp(CHAT, 'chat', '/connections/ai', {
-			value: { provider: 'openai', apiKey: 'sk-merchant-000456', model: 'gpt-4.1-mini' },
-		});
+		await sys.connectAi(websiteId, { provider: 'openai', apiKey: 'sk-merchant-000456', model: 'gpt-4.1-mini' });
 		// (Chat reads the catalog by the Portal's link to Ecommerce, which allows it only while a shop feature of Chat is on)
 		aiAnswers.push({ tool: 'search_catalog', arguments: { query: 'phone' } }, { text: 'Phone X is in stock.' });
 		const sent = await sys.call('POST', '/v1/chat/messages', {

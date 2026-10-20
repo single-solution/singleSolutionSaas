@@ -22,7 +22,7 @@ import {
 	strings as notifyStrings,
 } from '@ss/product-notifications/product';
 import { createRoutes as notifyRoutes } from '@ss/product-notifications/routes';
-import { HOUR, savePortalSettings, startSystem } from './helpers.js';
+import { HOUR, codeOf, savePortalSettings, startSystem } from './helpers.js';
 
 const CHAT = 'https://chat.test';
 const ACCOUNTS = 'https://accounts.test';
@@ -137,10 +137,14 @@ describe('Chat on the real Portal', () => {
 	it('a guest’s message is answered by the merchant’s AI provider (faked) through the Portal-issued browser token', async () => {
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);
 		await sys.connectDatabase(websiteId);
-		const ai = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/ai`, {
-			value: { provider: 'openai', apiKey: 'sk-merchant-000123', model: 'gpt-4.1-mini' },
+		// the merchant enters the AI key once, in the Portal; Chat gets it from there (its own dashboard only shows it as managed)
+		await sys.connectAi(websiteId, { provider: 'openai', apiKey: 'sk-merchant-000123', model: 'gpt-4.1-mini' });
+		const shown = await sys.dashboard(cookie, 'GET', `/v1/dashboard/websites/${websiteId}/connections`);
+		expect(shown.json.connections.find((/** @type {any} */ c) => c.name === 'ai')).toMatchObject({ set: true, managed: true });
+		const pasted = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/ai`, {
+			value: { provider: 'openai', apiKey: 'sk-pasted-in-chat', model: 'gpt-4.1-mini' },
 		});
-		expect(ai.json).toMatchObject({ status: 'connected', set: true });
+		expect([pasted.status, codeOf(pasted)]).toEqual([409, 'managed_by_portal']);
 		const sent = await visitor('POST', '/v1/chat/messages', { body: { text: 'How fast do you ship?' } });
 		expect(sent.status).toBe(201);
 		const guestKey = String(sent.json.guestKey);

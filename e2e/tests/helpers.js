@@ -597,6 +597,20 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	};
 
 	/**
+	 * Enter the website's AI provider key in the Portal, as an Owner does (Website settings › Data and files, the password
+	 * again). Every product of the website whose manifest says `needs.ai` (Chat) gets it; no product keeps it by itself.
+	 * @param {string} websiteId @param {Record<string, unknown>} value `{ provider, apiKey, model, baseUrl? }`
+	 */
+	const connectAi = async (websiteId, value) => {
+		const record = await portalDb.collection('identity_websites').findOne({ _id: /** @type {any} */ (websiteId) });
+		const res = await (
+			await owner()
+		).put(`/v1/merchants/${record?.merchantId}/websites/${websiteId}/connections/ai`, { value, password: PASSWORD });
+		if (res.status !== 200) throw new Error(`ai ${res.status} ${JSON.stringify(res.json)}`);
+		await settle();
+	};
+
+	/**
 	 * Add credits (Owner): a receipt.
 	 * @param {string} merchantId @param {number} credits
 	 */
@@ -642,6 +656,7 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 		setPrices,
 		connectDatabase,
 		connectStorage,
+		connectAi,
 		addCredits,
 		waitingNotices,
 		activity,

@@ -359,13 +359,7 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		expect(deal.status, JSON.stringify(deal.json)).toBe(201);
 
 		// Chat: the AI provider (faked); its links to Accounts, Notifications and Ecommerce are the Portal's
-		expect(
-			(
-				await setUp('chat', '/connections/ai', {
-					value: { provider: 'openai', apiKey: 'sk-merchant-000444', model: 'gpt-4.1-mini' },
-				})
-			).json,
-		).toMatchObject({ status: 'connected' });
+		await sys.connectAi(websiteId, { provider: 'openai', apiKey: 'sk-merchant-000444', model: 'gpt-4.1-mini' });
 		await configure('chat', {
 			'ai_replies.onFailure': 'message',
 			'staff_alerts.adminUrl': `${ADMIN_ORIGIN}/inbox?conversation={conversationId}`,
