@@ -176,7 +176,18 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	const network = createNetwork(handlers);
 	/** @type {Array<{ commandName: string, command: Record<string, any> }>} the merchant database's commands */
 	const commands = [];
+	/** @type {Array<{ level: string, message: string, fields: Record<string, any> }>} what the product logged */
+	const logs = [];
+	/** @type {import('@ss/net').Logger} */
+	const logger = Object.freeze({
+		debug: () => {},
+		info: (message, fields = {}) => void logs.push({ level: 'info', message, fields }),
+		warn: (message, fields = {}) => void logs.push({ level: 'warn', message, fields }),
+		error: (message, fields = {}) => void logs.push({ level: 'error', message, fields }),
+		child: () => logger,
+	});
 	const product = createProductInstance({
+		logger,
 		data: {
 			createClient: (uri, options) => {
 				const client = new MongoClient(uri, { ...options, monitorCommands: true });
@@ -303,6 +314,7 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		accounts,
 		staffHeaders,
 		product,
+		logs,
 		web,
 		websiteId,
 		browser,

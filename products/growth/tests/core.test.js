@@ -34,7 +34,9 @@ import {
 	dayOf,
 	expiryOf,
 	familiesOf,
+	foldTotals,
 	mergeTotals,
+	otherKeyOf,
 	pathOf,
 	ratingOf,
 	textOf,
@@ -83,6 +85,10 @@ describe('events', () => {
 		expect(pathOf('/a b')).toBeNull();
 		expect(pathOf(`/${'a'.repeat(400)}`)).toBeNull();
 		expect(pathOf(5)).toBeNull();
+		// not a path of the site's own pages: a backslash (read as a slash by browsers), markup or template characters
+		for (const path of ['/\\evil.example', '/a<b', '/a>b', '/a"b', '/a`b', '/a{b', '/a}b'])
+			expect([path, pathOf(path)]).toEqual([path, null]);
+		expect(pathOf('/shop/a%20b_c-d.html')).toBe('/shop/a%20b_c-d.html');
 		expect(textOf('  a\u0001  b ', 10)).toBe('a b');
 		expect(textOf(1, 5)).toBe('');
 	});
@@ -252,6 +258,52 @@ describe('events', () => {
 		expect(city({ 'x-vercel-ip-city': '%E0%A4%A', 'cf-ipcity': 'Paris' })).toBe('%E0%A4%A');
 		expect(city({ 'cf-ipcity': '12345', 'cloudfront-viewer-city': 'Tokyo' })).toBe('Tokyo');
 		expect(city({})).toBeNull();
+	});
+});
+
+describe('ceilings on a day’s keys (SR-7-9)', () => {
+	/** @param {string} metric @param {string} key @param {number} [count] */
+	const total = (metric, key, count = 1) => ({ metric, key, count, sum: count * 10 });
+
+	it('names the key a new value is counted under: (other), or (other) with the tail that is a currency or a Web Vital', () => {
+		expect(otherKeyOf('page', '/a')).toBe('(other)');
+		expect(otherKeyOf('item_name', 'prd_1\nLamp')).toBe('(other)\n(other)');
+		expect(otherKeyOf('not_found_from', '/a\nexample.org')).toBe('(other)\n(other)');
+		expect(otherKeyOf('item_revenue', 'prd_1\nUSD')).toBe('(other)\nUSD');
+		expect(otherKeyOf('vital_page', '/a\nLCP')).toBe('(other)\nLCP');
+	});
+
+	it('keeps the new keys a metric has room for, in order, and counts the rest under (other) with their counts and sums added', () => {
+		const rows = [
+			total('page', '/old'),
+			total('page', '/a'),
+			total('page', '/b', 2),
+			total('page', '/c', 3),
+			total('source', 'x'),
+		];
+		const folded = foldTotals(rows, {
+			room: (metric) => (metric === 'page' ? 1 : 0),
+			isNew: (metric, key) => key !== '/old',
+		});
+		expect(folded.totals).toEqual([
+			total('page', '/old'),
+			total('page', '/a'),
+			{ metric: 'page', key: '(other)', count: 5, sum: 50 },
+			{ metric: 'source', key: '(other)', count: 1, sum: 10 },
+		]);
+		expect(folded.added).toEqual({ page: 1 });
+		expect([...folded.folded].sort()).toEqual(['page', 'source']);
+		// the input is not changed
+		expect(rows[2]).toEqual(total('page', '/b', 2));
+	});
+
+	it('changes nothing when every key has room or is not new', () => {
+		const rows = [total('page', '/a'), total('page', '/b')];
+		const same = foldTotals(rows, { room: () => 5, isNew: () => true });
+		expect(same.totals).toEqual(rows);
+		expect(same.added).toEqual({ page: 2 });
+		expect(same.folded.size).toBe(0);
+		expect(foldTotals(rows, { room: () => 0, isNew: () => false }).totals).toEqual(rows);
 	});
 });
 

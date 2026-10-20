@@ -10,6 +10,7 @@
  * @module
  */
 import { createProduct, createProductBase } from '@ss/app-kit';
+import { noopLogger } from '@ss/net';
 import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -231,7 +232,7 @@ export const createProductInstance = (options) => {
 		openapi,
 		build: guide.build,
 	});
-	return Object.freeze({ ...product, web, now, valuesOf, lists });
+	return Object.freeze({ ...product, web, now, valuesOf, lists, logger: options.logger ?? noopLogger });
 };
 
 /** @typedef {ReturnType<typeof createProductInstance>} Product */

@@ -95,6 +95,22 @@ export const propsOf = (value) =>
 /** Most events in one request (the page script sends smaller batches). */
 export const MAX_BATCH = 25;
 
+/**
+ * Most distinct keys one metric holds in a website's totals of a day (a safety ceiling against a flood of made-up page
+ * paths, search terms, sources or names, which would fill the merchant's database; real days hold far fewer). A new key
+ * past it is counted under {@link OTHER}.
+ */
+export const MAX_DAY_KEYS = 5_000;
+/**
+ * Most raw events stored for one website in a day (a safety ceiling for the same reason; a busy real shop stays far
+ * under it). Later events no longer get a raw row, but still count in the totals.
+ */
+export const MAX_DAY_EVENTS = 100_000;
+/** The key (or, in a `<thing>\n<detail>` key, the thing) a metric's new values are counted under once it is full. */
+export const OTHER = '(other)';
+/** Metrics whose key is `<thing>\n<detail>` with a detail from a short set (a currency, a Web Vital) that stays when the thing is counted under {@link OTHER}. */
+const KEPT_DETAIL = Object.freeze(['item_revenue', 'vital_page']);
+
 /** Most items kept of one funnel event. */
 const MAX_ITEMS = 50;
 /** Most characters of an item's name the product totals keep (R7 #113). */
@@ -135,15 +151,17 @@ export const UNKNOWN = '(unknown)';
  */
 
 /**
- * A page path: the path only (no query string or fragment), at most 300 characters, or null.
+ * A page path of the site's own pages: the path only (no query string or fragment), one leading `/` (not `//`), at most
+ * 300 characters, without spaces, control characters, `\`, `<`, `>`, `"`, a backtick, `{` or `}`; else null.
  * @param {unknown} value
  * @returns {string | null}
  */
 export const pathOf = (value) => {
 	if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return null;
 	const path = value.split(/[?#]/)[0] ?? '';
+	// nor a backslash (browsers read `/\host` as another site), markup or template characters
 	// eslint-disable-next-line no-control-regex
-	if (path.length === 0 || path.length > 300 || /[\u0000-\u001f\s]/.test(path)) return null;
+	if (path.length === 0 || path.length > 300 || /[\u0000-\u001f\s\\<>"`{}]/.test(path)) return null;
 	return path;
 };
 
@@ -533,6 +551,60 @@ export const mergeTotals = (events) => {
 			} else merged.set(id, { ...total });
 		}
 	return [...merged.values()];
+};
+
+/**
+ * The key a new value is counted under once its metric holds {@link MAX_DAY_KEYS} keys: {@link OTHER}, and for a
+ * `<thing>\n<detail>` key {@link OTHER} for the thing and the detail (a currency or a Web Vital stays, else {@link OTHER}).
+ * @param {string} metric
+ * @param {string} key
+ */
+export const otherKeyOf = (metric, key) => {
+	const cut = key.lastIndexOf('\n');
+	if (cut === -1) return OTHER;
+	return `${OTHER}\n${KEPT_DETAIL.includes(metric) ? key.slice(cut + 1) : OTHER}`;
+};
+
+/**
+ * A batch's increments with the new keys that a metric has no room for counted under {@link OTHER}: the first new keys
+ * a metric has room for are kept, the rest are added (count and sum) to the metric's (other) row. A key that is not new
+ * is never changed. The rows given are not changed.
+ * @param {Array<{ metric: string, key: string, count: number, sum: number }>} totals merged per metric and key
+ * @param {{ room: (metric: string) => number, isNew: (metric: string, key: string) => boolean }} limits `room`: how many
+ *   new keys the metric may still take; `isNew`: whether the day has no such key yet
+ * @returns {{ totals: Array<{ metric: string, key: string, count: number, sum: number }>, added: Record<string, number>,
+ *   folded: Set<string> }} `added`: the new keys kept per metric; `folded`: the metrics that counted some under (other)
+ */
+export const foldTotals = (totals, { room, isNew }) => {
+	/** @type {Map<string, number>} */
+	const left = new Map();
+	/** @type {Record<string, number>} */
+	const added = {};
+	/** @type {Set<string>} */
+	const folded = new Set();
+	/** @type {Map<string, { metric: string, key: string, count: number, sum: number }>} */
+	const out = new Map();
+	for (const row of totals) {
+		let target = row;
+		if (isNew(row.metric, row.key)) {
+			const space = left.get(row.metric) ?? room(row.metric);
+			if (space > 0) {
+				left.set(row.metric, space - 1);
+				added[row.metric] = (added[row.metric] ?? 0) + 1;
+			} else {
+				left.set(row.metric, 0);
+				folded.add(row.metric);
+				target = { ...row, key: otherKeyOf(row.metric, row.key) };
+			}
+		}
+		const id = `${target.metric}\n${target.key}`;
+		const found = out.get(id);
+		if (found) {
+			found.count += target.count;
+			found.sum += target.sum;
+		} else out.set(id, { ...target });
+	}
+	return { totals: [...out.values()], added, folded };
 };
 
 /**

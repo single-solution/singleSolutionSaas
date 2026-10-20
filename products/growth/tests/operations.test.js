@@ -1,7 +1,8 @@
 /**
  * Merchant database operations per page view (RT-2): MongoDB Atlas's free tier allows about 100 operations a second
  * for the whole cluster, so each batch the page script sends costs one insert of its raw events and one update of the
- * day's totals, whatever it holds; the analytics report reads a day's parts as one.
+ * day's totals, whatever it holds; the analytics report reads a day's parts as one. The ceilings on a day (SR-7-9, see
+ * collect-caps.test.js) add one read of the day's counts per instance and day, and again every 15 seconds.
  */
 import { BSON } from 'mongodb';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -26,23 +27,26 @@ afterAll(async () => {
 });
 
 describe('database operations per page view (RT-2)', () => {
-	it('a landing page view with every detail costs one insert and one update', async () => {
-		const ops = await env.operationsDuring(() =>
-			env.collect(
-				[
-					{
-						type: 'page_view',
-						path: '/lamps',
-						visit: true,
-						device: 'mobile',
-						referrer: 'www.google.com',
-						page: 1,
-						...VISITOR,
-					},
-				],
-				HERE,
-			),
+	const landing = () =>
+		env.collect(
+			[
+				{
+					type: 'page_view',
+					path: '/lamps',
+					visit: true,
+					device: 'mobile',
+					referrer: 'www.google.com',
+					page: 1,
+					...VISITOR,
+				},
+			],
+			HERE,
 		);
+
+	it('a landing page view with every detail costs one insert and one update (and, the first of the day, one read of its counts)', async () => {
+		const first = await env.operationsDuring(landing);
+		expect(first.names).toEqual(['aggregate ss_growth_totals', 'insert ss_growth_analytics_events', 'update ss_growth_totals']);
+		const ops = await env.operationsDuring(landing);
 		expect(ops.names).toEqual(['insert ss_growth_analytics_events', 'update ss_growth_totals']);
 		expect(ops.total).toBe(2);
 	});
@@ -109,7 +113,12 @@ describe('the day’s totals (RT-2)', () => {
 		const ops = await env.operationsDuring(() =>
 			env.collect([{ type: 'page_view', path: `/${'long-path-'.repeat(20)}`, visit: true }]),
 		);
-		expect(ops.names).toEqual(['insert ss_growth_analytics_events', 'update ss_growth_totals', 'update ss_growth_totals']);
+		expect(ops.names).toEqual([
+			'aggregate ss_growth_totals',
+			'insert ss_growth_analytics_events',
+			'update ss_growth_totals',
+			'update ss_growth_totals',
+		]);
 		expect(await db.collection('ss_growth_totals').countDocuments({ day: '2026-10-03' })).toBe(2);
 		const report = await (await env.call('GET', '/v1/analytics?from=2026-10-03&to=2026-10-03', { token: env.server })).json();
 		expect(report.totals).toEqual({ visits: 3, pageViews: 6 });

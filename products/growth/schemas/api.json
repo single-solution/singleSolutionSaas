@@ -10,7 +10,7 @@
 				},
 				"path": {
 					"type": "string",
-					"description": "The page's path from / (not //); the query string and fragment are cut off; at most 300 characters, no spaces."
+					"description": "The page's path from / (not //); the query string and fragment are cut off; at most 300 characters, no spaces, backslash, <, >, double quote, backtick, { or }."
 				},
 				"visit": {
 					"type": "boolean",
@@ -1818,7 +1818,7 @@
 	},
 	"POST /v1/collect": {
 		"summary": "Record the page script's events",
-		"description": "The page script sends these itself. Your server may send a visitor's events too: the server token without an Origin, naming the visitor's IP address in SS-Visitor-IP. Nothing answers an error for a bad event: invalid events, events of features that are off and any after the first 25 are dropped, and nothing is kept while Visitor analytics is off; accepted says how many were kept. At most 64 KB; 3,000 calls a minute per website and 120 per visitor.",
+		"description": "The page script sends these itself. Your server may send a visitor's events too: the server token without an Origin, naming the visitor's IP address in SS-Visitor-IP. Nothing answers an error for a bad event: invalid events, events of features that are off and any after the first 25 are dropped, and nothing is kept while Visitor analytics is off; accepted says how many were kept. At most 64 KB; 3,000 calls a minute per website and 120 per visitor. Safety ceilings per website and day: a figure (pages, search terms, sources, event names …) holds at most 5,000 different values, and later new ones are counted together as (other); at most 100,000 raw events are stored, and later events are still counted in the totals.",
 		"body": {
 			"type": "object",
 			"properties": {

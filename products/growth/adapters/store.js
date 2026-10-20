@@ -9,14 +9,18 @@
  *   `totals.<metric>.<key>` `{ c: count, s: sum }` (the key escaped, see {@link fieldOf}; no `s` while the sum is 0).
  *   A batch of events costs one insert of its raw events and one `$inc` upsert of the day's document (RT-2: Atlas's
  *   free tier allows about 100 operations a second for the whole cluster). A day whose document would grow past
- *   MongoDB's 16 MB goes on in a next `part`; the parts of a day are read as one.
+ *   MongoDB's 16 MB goes on in a next `part`; the parts of a day are read as one. The ceilings of `day-caps.js`
+ *   (SR-7-9) keep a flood from filling the database: a day's `rawEvents` counts the raw events stored, and a metric's
+ *   keys past its most are counted under "(other)".
  *
  * With the `sessions` detail (PLAN 0.8.10 G3) raw events also keep `session`, `browser`, `os` and `city`; live visitors
  * and journeys are read from them when asked (nothing is kept per session besides the events).
  * @module
  */
 import { createId } from '@ss/contracts';
+import { noopLogger } from '@ss/net';
 import { PRODUCT_METRICS } from '../core/product-performance.js';
+import { createDayCaps } from './day-caps.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/events.js').KeptEvent} KeptEvent */
@@ -91,9 +95,10 @@ const incrementsOf = (totals) => {
 
 /**
  * @param {WebsiteData} data the guarded merchant database of one website
- * @param {{ merchantId: string }} context
+ * @param {{ merchantId: string, caps?: import('./day-caps.js').DayCaps }} context `caps`: the instance's ceilings on a day
+ *   (it keeps the counts it read, so it is the same for every request; without it each batch reads them)
  */
-export const createStore = (data, { merchantId }) => {
+export const createStore = (data, { merchantId, caps = createDayCaps({ now: Date.now, logger: noopLogger }) }) => {
 	const events = data.collection(EVENTS);
 	const totals = data.collection(TOTALS);
 	const websiteId = data.websiteId;
@@ -159,6 +164,62 @@ export const createStore = (data, { merchantId }) => {
 	};
 
 	/**
+	 * What a day holds for the ceilings: the raw events stored and the keys of each metric (the parts of the day added up).
+	 * @param {string} day
+	 * @returns {Promise<{ rawEvents: number, sizes: Record<string, number> }>}
+	 */
+	const readDay = async (day) => {
+		const parts = await totals
+			.aggregate([
+				{ $match: { websiteId, day } },
+				{
+					$project: {
+						_id: 0,
+						rawEvents: { $ifNull: ['$rawEvents', 0] },
+						sizes: {
+							$map: {
+								input: { $objectToArray: { $ifNull: ['$totals', {}] } },
+								in: {
+									k: '$$this.k',
+									n: {
+										$cond: [{ $eq: [{ $type: '$$this.v' }, 'object'] }, { $size: { $objectToArray: '$$this.v' } }, 0],
+									},
+								},
+							},
+						},
+					},
+				},
+			])
+			.toArray();
+		/** @type {Record<string, number>} */
+		const sizes = {};
+		let rawEvents = 0;
+		for (const part of parts) {
+			rawEvents += Number(part.rawEvents) || 0;
+			for (const { k, n } of part.sizes) sizes[String(k)] = (sizes[String(k)] ?? 0) + Number(n);
+		}
+		return { rawEvents, sizes };
+	};
+
+	/**
+	 * Which of some metric × key rows a day's totals hold already (one read of just those keys).
+	 * @param {string} day
+	 * @param {Array<{ metric: string, key: string }>} rows
+	 * @returns {Promise<Set<string>>} `<metric>\n<key>`
+	 */
+	const existing = async (day, rows) => {
+		/** @type {Record<string, number>} */
+		const projection = { _id: 0 };
+		for (const { metric, key } of rows) projection[`totals.${metric}.${fieldOf(key)}.c`] = 1;
+		const parts = await totals.find({ websiteId, day }, { projection }).toArray();
+		return new Set(
+			rows
+				.filter(({ metric, key }) => parts.some((part) => part.totals?.[metric]?.[fieldOf(key)] !== undefined))
+				.map(({ metric, key }) => `${metric}\n${key}`),
+		);
+	};
+
+	/**
 	 * The raw events' filter of a list or count request.
 	 * @param {{ type?: string, session?: string }} query
 	 * @returns {Record<string, unknown>}
@@ -167,26 +228,37 @@ export const createStore = (data, { merchantId }) => {
 
 	return Object.freeze({
 		/**
-		 * Keep a batch: its raw events (with their expiry; one insert) and the day's totals (one `$inc` upsert).
+		 * Keep a batch: its raw events (with their expiry; one insert) and the day's totals (one `$inc` upsert), within
+		 * the day's ceilings: no raw row past the day's most (the totals still count the event), and a new key of a full
+		 * metric counted under "(other)". An instance reads the day's counts once per {@link REFRESH_MS} (one aggregate).
 		 * @param {KeptEvent[]} kept
 		 * @param {{ at: number, day: string, expiresAt: Date, totals: Array<{ metric: string, key: string, count: number, sum: number }> }} batch
 		 *   `totals`: merged per metric and key
 		 */
 		record: async (kept, { at, day, expiresAt, totals: increments }) => {
 			if (kept.length === 0) return;
-			await events.insertMany(
-				kept.map((event, index) => ({
-					id: createId('evt'),
-					type: event.type,
-					path: event.path,
-					// a millisecond apart, so the events of one batch keep their order (journeys)
-					at: new Date(at + index),
-					expiresAt,
-					data: event.data,
-					...(event.visitor ?? {}),
-				})),
+			const plan = await caps.plan(
+				{ websiteId, day, events: kept.length, totals: increments },
+				{ read: readDay, exists: existing },
 			);
-			await addTotals(day, incrementsOf(increments), new Date(at));
+			if (plan.events > 0)
+				await events.insertMany(
+					kept.slice(0, plan.events).map((event, index) => ({
+						id: createId('evt'),
+						type: event.type,
+						path: event.path,
+						// a millisecond apart, so the events of one batch keep their order (journeys)
+						at: new Date(at + index),
+						expiresAt,
+						data: event.data,
+						...(event.visitor ?? {}),
+					})),
+				);
+			await addTotals(
+				day,
+				{ ...incrementsOf(plan.totals), ...(plan.events > 0 ? { rawEvents: plan.events } : {}) },
+				new Date(at),
+			);
 		},
 
 		/**

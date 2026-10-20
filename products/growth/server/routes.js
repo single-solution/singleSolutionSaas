@@ -26,6 +26,7 @@ import {
 } from '../core/events.js';
 import { indexNowActivity, indexNowSubmission, robotsTxtOf, verificationOf } from '../core/seo.js';
 import { zonedDayStart } from '@ss/contracts/format';
+import { createDayCaps } from '../adapters/day-caps.js';
 import { createStore } from '../adapters/store.js';
 import { renderDocs } from './docs.js';
 import { redirectRoutes } from './redirects.js';
@@ -55,9 +56,11 @@ const SERVER = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
  */
 export const createRoutes = (product) => {
 	const { now, web } = product;
+	// the ceilings on a day's events (SR-7-9); this instance keeps the counts it read, so every request shares them
+	const caps = createDayCaps({ now, logger: product.logger });
 
 	/** @param {any} ctx */
-	const storeOf = async (ctx) => createStore(await ctx.data(), { merchantId: String(ctx.merchantId) });
+	const storeOf = async (ctx) => createStore(await ctx.data(), { merchantId: String(ctx.merchantId), caps });
 
 	/**
 	 * The website's business time zone (business `timeZone`, else UTC): the zone of every day Growth counts.
