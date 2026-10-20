@@ -98,8 +98,8 @@ describe('S3 storage adapter', () => {
 	it('a presigned PUT always fixes the type and the size, and lives only a few minutes', () => {
 		const storage = createS3Storage({ descriptor, websiteId: WEBSITE, slug: 'reviews', send: noSend, now: () => AWS_NOW });
 		// a caller that forgets the type or the size gets an error, never a link that takes any type or size
-		expect(() => storage.presignPut({ key: 'k', contentLength: 1 })).toThrow(/contentType/);
-		expect(() => storage.presignPut({ key: 'k', contentType: 'image/png' })).toThrow(/contentLength/);
+		expect(() => storage.presignPut(/** @type {any} */ ({ key: 'k', contentLength: 1 }))).toThrow(/contentType/);
+		expect(() => storage.presignPut(/** @type {any} */ ({ key: 'k', contentType: 'image/png' }))).toThrow(/contentLength/);
 		expect(() => storage.presignPut(/** @type {any} */ ({ key: 'k' }))).toThrow(/contentType/);
 		const link = (/** @type {number | undefined} */ expiresIn) =>
 			storage.presignPut({ key: 'k', contentType: 'image/png', contentLength: 1, expiresIn });
