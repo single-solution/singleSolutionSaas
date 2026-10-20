@@ -451,7 +451,8 @@ describe('Ecommerce on the real Portal', () => {
 		});
 		expect(claim.status).toBe(201);
 		const claimId = claim.json.id;
-		const staff = await ticket(['returns.manage']);
+		// paying money back needs orders.refund on top of returns.manage
+		const staff = await ticket(['returns.manage', 'orders.refund']);
 		const admin = (/** @type {string} */ path, /** @type {unknown} */ body) =>
 			sys.call('POST', path, { token: staff, origin: ADMIN_ORIGIN, body });
 		expect((await admin(`/v1/admin/returns/${claimId}/approve`, {})).json.status).toBe('approved');
