@@ -69,7 +69,10 @@ describe('merchants (PLAN 0.2 Merchants, 0.5.9)', () => {
 		const o = await h.owner();
 		const created = await o.client.post('/v1/admin/merchants', { name: 'Shop', ownerName: 'Sam', email: 'sam@shop.test' });
 		expect(created.json.setup).toMatchObject({ mailed: false, link: null });
-		const copied = await o.client.post(`/v1/admin/merchants/${created.json.merchant.merchantId}/setup-link`, { copy: true });
+		const copied = await o.client.post(`/v1/admin/merchants/${created.json.merchant.merchantId}/setup-link`, {
+			copy: true,
+			password: PASSWORD,
+		});
 		expect(copied.json.link).toMatch(/^https:\/\/portal\.test\/set-password#token=/);
 		expect(await h.activity('merchant.setup_link_copied')).toHaveLength(1);
 		const token = decodeURIComponent(copied.json.link.split('#token=')[1]);
@@ -183,10 +186,16 @@ describe('merchants (PLAN 0.2 Merchants, 0.5.9)', () => {
 		const m = await h.merchantWithWebsite('sam@shop.test');
 		const support = await h.admin('support');
 		expect((await support.client.del(`/v1/admin/merchants/${m.merchantId}`, { confirm: 'Shop' })).status).toBe(403);
-		expect((await m.admin.del(`/v1/admin/merchants/${m.merchantId}`, { confirm: 'Shop' })).status).toBe(409);
+		expect((await m.admin.del(`/v1/admin/merchants/${m.merchantId}`, { confirm: 'Shop', password: PASSWORD })).status).toBe(
+			409,
+		);
 		await m.admin.del(`/v1/merchants/${m.merchantId}/websites/${m.websiteId}`, { confirm: m.domain });
-		expect((await m.admin.del(`/v1/admin/merchants/${m.merchantId}`, { confirm: 'shop' })).status).toBe(422);
-		expect((await m.admin.del(`/v1/admin/merchants/${m.merchantId}`, { confirm: 'Shop' })).status).toBe(204);
+		expect((await m.admin.del(`/v1/admin/merchants/${m.merchantId}`, { confirm: 'shop', password: PASSWORD })).status).toBe(
+			422,
+		);
+		expect((await m.admin.del(`/v1/admin/merchants/${m.merchantId}`, { confirm: 'Shop', password: PASSWORD })).status).toBe(
+			204,
+		);
 		expect((await m.client.get('/v1/me')).status).toBe(401);
 		const stored = await h.db.collection(C.merchants).findOne({ _id: /** @type {any} */ (m.merchantId) });
 		expect(stored).toMatchObject({ name: 'Shop', status: 'deleted', ownerName: null, email: null, passwordHash: null });

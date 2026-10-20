@@ -261,6 +261,7 @@ export const inputs = Object.freeze({
 	emailChange: /** @type {(b: unknown) => Parsed<SecondFactor & { email: string, password: string }>} */ (
 		(b) => object(b, { email, password, code: { optional: otp }, recoveryCode: { optional: recoveryCode } })
 	),
+	twoStepStart: /** @type {(b: unknown) => Parsed<{ password: string }>} */ ((b) => object(b, { password })),
 	twoStepConfirm: /** @type {(b: unknown) => Parsed<{ code: string }>} */ ((b) => object(b, { code: otp })),
 	twoStepWithPassword: /** @type {(b: unknown) => Parsed<SecondFactor & { password: string }>} */ (
 		(b) => secondFactor(b, { password })
@@ -319,6 +320,7 @@ export const inputs = Object.freeze({
 				reason: { optional: text(500) },
 			})
 	),
+	empty: /** @type {(b: unknown) => Parsed<Record<string, never>>} */ ((b) => object(b ?? {}, {})),
 	linkAction: /** @type {(b: unknown) => Parsed<{ copy?: boolean }>} */ ((b) => object(b ?? {}, { copy: { optional: bool } })),
 	website:
 		/** @type {(b: unknown, options?: { isPublicSuffix?: (domain: string) => boolean }) => Parsed<{ domain: string }>} */ (

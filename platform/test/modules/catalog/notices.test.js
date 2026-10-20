@@ -140,11 +140,11 @@ describe('notices (PLAN 0.4.12)', () => {
 		const revoked = (subject) => ({ type: 'sessions.revoked', subject });
 		const support = await h.admin('support');
 		const finance = await h.admin('finance');
-		await owner.patch(`/v1/admin/admins/${support.adminId}`, { role: 'finance' });
+		await owner.patch(`/v1/admin/admins/${support.adminId}`, { role: 'finance', password: PASSWORD });
 		h.clock.advance(1000);
 		expect(notes.notices).toContainEqual(revoked(support.adminId));
 		expect(chat.notices).toContainEqual(revoked(support.adminId));
-		await owner.del(`/v1/admin/admins/${finance.adminId}`);
+		await owner.del(`/v1/admin/admins/${finance.adminId}`, { password: PASSWORD });
 		h.clock.advance(1000);
 		expect(notes.notices).toContainEqual(revoked(finance.adminId));
 		const m = await h.merchant('m@shop.test');
@@ -161,7 +161,7 @@ describe('notices (PLAN 0.4.12)', () => {
 		});
 		h.clock.advance(1000);
 		expect(notes.notices.filter((n) => n.subject === m.merchantId)).toHaveLength(3);
-		const deleted = await owner.del(`/v1/admin/merchants/${m.merchantId}`, { confirm: m.name });
+		const deleted = await owner.del(`/v1/admin/merchants/${m.merchantId}`, { confirm: m.name, password: PASSWORD });
 		expect(deleted.status).toBe(204);
 		h.clock.advance(1000);
 		expect(notes.notices.filter((n) => n.subject === m.merchantId)).toHaveLength(4);

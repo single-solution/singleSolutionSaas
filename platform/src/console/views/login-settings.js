@@ -33,10 +33,11 @@ import {
 	TextLink,
 } from '@ss/ui';
 import { AUTH, LOGIN, MORE, TWO_STEP } from '../../texts/console.js';
-import { apiConfirm, apiFetch, usePagedList } from '../client.js';
+import { apiConfirm, usePagedList } from '../client.js';
 import { Link } from '../link.js';
 import { withCursor } from '../paths.js';
 import { factorOf } from './common.js';
+import { ConfirmChange } from './confirm-change.js';
 import { useListPages } from './paging.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
@@ -83,14 +84,14 @@ export function TwoStepSetup({ onDone }) {
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [saved, setSaved] = useState(false);
+	const [asking, setAsking] = useState(false);
 	const step = codes ? 'codes' : secret ? 'confirm' : 'start';
-	const start = async () => {
-		setBusy(true);
-		setProblem(null);
-		const result = await apiFetch('/v1/me/two-step/start', { method: 'POST' });
-		setBusy(false);
+	// starting asks for the password again: a stolen session alone must not be able to claim the sign-in's second step
+	/** @param {{ password: string }} confirmation */
+	const start = async ({ password }) => {
+		const result = await apiConfirm('/v1/me/two-step/start', { method: 'POST', body: { password } });
 		if (result.ok) setSecret(result.data);
-		else setProblem(result.problem);
+		return result;
 	};
 	const confirm = async () => {
 		setBusy(true);
@@ -116,9 +117,16 @@ export function TwoStepSetup({ onDone }) {
 				<div className="space-y-4">
 					<p className="text-sm text-muted">{TWO_STEP.intro}</p>
 					<FormError problem={problem} />
-					<Button onClick={() => void start()} loading={busy}>
-						{TWO_STEP.start}
-					</Button>
+					<Button onClick={() => setAsking(true)}>{TWO_STEP.start}</Button>
+					<ConfirmChange
+						open={asking}
+						title={TWO_STEP.start}
+						help={TWO_STEP.startHelp}
+						confirmLabel={TWO_STEP.startConfirm}
+						send={start}
+						onClose={() => setAsking(false)}
+						onDone={() => setAsking(false)}
+					/>
 				</div>
 			) : null}
 			{step === 'confirm' && secret ? (

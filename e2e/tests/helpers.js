@@ -420,7 +420,7 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	const admin = async (role) => {
 		invited += 1;
 		const email = `${role}-${invited}@portal.test`;
-		const res = await (await owner()).post('/v1/admin/admins', { email, role });
+		const res = await (await owner()).post('/v1/admin/admins', { email, role, password: PASSWORD });
 		if (res.status !== 201) throw new Error(`invite ${res.status} ${JSON.stringify(res.json)}`);
 		const accepted = await api.call('POST', '/v1/auth/set-password', {
 			body: { token: mailer.token(email, 'admin_invite'), password: PASSWORD, name: `${role} admin` },

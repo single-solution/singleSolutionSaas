@@ -33,6 +33,7 @@ import { apiConfirm, apiFetch } from '../client.js';
 import { api } from '../paths.js';
 import { productTone, UsageView } from './billing.js';
 import { factorOf } from './common.js';
+import { confirmationErrors } from './confirm-change.js';
 
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
 /**
@@ -216,22 +217,6 @@ export const useOnce = (path) => {
  * @param {import('./common.js').ApiResult | null} me
  */
 export const twoStepOnOf = (me) => me?.ok === true && me.data?.[me.data?.kind]?.twoStep?.enabled === true;
-
-/**
- * What the Portal said to a refused confirmation, as words for the field it belongs to: a wrong password under the
- * password, a missing or wrong code under the code; anything else (too many tries, a server problem) under the fields.
- * @param {Problem | null} problem
- * @returns {{ password?: string, code?: string, form?: string }}
- */
-export const confirmationErrors = (problem) => {
-	if (!problem) return {};
-	const fields = fieldErrors(problem);
-	if (fields.code || fields.recoveryCode) return { code: WEBSITE.needsCode };
-	if (problemCode(problem) === 'invalid_credentials')
-		return /code/i.test(String(problem.detail ?? '')) ? { code: WEBSITE.wrongCode } : { password: WEBSITE.wrongPassword };
-	if (fields.password) return { password: WEBSITE.wrongPassword };
-	return { form: describeProblem(problem) };
-};
 
 /**
  * One product's install block: the widget script tag (products with widgets), the browser token, the server token

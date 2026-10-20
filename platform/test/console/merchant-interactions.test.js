@@ -188,6 +188,9 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		withToasts(<AccountView part="two-step" {...await loaders.loadAccount(a.api, merchantId)} />);
 		await press('Set up two-step sign-in');
 		await press('Set up two-step sign-in');
+		// starting asks for the password again
+		fill('Your password', 'a brand new passphrase');
+		await press('Continue');
 		const started = await a.waitCall('POST', '/v1/me/two-step/start', (st) => st === 200);
 		expect(document.querySelector('svg[aria-label="QR code"]')).not.toBeNull();
 		fill('6-digit code from your app', '000000');
@@ -229,7 +232,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		// ---------------------------------------------------------------- sign-in with two-step and a recovery code
 		const b = browserOf(portal);
 		await b.api.post('/v1/auth/sign-in', { email: 'owner@shop.test', password: 'a brand new passphrase' });
-		const twoStep = await b.api.post('/v1/me/two-step/start');
+		const twoStep = await b.api.post('/v1/me/two-step/start', { password: 'a brand new passphrase' });
 		const secret = twoStep.ok ? twoStep.data.secret : '';
 		await new Promise((resolve) => setTimeout(resolve, 1100));
 		const on = await b.api.post('/v1/me/two-step/confirm', { code: code(secret) });
@@ -302,7 +305,11 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		await press('Save and sign in');
 		await f.waitCall('POST', '/v1/auth/set-password', (st) => st === 200);
 		cleanup();
-		await world.ownerBrowser.api.post('/v1/admin/admins', { email: 'sue@portal.test', role: 'support' });
+		await world.ownerBrowser.api.post('/v1/admin/admins', {
+			email: 'sue@portal.test',
+			role: 'support',
+			password: 'owner password 123!',
+		});
 		setToken(world.tokenOf('sue@portal.test', 'admin_invite'));
 		render(<SetPasswordView branding={BRANDING} />);
 		await until(() => shows('Enter your name and choose the password'));

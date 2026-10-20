@@ -193,7 +193,7 @@ export const boot = async (options = {}) => {
 	 */
 	const admin = async (role, email = `${role}-${(keyCounter += 1)}@portal.test`) => {
 		const by = (await owner()).client;
-		const invited = await by.post('/v1/admin/admins', { email, role });
+		const invited = await by.post('/v1/admin/admins', { email, role, password: PASSWORD });
 		if (invited.status !== 201) throw new Error(`invite ${invited.status} ${JSON.stringify(invited.json)}`);
 		const c = client();
 		const accepted = await c.post('/v1/auth/set-password', {
@@ -238,7 +238,7 @@ export const boot = async (options = {}) => {
 	 * @param {ReturnType<typeof client>} c
 	 */
 	const enableTwoStep = async (c) => {
-		const started = await c.post('/v1/me/two-step/start');
+		const started = await c.post('/v1/me/two-step/start', { password: PASSWORD });
 		clock.advance(30_000);
 		const confirmed = await c.post('/v1/me/two-step/confirm', { code: code(started.json.secret) });
 		if (confirmed.status !== 200) throw new Error(`two-step ${confirmed.status} ${JSON.stringify(confirmed.json)}`);

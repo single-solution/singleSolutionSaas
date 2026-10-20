@@ -103,6 +103,25 @@ export const identityRoutes = (ctx, service) => {
 	 */
 	const confirmed = (c, confirmation) => accounts.confirm(kindOf(c), { ...confirmation, id: sessionOf(c).subject }, metaOf(c));
 
+	/**
+	 * The body of a high-impact call: the members of the call itself plus a fresh confirmation (password, and a code
+	 * while two-step is on) sent alongside. The members are checked first, then the confirmation; `needs(value)` says
+	 * whether this call asks for it at all (copying a link does, mailing it does not). Wrong passwords and codes count
+	 * against the sign-in throttle.
+	 * @template T
+	 * @param {RequestContext} c
+	 * @param {(body: unknown) => { ok: true, value: T } | { ok: false, errors: FieldError[] }} parse
+	 * @param {(value: T) => boolean} [needs]
+	 * @returns {Promise<T>}
+	 */
+	const confirmedBody = async (c, parse, needs = () => true) => {
+		const whole = typeof c.body === 'object' && c.body !== null && !Array.isArray(c.body);
+		const { password, code, recoveryCode, ...rest } = /** @type {Record<string, unknown>} */ (whole ? c.body : {});
+		const value = valid(parse(whole || c.body === null || c.body === undefined ? rest : c.body));
+		if (needs(value)) await confirmed(c, valid(inputs.confirmation({ password, code, recoveryCode })));
+		return value;
+	};
+
 	/** @type {RouteDefinition[]} */
 	const routes = [
 		// ---------------------------------------------------------------------------------------------------------
@@ -258,7 +277,15 @@ export const identityRoutes = (ctx, service) => {
 			auth: ['admin', 'merchant'],
 			mfa: false,
 			idempotent: 'no-store',
-			handler: async (c) => ok(await accounts.twoStepStart(kindOf(c), sessionOf(c).subject)),
+			rateLimit: AUTH_LIMIT,
+			handler: async (c) =>
+				ok(
+					await accounts.twoStepStart(
+						kindOf(c),
+						{ ...valid(inputs.twoStepStart(c.body)), id: sessionOf(c).subject },
+						metaOf(c),
+					),
+				),
 		},
 		{
 			method: 'POST',
@@ -485,7 +512,7 @@ export const identityRoutes = (ctx, service) => {
 			handler: async (c) => {
 				await merchants.remove({
 					merchantId: /** @type {string} */ (c.params.merchantId),
-					...valid(inputs.merchantDelete(c.body)),
+					...(await confirmedBody(c, inputs.merchantDelete)),
 					actor: actorOf(c),
 					meta: metaOf(c),
 				});
@@ -518,7 +545,7 @@ export const identityRoutes = (ctx, service) => {
 				ok(
 					await merchants.setupLink({
 						merchantId: /** @type {string} */ (c.params.merchantId),
-						...valid(inputs.linkAction(c.body)),
+						...(await confirmedBody(c, inputs.linkAction, (v) => v.copy === true)),
 						actor: actorOf(c),
 						meta: metaOf(c),
 					}),
@@ -530,14 +557,16 @@ export const identityRoutes = (ctx, service) => {
 			auth: 'admin',
 			permission: P.twoStepTurnOff,
 			idempotent: 'optional',
-			handler: async (c) =>
-				ok(
+			handler: async (c) => {
+				await confirmedBody(c, inputs.empty);
+				return ok(
 					await accounts.turnOffTwoStepFor('merchant', {
 						id: /** @type {string} */ (c.params.merchantId),
 						actor: actorOf(c),
 						meta: metaOf(c),
 					}),
-				),
+				);
+			},
 		},
 
 		// ---------------------------------------------------------------------------------------------------------
@@ -556,7 +585,7 @@ export const identityRoutes = (ctx, service) => {
 			permission: P.adminsManage,
 			idempotent: 'no-store',
 			handler: async (c) =>
-				created(await admins.invite({ ...valid(inputs.adminInvite(c.body)), actor: actorOf(c), meta: metaOf(c) })),
+				created(await admins.invite({ ...(await confirmedBody(c, inputs.adminInvite)), actor: actorOf(c), meta: metaOf(c) })),
 		},
 		{
 			method: 'PATCH',
@@ -567,7 +596,7 @@ export const identityRoutes = (ctx, service) => {
 				ok(
 					await admins.update({
 						adminId: /** @type {string} */ (c.params.adminId),
-						...valid(inputs.adminUpdate(c.body)),
+						...(await confirmedBody(c, inputs.adminUpdate)),
 						actor: actorOf(c),
 						meta: metaOf(c),
 					}),
@@ -583,7 +612,7 @@ export const identityRoutes = (ctx, service) => {
 				ok(
 					await admins.resendInvite({
 						adminId: /** @type {string} */ (c.params.adminId),
-						...valid(inputs.linkAction(c.body)),
+						...(await confirmedBody(c, inputs.linkAction, (v) => v.copy === true)),
 						actor: actorOf(c),
 						meta: metaOf(c),
 					}),
@@ -595,14 +624,16 @@ export const identityRoutes = (ctx, service) => {
 			auth: 'admin',
 			permission: P.twoStepTurnOff,
 			idempotent: 'optional',
-			handler: async (c) =>
-				ok(
+			handler: async (c) => {
+				await confirmedBody(c, inputs.empty);
+				return ok(
 					await accounts.turnOffTwoStepFor('admin', {
 						id: /** @type {string} */ (c.params.adminId),
 						actor: actorOf(c),
 						meta: metaOf(c),
 					}),
-				),
+				);
+			},
 		},
 		{
 			method: 'DELETE',
@@ -610,6 +641,7 @@ export const identityRoutes = (ctx, service) => {
 			auth: 'admin',
 			permission: P.adminsManage,
 			handler: async (c) => {
+				await confirmedBody(c, inputs.empty);
 				await admins.remove({ adminId: /** @type {string} */ (c.params.adminId), actor: actorOf(c), meta: metaOf(c) });
 				return noContent();
 			},

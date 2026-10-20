@@ -91,8 +91,11 @@ describe('admin console smoke', () => {
 		const { world, merchant, merchantId, websiteId } = await seed('admin_smoke');
 		try {
 			const { ownerBrowser } = world;
+			// inviting an admin asks for the Owner's password (and a code once two-step is on), so it comes first
+			const invite = { email: 'help@ss.test', role: 'support', password: 'owner password 123!' };
+			expect((await ownerBrowser.api.post(adminApi.admins(), invite)).ok).toBe(true);
 			// two-step on for the Owner (My account shows the recovery codes left)
-			const started = await ownerBrowser.api.post('/v1/me/two-step/start');
+			const started = await ownerBrowser.api.post('/v1/me/two-step/start', { password: 'owner password 123!' });
 			const confirmed = await ownerBrowser.api.post('/v1/me/two-step/confirm', {
 				code: totpCode(started.ok ? started.data.secret : '', Date.now()),
 			});
@@ -102,7 +105,6 @@ describe('admin console smoke', () => {
 			const session = await admin.loadAdminSession(ownerBrowser.api);
 			if (!session.ok) throw new Error('no admin session');
 			const owner = session.admin;
-			expect((await ownerBrowser.api.post(adminApi.admins(), { email: 'help@ss.test', role: 'support' })).ok).toBe(true);
 
 			// ------------------------------------------------------------------ frame
 			const shell = text(

@@ -341,7 +341,7 @@ export const createWorld = async ({ db }) => {
 	const adminOf = async (role) => {
 		invited += 1;
 		const email = `${role}-${invited}@ss.test`;
-		const r = await ownerBrowser.api.post('/v1/admin/admins', { email, role });
+		const r = await ownerBrowser.api.post('/v1/admin/admins', { email, role, password: 'owner password 123!' });
 		if (!r.ok) throw new Error(`invite: ${JSON.stringify(r.problem)}`);
 		const b = browserOf(portal, 'admin password 123!');
 		const set = await b.api.post('/v1/auth/set-password', {

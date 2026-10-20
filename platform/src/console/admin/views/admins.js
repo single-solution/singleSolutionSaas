@@ -16,7 +16,6 @@ import {
 	Callout,
 	Card,
 	CodeBlock,
-	ConfirmDialog,
 	DataTable,
 	Dialog,
 	Drawer,
@@ -39,7 +38,8 @@ import {
 import { ADMIN, MORE, TWO_STEP } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
-import { apiFetch, usePagedList, useResource } from '../../client.js';
+import { apiConfirm, apiFetch, usePagedList, useResource } from '../../client.js';
+import { ConfirmChange, confirmationErrors } from '../../views/confirm-change.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { useListPages } from '../../views/paging.js';
 import { adminApi, adminRoutes } from '../paths.js';
@@ -91,56 +91,72 @@ function InviteLink({ link, onClose }) {
 
 /**
  * Invite an admin, in a drawer: the email and the role; Invite sends the invite, Copy invite link hands the link over.
+ * Both ask for the Owner's password first (an invite can make an Owner).
  * @param {{ open: boolean, onClose: () => void, onInvited: (invite: any, copy: boolean) => void }} props
  */
 function InviteDrawer({ open, onClose, onInvited }) {
 	const [email, setEmail] = useState('');
 	const [role, setRole] = useState('support');
-	const [busy, setBusy] = useState(false);
+	const [asking, setAsking] = useState(/** @type {null | { copy: boolean }} */ (null));
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const formId = useId();
-	/** @param {boolean} copy */
-	const invite = async (copy) => {
-		setBusy(true);
+	/** @param {{ password: string, code?: string, recoveryCode?: string }} confirmation */
+	const send = async (confirmation) => {
+		const copy = asking?.copy ?? false;
 		setProblem(null);
-		const result = await apiFetch(adminApi.admins(), { method: 'POST', body: { email: email.trim(), role, copy } });
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
+		const result = await apiConfirm(adminApi.admins(), {
+			method: 'POST',
+			body: { email: email.trim(), role, copy, ...confirmation },
+		});
+		if (result.ok) {
+			setEmail('');
+			setRole('support');
+			onInvited(result.data?.invite, copy);
+		} else if (result.status === 422) {
+			const found = confirmationErrors(result.problem);
+			if (!found.password && !found.code) setProblem(result.problem);
 		}
-		setEmail('');
-		setRole('support');
-		onInvited(result.data?.invite, copy);
+		return result;
 	};
 	return (
-		<Drawer
-			open={open}
-			onClose={onClose}
-			title={ADMIN.inviteTitle}
-			footer={
-				<>
-					<Button variant="secondary" onClick={() => void invite(true)} loading={busy}>
-						{ADMIN.copyInvite}
-					</Button>
-					<Button type="submit" form={formId} loading={busy}>
-						{ADMIN.invite}
-					</Button>
-				</>
-			}>
-			<Form id={formId} onSubmit={() => invite(false)} busy={busy} aria-label={ADMIN.inviteTitle}>
-				<Input
-					label="Email"
-					type="email"
-					value={email}
-					onChange={(e) => setEmail(e.currentTarget.value)}
-					error={fieldErrors(problem).email}
-					required
-				/>
-				<RadioGroup legend={ADMIN.role} cards value={role} onChange={setRole} options={[...ROLE_CARDS]} />
-				<FormError problem={problem} fields={['email', 'role']} />
-			</Form>
-		</Drawer>
+		<>
+			<Drawer
+				open={open}
+				onClose={onClose}
+				title={ADMIN.inviteTitle}
+				footer={
+					<>
+						<Button variant="secondary" onClick={() => setAsking({ copy: true })}>
+							{ADMIN.copyInvite}
+						</Button>
+						<Button type="submit" form={formId}>
+							{ADMIN.invite}
+						</Button>
+					</>
+				}>
+				<Form id={formId} onSubmit={() => setAsking({ copy: false })} aria-label={ADMIN.inviteTitle}>
+					<Input
+						label="Email"
+						type="email"
+						value={email}
+						onChange={(e) => setEmail(e.currentTarget.value)}
+						error={fieldErrors(problem).email}
+						required
+					/>
+					<RadioGroup legend={ADMIN.role} cards value={role} onChange={setRole} options={[...ROLE_CARDS]} />
+					<FormError problem={problem} fields={['email', 'role']} />
+				</Form>
+			</Drawer>
+			<ConfirmChange
+				open={asking !== null}
+				title={ADMIN.inviteTitle}
+				help={ADMIN.confirmInviteHelp}
+				confirmLabel={asking?.copy ? ADMIN.copyInvite : ADMIN.invite}
+				send={send}
+				onClose={() => setAsking(null)}
+				onDone={() => setAsking(null)}
+			/>
+		</>
 	);
 }
 
@@ -254,11 +270,12 @@ function AdminPage({ props, adminId, section }) {
 	const toast = useToast();
 	const nav = useNavigation();
 	const { data, reload } = useResource(adminApi.admins(), { items: props.items });
-	const [dialog, setDialog] = useState(/** @type {null | 'email' | 'role' | 'twoStep' | 'remove'} */ (null));
+	const [dialog, setDialog] = useState(/** @type {null | 'email' | 'role' | 'twoStep' | 'remove' | 'copy'} */ (null));
+	// the password dialog over the email or role drawer (the other changes open it straight away)
+	const [asking, setAsking] = useState(false);
 	const [email, setEmail] = useState('');
 	const [role, setRole] = useState('support');
 	const [link, setLink] = useState(/** @type {string | null} */ (null));
-	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const emailForm = useId();
 	const roleForm = useId();
@@ -277,46 +294,42 @@ function AdminPage({ props, adminId, section }) {
 		);
 	const title = current.name ?? current.email;
 
-	/**
-	 * @param {string} path
-	 * @param {string} method
-	 * @param {Record<string, unknown>} [body]
-	 */
-	const call = async (path, method, body) => {
-		setBusy(true);
-		setProblem(null);
-		const result = await apiFetch(path, { method, ...(body ? { body } : {}) });
-		setBusy(false);
-		if (!result.ok) setProblem(result.problem);
-		return result;
-	};
-	/** @param {boolean} copy */
-	const resend = async (copy) => {
-		const result = await call(adminApi.adminInvite(adminId), 'POST', { copy });
-		if (!result.ok) {
-			toast.show({ tone: 'danger', title: describeProblem(result.problem) });
-			return;
-		}
-		if (copy) setLink(result.data?.link ?? null);
+	// mailing the invite again needs no password (the link is not shown); copying it, and every other change here, does
+	const resend = async () => {
+		const result = await apiFetch(adminApi.adminInvite(adminId), { method: 'POST', body: { copy: false } });
+		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
 		else toast.show({ title: result.data?.mailed ? ADMIN.inviteMailed : ADMIN.inviteNotMailed });
 	};
-	const save = async () => {
-		if (!dialog) return;
+	/** @param {{ password: string, code?: string, recoveryCode?: string }} confirmation */
+	const send = async (confirmation) => {
+		setProblem(null);
+		const withIt = (/** @type {Record<string, unknown>} */ body) => ({ ...body, ...confirmation });
 		const result =
-			dialog === 'email'
-				? await call(adminApi.admin(adminId), 'PATCH', { email: email.trim() })
-				: dialog === 'role'
-					? await call(adminApi.admin(adminId), 'PATCH', { role })
-					: dialog === 'twoStep'
-						? await call(adminApi.adminTwoStepOff(adminId), 'POST', {})
-						: await call(adminApi.admin(adminId), 'DELETE');
-		if (!result.ok) return;
+			dialog === 'copy'
+				? await apiConfirm(adminApi.adminInvite(adminId), { method: 'POST', body: withIt({ copy: true }) })
+				: dialog === 'email'
+					? await apiConfirm(adminApi.admin(adminId), { method: 'PATCH', body: withIt({ email: email.trim() }) })
+					: dialog === 'role'
+						? await apiConfirm(adminApi.admin(adminId), { method: 'PATCH', body: withIt({ role }) })
+						: dialog === 'twoStep'
+							? await apiConfirm(adminApi.adminTwoStepOff(adminId), { method: 'POST', body: withIt({}) })
+							: await apiConfirm(adminApi.admin(adminId), { method: 'DELETE', body: withIt({}) });
+		if (result.ok) {
+			if (dialog === 'copy') setLink(result.data?.link ?? null);
+		} else if (result.status === 422) {
+			const found = confirmationErrors(result.problem);
+			if (!found.password && !found.code) setProblem(result.problem);
+		}
+		return result;
+	};
+	const done = async () => {
 		const removed = dialog === 'remove';
+		setAsking(false);
 		setDialog(null);
 		if (removed) nav.go(adminRoutes.admins());
 		else await reload();
 	};
-	/** @param {'email' | 'role' | 'twoStep' | 'remove'} kind */
+	/** @param {'email' | 'role' | 'twoStep' | 'remove' | 'copy'} kind */
 	const open = (kind) => {
 		setProblem(null);
 		setEmail(kind === 'email' ? (current.email ?? '') : '');
@@ -329,8 +342,8 @@ function AdminPage({ props, adminId, section }) {
 	const actionList = [
 		...(current.status === 'invited'
 			? [
-					{ label: ADMIN.resendInvite, onSelect: () => void resend(false) },
-					{ label: ADMIN.copyInvite, onSelect: () => void resend(true) },
+					{ label: ADMIN.resendInvite, onSelect: () => void resend() },
+					{ label: ADMIN.copyInvite, onSelect: () => open('copy') },
 					{ label: ADMIN.correctEmail, onSelect: () => open('email') },
 				]
 			: []),
@@ -431,11 +444,11 @@ function AdminPage({ props, adminId, section }) {
 				title={ADMIN.correctEmail}
 				description={title}
 				footer={
-					<Button type="submit" form={emailForm} loading={busy}>
+					<Button type="submit" form={emailForm}>
 						{ADMIN.correctEmail}
 					</Button>
 				}>
-				<Form id={emailForm} onSubmit={save} busy={busy} aria-label={ADMIN.correctEmail}>
+				<Form id={emailForm} onSubmit={() => setAsking(true)} aria-label={ADMIN.correctEmail}>
 					<Input
 						label="Email"
 						type="email"
@@ -453,26 +466,54 @@ function AdminPage({ props, adminId, section }) {
 				title={ADMIN.changeRole}
 				description={ADMIN.roleChangeHelp}
 				footer={
-					<Button type="submit" form={roleForm} loading={busy}>
+					<Button type="submit" form={roleForm}>
 						{ADMIN.changeRole}
 					</Button>
 				}>
-				<Form id={roleForm} onSubmit={save} busy={busy} aria-label={ADMIN.changeRole}>
+				<Form id={roleForm} onSubmit={() => setAsking(true)} aria-label={ADMIN.changeRole}>
 					<RadioGroup legend={ADMIN.role} cards value={role} onChange={setRole} options={[...ROLE_CARDS]} />
 					<FormError problem={problem} fields={['role']} />
 				</Form>
 			</Drawer>
-			<ConfirmDialog
-				open={dialog === 'twoStep' || dialog === 'remove'}
-				onClose={() => setDialog(null)}
-				onConfirm={() => void save()}
-				busy={busy}
-				danger
-				confirmLabel={dialog === 'twoStep' ? ADMIN.turnOffTwoStep : ADMIN.remove}
-				title={title}
-				error={problem ? describeProblem(problem) : null}>
-				<p className="text-sm text-muted">{dialog === 'twoStep' ? ADMIN.turnOffTwoStepHelp : ADMIN.removeAdminHelp}</p>
-			</ConfirmDialog>
+			<ConfirmChange
+				open={asking || dialog === 'twoStep' || dialog === 'remove' || dialog === 'copy'}
+				title={
+					dialog === 'copy'
+						? ADMIN.copyInvite
+						: dialog === 'twoStep'
+							? ADMIN.turnOffTwoStep
+							: dialog === 'remove'
+								? ADMIN.remove
+								: title
+				}
+				help={
+					dialog === 'twoStep'
+						? ADMIN.turnOffTwoStepHelp
+						: dialog === 'remove'
+							? ADMIN.removeAdminHelp
+							: dialog === 'copy'
+								? ADMIN.copyInviteHelp
+								: ADMIN.confirmChangeHelp
+				}
+				confirmLabel={
+					dialog === 'twoStep'
+						? ADMIN.turnOffTwoStep
+						: dialog === 'remove'
+							? ADMIN.remove
+							: dialog === 'copy'
+								? ADMIN.copyInvite
+								: dialog === 'email'
+									? ADMIN.correctEmail
+									: ADMIN.changeRole
+				}
+				danger={dialog === 'twoStep' || dialog === 'remove'}
+				send={send}
+				onClose={() => {
+					setAsking(false);
+					if (dialog === 'twoStep' || dialog === 'remove' || dialog === 'copy') setDialog(null);
+				}}
+				onDone={() => void done()}
+			/>
 			<InviteLink link={link} onClose={() => setLink(null)} />
 		</>
 	);

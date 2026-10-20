@@ -221,7 +221,7 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 		const mail = { host: 'smtp.example.com', port: 587, user: 'mailer', password: 's3cret', senderAddress: 'no@example.com' };
 		expect((await owner.put('/v1/admin/settings/mail', { mail })).status).toBe(200);
 		// a two-step secret being set up (sealed too)
-		expect((await owner.post('/v1/me/two-step/start')).status).toBe(200);
+		expect((await owner.post('/v1/me/two-step/start', { password: PASSWORD })).status).toBe(200);
 		// Re-seal is the Owner's
 		const support = await h.admin('support');
 		expect(codeOf(await support.client.post('/v1/admin/settings/reseal'))).toEqual([403, 'forbidden']);

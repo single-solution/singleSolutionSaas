@@ -88,6 +88,8 @@ export const TWO_STEP = Object.freeze({
 		'Two-step sign-in is required for every admin. Set it up now: the rest of the console opens as soon as it is on.',
 	intro: 'From now on, signing in asks for your password and then a 6-digit code from an authenticator app on your phone.',
 	start: 'Set up two-step sign-in',
+	startHelp: 'Type your password to continue. This stops a stolen sign-in from taking over your second step.',
+	startConfirm: 'Continue',
 	scan: 'Scan the QR code with your authenticator app (or type the key by hand), then enter the 6-digit code it shows. The key is shown only now.',
 	codeLabel: '6-digit code from your app',
 	key: 'Or type this key',
@@ -192,6 +194,14 @@ export const MERCHANT = Object.freeze({
 			effect: 'Your admin adds products to a website; then you open and set them up here.',
 		}),
 	}),
+});
+
+/** The password step before a change a stolen sign-in must not make (one dialog, used by every such change). */
+export const CONFIRM_CHANGE = Object.freeze({
+	password: 'Your password',
+	passwordHelp: 'The password you sign in with.',
+	code: 'Two-step or recovery code',
+	codeHelp: 'From your authenticator app, or one of your recovery codes.',
 });
 
 /** The websites list and the website page (PLAN 0.6 Website page, 0.8.2, 0.4.4, 0.5.9), in both consoles. */
@@ -787,6 +797,8 @@ export const ADMIN = Object.freeze({
 	setupMailed: 'The setup link was emailed (valid 72 hours).',
 	setupNotMailed: 'Email sending is not set up: copy the setup link and pass it on.',
 	copySetupLink: 'Copy setup link',
+	copySetupLinkHelp:
+		'Whoever opens the link can set the merchant’s password and sign in as them, so we ask for your password again. The link is shown only once.',
 	resendSetupLink: 'Resend setup link',
 	setupLinkSent: 'A new setup link was emailed; the previous one stopped working.',
 	setupLinkCopy: 'Copy this link now. It is shown only once and works once.',
@@ -842,6 +854,10 @@ export const ADMIN = Object.freeze({
 	remove: 'Remove',
 	removeAdminHelp: 'Their sessions end at once and they can no longer sign in. Activity keeps their name.',
 	roleChangeHelp: 'The change takes effect at once and ends all their sessions.',
+	copyInviteHelp:
+		'Whoever opens the link can set this admin’s password and sign in as them, so we ask for your password again. The link is shown only once.',
+	confirmInviteHelp: 'Type your password to confirm. An invite can make an Owner, so a stolen sign-in must not send one.',
+	confirmChangeHelp: 'Type your password to confirm. A stolen sign-in cannot change this.',
 	you: 'you',
 	twoStepColumn: 'Two-step',
 	settingsTitle: 'Settings',
@@ -1295,10 +1311,6 @@ export const WEBSITE_SETTINGS = Object.freeze({
 		confirmSave: (/** @type {string} */ what) => `Save ${what}`,
 		confirmRemove: (/** @type {string} */ what) => `Remove ${what}`,
 		confirmHelp: 'Type your password to confirm. A stolen sign-in cannot change this.',
-		password: 'Your password',
-		passwordHelp: 'The password you sign in with.',
-		code: 'Two-step or recovery code',
-		codeHelp: 'From your authenticator app, or one of your recovery codes.',
 		wrongPassword: 'That password is not right. Check it and try again.',
 		wrongCode: 'That code is not right. Try the next code from your app, or a recovery code.',
 		needsCode: 'Two-step sign-in is on for you: enter a code from your app, or a recovery code.',

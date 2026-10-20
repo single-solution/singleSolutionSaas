@@ -31,7 +31,6 @@ import {
 	Select,
 	TextArea,
 	Toolbar,
-	TypedConfirmDialog,
 	describeProblem,
 	fieldErrors,
 	formatCredits,
@@ -44,11 +43,12 @@ import { DaysLeft } from '../../views/billing.js';
 import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
 import { COUNTRY_NAMES } from '../../../modules/identity/core/countries.js';
 import { Link } from '../../link.js';
+import { ConfirmChange } from '../../views/confirm-change.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { useListPages } from '../../views/paging.js';
 import { AddWebsiteDialog, MerchantUsageDialog, dailyCostOf, websiteDot } from '../../views/website.js';
 import { useNavigation } from '../../navigation.js';
-import { apiFetch, usePagedList } from '../../client.js';
+import { apiConfirm, apiFetch, usePagedList } from '../../client.js';
 import { adminApi, adminRoutes, merchantFilter } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
 import { SITE_PILLS } from './website.js';
@@ -464,7 +464,9 @@ function MerchantPage({ detail, admin, section = 'websites' }) {
 	const [merchant, setMerchant] = useState(detail.merchant);
 	const [rows, setRows] = useState(/** @type {Array<{ website: any, cards: any[] }>} */ (detail.rows));
 	const [dialog, setDialog] = useState(
-		/** @type {null | 'suspend' | 'resume' | 'twoStep' | 'delete' | 'addWebsite' | 'edit' | 'credits' | 'usage'} */ (null),
+		/** @type {null | 'suspend' | 'resume' | 'twoStep' | 'delete' | 'copyLink' | 'addWebsite' | 'edit' | 'credits' | 'usage'} */ (
+			null
+		),
 	);
 	const [reason, setReason] = useState('');
 	const [link, setLink] = useState(/** @type {string | null} */ (null));
@@ -507,24 +509,34 @@ function MerchantPage({ detail, admin, section = 'websites' }) {
 		setDialog(null);
 		setReason('');
 	};
-	const setupLink = async (/** @type {boolean} */ copy) => {
-		const result = await act(adminApi.setupLink(merchantId), { copy });
+	// mailing the setup link again needs no password (the link is not shown); copying it does
+	const resendSetupLink = async () => {
+		const result = await act(adminApi.setupLink(merchantId), { copy: false });
 		if (!result.ok) {
 			toast.show({ tone: 'danger', title: describeProblem(result.problem) });
 			return;
 		}
-		if (copy) setLink(result.data?.link ?? null);
-		else toast.show({ title: result.data?.mailed ? ADMIN.setupLinkSent : ADMIN.setupNotMailed });
+		toast.show({ title: result.data?.mailed ? ADMIN.setupLinkSent : ADMIN.setupNotMailed });
 	};
-	const turnOffTwoStep = async () => {
-		const result = await act(adminApi.merchantTwoStepOff(merchantId), {});
-		if (!result.ok) return;
-		setMerchant(result.data);
-		setDialog(null);
-	};
-	const remove = async () => {
-		const result = await act(adminApi.merchant(merchantId), { confirm: merchant.name }, 'DELETE');
-		if (result.ok) nav.go(adminRoutes.merchants());
+	// a stolen sign-in must not copy a link that signs in as the merchant, turn off a second step or delete a merchant:
+	// these three ask for the person's password (and a code while two-step is on)
+	/** @param {{ password: string, code?: string, recoveryCode?: string }} confirmation */
+	const sendConfirmed = async (confirmation) => {
+		setProblem(null);
+		const result =
+			dialog === 'copyLink'
+				? await apiConfirm(adminApi.setupLink(merchantId), { method: 'POST', body: { copy: true, ...confirmation } })
+				: dialog === 'twoStep'
+					? await apiConfirm(adminApi.merchantTwoStepOff(merchantId), { method: 'POST', body: confirmation })
+					: await apiConfirm(adminApi.merchant(merchantId), {
+							method: 'DELETE',
+							body: { confirm: merchant.name, ...confirmation },
+						});
+		if (!result.ok) return result;
+		if (dialog === 'copyLink') setLink(result.data?.link ?? null);
+		else if (dialog === 'twoStep') setMerchant(result.data);
+		else nav.go(adminRoutes.merchants());
+		return result;
 	};
 
 	/** @type {import('@ss/ui').MenuItem[]} */
@@ -539,8 +551,8 @@ function MerchantPage({ detail, admin, section = 'websites' }) {
 			: []),
 		...(can('merchants.setup_link') && merchant.setupPending
 			? [
-					{ label: ADMIN.resendSetupLink, onSelect: () => void setupLink(false), disabled: busy },
-					{ label: ADMIN.copySetupLink, onSelect: () => void setupLink(true), disabled: busy },
+					{ label: ADMIN.resendSetupLink, onSelect: () => void resendSetupLink(), disabled: busy },
+					{ label: ADMIN.copySetupLink, onSelect: () => openDialog('copyLink') },
 				]
 			: []),
 		...(can('two_step.turn_off') && merchant.twoStep?.enabled
@@ -784,29 +796,31 @@ function MerchantPage({ detail, admin, section = 'websites' }) {
 					<p className="text-sm text-muted">{ADMIN.resumeHelp}</p>
 				)}
 			</ConfirmDialog>
-			<ConfirmDialog
-				open={dialog === 'twoStep'}
+			<ConfirmChange
+				open={dialog === 'copyLink' || dialog === 'twoStep' || dialog === 'delete'}
+				title={
+					dialog === 'copyLink'
+						? ADMIN.copySetupLink
+						: dialog === 'twoStep'
+							? ADMIN.turnOffTwoStep
+							: `${ADMIN.deleteMerchant} ${merchant.name}`
+				}
+				help={
+					dialog === 'copyLink'
+						? ADMIN.copySetupLinkHelp
+						: dialog === 'twoStep'
+							? ADMIN.turnOffTwoStepHelp
+							: ADMIN.deleteHelp(typeof balance === 'number' ? formatCredits(balance) : '—')
+				}
+				confirmLabel={
+					dialog === 'copyLink' ? ADMIN.copySetupLink : dialog === 'twoStep' ? ADMIN.turnOffTwoStep : ADMIN.deleteMerchant
+				}
+				danger={dialog !== 'copyLink'}
+				{...(dialog === 'delete' ? { expected: merchant.name } : {})}
+				send={sendConfirmed}
 				onClose={() => setDialog(null)}
-				onConfirm={() => void turnOffTwoStep()}
-				busy={busy}
-				danger
-				confirmLabel={ADMIN.turnOffTwoStep}
-				title={ADMIN.turnOffTwoStep}
-				error={problem ? describeProblem(problem) : null}>
-				<p className="text-sm text-muted">{ADMIN.turnOffTwoStepHelp}</p>
-			</ConfirmDialog>
-			<TypedConfirmDialog
-				open={dialog === 'delete'}
-				onClose={() => setDialog(null)}
-				onConfirm={() => void remove()}
-				expected={merchant.name}
-				busy={busy || nav.pending}
-				danger
-				confirmLabel={ADMIN.deleteMerchant}
-				title={`${ADMIN.deleteMerchant} ${merchant.name}`}
-				error={problem ? describeProblem(problem) : null}>
-				<p className="text-sm text-muted">{ADMIN.deleteHelp(typeof balance === 'number' ? formatCredits(balance) : '—')}</p>
-			</TypedConfirmDialog>
+				onDone={() => setDialog(null)}
+			/>
 			<AddWebsiteDialog
 				open={dialog === 'addWebsite'}
 				merchantId={merchantId}

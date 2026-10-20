@@ -82,7 +82,7 @@ export const bootPortal = async ({ db, clock = createClock(T0), settings, allowH
 	const admin = async (role) => {
 		counter += 1;
 		const email = `${role}-${counter}@portal.test`;
-		const invited = await (await owner()).post('/v1/admin/admins', { email, role });
+		const invited = await (await owner()).post('/v1/admin/admins', { email, role, password: PASSWORD });
 		if (invited.status !== 201) throw new Error(`invite ${invited.status} ${JSON.stringify(invited.json)}`);
 		const accepted = await api.call('POST', '/v1/auth/set-password', {
 			body: { token: mailer.token(email, 'admin_invite'), password: PASSWORD, name: `${role} admin` },

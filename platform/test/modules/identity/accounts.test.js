@@ -242,7 +242,7 @@ describe('links (PLAN 0.2 Logins)', () => {
 		expect((await o.client.post(`/v1/admin/merchants/${created.json.merchant.merchantId}/setup-link`, {})).status).toBe(409);
 		expect(await h.activity('merchant.setup_link_sent')).toHaveLength(2);
 
-		const invited = await o.client.post('/v1/admin/admins', { email: 'sue@portal.test', role: 'support' });
+		const invited = await o.client.post('/v1/admin/admins', { email: 'sue@portal.test', role: 'support', password: PASSWORD });
 		const inviteToken = h.mailer.token('sue@portal.test', 'admin_invite');
 		expect((await h.call('POST', '/v1/auth/set-password/check', { body: { token: inviteToken } })).json.needsName).toBe(true);
 		expect((await h.client().post('/v1/auth/set-password', { token: inviteToken, password: PASSWORD })).status).toBe(422);
@@ -250,7 +250,7 @@ describe('links (PLAN 0.2 Logins)', () => {
 		expect(accepted.json).toMatchObject({ console: 'admin', admin: { name: 'Sue', role: 'support', status: 'active' } });
 		expect(invited.json.invite).toMatchObject({ mailed: true });
 		// admin invites last 24 hours
-		await o.client.post('/v1/admin/admins', { email: 'late@portal.test', role: 'finance' });
+		await o.client.post('/v1/admin/admins', { email: 'late@portal.test', role: 'finance', password: PASSWORD });
 		const late = h.mailer.token('late@portal.test', 'admin_invite');
 		h.clock.advance(23 * 3_600_000);
 		expect((await h.call('POST', '/v1/auth/set-password/check', { body: { token: late } })).status).toBe(200);

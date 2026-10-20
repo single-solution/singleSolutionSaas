@@ -130,6 +130,29 @@ const confirmInput = () => {
 	return /** @type {HTMLInputElement} */ (document.getElementById(/** @type {HTMLLabelElement} */ (label).htmlFor));
 };
 
+/** The Owner's password in this flow (the first admin below). */
+const OWNER_PASSWORD = 'root password 123!';
+
+/**
+ * Answer the open password dialog (the top one: it can sit over a drawer): type the password and press its button.
+ * @param {string} label the button of the dialog
+ * @param {string} [password]
+ */
+const confirmWithPassword = async (label, password = OWNER_PASSWORD) => {
+	const dialog = () =>
+		[...document.querySelectorAll('[role="dialog"]')].reverse().find((d) => d.querySelector('input[type="password"]'));
+	await until(() => dialog());
+	type(byLabel(/** @type {HTMLElement} */ (dialog()), 'Your password'), password);
+	const found = () =>
+		/** @type {HTMLButtonElement | undefined} */ (
+			[...(dialog()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === label)
+		);
+	await until(() => found()?.disabled === false);
+	await act(async () => {
+		found()?.click();
+	});
+};
+
 describe('admin console interactions (jsdom)', () => {
 	it('drives every admin page against a live Portal', async () => {
 		/** @type {Array<{ to: string, template: string, data: Record<string, any> }>} */
@@ -160,7 +183,7 @@ describe('admin console interactions (jsdom)', () => {
 		const created = await ownerBrowser.api.post('/v1/auth/first-admin', {
 			name: 'Rita Root',
 			email: 'root@ss.test',
-			password: 'root password 123!',
+			password: OWNER_PASSWORD,
 		});
 		expect(created.ok).toBe(true);
 		const session = await admin.loadAdminSession(ownerBrowser.api);
@@ -280,6 +303,11 @@ describe('admin console interactions (jsdom)', () => {
 		await renderMerchant(madeId);
 		await until(() => shows('Setup pending'));
 		await choose('Copy setup link');
+		// copying a link that signs in as the merchant asks for the password: a wrong one changes nothing
+		await confirmWithPassword('Copy setup link', 'not my password');
+		await until(() => shows('That password is not right'));
+		expect(ownerBrowser.calls.some((c) => c.path === adminApi.setupLink(madeId) && c.body?.link)).toBe(false);
+		await confirmWithPassword('Copy setup link');
 		await until(() => shows('Copy this link now.'));
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (document.querySelector('[role="dialog"] button[aria-label="Close"]'))?.click();
@@ -353,7 +381,7 @@ describe('admin console interactions (jsdom)', () => {
 		// delete the merchant (no websites left): typed business name
 		await choose('Delete');
 		type(confirmInput(), 'Ops Made Ltd');
-		await pressInDialog('Delete');
+		await confirmWithPassword('Delete');
 		await until(() =>
 			ownerBrowser.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.merchant(madeId) && c.status === 204),
 		);
@@ -361,11 +389,11 @@ describe('admin console interactions (jsdom)', () => {
 		// two-step off for a merchant with two-step on
 		// the bulk suspension ended the merchant's sessions: sign in again
 		await other.b.api.post('/v1/auth/sign-in', { email: 'other@else.test', password: 'correct horse battery' });
-		const started = await other.b.api.post('/v1/me/two-step/start');
+		const started = await other.b.api.post('/v1/me/two-step/start', { password: 'correct horse battery' });
 		await other.b.api.post('/v1/me/two-step/confirm', { code: totpCode(started.ok ? started.data.secret : '', Date.now()) });
 		await renderMerchant(other.merchantId);
 		await choose('Turn off two-step');
-		await pressInDialog('Turn off two-step');
+		await confirmWithPassword('Turn off two-step');
 		await until(() =>
 			ownerBrowser.calls.some((c) => c.path === adminApi.merchantTwoStepOff(other.merchantId) && c.status === 200),
 		);
@@ -538,6 +566,7 @@ describe('admin console interactions (jsdom)', () => {
 			byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Support').click();
 		});
 		await pressInDialog('Invite');
+		await confirmWithPassword('Invite');
 		const invited = /** @type {any} */ (
 			await until(
 				() =>
@@ -556,6 +585,7 @@ describe('admin console interactions (jsdom)', () => {
 			</ToastProvider>,
 		);
 		await press('Copy invite link');
+		await confirmWithPassword('Copy invite link');
 		await until(() => shows('Copy this link now.'));
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (document.querySelector('[role="dialog"] button[aria-label="Close"]'))?.click();
@@ -564,18 +594,22 @@ describe('admin console interactions (jsdom)', () => {
 		await choose('Correct invite email');
 		fillDialog('Email', 'helpdesk@ss.test');
 		await pressInDialog('Correct invite email');
+		await confirmWithPassword('Correct invite email');
 		await until(() => shows('helpdesk@ss.test'));
 		await choose('Change role');
 		await act(async () => {
 			byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Finance').click();
 		});
 		await pressInDialog('Change role');
+		await confirmWithPassword('Change role');
 		await until(() =>
 			ownerBrowser.calls.some((c) => c.method === 'PATCH' && c.path.startsWith('/v1/admin/admins/') && c.status === 200),
 		);
 		await settle(2);
+		// the role drawer and its password dialog are gone before the menu opens the next one
+		await until(() => !document.querySelector('[role="dialog"]'));
 		await choose('Remove');
-		await pressInDialog('Remove');
+		await confirmWithPassword('Remove');
 		await until(() =>
 			ownerBrowser.calls.some((c) => c.method === 'DELETE' && c.path.startsWith('/v1/admin/admins/') && c.status === 204),
 		);

@@ -3,7 +3,7 @@
  * reports, the Portal accepts them and charges from them; a refused report changes nothing in the product.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { HOUR, startSystem } from './helpers.js';
+import { HOUR, PASSWORD, startSystem } from './helpers.js';
 
 /** @type {import('./helpers.js').System} */
 let sys;
@@ -86,7 +86,7 @@ describe('price and feature reports', () => {
 		const cookie = await sys.adminSession(support.client, websiteId);
 		// the admin becomes Finance while the product cannot hear it: its dashboard session lives on for now
 		sys.setReachable(false);
-		const changed = await owner.patch(`/v1/admin/admins/${support.adminId}`, { role: 'finance' });
+		const changed = await owner.patch(`/v1/admin/admins/${support.adminId}`, { role: 'finance', password: PASSWORD });
 		expect(changed.status).toBe(200);
 		expect((await sys.waitingNotices()).map((n) => n.type)).toContain('sessions.revoked');
 		sys.setReachable(true);

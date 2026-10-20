@@ -525,12 +525,16 @@ export const createAccounts = (deps) => {
 
 		/**
 		 * Start setting two-step up: the secret and `otpauth://` URI (shown once; sealed at rest with `ENCRYPTION_KEY`).
+		 * Needs the current password (a stolen session alone must not be able to claim the login's second step); wrong
+		 * passwords count against the same throttle as signing in.
 		 * @param {Kind} kind
-		 * @param {string} id
+		 * @param {{ id: string, password: string }} input
+		 * @param {Meta} meta
 		 */
-		twoStepStart: async (kind, id) => {
+		twoStepStart: async (kind, { id, password }, meta) => {
 			const doc = await loadLogin(kind, id);
 			if (doc.totp) throw problem('conflict', 'Two-step sign-in is already on.');
+			await proveLogin(kind, doc, password, {}, meta);
 			const secret = generateTotpSecret({ randomBytes: ctx.randomBytes });
 			await logins(kind).updateOne(
 				{ _id: doc._id },

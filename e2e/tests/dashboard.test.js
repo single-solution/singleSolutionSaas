@@ -112,7 +112,7 @@ describe('opening the product dashboard', () => {
 		// so does a role change
 		const third = await sys.admin('support');
 		const thirdCookie = await sys.adminSession(third.client, w1);
-		await owner.patch(`/v1/admin/admins/${third.adminId}`, { role: 'owner' });
+		await owner.patch(`/v1/admin/admins/${third.adminId}`, { role: 'owner', password: PASSWORD });
 		expect((await session(thirdCookie)).status).toBe(401);
 
 		// and a merchant's suspension (the merchant cannot open it again; an admin still can)

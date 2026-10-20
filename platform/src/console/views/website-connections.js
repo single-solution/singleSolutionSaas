@@ -22,7 +22,6 @@ import {
 	EmptyState,
 	FormError,
 	Input,
-	PasswordConfirmDialog,
 	Select,
 	SettingRow,
 	SettingsCard,
@@ -33,8 +32,7 @@ import { AI_PROVIDERS } from '@ss/contracts';
 import { WEBSITE_SETTINGS as T } from '../../texts/console.js';
 import { apiConfirm } from '../client.js';
 import { api } from '../paths.js';
-import { confirmationErrors } from './website.js';
-import { factorOf } from './common.js';
+import { ConfirmChange, confirmationErrors } from './confirm-change.js';
 
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
 /**
@@ -70,53 +68,6 @@ const TONES = {
 	off: 'neutral',
 	idle: 'neutral',
 };
-
-/**
- * The password dialog of a change: the person's password (and a code when the Portal asks for one), the request, and the
- * reason under its field when refused. It keeps the request in the page's hands: `send(confirmation)` returns the answer.
- * @param {{ open: boolean, title: string, help: string, confirmLabel: string, danger?: boolean,
- *   send: (confirmation: { password: string, code?: string, recoveryCode?: string }) => Promise<{ ok: true } | { ok: false, problem: Problem }>,
- *   onClose: () => void, onDone: () => void }} props
- */
-function ConfirmChange({ open, title, help, confirmLabel, danger = false, send, onClose, onDone }) {
-	const [busy, setBusy] = useState(false);
-	const [errors, setErrors] = useState(/** @type {{ password?: string, code?: string, form?: string }} */ ({}));
-	const [wantsCode, setWantsCode] = useState(false);
-	/** @param {{ password: string, code: string }} input */
-	const confirm = async ({ password, code }) => {
-		setBusy(true);
-		setErrors({});
-		const result = await send({ password, ...factorOf(code) });
-		setBusy(false);
-		if (result.ok) {
-			onDone();
-			return;
-		}
-		const found = confirmationErrors(result.problem);
-		if (found.code) setWantsCode(true);
-		// a refusal that is not about the password (a value the Portal does not accept) is shown by the form, not here
-		if (!found.password && !found.code && result.problem.status === 422) {
-			onClose();
-			return;
-		}
-		setErrors(found);
-	};
-	return (
-		<PasswordConfirmDialog
-			open={open}
-			onClose={onClose}
-			onConfirm={(input) => void confirm(input)}
-			busy={busy}
-			danger={danger}
-			showCode={wantsCode}
-			confirmLabel={confirmLabel}
-			title={title}
-			errors={errors}
-			texts={{ password: T.data.password, passwordHelp: T.data.passwordHelp, code: T.data.code, codeHelp: T.data.codeHelp }}>
-			<p className="text-sm text-muted">{help}</p>
-		</PasswordConfirmDialog>
-	);
-}
 
 /**
  * The state of a value (or of a link) in words, as a badge.

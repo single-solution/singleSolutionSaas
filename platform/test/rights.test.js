@@ -150,7 +150,10 @@ describe('rights: people, merchants, websites, tokens, admins and Settings', () 
 			name: 'Resend or copy merchant setup links',
 			columns: {
 				owner: async (as) =>
-					expect((await as.owner.post(`/v1/admin/merchants/${as.pending}/setup-link`, { copy: true })).status).toBe(200),
+					expect(
+						(await as.owner.post(`/v1/admin/merchants/${as.pending}/setup-link`, { copy: true, password: PASSWORD }))
+							.status,
+					).toBe(200),
 				support: async (as) =>
 					expect((await as.support.post(`/v1/admin/merchants/${as.pending}/setup-link`, {})).status).toBe(200),
 				finance: async (as) =>
@@ -164,7 +167,9 @@ describe('rights: people, merchants, websites, tokens, admins and Settings', () 
 			name: "Turn off another person's two-step",
 			columns: {
 				owner: async (as) =>
-					expect(allowed(await as.owner.post(`/v1/admin/merchants/${as.m.merchantId}/two-step/off`, {}))).toBe(true),
+					expect(
+						allowed(await as.owner.post(`/v1/admin/merchants/${as.m.merchantId}/two-step/off`, { password: PASSWORD })),
+					).toBe(true),
 				support: async (as) =>
 					expect((await as.support.post(`/v1/admin/merchants/${as.m.merchantId}/two-step/off`, {})).status).toBe(403),
 				finance: async (as) =>
@@ -178,7 +183,11 @@ describe('rights: people, merchants, websites, tokens, admins and Settings', () 
 			name: 'Delete a merchant',
 			columns: {
 				owner: async (as) =>
-					expect(allowed(await as.owner.del(`/v1/admin/merchants/${as.pending}`, { confirm: 'not the name' }))).toBe(true),
+					expect(
+						allowed(
+							await as.owner.del(`/v1/admin/merchants/${as.pending}`, { confirm: 'not the name', password: PASSWORD }),
+						),
+					).toBe(true),
 				support: async (as) =>
 					expect((await as.support.del(`/v1/admin/merchants/${as.pending}`, { confirm: 'P' })).status).toBe(403),
 				finance: async (as) =>
