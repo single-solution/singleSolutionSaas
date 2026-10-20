@@ -54,6 +54,8 @@ import { createStore } from '../adapters/store.js';
 
 /** A pending payment is asked of its gateway again at most this often. */
 const RECHECK_MS = 30_000;
+/** A refund reserved before its gateway call is taken to be of a process that is gone after this long (SR-3-3). */
+const REFUND_RESERVATION_MS = 300_000;
 
 /** The server token as an actor (when a server-token call names no acting user). */
 export const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
@@ -507,18 +509,34 @@ export const createService = (product) => {
 					});
 		const refundId = `rfd_${payment.id.slice(4)}_${payment.refunds.length + 1}`;
 		const gateway = payment.gateway;
+		const keys = isGateway(gateway) ? await keysOf(s, gateway) : null;
+		if (isGateway(gateway) && !keys) throw problem('gateway_not_ready', `${gateway} is not connected for this website.`);
+		// reserved here first, with the same compare-and-swap as the refund itself, so two refunds at once reach the
+		// gateway once; removed again when the gateway does not take it (SR-3-3)
+		const reserved = await s.store.payments.reserveRefund(
+			payment.id,
+			payment.refunded,
+			{ id: refundId, amount: checked.amount, at: new Date(now()) },
+			new Date(now() - REFUND_RESERVATION_MS),
+		);
+		if (!reserved) throw problem('conflict', 'The payment changed meanwhile or another refund is on its way; read it again.');
 		/** @type {import('../adapters/gateways/types.js').Refunded} */
 		let done = { ok: true, manual: true };
-		if (isGateway(gateway)) {
-			const keys = await keysOf(s, gateway);
-			if (!keys) throw problem('gateway_not_ready', `${gateway} is not connected for this website.`);
-			done = await gateways[adapterOf(gateway)].refund(
-				{ payment: { ...payment, websiteId: s.websiteId }, amount: checked.amount, reason, refundId },
-				keys,
-				ctx,
-			);
+		try {
+			if (isGateway(gateway) && keys)
+				done = await gateways[adapterOf(gateway)].refund(
+					{ payment: { ...payment, websiteId: s.websiteId }, amount: checked.amount, reason, refundId },
+					keys,
+					ctx,
+				);
+		} catch (error) {
+			await s.store.payments.releaseRefund(payment.id, refundId);
+			throw error;
 		}
-		if (!done.ok) throw problem('gateway_failed', done.message);
+		if (!done.ok) {
+			await s.store.payments.releaseRefund(payment.id, refundId);
+			throw problem('gateway_failed', done.message);
+		}
 		const refunded = await s.store.payments.addRefund(
 			payment.id,
 			payment.refunded,

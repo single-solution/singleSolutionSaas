@@ -5,6 +5,7 @@ import { formSignature } from '../adapters/gateways/payfast.js';
 import { pakistanTime, secureHash } from '../adapters/gateways/jazzcash.js';
 import { validationHash } from '../adapters/gateways/payfast-pk.js';
 import { webhookSignature } from '../adapters/gateways/rapid.js';
+import { createStore } from '../adapters/store.js';
 import { ADMIN_ORIGIN, ALL, BASE, BUCKET, DOMAIN, NOTIFY_BASE, ORIGIN, setup } from './helpers.js';
 
 /** Today's bank transfer, filled in: paid first, proof on, one account for any currency. */
@@ -351,6 +352,57 @@ describe('the payment API and Stripe', () => {
 		expect(refused.json.detail).toBe('Declined');
 		stripeAnswers();
 		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('This payment was refunded');
+	});
+
+	it('reserves a refund before the gateway is called: two at once reach it once, a refused one leaves nothing behind (SR-3-3)', async () => {
+		stripeAnswers();
+		const payment = await createPayment({ gateway: 'stripe' });
+		await page(`/pay/${env.websiteId}/${payment.id}`);
+		await stripePaid(payment.id, 250000);
+		const refundCalls = () => env.gateways.callsTo('https://api.stripe.com').filter((c) => c.path === '/v1/refunds');
+		const before = refundCalls().length;
+		const refund = (/** @type {number} */ amount) => env.api('POST', `/v1/payments/${payment.id}/refunds`, { amount });
+		const read = async () => (await env.api('GET', `/v1/payments/${payment.id}`)).json;
+		const both = await Promise.all([refund(100000), refund(100000)]);
+		expect(both.map((answer) => answer.status).sort()).toEqual([201, 409]);
+		expect(refundCalls()).toHaveLength(before + 1);
+		expect(await read()).toMatchObject({ status: 'partially_refunded', refunded: 100000 });
+		// a gateway that refuses leaves no refund reserved: the same refund goes through when it is tried again
+		env.gateways.respond('https://api.stripe.com', () => ({ status: 402, body: { error: { message: 'Declined' } } }));
+		expect((await refund(50000)).status).toBe(502);
+		expect(await read()).toMatchObject({ status: 'partially_refunded', refunded: 100000, refunds: [{ amount: 100000 }] });
+		stripeAnswers();
+		expect((await refund(50000)).status).toBe(201);
+		expect(await read()).toMatchObject({ refunded: 150000, refunds: [{ amount: 100000 }, { amount: 50000 }] });
+		// the refund's own id is the gateway's idempotency key: the refused try and the one that went through share it
+		const keys = refundCalls().map((call) => call.headers['idempotency-key']);
+		expect(keys.slice(-2)[0]).toBe(keys.slice(-1)[0]);
+		expect(keys.slice(-3)[0]).not.toBe(keys.slice(-1)[0]);
+	});
+
+	it('does not let a refund whose process is gone block the payment for ever (SR-3-3)', async () => {
+		stripeAnswers();
+		const payment = await createPayment({ gateway: 'stripe' });
+		await page(`/pay/${env.websiteId}/${payment.id}`);
+		await stripePaid(payment.id, 250000);
+		const store = createStore(await env.product.data.forWebsite(env.websiteId), { now: env.now });
+		const reserved = await store.payments.reserveRefund(
+			payment.id,
+			0,
+			{ id: `rfd_${payment.id.slice(4)}_1`, amount: 100000, at: new Date(env.now()) },
+			new Date(env.now() - 300_000),
+		);
+		expect(reserved).not.toBeNull();
+		const refund = () => env.api('POST', `/v1/payments/${payment.id}/refunds`, { amount: 100000 });
+		const calls = () => env.gateways.callsTo('https://api.stripe.com').filter((c) => c.path === '/v1/refunds').length;
+		const before = calls();
+		// a refund that is on its way blocks another one
+		expect((await refund()).status).toBe(409);
+		expect(calls()).toBe(before);
+		// five minutes later the process that made it is taken to be gone
+		env.advance(301_000);
+		expect((await refund()).status).toBe(201);
+		expect(calls()).toBe(before + 1);
 	});
 
 	it('does not verify a payment that was refunded in full (SR-3-9), and still says what was refunded', async () => {

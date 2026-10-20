@@ -45,6 +45,8 @@ import { createId } from '@ss/contracts';
  * @property {{ kind: 'redirect', url: string } | { kind: 'form', action: string, fields: Array<[string, string]> } | null} checkout
  * @property {number} refunded minor units refunded so far
  * @property {Array<{ id: string, amount: number, reason: string, manual: boolean, by: string, at: Date, gatewayRef: string | null }>} refunds
+ * @property {{ id: string, amount: number, at: Date } | null} refundPending the refund reserved before its gateway is
+ *   called (SR-3-3): only one at a time; it is moved into `refunds` when the gateway took it, and removed when it did not
  * @property {{ key: string, type: string, size: number, at: Date } | null} proof the payer's proof of a manual payment, in
  *   the merchant's storage
  * @property {HistoryEntry[]} history
@@ -146,7 +148,7 @@ export const createStore = (data, { now }) => {
 	return Object.freeze({
 		payments: Object.freeze({
 			/**
-			 * @param {Omit<PaymentRecord, 'id' | 'websiteId' | 'createdAt' | 'updatedAt' | 'status' | 'refunded' | 'refunds' | 'proof' | 'history' | 'paidAt' | 'voidedAt' | 'gatewayRef' | 'captureRef' | 'checkout'>} input
+			 * @param {Omit<PaymentRecord, 'id' | 'websiteId' | 'createdAt' | 'updatedAt' | 'status' | 'refunded' | 'refunds' | 'refundPending' | 'proof' | 'history' | 'paidAt' | 'voidedAt' | 'gatewayRef' | 'captureRef' | 'checkout'>} input
 			 * @returns {Promise<PaymentRecord>}
 			 */
 			add: async (input) => {
@@ -160,6 +162,7 @@ export const createStore = (data, { now }) => {
 					checkout: null,
 					refunded: 0,
 					refunds: [],
+					refundPending: null,
 					proof: null,
 					history: [{ at: at(), event: 'created' }],
 					paidAt: null,
@@ -186,7 +189,39 @@ export const createStore = (data, { now }) => {
 					),
 				),
 			/**
-			 * Add a refund while nothing else was refunded meanwhile.
+			 * Reserve a refund before its gateway is called (SR-3-3), while nothing else was refunded meanwhile and no other
+			 * refund is on its way: two refunds at once never both reach the gateway. A reservation made before `staleBefore`
+			 * is taken to be of a process that is gone, and may be replaced.
+			 * @param {string} id
+			 * @param {number} refundedBefore
+			 * @param {{ id: string, amount: number, at: Date }} reservation
+			 * @param {Date} staleBefore
+			 * @returns {Promise<PaymentRecord | null>} null when it was not free to reserve
+			 */
+			reserveRefund: async (id, refundedBefore, reservation, staleBefore) =>
+				as(
+					await payments.findOneAndUpdate(
+						{
+							websiteId,
+							id,
+							refunded: refundedBefore,
+							status: { $in: ['paid', 'partially_refunded'] },
+							$or: [{ refundPending: null }, { 'refundPending.at': { $lt: staleBefore } }],
+						},
+						{ $set: { refundPending: reservation } },
+						{ returnDocument: 'after', ...NO_ID },
+					),
+				),
+			/**
+			 * Remove a reservation: the gateway did not take the refund.
+			 * @param {string} id
+			 * @param {string} refundId
+			 */
+			releaseRefund: async (id, refundId) => {
+				await payments.updateOne({ websiteId, id, 'refundPending.id': refundId }, { $set: { refundPending: null } });
+			},
+			/**
+			 * Add a refund the gateway took, while it is still the one reserved and nothing else was refunded meanwhile.
 			 * @param {string} id
 			 * @param {number} refundedBefore
 			 * @param {PaymentRecord['refunds'][number]} refund
@@ -196,9 +231,15 @@ export const createStore = (data, { now }) => {
 			addRefund: async (id, refundedBefore, refund, status) =>
 				as(
 					await payments.findOneAndUpdate(
-						{ websiteId, id, refunded: refundedBefore, status: { $in: ['paid', 'partially_refunded'] } },
 						{
-							$set: { status, refunded: refundedBefore + refund.amount },
+							websiteId,
+							id,
+							refunded: refundedBefore,
+							status: { $in: ['paid', 'partially_refunded'] },
+							'refundPending.id': refund.id,
+						},
+						{
+							$set: { status, refunded: refundedBefore + refund.amount, refundPending: null },
 							$push: {
 								refunds: refund,
 								history: {
