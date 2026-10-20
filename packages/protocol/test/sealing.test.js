@@ -66,6 +66,21 @@ describe('sealing', () => {
 		expectThrowCode(() => createSealer(/** @type {any} */ ({ key: A })), 'invalid_argument');
 	});
 
+	it('a value whose tag is not the full 16 bytes does not open (a short tag checks only a few bits)', () => {
+		const sealer = createSealer({ key: A, label: 'test' });
+		const sealed = sealer.seal('secret', 'here');
+		const [format, keyId, iv, tag, data] = sealed.split('.');
+		const tagBytes = Buffer.from(/** @type {string} */ (tag), 'base64url');
+		expect(tagBytes).toHaveLength(16);
+		for (const length of [4, 8, 12, 15]) {
+			const short = [format, keyId, iv, tagBytes.subarray(0, length).toString('base64url'), data].join('.');
+			expect(sealer.open(short, 'here')).toBeNull();
+		}
+		const long = [format, keyId, iv, Buffer.concat([tagBytes, Buffer.from([0])]).toString('base64url'), data].join('.');
+		expect(sealer.open(long, 'here')).toBeNull();
+		expect(sealer.open(sealed, 'here')).toBe('secret');
+	});
+
 	it('uses the given randomness for the IV', () => {
 		const sealer = createSealer({ key: A, label: 'test', randomBytes: (n) => new Uint8Array(n).fill(1) });
 		expect(sealer.seal('x', 'a')).toBe(sealer.seal('x', 'a'));

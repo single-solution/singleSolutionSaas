@@ -18,6 +18,8 @@ import { createProtocolError } from './errors.js';
 export const SEAL_FORMAT = 'ss2';
 /** Shortest accepted `ENCRYPTION_KEY` (and `ENCRYPTION_KEY_PREVIOUS`). */
 const MIN_ENCRYPTION_KEY_LENGTH = 32;
+/** Bytes of the GCM authentication tag: the only length a sealed value is sealed with and opened with. */
+const TAG_LENGTH = 16;
 
 const LABEL = /^[a-z][a-z0-9-]{0,40}$/;
 
@@ -45,9 +47,11 @@ export const sealKeyId = (encryptionKey) => derive(encryptionKey, 'ss.seal.key-i
  */
 const gcmOpen = (key, iv, tag, data, aad) => {
 	try {
-		const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64url'));
+		const tagBytes = Buffer.from(tag, 'base64url');
+		if (tagBytes.length !== TAG_LENGTH) return null; // a short tag would check only a few bits
+		const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64url'), { authTagLength: TAG_LENGTH });
 		decipher.setAAD(Buffer.from(aad, 'utf8'));
-		decipher.setAuthTag(Buffer.from(tag, 'base64url'));
+		decipher.setAuthTag(tagBytes);
 		return Buffer.concat([decipher.update(Buffer.from(data, 'base64url')), decipher.final()]).toString('utf8');
 	} catch {
 		return null;
@@ -87,7 +91,7 @@ export const createSealer = ({ key, previousKey = null, label, randomBytes = (n)
 	 */
 	const seal = (plaintext, aad) => {
 		const iv = Buffer.from(randomBytes(12));
-		const cipher = createCipheriv('aes-256-gcm', current.aes, iv);
+		const cipher = createCipheriv('aes-256-gcm', current.aes, iv, { authTagLength: TAG_LENGTH });
 		cipher.setAAD(Buffer.from(aad, 'utf8'));
 		const data = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
 		return `${prefix}${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${data.toString('base64url')}`;
