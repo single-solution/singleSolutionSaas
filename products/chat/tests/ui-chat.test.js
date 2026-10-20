@@ -71,6 +71,8 @@ const view = (over = {}) => ({
 /** @param {number} seq @param {string} author @param {string} text @param {Record<string, unknown>} [over] */
 const msg = (seq, author, text, over = {}) => ({ id: `m${seq}`, seq, author, name: null, text, createdAt: AT, ...over });
 
+const signedIn = { kind: 'user', name: 'Ana', email: 'a@b.co' };
+
 const keepGuest = () =>
 	window.localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify({ key: 'g1', expiresAt: START + 86_400_000 }));
 
@@ -608,15 +610,15 @@ describe('conversation tools', () => {
 		const { $, root, server } = await start({
 			features: ['visitor_chat', 'guest_chat', 'handoff', 'presence_queue', 'transcripts'],
 			routes: {
-				'GET /v1/chat': () => answer(200, { ...view({ conversation: current }), messages: [] }),
+				'GET /v1/chat': () => answer(200, { ...view({ conversation: current, visitor: signedIn }), messages: [] }),
 				'POST /v1/chat/handoff': () => {
 					current = conv({ waiting: true, queuePosition: 2, officeHours: { open: false, backAt: '2026-10-02T09:00:00Z' } });
-					return answer(200, { chat: view({ conversation: current }) });
+					return answer(200, { chat: view({ conversation: current, visitor: signedIn }) });
 				},
 				'POST /v1/chat/transcript': () => transcript,
 				'POST /v1/chat/end': () => {
 					current = conv({ status: 'resolved', officeHours: { open: false, backAt: null } });
-					return answer(200, { chat: view({ conversation: current }) });
+					return answer(200, { chat: view({ conversation: current, visitor: signedIn }) });
 				},
 			},
 		});
@@ -640,6 +642,16 @@ describe('conversation tools', () => {
 		await click(buttonIn(root, TEXTS['chat.end']));
 		expect(shows(root, TEXTS['chat.end'])).toBe(false);
 		expect(textsIn(root, '.notices p')).toEqual([TEXTS['chat.officeAway']]);
+	});
+
+	it('offers no transcript to a guest, who has no verified email to send it to (SR-6-2)', async () => {
+		keepGuest();
+		const { root } = await start({
+			features: ['visitor_chat', 'guest_chat', 'transcripts'],
+			routes: { 'GET /v1/chat': () => answer(200, { ...view({ conversation: conv() }), messages: [] }) },
+		});
+		await click(root.querySelector('.launcher'));
+		expect(shows(root, TEXTS['chat.transcript'])).toBe(false);
 	});
 
 	it('says when handoff or end fail', async () => {

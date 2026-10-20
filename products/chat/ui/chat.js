@@ -539,7 +539,8 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		const live = Boolean(c) && c.status !== 'resolved' && !stopped;
 		setHidden(talk, !(on('handoff') && s.handoff.showButton && live && !c.waiting));
 		setHidden(older, !earlier);
-		setHidden(copy, !(on('transcripts') && c && !stopped));
+		// a transcript goes only to the verified email of a sign-in (SR-6-2): a guest has none to send to
+		setHidden(copy, !(on('transcripts') && c && !stopped && chat.visitor.kind === 'user'));
 		setHidden(end, !live);
 		setHidden(composer, stopped || Boolean(limit) || (needsContact() && !c));
 		const visitors = s.attachments.visitors;
