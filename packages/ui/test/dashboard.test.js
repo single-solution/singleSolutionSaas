@@ -1147,7 +1147,7 @@ describe('standard tabs', () => {
 		]);
 	});
 
-	it('Connections: the database, the storage and the links belong to the Portal: a note and a link to it, no form, no Remove', async () => {
+	it('Connections: the database, the storage, the AI provider key and the links belong to the Portal: a note and a link to it, no form, no Remove', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}/connections`;
 		serve({
@@ -1163,6 +1163,14 @@ describe('standard tabs', () => {
 						status: 'not_connected',
 						managed: true,
 					},
+					{
+						name: 'ai_shared',
+						label: 'AI provider',
+						kind: 'secret',
+						neededBy: ['notes'],
+						status: 'connected',
+						managed: true,
+					},
 					{ name: 'ai', label: 'AI key', kind: 'secret', neededBy: [], status: 'not_connected', managed: false },
 				],
 			}),
@@ -1174,6 +1182,7 @@ describe('standard tabs', () => {
 			['database', TEXTS.connections.managed.database],
 			['storage', TEXTS.connections.managed.storage],
 			['link_accounts', TEXTS.connections.managed.link],
+			['ai_shared', TEXTS.connections.managed.secret],
 		])) {
 			openSection(container, `connection-${name}`);
 			const section = /** @type {HTMLElement} */ (container.querySelector(`#section-connection-${name}`));

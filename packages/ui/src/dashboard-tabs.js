@@ -59,7 +59,7 @@ import { websiteSettingsUrl } from './portal-links.js';
 /**
  * One connection of a website (`GET …/connections`).
  * @typedef {{ name: string, label: string, kind?: string, neededBy: string[], status: string, message?: string,
- *   managed?: boolean, last4?: string | null }} Connection `managed`: the Portal owns it (the database, the storage, the links)
+ *   managed?: boolean, last4?: string | null }} Connection `managed`: the Portal owns it (the database, the storage, the AI provider key, the links)
  */
 /**
  * What a product adds to its Overview: its own "Needs you" items, setup steps, number tiles and sections.
@@ -492,7 +492,7 @@ function TextsPanel({ items, saveUrl, resetBody, savedSource, reload }) {
  * its state is a pill in the header beside Test (and Remove in the More menu once something is saved, after a
  * confirmation), who needs it is behind the (i), and the body holds a value to save (Save and test) or the product's own
  * form. `form` gives the product's own form for a connection (null: the one value field); `hint` its help line under the
- * status. A connection the Portal owns (`managed`: the database, the storage and the links to other products) has no
+ * status. A connection the Portal owns (`managed`: the database, the storage, the AI provider key and the links to other products) has no
  * form and no Remove here: a note says where it is set, with a link to the Portal; the database and the storage can be
  * tested.
  * @param {TabProps & { form?: (item: Connection, save: (value: unknown) => Promise<void>) => ReactNode,

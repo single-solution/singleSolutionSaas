@@ -111,11 +111,13 @@ export const DASHBOARD_TEXTS = Object.freeze({
 		removeTitle: 'Remove {name}?',
 		removeHelp: 'The saved value is deleted here. The features that need it stop working until it is connected again.',
 		none: 'No connections.',
-		/** What a connection the Portal owns says instead of a form: the database, the storage and the links to other products. */
+		/** What a connection the Portal owns says instead of a form: the database, the storage, the AI provider key and the links to other products. */
 		managed: Object.freeze({
 			database: 'The database is entered once for all your products, in the Portal. This product uses its own database in it.',
 			storage:
 				'The storage is entered once for all your products, in the Portal. This product keeps its files in its own folder.',
+			secret:
+				'The AI provider key is entered once for all your products, in the Portal. Every product that uses AI takes it from there.',
 			link: 'The Portal links your products by itself. Nothing is pasted here; a link ends when a product leaves the website.',
 			open: 'Open it in the Portal',
 			notLinked: 'Not linked yet.',
