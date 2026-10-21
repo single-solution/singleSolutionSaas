@@ -66,6 +66,7 @@ export { NextStep, NEXT_STEP_TEXTS } from './NextStep.js';
 export { ListColumn, LIST_COLUMN_TEXTS } from './ListColumn.js';
 export { useListSelection } from './list-selection.js';
 export { Page, PAGE_TEXTS } from './Page.js';
+export { useNarrow } from './page-parts.js';
 export { SECTION_JUMPS_FROM } from './page-sections.js';
 export {
 	InnerNavSkeleton,

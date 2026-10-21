@@ -7,7 +7,7 @@
  * Layout: the Overview is one page (the greeting behind the (i), the key numbers in the header, then its cards).
  * @module
  */
-import { useLayoutEffect, useState } from 'react';
+import { useState } from 'react';
 import {
 	BarChart,
 	Button,
@@ -24,6 +24,7 @@ import {
 	StatGrid,
 	describeProblem,
 	formatCredits,
+	useNarrow,
 	useToast,
 	TextLink,
 } from '@ss/ui';
@@ -293,23 +294,6 @@ const SITE_PILLS = /** @type {const} */ ({
 const DOT_ORDER = /** @type {const} */ (['success', 'warning', 'danger', 'neutral']);
 
 /**
- * Whether the window is a phone (the kit's breakpoint); false until the page is in the browser. On a phone the list
- * stands alone until a website is picked.
- */
-const usePhone = () => {
-	const [phone, setPhone] = useState(false);
-	useLayoutEffect(() => {
-		if (!window.matchMedia) return undefined;
-		const media = window.matchMedia('(max-width: 639px)');
-		const read = () => setPhone(media.matches);
-		read();
-		media.addEventListener('change', read);
-		return () => media.removeEventListener('change', read);
-	}, []);
-	return phone;
-};
-
-/**
  * The one thing a website still needs, for its row: a stopped or suspended product, one in grace, a product with no
  * feature on yet, or no product at all; null when nothing is left.
  * @param {ProductCard[]} cards
@@ -336,7 +320,7 @@ const troubleOf = (cards) => {
  */
 function WebsitesScreen({ rows, websiteId, fromList = false, part = '', settings = null, setup = null, merchantId }) {
 	const nav = useNavigation();
-	const phone = usePhone();
+	const phone = useNarrow();
 	const [q, setQ] = useState('');
 	const [status, setStatus] = useState('all');
 	const crumbs = [{ label: MERCHANT.websitesTitle, href: routes.websites() }];
