@@ -254,20 +254,39 @@ const trapTab = (dialog, event) => {
  * @property {boolean} [wide]
  * @property {{ text: string, label: string }} [confirm] typed confirmation (PLAN 0.6): the submit button works only
  *   while the field labeled `label` holds exactly `text`
+ * @property {string} [discardText] a form with typed text asks this before Escape or Cancel throws the text away
+ *   (default "Discard what you typed?")
+ * @property {string} [discardLabel] what Cancel says while it asks (default "Discard")
+ * @property {string} [failedText] what the dialog says when the save throws instead of answering a problem (default
+ *   "Saving failed. Try again.")
  */
 
 /**
  * A dialog over the widget (the product CSS makes it a full-screen sheet on phones). With `onSubmit` it is a form with
  * a Cancel and a submit button (Cancel first, the main action last, as in the Portal); without, it shows `body` with a
  * Close button and a press beside it closes it too. Focus starts on the first field (the first button when there is
- * none, which is Cancel), Tab stays inside the dialog, Escape closes either, and focus goes back to where it was.
+ * none, which is Cancel), Tab stays inside the dialog, Escape closes either, and focus goes back to where it was. A form
+ * waits while it saves (Escape and Cancel do nothing, and the Save button comes back whatever happens), and once typed
+ * text would be thrown away Escape or Cancel asks first; the second press discards it.
  * @param {HTMLElement | ShadowRoot} root the widget's root
  * @param {DialogInput} input
  * @returns {{ close: () => void, dialog: HTMLElement, submit: HTMLButtonElement | null, status: HTMLElement }}
  */
 export const openDialog = (
 	root,
-	{ title, body, closeLabel, submitLabel = '', onSubmit, danger = false, wide = false, confirm },
+	{
+		title,
+		body,
+		closeLabel,
+		submitLabel = '',
+		onSubmit,
+		danger = false,
+		wide = false,
+		confirm,
+		discardText = 'Discard what you typed?',
+		discardLabel = 'Discard',
+		failedText = 'Saving failed. Try again.',
+	},
 ) => {
 	const doc = /** @type {Document} */ (root.ownerDocument);
 	const place = /** @type {Document | ShadowRoot} */ (root.getRootNode());
@@ -288,8 +307,25 @@ export const openDialog = (
 		overlay.remove();
 		if (opener?.isConnected) opener.focus();
 	};
-	const dismiss = element(doc, 'button', { type: 'button', ...(onSubmit ? { class: 'secondary' } : {}) }, closeLabel);
-	dismiss.addEventListener('click', close);
+	const dismiss = /** @type {HTMLButtonElement} */ (
+		element(doc, 'button', { type: 'button', ...(onSubmit ? { class: 'secondary' } : {}) }, closeLabel)
+	);
+	/** A form is being saved: Escape and Cancel wait for the answer. */
+	let saving = false;
+	/** The merchant typed into the form (the typed confirmation is not work to keep). */
+	let typed = false;
+	/** Escape or Cancel asked whether to discard; the next press discards. */
+	let asking = false;
+	/** Asks once; the next press (or a press with nothing typed) closes. */
+	const leave = () => {
+		if (saving) return;
+		if (!onSubmit || !typed || asking) return close();
+		asking = true;
+		status.textContent = discardText;
+		status.classList.remove('error');
+		dismiss.textContent = discardLabel;
+	};
+	dismiss.addEventListener('click', leave);
 	/** @type {Node[]} */
 	const extra = [];
 	/** @type {HTMLButtonElement | null} */
@@ -301,28 +337,56 @@ export const openDialog = (
 		submit = button;
 		/** Whether the typed confirmation, if any, is done. @type {() => boolean} */
 		let confirmed = () => true;
+		/** @type {HTMLInputElement | null} */
+		let confirmField = null;
 		if (confirm) {
 			confirmIds += 1;
 			const id = `ss-confirm-${confirmIds}`;
-			const typed = /** @type {HTMLInputElement} */ (element(doc, 'input', { id, autocomplete: 'off' }));
+			const field = /** @type {HTMLInputElement} */ (element(doc, 'input', { id, autocomplete: 'off' }));
+			confirmField = field;
 			const wrap = element(doc, 'div', { class: 'field' });
-			wrap.append(element(doc, 'label', { for: id }, confirm.label), typed);
+			wrap.append(element(doc, 'label', { for: id }, confirm.label), field);
 			extra.push(wrap);
-			confirmed = () => typed.value.trim() === confirm.text;
-			typed.addEventListener('input', () => {
+			confirmed = () => field.value.trim() === confirm.text;
+			field.addEventListener('input', () => {
 				button.disabled = !confirmed();
 			});
 		}
 		button.disabled = !confirmed();
+		// what the merchant types or picks is work worth asking about; typing again takes the question back
+		const edited = (/** @type {Event} */ event) => {
+			if (event.target === confirmField) return;
+			typed = true;
+			if (!asking) return;
+			asking = false;
+			dismiss.textContent = closeLabel;
+			status.textContent = '';
+		};
+		dialog.addEventListener('input', edited);
+		dialog.addEventListener('change', edited);
 		dialog.addEventListener('submit', async (event) => {
 			event.preventDefault();
 			// Enter in a field submits too: never while a submit runs or before the confirmation is typed
 			if (button.disabled) return;
 			button.disabled = true;
-			const problem = await onSubmit();
-			button.disabled = !confirmed();
-			if (!problem) return close();
-			status.textContent = problem;
+			saving = true;
+			dismiss.disabled = true;
+			/** @type {string | null | undefined | void} */
+			let problem;
+			let threw = false;
+			try {
+				problem = await onSubmit();
+			} catch {
+				threw = true;
+			} finally {
+				saving = false;
+				dismiss.disabled = false;
+				button.disabled = !confirmed();
+			}
+			// a save that ends after the dialog was closed has nobody to tell
+			if (!open) return;
+			if (!threw && !problem) return close();
+			status.textContent = threw ? failedText : String(problem);
 			status.classList.add('error');
 		});
 	} else
@@ -342,7 +406,7 @@ export const openDialog = (
 	overlay.addEventListener('keydown', (event) => {
 		if (event.key === 'Escape') {
 			event.stopPropagation();
-			close();
+			leave();
 		} else if (event.key === 'Tab') trapTab(dialog, event);
 	});
 	root.append(overlay);
