@@ -50,7 +50,9 @@ export function AccountPage({ title, info, part, parts, activity, facts, status,
 						label: LOGIN.activityTitle,
 						icon: /** @type {const} */ ('activity'),
 						body: (
-							<SettingsCard title={LOGIN.activityTitle} description={MORE.activityIntro ?? 'Recent sign-ins and security actions on your account.'}>
+							<SettingsCard
+								title={LOGIN.activityTitle}
+								description={MORE.activityIntro ?? 'Recent sign-ins and security actions on your account.'}>
 								<OwnActivityTimeline path={activity.path} initial={activity.initial} />
 							</SettingsCard>
 						),

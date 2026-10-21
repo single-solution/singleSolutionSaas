@@ -18,12 +18,25 @@ import { cx } from './cx.js';
 import { EmptyState, SkeletonBlock } from './display.js';
 import { Icon } from './icons.js';
 import { LIST, STAGGER } from './layout-metrics.js';
-import { Row } from './Row.js';
+import { Row, leadOf } from './Row.js';
 import { Spinner } from './Spinner.js';
 import { PickKeepsEditsContext, askLeave } from './unsaved.js';
 
 /** @typedef {Parameters<typeof Row>[0]} RowProps */
-/** @typedef {{ search: string, filters: string, loading: string, more: string, back: string, clearSearch: string, clearFilter: string, noFilterMatch: string, noMatch?: (query: string) => string }} ListColumnTexts */
+/** @typedef {object} ListSelection
+ * @property {boolean} mode
+ * @property {(key?: string) => void} [start]
+ * @property {() => void} [done]
+ * @property {(key: string) => void} [toggle]
+ * @property {() => void} [selectAll]
+ * @property {() => void} [clear]
+ * @property {number} [count]
+ * @property {number} [total]
+ * @property {boolean} [allSelected]
+ * @property {(key: string) => boolean} [isSelected]
+ * @property {import('react').ReactNode} [actions]
+ */
+/** @typedef {{ search: string, filters: string, loading: string, more: string, back: string, clearSearch: string, clearFilter: string, noFilterMatch: string, noMatch?: (query: string) => string, select: string, selectAll: string, deselectAll: string, done: string, selected: (n: number) => string, selectRow: (label: string) => string }} ListColumnTexts */
 
 /** The words the list column says itself (replace them to translate). @type {Readonly<ListColumnTexts>} */
 export const LIST_COLUMN_TEXTS = Object.freeze({
@@ -35,6 +48,14 @@ export const LIST_COLUMN_TEXTS = Object.freeze({
 	clearSearch: 'Clear search',
 	clearFilter: 'Clear filter',
 	noFilterMatch: 'No match for filter',
+	select: 'Select',
+	selectAll: 'Select all',
+	deselectAll: 'Deselect all',
+	done: 'Done',
+	/** @param {number} n */
+	selected: (n) => `${n} selected`,
+	/** @param {string} label */
+	selectRow: (label) => `Select ${label}`,
 });
 
 /** How long the pointer rests on a row before `onPrefetch` is called (ms). */
@@ -51,8 +72,9 @@ const typing = (target) =>
  * @template T
  * @param {{ label: string, items: T[], idOf: (item: T) => string | number, rowOf: (item: T) => Omit<RowProps, 'selected' | 'onSelect'>,
  *   selected?: string | number | null, onSelect?: (id: string) => void, onBack?: () => void, guard?: boolean,
- *   search?: { value: string, onChange: (value: string) => void, placeholder?: string },
+ *   search?: { value: string, onChange: (value: string) => void, placeholder?: string, onSearch?: (value: string) => void, onSubmit?: (value: string) => void },
  *   filters?: { value: string, onChange: (id: string) => void, options: { id: string, label: string, count?: number }[] },
+ *   selection?: ListSelection,
  *   loading?: boolean, empty?: Parameters<typeof EmptyState>[0], hasMore?: boolean, onMore?: () => void,
  *   onPrefetch?: (item: T) => void, texts?: Partial<ListColumnTexts>, className?: string }} props `label`: the name of
  *   the list for screen readers; `rowOf`: the `Row` props of an item (the column sets `selected` and `onSelect`);
@@ -61,7 +83,7 @@ const typing = (target) =>
  *   when the `Page` around the list keeps its views mounted, so no edit is lost by picking another);
  *   `search`: a box above the rows (`/` focuses it); `filters`: chips under it, the one whose `id` is `value` on; `empty`:
  *   what to say when there are no items; `hasMore` + `onMore`: the list has more rows to load (called once each time the
- *   end comes into view)
+ *   end comes into view); `selection`: bulk select mode with row checkboxes and foot bar
  */
 export function ListColumn({
 	label,
@@ -73,6 +95,7 @@ export function ListColumn({
 	guard,
 	search,
 	filters,
+	selection,
 	loading = false,
 	empty,
 	hasMore = false,
@@ -184,27 +207,43 @@ export function ListColumn({
 
 	return (
 		<div data-ss-list="" className={cx(LIST.column, className)}>
-			{search || (filters && filters.options.length > 0) ? (
+			{search || (filters && filters.options.length > 0) || selection ? (
 				<div className={LIST.head}>
-					{search ? (
-						<div className="relative">
-							<span
-								aria-hidden="true"
-								className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-subtle">
-								<Icon name="search" size={14} />
-							</span>
-							<input
-								ref={field}
-								type="search"
-								aria-label={search.placeholder ?? words.search}
-								placeholder={search.placeholder ?? words.search}
-								value={search.value}
-								onChange={(event) => search.onChange(event.target.value)}
-								onKeyDown={(event) => {
-									if (event.key === 'Escape') event.currentTarget.blur();
-								}}
-								className="h-8 w-full rounded-control border border-line bg-surface pr-2.5 pl-8 text-label text-fg placeholder:text-subtle focus-visible:outline-2 focus-visible:outline-focus"
-							/>
+					{search || selection ? (
+						<div className="flex items-center gap-2">
+							{search ? (
+								<div className="relative min-w-0 flex-1">
+									<span
+										aria-hidden="true"
+										className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-subtle">
+										<Icon name="search" size={14} />
+									</span>
+									<input
+										ref={field}
+										type="search"
+										aria-label={search.placeholder ?? words.search}
+										placeholder={search.placeholder ?? words.search}
+										value={search.value}
+										onChange={(event) => search.onChange(event.target.value)}
+										onKeyDown={(event) => {
+											if (event.key === 'Escape') event.currentTarget.blur();
+											else if (event.key === 'Enter') {
+												search.onSearch?.(event.currentTarget.value);
+												search.onSubmit?.(event.currentTarget.value);
+											}
+										}}
+										className="h-8 w-full rounded-control border border-line bg-surface pr-2.5 pl-8 text-label text-fg placeholder:text-subtle focus-visible:outline-2 focus-visible:outline-focus"
+									/>
+								</div>
+							) : null}
+							{selection ? (
+								<Button
+									size="sm"
+									variant={selection.mode ? 'secondary' : 'ghost'}
+									onClick={() => (selection.mode ? selection.done?.() : selection.start?.())}>
+									{selection.mode ? words.done : words.select}
+								</Button>
+							) : null}
 						</div>
 					) : null}
 					{filters && filters.options.length > 0 ? (
@@ -289,16 +328,73 @@ export function ListColumn({
 							const on = id === picked;
 							const entering = fresh && index < STAGGER.rows;
 							const look = rowOf(item);
+							const rowTitle = typeof look.title === 'string' ? look.title : '';
+							const chosen = Boolean(selection?.isSelected?.(id));
+							const leadNode = selection ? (
+								<div className="relative flex shrink-0 items-center">
+									{selection.mode ? (
+										<button
+											type="button"
+											role="checkbox"
+											aria-checked={chosen}
+											aria-label={
+												typeof words.selectRow === 'function' ? words.selectRow(rowTitle) : `Select ${rowTitle}`
+											}
+											onClick={(event) => {
+												event.stopPropagation();
+												selection.toggle?.(id);
+											}}
+											className={cx(
+												'ss-motion ss-press flex size-5 items-center justify-center rounded-full border',
+												chosen
+													? 'border-primary bg-primary text-on-primary'
+													: 'border-line-strong bg-surface text-transparent hover:border-fg',
+											)}>
+											<Icon name="check" size={12} />
+										</button>
+									) : (
+										<div className="group/check relative flex items-center">
+											<div className="ss-motion group-hover/check:opacity-0 group-focus-within/check:opacity-0">
+												{leadOf(look.lead)}
+											</div>
+											<button
+												type="button"
+												role="checkbox"
+												aria-checked={chosen}
+												aria-label={
+													typeof words.selectRow === 'function' ? words.selectRow(rowTitle) : `Select ${rowTitle}`
+												}
+												onClick={(event) => {
+													event.stopPropagation();
+													selection.start?.(id);
+												}}
+												className="ss-motion ss-press absolute inset-0 flex size-5 items-center justify-center rounded-full border border-line-strong bg-surface text-transparent opacity-0 hover:border-fg group-hover/check:opacity-100 group-focus-within/check:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-focus">
+												<Icon name="check" size={12} />
+											</button>
+										</div>
+									)}
+								</div>
+							) : (
+								look.lead
+							);
 							return (
 								<Row
 									key={id}
 									{...look}
+									lead={leadNode}
 									role="option"
 									aria-selected={on}
 									tabIndex={on || (picked === null && index === 0) ? 0 : -1}
 									data-ss-id={id}
 									selected={on}
-									onSelect={() => (asks && !on ? askLeave(() => onSelect?.(id)) : onSelect?.(id))}
+									href={selection?.mode ? undefined : look.href}
+									onSelect={() =>
+										selection?.mode
+											? selection.toggle?.(id)
+											: asks && !on
+												? askLeave(() => onSelect?.(id))
+												: onSelect?.(id)
+									}
 									className={cx(look.className, entering && 'ss-stagger')}
 									{...(entering ? { style: /** @type {import('react').CSSProperties} */ ({ '--ss-i': index }) } : {})}
 									{...(onPrefetch
@@ -324,6 +420,28 @@ export function ListColumn({
 					</div>
 				) : null}
 			</div>
+			{selection?.mode ? (
+				<div
+					data-ss-bulk=""
+					className="animate-ss-enter flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line-soft bg-surface-2 p-2.5 text-sm">
+					<p role="status" className="min-w-0 truncate font-medium">
+						{typeof words.selected === 'function'
+							? words.selected(selection.count ?? 0)
+							: `${selection.count ?? 0} selected`}
+					</p>
+					<div className="flex shrink-0 items-center gap-1.5">
+						{selection.actions}
+						{selection.selectAll && !selection.allSelected ? (
+							<Button size="sm" variant="ghost" onClick={selection.selectAll}>
+								{words.selectAll}
+							</Button>
+						) : null}
+						<Button size="sm" variant="secondary" onClick={selection.done}>
+							{words.done}
+						</Button>
+					</div>
+				</div>
+			) : null}
 		</div>
 	);
 }

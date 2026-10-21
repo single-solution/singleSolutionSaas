@@ -1018,7 +1018,7 @@ export function PagesSection(props) {
 							{d.documents.map((document, index) => (
 								<Row
 									key={document.key || String(index)}
-									lead={{ icon: 'fileText' }}
+									lead={{ icon: 'list' }}
 									title={document.title || document.key || String(index + 1)}
 									meta={[document.key, P.documentSummary(document.text.length)].filter(Boolean)}
 									onSelect={() => setEditing(index)}

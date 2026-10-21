@@ -8,7 +8,6 @@
 export const KIT_ONLY_TODO = [
 	{ file: 'platform/src/console/admin/views/admins.js', uses: ['DataTable'] },
 	{ file: 'platform/src/console/admin/views/finance.js', uses: ['DataTable'] },
-	{ file: 'platform/src/console/admin/views/merchants.js', uses: ['DataTable'] },
 	{ file: 'platform/src/console/admin/views/overview.js', uses: ['DataTable'] },
 	{ file: 'platform/src/console/admin/views/products.js', uses: ['DataTable'] },
 	{ file: 'platform/src/console/admin/views/settings.js', uses: ['Disclosure'] },

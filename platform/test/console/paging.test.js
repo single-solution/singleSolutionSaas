@@ -34,6 +34,7 @@ function PagingHarness({ list, size, onState }) {
 
 describe('useListPages (points 154 & 155)', () => {
 	it('point 154: when deleting leaves a page empty, goes back to the last page with rows and keeps pagination intact', () => {
+		/** @type {any} */
 		let latest;
 		const initialItems = Array.from({ length: 51 }, (_, i) => ({ id: `item-${i}` }));
 		const list = {
@@ -48,7 +49,7 @@ describe('useListPages (points 154 & 155)', () => {
 
 		// Go to page 1 (which holds only item-50)
 		act(() => {
-			container.querySelector('[data-testid="next"]')?.click();
+			/** @type {HTMLElement} */ (container.querySelector('[data-testid="next"]'))?.click();
 		});
 
 		expect(latest.start).toBe(50);
@@ -72,6 +73,7 @@ describe('useListPages (points 154 & 155)', () => {
 	});
 
 	it('point 155: on Next, keep old rows and the bar until new rows arrive (never flash empty)', () => {
+		/** @type {any} */
 		let latest;
 		const page0Items = Array.from({ length: 50 }, (_, i) => ({ id: `item-${i}` }));
 		const moreMock = vi.fn(async () => {});
@@ -90,7 +92,7 @@ describe('useListPages (points 154 & 155)', () => {
 
 		// User clicks Next while page 1 has not loaded yet
 		act(() => {
-			container.querySelector('[data-testid="next"]')?.click();
+			/** @type {HTMLElement} */ (container.querySelector('[data-testid="next"]'))?.click();
 		});
 
 		// Point 155: Keep old rows and the pagination bar until new rows arrive

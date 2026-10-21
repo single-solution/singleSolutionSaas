@@ -33,14 +33,7 @@ import { AUTH, BILLING, MERCHANT, MORE, WEBSITE } from '../../texts/console.js';
 import { Link } from '../link.js';
 import { useNavigation } from '../navigation.js';
 import { api, routes } from '../paths.js';
-import {
-	DaysLeft,
-	ProductStatusBadge,
-	creditDayBars,
-	formatChartCredits,
-	productStatusLabel,
-	productTone,
-} from './billing.js';
+import { DaysLeft, ProductStatusBadge, creditDayBars, formatChartCredits, productStatusLabel, productTone } from './billing.js';
 import { FrameBilling } from './frame-billing.js';
 import { PageProblem, openDashboard } from './common.js';
 import { ActivityTimeline } from './login-settings.js';
@@ -217,7 +210,10 @@ export function OverviewView(props) {
 											lead={{ icon: 'globe' }}
 											href={routes.website(r.website.websiteId)}
 											title={r.website.domain}
-											meta={[r.card?.name ?? WEBSITE.noProductsMerchant, r.card ? productStatusLabel(r.card) : null].filter(Boolean)}
+											meta={[
+												r.card?.name ?? WEBSITE.noProductsMerchant,
+												r.card ? productStatusLabel(r.card) : null,
+											].filter(Boolean)}
 											status={
 												r.card
 													? {
@@ -255,7 +251,7 @@ export function OverviewView(props) {
 								<EmptyState compact icon="receipt" kind="credit" title={BILLING.noReceipts} />
 							) : (
 								<div className="divide-y divide-line-soft">
-									{(props.receipts ?? []).map((r) => (
+									{(props.receipts ?? []).map((/** @type {any} */ r) => (
 										<Row
 											key={r.receiptId}
 											lead={{ icon: 'receipt' }}

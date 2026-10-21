@@ -97,12 +97,7 @@ describe('the dashboard', () => {
 		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="About this page"]')));
 		expect(container.textContent).toContain('Welcome back, Acme');
 		const needs = [...container.querySelectorAll('section[aria-label="Needs you"] li p:first-child')].map((p) => p.textContent);
-		expect(needs).toEqual([
-			`${TEXTS.title} is in grace until Oct 4, 2026, 10:30 AM EDT`,
-			'Database (MongoDB) is not connected',
-			'The widget has not been seen on shop.example.com',
-			'Needs setup: set your website settings in the Portal',
-		]);
+		expect(needs).toEqual([`${TEXTS.title} is in grace until Oct 4, 2026, 10:30 AM EDT`, '3 setup steps left']);
 		expect(byText(container, 'Contact support', 'a').getAttribute('href')).toBe('mailto:help@example.com');
 		click(byText(container, 'Check again', 'button'));
 		await settle();
@@ -116,6 +111,6 @@ describe('the dashboard', () => {
 		// a button opens another section of the page
 		click(byText(container, 'Connect', 'button'));
 		await settle();
-		expect(window.location.search).toBe(`?websiteId=${WEBSITE}&view=connections`);
+		expect(window.location.search).toBe(`?websiteId=${WEBSITE}&view=developers`);
 	});
 });

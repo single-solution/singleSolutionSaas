@@ -457,7 +457,8 @@ export function LinksSection({ view, manage, canWrite, onChanged }) {
 																? [
 																		{
 																			label: T.links.regenerate,
-																			onSelect: () => setAsking({ link, action: /** @type {const} */ ('regenerate') }),
+																			onSelect: () =>
+																				setAsking({ link, action: /** @type {const} */ ('regenerate') }),
 																		},
 																	]
 																: []),

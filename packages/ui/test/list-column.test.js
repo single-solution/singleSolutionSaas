@@ -461,3 +461,98 @@ describe('useListSelection', () => {
 		expect(shown(container)).toBe('bolt');
 	});
 });
+
+describe('ListColumn selection', () => {
+	it('starts select mode from Select button and selects items', () => {
+		/** Selection probe. */
+		const Selectable = () => {
+			const [mode, setMode] = useState(false);
+			const [picked, setPicked] = useState(/** @type {Set<string>} */ (new Set()));
+			/** @param {string} id */
+			const toggle = (id) =>
+				setPicked((prev) => {
+					const next = new Set(prev);
+					if (next.has(id)) next.delete(id);
+					else next.add(id);
+					return next;
+				});
+			return column({
+				selection: {
+					mode,
+					/** @param {string} [id] */
+					start: (id) => {
+						setMode(true);
+						if (id) setPicked(new Set([id]));
+					},
+					done: () => {
+						setMode(false);
+						setPicked(new Set());
+					},
+					toggle,
+					selectAll: () => setPicked(new Set(merchants.map((m) => m.id))),
+					clear: () => setPicked(new Set()),
+					/** @param {string} id */
+					isSelected: (id) => picked.has(id),
+					count: picked.size,
+					total: merchants.length,
+					allSelected: picked.size === merchants.length,
+					actions: <button type="button">Bulk action</button>,
+				},
+			});
+		};
+
+		const { container } = render(<Selectable />);
+		const selectBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Select');
+		expect(selectBtn).not.toBeUndefined();
+		click(/** @type {HTMLElement} */ (selectBtn));
+		expect(container.querySelector('[data-ss-bulk]')).not.toBeNull();
+		expect(container.textContent).toContain('0 selected');
+
+		const checkAcme = container.querySelector('button[aria-label="Select Acme Shop"]');
+		expect(checkAcme).not.toBeNull();
+		click(/** @type {HTMLElement} */ (checkAcme));
+		expect(container.textContent).toContain('1 selected');
+		expect(container.textContent).toContain('Bulk action');
+
+		const selectAllBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Select all');
+		expect(selectAllBtn).not.toBeUndefined();
+		click(/** @type {HTMLElement} */ (selectAllBtn));
+		expect(container.textContent).toContain('3 selected');
+
+		const doneBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Done');
+		expect(doneBtn).not.toBeUndefined();
+		click(/** @type {HTMLElement} */ (doneBtn));
+		expect(container.querySelector('[data-ss-bulk]')).toBeNull();
+	});
+
+	it('starts select mode directly by clicking a row checkbox', () => {
+		const start = vi.fn();
+		const { container } = render(
+			column({
+				selection: {
+					mode: false,
+					start,
+					isSelected: () => false,
+				},
+			}),
+		);
+		const check = /** @type {HTMLElement} */ (container.querySelector('button[aria-label="Select Bolt Studio"]'));
+		expect(check).not.toBeNull();
+		click(check);
+		expect(start).toHaveBeenCalledWith('bolt');
+	});
+
+	it('calls onSearch and onSubmit on Enter key in search box', () => {
+		const onSearch = vi.fn();
+		const onSubmit = vi.fn();
+		const { container } = render(
+			column({
+				search: { value: 'query', onChange: () => {}, onSearch, onSubmit },
+			}),
+		);
+		const input = /** @type {HTMLInputElement} */ (container.querySelector('input[type="search"]'));
+		keydown(input, 'Enter');
+		expect(onSearch).toHaveBeenCalledWith('query');
+		expect(onSubmit).toHaveBeenCalledWith('query');
+	});
+});

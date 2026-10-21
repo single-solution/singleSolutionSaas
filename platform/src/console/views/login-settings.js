@@ -38,7 +38,6 @@ import { Link } from '../link.js';
 import { withCursor } from '../paths.js';
 import { factorOf } from './common.js';
 import { ConfirmChange } from './confirm-change.js';
-import { useListPages } from './paging.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
@@ -547,7 +546,7 @@ export function ActivityTable({
 			{items.length === 0 ? (
 				<EmptyState compact icon="activity" kind="activity" title={empty} />
 			) : (
-				<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+				<div aria-label={caption} className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
 					{items.map((e) => {
 						const name = actorName(e);
 						const who =
@@ -558,16 +557,16 @@ export function ActivityTable({
 										? filterLink(name, filterHref({ merchantId: e.actor.id }))
 										: name
 								: name;
+						const merchant =
+							filterHref && e.merchantId && e.merchantName
+								? filterLink(e.merchantName, filterHref({ merchantId: e.merchantId }))
+								: e.merchantName;
 						return (
 							<Row
 								key={e.activityId}
 								lead={{ avatar: name }}
 								title={actionLabel(e.action)}
-								meta={[
-									who !== name ? who : null,
-									showMerchant && e.merchantName ? e.merchantName : null,
-									e.reason,
-								].filter(Boolean)}
+								meta={[who !== name ? who : null, showMerchant && merchant ? merchant : null, e.reason].filter(Boolean)}
 								time={<LocalTime value={e.at} />}
 								{...(details ? { onSelect: () => setOpen(e) } : {})}
 							/>
@@ -603,7 +602,12 @@ export function ActivityTable({
  * When there are more entries, a "Show more" button appends the next page.
  * @param {{ path: string, initial?: { items: any[], nextCursor?: string | null }, empty?: string, showMerchant?: boolean }} props
  */
-export function OwnActivityTimeline({ path, initial = { items: [], nextCursor: null }, empty = MORE.noActivity, showMerchant = false }) {
+export function OwnActivityTimeline({
+	path,
+	initial = { items: [], nextCursor: null },
+	empty = MORE.noActivity,
+	showMerchant = false,
+}) {
 	const list = usePagedList((cursor) => withCursor(path, cursor), initial);
 	return (
 		<div className="space-y-4">
@@ -625,11 +629,7 @@ export function OwnActivityTimeline({ path, initial = { items: [], nextCursor: n
 			)}
 			{list.cursor ? (
 				<div className="flex justify-center pt-2">
-					<Button
-						variant="secondary"
-						size="sm"
-						loading={list.loading}
-						onClick={() => void list.more()}>
+					<Button variant="secondary" size="sm" loading={list.loading} onClick={() => void list.more()}>
 						{MORE.showMore}
 					</Button>
 				</div>

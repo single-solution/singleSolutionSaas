@@ -187,7 +187,7 @@ describe('fuller Portal screens (jsdom)', () => {
 			expect(shows('Products on websites')).toBe(false); // the Websites part shows the count
 			showMerchant('activity');
 			expect(shows('Activity')).toBe(true);
-			await clickEl(/** @type {HTMLElement} */ (document.querySelector('tbody tr')));
+			await clickEl(/** @type {HTMLElement} */ (document.querySelector('#activity [data-ss-row]')));
 			expect(shows('Activity entry') && shows('Changes')).toBe(true);
 			await press('Close');
 			await menu('More actions');
@@ -253,7 +253,7 @@ describe('fuller Portal screens (jsdom)', () => {
 			expect(activity.admins?.map((a) => a.value)).toEqual([owner.adminId]);
 			render(<ActivityView {...activity} />);
 			// a row opens a drawer with what the entry changed
-			await clickEl(/** @type {HTMLElement} */ (document.querySelector('tbody tr')));
+			await clickEl(/** @type {HTMLElement} */ (document.querySelector('[data-ss-row]')));
 			expect(shows('Activity entry') && shows('Changes')).toBe(true);
 			await press('Close');
 			const only = /** @type {HTMLAnchorElement} */ (document.querySelector('a[title="Show only Shop & Co"]'));
@@ -297,7 +297,7 @@ describe('fuller Portal screens (jsdom)', () => {
 			cleanup();
 			const ownActivity = await admin.loadAdmin(ownerBrowser.api, owner, owner.adminId, 'activity');
 			withToasts(<AdminsView {...ownActivity} selectedId={owner.adminId} section="activity" />);
-			expect(document.querySelectorAll('tbody tr').length).toBeGreaterThan(0);
+			expect(document.querySelectorAll('[data-ss-row]').length).toBeGreaterThan(0);
 			await pressMenu('More actions', 'Open in Activity');
 			expect(pushed(`/admin/activity?adminId=${owner.adminId}`)).toBe(true);
 			cleanup();

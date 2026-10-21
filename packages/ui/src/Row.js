@@ -9,7 +9,7 @@
  * `ListColumn` have the same size.
  * @module
  */
-import { isValidElement } from 'react';
+import { Fragment, isValidElement } from 'react';
 import { cx } from './cx.js';
 import { Avatar, DOTS, IconBadge } from './display.js';
 import { LIST, LIST_TONE } from './layout-metrics.js';
@@ -31,7 +31,7 @@ import { UNSAVED_TEXTS } from './unsaved.js';
 const DOT_TONES = { success: 'success', warning: 'warning', danger: 'danger', accent: 'primary', neutral: 'neutral' };
 
 /** The lead of a row. @param {RowLead} lead */
-const leadOf = (lead) => {
+export const leadOf = (lead) => {
 	if (lead === null || lead === undefined || typeof lead !== 'object' || isValidElement(lead) || Array.isArray(lead)) {
 		return /** @type {ReactNode} */ (lead);
 	}
@@ -42,7 +42,7 @@ const leadOf = (lead) => {
 
 /**
  * @param {RowBoxProps & { lead?: RowLead, title: ReactNode, status?: { tone: RowTone, label: string },
- *   meta?: string | string[], warning?: { tone?: RowTone, text: string }, value?: ReactNode, time?: ReactNode,
+ *   meta?: ReactNode | ReactNode[], warning?: { tone?: RowTone, text: string }, value?: ReactNode, time?: ReactNode,
  *   trailing?: ReactNode, href?: string, onSelect?: () => void, selected?: boolean, disabled?: boolean,
  *   changed?: boolean, texts?: Partial<Pick<import('./unsaved.js').UnsavedTexts, 'changed'>>,
  *   linkAs?: import('react').ElementType, className?: string }} props `status`: a colored dot after the title, its
@@ -72,8 +72,8 @@ export function Row({
 }) {
 	const shell = useShell();
 	const LinkTag = linkAs ?? shell.linkAs ?? 'a';
-	const line = warning?.text ?? [meta].flat().filter(Boolean).join(' · ');
 	const tone = warning ? LIST_TONE[warning.tone ?? 'warning'] : LIST_TONE.neutral;
+	const metaItems = warning ? [] : [meta].flat().filter((m) => m !== null && m !== undefined && m !== false && m !== '');
 	// a link row is made of a stretched link; a plain row is the target itself
 	const button = !href && onSelect !== undefined;
 	const live = !disabled && (href !== undefined || onSelect !== undefined);
@@ -91,7 +91,15 @@ export function Row({
 			{...(button ? { role: 'button', tabIndex: disabled ? -1 : 0 } : {})}
 			{...(disabled ? { 'aria-disabled': true } : {})}
 			{...box}
-			onClick={live ? () => onSelect?.() : undefined}
+			onClick={
+				live
+					? (event) => {
+							const target = /** @type {HTMLElement | null} */ (event.target);
+							if (target?.closest('a, button, input, select, textarea')) return;
+							onSelect?.();
+						}
+					: undefined
+			}
 			onKeyDown={
 				button && live
 					? (event) => {
@@ -141,9 +149,18 @@ export function Row({
 						</span>
 					) : null}
 				</div>
-				{line ? (
-					<p className={cx('truncate text-micro', tone)} {...(warning ? { 'data-ss-warning': '' } : {})}>
-						{line}
+				{warning ? (
+					<p className={cx('truncate text-micro', tone)} data-ss-warning="">
+						{warning.text}
+					</p>
+				) : metaItems.length > 0 ? (
+					<p className={cx('truncate text-micro', tone)}>
+						{metaItems.map((item, idx) => (
+							<Fragment key={idx}>
+								{idx > 0 ? ' · ' : null}
+								{item}
+							</Fragment>
+						))}
 					</p>
 				) : null}
 			</div>

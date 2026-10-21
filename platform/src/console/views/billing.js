@@ -230,7 +230,7 @@ export function UsageView({ usage, showWebsite = true, chartTitle = BILLING.usag
  * @returns {Columns}
  */
 export const usageColumns = (showWebsite = true) => [
-	{ key: 'day', header: BILLING.usageColumns.day, kind: /** @type {const} */ ('date'), sortable: true, rowHeader: true },
+	{ key: 'day', header: BILLING.usageColumns.day, kind: /** @type {const} */ ('date'), sortable: true },
 	...(showWebsite ? [{ key: 'domain', header: BILLING.usageColumns.website, sortable: true }] : []),
 	{ key: 'product', header: BILLING.usageColumns.product, sortable: true },
 	{ key: 'featureName', header: BILLING.usageColumns.feature, sortable: true, low: true },

@@ -487,7 +487,7 @@ function Recommendations({ sheet, actions }) {
 									return (
 										<Row
 											key={`${product.productId}:${entry.feature}`}
-											lead={{ icon: 'sparkles' }}
+											lead={{ icon: 'sparkle' }}
 											title={titleOf(product, entry.feature)}
 											meta={[
 												product.name,

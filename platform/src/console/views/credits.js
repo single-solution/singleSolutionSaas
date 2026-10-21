@@ -77,7 +77,10 @@ export function CreditsView(props) {
 					{usage ? (
 						<Card
 							title={BILLING.usageChart}
-							subtitle={BILLING.usageChartIntro(`${usage?.from ?? ''} – ${usage?.to ?? ''}`, formatCredits(usage?.total ?? 0))}>
+							subtitle={BILLING.usageChartIntro(
+								`${usage?.from ?? ''} – ${usage?.to ?? ''}`,
+								formatCredits(usage?.total ?? 0),
+							)}>
 							<BarChart
 								label={BILLING.usageChart}
 								data={creditDayBars(usage?.days)}

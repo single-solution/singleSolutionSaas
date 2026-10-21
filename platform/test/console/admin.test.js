@@ -188,10 +188,10 @@ describe('admin console smoke', () => {
 				'Activity',
 			])
 				expect(detailHtml).toContain(word);
-			expect(raw).toContain(`href="/admin/merchants/${merchantId}/credits"`);
-			expect(raw).toContain(`href="/admin/merchants/${merchantId}/details"`);
-			expect(raw).toContain(`href="/admin/merchants/${merchantId}/activity"`);
-			expect(detailHtml).not.toContain('Credit receipts');
+			expect(raw).toContain(`id="credits"`);
+			expect(raw).toContain(`id="details"`);
+			expect(raw).toContain(`id="activity"`);
+			expect(detailHtml).toContain('Credit receipts');
 			// the other actions (Suspend, setup link, two-step off, Delete) sit in the header's More menu
 			expect(raw).toContain('aria-label="More actions"');
 			expect(raw).not.toMatch(/>Suspend<\/button>/);

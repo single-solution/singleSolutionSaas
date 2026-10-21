@@ -1,13 +1,18 @@
-import { loadMerchant } from '../../../../src/console/admin/loaders.js';
+import { loadMerchant, loadMerchants } from '../../../../src/console/admin/loaders.js';
 import { MerchantsView } from '../../../../src/console/admin/views/merchants.js';
-import { adminContext } from '../../_lib/server.js';
+import { adminContext, one } from '../../_lib/server.js';
 
 export const metadata = { title: 'Merchant' };
 
-/** A merchant's page, on its Websites part. */
-/** @param {{ params: Promise<{ merchantId: string }> }} props */
-export default async function MerchantPage({ params }) {
+/** A merchant's page beside the list of merchants. */
+/** @param {{ params: Promise<{ merchantId: string }>, searchParams?: Promise<Record<string, string | string[] | undefined>> }} props */
+export default async function MerchantPage({ params, searchParams }) {
 	const { merchantId } = await params;
+	const q = searchParams ? await searchParams : {};
 	const { api, admin } = await adminContext(`/admin/merchants/${merchantId}`);
-	return <MerchantsView detail={await loadMerchant(api, merchantId, admin)} section="websites" admin={admin} />;
+	const [list, detail] = await Promise.all([
+		loadMerchants(api, { status: one(q.status), q: one(q.q), cursor: one(q.cursor) }),
+		loadMerchant(api, merchantId, admin),
+	]);
+	return <MerchantsView list={list} detail={detail} merchantId={merchantId} admin={admin} />;
 }
