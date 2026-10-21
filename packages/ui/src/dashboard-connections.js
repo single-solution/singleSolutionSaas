@@ -16,6 +16,7 @@ import { SettingList } from './blocks.js';
 import { Input } from './fields.js';
 import { ConfirmDialog } from './overlay.js';
 import { call, fill, useLoad } from './dashboard-api.js';
+import { describeProblem } from './problems.js';
 import { toneOf, useDashboard } from './dashboard-parts.js';
 import { websiteSettingsUrl } from './portal-links.js';
 
@@ -51,18 +52,45 @@ export function useConnections({ websiteId, merchantId, who, portal, parts }) {
 	const base = `/v1/dashboard/websites/${websiteId}/connections`;
 	const { answer, reload } = useLoad(wanted ? base : null);
 	const [values, setValues] = useState(/** @type {Record<string, string>} */ ({}));
+	/** Why the last "Save and test" of a connection's value was refused (by name); gone when the value is edited. */
+	const [refused, setRefused] = useState(/** @type {Record<string, string>} */ ({}));
 	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
 	const [removing, setRemoving] = useState(/** @type {{ name: string, label: string } | null} */ (null));
 	/** @param {Promise<Answer>} pending */
 	const act = async (pending) => {
-		setResult(await pending);
+		const answered = await pending;
+		setResult(answered);
 		reload();
+		return answered;
+	};
+	/**
+	 * Sets or clears what is typed in the value field of a connection.
+	 * @param {string} name
+	 * @param {string} value
+	 */
+	const typeInto = (name, value) => setValues((all) => ({ ...all, [name]: value }));
+	/**
+	 * Saves what is typed in a connection's value field. The field empties only once the server accepted it; a refused
+	 * key stays in the field and its reason shows on the card.
+	 * @param {string} name
+	 * @param {(value: unknown) => Promise<Answer>} send
+	 * @param {string} sent
+	 */
+	const saveTyped = async (name, send, sent) => {
+		setRefused((all) => ({ ...all, [name]: '' }));
+		const answered = await send(sent.trim());
+		if (answered.ok) setValues((all) => (all[name] === sent ? { ...all, [name]: '' } : all));
+		else setRefused((all) => ({ ...all, [name]: describeProblem(answered.problem) }));
 	};
 	/** @param {Connection[]} list */
 	const sections = (list) =>
 		list.map((item) => {
 			/** @param {unknown} value */
-			const save = (value) => act(call('PUT', `${base}/${item.name}`, { value }));
+			const send = (value) => act(call('PUT', `${base}/${item.name}`, { value }));
+			/** @param {unknown} value */
+			const save = async (value) => {
+				await send(value);
+			};
 			const managed = item.managed === true;
 			const own = parts?.form && !managed ? parts.form(item, save) : null;
 			const help = parts?.hint ? parts.hint(item.name) : null;
@@ -105,14 +133,7 @@ export function useConnections({ websiteId, merchantId, who, portal, parts }) {
 						{...(field
 							? {
 									action: (
-										<Button
-											size="sm"
-											disabled={!typed.trim()}
-											onClick={() => {
-												const done = save(typed.trim());
-												setValues({ ...values, [item.name]: '' });
-												return done;
-											}}>
+										<Button size="sm" disabled={!typed.trim()} onClick={() => saveTyped(item.name, send, typed)}>
 											{C.save}
 										</Button>
 									),
@@ -146,7 +167,11 @@ export function useConnections({ websiteId, merchantId, who, portal, parts }) {
 									type="password"
 									autoComplete="off"
 									value={typed}
-									onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
+									{...(refused[item.name] ? { error: refused[item.name] } : {})}
+									onChange={(event) => {
+										typeInto(item.name, event.target.value);
+										setRefused((all) => (all[item.name] ? { ...all, [item.name]: '' } : all));
+									}}
 								/>
 							</SettingList>
 						)}
