@@ -9,7 +9,7 @@
  * Nothing here stretches a card to the height of its neighbor: the grids align their cells to the start ({@link NO_STRETCH}).
  * @module
  */
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useContext, useEffect, useId, useState } from 'react';
 import { cx } from './cx.js';
 import { Button } from './Button.js';
 import { Card } from './display.js';
@@ -17,6 +17,7 @@ import { FieldLayoutContext, ROW_GRID, ROW_LABEL, ROW_LIST, rowControl } from '.
 import { Icon } from './icons.js';
 import { SAVE_BAR } from './layout-metrics.js';
 import { usePresence } from './motion.js';
+import { PageSavesContext } from './page-sections.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 
@@ -174,6 +175,12 @@ export function SettingRow({ label, description, htmlFor, children, stacked = fa
  * buttons: `disabled` keeps Save off for an entry the server would refuse, and a save that returns a promise shows
  * the spinner (and locks Discard) until it settles, without the caller tracking it. A save that failed leaves the bar
  * on screen so the person can try again. Place it anywhere in the page; it is fixed to the window.
+ *
+ * Inside a `Page` with `sections` it draws nothing: it tells the page what it has (`show`, the handlers, the words) and
+ * the page draws ONE bar for all its sections. That bar shows while any section has changes (with the words of the
+ * first), Save runs the `onSave` of each section with changes in the page's order and stops at the first that throws,
+ * rejects or returns `false` (its own error stays where the section shows it), Discard runs every one's `onDiscard`,
+ * Save is off while any section's Save is `disabled`, and the bar is busy while any section is `saving`.
  * @param {{ show: boolean, onSave: () => unknown, onDiscard: () => void, saving?: boolean, disabled?: boolean,
  *   message?: ReactNode, saveLabel?: string, discardLabel?: string, className?: string }} props `saving`: the caller
  *   knows the save is running; `disabled`: Save is off although something changed
@@ -189,7 +196,9 @@ export function SaveBar({
 	discardLabel = 'Discard',
 	className,
 }) {
-	const { mounted, closing, ref } = usePresence(show);
+	const page = useContext(PageSavesContext);
+	const id = useId();
+	const { mounted, closing, ref } = usePresence(show && !page);
 	const [running, setRunning] = useState(false);
 	const busy = saving || running;
 	const save = () => {
@@ -200,7 +209,12 @@ export function SaveBar({
 			/** @type {Promise<unknown>} */ (result).then(done, done);
 		}
 	};
-	if (!mounted) return null;
+	// a page with sections keeps the latest of what this bar has (its handlers are read when the page saves)
+	useEffect(() => {
+		page?.put(id, { show, onSave, onDiscard, saving, disabled, message, saveLabel, discardLabel });
+	});
+	useEffect(() => () => page?.drop(id), [page, id]);
+	if (page || !mounted) return null;
 	return (
 		<div
 			ref={ref}

@@ -62,6 +62,7 @@ export { DataTable, DATA_TABLE_TEXTS, useRowSelection } from './DataTable.js';
 export { Pagination, PaginationSkeleton } from './Pagination.js';
 export { InnerNav, INNER_NAV_TEXTS } from './InnerNav.js';
 export { Page, PAGE_TEXTS } from './Page.js';
+export { SECTION_JUMPS_FROM } from './page-sections.js';
 export {
 	InnerNavSkeleton,
 	ToolbarSkeleton,
@@ -133,6 +134,7 @@ export { describeProblem, fieldErrors, problemCode, problemLines } from './probl
 /** @typedef {import('./DataTable.js').RowSelection} RowSelection */
 /** @typedef {import('./layout-metrics.js').ColumnKind} ColumnKind */
 /** @typedef {import('./overlay.js').DrawerProps} DrawerProps */
+/** @typedef {import('./page-sections.js').PageSection} PageSection */
 /** @typedef {import('./page-parts.js').PageCrumb} PageCrumb */
 /** @typedef {import('./page-parts.js').PageFact} PageFact */
 /** @typedef {import('./page-parts.js').PageAction} PageAction */

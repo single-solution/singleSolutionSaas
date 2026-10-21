@@ -16,6 +16,9 @@
  * nothing overlaps. On phones the frame's menu button leads the header and the inner navigation is a dropdown above the
  * panel.
  *
+ * With `sections` the body shows every section of the page at once, all open, and the page has one save bar for all of
+ * them (see `page-sections.js`); from four sections up the inner navigation lists them as jumps.
+ *
  * Inside an `AppShell` the frame's own header hides itself while a page draws this one (`:has([data-ss-page])`), so old
  * pages keep working until they move onto this component.
  * @module
@@ -23,9 +26,11 @@
 import { useId } from 'react';
 import { cx } from './cx.js';
 import { ErrorState, StatusPill } from './display.js';
+import { SaveBar } from './blocks.js';
 import { InnerNav } from './InnerNav.js';
 import { PAGE, pageBody } from './layout-metrics.js';
 import { Crumbs, Fact, HeaderActions, InfoButton, PAGE_TEXTS, ShellMenuButton, useNarrow } from './page-parts.js';
+import { PageSectionList, usePageSections } from './page-sections.js';
 import { useShell } from './shell-state.js';
 import { PageSkeleton } from './skeletons.js';
 
@@ -38,17 +43,20 @@ export { PAGE_TEXTS };
 /** @typedef {import('./page-parts.js').PageActions} PageActions */
 /** @typedef {import('./page-parts.js').PageStatus} PageStatus */
 /** @typedef {import('./page-parts.js').PageTexts} PageTexts */
+/** @typedef {import('./page-sections.js').PageSection} PageSection */
 /** @typedef {Parameters<typeof InnerNav>[0]} PageNav */
 
 /**
  * @param {{ crumbs: PageCrumb[], status?: PageStatus[], facts?: PageFact[], actions?: PageActions, info?: ReactNode,
- *   nav?: PageNav, toolbar?: ReactNode, footer?: ReactNode, loading?: boolean,
+ *   nav?: PageNav, sections?: PageSection[], toolbar?: ReactNode, footer?: ReactNode, loading?: boolean,
  *   error?: string | { title?: string, message?: ReactNode, action?: ReactNode }, flush?: boolean,
  *   bodyKey?: string, skeleton?: ReactNode, linkAs?: import('react').ElementType, texts?: Partial<PageTexts>,
  *   className?: string, children?: ReactNode }} props `crumbs`: every step a link, the last one the title (and the
  *   page's one heading); `status`: pills after the title; `facts`: live numbers, at most four, each a filter button
  *   (`onClick`), a link (`href`) or plain; `actions`: `{ primary, secondary (at most two), more }`; `info`: the page's
- *   description, shown from an (i); `nav`: the props of an `InnerNav` (the page's sub-pages); `toolbar`: a `Toolbar`;
+ *   description, shown from an (i); `nav`: the props of an `InnerNav` (the page's sub-pages); `sections`: the
+ *   parts of the page, all drawn at once in place of `children` (each `{ id, label, icon?, dot?, dotLabel?, body }`), with
+ *   the jump list from four of them (`nav` wins when given) and one save bar for the page; `toolbar`: a `Toolbar`;
  *   `footer`: a `Pagination`; `loading`: draw the page's skeleton (`skeleton` is the body's own, a few settings cards by
  *   default); `error`: a message (or `{ title, message, action }`) in place of the body, toolbar and footer; `flush`: the
  *   body has no padding (a table uses all of it); `bodyKey`: when it changes (the sub-page) the body fades in again;
@@ -61,6 +69,7 @@ export function Page({
 	actions,
 	info,
 	nav,
+	sections,
 	toolbar,
 	footer,
 	loading = false,
@@ -76,14 +85,16 @@ export function Page({
 	const shell = useShell();
 	const narrow = useNarrow();
 	const titleId = useId();
+	const flow = usePageSections(sections);
 	const words = { ...PAGE_TEXTS, ...texts };
 	const link = linkAs ?? shell.linkAs;
+	const rail = nav ?? flow.nav;
 	if (loading)
 		return (
 			<PageSkeleton
 				crumbs={crumbs}
 				{...(link ? { linkAs: link } : {})}
-				nav={Boolean(nav)}
+				nav={Boolean(rail)}
 				toolbar={Boolean(toolbar)}
 				footer={Boolean(footer)}
 				flush={flush}
@@ -135,7 +146,7 @@ export function Page({
 				</div>
 			</header>
 			<div className={PAGE.area}>
-				{nav ? <InnerNav {...(link ? { linkAs: link } : {})} {...nav} /> : null}
+				{rail ? <InnerNav {...(link ? { linkAs: link } : {})} {...rail} /> : null}
 				<section className={PAGE.main}>
 					{bar ? (
 						<div data-ss-part="toolbar" className={PAGE.toolbar}>
@@ -143,6 +154,7 @@ export function Page({
 						</div>
 					) : null}
 					<div
+						ref={flow.body}
 						data-ss-part="body"
 						className={pageBody({ toolbar: Boolean(bar), footer: Boolean(end) })}
 						{...(flush ? {} : { role: 'region', tabIndex: 0, 'aria-labelledby': titleId })}>
@@ -153,6 +165,8 @@ export function Page({
 									message={failure.message}
 									{...(failure.action ? { action: failure.action } : {})}
 								/>
+							) : sections ? (
+								<PageSectionList sections={sections} scopes={flow.scopes} />
 							) : (
 								children
 							)}
@@ -165,6 +179,7 @@ export function Page({
 					) : null}
 				</section>
 			</div>
+			{flow.bar ? <SaveBar {...flow.bar} /> : null}
 		</div>
 	);
 }
