@@ -3,6 +3,7 @@
  * @module
  */
 import { Fragment, isValidElement } from 'react';
+import { CountUp } from './CountUp.js';
 import { cx } from './cx.js';
 import { humanize } from './format.js';
 import { Icon } from './icons.js';
@@ -610,6 +611,18 @@ export function LockedState({ title, description, note, action, compact = false,
 }
 
 /**
+ * Text colors of a tile's hint and change by status (any other tone stays muted).
+ * @type {Partial<Record<Tone, string>>}
+ */
+const STAT_TEXT = {
+	danger: 'text-danger',
+	warning: 'text-warning',
+	success: 'text-success',
+	attention: 'text-attention',
+	info: 'text-info',
+};
+
+/**
  * Type size of a tile's value by the tile's width (container queries), so a figure fits on one line: up to 13
  * characters (`1,250 credits`) it is full size from a 12rem tile and one step smaller below; a longer one
  * (`12,345.678 credits`) steps down from full size below 17.5rem to the smallest step below 11.5rem. A value that is
@@ -625,28 +638,25 @@ const valueSize = (value) =>
 
 /**
  * Key figure: a summary tile on a neutral surface. With a `kind` its icon sits in the accent-tinted badge, without one
- * in a neutral badge (PLAN 0.6 color rule); `tone` colors the hint by status. A new value fades in.
+ * in a neutral badge (PLAN 0.6 color rule); `tone` colors the hint by status. A new value fades in, and a numeric one
+ * (a number, or a text with one number such as `1,284` or `$82`) counts from the old number to the new one (not on the
+ * first draw, not with reduced motion; see {@link CountUp}).
  *
  * The tile follows its own width (a size container), not the screen's: a small icon sits beside the label, which
  * wraps on whole words; a figure stays on one line and is never cut, its type a step
  * or two smaller where the tile is too narrow for it at full size (see `valueSize`). Put tiles in a
  * {@link StatGrid}, which keeps each one wide enough for its value.
  * @param {{ label: ReactNode, value: ReactNode, hint?: ReactNode, tone?: Tone, icon?: import('./icons.js').IconName,
- *   kind?: Kind, className?: string }} props
+ *   kind?: Kind, className?: string, change?: { value: ReactNode, tone?: Tone } }} props `change`: how the figure moved
+ *   (`+8%`), beside it in its tone's color
  */
-export function Stat({ label, value, hint, tone = 'neutral', icon, kind, className }) {
-	const hintTone =
-		tone === 'danger'
-			? 'text-danger'
-			: tone === 'warning'
-				? 'text-warning'
-				: tone === 'success'
-					? 'text-success'
-					: tone === 'attention'
-						? 'text-attention'
-						: tone === 'info'
-							? 'text-info'
-							: 'text-muted';
+export function Stat({ label, value, hint, tone = 'neutral', icon, kind, className, change }) {
+	const figure = (
+		<CountUp
+			value={value}
+			className={cx('animate-ss-fade font-display font-semibold tracking-[-0.02em] text-fg tabular-nums', valueSize(value))}
+		/>
+	);
 	return (
 		<div className={cx(CARD.tile, className)}>
 			<div className="space-y-2">
@@ -664,15 +674,17 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, kind, classNa
 					) : null}
 					<span className="min-w-0 text-label font-medium text-pretty text-muted">{label}</span>
 				</div>
-				<div
-					key={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
-					className={cx(
-						'animate-ss-fade font-display font-semibold tracking-[-0.02em] text-fg tabular-nums',
-						valueSize(value),
-					)}>
-					{value}
-				</div>
-				{hint ? <div className={cx('text-help font-medium text-pretty', hintTone)}>{hint}</div> : null}
+				{change ? (
+					<div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+						{figure}
+						<span className={cx('text-help font-medium tabular-nums', STAT_TEXT[change.tone ?? 'neutral'] ?? 'text-muted')}>
+							{change.value}
+						</span>
+					</div>
+				) : (
+					figure
+				)}
+				{hint ? <div className={cx('text-help font-medium text-pretty', STAT_TEXT[tone] ?? 'text-muted')}>{hint}</div> : null}
 			</div>
 		</div>
 	);
