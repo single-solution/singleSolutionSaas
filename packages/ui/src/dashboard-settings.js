@@ -2,23 +2,22 @@
 /**
  * The views of the settings tabs, a list of rich rows beside the page (owner 2026-10-21): the section lists of Settings
  * (a row per feature, grouped by category; all of a feature's settings are on its one page, its groups as cards, its
- * lists, then Advanced, all open), Texts (a row per screen or widget, each a table whose text opens in a drawer) and Defaults (both). Each
- * comes as an editor hook (the unsaved edits and the saves) and a function that builds the sections of a
- * {@link SectionsPage} from it; a view says what it is for in the (i) of its page, not in a heading of its own
- * (layout contract R2).
+ * lists, then Advanced, all open), Texts (a row per screen or widget, "{n} texts · {m} changed"; its page is every text as a
+ * field in place, label the English words, help where it shows, Reset to default when changed) and Defaults (both). Each
+ * comes as an editor hook (the unsaved edits and the saves; both collect every edit into the page's ONE save bar,
+ * {@link SettingsBar}) and a function that builds the sections of a {@link SectionsPage} from it; a view says what it
+ * is for in the (i) of its page, not in a heading of its own (layout contract R2).
  * @module
  */
 import { useState } from 'react';
-import { Button } from './Button.js';
-import { SaveBar } from './blocks.js';
-import { DataTable } from './DataTable.js';
-import { SoftBreaks, StatusPill, TextLink } from './display.js';
-import { Input } from './fields.js';
-import { Drawer } from './overlay.js';
+import { SaveBar, SettingList, SettingsCard } from './blocks.js';
+import { EmptyState, TextLink } from './display.js';
+import { Input, TextArea } from './fields.js';
 import { SchemaForm } from './SchemaForm.js';
 import { ADVANCED_GROUP, shapeOf } from './schema.js';
 import { call, fill } from './dashboard-api.js';
 import { humanize } from './format.js';
+import { describeProblem, problemCode } from './problems.js';
 import { Outcome, hasSettings } from './dashboard-parts.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
@@ -289,37 +288,78 @@ export function featureSections({ features, editor, savedSource, dash, notice, e
 const without = (all, key) => Object.fromEntries(Object.entries(all).filter(([name]) => name !== key));
 
 /**
- * The widget texts' unsaved edits and their saves: each text saves on its own; one saved here gets a Reset.
+ * Why a text was refused, for under its field: the server's own words when it refused the words (a lost
+ * `{placeholder}`, a text too long), else the friendly sentence of the problem.
+ * @param {Parameters<typeof describeProblem>[0]} problem
+ */
+const reasonOf = (problem) => {
+	const detail = typeof problem?.detail === 'string' ? problem.detail.trim() : '';
+	return detail && problemCode(problem) === 'validation_failed' ? detail : describeProblem(problem);
+};
+
+/**
+ * The widget texts' unsaved edits and their saves, like {@link useSettingsEditor}: the edits of every text, on any
+ * screen, wait for the page's one Save bar; Save writes each edited text on its own, keeps the edit of a text that was
+ * refused and says why under that text (`errors`); Reset sets a saved text back to the default at once.
  * @param {{ saveUrl: (key: string) => string, resetBody: boolean, reload: () => void }} options
  */
 export function useTextsEditor({ saveUrl, resetBody, reload }) {
 	const [edits, setEdits] = useState(/** @type {Record<string, string>} */ ({}));
-	const [result, setResult] = useState(/** @type {{ key: string, answer: Answer } | null} */ (null));
+	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
+	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
+	const [saving, setSaving] = useState(false);
 	return {
 		edits,
+		errors,
 		result,
-		/** @param {string} key @param {string} value */
-		change: (key, value) => setEdits((all) => ({ ...all, [key]: value })),
-		/** Saves the edited words of a text; whether it worked. @param {string} key */
-		save: async (key) => {
-			const answer = await call('PUT', saveUrl(key), { value: edits[key] });
-			setResult({ key, answer });
-			if (answer.ok) setEdits((all) => without(all, key));
-			reload();
-			return answer.ok;
+		saving,
+		dirty: Object.keys(edits).length > 0,
+		/**
+		 * Sets the words of a text; the saved words (`saved`) are no edit.
+		 * @param {string} key @param {string} value @param {string} [saved]
+		 */
+		change: (key, value, saved) => {
+			setEdits((all) => (value === saved ? without(all, key) : { ...all, [key]: value }));
+			setErrors((all) => without(all, key));
 		},
-		/** Sets a text back to the default; whether it worked. @param {string} key */
+		/** Sets a text back to the default. @param {string} key */
 		reset: async (key) => {
 			const answer = resetBody ? await call('PUT', saveUrl(key), { value: null }) : await call('DELETE', saveUrl(key));
-			setResult({ key, answer });
-			if (answer.ok) setEdits((all) => without(all, key));
+			setResult(answer);
+			if (answer.ok) {
+				setEdits((all) => without(all, key));
+				setErrors((all) => without(all, key));
+			}
 			reload();
-			return answer.ok;
 		},
-		/** Forgets the unsaved words of a text and its last outcome. @param {string} key */
-		discard: (key) => {
-			setEdits((all) => without(all, key));
-			setResult((last) => (last?.key === key ? null : last));
+		/** Saves every edited text; the ones that were refused stay edited, each with its reason. */
+		save: async () => {
+			setSaving(true);
+			/** @type {Answer | null} */
+			let outcome = null;
+			/** @type {Record<string, string>} */
+			const left = {};
+			/** @type {Record<string, string>} */
+			const refused = {};
+			for (const [key, value] of Object.entries(edits)) {
+				const answer = await call('PUT', saveUrl(key), { value });
+				if (answer.ok) outcome ??= answer;
+				else {
+					outcome = answer;
+					left[key] = value;
+					refused[key] = reasonOf(answer.problem);
+				}
+			}
+			setSaving(false);
+			setResult(outcome);
+			setEdits(left);
+			setErrors(refused);
+			reload();
+		},
+		discard: () => {
+			setEdits({});
+			setErrors({});
+			setResult(null);
 		},
 	};
 }
@@ -328,81 +368,68 @@ export function useTextsEditor({ saveUrl, resetBody, reload }) {
 /** @typedef {{ key: string, english: string, value: string, source: string }} WidgetText */
 
 /**
- * A table of widget texts (layout contract R5: a list is a table, a record is edited in a drawer): the key, the English
- * words, what is shown now and whether it was changed here. A click on a row opens the text in a drawer with a box for
- * the words and Save (Reset to default when the text was changed here, Cancel); a text that saved closes the drawer, a
- * refused one stays open with what was typed. Drawn in a flush page body.
- * @param {{ items: WidgetText[], editor: TextsEditor, savedSource: string, texts: Dashboard['texts'], caption: string,
- *   empty?: string }} props `caption`: what the table lists, for screen readers; `empty`: what it says with no rows
+ * Whether a text was changed: it is the website's own (`savedSource`), or what it says is not the English default (a
+ * global default the Owner set is a change too).
+ * @param {WidgetText} text @param {string} savedSource
  */
-export function TextsTable({ items, editor, savedSource, texts, caption, empty }) {
-	const T = texts.texts;
-	const [opened, setOpened] = useState(/** @type {WidgetText | null} */ (null));
-	const key = opened?.key ?? '';
-	const edited = opened ? editor.edits[key] : undefined;
-	const close = () => {
-		if (opened) editor.discard(opened.key);
-		setOpened(null);
-	};
-	/** Runs a write on the open text and closes the drawer when it worked. @param {(key: string) => Promise<boolean>} run */
-	const finish = async (run) => {
-		if (await run(key)) close();
-	};
-	/** @type {import('./DataTable.js').DataColumn<WidgetText>[]} */
-	const columns = [
-		{ key: 'key', header: T.columns.key, sortable: true, render: (text) => <SoftBreaks text={text.key} /> },
-		{ key: 'english', header: T.columns.english, low: true, wrap: true, className: 'min-w-48 max-w-sm text-muted' },
-		{ key: 'value', header: T.columns.shown, wrap: true, className: 'min-w-48 max-w-sm' },
-		{
-			key: 'status',
-			header: T.columns.status,
-			kind: 'status',
-			render: (text) => (text.source === savedSource ? <StatusPill status="info">{T.edited}</StatusPill> : null),
-		},
-	];
+export const isChanged = (text, savedSource) => text.source === savedSource || text.value !== text.english;
+
+/** A text longer than this (or in lines) is edited in a multi-line box. */
+const LONG_TEXT = 80;
+
+/**
+ * Where a text shows, from its key: its parts as words (`grid.sort.price_asc` is "Grid › Sort › Price asc").
+ * @param {string} key
+ */
+const whereOf = (key) => key.split('.').map(humanize).join(' › ');
+
+/** The Reset link beside a changed text (the look of the one in {@link SchemaForm}). @param {{ onClick: () => void, children: ReactNode }} props */
+function ResetLink({ onClick, children }) {
 	return (
-		<>
-			<DataTable
-				caption={caption}
-				columns={columns}
-				rows={items}
-				rowKey={(text) => text.key}
-				rowLabel={(text) => text.key}
-				onRowClick={setOpened}
-				{...(empty ? { empty } : {})}
-			/>
-			<Drawer
-				open={opened !== null}
-				onClose={close}
-				title={opened ? <SoftBreaks text={opened.key} /> : ''}
-				{...(opened ? { description: fill(T.englishWas, { english: opened.english }) } : {})}
-				footer={
-					<>
-						{opened?.source === savedSource ? (
-							<Button variant="ghost" onClick={() => finish(editor.reset)}>
-								{texts.reset}
-							</Button>
-						) : null}
-						<Button variant="secondary" onClick={close}>
-							{texts.cancel}
-						</Button>
-						<Button disabled={edited === undefined} onClick={() => finish(editor.save)}>
-							{texts.save}
-						</Button>
-					</>
-				}>
-				{opened ? (
-					<>
-						<Input
-							label={T.yours}
-							value={edited ?? opened.value}
-							onChange={(event) => editor.change(opened.key, event.target.value)}
+		<button
+			type="button"
+			onClick={onClick}
+			className="rounded text-help font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-focus">
+			{children}
+		</button>
+	);
+}
+
+/**
+ * Widget texts as fields in place (layout contract R5: a record is edited where it is shown; the page's one Save bar
+ * keeps the edits): a setting row for each text, its label the English words and its help where it shows (from its
+ * key), a box for the words shown now (a multi-line one for a long text) and Reset to default beside the label of a text
+ * that was changed here. A text the server refused says why under its box. Drawn in one card; with no texts, `empty`
+ * says so.
+ * @param {{ items: WidgetText[], editor: TextsEditor, savedSource: string, texts: Dashboard['texts'], empty?: string }} props
+ */
+export function TextFields({ items, editor, savedSource, texts, empty }) {
+	const T = texts.texts;
+	if (items.length === 0) return empty ? <EmptyState icon="search" title={empty} /> : null;
+	return (
+		<SettingsCard wide>
+			<SettingList>
+				{items.map((text) => {
+					const Control =
+						text.english.length > LONG_TEXT || text.value.length > LONG_TEXT || /\n/.test(text.english) ? TextArea : Input;
+					const error = editor.errors[text.key];
+					return (
+						<Control
+							key={text.key}
+							name={text.key}
+							label={text.english}
+							help={fill(T.where, { where: whereOf(text.key) })}
+							value={editor.edits[text.key] ?? text.value}
+							onChange={(event) => editor.change(text.key, event.target.value, text.value)}
+							{...(error ? { error } : {})}
+							{...(text.source === savedSource
+								? { aside: <ResetLink onClick={() => void editor.reset(text.key)}>{texts.reset}</ResetLink> }
+								: {})}
 						/>
-						{editor.result?.key === opened.key ? <Outcome result={editor.result.answer} /> : null}
-					</>
-				) : null}
-			</Drawer>
-		</>
+					);
+				})}
+			</SettingList>
+		</SettingsCard>
 	);
 }
 
@@ -422,37 +449,23 @@ export const textGroups = (items) => {
 };
 
 /**
- * The sidebar sections of the widget texts: a page per screen or widget, a table of its texts, with how many of them
- * were changed as the count in the sidebar and how many there are behind the (i).
+ * The rows of the widget texts: a row per screen or widget ("{n} texts · {m} changed" under its name) whose page is
+ * all its texts as fields, open to edit.
  * @param {{ items: WidgetText[], editor: TextsEditor, savedSource: string, dash: Dashboard, group?: string }} options
  * @returns {Section[]}
  */
 export function textSections({ items, editor, savedSource, dash, group }) {
 	const { texts } = dash;
 	const T = texts.texts;
-	return textGroups(items).map((entry) => {
-		const changed = entry.items.filter((text) => text.source === savedSource).length;
-		return {
-			id: `text-${entry.id || 'other'}`,
-			label: entry.label,
-			...(group ? { group } : {}),
-			...(changed > 0 ? { badge: changed } : {}),
-			flush: true,
-			info: (
-				<>
-					<p>{fill(T.count, { count: entry.items.length })}</p>
-					<p>{T.help}</p>
-				</>
-			),
-			content: (
-				<TextsTable
-					items={entry.items}
-					editor={editor}
-					savedSource={savedSource}
-					texts={texts}
-					caption={fill(T.caption, { screen: entry.label })}
-				/>
-			),
-		};
-	});
+	return textGroups(items).map((entry) => ({
+		id: `text-${entry.id || 'other'}`,
+		label: entry.label,
+		...(group ? { group } : {}),
+		meta: [
+			entry.items.length === 1 ? T.countOne : fill(T.count, { count: entry.items.length }),
+			fill(T.changed, { count: entry.items.filter((text) => isChanged(text, savedSource)).length }),
+		],
+		info: T.help,
+		content: <TextFields items={entry.items} editor={editor} savedSource={savedSource} texts={texts} />,
+	}));
 }

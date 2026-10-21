@@ -8,7 +8,7 @@
  *
  * Every tab with more than a couple of cards is a list of rich rows beside the page, which shows the picked row
  * (owner 2026-10-21): Settings has every feature (grouped by category, with its switch; there is no Features tab),
- * Texts a screen or widget, Connections one per connection, Developers and Prices a section. The look, the Format and the business facts are not
+ * Texts a screen or widget (its texts are fields in place, one Save bar), Connections one per connection, Developers and Prices a section. The look, the Format and the business facts are not
  * here: they are the Portal's Website settings, and what a product needs of them shows on its Overview.
  * @module
  */
@@ -33,7 +33,7 @@ import { LoadedPage, SectionsPage, useCrumbs } from './dashboard-page.js';
 import { Outcome, ResealCard, toneOf, useDashboard } from './dashboard-parts.js';
 import {
 	SettingsBar,
-	TextsTable,
+	TextFields,
 	featureSections,
 	textSections,
 	useSettingsEditor,
@@ -280,9 +280,10 @@ function SettingsPanel({
 }
 
 /**
- * Texts: every word the widgets show. The inner sidebar lists the screens and widgets (a text's key starts with its
- * screen), each a table of its texts; the search above finds a text by its words in all of them and shows the matches
- * in place of the screen (the sidebar stays). A text is changed in a drawer and saves on its own.
+ * Texts: every word the widgets show. The list has a row per screen or widget (a text's key starts with its screen)
+ * with how many texts it has and how many were changed; its page is all its texts as fields in place. The search above
+ * finds a text by its words in all of them and shows the matches the same way in place of the screen (the list stays).
+ * Every edit, on any screen, waits for the page's one Save bar.
  * @param {TabProps} props
  */
 export function TextsTab({ websiteId }) {
@@ -304,7 +305,7 @@ export function TextsTab({ websiteId }) {
 }
 
 /**
- * The texts' pages and search (a website's or the global defaults).
+ * The texts' pages and search (a website's or the global defaults), with their one Save bar.
  * @param {{ items: Array<{ key: string, english: string, value: string, source: string }>, saveUrl: (key: string) => string,
  *   resetBody: boolean, savedSource: string, reload: () => void }} props
  */
@@ -315,41 +316,36 @@ function TextsPanel({ items, saveUrl, resetBody, savedSource, reload }) {
 	const paged = usePaged(items, { text: (text) => `${text.key} ${text.english} ${text.value}`, pageSize: 50 });
 	const searching = paged.query.trim() !== '';
 	return (
-		<SectionsPage
-			tab="texts"
-			label={dash.texts.tabs.texts}
-			sections={textSections({ items, editor, savedSource, dash })}
-			searchFrom={6}
-			searchLabel={T.navSearch}
-			{...(items.length > 0
-				? {
-						toolbar: (
-							<Toolbar
-								search={{
-									onSearch: paged.setQuery,
-									value: paged.query,
-									label: T.search,
-									placeholder: T.search,
-									delay: 0,
-								}}
-							/>
-						),
-					}
-				: {})}
-			{...(searching
-				? { footer: <Pagination {...paged.pagination} />, flushChildren: true, resultLabel: T.results, info: T.help }
-				: {})}>
-			{searching ? (
-				<TextsTable
-					items={paged.rows}
-					editor={editor}
-					savedSource={savedSource}
-					texts={dash.texts}
-					caption={T.results}
-					empty={T.none}
-				/>
-			) : null}
-		</SectionsPage>
+		<>
+			<SectionsPage
+				tab="texts"
+				label={dash.texts.tabs.texts}
+				sections={textSections({ items, editor, savedSource, dash })}
+				searchFrom={6}
+				searchLabel={T.navSearch}
+				{...(items.length > 0
+					? {
+							toolbar: (
+								<Toolbar
+									search={{
+										onSearch: paged.setQuery,
+										value: paged.query,
+										label: T.search,
+										placeholder: T.search,
+										delay: 0,
+									}}
+								/>
+							),
+						}
+					: {})}
+				{...(searching ? { footer: <Pagination {...paged.pagination} />, resultLabel: T.results, info: T.help } : {})}>
+				{searching ? (
+					<TextFields items={paged.rows} editor={editor} savedSource={savedSource} texts={dash.texts} empty={T.none} />
+				) : null}
+			</SectionsPage>
+			<SettingsBar editor={editor} texts={dash.texts} />
+			<Outcome result={editor.result} />
+		</>
 	);
 }
 
@@ -607,8 +603,9 @@ function DevelopersPanel({ features, sections, children }) {
 }
 
 /**
- * Defaults (Owner): the inner sidebar has the global defaults of every feature's settings (by category, with the
- * product's `notice`), the widget texts by screen, and Recent changes (the theme and the Format are the Portal's).
+ * Defaults (Owner): the list has the global defaults of every feature's settings (by category, with the product's
+ * `notice`), the widget texts by screen (each text a field in place, as in Texts) and Recent changes (the theme and the
+ * Format are the Portal's). The settings and the texts share the page's one Save bar.
  * @param {Partial<TabProps> & { notice?: SettingsNotice }} props
  */
 export function DefaultsTab({ notice }) {
@@ -630,6 +627,19 @@ function DefaultsPanel({ data, reload, notice }) {
 	const saveUrl = (key) => `/v1/dashboard/defaults/${encodeURIComponent(key)}`;
 	const settings = useSettingsEditor({ saveUrl, resetBody: true, reload });
 	const words = useTextsEditor({ saveUrl: (key) => saveUrl(`text.${key}`), resetBody: true, reload });
+	// the feature settings and the texts share the page's one Save bar
+	const edits = {
+		dirty: settings.dirty || words.dirty,
+		saving: settings.saving || words.saving,
+		save: async () => {
+			if (settings.dirty) await settings.save();
+			if (words.dirty) await words.save();
+		},
+		discard: () => {
+			settings.discard();
+			words.discard();
+		},
+	};
 	const sections = [
 		...featureSections({
 			features: data.features,
@@ -658,7 +668,8 @@ function DefaultsPanel({ data, reload, notice }) {
 				searchLabel={D.navSearch}
 				info={D.intro}
 			/>
-			<SettingsBar editor={settings} texts={dash.texts} />
+			<SettingsBar editor={edits} texts={dash.texts} />
+			<Outcome result={words.result} />
 		</>
 	);
 }

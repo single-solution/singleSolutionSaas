@@ -309,8 +309,11 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
   `ListColumn` beside the page (`SectionsPage` in `dashboard-page.js`, each view its own `#hash`, the badge, status dot,
   `meta` line and lock on its row, the groups as filter chips); a section with parts is one row whose page shows every part
   stacked under its heading.
-  Lists are `DataTable` pages for now (the Texts, Defaults, Changes and Developers docs tables; they move to rows) and a record edit opens in a
-  `Drawer`; the loading states are the matching skeletons (`OverviewSkeleton` is built from `StatGridSkeleton` and
+  Lists are `DataTable` pages for now (the Changes and Developers docs tables; they move to rows) and a record edit opens in a
+  `Drawer`. The widget texts (Texts, and the texts of Defaults) are no table: a screen's row says "{n} texts · {m} changed"
+  and its page is every text as a kit field in place (label the English words, help where it shows, Reset to default
+  once changed; `useTextsEditor` + `TextFields`), all edits waiting for the page's one Save bar (`SettingsBar`); the
+  search shows the matches the same way. The loading states are the matching skeletons (`OverviewSkeleton` is built from `StatGridSkeleton` and
   `SettingsCardSkeleton`).
 - Standard tabs, each taking the product's parts as props: `OverviewTab` (`useMore(overview, props)`, a hook that
   returns the product's `needs`, `steps`, `numbers` and `children`), `SettingsTab`
@@ -320,7 +323,7 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
   its status dot, Test sits in the header and Remove in the header's More menu, which asks first), `DevelopersTab` (the product's `sections` instead of the widget script, `children` under More; the
   website id and tokens are in the Portal),
   `DefaultsTab` (`notice`) and `PricesTab` (with the Re-seal card).
-- Pieces for a product's own tabs: `Loaded`, `Outcome`, `SaveOutcome`, `SettingsForms`, `TextsForm` (with a box that finds a text),
+- Pieces for a product's own tabs: `Loaded`, `Outcome`, `SaveOutcome`, `SettingsForms`,
   `ResealCard`, and `hasSettings`, `toneOf`, `withDependents`. A setting marked `x-ui.defaultFrom` says "Using your
   website's language. Change it in the Portal" under its help while it uses the Portal's value (`SchemaForm`'s
   `inherited`).

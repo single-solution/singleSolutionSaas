@@ -42,7 +42,6 @@ export {
 	ResealCard,
 	SaveOutcome,
 	SettingsForms,
-	TextsForm,
 	hasSettings,
 	toneOf,
 	useDashboard,
@@ -50,7 +49,7 @@ export {
 } from './dashboard-parts.js';
 export {
 	SettingsBar,
-	TextsTable,
+	TextFields,
 	featureSections,
 	settingSectionOf,
 	textGroups,

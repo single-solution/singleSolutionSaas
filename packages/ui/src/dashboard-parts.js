@@ -1,15 +1,15 @@
 'use client';
 /**
  * The pieces every product dashboard's tabs share (PLAN 0.4.3): the product's words and feature names
- * (`DashboardProvider`, `useDashboard`), the loading and outcome states, and the kit's settings and texts forms (a
- * website's values or the global defaults) and the Owner's Re-seal card.
+ * (`DashboardProvider`, `useDashboard`), the loading and outcome states, and the kit's settings form (a website's
+ * values or the global defaults) and the Owner's Re-seal card. The widget texts are fields in place
+ * (`dashboard-settings.js`).
  * @module
  */
 import { ViewTransition, createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from './Button.js';
-import { SaveBar, SettingList, SettingRow, SettingsCard } from './blocks.js';
-import { Callout, Card, ErrorState, Skeleton, SoftBreaks } from './display.js';
-import { Input } from './fields.js';
+import { SaveBar } from './blocks.js';
+import { Callout, Card, ErrorState, Skeleton } from './display.js';
 import { SchemaForm } from './SchemaForm.js';
 import { describeProblem, problemLines } from './problems.js';
 import { ToastProvider, useToast } from './Toast.js';
@@ -313,85 +313,6 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 				discardLabel={texts.settings.discard}
 			/>
 		</>
-	);
-}
-
-/**
- * Widget texts: every word the widgets show, with its English default, and a box that finds a text by its key or
- * words. Each text saves on its own; one saved here gets a Reset (`resetBody` as in `SettingsForms`).
- * @param {{ texts: Array<{ key: string, english: string, value: string, source: string }>, saveUrl: (key: string) => string,
- *   resetBody: boolean, savedSource: string, reload: () => void }} props
- */
-export function TextsForm({ texts, saveUrl, resetBody, savedSource, reload }) {
-	const { texts: words } = useDashboard();
-	const [edits, setEdits] = useState(/** @type {Record<string, string>} */ ({}));
-	const [result, setResult] = useState(/** @type {{ key: string, answer: Answer } | null} */ (null));
-	const [filter, setFilter] = useState('');
-	const needle = filter.trim().toLowerCase();
-	const shown = needle
-		? texts.filter((text) => `${text.key} ${text.english} ${text.value}`.toLowerCase().includes(needle))
-		: texts;
-	return (
-		<SettingsCard title={words.settings.texts} description={words.settings.textsHelp}>
-			<Input
-				fieldClassName="mb-4"
-				label={words.settings.textsFilter}
-				type="search"
-				value={filter}
-				onChange={(event) => setFilter(event.target.value)}
-				layout="stack"
-			/>
-			<SettingList>
-				{shown.map((text) => {
-					const englishId = `text-${text.key.replace(/[^\w-]/g, '-')}-english`;
-					return (
-						<SettingRow
-							key={text.key}
-							label={<SoftBreaks text={text.key} />}
-							description={<span id={englishId}>{text.english}</span>}>
-							<Input
-								hideLabel
-								label={<SoftBreaks text={text.key} />}
-								aria-describedby={englishId}
-								value={edits[text.key] ?? text.value}
-								onChange={(event) => setEdits({ ...edits, [text.key]: event.target.value })}
-							/>
-							<div className="flex flex-wrap items-center gap-2">
-								<Button
-									size="sm"
-									disabled={edits[text.key] === undefined}
-									onClick={async () => {
-										const next = await call('PUT', saveUrl(text.key), { value: edits[text.key] });
-										setResult({ key: text.key, answer: next });
-										if (next.ok)
-											setEdits(Object.fromEntries(Object.entries(edits).filter(([key]) => key !== text.key)));
-										reload();
-									}}>
-									{words.save}
-								</Button>
-								{text.source === savedSource ? (
-									<Button
-										size="sm"
-										variant="ghost"
-										onClick={async () => {
-											setResult({
-												key: text.key,
-												answer: resetBody
-													? await call('PUT', saveUrl(text.key), { value: null })
-													: await call('DELETE', saveUrl(text.key)),
-											});
-											reload();
-										}}>
-										{words.reset}
-									</Button>
-								) : null}
-							</div>
-							{result?.key === text.key ? <Outcome result={result.answer} /> : null}
-						</SettingRow>
-					);
-				})}
-			</SettingList>
-		</SettingsCard>
 	);
 }
 
