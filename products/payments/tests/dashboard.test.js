@@ -12,7 +12,7 @@ import manifest from '../manifest.json' with { type: 'json' };
 import { MethodsEditor } from '../app/dashboard/methods.js';
 import { TABS } from '../app/dashboard/tabs.js';
 import { TEXTS } from '../app/dashboard/texts.js';
-import { closeDrawer, drawerOf, openRow, rowMenu, rowNames } from './dashboard-provider.js';
+import { closeDrawer, drawerOf, factsOf, openRow, rowMenu, rowNames, rowOf, rowsOf } from './dashboard-provider.js';
 
 /** The dashboard keeps each answer it loaded for the page: each render opens its own website. */
 let website = 0;
@@ -233,10 +233,11 @@ describe('the manual payment methods editor (P1, P2)', () => {
 		// the title and Add method are there; a row is a method with its kind, key, accounts and status
 		expect(container.querySelector('h2')?.textContent).toBe('Manual payment methods');
 		expect(rowNames(container)).toEqual(['Bank transfer']);
-		const cells = container.querySelector('tbody')?.textContent ?? '';
-		expect(cells).toContain('Paid first');
-		expect(cells).toContain('bank_transfer');
-		expect(cells).toContain('Shown to payers');
+		expect(factsOf(rowOf(container, 'Bank transfer'))).toEqual({
+			meta: 'Paid first · bank_transfer · Accounts: 1',
+			value: 'Shown to payers',
+			status: 'Shown to payers',
+		});
 		// no Save bar until something changed
 		expect(saveButton()).toBeNull();
 		const first = await openRow(container, 'Bank transfer');
@@ -295,6 +296,10 @@ describe('the manual payment methods editor (P1, P2)', () => {
 		const empty = render(Editor(`web_${(website += 1)}`));
 		await settle();
 		expect(empty.container.textContent).toContain('No manual payment methods yet.');
+		// the empty state carries the one Add method action
+		expect(empty.container.querySelectorAll('button')).toHaveLength(1);
+		await act(async () => click(byText(empty.container, 'Add method', 'button')));
+		expect(drawerOf().querySelector('h2')?.textContent).toBe('Method 1');
 	});
 
 	it('shows the server’s errors with their paths, and warns about Storage only for a method with proofs', async () => {
@@ -321,10 +326,11 @@ describe('the manual payment methods editor (P1, P2)', () => {
 		serveList([transfer([]), { ...transfer([]), key: 'cash', name: 'Cash', kind: 'on_delivery' }]);
 		const { container } = render(Editor(`web_${(website += 1)}`));
 		await settle();
-		const rows = [...container.querySelectorAll('tbody tr')];
+		const rows = rowsOf(container).map(factsOf);
 		// a paid-first method with no account or instructions is not shown yet; the one paid on delivery is
-		expect(rows[0]?.textContent).toContain('Not shown yet');
-		expect(rows[1]?.textContent).toContain('Shown to payers');
+		expect(rows[0]?.status).toBe('Not shown yet');
+		expect(rows[0]?.value).toBe('Not shown yet');
+		expect(rows[1]?.status).toBe('Shown to payers');
 		const drawer = await openRow(container, 'Bank transfer');
 		expect(drawer.textContent).toContain('not shown to payers yet');
 	});

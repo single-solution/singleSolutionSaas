@@ -4,24 +4,27 @@
  * add, rename, reorder and remove methods; each with its kind (pay first, on delivery, at pickup), details, instructions,
  * proof upload and accounts (label/value rows with an optional currency). The list is read with
  * `GET /v1/dashboard/websites/:websiteId/lists/manual_methods` and saved whole with `PUT … { value }`; a 422 lists the
- * server's check errors under the editor. The methods are a table with a row menu; a method opens in a drawer.
+ * server's check errors under the editor. The methods are rich rows (icon, name, a dot for shown to payers or not, kind,
+ * key, accounts) with a row menu; a method opens in a drawer, because it has many fields and accounts of its own. An
+ * empty list is an empty state with the one Add action.
  * @module
  */
 import { useState } from 'react';
 import {
+	ActionMenu,
 	Button,
 	Callout,
 	Card,
 	Checkbox,
-	DataTable,
-	DataTableSkeleton,
 	Drawer,
+	EmptyState,
 	EntryGroup,
 	FieldGrid,
 	Icon,
 	Input,
+	Row,
+	RowListSkeleton,
 	Select,
-	StatusPill,
 	TextArea,
 	SaveBar,
 } from '@ss/ui';
@@ -30,6 +33,11 @@ import { Loaded, SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
 const M = TEXTS.methods;
+
+/** The icon of each kind of method's row. */
+const KIND_ICONS = Object.freeze(
+	/** @type {Record<string, import('@ss/ui').IconName>} */ ({ pay_first: 'creditCard', on_delivery: 'bag', at_pickup: 'home' }),
+);
 
 /** @typedef {import('../../core/methods.js').ManualMethod} ManualMethod */
 /** @typedef {import('../../core/methods.js').Account} Account */
@@ -217,7 +225,7 @@ function MethodFields({ method, noStorage, onChange }) {
 
 /**
  * The editor: the saved list (or today's bank transfer before one is saved), edited locally and saved whole with the
- * frame's Save bar. The methods are a table (the row menu moves a method up or down or removes it); a click on a row
+ * frame's Save bar. The methods are rows (the row menu moves a method up or down or removes it); a click on a row
  * opens the method's fields in a drawer that edits the draft only (Done closes it).
  * @param {{ websiteId: string, bare?: boolean }} props `bare`: the page already says the title, so the card has none
  */
@@ -244,71 +252,85 @@ export function MethodsEditor({ websiteId, bare = false }) {
 	/** @param {ManualMethod} method @param {number} index */
 	const nameFor = (method, index) => method.name.trim() || fill(M.untitled, { n: index + 1 });
 	const current = opened === null ? undefined : methods[opened];
+	const add = () => {
+		change([...methods, newMethod(methods)]);
+		setOpened(methods.length);
+	};
+	const empty = answer?.ok === true && methods.length === 0;
 	return (
 		<Card
 			{...(bare ? {} : { title: M.title })}
 			subtitle={`${M.help} ${fill(M.max, { max: METHOD_LIMITS.methods })}`}
 			actions={
-				<Button
-					size="sm"
-					disabled={!answer?.ok || methods.length >= METHOD_LIMITS.methods}
-					onClick={() => {
-						change([...methods, newMethod(methods)]);
-						setOpened(methods.length);
-					}}>
-					<Icon name="plus" size={14} />
-					{M.addMethod}
-				</Button>
+				empty ? null : (
+					<Button size="sm" disabled={!answer?.ok || methods.length >= METHOD_LIMITS.methods} onClick={add}>
+						<Icon name="plus" size={14} />
+						{M.addMethod}
+					</Button>
+				)
 			}>
 			<div className="space-y-4">
-				<Loaded answer={answer} skeleton={<DataTableSkeleton columns={4} rows={3} menu />}>
-					{() => (
-						<DataTable
-							caption={M.title}
-							columns={[
-								{ key: 'name', header: M.columns.name, render: (row) => nameFor(row.method, row.index) },
-								{ key: 'kind', header: M.columns.kind, render: (row) => M.kinds[row.method.kind] },
-								{ key: 'key', header: M.columns.key, low: true, render: (row) => row.method.key },
-								{
-									key: 'accounts',
-									header: M.columns.accounts,
-									kind: 'number',
-									low: true,
-									render: (row) => row.method.accounts.length,
-								},
-								{
-									key: 'status',
-									header: M.columns.status,
-									render: (row) =>
-										methodReady(row.method, null).ready ? (
-											<StatusPill status="active">{M.columns.ready}</StatusPill>
-										) : (
-											<StatusPill status="setup" title={M.notReady}>
-												{M.columns.notReady}
-											</StatusPill>
-										),
-								},
-							]}
-							rows={methods.map((method, index) => ({ method, index }))}
-							rowKey={(row) => String(row.index)}
-							rowLabel={(row) => nameFor(row.method, row.index)}
-							onRowClick={(row) => setOpened(row.index)}
-							rowMenu={(row) => [
-								{ label: M.up, disabled: row.index === 0, onSelect: () => change(moved(methods, row.index, -1)) },
-								{
-									label: M.down,
-									disabled: row.index === methods.length - 1,
-									onSelect: () => change(moved(methods, row.index, 1)),
-								},
-								{
-									label: M.remove,
-									danger: true,
-									onSelect: () => change(methods.filter((_, at) => at !== row.index)),
-								},
-							]}
-							empty={M.none}
-						/>
-					)}
+				<Loaded answer={answer} skeleton={<RowListSkeleton rows={3} label={TEXTS.loading} />}>
+					{() =>
+						methods.length === 0 ? (
+							<EmptyState
+								compact
+								icon="creditCard"
+								title={M.none}
+								action={
+									<Button size="sm" onClick={add}>
+										<Icon name="plus" size={14} />
+										{M.addMethod}
+									</Button>
+								}
+							/>
+						) : (
+							<div>
+								{methods.map((method, index) => {
+									const ready = methodReady(method, null).ready;
+									const name = nameFor(method, index);
+									return (
+										<Row
+											key={index}
+											lead={{ icon: KIND_ICONS[method.kind] ?? 'wallet', tone: 'primary' }}
+											title={name}
+											status={{
+												tone: ready ? 'success' : 'warning',
+												label: ready ? M.columns.ready : M.columns.notReady,
+											}}
+											meta={[M.kinds[method.kind], method.key, `${M.columns.accounts}: ${method.accounts.length}`]}
+											value={ready ? M.columns.ready : M.columns.notReady}
+											selected={opened === index}
+											onSelect={() => setOpened(index)}
+											trailing={
+												<ActionMenu
+													floating
+													label={fill(TEXTS.rowActions, { name })}
+													items={[
+														{
+															label: M.up,
+															disabled: index === 0,
+															onSelect: () => change(moved(methods, index, -1)),
+														},
+														{
+															label: M.down,
+															disabled: index === methods.length - 1,
+															onSelect: () => change(moved(methods, index, 1)),
+														},
+														{
+															label: M.remove,
+															danger: true,
+															onSelect: () => change(methods.filter((_, at) => at !== index)),
+														},
+													]}
+												/>
+											}
+										/>
+									);
+								})}
+							</div>
+						)
+					}
 				</Loaded>
 				<SaveBar
 					show={draft !== null}
