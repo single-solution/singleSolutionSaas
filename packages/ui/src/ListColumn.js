@@ -21,7 +21,7 @@ import { Row } from './Row.js';
 import { Spinner } from './Spinner.js';
 
 /** @typedef {Parameters<typeof Row>[0]} RowProps */
-/** @typedef {{ search: string, filters: string, loading: string, more: string }} ListColumnTexts */
+/** @typedef {{ search: string, filters: string, loading: string, more: string, back: string }} ListColumnTexts */
 
 /** The words the list column says itself (replace them to translate). @type {Readonly<ListColumnTexts>} */
 export const LIST_COLUMN_TEXTS = Object.freeze({
@@ -29,6 +29,7 @@ export const LIST_COLUMN_TEXTS = Object.freeze({
 	filters: 'Filter',
 	loading: 'Loading',
 	more: 'Loading more',
+	back: 'Back to the list',
 });
 
 /** How long the pointer rests on a row before `onPrefetch` is called (ms). */
@@ -50,7 +51,7 @@ const typing = (target) =>
  *   loading?: boolean, empty?: Parameters<typeof EmptyState>[0], hasMore?: boolean, onMore?: () => void,
  *   onPrefetch?: (item: T) => void, texts?: Partial<ListColumnTexts>, className?: string }} props `label`: the name of
  *   the list for screen readers; `rowOf`: the `Row` props of an item (the column sets `selected` and `onSelect`);
- *   `selected`: the id of the picked item; `onBack`: read by a `Page` on phones (its Back button shows the list again);
+ *   `selected`: the id of the picked item; `onBack`: read by a `Page` on phones (its Back button, named by `texts.back`, shows the list again);
  *   `search`: a box above the rows (`/` focuses it); `filters`: chips under it, the one whose `id` is `value` on; `empty`:
  *   what to say when there are no items; `hasMore` + `onMore`: the list has more rows to load (called once each time the
  *   end comes into view)

@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from '../src/AppShell.js';
 import { Pagination } from '../src/Pagination.js';
+import { ListColumn } from '../src/ListColumn.js';
 import { Page, PAGE_TEXTS } from '../src/Page.js';
 import { PAGE } from '../src/layout-metrics.js';
 import { PageSkeleton } from '../src/skeletons.js';
@@ -619,5 +620,116 @@ describe('Page header by its own width', () => {
 		expect(button.getAttribute('aria-label')).toBeNull();
 		expect(button.className).not.toContain('@max-md');
 		expect(byText(button, 'Save').className).not.toContain('sr-only');
+	});
+});
+
+describe('Page with a list', () => {
+	const merchants = [
+		{ id: 'acme', name: 'Acme Shop' },
+		{ id: 'bolt', name: 'Bolt Studio' },
+	];
+
+	/** @param {{ selected?: string | null, onBack?: () => void }} props */
+	const listOf = ({ selected = null, onBack }) => (
+		<ListColumn
+			label="Merchants"
+			items={merchants}
+			idOf={(m) => m.id}
+			rowOf={(m) => ({ title: m.name })}
+			selected={selected}
+			{...(onBack ? { onBack } : {})}
+		/>
+	);
+
+	const crumbs = [{ label: 'Merchants' }];
+
+	it('draws the column where the inner navigation goes, before the main panel, and not the navigation', () => {
+		const { container } = render(
+			<Page crumbs={crumbs} nav={{ items: [{ id: 'a', label: 'Alpha' }], value: 'a' }} list={listOf({ selected: 'acme' })}>
+				<p>Acme page</p>
+			</Page>,
+		);
+		const column = /** @type {HTMLElement} */ (container.querySelector('[data-ss-list]'));
+		expect(column).not.toBeNull();
+		expect(container.querySelector('nav[aria-label="Sections"]')).toBeNull();
+		expect(allByRole(container, 'option')).toHaveLength(2);
+		expect(column.compareDocumentPosition(part(container, 'body')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(part(container, 'body').textContent).toContain('Acme page');
+		expect(/** @type {HTMLElement} */ (column.parentElement).className).toBe(PAGE.listArea);
+	});
+
+	it('wins over the jump list of four sections, which all still show in the body', () => {
+		const sections = ['one', 'two', 'three', 'four'].map((id) => ({
+			id,
+			label: id.toUpperCase(),
+			body: <p>{`Body ${id}`}</p>,
+		}));
+		const { container } = render(<Page crumbs={crumbs} sections={sections} list={listOf({ selected: 'acme' })} />);
+		expect(container.querySelector('nav[aria-label="Sections"]')).toBeNull();
+		expect(container.querySelector('[data-ss-list]')).not.toBeNull();
+		expect(part(container, 'body').textContent).toContain('Body four');
+	});
+
+	it('fades the body in again when the picked item changes', () => {
+		const { container, rerender } = render(
+			<Page crumbs={crumbs} list={listOf({ selected: 'acme' })}>
+				x
+			</Page>,
+		);
+		const before = /** @type {HTMLElement} */ (part(container, 'body').firstElementChild);
+		expect(before.className).toContain('animate-ss-enter');
+		rerender(
+			<Page crumbs={crumbs} list={listOf({ selected: 'acme' })}>
+				x
+			</Page>,
+		);
+		expect(part(container, 'body').firstElementChild).toBe(before);
+		rerender(
+			<Page crumbs={crumbs} list={listOf({ selected: 'bolt' })}>
+				x
+			</Page>,
+		);
+		expect(part(container, 'body').firstElementChild).not.toBe(before);
+	});
+
+	it('shows both on a wide screen, without a Back button', () => {
+		phone(false);
+		const onBack = vi.fn();
+		const { container } = render(
+			<Page crumbs={crumbs} list={listOf({ selected: 'acme', onBack })}>
+				Acme page
+			</Page>,
+		);
+		expect(container.querySelector('[data-ss-list]')).not.toBeNull();
+		expect(part(container, 'body')).not.toBeNull();
+		expect(part(container, 'header').querySelector('[aria-label="Back to the list"]')).toBeNull();
+	});
+
+	it('shows only the list on a phone while nothing is picked', () => {
+		phone(true);
+		const { container } = render(
+			<Page crumbs={crumbs} list={listOf({ selected: null })}>
+				Acme page
+			</Page>,
+		);
+		expect(container.querySelector('[data-ss-list]')).not.toBeNull();
+		expect(allByRole(container, 'option')).toHaveLength(2);
+		expect(part(container, 'body')).toBeNull();
+		expect(container.textContent).not.toContain('Acme page');
+	});
+
+	it('shows only the picked item on a phone, with a Back button in the header that calls onBack', () => {
+		phone(true);
+		const onBack = vi.fn();
+		const { container } = render(
+			<Page crumbs={crumbs} list={listOf({ selected: 'acme', onBack })}>
+				Acme page
+			</Page>,
+		);
+		expect(container.querySelector('[data-ss-list]')).toBeNull();
+		expect(part(container, 'body').textContent).toContain('Acme page');
+		const back = /** @type {HTMLElement} */ (part(container, 'header').querySelector('[aria-label="Back to the list"]'));
+		click(back);
+		expect(onBack).toHaveBeenCalledTimes(1);
 	});
 });

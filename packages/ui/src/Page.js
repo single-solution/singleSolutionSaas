@@ -16,6 +16,11 @@
  * nothing overlaps. On phones the frame's menu button leads the header and the inner navigation is a dropdown above the
  * panel.
  *
+ * With `list` (a `ListColumn` element) the column of rich rows is drawn where the inner navigation goes (it wins over `nav`
+ * and over the sections' jump list) and the body is the picked item's page; the body fades and rises when the picked
+ * item changes. On phones one of the two shows: the list while nothing is picked, else the body with a Back button
+ * in the header that calls the list's `onBack`.
+ *
  * With `sections` the body shows every section of the page at once, all open, and the page has one save bar for all of
  * them (see `page-sections.js`); from four sections up the inner navigation lists them as jumps.
  *
@@ -27,8 +32,11 @@ import { useId } from 'react';
 import { cx } from './cx.js';
 import { ErrorState, StatusPill } from './display.js';
 import { SaveBar } from './blocks.js';
+import { IconButton } from './Button.js';
+import { Icon } from './icons.js';
 import { InnerNav } from './InnerNav.js';
 import { PAGE, pageBody } from './layout-metrics.js';
+import { LIST_COLUMN_TEXTS } from './ListColumn.js';
 import { Crumbs, Fact, HeaderActions, InfoButton, PAGE_TEXTS, ShellMenuButton, useNarrow } from './page-parts.js';
 import { PageSectionList, usePageSections } from './page-sections.js';
 import { useShell } from './shell-state.js';
@@ -45,16 +53,19 @@ export { PAGE_TEXTS };
 /** @typedef {import('./page-parts.js').PageTexts} PageTexts */
 /** @typedef {import('./page-sections.js').PageSection} PageSection */
 /** @typedef {Parameters<typeof InnerNav>[0]} PageNav */
+/** @typedef {import('react').ReactElement<{ selected?: string | number | null, onBack?: () => void, texts?: Partial<import('./ListColumn.js').ListColumnTexts> }>} PageList */
 
 /**
  * @param {{ crumbs: PageCrumb[], status?: PageStatus[], facts?: PageFact[], actions?: PageActions, info?: ReactNode,
- *   nav?: PageNav, sections?: PageSection[], toolbar?: ReactNode, footer?: ReactNode, loading?: boolean,
+ *   nav?: PageNav, list?: PageList, sections?: PageSection[], toolbar?: ReactNode, footer?: ReactNode, loading?: boolean,
  *   error?: string | { title?: string, message?: ReactNode, action?: ReactNode }, flush?: boolean,
  *   bodyKey?: string, skeleton?: ReactNode, linkAs?: import('react').ElementType, texts?: Partial<PageTexts>,
  *   className?: string, children?: ReactNode }} props `crumbs`: every step a link, the last one the title (and the
  *   page's one heading); `status`: pills after the title; `facts`: live numbers, at most four, each a filter button
  *   (`onClick`), a link (`href`) or plain; `actions`: `{ primary, secondary (at most two), more }`; `info`: the page's
- *   description, shown from an (i); `nav`: the props of an `InnerNav` (the page's sub-pages); `sections`: the
+ *   description, shown from an (i); `nav`: the props of an `InnerNav` (the page's sub-pages); `list`: a `ListColumn` element, drawn in place of
+ *   the navigation, the page being the picked item (set `bodyKey` to its id; the element's `selected` and `onBack` tell the
+ *   page what to show on phones); `sections`: the
  *   parts of the page, all drawn at once in place of `children` (each `{ id, label, icon?, dot?, dotLabel?, body }`), with
  *   the jump list from four of them (`nav` wins when given) and one save bar for the page; `toolbar`: a `Toolbar`;
  *   `footer`: a `Pagination`; `loading`: draw the page's skeleton (`skeleton` is the body's own, a few settings cards by
@@ -69,6 +80,7 @@ export function Page({
 	actions,
 	info,
 	nav,
+	list,
 	sections,
 	toolbar,
 	footer,
@@ -88,13 +100,18 @@ export function Page({
 	const flow = usePageSections(sections);
 	const words = { ...PAGE_TEXTS, ...texts };
 	const link = linkAs ?? shell.linkAs;
-	const rail = nav ?? flow.nav;
+	const rail = list ? undefined : (nav ?? flow.nav);
+	// on phones a list page shows the list or the picked item, one at a time
+	const picked = list?.props.selected;
+	const hasPick = picked !== null && picked !== undefined;
+	const listOnly = Boolean(list) && narrow && !hasPick;
+	const back = list && narrow && hasPick ? list.props.onBack : undefined;
 	if (loading)
 		return (
 			<PageSkeleton
 				crumbs={crumbs}
 				{...(link ? { linkAs: link } : {})}
-				nav={Boolean(rail)}
+				nav={Boolean(rail) || Boolean(list)}
 				toolbar={Boolean(toolbar)}
 				footer={Boolean(footer)}
 				flush={flush}
@@ -110,6 +127,11 @@ export function Page({
 		<div data-ss-page="" className={cx(PAGE.root, className)}>
 			<header data-ss-part="header" className={PAGE.header}>
 				<ShellMenuButton texts={words} />
+				{back ? (
+					<IconButton label={list?.props.texts?.back ?? LIST_COLUMN_TEXTS.back} onClick={back}>
+						<Icon name="chevronLeft" size={16} />
+					</IconButton>
+				) : null}
 				<div className="flex min-w-0 shrink items-center gap-1 @max-[60rem]:min-w-[10.5rem]">
 					<Crumbs crumbs={crumbs} titleId={titleId} texts={words} {...(link ? { linkAs: link } : {})} />
 					{info ? <InfoButton label={words.info}>{info}</InfoButton> : null}
@@ -145,39 +167,44 @@ export function Page({
 					{actions ? <HeaderActions actions={actions} narrow={narrow} texts={words} byWidth /> : null}
 				</div>
 			</header>
-			<div className={PAGE.area}>
+			<div className={list ? PAGE.listArea : PAGE.area}>
+				{list && !(narrow && hasPick) ? list : null}
 				{rail ? <InnerNav {...(link ? { linkAs: link } : {})} {...rail} /> : null}
-				<section className={PAGE.main}>
-					{bar ? (
-						<div data-ss-part="toolbar" className={PAGE.toolbar}>
-							{bar}
+				{listOnly ? null : (
+					<section className={PAGE.main}>
+						{bar ? (
+							<div data-ss-part="toolbar" className={PAGE.toolbar}>
+								{bar}
+							</div>
+						) : null}
+						<div
+							ref={flow.body}
+							data-ss-part="body"
+							className={pageBody({ toolbar: Boolean(bar), footer: Boolean(end) })}
+							{...(flush ? {} : { role: 'region', tabIndex: 0, 'aria-labelledby': titleId })}>
+							<div
+								key={bodyKey ?? (list ? String(picked ?? '') : undefined)}
+								className={cx(flush ? PAGE.flush : PAGE.padded, 'animate-ss-enter')}>
+								{failure ? (
+									<ErrorState
+										{...(failure.title ? { title: failure.title } : {})}
+										message={failure.message}
+										{...(failure.action ? { action: failure.action } : {})}
+									/>
+								) : sections ? (
+									<PageSectionList sections={sections} scopes={flow.scopes} />
+								) : (
+									children
+								)}
+							</div>
 						</div>
-					) : null}
-					<div
-						ref={flow.body}
-						data-ss-part="body"
-						className={pageBody({ toolbar: Boolean(bar), footer: Boolean(end) })}
-						{...(flush ? {} : { role: 'region', tabIndex: 0, 'aria-labelledby': titleId })}>
-						<div key={bodyKey} className={cx(flush ? PAGE.flush : PAGE.padded, 'animate-ss-enter')}>
-							{failure ? (
-								<ErrorState
-									{...(failure.title ? { title: failure.title } : {})}
-									message={failure.message}
-									{...(failure.action ? { action: failure.action } : {})}
-								/>
-							) : sections ? (
-								<PageSectionList sections={sections} scopes={flow.scopes} />
-							) : (
-								children
-							)}
-						</div>
-					</div>
-					{end ? (
-						<div data-ss-part="footer" className={PAGE.footer}>
-							{end}
-						</div>
-					) : null}
-				</section>
+						{end ? (
+							<div data-ss-part="footer" className={PAGE.footer}>
+								{end}
+							</div>
+						) : null}
+					</section>
+				)}
 			</div>
 			{flow.bar ? <SaveBar {...flow.bar} /> : null}
 		</div>
