@@ -8,29 +8,30 @@
  *
  * Every tab with more than a couple of cards is a list of rich rows beside the page, which shows the picked row
  * (owner 2026-10-21): Settings has every feature (grouped by category, with its switch; there is no Features tab),
- * Texts a screen or widget (its texts are fields in place, one Save bar), Connections one per connection, Developers and Prices a section. The look, the Format and the business facts are not
+ * Texts a screen or widget (its texts are fields in place, one Save bar), Developers the connections first (one rich
+ * card each; there is no Connections tab, see `dashboard-connections.js`) and then the developer parts, Prices a
+ * category of prices (rows with the price in place, one Save bar). The look, the Format and the business facts are not
  * here: they are the Portal's Website settings, and what a product needs of them shows on its Overview.
  * @module
  */
 import { useState } from 'react';
-import { Button } from './Button.js';
 import { CodeBlock } from './CodeBlock.js';
-import { Card, EmptyState, ManagedNote, TextLink } from './display.js';
-import { DataTable } from './DataTable.js';
+import { Card, EmptyState } from './display.js';
 import { SaveBar, SettingList, SettingsCard } from './blocks.js';
 import { Input } from './fields.js';
 import { NextStep } from './NextStep.js';
-import { ConfirmDialog } from './overlay.js';
 import { ChangesTable, OverviewSkeleton, ProductOverview } from './overview.js';
 import { usePaged } from './paged.js';
 import { Pagination } from './Pagination.js';
+import { Row } from './Row.js';
 import { Toolbar } from './Toolbar.js';
 import { formatCreditsPerHour, parseCredits } from './format.js';
 import { useDisplayLocale } from './time.js';
-import { call, fill, useLoad } from './dashboard-api.js';
+import { call, useLoad } from './dashboard-api.js';
+import { useConnections } from './dashboard-connections.js';
 import { featureLooks, useFeatureSwitches } from './dashboard-features.js';
 import { LoadedPage, SectionsPage, useCrumbs } from './dashboard-page.js';
-import { Outcome, ResealCard, toneOf, useDashboard } from './dashboard-parts.js';
+import { Outcome, ResealCard, useDashboard } from './dashboard-parts.js';
 import {
 	SettingsBar,
 	TextFields,
@@ -58,11 +59,8 @@ import { websiteSettingsUrl } from './portal-links.js';
  *   open: (tab: string, section?: string) => void }} TabProps
  */
 /** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
-/**
- * One connection of a website (`GET …/connections`).
- * @typedef {{ name: string, label: string, kind?: string, neededBy: string[], status: string, message?: string,
- *   managed?: boolean, last4?: string | null }} Connection `managed`: the Portal owns it (the database, the storage, the AI provider key, the links)
- */
+/** @typedef {import('./dashboard-connections.js').Connection} Connection */
+/** @typedef {import('./dashboard-connections.js').ConnectionParts} ConnectionParts */
 /**
  * What a product adds to its Overview: its own "Needs you" items, setup steps, number tiles and sections.
  * @typedef {{ needs?: import('./overview.js').Need[], steps?: import('./overview.js').SetupStep[], numbers?: ReactNode,
@@ -350,208 +348,59 @@ function TextsPanel({ items, saveUrl, resetBody, savedSource, reload }) {
 }
 
 /**
- * Connections: the inner sidebar lists the connections, each with a dot for its state; the page is one connection:
- * its state is a pill in the header beside Test (and Remove in the More menu once something is saved, after a
- * confirmation), who needs it is behind the (i), and the body holds a value to save (Save and test) or the product's own
- * form. `form` gives the product's own form for a connection (null: the one value field); `hint` its help line under the
- * status. A connection the Portal owns (`managed`: the database, the storage, the AI provider key and the links to other products) has no
- * form and no Remove here: a note says where it is set, with a link to the Portal; the database and the storage can be
- * tested.
- * @param {TabProps & { form?: (item: Connection, save: (value: unknown) => Promise<void>) => ReactNode,
- *   hint?: (name: string) => ReactNode }} props
+ * The answer of two reads as one: nothing until both are there, the first problem when one failed. `second` is
+ * `undefined` when it is not wanted (then the first stands alone); the connections of the second go into the data.
+ * @param {Answer | null} first the features
+ * @param {Answer | null | undefined} second the connections
+ * @returns {Answer | null}
  */
-export function ConnectionsTab({ websiteId, merchantId, who, portal, form, hint }) {
-	const { texts, namesOf } = useDashboard();
-	const C = texts.connections;
-	const base = `/v1/dashboard/websites/${websiteId}/connections`;
-	const { answer, reload } = useLoad(base);
-	const [values, setValues] = useState(/** @type {Record<string, string>} */ ({}));
-	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
-	const [removing, setRemoving] = useState(/** @type {{ name: string, label: string } | null} */ (null));
-	/** @param {Promise<Answer>} pending */
-	const act = async (pending) => {
-		setResult(await pending);
-		reload();
-	};
-	return (
-		<LoadedPage answer={answer} tab="connections" withNav>
-			{(data) => {
-				/** @type {Connection[]} */
-				const connections = data.connections;
-				const sections = connections.map((item) => {
-					/** @param {unknown} value */
-					const save = (value) => act(call('PUT', `${base}/${item.name}`, { value }));
-					const managed = item.managed === true;
-					const own = form && !managed ? form(item, save) : null;
-					const help = hint ? hint(item.name) : null;
-					const tone = toneOf(item.status);
-					const state = String(C[/** @type {'connected'} */ (item.status)]);
-					/** @type {import('./display.js').PillStatus} */
-					const pill = tone === 'success' ? 'active' : tone === 'danger' ? 'error' : 'setup';
-					const details = item.last4 || item.message || (help && !managed);
-					return {
-						id: `connection-${item.name}`,
-						label: item.label,
-						icon: /** @type {const} */ ('plug'),
-						status: tone,
-						statusLabel: state,
-						info: item.neededBy.length > 0 ? fill(C.neededBy, { features: namesOf(item.neededBy, 4) }) : C.neededByNone,
-						pills: [
-							{
-								status: pill,
-								label: state,
-							},
-						],
-						actions: {
-							...(item.kind === 'link'
-								? {}
-								: {
-										secondary: [{ label: C.test, onClick: () => act(call('POST', `${base}/${item.name}/test`)) }],
-									}),
-							...(item.status === 'not_connected' || managed
-								? {}
-								: {
-										more: [
-											{
-												label: C.remove,
-												danger: true,
-												onSelect: () => setRemoving({ name: item.name, label: item.label }),
-											},
-										],
-									}),
-						},
-						content: (
-							<>
-								{details ? (
-									<Card>
-										<p className="flex flex-wrap items-center gap-2 text-sm">
-											{item.last4 ? <code>••••{item.last4}</code> : null}
-											{item.message ? <span className="text-muted">{item.message}</span> : null}
-											{help && !managed ? <span className="text-help text-muted">{help}</span> : null}
-										</p>
-									</Card>
-								) : null}
-								{managed ? (
-									<ManagedNote
-										title={texts.managed.title}
-										href={websiteSettingsUrl({
-											portal,
-											admin: who.kind === 'admin',
-											websiteId,
-											merchantId,
-											section: item.kind === 'link' ? 'links' : 'connections',
-										})}
-										linkLabel={C.managed.open}>
-										{C.managed[/** @type {'database'} */ (item.kind ?? 'database')] ?? C.managed.link}
-									</ManagedNote>
-								) : own ? (
-									<Card>{own}</Card>
-								) : (
-									<SettingsCard
-										wide
-										footer={
-											<Button
-												size="sm"
-												disabled={!values[item.name]?.trim()}
-												onClick={() => {
-													const done = save(values[item.name]?.trim());
-													setValues({ ...values, [item.name]: '' });
-													return done;
-												}}>
-												{C.save}
-											</Button>
-										}>
-										<SettingList>
-											<Input
-												label={C.value}
-												type="password"
-												autoComplete="off"
-												value={values[item.name] ?? ''}
-												onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
-											/>
-										</SettingList>
-									</SettingsCard>
-								)}
-							</>
-						),
-					};
-				});
-				return (
-					<>
-						<Outcome result={result} />
-						<SectionsPage
-							tab="connections"
-							label={texts.tabs.connections}
-							sections={sections}
-							empty={<EmptyState icon="plug" title={C.none} />}
-						/>
-						<ConfirmDialog
-							open={removing !== null}
-							title={fill(C.removeTitle, { name: removing?.label ?? '' })}
-							confirmLabel={C.remove}
-							cancelLabel={texts.cancel}
-							danger
-							onClose={() => setRemoving(null)}
-							onConfirm={async () => {
-								const name = removing?.name ?? '';
-								setRemoving(null);
-								await act(call('DELETE', `${base}/${name}`));
-							}}>
-							<p>{C.removeHelp}</p>
-						</ConfirmDialog>
-					</>
-				);
-			}}
-		</LoadedPage>
-	);
-}
+const joined = (first, second) => {
+	if (!first) return null;
+	if (!first.ok || second === undefined) return first;
+	if (!second) return null;
+	return second.ok ? { ok: true, data: { ...first.data, connections: second.data.connections } } : second;
+};
 
 /**
- * Developers: the inner sidebar has the product's own `sections` (by default the widget script: the snippets, API calls and
- * addresses of this product), `children` under More, and the docs of every feature, a table with a search (off ones
+ * Developers (owner 2026-10-21: the connections live here, there is no Connections tab): one list of views. First the
+ * website's connections, each one a rich card with its state, the product's hint and its form (or the note that the
+ * Portal owns it), then the product's own `sections` (by default the widget script: the snippets, API calls and
+ * addresses of this product), `children` under More, and the docs of every feature as rows with a search (off ones
  * marked). What each page is for is behind its (i). The website's id and the tokens are in the Portal (Install and
- * tokens, the Setup sheet); the docs link is in the header.
- * @param {TabProps & { sections?: SectionSpec[], children?: ReactNode }} props
+ * tokens, the Setup sheet); the docs link is in the header. `connections` is the product's way of drawing the
+ * connections (`form(item, save)` for a connection's own form, `hint(name)`); `null` leaves them out.
+ * @param {TabProps & { sections?: SectionSpec[], children?: ReactNode,
+ *   connections?: import('./dashboard-connections.js').ConnectionParts | null }} props
  */
-export function DevelopersTab({ websiteId, sections, children }) {
-	const { answer } = useLoad(`/v1/dashboard/websites/${websiteId}/features`);
+export function DevelopersTab({ websiteId, merchantId, who, portal, sections, children, connections }) {
+	const features = useLoad(`/v1/dashboard/websites/${websiteId}/features`);
+	const linked = useConnections({ websiteId, merchantId, who, portal, parts: connections === undefined ? {} : connections });
 	return (
-		<LoadedPage answer={answer} tab="developers" withNav>
+		<LoadedPage answer={joined(features.answer, linked.answer)} tab="developers" withNav>
 			{(data) => (
-				<DevelopersPanel features={data.features} {...(sections ? { sections } : {})}>
-					{children}
-				</DevelopersPanel>
+				<>
+					<Outcome result={linked.result} />
+					<DevelopersPanel
+						features={data.features}
+						connections={linked.sections(data.connections ?? [])}
+						{...(sections ? { sections } : {})}>
+						{children}
+					</DevelopersPanel>
+					{linked.dialog}
+				</>
 			)}
 		</LoadedPage>
 	);
 }
 
 /**
- * @param {{ features: Feature[], sections?: SectionSpec[], children?: ReactNode }} props
+ * @param {{ features: Feature[], connections: Section[], sections?: SectionSpec[], children?: ReactNode }} props
  */
-function DevelopersPanel({ features, sections, children }) {
+function DevelopersPanel({ features, connections, sections, children }) {
 	const { texts } = useDashboard();
 	const D = texts.developers;
 	const origin = typeof window === 'undefined' ? '' : window.location.origin;
 	const paged = usePaged(features, { text: (feature) => `${feature.name} ${feature.key}`, pageSize: 25 });
-	/** @type {import('./DataTable.js').DataColumn<Feature>[]} */
-	const columns = [
-		{
-			key: 'name',
-			header: D.columns.feature,
-			sortable: true,
-			render: (feature) => <TextLink href={`/docs#feature-${feature.key}`}>{feature.name}</TextLink>,
-		},
-		{
-			key: 'on',
-			header: D.columns.status,
-			kind: 'status',
-			pill: (feature) => ({
-				status: feature.on ? 'active' : 'off',
-				label: feature.on ? D.columns.on : D.columns.off,
-			}),
-		},
-	];
 	/** @type {Section[]} */
 	const own = sections ?? [
 		{
@@ -562,18 +411,23 @@ function DevelopersPanel({ features, sections, children }) {
 			content: <CodeBlock code={`<script src="${origin}/widget.js" data-token="YOUR_BROWSER_TOKEN" async></script>`} />,
 		},
 	];
+	/** The group chip of a view that is not a connection: only when the list has connections to tell it from. @type {{ group?: string }} */
+	const apart = connections.length > 0 ? { group: D.groups.developer } : {};
 	return (
 		<SectionsPage
 			tab="developers"
 			label={texts.tabs.developers}
 			sections={[
-				...own,
-				...(children ? [{ id: 'more', label: D.more, icon: /** @type {const} */ ('layers'), content: children }] : []),
+				...connections,
+				...own.map((section) => ({ ...apart, ...section })),
+				...(children
+					? [{ ...apart, id: 'more', label: D.more, icon: /** @type {const} */ ('layers'), content: children }]
+					: []),
 				{
+					...apart,
 					id: 'docs',
 					label: D.docs,
 					icon: 'external',
-					flush: true,
 					info: D.docsHelp,
 					toolbar: (
 						<Toolbar
@@ -588,13 +442,26 @@ function DevelopersPanel({ features, sections, children }) {
 					),
 					footer: <Pagination {...paged.pagination} />,
 					content: (
-						<DataTable
-							caption={D.docs}
-							columns={columns}
-							rows={paged.rows}
-							rowKey={(feature) => feature.key}
-							empty={D.none}
-						/>
+						<Card padded={false} bodyClassName="p-2">
+							{paged.rows.length === 0 ? (
+								<EmptyState compact title={D.none} />
+							) : (
+								paged.rows.map((feature) => (
+									<Row
+										key={feature.key}
+										linkAs="a"
+										href={`/docs#feature-${feature.key}`}
+										title={feature.name}
+										meta={feature.description}
+										status={{
+											tone: feature.on ? 'success' : 'neutral',
+											label: feature.on ? D.columns.on : D.columns.off,
+										}}
+										value={feature.on ? D.columns.on : D.columns.off}
+									/>
+								))
+							)}
+						</Card>
 					),
 				},
 			]}
@@ -675,9 +542,9 @@ function DefaultsPanel({ data, reload, notice }) {
 }
 
 /**
- * Prices (Owner): the inner sidebar has the hourly prices by category (one price per feature, in credits, for every
- * merchant and website; a category says how many prices are changed and not saved yet), the encryption key's Re-seal,
- * and Recent changes. What the prices are is behind the (i) of the page.
+ * Prices (Owner): the list has the hourly prices by category (one price per feature, in credits, for every merchant and
+ * website, each a row with the price to edit in place; a category says how many prices are changed and not saved yet,
+ * and one Save bar saves them all), the encryption key's Re-seal, and Recent changes. What the prices are is behind the (i) of the page.
  */
 export function PricesTab() {
 	const { texts, byCategory } = useDashboard();

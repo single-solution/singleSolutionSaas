@@ -178,7 +178,7 @@ export function featureLooks({ catalog, links, who, dash, locale, ask, support, 
 													: {
 															label: `${F.connect} ${link.label}`,
 															// the Connections tab opens on this connection
-															onClick: () => open?.('connections', `connection-${link.name}`),
+															onClick: () => open?.('developers', `connection-${link.name}`),
 														}
 											}>
 											{fill(F.notWorking, { connection: link.label })}

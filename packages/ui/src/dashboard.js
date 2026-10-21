@@ -1,8 +1,8 @@
 'use client';
 /**
  * `@ss/ui/dashboard` — the product dashboard (PLAN 0.4.3), one for every product: one page, opened from the Portal
- * (`/sso` → `/dashboard?websiteId=…`), with the left sidebar Overview · Settings · Texts · Connections ·
- * Developers, plus Defaults and Prices for Owners. The look, the Format and the business facts are not here: they are the
+ * (`/sso` → `/dashboard?websiteId=…`), with the left sidebar Overview · Settings · Texts ·
+ * Developers (the connections come first), plus Defaults and Prices for Owners. The look, the Format and the business facts are not here: they are the
  * Portal's Website settings, shown read-only where a value is used (`ManagedNote`) with a link to the place to change it.
  * Every tab draws a `Page` (layout contract 2026-10-17: the breadcrumbs `Product › Section › sub-page` are its title, the
  * old descriptions sit behind its (i)); a tab with sub-pages uses `SectionsPage` (a list of rich rows beside the page, each view its
@@ -31,7 +31,7 @@ import { call, fill, useLoad } from './dashboard-api.js';
 import { DisplayLocale } from './time.js';
 import { DashboardProvider, useDashboard } from './dashboard-parts.js';
 import { FrameContext } from './dashboard-page.js';
-import { ConnectionsTab, DefaultsTab, DevelopersTab, OverviewTab, PricesTab, SettingsTab, TextsTab } from './dashboard-tabs.js';
+import { DefaultsTab, DevelopersTab, OverviewTab, PricesTab, SettingsTab, TextsTab } from './dashboard-tabs.js';
 
 export { call, fill, useLoad } from './dashboard-api.js';
 export { isFilled, useSetupSteps, wantsSettings } from './dashboard-setup.js';
@@ -59,7 +59,7 @@ export {
 } from './dashboard-settings.js';
 export { FrameContext, SectionsPage, pageState, useCrumbs } from './dashboard-page.js';
 export { WEBSITE_SECTION_NAMES, websiteSettingsUrl } from './portal-links.js';
-export { ConnectionsTab, DefaultsTab, DevelopersTab, OverviewTab, PricesTab, SettingsTab, TextsTab };
+export { DefaultsTab, DevelopersTab, OverviewTab, PricesTab, SettingsTab, TextsTab };
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
 /** @typedef {import('./dashboard-parts.js').DashboardManifest} DashboardManifest */
@@ -74,6 +74,7 @@ export { ConnectionsTab, DefaultsTab, DevelopersTab, OverviewTab, PricesTab, Set
 /** @typedef {import('./dashboard-tabs.js').Who} Who */
 /** @typedef {import('./dashboard-tabs.js').Feature} Feature */
 /** @typedef {import('./dashboard-tabs.js').Connection} Connection */
+/** @typedef {import('./dashboard-tabs.js').ConnectionParts} ConnectionParts */
 /** @typedef {import('./dashboard-tabs.js').OverviewMore} OverviewMore */
 /** @typedef {import('./dashboard-tabs.js').UseOverviewMore} UseOverviewMore */
 /** @typedef {import('react').ComponentType<TabProps>} TabComponent */
@@ -85,14 +86,13 @@ export { ConnectionsTab, DefaultsTab, DevelopersTab, OverviewTab, PricesTab, Set
  */
 
 /**
- * The standard tabs in sidebar order: the five of every website, then the Owner's.
+ * The standard tabs in sidebar order: the four of every website, then the Owner's.
  * @type {ReadonlyArray<[string, TabSpec]>}
  */
 const STANDARD_TABS = [
 	['overview', { component: OverviewTab, icon: 'home', kind: 'overview' }],
 	['settings', { component: SettingsTab, icon: 'sliders', kind: 'settings' }],
 	['texts', { component: TextsTab, icon: 'type', kind: 'settings' }],
-	['connections', { component: ConnectionsTab, icon: 'plug', kind: 'connection' }],
 	['developers', { component: DevelopersTab, icon: 'code', kind: 'developer' }],
 	['defaults', { component: DefaultsTab, icon: 'layers', kind: 'default', global: true }],
 	['prices', { component: PricesTab, icon: 'coins', kind: 'price', global: true }],
@@ -100,8 +100,7 @@ const STANDARD_TABS = [
 
 /**
  * The tabs of a product: the standard ones with the product's own sections in their place, then its new tabs (a
- * website's before the Owner tabs). A standard tab set to `null` is not shown (Growth has no provider key, so no
- * Connections tab).
+ * website's before the Owner tabs). A standard tab set to `null` is not shown.
  * @param {Record<string, TabComponent | TabSpec | null>} own
  * @returns {Array<[string, TabSpec]>}
  */
@@ -121,8 +120,12 @@ const tabsOf = (own) => {
 	return [...all.filter(([, tab]) => !tab.global), ...all.filter(([, tab]) => tab.global)];
 };
 
-/** Tabs that were folded into another: an old link to the Features tab opens Settings, where the features are now. @type {Record<string, string>} */
-const MOVED_TABS = { features: 'settings' };
+/**
+ * Tabs that were folded into another: an old link to the Features tab opens Settings, where the features are now, and
+ * an old link to the Connections tab opens Developers, which lists the connections first.
+ * @type {Record<string, string>}
+ */
+const MOVED_TABS = { features: 'settings', connections: 'developers' };
 
 /**
  * The website and tab of a dashboard address.

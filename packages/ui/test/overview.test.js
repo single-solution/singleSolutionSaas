@@ -182,7 +182,7 @@ describe('a product dashboard Overview', () => {
 		click(byText(container, 'Fix it', 'button'));
 		click(byText(container, 'Connect', 'button'));
 		click(byText(container, 'Get the script', 'button'));
-		expect(open.mock.calls).toEqual([['connections'], ['connections'], ['developers']]);
+		expect(open.mock.calls).toEqual([['developers', 'connection-mail'], ['developers', 'connection-database'], ['developers']]);
 		click(byText(container, 'Check again', 'button'));
 		expect(recheck).toHaveBeenCalledTimes(1);
 		// the button is busy until the Portal's settings were fetched again
@@ -197,7 +197,7 @@ describe('a product dashboard Overview', () => {
 		expect(text).toContain('Visitors see nothing until the widget script is on your pages.');
 		const row = /** @type {HTMLElement} */ (byText(container, 'Connect Merchant database', 'span').closest('li'));
 		click(byText(row, 'Connect', 'button'));
-		expect(open).toHaveBeenLastCalledWith('connections', 'connection-database');
+		expect(open).toHaveBeenLastCalledWith('developers', 'connection-database');
 		const widgetRow = /** @type {HTMLElement} */ (byText(container, 'Put the widget on your pages', 'span').closest('li'));
 		click(byText(widgetRow, 'Get the script', 'button'));
 		expect(open).toHaveBeenLastCalledWith('developers');

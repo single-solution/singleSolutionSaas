@@ -286,7 +286,7 @@ button), a setup checklist, the key numbers and the latest activity as a timelin
   (or lacking what the manifest's `websiteSettings.requires` asks for, one item per section with a link to it in the
   Portal) are "Needs you" items and setup steps on their own; the product adds its own `needs`, `steps`, `numbers` (`Stat` tiles) and
   sections (`children`). Red items come first; the sentence names the most urgent one. `open(tab)` shows a dashboard
-  section (Settings, Connections or Developers); credits send merchants to support and admins to the Portal.
+  section (Settings or Developers); credits send merchants to support and admins to the Portal.
   `OverviewSkeleton` is its loading state; `RecentChanges` is the timeline card also shown under Defaults and Prices.
 
 ## Product dashboard
@@ -294,7 +294,7 @@ button), a setup checklist, the key numbers and the latest activity as a timelin
 `@ss/ui/dashboard` (client only) is the dashboard of every product (PLAN.md 0.4.3), one implementation for all: a
 product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} texts={TEXTS} tabs={TABS} />`.
 
-- `ProductDashboard` loads the session, then shows the sidebar (Overview, Settings, Connections, Developers;
+- `ProductDashboard` loads the session, then shows the sidebar (Overview, Settings, Texts, Developers;
   Defaults and Prices for Owners), the website switcher (merchant names for admins), the `Admin view` banner and Back
   to Portal; sections and websites switch inside the page and the address follows (Back and Forward work). `tabs`
   puts a product's own section in a standard tab's place (`{ settings: ChatSettings }`) or adds a tab
@@ -309,7 +309,7 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
   `ListColumn` beside the page (`SectionsPage` in `dashboard-page.js`, each view its own `#hash`, the badge, status dot,
   `meta` line and lock on its row, the groups as filter chips); a section with parts is one row whose page shows every part
   stacked under its heading.
-  Lists are `DataTable` pages for now (the Changes and Developers docs tables; they move to rows) and a record edit opens in a
+  Lists are `DataTable` pages for now (the Changes table; it moves to rows) and a record edit opens in a
   `Drawer`. The widget texts (Texts, and the texts of Defaults) are no table: a screen's row says "{n} texts · {m} changed"
   and its page is every text as a kit field in place (label the English words, help where it shows, Reset to default
   once changed; `useTextsEditor` + `TextFields`), all edits waiting for the page's one Save bar (`SettingsBar`); the
@@ -319,10 +319,15 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
   returns the product's `needs`, `steps`, `numbers` and `children`), `SettingsTab`
   (every feature is a row with its switch, so there is no Features tab; `warnings(on)` for the rules between features,
   `sections` after the features, `notice(key, values, features)` on a feature's card, `featureCards(features)` beside the forms),
-  `ConnectionsTab` (`form(item, save)` for a connection's own form, `hint(name)`; each connection is a sub-page with
-  its status dot, Test sits in the header and Remove in the header's More menu, which asks first), `DevelopersTab` (the product's `sections` instead of the widget script, `children` under More; the
-  website id and tokens are in the Portal),
-  `DefaultsTab` (`notice`) and `PricesTab` (with the Re-seal card).
+  `DevelopersTab` (the connections first, then the product's `sections` instead of the widget script, `children` under
+  More and the feature docs as rows; the website id and tokens are in the Portal). There is no Connections tab, and an
+  old `?view=connections` link opens Developers: `connections={{ form(item, save), hint(name) }}` gives a connection's
+  own form and its help line (`connections={null}` leaves the connections out, as in Growth). Each connection is a row of
+  the list (status dot, who needs it) whose page is one rich `Card` (icon, name, state, the hint as help, then the form,
+  the value field with Save and test, or the note that the Portal owns it); Test sits in the header and Remove in the
+  header's More menu, which asks first (`dashboard-connections.js`),
+  `DefaultsTab` (`notice`) and `PricesTab` (the prices of a category as rows with the price in place, one Save bar, and
+  the Re-seal card).
 - Pieces for a product's own tabs: `Loaded`, `Outcome`, `SaveOutcome`, `SettingsForms`,
   `ResealCard`, and `hasSettings`, `toneOf`, `withDependents`. A setting marked `x-ui.defaultFrom` says "Using your
   website's language. Change it in the Portal" under its help while it uses the Portal's value (`SchemaForm`'s

@@ -339,7 +339,7 @@ export function ChangesTable({ items }) {
 
 /**
  * The dashboard sections an Overview's buttons open (and, for a deeper link, the section of its inner sidebar).
- * @typedef {'settings' | 'connections' | 'developers'} OverviewTab
+ * @typedef {'settings' | 'developers'} OverviewTab
  */
 
 /** Values of the website's settings that read better than their path does. */
@@ -452,9 +452,9 @@ export function ProductOverview({
 		if (website.missing.includes(path)) entry.missing.push(settingName(path));
 		bySection.set(section, entry);
 	}
-	/** @param {string} label @param {OverviewTab} tab */
-	const go = (label, tab) => (
-		<Button size="sm" variant="secondary" onClick={() => open(tab)}>
+	/** @param {string} label @param {OverviewTab} tab @param {string} [section] */
+	const go = (label, tab, section) => (
+		<Button size="sm" variant="secondary" onClick={() => (section ? open(tab, section) : open(tab))}>
 			{label}
 		</Button>
 	);
@@ -519,7 +519,7 @@ export function ProductOverview({
 					{N.website.action}
 				</ButtonLink>
 			) : (
-				go(words.action, 'connections')
+				go(words.action, 'developers', `connection-${connection.name}`)
 			),
 		});
 	}
@@ -606,7 +606,7 @@ export function ProductOverview({
 			done: connection.status === 'connected',
 			...(connection.managed
 				? { href: settingsAt(connection.kind === 'link' ? 'links' : 'connections') }
-				: { onSelect: () => open('connections', `connection-${connection.name}`) }),
+				: { onSelect: () => open('developers', `connection-${connection.name}`) }),
 		})),
 		...steps,
 		...(widget

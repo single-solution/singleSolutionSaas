@@ -29,7 +29,6 @@ export const DASHBOARD_TEXTS = Object.freeze({
 		overview: 'Overview',
 		settings: 'Settings',
 		texts: 'Texts',
-		connections: 'Connections',
 		developers: 'Developers',
 		defaults: 'Defaults',
 		prices: 'Prices',
@@ -99,7 +98,6 @@ export const DASHBOARD_TEXTS = Object.freeze({
 		remove: 'Remove',
 		removeTitle: 'Remove {name}?',
 		removeHelp: 'The saved value is deleted here. The features that need it stop working until it is connected again.',
-		none: 'No connections.',
 		/** What a connection the Portal owns says instead of a form: the database, the storage, the AI provider key and the links to other products. */
 		managed: Object.freeze({
 			database: 'The database is entered once for all your products, in the Portal. This product uses its own database in it.',
@@ -122,7 +120,9 @@ export const DASHBOARD_TEXTS = Object.freeze({
 		scriptHelp: 'Add it to the pages that show the widgets; your browser token is in the Portal.',
 		off: 'off',
 		none: 'No feature matches.',
-		columns: Object.freeze({ feature: 'Feature', status: 'Status', on: 'On', off: 'Off' }),
+		columns: Object.freeze({ on: 'On', off: 'Off' }),
+		/** The chips of the list: the website's connections, and the developer parts. */
+		groups: Object.freeze({ connections: 'Connections', developer: 'Developer' }),
 	}),
 	defaults: Object.freeze({
 		intro: 'Global defaults apply to every website that has not saved its own value.',

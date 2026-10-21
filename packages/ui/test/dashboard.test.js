@@ -6,7 +6,6 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-	ConnectionsTab,
 	DashboardProvider,
 	DefaultsTab,
 	DevelopersTab,
@@ -539,7 +538,7 @@ describe('standard tabs', () => {
 		openSection(container, 'inbox');
 		expect(container.querySelector('#section-inbox')?.textContent).toContain('Not working: connect Database');
 		click(byText(container.querySelector('#section-inbox') ?? container, 'Connect Database', 'button'));
-		expect(open).toHaveBeenCalledWith('connections', 'connection-database');
+		expect(open).toHaveBeenCalledWith('developers', 'connection-database');
 		openSection(container, 'notes');
 		const checks = () => switchesOf(container).map((box) => box.getAttribute('aria-checked') === 'true');
 		expect(checks()).toEqual([true, true, false]);
@@ -1073,10 +1072,11 @@ describe('standard tabs', () => {
 		expect(container.querySelector('[aria-busy="true"]')).toBeNull();
 	});
 
-	it('Connections: saves and tests a value, removes after a confirmation, with the product forms and hints', async () => {
+	it('Developers: the connections come first; saves and tests a value, removes after a confirmation, with the product forms and hints', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}/connections`;
 		serve({
+			[`GET /v1/dashboard/websites/${id}/features`]: ok({ features: FEATURES }),
 			[`GET ${base}`]: ok({
 				connections: [
 					{
@@ -1098,33 +1098,40 @@ describe('standard tabs', () => {
 		});
 		const { container } = render(
 			inDashboard(
-				<ConnectionsTab
+				<DevelopersTab
 					{...tabProps(id)}
-					hint={(name) => (name === 'database' ? 'Your MongoDB address.' : null)}
-					form={(item, save) =>
-						item.name === 'storage' ? (
-							<button type="button" onClick={() => void save({ bucket: 'b' })}>
-								Save storage
-							</button>
-						) : null
-					}
+					connections={{
+						hint: (name) => (name === 'database' ? 'Your MongoDB address.' : null),
+						form: (item, save) =>
+							item.name === 'storage' ? (
+								<button type="button" onClick={() => void save({ bucket: 'b' })}>
+									Save storage
+								</button>
+							) : null,
+					}}
 				/>,
 			),
 		);
 		await settle();
-		// one connection per sidebar link, with its state as a dot
-		expect(navLinks(container)).toEqual(['DatabaseConnected', 'MailNot connected', 'StorageTest failed']);
-		expect(crumbsOf(container)).toEqual(['Notes', 'Connections', 'Database']);
+		// the connections are the first rows of the list, with their state as a dot and who needs them as the line; the developer parts follow
+		expect(navLinks(container)).toEqual([
+			'DatabaseConnectedNeeded by: Notes, Inbox',
+			'MailNot connectedOptional',
+			'StorageTest failedNeeded by: Alerts',
+			'Widget script',
+			'Feature docs',
+		]);
+		expect(crumbsOf(container)).toEqual(['Notes', 'Developers', 'Database']);
 		const header = () => /** @type {HTMLElement} */ (container.querySelector('[data-ss-part="header"]'));
-		expect(header().textContent).toContain('Connected');
-		// no heading in the body: who needs it is behind the (i)
-		expect(container.querySelector('#section-connection-database h2, #section-connection-database h3')).toBeNull();
-		expect(container.textContent).not.toContain('Needed by: Notes, Inbox');
+		const card = (/** @type {string} */ name) =>
+			/** @type {HTMLElement} */ (container.querySelector(`#section-connection-${name}`));
+		// the page is one rich card: its name, its state, the product's hint as the help line
+		expect(card('database').querySelector('h2')?.textContent).toBe('Database');
+		expect(card('database').textContent).toContain('Connected');
 		expect(aboutOf(container)).toContain('Needed by: Notes, Inbox');
 		expect(container.textContent).toContain('••••abcd');
 		expect(container.textContent).toContain('Fine');
 		expect(container.textContent).toContain('Your MongoDB address.');
-		expect(container.textContent).not.toContain('Optional');
 		// Test is a button of the header, not of the body
 		expect(buttonsOf(header(), TEXTS.connections.test)).toHaveLength(1);
 		expect(
@@ -1135,9 +1142,9 @@ describe('standard tabs', () => {
 		expect(container.textContent).toContain('Cannot reach it');
 		// Mail: a value field, Save and test sends it trimmed, and the field empties; nothing saved yet, so no Remove menu
 		openSection(container, 'connection-mail');
-		expect(crumbsOf(container)).toEqual(['Notes', 'Connections', 'Mail']);
+		expect(crumbsOf(container)).toEqual(['Notes', 'Developers', 'Mail']);
 		expect(aboutOf(container)).toContain('Optional');
-		expect(header().textContent).toContain('Not connected');
+		expect(card('mail').textContent).toContain('Not connected');
 		// More holds only the folded Test and shows only where the header is narrow (below 48rem)
 		expect(moreOf(container)?.closest('.relative')?.className ?? '@3xl:hidden').toContain('@3xl:hidden');
 		const token = byLabel(
@@ -1157,7 +1164,7 @@ describe('standard tabs', () => {
 		expect(token.value).toBe('');
 		// Storage: the product's own form, and its state
 		openSection(container, 'connection-storage');
-		expect(header().textContent).toContain('Test failed');
+		expect(card('storage').textContent).toContain('Test failed');
 		await act(async () => button('Save storage').click());
 		await settle();
 		expect(requests.filter((request) => request.method === 'PUT').at(-1)).toEqual({
@@ -1188,10 +1195,11 @@ describe('standard tabs', () => {
 		]);
 	});
 
-	it('Connections: the database, the storage, the AI provider key and the links belong to the Portal: a note and a link to it, no form, no Remove', async () => {
+	it('Developers: the database, the storage, the AI provider key and the links belong to the Portal: a note and a link to it, no form, no Remove', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}/connections`;
 		serve({
+			[`GET /v1/dashboard/websites/${id}/features`]: ok({ features: FEATURES }),
 			[`GET ${base}`]: ok({
 				connections: [
 					{ name: 'database', label: 'Database', kind: 'database', neededBy: ['notes'], status: 'connected', managed: true },
@@ -1217,7 +1225,7 @@ describe('standard tabs', () => {
 			}),
 			[`POST ${base}/database/test`]: ok({}),
 		});
-		const { container } = render(inDashboard(<ConnectionsTab {...tabProps(id)} />));
+		const { container } = render(inDashboard(<DevelopersTab {...tabProps(id)} />));
 		await settle();
 		for (const [name, words] of /** @type {const} */ ([
 			['database', TEXTS.connections.managed.database],
@@ -1227,7 +1235,7 @@ describe('standard tabs', () => {
 		])) {
 			openSection(container, `connection-${name}`);
 			const section = /** @type {HTMLElement} */ (container.querySelector(`#section-connection-${name}`));
-			expect(section.querySelector('h2, h3')).toBeNull();
+			expect(section.querySelectorAll('h2')).toHaveLength(1);
 			expect(section.textContent).toContain(TEXTS.managed.title);
 			expect(section.textContent).toContain(words);
 			// the way to change it is the Portal, at the section that holds it; nothing is typed or removed here
@@ -1255,31 +1263,43 @@ describe('standard tabs', () => {
 		).not.toBeNull();
 	});
 
-	it('Connections: says when there are none', async () => {
+	it('Developers: with no connections, or with them left out, the list holds the developer parts only and nothing is asked for', async () => {
 		const id = freshSite();
-		serve({ [`GET /v1/dashboard/websites/${id}/connections`]: ok({ connections: [] }) });
-		const { container } = render(inDashboard(<ConnectionsTab {...tabProps(id)} />));
+		serve({
+			[`GET /v1/dashboard/websites/${id}/features`]: ok({ features: FEATURES }),
+			[`GET /v1/dashboard/websites/${id}/connections`]: ok({ connections: [] }),
+		});
+		const empty = render(inDashboard(<DevelopersTab {...tabProps(id)} />));
 		await settle();
-		expect(crumbsOf(container)).toEqual(['Notes', 'Connections']);
-		expect(container.textContent).toContain(TEXTS.connections.none);
+		expect(navLinks(empty.container)).toEqual(['Widget script', 'Feature docs']);
+		expect(empty.container.querySelector('[role="radio"], [data-ss-chip]')).toBeNull();
+		cleanup();
+		requests.length = 0;
+		const left = render(inDashboard(<DevelopersTab {...tabProps(id)} connections={null} />));
+		await settle();
+		expect(navLinks(left.container)).toEqual(['Widget script', 'Feature docs']);
+		expect(requests.some((request) => request.path.endsWith('/connections'))).toBe(false);
 	});
 
-	it('Connections: shows the page skeleton while loading and the problem in the page when it failed', async () => {
+	it('Developers: shows the page skeleton while loading and the problem in the page when the connections failed', async () => {
 		const id = freshSite();
-		serve({ [`GET /v1/dashboard/websites/${id}/connections`]: { status: 500, body: { status: 500, title: 'Down' } } });
-		const { container } = render(inDashboard(<ConnectionsTab {...tabProps(id)} />));
+		serve({
+			[`GET /v1/dashboard/websites/${id}/features`]: ok({ features: FEATURES }),
+			[`GET /v1/dashboard/websites/${id}/connections`]: { status: 500, body: { status: 500, title: 'Down' } },
+		});
+		const { container } = render(inDashboard(<DevelopersTab {...tabProps(id)} />));
 		expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
-		expect(crumbsOf(container)).toEqual(['Notes', 'Connections']);
+		expect(crumbsOf(container)).toEqual(['Notes', 'Developers']);
 		await settle();
 		expect(container.querySelector('[aria-busy="true"]')).toBeNull();
 		expect(container.textContent).toContain(TEXTS.failed);
 		expect(byText(container, TEXTS.tryAgain, 'button')).toBeTruthy();
 	});
 
-	it('Developers: the product sections or the widget script, and the searchable docs table; the id and tokens are in the Portal', async () => {
+	it('Developers: the product sections or the widget script, and the searchable docs rows; the id and tokens are in the Portal', async () => {
 		const id = freshSite();
 		serve({ [`GET /v1/dashboard/websites/${id}/features`]: ok({ features: FEATURES }) });
-		const { container } = render(inDashboard(<DevelopersTab {...tabProps(id)} />));
+		const { container } = render(inDashboard(<DevelopersTab {...tabProps(id)} connections={null} />));
 		await settle();
 		expect(navLinks(container)).toEqual(['Widget script', 'Feature docs']);
 		expect(crumbsOf(container)).toEqual(['Notes', 'Developers', 'Widget script']);
@@ -1292,22 +1312,20 @@ describe('standard tabs', () => {
 		expect(container.textContent).not.toContain('server token');
 		expect(container.querySelector('a[href="https://portal.example.com"]')).toBeNull();
 		expect(container.textContent).toContain(`${window.location.origin}/widget.js`);
-		// the docs are a table of the features, the ones that are off marked, with a search above it
+		// the docs are rows of the features, each a link to its docs, the ones that are off marked, with a search above them
 		openSection(container, 'docs');
 		expect(crumbsOf(container)).toEqual(['Notes', 'Developers', 'Feature docs']);
-		expect(container.querySelector('#section-docs ul, #section-docs ol')).toBeNull();
-		const table = /** @type {HTMLElement} */ (container.querySelector('#section-docs table'));
-		expect([...table.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual(['Feature', 'Status']);
-		const rows = [...table.querySelectorAll('tbody tr')].map((row) => row.textContent);
-		expect(rows).toEqual(['NotesOn', 'InboxOn', 'AlertsOff']);
+		expect(container.querySelector('#section-docs table, #section-docs ul, #section-docs ol')).toBeNull();
+		const docs = () => [...container.querySelectorAll('#section-docs [data-ss-row]')];
+		expect(docs().map((row) => row.querySelector('a')?.textContent)).toEqual(['Notes', 'Inbox', 'Alerts']);
+		expect(docs().map((row) => row.querySelector('.tabular-nums')?.textContent)).toEqual(['On', 'On', 'Off']);
 		expect(container.querySelector('a[href="/docs#feature-notes"]')).not.toBeNull();
-		expect(container.querySelector('[data-ss-part="body"]')?.getAttribute('role')).toBeNull();
 		const search = /** @type {HTMLInputElement} */ (
 			container.querySelector('input[type="search"][aria-label="Find a feature"]')
 		);
 		type(search, 'inb');
 		await settle();
-		expect([...container.querySelectorAll('#section-docs tbody tr')].map((row) => row.textContent)).toEqual(['InboxOn']);
+		expect(docs().map((row) => row.querySelector('a')?.textContent)).toEqual(['Inbox']);
 		type(search, 'zzz');
 		await settle();
 		expect(container.textContent).toContain(TEXTS.developers.none);
@@ -1319,6 +1337,7 @@ describe('standard tabs', () => {
 			inDashboard(
 				<DevelopersTab
 					{...tabProps(id)}
+					connections={null}
 					sections={[{ id: 'snippets', label: 'Snippets', content: <section>own sections</section> }]}
 				/>,
 			),
@@ -1510,7 +1529,7 @@ describe('ProductDashboard', () => {
 		const tabs = { overview: probe('overview'), settings: probe('settings') };
 		render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} tabs={tabs} />);
 		await settle();
-		expect(sidebar()).toEqual(['Overview', 'Settings', 'Texts', 'Connections', 'Developers']);
+		expect(sidebar()).toEqual(['Overview', 'Settings', 'Texts', 'Developers']);
 		expect(document.body.textContent).toContain(TEXTS.pickWebsite);
 		expect(document.body.textContent).toContain('Notes');
 		// Back to Portal and the docs sit at the bottom of the sidebar, not in a header that pages replace
@@ -1598,17 +1617,7 @@ describe('ProductDashboard', () => {
 			/>,
 		);
 		await settle();
-		expect(sidebar()).toEqual([
-			'Overview',
-			'Settings',
-			'Texts',
-			'Connections',
-			'Developers',
-			'Lists',
-			'Defaults',
-			'Prices',
-			'Audit',
-		]);
+		expect(sidebar()).toEqual(['Overview', 'Settings', 'Texts', 'Developers', 'Lists', 'Defaults', 'Prices', 'Audit']);
 		expect(current()).toBe('Defaults');
 		expect(document.body.textContent).toContain('tab for null');
 		const picker = /** @type {HTMLSelectElement} */ (document.querySelector('select'));
@@ -1623,7 +1632,7 @@ describe('ProductDashboard', () => {
 		expect(document.body.textContent).toContain('Viewing as admin · Other / other.example.com');
 		expect(document.body.textContent).toContain('tab for p2');
 		// from a website tab, the same tab of the other website
-		click(/** @type {HTMLElement} */ ([...document.querySelectorAll('nav[aria-label="Main"] a')][5]));
+		click(/** @type {HTMLElement} */ ([...document.querySelectorAll('nav[aria-label="Main"] a')][4]));
 		await settle();
 		type(picker, 'p1');
 		await settle();
@@ -1678,6 +1687,18 @@ describe('ProductDashboard', () => {
 		expect(document.body.textContent).toContain('settings of p1');
 	});
 
+	it('an old link to the Connections tab opens Developers, where the connections are now', async () => {
+		/** @param {TabProps} props */
+		const Where = (props) => <p>{`developers of ${props.websiteId}`}</p>;
+		serve({ 'GET /v1/dashboard/session': session(MERCHANT) });
+		window.history.replaceState(null, '', '?websiteId=p1&view=connections#connection-database');
+		render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} tabs={{ developers: Where }} />);
+		await settle();
+		expect(current()).toBe('Developers');
+		expect(document.body.textContent).toContain('developers of p1');
+		expect(sidebar()).not.toContain('Connections');
+	});
+
 	it('moves to a sub-page of the tab it is already on when another tab asks to open it', async () => {
 		/** @type {TabProps['open'] | null} */
 		let open = null;
@@ -1686,7 +1707,7 @@ describe('ProductDashboard', () => {
 			open = props.open;
 			return (
 				<SectionsPage
-					tab="connections"
+					tab="developers"
 					sections={[
 						{ id: 'one', label: 'One', content: <p>first part</p> },
 						{ id: 'two', label: 'Two', content: <p>second part</p> },
@@ -1695,10 +1716,10 @@ describe('ProductDashboard', () => {
 			);
 		};
 		serve({ 'GET /v1/dashboard/session': session(MERCHANT) });
-		window.history.replaceState(null, '', '?websiteId=p1&view=connections');
-		render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} tabs={{ connections: Parts }} />);
+		window.history.replaceState(null, '', '?websiteId=p1&view=developers');
+		render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} tabs={{ developers: Parts }} />);
 		await settle();
-		await act(async () => /** @type {NonNullable<typeof open>} */ (open)('connections', 'two'));
+		await act(async () => /** @type {NonNullable<typeof open>} */ (open)('developers', 'two'));
 		await settle();
 		expect(document.querySelector('h1')?.textContent).toBe('Two');
 	});
