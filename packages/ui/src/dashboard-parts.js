@@ -10,7 +10,7 @@ import { ViewTransition, createContext, useContext, useEffect, useMemo, useRef, 
 import { Button } from './Button.js';
 import { SaveBar } from './blocks.js';
 import { Callout, Card, ErrorState, Skeleton } from './display.js';
-import { SchemaForm } from './SchemaForm.js';
+import { SchemaForm, isJsonDraft } from './SchemaForm.js';
 import { describeProblem, problemLines } from './problems.js';
 import { ToastProvider, useToast } from './Toast.js';
 import { call, fill } from './dashboard-api.js';
@@ -249,6 +249,8 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 	const shown = features.filter(hasSettings);
 	if (shown.length === 0) return null;
 	const dirty = shown.some((feature) => Object.keys(edits[feature.key] ?? {}).length > 0);
+	// text typed in a raw JSON box that is not valid JSON yet is no value: Save waits until it is
+	const blocked = shown.some((feature) => Object.values(edits[feature.key] ?? {}).some(isJsonDraft));
 	/** @param {string} feature @param {string} name */
 	const reset = async (feature, name) => {
 		const key = saveUrl(`${feature}.${name}`);
@@ -256,6 +258,7 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 		reload();
 	};
 	const save = async () => {
+		if (blocked) return false;
 		setSaving(true);
 		/** @type {{ feature: string, answer: Answer } | null} */
 		let outcome = null;
@@ -282,6 +285,10 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 				const values = Object.fromEntries(
 					Object.entries(feature.values).map(([name, entry]) => [name, name in changed ? changed[name] : entry.value]),
 				);
+				// a product's notice reads values, never text that is not valid JSON yet: it sees the saved value then
+				const saneValues = Object.fromEntries(
+					Object.entries(values).map(([name, value]) => [name, isJsonDraft(value) ? feature.values[name]?.value : value]),
+				);
 				const overridden = Object.fromEntries(
 					Object.entries(feature.values).map(([name, entry]) => [name, entry.source === savedSource]),
 				);
@@ -294,8 +301,9 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 						values={values}
 						overridden={overridden}
 						onReset={(name) => void reset(feature.key, name)}
+						invalidJsonText={texts.settings.invalidJson}
 						onChange={(name, value) => setEdits({ ...edits, [feature.key]: { ...changed, [name]: value } })}
-						before={notice ? notice(feature.key, values, features) : null}
+						before={notice ? notice(feature.key, saneValues, features) : null}
 						after={result?.feature === feature.key ? <Outcome result={result.answer} /> : null}
 					/>
 				);
@@ -303,6 +311,7 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 			<SaveBar
 				show={dirty}
 				saving={saving}
+				disabled={blocked}
 				onSave={save}
 				onDiscard={() => {
 					setEdits({});

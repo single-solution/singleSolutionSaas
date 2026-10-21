@@ -498,7 +498,9 @@ function DefaultsPanel({ data, reload, notice }) {
 	const edits = {
 		dirty: settings.dirty || words.dirty,
 		saving: settings.saving || words.saving,
+		blocked: settings.blocked,
 		save: async () => {
+			if (settings.blocked) return false;
 			if (settings.dirty) await settings.save();
 			if (words.dirty) await words.save();
 		},

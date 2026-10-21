@@ -7,8 +7,9 @@
  * them and takes the merchant's own; a list of texts is a picker of them that adds what is typed) and `generate` (a
  * text gets a Generate button that fills in a new random key of that many characters); a setting's
  * `description` is its help text. A list of more than 12 choices (or `widget: 'tags'`) is a searchable picker; a
- * shorter one a group of checkboxes; a list without choices is typed one item per line (a list of on/off values as
- * JSON). Each card lists its settings as rows (PLAN 0.6, owner 2026-10-16): the label and the muted help on the left,
+ * shorter one a group of checkboxes; a list without choices is typed one item per line (the box keeps what is typed
+ * while it has focus and becomes the clean list when it loses it; a list of on/off values is JSON, and while its text is
+ * not valid JSON the form reports a {@link JsonDraft} in place of a value, which turns Save off). Each card lists its settings as rows (PLAN 0.6, owner 2026-10-16): the label and the muted help on the left,
  * the control on the right; an on/off setting is a toggle, a choice of up to four is a segmented control, a longer one
  * a select; long text and lists take the whole row. Rows stack on a narrow card.
  *
@@ -43,6 +44,7 @@ import { ADVANCED_GROUP, GROUPS_AS_TABS_FROM, fieldsOf, groupFields, optionLabel
 /** @typedef {import('./schema.js').SettingsSchema} SettingsSchema */
 /** @typedef {import('./schema.js').SettingNode} SettingNode */
 /** @typedef {import('./schema.js').FieldDescriptor} FieldDescriptor */
+/** @typedef {import('react').TextareaHTMLAttributes<HTMLTextAreaElement> & import('./fields.js').FieldProps} AreaProps */
 
 /**
  * A new random key of `length` hex characters (the browser's own random source).
@@ -57,10 +59,106 @@ export const randomKey = (length) => {
 };
 
 /**
+ * What a raw JSON box reports (`onChange`, and in `values`) while its text is not valid JSON: the text itself. It is no
+ * value to save: a page that saves the form must not save one (see {@link isJsonDraft}); it keeps the page's Save off.
+ */
+export class JsonDraft {
+	/** @param {string} text */
+	constructor(text) {
+		this.text = text;
+	}
+}
+
+/**
+ * Whether a value is a {@link JsonDraft}: text typed in a raw JSON box that is not valid JSON yet.
+ * @param {unknown} value
+ * @returns {value is JsonDraft}
+ */
+export const isJsonDraft = (value) => value instanceof JsonDraft;
+
+/**
+ * The items of a "one per line" text: each line trimmed, the empty ones dropped (numbers for a list of numbers).
+ * @param {string} text @param {boolean} numeric
+ */
+const linesOf = (text, numeric) => {
+	const kept = text
+		.split('\n')
+		.map((line) => line.trim())
+		.filter((line) => line !== '');
+	return numeric ? kept.map(Number) : kept;
+};
+
+/** Whether two values are the same JSON. @param {unknown} a @param {unknown} b */
+const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * A list typed one item per line. The box keeps the raw text while it is typed in, so a space at the end of a line and a
+ * new empty line stay; the form always holds the clean list (so Save needs no extra step). The box shows the clean
+ * list again when it loses focus, and at once when the list changes from outside (Discard, a reload).
+ * @param {{ items: unknown[], numeric: boolean, onChange: (value: unknown[]) => void } & Omit<AreaProps, 'value' | 'onChange'>} props
+ */
+function LinesField({ items, numeric, onChange, ...rest }) {
+	const [raw, setRaw] = useState(/** @type {string | null} */ (null));
+	const text = raw !== null && sameJson(linesOf(raw, numeric), items) ? raw : items.join('\n');
+	return (
+		<TextArea
+			{...rest}
+			value={text}
+			onChange={(e) => {
+				setRaw(e.currentTarget.value);
+				onChange(linesOf(e.currentTarget.value, numeric));
+			}}
+			onBlur={() => setRaw(null)}
+		/>
+	);
+}
+
+/**
+ * The raw JSON box of a setting that has no better control. It shows what the value is: it follows the value when that
+ * changes from outside (Discard, a reload), and keeps the text as it was typed while that is valid JSON of the value. A
+ * text that is not valid JSON is reported as a {@link JsonDraft} and the reason shows under the box.
+ * @param {{ value: unknown, onChange: (value: unknown) => void, error: string | undefined, invalidText: string } &
+ *   Omit<AreaProps, 'value' | 'onChange' | 'error'>} props
+ */
+function JsonField({ value, onChange, error, invalidText, ...rest }) {
+	const [typed, setTyped] = useState(/** @type {string | null} */ (null));
+	const draft = isJsonDraft(value) ? value : null;
+	/** @param {string} text */
+	const parsed = (text) => {
+		try {
+			return { ok: true, value: JSON.parse(text) };
+		} catch {
+			return { ok: false, value: undefined };
+		}
+	};
+	const typedIsValue = typed !== null && (() => {
+		const result = parsed(typed);
+		return result.ok && sameJson(result.value, value);
+	})();
+	const text = draft ? draft.text : typedIsValue ? /** @type {string} */ (typed) : value === undefined ? '' : JSON.stringify(value, null, 2);
+	return (
+		<TextArea
+			{...rest}
+			rows={5}
+			className="font-mono text-xs"
+			value={text}
+			error={draft ? invalidText : error}
+			onChange={(e) => {
+				const next = e.currentTarget.value;
+				setTyped(next);
+				const result = parsed(next);
+				onChange(result.ok ? result.value : new JsonDraft(next));
+			}}
+		/>
+	);
+}
+
+/**
  * The control of one setting, by its type and widget.
  * @param {{ id: string, label: string, node: SettingNode, widget: string, value: unknown,
  *   onChange: (value: unknown) => void, error: string | undefined, help: import('react').ReactNode, disabled: boolean,
- *   placeholder: string | null, aside: import('react').ReactNode, generateText?: string }} props
+ *   placeholder: string | null, aside: import('react').ReactNode, generateText?: string,
+ *   invalidJsonText?: string }} props
  */
 function NodeControl({
 	id,
@@ -75,9 +173,8 @@ function NodeControl({
 	placeholder,
 	aside,
 	generateText = 'Generate',
+	invalidJsonText = 'Enter valid JSON.',
 }) {
-	const [jsonText, setJsonText] = useState(() => (value === undefined ? '' : JSON.stringify(value, null, 2)));
-	const [jsonError, setJsonError] = useState(/** @type {string | null} */ (null));
 	const common = { id, error, help, aside, disabled };
 	const ph = placeholder ?? undefined;
 
@@ -244,44 +341,22 @@ function NodeControl({
 			);
 		if (items && (items.type === 'string' || items.type === 'integer' || items.type === 'number')) {
 			return (
-				<TextArea
+				<LinesField
 					{...common}
 					label={label}
 					rows={3}
-					value={list.join('\n')}
+					items={list}
+					numeric={items.type !== 'string'}
 					placeholder={ph ?? 'One per line'}
 					aside={aside}
-					onChange={(e) => {
-						const lines = e.currentTarget.value.split('\n').map((l) => l.trim());
-						const kept = lines.filter((l, i) => l !== '' || i === lines.length - 1).filter((l) => l !== '');
-						onChange(items.type === 'string' ? kept : kept.map(Number));
-					}}
+					onChange={(next) => onChange(next)}
 				/>
 			);
 		}
 	}
 
 	// a list of on/off values: JSON
-	return (
-		<TextArea
-			{...common}
-			label={label}
-			rows={5}
-			className="font-mono text-xs"
-			value={jsonText}
-			error={jsonError ?? error}
-			onChange={(e) => {
-				const text = e.currentTarget.value;
-				setJsonText(text);
-				try {
-					onChange(JSON.parse(text));
-					setJsonError(null);
-				} catch {
-					setJsonError('Enter valid JSON.');
-				}
-			}}
-		/>
-	);
+	return <JsonField {...common} label={label} value={value} onChange={onChange} error={error} invalidText={invalidJsonText} />;
 }
 
 /**
@@ -298,9 +373,12 @@ function NodeControl({
  *   onReset?: (name: string) => void, disabled?: boolean, idPrefix?: string,
  *   emptyText?: string, className?: string, title?: import('react').ReactNode, description?: import('react').ReactNode,
  *   before?: import('react').ReactNode, after?: import('react').ReactNode, dirty?: boolean, saving?: boolean,
- *   onSave?: () => unknown, onDiscard?: () => void, group?: string, tabs?: boolean, withAdvanced?: boolean,
+ *   onSave?: () => unknown, onDiscard?: () => unknown, group?: string, tabs?: boolean, withAdvanced?: boolean,
  *   advancedTexts?: { title?: string, description?: string, errors?: string, groups?: string },
- *   saveTexts?: { message?: string, save?: string, discard?: string }, generateText?: string }} props
+ *   saveTexts?: { message?: string, save?: string, discard?: string }, generateText?: string,
+ *   invalidJsonText?: string }} props `onDiscard` may return a function that brings the edits back (the save bar then
+ *   offers it as Undo); `invalidJsonText`: the reason under a raw JSON box whose text is not valid JSON (that setting
+ *   is reported as a {@link JsonDraft}, and Save is off while one is)
  */
 export function SchemaForm({
 	schema,
@@ -328,6 +406,7 @@ export function SchemaForm({
 	advancedTexts = {},
 	saveTexts = {},
 	generateText,
+	invalidJsonText,
 }) {
 	const auto = useId();
 	const prefix = idPrefix ?? `sf${auto.replace(/[^a-zA-Z0-9_-]/g, '')}`;
@@ -384,6 +463,7 @@ export function SchemaForm({
 					disabled={disabled}
 					aside={aside}
 					{...(generateText ? { generateText } : {})}
+					{...(invalidJsonText ? { invalidJsonText } : {})}
 				/>
 			</div>
 		);
@@ -506,6 +586,7 @@ export function SchemaForm({
 					saving={saving}
 					onSave={onSave}
 					onDiscard={onDiscard ?? (() => undefined)}
+					disabled={Object.values(values).some(isJsonDraft)}
 					{...(saveTexts.message ? { message: saveTexts.message } : {})}
 					{...(saveTexts.save ? { saveLabel: saveTexts.save } : {})}
 					{...(saveTexts.discard ? { discardLabel: saveTexts.discard } : {})}

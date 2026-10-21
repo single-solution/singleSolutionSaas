@@ -13,7 +13,7 @@ import { useState } from 'react';
 import { SaveBar, SettingList, SettingsCard } from './blocks.js';
 import { EmptyState, TextLink } from './display.js';
 import { Input, TextArea } from './fields.js';
-import { SchemaForm } from './SchemaForm.js';
+import { SchemaForm, isJsonDraft } from './SchemaForm.js';
 import { ADVANCED_GROUP, shapeOf } from './schema.js';
 import { call, fill } from './dashboard-api.js';
 import { humanize } from './format.js';
@@ -57,11 +57,14 @@ export function useSettingsEditor({ saveUrl, resetBody, reload }) {
 	const [result, setResult] = useState(/** @type {{ feature: string, answer: Answer } | null} */ (null));
 	const [saving, setSaving] = useState(false);
 	const dirty = Object.values(edits).some((entry) => Object.keys(entry).length > 0);
+	// text typed in a raw JSON box that is not valid JSON yet is no value: Save waits until it is
+	const blocked = Object.values(edits).some((entry) => Object.values(entry).some(isJsonDraft));
 	return {
 		edits,
 		result,
 		saving,
 		dirty,
+		blocked,
 		/** @param {string} feature @param {string} name @param {unknown} value */
 		change: (feature, name, value) => setEdits((all) => ({ ...all, [feature]: { ...all[feature], [name]: value } })),
 		/** @param {string} feature @param {string} name */
@@ -71,6 +74,7 @@ export function useSettingsEditor({ saveUrl, resetBody, reload }) {
 			reload();
 		},
 		save: async () => {
+			if (blocked) return false;
 			setSaving(true);
 			/** @type {{ feature: string, answer: Answer } | null} */
 			let outcome = null;
@@ -100,13 +104,15 @@ export function useSettingsEditor({ saveUrl, resetBody, reload }) {
 
 /**
  * The Save changes bar of an editor, shown only while something changed.
- * @param {{ editor: { dirty: boolean, saving: boolean, save: () => unknown, discard: () => void }, texts: Dashboard['texts'] }} props
+ * @param {{ editor: { dirty: boolean, saving: boolean, blocked?: boolean, save: () => unknown, discard: () => unknown },
+ *   texts: Dashboard['texts'] }} props `blocked`: some edit cannot be saved yet (Save is off)
  */
 export function SettingsBar({ editor, texts }) {
 	return (
 		<SaveBar
 			show={editor.dirty}
 			saving={editor.saving}
+			disabled={editor.blocked === true}
 			onSave={editor.save}
 			onDiscard={editor.discard}
 			message={texts.settings.unsaved}
@@ -128,6 +134,10 @@ function FeatureForm({ feature, features, editor, savedSource, notice, group, wi
 	const changed = editor.edits[feature.key] ?? {};
 	const values = Object.fromEntries(
 		Object.entries(feature.values).map(([name, entry]) => [name, name in changed ? changed[name] : entry.value]),
+	);
+	// a product's notice reads values, never text that is not valid JSON yet: it sees the saved value then
+	const saneValues = Object.fromEntries(
+		Object.entries(values).map(([name, value]) => [name, isJsonDraft(value) ? feature.values[name]?.value : value]),
 	);
 	const overridden = Object.fromEntries(
 		Object.entries(feature.values).map(([name, entry]) => [name, entry.source === savedSource]),
@@ -160,9 +170,10 @@ function FeatureForm({ feature, features, editor, savedSource, notice, group, wi
 			withAdvanced={withAdvanced}
 			advancedTexts={{ title: texts.settings.advanced, description: texts.settings.advancedHelp }}
 			generateText={texts.settings.generate}
+			invalidJsonText={texts.settings.invalidJson}
 			onReset={(name) => void editor.reset(feature.key, name)}
 			onChange={(name, value) => editor.change(feature.key, name, value)}
-			before={notice && group === undefined ? notice(feature.key, values, features) : null}
+			before={notice && group === undefined ? notice(feature.key, saneValues, features) : null}
 			after={editor.result?.feature === feature.key && group === undefined ? <Outcome result={editor.result.answer} /> : null}
 		/>
 	);

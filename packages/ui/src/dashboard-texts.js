@@ -62,6 +62,7 @@ export const DASHBOARD_TEXTS = Object.freeze({
 		advanced: 'Advanced',
 		advancedHelp: 'Settings most people never change',
 		generate: 'Generate',
+		invalidJson: 'Enter valid JSON.',
 		inherited: 'Using your website’s {what}.',
 		inheritedLink: 'Change it in the Portal',
 		groups: 'Groups',
