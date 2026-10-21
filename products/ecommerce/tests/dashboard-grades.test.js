@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 /**
  * The condition grades editor (`GradesEditor` in `app/dashboard/grades.js`) in the browser (jsdom) on a faked dashboard
- * API: the grades are a table (swatch and name, key, condition, return and warranty times, what each is for, a pill when
- * it is not offered) with a row menu, a click on a row opens the fields in a drawer whose Done applies them to the draft
+ * API: the grades are rich rows (swatch and name, a dot when it is not offered, condition, return and warranty times and
+ * what each is for on one line, the key at the right) with a row menu, a click on a row opens the fields in a drawer whose Done applies them to the draft
  * only (a grade without a name stays open), and the Save bar is the only save control.
  */
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { GradesEditor } from '../app/dashboard/grades.js';
-import { closeDrawer, drawerOf, inDashboard, openRow, rowMenu, rowNames } from './dashboard-provider.js';
+import { closeEditor, drawerOf, factsOf, inDashboard, openRow, rowMenu, rowNames, rowsOf } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 
@@ -66,7 +66,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-describe('the condition grades table', () => {
+describe('the condition grades list', () => {
 	it('shows a skeleton while the grades load, then a row per grade with its facts', async () => {
 		const api = serve(
 			[grade(), grade({ key: 'b', label: 'Grade B', active: false, condition: 'used', categoryIds: ['c1', 'c2'] })],
@@ -81,13 +81,14 @@ describe('the condition grades table', () => {
 		await settle();
 		expect(container.querySelector('[aria-busy="true"]')).toBeNull();
 		expect(rowNames(container)).toEqual(['Grade A', 'Grade B']);
-		const rows = [...container.querySelectorAll('tbody tr')].map((row) => row.textContent ?? '');
-		expect(rows[0]).toContain('Refurbished');
-		expect(rows[0]).toContain('Returns 14 days · warranty as set');
-		expect(rows[0]).toContain('All categories');
-		expect(rows[0]).not.toContain('Not offered');
-		expect(rows[1]).toContain('2 categories');
-		expect(rows[1]).toContain('Not offered');
+		const [first, second] = rowsOf(container).map(factsOf);
+		expect(first?.meta).toContain('Refurbished');
+		expect(first?.meta).toContain('Returns 14 days · warranty as set');
+		expect(first?.meta).toContain('All categories');
+		expect(first?.value).toBe('a');
+		expect(first?.status).toBe('');
+		expect(second?.meta).toContain('2 categories');
+		expect(second?.status).toBe('Not offered');
 		expect(/** @type {HTMLButtonElement} */ (byText(container, 'Add grade', 'button')).disabled).toBe(false);
 	});
 
@@ -98,6 +99,8 @@ describe('the condition grades table', () => {
 		expect(container.querySelector('h2')).toBeNull();
 		expect(container.textContent).toContain('Nothing yet.');
 		expect(byText(container, 'Add grade', 'button')).toBeTruthy();
+		// the empty state has the one Add action, not a second one in the header
+		expect([...container.querySelectorAll('button')].filter((button) => button.textContent === 'Add grade')).toHaveLength(1);
 	});
 
 	it('edits a grade in the drawer on a working copy, and saves with the Save bar only', async () => {
@@ -116,7 +119,7 @@ describe('the condition grades table', () => {
 		expect(saveButton()).toBeNull();
 		const again = await openRow(container, 'Grade A');
 		type(byLabel(again, 'Name'), 'Grade A+');
-		await closeDrawer();
+		await closeEditor();
 		expect(drawerOf()).toBeNull();
 		expect(rowNames(container)).toEqual(['Grade A+']);
 		expect(saved).toEqual([]);
@@ -133,11 +136,11 @@ describe('the condition grades table', () => {
 		await settle();
 		await act(async () => click(byText(container, 'Add grade', 'button')));
 		expect(drawerOf().querySelector('h2')?.textContent).toBe('New grade');
-		await closeDrawer();
+		await closeEditor();
 		expect(drawerOf()).not.toBeNull();
 		expect(drawerOf().textContent).toContain('Give the grade a name.');
 		type(byLabel(drawerOf(), 'Name'), 'Grade C');
-		await closeDrawer();
+		await closeEditor();
 		expect(drawerOf()).toBeNull();
 		expect(rowNames(container)).toEqual(['Grade A', 'Grade C']);
 	});

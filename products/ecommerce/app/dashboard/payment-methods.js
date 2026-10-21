@@ -9,7 +9,7 @@
  * (`core/payment-methods.js` `checkPaymentMethods`).
  * @module
  */
-import { Button, Checkbox, EntryGroup, FieldGrid, Input, Select, StatusPill, TextArea } from '@ss/ui';
+import { Button, Checkbox, EntryGroup, FieldGrid, Input, Select, TextArea } from '@ss/ui';
 import { currencyDigits } from '@ss/contracts/format';
 import { PAYMENT_KINDS, PAY_LATER_KINDS, newAccount, paidByHand } from '../../core/payment-methods.js';
 import { fill } from '@ss/ui/dashboard';
@@ -81,31 +81,16 @@ export function PaymentMethodsEditor({ websiteId, off, bare = false, currency })
 			max={20}
 			off={off}
 			bare={bare}
-			size="lg"
-			columns={[
-				{
-					key: 'kind',
-					header: L.columns.kind,
-					render: (method) => P.kinds[/** @type {keyof typeof P.kinds} */ (method.kind)] ?? method.kind,
-				},
-				{
-					key: 'fee',
-					header: L.columns.fee,
-					kind: 'number',
-					low: true,
-					render: (method) => `${String(method.feePercent ?? 0)}%`,
-				},
-				{
-					key: 'active',
-					header: L.columns.active,
-					render: (method) =>
-						method.active !== false ? (
-							<StatusPill status="active">{L.columns.activeOn}</StatusPill>
-						) : (
-							<StatusPill status="off">{L.columns.activeOff}</StatusPill>
-						),
-				},
-			]}
+			drawer
+			look={{
+				icon: 'creditCard',
+				facts: (method) => [P.kinds[/** @type {keyof typeof P.kinds} */ (method.kind)] ?? method.kind],
+				value: (method) => `${L.columns.fee}: ${String(method.feePercent ?? 0)}%`,
+				status: (method) =>
+					method.active !== false
+						? { tone: 'success', label: L.columns.activeOn }
+						: { tone: 'neutral', label: L.columns.activeOff },
+			}}
 			blank={() => ({
 				key: '',
 				name: '',

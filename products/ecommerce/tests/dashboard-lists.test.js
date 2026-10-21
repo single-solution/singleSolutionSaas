@@ -1,16 +1,28 @@
 // @vitest-environment jsdom
 /**
  * The shared list editor (`ListEditor` in `app/dashboard/lists.js`) through the editors that use it, in the browser
- * (jsdom) on a faked dashboard API: the records are a table with useful columns and a row menu, a click on a row opens
- * the fields in a drawer that edits the draft only, Add stops at the limit, the Save bar is the only save control, and
- * a page that is the whole editor leaves out the card title.
+ * (jsdom) on a faked dashboard API: the records are rich rows (name, facts, value, a dot) with a row menu, a click on a
+ * row opens the fields under it (a long record in a drawer) that edit the draft only, Add stops at the limit, an empty
+ * list is an empty state with the one Add action, the Save bar is the only save control, and a page that is the whole
+ * editor leaves out the card title.
  */
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byLabel, byText, cleanup, click, keydown, render, type } from '@ss/ui/testing';
 import { CouriersEditor, TaxRulesEditor, UnitStatesEditor, ZonesEditor, BookingSchedulesEditor } from '../app/dashboard/lists.js';
 import { ReasonsEditor } from '../app/dashboard/merchant-lists.js';
-import { closeDrawer, drawerOf, inDashboard, openRow, rowMenu, rowNames } from './dashboard-provider.js';
+import {
+	closeEditor,
+	drawerOf,
+	editorOf,
+	factsOf,
+	inDashboard,
+	openRow,
+	rowMenu,
+	rowNames,
+	rowOf,
+	rowsOf,
+} from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 
@@ -52,8 +64,8 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-describe('the list editor table', () => {
-	it('shows a skeleton table while the list loads, then a row per record with its columns', async () => {
+describe('the list editor rows', () => {
+	it('shows a skeleton while the list loads, then a row per record with its facts', async () => {
 		const api = serve(
 			{ couriers: [{ key: 'swift', name: 'Swift', trackingUrl: 'https://t.example/{tracking}', connection: 'courier_2' }] },
 			{ late: true },
@@ -68,25 +80,26 @@ describe('the list editor table', () => {
 		await settle();
 		expect(container.querySelector('[aria-busy="true"]')).toBeNull();
 		expect(rowNames(container)).toEqual(['Swift']);
-		const cells = container.querySelector('tbody')?.textContent ?? '';
-		expect(cells).toContain('https://t.example/{tracking}');
-		expect(cells).toContain('Courier API keys 2');
+		const facts = factsOf(rowOf(container, 'Swift'));
+		expect(facts.meta).toBe('https://t.example/{tracking}');
+		expect(facts.value).toBe('Courier API keys 2');
 		expect(/** @type {HTMLButtonElement} */ (byText(container, 'Add', 'button')).disabled).toBe(false);
 	});
 
-	it('edits a record in the drawer without saving, and saves it with the Save bar only', async () => {
+	it('edits a record under its row without saving, and saves it with the Save bar only', async () => {
 		serve({ couriers: [{ key: 'swift', name: 'Swift', trackingUrl: 'https://t.example/{tracking}', connection: '' }] });
 		const { container } = render(inDashboard(<CouriersEditor websiteId={WEBSITE} />));
 		await settle();
 		// no Save bar until something changed, and no Save or Cancel button inside the card
 		expect(byTextOrNull(document.body, 'Save list')).toBeNull();
 		expect(container.querySelector('[data-entry]')).toBeNull();
-		const drawer = await openRow(container, 'Swift');
-		expect(drawer.querySelector('h2')?.textContent).toBe('Swift');
-		type(byLabel(drawer, 'Name'), 'Swift Post');
-		// Done closes the drawer; the draft is not saved
-		await closeDrawer();
+		const fields = await openRow(container, 'Swift');
+		// a few fields open in place, under their row, not in a drawer
 		expect(drawerOf()).toBeNull();
+		type(byLabel(fields, 'Name'), 'Swift Post');
+		// Done closes the fields; the draft is not saved
+		await closeEditor();
+		expect(container.querySelector('[data-entry]')).toBeNull();
 		expect(saved.couriers).toBeUndefined();
 		expect(rowNames(container)).toEqual(['Swift Post']);
 		await act(async () => click(byText(document.body, 'Save list', 'button')));
@@ -98,7 +111,7 @@ describe('the list editor table', () => {
 		expect(byTextOrNull(document.body, 'Save list')).toBeNull();
 	});
 
-	it('moves and removes a record from its row menu, and a new record opens in the drawer', async () => {
+	it('moves and removes a record from its row menu, and a new record opens under its row', async () => {
 		serve({
 			unit_states: [
 				{ key: 'new', label: 'New' },
@@ -117,8 +130,8 @@ describe('the list editor table', () => {
 		await rowMenu(container, 'New', 'Remove');
 		expect(rowNames(container)).toEqual(['Used']);
 		await act(async () => click(byText(container, 'Add', 'button')));
-		type(byLabel(drawerOf(), 'Name'), 'Refurbished');
-		await closeDrawer();
+		type(byLabel(editorOf(), 'Name'), 'Refurbished');
+		await closeEditor();
 		expect(rowNames(container)).toEqual(['Used', 'Refurbished']);
 		await act(async () => click(byText(document.body, 'Save list', 'button')));
 		await settle();
@@ -141,15 +154,19 @@ describe('the list editor table', () => {
 		await settle();
 		expect(rowNames(container)).toHaveLength(30);
 		expect(/** @type {HTMLButtonElement} */ (byText(container, 'Add', 'button')).disabled).toBe(true);
-		// the first one counts against the customer: a pill, the others none
-		expect(container.querySelectorAll('tbody tr')[0]?.textContent).toContain('Yes');
-		expect(container.querySelectorAll('tbody tr')[1]?.textContent).not.toContain('Yes');
+		// the first one counts against the customer: a dot, the others none
+		expect(factsOf(/** @type {HTMLElement} */ (rowsOf(container)[0])).status).toBe('Counts against');
+		expect(factsOf(/** @type {HTMLElement} */ (rowsOf(container)[1])).status).toBe('');
 		cleanup();
 		serve({ cancel_reasons: [] });
 		const empty = render(inDashboard(<ReasonsEditor websiteId={WEBSITE} list="cancel_reasons" />));
 		await settle();
 		expect(empty.container.textContent).toContain('Nothing yet.');
+		// the empty state carries the one Add action
+		expect([...empty.container.querySelectorAll('button')].filter((one) => one.textContent === 'Add')).toHaveLength(1);
 		expect(/** @type {HTMLButtonElement} */ (byText(empty.container, 'Add', 'button')).disabled).toBe(false);
+		await act(async () => click(byText(empty.container, 'Add', 'button')));
+		expect(rowNames(empty.container)).toEqual(['Reason 1']);
 	});
 
 	it('leaves the card title out when the page already says it', async () => {
@@ -179,10 +196,11 @@ describe('the editors with longer records', () => {
 		const { container } = render(inDashboard(<TaxRulesEditor websiteId={WEBSITE} />));
 		await settle();
 		expect(rowNames(container)).toEqual(['Standard', 'Food']);
-		const rows = [...container.querySelectorAll('tbody tr')].map((row) => row.textContent);
-		expect(rows[0]).toContain('7.5%');
-		expect(rows[0]).toContain('All');
-		expect(rows[1]).toContain('0%');
+		const [standard, food] = rowsOf(container).map(factsOf);
+		expect(standard?.value).toBe('7.5%');
+		expect(standard?.meta).toBe('Categories: All · Regions: All');
+		expect(food?.value).toBe('0%');
+		expect(food?.meta).toBe('Categories: 2 · Regions: 1');
 		const drawer = await openRow(container, 'Food');
 		const categories = /** @type {unknown} */ (byLabel(drawer, 'Category ids (one per line, empty: all)'));
 		expect(/** @type {HTMLTextAreaElement} */ (categories).value).toContain('cat_food');
@@ -224,14 +242,12 @@ describe('the editors with longer records', () => {
 		});
 		const { container } = render(inDashboard(<ZonesEditor websiteId={WEBSITE} currency="USD" />));
 		await settle();
-		const row = container.querySelector('tbody tr');
-		expect(row?.textContent).toContain('Home');
-		const numbers = [...(row?.querySelectorAll('td') ?? [])].map((cell) => cell.textContent);
-		expect(numbers).toContain('3');
-		expect(numbers).toContain('2');
+		const facts = factsOf(rowOf(container, 'Home'));
+		expect(facts.meta).toBe('Places: 3');
+		expect(facts.value).toBe('Rates: 2');
 		const drawer = await openRow(container, 'Home');
 		expect(drawer.querySelectorAll('[data-rate]')).toHaveLength(2);
-		await closeDrawer();
+		await closeEditor();
 	});
 
 	it('lists booking schedules with their weekly windows', async () => {
@@ -250,11 +266,9 @@ describe('the editors with longer records', () => {
 		});
 		const { container } = render(inDashboard(<BookingSchedulesEditor websiteId={WEBSITE} />));
 		await settle();
-		const cells = [...(container.querySelectorAll('tbody tr')[0]?.querySelectorAll('td') ?? [])].map(
-			(cell) => cell.textContent,
-		);
-		expect(cells).toContain('2');
-		expect(cells).toContain('1');
+		const facts = factsOf(rowOf(container, 'Main'));
+		expect(facts.value).toBe('Weekly windows: 2');
+		expect(facts.meta).toBe('Exceptions: 1');
 		const drawer = await openRow(container, 'Main');
 		expect(drawer.querySelectorAll('[data-window]')).toHaveLength(2);
 	});

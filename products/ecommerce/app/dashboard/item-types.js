@@ -1,7 +1,8 @@
 'use client';
 /**
- * Settings → Catalog: the item types editor (`item_types` list of `catalog`, PLAN 0.8.10 dynamic model §1). The table
- * shows each type's name, key, kind and parts, with a row menu (move, remove); a click on a row opens the type, and every
+ * Settings → Catalog: the item types editor (`item_types` list of `catalog`, PLAN 0.8.10 dynamic model §1). The list
+ * is a column of rich rows (a kind icon, name, a dot for a type that is not offered, kind and parts, the key at the
+ * right) with a row menu (move, remove), or an empty state with its one Add action; a click on a row opens the type, and every
  * field is edited in a drawer: name and key, kind (physical goods, digital goods or a service),
  * whether it is offered, the parts its items have (only those of its kind; each works while its feature is on),
  * numbered units (the unit fields their numbers take, picked from stock or typed, and the step they are needed before),
@@ -15,7 +16,20 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Card, Checkbox, DataTable, DataTableSkeleton, Drawer, FieldGrid, Icon, Input, Select, StatusPill } from '@ss/ui';
+import {
+	ActionMenu,
+	Button,
+	Card,
+	Checkbox,
+	Drawer,
+	EmptyState,
+	FieldGrid,
+	Icon,
+	Input,
+	Row,
+	RowListSkeleton,
+	Select,
+} from '@ss/ui';
 import { FIELD_LIMITS } from '../../core/fields.js';
 import { ELEMENTS, ITEM_KINDS, TYPE_LIMITS, UNIT_CAPTURES, elementFor } from '../../core/item-types.js';
 import { MAX_DECIMALS, MAX_UNIT_LABEL, STANDARD_UNITS } from '../../core/measure.js';
@@ -308,35 +322,14 @@ const partsOf = (type) => [
 			: []),
 ];
 
-/**
- * The columns of the types table: name, key, kind, parts, and a pill for a type that is not offered.
- * @type {Array<{ key: string, header: string, low?: boolean, render: (row: { type: TypeDraft, index: number }) => import('react').ReactNode }>}
- */
-const COLUMNS = [
-	{ key: 'name', header: L.columns.name, render: ({ type }) => type.name.trim() || T.unnamed },
-	{ key: 'key', header: L.columns.key, render: ({ type }) => <code>{keyOf(type.key, type.name)}</code> },
-	{ key: 'kind', header: L.columns.kind, render: ({ type }) => T.kinds[type.kind] },
-	{
-		key: 'parts',
-		header: L.columns.parts,
-		low: true,
-		render: ({ type }) => {
-			const parts = partsOf(type);
-			return parts.length > 0 ? parts.join(' · ') : T.noParts;
-		},
-	},
-	{
-		key: 'status',
-		header: L.columns.active,
-		render: ({ type }) => (type.active ? null : <StatusPill status="off">{T.notOffered}</StatusPill>),
-	},
-];
+/** The icon of a type's kind. @type {Record<TypeDraft['kind'], import('@ss/ui').IconName>} */
+const KIND_ICONS = { physical: 'box', digital: 'zap', service: 'calendar' };
 
 /** What the drawer edits: which type (null = a new one), the working copy, whether Done was pressed. */
 /** @typedef {{ open: boolean, index: number | null, draft: TypeDraft, tried: boolean }} Editing */
 
 /**
- * Item types (`item_types`, feature catalog): the table, and each type's fields in a drawer.
+ * Item types (`item_types`, feature catalog): the rows, and each type's fields in a drawer.
  * @param {{ websiteId: string, off?: boolean, bare?: boolean }} props `bare`: the page already says the title, so the
  *   card has none
  */
@@ -354,6 +347,8 @@ export function ItemTypesEditor({ websiteId, off, bare = false }) {
 	const problems = typeProblems(editing.draft, otherKeys);
 	/** @param {number | null} index @param {TypeDraft} draft */
 	const open = (index, draft) => setEditing({ open: true, index, draft, tried: false });
+	const add = () => open(null, blankType());
+	const empty = data !== null && items.length === 0;
 	const close = () => setEditing({ ...editing, open: false });
 	const done = () => {
 		if (Object.keys(problems).length > 0) return setEditing({ ...editing, tried: true });
@@ -369,38 +364,75 @@ export function ItemTypesEditor({ websiteId, off, bare = false }) {
 			{...(bare ? {} : { title: T.title })}
 			subtitle={off ? TEXTS.settings.off : `${T.help} ${fill(L.max, { max: TYPE_LIMITS.types })}`}
 			actions={
-				<Button size="sm" disabled={!data || items.length >= TYPE_LIMITS.types} onClick={() => open(null, blankType())}>
-					<Icon name="plus" size={14} />
-					{T.add}
-				</Button>
+				empty ? null : (
+					<Button size="sm" disabled={!data || items.length >= TYPE_LIMITS.types} onClick={add}>
+						<Icon name="plus" size={14} />
+						{T.add}
+					</Button>
+				)
 			}>
 			<div className="space-y-4">
-				<Loaded answer={state.answer} skeleton={<DataTableSkeleton columns={COLUMNS.length} rows={4} menu />}>
-					{() => (
-						<DataTable
-							caption={T.title}
-							className="max-h-[36rem]"
-							columns={COLUMNS}
-							rows={items.map((type, index) => ({ type, index }))}
-							rowKey={(row) => String(row.index)}
-							rowLabel={(row) => row.type.name.trim() || T.unnamed}
-							onRowClick={(row) => open(row.index, row.type)}
-							rowMenu={(row) => [
-								{ label: L.up, disabled: row.index === 0, onSelect: () => setItems(moved(items, row.index, -1)) },
-								{
-									label: L.down,
-									disabled: row.index === items.length - 1,
-									onSelect: () => setItems(moved(items, row.index, 1)),
-								},
-								{
-									label: L.remove,
-									danger: true,
-									onSelect: () => setItems(items.filter((_, at) => at !== row.index)),
-								},
-							]}
-							empty={T.none}
-						/>
-					)}
+				<Loaded answer={state.answer} skeleton={<RowListSkeleton rows={4} label={TEXTS.loading} />}>
+					{() =>
+						items.length === 0 ? (
+							<EmptyState
+								compact
+								icon="layers"
+								title={T.none}
+								{...(bare ? { description: T.help } : {})}
+								action={
+									<Button size="sm" onClick={add}>
+										<Icon name="plus" size={14} />
+										{T.add}
+									</Button>
+								}
+							/>
+						) : (
+							<div>
+								{items.map((type, index) => {
+									const name = type.name.trim() || T.unnamed;
+									const parts = partsOf(type);
+									return (
+										<Row
+											key={index}
+											lead={{ icon: KIND_ICONS[type.kind], tone: 'primary' }}
+											title={name}
+											{...(type.active
+												? {}
+												: { status: { tone: /** @type {const} */ ('neutral'), label: T.notOffered } })}
+											meta={[T.kinds[type.kind], parts.length > 0 ? parts.join(' · ') : T.noParts]}
+											value={keyOf(type.key, type.name)}
+											selected={editing.open && editing.index === index}
+											onSelect={() => open(index, type)}
+											trailing={
+												<ActionMenu
+													floating
+													label={fill(TEXTS.rowActions, { name })}
+													items={[
+														{
+															label: L.up,
+															disabled: index === 0,
+															onSelect: () => setItems(moved(items, index, -1)),
+														},
+														{
+															label: L.down,
+															disabled: index === items.length - 1,
+															onSelect: () => setItems(moved(items, index, 1)),
+														},
+														{
+															label: L.remove,
+															danger: true,
+															onSelect: () => setItems(items.filter((_, at) => at !== index)),
+														},
+													]}
+												/>
+											}
+										/>
+									);
+								})}
+							</div>
+						)
+					}
 				</Loaded>
 				<ListActions
 					dirty={state.draft !== null}

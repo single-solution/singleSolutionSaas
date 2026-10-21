@@ -6,19 +6,21 @@
  * with `PUT … { value }`; a 422 lists the server's check errors, which are shown under the editor.
  * @module
  */
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import {
+	ActionMenu,
 	Badge,
 	Button,
 	Card,
-	DataTable,
-	DataTableSkeleton,
 	Drawer,
+	EmptyState,
 	EntryGroup,
 	FieldGrid,
 	Icon,
 	IconButton,
 	Input,
+	Row,
+	RowListSkeleton,
 	Select,
 	TextArea,
 	SaveBar,
@@ -175,26 +177,27 @@ export const useList = (websiteId, list) => {
 };
 
 /**
- * @typedef {object} ListColumn a column of a list editor's table beside the name
- * @property {string} key
- * @property {string} header
- * @property {(item: Item, index: number) => import('react').ReactNode} render the cell, from the draft of the record
- * @property {'text' | 'number'} [kind]
- * @property {boolean} [low] hidden on narrow widths
- * @property {string} [className]
+ * @typedef {object} ListLook how the records of a list look as rows
+ * @property {import('@ss/ui').IconName} icon the lead of each row
+ * @property {(item: Item, index: number) => string[]} facts the line under the name (empty ones are left out)
+ * @property {(item: Item, index: number) => string} [value] the value at the right of the row
+ * @property {(item: Item, index: number) => { tone: 'success' | 'warning' | 'danger' | 'accent' | 'neutral', label: string } | null} [status]
+ *   a colored dot after the name (null for none)
  */
 
 /**
- * A list of records, edited as a whole and saved with one PUT (the frame's Save bar). The records are a table (the name
- * and `columns`; the row menu moves a record up or down or removes it); a click on a row opens the record's fields in a
- * drawer that edits the draft only (Done closes it). `load` turns a saved record into its draft (amounts as decimals),
- * `clean` a draft back into the record to save, `check` finds draft problems before anything is sent.
+ * A list of records, edited as a whole and saved with one PUT (the frame's Save bar). The records are rich rows (`look`:
+ * icon, facts, value and a state dot; the row menu moves a record up or down or removes it); a click on a row opens the
+ * record's fields, under the row for a few fields or in a drawer for a long editor (`drawer`), and they edit the draft
+ * only (Done closes them). An empty list is an empty state with the one Add action. `load` turns a saved record into its
+ * draft (amounts as decimals), `clean` a draft back into the record to save, `check` finds draft problems before anything
+ * is sent.
  * @param {{ websiteId: string, list: string, title: string, help: string, itemLabel: string, max: number,
  *   blank: () => Item, load?: (item: Item) => Item, clean: (item: Item) => Item, check?: (items: Item[]) => string[],
- *   off?: boolean, bare?: boolean, size?: 'md' | 'lg', columns?: ListColumn[], nameOf?: (item: Item) => string,
+ *   off?: boolean, bare?: boolean, drawer?: boolean, look: ListLook, nameOf?: (item: Item) => string,
  *   render: (item: Item, set: (patch: Item) => void) => import('react').ReactNode }} props `bare`: the page already
- *   says the title, so the card has none; `size`: `lg` for a record with many fields; `nameOf`: the name of a record
- *   (its name, label or title by default)
+ *   says the title, so the card has none; `drawer`: a record with many fields opens in a large drawer, not under its
+ *   row; `nameOf`: the name of a record (its name, label or title by default)
  */
 export function ListEditor({
 	websiteId,
@@ -209,8 +212,8 @@ export function ListEditor({
 	check,
 	off,
 	bare = false,
-	size = 'md',
-	columns = [],
+	drawer = false,
+	look,
 	nameOf = (item) => String(item.name ?? item.label ?? item.title ?? ''),
 	render,
 }) {
@@ -226,61 +229,97 @@ export function ListEditor({
 	/** @param {Item} item @param {number} index */
 	const nameFor = (item, index) => nameOf(item) || `${itemLabel} ${index + 1}`;
 	const current = opened === null ? undefined : items[opened];
-	/** @type {Array<{ key: string, header: string, kind?: 'text' | 'number', low?: boolean, className?: string,
-	 *   render: (row: { item: Item, index: number }) => import('react').ReactNode }>} */
-	const tableColumns = [
-		{ key: 'name', header: L.columns.name, render: (row) => nameFor(row.item, row.index) },
-		...columns.map((column) => ({
-			key: column.key,
-			header: column.header,
-			...(column.kind ? { kind: column.kind } : {}),
-			...(column.low ? { low: true } : {}),
-			...(column.className ? { className: column.className } : {}),
-			render: (/** @type {{ item: Item, index: number }} */ row) => column.render(row.item, row.index),
-		})),
-	];
+	const add = () => {
+		setItems([...items, blank()]);
+		setOpened(items.length);
+	};
+	const empty = data !== null && items.length === 0;
 	return (
 		<Card
 			{...(bare ? {} : { title })}
 			subtitle={off ? TEXTS.settings.off : `${help} ${fill(L.max, { max })}`}
 			actions={
-				<Button
-					size="sm"
-					disabled={!data || items.length >= max}
-					onClick={() => {
-						setItems([...items, blank()]);
-						setOpened(items.length);
-					}}>
-					<Icon name="plus" size={14} />
-					{L.add}
-				</Button>
+				empty ? null : (
+					<Button size="sm" disabled={!data || items.length >= max} onClick={add}>
+						<Icon name="plus" size={14} />
+						{L.add}
+					</Button>
+				)
 			}>
 			<div className="space-y-4">
-				<Loaded answer={state.answer} skeleton={<DataTableSkeleton columns={tableColumns.length} rows={4} menu />}>
-					{() => (
-						<DataTable
-							caption={title}
-							columns={tableColumns}
-							rows={items.map((item, index) => ({ item, index }))}
-							rowKey={(row) => String(row.index)}
-							rowLabel={(row) => nameFor(row.item, row.index)}
-							onRowClick={(row) => setOpened(row.index)}
-							rowMenu={(row) => [
-								{ label: L.up, disabled: row.index === 0, onSelect: () => setItems(moved(items, row.index, -1)) },
-								{
-									label: L.down,
-									disabled: row.index === items.length - 1,
-									onSelect: () => setItems(moved(items, row.index, 1)),
-								},
-								{
-									label: L.remove,
-									danger: true,
-									onSelect: () => setItems(items.filter((_, at) => at !== row.index)),
-								},
-							]}
-							empty={L.none}
-						/>
-					)}
+				<Loaded answer={state.answer} skeleton={<RowListSkeleton rows={4} label={TEXTS.loading} />}>
+					{() =>
+						items.length === 0 ? (
+							<EmptyState
+								compact
+								icon={look.icon}
+								title={L.none}
+								{...(bare ? { description: help } : {})}
+								action={
+									<Button size="sm" onClick={add}>
+										<Icon name="plus" size={14} />
+										{L.add}
+									</Button>
+								}
+							/>
+						) : (
+							<div>
+								{items.map((item, index) => {
+									const name = nameFor(item, index);
+									const on = opened === index;
+									const value = look.value?.(item, index);
+									const dot = look.status?.(item, index);
+									return (
+										<Fragment key={index}>
+											<Row
+												lead={{ icon: look.icon, tone: 'primary' }}
+												title={name}
+												{...(dot ? { status: dot } : {})}
+												meta={look.facts(item, index)}
+												{...(value ? { value } : {})}
+												selected={on}
+												onSelect={() => setOpened(on && !drawer ? null : index)}
+												trailing={
+													<ActionMenu
+														floating
+														label={fill(TEXTS.rowActions, { name })}
+														items={[
+															{
+																label: L.up,
+																disabled: index === 0,
+																onSelect: () => setItems(moved(items, index, -1)),
+															},
+															{
+																label: L.down,
+																disabled: index === items.length - 1,
+																onSelect: () => setItems(moved(items, index, 1)),
+															},
+															{
+																label: L.remove,
+																danger: true,
+																onSelect: () => {
+																	setItems(items.filter((_, at) => at !== index));
+																	setOpened(null);
+																},
+															},
+														]}
+													/>
+												}
+											/>
+											{on && !drawer ? (
+												<div data-entry="" className="space-y-4 px-2.5 pt-2 pb-4">
+													{render(item, (patch) => set(index, patch))}
+													<div className="flex justify-end">
+														<Button onClick={() => setOpened(null)}>{L.done}</Button>
+													</div>
+												</div>
+											) : null}
+										</Fragment>
+									);
+								})}
+							</div>
+						)
+					}
 				</Loaded>
 				<ListActions
 					dirty={state.draft !== null}
@@ -298,12 +337,12 @@ export function ListEditor({
 				<ListOutcome result={state.result} local={state.local} />
 			</div>
 			<Drawer
-				open={current !== undefined}
+				open={drawer && current !== undefined}
 				onClose={() => setOpened(null)}
 				title={current && opened !== null ? nameFor(current, opened) : ''}
-				size={size}
+				size="lg"
 				footer={<Button onClick={() => setOpened(null)}>{L.done}</Button>}>
-				{current && opened !== null ? (
+				{drawer && current && opened !== null ? (
 					<div data-entry="" className="space-y-4">
 						{render(current, (patch) => set(opened, patch))}
 					</div>
@@ -331,21 +370,12 @@ export function CouriersEditor({ websiteId, off, bare = false }) {
 			max={30}
 			off={off}
 			bare={bare}
-			columns={[
-				{
-					key: 'trackingUrl',
-					header: L.columns.trackingLink,
-					low: true,
-					className: 'max-w-xs truncate',
-					render: (courier) => courier.trackingUrl,
-				},
-				{
-					key: 'connection',
-					header: L.columns.booking,
-					render: (courier) =>
-						courier.connection ? fill(C.keys, { n: COURIER_CONNECTIONS.indexOf(courier.connection) + 1 }) : C.byHand,
-				},
-			]}
+			look={{
+				icon: 'box',
+				facts: (courier) => [courier.trackingUrl],
+				value: (courier) =>
+					courier.connection ? fill(C.keys, { n: COURIER_CONNECTIONS.indexOf(courier.connection) + 1 }) : C.byHand,
+			}}
 			blank={() => ({ key: '', name: '', trackingUrl: 'https://', connection: '' })}
 			clean={(courier) => ({
 				key: keyOf(courier.key, courier.name),
@@ -402,7 +432,7 @@ export function UnitStatesEditor({ websiteId, off, bare = false }) {
 			max={UNIT_STATE_LIMITS.states}
 			off={off}
 			bare={bare}
-			columns={[{ key: 'key', header: L.columns.key, render: (state) => <code>{state.key}</code> }]}
+			look={{ icon: 'list', facts: (state) => [state.key] }}
 			blank={() => ({ key: '', label: '' })}
 			clean={(state) => ({ key: keyOf(state.key, state.label), label: String(state.label ?? '').trim() })}
 			render={(state, set) => (
@@ -444,7 +474,7 @@ export function PoliciesEditor({ websiteId, off, bare = false }) {
 			max={20}
 			off={off}
 			bare={bare}
-			columns={[{ key: 'key', header: L.columns.key, render: (policy) => <code>{policy.key}</code> }]}
+			look={{ icon: 'shield', facts: (policy) => [policy.key] }}
 			blank={() => ({ key: '', title: '', text: '' })}
 			clean={(policy) => ({
 				key: keyOf(policy.key, policy.title),
@@ -534,16 +564,14 @@ export function ZonesEditor({ websiteId, off, currency }) {
 			itemLabel={Z.item}
 			max={100}
 			off={off}
-			size="lg"
-			columns={[
-				{
-					key: 'places',
-					header: L.columns.places,
-					kind: 'number',
-					render: (zone) => PLACE_KINDS.reduce((total, kind) => total + cleanLines(zone[kind]).length, 0),
-				},
-				{ key: 'rates', header: L.columns.rates, kind: 'number', render: (zone) => (zone.rates ?? []).length },
-			]}
+			drawer
+			look={{
+				icon: 'globe',
+				facts: (zone) => [
+					`${L.columns.places}: ${PLACE_KINDS.reduce((total, kind) => total + cleanLines(zone[kind]).length, 0)}`,
+				],
+				value: (zone) => `${L.columns.rates}: ${(zone.rates ?? []).length}`,
+			}}
 			blank={() => ({
 				key: '',
 				name: '',
@@ -797,16 +825,12 @@ export function BookingSchedulesEditor({ websiteId, off }) {
 			itemLabel={B.item}
 			max={20}
 			off={off}
-			size="lg"
-			columns={[
-				{ key: 'windows', header: L.columns.windows, kind: 'number', render: (schedule) => schedule.weekly.length },
-				{
-					key: 'exceptions',
-					header: L.columns.exceptions,
-					kind: 'number',
-					render: (schedule) => cleanLines(String(schedule.exceptions ?? '').split('\n')).length,
-				},
-			]}
+			drawer
+			look={{
+				icon: 'calendar',
+				facts: (schedule) => [`${L.columns.exceptions}: ${cleanLines(String(schedule.exceptions ?? '').split('\n')).length}`],
+				value: (schedule) => `${L.columns.windows}: ${schedule.weekly.length}`,
+			}}
 			blank={() => ({ key: '', name: '', weekly: [{ day: 1, start: '09:00', end: '17:00' }], exceptions: '' })}
 			load={(schedule) => ({
 				key: schedule.key ?? '',
@@ -937,28 +961,14 @@ export function TaxRulesEditor({ websiteId, off }) {
 			itemLabel={X.item}
 			max={50}
 			off={off}
-			columns={[
-				{
-					key: 'percent',
-					header: L.columns.percent,
-					kind: 'number',
-					render: (rule) => `${String(rule.percent).trim()}%`,
-				},
-				{
-					key: 'categories',
-					header: L.columns.categories,
-					kind: 'number',
-					low: true,
-					render: (rule) => cleanLines(rule.categoryIds).length || L.columns.everywhere,
-				},
-				{
-					key: 'regions',
-					header: L.columns.regions,
-					kind: 'number',
-					low: true,
-					render: (rule) => cleanLines(rule.regions).length || L.columns.everywhere,
-				},
-			]}
+			look={{
+				icon: 'receipt',
+				facts: (rule) => [
+					`${L.columns.categories}: ${cleanLines(rule.categoryIds).length || L.columns.everywhere}`,
+					`${L.columns.regions}: ${cleanLines(rule.regions).length || L.columns.everywhere}`,
+				],
+				value: (rule) => `${String(rule.percent).trim()}%`,
+			}}
 			blank={() => ({ name: '', percent: '', categoryIds: [], regions: [] })}
 			load={(rule) => ({
 				name: rule.name ?? '',
@@ -1041,19 +1051,16 @@ export function RolePricesEditor({ websiteId, off, currency }) {
 			itemLabel={R.item}
 			max={20}
 			off={off}
-			size="lg"
+			drawer
 			nameOf={(entry) => String(entry.role ?? '')}
-			columns={[
-				{
-					key: 'discount',
-					header: L.columns.discount,
-					render: (entry) =>
-						entry.kind === 'prices'
-							? fill(L.columns.prices, { count: entry.prices.length })
-							: fill(L.columns.percentOff, { percent: String(entry.percent).trim() }),
-				},
-				{ key: 'label', header: L.columns.label, low: true, render: (entry) => entry.label },
-			]}
+			look={{
+				icon: 'users',
+				facts: (entry) => [entry.label],
+				value: (entry) =>
+					entry.kind === 'prices'
+						? fill(L.columns.prices, { count: entry.prices.length })
+						: fill(L.columns.percentOff, { percent: String(entry.percent).trim() }),
+			}}
 			blank={() => ({ role: '', kind: 'percent', percent: '', prices: [], label: '' })}
 			load={(entry) => ({
 				role: entry.role ?? '',
@@ -1269,15 +1276,12 @@ export function SegmentsEditor({ websiteId, off, bare = false, currency }) {
 			max={30}
 			off={off}
 			bare={bare}
-			size="lg"
-			columns={[
-				{
-					key: 'match',
-					header: L.columns.match,
-					render: (segment) => (segment.match === 'any' ? S.matchAny : S.matchAll),
-				},
-				{ key: 'rules', header: L.columns.rules, kind: 'number', render: (segment) => segment.rules.length },
-			]}
+			drawer
+			look={{
+				icon: 'filter',
+				facts: (segment) => [segment.match === 'any' ? S.matchAny : S.matchAll],
+				value: (segment) => `${L.columns.rules}: ${segment.rules.length}`,
+			}}
 			blank={() => ({ key: '', name: '', match: 'all', rules: [{ field: 'tag', fieldId: '', op: 'is', value: '' }] })}
 			load={(segment) => ({
 				key: segment.key ?? '',

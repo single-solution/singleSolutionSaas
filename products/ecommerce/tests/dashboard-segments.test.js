@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The customer segments editor in Settings → Customers (E11), in the browser (jsdom) on a faked dashboard API: it lists
- * the saved segments in a table (a row opens its rules in a drawer), adds a segment with a tag rule and a spend rule in the shop's currency, refuses
+ * the saved segments as rows (a row opens its rules in a drawer), adds a segment with a tag rule and a spend rule in the shop's currency, refuses
  * a rule without its value before saving, and saves the whole list with one PUT that the server's check takes.
  */
 import { act } from 'react';
@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { SegmentsEditor } from '../app/dashboard/lists.js';
 import { DEFAULT_SEGMENTS, checkSegments } from '../core/customer-segments.js';
-import { closeDrawer, drawerOf, inDashboard, openRow, rowNames } from './dashboard-provider.js';
+import { closeEditor, drawerOf, inDashboard, openRow, rowNames } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 const PATH = `/v1/dashboard/websites/${WEBSITE}/lists/customer_segments`;
@@ -59,7 +59,7 @@ describe('the customer segments editor', () => {
 		expect(rowNames(container)).toHaveLength(3);
 		const loyalty = await openRow(container, 'Loyalty members');
 		expect(byLabel(loyalty, 'Name').getAttribute('value')).toBe('Loyalty members');
-		await closeDrawer();
+		await closeEditor();
 		const add = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Add');
 		await act(async () => click(/** @type {HTMLElement} */ (add)));
 		const fourth = drawerOf();
@@ -70,7 +70,7 @@ describe('the customer segments editor', () => {
 		type(byLabel(/** @type {HTMLElement} */ (rules[1]), 'Rule'), 'spent');
 		type(byLabel(/** @type {HTMLElement} */ ([...fourth.querySelectorAll('[data-rule]')][1]), 'Amount (USD)'), '500.50');
 		// the tag rule has no value yet: refused before anything is sent
-		await closeDrawer();
+		await closeEditor();
 		await act(async () => click(byText(container, 'Save list', 'button')));
 		await settle();
 		expect(saved).toHaveLength(0);
@@ -78,7 +78,7 @@ describe('the customer segments editor', () => {
 		const again = await openRow(container, 'Big spenders');
 		type(byLabel(/** @type {HTMLElement} */ ([...again.querySelectorAll('[data-rule]')][0]), 'Value'), 'vip');
 		type(byLabel(again, 'Customers match'), 'any');
-		await closeDrawer();
+		await closeEditor();
 		await act(async () => click(byText(container, 'Save list', 'button')));
 		await settle();
 		expect(saved).toHaveLength(1);

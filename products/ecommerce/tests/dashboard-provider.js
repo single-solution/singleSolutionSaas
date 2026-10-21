@@ -1,5 +1,6 @@
 /**
- * A dashboard piece inside the dashboard's provider (Ecommerce's words and feature names), as the page renders it.
+ * A dashboard piece inside the dashboard's provider (Ecommerce's words and feature names), as the page renders it, and the
+ * rows and editor of a list as a test reads them.
  * @module
  */
 /* global document */
@@ -16,31 +17,52 @@ export const inDashboard = (node) => createElement(DashboardProvider, { manifest
 export const drawerOf = () => /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
 
 /**
- * The names of a table's rows (its first cell).
+ * The rows of a list, in order.
  * @param {HTMLElement} root
  */
-export const rowNames = (root) =>
-	[...root.querySelectorAll('tbody tr')].map((row) => row.querySelector('th, td')?.textContent ?? '');
+export const rowsOf = (root) => /** @type {HTMLElement[]} */ ([...root.querySelectorAll('[data-ss-row]')]);
+
+/** @param {Element} row the name of a row (its title) */
+const titleOf = (row) => row.querySelector('span.truncate')?.textContent ?? '';
 
 /**
- * A table's row by its name.
+ * The names of a list's rows (their titles).
+ * @param {HTMLElement} root
+ */
+export const rowNames = (root) => rowsOf(root).map(titleOf);
+
+/**
+ * A list's row by its name.
  * @param {HTMLElement} root
  * @param {string} name
  */
 export const rowOf = (root, name) => {
-	const row = [...root.querySelectorAll('tbody tr')].find((one) => one.querySelector('th, td')?.textContent === name);
+	const row = rowsOf(root).find((one) => titleOf(one) === name);
 	if (!row) throw new Error(`no row “${name}”`);
-	return /** @type {HTMLElement} */ (row);
+	return row;
 };
 
 /**
- * Open a row's record in the drawer, as a click on the row does.
+ * What a row says: its line of facts, its value, and the state dot's words (empty without one).
+ * @param {HTMLElement} row
+ */
+export const factsOf = (row) => ({
+	meta: row.querySelector('p')?.textContent ?? '',
+	value: row.querySelector('.tabular-nums')?.textContent ?? '',
+	status: row.querySelector('.sr-only')?.textContent ?? '',
+});
+
+/** The open editor of a record: the drawer of a long one, or the fields in place under their row (null when none is open). */
+export const editorOf = () => /** @type {HTMLElement} */ (drawerOf() ?? document.querySelector('[data-entry]'));
+
+/**
+ * Open a row's record in its editor, as a click on the row does.
  * @param {HTMLElement} root
  * @param {string} name
  */
 export const openRow = async (root, name) => {
-	await act(async () => click(/** @type {HTMLElement} */ (rowOf(root, name).querySelector('th, td'))));
-	return drawerOf();
+	await act(async () => click(rowOf(root, name)));
+	return editorOf();
 };
 
 /**
@@ -56,8 +78,8 @@ export const rowMenu = async (root, name, item) => {
 	await act(async () => click(/** @type {HTMLElement} */ (entry)));
 };
 
-/** Close the open drawer with its Done button. */
-export const closeDrawer = async () => {
-	const done = [...drawerOf().querySelectorAll('button')].find((button) => button.textContent === 'Done');
+/** Close the open editor with its Done button. */
+export const closeEditor = async () => {
+	const done = [...editorOf().querySelectorAll('button')].find((button) => button.textContent === 'Done');
 	await act(async () => click(/** @type {HTMLElement} */ (done)));
 };

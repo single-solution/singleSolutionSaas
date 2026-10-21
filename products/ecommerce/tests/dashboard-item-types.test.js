@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The item types editor in the browser (jsdom) on a faked dashboard API (PLAN 0.8.10 dynamic model §1): it lists the
- * saved types with their kind and parts in a table, adds a type in its drawer (name, kind, parts of its kind, numbered units with
+ * saved types with their kind and parts as rows, adds a type in its drawer (name, kind, parts of its kind, numbered units with
  * their unit fields, the step they are needed before, the fields it names) and edits one, and saves the whole list
  * with one PUT that the server's check takes.
  */
@@ -11,7 +11,7 @@ import { byLabel, byText, cleanup, click, keydown, render, type } from '@ss/ui/t
 import { ItemTypesEditor } from '../app/dashboard/item-types.js';
 import { blankType, cleanType, loadType, typeProblems } from '../app/dashboard/drafts.js';
 import { checkItemTypes } from '../core/item-types.js';
-import { drawerOf, inDashboard, openRow, rowMenu, rowNames } from './dashboard-provider.js';
+import { drawerOf, factsOf, inDashboard, openRow, rowMenu, rowNames, rowOf } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 const PATH = `/v1/dashboard/websites/${WEBSITE}/lists/item_types`;
@@ -186,9 +186,10 @@ describe('the item types editor', () => {
 		const { container } = render(inDashboard(<ItemTypesEditor websiteId={WEBSITE} />));
 		await settle();
 		expect(rowNames(container)).toEqual(['E-book']);
-		expect(container.textContent).toContain('Digital goods');
-		expect(container.textContent).toContain('Not offered');
-		expect(container.textContent).toContain('Downloads');
+		const facts = factsOf(rowOf(container, 'E-book'));
+		expect(facts.meta).toContain('Digital goods');
+		expect(facts.meta).toContain('Downloads');
+		expect(facts.status).toBe('Not offered');
 		await act(async () => click(byText(container, 'Add item type', 'button')));
 		const dialog = document.body;
 		// Done refuses a type without a name
