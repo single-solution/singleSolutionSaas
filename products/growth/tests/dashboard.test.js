@@ -16,7 +16,7 @@ import { manifest, SHARED_SETTINGS } from '../adapters/product.js';
 import { TABS } from '../app/dashboard/tabs.js';
 import { TEXTS } from '../app/dashboard/texts.js';
 import { LISTS } from '../core/lists.js';
-import { closeDrawer, drawerOf, openRow, rowMenu, rowNames } from './dashboard-provider.js';
+import { closeEditor, editorOf, openRow, rowMenu, rowNames } from './dashboard-provider.js';
 import { type } from '@ss/ui/testing';
 
 const WEBSITE = 'web_1';
@@ -235,12 +235,12 @@ describe('the dashboard (setup only)', () => {
 		// the goals, stacked on the feature's page under their own small heading; the list itself has no second title
 		expect(rowNames(card)).toEqual(['Purchase', 'Contact']);
 		expect(card.querySelectorAll('h2')).toHaveLength(1);
-		// a new goal opens in a drawer: its name and event (the kind is a select)
+		// a new goal opens in place, under the last row: its name and event (the kind is a select)
 		await act(async () => click(byText(card, TEXTS.lists.add, 'button')));
-		const fresh = [...drawerOf().querySelectorAll('input')];
+		const fresh = [...editorOf(card).querySelectorAll('input')];
 		await type(/** @type {HTMLInputElement} */ (fresh[1]), 'Booked a demo');
 		await type(/** @type {HTMLInputElement} */ (fresh[2]), 'book_demo');
-		await closeDrawer();
+		await closeEditor(card);
 		// nothing is saved until the Save bar; move the new goal up, rename Purchase, remove Contact
 		expect(sent).toEqual([]);
 		await rowMenu(card, 'Booked a demo', TEXTS.lists.up);
@@ -250,7 +250,7 @@ describe('the dashboard (setup only)', () => {
 			/** @type {HTMLInputElement} */ ([...purchase.querySelectorAll('input')].find((input) => input.value === 'Purchase')),
 			'Order',
 		);
-		await closeDrawer();
+		await closeEditor(card);
 		await rowMenu(card, 'Contact', TEXTS.lists.remove);
 		expect(rowNames(card)).toEqual(['Order', 'Booked a demo']);
 		await act(async () => click(byText(document.body, TEXTS.lists.save, 'button')));

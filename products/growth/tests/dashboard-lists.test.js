@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 /**
  * Growth's list editor (`ListCard` in `app/dashboard/lists.js`) in the browser (jsdom) on a faked dashboard API: the
- * entries are a table with columns and a row menu, a click on a row opens the fields in a drawer (a funnel's steps
- * inside it) that edits the draft only, the Save bar is the only save, and a refused save names the entry and the field.
+ * entries are rich rows with a row menu, a click on a row opens the fields (a few in place under the row, a long editor
+ * such as a funnel's steps in a drawer) that edit the draft only, the Save bar is the only save, and a refused save
+ * names the entry and the field.
  */
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { ListCard } from '../app/dashboard/lists.js';
-import { closeDrawer, inDashboard, openRow, rowMenu, rowNames } from './dashboard-provider.js';
+import { closeEditor, factsOf, inDashboard, openRow, rowMenu, rowNames, rowOf } from './dashboard-provider.js';
 
 const WEBSITE = 'web_1';
 
@@ -59,7 +60,7 @@ const FUNNEL = {
 };
 
 describe('a Growth list', () => {
-	it('shows a skeleton while it loads, then a row per entry with its columns and an empty note when there are none', async () => {
+	it('shows a skeleton while it loads, then a row per entry with its facts and an empty state with the one Add action when there are none', async () => {
 		serve({ funnels: [FUNNEL], seo_ignored: [] });
 		const { container } = render(inDashboard(<ListCard websiteId={WEBSITE} name="funnels" bare />));
 		expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
@@ -68,12 +69,35 @@ describe('a Growth list', () => {
 		// the page says the title: no card title; the steps are counted
 		expect(container.querySelector('h2')).toBeNull();
 		expect(rowNames(container)).toEqual(['Shop']);
-		expect(container.querySelector('tbody tr')?.textContent).toContain('2');
+		expect(factsOf(rowOf(container, 'Shop'))).toEqual({ meta: 'shop', value: '2 steps', status: '' });
 		cleanup();
 		const empty = render(inDashboard(<ListCard websiteId={WEBSITE} name="seo_ignored" bare />));
 		await settle();
 		expect(empty.container.textContent).toContain('Nothing yet.');
+		// the empty state carries the one Add action
+		expect(empty.container.querySelectorAll('button')).toHaveLength(1);
 		expect(/** @type {HTMLButtonElement} */ (byText(empty.container, 'Add', 'button')).disabled).toBe(false);
+		await act(async () => click(byText(empty.container, 'Add', 'button')));
+		expect(empty.container.querySelector('[data-entry]')).not.toBeNull();
+	});
+
+	it('opens a few fields in place under their row, says what is still missing with a dot, and closes with a second click', async () => {
+		serve({ goals: [{ key: 'buy', name: 'Buy', kind: 'page', match: '/thanks' }] });
+		const { container } = render(inDashboard(<ListCard websiteId={WEBSITE} name="goals" bare />));
+		await settle();
+		expect(factsOf(rowOf(container, 'Buy'))).toEqual({ meta: 'buy · /thanks', value: 'A page', status: '' });
+		const editor = await openRow(container, 'Buy');
+		// in place: no drawer, the fields sit in the list
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		expect(container.contains(editor)).toBe(true);
+		await type(byLabel(editor, 'Name'), '');
+		expect(factsOf(rowOf(container, '(no name yet)')).status).toBe('Fill in what is required');
+		await closeEditor(container);
+		expect(container.querySelector('[data-entry]')).toBeNull();
+		await openRow(container, '(no name yet)');
+		await act(async () => click(rowOf(container, '(no name yet)')));
+		expect(container.querySelector('[data-entry]')).toBeNull();
+		expect(sent.goals).toBeUndefined();
 	});
 
 	it('edits a funnel and its steps in a large drawer, and saves the whole list with the Save bar only', async () => {
@@ -84,7 +108,7 @@ describe('a Growth list', () => {
 		expect(drawer.textContent).toContain('1. View');
 		expect(drawer.textContent).toContain('2. Buy');
 		type(byLabel(drawer, 'Name'), 'Store funnel');
-		await closeDrawer();
+		await closeEditor(container);
 		expect(sent.funnels).toBeUndefined();
 		expect(rowNames(container)).toEqual(['Store funnel']);
 		await act(async () => click(byText(document.body, 'Save the list', 'button')));
@@ -115,7 +139,7 @@ describe('a Growth list', () => {
 		await settle();
 		const drawer = await openRow(container, 'Shop');
 		type(byLabel(drawer, 'Name'), 'Store funnel');
-		await closeDrawer();
+		await closeEditor(container);
 		await act(async () => click(byText(document.body, 'Save the list', 'button')));
 		await settle();
 		expect(container.textContent).toContain('Store funnel, Steps: An event name is lower-case.');

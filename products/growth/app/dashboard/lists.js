@@ -1,30 +1,34 @@
 'use client';
 /**
  * Growth's merchant lists in Settings (`core/lists.js`; the kit's `GET|PUT /v1/dashboard/websites/:websiteId/lists/:list`):
- * one page per list of a switched-on feature: the entries are a table (the row menu moves one up or down or removes it),
- * a click on a row opens the entry's fields in a drawer that edits the draft only, Add, and the frame's Save bar saves
- * the whole list (a 422 lists the server's errors under the table). The editor is drawn from the list's fields, so every
- * list gets add, rename, reorder and remove the same way. Also the robots.txt online store preset (G12), one click.
+ * one page per list of a switched-on feature: the entries are rich rows (icon, name, a dot when required fields are
+ * empty, one line of facts, a value; the row menu moves one up or down or removes it), a click on a row opens the
+ * entry's fields (a few fields in place under the row, a long editor in a drawer) that edit the draft only, Add, and
+ * the frame's Save bar saves the whole list (a 422 lists the server's errors under the rows). An empty list is an empty
+ * state with the one Add action. The editor is drawn from the list's fields, so every list gets add, rename, reorder
+ * and remove the same way. Also the robots.txt online store preset (G12), one click.
  * @module
  */
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import {
+	ActionMenu,
 	Button,
 	Card,
 	Checkbox,
 	CheckboxGroup,
-	DataTable,
-	DataTableSkeleton,
 	Drawer,
+	EmptyState,
 	EntryGroup,
 	FieldGrid,
 	Icon,
 	Input,
+	Row,
+	RowListSkeleton,
 	Select,
 	TextArea,
 	SaveBar,
 } from '@ss/ui';
-import { Loaded, SaveOutcome, call, useLoad } from '@ss/ui/dashboard';
+import { Loaded, SaveOutcome, call, fill, useLoad } from '@ss/ui/dashboard';
 import { LISTS } from '../../core/lists.js';
 import { ONLINE_STORE_PRESET } from '../../core/seo.js';
 import { TEXTS } from './texts.js';
@@ -248,49 +252,71 @@ const NAME_FIELDS = ['name', 'event', 'text', 'check'];
 /** @param {Record<string, Field>} fields @returns {string} */
 const nameField = (fields) => NAME_FIELDS.find((name) => name in fields) ?? 'name';
 
-/**
- * The columns of a list's table beside the name (headers: `TEXTS.lists.columns.<key>`).
- * @typedef {{ key: string, render: (entry: Entry) => import('react').ReactNode, kind?: 'number', low?: boolean }} Column
- */
-
 /** @param {string} field @returns {(entry: Entry) => string} */
 const plain = (field) => (entry) => String(entry[field] ?? '');
 
-/** A time of the editor (`2026-12-01T09:00`) as the table shows it. @param {string} field @returns {(entry: Entry) => string} */
+/** A time of the editor (`2026-12-01T09:00`) as a row says it. @param {string} field @returns {(entry: Entry) => string} */
 const when = (field) => (entry) => String(entry[field] ?? '').replace('T', ' ');
 
-/** @type {Record<ListName, Column[]>} */
-const COLUMNS = {
-	goals: [
-		{ key: 'key', low: true, render: plain('key') },
-		{ key: 'kind', render: (entry) => choiceLabel(String(entry.kind)) },
-		{ key: 'match', render: plain('match') },
-	],
-	funnels: [
-		{ key: 'key', low: true, render: plain('key') },
-		{ key: 'steps', kind: 'number', render: (entry) => (Array.isArray(entry.steps) ? entry.steps.length : 0) },
-	],
-	consent_categories: [
-		{ key: 'key', low: true, render: plain('key') },
-		{ key: 'mode', render: (entry) => choiceLabel(String(entry.mode)) },
-	],
-	announcements: [
-		{ key: 'key', low: true, render: plain('key') },
-		{ key: 'from', render: when('startsAt') },
-		{ key: 'until', render: when('endsAt') },
-	],
-	conversion_actions: [
-		{ key: 'meta', render: plain('meta') },
-		{ key: 'google', low: true, render: plain('google') },
-		{ key: 'tiktok', low: true, render: plain('tiktok') },
-	],
-	verification_tags: [{ key: 'content', render: plain('content') }],
-	seo_ignored: [{ key: 'page', render: (entry) => String(entry.page ?? '') || L.columns.everyPage }],
+/** `n` things in words: one, or the plural text with `{n}`. @param {{ one: string, other: string }} words @param {number} n */
+const counted = (words, n) => (n === 1 ? words.one : fill(words.other, { n }));
+
+/**
+ * How a list's entries look as rows: the icon, the facts under the name (empty ones are left out) and the value at the
+ * right (see `TEXTS.lists.columns` for the labels).
+ * @typedef {{ icon: import('@ss/ui').IconName, meta: (entry: Entry) => string[], value?: (entry: Entry) => string }} Look
+ */
+
+/** @param {string} field @param {string} label @returns {(entry: Entry) => string} */
+const labelled = (field, label) => (entry) => (entry[field] ? `${label}: ${entry[field]}` : '');
+
+/** @type {Record<ListName, Look>} */
+const LOOKS = {
+	goals: {
+		icon: 'trendingUp',
+		meta: (entry) => [plain('key')(entry), plain('match')(entry)],
+		value: (entry) => choiceLabel(String(entry.kind)),
+	},
+	funnels: {
+		icon: 'filter',
+		meta: (entry) => [plain('key')(entry)],
+		value: (entry) => counted(L.stepsCount, Array.isArray(entry.steps) ? entry.steps.length : 0),
+	},
+	consent_categories: {
+		icon: 'shield',
+		meta: (entry) => [plain('key')(entry), plain('description')(entry)],
+		value: (entry) => choiceLabel(String(entry.mode)),
+	},
+	announcements: {
+		icon: 'bell',
+		meta: (entry) => [
+			plain('key')(entry),
+			when('startsAt')(entry) && `${L.columns.from}: ${when('startsAt')(entry)}`,
+			when('endsAt')(entry) && `${L.columns.until}: ${when('endsAt')(entry)}`,
+		],
+	},
+	conversion_actions: {
+		icon: 'zap',
+		meta: (entry) => [
+			labelled('meta', L.columns.meta)(entry),
+			labelled('google', L.columns.google)(entry),
+			labelled('tiktok', L.columns.tiktok)(entry),
+		],
+		value: (entry) => counted(L.pixelsCount, ['meta', 'google', 'tiktok'].filter((pixel) => entry[pixel]).length),
+	},
+	verification_tags: {
+		icon: 'check',
+		meta: (entry) => [plain('content')(entry)],
+	},
+	seo_ignored: {
+		icon: 'search',
+		meta: (entry) => [plain('page')(entry) || L.columns.everyPage],
+	},
 };
 
 /**
- * One list's page: its entries as a table, the drawer of the picked entry, the frame's Save bar for the whole list,
- * and what the server said.
+ * One list's page: its entries as rich rows, the fields of the picked entry (under its row, or in a drawer when the
+ * editor is long), the frame's Save bar for the whole list, and what the server said.
  * @param {{ websiteId: string, name: ListName, bare?: boolean }} props `bare`: the page already says the title, so the
  *   card has none
  */
@@ -307,7 +333,7 @@ export function ListCard({ websiteId, name, bare = false }) {
 	const locked = answer?.ok && Array.isArray(answer.data.locked) ? /** @type {string[]} */ (answer.data.locked) : [];
 	const entries = draft ?? saved ?? [];
 	const nameKey = nameField(spec.fields);
-	const columns = COLUMNS[name];
+	const look = LOOKS[name];
 	/** @param {Entry} entry */
 	const nameOf = (entry) => String(entry[nameKey] ?? '').trim() || L.untitled;
 	/** @type {Record<string, string>} */
@@ -324,59 +350,110 @@ export function ListCard({ websiteId, name, bare = false }) {
 			return `${nameOf(entry)}${field ? `, ${wordsOf(field).label}` : ''}: ${message}`;
 		});
 	const current = opened === null ? undefined : entries[opened];
-	// many fields, or rows of their own: a large drawer
+	// many fields, or rows of their own: a large drawer; a few fields open in place under their row
 	const wide = Object.keys(spec.fields).length > 5 || Object.values(spec.fields).some((field) => field.type === 'rows');
+	// a required text field that is still empty: the row says so with a dot
+	const incomplete = (/** @type {Entry} */ entry) =>
+		Object.entries(spec.fields).some(
+			([key, field]) => field.type === 'text' && field.required === true && !String(entry[key] ?? '').trim(),
+		);
+	const add = () => {
+		setDraft([...entries, blankEntry(spec.fields, entries)]);
+		setOpened(entries.length);
+	};
+	const empty = answer?.ok === true && entries.length === 0;
 	return (
 		<Card
 			{...(bare ? {} : { title: words.title })}
 			subtitle={words.help}
 			actions={
-				<Button
-					size="sm"
-					disabled={!answer?.ok || entries.length >= spec.max}
-					onClick={() => {
-						setDraft([...entries, blankEntry(spec.fields, entries)]);
-						setOpened(entries.length);
-					}}>
-					<Icon name="plus" size={14} />
-					{L.add}
-				</Button>
+				empty ? null : (
+					<Button size="sm" disabled={!answer?.ok || entries.length >= spec.max} onClick={add}>
+						<Icon name="plus" size={14} />
+						{L.add}
+					</Button>
+				)
 			}>
 			<div className="space-y-4">
-				<Loaded answer={answer} skeleton={<DataTableSkeleton columns={columns.length + 1} rows={4} menu />}>
-					{() => (
-						<DataTable
-							caption={words.title}
-							columns={[
-								{ key: 'name', header: wordsOf(nameKey).label, render: (row) => nameOf(row.entry) },
-								...columns.map((column) => ({
-									key: column.key,
-									header: /** @type {Record<string, string>} */ (L.columns)[column.key] ?? column.key,
-									...(column.kind ? { kind: column.kind } : {}),
-									...(column.low ? { low: true } : {}),
-									render: (/** @type {{ entry: Entry }} */ row) => column.render(row.entry),
-								})),
-							]}
-							rows={entries.map((entry, index) => ({ entry, index }))}
-							rowKey={(row) => String(row.index)}
-							rowLabel={(row) => nameOf(row.entry)}
-							onRowClick={(row) => setOpened(row.index)}
-							rowMenu={(row) => [
-								{ label: L.up, disabled: row.index === 0, onSelect: () => setDraft(moved(entries, row.index, -1)) },
-								{
-									label: L.down,
-									disabled: row.index === entries.length - 1,
-									onSelect: () => setDraft(moved(entries, row.index, 1)),
-								},
-								{
-									label: L.remove,
-									danger: true,
-									onSelect: () => setDraft(entries.filter((_, at) => at !== row.index)),
-								},
-							]}
-							empty={L.none}
-						/>
-					)}
+				<Loaded answer={answer} skeleton={<RowListSkeleton rows={4} label={TEXTS.loading} />}>
+					{() =>
+						entries.length === 0 ? (
+							<EmptyState
+								compact
+								icon={look.icon}
+								title={L.none}
+								action={
+									<Button size="sm" onClick={add}>
+										<Icon name="plus" size={14} />
+										{L.add}
+									</Button>
+								}
+							/>
+						) : (
+							<div>
+								{entries.map((entry, index) => {
+									const title = nameOf(entry);
+									const on = opened === index;
+									return (
+										<Fragment key={index}>
+											<Row
+												lead={{ icon: look.icon, tone: 'primary' }}
+												title={title}
+												{...(incomplete(entry)
+													? { status: { tone: /** @type {const} */ ('warning'), label: L.incomplete } }
+													: {})}
+												meta={look.meta(entry)}
+												{...(look.value ? { value: look.value(entry) } : {})}
+												selected={on}
+												onSelect={() => setOpened(on && !wide ? null : index)}
+												trailing={
+													<ActionMenu
+														floating
+														label={fill(TEXTS.rowActions, { name: title })}
+														items={[
+															{
+																label: L.up,
+																disabled: index === 0,
+																onSelect: () => setDraft(moved(entries, index, -1)),
+															},
+															{
+																label: L.down,
+																disabled: index === entries.length - 1,
+																onSelect: () => setDraft(moved(entries, index, 1)),
+															},
+															{
+																label: L.remove,
+																danger: true,
+																onSelect: () => {
+																	setDraft(entries.filter((_, at) => at !== index));
+																	setOpened(null);
+																},
+															},
+														]}
+													/>
+												}
+											/>
+											{on && !wide ? (
+												<div data-entry="" className="space-y-4 px-2.5 pt-2 pb-4">
+													<EntryFields
+														fields={spec.fields}
+														entry={entry}
+														at={`/value/${index}`}
+														errors={errors}
+														locked={locked}
+														onChange={(next) => setDraft(entries.map((other, i) => (i === index ? next : other)))}
+													/>
+													<div className="flex justify-end">
+														<Button onClick={() => setOpened(null)}>{L.done}</Button>
+													</div>
+												</div>
+											) : null}
+										</Fragment>
+									);
+								})}
+							</div>
+						)
+					}
 				</Loaded>
 				<SaveBar
 					show={draft !== null}
@@ -399,12 +476,12 @@ export function ListCard({ websiteId, name, bare = false }) {
 				<SaveOutcome result={result} format={lines} />
 			</div>
 			<Drawer
-				open={current !== undefined}
+				open={wide && current !== undefined}
 				onClose={() => setOpened(null)}
 				title={current ? nameOf(current) : ''}
-				size={wide ? 'lg' : 'md'}
+				size="lg"
 				footer={<Button onClick={() => setOpened(null)}>{L.done}</Button>}>
-				{current && opened !== null ? (
+				{wide && current && opened !== null ? (
 					<div data-entry="" className="space-y-4">
 						<EntryFields
 							fields={spec.fields}

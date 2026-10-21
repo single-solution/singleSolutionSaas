@@ -27,5 +27,4 @@ export const KIT_ONLY_TODO = [
 	{ file: 'products/ecommerce/app/dashboard/grades.js', uses: ['DataTable'] },
 	{ file: 'products/ecommerce/app/dashboard/item-types.js', uses: ['DataTable'] },
 	{ file: 'products/ecommerce/app/dashboard/lists.js', uses: ['DataTable'] },
-	{ file: 'products/growth/app/dashboard/lists.js', uses: ['DataTable'] },
 ];

@@ -37,6 +37,9 @@ export const TEXTS = dashboardTexts({
 		save: 'Save the list',
 		saved: 'Saved.',
 		untitled: '(no name yet)',
+		incomplete: 'Fill in what is required',
+		stepsCount: { one: '1 step', other: '{n} steps' },
+		pixelsCount: { one: '1 pixel', other: '{n} pixels' },
 		columns: {
 			key: 'Key',
 			kind: 'Matches',
