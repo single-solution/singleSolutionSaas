@@ -26,7 +26,9 @@ const blur = (el) =>
  * @param {{ initial?: Record<string, unknown>, onChange?: (name: string, value: unknown) => void, onSave?: () => void } & Record<string, any>} props
  */
 function Harness({ initial = {}, onChange, onSave, ...rest }) {
-	const [values, setValues] = useState(/** @type {Record<string, unknown>} */ ({ reasons: [], sizes: [], flags: [], ...initial }));
+	const [values, setValues] = useState(
+		/** @type {Record<string, unknown>} */ ({ reasons: [], sizes: [], flags: [], ...initial }),
+	);
 	return (
 		<>
 			<button type="button" onClick={() => setValues({ reasons: ['Kept'], sizes: [], flags: [true] })}>
@@ -117,12 +119,16 @@ describe('the raw JSON box (189)', () => {
 		type(box, '[oops');
 		expect(box.value).toBe('[oops');
 		expect(container.textContent).toContain('Enter valid JSON.');
-		const save = /** @type {HTMLButtonElement} */ ([...container.querySelectorAll('button')].find((b) => b.textContent === 'Save changes'));
+		const save = /** @type {HTMLButtonElement} */ (
+			[...container.querySelectorAll('button')].find((b) => b.textContent === 'Save changes')
+		);
 		expect(save.disabled).toBe(true);
 		type(box, '[true]');
 		expect(container.textContent).not.toContain('Enter valid JSON.');
 		expect(
-			/** @type {HTMLButtonElement} */ ([...container.querySelectorAll('button')].find((b) => b.textContent === 'Save changes')).disabled,
+			/** @type {HTMLButtonElement} */ (
+				[...container.querySelectorAll('button')].find((b) => b.textContent === 'Save changes')
+			).disabled,
 		).toBe(false);
 	});
 

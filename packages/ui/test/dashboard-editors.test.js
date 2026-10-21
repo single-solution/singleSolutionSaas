@@ -195,7 +195,7 @@ describe('text that is not valid JSON is never saved (189)', () => {
 	});
 });
 
-describe('Reset to default drops that setting\'s unsaved edit (180)', () => {
+describe("Reset to default drops that setting's unsaved edit (180)", () => {
 	it('shows the default, closes the bar when it was the only edit, and Save puts nothing back', async () => {
 		const id = freshSite();
 		const { container } = await openSettings(id);

@@ -62,19 +62,23 @@ export const randomKey = (length) => {
  * What a raw JSON box reports (`onChange`, and in `values`) while its text is not valid JSON: the text itself. It is no
  * value to save: a page that saves the form must not save one (see {@link isJsonDraft}); it keeps the page's Save off.
  */
-export class JsonDraft {
-	/** @param {string} text */
-	constructor(text) {
-		this.text = text;
-	}
-}
+const DRAFT = Symbol('JsonDraft');
+
+/** @typedef {{ readonly [DRAFT]: true, readonly text: string }} JsonDraft */
+
+/**
+ * Makes the {@link JsonDraft} of text that is not valid JSON.
+ * @param {string} text
+ * @returns {JsonDraft}
+ */
+export const jsonDraft = (text) => Object.freeze({ [DRAFT]: /** @type {const} */ (true), text });
 
 /**
  * Whether a value is a {@link JsonDraft}: text typed in a raw JSON box that is not valid JSON yet.
  * @param {unknown} value
  * @returns {value is JsonDraft}
  */
-export const isJsonDraft = (value) => value instanceof JsonDraft;
+export const isJsonDraft = (value) => typeof value === 'object' && value !== null && DRAFT in value;
 
 /**
  * The items of a "one per line" text: each line trimmed, the empty ones dropped (numbers for a list of numbers).
@@ -131,11 +135,19 @@ function JsonField({ value, onChange, error, invalidText, ...rest }) {
 			return { ok: false, value: undefined };
 		}
 	};
-	const typedIsValue = typed !== null && (() => {
-		const result = parsed(typed);
-		return result.ok && sameJson(result.value, value);
-	})();
-	const text = draft ? draft.text : typedIsValue ? /** @type {string} */ (typed) : value === undefined ? '' : JSON.stringify(value, null, 2);
+	const typedIsValue =
+		typed !== null &&
+		(() => {
+			const result = parsed(typed);
+			return result.ok && sameJson(result.value, value);
+		})();
+	const text = draft
+		? draft.text
+		: typedIsValue
+			? /** @type {string} */ (typed)
+			: value === undefined
+				? ''
+				: JSON.stringify(value, null, 2);
 	return (
 		<TextArea
 			{...rest}
@@ -147,7 +159,7 @@ function JsonField({ value, onChange, error, invalidText, ...rest }) {
 				const next = e.currentTarget.value;
 				setTyped(next);
 				const result = parsed(next);
-				onChange(result.ok ? result.value : new JsonDraft(next));
+				onChange(result.ok ? result.value : jsonDraft(next));
 			}}
 		/>
 	);
