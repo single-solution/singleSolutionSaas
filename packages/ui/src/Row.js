@@ -14,6 +14,7 @@ import { cx } from './cx.js';
 import { Avatar, DOTS, IconBadge } from './display.js';
 import { LIST, LIST_TONE } from './layout-metrics.js';
 import { useShell } from './shell-state.js';
+import { UNSAVED_TEXTS } from './unsaved.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {import('./display.js').Tone} Tone */
@@ -43,10 +44,12 @@ const leadOf = (lead) => {
  * @param {RowBoxProps & { lead?: RowLead, title: ReactNode, status?: { tone: RowTone, label: string },
  *   meta?: string | string[], warning?: { tone?: RowTone, text: string }, value?: ReactNode, time?: ReactNode,
  *   trailing?: ReactNode, href?: string, onSelect?: () => void, selected?: boolean, disabled?: boolean,
+ *   changed?: boolean, texts?: Partial<Pick<import('./unsaved.js').UnsavedTexts, 'changed'>>,
  *   linkAs?: import('react').ElementType, className?: string }} props `status`: a colored dot after the title, its
  *   `label` the tooltip and the screen-reader text; `meta`: one line (an array is joined with " · "); `warning`: shown in
  *   place of `meta`, in its color; `trailing`: a control (a switch); `href` or `onSelect` makes the row a link or a
- *   button, `selected` its picked look
+ *   button, `selected` its picked look; `changed`: the item has unsaved changes (the word "Changed" after the title, so
+ *   it is not told by colour alone)
  */
 export function Row({
 	lead,
@@ -61,6 +64,8 @@ export function Row({
 	onSelect,
 	selected = false,
 	disabled = false,
+	changed = false,
+	texts,
 	linkAs,
 	className,
 	...box
@@ -122,6 +127,13 @@ export function Row({
 					) : (
 						name
 					)}
+					{changed ? (
+						<span
+							data-ss-changed=""
+							className="shrink-0 rounded-full bg-attention-soft px-1.5 text-micro font-medium text-on-attention-soft">
+							{texts?.changed ?? UNSAVED_TEXTS.changed}
+						</span>
+					) : null}
 					{status ? (
 						<span className="flex shrink-0 items-center" title={status.label}>
 							<span aria-hidden="true" className={cx('size-2 rounded-full', DOTS[DOT_TONES[status.tone]])} />

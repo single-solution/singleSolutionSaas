@@ -38,7 +38,7 @@ import { InnerNav } from './InnerNav.js';
 import { PAGE, pageBody } from './layout-metrics.js';
 import { LIST_COLUMN_TEXTS } from './ListColumn.js';
 import { Crumbs, Fact, HeaderActions, InfoButton, PAGE_TEXTS, ShellMenuButton, useNarrow } from './page-parts.js';
-import { PageSectionList, usePageSections } from './page-sections.js';
+import { PageSectionList, markChanged, usePageSections } from './page-sections.js';
 import { useShell } from './shell-state.js';
 import { PageSkeleton } from './skeletons.js';
 import { PickKeepsEditsContext, askLeave } from './unsaved.js';
@@ -60,7 +60,7 @@ export { PAGE_TEXTS };
  * @param {{ crumbs: PageCrumb[], status?: PageStatus[], facts?: PageFact[], actions?: PageActions, info?: ReactNode,
  *   nav?: PageNav, list?: PageList, sections?: PageSection[], toolbar?: ReactNode, footer?: ReactNode, loading?: boolean,
  *   error?: string | { title?: string, message?: ReactNode, action?: ReactNode }, flush?: boolean,
- *   bodyKey?: string, skeleton?: ReactNode, linkAs?: import('react').ElementType, texts?: Partial<PageTexts>,
+ *   bodyKey?: string, skeleton?: ReactNode, linkAs?: import('react').ElementType, texts?: Partial<PageTexts & import('./unsaved.js').UnsavedTexts>,
  *   className?: string, children?: ReactNode }} props `crumbs`: every step a link, the last one the title (and the
  *   page's one heading); `status`: pills after the title; `facts`: live numbers, at most four, each a filter button
  *   (`onClick`), a link (`href`) or plain; `actions`: `{ primary, secondary (at most two), more }`; `info`: the page's
@@ -68,7 +68,8 @@ export { PAGE_TEXTS };
  *   the navigation, the page being the picked item (set `bodyKey` to its id; the element's `selected` and `onBack` tell the
  *   page what to show on phones); `sections`: the
  *   parts of the page, all drawn at once in place of `children` (each `{ id, label, icon?, dot?, dotLabel?, body }`), with
- *   the jump list from four of them (`nav` wins when given) and one save bar for the page; `toolbar`: a `Toolbar`;
+ *   the jump list from four of them (`nav` wins when given) and one save bar for the page, which names the sections
+ *   with changes (each name jumps to its section) while those sections carry a "Changed" mark in the navigation; `toolbar`: a `Toolbar`;
  *   `footer`: a `Pagination`; `loading`: draw the page's skeleton (`skeleton` is the body's own, a few settings cards by
  *   default); `error`: a message (or `{ title, message, action }`) in place of the body, toolbar and footer; `flush`: the
  *   body has no padding (a table uses all of it); `bodyKey`: when it changes (the sub-page) the body fades in again;
@@ -101,7 +102,9 @@ export function Page({
 	const flow = usePageSections(sections);
 	const words = { ...PAGE_TEXTS, ...texts };
 	const link = linkAs ?? shell.linkAs;
-	const rail = list ? undefined : (nav ?? flow.nav);
+	// the sections with changes carry a mark in the navigation, in the words of the page's texts
+	const rail = list ? undefined : nav ? markChanged(nav, flow.changed) : flow.nav;
+	const railTexts = texts?.changed ? { changed: texts.changed } : undefined;
 	// on phones a list page shows the list or the picked item, one at a time
 	const picked = list?.props.selected;
 	const hasPick = picked !== null && picked !== undefined;
@@ -176,7 +179,9 @@ export function Page({
 				{list && !(narrow && hasPick) ? (
 					<PickKeepsEditsContext.Provider value={keepsEdits}>{list}</PickKeepsEditsContext.Provider>
 				) : null}
-				{rail ? <InnerNav {...(link ? { linkAs: link } : {})} {...rail} /> : null}
+				{rail ? (
+					<InnerNav {...(link ? { linkAs: link } : {})} {...(railTexts ? { texts: railTexts } : {})} {...rail} />
+				) : null}
 				{listOnly ? null : (
 					<section className={PAGE.main}>
 						{bar ? (
@@ -199,7 +204,7 @@ export function Page({
 										{...(failure.action ? { action: failure.action } : {})}
 									/>
 								) : sections ? (
-									<PageSectionList sections={sections} scopes={flow.scopes} />
+									<PageSectionList sections={sections} scopes={flow.scopes} changed={flow.changed} />
 								) : (
 									children
 								)}
@@ -213,7 +218,7 @@ export function Page({
 					</section>
 				)}
 			</div>
-			{flow.bar ? <SaveBar {...flow.bar} /> : null}
+			{flow.bar ? <SaveBar {...flow.bar} {...(texts ? { texts } : {})} /> : null}
 		</div>
 	);
 }

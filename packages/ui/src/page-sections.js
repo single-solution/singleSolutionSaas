@@ -31,7 +31,7 @@ export const SECTION_JUMPS_FROM = 4;
  * @typedef {object} SaveEntry
  * @property {boolean} show
  * @property {() => unknown} onSave
- * @property {() => void} onDiscard
+ * @property {() => unknown} onDiscard may return a function that brings the discarded edits back
  * @property {boolean} saving
  * @property {boolean} disabled
  * @property {ReactNode} message
@@ -44,12 +44,13 @@ export const SECTION_JUMPS_FROM = 4;
 export const PageSavesContext = createContext(/** @type {SaveScope | null} */ (null));
 
 /**
- * What the page's one bar shows.
- * @typedef {{ show: boolean, saving: boolean, disabled: boolean, message?: ReactNode, saveLabel?: string,
- *   discardLabel?: string }} SaveView
+ * What the page's one bar shows. `changed` is the order of every section with changes, joined with commas (one stable
+ * string, so a bar that did not change does not draw again).
+ * @typedef {{ show: boolean, saving: boolean, disabled: boolean, changed: string, message?: ReactNode,
+ *   saveLabel?: string, discardLabel?: string }} SaveView
  */
 /** @type {SaveView} */
-const NO_SAVE = { show: false, saving: false, disabled: false };
+const NO_SAVE = { show: false, saving: false, disabled: false, changed: '' };
 
 /**
  * The page's one save bar: the bars of its sections register here, and Save and Discard act on every section that
@@ -66,11 +67,12 @@ function usePageSaves(count) {
 			[...live.current.entries()]
 				.filter(([, known]) => known.entry.show)
 				.sort(([, a], [, b]) => a.order - b.order || a.seq - b.seq)
-				.map(([id, known]) => ({ id, entry: known.entry })),
+				.map(([id, known]) => ({ id, order: known.order, entry: known.entry })),
 		[],
 	);
 	const refresh = useCallback(() => {
-		const changed = dirty().map((one) => one.entry);
+		const found = dirty();
+		const changed = found.map((one) => one.entry);
 		setView((prev) => {
 			// the last words stay while the bar leaves
 			if (!changed[0]) return prev.show ? { ...prev, show: false, saving: false } : prev;
@@ -79,6 +81,7 @@ function usePageSaves(count) {
 				show: true,
 				saving: changed.some((entry) => entry.saving),
 				disabled: changed.some((entry) => entry.disabled),
+				changed: [...new Set(found.map((one) => one.order))].join(','),
 				message: changed[0].message,
 				saveLabel: changed[0].saveLabel,
 				discardLabel: changed[0].discardLabel,
@@ -119,8 +122,18 @@ function usePageSaves(count) {
 		}
 		return true;
 	}, [dirty]);
+	// Discard runs every section's; the ways back they gave become one Undo
 	const onDiscard = useCallback(() => {
-		for (const { entry } of dirty()) entry.onDiscard();
+		/** @type {Array<() => void>} */
+		const undos = [];
+		for (const { entry } of dirty()) {
+			const undo = entry.onDiscard();
+			if (typeof undo === 'function') undos.push(/** @type {() => void} */ (undo));
+		}
+		if (undos.length === 0) return undefined;
+		return () => {
+			for (const undo of undos) undo();
+		};
 	}, [dirty]);
 	return { scopes, view, onSave, onDiscard };
 }
@@ -232,6 +245,11 @@ export function usePageSections(sections) {
 	const list = sections ?? [];
 	const { scopes, view, onSave, onDiscard } = usePageSaves(list.length);
 	const { body, active, jump } = useJumps(list.map((section) => section.id));
+	const { changed: orders, ...shown } = view;
+	/** The sections that have changes, in the order of the page (the bar keeps the last ones while it leaves). */
+	const named = orders ? orders.split(',').flatMap((order) => list[Number(order)] ?? []) : [];
+	/** The ids of the sections that have changes now. */
+	const changed = view.show ? named.map((section) => section.id) : [];
 	const nav =
 		list.length >= SECTION_JUMPS_FROM
 			? {
@@ -241,24 +259,62 @@ export function usePageSections(sections) {
 						...(section.icon ? { icon: section.icon } : {}),
 						...(section.dot ? { dot: section.dot } : {}),
 						...(section.dotLabel ? { dotLabel: section.dotLabel } : {}),
+						...(changed.includes(section.id) ? { changed: true } : {}),
 					})),
 					value: active,
 					onSelect: jump,
 				}
 			: null;
-	return { body, scopes, nav, bar: sections ? { ...view, onSave, onDiscard } : null };
+	return {
+		body,
+		scopes,
+		nav,
+		changed,
+		bar: sections
+			? {
+					...shown,
+					onSave,
+					onDiscard,
+					changes: named.map((section) => ({ id: section.id, label: section.label })),
+					onJump: jump,
+				}
+			: null,
+	};
+}
+
+/**
+ * A navigation the page was given with the items of the sections that have changes marked `changed` (an item is a
+ * section's when its id is the section's).
+ * @param {import('./InnerNav.js').InnerNavProps | null | undefined} nav
+ * @param {string[]} ids the sections with changes
+ */
+export function markChanged(nav, ids) {
+	if (!nav || ids.length === 0) return nav;
+	/** @param {import('./InnerNav.js').InnerNavItem[]} items */
+	const mark = (items) => items.map((item) => (ids.includes(item.id) ? { ...item, changed: true } : item));
+	return {
+		...nav,
+		...(nav.items ? { items: mark(nav.items) } : {}),
+		...(nav.groups ? { groups: nav.groups.map((group) => ({ ...group, items: mark(group.items) })) } : {}),
+	};
 }
 
 /**
  * The sections, each a `<section>` with its own name, stacked with the body's gap.
- * @param {{ sections: PageSection[], scopes: SaveScope[] }} props
+ * @param {{ sections: PageSection[], scopes: SaveScope[], changed?: string[] }} props `changed`: the ids of the sections
+ *   that have changes (each gets `data-changed`)
  */
-export function PageSectionList({ sections, scopes }) {
+export function PageSectionList({ sections, scopes, changed = [] }) {
 	return (
 		<>
 			{sections.map((section, index) => (
 				<PageSavesContext.Provider key={section.id} value={scopes[index] ?? null}>
-					<section id={section.id} data-ss-section="" aria-label={section.label} className="flex min-w-0 flex-col gap-6">
+					<section
+						id={section.id}
+						data-ss-section=""
+						{...(changed.includes(section.id) ? { 'data-changed': '' } : {})}
+						aria-label={section.label}
+						className="flex min-w-0 flex-col gap-6">
 						{section.body}
 					</section>
 				</PageSavesContext.Provider>

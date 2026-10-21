@@ -341,14 +341,14 @@ describe('Page sections: one save bar for the page', () => {
 		expect(button(container, 'Discard').disabled).toBe(false);
 	});
 
-	it('says what the first section with changes says', () => {
+	it('names the sections with changes, and uses the buttons of the first of them', () => {
 		const { container } = render(
 			page({
 				b: { show: true, message: '2 changes', saveLabel: 'Save list', discardLabel: 'Cancel' },
 				c: { show: true, message: 'Other', saveLabel: 'Other save' },
 			}),
 		);
-		expect(container.querySelector('[role="status"]')?.textContent).toBe('2 changes');
+		expect(container.querySelector('[role="status"]')?.textContent).toBe('Unsaved changes in B, C');
 		expect(button(container, 'Save list')).toBeTruthy();
 		expect(button(container, 'Cancel')).toBeTruthy();
 	});

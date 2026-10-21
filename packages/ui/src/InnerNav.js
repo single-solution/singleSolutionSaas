@@ -31,25 +31,30 @@ import { InnerNavSkeleton } from './skeletons.js';
  * @property {Tone} [dot]
  * @property {string} [dotLabel]
  * @property {boolean} [locked]
+ * @property {boolean} [changed] the page behind it has unsaved changes (a word "Changed" after the label)
  * @property {string} [href]
  * @property {(id: string) => void} [onSelect]
  */
 /** @typedef {{ label?: string, items: InnerNavItem[] }} InnerNavGroup */
 
-/** @typedef {{ search: string, none: string, locked: string }} InnerNavTexts */
+/** @typedef {{ search: string, none: string, locked: string, changed: string }} InnerNavTexts */
 
 /** The words the navigation says itself (replace them to translate). @type {Readonly<InnerNavTexts>} */
-export const INNER_NAV_TEXTS = Object.freeze({ search: 'Search', none: 'No match', locked: 'Locked' });
+export const INNER_NAV_TEXTS = Object.freeze({ search: 'Search', none: 'No match', locked: 'Locked', changed: 'Changed' });
 
 /** The plain text of a label, for searching. @param {ReactNode} label */
 const textOf = (label) => (typeof label === 'string' || typeof label === 'number' ? String(label) : '');
 
 /**
- * @param {{ groups?: InnerNavGroup[], items?: InnerNavItem[], value: string,
+ * @typedef {{ groups?: InnerNavGroup[], items?: InnerNavItem[], value: string,
  *   onSelect?: (id: string, item: InnerNavItem) => void, label?: string, footer?: ReactNode,
  *   linkAs?: import('react').ElementType, searchFrom?: number, texts?: Partial<InnerNavTexts>,
- *   loading?: boolean, className?: string }} props `items` is one group without a label; `value` the id of the current
- *   item; `searchFrom` the number of items from which the search box shows (more than 10 by default)
+ *   loading?: boolean, className?: string }} InnerNavProps
+ */
+
+/**
+ * @param {InnerNavProps} props `items` is one group without a label; `value` the id of the current item; `searchFrom`
+ *   the number of items from which the search box shows (more than 10 by default)
  */
 export function InnerNav({
 	groups,
@@ -146,6 +151,13 @@ export function InnerNav({
 					<span className="flex shrink-0 items-center" {...(item.dotLabel ? { title: item.dotLabel } : {})}>
 						<span aria-hidden="true" className={cx('size-1.5 rounded-full', DOTS[item.dot])} />
 						{item.dotLabel ? <span className="sr-only">{item.dotLabel}</span> : null}
+					</span>
+				) : null}
+				{item.changed ? (
+					<span
+						data-ss-changed=""
+						className="shrink-0 rounded-full bg-attention-soft px-1.5 text-micro font-medium text-on-attention-soft">
+						{words.changed}
 					</span>
 				) : null}
 				{item.locked ? (
