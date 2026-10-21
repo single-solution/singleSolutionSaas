@@ -102,12 +102,34 @@ function SearchBox({ search, words }) {
 		setText(next);
 		send(next);
 	};
+	const box = useRef(/** @type {HTMLInputElement | null} */ (null));
+	const clearNow = useRef(clear);
+	clearNow.current = clear;
+	useEffect(() => {
+		const input = box.current;
+		if (!input) return undefined;
+		/** @param {KeyboardEvent} event */
+		const onEscape = (event) => {
+			if (event.key !== 'Escape') return;
+			// the search is the innermost open thing: a drawer or dialog around it listens on its own panel and would
+			// close with it, so the search takes the key here, before it gets that far
+			event.stopPropagation();
+			if (input.value !== '') return clearNow.current('');
+			// nothing to clear: leave the search, to the overlay around it when there is one (the next Escape closes that)
+			const around = input.closest('[role="dialog"]');
+			if (around instanceof HTMLElement) around.focus();
+			else input.blur();
+		};
+		input.addEventListener('keydown', onEscape);
+		return () => input.removeEventListener('keydown', onEscape);
+	}, []);
 	return (
 		<div className="relative min-w-0 flex-1 sm:max-w-xs">
 			<span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-subtle">
 				<Icon name="search" size={14} />
 			</span>
 			<input
+				ref={box}
 				type="search"
 				aria-label={label ?? words.search}
 				placeholder={placeholder ?? words.search}
@@ -120,7 +142,6 @@ function SearchBox({ search, words }) {
 				}}
 				onKeyDown={(event) => {
 					if (event.key === 'Enter') send(text);
-					if (event.key === 'Escape') clear('');
 				}}
 				className="ss-motion h-8 w-full appearance-none rounded-control border border-line bg-surface pr-8 pl-8 text-label text-fg placeholder:text-subtle focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-search-cancel-button]:appearance-none"
 			/>
