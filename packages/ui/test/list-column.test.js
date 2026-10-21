@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { ListColumn } from '../src/ListColumn.js';
+import { useListSelection } from '../src/list-selection.js';
 import { STAGGER } from '../src/layout-metrics.js';
 import { act, allByRole, byText, cleanup, click, keydown, render, type } from '../src/testing.js';
 
@@ -292,5 +293,121 @@ describe('ListColumn prefetch', () => {
 		const { container } = render(column({ onPrefetch }));
 		act(() => options(container)[2]?.focus());
 		expect(onPrefetch).toHaveBeenCalledWith(merchants[2]);
+	});
+});
+
+/**
+ * A page that shows the picked id and a button per id.
+ * @param {{ ids: Array<string | number>, param?: string, initial?: string | number | null }} props
+ */
+function Probe({ ids, param, initial }) {
+	const [selected, select] = useListSelection({
+		ids,
+		...(param ? { param } : {}),
+		...(initial !== undefined ? { initial } : {}),
+	});
+	return (
+		<div>
+			<output data-testid="selected">{String(selected)}</output>
+			{ids.map((id) => (
+				<button key={id} type="button" onClick={() => select(id)}>
+					{`pick ${id}`}
+				</button>
+			))}
+			<button type="button" onClick={() => select(null)}>
+				clear
+			</button>
+		</div>
+	);
+}
+
+/** @param {HTMLElement} root */
+const shown = (root) => root.querySelector('output')?.textContent;
+
+/** @param {HTMLElement} root @param {string} text */
+const button = (root, text) =>
+	/** @type {HTMLElement} */ ([...root.querySelectorAll('button')].find((el) => el.textContent === text));
+
+/** Back or Forward: the browser has already changed the address and says so. @param {string} url */
+const travel = (url) =>
+	act(() => {
+		window.history.replaceState(null, '', url);
+		window.dispatchEvent(new PopStateEvent('popstate'));
+	});
+
+describe('useListSelection', () => {
+	beforeEach(() => {
+		window.history.replaceState(null, '', '/merchants');
+	});
+
+	it('reads ?id= from the address', () => {
+		window.history.replaceState(null, '', '/merchants?id=bolt');
+		const { container } = render(<Probe ids={['acme', 'bolt', 'cedar']} />);
+		expect(shown(container)).toBe('bolt');
+	});
+
+	it('picks the first id when the address has none, or the initial one', () => {
+		const { container, rerender } = render(<Probe ids={['acme', 'bolt']} />);
+		expect(shown(container)).toBe('acme');
+		rerender(<Probe ids={['acme', 'bolt']} initial="bolt" />);
+		expect(shown(container)).toBe('bolt');
+		rerender(<Probe ids={['acme', 'bolt']} initial="nobody" />);
+		expect(shown(container)).toBe('acme');
+		rerender(<Probe ids={['acme', 'bolt']} initial={null} />);
+		expect(shown(container)).toBe('null');
+	});
+
+	it('picks the first id when the id in the address is not in the list, and keeps it while the list is on the way', () => {
+		window.history.replaceState(null, '', '/merchants?id=gone');
+		const { container, rerender } = render(<Probe ids={[]} />);
+		expect(shown(container)).toBe('gone');
+		rerender(<Probe ids={['acme', 'bolt']} />);
+		expect(shown(container)).toBe('acme');
+	});
+
+	it('pushes a history entry on select and keeps the rest of the address', () => {
+		window.history.replaceState(null, '', '/merchants?tab=late&id=acme#top');
+		const push = vi.spyOn(window.history, 'pushState');
+		const { container } = render(<Probe ids={['acme', 'bolt']} />);
+		click(button(container, 'pick bolt'));
+		expect(push).toHaveBeenCalledTimes(1);
+		expect(window.location.pathname).toBe('/merchants');
+		const params = new URLSearchParams(window.location.search);
+		expect(params.get('id')).toBe('bolt');
+		expect(params.get('tab')).toBe('late');
+		expect(window.location.hash).toBe('#top');
+		expect(shown(container)).toBe('bolt');
+		click(button(container, 'pick bolt'));
+		expect(push).toHaveBeenCalledTimes(1);
+		push.mockRestore();
+	});
+
+	it('follows Back and Forward (popstate)', () => {
+		const { container } = render(<Probe ids={['acme', 'bolt', 'cedar']} />);
+		click(button(container, 'pick cedar'));
+		expect(shown(container)).toBe('cedar');
+		travel('/merchants?id=bolt');
+		expect(shown(container)).toBe('bolt');
+		travel('/merchants');
+		expect(shown(container)).toBe('acme');
+	});
+
+	it('uses another parameter name when asked', () => {
+		window.history.replaceState(null, '', '/m?id=acme&site=two');
+		const { container } = render(<Probe ids={['one', 'two']} param="site" />);
+		expect(shown(container)).toBe('two');
+		click(button(container, 'pick one'));
+		expect(new URLSearchParams(window.location.search).get('site')).toBe('one');
+		expect(new URLSearchParams(window.location.search).get('id')).toBe('acme');
+	});
+
+	it('puts the pick away with select(null) (a phone shows the list again) and comes back with Back', () => {
+		window.history.replaceState(null, '', '/merchants?id=bolt');
+		const { container } = render(<Probe ids={['acme', 'bolt']} />);
+		click(button(container, 'clear'));
+		expect(shown(container)).toBe('null');
+		expect(window.location.search).toBe('');
+		travel('/merchants?id=bolt');
+		expect(shown(container)).toBe('bolt');
 	});
 });
