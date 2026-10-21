@@ -2,7 +2,7 @@
  * Layout and data-display components (no client state; usable from server components).
  * @module
  */
-import { Fragment } from 'react';
+import { Fragment, isValidElement } from 'react';
 import { cx } from './cx.js';
 import { humanize } from './format.js';
 import { Icon } from './icons.js';
@@ -135,14 +135,73 @@ export function Avatar({ name, size = 'md', className }) {
 }
 
 /**
+ * The dot of a status: the brand hue of its meaning (`accent` is the accent blue), the `label` its tooltip and the
+ * screen-reader text. The same dot a `Row` draws after its title.
+ * @param {{ tone: Tone | 'accent', label: string }} status
+ */
+const statusDot = (status) => (
+	<span className="flex shrink-0 items-center" title={status.label}>
+		<span aria-hidden="true" className={cx('size-2 rounded-full', DOTS[status.tone === 'accent' ? 'primary' : status.tone])} />
+		<span className="sr-only">{status.label}</span>
+	</span>
+);
+
+/**
+ * What leads a card's title: `{ icon, tone }` draws an icon chip, `{ avatar: name }` the initials of a person or a
+ * business, a node is drawn as it is.
+ * @typedef {ReactNode | { avatar: string } | { icon: import('./icons.js').IconName, tone?: Tone }} CardLead
+ */
+
+/** @param {CardLead} lead */
+const cardLead = (lead) => {
+	if (lead === null || lead === undefined || typeof lead !== 'object' || isValidElement(lead) || Array.isArray(lead)) {
+		return /** @type {ReactNode} */ (lead);
+	}
+	if ('avatar' in lead) return <Avatar name={lead.avatar} />;
+	if ('icon' in lead) return <IconBadge icon={lead.icon} {...(lead.tone ? { tone: lead.tone } : {})} />;
+	return null;
+};
+
+/**
+ * The meter of a card: a thin bar that grows to its width when it appears (the theme's motion; with reduced motion it
+ * fades in) and the words about it under it.
+ * @param {{ percent: number, label?: ReactNode }} props
+ */
+function CardMeter({ percent, label }) {
+	const width = Math.min(100, Math.max(0, Number.isFinite(percent) ? percent : 0));
+	return (
+		<div>
+			<div
+				role="meter"
+				aria-valuemin={0}
+				aria-valuemax={100}
+				aria-valuenow={Math.round(width)}
+				{...(typeof label === 'string' ? { 'aria-label': label } : {})}
+				className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+				<div data-ss-meter="" className="h-full animate-ss-meter rounded-full bg-primary" style={{ width: `${width}%` }} />
+			</div>
+			{label ? <p className="mt-1.5 text-micro text-muted tabular-nums">{label}</p> : null}
+		</div>
+	);
+}
+
+/**
  * Surface card, only where grouping helps (level 1: a white surface with a hairline edge on the off-white canvas): its
  * header holds the title, a one-line description and up to two actions (the rest in a More menu); whitespace, not a
  * line, parts it from the body, which is padded 20 px. Never put boxes inside a card: use rows divided by hairlines
  * (setting rows, a table).
+ *
+ * The rich parts are all optional (a card with none of them looks as it always did): `lead` before the title, `status`
+ * a colored dot after it, `help` one muted line under it, `toggle` at the right of the title line, `meter` a thin bar
+ * with its words under the body, `action` one link or button at the very bottom. A card with any of them also lifts 1 px
+ * and darkens its edge on hover (not with reduced motion); a card whose `toggle` is a node with `checked={false}` (the
+ * kit's `Switch`) draws its body muted.
  * @param {{ title?: ReactNode, subtitle?: ReactNode, actions?: ReactNode, children?: ReactNode, className?: string,
- *   bodyClassName?: string, as?: 'section' | 'div' | 'article', id?: string, padded?: boolean, flow?: boolean }} props
+ *   bodyClassName?: string, as?: 'section' | 'div' | 'article', id?: string, padded?: boolean, flow?: boolean,
+ *   lead?: CardLead, status?: { tone: Tone | 'accent', label: string }, help?: ReactNode, toggle?: ReactNode,
+ *   meter?: { percent: number, label?: ReactNode }, action?: ReactNode }} props
  *   `flow`: a small card that takes one column of a `CardFlow` and sits beside the others (anything else in a flow takes
- *   the whole row)
+ *   the whole row); `meter.percent`: 0 to 100
  */
 export function Card({
 	title,
@@ -155,22 +214,67 @@ export function Card({
 	id,
 	padded = true,
 	flow = false,
+	lead,
+	status,
+	help,
+	toggle,
+	meter,
+	action,
 }) {
 	const Tag = as;
-	const hasHeader = Boolean(title || actions);
+	const hasHeader = Boolean(title || actions || lead || status || help || toggle);
+	const rich = Boolean(lead || status || help || toggle || meter || action);
+	const off = isValidElement(toggle) && /** @type {{ checked?: unknown }} */ (toggle.props).checked === false;
+	const leading = lead === undefined || lead === null ? null : cardLead(lead);
+	const heading = title ? <h2 className="text-title font-semibold tracking-[-0.01em] text-fg">{title}</h2> : null;
+	const main = (
+		<div className="min-w-0 flex-1">
+			{status ? (
+				<div className="flex min-w-0 items-center gap-2">
+					{heading}
+					{statusDot(status)}
+				</div>
+			) : (
+				heading
+			)}
+			{subtitle ? <p className="mt-0.5 text-help text-muted">{subtitle}</p> : null}
+			{help ? <p className="mt-0.5 text-help text-pretty text-muted">{help}</p> : null}
+		</div>
+	);
+	const content =
+		(children || meter) && (meter || off) ? (
+			<div className={cx(off && 'opacity-60 ss-motion')}>
+				{children}
+				{meter ? (
+					<div className={cx(Boolean(children) && 'mt-4')}>
+						<CardMeter percent={meter.percent} {...(meter.label ? { label: meter.label } : {})} />
+					</div>
+				) : null}
+			</div>
+		) : (
+			children
+		);
+	const foot = action ? (
+		<div className={cx('flex flex-wrap items-center gap-2', Boolean(content) && 'mt-4')}>{action}</div>
+	) : null;
 	return (
 		<Tag
 			id={id}
 			{...(flow ? { 'data-flow': 'card' } : {})}
-			className={cx(CARD.box, className)}
+			className={cx(CARD.box, rich && 'ss-lift hover:border-line-strong', className)}
 			{...(title && typeof title === 'string' && as === 'section' ? { 'aria-label': title } : {})}>
 			{hasHeader ? (
 				<header className={CARD.header}>
-					<div className="min-w-0 flex-1">
-						{title ? <h2 className="text-title font-semibold tracking-[-0.01em] text-fg">{title}</h2> : null}
-						{subtitle ? <p className="mt-0.5 text-help text-muted">{subtitle}</p> : null}
-					</div>
+					{leading ? (
+						<div className="flex min-w-0 flex-1 items-start gap-3">
+							<span className="flex shrink-0 items-center">{leading}</span>
+							{main}
+						</div>
+					) : (
+						main
+					)}
 					{actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+					{toggle ? <div className="flex shrink-0 items-center">{toggle}</div> : null}
 				</header>
 			) : null}
 			<div
@@ -179,8 +283,16 @@ export function Card({
 					!padded && hasHeader && 'pt-2',
 					bodyClassName,
 				)}>
-				{children}
+				{padded ? (
+					<>
+						{content}
+						{foot}
+					</>
+				) : (
+					content
+				)}
 			</div>
+			{!padded && foot ? <div className="px-5 pt-3 pb-5">{foot}</div> : null}
 		</Tag>
 	);
 }

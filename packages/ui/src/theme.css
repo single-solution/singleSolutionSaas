@@ -126,6 +126,7 @@
 	--animate-ss-toast: ss-toast var(--ss-motion-slow) var(--ss-ease) both;
 	--animate-ss-toast-out: ss-toast-out var(--ss-motion) var(--ss-ease-exit) both;
 	--animate-ss-shake: ss-shake var(--ss-motion-slow) var(--ss-ease-move) both;
+	--animate-ss-meter: ss-meter var(--ss-motion-slow) var(--ss-ease) both;
 }
 
 /*
@@ -278,8 +279,20 @@
 	}
 }
 
+/* the bar of a card's meter grows from nothing to its width */
+@keyframes ss-meter {
+	from {
+		width: 0;
+	}
+}
+
 /* reduced motion: the same names, but nothing moves, grows or shrinks (the browser takes the last definition) */
 @media (prefers-reduced-motion: reduce) {
+	@keyframes ss-meter {
+		from {
+			opacity: 0;
+		}
+	}
 	@keyframes ss-enter {
 		from {
 			opacity: 0;
