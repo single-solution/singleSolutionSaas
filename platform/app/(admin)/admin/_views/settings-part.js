@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { loadSettings } from '../../../../src/console/admin/loaders.js';
-import { SETTINGS_PARTS, SettingsView } from '../../../../src/console/admin/views/settings.js';
+import { SETTINGS_PARTS } from '../../../../src/console/admin/paths.js';
+import { SettingsView } from '../../../../src/console/admin/views/settings.js';
 import { adminContext } from '../../_lib/server.js';
 
 export const metadata = { title: 'Settings' };

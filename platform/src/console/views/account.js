@@ -144,9 +144,6 @@ export function MerchantFieldsForm({
 	);
 }
 
-/** The parts of the Account page that have their own address (Details is the page's address itself). */
-export const ACCOUNT_PARTS = ['details', 'sign-in', 'two-step', 'activity'];
-
 /**
  * @param {any} props loader result of `loadAccount` plus the `part` of the address
  */

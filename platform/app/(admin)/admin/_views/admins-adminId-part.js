@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { loadAdmin } from '../../../../src/console/admin/loaders.js';
-import { ADMIN_PARTS, AdminsView } from '../../../../src/console/admin/views/admins.js';
+import { ADMIN_PARTS } from '../../../../src/console/admin/paths.js';
+import { AdminsView } from '../../../../src/console/admin/views/admins.js';
 import { adminContext } from '../../_lib/server.js';
 
 export const metadata = { title: 'Admin' };

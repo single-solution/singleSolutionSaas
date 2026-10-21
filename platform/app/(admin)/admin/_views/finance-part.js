@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { FINANCE_PARTS } from '../../../../src/console/admin/views/finance.js';
+import { FINANCE_PARTS } from '../../../../src/console/admin/paths.js';
 import { FinanceScreen } from './finance.js';
 
 export const metadata = { title: 'Credits and billing' };

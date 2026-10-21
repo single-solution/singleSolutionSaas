@@ -34,13 +34,10 @@ import { LOGO_MAX_BYTES, LOGO_TYPES } from '../../../infra/branding.js';
 import { ADMIN, LOGIN } from '../../../texts/console.js';
 import { apiFetch } from '../../client.js';
 import { Link } from '../../link.js';
-import { adminApi, adminRoutes } from '../paths.js';
+import { SETTINGS_PARTS, adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
-
-/** The parts of the Settings page, in the order of the inner navigation (Branding is the page's own address). */
-export const SETTINGS_PARTS = ['branding', 'support', 'mail', 'security', 'billing'];
 
 /**
  * Save a settings group and report the outcome.

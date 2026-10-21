@@ -131,3 +131,9 @@ export const api = Object.freeze({
 	/** connected products (Owner, Support); `status=active` lists what Add product offers */
 	products: (/** @type {{ status?: string | null }} */ q = {}) => `/v1/admin/products${query(q)}`,
 });
+
+/**
+ * The parts of the Account page that have their own address (Details is the page's address itself). It lives here
+ * and not in the view: a server route cannot read a value of a 'use client' file.
+ */
+export const ACCOUNT_PARTS = ['details', 'sign-in', 'two-step', 'activity'];

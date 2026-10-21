@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { loadMyAccount } from '../../../../src/console/admin/loaders.js';
-import { MY_ACCOUNT_PARTS, MyAccountView } from '../../../../src/console/admin/views/account.js';
+import { MY_ACCOUNT_PARTS } from '../../../../src/console/admin/paths.js';
+import { MyAccountView } from '../../../../src/console/admin/views/account.js';
 import { adminContext } from '../../_lib/server.js';
 
 export const metadata = { title: 'My account' };

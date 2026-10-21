@@ -27,3 +27,30 @@ describe('console files stay browser-safe', () => {
 		expect(bad).toEqual([]);
 	});
 });
+
+/** @param {string} source */
+const isClientFile = (source) => /^(\s*(\/\/[^\n]*\n|\/\*[\s\S]*?\*\/))*\s*['"]use client['"]/.test(source);
+
+describe('server routes read only components from client files', () => {
+	// A server file that imports a plain value (a list, a constant) from a 'use client' file gets a client reference,
+	// not the value, and the page fails with "This could not be loaded" (My account parts, 2026-10-21). Shared values
+	// belong in plain modules such as the paths files.
+	it('imports no plain value from a use client file', async () => {
+		const bad = [];
+		for (const file of await filesOf(path.join(root, 'app'))) {
+			const source = await readFile(file, 'utf8');
+			if (isClientFile(source)) continue;
+			for (const [, names, spec] of source.matchAll(/^import\s*\{([^}]*)\}\s*from\s+['"](\.[^'"]+)['"]/gm)) {
+				const target = path.resolve(path.dirname(file), spec ?? '');
+				const targetSource = await readFile(target, 'utf8').catch(() => '');
+				if (!isClientFile(targetSource)) continue;
+				const values = (names ?? '')
+					.split(',')
+					.map((name) => name.trim().split(/\s+as\s+/)[0])
+					.filter((name) => name && !/^[A-Z][a-z]/.test(name));
+				if (values.length) bad.push(`${path.relative(root, file)}: ${values.join(', ')} from ${spec}`);
+			}
+		}
+		expect(bad).toEqual([]);
+	});
+});

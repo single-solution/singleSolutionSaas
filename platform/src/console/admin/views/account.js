@@ -54,9 +54,6 @@ function NameCard({ admin, onSaved }) {
 	);
 }
 
-/** The parts of My account that have their own address (Profile is the page's address itself). */
-export const MY_ACCOUNT_PARTS = ['profile', 'sign-in', 'two-step', 'activity'];
-
 /**
  * @param {any} props loader result of `loadMyAccount` plus the `part` of the address
  */

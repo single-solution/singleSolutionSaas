@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { loadAccount } from '../../../src/console/loaders.js';
-import { ACCOUNT_PARTS, AccountView } from '../../../src/console/views/account.js';
+import { ACCOUNT_PARTS } from '../../../src/console/paths.js';
+import { AccountView } from '../../../src/console/views/account.js';
 import { merchantContext } from '../_lib/server.js';
 
 export const metadata = { title: 'Account' };

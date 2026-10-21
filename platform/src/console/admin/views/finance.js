@@ -254,9 +254,6 @@ function PickMerchantDialog({ merchants, initial = null, onClose, onPicked }) {
 /** @param {readonly any[]} rows @param {(row: any) => number} amount */
 const sumOf = (rows, amount) => rows.reduce((n, r) => n + (Number(amount(r)) || 0), 0);
 
-/** The sub-pages of the page, in the order of the inner navigation. */
-export const FINANCE_PARTS = /** @type {const} */ (['attention', 'receipts', 'charges']);
-
 /**
  * The page around the three parts: the header (title, the two sums of the period, Add credits), the navigation and the
  * part's toolbar, body and footer.

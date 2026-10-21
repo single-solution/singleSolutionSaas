@@ -140,3 +140,22 @@ export const adminApi = Object.freeze({
  */
 export const merchantFilter = (status) =>
 	status === 'setup_pending' ? { setup: /** @type {const} */ ('pending') } : { status: status ?? null };
+
+// The parts of the pages with an inner navigation, in its order; each part is an address of its own and the first is
+// the page's own address. They live here and not in the views: a server route cannot read a value of a 'use client'
+// file (it gets a client reference, and `.includes` throws).
+
+/** The parts of a product's page (Websites is the product's own address). */
+export const PRODUCT_PARTS = ['websites', 'features', 'connection'];
+
+/** The sub-pages of Credits and billing. */
+export const FINANCE_PARTS = /** @type {const} */ (['attention', 'receipts', 'charges']);
+
+/** The parts of an admin's page (Details is the admin's own address). */
+export const ADMIN_PARTS = ['details', 'activity'];
+
+/** The parts of the Settings page (Branding is the page's own address). */
+export const SETTINGS_PARTS = ['branding', 'support', 'mail', 'security', 'billing'];
+
+/** The parts of My account (Profile is the page's own address). */
+export const MY_ACCOUNT_PARTS = ['profile', 'sign-in', 'two-step', 'activity'];

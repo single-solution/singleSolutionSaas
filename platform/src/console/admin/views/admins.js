@@ -42,13 +42,10 @@ import { apiConfirm, apiFetch, usePagedList, useResource } from '../../client.js
 import { ConfirmChange, confirmationErrors } from '../../views/confirm-change.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { useListPages } from '../../views/paging.js';
-import { adminApi, adminRoutes } from '../paths.js';
+import { ADMIN_PARTS, adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
-
-/** The parts of an admin's page, each its own address (Details is the admin's own address). */
-export const ADMIN_PARTS = ['details', 'activity'];
 
 const ROLE_OPTIONS = Object.freeze([
 	{ value: 'owner', label: ADMIN.roles.owner },

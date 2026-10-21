@@ -48,13 +48,10 @@ import { creditDayBars, formatChartCredits, productPill } from '../../views/bill
 import { openDashboard } from '../../views/common.js';
 import { useListPages } from '../../views/paging.js';
 import { apiFetch } from '../../client.js';
-import { adminApi, adminRoutes } from '../paths.js';
+import { PRODUCT_PARTS, adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
-
-/** The parts of a product's page, each its own address (Websites is the product's own address). */
-export const PRODUCT_PARTS = ['websites', 'features', 'connection'];
 
 /**
  * The pill of a connected product's status.
