@@ -304,8 +304,10 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
   itself, not from the client-only `@ss/ui/dashboard`, because the product's server `app/layout.js` reads its title; `useDashboard()` gives the
   merged words and `namesOf(keys, max?)` (feature names from the manifest) inside the page or a `DashboardProvider`.
 - Every standard tab draws through `Page` (layout contract 2026-10-17): crumbs `Product > Section > sub-page`, the old
-  description behind the (i), the actions in the header, and a section with parts shows them in the `InnerNav`
-  (`SectionsPage` in `dashboard-page.js`, each sub-page its own `#hash`, counts and status dots in the sidebar).
+  description behind the (i), the actions in the header, and a tab with several views lists them as rich rows in a
+  `ListColumn` beside the page (`SectionsPage` in `dashboard-page.js`, each view its own `#hash`, the badge, status dot,
+  `meta` line and lock on its row, the groups as filter chips); a section with parts is one row whose page shows every part
+  stacked under its heading.
   Lists are `DataTable` pages for now (the Texts, Defaults, Changes and Developers docs tables; they move to rows) and a record edit opens in a
   `Drawer`; the loading states are the matching skeletons (`OverviewSkeleton` is built from `StatGridSkeleton` and
   `SettingsCardSkeleton`).

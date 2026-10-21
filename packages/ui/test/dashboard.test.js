@@ -98,13 +98,12 @@ const inDashboard = (node, categories) => (
 );
 
 /**
- * Opens a section of the inner sidebar by its address (a sub-item, when it is one, is the last link to it).
+ * Opens a view of the list beside the page by its address (the id of its row).
  * @param {ParentNode} root
  * @param {string} id
  */
 const openSection = (root, id) => {
-	const links = [...root.querySelectorAll(`nav a[href="#${id}"]`)];
-	click(/** @type {HTMLElement} */ (links.at(-1)));
+	click(/** @type {HTMLElement} */ (root.querySelector(`[role="option"][data-ss-id="${id}"]`)));
 };
 
 /** What the page's (i) says: opens it and gives the page's text. @param {ParentNode} root */
@@ -120,8 +119,8 @@ const aboutOf = (root) => {
 const crumbsOf = (root) =>
 	[...root.querySelectorAll('nav[aria-label="Breadcrumb"] li')].map((li) => li.textContent).filter(Boolean);
 
-/** The links of the inner sidebar. @param {ParentNode} root */
-const navLinks = (root) => [...root.querySelectorAll('nav[aria-label] a[href^="#"]')].map((link) => link.textContent);
+/** The rows of the list beside the page. @param {ParentNode} root */
+const navLinks = (root) => [...root.querySelectorAll('[role="option"]')].map((row) => row.textContent);
 
 /**
  * The props a tab gets for a website.
@@ -603,7 +602,7 @@ describe('standard tabs', () => {
 		expect(merchant.container.textContent).not.toContain('Save');
 	});
 
-	it('Features: the categories are the inner navigation with how many are on, a dot for a broken connection and a lock; one category at a time, each its own address', async () => {
+	it('Features: the categories are the list beside the page with how many are on, a dot for a broken connection and a lock; one category at a time, each its own address', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}`;
 		serve({
@@ -620,7 +619,7 @@ describe('standard tabs', () => {
 		const { container } = render(inDashboard(<FeaturesTab {...tabProps(id)} />, categories));
 		await settle();
 		const link = (/** @type {string} */ name) =>
-			/** @type {HTMLElement} */ (container.querySelector(`nav a[href="#category-${name}"]`));
+			/** @type {HTMLElement} */ (container.querySelector(`[role="option"][data-ss-id="category-${name}"]`));
 		expect(navLinks(container)).toEqual(['Writing1/1', 'ReadingNeeds setup1/1', 'Telling0/1']);
 		// the crumbs end in the open category, whose own numbers are in the header
 		expect(
@@ -642,8 +641,10 @@ describe('standard tabs', () => {
 			inDashboard(<FeaturesTab {...tabProps(id, { who: { kind: 'merchant', id: 'm1', name: 'Sam' } })} />, categories),
 		);
 		await settle();
-		expect(merchant.container.querySelector('nav a[href="#category-telling"]')?.textContent).toContain('Locked');
-		expect(merchant.container.querySelector('nav a[href="#category-writing"]')?.textContent).not.toContain('Locked');
+		expect(merchant.container.querySelector('[role="option"][data-ss-id="category-telling"]')?.textContent).toContain('Locked');
+		expect(merchant.container.querySelector('[role="option"][data-ss-id="category-writing"]')?.textContent).not.toContain(
+			'Locked',
+		);
 		// features in no category are listed under More
 		cleanup();
 		const rest = render(inDashboard(<FeaturesTab {...tabProps(id)} />, [{ title: 'Writing', features: ['notes'] }]));
@@ -689,7 +690,7 @@ describe('standard tabs', () => {
 		expect(container.querySelector('table')).toBeNull();
 	});
 
-	it('Settings: the features that are on, by category, one view at a time with the notice, the extras and the groups as sub-items', async () => {
+	it('Settings: the features that are on, by category, a row each with the notice, the extras and all the groups on its one page', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}`;
 		const GROUPED = {
@@ -762,23 +763,12 @@ describe('standard tabs', () => {
 			),
 		);
 		await settle();
-		// the sidebar lists the features that are on whose needs are on, under their category (Alerts is off, Digest needs it)
-		const nav = /** @type {HTMLElement} */ (container.querySelector('nav[aria-label="Settings"]'));
-		const ALL = [
-			'Notes',
-			'Inbox › Basics',
-			'Inbox › Messages',
-			'Inbox › Limits',
-			'Inbox › Advanced',
-			'Inbox › Rules',
-			'Beside',
-			'Own section',
-		];
+		// the list has a row for each feature that is on and whose needs are on (Alerts is off, Digest needs it), with the
+		// categories as its filter chips
+		const ALL = ['Notes', 'Inbox', 'Beside', 'Own section'];
 		expect(navLinks(container)).toEqual(ALL);
-		expect(nav.textContent).toContain('Writing');
-		expect(nav.textContent).toContain('Reading');
-		expect(nav.textContent).not.toContain('Alerts');
-		expect(nav.textContent).not.toContain('Digest');
+		const chips = [...container.querySelectorAll('button[aria-pressed]')].map((chip) => chip.textContent);
+		expect(chips).toEqual(['All4', 'Writing1', 'Reading2', 'Lists1']);
 		// one view: Notes, with the notice and its extra; Inbox is not on the page yet
 		expect(crumbsOf(container)).toEqual(['Notes', 'Settings', 'Notes']);
 		expect(container.querySelector('h1')?.textContent).toBe('Notes');
@@ -795,22 +785,26 @@ describe('standard tabs', () => {
 		expect(requests.filter((request) => request.method === 'PUT')).toEqual([
 			{ method: 'PUT', path: `${base}/settings/notes.greeting`, body: { value: 'Hey' } },
 		]);
-		// Inbox has three groups and Advanced settings: each is a page in the navigation, named after the feature; its list editor is one too
-		openSection(container, 'inbox.basics');
+		// Inbox has three groups and Advanced settings: they are all on its one page, none behind a tab or another row; its
+		// list editor is one more part of the page under its heading
+		openSection(container, 'inbox');
 		// a view marked `top` is listed beside the feature, not under it
 		expect(navLinks(container)).toEqual(ALL);
-		expect(container.querySelector('[data-field="subject"]')).not.toBeNull();
-		expect(container.querySelector('[data-field="sender"]')).toBeNull();
-		// the crumbs name the feature and the group; its address is its own
-		expect(crumbsOf(container)).toEqual(['Notes', 'Settings', 'Inbox', 'Basics']);
-		expect(container.querySelector('h1')?.textContent).toBe('Basics');
-		expect(window.location.hash).toBe('#inbox.basics');
-		openSection(container, 'inbox.limits');
-		expect(/** @type {HTMLElement} */ (container.querySelector('[data-field="limit"]')).closest('[hidden]')).toBeNull();
-		openSection(container, 'inbox.advanced');
+		for (const name of ['subject', 'sender', 'limit'])
+			expect(/** @type {HTMLElement} */ (container.querySelector(`[data-field="${name}"]`)).closest('[hidden]')).toBeNull();
+		// Advanced is the kit's block at the end of the page, opened by its bar
+		expect(container.querySelector('[data-field="salt"]')).toBeNull();
+		click(/** @type {HTMLElement} */ (container.querySelector('#section-inbox button[aria-expanded="false"]')));
 		expect(container.querySelector('[data-field="salt"]')).not.toBeNull();
-		openSection(container, 'inbox.rules');
+		expect([...container.querySelectorAll('#section-inbox > section > h2')].map((heading) => heading.textContent)).toEqual([
+			'Settings',
+			'Rules',
+		]);
 		expect(container.textContent).toContain('rules list');
+		// the crumbs name the feature; its address is its own, and an old address of one of its groups opens it too
+		expect(crumbsOf(container)).toEqual(['Notes', 'Settings', 'Inbox']);
+		expect(container.querySelector('h1')?.textContent).toBe('Inbox');
+		expect(window.location.hash).toBe('#inbox');
 		openSection(container, 'inbox.beside');
 		expect(container.textContent).toContain('beside inbox');
 		openSection(container, 'own');
@@ -898,7 +892,7 @@ describe('standard tabs', () => {
 		expect(container.textContent).toContain('Try again');
 	});
 
-	it('Texts: a sidebar of screens and widgets with how many were changed, each screen a table, a text edited in a drawer', async () => {
+	it('Texts: a list of screens and widgets with how many were changed, each screen a table, a text edited in a drawer', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}`;
 		serve({
@@ -919,7 +913,7 @@ describe('standard tabs', () => {
 		expect(container.querySelector('h1')?.textContent).toBe('Cart');
 		expect(aboutOf(container)).toContain('2 texts');
 		// the screen with a changed text says how many; only the open screen is drawn
-		expect(container.querySelector('nav a[href="#text-signIn"]')?.textContent).toBe('Sign in1');
+		expect(container.querySelector('[role="option"][data-ss-id="text-signIn"]')?.textContent).toBe('Sign in1');
 		expect(container.querySelector('#section-text-signIn')).toBeNull();
 		const table = /** @type {HTMLElement} */ (container.querySelector('#section-text-cart table'));
 		expect([...table.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
@@ -978,7 +972,7 @@ describe('standard tabs', () => {
 		expect(document.querySelector('[role="dialog"]')).toBeNull();
 	});
 
-	it('Texts: a search across all the screens keeps the sidebar and shows the matches as a table, paged', async () => {
+	it('Texts: a search across all the screens keeps the list and shows the matches as a table, paged', async () => {
 		const id = freshSite();
 		const base = `/v1/dashboard/websites/${id}`;
 		serve({
@@ -996,8 +990,8 @@ describe('standard tabs', () => {
 			/** @type {HTMLInputElement} */ (container.querySelector('input[type="search"][aria-label="Find a text by its words"]'));
 		type(search(), 'welcome');
 		await settle();
-		// the sidebar stays; the crumbs say these are results; the matches are one table that uses all of the body
-		expect(container.querySelector('nav[aria-label="Texts"]')).not.toBeNull();
+		// the list stays; the crumbs say these are results; the matches are one table that uses all of the body
+		expect(container.querySelector('[role="listbox"][aria-label="Texts"]')).not.toBeNull();
 		expect(crumbsOf(container)).toEqual(['Notes', 'Texts', TEXTS.texts.results]);
 		const shown = [...container.querySelectorAll('table')]
 			.filter((table) => table.closest('[hidden]') === null)
@@ -1602,7 +1596,7 @@ describe('ProductDashboard', () => {
 		render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} tabs={{ features: Parts }} />);
 		await settle();
 		const before = window.history.length;
-		click(/** @type {HTMLElement} */ ([...document.querySelectorAll('a[href="#two"]')].at(-1)));
+		click(/** @type {HTMLElement} */ (document.querySelector('[role="option"][data-ss-id="two"]')));
 		await settle();
 		expect(window.location.search).toBe('?websiteId=p1&view=features');
 		expect(window.location.hash).toBe('#two');

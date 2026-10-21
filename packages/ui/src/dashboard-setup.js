@@ -10,7 +10,6 @@
  * @module
  */
 import { useLoad } from './dashboard-api.js';
-import { useDashboard } from './dashboard-parts.js';
 import { settingSectionOf } from './dashboard-settings.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
@@ -82,7 +81,6 @@ export const wantsSettings = (overview, requirements) =>
  * @returns {SetupStep[]}
  */
 export function useSetupSteps({ overview, websiteId, open, settings: given }, requirements) {
-	const { texts } = useDashboard();
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	/** @type {string[]} */
 	const on = overview?.ok ? overview.data.featuresOn : [];
@@ -137,7 +135,7 @@ export function useSetupSteps({ overview, websiteId, open, settings: given }, re
 					: requirement.confirm
 						? entry.source !== 'built-in'
 						: isFilled(value);
-			section ??= settingSectionOf(feature, name, texts.settings.advanced);
+			section ??= settingSectionOf(feature);
 		} else if (requirement.list) {
 			const answer = lists.get(requirement.list);
 			if (!answer?.ok) continue;

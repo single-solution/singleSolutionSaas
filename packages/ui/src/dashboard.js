@@ -5,7 +5,7 @@
  * Developers, plus Defaults and Prices for Owners. The look, the Format and the business facts are not here: they are the
  * Portal's Website settings, shown read-only where a value is used (`ManagedNote`) with a link to the place to change it.
  * Every tab draws a `Page` (layout contract 2026-10-17: the breadcrumbs `Product › Section › sub-page` are its title, the
- * old descriptions sit behind its (i)); a tab with sub-pages uses `SectionsPage` (an inner navigation, each sub-page its
+ * old descriptions sit behind its (i)); a tab with sub-pages uses `SectionsPage` (a list of rich rows beside the page, each view its
  * own `#address`). Admins get the website switcher's merchant names and a small "Viewing as admin" note; everyone gets
  * the docs and Back to Portal; all three sit at the bottom of the sidebar. Saved and errors show as toasts at the bottom
  * right. Setup only: it calls the kit's dashboard API and shows no business data.
@@ -67,7 +67,7 @@ export {
 	useSettingsEditor,
 	useTextsEditor,
 } from './dashboard-settings.js';
-export { FrameContext, SectionsPage, navGroupsOf, pageState, useCrumbs } from './dashboard-page.js';
+export { FrameContext, SectionsPage, pageState, useCrumbs } from './dashboard-page.js';
 export { WEBSITE_SECTION_NAMES, websiteSettingsUrl } from './portal-links.js';
 export { ConnectionsTab, DefaultsTab, DevelopersTab, FeaturesTab, OverviewTab, PricesTab, SettingsTab, TextsTab };
 

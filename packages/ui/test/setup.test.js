@@ -45,14 +45,10 @@ afterEach(() => {
 });
 
 describe('settingSectionOf', () => {
-	it('names the feature’s view of the setting’s group when the feature shows its groups as views, else the feature', () => {
+	it('names the feature, whose one page has all its settings, whatever group the setting is in', () => {
 		const feature = (/** @type {keyof typeof SCHEMAS} */ key) => ({ key, name: key, schema: SCHEMAS[key], values: {} });
-		expect(settingSectionOf(feature('catalog'), 'productUrl', 'Advanced')).toBe('catalog.page-addresses');
-		expect(settingSectionOf(feature('catalog'), 'unit', 'Advanced')).toBe('catalog.units-and-uploads');
-		expect(settingSectionOf(feature('catalog'), 'cache', 'Advanced')).toBe('catalog.advanced');
-		// one group: the feature itself (its first view)
-		expect(settingSectionOf(feature('checkout'), 'guests', 'Advanced')).toBe('checkout');
-		expect(settingSectionOf(feature('catalog'), 'missing', 'Advanced')).toBe('catalog');
+		expect(settingSectionOf(feature('catalog'))).toBe('catalog');
+		expect(settingSectionOf(feature('checkout'))).toBe('checkout');
 	});
 });
 
@@ -202,7 +198,7 @@ describe('useSetupSteps', () => {
 		await press('See features');
 		await press('Choose');
 		expect(open.mock.calls).toEqual([
-			['settings', 'catalog.page-addresses'],
+			['settings', 'catalog'],
 			['settings', 'shipping.zones'],
 			['features'],
 			['settings', 'checkout'],

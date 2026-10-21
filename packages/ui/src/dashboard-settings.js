@@ -1,10 +1,11 @@
 'use client';
 /**
- * The inner-sidebar views of the settings tabs (owner 2026-10-16: no long scrolls, one view per screen): the section
- * lists of Settings (a view per feature, grouped by category, with its groups as sub-items when it has many), Texts (a
- * view per screen or widget, each a table whose text opens in a drawer) and Defaults (both). Each comes as an editor
- * hook (the unsaved edits and the saves) and a function that builds the sections of a {@link SectionsPage} from it; a
- * view says what it is for in the (i) of its page, not in a heading of its own (layout contract R2).
+ * The views of the settings tabs, a list of rich rows beside the page (owner 2026-10-21): the section lists of Settings
+ * (a row per feature, grouped by category; all of a feature's settings are on its one page, its groups as cards, then
+ * Advanced), Texts (a row per screen or widget, each a table whose text opens in a drawer) and Defaults (both). Each
+ * comes as an editor hook (the unsaved edits and the saves) and a function that builds the sections of a
+ * {@link SectionsPage} from it; a view says what it is for in the (i) of its page, not in a heading of its own
+ * (layout contract R2).
  * @module
  */
 import { useState } from 'react';
@@ -16,7 +17,6 @@ import { Input } from './fields.js';
 import { Drawer } from './overlay.js';
 import { SchemaForm } from './SchemaForm.js';
 import { call, fill } from './dashboard-api.js';
-import { GROUPS_AS_TABS_FROM, fieldsOf, shapeOf } from './schema.js';
 import { humanize } from './format.js';
 import { Outcome, hasSettings } from './dashboard-parts.js';
 
@@ -38,18 +38,11 @@ import { Outcome, hasSettings } from './dashboard-parts.js';
 const slug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
 /**
- * The sidebar section of Settings that holds one setting, for a link that opens it (`?view=settings#catalog.page-addresses`):
- * the feature's view of the setting's group when the feature shows its groups as views, else the feature (its first view).
+ * The row of Settings that holds one setting, for a link that opens it (`?view=settings#catalog`): the feature, whose
+ * one page has all its settings (an old address of one of its groups, `#catalog.page-addresses`, opens the feature too).
  * @param {FeatureSettings} feature
- * @param {string} name the setting
- * @param {string} advancedTitle the name of the Advanced view
  */
-export const settingSectionOf = (feature, name, advancedTitle) => {
-	const shape = shapeOf(feature.schema);
-	const field = fieldsOf(feature.schema).find((entry) => entry.name === name);
-	if (!field || shape.groups.length + (shape.advanced ? 1 : 0) < GROUPS_AS_TABS_FROM) return feature.key;
-	return `${feature.key}.${slug(field.advanced ? advancedTitle : field.group)}`;
-};
+export const settingSectionOf = (feature) => feature.key;
 
 /* ------------------------------------------------------------------------------------------------- feature settings */
 
@@ -181,9 +174,10 @@ const hasItems = (extra) =>
 	typeof extra === 'object' && extra !== null && !('$$typeof' in extra) && 'items' in extra && Array.isArray(extra.items);
 
 /**
- * The sidebar sections of the features' settings: one item per feature (listed under its category), with sub-items
- * when the feature has many groups of settings or lists of its own. A website's page hides the features that are off
- * or whose needs are off (`hideOff`); the Owner's defaults show them all.
+ * The sections of the features' settings: one row per feature (listed under its category chip). All the groups of a
+ * feature's settings are on its one page (a card each, then Advanced); a feature with lists of its own has them as
+ * parts of the same page, stacked under their headings. A website's page hides the features that are off or whose
+ * needs are off (`hideOff`); the Owner's defaults show them all.
  * @param {{ features: FeatureSettings[], editor: SettingsEditor, savedSource: string, dash: Dashboard,
  *   hideOff?: boolean, notice?: SettingsNotice, extras?: Record<string, FeatureExtra>, portalLink?: PortalLink }} options
  *   `portalLink`: the address of a section of the website's Website settings in the Portal; with it a setting that
@@ -203,11 +197,7 @@ export function featureSections({ features, editor, savedSource, dash, hideOff =
 		category.keys.flatMap((key) => {
 			const feature = /** @type {FeatureSettings} */ (byKey.get(key));
 			const extra = extras[key];
-			const shape = shapeOf(feature.schema);
-			const names = [...shape.groups, ...(shape.advanced ? [S.advanced] : [])];
-			const split = names.length >= GROUPS_AS_TABS_FROM;
-			// the notice sits above the first view of a feature that has several
-			const form = (/** @type {string | undefined} */ group, /** @type {boolean} */ first = true) => (
+			const form = (
 				<FeatureForm
 					feature={feature}
 					features={features}
@@ -215,42 +205,25 @@ export function featureSections({ features, editor, savedSource, dash, hideOff =
 					savedSource={savedSource}
 					texts={texts}
 					{...(portalLink ? { portalLink } : {})}
-					{...(notice && first ? { notice } : {})}
-					{...(group !== undefined ? { group } : {})}
+					{...(notice ? { notice } : {})}
 				/>
 			);
 			const description = dash.describe(key);
 			/** @type {Section[]} */
 			const views = [];
-			if (hasSettings(feature)) {
-				if (split)
-					names.forEach((name, index) => {
-						const advanced = shape.advanced && index === names.length - 1;
-						views.push({
-							id: `${key}.${slug(name)}`,
-							label: name,
-							info: description,
-							content: (
-								<>
-									{form(advanced ? 'Advanced' : name, index === 0)}
-									{index === names.length - 1 && extra !== undefined && !hasItems(extra) ? extra : null}
-								</>
-							),
-						});
-					});
-				else
-					views.push({
-						id: `${key}.${slug(S.settingsView)}`,
-						label: S.settingsView,
-						info: description,
-						content: (
-							<>
-								{form(undefined)}
-								{extra !== undefined && !hasItems(extra) ? extra : null}
-							</>
-						),
-					});
-			} else if (extra !== undefined && !hasItems(extra))
+			if (hasSettings(feature))
+				views.push({
+					id: `${key}.${slug(S.settingsView)}`,
+					label: S.settingsView,
+					info: description,
+					content: (
+						<>
+							{form}
+							{extra !== undefined && !hasItems(extra) ? extra : null}
+						</>
+					),
+				});
+			else if (extra !== undefined && !hasItems(extra))
 				views.push({ id: `${key}.${slug(S.settingsView)}`, label: S.settingsView, info: description, content: extra });
 			/** @type {Section[]} */
 			const beside = [];
