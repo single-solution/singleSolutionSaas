@@ -17,7 +17,7 @@ import manifest from '../manifest.json' with { type: 'json' };
 import { TABS } from '../app/dashboard/tabs.js';
 import { TemplatesSection } from '../app/dashboard/templates.js';
 import { TEXTS } from '../app/dashboard/texts.js';
-import { drawerButton, drawerOf, openRow, rowMenu, rowNames } from './dashboard-table.js';
+import { drawerButton, drawerOf, factsOf, openMenuOf, openRow, rowMenu, rowNames, rowOf, rowsOf } from './dashboard-rows.js';
 
 const WEBSITE = 'web_1';
 const BASE = `/v1/dashboard/websites/${WEBSITE}`;
@@ -91,14 +91,14 @@ const TEMPLATES = {
 
 /** @type {Array<{ path: string, method: string, body: unknown }>} */
 let calls = [];
-/** @param {{ items: object[], off: object[], products: object[], unavailable: string[] }} [catalog] */
-const serve = (catalog = CATALOG) => {
+/** @param {{ items: object[], off: object[], products: object[], unavailable: string[] }} [catalog] @param {{ items: object[] }} [templates] */
+const serve = (catalog = CATALOG, templates = TEMPLATES) => {
 	calls = [];
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) => {
 			calls.push({ path, method: init.method ?? 'GET', body: init.body ? JSON.parse(String(init.body)) : undefined });
-			const body = path === `${BASE}/messages` ? catalog : path === `${BASE}/templates` ? TEMPLATES : {};
+			const body = path === `${BASE}/messages` ? catalog : path === `${BASE}/templates` ? templates : {};
 			return new Response(init.method === 'DELETE' ? null : JSON.stringify(body), {
 				status: init.method === 'DELETE' ? 204 : 200,
 				headers: { 'content-type': 'application/json' },
@@ -116,20 +116,28 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-/** @param {HTMLElement} row the texts of a table row's cells (the row menu's cell left out) */
-const cellsOf = (row) => [...row.querySelectorAll('th, td')].slice(0, -1).map((cell) => cell.textContent ?? '');
-
 /** The writes the page sent. */
 const writes = () => calls.filter((call) => call.method !== 'GET');
 
 describe('Settings → Templates: the products’ messages (parity P1)', () => {
-	it('shows a table skeleton while the templates load', async () => {
+	it('shows skeleton rows while the templates load', async () => {
 		serve();
 		const { container } = render(<TemplatesSection websiteId={WEBSITE} />);
-		expect(container.querySelector('[role="status"] table')).not.toBeNull();
+		expect(container.querySelector('[role="status"][aria-busy]')).not.toBeNull();
 		await settle();
-		expect(container.querySelector('[role="status"] table')).toBeNull();
-		expect(container.querySelector('table')).not.toBeNull();
+		expect(container.querySelector('[role="status"][aria-busy]')).toBeNull();
+		expect(rowsOf(container)).toHaveLength(5);
+	});
+
+	it('an empty list is an empty state with the one Add action, which opens a blank template', async () => {
+		serve({ items: [], off: [], products: [], unavailable: [] }, { items: [] });
+		const { container } = render(<TemplatesSection websiteId={WEBSITE} />);
+		await settle();
+		expect(rowsOf(container)).toHaveLength(0);
+		expect(container.textContent).toContain(T.none);
+		expect(container.querySelectorAll('button')).toHaveLength(1);
+		await click(byText(container, T.add, 'button'));
+		expect(byLabel(drawerOf(), T.key).value).toBe('');
 	});
 
 	it('lists each message by channel with its state, then the other templates', async () => {
@@ -143,30 +151,22 @@ describe('Settings → Templates: the products’ messages (parity P1)', () => {
 			'New chat message',
 			'welcome',
 		]);
-		const rows = [...container.querySelectorAll('tbody tr')].map((row) => cellsOf(/** @type {HTMLElement} */ (row)));
-		// name, channel, product (by the name the directory gives), state, language, words, flags
-		expect(rows[0]).toEqual([
-			'Password reset link',
-			'Email',
-			'Accounts',
-			T.states.default,
-			T.default,
-			'accounts.password_reset · Reset your password for {business}',
-			`${T.required_badge}${T.urgent_badge}${T.sensitive_badge}`,
-		]);
-		expect(rows[1]).toEqual([
-			'New chat message',
-			'Email',
-			'Chat',
-			T.states.edited,
-			T.default,
-			'chat.staff_new_message · Chat: {visitor}',
-			T.required_badge,
-		]);
-		expect(rows[2]?.[3]).toBe(T.states.off);
-		expect(rows[3]?.[3]).toBe(T.states.not_set_up);
-		expect(rows[3]?.[5]).toContain(T.notSetUpHelp);
-		expect(rows[4]).toEqual(['welcome', 'SMS', T.own, '', T.default, 'Welcome!', '']);
+		const rows = rowsOf(container).map(factsOf);
+		// the line of facts: channel, product (by the name the directory gives), flags, then the key and the words
+		expect(rows[0]).toEqual({
+			meta: `Email · Accounts · ${T.required_badge} · ${T.urgent_badge} · ${T.sensitive_badge} · accounts.password_reset · Reset your password for {business}`,
+			value: T.default,
+			status: T.states.default,
+		});
+		expect(rows[1]).toEqual({
+			meta: `Email · Chat · ${T.required_badge} · chat.staff_new_message · Chat: {visitor}`,
+			value: T.default,
+			status: T.states.edited,
+		});
+		expect(rows[2]?.status).toBe(T.states.off);
+		expect(rows[3]?.status).toBe(T.states.not_set_up);
+		expect(rows[3]?.meta).toContain(T.notSetUpHelp);
+		expect(rows[4]).toEqual({ meta: `SMS · ${T.own} · Welcome!`, value: T.default, status: '' });
 		expect(container.textContent).toContain(T.unavailable.replace('{products}', 'Bookings, Ecommerce'));
 	});
 
@@ -218,15 +218,11 @@ describe('Settings → Templates: the products’ messages (parity P1)', () => {
 		const { container } = render(<TemplatesSection websiteId={WEBSITE} />);
 		await settle();
 		/** The labels of the open menu of the row at `at`, which stays open. @param {number} at */
-		const menuAt = async (at) => {
-			const row = /** @type {HTMLElement} */ ([...container.querySelectorAll('tbody tr')][at]);
-			await act(async () => click(/** @type {HTMLElement} */ (row.querySelector('button[aria-haspopup]'))));
-			return /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('[role="menuitem"]')]);
-		};
+		const menuAt = async (at) => openMenuOf(/** @type {HTMLElement} */ (rowsOf(container)[at]));
 		const labels = (/** @type {HTMLButtonElement[]} */ items) => items.map((item) => item.textContent);
 		// Accounts' reset link can neither be switched off nor has an edited version: only Edit
 		expect(labels(await menuAt(0))).toEqual([T.edit]);
-		await act(async () => click(/** @type {HTMLElement} */ (container.querySelector('tbody tr button[aria-haspopup]'))));
+		await act(async () => click(/** @type {HTMLElement} */ (container.querySelector('[data-ss-row] button[aria-haspopup]'))));
 		// an edited message: Reset to default and Switch off
 		const edited = await menuAt(1);
 		expect(labels(edited)).toEqual([T.edit, T.reset, T.switchOff]);
@@ -245,7 +241,7 @@ describe('Settings → Templates: the products’ messages (parity P1)', () => {
 		await settle();
 		/** @param {number} at */
 		const menuAt = async (at) => {
-			const row = /** @type {HTMLElement} */ ([...container.querySelectorAll('tbody tr')][at]);
+			const row = /** @type {HTMLElement} */ (rowsOf(container)[at]);
 			await act(async () => click(/** @type {HTMLElement} */ (row.querySelector('button[aria-haspopup]'))));
 			const labels = [...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
 			await act(async () => click(/** @type {HTMLElement} */ (row.querySelector('button[aria-haspopup]'))));
@@ -305,7 +301,7 @@ describe('Settings → Templates: the products’ messages (parity P1)', () => {
 		expect(writes().map((call) => [call.method, call.path])).toEqual([['DELETE', `${BASE}/templates/welcome/sms/default`]]);
 	});
 
-	it('the search and the Channel and Product filters narrow the table', async () => {
+	it('the search and the Channel and Product filters narrow the rows', async () => {
 		serve();
 		const { container } = render(<TemplatesSection websiteId={WEBSITE} />);
 		await settle();
@@ -409,6 +405,37 @@ describe('Overview (PLAN 0.6 "Overviews talk")', () => {
 	/** @param {HTMLElement} container the titles of the "Needs you" items */
 	const needs = (container) =>
 		[...container.querySelectorAll('section[aria-label="Needs you"] li p:first-child')].map((p) => p.textContent);
+
+	it('Developers lists the template keys as rows with their channels', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (/** @type {string} */ path) => {
+				const body = path.endsWith('/templates')
+					? TEMPLATES
+					: path.endsWith('/features')
+						? { features: [] }
+						: path.endsWith('/connections')
+							? { connections: [] }
+							: {};
+				return new Response(JSON.stringify(body), { status: 200 });
+			}),
+		);
+		const { container } = render(
+			<DashboardProvider manifest={manifest} texts={TEXTS}>
+				<TABS.developers {...props()} />
+			</DashboardProvider>,
+		);
+		await settle();
+		// the view is picked in the list beside the page
+		await act(async () => click(rowOf(container, TEXTS.developers.keys)));
+		await settle();
+		const keys = rowsOf(container).filter((row) => row.textContent?.includes(TEXTS.developers.keyColumns.channels));
+		expect(keys.map((row) => factsOf(row).meta)).toEqual([
+			`${TEXTS.developers.keyColumns.channels}: Email`,
+			`${TEXTS.developers.keyColumns.channels}: SMS`,
+		]);
+		expect(keys.map((row) => row.querySelector('span.truncate')?.textContent)).toEqual(['chat.staff_new_message', 'welcome']);
+	});
 
 	it('counts the templates; with Outgoing webhooks on and no address, asks for one and opens its section of Settings', async () => {
 		serveOverview({ featuresOn: ['email', 'webhooks'] });

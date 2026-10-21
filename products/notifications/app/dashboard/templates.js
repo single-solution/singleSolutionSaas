@@ -5,27 +5,29 @@
  * buttons that take a value (PLAN 0.8.10 N1). Every message the products send is listed too, with its state (parity
  * P1): the product's default words, the merchant's edited version, switched off, or (WhatsApp) not set up; the
  * merchant edits it, resets it to the default or switches it off on a channel (Accounts' messages are always sent).
+ * They are rich rows (icon, name, state dot, a line of facts, the language) with a menu; a row opens in a drawer, whose
+ * many fields (words, flags, WhatsApp buttons, a live preview) do not fit in the list; an empty list is an empty state
+ * with the one Add action.
  * @module
  */
 import { useId, useState } from 'react';
 import {
-	Badge,
+	ActionMenu,
 	Button,
 	Callout,
 	Card,
 	Checkbox,
 	ConfirmDialog,
-	DataTable,
-	DataTableSkeleton,
 	Drawer,
 	EmptyState,
 	EntryGroup,
 	FieldGrid,
 	Form,
 	Input,
+	Row,
+	RowListSkeleton,
 	Section,
 	Select,
-	StatusPill,
 	TextArea,
 	Toolbar,
 	describeProblem,
@@ -179,8 +181,21 @@ function TemplatePreview({ template, longValues }) {
  * @typedef {Template & { isNew: boolean, fixed: boolean, name?: string, values?: string[], longValues?: string[] }} Draft
  */
 
-/** The status pill of each state of a product's message. */
-const STATE_PILLS = Object.freeze(/** @type {const} */ ({ default: 'active', edited: 'info', off: 'off', not_set_up: 'setup' }));
+/** The state dot of each state of a product's message: sent with the default words, edited, switched off, not set up. */
+const STATE_TONES = Object.freeze(
+	/** @type {const} */ ({ default: 'success', edited: 'accent', off: 'neutral', not_set_up: 'warning' }),
+);
+
+/** The icon of each channel's row. */
+const CHANNEL_ICONS = Object.freeze(
+	/** @type {Record<string, import('@ss/ui').IconName>} */ ({
+		email: 'mail',
+		sms: 'message',
+		whatsapp: 'message',
+		push: 'bell',
+		staff_push: 'bell',
+	}),
+);
 
 /** The filter value of the merchant's own templates (a product's id is the others). */
 const OWN = '_own';
@@ -346,65 +361,43 @@ export function TemplatesSection({ websiteId }) {
 				];
 		return [edit, ...more];
 	};
-	/** @type {Array<{ key: string, header: string, low?: boolean, wrap?: boolean, render: (row: import('../../core/templates.js').TemplateRow) => import('react').ReactNode }>} */
-	const columns = [
-		{ key: 'name', header: T.columns.name, render: (row) => (row.message ? row.message.name : row.key) },
-		{
-			key: 'channel',
-			header: T.columns.channel,
-			render: (row) => TEXTS.settings.channels[/** @type {typeof CHANNELS[number]} */ (row.channel)],
-		},
-		{
-			key: 'product',
-			header: T.columns.product,
-			low: true,
-			render: (row) => (row.message ? productName(row.message.productId) : T.own),
-		},
-		{
-			key: 'state',
-			header: T.columns.state,
-			render: (row) =>
-				row.message ? (
-					<StatusPill status={STATE_PILLS[/** @type {keyof typeof STATE_PILLS} */ (row.state)]}>
-						{T.states[/** @type {keyof typeof T.states} */ (row.state)]}
-					</StatusPill>
-				) : null,
-		},
-		{
-			key: 'language',
-			header: T.columns.language,
-			low: true,
-			render: (row) => (row.language === 'default' ? T.default : row.language),
-		},
-		{
-			key: 'words',
-			header: T.columns.words,
-			low: true,
-			render: (row) => {
-				const words = wordsOf(row);
-				const preview = words ? words.subject || words.text : T.notSetUpHelp;
-				return <span title={words?.text ?? ''}>{row.message ? `${row.key} · ${preview}` : preview}</span>;
-			},
-		},
-		{
-			key: 'flags',
-			header: T.columns.flags,
-			low: true,
-			wrap: true,
-			render: (row) => {
-				const words = wordsOf(row);
-				return (
-					<span className="flex flex-wrap gap-1">
-						{words?.required ? <Badge>{T.required_badge}</Badge> : null}
-						{words?.urgent ? <Badge>{T.urgent_badge}</Badge> : null}
-						{words?.sensitive ? <Badge>{T.sensitive_badge}</Badge> : null}
-						{words?.providerTemplate ? <Badge>{fill(T.atMeta, { name: words.providerTemplate })}</Badge> : null}
-						{words?.buttons?.length ? <Badge>{fill(T.buttonsCount, { count: words.buttons.length })}</Badge> : null}
-					</span>
-				);
-			},
-		},
-	];
+	/**
+	 * A message or template as a row: the channel's icon, its name, a dot with the state of a product's message, one line
+	 * of facts (channel, product, flags, key and words; the help of a message not set up in place of them) and the language.
+	 * @param {import('../../core/templates.js').TemplateRow} row
+	 */
+	const rowFacts = (row) => {
+		const words = wordsOf(row);
+		const channelName = TEXTS.settings.channels[/** @type {typeof CHANNELS[number]} */ (row.channel)];
+		const preview = words ? words.subject || words.text : '';
+		return {
+			lead: { icon: CHANNEL_ICONS[row.channel] ?? 'mail', tone: /** @type {const} */ ('primary') },
+			title: row.message ? row.message.name : row.key,
+			...(row.message
+				? {
+						status: {
+							tone: STATE_TONES[/** @type {keyof typeof STATE_TONES} */ (row.state)],
+							label: T.states[/** @type {keyof typeof T.states} */ (row.state)],
+						},
+					}
+				: {}),
+			...(words
+				? {
+						meta: [
+							channelName,
+							row.message ? productName(row.message.productId) : T.own,
+							...(words.required ? [T.required_badge] : []),
+							...(words.urgent ? [T.urgent_badge] : []),
+							...(words.sensitive ? [T.sensitive_badge] : []),
+							...(words.providerTemplate ? [fill(T.atMeta, { name: words.providerTemplate })] : []),
+							...(words.buttons?.length ? [fill(T.buttonsCount, { count: words.buttons.length })] : []),
+							row.message ? `${row.key} · ${preview}` : preview,
+						],
+					}
+				: { warning: { tone: /** @type {const} */ ('warning'), text: `${channelName} · ${T.notSetUpHelp}` } }),
+			value: row.language === 'default' ? T.default : row.language,
+		};
+	};
 	const term = search.trim().toLowerCase();
 	const shownRows = rows.filter(
 		(row) =>
@@ -418,18 +411,32 @@ export function TemplatesSection({ websiteId }) {
 			title={TEXTS.settings.templatesTitle}
 			description={TEXTS.settings.templatesHelp}
 			actions={
-				<Button size="sm" onClick={() => open({ ...EMPTY, isNew: true, fixed: false })}>
-					{T.add}
-				</Button>
+				answer?.ok && rows.length === 0 ? null : (
+					<Button size="sm" onClick={() => open({ ...EMPTY, isNew: true, fixed: false })}>
+						{T.add}
+					</Button>
+				)
 			}>
 			{!answer ? (
-				<DataTableSkeleton columns={columns.length} rows={4} menu label={TEXTS.loading} />
+				<Card padded={false} bodyClassName="p-2">
+					<RowListSkeleton rows={4} label={TEXTS.loading} />
+				</Card>
 			) : !answer.ok ? (
 				<Callout tone="info">
 					{answer.problem?.type?.endsWith('database_not_connected') ? T.needsDatabase : describeProblem(answer.problem)}
 				</Callout>
 			) : rows.length === 0 ? (
-				<EmptyState compact icon="mail" kind="settings" title={T.none} />
+				<EmptyState
+					compact
+					icon="mail"
+					kind="settings"
+					title={T.none}
+					action={
+						<Button size="sm" onClick={() => open({ ...EMPTY, isNew: true, fixed: false })}>
+							{T.add}
+						</Button>
+					}
+				/>
 			) : (
 				<Card padded={false} className="overflow-hidden">
 					<Toolbar
@@ -461,17 +468,25 @@ export function TemplatesSection({ websiteId }) {
 							},
 						]}
 					/>
-					<DataTable
-						caption={TEXTS.settings.templatesTitle}
-						className="max-h-[36rem]"
-						columns={columns}
-						rows={shownRows}
-						rowKey={(row) => `${row.key}|${row.channel}|${row.language}`}
-						rowLabel={(row) => (row.message ? row.message.name : row.key)}
-						onRowClick={editRow}
-						rowMenu={menuOf}
-						empty={T.noMatch}
-					/>
+					<div className="ss-scroll max-h-[36rem] overflow-y-auto p-2">
+						{shownRows.length === 0 ? (
+							<EmptyState compact title={T.noMatch} />
+						) : (
+							shownRows.map((row) => {
+								const look = rowFacts(row);
+								return (
+									<Row
+										key={`${row.key}|${row.channel}|${row.language}`}
+										{...look}
+										onSelect={() => editRow(row)}
+										trailing={
+											<ActionMenu floating label={fill(TEXTS.rowActions, { name: look.title })} items={menuOf(row)} />
+										}
+									/>
+								);
+							})
+						)}
+					</div>
 				</Card>
 			)}
 			{unavailable.length > 0 ? (

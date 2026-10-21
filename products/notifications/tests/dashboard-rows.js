@@ -1,5 +1,6 @@
 /**
- * Tables and drawers of the dashboard as a test reads them: a table's rows by name, a row's menu and the open drawer.
+ * Rows and drawers of the dashboard as a test reads them: a list's rows by name, a row's facts and menu, and the open
+ * drawer.
  * @module
  */
 /* global document */
@@ -10,22 +11,40 @@ import { click } from '@ss/ui/testing';
 export const drawerOf = () => /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
 
 /**
- * The names of a table's rows (its first cell).
+ * The rows of a list, in order.
  * @param {HTMLElement} root
  */
-export const rowNames = (root) =>
-	[...root.querySelectorAll('tbody tr')].map((row) => row.querySelector('th, td')?.textContent ?? '');
+export const rowsOf = (root) => /** @type {HTMLElement[]} */ ([...root.querySelectorAll('[data-ss-row]')]);
+
+/** @param {Element} row the name of a row (its title) */
+const titleOf = (row) => row.querySelector('span.truncate')?.textContent ?? '';
 
 /**
- * A table's row by its name.
+ * The names of a list's rows (their titles).
+ * @param {HTMLElement} root
+ */
+export const rowNames = (root) => rowsOf(root).map(titleOf);
+
+/**
+ * A list's row by its name.
  * @param {HTMLElement} root
  * @param {string} name
  */
 export const rowOf = (root, name) => {
-	const row = [...root.querySelectorAll('tbody tr')].find((one) => one.querySelector('th, td')?.textContent === name);
+	const row = rowsOf(root).find((one) => titleOf(one) === name);
 	if (!row) throw new Error(`no row “${name}”`);
-	return /** @type {HTMLElement} */ (row);
+	return row;
 };
+
+/**
+ * What a row says: its line of facts (or its warning), its value, and the state dot's words (empty without one).
+ * @param {HTMLElement} row
+ */
+export const factsOf = (row) => ({
+	meta: row.querySelector('p')?.textContent ?? '',
+	value: row.querySelector('.tabular-nums')?.textContent ?? '',
+	status: row.querySelector('.sr-only')?.textContent ?? '',
+});
 
 /**
  * Open a row's record in the drawer, as a click on the row does.
@@ -33,17 +52,16 @@ export const rowOf = (root, name) => {
  * @param {string} name
  */
 export const openRow = async (root, name) => {
-	await act(async () => click(/** @type {HTMLElement} */ (rowOf(root, name).querySelector('th, td'))));
+	await act(async () => click(rowOf(root, name)));
 	return drawerOf();
 };
 
 /**
- * The items of a row's menu, open (the button is the row's last one with a pop-up).
- * @param {HTMLElement} root
- * @param {string} name the row
+ * The items of a row's menu, open (the button is the row's one with a pop-up).
+ * @param {HTMLElement} row
  */
-export const openRowMenu = async (root, name) => {
-	await act(async () => click(/** @type {HTMLElement} */ (rowOf(root, name).querySelector('button[aria-haspopup]'))));
+export const openMenuOf = async (row) => {
+	await act(async () => click(/** @type {HTMLElement} */ (row.querySelector('button[aria-haspopup]'))));
 	return /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('[role="menuitem"]')]);
 };
 
@@ -54,7 +72,7 @@ export const openRowMenu = async (root, name) => {
  * @param {string} item
  */
 export const rowMenu = async (root, name, item) => {
-	const entry = (await openRowMenu(root, name)).find((one) => one.textContent === item);
+	const entry = (await openMenuOf(rowOf(root, name))).find((one) => one.textContent === item);
 	if (!entry) throw new Error(`no menu item “${item}”`);
 	await act(async () => click(entry));
 };

@@ -8,7 +8,7 @@
  * email, SMS and WhatsApp.
  * @module
  */
-import { Badge, Button, Card, CodeBlock, DataTable, Section, Stat } from '@ss/ui';
+import { Button, Card, CodeBlock, EmptyState, Row, RowListSkeleton, Section, Stat } from '@ss/ui';
 import { DevelopersTab, OverviewTab, SettingsTab, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
@@ -169,33 +169,26 @@ function NotificationsDevelopers(props) {
 					'keys',
 					D.keys,
 					D.keysHelp,
-					<Card padded={false} className="overflow-hidden">
-						<DataTable
-							caption={D.keys}
-							loading={!templates.answer}
-							skeletonRows={3}
-							columns={[
-								{ key: 'key', header: D.keyColumns.key, render: (row) => <code>{row.key}</code> },
-								{
-									key: 'channels',
-									header: D.keyColumns.channels,
-									wrap: true,
-									render: (row) => (
-										<span className="flex flex-wrap gap-1">
-											{row.channels.map((channel) => (
-												<Badge key={channel} tone="info">
-													{TEXTS.settings.channels[/** @type {keyof typeof TEXTS.settings.channels} */ (channel)]}
-												</Badge>
-											))}
-										</span>
-									),
-								},
-							]}
-							rows={[...keys].map(([key, channels]) => ({ key, channels }))}
-							rowKey={(row) => row.key}
-							rowLabel={(row) => row.key}
-							empty={D.noKeys}
-						/>
+					<Card padded={false} bodyClassName="p-2">
+						{!templates.answer ? (
+							<RowListSkeleton rows={3} label={TEXTS.loading} />
+						) : keys.size === 0 ? (
+							<EmptyState compact icon="key" title={D.noKeys} />
+						) : (
+							[...keys].map(([key, channels]) => (
+								<Row
+									key={key}
+									lead={{ icon: 'key', tone: 'primary' }}
+									title={key}
+									meta={`${D.keyColumns.channels}: ${channels
+										.map(
+											(channel) =>
+												TEXTS.settings.channels[/** @type {keyof typeof TEXTS.settings.channels} */ (channel)],
+										)
+										.join(', ')}`}
+								/>
+							))
+						)}
 					</Card>,
 					'key',
 				),
