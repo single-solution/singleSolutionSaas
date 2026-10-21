@@ -93,7 +93,7 @@ export const TEXTS = dashboardTexts({
 			required_badge: 'Required',
 			urgent_badge: 'Urgent',
 			sensitive_badge: 'Sensitive',
-			needsDatabase: 'Templates live in your database: connect it in Connections first.',
+			needsDatabase: 'Templates live in your database: connect it under Developers first.',
 		},
 		webhooks: {
 			title: 'Webhook URLs',
@@ -222,6 +222,6 @@ export const TEXTS = dashboardTexts({
 		webhookHelp: 'Check the SS-Signature header of every event before trusting it.',
 		replies: 'Reply addresses',
 		repliesHelp:
-			"Point your provider's incoming-message webhook here for unsubscribe keywords. For any other gateway, add ?token= and its reply token from Connections.",
+			"Point your provider's incoming-message webhook here for unsubscribe keywords. For any other gateway, add ?token= and its reply token from Developers.",
 	},
 });

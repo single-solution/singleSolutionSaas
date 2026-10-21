@@ -39,7 +39,7 @@ export const TEXTS = dashboardTexts({
 			delete: 'Delete',
 			none: 'No custom fields yet.',
 			required_badge: 'Required',
-			needsDatabase: 'Custom fields live in your database: connect it in Connections first.',
+			needsDatabase: 'Custom fields live in your database: connect it under Developers first.',
 		},
 		consentsTitle: 'Consents',
 		consentsHelp:
@@ -60,7 +60,7 @@ export const TEXTS = dashboardTexts({
 			columns: { label: 'Words', key: 'Key', version: 'Version', purpose: 'Purpose', required: 'Required' },
 			none: 'No consents yet.',
 			required_badge: 'Required',
-			needsDatabase: 'Consents live in your database: connect it in Connections first.',
+			needsDatabase: 'Consents live in your database: connect it under Developers first.',
 		},
 		consentPurposes: {
 			agreement: 'Agreement',

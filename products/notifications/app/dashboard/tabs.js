@@ -3,13 +3,13 @@
  * Notifications' own parts of the shared dashboard tabs (`@ss/ui/dashboard`, PLAN 0.4.3): the templates counted in the
  * Overview and a webhook URL asked for while Outgoing webhooks is on without one; Settings → Templates on top of
  * Settings and the webhook URLs and the merchant's lists (topics, template settings, fallback channels, quiet hours)
- * beside the feature settings; the provider forms of the email, SMS and WhatsApp
- * connections; and the developer sections (send API, template keys, widget and ticket snippets, the webhook signature
- * check and the reply addresses).
+ * beside the feature settings; and the developer sections (send API, template keys, widget and ticket snippets, the
+ * webhook signature check and the reply addresses), which also hold the connections with the provider forms of the
+ * email, SMS and WhatsApp.
  * @module
  */
 import { Badge, Button, Card, CodeBlock, DataTable, Section, Stat } from '@ss/ui';
-import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, useLoad, useSetupSteps } from '@ss/ui/dashboard';
+import { DevelopersTab, OverviewTab, SettingsTab, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
 import { PROVIDER_FORMS, ProviderForm } from './providers.js';
@@ -126,11 +126,6 @@ function NotificationsSettings(props) {
 const providerForm = (item, save) => (item.name in PROVIDER_FORMS ? <ProviderForm name={item.name} onSave={save} /> : null);
 
 /** @param {TabProps} props */
-function NotificationsConnections(props) {
-	return <ConnectionsTab {...props} form={providerForm} />;
-}
-
-/** @param {TabProps} props */
 function NotificationsDevelopers(props) {
 	const templates = useLoad(`/v1/dashboard/websites/${props.websiteId}/templates`);
 	const origin = typeof window === 'undefined' ? '' : window.location.origin;
@@ -158,6 +153,7 @@ function NotificationsDevelopers(props) {
 	return (
 		<DevelopersTab
 			{...props}
+			connections={{ form: providerForm }}
 			sections={[
 				part(
 					'send',
@@ -231,6 +227,5 @@ function NotificationsDevelopers(props) {
 export const TABS = Object.freeze({
 	overview: NotificationsOverview,
 	settings: NotificationsSettings,
-	connections: NotificationsConnections,
 	developers: NotificationsDevelopers,
 });

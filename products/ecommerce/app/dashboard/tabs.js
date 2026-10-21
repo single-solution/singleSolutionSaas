@@ -1,20 +1,19 @@
 'use client';
 /**
  * Ecommerce's parts of the dashboard tabs (PLAN 0.4.3, 0.8.8), on the shared tabs of `@ss/ui/dashboard`: the Overview's
- * own items, its settings sections (Settings and Defaults), the courier connection form with its hint (the
- * database, the storage and the AI provider key are the Portal's), and the developer snippets with the catalog and SEO guide.
+ * own items, its settings sections (Settings and Defaults), and the developer snippets with the catalog and SEO guide,
+ * above which the connections (the courier connection form with its hint; the database, the storage and the AI provider
+ * key are the Portal's).
  * @module
  */
 import { Fragment } from 'react';
 import { Button, ButtonLink, CodeBlock, LocalTime, Section, Stat, TextLink } from '@ss/ui';
 import {
-	ConnectionsTab,
 	DefaultsTab,
 	DevelopersTab,
 	OverviewTab,
 	fill,
 	settingSectionOf,
-	useDashboard,
 	useLoad,
 	useSetupSteps,
 	wantsSettings,
@@ -73,7 +72,6 @@ const settingOf = (answer, feature, key) => {
  * @type {import('@ss/ui/dashboard').UseOverviewMore}
  */
 const useShopOverview = (overview, { websiteId, open }) => {
-	const { texts } = useDashboard();
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	/** @type {string[]} */
 	const on = overview?.ok ? overview.data.featuresOn : [];
@@ -88,13 +86,13 @@ const useShopOverview = (overview, { websiteId, open }) => {
 	const methods = useLoad(shop ? `${base}/lists/payment_methods` : null);
 	if (!overview?.ok) return {};
 	const O = TEXTS.overview;
-	/** The Settings section that holds a setting, for a button that opens it. @param {string} feature @param {string} name */
-	const sectionOf = (feature, name) => {
+	/** The Settings section of a feature, for a button that opens it. @param {string} feature */
+	const sectionOf = (feature) => {
 		/** @type {import('@ss/ui/dashboard').FeatureSettings | undefined} */
 		const found = settings.answer?.ok
 			? settings.answer.data.features.find((/** @type {{ key: string }} */ item) => item.key === feature)
 			: undefined;
-		return found ? settingSectionOf(found, name, texts.settings.advanced) : feature;
+		return found ? settingSectionOf(found) : feature;
 	};
 	/** @param {string} label @param {string} tab @param {string} [section] */
 	const go = (label, tab, section) => (
@@ -123,7 +121,7 @@ const useShopOverview = (overview, { websiteId, open }) => {
 				tone: 'warning',
 				title: O.payments.title,
 				effect: O.payments.effect,
-				action: go(O.payments.action, 'connections', 'connection-link_payments'),
+				action: go(O.payments.action, 'developers', 'connection-link_payments'),
 			});
 		steps.push({
 			key: 'payments',
@@ -131,7 +129,7 @@ const useShopOverview = (overview, { websiteId, open }) => {
 			why: O.payments.why,
 			actionLabel: O.payments.action,
 			done: payments.status === 'connected',
-			onSelect: () => open('connections', 'connection-link_payments'),
+			onSelect: () => open('developers', 'connection-link_payments'),
 		});
 	}
 	if (messages)
@@ -142,7 +140,7 @@ const useShopOverview = (overview, { websiteId, open }) => {
 			actionLabel: O.notificationsAction,
 			optional: true,
 			done: messages.status === 'connected',
-			onSelect: () => open('connections', 'connection-link_notifications'),
+			onSelect: () => open('developers', 'connection-link_notifications'),
 		});
 	// the Atlas Search index, while the shop or Chat searches with Atlas (E14)
 	/** @type {NonNullable<import('@ss/ui/dashboard').OverviewMore['steps']>[number] | null} */
@@ -191,7 +189,7 @@ const useShopOverview = (overview, { websiteId, open }) => {
 				tone: 'warning',
 				title: O.alerts.title,
 				effect: O.alerts.effect,
-				action: go(O.alerts.action, 'settings', sectionOf('staff_alerts', 'recipients')),
+				action: go(O.alerts.action, 'settings', sectionOf('staff_alerts')),
 			});
 		if (!String(settingOf(settings.answer, 'staff_alerts', 'adminUrl')?.value ?? '').trim())
 			needs.push({
@@ -199,7 +197,7 @@ const useShopOverview = (overview, { websiteId, open }) => {
 				tone: 'warning',
 				title: O.adminUrl.title,
 				effect: O.adminUrl.effect,
-				action: go(O.adminUrl.action, 'settings', sectionOf('staff_alerts', 'adminUrl')),
+				action: go(O.adminUrl.action, 'settings', sectionOf('staff_alerts')),
 			});
 	}
 	// a method paid by hand, offered, with nothing telling shoppers where to pay (no instructions, no account row with
@@ -257,14 +255,9 @@ function Overview(props) {
 	return <OverviewTab {...props} useMore={useShopOverview} />;
 }
 
-/** @param {TabProps} props */
-function Connections(props) {
-	return <ConnectionsTab {...props} hint={connectionHint} form={connectionForm} />;
-}
-
 /**
  * The widget scripts, the JS API, the ticket request, what the merchant's site serves, the Atlas Search index and the
- * storage CORS, pointing at this Ecommerce; the catalog and SEO guide beside the docs.
+ * storage CORS, pointing at this Ecommerce; the catalog and SEO guide beside the docs. The connections come first.
  * @param {TabProps} props
  */
 function Developers(props) {
@@ -289,6 +282,7 @@ function Developers(props) {
 	return (
 		<DevelopersTab
 			{...props}
+			connections={{ hint: connectionHint, form: connectionForm }}
 			sections={[
 				part('visitor', D.visitor, D.visitorHelp, <CodeBlock code={snippets.visitor} />, 'users'),
 				part('api', D.api, D.apiHelp, <CodeBlock code={snippets.api} />, 'code'),
@@ -344,7 +338,6 @@ const Defaults = (props) => <DefaultsTab {...props} notice={settingsNotice} />;
 export const TABS = Object.freeze({
 	overview: Overview,
 	settings: SettingsTab,
-	connections: Connections,
 	developers: Developers,
 	defaults: Defaults,
 });

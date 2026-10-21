@@ -146,7 +146,7 @@ describe('Ecommerce’s Overview', () => {
 		expect(text).toContain('Connect Notifications for order messages to shoppers');
 		expect(text).toContain('Connections ready1 of 1');
 		await press(container, 'Connect');
-		expect(opened).toEqual(['connections#connection-link_payments']);
+		expect(opened).toEqual(['developers#connection-link_payments']);
 	});
 
 	it('asks for staff alert recipients and admin page, how to pay methods paid by hand and the Atlas Search index', async () => {

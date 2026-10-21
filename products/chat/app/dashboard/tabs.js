@@ -2,12 +2,12 @@
 /**
  * Chat's parts of the dashboard tabs (PLAN 0.4.3, 0.8.3 Chat dashboard), on the shared tabs of `@ss/ui/dashboard`: the
  * Overview's setup steps and its booking address while the Book-a-slot tool is on, the rules between features, Chat's settings sections, the
- * backup AI provider form with its hint (the database, the storage and the main AI key are the Portal's), the developer snippets, and the AI label warning in
- * Defaults.
+ * developer snippets with the connections beside them (the backup AI provider form with its hint; the database, the
+ * storage and the main AI key are the Portal's), and the AI label warning in Defaults.
  * @module
  */
 import { Button, CodeBlock, Section } from '@ss/ui';
-import { ConnectionsTab, DefaultsTab, DevelopersTab, OverviewTab, useLoad, useSetupSteps, wantsSettings } from '@ss/ui/dashboard';
+import { DefaultsTab, DevelopersTab, OverviewTab, useLoad, useSetupSteps, wantsSettings } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
 import { AiForm, FORMS } from './forms.js';
@@ -89,11 +89,6 @@ function Settings(props) {
 	return <SettingsTab {...props} warnings={ruleWarnings} />;
 }
 
-/** @param {TabProps} props */
-function Connections(props) {
-	return <ConnectionsTab {...props} hint={connectionHint} form={connectionForm} />;
-}
-
 /** The widget scripts, the ticket request and the tool signature check, pointing at this Chat. @param {TabProps} props */
 function Developers(props) {
 	const origin = typeof window === 'undefined' ? '' : window.location.origin;
@@ -117,6 +112,7 @@ function Developers(props) {
 	return (
 		<DevelopersTab
 			{...props}
+			connections={{ hint: connectionHint, form: connectionForm }}
 			sections={[
 				part('visitor', D.visitor, D.visitorHelp, <CodeBlock code={snippets.visitor} />, 'users'),
 				part('admin', D.admin, D.adminHelp, <CodeBlock code={snippets.admin} />, 'box'),
@@ -145,7 +141,6 @@ function Defaults(props) {
 export const TABS = Object.freeze({
 	overview: Overview,
 	settings: Settings,
-	connections: Connections,
 	developers: Developers,
 	defaults: Defaults,
 });

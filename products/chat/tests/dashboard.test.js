@@ -4,7 +4,7 @@
  * Overview with Chat's own part while the Book-a-slot tool is on (its booking address asked for while missing; the
  * settings are read only then), and its times computed in UTC and shown in the viewer's local time (owner
  * 2026-10-14): UTC on the server and in the first render, then the viewer's zone, with UTC on hover. Also the AI label
- * warning of Settings and the Connections tab (the main AI key is the Portal's, the backup provider has Chat's form).
+ * warning of Settings and the connections in Developers (the main AI key is the Portal's, the backup provider has Chat's form).
  */
 import { act } from 'react';
 import { renderToString } from 'react-dom/server';
@@ -199,7 +199,7 @@ describe('the AI label warning (PLAN 0.8.3 AI, C1)', () => {
 	});
 });
 
-describe('Connections: the AI providers', () => {
+describe('Developers: the AI provider connections', () => {
 	it('the main AI key is a note and a link to the Portal; the backup provider has the form', async () => {
 		const connections = [
 			{ name: 'ai', label: 'AI provider', kind: 'secret', neededBy: ['ai_replies'], status: 'connected', managed: true },
@@ -217,12 +217,14 @@ describe('Connections: the AI providers', () => {
 			vi.fn(async (/** @type {string} */ path) =>
 				path.endsWith('/connections')
 					? new Response(JSON.stringify({ connections }), { status: 200 })
-					: new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 }),
+					: path.endsWith('/features')
+						? new Response(JSON.stringify({ features: [] }), { status: 200 })
+						: new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 }),
 			),
 		);
-		const Connections = TABS.connections;
+		const Developers = TABS.developers;
 		const own = props();
-		const { container } = render(inDashboard(<Connections {...own} />));
+		const { container } = render(inDashboard(<Developers {...own} />));
 		await settle();
 		/** @param {string} name */
 		const open = (name) => {

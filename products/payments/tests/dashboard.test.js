@@ -170,8 +170,8 @@ describe("Payments's dashboard Overview: manual payment methods (P1, P2)", () =>
 			expect(Boolean(item)).toBe(warned);
 			if (item) {
 				expect(item.textContent).toContain('Proof upload is on for Bank transfer, but Storage is not connected');
-				click(byText(container, 'Open Connections', 'button'));
-				expect(tab.open).toHaveBeenCalledWith('connections', 'connection-storage');
+				click(byText(container, 'Connect storage', 'button'));
+				expect(tab.open).toHaveBeenCalledWith('developers', 'connection-storage');
 			}
 			// the connections are read only while a method takes proofs
 			expect(vi.mocked(fetch).mock.calls.some(([path]) => String(path).endsWith('/connections'))).toBe(proof);
@@ -340,6 +340,7 @@ describe("Payments's dashboard Developers tab", () => {
 			'fetch',
 			vi.fn(async (/** @type {string} */ path) => {
 				if (path.endsWith('/features')) return new Response(JSON.stringify({ features: [] }), { status: 200 });
+				if (path.endsWith('/connections')) return new Response(JSON.stringify({ connections: [] }), { status: 200 });
 				if (path.endsWith('/gateway-addresses')) return new Response(JSON.stringify({ items }), { status: 200 });
 				return new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 });
 			}),

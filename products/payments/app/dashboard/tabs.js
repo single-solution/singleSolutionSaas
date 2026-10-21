@@ -1,12 +1,13 @@
 'use client';
 /**
  * Payments' own parts of the shared dashboard tabs (PLAN 0.4.3): the Overview's ways to pay ready and the manual
- * payment methods payers do not see yet, the manual payment methods editor in Settings, each gateway's key form in
- * Connections, and the payment API, gateway addresses and snippets in Developers. The other tabs are the shared ones as they are.
+ * payment methods payers do not see yet, the manual payment methods editor in Settings, and in Developers the payment
+ * API, gateway addresses and snippets, with each gateway's key form among the connections. The other tabs are the shared
+ * ones as they are.
  * @module
  */
 import { Button, CodeBlock, Section, Stat } from '@ss/ui';
-import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, fill, useLoad, useSetupSteps } from '@ss/ui/dashboard';
+import { DevelopersTab, OverviewTab, SettingsTab, fill, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { CUSTOM_GATEWAY_CONNECTIONS, GATEWAY_CONNECTIONS, GATEWAY_FEATURES, GATEWAYS } from '../../core/gateways.js';
 import { methodReady } from '../../core/methods.js';
@@ -103,7 +104,7 @@ const usePaymentsOverview = (overview, { websiteId, open }) => {
 							title: O.noStorage.title,
 							effect: fill(O.storageHelp, { names: methods.proof.join(', ') }),
 							action: (
-								<Button size="sm" variant="secondary" onClick={() => open('connections', 'connection-storage')}>
+								<Button size="sm" variant="secondary" onClick={() => open('developers', 'connection-storage')}>
 									{O.noStorage.action}
 								</Button>
 							),
@@ -157,12 +158,9 @@ const PaymentsSettings = (props) => (
 
 /**
  * Each gateway's keys and the proof storage have their own form; the tokens keep the one value field.
- * @type {NonNullable<Parameters<typeof ConnectionsTab>[0]['form']>}
+ * @type {NonNullable<import('@ss/ui/dashboard').ConnectionParts['form']>}
  */
 const connectionForm = (item, save) => (item.name in FORMS ? <ConnectionForm name={item.name} onSave={save} /> : null);
-
-/** @param {TabProps} props */
-const PaymentsConnections = (props) => <ConnectionsTab {...props} form={connectionForm} />;
 
 /**
  * Developers: the payment API, the gateway addresses of this website, webhooks, links, refunds, manual payment methods
@@ -195,6 +193,7 @@ function PaymentsDevelopers(props) {
 	return (
 		<DevelopersTab
 			{...props}
+			connections={{ form: connectionForm }}
 			sections={[
 				part(
 					'api',
@@ -242,10 +241,9 @@ function PaymentsDevelopers(props) {
 	);
 }
 
-/** Payments' sections in place of the shared Overview, Settings, Connections and Developers. */
+/** Payments' sections in place of the shared Overview, Settings and Developers. */
 export const TABS = Object.freeze({
 	overview: PaymentsOverview,
 	settings: PaymentsSettings,
-	connections: PaymentsConnections,
 	developers: PaymentsDevelopers,
 });

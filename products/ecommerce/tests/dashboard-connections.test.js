@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Connections on the shared dashboard tab with Ecommerce's forms and hints: each courier API connection (`courier_1` …
+ * Connections on the shared Developers tab (its first views) with Ecommerce's forms and hints: each courier API connection (`courier_1` …
  * `courier_5`, E25) takes the courier form (booking and tracking addresses, key, headers, body) and the courier hint;
  * the database, the storage, the AI key and the links to other products are the Portal's: a note, no form.
  */
@@ -42,10 +42,16 @@ describe('Ecommerce’s connection forms', () => {
 		};
 		vi.stubGlobal(
 			'fetch',
-			vi.fn(async () => new Response(JSON.stringify(answer), { status: 200 })),
+			vi.fn(async (/** @type {string} */ path) =>
+				path.endsWith('/features')
+					? new Response(JSON.stringify({ features: [] }), { status: 200 })
+					: path.endsWith('/connections')
+						? new Response(JSON.stringify(answer), { status: 200 })
+						: new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 }),
+			),
 		);
-		const Connections = TABS.connections;
-		const { container } = render(inDashboard(<Connections {...props} />));
+		const Developers = TABS.developers;
+		const { container } = render(inDashboard(<Developers {...props} />));
 		const settle = async () => {
 			for (let i = 0; i < 4; i += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 		};

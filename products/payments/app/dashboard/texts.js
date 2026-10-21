@@ -21,7 +21,7 @@ export const TEXTS = dashboardTexts({
 		methodsHelp: 'Add an account with its details, or instructions that tell payers how to pay, to: {names}.',
 		noStorage: {
 			title: 'Payers cannot upload payment proofs yet',
-			action: 'Open Connections',
+			action: 'Connect storage',
 		},
 		storageHelp: 'Proof upload is on for {names}, but Storage is not connected: connect it, or turn Proof upload off.',
 	},
@@ -39,8 +39,8 @@ export const TEXTS = dashboardTexts({
 			'Paid first: payers pay before (and may upload a proof). On delivery or at pickup: payers pay then; you confirm the money.',
 		kinds: { pay_first: 'Paid first', on_delivery: 'Paid on delivery', at_pickup: 'Paid at pickup' },
 		proof: 'Proof upload',
-		proofHelp: 'Payers may upload a photo or PDF of their payment to your storage (connect Storage in Connections).',
-		noStorage: 'Storage is not connected: payers do not see the proof upload until you connect it in Connections.',
+		proofHelp: 'Payers may upload a photo or PDF of their payment to your storage (connect Storage under Developers).',
+		noStorage: 'Storage is not connected: payers do not see the proof upload until you connect it under Developers.',
 		details: 'Details',
 		detailsHelp: 'Shown under the method when payers choose how to pay (plain text).',
 		instructions: 'Instructions',
@@ -75,9 +75,6 @@ export const TEXTS = dashboardTexts({
 			ready: 'Shown to payers',
 			notReady: 'Not shown yet',
 		},
-	},
-	settings: {
-		textsHelp: 'Every word the widgets and hosted pages show. A text must keep the same {placeholders} as the English text.',
 	},
 	connections: {
 		fields: {

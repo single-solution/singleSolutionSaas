@@ -3,12 +3,12 @@
  * Accounts' own parts of the shared dashboard tabs (`@ss/ui/dashboard`, PLAN 0.4.3): the custom fields in the Overview
  * (how many there are while Custom fields is on, and a field to add while there is none) and, with the consent list
  * (A2), on top of Settings; the
- * social sign-in key forms and the help line of each connection; and the developer sections (offline sign-in
- * verification, widget and ticket snippets, social sign-in return addresses and the message templates).
+ * developer sections (offline sign-in verification, widget and ticket snippets, social sign-in return addresses and the
+ * message templates), which also hold the connections: the social sign-in key forms and the help line of each one.
  * @module
  */
 import { Badge, Button, Card, CodeBlock, DataTable, Section, Stat } from '@ss/ui';
-import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, useLoad, useSetupSteps } from '@ss/ui/dashboard';
+import { DevelopersTab, OverviewTab, SettingsTab, useLoad, useSetupSteps } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import messages from '../../schemas/messages.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
@@ -110,11 +110,6 @@ const connectionHint = (name) => (name === 'imported_password_pepper' ? TEXTS.co
 const keyForm = (item, save) => (item.name in KEY_FORMS ? <KeyForm name={item.name} onSave={save} /> : null);
 
 /** @param {TabProps} props */
-function AccountsConnections(props) {
-	return <ConnectionsTab {...props} hint={connectionHint} form={keyForm} />;
-}
-
-/** @param {TabProps} props */
 function AccountsDevelopers(props) {
 	const origin = typeof window === 'undefined' ? '' : window.location.origin;
 	const snippets = createSnippets({
@@ -127,6 +122,7 @@ function AccountsDevelopers(props) {
 	return (
 		<DevelopersTab
 			{...props}
+			connections={{ hint: connectionHint, form: keyForm }}
 			sections={[
 				{
 					id: 'verification',
@@ -214,6 +210,5 @@ function AccountsDevelopers(props) {
 export const TABS = Object.freeze({
 	overview: AccountsOverview,
 	settings: AccountsSettings,
-	connections: AccountsConnections,
 	developers: AccountsDevelopers,
 });
