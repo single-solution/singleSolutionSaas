@@ -60,7 +60,7 @@ export const adminRoutes = Object.freeze({
 	settingsPart: (/** @type {string} */ part) => `/admin/settings#${e(part)}`,
 	account: () => '/admin/account',
 	/** a part of My account: profile (the page's own address), sign-in, two-step or activity */
-	accountPart: (/** @type {string} */ part) => (part === 'profile' ? '/admin/account' : `/admin/account/${e(part)}`),
+	accountPart: (/** @type {string} */ part) => (part === 'profile' ? '/admin/account' : `/admin/account#${e(part)}`),
 });
 
 /** Admin API paths. */

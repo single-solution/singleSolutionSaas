@@ -1140,6 +1140,8 @@ export const MORE = Object.freeze({
 		'website.setup_profile_saved': 'Business profile saved',
 	}),
 	noActivity: 'No activity yet.',
+	showMore: 'Show more',
+	activityIntro: 'Recent sign-ins and security actions on your account.',
 	count: (/** @type {number} */ n, /** @type {boolean} */ more = false) => (more ? `${n}+` : String(n)),
 	/** the range in a list's footer, when the total is not known: "Showing 1–50+" */
 	showing: (/** @type {number} */ from, /** @type {number} */ to, /** @type {boolean} */ more) =>

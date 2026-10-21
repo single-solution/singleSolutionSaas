@@ -23,6 +23,7 @@ import {
 	KeyValueList,
 	LocalTime,
 	Pagination,
+	Row,
 	SettingsCard,
 	Stepper,
 	Timeline,
@@ -625,26 +626,54 @@ export function ActivityTable({
 }
 
 /**
- * The person's own activity as the parts of a page: the pages (`useListPages`), the table for the body and the
- * pagination for the footer. The newest entries come with the page; going on loads older ones from `path`.
+ * The signed-in person's own activity as a timeline of rich rows (flat layout 2026-10-21, K-4b):
+ * each entry has an avatar with the actor's initials, the action label, the reason, and the date in local time.
+ * When there are more entries, a "Show more" button appends the next page.
+ * @param {{ path: string, initial?: { items: any[], nextCursor?: string | null }, empty?: string, showMerchant?: boolean }} props
+ */
+export function OwnActivityTimeline({ path, initial = { items: [], nextCursor: null }, empty = MORE.noActivity, showMerchant = false }) {
+	const list = usePagedList((cursor) => withCursor(path, cursor), initial);
+	return (
+		<div className="space-y-4">
+			{list.problem ? <Callout tone="danger">{describeProblem(list.problem)}</Callout> : null}
+			{list.items.length === 0 && !list.loading ? (
+				<EmptyState compact icon="activity" kind="activity" title={empty} />
+			) : (
+				<div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface">
+					{list.items.map((e) => (
+						<Row
+							key={e.activityId}
+							lead={{ avatar: actorName(e) }}
+							title={actionLabel(e.action)}
+							meta={[showMerchant && e.merchantName ? e.merchantName : null, e.reason].filter(Boolean)}
+							time={<LocalTime value={e.at} />}
+						/>
+					))}
+				</div>
+			)}
+			{list.cursor ? (
+				<div className="flex justify-center pt-2">
+					<Button
+						variant="secondary"
+						size="sm"
+						loading={list.loading}
+						onClick={() => void list.more()}>
+						{MORE.showMore}
+					</Button>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
+/**
+ * The person's own activity as a timeline of rows with "Show more" (flat layout 2026-10-21, K-4b).
  * @param {string} path the activity API path (`{ items, nextCursor }`)
  * @param {{ items: any[], nextCursor?: string | null } | undefined} initial
  */
 export function useOwnActivity(path, initial = { items: [], nextCursor: null }) {
-	const list = usePagedList((cursor) => withCursor(path, cursor), initial);
-	const pages = useListPages(list);
 	return {
-		problem: list.problem,
-		body: (
-			<>
-				{list.problem ? (
-					<div className="p-4">
-						<Callout tone="danger">{describeProblem(list.problem)}</Callout>
-					</div>
-				) : null}
-				<ActivityTable items={pages.rows} caption={LOGIN.activityTitle} empty={MORE.noActivity} />
-			</>
-		),
-		footer: pages.pagination ? <Pagination {...pages.pagination} /> : null,
+		body: <OwnActivityTimeline path={path} initial={initial} />,
+		footer: null,
 	};
 }

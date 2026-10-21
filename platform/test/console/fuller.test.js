@@ -273,8 +273,9 @@ describe('fuller Portal screens (jsdom)', () => {
 			if (!first.ok) throw new Error('my activity');
 			const mine = await admin.loadMyAccount(ownerBrowser.api);
 			withToasts(<MyAccountView {...mine} activity={first.data} part="activity" />);
-			// the page is not full and there is more: the next batch comes by itself
-			await until(() => document.querySelectorAll('tbody tr').length > 1);
+			expect(document.querySelectorAll('[data-ss-row]').length).toBe(1);
+			await press('Show more');
+			await until(() => document.querySelectorAll('[data-ss-row]').length > 1);
 			cleanup();
 
 			// ---------------------------------------------------------------- Admins
