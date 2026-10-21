@@ -136,8 +136,9 @@ export const LIST = Object.freeze({
 	scroller: 'ss-scroll group/list min-h-0 flex-1 p-2',
 	/** one row (the outer box); the intrinsic size is the row's height */
 	row: 'h-14 [content-visibility:auto] [contain-intrinsic-size:auto_3.5rem]',
-	/** the highlight under the picked row: one element that moves with `transform` */
-	slide: 'pointer-events-none absolute inset-x-0 top-0 -z-10 rounded-md bg-primary-soft opacity-0 transition-[transform,height,opacity] duration-(--ss-motion) ease-ss',
+	/** the highlight under the picked row: one element that moves with `transform` (`slideMove` after its first place) */
+	slide: 'pointer-events-none absolute inset-x-0 top-0 -z-10 rounded-md bg-primary-soft opacity-0',
+	slideMove: 'transition-[transform,height,opacity] duration-(--ss-motion) ease-ss',
 	/** a filter chip, off and on */
 	chip: 'ss-motion ss-press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-micro font-medium focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
 	chipOff: 'bg-surface-2 text-muted hover:text-fg',
