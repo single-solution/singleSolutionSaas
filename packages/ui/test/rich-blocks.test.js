@@ -2,7 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Card, Stat } from '../src/display.js';
 import { Switch } from '../src/fields.js';
-import { act, cleanup, render } from '../src/testing.js';
+import { NextStep } from '../src/NextStep.js';
+import { act, cleanup, click, render } from '../src/testing.js';
 
 afterEach(() => {
 	cleanup();
@@ -206,5 +207,58 @@ describe('Stat', () => {
 		rerender(<Stat label="State" value={20} />);
 		expect(figure(container)).toBe('20');
 		expect(loop.waiting()).toBe(0);
+	});
+});
+
+describe('NextStep', () => {
+	it('draws the sentence with an icon on the accent tint, and fades in', () => {
+		const { container } = render(<NextStep>Connect a payment method to start selling.</NextStep>);
+		const hint = /** @type {HTMLElement} */ (container.firstElementChild);
+		expect(hint.textContent).toBe('Connect a payment method to start selling.');
+		expect(hint.className).toContain('bg-primary-soft');
+		expect(hint.className).toContain('animate-ss-fade');
+		expect(hint.querySelector('svg')).not.toBeNull();
+		expect(hint.querySelector('a, button')).toBeNull();
+	});
+
+	it('takes a meaning tone and its own icon', () => {
+		const { container } = render(
+			<NextStep tone="warning" icon="alert">
+				Check this.
+			</NextStep>,
+		);
+		expect(/** @type {HTMLElement} */ (container.firstElementChild).className).toContain('bg-warning-soft');
+	});
+
+	it('draws the action as a link with an arrow when it has an href', () => {
+		const { container } = render(<NextStep action={{ label: 'Open payments', href: '/payments' }}>Set up payments.</NextStep>);
+		const link = /** @type {HTMLAnchorElement} */ (container.querySelector('a'));
+		expect(link.getAttribute('href')).toBe('/payments');
+		expect(link.textContent).toBe('Open payments');
+		expect(link.querySelector('svg')).not.toBeNull();
+	});
+
+	it('draws the action as a button that calls onClick', () => {
+		const onClick = vi.fn();
+		const { container } = render(<NextStep action={{ label: 'Invite', onClick }}>Invite your team.</NextStep>);
+		click(/** @type {HTMLElement} */ (container.querySelector('button')));
+		expect(onClick).toHaveBeenCalledTimes(1);
+	});
+
+	it('shows a dismiss button only with onDismiss, named by the texts', () => {
+		const onDismiss = vi.fn();
+		const { container, rerender } = render(<NextStep>Hint.</NextStep>);
+		expect(container.querySelector('button')).toBeNull();
+		rerender(<NextStep onDismiss={onDismiss}>Hint.</NextStep>);
+		const close = /** @type {HTMLElement} */ (container.querySelector('button'));
+		expect(close.getAttribute('aria-label')).toBe('Dismiss');
+		click(close);
+		expect(onDismiss).toHaveBeenCalledTimes(1);
+		rerender(
+			<NextStep onDismiss={onDismiss} texts={{ dismiss: 'Close' }}>
+				Hint.
+			</NextStep>,
+		);
+		expect(container.querySelector('button')?.getAttribute('aria-label')).toBe('Close');
 	});
 });

@@ -473,8 +473,8 @@ export function StatusPill({ status, children, title, className }) {
 	);
 }
 
-/** @type {Record<Tone, { box: string, icon: import('./icons.js').IconName }>} */
-const CALLOUTS = {
+/** The soft box and the icon of each meaning (a `Callout`, a `NextStep`). @type {Record<Tone, { box: string, icon: import('./icons.js').IconName }>} */
+export const CALLOUTS = {
 	neutral: { box: 'bg-surface-2 text-fg', icon: 'info' },
 	primary: { box: 'bg-primary-soft text-on-primary-soft', icon: 'info' },
 	info: { box: 'bg-info-soft text-on-info-soft', icon: 'info' },
